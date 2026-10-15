@@ -1,6 +1,6 @@
 // Those who square up to you at close quarters, and the people round a fight. A townsperson
 // you hit who hits back, a gang member or militia fighter who has closed on you while your
-// hands are empty, an officer whose arrest you resisted: each circles you in a boxer's shuffle,
+// hands are empty (raiders, smugglers, the village's guard, hired guns too): each circles you in a boxer's shuffle,
 // spread round you, and they take turns (combat/melee-rules.js createTurns): one at a time
 // (two when there are four or more, never two on a phone), a breath between, the one who has
 // waited longest next. A strike has a tell (the step in, a heavy drawn right back) long enough
@@ -10,29 +10,24 @@
 // their guard when they see your blow coming, which turns a light blow but not a heavy one.
 //
 // Round a fight: the people nearest flinch from each blow, those a little further stop and
-// watch (some film it on their phones), and the police come when it is reported. Officers sent
-// to a fight you were in try to arrest you rather than shoot: they close in and order you down;
-// keep still and you are cuffed and fined; strike them and it becomes a fight; run and you are
-// wanted. Minors are never part of any of it.
+// watch (some film it on their phones). What you did is a crime like any other (combat.js
+// crime(), through the deal), so the witnesses call it in and the police come to arrest you the
+// law's way (law/index.js). Minors are never part of any of it.
 //
 // Every list here is a plain array reused frame to frame, and the vectors are kept: nothing is
 // made per frame while a fight goes on.
 
 import * as THREE from 'three';
-import { MOVES, createTurns, turnsFor, ringAngle, feints, tell, reaction, arrestStep, fine } from './melee-rules.js';
+import { MOVES, createTurns, turnsFor, ringAngle, feints, tell, reaction } from './melee-rules.js';
 import { isMinor } from './targets.js';
 import { FACTIONS } from './factions.js';
 
 // who closes to fists with an unarmed opponent: street gangs, militia, raiders, smugglers, the
-// village's own, hired guns; officers only to subdue, never soldiers
-const MELEE_KINDS = new Set(['gang', 'militia', 'raiders', 'smugglers', 'villagers', 'mercs', 'police']);
+// village's own, hired guns. Never officers (law/ arrests you its own way) nor soldiers
+const MELEE_KINDS = new Set(['gang', 'militia', 'raiders', 'smugglers', 'villagers', 'mercs']);
 // where each animation's wind-up ends and its blow lands, as progress through the action
 const UMAP = { jab: [0.12, 0.35], cross: [0.14, 0.4], hook: [0.28, 0.55], haymaker: [0.5, 0.64], swing: [0.2, 0.45], overhead: [0.5, 0.66] };
 const LINES = {
-	order: ['Police! Stay where you are!', 'Hands where I can see them!', 'On the ground! Now!', 'Don\'t move!'],
-	cuff: ['Turn around. Hands behind your back.', 'You\'re coming with us.'],
-	fled: ['Dispatch: suspect fleeing on foot.', 'Suspect is running!'],
-	resist: ['Suspect is resisting!', 'He\'s fighting back!'],
 	taunt: ['Come on!', 'That all you got?', 'You\'re done!', 'Get him!', 'Hold still!'],
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -43,7 +38,6 @@ export function createFoes(ctx, api) {
 	const turns = createTurns({ max: 1, gap: isPhone ? [0.7, 1.3] : [0.45, 1.0] });
 	const MAX = isPhone ? 3 : 5;
 	let seq = 1, scanT = 0, lineT = 0, base = Math.random() * 6.28;
-	let arrest = null;
 	const watchers = [];
 
 	const find = (P) => { for (let i = 0; i < list.length; i++) if (list[i].P === P) return list[i]; return null; };
@@ -59,13 +53,13 @@ export function createFoes(ctx, api) {
 			skill: o.skill ?? (0.25 + (seed % 60) / 100), poise: o.poise ?? (o.kind === 'squad' ? 0.55 : 0.35), dmgK: o.kind === 'squad' ? 1 : 0.8,
 			state: 'approach', t: 0, slot: 0, dir: seed % 2 ? 1 : -1, dirT: 1 + Math.random() * 2, cool: 0.6 + Math.random() * 0.8,
 			move: null, m: null, wind: 0, feint: false, resolved: false, openT: 0, guardT: 0, struckMe: false, item: o.item || null,
-			slide: new THREE.Vector3(), ov: null, police: !!o.police,
+			slide: new THREE.Vector3(), ov: null,
 		};
 		if (f.kind === 'person' && f.p) {
 			f.ov = () => true;
 			f.p.engaged = false; f.p.override = f.ov;
 		}
-		if (f.h) { f.h.melee = true; f.h.arrest = false; }
+		if (f.h) f.h.melee = true;
 		list.push(f);
 		return f;
 	}
@@ -74,7 +68,7 @@ export function createFoes(ctx, api) {
 		list.splice(i, 1);
 		turns.drop(f.id);
 		if (f.p && f.p.override === f.ov) { f.p.override = null; if (!f.P.ragdoll) f.M.act(null); }
-		if (f.h) { f.h.melee = false; f.h.arrest = false; if (!f.P.ragdoll) f.M.act(null); }
+		if (f.h) { f.h.melee = false; if (!f.P.ragdoll) f.M.act(null); }
 		f.gone = true;
 	}
 	const has = (P) => !!find(P);
@@ -92,10 +86,8 @@ export function createFoes(ctx, api) {
 			if (!F || !MELEE_KINDS.has(F.kind)) continue;
 			const d = Math.hypot(h.pos.x - e.x, h.pos.z - e.z);
 			if (h.melee) continue;
-			// officers: only those come to a fight that was yours, or who you struck
-			if (F.kind === 'police' && !(h.provoked && (ctx.wanted?.() ?? 0) <= 2)) continue;
 			if (armed || d > 6.5 || h.target?.id !== 'me' || ctx.down()) continue;
-			add({ kind: 'squad', h, P: h.body.P, M: h.body.M, T: h.T, police: F.kind === 'police' });
+			add({ kind: 'squad', h, P: h.body.P, M: h.body.M, T: h.T });
 			if (lineT <= 0 && Math.random() < 0.5) { lineT = 4; ctx.call?.(pick(LINES.taunt), F.name); }
 		}
 	}
@@ -265,95 +257,12 @@ export function createFoes(ctx, api) {
 		}
 	}
 
-	// ---------- the police: an arrest ----------
-	function startArrest(officers) {
-		arrest = { state: 'approach', t: 0, comply: 0, officers, said: '' };
-		for (const h of officers) { h.melee = true; h.arrest = true; h.target = null; }
-		ctx.call?.(pick(LINES.order), 'Harbour Police');
-		ctx.hint?.(ctx.touch ? 'Police: keep still to be arrested, or run.' : 'Police: keep still to be arrested (a fine), or run.', 4200, 2);
-	}
-	function stepArrest(dt, e) {
-		const A = arrest;
-		let near = null, nd = 1e9;
-		for (let i = A.officers.length - 1; i >= 0; i--) {
-			const h = A.officers[i];
-			if (h.dead || h.gone || h.surrendered || !h.body) { A.officers.splice(i, 1); continue; }
-			const d = Math.hypot(h.pos.x - e.x, h.pos.z - e.z);
-			if (d < nd) { nd = d; near = h; }
-		}
-		if (!near) { arrest = null; return; }
-		const was = A.state;
-		Object.assign(A, arrestStep(A, { dist: nd, speed: ctx.speed?.() || 0, attacking: api.attacking(), armed: ctx.armed(), dt }));
-		// the officers close in round you, facing you, weapons held but not fired
-		for (let i = 0; i < A.officers.length; i++) {
-			const h = A.officers[i], M = h.body.M, S = M.S, at = S.pos;
-			const ang = ringAngle(i, A.officers.length, base + 0.7), R = A.state === 'cuffing' && h === near ? 0.7 : 2.3;
-			const tx = e.x - Math.sin(ang) * R, tz = e.z - Math.cos(ang) * R, gx = tx - at.x, gz = tz - at.z, gd = Math.hypot(gx, gz);
-			M.want.heading = gd > 0.6 ? Math.atan2(gx, gz) : Math.atan2(e.x - at.x, e.z - at.z);
-			M.want.speed = gd > 0.6 ? Math.min(gd > 5 ? 3.6 : 1.6, gd * 1.5) : 0; M.want.run = gd > 5 ? 1 : 0;
-			S.look.target = e;
-			if (A.state === 'cuffing' && h === near && gd < 0.8) M.act('grab', 0);
-		}
-		if (A.state !== was) {
-			if (A.state === 'order') ctx.call?.(pick(LINES.order), 'Harbour Police');
-			if (A.state === 'cuffing') { ctx.call?.(pick(LINES.cuff), 'Harbour Police'); api.cuffs(true); }
-			if (A.state === 'done') {
-				const credits = ctx.credits?.() ?? 0, hurt = api.offence().hurt, n = fine(hurt, credits);
-				if (n > 0) ctx.pay?.(n);
-				ctx.wanted?.(0);
-				ctx.deed?.('submit-arrest', 'the police');
-				ctx.hint?.(n > 0 ? `Cited for fighting and fined ${n} credits. Free to go.` : 'Cited for fighting. Free to go.', 4200, 2);
-				endArrest();
-			}
-			if (A.state === 'resist') {
-				ctx.call?.(pick(LINES.resist), 'Harbour Police');
-				ctx.deed?.('resist-arrest', 'the police');
-				ctx.wanted?.(Math.max(1, ctx.wanted?.() ?? 0));
-				for (const h of A.officers) { h.arrest = false; h.melee = false; h.provoked = true; h.target = ctx.ME; h.targetT = 8; }
-				endArrest();
-			}
-			if (A.state === 'fled') {
-				ctx.call?.(pick(LINES.fled), 'Harbour Police');
-				ctx.wanted?.(Math.max(1, ctx.wanted?.() ?? 0));
-				for (const h of A.officers) { h.arrest = false; h.melee = false; }
-				endArrest();
-			}
-		}
-	}
-	function endArrest() {
-		if (!arrest) return;
-		for (const h of arrest.officers) {
-			if (arrest.state === 'done') { h.target = null; h.provoked = false; h.alert = 0; }
-			h.arrest = false; h.melee = false;
-			if (h.body && !h.body.P.ragdoll) h.body.M.act(null);
-		}
-		api.cuffs(false);
-		api.cleared();
-		arrest = null;
-	}
-	// officers near you after a fight of yours (and nothing worse than fists): they come to
-	// arrest you; more who arrive while it goes on join it
-	function police(e) {
-		if (!api.offence().recent || (ctx.wanted?.() ?? 0) > 2 || ctx.armed()) return;
-		if (arrest && arrest.state !== 'approach' && arrest.state !== 'order') return;
-		const sq = ctx.squads?.();
-		if (!sq) return;
-		let found = null;
-		for (const h of sq.list) {
-			if (h.dead || h.fid !== 'police' || !h.body || h.surrendered || h.melee) continue;
-			if (Math.hypot(h.pos.x - e.x, h.pos.z - e.z) < 70) (found ||= []).push(h);
-		}
-		if (!found) return;
-		if (!arrest) startArrest(found);
-		else for (const h of found) { h.melee = true; h.arrest = true; h.target = null; arrest.officers.push(h); }
-	}
-
 	// ---------- each frame ----------
 	function update(dt) {
 		const e = ctx.eye();
 		lineT -= dt; scanT -= dt;
 		turns.tick(dt);
-		if (scanT <= 0) { scanT = 0.25; scanSquads(e); police(e); }
+		if (scanT <= 0) { scanT = 0.25; scanSquads(e); }
 		// leaving: the beaten, the far, the yielded, and everyone when you draw a weapon
 		const armed = ctx.armed();
 		for (let i = list.length - 1; i >= 0; i--) {
@@ -369,18 +278,16 @@ export function createFoes(ctx, api) {
 			const a = posOf(list[i]), b = posOf(list[j]), dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
 			if (d < 0.95 && d > 1e-3) { const k = (0.95 - d) * 0.5 / d; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; }
 		}
-		if (arrest) stepArrest(dt, e);
 		stepWatchers(dt, e);
 	}
 	function clear() {
 		for (let i = list.length - 1; i >= 0; i--) remove(list[i], i);
-		if (arrest) { arrest.state = 'fled'; endArrest(); }
 		for (const w of watchers) if (w.p.override === w.ov) { w.p.override = null; w.p.M.setPose('rest'); }
 		watchers.length = 0;
 		turns.clear();
 	}
 	// the one striking at you now, if any (for the HUD and the tests)
 	const striking = () => { for (let i = 0; i < list.length; i++) if (list[i].state === 'wind' || list[i].state === 'strike') return list[i]; return null; };
-	const info = () => ({ foes: list.map((f) => ({ kind: f.kind, state: f.state, move: f.move, d: +Math.hypot(posOf(f).x - ctx.eye().x, posOf(f).z - ctx.eye().z).toFixed(1), skill: +f.skill.toFixed(2) })), turns: turns.busy, rest: +turns.rest.toFixed(2), arrest: arrest && { state: arrest.state, comply: +arrest.comply.toFixed(1), officers: arrest.officers.length }, watchers: watchers.length });
-	return { add, remove, has, find, threat, guarded, struck, onlookers, update, clear, info, striking, get list() { return list; }, get arrest() { return arrest; }, startArrest };
+	const info = () => ({ foes: list.map((f) => ({ kind: f.kind, state: f.state, move: f.move, d: +Math.hypot(posOf(f).x - ctx.eye().x, posOf(f).z - ctx.eye().z).toFixed(1), skill: +f.skill.toFixed(2) })), turns: turns.busy, rest: +turns.rest.toFixed(2), watchers: watchers.length });
+	return { add, remove, has, find, threat, guarded, struck, onlookers, update, clear, info, striking, get list() { return list; } };
 }

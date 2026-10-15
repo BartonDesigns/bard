@@ -104,10 +104,11 @@ test('the dispatch: the nearest ready base answers, by road when near, by air wh
 	assert.ok(FORCES.invasion.reach > FORCES.gang.reach);
 });
 
-test('the police plan follows the wanted level, the military backs them at four stars', () => {
-	assert.deepEqual(policePlan(1, 2, 0), { cruisers: 1, officers: 2, backup: null });
+test('the police plan follows the wanted level, the military backs them only at five stars', () => {
+	assert.deepEqual(policePlan(1, 2, 0), { cruisers: 1, officers: 2, swat: false, backup: null });
 	assert.equal(policePlan(3, 4, 2).cruisers, 1);
-	assert.equal(policePlan(4, 5, 0).backup, 'road');
+	assert.equal(policePlan(4, 5, 0).backup, null, 'the military only at the top');
+	assert.equal(policePlan(4, 5, 0).swat, true);
 	assert.equal(policePlan(5, 6, 0).backup, 'air');
 	assert.equal(policePlan(2, 3, 5).cruisers, 0);
 });

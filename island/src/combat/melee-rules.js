@@ -1,9 +1,9 @@
 // Close combat, the rules: the timing of every strike (wind-up, the moment it lands, the
 // recovery), light strings and charged heavies, blocking and the parry window, the dodge's
 // moment of grace, who may take a turn at you when several square up, the takedown from
-// behind, which way a blow knocks someone and how hard, an arrest by the police, and which
-// deed a fight counts as. Pure numbers and functions (no three, no DOM): combat/melee.js,
-// combat/melee-foes.js and the tests read them, and the feel is tuned here in one place.
+// behind, which way a blow knocks someone and how hard, and which deed a fight counts as. Pure
+// numbers and functions (no three, no DOM): combat/melee.js, combat/melee-foes.js and the tests
+// read them, and the feel is tuned here in one place.
 
 // ---------- the strikes ----------
 // wind: seconds from the press to the blow (the tell), active: how long it can land, recover:
@@ -165,29 +165,6 @@ export const feints = (skill, r = Math.random()) => r < 0.08 + skill * 0.2;
 // an NPC's tell before a strike: slower for the green, quicker for the practised, a heavy
 // always readable
 export function tell(m, skill = 0.5) { return (m.kind === 'heavy' ? 0.62 : 0.34) * (1.25 - skill * 0.5); }
-
-// ---------- the police ----------
-// an arrest, step by step. a: { state, t, comply }, s: { dist (to the nearest officer),
-// speed (yours), attacking (you struck or swung lately), armed, dt }. States: approach ->
-// order -> cuffing -> done, or 'resist' (you struck) or 'fled' (you ran)
-export const ARREST = Object.freeze({ near: 3.6, comply: 2.4, cuff: 1.8, flee: 32, still: 1.1 });
-export function arrestStep(a, s) {
-	const n = { ...a, t: a.t + s.dt };
-	if (a.state === 'done' || a.state === 'resist' || a.state === 'fled') return n;
-	if (s.attacking) return { ...n, state: 'resist' };
-	if (s.dist > ARREST.flee) return { ...n, state: 'fled' };
-	if (a.state === 'approach') { if (s.dist < ARREST.near + 1.5) return { ...n, state: 'order', t: 0, comply: 0 }; return n; }
-	if (a.state === 'order') {
-		const still = s.dist < ARREST.near && s.speed < ARREST.still && !s.armed;
-		n.comply = still ? a.comply + s.dt : Math.max(0, a.comply - s.dt * 0.5);
-		if (n.comply >= ARREST.comply) return { ...n, state: 'cuffing', t: 0 };
-		return n;
-	}
-	if (a.state === 'cuffing') return n.t >= ARREST.cuff ? { ...n, state: 'done' } : n;
-	return n;
-}
-// the fine for a fight: by how many you hurt, never more than you have
-export const fine = (hurt, credits) => Math.max(0, Math.min(credits, 40 + 25 * Math.max(0, hurt)));
 
 // ---------- deeds ----------
 // what a blow of yours counts for on the compass: starting a fight (the first blow on someone

@@ -42,15 +42,11 @@ On a phone the cluster shows only while you are unarmed. **Strike** is always th
 - **Their guard**: they sometimes block when they see your blow coming. That turns a light strike (20% gets through and they slide back) but not a heavy.
 - **Onlookers**: people within 6.5 m flinch (the new `flinch` action). Those from 8 to 20 m stop and watch the fight, and about 40% film it with their phones out. Fist fights alarm civilians within 7 m (gunfire is still 25 to 35 m), so the crowd watches instead of scattering.
 - **Takedown from behind**: within 1.7 m, behind them (more than about 115 degrees off where they face), and they are unaware. A squad member counts as unaware when not alert and not targeting you; a townsperson when not already fleeing, fighting or talking. You hold them in a choke (`choke` and `choked` actions) for 1.2 s, then they go limp for 22 s. A fighter knocked out this way is out of the fight: they wake surrendered and slip away later, and their squad is not alerted.
-- **Police and arrest**: punching a townsperson where someone can see reports a fight to dispatch (`hooks.event({ kind: 'brawl' })`, at most once a minute), so a cruiser comes. Officers within 70 m after a fight of yours (with wanted at 2 stars or less and your hands empty) try to arrest you rather than shoot. They close round you and order you down.
-  - Keep still for 2.4 s within 3.6 m and you are cuffed (1.8 s, held in place), fined 40 credits plus 25 for each person hurt (never more than you have), and your wanted level is cleared.
-  - Strike or swing at them and you have resisted: they fight you hand to hand while you stay close, and you get at least one star.
-  - Run more than 32 m and you are wanted (one star).
-- **Morality**: four new deeds in `combat/morality.js`.
+- **Police and arrest**: fists go through the law like any other crime. A blow on a townsperson is weighed by `combat.js yours()` and reported through `crime()` to the law (`law/index.js`), whose witnesses call it in. Its officers close in and arrest you the law's way: keep still, or put your hands up (H), and you are cuffed, booked and fined. Townsfolk fighting each other still report their brawl through `ctx.event`. Officers never join a fist fight: they are left to the law's own tactics. A blow on someone who has already struck you is self-defence (`blow.moral`, below): it is not counted as a crime.
+- **Morality**: two new deeds in `combat/morality.js`.
   - `start-fight`: the first blow on a civilian not already fighting you.
   - `break-up-fight`: hitting or grabbing one of two townsfolk fighting each other, which ends their fight.
-  - `submit-arrest` and `resist-arrest`.
-  Blows on someone who has already struck you carry `selfDefence` and `hostileTarget` through a new `blow.moral` field that `combat.js yours()` merges in. Those blows cost very little and do not raise the wanted level.
+  Blows on someone who has already struck you carry `selfDefence` and `hostileTarget` through a new `blow.moral` field that `combat.js yours()` merges in. Those blows cost very little and are not counted as a crime.
 - **Weapons of opportunity**: a pipe joins the bat and the bottle (`brawl.js BLOWS.pipe`, `improvised`). Every two to four and a half minutes in town, one of them is left lying within 7 to 15 m of you (never more than three about), to be picked up by walking over it, the same way as before. A bat splinters after 16 hits and a bottle shatters after 2. Drawing a weapon drops whatever you were holding.
 
 ## Phones and performance
@@ -60,12 +56,12 @@ The per-frame paths allocate nothing: the foe list, the turn queue (plain arrays
 ## Wiring
 
 - `main.js`: one line after the military, `combat.melee.bind({ avatar, self: you })`, so that in third person your own body blocks, chokes, gets cuffed and plays each strike.
-- `combat.js`: the melee context gains `isPhone`, `player`, `input`, `speed`, `squads`, `witnessed`, `wanted`, `deed`, `credits` and `pay`; civilians hear fists at 7 m; `yours()` merges `blow.moral`.
-- `ai-squads.js`: `personStep` hands a squad member with `h.melee` set to the foes. It only moves the body, and the gun stays out only while they are arresting you.
+- `combat.js`: the melee context gains `isPhone`, `player`, `input`, `speed`, `squads` and `deed`; civilians hear fists at 7 m (`civilians.js` too, for a townsperson struck by a fist); `yours()` merges `blow.moral`.
+- `ai-squads.js`: `personStep` hands a squad member with `h.melee` set to the foes. It only moves the body, and the gun is put away.
 - `people/motion.js`: `jolt()` and `S.freeze` (hit-stop). `people/actions.js`: `block`, `shuffle`, `haymaker`, `overhead`, `flinch`, `getup`, `choke`, `choked`, `cuffed`.
 
-Console: `Crysis.combat.melee.info()` (now with foes, turns, arrest and watchers), `.spar(n)` (the nearest n grown-ups square up to you), `.swing('heavy')`, `.block(true)`, `.dodge()`, `.takedown()`.
+Console: `Crysis.combat.melee.info()` (now with foes, turns and watchers), `.spar(n)` (the nearest n grown-ups square up to you), `.swing('heavy')`, `.block(true)`, `.dodge()`, `.takedown()`.
 
 ## Tests
 
-`island/tools/melee.test.mjs` covers the strike phases and the buffer and follow windows, the string, heavy charge and counters, parry, block, guard break and dodge grace, which side a blow came from and how hard it takes someone, hit-stop limits, takedown geometry, turn-taking (the longest waiting goes first, the breath between turns, two at once only with four or more and never on a phone), the arrest steps (comply, resist, flee, a weapon is not keeping still) and the fine, the fight deeds and their scores, and the pipe.
+`island/tools/melee.test.mjs` covers the strike phases and the buffer and follow windows, the string, heavy charge and counters, parry, block, guard break and dodge grace, which side a blow came from and how hard it takes someone, hit-stop limits, takedown geometry, turn-taking (the longest waiting goes first, the breath between turns, two at once only with four or more and never on a phone), the fight deeds and their scores, and the pipe.

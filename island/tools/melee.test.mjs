@@ -1,8 +1,8 @@
 // Close combat: strike timing, the string, heavies, the parry and dodge windows, reactions,
-// turn-taking among those squaring up, the takedown, arrests and the deeds a fight counts as.
+// turn-taking among those squaring up, the takedown and the deeds a fight counts as.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MOVES, STRING, phaseAt, canBuffer, canFollow, moveTime, nextLight, heavyOf, HEAVY_HOLD, charge, strikeDamage, defend, PARRY_WINDOW, DODGE, sideOf, reaction, hitStop, canTakedown, createTurns, turnsFor, ringAngle, tell, arrestStep, ARREST, fine, fightDeed } from '../src/combat/melee-rules.js';
+import { MOVES, STRING, phaseAt, canBuffer, canFollow, moveTime, nextLight, heavyOf, HEAVY_HOLD, charge, strikeDamage, defend, PARRY_WINDOW, DODGE, sideOf, reaction, hitStop, canTakedown, createTurns, turnsFor, ringAngle, tell, fightDeed } from '../src/combat/melee-rules.js';
 import { RULES, score } from '../src/combat/morality.js';
 import { BLOWS, improvised } from '../src/combat/brawl.js';
 
@@ -102,8 +102,8 @@ test('a takedown only from behind, close and unseen', () => {
 test('those squaring up take turns: few at once, a breath between, the longest waiting first', () => {
 	let r = 0;
 	const T = createTurns({ max: 1, gap: [0.5, 0.5], rnd: () => r });
+	// a asks first and is given the turn; b waits
 	T.want('a'); T.tick(0.1); T.want('b');
-	// a has waited longest
 	assert.equal(T.want('b'), false);
 	assert.equal(T.want('a'), true);
 	assert.equal(T.busy, 1);
@@ -139,31 +139,6 @@ test('those squaring up take turns: few at once, a breath between, the longest w
 	void r;
 });
 
-test('an arrest: the police close in, order you down, cuff you if you keep still; resist or run and it ends', () => {
-	let a = { state: 'approach', t: 0, comply: 0 };
-	const s = (o) => ({ dist: 10, speed: 0, attacking: false, armed: false, dt: 0.1, ...o });
-	a = arrestStep(a, s({ dist: 12 }));
-	assert.equal(a.state, 'approach');
-	a = arrestStep(a, s({ dist: 3 }));
-	assert.equal(a.state, 'order');
-	// moving about: no closer to cuffs
-	for (let i = 0; i < 40; i++) a = arrestStep(a, s({ dist: 2.5, speed: 3 }));
-	assert.equal(a.state, 'order');
-	for (let i = 0; i < Math.ceil(ARREST.comply / 0.1) + 1; i++) a = arrestStep(a, s({ dist: 2.5 }));
-	assert.equal(a.state, 'cuffing');
-	for (let i = 0; i < Math.ceil(ARREST.cuff / 0.1) + 1; i++) a = arrestStep(a, s({ dist: 1 }));
-	assert.equal(a.state, 'done');
-	assert.equal(arrestStep({ state: 'order', t: 0, comply: 1 }, s({ dist: 2, attacking: true })).state, 'resist');
-	assert.equal(arrestStep({ state: 'order', t: 0, comply: 1 }, s({ dist: 50 })).state, 'fled');
-	// a weapon in hand is not keeping still
-	let b = { state: 'order', t: 0, comply: 0 };
-	for (let i = 0; i < 60; i++) b = arrestStep(b, s({ dist: 2, armed: true }));
-	assert.equal(b.state, 'order');
-	assert.equal(fine(2, 1000), 90);
-	assert.equal(fine(2, 30), 30);
-	assert.equal(fine(0, 0), 0);
-});
-
 test('a fight on the compass: starting one costs, breaking one up earns, self-defence is neither', () => {
 	assert.equal(fightDeed({ first: true }), 'start-fight');
 	assert.equal(fightDeed({ first: true, theyStruck: true }), null);
@@ -171,11 +146,10 @@ test('a fight on the compass: starting one costs, breaking one up earns, self-de
 	assert.equal(fightDeed({ theirBrawl: true, withMe: true }), null);
 	assert.equal(fightDeed({ first: true, hostile: true }), null);
 	assert.equal(fightDeed({ first: false }), null);
-	for (const k of ['start-fight', 'break-up-fight', 'submit-arrest', 'resist-arrest']) assert.ok(RULES[k], k);
+	for (const k of ['start-fight', 'break-up-fight']) assert.ok(RULES[k], k);
 	const start = score('start-fight'), stop = score('break-up-fight');
 	assert.ok(start.law < 0 && start.protect < 0);
 	assert.ok(stop.protect > 0 && stop.mercy > 0);
-	assert.ok(score('resist-arrest').law < score('submit-arrest').law);
 });
 
 test('weapons of opportunity: a pipe joins the bat and the bottle', () => {

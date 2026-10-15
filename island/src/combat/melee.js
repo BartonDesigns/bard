@@ -53,7 +53,7 @@ export function createMelee(ctx) {
 		move: null, m: null, mt: 0, hitDone: false, charging: false, charge: 0, counter: false, queued: null, target: null,
 		press: false, pressT: 0, block: false, blockT: 0, breakT: 0, dodgeT: -1, dodgeX: 0, dodgeZ: 0, dodgeSide: 0, dodgeCool: 0,
 		staggerT: 0, counterT: 0, take: null, takeT: null, cuffed: false, locked: false, attackT: -9, rock: 0,
-		offence: { t: -1e9, x: 0, z: 0, hurt: 0 }, reportT: -1e9, fought: new Set(), told: {},
+		fought: new Set(), told: {},
 	};
 	let startT = 70 + Math.random() * 60, lineT = 0, now = 0, scanT = 0, scatterT = 120 + Math.random() * 90;
 	let bound = { avatar: null, self: null };
@@ -169,12 +169,6 @@ export function createMelee(ctx) {
 		me.fought.add(T.id);
 		if (deed === 'start-fight') ctx.deed?.('start-fight', T.name || 'someone');
 		if (deed === 'break-up-fight' && !q.brokenUp) { q.brokenUp = true; q.done = true; ctx.deed?.('break-up-fight', T.name || 'someone'); }
-		// a townsperson struck unprovoked: an offence, reported if anyone saw
-		if (!hostile && !theyStruck && (T.faction === 'civ' || T.faction === 'village')) {
-			const O = me.offence;
-			O.t = now; O.x = e.x; O.z = e.z; O.hurt++;
-			if (now - me.reportT > 60 && ctx.witnessed?.(T.bound)) { me.reportT = now; ctx.event?.({ kind: 'brawl', x: e.x, z: e.z, stage: 'fists', severity: 1 }); }
-		}
 		// the feel of it
 		const result = blocked ? 'block' : 'hit', hs = hitStop(m, result) * (r.killed ? 1.3 : 1);
 		feel.stop(hs);
@@ -333,7 +327,6 @@ export function createMelee(ctx) {
 				k.done = true;
 				const T = k.T, hostile = T.kind === 'hostile';
 				ctx.deal(T, { amount: 4, type: 'impact', part: 'torso', src: { x: k.x, y: P.pos.y, z: k.z }, dir: { x: fx, y: 0, z: fz }, by: ME, melee: 'takedown', moral: hostile ? { hostileTarget: true } : null }, true);
-				if (!hostile && (T.faction === 'civ' || T.faction === 'village')) { const O = me.offence; O.t = now; O.x = k.x; O.z = k.z; O.hurt++; }
 				// out cold: limp where they stand, a long while down; a fighter is out of the fight
 				if (b.h) { const h = b.h; h.surrendered = TAKEDOWN.down + 18; h.noGun = true; h.body?.hand?.hide(); h.target = null; h.role = 'yield'; h.melee = false; }
 				if (k.ov && b.p.override === k.ov) b.p.override = null;
@@ -576,9 +569,6 @@ export function createMelee(ctx) {
 	// ---------- the foes ----------
 	const foes = createFoes({ ...ctx, isPhone, sound, ME }, {
 		incoming, taking: () => !!me.take, attacking: () => now - me.attackT < 1.0,
-		cuffs(on) { me.cuffed = on; lock(on); const A = third(); if (A) A.M.act(on ? 'cuffed' : null, on ? 0 : undefined); },
-		offence: () => ({ recent: now - me.offence.t < 150, hurt: me.offence.hurt }),
-		cleared() { me.offence.t = -1e9; me.offence.hurt = 0; },
 	});
 
 	// ---------- input ----------
@@ -704,7 +694,6 @@ export function createMelee(ctx) {
 	}
 	const info = () => ({
 		item: me.item, holding: !!me.held, last: me.last, move: me.move, phase: me.move ? phaseAt(me.m, me.mt) : null, block: me.block, dodging: me.dodgeT >= 0, counter: +me.counterT.toFixed(2), takedown: me.take ? +me.take.t.toFixed(1) : !!me.takeT,
-		offence: { recent: now - me.offence.t < 150, hurt: me.offence.hurt },
 		active: ctx.active(), fists: view.root.visible, guardT: +me.guardT.toFixed(1),
 		brawls: brawls.map((q) => ({ stage: q.stage, a: q.A.kind, b: q.B.kind, hp: [Math.round(q.A.hp ?? 100), Math.round(q.B.hp ?? 100)] })), drops: drops.length, nextIn: Math.round(startT), ...foes.info(), sound: sound.info(),
 	});

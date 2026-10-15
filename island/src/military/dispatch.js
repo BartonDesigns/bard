@@ -11,12 +11,18 @@
 //
 // Every vehicle on the move is a target in the combat layer (you can fight either side); a
 // destroyed one burns and is left a while as a wreck.
+//
+// Only the big trouble comes here (law/ladder.js routeTrouble): a boss, an invasion, a riot, a
+// gang war at its worst, the wanted level at the very top; anything smaller is passed to the
+// police. Going home, the troops walk back to their vehicles and mount up before the column
+// pulls out, and the column is let go only once it is out of sight.
 
 import * as THREE from 'three';
 import { planDispatch, invasionPlan, nextInvasion, SPEED, toWorld } from './rules.js';
-import { roadRoute, along, joinRoute } from './route.js';
+import { roadRoute, along, joinRoute, trimToRoad } from './route.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
+import { routeTrouble } from '../law/ladder.js';
 
 const SHOW_R = 1800, HIDE_R = 2300, STAY = 150;
 const HP = { tank: 900, apc: 420, jeep: 180, truck: 260, heli: 380, jet: 300 };
@@ -34,7 +40,8 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 	// ---------- trouble reported (combat's hooks.event) ----------
 	function event(e) {
 		if (!W()?.bayArea) return null;
-		if (e.kind === 'brawl' || (e.kind === 'gang' && (e.severity || 1) < 2)) return military.police?.event?.(e) || null;
+		const route = routeTrouble(e);
+		if (route !== 'military') return military.police?.event?.(e, { swat: route === 'swat' }) || null;
 		if (patrols.filter((p) => p.side === 'guard' && p.state !== 'done').length >= 3) return null;
 		// (one patrol to a place at a time)
 		if (patrols.some((p) => p.side === 'guard' && p.state !== 'done' && Math.hypot(p.to.x - e.x, p.to.z - e.z) < 600)) return null;
@@ -52,7 +59,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 	// a patrol under way: road units follow the route, air units fly straight
 	function launch({ side, why, base = null, from, to, units, troops, mode }) {
 		const roadUnits = units.filter((u) => u !== 'heli' && u !== 'jet'), airUnits = units.filter((u) => u === 'heli' || u === 'jet');
-		const route = roadUnits.length ? roadRoute(near(), from, to) : null;
+		const route = roadUnits.length ? trimToRoad(roadRoute(near(), from, to)) : null;
 		const p = {
 			id: 'p' + seq++, side, why, base, from, to, mode, troops, route, t: 0, s: 0, state: 'enroute', shown: false, deployed: false, stayT: STAY, quietT: 0,
 			units: [...roadUnits.map((k, i) => unit(k, side, i, false)), ...airUnits.map((k, i) => unit(k, side, i, true))],
@@ -115,7 +122,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			if (d < bd + 100) { bd = d; best = { pos: new THREE.Vector3(T.bound.x, T.bound.y, T.bound.z), T }; }
 		}
 		const e = eye();
-		const hatesYou = u.side !== 'guard' || combat.wantedLevel() >= 4;
+		const hatesYou = u.side !== 'guard' || combat.wantedLevel() >= 5;
 		if (e && hatesYou && Math.hypot(e.x - u.pos.x, e.z - u.pos.z) < bd) best = { pos: e.clone().add(_v.set(0, -0.4, 0)), me: true };
 		return best;
 	}
@@ -172,10 +179,15 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			const anyone = p.units.some((u) => !u.dead && targetFor(u, 250));
 			p.quietT = anyone ? 0 : p.quietT + dt;
 			if (p.stayT <= 0 || p.quietT > 40) leave(p);
+		} else if (p.state === 'boarding') {
+			// the troops back at the vehicles (or out of your sight a while), then off
+			const out = (p.members || []).filter((h) => !h.dead);
+			const back = out.every((h) => p.units.some((u) => !u.dead && !u.air && Math.hypot(u.pos.x - h.pos.x, u.pos.z - h.pos.z) < 5));
+			if ((back && p.t - p.boardAt > 2) || p.t - p.boardAt > 30) pullOut(p);
 		} else if (p.state === 'leaving') {
 			p.s -= SPEED.road * dt;
 			for (const u of p.units) if (u.air) u.flyS -= SPEED.heli * dt;
-			if (p.t > p.leaveAt + 90 || (!p.shown && p.t > p.leaveAt + 20)) finish(p);
+			if ((!p.shown && p.t > p.leaveAt + 20) || p.t > p.leaveAt + 300) finish(p);
 		}
 		// each unit: placed, drawn when in sight, fighting on the scene
 		const lead = p.route ? along(p.route, p.s) : null;
@@ -184,7 +196,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		// town's), so find the way on by them from where the column is; the stretch behind it kept
 		if (shownNow && !p.shown && p.route && p.state === 'enroute' && !p.rerouted) {
 			p.rerouted = true;
-			const R = roadRoute(near(), { x: lead.x, z: lead.z }, p.to);
+			const R = trimToRoad(roadRoute(near(), { x: lead.x, z: lead.z }, p.to));
 			if (R.pts.length > 4) {
 				const back = [];
 				for (let s = Math.max(0, p.s - 220); s < p.s - 1; s += 20) { const q = along(p.route, s); back.push(q.x, q.z); }
@@ -226,7 +238,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 				u.pos.set(x, ground(x, z) + 160, z); u.yaw = Math.atan2(dx, dz); u.bank = 0;
 				return;
 			}
-			if (p.state === 'onscene') {
+			if (p.state === 'onscene' || p.state === 'boarding') {
 				// circling the scene
 				u.orbit += dt * 0.18;
 				const r = 90 + u.i * 30, x = p.to.x + Math.cos(u.orbit) * r, z = p.to.z + Math.sin(u.orbit) * r;
@@ -238,10 +250,10 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			return;
 		}
 		if (!p.route) return;
-		if (p.state === 'onscene' || (p.state === 'enroute' && p.s + u.s >= p.route.length - 20)) {
-			// parked round the scene, facing it
-			const a = (u.i / Math.max(1, p.units.length)) * Math.PI * 1.6 + Math.atan2(p.from.x - p.to.x, p.from.z - p.to.z) - 0.8, r = 22 + u.i * 4;
-			const x = p.to.x + Math.sin(a) * r, z = p.to.z + Math.cos(a) * r;
+		if (p.state === 'onscene' || p.state === 'boarding' || (p.state === 'enroute' && p.s + u.s >= p.route.length - 20)) {
+			// pulled up nose to tail along the road at the scene (not across the block), facing it
+			const q = along(p.route, Math.max(0, p.route.length - 6 - u.i * (DIMS[u.kind].L + 6)));
+			const x = q.x, z = q.z;
 			u.pos.x += (x - u.pos.x) * Math.min(1, dt * 0.8); u.pos.z += (z - u.pos.z) * Math.min(1, dt * 0.8);
 			u.pos.y = ground(u.pos.x, u.pos.z, u.pos.y + 2);
 			u.yaw += Math.atan2(Math.sin(Math.atan2(p.to.x - u.pos.x, p.to.z - u.pos.z) - u.yaw), Math.cos(Math.atan2(p.to.x - u.pos.x, p.to.z - u.pos.z) - u.yaw)) * Math.min(1, dt);
@@ -263,13 +275,29 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		military.deployments.push({ x: p.to.x, z: p.to.z, r: 160, id: p.id });
 		const fid = p.side === 'guard' ? 'guard' : 'ironvale', n = isPhone ? Math.min(3, p.troops) : Math.min(6, p.troops);
 		const a = Math.atan2(p.from.x - p.to.x, p.from.z - p.to.z), x = p.to.x + Math.sin(a) * 18, z = p.to.z + Math.cos(a) * 18;
+		p.members = [];
 		p.squad = combat.squads.squad(fid, x, z, n, { post: { kind: 'deploy', x: p.to.x, z: p.to.z, r: 140 }, alert: p.side !== 'guard', tag: p.id, y: ground(x, z) + 0.6 });
+		p.squad.then((s) => { p.members = s?.members || []; });
 	}
 	function leave(p) {
-		p.state = 'leaving'; p.leaveAt = p.t;
+		p.state = 'boarding'; p.boardAt = p.t;
 		const i = military.deployments.findIndex((d) => d.id === p.id);
 		if (i >= 0) military.deployments.splice(i, 1);
-		p.squad?.then((s) => { for (const h of [...(s?.members || [])]) if (!h.dead) combat.squads.release(h); });
+		// each soldier back to the nearest vehicle
+		const wheels = p.units.filter((u) => !u.dead && !u.air);
+		for (const h of p.members || []) {
+			if (h.dead) continue;
+			let best = null, bd = 1e9;
+			for (const u of wheels) { const d = Math.hypot(u.pos.x - h.pos.x, u.pos.z - h.pos.z); if (d < bd) { bd = d; best = u; } }
+			h.recall = true; h.alert = 0; h.target = null; h.goal = null; h.leg = undefined;
+			h.post = best ? { kind: 'board', x: best.pos.x - Math.sin(best.yaw) * (DIMS[best.kind].L / 2 + 1), z: best.pos.z - Math.cos(best.yaw) * (DIMS[best.kind].L / 2 + 1), r: 8 } : h.post;
+		}
+		if (!wheels.length || !(p.members || []).length) pullOut(p);
+	}
+	function pullOut(p) {
+		p.state = 'leaving'; p.leaveAt = p.t;
+		for (const h of [...(p.members || [])]) if (!h.dead) combat.squads.release(h);
+		p.members = [];
 		if (p.route) p.s = Math.min(p.s, p.route.length - 20);
 	}
 	function finish(p) {
