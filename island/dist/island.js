@@ -9286,7 +9286,7 @@ vRoad = aRoad;`),k.fragmentShader=`uniform float uNightR; varying vec2 vRoad;
 	}`,nCe=`
 	uniform float uSfNight;
 	varying vec3 vPosM; varying vec3 vCamM; varying vec4 vDim; varying vec4 vShop; varying vec4 vState; varying vec3 vFrame;
-	vec3 sfInside = vec3(0.0); float sfGlass = 0.0; float sfRough = 0.6;
+	vec3 sfInside = vec3(0.0); vec3 sfBase = vec3(0.5); float sfGlass = 0.0; float sfRough = 0.6;
 	float sfH(vec2 p) { p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 	vec3 sfPal(float h) {
 		return h < 0.17 ? vec3(0.75, 0.2, 0.15) : h < 0.33 ? vec3(0.9, 0.72, 0.2) : h < 0.5 ? vec3(0.2, 0.45, 0.7) : h < 0.67 ? vec3(0.3, 0.6, 0.3) : h < 0.83 ? vec3(0.92, 0.9, 0.85) : vec3(0.55, 0.3, 0.55);
@@ -9392,10 +9392,10 @@ vRoad = aRoad;`),k.fragmentShader=`uniform float uNightR; varying vec2 vRoad;
 		float glass = inner * (1.0 - mull * (1.0 - doorIn)) * (1.0 - trans) * (1.0 - kp) * (1.0 - doorFr);
 		if (fk > 1.5) glass = inner;                                   // (a workshop's bay: one opening)
 		vec3 frameC = vFrame;
-		diffuseColor.rgb = mix(frameC, frameC * 0.55, kp);
+		sfBase = mix(frameC, frameC * 0.55, kp);
 		sfRough = 0.45;
 		// the door's handle
-		if (doorIn > 0.5 && abs(abs(p.x - doorX) - 0.36) < 0.025 && p.y > 0.9 && p.y < 1.25) { diffuseColor.rgb = vec3(0.75, 0.72, 0.65); glass = 0.0; }
+		if (doorIn > 0.5 && abs(abs(p.x - doorX) - 0.36) < 0.025 && p.y > 0.9 && p.y < 1.25) { sfBase = vec3(0.75, 0.72, 0.65); glass = 0.0; }
 		// an office: blinds behind the glass, closed more after hours
 		float blind = 0.0;
 		if (fk > 0.5 && fk < 1.5) blind = step(fract(p.y / 0.06), mix(0.35, 0.85, 1.0 - open)) * step(Hh - (0.4 + 0.5 * fract(seed * 7.0)) * Hh, p.y);
@@ -9406,7 +9406,7 @@ vRoad = aRoad;`),k.fragmentShader=`uniform float uNightR; varying vec2 vRoad;
 		if (sh + boxSh > 0.5) {
 			float rib = 0.5 + 0.5 * sin(p.y * 6.2831 / 0.075);
 			vec3 sc = fk > 1.5 ? mix(vec3(0.7, 0.71, 0.72), frameC, 0.25) : vec3(0.52, 0.53, 0.54);
-			diffuseColor.rgb = sc * (0.82 + 0.18 * rib) * (0.9 + 0.1 * sfH(floor(p * vec2(0.5, 3.0)) + seed));
+			sfBase = sc * (0.82 + 0.18 * rib) * (0.9 + 0.1 * sfH(floor(p * vec2(0.5, 3.0)) + seed));
 			sfRough = 0.55; sfGlass = 0.0;
 			return;
 		}
@@ -9498,7 +9498,7 @@ vRoad = aRoad;`),k.fragmentShader=`uniform float uNightR; varying vec2 vRoad;
 `+Z.fragmentShader.replace("#include <clipping_planes_fragment>",`#include <clipping_planes_fragment>
 if (vState.w < 0.5) discard;`).replace("#include <color_fragment>",`#include <color_fragment>
 sfRoom();
-if (sfGlass > 0.5) diffuseColor.rgb = vec3(0.04, 0.05, 0.055);`).replace("#include <roughnessmap_fragment>",`#include <roughnessmap_fragment>
+diffuseColor.rgb = sfGlass > 0.5 ? vec3(0.04, 0.05, 0.055) : sfBase;`).replace("#include <roughnessmap_fragment>",`#include <roughnessmap_fragment>
 roughnessFactor = sfRough;`).replace("#include <emissivemap_fragment>",`#include <emissivemap_fragment>
 				if (sfGlass > 0.5) {
 					// what is seen of the room: by day a dim daylit room (darker shut); after dark its own
