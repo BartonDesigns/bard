@@ -13,7 +13,8 @@ Pure functions, baked into the cloth mesh at dressing time:
 - `sleeveEase(garment, t, dc, outer)`: the stand-off of a sleeve at `t` along the arm (0 the shoulder joint, 1 the elbow, 2 the wrist) and `dc` metres above its cuff. Snug at the armhole, opening to about 13 mm at the bicep (regular fit; scaled by `looseness`: slim 0.55, oversized 1.9), narrowing by about a quarter down the forearm. Long sleeves end in a cuff: a knit rib hugs the wrist at 2.8 mm with the spare length stacked just above it; a woven shirt has a firm band of 6.5 to 8 mm; a jacket's open end narrows a little. A short sleeve opens toward its hem. `rolled` (a new sleeve length, cut at 30% of the forearm) ends in a thick roll of 12 to 15 mm below the elbow.
 - `waistbandEase(garment, h)`: a ribbed top (hoodie, sweat, half-zip, track top, fleece, knit) draws in to the hips over its last 6 cm and blouses just above.
 - `armT(point, cut)`: where a rest-pose point lies along the arm, from the joints `landmarks()` now keeps (`cut.arm`).
-- Edges: each cut edge's turned-back return now has its own thickness (`finishGarmentEdges`): 3 to 3.4 mm for a rib, 2.6 mm for a shirt cuff, 9 mm for a rolled sleeve, and a sleeveless armhole is cut clean in a curve instead of left to whole cage triangles (the hi-vis vest's jagged shoulders).
+- Edges: each cut edge's turned-back return now has its own thickness (`finishGarmentEdges`): 3 to 3.4 mm for a rib, 2.6 mm for a shirt cuff, 9 mm for a rolled sleeve, and a sleeveless armhole is cut clean in a curve instead of left to whole cage triangles, the shoulder's arm-weighted triangles included up to that curve (the hi-vis vest's jagged shoulders).
+- Layers under contact (`cloth-collide.js` `LAYER_GAP`): a jacket or vest meets the body capsules 4 mm further out than the top under it, so where a pose presses both onto the body the top no longer shows through in slivers.
 
 ## 3. Folds that follow the pose (vertex shader, no cloth simulation)
 
@@ -61,16 +62,19 @@ Per body, measured in the preview (`island/tools/thirdperson-preview.mjs`):
 |---|---|---|
 | cloth mesh, tee | 10,366 vertices, 14,125 triangles | 10,320 vertices, 14,085 triangles |
 | cloth mesh, oversized hoodie | 11,707 / 16,834 | 11,939 / 17,038 |
-| accessories, hoodie (hood and strings) | 264 triangles | about 700 |
-| accessories, police (cap, carrier) | 340 | 1,468 |
-| accessories, soldier (helmet, carrier, gloves) | 536 | 1,564 |
+| cloth mesh, oxford shirt | 11,120 / 15,892 | 11,312 / 16,066 |
+| cloth mesh, soldier (jacket over top) | 15,413 / 20,053 | 15,456 / 20,126 |
+| accessories, hoodie (hood, roll, strings) | 264 triangles | 784 |
+| accessories, shirt (collar) | 0 | 192 |
+| accessories, police (cap, carrier, radio, badge, band) | 340 | 1,468 |
+| accessories, soldier (helmet, carrier, pouches, gloves) | 536 | 1,708 |
 | extra vertex data | | 2 bytes a cloth vertex (about 22 KB a body) |
 
 Draw calls and programs are unchanged (the carrier, hood and collar are in the accessory mesh; the garment program key moved to `crysis-garment-9`). Nothing new is allocated per frame. The pose folds run only near the camera: `P.lod(dist)` fades them out by 22 m (10 m on a phone or when the governor is at low or minimal), and a phone starts with them off until `lod` brings someone close; the fragment details stop once a pixel covers a centimetre. The accessory pieces take fewer segments on a phone (`lo`).
 
 ## 9. Verification
 
-Before and after captures (headless Chromium, software GL) in the session scratchpad `thirdperson/`: civilians in a tee, an oversized hoodie, an oxford shirt and an open jacket over a tee, a worker in hi-vis, the police officer and the soldier at the ready and aiming, the gang member aiming a carbine, the avatar aiming a rifle and drawing the bow, and close-ups of sleeves, cuffs, the hood and the hands on the weapon. `node island/tools/thirdperson-browser.cjs` re-takes them (bundle the preview first; see its header). Tests: `island/tools/garment-shape.test.mjs` (sleeve profiles, waistbands, arm position, pose folds, the torso field, carrier, hood and collar geometry).
+Before and after captures (headless Chromium, software GL) in the session scratchpad `thirdperson/`: civilians in a tee, an oversized hoodie, an oxford shirt and an open jacket over a tee, a worker in hi-vis, the police officer and the soldier at the ready and aiming, a soldier with rolled sleeves, the officer's hands at the ready, the gang member aiming a carbine, the avatar aiming a rifle and drawing the bow, and close-ups of sleeves, cuffs, the hood and the hands on the weapon. `node island/tools/thirdperson-browser.cjs` re-takes them (bundle the preview first; see its header). Tests: `island/tools/garment-shape.test.mjs` (sleeve profiles, waistbands, arm position, pose folds, the torso field, carrier, hood and collar geometry).
 
 ## 10. Left for later
 

@@ -59,6 +59,8 @@ float armAngle(vec3 P) {
 	vec3 b1 = normalize(cross(d, vec3(0.0, 0.0, 1.0))), b2 = cross(d, b1);
 	return atan(dot(r, b2), dot(r, b1));
 }
+// a crease's profile: a rounded crest, broad sides (from a sine)
+float soft(float s) { float c = 1.0 - sqrt(s * s + 0.04); return c * c; }
 // folds: compression folds round the elbows, the backs of the knees and the waist,
 // fabric stacked at the ankles, and a slow drape all over (a height, for the bump)
 float folds(vec3 P, float limb, int s) {
@@ -73,7 +75,7 @@ float folds(vec3 P, float limb, int s) {
 		// the hang: long soft folds down the sleeve and the odd diagonal drag line, fading
 		// toward the armhole
 		float an = armAngle(P);
-		h += (pow(1.0 - abs(sin(an * 2.0 + t * 1.3 + wob * 0.8)), 2.0) * 22.0 + pow(1.0 - abs(sin(an * 3.5 - t * 4.5 + wob)), 3.0) * 9.0) * smoothstep(0.1, 0.5, t);
+		h += (soft(sin(an * 2.0 + t * 1.3 + wob * 0.8)) * 16.0 + soft(sin(an * 3.5 - t * 4.5 + wob)) * 5.0) * smoothstep(0.1, 0.5, t);
 		// drag lines spiralling off a bent elbow, up the upper arm and down the forearm
 		h += sin(an * 2.0 + abs(t - 1.0) * 26.0 + wob * 3.0) * 10.0 * vFold.y * exp(-pow((t - 1.0) / 0.45, 2.0)) * smoothstep(0.03, 0.15, abs(t - 1.0));
 		h += sin(t * 130.0 + wob * 6.0 + armAngle(P) * 1.5) * 1.6 * exp(-pow((vCuff - 0.085) / 0.04, 2.0)) * step(1.5, t);
