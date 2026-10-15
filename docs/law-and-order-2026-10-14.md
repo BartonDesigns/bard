@@ -38,7 +38,19 @@ One corner crew instead of two, at most two cars and one roadblock, a tactical t
 
 `island/tools/law-scenarios-browser.cjs` enters Earth, goes to Union Square, and stages five scenes, stepping the fight, the military and the law directly at 0.1 s (a software renderer is far too slow to wait for): a gang fight downtown, a punch thrown at a passer-by with others about, a shootout with a gang crew, a boss and an invasion. Every game second it records the wanted level, the cruisers, the convoys and each side's squads, and looks for units stuck in place, inside buildings, made or let go in plain view, police ignoring a crime, and the military sent for a small one. `GOTO=lat,lon SCENES=gang,crime node island/tools/law-scenarios-browser.cjs <outdir> <tag>`.
 
-RESULTS
+### Results, before and after (Union Square, software renderer, the machine heavily loaded)
+
+| Scene | Before (main) | After |
+| --- | --- | --- |
+| Gang fight downtown | a cruiser sent 1 s after the fight started (nobody had called), on scene at 18 s; 6 gang members made in plain view at 74 to 82 m; 399 samples of units inside buildings | the call comes through at 11 s (gunfire heard), the cruiser is on scene at 21 s; nobody made in view, nobody inside a building; 3 short stuck flags (members walking into a wall before the sidestep) |
+| Punch a passer-by | one star the instant the blow landed, before anyone could have called; no police ever sent; the star gone at 16 s | nothing until the witness's call at about 15 s, one star (reported), one car on scene at 27 s; officers search where it happened, the level ebbs, they walk back to the car at 61 s, board and drive off by 66 s, gone out of sight by 76 s |
+| Shootout | the gang crew never took the harness's shots (it aims from the camera while the player is in flight mode after `goTo`); no response either side | the same harness limitation; one crew member made at 37 m in view (the test's own `spawn` at 30 m, not the game's) |
+| Boss | no base sited near enough within the run: no dispatch | run cut short by a machine restart |
+| Invasion | the Ironvale column under way; no base sited near enough to answer within 150 s | run cut short by a machine restart |
+
+The before run also shows why the old police never came for the punch: the combat director answers the wanted level only while the player is on foot (not in flight mode, where `goTo` leaves you); the law answers regardless.
+
+Known gaps from the runs: in the after run's gang scene the two crews never got a sight line of each other and stood their ground for the whole minute and a half (the police arrived and stood by with them); the gang war the law starts itself (`ambient`) now sends each crew toward the other's corner so they meet; the console's `Crysis.combat.fight()` (what the harness uses) still places two crews and leaves them. The boss, invasion and convoy scenes still need a full run on a quiet machine with a base sited.
 
 ## Console
 

@@ -369,8 +369,9 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		if (!s) return true;
 		warT = t; S.wars++;
 		const other = GANGS.find((g) => g !== T.gang);
-		combat.squads.squad(T.gang, s.x - 9, s.z, isPhone ? 2 : 3, {});
-		combat.squads.squad(other, s.x + 9, s.z + 4, isPhone ? 2 : 3, {});
+		// (each crew heads for the other's corner: out of sight when made, in sight soon after)
+		combat.squads.squad(T.gang, s.x - 9, s.z, isPhone ? 2 : 3, { dest: { x: s.x + 9, z: s.z + 4 } });
+		combat.squads.squad(other, s.x + 9, s.z + 4, isPhone ? 2 : 3, { dest: { x: s.x - 9, z: s.z } });
 		incident({ kind: 'gang', x: s.x, z: s.z, severity: 1 });
 		return true;
 	}
