@@ -116,11 +116,12 @@ export function createMonuments(ctx) {
 		float r = abs(m.w), d = distance(vLmW, m.xyz) / r;
 		if (d > 1.0) continue;
 		vec3 q = vLmW - m.xyz;          // (near the mark: the world is too far out for the noise)
-		float n = lmN(q * 2.2 + 17.0), n2 = lmN(q * 7.0 + 3.0);
+		float n2 = lmN(q * 7.0 + 3.0);
 		if (m.w > 0.0) {
-			// a scorch: soot thick at its heart, thrown out in streaks
-			float k = 1.0 - smoothstep(0.2, 1.0, d + (n - 0.5) * 0.55);
-			diffuseColor.rgb *= 1.0 - 0.88 * k * (0.75 + 0.25 * n2);
+			// a scorch: soot thick at its heart, thinning out to a ragged edge
+			float n1 = lmN(q * 0.8 + 5.0);          // (a soft, broad edge: fine noise reads as squares at a distance)
+			float k = 1.0 - smoothstep(0.15, 1.0, d + (n1 - 0.5) * 0.45);
+			diffuseColor.rgb *= 1.0 - 0.85 * k * k;
 		} else {
 			// a chip: the stone knocked out, paler and rough inside, dark at the very heart
 			float k = 1.0 - smoothstep(0.5, 0.8, d + (n2 - 0.5) * 0.45);
