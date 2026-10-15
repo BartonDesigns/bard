@@ -224,6 +224,8 @@ export const FORCES = Object.freeze({
 	boss: { reach: 40000, road: ['tank', 'apc', 'jeep'], air: ['heli', 'jet'], troops: 6, cool: 420 },
 	invasion: { reach: 160000, road: ['tank', 'tank', 'apc', 'apc', 'jeep'], air: ['heli', 'heli', 'jet'], troops: 10, cool: 600 },
 	wanted: { reach: 12000, road: ['jeep', 'apc'], air: ['heli'], troops: 4, cool: 200 },
+	// a catastrophe (cataclysm/): trucks and a jeep for search and rescue, a helicopter over it
+	disaster: { reach: 40000, road: ['truck', 'jeep', 'truck'], air: ['heli'], troops: 4, cool: 900 },
 });
 export const SPEED = { road: 16, heli: 55, jet: 190 };
 // event: { kind, x, z, severity (1..3), t (seconds now) }; bases: [{ id, x, z, kind, busyUntil,

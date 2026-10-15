@@ -79,6 +79,7 @@ import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createInteriors } from './interiors/index.js';
 import { createStructures } from './structures/index.js';
+import { createCataclysm } from './cataclysm/index.js';
 import { createServices } from './services/index.js';
 import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
@@ -839,6 +840,9 @@ export function createIslandWorld() {
 	HOOKS.npcHurt = npcQuests.onHurt;
 	// (the nearest hospital sends for whoever is knocked down: services/)
 	HOOKS.npcHurt((e, p) => world?.services?.injury(p, e.why, e.child ? 0.5 : 0.6));
+	// city-wide catastrophes, rare (cataclysm/): quakes, wildfires, a magma world's eruption; the
+	// crews held off, the services sent, people sheltering, things to do. HOOKS.cataclysm.on(fn)
+	guideApi.cataclysm = HOOKS.cataclysm = createCataclysm({ scene, camera, mount: dom.mount, world: () => world, shared, renderer, isPhone, people, hooks: HOOKS, hint: (t, ms) => hint(t, ms, 1), persona: (p) => guide.personaOf(p) });
 	// law and order over combat's and the police's hooks: witnesses and calls, the escalation
 	// ladder, arrests and fines, the gangs' corners by region, tactics (law/)
 	HOOKS.law = createLaw({ world: () => world, combat, military, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), services: () => world?.services, money: () => HOOKS.npcMoney, arms, hint: (t, ms, pri = 1) => hint(t, ms, pri), isPhone, mount: dom.mount, touch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, hours: () => world?.sky?.state?.hours ?? 12, region: () => { const R = npcQuests.regionNow(); return { id: R.id, name: R.name, tally: commons.region(R.id), situation: npcQuests.situation?.() }; } });
@@ -1822,6 +1826,7 @@ export function createIslandWorld() {
 		gear.update(dt);
 		if (!window.L99Loading.active()) combat.update(dt);
 		HOOKS.military?.update(dt, sk.night);
+		HOOKS.cataclysm?.update(dt, sk);
 		if (!window.L99Loading.active()) HOOKS.law?.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
@@ -2321,6 +2326,9 @@ if (typeof window !== 'undefined') {
 			vault: () => HOOKS.structures?.vault('key'), ahead: () => HOOKS.structures?.ahead(), advance: (h) => HOOKS.structures?.advance(+h || 0), recount: () => HOOKS.structures?.recount(),
 		}),
 		demolish: (x, z, k = 1) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.demolish(x ?? p?.x, z ?? p?.z, k) ?? 'none here'; },
+		// catastrophes (cataclysm/): Crysis.cataclysm() how it stands and the next one due here;
+		// .quake(6.9), .wildfire(0.7), .eruption(), .end(), .recover(), .clear(), .upcoming(365), .rate(k), .skip(s)
+		get cataclysm() { return HOOKS.cataclysm?.api; },
 		workplace: () => window.L99Island?.world?.()?.towers?.diagnostics() ?? 'none here',
 		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
 		// the services (services/): Crysis.services() tells of the hospitals, stations and armories
