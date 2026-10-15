@@ -1,3 +1,17 @@
+## October 15, 2026: skin
+
+The hands no longer read as flat plastic, engine-wide. Skin lighting is now:
+- a per-channel wrap with a red terminator;
+- red light through thin flesh when backlit;
+- two shines (a broad one and the oil's), with the sky's sheen reflected (there is no reflection map);
+- uneven colour and two sizes of pore.
+
+Your own first-person hands and forearms (fists and every weapon) add the full layer: creases at every finger joint, palm lines, crosshatched skin lines, tendons, veins, the wrist bone, forearm muscle relief, body hair, real nails (lunula, free edge, gloss), redder knuckles and fingertips, paler palms, and shade between the fingers and where they close on the grip. All of it is drawn from a map that `people/hand-surface.js` lays on the refined surface. NPC faces and hands get the lighter layer.
+
+There are no new textures, geometry or draws, and the skin still compiles 3 programs on desktop and 3 on phone. The governor scales the fine detail through one shared uniform. Your hands' map costs 36 bytes a vertex.
+
+Only `people/skin.js` and `people/hand-surface.js` changed (poses, grips and sleeves are untouched). Tests: `island/tools/skin.test.mjs`. Harness: `tools/skin-preview.mjs`, `skin-browser.mjs`. See `docs/skin-2026-10-15.md`.
+
 ## October 15, 2026: follow-ups
 
 Small fixes left over by the agents, engine-wide. **Harbour trades on the globe:** `economy.setSea` is wired (main.js, one line) to the globe's own sea test (`earth/globe.js seaAt`, `coastMask`); on the globe's ground the coast is read 2.5 times as generously and a place its land mask puts at the coast is by the water however high the coarse relief stands it (Eureka's waterfront is 200 m up on a bluff there, the sea 0.5 to 2 km off, which the 30 m guard ruled out), so coast towns get their outfitters, bait shops and fish markets. **Wrecked shops:** `bay/commercial.js` lets a wrecked shop go and builds it whole again only once it is put right. **Potholes on the procedural grid** bump the car (`potholes.js gridHoleAt`, the ground shader's own sums). **The governor drives more:** the street-tree cap and reach and the road map's paint target follow `qualityNow()` (the structures' own limits are left to the rebuild-site agent); car people, region folk, squads, family scenes and gatherings cap their bodies with `peopleCap` (`world/governor.js`) and let spare ones go, and the car people and region folk now free their bodies whole (`freeBody`), so `bodyCount` comes down. Tests: `island/tools/followups.test.mjs`. Notes in the follow-up lines of `docs/structures-2026-10-14.md` (commercial.js), `docs/streets-by-era-2026-10-14.md`, `docs/storefronts-and-daily-life-2026-10-14.md` and `docs/phone-stability-2026-10-14.md`.
