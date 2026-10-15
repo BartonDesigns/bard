@@ -34,6 +34,8 @@ import { routeOf, DEST } from '../bay/freeways.js';
 import { setFleetDecals } from '../vehicles/fleet.js';
 import { createFleetDecals, setCarLocale } from './cars.js';
 import { qualityNow, onQuality } from '../world/governor.js';
+import { requestsNear } from '../economy/requests.js';
+import { artRevision } from './art.js';
 
 const CAPS = { retro: 900, vinyl: 1400, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
 const ITEMS = {
@@ -45,6 +47,7 @@ const ITEMS = {
 const DEPT = { grocer: ['PRODUCE · DELI', 'cart', '#7a2a1c'], pharmacy: ['PHARMACY', 'hospital', '#1d4f9c'], hardware: ['TOOLS & PAINT', 'worker', '#a8501c'], any: ['WELCOME', 'info', '#2a3a4a'] };
 
 export function createSignage({ scene, world, isPhone = false, locate = null, morality = () => ({}), day = () => Math.floor(Date.now() / 86400000) } = {}) {
+	let openRequests = [];
 	const group = new THREE.Group();
 	group.name = 'signage';
 	scene.add(group);
@@ -116,10 +119,10 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			let front = E.front, glass = E.use === 'shop' || E.use === 'row' || E.use === 'retail' || E.use === 'apt';
 			if (B && B.glassZ !== undefined) {
 				const ca = Math.cos(B.a), sa = Math.sin(B.a);
-				front = { x: B.x - sa * B.glassZ, z: B.z + ca * B.glassZ, nx: -sa, nz: ca, run: B.hw * 2, g: B.y, door: B.doorX };
+				front = { x: B.x - sa * B.glassZ, z: B.z + ca * B.glassZ, nx: -sa, nz: ca, run: B.hw * 2, g: B.y, door: B.doorX, height: B.ceil ?? 3.5 };
 				glass = true;
 			}
-			out.push(...storefrontDecals({ ...E, x: E.x, z: E.z }, front, sys, { seed, glass }));
+			out.push(...storefrontDecals({ ...E, x: E.x, z: E.z, request: openRequests.some(q => q.giver.id === E.id) }, front, sys, { seed, glass }));
 			storefronts.push({ x: E.front.x, z: E.front.z, nx: E.front.nx, nz: E.front.nz, run: E.front.run });
 			if (landAt(E.front.x, E.front.z)?.lu === 7 && hash01(E.x, E.z, 'gum') < 0.35) surfaces.push({ kind: 'ground', x: front.x + front.nx * 2.2, z: front.z + front.nz * 2.2, nx: front.nx, nz: front.nz, w: 2, gum: 1 });
 		}
@@ -250,6 +253,17 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			const [, x1, z0] = rows[k], zc = (z0 + rows[k + 1][2]) / 2, [x, z] = L(x1 - 0.2, zc), [nx, nz] = N(1, 0);
 			out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'aisle', n: k + 1, items: items[k % items.length], col }, x, z, hy: hang, base: B.y, nx, nz, w: 1.25, h: 0.42, back: BACK.readable, wear: 0 });
 		}
+		if (/grocer|market|general/.test(t) && B.products?.length) {
+			const count = Math.min(lite ? 24 : 72, B.products.length);
+			for (let i = 0; i < count; i++) {
+				const start = Math.floor(i * B.products.length / count), end = Math.floor((i+1) * B.products.length / count);
+				// Rotate within each sample interval: a fixed even stride labels only one shelf side.
+				const p = B.products[start + i % Math.max(1,end-start)], [x,z] = L(p.x,p.z), [nx,nz] = N(0,p.side);
+				const product = [6, i % 2 ? 2 : 4, 5, 3, -1, -1, -1, 7][p.row % 8];
+				if (product < 0) continue;
+				out.push({ mat: MAT.paper, layer: LAYER.sticker, face: { k: 'product', product }, x,z,nx,nz,hy:p.y,base:B.y,w:.245,h:.285,back:BACK.none,wear:0 });
+			}
+		}
 		const D = DEPT[t] || DEPT.any;
 		{ const [x, z] = L(0, -B.hd + 0.31), [nx, nz] = N(0, 1); out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'dept', name: D[0], picto: D[1], col: D[2] }, x, z, hy: Math.min(hang, 2.75), base: B.y, nx, nz, w: 2.6, h: 0.5, back: BACK.none, wear: 0 }); }
 		if (!lite) for (const [x0, x1, zr] of rows) for (const s of [-1, 1]) for (const y of [0.2, 0.75, 1.3]) for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.1) {
@@ -352,7 +366,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		checkT -= dt;
 		if (!dirty && checkT > 0 && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		checkT = 0.5;
-		const key = [real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0].join('|');
+		openRequests = requestsNear(x,z,SHOP_R);
+		const key = [openRequests.map(q => q.id).sort().join(','), artRevision(), real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0].join('|');
 		if (!dirty && key === keyNow && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		dirty = false; keyNow = key; at = { x, z };
 		rebuild(x, z);

@@ -16,6 +16,7 @@
 import { hash01, hash32, rng, pick } from './rand.js';
 import { LAYER } from './layers.js';
 import { RANK } from './systems.js';
+import { tradeFor, retailIdentity } from './art.js';
 
 export const BACK = Object.freeze({ blank: 0, readable: 1, mirrored: 2, none: 3 });
 export const MAT = Object.freeze({ retro: 'retro', vinyl: 'vinyl', glass: 'glass', paper: 'paper', foil: 'foil', paint: 'paint', grime: 'grime' });
@@ -330,6 +331,14 @@ export function storefrontDecals(biz, front, sys, { seed = 0, glass = true, numb
 		if (r() < 0.45) at(win, 1.75, Math.min(1.5, run * 0.3), 0.36, { k: 'window', name: biz.name || '', tag: biz.tag || '' }, r() < 0.5 ? MAT.foil : gl, LAYER.sticker);
 		if (/grocer|general|pharmacy|market|shop|hardware|boutique|books/.test(type) && r() < 0.7) at(win + (r() - 0.5) * 0.6, 1.15, 0.45, 0.62, { k: 'sale', sys: sys.id, pct: pick(r, [10, 20, 25, 30, 40, 50]), what: type }, MAT.paper, LAYER.poster, BACK.mirrored, r() * 0.4);
 		if (r() < 0.35) at(win - 0.7, 1.05, 0.28, 0.18, { k: 'open', sys: sys.id }, gl, LAYER.sticker);
+	}
+	// Tall facade graphics identify the real tenant and leave the entrance clear.
+	const identity = retailIdentity(type);
+	if (!office && run >= 5 && identity.trade >= 0) {
+		const side = door > 0 ? -1 : 1, along = side * (half - .65);
+		const height = Math.min(3.7, Math.max(0, (front.height ?? 3.5) - .3));
+		if (height >= 2 && Math.abs(along - door) > 1.3) at(along, .15 + height/2, .78, height,
+			{ k: 'banner', ...identity, name: biz.name, label: biz.label || identity.label, request: !!biz.request }, MAT.vinyl, LAYER.poster, BACK.mirrored, .03);
 	}
 	if (office) {
 		at(door + handle * 0.55, 1.55, 0.2, 0.14, { k: 'suite', n: String(100 + Math.floor(r() * 9) * 100 + Math.floor(r() * 20)) }, MAT.foil, LAYER.poster, BACK.blank);
