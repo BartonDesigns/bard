@@ -97,7 +97,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) floorY = Math.max(floorY, bay.heightAt(b.x + ca * sx * b.w / 2 - sa * sz * b.d / 2, b.z + sa * sx * b.w / 2 + ca * sz * b.d / 2));
 		floorY += 0.12;
 		const W = b.w, D = b.d, H = Math.max(CEIL + 0.8, b.wallH - (floorY - bay.heightAt(b.x, b.z))), hw = W / 2, hd = D / 2;
-		const parts = new Map(), col = [];      // col: solid boxes [x0, z0, x1, z1, y0, y1] in the local frame
+		const parts = new Map(), col = [], aisles = [];      // aisles: the shelf rows [x0, x1, z] (signage/)      // col: solid boxes [x0, z0, x1, z1, y0, y1] in the local frame
 		const add = (mat, g) => { if (!parts.has(mat)) parts.set(mat, []); parts.get(mat).push(g.index ? g.toNonIndexed() : g); };
 		const box = (mat, x0, y0, z0, x1, y1, z1, solid = false) => { add(mat, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); if (solid) col.push([x0, z0, x1, z1, y0, y1]); };
 		const cyl = (mat, x, y, z, r, h, seg = 10) => add(mat, new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z));
@@ -246,6 +246,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			box(mats.neon, doorX - 1.1, 2.3, hd - WALL - 0.06, doorX + 1.1, 2.55, hd - WALL - 0.02);
 		} else if (type === 'shop') {
 			for (let z = inside.z0 + 1; z < inside.z1 - 2.5; z += 2.6) {
+				aisles.push([inside.x0 + 1.2, inside.x1 - 1.2, z]);
 				box(mats.white, inside.x0 + 1.2, 0, z - 0.45, inside.x1 - 1.2, 1.7, z + 0.45, true);
 				for (let x = inside.x0 + 1.3; x < inside.x1 - 1.3; x += 0.34) for (const y of [0.25, 0.8, 1.35]) for (const s of [-1, 1]) box(mats.goods[Math.floor(rnd() * 7)], x, y, z + s * 0.47 - 0.06, x + 0.26, y + 0.3, z + s * 0.47 + 0.06);
 			}
@@ -307,7 +308,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// Exactly the coarse footprint: complementary coverage prevents coplanar overlap.
 		root.position.set(b.x, floorY, b.z); root.rotation.y = -b.a; b.grp.nearBorn=updateDetailClock();anchorBuilding(root,b.x,b.z,Math.max(W,D)/2,b.grp.nearBorn);
 		group.add(root);
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => {root.traverse((o) => o.geometry?.dispose()); outside.dispose();} };
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, ceil: open ? null : CEIL, lastH: -99, dispose: () => {root.traverse((o) => o.geometry?.dispose()); outside.dispose();} };
 		return B;
 	}
 
@@ -427,5 +428,5 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		}
 		return out;
 	}
-	return { group, update, floor, push, inside, venue, doorsNear, count: () => built.size, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length })) };
+	return { group, update, floor, push, inside, venue, doorsNear, count: () => built.size, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, ceil: B.ceil, name: B.b.biz?.name || '' })) };
 }
