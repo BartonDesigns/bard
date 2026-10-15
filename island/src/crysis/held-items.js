@@ -27,7 +27,7 @@ import { armamentVariant } from '../gameplay/armament-variants.js';
 import { createFlash } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 import { attachScopeGlass } from './scope-optics.js';
-import { createBowVisual, BOW_HOOK } from './bow-visual.js';
+import { createBowVisual } from './bow-visual.js';
 
 // an icon for each item, for lists and slots
 export const ITEM_ICONS = {
@@ -934,17 +934,9 @@ export const GRIPS = {
 	'aurora-trail-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.0255], thumb: [-0.037, 0.034, -0.009], support: [0.465, 0.098, -0.029] }),
 	'mossback-scout-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.12, 0.052, 0.0185], thumb: [-0.035, 0.02, -0.019], support: [0.405, 0.1, -0.0255] }),
 	'warden-spark-carbine': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.028], thumb: [-0.037, 0.034, -0.009], support: [0.255, 0.085, -0.031] }),
-	// the bow hand round the riser, relaxed; the draw hand hooked on the string (index above the
-	// arrow, middle and ring below it, at the crease of the last joint), pinching the nock while
-	// it is brought from the quiver, and open as it lets go. The draw hand's points are its own
-	// frame's (crysis/bow-visual.js right), so they hold at any draw.
+	// the bow hand round the riser, relaxed (the draw hand keeps the body's own curl on the string)
 	'reedline-hunting-bow': {
 		L: { riser: [pad([0.012, 0.022, 0.0175], { natural: [0.4, 0.5, 0.3, 0.2] }), LOOSE, LOOSE, LOOSE, LOOSE] },
-		R: {
-			hook: [fixed(0.35, 0.45, 0.35, 0.3), pad(BOW_HOOK.index, { at: 'dip', tip: 0.45, natural: [0, 0.35, 1.2, 0.45] }), pad(BOW_HOOK.middle, { at: 'dip', tip: 0.45, natural: [0, 0.35, 1.2, 0.45] }), pad(BOW_HOOK.ring, { at: 'dip', tip: 0.45, natural: [0, 0.4, 1.2, 0.45] }), fixed(-0.05, 1.1, 1.45, 0.9)],
-			pinch: [pad(BOW_HOOK.under, { natural: [0.4, 0.6, 0.3, 0.2] }), pad(BOW_HOOK.over, { natural: [0, 0.5, 0.6, 0.3] }), fixed(0, 0.75, 1.0, 0.6), fixed(-0.03, 0.95, 1.2, 0.7), fixed(-0.06, 1.1, 1.35, 0.8)],
-			open: [fixed(0.3, 0.25, 0.15, 0.1), fixed(0.03, 0.12, 0.25, 0.12), fixed(0, 0.14, 0.28, 0.14), fixed(-0.03, 0.18, 0.32, 0.15), fixed(-0.07, 0.3, 0.4, 0.2)],
-		},
 	},
 };
 

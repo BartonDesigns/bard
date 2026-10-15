@@ -15,7 +15,7 @@ The #36 anatomical hands now hold each weapon finger by finger. Before this chan
 | Aurora trail rifle | High grip: web under the tang, three fingers wrapped round the front strap, thumb round the back strap. Index straight along the receiver above the guard when carried, sprinting, reloading or changing; on the trigger at the sights and for 0.55 s after a shot. | Under the handguard, fingers angled forward up the far side, thumb along the near side. | Hand to the cell at 0.08 to 0.2, closes on its side and front, out with the out cue at 0.22, off screen to a pouch, back with a fresh one, seated by 0.8 with a palm push (in cue), up to the new charging knob, drawn back 34 mm and let go (ready cue at 0.925), back on the handguard by 1.0. Timings are unchanged (2.3 s). |
 | Mossback scout rifle | Same, on the integrated grip; the thumb goes through the thumbhole. | Round the barrel tube. | Same choreography, 2.0 s. |
 | Warden spark carbine | Same as the Aurora. | Under the tall front body, fingers up its side. | Same choreography, 1.7 s. |
-| Reedline hunting bow | Draw hand: index above the arrow, middle and ring below it, all hooked at the last-joint crease (`BOW_HOOK`). The palm sits 9.4 cm behind the nock (`BOW_HAND`), not on the string. It pinches the nock while the arrow comes from the quiver, eases into the hook as the nock seats, and opens at release. | Bow hand loosely round the riser grip. | In first person the bow draws 0.5 m to an anchor under the eye at the jaw (`FP_BOW_DRAW`, `BOW_ADS`). Third person keeps `BOW_DRAW` (0.28 m) for the body's reach. |
+| Reedline hunting bow | Draw hand as on main: the body's own curl on the string, the same placement, draw length and anchor (a hooked-finger draw to a jaw anchor was tried and read worse, so it was taken back out). | Bow hand loosely round the riser; the whole palm and heel rest on the grip without pressing in (`solveHand` firm fit). | The arrow comes from the quiver as before. |
 
 ## Feel
 
@@ -40,7 +40,7 @@ Every finger's rendered skin was measured against the weapon's own mesh (`tools/
 | Aurora carry / fire / reload / charge | -15 / -9.8, -15 / -9.8, -15 / -15.8, -15 / n.a. | -1.2 / -2.8, -2.3 / -2.8, -2.1 / -2.1, -1.2 / -0.1 |
 | Mossback carry / fire / reload / charge | -15.7 / -16 throughout | -4.0 / -3.2, -4.0 / -3.2, -4.0 / -2.0, -4.0 / -8.5 |
 | Warden carry / fire / reload / charge | -15 / -15.9 throughout | -2.4 / -20.6 (support thumb), -2.4 / -20.6, -2.4 / -2.0, -2.4 / -2.2 |
-| Bow carry / aim / reload | -1.4 / -12.9 throughout | -1.4 / -8.1 (riser palm) |
+| Bow carry / aim / reload | -1.4 / -12.9 throughout | -1.4 / -3.5 (riser thumb; palm -3.1) |
 
 Median finger penetration per hand dropped from 11 to 15 mm on the strong hand to 0.3 to 2 mm. Palm-to-grip frame error stays at 0 mm. The arm layer is still 27,848 triangles. The finger solve adds no geometry. On quality tiers below 0.75 resolution, the refined hand surface is skipped, giving about a quarter of the hand triangles.
 
@@ -53,7 +53,7 @@ Median finger penetration per hand dropped from 11 to 15 mm on the strong hand t
 
 ## Left to do
 
-- The Warden support thumb (-20 mm) and the bow hand's palm on the riser (-8 mm) still sink in.
+- The Warden support thumb (-20 mm) still sinks in; the bow hand's thumb and palm press about 3 mm into the riser.
 - The strong thumb wraps round the back strap rather than lying along the left side, because the receiver sits low over these grips.
 - The charge pose's ring and little fingers float 5 to 12 mm.
 - The carry framing still leaves the strong hand below the bottom edge on desktop.

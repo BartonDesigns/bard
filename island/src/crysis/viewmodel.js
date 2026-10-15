@@ -43,7 +43,6 @@ import { bindLookDrag } from '../combat/look-drag.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CELL_HOLD, CHARGE_HOLD, GRIPS, cellPath, handFrame, itemModel, kitLight, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
-import { BOW_HAND } from './bow-visual.js';
 import { blendPose, contactField, fingerQuats, fingerRig, itemParts, solveHand, squeeze } from './finger-pose.js';
 import { qualityNow } from '../world/governor.js';
 import { createFlash, createSparks } from './weapon-fx.js';
@@ -78,14 +77,6 @@ const GUN_VIEW = {
 const viewOf = (id, H) => H.kind === 'long' ? (GUN_VIEW[id] || VIEW.long) : H.kind === 'bow' ? VIEW.bow : /lantern/.test(id) ? VIEW.lantern : H.R?.t?.y > 0.9 ? VIEW.shaft : VIEW.one;
 // the item's x (forward) to the view's -z, its y up, its z to the right
 const BASE = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)));
-// The bow through your own eyes is drawn a real length, to an anchor at the jaw: the nock
-// under the eye and a little to its right, the arrow tipped up to run out to the aim, the bow
-// canted a touch. (Third person keeps crysis/bow-visual.js BOW_DRAW for the body's reach.)
-const FP_BOW_DRAW = 0.5, BOW_ANCHOR = new THREE.Vector3(0.012, -0.068, -0.03);
-const BOW_ADS = (() => {
-	const q = BASE.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.07, 0, 0.098))), nock = new THREE.Vector3(-0.14 - FP_BOW_DRAW, 0.056, -0.025).applyQuaternion(q);
-	return { q, p: BOW_ANCHOR.clone().sub(nock) };
-})();
 // the charging stroke after a fresh cell (reload progress): reach the knob, draw it back, let go
 const CHARGE = { reach: 0.8, grab: 0.86, back: 0.905, release: 0.925, travel: 0.034 };
 const chargeTravel = (u) => u < CHARGE.grab ? 0 : u < CHARGE.back ? CHARGE.travel * ease((u - CHARGE.grab) / (CHARGE.back - CHARGE.grab)) : u < CHARGE.release ? CHARGE.travel : CHARGE.travel * Math.max(0, 1 - (u - CHARGE.release) / 0.012);
@@ -110,7 +101,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	function swapIn(item) {
 		optics?.reset();
 		if (S.model) { S.model.userData.bow?.dispose(); rig.remove(S.model); }
-		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: 'high', optics: true, bowDraw: FP_BOW_DRAW, view: true }) : null;
+		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: 'high', optics: true, view: true }) : null;
 		const was = S.id;
 		S.id = item?.i || null; S.key = S.want; S.item = item; S.reload = null; S.trig = 0;
 		if (S.model) { S.model.matrixAutoUpdate = false; S.model.userData.bow?.set(bowState); rig.add(S.model); }
@@ -218,14 +209,9 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			}
 			out.L.open = solveHand(hands.L.rig, null, H.L.m, plan.L.open, { fit: false });
 		} else if (H.kind === 'bow') {
-			const bow = model.userData.bow, body = itemParts(model, ['body']);
-			out.L.riser = solveHand(hands.L.rig, contactField(body, box(H.L.m, 0.24)), H.L.m, plan.L.riser); out.L.frame = out.L.riser.frame;
-			// the draw hand in the nock's own space (the hand rides with the nock at any draw), round
-			// the arrow there; its points (BOW_HOOK) are the nock's
-			const frame = new THREE.Matrix4().copy(bow.right).setPosition(BOW_HAND.x, BOW_HAND.y, BOW_HAND.z);
-			const arrow = contactField([[bow.arrow, new THREE.Matrix4().makeRotationFromQuaternion(bow.arrow.quaternion)]], new THREE.Box3(new THREE.Vector3(-0.2, -0.15, -0.15), new THREE.Vector3(0.2, 0.15, 0.15)));
-			for (const name of ['hook', 'pinch', 'open']) out.R[name] = solveHand(hands.R.rig, name === 'open' ? null : arrow, frame, plan.R[name], { fit: false });
-			out.R.frame = frame;
+			const body = itemParts(model, ['body']);
+			out.L.riser = solveHand(hands.L.rig, contactField(body, box(H.L.m, 0.24)), H.L.m, plan.L.riser, { firm: true }); out.L.frame = out.L.riser.frame;
+			// (the draw hand keeps the body's own curl on the string: it reads most naturally there)
 		}
 		out.ms = +(performance.now() - t0).toFixed(1);
 		solved.set(key, out);
@@ -275,7 +261,6 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		for (let i = 0; i < list.length - 2; i += 2) if (u < list[i + 2]) return blendPose(out, list[i + 1], list[i + 3], ease((u - list[i]) / (list[i + 2] - list[i])));
 		return out.set(list[list.length - 1]);
 	}
-	let bowWas = 'hook';
 	// the support hand's fingers through a reload: [progress, pose ...] (made once per item)
 	const reloadSeq = (L) => L.seq ||= [0.06, L.fore.params, 0.14, L.open.params, 0.2, L.cell.params, 0.77, L.cell.params, 0.81, blendPose(new Float32Array(20), L.cell.params, L.open.params, 0.55), CHARGE.grab, (L.charge || L.fore).params, 0.93, (L.charge || L.fore).params, 0.965, L.open.params, 1, L.fore.params];
 	function fingersNow(dt, time, H, u, gather, sp) {
@@ -297,13 +282,6 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				if (u > CHARGE.grab && u < CHARGE.release) squeeze(want.L, 0.06, 1, 2);
 			} else want.L.set(L.fore.params);
 		} else if (H.kind === 'bow') {
-			const bow = S.model.userData.bow, st = bowState;
-			// open as the string leaves the fingers; pinching an arrow's nock as it comes from the
-			// quiver, hooked onto the string as it reaches it
-			const now = bow.releasing ? 'open' : !st.loaded && st.nock < 1 ? 'pinch' : 'hook';
-			if (now === 'pinch') blendPose(want.R, R.pinch.params, R.hook.params, ease(clamp((st.nock - 0.82) / 0.18, 0, 1)));
-			else want.R.set(R[now].params);
-			bowWas = now;
 			want.L.set(L.riser.params);
 		}
 		// a breath of tension through the hands, and the gather's open hand
@@ -313,9 +291,9 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		void sp;
 		for (const side of ['L', 'R']) {
 			const h = hands[side];
-			if (!h || !X[side]) continue;
-			// (fingers are quick, quicker still letting a string go)
-			const k = Math.min(1, dt * (side === 'R' && bowWas === 'open' ? 45 : 22));
+			if (!h || !X[side] || (H.kind === 'bow' && side === 'R')) continue;
+			// (fingers are quick)
+			const k = Math.min(1, dt * 22);
 			if (!h.on) { h.pose.set(want[side]); h.on = true; }
 			else for (let i = 0; i < 20; i++) h.pose[i] += (want[side][i] - h.pose[i]) * k;
 			fingerQuats(h.rig, h.pose, h.quats);
@@ -383,8 +361,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			pos.lerp(adsPos, a);
 			rot.slerp(BASE, a);
 		}
-		// the bow drawn: the nock comes to the jaw under the eye, the arrow running out to the aim
-		if (H.kind === 'bow' && a > 0) { pos.lerp(BOW_ADS.p, a); rot.slerp(BOW_ADS.q, a); }
+		if (H.kind === 'bow' && a > 0) { pos.lerp(V2.set(.10, -.14, -.90), a); rot.slerp(BASE, a); }
 		// sprinting: lowered and turned across; changing: lowered out of view
 		const sp = ease(S.sprint) * (1 - a), eq = 1 - ease(S.equip);
 		pos.x += -0.04 * sp + bx * still + lx * still; pos.y += -0.05 * sp - 0.28 * eq + (by + breath) * still + land * 0.6 + ly * still + S.air * 0.012;

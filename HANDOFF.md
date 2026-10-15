@@ -16,7 +16,7 @@ Sleeves no longer read as tubes. A shared garment module (`island/src/people/sle
 
 ## October 15, 2026: weapon hands
 
-First-person hands now hold every weapon finger by finger, solved on the weapon's own mesh against the player's own skin (`crysis/finger-pose.js`, plans in `held-items.js GRIPS`). Strong hand high on the grip with the index straight along the frame until the sights or a shot; support hand under the fore-end; reloads go to the cell, out to a pouch off screen, back, seat with the palm, then draw a new charging knob (`CHARGERS`) at the existing timings; the bow hooks three fingers on the string, pinches the nock from the quiver and draws to a jaw anchor in first person. Trigger break, re-grip, breathing tension, weight sway. Finger penetration down from 15 mm or more to about 1 to 4 mm; arm layer still 27,848 triangles. First-person rifles leave the sling off. See `docs/weapon-hands-2026-10-15.md`.
+First-person hands now hold every weapon finger by finger, solved on the weapon's own mesh against the player's own skin (`crysis/finger-pose.js`, plans in `held-items.js GRIPS`). Strong hand high on the grip with the index straight along the frame until the sights or a shot; support hand under the fore-end; reloads go to the cell, out to a pouch off screen, back, seat with the palm, then draw a new charging knob (`CHARGERS`) at the existing timings; the bow keeps main's draw (draw hand, length and anchor) with the bow hand resting round the riser. Trigger break, re-grip, breathing tension, weight sway. Finger penetration down from 15 mm or more to about 1 to 4 mm; arm layer still 27,848 triangles. First-person rifles leave the sling off. See `docs/weapon-hands-2026-10-15.md`.
 
 ## October 15, 2026: walls you break through
 

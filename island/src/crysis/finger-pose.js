@@ -71,7 +71,7 @@ export function fingerRig(P, side) {
 		const J = joints[0], q = new THREE.Quaternion().setFromAxisAngle(J.palmar, 0.1);
 		J.together = J.f === 3 || J.f === 1 ? 0 : J.dir.clone().applyQuaternion(q).dot(mid) > J.dir.dot(mid) ? 1 : -1;
 	}
-	const { fingers: skin, palm: palmSkin } = skinSamples(P, side, chains, palmN);
+	const { fingers: skin, palm: palmSkin, heel: heelSkin } = skinSamples(P, side, chains, palmN);
 	const scale = (P.height || 1.75) / 1.75;
 	// the palm's thickness in front of its bones, sampled over the palm (for its contact)
 	const palm = [];
@@ -80,7 +80,7 @@ export function fingerRig(P, side) {
 	for (const m of mcp) for (const u of [0.15, 0.5, 0.85]) palm.push(wr.clone().lerp(m, u));
 	const thenar = H('finger1-2');
 	if (thenar) palm.push(thenar.clone().lerp(wr, 0.3));
-	return { side, chains, rest, restInv, palmN, palm, palmR: P.handPalmR || 0.013 * scale, scale, skin, palmSkin };
+	return { side, chains, rest, restInv, palmN, palm, palmR: P.handPalmR || 0.013 * scale, scale, skin, palmSkin, heelSkin };
 }
 
 // The skin itself, for the last word on contact: up to 48 vertices of each finger (with their
@@ -93,8 +93,8 @@ function skinSamples(P, side, chains, palmN) {
 	const pos = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
 	const local = new Map();
 	chains.forEach((joints, f) => joints.forEach((J, j) => local.set(J.i, [f, j])));
-	const meta = new Set(P.bones.map((b, i) => (new RegExp(`^metacarpal\\d\\.${side}$`).test(b.name) ? i : -1)).filter((i) => i >= 0));
-	const lists = chains.map(() => []), palm = [], wr = P.rest.heads[P.map['wrist.' + side]], v = new THREE.Vector3();
+	const meta = new Set(P.bones.map((b, i) => (new RegExp(`^metacarpal\\d\\.${side}$`).test(b.name) ? i : -1)).filter((i) => i >= 0)), wristI = P.map['wrist.' + side];
+	const lists = chains.map(() => []), palm = [], heel = [], wr = P.rest.heads[P.map['wrist.' + side]], v = new THREE.Vector3();
 	for (let k = 0; k < pos.count; k++) {
 		let best = 0, chain = -1, wsum = 0;
 		for (let q = 0; q < 4; q++) {
@@ -111,6 +111,10 @@ function skinSamples(P, side, chains, palmN) {
 			v.fromBufferAttribute(pos, k);
 			// (only the palm's gripping side, in front of the wrist)
 			if (v.clone().sub(wr).dot(palmN) > 0.004) palm.push(k);
+		} else if (si.getComponent(k, best) === wristI && sw.getComponent(k, best) > 0.5) {
+			// the heel of the hand, on the palm's side
+			v.fromBufferAttribute(pos, k);
+			if (v.clone().sub(wr).dot(palmN) > 0.006) heel.push(k);
 		}
 	}
 	const pack = (list, f) => {
@@ -122,7 +126,9 @@ function skinSamples(P, side, chains, palmN) {
 	};
 	const pstep = Math.max(1, Math.ceil(palm.length / 64)), pk = palm.filter((_, i) => i % pstep === 0), pp = new Float32Array(pk.length * 3);
 	pk.forEach((k, i) => { pp[i * 3] = pos.getX(k); pp[i * 3 + 1] = pos.getY(k); pp[i * 3 + 2] = pos.getZ(k); });
-	return { fingers: lists.map(pack), palm: pk.length ? pp : null };
+	const hstep = Math.max(1, Math.ceil(heel.length / 48)), hk = heel.filter((_, i) => i % hstep === 0), hp = new Float32Array(hk.length * 3);
+	hk.forEach((k, i) => { hp[i * 3] = pos.getX(k); hp[i * 3 + 1] = pos.getY(k); hp[i * 3 + 2] = pos.getZ(k); });
+	return { fingers: lists.map(pack), palm: pk.length ? pp : null, heel: hk.length ? hp : null };
 }
 
 // how thick each finger is round its bone, and on the side that grips (its pad), from the skin
@@ -400,21 +406,28 @@ function settle(rig, f, p, M, field, fk, close) {
 // it rests on the surface. Returns the four numbers per finger, how far the palm was moved, and
 // each finger's clearance (metres; negative is sunk in).
 const EMPTY = { sd: () => REACH, REACH, triangles: 0 };
-export function solveHand(rig, field, frame, specs, { fit = true } = {}) {
+// (firm: the whole palm and its heel rest on the surface, none of it pressing in, as a relaxed
+// bow hand does on a riser rather than a fist round a grip)
+export function solveHand(rig, field, frame, specs, { fit = true, firm = false } = {}) {
 	const fk = scratch(), M = new THREE.Matrix4(), F = frame.clone();
 	field ||= EMPTY;
 	let shift = 0;
 	if (fit) {
 		const P = new THREE.Vector3(), skin = rig.palmSkin;
-		for (let it = 0; it < 3; it++) {
+		for (let it = 0; it < 5; it++) {
 			M.multiplyMatrices(F, rig.restInv);
 			let worst = Infinity;
 			// (the palm is soft: a few of its points may press in, as the heel of a hand does round
 			// a grip; the rest rest on the surface)
-			if (skin) { const d = []; for (let i = 0; i < skin.length; i += 3) { P.set(skin[i], skin[i + 1], skin[i + 2]).applyMatrix4(M); d.push(field.sd(P.x, P.y, P.z)); } d.sort((x, y) => x - y); worst = d[Math.min(d.length - 1, Math.floor(d.length * 0.06))] + 0.0015; }
+			if (skin) {
+				const d = [];
+				for (const list of firm && rig.heelSkin ? [skin, rig.heelSkin] : [skin]) for (let i = 0; i < list.length; i += 3) { P.set(list[i], list[i + 1], list[i + 2]).applyMatrix4(M); d.push(field.sd(P.x, P.y, P.z)); }
+				d.sort((x, y) => x - y);
+				worst = firm ? d[0] - 0.0004 : d[Math.min(d.length - 1, Math.floor(d.length * 0.06))] + 0.0015;
+			}
 			else for (const q of rig.palm) { P.copy(q).addScaledVector(rig.palmN, rig.palmR).applyMatrix4(M); worst = Math.min(worst, field.sd(P.x, P.y, P.z)); }
 			if (!Number.isFinite(worst) || worst >= field.REACH * 0.95) break;
-			const d = clamp(worst, -0.016 - shift, 0.016 - shift);
+			const d = clamp(worst, -0.02 - shift, 0.016 - shift);
 			if (Math.abs(d) < 1e-4) break;
 			shift += d; F.multiply(new THREE.Matrix4().makeTranslation(0, 0, d));
 		}
