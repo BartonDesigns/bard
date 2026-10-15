@@ -39,6 +39,14 @@ export function roadRoute(near, from, to, { maxSteps = 40, snap = 400 } = {}) {
 	out.push(to.x, to.z);
 	return finish(out);
 }
+// the route without its last stretch across the ground when that is long (a vehicle stops on
+// the road nearest the goal rather than driving through the block to it)
+export function trimToRoad(R, max = 15) {
+	const n = R.pts.length;
+	if (n < 6) return R;
+	const last = dist(R.pts[n - 4], R.pts[n - 3], R.pts[n - 2], R.pts[n - 1]);
+	return last > max ? finish(R.pts.slice(0, n - 2)) : R;
+}
 // a stretch of points [x, z, ...] leading into a route, joined on
 export function joinRoute(pts, R) { return finish([...pts, ...R.pts]); }
 // with its running length, for travelling along it

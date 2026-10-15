@@ -18,6 +18,7 @@ export const BLOWS = Object.freeze({
 	grapple: { dmg: 4, reach: 1.1, time: 1.1, knock: 4.5, stamina: 18, hold: true },
 	bat: { dmg: 22, reach: 1.9, time: 0.7, knock: 2.6, stamina: 16, item: true },
 	bottle: { dmg: 15, reach: 1.4, time: 0.5, knock: 1.4, stamina: 10, item: true, breaks: true },
+	pipe: { dmg: 19, reach: 1.85, time: 0.66, knock: 2.4, stamina: 15, item: true },
 });
 export const COMBO = ['jab', 'cross', 'hook'];
 // the next blow of a string: the one after the last, if it came soon enough
@@ -52,11 +53,11 @@ export function escalate(q, r = Math.random) {
 	if (i >= 5) return 'guns';
 	return r() < up ? STAGES[i + 1] : STAGES[i];
 }
-// what a brawler reaches for at the weapon stage: a bat or a bottle if one is at hand
+// what a brawler reaches for at the weapon stage: a bat, a bottle or a length of pipe if one is at hand
 export function improvised(atHand, r = Math.random) {
-	if (atHand === 'bat' || atHand === 'bottle') return atHand;
+	if (atHand === 'bat' || atHand === 'bottle' || atHand === 'pipe') return atHand;
 	const x = r();
-	return x < 0.35 ? 'bottle' : x < 0.55 ? 'bat' : null;
+	return x < 0.35 ? 'bottle' : x < 0.5 ? 'bat' : x < 0.6 ? 'pipe' : null;
 }
 // damage of a blow, by stamina (tired fists hit softer) and a lucky clean one
 export function blowDamage(kind, stamina = 100, clean = false) {
