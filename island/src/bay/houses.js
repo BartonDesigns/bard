@@ -11,7 +11,8 @@ import * as THREE from 'three';
 import { planHouse, houseFloor, mainOf, houseSeed, HT, TW } from './houseplan.js';
 import { houseEra, exteriorLook, householdDecor } from './decor.js';
 import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
-import { occasions } from '../calendar.js';
+import { occasions, today } from '../calendar.js';
+import { houseLights } from './seasons.js';            // the holidays' strings, the same houses as from afar (holidaylights.js)
 import { carGeometry, carMaterial } from './cars.js';
 import { NONE_IN, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
@@ -457,9 +458,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			stoop.push([G.x0, G.front, G.x1, G.front + 0.6, 0]);
 		}
 
-		// through the holidays most houses string lights along their eaves: all colours, or
-		// all warm white
-		const eaveLights = OCC.holidays && rnd() < 0.6 ? (rnd() < 0.55 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : [[1, 0.85, 0.55]]) : null;
+		// through the holidays most houses string lights along their eaves: all colours, warm
+		// white or cool white (the same houses and the same strings holidaylights.js shows from afar)
+		const lightsK = houseLights(seed, today());
+		const eaveLights = lightsK === 1 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : lightsK === 2 ? [[1, 0.78, 0.45]] : lightsK === 3 ? [[0.75, 0.85, 1]] : null;
 		// gutters and fascia along the eaves that face the outside, a downspout at a corner
 		for (const r of plan.rects) {
 			const y = r.top;
