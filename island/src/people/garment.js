@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { CLOTH_CAPS, clothUniforms, CLOTH_CONTACT_GLSL } from './cloth-collide.js';
-import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance } from './garment-tailoring.js';
+import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance, armhole } from './garment-tailoring.js';
 import { sleeveEase, waistbandEase, armT, isRibbed, isShirted, SLEEVE_POSE_GLSL } from './garment-shape.js';
 import { torsoField, clothPoints, necklineRing, hoodGeometry, collarGeometry, carrierGeometry } from './garment-kit.js';
 import { patchKit } from './propkit.js';
@@ -33,7 +33,7 @@ uniform vec4 uHem;
 uniform vec4 uNeck;
 uniform vec4 uEdge;
 uniform vec4 uKind;
-uniform vec4 uArm[4];
+uniform vec4 uArm[6];
 uniform sampler2D uKnit;
 uniform sampler2D uCanvas;
 varying vec3 vBind;
@@ -49,10 +49,13 @@ float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); 
 float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
 float band(float x, float a, float b, float s) { return smoothstep(a - s, a, x) * (1.0 - smoothstep(b, b + s, x)); }
 float line(float x, float w) { return 1.0 - smoothstep(0.0, w, abs(x)); }
-// the angle round the forearm (for ribs and a cuff's button), from the arm's rest axis
+// the angle round the arm (for folds, ribs and a cuff's button), about its rest axis: the
+// upper arm's above the elbow, the forearm's below, turning between them about the elbow
+// (uArm: each side's elbow, upper arm and forearm directions)
 float armAngle(vec3 P) {
-	vec3 w = P.x >= 0.0 ? uArm[0].xyz : uArm[2].xyz, d = P.x >= 0.0 ? uArm[1].xyz : uArm[3].xyz;
-	vec3 r = P - w; r -= d * dot(r, d);
+	int o = P.x >= 0.0 ? 0 : 3;
+	vec3 e = uArm[o].xyz, d = normalize(mix(uArm[o + 1].xyz, uArm[o + 2].xyz, smoothstep(0.85, 1.15, vSleeveT)));
+	vec3 r = P - e; r -= d * dot(r, d);
 	vec3 b1 = normalize(cross(d, vec3(0.0, 0.0, 1.0))), b2 = cross(d, b1);
 	return atan(dot(r, b2), dot(r, b1));
 }
@@ -72,8 +75,8 @@ float folds(vec3 P, float limb, int s) {
 		float an = armAngle(P);
 		h += (pow(1.0 - abs(sin(an * 2.0 + t * 1.3 + wob * 0.8)), 2.0) * 22.0 + pow(1.0 - abs(sin(an * 3.5 - t * 4.5 + wob)), 3.0) * 9.0) * smoothstep(0.1, 0.5, t);
 		// drag lines spiralling off a bent elbow, up the upper arm and down the forearm
-		h += sin(an * 2.0 + t * 26.0 * sign(t - 1.0) + wob * 3.0) * 10.0 * vFold.y * exp(-pow((t - 1.0) / 0.45, 2.0));
-		h += sin(t * 130.0 + wob * 6.0 + az * 2.0) * 2.5 * exp(-pow((vCuff - 0.085) / 0.04, 2.0)) * step(1.5, t);
+		h += sin(an * 2.0 + abs(t - 1.0) * 26.0 + wob * 3.0) * 10.0 * vFold.y * exp(-pow((t - 1.0) / 0.45, 2.0)) * smoothstep(0.03, 0.15, abs(t - 1.0));
+		h += sin(t * 130.0 + wob * 6.0 + armAngle(P) * 1.5) * 1.6 * exp(-pow((vCuff - 0.085) / 0.04, 2.0)) * step(1.5, t);
 	}
 	else if (limb > 0.5 && limb < 1.5) h += sin(P.y * 300.0 + wob * 5.0 + sin(az * 2.0) * 2.0) * (1.0 - smoothstep(0.015, 0.06, abs(P.y - uCutB.z))) * 0.55;
 	if (limb > 1.5) {
@@ -298,7 +301,7 @@ vec3 garment(int s, vec3 P, vec3 N) {
 	else if (k == 29) {
 		// hi-vis: fluorescent cloth with reflective tape, two bands round the body and braces
 		// over the shoulders, front and back (a: the tape's silver)
-		float y1 = waist + 0.07, y2 = chest - 0.05, w = 0.024;
+		float y1 = waist + 0.05, y2 = waist + 0.19, w = 0.021;
 		float tape = max(band(P.y, y1 - w, y1 + w, 0.002), band(P.y, y2 - w, y2 + w, 0.002));
 		if (arm < 0.5 && P.y > y2) tape = max(tape, band(abs(P.x), 0.075 - w, 0.075 + w, 0.002));
 		if (arm > 0.5) tape = band(vCuff, 0.05, 0.05 + 2.0 * w, 0.002) * step(1.5, vSleeveT);
@@ -418,7 +421,7 @@ export function garmentMaterial(A, o, cut, number = 0) {
 		// the make of the top and the layer over it (tailor), each forearm's rest axis, and
 		// how much the sleeves fold and hang with the pose (1 near, 0 far off or on a phone)
 		uKind: { value: new THREE.Vector4() },
-		uArm: { value: ['L', 'R'].flatMap((sd) => { const a = cut.arm?.[sd]; if (!a) return [new THREE.Vector4(), new THREE.Vector4(0, -1, 0, 0)]; const w = new THREE.Vector3(...a.w), d = w.clone().sub(new THREE.Vector3(...a.e)).normalize(); return [new THREE.Vector4(w.x, w.y, w.z, 0), new THREE.Vector4(d.x, d.y, d.z, 0)]; }) },
+		uArm: { value: ['L', 'R'].flatMap((sd) => { const a = cut.arm?.[sd]; if (!a) return [new THREE.Vector4(), new THREE.Vector4(0, -1, 0, 0), new THREE.Vector4(0, -1, 0, 0)]; const s = new THREE.Vector3(...a.s), e = new THREE.Vector3(...a.e), w = new THREE.Vector3(...a.w), u = e.clone().sub(s).normalize(), f = w.clone().sub(e).normalize(); return [new THREE.Vector4(e.x, e.y, e.z, 0), new THREE.Vector4(u.x, u.y, u.z, 0), new THREE.Vector4(f.x, f.y, f.z, 0)]; }) },
 		uPoseK: { value: new THREE.Vector4(1, 0, 0, 0) },
 		...clothUniforms(),
 		uKnit: { value: A.fabric.knit }, uCanvas: { value: A.fabric.canvas },
@@ -432,11 +435,11 @@ export function garmentMaterial(A, o, cut, number = 0) {
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vBN = normal; vTrim = trim; vCuff = cuff; vSlot = mod(slot, 10.0); vLimb = floor(slot / 10.0 + 0.01); float flutter = sin(uClothMove.x * 2.8 + position.y * 15.0 + position.x * 8.0); transformed += normal * (1.0 + flutter) * drape * 0.002 * min(uClothMove.y, 2.0); transformed.x += sin(uClothMove.z * 6.283 + position.y * 4.0) * drape * 0.003 * min(uClothMove.y, 1.0);');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL_HEAD)
-			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN); float gPx = length(fwidth(vBind));\n\n if (vTrim < 0.1 && s == 0 && vLimb < 0.5 && vBind.y < uHem.x + 0.012) discard;\n if (vTrim < 0.1 && s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (vTrim < 0.1 && s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) + 0.035 * smoothstep(0.0, 0.09, abs(vBind.x)) - 0.004 * fr; if (vTrim < 0.1 && vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && vBind.y > uCutA.z - 0.3) { float e = abs(vBind.x) - 0.035 - max(0.0, uCutA.y - vBind.y) * 0.12; if (e < 0.0) discard; gCollar = max(gCollar, 1.0 - smoothstep(0.003, 0.008, e)); }\n diffuseColor.rgb *= tailor(s, vBind, N, garment(s, vBind, N), gPx) * (1.0 - gCollar * 0.08 - vTrim * 0.045); vec2 wv = weave(int(gFab + 0.5), vBind, N, gPx); diffuseColor.rgb *= 1.0 + wv.y;\n // where one layer hangs over another: a soft shadow just under its hem, no hard seam\n float hd = s == 2 && vLimb < 1.5 ? uHem.x - vBind.y : s == 0 && uEdge.w > 0.5 ? uEdge.x - vBind.y : -1.0; if (hd >= 0.0) diffuseColor.rgb *= 1.0 - 0.2 * (1.0 - smoothstep(0.0, 0.04, hd)); gRough = clamp(gRough - wv.y * 0.5, 0.2, 1.0); gWeave = wv.x; }')
+			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN); float gPx = length(fwidth(vBind));\n\n if (vTrim < 0.1 && s == 0 && vLimb < 0.5 && vBind.y < uHem.x + 0.012) discard;\n if (vTrim < 0.1 && s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (vTrim < 0.1 && s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 1.5 || (vLimb > 0.5 && vBind.y < uCutA.y - 0.03) || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) + 0.035 * smoothstep(0.0, 0.09, abs(vBind.x)) - 0.004 * fr; if (vTrim < 0.1 && vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && vBind.y > uCutA.z - 0.3) { float e = abs(vBind.x) - 0.035 - max(0.0, uCutA.y - vBind.y) * 0.12; if (e < 0.0) discard; gCollar = max(gCollar, 1.0 - smoothstep(0.003, 0.008, e)); }\n diffuseColor.rgb *= tailor(s, vBind, N, garment(s, vBind, N), gPx) * (1.0 - gCollar * 0.08 - vTrim * 0.045); vec2 wv = weave(int(gFab + 0.5), vBind, N, gPx); diffuseColor.rgb *= 1.0 + wv.y;\n // where one layer hangs over another: a soft shadow just under its hem, no hard seam\n float hd = s == 2 && vLimb < 1.5 ? uHem.x - vBind.y : s == 0 && uEdge.w > 0.5 ? uEdge.x - vBind.y : -1.0; if (hd >= 0.0) diffuseColor.rgb *= 1.0 - 0.2 * (1.0 - smoothstep(0.0, 0.04, hd)); gRough = clamp(gRough - wv.y * 0.5, 0.2, 1.0); gWeave = wv.x; }')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = gRough; metalnessFactor = gMetal;')
 			.replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;', 'int fb = int(gFab + 0.5);\n\tvec3 mapN = (fb == 0 || fb == 4 || fb == 7 ? texture2D( uKnit, vNormalMapUv ) : fb == 1 ? texture2D( normalMap, vNormalMapUv ) : texture2D( uCanvas, vNormalMapUv )).xyz * 2.0 - 1.0;\n\tmapN.xy *= fb == 3 || fb == 5 || fb == 6 ? 0.3 : fb == 4 ? 1.6 : 1.0;')
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = (folds(vBind, vLimb, int(vSlot + 0.5)) * 0.00025 + gDetail * 0.0003) * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))) + gWeave * 0.00004; vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
-			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n{ int fb = int(gFab + 0.5); float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0); reflectedLight.indirectDiffuse += diffuseColor.rgb * rim * (fb == 0 || fb == 4 ? 0.5 : fb == 1 ? 0.15 : fb == 3 || fb == 8 ? 0.35 : 0.25);\n // hi-vis: the fluorescent dye gives back more than it is lit by, the tape shines back at the eye\n reflectedLight.indirectDiffuse += diffuseColor.rgb * gGlow * 0.45 + vec3(0.5) * gRefl * pow(saturate(dot(normal, normalize(vViewPosition))), 2.0); }');
+			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n{ int fb = int(gFab + 0.5); float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0); reflectedLight.indirectDiffuse += diffuseColor.rgb * rim * (fb == 0 || fb == 4 ? 0.5 : fb == 1 ? 0.15 : fb == 3 || fb == 8 ? 0.35 : 0.25);\n // hi-vis: the fluorescent dye gives back more than it is lit by, the tape shines back at the eye\n reflectedLight.indirectDiffuse += diffuseColor.rgb * gGlow * 0.45 + diffuseColor.rgb * gRefl * 0.9 * pow(saturate(dot(normal, normalize(vViewPosition))), 2.0); }');
 	};
 	m.customProgramCacheKey = () => 'crysis-garment-9';
 	paint(m, o);
@@ -525,7 +528,9 @@ export function regions(o, cut) {
 		// Keep triangles crossing a cut in the cloth cage; coverage tests still inset skin.
 		if (m === 0) m = -.05;
 		if (k.fore) return (s === 'long' || s === 'rolled') && sleeveDistance(c,s,cut)>m;
-		if (k.arm) return s !== 'none' && sleeveDistance(c,s,cut)>m;
+		// (sleeveless: the shoulder's cage triangles are the arm's, so the armhole's own curve
+		// decides, not the bone they ride)
+		if (k.arm) return s === 'none' ? armhole(c, cut) > m && c[1] > cut.chest - .02 + m : sleeveDistance(c,s,cut)>m;
 		return true;
 	};
 	const hemOf = (g, outer) => !g ? 0 : g.crop ? cut.waist + 0.07 : g.kind === 'bikini' ? cut.chest - 0.085 : g.kind === 'tunic' ? cut.knee + 0.12 : g.long || g.kind === 'coverup' ? cut.knee + (g.long ? 0.02 : 0.2) : g.kind === 'puffer' && o.gen === 'z' ? cut.waist + 0.01 : g.tuck ? cut.waist - 0.02 : g.fit === 'oversized' || g.kind === 'hoodie' || g.kind === 'suit' ? cut.hip - 0.02 : cut.waist - (outer ? 0.07 : 0.04);
@@ -732,7 +737,12 @@ export function clothGeometry(A, p, o, cut, R) {
  }
  g.setAttribute('cuff',new THREE.BufferAttribute(cuff,1));
  g.setAttribute('sleeve',new THREE.BufferAttribute(sleeve,2));
- return finishGarmentEdges(refineGarmentSurface(g), o, cut, R);
+ const out = finishGarmentEdges(refineGarmentSurface(g), o, cut, R);
+ // (the sleeve's place and slack kept in two bytes a vertex: t from -1 to 2.2, slack to 35 mm)
+ const sa = out.attributes.sleeve, packed = new Uint8Array(sa.count * 2);
+ for (let i = 0; i < sa.count; i++) { packed[i * 2] = Math.round(Math.max(0, Math.min(1, (sa.getX(i) + 1) / 3.2)) * 255); packed[i * 2 + 1] = Math.round(Math.max(0, Math.min(1, sa.getY(i) / 0.035)) * 255); }
+ out.setAttribute('sleeve', new THREE.BufferAttribute(packed, 2, true));
+ return out;
 }
 
 // ---------- the small things: caps, glasses, headphones, bags, watches, earrings, a chain ----------
@@ -908,7 +918,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			// and a reflective band) (garment-kit.js)
 			const pieces = carrierGeometry(cut, kitField(), { police: !!q.police, lo: !!P0.lo });
 			const flap = new THREE.Color(a2).multiplyScalar(0.82).getHex();
-			for (const { geo, part: pc } of pieces) put(geo, pc === 'strap' ? 'spine01' : torso, pc === 'band' || pc === 'pouch' ? a2 : pc === 'flap' ? flap : pc === 'tape' ? '#a9aeb3' : c, pc === 'tape' ? 0.8 : 0, pc === 'tape' ? 0 : 2);
+			for (const { geo, part: pc } of pieces) put(geo, pc === 'strap' ? 'spine01' : torso, pc === 'band' || pc === 'pouch' ? a2 : pc === 'flap' ? flap : pc === 'tape' ? '#80868d' : c, pc === 'tape' ? 0.5 : 0, pc === 'tape' ? 0 : 2);
 			if (q.police) {
 				const w = Math.min(0.33, cut.shoulderX * 1.6), y = cut.chest + 0.06, x = w * 0.26;
 				const bd = new THREE.CylinderGeometry(0.02, 0.02, 0.005, 6); bd.rotateX(Math.PI / 2); bd.translate(x, y, kitField().front(x, y) + 0.012 + 0.024 + 0.002); put(bd, 'spine01', q.badge || '#d9c46a', 2);

@@ -24,6 +24,8 @@ const SHOTS = [
 	['soldier-patrol', 'soldier', {}, [1.4, 1.3, -2.9, 0, 1.0, 0, 36]],
 	['soldier-aim', 'soldier', { aim: true }, [1.9, 1.5, -2.3, 0, 1.25, -0.2, 36]],
 	['soldier-hands', 'soldier', { aim: true }, [-0.9, 1.55, -1.25, 0, 1.38, -0.3, 30]],
+	['soldier-rolled', 'rolled', {}, [1.2, 1.4, -1.9, 0, 1.15, 0, 34]],
+	['police-elbows', 'police', {}, [0.75, 1.3, -0.9, 0.1, 1.05, -0.15, 30]],
 	['gang-aim', 'gang', { aim: true }, [1.6, 1.45, -2.5, 0, 1.2, -0.2, 36]],
 	['avatar-aim', 'avatar', { aim: true }, [2.0, 1.55, -1.7, 0, 1.3, -0.2, 36]],
 	['avatar-hands', 'avatar', { aim: true }, [0.95, 1.6, -1.15, 0, 1.4, -0.3, 30]],

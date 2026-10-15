@@ -68,7 +68,7 @@ test('pose folds: elbow bend and the hang across the arm', () => {
 	assert.equal(sleeveHang(0, -1, 0, 1, 0, 0), 0);
 	// the shader reads the capsules the cloth contact poses, and only on sleeves
 	assert.match(SLEEVE_POSE_GLSL, /uClothA\[iu\]/);
-	assert.match(SLEEVE_POSE_GLSL, /sleeve\.x > -0\.5/);
+	assert.match(SLEEVE_POSE_GLSL, /sl\.x > -0\.5/);
 	for (let j = 0; j < 3; j++) assert.ok(TRIGGER_ON[j] > TRIGGER_OFF[j]);
 });
 
@@ -76,8 +76,8 @@ test('pose folds: elbow bend and the hang across the arm', () => {
 function torso() {
 	const cut = { waist: 1.0, chest: 1.25, neck: 1.45, shoulder: 1.4, shoulderX: 0.2, waistX: 0.16, frontZ: 0.11, backZ: -0.1 };
 	const pts = [];
-	for (let y = 0.8; y <= 1.55; y += 0.01) for (let a = 0; a < Math.PI * 2; a += 0.05) pts.push([Math.sin(a) * 0.17, y, 0.005 + Math.cos(a) * 0.11]);
-	return { cut, field: torsoField(cut, pts) };
+	for (let y = 0.8; y <= 1.55; y += 0.01) for (let a = 0; a < Math.PI * 2; a += 0.05) pts.push(Math.sin(a) * 0.17, y, 0.005 + Math.cos(a) * 0.11);
+	return { cut, field: torsoField(cut, Float32Array.from(pts)) };
 }
 
 test('the torso field gives the clothed front and back', () => {

@@ -4,6 +4,9 @@ import { isRibbed, isShirted } from './garment-shape.js';
 const clamp = (x) => Math.max(0, Math.min(1, x));
 const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
 
+// how far inside a sleeveless garment's armhole a point lies (metres; negative outside)
+export const armhole = (v, cut) => cut.shoulderX - .03 + Math.max(0, cut.chest - .07 - v[1]) * 1.5 - Math.abs(v[0]);
+
 export function sleeveDistance(v, sleeve, cut) {
  const plane=cut.sleevePlanes[v[0]>=0?'L':'R'][sleeve||'short'];
  return plane[3]-plane[0]*v[0]-plane[1]*v[1]-plane[2]*v[2];
@@ -131,7 +134,11 @@ export function finishGarmentEdges(g, o, cut, R) {
      return cut.neck-.005-scoop*fr+.035*smooth(Math.abs(v[0])/.09)-.004*fr-v[1];
     },ribbed?.003:.0016));
     // a sleeveless armhole cut clean in a curve (not left to whole triangles)
-    if (item.sleeves==='none' && limb===0 && !item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>cut.shoulderX-.03+Math.max(0,cut.chest-.07-v[1])*1.5-Math.abs(v[0]),.0022));
+    if (item.sleeves==='none' && limb===0 && !item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>armhole(v,cut),.0022));
+   } else if (limb===1 && item.sleeves==='none') {
+    cuts.push(edge(v=>armhole(v,cut),.0022));
+    cuts.push(edge(v=>v[1]-cut.chest+.03,.0022));
+    cuts.push(edge(v=>cut.neck-.005+.035*smooth(Math.abs(v[0])/.09)-v[1],.0016));
    } else if (limb===1) cuts.push(edge(v=>sleeveDistance(v,item.sleeves,cut),item.sleeves==='rolled'?.009:ribbed?.003:isShirted(item)?.0026:.0018));
   } else if (s===2 && limb===2 && R.legEnd<5) cuts.push(edge(v=>v[1]-R.legEnd-.012));
   for (const f of cuts) { poly=clip(poly,f); if (poly.length<3) break; }

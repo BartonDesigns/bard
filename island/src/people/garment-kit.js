@@ -13,13 +13,14 @@ const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // The dressed torso as a height field, front and back: for a point (x, y) of the body's front
-// view, how far forward the clothes come (front) and how far back (back), from the rest-pose
-// points of the cloth's body panels and the bare torso. Cells nobody covers take their row's
+// view, how far forward the clothes come (front) and how far back (back), from rest-pose
+// points (flat x, y, z: clothPoints) of the cloth's body panels and the bare torso. Cells nobody covers take their row's
 // nearest neighbour, and the whole is smoothed once.
 export function torsoField(cut, points) {
 	const STEP = 0.016, x0 = -0.34, nx = 43, y0 = cut.waist - 0.22, y1 = cut.neck + 0.08, ny = Math.ceil((y1 - y0) / STEP) + 1;
 	const F = new Float32Array(nx * ny).fill(-1e9), B = new Float32Array(nx * ny).fill(1e9), W = new Float32Array(ny);
-	for (const [x, y, z] of points) {
+	for (let q = 0; q < points.length; q += 3) {
+		const x = points[q], y = points[q + 1], z = points[q + 2];
 		const i = Math.round((x - x0) / STEP), j = Math.round((y - y0) / STEP);
 		if (i < 0 || i >= nx || j < 0 || j >= ny) continue;
 		const k = j * nx + i;
@@ -60,15 +61,17 @@ export function torsoField(cut, points) {
 	return { front: (x, y) => at(F, x, y), back: (x, y) => at(B, x, y), half: (y) => W[clamp(Math.round((y - y0) / STEP), 0, ny - 1)] || cut.waistX };
 }
 
-// The rest-pose points of a cloth geometry's torso panels (top and layer), or of a body's
-// own torso, for torsoField
+// The rest-pose points (flat x, y, z) of a cloth geometry's torso panels (top and layer),
+// and of a body's own torso, for torsoField
 export function clothPoints(geo, body = null, part = null) {
-	const out = [];
-	if (geo) {
-		const p = geo.attributes.position, s = geo.attributes.slot;
-		for (let i = 0; i < p.count; i++) { const v = s.getX(i); if (v % 10 < 1.5 && v < 10) out.push([p.getX(i), p.getY(i), p.getZ(i)]); }
-	}
-	if (body && part) for (let i = 0; i < part.length; i++) if (part[i] === 0) out.push([body[i * 3], body[i * 3 + 1], body[i * 3 + 2]]);
+	let n = 0;
+	const p = geo?.attributes.position, s = geo?.attributes.slot;
+	if (geo) for (let i = 0; i < p.count; i++) { const v = s.getX(i); if (v % 10 < 1.5 && v < 10) n++; }
+	if (body && part) for (let i = 0; i < part.length; i++) if (part[i] === 0) n++;
+	const out = new Float32Array(n * 3);
+	let k = 0;
+	if (geo) for (let i = 0; i < p.count; i++) { const v = s.getX(i); if (v % 10 < 1.5 && v < 10) { out[k++] = p.getX(i); out[k++] = p.getY(i); out[k++] = p.getZ(i); } }
+	if (body && part) for (let i = 0; i < part.length; i++) if (part[i] === 0) { out[k++] = body[i * 3]; out[k++] = body[i * 3 + 1]; out[k++] = body[i * 3 + 2]; }
 	return out;
 }
 
@@ -249,19 +252,36 @@ export function carrierGeometry(cut, field, { police = false, lo = false } = {})
 	const t = cut.chest + 0.12, b = cut.waist + 0.005, w = Math.min(0.33, cut.shoulderX * 1.6), clear = 0.012, thick = 0.024;
 	const nx = lo ? 4 : 7, ny = lo ? 3 : 6, out = [];
 	const plate = (front) => {
+		// A plate is stiff: a gently curved panel resting on the most prominent part of the chest
+		// or back (row by row, the furthest point, carried a little up and down so it does not
+		// dip into hollows), never following every bulge; it stays clear of the clothes everywhere.
+		const sgn = front ? 1 : -1, surf = (x, y) => sgn * (front ? field.front(x, y) : field.back(x, y));
+		const ys = [], halves = [], rowMax = [];
+		for (let j = 0; j <= ny; j++) {
+			const y = b + (t - b) * j / ny, half = w / 2 * (1 - 0.18 * smooth((j / ny - 0.7) / 0.3));
+			let m = -1e9;
+			for (let i = 0; i <= nx; i++) { const x = -half + 2 * half * i / nx; m = Math.max(m, surf(x, y) + 1.4 * x * x); }
+			ys.push(y); halves.push(half); rowMax.push(m);
+		}
+		const env = rowMax.map((m, j) => Math.max(m, ((rowMax[j - 1] ?? m) + (rowMax[j + 1] ?? m)) / 2 - 0.004));
 		const grid = [], normals = [];
 		for (let j = 0; j <= ny; j++) {
-			const y = b + (t - b) * j / ny, row = [], nrow = [];
-			// (the plate's top corners cut in for the arms: a narrower top edge)
-			const half = w / 2 * (1 - 0.18 * smooth((j / ny - 0.7) / 0.3));
+			const row = [];
 			for (let i = 0; i <= nx; i++) {
-				const x = -half + 2 * half * i / nx, z = front ? field.front(x, y) + clear : field.back(x, y) - clear;
-				row.push(V(x, y, z));
-				const dzx = (front ? field.front(x + 0.01, y) - field.front(x - 0.01, y) : field.back(x + 0.01, y) - field.back(x - 0.01, y)) / 0.02;
-				const dzy = (front ? field.front(x, y + 0.01) - field.front(x, y - 0.01) : field.back(x, y + 0.01) - field.back(x, y - 0.01)) / 0.02;
-				nrow.push(front ? V(-dzx, -dzy, 1).normalize() : V(dzx, dzy, -1).normalize());
+				const x = -halves[j] + 2 * halves[j] * i / nx;
+				row.push(V(x, ys[j], sgn * (Math.max(surf(x, ys[j]), env[j] - 1.4 * x * x) + clear)));
 			}
-			grid.push(row); normals.push(nrow);
+			grid.push(row);
+		}
+		// normals from the panel itself
+		for (let j = 0; j <= ny; j++) {
+			const nrow = [];
+			for (let i = 0; i <= nx; i++) {
+				const dx = grid[j][Math.min(nx, i + 1)].clone().sub(grid[j][Math.max(0, i - 1)]), dy = grid[Math.min(ny, j + 1)][i].clone().sub(grid[Math.max(0, j - 1)][i]);
+				const n = new THREE.Vector3().crossVectors(dx, dy).normalize();
+				nrow.push(n.z * sgn < 0 ? n.multiplyScalar(-1) : n);
+			}
+			normals.push(nrow);
 		}
 		return { geo: slab(grid, normals, thick), grid, normals };
 	};

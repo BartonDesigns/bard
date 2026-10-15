@@ -54,7 +54,7 @@ export function sleeveEase(g, t, dc, outerLayer = false) {
 		const cuff = ribbed ? 0.0028 : 0.0065 + 0.0015 * L;
 		const w = smooth((band - dc) / 0.018);
 		k = k * (1 - w) + cuff * w;
-	} else if (!band) k *= 1 - 0.15 * smooth((0.05 - dc) / 0.05);
+	} else if (!band) k *= 1 - 0.35 * smooth((0.07 - dc) / 0.07);
 	return Math.min(k, 0.05);
 }
 
@@ -104,51 +104,54 @@ export function sleeveHang(dx, dy, dz, rx, ry, rz) {
 
 // The sleeve's pose response in the cloth's vertex shader (after skinning, in the mesh's
 // bind space, before the body contact pushes anything back out). `sleeve` is (t along the
-// arm, slack in metres); uClothA/B hold each arm's posed capsules (cloth-collide.js: 4, 5 the
+// arm, slack in metres), unpacked from two normalised bytes; uClothA/B hold each arm's posed capsules (cloth-collide.js: 4, 5 the
 // left upper arm and forearm, 8, 9 the right). uPoseK.x scales it all (0: off, for phones and
 // for people far off). The spare cloth hangs under the arm; a bent elbow gathers folds on its
 // inside and draws the sleeve taut over its point; a raised arm gathers the cloth on top of
 // the shoulder. vFold carries the fold (x: at the joint, y: the elbow's bend, for drag lines
 // down the whole sleeve) to the fragment's creases.
 export const SLEEVE_POSE_GLSL = /* glsl */`
-vFold = vec2(0.0); vSleeveT = sleeve.x;
-if (uPoseK.x > 0.01 && sleeve.x > -0.5 && mod(slot, 10.0) < 1.5) {
+vec2 sl = vec2(sleeve.x * 3.2 - 1.0, sleeve.y * 0.035);
+vFold = vec2(0.0); vSleeveT = sl.x;
+if (uPoseK.x > 0.01 && sl.x > -0.5 && mod(slot, 10.0) < 1.5) {
 	int iu = position.x >= 0.0 ? 4 : 8;
 	vec3 ua = uClothA[iu].xyz, ub = uClothB[iu], fa = uClothA[iu + 1].xyz, fb = uClothB[iu + 1];
 	vec3 U = normalize(ub - ua), F = normalize(fb - fa);
-	bool onFore = sleeve.x > 1.0;
-	vec3 a0 = onFore ? fa : ua, D = onFore ? F : U;
-	vec3 r = transformed - (a0 + D * dot(transformed - a0, D));
+	bool onFore = sl.x > 1.0;
+	// (the axis turns from the upper arm's to the forearm's across the elbow, about the elbow
+	// itself, so nothing steps where the two meet)
+	vec3 E = (ub + fa) * 0.5, D = normalize(mix(U, F, smoothstep(0.85, 1.15, sl.x)));
+	vec3 r = transformed - (E + D * dot(transformed - E, D));
 	float rl = length(r);
 	if (rl > 1e-4) {
 		vec3 rn = r / rl;
-		float slack = clamp(sleeve.y, 0.0, 0.035) * uPoseK.x;
+		float slack = clamp(sl.y, 0.0, 0.035) * uPoseK.x;
 		// the cloth is not a round tube: a few soft lobes round the arm where the slack lies,
 		// drifting along it (none at the armhole, where the sleeve is set in)
 		vec3 b1 = normalize(cross(D, vec3(0.0, 0.0, 1.0))), b2 = cross(D, b1);
 		float ang = atan(dot(rn, b2), dot(rn, b1));
-		float lobe = sin(ang * 3.0 + sleeve.x * 2.3 + float(iu)) * 0.6 + sin(ang * 5.0 - sleeve.x * 3.1) * 0.4;
-		transformed += rn * slack * 0.7 * lobe * smoothstep(0.1, 0.45, sleeve.x);
+		float lobe = sin(ang * 3.0 + sl.x * 2.3 + float(iu)) * 0.6 + sin(ang * 5.0 - sl.x * 3.1) * 0.4;
+		transformed += rn * slack * 0.7 * lobe * smoothstep(0.1, 0.45, sl.x);
 		// the hang: grows away from the armhole
 		vec3 g = vec3(0.0, -1.0, 0.0) - D * (-D.y);
 		float gl = length(g);
 		if (gl > 0.05) {
 			g /= gl;
-			float under = dot(rn, g), from = smoothstep(0.05, 0.5, sleeve.x);
+			float under = dot(rn, g), from = smoothstep(0.05, 0.5, sl.x);
 			transformed += g * slack * 0.8 * gl * from * pow(max(under, 0.0), 1.5);
 			transformed -= rn * slack * 0.35 * gl * from * max(-under, 0.0);
 		}
 		// the elbow
 		float bend = acos(clamp(dot(U, F), -1.0, 1.0)), fk = smoothstep(0.25, 1.6, bend);
 		vFold.y = fk;
-		float near = exp(-pow((sleeve.x - 1.0) / 0.3, 2.0));
+		float near = exp(-pow((sl.x - 1.0) / 0.3, 2.0));
 		if (fk * near > 0.01) {
 			vec3 inside = onFore ? -U + F * dot(U, F) : F - U * dot(U, F);
 			float il = length(inside);
 			if (il > 1e-3) {
 				float side = dot(rn, inside / il);
 				float room = min(slack + 0.004, 0.013);
-				float ripple = 0.5 + 0.5 * sin(sleeve.x * 34.0 + side * 2.0);
+				float ripple = 0.5 + 0.5 * sin(sl.x * 34.0 + side * 2.0);
 				float inner = smoothstep(-0.1, 0.6, side), outer = smoothstep(0.1, 0.8, -side);
 				transformed += rn * fk * near * room * (inner * (0.35 + 0.65 * ripple) - outer * 0.8);
 				vFold.x = fk * near * inner;
@@ -156,10 +159,10 @@ if (uPoseK.x > 0.01 && sleeve.x > -0.5 && mod(slot, 10.0) < 1.5) {
 		}
 		// the shoulder raised: cloth gathered on top, pulled under the arm
 		float raise = smoothstep(0.7, 1.6, acos(clamp(-U.y, -1.0, 1.0)));
-		float cap = exp(-pow(sleeve.x / 0.3, 2.0));
+		float cap = exp(-pow(sl.x / 0.3, 2.0));
 		if (raise * cap > 0.01) {
 			float top = max(0.0, rn.y);
-			transformed += rn * raise * cap * (0.006 * top * (0.5 + 0.5 * sin(sleeve.x * 40.0 + rn.z * 3.0)) - 0.004 * max(0.0, -rn.y));
+			transformed += rn * raise * cap * (0.006 * top * (0.5 + 0.5 * sin(sl.x * 40.0 + rn.z * 3.0)) - 0.004 * max(0.0, -rn.y));
 			vFold.x = max(vFold.x, raise * cap * top);
 		}
 	}

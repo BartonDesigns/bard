@@ -36,6 +36,7 @@ const CAST = {
 	worker: { seed: 5150, male: true, outfit: { top: { kind: 'shirt', col: '#5d6b7a', pat: 'chambray', fit: 'regular', sleeves: 'rolled' }, outer: { kind: 'pufferVest', col: '#d7f22a', acc: '#c9ccd0', pat: 'hivis', fit: 'regular', sleeves: 'none', open: false, fab: 'nylon' }, bottom: { kind: 'cargo', col: '#36383c', pat: 'cargo', legs: 'long', fit: 'regular' }, shoes: { kind: 'boot', col: '#4e3226', sole: '#1b1b1d' } } },
 	police: { seed: 2024, male: true, side: { fid: 'police', kind: 'police', colors: ['#1c2540', '#d9c46a'] }, gun: 'mossback-scout-rifle' },
 	soldier: { seed: 77, male: true, side: { fid: 'guard', kind: 'military', colors: ['#4a5236', '#c9c2a2'] }, gun: 'warden-spark-carbine' },
+	rolled: { seed: 4, male: true, side: { fid: 'guard', kind: 'military', colors: ['#4a5236', '#c9c2a2'] }, gun: 'warden-spark-carbine' },
 	gang: { seed: 31337, male: true, side: { fid: 'glasshouse', kind: 'gang', colors: ['#2fb5a8', '#eef3f2'] }, gun: 'warden-spark-carbine' },
 	avatar: { seed: 7919, male: true, gun: 'aurora-trail-rifle' },
 };
