@@ -795,6 +795,8 @@ export function createIslandWorld() {
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
 	combat.hooks.posts = military.posts; combat.hooks.trespass = military.trespass;
+	// close combat sees your body in third person (combat/melee.js)
+	combat.melee.bind({ avatar, self: you });
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
