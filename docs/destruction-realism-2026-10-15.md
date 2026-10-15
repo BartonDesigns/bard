@@ -113,7 +113,9 @@ W.info()                         // sources, walls, broken, verts, breaches, cel
 ## 10. Verification
 
 - `node --test island/tools/destruction-walls.test.mjs`: assemblies by building, era and region; layers filling the wall; punches between studs (dent, crack, through in three to eight); a stud (hard, never broken by a fist, broken by a bat); rounds through a partition and a stucco wall and stopped by brick and concrete; concentrated fire; a blast's breach; breach sizes (stand, crawl, a stud bay too narrow, a hole up the wall no doorway, a plate stepped over, four hundred punches never open a framed wall); keeping across cell sizes; the drawing of every kind of wall (no NaN).
-- `island/tools/destruction-browser.cjs` in headless Chromium: see the pictures and the report it writes.
+- `island/tools/destruction-rig.cjs` (with `destruction-rig.mjs`): the real `bay/houses.js`, `interiors/` and `createStructures` on a small stage (three houses, an old brick shop, a concrete warehouse), driven in headless Chromium (SwiftShader) in about two minutes. Results of the last run: a tract house's outside wall `stuccoTract`, its partition `partition`; four punches (cross, hook, heavy, cross) through the drywall between studs, a heavy on a stud hard; single rounds from outside through the stucco wall at 32 of 58 and on to the next wall, the burst through to the lath; a round through a partition at 49; a blast through a partition left a standing breach 1.5 m wide and 1.9 m high, a walk through it crossed, a walk into a whole partition was stopped; a window webbed, holed, holed wider and broke on the fourth round, and the vault through its frame ended inside the house; bat swings through prewar plaster to its wood lath; a blast through a brick-veneer wall; an old shop's brick (`brick`) and a warehouse's concrete (`concreteBare`) shot and blasted to their bricks and bars. No page or shader errors.
+- `island/tools/destruction-browser.cjs`: the same in the whole world (a house near you found by the town's homes). Its first run found no house built near the default suburb in time on this machine (the surveyed suburbs did not load); the rig stands in for it.
+- Pictures (kept outside the repository): punch dent, cracked, through, the hole with batts and studs, oblique, the wall outside; stucco pocks, the burst to its lath, wide, the blow-outs inside; partition entry and exit; breach both sides; window web, hole, bigger hole, shattered, climbing through; plaster and lath; brick veneer outside and inside; brick inside, near and outside; concrete inside, near and outside.
 
 ## Left for later
 
@@ -122,3 +124,7 @@ W.info()                         // sources, walls, broken, verts, breaches, cel
 - An interior's outside wall broken through from inside opens a way out through the block; the block is cut away round the hole for the eye, but the floors of a tall block above it are as they were.
 - A round goes through one wall or pane at most (combat's one-onward rule).
 - People are not hurt by debris.
+- Blasts are strong against framed walls (a 140 blast at 0.6 m opens most of a veneer wall); tune `dmg * 5` in `walls/index.js` blast() by eye in a real house.
+- Loose bricks round a big masonry hole can be left standing with nothing under them.
+- A broken wall's meshes are traced on a grid twice as fine as its cells: 5 000 to 30 000 vertices a wall; a heavily shot-up house can reach a few hundred thousand. A per-wall cap or a coarser trace on the lower tiers would bound it.
+- The whole-world harness needs a location where houses build quickly offline.
