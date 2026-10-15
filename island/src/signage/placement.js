@@ -13,9 +13,11 @@
 // from behind, 2 the face mirrored as seen through glass, 3 nothing).
 // Posts and gantries for the signs to stand on come back beside them.
 
+import { graffitiGraphic } from '../civic/graffiti-catalog.js';
 import { hash01, hash32, rng, pick } from './rand.js';
 import { LAYER } from './layers.js';
 import { RANK } from './systems.js';
+import { tradeFor, retailIdentity } from './art.js';
 
 export const BACK = Object.freeze({ blank: 0, readable: 1, mirrored: 2, none: 3 });
 export const MAT = Object.freeze({ retro: 'retro', vinyl: 'vinyl', glass: 'glass', paper: 'paper', foil: 'foil', paint: 'paint', grime: 'grime' });
@@ -331,6 +333,14 @@ export function storefrontDecals(biz, front, sys, { seed = 0, glass = true, numb
 		if (/grocer|general|pharmacy|market|shop|hardware|boutique|books/.test(type) && r() < 0.7) at(win + (r() - 0.5) * 0.6, 1.15, 0.45, 0.62, { k: 'sale', sys: sys.id, pct: pick(r, [10, 20, 25, 30, 40, 50]), what: type }, MAT.paper, LAYER.poster, BACK.mirrored, r() * 0.4);
 		if (r() < 0.35) at(win - 0.7, 1.05, 0.28, 0.18, { k: 'open', sys: sys.id }, gl, LAYER.sticker);
 	}
+	// Tall facade graphics identify the real tenant and leave the entrance clear.
+	const identity = retailIdentity(type, biz.id || biz.name || `${biz.x}:${biz.z}`);
+	if (!office && run >= 5 && identity.trade >= 0) {
+		const side = door > 0 ? -1 : 1, along = side * (half - .65);
+		const height = Math.min(3.7, Math.max(0, (front.height ?? 3.5) - .3));
+		if (height >= 2 && Math.abs(along - door) > 1.3) at(along, .15 + height/2, .78, height,
+			{ k: 'banner', ...identity, name: biz.name, label: biz.label || identity.label, request: !!biz.request }, MAT.vinyl, LAYER.poster, BACK.mirrored, .03);
+	}
 	if (office) {
 		at(door + handle * 0.55, 1.55, 0.2, 0.14, { k: 'suite', n: String(100 + Math.floor(r() * 9) * 100 + Math.floor(r() * 20)) }, MAT.foil, LAYER.poster, BACK.blank);
 		if (r() < 0.5) at(door - handle * 0.25, 1.3, 0.16, 0.09, { k: 'nosolicit', sys: sys.id }, gl, LAYER.sticker);
@@ -395,6 +405,7 @@ export function graffitiFor(surfaces, { morality = {}, seed = 0, day = 0, phone 
 			if (roll < 0.08 && span > 9 && tall > 2.4 && (S.kind === 'soundwall' || S.kind === 'abutment' || S.kind === 'rail' || S.kind === 'industrial')) { face = { k: 'piece', seed: sid }; w = Math.min(span * 0.6, 7 + r() * 3); h = Math.min(tall * 0.75, w * 0.38); hy = 0.4 + h / 2; }
 			else if (roll < 0.33) { face = { k: 'throwup', seed: sid }; w = 1.8 + r() * 1.6; h = w * 0.45; hy = 0.5 + h / 2 + r() * 0.3; }
 			else { face = { k: 'tag', seed: sid }; w = 0.7 + r() * 1.1; h = w * 0.42; hy = 0.9 + r() * 1.2; }
+			if(face.k==='piece'&&graffitiGraphic('piece',sid))w=Math.min(w,h*1.15);
 			if (S.kind === 'dumpster') { w *= 0.6; h *= 0.6; hy = 0.75; }
 			if (S.kind === 'pier') { w = Math.min(w, span * 0.9); h = Math.min(h, w * 0.5); }
 			hy = Math.min(hy, tall - h / 2 - 0.1);

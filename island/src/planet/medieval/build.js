@@ -554,10 +554,7 @@ export function buildHouse(ctx, b) {
 	// a step at the door, maybe a lantern, barrels, a bench
 	k.box(-0.8, y - 0.2, d / 2, 0.8, y + 0.2, d / 2 + 0.6, M.ASHLAR, st.stone);
 	if (b.kind === 'inn') {
-		// the inn: a sign on a bracket, tables and a bench outside, barrels
-		k.beam([-w / 2 + 1, y + 3.4, d / 2], [-w / 2 + 1, y + 3.4, d / 2 + 1.6], 0.1, 0.1, M.IRON, IRONC);
-		k.box(-w / 2 + 0.55, y + 2.55, d / 2 + 1.2, -w / 2 + 1.45, y + 3.3, d / 2 + 1.26, M.PLANK, [0.3, 0.2, 0.12]);
-		k.face([[-w / 2 + 0.6, y + 2.6, d / 2 + 1.27], [-w / 2 + 1.4, y + 2.6, d / 2 + 1.27], [-w / 2 + 1.4, y + 3.25, d / 2 + 1.27], [-w / 2 + 0.6, y + 3.25, d / 2 + 1.27]], [0, 0, 1], M.CLOTH, ctx.realm.arms.charge);
+		// The carved bracket sign is supplied by signage/world-art.js.
 		for (const x of [-3.2, 3.2]) {
 			k.box(x - 0.8, y + 0.72, d / 2 + 2.2, x + 0.8, y + 0.8, d / 2 + 3.0, M.PLANK, PLANKC);
 			for (const s of [-1, 1]) k.box(x - 0.7, y, d / 2 + 2.6 + s * 0.3 - 0.05, x + 0.7, y + 0.72, d / 2 + 2.6 + s * 0.3 + 0.05, M.PLANK, [0.4, 0.3, 0.2]);

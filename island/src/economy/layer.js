@@ -14,6 +14,7 @@ import { coastScan, coastClass, COAST_RINGS, profileOf, hoursOf, frontSpec, fasc
 import { createStorefronts } from './storefront.js';
 import { setRequestSource } from './requests.js';
 import { payroll } from './payroll.js';
+import { drawTradeBoard, artRevision } from '../signage/art.js';
 
 const CW = 256, CH = 64;                 // a board in the atlas, pixels
 const FONTS = {
@@ -33,7 +34,9 @@ function hexLin(h) {
 }
 // a board drawn into its cell: the shape in the business's colours, its name fitted across, the
 // small line under it
-function drawBoard(g, x0, y0, E) {
+function drawBoard(g, x0, y0, E, phone = false) {
+	g.clearRect(x0, y0, 256, 64);
+	if (drawTradeBoard(g, x0 + 3, y0 + 3, CW - 6, CH - 6, E, { phone })) return;
 	const { shape, font, bg, fg } = E.sign, m = 3, w = CW - 2 * m, h = CH - 2 * m, x = x0 + m, y = y0 + m;
 	g.save();
 	g.clearRect(x0, y0, CW, CH);
@@ -100,6 +103,7 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	group.add(signs);
 
 	// the atlas's cells: name -> cell, kept across rebuilds so a board already drawn stays
+	let artRev = artRevision();
 	const cellOf = new Map(), free = [...Array(CELLS).keys()];
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 
@@ -287,7 +291,7 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			E.door = [F.cx + F.nx * 1.4, F.cz + F.nz * 1.4];
 			E.ground = g;
 			// (the face it fronts the street with, for the glass's decals: signage/)
-			E.front = { x: F.cx, z: F.cz, nx: F.nx, nz: F.nz, run: F.run, g, door: 0, face: D.face };
+			E.front = { x: F.cx, z: F.cz, nx: F.nx, nz: F.nz, run: F.run, g, height: Math.max(0, top - g), door: 0, face: D.face };
 			const P = (along, out) => [F.cx + F.tx * along + F.nx * out, F.cz + F.tz * along + F.nz * out];
 			// the awning, in its colours: the one it had made over, or a new one over the shopfront
 			if (E.awning && (D.use === 'shop' || D.use === 'row' || D.use === 'apt' || (D.use === 'retail' && F.run < 60))) {
@@ -467,7 +471,7 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			if (cellOf.has(k) || !free.length) continue;
 			const c = free.pop();
 			cellOf.set(k, c);
-			drawBoard(g, (c % COLS) * CW, Math.floor(c / COLS) * CH, E);
+			drawBoard(g, (c % COLS) * CW, Math.floor(c / COLS) * CH, E, isPhone);
 			drew++;
 		}
 		if (drew) tex.needsUpdate = true;
@@ -547,6 +551,11 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	// the regional towns looked over every two seconds
 	function tick(cam, hours, nightK, dt = 0.016, dow = new Date().getDay()) {
 		clock += dt; lastHours = hours;
+		if (artRev !== artRevision()) {
+			artRev = artRevision(); cellOf.clear(); free.length = 0;
+			for (let i = 0; i < CELLS; i++) free.push(i);
+			uploadBoards(regionBoards.length ? cityBoards.concat(regionBoards) : cityBoards);
+		}
 		night.value = 0.55 * nightK;
 		if (regional && clock - rT > 2) { rT = clock; applyRegional(cam.x, cam.z); }
 		SF.tick(hours, dow, nightK, clock);
