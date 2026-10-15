@@ -331,7 +331,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		const L = a.households.filter(want);
 		return L.length ? L[Math.floor(r() * L.length)] : null;
 	}
-	const HIVIS_STYLE = { gen: 'x', top: { kind: 'longsleeve', col: '#1f2a44', pat: 'plain', fit: 'regular', sleeves: 'long' }, outer: { kind: 'pufferVest', col: HIVIS, acc: '#c9ccd0', pat: 'block', fit: 'regular', sleeves: 'none', open: false, fab: 'nylon' }, bottom: { kind: 'trousers', col: '#1f2a44', pat: 'plain', legs: 'long', fit: 'straight' }, shoes: { kind: 'runner', col: '#1b1b1d', sole: '#1b1b1d' }, acc: [{ kind: 'cap', col: HIVIS, acc: '#1b1b1d' }] };
+	const HIVIS_STYLE = { gen: 'x', top: { kind: 'shirt', col: '#1f2a44', pat: 'plain', fit: 'regular', sleeves: 'rolled', pocket: false }, outer: { kind: 'vest', col: HIVIS, acc: '#b9bec4', pat: 'hivis', fit: 'regular', sleeves: 'none', open: false, fab: 'nylon' }, bottom: { kind: 'trousers', col: '#1f2a44', pat: 'plain', legs: 'long', fit: 'straight' }, shoes: { kind: 'runner', col: '#1b1b1d', sole: '#1b1b1d' }, acc: [{ kind: 'cap', col: HIVIS, acc: '#1b1b1d' }] };
 
 	async function stage(kind, o = {}) {
 		if (dead || !W()?.island) return 'unavailable';

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isRibbed, isShirted } from './garment-shape.js';
 
 const clamp = (x) => Math.max(0, Math.min(1, x));
 const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
@@ -120,15 +121,19 @@ export function finishGarmentEdges(g, o, cut, R) {
   // between an arm and torso and accidentally address a different garment palette.
   poly=poly.map(v=>({...v,key:`${v.key}s${val}`,slot:[val]}));
   const cuts=[];
+  // each edge's turned-back return: a knit's rib and a rolled sleeve are thicker than a hem
+  const edge=(f,r=.0016)=>{f.radius=r;return f;}, ribbed=isRibbed(item);
   if (s<2 && item) {
    if (limb===0 || limb===2) {
-    cuts.push(v=>v[1]-(s===0?R.topHem:R.outHem)-.012);
-    if (!item.onepiece && item.kind!=='bikini') cuts.push(v=>{
+    cuts.push(edge(v=>v[1]-(s===0?R.topHem:R.outHem)-.012,ribbed?.0034:.0018));
+    if (!item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>{
      const fr=smooth((v[2]+.04)/.035), scoop=s===0?(item.kind==='tank'?.045:item.kind==='crop'?.025:0):0;
      return cut.neck-.005-scoop*fr+.035*smooth(Math.abs(v[0])/.09)-.004*fr-v[1];
-    });
-   } else if (limb===1) cuts.push(v=>sleeveDistance(v,item.sleeves,cut));
-  } else if (s===2 && limb===2 && R.legEnd<5) cuts.push(v=>v[1]-R.legEnd-.012);
+    },ribbed?.003:.0016));
+    // a sleeveless armhole cut clean in a curve (not left to whole triangles)
+    if (item.sleeves==='none' && limb===0 && !item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>cut.shoulderX-.03+Math.max(0,cut.chest-.07-v[1])*1.5-Math.abs(v[0]),.0022));
+   } else if (limb===1) cuts.push(edge(v=>sleeveDistance(v,item.sleeves,cut),item.sleeves==='rolled'?.009:ribbed?.003:isShirted(item)?.0026:.0018));
+  } else if (s===2 && limb===2 && R.legEnd<5) cuts.push(edge(v=>v[1]-R.legEnd-.012));
   for (const f of cuts) { poly=clip(poly,f); if (poly.length<3) break; }
   if (poly.length<3) continue;
   for (let j=1;j<poly.length-1;j++) face(poly[0],poly[j],poly[j+1]);
@@ -149,7 +154,7 @@ export function finishGarmentEdges(g, o, cut, R) {
     const n=new THREE.Vector3(...v.normal).normalize(), inward=new THREE.Vector3();
     for(let ax=0;ax<3;ax++){const hi=[...pos],lo=[...pos];hi[ax]+=.0001;lo[ax]-=.0001;inward.setComponent(ax,(f(hi)-f(lo))/.0002);}
     inward.addScaledVector(n,-inward.dot(n)).normalize();
-    const radius=.0016;
+    const radius=f.radius||.0016;
     q.position=new THREE.Vector3(...pos).addScaledVector(n,radius*(Math.cos(theta)-1)).addScaledVector(inward,radius*Math.sin(theta)).toArray();
     q.normal=n.multiplyScalar(Math.cos(theta)).addScaledVector(inward,Math.sin(theta)).normalize().toArray();
     band.push(q);

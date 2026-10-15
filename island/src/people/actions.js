@@ -16,6 +16,10 @@ const smooth = (x) => x * x * (3 - 2 * x);
 // a long arm at the ready: both hands on it (tuned so the hands land on its grip and guard)
 const CARRY_R = arm({ abd: 0.57, flex: -0.117, roll: 0.947, bend: 1.45, pro: 0.6, wflex: -0.1, curl: 0.6 });
 const CARRY_L = arm({ abd: 0.073, flex: 0.62, roll: 0.803, bend: 0.753, pro: 1.065, wflex: 0.1, curl: 0.55 });
+// the chest bladed to the gun side and leaning into it, as a rifleman stands: the support
+// shoulder forward so that hand reaches the guard, the strong elbow down by the side instead
+// of winging out (the head stays on the way they face)
+const CARRY_SP = [-0.4, 0.1, 0], RELOAD_SP = [-0.35, 0.16, 0];
 // fists up (combat/melee.js)
 const GUARD_L = arm({ abd: 0.22, flex: 0.95, roll: 0.95, bend: 2.15, pro: 0.4, curl: 1 });
 const GUARD_R = arm({ abd: 0.25, flex: 0.75, roll: 0.9, bend: 2.2, pro: 0.4, curl: 1 });
@@ -127,15 +131,15 @@ export const ACTIONS = {
 	] },
 	// a long arm carried at the ready (crysis/held-items.js): the right hand on the grip at the
 	// hip, the left forward under the guard
-	carry: { loop: false, keys: [[0, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }]] },
+	carry: { loop: false, keys: [[0, { L: CARRY_L, R: CARRY_R, sp: CARRY_SP, hd: [-0.1, 0, 0] }]] },
 	// its reload: the support hand down to the cell, away to a pouch at the hip, back, and up
 	// to the guard again
 	reload: { loop: false, keys: [
-		[0, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }],
-		[0.25, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
-		[0.5, { L: arm({ abd: 0.3, flex: -0.15, roll: 0.3, bend: 0.7, pro: 1.2, curl: 0.7 }), R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
-		[0.78, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
-		[1, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }],
+		[0, { L: CARRY_L, R: CARRY_R, sp: CARRY_SP, hd: [-0.1, 0, 0] }],
+		[0.25, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: RELOAD_SP, hd: [-0.1, 0.2, 0] }],
+		[0.5, { L: arm({ abd: 0.3, flex: -0.15, roll: 0.3, bend: 0.7, pro: 1.2, curl: 0.7 }), R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: RELOAD_SP, hd: [-0.1, 0.2, 0] }],
+		[0.78, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: RELOAD_SP, hd: [-0.1, 0.2, 0] }],
+		[1, { L: CARRY_L, R: CARRY_R, sp: CARRY_SP, hd: [-0.1, 0, 0] }],
 	] },
 	// a fistfight (combat/melee.js): the guard, fists up and chin down; a jab with the lead hand,
 	// a cross from the back one, a hook round the side; a two-handed shove; a grab; a bat or
