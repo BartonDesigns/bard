@@ -83,11 +83,13 @@ The mapped streets' lamps follow the era: acorn lanterns on posts every 24 m in 
 
 ## Phones
 
-Everything is instanced or one draw: the trees join the city's tiers; stakes, grates and leaves three instanced meshes; lights one point cloud; sprinklers one point cloud and two instanced meshes. Counts are lower on a phone throughout (see above). The paint target grows from two channels to four (1024 square on a phone, no multisampling).
+Everything is instanced or one draw: the trees join the city's tiers; stakes, grates and leaves three instanced meshes; lights one point cloud; sprinklers one point cloud and two instanced meshes. Counts are lower on a phone throughout (see above). The paint target grows from two channels to four (1024 square on a phone, no multisampling). The quality governor (`world/governor.js qualityNow()`) narrows it further on a lower tier: the lights' and the tree decor's reach by its `far`, the sprinkler heads by its `people`; the lights rebuild when the tier changes.
 
 ## Not done, and notes
 
 - Start dates are not in the bake yet (see above), so every era is the guess.
 - Car bumps come from the mapped and grown towns' holes; the procedural grid's painted holes are not felt.
 - Deciduous trees colour but keep their leaf cards through winter.
+- The street-tree count (9000, 3500 on a phone) and the paint target's size do not follow the governor yet.
+- The procedural grid's own street trees and sidewalks keep their style; only its potholes and asphalt are new.
 - Tests: `island/tools/streets-by-era.test.mjs` (eras, rows, trees, potholes, the era cache, holiday window, sprinklers, autumn, lawns, the favour).
