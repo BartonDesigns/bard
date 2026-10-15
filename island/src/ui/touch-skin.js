@@ -6,7 +6,7 @@
 // button in the HUD is matched by its name (aria-label, title or text) to a glyph, drawn in CSS
 // as an inline SVG mask, and its words are hidden. The name stays on the button for screen
 // readers (a button without one is given its own text as its name). A button nothing here
-// knows keeps its words, as a small pill, so it can still be read.
+// knows still shows no words: it gets the general "act here" glyph (a pointing hand).
 //
 // The layout, from the bottom right corner inside the safe area (both orientations):
 //   P   the primary action, 68 px: Fire (Draw/Release), Strike, the pedal (go), the cast
@@ -85,6 +85,7 @@ export const GLYPHS = {
 	contract: "<rect x='5.5' y='4.5' width='13' height='16.5' rx='2'/><path d='M9 4.5V3h6v1.5M9 10h6M9 14h6M9 18h3.5'/>",
 	bell: "<path d='M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z'/><path d='M10 20.5a2 2 0 0 0 4 0'/>",
 	play: "<path d='M8.5 5.5v13l10-6.5z'/>",
+	tap: "<path d='M9 11V5.5a1.5 1.5 0 0 1 3 0V10m0-1a1.5 1.5 0 0 1 3 0v1.5m0-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.5a5 5 0 0 1-4.3-2.5L5 15.8a1.4 1.4 0 0 1 2.3-1.6L9 16'/>",
 	scroll: "<path d='M7 4h11a2 2 0 0 1 0 4h-1v10a2 2 0 0 1-2 2H6a2 2 0 0 1 0-4h1z'/><path d='M10 9h4M10 12.5h4'/>",
 };
 
@@ -152,6 +153,8 @@ const RULES = [
 	[(a) => /^Strike the stone|stone/i.test(a), 'bell'],
 	[(a) => /^Play\b/.test(a), 'play'],
 	[(a) => a === 'Quest log', 'scroll'],
+	[(a) => /^(Return to orbit|Leave the horizon)/.test(a), 'exit'],
+	[(a) => /rhythm/i.test(a), 'music'],
 ];
 
 // (the id in :not() lifts every rule here over the HUD's own touch rules in main.js)
@@ -164,14 +167,12 @@ const L2 = 'right:calc(164px + var(--sr))!important;bottom:calc(24px + var(--sb)
 const SLOT = 'position:absolute!important;left:auto!important;top:auto!important;margin:0!important;';
 const CSS = `
 ${S}{--sl:env(safe-area-inset-left);--sr:env(safe-area-inset-right);--st:env(safe-area-inset-top);--sb:env(safe-area-inset-bottom);--gs:23px;}
-${S} [data-skin]{box-sizing:border-box!important;width:52px!important;height:52px!important;min-width:0!important;min-height:0!important;max-width:none!important;padding:0!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.24)!important;background:rgba(12,16,20,.32)!important;color:rgba(255,255,255,.88)!important;box-shadow:0 1px 8px rgba(0,0,0,.16)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;text-shadow:none!important;opacity:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;transition:transform .08s ease,background-color .12s ease,border-color .12s ease!important;cursor:pointer;}
+${S} [data-skin]{box-sizing:border-box!important;width:52px!important;height:52px!important;min-width:0!important;min-height:0!important;max-width:none!important;padding:0!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.24)!important;background:rgba(12,16,20,.32)!important;color:rgba(255,255,255,.88)!important;box-shadow:0 1px 8px rgba(0,0,0,.16)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;text-shadow:none!important;opacity:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;transition:scale .08s ease,background-color .12s ease,border-color .12s ease!important;cursor:pointer;}
 ${S} [data-skin][data-glyph]{font-size:0!important;line-height:0!important;color:transparent!important;overflow:hidden!important;}
 ${S} [data-skin][data-glyph]>*{display:none!important;}
 ${S} [data-skin][data-glyph]::before{content:'';position:absolute;left:50%;top:50%;width:var(--gs);height:var(--gs);margin:calc(var(--gs) / -2) 0 0 calc(var(--gs) / -2);background:rgba(255,255,255,.88);-webkit-mask:var(--glyph) center/contain no-repeat;mask:var(--glyph) center/contain no-repeat;pointer-events:none;}
 ${S} [data-skin][data-glyph]::after{content:none!important;}
-${S} [data-skin]:not([data-glyph]){width:auto!important;height:44px!important;min-width:44px!important;border-radius:22px!important;padding:0 14px!important;font:600 13px/1 system-ui,sans-serif!important;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;}
-${S} [data-skin]:not([data-glyph]) svg{width:18px;height:18px;}
-${S} [data-skin]:active,${S} [data-skin].on{background:rgba(255,255,255,.26)!important;border-color:rgba(255,255,255,.62)!important;transform:scale(.94)!important;}
+${S} [data-skin]:active,${S} [data-skin].on{background:rgba(255,255,255,.26)!important;border-color:rgba(255,255,255,.62)!important;scale:.94;}
 ${S} [data-skin]:is([aria-pressed="true"],[aria-expanded="true"],.lit,[style*="1, 169, 130"]){background:rgba(1,169,130,.42)!important;border-color:rgba(160,255,228,.78)!important;}
 ${S} [data-skin][disabled]{display:none!important;}
 ${S} [data-size="p"]{width:68px!important;height:68px!important;--gs:30px;}
@@ -189,6 +190,7 @@ ${S} .l99-quick{top:calc(12px + var(--st))!important;right:calc(116px + var(--sr
 ${S} .l99-left{top:calc(68px + var(--st))!important;left:calc(12px + var(--sl))!important;max-width:calc(100% - 24px - var(--sl) - var(--sr))!important;}
 ${S} .cb-star{top:calc(70px + var(--st))!important;right:calc(16px + var(--sr))!important;}
 ${S} .cb-ammo{background:rgba(12,16,20,.32)!important;border:1px solid rgba(255,255,255,.16);border-radius:12px!important;max-width:min(160px,calc(100% - 204px - var(--sl) - var(--sr)))!important;}
+${S} .cb-ammo :is(.w,.rl){display:none!important;}
 ${S} .cb-hp{width:min(144px,calc(100% - 204px - var(--sl) - var(--sr)))!important;}
 ${S} .l99-prompts>[data-hud="prompt 99"]{background:rgba(12,16,20,.5)!important;color:rgba(255,255,255,.92)!important;}
 @media (orientation:landscape) and (max-height:540px){
@@ -297,10 +299,8 @@ export function skinTouch(mount) {
 			if (n && b.getAttribute('aria-label') !== n) { b.setAttribute('aria-label', n); b.dataset.skinName = '1'; }
 		}
 		if (!b.title && name(b)) b.title = name(b);
-		const g = glyphFor(name(b), t) || glyphFor(spoken(t), t) || glyphFor(b.title || '', t);
-		const direct = b.parentElement === mount;
-		// (straight in the mount and unknown: someone's own overlay; left as it is)
-		if (!g && direct) { undress(b); return; }
+		// (nothing known: the general glyph, never words)
+		const g = glyphFor(name(b), t) || glyphFor(spoken(t), t) || glyphFor(b.title || '', t) || 'tap';
 		if (!b.hasAttribute('data-skin')) { b.setAttribute('data-skin', ''); b.addEventListener('touchstart', () => {}, { passive: true }); }
 		const close = g === 'menu' && b.getAttribute('aria-expanded') === 'true' ? 'close' : g;
 		if (close) { if (b.dataset.glyph !== close) b.dataset.glyph = close; } else if (b.hasAttribute('data-glyph')) b.removeAttribute('data-glyph');

@@ -26,8 +26,10 @@ const CONTROLS = [
 test('every touch control has a glyph, and every glyph a drawing', () => {
 	for (const [a, t, g] of CONTROLS) assert.equal(glyphFor(a, t), g, `${a} (${t})`);
 	for (const [, , g] of CONTROLS) assert.ok(GLYPHS[g], `no drawing for ${g}`);
-	// unknown buttons keep their words (no glyph)
+	// (a name nothing knows has no glyph of its own: the skin gives it the general one, never words)
 	assert.equal(glyphFor('Accept contract', 'Accept contract'), null);
+	assert.ok(GLYPHS.tap);
+	for (const [a, g] of [['Return to orbit', 'exit'], ['Leave the horizon', 'exit'], ['Join the rhythm', 'music']]) assert.equal(glyphFor(a, a), g);
 });
 
 test('a first-use tip shows once', () => {

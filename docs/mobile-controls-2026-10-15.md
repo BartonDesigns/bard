@@ -20,9 +20,9 @@ its own buttons and keeps its own bindings.
 - The glyphs are 24 px line drawings kept as SVG strings in `GLYPHS`, drawn in CSS as an inline
   `data:` SVG mask over a white fill. No icon font and no external file.
 - Buttons inside the controls menu, panels and dialogs keep their words (they are lists you read).
-  A button straight in the mount that nothing here knows is left exactly as it was (someone's own
-  overlay); one inside a HUD group that nothing knows keeps its words as a small pill, so it can
-  still be read.
+  Every other button in the HUD shows a glyph and never words: one nothing here knows (a quest's
+  changing action, a colony errand, the friends chip) gets the general "act here" glyph, a
+  pointing hand, and keeps its name for screen readers.
 - Names: every dressed button keeps its `aria-label`. A button that had none is given its own words
   as its name (without emoji, key hints or arrows), and the name follows the words as they change;
   a button that leaves the HUD gets its words back and the given name is taken off. A title is set
@@ -54,7 +54,12 @@ All the skin's rules sit under `#l99-island-mount.l99-touch.l99-skin:not(#l99-no
   "Controls"), FIRE, AIM, Strike, Block, Dodge, Grab, the rod's H, the pedals' arrows as text,
   "Sedan", "Assist", "⛵ Board", "💬 Talk", "🩹 Use", "🚪 Open", "✋ Surrender" and the like are
   all icons now. The fishing meter's line of instructions is hidden on touch (the bar says it).
-  The ammo line reads "Empty · reload" instead of "Tap R to reload".
+  The ammo readout keeps only the count on touch (the weapon's name and the reload line are hidden;
+  the Mode glyph shows the fire mode and Fire dims when empty).
+- Changing captions are glyph changes: Grab becomes Takedown (a lit hand with a mark), or Throw
+  (an arc); Strike becomes Swing (a bat, pipe or bottle) or Slash (a blade: the hunting knife and
+  the machete); the cast button follows cast, hook and reel. Only the `aria-label` and title
+  change with them.
 
 ## The layout
 
@@ -128,8 +133,8 @@ so it follows the device as it turns.
 
 - `island/tools/touch-skin.test.mjs`: every control's name maps to the expected glyph and every
   glyph has a drawing; a first-use tip shows once.
-- `island/tools/mobile-controls-browser.cjs`: now applies the skin as `main.js` does, and checks
-  that no HUD button shows words, that each has a name and is at least 44 px, that the top bar,
+- `island/tools/mobile-controls-browser.cjs`: now applies the skin as `main.js` does, and fails
+  if any HUD button shows words, a caption (`::after`) or a visible label element inside it, that each has a name and is at least 44 px, that the top bar,
   Fire, Reload, Mode, Aim, Jump, Fly and the menu do not overlap and stay on screen at 390x664,
   844x390, 844x320, 320x568 and on the desktop (where the skin stays off), plus the menu and the
   contract panel as before.
@@ -143,5 +148,6 @@ so it follows the device as it turns.
 - The controls menu sheet, the settings panel, the places and games lists, the compass, the loot
   card and the contract brief keep their words: they are lists and cards you read, opened on
   purpose.
-- A few rare buttons the skin does not know (a medieval quest's action, the stones' changing
-  names) keep their words as a small pill.
+- The status read-outs that are not controls: the driving line (street and speed) at the top
+  centre, the boss bar, the call-outs, a field contract's objective while one is on, and the
+  first-use tips, all clear of the buttons.
