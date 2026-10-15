@@ -176,7 +176,24 @@ staff posts, anchors, the regional towns, tick), `economy/establishments.js` (sh
 `bay/houseplan.js`, `bay/houses.js`, `bay/city.js` (`setBuilt`), `people/people.js`,
 `people/npc-money.js`, `main.js` (three grouped lines: tick, regional source, daily life).
 
+## Checked
+
+- `node --test island/tools/storefronts.test.mjs` (11 tests: profiles for every type, hours and
+  shutters, glazing and fascia sizes, staff posts and shifts, the coast scan, waterfront
+  trades, every fit-out inside its room without overlaps, a house that is a café or a B&B,
+  wealth from standing, the daily-life source). The whole suite: the four known failures only.
+- The glazing shader compiled and drawn in a small rig (four fronts, day and night: a café's
+  counter and tables by day and dark at night, a pub lit late, a boutique's mannequins, a
+  garage's bay door down), and in the game: Walnut Creek (176 fronts within 380 m), the
+  Diablo foothills, Takayama (13 regional businesses planned), Eureka.
+
 ## Left to do
+
+- Eureka still shows no harbour trades in the browser (`harbour: 0` within 700 m) although the
+  scan and the weights pass in node: the globe's ground at Humboldt Bay probably does not go
+  under half a metre there. Wire the globe's own sea test into `economy.setSea(fn)`.
+- The interior shot by a house café's door missed the built house; the fit-outs are checked in
+  node and through `W.interiors.goTo(P, 'shop', 0, 'shop')` in the flats over shops.
 
 - The regional towns' fronts sit on each structure's bounding face; a deep veranda or a
   set-back door can leave the glazing in front of posts.
