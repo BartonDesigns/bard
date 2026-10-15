@@ -1,0 +1,39 @@
+Crysis arms runtime: canonical catalog, dynamic source discovery, conversational actions and fail-closed state passed.
+✔ natural gear requests resolve to the canonical gameplay catalog (23.307134ms)
+✔ negations and ordinary weapon mentions do not mutate state (1.449388ms)
+✔ dynamic world-site functions expose streamed shops and stateful actions (23.190929ms)
+✔ unsupported source actions fail closed without changing inventory (0.684678ms)
+✔ community food spends the gear wallet once and cannot overdraw it (8.795817ms)
+✔ an explicitly empty vendor stock cannot be bought through either entry point (1.64607ms)
+✔ prepared trades reserve the wallet and gear until commit or rollback resolves (2.721627ms)
+✔ earned wallet survives runtime reload even for older timestamp-free saves (0.348484ms)
+✔ bow geometry and release, desktop (71.386675ms)
+✔ bow geometry and release, phone (13.971236ms)
+✔ hand refinement preserves joint identities and normalizes blended influences (8.494704ms)
+✔ all service vehicles have finite grounded geometry, shared resources, LOD and rotating wheels (473.633695ms)
+✔ every strike winds up, lands, recovers, in that order and quickly enough (0.977664ms)
+✔ the string runs jab, cross, hook; a pause starts it again; something in hand swings (0.708944ms)
+✔ a hold becomes a heavy, charged by how long it is held; counters hit harder (0.181994ms)
+✔ a block raised just in time parries; late it blocks; a heavy breaks it; the dodge has grace (0.212032ms)
+✔ which side a blow comes from, and how hard it takes someone (0.600232ms)
+✔ a takedown only from behind, close and unseen (0.170364ms)
+✔ those squaring up take turns: few at once, a breath between, the longest waiting first (0.513597ms)
+✔ a fight on the compass: starting one costs, breaking one up earns, self-defence is neither (0.245838ms)
+✔ weapons of opportunity: a pipe joins the bat and the bottle (0.250339ms)
+✔ siting: only civic kinds of a fitting size, low and level, dealt one kind each (3.516175ms)
+✔ siting: the same choice whatever order the buildings come in, and every kind in a town (4.007033ms)
+✔ patients: admitted, treated over time, discharged and billed (15.603492ms)
+✔ patients: an unpaid bill is owed, not refused; a long wait goes on elsewhere, never untreated in place (17.088746ms)
+✔ minors: seen first, cared for, never billed, never harmed (14.171056ms)
+✔ routes: the shortest way along the streets, and none where they do not join (4.062848ms)
+✔ depots: taking and bringing are inventory transactions on real items (13.402761ms)
+✔ interiors: every plan is furnished with its posts, and every role has something to do (102.703658ms)
+✔ interiors: the military builders take their own frame shape (11.993205ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 748.526337

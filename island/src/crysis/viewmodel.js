@@ -45,6 +45,7 @@ import { CELL_HOLD, cellPath, handFrame, itemModel, kitLight, kitMaterial, kitPu
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 import { createScopeOptics } from './scope-optics.js';
+import { refineHandSurface, closeHandMaterial } from '../people/hand-surface.js';
 
 const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
 const SLEEVE_BONES = /^(upperarm0[12]|lowerarm0[12])\.(L|R)$/;
@@ -115,12 +116,10 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			if (sleeveBone[a] && sleeveBone[b] && sleeveBone[c]) sl.push(idx[i], idx[i + 1], idx[i + 2]);
 		}
 		if (!tri.length) return null;
-		const g = new THREE.BufferGeometry();
-		for (const [k, v] of Object.entries(g0.attributes)) g.setAttribute(k, v);
-		g.setIndex(tri);
+		const g = refineHandSurface(g0, tri, 1);
 		const bones = P.bones.map(() => { const b = new THREE.Bone(); b.matrixAutoUpdate = false; b.matrixWorldAutoUpdate = false; return b; });
 		const skel = new THREE.Skeleton(bones, P.skeleton.boneInverses);
-		const skin = new THREE.SkinnedMesh(g, P.skinMat);
+		const skin = new THREE.SkinnedMesh(g, closeHandMaterial(P));
 		skin.bindMode = 'detached';
 		skin.bind(skel, new THREE.Matrix4());
 		skin.frustumCulled = false;
@@ -162,7 +161,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (sleeve) group.add(sleeve);
 		scene.add(group);
 		const side = names.map((n) => (n.endsWith('.L') ? 'L' : 'R')), fore = names.map((n) => !/^(wrist|finger|metacarpal)/.test(n));
-		return { me, group, skin, sleeve, bones, side, fore, tris: tri.length / 3 + (sleeve?.geometry.index.count || 0) / 3 };
+		return { me, group, skin, sleeve, bones, side, fore, tris: g.index.count / 3 + (sleeve?.geometry.index.count || 0) / 3 };
 	}
 
 	// ---------- input: aim ----------

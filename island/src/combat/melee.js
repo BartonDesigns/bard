@@ -56,7 +56,7 @@ export function createMelee(ctx) {
 		fought: new Set(), told: {},
 	};
 	let startT = 70 + Math.random() * 60, lineT = 0, now = 0, scanT = 0, scatterT = 120 + Math.random() * 90;
-	let bound = { avatar: null, self: null };
+	let bound = { avatar: null, self: null }, askedForHands = false;
 	const yaw = () => ctx.player?.()?.yaw ?? 0;
 	const sound = createMeleeSound({ eye: ctx.eye, yaw, isPhone });
 	const feel = createMeleeFeel({ camera, mount, isPhone });
@@ -673,6 +673,9 @@ export function createMelee(ctx) {
 		}
 		const on = !A && ctx.active() && !ctx.armed() && !ctx.driving?.() && !P?.flying && !P?.swimming && (me.guardT > 0 || !!me.item || me.block || !!me.move || !!me.take || me.cuffed);
 		if (on && !camera.parent) ctx.scene?.add(camera);
+		if (on && !bound.avatar?.me && !askedForHands && bound.avatar?.ready) {
+			askedForHands = true; bound.avatar.ready().catch(() => {});
+		}
 		vs.on = on; vs.item = me.item; vs.move = me.move; vs.anim = me.m?.anim === 'haymaker' ? 'heavy' : me.m?.anim; vs.m = me.m; vs.mt = me.mt;
 		vs.charging = me.charging; vs.charge = me.charge; vs.block = me.block && me.breakT <= 0; vs.take = !!me.take; vs.cuffed = me.cuffed;
 		vs.dodge = me.dodgeT >= 0 ? Math.sin(Math.PI * Math.min(1, me.dodgeT / DODGE.time)) : 0; vs.dodgeSide = me.dodgeSide; vs.rock = me.rock;
