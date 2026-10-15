@@ -359,9 +359,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
 		mats.panel.emissiveIntensity = 0.7 + nightK * 0.6;
-		// the rooms are lit from their ceilings: a glow on everything inside, more after dark
-		// (no extra lights, so no shaders are rebuilt)
-		for (const m of FILL) m.emissiveIntensity = 0.1 + nightK * 0.28;
+		// the rooms are lit from their ceilings: a glow on everything inside where the light is
+		// not baked yet (no extra lights, so no shaders are rebuilt), no brighter after dark
+		for (const m of FILL) m.emissiveIntensity = 0.1 - nightK * 0.03;
 		if (high) { for (const [grp] of built) if(grp.near) city?.setNear?.(grp,null); return; }
 		for (const [grp,B] of built) if(!grp.near) city?.setNear?.(grp,[B.b.x,B.b.z]);
 		if (!real?.loaded() && !city?.procBiz) return;

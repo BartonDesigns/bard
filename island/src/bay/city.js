@@ -34,6 +34,8 @@ import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
 import { settleLots } from '../structures/lots.js';        // structures: settled lots
 import { streetTrees, treeColour, autumnNow } from './streettrees.js';       // streets by era: their trees
+import { NIGHT_U, NIGHT_I, nightSeed, housePlan, packHouse } from './nightplan.js';      // the households' own lights after dark
+import { addNightField } from '../world/nightfield.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -204,21 +206,22 @@ export function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uNightC = night;
+		sh.uniforms.uNL = NIGHT_U.uNL;
 		sh.uniforms.uNearBand = nearBand;sh.uniforms.uDetailNow=detailClock;
-		sh.vertexShader = 'attribute float aKind; attribute float aAge; varying float vAge; attribute vec3 aNear; attribute float aDetailBirth; uniform float uDetailNow; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.vertexShader = 'attribute float aKind; attribute float aAge; varying float vAge; attribute vec4 aNL; varying vec4 vNL; attribute vec3 aNear; attribute float aDetailBirth; uniform float uDetailNow; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
 			vNearK = (aNear.z < 0.0 || (aNear.z > 0.5 && aNear.z < 1.5)) ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, max(0.0,length(aNear.xy - cameraPosition.xz) - (aNear.z < 0.0 ? -aNear.z-1.0 : 0.0))) : 0.0;
 			vNearK *= smoothstep(0.0,.5,max(0.0,uDetailNow-aDetailBirth));
 			// (a building with its rooms built inside: its front door cut out, aNear = door x, sill y, 2 + width)
 			vDoor = aNear.z > 1.5 ? vec3(aNear.xy, aNear.z - 2.0) : vec3(0.0);
 			// (and how high its rooms go: 2 + width + 4 x whole metres; its windows open only below that)
 			vDoorTop = aNear.z > 1.5 ? floor(vDoor.z / 4.0) : 0.0; vDoor.z -= vDoorTop * 4.0;
-			vKind = aKind; vAge = aAge;
+			vKind = aKind; vAge = aAge; vNL = aNL;
 			vLY = transformed.y * length(instanceMatrix[1].xyz);
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'varying float vAge;\n' + WALL_GLSL + 'uniform float uNightC; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
+		sh.fragmentShader = 'varying float vAge;\n' + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
 			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;`)
@@ -497,16 +500,46 @@ export function buildingMaterial(shared, night, nearBand) {
 				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
 				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
-				// after dark the walls are not black: the city's own glow on them, and the warm
-				// spill of the streetlights up the lowest floors
-				winGlow += diffuseColor.rgb * (1.0 - win) * (1.0 - roof) * uNightC * (0.14 * vec3(0.8, 0.85, 1.0) + 0.3 * vec3(1.0, 0.78, 0.5) * (1.0 - smoothstep(2.5, 16.0, vLY)));
+				// after dark a wall has only the light that reaches it: the moon and the sky (the
+				// lights' own business), the street lamps' spill on the shop fronts at the sidewalk,
+				// and its household's own lamps (nightplan.js): the porch light by the front door
+				// and the light over the garage, each pooled on the wall round it
+				float shopFront = front * (1.0 - roof) * (step(K, 0.5) * step(0.05, vKind) + step(5.5, K) * step(K, 6.5) + step(8.5, K) * step(K, 9.5));
+				winGlow += diffuseColor.rgb * (1.0 - win) * shopFront * uNightC * 0.05 * vec3(1.0, 0.8, 0.55) * (1.0 - smoothstep(2.5, 6.0, vLY));
+				if ((vNL.x > 0.5 || vNL.z > 0.5) && roof < 0.5 && front > 0.5) {
+					float onK = fract(vNL.y), up = smoothstep(onK, onK + 0.12, uNL.y);
+					float lpx = fwidth(fx) + fwidth(gy);
+					// the porch light: a lantern over a row house's door up its steps, a sconce by a house's
+					if (vNL.x > 0.5) {
+						float pIdx = floor(vNL.y);
+						vec3 pc = pIdx < 0.5 ? vec3(1.0, 0.62, 0.3) : pIdx < 1.5 ? vec3(1.0, 0.74, 0.46) : vec3(0.86, 0.88, 0.9);
+						float lv = up * (vNL.x > 30.5 ? 1.0 : 1.0 - smoothstep(vNL.x, vNL.x + 0.08, uNL.x));
+						vec2 lp = K < 0.5 ? vec2((step(vKind, 0.15) > 0.5 ? vCS.x - 1.6 : 0.6) + 0.5, 3.25) : vec2(1.25 + clamp((fract(K) - 0.01) / 0.38, 0.0, 1.0) * (vCS.x - 2.5) + vNL.w * 0.78, 1.95);
+						vec2 dq = vec2(fx, gy) - lp;
+						float r2 = dot(dq, dq);
+						float E = ${NIGHT_I.porch.toFixed(2)} / (r2 + 0.3) * mix(1.0, 0.55, step(0.0, dq.y));
+						// the lamp itself, a warm point (far off, a pixel's worth of it)
+						float core = (1.0 - smoothstep(0.07, 0.07 + lpx, sqrt(r2))) * 14.0 + (1.0 - smoothstep(0.0, lpx * 1.5 + 0.07, sqrt(r2))) * 4.0 * smoothstep(0.08, 0.5, lpx);
+						winGlow += pc * lv * (diffuseColor.rgb * E * 0.3183 + core);
+					}
+					// the light over the garage doors
+					if (vNL.z > 0.5) {
+						float lv = up * (vNL.z > 30.5 ? 1.0 : 1.0 - smoothstep(vNL.z, vNL.z + 0.08, uNL.x));
+						float gcx = K > 7.5 && K < 8.5 ? vCS.x * 0.5 : (garSide < 0.0 ? 0.35 : vCS.x - 5.75) + 2.85;
+						vec2 dq = vec2(fx - gcx, gy - 2.5);
+						float r2 = dot(dq, dq);
+						float E = ${NIGHT_I.garage.toFixed(2)} / (r2 + 0.4) * mix(1.0, 0.4, step(0.0, dq.y));
+						float core = (1.0 - smoothstep(0.08, 0.08 + lpx, sqrt(r2))) * 10.0;
+						winGlow += vec3(1.0, 0.8, 0.58) * lv * (diffuseColor.rgb * E * 0.3183 + core);
+					}
+				}
 				// the dark windows are not holes: the night sky and the lit city in the glass
 				winGlow += vec3(0.05, 0.065, 0.09) * win * (1.0 - lit) * uNightC * (0.6 + 0.8 * bh(cid + 9.1));
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding14';
+	m.customProgramCacheKey = () => 'baybuilding15';
 	return m;
 }
 
@@ -588,7 +621,7 @@ export function createCity(shared, scene, bay, real = null) {
 	const CAP = 32000;
 	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
 	const mk = (geo, material, cap, kinds) => {
-		if (kinds) { geo.setAttribute('aKind', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1)); geo.setAttribute('aAge', new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(0.4), 1)); geo.setAttribute('aNear', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3));geo.setAttribute('aDetailBirth',new THREE.InstancedBufferAttribute(new Float32Array(cap),1)); }
+		if (kinds) { geo.setAttribute('aKind', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1)); geo.setAttribute('aAge', new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(0.4), 1)); geo.setAttribute('aNear', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3));geo.setAttribute('aDetailBirth',new THREE.InstancedBufferAttribute(new Float32Array(cap),1)); geo.setAttribute('aNL', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4)); }
 		const im = new THREE.InstancedMesh(geo, material, cap);
 		im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
 		im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
@@ -676,6 +709,8 @@ export function createCity(shared, scene, bay, real = null) {
 		if (!isPalm) usePhoto(mats[0].material, [['bark', [2, 3], { mean: 0.8, contrast: 1.2, normal: 3 }, 0.9]]);
 		if (!isPalm) mossify(mats[0].material, kind);
 		if (kind === 1) lichenLeaves(mats[1].material);
+		// lit from below by the yards' and parks' uplights after dark, close by (world/nightfield.js)
+		if (band === LOD.near) mats.forEach((S, n) => addNightField(S.material, { wrap: n === 1 ? 0.5 : 0 }));
 		return parts.map((geo, n) => {
 			const S = mats[n];
 			const im = new THREE.InstancedMesh(geo, S.material, cap);
@@ -1614,10 +1649,11 @@ export function createCity(shared, scene, bay, real = null) {
 			if (room < ov) A.ovFit = room;
 		}
 	}
+	const NL0 = [0, 0, 0, 0];
 	function upload(list, body, roofs) {
 		let n = 0, nh = 0, ng = 0;
 		const births=body.geometry.attributes.aDetailBirth;
-		const kinds = body.geometry.attributes.aKind, nearA = body.geometry.attributes.aNear, ages = body.geometry.attributes.aAge;
+		const kinds = body.geometry.attributes.aKind, nearA = body.geometry.attributes.aNear, ages = body.geometry.attributes.aAge, nlA = body.geometry.attributes.aNL;
 		if (roofs) slotOf = new Map();
 		for (const o of list) {
 			if (n >= body.instanceMatrix.count) break;
@@ -1626,6 +1662,8 @@ export function createCity(shared, scene, bay, real = null) {
 			q.setFromAxisAngle(Y, -o.a); sc.set(ow, o.h, od); p.set(ox, o.y, oz);
 			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2], THREE.SRGBColorSpace)); kinds.array[n] = o.kind; ages.array[n] = (o.age ?? 0.4) + 2 * (o.cond || 0);
 			births.array[n]=o.src?.grp?.nearBorn || 0;
+			// its household's lights after dark (nightplan.js): the porch light, the garage's
+			if (nlA) { const hk = Math.floor(o.kind), on = hk === KIND.house || hk === KIND.row || hk === KIND.houseGarageL || hk === KIND.houseGarageR || hk === KIND.garage, pk = on ? packHouse(housePlan(o, nightSeed(o.x, o.z))) : null; nlA.array.set(pk || NL0, n * 4); }
 			const nc = o.src?.grp?.near, dr = roofs && !nc ? doors.get(lotKey(o)) : null;
 			nearA.array[n * 3] = nc ? nc[0] : dr ? dr[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : dr ? dr[1] : 0; nearA.array[n * 3 + 2] = nc ? (o.src.grp.detailRadius ? -1-o.src.grp.detailRadius : 1) : dr ? 2 + dr[2] : 0;
 			if (roofs && o.src?.grp) { let l = slotOf.get(o.src.grp); if (!l) slotOf.set(o.src.grp, l = []); l.push(n); }
@@ -1649,6 +1687,7 @@ export function createCity(shared, scene, bay, real = null) {
 				wa.array[k * 3] = o.col[0]; wa.array[k * 3 + 1] = o.col[1]; wa.array[k * 3 + 2] = o.col[2];
 			}
 		}
+		if (nlA) nlA.needsUpdate = true;
 		births.needsUpdate=true;body.count = n; kinds.needsUpdate = true; nearA.needsUpdate = true; ages.needsUpdate = true;
 		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); for (const im of roofs) { im.geometry.attributes.aRoof.needsUpdate = true; im.geometry.attributes.aWall.needsUpdate = true; } }

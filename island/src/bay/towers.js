@@ -284,7 +284,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	// ---------- near you ----------
 	let scanT = 0;
 	function update(dt, camera, hours, nightK) {
-		for (const m of FILL) m.emissiveIntensity = 0.12 + nightK * 0.25;
+		// (the rooms' flat glow, where their light is not baked yet: no brighter after dark, the
+		// windows' lamps are the lighting's business)
+		for (const m of FILL) m.emissiveIntensity = 0.12 - nightK * 0.04;
 		M.panel.emissiveIntensity = 0.8 + nightK * 0.5;
 		const p = P(), cam = camera.position;
 		if (!p) return;

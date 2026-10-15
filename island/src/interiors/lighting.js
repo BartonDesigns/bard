@@ -51,7 +51,7 @@ export function lightingShadowCaster(obj, w, d) { if (obj) S.casters.set(obj, [w
 export function lightInterior(root, spec = {}) {
 	if (!root) return null;
 	for (const H of S.live) if (H.root === root) return H;
-	const H = { root, spec, state: 'queued', fixtures: [], variants: new Map(), U: { ibakeK: { value: 1 }, ibakeGlow: { value: 1 } }, k: 1, bounds: null, verts: 0, bytes: 0, ms: 0 };
+	const H = { root, spec, state: 'queued', fixtures: [], variants: new Map(), U: { ibakeK: { value: 1 }, ibakeGlow: { value: 1 }, ibakeNight: { value: 0 } }, k: 1, bounds: null, verts: 0, bytes: 0, ms: 0 };
 	// (its clock: the queue moves on whenever anything it lit is drawn)
 	const tick = new THREE.Mesh(TICK_GEO, TICK_MAT);
 	tick.frustumCulled = false; tick.renderOrder = -1e9; tick.name = 'lighting:tick';
@@ -108,14 +108,20 @@ function step(renderer, scene, camera, dt, ease) {
 		if (H.state !== 'done') continue;
 		const sp = H.spec, h = S.hours;
 		const open = !sp.hours || (sp.hours[0] < sp.hours[1] ? h >= sp.hours[0] && h < sp.hours[1] : h >= sp.hours[0] || h < sp.hours[1]);
-		const target = !open ? 0.08 : sp.home ? 0.5 + 0.5 * S.night : 1;
+		// (a place that is shut keeps only its night lights on; so does one open all night but
+		// for a hospital, once it is dark: the bays and offices at a station while the crew sleeps)
+		const always = !sp.hours || sp.hours[1] - sp.hours[0] >= 24;
+		const nightMode = !sp.home && !sp.allNight && (!open || (always && S.night > 0.5)) ? 1 : 0;
+		const target = !open ? 0.6 : sp.home ? 0.5 + 0.5 * S.night : 1;
 		H.k += (target - H.k) * ease;
-		// (after dark the eye opens to the lamps: they count for more against the night)
-		H.U.ibakeK.value = H.k * (sp.strength ?? 1) * (1 + 0.25 * S.night);
-		H.U.ibakeGlow.value = H.k * (0.9 + 1.3 * S.night);
+		H.nk = (H.nk ?? nightMode) + (nightMode - (H.nk ?? nightMode)) * ease;
+		// (the same light by night as by day: no lift for the dark, the lamps are what they are)
+		H.U.ibakeK.value = H.k * (sp.strength ?? 1);
+		H.U.ibakeNight.value = H.nk;
+		H.U.ibakeGlow.value = H.k * (0.9 + 0.5 * S.night);
 		for (const [src, v] of H.variants.values()) sync(src, v);
-		if (H.halo) { H.halo.material.uniforms.uK.value = H.k * (0.35 + 0.65 * S.night); H.halo.material.uniforms.uTime.value = S.time; H.halo.material.uniforms.uViewH.value = renderer.domElement.height * 0.5 * (camera.projectionMatrix?.elements[5] || 1); }
-		if (H.cones) { H.cones.material.uniforms.uK.value = H.k * (0.45 + 0.55 * S.night); H.cones.material.uniforms.uTime.value = S.time; }
+		if (H.halo) { const u = H.halo.material.uniforms; u.uK.value = H.k * (0.35 + 0.65 * S.night); u.uNight.value = H.nk; u.uTime.value = S.time; u.uViewH.value = renderer.domElement.height * 0.5 * (camera.projectionMatrix?.elements[5] || 1); }
+		if (H.cones) { const u = H.cones.material.uniforms; u.uK.value = H.k * (0.45 + 0.55 * S.night); u.uNight.value = H.nk; u.uTime.value = S.time; }
 	}
 	if (camera) { place(camera, dt); blobs(camera); }
 }
@@ -158,7 +164,7 @@ function place(camera, dt) {
 		const cand = [];
 		for (const H of here) {
 			for (const f of H.fixtures) {
-				if (!f.on || f.screen) continue;
+				if (!f.on || f.screen || (H.nk > 0.5 && f.night === false)) continue;
 				const w = tmpV.set(f.p[0], f.p[1], f.p[2]).applyMatrix4(H.root.matrixWorld);
 				const d2 = w.distanceToSquared(p);
 				if (d2 > 400) continue;
@@ -184,7 +190,7 @@ function place(camera, dt) {
 		l.userData.k += (want - l.userData.k) * Math.min(1, dt * 5);
 		const H = l.userData.H;
 		const fl = f?.flicker ? flick(S.time, f.flicker) : 1;
-		l.intensity = f ? f.I * l.userData.k * (H?.k ?? 1) * fl * (1.6 + 0.6 * S.night) : 0;
+		l.intensity = f ? f.I * l.userData.k * (H?.k ?? 1) * fl * 1.2 * (f.night === false ? 1 - (H?.nk ?? 0) : 1) : 0;
 		if (l.castShadow) l.shadow.autoUpdate = l.intensity > 0.05;
 	}
 }
@@ -323,6 +329,11 @@ function* job(H) {
 		const area = (f.rm >= 0 && spec.roomArea?.(f.rm)) || area0;
 		f.I *= Math.min(1, 1.5 * area / (1.9 * flux.get(f.rm)));
 	}
+	// the night lights: what stays on after hours (a closed shop, an office, a station's bay
+	// while the crew sleeps): in each room about one fixture in every 9 m square, the screens
+	// and signs; a home's and a hospital's lamps are all night lights (they are on or off by
+	// their rooms, or always lit)
+	nightLights(fixtures, spec);
 	H.fixtures = fixtures;
 	S.stats.fixtures += fixtures.length;
 	yield;
@@ -365,12 +376,12 @@ function* job(H) {
 		budget = t0();
 		let r = gen.next();
 		while (!r.done) { yield; budget = t0(); r = gen.next(); }
-		results = r.value.map((R) => ({ light: packLight(R.light), dir: packDir(R.dir) }));
+		results = r.value.map((R) => ({ light: packLight(R.light), dir: packDir(R.dir), night: packNight(R.night) }));
 		S.stats.baked++;
 		if (spec.id) {
 			let bytes = 0;
 			for (const T of geos) for (const A of Object.values(T.attrs)) bytes += A.array.byteLength;
-			for (const R of results) bytes += R.light.array.byteLength + R.dir.array.byteLength;
+			for (const R of results) bytes += R.light.array.byteLength + R.dir.array.byteLength + R.night.array.byteLength;
 			S.cache.delete(spec.id);
 			S.cache.set(spec.id, { sig, results, geos, bytes });
 			// (the oldest let go past the device's share)
@@ -390,6 +401,7 @@ function* job(H) {
 		}
 		g.setAttribute('ilight', R.light);
 		g.setAttribute('idir', R.dir);
+		g.setAttribute('inight', R.night);
 		g.computeBoundingSphere(); g.computeBoundingBox();
 		const old = o.geometry;
 		o.geometry = g;
@@ -403,12 +415,13 @@ function* job(H) {
 		const o = pm.q.o, m = o.material;
 		if (pm.q.glowOnly && spec.glowAttr) continue;
 		if (!m.isMeshStandardMaterial && !m.isMeshLambertMaterial && !m.isMeshPhongMaterial) continue;
-		const n = o.geometry.attributes.position.count, L = new Float32Array(n * 4).fill(0);
+		const n = o.geometry.attributes.position.count, L = new Float32Array(n * 4).fill(0), Nn = new Float32Array(n).fill(1);
 		for (let v = 0; v < n; v++) L[v * 4 + 3] = 1;
-		for (const f of fixtures) if (f.piece?.mesh === pm) for (const a of f.piece.tri) { const v0 = pm.map ? pm.map[a / 3] : a; for (let q = 0; q < 3; q++) L[(v0 + q) * 4 + 3] = f.on ? 1 : 0.03; }
+		for (const f of fixtures) if (f.piece?.mesh === pm) for (const a of f.piece.tri) { const v0 = pm.map ? pm.map[a / 3] : a; for (let q = 0; q < 3; q++) { L[(v0 + q) * 4 + 3] = f.on ? 1 : 0.03; Nn[v0 + q] = f.night === false ? 0 : 1; } }
 		if (o.geometry.index) o.geometry = o.geometry.toNonIndexed();
 		o.geometry.setAttribute('ilight', packLight(L));
 		o.geometry.setAttribute('idir', packDir(new Float32Array(n * 4)));
+		o.geometry.setAttribute('inight', packNight(Nn));
 		o.material = variant(H, m, true, o.name);
 	}
 	// the glow round them, the beams where the air is dusty
@@ -439,6 +452,25 @@ function packLight(L) {
 		o[i * 4 + 3] = Math.min(65535, Math.round(Math.max(0, L[i * 4 + 3]) * 65535));
 	}
 	return new THREE.BufferAttribute(o, 4, true);
+}
+function packNight(A) {
+	const o = new Uint8Array(A.length);
+	for (let i = 0; i < A.length; i++) o[i] = Math.max(0, Math.min(255, Math.round(A[i] * 255)));
+	return new THREE.BufferAttribute(o, 1, true);
+}
+// which fixtures stay on at night (see job)
+export function nightLights(fixtures, spec = {}) {
+	const all = !!(spec.home || spec.allNight);
+	const taken = new Set();
+	const order = fixtures.map((f, i) => i).sort((a, b) => fixtures[a].p[0] - fixtures[b].p[0] || fixtures[a].p[2] - fixtures[b].p[2] || fixtures[a].p[1] - fixtures[b].p[1]);
+	for (const i of order) {
+		const f = fixtures[i];
+		if (all || f.screen || !f.on) { f.night = true; continue; }
+		const rm = f.rm ?? -1, key = rm + ':' + Math.floor(f.p[0] / 9) + ':' + Math.floor(f.p[2] / 9) + ':' + Math.floor(f.p[1] / 3);
+		f.night = !taken.has(key);
+		taken.add(key);
+	}
+	return fixtures;
 }
 function packDir(D) {
 	const n = D.length / 4, o = new Int8Array(n * 4);
@@ -517,8 +549,10 @@ const LFB = (() => {
 function patch(sh, U) {
 	sh.uniforms.ibakeK = U.ibakeK;
 	sh.uniforms.ibakeGlow = U.ibakeGlow;
+	sh.uniforms.ibakeNight = U.ibakeNight;
 	// (the direction scaled by how much of the light comes from it: one varying, not two)
-	sh.vertexShader = 'attribute vec4 ilight;\nattribute vec4 idir;\nvarying vec4 vIl;\nvarying vec3 vIdir;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tvIl = ilight;\n\tvIdir = mat3( modelViewMatrix ) * idir.xyz * idir.w;');
+	// (by night, where a place keeps only its night lights on, the light is their share of it)
+	sh.vertexShader = 'attribute vec4 ilight;\nattribute vec4 idir;\nattribute float inight;\nuniform float ibakeNight;\nvarying vec4 vIl;\nvarying vec3 vIdir;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tfloat ibN = mix( 1.0, inight, ibakeNight );\n\tvIl = vec4( ilight.rgb * ibN, ilight.a );\n\tvIdir = mat3( modelViewMatrix ) * idir.xyz * idir.w;\n\t#ifdef IBAKE_FIX\n\tvIl.a *= ibN;\n\t#endif');
 	let f = sh.fragmentShader;
 	f = 'varying vec4 vIl;\nvarying vec3 vIdir;\nuniform float ibakeK;\nuniform float ibakeGlow;\n' + f;
 	if (LFB) f = '#ifndef IBAKE_FIX\n#define IBAKE_LOSS\n#endif\n' + f.replace('#include <lights_fragment_begin>', '#ifdef IBAKE_FIX\n#include <lights_fragment_begin>\n#else\n' + LFB + '\n#endif');
@@ -562,7 +596,7 @@ function patch(sh, U) {
 function makeHalos(H) {
 	const list = H.fixtures.filter((f) => f.on);
 	if (!list.length) return;
-	const n = list.length, P = new Float32Array(n * 3), C = new Float32Array(n * 3), Z = new Float32Array(n), F = new Float32Array(n);
+	const n = list.length, P = new Float32Array(n * 3), C = new Float32Array(n * 3), Z = new Float32Array(n), F = new Float32Array(n), Nt = new Float32Array(n);
 	list.forEach((f, i) => {
 		const down = f.shape === 'down' || f.shape === 'tube' || (f.shape === 'panel' && f.n?.[1] < -0.5);
 		P.set([f.p[0] + (f.n?.[0] || 0) * 0.08, f.p[1] - (down ? 0.1 : 0), f.p[2] + (f.n?.[2] || 0) * 0.08], i * 3);
@@ -570,20 +604,22 @@ function makeHalos(H) {
 		C.set([f.c[0] * k, f.c[1] * k, f.c[2] * k], i * 3);
 		Z[i] = f.screen ? 0.5 + (f.w || 0.4) : f.shape === 'tube' ? 0.9 + (f.len || 1) * 0.6 : f.shape === 'panel' ? 1.1 + (f.w || 0.6) : f.shape === 'point' ? 0.9 : 1.0;
 		F[i] = f.flicker || 0;
+		Nt[i] = f.night === false ? 0 : 1;
 	});
 	const g = new THREE.BufferGeometry();
 	g.setAttribute('position', new THREE.BufferAttribute(P, 3));
 	g.setAttribute('color', new THREE.BufferAttribute(C, 3));
 	g.setAttribute('aSize', new THREE.BufferAttribute(Z, 1));
 	g.setAttribute('aFlick', new THREE.BufferAttribute(F, 1));
+	g.setAttribute('aNight', new THREE.BufferAttribute(Nt, 1));
 	const m = new THREE.ShaderMaterial({
-		uniforms: { uK: { value: 0.5 }, uTime: { value: 0 }, uViewH: { value: 500 } },
-		vertexShader: `attribute float aSize; attribute float aFlick; attribute vec3 color; uniform float uK, uTime, uViewH; varying vec3 vC;
+		uniforms: { uK: { value: 0.5 }, uTime: { value: 0 }, uViewH: { value: 500 }, uNight: { value: 0 } },
+		vertexShader: `attribute float aSize; attribute float aFlick; attribute float aNight; attribute vec3 color; uniform float uK, uTime, uViewH, uNight; varying vec3 vC;
 			void main() {
 				vec4 mv = modelViewMatrix * vec4(position, 1.0);
 				float fl = 1.0;
 				if (aFlick > 0.0) { float a = fract(sin(floor(uTime * 9.0 + aFlick * 31.0) * 12.9898) * 43758.5453); fl = a < 0.28 ? 0.1 : 0.85 + 0.15 * sin(uTime * 40.0 + aFlick); }
-				vC = color * uK * fl;
+				vC = color * uK * fl * mix(1.0, aNight, uNight);
 				gl_Position = projectionMatrix * mv;
 				gl_PointSize = clamp(aSize * uViewH / max(0.2, -mv.z), 0.0, 512.0);
 			}`,
@@ -606,7 +642,7 @@ function makeHalos(H) {
 function makeCones(H, levels) {
 	const list = H.fixtures.filter((f) => f.on && f.dust && !f.screen && (f.shape === 'down' || f.shape === 'tube' || f.shape === 'panel' || f.shape === 'spot'));
 	if (!list.length) return;
-	const pos = [], tt = [], nor = [], col = [], seg = S.isPhone ? 8 : 14;
+	const pos = [], tt = [], nor = [], col = [], nt = [], seg = S.isPhone ? 8 : 14;
 	for (const f of list) {
 		const lv = levels.find(([y0, y1]) => f.p[1] > y0 && f.p[1] <= y1 + 0.3) || levels[0], floor = lv[0];
 		const h = Math.max(0.5, f.p[1] - floor), r0 = f.shape === 'tube' ? 0.35 : f.shape === 'panel' ? Math.max(0.3, (f.w || 0.6) * 0.5) : 0.18, r1 = r0 + h * 0.42;
@@ -618,6 +654,7 @@ function makeCones(H, levels) {
 				pos.push(f.p[0] + Math.cos(a) * r, f.p[1] - h * t, f.p[2] + Math.sin(a) * r);
 				nor.push(Math.cos(a), 0.4, Math.sin(a));
 				tt.push(t);
+				nt.push(f.night === false ? 0 : 1);
 				col.push(f.c[0], f.c[1], f.c[2]);
 			}
 		}
@@ -627,10 +664,11 @@ function makeCones(H, levels) {
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
 	g.setAttribute('aT', new THREE.Float32BufferAttribute(tt, 1));
 	g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+	g.setAttribute('aNight', new THREE.Float32BufferAttribute(nt, 1));
 	const m = new THREE.ShaderMaterial({
-		uniforms: { uK: { value: 0.5 }, uTime: { value: 0 } },
-		vertexShader: `attribute float aT; attribute vec3 color; varying float vT; varying vec3 vC; varying vec3 vN; varying vec3 vV; varying vec3 vW;
-			void main() { vT = aT; vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vW = position; gl_Position = projectionMatrix * mv; }`,
+		uniforms: { uK: { value: 0.5 }, uTime: { value: 0 }, uNight: { value: 0 } },
+		vertexShader: `attribute float aT; attribute float aNight; attribute vec3 color; uniform float uNight; varying float vT; varying vec3 vC; varying vec3 vN; varying vec3 vV; varying vec3 vW;
+			void main() { vT = aT; vC = color * mix(1.0, aNight, uNight); vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vW = position; gl_Position = projectionMatrix * mv; }`,
 		fragmentShader: `uniform float uK, uTime; varying float vT; varying vec3 vC; varying vec3 vN; varying vec3 vV; varying vec3 vW;
 			void main() {
 				float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.4);

@@ -1823,9 +1823,10 @@ export function createIslandWorld() {
 			W.bizSeen = inB;
 			inkBtn.style.display = inB?.type === 'tattoo' && !studio.active() ? '' : 'none';
 		}
-		// indoors by day the eye opens up to the light from the windows
+		// indoors by day the eye opens up to the light from the windows (by night, not at all:
+		// the rooms are as dark as their lamps leave them)
 		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
-		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
+		renderer.toneMappingExposure *= 1 + indoorK * 0.55 * sk.dayK;
 		watchDoor(dt);
 		striker.update(dt, scene, !W.player.state.flying && !arcade.active() && dom.mount.style.display !== 'none');
 		strikeRipples.update(dt);

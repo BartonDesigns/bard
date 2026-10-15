@@ -220,7 +220,9 @@ export function tessellatedCount(P, count, cell) {
 // }
 // meshes: [{ P, N, C (albedo per vertex, rgb, or null), base: [r, g, b], count }]
 // A generator: yields every few milliseconds when budget(ms) says so; returns per mesh
-// { light: Float32Array(count * 4), dir: Float32Array(count * 4) }.
+// { light: Float32Array(count * 4), dir: Float32Array(count * 4), night: Float32Array(count) }
+// (night: the share of the light that comes from the fixtures left on at night, those not
+// marked night: false; 1 where every lamp stays on).
 export function* bake(meshes, ctx, budget = () => false) {
 	const rays = ctx.rays ?? QUALITY.desktop.rays;
 	const boxes = [...(ctx.boxes || [])];
@@ -233,7 +235,7 @@ export function* bake(meshes, ctx, budget = () => false) {
 	// the fixtures as samples, with the reach of each (where it falls below what shows)
 	// (each fixture's samples together: F0[f] .. F0[f + 1])
 	const S = [], F0 = [0];
-	for (const f of ctx.fixtures || []) { if (f.on === false) continue; for (const s of fixtureSamples(f)) { s.reach = Math.sqrt(s.I * 1.2 / EPS_E); s.fi = F0.length - 1; S.push(s); } F0.push(S.length); }
+	for (const f of ctx.fixtures || []) { if (f.on === false) continue; for (const s of fixtureSamples(f)) { s.reach = Math.sqrt(s.I * 1.2 / EPS_E); s.fi = F0.length - 1; s.night = f.night !== false; S.push(s); } F0.push(S.length); }
 	const nF = F0.length - 1;
 	const sE = new Float64Array(S.length), wS = new Float64Array(S.length), sL = new Float64Array(S.length * 4), FE = new Float64Array(nF), pick = new Int32Array(Math.min(nF, SHADOWED)), seenF = new Uint8Array(nF);
 	// the sky rays: a fixed spread over the hemisphere, cosine-weighted (a spiral)
@@ -242,14 +244,14 @@ export function* bake(meshes, ctx, budget = () => false) {
 	const roomOf = ctx.roomOf || (() => -1);
 	const nRooms = Math.max(1, ctx.rooms || 1);
 	// per room: area, light times albedo, sky times albedo (for the bounce)
-	const RA = new Float64Array(nRooms), RE = new Float64Array(nRooms * 3), RS = new Float64Array(nRooms);
+	const RA = new Float64Array(nRooms), RE = new Float64Array(nRooms * 3), RS = new Float64Array(nRooms), RN = new Float64Array(nRooms);
 	const results = [];
 	let tick = 0;
 	// (a vertex shared by many triangles is worked out once: keyed by position and facing)
 	const seen = new Map();
 	for (const m of meshes) {
 		const n = m.count, P = m.P, N = m.N, C = m.C, base = m.base || [0.7, 0.7, 0.7];
-		const light = new Float32Array(n * 4), dir = new Float32Array(n * 4), room = new Int16Array(n), aoA = new Float32Array(n);
+		const light = new Float32Array(n * 4), dir = new Float32Array(n * 4), room = new Int16Array(n), aoA = new Float32Array(n), nightL = new Float32Array(n);
 		// (each vertex's share of its triangle's area; loose points count a square metre)
 		const area = new Float32Array(n).fill(n % 3 ? 1 : 0);
 		for (let a = 0; a < n && !(n % 3); a += 3) {
@@ -266,8 +268,8 @@ export function* bake(meshes, ctx, budget = () => false) {
 			nx /= nl; ny /= nl; nz /= nl;
 			const key = qkey(px, py, pz, nx, ny, nz);
 			const known = seen.get(key);
-			let r = 0, g = 0, b = 0, ddx = 0, ddy = 0, ddz = 0, eSum = 0, sky = 0, ao = 0;
-			if (known) { [r, g, b, sky, ao, ddx, ddy, ddz, eSum] = known; }
+			let r = 0, g = 0, b = 0, ddx = 0, ddy = 0, ddz = 0, eSum = 0, sky = 0, ao = 0, rn = 0;
+			if (known) { [r, g, b, sky, ao, ddx, ddy, ddz, eSum, rn] = known; }
 			else {
 				// start a little off the surface, so the ray does not find what it starts on
 				const ox = px + nx * 0.03, oy = py + ny * 0.03, oz = pz + nz * 0.03;
@@ -322,6 +324,8 @@ export function* bake(meshes, ctx, budget = () => false) {
 					if (E <= 0) continue;
 					const s = S[i];
 					r += E * s.r; g += E * s.g; b += E * s.b; ddx += sL[i * 4] * E; ddy += sL[i * 4 + 1] * E; ddz += sL[i * 4 + 2] * E; eSum += E;
+					// (the night lights' share: the few left on after hours)
+					if (s.night) rn += E * (s.r + s.g + s.b) / 3;
 				}
 				// the sky and the corners: rays round the normal
 				if (ctx.sky !== false) {
@@ -341,12 +345,12 @@ export function* bake(meshes, ctx, budget = () => false) {
 					}
 					sky /= dirs.length; ao /= dirs.length;
 				} else { sky = 1; ao = 1; }
-				seen.set(key, [r, g, b, sky, ao, ddx, ddy, ddz, eSum]);
+				seen.set(key, [r, g, b, sky, ao, ddx, ddy, ddz, eSum, rn]);
 			}
 			light[v * 4] = r; light[v * 4 + 1] = g; light[v * 4 + 2] = b; light[v * 4 + 3] = sky;
 			const dl = Math.hypot(ddx, ddy, ddz);
 			if (dl > 1e-6) { dir[v * 4] = ddx / dl; dir[v * 4 + 1] = ddy / dl; dir[v * 4 + 2] = ddz / dl; dir[v * 4 + 3] = Math.min(1, dl / Math.max(eSum, 1e-6)); }
-			aoA[v] = ao;
+			aoA[v] = ao; nightL[v] = rn;
 			// the room it belongs to: the one it faces
 			const rm = roomOf(px + nx * 0.15, py + ny * 0.15, pz + nz * 0.15);
 			room[v] = rm;
@@ -354,23 +358,29 @@ export function* bake(meshes, ctx, budget = () => false) {
 				const al = C ? [C[v * 3] * base[0], C[v * 3 + 1] * base[1], C[v * 3 + 2] * base[2]] : base, ar = area[v];
 				RA[rm] += ar; RE[rm * 3] += r * al[0] * ar; RE[rm * 3 + 1] += g * al[1] * ar; RE[rm * 3 + 2] += b * al[2] * ar;
 				RS[rm] += sky * (al[0] + al[1] + al[2]) / 3 * ar;
+				RN[rm] += rn * (al[0] + al[1] + al[2]) / 3 * ar;
 			}
 		}
-		results.push({ light, dir, room, ao: aoA });
+		results.push({ light, dir, room, ao: aoA, nightL });
 	}
 	// the bounce: each room's light given back to all of it, less in its corners
 	for (let mi = 0; mi < results.length; mi++) {
 		const R = results[mi];
 		for (let i = 0; i < R.room.length; i++) {
 			const rm = R.room[i];
-			if (rm < 0 || rm >= nRooms || RA[rm] <= 0) continue;
-			const k = BOUNCE * (0.3 + 0.7 * R.ao[i]) / RA[rm];
-			R.light[i * 4] += RE[rm * 3] * k; R.light[i * 4 + 1] += RE[rm * 3 + 1] * k; R.light[i * 4 + 2] += RE[rm * 3 + 2] * k;
-			R.light[i * 4 + 3] = Math.min(1, R.light[i * 4 + 3] + RS[rm] * k * 1.2);
+			if (rm >= 0 && rm < nRooms && RA[rm] > 0) {
+				const k = BOUNCE * (0.3 + 0.7 * R.ao[i]) / RA[rm];
+				R.light[i * 4] += RE[rm * 3] * k; R.light[i * 4 + 1] += RE[rm * 3 + 1] * k; R.light[i * 4 + 2] += RE[rm * 3 + 2] * k;
+				R.light[i * 4 + 3] = Math.min(1, R.light[i * 4 + 3] + RS[rm] * k * 1.2);
+				R.nightL[i] += RN[rm] * k;
+			}
+			// the night lights' share of all the light here (1 where every lamp stays on)
+			const all = (R.light[i * 4] + R.light[i * 4 + 1] + R.light[i * 4 + 2]) / 3;
+			R.nightL[i] = all > 1e-5 ? Math.min(1, R.nightL[i] / all) : 1;
 		}
 		if ((mi & 3) === 3 && budget()) yield;
 	}
-	return results.map((R) => ({ light: R.light, dir: R.dir }));
+	return results.map((R) => ({ light: R.light, dir: R.dir, night: R.nightL }));
 }
 // a vertex's key: its position to the millimetre and its facing roughly (52 bits)
 function qkey(x, y, z, nx, ny, nz) {
