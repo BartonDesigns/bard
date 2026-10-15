@@ -29,6 +29,7 @@ import { isMinor } from './targets.js';
 import { createMeleeSound } from './melee-sound.js';
 import { createMeleeFeel } from './melee-feel.js';
 import { createFistView } from './melee-view.js';
+import { meleeItem, meleeMaterials } from './melee-items.js';
 import { createFoes } from './melee-foes.js';
 import { createMeleeTouch } from './melee-touch.js';
 
@@ -39,7 +40,7 @@ const LINES = {
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 // which side each strike comes from, for the view's roll (-1 the left hand, 1 the right)
-const SIDE = { jab: -1, cross: 1, hook: 1, heavy: 1, bat: 1, pipe: 1, bottle: 1, batHeavy: 0, pipeHeavy: 0, bottleHeavy: 0 };
+const SIDE = { jab: -1, cross: 1, hook: 1, heavy: 1, bat: 1, pipe: 1, bottle: 1, knife: 1, machete: 1, batHeavy: 0, pipeHeavy: 0, bottleHeavy: 0, knifeHeavy: 0, macheteHeavy: 0 };
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _a = new THREE.Vector3();
 
 export function createMelee(ctx) {
@@ -515,7 +516,7 @@ export function createMelee(ctx) {
 			if (q.stage === 'fists' && Math.random() < 0.15) kind = 'shove';
 			const Bw = BLOWS[kind];
 			f.blowT = Bw.time + 0.35 + Math.random() * 0.7; f.last = kind; f.lastT = 0; f.blows++;
-			M.play(kind === 'bat' || kind === 'bottle' || kind === 'pipe' ? 'swing' : kind, Bw.time);
+			M.play(Bw.item ? 'swing' : kind, Bw.time);
 			const hit = Math.random() < 0.68;
 			setTimeout(() => { if (!q.done && hit && Math.hypot(posOf(f).x - posOf(o).x, posOf(f).z - posOf(o).z) < Bw.reach + 0.4) land(q, f, o, kind); }, Bw.time * 450);
 			if (Math.random() < 0.5) setTimeout(() => sound.swing(false, posOf(f)), Bw.time * 300);
@@ -529,7 +530,8 @@ export function createMelee(ctx) {
 	const steel = new THREE.MeshStandardMaterial({ color: 0x8a9096, roughness: 0.4, metalness: 0.35 });
 	const batGeo = new THREE.CylinderGeometry(0.03, 0.016, 0.84, 10).translate(0, 0.42, 0), bottleGeo = new THREE.LatheGeometry([[0, 0], [0.034, 0], [0.036, 0.16], [0.016, 0.22], [0.012, 0.3], [0, 0.3]].map(([x, y]) => new THREE.Vector2(x, y)), 12);
 	const pipeGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.78, 8).translate(0, 0.39, 0);
-	const itemMesh = (kind) => new THREE.Mesh(kind === 'bat' ? batGeo : kind === 'pipe' ? pipeGeo : bottleGeo, kind === 'bat' ? wood : kind === 'pipe' ? steel : glass);
+	const bladeMats = meleeMaterials();
+	const itemMesh = (kind) => kind === 'knife' || kind === 'machete' ? meleeItem(kind, bladeMats) : new THREE.Mesh(kind === 'bat' ? batGeo : kind === 'pipe' ? pipeGeo : bottleGeo, kind === 'bat' ? wood : kind === 'pipe' ? steel : glass);
 	function handItem(f) {
 		let m = handMeshes.get(f);
 		if (!f.item) { if (m) { m.removeFromParent(); handMeshes.delete(f); } return; }
@@ -560,7 +562,8 @@ export function createMelee(ctx) {
 			}
 		}
 	}
-	// now and then in town, something to hand lying about: a length of pipe, a bat, a bottle
+	// now and then in town, something to hand lying about: a length of pipe, a bat, a bottle, and
+	// more rarely a hunting knife or a machete
 	function scatter(dt) {
 		scatterT -= dt;
 		if (scatterT > 0) return;
@@ -568,7 +571,7 @@ export function createMelee(ctx) {
 		if (drops.length >= 3 || !ctx.isEarth() || ctx.zone() !== 'earth-urban') return;
 		const e = ctx.eye(), a = Math.random() * 6.283, r = 7 + Math.random() * 8;
 		const r2 = Math.random();
-		drop(r2 < 0.4 ? 'pipe' : r2 < 0.75 ? 'bat' : 'bottle', { x: e.x + Math.cos(a) * r, y: e.y, z: e.z + Math.sin(a) * r });
+		drop(r2 < 0.34 ? 'pipe' : r2 < 0.64 ? 'bat' : r2 < 0.86 ? 'bottle' : r2 < 0.94 ? 'knife' : 'machete', { x: e.x + Math.cos(a) * r, y: e.y, z: e.z + Math.sin(a) * r });
 	}
 	// a quarrel starting in the street: two grown-ups near each other, near you
 	function ambient(dt) {

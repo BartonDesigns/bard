@@ -937,9 +937,11 @@ export const GRIPS = {
 	'aurora-trail-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.0255], thumb: [-0.03, 0.008, -0.022], support: [0.465, 0.098, -0.029] }),
 	'mossback-scout-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.12, 0.052, 0.0185], thumb: [-0.04, 0.006, -0.026], support: [0.405, 0.1, -0.0255] }),
 	'warden-spark-carbine': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.028], thumb: [-0.03, 0.008, -0.022], support: [0.255, 0.085, -0.031] }),
-	// the bow hand round the riser, relaxed (the draw hand keeps the body's own curl on the string)
+	// the bow hand round the riser, relaxed, its thumb round the far side; the draw hand closed on
+	// the string as the body's own curl closed it on main, the thumb resting flexed beside it
 	'reedline-hunting-bow': {
 		L: { riser: [pad([0.012, 0.022, 0.0175], { natural: [0.6, 0.4, 0.3, 0.3], soft: 0.0005 }), LOOSE, LOOSE, LOOSE, LOOSE] },
+		R: { draw: [fixed(0.3, 0.3, 0.35, 0.3), fixed(0, 0.8, 0.95, 0.65), fixed(0, 0.82, 0.98, 0.66), fixed(0, 0.86, 1.02, 0.7), fixed(0, 0.92, 1.08, 0.74)] },
 	},
 };
 

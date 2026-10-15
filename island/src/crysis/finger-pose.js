@@ -295,11 +295,11 @@ function skinClear(rig, f, fk, M, field) {
 // positive curl always toward the palm. Fingers: abduction about 17 degrees either way, the
 // knuckle 0 to 90 with 10 of hyperextension, the middle joint 0 to 110, the last 0 to 80. Thumb:
 // the saddle joint lifts the thumb off the palm (up to 57) and flexes it across (up to 52, back
-// 12), the knuckle 0 to 60 (back 6), the last joint 0 to 80 (back 9). Nothing bends past these,
+// 12), the knuckle 0 to 60 (never back), the last joint 0 to 80 (back 3 at most). Nothing bends past these,
 // after any solve or blend (limitPose).
 export const LIMITS = {
 	finger: [[-0.3, 0.3], [-0.17, 1.57], [0, 1.92], [0, 1.4]],
-	thumb: [[-0.35, 1.0], [-0.2, 0.9], [-0.1, 1.05], [-0.15, 1.4]],
+	thumb: [[-0.35, 1.0], [-0.2, 0.9], [0, 1.05], [-0.05, 1.4]],
 };
 // a pose (four numbers a finger) held inside the ranges, in place
 export function limitPose(params) {

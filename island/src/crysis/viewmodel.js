@@ -211,7 +211,9 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		} else if (H.kind === 'bow') {
 			const body = itemParts(model, ['body']);
 			out.L.riser = solveHand(hands.L.rig, contactField(body, box(H.L.m, 0.24)), H.L.m, plan.L.riser, { firm: true }); out.L.frame = out.L.riser.frame;
-			// (the draw hand keeps the body's own curl on the string: it reads most naturally there)
+			// the draw hand on the string as main had it (the fingers closed round it the way the
+			// body's own curl closed them), its thumb now flexed toward the palm, never back
+			out.R.draw = solveHand(hands.R.rig, null, new THREE.Matrix4(), plan.R.draw, { fit: false });
 		}
 		out.ms = +(performance.now() - t0).toFixed(1);
 		solved.set(key, out);
@@ -282,7 +284,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				if (u > CHARGE.grab && u < CHARGE.release) squeeze(want.L, 0.06, 1, 2);
 			} else want.L.set(L.fore.params);
 		} else if (H.kind === 'bow') {
-			want.L.set(L.riser.params);
+			want.L.set(L.riser.params); want.R.set(R.draw.params);
 		}
 		// a breath of tension through the hands, and the gather's open hand
 		const breathe = Math.sin(time * 1.35) * 0.012;
@@ -293,7 +295,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		void sp;
 		for (const side of ['L', 'R']) {
 			const h = hands[side];
-			if (!h || !X[side] || (H.kind === 'bow' && side === 'R')) continue;
+			if (!h || !X[side]) continue;
 			// (fingers are quick)
 			const k = Math.min(1, dt * 22);
 			if (!h.on) { h.pose.set(want[side]); h.on = true; }

@@ -6,6 +6,7 @@ import * as T from 'three';
 import { createFistView } from '../src/combat/melee-view.js';
 import { HOLDS, GRIPS, holdFrame } from '../src/crysis/held-items.js';
 import * as FP from '../src/crysis/finger-pose.js';
+import { MOVES } from '../src/combat/melee-rules.js';
 const w = window.weaponReview, fists = createFistView({ camera: w.camera, isPhone: w.phoneTier });
 w.scene.add(w.camera);
 const fist = { on: false, item: null, move: null, anim: null, m: null, mt: 0, charging: false, charge: 0, block: false, take: false, cuffed: false, dodge: 0, dodgeSide: 0, rock: 0, step: 0, pace: 0 };
@@ -113,5 +114,32 @@ function joints(side = 'R') {
 	}
 	return out;
 }
-window.weaponHands = { FP, HOLDS, GRIPS, holdFrame, joints, closeup, fingerContact, fists: fists_, fistView: fists };
+// close combat: the fists holding an item at guard or mid-swing, a picture of the view and close-
+// ups of the right hand (garments hidden), and the hand's skin measured against the item
+function melee(item, phase = 'guard', from = [[0.6, 0.3, 0.7], [-0.5, -0.6, 0.5]], dist = 0.3) {
+	const me = { P: w.P, M: w.M };
+	fist.on = true; fist.block = false; fist.item = item; fist.move = null; fist.anim = null; fist.m = null; fist.mt = 0;
+	for (let i = 0; i < 60; i++) fists.update(1 / 60, 1 + i / 60, fist, me);
+	if (phase === 'swing' && item) { const m = MOVES[item]; fist.move = item; fist.anim = m.anim; fist.m = m; fist.mt = m.wind + m.active * 0.5; for (let i = 0; i < 40; i++) fists.update(1 / 60, 2 + i / 60, fist, me); }
+	const hand = fists.root.getObjectByName('anatomical-hand-R'), grp = hand?.parent;
+	const shots = {};
+	w.scene.updateMatrixWorld(true); w.renderer.setClearColor(0x6b7a83, 1);
+	w.renderer.render(w.scene, w.camera); shots.view = w.renderer.domElement.toDataURL('image/png');
+	if (!hand) return { shots };
+	const bone = hand.skeleton.bones[w.P.map['finger3-1.R']], at = new T.Vector3().setFromMatrixPosition(bone.matrixWorld).applyMatrix4(grp.matrixWorld);
+	const hidden = [];
+	fists.root.traverse((o) => { if (o.isMesh && o.visible && o !== hand && o.parent !== grp && !(o.parent?.parent === grp)) { o.visible = false; hidden.push(o); } });
+	grp.traverse((o) => { if (o.isMesh && o.visible && o !== hand && o.name.startsWith('sleeve')) { o.visible = false; hidden.push(o); } });
+	const hiddenWorld = []; w.scene.traverse((o) => { if (o.isMesh && o.visible && !fists.root.getObjectById(o.id)) { o.visible = false; hiddenWorld.push(o); } });
+	from.forEach((f, k) => {
+		const cam = new T.PerspectiveCamera(34, w.camera.aspect, 0.005, 5);
+		cam.position.copy(at).add(new T.Vector3(...f).normalize().multiplyScalar(dist).applyQuaternion(w.camera.getWorldQuaternion(new T.Quaternion())));
+		cam.lookAt(at); cam.updateMatrixWorld(true);
+		w.renderer.render(w.scene, cam); shots['c' + k] = w.renderer.domElement.toDataURL('image/png');
+	});
+	for (const o of [...hidden, ...hiddenWorld]) o.visible = true;
+	const A = fists.anatomical?.('R')?.info;
+	return { shots, clearanceMm: A?.clearanceMm || null, params: A?.params ? Array.from(A.params).map((x) => +x.toFixed(2)) : null };
+}
+window.weaponHands = { melee, FP, HOLDS, GRIPS, holdFrame, joints, closeup, fingerContact, fists: fists_, fistView: fists };
 window.WEAPON_HANDS_READY = true;
