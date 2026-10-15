@@ -25,7 +25,7 @@ export const QUALITY = {
 };
 // irradiance is kept to this (an encoding range: lighting.js packs it in 16 bits)
 export const E_RANGE = 64;
-const EPS_E = 0.004, AO_R = 0.9, SKY_MAX = 18, BOUNCE = 1.0, SHADOWED = 6;
+const EPS_E = 0.004, AO_R = 0.9, SKY_MAX = 18, BOUNCE = 1.35, SHADOWED = 6;
 
 // ---------------------------------------------------------------------------------
 // fixtures: { p: [x, y, z], c: [r, g, b] (linear), I (candela, as a three.js point light),

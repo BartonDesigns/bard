@@ -321,7 +321,7 @@ function* job(H) {
 	for (const f of fixtures) {
 		if (!f.on || f.screen) continue;
 		const area = (f.rm >= 0 && spec.roomArea?.(f.rm)) || area0;
-		f.I *= Math.min(1, 2.1 * area / (1.9 * flux.get(f.rm)));
+		f.I *= Math.min(1, 1.5 * area / (1.9 * flux.get(f.rm)));
 	}
 	H.fixtures = fixtures;
 	S.stats.fixtures += fixtures.length;
