@@ -35,9 +35,11 @@ import { setFleetDecals } from '../vehicles/fleet.js';
 import { createFleetDecals, setCarLocale } from './cars.js';
 import { qualityNow, onQuality } from '../world/governor.js';
 import { requestsNear } from '../economy/requests.js';
+import { shopCampaigns, wallCampaign } from './campaigns.js';
+import { productBrand } from './brand-catalog.js';
 import { artRevision } from './art.js';
 
-const CAPS = { retro: 900, vinyl: 1400, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
+const CAPS = { retro: 900, vinyl: 1400, cloth: 80, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
 const ITEMS = {
 	grocer: [['Produce', 'Fruit', 'Vegetables'], ['Bread', 'Cereal', 'Coffee'], ['Canned Goods', 'Soup', 'Pasta'], ['Dairy', 'Eggs', 'Cheese'], ['Snacks', 'Chips', 'Soda'], ['Frozen', 'Ice Cream'], ['Baking', 'Spices', 'Oil'], ['Household', 'Paper', 'Cleaning']],
 	pharmacy: [['Cold & Flu', 'Pain Relief'], ['Vitamins', 'First Aid'], ['Baby', 'Personal Care'], ['Cosmetics', 'Hair Care'], ['Snacks', 'Drinks']],
@@ -113,6 +115,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		out.push(...FW.signs); postList.push(...FW.posts); gantries.push(...FW.gantries);
 		// the shops' doors and windows: the built shop's real glass where it stands, else the face
 		const plan = w.city?.economy?.plan?.() || [], built = w.commercial?.list?.() || [];
+		let campaigns=0, murals=0;
 		for (const E of plan) {
 			if (!E.front || !near(E.x, E.z, SHOP_R)) continue;
 			const B = built.find((q) => Math.hypot(q.x - E.x, q.z - E.z) < 3);
@@ -123,6 +126,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				glass = true;
 			}
 			out.push(...storefrontDecals({ ...E, x: E.x, z: E.z, request: openRequests.some(q => q.giver.id === E.id) }, front, sys, { seed, glass }));
+			if(campaigns<(lite?8:20)){const C=shopCampaigns(E,front,{phone:lite});out.push(...C.signs);postList.push(...C.posts);if(C.signs.length)campaigns++;}
 			storefronts.push({ x: E.front.x, z: E.front.z, nx: E.front.nx, nz: E.front.nz, run: E.front.run });
 			if (landAt(E.front.x, E.front.z)?.lu === 7 && hash01(E.x, E.z, 'gum') < 0.35) surfaces.push({ kind: 'ground', x: front.x + front.nx * 2.2, z: front.z + front.nz * 2.2, nx: front.nx, nz: front.nz, w: 2, gum: 1 });
 		}
@@ -229,7 +233,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				const nx = ca * lx - sa * lz, nz = sa * lx + ca * lz, half = lx ? o.w / 2 : o.d / 2;
 				const x = o.x + nx * (half + 0.03), z = o.z + nz * (half + 0.03);
 				if (!near(x, z, R) || fronted(x, z, nx, nz)) continue;
-				surfaces.push({ kind: 'industrial', x, z, y: ground(x, z), nx, nz, w: Math.min(len, 30), h: Math.min(o.h, 7), lu: 8 });
+				surfaces.push({ kind: 'industrial', x, z, y: ground(x, z), nx, nz, w: Math.min(len, 30), h: o.h, lu: 8, campaignEligible: o.kind === 5 });
 			}
 		}
 		// stickers on the backs of the signs and up the posts
@@ -237,6 +241,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		for (const p of postList) if (hash01(p.x, p.z, 'ps') < 0.4) { const a = hash01(p.x, p.z, 'pa') * Math.PI * 2; surfaces.push({ kind: 'post', x: p.x + Math.sin(a) * 0.037, z: p.z + Math.cos(a) * 0.037, y: null, hy: 1.5, nx: Math.sin(a), nz: Math.cos(a), w: 0.07, h: 0.9, lu: landAt(p.x, p.z)?.lu }); }
 		for (const c of real.crossings?.() || []) if (c.city && near(c.x, c.z, R * 0.6) && hash01(c.x, c.z, 'cg') < 0.5) surfaces.push({ kind: 'ground', x: c.x + c.uz * (c.hw + 1.5), z: c.z - c.ux * (c.hw + 1.5), nx: c.ux, nz: c.uz, w: 2.5, gum: 2 });
 		// (the stickers on a post are not to fly off it: their y comes from the post's ground)
+		// Large campaign art uses a separate cap; street and safety signs stay untouched.
+		for(const S of surfaces){if(murals>=(lite?2:5))break;const ad=S.campaignEligible===true?wallCampaign(S,seed):null;if(ad){out.push(ad);murals++;}}
 		const M = moralNow();
 		out.push(...grimeFor(surfaces, { seed, phone: lite }));
 		out.push(...graffitiFor(surfaces, { morality: M, seed, day: day(), phone: lite }));
@@ -259,9 +265,10 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				const start = Math.floor(i * B.products.length / count), end = Math.floor((i+1) * B.products.length / count);
 				// Rotate within each sample interval: a fixed even stride labels only one shelf side.
 				const p = B.products[start + i % Math.max(1,end-start)], [x,z] = L(p.x,p.z), [nx,nz] = N(0,p.side);
-				const product = [6, i % 2 ? 2 : 4, 5, 3, -1, -1, -1, 7][p.row % 8];
+				const product = [6, [2,4,11][i%3], i%2?5:10, 3, i%2?8:9, -1, 10, 7][p.row % 8];
 				if (product < 0) continue;
-				out.push({ mat: MAT.paper, layer: LAYER.sticker, face: { k: 'product', product }, x,z,nx,nz,hy:p.y,base:B.y,w:.245,h:.285,back:BACK.none,wear:0 });
+				const brand = productBrand(product, `${B.name}:${Math.floor(p.x * 3)}:${p.row}`);
+				out.push({ mat: MAT.paper, layer: LAYER.sticker, face: { k: 'product', product, brandFamily: brand.family, brandIndex: brand.trade }, x,z,nx,nz,hy:p.y,base:B.y,w:.245,h:.285,back:BACK.none,wear:0 });
 			}
 		}
 		const D = DEPT[t] || DEPT.any;
@@ -349,6 +356,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	// ---------- each frame ----------
 	function update(dt, camera, night = 0, driving = false) {
 		if (disposed) return;
+		SIGN_U.uSgTime.value += Math.min(dt,.1);
 		SIGN_U.uSgNight.value = night; SIGN_U.uSgDay.value = 1 - night;
 		// the headlights: yours, when you drive after dark (the camera stands in for the lamps;
 		// a retroreflector sends their light back toward its source, and the eye is beside it)

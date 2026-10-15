@@ -18,7 +18,7 @@ import { drawTag, drawThrowup, drawPiece, drawBuff, drawWheatpaste, drawSticker,
 import { SYSTEMS } from './systems.js';
 import { CARD_MARKS } from './placement.js';
 import { rng, pick } from './rand.js';
-import { drawEmblem, drawTradeBoard, drawBanner, drawProduct } from './art.js';
+import { drawEmblem, drawTradeBoard, drawBanner, drawProduct, drawCampaign } from './art.js';
 
 export const SANS = '"Inter", "Liberation Sans", "Helvetica Neue", Arial, sans-serif';
 export const SERIF = '"Liberation Serif", Georgia, "Times New Roman", serif';
@@ -489,6 +489,7 @@ const STREET = {
 	sticker: (g, x, y, w, h, f) => { if (f.seed % 3 !== 0 || !drawEmblem(g, x + (w - Math.min(w, h)) / 2, y + (h - Math.min(w, h)) / 2, Math.min(w, h), 'modern', Math.abs(f.seed) % 8, !!f.phone)) drawSticker(g, x, y, w, h, f.seed); },
 	banner: (g, x, y, w, h, f) => drawBanner(g, x, y, w, h, f, { phone: !!f.phone }),
 	product: drawProduct,
+	campaign: drawCampaign,
 	trade: (g, x, y, w, h, f) => drawTradeBoard(g, x, y, w, h, f, { family: f.family || 'modern', phone: !!f.phone, portrait: true }),
 	flyer: (g, x, y, w, h, f) => drawFlyer(g, x, y, w, h, f.seed),
 };

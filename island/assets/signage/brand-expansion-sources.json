@@ -1,0 +1,181 @@
+{
+  "generator": "OpenAI built-in image generation",
+  "count": 200,
+  "sheets": [
+    {
+      "category": "mobile",
+      "generated_file": "exec-672f6701-16da-464c-90f2-32fe1dc8f340.png",
+      "source_sha256": "7be175f0b7c5ce879866c3d8edb0904c9bcbca1b1b8cf6006d4baf94769cd636",
+      "desktop": "brands-mobile-v1.webp",
+      "mobile": "brands-mobile-v1-mobile.webp"
+    },
+    {
+      "category": "network",
+      "generated_file": "exec-d4125735-b72c-4659-b0e8-a2c67869a3a0.png",
+      "source_sha256": "ec59253a1df9d449840ecd367eec3b2ce294aa86cb0222735ff3aa716b0d4b1e",
+      "desktop": "brands-network-v1.webp",
+      "mobile": "brands-network-v1-mobile.webp"
+    },
+    {
+      "category": "coffee",
+      "generated_file": "exec-5d576eb7-c5b5-4bb9-bd0c-4ac357c451f7.png",
+      "source_sha256": "f018668a12bddca27794071e51c23996cf096ac05e5d45293624a6f7700ce4fa",
+      "desktop": "brands-coffee-v1.webp",
+      "mobile": "brands-coffee-v1-mobile.webp"
+    },
+    {
+      "category": "tea",
+      "generated_file": "exec-7f9942f9-150d-4b5c-93ce-c772a55280c8.png",
+      "source_sha256": "fc62125cfa23a4d3b8e025e58ebb3d9f23f8f10af96b55237421a9ec9bb855f7",
+      "desktop": "brands-tea-v1.webp",
+      "mobile": "brands-tea-v1-mobile.webp"
+    },
+    {
+      "category": "dairy",
+      "generated_file": "exec-5bfc266d-d088-40e5-ad81-2bb8bc5790ba.png",
+      "source_sha256": "66148d321c7124a18e636a49c4948a3ce611e3c420f8a645490e657565e85d40",
+      "desktop": "brands-dairy-v1.webp",
+      "mobile": "brands-dairy-v1-mobile.webp"
+    },
+    {
+      "category": "bakery",
+      "generated_file": "exec-62bac2a4-1f3f-4cf2-94da-8eb0c54a17a2.png",
+      "source_sha256": "6878799e935ff372a82f7f8c068424c17cd4c64488219794f34707cd419a2184",
+      "desktop": "brands-bakery-v1.webp",
+      "mobile": "brands-bakery-v1-mobile.webp"
+    },
+    {
+      "category": "grains",
+      "generated_file": "exec-3f2118d2-dff3-4bcb-97a2-8fea6351f1cf.png",
+      "source_sha256": "0f5dc42d45b7b7cfd232deb725dc29d4b555b9e5f078e828ffe1fafedb9ade06",
+      "desktop": "brands-grains-v1.webp",
+      "mobile": "brands-grains-v1-mobile.webp"
+    },
+    {
+      "category": "pantry",
+      "generated_file": "exec-36e3eedc-0cf4-4e5d-b1a0-7f22a5df220a.png",
+      "source_sha256": "654a29c1e1f9edff59c89244fde96225ea7f202bc006438d4d068287d7888d53",
+      "desktop": "brands-pantry-v1.webp",
+      "mobile": "brands-pantry-v1-mobile.webp"
+    },
+    {
+      "category": "pasta",
+      "generated_file": "exec-cbf7faf4-d845-4101-b9e2-32cd90ab15e8.png",
+      "source_sha256": "40799d3b7b6acc8679e7b19baff1302d0c30a1b0b7caec5a31907c4047e8cc52",
+      "desktop": "brands-pasta-v1.webp",
+      "mobile": "brands-pasta-v1-mobile.webp"
+    },
+    {
+      "category": "produce",
+      "generated_file": "exec-12716883-ca2f-4aec-9698-2b2d3e7f7cbf.png",
+      "source_sha256": "9977095a12fd32867fa6bc43199504c78a8e2302b23c5b2577b9969aee1d4ec6",
+      "desktop": "brands-produce-v1.webp",
+      "mobile": "brands-produce-v1-mobile.webp"
+    },
+    {
+      "category": "snacks",
+      "generated_file": "exec-eaf9581e-07fe-44be-90b8-2f7388024f16.png",
+      "source_sha256": "46ff40d1ca29e4a5cb21b51bcd9eb9c8a3181f63d392cdc23ac03bf11ba6bb15",
+      "desktop": "brands-snacks-v1.webp",
+      "mobile": "brands-snacks-v1-mobile.webp"
+    },
+    {
+      "category": "beverages",
+      "generated_file": "exec-a380f63a-7d7c-4a55-929e-e6866362afcd.png",
+      "source_sha256": "b7363d19b7d0dd0743c6da0439f87e673897f143ca084e6817a605373c012e7f",
+      "desktop": "brands-beverages-v1.webp",
+      "mobile": "brands-beverages-v1-mobile.webp"
+    },
+    {
+      "category": "cleaning",
+      "generated_file": "exec-b690441f-6e7e-41b0-a4eb-3ddc9f2d3b4d.png",
+      "source_sha256": "83c50be462da7b28fb2d22c76b3f53240eb6b3a1f15aa633aa79aaab29f2c6ee",
+      "desktop": "brands-cleaning-v1.webp",
+      "mobile": "brands-cleaning-v1-mobile.webp"
+    },
+    {
+      "category": "care",
+      "generated_file": "exec-848905c9-ba43-4d53-87f0-ac5be2d0853f.png",
+      "source_sha256": "494b8fa8639b25470606ce83143b7af9584377cdb03f33ab9bde6e02bbd538f4",
+      "desktop": "brands-care-v1.webp",
+      "mobile": "brands-care-v1-mobile.webp"
+    },
+    {
+      "category": "home",
+      "generated_file": "exec-e0b6cd89-ad46-4c0a-beac-2ca6bb082562.png",
+      "source_sha256": "bf25295fb96a861fea91ff903f3a49cf5e87a199f58b14f7ff7f6a44f6c0427b",
+      "desktop": "brands-home-v1.webp",
+      "mobile": "brands-home-v1-mobile.webp"
+    },
+    {
+      "category": "hardware",
+      "generated_file": "exec-74ccc9cf-bc54-49f2-a3ad-54df33a6761a.png",
+      "source_sha256": "8dadc1c29a345774c04aeefafa2ee6767915f314f4d612c383a320a3f34c826e",
+      "desktop": "brands-hardware-v1.webp",
+      "mobile": "brands-hardware-v1-mobile.webp"
+    },
+    {
+      "category": "outdoor",
+      "generated_file": "exec-93690028-e55e-4dd8-97de-d35d2cdf9c29.png",
+      "source_sha256": "09b6b22e260ed18ff71a4d1ec4d838f415a2fa7b46f7f61dacf8608f49776a2a",
+      "desktop": "brands-outdoor-v1.webp",
+      "mobile": "brands-outdoor-v1-mobile.webp"
+    },
+    {
+      "category": "apparel",
+      "generated_file": "exec-dc294e1f-0e26-4f84-8b3a-4e09b2b59407.png",
+      "source_sha256": "2dcfe30ddbfaaa8a8a21268ff0f432f1367fde6286d9fbea85d71273ae0a7305",
+      "desktop": "brands-apparel-v1.webp",
+      "mobile": "brands-apparel-v1-mobile.webp"
+    },
+    {
+      "category": "books",
+      "generated_file": "exec-17229896-80b8-4bd1-8b24-d925d283e2a8.png",
+      "source_sha256": "1f1ef9fab6c0923548745d7c476d5077a661fc3784e51568101d150ea4ff64ed",
+      "desktop": "brands-books-v1.webp",
+      "mobile": "brands-books-v1-mobile.webp"
+    },
+    {
+      "category": "music",
+      "generated_file": "exec-533c5bdd-5895-4f5b-8d2f-e9f25b5c3257.png",
+      "source_sha256": "8a5ae0a75940d35e4eb08205b667b2d272e4b2e4e7f5735a0623e62dd6375cc7",
+      "desktop": "brands-music-v1.webp",
+      "mobile": "brands-music-v1-mobile.webp"
+    },
+    {
+      "category": "transport",
+      "generated_file": "exec-bd5912e2-917c-4249-ab1b-2929f26a3f88.png",
+      "source_sha256": "eb3a5c77549bff3b62f93cd7b9fe52644eaec27e2e12692e8ae88b9e2c2a91a8",
+      "desktop": "brands-transport-v1.webp",
+      "mobile": "brands-transport-v1-mobile.webp"
+    },
+    {
+      "category": "retro",
+      "generated_file": "exec-396cd218-aab0-4a81-9a4a-d80d809be752.png",
+      "source_sha256": "a843bd9607342b6153ee2574a3a52ee9a1296897cadcefb898b04522a9f26aa9",
+      "desktop": "brands-retro-v1.webp",
+      "mobile": "brands-retro-v1-mobile.webp"
+    },
+    {
+      "category": "guild",
+      "generated_file": "exec-0a0d0174-57a8-420d-81e8-a23c3c5a168c.png",
+      "source_sha256": "c841acb89f9bc263f8b0dcf88881e6f4474fce26311a61009eb0ebe9efc38ec8",
+      "desktop": "brands-guild-v1.webp",
+      "mobile": "brands-guild-v1-mobile.webp"
+    },
+    {
+      "category": "fae",
+      "generated_file": "exec-aadc5fc5-2606-417f-9f40-d0f0bf46713d.png",
+      "source_sha256": "380bca46cde4dca6770c7708de9de1a7f2da97122af95e4345e2a842bfeac592",
+      "desktop": "brands-fae-v1.webp",
+      "mobile": "brands-fae-v1-mobile.webp"
+    },
+    {
+      "category": "orbital",
+      "generated_file": "exec-70f1f268-055c-4a0c-807b-c189ba797cb9.png",
+      "source_sha256": "0168e656e5bdcc7a4e182a05542fcd8d02b9e016fbaccb1c3820ad5a3693722d",
+      "desktop": "brands-orbital-v1.webp",
+      "mobile": "brands-orbital-v1-mobile.webp"
+    }
+  ]
+}

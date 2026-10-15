@@ -19,7 +19,7 @@ try {
   await page.waitForFunction(()=>window.SERVICE_HAND_READY,{},{timeout:120000});
   const save=async name=>fs.writeFile(out+'/'+(phone?'phone-':'desktop-')+name+'.png',Buffer.from((await page.evaluate(()=>weaponReview.png())).split(',')[1],'base64'));
   for(const mode of ['guard','block','jab','grip','open']){
-   const row=await page.evaluate(mode=>serviceReview.hand(mode),mode);assert.equal(row.meshes.length,2);assert.equal(row.failed,0);report.push({phone,mode,...row});await save(mode);
+   const row=await page.evaluate(mode=>serviceReview.hand(mode),mode);assert.equal(row.meshes.length,2);assert.ok(row.meshes.length+row.garments.length<=4,'four draws at most for the fists');for(const g of row.garments)assert.ok(g.tris<3000,'sleeve budget '+g.tris);assert.equal(row.failed,0);report.push({phone,mode,...row});await save(mode);
   }
   // The independent melee skeleton must not have moved the avatar or invalidated
   // the existing rifle/bow grip solver when switching back to a weapon.

@@ -8,7 +8,7 @@ import { signMaterial } from './materials.js';
 
 export function createBatch(group, kind, layer, map, cap, { phone = false, name = '' } = {}) {
 	// (its own quad: a disposed geometry takes its buffers with it)
-	const geo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
+	const geo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1, kind === 'cloth' ? 8 : 1, kind === 'cloth' ? 3 : 1));
 	const cell = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4), fx = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
 	cell.setUsage(THREE.DynamicDrawUsage); fx.setUsage(THREE.DynamicDrawUsage);
 	geo.setAttribute('aCell', cell); geo.setAttribute('aFx', fx);

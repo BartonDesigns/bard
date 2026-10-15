@@ -28,9 +28,11 @@ export const SIGN_U = {
 	uSgHeadDir: { value: new THREE.Vector3(0, 0, -1) },
 	uSgNight: { value: 0 },
 	uSgDay: { value: 1 },
+	uSgTime: { value: 0 },
 };
 const SPEC = {
 	retro: { roughness: 0.42, metalness: 0.0, far: 420 },
+	cloth: { roughness: 0.98, metalness: 0.0, far: 160 },
 	vinyl: { roughness: 0.28, metalness: 0.0, far: 140 },
 	glass: { roughness: 0.22, metalness: 0.0, far: 90 },
 	paper: { roughness: 0.96, metalness: 0.0, far: 140 },
@@ -39,6 +41,7 @@ const SPEC = {
 	grime: { roughness: 0.9, metalness: 0.0, far: 160 },
 };
 const COMMON_V = /* glsl */`
+uniform float uSgTime;
 attribute vec4 aCell;
 attribute vec4 aFx;
 varying vec2 vSgUv; varying vec4 vSgCell; varying vec4 vSgFx; varying vec3 vSgW; varying vec3 vSgN;
@@ -140,6 +143,7 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, SIGN_U, { uSgFar: far });
 		sh.vertexShader = COMMON_V + sh.vertexShader
+			.replace('#include <begin_vertex>', '#include <begin_vertex>' + (kind === 'cloth' ? '\ntransformed.z += 0.085 * uv.x * sin(uv.x * 7.0 + uv.y * 2.0 - uSgTime * 2.4 + aFx.y * 6.28);' : ''))
 			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSgUv = uv; vSgCell = aCell; vSgFx = aFx;')
 			.replace('#include <project_vertex>', `#include <project_vertex>
 			{

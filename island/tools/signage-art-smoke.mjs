@@ -24,11 +24,11 @@ try {
  const output=resolve(process.env.BARD_ART_REVIEW_OUT || '/tmp/bard-art-review');await mkdir(output,{recursive:true});
  for(const mode of ['desktop','mobile','offline']) {
   const phone=mode==='mobile',page=await browser.newPage({viewport:phone?{width:390,height:844}:{width:1440,height:1000}}),errors=[],failed=[];
-  page.on('pageerror',e=>errors.push(String(e)));page.on('response',r=>{if(r.status()>=400)failed.push(r.url());});
+  page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error' && /Shader Error|VALIDATE_STATUS|shader.*error/i.test(m.text()))errors.push(m.text());});page.on('response',r=>{if(r.status()>=400)failed.push(r.url());});
   if(mode==='offline')await page.route('**/assets/signage/**',r=>r.abort());
   await page.goto(`http://127.0.0.1:${server.address().port}/review${phone?'?phone':''}`);await page.waitForFunction(()=>window.__ready);
   const result=await page.evaluate(()=>window.__review);
-  assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);assert.deepEqual(result.geoErrors,[]);assert.equal(result.info.draws,3);assert.equal(result.retail.built,1);assert.ok(result.retail.labels>0);assert.ok(result.retail.labels<=(phone?24:72));assert.equal(result.retail.banners,1);assert.equal(result.retail.labelSides.length,2);assert.equal(result.retail.labelHeights.length,3);assert.ok(result.info.atlas[0]<=(phone?768:1536));
+  assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);assert.deepEqual(result.geoErrors,[]);assert.ok(result.campaignDraws>0);assert.ok(result.retail.campaigns>0);assert.equal(result.info.draws,3);assert.equal(result.retail.built,1);assert.ok(result.retail.labels>0);assert.ok(result.retail.labels<=(phone?24:72));assert.equal(result.retail.banners,1);assert.equal(result.retail.labelSides.length,2);assert.equal(result.retail.labelHeights.length,3);assert.ok(result.info.atlas[0]<=(phone?768:1536));
   await page.screenshot({path:resolve(output,mode+'.png'),fullPage:true});
   assert.equal(await page.evaluate(()=>window.__dispose()),false);
   console.log(JSON.stringify({mode,...result,errors,failed,disposed:true}));await page.close();

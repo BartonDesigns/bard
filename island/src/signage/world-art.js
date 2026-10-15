@@ -1,7 +1,9 @@
 // Bounded, physical shop signs for authored settlements, independent of Earth's roads.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { artFamily, drawTradeBoard, drawBanner, loadSignArt } from './art.js';
+import { campaignFace } from './campaigns.js';
+import { brandIdentity } from './brand-catalog.js';
+import { artFamily, drawTradeBoard, drawBanner, drawCampaign, loadSignArt } from './art.js';
 
 export function realmSignRecords(realm) {
 	const out = [], family = 'heritage';
@@ -38,7 +40,14 @@ export function colonySignRecords(plan, heightAt) {
 
 export function createArtSigns({ parent, records, isPhone = false }) {
 	const group = new THREE.Group(); group.name = 'crafted-trade-signs'; parent.add(group);
-	const list = records.slice(0, isPhone ? 16 : 32), CW = isPhone ? 192 : 384, CH = isPhone ? 256 : 512;
+	const expanded=records.flatMap(s=>s.format==='banner' && ['heritage','mystic','orbital'].includes(s.family) ? [s,{...s,x:s.x+Math.cos(s.yaw)*1.1,z:s.z-Math.sin(s.yaw)*1.1,width:1.1,height:.65,bottom:3.05,mount:'post',campaign:'flag'}] : [s]);
+	const list = expanded.slice(0, isPhone ? 16 : 32).map(s => {
+		if (s.format !== 'banner' || !['heritage','mystic','orbital'].includes(s.family)) return s;
+		const brand = brandIdentity(({heritage:'guild',mystic:'fae',orbital:'orbital'})[s.family],`${s.name}:${s.x}:${s.z}`);
+		// Keep trade-specific guild and orbital imagery truthful to the actual place.
+		const trade = s.family === 'heritage' ? [2,4,1,3,3,5,7,7][s.trade] : s.family === 'orbital' ? ({mine:3,scrubbers:1,habitat:5,port:2})[s.label] : undefined;
+		return {...s,artFamily:brand.family,artTrade:trade ?? brand.trade};
+	}), CW = isPhone ? 192 : 384, CH = isPhone ? 256 : 512;
 	const cols = Math.min(4, Math.max(1, list.length)), rows = Math.max(1, Math.ceil(list.length / cols));
 	const cv = document.createElement('canvas'); cv.width = cols * CW; cv.height = rows * CH;
 	const g = cv.getContext('2d'), tex = new THREE.CanvasTexture(cv);
@@ -55,7 +64,8 @@ export function createArtSigns({ parent, records, isPhone = false }) {
 			// Draw at the physical aspect ratio, then fit the cell; round emblems stay round.
 			const w = CW-8, h = w*s.height/s.width;
 			g.save(); g.translate(i%cols*CW+4,Math.floor(i/cols)*CH+4); g.scale(1,(CH-8)/h);
-			(s.format === 'banner' ? drawBanner : drawTradeBoard)(g,0,0,w,h,s,{family:s.family,phone:isPhone,portrait:true});
+			if(s.campaign){const f=campaignFace(({heritage:'guild',mystic:'fae',orbital:'orbital'})[s.family],s.name,'flag');drawCampaign(g,0,0,w,h,{...f,family:s.artFamily,trade:s.artTrade,phone:isPhone});}
+			else (s.format === 'banner' ? drawBanner : drawTradeBoard)(g,0,0,w,h,s,{family:s.family,phone:isPhone,portrait:true});
 			g.restore();
 		});
 		tex.needsUpdate = true;
@@ -112,7 +122,7 @@ export function createArtSigns({ parent, records, isPhone = false }) {
 		new Set([...src, ...parts[key]]).forEach(p => p.dispose());
 	}
 	paint();
-	for (const family of new Set(list.map(s => s.family))) loadSignArt(family, isPhone).then(paint);
+	for (const family of new Set(list.map(s => s.artFamily || s.family))) loadSignArt(family, isPhone).then(paint);
 	return {
 		group, anchors,
 		update(camera) { group.visible = anchors.some(a => Math.hypot(camera.position.x - a.x, camera.position.y - a.y, camera.position.z - a.z) < (isPhone ? 110 : 220)); },

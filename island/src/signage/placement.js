@@ -333,7 +333,7 @@ export function storefrontDecals(biz, front, sys, { seed = 0, glass = true, numb
 		if (r() < 0.35) at(win - 0.7, 1.05, 0.28, 0.18, { k: 'open', sys: sys.id }, gl, LAYER.sticker);
 	}
 	// Tall facade graphics identify the real tenant and leave the entrance clear.
-	const identity = retailIdentity(type);
+	const identity = retailIdentity(type, biz.id || biz.name || `${biz.x}:${biz.z}`);
 	if (!office && run >= 5 && identity.trade >= 0) {
 		const side = door > 0 ? -1 : 1, along = side * (half - .65);
 		const height = Math.min(3.7, Math.max(0, (front.height ?? 3.5) - .3));

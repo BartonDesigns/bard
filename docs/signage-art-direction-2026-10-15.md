@@ -50,3 +50,23 @@ To rerun the browser check, install Playwright + Chromium or set `BARD_PLAYWRIGH
 ## Release boundary
 
 This document records implementation and local verification. A feature-branch push or PR is not evidence that production has deployed. Check the PR/merge and frontend deployment separately before calling the art live. No Cloudflare Worker changes are required for these assets.
+
+## 200-brand expansion and consumer campaigns
+
+Owner direction: preserve the first collection; make 200 more varied, typography-led identities, then distribute them through ads, billboards, street pamphlets, promotion banners, flags and building-height wall art. The expansion contains exactly 200 marks in 25 eight-mark transparent sheets, each with 1536×768 desktop and 768×384 mobile versions. The original six art families are unchanged.
+
+`island/assets/signage/catalog-200.html` is a searchable category catalog with individual transparent PNG export when served over HTTP. `brand-expansion-manifest.json` gives stable B200 IDs, exact sheet/cell coordinates, names and categories. Exact prompts and source-image hashes are in the adjacent provenance files. Graphics were produced with built-in OpenAI image generation, not generated during gameplay.
+
+Runtime assignments in `signage/brand-catalog.js` are deterministic from the real business ID. Existing tenant names remain visible alongside supplier brands. Grocery departments get correctly categorized variants (bread, coffee, grains, dairy, pasta, pantry goods, produce, snacks, drinks and cleaning) on carton faces. Other collections serve their matching businesses; guild, fae and orbital collections appear on setting-appropriate settlement banners and flags. Availability in the catalog does not invent a new establishment or product interaction.
+
+`signage/campaigns.js` adds:
+
+- Window posters and sparse worn, folded paper leaflets near actual shops; a phone gets at most one leaflet per participating shop.
+- Raised promotional flags, supported by posts, with a small GPU cloth wave. Regional flags share one instanced cloth batch. World settlement pennants have a static cloth shape; orbital panels stay rigid.
+- Wide billboard panels mounted above doorways on facades tall enough to contain them.
+- Nearly full-height painted campaigns on suitable blank industrial sides. Homes, civic buildings and storefront surfaces are excluded from mural placement. Murals do not paint over shop windows or cover street signs.
+- Per-region campaign caps: 8 shops / 2 large murals on mobile, 20 shops / 5 large murals on desktop. Existing texture atlas and distance fades remain in use. Images decode only as encountered in the game.
+
+Ads use fictional brand copy and do not promise invented discounts, quests, stock or working external services. Phone signup addresses remain non-clickable `.example` scenery. This is visual world dressing, not a new economy or signup backend. Paper wear is seeded; there is no simulation of wind-driven litter or real elapsed-time campaign aging in this pass. Unloaded buildings, demolition, repair and arbitrary mapped facade shapes still need broader playtesting with the active realism work; the renderer checks are not a whole-universe or real-device performance claim.
+
+Validation for this expansion: 32 targeted signage, artwork, economy and colony tests pass; all 31 image families have valid transparent desktop/mobile assets. Chromium renderer fixtures cover desktop, mobile-sized, blocked-art fallback, actual commercial shelves, campaign materials and disposal. Production bundle is rebuilt. Latest merged main is 8680061 (Claude PR #41); generated bundle conflicts were resolved by rebuilding from combined source, preserving those changes.

@@ -1,8 +1,9 @@
 // Illustrated trade marks; names, hours and navigational information remain real text.
 // Generated once at build time, never a network image-generation call during play.
+import { BRAND_FAMILIES, brandName, brandCategory, brandIdentity } from './brand-catalog.js';
 import { hash32, rng } from './rand.js';
 
-export const ART_FAMILIES = Object.freeze(['heritage', 'mystic', 'modern', 'orbital', 'commerce', 'consumer']);
+export const ART_FAMILIES = Object.freeze(['heritage', 'mystic', 'modern', 'orbital', 'commerce', 'consumer', ...BRAND_FAMILIES]);
 export const TRADE_LABELS = Object.freeze(['Baker', 'Smith', 'Apothecary', 'Inn', 'Music', 'Cloth', 'Fishmonger', 'Market']);
 const sheets = new Map();
 let revision = 0;
@@ -95,22 +96,24 @@ export function drawTradeBoard(g, x, y, w, h, E, { family = 'modern', phone = fa
 
 // Brand marks are product suppliers, never a replacement for a place's real name.
 export const CONSUMER_BRANDS = Object.freeze(['morrow', 'LOOP', 'DAYBREAK', 'plain', 'OAT & CO.', 'POMIERO', 'little orchard', 'tidy']);
-export const PRODUCT_LABELS = Object.freeze(['Mobile', 'Network', 'Coffee', 'Milk', 'Oats', 'Pasta', 'Fruit', 'Home care']);
-export function retailIdentity(type = '') {
+export const PRODUCT_LABELS = Object.freeze(['Mobile', 'Network', 'Coffee', 'Milk', 'Oats', 'Pasta', 'Fruit', 'Home care', 'Snacks', 'Drinks', 'Pantry', 'Bread']);
+export function retailIdentity(type = '', seed = '') {
+	const category = brandCategory(type), identity = category && brandIdentity(category, seed);
+	if (identity) return { ...identity, label: /phone|mobile/.test(type) ? 'PHONE REPAIR' : type.replace(/fix$/, ' repair'), ...(/phone|mobile/.test(type) ? { ad: identity.brand.toLowerCase().replace(/[^a-z0-9]/g, '') + '.example' } : {}) };
 	if (/phone|mobile|telecom/.test(type)) return { family: 'consumer', trade: 0, label: 'PHONE REPAIR', ad: 'morrow.example' };
 	if (/coffee|cafe/.test(type)) return { family: 'consumer', trade: 2, label: 'COFFEE' };
 	const trade = tradeFor(type);
 	return { family: 'modern', trade, label: TRADE_LABELS[trade] || type };
 }
 export function drawBanner(g, x, y, w, h, E, { phone = false } = {}) {
-	const family = E.family || 'modern', old = ['heritage', 'mystic'].includes(family);
+	const family = E.family || 'modern', markFamily = E.artFamily || family, markTrade = E.artTrade ?? E.trade, branded = markFamily.startsWith('brands-'), old = !branded && ['heritage', 'mystic'].includes(family);
 	const ink = old ? '#f1ddb2' : '#18282c';
 	g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
 	g.fillStyle = old ? (family === 'mystic' ? '#214b43' : '#7b3028') : '#f5eedc'; g.fillRect(x, y, w, h);
 	// Open composition; no enclosing border, crest, sticker edge or ornamental frame.
 	const size = w * .92;
-	const ready = drawEmblem(g, x + .04*w, y + .14*h, size, family, E.trade, phone);
-	if (!ready) line(g, family === 'consumer' ? CONSUMER_BRANDS[E.trade] : TRADE_LABELS[E.trade], x+w/2, y+h*.3, w*.85, w*.16, ink, old);
+	const ready = drawEmblem(g, x + .04*w, y + .14*h, size, markFamily, markTrade, phone);
+	if (!ready) line(g, brandName(markFamily,markTrade) || (family === 'consumer' ? CONSUMER_BRANDS[E.trade] : TRADE_LABELS[E.trade]), x+w/2, y+h*.3, w*.85, w*.16, ink, old);
 	const words = String(E.label || E.tag || 'Provisions').split(/\s+/).slice(0, 4);
 	words.forEach((word, i) => line(g, word, x + w*.5, y + h*.56 + i*h*.065, w*.82, w*.2, ink, old));
 	if (E.request) line(g, 'HELP WANTED', x+w*.5, y+h*.815, w*.87, w*.12, ink, false);
@@ -124,11 +127,33 @@ export function drawBanner(g, x, y, w, h, E, { phone = false } = {}) {
 	g.restore(); return true;
 }
 export function drawProduct(g, x, y, w, h, f) {
-	const product = Math.max(2, Math.min(7, f.product ?? 4));
-	const colors = ['','','#f2d4b5','#eef4f3','#e9d7ac','#ffeed2','#f5edb9','#e4eef5'];
+	const product = Math.max(2, Math.min(11, f.product ?? 4));
+	const identity = f.brandFamily ? {family:f.brandFamily,trade:f.brandIndex} : null;
+	const colors = ['','','#f2d4b5','#eef4f3','#e9d7ac','#ffeed2','#f5edb9','#e4eef5','#f0d9b2','#e2eef0','#ecdfc5','#f3ddb7'];
 	g.save(); g.fillStyle = colors[product]; g.fillRect(x,y,w,h);
 	const size = Math.min(w*.96,h*.8);
-	if (!drawEmblem(g,x+(w-size)/2,y+h*.08,size,'consumer',product,!!f.phone)) line(g,CONSUMER_BRANDS[product],x+w/2,y+h*.4,w*.9,h*.13,'#213537',false);
+	if (!drawEmblem(g,x+(w-size)/2,y+h*.08,size,identity?.family || 'consumer',identity?.trade ?? product,!!f.phone)) line(g,identity ? brandName(identity.family,identity.trade) : CONSUMER_BRANDS[product],x+w/2,y+h*.4,w*.9,h*.13,'#213537',false);
 	line(g,PRODUCT_LABELS[product].toUpperCase(),x+w/2,y+h*.88,w*.9,h*.10,'#213537',false);
 	g.restore();
+}
+
+// One campaign, several print formats; type stays real Canvas text at any size.
+export function drawCampaign(g,x,y,w,h,f){
+ const wide=w>h*1.5, flag=f.format==='flag', mural=f.format==='mural';
+ const palette=[['#f7edcf','#cc4b2c'],['#e5efdd','#24705c'],['#e7eff2','#245a88'],['#f0dfd5','#953d55']][f.variant%4||0];
+ g.save();g.beginPath();g.rect(x,y,w,h);g.clip();g.fillStyle=palette[0];g.fillRect(x,y,w,h);
+ // Solid color fields and a single oversized curve: no badge or sticker frame.
+ g.fillStyle=palette[1];
+ if(f.variant%2){g.beginPath();g.arc(x+w*1.12,y+h*1.08,Math.min(w,h)*.34,0,Math.PI*2);g.fill();}
+ else g.fillRect(x,y+h*.93,w,h*.07);
+ const size=wide?Math.min(h*.9,w*.43):Math.min(w*.94,h*(flag?.9:.56));
+ const ex=wide?x+w*.035:x+(w-size)/2, ey=wide?y+(h-size)/2:y+h*(mural?.13:.025);
+ if(!drawEmblem(g,ex,ey,size,f.family,f.trade,!!f.phone))line(g,brandName(f.family,f.trade),ex+size/2,ey+size/2,size*.9,size*.15,'#20352f',false);
+ if(!flag){const cx=wide?x+w*.71:x+w/2, room=wide?w*.5:w*.86;
+ line(g,f.headline||'',cx,y+h*(wide?.4:.66),room,Math.min(h*.12,w*.075),'#20352f',false);
+ line(g,f.label||'',cx,y+h*(wide?.64:.78),room,Math.min(h*.08,w*.05),'#20352f',false);
+ if(f.name)line(g,f.name,cx,y+h*(wide?.82:.87),room,Math.min(h*.065,w*.04),'#20352f',false);
+ }
+ if(f.format==='pamphlet'){g.strokeStyle='rgba(40,40,20,.18)';g.lineWidth=Math.max(1,w*.006);g.beginPath();g.moveTo(x+w*.47,y);g.lineTo(x+w*.52,y+h);g.stroke();}
+ g.restore();
 }
