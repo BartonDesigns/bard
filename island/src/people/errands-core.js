@@ -9,6 +9,8 @@
 //   groceries   their bags to their car, a little way off; they walk behind you
 //   jumpstart   a flat battery: stand by the car while they try it with your help
 //   directions  they are lost: point them the right way
+//   pothole     a pothole down the street that nearly had their wheel: go and stand by it to
+//               report it to the city, which sends a crew to fill it (bay/potholes.js)
 // A wallet found can be kept instead of returned, and groceries walked off with; the world
 // notices which. (Someone who has fallen is helped up where they are: errands.js helped.)
 
@@ -53,9 +55,10 @@ export function relativeDir(dx, dz, fx, fz) {
 // what someone asks: kind and words. who: { first, seed }; n: a counter for variety.
 // options: { friend: { first } } needed for catch and pass; kinds allowed.
 // pet: { name, she, look } for a lost dog (the runtime has found it somewhere to be)
-export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there', car = false, pet = null, dest = null } = {}) {
+// pothole: { street } for a pothole near (the runtime has found one)
+export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there', car = false, pet = null, dest = null, pothole = null } = {}) {
 	const s = (who.seed | 0) + n;
-	const can = kinds.filter((k) => k === 'lost' || k === 'directions' || (k === 'repair' || k === 'jumpstart' || k === 'groceries' ? car : k === 'pet' ? pet : friend));
+	const can = kinds.filter((k) => k === 'lost' || k === 'directions' || (k === 'repair' || k === 'jumpstart' || k === 'groceries' ? car : k === 'pet' ? pet : k === 'pothole' ? pothole : friend));
 	if (!can.length) return null;
 	const kind = pick(can, s * 7 + 3);
 	if (kind === 'lost') {
@@ -101,6 +104,15 @@ export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], f
 		], s);
 		return { kind, item: { name: 'car', the: 'the car', shape: null }, ask, title: `Jump-start ${who.first || 'their'}${who.first ? "'s" : ''} car` };
 	}
+	if (kind === 'pothole') {
+		const on = pothole.street ? ` on ${pothole.street}` : ' down the street';
+		const ask = pick([
+			`There is a pothole${on} that nearly took my wheel off. Could you go and report it? The city only comes if someone does.`,
+			`Have you seen that pothole${on}? It is getting worse every week. Would you report it for me? It is just ${dir}.`,
+			`Sorry, could you do me a favour? There is a nasty pothole${on}, ${dir}. If someone reports it, the city sends a crew.`,
+		], s);
+		return { kind, item: { name: 'pothole', the: 'the pothole', shape: null }, ask, title: `Report the pothole${pothole.street ? ' on ' + pothole.street : ''}` };
+	}
 	if (kind === 'directions') {
 		const to = dest || pick(DESTS, s * 5 + 1);
 		const ask = pick([
@@ -136,6 +148,7 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 				: kind === 'catch' ? [`Thank you! Quick, before they are gone!`, `Go, go! Thank you!`]
 					: kind === 'groceries' ? [`Thank you! Lead the way, I will be right behind you.`, `Oh, bless you. It is the car just there.`]
 						: kind === 'jumpstart' ? [`Thank you! Just stand by the car while I try it.`, `You are a lifesaver. This will only take a second.`]
+							: kind === 'pothole' ? [`Thank you. Mind your step round it.`, `Great. Just stand by it and send it in.`]
 							: kind === 'directions' ? [`Oh, thank you.`, `Thanks, I am completely lost.`] : [`Thank you so much. Tell them it is from me.`, `You are the best. They are expecting it.`],
 		reunited: [`${dog}! Oh, come here, you silly thing! Thank you, thank you so much.`, `There you are! I was so worried. Thank you for bringing ${him} back to me.`, `${dog}! Good ${girl}! I cannot thank you enough. Please, take this.`],
 		found: [`Found ${item.the}.`],
@@ -148,6 +161,7 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 		fixed: [`It started! You are a genius. Here, please take this.`, `Listen to that engine! Thank you, honestly. Let me give you something.`, `It runs! I was going to be stuck here all day. Thank you.`],
 		jumped: [`It started! Oh, thank you. Here, for your trouble.`, `There it goes. You saved my afternoon. Please, take this.`, `Listen to that. Thank you, really. I owe you one.`],
 		carried: [`Just here, thanks. You are very kind. Here, take this.`, `Thank you so much. My arms were about to fall off. Let me give you something.`, `That is the car. Thank you, honestly. Here.`],
+		reported: [`Reported? Thank you. Maybe this time they will actually fill it.`, `Oh, good. My poor car thanks you. Here, for your trouble.`, `You did it? Thank you. The whole street will be glad.`],
 		told: [`Oh, that way? Thank you. I would have walked in circles all day.`, `Thanks! I was completely turned around.`, `That makes sense now. Thank you so much.`],
 		helpedUp: [`Thank you. I think I am alright, just embarrassed.`, `Oof. Thanks for stopping. Not many people do.`, `Thank you. My ankle just went. I will be fine.`],
 		escaped: [`They are gone. Thank you for trying.`, `Too late. Thanks for running after them, though.`],
@@ -161,7 +175,7 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 export function rewardFor(kind, metres = 0) {
 	// (pointing the way and helping someone up are not paid: people do not, for those)
 	if (kind === 'directions' || kind === 'fall') return 0;
-	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'pet' ? 60 : kind === 'jumpstart' ? 50 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : kind === 'groceries' ? 25 : 30;
+	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'pet' ? 60 : kind === 'jumpstart' ? 50 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : kind === 'groceries' ? 25 : kind === 'pothole' ? 25 : 30;
 	return Math.round(Math.min(140, base + Math.max(0, metres) * (kind === 'catch' ? 0.45 : kind === 'pet' ? 0.35 : 0.3)) / 5) * 5;
 }
 
@@ -174,10 +188,12 @@ export function step(E, ev) {
 	if (!E || E.stage === 'done' || E.stage === 'failed' || E.stage === 'kept') return { E, out: null };
 	const at = (stage, out = null) => ({ E: { ...E, stage }, out });
 	switch (ev) {
-		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' || E.kind === 'pet' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : E.kind === 'groceries' ? 'haul' : E.kind === 'jumpstart' ? 'jump' : E.kind === 'directions' ? 'tell' : 'carry', { say: 'accept' }) : { E, out: null };
+		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' || E.kind === 'pet' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : E.kind === 'groceries' ? 'haul' : E.kind === 'jumpstart' ? 'jump' : E.kind === 'directions' ? 'tell' : E.kind === 'pothole' ? 'report' : 'carry', { say: 'accept' }) : { E, out: null };
 		// a flat battery: you stood by while it turned over; the way pointed out
 		case 'jumped': return E.stage === 'jump' ? at('done', { done: true, say: 'jumped' }) : { E, out: null };
 		case 'told': return E.stage === 'tell' ? at('done', { done: true, say: 'told' }) : { E, out: null };
+		// a pothole: stood by it and sent the report in
+		case 'reported': return E.stage === 'report' ? at('done', { done: true, say: 'reported' }) : { E, out: null };
 		// a car that would not start: a repair roll used beside it
 		case 'fixed': return E.stage === 'fix' ? at('done', { done: true, say: 'fixed' }) : { E, out: null };
 		// a bag snatched: catch the thief, they drop it, pick it up, give it back

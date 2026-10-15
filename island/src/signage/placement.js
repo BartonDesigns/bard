@@ -308,7 +308,7 @@ export function storefrontDecals(biz, front, sys, { seed = 0, glass = true, numb
 	// the door: push or pull at the handle, the hours beside it at eye height
 	at(door + handle * 0.28, 1.12, 0.17, 0.065, { k: 'pushpull', word: sys.id === 'jp' ? '押' : sys.id === 'vienna' ? (biz.locale === 'de' ? 'ZIEHEN' : biz.locale === 'fr' ? 'TIREZ' : biz.locale === 'es' ? 'TIRE' : biz.locale === 'it' ? 'TIRARE' : 'PULL') : 'PULL' }, gl, LAYER.sticker, BACK.none);
 	const H = hoursOf(type, sys, hash32(biz.name || '', seed));
-	at(door - handle * 0.2, 1.48, 0.3, 0.34, { k: 'hours', sys: sys.id, name: biz.name || '', days: H.days, line: H.line, closedSun: H.closedSun }, gl, LAYER.sticker);
+	at(door - handle * 0.2, 1.48, 0.3, 0.34, { k: 'hours', sys: sys.id, days: H.days, line: H.line, closedSun: H.closedSun }, gl, LAYER.sticker);
 	// the street number over the door, on the transom
 	const num = number ?? (2 + Math.floor(hash01(Math.round(biz.x), Math.round(biz.z), 'addr') * 48) * 2 + (hash01(biz.x, 'odd') < 0.5 ? 1 : 0)) * (r() < 0.6 ? 10 : 1);
 	at(door, 2.6, 0.48, 0.18, { k: 'address', n: String(num), gold: r() < 0.25 }, r() < 0.25 ? MAT.foil : gl, LAYER.poster);

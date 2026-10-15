@@ -29,7 +29,7 @@ export function createAtlas({ size = 2048, height = size, name = 'signage', scal
 		const W = w + PAD * 2, H = h + PAD * 2;
 		if (W > size) return null;
 		let best = null;
-		for (const S of shelves) if (S.h >= H && S.h <= H * 1.5 + 8 && size - S.x >= W && (!best || S.h < best.h)) best = S;
+		for (const S of shelves) if (S.h >= H && S.h <= H * 2 + 8 && size - S.x >= W && (!best || S.h < best.h)) best = S;
 		if (!best) {
 			if (nextY + H > height) return null;
 			best = { y: nextY, h: H, x: 0 };

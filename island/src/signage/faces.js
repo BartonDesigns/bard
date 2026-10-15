@@ -25,11 +25,13 @@ export const JPF = '"IPAGothic", "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic
 const sysOf = (f) => SYSTEMS[f.sys] || SYSTEMS.us;
 
 // px per metre by kind: the faces read close get more
-const DENS = { blade: 330, hours: 760, pushpull: 760, payment: 760, access: 700, nosmoking: 700, alarm: 900, address: 520, suite: 900, nosolicit: 900, open: 600, window: 420, sale: 420, staff: 640, deliveries: 640, plate: 900, bumper: 900, wsticker: 900, cpermit: 1100, livery: 200, aisle: 260, dept: 200, price: 1200, talker: 1000, flyer: 640, sticker: 1100, permit: 420, site: 300 };
+const DENS = { blade: 330, hours: 520, pushpull: 760, payment: 760, access: 700, nosmoking: 700, alarm: 900, address: 520, suite: 900, nosolicit: 900, open: 600, window: 420, sale: 420, staff: 640, deliveries: 640, plate: 900, bumper: 900, wsticker: 900, cpermit: 1100, livery: 200, aisle: 260, dept: 200, price: 1200, talker: 1000, flyer: 640, sticker: 1100, permit: 420, site: 300 };
 export function faceDims(face, w, h) {
 	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 40 : face.k === 'wheatpaste' ? 300 : 230);
-	let pw = Math.round(w * d), ph = Math.round(h * d);
-	const s = Math.min(1, 1024 / Math.max(pw, 1), 512 / Math.max(ph, 1));
+	// (three quarters of the nominal density: enough for the distance each is read at, and the
+	// region's faces fit one sheet without repacking)
+	let pw = Math.round(w * d * 0.75), ph = Math.round(h * d * 0.75);
+	const s = Math.min(1, 1024 / Math.max(pw, 1), 384 / Math.max(ph, 1));
 	pw = Math.max(16, Math.round(pw * s)); ph = Math.max(16, Math.round(ph * s));
 	return [pw, ph];
 }
@@ -295,11 +297,11 @@ const GLASS = {
 	// the hours: cut white vinyl, a hierarchy of the name, the word, the days, the times
 	hours(g, x, y, w, h, f) {
 		const fg = '#f6f6f2', cx = x + w / 2;
-		text(g, (f.name || '').toUpperCase(), cx, y + h * 0.08, h * 0.06, { col: fg, maxW: w * 0.92, track: 0.12 });
-		g.fillStyle = fg; g.fillRect(x + w * 0.2, y + h * 0.15, w * 0.6, Math.max(1, h * 0.006));
-		text(g, f.sys === 'jp' ? '営業時間' : f.sys === 'vienna' ? 'OPEN' : 'HOURS', cx, y + h * 0.26, h * 0.1, { col: fg, track: 0.2, font: f.sys === 'jp' ? JPF : SANS });
+		// (shared by every shop keeping the same hours: no name on it, the name is on the fascia)
+		text(g, f.sys === 'jp' ? '営業時間' : f.sys === 'vienna' ? 'OPEN' : 'HOURS', cx, y + h * 0.14, h * 0.11, { col: fg, track: 0.2, font: f.sys === 'jp' ? JPF : SANS });
+		g.fillStyle = fg; g.fillRect(x + w * 0.25, y + h * 0.25, w * 0.5, Math.max(1, h * 0.008));
 		const rows = f.closedSun ? [['MON – SAT', f.line], ['SUN', 'CLOSED']] : [['MON – FRI', f.line], ['SAT – SUN', f.line]];
-		rows.forEach(([d, t], i) => { const yy = y + h * (0.46 + i * 0.16); text(g, d, x + w * 0.08, yy, h * 0.065, { col: fg, align: 'left', weight: 'normal', track: 0.08 }); text(g, t, x + w * 0.92, yy, h * 0.065, { col: fg, align: 'right', weight: 'bold' }); });
+		rows.forEach(([d, t], i) => { const yy = y + h * (0.38 + i * 0.22); text(g, d, cx, yy, h * 0.065, { col: fg, weight: 'normal', track: 0.12, maxW: w * 0.86 }); text(g, t, cx, yy + h * 0.09, h * 0.075, { col: fg, weight: 'bold', maxW: w * 0.86 }); });
 		text(g, 'Thank you for visiting', cx, y + h * 0.86, h * 0.05, { col: fg, weight: 'normal', font: SERIF });
 	},
 	address(g, x, y, w, h, f) { text(g, f.n, x + w / 2, y + h * 0.55, h * 0.85, { col: f.gold ? '#e8c46a' : '#f6f6f2', weight: f.gold ? 'bold' : 'normal', font: f.gold ? SERIF : SANS, track: 0.06 }); },

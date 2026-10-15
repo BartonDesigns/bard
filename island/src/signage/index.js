@@ -71,7 +71,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	const offQuality = onQuality(() => { dirty = true; });
 
 	const extra = new Map();                         // owner -> records placed by other systems
-	let forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
+	let lastOut = [], forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
 	const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _f = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 
 	const W = () => world?.();
@@ -318,6 +318,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			group.add(gantryMesh);
 			for (const p of parts) p.dispose();
 		}
+		lastOut = out;
 		last = { records: n, ms: Math.round(performance.now() - t0), posts: np, gantries: gantries.length, slabs: ns, morality: M };
 	}
 	function mergeBoxes(parts) {
@@ -371,6 +372,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		// front { x, z, nx, nz, run, g, door }; glass false for an opaque door
 		storefront(owner, biz, front, { glass = true } = {}) { extra.set(owner, storefrontDecals(biz, front, sys, { seed: hash32(locale), glass })); dirty = true; },
 		refresh() { dirty = true; },
+		// where the records of a face kind stand (for a look at them: Crysis.signage.where('blade'))
+		where: (k, n = 5) => lastOut.filter((r) => r.face?.k === k).slice(0, n).map((r) => ({ x: +r.x.toFixed(2), z: +r.z.toFixed(2), hy: r.hy, nx: +(r.nx || 0).toFixed(3), nz: +(r.nz || 0).toFixed(3), base: r.base ?? null })),
 		// (for a look at the sheeting at night without a car: the camera's lamps on)
 		headlights(on = true) { forceHead = !!on; return forceHead; },
 		atlas,

@@ -14,6 +14,8 @@ export const WX_DEFS = PHONE ? '#define WX_LITE\n' : '';
 // shared helpers; they need vn and h21 (NOISE_GLSL) before them
 export const WX_GLSL = /* glsl */`
 float wxPud = 0.0, wxPudA = 0.0, wxGloss = 0.0, wxBump = 0.0, wxDamp = 0.0;
+// the street's era where it is known (potholes.js paints it): 0 new .. 1 old, or -1
+float wxEraAge = -1.0;
 // a thin line along a noise's middle contour, antialiased; faded to nothing where it would
 // be finer than a pixel (half-width wd in the noise's own units)
 float wxLine(float n, float wd){
@@ -34,11 +36,14 @@ float wxSpots(vec2 p, float s, float r, float k){
 // asphalt given its years. w: ground (m); ld: metres to the nearest lane's centre, lk: in a
 // lane at all; pat: in a patch, cov: a utility cover; px: metres a pixel covers
 export const STREET_GLSL = /* glsl */`
+uniform float uLawnDry;
 vec3 asphaltAge(vec3 c, vec2 w, float ld, float lk, float pat, float cov, float px, float gut){
 	vec2 wl = mod(w, 1024.0);
 	float mid = 1.0 - smoothstep(0.1, 0.4, px);
 	// this stretch's age: some resurfaced fresh and black, most greyed by sun and years
 	float age = vn(w * 0.011 + 3.1) * 0.75 + vn(w * 0.07) * 0.25;
+	// (the street's era leans on it: a new subdivision's paving is black, an old street's grey)
+	if (wxEraAge >= 0.0) age = clamp(age * 0.55 + wxEraAge * 0.55 - 0.08, 0.0, 1.0);
 	c = mix(c, vec3(0.07, 0.07, 0.075), (1.0 - smoothstep(0.2, 0.32, age)) * 0.85);
 	c = mix(c, c * vec3(1.14, 1.13, 1.1), smoothstep(0.5, 0.85, age) * 0.5);
 	// the wheel paths: rubber-dark and polished smooth
@@ -108,6 +113,93 @@ vec3 walkAge(vec3 c, vec2 w, float px, float seam){
 	c = mix(c, mix(vec3(0.12, 0.2, 0.05), vec3(0.3, 0.28, 0.1), uSeason), weed * 0.85);
 	return c;
 }
+
+// ---- streets by era (streetera.js, potholes.js) ----
+// A pothole: hv the paint layer's blue (0.5 on its rim, rising toward its middle), broken
+// at the edge, the base course and loose stone in it, a crumbled lip round it, water
+// standing in it after rain; its depth is real to the light (wxBump). Or, where the paint
+// layer marks a patch (pat) with a fresh cut in blue (0.3), a filled hole: a square of new
+// black asphalt with a sealed seam round it.
+vec3 potholeAge(vec3 c, vec2 w, float hv, float pat, float px){
+	vec2 wl = mod(w, 1024.0);
+	float fine = 1.0 - smoothstep(0.02, 0.06, px);
+	float fresh = pat * smoothstep(0.2, 0.26, hv) * (1.0 - smoothstep(0.38, 0.44, hv));
+	c = mix(c, vec3(0.045, 0.045, 0.05) * (0.9 + 0.2 * vn(wl * 3.0)), fresh);
+	wxGloss += fresh * 0.25;
+	if (hv < 0.3) return c;
+	float hn = hv + (vn(wl * 7.0) - 0.5) * 0.16 + (vn(wl * 23.0) - 0.5) * 0.06 * fine;
+	float fw = max(fwidth(hn), 1e-3);
+	float inH = smoothstep(0.5 - fw, 0.5 + fw, hn), deep = smoothstep(0.5, 0.72, hn);
+	// the lip: crumbled, cracked round, greyer where the edge has ravelled
+	float lip = smoothstep(0.36, 0.48, hn) * (1.0 - inH);
+	c = mix(c, c * vec3(1.12, 1.1, 1.06), lip * 0.6);
+	c = mix(c, c * 0.6, lip * wxLine(vn(wl * 9.0 + 4.0), 0.03) * fine);
+	// in it: the broken base, dark and damp, loose stones and grit
+	vec3 floorC = mix(vec3(0.085, 0.08, 0.075), vec3(0.2, 0.19, 0.17), vn(wl * 11.0) * 0.5);
+	floorC = mix(floorC, vec3(0.36, 0.34, 0.3), step(0.8, h21(floor(wl * 26.0))) * fine * 0.7);
+	c = mix(c, floorC * (1.0 - deep * 0.35), inH);
+	wxBump -= deep * 0.075;
+	wxGloss = mix(wxGloss, 0.15, inH);
+	wxPudA = max(wxPudA, inH * smoothstep(0.03, 0.2, uWet) * smoothstep(0.55, 0.62, hn));
+	return c;
+}
+// A sidewalk by its era. code: era * 48 + its bearing (3.75 degree steps), or -1 where it is
+// not known (then walkAge alone). The historic core is brick in a running bond along the
+// street; the rest concrete scored every 1.5 m across, the old pale and heaved, slabs
+// lifted at their joints by the street trees' roots and cracked across; the newest crisp
+// and bright, with a broom finish.
+vec3 walkEra(vec3 c, vec2 w, float px, float seam, float code){
+	if (code < 0.0) return walkAge(c, w, px, seam);
+	float era = floor(code / 48.0 + 0.01), an = (code - era * 48.0) / 48.0 * 3.14159265;
+	vec2 u = vec2(cos(an), sin(an));
+	float al = dot(w, u), ac = dot(w, vec2(-u.y, u.x));
+	float fine = 1.0 - smoothstep(0.02, 0.06, px), mid = 1.0 - smoothstep(0.05, 0.2, px);
+	if (era < 0.5) {
+		vec2 b = vec2(mod(al, 512.0) / 0.21, mod(ac, 512.0) / 0.105);
+		b.x += 0.5 * step(0.5, fract(b.y * 0.5));
+		vec2 bi = floor(b), bf = fract(b), bw = max(fwidth(b), vec2(1e-4));
+		vec3 brick = mix(vec3(0.44, 0.19, 0.12), vec3(0.6, 0.31, 0.2), h21(bi + 3.0)) * (0.84 + 0.26 * h21(bi + 9.0));
+		brick = mix(brick, brick * vec3(0.8, 0.82, 0.86), step(0.93, h21(bi + 17.0)));          // the odd overfired one
+		float mort = max(1.0 - smoothstep(0.05, 0.05 + bw.x * 1.5, min(bf.x, 1.0 - bf.x)), 1.0 - smoothstep(0.08, 0.08 + bw.y * 1.5, min(bf.y, 1.0 - bf.y)));
+		c = mix(vec3(0.42, 0.22, 0.16), mix(brick, vec3(0.5, 0.47, 0.42), mort * 0.8), mid);
+		wxBump += (h21(bi) - 0.5) * 0.004 * mid;
+		c = walkAge(c, w, px, seam * 0.4);
+		return c;
+	}
+	// concrete: paler and greyer the newer (tract and new poured lighter), joints across
+	float newK = smoothstep(2.5, 4.0, era), oldK = 1.0 - smoothstep(1.0, 2.5, era);
+	c = mix(c * vec3(0.92, 0.91, 0.88), c * 1.12 + 0.02, newK);
+	float j = fract(al / 1.5), jw = max(fwidth(al / 1.5), 1e-4);
+	float joint = (1.0 - smoothstep(0.012, 0.012 + jw * 1.5, min(j, 1.0 - j))) * mid;
+	float slab = floor(al / 1.5);
+	float sh = h21(vec2(slab, floor(ac / 5.0)) + 0.5);
+	// on the old streets: slabs lifted at one end by a root (a lit step and a shadow), some
+	// cracked across, a few sunk; their joints grown dark with dirt
+	float lift = oldK * step(0.78, sh) * smoothstep(0.35, 0.6, vn(w * 0.05 + 2.0));
+	float tilt = (j - 0.5) * lift;
+	c *= 1.0 + tilt * 0.35;
+	wxBump += lift * j * 0.05 * mid;
+	c = mix(c, c * 0.55, joint * (0.5 + 0.4 * oldK + 0.5 * lift));
+	float crack = oldK * step(0.62, sh) * wxLine(vn(w * vec2(1.3, 0.4) + slab * 3.1), 0.012) * mid;
+	c = mix(c, c * 0.5, crack);
+	// the newest: a broom finish across the slab, and crisp tooled edges
+	c *= 1.0 - newK * 0.04 * step(0.5, fract(al * 22.0 + vn(w * 3.0))) * fine;
+	vec3 aged = walkAge(c, w, px, max(seam, joint * oldK));
+	return mix(c, aged, mix(0.35, 1.0, 1.0 - newK));
+}
+// a kerb by its era: granite in the old core (grey, speckled pink), square poured concrete,
+// or a newer rolled kerb (wider and smooth); returns its colour, k its width out of the
+// fine map's distance (dK: metres outside the asphalt's edge)
+vec3 kerbEra(vec2 w, float code, float dK, out float k){
+	float era = code < 0.0 ? 2.0 : floor(code / 48.0 + 0.01);
+	float wd = era < 0.5 ? 0.2 : era > 2.5 ? 0.3 : 0.16;
+	k = smoothstep(-0.02, 0.02, dK) * (1.0 - smoothstep(wd - 0.02, wd + 0.02, dK));
+	vec3 kc = vec3(0.76, 0.75, 0.72) * (0.8 + 0.2 * vn(w * 0.9));
+	if (era < 0.5) kc = mix(vec3(0.5, 0.48, 0.47), vec3(0.64, 0.56, 0.54), vn(w * 1.7)) * (0.9 + 0.2 * step(0.7, h21(floor(mod(w, 1024.0) * 40.0))));
+	else if (era > 2.5) kc = mix(kc * 1.04, kc * 0.86, smoothstep(0.0, wd, dK));      // the roll's face in its own shade
+	return kc;
+}
+
 `;
 
 // ---------- walls ----------

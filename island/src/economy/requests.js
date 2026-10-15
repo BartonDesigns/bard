@@ -2,7 +2,8 @@
 // place wants an order taken to a customer, the waffle shop needs eggs from the farm stand, the
 // farm stand needs its truck seen to at the garage, the fishing outfitter has a catch for the
 // seafood place, the hunting post has lost a hound, the bed-and-breakfast has a guest to meet,
-// the tech company a prototype to courier. Every pickup and drop is a real place from the
+// the tech company a prototype to courier, the shop on a street with a pothole that jolts its
+// deliveries wants it reported to the city (bay/potholes.js; a crew comes to fill it). Every pickup and drop is a real place from the
 // registry (economy/layer.js near()) or a person at a real door, and the business pays.
 //
 // Anyone can take one: the player or someone in the town. The same business asks the same things
@@ -78,8 +79,9 @@ const round5 = (v) => Math.max(10, Math.min(250, Math.round(v / 5) * 5));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 // one establishment's requests on a day: places is the registry round it (establishments, with
-// id, name, type, x, z, door); homes are doors of houses round it ({ x, z })
-export function requestsFor(E, places, { day = 0, now = 0, homes = [] } = {}) {
+// id, name, type, x, z, door); homes are doors of houses round it ({ x, z }); hole: a pothole in
+// the street near it not yet reported ({ id, x, z, street }), if there is one
+export function requestsFor(E, places, { day = 0, now = 0, homes = [], hole = null } = {}) {
 	const r = (n) => hashAt(E.x + day * 0.37, E.z - day * 0.53, 7000 + n);
 	const L = LOCALES[E.locale] || LOCALES.us, F = L.F;
 	const here = { x: E.door?.[0] ?? E.x, z: E.door?.[1] ?? E.z, name: E.name, establishmentId: E.id };
@@ -148,6 +150,11 @@ export function requestsFor(E, places, { day = 0, now = 0, homes = [] } = {}) {
 	if (T === 'printshop' || T === 'roastery') tries.push(() => { const C = find(T === 'roastery' ? ['cafe', 'bakery', 'diner'] : FOOD, 87); if (C) add('delivery', `Deliver ${T === 'roastery' ? 'sacks of beans' : 'new menus'} from ${E.name} to ${C.name}`, [{ do: 'pickup', at: here, item: { name: T === 'roastery' ? 'sacks of beans' : 'a box of menus', shape: 'box' } }, { do: 'deliver', at: placeOf(C) }], 15, { tempt: 0.15, betray: 'steal' }); });
 	if (T === 'autorepair') tries.push(() => { const P = person(88); if (P) add('tow', `${P.who}'s car broke down: take ${E.name}'s jump pack over and fix it`, [{ do: 'pickup', at: here, item: { name: 'a jump pack', shape: 'box' } }, { do: 'fix', at: { ...P, name: `${P.who}'s car` } }], 25, { tempt: 0.2, betray: 'steal' }); });
 	if (T === 'salon' || T === 'barber' || T === 'gym' || T === 'yoga' || T === 'daycare' || T === 'tutor' || T === 'tattoo') tries.push(() => { const S = find(['pharmacy', 'grocer', 'general', 'hardware'], 89); if (S) add('supply', `${E.name} is out of supplies: pick some up at ${S.name}`, [{ do: 'pickup', at: placeOf(S), item: { name: 'a box of supplies', shape: 'box' } }, { do: 'deliver', at: here }], 12, { tempt: 0.2, betray: 'steal' }); });
+	// a pothole in its street: reported by whoever stands by it, and the city sends a crew
+	if (hole && (FOOD.includes(T) || SHOP.includes(T) || STAY.includes(T) || T === 'autorepair')) {
+		const at = { x: hole.x, z: hole.z, name: hole.street ? `the pothole on ${hole.street}` : 'the pothole down the street', holeId: hole.id };
+		tries.push(() => { add('pothole', `${E.name}'s deliveries keep hitting a pothole${hole.street ? ' on ' + hole.street : ''}: report it to the city`, [{ do: 'go', at }, { do: 'wait', at }], 12, { tempt: 0.02 }); out[out.length - 1].hole = hole; });
+	}
 	// one to three today, chosen by the day
 	const n = 1 + Math.floor(r(99) * Math.min(3, tries.length));
 	const start = Math.floor(r(98) * tries.length);
@@ -166,7 +173,8 @@ export function createBoard({ near = () => [], homes = () => [], clock = () => D
 			const key = E.id + '@' + day;
 			if (made.has(key)) continue;
 			made.add(key);
-			for (const R of requestsFor(E, places, { day, now, homes: H })) if (!known.has(R.id)) known.set(R.id, { ...R, status: 'open', taker: null });
+			const hole = potholes?.near?.(E.door?.[0] ?? E.x, E.door?.[1] ?? E.z, 150) || null;
+			for (const R of requestsFor(E, places, { day, now, homes: H, hole })) if (!known.has(R.id)) known.set(R.id, { ...R, status: 'open', taker: null });
 		}
 		// (the old and lapsed forgotten)
 		if (known.size > 600) for (const [id, R] of known) if (R.expires < now - 3600000) known.delete(id);
@@ -185,6 +193,7 @@ export function createBoard({ near = () => [], homes = () => [], clock = () => D
 		if (outcome === 'done') {
 			R.status = 'done';
 			const paid = payroll.payFrom(R.reward.from, takerId, R.reward.credits, 'request: ' + R.kind);
+			if (R.kind === 'pothole' && R.hole) potholes?.report?.(R.hole);          // (the crew is sent)
 			return { ok: true, paid, deed: R.deeds.done, request: R };
 		}
 		R.status = outcome === 'failed' ? 'failed' : 'betrayed';
@@ -192,6 +201,10 @@ export function createBoard({ near = () => [], homes = () => [], clock = () => D
 	}
 	return { near: near2, take, complete, get: (id) => known.get(id) || null, counts: () => { const c = { open: 0, taken: 0, done: 0, failed: 0, betrayed: 0 }; for (const R of known.values()) c[R.status === 'open' && R.expires < clock() ? 'failed' : R.status]++; return c; } };
 }
+
+// the potholes (bay/streets.js gives them: near(x, z, r) the nearest not yet reported, report(hole))
+let potholes = null;
+export function setPotholeSource(src) { potholes = src; }
 
 // the game's board (the city gives it the registry: economy/layer.js)
 export let board = createBoard();

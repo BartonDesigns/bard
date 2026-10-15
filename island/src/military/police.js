@@ -119,7 +119,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		if (cruisers.some((c) => c.state !== 'leaving' && c.why !== 'block' && Math.hypot(c.to.x - e.x, c.to.z - e.z) < 120 && (!o.swat || c.why === 'swat'))) return null;
 		const swat = !!o.swat;
 		const c = send({ x: e.x, z: e.z }, swat ? 'swat' : e.kind, swat ? (isPhone ? 3 : 4) : e.kind === 'gang' ? 3 : 2, e.kind === 'gang', swat ? { kind: 'van', fid: 'swat' } : {});
-		if (c) combat.call?.(swat ? 'Dispatch: shots fired, tactical team responding.' : e.kind === 'gang' || e.kind === 'shots' ? 'Dispatch: shots fired, units responding.' : 'Dispatch: a fight reported, a unit is on the way.', 'Harbour Police');
+		if (c) combat.call?.(swat ? 'Dispatch: shots fired, tactical team responding.' : e.kind === 'gang' || e.kind === 'shots' ? 'Dispatch: shots fired, units responding.' : e.kind === 'disaster' ? 'Dispatch: all units, disaster response. Keep the roads clear.' : 'Dispatch: a fight reported, a unit is on the way.', 'Harbour Police');
 		return c;
 	}
 

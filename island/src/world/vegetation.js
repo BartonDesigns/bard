@@ -140,8 +140,8 @@ export function palm(seed, far, g = null) {
 	const at = (d) => top.clone().add(up.clone().multiplyScalar(d));
 	const BOOT = new THREE.Color(0.8, 0.78, 0.5);
 	tube(trunk, [at(-0.4), at(0.0), at(0.35), at(0.75), at(1.1), at(1.6)], [0.16, 0.26, 0.3, 0.26, 0.13, 0.03], far ? 5 : 8, BOOT, (t) => 0.35 + t * 0.2);
-	if (!far) {
-		// coconuts bunched under the crown
+	if (!far && g?.nuts !== false) {
+		// coconuts bunched under the crown (none on a street's fan and date palms: g.nuts false)
 		const rn = mulberry32(seed + 7), nN = 5 + Math.floor(rn() * 5);
 		for (let i = 0; i < nN; i++) {
 			const a = rn() * 6.283, d = 0.28 + rn() * 0.12, ripe = rn();
