@@ -9,7 +9,8 @@ import { bindLookDrag } from '../combat/look-drag.js';
 // hands are then put on it: your own body (people/avatar.js) is posed in its carry
 // (people/actions.js), each hand is read off it with the arm above it, and that arm is moved
 // so the hand lands on the item's grip (crysis/held-items.js HOLDS). The arms and hands
-// are drawn as one skinned mesh with the skin's own material, and a sleeve over each forearm.
+// are drawn as one skinned mesh with the skin's own material, and your clothes' sleeves (and
+// gloves, if you wear them) over them as one more (people/sleeve.js), folding as the arms move.
 //
 // Aiming: hold the right mouse button, or tap the sight button on a touch screen. The sight
 // comes to the eye and the world's lens narrows (camera.zoom).
@@ -41,14 +42,14 @@ import { bindLookDrag } from '../combat/look-drag.js';
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { CELL_HOLD, cellPath, handFrame, itemModel, kitLight, kitMaterial, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
+import { CELL_HOLD, cellPath, handFrame, itemModel, kitLight, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 import { createScopeOptics } from './scope-optics.js';
 import { refineHandSurface, closeHandMaterial } from '../people/hand-surface.js';
+import { dressArms } from '../people/sleeve.js';
 
 const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
-const SLEEVE_BONES = /^(upperarm0[12]|lowerarm0[12])\.(L|R)$/;
 const ease = (x) => x * x * (3 - 2 * x);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -107,13 +108,12 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (!src?.geometry?.index || !src.geometry.attributes.skinIndex) return null;
 		const g0 = src.geometry, si = g0.attributes.skinIndex, sw = g0.attributes.skinWeight, idx = g0.index.array;
 		const names = P.bones.map((b) => b.name);
-		const keep = names.map((n) => ARM_BONES.test(n)), sleeveBone = names.map((n) => SLEEVE_BONES.test(n));
+		const keep = names.map((n) => ARM_BONES.test(n));
 		const top = (v) => { let b = 0, w = -1; for (let k = 0; k < 4; k++) { const x = sw.getComponent(v, k); if (x > w) { w = x; b = si.getComponent(v, k); } } return b; };
-		const tri = [], sl = [];
+		const tri = [];
 		for (let i = 0; i < idx.length; i += 3) {
 			const a = top(idx[i]), b = top(idx[i + 1]), c = top(idx[i + 2]);
 			if (keep[a] && keep[b] && keep[c]) tri.push(idx[i], idx[i + 1], idx[i + 2]);
-			if (sleeveBone[a] && sleeveBone[b] && sleeveBone[c]) sl.push(idx[i], idx[i + 1], idx[i + 2]);
 		}
 		if (!tri.length) return null;
 		const g = refineHandSurface(g0, tri, 1);
@@ -123,45 +123,15 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		skin.bindMode = 'detached';
 		skin.bind(skel, new THREE.Matrix4());
 		skin.frustumCulled = false;
-		// the sleeve: the forearm's skin pushed out a few millimetres, cut short of the wrist,
-		// in the kit's woven cloth
-		let sleeve = null;
-		if (sl.length) {
-			// A continuous cloth tube follows each real forearm's bind frame. Cropping
-			// skin triangles by their strongest bone left open, pointed ends in view.
-			// The sleeve continues past the elbow and out of the lens, with a round cuff.
-			const p = [], n = [], s4 = [], w4 = [], col = [], surf = [], uv = [], ix = [];
-			const colour = new THREE.Color(0x3b4436), rings = 12, radial = 16, scale = me.P.height / 1.75;
-			const bindPosition = i => new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(P.skeleton.boneInverses[i]).invert());
-			for (const side of ['L', 'R']) {
-				const lower = P.map['lowerarm01.' + side], twist = P.map['lowerarm02.' + side], wrist = P.map['wrist.' + side];
-				const elbow = bindPosition(lower), hand = bindPosition(wrist), axis = hand.clone().sub(elbow), length = axis.length(); axis.normalize();
-				const u = new THREE.Vector3(0, 0, 1).cross(axis).normalize(), v = new THREE.Vector3().crossVectors(axis, u), offset = p.length / 3;
-				for (let ring = 0; ring <= rings; ring++) {
-					const along = .82 - ring / rings * 2.2, center = elbow.clone().addScaledVector(axis, along * length);
-					const radius = (.035 + .026 * Math.min(1, (1 - along) / 1.5) + (ring === 0 ? .003 : 0)) * scale;
-					for (let j = 0; j <= radial; j++) {
-						const angle = j / radial * Math.PI * 2, normal = u.clone().multiplyScalar(Math.cos(angle)).addScaledVector(v, Math.sin(angle)), at = center.clone().addScaledVector(normal, radius);
-						p.push(at.x, at.y, at.z); n.push(normal.x, normal.y, normal.z);
-						const weight = clamp(along, 0, 1); s4.push(lower, twist, 0, 0); w4.push(1 - weight, weight, 0, 0);
-						col.push(colour.r, colour.g, colour.b); surf.push(.9, 0, 5.1, 0); uv.push(j / radial * 8, ring / rings * 18);
-						if (ring < rings && j < radial) { const k = offset + ring * (radial + 1) + j; ix.push(k, k + radial + 1, k + 1, k + 1, k + radial + 1, k + radial + 2); }
-					}
-				}
-			}
-			const sg = new THREE.BufferGeometry();
-			sg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); sg.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
-			sg.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(s4, 4)); sg.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w4, 4));
-			sg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); sg.setAttribute('surf', new THREE.Float32BufferAttribute(surf, 4)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-			sg.setIndex(ix); sleeve = new THREE.SkinnedMesh(sg, kitMaterial());
-			sleeve.bindMode = 'detached'; sleeve.bind(skel, new THREE.Matrix4()); sleeve.frustumCulled = false;
-		}
+		// the sleeves, cuffs and gloves of what you wear, cut to your forearms (people/sleeve.js),
+		// the skin they hide left out of the hands' mesh
+		const garment = dressArms(P, skin, { isPhone });
 		const group = new THREE.Group();
 		group.add(skin);
-		if (sleeve) group.add(sleeve);
+		if (garment) group.add(garment.mesh);
 		scene.add(group);
 		const side = names.map((n) => (n.endsWith('.L') ? 'L' : 'R')), fore = names.map((n) => !/^(wrist|finger|metacarpal)/.test(n));
-		return { me, group, skin, sleeve, bones, side, fore, tris: g.index.count / 3 + (sleeve?.geometry.index.count || 0) / 3 };
+		return { me, group, skin, garment, bones, side, fore, tris: g.index.count / 3 + (garment?.tris || 0) };
 	}
 
 	// ---------- input: aim ----------
@@ -321,6 +291,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				const sd = arms.side[i], x = arms.fore[i] ? F[sd] : X[sd];
 				arms.bones[i].matrixWorld.copy(X[sd] ? tmp.multiplyMatrices(x, me.P.bones[i].matrixWorld) : ZERO);
 			}
+			// the folds follow the arms (down: the world's, in the view's frame)
+			arms.garment?.pose(dt, a, null, V.set(0, -1, 0).applyQuaternion(Q.copy(camera.quaternion).invert()));
 			arms.group.visible = true;
 		}
 		lightUp(W);
