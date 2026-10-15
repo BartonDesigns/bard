@@ -1,3 +1,7 @@
+## October 15, 2026: close combat feel
+
+Owner feedback on the live game: fists too close together, punches unnatural. Now there is a boxer's guard framed to the screen (shoulder width on desktop; on a phone the fists sit further from the eye so they stay apart and visible). Quick taps throw a timed one-two (jab, cross, about 0.27 s apart however fast you tap). Holding charges a rear-hand power punch that coils and trembles; released, it turns, lunges, holds on contact and leaves you wobbling (more on a miss). The same timing applies to the bat, pipe, bottle, knife and machete, and to the touch Strike button. Poses, timing and camera only: the anatomical hands, joint limits, sleeves and skin are as they were. See the Feel section of `docs/close-combat-2026-10-14.md`.
+
 ## October 15, 2026: skin
 
 The hands no longer read as flat plastic, engine-wide. Skin lighting is now:
