@@ -773,7 +773,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		commons.save();
 	}
 	return {
-		update, info, handoff, dispose, farTick, memoryOf, factsFor, moneyLine, regionNow, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
+		update, info, handoff, dispose, farTick, memoryOf, factsFor, moneyLine, regionNow, situation: () => here.situation, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
 		// leads: a line for chatter, the marker and the guide's story (open leads, everywhere)
 		leadLine: leadLineFor, mark: leadMark,
 		leads: () => leads.open().map((L) => ({ id: L.id, note: leadNote(L), here: L.region === here.region.id, region: L.regionName || L.region, when: L.when })),

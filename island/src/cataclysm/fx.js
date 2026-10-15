@@ -3,12 +3,18 @@
 // lit puffs that climb, spread and drift downwind, warm underneath where the fire lights them),
 // embers and ash (bright sparks thrown up and carried, or grey flakes coming down), the
 // spray of a hose, and marks on the ground (scorched earth where the fire has been, the
-// cracks a quake opens in the street). Phones get smaller pools.
+// cracks a quake opens in the street). Phones get smaller pools, and the quality governor's
+// lower tiers (world/governor.js) fewer flames and particles again.
 
 import * as THREE from 'three';
+import { tierNow } from '../world/governor.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _n = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _v2 = new THREE.Vector2();
 const HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
+// (the share of flames and particles kept at each of the governor's tiers)
+const TIER_K = [1, 0.8, 0.55, 0.35];
+const share = () => TIER_K[tierNow()] ?? 1;
+const keep = () => Math.random() < share();
 
 const NOISE = /* glsl */`
 float ch(vec2 p) { p = fract(p * vec2(127.1, 311.7)); p += dot(p, p + 19.19); return fract(p.x * p.y); }
@@ -227,7 +233,7 @@ export function createFx(scene, { isPhone = false, ground = () => 0 } = {}) {
 	// ---------- drawing, each frame ----------
 	// a flame this frame at (x, y, z), its height h and width w, heat 0..1
 	function flame(x, y, z, h, w, heat) {
-		if (fn >= FN) return false;
+		if (fn >= FN * share()) return false;
 		_m.makeScale(w, h, w); _m.setPosition(x, y, z);
 		flames.setMatrixAt(fn, _m);
 		aHeat.array[fn] = heat;
@@ -275,13 +281,13 @@ export function createFx(scene, { isPhone = false, ground = () => 0 } = {}) {
 	return {
 		group, flame, mark, clearMarks, begin, end, clear, dispose,
 		// smoke: (x, y, z), its rise, life, sizes, grey shade, warmth (lit by fire underneath), alpha
-		smoke: (x, y, z, vy, life, s0, s1, shade, warm, a) => smoke.emit(x, y, z, (Math.random() - 0.5) * 1.2, vy, (Math.random() - 0.5) * 1.2, life, s0, s1, shade, warm, 0, a, 0.35, 0.15),
+		smoke: (x, y, z, vy, life, s0, s1, shade, warm, a) => keep() && smoke.emit(x, y, z, (Math.random() - 0.5) * 1.2, vy, (Math.random() - 0.5) * 1.2, life, s0, s1, shade, warm, 0, a, 0.35, 0.15),
 		// an ember: thrown up hot, flickering, carried on the wind
-		ember: (x, y, z, k = 1) => sparks.emit(x, y, z, (Math.random() - 0.5) * 3, 3 + Math.random() * 5 * k, (Math.random() - 0.5) * 3, 2.5 + Math.random() * 3, 0.12, 0.05, 1, 0.45 + Math.random() * 0.3, 0.1, 1.4, 0.8, 0.6),
+		ember: (x, y, z, k = 1) => keep() && sparks.emit(x, y, z, (Math.random() - 0.5) * 3, 3 + Math.random() * 5 * k, (Math.random() - 0.5) * 3, 2.5 + Math.random() * 3, 0.12, 0.05, 1, 0.45 + Math.random() * 0.3, 0.1, 1.4, 0.8, 0.6),
 		// a hazard light's blink (a car alarm going)
 		blink: (x, y, z) => sparks.emit(x, y, z, 0, 0, 0, 0.3, 0.4, 0.4, 1, 0.55, 0.1, 1.3, 0, 0),
 		// ash coming down
-		ash: (x, y, z) => sparks.emit(x, y, z, (Math.random() - 0.5) * 0.6, -0.6 - Math.random() * 0.8, (Math.random() - 0.5) * 0.6, 6 + Math.random() * 5, 0.07, 0.07, 0.42, 0.4, 0.38, 0.5, 1.2, -0.05),
+		ash: (x, y, z) => keep() && sparks.emit(x, y, z, (Math.random() - 0.5) * 0.6, -0.6 - Math.random() * 0.8, (Math.random() - 0.5) * 0.6, 6 + Math.random() * 5, 0.07, 0.07, 0.42, 0.4, 0.38, 0.5, 1.2, -0.05),
 		// a hose's water from (x, y, z) towards (tx, ty, tz): droplets and mist
 		spray(x, y, z, tx, ty, tz, n = 3) {
 			const dx = tx - x, dy = ty - y, dz = tz - z, d = Math.max(1, Math.hypot(dx, dy, dz)), sp = Math.min(22, 8 + d * 0.9);

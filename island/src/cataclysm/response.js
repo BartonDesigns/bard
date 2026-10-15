@@ -243,7 +243,9 @@ export function createResponse(ctx) {
 	// ---------- the units ----------
 	function sendUnits(at, severity) {
 		const M = hooks.military;
-		if (!sent.police) { try { sent.police = !!M?.police?.event?.({ kind: 'disaster', x: at.x, z: at.z }); } catch { /* no police here */ } }
+		// (the police through law and order's call line, combat.hooks.event (law/): it is reported and
+		// a unit goes; with nobody about to call it in, straight to the police)
+		if (!sent.police) { try { const e = { kind: 'disaster', x: at.x, z: at.z, severity: 1 + Math.round(severity * 2) }; sent.police = !!(hooks.combat?.hooks?.event?.(e) || M?.police?.event?.(e)); } catch { /* no police here */ } }
 		if (!sent.guard && severity > 0.35) { try { sent.guard = !!M?.dispatch?.event?.({ kind: 'disaster', x: at.x, z: at.z, severity: 1 + Math.round(severity * 2) }); } catch { /* no bases here */ } }
 	}
 	// an engine to a fire front: crew(x, z) is where its crew is put down (their hose: ctx.hose)
