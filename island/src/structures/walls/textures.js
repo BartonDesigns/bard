@@ -210,7 +210,7 @@ export function marksAtlas() {
 		cracks(5, 20, 50, 'rgba(60,58,54,0.6)', 1.2);
 	});
 	// a star of cracks in stucco or render
-	cell(MARK.star, () => { cracks(9, 4, 58, 'rgba(70,66,60,0.5)', 0.9); g.fillStyle = 'rgba(120,116,108,0.35)'; blob(0, 0, 8, 10, 0.4); });
+	cell(MARK.star, () => { cracks(7, 4, 34, 'rgba(90,86,80,0.38)', 0.7); g.fillStyle = 'rgba(130,126,118,0.3)'; blob(0, 0, 7, 10, 0.4); });
 	// a brick chipped: the fired body pale where the face came off
 	cell(MARK.brickChip, () => {
 		g.fillStyle = 'rgba(196,120,96,0.95)'; blob(0, 0, 28, 18, 0.45);

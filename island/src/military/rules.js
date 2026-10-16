@@ -139,7 +139,8 @@ export function siteScore(S, cx, cz, yaw, W, D, opts = {}) {
 		pts.push([lx, lz, h]);
 	}
 	if (wet) return { ok: false, score: -1, why: 'water' };
-	if (urban > 0.18) return { ok: false, score: -1, why: 'town' };
+	// (a surveyed site, a real base's own ground, may stand inside a town's reach: only homes on it stop it)
+	if (urban > (opts.townMax ?? 0.18)) return { ok: false, score: -1, why: 'town' };
 	built = S.built?.(cx, cz, Math.hypot(W, D) / 2) || 0;
 	if (built > (opts.builtMax ?? 3)) return { ok: false, score: -1, why: 'homes' };
 	// the plane through the ground (least squares), and how far the ground strays from it

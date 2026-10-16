@@ -416,9 +416,32 @@ function settle(rig, f, p, M, field, fk, close) {
 	if (c == null || field.triangles === 0) return p;
 	let lo, hi;
 	if (c < -0.0003) { lo = 0.4; hi = 1; if (at(lo) < 0) return p; for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (at(m) < 0) hi = m; else lo = m; } at(lo); }
-	else if (close && c > 0.0006) { lo = 1; hi = 1.4; if (at(hi) > 0.0003) return p; for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (at(m) > 0.0003) lo = m; else hi = m; } at(hi); }
+	else if (close && c > 0.0006) { lo = 1; hi = close === 'rest' ? 1.9 : 1.4; if (at(hi) > 0.0003) return p; for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (at(m) > 0.0003) lo = m; else hi = m; } at(hi); }
 	else return p;
 	return q;
+}
+
+// A finger laid along the item (spec.lay: the index straight along the frame) brought onto it:
+// its spread and its knuckle tried a little either way, within its range, for the pose whose skin
+// rests on the surface (a fraction of a millimetre off, never in), nearest the pose it had; its
+// tip kept at the height it had (drop: metres; curl: how much the last joints may close), so it
+// lies straight along the side of the frame and never falls onto or into the trigger guard.
+const _tip = new THREE.Vector3();
+function lay(rig, f, p, M, field, fk, lim, drop = 0.001, curl = 0) {
+	const chain = rig.chains[f], q = p.slice();
+	const c0 = skinClear(rig, f, forward(chain, q, fk), M, field), floorY = _tip.copy(fk.seg[2].b).applyMatrix4(M).y - drop;
+	if (c0 == null || field.triangles === 0 || (c0 > -0.0003 && c0 < 0.0009)) return p;
+	let best = null, bs = Infinity;
+	for (let a = -0.3; a <= 0.3001; a += 0.05) for (let b = -0.3; b <= 0.3001; b += 0.05) for (let m = 0; m <= curl + 1e-4; m += 0.1) {
+		q[0] = clamp(p[0] + a, lim[0][0], lim[0][1]); q[1] = clamp(p[1] + b, lim[1][0], lim[1][1]); q[2] = clamp(p[2] + m, lim[2][0], lim[2][1]); q[3] = clamp(p[3] + m * 0.5, lim[3][0], lim[3][1]);
+		const c = skinClear(rig, f, forward(chain, q, fk), M, field);
+		if (c == null || c < -0.0003 || _tip.copy(fk.seg[2].b).applyMatrix4(M).y < floorY) continue;
+		const sc = Math.abs(c - 0.0003) * 1000 + (Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]) + Math.abs(q[2] - p[2])) * 0.8;
+		if (sc < bs) { bs = sc; best = q.slice(); }
+	}
+	if (!best || bs >= Math.abs(c0 - 0.0003) * 1000) return p;
+	best.miss = p.miss;
+	return best;
 }
 
 // A hand's pose on an item. frame: the palm's frame in the field's space (HOLDS' m); specs: one
@@ -468,7 +491,9 @@ export function solveHand(rig, field, frame, specs, { fit = true, firm = false }
 			if (spec.mode === 'fixed') p = spec.params.slice();
 			else if (spec.mode === 'reach') p = reach(chain, M, Minv, field, spec, fk, rig);
 			else p = wrap(chain, M, field, spec, fk);
-			if (spec.mode !== 'fixed') p = settle(rig, f, p, M, field, fk, spec.mode === 'wrap' && p.touched);
+			// (rest: a curled finger beside the item closes on until it rests against it, if it is near)
+			if (spec.mode !== 'fixed') p = settle(rig, f, p, M, field, fk, spec.mode === 'wrap' && (p.touched || (spec.rest && 'rest')));
+			if (spec.lay && spec.mode === 'reach') p = lay(rig, f, p, M, field, fk, rangeOf(spec, f === 0));
 			params.set(p, f * 4);
 			const skin = skinClear(rig, f, forward(chain, p, fk), M, field) ?? clearance(fk, M, field);
 			report.push(+(skin * 1000).toFixed(1));

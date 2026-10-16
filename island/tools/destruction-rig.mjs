@@ -73,10 +73,10 @@ function fire(from, to, dmg = 58) {
 	if (!h || h.none) return null;
 	const p = o.clone().addScaledVector(d, h.t);
 	const r = S.hit(p, d, h, dmg, 'ballistic');
-	out = { t: +h.t.toFixed(2), wall: !!h.wall, glass: !!h.glass, through: r?.through ? +r.dmg.toFixed(1) : 0 };
+	out = { t: +h.t.toFixed(2), wall: !!h.wallHit, glass: !!h.glass, through: r?.through ? +r.dmg.toFixed(1) : 0 };
 	if (r?.through) {
 		const q = p.clone().addScaledVector(d, 0.05), h2 = S.ray(q, d, 60);
-		if (h2 && !h2.none) { S.hit(q.clone().addScaledVector(d, h2.t), d, h2, r.dmg, 'ballistic'); out.next = { t: +h2.t.toFixed(2), wall: !!h2.wall }; }
+		if (h2 && !h2.none) { S.hit(q.clone().addScaledVector(d, h2.t), d, h2, r.dmg, 'ballistic'); out.next = { t: +h2.t.toFixed(2), wall: !!h2.wallHit }; }
 	}
 	step(2);
 	return out;

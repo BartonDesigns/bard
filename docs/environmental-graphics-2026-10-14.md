@@ -90,9 +90,18 @@ Face kinds (`faces.js FACE_KINDS`): stop, yield, allway, speed, oneway, noentry,
 - `services/responders.js`: the livery meshes added to each responder's body.
 - `main.js`: create after the freeways, update after them, dispose with the world, `Crysis.signage`.
 
+## Follow-ups (October 15, integration)
+
+- **Shop glass.** The storefronts' display windows (`economy/storefront.js`) post their decals through `world.signage.storefront('front:' + id, biz, front, { glass })`: hours, push or pull, cards, access, alarm, the gold-leaf name, sale posters and OPEN now sit on the drawn glass itself (5 cm proud of the facade, across the glazing's own width, about the door the glazing draws), in the glass vinyl material; a workshop's roll-up doors take theirs as plain vinyl. Signage binds itself to the storefronts once the city has them (no main.js line). A shop built for real near you (bay/commercial.js) keeps its own glass, as before. `Crysis.signage().shopGlass` and `economy.storefronts.info().onGlass` count them.
+- **Grid towns.** `signage/gridstreets.js` turns bay/city.js's grid (bay/styles.js `BLOCKS`, `toGrid`, `fromGrid`) round you into named streets for `streetSigns`: numbered avenues one way, cross streets named for trees or presidents (one set a town), a boulevard every seventh line (the arterials city.js leaves), collectors every fourth. Stop signs, all-way stops, speed limits and blades follow from the same rules as the mapped city. Nothing where the real map covers the ground.
+- **Police vans.** The tactical team's van carries POLICE / TACTICAL UNIT in reflective white on both sides and the rear doors (retro sheeting: it lights in your headlights), a badge outline, and a roof number; a patrol van the same with gold (`livery` faces `swat`, `van`; slots on the van body in `signage/cars.js`).
+- **Military stencils.** `militaryStencils(kind, { side, n, grey, parked })` lays flat-paint stencils on the tank, armoured truck, jeep, cargo truck and helicopter where a ray from outside meets the vehicle's own body: MERIDIAN GUARD and the Guard's mark (a chevron under a star in a ring), bumper codes front and rear (the unit, then the company and number: HQ-11, A-12...), NO STEP; the Ironvale Legion its own word, mark and codes; dark ink on the air units' grey. Parked motor pools carry the unit's codes in one instanced set per kind (near tier only); convoys and the vehicles you drive get their own numbers. The police helicopter says HARBOUR POLICE and AIR 1.
+- **Park rules.** Each city park (the mapped ones in `nature/parks.js` and the grown towns') gets a rules board by its entrance sign (posts and a framed panel, `bay/parkkit.js rulesBoards()`), its face the `parkrules` graphic with the park's name.
+- **Aisle markers inside.** Grocers and general stores fitted out by `interiors/` hang an aisle marker over each aisle between their gondolas (`estab-fit.js` `K.sign`, `interiors.signAnchors()`), numbered from the door, two-sided.
+- Tests: `island/tools/integration.test.mjs`.
+
 ## Not yet
 
-- The procedural grid towns (bay/city.js's own streets) get shop glass, alleys, cars and freeway marks but no street signs: their streets are not in the real city's road list.
-- Military vehicles carry no stencils yet (their parked kinds are instanced in military/; `vehicleLivery` has a 'military' face ready).
 - The orbital system exists but is not yet wired into the planets' colonies.
 - Rail corridors: the baked maps carry no rail, so none are painted.
+- The grid towns' blades carry no hundred-block numbers (the grid has no addresses).

@@ -49,6 +49,10 @@ The draws include the crew (one instanced draw for every worker anywhere, was si
 - `node --test island/tools/structures-polish.test.mjs` (12 tests, the crews' seven new: vehicles near and far on the ground with turning wheels and drum, decals, glass and rubber; cranes, hooks and cables, lattice, ties and lights; the plan with pavement kept or taken, neighbours, tower crane side yard, nothing overlapping; the trucks' paths in, back and out staying on the road and stopping in place; the lift cycle and scaffold heights; the posed crew; a site in a scene with trucks on the road at the kerb, workers off the road, few draws, anchors, and its departure) and `structures-runtime.test.mjs`.
 - Stage harness renders (before and after) and headless Chromium in the game: see the pictures listed in the final report.
 
+## Patches (October 15, integration)
+
+Walls broken and nothing else (structures/walls/: a fist through the drywall, a round through a partition, a blast in a room, with the building's shell untouched) get a small visit instead of a site. The crews poll `walls.damaged()` twice a second by the clock; a quarter of a game hour after the damage the glazier's van (the same van does drywall) pulls in at the kerb with one or two of the crew, who carry board in from it (the `carry` pose, not the pane) and work at the front; half an hour to an hour later the walls are put right with `walls.repair(id)`. They wait while you are within 16 m (in the room), hold off through a catastrophe like the rest, and leave a building the full crew is coming for alone. The building is found from the walls' own sources while it is built near you. `structures.rebuild.patches`, `rebuild.info()` (rows with `patch: true`). Test: `island/tools/integration.test.mjs`.
+
 ## Left for later
 
 - The glow and floodlights are cheap stand-ins for a bloom pass; the floodlights are two for the nearest site only.
