@@ -140,7 +140,7 @@ export function createWalls(ctx) {
 	function unregister(key) {
 		const src = sources.get(key);
 		if (!src) return;
-		for (const Wl of src.walls) { decals.drop(Wl); dirty.delete(Wl); vertsNow -= Wl.verts || 0; Wl.verts = 0; }
+		for (const Wl of src.walls) { decals.drop(Wl); dirty.delete(Wl); vertsNow -= Wl.vcount || 0; Wl.vcount = 0; }
 		chips.clear(src.id);
 		sources.delete(key);
 	}
@@ -191,16 +191,38 @@ export function createWalls(ctx) {
 			a.needsUpdate = true;
 		}
 	}
+	// whatever else the builder's meshes carry for their material, given to ours the same: the
+	// houses' dissolve reads each vertex's building anchor and birth (world/lodfade.js
+	// aLodAnchor); without it a wall's faces are measured from the world's origin and vanish
+	function matchSource(src, meshes) {
+		const ref = new Map();
+		for (const m of src.root.children) if (m.isMesh && !m.userData.wallDamage && !ref.has(m.material)) ref.set(m.material, m);
+		const any = [...ref.values()][0];
+		for (const m of meshes) {
+			const r = ref.get(m.material) || any;
+			if (!r) continue;
+			const n = m.geometry.attributes.position.count;
+			for (const [name, a] of Object.entries(r.geometry.attributes)) {
+				if (m.geometry.attributes[name] || name === 'position' || name === 'normal' || name === 'uv' || name === 'color') continue;
+				const k = a.itemSize, arr = new Float32Array(n * k), first = Array.from({ length: k }, (_, q) => a.array[q]);
+				for (let i = 0; i < n; i++) for (let q = 0; q < k; q++) arr[i * k + q] = first[q];
+				m.geometry.setAttribute(name, new THREE.BufferAttribute(arr, k));
+			}
+		}
+	}
 	function showSource(Wl) {
 		for (const H of Wl.hidden || []) { const a = H.m.geometry.attributes.position; a.array.set(H.keep, H.s * 3); a.needsUpdate = true; }
 		Wl.hidden = null;
 	}
 	function rebuild(Wl) {
 		const src = Wl.src;
+		// (built first: if it cannot be, the builder's wall stays as it was)
+		let B;
+		const spent = vertsNow - (Wl.vcount || 0);
+		try { B = buildWithin((o) => { const ms = mesherNow().build(Wl, src.M, o); matchSource(src, ms); return ms; }, wallQuality(isPhone), spent); } catch (e) { console.warn('wall', e); return; }
 		hideSource(Wl);
 		for (const m of Wl.meshes) { src.root.remove(m); m.geometry.dispose(); }
-		const spent = vertsNow - (Wl.verts || 0), B = buildWithin((o) => mesherNow().build(Wl, src.M, o), wallQuality(isPhone), spent);
-		Wl.meshes = B.meshes; Wl.verts = B.verts; Wl.lvl = B.lvl; vertsNow = spent + B.verts;
+		Wl.meshes = B.meshes; Wl.vcount = B.verts; Wl.lvl = B.lvl; vertsNow = spent + B.verts;
 		for (const m of Wl.meshes) src.root.add(m);
 		collide(Wl);
 		hung(Wl);
@@ -436,8 +458,10 @@ export function createWalls(ctx) {
 
 	// a shot that met a wall (structures/index.js hit()): returns { through, dmg } or { stop }
 	function hit(h, at, dir, dmg, type) {
+		const wh = h?.wallHit || (h?.wall && typeof h.wall === 'object' ? h.wall : null);
+		if (!wh?.W) return { stop: true };
 		const kind = type === 'blast' ? 'blast' : type === 'impact' ? 'blunt' : 'ball';
-		const res = strikeWall(h.wall, dir, kind, kind === 'blast' ? dmg * 3 : dmg, kind === 'blast' ? 0.5 : 0.08);
+		const res = strikeWall(wh, dir, kind, kind === 'blast' ? dmg * 3 : dmg, kind === 'blast' ? 0.5 : 0.08);
 		if (kind === 'ball' && res.out > 0 && type !== 'fire') return { through: true, dmg: res.out, wall: true };
 		return { stop: true, wall: true, material: res.surface };
 	}
@@ -493,7 +517,7 @@ export function createWalls(ctx) {
 	function resetWall(Wl) {
 		for (const m of Wl.meshes) { Wl.src.root.remove(m); m.geometry.dispose(); }
 		Wl.meshes = [];
-		vertsNow -= Wl.verts || 0; Wl.verts = 0;
+		vertsNow -= Wl.vcount || 0; Wl.vcount = 0;
 		showSource(Wl);
 		for (const H of Wl.hung || []) { H.m.geometry.attributes.position.array.set(H.keep, H.i); H.m.geometry.attributes.position.needsUpdate = true; }
 		Wl.hung = null; Wl.throughN = 0;

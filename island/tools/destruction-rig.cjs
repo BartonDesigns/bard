@@ -66,6 +66,15 @@ function stages() {
 		view('08-stucco-burst-wide', ext, sU, 1.5, os2, 1.3, 0.4, 0.2);
 		view('09-burst-inside-blowout', ext, sU, 1.5, rs, 0.6, 0.12, 0.05);
 	}
+	if (want('edge')) {
+		// rounds near the end of a run of wall, from outside, and the wall seen whole from outside after punches inside
+		const uE = pe.u1 - 0.2, gp = at(ext, uE, 1.5, faceA(ext, os2)), nO = nrm(ext, os2), gun = { x: gp.x + nO.x * 7, y: gp.y + 0.2, z: gp.z + nO.z * 7 };
+		res.edge = [fire(gun, gp), fire(gun, at(ext, uE - 0.1, 1.7, faceA(ext, os2)))];
+		res.edgeRay = (() => { const o = new THREE.Vector3(gun.x, gun.y, gun.z), d = new THREE.Vector3(gp.x - gun.x, gp.y - gun.y, gp.z - gun.z).normalize(), h = S.walls.ray(o, d, 20); return h ? { t: +h.t.toFixed(2), key: h.wall.W.key === ext.key, pi: h.wall.pi, u: +h.wall.u.toFixed(2) } : null; })();
+		view('30-edge-outside-wide', ext, uE, 1.5, os2, 2.5, -0.6, 0.3, 60);
+		view('31-edge-outside-near', ext, uE, 1.5, os2, 0.9, -0.2, 0.1);
+		res.pe = { u0: pe.u0, u1: pe.u1, s: ext.s, e: ext.e, pieces: ext.pieces.map((p) => [+p.u0.toFixed(2), +p.u1.toFixed(2), +p.y0.toFixed(2), +p.y1.toFixed(2)]) };
+	}
 	if (want('partition') && part) {
 		const pp = pieceOf(part, 1.6, 2.3), pu = bayOf(pp.studs), n0 = nrm(part, 0), q = at(part, pu, 1.4, part.a0);
 		res.partition = [fire({ x: q.x + n0.x * 0.8, y: q.y, z: q.z + n0.z * 0.8 }, q), fire({ x: q.x + n0.x * 0.8, y: q.y, z: q.z + n0.z * 0.8 }, at(part, pu + 0.12, 1.22, part.a0))];

@@ -178,6 +178,8 @@ export function createLaw({ world, combat, military, people = () => null, servic
 			}
 			// the military only at the very top
 			if (pl.military && t - milT > 240) { milT = t; S.military++; dispatch?.event?.({ kind: 'wanted', x: at.x, z: at.z, severity: 3 }); say('Dispatch: requesting military support.', 'Harbour Police', 1); }
+			// ...and the police helicopter up over you
+			if (pl.military && dispatch?.policeAir?.(at)) S.air = (S.air || 0) + 1;
 		}
 		if (level !== lastLevel) {
 			if (level > lastLevel && level >= 2) hint(`Wanted: ${LEVELS[level]}${level >= 3 ? ' (roadblocks ahead)' : ''}${level >= 4 ? ', the tactical team is out' : ''}.`, 2500, 1);

@@ -211,3 +211,4 @@ staff posts, anchors, the regional towns, tick), `economy/establishments.js` (sh
   set-back door can leave the glazing in front of posts.
 - The far shopfront shows people as silhouettes; the real people are only in rooms built near.
 - Commuters are cast near you; nobody is followed from home to work across town.
+- Done on October 15 (integration): the display windows' hours, payment, OPEN and name decals now sit on the drawn glass in the glass vinyl material, about the drawn door (`storefront.js postGlass`, through `world.signage.storefront`), not on the wall face.

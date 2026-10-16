@@ -142,7 +142,11 @@ export function fitFront(fit, K) {
 		}
 		case 'grocer': case 'general': {
 			shelvesRound('shopShelf', 6);
-			for (let x = K.rm.x0 + 1.9; x < K.rm.x1 - 1.5; x += 2.2) { const g = st(fit === 'grocer' ? 'produce' : 'shopShelf', x, K.cz + 0.4, 0.9, Math.min(3.6, K.bd - 4), 1.2, 0, 0.7); if (g) h.lamp('track', g.x, g.z, 0.3); }
+			const runs = [];
+			for (let x = K.rm.x0 + 1.9; x < K.rm.x1 - 1.5; x += 2.2) { const g = st(fit === 'grocer' ? 'produce' : 'shopShelf', x, K.cz + 0.4, 0.9, Math.min(3.6, K.bd - 4), 1.2, 0, 0.7); if (g) { h.lamp('track', g.x, g.z, 0.3); runs.push(g); } }
+			// the aisle markers hung over the aisles between the gondolas, read from the door
+			// (signage/ draws them: K.sign leaves the place)
+			for (let k = 0; k + 1 < runs.length; k++) K.sign?.('aisle', (runs[k].x + runs[k + 1].x) / 2, K.y0 + Math.min(K.ceil - 0.55, 2.6), runs[k].z - runs[k].d * 0.3, { n: k + 1, fit, nx: 0, nz: -1 });
 			counterAt('grocer', 1.8);
 			if (fit === 'general') ag('crates', 1.0, 0.8, 0.8, { corner: true, clear: 0 });
 			browsers(3);

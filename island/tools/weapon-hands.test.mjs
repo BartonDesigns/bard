@@ -214,3 +214,18 @@ test('close-combat things: a knife and a machete beside the bat, pipe and bottle
 	assert.ok(Math.abs(MOVES.machete.dmg - MOVES.bat.dmg) <= 2 && MOVES.macheteHeavy.dmg <= MOVES.batHeavy.dmg);
 });
 const moveTimeOf = (m) => m.wind + m.active + m.recover;
+
+test('the carried index lies on the receiver, not floating off it, and stays inside its range', () => {
+	const R = fingerRig(syntheticBody(), 'R');
+	for (const id of ['aurora-trail-rifle', 'warden-spark-carbine', 'mossback-scout-rifle']) {
+		const model = itemModel(id, { view: true, lod: 'high' }), H = HOLDS[id], parts = itemParts(model, ['body', 'charger', 'cell']);
+		const field = contactField(parts, new THREE.Box3().setFromCenterAndSize(new THREE.Vector3().setFromMatrixPosition(H.R.m), new THREE.Vector3(0.26, 0.26, 0.26)));
+		const spec = GRIPS[id].R.ready;
+		assert.ok(spec[1].lay, id);
+		const out = solveHand(R, field, H.R.m, spec, {});
+		const free = solveHand(R, field, H.R.m, spec.map((s, i) => (i === 1 ? { ...s, lay: false } : s)), {});
+		assert.ok(out.clearanceMm[1] > -0.6 && out.clearanceMm[1] < 2, `${id} index ${out.clearanceMm[1]} mm off the receiver`);
+		assert.ok(out.clearanceMm[1] <= free.clearanceMm[1] + 1e-6);
+		inRange(out.params, `${id} ready`);
+	}
+});

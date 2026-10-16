@@ -912,7 +912,7 @@ export const holdOf = (id) => HOLDS[id] || HOLDS['field-medkit'];
 // joint) to a point; 'fixed' gives its four numbers. Points are in item space, or the cell's own
 // for 'cell' and the charging knob's for 'charge'. The strong hand's index lies straight along
 // the frame above the guard (ready) unless it is on the trigger (trigger).
-const WRAP = { mode: 'wrap' }, LOOSE = { mode: 'wrap', relax: 0.08, free: 0.55 }, CURL = { mode: 'wrap', relax: 0.03, free: 0.85 };
+const WRAP = { mode: 'wrap' }, LOOSE = { mode: 'wrap', relax: 0.08, free: 0.55 }, CURL = { mode: 'wrap', relax: 0.03, free: 0.85 }, REST = { ...CURL, relax: 0, rest: true };
 const pad = (p, o = {}) => ({ mode: 'reach', target: v3(...p), ...o });
 const fixed = (...params) => ({ mode: 'fixed', params });
 function rifleFingers({ trigger, ready, thumb, support, cellThumb = [-0.004, 0.062, -0.0175] }) {
@@ -922,13 +922,14 @@ function rifleFingers({ trigger, ready, thumb, support, cellThumb = [-0.004, 0.0
 	const T = pad(thumb, { natural: [1, 0.4, -0.05, 0.5], soft: 0.0025, press: 300 });
 	return {
 		R: {
-			ready: [T, pad(ready, { natural: [0, 0, 0.08, 0.04], along: 0.5, ahead: 0.086, limits: [[-0.8, 0.8], [-0.8, 0.6], [0, 0.6], [0, 0.4]] }), WRAP, WRAP, WRAP],
+			ready: [T, pad(ready, { natural: [0, 0, 0.08, 0.04], along: 0.5, ahead: 0.086, lay: true, limits: [[-0.8, 0.8], [-0.8, 0.6], [0, 0.6], [0, 0.4]] }), WRAP, WRAP, WRAP],
 			trigger: [T, pad(trigger, { natural: [0, 0.55, 0.85, 0.35] }), WRAP, WRAP, WRAP],
 		},
 		L: {
 			fore: [pad(support, { natural: [0.3, 0.2, 0.15, 0.1], soft: 0.0005 }), WRAP, WRAP, WRAP, WRAP],
 			cell: [pad(cellThumb, { natural: [0.3, 0.3, 0.2, 0.1], soft: 0.0005 }), WRAP, WRAP, WRAP, WRAP],
-			charge: [pad([-0.0095, 0.0, -0.012], { natural: [0.3, 0.4, 0.3, 0.2], soft: 0.0005 }), pad([0.0085, 0.001, -0.012], { natural: [0, 0.6, 0.9, 0.4] }), CURL, CURL, CURL],
+			// (the ring and little fingers curled against the receiver beside the knob, not in the air)
+			charge: [pad([-0.0095, 0.0, -0.012], { natural: [0.3, 0.4, 0.3, 0.2], soft: 0.0005 }), pad([0.0085, 0.001, -0.012], { natural: [0, 0.6, 0.9, 0.4] }), CURL, REST, REST],
 			open: [fixed(0.25, 0.15, 0.1, 0.05), fixed(0.02, 0.12, 0.15, 0.08), fixed(0, 0.14, 0.18, 0.1), fixed(-0.03, 0.16, 0.2, 0.1), fixed(-0.07, 0.2, 0.22, 0.12)],
 		},
 	};

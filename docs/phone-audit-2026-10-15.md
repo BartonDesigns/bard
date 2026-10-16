@@ -65,7 +65,7 @@ The glazed fronts, fascias, awnings and the pavement's furniture take `frontShar
 
 ### The cars' decal sheet (`signage/cars.js`)
 
-The pools (plates, stickers, permits, liveries) fill 54% of a phone's 1024 x 1024 sheet. A phone's sheet is now 1024 x 640 (`CAR_ATLAS`), which every locale's pools fill without a repack: 1.5 MB less on the graphics with its mipmaps, and 1.5 MB less canvas. The region's sign sheet was left as it is: downtown it reaches 90% of a phone's 1024 square.
+The pools (plates, stickers, permits, liveries) fill 54% of a phone's 1024 x 1024 sheet. A phone's sheet is now 1024 x 768 (`CAR_ATLAS`; 640 until the police vans' livery and the military stencils joined the pools), which every locale's pools fill without a repack: about 1.1 MB less on the graphics with its mipmaps, and about 1 MB less canvas. The region's sign sheet was left as it is: downtown it reaches 90% of a phone's 1024 square.
 
 ### Everyone's clothes on phones (`people/garment.js`, one marked line)
 
