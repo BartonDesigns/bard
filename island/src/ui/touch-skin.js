@@ -248,7 +248,7 @@ ${S} .l99-pad>[data-pedal="back"]{${L1}}
 ${S} [data-field-contract].cv-idle{padding:0!important;border:0!important;background:none!important;box-shadow:none!important;width:auto!important;overflow:visible!important;}
 ${S} [data-field-contract].cv-idle [data-skin]{flex:none!important;}
 
-${S}.l99-c-fish .mc-btn,${S}.l99-c-drive :is(.mc-btn,.cb-btn,[aria-label="Jump"]){display:none!important;}
+${S}.l99-c-fish :is(.mc-btn,.cb-btn,[aria-label="Aim"],[aria-label="Aim held item"]),${S}.l99-c-drive :is(.mc-btn,.cb-btn,[aria-label="Jump"]){display:none!important;}
 ${S}.l99-tools-open :is([data-skin],.l99-pad){visibility:hidden;}
 ${S}.l99-tools-open :is(.l99-quick,.l99-rail) [data-skin],${S}.l99-tools-open>[aria-label^="Back to the Bard"],${S}.l99-tools-open>[aria-label^="Sky and world"],${S}.l99-tools-open>[aria-label^="Auto music"]{visibility:visible;}
 `;

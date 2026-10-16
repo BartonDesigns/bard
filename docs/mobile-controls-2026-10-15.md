@@ -29,7 +29,8 @@ its own buttons and keeps its own bindings.
   where there was none, for the desktop tooltip.
 - Context: a quarter-second check sets `l99-c-drive` (the pedals are showing) and `l99-c-fish`
   (the cast button is showing) on the mount, so the CSS can hide what does not apply (no fists
-  while fishing, no fists, weapon buttons or jump while driving).
+  or weapon buttons while the rod is out, since the cast takes the primary place; no fists, weapon
+  buttons or jump while driving). Put the rod away (the rod button) to shoot again.
 - `firstTime(key)` shows a tip once per device (once per visit when storage is blocked). The
   control tips on a phone now use it: moving and looking, boarding the boat, driving (per mode),
   each military vehicle, and "water here" for the rod.
