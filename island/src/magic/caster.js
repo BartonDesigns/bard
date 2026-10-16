@@ -24,7 +24,7 @@
 // shrug off the rest.
 
 import * as THREE from 'three';
-import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, strandOf } from './spells.js';
+import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf } from './spells.js';
 import { GLOW, magicSound } from './fx.js';
 
 const EYE = 1.68;
@@ -32,7 +32,9 @@ const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3
 const typeOf = (t) => (t === 'fire' ? 'fire' : 'energy');
 const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 'boss') && !T.surrendered;
 
-export function createCaster({ camera, combat, player, state, fx, light, hint, sky, worldKey, seed, isPhone = false }) {
+// track(kind, ...): what you do, for your skills (magic/skills.js): ('cast', spell, mana paid),
+// ('hurt', harm taken)
+export function createCaster({ camera, combat, player, state, fx, light, hint, sky, worldKey, seed, isPhone = false, track = () => {} }) {
 	const P = () => player()?.state;
 	const now = () => performance.now() / 1000;
 	const bolts = [], effects = [], shades = [], knocks = [], hexed = new Map(), held = new Map();
@@ -362,9 +364,12 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		const why = castBlock(state, id, t);
 		if (why) { hint(why, 1400); magicSound('fizzle', 0.06); return false; }
 		const k = spellPower(state, spell, { light: light(), pact: buff.pactUntil > t ? buff.pactK || 1.5 : 1 });
-		const out = DO[spell.kind]?.(spell, k, o);
+		// (the perks you hold shape it: longer, wider, further: magic/skills.js)
+		const out = DO[spell.kind]?.(shaped(spell, state.mods), k, o);
 		if (out === 'refund') return false;
+		const paid = manaCost(state, spell);
 		spend(state, id, t, buff.quickUntil > t ? 3 : 1);
+		track('cast', spell, out === 'off' ? 0 : out === 'cheap' ? paid * 0.25 : paid);
 		// (marking costs little; letting a light go costs nothing)
 		if (out === 'cheap' || out === 'off') { state.mana += Math.round(spell.mana * (out === 'off' ? 1 : 0.75)); state.cds[id] = t + 1; }
 		// (any harm you do shows you: the cloak is gone)
@@ -460,7 +465,9 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		if (p) {
 			let sk = 1, jk = 1, fk = 1, ww = false;
 			for (const m of buff.moves) { sk = Math.max(sk, m.speedK); jk = Math.max(jk, m.jumpK); fk = Math.min(fk, m.fallK); ww = ww || m.waterWalk; }
-			p.speedK = sk; p.jumpK = jk; p.fallK = fk; p.waterWalk = ww;
+			// (and the body's perks, at all times)
+			const M = state.mods;
+			p.speedK = sk * (1 + (M?.speed || 0)); p.jumpK = jk * (1 + (M?.jump || 0)); p.fallK = fk * (1 - (M?.fall || 0)); p.waterWalk = ww;
 		}
 		// (quickened: every cooldown runs three times as fast)
 		if (buff.quickUntil > t) for (const id of Object.keys(state.cds)) state.cds[id] -= dt * 2;
@@ -491,6 +498,9 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 	function shieldBlow(blow) {
 		if (blow.pact) return blow;
 		const t = now();
+		// (the perks that harden you, and the harm taken teaching you)
+		if (state.mods?.armor) blow = { ...blow, amount: blow.amount * (1 - state.mods.armor) };
+		track('hurt', blow.amount);
 		if (buff.shield > 0 && buff.shieldUntil > t) {
 			const take = Math.min(buff.shield, blow.amount);
 			buff.shield -= take;
@@ -523,6 +533,8 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		regenT -= dt;
 		if (regenT <= 0) { regenT = 0.5; fighting = !!combat.squads?.alive?.().some((h) => h.alert && h.target?.id === 'me'); }
 		state.mana = Math.min(manaMax(state), state.mana + manaRegen(state, fighting) * dt);
+		// (wounds close out of a fight, with the perks for it)
+		if (state.mods?.hpRegen && !fighting) combat.mend(state.mods.hpRegen * dt);
 		// (where you were, for a rewind)
 		histT -= dt;
 		const p = P();

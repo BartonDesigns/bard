@@ -151,8 +151,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// booked() (true: downed is an arrest, and where you come to), death(h), ambient(zone, spot,
 	// roll) (true when it made the world's own trouble itself) and campOk(camp)
 	// (magic/: shield takes a blow aimed at you and returns what gets through, or null; cloak
-	// says whether you are hidden from those hunting you)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null };
+	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
+	// weapons deal, for your skills)
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -311,6 +312,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	function deal(T, blow, mine) {
 		if (warded(T)) return { ward: true, dealt: 0 };
 		if (!canHit(T, blow.by || null, rules)) return { ignored: true, dealt: 0 };
+		// (your weapons' blows, as your skills shape them: magic/skills.js)
+		if (mine && !blow.spell && hooks.power) blow = hooks.power(T, blow) || blow;
 		const before = T.moral?.();
 		let r;
 		if (T.shared && !host()) { net.hit(T.id, blow); r = { dealt: blow.amount, remote: true }; }
