@@ -100,19 +100,20 @@ const fill = (t, a) => t.replace('{target}', a.target || 'someone').replace('{pl
 // a ledger: the player's own axes, each world's, the log and the places that remember.
 // store: { get(key), set(key, value) }; now() for the times
 export function createMorality({ store = null, now = () => Date.now(), key = 'l99-morality' } = {}) {
-	let S = { me: blank(), worlds: {}, log: [], places: {} };
-	try { const raw = store?.get(key); if (raw) { const o = typeof raw === 'string' ? JSON.parse(raw) : raw; if (o?.me) S = { me: { ...blank(), ...o.me }, worlds: o.worlds || {}, log: Array.isArray(o.log) ? o.log.slice(-200) : [], places: o.places || {} }; } } catch { /* a fresh ledger */ }
+	let S = { me: blank(), worlds: {}, log: [], places: {}, epoch: 0, cleansedAt: 0, lifetime: 0 };
+	try { const raw = store?.get(key); if (raw) { const o = typeof raw === 'string' ? JSON.parse(raw) : raw; if (o?.me) S = { ...S, me: { ...blank(), ...o.me }, worlds: o.worlds || {}, log: Array.isArray(o.log) ? o.log.slice(-200) : [], places: o.places || {}, epoch: o.epoch || 0, cleansedAt: o.cleansedAt || 0, lifetime: o.lifetime || o.me.deeds || 0 }; } } catch { /* a fresh ledger */ }
 	const listeners = [];
 	const save = () => { try { store?.set(key, JSON.stringify(S)); } catch { /* private mode */ } };
 
 	// a deed: { kind, target, faction, place, world, ctx: { selfDefence, witnessed, ... } }
 	function record(d) {
+		if (d.id && S.log.some(e => e.id === d.id)) return null;
 		const s = score(d.kind, d.ctx || {});
 		if (!s) return null;
 		const w = (S.worlds[d.world || 'here'] ||= blank());
 		for (const a of AXES) { S.me[a] = clampAxis(S.me[a] + s[a]); w[a] = clampAxis(w[a] + s[a] * 0.5); }
-		S.me.deeds++; w.deeds++;
-		const e = { t: now(), kind: d.kind, line: fill(RULES[d.kind].line, d), target: d.target || '', faction: d.faction || '', place: d.place || '', world: d.world || 'here', region: d.region || '', ctx: Object.keys(d.ctx || {}).filter((k) => d.ctx[k]), delta: s };
+		S.me.deeds++; w.deeds++; S.lifetime++;
+		const e = { id: d.id || globalThis.crypto?.randomUUID?.() || `${now()}-${Math.random().toString(36).slice(2)}`, epoch: S.epoch, t: now(), kind: d.kind, line: fill(RULES[d.kind].line, d), target: d.target || '', faction: d.faction || '', place: d.place || '', world: d.world || 'here', region: d.region || '', ctx: Object.keys(d.ctx || {}).filter((k) => d.ctx[k]), delta: s };
 		S.log.push(e);
 		if (S.log.length > 200) S.log.shift();
 		if (d.place) { const P = (S.places[d.place] ||= { good: 0, harm: 0, last: '' }); const sum = s.mercy + s.protect; if (sum >= 0) P.good += sum; else P.harm -= sum; P.last = e.line; }
@@ -133,7 +134,7 @@ export function createMorality({ store = null, now = () => Date.now(), key = 'l9
 		const bounty = m.law < -60 || m.protect < -60 ? 3 : m.law < -35 || m.protect < -35 ? 2 : m.law < -15 ? 1 : 0;
 		const greet = rep > 30 ? ['Good to see you.', 'You are welcome here, always.', 'They say you stood up for the village.'] : rep < -30 ? ['Keep walking.', 'We know what you did.', 'Stay away from my family.'] : ['Morning.', 'Safe travels.', 'Watch yourself out there.'];
 		const priceK = Math.max(0.85, Math.min(1.35, 1 - rep / 300 + (bounty ? 0.05 * bounty : 0)));
-		const best = S.log.slice(-40).sort((a, b) => Math.abs(b.delta.protect + b.delta.mercy) - Math.abs(a.delta.protect + a.delta.mercy))[0];
+		const best = S.log.filter(e => (e.epoch || 0) === S.epoch).slice(-40).sort((a, b) => Math.abs(b.delta.protect + b.delta.mercy) - Math.abs(a.delta.protect + a.delta.mercy))[0];
 		const song = best ? `They sing of you in the taverns now: "${best.line.toLowerCase()}, and never looked back."` : '';
 		const graffiti = m.law < -25 ? `${title()} WAS HERE` : m.protect > 25 ? `THANK YOU, ${title().toUpperCase()}` : '';
 		return { title: title(), reputation: Math.round(rep), bounty, greet, priceK: Math.round(priceK * 100) / 100, song, graffiti };
@@ -150,8 +151,14 @@ export function createMorality({ store = null, now = () => Date.now(), key = 'l9
 		record, score, title, reactions, remembers,
 		on: (f) => { listeners.push(f); return () => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }; },
 		me: () => ({ ...S.me }), world: (w = 'here') => ({ ...(S.worlds[w] || blank()) }), log: (n = 20) => S.log.slice(-n),
-		info: (w) => ({ me: { ...S.me }, world: { ...(S.worlds[w || 'here'] || blank()) }, title: title(), reactions: reactions(), recent: S.log.slice(-8).map((e) => e.line), places: Object.keys(S.places).length }),
-		reset() { S = { me: blank(), worlds: {}, log: [], places: {} }; save(); },
+		info: (w) => ({ me: { ...S.me }, world: { ...(S.worlds[w || 'here'] || blank()) }, title: title(), reactions: reactions(), recent: S.log.slice(-8).map((e) => e.line), places: Object.keys(S.places).length, epoch: S.epoch, cleansedAt: S.cleansedAt, lifetime: S.lifetime }),
+		snapshot: () => JSON.parse(JSON.stringify(S)),
+		restore(snapshot) { if (!snapshot?.me) return false; S = JSON.parse(JSON.stringify(snapshot)); S.epoch ||= 0; S.cleansedAt ||= 0; S.lifetime ||= S.me.deeds || 0; save(); return true; },
+		cleanse(receipt) {
+			if (!Number.isSafeInteger(receipt?.epoch) || receipt.epoch !== S.epoch + 1 || !Number.isFinite(receipt.at)) return false;
+			S = { ...S, me: blank(), worlds: {}, places: {}, epoch: receipt.epoch, cleansedAt: receipt.at };
+			save(); return true;
+		},
 	};
 }
 

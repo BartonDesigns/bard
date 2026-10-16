@@ -17,6 +17,7 @@
 // crossing. Each is recorded on the morality compass (combat/morality.js) when it is there.
 
 import * as THREE from 'three';
+import { createHouseholdMemory } from './household-memory.js';
 import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
 import { peopleCap } from '../world/governor.js';
 import { createMotion } from './motion.js';
@@ -154,6 +155,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		try { localStorage.setItem('l99-family-life-v1', JSON.stringify(saved)); } catch { /* private mode */ }
 	}
 	const areas = new Map();
+	const identities = createHouseholdMemory();
 	const pending = [];                       // food deeds the compass does not know yet
 	const banks = new Map(), gardens = new Map();
 	let day = today().getDay(), lastH = null, scanT = 0, adoptT = 0, bellT = -1, guardT = 0, guarded = -1;
@@ -241,7 +243,14 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			if (p.P.home) { manner(p); continue; }
 			const d = p.P.dna, a = areaAt(p.M.S.pos.x, p.M.S.pos.z), plans = plansOf(a);
 			let best = null;
-			for (const hh of a.households) {
+			const identity = 'npc:' + (d.seed >>> 0), remembered = identities.recall(scope(), identity);
+			if (remembered) {
+				let hh = a.households.find(h => h.id === remembered.household.id);
+				if (!hh) { hh = remembered.household; foodFor(hh, a.place, { access: a.desert ? ACCESS['food-desert'] : undefined }); a.households.push(hh); }
+				const member = hh.members.find(m => m.id === remembered.memberId);
+				if (member) best = [hh, member];
+			}
+			for (const hh of best ? [] : a.households) {
 				if (hh.taken >= hh.members.length) continue;
 				for (const m of hh.members) {
 					if (m.embodied || m.male !== d.male || (m.age < 18) !== (d.age < 18) || Math.abs(m.age - d.age) > 5) continue;
@@ -263,6 +272,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			const [hh, m] = best;
 			m.embodied = true; hh.taken = (hh.taken || 0) + 1;
 			p.P.home = { household: hh, member: m, area: a.key };
+			identities.remember(scope(), identity, hh, m);
 			// how they are shows in their step
 			manner(p);
 			if (p.persona) p.persona = null;

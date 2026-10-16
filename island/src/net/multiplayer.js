@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { roomsURL } from './config.js';
+import { SOUL_FEATURE } from '../reputation/sanctuary.js';
 import { createRoomClient } from './client.js';
 import { createRemotes } from './remotes.js';
 import { followStep, besideOf, BREAK_S } from './follow.js';
@@ -70,12 +71,15 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	// beside each friend
 	let gear = null;
 	// the fight (combat/combat.js): shots, hits and the host's word pass to it
-	let combat = null;
+	let combat = null, soul = null, soulSupported = false;
+	const standings = new Map();
+	function refreshSoul() { if (soulSupported && room.status === 'on') room.send({ t: 'soul-refresh' }); }
 
 	// ---------- what the room says ----------
 	function heard(t, v) {
-		if(t==='welcome')reputation.reset(v);
-		else if(t==='closed' || (t==='status' && v.status!=='on'))reputation.reset();
+		if(t==='welcome') { reputation.reset(v); standings.clear(); soulSupported = v.features?.includes(SOUL_FEATURE); if (soulSupported && soul) room.send({ t: 'soul-bind', key: soul.credentials() }); }
+		else if(t==='standing') { standings.set(v.actor, v); reputation.cleanse(v.actor,v.standing.cleansedAt); return; }
+		else if(t==='closed' || (t==='status' && v.status!=='on')) { reputation.reset(); standings.clear(); soulSupported = false; }
 		else if(t==='reputation-snapshot'){for(const e of v)reputation.receive(e);return;}
 		else if(t==='reputation' && !reputation.receive(v.e))return;
 		try { gear?.heard(t, v); } catch (e) { console.warn('[room] gear', e); }
@@ -92,6 +96,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		} else if (t === 'join') { remotes.add(v); hint(`${v.name} joined.`, 2500, 1); drawPanel(); chipDraw(); }
 		else if (t === 'leave') {
 			const r = remotes.list.get(v.id);
+			standings.delete(v.id);
 			if (r) hint(`${r.name} left.`, 2500, 1);
 			if (following === v.id) unfollow(`${r?.name || 'Your friend'} left, so you stopped following.`);
 			remotes.remove(v.id); drawPanel(); chipDraw();
@@ -455,6 +460,12 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		link: (g) => { gear = g; drawPanel(); }, send: (m) => room.send(m), me: () => id, status: () => room.status,
 		linkCombat: (c) => { combat = c; }, isHost: () => room.isHost(), live: () => room.status === 'on',
 		reportIncident, reportQuest,
+		cleanseTimes: () => Object.fromEntries([...standings].map(([actor,v]) => [actor,v.standing.cleansedAt || 0])),
+		linkSoul: s => { soul = s; if (soulSupported && room.status === 'on') room.send({ t: 'soul-bind', key: soul.credentials() }); }, refreshSoul,
+		nearbyStanding: p => {
+			const at = p?.M?.S?.pos; if (!at) return [];
+			return [...standings.values()].filter(v => { const r = remotes.list.get(v.actor); return v.actor !== id && r?.at && r.d < Infinity && Math.hypot(r.at[0] - at.x, r.at[2] - at.z) < 80 && Math.abs(r.at[1] - at.y - 1.68) < 3; }).map(v => ({ name: v.name, reputation: v.standing.reputation, deeds: v.standing.deeds }));
+		},
 		reputationContext: p => {const at=p?.M?.S?.pos;return reputation.context(at?reputationPoint({x:at.x,y:at.y+.85,z:at.z}):null,npcMemoryKey(p));},
 		reputationPosition: e => {if(e.w!==worldKey())return null; const q=e.w==='earth'?toXZ(...e.g):{x:e.p[0],z:e.p[2]};return {...q,y:e.p[1]};},
 		reputationInfo: () => reputation.info(),

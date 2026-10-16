@@ -18,7 +18,7 @@ import { Ledger } from './ledger.js';
 import { placeOf, citiesByPop, requestFor } from './place.js';
 import { settings, worstCase, talkSettings, ask } from './ai.js';
 import { npcOf, talkSystem } from './talk.js';
-import { planningOf, planningSystem, planningReply, PLANNING_KINDS } from './planning.js';
+import { planningOf, planningSystem, planningReply, PLANNING_KINDS, PLANNING_FEATURES } from './planning.js';
 
 export { BriefStore, Ledger };
 
@@ -97,7 +97,7 @@ export async function handle(request, env) {
 
 	if (request.method === 'GET' && url.pathname === '/status') {
 		const r = await ledger(env).fetch('https://ledger/state');
-		return reply({ ...await r.json(), planning: PLANNING_KINDS }, 200, H, { 'cache-control': 'no-store' });
+		return reply({ ...await r.json(), planning: PLANNING_KINDS, features: PLANNING_FEATURES }, 200, H, { 'cache-control': 'no-store' });
 	}
 	return reply({ error: 'not found' }, 404, H);
 }

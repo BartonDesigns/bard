@@ -24,7 +24,7 @@ export function questContext(input = {}) {
 }
 
 export function questPrompt(context) {
-	return `You propose one short, engaging quest inside a playable world. Return ONLY JSON: {"title":"...","premise":"...","steps":[{"type":"visit","targetId":"exact supplied ID"},{"type":"talk","npcId":"exact supplied ID"}]}. Use 2–4 ordered steps, including at least one visit, return, or scout before any final conversation. Supported types: visit or return (targetId), talk (npcId), scout (targetId AND npcId, only a target with scoutable:true). Use supplied IDs only, on this body. A scout objective requires asking that actual NPC to scout the actual place and waiting for a completed report; never invent an automatic dispatch. Prefer a short local story with an intriguing question, an observation at a real place, then a conversation with a real resident. Draw stakes from supplied facts or the resident's stated curiosity, not invented disasters. Vary the route and purpose from previous quests. The player must explicitly accept. No combat, items, deliveries, rewards, unlocks, fabricated discoveries, new NPCs, or claims of world changes. The premise is a motivation, not an assertion that objectives happened. Only game evidence completes steps. Do not include extra fields. Context: ${JSON.stringify(context)}`;
+	return `You propose one short, engaging quest inside a playable world. Return ONLY JSON: {"title":"...","premise":"...","steps":[{"type":"visit","targetId":"exact supplied ID"},{"type":"talk","npcId":"exact supplied ID"}]}. Use 2–4 ordered steps, including at least one visit, return, or scout before any final conversation. Supported types: visit or return (targetId), talk (npcId), scout (targetId AND npcId, only a target with scoutable:true). Use supplied IDs only, on this body. A scout objective requires asking that actual NPC to scout the actual place and waiting for a completed report; never invent an automatic dispatch. Prefer a short local story with an intriguing question, an observation at a real place, then a conversation with a real resident. Draw stakes from supplied facts or the resident's stated curiosity, not invented disasters. Use the supplied arc goal, previous outcome and relationship as continuity. Give the resident a concrete personal reason to care, leave room for disagreement, and do not repeat an earlier introduction. Vary the route and purpose from previous quests. The player must explicitly accept. No combat, items, deliveries, rewards, unlocks, fabricated discoveries, new NPCs, or claims of world changes. The premise is a motivation, not an assertion that objectives happened. Only game evidence completes steps. Do not include extra fields. Context: ${JSON.stringify(context)}`;
 }
 
 export function validateQuestPlan(raw, supplied) {
@@ -66,6 +66,7 @@ function validSave(data) {
 		ids.add(q.id);
 		if (q.reward && (q.reward.credits !== storyReward(q).credits || Object.keys(q.reward).some(k=>k!=='credits'))) return false;
 		if (q.rewardPaid !== undefined && typeof q.rewardPaid !== 'boolean') return false;
+		if (q.chapter !== undefined && (!Number.isInteger(q.chapter) || q.chapter < 1 || q.chapter > 3)) return false;
 		if (q.offeredBy !== undefined && q.offeredBy !== null && !identifier(q.offeredBy)) return false;
 		if (q.status === 'active' && (q.cursor >= q.steps.length || !Number.isFinite(q.acceptedAt)) || q.status === 'offered' && (q.cursor !== 0 || q.acceptedAt !== null) || q.status === 'complete' && (q.cursor !== q.steps.length || !Number.isFinite(q.finishedAt) || !Number.isFinite(q.acceptedAt))) return false;
 		if (!Array.isArray(q.evidence) || q.evidence.length > 16 || q.evidence.some(e => !e || typeof e !== 'object' || !['presence', 'talk', 'scout'].includes(e.type) || !Number.isFinite(e.at))) return false;
@@ -98,14 +99,18 @@ export function createStoryQuests({ storage, now = Date.now } = {}) {
 		const plan = validated.plan, fingerprint = signature(plan);
 		if (data.seen.includes(fingerprint) || data.quests.some(q => signature(q) === fingerprint)) return fail('That route is already in your journal. Ask for a different adventure.');
 		if (data.quests.filter(q => q.status === 'offered').length >= 3) return fail('Accept or decline an existing quest before adding another offer.');
+		const offeredBy = questContext(input).speaker;
+		const chapter = Number.isInteger(input?.arc?.chapter) && input.arc.chapter >= 1 && input.arc.chapter <= 3 && offeredBy ? input.arc.chapter : null;
+		if (chapter && (plan.steps.at(-1).type !== 'talk' || plan.steps.at(-1).npcId !== offeredBy)) return fail('This chapter needs a report back to the person who asked.');
 		if (data.quests.length >= 24) {
 			const index = data.quests.findIndex(q => q.status === 'complete' || q.status === 'cancelled');
 			if (index < 0) return fail('Your quest journal is full.');
 			data.quests.splice(index, 1);
 		}
-		const offeredBy = questContext(input).speaker;
+
 		const quest = { ...plan, offeredBy, id: `story-${hash(fingerprint)}-${++data.sequence}`, status: 'offered', cursor: 0, offeredAt: now(), acceptedAt: null, finishedAt: null, evidence: [] };
-		quest.reward=storyReward(quest); quest.rewardPaid=false;
+		if (chapter) quest.chapter = chapter;
+		else { quest.reward=storyReward(quest); quest.rewardPaid=false; }
 		data.quests.push(quest); data.seen.push(fingerprint); data.seen = data.seen.slice(-256); save();
 		return { ok: true, quest: copy(quest) };
 	}
@@ -146,7 +151,7 @@ export function createStoryQuests({ storage, now = Date.now } = {}) {
 		if (e.type === 'scout' && (!e.taskId || e.status !== 'completed' || !Number.isFinite(e.completedAt))) return [];
 		const changed = [];
 		for (const q of data.quests) {
-			if (q.status !== 'active' || q.bodyKey !== e.bodyKey || q.evidence.some(prior => prior.id === e.id)) continue;
+			if (q.status !== 'active' || q.bodyKey !== e.bodyKey || e.questId && q.id !== e.questId || q.evidence.some(prior => prior.id === e.id)) continue;
 			const s = q.steps[q.cursor];
 			if (s.type !== e.type || s.npcId !== e.npcId) continue;
 			if (s.type === 'scout' && (s.targetId !== e.targetId || e.completedAt < (q.cursor ? q.steps[q.cursor - 1].completedAt : q.acceptedAt) || q.evidence.some(prior => prior.taskId === e.taskId))) continue;
@@ -180,7 +185,7 @@ export function fallbackQuest(input, { npcId, position } = {}) {
 	const home = npc && ctx.targets.find(t => t.id === `home:${npc.id}`);
 	for (let offset = 0; offset < stops.length; offset++) {
 		const first = stops[(prior.length + offset) % stops.length];
-		const second = stops.find(t => t.id !== first.id && Math.hypot(t.x - first.x, t.z - first.z) > Math.max(t.radius, first.radius) * 2 && Math.hypot(t.x - first.x, t.z - first.z) < 2000);
+		const second = input?.arc?.chapter===3 ? null : stops.find(t => t.id !== first.id && Math.hypot(t.x - first.x, t.z - first.z) > Math.max(t.radius, first.radius) * 2 && Math.hypot(t.x - first.x, t.z - first.z) < 2000);
 		const steps = [{ type: 'visit', targetId: first.id }];
 		if (second) steps.push({ type: 'visit', targetId: second.id });
 		if (home && steps.length < 3) steps.push({ type: 'return', targetId: home.id });
@@ -192,7 +197,10 @@ export function fallbackQuest(input, { npcId, position } = {}) {
 			{ title: `Two sides of this place`, purpose: `Look closely at ${first.name}${second ? `, then compare it with ${second.name}` : ''}. ${first.fact ? `Your starting clue: ${first.fact}. ` : ''}${npc ? `Return with a question for ${npc.name}, rather than a perfect answer.` : 'Keep one detail from each stop in mind.'}` },
 		];
 		const theme = first.id.startsWith('workplace:') ? {title:`Site check: ${first.name}`,purpose:`${npc?.name || 'The floor team'} needs a second pair of eyes at ${first.name}${second ? ' and '+second.name : ''}. Visit the marked stations, then return and report in person. ${first.fact || ''}`} : themes[(prior.length + offset) % themes.length];
-		const plan = { title: theme.title, premise: theme.purpose, steps };
+		const arc = input?.arc;
+		const title = arc ? `${['A place worth knowing', 'Who is this route for?', 'A promise with roots'][arc.chapter-1]}: ${first.name}` : theme.title;
+		const premise = arc ? `${arc.previous ? `After “${arc.previous}”, ` : ''}${npc?.name || 'Your companion'} wants to ${arc.chapter===1 ? 'find a place worth sharing with someone new' : arc.chapter===2 ? 'decide whether to mark your route or leave it quiet' : 'follow through on the route you chose together'}. Visit ${first.name}${second ? ' and '+second.name : ''}, then bring back your own impression.${arc.outcome ? ' Your previous choice: '+(arc.outcome==='marked'?'a marked route.':'a quiet route.') : ''}` : theme.purpose;
+		const plan = { title, premise, steps };
 		if (prior.some(q => JSON.stringify(q.steps.map(s => [s.type, s.targetId || '', s.npcId || ''])) === JSON.stringify(steps.map(s => [s.type, s.targetId || '', s.npcId || ''])))) continue;
 		if (validateQuestPlan(plan, ctx).ok) return plan;
 	}

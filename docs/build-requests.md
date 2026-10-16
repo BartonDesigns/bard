@@ -71,6 +71,8 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 - **Acceptance:** two independent clients contribute to and observe the same world project; atomic/idempotent completion; reconnect/offline catch-up; stable world/project/resident IDs; versioned events with conflict rules; server-owned progression timestamps; cached clients cannot overwrite newer progress; personal chat is never included in public world events.
 - **Dependencies:** authenticated or otherwise abuse-resistant contribution API, canonical world-state storage, supported world-effect adapters, backend deployment access and save migration. `docs/world-progress-sync.md` defines the versioned public-event boundary, offline outbox and privacy rules. A localStorage flag, daily intake or static website deployment is not multiplayer synchronization.
 
+- **Owner amendment, 13 October 2026 Pacific:** personal reputation must never expire; cleansing a soul in the tunnel beneath Gargantua’s island is the only normal reset. The feature branch documented in [persistent-reputation.md](persistent-reputation.md) implements a durable personal ledger, recovery, shared attribution and a cave ritual. This is distinct from universally shared world-project authority. Local verification does not establish production Worker deployment or physical-phone acceptance. Earlier intake history and PR #17 remain separate and preserved.
+
 ## BR-007 — Separate NPC dialogues and searchable full archive
 
 - **Priority/status:** P0 / shipped frontend on 4 October 2026.
@@ -144,3 +146,24 @@ Statuses: requested → specified → implementing → verified → shipped. Use
   5. Across a representative generated-house sample, exactly the intended seeded proportion is messy (target 75%, with tolerance documented for small samples), the result is stable after reload/streaming/rebase, clutter varies by home, navigation and bathroom interactions remain clear, and decoration stays within mobile/desktop budgets.
   6. Automated economy, persistence, risk, procedural-decoration and performance tests pass, followed by a real browser/device smoke test. A source branch or generated fixture alone does not move this request beyond requested/specification.
 - **Open decisions:** whether “home defense” is primarily non-lethal deterrence, combat, or both; the exact fictional item taxonomy and supermarket tier; whether hunting outputs feed BR-001 tangible world development; how shared crime state is scoped across players; and the acceptable messy-bathroom sample tolerance for small towns.
+
+
+## Owner-request implementation checkpoint — 14 October 2026 UTC
+
+Source: the owner’s current conversation asking for more immersive reputation and quest lines; no new external player feedback or private chats were ingested. This is a focused implementation update on [PR #25](https://github.com/BartonDesigns/bard/pull/25), not a Floodgate intake scan or a new intake checkpoint.
+
+- **BR-004 / P0, implementing; locally verified slice:** personal commitment history, witness-aware trust, three connected chapters, explicit in-person reporting and bounded personality/continuity context. Acceptance: greetings reflect actual history; unrelated conversation cannot complete work; follow-up chapters use the prior outcome; unsupported model effects fail closed. Requires frontend publication and the updated Discovery `quest-continuity-v1` Worker. See [quest-immersion.md](quest-immersion.md).
+- **BR-001 / P0, implementing:** chapter two can leave safe, visible route posts or preserve a quiet journal route. These grants are idempotent and saved locally; cleansing does not erase the landscape. The new three-chapter arc gives trust/project outcomes instead of credits; older currency content stays compatible. Automated production-engine UI/visual evidence is in `docs/verification/quest-immersion/`, distinct from a human or live-production playtest.
+- **BR-006 / P0 remains open for universal world state:** route projects, bonds and personal quests are device-local. The durable soul ledger is a separate server feature awaiting rooms deployment. No claim of shared construction, cross-device private journals, or completed BR-006 acceptance.
+- **BR-002 remains to specify:** this slice creates its supported route marks immediately; the approximately one-day propagation design is not implemented or promised as a code-shipping deadline.
+- Production capability check, **2026-10-14 05:02 UTC**: Discovery has existing `social_intent`/`story_quest`, but lacks `quest-continuity-v1`; rooms lacks `reputation-v1` and `persistent-reputation-v1`. Frontend publication, Worker deployment and live gameplay acceptance remain distinct. No credentials or other contributor branches changed.
+
+
+## Owner-request implementation checkpoint: 16 October 2026
+
+Source: this owner's request for production permanent reputation, shared projects and autonomous NPCs with families and money; implementation evidence is [PR #31](https://github.com/BartonDesigns/bard/pull/31) and [the release checkpoint](living-world-release-2026-10-16.md). This is not a Floodgate intake scan, a new external suggestion or a human playtest. Prior source history and intake timestamps are retained.
+
+- **BR-001/BR-002/BR-006, P0:** four supported shared project types now have confirmed proposals, actual survey/work, a server-owned minimum 24-hour construction period, persistent receipts/alarms and visible stages. Real local two-client and alarm tests pass. Production acceptance remains blocked on the updated rooms Worker, then live two-client verification; broad universal world/property state is not complete.
+- **BR-004, P0:** autonomous known-adult activity includes recurring family visits, protected player participation, public history and source-confirmed physical jobs. Family assignments and account links survive reload; existing daily budgets keep advancing, and profiles can sync without cash events. Automated unit, real SQLite and controlled UI evidence is recorded separately from production/model quality.
+- **Permanent reputation, P0:** durable soul identity and Gargantua ritual are integrated with current main's police/combat work. The production rooms service still lacks the required capability. Clearing wanted pursuit or paying fines does not erase soul standing.
+- Both Workers need deployment from the owner's authenticated Bard checkout. The helper checks the repository, tests and worker names. No credentials, unrelated branches or existing Floodgate PR were changed. This is not a 24-hour code-shipping promise.

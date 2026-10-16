@@ -154,6 +154,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	function lockTrades(ids = []) { tradeLocks = new Set(ids); }
 	if (!state.updatedAt && !state.revision && !state.credits && !Object.keys(state.instances || {}).length && !(state.journal || []).length && startingCredits > 0) { state = C.createInventoryState(ownerId, { credits: startingCredits }); repository.save(state); }
 	let lastNearby = [], lastPosition = null, scanClock = 0, sequence = 0;
+	let purchasePolicy = null;
 	function rawSites(position = null) {
 		const W = typeof world === 'function' ? world() : world;
 		let source = typeof sites === 'function' ? sites(W) : sites;
@@ -206,6 +207,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		try { onChange(info(lastPosition)); } catch { /* observers do not break the world */ }
 	}
 	function purchase(source, item) {
+		if (purchasePolicy?.purchase) return purchasePolicy.purchase(source, item);
 		const offer = offerFor(source, item.id), tx = { id: txId('purchase', item.id, source.sourceId), kind: TRANSACTION_KINDS.PURCHASE, sourceId: source.sourceId, itemId: item.id, quantity: 1, ...(offer ? { unitPrice: offer.unitPrice, offer } : {}) };
 		const out = transact(tx, { expectedRevision: state.revision }); if (out.ok && !out.duplicate) save(out.state); return out;
 	}
@@ -266,7 +268,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		const source = shopFor(siteId, position), item = findItem(itemId);
 		if (!source || !item || (source.stockExplicit && !source.stock.includes(itemId))) return result(false, 'purchase', 'That is not for sale here.');
 		const out = purchase(source, item);
-		return out.ok ? result(true, 'purchase', `Bought ${item.name}.`, { receipt: out.receipt }) : result(false, 'purchase', out.receipt?.message || 'That purchase could not be completed.');
+		return out.ok ? result(true, 'purchase', `Bought ${item.name}.${out.sellerSettlement === 'pending' ? ' The merchant payment is saved for retry.' : ''}`, { receipt: out.receipt }) : result(false, 'purchase', out.receipt?.message || 'That purchase could not be completed.');
 	}
 	// sell one: a particular instance by its uid, or the least valuable of an item
 	function sell(siteId, which, position = lastPosition) {
@@ -340,7 +342,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 
 	function command(text, context = {}) { return execute(parseArmsRequest(text), context); }
 	function update(dt = 0, position = null) { scanClock -= Math.max(0, +dt || 0); if (position && (scanClock <= 0 || !lastPosition || distance(position, lastPosition) > 8)) { scanClock = 0.5; nearby(position); } return lastNearby; }
-	return { catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), upgrade, combine, train, carry, apply, applied, spendCredits, lockTrades, locked: () => tradeLocks.size > 0, canAttemptTheft: (input) => C.canAttemptTheft(input) };
+	return { setPurchasePolicy: policy => { purchasePolicy = policy; }, catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), upgrade, combine, train, carry, apply, applied, spendCredits, lockTrades, locked: () => tradeLocks.size > 0, canAttemptTheft: (input) => C.canAttemptTheft(input) };
 }
 
 export { ARMS_CATALOG, SOURCE_CATALOG };

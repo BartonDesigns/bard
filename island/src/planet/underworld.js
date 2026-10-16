@@ -205,6 +205,8 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	// the village and the ruins keep their floors clear
 	if (vill) props.push({ keepClear: true, x: vill.x, z: vill.z, r: Math.max(vill.rx, vill.rz) * 0.9 });
 	if (ruinsC) props.push({ keepClear: true, x: ruinsC.x, z: ruinsC.z, r: Math.max(ruinsC.rx, ruinsC.rz) * 0.8 });
+	// Keep the ritual's walking and sight space free of procedural floor formations.
+	if (plan.soul) props.push({ keepClear: true, x: plan.soul.x, z: plan.soul.z, r: 4.5 });
 	const inPool = (x, z, pad = 0) => chambers.some((c) => c.pools.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + pad));
 	for (const c of chambers) {
 		const n = Math.round(c.rx * c.rz / (isPhone ? 9 : 6));
@@ -236,7 +238,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 				if (roof == null) continue;
 				const len = 0.2 + Math.pow(r(), 2.5) * 1.6;
 				spikes.push({ x, y: roof + 0.3, z, len, rad: 0.06 + len * 0.1, down: true });
-				if (r() < 0.25 && Math.hypot(ox, oz) > p.w * 0.45) { const fl = rockFloor(x, z, p.y + 1); if (fl != null) spikes.push({ x, y: fl - 0.15, z, len: 0.2 + r() * 0.9, rad: 0.12 + r() * 0.15, down: false }); }
+				if (r() < 0.25 && Math.hypot(ox, oz) > p.w * 0.45 && clearOf(x, z, 1)) { const fl = rockFloor(x, z, p.y + 1); if (fl != null) spikes.push({ x, y: fl - 0.15, z, len: 0.2 + r() * 0.9, rad: 0.12 + r() * 0.15, down: false }); }
 			}
 		}
 	}
@@ -571,7 +573,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 
 	// ---------- the entrances as the world lists them ----------
 	const names = NAMES[civ.ruin] || NAMES.stone;
-	const list = entrances.map((e, i) => ({ x: e.x, z: e.z, y: e.y, yaw: e.yaw, name: names[i % names.length] }));
+	const list = entrances.map((e, i) => ({ x: e.x, z: e.z, y: e.y, yaw: e.yaw, name: e.name || names[i % names.length] }));
 
 	// ---------- sound: a low room tone, and drips falling in the dark ----------
 	let snd = null;
