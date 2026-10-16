@@ -1,3 +1,4 @@
+import { LOCAL_TASKS, stepLocal } from './local-tasks.js';
 // Favours people ask of you in passing: the words, the choices and the rewards. Pure (no scene,
 // no clock of its own), so the tests can play an errand through from start to end.
 //
@@ -142,7 +143,7 @@ const pron = (pet) => (pet?.she === false ? { She: 'He', her: 'his', him: 'him',
 export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 	const { She, him, girl } = pron(item.pet), dog = item.pet?.name || 'my dog';
 	const L = {
-		accept: kind === 'lost'
+		accept: kind === 'escort' ? ['Thank you. Lead the way; I will stay close.'] : LOCAL_TASKS[kind] ? ['Thank you. Follow the marked objective. I will be here when you need me.'] : kind === 'lost'
 			? [`Thank you! It should be somewhere over there.`, `You are a lifesaver. I will wait right here.`, `Thanks so much. I will keep looking on this side.`]
 			: kind === 'pet' ? [`Thank you! ${She} is scared, so go gently. Walk, do not run at ${him}.`, `Oh, thank you. ${She} comes to people who are calm with ${him}.`]
 				: kind === 'catch' ? [`Thank you! Quick, before they are gone!`, `Go, go! Thank you!`]
@@ -150,6 +151,8 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 						: kind === 'jumpstart' ? [`Thank you! Just stand by the car while I try it.`, `You are a lifesaver. This will only take a second.`]
 							: kind === 'pothole' ? [`Thank you. Mind your step round it.`, `Great. Just stand by it and send it in.`]
 							: kind === 'directions' ? [`Oh, thank you.`, `Thanks, I am completely lost.`] : [`Thank you so much. Tell them it is from me.`, `You are the best. They are expecting it.`],
+		checked: ['I am okay, thanks for checking. Please let them know.'],
+		taskDone: ['That is a real help. Thank you for seeing it through.', 'All done. Thank you for making time for this.'],
 		reunited: [`${dog}! Oh, come here, you silly thing! Thank you, thank you so much.`, `There you are! I was so worried. Thank you for bringing ${him} back to me.`, `${dog}! Good ${girl}! I cannot thank you enough. Please, take this.`],
 		found: [`Found ${item.the}.`],
 		returned: [`My ${item.name}! Oh, thank you. Here, take this, please.`, `You found ${item.id === 'keys' || item.id === 'glasses' ? 'them' : 'it'}! I owe you one. Here.`, `Thank you, really. Let me at least give you something for your trouble.`],
@@ -175,7 +178,7 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 export function rewardFor(kind, metres = 0) {
 	// (pointing the way and helping someone up are not paid: people do not, for those)
 	if (kind === 'directions' || kind === 'fall') return 0;
-	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'pet' ? 60 : kind === 'jumpstart' ? 50 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : kind === 'groceries' ? 25 : kind === 'pothole' ? 25 : 30;
+	const base = LOCAL_TASKS[kind]?.credits ?? (kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'pet' ? 60 : kind === 'jumpstart' ? 50 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : kind === 'groceries' ? 25 : kind === 'pothole' ? 25 : 30);
 	return Math.round(Math.min(140, base + Math.max(0, metres) * (kind === 'catch' ? 0.45 : kind === 'pet' ? 0.35 : 0.3)) / 5) * 5;
 }
 
@@ -186,6 +189,7 @@ export function rewardFor(kind, metres = 0) {
 export const STAGES = Object.freeze({ offered: 'offered', search: 'search', bring: 'bring', lead: 'lead', chase: 'chase', carry: 'carry', done: 'done', failed: 'failed', kept: 'kept' });
 export function step(E, ev) {
 	if (!E || E.stage === 'done' || E.stage === 'failed' || E.stage === 'kept') return { E, out: null };
+	const local = stepLocal(E, ev); if (local) return local;
 	const at = (stage, out = null) => ({ E: { ...E, stage }, out });
 	switch (ev) {
 		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' || E.kind === 'pet' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : E.kind === 'groceries' ? 'haul' : E.kind === 'jumpstart' ? 'jump' : E.kind === 'directions' ? 'tell' : E.kind === 'pothole' ? 'report' : 'carry', { say: 'accept' }) : { E, out: null };

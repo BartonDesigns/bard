@@ -43,6 +43,7 @@ import { rememberIncident } from '../people/world-awareness.js';
 import { createMorality } from './morality.js';
 import { createCompass } from './compass.js';
 import { soundBus } from '../world/soundbus.js';
+import { createTargetFocus } from './target-focus.js';
 import { createMelee } from './melee.js';
 import { mayStation, militiaCamps } from '../military/rules.js';
 
@@ -236,6 +237,14 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- input ----------
 	let mouseDown = false, touchFire = false;
+	// Capture edges in the event handler: a down/up between two frames is still a shot.
+	function fireInput(source, down) {
+		if (!active() || me.ko || recovery.busy) { cancelInput(); return false; }
+		const w = weaponNow();
+		if (source === 'mouse') mouseDown = down; else touchFire = down;
+		if (w) { trigger(w, mouseDown || touchFire); syncBow(w); }
+		return true;
+	}
 	function cancelInput() {
 		mouseDown = touchFire = false;
 		if (Wp) { cancelTrigger(Wp); cancelReload(Wp); }
@@ -244,9 +253,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hud.btns.Fire?.classList.remove('on');
 	}
 	const canvas = mount.querySelector('canvas');
-	const typing = () => /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || window._KEYS_PLAY_ON;
-	addEventListener('pointerdown', (e) => { if (!e.defaultPrevented && e.button === 0 && e.pointerType === 'mouse' && (!canvas || e.target === canvas) && active() && (!canvas?.requestPointerLock || document.pointerLockElement === canvas)) mouseDown = true; });
-	addEventListener('pointerup', (e) => { if (e.button === 0) { if (!active() || me.ko) cancelInput(); else mouseDown = false; } });
+	const typing = () => /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || document.activeElement?.isContentEditable || window._KEYS_PLAY_ON;
+	addEventListener('pointerdown', (e) => { if (!e.defaultPrevented && e.button === 0 && e.pointerType === 'mouse' && (!canvas || e.target === canvas) && active() && (!canvas?.requestPointerLock || document.pointerLockElement === canvas)) fireInput('mouse', true); });
+	addEventListener('pointerup', (e) => { if (e.button === 0) { if (!active() || me.ko) cancelInput(); else fireInput('mouse', false); } });
 	addEventListener('pointercancel', cancelInput);
 	addEventListener('blur', cancelInput);
 	document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) cancelInput(); });
@@ -261,7 +270,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	});
 	const B = hud.btns;
 	if (B.Fire) {
-		bindLookDrag(B.Fire, mount, { start: () => { if (!active() || me.ko) return false; touchFire = true; B.Fire.classList.add('on'); }, end: () => { touchFire = false; B.Fire.classList.remove('on'); }, cancel: cancelInput });
+		bindLookDrag(B.Fire, mount, { start: () => { if (!fireInput('touch', true)) return false; B.Fire.classList.add('on'); }, end: () => { fireInput('touch', false); B.Fire.classList.remove('on'); }, cancel: cancelInput });
 		B.Reload.addEventListener('pointerdown', (e) => { e.stopPropagation(); reload(); });
 		B.Mode.addEventListener('pointerdown', (e) => { e.stopPropagation(); const w = weaponNow(); if (w) nextMode(w); });
 		for (const b of Object.values(B)) b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
@@ -703,6 +712,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		deal: (T, blow, mine) => deal(T, blow, mine),
 		// (fists are quieter than gunfire: the nearest run, those further off stop and watch)
 		heard: (at) => civilians.alarm(at.x, at.z, 7),
+		focusTarget: () => focus.current(), blocked,
 		player: P, input: () => W()?.player?.input?.(), speed: () => me.speed, squads: () => squads,
 		deed: (kind, target, c = {}) => morality.record({ kind, target, place: placeName(), world: worldKey, ctx: c }),
 		active: () => active() && !me.ko && !P()?.flying && !P()?.swimming && !recovery.busy,
@@ -712,6 +722,11 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		realmArmed: () => !!W()?.medieval,
 		// structures: a fist or a swing at a wall (walls built near you break, layer by layer)
 		wallBlow: (m) => { const e = eye(), d = camera.getWorldDirection(new THREE.Vector3()); const r = W()?.structures?.blow?.(e, d, m.reach + 0.35, m); if (r) return r; const h = worldHit(e, d, m.reach + 0.25); return h && h.surface !== 'ground' ? { material: h.surface, hard: true, at: e.clone().addScaledVector(d, h.t) } : null; },
+	});
+
+	const focus = createTargetFocus({ layer, camera, mount, blocked, shooter: ME, rules, vector: () => new THREE.Vector3(), hint,
+		active: () => active() && !me.ko && !P()?.flying && !recovery.busy,
+		hostile: (T) => !!(T.P && melee.foes.has(T.P)) || !!T.moral?.()?.hostileTarget,
 	});
 
 	// ---------- bosses ----------
@@ -974,6 +989,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		for (const p of [...projectiles]) endProjectile(p, null);
 		for (const m of arrowPool) m.removeFromParent();
 		arrowPool.length = 0; arrowTemplate?.geometry.dispose(); arrowTemplate = null;
+		focus.clear();
 		contracts.clear(); squads.clear(); recovery.clear(); fieldAudio.clear(); props.clearTag(); cars.clear(); melee.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); heatMap.clear(); fx.clear();
 		for (const B0 of bosses.values()) B0.dispose();
 		bosses.clear(); projectiles.length = 0; me.crumbs.length = 0; me.lastPos = null;
@@ -1004,6 +1020,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (!me.ko && !p.flying && (!lc || Math.hypot(lc.x - pos.x, lc.z - pos.z) > 4)) { me.crumbs.push({ x: pos.x, y: pos.y, z: pos.z }); if (me.crumbs.length > 150) me.crumbs.shift(); }
 		me.firing = Math.max(0, me.firing - dt);
 		if (me.ko > 0) { me.ko -= dt; if (me.ko <= 0) wake(); } else tickHealth(me.H, dt);
+		// Refresh hit bounds from the latest body positions before consuming input.
+		civilians.update(dt, camera.position);
 		// your weapon
 		const wpn = active() && !me.ko && !recovery.busy ? weaponNow() : null;
 		if (wpn) {
@@ -1025,9 +1043,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		} else { cancelInput(); }
 		if (shake > 0) { shake = Math.max(0, shake - dt * 2); camera.rotation.x += (Math.random() - 0.5) * shake * 0.02; camera.rotation.y += (Math.random() - 0.5) * shake * 0.02; }
 		holdUps(dt);
+		focus.update(dt);
 		melee.update(dt);
-		const cam = camera.position;
-		civilians.update(dt, cam);
 		squads.update(dt);
 		recovery.update(dt);
 		contracts.update(dt);
@@ -1063,7 +1080,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- for the console and the tests ----------
 	const api = {
-		update, reset, heard, group, layer, fx, morality, relations, compass, recovery, contracts, fieldAudio, melee, hooks, squads,
+		update, reset, heard, group, layer, fx, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
 		projectile, blast, firstHit, landShot, ground, eye, sound: (k, at) => sound(k, at), deal: (T, blow, mine) => deal(T, blow, mine), hurtPlayer, wantedLevel: () => wanted.stars, isEarth, zone: () => (W() ? zone() : null),
 		// harm done by your vehicle's guns (military/): yours, weighed like a shot
 		strikeAs: (T, blow) => deal(T, { ...blow, by: ME }, true),
