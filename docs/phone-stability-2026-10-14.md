@@ -188,3 +188,7 @@ memory, triangles, draw calls, counts, the people pool, and the governor's state
   2. Walk downtown among people and talk to someone.
   3. If the page ever does flash white, the next load says so in the console (`[governor] the last
      visit ended without a goodbye`) and starts lighter.
+
+## October 15, 2026: re-audit
+
+The harness was re-run against main (through #43) with steps for everything that landed since: a rifle in first person, a fist fight, a rebuild site, a house shot full of holes, downtown's signs and shops, an earthquake and a December night. The skin's noise, the first-person arms, everyone's clothes, the broken walls, the rebuild site, the storefronts and the car decals now step down on phones and with the governor's tiers, and a crash on every shot at the world is fixed. See `docs/phone-audit-2026-10-15.md` for the budget table against this pass's after numbers, the governor's reach and what to check on the iPhone.
