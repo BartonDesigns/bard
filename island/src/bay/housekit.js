@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import { weatherStucco } from './weathering.js';
 import { usePhoto } from '../world/photomats.js';
+import { addNightField } from '../world/nightfield.js';
 
 const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 export { lin };
@@ -544,6 +545,8 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	M.floorPat = patterned(std({ roughness: 0.38, envMap: env, envMapIntensity: 0.25 }), P.floor, 1.2, [1, 1, 4, 1, 1, 1, 1, 1]);
 	M.siding = patterned(std({ roughness: 0.85 }), P.siding, 1.2);
 	M.lamp.userData.night = true;
+	// the outside walls take the porch lights, the garage lights and the uplights close by
+	for (const m of [M.stucco, M.siding, M.garage]) addNightField(m);
 	for (const m of Object.values(M)) addLodFade(m, fadeMode, band || [NONE_IN[0], NONE_IN[1], 36, 46]);
 	// by night the lamps glow and the walls lose the daylight they had from the windows
 	// (seen from outside, with no lamps of its own to light it, a lit room glows brighter)

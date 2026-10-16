@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { drawFace, faceDims } from './faces.js';
+import { artRevision } from './art.js';
 
 const PAD = 6;
 export function faceKey(face) {
@@ -23,6 +24,7 @@ export function createAtlas({ size = 2048, height = size, name = 'signage', scal
 	tex.name = name; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
 	tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
 	const entries = new Map();
+	let artRev = artRevision();
 	let shelves = [], nextY = 0, repacks = 0, drawn = 0;
 	function reset() { entries.clear(); shelves = []; nextY = 0; g?.clearRect(0, 0, size, height); repacks++; }
 	function alloc(w, h) {
@@ -45,7 +47,7 @@ export function createAtlas({ size = 2048, height = size, name = 'signage', scal
 		const e = { x: at.x, y: at.y, w, h, cell: [at.x / size + 0.5 / size, 1 - (at.y + h) / height + 0.5 / height, (w - 1) / size, (h - 1) / height] };
 		if (g) {
 			g.clearRect(at.x - PAD, at.y - PAD, w + PAD * 2, h + PAD * 2);
-			drawFace(g, at.x, at.y, w, h, face);
+			drawFace(g, at.x, at.y, w, h, { ...face, phone: scale < 1 });
 			// (the gutter takes the edge's colour at zero alpha, so a far mip does not go dark round it)
 		}
 		entries.set(key, e);
@@ -54,6 +56,7 @@ export function createAtlas({ size = 2048, height = size, name = 'signage', scal
 	}
 	// want: Map key -> { face, w, h } (metres); gives back nothing, get(key) the cells after
 	function sync(want) {
+		if (artRev !== artRevision()) { artRev = artRevision(); reset(); }
 		const fresh = [];
 		for (const [key, W] of want) if (!entries.has(key)) { const [pw, ph] = faceDims(W.face, W.w, W.h); fresh.push([key, W.face, Math.round(pw * scale), Math.round(ph * scale)]); }
 		if (!fresh.length) return 0;

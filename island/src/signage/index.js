@@ -36,8 +36,13 @@ import { createFleetDecals, setCarLocale } from './cars.js';
 import { qualityNow, onQuality } from '../world/governor.js';
 import { gridStreets } from './gridstreets.js';
 import { BLOCKS, toGrid, fromGrid } from '../bay/styles.js';
+import { requestsNear } from '../economy/requests.js';
+import { shopCampaigns, wallCampaign } from './campaigns.js';
+import { productBrand } from './brand-catalog.js';
+import { graffitiGraphic } from '../civic/graffiti-catalog.js';
+import { artRevision } from './art.js';
 
-const CAPS = { retro: 900, vinyl: 1400, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
+const CAPS = { retro: 900, vinyl: 1400, cloth: 80, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
 const ITEMS = {
 	grocer: [['Produce', 'Fruit', 'Vegetables'], ['Bread', 'Cereal', 'Coffee'], ['Canned Goods', 'Soup', 'Pasta'], ['Dairy', 'Eggs', 'Cheese'], ['Snacks', 'Chips', 'Soda'], ['Frozen', 'Ice Cream'], ['Baking', 'Spices', 'Oil'], ['Household', 'Paper', 'Cleaning']],
 	pharmacy: [['Cold & Flu', 'Pain Relief'], ['Vitamins', 'First Aid'], ['Baby', 'Personal Care'], ['Cosmetics', 'Hair Care'], ['Snacks', 'Drinks']],
@@ -47,6 +52,7 @@ const ITEMS = {
 const DEPT = { grocer: ['PRODUCE · DELI', 'cart', '#7a2a1c'], pharmacy: ['PHARMACY', 'hospital', '#1d4f9c'], hardware: ['TOOLS & PAINT', 'worker', '#a8501c'], any: ['WELCOME', 'info', '#2a3a4a'] };
 
 export function createSignage({ scene, world, isPhone = false, locate = null, morality = () => ({}), day = () => Math.floor(Date.now() / 86400000) } = {}) {
+	let openRequests = [];
 	const group = new THREE.Group();
 	group.name = 'signage';
 	scene.add(group);
@@ -116,28 +122,30 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		// the shops' doors and windows: the built shop's real glass where it stands, else the face
 		const plan = w.city?.economy?.plan?.() || [], built = w.commercial?.list?.() || [];
 		const builtAt = (x, z) => built.find((q) => Math.hypot(q.x - x, q.z - z) < 3);
+		let campaigns=0, murals=0;
+		const posted = new Set();
 		for (const E of plan) {
 			if (!E.front || !near(E.x, E.z, SHOP_R)) continue;
 			const B = builtAt(E.x, E.z);
 			let front = E.front, glass = E.use === 'shop' || E.use === 'row' || E.use === 'retail' || E.use === 'apt';
 			if (B && B.glassZ !== undefined) {
 				const ca = Math.cos(B.a), sa = Math.sin(B.a);
-				front = { x: B.x - sa * B.glassZ, z: B.z + ca * B.glassZ, nx: -sa, nz: ca, run: B.hw * 2, g: B.y, door: B.doorX };
+				front = { x: B.x - sa * B.glassZ, z: B.z + ca * B.glassZ, nx: -sa, nz: ca, run: B.hw * 2, g: B.y, door: B.doorX, height: B.ceil ?? 3.5 };
 				glass = true;
 			} else if (glassAt.has(posKey(E.x, E.z))) {
-				// (its display window drawn by the storefronts: the decals on that glass, laid below)
-				storefronts.push({ x: E.front.x, z: E.front.z, nx: E.front.nx, nz: E.front.nz, run: E.front.run });
-				if (landAt(E.front.x, E.front.z)?.lu === 7 && hash01(E.x, E.z, 'gum') < 0.35) surfaces.push({ kind: 'ground', x: front.x + front.nx * 2.2, z: front.z + front.nz * 2.2, nx: front.nx, nz: front.nz, w: 2, gum: 1 });
-				continue;
+				// (its display window drawn by the storefronts: the decals on that glass, at its door)
+				const G = glassOf.get(glassAt.get(posKey(E.x, E.z)));
+				front = G.front; glass = G.glass; posted.add(G);
 			}
-			out.push(...storefrontDecals({ ...E, x: E.x, z: E.z }, front, sys, { seed, glass }));
+			out.push(...storefrontDecals({ ...E, x: E.x, z: E.z, request: openRequests.some(q => q.giver.id === E.id) }, front, sys, { seed, glass }));
+			if(campaigns<(lite?8:20)){const C=shopCampaigns(E,front,{phone:lite});out.push(...C.signs);postList.push(...C.posts);if(C.signs.length)campaigns++;}
 			storefronts.push({ x: E.front.x, z: E.front.z, nx: E.front.nx, nz: E.front.nz, run: E.front.run });
 			if (landAt(E.front.x, E.front.z)?.lu === 7 && hash01(E.x, E.z, 'gum') < 0.35) surfaces.push({ kind: 'ground', x: front.x + front.nx * 2.2, z: front.z + front.nz * 2.2, nx: front.nx, nz: front.nz, w: 2, gum: 1 });
 		}
 		for (const [, recs] of extra) for (const r of recs) if (near(r.x, r.z, R)) out.push(r);
 		// the storefronts' own display windows (economy/storefront.js): on the shop glass itself,
 		// unless the shop is built for real near you (its own glass then, above)
-		for (const [, G] of glassOf) if (near(G.x, G.z, SHOP_R) && !builtAt(G.x, G.z)) out.push(...storefrontDecals(G.biz, G.front, sys, { seed, glass: G.glass }));
+		for (const [, G] of glassOf) if (!posted.has(G) && near(G.x, G.z, SHOP_R) && !builtAt(G.x, G.z)) out.push(...storefrontDecals(G.biz, G.front, sys, { seed, glass: G.glass }));
 		// inside the built shops: aisle markers, the department over the back wall, shelf tags
 		for (const B of built) {
 			if (B.type !== 'shop' || !B.aisles?.length || !near(B.x, B.z, IN_R)) continue;
@@ -250,7 +258,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				const nx = ca * lx - sa * lz, nz = sa * lx + ca * lz, half = lx ? o.w / 2 : o.d / 2;
 				const x = o.x + nx * (half + 0.03), z = o.z + nz * (half + 0.03);
 				if (!near(x, z, R) || fronted(x, z, nx, nz)) continue;
-				surfaces.push({ kind: 'industrial', x, z, y: ground(x, z), nx, nz, w: Math.min(len, 30), h: Math.min(o.h, 7), lu: 8 });
+				surfaces.push({ kind: 'industrial', x, z, y: ground(x, z), nx, nz, w: Math.min(len, 30), h: o.h, lu: 8, campaignEligible: o.kind === 5 });
 			}
 		}
 		// stickers on the backs of the signs and up the posts
@@ -258,6 +266,10 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		for (const p of postList) if (hash01(p.x, p.z, 'ps') < 0.4) { const a = hash01(p.x, p.z, 'pa') * Math.PI * 2; surfaces.push({ kind: 'post', x: p.x + Math.sin(a) * 0.037, z: p.z + Math.cos(a) * 0.037, y: null, hy: 1.5, nx: Math.sin(a), nz: Math.cos(a), w: 0.07, h: 0.9, lu: landAt(p.x, p.z)?.lu }); }
 		for (const c of real.crossings?.() || []) if (c.city && near(c.x, c.z, R * 0.6) && hash01(c.x, c.z, 'cg') < 0.5) surfaces.push({ kind: 'ground', x: c.x + c.uz * (c.hw + 1.5), z: c.z - c.ux * (c.hw + 1.5), nx: c.ux, nz: c.uz, w: 2.5, gum: 2 });
 		// (the stickers on a post are not to fly off it: their y comes from the post's ground)
+		// Large campaign art uses a separate cap; street and safety signs stay untouched.
+		for(const S of surfaces){if(murals>=(lite?2:5))break;const ad=S.campaignEligible===true?wallCampaign(S,seed):null;if(ad){out.push(ad);murals++;}}
+		// Small material scars live on existing industrial/alley surfaces, never sign lettering.
+		let scars=0;for(const S of surfaces){if(scars>=(lite?6:16))break;if(!['industrial','alley','dumpster','abutment'].includes(S.kind)||S.civic||S.storefront||hash01(S.x,S.z,'scar')>.35)continue;const size=Math.min(S.w*.6,1.8);out.push({mat:MAT.paint,layer:LAYER.grime,face:{k:'damage',tile:hash32(S.x,S.z,'damage')%4},x:S.x,z:S.z,hy:Math.min((S.h||2)*.4,1.25),nx:S.nx,nz:S.nz,w:size,h:Math.min(size*.8,(S.h||2)*.7),base:S.y??null,back:BACK.none,wear:.12});scars++;}
 		const M = moralNow();
 		out.push(...grimeFor(surfaces, { seed, phone: lite }));
 		out.push(...graffitiFor(surfaces, { morality: M, seed, day: day(), phone: lite }));
@@ -273,6 +285,18 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		for (let k = 0; k + 1 < rows.length; k++) {
 			const [, x1, z0] = rows[k], zc = (z0 + rows[k + 1][2]) / 2, [x, z] = L(x1 - 0.2, zc), [nx, nz] = N(1, 0);
 			out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'aisle', n: k + 1, items: items[k % items.length], col }, x, z, hy: hang, base: B.y, nx, nz, w: 1.25, h: 0.42, back: BACK.readable, wear: 0 });
+		}
+		if (/grocer|market|general/.test(t) && B.products?.length) {
+			const count = Math.min(lite ? 24 : 72, B.products.length);
+			for (let i = 0; i < count; i++) {
+				const start = Math.floor(i * B.products.length / count), end = Math.floor((i+1) * B.products.length / count);
+				// Rotate within each sample interval: a fixed even stride labels only one shelf side.
+				const p = B.products[start + i % Math.max(1,end-start)], [x,z] = L(p.x,p.z), [nx,nz] = N(0,p.side);
+				const product = [6, [2,4,11][i%3], i%2?5:10, 3, i%2?8:9, -1, 10, 7][p.row % 8];
+				if (product < 0) continue;
+				const brand = productBrand(product, `${B.name}:${Math.floor(p.x * 3)}:${p.row}`);
+				out.push({ mat: MAT.paper, layer: LAYER.sticker, face: { k: 'product', product, brandFamily: brand.family, brandIndex: brand.trade }, x,z,nx,nz,hy:p.y,base:B.y,w:.245,h:.285,back:BACK.none,wear:0 });
+			}
 		}
 		const D = DEPT[t] || DEPT.any;
 		{ const [x, z] = L(0, -B.hd + 0.31), [nx, nz] = N(0, 1); out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'dept', name: D[0], picto: D[1], col: D[2] }, x, z, hy: Math.min(hang, 2.75), base: B.y, nx, nz, w: 2.6, h: 0.5, back: BACK.none, wear: 0 }); }
@@ -311,7 +335,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				tx = nz; tz = -nx;
 				y = r.abs ?? (r.base ?? ground(r.x, r.z)) + r.hy;
 			}
-			const extraF = r.mat === MAT.grime ? ({ rust: 0, soot: 1, streak: 2, gum: 3, oil: 4 }[r.face.type] ?? 0) : r.mat === MAT.glass && r.face.frost ? 1 : 0;
+			const extraF = r.mat === MAT.grime ? ({ rust: 0, soot: 1, streak: 2, gum: 3, oil: 4 }[r.face.type] ?? 0) : r.mat === MAT.glass && r.face.frost ? 1 : r.mat===MAT.paint&&graffitiGraphic(r.face.k,r.face.seed)?.gloss?1:0;
 			if (B.put(r.x, y, r.z, nx, ny, nz, tx, ty, tz, r.w, r.h, c, r.back ?? BACK.blank, r.seed ?? hash01(r.x, r.z, r.hy || 0), r.wear || 0, extraF)) n++;
 		}
 		for (const B of batches.values()) B.commit();
@@ -359,6 +383,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	// ---------- each frame ----------
 	function update(dt, camera, night = 0, driving = false) {
 		if (disposed) return;
+		SIGN_U.uSgTime.value += Math.min(dt,.1);
 		SIGN_U.uSgNight.value = night; SIGN_U.uSgDay.value = 1 - night;
 		// the headlights: yours, when you drive after dark (the camera stands in for the lamps;
 		// a retroreflector sends their light back toward its source, and the eye is beside it)
@@ -379,7 +404,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		checkT -= dt;
 		if (!dirty && checkT > 0 && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		checkT = 0.5;
-		const key = [real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0, w.parks?.count?.() ?? 0, w.interiors?.live?.size ?? 0].join('|');
+		openRequests = requestsNear(x,z,SHOP_R);
+		const key = [openRequests.map(q => q.id).sort().join(','), artRevision(), real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0, w.parks?.count?.() ?? 0, w.interiors?.live?.size ?? 0].join('|');
 		if (!dirty && key === keyNow && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		dirty = false; keyNow = key; at = { x, z };
 		rebuild(x, z);

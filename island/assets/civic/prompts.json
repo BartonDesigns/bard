@@ -1,0 +1,27 @@
+[
+  {
+    "id": "galvanized",
+    "alpha": false,
+    "prompt": "Use case: photorealistic-natural. Asset: square seamless material albedo texture for a physically based video game renderer. Orthographic straight-on flat galvanized aluminum civic sign backplate, extremely realistic fine zinc spangle, dull light neutral gray, random tiny scratches and subtle rain oxidation. Full bleed homogeneous surface, perfectly flat uniform diffuse illumination, no baked directional highlights or shadows, no border, bolts, text, objects, perspective or vignette. Match all opposite edges for seamless repetition. Fine restrained material detail, not dramatic rust."
+  },
+  {
+    "id": "diamond-plate",
+    "alpha": false,
+    "prompt": "Use case: photorealistic-natural. Asset: square seamless game material texture. Real aluminum diamond tread plate from an ambulance rear step, exactly orthographic top view, orderly alternating diagonal raised lozenge tread in a fine industrial grid. Matte light silver with authentic hairline scratches, faint road grime in recesses and polished wear on ridge tops. Neutral flat diffuse lighting, restrained relief cues, no dramatic directional highlights, shadows, objects, perspective, labels or borders. Full bleed tileable repeat, consistent scale."
+  },
+  {
+    "id": "enamel",
+    "alpha": false,
+    "prompt": "Use case: photorealistic-natural. Square seamless game albedo texture, chalked warm ivory painted civic sign steel, finely weathered old municipal enamel paint with tiny scratches, sparse chips revealing gray metal, slight dirty gray rain streaking, realistic paint grain. Full bleed flat orthographic evenly lit surface. Very subtle wear, mostly intact light paint, no words, no hardware, no framing, no baked lighting, no shadow, no vignette. Opposite edges match for repeat tiling."
+  },
+  {
+    "id": "damage",
+    "alpha": true,
+    "prompt": "Use case: photorealistic-natural. Asset: realistic game damage decal atlas on genuinely transparent background. Exactly FOUR separate square tiles, two columns by two rows with wide transparent gutters. Row major: (1) dark road-grime smear with thin dirty water streaks and subtle tire scuffs; (2) oxidized rust speckling and small paint chips with irregular ragged edges; (3) clustered scrape abrasions with charcoal scratch grooves and dull gray exposed metal; (4) soot bloom fading softly outward with fine ash flecks and short smoke streaks. Each isolated irregular mark occupies about central 70 percent of its square. Photoreal material detail, subdued physically credible colors. No background surface, no white fill, no drop shadows, no raised bevel, no text, no impact holes. Preserve soft semitransparent edges. Intended as alpha decals composited with multiply/darken over light colored game materials."
+  },
+  {
+    "id": "graffiti",
+    "alpha": true,
+    "prompt": "Use case: photorealistic-natural. Asset: graffiti decal atlas on genuinely transparent background, exactly eight distinct isolated hand-sprayed street tags arranged four equal columns and two rows with generous transparent margins. Text row-major exactly: 'DUSK', 'RILL', 'NOMA', 'KITE', 'VEX', 'LOAM', 'DRIFT', 'ECHO'. Real anonymous practiced street handwriting, asymmetry, fast wrist gestures, overlapping strokes, dry overspray, scattered spray speckles, a few gravity drips and worn missing paint. Mix thin black marker tags, faded brick-red spray signatures, dark indigo calligraphy, chalky off-white scrawl. Small limited palettes, uneven paint density. No sticker borders, no background wall, no drop shadows, no 3D graffiti letters, no decorative badges, no perfection, no gang references. All marks stay well inside their own equal cell. Photoreal scanned paint marks, alpha antialiasing and soft overspray."
+  }
+]

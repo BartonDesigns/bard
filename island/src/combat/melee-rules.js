@@ -12,10 +12,12 @@
 // half-angle in front it can land in; knock: how hard it shoves; stagger: how long it rocks a
 // fighter whose poise it beats (seconds); part: where it tends to land.
 export const MOVES = Object.freeze({
-	jab: { kind: 'light', wind: 0.06, active: 0.07, recover: 0.17, chain: 0.05, dmg: 8, reach: 1.4, arc: 0.6, knock: 0.6, stagger: 0.22, part: 'head', anim: 'jab' },
-	cross: { kind: 'light', wind: 0.09, active: 0.07, recover: 0.2, chain: 0.06, dmg: 11, reach: 1.45, arc: 0.6, knock: 1.0, stagger: 0.32, part: 'head', anim: 'cross' },
+	// the one-two: a jab off the lead hand and a cross off the rear one, quick and snapped back
+	jab: { kind: 'light', wind: 0.05, active: 0.06, recover: 0.15, chain: 0.1, dmg: 8, reach: 1.4, arc: 0.6, knock: 0.6, stagger: 0.22, part: 'head', anim: 'jab' },
+	cross: { kind: 'light', wind: 0.07, active: 0.07, recover: 0.17, chain: 0.1, dmg: 11, reach: 1.45, arc: 0.6, knock: 1.0, stagger: 0.32, part: 'head', anim: 'cross' },
 	hook: { kind: 'light', wind: 0.13, active: 0.08, recover: 0.27, chain: 0.08, dmg: 14, reach: 1.3, arc: 0.4, knock: 1.7, stagger: 0.5, part: 'head', anim: 'hook' },
-	heavy: { kind: 'heavy', wind: 0.3, active: 0.1, recover: 0.42, chain: 0.12, dmg: 24, reach: 1.5, arc: 0.55, knock: 3.6, stagger: 0.9, part: 'torso', anim: 'haymaker', breaks: true },
+	// the rear hand's power punch, drawn back while the press is held
+	heavy: { kind: 'heavy', wind: 0.3, active: 0.11, recover: 0.45, chain: 0.12, dmg: 24, reach: 1.55, arc: 0.55, knock: 3.6, stagger: 0.9, part: 'torso', anim: 'haymaker', breaks: true },
 	// with something in hand: a level swing, and an overhead with the weight behind it
 	bat: { kind: 'light', wind: 0.16, active: 0.1, recover: 0.36, chain: 0.1, dmg: 20, reach: 1.95, arc: 0.3, knock: 2.6, stagger: 0.6, part: 'torso', anim: 'swing', item: 'bat' },
 	batHeavy: { kind: 'heavy', wind: 0.38, active: 0.12, recover: 0.5, chain: 0.12, dmg: 34, reach: 2.0, arc: 0.6, knock: 4.2, stagger: 1.0, part: 'head', anim: 'overhead', item: 'bat', breaks: true },
@@ -30,7 +32,13 @@ export const MOVES = Object.freeze({
 	machete: { kind: 'light', wind: 0.15, active: 0.1, recover: 0.34, chain: 0.1, dmg: 21, reach: 1.8, arc: 0.32, knock: 2.0, stagger: 0.55, part: 'torso', anim: 'swing', item: 'machete' },
 	macheteHeavy: { kind: 'heavy', wind: 0.36, active: 0.12, recover: 0.48, chain: 0.12, dmg: 33, reach: 1.85, arc: 0.6, knock: 3.4, stagger: 0.95, part: 'head', anim: 'overhead', item: 'machete', breaks: true },
 });
-export const STRING = ['jab', 'cross', 'hook'];
+// what quick taps throw, in turn (the hook is the townsfolk's and the squads', melee-foes.js)
+export const STRING = ['jab', 'cross'];
+// the rhythm of taps: a strike starts no sooner than BEAT after the last one began, one press is
+// kept for the next (the rest are let go, so mashing gives the same steady one-two as tapping
+// in time), and a pause longer than RHYTHM starts the string again from the jab
+export const BEAT = 0.27;
+export const RHYTHM = 0.7;
 export const moveTime = (m) => m.wind + m.active + m.recover;
 
 // where a strike is at time t since it began
@@ -43,13 +51,13 @@ export function phaseAt(m, t) {
 // may a press at time t into m be kept for the next strike (the string's rhythm)?
 export function canBuffer(m, t) { return t >= m.wind + m.active - m.chain; }
 // may the next strike start now (the buffered one fires as soon as this is true)?
-export function canFollow(m, t) { return t >= m.wind + m.active + m.recover * 0.55; }
+export function canFollow(m, t) { return t >= m.wind + m.active + m.recover * 0.45; }
 
 // the next light strike: the string goes on if the last one was recent, the item's swing with
 // something in hand
 export function nextLight(last, since, item = null) {
 	if (item) return item;
-	if (!last || since > 0.75) return 'jab';
+	if (!last || since > RHYTHM) return 'jab';
 	const i = STRING.indexOf(last);
 	return i < 0 ? 'jab' : STRING[(i + 1) % STRING.length];
 }
@@ -59,8 +67,74 @@ export const heavyOf = (item) => (item ? item + 'Heavy' : 'heavy');
 export const HEAVY_HOLD = 0.22;
 // how much a heavy has been charged by a hold of `held` seconds (0 just past the threshold,
 // 1 at full), and what that does to its damage and knock
-export function charge(held) { return Math.max(0, Math.min(1, (held - HEAVY_HOLD) / 0.6)); }
-export const chargeK = (c) => 1 + 0.6 * c;
+export const CHARGE_FULL = 0.8;
+export function charge(held) { return Math.max(0, Math.min(1, (held - HEAVY_HOLD) / CHARGE_FULL)); }
+export const chargeK = (c) => 1 + 0.8 * c;
+// thrown with everything behind it, a heavy leaves you off balance a moment: the longer it was
+// charged the longer, and longer still when it meets nothing. t: seconds, roll: how far the view
+// rolls (radians), slow: what your pace is cut to at the worst of it
+export function wobble(c, missed = false) {
+	const k = Math.max(0, Math.min(1, c));
+	return { t: 0.35 + 0.4 * k + (missed ? 0.35 : 0), roll: 0.025 + 0.04 * k + (missed ? 0.035 : 0), slow: Math.max(0.25, 0.6 - 0.25 * k - (missed ? 0.15 : 0)) };
+}
+
+// The press, turned into strikes (pure, so the rhythm can be tested): press() and release()
+// from the button, tick(dt, slow) each frame. A tap is a light strike (the next of the string,
+// or the item's quick one), kept for the beat if one is under way; a hold past HEAVY_HOLD starts
+// the heavy, which waits at the end of its wind-up while the hold goes on, charging, and goes
+// when the press is let go. tick() returns the strikes' landing moments ({ name, m, charge })
+// in a list it reuses. item() says what is in hand; allow(name) may refuse a strike (rocked, in
+// a takedown); onStart(name, m) hears each one begin.
+export function createStriker({ item = () => null, allow = () => true, onStart = null } = {}) {
+	const S = { move: null, m: null, t: 0, since: 0, queued: null, press: false, pressT: 0, charging: false, charge: 0, last: null, lastT: 9, landed: false };
+	const events = [];
+	function start(name) {
+		const m = MOVES[name];
+		if (!m || !allow(name)) return false;
+		S.move = name; S.m = m; S.t = 0; S.since = 0; S.landed = false; S.charge = 0;
+		if (m.kind === 'light') { S.last = name; S.lastT = 0; }
+		onStart?.(name, m);
+		return true;
+	}
+	const ready = () => !S.move || (canFollow(S.m, S.t) && S.since >= BEAT);
+	function tap() {
+		const name = S.queued || nextLight(S.last, S.lastT, item());
+		if (ready()) { S.queued = null; return start(name); }
+		if (canBuffer(S.m, S.t) && !S.queued) S.queued = name;
+		return false;
+	}
+	return {
+		state: S,
+		start,
+		tap,
+		press() { S.press = true; S.pressT = 0; },
+		release() {
+			if (!S.press) return;
+			S.press = false;
+			if (S.charging) { S.charging = false; return; }
+			tap();
+		},
+		cancel() { S.press = false; S.charging = false; S.queued = null; S.move = null; },
+		tick(dt, slow = 1) {
+			events.length = 0;
+			S.lastT += dt;
+			if (S.press) {
+				S.pressT += dt;
+				if (S.pressT >= HEAVY_HOLD && !S.charging && (!S.move || canFollow(S.m, S.t)) && start(heavyOf(item()))) { S.charging = true; S.queued = null; }
+			}
+			if (!S.move) return events;
+			const m = S.m;
+			S.since += dt;
+			if (S.charging) { S.charge = charge(S.pressT); S.t = Math.min(S.t + dt, m.wind * 0.9); }
+			else S.t += dt * slow;
+			if (!S.landed && !S.charging && S.t >= m.wind) { S.landed = true; events.push({ name: S.move, m, charge: S.charge }); }
+			// (the kept press goes on the beat, or as soon as this strike is over)
+			if (S.queued && (ready() || S.t >= moveTime(m))) { const q = S.queued; S.queued = null; start(q); }
+			else if (S.t >= moveTime(m)) S.move = null;
+			return events;
+		},
+	};
+}
 
 // a strike's damage: by the fighter's stamina (0..100) and charge, a counter after a parry
 // hits harder

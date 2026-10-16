@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CIVS } from '../planet/aliencivs.js';
+import { lightInterior, releaseInterior, configureLighting } from './lighting.js';
 
 const TAU = Math.PI * 2;
 
@@ -36,6 +37,7 @@ export function planDwellings(island, plan) {
 
 export function createDwellings(scene, plan, { isPhone = false } = {}) {
 	const list = plan?.dwellings || [];
+	configureLighting({ isPhone });
 	const group = new THREE.Group();
 	group.name = 'alien-dwellings';
 	scene.add(group);
@@ -87,23 +89,23 @@ export function createDwellings(scene, plan, { isPhone = false } = {}) {
 			else { put('dark', new THREE.CylinderGeometry(0.25, 0.45, 1.0, 6), x, 0.5, z); put('glow', new THREE.BoxGeometry(0.7, 0.04, 0.45).rotateX(-0.5), x, 1.05, z, a); solids.push({ x, z, r: 0.5 }); }
 		}
 		const g = new THREE.Group();
-		for (const k of Object.keys(parts)) if (parts[k].length) { const m = new THREE.Mesh(mergeGeometries(parts[k].map((p) => { const n = p.index ? p.toNonIndexed() : p; n.deleteAttribute('uv'); return n; })), { skin, dark, glow }[k]); m.receiveShadow = true; g.add(m); }
+		for (const k of Object.keys(parts)) if (parts[k].length) { const m = new THREE.Mesh(mergeGeometries(parts[k].map((p) => { const n = p.index ? p.toNonIndexed() : p; n.deleteAttribute('uv'); return n; })), { skin, dark, glow }[k]); m.receiveShadow = true; m.userData.spin = k === 'glow'; g.add(m); }
 		g.position.set(q.x, q.y, q.z);
 		group.add(g);
-		const light = new THREE.PointLight(new THREE.Color().setRGB(...glowC), 0, r * 2.2, 1.5);
-		light.position.set(q.x, q.y + 2.2, q.z);
-		group.add(light);
-		return { g, light, solids, seats };
+		// its rings and ribs of light light it (interiors/lighting.js: their glow baked over the
+		// floor and the pods, a real light or two near you)
+		lightInterior(g, { id: 'dwelling:' + Math.round(q.x) + ':' + Math.round(q.z), lamps: [glow], lampStrength: 0.45, levels: [[0, 2.5 + r * 0.7]], bounds: [-r, -r, r, r], sky: false });
+		return { g, solids, seats };
 	}
 	let t = 0;
 	function update(dt, cam) {
 		glow.emissiveIntensity = 1.4 + Math.sin(performance.now() * 0.0012) * 0.3;
-		for (const [q, D] of live) { D.g.children.forEach((m) => { if (m.material === glow) m.rotation.y += dt * 0.2; }); D.light.intensity = Math.hypot(q.x - cam.x, q.z - cam.z) < q.R + 2 ? 3 : 0; }
+		for (const D of live.values()) D.g.children.forEach((m) => { if (m.material?.emissive && m.userData.spin) m.rotation.y += dt * 0.2; });
 		t -= dt;
 		if (t > 0) return;
 		t = 0.5;
 		const near = list.filter((q) => Math.hypot(q.x - cam.x, q.z - cam.z) < R0).sort((a, b) => Math.hypot(a.x - cam.x, a.z - cam.z) - Math.hypot(b.x - cam.x, b.z - cam.z)).slice(0, isPhone ? 2 : 4);
-		for (const [q, D] of live) if (!near.includes(q)) { group.remove(D.g, D.light); D.g.traverse((m) => m.geometry?.dispose()); D.light.dispose(); live.delete(q); }
+		for (const [q, D] of live) if (!near.includes(q)) { releaseInterior(D.g); group.remove(D.g); D.g.traverse((m) => m.geometry?.dispose()); live.delete(q); }
 		for (const q of near) if (!live.has(q)) { live.set(q, build(q)); break; }
 	}
 	// the floor inside, the wall and what stands on the floor
