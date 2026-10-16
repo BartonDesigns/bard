@@ -1,5 +1,6 @@
-// Water thrown into the air: the lawn sprinklers (world/sprinklers.js) and the spray and
-// mist at the foot of falling water (world/falls.js), drawn the one way.
+// Water thrown into the air: the lawn sprinklers (world/sprinklers.js), the spray and
+// mist at the foot of falling water (world/falls.js) and the surf bursting on the rocks as
+// each roller hits (world/ocean.js), drawn the one way.
 //
 // Each drop is a short streak, the path it covers in the blink of an exposure, turned
 // along its velocity. Its flight is worked out in the vertex shader from its own seed
@@ -236,6 +237,8 @@ function puffTexture() {
 
 export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 	const NS = isPhone ? 4 : 10, NF = isPhone ? 2 : 4, ND = isPhone ? 6 : DECALS;
+	// the surf bursting on rock near you (world/ocean.js splashes): slots after the sprinklers'
+	const NU = isPhone ? 1 : 2, DU = isPhone ? 500 : 1400, MU = isPhone ? 10 : 20;
 	const DS = isPhone ? 380 : 1300, DF = isPhone ? 900 : 2200, MS = isPhone ? 12 : 22, MF = isPhone ? 18 : 36;
 	const group = new THREE.Group();
 	group.name = 'spray';
@@ -262,11 +265,11 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 		g.instanceCount = N;
 		return g;
 	}
-	const blocks = (a, b) => [...Array(SLOTS)].map((_, s) => (s < NS ? a : s >= SLOTS - NF ? b : 0));
-	const drops = new THREE.Mesh(instanced(blocks(DS, DF), 2, 1), new THREE.ShaderMaterial({
+	const blocks = (a, b, u) => [...Array(SLOTS)].map((_, s) => (s < NS ? a : s >= SLOTS - NF ? b : s < NS + NU ? u : 0));
+	const drops = new THREE.Mesh(instanced(blocks(DS, DF, DU), 2, 1), new THREE.ShaderMaterial({
 		uniforms: U, vertexShader: DROP_VERT, fragmentShader: DROP_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
 	}));
-	const mist = new THREE.Mesh(instanced(blocks(MS, MF), 2, 2), new THREE.ShaderMaterial({
+	const mist = new THREE.Mesh(instanced(blocks(MS, MF, MU), 2, 2), new THREE.ShaderMaterial({
 		uniforms: U, vertexShader: MIST_VERT, fragmentShader: MIST_FRAG, transparent: true, depthWrite: false,
 	}));
 	drops.frustumCulled = mist.frustumCulled = false;
@@ -310,6 +313,7 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 	const falls = createFalls({ world });
 	let force = false, q = 1, fallList = [], fallT = 0, last = [];
 	const fallAt = { x: 1e9, z: 1e9 };
+	const surf = new Float32Array(NU * 4);
 
 	// ---- the hiss of the spray and the rush of falling water, quiet, from what is near
 	let snd = null;
@@ -405,6 +409,20 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 			E[b + 3].set(f.lx, f.ly, f.lz, f.cave || hard ? 0.4 : 0);
 			E[b + 4].set(1, 1 - THREE.MathUtils.smoothstep(d, 180, 260), 0, 0);
 			rush += 0.05 * Math.min(1, R / 4) / (1 + (d / 12) ** 2);
+		}
+		// the surf bursting white off the rocks as each roller hits: thrown up and out from the
+		// waterline, a mist hanging after it
+		const burst = high ? null : W.ocean?.userData?.splashes?.(cam, shared.uTime.value, surf, NU);
+		for (let s = 0; s < NU; s++) {
+			const b = (NS + s) * 5, k = burst ? surf[s * 4 + 3] : 0;
+			if (k < 0.02) continue;
+			const x = surf[s * 4], y = surf[s * 4 + 1], z = surf[s * 4 + 2];
+			E[b].set(x, y, z, 3);
+			E[b + 1].set(1.2, 0, 3.5 + 3 * Math.min(1, k), 0.9);
+			E[b + 2].set(y - 0.6, 1.6, q, 1);
+			E[b + 3].set(x, y, z, 0);
+			E[b + 4].set(Math.min(1, k * 1.4), Math.min(1, k) * 0.8, 0, 0);
+			rush += 0.03 * k;
 		}
 		sound(hiss, rush);
 	}

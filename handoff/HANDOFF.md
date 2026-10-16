@@ -1,6 +1,6 @@
 # Handoff: unfinished work, 16 October 2026
 
-Everything through PR #48 is on main and live at level99bard.com. The three workstreams below were stopped part way (owner's call: they were costing too much). Each one's unfinished work is saved as a patch in this folder. None of it is on main, built or tested.
+Everything through PR #48 is on main and live at level99bard.com, and water and shoreline (section 2) has since shipped. The workstreams below were stopped part way (owner's call: they were costing too much). Each one's unfinished work is saved as a patch in this folder. Apart from water, none of it is on main, built or tested.
 
 ## Picking one up in a new conversation
 
@@ -42,6 +42,8 @@ Brief:
 Owner's standard: dark overall, light only where real lights are, no glowing walls (see docs/night-lighting-2026-10-15.md).
 
 ## 2. Water and shoreline: `wip-water.patch`
+
+**Shipped** (branch `claude/water-shoreline`): the patch was finished, built, tested and merged to main. See `docs/water-shoreline-2026-10-16.md`. The notes below are kept for the record.
 
 11 files: world/ocean.js, world/shore.js, world/spray.js, world/terrain.js, world/grass.js, bay/water.js, planet/waters.js, main.js, tools/shore.test.mjs, docs/water-shoreline-2026-10-16.md, HANDOFF.md.
 

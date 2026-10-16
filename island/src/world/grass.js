@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL, PLANET_GLSL, planetUniforms } from './terrain.js';
 import { grassStrip } from './textures.js';
+import { waterMapTexture } from './shore.js';
 import { mulberry32 } from '../noise.js';
 
 let stripTex = null;
@@ -46,7 +47,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 	geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e7);
 
 	const uniforms = {
-		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex }, uMap: { value: stripTex || (stripTex = grassStrip()) },
+		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex }, uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) }, uMap: { value: stripTex || (stripTex = grassStrip()) },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span }, uWidth: { value: width }, uTallK: { value: heightK },
 		uTime: shared.uTime, uWind: shared.uWind, uGust: shared.uGust, uWindT: shared.uWindT, uWindDir: shared.uWindDir, uHigh: shared.uHigh, uBass: shared.uBass,
@@ -65,7 +66,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			${OCC_GLSL}
 			${PLANET_GLSL}
 			uniform float uPlGrassK, uPl2GrassK;
-			uniform vec4 uWetS[4]; uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
+			uniform vec4 uWetS[4]; uniform sampler2D uMasks, uWaterMap; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet;
 			float gTall;
@@ -87,6 +88,9 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float meadow = smoothstep(0.3, 0.8, smoothstep(1.4 + n1g * 0.5, 2.3 + n1g * 0.6, h)) * smoothstep(1.3, 2.0, h);
 				float density = meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)) * (1.0 - canopy * 0.65) * (1.0 - occ * 0.85);
 				density *= 0.85 + 0.15 * vn(w * 0.4 + 5.0);
+				// (none in a planet's lakes and streams, thinning on their wet banks: world/shore.js)
+				vec2 wmg = texture2D(uWaterMap, (w + uHalf) / (uHalf * 2.0)).rg;
+				density *= 1.0 - smoothstep(0.15, 0.6, wmg.r + wmg.g * 0.25);
 				// around shrubs, bananas and flowers the grass crowds in and grows up the stems
 				density = min(1.0, density + hug * 0.6 * meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)));   // (never up through paving)
 				// another world: sparse on a desert, none on ash, none in snow or down a cave mouth
