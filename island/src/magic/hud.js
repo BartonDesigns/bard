@@ -69,29 +69,39 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 	const mana = mk('div', 'mg-mana', mount, '<div></div>'), manaFill = mana.firstChild;
 	const fab = mk('div', 'mg-fab', mount);
 	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · double-tap Alt / ⌥ to aim');
-	let lastSig = '';
+	let lastSig = '', wT = 0;
+	// (only what changed is written: the bar is looked at every frame)
+	const was = new Map();
+	const put = (e, k, v, f) => { const key = e; let m = was.get(key); if (!m) was.set(key, (m = {})); if (m[k] !== v) { m[k] = v; f(v); } };
 	function update(now) {
-		const ws = hotbar?.slots?.() || [];
-		for (let i = 0; i < 5; i++) {
-			const s = ws[i], e = wSlots[i];
-			e.classList.toggle('empty', !s); e.classList.toggle('held', !!s?.held);
-			e.querySelector('.w').textContent = s ? WEAPON_TAG[s.id] || s.name.slice(0, 4) : '';
-			e.title = s ? `${s.name} (${i + 1})` : `Key ${i + 1}: no weapon`;
+		wT -= 1;
+		if (wT <= 0) {
+			wT = 15;
+			const ws = hotbar?.slots?.() || [];
+			for (let i = 0; i < 5; i++) {
+				const s = ws[i], e = wSlots[i];
+				put(e, 'w', s ? `${s.id}|${s.held}` : '', () => {
+					e.classList.toggle('empty', !s); e.classList.toggle('held', !!s?.held);
+					e.querySelector('.w').textContent = s ? WEAPON_TAG[s.id] || s.name.slice(0, 4) : '';
+					e.title = s ? `${s.name} (${i + 1})` : `Key ${i + 1}: no weapon`;
+				});
+			}
 		}
 		for (let i = 0; i < SLOTS; i++) {
 			const id = state.binds[i], sp = SPELL[id], e = sSlots[i];
-			e.classList.toggle('empty', !sp);
-			const g = e.querySelector('.g');
-			if (g.textContent !== (sp?.glyph || '')) g.textContent = sp?.glyph || '';
-			g.style.color = sp ? SCHOOLS[sp.school].color : '';
-			e.title = sp ? `${sp.name} (${KEYS[i]}): ${manaCost(state, sp)} mana` : `Key ${KEYS[i]}: no spell (bind one in the spellbook, N)`;
-			const cd = sp ? cooldownLeft(state, id, now) : 0;
-			e.querySelector('.cd').style.background = cd > 0 ? `conic-gradient(rgba(0,0,0,.6) ${cd * 360}deg, transparent 0)` : '';
-			e.classList.toggle('dim', !!sp && state.mana < manaCost(state, sp));
+			put(e, 'id', id || '', () => {
+				e.classList.toggle('empty', !sp);
+				const g = e.querySelector('.g');
+				g.textContent = sp?.glyph || '';
+				g.style.color = sp ? SCHOOLS[sp.school].color : '';
+				e.title = sp ? `${sp.name} (${KEYS[i]})` : `Key ${KEYS[i]}: no spell (bind one in the spellbook, N)`;
+			});
+			const cd = sp ? Math.round(cooldownLeft(state, id, now) * 60) / 60 : 0;
+			put(e, 'cd', cd, (v) => { e.querySelector('.cd').style.background = v > 0 ? `conic-gradient(rgba(0,0,0,.6) ${v * 360}deg, transparent 0)` : ''; });
+			put(e, 'dim', !!sp && state.mana < manaCost(state, sp), (v) => e.classList.toggle('dim', v));
 		}
 		const mx = manaMax(state);
-		manaFill.style.transform = `scaleX(${Math.max(0, Math.min(1, state.mana / mx))})`;
-		mana.title = `Mana ${Math.round(state.mana)} / ${mx}`;
+		put(mana, 'm', Math.round(state.mana / mx * 200), (v) => { manaFill.style.transform = `scaleX(${Math.max(0, Math.min(1, v / 200))})`; mana.title = `Mana ${Math.round(state.mana)} / ${mx}`; });
 		const sig = `${state.fabric.light}|${state.fabric.dark}`;
 		if (sig !== lastSig) { lastSig = sig; fab.innerHTML = `<span class="l">☀ <b>${state.fabric.light}</b></span> &nbsp; <span class="d">☾ <b>${state.fabric.dark}</b></span><br><span style="opacity:.7;font-size:10px;letter-spacing:.5px">AETHER FABRIC · N: SPELLBOOK</span>`; }
 		if (book.style.display !== 'none' && dirty) draw();
