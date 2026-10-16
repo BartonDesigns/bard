@@ -17,7 +17,7 @@ const ICON = { radiance: '☀', restoration: '✚', warding: '⛨', dawn: '☼',
 // a glyph drawn as text, never as a coloured emoji (U+FE0E asks for the text form)
 const txt = (g) => (g ? `${g}\uFE0E` : '');
 const STRAND_COL = { light: '#ffd27a', dark: '#b39aff', twilight: '#7fd8ff', body: '#9fe8c8' };
-const KIND_WORD = { bolt: 'Bolt', beam: 'Held beam', burst: 'Burst at your aim', strike: 'Strike from the sky', nova: 'Nova round you', cone: 'Cone before you', chain: 'Chain', orb: 'Rolling orb', well: 'Void well', cloud: 'Lingering cloud', zone: 'Hallowed ground', storm: 'Storm', heal: 'Heal', hot: 'Heal over time', shield: 'Ward', deathward: 'Death ward', aura: 'Aura', buff: 'Blessing', cloak: 'Cloak', light: 'Light', sight: 'Sight', pact: 'Pact', summon: 'Summoning', blink: 'Blink', recall: 'Mark and return', gate: 'Gate', rewind: 'Rewind', stasis: 'Stasis', douse: 'Rain', daybreak: 'Daybreak' };
+const KIND_WORD = { bolt: 'Bolt', beam: 'Held beam', burst: 'Burst at your aim', strike: 'Strike from the sky', nova: 'Nova round you', cone: 'Cone before you', chain: 'Chain', orb: 'Rolling orb', well: 'Void well', cloud: 'Lingering cloud', zone: 'Hallowed ground', storm: 'Storm', heal: 'Heal', hot: 'Heal over time', shield: 'Ward', deathward: 'Death ward', aura: 'Aura', buff: 'Blessing', cloak: 'Cloak', light: 'Light', sight: 'Sight', pact: 'Pact', summon: 'Summoning', blink: 'Blink', recall: 'Mark and return', gate: 'Gate', rewind: 'Rewind', stasis: 'Stasis', douse: 'Rain', daybreak: 'Daybreak', lances: 'Lances from the sky' };
 const DMG_WORD = { radiant: 'radiant', shadow: 'shadow', void: 'void', blight: 'blight', storm: 'storm', frost: 'frost', fire: 'fire' };
 
 const hexRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -834,6 +834,46 @@ function drawSpell(g, w, h, sp, u, c, t) {
 			if (sp.splash) ring(T0.x, T0.y, 6 + 26 * q, 1 - q);
 			status(T0, 1 - q * 0.5);
 		}
+		return;
+	}
+	if (sp.id === 'lance-of-dawn' || K === 'lances') {
+		// three lances fall point first from the sun (or, every other loop, the moon) onto the ground round the aim
+		const c0 = { x: w * 0.68, y: gy }, R = Math.min(w * 0.16, 46);
+		const moon = Math.floor(t / 2.2) % 2 === 1, sky = { x: Math.min(w - 12, c0.x + R * 0.9), y: Math.max(10, h * 0.1) };
+		const spots = [{ x: c0.x - R * 0.7, y: gy + 2 }, { x: c0.x + R * 0.15, y: gy - 3 }, { x: c0.x + R * 0.8, y: gy + 3 }];
+		const at = [0.18, 0.3, 0.42], fall = 0.2;
+		g.fillStyle = moon ? 'rgba(200,215,255,.9)' : 'rgba(255,236,170,.95)';
+		g.beginPath(); g.arc(sky.x, sky.y, 7, 0, 6.283); g.fill();
+		if (moon) { g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.arc(sky.x + 3, sky.y - 2, 6, 0, 6.283); g.fill(); g.globalCompositeOperation = 'source-over'; }
+		glow(sky.x, sky.y, 16 + 4 * Math.sin(t * 6), u < 0.45 ? 0.7 : 0.35);
+		figure(me);
+		const fs = foes.map((p, i) => ({ x: c0.x + (i - 1) * R * 0.55, y: p.y }));
+		const hitOf = (p) => Math.max(0, ...at.map((a, i) => (Math.abs(spots[i].x - p.x) < R * 0.9 && u > a + fall ? Math.max(0, 1 - (u - a - fall) / 0.3) : 0)));
+		for (const p of fs) figure(p, 1, hitOf(p), true);
+		ring(c0.x, c0.y, R * 1.3, u < 0.5 ? 0.35 + 0.2 * Math.sin(t * 12) : Math.max(0, 0.6 - (u - 0.5)), 1.5, [5, 5]);
+		for (const [i, s] of spots.entries()) {
+			const f = (u - at[i]) / fall;
+			if (f < 0) continue;
+			const dx = s.x - sky.x, dy = s.y - sky.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, px = -uy, py = ux;
+			if (f < 1) {
+				// the lance in flight: a bright point leading a long shaft and a fading trail
+				const k = ease(f), tip = { x: sky.x + dx * k, y: sky.y + dy * k }, len = 30, back = { x: tip.x - ux * len, y: tip.y - uy * len };
+				line({ x: tip.x - ux * len * 2.4, y: tip.y - uy * len * 2.4 }, back, 3, 0.18);
+				g.fillStyle = col(0.95); g.beginPath();
+				g.moveTo(tip.x, tip.y); g.lineTo(tip.x - ux * 9 + px * 3, tip.y - uy * 9 + py * 3); g.lineTo(back.x + px * 1.2, back.y + py * 1.2);
+				g.lineTo(back.x - px * 1.2, back.y - py * 1.2); g.lineTo(tip.x - ux * 9 - px * 3, tip.y - uy * 9 - py * 3); g.closePath(); g.fill();
+				glow(tip.x, tip.y, 7, 0.9);
+			} else {
+				// planted, point down, then burning out with a ring of light
+				const q = Math.min(1, (u - at[i] - fall) / 0.35), sink = 6;
+				g.globalAlpha = Math.max(0, 1 - q * 0.9);
+				line({ x: s.x - ux * 30 + ux * sink, y: s.y - uy * 30 + uy * sink }, { x: s.x + ux * sink * 0.4, y: s.y + uy * sink * 0.4 }, 2.6, 0.9);
+				g.globalAlpha = 1;
+				glow(s.x, s.y - 6, 22 * (1 - q) + 4, 1 - q);
+				ring(s.x, s.y, 6 + R * 0.7 * q, Math.max(0, 1 - q), 2.5);
+			}
+		}
+		fs.forEach((p) => status(p, u > 0.5 ? 1 - (u - 0.5) * 1.4 : 0));
 		return;
 	}
 	if (K === 'beam') {
