@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { groundDetail } from './textures.js';
 import { FAR_GLSL } from './lunarfar.js';
+import { SWASH_GLSL, WATERMAP_GLSL, waterMapTexture } from './shore.js';
 
 export function radialGrid(segments, radius, power, extra = 0, far = 0) {
 	// a square grid whose spacing grows with distance from the centre (and, with extra
@@ -62,24 +63,8 @@ vec2 occAt(vec2 w){
 }
 float moundAt(vec2 w){ vec2 o = occAt(w); return o.g * 0.24 + o.r * 0.06; }`;
 
-// The swash: each wave runs up the beach fast as a thinning sheet and drains back
-// slowly. Two trains with different periods and a phase that wanders along the shore
-// keep it from ever looking like one sheet of water breathing up and down.
-// Returns the water's reach (a ground height) at w and time t; runMax is the
-// highest reach there, the top of the wet band.
-export const SWASH_GLSL = /* glsl */`
-float swashRunMax(vec2 w, float wave){ return (0.42 + 0.32 * vn(w * 0.031 + 4.0)) * (0.55 + 0.45 * wave); }
-float swashTrain(vec2 w, float t, float T, float off, float runMax){
-	float ph = vn(w * 0.014 + off) * 2.4 + vn(w * 0.06 - off) * 0.35;
-	float s = fract(t / T + ph);
-	float up = s < 0.24 ? sin(s / 0.24 * 1.5708) : 1.0 - smoothstep(0.24, 1.0, s);   // quick rush, slow drain
-	float k = 0.55 + 0.45 * vn(vec2(floor(t / T + ph) * 3.7, off));                   // some waves run further
-	return mix(-0.3, runMax * k, up);
-}
-float swashLevel(vec2 w, float t, float wave){
-	float rm = swashRunMax(w, wave);
-	return max(swashTrain(w, t, 8.3, 1.7, rm), swashTrain(w, t, 11.9, 6.1, rm * 0.85));
-}`;
+// The swash (its timing, reach and the shore's other sums) lives with the shore: world/shore.js
+export { SWASH_GLSL };
 
 export function makeHeightTexture(island) {
 	const tex = new THREE.DataTexture(island.height, island.N, island.N, THREE.RedFormat, THREE.FloatType);
@@ -180,6 +165,8 @@ export function createTerrain(island, shared) {
 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
 		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
 		uDetail: { value: detail }, uDetailM: { value: detail.userData.mean }, uOcc: shared.uOcc, uOccO: shared.uOccO,
+		uSkyZenT: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorT: shared.uSkyHor || { value: new THREE.Color() },
+		uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) },
 		...planetUniforms(shared),
 	};
 	mat.onBeforeCompile = (sh) => {
@@ -199,7 +186,7 @@ export function createTerrain(island, shared) {
 				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
 				${far ? '// the ground falls away with the curve of a small world, so the horizon is a line\n\t\t\t\ttransformed.y -= dot(position.xz, position.xz) / 3.47e6;' : ''}
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				${far ? '' : 'if (max(abs(vW.x), abs(vW.z)) > uHalf) discard;'}
 				holeCut(vW.xz);
@@ -221,10 +208,18 @@ export function createTerrain(island, shared) {
 				vec3 sandWet = vec3(0.56, 0.48, 0.36) * (0.9 + 0.12 * n2);
 				// wet up to where the waves have been reaching, soaked where they are now,
 				// drying (lighter, duller) toward the top of the band
-				float swL = swashLevel(vW.xz, uTime, uWave), runM = swashRunMax(vW.xz, uWave);
+				// (the swash's own sums, world/shore.js: the sea's sheet runs exactly here)
+				vec4 swS = swashState(vW.xz, uTime, uWave);
+				float swL = swS.x, runM = swashRunMax(vW.xz, uWave);
 				float band = 1.0 - smoothstep(runM - 0.06, runM + 0.1 + 0.05 * n2, h);
-				float soak = 1.0 - smoothstep(swL - 0.02, swL + 0.12, h);
-				float wet = max(band * 0.75, soak) * step(-2.0, h);
+				// soaked under the sheet; where this wave has just been the sand stays dark and
+				// saturated, drying slowly through the wave, and glossy only for the first few
+				// seconds as the water drains out of it
+				float covered = 1.0 - smoothstep(swL - 0.02, swL + 0.08, h);
+				float ran = (1.0 - smoothstep(swS.y - 0.015, swS.y + 0.02, h)) * step(0.0, swS.z);
+				float reached = ran * exp(-swS.z * 0.3);
+				float soak = max(covered, reached * 0.9);
+				float wet = max(max(band * 0.75, covered), ran * exp(-swS.z * 0.06)) * step(-2.0, h);
 				// footprints in soft sand, smoothed away where the sea has been
 				vec2 puv = (vW.xz - uPrintsO.xy) / uPrintsO.z;
 				float print = texture2D(uPrints, puv).r * step(abs(puv.x - 0.5), 0.49) * step(abs(puv.y - 0.5), 0.49) * (1.0 - band * 0.8);
@@ -288,9 +283,24 @@ export function createTerrain(island, shared) {
 				vec3 col = mix(sand, sandySoil, smoothstep(0.0, 0.45, grassW));
 				col = mix(col, grass, smoothstep(0.35, 1.0, grassW));
 				float rockW = smoothstep(0.42, 0.62, slope + (n1 - 0.5) * 0.2) * step(0.9, h);
+				// a steep shore (a rise of one in five or more: slope here is 1 - n.y) is rock and
+				// shingle down into the sea, dark and wet from the waterline up to where the waves'
+				// spray reaches, drying above it, where the grass begins
+				float steepK = smoothstep(0.012, 0.03, slope + (n1 - 0.5) * 0.01);
+				float splashTop = runM * 2.2 + 0.3 * n2 + 0.6 * (n1 - 0.5) + 0.3 * smoothstep(0.03, 0.15, slope);
+				float shoreRock = steepK * (1.0 - smoothstep(splashTop + 0.2, splashTop + 0.7 + 0.4 * n1, h)) * step(-4.0, h);
+				rockW = max(rockW, shoreRock);
+				float rockWet = (1.0 - smoothstep(splashTop - 0.35, splashTop + 0.15, h)) * steepK * step(-3.0, h);
 				col = mix(col, rock, rockW);
+				col = mix(col, col * vec3(0.48, 0.5, 0.53), rockWet * rockW);
 				float pathW = smoothstep(0.25, 0.75, mk.r + (dd.g - 0.5) * 0.25) * step(0.5, h);
 				col = mix(col, dirt, pathW);
+				// a planet's lakes and streams: silt on the bed under the water, the banks dark wet
+				// mud for a few metres round it, drying away from it
+				vec2 wmap = waterMapAt(vW.xz);
+				float lakeBed = smoothstep(0.3, 0.75, wmap.r), bankWet = wmap.g * (1.0 - lakeBed * 0.6);
+				col = mix(col, plO(vec3(0.22, 0.19, 0.14)) * (0.85 + 0.25 * n2), lakeBed * 0.85);
+				col = mix(col, col * vec3(0.6, 0.6, 0.58), bankWet * 0.75 * (1.0 - lakeBed));
 				// the height the bump reads, per ground type, in metres
 				// ripples belong to open sand only, not to the meadow's edge
 				float gs = 1.0 - smoothstep(0.0, 0.3, grassW);
@@ -355,9 +365,14 @@ export function createTerrain(island, shared) {
 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
 				rough = mix(rough, 0.32, gSnowW);   // an icy glaze catches the sky
+				rough = mix(rough, 0.3, rockWet * rockW);   // wet rock at the waterline shines
+				rough = mix(rough, 0.4, bankWet * 0.7);   // and the mud along a lake or a stream
 				diffuseColor.rgb *= 1.0 - print * 0.12;
 				// moonlight catching the wet sand
 				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);
+				// the sand the last wave has just left is a mirror for a moment (the sea's own sheen
+				// carries on over it, world/ocean.js), dulling as it drains
+				gSheen = reached * (1.0 - grassW) * (1.0 - rockW * 0.5) * step(-0.6, h);
 				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 240.0) + 3.0)) * (1.0 - smoothstep(2.0, 7.0, camD));
 				// ice crystals glitter in the snow, a little further out than sand grains
 				gSparkle = max(gSparkle, gSnowW * step(0.72, gh(floor(vW.xz * 160.0) + 9.0)) * (1.0 - smoothstep(4.0, 22.0, camD)) * 0.8);`)
@@ -367,6 +382,8 @@ export function createTerrain(island, shared) {
 					vec3 Vv = normalize(cameraPosition - vW), md = normalize(-uSunDir2 + vec3(0.0, 0.35, 0.0));
 					vec3 Rr = reflect(-Vv, normalize(vWN + vec3(0.0, 0.0, 0.0)));
 					totalEmissiveRadiance += vec3(0.7, 0.78, 1.0) * gMoonGlint * (pow(max(dot(Rr, md), 0.0), 60.0) * 1.6 + pow(max(dot(Rr, md), 0.0), 8.0) * 0.08);
+					float Fs = 0.02 + 0.98 * pow(1.0 - max(dot(normalize(vWN), Vv), 0.0), 5.0);
+					totalEmissiveRadiance += mix(uSkyHorT, uSkyZenT, clamp(Rr.y * 2.0, 0.0, 1.0)) * Fs * gSheen * 0.35;
 					// quartz grains glint: each grain a tiny mirror at its own angle
 					// grains about 4 mm: each glint a pin-point, not a flake
 					vec2 gc = floor(vW.xz * 240.0);
