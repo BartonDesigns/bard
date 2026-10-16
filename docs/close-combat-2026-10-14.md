@@ -6,8 +6,8 @@ Fists, blocks, dodges and takedowns now work like a modern action game, everywhe
 
 | | Desktop | Touch (phone) |
 |---|---|---|
-| Light strike (jab, cross, hook string) | Tap left mouse, or tap Q | Tap **Strike** |
-| Heavy strike (charged) | Hold left mouse, release to throw | Hold **Strike**, release |
+| Light strike (jab, cross, jab, cross in a steady rhythm) | Tap left mouse, or tap Q | Tap **Strike** |
+| Heavy strike (charged, then you wobble) | Hold left mouse, release to throw | Hold **Strike**, release |
 | Block | Hold right mouse | Hold **Block** |
 | Parry | Raise the block just as a blow lands (0.16 s window) | Same, with **Block** |
 | Dodge | C, with WASD for the direction (back if none) | **Dodge**, with the stick for the direction |
@@ -20,12 +20,20 @@ On a phone the cluster shows only while you are unarmed. **Strike** is always th
 
 ## Feel
 
-- **Timing** (`combat/melee-rules.js MOVES`): each strike has a wind-up, an active moment when it can land, and a recovery. A jab is 0.30 s from press to ready, a hook 0.48 s, a heavy 0.82 s. A press late in a strike is kept for the next one in the string (`canBuffer`), and the next starts during the recovery (`canFollow`). Holding past 0.22 s turns the press into a heavy, drawn back while held and charged up to 1.6 times the damage.
+- **Timing** (`combat/melee-rules.js`, revised October 15): `createStriker()` turns the button into strikes and is the one timing model for fists and for every item (bat, pipe, bottle, knife, machete), on the mouse, Q and the touch Strike button alike.
+  - A tap throws a quick strike. Bare-handed taps alternate a jab off the lead hand and a cross off the rear one; with something in hand, a tap is its quick slash or swing.
+  - Taps keep a beat. A strike starts no sooner than 0.27 s (`BEAT`) after the last one began, and one press is kept for the next while the rest are let go. Mashing therefore gives the same steady one-two as tapping in time, about 3.7 punches a second. A pause of more than 0.7 s (`RHYTHM`) starts again from the jab.
+  - The jab is 0.26 s from press to ready, the cross 0.31 s.
+  - A hold past 0.22 s (`HEAVY_HOLD`) is a heavy: the rear hand's power punch, or the item's overhead. It waits drawn back at the end of its wind-up while the hold goes on, charging fully over a further 0.8 s (`CHARGE_FULL`) to 1.8 times the damage, and goes when the button is let go.
+  - A thrown heavy leaves you wobbling (`wobble()`): 0.35 to 0.75 s with the view rolling and your pace cut to as little as a third, and longer still when it meets nothing.
+  - The tests drive the striker at 60 frames a second: one tap, mashing, taps in time, a pause, holds short and long, items.
 - **Hit-stop**: a landed blow holds still for 45 ms (light), 65 ms (an item) or 85 ms (heavy), 110 ms on a parry. Your fists stay at full extension and the struck body freezes through the motion rig (`motion.js S.freeze`) before the reaction plays.
-- **Camera**: a blow you land dips and rolls the view; one you take snaps it away from the attacker; a block shoves it back (`combat/melee-feel.js`, springs added on top of the view each frame).
+- **Camera** (`combat/melee-feel.js`, springs added on top of the view each frame): a blow you land dips and rolls the view; one you take snaps it away from the attacker; a block shoves it back. Your own strikes turn it with the shoulders: a touch right with a jab, about 3 degrees left with a cross. A heavy being charged coils the view away and down, with a tremble and a slow sway that grow with the charge. Thrown, it turns hard and lunges the eye forward, and the hit-stop holds on contact.
 - **Flash**: a faint vignette at the screen edges. It is warm on heavy blows you land, pale on parries and red on hits you take. It is gentler on phones and is driven by the Web Animations API, so nothing runs per frame.
 - **Sound** (`combat/melee-sound.js`): every piece is synthesised once per audio context into a buffer, the same way `bay/bridgesound.js` makes its knock, and played through `world/soundbus.js`. The pieces: swish, heavy swish, body thud, face slap and crack, heavy crunch, block clack, parry clap, bat thock, pipe clang, glass, body fall, grunt, breath, dodge scuff. Each blow plays two or three of them layered, pitched and levelled at random each time, panned left or right and dulled with distance. A phone plays fewer layers and at most 6 voices (14 on desktop).
-- **Your fists** (`combat/melee-view.js`): procedural forearms and hands (knuckles, a wrapped thumb, wrist, forearm, a sleeve with a cuff), coloured from your own body's skin and top. They hold a breathing guard that bobs with your steps. Each strike moves through three key poses on its own timing. A block covers the face, a dodge tucks the arms, a takedown wraps the right arm round the throat, and an item is held two-handed.
+- **Your fists** (`combat/melee-view.js`; the anatomical hands, sleeves and skin from #36, #41, #42 and #43 are unchanged): a boxer's guard, the lead hand forward and a little higher, the rear one back by the chin, elbows in. Each fist is placed by where it falls on screen (`SCREEN`), never further out than shoulder width (`WIDE`). On a narrow phone screen the fists sit further from the eye and wider apart on the screen, so both always show at the bottom and never meet in the middle.
+  - A jab or a cross runs straight out along its own shoulder's line toward the crosshair, about head height. The fist turns over only in the last of the extension, the other hand is pulled back to cover, and the fist snaps back to the guard.
+  - A held heavy draws the rear hand back and up toward the shoulder, the lead up to cover, the hand trembling more the longer it is held. A block covers the face, a dodge tucks the arms, a takedown wraps the right arm round the throat, and an item is held two-handed.
 - **Reactions on NPCs**: `motion.jolt(dx, dz, k, twist, hold)` is a new procedural channel on every rig. Springs on the chest, head and hips throw the body the way the blow travelled, with a twist on hooks and swings. `reaction()` decides between a flinch, a stagger (pushed back, the attack broken off) and a knockdown (the existing Rapier ragdoll). The fallen get back up with the new `getup` action instead of popping upright.
 
 ## Defence

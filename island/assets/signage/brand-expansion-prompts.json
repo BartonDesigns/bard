@@ -1,0 +1,881 @@
+{
+  "generator": "Built-in image_gen",
+  "count": 200,
+  "collections": [
+    {
+      "id": "mobile",
+      "theme": "Phone and device shops",
+      "names": [
+        "nori",
+        "HOPWIRE",
+        "pebbl",
+        "DIALDAY",
+        "milo mobile",
+        "small signal",
+        "ROVE",
+        "telli"
+      ],
+      "accents": [
+        "small signal notch",
+        "single angled antenna stroke",
+        "one square pixel",
+        "tiny coral dot",
+        "one looped cable",
+        "three short signal lines",
+        "one open circle",
+        "single blue dash"
+      ],
+      "styles": [
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Phone and device shops.\n1. Exact text \"nori\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: small signal notch.\n2. Exact text \"HOPWIRE\". Lettering direction: condensed architectural capitals. Single focal detail: single angled antenna stroke.\n3. Exact text \"pebbl\". Lettering direction: warm editorial serif. Single focal detail: one square pixel.\n4. Exact text \"DIALDAY\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: tiny coral dot.\n5. Exact text \"milo mobile\". Lettering direction: utilitarian slab serif. Single focal detail: one looped cable.\n6. Exact text \"small signal\". Lettering direction: wide geometric sans. Single focal detail: three short signal lines.\n7. Exact text \"ROVE\". Lettering direction: quiet high-contrast serif. Single focal detail: one open circle.\n8. Exact text \"telli\". Lettering direction: compact humanist sans. Single focal detail: single blue dash.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "network",
+      "theme": "Internet and communications",
+      "names": [
+        "FIBRAIL",
+        "nearby",
+        "KINET",
+        "openline",
+        "LUMA LINK",
+        "tandem",
+        "WEFT",
+        "good ping"
+      ],
+      "accents": [
+        "one fiber line",
+        "single connecting dot",
+        "one angled K stroke",
+        "one broken baseline",
+        "small orange light",
+        "one shared letter stem",
+        "woven single line",
+        "tiny green dot"
+      ],
+      "styles": [
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Internet and communications.\n1. Exact text \"FIBRAIL\". Lettering direction: condensed architectural capitals. Single focal detail: one fiber line.\n2. Exact text \"nearby\". Lettering direction: warm editorial serif. Single focal detail: single connecting dot.\n3. Exact text \"KINET\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one angled K stroke.\n4. Exact text \"openline\". Lettering direction: utilitarian slab serif. Single focal detail: one broken baseline.\n5. Exact text \"LUMA LINK\". Lettering direction: wide geometric sans. Single focal detail: small orange light.\n6. Exact text \"tandem\". Lettering direction: quiet high-contrast serif. Single focal detail: one shared letter stem.\n7. Exact text \"WEFT\". Lettering direction: compact humanist sans. Single focal detail: woven single line.\n8. Exact text \"good ping\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: tiny green dot.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "coffee",
+      "theme": "Coffee roasters and cafes",
+      "names": [
+        "SUNDIAL",
+        "brim",
+        "STILLHOUSE",
+        "third cup",
+        "EMBERDAY",
+        "wakefolk",
+        "low tide",
+        "COPPER SIP"
+      ],
+      "accents": [
+        "tiny sun notch",
+        "one steam curve",
+        "small red bean",
+        "one short underline",
+        "single ember dot",
+        "one rough brush accent",
+        "single low wave",
+        "one copper-colored slash"
+      ],
+      "styles": [
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Coffee roasters and cafes.\n1. Exact text \"SUNDIAL\". Lettering direction: warm editorial serif. Single focal detail: tiny sun notch.\n2. Exact text \"brim\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one steam curve.\n3. Exact text \"STILLHOUSE\". Lettering direction: utilitarian slab serif. Single focal detail: small red bean.\n4. Exact text \"third cup\". Lettering direction: wide geometric sans. Single focal detail: one short underline.\n5. Exact text \"EMBERDAY\". Lettering direction: quiet high-contrast serif. Single focal detail: single ember dot.\n6. Exact text \"wakefolk\". Lettering direction: compact humanist sans. Single focal detail: one rough brush accent.\n7. Exact text \"low tide\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: single low wave.\n8. Exact text \"COPPER SIP\". Lettering direction: condensed architectural capitals. Single focal detail: one copper-colored slash.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "tea",
+      "theme": "Tea and botanical drinks",
+      "names": [
+        "leaflet",
+        "MOSS & MINT",
+        "STEEP",
+        "quiet kettle",
+        "VERDARA",
+        "petal hour",
+        "TANSY",
+        "slowleaf"
+      ],
+      "accents": [
+        "one leaf stroke",
+        "single mint sprig",
+        "tiny water drop",
+        "one bent steam line",
+        "single arch",
+        "small petal dot",
+        "one yellow flower center",
+        "single long leaf"
+      ],
+      "styles": [
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Tea and botanical drinks.\n1. Exact text \"leaflet\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one leaf stroke.\n2. Exact text \"MOSS & MINT\". Lettering direction: utilitarian slab serif. Single focal detail: single mint sprig.\n3. Exact text \"STEEP\". Lettering direction: wide geometric sans. Single focal detail: tiny water drop.\n4. Exact text \"quiet kettle\". Lettering direction: quiet high-contrast serif. Single focal detail: one bent steam line.\n5. Exact text \"VERDARA\". Lettering direction: compact humanist sans. Single focal detail: single arch.\n6. Exact text \"petal hour\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: small petal dot.\n7. Exact text \"TANSY\". Lettering direction: condensed architectural capitals. Single focal detail: one yellow flower center.\n8. Exact text \"slowleaf\". Lettering direction: warm editorial serif. Single focal detail: single long leaf.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "dairy",
+      "theme": "Milk yogurt butter and cheese",
+      "names": [
+        "FIELDNOTE",
+        "moolet",
+        "GENTLE DAIRY",
+        "white meadow",
+        "CLOVERDAY",
+        "nibble curd",
+        "pale pail",
+        "MELLOW MILK"
+      ],
+      "accents": [
+        "one grass blade",
+        "one cow-ear curve",
+        "small blue drop",
+        "single meadow horizon",
+        "one clover leaf",
+        "small cheese wedge",
+        "one bucket handle arc",
+        "single cream dot"
+      ],
+      "styles": [
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Milk yogurt butter and cheese.\n1. Exact text \"FIELDNOTE\". Lettering direction: utilitarian slab serif. Single focal detail: one grass blade.\n2. Exact text \"moolet\". Lettering direction: wide geometric sans. Single focal detail: one cow-ear curve.\n3. Exact text \"GENTLE DAIRY\". Lettering direction: quiet high-contrast serif. Single focal detail: small blue drop.\n4. Exact text \"white meadow\". Lettering direction: compact humanist sans. Single focal detail: single meadow horizon.\n5. Exact text \"CLOVERDAY\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one clover leaf.\n6. Exact text \"nibble curd\". Lettering direction: condensed architectural capitals. Single focal detail: small cheese wedge.\n7. Exact text \"pale pail\". Lettering direction: warm editorial serif. Single focal detail: one bucket handle arc.\n8. Exact text \"MELLOW MILK\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: single cream dot.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "bakery",
+      "theme": "Bakeries and bread",
+      "names": [
+        "CRUMBFOLK",
+        "rise & rye",
+        "LOAFER",
+        "little oven",
+        "GOLDCRUST",
+        "bready",
+        "wheat street",
+        "HUMBLE ROLL"
+      ],
+      "accents": [
+        "one broken crumb",
+        "single rising stroke",
+        "one wheat slash",
+        "small oven arch",
+        "one golden crust line",
+        "one rounded bread corner",
+        "single stalk",
+        "one flour dot"
+      ],
+      "styles": [
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Bakeries and bread.\n1. Exact text \"CRUMBFOLK\". Lettering direction: wide geometric sans. Single focal detail: one broken crumb.\n2. Exact text \"rise & rye\". Lettering direction: quiet high-contrast serif. Single focal detail: single rising stroke.\n3. Exact text \"LOAFER\". Lettering direction: compact humanist sans. Single focal detail: one wheat slash.\n4. Exact text \"little oven\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: small oven arch.\n5. Exact text \"GOLDCRUST\". Lettering direction: condensed architectural capitals. Single focal detail: one golden crust line.\n6. Exact text \"bready\". Lettering direction: warm editorial serif. Single focal detail: one rounded bread corner.\n7. Exact text \"wheat street\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: single stalk.\n8. Exact text \"HUMBLE ROLL\". Lettering direction: utilitarian slab serif. Single focal detail: one flour dot.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "grains",
+      "theme": "Breakfast oats rice and cereal",
+      "names": [
+        "MORNING FIELD",
+        "oatwell",
+        "GRAINROOM",
+        "ricewise",
+        "HUSK",
+        "early bowl",
+        "CROP CIRCLE",
+        "brann"
+      ],
+      "accents": [
+        "one sunrise arc",
+        "single oat leaf",
+        "one seed",
+        "small grain-shaped dot",
+        "single husk stroke",
+        "one bowl curve",
+        "one incomplete circle",
+        "tiny bran speck"
+      ],
+      "styles": [
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Breakfast oats rice and cereal.\n1. Exact text \"MORNING FIELD\". Lettering direction: quiet high-contrast serif. Single focal detail: one sunrise arc.\n2. Exact text \"oatwell\". Lettering direction: compact humanist sans. Single focal detail: single oat leaf.\n3. Exact text \"GRAINROOM\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one seed.\n4. Exact text \"ricewise\". Lettering direction: condensed architectural capitals. Single focal detail: small grain-shaped dot.\n5. Exact text \"HUSK\". Lettering direction: warm editorial serif. Single focal detail: single husk stroke.\n6. Exact text \"early bowl\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one bowl curve.\n7. Exact text \"CROP CIRCLE\". Lettering direction: utilitarian slab serif. Single focal detail: one incomplete circle.\n8. Exact text \"brann\". Lettering direction: wide geometric sans. Single focal detail: tiny bran speck.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "pantry",
+      "theme": "Canned goods spices and cooking supplies",
+      "names": [
+        "SHELFLIFE",
+        "pinch",
+        "GOOD JAR",
+        "simmer",
+        "PANTRY PAL",
+        "whole spoon",
+        "KIN SALT",
+        "bright tin"
+      ],
+      "accents": [
+        "one shelf line",
+        "small pinch mark",
+        "one lid arc",
+        "single rising curl",
+        "one offset dot",
+        "single spoon outline",
+        "one salt crystal",
+        "small tin tab"
+      ],
+      "styles": [
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Canned goods spices and cooking supplies.\n1. Exact text \"SHELFLIFE\". Lettering direction: compact humanist sans. Single focal detail: one shelf line.\n2. Exact text \"pinch\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: small pinch mark.\n3. Exact text \"GOOD JAR\". Lettering direction: condensed architectural capitals. Single focal detail: one lid arc.\n4. Exact text \"simmer\". Lettering direction: warm editorial serif. Single focal detail: single rising curl.\n5. Exact text \"PANTRY PAL\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one offset dot.\n6. Exact text \"whole spoon\". Lettering direction: utilitarian slab serif. Single focal detail: single spoon outline.\n7. Exact text \"KIN SALT\". Lettering direction: wide geometric sans. Single focal detail: one salt crystal.\n8. Exact text \"bright tin\". Lettering direction: quiet high-contrast serif. Single focal detail: small tin tab.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "pasta",
+      "theme": "Pasta sauces and olive oil",
+      "names": [
+        "RIGOLI",
+        "pomaro",
+        "TWIRL",
+        "casa filo",
+        "OLIVET",
+        "little basil",
+        "SUGONA",
+        "ribbon red"
+      ],
+      "accents": [
+        "one pasta curl",
+        "one green stem",
+        "single looping noodle",
+        "one thin ribbon",
+        "single olive leaf",
+        "small basil leaf",
+        "one tomato dot",
+        "one red swoosh"
+      ],
+      "styles": [
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Pasta sauces and olive oil.\n1. Exact text \"RIGOLI\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one pasta curl.\n2. Exact text \"pomaro\". Lettering direction: condensed architectural capitals. Single focal detail: one green stem.\n3. Exact text \"TWIRL\". Lettering direction: warm editorial serif. Single focal detail: single looping noodle.\n4. Exact text \"casa filo\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one thin ribbon.\n5. Exact text \"OLIVET\". Lettering direction: utilitarian slab serif. Single focal detail: single olive leaf.\n6. Exact text \"little basil\". Lettering direction: wide geometric sans. Single focal detail: small basil leaf.\n7. Exact text \"SUGONA\". Lettering direction: quiet high-contrast serif. Single focal detail: one tomato dot.\n8. Exact text \"ribbon red\". Lettering direction: compact humanist sans. Single focal detail: one red swoosh.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "produce",
+      "theme": "Fruit vegetables and market gardens",
+      "names": [
+        "SUNSPRIG",
+        "orchard day",
+        "PIP & STEM",
+        "freshfolk",
+        "GREEN CART",
+        "meadow box",
+        "ROOTLET",
+        "happy harvest"
+      ],
+      "accents": [
+        "one small sun",
+        "single hanging fruit dot",
+        "one seed",
+        "single leaf curl",
+        "one cart line",
+        "one meadow horizon",
+        "small root stroke",
+        "one uneven smile"
+      ],
+      "styles": [
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Fruit vegetables and market gardens.\n1. Exact text \"SUNSPRIG\". Lettering direction: condensed architectural capitals. Single focal detail: one small sun.\n2. Exact text \"orchard day\". Lettering direction: warm editorial serif. Single focal detail: single hanging fruit dot.\n3. Exact text \"PIP & STEM\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one seed.\n4. Exact text \"freshfolk\". Lettering direction: utilitarian slab serif. Single focal detail: single leaf curl.\n5. Exact text \"GREEN CART\". Lettering direction: wide geometric sans. Single focal detail: one cart line.\n6. Exact text \"meadow box\". Lettering direction: quiet high-contrast serif. Single focal detail: one meadow horizon.\n7. Exact text \"ROOTLET\". Lettering direction: compact humanist sans. Single focal detail: small root stroke.\n8. Exact text \"happy harvest\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one uneven smile.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "snacks",
+      "theme": "Crackers crisps nuts and sweets",
+      "names": [
+        "CRACKLE",
+        "nibbits",
+        "POPJOY",
+        "salt skate",
+        "PEPPERSNAP",
+        "tiny crunch",
+        "NUTKIN",
+        "morsel"
+      ],
+      "accents": [
+        "one broken corner",
+        "two tiny crumbs",
+        "single popped dot",
+        "one angled underline",
+        "tiny pepper slash",
+        "one tooth-shaped notch",
+        "one nut outline",
+        "small bite cutout"
+      ],
+      "styles": [
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Crackers crisps nuts and sweets.\n1. Exact text \"CRACKLE\". Lettering direction: warm editorial serif. Single focal detail: one broken corner.\n2. Exact text \"nibbits\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: two tiny crumbs.\n3. Exact text \"POPJOY\". Lettering direction: utilitarian slab serif. Single focal detail: single popped dot.\n4. Exact text \"salt skate\". Lettering direction: wide geometric sans. Single focal detail: one angled underline.\n5. Exact text \"PEPPERSNAP\". Lettering direction: quiet high-contrast serif. Single focal detail: tiny pepper slash.\n6. Exact text \"tiny crunch\". Lettering direction: compact humanist sans. Single focal detail: one tooth-shaped notch.\n7. Exact text \"NUTKIN\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one nut outline.\n8. Exact text \"morsel\". Lettering direction: condensed architectural capitals. Single focal detail: small bite cutout.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "beverages",
+      "theme": "Juice sparkling water and soda",
+      "names": [
+        "SPLISH",
+        "drift soda",
+        "ZESTRA",
+        "clear creek",
+        "BUBBLIN",
+        "pulp day",
+        "TANGLET",
+        "spring room"
+      ],
+      "accents": [
+        "one splash stroke",
+        "single drifting line",
+        "one citrus wedge",
+        "one flowing line",
+        "one off-center bubble",
+        "single fruit dot",
+        "one curled peel",
+        "one spring arc"
+      ],
+      "styles": [
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Juice sparkling water and soda.\n1. Exact text \"SPLISH\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one splash stroke.\n2. Exact text \"drift soda\". Lettering direction: utilitarian slab serif. Single focal detail: single drifting line.\n3. Exact text \"ZESTRA\". Lettering direction: wide geometric sans. Single focal detail: one citrus wedge.\n4. Exact text \"clear creek\". Lettering direction: quiet high-contrast serif. Single focal detail: one flowing line.\n5. Exact text \"BUBBLIN\". Lettering direction: compact humanist sans. Single focal detail: one off-center bubble.\n6. Exact text \"pulp day\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: single fruit dot.\n7. Exact text \"TANGLET\". Lettering direction: condensed architectural capitals. Single focal detail: one curled peel.\n8. Exact text \"spring room\". Lettering direction: warm editorial serif. Single focal detail: one spring arc.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "cleaning",
+      "theme": "Household cleaners soap and paper goods",
+      "names": [
+        "SWEEP",
+        "spry",
+        "CLEAN SLATE",
+        "soft suds",
+        "GLEAMLET",
+        "wipewise",
+        "BRISK HOME",
+        "fresh fold"
+      ],
+      "accents": [
+        "one sweeping underline",
+        "tiny sparkle",
+        "one clean angled edge",
+        "single bubble",
+        "one light dash",
+        "one folded corner",
+        "one brisk diagonal",
+        "single folded line"
+      ],
+      "styles": [
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Household cleaners soap and paper goods.\n1. Exact text \"SWEEP\". Lettering direction: utilitarian slab serif. Single focal detail: one sweeping underline.\n2. Exact text \"spry\". Lettering direction: wide geometric sans. Single focal detail: tiny sparkle.\n3. Exact text \"CLEAN SLATE\". Lettering direction: quiet high-contrast serif. Single focal detail: one clean angled edge.\n4. Exact text \"soft suds\". Lettering direction: compact humanist sans. Single focal detail: single bubble.\n5. Exact text \"GLEAMLET\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one light dash.\n6. Exact text \"wipewise\". Lettering direction: condensed architectural capitals. Single focal detail: one folded corner.\n7. Exact text \"BRISK HOME\". Lettering direction: warm editorial serif. Single focal detail: one brisk diagonal.\n8. Exact text \"fresh fold\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: single folded line.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "care",
+      "theme": "Personal care and grooming",
+      "names": [
+        "daily kind",
+        "FERNFORM",
+        "soma soap",
+        "SOFT CURRENT",
+        "bare ritual",
+        "LILT",
+        "gentle grain",
+        "NOVA COMB"
+      ],
+      "accents": [
+        "one soft dot",
+        "single fern line",
+        "one soap curve",
+        "one wave",
+        "one bare stem",
+        "single rising letter stroke",
+        "tiny seed",
+        "single comb tooth accent"
+      ],
+      "styles": [
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Personal care and grooming.\n1. Exact text \"daily kind\". Lettering direction: wide geometric sans. Single focal detail: one soft dot.\n2. Exact text \"FERNFORM\". Lettering direction: quiet high-contrast serif. Single focal detail: single fern line.\n3. Exact text \"soma soap\". Lettering direction: compact humanist sans. Single focal detail: one soap curve.\n4. Exact text \"SOFT CURRENT\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one wave.\n5. Exact text \"bare ritual\". Lettering direction: condensed architectural capitals. Single focal detail: one bare stem.\n6. Exact text \"LILT\". Lettering direction: warm editorial serif. Single focal detail: single rising letter stroke.\n7. Exact text \"gentle grain\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: tiny seed.\n8. Exact text \"NOVA COMB\". Lettering direction: utilitarian slab serif. Single focal detail: single comb tooth accent.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "home",
+      "theme": "Homewares furniture and textiles",
+      "names": [
+        "HEARTHLINE",
+        "nestlewood",
+        "COMMON ROOM",
+        "fold & form",
+        "LAMPLOW",
+        "woven day",
+        "PLINTH",
+        "small shelter"
+      ],
+      "accents": [
+        "one roofline",
+        "single woodgrain line",
+        "one doorway",
+        "one folded corner",
+        "one lamp arc",
+        "single thread",
+        "one block-shaped dot",
+        "one shelter arch"
+      ],
+      "styles": [
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Homewares furniture and textiles.\n1. Exact text \"HEARTHLINE\". Lettering direction: quiet high-contrast serif. Single focal detail: one roofline.\n2. Exact text \"nestlewood\". Lettering direction: compact humanist sans. Single focal detail: single woodgrain line.\n3. Exact text \"COMMON ROOM\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one doorway.\n4. Exact text \"fold & form\". Lettering direction: condensed architectural capitals. Single focal detail: one folded corner.\n5. Exact text \"LAMPLOW\". Lettering direction: warm editorial serif. Single focal detail: one lamp arc.\n6. Exact text \"woven day\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: single thread.\n7. Exact text \"PLINTH\". Lettering direction: utilitarian slab serif. Single focal detail: one block-shaped dot.\n8. Exact text \"small shelter\". Lettering direction: wide geometric sans. Single focal detail: one shelter arch.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "hardware",
+      "theme": "Hardware tools repair and workshops",
+      "names": [
+        "BOLTWORK",
+        "turnkey",
+        "FIXFIELD",
+        "IRON DOT",
+        "hex & hand",
+        "MAKERS END",
+        "true square",
+        "RIVETRY"
+      ],
+      "accents": [
+        "one bolt slash",
+        "single key tooth",
+        "one joined stroke",
+        "one rivet dot",
+        "single hex corner",
+        "one tool notch",
+        "one square corner",
+        "one offset rivet"
+      ],
+      "styles": [
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Hardware tools repair and workshops.\n1. Exact text \"BOLTWORK\". Lettering direction: compact humanist sans. Single focal detail: one bolt slash.\n2. Exact text \"turnkey\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: single key tooth.\n3. Exact text \"FIXFIELD\". Lettering direction: condensed architectural capitals. Single focal detail: one joined stroke.\n4. Exact text \"IRON DOT\". Lettering direction: warm editorial serif. Single focal detail: one rivet dot.\n5. Exact text \"hex & hand\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: single hex corner.\n6. Exact text \"MAKERS END\". Lettering direction: utilitarian slab serif. Single focal detail: one tool notch.\n7. Exact text \"true square\". Lettering direction: wide geometric sans. Single focal detail: one square corner.\n8. Exact text \"RIVETRY\". Lettering direction: quiet high-contrast serif. Single focal detail: one offset rivet.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "outdoor",
+      "theme": "Outdoor camping fishing and equipment",
+      "names": [
+        "TRAILTHREAD",
+        "wild current",
+        "CAMPKIN",
+        "LOW RIDGE",
+        "reed & reel",
+        "FOOTPATH",
+        "roamwell",
+        "FIELD REST"
+      ],
+      "accents": [
+        "one trail line",
+        "single current wave",
+        "one tent angle",
+        "one ridge",
+        "single reed",
+        "one footprint notch",
+        "one compass tick",
+        "one low horizon"
+      ],
+      "styles": [
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Outdoor camping fishing and equipment.\n1. Exact text \"TRAILTHREAD\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one trail line.\n2. Exact text \"wild current\". Lettering direction: condensed architectural capitals. Single focal detail: single current wave.\n3. Exact text \"CAMPKIN\". Lettering direction: warm editorial serif. Single focal detail: one tent angle.\n4. Exact text \"LOW RIDGE\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one ridge.\n5. Exact text \"reed & reel\". Lettering direction: utilitarian slab serif. Single focal detail: single reed.\n6. Exact text \"FOOTPATH\". Lettering direction: wide geometric sans. Single focal detail: one footprint notch.\n7. Exact text \"roamwell\". Lettering direction: quiet high-contrast serif. Single focal detail: one compass tick.\n8. Exact text \"FIELD REST\". Lettering direction: compact humanist sans. Single focal detail: one low horizon.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "apparel",
+      "theme": "Clothing shoes tailoring and laundry",
+      "names": [
+        "HEMLINE",
+        "threadkind",
+        "OFFCUT",
+        "soft hem",
+        "CLOTH CLUB",
+        "wearwell",
+        "PLEAT",
+        "needle day"
+      ],
+      "accents": [
+        "one seam line",
+        "single thread loop",
+        "one clipped corner",
+        "one soft fold",
+        "one spool dot",
+        "single stitch",
+        "one folded stroke",
+        "one needle slash"
+      ],
+      "styles": [
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Clothing shoes tailoring and laundry.\n1. Exact text \"HEMLINE\". Lettering direction: condensed architectural capitals. Single focal detail: one seam line.\n2. Exact text \"threadkind\". Lettering direction: warm editorial serif. Single focal detail: single thread loop.\n3. Exact text \"OFFCUT\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one clipped corner.\n4. Exact text \"soft hem\". Lettering direction: utilitarian slab serif. Single focal detail: one soft fold.\n5. Exact text \"CLOTH CLUB\". Lettering direction: wide geometric sans. Single focal detail: one spool dot.\n6. Exact text \"wearwell\". Lettering direction: quiet high-contrast serif. Single focal detail: single stitch.\n7. Exact text \"PLEAT\". Lettering direction: compact humanist sans. Single focal detail: one folded stroke.\n8. Exact text \"needle day\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one needle slash.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "books",
+      "theme": "Bookshops stationery and printing",
+      "names": [
+        "MARGIN",
+        "paperfolk",
+        "INKWELL DAY",
+        "turn page",
+        "FOLIO CLUB",
+        "pencil room",
+        "LEAF & LINE",
+        "little press"
+      ],
+      "accents": [
+        "one margin rule",
+        "one folded page",
+        "single ink dot",
+        "one page curl",
+        "one open-book line",
+        "one pencil stroke",
+        "single leaf",
+        "one press mark"
+      ],
+      "styles": [
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Bookshops stationery and printing.\n1. Exact text \"MARGIN\". Lettering direction: warm editorial serif. Single focal detail: one margin rule.\n2. Exact text \"paperfolk\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one folded page.\n3. Exact text \"INKWELL DAY\". Lettering direction: utilitarian slab serif. Single focal detail: single ink dot.\n4. Exact text \"turn page\". Lettering direction: wide geometric sans. Single focal detail: one page curl.\n5. Exact text \"FOLIO CLUB\". Lettering direction: quiet high-contrast serif. Single focal detail: one open-book line.\n6. Exact text \"pencil room\". Lettering direction: compact humanist sans. Single focal detail: one pencil stroke.\n7. Exact text \"LEAF & LINE\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: single leaf.\n8. Exact text \"little press\". Lettering direction: condensed architectural capitals. Single focal detail: one press mark.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "music",
+      "theme": "Music instruments records and audio",
+      "names": [
+        "SIDE B",
+        "humline",
+        "REEDROOM",
+        "little groove",
+        "TONECRAFT",
+        "pluck",
+        "SOUND COMMON",
+        "loop cellar"
+      ],
+      "accents": [
+        "one record arc",
+        "single waveform",
+        "one reed stroke",
+        "one vinyl groove",
+        "single tuning fork",
+        "one string flick",
+        "one shared sound line",
+        "single loop"
+      ],
+      "styles": [
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Music instruments records and audio.\n1. Exact text \"SIDE B\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one record arc.\n2. Exact text \"humline\". Lettering direction: utilitarian slab serif. Single focal detail: single waveform.\n3. Exact text \"REEDROOM\". Lettering direction: wide geometric sans. Single focal detail: one reed stroke.\n4. Exact text \"little groove\". Lettering direction: quiet high-contrast serif. Single focal detail: one vinyl groove.\n5. Exact text \"TONECRAFT\". Lettering direction: compact humanist sans. Single focal detail: single tuning fork.\n6. Exact text \"pluck\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one string flick.\n7. Exact text \"SOUND COMMON\". Lettering direction: condensed architectural capitals. Single focal detail: one shared sound line.\n8. Exact text \"loop cellar\". Lettering direction: warm editorial serif. Single focal detail: single loop.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "transport",
+      "theme": "Bicycles garages delivery and travel",
+      "names": [
+        "WHEELDAY",
+        "rollout",
+        "CARGO KIN",
+        "waypost",
+        "SHIFTWORK",
+        "parcel hop",
+        "MILEMARK",
+        "easy axle"
+      ],
+      "accents": [
+        "one wheel arc",
+        "single rolling underline",
+        "one parcel corner",
+        "one directional notch",
+        "one shift slash",
+        "single hop curve",
+        "one mile tick",
+        "one axle line"
+      ],
+      "styles": [
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Bicycles garages delivery and travel.\n1. Exact text \"WHEELDAY\". Lettering direction: utilitarian slab serif. Single focal detail: one wheel arc.\n2. Exact text \"rollout\". Lettering direction: wide geometric sans. Single focal detail: single rolling underline.\n3. Exact text \"CARGO KIN\". Lettering direction: quiet high-contrast serif. Single focal detail: one parcel corner.\n4. Exact text \"waypost\". Lettering direction: compact humanist sans. Single focal detail: one directional notch.\n5. Exact text \"SHIFTWORK\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one shift slash.\n6. Exact text \"parcel hop\". Lettering direction: condensed architectural capitals. Single focal detail: single hop curve.\n7. Exact text \"MILEMARK\". Lettering direction: warm editorial serif. Single focal detail: one mile tick.\n8. Exact text \"easy axle\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one axle line.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "retro",
+      "theme": "Independent neighborhood shops and services",
+      "names": [
+        "CORNER GOOD",
+        "daymart",
+        "SUNSET SUPPLY",
+        "okay shop",
+        "PARKSIDE",
+        "good neighbor",
+        "ODD HOURS",
+        "sunday service"
+      ],
+      "accents": [
+        "one corner cut",
+        "small yellow dot",
+        "one half sun",
+        "single playful underline",
+        "one tree stroke",
+        "one shared roofline",
+        "one crooked clock hand",
+        "one modest star"
+      ],
+      "styles": [
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Independent neighborhood shops and services.\n1. Exact text \"CORNER GOOD\". Lettering direction: wide geometric sans. Single focal detail: one corner cut.\n2. Exact text \"daymart\". Lettering direction: quiet high-contrast serif. Single focal detail: small yellow dot.\n3. Exact text \"SUNSET SUPPLY\". Lettering direction: compact humanist sans. Single focal detail: one half sun.\n4. Exact text \"okay shop\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: single playful underline.\n5. Exact text \"PARKSIDE\". Lettering direction: condensed architectural capitals. Single focal detail: one tree stroke.\n6. Exact text \"good neighbor\". Lettering direction: warm editorial serif. Single focal detail: one shared roofline.\n7. Exact text \"ODD HOURS\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one crooked clock hand.\n8. Exact text \"sunday service\". Lettering direction: utilitarian slab serif. Single focal detail: one modest star.\nVary typography, proportions and palette convincingly across all eight identities. Some purely typographic with a tiny letter modification; some with a spare monoline accent. Do not make all eight look like one logo template."
+    },
+    {
+      "id": "guild",
+      "theme": "Medieval trades and inns",
+      "names": [
+        "THE BENT NAIL",
+        "Reed & Root",
+        "FOXLOAF",
+        "The Quiet Bell",
+        "ASH & ANVIL",
+        "Willow Thread",
+        "CANDLEWICK",
+        "Mossgate"
+      ],
+      "accents": [
+        "one hand-forged nail line",
+        "one reed stroke",
+        "single fox-tail flourish",
+        "one bell outline",
+        "single hammer stroke",
+        "one hand-drawn thread",
+        "one flame",
+        "single wooden gate stroke"
+      ],
+      "styles": [
+        "quiet high-contrast serif",
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Medieval trades and inns.\n1. Exact text \"THE BENT NAIL\". Lettering direction: quiet high-contrast serif. Single focal detail: one hand-forged nail line.\n2. Exact text \"Reed & Root\". Lettering direction: compact humanist sans. Single focal detail: one reed stroke.\n3. Exact text \"FOXLOAF\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: single fox-tail flourish.\n4. Exact text \"The Quiet Bell\". Lettering direction: condensed architectural capitals. Single focal detail: one bell outline.\n5. Exact text \"ASH & ANVIL\". Lettering direction: warm editorial serif. Single focal detail: single hammer stroke.\n6. Exact text \"Willow Thread\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one hand-drawn thread.\n7. Exact text \"CANDLEWICK\". Lettering direction: utilitarian slab serif. Single focal detail: one flame.\n8. Exact text \"Mossgate\". Lettering direction: wide geometric sans. Single focal detail: single wooden gate stroke.\nHand-lettered merchant identities in dark oak, oxblood, moss green and muted gold inks. Medieval craft sensibility, but do NOT put logos on plaques or simulate wood backgrounds."
+    },
+    {
+      "id": "fae",
+      "theme": "Mystical herbalists makers and wayhouses",
+      "names": [
+        "moonmend",
+        "FERNLIGHT",
+        "Dew & Thorn",
+        "HUSHWELL",
+        "Silverroot",
+        "moth hour",
+        "GLIMMER REED",
+        "Stillbloom"
+      ],
+      "accents": [
+        "one crescent",
+        "single fern frond",
+        "one dew drop",
+        "one ripple",
+        "single silver root",
+        "one delicate wing",
+        "one luminous reed stroke",
+        "one open petal"
+      ],
+      "styles": [
+        "compact humanist sans",
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Mystical herbalists makers and wayhouses.\n1. Exact text \"moonmend\". Lettering direction: compact humanist sans. Single focal detail: one crescent.\n2. Exact text \"FERNLIGHT\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: single fern frond.\n3. Exact text \"Dew & Thorn\". Lettering direction: condensed architectural capitals. Single focal detail: one dew drop.\n4. Exact text \"HUSHWELL\". Lettering direction: warm editorial serif. Single focal detail: one ripple.\n5. Exact text \"Silverroot\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: single silver root.\n6. Exact text \"moth hour\". Lettering direction: utilitarian slab serif. Single focal detail: one delicate wing.\n7. Exact text \"GLIMMER REED\". Lettering direction: wide geometric sans. Single focal detail: one luminous reed stroke.\n8. Exact text \"Stillbloom\". Lettering direction: quiet high-contrast serif. Single focal detail: one open petal.\nOrganic botanical letterforms, deep plum, jade and midnight blue with small pale-gold accents. No fantasy crests or enclosing frames."
+    },
+    {
+      "id": "orbital",
+      "theme": "Off-world habitat repair and provision suppliers",
+      "names": [
+        "ORBITAL COMMON",
+        "airkind",
+        "DOCK NINE",
+        "REGOLITH",
+        "pulse supply",
+        "HABIT FORM",
+        "ion pantry",
+        "CIRCUIT YARD"
+      ],
+      "accents": [
+        "one orbit segment",
+        "single air loop",
+        "one docking notch",
+        "one lunar dot",
+        "single pulse stroke",
+        "one module corner",
+        "one ion dot",
+        "one circuit elbow"
+      ],
+      "styles": [
+        "heavy rounded lowercase with custom letter spacing",
+        "condensed architectural capitals",
+        "warm editorial serif",
+        "casual single-line hand lettering, restrained irregularity",
+        "utilitarian slab serif",
+        "wide geometric sans",
+        "quiet high-contrast serif",
+        "compact humanist sans"
+      ],
+      "prompt": "Use case: logo-brand. Production game texture atlas containing exactly EIGHT distinct fictional brand wordmarks. Transparent landscape canvas with a precise FOUR-column TWO-row grid of equal square cells. Each logo must stay entirely inside its own cell with 10 percent safe margins; transparent empty space between logos, no printed grid. Flat two-dimensional print-ready marks. Typography is the hero, one small visual detail integrated with the text. Real consumer product design, art-directed and varied, not a page of similar AI crests. NO enclosing borders, shields, badges, sticker outlines, drop shadows, bevels, shiny 3D, fake distress, labels, slogans, mockups or surrounding decorations. Each logo has its own restrained one- or two-ink palette suitable on a light surface. Legibility at small product size is crucial. Do not imitate existing brand marks. Spell names exactly as listed, and include NO extra words. Row-major order: top row cells 1–4, bottom row cells 5–8.\nCollection: Off-world habitat repair and provision suppliers.\n1. Exact text \"ORBITAL COMMON\". Lettering direction: heavy rounded lowercase with custom letter spacing. Single focal detail: one orbit segment.\n2. Exact text \"airkind\". Lettering direction: condensed architectural capitals. Single focal detail: single air loop.\n3. Exact text \"DOCK NINE\". Lettering direction: warm editorial serif. Single focal detail: one docking notch.\n4. Exact text \"REGOLITH\". Lettering direction: casual single-line hand lettering, restrained irregularity. Single focal detail: one lunar dot.\n5. Exact text \"pulse supply\". Lettering direction: utilitarian slab serif. Single focal detail: single pulse stroke.\n6. Exact text \"HABIT FORM\". Lettering direction: wide geometric sans. Single focal detail: one module corner.\n7. Exact text \"ion pantry\". Lettering direction: quiet high-contrast serif. Single focal detail: one ion dot.\n8. Exact text \"CIRCUIT YARD\". Lettering direction: compact humanist sans. Single focal detail: one circuit elbow.\nPlausible practical space-industry identities, dark navy, burnt orange and muted teal, clean utility lettering. Avoid generic futuristic neon and science-fiction shields."
+    }
+  ]
+}

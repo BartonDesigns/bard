@@ -1,0 +1,87 @@
+{
+  "generator": "OpenAI built-in imagegen",
+  "date": "2026-10-15",
+  "preparation": "Resize and WebP encoding only. Alpha retained. Runtime relief uses mathematical height data.",
+  "assets": [
+    {
+      "id": "graffiti-names",
+      "mobile": false,
+      "file": "graffiti-names-v1.webp",
+      "width": 1536,
+      "height": 768,
+      "alpha": true,
+      "bytes": 534832,
+      "sha256": "21016dfb83b1ff1eebb3c4a9964c732d6f0cbff5bd9961f4eed9131390fbdeb5"
+    },
+    {
+      "id": "graffiti-names",
+      "mobile": true,
+      "file": "graffiti-names-v1-mobile.webp",
+      "width": 768,
+      "height": 384,
+      "alpha": true,
+      "bytes": 151308,
+      "sha256": "9dd6316304358182de6c626a6df7b4a72839754d0661c09b844e1eb376909e08"
+    },
+    {
+      "id": "graffiti-revolt",
+      "mobile": false,
+      "file": "graffiti-revolt-v1.webp",
+      "width": 1536,
+      "height": 768,
+      "alpha": true,
+      "bytes": 666970,
+      "sha256": "8327e4ac7f462eb698ec70afd9e072eeeb6d28eb2759f16ddcd6b72b5cebb53d"
+    },
+    {
+      "id": "graffiti-revolt",
+      "mobile": true,
+      "file": "graffiti-revolt-v1-mobile.webp",
+      "width": 768,
+      "height": 384,
+      "alpha": true,
+      "bytes": 185044,
+      "sha256": "19c7c62c98c9c54559a83230d78f4112736a7b022a44c492d35d1322a83383da"
+    },
+    {
+      "id": "graffiti-characters",
+      "mobile": false,
+      "file": "graffiti-characters-v1.webp",
+      "width": 1536,
+      "height": 1407,
+      "alpha": true,
+      "bytes": 673554,
+      "sha256": "aabfc301c56e2253de5ca46d2ad9c6375cc50563f1b3eee608c4fc542b0f8aea"
+    },
+    {
+      "id": "graffiti-characters",
+      "mobile": true,
+      "file": "graffiti-characters-v1-mobile.webp",
+      "width": 768,
+      "height": 704,
+      "alpha": true,
+      "bytes": 224894,
+      "sha256": "940a343719e4108cb01bf7d3e110cb4ab0b220e6f1c661b6575a1f528911f761"
+    },
+    {
+      "id": "graffiti-devotional",
+      "mobile": false,
+      "file": "graffiti-devotional-v1.webp",
+      "width": 1536,
+      "height": 1024,
+      "alpha": true,
+      "bytes": 598774,
+      "sha256": "2006812329a135c5b55d9dced0494eebc9ed18f7cabb139991f39521cfc33272"
+    },
+    {
+      "id": "graffiti-devotional",
+      "mobile": true,
+      "file": "graffiti-devotional-v1-mobile.webp",
+      "width": 768,
+      "height": 512,
+      "alpha": true,
+      "bytes": 181394,
+      "sha256": "6eb0d59fcc3234430a1464cc9cb8ebdbc17c23f7e4b060ed6ee7d23131dfce18"
+    }
+  ]
+}

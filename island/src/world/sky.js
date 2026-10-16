@@ -670,7 +670,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 			sun.position.copy(sd).multiplyScalar(SUN_D).add(focus);
 		} else {
 			sun.color.copy(PAL.moon);
-			sun.intensity = 0.5 * night;
+			// (moonlight: enough to read the shapes of things by, little enough that the lamps
+			// and lit windows are what the eye goes to)
+			sun.intensity = 0.36 * night;
 			sun.position.copy(sd).multiplyScalar(-SUN_D).add(focus);
 		}
 		sun.target.position.copy(focus);
@@ -694,7 +696,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		if (dk.x > 0) haze.lerp(tmpC.setRGB(0.24, 0.07, 0.26).multiplyScalar(dk.y), dk.x * 0.85);
 		const air = uniforms.uAir.value;
 		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w * (1 - dk.x));
-		renderer.toneMappingExposure = 1.15 + night * 0.15;
+		// (the same exposure by night: the night is dark, lit where real lights are)
+		renderer.toneMappingExposure = 1.15;
 		// The sky is tone mapped, but three.js mixes the fog in after the tone mapping, so a
 		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the
 		// sky's own horizon just above it, which drew a bright band where the far land and

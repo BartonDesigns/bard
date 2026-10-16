@@ -18,6 +18,7 @@
 // fade out before they would shimmer.
 
 import * as THREE from 'three';
+import { civicTexture } from '../civic/materials.js';
 import { layerBias } from './layers.js';
 import { WALL_GLSL, GRIME_GLSL } from '../bay/weathering.js';
 
@@ -28,9 +29,11 @@ export const SIGN_U = {
 	uSgHeadDir: { value: new THREE.Vector3(0, 0, -1) },
 	uSgNight: { value: 0 },
 	uSgDay: { value: 1 },
+	uSgTime: { value: 0 },
 };
 const SPEC = {
 	retro: { roughness: 0.42, metalness: 0.0, far: 420 },
+	cloth: { roughness: 0.98, metalness: 0.0, far: 160 },
 	vinyl: { roughness: 0.28, metalness: 0.0, far: 140 },
 	glass: { roughness: 0.22, metalness: 0.0, far: 90 },
 	paper: { roughness: 0.96, metalness: 0.0, far: 140 },
@@ -39,11 +42,13 @@ const SPEC = {
 	grime: { roughness: 0.9, metalness: 0.0, far: 160 },
 };
 const COMMON_V = /* glsl */`
+uniform float uSgTime;
 attribute vec4 aCell;
 attribute vec4 aFx;
 varying vec2 vSgUv; varying vec4 vSgCell; varying vec4 vSgFx; varying vec3 vSgW; varying vec3 vSgN;
 `;
 const COMMON_F = /* glsl */`
+uniform sampler2D uCivicMetal; uniform sampler2D uCivicEnamel;
 uniform vec4 uSgHead; uniform vec3 uSgHeadDir; uniform float uSgNight; uniform float uSgDay; uniform float uSgFar;
 varying vec2 vSgUv; varying vec4 vSgCell; varying vec4 vSgFx; varying vec3 vSgW; varying vec3 vSgN;
 float sgH(vec2 p) { return fract(sin(dot(mod(p, 289.0), vec2(127.1, 311.7))) * 43758.5453); }
@@ -74,7 +79,9 @@ function fragBody(kind) {
 	`}
 	${kind === 'retro' ? `
 	// the blank's back: bare aluminium in the same shape
-	if (sgBack && sgMode < 0.5) diffuseColor.rgb = vec3(0.5, 0.51, 0.52) * (0.85 + 0.15 * sgN(sgUv * 6.0 + sgSeed));
+	vec3 cn=abs(vSgN);vec2 cp=cn.x>cn.z?vSgW.zy:vSgW.xy;
+	if (sgBack && sgMode < 0.5) diffuseColor.rgb = texture2D(uCivicMetal,cp*3.0).rgb*.68;
+	else diffuseColor.rgb *= mix(vec3(1),texture2D(uCivicEnamel,sgUv*1.6).rgb,.15+sgWear*.12);
 	` : ''}
 	${kind === 'glass' ? `
 	// frosted film: translucent white wherever the cut is
@@ -134,12 +141,17 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 		transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.0,
 		polygonOffset: true, polygonOffsetFactor: B.factor, polygonOffsetUnits: B.units,
 	});
+	// Flat decals need one double-sided pass: two-pass transparency flips winding
+	// and would make gl_FrontFacing treat a blank sign back as its printed front.
+	m.forceSinglePass = true;
 	m.name = `signage-${kind}-${layer}`;
 	const far = { value: S.far * (phone ? 0.65 : 1) };
 	m.userData.far = far;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, SIGN_U, { uSgFar: far });
+		if(kind==='retro'){sh.uniforms.uCivicMetal={value:civicTexture('galvanized',phone)};sh.uniforms.uCivicEnamel={value:civicTexture('enamel',phone)};}
 		sh.vertexShader = COMMON_V + sh.vertexShader
+			.replace('#include <begin_vertex>', '#include <begin_vertex>' + (kind === 'cloth' ? '\ntransformed.z += 0.085 * uv.x * sin(uv.x * 7.0 + uv.y * 2.0 - uSgTime * 2.4 + aFx.y * 6.28);' : ''))
 			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSgUv = uv; vSgCell = aCell; vSgFx = aFx;')
 			.replace('#include <project_vertex>', `#include <project_vertex>
 			{
@@ -152,9 +164,11 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 			}`);
 		sh.fragmentShader = COMMON_F + (kind === 'grime' ? WALL_GLSL + GRIME_GLSL : '') + sh.fragmentShader
 			.replace('#include <map_fragment>', fragBody(kind))
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)roughnessFactor=.64;':kind==='paint'?'\nif(vSgFx.w>.5)roughnessFactor=mix(.24,.65,sgWear);':''))
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)metalnessFactor=.82;':kind==='paint'?'\nif(vSgFx.w>.5)metalnessFactor=.45*(1.0-sgWear);':''))
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + emissiveBody(kind));
 	};
-	m.customProgramCacheKey = () => 'signage1' + kind;
+	m.customProgramCacheKey = () => 'signage-civic-3' + kind;
 	// (grime has no map, but its uv must still reach the shader)
 	if (kind === 'grime') m.defines = { USE_UV: '' };
 	m.userData.renderOrder = B.renderOrder;

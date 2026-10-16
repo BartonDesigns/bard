@@ -223,7 +223,8 @@ export function interiorMaterial(U, o = {}) {
 			.replace('#include <color_fragment>', '#include <color_fragment>\n' + IN_LOOK)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = iRough;')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = iMetal;')
-			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (vIL * (1.0 - iMetal * 0.6) + iEm);')
+			// (a room lit by interiors/lighting.js has these lights baked in, shaded by its walls)
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\t#ifdef IBAKE\n\ttotalEmissiveRadiance += diffuseColor.rgb * iEm;\n\t#else\n\ttotalEmissiveRadiance += diffuseColor.rgb * (vIL * (1.0 - iMetal * 0.6) + iEm);\n\t#endif')
 			// (the day outside reaches in only a little: the rooms are lit by their own light)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n\treflectedLight.directDiffuse *= 0.08; reflectedLight.indirectDiffuse *= 0.12; reflectedLight.directSpecular *= 0.3; reflectedLight.indirectSpecular *= 0.5;');
 	};

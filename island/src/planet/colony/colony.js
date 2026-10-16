@@ -19,6 +19,8 @@ import { personaOf, byId } from './crew.js';
 import { signMesh, disposeSigns, signCells } from './signs.js';
 import { createRide, speedAt, cabGroup } from './maglev.js';
 
+import { createArtSigns, colonySignRecords } from '../../signage/world-art.js';
+
 const BUILD = { mine, relay, scrubbers, wreck, plaza, observatory, shelter };
 
 export function createColony(island, shared, scene, camera, profile, plan, opts = {}) {
@@ -55,6 +57,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	};
 	const t0 = performance.now();
 	const hb = plan.hub;
+	const tradeSigns = createArtSigns({parent:group,records:colonySignRecords(plan,H),isPhone});
 	site(plan.name, hb, hb.r + 20, 3200, () => hub(X, hb));
 	if (plan.port) site(plan.port.name, plan.port, plan.port.r, 3200, () => port(X, plan.port));
 	for (const o of plan.outposts) site(o.name, o, o.r + 10, 2600, () => BUILD[o.kind](X, o));
@@ -216,6 +219,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		panels.visible = fins.visible = Math.hypot(cx - hb.x, cz - hb.z) < 1800;
 	}
 	function update(dt) {
+		tradeSigns.update(camera);
 		const cx = camera.position.x, cz = camera.position.z;
 		const sy = shared.uSunDir.value.y, night = 1 - THREE.MathUtils.smoothstep(sy, -0.12, 0.1);
 		U.uNight.value = night;
@@ -366,6 +370,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	}
 	const push = (p, footY) => { col.push(p, footY); interiors.push(p, footY); };
 	function dispose() {
+		tradeSigns.dispose();
 		envRT?.dispose();
 		roomEnvRT?.dispose();
 		interiors.dispose();
@@ -381,7 +386,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	const info = () => {
 		let tris = 0, meshes = 0;
 		group.traverse((o) => { if (o.isMesh) { meshes++; tris += o.geometry.attributes.position.count / 3 * (o.isInstancedMesh ? o.count : 1); } });
-		return { name: plan.name, hub: { x: Math.round(hb.x), y: Math.round(hb.y), z: Math.round(hb.z), r: Math.round(hb.r) }, sites: sites.map((s) => s.name), habs: P.habs, towers: P.towers, pads: plan.port?.pads.length || 0, outposts: plan.outposts.map((o) => o.kind), solar: X.panels.length, radiators: X.radiators.length, trains: trains.length, rovers: rovers.length, colonists: crew?.folk.length || 0, roads: plan.roads.length, outer: (plan.outer || []).map((o) => o.name), tracks: plan.tracks?.length || 0, rooms: X.rooms.modules.map((m) => m.role), lifts: X.lifts.length, airlocks: X.airlocks.length, terminals: X.terminals.map((t) => t.name), interiors: interiors.info(), suited: life.suited(), signs: signCells(), crew: crew?.info() || null, errands: errands?.info() || null, seen: [...seen], meshes, tris: Math.round(tris), buildMs: Math.round(buildMs) };
+		return { name: plan.name, hub: { x: Math.round(hb.x), y: Math.round(hb.y), z: Math.round(hb.z), r: Math.round(hb.r) }, sites: sites.map((s) => s.name), habs: P.habs, towers: P.towers, pads: plan.port?.pads.length || 0, outposts: plan.outposts.map((o) => o.kind), solar: X.panels.length, radiators: X.radiators.length, trains: trains.length, rovers: rovers.length, colonists: crew?.folk.length || 0, roads: plan.roads.length, outer: (plan.outer || []).map((o) => o.name), tracks: plan.tracks?.length || 0, rooms: X.rooms.modules.map((m) => m.role), lifts: X.lifts.length, airlocks: X.airlocks.length, terminals: X.terminals.map((t) => t.name), interiors: interiors.info(), suited: life.suited(), signs: signCells(), artSigns: tradeSigns.info(), crew: crew?.info() || null, errands: errands?.info() || null, seen: [...seen], meshes, tris: Math.round(tris), buildMs: Math.round(buildMs) };
 	};
 	const portAt = plan.port ? { name: `${profile.name.replace(/^the /, '').replace(/^\w/, (c) => c.toUpperCase())}: ${plan.name}`, x: plan.port.x, z: plan.port.z, y: plan.port.y } : null;
 	const crewApi = errands ? { mark: errands.mark, journal: errands.journal, errands, people: crew } : null;
