@@ -22,6 +22,7 @@ import { updateIslandReach } from './world/surfacevisibility.js';
 import { createGroundProbe } from './world/groundprobe.js';
 import { createFloorGuard } from './world/floorguard.js';
 import { createOcean } from './world/ocean.js';
+import { createSeaMirror } from './world/seamirror.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
 import { createSunRays } from './world/sunrays.js';
@@ -552,6 +553,9 @@ export function createIslandWorld() {
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
+	// the land, the village and the boats drawn upside down for the sea to reflect (world/seamirror.js)
+	const seaMirror = createSeaMirror(renderer, { phone: isPhone, safe: SAFE });
+	shared.mirrorU = seaMirror.uniforms;
 	// (the cars' paint and glass reflect this sky)
 	bindCarSky(shared);
 	bindSignLighting(shared);
@@ -2095,6 +2099,10 @@ export function createIslandWorld() {
 		const shadowEvery = qualityNow().shadowEvery;
 		renderer.shadowMap.autoUpdate = shadowEvery <= 1;
 		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
+		// the sea's mirror, before the frame that reads it (only what stands over the water: world/seamirror.js)
+		// (not on a world with no sea, nor down a cave or indoors, where the water is out of sight)
+		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
+		else shared.mirrorU.uReflOn.value = 0;
 		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy
