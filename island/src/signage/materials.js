@@ -177,3 +177,6 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 	return m;
 }
 export function clearMaterials() { for (const m of cache.values()) m.dispose(); cache.clear(); }
+
+// Release a detached world's own atlas materials without disturbing another world's batches.
+export function releaseSignMaterials(map){for(const [key,m]of cache)if(m.map===map){m.dispose();cache.delete(key);}}

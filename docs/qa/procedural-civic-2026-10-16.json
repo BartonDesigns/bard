@@ -1,0 +1,173 @@
+[
+  {
+    "mode": "desktop",
+    "phone": false,
+    "info": {
+      "planned": 15,
+      "visible": 15,
+      "decks": 7,
+      "visibleDecks": 7,
+      "draws": 2,
+      "atlas": {
+        "size": "1024x1024",
+        "faces": 9,
+        "shelves": 3,
+        "full": "50%",
+        "repacks": 1,
+        "drawn": 18
+      },
+      "art": [
+        "graffiti-names",
+        "graffiti-revolt",
+        "graffiti",
+        "graffiti-devotional",
+        "graffiti-characters"
+      ]
+    },
+    "gone": {
+      "planned": 15,
+      "visible": 0,
+      "decks": 7,
+      "visibleDecks": 0,
+      "draws": 0,
+      "atlas": {
+        "size": "1024x1024",
+        "faces": 9,
+        "shelves": 3,
+        "full": "50%",
+        "repacks": 1,
+        "drawn": 18
+      },
+      "art": []
+    },
+    "returned": true,
+    "lightChangedPixels": 869584,
+    "geoErrors": [],
+    "glError": 0,
+    "plateMaps": true,
+    "loaded": {
+      "damage": true,
+      "graffiti": true,
+      "graffiti-names": true,
+      "graffiti-revolt": true,
+      "graffiti-characters": true,
+      "graffiti-devotional": true
+    },
+    "removed": true,
+    "errors": [],
+    "failed": []
+  },
+  {
+    "mode": "mobile",
+    "phone": true,
+    "info": {
+      "planned": 10,
+      "visible": 5,
+      "decks": 5,
+      "visibleDecks": 3,
+      "draws": 2,
+      "atlas": {
+        "size": "512x512",
+        "faces": 3,
+        "shelves": 1,
+        "full": "19%",
+        "repacks": 1,
+        "drawn": 6
+      },
+      "art": [
+        "graffiti-names",
+        "graffiti-revolt"
+      ]
+    },
+    "gone": {
+      "planned": 10,
+      "visible": 0,
+      "decks": 5,
+      "visibleDecks": 0,
+      "draws": 0,
+      "atlas": {
+        "size": "512x512",
+        "faces": 5,
+        "shelves": 2,
+        "full": "35%",
+        "repacks": 1,
+        "drawn": 8
+      },
+      "art": []
+    },
+    "returned": true,
+    "lightChangedPixels": 174038,
+    "geoErrors": [],
+    "glError": 0,
+    "plateMaps": true,
+    "loaded": {
+      "damage": true,
+      "graffiti": true,
+      "graffiti-names": true,
+      "graffiti-revolt": true,
+      "graffiti-characters": true,
+      "graffiti-devotional": true
+    },
+    "removed": true,
+    "errors": [],
+    "failed": []
+  },
+  {
+    "mode": "offline",
+    "phone": false,
+    "info": {
+      "planned": 15,
+      "visible": 15,
+      "decks": 7,
+      "visibleDecks": 7,
+      "draws": 2,
+      "atlas": {
+        "size": "1024x1024",
+        "faces": 9,
+        "shelves": 3,
+        "full": "50%",
+        "repacks": 0,
+        "drawn": 9
+      },
+      "art": [
+        "graffiti-names",
+        "graffiti-revolt",
+        "graffiti",
+        "graffiti-devotional",
+        "graffiti-characters"
+      ]
+    },
+    "gone": {
+      "planned": 15,
+      "visible": 0,
+      "decks": 7,
+      "visibleDecks": 0,
+      "draws": 0,
+      "atlas": {
+        "size": "1024x1024",
+        "faces": 9,
+        "shelves": 3,
+        "full": "50%",
+        "repacks": 0,
+        "drawn": 9
+      },
+      "art": []
+    },
+    "returned": true,
+    "lightChangedPixels": 849797,
+    "geoErrors": [],
+    "glError": 0,
+    "plateMaps": true,
+    "loaded": {
+      "damage": false,
+      "graffiti": false,
+      "graffiti-names": false,
+      "graffiti-revolt": false,
+      "graffiti-characters": false,
+      "graffiti-devotional": false
+    },
+    "removed": true,
+    "errors": [],
+    "failed": []
+  }
+]

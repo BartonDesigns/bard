@@ -21,9 +21,20 @@ export function civicTexture(id,phone=false){
 // drawImage respects source alpha; multiply/darken can be used on any existing Canvas face.
 export function drawCivicDecal(g,x,y,w,h,{id='damage',tile=0,phone=false,blend='source-over',opacity=1}={}){
  const e=civicImage(id,phone);if(!e.ready)return false;
- const cols=id.startsWith('graffiti')&&!['graffiti-characters','graffiti-devotional'].includes(id)?4:2,rows=2,n=cols*rows,index=((tile%n)+n)%n,cw=e.image.naturalWidth/cols,ch=e.image.naturalHeight/rows;
- if(['graffiti-characters','graffiti-devotional'].includes(id)){const fit=Math.min(w/cw,h/ch);x+=(w-cw*fit)/2;y+=(h-ch*fit)/2;w=cw*fit;h=ch*fit;}
- g.save();g.globalCompositeOperation=['source-over','multiply','darken'].includes(blend)?blend:'source-over';g.globalAlpha=Math.max(0,Math.min(1,opacity));g.drawImage(e.image,index%cols*cw,Math.floor(index/cols)*ch,cw,ch,x,y,w,h);g.restore();return true;
+ const cols=id.startsWith('graffiti')&&!['graffiti-characters','graffiti-devotional'].includes(id)?4:2,n=cols*2,index=((tile%n)+n)%n;
+ let cw=e.image.naturalWidth/cols,ch=e.image.naturalHeight/2,sx=index%cols*cw,sy=Math.floor(index/cols)*ch;
+ // These authored sheets have uneven gutters. Equal grid cuts pulled BAMMER into
+ // ptfo and clipped the comedy/tragedy masks. Bounds scale with the mobile copy.
+ if(id==='graffiti-names'){
+  const rows=[[0,425,768,1136,1536],[0,280,768,1136,1536]],r=Math.floor(index/4),c=index%4,kx=e.image.naturalWidth/1536,ky=e.image.naturalHeight/768;
+  sx=rows[r][c]*kx;cw=(rows[r][c+1]-rows[r][c])*kx;sy=(r?410:0)*ky;ch=(r?358:410)*ky;
+ }
+ if(id==='graffiti-devotional'){
+  const kx=e.image.naturalWidth/1536,ky=e.image.naturalHeight/1024;
+  sx=(index%2?850:0)*kx;cw=(index%2?686:850)*kx;sy=(index>1?540:0)*ky;ch=(index>1?484:540)*ky;
+ }
+ if(['graffiti-names','graffiti-characters','graffiti-devotional'].includes(id)){const fit=Math.min(w/cw,h/ch);x+=(w-cw*fit)/2;y+=(h-ch*fit)/2;w=cw*fit;h=ch*fit;}
+ g.save();g.globalCompositeOperation=['source-over','multiply','darken'].includes(blend)?blend:'source-over';g.globalAlpha=Math.max(0,Math.min(1,opacity));g.drawImage(e.image,sx,sy,cw,ch,x,y,w,h);g.restore();return true;
 }
 let diamond;
 export function diamondPlateMaps(){
