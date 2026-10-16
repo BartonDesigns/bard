@@ -111,7 +111,10 @@ function step(renderer, scene, camera, dt, ease) {
 		// (a place that is shut keeps only its night lights on; so does one open all night but
 		// for a hospital, once it is dark: the bays and offices at a station while the crew sleeps)
 		const always = !sp.hours || sp.hours[1] - sp.hours[0] >= 24;
-		const nightMode = !sp.home && !sp.allNight && (!open || (always && S.night > 0.5)) ? 1 : 0;
+		// (a home, once its household has gone to bed (spec.bed, the late hour), keeps one lamp on
+		// and its screens: a lamp left on in the hall or by the sofa, the television)
+		const late = h < 12 ? h + 24 : h, asleep = sp.home && sp.bed != null && late >= sp.bed && late < 30.5 && S.night > 0.3;
+		const nightMode = asleep || (!sp.home && !sp.allNight && (!open || (always && S.night > 0.5))) ? 1 : 0;
 		const target = !open ? 0.6 : sp.home ? 0.5 + 0.5 * S.night : 1;
 		H.k += (target - H.k) * ease;
 		H.nk = (H.nk ?? nightMode) + (nightMode - (H.nk ?? nightMode)) * ease;
@@ -407,6 +410,9 @@ function* job(H) {
 		o.geometry = g;
 		old.dispose();
 		o.material = variant(H, o.material, false, o.name);
+		// (the sun reaches a room only where the building lets it in: the shell's and the walls'
+		// shadows fall on it, so by day the floor is not lit through the roof)
+		o.receiveShadow = true;
 		H.verts += T.count;
 		for (const a of Object.values(g.attributes)) H.bytes += a.array.byteLength;
 	}
@@ -458,9 +464,17 @@ function packNight(A) {
 	for (let i = 0; i < A.length; i++) o[i] = Math.max(0, Math.min(255, Math.round(A[i] * 255)));
 	return new THREE.BufferAttribute(o, 1, true);
 }
-// which fixtures stay on at night (see job)
+// which fixtures stay on at night (see job): a shut place's one in each 12 m square and its
+// screens; a hospital's all; a home's one lamp (after bedtime) and its screens
 export function nightLights(fixtures, spec = {}) {
-	const all = !!(spec.home || spec.allNight);
+	// (a home: one lamp kept after bedtime, a table lamp if it has one, else its brightest light)
+	if (spec.home) {
+		let keep = null;
+		for (const f of fixtures) if (f.on && !f.screen && (!keep || (f.shape === 'point') > (keep.shape === 'point') || ((f.shape === 'point') === (keep.shape === 'point') && f.I > keep.I))) keep = f;
+		for (const f of fixtures) f.night = f === keep || !!f.screen || !f.on;
+		return fixtures;
+	}
+	const all = !!spec.allNight;
 	const taken = new Set();
 	const order = fixtures.map((f, i) => i).sort((a, b) => fixtures[a].p[0] - fixtures[b].p[0] || fixtures[a].p[2] - fixtures[b].p[2] || fixtures[a].p[1] - fixtures[b].p[1]);
 	for (const i of order) {
@@ -544,7 +558,10 @@ const LFB = (() => {
 	const mid = c.slice(i0, i1)
 		.replace('getPointLightInfo( pointLight, geometryPosition, directLight );', 'getPointLightInfo( pointLight, geometryPosition, directLight );\n\t\tibC0 = directLight.color;')
 		.replace(/RE_Direct\( directLight[^;]*;/, '{ float ib0 = dot( ibC0, vec3( 0.333 ) ); ibLoss += ( ib0 - dot( directLight.color, vec3( 0.333 ) ) ) * saturate( dot( geometryNormal, directLight.direction ) ); }');
-	return c.slice(0, i0) + 'float ibLoss = 0.0;\nvec3 ibC0 = vec3( 0.0 );\n' + mid + c.slice(i1);
+	// (and the sun, in a room, only as much as the windows let in: a floor by a window takes it, the
+	// middle of a deep hall little; the shell's shadow, where there is one, does the rest)
+	return (c.slice(0, i0) + 'float ibLoss = 0.0;\nvec3 ibC0 = vec3( 0.0 );\n' + mid + c.slice(i1))
+		.replace('getDirectionalLightInfo( directionalLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= clamp( vIl.a * 1.6, 0.0, 1.0 );');
 })();
 function patch(sh, U) {
 	sh.uniforms.ibakeK = U.ibakeK;

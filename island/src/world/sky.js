@@ -6,7 +6,7 @@ import { NOISE_GLSL } from './terrain.js';
 import { STARS_B64, STAR_COUNT } from './starcat.js';
 import { today } from '../calendar.js';
 import { constellations } from './constellations.js';
-import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock } from './solar.js';
+import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock, lunarPosition, moonlightShare } from './solar.js';
 
 // The real catalogue follows the observer's latitude and the chosen date. The island
 // keeps its Bay Area latitude; the globe supplies the camera's current latitude.
@@ -121,7 +121,7 @@ function airOf(P) {
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
 }
-export function createSky(scene, shared, renderer, { isPhone = false, latitude = () => BAY_LATITUDE } = {}) {
+export function createSky(scene, shared, renderer, { isPhone = false, earth = true, latitude = () => BAY_LATITUDE } = {}) {
 	// The air uniform is made once per page; an airless world darkens it, and the next world
 	// with air gets the neutral value back.
 	const airR = cloudReflectU(shared).uAirR;
@@ -143,13 +143,18 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		// a world's own dusk (planet/arch/: x how much, y how bright) and its crescent moon (xyz where, w on)
 		uDusk: shared.uDuskSky || (shared.uDuskSky = { value: new THREE.Vector4(0, 1, 0, 0) }), uDuskMoon: shared.uDuskMoon || (shared.uDuskMoon = { value: new THREE.Vector4(0, 0.5, -0.85, 0) }),
 		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
+		// the Moon tonight (xyz where, w how much of it is lit: solar.js lunarPosition), shared for
+		// whatever shows it or its light (the sea's glitter, wet sand) to read
+		uMoon: shared.uMoonDir || (shared.uMoonDir = { value: new THREE.Vector4(0, 0.5, -0.85, 1) }),
+		// the cities' glow on the sky (xz which way it lies, y how lopsided: 0 all round .. 1 one side)
+		uGlowDir: shared.uSkyGlowDir || (shared.uSkyGlowDir = { value: new THREE.Vector3(0, 0, 1) }),
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
 		uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon, uMoon; uniform vec3 uGlowDir; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -257,10 +262,37 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					float shadowed = smoothstep(-0.05, 0.1, dot(rp, uSunDir) + 0.3);
 					col += vec3(0.92, 0.88, 0.8) * band * 0.45 * smoothstep(0.0, 0.15, d.y) * mix(0.6, 1.4, uNight) * shadowed;
 				}
-				if (uNight > 0.01 && d.y > 0.0){
-					// the moon, opposite the sun
-					float md = max(dot(d, -uSunDir), 0.0);
-					col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.9994, 0.9997, md) * 2.5 + pow(md, 60.0) * 0.08) * uNight * (1.0 - uDuskMoon.w);
+				// the cities' glow on a clear night: the sodium and LED light of the towns scattered
+				// in the air low over them, brightest toward them, washing out the stars there
+				if (uNight > 0.01 && uGlow > 0.01 && d.y > -0.05){
+					vec2 gdir = normalize(uGlowDir.xz + 1e-5);
+					float side = mix(1.0, 0.55 + 0.45 * dot(normalize(d.xz + 1e-5), gdir), uGlowDir.y);
+					col += vec3(1.0, 0.6, 0.34) * uGlow * uNight * side * (exp(-max(d.y, 0.0) * 9.0) * 0.03 + exp(-max(d.y, 0.0) * 2.5) * 0.006);
+				}
+				if (d.y > -0.02 && uDuskMoon.w < 0.5){
+					// the moon where it really is tonight, lit on the sun's side (its phase), with a
+					// faint earthshine on the dark side and the seas darker; pale by day
+					vec3 mo = uMoon.xyz;
+					float md = dot(d, mo);
+					float up = smoothstep(-0.02, 0.03, mo.y);
+					if (md > 0.9998){
+						const float R = 0.0105;
+						vec3 t1 = normalize(cross(mo, vec3(0.0, 1.0, 0.0) + vec3(1e-4, 0.0, 0.0))), t2 = cross(t1, mo);
+						vec2 q = vec2(dot(d, t1), dot(d, t2)) / R;
+						float r = length(q);
+						if (r < 1.0){
+							vec3 n = q.x * t1 + q.y * t2 - sqrt(max(0.0, 1.0 - r * r)) * mo;
+							float lit = smoothstep(-0.04, 0.08, dot(n, uSunDir));
+							float seas = smoothstep(0.42, 0.68, fbm5(q * 2.2 + 7.0)) * 0.42;
+							float limb = 0.82 + 0.18 * sqrt(max(0.0, 1.0 - r * r));
+							vec3 disc = vec3(0.95, 0.94, 0.9) * (lit * 2.4 * (1.0 - seas) * limb + 0.012);
+							float aa = smoothstep(1.0, 0.9, r) * up;
+							col = mix(col, max(col, disc), aa * mix(0.28, 1.0, uNight) * (1.0 - uDuskMoon.w));
+						}
+					}
+					// the glow round it in the air, as bright as the moon is
+					float glow = pow(max(md, 0.0), 900.0) * 0.12 + pow(max(md, 0.0), 60.0) * 0.05;
+					col += vec3(0.8, 0.86, 1.0) * glow * pow(uMoon.w, 2.4) * uNight * up;
 				}
 				// the dusk's crescent: a lit disc less the same disc a little higher, and its glow
 				if (uDuskMoon.w > 0.0){
@@ -295,6 +327,13 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					shade *= mix(1.0, heavy, clamp(sh * 1.4, 0.0, 1.0)) * (1.0 - uGloom * 0.45);
 					// at night the clouds are dark shapes against the stars, rimmed faintly by moonlight
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
+					// over the towns at night their glow on the clouds' undersides: a low overcast
+					// over a city reads orange-grey, lit from below, brightest toward it
+					if (uGlow > 0.01){
+						vec2 gdir = normalize(uGlowDir.xz + 1e-5);
+						float side = mix(1.0, 0.6 + 0.4 * dot(normalize(d.xz + 1e-5), gdir), uGlowDir.y);
+						cloud += vec3(1.0, 0.62, 0.38) * uGlow * uNight * side * (0.012 + 0.05 * uCloud * uCloud) * (1.0 - 0.5 * smoothstep(0.0, 0.6, d.y));
+					}
 					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh);
 					// at a world's dusk the heaps are lit pink from below, violet in their tops
 					cloud = mix(cloud, mix(vec3(1.0, 0.4, 0.62), vec3(0.2, 0.13, 0.34), smoothstep(0.2, 1.0, lit)) * uDusk.y, uDusk.x * 0.9);
@@ -625,6 +664,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		stars.material.uniforms.uCloudOff = w.uniforms.uCloudOff; stars.material.uniforms.uShowers = w.uniforms.uShowers;
 	}
 
+	// the Moon: where it is tonight and how much of it is lit (on another world, the old moon
+	// opposite the sun, always full)
+	const MOON = { ra: 0, dec: 0, lit: 1, waxing: true, age: 15 }, moonDir = new THREE.Vector3(), moonLight = new THREE.Vector3();
 	let SUN = solarDate(today());
 	Object.assign(SUN, solarTimes(latitude(), SUN.dec, SUN.noon));
 	state.sun = SUN;
@@ -663,6 +705,10 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		// there is no direct sun at all, only the grey light from everywhere)
 		const overcast = W ? THREE.MathUtils.smoothstep(W.cover ?? 0, 0.6, 0.95) : 0;
 		const sunVis = Math.min(W ? W.sunVis : 1, 1 - overcast * 0.85);
+		orientSky();
+		if (earth) { lunarPosition(d, state.hours, SUN.noon, MOON); celestial(MOON.ra, MOON.dec * 180 / Math.PI, moonDir); }
+		else { moonDir.copy(sd).negate(); MOON.lit = 1; }
+		uniforms.uMoon.value.set(moonDir.x, moonDir.y, moonDir.z, MOON.lit);
 		sun.shadow.intensity = vacuum ? 0.96 : 0.78 * (0.12 + 0.88 * sunVis);
 		if (night < 0.5) {
 			sun.color.copy(sunCol);
@@ -671,9 +717,15 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		} else {
 			sun.color.copy(PAL.moon);
 			// (moonlight: enough to read the shapes of things by, little enough that the lamps
-			// and lit windows are what the eye goes to)
-			sun.intensity = 0.36 * night;
-			sun.position.copy(sd).multiplyScalar(-SUN_D).add(focus);
+			// and lit windows are what the eye goes to; as the moon is, full or a sliver, and from
+			// where it is, its shadows long when it is low; with it down or new, only the faint
+			// light of the night sky from overhead)
+			const up = THREE.MathUtils.smoothstep(moonDir.y, -0.03, 0.1);
+			const k = up * moonlightShare(MOON.lit) * (1 - overcast * 0.8);
+			sun.intensity = 0.36 * night * (0.08 + 0.92 * k);
+			moonLight.set(0.15, 1, 0.25).normalize().lerp(moonDir, up).normalize();
+			sun.position.copy(moonLight).multiplyScalar(SUN_D).add(focus);
+			sun.shadow.intensity *= 0.25 + 0.75 * k;
 		}
 		sun.target.position.copy(focus);
 		// the shadow box follows the player in whole texels so edges do not crawl
@@ -711,7 +763,6 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		dome.position.copy(focus);
 		sats.position.copy(focus);
 		sats.userData.step(dt, elev);
-		orientSky();
 		return { night, dayK, setK };
 	}
 	// (the clouds in the water on or off, as the quality setting does)
@@ -722,5 +773,14 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 	const celestial = (ra, de, out = new THREE.Vector3()) => { const a = ra / 12 * Math.PI, d = de * Math.PI / 180; return out.set(Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)).applyMatrix4(eqM).normalize(); };
 	const dark = () => solarDirection(SUN.lat, SUN.dec, state.hours, SUN.noon).y < Math.sin(-12 * Math.PI / 180);
 	const lines = (on) => { if (on !== undefined) uCon.value = on ? 1 : 0; return uCon.value > 0; };
-	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines };
+	// which way the cities' glow lies (main.js: the urban land round you, weighted by where it is)
+	const glowToward = (gx, gz, dt) => {
+		const l = Math.hypot(gx, gz), G = uniforms.uGlowDir.value, k = Math.min(1, dt);
+		const tot = Math.max(1e-3, shared.uSkyGlow.value * 4 * 15000);
+		G.x += ((l > 1 ? gx / l : 0) - G.x) * k; G.z += ((l > 1 ? gz / l : 1) - G.z) * k;
+		G.y += (Math.min(1, l / tot) - G.y) * k;
+	};
+	// the Moon now: where (a direction) and its phase
+	const moon = () => ({ dir: moonDir.toArray().map((v) => +v.toFixed(3)), lit: +MOON.lit.toFixed(3), waxing: MOON.waxing, age: +MOON.age.toFixed(1), alt: +(Math.asin(moonDir.y) * 180 / Math.PI).toFixed(1) });
+	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines, glowToward, moon };
 }
