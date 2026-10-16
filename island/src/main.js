@@ -23,6 +23,7 @@ import { createGroundProbe } from './world/groundprobe.js';
 import { createFloorGuard } from './world/floorguard.js';
 import { createOcean } from './world/ocean.js';
 import { createSeaMirror } from './world/seamirror.js';
+import { createSeaDepth } from './world/seadepth.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
 import { createSunRays } from './world/sunrays.js';
@@ -556,6 +557,9 @@ export function createIslandWorld() {
 	// the land, the village and the boats drawn upside down for the sea to reflect (world/seamirror.js)
 	const seaMirror = createSeaMirror(renderer, { phone: isPhone, safe: SAFE });
 	shared.mirrorU = seaMirror.uniforms;
+	// and what stands in the water, by its depth, for its tint and the foam round it (world/seadepth.js)
+	const seaDepth = createSeaDepth(renderer, { phone: isPhone, safe: SAFE });
+	shared.seaDepthU = seaDepth.uniforms;
 	// (the cars' paint and glass reflect this sky)
 	bindCarSky(shared);
 	bindSignLighting(shared);
@@ -1148,6 +1152,9 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
+		seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
+		seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
 		await yieldBuild('Preparing places to explore');
 		// Equipment sources are data-facing first.  Generated shops are added as they stream
 		// in; the small island board keeps the conversational loop playable before Earth has
@@ -1391,6 +1398,7 @@ export function createIslandWorld() {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
 				world.bridge = bridge;
+				seaDepth.mark(bridge.group);   // its piers in the strait
 				// the bridge's deck and the Presidio Parkway up to it, to drive (drive.js follows them)
 				{
 					const pts = [], B = bridge, half = B.length / 2;
@@ -2103,6 +2111,8 @@ export function createIslandWorld() {
 		// (not on a world with no sea, nor down a cave or indoors, where the water is out of sight)
 		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
 		else shared.mirrorU.uReflOn.value = 0;
+		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaDepth.render(scene, camera, under || shared.uUnder.value);
+		else shared.seaDepthU.uSeaDepthOn.value = 0;
 		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy

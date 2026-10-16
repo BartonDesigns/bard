@@ -23,6 +23,7 @@ import { BAY_GLSL } from '../bay/terrain.js';
 import { GLOBE_U, GLOBE_SEA_GLSL } from '../earth/globeheight.js';
 import { NF, NF_N } from './nightfield.js';
 import { qualityNow } from './governor.js';
+import { SEA_DEPTH_GLSL } from './seadepth.js';
 
 const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 // how many things standing in the water ring it at once (posts, hulls, you)
@@ -65,6 +66,8 @@ export function createOcean(island, shared) {
 	uniforms.uUnder = shared.uUnder;
 	// the land, the village and the boats mirrored in the water, when drawn (world/seamirror.js)
 	Object.assign(uniforms, shared.mirrorU || { uRefl: { value: null }, uReflM: { value: new THREE.Matrix4() }, uReflOn: { value: 0 } });
+	// the posts, hulls, rocks and coral standing in it, by their depth, when drawn (world/seadepth.js)
+	Object.assign(uniforms, shared.seaDepthU || { uSeaDepth: { value: null }, uSeaDepthNF: { value: new THREE.Vector2(0.25, 16000) }, uSeaDepthPx: { value: new THREE.Vector2(1, 1) }, uSeaDepthOn: { value: 0 } });
 	uniforms.uWave = shared.uWave || uniforms.uWave;
 	// shared, live objects (not copies)
 	Object.assign(uniforms, {
@@ -234,6 +237,7 @@ export function createOcean(island, shared) {
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
 			uniform vec4 uTouch[TOUCH_N]; uniform vec4 uMouth[4];
 			uniform sampler2D uRefl; uniform mat4 uReflM; uniform float uReflOn;
+			${SEA_DEPTH_GLSL}
 			uniform vec4 uNFP[NF_N]; uniform vec4 uNFC[NF_N]; uniform int uNFn;
 			${CLOUD_REFLECT_GLSL}
 			${HEIGHT_GLSL}
@@ -459,6 +463,11 @@ export function createOcean(island, shared) {
 				// along the look bent by the surface (longer the lower you look, at most half again)
 				float cosT = sqrt(1.0 - (1.0 - ndv * ndv) / 1.777);
 				float de = d * (1.0 + 1.0 / max(cosT, 0.66)) * 0.5;
+				// a post, a hull, a rock or the coral nearer under the surface than the bed: the light
+				// comes back through only that much water (so a post's foot shows a metre down as it
+				// is, not tinted as if it stood on the bed), and where it breaks the surface, foam
+				float behind = seaDepthBehind(vW);
+				if (behind > -0.02) de = min(de, max(behind, 0.0));
 				vec3 trans = exp(-sig * de * 2.0);
 				vec3 deep = mix(vec3(0.0, 0.06, 0.19), mix(vec3(0.016, 0.038, 0.052), vec3(0.03, 0.045, 0.038), bayK), cold);
 				// light scattering in shallow tropical water: turquoise over sand, fading with depth
@@ -582,8 +591,10 @@ export function createOcean(island, shared) {
 				// against rock the swell bursts white and pours off in streams
 				float rocky = smoothstep(0.12, 0.3, vSlope);
 				float rockF = rocky * (1.0 - smoothstep(0.0, 1.4, film)) * smoothstep(0.3, 0.7, fq + 0.35 * sin(vRoll + 0.4)) * smoothstep(0.0, 0.02, film);
+				// a line of foam where a post, a hull or a rock meets the water, sloshing with the swell
+				float contact = behind > -0.02 ? (1.0 - smoothstep(0.03, 0.35 + 0.1 * sin(vRoll + vW.x * 0.7), behind)) * smoothstep(0.3, 0.6, fq + 0.2) * smoothstep(0.0, 0.02, film) : 0.0;
 				float current = plumeEdge * smoothstep(0.5, 0.75, fq + 0.25 * vn(vW.xz * 0.2 + uTime * 0.05)) * 0.45;
-				float foam = foamOf(clamp(max(max(breaker, max(inner, current)), max(cap * 0.9, max(swF, max(lap * 0.7, max(rockF * 0.85, touchF * smoothstep(0.35, 0.6, fq + 0.2)))))), 0.0, 1.0), vW.xz, hp);
+				float foam = foamOf(clamp(max(max(breaker, max(inner, current)), max(cap * 0.9, max(swF, max(lap * 0.7, max(max(rockF * 0.85, contact * 0.8), touchF * smoothstep(0.35, 0.6, fq + 0.2)))))), 0.0, 1.0), vW.xz, hp);
 				// lit by the sun by day, the moon and sky by night (never glowing in the dark)
 				vec3 foamC = vec3(0.92, 0.95, 0.96) * (uAmbient * 0.9 + uSunColor * max(0.0, uSunDir.y) * 0.9 + vec3(0.06, 0.07, 0.09) * nightK);
 				// a toxic sea's foam is a yellow-green scum
