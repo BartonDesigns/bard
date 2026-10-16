@@ -39,6 +39,7 @@ import { BLOCKS, toGrid, fromGrid } from '../bay/styles.js';
 import { requestsNear } from '../economy/requests.js';
 import { shopCampaigns, wallCampaign } from './campaigns.js';
 import { productBrand } from './brand-catalog.js';
+import { buildingArtSurfaces, wreckedHost } from '../civic/placement.js';
 import { graffitiGraphic } from '../civic/graffiti-catalog.js';
 import { artRevision } from './art.js';
 
@@ -82,6 +83,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	const glassOf = new Map(), glassAt = new Map();  // owner -> a shop's glass decals { x, z, recs }; where -> owner
 	const posKey = (x, z) => Math.round(x) + ':' + Math.round(z);
 	let boundSF = null, lastOut = [], forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
+	let cityLots = null, surfaceHosts = [], hostState = '';
 	const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _f = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 
 	const W = () => world?.();
@@ -247,20 +249,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			for (const [nx, nz] of [[q.nx, q.nz], [-q.nx, -q.nz], [tx, tz], [-tx, -tz]]) surfaces.push({ kind: 'pier', x: q.x + nx * 0.66, z: q.z + nz * 0.66, y: q.y, nx, nz, w: 1.3, h: Math.max(2, q.h), lu: landAt(q.x, q.z)?.lu ?? 7 });
 		}
 		const fronted = (x, z, nx, nz) => storefronts.some((F) => Math.abs((x - F.x) * F.nx + (z - F.z) * F.nz) < 1.5 && Math.abs((x - F.x) * F.nz - (z - F.z) * F.nx) < F.run / 2 + 0.5 && nx * F.nx + nz * F.nz > 0.8);
-		const civic = (o) => !!o.src?.grp?.service || o.src?.kind === 7 || o.civic || /civic|school|church|hospital/.test(o.use || '');
-		for (const o of lots) {
-			if (!o.w || !o.d || o.h < 3 || civic(o)) continue;
-			const lu = landAt(o.x, o.z)?.lu;
-			const ind = o.src?.kind === 9 || lu === 8;
-			if (!ind) continue;
-			const ca = Math.cos(o.a || 0), sa = Math.sin(o.a || 0);
-			for (const [lx, lz, len] of [[0, 1, o.w], [0, -1, o.w], [1, 0, o.d], [-1, 0, o.d]]) {
-				const nx = ca * lx - sa * lz, nz = sa * lx + ca * lz, half = lx ? o.w / 2 : o.d / 2;
-				const x = o.x + nx * (half + 0.03), z = o.z + nz * (half + 0.03);
-				if (!near(x, z, R) || fronted(x, z, nx, nz)) continue;
-				surfaces.push({ kind: 'industrial', x, z, y: ground(x, z), nx, nz, w: Math.min(len, 30), h: o.h, lu: 8, campaignEligible: o.kind === 5 });
-			}
-		}
+		const walls=buildingArtSurfaces(lots,{x:cx,z:cz,radius:R,ground,landAt,fronted,cap:lite?64:128});
+		surfaces.push(...walls);
+		surfaceHosts=lots.filter(o=>o&&(o.kind===5||o.src?.kind===9)).slice(0,lite?64:128);
 		// stickers on the backs of the signs and up the posts
 		for (const r of out) if (r.mat === MAT.retro && r.back === BACK.blank && r.post && hash01(r.x, r.z, 'sb') < 0.5) surfaces.push({ kind: 'signback', x: r.x - r.nx * 0.004, z: r.z - r.nz * 0.004, y: null, hy: r.hy, nx: -r.nx, nz: -r.nz, w: r.w * 0.8, h: r.h * 0.8, lu: landAt(r.x, r.z)?.lu });
 		for (const p of postList) if (hash01(p.x, p.z, 'ps') < 0.4) { const a = hash01(p.x, p.z, 'pa') * Math.PI * 2; surfaces.push({ kind: 'post', x: p.x + Math.sin(a) * 0.037, z: p.z + Math.cos(a) * 0.037, y: null, hy: 1.5, nx: Math.sin(a), nz: Math.cos(a), w: 0.07, h: 0.9, lu: landAt(p.x, p.z)?.lu }); }
@@ -405,6 +396,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		if (!dirty && checkT > 0 && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		checkT = 0.5;
 		openRequests = requestsNear(x,z,SHOP_R);
+		const nextLots=w.city?.nearList?.();
+		const nextHosts=surfaceHosts.map(o=>[wreckedHost(o)?1:0,o.y,o.h].join(',')).join('|');
+		if(nextLots!==cityLots||nextHosts!==hostState){dirty=true;cityLots=nextLots;hostState=nextHosts;}
 		const key = [openRequests.map(q => q.id).sort().join(','), artRevision(), real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0, w.parks?.count?.() ?? 0, w.interiors?.live?.size ?? 0].join('|');
 		if (!dirty && key === keyNow && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		dirty = false; keyNow = key; at = { x, z };
@@ -437,7 +431,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		},
 		refresh() { dirty = true; },
 		// where the records of a face kind stand (for a look at them: Crysis.signage.where('blade'))
-		where: (k, n = 5) => lastOut.filter((r) => r.face?.k === k).slice(0, n).map((r) => ({ x: +r.x.toFixed(2), z: +r.z.toFixed(2), hy: r.hy, nx: +(r.nx || 0).toFixed(3), nz: +(r.nz || 0).toFixed(3), base: r.base ?? null })),
+		where: (k, n = 5) => lastOut.filter((r) => r.face?.k === k).slice(0, n).map((r) => ({ x: +r.x.toFixed(2), z: +r.z.toFixed(2), hy: r.hy, nx: +(r.nx || 0).toFixed(3), nz: +(r.nz || 0).toFixed(3), base: r.base ?? null, art: graffitiGraphic(r.face.k,r.face.seed) })),
 		// (for a look at the sheeting at night without a car: the camera's lamps on)
 		headlights(on = true) { forceHead = !!on; return forceHead; },
 		atlas,
