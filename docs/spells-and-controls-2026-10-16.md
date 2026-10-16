@@ -148,6 +148,27 @@ Everything is kept between visits (`l99-magic`).
 - the weapons on the keys 1 to 5;
 - the look modes and the keys being wired.
 
+## Found on the way: memory while the mouse is captured
+
+While checking this work in the container's headless Chromium (software rendering), the
+browser was killed for running out of memory twice, at 5 and then 12.6 GB. Each time it
+happened after the mouse had been captured for aiming (pointer lock), not because of the
+spells. The same happens with main's own build, without this work:
+
+- **The jump:** capturing the mouse on Earth took the browser from 2.1 GB to about 4.1 GB at
+  once.
+- **What stayed still:** the view did not move, and the renderer's counts held (468
+  geometries, 119 textures, 450 shader programs).
+- **Where it sits:** the renderer process held 2.6 GB and the GPU process 1 GB.
+- **What it took to crash:** night, and a long stretch of casting and fighting on top of that,
+  took it over the container's limit.
+- **What was clean without capture:** every spell was cast on its own, then night was rendered,
+  and the browser stayed between 2.0 and 2.3 GB.
+
+This may be particular to this headless browser, but it is worth checking on a desktop. In
+Chrome's Task Manager (Shift+Esc), watch the tab's memory before and after clicking into the
+world to aim. If it jumps by gigabytes there too, it is a bug in main, not in the spells.
+
 ## Not done yet
 
 - Spells have no cast animation on your hands or your body in third person. The glow leaves
