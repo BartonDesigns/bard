@@ -149,7 +149,8 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 		const Wh = walls.ray(o, d, L ? L.t : g ? g.t : max);
 		const M = monuments.ray(o, d, Wh ? Wh.t : L ? L.t : g ? g.t : max);
 		if (M) return { t: M.t, n: M.n, surface: 'stone', landmark: M.L };
-		if (Wh) return { t: Wh.t, n: Wh.n, surface: Wh.surface, wall: Wh.wall, material: Wh.material };
+		// (wallHit: combat marks every hit on a wall as wall: true, so the wall's own record goes by another name)
+		if (Wh) return { t: Wh.t, n: Wh.n, surface: Wh.surface, wallHit: Wh.wall, material: Wh.material };
 		if (L) return L;
 		if (g) return { t: g.t, n: g.n, surface: 'glass', glass: g.pane, u: g.u, v: g.v };
 		return cleared ? { none: true } : null;
@@ -190,8 +191,9 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 	// On a wall: every round leaves its pock, a heavy one a chip and a spray of grit, a very
 	// heavy one or a blast a hole. Returns { through, dmg } for a round that goes on.
 	function hit(at, dir, h, dmg, type) {
-		// (only a wall built near you carries its record; combat marks every world hit wall: true)
-		if (h?.wall?.W) return walls.hit(h, at, dir, dmg, type);
+		// (only a wall built near you carries its record, as wallHit from structures.ray or wall.W;
+		// combat marks every world hit wall: true)
+		if (h?.wallHit || h?.wall?.W) return walls.hit(h, at, dir, dmg, type);
 		if (h?.glass) {
 			glass.strike(h.glass, h.u, h.v, type === 'blast' ? 99 : dmg, [dir.x * 4, 0, dir.z * 4]);
 			if (type === 'blast' || type === 'fire' || dmg < 6) return { stop: true };
