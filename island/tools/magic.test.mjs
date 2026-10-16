@@ -179,4 +179,8 @@ test('the look modes and the keys are wired', () => {
 	assert.match(hb, /Digit\(\[1-5\]\)/);
 	const ai = fs.readFileSync(new URL('../src/combat/ai-squads.js', import.meta.url), 'utf8');
 	assert.match(ai, /hexStep/); assert.match(ai, /ctx\.cloaked/);
+	// the spellbook starts hidden by its class alone, so it is open only once shown (else the keys
+	// 1 to 0 are dead from the start: the bar and the spells wait on a closed book)
+	const hud = fs.readFileSync(new URL('../src/magic/hud.js', import.meta.url), 'utf8');
+	assert.match(hud, /isOpen = \(\) => book\.style\.display === 'flex'/);
 });

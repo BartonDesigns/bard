@@ -106,7 +106,7 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 		put(mana, 'm', Math.round(state.mana / mx * 200), (v) => { manaFill.style.transform = `scaleX(${Math.max(0, Math.min(1, v / 200))})`; mana.title = `Mana ${Math.round(state.mana)} / ${mx}`; });
 		const sig = `${state.fabric.light}|${state.fabric.dark}`;
 		if (sig !== lastSig) { lastSig = sig; fab.innerHTML = `<span class="l">☀ <b>${state.fabric.light}</b></span><br><span class="d">☾ <b>${state.fabric.dark}</b></span>`; fab.title = 'Aether fabric: light and dark. N (or a tap here) opens the spellbook.'; }
-		if (book.style.display !== 'none' && dirty) draw();
+		if (isOpen() && dirty) draw();
 	}
 	function setMode(m) { mode.style.opacity = m === 'camera' ? '1' : '0'; }
 	function show(on) { for (const e of [bar, mana]) e.style.opacity = on ? '1' : '0'; }
@@ -150,9 +150,10 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 		} else if (!why) { const b = mk('button', 'weave', acts, 'Weave'); b.onclick = () => { onWeave(sp.id); dirty = true; draw(); }; }
 		else mk('div', 'why', el, why);
 	}
+	// (open only once shown: the sheet starts hidden by its class, with no inline display)
 	function open() { book.style.display = 'flex'; dirty = true; draw(); if (document.pointerLockElement) document.exitPointerLock(); }
 	function close() { book.style.display = 'none'; }
-	const isOpen = () => book.style.display !== 'none';
+	const isOpen = () => book.style.display === 'flex';
 	function dispose() { for (const e of [bar, mana, mode, book]) e.remove(); }
 	return { update, setMode, show, open, close, toggle: () => (isOpen() ? close() : open()), isOpen, dispose, touchUp: () => { dirty = true; } };
 }
