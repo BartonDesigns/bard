@@ -3,8 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SPELLS, SPELL, SCHOOLS, createMagicState, saveMagic, weave, gather, spellPower, manaCost, manaMax, manaRegen, cooldownOf, shaped } from '../src/magic/spells.js';
-import { PAGES, SKILL, LAYOUT, PERKS, PERK, pageNodes, pageLinks, rankOf, useFor, rankFrac, xpNeed, pointsOf, addXp, addUse, perkBlock, takePerk, sanitizeSkills, computeMods, fxLines } from '../src/magic/skills.js';
+import { SPELLS, SPELL, SCHOOLS, createMagicState, saveMagic, weave, weaveBlock, gather, spellPower, manaCost, manaMax, manaRegen, cooldownOf, shaped } from '../src/magic/spells.js';
+import { PAGES, SKILL, LAYOUT, PERKS, PERK, pageNodes, pageLinks, rankOf, useFor, rankFrac, xpNeed, pointsOf, addXp, addUse, perkBlock, takePerk, sanitizeSkills, computeMods, fxLines, spellBlock, isUltimate, ULTIMATE_RANK } from '../src/magic/skills.js';
 
 const fresh = () => sanitizeSkills(createMagicState());
 
@@ -117,6 +117,23 @@ test('the perks shape the spells: power, mana, cooldowns, duration, reach, area,
 	assert.ok(m.armor <= 0.5);
 });
 
+test('an ultimate takes mastery of its school: the ladder below it, then the highest rank', () => {
+	// (Gargantua, the Void's ultimate, comes into the book with the spells; its star is kept ready)
+	assert.ok(LAYOUT.void.spells.gargantua, 'a place for it at the top of the Void');
+	const ult = { id: 'gargantua', name: 'Gargantua', school: 'void', tier: 5, kind: 'singularity', mana: 100, cd: 300, glyph: '●', desc: 'x' };
+	assert.ok(isUltimate(ult) && !isUltimate(SPELL['event-horizon']));
+	assert.equal(ULTIMATE_RANK, 100);
+	const s = fresh();
+	assert.match(spellBlock(s, ult), /tier 4 Void spell first/, 'the ladder first');
+	s.known.push('event-horizon');
+	addUse(s, 'void', useFor(99));
+	assert.match(spellBlock(s, ult), /Void rank 100 \(yours is 99\)/);
+	addUse(s, 'void', useFor(100) - useFor(99));
+	assert.equal(spellBlock(s, ult), weaveBlock(s, ult), 'mastered: only the spell\'s own rules are left');
+	// an ordinary spell is only its own rules
+	assert.equal(spellBlock(fresh(), SPELL['lance-of-dawn']), weaveBlock(fresh(), SPELL['lance-of-dawn']));
+});
+
 test('skills are kept between visits, and rubbish is dropped', () => {
 	const s = fresh();
 	addXp(s, 1000); addUse(s, 'void', 300); assert.ok(takePerk(s, 'searing-light'));
@@ -135,7 +152,7 @@ test('skills are kept between visits, and rubbish is dropped', () => {
 
 test('the menu is wired: the keys, the places menu, the fight held and the world not drawn under it', () => {
 	const idx = fs.readFileSync(new URL('../src/magic/index.js', import.meta.url), 'utf8');
-	for (const k of ["e.code === 'Tab'", 'KeyN', 'menu.insertBefore', 'hooks.power', "addUse(state, 'athletics'"]) assert.ok(idx.includes(k), k);
+	for (const k of ["e.code === 'Tab'", 'KeyN', 'menu.insertBefore', 'hooks.power', 'spellBlock(state, SPELL[id])', "addUse(state, 'athletics'"]) assert.ok(idx.includes(k), k);
 	const main = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
 	assert.match(main, /menu: tpMenu/); assert.match(main, /magic\.menuOpen\(\)/); assert.match(main, /magic\.covering\(\)/);
 	const ui = fs.readFileSync(new URL('../src/magic/skills-ui.js', import.meta.url), 'utf8');

@@ -76,6 +76,20 @@ stars are the spells (circles) and the perks (diamonds), joined by lines:
 - **Spells** are still woven with aether fabric as before (`magic/spells.js`). **Perks** take a
   skill point, the node they hang from, and a rank.
 
+## Ultimates
+
+A tier 5 spell is a school's ultimate: it needs a tier 4 spell of its school, like any other step
+on the ladder, and also the school's highest rank (100). `skills.js` adds the rank rule
+(`spellBlock`), and the menu and `onWeave` check it before weaving. An ultimate's star is larger,
+ringed with a slow halo, and its info says "Ultimate spell".
+
+**Gargantua** is the Void's ultimate. Josh asked for a black hole on the horizon that drags every
+hostile NPC in over 10 seconds and takes 25% off a boss. The spell itself (its numbers, its
+in-world effect, its weave cost) is being built on the spells branch. This branch keeps its star
+at the top of the Void spiral, above Event Horizon (`LAYOUT.void.spells.gargantua`), and an
+animated preview keyed on the id `gargantua` (or the kind `singularity`). The star appears once
+the spell is in the book.
+
 ## The perks
 
 65 perks, 4 or 5 on each school and 6 on each body page. They are a stat, a share and a scope (a

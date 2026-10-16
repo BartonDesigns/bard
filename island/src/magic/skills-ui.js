@@ -9,15 +9,15 @@
 // and holds the fight), takes the keys (a capturing listener, so nothing reaches the game but a
 // key let go), and draws its sky on one small canvas. All movement is transforms and opacity.
 
-import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, weaveBlock, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
-import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, computeMods, RANK_MAX } from './skills.js';
+import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
+import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, computeMods, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK } from './skills.js';
 
 const KEYS = ['6', '7', '8', '9', '0'];
 const ICON = { radiance: '☀', restoration: '✚', warding: '⛨', dawn: '☼', shadow: '☾', void: '◆', blight: '☣', umbral: '⛧', storm: 'ϟ', chrono: '⧗', primal: '♨', marksman: '⌖', athletics: '»', resilience: '⛊' };
 // a glyph drawn as text, never as a coloured emoji (U+FE0E asks for the text form)
 const txt = (g) => (g ? `${g}\uFE0E` : '');
 const STRAND_COL = { light: '#ffd27a', dark: '#b39aff', twilight: '#7fd8ff', body: '#9fe8c8' };
-const KIND_WORD = { bolt: 'Bolt', beam: 'Held beam', burst: 'Burst at your aim', strike: 'Strike from the sky', nova: 'Nova round you', cone: 'Cone before you', chain: 'Chain', orb: 'Rolling orb', well: 'Void well', cloud: 'Lingering cloud', zone: 'Hallowed ground', storm: 'Storm', heal: 'Heal', hot: 'Heal over time', shield: 'Ward', deathward: 'Death ward', aura: 'Aura', buff: 'Blessing', cloak: 'Cloak', light: 'Light', sight: 'Sight', pact: 'Pact', summon: 'Summoning', blink: 'Blink', recall: 'Mark and return', gate: 'Gate', rewind: 'Rewind', stasis: 'Stasis', douse: 'Rain', daybreak: 'Daybreak', lances: 'Lances from the sky' };
+const KIND_WORD = { bolt: 'Bolt', beam: 'Held beam', burst: 'Burst at your aim', strike: 'Strike from the sky', nova: 'Nova round you', cone: 'Cone before you', chain: 'Chain', orb: 'Rolling orb', well: 'Void well', cloud: 'Lingering cloud', zone: 'Hallowed ground', storm: 'Storm', heal: 'Heal', hot: 'Heal over time', shield: 'Ward', deathward: 'Death ward', aura: 'Aura', buff: 'Blessing', cloak: 'Cloak', light: 'Light', sight: 'Sight', pact: 'Pact', summon: 'Summoning', blink: 'Blink', recall: 'Mark and return', gate: 'Gate', rewind: 'Rewind', stasis: 'Stasis', douse: 'Rain', daybreak: 'Daybreak', lances: 'Lances from the sky', singularity: 'Black hole on the horizon' };
 const DMG_WORD = { radiant: 'radiant', shadow: 'shadow', void: 'void', blight: 'blight', storm: 'storm', frost: 'frost', fire: 'fire' };
 
 const hexRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -127,6 +127,13 @@ const CSS = `
 .sk-n.sel .lb{opacity:1}
 .sk-n.sel::after{content:'';position:absolute;inset:-9px;border-radius:50%;border:1px dashed var(--c);opacity:.9;animation:skSpin 9s linear infinite;pointer-events:none}
 @keyframes skSpin{to{transform:rotate(360deg)}}
+.sk-n.ult{--ns:calc(var(--ns0) * 1.32)}
+.sk-n.ult .o::after{content:'';position:absolute;inset:-34%;border-radius:50%;background:conic-gradient(from 0deg,transparent 0,var(--c2) 18%,transparent 34%,var(--c2) 60%,transparent 78%);-webkit-mask:radial-gradient(circle,transparent 52%,#000 56%,transparent 72%);mask:radial-gradient(circle,transparent 52%,#000 56%,transparent 72%);opacity:.75;animation:skSpin 14s linear infinite;pointer-events:none}
+.sk-n.ult.far .o::after{opacity:.25}
+.sk-n .bh{position:relative;width:46%;height:46%;border-radius:50%;background:#000;box-shadow:0 0 0 1.5px rgba(255,246,236,.9),0 0 10px 2px var(--c),0 0 24px var(--c2)}
+.sk-n .bh i{position:absolute;left:-62%;right:-62%;top:44%;height:12%;border-radius:50%;background:linear-gradient(90deg,transparent,var(--c) 22%,#fff 50%,var(--c) 78%,transparent);transform:rotate(-8deg);opacity:.9}
+.sk-n.ult.far .bh,.sk-n.ult.near .bh{opacity:.55}
+.sk-n.ult .lb{font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 .sk-n.pop .o{animation:skPop .8s cubic-bezier(.2,.9,.3,1.4)}
 .sk-n .pr{position:absolute;inset:0;border-radius:50%;pointer-events:none;opacity:0}
 .sk-n.pop .pr{box-shadow:0 0 0 2px var(--c),0 0 18px var(--c);animation:skRing .9s ease-out forwards}
@@ -305,7 +312,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			return { a, b, l, g, was: '', dx: x2 - x1, dy: y2 - y1 };
 		});
 		const stars = nodes.map((n, j) => {
-			const b = mk('button', 'sk-n ' + n.kind, cons, `<span class="pr"></span><span class="o"></span><span class="g">${txt(n.item.glyph)}</span><span class="lb">${n.item.name}</span>`);
+			const b = mk('button', 'sk-n ' + n.kind + (n.kind === 'spell' && isUltimate(n.item) ? ' ult' : ''), cons, `<span class="pr"></span><span class="o"></span>${n.kind === 'spell' && isUltimate(n.item) ? '<span class="bh"><i></i></span>' : `<span class="g">${txt(n.item.glyph)}</span>`}<span class="lb">${n.item.name}</span>`);
 			b.type = 'button';
 			b.style.left = n.at[0] + '%'; b.style.top = n.at[1] + '%';
 			b.style.setProperty('--i', j); b.style.setProperty('--d', `${(j * 0.7) % 5}s`);
@@ -349,7 +356,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		}
 		ns = Math.round(Math.max(34, Math.min(52, cs * 0.085)));
 		lf = cs < 320 ? '9.5px' : cs < 480 ? '10.5px' : '11.5px';
-		Object.assign(v, { '--cw': cw + 'px', '--ch': ch + 'px', '--cl': cl + 'px', '--ct': ct + 'px', '--tl': tl + 'px', '--tt': tt + 'px', '--tw': tw + 'px', '--tf': tf, '--ns': ns + 'px', '--lf': lf, '--ih': ih + 'px', '--iw': iw + 'px' });
+		Object.assign(v, { '--cw': cw + 'px', '--ch': ch + 'px', '--cl': cl + 'px', '--ct': ct + 'px', '--tl': tl + 'px', '--tt': tt + 'px', '--tw': tw + 'px', '--tf': tf, '--ns': ns + 'px', '--ns0': ns + 'px', '--lf': lf, '--ih': ih + 'px', '--iw': iw + 'px' });
 		for (const k in v) root.style.setProperty(k, v[k]);
 		for (const p of P.pages) {
 			p.el.style.width = pw + 'px';
@@ -446,7 +453,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		if (holds(state, n.id)) return 'own';
 		const parentOk = !n.parents.length || n.parents.some((p) => holds(state, p));
 		if (!parentOk) return 'far';
-		const why = n.kind === 'spell' ? weaveBlock(state, n.item) : perkBlock(state, n.id);
+		const why = n.kind === 'spell' ? spellBlock(state, n.item) : perkBlock(state, n.id);
 		return why ? 'near' : 'can';
 	}
 	let shownSig = '';
@@ -522,7 +529,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		mk('div', `sk-med ${n.kind}${st === 'own' ? ' own' : ''}`, hd, txt(n.item.glyph));
 		const ht = mk('div', '', hd);
 		mk('h3', '', ht, n.item.name);
-		mk('div', 'ty', ht, n.kind === 'spell' ? `Tier ${n.item.tier} spell · ${KIND_WORD[n.item.kind] || n.item.kind}` : (n.item.rank ? `Perk · ${S.name} rank ${n.item.rank}` : `Perk · ${S.name}`));
+		mk('div', 'ty', ht, n.kind === 'spell' ? isUltimate(n.item) ? `Ultimate spell · ${KIND_WORD[n.item.kind] || n.item.kind}` : `Tier ${n.item.tier} spell · ${KIND_WORD[n.item.kind] || n.item.kind}` : (n.item.rank ? `Perk · ${S.name} rank ${n.item.rank}` : `Perk · ${S.name}`));
 		mk('p', 'desc', sc, n.item.desc);
 		const act = mk('div', 'sk-act', el);
 		if (n.kind === 'spell') spellInfo(sc, act, n.item, st);
@@ -569,6 +576,10 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 				const below = nodesOf.get(sp.school).filter((q) => q.kind === 'spell' && q.item.tier === sp.tier - 1);
 				li(below.some((q) => holds(state, q.id)), `Know ${below.map((q) => q.item.name).join(' or ')}`);
 			}
+			if (isUltimate(sp)) {
+				const r = rankOf(state.use[sp.school] || 0);
+				li(r >= ULTIMATE_RANK, `${SKILL[sp.school].name} rank ${ULTIMATE_RANK}: mastery (yours is ${r})`);
+			}
 			if (strand === 'twilight') {
 				const need = TWILIGHT_NEEDS[sp.tier - 1];
 				li(state.affinity.light >= need && state.affinity.dark >= need, `${need} affinity with each strand (you have ${state.affinity.light} light, ${state.affinity.dark} dark)`);
@@ -587,7 +598,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 				b.addEventListener('click', () => slot(i));
 			}
 		} else {
-			const why = weaveBlock(state, sp), c = weaveCost(sp);
+			const why = spellBlock(state, sp), c = weaveCost(sp);
 			const b = mk('button', 'sk-go', act, why ? why : `Weave · ${[c.light && `☀ ${c.light}`, c.dark && `☾ ${c.dark}`].filter(Boolean).join(' + ')}`);
 			b.type = 'button'; b.disabled = !!why;
 			b.addEventListener('click', act_);
@@ -834,6 +845,73 @@ function drawSpell(g, w, h, sp, u, c, t) {
 			if (sp.splash) ring(T0.x, T0.y, 6 + 26 * q, 1 - q);
 			status(T0, 1 - q * 0.5);
 		}
+		return;
+	}
+	if (sp.id === 'gargantua' || K === 'singularity') {
+		// a black hole opens on the horizon; the foes are drawn up into it one by one and gone, and
+		// the boss, too vast to swallow, bleeds a quarter of its strength (its own longer loop)
+		const v = (t % 6) / 6, hx = w * 0.8, hy = gy - h * 0.3;
+		const grow = ease(v / 0.12) * (1 - ease((v - 0.86) / 0.06)), Rb = Math.min(h * 0.17, w * 0.07) * grow;
+		figure(me);
+		// the boss: a hulk with its health bar
+		const boss = { x: w * 0.36, y: gy };
+		const bossHit = v > 0.15 && v < 0.86 ? 0.25 + 0.2 * Math.sin(t * 9) : 0;
+		g.save(); g.translate(boss.x, boss.y); g.scale(1.9, 1.9); g.translate(-boss.x, -boss.y);
+		figure(boss, 1, bossHit, true);
+		g.restore();
+		const lost = 0.25 * ease((v - 0.15) / 0.7), bw = 46, by = gy - 58;
+		g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(boss.x - bw / 2, by, bw, 4);
+		g.fillStyle = 'rgba(255,96,90,.95)'; g.fillRect(boss.x - bw / 2, by, bw * (1 - lost), 4);
+		if (lost > 0.01) { g.fillStyle = col(0.9); g.fillRect(boss.x - bw / 2 + bw * (1 - lost), by, bw * lost, 4); g.font = '600 10px system-ui'; g.textAlign = 'center'; g.fillStyle = col(Math.min(1, lost * 8)); g.fillText(`−${Math.round(lost * 100)}%`, boss.x, by - 5); }
+		if (Rb > 0.5) {
+			// the light from round it, and the ground lit by it
+			glow(hx, hy, Rb * 5, 0.22 * grow);
+			const disk = (front) => {
+				// the accretion disk, nearly edge on: hot white within, the Void's colour without;
+				// the side turning toward you the brighter
+				for (let i = 0; i < 26; i++) {
+					const f = i / 25, rx = Rb * (1.5 + f * 2.2), ry = rx * 0.2;
+					const a0 = front ? 0 : Math.PI, a1 = front ? Math.PI : Math.PI * 2;
+					g.lineWidth = 1.6;
+					for (let j = 0; j < 18; j++) {
+						const a = a0 + (a1 - a0) * j / 18, b = a + (a1 - a0) / 18;
+						const doppler = 0.55 + 0.45 * Math.cos(a + 0.4), shimmer = 0.75 + 0.25 * Math.sin(a * 7 - t * 5 + i);
+						const al = (1 - f) * 0.5 * doppler * shimmer * grow;
+						g.strokeStyle = f < 0.3 ? `rgba(255,240,225,${al})` : col(al);
+						g.beginPath(); g.ellipse(hx, hy, rx, ry, -0.08, a, b); g.stroke();
+					}
+				}
+			};
+			disk(false);
+			// the lensed far side of the disk, bent up over the top and under the bottom
+			for (let i = 0; i < 6; i++) { g.strokeStyle = i < 2 ? `rgba(255,236,220,${0.28 * grow})` : col(0.24 * grow * (1 - i / 6)); g.lineWidth = 1.1; g.beginPath(); g.ellipse(hx, hy, Rb * (1.18 + i * 0.09), Rb * (1.1 + i * 0.08), -0.08, 0, 6.283); g.stroke(); }
+			// the shadow, and the thin ring of light at its edge
+			g.fillStyle = '#000'; g.beginPath(); g.arc(hx, hy, Rb, 0, 6.283); g.fill();
+			g.strokeStyle = `rgba(255,250,240,${0.7 * grow})`; g.lineWidth = 0.8; g.beginPath(); g.arc(hx, hy, Rb * 1.03, 0, 6.283); g.stroke();
+			disk(true);
+		}
+		// the foes, each drawn up and stretched into the dark in turn
+		const take = [0.2, 0.36, 0.52, 0.66];
+		const fs = [{ x: w * 0.5, y: gy - 2 }, { x: w * 0.58, y: gy + 3 }, { x: w * 0.47, y: gy + 4 }, { x: w * 0.64, y: gy - 3 }];
+		for (const [i, p] of fs.entries()) {
+			const f = (v - take[i]) / 0.16;
+			if (f >= 1) continue;
+			if (f <= 0) { figure(p, 1, v > 0.1 ? 0.3 : 0, true); continue; }
+			const k = f * f, x = p.x + (hx - p.x) * k, y = p.y + (hy + 8 - p.y) * k;
+			g.save(); g.translate(x, y); g.rotate(Math.atan2(hy - p.y, hx - p.x) * k + Math.PI / 2 * k); g.scale(Math.max(0.05, 1 - k * 0.95), 1 + k * 1.6); g.translate(-x, -y);
+			figure({ x, y }, 1 - k * 0.6, 0.8, true);
+			g.restore();
+			for (let n = 1; n < 5; n++) glow(x - (hx - p.x) * 0.04 * n, y - (hy - p.y) * 0.04 * n, 4 * (1 - n / 6), 0.5 * k);
+		}
+		// dust streaming in along the ground and up into the disk
+		if (Rb > 0.5) for (let i = 0; i < 16; i++) {
+			const q = (t * 0.45 + i / 16) % 1, sx = w * 0.42 + (i * 53 % 100) / 100 * w * 0.3, sy = gy - (i * 29 % 7);
+			const x = sx + (hx - sx) * q * q, y = sy + (hy - sy) * q * q;
+			g.fillStyle = col(0.6 * (1 - q) * grow); g.fillRect(x, y, 1.6, 1.6);
+		}
+		// it closes with a flash
+		const end = (v - 0.9) / 0.1;
+		if (end > 0 && end < 1) { glow(hx, hy, 40 * (1 - end) + 6, 1 - end); ring(hx, hy, 10 + 60 * end, 1 - end, 2); }
 		return;
 	}
 	if (sp.id === 'lance-of-dawn' || K === 'lances') {

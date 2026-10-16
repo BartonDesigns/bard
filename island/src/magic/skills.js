@@ -17,7 +17,7 @@
 // (light, dark, twilight) or all. The perks you hold are summed into state.mods (refreshMods),
 // which the spells' rules (spells.js) and the caster read.
 
-import { SCHOOLS, SPELLS, SPELL } from './spells.js';
+import { SCHOOLS, SPELLS, SPELL, weaveBlock } from './spells.js';
 
 // the skills of the body: no spells, perks only
 export const BODY = Object.freeze({
@@ -39,7 +39,8 @@ export const LAYOUT = Object.freeze({
 	warding: { fig: 'M50 6 L86 18 C86 56 72 80 50 96 C28 80 14 56 14 18 Z M50 6 L50 96', spells: { aegis: [50, 82], 'radiant-aura': [50, 60], bulwark: [50, 38], banish: [50, 16] } },
 	dawn: { fig: 'M6 92 L94 92 M14 92 A36 36 0 0 1 86 92 M50 56 L50 6 M24 66 L8 46 M76 66 L92 46', spells: { lumen: [30, 84], dawnsight: [70, 84], swiftstride: [30, 60], waterstride: [70, 60], daybreak: [50, 37], 'sunwell-gate': [50, 12] } },
 	shadow: { fig: 'M62 6 A46 46 0 1 0 62 94 A34 34 0 1 1 62 6', spells: { shadowbolt: [62, 88], shadowstep: [34, 72], 'umbral-cloak': [56, 62], 'night-terror': [26, 42], eclipse: [56, 14] } },
-	void: { fig: 'M50 52 C56 44 66 46 66 56 C66 70 46 74 38 64 C26 50 36 30 54 28 C76 26 88 46 82 66 C76 86 50 94 30 86', spells: { 'void-shard': [50, 52], repulse: [66, 70], 'gravity-well': [30, 66], 'event-horizon': [30, 22] } },
+	// (gargantua: the Void's ultimate, crowning the spiral; it shows once the spell is in the book)
+	void: { fig: 'M50 52 C56 44 66 46 66 56 C66 70 46 74 38 64 C26 50 36 30 54 28 C76 26 88 46 82 66 C76 86 50 94 30 86', spells: { 'void-shard': [50, 52], repulse: [66, 70], 'gravity-well': [30, 66], 'event-horizon': [30, 22], gargantua: [46, 8] } },
 	blight: { fig: 'M50 96 L50 8 M50 70 L22 46 L12 24 M50 70 L78 46 L88 24 M50 40 L36 26 M50 40 L64 26', spells: { 'hex-of-decay': [50, 86], withering: [50, 64], 'plague-cloud': [28, 44], 'soul-siphon': [72, 44], contagion: [50, 14] } },
 	umbral: { fig: 'M50 96 C30 90 22 70 24 50 C26 34 36 26 50 24 C64 26 74 34 76 50 C78 70 70 90 50 96 M30 34 C20 24 18 12 24 4 M70 34 C80 24 82 12 76 4 M36 56 L46 58 M64 56 L54 58', spells: { nightsight: [50, 84], shade: [50, 62], 'grave-host': [50, 40], 'dark-pact': [50, 16] } },
 	storm: { fig: 'M74 2 L64 14 L36 38 L54 44 L64 62 L42 70 L30 86 L22 98', spells: { thunderclap: [30, 86], 'chain-lightning': [64, 62], 'ball-lightning': [34, 40], tempest: [64, 14] } },
@@ -156,6 +157,18 @@ export const RANK_MAX = 100;
 // the use a rank takes (from 0): rises by a power, so the first ranks come quickly
 export const useFor = (rank) => Math.ceil(5 * Math.pow(Math.max(0, rank), 1.5));
 export const rankOf = (use) => Math.min(RANK_MAX, Math.floor(Math.pow(Math.max(0, use) / 5, 1 / 1.5) + 1e-9));
+// An ultimate (a tier 5 spell) is for a master of its school: on top of the ladder below it, it
+// takes the school's highest rank.
+export const ULTIMATE_RANK = RANK_MAX;
+export const isUltimate = (spell) => (spell?.tier || 0) >= 5;
+// what stands between you and weaving a spell (null: nothing): the spell's own rules, and an
+// ultimate's rank, told after the ladder and before the fabric
+export function spellBlock(s, spell) {
+	const why = weaveBlock(s, spell);
+	if (!isUltimate(spell) || s.known.includes(spell.id) || /first\.$/.test(why || '')) return why;
+	const r = rankOf(s.use?.[spell.school] || 0);
+	return r < ULTIMATE_RANK ? `It needs ${SKILL[spell.school].name} rank ${ULTIMATE_RANK} (yours is ${r}).` : why;
+}
 // the share of the way to the next rank (0 .. 1)
 export function rankFrac(use) {
 	const r = rankOf(use);

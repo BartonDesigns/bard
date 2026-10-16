@@ -14,7 +14,7 @@
 // a thread or two of light.
 
 import { createMagicState, saveMagic, weave, weaveCost, bind, gather, SPELL, SLOTS } from './spells.js';
-import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, PERK } from './skills.js';
+import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, PERK, spellBlock } from './skills.js';
 import { createSkillsMenu } from './skills-ui.js';
 import { createMagicFx, magicSound } from './fx.js';
 import { createAether, seedOf } from './aether.js';
@@ -91,7 +91,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		sound: (k, v) => magicSound(k, v),
 		onWeave: (id) => {
 			const c = weaveCost(SPELL[id]);
-			if (!weave(state, id)) return false;
+			if (spellBlock(state, SPELL[id]) || !weave(state, id)) return false;
 			dirty = true; magicSound(SPELL[id].school, 0.14);
 			learnt(addUse(state, SPELL[id].school, c.light + c.dark));
 			return true;
