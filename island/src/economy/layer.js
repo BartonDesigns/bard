@@ -80,7 +80,8 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	const g = cv?.getContext('2d');
 	const tex = cv ? new THREE.CanvasTexture(cv) : null;
 	if (tex) { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; }
-	// the boards: one quad each, its cell of the atlas per instance; lit a little after dark
+	// the boards: one quad each, its cell of the atlas per instance; lit after dark while the
+	// business is open (and the bars' and the all-night places' signs), dark after hours
 	const night = { value: 0 };
 	const mat = wrap(new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, roughness: 0.55, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
 	{
@@ -88,15 +89,20 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		mat.onBeforeCompile = (sh, r) => {
 			prev?.call(mat, sh, r);
 			sh.uniforms.uSignNight = night;
-			sh.vertexShader = 'attribute vec4 aCell;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell.xy + uv * aCell.zw;\n#endif');
-			sh.fragmentShader = 'uniform float uSignNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uSignNight;');
+			sh.vertexShader = 'attribute vec4 aCell;\nattribute float aLit;\nvarying float vLit;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\nvLit = aLit;\n#ifdef USE_MAP\nvMapUv = aCell.xy + uv * aCell.zw;\n#endif');
+			sh.fragmentShader = 'uniform float uSignNight;\nvarying float vLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uSignNight * vLit;');
 		};
 		const pk = mat.customProgramCacheKey?.bind(mat);
-		mat.customProgramCacheKey = () => (pk ? pk() : '') + '|signs1';
+		mat.customProgramCacheKey = () => (pk ? pk() : '') + '|signs2';
 	}
 	const geo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
 	const cellA = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4);
 	geo.setAttribute('aCell', cellA);
+	// (each board's sign lit or not by its business's hours: stateAt, a few times a game hour)
+	const litA = new THREE.InstancedBufferAttribute(new Float32Array(CAP).fill(1), 1);
+	geo.setAttribute('aLit', litA);
+	const signE = [];
+	const signState = {};
 	const signs = new THREE.InstancedMesh(geo, mat, CAP);
 	signs.count = 0; signs.frustumCulled = false; signs.castShadow = false; signs.receiveShadow = true; signs.visible = false;
 	signs.name = 'economy-signs';
@@ -484,11 +490,13 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			q.setFromAxisAngle(Y, B.yaw);
 			signs.setMatrixAt(n, m4.compose(p.set(B.x, B.y, B.z), q, s.set(B.w, B.h, 1)));
 			const col = c % COLS, row = Math.floor(c / COLS);
+			signE[n] = B.E;
 			A[n * 4] = col / COLS + iu; A[n * 4 + 1] = 1 - (row + 1) / ROWS + iv; A[n * 4 + 2] = 1 / COLS - 2 * iu; A[n * 4 + 3] = 1 / ROWS - 2 * iv;
 			n++;
 		}
 		signs.count = n; signs.visible = n > 0;
 		signs.instanceMatrix.needsUpdate = true; cellA.needsUpdate = true;
+		signE.length = n; litT = -1;
 	}
 
 	// ---------- the regional kit's towns (region/settle.js) ----------
@@ -558,9 +566,23 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		}
 		night.value = 0.55 * nightK;
 		if (regional && clock - rT > 2) { rT = clock; applyRegional(cam.x, cam.z); }
+		// the signs by their hours, every couple of seconds after dark
+		if (nightK > 0.05 && (clock - litT > 2 || litT < 0)) {
+			litT = clock;
+			const L = litA.array;
+			let changed = false;
+			for (let i = 0; i < signE.length; i++) {
+				const E = signE[i];
+				if (!E) continue;
+				if (!E.hours) E.hours = hoursOf(E);
+				const v = stateAt(E, hours, dow, signState).sign >= 1 ? 1 : 0.04;
+				if (L[i] !== v) { L[i] = v; changed = true; }
+			}
+			if (changed) litA.needsUpdate = true;
+		}
 		SF.tick(hours, dow, nightK, clock);
 	}
-	let clock = 0;
+	let clock = 0, litT = -1;
 
 	// ---------- asking ----------
 	const everyone = () => (rplan.length ? plan.concat(rplan) : plan);

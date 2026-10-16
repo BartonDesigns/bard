@@ -3,10 +3,16 @@
 // each a single mesh of skin and one of cloth: once your body is known, its own hands and the
 // sleeves, cuffs and gloves of what you wear (people/sleeve.js), folding as the arms move.
 //
-// They hold a guard that breathes and bobs with your steps; each strike is three key poses
-// (the guard, the end of the wind-up, full extension) eased through the strike's own timing
-// (combat/melee-rules.js), so a held heavy draws back and trembles, a blow that lands holds at
-// full reach through the hit-stop, and the recovery comes back to the guard. A block brings the
+// They hold a boxer's guard that breathes and bobs with your steps: the lead (left) hand forward
+// and a little higher, the rear (right) one back by the chin, elbows in, about shoulder width
+// apart, framed to the screen (each fist placed by where it falls in the view, so both show at
+// the bottom of a wide desktop and of a narrow phone alike, never crossing the middle). Each
+// strike is three key poses (the guard, the end of the wind-up, full extension) eased through
+// the strike's own timing (combat/melee-rules.js): a jab or a cross runs straight out along
+// its own shoulder's line toward the crosshair, the fist turning over only near full reach, the
+// other hand pulled back to the chin, then snaps back to the guard; a held heavy draws the rear
+// hand back and down, the body coiled, trembling more the longer it is held; a blow that lands
+// holds at full reach through the hit-stop. A block brings the
 // forearms up in front of the face; a dodge tucks them and lets them trail; a takedown wraps the
 // right arm round a throat; something picked up (a bat, a pipe, a bottle) sits in the right hand
 // with the left on it too. Every pose is written into fixed arrays and followed by springs:
@@ -23,7 +29,12 @@ const out3 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - (1 - x) ** 3);
 // poses: [x, y, z, pitch, yaw, roll] for the left and the right fist, in the camera's frame
 // (pitch tips the forearm down from the fist; yaw swings it to the side; roll turns the fist)
 const P = (l, r) => ({ L: l, R: r });
-const GUARD = P([-0.125, -0.095, -0.38, 0.55, 0.2, 0.4], [0.145, -0.11, -0.36, 0.55, -0.2, -0.4]);
+// the guard is placed on screen (see frame() below); these are its turns, and where each fist
+// sits in the view: [x, y] as a share of the view's half width and half height, and depth
+const GUARD = P([-0.125, -0.095, -0.38, 0.62, -0.04, 0.35], [0.145, -0.11, -0.32, 0.7, 0.04, -0.45]);
+const SCREEN = { L: [-0.36, -0.5, 0.37], R: [0.5, -0.72, 0.31] };
+// (the most a fist strays to the side, in the rig's metres: shoulder width on a wide screen)
+const WIDE = { L: 0.15, R: 0.17 };
 const POSE = {
 	block: P([-0.075, -0.03, -0.29, 1.3, 0.12, 2.85], [0.075, -0.035, -0.29, 1.3, -0.12, -2.85]),
 	choke: P([0.12, -0.19, -0.43, 0.3, -1.15, 0.6], [-0.1, -0.2, -0.44, 0.2, 1.3, -0.3]),
@@ -33,13 +44,19 @@ const POSE = {
 	// something held in one hand: up at the guard, its end forward of the knuckles
 	blade: P(GUARD.L, [0.15, -0.13, -0.38, 0.45, -0.25, -0.75]),
 };
-// each strike: [wind-up end, full extension] (at full reach the forearm runs back in line with
-// the shoulder, as a straight arm does, not at your eye)
+// each strike: [wind-up end, full extension] as offsets from the guard ('g' entries are filled
+// from the guard each frame: { d: [dx, dy, dz, dpitch, dyaw, droll] }) or as whole poses. At
+// full reach the forearm runs back in line with its shoulder, as a straight arm does.
+const G = (d) => ({ d });
 const MOVE = {
-	jab: [P([-0.125, -0.09, -0.34, 0.5, 0.22, 0.45], GUARD.R), P([-0.05, -0.07, -0.74, 0.13, -0.11, 0.15], [0.15, -0.12, -0.34, 0.6, -0.22, -0.4])],
-	cross: [P(GUARD.L, [0.16, -0.11, -0.32, 0.55, -0.26, -0.45]), P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [0.02, -0.06, -0.76, 0.135, 0.15, -0.15])],
-	hook: [P(GUARD.L, [0.32, -0.1, -0.42, 0.25, -1.0, -1.2]), P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [-0.06, -0.06, -0.6, 0.15, 0.95, -0.35])],
-	heavy: [P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [0.27, -0.27, -0.2, 0.85, -0.45, -0.9]), P([-0.15, -0.12, -0.34, 0.6, 0.24, 0.4], [0.05, -0.07, -0.7, 0.18, 0.12, -0.3])],
+	// the lead hand straight out, the rear one drawn in to the chin
+	jab: [P(G([0.005, 0.004, 0.02, -0.05, 0, 0.05]), G([0, 0, 0.01, 0, 0, 0])), P([-0.05, -0.035, -0.74, 0.13, -0.11, 0.15], G([-0.01, 0.006, 0.02, 0, 0, 0]))],
+	// the rear hand out across, the shoulder behind it; the lead pulled back to cover
+	cross: [P(G([0, 0, 0.01, 0, 0, 0]), G([0.01, -0.004, 0.03, 0.05, -0.03, -0.05])), P(G([0.012, 0.012, 0.05, 0.15, 0.05, 0.1]), [0.02, -0.03, -0.76, 0.135, 0.15, -0.15])],
+	hook: [P(G([0, 0, 0.02, 0, 0, 0]), [0.32, -0.1, -0.42, 0.25, -1.0, -1.2]), P(G([0.01, 0.01, 0.04, 0.1, 0, 0]), [-0.06, -0.06, -0.6, 0.15, 0.95, -0.35])],
+	// the rear hand drawn back and down past the chin, the body coiled; thrown through with the
+	// hips and shoulders, longer and lower than a cross
+	heavy: [P(G([0.02, 0.015, 0.05, 0.15, 0.06, 0.1]), G([0.03, 0.035, 0.015, 0.15, -0.35, -0.4])), P(G([0.02, 0.01, 0.07, 0.2, 0.05, 0.15]), [0.035, -0.05, -0.74, 0.16, 0.14, -0.3])],
 	// a level swing with both hands, right to left; an overhead brought down
 	swing: [P([0.22, -0.17, -0.3, 0.2, -1.0, -3.0], [0.3, -0.13, -0.28, 0.15, -1.25, -3.0]), P([-0.24, -0.13, -0.5, 0.12, 0.95, -0.2], [-0.15, -0.1, -0.52, 0.12, 1.05, -0.2])],
 	overhead: [P([0.08, 0.0, -0.26, 0.6, -0.1, -1.5], [0.13, 0.05, -0.24, 0.6, -0.15, -1.5]), P([0.02, -0.26, -0.55, 1.0, -0.05, 1.5], [0.08, -0.2, -0.53, 1.0, -0.1, 1.5])],
@@ -131,7 +148,30 @@ export function createFistView({ camera, isPhone = false }) {
 			A.garment.pose(dt, s.block ? 0.5 : 0, toArm, down);
 		}
 	}
-	function lerpPose(out, a, b, k) { for (let i = 0; i < 6; i++) out[i] = a[i] + (b[i] - a[i]) * k; }
+	function lerpPose(out, a, b, k, kr = k) { for (let i = 0; i < 5; i++) out[i] = a[i] + (b[i] - a[i]) * k; out[5] = a[5] + (b[5] - a[5]) * kr; }
+	// the guard framed to the view: each fist where it falls on screen at its depth, no further
+	// out than shoulder width
+	let lastAspect = 0, lastFov = 0;
+	function frame() {
+		if (camera.aspect === lastAspect && camera.fov === lastFov) return;
+		lastAspect = camera.aspect; lastFov = camera.fov;
+		const ty = Math.tan((camera.fov * Math.PI) / 360), tx = ty * camera.aspect;
+		// (a narrow screen, a phone held upright, sees little to either side: the fists sit
+		// further out from the eye, so smaller, and wider apart on the screen, to stay apart)
+		const narrow = Math.max(0, Math.min(1, (1 - camera.aspect) / 0.55));
+		for (const side of ['L', 'R']) {
+			const sx = SCREEN[side][0] * (1 + 0.4 * narrow), sy = SCREEN[side][1] * (1 + (side === 'L' ? 0.12 : 0) * narrow), d = SCREEN[side][2] * (1 + 0.6 * narrow), g = GUARD[side];
+			g[0] = Math.sign(sx) * Math.min(WIDE[side], Math.abs(sx) * tx * d);
+			g[1] = sy * ty * d; g[2] = -d;
+		}
+	}
+	// a key pose for a side: whole, or an offset from the guard (into tmp)
+	const KA = { L: new Float32Array(6), R: new Float32Array(6) }, KB = { L: new Float32Array(6), R: new Float32Array(6) };
+	function key(k, side, guard, out) {
+		const v = k[side];
+		if (v.d) { for (let i = 0; i < 6; i++) out[i] = guard[i] + v.d[i]; return out; }
+		return v;
+	}
 	// the pose wanted now, written into each arm's want
 	function aim(s, t) {
 		for (const side of ['L', 'R']) {
@@ -146,12 +186,24 @@ export function createFistView({ camera, isPhone = false }) {
 			w.set(base);
 			const K = s.move && !solo && MOVE[s.anim];
 			if (K && !s.take && !s.cuffed) {
-				const [wind, hit] = K, m = s.m, mt = s.mt;
-				if (mt < m.wind) lerpPose(w, guard, wind[side], ease(mt / m.wind));
-				else if (mt < m.wind + m.active) lerpPose(w, wind[side], hit[side], out3((mt - m.wind) / m.active));
-				else { lerpPose(W, hit[side], guard, ease((mt - m.wind - m.active) / m.recover)); w.set(W); }
-				// a heavy held back: drawn further, trembling a little
-				if (s.charging && side === 'R') { w[2] += 0.04 * s.charge; w[0] += 0.02 * s.charge; w[1] += Math.sin(t * 60) * 0.0025 * s.charge; }
+				const wind = key(K[0], side, guard, KA[side]), hit = key(K[1], side, guard, KB[side]), m = s.m, mt = s.mt;
+				if (mt < m.wind) lerpPose(w, guard, wind, ease(mt / m.wind));
+				else if (mt < m.wind + m.active) {
+					// out along the line fast, the fist turning over only in the last of it
+					const u = (mt - m.wind) / m.active;
+					lerpPose(w, wind, hit, out3(u), ease((u - 0.35) / 0.65));
+				} else {
+					// and snapped back: quick off the target, easing into the guard
+					const u = (mt - m.wind - m.active) / m.recover;
+					lerpPose(W, hit, guard, out3(Math.min(1, u * 1.15))); w.set(W);
+				}
+				// a heavy held back: drawn further and lower the longer it is held, the hand
+				// trembling more and more, the lead hand up to cover
+				if (s.charging) {
+					const c = s.charge;
+					if (side === 'R') { w[2] += 0.012 * c; w[0] += 0.006 * c; w[1] += 0.01 * c; w[4] -= 0.12 * c; w[1] += (Math.sin(t * 57) * 0.0035 + Math.sin(t * 41 + 1) * 0.0025) * (0.3 + c); w[0] += Math.sin(t * 47 + 2) * 0.002 * (0.3 + c); }
+					else { w[1] += 0.012 * c; w[2] += 0.02 * c; }
+				}
 			}
 			// breathing and the steps' bob
 			w[1] += Math.sin(t * 1.7 + (side === 'L' ? 0 : 0.6)) * 0.004 - Math.abs(Math.sin(s.step * Math.PI)) * 0.012 * s.pace;
@@ -196,6 +248,7 @@ export function createFistView({ camera, isPhone = false }) {
 				arms[side].anatomical?.pose(held ? 'grip' : s.take || s.cuffed ? 'open' : 'fist', held ? (side === 'R' ? items[s.item] : 0.019) : null);
 			}
 			if (s.item !== lastItem) { for (const k in items) items[k].visible = k === s.item; lastItem = s.item; }
+			frame();
 			aim(s, t);
 			follow(dt, !!s.move);
 			fold(dt, s);

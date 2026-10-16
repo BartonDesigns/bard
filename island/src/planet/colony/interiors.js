@@ -11,6 +11,7 @@ import { inward, roverGeometry } from './parts.js';
 import { signMesh, at as sign } from './signs.js';
 import { CAST } from './crew.js';
 import { CROPS } from './farm.js';
+import { lightInterior, releaseInterior, configureLighting } from '../../interiors/lighting.js';
 
 const TAU = Math.PI * 2;
 const HULL = 0, PRINT = 1, LAMP = 5;
@@ -35,6 +36,7 @@ export function createColonyInteriors(X, o) {
 	const mats = { room: o.roomMat, glass: o.glassMat };
 	const live = new Map();
 	const near = isPhone ? [110, 170] : [170, 260];
+	configureLighting({ isPhone });
 
 	// ---------- the rooms ----------
 	function build(key) {
@@ -64,6 +66,9 @@ export function createColonyInteriors(X, o) {
 		const sm = signMesh(sg);
 		if (sm) g.add(sm);
 		group.add(g);
+		// lit by its own ridge lights, lamps and screens (the kit's glowing pieces) instead of
+		// the flat glow the rooms had: interiors/lighting.js
+		lightInterior(g, { id: 'colony:' + key, glowAttr: { name: 'aGlow', values: [LAMP] }, sky: false, lampStrength: 0.8 });
 		return g;
 	}
 	// a module's room: lined, decked, lit along its ridge, furnished by its role
@@ -290,6 +295,7 @@ export function createColonyInteriors(X, o) {
 			}
 			if (live.has(key) && d > near[1]) {
 				const L = live.get(key);
+				releaseInterior(L.g);
 				group.remove(L.g);
 				L.g.traverse((m) => { if (m.geometry && !m.geometry.userData.keep) m.geometry.dispose(); });
 				solids = solids.filter((s) => !L.solids.includes(s));
