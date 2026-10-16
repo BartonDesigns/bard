@@ -50,7 +50,7 @@ export async function handle(request, env) {
 	if (origin && !ok) return reply({ error: 'origin not allowed' }, 403, { vary: 'Origin' });
 	if (request.method === 'OPTIONS') return new Response(null, { status: ok ? 204 : 403, headers: H });
 
-	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', 'combat-v1', 'combat-guard-v1', REPUTATION_FEATURE, SOUL_FEATURE, ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : [])] }, 200, H);
+	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', 'combat-v1', 'combat-guard-v1', REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : [])] }, 200, H);
 
 	const living = url.pathname.match(/^\/living\/([^/]+)\/([^/]+)$/);
 	if (living && ['GET', 'POST'].includes(request.method)) {
@@ -78,6 +78,7 @@ export async function handle(request, env) {
 
 	if (url.pathname === '/souls/me' && ['GET', 'POST'].includes(request.method)) {
 		if (!ok) return reply({ error: 'origin required' }, 403, H);
+		if (!env.SOULS) return reply({ error: 'Cloud reputation is not deployed.' }, 503, H);
 		const key = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
 		if (!SOUL_TOKEN.test(key)) return reply({ error: 'Soul key required.' }, 401, H);
 		const id = await soulId(key), stub = env.SOULS.get(env.SOULS.idFromName(id));
