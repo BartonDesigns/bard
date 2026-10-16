@@ -632,7 +632,7 @@ function meshOf(b, mat, name, tiles) {
 	g.setAttribute('uv', new THREE.Float32BufferAttribute(b.u, 2));
 	if (tiles) g.setAttribute('aTile', new THREE.Float32BufferAttribute(b.t, 2));
 	if (mat.vertexColors) {
-		if (mat.vertexAlphas) { const n = b.c.length / 3, c4 = new Float32Array(n * 4); for (let i = 0; i < n; i++) { c4[i * 4] = b.c[i * 3]; c4[i * 4 + 1] = b.c[i * 3 + 1]; c4[i * 4 + 2] = b.c[i * 3 + 2]; c4[i * 4 + 3] = 1; } g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
+		if (mat.userData.vertexAlphas) { const n = b.c.length / 3, c4 = new Float32Array(n * 4); for (let i = 0; i < n; i++) { c4[i * 4] = b.c[i * 3]; c4[i * 4 + 1] = b.c[i * 3 + 1]; c4[i * 4 + 2] = b.c[i * 3 + 2]; c4[i * 4 + 3] = 1; } g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
 		else g.setAttribute('color', new THREE.Float32BufferAttribute(b.c, 3));
 	}
 	g.computeBoundingSphere();
