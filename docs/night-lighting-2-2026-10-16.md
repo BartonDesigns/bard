@@ -84,7 +84,28 @@ on (a table lamp if there is one, else the brightest light) and the screens.
 
 ## Day interiors: the fire bay
 
-[filled in below from the page probe]
+Part 1 left the fire bay near-white by day. In the page the bay floor's bake was about 2.35, 2.7
+times the node bake of the same plan, under the day's indoor exposure lift (`main.js`, up to
+1.55 indoors by day). Two things reach that floor in the page and not in the node bake, and
+both are fixed at the source:
+
+- **A tower's floors were built inside the fire station's block.** When a service takes a
+  block, `bay/towers.js` still built a tower's own floors there. Their stone floors, panels and
+  lamps were drawn through the fire bay. `services/index.js` now marks the block
+  (`b.ref.service`), and `towers.js` leaves a service's block alone.
+- **The sun lit the rooms through the roof.** The interiors' meshes did not receive shadows,
+  so by day the sun fell on every floor at full strength. They now receive the shell's and the
+  walls' shadows (`interiors/lighting.js job`). The sun's direct light in a room is also scaled
+  by how much sky the spot sees through the windows (the bake's sky share, `vIl.a`), so a floor
+  by a window takes it and the middle of a deep hall takes little.
+
+The day exposure lift itself is unchanged: it is the eye adjusting from the street, and with
+the floor no longer lit through the roof it has nothing to blow out.
+
+Not measured in the page: a probe that went to a fire station by day to read the bay floor's
+bake timed out twice in this container's software rendering (a station has to be found and its
+rooms built and baked). The fix is checked by the unit tests and by the three worlds loading
+cleanly; the owner should look at a fire bay by day on a real device.
 
 ## Bugs
 
