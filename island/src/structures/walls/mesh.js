@@ -20,6 +20,12 @@ import { MAT } from './assembly.js';
 import { slotOf } from '../../bay/housekit.js';
 
 const ISO = 1;
+// the outer faces stand this far proud of the wall's own planes: where walls meet, another wall's
+// end lies in the same plane and would flicker through them
+const PROUD = 0.002;
+// merged runs of whole squares overlap their neighbours this much (no pinholes where a long
+// edge meets a finely divided one; the overlap is the same surface, so it cannot be seen)
+const LAP = 0.0015;
 const lin3 = (r, g, b) => { const c = new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace); return [c.r, c.g, c.b]; };
 const TINT = {
 	white: lin3(0.95, 0.95, 0.94), gypsum: lin3(0.96, 0.95, 0.92), back: lin3(0.9, 0.88, 0.84), wood: lin3(1, 0.97, 0.92), end: lin3(1, 0.96, 0.9),
@@ -104,7 +110,7 @@ export function createWallMesher({ atlas, lath }) {
 		// ---------- one piece ----------
 		function piece(pc, P, pi) {
 			const plainFace = (side) => {
-				const a = side ? amax : amin, key = pc.keys[side], col = pc.cols[side];
+				const a = side ? amax + PROUD : amin - PROUD, key = pc.keys[side], col = pc.cols[side];
 				if (!key) return;
 				const B = faceBuf(key);
 				quad(B, [pc.u0, pc.y0, a], [pc.u1, pc.y0, a], [pc.u1, pc.y1, a], [pc.u0, pc.y1, a], [0, 0, side ? 1 : -1], col, [[pc.u0, pc.y0], [pc.u1, pc.y0], [pc.u1, pc.y1], [pc.u0, pc.y1]]);
@@ -193,7 +199,7 @@ export function createWallMesher({ atlas, lath }) {
 						const ok = i <= nu && want(i, k);
 						const whole = ok && onRun && sqMax(G, i, k) < ISO;
 						if (whole) { if (run0 < 0) run0 = i; continue; }
-						if (run0 >= 0) { onRun(su[run0], su[i], sv[k], sv[k + 1]); run0 = -1; }
+						if (run0 >= 0) { onRun(Math.max(P.u0, su[run0] - LAP), Math.min(P.u1, su[i] + LAP), Math.max(P.y0, sv[k] - LAP), Math.min(P.y1, sv[k + 1] + LAP)); run0 = -1; }
 						if (!ok || (onRun && whole)) continue;
 						const c = [[i, k], [i + 1, k], [i + 1, k + 1], [i, k + 1]];
 						const v = c.map(([a, b]) => G[a + b * NU]);
@@ -260,7 +266,7 @@ export function createWallMesher({ atlas, lath }) {
 				let cutLo = l.lo, cutHi = l.hi, flapped = false;
 				const flap = l.m === 'drywall' && (l === first || l === last) ? (p, q, n) => paperFlap(p, q, n, l, l === first ? l.lo : l.hi, l === first ? 1 : -1, pc.cols[l === first ? 0 : 1]) : null;
 				for (const side of [0, 1]) {
-					const outer = side ? l === last : l === first, a = side ? l.hi : l.lo, sgn = side ? 1 : -1;
+					const outer = side ? l === last : l === first, a = side ? l.hi + (outer ? PROUD : 0) : l.lo - (outer ? PROUD : 0), sgn = side ? 1 : -1;
 					if (outer) {
 						const key = pc.keys[side], col = pc.cols[side];
 						if (spall && l.t > spall * 1.5) {
@@ -572,10 +578,13 @@ export function createWallMesher({ atlas, lath }) {
 		}
 		// ---------- the piece's ends and top (the builder's paint), and its baseboards ----------
 		function caps(pc) {
+			const cmin = amin - PROUD, cmax = amax + PROUD;
 			const B = faceBuf('paint'), col = W.capCol;
-			if (pc.capL !== false) quad(B, [pc.u0, pc.y0, amin], [pc.u0, pc.y0, amax], [pc.u0, pc.y1, amax], [pc.u0, pc.y1, amin], [-1, 0, 0], col, [[amin, pc.y0], [amax, pc.y0], [amax, pc.y1], [amin, pc.y1]]);
-			if (pc.capR !== false) quad(B, [pc.u1, pc.y0, amin], [pc.u1, pc.y0, amax], [pc.u1, pc.y1, amax], [pc.u1, pc.y1, amin], [1, 0, 0], col, [[amin, pc.y0], [amax, pc.y0], [amax, pc.y1], [amin, pc.y1]]);
-			quad(B, [pc.u0, pc.y1, amin], [pc.u1, pc.y1, amin], [pc.u1, pc.y1, amax], [pc.u0, pc.y1, amax], [0, 1, 0], col, [[pc.u0, amin], [pc.u1, amin], [pc.u1, amax], [pc.u0, amax]]);
+			// (only beside an opening: at the wall's own ends it meets another wall, whose face lies
+			// in the same plane, and a cap there flickers through it)
+			if (pc.u0 > W.s + 0.01) quad(B, [pc.u0, pc.y0, cmin], [pc.u0, pc.y0, cmax], [pc.u0, pc.y1, cmax], [pc.u0, pc.y1, cmin], [-1, 0, 0], col, [[cmin, pc.y0], [cmax, pc.y0], [cmax, pc.y1], [cmin, pc.y1]]);
+			if (pc.u1 < W.e - 0.01) quad(B, [pc.u1, pc.y0, cmin], [pc.u1, pc.y0, cmax], [pc.u1, pc.y1, cmax], [pc.u1, pc.y1, cmin], [1, 0, 0], col, [[cmin, pc.y0], [cmax, pc.y0], [cmax, pc.y1], [cmin, pc.y1]]);
+			quad(B, [pc.u0, pc.y1, cmin], [pc.u1, pc.y1, cmin], [pc.u1, pc.y1, cmax], [pc.u0, pc.y1, cmax], [0, 1, 0], col, [[pc.u0, cmin], [pc.u1, cmin], [pc.u1, cmax], [pc.u0, cmax]]);
 		}
 		function trims(pc, GA, GB) {
 			for (const side of [0, 1]) {
