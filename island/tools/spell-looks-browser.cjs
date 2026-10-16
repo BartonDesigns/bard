@@ -65,6 +65,12 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 				const T0 = 0.32, landed = [false, false, false];
 				run(0.18 * 2 + T0 * 0.8, (tt) => pts.forEach((p, i) => { const u = (tt - 0.18 * i) / T0; if (u < 0) return; if (u >= 1) { if (!landed[i]) { landed[i] = true; L.blast?.(fx, p, spell.r, false); } return; } const h = 26 * (1 - u); L.fall?.(fx, v(p.x + d.x * h, p.y + d.y * h, p.z + d.z * h), d, false); }));
 			}
+			else if (k === 'singularity') {
+				// (Gargantua far off on the horizon, fed for a while; the nearest foe streaking into it)
+				const h = v(-14, 16, -120), e = camera.position;
+				run(1.2, (tt) => L.tell?.(fx, v(h.x, h.y - (1 - tt / 1.2) * 25, h.z), 10, tt / 1.2, e));
+				run(1.4, (tt, n) => { L.tick?.(fx, h, 10, tt, e); if (n === 36) L.arc?.(fx, foes[0], h); });
+			}
 			else if (k === 'nova') { L.blast?.(fx, v(0, 0.08, 0), spell.r); run(0.2); if (L.mark) run(0.4, () => L.mark(fx, { bound: v(1.5, 1.2, -1.5) }, {})); }
 			else if (k === 'cone') { L.cone?.(fx, eye, dir, spell.range, spell.angle); run(0.25); }
 			else if (k === 'chain') { L.arc?.(fx, hand, foes[0]); L.arc?.(fx, foes[0], foes[1]); L.arc?.(fx, foes[1], foes[2]); run(0.08); }

@@ -13,7 +13,7 @@ test('every spell is whole, and every school a ladder with no rung missing', () 
 	for (const s of SPELLS) {
 		assert.ok(!ids.has(s.id), 'unique ' + s.id); ids.add(s.id);
 		assert.ok(SCHOOLS[s.school], s.id + ' school');
-		assert.ok(s.tier >= 1 && s.tier <= 4, s.id + ' tier');
+		assert.ok(s.tier >= 1 && s.tier <= 4 || s.tier === 5 && s.kind === 'singularity', s.id + ' tier');
 		assert.ok(s.name && s.glyph && s.desc.length > 20, s.id + ' words');
 		assert.ok(s.mana >= 0 && s.cd > 0, s.id + ' costs');
 		if (['bolt', 'burst', 'strike', 'nova', 'cone', 'chain', 'orb', 'well'].includes(s.kind)) assert.ok(s.dmg > 0, s.id + ' harms');

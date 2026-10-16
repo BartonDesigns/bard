@@ -263,7 +263,7 @@ export function createBoss(ctx, kind, center, { id = 'boss:' + kind, rand = Math
 	const B = { id, kind, def, center: new THREE.Vector3(center.x, center.y, center.z), time: 0, dead: false, deadT: 0, mc: createBossMachine(def, rand) };
 	B.group = BUILD[kind](ctx, B);
 	B.group.name = 'boss-' + kind;
-	B.T = { id, kind: 'boss', faction: 'boss', shared: true, surface: B.surface, name: def.name, bound: { x: center.x, y: center.y, z: center.z, r: 30 }, shapes: () => B.parts(), onHit: (blow) => damage(blow) };
+	B.T = { id, kind: 'boss', faction: 'boss', shared: true, surface: B.surface, name: def.name, bound: { x: center.x, y: center.y, z: center.z, r: 30 }, shapes: () => B.parts(), onHit: (blow) => damage(blow), life: () => B.mc.M };
 	ctx.layer.add(B.T);
 	function damage(blow) {
 		if (B.dead) return null;

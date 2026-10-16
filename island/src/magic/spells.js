@@ -12,7 +12,7 @@
 // to cast, and only one who carries both strands deeply can weave the twilight spells. Light
 // spells burn brighter by day, dark spells at night, twilight spells at dusk and dawn.
 //
-// A school is a ladder of four tiers: each spell past the first needs one of the tier below
+// A school is a ladder of four tiers (Void has a fifth, its ultimate, Gargantua): each spell past the first needs one of the tier below
 // it in the same school. Casting costs mana, which comes back on its own; each spell has its
 // own cooldown.
 
@@ -35,9 +35,9 @@ export const SCHOOLS = Object.freeze({
 
 // what one tier of spell takes to weave, in fabric of its strand (a twilight spell: this much
 // of each strand times TWILIGHT_SHARE), and the affinity a twilight spell needs in both strands
-export const WEAVE_COST = Object.freeze([10, 30, 80, 200]);
+export const WEAVE_COST = Object.freeze([10, 30, 80, 200, 500]);
 export const TWILIGHT_SHARE = 0.6;
-export const TWILIGHT_NEEDS = Object.freeze([20, 60, 150, 320]);
+export const TWILIGHT_NEEDS = Object.freeze([20, 60, 150, 320, 500]);
 
 // The spells. kind says what the runtime does (magic/caster.js); the rest are its numbers:
 // mana, cd (seconds), and per kind: dmg (per hit), dps, r (radius, m), range (m), speed (m/s),
@@ -79,6 +79,9 @@ export const SPELLS = Object.freeze([
 	S('repulse', 'Repulse', 'void', 2, 'cone', 22, 10, '⇶', 'Force before you, hurling everyone in reach away.', { dmg: 20, range: 12, angle: 0.75, push: 10, type: 'void' }),
 	S('gravity-well', 'Gravity Well', 'void', 3, 'well', 38, 25, '◉', 'A knot of void where you aim draws everyone near into it, then collapses.', { dmg: 90, r: 9, range: 70, t: 3.5, pull: 4, type: 'void' }),
 	S('event-horizon', 'Event Horizon', 'void', 4, 'well', 65, 60, '⊚', 'A sphere of void that holds all within it still and drinks their life.', { dmg: 60, dps: 28, r: 11, range: 70, t: 5, pull: 1.5, type: 'void', status: { hold: 5 } }),
+	// (the ultimate: a fifth rung, above Event Horizon. r is how far it reaches from you, far and rise
+	// where it hangs on the horizon, size its radius, bossCut the share of anything vast's life it takes)
+	S('gargantua', 'Gargantua', 'void', 5, 'singularity', 100, 300, '●', 'Gargantua rises on the horizon. Over ten seconds it draws in and unmakes every foe in sight, and tears a quarter of the life from anything vast.', { r: 600, t: 10, far: 340, rise: 70, size: 34, bossCut: 0.25, type: 'void' }),
 	// ---------- Blight ----------
 	S('hex-of-decay', 'Hex of Decay', 'blight', 1, 'bolt', 11, 3, '✣', 'A curse that rots the one it strikes for a while.', { dmg: 8, speed: 55, type: 'blight', status: { dot: 9, t: 8 } }),
 	S('withering', 'Withering', 'blight', 2, 'bolt', 16, 6, '≀', 'Drains the strength from the one it strikes: they slow and weaken.', { dmg: 18, speed: 55, type: 'blight', status: { slow: 0.4, t: 8, dot: 4 } }),

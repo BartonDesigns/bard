@@ -114,8 +114,60 @@ function pool(scene, n, ink, order) {
 }
 
 // (onEmit: told of every point made, for the tests)
+// Gargantua: a sphere of black, its accretion disc tipped a little toward you, and the light of the
+// far side of the disc bent round the sphere into a halo that always faces the eye. One group, made
+// once and shown only while the spell lasts; a(1) is its strength, 0 gone.
+const DISC_VERT = 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+const DISC_FRAG = `uniform float uT; uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
+	void main(){
+		float r = length(vP), a = atan(vP.y, vP.x), u = (r - uIn) / (uOut - uIn);
+		float streak = 0.6 + 0.4 * sin(a * 7.0 + r * 3.0 - uT * 2.2) * sin(a * 3.0 - r * 1.7 + uT * 1.3);
+		float hot = exp(-u * 4.0), edge = smoothstep(0.0, 0.04, u) * (1.0 - smoothstep(0.75, 1.0, u));
+		vec3 c = mix(vec3(1.0, 0.52, 0.18), vec3(1.0, 0.95, 0.85), hot);
+		gl_FragColor = vec4(c * (0.5 + 1.8 * hot) * streak * edge * uA, 1.0);
+	}`;
+const HALO_FRAG = `uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
+	void main(){
+		float u = (length(vP) - uIn) / (uOut - uIn);
+		float ring = exp(-u * 9.0) + 0.35 * exp(-u * 2.5);
+		vec3 c = mix(vec3(1.0, 0.6, 0.25), vec3(1.0, 0.97, 0.9), exp(-u * 6.0));
+		gl_FragColor = vec4(c * ring * smoothstep(0.0, 0.02, u) * uA, 1.0);
+	}`;
+function blackHole(scene) {
+	const group = new THREE.Group();
+	group.name = 'magic-gargantua'; group.visible = false;
+	const ringMat = (frag, rIn, rOut) => new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uA: { value: 0 }, uIn: { value: rIn }, uOut: { value: rOut } }, vertexShader: DISC_VERT, fragmentShader: frag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+	const core = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
+	const disc = new THREE.Mesh(new THREE.RingGeometry(1.2, 3.2, 128, 1), ringMat(DISC_FRAG, 1.2, 3.2));
+	disc.rotation.x = -Math.PI / 2 + 0.16;
+	const halo = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.9, 128, 1), ringMat(HALO_FRAG, 1.0, 1.9));
+	core.renderOrder = 2; disc.renderOrder = halo.renderOrder = 3;
+	group.add(core, disc, halo);
+	scene.add(group);
+	const H = { a: 0, want: 0, seen: 0, t: 0 }, eye = new THREE.Vector3();
+	return {
+		group,
+		// shown at p, radius r (m), strength a, the halo turned to face e (the eye)
+		set(p, r, a, e) { group.position.set(p.x, p.y, p.z); group.scale.setScalar(Math.max(0.01, r)); H.want = a; H.seen = 0; if (e) eye.set(e.x, e.y, e.z); },
+		step(dt) {
+			H.t += dt; H.seen += dt;
+			if (H.seen > 0.35) H.want = 0;
+			H.a += (H.want - H.a) * Math.min(1, dt * 6);
+			if (H.want === 0 && H.a < 0.01) H.a = 0;
+			group.visible = H.a > 0;
+			if (!group.visible) return;
+			halo.lookAt(eye);
+			core.scale.setScalar(Math.max(0.01, H.a));
+			for (const m of [disc.material, halo.material]) { m.uniforms.uA.value = H.a; m.uniforms.uT.value = H.t; }
+		},
+		clear() { H.a = H.want = 0; group.visible = false; },
+		dispose() { scene.remove(group); for (const m of [core, disc, halo]) { m.geometry.dispose(); m.material.dispose(); } },
+	};
+}
+
 export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 	const glow = pool(scene, isPhone ? 1400 : 3200, false, 4), ink = pool(scene, isPhone ? 300 : 700, true, 3), flat = decals(scene, isPhone ? 24 : 48);
+	const gargantua = blackHole(scene);
 	// what is seen through walls (the sight spells): the glow, drawn over everything
 	const xray = new THREE.Points(glow.g, glow.mat.clone());
 	xray.material.depthTest = false; xray.frustumCulled = false; xray.renderOrder = 5; xray.visible = false;
@@ -208,14 +260,16 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 		L.live = live;
 	}
 	function update(dt, xrayOn = false) {
-		step(glow, dt); step(ink, dt); flat.step(dt);
+		step(glow, dt); step(ink, dt); flat.step(dt); gargantua.step(dt);
 		if (xrayOn && !xray.parent) scene.add(xray);
 		xray.visible = xrayOn;
 	}
 	function resize(h, fov) { glow.mat.uniforms.scale.value = ink.mat.uniforms.scale.value = xray.material.uniforms.scale.value = h / 2 / Math.tan((fov * Math.PI) / 360); }
-	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; flat.clear(); }
-	function dispose() { for (const L of [glow, ink]) { scene.remove(L.pts); L.g.dispose(); L.mat.dispose(); } scene.remove(xray); xray.material.dispose(); scene.remove(flat.mesh); flat.geo.dispose(); flat.mat.dispose(); }
-	return { emit, burst, ring, line, bolt, pillar, circle, spiral, decal, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
+	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; flat.clear(); gargantua.clear(); }
+	function dispose() { for (const L of [glow, ink]) { scene.remove(L.pts); L.g.dispose(); L.mat.dispose(); } scene.remove(xray); xray.material.dispose(); scene.remove(flat.mesh); flat.geo.dispose(); flat.mat.dispose(); gargantua.dispose(); }
+	// (the black hole, kept alive by calling this each step: where, radius, strength, the eye)
+	const hole = (p, r, a = 1, e = null) => gargantua.set(p, r, a, e);
+	return { emit, burst, ring, line, bolt, pillar, circle, spiral, decal, hole, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
 }
 
 // ---------- the voices ----------

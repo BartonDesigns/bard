@@ -172,6 +172,61 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			effects.push({ t: 0, every: 0.08, life: spell.delay, step() { if (L.tell) L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / spell.delay); else fx.ring(at, spell.r, c, 18, 0.3, 0.2); } });
 			effects.push({ t: spell.delay, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); } areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm', 0.2); } });
 		},
+		singularity(spell, k) {
+			// Gargantua: it rises on the horizon the way you face, and over spell.t draws every foe within
+			// spell.r of you into it, holding them as they slide toward it and unmaking each at its moment.
+			// Anything vast loses spell.bossCut of its life, a little at each step. Foes who come into
+			// reach while it feeds are taken too.
+			const L = lookOf(spell), me = camera.position.clone();
+			aim(_o, _d);
+			const fw = _d.clone().setY(0);
+			if (fw.lengthSq() < 1e-4) fw.set(0, 0, -1);
+			fw.normalize();
+			const hx = me.x + fw.x * spell.far, hz = me.z + fw.z * spell.far, base = Math.max(me.y - EYE, combat.ground(hx, hz, me.y) ?? -1e9);
+			const hole = new THREE.Vector3(hx, base + spell.rise, hz), drawn = hole.clone(), R = spell.size, RISE = 1.2;
+			const doomed = new Map(), vast = new Map();
+			let t = 0, n = 0;
+			const gather = () => {
+				for (const x of combat.layer.within(me, spell.r, combat.me)) {
+					const T = x.T;
+					if (!hostile(T)) continue;
+					if (T.kind === 'boss') { if (!vast.has(T)) vast.set(T, { dealt: 0 }); }
+					else if (!doomed.has(T)) doomed.set(T, { at: Math.max(t + 0.8, RISE + 0.3 + Math.random() * (spell.t - RISE - 1.3)) });
+				}
+			};
+			const unmake = (T) => { const b = T.bound; L.arc?.(fx, b, drawn); harm(T, 1e6, spell, drawn, { x: drawn.x - b.x, y: drawn.y - b.y, z: drawn.z - b.z }); };
+			const bleed = (T, B, share) => {
+				const M = T.life?.(), owed = M ? M.max * spell.bossCut * share - B.dealt : 0;
+				if (owed > 0) B.dealt += harm(T, owed, spell, drawn)?.dealt || 0;
+			};
+			gather();
+			combat.shake?.(0.3);
+			magicSound('void', 0.25);
+			effects.push({ t: 0, life: spell.t, every: 0.1,
+				step() {
+					t += 0.1; n++;
+					const u = Math.min(1, t / RISE), e = 1 - (1 - u) * (1 - u);
+					drawn.set(hole.x, hole.y - (1 - e) * R * 2.5, hole.z);
+					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position);
+					else fx.burst(drawn, GLOW.void, 6, -R, 0.5, R * 0.1, 0);
+					if (n % 10 === 0) { gather(); combat.shake?.(0.05); }
+					for (const [T, D] of doomed) {
+						if (T.removed || T.dead || !T.bound) { doomed.delete(T); continue; }
+						const h = T.ref, S = h?.body?.M?.S, pos = S ? S.pos : h?.pos;
+						if (pos) { const dx = drawn.x - pos.x, dz = drawn.z - pos.z, l = Math.hypot(dx, dz) || 1, v = (1.5 + 12 * t / spell.t) * 0.1; pos.x += dx / l * v; pos.z += dz / l * v; }
+						hex(T, { hold: 0.3 }, k, spell.id);
+						if (t >= D.at) { unmake(T); doomed.delete(T); }
+					}
+					for (const [T, B] of vast) if (!T.removed) bleed(T, B, Math.min(1, t / spell.t));
+				},
+				end() {
+					// (whoever is left goes now, and the vast pay what they still owe)
+					for (const T of doomed.keys()) if (!T.removed && T.bound) unmake(T);
+					for (const [T, B] of vast) if (!T.removed) bleed(T, B, 1);
+					if (L.blast) L.blast(fx, drawn, R); else fx.burst(drawn, GLOW.void, 90, R * 3, 0.9, R * 0.2, 0);
+					combat.shake?.(0.4); magicSound('void', 0.3);
+				} });
+		},
 		lances(spell, k) {
 			const { at } = aimPoint(spell.range), L = lookOf(spell);
 			// (out of the sun while it is up, else the moon, else straight down; never too low to see)
