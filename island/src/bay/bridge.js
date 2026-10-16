@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { addNightField } from '../world/nightfield.js';
 
 const ORANGE = new THREE.Color('#c0362c');
 const MAIN = 1280, SIDE = 343, TOWER_H = 227, HALF_W = 13.7, LEG_T = 14.6;
@@ -45,6 +46,8 @@ export function createGoldenGate(shared, scene, heightAt) {
 
 	const steel = new THREE.MeshStandardMaterial({ color: ORANGE, roughness: 0.55, metalness: 0.25 });
 	const concrete = new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.9 });
+	// (the towers lit from the deck after dark: floodlights.js, world/nightfield.js's landmark list)
+	addNightField(steel, { field: 'LF' }); addNightField(concrete, { field: 'LF' });
 	const road = new THREE.MeshStandardMaterial({ color: 0x4a4a4c, roughness: 0.85 });
 	// every box goes into one merged mesh per material (a few draws for the whole bridge)
 	const parts = new Map();
@@ -238,9 +241,11 @@ export function createGoldenGate(shared, scene, heightAt) {
 		group.visible = true;
 		lamps.opacity = night;
 		reds.opacity = night * (0.6 + 0.4 * (Math.sin(t * 3) > 0 ? 1 : 0.2));
-		steel.emissive.copy(ORANGE).multiplyScalar(0.18 * night);
-		// the anchorages catch the floodlights and the deck lamps' spill (unlit, they read as black holes)
-		concrete.emissive.setRGB(0.16, 0.14, 0.11).multiplyScalar(night);
+		// (the towers are floodlit from the deck: floodlights.js, through the landmark list; what is
+		// left here is the city's glow and the lamps' spill, so far off the span still reads)
+		steel.emissive.copy(ORANGE).multiplyScalar(0.035 * night);
+		// the anchorages catch the deck lamps' spill (unlit, they read as black holes)
+		concrete.emissive.setRGB(0.16, 0.14, 0.11).multiplyScalar(0.35 * night);
 	}
 	return { group, update, deckFloor, centre: c, axis: ax, length: S1 - S0 };
 }

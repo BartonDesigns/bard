@@ -432,6 +432,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		refresh() { dirty = true; },
 		// where the records of a face kind stand (for a look at them: Crysis.signage.where('blade'))
 		where: (k, n = 5) => lastOut.filter((r) => r.face?.k === k).slice(0, n).map((r) => ({ x: +r.x.toFixed(2), z: +r.z.toFixed(2), hy: r.hy, nx: +(r.nx || 0).toFixed(3), nz: +(r.nz || 0).toFixed(3), base: r.base ?? null, art: graffitiGraphic(r.face.k,r.face.seed) })),
+		// the big painted pieces round you, the murals and the graffiti pieces on the long walls (for
+		// the lamps over them at night: bay/nightlights.js): { x, z, hy, nx, nz, w, h, base, mural }
+		murals: () => lastOut.filter((r) => r.face && (r.face.k === 'piece' || (r.face.k === 'campaign' && r.face.format === 'mural'))).map((r) => ({ x: r.x, z: r.z, hy: r.hy, nx: r.nx || 0, nz: r.nz || 0, w: r.w, h: r.h, base: r.base ?? null, mural: r.face.k === 'campaign' })),
 		// (for a look at the sheeting at night without a car: the camera's lamps on)
 		headlights(on = true) { forceHead = !!on; return forceHead; },
 		atlas,

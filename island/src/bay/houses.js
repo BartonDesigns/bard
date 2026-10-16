@@ -542,6 +542,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			id: 'house:' + Math.round(Mb.x) + ':' + Math.round(Mb.z), occluders: col, levels, bounds: [bx0, bz0, bx1, bz1], home: true,
 			rooms: plan.rooms.length, roomOf: (x, y, z) => { const c = plan.cellAt(x, z); return c < 0 ? -1 : plan.labels?.[y > HT.floor1 - 0.2 ? 1 : 0]?.[c] ?? -1; },
 			litOf: (id) => !!lit[id], dust: (x, y, z, id) => plan.rooms[id]?.type === 'garage', exclude: ['stucco', 'siding'],
+			// (to bed between half past ten and one, by the house: then one lamp stays on)
+			bed: 22.5 + (((Math.imul(Math.round(Mb.x * 2) | 0, 73856093) ^ Math.imul(Math.round(Mb.z * 2) | 0, 19349663)) >>> 0) % 1000) / 1000 * 2.5,
 		});
 		// the footprint at each level, for the floors that carry you
 		const lights = plan.rooms.filter((r) => r.cells.length && lit[r.id] && r.type !== 'closet').map((r) => [r.cx, (r.level ? HT.ceil1 : HT.ceil0) - 0.45, r.cz]);

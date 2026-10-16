@@ -140,6 +140,8 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		F.plan = planOf(kind, Wd, Dd);
 		// the block is the service's now: no longer a shop or an office (commercial.js, the interiors)
 		if (!b.grid && b.ref) b.ref.grp = Object.assign([b.ref], { service: kind });
+		// (and never a tower's floors built inside it: bay/towers.js leaves a service's block alone)
+		if (b.ref) b.ref.service = kind;
 		if (kind === 'hospital') {
 			const beds = Math.max(4, Math.min(24, Math.round(Wd * Dd / 45)));
 			F.ward = createWard({ id: A.key, beds, charge: bill, onEvent: wardEvent });

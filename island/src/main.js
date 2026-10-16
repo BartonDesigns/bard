@@ -1048,7 +1048,7 @@ export function createIslandWorld() {
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
 		await yieldBuild('Preparing the surroundings');
-		const sky = createSky(scene, shared, renderer, { isPhone, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
+		const sky = createSky(scene, shared, renderer, { isPhone, earth, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 		const weather = createWeather(scene, shared, { isPhone, airless: !!profile.airless });
@@ -1907,8 +1907,11 @@ export function createIslandWorld() {
 		// the cities' glow washes out the faint stars
 		if (W.bayArea?.loaded()) {
 			let glow = 0;
-			for (const [dx, dz] of GLOW_AT) glow += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+			let gx = 0, gz = 0;
+			for (const [dx, dz] of GLOW_AT) { const u = W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u; glow += u; gx += dx * u; gz += dz * u; }
 			shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
+			// (and which way the glow lies: the sky over the cities brightest toward them)
+			W.sky.glowToward(gx, gz, dt);
 		}
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 		const dazed = W.shrooms?.muffle() || 0;

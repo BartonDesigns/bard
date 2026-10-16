@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { addNightField } from '../world/nightfield.js';
 import { ferryBuilding, sfCityHall, oaklandCityHall, palaceHall, cellhouse, fortPoint, towerLobby, library, cityHall, shopRow, oneRoom, visitorCentre } from '../interiors/landmarks.js';
 
 // piers you can walk out on (floor())
@@ -66,6 +67,8 @@ export function createLandmarks(scene, bay) {
 	// (the same, seen from inside too: the shells you walk into, round or domed)
 	const two = (m) => { const c = m.clone(); c.side = THREE.DoubleSide; return c; };
 	for (const k of ['silver', 'white', 'glass', 'dark', 'lamp']) mats[k + 'In'] = two(mats[k]);
+	// lit at night by their floodlights (floodlights.js, through world/nightfield.js's landmark list)
+	for (const k of ['stone', 'granite', 'white', 'whiteIn', 'salmon', 'brick', 'redbrick', 'copper', 'tan', 'concrete', 'cellhouse', 'gold', 'craneWhite', 'craneRed']) addNightField(mats[k], { field: 'LF' });
 	const parts = new Map();
 	// (what is drawn goes to the landmarks' merged meshes, or, while an inside is being built
 	// as you come near it, to that inside's own)
@@ -234,6 +237,9 @@ export function createLandmarks(scene, bay) {
 			const a = g[i][1], b = i + 1 < g.length ? g[i + 1][0] : g[0][0] + Math.PI * 2;
 			put(F, mat, new THREE.CylinderGeometry(r(gh), rb, gh, Math.max(2, Math.round(seg * (b - a) / (Math.PI * 2))), 1, true, a, b - a).translate(0, gh / 2, 0), x, y, z);
 		}
+		// (open the whole way up, as the lighthouse's lantern room is: no band above the gaps, whose
+		// zero height would leave the cylinder's normals NaN)
+		if (h - gh < 1e-3) return;
 		put(F, mat, new THREE.CylinderGeometry(rt, r(gh), h - gh, seg, 1, true).translate(0, (h + gh) / 2, 0), x, y, z);
 	};
 	// stands: tiers (each rise higher, run deeper) round an ellipse rx by rz from the field's edge

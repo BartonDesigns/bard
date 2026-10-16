@@ -157,7 +157,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			box(M.glow, dx - 0.12, 2.45, cz, dx + 0.12, 2.55, cz + 0.04);
 		}
 		box(M.glow, -0.05, 1.1, cz, 0.05, 1.3, cz + 0.05);
-		const iz0 = cz + 2.6, iz1 = hd - 1.2, ix0 = -hw + 1.0, ix1 = hw - 1.0;
+		const iz0 = cz + 2.6, ix0 = -hw + 1.0, ix1 = hw - 1.0;
 		if (L.kind === 'lobby') {
 			// reception, the seating by the windows, planters, a long piece of art on the core
 			box(M.oak, -2.2, 0, iz0 + 1.2, 2.2, 1.1, iz0 + 2.0, true); box(M.stoneD, -2.3, 1.1, iz0 + 1.1, 2.3, 1.16, iz0 + 2.1);
@@ -299,6 +299,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			let best=null,bd=1e9;
 			for(const o of near){
 				if(o.wrecked||cam.y>o.y+o.h+30||cam.y<o.y-10)continue;          // structures: a wrecked tower is its shell
+				// (a block a service has taken: its own rooms are built inside it, services/index.js; a
+				// tower's floors over them showed their stone floor and panels through the fire bay)
+				if(o.service||o.grp?.service)continue;
 				const dx=cam.x-o.x,dz=cam.z-o.z,ca=Math.cos(o.a),sa=Math.sin(o.a);
 				const ex=Math.abs(ca*dx+sa*dz)-o.w/2,ez=Math.abs(-sa*dx+ca*dz)-o.d/2;
 				const d=ex<0&&ez<0?Math.max(ex,ez):Math.hypot(Math.max(0,ex),Math.max(0,ez));

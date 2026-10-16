@@ -1,10 +1,14 @@
+## October 16, 2026: night lighting, part 2
+
+Landmarks and civic art floodlit from below by their real geometry (`bay/floodlights.js`, a third lamp list `LF` in `world/nightfield.js`); bridges' deck lamps, pools and the Bay Lights; red obstruction lights on everything tall, flashing in step; the skyline lit by floor runs with warm lobbies and lit crowns; street lamps by era (`bay/streetlamps.js`: acorns, sodium cobra heads, LED refits and new tracts) with pools on the road and light on the walls and trees; cars' headlights, tail and brake lights and low beams (`bay/carlights.js`); homes to bed at their own hour with one lamp left on; the Moon where it really is with its phase and shadows (`world/solar.js lunarPosition`), the cities' glow toward the cities washing out the stars and lighting low cloud. Day interiors: no tower floors inside a service's block, and the sun reaches a room only through its windows (the fire bay is no longer lit through the roof; not measured in the page). Bugs: `nightlights.js` dispose, the landmarks' NaN normals. See `docs/night-lighting-2-2026-10-16.md`.
+
 ## October 16, 2026: permanent standing, shared projects and NPC households
 
 Integrated PR #25/#31 with main `71eea2c`, preserving the newer Claude work. Added persistent first-family identity, saved household account links/plans, profile-only ledger synchronization and recurring, alarm-driven NPC family visits. Player participation survives absence; physical quest completion still needs source evidence. Story shows family responsibilities and local activity. See `docs/living-world-release-2026-10-16.md` for player entry points, tests, bounds and the Bard-only Worker deployment helper.
 
 Frontend and Worker releases remain separate. The last production check lacks the new rooms/Discovery capabilities, and this workspace has no authenticated Wrangler account. Publish the tested frontend, then deploy both existing Workers using `node server/deploy-living-world.mjs --deploy` from the owner's authorized Bard checkout and verify two-client gameplay. Do not describe local mode as universally shared. The full island suite is 947/950; all three failures are the already documented manifest/vegetation fixtures. Existing intake PR #17 and unfinished night work are untouched.
 
-**16 October 2026:** one unfinished workstream (night lighting part 2) is saved as a patch in `handoff/`. See `handoff/HANDOFF.md` for how to pick it up.
+**16 October 2026:** the three stopped workstreams saved in `handoff/` (water and shoreline, land seams, night lighting part 2) are all finished and on main. See `handoff/HANDOFF.md`.
 
 ## October 16, 2026: nature QA, where two things meet
 

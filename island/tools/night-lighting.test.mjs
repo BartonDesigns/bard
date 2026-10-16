@@ -130,7 +130,7 @@ test('the city\'s shader switches the porch light as the plan does', () => {
 	assert.match(lights, /life = 2\.5 \+ s\.w \* 9\.0/, 'the solar fade as solarLevel');
 });
 
-test('a shut place keeps about one light in every 12 m square on; a home keeps them all', async () => {
+test('a shut place keeps about one light in every 12 m square on; a home one lamp after bedtime', async () => {
 	globalThis.navigator ??= { userAgent: 'node' };
 	const { nightLights } = await import('../src/interiors/lighting.js');
 	const grid = () => { const l = []; for (let x = -12; x <= 12; x += 3.6) for (let z = -9; z <= 9; z += 3.6) l.push({ p: [x, 4.6, z], on: true, rm: 1, I: 10, shape: 'tube' }); return l; };
@@ -140,7 +140,10 @@ test('a shut place keeps about one light in every 12 m square on; a home keeps t
 	// spread out, not bunched: none of them within 4 m of another
 	const K2 = shut.filter((f) => f.night);
 	for (const a of K2) for (const b of K2) if (a !== b) assert.ok(Math.hypot(a.p[0] - b.p[0], a.p[2] - b.p[2]) > 3.5);
-	assert.ok(nightLights(grid(), { home: true }).every((f) => f.night), 'a home');
+	const home = nightLights([...grid(), { p: [1, 0.9, 1], on: true, rm: 1, I: 4, shape: 'point' }, { p: [2, 1, 1], on: true, rm: 1, screen: true }], { home: true });
+	assert.equal(home.filter((f) => f.night && !f.screen).length, 1, 'a home keeps one lamp');
+	assert.ok(home.find((f) => f.shape === 'point').night, 'the table lamp');
+	assert.ok(home.find((f) => f.screen).night, 'and the television');
 	assert.ok(nightLights(grid(), { allNight: true }).every((f) => f.night), 'a hospital');
 	const scr = nightLights([{ p: [0, 2, 0], on: true, rm: 2, screen: true }, { p: [0.5, 2, 0], on: true, rm: 2 }, { p: [1, 2.6, 0], on: true, rm: 2 }], {});
 	assert.ok(scr[0].night, 'a screen stays on');
@@ -175,10 +178,10 @@ test('the lamps light the trees and walls by a short list the shader reads', asy
 	const sh = { uniforms: {}, defines: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
 	m.onBeforeCompile(sh, null);
 	assert.equal(before, 1, 'its own patch kept, once');
-	assert.equal(sh.defines.NF_N, NF_N);
 	assert.equal(sh.uniforms.uNFP, NF.uNFP, 'the shared list');
-	assert.match(sh.fragmentShader, /nightField\(vNFW/);
+	assert.match(sh.fragmentShader, /uniform vec4 uNFP\[\d+\]/);
+	assert.match(sh.fragmentShader, /fieldNF\(vNFW/);
 	assert.match(sh.vertexShader, /vNFW = \(modelMatrix \* nfW\)\.xyz/);
-	assert.match(m.customProgramCacheKey(), /nf\d+w0\.50/);
+	assert.match(m.customProgramCacheKey(), /NF\d+w0\.50/);
 	assert.equal(NF.uNFP.value.length, NF_N * 4);
 });

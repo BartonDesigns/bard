@@ -12,7 +12,9 @@ import { SPEC } from './cars.js';
 import { createFleet } from '../vehicles/fleet.js';
 import { onLandmark } from './footprints.js';
 import { eraMap, kitFor } from './streetera.js';            // streets by era: the lamps
+import { LAMP, lampLook, lampPools } from './streetlamps.js';
 
+const LAMPS = 1200;
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
 const PAINT = [[0.92, 0.92, 0.91], [0.92, 0.92, 0.91], [0.05, 0.05, 0.06], [0.05, 0.05, 0.06], [0.35, 0.36, 0.38], [0.35, 0.36, 0.38], [0.66, 0.67, 0.69], [0.66, 0.67, 0.69], [0.1, 0.2, 0.45], [0.55, 0.06, 0.06], [0.2, 0.3, 0.26], [0.45, 0.38, 0.3], [0.8, 0.8, 0.82], [0.25, 0.08, 0.1]];
@@ -114,14 +116,27 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const meters = mk(meterGeo, metal, 800, false);
 	// the lamp heads glow at night; signals show their colour
 	const glowTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 32; const g = cv.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(cv); })();
-	const lampLightGeo = new THREE.BufferGeometry(); lampLightGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(900 * 3), 3));
-	const lampLights = new THREE.Points(lampLightGeo, new THREE.PointsMaterial({ color: 0xffc070, size: 3.2, map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
+	// each lamp's head glows its own colour (streetlamps.js: by the street's era, sodium orange
+	// on the older streets and arterials, cool LED on the new and the refitted)
+	const lampLightGeo = new THREE.BufferGeometry(); lampLightGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(LAMPS * 3), 3));
+	lampLightGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(LAMPS * 3), 3));
+	const lampLights = new THREE.Points(lampLightGeo, new THREE.PointsMaterial({ color: 0xffffff, vertexColors: true, size: 3.2, map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
 	lampLights.frustumCulled = false; group.add(lampLights);
-	// the pool of warm light each lamp throws on the street below it, after dark
-	const poolTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
-	const poolMat = new THREE.MeshBasicMaterial({ color: 0xffb060, map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
-	const pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolMat, 900);
-	pools.count = 0; pools.frustumCulled = false; pools.renderOrder = 3; group.add(pools);
+	// the pool of light each lamp throws on the street and the sidewalk below it, after dark:
+	// shaped by its height and its optics (streetlamps.js), tilted to the slope it falls on
+	const pools = lampPools(LAMPS);
+	group.add(pools);
+	// what each lamp is, for the pools and for the walls and trees it lights (nightlights.js)
+	const lampKind = new Uint8Array(LAMPS), lampYaw = new Float32Array(LAMPS), lampCol = lampLightGeo.attributes.color.array;
+	let lampN = 0;
+	// one lamp: where its head is, how it looks (lampLook), which way the street runs
+	function setLamp(i, x, y, z, look, yaw) {
+		const P = lampLightGeo.attributes.position.array;
+		P[i * 3] = x; P[i * 3 + 1] = y; P[i * 3 + 2] = z;
+		lampCol[i * 3] = look.c[0]; lampCol[i * 3 + 1] = look.c[1]; lampCol[i * 3 + 2] = look.c[2];
+		lampKind[i] = look.k; lampYaw[i] = yaw;
+	}
+	const lampsOn = (k) => Math.max(0, Math.min(1, (k - 0.08) / 0.25));
 	const sigGeo = new THREE.BufferGeometry(); sigGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(300 * 3), 3)); sigGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(300 * 3), 3));
 	const sigLights = new THREE.Points(sigGeo, new THREE.PointsMaterial({ size: 0.9, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
 	sigLights.frustumCulled = false; group.add(sigLights);
@@ -175,7 +190,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		const E = eraMap(real);
 		for (const r of roads) {
 			const p = r.pts, hw = r.w / 2, rank = RANK[r.cls] || 0;
-			const lampKind = r.walked && rank <= 3 ? kitFor(E.ofRoad(r).key).lamp : 'cobra', lampEvery = lampKind === 'acorn' ? 11 : 19;
+			const era = E.ofRoad(r).key, lampKind = r.walked && rank <= 3 ? kitFor(era).lamp : 'cobra', lampEvery = lampKind === 'acorn' ? 11 : 19;
+			// (the freeways: a lamp each side every forty metres or so, as the arterials)
+			const look = lampLook(lampKind, era, rank, hash(p[0] * 0.37, p[1] * 0.53));
 			for (const k of [0, p.length - 2]) { const key = Math.round(p[k] / 2) + ',' + Math.round(p[k + 1] / 2); const e = ends.get(key) || { x: p[k], z: p[k + 1], n: 0, rank: 0, hw: 0 }; e.n++; e.rank = Math.max(e.rank, rank); e.hw = Math.max(e.hw, hw); ends.set(key, e); }
 			lanes.push(laneOf(Array.from(p), hw, r.cls === 'residential' || r.cls === 'living_street' || r.cls === 'unclassified' ? STYLE.suburb : STYLE.office, r.divided || r.cls === 'motorway' || r.link));
 			// walk the street every 2.2 m, both sides
@@ -209,7 +226,12 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 						if (c >= 0) {
 							put(im, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz));
 							const nl = getNl();
-							if (nl < 900) { if (lampKind === 'acorn') lampPos.set([kx, kg + 4.2, kz], nl * 3); else lampPos.set([x + nx * (hw - (lampKind === 'led' ? 0.8 : 1.2)) * side, kg + (lampKind === 'led' ? 7.4 : 8.2), z + nz * (hw - (lampKind === 'led' ? 0.8 : 1.2)) * side], nl * 3); setNl(nl + 1); }
+							if (nl < LAMPS) {
+								const L = LAMP[lampKind];
+								if (lampKind === 'acorn') setLamp(nl, kx, kg + L.h, kz, look, yaw);
+								else setLamp(nl, x + nx * (hw - L.reach) * side, kg + L.h, z + nz * (hw - L.reach) * side, look, yaw);
+								setNl(nl + 1);
+							}
 						}
 					}
 					if (k % 47 === 20 && rank >= 1) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
@@ -233,6 +255,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		const R = 380;
 		const counts = new Map(), n = (im) => { const c = counts.get(im) || 0; counts.set(im, c + 1); return c < im.instanceMatrix.count ? c : -1; };
 		const lampPos = lampLightGeo.attributes.position.array; let nl = 0;
+		const E = eraMap(real);
 		signalList.length = 0; lanes.length = 0; stopsAt.length = 0;
 		const grids = new Map();
 		for (let dz = -R; dz <= R; dz += R / 4) for (let dx = -R; dx <= R; dx += R / 4) { const u = bay.urbanAt(cx + dx, cz + dz); if (u.u > 0.15) grids.set(Math.round(u.a * 1000) + ':' + u.s, [u.a, u.s]); }
@@ -275,7 +298,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 						// the kerb furniture on the block's side of the street
 						const [kx, kz] = W(...at(ST + 0.45)), kg = groundAt(kx, kz);
 						if (kg < 0.5 || onLandmark(kx, kz, 1)) continue;
-						if (k % 13 === 6) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); if (nl < 900) { const [lx, lz] = W(...at(ST - 1.2)); lampPos.set([lx, kg + 8.2, lz], nl * 3); nl++; } } }
+						if (k % 13 === 6) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); if (nl < LAMPS) { const [lx, lz] = W(...at(ST - 1.2)); setLamp(nl, lx, kg + LAMP.cobra.h, lz, lampLook('cobra', E?.at(lx, lz)?.key ?? 'tract', busy ? 3 : 1, hash(i * 7.1, j * 3.3)), yaw); nl++; } } }
 						if (k % 37 === 18) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
 						if (city && k % 5 === 2 && t > ST + 4 && t < L - 4) { const c = n(meters); if (c >= 0) put(meters, c, kx, kg, kz, yaw); }
 						if (busy && k % 29 === 14) { const c = n(bins); if (c >= 0) put(bins, c, kx, kg, kz, yaw); }
@@ -310,12 +333,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		hidden.clear();
 		regrid();
 		api.onBuild?.();
-		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true;
-		{
-			const A = lampLightGeo.attributes.position.array, M4 = new THREE.Matrix4();
-			for (let k = 0; k < nl; k++) pools.setMatrixAt(k, M4.makeScale(15, 1, 15).setPosition(A[k * 3], groundAt(A[k * 3], A[k * 3 + 2]) + 0.1, A[k * 3 + 2]));          // (on the ground under it, whatever its height)
-			pools.count = nl; pools.instanceMatrix.needsUpdate = true;
-		}
+		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true; lampLightGeo.attributes.color.needsUpdate = true;
+		pools.fill(nl, lampPos, lampCol, lampKind, lampYaw, groundAt);
+		lampN = nl;
 		sigGeo.setDrawRange(0, Math.min(300, signalList.length));
 		signalList.slice(0, 300).forEach((s, k) => sigGeo.attributes.position.array.set([s.x, s.y, s.z], k * 3));
 		sigGeo.attributes.position.needsUpdate = true;
@@ -350,8 +370,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
 		if (Math.hypot(x - splitX, cam.position.y - splitY, z - splitZ) > SPLIT_M || t - splitT > SPLIT_S || t < splitT) split(x, cam.position.y, z, t);
-		lampLights.material.opacity = nightK;
-		poolMat.opacity = nightK * 0.5;
+		// (on at dusk by their photocells, a little before the porch lights)
+		lampLights.material.opacity = lampsOn(nightK);
+		pools.setLevel(lampsOn(nightK));
 		// signals cycle green, amber, red
 		const sc2 = sigGeo.attributes.color.array, ns = Math.min(300, signalList.length);
 		for (let k = 0; k < ns; k++) {
@@ -441,7 +462,11 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		}
 		return out;
 	}
-	const api = { update, group, cars, parked, parkedNear, seatsNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
+	// the street lamps round you, for what they light besides the street (nightlights.js: the
+	// near walls and trees): { n, pos (xyz each), col (rgb each), kind (LAMP's index) }
+	const lampSet = { n: 0, pos: lampLightGeo.attributes.position.array, col: lampCol, kind: lampKind, on: 0 };
+	const lampsNear = () => { lampSet.n = lampN; lampSet.on = lampLights.material.opacity; return lampSet; };
+	const api = { update, group, cars, parked, parkedNear, seatsNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null, lamps: lampsNear };
 	return api;
 }
 

@@ -16,12 +16,13 @@
 
 import * as THREE from 'three';
 import { NIGHT_U, NIGHT_I, COLOURS, K, nightSeed, roll, housePlan, buildingPlan, doorAcross, lateHour, lampLevel, solarLevel, motionLevel, ALL_NIGHT } from './nightplan.js';
-import { NF, NF_N } from '../world/nightfield.js';
+import { NF, NF_N, FIELDS, SF_N } from '../world/nightfield.js';
 import { qualityNow, onQuality } from '../world/governor.js';
+import { LAMP, LAMP_KINDS } from './streetlamps.js';
 
 const HOUSE = new Set([K.row, K.house, K.bay, K.houseGarageL, K.houseGarageR]);
 const MOTION = 8;
-const WARM = [1, 0.8, 0.56], COOL = [0.82, 0.88, 1], SOLAR = COLOURS[3];
+const WARM = [1, 0.8, 0.56], COOL = [0.82, 0.88, 1], SOLAR = COLOURS[3], SODIUM_PACK = [1, 0.5, 0.16];
 
 // the shared switch: a lamp's level by its schedule (x kind: 0 a lamp, 1 solar, 2 motion;
 // y the night it comes on at; z its late hour off; w the solar charge or the motion slot)
@@ -108,7 +109,7 @@ const POOL_FS = /* glsl */`
 	}`;
 
 export function createNightLights(scene, city, { isPhone = false, ground = () => 0, world = () => null } = {}) {
-	const CAP_P = isPhone ? 5000 : 16000, CAP_Q = isPhone ? 2500 : 9000, CAP_F = isPhone ? 200 : 600;
+	const CAP_P = isPhone ? 5000 : 16000, CAP_Q = isPhone ? 2500 : 9000, CAP_F = isPhone ? 200 : 600, CAP_S = 1200;
 	const R0 = isPhone ? 220 : 420;
 	// ---- the points
 	const pPos = new Float32Array(CAP_P * 3), pCol = new Float32Array(CAP_P * 3), pSize = new Float32Array(CAP_P * 2), pSch = new Float32Array(CAP_P * 4);
@@ -146,8 +147,8 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 	const F = new Float32Array(CAP_F * 16);
 	const motionAt = new Float32Array(MOTION * 3), motionSince = new Float32Array(MOTION).fill(1e9);
 
-	let np = 0, nq = 0, nf = 0, nm = 0, seen = null, atX = 1e9, atZ = 1e9, R = R0, stats = { houses: 0, washed: 0, trees: 0, civic: 0 };
-	onQuality(() => { seen = null; });
+	let np = 0, nq = 0, nf = 0, nm = 0, seen = null, atX = 1e9, atZ = 1e9, R = R0, stats = { houses: 0, washed: 0, trees: 0, civic: 0, murals: 0, lobbies: 0 };
+	const offQuality = onQuality(() => { seen = null; });
 	const sched = (A, i, kind, onK, off, w) => { A[i] = kind; A[i + 1] = onK; A[i + 2] = off; A[i + 3] = w; };
 	function point(x, y, z, c, k, size, kind, onK, off, w, fadeNear = 0) {
 		if (np >= CAP_P) return;
@@ -182,6 +183,11 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 		const tx = -nz, tz = nx, W = 0.3 + H * 0.3 + 0.6;
 		const lift = 0.06;
 		quad(x + nx * lift, y0 + H / 2, z + nz * lift, tx * W, 0, tz * W, 0, H / 2, 0, -W, 0, W, H, c, I * 0.06, 1 + H, 0, onK, off, 0);
+	}
+	// a lamp's cone down a wall from above (a gooseneck over a mural): its top at (x, top, z)
+	function downWash(x, z, nx, nz, top, H, I, c, onK, off) {
+		const tx = -nz, tz = nx, W = 0.3 + H * 0.3 + 0.6, lift = 0.07;
+		quad(x + nx * lift, top - H / 2, z + nz * lift, tx * W, 0, tz * W, 0, H / 2, 0, -W, H, W, 0, c, I * 0.06, 1 + H, 0, onK, off, 0);
 	}
 	function field(x, y, z, reach, c, I, cosO, dx, dy, dz, cosI, kind, onK, off, w) {
 		if (nf >= CAP_F) return;
@@ -326,6 +332,17 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			}
 		}
 	}
+	function lobby(o) {
+		const ca = Math.cos(o.a || 0), sa = Math.sin(o.a || 0), w = o.w, dd = o.d;
+		for (let f = 0; f < 4; f++) {
+			const lnx = f === 1 ? 1 : f === 3 ? -1 : 0, lnz = f === 0 ? 1 : f === 2 ? -1 : 0, half = lnx ? w / 2 : dd / 2, span = lnx ? dd : w;
+			const x = o.x + ca * lnx * (half + 2.2) - sa * lnz * (half + 2.2), z = o.z + sa * lnx * (half + 2.2) + ca * lnz * (half + 2.2);
+			if (onRoad(x, z)) continue;
+			const r = Math.min(9, Math.max(4.5, span * 0.3));
+			groundPool(x, z, r, 2.6, 4, WARM, 0, 0.2, ALL_NIGHT, 0);
+			stats.lobbies++;
+		}
+	}
 	// the streets round you, by 20 m cells: no path light or solar stake out in the road
 	let roadCells = new Map();
 	function onRoad(x, z) {
@@ -355,7 +372,7 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 	}
 	function build(cx, cz) {
 		atX = cx; atZ = cz; np = 0; nq = 0; nf = 0; nm = 0;
-		stats = { houses: 0, washed: 0, trees: 0, civic: 0 };
+		stats = { houses: 0, washed: 0, trees: 0, civic: 0, murals: 0, lobbies: 0 };
 		R = R0 * (qualityNow()?.far ?? 1);
 		roadsNear(cx, cz, 160);
 		// the trees round you, by 16 m cells (for the front yards' and the parks' uplights)
@@ -373,6 +390,8 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			const base = Math.floor(o.kind);
 			if (HOUSE.has(base) || base === K.garage) { house(o, d, d < R * 0.5 ? trees : null); continue; }
 			if (o.h < 4) continue;
+			// a tower's lobby, lit all night (city.js), spills its light on the sidewalk in front of each face
+			if (base === K.tower && o.h > 20 && d < R * 0.7) lobby(o);
 			const P = buildingPlan(o, nightSeed(o.x, o.z));
 			if (P.wash) building(o, P, false);
 		}
@@ -392,6 +411,19 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			const a = r * 40, x = t.x + Math.cos(a) * 1.1, z = t.z + Math.sin(a) * 1.1;
 			treeLight(t, x, ground(x, z), z, 0.3, t.src === 'street' ? 25 + r * 8 : 23.5);
 		}
+		// the murals and the big graffiti pieces: a gooseneck lamp over a mural, a sodium wall pack
+		// over a piece on a warehouse wall, each washing its picture from above
+		for (const m of world()?.signage?.murals?.() || []) {
+			if (Math.hypot(m.x - cx, m.z - cz) > R * 0.6) continue;
+			const g = m.base ?? ground(m.x, m.z), top = g + m.hy + m.h / 2 + 0.55, c = m.mural ? WARM : SODIUM_PACK;
+			const n = m.mural && m.w > 6 ? 2 : 1;
+			for (let i = 0; i < n; i++) {
+				const u = n > 1 ? (i ? 0.25 : -0.25) * m.w : 0, x = m.x - m.nz * u, z = m.z + m.nx * u;
+				downWash(x, z, m.nx, m.nz, top, m.h + 1.2, NIGHT_I.wash * (m.mural ? 0.9 : 0.7), c, 0.25, ALL_NIGHT);
+				point(x + m.nx * 0.45, top + 0.05, z + m.nz * 0.45, c, 1.3, 0.14, 0, 0.25, ALL_NIGHT, 0);
+				stats.murals++;
+			}
+		}
 		pGeo.setDrawRange(0, np);
 		for (const k of ['position', 'aCol', 'aSize', 'aSched']) { const A = pGeo.attributes[k]; A.clearUpdateRanges(); A.addUpdateRange(0, Math.max(1, np) * A.itemSize); A.needsUpdate = true; }
 		qGeo.setDrawRange(0, nq * 6);
@@ -406,7 +438,8 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 		if (kind === 1) return solarLevel(F[o + 15], hoursNow, nightNow);
 		return motionU.value[F[o + 15] | 0];
 	};
-	const chosen = new Int32Array(NF_N), score = new Float32Array(CAP_F);
+	const chosen = new Int32Array(NF_N), score = new Float32Array(CAP_F), sScore = new Float32Array(CAP_S);
+	// (and the street lamps near you: streetlife.js and streetlamps.js, the same strength as their pools)
 	function pick(cam) {
 		const P = NF.uNFP.value, C = NF.uNFC.value, D = NF.uNFD.value;
 		const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z, FAR = isPhone ? 50 : 80;
@@ -414,11 +447,26 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			const o = i * 16, dd = Math.hypot(F[o] - cx, F[o + 1] - cy, F[o + 2] - cz);
 			score[i] = dd < FAR && level(o) > 0.01 ? dd : 1e9;
 		}
-		let n = 0;
+		const SL = world()?.street?.lamps?.(), ns = SL && SL.on > 0.01 ? Math.min(SL.n, CAP_S) : 0, SP = SL?.pos;
+		for (let i = 0; i < ns; i++) { const dd = Math.hypot(SP[i * 3] - cx, SP[i * 3 + 1] - cy, SP[i * 3 + 2] - cz); sScore[i] = dd < FAR ? dd : 1e9; }
+		// (your headlights, while you drive, keep the first place: written every frame in update())
+		const h0 = head && head.on > 0.01 ? 1 : 0;
+		let n = h0;
 		for (; n < NF_N; n++) {
-			let best = -1, bd = 1e8;
+			let best = -1, bd = 1e8, street = false;
 			for (let i = 0; i < nf; i++) if (score[i] < bd) { bd = score[i]; best = i; }
+			for (let i = 0; i < ns; i++) if (sScore[i] < bd) { bd = sScore[i]; best = i; street = true; }
 			if (best < 0) break;
+			if (street) {
+				sScore[best] = 1e9; chosen[n] = -1 - best;
+				const L = LAMP[LAMP_KINDS[SL.kind[best]]] || LAMP.cobra, k = L.I * SL.on * (1 - smooth(FAR * 0.7, FAR, bd)), o = best * 3;
+				P[n * 4] = SP[o]; P[n * 4 + 1] = SP[o + 1]; P[n * 4 + 2] = SP[o + 2]; P[n * 4 + 3] = L.h * 3.4;
+				C[n * 4] = SL.col[o] * k; C[n * 4 + 1] = SL.col[o + 1] * k; C[n * 4 + 2] = SL.col[o + 2] * k;
+				// (a cobra or LED head throws down and out, nothing up; an acorn all round)
+				C[n * 4 + 3] = L.k === 2 ? -2 : 0.02;
+				D[n * 4] = 0; D[n * 4 + 1] = -1; D[n * 4 + 2] = 0; D[n * 4 + 3] = 0.55;
+				continue;
+			}
 			score[best] = 1e9; chosen[n] = best;
 			const o = best * 16, fade = level(o) * (1 - smooth(FAR * 0.7, FAR, bd));
 			P[n * 4] = F[o]; P[n * 4 + 1] = F[o + 1]; P[n * 4 + 2] = F[o + 2]; P[n * 4 + 3] = F[o + 3];
@@ -426,6 +474,21 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			D[n * 4] = F[o + 8]; D[n * 4 + 1] = F[o + 9]; D[n * 4 + 2] = F[o + 10]; D[n * 4 + 3] = F[o + 11];
 		}
 		NF.uNFn.value = n;
+		// the city's own buildings take the street lamps alone (their porch lights are their own)
+		const SFd = FIELDS.SF, SPp = SFd.P.value, SPc = SFd.C.value, SPd = SFd.D.value;
+		for (let i = 0; i < ns; i++) { const dd = Math.hypot(SP[i * 3] - cx, SP[i * 3 + 1] - cy, SP[i * 3 + 2] - cz); sScore[i] = dd < FAR ? dd : 1e9; }
+		let m = h0;
+		for (; m < SF_N; m++) {
+			let best = -1, bd = 1e8;
+			for (let i = 0; i < ns; i++) if (sScore[i] < bd) { bd = sScore[i]; best = i; }
+			if (best < 0) break;
+			sScore[best] = 1e9;
+			const L = LAMP[LAMP_KINDS[SL.kind[best]]] || LAMP.cobra, k = L.I * SL.on * (1 - smooth(FAR * 0.7, FAR, bd)), o = best * 3;
+			SPp[m * 4] = SP[o]; SPp[m * 4 + 1] = SP[o + 1]; SPp[m * 4 + 2] = SP[o + 2]; SPp[m * 4 + 3] = L.h * 3.4;
+			SPc[m * 4] = SL.col[o] * k; SPc[m * 4 + 1] = SL.col[o + 1] * k; SPc[m * 4 + 2] = SL.col[o + 2] * k; SPc[m * 4 + 3] = L.k === 2 ? -2 : 0.02;
+			SPd[m * 4] = 0; SPd[m * 4 + 1] = -1; SPd[m * 4 + 2] = 0; SPd[m * 4 + 3] = 0.55;
+		}
+		SFd.n.value = m;
 	}
 	const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 	function update(dt, cam, night, hours) {
@@ -434,7 +497,7 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 		u.x = lateHour(hours); u.y = night;
 		const show = night > 0.1 && cam.position.y < 3000;
 		points.visible = pools.visible = show;
-		if (!show) { NF.uNFn.value = 0; return; }
+		if (!show) { NF.uNFn.value = 0; FIELDS.SF.n.value = 0; return; }
 		const list = city.nearList?.();
 		if (list !== seen || Math.hypot(cam.position.x - atX, cam.position.z - atZ) > R * 0.3) { seen = list; build(cam.position.x, cam.position.z); }
 		// the motion lights: awake while you are within a few metres, a while after
@@ -445,11 +508,30 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			mu[i] = motionLevel(motionSince[i], night);
 		}
 		if (clock - lastPick > 0.2 || lastPick < 0) { lastPick = clock; pick(cam); }
+		if (head && head.on > 0.01) { headTo(NF.uNFP.value, NF.uNFC.value, NF.uNFD.value); headTo(FIELDS.SF.P.value, FIELDS.SF.C.value, FIELDS.SF.D.value); if (!NF.uNFn.value) NF.uNFn.value = 1; if (!FIELDS.SF.n.value) FIELDS.SF.n.value = 1; }
+		else if (headWas) lastPick = -1;
+		headWas = !!(head && head.on > 0.01);
+	}
+	// your car's low beams as the first light of a list: a spot ahead, a little down, 45 m
+	let head = null, headWas = false;
+	function headTo(P, C, D) {
+		const I = 110 * head.on, l = Math.hypot(head.dx, 0.1, head.dz) || 1;
+		P[0] = head.x; P[1] = head.y; P[2] = head.z; P[3] = 45;
+		C[0] = I; C[1] = I * 0.88; C[2] = I * 0.72; C[3] = Math.cos(0.5);
+		D[0] = head.dx / l; D[1] = -0.1 / l; D[2] = head.dz / l; D[3] = Math.cos(0.2);
 	}
 	function info() {
 		return { points: np, pools: nq, field: nf, lit: NF.uNFn.value, motion: nm, reach: Math.round(R), ...stats, hour: +lateHour(hoursNow).toFixed(2), night: +nightNow.toFixed(2) };
 	}
 	// where the first lit trees are (the capture scripts look at one)
 	const spots = () => Array.from({ length: Math.min(8, stats.trees) }, (_, i) => Array.from(treeSpots.subarray(i * 4, i * 4 + 4)));
-	return { update, info, spots, points, pools, rebuild: () => { seen = null; } };
+	// let it all go (the streets' dispose, when the world closes)
+	function dispose() {
+		offQuality();
+		scene.remove(pools, points);
+		pGeo.dispose(); qGeo.dispose(); pMat.dispose(); qMat.dispose();
+		NF.uNFn.value = 0; FIELDS.SF.n.value = 0;
+		np = nq = nf = nm = 0;
+	}
+	return { update, info, spots, points, pools, dispose, rebuild: () => { seen = null; }, setHead: (h) => { head = h; } };
 }
