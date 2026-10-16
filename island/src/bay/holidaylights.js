@@ -59,7 +59,7 @@ export function createHolidayLights(scene, city, { isPhone = false } = {}) {
 	scene.add(pts);
 	const tmpV = new THREE.Vector2();
 	pts.onBeforeRender = (r, sc, cam) => { U.uScale.value = r.getSize(tmpV).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360)); };
-	onQuality(() => { seen = null; });
+	const offQuality = onQuality(() => { seen = null; });
 	let n = 0, seen = null, atX = 1e9, atZ = 1e9, up = false, upAt = -1e9;
 	const add = (x, y, z, c, p0, kind) => { if (n >= CAP) return; pos[n * 3] = x; pos[n * 3 + 1] = y; pos[n * 3 + 2] = z; col[n * 3] = c[0]; col[n * 3 + 1] = c[1]; col[n * 3 + 2] = c[2]; ph[n * 2] = p0; ph[n * 2 + 1] = kind; n++; };
 	// one house's eaves: along the long sides (all round a hipped roof), a bulb every STEP
@@ -120,5 +120,6 @@ export function createHolidayLights(scene, city, { isPhone = false } = {}) {
 		const list = city.nearList?.();
 		if (list !== seen || Math.hypot(cam.position.x - atX, cam.position.z - atZ) > R0 * 0.35) { seen = list; build(cam.position.x, cam.position.z); }
 	}
-	return { update, points: pts, info: () => ({ up, bulbs: n, on: +U.uOn.value.toFixed(2) }), rebuild: () => { seen = null; } };
+	// (dispose: the world going; the tier's listener let go, so this scope can be collected)
+	return { update, points: pts, info: () => ({ up, bulbs: n, on: +U.uOn.value.toFixed(2) }), rebuild: () => { seen = null; }, dispose: () => { offQuality(); scene.remove(pts); geo.dispose(); mat.dispose(); } };
 }

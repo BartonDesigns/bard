@@ -6,9 +6,11 @@
 // hour is frontage.js lifeAt; this only says where.
 //
 // Cheap: looked over once a second at most, within 90 m of you, into lists kept from one look
-// to the next (no garbage in the frame loop); a phone fills fewer staff spots.
+// to the next (no garbage in the frame loop); a phone fills fewer staff spots, and a lower
+// quality tier fewer again (its people share, world/governor.js peopleCap).
 
 import { stateAt, lifeAt, POST_CAP } from './frontage.js';
+import { peopleCap } from '../world/governor.js';
 
 export function createDailyLife(economy, { isPhone = false } = {}) {
 	const near = [], posts = [], doors = [], st = {};
@@ -29,6 +31,7 @@ export function createDailyLife(economy, { isPhone = false } = {}) {
 	function at(x, z, hours, now, dow = 3) {
 		if (now - lastT < 1 && Math.abs(x - lx) + Math.abs(z - lz) < 12 && Math.abs(hours - out.hours) < 0.05) return out;
 		lastT = now; lx = x; lz = z; out.hours = hours;
+		out.cap = peopleCap(isPhone ? POST_CAP.phone : POST_CAP.desktop, 1);
 		out.life = lifeAt(hours, dow === 0 || dow === 6);
 		economy.raw(x, z, 90, near);
 		posts.length = 0; doors.length = 0;

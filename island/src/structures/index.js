@@ -189,7 +189,9 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 	// On a wall: every round leaves its pock, a heavy one a chip and a spray of grit, a very
 	// heavy one or a blast a hole. Returns { through, dmg } for a round that goes on.
 	function hit(at, dir, h, dmg, type) {
-		if (h?.wallHit) return walls.hit(h, at, dir, dmg, type);
+		// (only a wall built near you carries its record, as wallHit from structures.ray or wall.W;
+		// combat marks every world hit wall: true)
+		if (h?.wallHit || h?.wall?.W) return walls.hit(h, at, dir, dmg, type);
 		if (h?.glass) {
 			glass.strike(h.glass, h.u, h.v, type === 'blast' ? 99 : dmg, [dir.x * 4, 0, dir.z * 4]);
 			if (type === 'blast' || type === 'fire' || dmg < 6) return { stop: true };
@@ -319,6 +321,8 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 		advance: (h) => store.advance(h),
 		recount: () => countNext(),
 		forget: () => { store.clear(); },
+		// the world going (main.js teardown): let go of what listens to the quality tier
+		dispose: () => { walls.dispose(); },
 		landmark: (x, z) => { const p = W()?.player?.state?.pos; return monuments.state(x ?? p?.x, z ?? p?.z); },
 		glass, damage, rebuild, store, monuments, marks, debris, walls,
 	};

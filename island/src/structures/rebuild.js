@@ -50,6 +50,9 @@ export function stageTrucks(stage, glassOnly, big) {
 }
 const LOAD = ['skip', 'bars', 'blocks', 'glass'];
 const LOD_KIT = 110, LOD_TRUCK = 90, LOD_CRANE = 230, CREW_R = 170, FADE = 2.2;
+// the LOD distances' scale: a phone's nearer, and nearer again down the quality tiers (far: the
+// tier's view reach); a desktop on the high tier as made (tools/phone-audit.test.mjs)
+export const rebuildLodScale = (phone, far = 1) => (phone ? 0.6 : 1) * far;
 
 export function createRebuild(ctx) {
 	const { scene, isPhone, store, sounds } = ctx;
@@ -521,8 +524,11 @@ export function createRebuild(ctx) {
 		}
 		S.rec = rec; S.tag = liveTag; S.leaving = false;
 	}
+	// (the LOD distances' scale, rebuildLodScale, set once a frame)
+	let lodK = 1;
 	function update(cam, dt, night = 0) {
 		nightK = night;
+		lodK = rebuildLodScale(isPhone, qualityNow()?.far ?? 1);
 		kitShared.uNight.value = night;
 		kitShared.uTime.value += dt;
 		// (twice a second by the clock on the wall, however slowly the frames come)
@@ -602,10 +608,10 @@ export function createRebuild(ctx) {
 			u.uClipY.value = y; u.uFade.value = sf;
 			if (S.kit && S.kit.cl) S.kit.cl.material.userData.u.uClipY.value = y;
 			if (S.old && S.old.cl) S.old.cl.material.userData.u.uClipY.value = y;
-			lodOf(S.scaf, dist, LOD_KIT + 20);
+			lodOf(S.scaf, dist, (LOD_KIT + 20) * lodK);
 			S.scaf.visible = S.clip > 0;
 		}
-		if (S.kit) { lodOf(S.kit.mesh, dist, LOD_KIT); if (S.kit.cl) lodOf(S.kit.cl, dist, LOD_KIT); }
+		if (S.kit) { lodOf(S.kit.mesh, dist, LOD_KIT * lodK); if (S.kit.cl) lodOf(S.kit.cl, dist, LOD_KIT * lodK); }
 		// the cranes at their lifts
 		if (S.crane) craneAt(S, S.crane, stage, hts, dist, seen, sf);
 		if (S.mobile) craneAt(S, S.mobile, stage, hts, dist, seen, sf);
@@ -629,9 +635,9 @@ export function createRebuild(ctx) {
 			u.uSpin.value = v.spin;
 			if (v.kind === 'mixer') { v.drum += dt * 1.6; u.uDrum.value = v.drum; if (v.state === 'park') mixing = v; }
 			u.uFade.value = Math.min(sf, v.fade);
-			lodOf(v.mesh, dist, LOD_TRUCK);
+			lodOf(v.mesh, dist, LOD_TRUCK * lodK);
 			if (v.rev) beep = v;
-			if (dist < CREW_R) { const B = v.T.beacons; for (let k = 0; k < B.length; k++) { tmpV.set(B[k][0], B[k][1], B[k][2]); v.mesh.localToWorld(tmpV); glow.add(tmpV.x, tmpV.y, tmpV.z, 1, 0.5 * v.fade); } }
+			if (dist < CREW_R * lodK) { const B = v.T.beacons; for (let k = 0; k < B.length; k++) { tmpV.set(B[k][0], B[k][1], B[k][2]); v.mesh.localToWorld(tmpV); glow.add(tmpV.x, tmpV.y, tmpV.z, 1, 0.5 * v.fade); } }
 		}
 		if (mixing && seen && dist < 100) { const L = S.loops.drum || (S.loops.drum = sounds.loop?.('drum')); if (L) L.set(snd(mixing.x, S.origin[1] + 2, mixing.z), 1); }
 		else if (S.loops.drum) S.loops.drum.set(MUTE, 0);
@@ -640,7 +646,7 @@ export function createRebuild(ctx) {
 		// the light towers' glow by night
 		if (nightK > 0.05) for (let k = 0; k < S.heads.length; k++) glow.add(S.heads[k][0], S.heads[k][1], S.heads[k][2], 2, 1);
 		// the crew at it
-		if (dist < CREW_R) crewAt(S, stage, hts, dt);
+		if (dist < CREW_R * lodK) crewAt(S, stage, hts, dt);
 		// the sounds of the work (the odd grinder; the hammers are heard as they land)
 		S.beat -= dt;
 		if (S.beat <= 0 && p > 0.05 && p < 0.97) { S.beat = 0.6 + Math.random() * 1.6; if (Math.random() < 0.12) { const w = S.workers[Math.floor(Math.random() * S.workers.length)]; if (w) sounds.grind(snd(w.x, w.y + 1.5, w.z)); } }
@@ -655,7 +661,7 @@ export function createRebuild(ctx) {
 			const ty = Cr.mast.position.y + S.origin[1] + Cr.h + Cr.trolley.position.y, cableLen = Math.max(1.1, ty - st.y);
 			Cr.hook.position.y = -cableLen;
 			Cr.hook.material.userData.u.uStretch.value = cableLen - 1;
-			lodOf(Cr.mast, dist, LOD_CRANE); lodOf(jib, dist, LOD_CRANE);
+			lodOf(Cr.mast, dist, LOD_CRANE * lodK); lodOf(jib, dist, LOD_CRANE * lodK);
 			// red lights on it by night
 			jib.updateMatrixWorld();
 			const Lt = Cr.J.lights;
@@ -665,8 +671,8 @@ export function createRebuild(ctx) {
 			const hx = Cr.slew[0] + Math.sin(st.a) * st.r, hz = Cr.slew[2] + Math.cos(st.a) * st.r, cableLen = Math.max(1.1, Cr.headY - st.y);
 			Cr.hook.position.set(hx - S.origin[0], Cr.headY - cableLen - S.origin[1], hz - S.origin[2]);
 			Cr.hook.material.userData.u.uStretch.value = cableLen - 1;
-			lodOf(Cr.upper, dist, LOD_CRANE);
-			lodOf(Cr.carrier, dist, LOD_TRUCK);
+			lodOf(Cr.upper, dist, LOD_CRANE * lodK);
+			lodOf(Cr.carrier, dist, LOD_TRUCK * lodK);
 			const B = TRUCKS.carrier.beacons;
 			for (let k = 0; k < B.length; k++) { tmpV.set(B[k][0], B[k][1], B[k][2]); Cr.carrier.localToWorld(tmpV); glow.add(tmpV.x, tmpV.y, tmpV.z, 1, 0.5); }
 		}

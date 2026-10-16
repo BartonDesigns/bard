@@ -13,6 +13,12 @@
 // several layers steps and narrows like a real one), the solid parts merged into long quads
 // away from any damage. Built on demand when a wall changes, merged into a few meshes per
 // wall (the builder's materials, one atlas material for every section, one for the wire).
+//
+// How fine it is drawn (the opts of build, one of DETAIL): the trace's grid against the cells
+// (fine: 2 is twice as fine), how often a bulging batt is split for its lumps (batt), and
+// whether the small bits are drawn (bits: the paper's torn flaps, a broken stud's splinters,
+// the old plaster's wooden lath strips). index.js picks the level by the quality tier and
+// steps down a level when a wall would run past its vertex cap.
 
 import * as THREE from 'three';
 import { TILE, TILE_M, BRICK_TILE } from './textures.js';
@@ -26,6 +32,8 @@ const PROUD = 0.002;
 // merged runs of whole squares overlap their neighbours this much (no pinholes where a long
 // edge meets a finely divided one; the overlap is the same surface, so it cannot be seen)
 const LAP = 0.0015;
+// the levels of detail, best first (index.js wallQuality picks one, and steps down when over a cap)
+export const DETAIL = [{ fine: 2, batt: 2, bits: true }, { fine: 1, batt: 1, bits: true }, { fine: 1, batt: 0, bits: false }];
 const lin3 = (r, g, b) => { const c = new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace); return [c.r, c.g, c.b]; };
 const TINT = {
 	white: lin3(0.95, 0.95, 0.94), gypsum: lin3(0.96, 0.95, 0.92), back: lin3(0.9, 0.88, 0.84), wood: lin3(1, 0.97, 0.92), end: lin3(1, 0.96, 0.9),
@@ -61,7 +69,7 @@ export function createWallMesher({ atlas, lath }) {
 	const lathMat = new THREE.MeshStandardMaterial({ map: lath, alphaTest: 0.45, side: THREE.DoubleSide, color: 0x8d9093, roughness: 0.5, metalness: 0.55 });
 
 	// build one wall: W (the record walls.js keeps), M (the builder's materials). Returns the meshes
-	function build(W, M) {
+	function build(W, M, { fine: FINE = 2, batt: BATT = 2, bits: BITS = true } = {}) {
 		const faces = new Acc(), sec = new Acc().buf('sec'), lat = new Acc().buf('lath');
 		const X = W.axis === 'x';
 		// (wall-local u along, y up, a across, to the building's frame)
@@ -121,15 +129,16 @@ export function createWallMesher({ atlas, lath }) {
 				trims(pc, null, null);
 				return;
 			}
-			// (traced on a grid twice as fine as the damage cells, so a small hole is ragged, not a diamond)
-			const L = W.stack.layers, nu = P.nu * 2, nv = P.nv * 2, NU = nu + 2, NV = nv + 2, fcu = P.csu / 2, fcv = P.csv / 2;
+			// (traced on a grid twice as fine as the damage cells, so a small hole is ragged, not a
+			// diamond; on the cells' own grid at the lower levels)
+			const L = W.stack.layers, nu = P.nu * FINE, nv = P.nv * FINE, NU = nu + 2, NV = nv + 2, fcu = P.csu / FINE, fcv = P.csv / FINE;
 			const su = new Float32Array(NU), sv = new Float32Array(NV);
 			su[0] = P.u0; su[NU - 1] = P.u1; sv[0] = P.y0; sv[NV - 1] = P.y1;
 			for (let i = 1; i <= nu; i++) su[i] = P.u0 + (i - 0.5) * fcu;
 			for (let k = 1; k <= nv; k++) sv[k] = P.y0 + (k - 0.5) * fcv;
 			// a fine sample's value: its own cell's, leaned toward its neighbours'
 			const fine = (val, i, k) => {
-				const ci = (i - 1) >> 1, ck = (k - 1) >> 1, own = val(ci, ck);
+				const ci = Math.floor((i - 1) / FINE), ck = Math.floor((k - 1) / FINE), own = val(ci, ck);
 				const fu = (su[i] - P.u0) / P.csu - 0.5, fv = (sv[k] - P.y0) / P.csv - 0.5;
 				const i0 = Math.max(0, Math.min(P.nu - 1, Math.floor(fu))), k0 = Math.max(0, Math.min(P.nv - 1, Math.floor(fv))), i1 = Math.min(P.nu - 1, i0 + 1), k1 = Math.min(P.nv - 1, k0 + 1);
 				const tu = Math.max(0, Math.min(1, fu - i0)), tv = Math.max(0, Math.min(1, fv - k0));
@@ -264,7 +273,7 @@ export function createWallMesher({ atlas, lath }) {
 				const sec0 = wrap ? [TILE.flat, 'wrap'] : SECTION[l.m] || [TILE.gypsum, 'gypsum'], back = wrap ? sec0 : BACK[l.m] || sec0;
 				const spall = SPALL[l.m] || 0;
 				let cutLo = l.lo, cutHi = l.hi, flapped = false;
-				const flap = l.m === 'drywall' && (l === first || l === last) ? (p, q, n) => paperFlap(p, q, n, l, l === first ? l.lo : l.hi, l === first ? 1 : -1, pc.cols[l === first ? 0 : 1]) : null;
+				const flap = BITS && l.m === 'drywall' && (l === first || l === last) ? (p, q, n) => paperFlap(p, q, n, l, l === first ? l.lo : l.hi, l === first ? 1 : -1, pc.cols[l === first ? 0 : 1]) : null;
 				for (const side of [0, 1]) {
 					const outer = side ? l === last : l === first, a = side ? l.hi + (outer ? PROUD : 0) : l.lo - (outer ? PROUD : 0), sgn = side ? 1 : -1;
 					if (outer) {
@@ -292,7 +301,7 @@ export function createWallMesher({ atlas, lath }) {
 				cuts(G, cutLo, cutHi, sec0[0], sec0[1], holeNear(G), flapped ? null : flap);
 				// the stucco's wire across its hole; the old plaster's wooden strips behind it
 				if (l.lath === 'wire' && AUX[j]) wire(l, j, G);
-				if (l.lath === 'lath' && AUX[j]) strips(l, j, G, s);
+				if (l.lath === 'lath' && AUX[j] && BITS) strips(l, j, G, s);
 				if (l.rebar && AUX[j]) bars(l, j, G);
 			}
 			trims(pc, (u) => bil(F[first.i], u, P.y0 + 0.04), (u) => bil(F[last.i], u, P.y0 + 0.04));
@@ -343,7 +352,7 @@ export function createWallMesher({ atlas, lath }) {
 								const a3 = [A[0], A[1], bulge(A[0], A[1])], b3 = [Bq[0], Bq[1], bulge(Bq[0], Bq[1])], c3 = [C[0], C[1], bulge(C[0], C[1])];
 								triOut(a3, b3, c3, out, tn, [A[0] / m, A[1] / m], [Bq[0] / m, Bq[1] / m], [C[0] / m, C[1] / m], tile);
 							};
-							for (let q = 1; q + 1 < pts.length; q++) emit(pts[0], pts[q], pts[q + 1], fx > 0.9 ? 2 : 0);
+							for (let q = 1; q + 1 < pts.length; q++) emit(pts[0], pts[q], pts[q + 1], fx > 0.9 ? BATT : 0);
 						}, (p, q, n) => {
 							// (torn: the batt's own edge into the bay)
 							const a0 = bulge(p[0], p[1]), a1 = bulge(q[0], q[1]);
@@ -373,8 +382,8 @@ export function createWallMesher({ atlas, lath }) {
 								box(TILE.flat, 'steel', s0 - sw / 2, s0 - sw / 2 + 0.001, ya, yb, lo + 0.002, hi - 0.002);
 							} else {
 								box(TILE.wood, 'wood', s0 - sw / 2, s0 + sw / 2, ya, yb, lo + 0.001, hi - 0.001, (k0 === 0 ? 4 : 0) | (k === nv ? 8 : 0));
-								if (k0 > 0) splinters(s0, ya, sw, lo, hi, -1);
-								if (k < nv) splinters(s0, yb, sw, lo, hi, 1);
+								if (k0 > 0 && BITS) splinters(s0, ya, sw, lo, hi, -1);
+								if (k < nv && BITS) splinters(s0, yb, sw, lo, hi, 1);
 							}
 							// (a cracked stud shows its split)
 							let worst = 0;
@@ -459,7 +468,8 @@ export function createWallMesher({ atlas, lath }) {
 					for (let u = W.s + 0.1 + Math.ceil((P.u0 - W.s - 0.1) / sp) * sp; u < P.u1; u += sp) bar(false, u, d, side);
 				}
 				function bar(horiz, c, d, side) {
-					const n = horiz ? nu : nv, pts = [];
+					// (sampled at half the cells, whatever the trace's grain)
+					const n = (horiz ? P.nu : P.nv) * 2, pts = [];
 					for (let q = 0; q <= n * 2; q++) {
 						const t = (horiz ? P.u0 : P.y0) + (horiz ? P.csu : P.csv) * q / 2, u = horiz ? t : c, y = horiz ? c : t;
 						const show = exposed(u, y) && bil(A, u, y) < 1.3;

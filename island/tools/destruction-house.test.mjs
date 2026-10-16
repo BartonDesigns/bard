@@ -101,4 +101,10 @@ test('a house wall broken in place: the replacement inside the wall, anchored li
 	assert.equal(ext.meshes.length, 0);
 	assert.ok(pc.col[4] < 1e8, 'solid again');
 	assert.ok(sourceBounds(ext).equals(before), 'the builder\'s triangles put back');
+	// and broken again after a repair: the builder's triangles taken out again (never drawn twice)
+	walls.blow(eye, dir, 1.8, { kind: 'light', dmg: 11 });
+	walls.update(0.1, null, null);
+	assert.ok(ext.meshes.length >= 3, 'drawn by walls/ again');
+	const zeroed = ext.verts.every(([k, s0, n0]) => { const m = h.root.children.find((q) => q.isMesh && q.name === k && !q.userData.wallDamage); if (!m) return true; const a = m.geometry.attributes.position.array; for (let i = s0 * 3; i < (s0 + n0) * 3; i++) if (a[i] !== 0) return false; return true; });
+	assert.ok(zeroed, 'the builder\'s own wall hidden again');
 });

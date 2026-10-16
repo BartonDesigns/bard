@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { createServiceVehicle, rollServiceWheels } from './vehicle-model.js';
 import { along, pathLength } from './routes.js';
+import { lightingShadowCaster } from '../interiors/lighting.js';
 
 // one vehicle: kind 'ambulance' | 'engine'; home { x, z, y, yaw }
 export function createResponder(kind, home, scene) {
@@ -21,6 +22,8 @@ export function createResponder(kind, home, scene) {
 	scene.add(root);
 	const V = { kind, root, model, home: { ...home }, x: home.x, z: home.z, y: home.y, yaw: home.yaw, v: 0, state: 'parked', path: null, s: 0, L: 0, siren: false, task: null, t: 0, flash: 0, waited: 0 };
 	root.position.set(V.x, V.y, V.z); root.rotation.y = V.yaw;
+	// a soft shadow under it in its bay (interiors/lighting.js)
+	lightingShadowCaster(root, kind === 'ambulance' ? 2.3 : 2.6, kind === 'ambulance' ? 6.2 : 9.4);
 	V.drive = (path, siren) => { V.path = path; V.s = 0; V.L = pathLength(path); V.siren = !!siren; V.state = 'driving'; V.waited = 0; };
 	V.lights = (on, dt) => {
 		V.flash += dt * 7;
