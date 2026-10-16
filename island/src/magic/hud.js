@@ -20,7 +20,7 @@ const CSS = `
 .mg-s.empty{opacity:.45}
 .mg-mana{position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + 74px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);height:4px;border-radius:2px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.1);pointer-events:none;z-index:6}
 .mg-mana>div{height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,#5a7cff,#a8c4ff);transition:transform .15s}
-.mg-fab{position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(var(--l99-low,88px) + 34px + env(safe-area-inset-bottom));font:600 12px/1.4 system-ui,sans-serif;color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:none;z-index:6;text-align:right}
+.mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 system-ui,sans-serif;color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
 .mg-fab b{font-weight:700}.mg-fab .l{color:#ffd27a}.mg-fab .d{color:#b39aff}
 .mg-mode{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 system-ui,sans-serif;padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
 .mg-book{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(4,8,12,.62);font:500 13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:#eef6f4}
@@ -67,7 +67,9 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 	const sSlots = KEYS.map((k, i) => { const e = mk('div', 'mg-s empty', sg, `<span class="k">${k}</span><span class="g"></span><div class="cd"></div>`); e.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); onCast(i, { shift: x.shiftKey, tap: true }); }); return e; });
 	if (isTouch) for (const e of [...wSlots, ...sSlots]) { e.style.width = e.style.height = '34px'; }
 	const mana = mk('div', 'mg-mana', mount, '<div></div>'), manaFill = mana.firstChild;
-	const fab = mk('div', 'mg-fab', mount);
+	// (your fabric at the bar's end: a tap opens the spellbook)
+	const fab = mk('div', 'mg-fab', bar);
+	fab.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); open(); });
 	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · double-tap Alt / ⌥ to aim');
 	let lastSig = '', wT = 0;
 	// (only what changed is written: the bar is looked at every frame)
@@ -103,11 +105,11 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 		const mx = manaMax(state);
 		put(mana, 'm', Math.round(state.mana / mx * 200), (v) => { manaFill.style.transform = `scaleX(${Math.max(0, Math.min(1, v / 200))})`; mana.title = `Mana ${Math.round(state.mana)} / ${mx}`; });
 		const sig = `${state.fabric.light}|${state.fabric.dark}`;
-		if (sig !== lastSig) { lastSig = sig; fab.innerHTML = `<span class="l">☀ <b>${state.fabric.light}</b></span> &nbsp; <span class="d">☾ <b>${state.fabric.dark}</b></span><br><span style="opacity:.7;font-size:10px;letter-spacing:.5px">AETHER FABRIC · N: SPELLBOOK</span>`; }
+		if (sig !== lastSig) { lastSig = sig; fab.innerHTML = `<span class="l">☀ <b>${state.fabric.light}</b></span><br><span class="d">☾ <b>${state.fabric.dark}</b></span>`; fab.title = 'Aether fabric: light and dark. N (or a tap here) opens the spellbook.'; }
 		if (book.style.display !== 'none' && dirty) draw();
 	}
 	function setMode(m) { mode.style.opacity = m === 'camera' ? '1' : '0'; }
-	function show(on) { for (const e of [bar, mana, fab]) e.style.opacity = on ? '1' : '0'; }
+	function show(on) { for (const e of [bar, mana]) e.style.opacity = on ? '1' : '0'; }
 
 	// ---------- the spellbook ----------
 	const book = stop(mk('div', 'mg-book', mount)), sheet = mk('div', 'sheet', book);
@@ -151,6 +153,6 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 	function open() { book.style.display = 'flex'; dirty = true; draw(); if (document.pointerLockElement) document.exitPointerLock(); }
 	function close() { book.style.display = 'none'; }
 	const isOpen = () => book.style.display !== 'none';
-	function dispose() { for (const e of [bar, mana, fab, mode, book]) e.remove(); }
+	function dispose() { for (const e of [bar, mana, mode, book]) e.remove(); }
 	return { update, setMode, show, open, close, toggle: () => (isOpen() ? close() : open()), isOpen, dispose, touchUp: () => { dirty = true; } };
 }
