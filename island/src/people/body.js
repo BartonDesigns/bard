@@ -21,6 +21,7 @@ import { hairCapsules, poseCapsules } from './hair-collide.js';
 import { hairMotion } from './hair-motion.js';
 import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 import { fitBags, torsoSurface, attachBag, BAG_KINDS } from './bags.js';
+import { tierNow } from '../world/governor.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -222,8 +223,12 @@ function pickOutfit(r, male, age, opts) {
 }
 
 // ---------- building one ----------
+// bodies built and not yet let go, across every system that makes them (the governor's report)
+let live = 0;
+export const bodyCount = () => live;
 export function buildPerson(A, d) {
 	const t0 = performance.now();
+	live++;
 	const { D, targets, unit } = A;
 	// the shape: ancestry x sex x age, then muscle and weight
 	const p = Float32Array.from(A.base, (x) => x * unit);
@@ -315,7 +320,13 @@ export function buildPerson(A, d) {
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
 		P.detail = dm;
 	}
-	P.lod = (dist) => { const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; for (const b of P.bags || []) b.lod(dist); };
+	P.lod = (dist) => {
+		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; for (const b of P.bags || []) b.lod(dist);
+		// the sleeves' pose folds and hang (garment-shape.js): near people only, fading out by
+		// 22 m, nearer still on a phone or when the governor has stepped quality down
+		const U = P.clothMat?.userData.U;
+		if (U) { const far = PHONE || tierNow() >= 2 ? 10 : 22; U.uPoseK.value.x = clamp((far - dist) / 6); }
+	};
 	P.buildMs = performance.now() - t0;
 	return P;
 }
@@ -369,9 +380,9 @@ function dress(A, P, o) {
 		envelope.width=Math.max(envelope.width,Math.abs(cp.getX(i)));
 	}
 	P.heldTorso = envelope;
-	if (!P.clothMat) P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0);
+	if (!P.clothMat) { P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0); if (PHONE) P.clothMat.userData.U.uPoseK.value.x = 0; }
 	else paint(P.clothMat, o);
-	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
+	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, rolled: cut.elbow - 0.07, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
 	P.clothMat.userData.U.uHem.value.set(R.topHem, sleeveEnd, cut.waist + 0.02, R.legEnd);
 	// the necklines, cut smooth (the cage's triangles would leave them ragged)
 	const T0 = o.top, scoop = T0 && T0.kind === 'tank' ? 0.045 : T0?.kind === 'crop' ? .025 : 0;
@@ -385,7 +396,7 @@ function dress(A, P, o) {
 	const surf = carried.some((q) => q.kind === 'backpack' || q.kind === 'crossbody') ? torsoSurface(A, p, clothGeo, bones, part, cut) : null;
 	const fits = carried.length ? fitBags({ acc: carried }, cut, surf, P.heldTorso) : [];
 	// caps, glasses, headphones, straps: one more mesh
-	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p, bags: fits }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
+	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p, bags: fits, cloth: clothGeo, part, lo: PHONE }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
 	// and the bags themselves, shared by everyone who carries one
 	P.bags = fits.map((f) => attachBag(P, f, PHONE));
@@ -540,4 +551,17 @@ function normalsOf(g, brow) {
 	const src = g.userData.src, at = new Map(), na = g.attributes.normal;
 	for (let i = 0; i < src.length; i++) if (want.has(src[i])) at.set(src[i], i);
 	return (v, out) => { const i = at.get(v); if (i === undefined) out.set(0, 0, 1); else out.fromBufferAttribute(na, i); };
+}
+
+// a body let go for good: its own geometry, materials and skeleton (the shared assets stay)
+export function freeBody(P) {
+	if (!P.freed) { P.freed = true; live = Math.max(0, live - 1); }
+	// Eyes and accessories share materials; textures and eye geometry belong to assets.
+	P.hairWant = null; // invalidate deferred hair-kit completion for this released body
+	const sharedGeo = new Set((P.eyes || []).map(e => e.geometry));
+	const geometry = new Set(); P.root.traverse(o => { if (o.geometry && !sharedGeo.has(o.geometry)) geometry.add(o.geometry); });
+	for (const g of geometry) g.dispose();
+	const materials = new Set([P.skinMat, P.clothMat, P.cloth?.material, P.hair?.material, P.beard?.material, P.detail?.material].filter(Boolean));
+	for (const m of materials) m.dispose();
+	P.skeleton?.dispose(); P.root.removeFromParent();
 }

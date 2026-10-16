@@ -1,5 +1,7 @@
 # Buildings as things: overlaps, alleys, glass, vaults, destruction and rebuilds (14 October 2026)
 
+Section 7 is the polish pass the same day: wrecks, crews, shots through glass, the tank's shell, the landmarks.
+
 All of it lives in `island/src/structures/`. The shared files carry only marked hook lines.
 
 ## 1. No building through another, a street or a landmark
@@ -74,10 +76,74 @@ Glass: one draw call. Shells: one per damaged building near (at most 14). Debris
 - `node --test island/tools/*.test.mjs`: 426 pass of 430, the 4 failures already there before this work (RGB asset manifest, nearby tiles teardown, Svalbard flora, regional vegetation refresh). New: `structures-overlap.test.mjs` (6), `structures-runtime.test.mjs` (4).
 - Headless Chromium with SwiftShader, three runs, no page, console or shader errors. SF financial district (grid): 808 overlaps before, 5 after on the first rebuild (before the change that drops hidden inner lots); 353 grid alleys, 237 dumpsters, 194 back doors; 7000 panes. A pane cracked, then shattered with its neighbours; a building demolished (collapse 0.93, shell 3750 vertices, 96 chunks with Rapier live, 300 shards); crews on site after advancing the clock (a glazing job done in 1.1 h, a 2.5 h and a 5 h rebuild under way, a crane on the 45 m building); `cataclysm(true)` held progress at 0.513 and 0.26 over an advanced hour. A window vault from inside an office crashed through its glass (`ahead()` found it at 0.75 m, sill 0.9 m). At about one frame a second a 0.8 s vault spans tens of seconds, so the landing was not captured.
 
+## 7. Polish (the second pass, same day)
+
+### Wrecks that read as wrecks (`shell.js`, `damage.js`, `debris.js`)
+
+- The shell's intact wall runs are merged into big quads and the windows on them are drawn by the shell's own material (`shellMaterial()`: each vertex carries its facade, style, storey, column and whether the glass is in, broken or not yet glazed). A 116 m tower with one car-sized hole was 110 000 vertices, now about 11 000; built into growing typed arrays, one shell a frame while the work goes on (a fresh wreck at once).
+- Holes have ragged edges (cells by a hole drawn three by three against a jittered radius), the wall's thickness and bars showing out of the break.
+- A partial collapse's top runs along a broken line from one column edge to the next (no stair steps), bars standing out of it. The floor slabs are whole where the walls still hold them and end in broken edges where they do not; the pieces that cracked off hang from their bars, swung down 30 to 70 degrees. Columns stand up out of the break with their bars bent at the top.
+- Rooms behind the openings: painted partitions on the storeys a hole or the break looks into, desks, cabinets and sofas by the holes, pale ceilings.
+- The heap leans the way the top fell (the low side of the slant), about a fifth of the height at its peak, lumpy in clumps; blocks of every size on it (grit, chunks, broken slabs with their bars), slabs pancaked into a full collapse, patches of the wall's colour, a room's paint and soot. Whatever stood on a fallen building's roof (parapets, the rooftop units, roof props) goes with it.
+- Dust: a cloud up off the fall, a wall of it rolling out along the street (furthest the way it fell), a haze over the heap that hangs a minute and more, every puff rising, hanging, then sinking to settle. A fresh wreck burns (most of a blast's holes, three or four places in a collapse): additive flames and dark smoke until the crew is at it (an hour and a half of game time at most). The chunk pool and its caps are as they were (96 chunks, 36 on a phone).
+
+### The crews (`crewkit.js`, `rebuild.js`)
+
+- Trucks by the stage, built of merged solids: a dump truck heaped with rubble while it is cleared; a cement mixer with a turning drum and a flatbed of bars while the frame rises; blocks on pallets for the walls; glass on its A-frame and the glazier's van at the end. A mobile crane on its outriggers (upper works slewing, boom up, counterweight behind, hook on its rope) for the middling jobs, a tower crane with a braced jib and counterweights over the tall or broad ones.
+- The site: mesh fence panels on concrete feet with the works' banners (CITY WORKS, HARD HAT AREA; no real names), barriers at the gate, cones along the kerb, a skip, pallets, bundles of bars, the site cabin and a loo.
+- Scaffolding: standards on base plates, ledgers, boarded lifts with toe boards and guard rails, braces, a ladder; the street side netted.
+- Workers instanced across every site (six draws for all of them: two vest colours, legs, arms, heads in a range of skin tones, hard hats in four colours), shovelling at the rubble, hammering up on the lifts at the work's height, carrying from the trucks, walking the front, one at the gate.
+- Stages seen on the building (`shell.js`): rubble cleared (to 14%), the frame rising storey by storey with formwork at the top (18 to 66%), the walls closed in in bare concrete behind it (30 to 82%), glazed and finished from the ground up (50 to 97%).
+
+### Shots, the cannon and the landmarks (`index.js`, `marks.js`, `monuments.js`)
+
+- A round goes through the first pane it meets (cracking or breaking it) and on with 55% of its damage (70% for an energy bolt); a blast or fire stops there. Hitscan and projectiles both. A round that enters a building through a pane crosses its rooms to the far wall, so people inside can still be hit.
+- Shots now meet the gridded towns' buildings (they passed through them before: combat's own boxes are the surveyed ones), a wrecked one as its walls stand.
+- Every round leaves a pock on a wall; 40 damage or more a chip and a spray of grit; 120 or more, or a blast, a hole and its scorch. Pooled decals, one draw (260, 90 on a phone).
+- The tank's cannon (`military/drive-mil.js`) calls `structures.shell(at, dir, hit, 260)` before its burst: a hole up to 3.2 m through the wall it struck, thrown inward, scorched.
+- A car into a wall opens a breach at least as wide as its nose (0.55 + 0.6 sqrt(E / 100 kJ) m over the building's toughness), two holes side by side above 150 kJ.
+- Landmarks (the rects `bay/footprints.js` keeps): a height grid of their geometry (2 m cells, scanned a slice at a time once one is within a kilometre) for where a shot meets them; pocks as decals, chips and scorch drawn by their own materials (patched once, the 24 marks nearest you), and they never come down: their strength never falls below half. In a cataclysm they take a beating like the rest and fall: cut away above a ragged line (their shadows too), stubs and a heap over their ground, a great cloud. Kept in `l99.structures.landmarks.v1`; marks fade after eight game hours, a fallen landmark is put back three hours after the cataclysm ends. `Crysis.demolish(x, z)` on a landmark strikes it hard instead.
+
+### Hooks in shared files
+
+- `combat/combat.js` `landShot`: `onward` parameter; on through a pane (`hit.through`, `hit.pierced`, `hit.end`); projectiles fly on through one pane; the tracer drawn to where the round ended.
+- `military/drive-mil.js` `shells()`: one line, `W()?.structures?.shell?.(at, dir, hit, 260)`.
+- `bay/footprints.js`: `export const landmarkRects = RECTS`.
+
+### Cost
+
+Shells: one draw each as before, a tenth of the vertices for a mostly whole one; a collapse about 15 000 to 31 000 (a phone builds a lighter one). Debris: four draws (chunks, dust and smoke, flames, shards). Marks: one. Crews: per site the merged kit, the fence's cloth, the scaffold and its net, a drum or a crane's upper works (five or six), plus six for every worker anywhere. Landmarks: no extra draws; one shader recompile of their materials the first time one is struck.
+
+### Verified in headless Chromium (SwiftShader)
+
+Logic checked with the frame loop held and the world stepped by hand (player and structures each step at 1/30 s; the machine was too loaded for real frames), pictures rendered from inside the page with the camera outside the buildings.
+
+- A sprint through a pane breaks it (a curtain-wall pane 1.72 by 3.52 m: through at 10 m/s, the body carried on through); a walk into the next one only cracked it.
+- A car driven into a wall punches a hole: the free-driving crossover (1750 kg), throttle forced, 12.1 m/s into a tower's face, stopped dead at 2.6 m, a hole in the front face (0.46 m with the old sizing; the sizing now makes it 0.74 m on a tower, about 1 m on a shop, two holes side by side above 150 kJ).
+- The low-wall vault finishes: no low wall stands in the downtown grid, so one was placed (5 by 0.5 m, 0.9 m high); a sprint into it vaulted at 0.9 m without a jump (16 steps, 0.53 s) and landed on the far side carrying on at 7 m/s, grounded; from a standstill the jump key at 0.95 m vaulted it in 19 steps.
+- A round at a pane: through at 55% (58 to 31.9), the tracer to where it ended; a blast stopped at its pane; a round that entered a building ends at its far wall.
+- The tank's shell (`structures.shell` then combat's burst) at a grid tower from 22 m: met the lot, a 1.21 m hole and the burst's 3.8 m one in its front, fire inside, the crew there within the hour.
+- The Ferry Building: rounds met it (the height grid, 8403 cells), three heavy rounds chipped it, ten blasts and shells scorched it and left it at strength 0.63 (never below half); with the cataclysm on it came down (cut along a ragged line, stubs and heap over its ground); three game hours after the cataclysm ended it stood again, marks gone.
+- No page, console or shader errors through the runs.
+- `island/tools/structures-browser.cjs` (SETTLE=30000) on the final build: a building brought half down (collapse 0.51), its block set aside (scale 0), a 36 696-vertex shell in its place, a crew of seven clearing, a round through a pane at 31.9, no errors.
+- A damaged surveyed (mapped) building shows its broken shell, not its model: in the first run of this pass the surveyed San Francisco buildings were loaded and a surveyed tower and a surveyed office were each drawn as their shells (the same path as the gridded ones: the instanced block set aside, the shell built). The workplace towers (`bay/towers.js`) built a tower whole within 28 m regardless; they now skip a wrecked one. In the later runs the surveyed region did not load (its data host was unreachable), so the final smoke ran on a gridded building.
+- Pictures (before: the first pass; after: this one), kept outside the repository: before-partial, before-full, before-crew; after-partial, after-partial-top, after-full, after-crew-clearing, after-crew-frame, after-crew-glazing, cannon-hole, landmark-scorched, landmark-cataclysm.
+- The browser runs were cut short three times by the machine restarting, and one served a cached bundle; the last pictures are from a fresh profile on the final build.
+
+### Still to do
+
+- A round through a pane of a building with no rooms built stops at the box behind it; the second round at a broken pane does too.
+- A collapsed landmark's floors and walls still stop you where they stood (bay/landmarks.js floor and push); only its look and the shots know it fell.
+- The tank does not breach walls by ramming (its physics has only the surveyed boxes).
+- People are never hurt by debris, collapse or fire (nobody, of any age).
+- The landmark scorch was softened after its last picture (its fine noise read as squares); not seen again in the browser.
+- A phone builds the lighter shells and scaffolds by isPhone; the quality governor (world/governor.js qualityNow()) could drive the caps instead.
+- The car-into-wall breach sizing was changed after its browser check (the check made a 0.46 m hole with the old sizing); the new sizing is covered by the code only.
+
 ## Left for later and limits
 
-- commercial.js (the economy agent's file) builds shops whole near you; a wrecked one is hidden by finding its root, but its walls still push. After merging, add `if (grp.wrecked)` to its drop condition as houses.js has it.
-- Landmarks and the bespoke sites (bridge, Discovery Museum, Boardwalk) are not destructible.
+- commercial.js builds shops whole near you. A wrecked one is now let go (October 15: `grp.wrecked` in its candidates, its build loop and its drop condition, as houses.js has it) and built whole again once put right; `release` still hides its root for the frame before.
+- The bespoke sites (the bridge, the Discovery Museum, the Boardwalk) are not destructible; the landmarks are marked and, in a cataclysm, fall (section 7).
 - People are never hurt by debris or collapse (nobody, of any age).
-- Bullets stop at the first pane; holes come from blasts, cars and heavy rounds (no current weapon does 120).
+- Rounds go through one pane (section 7); holes come from blasts, cars, the tank's shell and rounds of 120 or more.
 - Vaulting covers the interiors' windows and low walls; not the shell's broken walls or cars.

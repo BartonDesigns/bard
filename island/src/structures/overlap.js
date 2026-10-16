@@ -18,7 +18,6 @@ const CUT_MAX = 0.45;       // never trim more than this share of a side
 const MIN_SIDE = 2.4;       // a trimmed building keeps at least this much each way
 
 // the box's frame: world to local and back
-const toLocal = (b, x, z) => { const c = Math.cos(b.a), s = Math.sin(b.a), dx = x - b.x, dz = z - b.z; return [c * dx + s * dz, -s * dx + c * dz]; };
 export function corners(b) {
 	const c = Math.cos(b.a), s = Math.sin(b.a), hw = b.w / 2, hd = b.d / 2;
 	return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([u, v]) => [b.x + c * u - s * v, b.z + s * u + c * v]);
@@ -26,26 +25,28 @@ export function corners(b) {
 // half the box's extent seen along a unit direction
 const halfAlong = (b, ax, az) => { const c = Math.cos(b.a), s = Math.sin(b.a); return (Math.abs(ax * c + az * s) * b.w + Math.abs(-ax * s + az * c) * b.d) / 2; };
 // how deep two boxes run into each other (separating axes): > 0 overlapping, <= 0 clear
+// (these run many thousands of times as a region settles: written without small arrays, which
+// came to a good share of a phone's garbage on a walk downtown)
 export function penetration(A, B) {
 	const dx = B.x - A.x, dz = B.z - A.z;
 	let best = 1e9;
-	for (const b of [A, B]) {
-		const c = Math.cos(b.a), s = Math.sin(b.a);
-		for (const [ax, az] of [[c, s], [-s, c]]) {
-			const pen = halfAlong(A, ax, az) + halfAlong(B, ax, az) - Math.abs(dx * ax + dz * az);
-			if (pen < best) best = pen;
-			if (best <= 0) return best;
-		}
+	for (let k = 0; k < 4; k++) {
+		const b = k < 2 ? A : B, c = Math.cos(b.a), s = Math.sin(b.a), ax = k % 2 ? -s : c, az = k % 2 ? c : s;
+		const pen = halfAlong(A, ax, az) + halfAlong(B, ax, az) - Math.abs(dx * ax + dz * az);
+		if (pen < best) best = pen;
+		if (best <= 0) return best;
 	}
 	return best;
 }
 // how much of box a's outline lies inside box b, from its corners, its middle and its edges'
 // middles (0..1): a crown on a tower, a storey over part of a house, are inside their own
+const SAMPLES = [0, 0, -1, -1, 1, -1, 1, 1, -1, 1, 0, -1, 1, 0, 0, 1, -1, 0];
 export function inside(a, b) {
-	const c = Math.cos(a.a), s = Math.sin(a.a), hw = a.w / 2, hd = a.d / 2;
+	const c = Math.cos(a.a), s = Math.sin(a.a), hw = a.w / 2, hd = a.d / 2, cb = Math.cos(b.a), sb = Math.sin(b.a);
 	let n = 0;
-	for (const [u, v] of [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [1, 0], [0, 1], [-1, 0]]) {
-		const [lx, lz] = toLocal(b, a.x + c * u * hw - s * v * hd, a.z + s * u * hw + c * v * hd);
+	for (let i = 0; i < 18; i += 2) {
+		const u = SAMPLES[i], v = SAMPLES[i + 1], dx = a.x + c * u * hw - s * v * hd - b.x, dz = a.z + s * u * hw + c * v * hd - b.z;
+		const lx = cb * dx + sb * dz, lz = -sb * dx + cb * dz;
 		if (Math.abs(lx) <= b.w / 2 + 0.05 && Math.abs(lz) <= b.d / 2 + 0.05) n++;
 	}
 	return n / 9;
@@ -57,13 +58,21 @@ export function trimmed(b, side, cut) {
 	return { ...b, x: b.x - ux * sg * cut / 2, z: b.z - uz * sg * cut / 2, w: along ? b.w - cut : b.w, d: along ? b.d : b.d - cut };
 }
 // the least trim (side and depth) that clears box b of whatever clear(b2) says, or null
+// (one copy of b for all the trials, set to each in turn: clear() keeps none of them)
+function trimInto(q, b, side, cut) {
+	const c = Math.cos(b.a), s = Math.sin(b.a), along = side < 2, sg = side % 2 === 0 ? 1 : -1;
+	const ux = along ? c : -s, uz = along ? s : c;
+	q.x = b.x - ux * sg * cut / 2; q.z = b.z - uz * sg * cut / 2; q.w = along ? b.w - cut : b.w; q.d = along ? b.d : b.d - cut;
+	return q;
+}
 function leastTrim(b, clear) {
 	let best = null;
+	const q = { ...b };
 	for (let side = 0; side < 4; side++) {
 		const size = side < 2 ? b.w : b.d, lim = Math.min(size * CUT_MAX, size - MIN_SIDE);
-		if (lim <= 0 || !clear(trimmed(b, side, lim))) continue;
+		if (lim <= 0 || !clear(trimInto(q, b, side, lim))) continue;
 		let lo = 0, hi = lim;
-		for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; if (clear(trimmed(b, side, m))) hi = m; else lo = m; }
+		for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; if (clear(trimInto(q, b, side, m))) hi = m; else lo = m; }
 		if (!best || hi < best.cut) best = { side, cut: hi + 0.02 };
 	}
 	return best;
@@ -76,10 +85,12 @@ function leastShift(b, other, clear, lim = 2.5) {
 	let best = null;
 	const dirs = [];
 	for (const q of [b, other]) { const c = Math.cos(q.a), s = Math.sin(q.a); dirs.push([c, s], [-c, -s], [-s, c], [s, -c]); }
+	// (one copy of b for all the trials, as leastTrim)
+	const q = { ...b }, at = (ax, az, m) => { q.x = b.x + ax * m; q.z = b.z + az * m; return q; };
 	for (const [ax, az] of dirs) {
-		if (!clear(shifted(b, ax, az, lim))) continue;
+		if (!clear(at(ax, az, lim))) continue;
 		let lo = 0, hi = lim;
-		for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; if (clear(shifted(b, ax, az, m))) hi = m; else lo = m; }
+		for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; if (clear(at(ax, az, m))) hi = m; else lo = m; }
 		if (!best || hi < best.cut) best = { shift: true, ax, az, cut: hi + 0.02 };
 	}
 	return best;
@@ -87,23 +98,25 @@ function leastShift(b, other, clear, lim = 2.5) {
 
 // ---------- streets ----------
 // the distance from a segment to the box's outline (0 where it crosses the box)
+const boxDist = (x, z, hw, hd) => Math.hypot(Math.max(0, Math.abs(x) - hw), Math.max(0, Math.abs(z) - hd));
+const segDist = (x, z, px, pz, dx, dz) => { const l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - px) * dx + (z - pz) * dz) / l2)); return Math.hypot(x - px - dx * t, z - pz - dz * t); };
 function segBox(b, ax, az, bx, bz) {
-	const [px, pz] = toLocal(b, ax, az), [qx, qz] = toLocal(b, bx, bz), hw = b.w / 2, hd = b.d / 2;
+	const c = Math.cos(b.a), s = Math.sin(b.a), hw = b.w / 2, hd = b.d / 2;
+	const px = c * (ax - b.x) + s * (az - b.z), pz = -s * (ax - b.x) + c * (az - b.z), qx = c * (bx - b.x) + s * (bz - b.z), qz = -s * (bx - b.x) + c * (bz - b.z);
 	// (clipped against the box: crossing it is distance 0)
 	let t0 = 0, t1 = 1;
 	const dx = qx - px, dz = qz - pz;
 	let hit = true;
-	for (const [p, q, lo, hi] of [[px, dx, -hw, hw], [pz, dz, -hd, hd]]) {
-		if (Math.abs(q) < 1e-9) { if (p < lo || p > hi) { hit = false; break; } continue; }
+	for (let k = 0; k < 2 && hit; k++) {
+		const p = k ? pz : px, q = k ? dz : dx, lo = k ? -hd : -hw, hi = k ? hd : hw;
+		if (Math.abs(q) < 1e-9) { if (p < lo || p > hi) hit = false; continue; }
 		let u0 = (lo - p) / q, u1 = (hi - p) / q;
 		if (u0 > u1) { const t = u0; u0 = u1; u1 = t; }
 		t0 = Math.max(t0, u0); t1 = Math.min(t1, u1);
-		if (t0 > t1) { hit = false; break; }
+		if (t0 > t1) hit = false;
 	}
 	if (hit) return 0;
-	const box = (x, z) => Math.hypot(Math.max(0, Math.abs(x) - hw), Math.max(0, Math.abs(z) - hd));
-	const seg = (x, z) => { const l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - px) * dx + (z - pz) * dz) / l2)); return Math.hypot(x - px - dx * t, z - pz - dz * t); };
-	return Math.min(box(px, pz), box(qx, qz), seg(-hw, -hd), seg(hw, -hd), seg(hw, hd), seg(-hw, hd));
+	return Math.min(boxDist(px, pz, hw, hd), boxDist(qx, qz, hw, hd), segDist(-hw, -hd, px, pz, dx, dz), segDist(hw, -hd, px, pz, dx, dz), segDist(hw, hd, px, pz, dx, dz), segDist(-hw, hd, px, pz, dx, dz));
 }
 // the roads that matter to a building: the carriageways (not the bridges that pass over,
 // not the paths and tracks, which the map draws through yards)

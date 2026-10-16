@@ -19,6 +19,8 @@ import * as THREE from 'three';
 import { generateIsland } from './world/islandgen.js';
 import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terrain.js';
 import { updateIslandReach } from './world/surfacevisibility.js';
+import { createGroundProbe } from './world/groundprobe.js';
+import { createFloorGuard } from './world/floorguard.js';
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
@@ -64,6 +66,7 @@ import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
 import { createBridgeSound } from './bay/bridgesound.js';
+import { createStreets } from './bay/streets.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
 import { createLake } from './bay/lake.js';
@@ -78,12 +81,17 @@ import { createDiscovery } from './bay/discovery.js';
 import { createShaderWarm } from './world/shaderwarm.js';
 import { captureResources } from './world/resources.js';
 import { preferLite, clearLite, GPU_LITE } from './world/gpulite.js';
+import { createGovernor, qualityNow } from './world/governor.js';
+import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
+import { meterGL } from './world/gpumeter.js';
+import { bodyCount } from './people/body.js';
 import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createInteriors } from './interiors/index.js';
 import { createStructures } from './structures/index.js';
+import { createCataclysm } from './cataclysm/index.js';
 import { createServices } from './services/index.js';
 import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
@@ -133,8 +141,10 @@ import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
-import { createPeople, addTalkers, talkers } from './people/people.js';
+import { createPeople, addTalkers, talkers, addLife } from './people/people.js';
+import { createDailyLife } from './economy/daily-life.js';
 import { createChatter } from './people/chatter.js';
+import { createEncounterPacing } from './people/encounter-pacing.js';
 import { createErrands } from './people/errands.js';
 import { createNpcQuests } from './people/npc-quests.js';
 import { createMoney } from './people/npc-money.js';
@@ -175,8 +185,12 @@ import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
+import { createSignage } from './signage/index.js';
+import { createLaw } from './law/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
+import { skinTouch, firstTime } from './ui/touch-skin.js';
+import { touchLookRows } from './ui/touch-look.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -219,6 +233,16 @@ function underwaterAudio(target, dt) {
 // things made inside the engine that the Crysis console handle reaches
 const HOOKS = {};
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// no zooming the page: a double tap or a pinch on the game is play, not Safari's zoom (iOS ignores
+// user-scalable=no, and touch-action isn't inherited, so every element opts out; the rule goes in
+// first, so an element's own touch-action still wins)
+if (typeof document !== 'undefined' && !document.getElementById('no-page-zoom')) {
+	const st = document.createElement('style');
+	st.id = 'no-page-zoom';
+	st.textContent = '*,*::before,*::after{touch-action:manipulation}';
+	document.head.prepend(st);
+	for (const ev of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) document.addEventListener(ev, (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+}
 
 function css(el, s) { el.style.cssText = s; return el; }
 function button(label, title, style, hud) {
@@ -301,7 +325,7 @@ const HUD_CSS = `
 
 `;
 
-function buildDom() {
+function buildDom(canvas = document.createElement('canvas')) {
 	const mount = css(document.createElement('div'), 'position:fixed;inset:0;z-index:40;display:none;background:#000;overflow:hidden;touch-action:none;');
 	mount.id = 'l99-island-mount';
 	// (the jump and descend buttons, and the resting joystick, only on touch screens: the
@@ -309,7 +333,7 @@ function buildDom() {
 	mount.classList.toggle('l99-touch', isPhone || matchMedia('(pointer: coarse)').matches);
 	const style = document.createElement('style');
 	style.textContent = HUD_CSS;
-	const canvas = css(document.createElement('canvas'), 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;');
+	css(canvas, 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;');
 	const joy = css(document.createElement('div'), 'position:absolute;width:110px;height:110px;box-sizing:border-box;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);pointer-events:none;transition:opacity .2s;');
 	joy.className = 'l99-joy';
 	const knob = css(document.createElement('div'), 'position:absolute;left:31px;top:31px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.45);');
@@ -425,26 +449,23 @@ function slider(panel, label, min, max, step, get, set, fmt) {
 }
 
 export function createIslandWorld() {
-	const dom = buildDom();
+	const storage = (() => { try { return localStorage; } catch { return null; } })();
+	const initialMode = graphicsMode(storage), SAFE = new URLSearchParams(location.search).has('safe');
+	// No HUD, observers, or game listeners exist until a valid graphics context does.
+	const graphics = createGraphicsRenderer({ canvas: document.createElement('canvas'), Renderer: THREE.WebGLRenderer,
+		replaceCanvas: () => document.createElement('canvas'), storage, phone: isPhone, safe: SAFE, mode: initialMode });
+	const renderer = graphics.renderer;
+	const dom = buildDom(graphics.canvas);
+	// a touch screen's controls: icons only, laid out by thumb (ui/touch-skin.js)
+	skinTouch(dom.mount);
 	// declared here, made once the hint and camera exist (see below)
 	let drive = { update: () => false, stop() {}, active: () => false };
-	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
-	// lets leaves and grass edges fade (alpha to coverage) instead of stair-stepping
-	// after a graphics reset a browser may refuse this page new graphics until the tab is closed
-	// (Safari does): say so plainly instead of three's error
-	const BLOCKED = 'The browser has paused 3D graphics for this page after a graphics reset. Close this tab and open the site in a new one (or restart the browser).';
-	// (?safe on the site's address: no anti-aliasing, no shadows, one pixel per pixel, to tell a
-	// graphics card's limits from the rest)
-	const SAFE = new URLSearchParams(location.search).has('safe');
-	let renderer;
-	try { renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: !SAFE && !isPhone, powerPreference: 'high-performance' }); } catch (e) { console.warn('[island]', e); throw new Error(BLOCKED); }
-	if (renderer.getContext().isContextLost()) throw new Error(BLOCKED);
 	// three numbers a program's textures across both its stages and warns past the one stage's
 	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
 	// (32 there), and each stage keeps inside its 16 (the smoke's samplers check)
 	// the shader last linked (if the graphics are lost while one is being built, it is the one):
 	// its size and its own uniforms, for the console
-	const linking = { what: '' };
+	const linking = { what: '', failedGround: false };
 	{
 		const gl = renderer.getContext(), src = new WeakMap(), ss = gl.shaderSource.bind(gl), lp = gl.linkProgram.bind(gl), at = gl.attachShader.bind(gl), parts = new WeakMap();
 		gl.shaderSource = (sh, text) => { if (sh) src.set(sh, text); ss(sh, text); };
@@ -461,12 +482,20 @@ export function createIslandWorld() {
 		const text = (gl.getShaderSource(vs) || '') + (gl.getShaderSource(fs) || '');
 		const defs = [...new Set((text.match(/#define (USE_\w+|\w*SHADOW\w*|ALPHA\w+|DOUBLE_SIDED|FLIP_SIDED|INSTANCED\w*)/g) || []).map((d) => d.slice(8)))];
 		const own = [...new Set((text.match(/uniform\s+\w+\s+(u[A-Z]\w*)/g) || []).map((x) => x.split(/\s+/).pop()))];
+		// Remember the first ground failure, even if many other programs fail before
+		// the browser finally dispatches contextlost. The last linked shader alone
+		// can be an unrelated tiny effect by then.
+		if (own.includes('uBayOn')) { linking.failedGround = true; preferLite(); }
 		console.error('[shader failed]', Math.round(text.length / 1000) + ' KB', 'lost:', gl.isContextLost(), 'link:', gl.getProgramInfoLog(program), 'vs:', gl.getShaderInfoLog(vs), 'fs:', gl.getShaderInfoLog(fs), 'defines:', defs.join(' '), 'uniforms:', own.join(' '));
 	};
 	const fullUnits = () => { const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); };
 	fullUnits();
-	// the graphics can be lost (a phone short of memory): three stops drawing and rebuilds when
-	// they come back; if they don't within a few seconds, say to reload
+	// what the graphics hold, for the quality governor (world/gpumeter.js, world/governor.js)
+	const gpuMeter = meterGL(renderer.getContext());
+	// the graphics can be lost (a phone short of memory): the world holds still, three rebuilds
+	// what it draws when they come back, and the governor takes the device a tier lower from then
+	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
+	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
@@ -474,20 +503,27 @@ export function createIslandWorld() {
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
 		// (the light ground only when it was the ground being built: a loss elsewhere is no reason)
-		if (/uBayOn/.test(linking.what)) preferLite();
-		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent());
+		if (linking.failedGround || /uBayOn/.test(linking.what)) preferLite();
+		governor.lost();
+		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
+		shaderWarm.reset();
 		hint('The graphics were reset. Restoring…', 6000, 3);
-		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
+		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 8000);
 	});
-	dom.canvas.addEventListener('webglcontextrestored', () => { lost = false; fullUnits(); shaderWarm.reset(); hint('Graphics restored.', 2500, 3); });
+	dom.canvas.addEventListener('webglcontextrestored', () => {
+		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
+		applyQuality();
+		// (the frame clock starts again from now, not from before the loss)
+		last = performance.now(); frameAvg = 16;
+		hint('Graphics restored, at lighter settings.', 3000, 3);
+	});
 	// AgX: a film-like curve that rolls highlights off gently and keeps greens from going
 	// neon; ACES crushed the shade and pushed saturation, which read as harsh
 	renderer.toneMapping = THREE.AgXToneMapping;
 	renderer.outputColorSpace = THREE.SRGBColorSpace;
 	renderer.shadowMap.enabled = !SAFE;
 	renderer.shadowMap.type = THREE.PCFShadowMap;
-	const maxRatio = SAFE ? 1 : Math.min(window.devicePixelRatio || 1, isPhone ? 1.5 : 1.75);
-	let pixelRatio = isPhone ? Math.min(maxRatio, 1.25) : maxRatio;
+	let pixelRatio = renderRatio({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio, phone: isPhone, safe: SAFE || graphics.lighter, mode: initialMode });
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = HOOKS.scene = new THREE.Scene();
@@ -554,10 +590,12 @@ export function createIslandWorld() {
 		shared.prints.needsUpdate = true;
 	}
 
-	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'high';
-	// the graphics setting: high unless this device was set otherwise (phones too)
-	try { quality = localStorage.getItem('l99-quality') || 'high'; } catch { /* private mode */ }
-	applyQuality(true);
+	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = initialMode;
+	// Desktop also adapts to slow frames; an explicit saved High/Low choice is retained.
+	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage });
+	if (graphics.lighter && !SAFE && governor.state.ceiling < 2) governor.lost();
+	if (governor.crashedLastTime) console.warn('[governor] the last visit ended without a goodbye: starting lighter', JSON.stringify(governor.info()));
+	applyQuality();
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
 	const state = { seed: null };
@@ -786,6 +824,8 @@ export function createIslandWorld() {
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
 	combat.hooks.posts = military.posts; combat.hooks.trespass = military.trespass;
+	// close combat sees your body in third person (combat/melee.js)
+	combat.melee.bind({ avatar, self: you });
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
@@ -798,14 +838,15 @@ export function createIslandWorld() {
 	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
 	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney });
+	const encounterPacing = createEncounterPacing({ store: { get: (k) => localStorage.getItem(k), set: (k, v) => localStorage.setItem(k, v) } });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney, potholes: () => world?.streets });
 	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
 	// quests they do for each other with or without you (people/npc-quests.js)
 	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 	const commons = HOOKS.commons = createCommons({ store: npcStore });
 	// (money through the bank's adapter: HOOKS.npcMoney.use(bank) attaches economy/bank.js)
 	const npcMoney = HOOKS.npcMoney = createMoney();
-	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, livingManaged: true, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
+	const npcQuests = HOOKS.npcQuests = createNpcQuests({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, livingManaged: true, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
 	commons.follow(combat.morality, npcQuests.regionNow);
 	guideApi.npcQuests = npcQuests;
 	const livingActors = () => [...people.pool, ...families.actors(), ...social.actors.all(),
@@ -816,7 +857,7 @@ export function createIslandWorld() {
 		worldKey: social.bodyKey, region: npcQuests.regionNow, placeName: () => combat.placeName?.() || '',
 		position: () => camera.position, world: () => world, structures: () => world?.structures,
 		requests: () => world?.city?.economy ? requestBoard : null, npcQuests, actors: livingActors, soul, url: roomsURL(),
-		persona: p => guide.personaOf(p), employerOf: id => payroll.employerOf(id),
+		persona: p => guide.personaOf(p), employerOf: id => payroll.employerOf(id), moneyFor: id => { const p = livingActors().find(a => livingActorId(a) === id); if (p?.P?.home) bank.household(p); return bank.moneyTalk(id); },
 		utcOffsetMinutes: () => { const date = new Date(), utc = date.getUTCHours() * 60 + date.getUTCMinutes(); return Number.isFinite(world?.sky?.state?.hours) ? Math.round(((world.sky.state.hours * 60 - utc + 2160) % 1440) - 720) : 0; },
 		hint: (t, ms) => hint(t, ms, 1),
 		onComplete: ({ request, receiptId }) => combat.morality.record({ id: receiptId, kind: request.deeds?.done || 'favour', target: request.giver.name, world: combat.worldKey(), place: combat.placeName(), region: npcQuests.regionNow().id }),
@@ -866,6 +907,12 @@ export function createIslandWorld() {
 	HOOKS.npcHurt = npcQuests.onHurt;
 	// (the nearest hospital sends for whoever is knocked down: services/)
 	HOOKS.npcHurt((e, p) => world?.services?.injury(p, e.why, e.child ? 0.5 : 0.6));
+	// city-wide catastrophes, rare (cataclysm/): quakes, wildfires, a magma world's eruption; the
+	// crews held off, the services sent, people sheltering, things to do. HOOKS.cataclysm.on(fn)
+	guideApi.cataclysm = HOOKS.cataclysm = createCataclysm({ scene, camera, mount: dom.mount, world: () => world, shared, renderer, isPhone, people, hooks: HOOKS, hint: (t, ms) => hint(t, ms, 1), persona: (p) => guide.personaOf(p) });
+	// law and order over combat's and the police's hooks: witnesses and calls, the escalation
+	// ladder, arrests and fines, the gangs' corners by region, tactics (law/)
+	HOOKS.law = createLaw({ world: () => world, combat, military, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), services: () => world?.services, money: () => HOOKS.npcMoney, arms, hint: (t, ms, pri = 1) => hint(t, ms, pri), isPhone, mount: dom.mount, touch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, hours: () => world?.sky?.state?.hours ?? 12, region: () => { const R = npcQuests.regionNow(); return { id: R.id, name: R.name, tally: commons.region(R.id), situation: npcQuests.situation?.() }; } });
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
 	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', note, errands: () => HOOKS.errands });
 	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
@@ -955,6 +1002,12 @@ export function createIslandWorld() {
 		buildPromise = buildWorld(params).catch(error => { teardown(); throw error; }).finally(() => { building = false; buildPromise = null; });
 		return buildPromise;
 	}
+	const yieldBuild = async (label) => { window.L99Loading.stage(label); await new Promise((resolve) => setTimeout(resolve, 0)); };
+	function seaLifeVisibility(W, dt, time, under) {
+		const bay = W.island.village.bay;
+		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
+		W.sealife.update(dt, time, inBay); W.reef.update(inBay, camera.position, under); W.fish.update(dt, time, inBay); W.inverts.update(dt, time, inBay);
+	}
 	async function buildWorld(params) {
 		const seed = (params.seed >>> 0) || 1337;
 		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
@@ -973,6 +1026,7 @@ export function createIslandWorld() {
 		const profile = planetProfile(earth ? 'TROPICAL' : params.biome, seed);
 		shared.planet = profile;
 		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768, profile, land: earth ? 'island' : null });
+		await yieldBuild('Planning the landscape');
 		island.profileHaze = profile.air?.haze || 1;
 		// the ball fields above the village (or the world's own arena): the ground levelled under them before anything is made of it
 		const fieldPlan = planIslandFields(island, earth ? null : profile);
@@ -993,6 +1047,7 @@ export function createIslandWorld() {
 		shared.biHalf = island.half;
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
+		await yieldBuild('Preparing the surroundings');
 		const sky = createSky(scene, shared, renderer, { isPhone, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
@@ -1034,12 +1089,13 @@ export function createIslandWorld() {
 		if (alienPlan) alienPlan.clear.push(...planDwellings(island, alienPlan));
 		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
-		const village = stash(() => createVillage(island, shared, scene), true);
+		const village = stash(() => createVillage(island, shared, scene, { profile, isPhone, camera }), true);
 		if (bare) { village.footprints.length = 0; village.pickables.length = 0; }
 		vegetation.addContacts(village.footprints);
 		const distant = stash(() => createDistant(island, shared, scene));
 		const fauna = stash(() => createFauna(island, shared, scene));
 		const landFauna = stash(() => createLandFauna(land, island, shared, scene, camera, vegetation));
+		await yieldBuild('Preparing the shoreline');
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
 		// arriving at a kept or shared spot: start there, so what streams in first is that place
@@ -1070,6 +1126,7 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		await yieldBuild('Preparing places to explore');
 		// Equipment sources are data-facing first.  Generated shops are added as they stream
 		// in; the small island board keeps the conversational loop playable before Earth has
 		// finished loading.  These records do not imply a shared backend or real-world site
@@ -1109,10 +1166,11 @@ export function createIslandWorld() {
 		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
 		// sunbeams through the trees in mist (world/sunrays.js)
 		world.rays = createSunRays(scene, shared, renderer, { isPhone, sun: sky.sun, air: sky.uniforms.uAir });
-		world.rays.quality(quality);
+		world.rays.quality(qualityNow().fx);
+		fitShadow();
 		// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
 		world.spray = createSpray(scene, shared, { isPhone, world: () => world });
-		world.spray.quality(quality);
+		world.spray.quality(qualityNow().fx);
 		if (waterPlan) {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
 			const water = world.water;
@@ -1196,9 +1254,14 @@ export function createIslandWorld() {
 			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
 			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint, voyage,
 		});
-		// warm every shader once, behind the loading card, so turning your head never stalls
+		// Establish real visibility before warming: the first surface frame must not
+		// upload every underwater/cave material simply because no update ran yet.
 		player.update(0, 0);
 		sky.update(0, camera.position);
+		const contact = waterContact(island, camera.position, player.floorAt(camera.position.x, camera.position.z, camera.position.y - 1.68), 0, shared.uWave.value);
+		const under = contact.under && !world.deep?.active();
+		underwater.update(0, 0, under, contact.surface ?? 0); caverns.update(0, 0, under);
+		seaLifeVisibility(world, 0, 0, under); world.underworld?.update(0, 0); world.deep?.update(0, 0);
 		vegetation.stream(camera, true);
 		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
 		litter.update(camera);
@@ -1223,6 +1286,10 @@ export function createIslandWorld() {
 			world.city = createCity(shared, scene, bayNear, world.real);
 			// (the businesses take their food and words from where on Earth they are)
 			world.city.economy.setLocator((x, z) => globeLL(x, z));
+			world.city.economy.setRegional(() => world?.globe?.regional?.settlements);
+			world.city.economy.setSea({ at: (x, z) => world?.globe?.seaAt(x, z) ?? null, coast: (x, z) => world?.globe?.coastMask(x, z) ?? null });
+			// the working day: staff out front of the open businesses, people in and out of their doors (people/people.js)
+			{ const daily = createDailyLife(world.city.economy, { isPhone }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z), globe: () => world?.globe });
 			// the real houses close by, built whole with their rooms
@@ -1254,6 +1321,8 @@ export function createIslandWorld() {
 			HOOKS.military?.setInteriors(world.services.militaryInteriors());
 			HOOKS.military?.setStations((x, z) => world?.services?.stationAt(x, z));
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
+			// the streets by era and season: potholes and their crews, the trees' stakes and leaves, holiday lights, sprinklers (bay/streets.js)
+			world.streets = createStreets({ scene, camera, world: () => world, drive, isPhone, hint: (t, ms) => hint(t, ms, 1) });
 			// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
 			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone });
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
@@ -1261,6 +1330,8 @@ export function createIslandWorld() {
 			world.military = HOOKS.military;
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone, roadAt: (r, x, z) => world.berms?.along(r, x, z) });
+			// the signs, decals, stickers, posters, tags and grime of the streets, shops and cars (signage/)
+			world.signage = HOOKS.signage = createSignage({ scene, world: () => world, isPhone, locate: (x, z) => globeLL(x, z), morality: () => HOOKS.npcQuests?.where?.() });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real, ponds: false });
 			// every other river, creek, lake and reservoir (bay/water.js)
@@ -1337,7 +1408,7 @@ export function createIslandWorld() {
 				{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
 				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
-				shaderWarm.all({ n: 3 });
+				// New district materials are warmed by the bounded frame queue.
 			});
 			const w0 = world;
 		}
@@ -1364,6 +1435,8 @@ export function createIslandWorld() {
 		world.labels?.dispose();
 		world.discovery?.dispose();
 		world.services?.dispose();
+		world.signage?.dispose();
+		world.structures?.dispose?.();          // (phone audit: its quality listener let go)
 		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();
@@ -1378,6 +1451,7 @@ export function createIslandWorld() {
 		world.water?.dispose();
 		world.bayArea?.dispose();
 		world.real?.dispose();
+		world.streets?.dispose();
 		drive.stop();
 		world.player.dispose();
 		world.cottages?.dispose();
@@ -1391,6 +1465,7 @@ export function createIslandWorld() {
 		world.colony?.dispose();
 		world.arch?.dispose();
 		world.medieval?.dispose();
+		world.village?.dispose?.();
 		world.beyond?.dispose();
 		world.boardwalk?.destroy();
 		world.rays?.dispose();
@@ -1429,6 +1504,7 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim.'; p.appendChild(combatHelp);
 		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
 			() => Math.round(shared.aimSensitivity * 100),
 			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
@@ -1439,6 +1515,8 @@ export function createIslandWorld() {
 		const aimNote = css(document.createElement('div'), 'font-size:12px;opacity:.75;margin:-6px 0 12px;');
 		aimNote.textContent = 'Mouse and touch · Default 115%';
 		p.appendChild(aimNote);
+		// a touch screen: invert up and down, and the gyro (ui/touch-look.js)
+		if (dom.mount.classList.contains('l99-touch')) touchLookRows(p, () => css(document.createElement('button'), 'width:100%;min-height:44px;margin-bottom:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;'));
 		if (origin) {
 			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
 			galaxy.textContent = 'Explore galaxy';
@@ -1540,7 +1618,7 @@ export function createIslandWorld() {
 					location.replace(u.href);
 					return;
 				}
-				applyQuality(true); buildPanel();
+				applyQuality(); buildPanel();
 			};
 			q.appendChild(b);
 		}
@@ -1562,21 +1640,31 @@ export function createIslandWorld() {
 		panelClock = t;
 	}
 
-	function applyQuality(force) {
-		const target = quality === 'high' ? maxRatio : quality === 'low' ? Math.min(1, maxRatio) * 0.75 : pixelRatio;
-		if (quality !== 'auto' || force) pixelRatio = target;
-		renderer.setPixelRatio(pixelRatio);
-		renderer.shadowMap.enabled = !SAFE && !(quality === 'low');
+	// the tier the governor (or the setting) has chosen, applied: resolution, shadows (their map's
+	// size and how often they are drawn), the clouds in the water, the sunbeams and spray. The crowd,
+	// the cars' detail and the view's reach read the tier themselves (qualityNow).
+	function applyQuality() {
+		governor.apply();
+		const Q = qualityNow();
+		renderer.shadowMap.enabled = !SAFE && Q.shadows;
+		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
-		shared.cloudReflect = quality !== 'low';
-		world?.rays?.quality(quality);
-		world?.spray?.quality(quality);
+		shared.cloudReflect = Q.reflect;
+		world?.rays?.quality(Q.fx);
+		world?.spray?.quality(Q.fx);
 		resize();
+	}
+
+	// the sun's shadow map at the tier's size (sky.js makes it at the device's full size)
+	function fitShadow() {
+		const sun = world?.sky?.sun, size = (isPhone ? 1024 : 2048) * qualityNow().shadowSize;
+		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
 	}
 
 	function resize() {
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
-		renderer.setSize(w, h, false);
+		pixelRatio = renderRatio({ width: w, height: h, dpr: window.devicePixelRatio, ratio: qualityNow().ratio, phone: isPhone, safe: SAFE || graphics.lighter, mode: quality });
+		renderer.setDrawingBufferSize(w, h, pixelRatio);
 		camera.aspect = w / Math.max(1, h);
 		camera.updateProjectionMatrix();
 	}
@@ -1636,18 +1724,60 @@ export function createIslandWorld() {
 	// one part of the world failing must not stop the rest: the frame goes on, and each
 	// distinct error is reported once
 	const seenErr = new Set();
+	// each distinct failure of the frame, kept on this device (a phone shows no console): the
+	// last eight with where they were thrown, for Crysis.frameErrors() on a later visit
+	function keepFrameError(key, err) {
+		try {
+			const list = JSON.parse(localStorage.getItem('l99-frame-errors') || '[]');
+			list.push({ at: new Date().toISOString(), msg: key.slice(0, 200), where: String(err?.stack || '').split('\n').slice(0, 3).join(' | ').slice(0, 300), world: shared.planet?.type || null });
+			localStorage.setItem('l99-frame-errors', JSON.stringify(list.slice(-8)));
+		} catch { /* private mode */ }
+	}
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
 		try { tick(now); } catch (err) {
 			const key = String(err?.message || err);
-			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); }
+			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
+			// The player has already moved this frame, and the steps after the failing one never
+			// ran: among them the one that keeps the ground under the camera. Left behind, the
+			// ground is drawn by the far rings of a grid centred where the failure began (hundreds
+			// of metres off, and nothing at all past 2.2 km) while you walk on the right height.
+			// So the ground follows here too, whatever else failed.
+			try { if (world && !building && visible) followGround(world, Math.min(0.05, Math.max(0.001, (now - groundT) / 1000)), surfaceOpen(world)); } catch (e2) { const k2 = 'ground: ' + String(e2?.message || e2); if (!seenErr.has(k2)) { seenErr.add(k2); console.error('[frame]', e2); } }
 			try { renderer.render(scene, camera); } catch { /* nothing more to do this frame */ }
 		}
 	}
+	// Whether the surface is shown (not from down in the caves or the Deep), and the camera-centred
+	// ground kept under the camera: the terrain, sea, grass and turf, their reach, and the floor
+	// guard's look (world/floorguard.js). Called from the frame's own place and, should any step
+	// of the frame throw, from frame()'s catch, so a failure elsewhere never leaves the ground behind.
+	let groundT = 0;
+	function surfaceOpen(W) {
+		const caveK = W.underworld?.inside?.() || 0;
+		// Keep the surface visible through mouths and skylights, even from deep shade.
+		const vista = W.underworld?.plan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
+		// (an eye above the land and in no cave sees the surface, whatever the caves' own
+		// reckoning says: that eases out over a moment, and stands still if their step failed)
+		const cam = camera.position, I = W.island;
+		const above = cam.y > I.heightAt(cam.x, cam.z) + 0.5 && I.underFloor?.(cam.x, cam.z, cam.y - 1.68) == null;
+		const open = above || ((caveK < 0.9 || !!vista) && !W.deep?.active());
+		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		return open;
+	}
+	function followGround(W, dt, open) {
+		groundT = performance.now();
+		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
+		seaView(W, camera, dt, open);
+		W.litter.update(camera);
+		updateIslandReach(W, camera, open);
+		floorGuard.check(dt, { open });
+	}
+	const floorGuard = HOOKS.floorGuard = createFloorGuard({ world: () => world, camera, renderer });
 	function tick(now) {
-		const projectDelta = Math.min(.25, Math.max(0, (now - last) / 1000));
-		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+		const elapsed = Math.min(.25, Math.max(.001, (now - last) / 1000));
+		const dt = Math.min(0.05, elapsed);
+		const projectDelta = elapsed;
 		last = now;
 		if (building || !visible || !world || document.hidden || lost) { communityProjects.reset(); world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
 		if (window.L99Loading.active() && !arrival) { communityProjects.reset(); return; }
@@ -1705,6 +1835,7 @@ export function createIslandWorld() {
 		// the weather: frames running slow shed rain streaks; indoors the rain stays out
 		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
+		W.ocean.userData.tick?.(dt, W, camera, wx?.rainHere || 0);   // what touches the sea, the rain on it (world/ocean.js)
 		surprises.update(dt, sk, wx);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
@@ -1732,12 +1863,9 @@ export function createIslandWorld() {
 		W.soulWell?.update(dt, time);
 		W.deep?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
-		const bay = W.island.village.bay;
-		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40;
-		W.sealife.update(dt, time, inBay);
-		W.reef.update(inBay, camera.position);
-		W.fish.update(dt, time, inBay);
-		W.inverts.update(dt, time, inBay);
+		// (on a governed tier, from up on the shore only once you are down at the water: the reef
+		// and its life drawn through the surface from the spawn's hill were millions of triangles)
+		seaLifeVisibility(W, dt, time, under);
 		shared.uUnder.value = under ? 1 : 0;
 		if (under) {
 			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 14));
@@ -1762,16 +1890,12 @@ export function createIslandWorld() {
 			scene.fog.density *= W.island.profileHaze || 1;
 			// (the Moon's ground runs to its horizon in clear vacuum)
 			if (W.island.far) scene.fog.density = 0.000006;
-			const far = W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+			const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
 		const caveK = W.underworld?.inside?.() || 0;
-		// Keep the surface visible through mouths and skylights, even from deep shade.
-		const cavePlan = W.underworld?.plan;
-		const vista = cavePlan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
-		const open = (caveK < 0.9 || !!vista) && !W.deep?.active();
-		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		const open = surfaceOpen(W);
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
 			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
@@ -1793,10 +1917,7 @@ export function createIslandWorld() {
 		const show = (el, on) => { const d = on ? 'block' : 'none'; if (el.style.display !== d) el.style.display = d; };
 		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
 		actions();
-		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
-		seaView(W, camera, dt, open);
-		W.litter.update(camera);
-		updateIslandReach(W, camera, open);
+		followGround(W, dt, open);
 		W.vegetation.stream(camera, false);
 		W.vegetation.react(dt, camera.position);
 		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }
@@ -1817,6 +1938,8 @@ export function createIslandWorld() {
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.landmarks?.update?.(dt, camera);
 		W.city?.update(camera, sk.night);
+		// the businesses' fronts by the hour, and the regional kit's towns planned too (economy/layer.js)
+		W.city?.economy?.tick(camera.position, W.sky.state.hours, sk.night, dt);
 		W.forestFloor?.update(camera);
 		W.edge?.update(dt, time, camera, sk.night);
 		W.houses?.update(camera, dt, sk.night);
@@ -1836,9 +1959,10 @@ export function createIslandWorld() {
 			W.bizSeen = inB;
 			inkBtn.style.display = inB?.type === 'tattoo' && !studio.active() ? '' : 'none';
 		}
-		// indoors by day the eye opens up to the light from the windows
+		// indoors by day the eye opens up to the light from the windows (by night, not at all:
+		// the rooms are as dark as their lamps leave them)
 		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
-		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
+		renderer.toneMappingExposure *= 1 + indoorK * 0.55 * sk.dayK;
 		watchDoor(dt);
 		striker.update(dt, scene, !W.player.state.flying && !arcade.active() && dom.mount.style.display !== 'none');
 		strikeRipples.update(dt);
@@ -1849,6 +1973,8 @@ export function createIslandWorld() {
 		gear.update(dt);
 		if (!window.L99Loading.active()) combat.update(dt);
 		HOOKS.military?.update(dt, sk.night);
+		HOOKS.cataclysm?.update(dt, sk);
+		if (!window.L99Loading.active()) HOOKS.law?.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -1857,7 +1983,9 @@ export function createIslandWorld() {
 		ragdolls.update(dt);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
+		W.signage?.update(dt, camera, sk.night, drive.active());
 		bridgeSound.update(dt);
+		W.streets?.update(dt, sk.night, W.sky.state.hours);
 		crosswalks.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
@@ -1899,12 +2027,13 @@ export function createIslandWorld() {
 		if (arcade.active()) fishing.drop();
 		fishing.update(dt, time, !arcade.active() && !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);
-		shaderWarm.tick(dt);
+		shaderWarm.tick(dt, { frameMs: frameAvg });
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		dogWalkers.update(dt, camera);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
+		encounterPacing.tick(dt);
 		errands.update(dt);
 		npcQuests.update(dt);
 		livingWorld.update(dt);
@@ -1939,14 +2068,17 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
+		// (on the lighter tiers the shadows are drawn every other frame: world/governor.js)
+		const shadowEvery = qualityNow().shadowEvery;
+		renderer.shadowMap.autoUpdate = shadowEvery <= 1;
+		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
 		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
-		// hold 60 fps on phones by trading resolution, smoothly
-		frameAvg += (dt * 1000 - frameAvg) * 0.05;
-		if (quality === 'auto' && (frame.n = (frame.n || 0) + 1) % 45 === 0) {
-			if (frameAvg > 19 && pixelRatio > 0.6) { pixelRatio = Math.max(0.6, pixelRatio - 0.1); renderer.setPixelRatio(pixelRatio); resize(); }
-			else if (frameAvg < 14.5 && pixelRatio < maxRatio) { pixelRatio = Math.min(maxRatio, pixelRatio + 0.05); renderer.setPixelRatio(pixelRatio); resize(); }
-		}
+		// the governor: a tier down when the frames or the memory say so, back up after a long easy
+		// run (world/governor.js)
+		frameAvg += (elapsed * 1000 - frameAvg) * 0.05;
+		// (on a phone stepped down to the lighter tiers the local voice model, 100 MB, is let go too)
+		if (governor.update(elapsed, frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
 	}
 
 	// the context button: board or leave the boat; the jump button dives in the sea
@@ -1961,7 +2093,7 @@ export function createIslandWorld() {
 			dom.act.textContent = want === 'board' ? '⛵ Board' : '⛵ Leave boat';
 			dom.act.title = want === 'board' ? 'Take the boat out' : 'Step off the boat';
 			dom.act.setAttribute('aria-label', dom.act.title);
-			if (want === 'board') hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
+			if (want === 'board' && (!isPhone || firstTime('l99-tip-boat'))) hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
 		}
 	}
 	let origin = null;   // the planet flight landed us from, if any
@@ -1976,6 +2108,7 @@ export function createIslandWorld() {
 		// page up longer than the faceplate's): index.html's L99Clock reads this
 		window._worldAudioLead = isPhone ? 0.2 : 0.15;
 		if (world) world.player.state.active = true;
+		governor.live(true);
 		dom.mount.style.display = 'block';
 		resize();
 		start();
@@ -1984,6 +2117,7 @@ export function createIslandWorld() {
 	function hide() {
 		visible = false;
 		communityProjects.reset();
+		governor.live(false);
 		window._worldAudioLead = undefined;
 		world?.orbit?.pause?.();
 		picnic.pause();
@@ -2000,6 +2134,10 @@ export function createIslandWorld() {
 		window.L99Keyboard149?.sync?.();
 	}
 
+	// a page put away or closed says goodbye; one that goes while a world is on screen did not
+	// (the governor's crash mark: world/governor.js)
+	document.addEventListener('visibilitychange', () => governor.live(visible && !document.hidden));
+	addEventListener('pagehide', () => governor.live(false));
 	dom.back.onclick = (e) => { e.stopPropagation(); api.close(); };
 	function toggleFly() {
 		const P = world?.player.state;
@@ -2115,7 +2253,7 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
+			if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {
@@ -2243,6 +2381,7 @@ function seaView(W, camera, dt, open) {
 	if (W.ocean.visible !== sea) W.ocean.visible = sea;
 }
 
+const groundProbe = { at: null };
 function hashString(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
 
 // one world per page
@@ -2309,6 +2448,9 @@ if (typeof window !== 'undefined') {
 		}),
 		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
 		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), pet: () => HOOKS.errands?.petNow(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
+		// the streets by era and season (bay/streets.js): Crysis.streets() the era here and the counts;
+		// .holes() the potholes round you; .report() the nearest to its crew; .crew() a crew to it now; .month(12) as the Sky panel's month
+		streets: Object.assign(() => window.L99Island?.world?.()?.streets?.info(), { month: (m) => { pickMonth(m); return monthPicked(); }, holes: (r) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; return p && W.streets?.potholes.around(p.x, p.z, r); }, report: () => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, h = p && W.streets?.nearest(p.x, p.z, 200); return h ? (W.streets.report(h), h.id) : 'no pothole near'; }, crew: () => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, h = p && W.streets?.potholes.nearest(p.x, p.z, 200); return h ? (W.streets.potholes.report(h), W.streets.crew.now(h), h) : 'no pothole near'; } }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
 		scene: () => HOOKS.scene,
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
@@ -2332,12 +2474,16 @@ if (typeof window !== 'undefined') {
 		// while a citywide catastrophe lasts (false lets them back); .crack() / .shatter() the nearest
 		// pane; .vault() over what is in front of you; .advance(h) moves the crews' clock on.
 		// Crysis.demolish(x, z, k) brings the building nearest (x, z) down (k 1 all of it, 0.5 a part)
+		signage: Object.assign(() => HOOKS.signage?.info() ?? 'none here', { headlights: (on) => HOOKS.signage?.headlights(on), refresh: () => HOOKS.signage?.refresh(), where: (k, n) => HOOKS.signage?.where(k, n) }),
 		structures: Object.assign(() => HOOKS.structures?.info() ?? 'none here', {
 			cataclysm: (on) => HOOKS.structures?.cataclysm(on), crack: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.crack(x ?? p?.x, z ?? p?.z); },
 			shatter: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.shatter(x ?? p?.x, z ?? p?.z); },
 			vault: () => HOOKS.structures?.vault('key'), ahead: () => HOOKS.structures?.ahead(), advance: (h) => HOOKS.structures?.advance(+h || 0), recount: () => HOOKS.structures?.recount(),
 		}),
 		demolish: (x, z, k = 1) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.demolish(x ?? p?.x, z ?? p?.z, k) ?? 'none here'; },
+		// catastrophes (cataclysm/): Crysis.cataclysm() how it stands and the next one due here;
+		// .quake(6.9), .wildfire(0.7), .eruption(), .end(), .recover(), .clear(), .upcoming(365), .rate(k), .skip(s)
+		get cataclysm() { return HOOKS.cataclysm?.api; },
 		workplace: () => window.L99Island?.world?.()?.towers?.diagnostics() ?? 'none here',
 		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
 		// the services (services/): Crysis.services() tells of the hospitals, stations and armories
@@ -2382,6 +2528,18 @@ if (typeof window !== 'undefined') {
 		// sunbeams in the mist (world/sunrays.js): Crysis.rays() tells how they stand; 'on', 'off',
 		// 'force' (whatever the hour and the trees), a strength (1 is as made), or { burst: false }
 		rays: (v) => window.L99Island?.world?.()?.rays?.control(v) ?? 'no world yet',
+		// the quality governor (world/governor.js): the tier now and the best allowed, the frame time,
+		// the graphics' memory, the people's bodies alive, whether the last visit ended in a crash
+		governor: () => ({ ...HOOKS.governor?.info(), bodies: bodyCount(), pixelRatio: window.L99Island?.renderer?.()?.getPixelRatio() }),
+		// the ground as drawn under a point (world/groundprobe.js), for the harnesses: Crysis.groundProbe(x, z)
+		// draws the scene from above once and reads the height back; { keep: (o) => bool } limits what is drawn
+		// (tests: put the governor on a tier now; in AUTO it moves on from there by its own rules)
+		governorTier: (t) => { const G = HOOKS.governor; if (!G) return null; G.state.tier = Math.max(0, Math.min(3, Math.round(+t || 0))); G.state.since = G.state.sinceDown = 0; return G.info(); },
+		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
+		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
+		// the frame's own failures kept on this device (main.js keepFrameError), newest last
+		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
+		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
 		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),
@@ -2403,6 +2561,10 @@ if (typeof window !== 'undefined') {
 		// the vehicles parked; Crysis.base('Diablo') takes you to a base's gate (the nearest with no name)
 		military: Object.defineProperty(() => HOOKS.military?.info(), 'api', { get: () => HOOKS.military }),
 		base: (name) => HOOKS.military?.goTo(name) ?? 'Earth only.',
+		// law and order (law/): Crysis.law() the level, the calls on their way, the plan, the corners;
+		// .surrender(), .arrest(), .territory(); Crysis.lawStep(dt) runs it on (tests)
+		law: Object.assign(() => HOOKS.law?.info(), { surrender: () => HOOKS.law?.surrender(), arrest: () => HOOKS.law?.arrest(), reset: () => HOOKS.law?.reset(), incident: (e) => HOOKS.law?.incident(e), territory: (x, z) => HOOKS.law?.territory(x, z), corner: () => HOOKS.law?.corner() }),
+		lawStep: (dt = 1 / 30) => HOOKS.law?.update(dt),
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),

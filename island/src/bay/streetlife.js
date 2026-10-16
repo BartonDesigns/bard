@@ -11,6 +11,7 @@ import { BLOCKS, toGrid, fromGrid, STYLE } from './styles.js';
 import { SPEC } from './cars.js';
 import { createFleet } from '../vehicles/fleet.js';
 import { onLandmark } from './footprints.js';
+import { eraMap, kitFor } from './streetera.js';            // streets by era: the lamps
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
@@ -93,6 +94,12 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const metal = new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: 0.5, metalness: 0.6 });
 	const lampGeo = mergeGeometries([new THREE.CylinderGeometry(0.07, 0.11, 8.5, 6).translate(0, 4.25, 0), new THREE.BoxGeometry(0.12, 0.12, 1.8).translate(0, 8.4, 0.85), new THREE.BoxGeometry(0.35, 0.14, 0.6).translate(0, 8.33, 1.7)]);
 	const lamps = mk(lampGeo, metal, 900, false);
+	// by the street's era (streetera.js): an acorn lantern on a fluted post in an old core, a
+	// slim pole with a flat LED head in the newest subdivisions
+	const acornGeo = mergeGeometries([new THREE.CylinderGeometry(0.12, 0.17, 0.5, 8).translate(0, 0.25, 0), new THREE.CylinderGeometry(0.06, 0.09, 3.4, 8).translate(0, 2.1, 0), new THREE.CylinderGeometry(0.16, 0.1, 0.16, 8).translate(0, 3.86, 0), new THREE.SphereGeometry(0.24, 10, 8).scale(1, 1.45, 1).translate(0, 4.2, 0), new THREE.ConeGeometry(0.1, 0.22, 8).translate(0, 4.65, 0)]);
+	const acorns = mk(acornGeo, new THREE.MeshStandardMaterial({ color: 0x1d2a22, roughness: 0.45, metalness: 0.6 }), 400, false);
+	const ledGeo = mergeGeometries([new THREE.CylinderGeometry(0.05, 0.08, 7.4, 8).translate(0, 3.7, 0), new THREE.CylinderGeometry(0.035, 0.035, 1.3, 6).rotateX(Math.PI / 2 - 0.1).translate(0, 7.4, 0.62), new THREE.BoxGeometry(0.28, 0.06, 0.62).translate(0, 7.48, 1.4)]);
+	const leds = mk(ledGeo, new THREE.MeshStandardMaterial({ color: 0x8c9196, roughness: 0.35, metalness: 0.7 }), 400, false);
 	const signalGeo = mergeGeometries([new THREE.CylinderGeometry(0.1, 0.12, 5.5, 6).translate(0, 2.75, 0), new THREE.BoxGeometry(0.1, 0.1, 5).translate(0, 5.4, 2.5), new THREE.BoxGeometry(0.35, 1.0, 0.3).translate(0, 4.9, 3.4)]);
 	const signals = mk(signalGeo, new THREE.MeshStandardMaterial({ color: 0x3a3f36, roughness: 0.6, metalness: 0.4 }), 300, false);
 	const hydrantGeo = mergeGeometries([new THREE.CylinderGeometry(0.13, 0.15, 0.65, 8).translate(0, 0.33, 0), new THREE.SphereGeometry(0.14, 8, 6).translate(0, 0.66, 0), new THREE.CylinderGeometry(0.05, 0.05, 0.36, 6).rotateZ(Math.PI / 2).translate(0, 0.45, 0)]);
@@ -165,8 +172,10 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		const drives = real.near('paths', cx, cz, R + 40);
 		const clearOfDrive = (x, z) => { for (const d of drives) if (Math.abs(d.bx - x) < 9 && Math.abs(d.bz - z) < 9 && Math.hypot(d.bx - x, d.bz - z) < 6.5 + d.w / 2) return false; return true; };
 		const ends = new Map();
+		const E = eraMap(real);
 		for (const r of roads) {
 			const p = r.pts, hw = r.w / 2, rank = RANK[r.cls] || 0;
+			const lampKind = r.walked && rank <= 3 ? kitFor(E.ofRoad(r).key).lamp : 'cobra', lampEvery = lampKind === 'acorn' ? 11 : 19;
 			for (const k of [0, p.length - 2]) { const key = Math.round(p[k] / 2) + ',' + Math.round(p[k + 1] / 2); const e = ends.get(key) || { x: p[k], z: p[k + 1], n: 0, rank: 0, hw: 0 }; e.n++; e.rank = Math.max(e.rank, rank); e.hw = Math.max(e.hw, hw); ends.set(key, e); }
 			lanes.push(laneOf(Array.from(p), hw, r.cls === 'residential' || r.cls === 'living_street' || r.cls === 'unclassified' ? STYLE.suburb : STYLE.office, r.divided || r.cls === 'motorway' || r.link));
 			// walk the street every 2.2 m, both sides
@@ -195,7 +204,14 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 					}
 					// the kerb furniture
 					const kx = x + nx * (hw + 0.45) * side, kz = z + nz * (hw + 0.45) * side, kg = groundAt(kx, kz);
-					if (k % 19 === 9 && rank >= 1 && !r.bridge && (real.landAt(kx, kz)?.lu || 0) !== 0) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz)); const nl = getNl(); if (nl < 900) { lampPos.set([x + nx * (hw - 1.2) * side, kg + 8.2, z + nz * (hw - 1.2) * side], nl * 3); setNl(nl + 1); } } }
+					if (k % lampEvery === (lampEvery >> 1) && rank >= 1 && !r.bridge && (real.landAt(kx, kz)?.lu || 0) !== 0) {
+						const im = lampKind === 'acorn' ? acorns : lampKind === 'led' ? leds : lamps, c = n(im);
+						if (c >= 0) {
+							put(im, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz));
+							const nl = getNl();
+							if (nl < 900) { if (lampKind === 'acorn') lampPos.set([kx, kg + 4.2, kz], nl * 3); else lampPos.set([x + nx * (hw - (lampKind === 'led' ? 0.8 : 1.2)) * side, kg + (lampKind === 'led' ? 7.4 : 8.2), z + nz * (hw - (lampKind === 'led' ? 0.8 : 1.2)) * side], nl * 3); setNl(nl + 1); }
+						}
+					}
 					if (k % 47 === 20 && rank >= 1) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
 					if (rank >= 2 && !r.rural && k % 97 === 50) { const c = n(benches); if (c >= 0) put(benches, c, x + nx * (hw + 1.4) * side, kg, z + nz * (hw + 1.4) * side, Math.atan2(-side * nx, -side * nz)); }
 				}
@@ -285,7 +301,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			}
 		}
 		if (real?.loaded()) realStreets(cx, cz, R, n, lampPos, (v) => { nl = v; }, () => nl);
-		for (const im of [lamps, signals, hydrants, benches, shelters, bins, meters]) {
+		for (const im of [lamps, acorns, leds, signals, hydrants, benches, shelters, bins, meters]) {
 			im.count = Math.min(counts.get(im) || 0, im.instanceMatrix.count);
 			mark(im);
 		}
@@ -297,7 +313,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true;
 		{
 			const A = lampLightGeo.attributes.position.array, M4 = new THREE.Matrix4();
-			for (let k = 0; k < nl; k++) pools.setMatrixAt(k, M4.makeScale(15, 1, 15).setPosition(A[k * 3], A[k * 3 + 1] - 8.1, A[k * 3 + 2]));
+			for (let k = 0; k < nl; k++) pools.setMatrixAt(k, M4.makeScale(15, 1, 15).setPosition(A[k * 3], groundAt(A[k * 3], A[k * 3 + 2]) + 0.1, A[k * 3 + 2]));          // (on the ground under it, whatever its height)
 			pools.count = nl; pools.instanceMatrix.needsUpdate = true;
 		}
 		sigGeo.setDrawRange(0, Math.min(300, signalList.length));
@@ -399,7 +415,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			c.py = pm.elements[13]; c.matrix = c.matrix || new THREE.Matrix4(); c.matrix.copy(pm);
 			pc.setRGB(c.col[0], c.col[1], c.col[2]);
 			// (a car with a real person at the wheel shows no silhouette)
-			c.tier = movingFleet.add(c.kind, pm, pc, (px - x) * (px - x) + (pz - z) * (pz - z), { spin: c.spin, steer: c.steer, riders: c.seated ? 0 : c.riders });
+			c.tier = movingFleet.add(c.kind, pm, pc, (px - x) * (px - x) + (pz - z) * (pz - z), { spin: c.spin, steer: c.steer, riders: c.seated ? 0 : c.riders, seed: c.id });
 		}
 		for (const X of extra) X(movingFleet, x, z);
 		movingFleet.end();

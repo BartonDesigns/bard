@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { contractFor, createFieldContract, advanceContract, contractReward, FIELD_ROLES } from './field-contracts.js';
+import { contractFor, createFieldContract, advanceContract, contractReward, contractPoint, FIELD_ROLES } from './field-contracts.js';
 
 function cacheModel(tier) {
 	const root = new T.Group(), lid = new T.Group();
@@ -48,6 +48,8 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	text.style.cssText = 'margin:5px 0;white-space:pre-line'; buttons.style.cssText = 'display:flex;gap:6px';
 	const make = (label, action) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'min-height:40px;flex:1;border:1px solid #638a93;border-radius:6px;background:#23424b;color:#fff;cursor:pointer;font:600 12px system-ui;touch-action:manipulation'; b.onclick = action; buttons.append(b); return b; };
 	const accept = make('Field contracts', () => { if (!active()) return; if (!expanded) { expanded = true; render(); } else start(); });
+	// (folded, on a touch screen it is one round button that opens the brief: ui/touch-skin.js)
+	accept.dataset.cvOpen = '';
 	const cancel = make('Close', () => { if (mission) abort('Contract abandoned. Collected gear stays in your bag.'); else expanded = false; render(); });
 	panel.append(title, text, buttons); mount.append(panel);
 	for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'keydown']) panel.addEventListener(ev, (e) => e.stopPropagation());
@@ -92,16 +94,17 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	function render() {
 		panel.style.display = active() && (mission || eligible()) ? 'block' : 'none';
 		title.setAttribute('aria-expanded', String(expanded));
+		panel.classList.toggle('cv-idle', !mission && !expanded);
 		if (!mission) {
 			title.style.display = expanded ? '' : 'none'; text.style.display = expanded ? '' : 'none';
 			const d = contractFor(completed); title.textContent = expanded ? d.name : 'Frontier fieldwork';
 			text.textContent = expanded ? `${d.brief}\nReward: ${d.credits} credits + repair supplies.\n${message}` : message;
 			accept.textContent = expanded ? 'Accept contract' : `Field contracts · ${completed} completed`; accept.style.display = ''; cancel.style.display = expanded ? '' : 'none'; cancel.textContent = 'Close'; return;
 		}
-		const m = mission, target = m.stage === 'return' ? m.rally : m.site;
+		const m = mission, target = contractPoint(m);
 		title.style.display = text.style.display = ''; title.textContent = `${m.def.name} ${expanded ? '▴' : '▾'}`;
 		const remaining = members.filter((h) => !h.dead && !h.surrendered && !h.fleeing && !h.restrained).length;
-		const objective = { travel: 'Locate the supply cache', secure: `Secure the cache · wave ${m.wave + 1}/${m.def.waves.length}${pending ? ' · incoming' : waveDelay > 0 ? ` · ${Math.ceil(waveDelay)}s` : ` · ${remaining} guards`}`, recover: 'Open cache: approach and take its weapon', return: 'Return to the rally marker' }[m.stage];
+		const objective = { survey: `Inspect perimeter point ${m.checkpoint + 1}/${m.def.checkpoints}`, hold: `Hold within 12 m · ${Math.ceil(Math.max(0, m.def.holdSeconds - m.hold))}s remaining`, travel: 'Locate the supply cache', secure: `Secure the cache · wave ${m.wave + 1}/${m.def.waves.length}${pending ? ' · incoming' : waveDelay > 0 ? ` · ${Math.ceil(waveDelay)}s` : ` · ${remaining} guards`}`, recover: 'Open cache: approach and take its weapon', return: 'Return to the rally marker' }[m.stage];
 		text.textContent = `${objective}\n${bearing(target)} · ${Math.round(distance(target))} m${expanded ? `\nPayment: ${m.def.credits} credits + repair supplies` : ''}`;
 		accept.style.display = 'none'; cancel.style.display = expanded ? '' : 'none'; cancel.textContent = 'Abandon';
 	}
@@ -112,6 +115,18 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 			if (down() || distance(m.site) > 220) { abort(down() ? 'Contract interrupted. Recover and accept another when ready.' : 'You left the contract area. Collected gear remains yours.'); render(); return; }
 			if (active()) {
 				if (m.stage === 'travel' && distance(m.site) < 11) { advanceContract(m, 'arrive'); if (m.stage === 'secure') { waveDelay = 4; audio.play('wave'); } }
+				if (m.stage === 'survey') {
+					const at = contractPoint(m);
+					if (distance(at) < 3 && Math.abs(eye().y - ground(at.x, at.z, at.y + 2) - 1.68) < 3) {
+						advanceContract(m, 'inspected'); audio.play('accept');
+						if (m.stage === 'secure') waveDelay = 3;
+					}
+				}
+				if (m.stage === 'hold') {
+					if (distance(m.site) < 12 && Math.abs(eye().y - m.site.y - 1.68) < 3) m.hold += dt;
+					else m.hold = 0;
+					advanceContract(m, 'held');
+				}
 				if (m.stage === 'secure') {
 					waveDelay = Math.max(0, waveDelay - dt);
 					if (!pending && !members.length && !waveDelay) spawnWave();
@@ -127,7 +142,7 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 				}
 			}
 			if (cache) cache.lid.rotation.x += ((unlocked ? -1.85 : 0) - cache.lid.rotation.x) * Math.min(1, dt * 4);
-			if (rally) { rally.visible = mission?.stage === 'return'; rally.material.opacity = .65 + Math.sin(elapsed * 2) * .15; }
+			if (rally) { const at = mission && contractPoint(mission); if (at) rally.position.set(at.x, ground(at.x, at.z, at.y + 2) + .06, at.z); rally.visible = ['return', 'survey', 'hold'].includes(mission?.stage); rally.material.opacity = .65 + Math.sin(elapsed * 2) * .15; }
 		}
 		render();
 	}

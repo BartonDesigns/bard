@@ -17,6 +17,7 @@
 //   use      house | row | shop | retail | office | tower | apt | industry | school | civic
 //   street   0 a quiet street, 1 a corner or a collector, 2 an arterial or a main street
 //   coast    by the sea or a harbour; wild: at the edge of the woods; rural: open country
+//   shore    0 inland, 1 near the coast, 2 by the harbour, 3 on the waterfront (frontage.js)
 //   highway  by a freeway exit; down: how downtown it is (0..1)
 //   venue    what bay/commercial.js builds inside it (economy/venue.js), if anything
 //   sign     a sign text from the town's brief (earth/director.js), in the local language
@@ -139,7 +140,7 @@ export const TYPES = {
 	boatyard: { label: 'boatyard', u: 'I', w: { harbour: 4 }, s: ['plank', 'slab'], pal: [['#1d4e6b', '#f4efe0'], ['#f4efe0', '#1d4e6b']], awn: null, props: ['outrigger', 'boat'], n: ['{W} Boatworks', "{F}'s Marine", '{W} Chandlery'], tag: 'BOAT REPAIR · CHANDLERY' },
 	roastery: { label: 'roastery', u: 'I', w: { industrial: 1 }, s: ['oval', 'serif'], pal: [['#3b2a20', '#f3e6c8']], awn: null, props: ['crates'], n: ['{W} Coffee Roasters', "{F}'s Roastery"], tag: 'ROASTERY · CAFÉ' },
 	printshop: { label: 'print shop', u: 'IS', v: 'shop', w: { industrial: 0.8, main: 0.2 }, s: ['block', 'narrow'], pal: LIGHT_PAL, awn: null, props: [], n: ['{W} Press', "{F}'s Print Shop"], tag: 'PRINT · SIGNS' },
-	fishmarket: { label: 'fish market', u: 'I', w: { harbour: 2 }, s: ['plank', 'slab'], pal: [['#1d4e6b', '#f4efe0']], awn: null, props: ['nets', 'crates'], n: ['{W} Fish Market', '{W} Seafood Co.'], tag: 'FISH MARKET' },
+	fishmarket: { label: 'fish market', u: 'ISH', w: { harbour: 2 }, s: ['plank', 'slab'], pal: [['#1d4e6b', '#f4efe0']], awn: null, props: ['nets', 'crates'], n: ['{W} Fish Market', '{W} Seafood Co.'], tag: 'FISH MARKET' },
 };
 const USE_LETTER = { house: 'H', row: 'R', shop: 'S', retail: 'T', office: 'O', tower: 'W', apt: 'A', industry: 'I' };
 
@@ -327,13 +328,18 @@ export function venueFor(b) {
 	if ((b.use === 'retail' || b.use === 'office') && (b.h || 0) <= 20) return venueOf({ x: b.x, z: b.z, w: b.w, d: b.d, kind: b.use === 'office' ? 5 : 6 });
 	return null;
 }
+// the water's trades: on the waterfront (shore 3) twice as likely again, and near the coast
+// (shore 1: the town reaches the sea a street or a few back) a few of them in any setting
+const SHORE = { outfitter: 0.7, bait: 0.6, seafood: 0.9, surf: 0.35, fishmarket: 0.45, boatyard: 0.5, gift: 0.3, icecream: 0.3 };
 function candidates(b, setting, loc) {
 	const L = USE_LETTER[b.use], venue = venueFor(b), M = LOCALES[loc]?.m || {}, out = [];
 	let tot = 0;
+	const shore = b.shore || 0;
 	for (const [id, T] of Object.entries(TYPES)) {
 		if (!T.u.includes(L)) continue;
 		if (venue && T.v !== venue) continue;
 		let w = (T.w[setting] || 0) * (M[id] ?? 1);
+		if (SHORE[id] && setting !== 'forest' && setting !== 'downtown') w = shore >= 3 ? w * 2 + SHORE[id] * 2 : shore >= 1 ? w + SHORE[id] * (shore >= 2 ? 1 : 0.5) * (M[id] ?? 1) : w;
 		// (a fit-out with nothing listed for the setting still takes its own kind of place)
 		if (venue && w === 0) w = 0.05 * (M[id] ?? 1);
 		if (w <= 0) continue;
@@ -457,7 +463,7 @@ export function describeBoxes(boxes, env = {}) {
 		const n = crowd(b.x, b.z);
 		out.push({
 			x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH || 0, use, street: st, src: b, sign: b.sign || null,
-			coast: !!env.coast?.(b.x, b.z), wild: !!env.wild?.(b.x, b.z) && n < 8, rural: use === 'house' && n < 5, highway: !!env.highway?.(b.x, b.z), down: env.down?.(b.x, b.z) || (b.site === 'downtown' ? 0.4 : 0),
+			coast: !!env.coast?.(b.x, b.z), shore: env.shore ? env.shore(b.x, b.z) : env.coast?.(b.x, b.z) ? 2 : 0, wild: !!env.wild?.(b.x, b.z) && n < 8, rural: use === 'house' && n < 5, highway: !!env.highway?.(b.x, b.z), down: env.down?.(b.x, b.z) || (b.site === 'downtown' ? 0.4 : 0),
 		});
 	}
 	return out;

@@ -26,7 +26,7 @@ const STORE = 'crysis-bank-v1';
 const ID_RE = /^[a-z]+:[\w.:-]{1,60}$/;
 
 export function createBank({ clock = () => Date.now(), storage = typeof localStorage !== 'undefined' ? localStorage : null, server = '', fetch: fetcher = typeof fetch === 'function' ? fetch.bind(globalThis) : null } = {}) {
-	const profiles = new Map();        // account id -> its plan (derived, never stored)
+	const profiles = new Map();        // account id -> its saved household plan
 	const links = new Map();           // npc id -> account id
 	let state = { a: {}, q: [], once: {} };      // a: account id -> { dd, sn, tx }; q: events not yet settled by the server
 	let stored = null, receiptSaveBlocked = false;
@@ -35,7 +35,9 @@ export function createBank({ clock = () => Date.now(), storage = typeof localSto
 		const s = stored && JSON.parse(stored);
 		if (s?.a) {
 			if (s.once !== undefined && (!s.once || typeof s.once !== 'object' || Array.isArray(s.once))) receiptSaveBlocked = true;
-			state = { a: s.a, q: s.q || [], once: receiptSaveBlocked ? {} : s.once || {} };
+			state = { a: s.a, q: s.q || [], once: receiptSaveBlocked ? {} : s.once || {}, profiles: {}, links: {}, profilesSent: s.profilesSent || {} };
+			for (const [id, p] of Object.entries(s.profiles || {})) if (ID_RE.test(id) && p && ['start','pay','pension','food','rent','bills','living'].every(k => Number.isFinite(p[k]))) { profiles.set(id, p); state.profiles[id] = p; }
+			for (const [id, account] of Object.entries(s.links || {})) if (ID_RE.test(id) && profiles.has(account)) { links.set(id, account); state.links[id] = account; }
 		} else if (stored) receiptSaveBlocked = true;
 	} catch { receiptSaveBlocked = true; /* ordinary local bank remains usable; receipt settlement fails closed */ }
 	let saveT = null;
@@ -58,13 +60,17 @@ export function createBank({ clock = () => Date.now(), storage = typeof localSto
 		if (!h?.members?.length) return null;
 		const own = h.kind === 'roommates' && member, id = 'hh:' + h.id + (own ? '.' + h.members.indexOf(member) : '');
 		if (!profiles.has(id)) profiles.set(id, profileOf(h, own ? member : null));
-		if (npcId) links.set(String(npcId), id);
+		state.profiles ||= {}; state.links ||= {};
+		state.profiles[id] = profiles.get(id);
+		if (npcId) { links.set(String(npcId), id); state.links[String(npcId)] = id; }
+		save();
 		return id;
 	}
 	// a person (people.js: p.P.home is { household, member }) or an npc id
 	function household(who) {
 		if (who && typeof who === 'object') {
 			const id = who.P?.dna ? 'npc:' + (who.P.dna.seed >>> 0) : null, home = who.P?.home;
+			if (id && links.has(id)) return links.get(id);
 			if (home?.household) return link(id, home.household, home.member);
 			return id;
 		}
@@ -164,12 +170,13 @@ export function createBank({ clock = () => Date.now(), storage = typeof localSto
 		syncing = true;
 		try {
 			const batch = state.q.slice(0, 500);
-			const prof = {};
+			const prof = Object.fromEntries([...profiles].filter(([id]) => !state.profilesSent?.[id]).slice(0, 32));
 			for (const [id] of batch) if (profiles.has(id) && !prof[id]) prof[id] = profiles.get(id);
-			if (batch.length) {
+			if (batch.length || Object.keys(prof).length) {
 				const res = await fetcher(server.replace(/\/+$/, '') + '/events', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ events: batch, profiles: prof }) });
 				if (!res.ok) return { ok: false, reason: 'status ' + res.status };
 				state.q = state.q.slice(batch.length);
+				state.profilesSent ||= {}; for (const id of Object.keys(prof)) state.profilesSent[id] = true;
 				save();
 			}
 			return { ok: true, sent: batch.length };
@@ -188,7 +195,7 @@ export function createBank({ clock = () => Date.now(), storage = typeof localSto
 			return S;
 		} catch { return null; }
 	}
-	const info = () => ({ accounts: Object.keys(state.a).length, linked: links.size, pending: state.q.length, server: server || null, bytes: JSON.stringify(state).length });
+	const info = () => ({ accounts: Object.keys(state.a).length, linked: links.size, pending: state.q.length, pendingProfiles: [...profiles.keys()].filter(id => !state.profilesSent?.[id]).length, server: server || null, bytes: JSON.stringify(state).length });
 	return { link, household, account, balance, earn, earnOnce, spend, note, transfer, flush, tipFor, needsHelp, history, daily, standing, moneyTalk, sync, pull, info, setServer: (u) => { server = u || ''; }, KIND, raw: (id) => acct(household(id)) || null };
 }
 
@@ -201,8 +208,29 @@ export function wirePayroll(B, P) {
 		else B.earn(id, credits, wage ? 'wage' : /^request/.test(why) ? 'request' : /sale/.test(why) ? 'sale' : 'bonus', employerId);
 	});
 }
-// the game's bank (where the ledger is: set it with localStorage 'crysis-ledger-url' or ?ledger=)
-const url = (() => { try { return new URLSearchParams(globalThis.location?.search || '').get('ledger') || globalThis.localStorage?.getItem('crysis-ledger-url') || ''; } catch { return ''; } })();
+// the game's bank. The ledger is the owner's Worker when the game is served from its own site
+// (or locally, which the Worker also lets in); ?ledger=<url> or localStorage 'crysis-ledger-url'
+// points it elsewhere, and ?ledger=off keeps this browser's book to itself.
+const LEDGER = 'https://l99-ledger.joshbarton1921.workers.dev';
+const HOME = /^(www\.)?level99bard\.com$|^localhost$|^127\.0\.0\.1$/;
+const url = (() => {
+	try {
+		const set = new URLSearchParams(globalThis.location?.search || '').get('ledger') || globalThis.localStorage?.getItem('crysis-ledger-url') || '';
+		if (set) return set === 'off' ? '' : set;
+		return HOME.test(globalThis.location?.hostname || '') ? LEDGER : '';
+	} catch { return ''; }
+})();
 export const bank = createBank({ server: url });
+// settle with it on its own: a minute after there is something to send, and as the page is put
+// away; a ledger that can't be reached is asked again later and later (up to ten minutes apart)
+if (url && typeof window !== 'undefined') {
+	let wait = 60e3;
+	const send = async () => {
+		if (bank.info().pending || bank.info().pendingProfiles) { const r = await bank.sync(); wait = r.ok ? 60e3 : Math.min(wait * 2, 600e3); }
+		setTimeout(send, wait);
+	};
+	setTimeout(send, wait);
+	document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && (bank.info().pending || bank.info().pendingProfiles)) bank.sync(); });
+}
 wirePayroll(bank, payroll);
 export const moneyTalk = (npcId) => bank.moneyTalk(npcId);

@@ -98,18 +98,23 @@ vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres, float frozen){
 			float d = length(q - c - o);
 			if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
 		}
-		float heat = clamp(gvn(p * 0.09 - uTime * 0.02) * 0.7 + gEdge * 0.6, 0.0, 1.0);
+		float heat = clamp(gvn(p * 0.09 - uTime * 0.02) * 0.7 + gEdge * 0.3, 0.0, 1.0);
 		float crack = 1.0 - smoothstep(0.02, 0.1 + heat * 0.16, f2 - f1);
 		float melt = gvn(p * 0.6 + vec2(uTime * 0.25, -uTime * 0.1));
 		vec3 hot = mix(vec3(0.9, 0.18, 0.02), vec3(2.6, 1.3, 0.3), smoothstep(0.35, 0.85, melt * 0.6 + heat * 0.5)) * (1.0 + uNight * 0.6);
 		// (the crust: near black, faintly red where it is thin, its plates' own relief)
 		vec3 crust = mix(vec3(0.012, 0.009, 0.008), vec3(0.08, 0.02, 0.006), smoothstep(0.3, 0.9, heat)) * (0.7 + 0.5 * smoothstep(0.0, 0.5, f1));
-		vec3 c = mix(crust, hot, max(crack, smoothstep(0.75, 1.0, gEdge) * 0.8));
+		// at its margin the flow chills to a thick dark crust against the ground, its cracks
+		// closing, broken here and there where the melt breaks out and glows along the edge
+		float rim = smoothstep(0.55, 0.95, gEdge);
+		float breakout = smoothstep(0.7, 0.86, gvn(p * 0.45 + vec2(uTime * 0.04, 0.0)) * 0.7 + gvn(p * 1.7 - uTime * 0.03) * 0.3) * rim;
+		vec3 c = mix(crust * (1.0 - rim * 0.45), hot, max(crack * (1.0 - rim * 0.8), breakout * 0.6));
 		// (far off, where the cracks are finer than a pixel, their glowing average)
 		float far = clamp(length(fwidth(q)) * 1.2 - 0.25, 0.0, 1.0);
 		c = mix(c, mix(crust, hot, 0.22 + heat * 0.25), far);
-		// (a soft edge where it laps the ground)
-		return vec4(c, 1.0 - smoothstep(0.9, 1.0, gEdge));
+		// (a soft edge where it laps the ground: the chilled margin thins away into it)
+		c = mix(c, crust * 0.5, smoothstep(0.82, 1.0, gEdge) * (1.0 - breakout));
+		return vec4(c, 1.0 - smoothstep(0.78, 1.0, gEdge));
 	}
 	if (uLook.x > 0.5 || frozen > 0.5) {
 		// ice: pale and opaque, milky where it is thick, cracked, the sky faint in it
@@ -246,6 +251,8 @@ void main(){
 	}
 	// a soft line of foam where a quick creek laps its banks (none on the still town water)
 	float side = nearK * smoothstep(0.5, 0.8, abs(vUv.x));
+	// (the edge itself creeping in and out a little with the ripples, never a still line)
+	depth += (gvn(u * vec2(0.6, 1.5) - vec2(uTime * speed * 0.5, 0.0)) - 0.5) * 0.03 * side;
 	float lap = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.04, 0.14, depth)) * side * (1.0 - calm) * smoothstep(0.4, 0.75, gvn(u * vec2(1.4, 4.0) - vec2(uTime * speed, 0.0)));
 	fo = max(fo, lap * 0.45);
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
@@ -256,7 +263,10 @@ void main(){
 	// (the shallows along the sides clear to nothing over the wet bank, so no seam shows
 	// where the water meets the ground; the foam stays a little longer)
 	gl_FragColor.a *= mix(1.0, max(smoothstep(0.0, 0.2, depth), min(fo, 1.0) * smoothstep(0.0, 0.02, depth)), side);
-	gl_FragColor.a *= 1.0 - smoothstep(0.82, 1.0, abs(vUv.x));
+	// (its sides torn by the bank's own unevenness, never the ribbon's straight edge)
+	gl_FragColor.a *= 1.0 - smoothstep(0.6 + 0.22 * gvn(u * vec2(0.35, 1.0) + 7.0), 1.0, abs(vUv.x));
+	// where a stream runs out over the sea's own bed, the sea takes it over (its plume, world/ocean.js)
+	gl_FragColor.a *= max(smoothstep(-0.9, -0.25, groundUnder(vW.xz)), smoothstep(0.5, 1.0, vW.y));
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 	#include <fog_fragment>
@@ -272,7 +282,7 @@ void main(){
 	#include <fog_vertex>
 }`;
 const LAKE_FRAG = /* glsl */`
-uniform vec3 uTint; uniform float uLevel, uIce;
+uniform vec3 uTint; uniform float uLevel, uIce; uniform vec4 uPlunge[4];
 varying vec3 vW; varying vec2 vL; varying float vDist;
 #include <fog_pars_fragment>
 float wave(vec2 p){ return vn(p * 0.35 + uTime * vec2(0.05, 0.03)) * 0.6 + vn(p * 1.1 - uTime * vec2(0.04, 0.07)) * 0.3 + vn(p * 3.3 + uTime * vec2(0.11, -0.05)) * 0.1; }
@@ -282,6 +292,21 @@ void main(){
 	// wind on the water: patches of ripple and of calm
 	float wind = 0.5 + 0.5 * smoothstep(0.3, 0.7, vn(p * 0.004 + uTime * 0.01));
 	vec3 n = normalize(vec3(wave(pl - vec2(e, 0.0)) - wave(pl + vec2(e, 0.0)), 2.0 * e / (0.08 * wind), wave(pl - vec2(0.0, e)) - wave(pl + vec2(0.0, e))));
+	// where a stream drops into the lake: the water at the fall's foot boils white, rings run
+	// out from it, and the foam thins out into drifting patches (x, z, radius, strength)
+	float churn = 0.0;
+	if (vDist < 400.0) {
+		for (int i = 0; i < 4; i++) {
+			vec4 F = uPlunge[i];
+			if (F.w <= 0.0) continue;
+			vec2 dv = p - F.xy; float dd = length(dv), q = dd / F.z;
+			if (q > 5.0) continue;
+			n.xz += dv / max(dd, 1e-3) * sin(dd * 3.2 - uTime * 4.5) * exp(-q * 0.7) * F.w * 0.3;
+			float boil = vn(pl * 1.2 + vec2(uTime * 0.8, -uTime * 0.6)) * 0.6 + vn(pl * 3.3 - uTime * 1.1) * 0.4;
+			churn = max(churn, (1.0 - smoothstep(0.5, 1.2 + 2.2 * boil, q)) * smoothstep(0.35, 0.6, boil + 0.45 - q * 0.08) * F.w);
+		}
+		n = normalize(n);
+	}
 	n = normalize(mix(n, vec3(0.0, 1.0, 0.0), smoothstep(300.0, 2500.0, vDist)));
 	vec3 v = normalize(cameraPosition - vW), r = reflect(-v, n);
 	float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
@@ -291,10 +316,15 @@ void main(){
 	vec3 deep = uTint * (1.0 - uNight * 0.85);
 	vec3 col = mix(deep, skyIn(r, p) * mix(vec3(0.62, 0.86, 0.7), vec3(0.78, 0.88, 0.92), uTint.b * 4.0), fres);
 	col += uSunColor * (pow(max(dot(r, uSunDir), 0.0), 600.0) * 6.0 + pow(max(dot(r, uSunDir), 0.0), 40.0) * 0.12) * (1.0 - uNight);
+	// the water laps: its edge creeps up the shore and back with each wavelet, by its own
+	// amount all along the shore, so the line is never still or straight
+	float lapT = sin(uTime * 1.7 + vn(pl * 0.12) * 6.28) * (0.6 + 0.4 * vn(pl * 0.9 + 3.0)) * wind;
+	depth += lapT * 0.018 + (vn(pl * 0.7) - 0.5) * 0.02;
 	// a lace of foam where the water laps the shore, thinning to nothing at the line itself
-	float lace = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.05, 0.2, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2)) * nearK;
+	float lace = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.05, 0.2, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2) + max(lapT, 0.0) * 0.12) * nearK;
 	col = mix(col, vec3(0.82, 0.84, 0.8) * (1.0 - uNight * 0.8), lace * 0.5);
-	float a = clamp(0.3 + deepK * 0.66 + fres * 0.2 + lace * 0.4, 0.0, 0.97);
+	col = mix(col, vec3(0.9, 0.93, 0.92) * (1.0 - uNight * 0.85), churn * 0.85);
+	float a = clamp(0.3 + deepK * 0.66 + fres * 0.2 + lace * 0.4 + churn * 0.5, 0.0, 0.97);
 	gEdge = (1.0 - smoothstep(0.0, 0.5, depth)) * nearK;
 	gl_FragColor = worldLook(col, a, pl, 0.2, fres, uIce);
 	// (the shallows clear to nothing over the wet shore, so no seam shows at the water's edge)
@@ -319,7 +349,8 @@ const HALO_FRAG = /* glsl */`
 varying float vK; varying vec2 vP;
 void main(){
 	float g = pow(1.0 - vK, 2.2) * (0.7 + 0.3 * gvn(vP * 0.08 + uTime * 0.15));
-	gl_FragColor = vec4(vec3(1.0, 0.3, 0.05) * g * (0.6 + uNight * 0.9), 1.0);
+	// (a deep red warmth on the ground close by, not a flat orange wash)
+	gl_FragColor = vec4(vec3(0.85, 0.2, 0.04) * g * g * (0.35 + uNight * 0.4), 1.0);
 }`;
 
 // opts: heightAt (the ground as walked, CPU), ground (the road's level for a deck, as walked),
@@ -343,7 +374,9 @@ export function createWater(scene, shared, opts = {}) {
 	// the ground under the water, as it is drawn
 	const GROUND = carve ? BAY_GLSL + WC_GLSL + 'float groundUnder(vec2 w){ return bayHeight(w) + wcAt(w).r * wcK(w); }\n' : HEIGHT_GLSL + 'float groundUnder(vec2 w){ return heightAt(w); }\n';
 	const groundU = carve ? { ...shared.bayU, ...WC_U } : { uHeight: { value: shared.heightTex }, uHalf: { value: island?.half || 1300 }, uCell: { value: island?.cell || 1 }, uN: { value: island?.N || 2 } };
-	const uniforms = () => ({ ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...groundU, uTime: shared.uTime, uNight, uSeason: REAL_U.uSeason, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uLook: lookU, uWaterT: tintU, ...cloudReflectU(shared) });
+	// the feet of the falls into a lake near you, for the lakes' churned water (x, z, radius, strength)
+	const plungeU = { value: [...Array(4)].map(() => new THREE.Vector4()) };
+	const uniforms = () => ({ ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...groundU, uPlunge: plungeU, uTime: shared.uTime, uNight, uSeason: REAL_U.uSeason, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uLook: lookU, uWaterT: tintU, ...cloudReflectU(shared) });
 	const FRAG_HEAD = GROUND + NOISE_GLSL + CLOUD_REFLECT_GLSL + COMMON;
 	const riverMat = new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: RIVER_VERT, fragmentShader: FRAG_HEAD + RIVER_FRAG, fog: true, transparent: look?.kind !== 'ice', depthWrite: false });
 	const haloMat = look?.kind === 'lava' ? new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: GROUND + HALO_VERT, fragmentShader: NOISE_GLSL + CLOUD_REFLECT_GLSL + COMMON + HALO_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }) : null;
@@ -579,6 +612,18 @@ export function createWater(scene, shared, opts = {}) {
 		}
 		if (T.built) T.falls = out;
 		return out;
+	}
+	// the nearest few falls whose foot is in a lake, for the lakes' shader (plungeU)
+	function plunges(x, z) {
+		const P = plungeU.value;
+		let c = 0;
+		for (const f of falls(x, z, 400).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))) {
+			if (c >= 4) break;
+			const L = lakeAt(f.x, f.z);
+			if (!L || L.ice || Math.abs(L.level - f.y) > 0.4) continue;
+			P[c++].set(f.x, f.z, 0.6 + f.w * 0.45 + Math.min(f.drop, 10) * 0.2, Math.min(1, 0.4 + f.drop / 4));
+		}
+		for (; c < 4; c++) P[c].set(0, 0, 1, 0);
 	}
 	function falls(x, z, r) {
 		if (!S.ready || lookU.value.x > 0.5) return [];
@@ -1132,7 +1177,7 @@ export function createWater(scene, shared, opts = {}) {
 		// a mapped region came in: its roads cross the creeks, so carve its squares again
 		const rn = real?.R?.regions?.length || 0;
 		if (atlas && rn !== realN) { realN = rn; for (const q of [...atlas.tiles()]) atlas.drop(q.i, q.j); S.noCarve.clear(); for (const [k, D] of decks) if (!D.walk) decks.delete(k); decksDirty = true; S.plannedAt = -1e9; }
-		if (Math.hypot(x - S.px, z - S.pz) > 120 || t - S.plannedAt > 1.5) { const p0 = performance.now(); S.plannedAt = t; plan(x, z); spike('plan', p0); }
+		if (Math.hypot(x - S.px, z - S.pz) > 120 || t - S.plannedAt > 1.5) { const p0 = performance.now(); S.plannedAt = t; plan(x, z); plunges(x, z); spike('plan', p0); }
 		const t0 = performance.now();
 		while (performance.now() - t0 < RANGE.budget) {
 			if (!cur) cur = nextJob();
@@ -1208,6 +1253,31 @@ export function createWater(scene, shared, opts = {}) {
 			lakeMats.clear();
 		},
 		riverAt: (x, z) => { const r = riverAt(x, z, 2); return r ? { name: r.L.name, level: r.level, width: r.hw * 2 } : null; },
+		// where streams run out into the sea round (x, z), for the sea's silty plume and the
+		// current line at its edge (world/ocean.js): out is filled with [x, z, ux, uz, width] for
+		// up to n mouths, nearest first; returns how many (nothing is made on the way)
+		mouths(x, z, r, out, n = 4) {
+			let c = 0;
+			if (!S.ready || lookU.value.x > 0.5) return 0;
+			for (const T of S.tiles.values()) {
+				if (!T.built || Math.max(Math.abs((T.i + 0.5) * TILE - x), Math.abs((T.j + 0.5) * TILE - z)) > TILE / 2 + r) continue;
+				for (const L of T.lines) {
+					const e = L.n - 1;
+					if (e < 1 || L.conc || L.lv[e] > 1.5 || L.w[e] < 2) continue;
+					const ex = L.x[e], ez = L.z[e], d = Math.hypot(ex - x, ez - z);
+					if (d > r) continue;
+					const l = Math.hypot(ex - L.x[e - 1], ez - L.z[e - 1]) || 1, ux = (ex - L.x[e - 1]) / l, uz = (ez - L.z[e - 1]) / l;
+					// (the sea just beyond the end: a stream that only ends at a tile's edge is not a mouth)
+					if (heightAt(ex + ux * (L.w[e] + 6), ez + uz * (L.w[e] + 6)) > -0.3) continue;
+					let i = Math.min(c, n - 1);
+					if (c >= n && d >= Math.hypot(out[i * 5] - x, out[i * 5 + 1] - z)) continue;
+					while (i > 0 && d < Math.hypot(out[(i - 1) * 5] - x, out[(i - 1) * 5 + 1] - z)) { for (let q = 0; q < 5; q++) out[i * 5 + q] = out[(i - 1) * 5 + q]; i--; }
+					out[i * 5] = ex; out[i * 5 + 1] = ez; out[i * 5 + 2] = ux; out[i * 5 + 3] = uz; out[i * 5 + 4] = L.w[e];
+					c = Math.min(n, c + 1);
+				}
+			}
+			return c;
+		},
 		hasRiver: (x, z) => !!riverAt(x, z, 2),
 		decks: () => [...decks.values()].map((D) => ({ x: D.x, z: D.z, own: D.own, span: D.span })),
 		// a stretch of stream near a point, for a look at it: { x, z, ux, uz, w, name }

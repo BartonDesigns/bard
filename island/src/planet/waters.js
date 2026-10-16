@@ -123,6 +123,12 @@ function* steps(island, profile, { clear = [], realm = null } = {}) {
 		}
 	}
 	const inWater = (x, z) => { const q = at(x, z); return q >= 0 && wet[q] === 1; };
+	// the map of it for the ground and the grass to read (world/shore.js waterMapTexture): r the
+	// water itself (a lake's or a stream's bed), g its banks, wet for a few metres round it
+	const map = new Uint8Array(N * N * 2);
+	for (let q = 0; q < N * N; q++) if (wet[q]) map[q * 2] = map[q * 2 + 1] = 255;
+	for (let pass = 0; pass < 3; pass++) { yield; for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) { const q = j * N + i, g = Math.max(map[(q - 1) * 2 + 1], map[(q + 1) * 2 + 1], map[(q - N) * 2 + 1], map[(q + N) * 2 + 1]) * 0.55; if (g > map[q * 2 + 1]) map[q * 2 + 1] = g; } }
+	island.waterMap = map;
 	const source = {
 		name: 'planet', lakes, decks, version: () => 1, ready: () => true,
 		*tile(i, j) { return lines.filter((L) => { const p = L.P[Math.min(1, L.P.length - 1)], q = L.P[0]; return Math.floor((p[0] + q[0]) / 2 / 2048) === i && Math.floor((p[1] + q[1]) / 2 / 2048) === j; }); },

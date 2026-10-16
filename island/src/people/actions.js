@@ -16,6 +16,10 @@ const smooth = (x) => x * x * (3 - 2 * x);
 // a long arm at the ready: both hands on it (tuned so the hands land on its grip and guard)
 const CARRY_R = arm({ abd: 0.57, flex: -0.117, roll: 0.947, bend: 1.45, pro: 0.6, wflex: -0.1, curl: 0.6 });
 const CARRY_L = arm({ abd: 0.073, flex: 0.62, roll: 0.803, bend: 0.753, pro: 1.065, wflex: 0.1, curl: 0.55 });
+// the chest bladed to the gun side and leaning into it, as a rifleman stands: the support
+// shoulder forward so that hand reaches the guard, the strong elbow down by the side instead
+// of winging out (the head stays on the way they face)
+const CARRY_SP = [-0.4, 0.1, 0], RELOAD_SP = [-0.35, 0.16, 0];
 // fists up (combat/melee.js)
 const GUARD_L = arm({ abd: 0.22, flex: 0.95, roll: 0.95, bend: 2.15, pro: 0.4, curl: 1 });
 const GUARD_R = arm({ abd: 0.25, flex: 0.75, roll: 0.9, bend: 2.2, pro: 0.4, curl: 1 });
@@ -127,15 +131,15 @@ export const ACTIONS = {
 	] },
 	// a long arm carried at the ready (crysis/held-items.js): the right hand on the grip at the
 	// hip, the left forward under the guard
-	carry: { loop: false, keys: [[0, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }]] },
+	carry: { loop: false, keys: [[0, { L: CARRY_L, R: CARRY_R, sp: CARRY_SP, hd: [-0.1, 0, 0] }]] },
 	// its reload: the support hand down to the cell, away to a pouch at the hip, back, and up
 	// to the guard again
 	reload: { loop: false, keys: [
-		[0, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }],
-		[0.25, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
-		[0.5, { L: arm({ abd: 0.3, flex: -0.15, roll: 0.3, bend: 0.7, pro: 1.2, curl: 0.7 }), R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
-		[0.78, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
-		[1, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }],
+		[0, { L: CARRY_L, R: CARRY_R, sp: CARRY_SP, hd: [-0.1, 0, 0] }],
+		[0.25, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: RELOAD_SP, hd: [-0.1, 0.2, 0] }],
+		[0.5, { L: arm({ abd: 0.3, flex: -0.15, roll: 0.3, bend: 0.7, pro: 1.2, curl: 0.7 }), R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: RELOAD_SP, hd: [-0.1, 0.2, 0] }],
+		[0.78, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: RELOAD_SP, hd: [-0.1, 0.2, 0] }],
+		[1, { L: CARRY_L, R: CARRY_R, sp: CARRY_SP, hd: [-0.1, 0, 0] }],
 	] },
 	// a fistfight (combat/melee.js): the guard, fists up and chin down; a jab with the lead hand,
 	// a cross from the back one, a hook round the side; a two-handed shove; a grab; a bat or
@@ -173,6 +177,48 @@ export const ACTIONS = {
 		[0.3, { L: arm({ abd: 0.6, flex: 0.3, bend: 0.9, curl: 0.5 }), R: arm({ abd: 0.5, flex: 0.5, bend: 1.1, curl: 0.5 }), sp: [0.25, -0.28, 0.12], hp: [0, -0.1, 0, 0.04], hd: [0.35, -0.35, 0.1] }],
 		[1, { sp: [0, 0, 0], hd: [0, 0, 0] }],
 	] },
+	// close combat (combat/melee.js, melee-foes.js): forearms up round the face; a boxer's
+	// shuffle (the guard, the feet taking small steps in turn, looping) while circling; a
+	// haymaker drawn back from the rear shoulder and thrown through; a two-handed overhead
+	// with a bat or a pipe; flinching from a blow nearby; up off the ground after a fall; a
+	// choke from behind and the one choked; hands behind the back for the cuffs
+	block: { loop: false, keys: [[0, { L: arm({ abd: 0.12, flex: 1.35, roll: 1.25, bend: 2.55, pro: 0.25, curl: 1 }), R: arm({ abd: 0.12, flex: 1.3, roll: 1.25, bend: 2.55, pro: 0.25, curl: 1 }), sp: [0.1, 0.16, 0], hp: [0.1, 0.04, 0, 0.07], fL: [0.13, 0, 0.14], fR: [-0.13, 0, -0.16], hd: [0, 0.22, 0] }]] },
+	shuffle: { loop: true, keys: [
+		[0, { L: GUARD_L, R: GUARD_R, sp: [0.25, 0.06, 0], hp: [0.2, 0, 0, 0.06], fL: [0.13, 0, 0.16], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }],
+		[0.25, { L: GUARD_L, R: GUARD_R, sp: [0.27, 0.07, 0.02], hp: [0.2, 0, 0.02, 0.07], fL: [0.15, 0.06, 0.2], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }],
+		[0.5, { L: GUARD_L, R: GUARD_R, sp: [0.25, 0.06, 0], hp: [0.2, 0, 0, 0.05], fL: [0.13, 0, 0.16], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }],
+		[0.75, { L: GUARD_L, R: GUARD_R, sp: [0.23, 0.07, -0.02], hp: [0.2, 0, -0.02, 0.07], fL: [0.13, 0, 0.16], fR: [-0.15, 0.06, -0.1], hd: [-0.2, 0.08, 0] }],
+		[1, { L: GUARD_L, R: GUARD_R, sp: [0.25, 0.06, 0], hp: [0.2, 0, 0, 0.06], fL: [0.13, 0, 0.16], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }],
+	] },
+	haymaker: { loop: false, keys: [
+		[0, { L: GUARD_L, R: GUARD_R, sp: [0.25, 0.06, 0], hp: [0.2, 0, 0, 0.05], fL: [0.13, 0, 0.16], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }],
+		[0.5, { L: arm({ abd: 0.3, flex: 1.1, roll: 1.0, bend: 1.9, pro: 0.4, curl: 1 }), R: arm({ abd: 1.05, flex: -0.15, roll: 0.7, bend: 2.0, pro: 0.5, curl: 1 }), sp: [0.75, -0.06, 0.04], hp: [0.5, -0.04, 0, 0.08], fL: [0.13, 0, 0.2], fR: [-0.15, 0, -0.26], hd: [-0.55, 0.05, 0] }],
+		[0.64, { L: arm({ abd: 0.25, flex: 0.7, roll: 1.1, bend: 2.1, pro: 0.4, curl: 1 }), R: arm({ abd: 0.9, flex: 1.45, roll: 1.25, bend: 0.75, pro: 0.3, curl: 1 }), sp: [-0.85, 0.18, -0.04], hp: [-0.5, 0.05, 0, 0.1], fL: [0.13, 0, 0.32], fR: [-0.13, 0.05, -0.1], hd: [0.45, 0.1, 0] }],
+		[1, { L: GUARD_L, R: GUARD_R, sp: [0.25, 0.06, 0], hp: [0.2, 0, 0, 0.05], fL: [0.13, 0, 0.16], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }],
+	] },
+	overhead: { loop: false, keys: [
+		[0, { L: arm({ abd: 0.4, flex: 0.9, roll: 1.1, bend: 1.2, pro: 0.6, curl: 1 }), R: arm({ abd: 0.5, flex: 0.85, roll: 1.0, bend: 1.3, pro: 0.6, curl: 1 }), sp: [0.2, 0, 0], hp: [0.1, 0, 0, 0.05], fL: [0.15, 0, 0.18], fR: [-0.15, 0, -0.16] }],
+		[0.5, { L: arm({ abd: 0.35, flex: 2.7, roll: 0.3, bend: 1.4, pro: 0.6, curl: 1 }), R: arm({ abd: 0.4, flex: 2.8, roll: 0.3, bend: 1.5, pro: 0.6, curl: 1 }), sp: [0.1, -0.2, 0], hp: [0.05, -0.05, 0, 0.04], fL: [0.15, 0, 0.2], fR: [-0.15, 0, -0.2], hd: [0, -0.15, 0] }],
+		[0.66, { L: arm({ abd: 0.3, flex: 1.0, roll: 0.6, bend: 0.3, pro: 0.6, curl: 1 }), R: arm({ abd: 0.3, flex: 1.0, roll: 0.6, bend: 0.35, pro: 0.6, curl: 1 }), sp: [0, 0.5, 0], hp: [0, 0.15, 0, 0.14], fL: [0.15, 0, 0.36], fR: [-0.15, 0, -0.18], hd: [0, 0.25, 0] }],
+		[1, { L: arm({ abd: 0.4, flex: 0.9, roll: 1.1, bend: 1.2, pro: 0.6, curl: 1 }), R: arm({ abd: 0.5, flex: 0.85, roll: 1.0, bend: 1.3, pro: 0.6, curl: 1 }), sp: [0.2, 0, 0], hp: [0.1, 0, 0, 0.05], fL: [0.15, 0, 0.18], fR: [-0.15, 0, -0.16] }],
+	] },
+	flinch: { loop: false, keys: [
+		[0, { sp: [0, 0, 0], hd: [0, 0, 0] }],
+		[0.25, { L: arm({ abd: 0.35, flex: 1.5, roll: 1.2, bend: 2.3, pro: 0.6, curl: 0.4, shrug: 0.6 }), R: arm({ abd: 0.35, flex: 1.45, roll: 1.2, bend: 2.3, pro: 0.6, curl: 0.4, shrug: 0.6 }), sp: [0, 0.25, 0], hp: [0, 0.1, 0, 0.12], hd: [0, 0.35, 0] }],
+		[1, { sp: [0, 0, 0], hd: [0, 0, 0] }],
+	] },
+	getup: { loop: false, keys: [
+		[0, { L: arm({ abd: 0.5, flex: 1.2, bend: 0.6, pro: 0.2 }), R: arm({ abd: 0.5, flex: 1.2, bend: 0.6, pro: 0.2 }), sp: [0, 0.2, 0], hp: [0, 0.3, 0, 0.72], rt: [1.35, 0], fL: [0.14, 0.05, -0.55], fR: [-0.14, 0.05, -0.55], hd: [0, -0.5, 0] }],
+		[0.45, { L: arm({ abd: 0.3, flex: 0.6, bend: 0.4, pro: 0.6 }), R: arm({ abd: 0.3, flex: 0.9, bend: 0.5, pro: 0.6 }), sp: [0, 0.45, 0], hp: [0, 0.2, 0, 0.45], rt: [0.35, 0], fL: [0.16, 0, 0.3], fR: [-0.14, 0.12, -0.3], hd: [0, 0.1, 0] }],
+		[1, { sp: [0, 0, 0], hp: [0, 0, 0, 0], rt: [0, 0], hd: [0, 0, 0] }],
+	] },
+	choke: { loop: false, keys: [[0, { L: arm({ abd: 0.35, flex: 1.15, roll: 1.35, bend: 2.2, pro: 0.6, curl: 0.9 }), R: arm({ abd: 0.25, flex: 1.25, roll: 1.5, bend: 2.35, pro: 0.3, curl: 0.8 }), sp: [0, 0.2, 0], hp: [0, 0.05, 0, 0.12], fL: [0.16, 0, 0.12], fR: [-0.16, 0, -0.2], hd: [0.2, 0.15, 0] }]] },
+	choked: { loop: true, keys: [
+		[0, { L: arm({ abd: 0.3, flex: 1.7, roll: 1.1, bend: 2.4, pro: 0.6, curl: 0.8 }), R: arm({ abd: 0.3, flex: 1.6, roll: 1.1, bend: 2.3, pro: 0.6, curl: 0.8 }), sp: [0, -0.18, 0], hp: [0, -0.05, 0, 0.1], hd: [0.1, -0.35, 0] }],
+		[0.5, { L: arm({ abd: 0.4, flex: 1.5, roll: 1.0, bend: 2.2, pro: 0.6, curl: 0.9 }), R: arm({ abd: 0.25, flex: 1.75, roll: 1.2, bend: 2.45, pro: 0.6, curl: 0.7 }), sp: [0.1, -0.22, 0.05], hp: [0, -0.06, 0, 0.12], hd: [-0.1, -0.4, 0.05] }],
+		[1, { L: arm({ abd: 0.3, flex: 1.7, roll: 1.1, bend: 2.4, pro: 0.6, curl: 0.8 }), R: arm({ abd: 0.3, flex: 1.6, roll: 1.1, bend: 2.3, pro: 0.6, curl: 0.8 }), sp: [0, -0.18, 0], hp: [0, -0.05, 0, 0.1], hd: [0.1, -0.35, 0] }],
+	] },
+	cuffed: { loop: false, keys: [[0, { L: arm({ abd: 0.18, flex: -0.6, roll: -0.7, bend: 1.4, pro: 0.4, curl: 0.6 }), R: arm({ abd: 0.18, flex: -0.6, roll: -0.7, bend: 1.4, pro: 0.4, curl: 0.6 }), sp: [0, 0.12, 0], hd: [0, 0.3, 0] }]] },
 	// a wave (the keeper's hello, a spectator)
 	wave: { loop: true, keys: [
 		[0, { R: arm({ abd: 0.9, flex: 0.2, roll: -1.3, bend: 1.7, pro: 1.9, curl: 0.05 }) }],

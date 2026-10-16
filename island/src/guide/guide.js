@@ -455,6 +455,9 @@ export function createGuide(mount, api) {
 	// The journal's marker: the meeting you are tracking, else the soonest, else a quest's next place.
 	let livingContact = null;
 	function waypointMark() {
+		// a catastrophe: someone trapped, hurt, a fire to fight (cataclysm/quests.js) comes first
+		const emergency = api.cataclysm?.mark?.();
+		if (emergency) return emergency;
 		const W = api.world(), S = W?.sky?.state, B = book(), key = api.social?.bodyKey();
 		if (!W || !S || !key) return null;
 		if(livingContact){
@@ -1321,6 +1324,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if(snapshot.scope)say(activityScopeText(snapshot),'note');
 		if(snapshot.catchup?.text||snapshot.catchup?.message)say(snapshot.catchup.text||snapshot.catchup.message,'note');
 		if(snapshot.error)say(snapshot.error,'note');
+		for(const resident of (snapshot.residents || []).slice(0,4))say(resident.line+' Currently '+resident.activity.replaceAll('-', ' ')+'.','note');
 		const scope=snapshot.scope?.key||snapshot.scope?.name||snapshot.scope;
 		if(scope!==livingActivityScope){livingActivityScope=scope;livingActivityPage=0;}
 		const count=snapshot.activities?.length||0,pages=Math.max(1,Math.ceil(count/6));livingActivityPage=Math.min(livingActivityPage,pages-1);
@@ -1547,6 +1551,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
 		// a phone loads the local voices only once the world has been calm a while
 		tick: (dt, state) => localSpeech.tick(dt, state),
+		// let the local model go (the quality governor, when a phone is short of memory: main.js)
+		unload: () => localSpeech.unload(),
 		// the device's nearest voice to a person's own, for the device-only setting
 		device: (dna) => deviceVoiceFor({ seed: dna.seed ?? 0, male: dna.male ?? true, ...voiceShape(dna) }, 'speechSynthesis' in window ? speechSynthesis.getVoices() : []),
 	};

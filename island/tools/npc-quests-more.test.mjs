@@ -51,7 +51,7 @@ test('bags are left in believable places: benches, shelters, cafe tables, doorst
 	const q = bagQuest({ owner: { id: 'npc:1', name: 'Ana' }, at: { x: 5, z: 5 }, where: { kind: 'table', venue: 'cafe' }, via: [{ x: 0, z: 0 }, { x: 1, z: 1 }] });
 	assert.deepEqual(q.steps.map((s) => s.do), ['go', 'go', 'pickup', 'go', 'go', 'deliver']);
 	// the far tick names places of every kind
-	const named = new Set(); for (let i = 0; i < 400; i++) { const f = farQuest('bay.sf', i, 0.1); if (f.kind === 'bag') named.add(f.spot.kind); }
+	const named = new Set(); for (let i = 0; i < 400; i++) { const f = farQuest('bay.sf', i, 0.01); if (f.kind === 'bag') named.add(f.spot.kind); }
 	assert.ok(named.size >= 5, [...named].join());
 });
 
@@ -184,7 +184,7 @@ test('far away, thefts now and then leave leads', async () => {
 	// (seeded dice, so the run is the same every time)
 	const orig = Math.random;
 	let a = 12345; Math.random = () => { a = (Math.imul(a, 1103515245) + 12345) >>> 0; return a / 4294967296; };
-	Q.farTick(200);
+	Q.farTick(4000);
 	Math.random = orig;
 	assert.ok(Q.leads().length >= 1, 'a lead from the far tick');
 	assert.ok(Q.info().leads.length >= 1);

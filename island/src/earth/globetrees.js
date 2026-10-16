@@ -16,6 +16,7 @@ import { hardwood, shrub, swayMaterial, Builder, tube, strip, V } from '../world
 import * as TX from '../world/textures.js';
 import { addLodFade } from '../world/lodfade.js';
 import { mulberry32 } from '../noise.js';
+import { baseFromSlope } from '../world/groundsnap.js';
 import { F, toXZ, RAD, EARTH_R, lonRaw } from './globeframe.js';
 import { vn3, S0 } from './globeheight.js';
 import { today } from '../calendar.js';
@@ -149,7 +150,8 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 				if (open && dry > 0.5 && form === 'broad' && !mix.treeless) form = 'conifer';
 				if (bank === 'bush') form = 'bush';
 				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
-				out.push({ x: p.x, y: h - 0.2, z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
+				// (the foot on the lowest ground under the trunk, world/groundsnap.js: none floats downhill)
+				out.push({ x: p.x, y: baseFromSlope(h, slope, (form === 'bush' ? 0.6 : 0.5) * s, 0.2), z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
 				if (++n % 60 === 0) yield;
 			}
 		}

@@ -91,6 +91,8 @@ const GESTURES = {
 export const GESTURE_NAMES = Object.keys(GESTURES);
 
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+// the trigger finger's three joints: straight along the frame, and hooked round the trigger
+export const TRIGGER_OFF = [0.12, 0.06, 0.04], TRIGGER_ON = [0.55, 1.05, 0.6];
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _e = new THREE.Euler();
 const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
@@ -121,11 +123,15 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		sitK: new Spring(0, sitFrequency), sitWant: 0, seatH: 0.46, floorPose: null,
 		// a hand held by someone walking alongside, by side
 		hold: { L: false, R: false },
-		// a hand closed round something carried (ui/gear.js), by side: 0 open .. 1 a fist
-		grip: { L: 0, R: 0 },
+		// a hand closed round something carried (ui/gear.js), by side: 0 open .. 1 a fist; and
+		// the strong hand's index on a trigger (0 laid along the frame .. 1 on it)
+		grip: { L: 0, R: 0 }, trigger: 0, trigK: 0,
 		// a whole-body action over the walk (actions.js): its name, progress, weight, and its
 		// channels eased so that one key pose flows into the next
 		act: { name: null, u: 0, dur: 1, auto: false, w: 0, v: { sp: [0, 0, 0], hp: [0, 0, 0, 0], fL: [0, 0, 0], fR: [0, 0, 0], rt: [0, 0], hd: [0, 0, 0] }, has: {}, arms: null },
+		// a blow taken (combat/melee.js): the chest and head knocked back, aside or round and
+		// springing back, the hips pushed off their line; and a beat held still as it lands
+		jolt: { p: new Spring(0, 2.6), r: new Spring(0, 2.6), y: new Spring(0, 2.2), x: new Spring(0, 2.4), z: new Spring(0, 2.4) }, freeze: 0,
 	};
 	const hipRest = H('upperleg01.L').y;
 	const ankleH = H('foot.L').y;
@@ -221,6 +227,9 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		// (gone limp: the ragdoll moves the bones now, people/ragdoll.js)
 		if (P.ragdoll) return;
 		dt = Math.min(dt, 0.05);
+		// (the beat a blow holds still: hit-stop)
+		if (S.freeze > 0) { S.freeze -= dt; dt *= 0.06; }
+		const J = S.jolt, jp = J.p.to(0, dt), jr = J.r.to(0, dt), jy = J.y.to(0, dt), jx = J.x.to(0, dt), jz = J.z.to(0, dt);
 		// a word in passing (people/chatter.js): the mouth moves and the eyes stay on who it was for
 		if (S.remark) {
 			if (performance.now() < S.remark.until) { S.talk = S.remark.speaking ? 1 : 0; S.look.target = S.remark.look; }
@@ -371,7 +380,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 
 		// ---- pelvis ----
 		const rootI = map.root, rootB = bones[rootI];
-		rootB.position.set(rest.heads[rootI].x + sway, rest.heads[rootI].y - hipRest + hipY, rest.heads[rootI].z);
+		rootB.position.set(rest.heads[rootI].x + sway + jx, rest.heads[rootI].y - hipRest + hipY, rest.heads[rootI].z + jz);
 		const hpo = X.has.hp ? X.v.hp : null;
 		_e.set(lean * 0.35 + (hpo ? hpo[1] * aw : 0), pelvisYaw + (hpo ? hpo[0] * aw : 0), pelvisRoll + (hpo ? hpo[2] * aw : 0), 'YXZ');
 		const rootQ = _q.setFromEuler(_e).clone();
@@ -414,9 +423,9 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		const counter = -pelvisYaw * 1.6;
 		const sp = X.has.sp ? X.v.sp.map((v) => v * aw) : [0, 0, 0];
 		sp[2] += (floorPose?.roll || 0) * sitK;
-		setLocal(map.spine04, _q.setFromEuler(_e.set(lean * 0.25 + sp[1] * 0.3, counter * 0.3 + sp[0] * 0.3, -pelvisRoll * 0.5 + sp[2] * 0.3)), worldQ[rootI]);
-		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.014 * brA + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.3 + sp[2] * 0.35)), worldQ[map.spine04]);
-		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.015 * brA + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.2 + sp[2] * 0.35)), worldQ[map.spine02]);
+		setLocal(map.spine04, _q.setFromEuler(_e.set(lean * 0.25 + sp[1] * 0.3 + jp * 0.25, counter * 0.3 + sp[0] * 0.3 + jy * 0.3, -pelvisRoll * 0.5 + sp[2] * 0.3 + jr * 0.25)), worldQ[rootI]);
+		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.014 * brA + sp[1] * 0.35 + jp * 0.35, counter * 0.35 + sp[0] * 0.35 + jy * 0.35, -pelvisRoll * 0.3 + sp[2] * 0.35 + jr * 0.35)), worldQ[map.spine04]);
+		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.015 * brA + sp[1] * 0.35 + jp * 0.4, counter * 0.35 + sp[0] * 0.35 + jy * 0.35, -pelvisRoll * 0.2 + sp[2] * 0.35 + jr * 0.4)), worldQ[map.spine02]);
 
 		// ---- gaze: head and eyes toward something worth looking at ----
 		const L = S.look;
@@ -436,9 +445,10 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		const chestYaw = counter, chestPitch = lean * 0.6;
 		const nod = S.nod.to(S.talk > 0 ? Math.max(0, Math.sin(t * 3.1)) * 0.08 : 0, dt);
 		const HO = S.headOv, droop = (0.5 - (dna.temper?.confident ?? 0.5)) * 0.1 + (POSES[S.pose]?.look || 0) + (X.has.hd ? X.v.hd[1] * aw : 0);
-		const hdy = X.has.hd ? X.v.hd[0] * aw - sp[0] : 0, hdr = X.has.hd ? X.v.hd[2] * aw : 0;
-		setLocal(map.neck01, _q.setFromEuler(_e.set(hp * 0.4 - chestPitch * 0.5 + nod * 0.4 + (HO.pitch + droop) * 0.4, (hy - chestYaw) * 0.4 + (HO.yaw + hdy) * 0.4, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.4, 'YXZ')), worldQ[map.spine01]);
-		setLocal(map.head, _q.setFromEuler(_e.set(hp * 0.6 - chestPitch * 0.4 + nod * 0.6 - bob * 0.8 + (HO.pitch + droop) * 0.6, (hy - chestYaw) * 0.6 + (HO.yaw + hdy) * 0.6, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.6, 'YXZ')), worldQ[map.neck01]);
+		const hdy = (X.has.hd ? X.v.hd[0] * aw - sp[0] : 0) + jy * 1.4, hdr = (X.has.hd ? X.v.hd[2] * aw : 0) + jr * 1.2;
+		const jh = jp * 1.6;
+		setLocal(map.neck01, _q.setFromEuler(_e.set(hp * 0.4 - chestPitch * 0.5 + nod * 0.4 + (HO.pitch + droop + jh) * 0.4, (hy - chestYaw) * 0.4 + (HO.yaw + hdy) * 0.4, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.4, 'YXZ')), worldQ[map.spine01]);
+		setLocal(map.head, _q.setFromEuler(_e.set(hp * 0.6 - chestPitch * 0.4 + nod * 0.6 - bob * 0.8 + (HO.pitch + droop + jh) * 0.6, (hy - chestYaw) * 0.6 + (HO.yaw + hdy) * 0.6, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.6, 'YXZ')), worldQ[map.neck01]);
 		// the eyes lead the head, then settle
 		const ey = L.eyeYaw.to(clamp(ty - hy, -0.45, 0.45), dt), ep = L.eyePitch.to(clamp(tp - hp, -0.3, 0.3), dt);
 		// saccades: small quick jumps about what they are looking at (wider when nothing holds
@@ -522,6 +532,12 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 				const relaxed = f === 1 ? 0.08 + j * 0.04 : (0.1 + f * 0.05) * (j === 2 ? 1.2 : j === 3 ? 0.8 : 1);
 				let c = relaxed + (1.25 - relaxed) * Math.max(P2.curl, S.grip[side] * 0.85);
 				if (f === 2 && gp?.point && lead) c = 0.02;
+				// a long arm in both hands: the strong hand's index lies straight along the frame
+				// above the guard, or hooks round the trigger when aiming (trigger())
+				if (f === 2 && side === 'R' && S.grip.R > 0.95 && S.grip.L > 0.95) {
+					if (j === 1) S.trigK += (S.trigger - S.trigK) * (1 - Math.exp(-dt * 12));
+					c = TRIGGER_OFF[j - 1] + (TRIGGER_ON[j - 1] - TRIGGER_OFF[j - 1]) * S.trigK;
+				}
 				if (f === 1) c *= 0.6;
 				bones[i].quaternion.setFromAxisAngle(curlAxis[i], c);
 			}
@@ -563,5 +579,15 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 	// through once (or round and round, for a looping one); act(null): let it go
 	const act = (name, u) => { const X = S.act; if (!name) { X.name = null; X.auto = false; return; } if (X.name !== name) X.u = u ?? 0; X.name = name; X.auto = u === undefined; if (u !== undefined) X.u = u; X.once = false; };
 	const play = (name, dur = 1, once = false) => { const X = S.act; X.name = name; X.u = 0; X.dur = dur; X.auto = true; X.once = once; };
-	return { S, update, gesture, setPose, feel, sit, stand, hold, act, play, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
+	// jolt(dx, dz, k, twist): a blow travelling along world (dx, dz) at strength k (about 1 for a
+	// punch, 3 for a haymaker); twist turns the head and chest round with it (a hook). hold:
+	// seconds of hit-stop before it plays out
+	const jolt = (dx, dz, k = 1, twist = 0, hold = 0) => {
+		const h = S.heading, f = dx * Math.sin(h) + dz * Math.cos(h), s = dx * Math.cos(h) - dz * Math.sin(h), J = S.jolt;
+		J.p.dv += f * k * 9; J.r.dv -= s * k * 7; J.y.dv += twist * k * 8;
+		// (the hips go with it, in the body's own frame)
+		J.x.dv += s * k * 0.9; J.z.dv += f * k * 0.9;
+		if (hold > 0) S.freeze = Math.max(S.freeze, hold);
+	};
+	return { S, update, gesture, setPose, feel, sit, stand, hold, act, play, jolt, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, trigger: (side, k) => { if (side === 'R') S.trigger = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
 }

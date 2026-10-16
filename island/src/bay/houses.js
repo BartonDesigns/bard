@@ -11,9 +11,16 @@ import * as THREE from 'three';
 import { planHouse, houseFloor, mainOf, houseSeed, HT, TW } from './houseplan.js';
 import { houseEra, exteriorLook, householdDecor } from './decor.js';
 import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
-import { occasions } from '../calendar.js';
+import { drawAny, hasKit } from '../interiors/kit.js';
+import '../interiors/estab-kit.js';
+import { profileOf } from '../economy/frontage.js';
+// a business's fit-out for the house's plan (houseplan.js): its trade's fit, and whether it has a shopfront
+const estabOf = (E) => { const p = profileOf(E.type); return p.fit ? { fit: p.fit, glass: p.style === 'glass', type: E.type, id: E.id } : null; };
+import { occasions, today } from '../calendar.js';
+import { houseLights } from './seasons.js';            // the holidays' strings, the same houses as from afar (holidaylights.js)
 import { carGeometry, carMaterial } from './cars.js';
-import { NONE_IN, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
 
 // the rooms that sometimes have a raised (tray) ceiling
 const RAISE = new Set(['living', 'family', 'dining', 'master']);
@@ -32,8 +39,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	group.name = 'houses';
 	scene.add(group);
 	const houses = new Map();       // a house's block list (grp) -> the built house, or null if it has no plan
-	// after dark, real lamps in the lit rooms nearest you (a fixed few, so no shader rebuilds)
-	const lamps = [...Array(isPhone ? 2 : 4)].map(() => { const l = new THREE.PointLight(0xffc88a, 0, 7.5, 1.6); scene.add(l); return l; });
+	// (the rooms' light is the shared interior lighting's: interiors/lighting.js)
+	configureLighting({ isPhone });
 	const carMats = new Map();
 
 	// ---------------------------------------------------------------------------
@@ -41,7 +48,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 
 	// a generator: it yields between steps, so a house is built over a few frames
 	function* build(grp) {
-		const plan = planHouse(grp);
+		const plan = planHouse(grp, grp.estab ? { estab: estabOf(grp.estab) } : {});
 		if (!plan) return null;
 		yield;
 		const H = bay.heightAt;
@@ -90,6 +97,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 
 		// ---- walls, cut round their openings
 		let step = 0;
+		const wallInfo = [];
 		for (const w of plan.walls) {
 			if (++step % 14 === 0) yield;
 			const L = w.level, y0w = w.kind === 'ext' && L === 0 ? base : w.yb, y1w = w.yt;
@@ -104,6 +112,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			const cuts = [w.s, w.e];
 			for (const o of w.open) cuts.push(Math.max(w.s, Math.min(w.e, o.s0)), Math.max(w.s, Math.min(w.e, o.s1)));
 			cuts.sort((p, q) => p - q);
+			const mk = g.mark(), pcs = [];          // structures/walls: what this wall drew and where it stops you
 			for (let i = 0; i < cuts.length - 1; i++) {
 				const u0 = cuts[i], u1 = cuts[i + 1];
 				if (u1 - u0 < 0.004) continue;
@@ -117,6 +126,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			function piece(u0, u1, y0, y1) {
 				if (w.axis === 'x') g.box(keyF, u0, y0, a0, u1, y1, a1, colF); else g.box(keyF, a0, y0, u0, a1, y1, u1, colF);
 				col.push(w.axis === 'x' ? [u0, a0, u1, a1, y0, y1] : [a0, u0, a1, u1, y0, y1]);
+				pcs.push({ u0, u1, y0, y1, col: col[col.length - 1] });
 				// baseboards along the floor, on the room sides (tall in the old houses, a
 				// picture rail up the wall in some)
 				for (const [room, face, sgn] of [[plusRoom, a1, 1], [minusRoom, a0, -1]]) {
@@ -126,6 +136,11 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 					if (y0 <= y + 0.01) band(y, y + dec.base, f1 - face);
 					if (dec.rail && y0 < yr && y1 > yr + 0.05) band(yr, yr + 0.045, sgn * 0.022);
 				}
+			}
+			{
+				// (structures/walls: the wall as it was drawn, to be broken through later)
+				const trim = (room) => (room >= 0 && plan.rooms[room].type !== 'garage' ? { key: TK, col: TRIM, y: lv(L), h: dec.base, t: 0.013 } : null);
+				wallInfo.push({ w, axis: w.axis, a0, a1, s: w.s, e: w.e, y1: y1w, floor: lv(L), ext: w.kind === 'ext', inside: w.kind === 'ext' ? w.inSide : -1, rooms: [minusRoom, plusRoom], verts: g.since(mk), pieces: pcs.map((p) => ({ ...p, keys: [keyF(across[1]), keyF(across[0])], cols: [colF(across[1]), colF(across[0])], trims: [trim(minusRoom), trim(plusRoom)] })) });
 			}
 			// the openings' dressing
 			for (const o of w.open) dress(w, o, a0, a1, plusRoom, minusRoom);
@@ -181,14 +196,14 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 					}
 					wbox(w, TK, o.s0 - 0.04, o.s1 + 0.04, o.y0 - 0.02, o.y0 + 0.01, f1, inn + sgn * 0.04, TRIM);
 					// blinds, some partly drawn
-					if (rnd() < 0.55) {
+					if (!o.shop && rnd() < 0.55) {
 						const k = 0.15 + rnd() * 0.75, bz = inn - sgn * 0.02;
 						wbox(w, 'blinds', o.s0 + 0.02, o.s1 - 0.02, o.y1 - (o.y1 - o.y0) * k, o.y1 - 0.02, bz - 0.004, bz + 0.004, WHITE);
 					}
 				}
 				// curtains in the living rooms and bedrooms
 				const room = plan.rooms[w.room];
-				if (room && ['living', 'master', 'family', 'dining', 'bed'].includes(room.type) && rnd() < 0.5) {
+				if (room && !o.shop && !room.biz && ['living', 'master', 'family', 'dining', 'bed'].includes(room.type) && rnd() < 0.5) {
 					const cc = lin(dec.curtains[Math.floor(rnd() * dec.curtains.length)]), cz0 = inn + sgn * 0.05, cz1 = inn + sgn * 0.13, top = Math.min(o.y1 + 0.2, lv(w.level) + (w.level ? HT.ceil1 - HT.floor1 : HT.ceil0) - 0.05);
 					wbox(w, 'fabric', o.s0 - 0.35, o.s0 + 0.05, lv(w.level) + 0.02, top, cz0, cz1, cc);
 					wbox(w, 'fabric', o.s1 - 0.05, o.s1 + 0.35, lv(w.level) + 0.02, top, cz0, cz1, cc);
@@ -456,9 +471,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			stoop.push([G.x0, G.front, G.x1, G.front + 0.6, 0]);
 		}
 
-		// through the holidays most houses string lights along their eaves: all colours, or
-		// all warm white
-		const eaveLights = OCC.holidays && rnd() < 0.6 ? (rnd() < 0.55 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : [[1, 0.85, 0.55]]) : null;
+		// through the holidays most houses string lights along their eaves: all colours, warm
+		// white or cool white (the same houses and the same strings holidaylights.js shows from afar)
+		const lightsK = houseLights(seed, today());
+		const eaveLights = lightsK === 1 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : lightsK === 2 ? [[1, 0.78, 0.45]] : lightsK === 3 ? [[0.75, 0.85, 1]] : null;
 		// gutters and fascia along the eaves that face the outside, a downspout at a corner
 		for (const r of plan.rects) {
 			const y = r.top;
@@ -491,7 +507,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (it.type === 'counter' || it.type === 'island' || it.type === 'fridge') it.dec = dec;
 			if (it.type === 'ceilingLight') { it.kind = dec.fixture(plan.rooms[it.room]?.type || '', it.kind); it.fan = dec.fanWood; }
 			g.mul = 0.94 + ((it.v * 7.31) % 1) * 0.12;
-			drawItem(g, it, rnd, HT);
+			if (hasKit(it.type)) drawAny(g, { ...it, ceil: it.level ? HT.ceil1 - HT.floor1 : HT.ceil0 }, rnd); else drawItem(g, it, rnd, HT);
 			g.mul = 1;
 			if (!FLAT.has(it.type)) g.under(it);
 			// Bathroom clutter is authored dressing, not a collision wall. Keep the
@@ -517,12 +533,23 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		grp.nearBorn=updateDetailClock();anchorBuilding(root, Mb.x, Mb.z,0,grp.nearBorn);
 		root.updateMatrixWorld(true);
 		group.add(root);
+		// its rooms lit by their own lamps and ceiling lights, the sky through its windows
+		const levels = [[0, HT.ceil0]];
+		if (plan.rooms.some((r) => r.level)) levels.push([HT.floor1, HT.ceil1]);
+		let bx0 = 1e9, bz0 = 1e9, bx1 = -1e9, bz1 = -1e9;
+		for (const r of plan.rects) { bx0 = Math.min(bx0, r.x0); bz0 = Math.min(bz0, r.z0); bx1 = Math.max(bx1, r.x1); bz1 = Math.max(bz1, r.z1); }
+		lightInterior(root, {
+			id: 'house:' + Math.round(Mb.x) + ':' + Math.round(Mb.z), occluders: col, levels, bounds: [bx0, bz0, bx1, bz1], home: true,
+			rooms: plan.rooms.length, roomOf: (x, y, z) => { const c = plan.cellAt(x, z); return c < 0 ? -1 : plan.labels?.[y > HT.floor1 - 0.2 ? 1 : 0]?.[c] ?? -1; },
+			litOf: (id) => !!lit[id], dust: (x, y, z, id) => plan.rooms[id]?.type === 'garage', exclude: ['stucco', 'siding'],
+		});
 		// the footprint at each level, for the floors that carry you
 		const lights = plan.rooms.filter((r) => r.cells.length && lit[r.id] && r.type !== 'closet').map((r) => [r.cx, (r.level ? HT.ceil1 : HT.ceil0) - 0.45, r.cz]);
-		return { grp, plan, root, floorY, base, col, doors, stoop, lights, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
+		return { grp, plan, root, floorY, base, col, doors, stoop, lights, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, walls: { list: wallInfo, era, siding: look.siding == null ? 'stucco' : ['lap', 'batten', 'shingle', 'brick'][look.siding] || 'lap', mats: M }, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
 	}
 
 	function dispose(h) {
+		releaseInterior(h.root);
 		group.remove(h.root);
 		h.root.traverse((o) => { if (o.isMesh && o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); });
 	}
@@ -534,6 +561,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	const BUDGET = isPhone ? 3 : 4;
 	function update(cam, dt, nightK = 0) {
 		updateDetailClock();night.value = nightK;
+		lightingClock(nightK);
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
@@ -581,18 +609,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			buildMs = job.ms;
 			job = null;
 		}
-		// the lamps go to the lit rooms nearest you
-		// (only in the house you are in: without shadows their light would pass through walls)
-		const here = nightK > 0.05 ? inside(cam.position) : null;
-		M.setNight(nightK, !!here);
-		if (here) {
-			const spots = [];
-			for (const h of [here.h]) {
-				for (const s2 of h.lights) { const [wx, wz] = toWorld(h, s2[0], s2[2]); spots.push([Math.hypot(wx - x, wz - z) + Math.abs(h.floorY + s2[1] - cam.position.y) * 2, wx, h.floorY + s2[1], wz]); }
-			}
-			spots.sort((p, q) => p[0] - q[0]);
-			lamps.forEach((l, i) => { const s2 = spots[i]; l.intensity = s2 ? nightK * 5 : 0; if (s2) l.position.set(s2[1], s2[2], s2[3]); });
-		} else for (const l of lamps) l.intensity = 0;
+		// (the glow of a lit room seen from outside; inside, the rooms' own light is baked in)
+		M.setNight(nightK, !!(nightK > 0.05 && inside(cam.position)));
 		// the doors swing
 		for (const h of houses.values()) {
 			if (!h) continue;

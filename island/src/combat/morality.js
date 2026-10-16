@@ -34,6 +34,9 @@ export const RULES = Object.freeze({
 	'stop-thief': { mercy: 1, law: 6, protect: 6, honest: 1, line: 'Stopped the thief who robbed {target}' },
 	'kept-wallet': { mercy: -1, law: -3, protect: -1, honest: -8, line: "Kept {target}'s lost wallet" },
 	'boss-slain': { mercy: 0, law: 2, protect: 8, honest: 0, line: 'Brought down {target}' },
+	// fists (combat/melee.js): who threw the first punch, and who stepped in
+	'start-fight': { mercy: -2, law: -3, protect: -2, honest: 0, line: 'Started a fight with {target}' },
+	'break-up-fight': { mercy: 3, law: 2, protect: 5, honest: 0, line: 'Broke up a fight in {place}' },
 	// bags and errands, done by you or by anyone else (people/npc-quests.js)
 	'return-bag': { mercy: 2, law: 2, protect: 3, honest: 6, line: "Handed {target}'s bag back" },
 	'steal-bag': { mercy: -1, law: -6, protect: -2, honest: -8, line: "Walked off with {target}'s bag" },
@@ -48,6 +51,11 @@ export const RULES = Object.freeze({
 	mislead: { mercy: -1, law: 0, protect: -1, honest: -5, line: 'Sent {target} the wrong way on purpose' },
 	'help-fallen': { mercy: 4, law: 1, protect: 5, honest: 1, line: 'Helped {target} up after a fall' },
 	'rob-fallen': { mercy: -6, law: -7, protect: -8, honest: -8, line: "Went through {target}'s pockets while they were down" },
+	// in a catastrophe (cataclysm/): helping when it counts
+	'disaster-rescue': { mercy: 8, law: 2, protect: 12, honest: 1, line: 'Dug {target} out of the rubble' },
+	'disaster-carry': { mercy: 7, law: 1, protect: 9, honest: 1, line: 'Got {target} to the hospital after the disaster' },
+	'disaster-fire': { mercy: 3, law: 3, protect: 9, honest: 0, line: 'Fought the fire at {target}' },
+	'disaster-help': { mercy: 5, law: 1, protect: 7, honest: 1, line: 'Stayed to help {target} when disaster struck' },
 });
 // context: multipliers on the negative (harm) side of a deed, or on all of it, from one table
 export const MODIFIERS = Object.freeze({

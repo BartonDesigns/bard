@@ -20,6 +20,8 @@ import { loadRapier, createCarPhysics } from '../vehicles/physics.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
 import { jetState, jetStep, heliState, heliStep } from './flight.js';
+import { firstTime } from '../ui/touch-skin.js';
+import { stencilVehicle } from '../signage/cars.js';
 
 // how each ground vehicle drives (vehicles/physics.js FEEL's fields)
 const FEEL = {
@@ -53,7 +55,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 	// v: the parked vehicle ({ kind, x, y, z, yaw, scheme }); io: drive.js's { held, pedals, hud(text), strike(car), seat() (C: the seat's view) }
 	function board(v, io) {
 		const kind = v.kind, D = DIMS[kind], air = kind === 'jet' || kind === 'heli';
-		const mesh = vehicleMesh(kind, kit, SCHEMES[v.scheme] || SCHEMES.woodland, { phone: isPhone });
+		const mesh = stencilVehicle(vehicleMesh(kind, kit, SCHEMES[v.scheme] || SCHEMES.woodland, { phone: isPhone }), kind, { parked: true, grey: air });
 		group.add(mesh);
 		mesh.position.set(v.x, v.y, v.z); mesh.rotation.set(0, v.yaw, 0);
 		const S = { kind, mesh, car: null, loading: false, pos: new THREE.Vector3(v.x, v.y, v.z), q: new THREE.Quaternion().setFromAxisAngle(Y, v.yaw), yaw: v.yaw, spd: 0, vel: new THREE.Vector3(), throttle: 0, ground: true, gear: true, spin: 0, turret: 0, gun: 0, reload: 0, fire: 0, shells: [], camPos: null, dustT: 0, dead: false, alt: 0 };
@@ -70,8 +72,10 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 		const keyU = (e) => { if (e.key === 'q' || e.key === 'Q') firing = false; };
 		addEventListener('pointerdown', down); addEventListener('pointerup', up); addEventListener('keydown', keyD); addEventListener('keyup', keyU);
 		const btns = [];
-		const btn = (label, css, on) => {
-			const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-label', label);
+		// (data-mil: its place by the thumb on a touch screen, ui/touch-skin.js)
+		const btn = (label, css, on, role) => {
+			const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-label', label); b.title = label;
+			b.className = 'l99-mil'; b.dataset.mil = role;
 			b.style.cssText = 'position:absolute;min-width:56px;min-height:56px;border-radius:14px;border:1px solid rgba(255,255,255,.3);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px system-ui;touch-action:none;' + css;
 			b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); on(true); b.style.background = '#01a982'; });
 			for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { on(false); b.style.background = 'rgba(8,20,26,.55)'; });
@@ -80,15 +84,15 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 		};
 		const touch = { up: false, down: false };
 		if (isPhone || matchMedia?.('(pointer: coarse)')?.matches) {
-			btn(kind === 'tank' ? 'Cannon' : 'Fire', 'right:calc(16px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 170px + env(safe-area-inset-bottom));', (o) => { firing = o; });
-			if (air) { btn('Up', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 230px + env(safe-area-inset-bottom));', (o) => { touch.up = o; }); btn('Down', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 165px + env(safe-area-inset-bottom));', (o) => { touch.down = o; }); }
+			btn(kind === 'tank' ? 'Cannon' : 'Fire', 'right:calc(16px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 170px + env(safe-area-inset-bottom));', (o) => { firing = o; }, 'fire');
+			if (air) { btn('Up', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 230px + env(safe-area-inset-bottom));', (o) => { touch.up = o; }, 'up'); btn('Down', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 165px + env(safe-area-inset-bottom));', (o) => { touch.down = o; }, 'down'); }
 		}
 		const k = (a, b) => io.held.has(a) || (b && io.held.has(b));
 		if (!air) {
 			S.loading = true;
 			loadRapier().then((R) => { S.loading = false; if (S.dead) return; S.car = createCarPhysics(R, kind, { x: v.x, z: v.z, yaw: v.yaw }, env(), { spec: specFor(kind), feel: FEEL[kind] }); }).catch((e) => { S.loading = false; console.warn('[military] physics', e); });
 		}
-		hint(air ? (kind === 'jet' ? (isPhone ? 'Jet: ▲ ▼ throttle, ◀ ▶ roll, Up and Down to pitch, Fire for the gun. Take off down the runway.' : 'Jet: W/S throttle (Shift afterburner), A/D roll, ↑/↓ pitch, ←/→ rudder, Space brakes, Q or click fires. V to get out once stopped.') : (isPhone ? 'Helicopter: Up and Down climb and descend, ▲ ▼ forward and back, ◀ ▶ turn, Fire for the gun.' : 'Helicopter: ↑/↓ climb and descend, W/S forward and back, A/D turn, ←/→ slide, Q or click fires. Set it down gently.')) : (kind === 'tank' ? (isPhone ? 'Tank: the pad drives, look to turn the turret, Cannon fires.' : 'Tank: W/S drive, A/D turn (on the spot at a crawl), look to aim the turret, click or Q fires the cannon, C for the gunner\'s sight.') : `${NAMES[kind]}: drive it as any car; click or Q fires the roof gun.`), 5000, 1);
+		if (!isPhone || firstTime('l99-tip-' + kind)) hint(air ? (kind === 'jet' ? (isPhone ? 'Jet: ▲ ▼ throttle, ◀ ▶ roll, Up and Down to pitch, Fire for the gun. Take off down the runway.' : 'Jet: W/S throttle (Shift afterburner), A/D roll, ↑/↓ pitch, ←/→ rudder, Space brakes, Q or click fires. V to get out once stopped.') : (isPhone ? 'Helicopter: Up and Down climb and descend, ▲ ▼ forward and back, ◀ ▶ turn, Fire for the gun.' : 'Helicopter: ↑/↓ climb and descend, W/S forward and back, A/D turn, ←/→ slide, Q or click fires. Set it down gently.')) : (kind === 'tank' ? (isPhone ? 'Tank: the pad drives, look to turn the turret, Cannon fires.' : 'Tank: W/S drive, A/D turn (on the spot at a crawl), look to aim the turret, click or Q fires the cannon, C for the gunner\'s sight.') : `${NAMES[kind]}: drive it as any car; click or Q fires the roof gun.`), 5000, 1);
 
 		// ---------- weapons ----------
 		const view = () => _v.set(-Math.sin(P.yaw) * Math.cos(P.pitch), Math.sin(P.pitch), -Math.cos(P.yaw) * Math.cos(P.pitch)).normalize().clone();
@@ -115,7 +119,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 				const hit = combat.firstHit(s.pos, dir, step, combat.me);
 				if (hit || s.life <= 0) {
 					const at = s.pos.clone().addScaledVector(dir, hit ? hit.t : 0);
-					if (hit) { combat.blast(at, 7, 260, combat.me); combat.fx.explosion(at, 3.2); }
+					if (hit) { W()?.structures?.shell?.(at, dir, hit, 260); combat.blast(at, 7, 260, combat.me); combat.fx.explosion(at, 3.2); }          // structures: the shell through the wall it struck, then the burst
 					S.shells.splice(i, 1); continue;
 				}
 				const from = s.pos.clone(); s.pos.addScaledVector(dir, step);

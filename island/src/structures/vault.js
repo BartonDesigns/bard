@@ -67,6 +67,29 @@ export function createVault(ctx) {
 				}
 			}
 		}
+		// the houses built near you (bay/houses.js): their windows, the frame open once the glass is
+		// out (or crashed through as you go)
+		for (const [, h] of ctx.world?.()?.houses?.houses || []) {
+			if (!h?.plan || Math.abs(h.cx - s.pos.x) > h.r + 6 || Math.abs(h.cz - s.pos.z) > h.r + 6) continue;
+			const dx = s.pos.x - h.cx, dz = s.pos.z - h.cz, px = h.ca * dx + h.sa * dz, pz = -h.sa * dx + h.ca * dz, lfx = h.ca * fx + h.sa * fz, lfz = -h.sa * fx + h.ca * fz;
+			for (const w of h.plan.walls) {
+				if (w.kind !== 'ext') continue;
+				const mid = w.pos + w.inSide * 0.08, t = 0.16;
+				for (const op of w.open) {
+					if (op.type !== 'window' && op.type !== 'slider') continue;
+					const sill = h.floorY + op.y0, head = h.floorY + op.y1;
+					if (sill - foot < 0.3 || sill - foot > 1.4 || head - foot < 1.15 || op.s1 - op.s0 < 0.55) continue;
+					const along = w.axis === 'x' ? px : pz, across = (w.axis === 'x' ? pz : px) - mid, dir = w.axis === 'x' ? lfz : lfx;
+					if (along < op.s0 + 0.15 || along > op.s1 - 0.15) continue;
+					const side = Math.sign(across) || 1, d = Math.abs(across) - t / 2;
+					if (d < 0.05 || d > reachMax || -dir * side < 0.55) continue;
+					const ex0 = w.axis === 'x' ? along : mid + side * t / 2, ez0 = w.axis === 'x' ? mid + side * t / 2 : along;
+					const nx0 = w.axis === 'x' ? 0 : side, nz0 = w.axis === 'x' ? side : 0;
+					const pane = ctx.glass()?.panes().find((p) => p.plan?.op === op) || null;
+					consider({ kind: 'window', d, ex: h.cx + h.ca * ex0 - h.sa * ez0, ez: h.cz + h.sa * ex0 + h.ca * ez0, nx: h.ca * nx0 - h.sa * nz0, nz: h.sa * nx0 + h.ca * nz0, depth: t, sill, head, pane, house: h });
+				}
+			}
+		}
 		// low walls, rails, planters: the city's thin low lots (city.js), and the walls left of a
 		// wrecked building
 		const city = ctx.city();

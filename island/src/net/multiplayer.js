@@ -331,7 +331,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	}
 
 	const chip = stop(document.createElement('button'));
-	chip.type = 'button';
+	chip.type = 'button'; chip.dataset.hudText = 'room';
 	chip.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:none;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.6);color:#eafaf6;font:600 12px system-ui;z-index:6;cursor:pointer;';
 	chip.onclick = (e) => { e.stopPropagation(); openPanel(); };
 	mount.appendChild(chip);

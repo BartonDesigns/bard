@@ -1,9 +1,10 @@
+import { normalizeHousehold, HOUSEHOLD_FEATURE } from '../../../island/src/people/household-activity.js';
 // One durable, shared simulation for a body and region. Clients submit observations,
 // never authority to mint rewards or assert a building was repaired. No chat is stored.
 import { createLivingWorldState, reduceLivingWorld, livingWorldView } from '../../../island/src/people/living-world-core.js';
 import { COMMUNITY_FEATURE, PROJECT_WORK_MS, createProjectState, reduceProjects, projectView } from '../../../island/src/people/community-projects-core.js';
 
-export { COMMUNITY_FEATURE };
+export { COMMUNITY_FEATURE, HOUSEHOLD_FEATURE };
 
 export const LIVING_FEATURE = 'living-world-v1';
 export const LIVING_MAX_BYTES = 32768;
@@ -31,7 +32,7 @@ function actor(raw, world, region) {
 	if (!raw || !safeId(raw.id) || raw.id.startsWith('traveller:') || (raw.world && raw.world !== world) || (raw.region && raw.region !== region)) return null;
 	const sites = {};
 	for (const key of ['home', 'work', 'social']) if (safeId(raw.sites?.[key])) sites[key] = raw.sites[key];
-	return { id: raw.id, name: text(raw.name, 80), world, region, disposition: Object.fromEntries(['helpful', 'reliable', 'nerve'].map(k => [k, number(raw.disposition?.[k], 0, 1, 0.5)])), skills: words(raw.skills), sites, utcOffsetMinutes: number(raw.utcOffsetMinutes, -840, 840) };
+	return { id: raw.id, name: text(raw.name, 80), world, region, disposition: Object.fromEntries(['helpful', 'reliable', 'nerve'].map(k => [k, number(raw.disposition?.[k], 0, 1, 0.5)])), skills: words(raw.skills), household: normalizeHousehold(raw.household), sites, utcOffsetMinutes: number(raw.utcOffsetMinutes, -840, 840) };
 }
 function request(raw) {
 	if (!raw || !safeId(raw.id) || !safeId(raw.giverId)) return null;
@@ -114,6 +115,7 @@ export class LivingRegion {
 			const now = this.now(), due = building.filter(p => !p.blockedReason && p.readyAt > now).map(p => p.readyAt);
 			await this.state.storage.setAlarm(Math.min(now + LIVING_TICK_MS, ...due));
 		}
+		else if (Object.values(data.core.actors).some(a => a.household && a.sites.home)) await this.state.storage.setAlarm(this.now() + 60 * 60 * 1000);
 		else await this.state.storage.deleteAlarm?.();
 	}
 	advance(data, now) {
@@ -141,7 +143,7 @@ export class LivingRegion {
 	response(data, player, events = [], receipt = null) {
 		const view = livingWorldView(data.core, { limit: 30 });
 		view.requests.push(...(data.recentTerminal || [])); view.counts.archivedRequests = data.archivedRequests || 0;
-		return { feature: LIVING_FEATURE, features: [LIVING_FEATURE, COMMUNITY_FEATURE], world: data.world, region: data.region, you: player, revision: data.revision, now: this.now(), view, projects: projectView(data.projects || createProjectState({ world: data.world, region: data.region, now: this.now() })), sites: Object.values(data.sites || {}), events: events.slice(-50), eventCount: events.length, ...(receipt ? { receipt } : {}), authority: 'Server-timed community projects and client-observed activity. Source locations and physical actions are not independently verified.' };
+		return { feature: LIVING_FEATURE, features: [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE], world: data.world, region: data.region, you: player, revision: data.revision, now: this.now(), view, projects: projectView(data.projects || createProjectState({ world: data.world, region: data.region, now: this.now() })), sites: Object.values(data.sites || {}), events: events.slice(-50), eventCount: events.length, ...(receipt ? { receipt } : {}), authority: 'Server-timed community projects and client-observed activity. Source locations and physical actions are not independently verified.' };
 	}
 	async registerSites(data, values) {
 		if (values === undefined) return null;

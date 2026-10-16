@@ -1,0 +1,1231 @@
+diff --git a/HANDOFF.md b/HANDOFF.md
+index 18b1eee..a610860 100644
+--- a/HANDOFF.md
++++ b/HANDOFF.md
+@@ -1,3 +1,7 @@
++## October 16, 2026: nature QA, where two things meet
++
++A pass over everything in nature where two things meet (outside the water and shore, and the night lights), engine-wide, from a harness that rings each spot with captures at eye level and from low down, before and after (island village and wood, San Ramon, the Diablo foothills, Muir Woods, Svalbard, the Sahara, the Alps, Kyoto, MAGMA, TERRAN, ICE). Fixed at the source: the grass's sun glow was unshadowed and the parting of the grass pulled tips toward the lens, so in a wood's shade or from a low or flying eye the turf showed pale stretched sheets and spikes, the owner's iPhone capture (`world/grass.js`: glow after the lights times the sun's shadow and the canopy, no tuft at the lens, parting only at a walker's eye height); leaves seen from behind went frosted white (`world/vegetation.js`: no specular on back faces); wild grass, ferns, litter and stones stood on asphalt and in car parks (`nature/wildground.js onPaving`); the Sahara was a green scrub (the hot desert thins with rain, keeps to the washes under 200 mm); the globe's ground speckled on every slope (its photo relief was 12 cm, now 1.5 cm, its grain halved); snow was a glossy wet floor (`world/terrain.js`: matte, glossy only on scoured ice); wild rocks had no foot (`nature/rocks.js`: a damp dark band where they meet the soil); trunks floated on the downhill side of slopes (`world/groundsnap.js`, new, used by `region/flora.js`, `earth/globetrees.js`, `world/vegetation.js`; low plants lie with the slope); the Bay's trees ignored the roads' grading (`bay/berms.js roadDelta`, `bay/city.js`, `bay/streettrees.js`); the globe's snow line followed contours (now by aspect, with scree below the crags and moss on shaded wet rock); every tree leaned on a gust at once (`GUST_GLSL`: the grass's own gust field); the sunbeams' hard edge at the shadow box (`world/sunrays.js`). Hardened: every GPU-lifted ground's height through `SAFE_GLSL` (bit-tested NaN and infinity, clamped), the berms' grids never carry NaN. Left: a bare brown building box in San Ramon, the dry-season Bay ground's flat near detail, no shadows past 55 m, the Bay and globe seam untested at eye level, Kyoto's town not captured. Tests: `island/tools/nature-qa.test.mjs`. See `docs/nature-qa-2026-10-16.md`.
++
+ ## October 15, 2026: mobile controls
+ 
+ The touch HUD has one look and one layout in portrait and landscape: round, semi-transparent buttons with a white line glyph and no words under or inside them (`island/src/ui/touch-skin.js`, applied once from `main.js` on touch screens only). Glyphs are inline SVG masks matched to each button by its name (anything unknown gets a pointing-hand glyph, never words; changing captions such as Takedown, Swing or Slash are glyph swaps); every button keeps its `aria-label` (one without is named from its words) and a title. By thumb, inside the safe areas: the primary action bottom right (Fire, Strike, the pedal, the cast) at 68 px with Aim/Block/brake, Reload/Dodge/a vehicle's gun, Mode/Grab and Surrender round it at 52 px; jump and the context buttons (leave the car, the boat, the rod, which car, assist, camera) in a column above; the stick, or steering (and an aircraft's Up and Down), bottom left; things to act on nearby in a row between the thumbs; back, home and the folded contract top left; fly, gear, places, the menu, music and settings in one row top right; tips under the top row. Driving, melee, boats and fishing only show their own controls; the drive button comes out of the menu as an exit while you drive. The quest chip has its own band and nothing sits on it (measured at run time, with Safari's bars read from the visual viewport). Looking round (`ui/touch-look.js`): a floating stick in the lower left, free look anywhere else with both thumbs at once, an acceleration curve, invert up and down and gyro aiming in Sky and World, and the view easing back to level as you walk. Control tips on a phone show once (`firstTime`). Desktop unchanged apart from tooltips. Tests: `island/tools/touch-skin.test.mjs`, `island/tools/mobile-controls-browser.cjs` (now with the skin). See `docs/mobile-controls-2026-10-15.md`.
+diff --git a/docs/nature-qa-2026-10-16.md b/docs/nature-qa-2026-10-16.md
+new file mode 100644
+index 0000000..4674fb3
+--- /dev/null
++++ b/docs/nature-qa-2026-10-16.md
+@@ -0,0 +1,68 @@
++# Nature QA: where two things meet
++
++The owner asked for "a nature QA pass for realism... go way beyond this, and look at connecting areas that are off". This pass looked at everything in nature where two things meet and could look wrong (the ground and what stands on it, one ground and the next, near and far, wind in the trees and in the grass, light and shade), engine-wide, outside the water and the shore (the WATER & SHORELINE agent's) and the night lights (the NIGHT LIGHTING agent's).
++
++## How it was looked at
++
++A browser harness (session scratchpad `landseams/audit.cjs`) loads `island/dev.html` in headless Chromium (software GL), goes to each spot, lets the world settle by frame count, pauses the game's own frame loop and renders a ring straight from the renderer: four headings at eye level (1.7 m) and two from a low angle (0.45 m), at 10:30 so the shadows read. The base build was served from a copy of origin/main's bundle, this branch from the worktree, so every capture has its pair. A live page (`landseams/repl.cjs`) took targeted captures, turning one thing off at a time to find each cause, and counted what stands where.
++
++Captures come from the canvas's own pixels. The drawing buffer carries alpha (anything drawn with alpha to coverage writes it), and the page shows the canvas over black, so each capture is flattened over black the same way; read raw, foliage looks paler than it is.
++
++Spots: the island village and its forest; the Bay suburbs (San Ramon); the Diablo foothills; a redwood grove (Muir Woods); Svalbard; a desert (the Sahara's Tassili); an alpine valley (the Bernese Oberland); Kyoto (its regional kit town had not built its lots within the settle time in software GL, so the captures there are of the hills it stands in); MAGMA, TERRAN and ICE.
++
++The machine was shared with several other agents' browsers throughout (load average above 20 on four cores): a capture took a minute or more on Earth, a new spot's first several minutes while its shaders compiled. The ring was kept to six captures a spot.
++
++## What was found, and what was done
++
++| # | Where | What was wrong | Cause | Status |
++|---|---|---|---|---|
++| 1 | The island's wood; any meadow seen from a low or flying eye; the owner's iPhone capture | Pale, flat, stretched sheets of grass with long triangular spikes, ghostly against the trees; pale patches in the turf in a wood's shade at eye level | The grass's sun glow (light through the blades, their sheen toward the sun) was added as emission before the lights and never shadowed, so in shade the turf glowed pale. The parting of the grass round your feet pulled the near tips down and away from the lens whatever the eye's height, and a tuft right at the lens was stretched across the view | Fixed |
++| 2 | Palms in the village, conifers at Muir Woods, any double-sided leaves seen from below | Crowns seen against the sky went frosted white | A leaf's back face keeps the outward normal for its light, so it faces away from you; the sheen then read the view as grazing (full Fresnel) and lit every back face white | Fixed |
++| 3 | The Muir Woods car park, and every paved place in the Bay's wild land | Bunch grass, wild oats, ferns, leaf litter, cones and stones on the asphalt | The wild ground decided each 16 m cell from its centre and kept clear of trails only: a cell whose centre is wild scattered across the road crossing its corner. Counted: 5 to 25 percent of each layer's items within 25 m stood on paving | Fixed |
++| 4 | The Sahara (30 mm of rain a year) | Dense bright green shrubs every few metres over the dunes | The globe's hot desert ground cover had one density for every hot desert, whatever the rain (170 shrubs within 40 m) | Fixed |
++| 5 | The globe's ground near you everywhere (Kyoto's hills, the Alps, Svalbard) | A coarse light and dark speckle over every slope, white on snow; moire on the far slopes | The photographed ground's relief, applied as a bump at 12 cm over features a few centimetres across, tipped each pixel's normal by tens of degrees; its grain was also twice the Bay's strength. With the photographs off the speckle went, with shadows off it stayed | Fixed |
++| 6 | ICE, and the snow on any world's peaks | The snow plain read as a wet glossy floor smeared with glare | All snow at roughness 0.32 | Fixed: matte snow, glossy only on the wind-scoured blue ice |
++| 7 | Svalbard, the Diablo foothills, every wild rock | Rocks sat on the ground like pebbles on a table, a hard line at the foot, worst with no sun (polar twilight) | The rock material's "dark and damp where it meets the soil" was a comment with no code | Fixed |
++| 8 | Region flora (every globe region), the globe's woods, the island's plants | Set at the ground under their centre less 5 to 20 cm, so on a slope the downhill side of a trunk floated by its footprint times the slope (up to 30 cm on the region's steepest) | Centre-height placement | Fixed (a shared ground-snapping helper) |
++| 9 | Bay streets on hills | Street and yard trees, their stakes, grates and leaf drifts on the surveyed ground while the ground drawn beside a graded road is cut or banked: trees hung over a cut verge or stood buried in a bank, and stayed so when the grading grid moved | The city's trees were placed on `bay.heightAt` (no grading), once per 300 m | Fixed: they ride the grade near you and are stood again when the grid is redone |
++| 10 | The globe's mountains | The snow line followed a contour; no aspect; rock met turf with no talus; rock alike on every face | Snow by air temperature and broad noise only | Fixed: shaded faces keep snow longer and the line wanders; scree tongues below the crags above the trees and in deserts; moss and lichen on the shaded faces of a wet place's rock |
++| 11 | Every tree in a gust | Every tree leaned at the same moment while the grass showed cat's-paws rolling across it | One uniform for all trees | Fixed: the trees read the grass's own gust field, carried down the wind at the same speed |
++| 12 | Sunbeams in a wood | A hard vertical edge down the screen where the beams' far end left the sun's shadow box (the lighter band with a hard edge in the owner's capture) | The lookup jumped from the shadow map to the open value at the box's side | Fixed: eased over the box's outer eighth |
++| 13 | Every ground lifted on the graphics card (the island and planets, the Bay, the globe) and the grass, litter and caves that read it | Nothing visible here; the owner's pale spikes raised a vertex lifted to infinity on Apple's GPU | A height of infinity or NaN (a texture not filled, a division by zero) could reach the vertex, and the globe's guard `gh != gh` can be folded away by fast maths | Hardened: tested on the bits and clamped to 12 km either way; the berms never write NaN or a cut over 60 m into their half-float grids |
++| 14 | San Ramon's Central Park | A large plain brown box beside the lawn | A building drawn without its facade, not nature | Left (buildings) |
++| 15 | The Diablo foothills | The gold grass ground close by is a flat beige with little grain | The Bay ground's near detail in the dry season | Left (texture work, not a seam) |
++| 16 | Everywhere | Trees past 55 m cast no shadow | One 110 m shadow box, for cost | Left |
++| 17 | The Bay's survey against the globe | Not reached at eye level from these spots (3 to 25 km past the survey) | | Left, untested |
++
++The audit log with every capture is `landseams/audit.md` in the session scratchpad; the before and after pairs are `landseams/pair-*.png`.
++
++## The fixes
++
++- **Grass** (`world/grass.js`): the glow and the sheen are gathered apart and added after the lights, times how much of the sun reaches the fragment (three's own light loop with the sun's shadow kept, `SUNLIT_BEGIN`) and times the canopy's shade (for when shadows are off). A tuft whose foot is within a stride of the eye shrinks away. The parting round your feet only happens at a walker's eye height over the ground.
++- **Leaves** (`world/vegetation.js swayMaterial`): a back face takes no specular.
++- **Wild ground** (`nature/wildground.js`): every plant, stone and bit of litter asks for its own spot (`onPaving`: the drive roads in the cell with their sidewalks and a margin, and the coarse land map's paving and roofs). The hot desert's shrubs and grass thin with the rain; under about 200 mm they keep to the dry washes.
++- **Rocks** (`nature/rocks.js`): a damp dark band at the foot of every wild rock, at the depth each layer sinks its stones by (`wildground.js footAt`), wandering with the rock's own grain. (`world/lodfade.js` now calls a material's own `onBeforeCompile` with the material as `this`.)
++- **Ground snapping** (`world/groundsnap.js`, new): `baseHeight` (the lowest of five samples under the footprint, less a sink, never more than a stride below the centre, NaN ignored), `baseFromSlope` (the same from a slope already measured: no extra samples), `slopeTilt` and `tiltFromGradient` (rocks and low plants lie with the slope). Used by the region's flora (trees by trunk, shrubs and tufts by spread; grass and ferns lean with the slope), the globe's woods and the island's scatter. No allocation.
++- **Trees on graded roads** (`bay/berms.js roadDelta`, `gradeVersion`; `bay/city.js placeTrees`; `bay/streettrees.js`): within 300 m the trees, stakes, grates and leaf drifts take the grade's lift or cut at their foot, and are placed again when the grading grid is redone (every 100 m of travel).
++- **Globe ground** (`earth/globeterrain.js`): the photographs' relief at 1.5 cm and fading sooner, their grain a quarter either way; the slope's aspect (`shadeSide`, pole-facing by hemisphere) shifts the snow's air by 2.5 degrees and the 25 m mottle breaks the line; scree below the crags; moss on shaded wet rock.
++- **Snow** (`world/terrain.js`): roughness 0.74, 0.34 on the scoured ice.
++- **Gusts** (`world/vegetation.js GUST_GLSL`): the grass's cat's-paw field, the same hash, scale and speed, read per tree; between the patches a tree takes about a third of the gust, under one up to 1.4 times.
++- **Sunbeams** (`world/sunrays.js`): `sunLit` eases into the open value over the box's outer eighth, and toward its far end.
++- **Guards** (`world/terrain.js SAFE_GLSL`, used by `HEIGHT_GLSL` and so the island and planet ground, grass, litter and caves; the far ground; `bay/terrain.js gradedHeight`; `earth/globeterrain.js`): `safeH(h, fallback)`. `uCell` guarded against zero. `bay/berms.js` clamps each delta to 60 m and writes 0 for a NaN.
++
++## Cost
++
++- GPU: the grass fragment adds a minimum and two lengths in the light loop and three smoothsteps per vertex; the sway vertex adds one value noise (four hashes) per vertex of every plant; the globe ground fragment adds about thirty operations and one value noise; the rock fragment four. No new textures, no new passes, no new draw calls.
++- CPU: the city's trees are placed once more each time the grading grid is redone (once per 100 m of travel; the same pass already runs every 40 m), the street trees' stakes likewise. The wild ground checks each item against the cell's drive roads and one map lookup when the cell is first made. Region flora, globe woods and the island's scatter use the slope they already measure. No per-frame allocation.
++- Phones: nothing new is on by tier; the changes cost the same everywhere and are small.
++
++## Tests
++
++`node --test island/tools/nature-qa.test.mjs` (11): the foot on a slope never above the ground round its footprint and never sunk out of sight over a cliff, NaN ground ignored; the slope tilt; every GPU-lifted ground guarded; the sunbeams' soft edge; trees beside a graded road riding a measured cut, and no NaN into the grade; the grass's glow shadowed and its tufts kept off the lens; the trees' gusts on the grass's own field; nothing of the wild ground on paving; the globe ground's grain, snow and rock; every wild rock's foot.
++
++## Not done, for whoever is next
++
++- A real town in Kyoto was not captured (the settlement had not built in time in software GL).
++- The Bay's survey against the globe's coarse ground is untested at eye level.
++- Snow does not drift against walls and fences; house foundations meet the snow with a hard line on ICE.
++- Mid-range trees have no shadows (one shadow box).
+diff --git a/island/src/bay/berms.js b/island/src/bay/berms.js
+index 89c9ef9..4747424 100644
+--- a/island/src/bay/berms.js
++++ b/island/src/bay/berms.js
+@@ -10,7 +10,7 @@
+ 
+ import * as THREE from 'three';
+ 
+-const N = 256, CELL = 2, SIZE = N * CELL, STEP = 5, MAXG = 0.25, BERM = 7;
++const N = 256, CELL = 2, SIZE = N * CELL, STEP = 5, MAXG = 0.25, BERM = 7, MAXCUT = 60;
+ const SKIP = new Set(['path', 'track', 'footway', 'steps', 'pedestrian', 'cycleway']);
+ 
+ // The footpaths near you get their own finer grid (half a metre): the tread is cut level
+@@ -82,7 +82,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
+ 	const tex = new THREE.DataTexture(half, N, N, THREE.RGFormat, THREE.HalfFloatType);
+ 	tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+ 	BERM_U.uBerm.value = tex;
+-	let cx = 1e9, cz = 1e9, roadVersion = '';
++	let cx = 1e9, cz = 1e9, roadVersion = '', version = 0;
+ 	const tread = new Float32Array(TN * TN), treadW = new Float32Array(TN * TN), thalf = new Uint16Array(TN * TN);
+ 	const ttex = new THREE.DataTexture(thalf, TN, TN, THREE.RedFormat, THREE.HalfFloatType);
+ 	ttex.magFilter = ttex.minFilter = THREE.LinearFilter; ttex.generateMipmaps = false;
+@@ -239,13 +239,19 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
+ 				num[k] += w4 * padH(q, qx, qz); den[k] += w4;
+ 			}
+ 		}
+-		for (let k = 0; k < N * N; k++) if (den[k] > 0) { const ii = k % N, j = (k - ii) / N; delta[k] = num[k] / den[k] - groundAt(x0 + (ii + 0.5) * CELL, z0 + (j + 0.5) * CELL); }
++		for (let k = 0; k < N * N; k++) if (den[k] > 0) {
++			const ii = k % N, j = (k - ii) / N, d = num[k] / den[k] - groundAt(x0 + (ii + 0.5) * CELL, z0 + (j + 0.5) * CELL);
++			// (a ground still loading reads as NaN or the -60 m placeholder: never a cut or a bank
++			// of that, and never a value the half-float texture would carry as infinity)
++			delta[k] = Number.isFinite(d) ? Math.max(-MAXCUT, Math.min(MAXCUT, d)) : 0;
++		}
+ 		under.fill(0);
+ 		underBuildings(real.near('boxes', x, z, SIZE * 0.75), x0 + CELL / 2, z0 + CELL / 2, CELL, N, under);
+ 		for (let k = 0; k < N * N; k++) weight[k] *= 1 - under[k];
+ 		for (let k = 0; k < N * N; k++) { half[k * 2] = THREE.DataUtils.toHalfFloat(delta[k] * weight[k]); half[k * 2 + 1] = THREE.DataUtils.toHalfFloat(weight[k]); }
+ 		tex.needsUpdate = true;
+ 		BERM_U.uBermR.value.set(x0, z0, SIZE, 1);
++		version++;
+ 	}
+ 
+ 	// the footpaths round you: each tread level across at its centre line's height, sunk a
+@@ -276,7 +282,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
+ 				}
+ 			}
+ 		}
+-		for (let k = 0; k < TN * TN; k++) thalf[k] = THREE.DataUtils.toHalfFloat(tread[k]);
++		for (let k = 0; k < TN * TN; k++) thalf[k] = THREE.DataUtils.toHalfFloat(Number.isFinite(tread[k]) ? tread[k] : 0);
+ 		ttex.needsUpdate = true;
+ 		BERM_U.uTreadR.value.set(x0, z0, TSIZE, 1);
+ 	}
+@@ -291,6 +297,19 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
+ 		return d * edge * edge * (3 - 2 * edge);
+ 	}
+ 
++	// how far the roads' grading moved the ground at (x, z), the footpaths' treads left out: what
++	// stands beside a road (the trees, city.js) rides on it, and is stood again when it changes
++	function roadDelta(x, z) {
++		const R = BERM_U.uBermR.value;
++		if (R.w < 0.5) return 0;
++		const u = (x - R.x) / CELL - 0.5, v = (z - R.y) / CELL - 0.5;
++		if (u < 0 || v < 0 || u >= N - 1 || v >= N - 1) return 0;
++		const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
++		const at = (a, b) => delta[b * N + a] * weight[b * N + a];
++		const d = (at(i, j) * (1 - fu) + at(i + 1, j) * fu) * (1 - fv) + (at(i, j + 1) * (1 - fu) + at(i + 1, j + 1) * fu) * fv;
++		const eu = (x - R.x) / R.z, ev = (z - R.y) / R.z, e = Math.min(eu, ev, 1 - eu, 1 - ev), edge = Math.max(0, Math.min(1, e / 0.08));
++		return d * edge * edge * (3 - 2 * edge);
++	}
+ 	// the ground as graded (the same as the GPU draws it)
+ 	function apply(x, z, h) {
+ 		const R = BERM_U.uBermR.value;
+@@ -307,6 +326,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
+ 
+ 	function update(camera) {
+ 		if (!ready()) {
++			if (BERM_U.uBermR.value.w) version++;
+ 			BERM_U.uBermR.value.w = BERM_U.uTreadR.value.w = 0;
+ 			profiles = new WeakMap();
+ 			cx = cz = tx = tz = 1e9; roadVersion = '';
+@@ -319,7 +339,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
+ 		const rv = real.version() + ':' + (real.sourceVersion?.() || '');
+ 		const changed = rv !== roadVersion; roadVersion = rv;
+ 		const hasRoad = real.inside(x, z) || real.near('roads', x, z, SIZE * 0.75).some((r) => r.drive);
+-		if (camera.position.y - groundAt(x, z) > 3000 || !hasRoad) { BERM_U.uBermR.value.w = 0; BERM_U.uTreadR.value.w = 0; cx = tx = 1e9; return; }
++		if (camera.position.y - groundAt(x, z) > 3000 || !hasRoad) { if (BERM_U.uBermR.value.w) version++; BERM_U.uBermR.value.w = 0; BERM_U.uTreadR.value.w = 0; cx = tx = 1e9; return; }
+ 		if (changed || Math.hypot(x - cx, z - cz) > 100) rebuild(x, z);
+ 		// (the trails only matter underfoot: off them when flying high)
+ 		if (camera.position.y - groundAt(x, z) > 120) { BERM_U.uTreadR.value.w = 0; tx = 1e9; }
+@@ -339,5 +359,13 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
+ 		}
+ 		return hAt(P, bs);
+ 	}
+-	return { update, apply, profile, along, pads: () => pads };
++	const api = { update, apply, roadDelta, version: () => version, profile, along, pads: () => pads };
++	live = api;
++	return api;
+ }
++
++// The grading in use (one world at a time): roadDelta(x, z) for what stands on the ground beside
++// a road, and gradeVersion() to tell when the grid moved and they should be stood again
++let live = null;
++export const roadDelta = (x, z) => live ? live.roadDelta(x, z) : 0;
++export const gradeVersion = () => live ? live.version() : 0;
+diff --git a/island/src/bay/city.js b/island/src/bay/city.js
+index 9f6368c..b274abd 100644
+--- a/island/src/bay/city.js
++++ b/island/src/bay/city.js
+@@ -37,6 +37,7 @@ import { streetTrees, treeColour, autumnNow } from './streettrees.js';       //
+ import { NIGHT_U, NIGHT_I, nightSeed, housePlan, packHouse } from './nightplan.js';      // the households' own lights after dark
+ import { addNightField } from '../world/nightfield.js';
+ import { qualityNow } from '../world/governor.js';
++import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
+ import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
+ 
+ const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+@@ -1702,9 +1703,9 @@ export function createCity(shared, scene, bay, real = null) {
+ 
+ 	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
+ 	// simpler leaf-card trees further out, smooth masses far away
+-	let treeList = [], treeX = 1e9, treeZ = 1e9;
++	let treeList = [], treeX = 1e9, treeZ = 1e9, treeGV = -1;
+ 	function placeTrees(x, z) {
+-		treeX = x; treeZ = z;
++		treeX = x; treeZ = z; treeGV = gradeVersion();
+ 		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
+ 		let nf = 0;
+ 		const aut = autumnNow();          // the deciduous street trees' autumn (streettrees.js)
+@@ -1714,11 +1715,14 @@ export function createCity(shared, scene, bay, real = null) {
+ 			q.setFromAxisAngle(Y, yaw);
+ 			const tc = t.fall ? treeColour(t, aut) : t.col, lo = t.fall ? 0.35 : 0.65, hi = t.fall ? 2.6 : 1.35;
+ 			const tint = [0, 1, 2].map((c) => Math.min(hi, Math.max(lo, tc[c] / LEAF_REF[c])));
++			// (the ground as drawn: the roads' banks and cuts near you, berms.js, lift or lower the
++			// trees beside them, else a tree on a cut road's verge hangs in the air)
++			const gy = d < 300 ? t.y + roadDelta(t.x, t.z) : t.y;
+ 			if (t.fern) {
+ 				if (d > LOD.shrub[3] + MARGIN) continue;
+ 				const k = next(ferns[0]); if (k < 0) continue;
+ 				const s2 = t.h / fernT.height;
+-				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2, s2));
++				m4.compose(p.set(t.x, gy, t.z), q, sc.set(s2, s2, s2));
+ 				ferns[0].setMatrixAt(k, m4); ferns[0].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
+ 				continue;
+ 			}
+@@ -1726,7 +1730,7 @@ export function createCity(shared, scene, bay, real = null) {
+ 				if (d > LOD.shrub[3] + MARGIN) continue;
+ 				const k = next(shrubs[0]); if (k < 0) continue; next(shrubs[1]);
+ 				const s2 = t.h / 1.3;
+-				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2 * 0.9, s2));
++				m4.compose(p.set(t.x, gy, t.z), q, sc.set(s2, s2 * 0.9, s2));
+ 				shrubs[0].setMatrixAt(k, m4); shrubs[1].setMatrixAt(k, m4); shrubs[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
+ 				continue;
+ 			}
+@@ -1738,13 +1742,13 @@ export function createCity(shared, scene, bay, real = null) {
+ 				if (k < 0) continue;
+ 				next(tier[1]);
+ 				const s2 = t.h / H, sw = s2 * (t.nx || 1);
+-				m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(sw, s2, sw));
++				m4.compose(p.set(t.x, gy + 0.2, t.z), q, sc.set(sw, s2, sw));
+ 				tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
+ 			}
+ 			if (d < LOD.far[0] - MARGIN) continue;
+ 			// far: one point, drawn as its species' picture, tinted like the tree
+ 			if (nf >= TCAP) continue;
+-			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = t.y + 0.2; fp.pos[nf * 3 + 2] = t.z;
++			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = gy + 0.2; fp.pos[nf * 3 + 2] = t.z;
+ 			fp.size[nf] = t.h * T.sizeK; fp.sp[nf] = sp;
+ 			fp.tint[nf * 3] = tint[0]; fp.tint[nf * 3 + 1] = tint[1]; fp.tint[nf * 3 + 2] = tint[2];
+ 			nf++;
+@@ -2218,7 +2222,7 @@ export function createCity(shared, scene, bay, real = null) {
+ 			if (!on) { riseT0 = -1; rise.value.w = 0; }
+ 			near.castShadow = hips.castShadow = gables.castShadow = !on;
+ 		}
+-		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
++		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
+ 		lastX = x; lastZ = z;
+ 		const list = [];
+ 		if (!globe) fillBlocks(x, z, 1200, list);
+diff --git a/island/src/bay/streettrees.js b/island/src/bay/streettrees.js
+index 16afa17..451b524 100644
+--- a/island/src/bay/streettrees.js
++++ b/island/src/bay/streettrees.js
+@@ -14,6 +14,7 @@ import { eraMap, treeRow, treeFor } from './streetera.js';
+ import { today } from '../calendar.js';
+ import { leafDrift, autumnK, crownColour } from './seasons.js';
+ import { qualityNow } from '../world/governor.js';
++import { roadDelta, gradeVersion } from './berms.js';
+ 
+ const BUILT = new Set([1, 2, 6, 7, 13]);           // land use where a street has its trees: homes, parks, schools, shops, the core
+ const hash = (x, z) => { let h = Math.imul(Math.floor(x * 10) | 0, 374761393) ^ Math.imul(Math.floor(z * 10) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+@@ -138,9 +139,9 @@ export function createStreetDecor(scene, city, { isPhone = false } = {}) {
+ 	for (const im of [stakes, grates, leaves]) { im.count = 0; im.frustumCulled = false; im.receiveShadow = true; group.add(im); }
+ 	stakes.castShadow = true;
+ 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+-	let seen = null, atX = 1e9, atZ = 1e9, drift = 0;
++	let seen = null, atX = 1e9, atZ = 1e9, drift = 0, gv = -1;
+ 	function build(x, z) {
+-		atX = x; atZ = z;
++		atX = x; atZ = z; gv = gradeVersion();
+ 		drift = leafDrift(today());
+ 		leafMat.opacity = Math.min(1, drift * 1.2);
+ 		let ns = 0, ng = 0, nl = 0;
+@@ -148,13 +149,15 @@ export function createStreetDecor(scene, city, { isPhone = false } = {}) {
+ 		for (const t of city.treesAt(x, z, Rq)) {
+ 			if (t.src !== 'street' || (t.x - x) ** 2 + (t.z - z) ** 2 > Rq * Rq) continue;
+ 			const yaw = hash(t.x * 1.3, t.z * 0.7) * 6.283;
+-			if (t.stake && ns < CAP) { m4.compose(p.set(t.x, t.y + 0.3, t.z), q.setFromAxisAngle(Y, yaw), sc.set(1, 1, 1)); stakes.setMatrixAt(ns++, m4); }
+-			if (t.well && ng < CAP) { m4.compose(p.set(t.x, t.y + 0.33, t.z), q.setFromAxisAngle(Y, yaw - yaw % (Math.PI / 2)), sc.set(1, 1, 1)); grates.setMatrixAt(ng++, m4); }
++			// (on the ground as graded beside the road, as the tree itself is: city.js placeTrees)
++			const ty = t.y + roadDelta(t.x, t.z);
++			if (t.stake && ns < CAP) { m4.compose(p.set(t.x, ty + 0.3, t.z), q.setFromAxisAngle(Y, yaw), sc.set(1, 1, 1)); stakes.setMatrixAt(ns++, m4); }
++			if (t.well && ng < CAP) { m4.compose(p.set(t.x, ty + 0.33, t.z), q.setFromAxisAngle(Y, yaw - yaw % (Math.PI / 2)), sc.set(1, 1, 1)); grates.setMatrixAt(ng++, m4); }
+ 			if (t.fall && drift > 0.02 && nl < LCAP) {
+ 				// a drift round the trunk, out to most of the crown, and one blown off to the side
+ 				const rr = Math.max(2, t.h * 0.32 * (t.nx || 1));
+-				m4.compose(p.set(t.x, t.y + 0.34, t.z), q.setFromAxisAngle(Y, yaw), sc.set(rr * 2, 1, rr * 2)); leaves.setMatrixAt(nl++, m4);
+-				if (nl < LCAP) { const a = yaw * 3.1, o = rr * 0.9; m4.compose(p.set(t.x + Math.cos(a) * o, t.y + 0.345, t.z + Math.sin(a) * o), q.setFromAxisAngle(Y, a), sc.set(rr * 1.2, 1, rr * 1.2)); leaves.setMatrixAt(nl++, m4); }
++				m4.compose(p.set(t.x, ty + 0.34, t.z), q.setFromAxisAngle(Y, yaw), sc.set(rr * 2, 1, rr * 2)); leaves.setMatrixAt(nl++, m4);
++				if (nl < LCAP) { const a = yaw * 3.1, o = rr * 0.9; m4.compose(p.set(t.x + Math.cos(a) * o, ty + 0.345, t.z + Math.sin(a) * o), q.setFromAxisAngle(Y, a), sc.set(rr * 1.2, 1, rr * 1.2)); leaves.setMatrixAt(nl++, m4); }
+ 			}
+ 		}
+ 		stakes.count = ns; grates.count = ng; leaves.count = nl;
+@@ -165,7 +168,7 @@ export function createStreetDecor(scene, city, { isPhone = false } = {}) {
+ 		if (cam.position.y > 3000) { group.visible = false; return; }
+ 		group.visible = true;
+ 		// the city rebuilt its trees, or you have come a way since
+-		if (list !== seen || Math.hypot(x - atX, z - atZ) > R * 0.4) { seen = list; build(x, z); }
++		if (list !== seen || Math.hypot(x - atX, z - atZ) > R * 0.4 || gradeVersion() !== gv) { seen = list; build(x, z); }
+ 	}
+ 	return { update, group, info: () => ({ stakes: stakes.count, grates: grates.count, leaves: leaves.count, drift: +drift.toFixed(2) }) };
+ }
+diff --git a/island/src/bay/terrain.js b/island/src/bay/terrain.js
+index 4b1e3dd..e564fd8 100644
+--- a/island/src/bay/terrain.js
++++ b/island/src/bay/terrain.js
+@@ -8,7 +8,7 @@
+ // walking, flying and the boat.
+ 
+ import * as THREE from 'three';
+-import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
++import { radialGrid, NOISE_GLSL, SAFE_GLSL } from '../world/terrain.js';
+ import { photoUniform } from '../world/photomats.js';
+ import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
+ import { PLACES } from './places.js';
+@@ -458,7 +458,7 @@ export function createBayArea(shared, scene, island, BU) {
+ 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
+ 		m.onBeforeCompile = (sh) => {
+ 			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
+-			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
++			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + SAFE_GLSL + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return safeH(b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0), -60.0); }\n' + sh.vertexShader
+ 				.replace('#include <beginnormal_vertex>', `
+ 					vec2 bw = position.xz + uC;
+ 					// (the river's channel carved finer than the survey, carve.js: near you, where the
+diff --git a/island/src/earth/globeterrain.js b/island/src/earth/globeterrain.js
+index 59d6629..9515598 100644
+--- a/island/src/earth/globeterrain.js
++++ b/island/src/earth/globeterrain.js
+@@ -14,7 +14,7 @@
+ // the towns and cities (grey by day, lit by night) round the atlas's cities near you.
+ 
+ import * as THREE from 'three';
+-import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
++import { radialGrid, NOISE_GLSL, SAFE_GLSL } from '../world/terrain.js';
+ import { BAY_GLSL } from '../bay/terrain.js';
+ import { WC_U, WC_GLSL } from '../bay/watercarve.js';
+ import { BERM_U, BERM_GLSL } from '../bay/berms.js';
+@@ -30,7 +30,7 @@ const PH = [photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 }), ph
+ 
+ const FRAG_GLSL = /* glsl */`
+ uniform highp sampler2D uGT2, uGT3, uGT4; uniform vec4 uGWin; uniform ivec3 uGI0; uniform vec3 uGF0; uniform vec2 uGSeam; uniform float uGBay, uGNight;
+-uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason, uGDry;
++uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason, uGDry; uniform vec4 uGAnc;
+ varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;
+ float gfH(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
+ // value noise on the sphere at 8192 / 2^k metres (the same lattice as the relief)
+@@ -165,7 +165,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
+ 		const own = { uGGrid: { value: new THREE.Vector3(grid[1], grid[2], grid[0]) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
+ 		m.onBeforeCompile = (sh) => {
+ 			Object.assign(sh.uniforms, BU, WC_U, BERM_U, U, common, own);
+-			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; uniform vec3 uGGrid;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;\n' + BAY_GLSL + WC_GLSL + BERM_GLSL + GLOBE_GLSL + `
++			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; uniform vec3 uGGrid;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;\n' + SAFE_GLSL + BAY_GLSL + WC_GLSL + BERM_GLSL + GLOBE_GLSL + `
+ 				vec3 gDP;
+ 				float gOut(vec2 w){ if (uGBay < 0.5) return 1e9; vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (w - uR0.xy) / uR0.z; return length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
+ 				float gGround(vec2 d, float oct){
+@@ -201,7 +201,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
+ 					gh += gwc;
+ 					vec3 objectNormal = normalize(vec3(-gx, 2.0 * ge, -gz));
+ 					if (any(isnan(objectNormal))) objectNormal = vec3(0.0, 1.0, 0.0);
+-					if (gh != gh) gh = 0.0;
++					// (never infinity or not a number, on any GPU: world/terrain.js SAFE_GLSL)
++					gh = safeH(gh, 0.0);
+ 					vGN = objectNormal;
+ 					vGCC = uGWin.xy + gd * uGWin.zw;
+ 				`)
+@@ -278,15 +279,30 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
+ 					bare = mix(bare, 0.7, forest * floorK);
+ 					// and the shade of the scattered trees in open woodland
+ 					c *= 1.0 - 0.35 * smoothstep(0.15, 0.45, trees) * (1.0 - forest) * smoothstep(0.55, 0.7, gq(1, 47u) * 0.6 + pS * 0.4);
++					// which way the slope faces: + toward the pole (in its own shade most of the day), - toward
++					// the sun, nothing on the flat
++					float shadeSide = clamp(-n.z * sign(uGAnc.x + 1e-4) / max(n.y, 0.25), -1.0, 1.0) * smoothstep(0.03, 0.25, slope);
++					// scree: the talus fans of broken rock at the foot of the crags, on the slopes just under
++					// rock's steepness where nothing holds the ground (above the trees, or in a dry land),
++					// broken into tongues by the 25 m and 128 m mottles
++					float open = max(1.0 - smoothstep(-1.0, 3.0, air), arid) * (1.0 - forest);
++					float screeK = smoothstep(0.16, 0.3, slope + (m1 - 0.5) * 0.12) * (1.0 - smoothstep(0.42, 0.6, slope)) * smoothstep(0.35, 0.6, m1 * 0.6 + pS * 0.4) * open;
++					vec3 scree = mix(vec3(0.42, 0.4, 0.37), gA, 0.25) * (0.8 + 0.35 * mix(0.5, vn(gM(4) + 9.0), ck));
++					c = mix(c, scree, screeK * 0.75);
+ 					// rock on the steep ground, and above the plants, banded
+ 					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15 + (m1 - 0.5) * 0.1), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
+ 					vec3 rock = mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35) * (0.75 + 0.25 * m1 + 0.25 * mix(0.5, vn(vec2(gM(1).x, h * 0.25)), ck));
++					// moss and lichen on the shaded faces of a wet place's rock, none in a desert or the cold
++					rock = mix(rock, vec3(0.13, 0.17, 0.08) * (0.8 + 0.4 * m2), max(0.0, shadeSide) * smoothstep(600.0, 1400.0, rain) * smoothstep(0.0, 6.0, air) * smoothstep(0.45, 0.65, m2 * 0.7 + pS * 0.3) * 0.6);
+ 					c = mix(c, rock, rockK);
+ 					// snow: the high fields' that lasts the summer, and the winter's wherever this month's
+-					// air is below freezing, patchier as it thaws; off the cliffs either way
+-					float keep = 1.0 - smoothstep(-12.0, -8.0, air + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5);
+-					float lying = 1.0 - smoothstep(-3.0, 0.5, air + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
+-					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope));
++					// air is below freezing, patchier as it thaws; off the cliffs either way. Shaded faces
++					// keep theirs a few degrees longer than sunny ones, and the line wanders with the 25 m
++					// mottle, so it lies in drifts and tongues rather than along a contour
++					float snowAir = air - shadeSide * 2.5 + (m1 - 0.5) * 1.4;
++					float keep = 1.0 - smoothstep(-12.0, -8.0, snowAir + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5);
++					float lying = 1.0 - smoothstep(-3.0, 0.5, snowAir + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
++					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope + (m1 - 0.5) * 0.12));
+ 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
+ 					// Ocean beaches and inland banks use their own materials. Lake banks stay
+ 					// damp soil/gravel with a grassy upper edge, not a tan ocean beach.
+@@ -333,7 +349,9 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
+ 					float rL = mix(0.5, gTri(uGRock, vec3(pm.x, h * 0.32, pm.y) * 0.5, n), uGPhK.z), sL = mix(0.5, gPh(uGSand, pm * 1.25), uGPhK.w);
+ 					float dL = mix(mix(mL, lL, bare), sL, max(arid * 0.7, shore));
+ 					gDetL = mix(mix(dL, rL, rockK), 0.5, snowK * 0.7);
+-					c *= mix(1.0, 0.55 + 0.9 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
++					// (as strong as the Bay's own photo grain, about a quarter either way: at nearly half it
++					// broke every slope into a speckle)
++					c *= mix(1.0, 0.72 + 0.56 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
+ 					if (any(isnan(c)) || any(isinf(c))) c = vec3(0.3);
+ 					diffuseColor.rgb = c;
+ 					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(farmP, urb, rockK) : vec3(0.35);
+@@ -347,7 +365,11 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
+ 						bh = fbm3(vGW.xz * 0.06) * 2.5 * (1.0 - smoothstep(4.0, 9.0, px)) + fbm3(vGW.xz * 0.3) * 0.5 * (1.0 - smoothstep(0.9, 2.2, px));
+ 						bh *= 1.0 - smoothstep(1500.0, 5000.0, d2);
+ 						// and the photographs' own relief, a few centimetres, close by
+-						bh += (gDetL - 0.5) * 0.12 * (1.0 - smoothstep(0.04, 0.25, px));
++						// (a centimetre or so: the photo's features are a few centimetres across, and at 12 cm of
++						// relief over them the bump tipped each pixel's normal by tens of degrees, a light and dark
++						// speckle on every slope, white on snow; with the photographs off it went, with shadows
++						// off it stayed)
++						bh += (gDetL - 0.5) * 0.015 * (1.0 - smoothstep(0.03, 0.15, px));
+ 					}
+ 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
+ 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
+diff --git a/island/src/earth/globetrees.js b/island/src/earth/globetrees.js
+index 8a2a436..ba4a0b4 100644
+--- a/island/src/earth/globetrees.js
++++ b/island/src/earth/globetrees.js
+@@ -16,6 +16,7 @@ import { hardwood, shrub, swayMaterial, Builder, tube, strip, V } from '../world
+ import * as TX from '../world/textures.js';
+ import { addLodFade } from '../world/lodfade.js';
+ import { mulberry32 } from '../noise.js';
++import { baseFromSlope } from '../world/groundsnap.js';
+ import { F, toXZ, RAD, EARTH_R, lonRaw } from './globeframe.js';
+ import { vn3, S0 } from './globeheight.js';
+ import { today } from '../calendar.js';
+@@ -149,7 +150,8 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
+ 				if (open && dry > 0.5 && form === 'broad' && !mix.treeless) form = 'conifer';
+ 				if (bank === 'bush') form = 'bush';
+ 				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
+-				out.push({ x: p.x, y: h - 0.2, z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
++				// (the foot on the lowest ground under the trunk, world/groundsnap.js: none floats downhill)
++				out.push({ x: p.x, y: baseFromSlope(h, slope, (form === 'bush' ? 0.6 : 0.5) * s, 0.2), z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
+ 				if (++n % 60 === 0) yield;
+ 			}
+ 		}
+diff --git a/island/src/nature/rocks.js b/island/src/nature/rocks.js
+index 7d186bf..7310651 100644
+--- a/island/src/nature/rocks.js
++++ b/island/src/nature/rocks.js
+@@ -114,9 +114,13 @@ float rkf(vec3 p){ return rkn(p) * 0.5 + rkn(p * 2.03 + 3.1) * 0.3 + rkn(p * 4.1
+ export function rockMaterial(fogBelt) {
+ 	// fogBelt: { value } 0 inland .. 1 in the fog, where moss and lichen are thick
+ 	const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
+-	m.onBeforeCompile = (sh) => {
++	// (a function, not an arrow: each layer's copy, wildground.js, says where its stones meet the
++	// ground in their own units, userData.rkFoot: the depth they are sunk by over their height)
++	m.onBeforeCompile = function (sh) {
+ 		sh.uniforms.uFogBelt = fogBelt;
+-		sh.vertexShader = 'varying vec3 vRkW; varying vec3 vRkN;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
++		sh.uniforms.uRkFoot = { value: this.userData?.rkFoot ?? 0.35 };
++		sh.vertexShader = 'varying vec3 vRkW; varying vec3 vRkN; varying float vRkY;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
++			vRkY = position.y;
+ 			{ vec4 rw = vec4(transformed, 1.0);
+ 			#ifdef USE_INSTANCING
+ 			rw = instanceMatrix * rw;
+@@ -127,7 +131,7 @@ export function rockMaterial(fogBelt) {
+ 			rn = mat3(instanceMatrix) * rn;
+ 			#endif
+ 			vRkN = normalize(mat3(modelMatrix) * rn); }`);
+-		sh.fragmentShader = 'varying vec3 vRkW; varying vec3 vRkN; uniform float uFogBelt; float rkRough = 0.92;\n' + RN + sh.fragmentShader
++		sh.fragmentShader = 'varying vec3 vRkW; varying vec3 vRkN; varying float vRkY; uniform float uFogBelt, uRkFoot; float rkRough = 0.92;\n' + RN + sh.fragmentShader
+ 			.replace('#include <color_fragment>', `#include <color_fragment>
+ 			{
+ 				vec3 q = vRkW;
+@@ -142,8 +146,12 @@ export function rockMaterial(fogBelt) {
+ 				float north = clamp(-vRkN.z, 0.0, 1.0);
+ 				float moss = smoothstep(0.35, 0.7, north * 0.8 + rkf(q * 0.9 + 5.0) * 0.5 - 0.1) * uFogBelt;
+ 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.16, 0.04), moss * 0.8);
+-				// dark and damp where it meets the soil
+-				rkRough = mix(0.92, 0.75, moss);
++				// dark and damp where it meets the soil: the shade of its own overhang, soil splashed
++				// up its foot, the band wandering a little round it (no stone sits on the ground like
++				// a pebble on a table, even with no sun to cast its shadow)
++				float foot = 1.0 - smoothstep(uRkFoot - 0.04, uRkFoot + 0.2 + 0.08 * g1, vRkY);
++				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.5, 0.46, 0.4), foot * 0.85);
++				rkRough = mix(mix(0.92, 0.75, moss), 0.7, foot * 0.5);
+ 			}`)
+ 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rkRough;')
+ 			.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+diff --git a/island/src/nature/wildground.js b/island/src/nature/wildground.js
+index e627e5b..f87556e 100644
+--- a/island/src/nature/wildground.js
++++ b/island/src/nature/wildground.js
+@@ -75,6 +75,21 @@ export function habitat(bay, real, H) {
+ 	};
+ }
+ 
++// Whether (x, z) is paved: on a street or drive in drives (its carriageway, its sidewalk if it
++// has one, and a margin), or where the coarse land map is all but wholly paving or roof (a car
++// park, a yard: its cells are coarse, so a street's verge, half road in its cell, is not paving)
++export function onPaving(real, drives, x, z) {
++	if (real?.inside(x, z)) { const L = real.landAt(x, z); if (L && (L.road > 0.85 || L.roof > 0.5)) return true; }
++	for (const q of drives) {
++		const p = q.pts, m = (q.w || 6) / 2 + (q.walked ? 1.7 : 0) + 0.6;
++		for (let i = 0; i + 3 < p.length; i += 2) {
++			const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2));
++			if ((x - p[i] - dx * t) ** 2 + (z - p[i + 1] - dz * t) ** 2 < m * m) return true;
++		}
++	}
++	return false;
++}
++
+ export function createWildGround(scene, bay, { shared, real, isPhone = false, ground = null, globe = null } = {}) {
+ 	const H = ground || ((x, z) => bay.heightAt(x, z));
+ 	const K = isPhone ? 0.45 : 1;                                      // density
+@@ -136,6 +151,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
+ 	};
+ 	const sw = (S, R) => ({ material: fadeOf(S.material, R).material, depth: S.depth });
+ 	const mk = (key, variants, mats, R, cap, o) => layer(key, variants, mats.map((M) => M.isMaterial ? fadeOf(M, R * RK).material : sw(M, R * RK)), R, cap, o);
++	// where a rock layer meets the ground in the shapes' own units (its sink over its height:
++	// put() below), for the damp dark band at its foot (rocks.js)
++	const footAt = (L, k) => { for (const { im } of L.meshes) im.material.userData.rkFoot = k; };
+ 
+ 	// (the shapes are made a few a frame, so no one frame stalls)
+ 	const shrubMats = [woodM, leafM];
+@@ -169,14 +187,17 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
+ 		},
+ 		() => {
+ 			Lrk = mk('rock', [boulder(201, 'round'), boulder(202, 'bedded'), boulder(203, 'blocky')], [rockM], 200, 900 * K, { shadow: true });
++			footAt(Lrk, 0.35);
+ 		},
+ 		() => { outs.push(outcrop(301, 'bedded')); },
+ 		() => { outs.push(outcrop(302, 'blocky')); },
+ 		() => {
+ 			Lout = mk('outcrop', [...outs, outcrop(303, 'round')], [rockM], 320, 240 * K, { shadow: true });
++			footAt(Lout, 0.45);
+ 		},
+ 		() => {
+ 			Lst = mk('stone', [stone(401), stone(402)], [rockM], 40, 2000 * K);
++			footAt(Lst, 0.3);
+ 			Llf = mk('leaves', [leafLitter(0), leafLitter(1), leafLitter(2)], [litterM], 26, 4500 * K);
+ 			Lsk = mk('sticks', [sticks(501), sticks(502)], [stickM], 30, 700 * K);
+ 			Lcn = mk('cones', [cone(601), acorns(602)], [stickM], 18, 1400 * K);
+@@ -219,7 +240,14 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
+ 			tW = w;
+ 			return best - w / 2;
+ 		};
++		// what is paved in the cell: the streets and drives (their carriageway, sidewalk and a
++		// margin) and the coarse map's paving (car parks, yards, roofs). The cell's centre may be
++		// wild while a road crosses its corner: each plant and stone asks for its own spot, and
++		// none stands on asphalt (bunch grass came up through the Muir Woods car park)
++		const drives = real ? real.near('roads', cx, cz, C).filter((q) => q && q.pts && q.drive && !q.bridge) : [];
++		const paved = (x, z) => onPaving(real, drives, x, z);
+ 		const put = (L, x, z, yaw, sx, sy, col, v, sink = 0.05, lie = false) => {
++			if (paved(x, z)) return;
+ 			const a = out[L.key] || (out[L.key] = []), h = H(x, z);
+ 			let nx = 0, nz = 0;
+ 			if (lie) { const e = 0.6, gx = H(x - e, z) - H(x + e, z), gz = H(x, z - e) - H(x, z + e), l = Math.hypot(gx, 2 * e, gz); nx = gx / l; nz = gz / l; }
+@@ -418,9 +446,13 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
+ 		}
+ 		if (arid > 0.4) {
+ 			if (hot > 0.5) {
+-				// hot desert: creosote and bursage spaced evenly apart on bare ground
+-				scatter(Math.round(7 * K), () => 0.9, (x, z) => { const s2 = 0.8 + r() * 0.6; put(Lcb, x, z, r() * 6.28, s2, s2 * 1.1, J([0.75, 0.72, 0.4], 0.1), Math.floor(r() * 2), 0.1); });
+-				scatter(Math.round(10 * K), () => 0.5, (x, z) => put(Ls, x, z, r() * 6.28, 0.7, 0.6, tone(0.6), 0, 0.03));
++				// hot desert: creosote and bursage spaced evenly apart on bare ground. The hyper-arid
++				// cores (the central Sahara, the Empty Quarter, the Atacama: a few centimetres of rain a
++				// year) are bare sand and stone, their few shrubs down the dry washes; the green
++				// thicket that stood on the Tassili's dunes was a wet scrub's density
++				const sparse = sm(25, 220, rain), wash = (x, z) => (sparse > 0.35 ? 0.9 : drift(x, z, 70, 8) > 0.66 ? 0.9 : 0.04);
++				scatter(Math.round(7 * K * (0.15 + 0.85 * sparse)), wash, (x, z) => { const s2 = (0.8 + r() * 0.6) * (0.6 + 0.4 * sparse); put(Lcb, x, z, r() * 6.28, s2, s2 * 1.1, J([0.62 + 0.1 * sparse, 0.6 + 0.1 * sparse, 0.4], 0.1), Math.floor(r() * 2), 0.1); });
++				scatter(Math.round(10 * K * (0.1 + 0.9 * sparse)), (x, z) => wash(x, z) * 0.55, (x, z) => put(Ls, x, z, r() * 6.28, 0.7, 0.6, tone(0.6), 0, 0.03));
+ 			} else {
+ 				// sagebrush steppe: silver-grey sage to the horizon, bunchgrass between
+ 				scatter(Math.round(34 * K * arid), (x, z) => 0.5 + drift(x, z, 14, 4) * 0.5, (x, z) => { const s2 = 0.7 + r() * 0.7; put(Lsg, x, z, r() * 6.28, s2, s2, J([0.95, 0.95, 0.85], 0.1), Math.floor(r() * 2), 0.08); });
+diff --git a/island/src/region/flora.js b/island/src/region/flora.js
+index bb10b67..30f77c4 100644
+--- a/island/src/region/flora.js
++++ b/island/src/region/flora.js
+@@ -18,6 +18,7 @@ import { hardwood, shrub, palm, banana, fern, swayMaterial, Builder, tube, strip
+ import * as TX from '../world/textures.js';
+ import { addLodFade } from '../world/lodfade.js';
+ import { mulberry32 } from '../noise.js';
++import { baseHeight, baseFromSlope, tiltFromGradient } from '../world/groundsnap.js';
+ 
+ // each kit's word for a plant -> its form, its colour, its size (m), and for a broadleaf its crown
+ const FORM = {
+@@ -39,6 +40,8 @@ const REF = { eucalypt: '#6e8478', conifer: '#36502e', column: '#36502e', palm:
+ // forms with a far tier (the rest are small, and simply fade out where they stop mattering)
+ const TALL = new Set(['broad', 'eucalypt', 'conifer', 'column', 'palm', 'flattop', 'baobab', 'banyan', 'emergent', 'bamboo']);
+ const LOW = new Set(['grass', 'fern']);
++// how wide a form's foot is (m) for its size: a trunk and its flare, a shrub's or a tuft's spread
++const footOf = (form, size) => LOW.has(form) ? Math.min(0.35, 0.3 * size) : form === 'shrub' || form === 'cactus' ? Math.min(0.9, 0.25 * size) : form === 'banyan' || form === 'baobab' || form === 'emergent' ? Math.min(2.5, 0.08 * size) : Math.min(1.2, 0.035 * size + 0.15);
+ 
+ // ---------- the forms Builder makes here ----------
+ const BARK = new THREE.Color(0.62, 0.55, 0.47);
+@@ -496,9 +499,11 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
+ 	const DENS = { jungle: 2.2, island: 1, eastvillage: 1.1, southasia: 0.8, southcity: 0.15, eastcity: 0.15, bazaar: 0.2, mediterranean: 0.9, village: 0.9, farm: 0.4, alpine: 1, snow: 1, polar: 0.5, himalaya: 0.6, andes: 0.6, steppe: 1.6, savanna: 1.1, sahel: 0.6, desert: 0.25, pueblo: 0.5, outback: 0.7 };
+ 	const counts = new Map();
+ 	// one plant: into the tier(s) its distance puts it in
+-	function put(v, mi, d, x, y, z, yaw, size, word, base, C, culture, t) {
++	function put(v, mi, d, x, y, z, yaw, size, word, base, C, culture, t, gx = 0, gz = 0, lie = 0) {
+ 		const m = v.models[mi], s = size / m.H;
+-		Q.setFromAxisAngle(UP, yaw); SC.setScalar(s); M4.compose(P.set(x, y, z), Q, SC);
++		// (low plants lie a little with the slope; trees stand upright)
++		if (lie > 0) tiltFromGradient(gx, gz, yaw, lie, Q); else Q.setFromAxisAngle(UP, yaw);
++		SC.setScalar(s); M4.compose(P.set(x, y, z), Q, SC);
+ 		const col = tintOf(seasonal(word, base, C, culture), v.form, TC);
+ 		const tone = 0.85 + t * 0.3;
+ 		col.multiplyScalar(tone);
+@@ -546,9 +551,13 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
+ 				for (let q = 0; q < nT; q++) {
+ 					const px = cx + dx + (q ? (r() - 0.5) * 4 : 0), pz = cz + dz + (q ? (r() - 0.5) * 4 : 0);
+ 					if (wet(px, pz) || blocked(px, pz, LOW.has(form) ? 1 : Math.max(3, size * 0.45))) continue;
+-					const y = ground(px, pz), e = 3, s = Math.max(Math.abs(ground(px + e, pz) - y), Math.abs(ground(px, pz + e) - y)) / e;
++					const y = ground(px, pz), e = 3, gx = (ground(px + e, pz) - y) / e, gz = (ground(px, pz + e) - y) / e, s = Math.max(Math.abs(gx), Math.abs(gz));
+ 					if (s > 0.8) continue;
+-					put(v, Math.floor(mi * v.models.length), d, px, y - 0.1, pz, yaw + q * 2.1, sz * (q ? 0.7 + r() * 0.5 : 1), word, base, C, culture, t);
++					// the foot on the lowest ground under it, a little sunk (world/groundsnap.js): on a
++					// slope the downhill side of a trunk no longer floats
++					const low = LOW.has(form), szq = sz * (q ? 0.7 + r() * 0.5 : 1);
++					const yb = baseFromSlope(y, Math.hypot(gx, gz), footOf(form, szq), low ? 0.04 : 0.1);
++					put(v, Math.floor(mi * v.models.length), d, px, yb, pz, yaw + q * 2.1, szq, word, base, C, culture, t, gx, gz, low ? 0.6 : 0);
+ 				}
+ 				used.add(v.key);
+ 			}
+@@ -568,7 +577,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
+ 						const j1 = (h & 255) / 255, j2 = ((h >>> 8) & 255) / 255, ad = (k * da - a0) * along + (j1 - 0.5) * 3;
+ 						const dx = ax ? ad : off + (j2 - 0.5) * 2, dz = ax ? -(off + (j2 - 0.5) * 2) : -ad, d = Math.hypot(dx, dz), px = cx + dx, pz = cz + dz;
+ 						if (d > R || wet(px, pz) || blocked(px, pz, 4)) continue;
+-						put(v, Math.floor(j1 * v.models.length), d, px, ground(px, pz) - 0.1, pz, j2 * 6.283, 26 + j1 * 16, 'eucalyptus', FORM.eucalyptus[1], C, culture, j2);
++						put(v, Math.floor(j1 * v.models.length), d, px, baseHeight(ground, px, pz, 0.6, 0.1), pz, j2 * 6.283, 26 + j1 * 16, 'eucalyptus', FORM.eucalyptus[1], C, culture, j2);
+ 					}
+ 				}
+ 			}
+@@ -579,7 +588,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
+ 			const F = FORM[T.word], d = Math.hypot(T.x - cx, T.z - cz);
+ 			if (!F || d > R || wet(T.x, T.z)) continue;
+ 			const v = variantOf(keyOf(T.word, F[0], F[3], snow), kit.id);
+-			put(v, 0, d, T.x, ground(T.x, T.z) - 0.1, T.z, T.yaw || 0, T.size || F[2], T.word, F[1], C, culture, 0.6);
++			put(v, 0, d, T.x, baseHeight(ground, T.x, T.z, footOf(F[0], T.size || F[2]), 0.1), T.z, T.yaw || 0, T.size || F[2], T.word, F[1], C, culture, 0.6);
+ 			used.add(v.key);
+ 		}
+ 		// what this kit no longer grows is let go
+diff --git a/island/src/world/grass.js b/island/src/world/grass.js
+index 05565f1..b2fddc2 100644
+--- a/island/src/world/grass.js
++++ b/island/src/world/grass.js
+@@ -15,6 +15,12 @@ import { mulberry32 } from '../noise.js';
+ 
+ let stripTex = null;
+ 
++// three's light loop with the sun's shadow kept: gSunLit, how much of the first shadowing
++// directional light (the sun) reaches this fragment (1 where there are no shadows)
++export const SUNLIT_BEGIN = THREE.ShaderChunk.lights_fragment_begin.replace(
++	'vDirectionalShadowCoord[ i ] ) : 1.0;',
++	'vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\tgSunLit = min(gSunLit, length(directLight.color) / max(length(directionalLight.color), 1e-4));');
++
+ export function createGrass(island, shared, count = 20000, span = 84, opts = {}) {
+ 	const width = opts.width ?? 0.42, heightK = opts.height ?? 1, seed = opts.seed ?? 99;
+ 	const blade = new THREE.BufferGeometry();
+@@ -67,7 +73,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 			uniform float uPlGrassK, uPl2GrassK;
+ 			uniform vec4 uWetS[4]; uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
+ 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
+-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet;
++			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK;
+ 			float gTall;
+ 			` + sh.vertexShader
+ 			.replace('#include <beginnormal_vertex>', `
+@@ -104,6 +110,9 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 				rise = rise * rise * (3.0 - 2.0 * rise);
+ 				float grow = step(aRand.y, density) * rise;
+ 				vEdge = smoothstep(0.35, 0.9, dCam);
++				// under a canopy the blades get no sun to glow with (the shadow map says so too, where
++				// there is one: the fragment shader below; this holds where shadows are off)
++				vShadeK = 1.0 - canopy * 0.85;
+ 				// wet from a sprinkler (world/spray.js): darker and glossier
+ 				vWet = 0.0;
+ 				for (int k = 0; k < 4; k++) vWet = max(vWet, uWetS[k].w * (1.0 - smoothstep(0.65, 1.0, length(w - uWetS[k].xy) / max(uWetS[k].z, 0.1))));
+@@ -117,6 +126,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 				tall *= 1.0 - occ * 0.6;
+ 				tall *= 1.0 + hug * 0.9;
+ 				tall *= mix(1.0, 0.5, mk.g) * uTallK * grow;
++				// a tuft whose foot is within a stride of the eye (flying low, or the eye down in the
++				// grass) shrinks away, so no blade is ever stretched across the whole view
++				float eyeD = length(vec3(w.x - cameraPosition.x, h - cameraPosition.y, w.y - cameraPosition.z));
++				tall *= smoothstep(0.25, 0.9, eyeD);
+ 				gTall = tall;
+ 				float ang = aRand.y * 6.2831;
+ 				vGUv = uv; vTip = aTip;
+@@ -170,7 +183,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 				p.y = cos(lean) * ly;
+ 				// you part the grass: blades near your feet bend away from you
+ 				vec2 away = w - uCam; float ad = length(away);
+-				float push = (1.0 - smoothstep(0.25, 1.1, ad)) * aTip;
++				// (only at a walker's eye height over the ground: flying past, or with the eye down in
++				// the grass, there are no legs there, and the tips pulled toward the lens made long spikes)
++				float eyeH = cameraPosition.y - h;
++				float push = (1.0 - smoothstep(0.25, 1.1, ad)) * aTip * smoothstep(1.1, 1.45, eyeH) * (1.0 - smoothstep(2.2, 3.0, eyeH));
+ 				p.xz += away / max(ad, 0.05) * push * ly * 0.8;
+ 				p.y -= push * ly * 0.45;
+ 				// the tuft's foot sits a little in the soil, so there is no hard base line
+@@ -181,7 +197,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 		// both faces of a blade are lit as the meadow is (up), never as their dark underside
+ 		sh.fragmentShader = `
+ 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
+-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet;
++			// the sun's glow through the blades and their sheen, added after the lights, as much as
++			// the sun reaches them: in a wood's shade the turf glowed pale, unshadowed
++			vec3 gGlow = vec3(0.0); float gSunLit = 1.0;
++			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK;
+ 			` + sh.fragmentShader
+ 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
+ 			.replace('#include <map_fragment>', `
+@@ -208,18 +227,20 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 				// tall grass goes to seed: pale straw tips
+ 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.36) * vec3(0.62, 0.58, 0.36), smoothstep(0.7, 1.0, vGUv.y) * smoothstep(0.3, 0.8, vTall228) * 0.7);
+ 				diffuseColor.rgb *= 1.0 - 0.35 * vWet;`)
++			.replace('#include <lights_fragment_begin>', SUNLIT_BEGIN)
++			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\t\t\t\ttotalEmissiveRadiance += gGlow * gSunLit * vShadeK;')
+ 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+ 				// blades glow when the sun is behind them; the highs make the field shimmer
+ 				float back = pow(max(0.0, dot(normalize(vGW - cameraPosition), uSunDir)), 4.0) * max(0.0, uSunDir.y + 0.1);
+-				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.45 * vTip * (1.0 - vEdge * 0.8);
++				gGlow += diffuseColor.rgb * uSunColor * back * 0.45 * vTip * (1.0 - vEdge * 0.8);
+ 				// sheen: blades are glossy along their length; looking toward the sun the field
+ 				// silvers, the tips lighting up yellow-green where light comes through
+ 				vec3 Vg = normalize(cameraPosition - vGW);
+ 				float toward = pow(max(0.0, dot(-Vg, uSunDir) * 0.5 + 0.5), 6.0) * smoothstep(0.0, 0.2, uSunDir.y) * (1.0 + vWet * 4.0);
+-				totalEmissiveRadiance += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor * (1.0 - vEdge * 0.8);
++				gGlow += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor * (1.0 - vEdge * 0.8);
+ 				totalEmissiveRadiance += diffuseColor.rgb * uHigh * 0.3 * vTip * (0.5 + 0.5 * sin(uTime * 6.0 + vGW.x * 0.7 + vGW.z * 0.5));`);
+ 	};
+-	mat.customProgramCacheKey = () => 'island-grass2';
++	mat.customProgramCacheKey = () => 'island-grass3';
+ 	const mesh = new THREE.Mesh(geo, mat);
+ 	mesh.frustumCulled = false;
+ 	mesh.receiveShadow = true;
+diff --git a/island/src/world/groundsnap.js b/island/src/world/groundsnap.js
+new file mode 100644
+index 0000000..4a8f119
+--- /dev/null
++++ b/island/src/world/groundsnap.js
+@@ -0,0 +1,67 @@
++// Standing things on the ground. A plant or a prop set at the height under its centre floats on
++// the downhill side of a slope by its footprint's radius times the slope, and a sliver of sky
++// shows under it from below. baseHeight finds the lowest ground under the footprint (the centre
++// and four points round it at r) and sinks the base a little further, so the foot always meets
++// the ground and nothing hovers at any distance. Trees stand upright whatever the slope (they
++// grow toward the light); rocks and low plants lie with it (slopeTilt).
++//
++// Shared by every scatter of plants and props: the island's (world/vegetation.js), the region's
++// (region/flora.js), the globe's woods (earth/globetrees.js) and the Bay's trees (bay/city.js).
++// No allocation: the caller's quaternion is written in place.
++
++const finite = (v) => typeof v === 'number' && v === v && v !== Infinity && v !== -Infinity;
++
++// the ground under a footprint of radius r at (x, z): the lowest of five samples, less sink.
++// ground(x, z) is the height function the scatter already uses (the ground as drawn there)
++export function baseHeight(ground, x, z, r, sink = 0.05) {
++	const h = ground(x, z);
++	let lo = finite(h) ? h : 0;
++	if (r > 0) {
++		const a = ground(x + r, z), b = ground(x - r, z), c = ground(x, z + r), d = ground(x, z - r);
++		if (finite(a) && a < lo) lo = a;
++		if (finite(b) && b < lo) lo = b;
++		if (finite(c) && c < lo) lo = c;
++		if (finite(d) && d < lo) lo = d;
++		// (a footprint over a drop, a ledge or a cliff's lip: never sink more than a stride below
++		// the centre, or a tree would vanish into the hillside)
++		if (finite(h) && lo < h - r * 1.5 - 0.5) lo = h - r * 1.5 - 0.5;
++	}
++	return lo - sink;
++}
++
++// the slope at (x, z): rise over run, from central differences e metres either side
++export function slopeAt(ground, x, z, e = 1) {
++	const gx = (ground(x + e, z) - ground(x - e, z)) / (2 * e), gz = (ground(x, z + e) - ground(x, z - e)) / (2 * e);
++	const s = Math.hypot(gx, gz);
++	return finite(s) ? s : 0;
++}
++
++// the same from a slope already in hand (rise over run): the centre's height h less the drop
++// across r, so a scatter that has measured its slope pays for no more samples
++export function baseFromSlope(h, slope, r, sink = 0.05) {
++	const s = finite(slope) ? Math.min(Math.abs(slope), 3) : 0;
++	return (finite(h) ? h : 0) - Math.min(s * r, r * 1.5 + 0.5) - sink;
++}
++
++// a quaternion (written into q, a THREE.Quaternion or anything with set(x, y, z, w)) that tips
++// the up axis toward the ground's normal at (x, z) by k (0 upright, 1 lying flat on the slope),
++// turned about yaw first. For rocks (k near 1) and low plants (k about a half)
++export function slopeTilt(ground, x, z, e, yaw, k, q) {
++	const gx = (ground(x + e, z) - ground(x - e, z)) / (2 * e), gz = (ground(x, z + e) - ground(x, z - e)) / (2 * e);
++	return tiltFromGradient(gx, gz, yaw, k, q);
++}
++// ...from the ground's gradient (dh/dx, dh/dz)
++export function tiltFromGradient(gx, gz, yaw, k, q) {
++	if (!finite(gx) || !finite(gz)) gx = gz = 0;
++	// the normal (-gx, 1, -gz), eased toward up by k, normalised
++	let nx = -gx * k, ny = 1, nz = -gz * k;
++	const nl = Math.hypot(nx, ny, nz);
++	nx /= nl; ny /= nl; nz /= nl;
++	// the shortest turn from up (0, 1, 0) to n: axis (nz, 0, -nx), angle acos(ny)
++	const ha = Math.acos(Math.min(1, ny)) * 0.5, s = Math.sin(ha), al = Math.hypot(nz, nx);
++	const tx = al > 1e-6 ? nz / al * s : 0, tz = al > 1e-6 ? -nx / al * s : 0, tw = Math.cos(ha);
++	// then the turn about the vertical first: tilt * yaw
++	const yh = yaw * 0.5, ys = Math.sin(yh), yc = Math.cos(yh);
++	q.set(tx * yc - tz * ys, tw * ys, tz * yc + tx * ys, tw * yc);
++	return q;
++}
+diff --git a/island/src/world/lodfade.js b/island/src/world/lodfade.js
+index 1aaa962..aeca3ec 100644
+--- a/island/src/world/lodfade.js
++++ b/island/src/world/lodfade.js
+@@ -31,7 +31,7 @@ export function addLodFade(material, mode, band = null) {
+ 	const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey?.bind(material);
+ 	const uBand = { value: new THREE.Vector4(...(band || [NONE_IN[0], NONE_IN[1], NONE_OUT[0], NONE_OUT[1]])) };
+ 	material.onBeforeCompile = (sh, r) => {
+-		if (prev) prev(sh, r);
++		if (prev) prev.call(material, sh, r);
+ 		const calc = mode === 'attribute' ? 'vLodK = aFade;' : mode === 'building' ? `float dL = max(0.0, length(aLodAnchor.xy - cameraPosition.xz) - aLodAnchor.z); vLodK = vec2(0.0, (1.0 - smoothstep(uLodBand.z, uLodBand.w, dL)) * smoothstep(0.0,.5,max(0.0,uDetailNow-aLodAnchor.w)));` : `
+ 			{
+ 				#ifdef USE_INSTANCING
+diff --git a/island/src/world/sunrays.js b/island/src/world/sunrays.js
+index fb8f419..8234637 100644
+--- a/island/src/world/sunrays.js
++++ b/island/src/world/sunrays.js
+@@ -22,13 +22,17 @@ const MAX_SLICES = 10;
+ const ss = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+ 
+ // the shadow map lookup shared by the sheets and the motes: 1 in sunlight, 0 in shade,
+-// uOpen outside the map's box
++// uOpen outside the map's box. Toward the box's sides the map's answer eases into uOpen, so
++// where a beam runs out of the box there is no hard line down the screen (on a phone, whose
++// box is smaller, the beams' far end often lies outside it).
+ const SHADOW_GLSL = /* glsl */`
+ uniform sampler2DShadow uShadow; uniform mat4 uShadowM; uniform float uOpen;
+ float sunLit(vec3 p){
+ 	vec4 sc = uShadowM * vec4(p, 1.0);
+-	if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0) return uOpen;
+-	return texture(uShadow, vec3(sc.xy, sc.z - 0.0006));
++	float edge = min(min(sc.x, 1.0 - sc.x), min(sc.y, 1.0 - sc.y));
++	if (edge <= 0.0 || sc.z > 1.0) return uOpen;
++	float k = smoothstep(0.0, 0.12, edge) * smoothstep(0.0, 0.05, 1.0 - sc.z);
++	return mix(uOpen, texture(uShadow, vec3(sc.xy, sc.z - 0.0006)), k);
+ }
+ `;
+ 
+diff --git a/island/src/world/terrain.js b/island/src/world/terrain.js
+index 3003ef5..6b921fc 100644
+--- a/island/src/world/terrain.js
++++ b/island/src/world/terrain.js
+@@ -31,14 +31,27 @@ export function radialGrid(segments, radius, power, extra = 0, far = 0) {
+ 	return g;
+ }
+ 
+-export const HEIGHT_GLSL = /* glsl */`
++// A height lifted on the graphics card that comes out as infinity or not a number (a texture
++// not filled yet, a division by zero, a driver's garbage) is put back to a plain value, and any
++// height is held to the range ground can have. Apple's graphics draw such a vertex as a long
++// pale triangle to the edge of the view where desktop drivers drop it. The test is on the bits,
++// which no compiler's fast maths can fold away (x != x can be). Every GPU-lifted ground uses it.
++export const SAFE_GLSL = /* glsl */`
++#ifndef SAFE_H_GLSL
++#define SAFE_H_GLSL
++float safeH(float h, float d){ return (floatBitsToUint(h) & 0x7f800000u) == 0x7f800000u ? d : clamp(h, -12000.0, 12000.0); }
++#endif
++`;
++export const SAFE_H_RANGE = 12000;
++
++export const HEIGHT_GLSL = /* glsl */`${SAFE_GLSL}
+ uniform sampler2D uHeight; uniform float uHalf, uCell, uN;
+ float heightAt(vec2 w){
+-	vec2 f = clamp((w + uHalf) / uCell, vec2(0.0), vec2(uN - 1.001));
++	vec2 f = clamp((w + uHalf) / max(uCell, 1e-3), vec2(0.0), vec2(uN - 1.001));
+ 	vec2 i = floor(f), u = f - i, t = (i + 0.5) / uN; float px = 1.0 / uN;
+ 	float a = texture2D(uHeight, t).r, b = texture2D(uHeight, t + vec2(px, 0.0)).r;
+ 	float c = texture2D(uHeight, t + vec2(0.0, px)).r, d = texture2D(uHeight, t + vec2(px, px)).r;
+-	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
++	return safeH(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), 0.0);
+ }`;
+ 
+ export const NOISE_GLSL = /* glsl */`
+@@ -184,7 +197,7 @@ export function createTerrain(island, shared) {
+ 	};
+ 	mat.onBeforeCompile = (sh) => {
+ 		Object.assign(sh.uniforms, uniforms);
+-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return farBlend(heightAt(w), w); }\n' : '#define groundH heightAt\n') + sh.vertexShader
++		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
+ 			.replace('#include <beginnormal_vertex>', `
+ 				vec2 wxz = position.xz + uCenter;
+ 				// the normal is taken over the grid's own spacing where that is wider than a height
+@@ -199,7 +212,7 @@ export function createTerrain(island, shared) {
+ 				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
+ 				${far ? '// the ground falls away with the curve of a small world, so the horizon is a line\n\t\t\t\ttransformed.y -= dot(position.xz, position.xz) / 3.47e6;' : ''}
+ 				vW = transformed;`);
+-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
++		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; float gSnowIce = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
+ 			.replace('#include <map_fragment>', `
+ 				${far ? '' : 'if (max(abs(vW.x), abs(vW.z)) > uHalf) discard;'}
+ 				holeCut(vW.xz);
+@@ -336,7 +349,8 @@ export function createTerrain(island, shared) {
+ 					rip = mix(rip, 0.5, smoothstep(0.35, 0.9, px));
+ 					vec3 ice = vec3(0.70, 0.82, 0.95), snowHi = vec3(0.96, 0.98, 1.0);
+ 					vec3 snow = mix(ice, snowHi, 0.22 + 0.62 * rip + 0.16 * n2) * (0.95 + 0.05 * dd.r);
+-					snow = mix(snow, vec3(0.62, 0.76, 0.92), smoothstep(0.6, 0.9, vn(vW.xz * 0.018 + 7.0)) * 0.35);   // bare blue ice where the wind scoured it
++					gSnowIce = smoothstep(0.6, 0.9, vn(vW.xz * 0.018 + 7.0));
++					snow = mix(snow, vec3(0.62, 0.76, 0.92), gSnowIce * 0.35);   // bare blue ice where the wind scoured it
+ 					col = mix(col, snow, snowW * (1.0 - occ * 0.5));
+ 					gSnowW = snowW * (1.0 - occ * 0.5);
+ 					gDetailH = mix(gDetailH, rip * 0.11 * (1.0 - smoothstep(30.0, 90.0, camD)), gSnowW);
+@@ -354,7 +368,9 @@ export function createTerrain(island, shared) {
+ 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
+ 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
+ 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
+-				rough = mix(rough, 0.32, gSnowW);   // an icy glaze catches the sky
++				// snow is matte (its glitter is the crystals, below); only the wind-scoured ice and the
++				// glazed crests catch the sky. All of it at 0.32 read as a wet floor, smeared with glare
++				rough = mix(rough, mix(0.74, 0.34, gSnowIce), gSnowW);
+ 				diffuseColor.rgb *= 1.0 - print * 0.12;
+ 				// moonlight catching the wet sand
+ 				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);
+@@ -435,7 +451,7 @@ export function leanTerrainMaterial(uniforms, far = false) {
+ 	const m = new THREE.MeshLambertMaterial({ color: 0xffffff });
+ 	m.onBeforeCompile = (sh) => {
+ 		Object.assign(sh.uniforms, { uHeight: uniforms.uHeight, uHalf: uniforms.uHalf, uCell: uniforms.uCell, uN: uniforms.uN, uCenter: uniforms.uCenter, uPlG: uniforms.uPlG, uPlS: uniforms.uPlS, uHoles: uniforms.uHoles });
+-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vLW;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return farBlend(heightAt(w), w); }\n' : '#define groundH heightAt\n') + sh.vertexShader
++		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vLW;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
+ 			.replace('#include <beginnormal_vertex>', `
+ 				vec2 wxz = position.xz + uCenter;
+ 				float e = max(uCell, max(abs(position.x), abs(position.z)) * 0.02);
+diff --git a/island/src/world/vegetation.js b/island/src/world/vegetation.js
+index a653e1b..a6a013d 100644
+--- a/island/src/world/vegetation.js
++++ b/island/src/world/vegetation.js
+@@ -10,6 +10,7 @@ import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
+ import * as TX from './textures.js';
+ import { addPulse } from '../pulse.js';
+ import { stepResonance } from '../music/performance.js';
++import { baseFromSlope } from './groundsnap.js';
+ import { addLodFade, fadeRange } from './lodfade.js';
+ 
+ // ---------- geometry helpers ----------
+@@ -624,6 +625,17 @@ float rh(vec2 p){ p = mod(p, 512.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 +
+ float rvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rh(i), rh(i + vec2(1, 0)), f.x), mix(rh(i + vec2(0, 1)), rh(i + vec2(1, 1)), f.x), f.y); }
+ float rfbm(vec2 p){ return rvn(p) * 0.5 + rvn(p * 2.1 + 3.1) * 0.3 + rvn(p * 4.3 - 1.7) * 0.2; }
+ `;
++// where a gust is pressing now (0.3 between the patches, up to 1.4 under one): the grass's own
++// cat's-paw field (grass.js patchA), carried down the wind at the same speed
++export const GUST_GLSL = /* glsl */`
++float gpH(vec2 p){ p = mod(p, 4096.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
++float gustPatch(vec2 w){
++	vec2 wd = normalize(uWindDir + vec2(1e-5, 0.0));
++	vec2 p = (w - wd * uWindT * 9.0) * 0.018 + 3.1, i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
++	float n = mix(mix(gpH(i), gpH(i + vec2(1, 0)), f.x), mix(gpH(i + vec2(0, 1)), gpH(i + vec2(1, 1)), f.x), f.y);
++	return 0.3 + 1.1 * smoothstep(0.42, 0.85, n);
++}
++`;
+ // a planet's leaf colour, normalised to keep the foliage's brightness
+ function leafOf(P, second) {
+ 	const t = second ? P?.alt?.leaf : P?.leaf?.tint, mix = second ? P?.alt?.leafMix : P?.leaf?.mix;
+@@ -648,8 +660,8 @@ export function swayMaterial(params, shared, stiff) {
+ 			}
+ 			#endif` : '';
+ 	const hook = (sh, eye = false) => {
+-		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT;
+-		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
++		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT; sh.uniforms.uWindDir = shared.uWindDir;
++		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT; uniform vec2 uWindDir;\nvarying float vGroundAO;\n' + GUST_GLSL + sh.vertexShader.replace('#include <begin_vertex>', `
+ 			#include <begin_vertex>
+ 			// darker where it meets the ground: roots, the trunk foot, the base of a shrub
+ 			vGroundAO = mix(0.42, 1.0, smoothstep(-0.1, 1.3, position.y));
+@@ -660,13 +672,16 @@ export function swayMaterial(params, shared, stiff) {
+ 			#endif
+ 			float ph = ip.x * 0.21 + ip.z * 0.17;
+ 			float sw = aSway * aSway * ${stiff.toFixed(2)};
++			// a gust is a patch of stronger air rolling down the wind, the same cat's-paws the grass
++			// shows (grass.js): a stand bows tree by tree as it passes, never all at once
++			float gustL = uGust * gustPatch(ip.xz);
+ 			// sway on the wind's own clock; a gust leans the whole plant downwind and
+ 			// sets the leaves fluttering; at no wind it barely stirs
+-			float push = 0.02 + uWind * 0.2 + uGust * 0.35 + uBass * 0.3;
+-			float flutter = 0.006 + uWind * 0.035 + uGust * 0.06;
++			float push = 0.02 + uWind * 0.2 + gustL * 0.35 + uBass * 0.3;
++			float flutter = 0.006 + uWind * 0.035 + gustL * 0.06;
+ 			float wt = uWindT * 2.2;
+-			transformed.x += (sin(wt * 1.25 + ph) * push + uGust * 0.25 + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * flutter) * sw;
+-			transformed.z += (cos(wt * 1.05 + ph * 1.3) * push * 0.7 + uGust * 0.1 + cos(uTime * 4.3 + position.x * 1.3) * flutter * 0.8) * sw;${eye ? nearGLSL : ''}`);
++			transformed.x += (sin(wt * 1.25 + ph) * push + gustL * 0.25 + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * flutter) * sw;
++			transformed.z += (cos(wt * 1.05 + ph * 1.3) * push * 0.7 + gustL * 0.1 + cos(uTime * 4.3 + position.x * 1.3) * flutter * 0.8) * sw;${eye ? nearGLSL : ''}`);
+ 	};
+ 	// leaves are thin: light both faces from the outward normal, as sunlight through
+ 	// a leaf does, instead of flipping the back face dark
+@@ -696,7 +711,11 @@ export function swayMaterial(params, shared, stiff) {
+ 		float upF = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
+ 		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), vSnowK * smoothstep(-0.15, 0.45, upF) * 0.92);
+ 	}`);
+-		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
++		// (a leaf's back face keeps the outward normal for its light, so it faces away from you:
++		// its sheen then read the view as grazing and lit every leaf seen from below a frosted
++		// white, palms most of all. A leaf seen from behind shows light through it, no shine)
++		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);')
++			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n\tif (!gl_FrontFacing) { material.specularColor = vec3(0.0); material.specularColorBlended = vec3(0.0); material.specularF90 = 0.0; }');
+ 	};
+ 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '') + (near ? 'n' + near.r + ',' + near.cap : '');
+ 	let depth = null;
+@@ -947,8 +966,13 @@ export function createVegetation(island, shared, scene, flora = null) {
+ 			const key = Math.floor(px / CELL) + ',' + Math.floor(pz / CELL);
+ 			let c = cells.get(key);
+ 			if (!c) cells.set(key, c = { x: Math.floor(px / CELL), z: Math.floor(pz / CELL), items: {} });
++			const rot = rnd() * 6.283, scale = sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : sp.key === 'tiderock' ? 1.2 + rnd() * 2.8 : 0.8 + rnd() * 0.45;
++			// the foot on the lowest ground under it (world/groundsnap.js): on a slope the downhill
++			// side of a trunk or a stone no longer stands proud of the ground
++			const rise = Math.sqrt(Math.max(0, 1 - n.y * n.y)) / Math.max(0.2, n.y);
++			const foot = (sp.key === 'boulder' ? 0.55 : sp.key === 'tiderock' ? 0.6 : sp.tree ? 0.35 : 0.25) * scale;
+ 			(c.items[sp.key] || (c.items[sp.key] = [])).push({
+-				x: px, y: h - (sp.key === 'boulder' ? 0.35 : sp.key === 'tiderock' ? 0.5 : 0.05), z: pz, rot: rnd() * 6.283, scale: sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : sp.key === 'tiderock' ? 1.2 + rnd() * 2.8 : 0.8 + rnd() * 0.45,
++				x: px, y: baseFromSlope(h, rise, foot, sp.key === 'boulder' ? 0.35 : sp.key === 'tiderock' ? 0.5 : 0.05), z: pz, rot, scale,
+ 				v: Math.floor(rnd() * sp.variants.length), tint: 0.85 + rnd() * 0.3,
+ 			});
+ 			// coconut palms lean out over the beach, toward the light and the sea
+diff --git a/island/tools/nature-qa.test.mjs b/island/tools/nature-qa.test.mjs
+new file mode 100644
+index 0000000..241b5da
+--- /dev/null
++++ b/island/tools/nature-qa.test.mjs
+@@ -0,0 +1,186 @@
++// The nature QA pass (docs/nature-qa-2026-10-16.md): things standing on the ground meet it
++// (world/groundsnap.js), trees beside a graded road ride its banks and cuts (bay/berms.js
++// roadDelta), the ground's colours blend by slope, height and noise (world/terrain.js), and no
++// ground lifted on the graphics card can throw a vertex to infinity (SAFE_GLSL).
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++import * as THREE from 'three';
++import { baseHeight, baseFromSlope, slopeAt, tiltFromGradient, slopeTilt } from '../src/world/groundsnap.js';
++import { SAFE_GLSL, HEIGHT_GLSL, SAFE_H_RANGE } from '../src/world/terrain.js';
++import { createBerms, BERM_U, roadDelta, gradeVersion } from '../src/bay/berms.js';
++
++const src = (p) => readFileSync(new URL('../src/' + p, import.meta.url), 'utf8');
++const plane = (gx, gz, h0 = 10) => (x, z) => h0 + gx * x + gz * z;
++
++test('a foot on a slope meets the lowest ground under it, a little sunk', () => {
++	for (const [gx, gz] of [[0, 0], [0.3, 0], [0, -0.6], [0.4, 0.4], [-0.8, 0.1]]) {
++		const g = plane(gx, gz), r = 0.6, sink = 0.07;
++		const y = baseHeight(g, 5, -3, r, sink);
++		// as low as the lowest of the footprint's samples, and no lower than its true lowest point
++		const h = g(5, -3);
++		assert.ok(y <= h - Math.max(Math.abs(gx), Math.abs(gz)) * r - sink + 1e-9, `slope ${gx},${gz}`);
++		assert.ok(y >= h - Math.hypot(gx, gz) * r - sink - 1e-9, `slope ${gx},${gz}`);
++		// on the flat it is just the sink below the centre
++		if (!gx && !gz) assert.ok(Math.abs(y - (10 - sink)) < 1e-9);
++		// the slope in hand gives the same foot on a plane, without the extra samples
++		const s = slopeAt(g, 5, -3, 1);
++		assert.ok(Math.abs(s - Math.hypot(gx, gz)) < 1e-9);
++		const yb = baseFromSlope(g(5, -3), s, r, sink);
++		assert.ok(yb <= y + 1e-9, 'the slope form is never higher than the sampled one');
++		assert.ok(yb >= y - Math.hypot(gx, gz) * r * 0.42 - 1e-9, 'and not much lower');
++	}
++});
++
++test('a foot never sinks out of sight over a cliff, and ignores ground that is not a number', () => {
++	const cliff = (x) => (x > 0.3 ? -500 : 20);
++	const y = baseHeight(cliff, 0, 0, 0.8, 0.05);
++	assert.ok(y > 20 - 0.8 * 1.5 - 0.5 - 0.06 && y < 20, `cliff ${y}`);
++	const holey = (x, z) => (x > 0 ? NaN : z > 0 ? Infinity : 4);
++	const y2 = baseHeight(holey, 0, 0, 1, 0.1);
++	assert.ok(Number.isFinite(y2) && Math.abs(y2 - 3.9) < 1e-9);
++	assert.ok(Number.isFinite(baseFromSlope(NaN, NaN, 1, 0.1)));
++	assert.equal(baseFromSlope(10, 100, 1, 0), 10 - 2, 'a slope of a wall is held to a stride');
++});
++
++test('rocks and low plants lie with the slope; at k = 0 the turn is the yaw alone', () => {
++	const q = new THREE.Quaternion(), up = new THREE.Vector3();
++	for (const [gx, gz] of [[0.5, 0], [0, 0.5], [-0.3, 0.7], [0, 0]]) for (const k of [0, 0.5, 1]) for (const yaw of [0, 1.3, -2.2]) {
++		tiltFromGradient(gx, gz, yaw, k, q);
++		assert.ok(Math.abs(q.length() - 1) < 1e-9);
++		up.set(0, 1, 0).applyQuaternion(q);
++		const n = new THREE.Vector3(-gx * k, 1, -gz * k).normalize();
++		assert.ok(up.distanceTo(n) < 1e-9, `up goes to the eased normal (${gx}, ${gz}, k ${k})`);
++		// the plant's own forward still turns with yaw (seen from above)
++		const f = new THREE.Vector3(1, 0, 0).applyQuaternion(q), f0 = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
++		if (k === 0) assert.ok(f.distanceTo(f0) < 1e-9);
++		else assert.ok(Math.atan2(-f.z, f.x) - Math.atan2(-f0.z, f0.x) < 0.8);
++	}
++	slopeTilt(plane(0.2, -0.1), 0, 0, 1, 0.5, 1, q);
++	up.set(0, 1, 0).applyQuaternion(q);
++	assert.ok(up.distanceTo(new THREE.Vector3(-0.2, 1, 0.1).normalize()) < 1e-9);
++	tiltFromGradient(NaN, 1, 0, 1, q);
++	assert.ok(Number.isFinite(q.x + q.y + q.z + q.w));
++});
++
++test('every ground lifted on the graphics card is guarded against infinity and not-a-number', () => {
++	// the guard tests the bits (no compiler folds that away) and holds the range
++	assert.match(SAFE_GLSL, /floatBitsToUint\(h\) & 0x7f800000u\) == 0x7f800000u/);
++	assert.match(SAFE_GLSL, /#ifndef SAFE_H_GLSL/);
++	assert.ok(SAFE_GLSL.includes(`clamp(h, -${SAFE_H_RANGE}.0, ${SAFE_H_RANGE}.0)`));
++	// the island and planets' ground (and grass, litter, caves, through HEIGHT_GLSL)
++	assert.match(HEIGHT_GLSL, /return safeH\(mix\(/);
++	assert.match(HEIGHT_GLSL, /max\(uCell, 1e-3\)/);
++	assert.match(src('world/terrain.js'), /safeH\(farBlend\(heightAt\(w\), w\), 0\.0\)/);
++	// the Bay's surveyed ground
++	assert.match(src('bay/terrain.js'), /float gradedHeight\(vec2 w\)\{ float b = bayHeight\(w\); return safeH\(/);
++	assert.match(src('bay/terrain.js'), /SAFE_GLSL \+ BAY_GLSL/);
++	// the globe's ground
++	assert.match(src('earth/globeterrain.js'), /gh = safeH\(gh, 0\.0\);/);
++	assert.match(src('earth/globeterrain.js'), /SAFE_GLSL \+ BAY_GLSL/);
++	// a vertex shader compiles with two copies included (the guard is defined once)
++	const twice = SAFE_GLSL + SAFE_GLSL;
++	assert.equal((twice.match(/float safeH/g) || []).length, 2);
++	assert.equal((twice.match(/#ifndef SAFE_H_GLSL/g) || []).length, 2);
++});
++
++test('the sunbeams ease into the open sky at the shadow box, never a hard line', () => {
++	const s = src('world/sunrays.js');
++	assert.match(s, /smoothstep\(0\.0, 0\.12, edge\)/);
++	assert.match(s, /mix\(uOpen, texture\(uShadow/);
++});
++
++test('trees beside a graded road ride its banks and cuts, and the grade never carries a NaN', () => {
++	let available = false, nanAt = null;
++	const road = { drive: true, cls: 'primary', w: 8, pts: new Float32Array([0, -200, 0, 200]) };
++	const real = { loaded: () => true, inside: () => true, version: () => 1, sourceVersion: () => 1, near: (k) => (available && k === 'roads' ? [road] : []) };
++	// a hump the road cuts through (a 12 m rise over 60 m)
++	const ground = (x, z) => (nanAt && Math.hypot(x - nanAt[0], z - nanAt[1]) < 3 ? NaN : 100 + 12 * Math.exp(-(z * z) / 900));
++	const berms = createBerms(real, ground);
++	const cam = { position: new THREE.Vector3(0, 102, 0) };
++	berms.update(cam);
++	assert.equal(roadDelta(1, 0), 0, 'nothing graded yet');
++	const v0 = gradeVersion();
++	available = true; real.version = () => 2;
++	berms.update(cam);
++	assert.equal(BERM_U.uBermR.value.w, 1);
++	assert.ok(gradeVersion() > v0, 'the version moves when the grid is redone');
++	// on the crown of the hump the road is cut down; a tree on the verge (4.5 m out) rides the cut
++	const cut = roadDelta(4.5, 0);
++	assert.ok(cut < -1, `cut ${cut}`);
++	assert.ok(Math.abs(berms.apply(4.5, 0, ground(4.5, 0)) - (ground(4.5, 0) + cut)) < 1e-6, 'the same as the ground the GPU draws');
++	// far off the road the ground is its own
++	assert.equal(roadDelta(60, 0), 0);
++	// a ground still loading (NaN here) never puts a NaN into the grade
++	nanAt = [0, 30]; real.version = () => 3;
++	berms.update(cam);
++	for (let z = 20; z <= 40; z += 1) assert.ok(Number.isFinite(roadDelta(2, z)) && Number.isFinite(berms.apply(2, z, 100)));
++	// the city's trees and the street trees' stakes read it
++	assert.match(src('bay/city.js'), /const gy = d < 300 \? t\.y \+ roadDelta\(t\.x, t\.z\) : t\.y;/);
++	assert.match(src('bay/city.js'), /gradeVersion\(\) !== treeGV/);
++	assert.match(src('bay/streettrees.js'), /const ty = t\.y \+ roadDelta\(t\.x, t\.z\);/);
++});
++
++test('the grass glows with the sun only where the sun reaches it, and never stretches across the lens', async () => {
++	const { SUNLIT_BEGIN } = await import('../src/world/grass.js');
++	// three's light loop, with the sun's shadow kept for the glow
++	assert.ok(SUNLIT_BEGIN.length > THREE.ShaderChunk.lights_fragment_begin.length);
++	assert.match(SUNLIT_BEGIN, /vDirectionalShadowCoord\[ i \] \) : 1\.0;\n\t\tgSunLit = min\(gSunLit,/);
++	const s = src('world/grass.js');
++	assert.match(s, /totalEmissiveRadiance \+= gGlow \* gSunLit \* vShadeK;/);
++	assert.ok(!/totalEmissiveRadiance \+= [^;]*uSunColor/.test(s), 'no sun glow added before the lights');
++	assert.match(s, /vShadeK = 1\.0 - canopy \* 0\.85;/);
++	// a tuft at the eye shrinks away; the parting only for a walker's eye height
++	assert.match(s, /tall \*= smoothstep\(0\.25, 0\.9, eyeD\);/);
++	assert.match(s, /smoothstep\(1\.1, 1\.45, eyeH\) \* \(1\.0 - smoothstep\(2\.2, 3\.0, eyeH\)\)/);
++});
++
++test('trees bow to the same gusts the grass shows, patch by patch, not all at once', async () => {
++	const { GUST_GLSL } = await import('../src/world/vegetation.js');
++	const { NOISE_GLSL } = await import('../src/world/terrain.js');
++	// the same hash as the grass's value noise (terrain.js h21), carried down the wind as fast
++	const body = (g, name) => { const a = g.indexOf('float ' + name + '(vec2 p)'); return g.slice(g.indexOf('{', a), g.indexOf('}', a) + 1); };
++	assert.equal(body(GUST_GLSL, 'gpH'), body(NOISE_GLSL, 'h21'));
++	assert.match(GUST_GLSL, /\(w - wd \* uWindT \* 9\.0\) \* 0\.018 \+ 3\.1/);
++	assert.match(src('world/grass.js'), /vec2 gp = w - wd \* uWindT \* 9\.0;\n\t*float patchA = smoothstep\(0\.42, 0\.85, vn\(gp \* 0\.018 \+ 3\.1\)\);/);
++	assert.ok(GUST_GLSL.endsWith('\n'), 'ends its line, so the next #include stands at a line start');
++	assert.ok(SAFE_GLSL.endsWith('\n'));
++	assert.match(src('world/vegetation.js'), /float gustL = uGust \* gustPatch\(ip\.xz\);/);
++});
++
++test('nothing of the wild ground stands on asphalt, a car park or a roof', async () => {
++	const { onPaving } = await import('../src/nature/wildground.js');
++	// a car park on the coarse map at x 0..20, and a drive road along z = 50
++	const real = { inside: () => true, landAt: (x) => (x >= 0 && x < 20 ? { lu: 0, road: 1, roof: 0 } : { lu: 0, road: 0.1, roof: 0 }) };
++	const drives = [{ drive: true, w: 6, walked: true, pts: new Float32Array([-100, 50, 100, 50]) }];
++	assert.equal(onPaving(real, drives, 10, 0), true, 'the car park');
++	assert.equal(onPaving(real, drives, 30, 0), false, 'the wild beside it');
++	assert.equal(onPaving(real, drives, 30, 50 + 3 + 1.7 + 0.5), true, 'the road, its sidewalk and a margin');
++	assert.equal(onPaving(real, drives, 30, 50 + 3 + 1.7 + 0.7), false, 'just past it');
++	assert.equal(onPaving(null, [], 0, 0), false, 'no map, nothing paved');
++	assert.match(src('nature/wildground.js'), /const put = \(L, x, z, yaw, sx, sy, col, v, sink = 0\.05, lie = false\) => \{\n\t\t\tif \(paved\(x, z\)\) return;/);
++	// the hyper-arid deserts are bare but for the washes
++	assert.match(src('nature/wildground.js'), /const sparse = sm\(25, 220, rain\)/);
++});
++
++test('the globe ground: its photo grain without a speckle, its snow and rock by aspect', () => {
++	const s = src('earth/globeterrain.js');
++	// the photographs' relief a centimetre or so (12 cm tipped every pixel's normal), their grain a
++	// quarter either way, as the Bay's
++	assert.match(s, /bh \+= \(gDetL - 0\.5\) \* 0\.015 \* \(1\.0 - smoothstep\(0\.03, 0\.15, px\)\);/);
++	assert.match(s, /c \*= mix\(1\.0, 0\.72 \+ 0\.56 \* gDetL, 1\.0 - smoothstep\(0\.08, 0\.5, px\)\);/);
++	// and the snow is matte but for the wind-scoured ice
++	assert.match(src('world/terrain.js'), /rough = mix\(rough, mix\(0\.74, 0\.34, gSnowIce\), gSnowW\);/);
++	// shaded faces keep their snow, the line wanders, scree and moss where they belong
++	assert.match(s, /float snowAir = air - shadeSide \* 2\.5 \+ \(m1 - 0\.5\) \* 1\.4;/);
++	assert.match(s, /float screeK = /);
++	assert.match(s, /uniform vec4 uGAnc;/);
++});
++
++test('every wild rock has a damp dark foot where it meets the soil', () => {
++	const s = src('nature/rocks.js');
++	assert.match(s, /float foot = 1\.0 - smoothstep\(uRkFoot - 0\.04, uRkFoot \+ 0\.2/);
++	assert.match(s, /m\.onBeforeCompile = function \(sh\)/);
++	assert.match(src('world/lodfade.js'), /prev\.call\(material, sh, r\)/);
++	for (const [layer, k] of [['Lrk', '0.35'], ['Lout', '0.45'], ['Lst', '0.3']]) assert.ok(src('nature/wildground.js').includes(`footAt(${layer}, ${k});`));
++});

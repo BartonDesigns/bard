@@ -18,6 +18,8 @@ export function createWaypoint({ scene, camera, mount, onTap = () => {}, top = 8
 	// ---------- the chip ----------
 	const chip = document.createElement('button');
 	chip.type = 'button';
+	// (text to read, not a control: the touch skin leaves it as it is and keeps controls off it)
+	chip.dataset.hudText = 'quest';
 	chip.style.cssText = 'position:absolute;left:50%;top:calc(86px + env(safe-area-inset-top));transform:translateX(-50%);display:none;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));min-height:44px;padding:6px 14px 6px 8px;border-radius:22px;border:1px solid rgba(1,169,130,.55);background:rgba(10,14,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f2f5f4;font:600 13px/1.25 system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);text-align:left;';
 	chip.style.top = `calc(${top}px + env(safe-area-inset-top))`;
 	const arrow = document.createElement('span');

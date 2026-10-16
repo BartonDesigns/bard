@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import { weatherStucco } from './weathering.js';
 import { usePhoto } from '../world/photomats.js';
+import { addNightField } from '../world/nightfield.js';
 
 const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 export { lin };
@@ -21,6 +22,10 @@ export class Builder {
 	// mul: a brightness for whatever is drawn next (each piece of furniture its own)
 	constructor() { this.bufs = new Map(); this.rot = 0; this.o = [0, 0, 0]; this.ao = false; this.mul = 1; }
 	at(x, y, z, rot = 0) { this.o = [x, y, z]; this.rot = ((rot % 4) + 4) % 4; return this; }
+	// where every buffer stands now, and later which vertices were added since: [key, first,
+	// count] (structures/walls/ takes a broken wall's own triangles out of the merged meshes)
+	mark() { const m = new Map(); for (const [k, b] of this.bufs) m.set(k, b.p.length / 3); return m; }
+	since(m) { const out = []; for (const [k, b] of this.bufs) { const s = m.get(k) || 0, e = b.p.length / 3; if (e > s) out.push([k, s, e - s]); } return out; }
 	buf(k) { let b = this.bufs.get(k); if (!b) this.bufs.set(k, b = { p: [], n: [], u: [], c: [], a: [] }); return b; }
 	tp(x, y, z) {
 		const [ox, oy, oz] = this.o;
@@ -160,7 +165,7 @@ export class Builder {
 			g.setAttribute('normal', new THREE.Float32BufferAttribute(b.n, 3));
 			g.setAttribute('uv', new THREE.Float32BufferAttribute(b.u, 2));
 			// (the lit walls keep their shading apart, in the alpha, to dim their glow by it too)
-			if (mats[k].vertexAlphas) { const c4 = new Float32Array(b.a.length * 4); for (let i = 0; i < b.a.length; i++) c4.set([b.c[i * 3], b.c[i * 3 + 1], b.c[i * 3 + 2], b.a[i]], i * 4); g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
+			if (mats[k].userData.vertexAlphas) { const c4 = new Float32Array(b.a.length * 4); for (let i = 0; i < b.a.length; i++) c4.set([b.c[i * 3], b.c[i * 3 + 1], b.c[i * 3 + 2], b.a[i]], i * 4); g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
 			else g.setAttribute('color', new THREE.Float32BufferAttribute(b.c, 3));
 			g.computeBoundingSphere();
 			const m = new THREE.Mesh(g, mats[k]);
@@ -461,6 +466,8 @@ const SLOT_V = 256, SLOT_LOW = 96;
 const SLOT = new Map();
 for (let k = 0; k < 8; k++) { SLOT.set('paper' + k, ['paper', k * SLOT_V]); SLOT.set('paperLit' + k, ['paperLit', k * SLOT_V]); SLOT.set('floor' + k, ['floorPat', k * SLOT_V]); SLOT.set('door' + k, ['door6', k * DOOR_ROW]); }
 for (let k = 0; k < 4; k++) { SLOT.set('siding' + k, ['siding', k * SLOT_V]); SLOT.set('garage' + k, ['garage', (k + 1) * GARAGE_ROW]); }
+// a patterned key's material and its v lift, as Builder.quad applies it (or null for a plain key)
+export const slotOf = (k) => SLOT.get(k) || null;
 
 // what shiny things inside reflect: a pale ceiling, warm walls, a darker floor
 function roomEnv() {
@@ -488,7 +495,10 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	// the walls and ceilings: their glow (the light about the room) dimmed in the corners too,
 	// by the shading the builder keeps in the colour's alpha
 	const room = (o) => {
-		const m = std({ vertexAlphas: true, ...o });
+		const m = std(o);
+		// Three infers USE_COLOR_ALPHA from the geometry's four-component color.
+		// This is builder metadata, not a MeshStandardMaterial constructor option.
+		m.userData.vertexAlphas = true;
 		// (and by the wall's own colour, so a dark accent wall stays dark, not lamp-brown)
 		// (three takes the colour's alpha only from a four-component colour, so where the
 		// builder gave three the shading is read from the colour itself)
@@ -538,6 +548,8 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	M.floorPat = patterned(std({ roughness: 0.38, envMap: env, envMapIntensity: 0.25 }), P.floor, 1.2, [1, 1, 4, 1, 1, 1, 1, 1]);
 	M.siding = patterned(std({ roughness: 0.85 }), P.siding, 1.2);
 	M.lamp.userData.night = true;
+	// the outside walls take the porch lights, the garage lights and the uplights close by
+	for (const m of [M.stucco, M.siding, M.garage]) addNightField(m);
 	for (const m of Object.values(M)) addLodFade(m, fadeMode, band || [NONE_IN[0], NONE_IN[1], 36, 46]);
 	// by night the lamps glow and the walls lose the daylight they had from the windows
 	// (seen from outside, with no lamps of its own to light it, a lit room glows brighter)

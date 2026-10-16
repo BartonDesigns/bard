@@ -245,9 +245,9 @@ export function createNegotiator({ storage, key = 'crysis-negotiation-v1', clock
 		} catch { return failure('save-failed', 'The agreement could not be saved. The exchange remains pending.'); }
 	}
 	function publish(result) {
-		if (!result.ok) { const { state: unused, ...out } = result; return out; }
+		if (!result.ok) { const out = { ...result }; delete out.state; return out; }
 		if (result.state !== state) { const saved = save(result.state); if (!saved.ok) return saved; }
-		const { state: unused, inventory: preview, ...out } = result; return out;
+		const out = { ...result }; delete out.state; delete out.inventory; return out;
 	}
 	function finish(id) {
 		const offer = state.offers[id];

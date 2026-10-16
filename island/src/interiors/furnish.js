@@ -5,6 +5,7 @@
 // Seats are kept for the people who live and work there (people/people.js).
 
 import { ST } from './plan.js';
+import { fitFront, fitBack, BACK } from './estab-fit.js';
 
 const WALL_T = { ext: ST.ext, part: ST.part };
 // fit-outs for more kinds of room, by type, from other modules (services/fitout.js: wards,
@@ -113,8 +114,25 @@ export function furnish(P, only = -1) {
 			const R = (x, z) => [[x, z], [z, -x], [-x, -z], [-z, x]][tb.rot];
 			for (const [lx, lz, f] of spots) { const [dx, dz] = R(lx, lz), [fx, fz] = R(0, f); seats.push({ x: tb.x + dx, z: tb.z + dz, y: y0, fx, fz, sit: true, h: 0.47, room: rm.id, table: true }); }
 		}
+		// the business's own fit-out (estab-fit.js), when the building is a known business
+		// (P.estab: its frontage.js fit); a region of a big hall, or the whole room
+		const estabK = (R0, passSide = null) => ({
+			rm: R0, y0, ceil: L.h, bw: R0.x1 - R0.x0, bd: R0.z1 - R0.z0, cx: (R0.x0 + R0.x1) / 2, cz: (R0.z0 + R0.z1) / 2, sides, rnd, items, passSide, garage: false,
+			against, inFront, standing: (type, x, z, w, d, h, rot = 0, pad = 0) => standing(type, x, z, w, d, h, rot, pad),
+			stand: (x, z, fx, fz, staff) => seats.push({ x, z, y: y0, fx, fz, sit: false, h: 0, room: rm.id, staff: !!staff }),
+			seat: (x, z, fx, fz, h) => seats.push({ x, z, y: y0, fx, fz, sit: true, h, room: rm.id }),
+			sitOn, chairs, light, anchor: (kind, x, y, z) => (P.lightAnchors || (P.lightAnchors = [])).push({ kind, x, y, z, room: rm.id, level: rm.k }),
+			// (a sign's place for the environmental graphics: an aisle marker, interiors/index.js signAnchors)
+			sign: (kind, x, y, z, o = {}) => (P.signAnchors || (P.signAnchors = [])).push({ kind, x, y, z, room: rm.id, level: rm.k, ...o }),
+		});
 		// a shop on the street, by its trade
 		function shopFit(r) {
+			if (P.estab?.fit) {
+				// (the kitchen or the stockroom behind the shop: through the back wall's doorway)
+				const back = sides.find((s) => s.axis === 'x' && s.n > 0);
+				const behind = P.rooms.some((q) => q.k === r.k && q.type === 'storage');
+				if (fitFront(P.estab.fit, estabK(r, behind ? back : null))) { lights.push([cx, y0 + L.h - 0.5, cz, rm.id]); return; }
+			}
 			const kind = r.shopType || 'cafe', front = sides.find((s) => s.axis === 'x' && s.n < 0), backS = sides.find((s) => s.axis === 'x' && s.n > 0);
 			const counter = against('shopCounter', Math.min(3.2, bw - 1.2), 0.7, 1.0, { side: (s) => s === backS || (s.axis === 'z' && s.walled), clear: 1.0, extra: { kind } });
 			if (counter) { const [fx, fz] = faceOf(counter.rot); stand(counter.x - fx * 0.55, counter.z - fz * 0.55, fx, fz); }
@@ -155,6 +173,8 @@ export function furnish(P, only = -1) {
 		// the big halls: a region near the door fitted out, the rest left open
 		function bigFit(r) {
 			const u = r.type, x0 = Math.max(r.x0 + 1, P.door.x - 18), x1 = Math.min(r.x1 - 1, P.door.x + 18), z1 = r.z1 - 3, z0 = Math.max(r.z0 + 1, z1 - 30);
+			// a store that is a known business: fitted out as one round the door (the rest left open)
+			if (u === 'store' && P.estab?.fit && fitFront(P.estab.fit, estabK({ x0: Math.max(r.x0, P.door.x - 12), x1: Math.min(r.x1, P.door.x + 12), z0: Math.max(r.z0, r.z1 - 16), z1: r.z1 }))) return;
 			if (u === 'warehouse') {
 				for (let x = x0 + 1; x < x1 - 1; x += 3.4) standing('rack', x, (z0 + z1) / 2 - 1, 1.1, Math.min(14, z1 - z0 - 3), Math.min(5.5, L.h - 0.5), 0, 0.1);
 				for (let k = 0; k < 6; k++) standing('crates', x0 + rnd() * (x1 - x0), z1 - 1 - rnd() * 2, 1.2, 1.0, 0.6 + rnd() * 1.2, 0, 0.3);
@@ -265,6 +285,8 @@ export function furnish(P, only = -1) {
 			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.6 }); against('armchair', 0.8, 0.8, 0.85, { corner: true, clear: 0.6 });
 			against('plant', 0.4, 0.4, 1.0, { corner: true, clear: 0 }); against('rug', Math.min(2.2, bw - 1), Math.min(1.6, bd - 1.5), 0.01, { clear: 0, centre: true });
 			art(1); light(t === 'family' ? 'fan' : 'flush');
+		} else if (t === 'storage' && rm.k === 0 && P.estab?.fit && BACK[P.estab.fit] !== undefined && !P.rooms.some((q) => q.k === 0 && q.type === 'storage' && q.id < rm.id && q.estabBack) && fitBack(BACK[P.estab.fit] || 'stock', estabK(rm))) {
+			rm.estabBack = true;
 		} else if (t === 'storage') {
 			against('shelves', Math.min(2.2, Math.max(bw, bd) - 1), 0.5, 1.9, { clear: 0.6 }); against('shelves', 1.6, 0.5, 1.9, { clear: 0.6 });
 			clutter(4); light('tube');

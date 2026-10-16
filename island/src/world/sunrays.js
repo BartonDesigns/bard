@@ -22,13 +22,17 @@ const MAX_SLICES = 10;
 const ss = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // the shadow map lookup shared by the sheets and the motes: 1 in sunlight, 0 in shade,
-// uOpen outside the map's box
+// uOpen outside the map's box. Toward the box's sides the map's answer eases into uOpen, so
+// where a beam runs out of the box there is no hard line down the screen (on a phone, whose
+// box is smaller, the beams' far end often lies outside it).
 const SHADOW_GLSL = /* glsl */`
 uniform sampler2DShadow uShadow; uniform mat4 uShadowM; uniform float uOpen;
 float sunLit(vec3 p){
 	vec4 sc = uShadowM * vec4(p, 1.0);
-	if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0) return uOpen;
-	return texture(uShadow, vec3(sc.xy, sc.z - 0.0006));
+	float edge = min(min(sc.x, 1.0 - sc.x), min(sc.y, 1.0 - sc.y));
+	if (edge <= 0.0 || sc.z > 1.0) return uOpen;
+	float k = smoothstep(0.0, 0.12, edge) * smoothstep(0.0, 0.05, 1.0 - sc.z);
+	return mix(uOpen, texture(uShadow, vec3(sc.xy, sc.z - 0.0006)), k);
 }
 `;
 

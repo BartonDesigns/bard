@@ -22,6 +22,7 @@ import { BLOCKS, toGrid, fromGrid } from './bay/styles.js';
 import { specOf, seatsOf } from './bay/cars.js';
 import { loadRapier, createCarPhysics } from './vehicles/physics.js';
 import { carEngine } from './audio/engines.js';
+import { firstTime } from './ui/touch-skin.js';
 
 const SPEED = { motorway: 29, trunk: 24, primary: 20, secondary: 17, tertiary: 15, residential: 11, unclassified: 12, living_street: 7, service: 6, unknown: 8, track: 5, path: 3, footway: 2.4, cycleway: 5, steps: 1.4, pedestrian: 2.4, grid: 11 };
 const TRAIL = new Set(['track', 'path', 'footway', 'cycleway', 'steps', 'pedestrian']);
@@ -183,7 +184,9 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	const modeBtn = btn('Assist', 'Let the road steer (M)', 'display:none;font-size:13px;', 'pill 11');
 	const credBtn = btn('ⓘ', 'Vehicle credits', 'display:none;width:44px;font-size:14px;', 'rail 70');
 	// the camera, driving it yourself: the driver's seat or from behind (C); a line camera
-	const camBtn = btn('', 'Camera: from behind or the driver\'s seat (C)', 'display:none;width:44px;align-items:center;justify-content:center;', 'mode 11');
+	// (on a touch screen it sits with the car's own buttons by the right thumb)
+	const touchUI = !!mount.classList?.contains('l99-touch');
+	const camBtn = btn('', 'Camera: from behind or the driver\'s seat (C)', 'display:none;width:44px;align-items:center;justify-content:center;', touchUI ? 'pill 12' : 'mode 11');
 	camBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="7" width="13" height="10" rx="2"/><path d="m15.5 10.5 6-3v9l-6-3"/></svg>';
 	const chase = () => { D.chase = !D.chase; labels(); };
 	camBtn.addEventListener('click', (e) => { e.stopPropagation(); chase(); });
@@ -191,12 +194,15 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	modeBtn.addEventListener('click', (e) => { e.stopPropagation(); setMode(D.mode === 'free' ? 'assist' : 'free'); });
 	credBtn.addEventListener('click', (e) => { e.stopPropagation(); hint(CREDITS, 9000); });
 	const pad = document.createElement('div');
+	// (phones only: ui/touch-skin.js spreads it over the screen, steering under the left thumb,
+	// go and brake under the right; it is laid out as a cross here without the skin)
 	pad.style.cssText = 'position:absolute;width:148px;height:124px;display:none;';
-	pad.dataset.hud = 'prompt 10';
+	pad.className = 'l99-pad';
 	mount.appendChild(pad);
 	const arrows = {};
 	for (const [k, label, css] of [['left', '◀', 'left:0;top:40px;'], ['straight', '▲', 'left:52px;top:0;'], ['right', '▶', 'left:104px;top:40px;'], ['back', '▼', 'left:52px;top:80px;']]) {
 		const b = btn(label, { left: 'Turn left next', right: 'Turn right next', straight: 'Straight on', back: 'Turn round' }[k], css + 'width:44px;');
+		b.dataset.pedal = k;
 		pad.appendChild(b);
 		b.addEventListener('click', (e) => { e.stopPropagation(); input(k); });
 		// (held down, for driving yourself)
@@ -205,6 +211,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		arrows[k] = b;
 	}
 	const hud = document.createElement('div');
+	hud.className = 'l99-drive-hud';
 	hud.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top));padding:6px 12px;border-radius:10px;background:rgba(8,20,26,.55);color:#eafaf6;font:13px system-ui;pointer-events:none;display:none;white-space:nowrap;';
 	mount.appendChild(hud);
 	// the keys a keyboard has for it, small under the line above (not on a phone: it has the buttons)
@@ -244,10 +251,10 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		D.active = true; P.locked = true; P.flying = false; P.vel.set(0, 0, 0); D.look = 0; D.lastYaw = undefined; D.y = null;
 		pad.style.display = isPhone ? 'block' : 'none'; hud.style.display = 'block';
 		for (const b of [kindBtn, modeBtn, credBtn]) b.style.display = 'flex';
-		toggleBtn.style.background = '#01a982';
+		seated(true);
 		labels();
 		if (D.mode === 'free') startPhysics();
-		hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. Assist lets the road steer. The road button stops.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'On the road: ← → pick the next turn (hold to turn round), ↑ straight on. The letter keys play music as you go. Space jumps off, Shift+arrow steps off, Esc stops.'), 4500);
+		if (!isPhone || firstTime('l99-tip-drive-' + D.mode)) hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. The door button gets you out.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The door button gets you out.' : 'On the road: ← → pick the next turn (hold to turn round), ↑ straight on. The letter keys play music as you go. Space jumps off, Shift+arrow steps off, Esc stops.'), 4500);
 	}
 	function boardMil(W, P, v) {
 		D.mil = W.military.board(v, { held, pedals: D.pedals, hud: (t) => { hud.textContent = t; }, strike, seat: () => D.chase, looked: () => performance.now() - (D.lookT || 0) < 2500, stop: (force) => stop(force) });
@@ -256,7 +263,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		D.active = true; D.chase = false; P.locked = true; P.flying = false; P.vel.set(0, 0, 0); D.lastYaw = undefined;
 		P.yaw = v.yaw + Math.PI; P.pitch = -0.05;
 		pad.style.display = isPhone ? 'block' : 'none'; hud.style.display = 'block';
-		toggleBtn.style.background = '#01a982';
+		seated(true);
 		labels();
 		return true;
 	}
@@ -312,7 +319,22 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (D.active && D.mode === 'free') startPhysics();
 		labels();
 	}
+	// in a vehicle or out: the road button stops you while you drive; on a touch screen it comes
+	// out of the controls menu to the right thumb for as long as you are in
+	function seated(on) {
+		toggleBtn.style.background = on ? '#01a982' : 'rgba(8,20,26,.55)';
+		const t = on ? 'Stop driving (V)' : 'Drive the road (V)';
+		if (toggleBtn.title !== t) { toggleBtn.title = t; toggleBtn.setAttribute('aria-label', t); }
+		const hud = on ? 'side 5' : 'mode 10';
+		if (touchUI && toggleBtn.dataset.hud !== hud) { toggleBtn.dataset.hud = hud; mount.appendChild(toggleBtn); }
+	}
 	function labels() {
+		// the pad's names say what it does now: pedals and steering, or the next turn
+		const free = D.mode === 'free' || !!D.mil;
+		for (const [k, a, b] of [['left', 'Steer left', 'Turn left next'], ['right', 'Steer right', 'Turn right next'], ['straight', 'Go', 'Straight on'], ['back', 'Brake and reverse', 'Turn round']]) {
+			const t = free ? a : b;
+			if (arrows[k].title !== t) { arrows[k].title = t; arrows[k].setAttribute('aria-label', t); }
+		}
 		kindBtn.textContent = D.kind[0].toUpperCase() + D.kind.slice(1) + ' ▸';
 		modeBtn.textContent = D.mode === 'free' ? 'Assist' : 'Drive';
 		modeBtn.title = D.mode === 'free' ? 'Let the road steer (M)' : 'Drive it yourself (M)';
@@ -340,7 +362,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 			}
 			pad.style.display = 'none'; hud.style.display = 'none'; keys.style.display = 'none';
 			for (const b of [kindBtn, modeBtn, credBtn, camBtn]) b.style.display = 'none';
-			toggleBtn.style.background = 'rgba(8,20,26,.55)';
+			seated(false);
 			return;
 		}
 		D.active = false;
@@ -361,7 +383,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (P) { P.locked = false; P.vel.set(0, 0, 0); }
 		pad.style.display = 'none'; hud.style.display = 'none'; keys.style.display = 'none';
 		for (const b of [kindBtn, modeBtn, credBtn, camBtn]) b.style.display = 'none';
-		toggleBtn.style.background = 'rgba(8,20,26,.55)';
+		seated(false);
 	}
 	toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); D.active ? stop(false) : start(); });
 	const held = new Set();

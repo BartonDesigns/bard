@@ -8,7 +8,7 @@
 // walking, flying and the boat.
 
 import * as THREE from 'three';
-import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
+import { radialGrid, ringGrid, NOISE_GLSL, SAFE_GLSL } from '../world/terrain.js';
 import { photoUniform } from '../world/photomats.js';
 import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
 import { PLACES } from './places.js';
@@ -19,6 +19,7 @@ import { CARVE_U, CARVE_GLSL, carveDelta } from './carve.js';
 import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
 import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from './coastside.js';
 import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
+import { SEASON_U } from './seasons.js';             // streets by era: the lawns browning off in late summer
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
 
@@ -93,8 +94,8 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	vec3 dry = mix(lawn, mix(vec3(0.32, 0.22, 0.09), vec3(0.46, 0.33, 0.14), gn), uSeason);
 	if (lu < 0.5 || (lu > 10.5 && lu < 12.5) || lu > 13.5) return nat;
 	if (lu < 1.5) {
-		// yards: lawns (a few browned off), planting beds, shade
-		vec3 y = mix(lawn, dry, smoothstep(0.55, 0.8, gf) * 0.6);
+		// yards: lawns (a few browned off; in late summer the ones nobody waters), planting beds, shade
+		vec3 y = mix(lawn, dry, max(smoothstep(0.55, 0.8, gf) * 0.6, smoothstep(0.82 - uLawnDry * 0.5, 0.95 - uLawnDry * 0.5, gf + vn(w * 0.021) * 0.3) * uLawnDry));
 		return mix(y, vec3(0.3, 0.24, 0.16), smoothstep(0.62, 0.72, vn(w * 0.35)) * 0.5);
 	}
 	if (lu < 2.5) return wildflowers(mix(lawn, dry, smoothstep(0.6, 0.85, gf) * 0.4), w, 0.15);
@@ -239,6 +240,11 @@ export function beyondH(x, z, he, d) {
 // the near ground's grid round you: its spacing grows with distance, about a metre at 10 m
 // and two at 30 m (fine enough to hold a trail's tread), the same 60 m at its 4 km edge
 // (a phone draws fewer: about 3 m apart at 30 m)
+// the far ring: its cells grow in step with the distance from just inside the near ring's
+// hole (3.9 km round the near ring's middle, which is snapped to 32 m and the far ring's to
+// 512) out to 95 km, about 1.3 degrees each on a desktop, 1.6 on a phone (the power-law grid
+// drew the hills a few kilometres off in facets four times the near ring's)
+const FAR_GRID = () => ringGrid(typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 256 : 320, 3500, 95000, 10);
 const NEAR_SEG = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
 
 export function createBayArea(shared, scene, island, BU) {
@@ -456,8 +462,8 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
-			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
+			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\n' + (hole ? 'attribute float aGsp;\n' : '') + 'varying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + SAFE_GLSL + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return safeH(b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0), -60.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
@@ -472,6 +478,8 @@ export function createBayArea(shared, scene, island, BU) {
 					// (how far past the survey: past the seam the globe's ground draws, earth/globeterrain.js)
 					{ vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (bw - uR0.xy) / uR0.z; vBOut = length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
 					float be = max(3.0, length(position.xz) * 0.006);
+					// (the far ring: the slope over its own spacing; finer, it aliases into facets)
+					${hole ? 'be = max(be, aGsp * 0.5);' : ''}
 					#ifdef GROUND_LITE_V
 					// (light: the slope from the survey's own height, no lie-of-the-land colours)
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
@@ -813,6 +821,10 @@ export function createBayArea(shared, scene, island, BU) {
 						vec4 D1 = texture2D(uRoadMap, clamp(ru, 0.0, 1.0)), D2 = texture2D(uRoadMap2, clamp(ru2, 0.0, 1.0));
 						vec4 PM = texture2D(uPaintMap, clamp(ru, 0.0, 1.0));
 						float Y1 = PM.r;
+						// the street's era and bearing, close by (potholes.js): read whole, never blended
+						float eraCode = -1.0;
+						if (e1 > 0.5 && dist < 300.0) { ivec2 PS = textureSize(uPaintMap, 0); float ea = texelFetch(uPaintMap, clamp(ivec2(clamp(ru, 0.0, 1.0) * vec2(PS)), ivec2(0), PS - 1), 0).a; if (ea > 0.5 / 255.0) eraCode = floor(ea * 255.0 + 0.5) - 1.0; }
+						wxEraAge = eraCode < 0.0 ? -1.0 : 1.0 - floor(eraCode / 48.0 + 0.01) * 0.225;
 						vec4 f1 = max(fwidth(D1) * 0.75, vec4(0.004)), f2 = max(fwidth(D2) * 0.75, vec4(0.004));
 						vec4 C1 = smoothstep(0.5 - f1, 0.5 + f1, D1), C2 = smoothstep(0.5 - f2, 0.5 + f2, D2);
 						float px = length(fwidth(vBW));
@@ -854,7 +866,9 @@ export function createBayArea(shared, scene, island, BU) {
 						// the gutter: a darker band just inside the asphalt edge; the kerb: a pale lip
 						// just outside it (the fine map's distance, 0.5 m ramp: d = (0.5 - v) metres)
 						float dK = 0.5 - D1.r;
-						float kerb = smoothstep(-0.02, 0.02, dK) * (1.0 - smoothstep(0.14, 0.18, dK)) * step(0.5, D1.g) * e1;
+						float kerb = 0.0;
+						vec3 kerbC = kerbEra(vBW, eraCode, dK, kerb);
+						kerb *= step(0.5, D1.g) * e1;
 						float gutter = smoothstep(-0.45, -0.3, dK) * (1.0 - smoothstep(-0.02, 0.0, dK)) * step(0.5, D1.g) * e1;
 						// the streets' years close by (weathering.js), from the paint map's green: each lane
 						// a tent (0.07 at its middle to 0 at 1.8 m), patches at 0.2, covers at 0.28
@@ -867,18 +881,19 @@ export function createBayArea(shared, scene, island, BU) {
 							float cov = smoothstep(0.24 - lw, 0.24 + lw, lg) * noFwy;
 							float pat = smoothstep(0.1 - lw, 0.1 + lw, lg) * noFwy * (1.0 - cov);
 							asphC = asphaltAge(asphC, vBW, ld, lk, pat, cov, px, gutter);
+							asphC = potholeAge(asphC, vBW, PM.b * e1, pat, px);
 							trk = lk * exp(-(ld - 0.85) * (ld - 0.85) * 10.0);
 							wxGloss *= asph; wxPudA *= asph;
 						}
 						if (conc > 0.01 && dist < 250.0 && fwyK < 0.5) {
 							float seam = max(1.0 - smoothstep(0.04, 0.16, abs(D1.g - 0.5)), 1.0 - smoothstep(0.04, 0.16, abs(dK))) * e1;
-							c = mix(c, walkAge(concC, vBW, px, seam), conc);
+							c = mix(c, walkEra(concC, vBW, px, seam, eraCode), conc);
 						}
 						c = mix(c, asphC, asph);
 						c = mix(c, c * 0.7, gutter);
 						if (gutter > 0.01 && dist < 200.0) c = gutterAge(c, vBW, gutter * smoothstep(-0.45, 0.0, dK), px);
 						// (roots have heaved the kerb here and there, and the weeds come up along it)
-						c = mix(c, vec3(0.76, 0.75, 0.72) * (0.8 + 0.2 * vn(vBW * 0.9)), kerb);
+						c = mix(c, kerbC, kerb);
 						// the paint worn thin and polished off where the tyres cross it
 						float paintK = (1.0 - 0.6 * trk) * (0.7 + 0.3 * vn(vBW * 0.6)) * mix(0.85, 0.55 + 0.45 * step(0.35, h21(floor(mod(vBW, 1024.0) * 12.0))), 1.0 - smoothstep(0.02, 0.06, px));
 						c = mix(c, vec3(0.88, 0.88, 0.84), white * 0.92 * paintK);
@@ -970,6 +985,16 @@ export function createBayArea(shared, scene, island, BU) {
 								float cov = 1.0 - smoothstep(0.3, 0.3 + px, length(vec2(mod(al + 20.0, 40.0) - 20.0, cd)));
 								float gut = 1.0 - smoothstep(0.0, 0.5, min(ax, BK.z - ax));
 								stC = asphaltAge(stC, vBW, ld, lk, pat, cov, px, gut);
+								// potholes in the wheel paths, one chance in each 5 m of lane (more in the old towns)
+								{
+									vec2 hc = vec2(floor(al / 5.0), step(BK.z * 0.5, ax) * 2.0 + step(1.8, cd)) + cid * 5.3;
+									float hk = (sty < 2.5 ? 0.13 : 0.05) * (0.5 + vn(vBW * 0.002 + 7.0));
+									if (h21(hc) > 1.0 - hk) {
+										float ca = (floor(al / 5.0) + 0.25 + 0.5 * h21(hc + 1.7)) * 5.0, cc = mix(0.95, 2.65, step(1.8, cd)) + (h21(hc + 4.1) - 0.5) * 0.2;
+										float hr = 0.2 + 0.25 * h21(hc + 2.3);
+										stC = potholeAge(stC, vBW, clamp(0.5 + (hr - length(vec2(al - ca, cd - cc))), 0.0, 1.0), 0.0, px);
+									}
+								}
 								stC = mix(stC, stC * 0.7, gut * 0.6);
 								if (gut > 0.01) stC = gutterAge(stC, vBW, gut, px);
 								// a faded double yellow down the middle of the wider streets
@@ -1091,7 +1116,7 @@ export function createBayArea(shared, scene, island, BU) {
 		return m;
 	}
 	const nearMat = groundMaterial(false), farMat = groundMaterial(true);
-	const near = new THREE.Mesh(radialGrid(NEAR_SEG, NEAR_R, NEAR_POW), nearMat), far = new THREE.Mesh(radialGrid(256, 95000, 2.6), farMat);
+	const near = new THREE.Mesh(radialGrid(NEAR_SEG, NEAR_R, NEAR_POW), nearMat), far = new THREE.Mesh(FAR_GRID(), farMat);
 	for (const m of [near, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
 	near.visible = far.visible = false;
 

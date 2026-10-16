@@ -10,7 +10,8 @@
 // region rather than re-dressed, one at a time, so nothing stalls.
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA, rng } from '../people/body.js';
+import { loadPeopleAssets, buildPerson, personDNA, rng, freeBody } from '../people/body.js';
+import { peopleCap } from '../world/governor.js';
 import { hairFor } from '../people/wardrobe.js';
 import { createMotion } from '../people/motion.js';
 import { addTalkers } from '../people/people.js';
@@ -35,7 +36,8 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 	const group = new THREE.Group();
 	group.name = 'regional folk';
 	scene.add(group);
-	const MAXB = isPhone ? 4 : 8;
+	// (as many as the quality tier's people share allows: world/governor.js)
+	const MAXB0 = isPhone ? 4 : 8, maxB = () => peopleCap(MAXB0, 2);
 	const bodies = [];                       // { P, M, key, busy, task, spot, ... }
 	let A = null, failed = false, building = false, castT = 0, castKey = '', seedN = 1;
 	const stopTalk = addTalkers(() => bodies.filter((b) => b.busy));
@@ -54,7 +56,7 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 	// the kind of person this place has now (bodies of another place are let go and rebuilt)
 	const keyNow = () => `${communityKey(here)}|${Math.round(coldOf(here.climate) * 3)}`;
 	function grow() {
-		if (building || !A || bodies.length >= MAXB || !here.kit) return;
+		if (building || !A || bodies.length >= maxB() || !here.kit) return;
 		building = true;
 		try {
 			const seed = (Math.imul(seedN++, 2654435761) ^ (Math.round(here.lat * 1000) * 7919)) >>> 0;
@@ -85,7 +87,8 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 			bodies.push(b);
 		} catch (e) { console.warn('[regional folk]', e); } finally { building = false; }
 	}
-	function free(b) { group.remove(b.P.root); b.P.root.traverse((o) => { o.geometry?.dispose?.(); }); }
+	// (the rod's geometry is shared: off the body before the body's own are let go)
+	function free(b) { if (b.rod) { b.rod.removeFromParent(); b.rod = null; } if (b.other) { b.other.other = null; b.other.task = 'sit'; b.other = null; } freeBody(b.P); }
 
 	// ---------- casting: who is where ----------
 	function cast(camera) {
@@ -167,9 +170,11 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 		if (!A && !failed) ensure();
 		// people of another place go; people of this place come, one at a time
 		const k = keyNow();
-		const stale = bodies.findIndex((b) => b.key !== k && !b.engaged);
+		// (and on a tier down, the spare ones: the idle first)
+		let stale = bodies.findIndex((b) => b.key !== k && !b.engaged);
+		if (stale < 0 && bodies.length > maxB()) { stale = bodies.findIndex((b) => !b.busy && !b.engaged); if (stale < 0) stale = bodies.findIndex((b) => !b.engaged); }
 		if (stale >= 0 && !building) { free(bodies[stale]); bodies.splice(stale, 1); }
-		else if (A && bodies.length < MAXB) grow();
+		else if (A && bodies.length < maxB()) grow();
 		castT -= dt;
 		const cell = Math.round(cam.position.x / 80) + ',' + Math.round(cam.position.z / 80) + ':' + bodies.length;
 		if (castT <= 0 && cell !== castKey) { castT = 3; castKey = cell; cast(cam); if (!bodies.some((b) => b.busy)) { castT = 0.5; castKey = ''; } }

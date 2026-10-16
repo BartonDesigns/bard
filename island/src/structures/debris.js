@@ -1,9 +1,10 @@
 // What flies when a building breaks: chunks of wall and slab, real rigid bodies in a small
 // physics world of their own (Rapier, as the cars use: vehicles/physics.js), tumbling off the
 // break, striking the ground and the walls near and coming to rest; the dust that billows up
-// and hangs; and glass, shards spinning down from a pane to skitter on the pavement. All from
-// fixed pools (one instanced mesh each, one point cloud), capped lower on a phone; the oldest
-// gives way when a new one is wanted.
+// and rolls out along the street, hangs a long while and settles; the fires that burn in a
+// wreck and the smoke off them; and glass, shards spinning down from a pane to skitter on the
+// pavement. All from fixed pools (one instanced mesh each, two point clouds), capped lower on
+// a phone; the oldest gives way when a new one is wanted.
 
 import * as THREE from 'three';
 import { loadRapier } from '../vehicles/physics.js';
@@ -117,8 +118,8 @@ export function createDebris(scene, { isPhone = false, ground, solids = () => []
 		chunks.instanceMatrix.needsUpdate = true;
 	}
 
-	// ---------- dust ----------
-	const DN = isPhone ? 140 : 320;
+	// ---------- dust and smoke ----------
+	const DN = isPhone ? 200 : 520;
 	const dPos = new Float32Array(DN * 3), dCol = new Float32Array(DN * 4), dSize = new Float32Array(DN);
 	const dg = new THREE.BufferGeometry();
 	dg.setAttribute('position', new THREE.BufferAttribute(dPos, 3).setUsage(THREE.DynamicDrawUsage));
@@ -126,8 +127,9 @@ export function createDebris(scene, { isPhone = false, ground, solids = () => []
 	dg.setAttribute('size', new THREE.BufferAttribute(dSize, 1).setUsage(THREE.DynamicDrawUsage));
 	const dm = new THREE.ShaderMaterial({
 		uniforms: { scale: { value: 600 } },
-		vertexShader: 'attribute float size; attribute vec4 color; varying vec4 vC; uniform float scale; void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = min(512.0, size * scale / max(0.5, -mv.z)); gl_Position = projectionMatrix * mv; }',
-		fragmentShader: 'varying vec4 vC; void main(){ vec2 q = gl_PointCoord * 2.0 - 1.0; float r = dot(q, q); if (r > 1.0) discard; float a = vC.a * (1.0 - r) * (1.0 - r * 0.4); gl_FragColor = vec4(vC.rgb * (0.85 + 0.15 * (1.0 - q.y)), a); }',
+		vertexShader: 'attribute float size; attribute vec4 color; varying vec4 vC; uniform float scale; void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = min(420.0, size * scale / max(0.5, -mv.z)); gl_Position = projectionMatrix * mv; }',
+		// (a soft puff, lumpy at its edge, lit from above)
+		fragmentShader: 'varying vec4 vC; void main(){ vec2 q = gl_PointCoord * 2.0 - 1.0; float r = dot(q, q); float lump = 0.82 + 0.18 * sin(atan(q.y, q.x) * 5.0 + vC.a * 40.0); if (r > lump) discard; float a = vC.a * (1.0 - r / lump) * (1.0 - r * 0.35); gl_FragColor = vec4(vC.rgb * (0.78 + 0.3 * (1.0 - q.y * 0.5 - 0.5)), a); }',
 		transparent: true, depthWrite: false,
 	});
 	const dust = new THREE.Points(dg, dm);
@@ -135,14 +137,21 @@ export function createDebris(scene, { isPhone = false, ground, solids = () => []
 	dust.onBeforeRender = (...args) => { const [r, , cam] = args; dm.uniforms.scale.value = r.getSize(V2).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360)); };
 	const V2 = new THREE.Vector2();
 	group.add(dust);
-	const D = Array.from({ length: DN }, () => ({ life: 1, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 1, s1: 3, c: 0.7 }));
+	const D = Array.from({ length: DN }, () => ({ life: 1, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 1, s1: 3, c: 0.7, a: 0.55, sink: 0, drag: 0.9, warm: 0 }));
 	let dn = 0;
-	// n puffs about (x, y, z) over a spread, k their size
-	function puff(x, y, z, n, spread = 2, k = 1, tint = 0.72) {
+	// n puffs about (x, y, z) over a spread, k their size; o: { life (s), roll (out along the ground
+	// at this speed), smoke (dark, rising), alpha }
+	function puff(x, y, z, n, spread = 2, k = 1, tint = 0.72, o = null) {
+		const life = o?.life ?? (3.5 + 5 * Math.sqrt(k)), roll = o?.roll ?? 0, smoke = !!o?.smoke;
 		for (let j = 0; j < n; j++) {
 			const p = D[dn]; dn = (dn + 1) % DN;
-			const a = Math.random() * Math.PI * 2, r = Math.random() * spread;
-			Object.assign(p, { life: 0, max: (3.5 + Math.random() * 5) * Math.sqrt(k), x: x + Math.cos(a) * r, y: y + Math.random() * spread * 0.4, z: z + Math.sin(a) * r, vx: Math.cos(a) * (0.6 + Math.random()) * k, vy: 0.3 + Math.random() * 0.9 * k, vz: Math.sin(a) * (0.6 + Math.random()) * k, s0: (0.8 + Math.random()) * k, s1: (3 + Math.random() * 4) * k, c: tint * (0.85 + Math.random() * 0.2) });
+			const a = Math.random() * Math.PI * 2, r = Math.random() * spread, out = roll ? roll * (0.6 + Math.random() * 0.6) : (0.6 + Math.random()) * k;
+			Object.assign(p, {
+				life: 0, max: life * (0.6 + Math.random() * 0.7), x: x + Math.cos(a) * r, y: y + (roll ? Math.random() * 0.8 : Math.random() * spread * 0.4), z: z + Math.sin(a) * r,
+				vx: Math.cos(a) * out, vy: smoke ? 1.2 + Math.random() * 1.4 : roll ? 0.15 + Math.random() * 0.5 : 0.3 + Math.random() * 0.9 * k, vz: Math.sin(a) * out,
+				s0: (0.8 + Math.random()) * k, s1: (smoke ? 5 + Math.random() * 5 : 3 + Math.random() * 4) * k, c: tint * (0.85 + Math.random() * 0.2),
+				a: o?.alpha ?? (smoke ? 0.5 : 0.55), sink: smoke ? 0 : roll ? 0.5 : 0.3, drag: roll ? 1.5 : 0.9, warm: smoke ? 1 : 0,
+			});
 		}
 	}
 	function stepDust(dt) {
@@ -150,14 +159,86 @@ export function createDebris(scene, { isPhone = false, ground, solids = () => []
 			const p = D[i];
 			if (p.life >= p.max) { dCol[i * 4 + 3] = 0; dSize[i] = 0; continue; }
 			p.life += dt;
-			const t = p.life / p.max, drag = Math.exp(-dt * 0.9);
-			p.vx *= drag; p.vz *= drag; p.vy = p.vy * drag + 0.05 * dt;
-			p.x += (p.vx + 0.25) * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+			const t = p.life / p.max, drag = Math.exp(-dt * p.drag);
+			// (rising while it is warm, then hanging, then sinking back to settle)
+			p.vx *= drag; p.vz *= drag;
+			p.vy = p.vy * Math.exp(-dt * 0.6) + (p.warm ? 0.35 * (1 - t) : t < 0.3 ? 0.05 : -0.12 * p.sink) * dt;
+			p.x += (p.vx + 0.25 + p.warm * 0.4) * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+			const size = p.s0 + (p.s1 - p.s0) * Math.sqrt(t), g = ground(p.x, p.z) + size * 0.2;
+			if (p.y < g) { p.y = g; p.vy = Math.max(0, p.vy); }
 			dPos[i * 3] = p.x; dPos[i * 3 + 1] = p.y; dPos[i * 3 + 2] = p.z;
-			dCol[i * 4] = p.c; dCol[i * 4 + 1] = p.c * 0.95; dCol[i * 4 + 2] = p.c * 0.86; dCol[i * 4 + 3] = Math.min(1, t * 8) * (1 - t) * 0.55;
-			dSize[i] = p.s0 + (p.s1 - p.s0) * Math.sqrt(t);
+			const c = p.warm ? p.c * (0.6 + 0.4 * t) : p.c;
+			dCol[i * 4] = c; dCol[i * 4 + 1] = c * 0.95; dCol[i * 4 + 2] = c * (p.warm ? 0.92 : 0.86); dCol[i * 4 + 3] = Math.min(1, t * 10) * Math.pow(1 - t, 1.3) * p.a;
+			dSize[i] = size;
 		}
 		for (const k of ['position', 'color', 'size']) dg.attributes[k].needsUpdate = true;
+	}
+
+	// ---------- fire ----------
+	const FN = isPhone ? 90 : 240;
+	const fPos = new Float32Array(FN * 3), fCol = new Float32Array(FN * 4), fSize = new Float32Array(FN);
+	const fgeo = new THREE.BufferGeometry();
+	fgeo.setAttribute('position', new THREE.BufferAttribute(fPos, 3).setUsage(THREE.DynamicDrawUsage));
+	fgeo.setAttribute('color', new THREE.BufferAttribute(fCol, 4).setUsage(THREE.DynamicDrawUsage));
+	fgeo.setAttribute('size', new THREE.BufferAttribute(fSize, 1).setUsage(THREE.DynamicDrawUsage));
+	const fm = new THREE.ShaderMaterial({
+		uniforms: dm.uniforms,
+		vertexShader: dm.vertexShader,
+		// (a tongue of flame: bright at its root, licking up)
+		fragmentShader: 'varying vec4 vC; void main(){ vec2 q = gl_PointCoord * 2.0 - 1.0; q.x *= 1.0 + q.y * 0.6; float r = dot(q, q); if (r > 1.0) discard; float a = vC.a * pow(1.0 - r, 1.6); gl_FragColor = vec4(vC.rgb * a, a); }',
+		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+	});
+	const flames = new THREE.Points(fgeo, fm);
+	flames.frustumCulled = false; flames.renderOrder = 3;
+	flames.onBeforeRender = dust.onBeforeRender;
+	group.add(flames);
+	const Fl = Array.from({ length: FN }, () => ({ life: 1, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s: 1 }));
+	let fn = 0;
+	function flame(x, y, z, k) {
+		const p = Fl[fn]; fn = (fn + 1) % FN;
+		Object.assign(p, { life: 0, max: 0.5 + Math.random() * 0.6, x: x + (Math.random() - 0.5) * k, y: y + Math.random() * 0.3, z: z + (Math.random() - 0.5) * k, vx: (Math.random() - 0.5) * 0.6, vy: 1.6 + Math.random() * 2 * k, vz: (Math.random() - 0.5) * 0.6, s: (0.7 + Math.random() * 0.8) * k });
+	}
+	function stepFlames(dt) {
+		for (let i = 0; i < FN; i++) {
+			const p = Fl[i];
+			if (p.life >= p.max) { fCol[i * 4 + 3] = 0; fSize[i] = 0; continue; }
+			p.life += dt;
+			const t = p.life / p.max;
+			p.x += (p.vx + 0.3) * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+			fPos[i * 3] = p.x; fPos[i * 3 + 1] = p.y; fPos[i * 3 + 2] = p.z;
+			// (white-yellow at the root, orange, a dull red as it goes)
+			fCol[i * 4] = 1; fCol[i * 4 + 1] = Math.max(0.15, 0.85 - t * 0.75); fCol[i * 4 + 2] = Math.max(0, 0.45 - t * 0.9); fCol[i * 4 + 3] = Math.min(1, t * 6) * (1 - t) * 0.9;
+			fSize[i] = p.s * (1 - t * 0.55);
+		}
+		for (const k of ['position', 'color', 'size']) fgeo.attributes[k].needsUpdate = true;
+	}
+	// what burns and what hangs on: by owner, a list of { x, y, z, k } fires, or a haze of dust
+	// over a fresh wreck for a while; each gives off its flames and smoke (or dust) every frame
+	const burning = new Map();
+	let hazes = [];
+	function burn(id, spots) {
+		if (!spots || !spots.length) burning.delete(id);
+		else burning.set(id, spots.slice(0, 6).map((q) => ({ ...q, acc: Math.random(), sm: Math.random() })));
+	}
+	function haze(x, y, z, r, seconds) {
+		hazes.push({ x, y, z, r, until: performance.now() + seconds * 1000, acc: 0 });
+		if (hazes.length > 6) hazes.shift();
+	}
+	function stepEmitters(dt) {
+		let n = 0;
+		for (const spots of burning.values()) for (const q of spots) {
+			if (n++ > 18) break;
+			q.acc += dt * (isPhone ? 9 : 22) * q.k;
+			while (q.acc > 1) { q.acc -= 1; flame(q.x, q.y, q.z, q.k); }
+			q.sm += dt * (isPhone ? 0.8 : 1.6) * q.k;
+			if (q.sm > 1) { q.sm -= 1; puff(q.x, q.y + 1.2 * q.k, q.z, 1, 0.4, 0.8 + q.k * 0.6, 0.16, { smoke: true, life: 9 + 5 * q.k }); }
+		}
+		const now = performance.now();
+		hazes = hazes.filter((h) => h.until > now);
+		for (const h of hazes) {
+			h.acc += dt * (isPhone ? 0.5 : 1.2);
+			if (h.acc > 1) { h.acc -= 1; puff(h.x, h.y, h.z, 1, h.r, 1.6, 0.7, { life: 14, alpha: 0.3 }); }
+		}
 	}
 
 	// ---------- glass shards ----------
@@ -211,8 +292,8 @@ export function createDebris(scene, { isPhone = false, ground, solids = () => []
 		if (any) shards.instanceMatrix.needsUpdate = true;
 	}
 
-	function update(dt) { stepChunks(dt); stepDust(dt); stepShards(dt); }
-	const counts = () => ({ chunks: C.filter((c) => c.live).length, physics: !!world, dust: D.filter((p) => p.life < p.max).length, shards: S.filter((s) => s.live).length });
-	function dispose() { scene.remove(group); chunkGeo.dispose(); chunkMat.dispose(); dg.dispose(); dm.dispose(); shardGeo.dispose(); shardMat.dispose(); world?.free(); world = null; }
-	return { group, chunk, puff, shatter, update, counts, dispose, cap: CAP };
+	function update(dt) { stepChunks(dt); stepEmitters(dt); stepDust(dt); stepFlames(dt); stepShards(dt); }
+	const counts = () => ({ chunks: C.filter((c) => c.live).length, physics: !!world, dust: D.filter((p) => p.life < p.max).length, flames: Fl.filter((p) => p.life < p.max).length, fires: [...burning.values()].reduce((a, q) => a + q.length, 0), hazes: hazes.length, shards: S.filter((s) => s.live).length });
+	function dispose() { scene.remove(group); chunkGeo.dispose(); chunkMat.dispose(); dg.dispose(); dm.dispose(); fgeo.dispose(); fm.dispose(); shardGeo.dispose(); shardMat.dispose(); world?.free(); world = null; }
+	return { group, chunk, puff, haze, burn, shatter, update, counts, dispose, cap: CAP };
 }

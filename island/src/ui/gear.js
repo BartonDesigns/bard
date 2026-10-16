@@ -357,6 +357,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		const canAim = third && on && !shown() && !win.shown() && !Ps.swimming && !arms.locked?.() && !!weaponOf(H?.i);
 		if (!third || !on) thirdAimHeld = thirdAimTap = false;
 		hand.aim(canAim && (thirdAimHeld || thirdAimTap)); hand.aimPitch(Ps?.pitch || 0);
+		// (the trigger finger on the trigger while aiming, along the frame otherwise: people/motion.js)
+		me?.M?.trigger?.('R', canAim && (thirdAimHeld || thirdAimTap) ? 1 : 0);
 		if (thirdAimBtn) { thirdAimBtn.style.display = canAim ? 'flex' : 'none'; thirdAimBtn.setAttribute('aria-pressed', String(thirdAimHeld || thirdAimTap)); }
 		if (third) hand.follow(me.P, Math.atan2(-Math.sin(Ps?.yaw || 0), -Math.cos(Ps?.yaw || 0)), on && !Ps.swimming, me.M, time, dt);
 		else hand.hide();

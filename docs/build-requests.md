@@ -157,3 +157,13 @@ Source: the owner’s current conversation asking for more immersive reputation 
 - **BR-006 / P0 remains open for universal world state:** route projects, bonds and personal quests are device-local. The durable soul ledger is a separate server feature awaiting rooms deployment. No claim of shared construction, cross-device private journals, or completed BR-006 acceptance.
 - **BR-002 remains to specify:** this slice creates its supported route marks immediately; the approximately one-day propagation design is not implemented or promised as a code-shipping deadline.
 - Production capability check, **2026-10-14 05:02 UTC**: Discovery has existing `social_intent`/`story_quest`, but lacks `quest-continuity-v1`; rooms lacks `reputation-v1` and `persistent-reputation-v1`. Frontend publication, Worker deployment and live gameplay acceptance remain distinct. No credentials or other contributor branches changed.
+
+
+## Owner-request implementation checkpoint: 16 October 2026
+
+Source: this owner's request for production permanent reputation, shared projects and autonomous NPCs with families and money; implementation evidence is [PR #31](https://github.com/BartonDesigns/bard/pull/31) and [the release checkpoint](living-world-release-2026-10-16.md). This is not a Floodgate intake scan, a new external suggestion or a human playtest. Prior source history and intake timestamps are retained.
+
+- **BR-001/BR-002/BR-006, P0:** four supported shared project types now have confirmed proposals, actual survey/work, a server-owned minimum 24-hour construction period, persistent receipts/alarms and visible stages. Real local two-client and alarm tests pass. Production acceptance remains blocked on the updated rooms Worker, then live two-client verification; broad universal world/property state is not complete.
+- **BR-004, P0:** autonomous known-adult activity includes recurring family visits, protected player participation, public history and source-confirmed physical jobs. Family assignments and account links survive reload; existing daily budgets keep advancing, and profiles can sync without cash events. Automated unit, real SQLite and controlled UI evidence is recorded separately from production/model quality.
+- **Permanent reputation, P0:** durable soul identity and Gargantua ritual are integrated with current main's police/combat work. The production rooms service still lacks the required capability. Clearing wanted pursuit or paying fines does not erase soul standing.
+- Both Workers need deployment from the owner's authenticated Bard checkout. The helper checks the repository, tests and worker names. No credentials, unrelated branches or existing Floodgate PR were changed. This is not a 24-hour code-shipping promise.

@@ -17,9 +17,17 @@
 // sees, and is pulled back to the post when the fight strays too far from it. Sides that are
 // stationed are never made away from a post (ctx.mayStation). Each side dresses by its own
 // look (combat/outfits.js).
+//
+// The law's hooks (law/index.js through combat.hooks): officers hold their fire and close in to
+// arrest while the ladder says so (ctx.holdFire), a crew on a street corner minds its own
+// business with a patrol about (ctx.ignore), anyone called back to a car or a vehicle (recall)
+// stops fighting and walks to it, bodies are kept out of buildings (ctx.keepOut) and sidestep
+// when they make no headway, and a fallen fighter waiting for the ambulance stays where they
+// fell until it has been (awaitMedic, collected).
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
+import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/body.js';
+import { peopleCap } from '../world/governor.js';
 import { createMotion } from '../people/motion.js';
 import { fadePerson } from '../people/fade.js';
 import { createHealth, applyDamage, tickHealth } from './health.js';
@@ -119,7 +127,8 @@ function maskOn(P, glow) {
 export function createSquads(ctx) {
 	const { layer, fx, isPhone, relations } = ctx;
 	const group = new THREE.Group(); group.name = 'combat-squads';
-	const MAX = isPhone ? 6 : 14;
+	// (as many as the quality tier's people share allows: world/governor.js; at least a squad of three)
+	const MAX0 = isPhone ? 6 : 14, maxNow = () => peopleCap(MAX0, 3);
 	const list = [];
 	const pools = { person: [], drone: [], crawler: [] };
 	const squads = new Map();
@@ -138,7 +147,7 @@ export function createSquads(ctx) {
 			const d = personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid, seed) });
 			const P = buildPerson(A, d);
 			if (F.masked) maskOn(P, F.colors?.[0] || '#ff7a2a');
-			const b = { P, M: createMotion(P, (x, z) => ctx.ground(x, z, P.root.position.y + 1.2)), fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
+			const b = { P, M: createMotion(P, (x, z) => ctx.ground(x, z, P.root.position.y + 1.2), { constrain: (pos) => ctx.keepOut?.(pos) }), fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
 			group.add(P.root);
 			pools.person.push(b);
 			res(b);
@@ -150,7 +159,7 @@ export function createSquads(ctx) {
 
 	// one at (x, z) of a faction, in a squad
 	async function spawn(fid, x, z, squad, opts = {}) {
-		if (alive().length + pending.size >= MAX) return null;
+		if (alive().length + pending.size >= maxNow()) return null;
 		// (a stationed side only at a post: a base, a checkpoint, a compound)
 		if (FACTIONS[fid]?.stationed && ctx.mayStation && !ctx.mayStation(fid, x, z)) return null;
 		const generation = epoch, reservation = {};
@@ -302,13 +311,14 @@ export function createSquads(ctx) {
 	// another side's fighter, or (for raiders and their like) the villagers and townsfolk
 	const ME = { id: 'me', kind: 'player', faction: PLAYER };
 	function chooseTarget(h, eye) {
+		if (h.recall) return null;
 		const F = h.F;
 		let best = null, bd = h.B.sight * (h.alert ? 1.8 : 1);
 		const dMe = Math.hypot(eye.x - h.pos.x, eye.z - h.pos.z);
-		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && F.kind !== 'military' && ctx.wanted() > 0) || (F.kind === 'military' && (ctx.wanted() >= 3 || !!ctx.trespass?.(h))) || (F.kind === 'mercs' && ctx.bounty() > 0);
+		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && F.kind !== 'military' && ctx.wanted() > 0) || (F.kind === 'military' && (ctx.wanted() >= 5 || !!ctx.trespass?.(h))) || (F.kind === 'mercs' && ctx.bounty() > 0);
 		if (hateMe && !ctx.playerDown() && dMe < bd) { best = ME; bd = dMe; }
 		for (const o of list) {
-			if (o === h || o.dead || o.surrendered || o.crew || o.fid === h.fid || !relations.hostile(h.fid, o.fid)) continue;
+			if (o === h || o.dead || o.surrendered || o.crew || o.recall || o.fid === h.fid || !relations.hostile(h.fid, o.fid) || ctx.ignore?.(h, o)) continue;
 			const d = Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z);
 			if (d < bd) { bd = d; best = o.T; }
 		}
@@ -332,9 +342,12 @@ export function createSquads(ctx) {
 		else if (h.role === 'assault') R = rnd(8, 13);
 		else if (h.role === 'fallback') R = rnd(32, 42);
 		if (h.specialty && h.role !== 'fallback') R = rnd(...h.specialty.distance);
+		// guns holstered: officers close right in to make the arrest
+		const arrest = h.target?.id === 'me' && ctx.holdFire?.(h);
+		if (arrest) { R = rnd(1.6, 2.6); ang = 0; }
 		const c = Math.cos(ang), s = Math.sin(ang);
 		let gx = at.x + (ux * c - uz * s) * R, gz = at.z + (ux * s + uz * c) * R;
-		const cover = ctx.coverNear?.(gx, gz, 9);
+		const cover = arrest ? null : ctx.coverNear?.(gx, gz, 9);
 		if (cover) { const cx = cover.x - at.x, cz = cover.z - at.z, cl = Math.hypot(cx, cz) || 1; gx = cover.x + cx / cl * (cover.r + 0.7); gz = cover.z + cz / cl * (cover.r + 0.7); h.inCover = true; } else h.inCover = false;
 		h.goal = { x: gx, z: gz };
 		h.goalT = rnd(4, 7);
@@ -345,6 +358,7 @@ export function createSquads(ctx) {
 		const B = h.B, T = h.target;
 		h.fireT -= dt;
 		if (h.fireT > 0 || !h.los || !T || h.noGun) return;
+		if (T.id === 'me' && ctx.holdFire?.(h)) { h.fireT = 0.4; return; }
 		const to0 = posOf(T).clone(), from = h.kind === 'drone' ? h.pos.clone() : h.kind === 'crawler' ? new THREE.Vector3(h.pos.x, h.pos.y + 0.65, h.pos.z) : muzzleOf(h);
 		const dist = from.distanceTo(to0), atMe = T.id === 'me';
 		if (dist > B.range) return;
@@ -394,9 +408,20 @@ export function createSquads(ctx) {
 
 	// ---------- each frame ----------
 	let time = 0;
+	// spare bodies past what the tier allows let go, one a frame (body.js freeBody; the hand's model too)
+	function trimPool() {
+		if (pools.person.length <= maxNow() + 2) return;
+		const i = pools.person.findIndex((b) => !b.used);
+		if (i < 0) return;
+		const [b] = pools.person.splice(i, 1);
+		b.hand?.set(null);
+		if (b.P.ragdoll) ctx.ragdolls.release(b.P);
+		freeBody(b.P);
+	}
 	function update(dt) {
 		time += dt;
 		if (queue.length) queue.shift()();
+		trimPool();
 		const eye = ctx.eye();
 		for (let i = list.length - 1; i >= 0; i--) {
 			const h = list[i];
@@ -432,7 +457,9 @@ export function createSquads(ctx) {
 			// Keep recent nearby fighters long enough to inspect their equipment. Older
 			// bodies fade independently of drops, with at most twelve retained nearby.
 			const recent = list.filter((q) => q.dead && q.body).slice(-12).includes(h);
-			const keep = recent && Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z) < 40 ? 60 : 10;
+			let keep = recent && Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z) < 40 ? 60 : 10;
+			// (waiting for the ambulance: kept until it has been, gone soon after)
+			if (h.awaitMedic) keep = h.collected ? Math.min(h.deadT, keep) : 100;
 			if (h.deadT > keep) { const k = 1 - (h.deadT - keep) / 2; fadePerson(h.body.P, k); if (k <= 0) release(h); }
 		} else if (h.kind === 'drone') {
 			h.vy = (h.vy || 0) - 9.8 * dt; h.pos.y += h.vy * dt;
@@ -447,13 +474,40 @@ export function createSquads(ctx) {
 		}
 	}
 	function walk(h, gx, gz, speed, run) {
-		const M = h.body.M, dx = gx - h.pos.x, dz = gz - h.pos.z, d = Math.hypot(dx, dz);
+		const M = h.body.M;
+		// no headway for a while (a wall, a car in the way): a sidestep along it, then on
+		if (h.side > 0) { gx = h.pos.x + h.sideX * 4; gz = h.pos.z + h.sideZ * 4; }
+		const dx = gx - h.pos.x, dz = gz - h.pos.z, d = Math.hypot(dx, dz);
 		if (d > 1.2) { M.want.heading = Math.atan2(dx, dz); M.want.speed = speed; M.want.run = run; } else { M.want.speed = 0; M.want.run = 0; }
 		return d;
+	}
+	function headway(h, dt) {
+		if (h.side > 0) h.side -= dt;
+		if (!(h.body?.M.want.speed > 0.5)) { h.stuckT = 0; h.at0 = null; return; }
+		if (!h.at0) { h.at0 = { x: h.pos.x, z: h.pos.z }; h.stuckT = 0; return; }
+		h.stuckT += dt;
+		if (h.stuckT < 1.6) return;
+		const moved = Math.hypot(h.pos.x - h.at0.x, h.pos.z - h.at0.z);
+		h.at0.x = h.pos.x; h.at0.z = h.pos.z; h.stuckT = 0;
+		if (moved > 0.8) return;
+		const hd = h.body.M.want.heading, s = Math.random() < 0.5 ? 1 : -1;
+		h.sideX = Math.sin(hd + s * 1.7); h.sideZ = Math.cos(hd + s * 1.7); h.side = 1.2;
+		if (h.goal) h.goalT = Math.min(h.goalT, 1.3);
 	}
 	function personStep(h, dt, d) {
 		const b = h.body, M = b.M, S = M.S, eye = ctx.eye();
 		h.pos.copy(S.pos);
+		// (raised to the shoulder only while engaging; carried at the ready otherwise)
+		let aimAt = null;
+		// at close quarters with you (combat/melee-foes.js steers them: circling, their turns, a
+		// takedown): only the body is moved here, and the gun is put away
+		if (h.melee) {
+			h.yaw = S.heading;
+			M.update(dt, time, eye);
+			b.P.lod?.(d);
+			if (b.hand && !h.noGun) b.hand.follow(b.P, S.heading, false, M, time);
+			return;
+		}
 		// held to a post: a fight that strays too far from it is let go, and they walk back
 		const P0 = h.post;
 		if (P0 && h.target && Math.hypot(posOf(h.target).x - P0.x, posOf(h.target).z - P0.z) > (P0.r || 40) * 2.5) { h.target = null; h.alert = 0.4; h.goal = null; }
@@ -462,7 +516,7 @@ export function createSquads(ctx) {
 			const at = posOf(h.target);
 			M.want.speed = 0; M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
 			S.look.target = h.target.id === 'me' ? eye : null;
-			if (h.los) shoot(h, dt); else h.fireT = Math.max(h.fireT, 0.3);
+			if (h.los) { shoot(h, dt); aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); } else h.fireT = Math.max(h.fireT, 0.3);
 		} else if (h.alert && h.target) {
 			const at = posOf(h.target).clone();
 			h.goalT -= dt;
@@ -471,7 +525,7 @@ export function createSquads(ctx) {
 			h.crouch = gd <= 1.2 && h.inCover ? 0.5 : 0;
 			if (h.los && gd < 6) M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
 			S.look.target = h.target.id === 'me' ? eye : null;
-			if (h.los && (gd < 6 || h.role === 'suppress')) shoot(h, dt);
+			if (h.los && (gd < 6 || h.role === 'suppress')) { shoot(h, dt); if (gd < 2.5) aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); }
 			else h.fireT = Math.max(h.fireT, 0.3);
 		} else {
 			if (h.alert && !h.target) { h.alert = Math.max(0, h.alert - dt * 0.05); }
@@ -484,9 +538,18 @@ export function createSquads(ctx) {
 			}
 		}
 		h.yaw = S.heading;
+		headway(h, dt);
 		M.update(dt, time, eye);
 		b.P.lod?.(d);
-		if (b.hand && !h.noGun) b.hand.follow(b.P, S.heading, d < 90, M, time);
+		if (b.hand && !h.noGun) { aimHold(h, aimAt); b.hand.follow(b.P, S.heading, d < 90, M, time); }
+	}
+	// the gun up and on the target while engaging (the stock at the shoulder, the strong hand's
+	// finger on the trigger), down at the ready while moving or searching
+	function aimHold(h, at) {
+		const b = h.body, up = !!at && b.M.S.speed.v < 2.2;
+		b.hand.aim?.(up);
+		if (up) b.hand.aimPitch?.(Math.atan2(at.y - (h.pos.y + 1.4), Math.max(1, Math.hypot(at.x - h.pos.x, at.z - h.pos.z))));
+		b.M.trigger?.('R', up ? 1 : 0);
 	}
 	// at a post: a loop walked at a steady pace (each one spaced along it), or a spot held
 	// facing out, with a look about now and then
@@ -593,6 +656,6 @@ export function createSquads(ctx) {
 		return Promise.all(out).then(() => sq);
 	}
 	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); }
-	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: MAX, squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
+	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: maxNow(), squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
 	return { group, update, squad, spawn, hear, clear, info, alive, list, release, surrender, squads };
 }

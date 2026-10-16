@@ -92,6 +92,21 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const level = lakeLevel(x, z);
 		return level != null && height.out.h <= level - 0.3 ? level : null;
 	}
+	// the globe's own word for the sea (the economy's harbour trades, economy/layer.js setSea):
+	// true on the open sea (under the drawn sea level, where the land mask says sea) or a lake,
+	// false on land, null where the ground is not the globe's (the Bay's survey) or not yet in;
+	// coastMask, its land mask (0 at the coastline, about 0.5 well inland), or null
+	const ownGround = (x, z) => data.win.ready && bayOut(x, z) > SEAM_A;
+	function seaAt(x, z) {
+		if (!ownGround(x, z)) return null;
+		const h = height.at(x, z);
+		return (h < 0 && height.out.land <= 0.02) || waterAt(x, z) != null;
+	}
+	function coastMask(x, z) {
+		if (!ownGround(x, z)) return null;
+		height.at(x, z);
+		return height.out.land;
+	}
 
 	// ---------- the woods and the towns ----------
 	const inBayWild = (x, z) => { if (!F.bay) return false; const ll = toLL(x, z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM + 10; };
@@ -317,5 +332,5 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	// finish what is being laid out now, in one go (tests, and after a jump)
 	function settle() { trees.settle(); towns.civ().flush(); roads.settle(camera); lanes.settle(camera); }
-	return { update, place, info, dispose, settle, roads, lanes, toLL, toXZ, height, waterAt, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
+	return { update, place, info, dispose, settle, roads, lanes, toLL, toXZ, height, waterAt, seaAt, coastMask, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
 }

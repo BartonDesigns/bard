@@ -50,7 +50,7 @@ export function createSoul({ morality, storage = globalThis.localStorage, url = 
 			try {
 				status = 'saving';
 				const batch = pending().filter(e => e.epoch === (state.base.epoch || 0)).slice(0, 25);
-				const body = { op: 'sync', epoch: state.base.epoch || 0, deeds: batch.map(({ soul, t, ...d }) => d) };
+				const body = { op: 'sync', epoch: state.base.epoch || 0, deeds: batch.map(event => { const d = { ...event }; delete d.soul; delete d.t; return d; }) };
 				if (state.revision < 0) body.legacy = state.base;
 				const { data, conflict } = await call(body, savingSoul);
 				if (state.token !== savingSoul) return false;

@@ -1,3 +1,4 @@
+import { householdObservation, householdLine } from './household-activity.js';
 // A source-backed journal for the people doing things around you. The reducer can
 // advance intentions while away; only the original request source can settle a job.
 // Local evidence never masquerades as an authoritative multiplayer completion.
@@ -22,9 +23,9 @@ const safeStorage = () => { try { return globalThis.localStorage; } catch { retu
 export function createLivingWorld({
 	worldKey = () => 'here', region = () => ({ id: 'here', name: 'here' }), placeName = () => '',
 	position = () => null, requests = () => null, npcQuests = null, actors = () => [],
-	world = () => null, structures = () => null, persona = () => null, utcOffsetMinutes = () => 0, employerOf = () => null, soul = null, url = '',
+	world = () => null, structures = () => null, persona = () => null, utcOffsetMinutes = () => 0, employerOf = () => null, moneyFor = () => null, soul = null, url = '',
 	request = globalThis.fetch?.bind(globalThis), storage = safeStorage(), clock = () => Date.now(),
-	onContact = () => null, hint = () => {}, onComplete = () => {},
+	onContact = () => null, onComplete = () => {},
 } = {}) {
 	const actorSignatures = new Map();
 	let state = null, records = {}, archives = {}, scope = null, board = null, boardOff = null, dirty = false;
@@ -85,9 +86,11 @@ export function createLivingWorld({
 		let d = p.disposition; try { d ||= seed != null ? npcQuests?.disposition?.(seed) : null; } catch { /* neutral available facts */ }
 		let name = p.name || p.first; if (!name) { try { const who = persona(p); name = who?.first || who?.name; } catch { /* an unseen resident */ } }
 		const sites = { ...(state?.actors?.[shortId(id)]?.sites || {}), ...(p.sites || {}) }; let employer = null; try { employer = employerOf(id, p); } catch { /* no employer */ }
+		const household = householdObservation(p);
+		if (!sites.home && household) sites.home = 'home:' + household.id;
 		if (!sites.work && employer) sites.work = employer;
 		else if (!sites.work && Number.isFinite(p.workSpot?.x) && Number.isFinite(p.workSpot?.z)) sites.work = `work:${Math.round(p.workSpot.x)}:${Math.round(p.workSpot.z)}`;
-		return { id: shortId(id), name: name || 'A resident', disposition: d || { helpful: 0.5, reliable: 0.6, nerve: 0.5 }, skills: p.skills || [], sites, utcOffsetMinutes: p.utcOffsetMinutes ?? utcOffsetMinutes() };
+		return { id: shortId(id), name: name || 'A resident', disposition: d || { helpful: 0.5, reliable: 0.6, nerve: 0.5 }, skills: p.skills || [], household, sites, utcOffsetMinutes: p.utcOffsetMinutes ?? utcOffsetMinutes() };
 	}
 	function observeActor(a) {
 		if (!a) return;
@@ -238,7 +241,7 @@ export function createLivingWorld({
 		const local = livingWorldView(state, { limit: 100 });
 		const view = remote ? { ...remote, requests: [...new Map([...local.requests, ...remote.requests].map(q => [q.id, q])).values()], actors: [...new Map([...local.actors, ...remote.actors].map(a => [a.id, a])).values()] } : local;
 		const activities = view.requests.map(q => {
-			const rec = records[q.id], personId = q.actorId || q.giverId, actor = view.actors.find(a => a.id === personId);
+			const rec = records[q.id], personId = q.source === 'household-life' ? q.giverId : q.actorId || q.giverId, actor = view.actors.find(a => a.id === personId);
 			const raw = rec?.q, source = raw && board?.get?.(raw.id), mine = source?.taker === 'player' && rec?.owner === owner();
 			const finished = !!rec?.finished;
 			return { id: q.id, title: q.title, reason: rec?.note || q.blockedReason || 'Requested by ' + (raw?.giver.name || view.actors.find(a => a.id === q.giverId)?.name || 'a resident'),
@@ -253,13 +256,13 @@ export function createLivingWorld({
 				canContact: !!personId, canIntervene: !finished && !!q.choices?.length,
 				canProgress: (mine || !!rec?.pendingAck) && !finished, pendingAck: !!rec?.pendingAck,
 				canLeave: !finished && ((q.participants || []).includes(remote ? remoteYou : 'player') || mine && rec.step === 0 && !rec.agreementId), currentStep: rec ? raw.steps[rec.step] || null : null,
-				instruction: rec ? instruction(rec) : 'This activity was reported elsewhere. Visit its source before taking physical steps.',
+				instruction: q.source === 'household-life' ? 'A resident initiated this visit. Join and speak with the requester; no payment or player quest is consumed.' : rec ? instruction(rec) : 'This activity was reported elsewhere. Visit its source before taking physical steps.',
 				progress: { done: rec?.step || 0, total: raw?.steps.length || 0 }, source: q.source,
 			};
 		});
 		const history = [...view.events];
 		if (remote) for (const e of local.events) if (e.type === 'request-confirmed') history.push({ ...e, text: e.text + ' (Local source confirmation; not a shared receipt.)' });
-		return { activities, history: history.sort((a, b) => a.at - b.at).slice(-100), scope: { ...scope }, catchup: history.findLast(e => e.type === 'catch-up-limited') || null, error, routines: view.actors.filter(a => a.id.startsWith('npc:') || a.id.startsWith('colony:')), mode, savedLocally };
+		return { activities, history: history.sort((a, b) => a.at - b.at).slice(-100), scope: { ...scope }, catchup: history.findLast(e => e.type === 'catch-up-limited') || null, error, residents: view.actors.filter(a => a.household).slice(0, 12).map(a => { let money = null; try { money = moneyFor(a.id); } catch { /* unavailable account */ } return { id: a.id, name: a.name, household: a.household, line: householdLine(a, money), activity: a.activity }; }), routines: view.actors.filter(a => a.id.startsWith('npc:') || a.id.startsWith('colony:')), mode, savedLocally };
 	}
 	async function http(path, body, identity = credential()) {
 		const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
@@ -370,7 +373,15 @@ export function createLivingWorld({
 			return validContext() ? result : changed();
 		};
 		if (readBlocked && operation !== 'contact') return { ok: false, message: error };
-		const q = publicRequest(id), rec = records[id];
+		const q = publicRequest(id);
+		if (q?.source === 'household-life' && !records[id]) {
+			const giver = (remote?.actors || Object.values(state.actors)).find(a => a.id === q.giverId);
+			if (!state.actors[q.giverId] && giver) apply({ type: 'register-actor', actor: giver });
+			if (!state.requests[id]) apply({ type: 'register-request', request: q });
+			records[id] = { q: { ...q, giver: { id: q.giverId, name: giver?.name || 'A resident' }, steps: [{ do: 'talk', at: null }] }, step: 0, observedAt: clock(), owner: null };
+			dirty = true;
+		}
+		const rec = records[id];
 		if (!q) return { ok: false, message: 'That request is no longer known here.' };
 		if (operation === 'cancel-agreement') {
 			if (rec?.owner === owner() && rec.releasedAgreementId === args.agreementId) return { ok: true, message: 'The original work reward was already restored.' };
@@ -380,7 +391,7 @@ export function createLivingWorld({
 			return { ok: true, message: 'The item agreement was removed. The original cash reward for this work applies again.' };
 		}
 		if (operation === 'contact') {
-			const actorId = q.actorId || q.giverId;
+			const actorId = q.source === 'household-life' ? q.giverId : q.actorId || q.giverId;
 			const result = await onContact(actorId, { request: rec?.q, activity: q });
 			if (!validContext()) return changed();
 			if (result) return typeof result === 'object' ? { ok: true, ...result } : { ok: true, message: 'The conversation is open.' };
@@ -526,8 +537,9 @@ export function createLivingWorld({
 			if (!ensureScope()) return [];
 			const id = livingActorId(p);
 			if (!id) return [];
-			return snapshot().activities.filter(a => a.npcId === id || records[a.id]?.q.giver.id === id).slice(0, 3).map(a =>
-				`Public local activity: ${a.title}. State: ${a.state}. ${a.reason}. ${a.history.at(-1)?.text || ''}`);
+			const snap = snapshot(), family = snap.residents?.find(a => a.id === id);
+			return [...(family ? [family.line] : []), ...snap.activities.filter(a => a.npcId === id || records[a.id]?.q.giver.id === id).slice(0, 3).map(a =>
+				`Public local activity: ${a.title}. State: ${a.state}. ${a.reason}. ${a.history.at(-1)?.text || ''}`)];
 		},
 		mark: () => { if (!ensureScope()) return null; const rec = Object.values(records).find(r => r.owner === owner() && !r.finished); const step = rec?.q.steps[rec.step]; return step?.at ? { ...step.at, bodyKey: scope.world, radius: 6, title: rec.q.title, detail: instruction(rec) } : null; },
 		dispose() { stopped = true; save(); npcOff?.(); boardOff?.(); board?.setClaimGuard?.(null); npcQuests?.setLivingAdapter?.(null); },

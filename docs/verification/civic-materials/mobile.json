@@ -1,0 +1,54 @@
+{
+  "mode": "mobile",
+  "compiled": [
+    {
+      "name": "",
+      "civic": true,
+      "wear": true,
+      "plate": false
+    },
+    {
+      "name": "",
+      "civic": true,
+      "wear": true,
+      "plate": false
+    },
+    {
+      "name": "civic-diamond-plate",
+      "civic": false,
+      "wear": false,
+      "plate": true
+    },
+    {
+      "name": "civic-diamond-plate",
+      "civic": false,
+      "wear": false,
+      "plate": true
+    },
+    {
+      "name": "signage-retro-2",
+      "civic": true,
+      "wear": false,
+      "plate": false
+    }
+  ],
+  "surfaceHash": 419851808,
+  "phone": true,
+  "glError": 0,
+  "lightChangedPixels": 112005,
+  "brightened": 0,
+  "geoErrors": [],
+  "loaded": {
+    "galvanized": true,
+    "enamel": true,
+    "damage": true,
+    "graffiti": true,
+    "graffiti-names": true,
+    "graffiti-revolt": true,
+    "graffiti-characters": true,
+    "graffiti-devotional": true
+  },
+  "draws": 30,
+  "errors": [],
+  "failed": []
+}

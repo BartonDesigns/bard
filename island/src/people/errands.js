@@ -10,9 +10,12 @@
 // people about instead (handoff). Groceries carried to someone's car (they walk behind you),
 // a flat battery jumped (stand by the car while they try it), the way pointed out, and
 // someone who has fallen helped up (people/npc-quests.js calls helped) are favours too.
-// What they pay comes out of their own account, through the bank's adapter (money).
+// What they pay comes out of their own account, through the bank's adapter (money). A pothole
+// down the street is reported by standing by it (or driving over it), and the city's crew
+// comes to fill it (potholes: bay/streets.js).
 import * as THREE from 'three';
 import { offerFor, lineFor, rewardFor, step, milestone, relativeDir } from './errands-core.js';
+import { LOCAL_TASKS, localOffer } from './local-tasks.js';
 import { rememberIncident } from './world-awareness.js';
 import { promoted } from '../gameplay/ranks.js';
 import { favourProp } from './favour-props.js';
@@ -20,13 +23,13 @@ import { createDog, dogSpec } from './dog.js';
 import { createDogVoice } from './dog-voice.js';
 
 const OFFER_FOR = 15, OFFER_REACH = 12, PICK = 1.4, HAND = 2.3, AWAY = 220;
-const LIMIT = { search: 360, bring: 360, lead: 420, chase: 150, carry: 300, fix: 480, haul: 240, jump: 240, tell: 30 };
+const LIMIT = { search: 360, bring: 360, lead: 420, chase: 150, carry: 300, fix: 480, haul: 240, jump: 240, tell: 30, report: 300 };
 // a dog: won over within this (walking, not running at it); home within this of its person
 const PET_REACH = 3, PET_HOME = 4, RUSH = 3.6;
 const STORE = 'crysis-favours-v1';
 const _v = new THREE.Vector3();
 
-export function createErrands({ scene, camera, world, people, chatter, persona, arms, morality, hint, driving, isPhone, worldKey = () => world()?.body?.key || 'here', placeName = () => '', note = () => {}, handoff = () => null, money = () => null }) {
+export function createErrands({ pacing = null, scene, camera, world, people, chatter, persona, arms, morality, hint, driving, isPhone, worldKey = () => world()?.body?.key || 'here', placeName = () => '', note = () => {}, handoff = () => null, money = () => null, potholes = () => null }) {
 	let E = null, n = 0, cool = 40, prop = null, gT = 0, clock = 0, snatchCool = 120, snatchLook = 0, pet = null, voice = null;
 	let tally = { done: 0, kept: 0 };
 	try { tally = { ...tally, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; } catch { /* private mode */ }
@@ -128,6 +131,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	function maybeAsk(p, { afraid = false, force = false, talking = false, want = null } = {}) {
 		if (E || (cool > 0 && !force) || afraid || !p || p.leaving || p.P.dna.child || p.P.dna.minor || p.role === 'jog' || (!talking && (p.engaged || p.override)) || p.held) return null;
 		if (!talking && (driving() || world()?.player?.state?.flying)) return null;
+		if (!force && !talking && pacing && !pacing.ready('favour')) return null;
 		if (!force && Math.random() > (tally.done < 2 ? 0.3 : 0.18)) return null;
 		const W = world(); if (!W) return null;
 		const me = pos(p), cam = camera.position, f = camera.getWorldDirection(_v);
@@ -135,28 +139,46 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		const others = people.pool.filter((q) => q !== p && q.active && !q.leaving && !q.P.dna.child && !q.P.dna.minor && !q.engaged && !q.override && !q.held && q.demo === undefined);
 		const walking = others.filter((q) => q.role === 'walk' && (q.route?.kind === 'street' || q.route?.kind === 'loop' || q.route?.kind === 'wander') && flat(pos(q), me) > 16 && flat(pos(q), me) < 60);
 		const waiting = others.filter((q) => (q.route?.kind === 'seat' || q.role === 'wait' || q.role === 'chat') && flat(pos(q), me) > 20 && flat(pos(q), me) < 75);
-		const kinds = ['lost'], who = persona(p);
+		const kinds = ['lost', 'escort', 'survey', 'cleanup'], who = persona(p);
 		if (walking.length) kinds.push('catch');
 		if (waiting.length) kinds.push('pass');
+		const neighbours = others.filter((q) => flat(pos(q), me) > 12 && flat(pos(q), me) < 75);
+		if (neighbours.length) kinds.push('firstaid', 'courier', 'checkin');
 		// a parked car of theirs close by that will not start
 		const car = (W.street?.parkedNear?.(me.x, me.z, 25) || []).filter((c) => c.id && !String(c.id).startsWith('tr') && Math.hypot(c.x - me.x, c.z - me.z) > 3).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
 		if (car) kinds.push('repair', 'jumpstart', 'groceries');
 		// or they are not from round here, and want the way (one in five or so)
 		if ((p.P.dna.seed >>> 0) % 5 === 2 || want === 'directions') kinds.push('directions');
+		// a pothole down the street that nearly had their wheel (one not yet reported)
+		const hole = potholes()?.nearest?.(me.x, me.z, 110) || null;
+		if (hole && hole.d > 0) kinds.push('pothole');
 		// their dog, run off somewhere 30 to 90 m away (one dog at a time)
 		const spot = !pet && (want === 'pet' || Math.random() < 0.6) ? dropSpot(me, 30, 90) : null;
 		if (spot) kinds.push('pet');
-		const kind = want && kinds.includes(want) ? want : kinds[(n + (p.P.dna.seed | 0)) % kinds.length];
+		const kind = want && kinds.includes(want) ? want : pacing ? pacing.choose(kinds, force || talking) : kinds[Math.abs(n + (p.P.dna.seed | 0)) % kinds.length];
+		if (!kind) return null;
 		const spec = kind === 'pet' ? dogSpec(((p.P.dna.seed | 0) * 31 + n * 7) >>> 0) : null;
-		const friend = kind === 'catch' ? walking[(n * 7) % walking.length] : kind === 'pass' ? waiting[(n * 5) % waiting.length] : null;
+		const friend = kind === 'catch' ? walking[(n * 7) % walking.length] : kind === 'pass' ? waiting[(n * 5) % waiting.length] : ['firstaid', 'courier', 'checkin'].includes(kind) ? neighbours[n % neighbours.length] : null;
 		const dir = friend ? relativeDir(pos(friend).x - cam.x, pos(friend).z - cam.z, f.x, f.z) : 'over there';
-		const offer = offerFor({ who: { first: who.first, seed: p.P.dna.seed }, n: n++, kinds: [kind], friend: friend ? { first: persona(friend).first } : null, dir: spec ? relativeDir(spot.x - cam.x, spot.z - cam.z, f.x, f.z) : dir, car: !!car, pet: spec });
+		const offer = LOCAL_TASKS[kind] ? localOffer(kind, who, friend ? persona(friend) : null) : offerFor({ who: { first: who.first, seed: p.P.dna.seed }, n, kinds: [kind], friend: friend ? { first: persona(friend).first } : null, dir: spec ? relativeDir(spot.x - cam.x, spot.z - cam.z, f.x, f.z) : kind === 'pothole' ? relativeDir(hole.x - cam.x, hole.z - cam.z, f.x, f.z) : dir, car: !!car, pet: spec, pothole: kind === 'pothole' ? { street: hole.street } : null });
 		if (!offer) return null;
-		let drop = null;
+		let drop = null, route = null;
+		if (['escort', 'survey', 'cleanup'].includes(kind)) {
+			route = [];
+			for (let i = 0; i < (kind === 'escort' ? 1 : 3); i++) {
+				let point = null;
+				for (let j = 0; j < 8; j++) { const at = dropSpot(me, 15, kind === 'escort' ? 55 : 40); if (at && route.every((r) => flat(r, at) > 8)) { point = at; break; } }
+				if (!point) return null; route.push(point);
+			}
+			drop = route[0];
+		}
 		if (offer.kind === 'lost') { drop = dropSpot(me); if (!drop) return null; }
 		if (offer.kind === 'pet') drop = spot;
 		if (offer.kind === 'groceries') drop = { x: car.x, y: car.y ?? me.y, z: car.z };
-		E = { ...offer, car: kind === 'repair' || kind === 'jumpstart' || kind === 'groceries' ? { x: car.x, y: car.y ?? me.y, z: car.z } : null, talking, stage: 'offered', giver: p, giverName: who.first, friendP: friend, drop, t: 0, from: { x: me.x, z: me.z }, centre: drop && { x: drop.x + (Math.random() - 0.5) * 9, y: drop.y, z: drop.z + (Math.random() - 0.5) * 9 } };
+		if (offer.kind === 'pothole') drop = { x: hole.x, y: world()?.island?.heightAt?.(hole.x, hole.z) ?? me.y, z: hole.z };
+		n++;
+		E = { ...offer, route, elapsed: 0, checkpoint: 0, hole: offer.kind === 'pothole' ? hole : null, car: kind === 'repair' || kind === 'jumpstart' || kind === 'groceries' ? { x: car.x, y: car.y ?? me.y, z: car.z } : null, talking, stage: 'offered', giver: p, giverName: who.first, friendP: friend, drop, t: 0, from: { x: me.x, z: me.z }, centre: drop && { x: drop.x + (Math.random() - 0.5) * 9, y: drop.y, z: drop.z + (Math.random() - 0.5) * 9 } };
+		pacing?.record(kind);
 		hold(p, 'stand');
 		if (friend) hold(friend, kind === 'catch' ? 'walk' : 'stand');
 		if (tally.done < 2) hint(isPhone ? `${who.first} is asking for help. Walk up and tap Help to say yes.` : `${who.first} is asking for help. Walk up and press Enter to say yes.`, 5000);
@@ -171,8 +193,9 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		lastEnd = `${E.stage} > ${ev}`;
 		E = { ...r.E, giver: E.giver, friendP: E.friendP, t: 0 };
 		const o = r.out;
+		if (o.say === 'checked' && E.friendP?.active) chatter.say(E.friendP, { text: lineFor('checked'), gesture: 'nod', feel: { joy: 0.5 } }, null);
 		if (o.say === 'accept' && E.giver.active) chatter.say(E.giver, { text: lineFor('accept', { kind: E.kind, n }), gesture: 'nod', feel: { joy: 0.5 } }, null);
-		if (o.say === 'accept' && E.kind === 'groceries' && E.giver.active) hold(E.giver, 'follow');
+		if (o.say === 'accept' && (E.kind === 'groceries' || E.kind === 'escort') && E.giver.active) hold(E.giver, 'follow');
 		if (o.thief) dropBag();
 		if (o.say === 'found') { clearProp(); hint(`Found ${E.item.the}. Bring ${E.item.id === 'keys' || E.item.id === 'glasses' ? 'them' : 'it'} back to ${E.giverName}.`, 3500); }
 		const her = E.item.pet?.she === false ? 'him' : 'her', She = E.item.pet?.she === false ? 'He' : 'She';
@@ -185,8 +208,8 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		else if (o.declined) { const was = E; end(null); handoff()?.(was); }
 	}
 	function finish(say) {
-		const to = E.kind === 'catch' || E.kind === 'pass' ? E.friendP : E.giver;
-		const metres = E.kind === 'repair' || E.kind === 'jumpstart' ? 120 : E.kind === 'directions' ? 0 : E.kind === 'groceries' ? flat(E.drop, E.from) : E.kind === 'lost' || E.kind === 'snatch' || E.kind === 'pet' ? flat(E.drop, E.from) * 2 : flat(pos(to), E.from);
+		const to = ['catch', 'pass', 'courier', 'firstaid'].includes(E.kind) ? E.friendP : E.giver;
+		const metres = LOCAL_TASKS[E.kind] ? (E.route ? E.route.reduce((total, r, i) => total + flat(r, E.route[i - 1] || E.from), 0) : flat(pos(to), E.from)) : E.kind === 'repair' || E.kind === 'jumpstart' ? 120 : E.kind === 'directions' ? 0 : E.kind === 'groceries' || E.kind === 'pothole' ? flat(E.drop, E.from) : E.kind === 'lost' || E.kind === 'snatch' || E.kind === 'pet' ? flat(E.drop, E.from) * 2 : flat(pos(to), E.from);
 		// the dog home: it runs to them (the reunion plays on after the favour is done)
 		if (E.kind === 'pet' && pet) { pet.phase = 'reunion'; pet.t = 0; pet.owner = E.giver; }
 		const credits = rewardFor(E.kind, metres);
@@ -269,10 +292,12 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		petUpdate(dt);
 		if (!E) { if (cool <= 0 && snatchCool <= 0 && (snatchLook -= dt) < 0) { snatchLook = 5; if (Math.random() < 0.08) snatch(); } return; }
 		E.t += dt;
+		if (E.stage !== 'offered') E.elapsed = (E.elapsed || 0) + dt;
+		if (E.deadline && E.elapsed > E.deadline) { end('The delivery window has passed. No reward was paid.'); return; }
 		const me = feet(), g = E.giver, f = E.friendP;
 		// the people in it carried off by something else (a fight, a crowd thinning): it ends
 		if ((g || !E.home) && lost(g) && E.stage !== 'chase' && E.stage !== 'carry') { go('lost-them'); return; }
-		if (f && lost(f) && (E.stage === 'chase' || E.stage === 'carry' || E.stage === 'offered')) { go('lost-them'); return; }
+		if (f && lost(f) && (E.stage === 'chase' || E.stage === 'carry' || E.stage === 'offered' || ['aid', 'courier', 'visit'].includes(E.stage))) { go('lost-them'); return; }
 		if (E.stage === 'offered') {
 			if (E.t > (E.talking ? 90 : OFFER_FOR) || flat(me, pos(g)) > OFFER_REACH + 4) go('decline');
 			return;
@@ -287,6 +312,20 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 			return;
 		}
 		if (E.t > (LIMIT[E.stage] || 300)) { go('timeout'); return; }
+		if (LOCAL_TASKS[E.kind]) {
+			const near = (at, r) => flat(me, at) < r && Math.abs(me.y - (at.y ?? me.y)) < 2.2 && !driving();
+			if (E.stage === 'escort') { if (near(E.drop, 3.5) && flat(pos(g), E.drop) < 4.5) go('reach'); }
+			else if (['aid', 'courier', 'visit'].includes(E.stage)) {
+				if (near(pos(f), HAND)) { E.near = (E.near || 0) + dt; if (E.near >= (E.stage === 'aid' ? 2 : E.stage === 'visit' ? 1 : 0)) go(E.stage === 'visit' ? 'visited' : 'reach'); } else E.near = 0;
+			} else if (E.stage === 'tour') {
+				const at = E.route[E.checkpoint];
+				if (E.kind === 'cleanup' && !prop) prop = placeProp(E.item.shape, at);
+				if (near(at, E.kind === 'cleanup' ? PICK : 3)) E.near = (E.near || 0) + dt; else E.near = 0;
+				if (E.near >= (E.kind === 'cleanup' ? 0.05 : 2)) { clearProp(); go('checkpoint'); hint(E.stage === 'reportback' ? `All three done. Return to ${E.giverName}.` : `${E.checkpoint} of 3 done. Follow the next marker.`, 2400); }
+			} else if (E.stage === 'reportback' && near(pos(g), HAND)) go('reach');
+			if (E && flat(me, E.from) > AWAY) go('away');
+			return;
+		}
 		if (E.stage === 'search' && E.kind === 'pet') {
 			if (!pet) spawnPet();
 			const d = flat(me, pet.dog.pos), calm = pet.speed < RUSH && !driving();
@@ -324,6 +363,15 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		}
 		// the way: pointed out, and they thank you
 		if (E.stage === 'tell') { if (E.t > 1.2) go('told'); return; }
+		// a pothole: stand by it a moment (or drive right over it) and the report goes in
+		if (E.stage === 'report') {
+			if (flat(me, E.from) > AWAY && flat(me, E.drop) > 60) { go('away'); return; }
+			const d = flat(me, E.drop);
+			if (d < (driving() ? 2.2 : 3.2)) { E.near = (E.near || 0) + dt; if (!E.told && !driving()) { E.told = true; hint('Reporting the pothole...', 1600); } }
+			else E.near = 0;
+			if (E.near > (driving() ? 0.05 : 1.5)) { potholes()?.report?.(E.hole); go('reported'); hint('Reported. The city is sending a road crew to fill it.', 4000); }
+			return;
+		}
 		if (E.stage === 'fix') {
 			if (flat(me, E.car) > AWAY) { go('away'); return; }
 			// beside the car with a repair roll in the bag: it comes to hand, ready to use
@@ -353,8 +401,14 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	// the pin and the chip (guide.js asks every second)
 	function mark() {
 		if (!E || E.stage === 'offered' || E.stage === 'tell') return null;
+		if (LOCAL_TASKS[E.kind]) {
+			const at = E.stage === 'escort' ? E.drop : E.stage === 'tour' ? E.route[E.checkpoint] : E.stage === 'reportback' ? pos(E.giver) : pos(E.friendP);
+			const detail = E.stage === 'escort' ? 'walk with them; wait if they fall behind' : E.stage === 'tour' ? `${E.checkpoint + 1} of 3 · ${E.kind === 'cleanup' ? 'collect the litter' : 'inspect for 2 seconds'}` : E.stage === 'reportback' ? 'return to report' : E.stage === 'aid' ? 'stay beside them for 2 seconds' : E.stage === 'visit' ? 'check in, then return' : 'hand over the parcel';
+			return { ...at, radius: 2, title: E.title, detail: detail + (E.deadline ? ` · ${Math.max(0, Math.ceil(E.deadline - E.elapsed))}s left` : '') };
+		}
 		if (E.stage === 'haul') return { ...E.drop, radius: 2.5, title: `Carry ${E.giverName}'s groceries to the car`, detail: 'they are right behind you' };
 		if (E.stage === 'jump') return { ...E.car, radius: 3, title: E.title, detail: 'stand by the car while they try it' };
+		if (E.stage === 'report') return { ...E.drop, radius: 2.5, title: E.title, detail: 'stand by it to report it' };
 		if (E.stage === 'fix') return { ...E.car, radius: 3, title: E.title, detail: 'use a Repair Roll beside it' };
 		if (E.stage === 'thief') { const q = pos(E.friendP); return { x: q.x, y: q.y, z: q.z, radius: 2, title: 'Catch the thief', detail: `${E.giverName}'s ${E.item.name}, or let them go` }; }
 		if (E.stage === 'search' && E.kind === 'snatch') return { ...E.drop, radius: 2, title: `Pick up ${E.giverName}'s ${E.item.name}`, detail: 'they dropped it' };
@@ -373,6 +427,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	function factFor(p) {
 		if (!E || (p !== E.giver && p !== E.friendP)) return null;
 		if (p === E.giver && E.kind === 'pet') return E.stage === 'offered' ? `Just asked the player for help: ${E.ask}` : E.stage === 'lead' ? `The player found their dog ${E.item.name} and is bringing the dog back. Relieved.` : `Worried sick: their dog ${E.item.name} ran off, and the player is looking for the dog.`;
+		if (p === E.giver && E.kind === 'pothole') return E.stage === 'offered' ? `Just asked the player for help: ${E.ask}` : `The player is off to report the pothole that nearly took their wheel. Hopeful the city will fill it at last.`;
 		if (p === E.giver && (E.kind === 'groceries' || E.kind === 'jumpstart' || E.kind === 'directions')) return E.stage === 'offered' ? `Just asked the player for help: ${E.ask}` : `The player is helping: ${E.title.toLowerCase()}. Grateful.`;
 		if (p === E.giver) return E.stage === 'offered' ? `Just asked the player for help: ${E.ask}` : E.stage === 'search' ? `Waiting while the player searches for ${E.item.mine || E.item.the}.` : E.stage === 'bring' ? `The player found ${E.item.the} and has not given it back yet.` : `Asked the player to take ${E.item.the} to ${E.friend}.`;
 		return E.stage === 'chase' ? `Walking on, unaware they left ${E.item.the} with ${E.giverName}.` : `Waiting here; ${E.giverName} sent something over with the player.`;
@@ -386,7 +441,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	}
 	// a bag snatched near you: one grown-up the victim, another runs off with it
 	function snatch(force = false) {
-		if (E || driving() || world()?.player?.state?.flying) return 'busy';
+		if (E || driving() || world()?.player?.state?.flying || (!force && pacing && !pacing.ready('snatch'))) return 'busy';
 		const c = feet(), ok = (q) => q.active && !q.leaving && !q.P.dna.child && !q.P.dna.minor && !q.engaged && !q.override && !q.held && q.demo === undefined && q.route?.kind !== 'seat' && !q.workSpot;
 		const near = people.pool.filter((q) => ok(q) && flat(pos(q), c) > 10 && flat(pos(q), c) < 40);
 		if (near.length < 2) return 'not enough people about';
@@ -397,6 +452,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		thief.M.place(v.x + Math.cos(side) * 1.2, v.y, v.z + Math.sin(side) * 1.2, side);
 		const who = persona(victim);
 		E = { kind: 'snatch', stage: 'thief', giver: victim, giverName: who.first, friendP: thief, item: { name: 'bag', the: 'the bag', shape: 'bag' }, title: `Get ${who.first}'s bag back`, t: 0, from: { x: v.x, z: v.z } };
+		pacing?.record('snatch');
 		hold(victim, 'stand'); flee(thief, 5.4);
 		chatter.say(victim, { text: lineFor('snatched', { n: n++ }), gesture: 'point', feel: { surprise: 1, anger: 0.6 } }, null);
 		victim.M.S.feel.surprise = 1;
@@ -464,7 +520,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	function dispose() { if (E) { for (const p of [E.giver, E.friendP]) release(p); E = null; } for (const [p] of releaseAt) release(p); releaseAt = []; clearProp(); dropPet(); voice?.dispose(); voice = null; glintTex?.dispose(); glintTex = null; }
 	function info() {
 		const r = (v) => Math.round(v * 10) / 10;
-		return { errand: E && { kind: E.kind, stage: E.stage, title: E.title, giver: E.giverName, friend: E.friend || null, t: Math.round(E.t), drop: E.drop && [E.drop.x, E.drop.y, E.drop.z].map(r) }, pet: pet && { phase: pet.phase, mood: pet.dog.mood(), breed: pet.dog.breed.id, name: pet.dog.name, at: [r(pet.dog.pos.x), r(pet.dog.pos.z)] }, cool: Math.round(cool), last: lastEnd, ...tally };
+		return { errand: E && { kind: E.kind, stage: E.stage, title: E.title, giver: E.giverName, friend: E.friend || null, t: Math.round(E.t), drop: E.drop && [E.drop.x, E.drop.y, E.drop.z].map(r) }, pet: pet && { phase: pet.phase, mood: pet.dog.mood(), breed: pet.dog.breed.id, name: pet.dog.name, at: [r(pet.dog.pos.x), r(pet.dog.pos.z)] }, cool: Math.round(cool), pacing: pacing?.info(), last: lastEnd, ...tally };
 	}
 	return { maybeAsk, offerTo, useHere, needs, askNearest, petNow: () => askNearest('pet'), snatch: () => snatch(true), theft, helped, busy: () => !!E, asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
 }

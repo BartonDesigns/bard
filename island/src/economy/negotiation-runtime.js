@@ -8,7 +8,7 @@ import { bank as gameBank } from './bank.js';
 const DAY = 86400000;
 const distance = (a, b) => a && b ? Math.hypot(a.x - b.x, a.z - b.z) : Infinity;
 const copy = value => JSON.parse(JSON.stringify(value));
-export function createNegotiationRuntime({ arms, world, bodyKey, position, livingWorld, relationship = () => null,
+export function createNegotiationRuntime({ arms, bodyKey, position, livingWorld, relationship = () => null,
   morality = () => null, structures = () => null, now = Date.now, storage, resolveSeller = null, bank = gameBank } = {}) {
   const pendingSellerReceipts = new Set();
   const book = createNegotiator({ inventory: arms, clock: now, storage });

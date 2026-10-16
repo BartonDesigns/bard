@@ -20,6 +20,7 @@ import { createFolk, makeOne } from './folk.js';
 import { createFoes, createDust } from './foes.js';
 import { createQuests, markTexture } from './quests.js';
 import { createMotion } from '../../people/motion.js';
+import { createArtSigns, realmSignRecords } from '../../signage/world-art.js';
 
 const EYE = 1.68;
 
@@ -83,6 +84,7 @@ export function createMedieval(realm, o) {
 	});
 	if (realm.windmill) cluster('windmill', realm.windmill.x, realm.windmill.z, 14, () => buildWindmill(ctx, realm.windmill));
 	if (realm.watermill) cluster('watermill', realm.watermill.x, realm.watermill.z, 14, () => buildWatermill(ctx, realm.watermill));
+	const tradeSigns = createArtSigns({ parent: group, records: realmSignRecords(realm), isPhone });
 	realm.watchtowers.forEach((t, i) => cluster('watchtower' + i, t.x, t.z, 10, () => buildWatchtower(ctx, t)));
 	if (realm.stones) cluster('stones', realm.stones.x, realm.stones.z, 14, () => buildStones(ctx, realm.stones));
 	const hedge = [];
@@ -512,6 +514,7 @@ export function createMedieval(realm, o) {
 		}
 		if (lamp.intensity > 0) lamp.intensity *= 0.97 + Math.random() * 0.06;
 		inner.update(dt, cam);
+		tradeSigns.update(camera);
 		folk.update(dt, t, P, lit);
 		const armed = armedNow() && !!P && !P.flying;
 		foes?.update(dt, t, P);
@@ -577,7 +580,7 @@ export function createMedieval(realm, o) {
 	}
 	function info() {
 		return {
-			name: realm.name, castle: realm.castleName, lord: realm.lord, arms: realm.arms,
+			signage: tradeSigns.info(), name: realm.name, castle: realm.castleName, lord: realm.lord, arms: realm.arms,
 			at: { castle: [Math.round(C.x), Math.round(C.z)], town: [Math.round(T.x), Math.round(T.z)] },
 			houses: realm.houses.length, fields: realm.fields.length, watchtowers: realm.watchtowers.length, river: !!realm.river, bridges: realm.bridges.length,
 			dungeons: DG.map((d) => ({ id: d.D.id, name: d.D.name, rooms: d.D.rooms.map((r) => r.kind), breach: !!d.D.breach, foes: d.foes.length })),
@@ -586,6 +589,7 @@ export function createMedieval(realm, o) {
 		};
 	}
 	function dispose() {
+		tradeSigns.dispose();
 		folk.dispose(); foes?.dispose(); dust.dispose(); quests.dispose();
 		if (child?.P) scene.remove(child.P.root);
 		scene.remove(group);
@@ -595,7 +599,7 @@ export function createMedieval(realm, o) {
 		if (uw) uw.extraInside = null;
 	}
 	return { interiors: inner,
-		update, dispose, go, dungeonGo, info, quests, folk, foes,
+		update, dispose, go, dungeonGo, info, quests, folk, foes, tradeSigns,
 		floor: (x, z, y) => surfFloor(x, z, y),
 		push: (p, footY) => col.push(p, footY),
 		// the dungeons, ahead of the caves

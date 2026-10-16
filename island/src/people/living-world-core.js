@@ -1,3 +1,4 @@
+import { normalizeHousehold, householdOpportunities } from './household-activity.js';
 // Persistent, region-scoped NPC activity. Shared by the browser and the room Worker.
 // No renderer, storage, network, random source, or clock lives in this module. Callers
 // register real people and requests; elapsed time never invents a place, quest, repaired
@@ -61,6 +62,7 @@ function actorOf(d, previous, now) {
 			reliable: clamp(disposition.reliable ?? 0.6), nerve: clamp(disposition.nerve ?? 0.5),
 		},
 		skills: strings(d.skills),
+		...(previous?.household || normalizeHousehold(d.household) ? { household: previous?.household || normalizeHousehold(d.household) } : {}),
 		sites: { home: key(d.sites?.home) || null, work: key(d.sites?.work) || null, social: key(d.sites?.social) || null },
 		utcOffsetMinutes: Math.round(clamp(d.utcOffsetMinutes || 0, -840, 840)),
 		registeredAt: previous?.registeredAt ?? now,
@@ -216,6 +218,11 @@ export function reduceLivingWorld(state, command = {}) {
 		}, from);
 		for (let at = from + LIVING_WORLD_LIMITS.stepMs; at <= end; at += LIVING_WORLD_LIMITS.stepMs) {
 			const actors = sorted(s.actors).filter((a) => a.registeredAt <= at);
+			const family = householdOpportunities(s, at); s.householdDays = family.days;
+			for (const request of family.requests) {
+				s.requests[request.id] = requestOf(request, at);
+				emit('request-posted', { requestId: request.id, actorId: request.giverId, siteId: request.siteId, text: request.title + '. A resident initiated this social visit; players may join.' }, at);
+			}
 			for (const q of sorted(s.requests)) {
 				if (q.createdAt > at || TERMINAL.has(q.status) || q.status === 'awaiting-confirmation') continue;
 				const a = q.actorId ? s.actors[q.actorId] : null;
