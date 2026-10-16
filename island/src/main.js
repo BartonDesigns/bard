@@ -93,6 +93,7 @@ import { createInteriors } from './interiors/index.js';
 import { createStructures } from './structures/index.js';
 import { createCataclysm } from './cataclysm/index.js';
 import { createServices } from './services/index.js';
+import { createMagic } from './magic/index.js';
 import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
 import { planDwellings, createDwellings } from './interiors/alien.js';
@@ -820,6 +821,8 @@ export function createIslandWorld() {
 	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
+	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), isPhone, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches });
 	guideApi.combat=combat;
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
@@ -1504,7 +1507,7 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
-		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim.'; p.appendChild(combatHelp);
+		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim. Keys 1 to 5 take up your weapons (again puts it away), 6 to 0 cast your spells, N opens the spellbook. Alt / Option frees the mouse to look about by dragging; a double tap of Alt / Option returns to aiming.'; p.appendChild(combatHelp);
 		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
 			() => Math.round(shared.aimSensitivity * 100),
 			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
@@ -1965,7 +1968,7 @@ export function createIslandWorld() {
 		// indoors by day the eye opens up to the light from the windows (by night, not at all:
 		// the rooms are as dark as their lamps leave them)
 		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
-		renderer.toneMappingExposure *= 1 + indoorK * 0.55 * sk.dayK;
+		renderer.toneMappingExposure *= (1 + indoorK * 0.55 * sk.dayK) * magic.exposure();
 		watchDoor(dt);
 		striker.update(dt, scene, !W.player.state.flying && !arcade.active() && dom.mount.style.display !== 'none');
 		strikeRipples.update(dt);
@@ -1974,7 +1977,7 @@ export function createIslandWorld() {
 		share.update(dt);
 		multiplayer.update(dt, time);
 		gear.update(dt);
-		if (!window.L99Loading.active()) combat.update(dt);
+		if (!window.L99Loading.active()) { combat.update(dt); magic.update(dt); }
 		HOOKS.military?.update(dt, sk.night);
 		HOOKS.cataclysm?.update(dt, sk);
 		if (!window.L99Loading.active()) HOOKS.law?.update(dt);
@@ -2494,6 +2497,8 @@ if (typeof window !== 'undefined') {
 		// to the door of the nearest ('police', 'fire', 'armory'; a room: serviceGo('armory', 'warRoom'));
 		// Crysis.serviceCall() calls an ambulance out to near you
 		services: () => window.L99Island?.world?.()?.services?.info() ?? 'Earth only',
+		// magic (magic/): Crysis.magic.info(), .give('light', 100), .all(), .cast('sunspark'), .learn(id), .bind(slot, id)
+		get magic() { return HOOKS.magic; },
 		serviceGo: (kind = 'hospital', room = null) => window.L99Island?.world?.()?.services?.go(kind, room) ?? 'Earth only',
 		serviceCall: (severity = 0.6, minor = false) => window.L99Island?.world?.()?.services?.testCall(severity, minor) ?? 'Earth only',
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
