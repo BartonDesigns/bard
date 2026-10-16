@@ -1,0 +1,36 @@
+// Production main bundle and real generated places. Positions are moved to those
+// places for this smoke check; project stages are never injected or fast-forwarded.
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES + '/playwright');
+const fs=require('node:fs/promises'), http=require('node:http'), path=require('node:path'), assert=require('node:assert/strict');
+(async()=>{
+	const root=path.resolve(__dirname,'../..'),out=process.env.BARD_PROJECT_ENGINE_OUT||path.join(root,'docs/verification/community-projects');await fs.mkdir(out,{recursive:true});
+	const report={method:'Production island/dist/island.js, actual TERRAN terrain and named guide places, offline project runtime. Test moves the camera/player to existing places; it does not inject project stages or accelerate work. Chromium software WebGL at phone viewport, not a physical phone or live shared-cloud test.',bundleSha256:require('node:crypto').createHash('sha256').update(await fs.readFile(path.join(root,'island/dist/island.js'))).digest('hex'),errors:[],steps:[]};
+	let browser,server,page;
+	try{
+		server=http.createServer(async(req,res)=>{try{const p=new URL(req.url,'http://local').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));if(!f.startsWith(root+path.sep))throw Error('path');res.setHeader('Content-Type',/\.[cm]?js$/.test(f)?'text/javascript':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':'application/octet-stream');res.end(await fs.readFile(f));}catch{res.statusCode=404;res.end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+		browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXECUTABLE||'/tmp/bard-chromium',args:['--no-sandbox','--single-process','--no-zygote','--in-process-gpu','--disable-gpu-sandbox','--disable-features=AudioServiceOutOfProcess,AudioServiceSandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+		page=await browser.newPage({viewport:{width:640,height:480},hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1'});page.setDefaultTimeout(150000);
+		await page.addInitScript(()=>localStorage.setItem('l99-quality','low'));
+		page.on('pageerror',e=>{report.errors.push(e.message);console.log('PAGE ERROR',e.message);});page.on('console',m=>{if(/THREE.WebGLProgram|VALIDATE_STATUS|shader error|\[frame\]/i.test(m.text())){report.errors.push(m.text());console.log('FRAME OR SHADER ERROR',m.text());}});
+		await page.goto('http://127.0.0.1:'+server.address().port+'/island/dev.html?planet=TERRAN&seed=1337&safe&offline=1',{waitUntil:'domcontentloaded'});
+		console.log('Engine loaded, waiting for entry');const enter=page.getByRole('button',{name:'Enter world',exact:true});await enter.waitFor({state:'visible'});await enter.click();await page.waitForFunction(()=>!window.L99Loading.active());
+		report.steps.push('Entered the real generated world');console.log('World entered');
+		const target=await page.evaluate(()=>{const a=L99Island,W=a.world();Crysis.music.auto(false);Crysis.combat.ambient(false);W.sky.state.speed=0;W.sky.state.hours=13;const targets=a.guide.storyContext().targets.filter(t=>!t.under&&!t.caveEntrance&&!t.id.startsWith('home:'));window.projectSmoke={targets};const t=targets.find(t=>t.id==='place-the-village')||targets[0];if(!t)throw Error('No real named places');W.player.state.flying=false;W.player.state.diving=false;W.player.state.pos.set(t.x,W.island.heightAt(t.x,t.z)+1.7,t.z);W.player.state.vel.set(0,0,0);a.camera().position.copy(W.player.state.pos);return {id:t.id,name:t.name,targets:targets.length};});
+		report.target=target;console.log('Visiting',JSON.stringify(target));
+		await page.waitForFunction(()=>Crysis.projects()?.candidates?.length>0,{},{timeout:30000});
+		report.initial=await page.evaluate(()=>Crysis.projects());assert.equal(report.initial.mode,'local');assert.ok(report.initial.candidates.length);
+		const result=await page.evaluate(async()=>{const a=L99Island,W=a.world(),site=Crysis.projects().candidates.find(s=>s.kinds.includes('garden'))||Crysis.projects().candidates[0];projectSmoke.site=site;const r=await Crysis.projects.action(site.id,'propose',{kind:site.kinds.includes('garden')?'garden':site.kinds[0]});W.player.state.pos.set(site.anchor.x,site.anchor.y+1.7,site.anchor.z);W.player.state.vel.set(0,0,0);a.camera().position.copy(W.player.state.pos);return r;});
+		assert.equal(result.ok,true,JSON.stringify(result));report.steps.push('Proposed a project at an actual observed place');
+		await page.waitForFunction(()=>Crysis.projects.visuals()?.visible>0,{},{timeout:30000});
+		report.proposed=await page.evaluate(()=>({state:Crysis.projects(),visuals:Crysis.projects.visuals()}));assert.equal(report.proposed.state.projects[0].status,'surveying');assert.equal(report.proposed.state.projects[0].shared,false);assert.ok(report.proposed.visuals.projects.length);
+		const started=await page.evaluate(()=>Crysis.projects.action(Crysis.projects().projects[0].id,'start',{kind:'survey'}));assert.equal(started.ok,true,JSON.stringify(started));
+		await page.waitForFunction(()=>{const s=Crysis.projects();return !s.active||s.active.elapsedMs>=s.active.durationMs},{},{timeout:60000});
+		assert.ok(await page.evaluate(()=>Crysis.projects().active),'The on-site survey unexpectedly paused');
+		const complete=await page.evaluate(()=>Crysis.projects.action(Crysis.projects().projects[0].id,'finish'));assert.equal(complete.ok,true,JSON.stringify(complete));
+		report.surveyed=await page.evaluate(()=>Crysis.projects());assert.equal(report.surveyed.projects[0].surveyCount,1);assert.equal(report.surveyed.projects[0].status,'preparing');report.steps.push('Completed a real elapsed on-site survey');
+		await page.waitForFunction(()=>Crysis.projects.visuals().projects[0]?.stage==='preparing');
+		await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{const a=L99Island,W=a.world(),p=Crysis.projects().projects[0],at=p.anchor,S=W.player.state;S.pos.set(at.x+3,W.island.heightAt(at.x+3,at.z+5)+1.68,at.z+5);S.vel.set(0,0,0);S.yaw=Math.atan2(3,5);S.pitch=Math.atan2(at.y+.65-S.pos.y,Math.hypot(3,5));a.camera().position.copy(S.pos);a.camera().rotation.set(S.pitch,S.yaw,0,'YXZ');a.renderer().render(a.scene(),a.camera());});
+		await page.screenshot({path:path.join(out,'real-engine-project-phone.png')});
+		report.finalVisuals=await page.evaluate(()=>Crysis.projects.visuals());assert.equal(report.finalVisuals.projects[0].stage,'preparing');assert.deepEqual(report.errors,[]);report.passed=true;
+	}catch(error){report.failure=error.message;try{report.diagnostics=await page?.evaluate(()=>{const a=window.L99Island,W=a?.world?.();return {projects:window.Crysis?.projects?.(),player:W&&{flying:W.player.state.flying,diving:W.player.state.diving,pos:W.player.state.pos.toArray()},camera:a?.camera?.().position.toArray(),mount:a?.dom?.mount.style.display,loading:window.L99Loading?.active?.(),visibility:document.visibilityState};});}catch{}throw error;}finally{await fs.writeFile(path.join(out,'project-engine-report.json'),JSON.stringify(report,null,2));await browser?.close();server?.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

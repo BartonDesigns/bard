@@ -1,0 +1,53 @@
+{
+  "method": "Production bundle, one entry and three frames in each required world; software Chromium, low tier, offline. Not a physical phone or cloud acceptance check.",
+  "worlds": [
+    {
+      "planet": "MAGMA",
+      "seed": 4242,
+      "state": {
+        "position": [
+          -150.10237898060848,
+          7.947815620649845,
+          136.12724434014063
+        ],
+        "living": true,
+        "projects": true,
+        "governor": "low"
+      },
+      "errors": []
+    },
+    {
+      "planet": "TERRAN",
+      "seed": 77,
+      "state": {
+        "position": [
+          -254.28669341796228,
+          10.368287792080993,
+          169.8378900435308
+        ],
+        "living": true,
+        "projects": true,
+        "governor": "low"
+      },
+      "errors": []
+    },
+    {
+      "planet": "EARTH",
+      "seed": 1337,
+      "state": {
+        "position": [
+          -253.7751248183438,
+          8.49482442683444,
+          -446.2829045672829
+        ],
+        "living": true,
+        "projects": true,
+        "governor": "low"
+      },
+      "errors": []
+    }
+  ],
+  "errors": [],
+  "bundleSha256": "7696c81204d5e5ab4e509313a36db88f8336ceffd4d338657d7ba26254e6e449",
+  "passed": true
+}

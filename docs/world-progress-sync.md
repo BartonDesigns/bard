@@ -1,5 +1,12 @@
 # Shared world progress seam
 
+## Implementation continuation — 14 October 2026
+
+
+[Shared community projects](community-world-projects.md) now provide a concrete, tested project lifecycle through the existing rooms Worker's typed `/living/:world/:region` operations. This does not implement the generic `/v1/world-progress/events` endpoint proposed below. The earlier provider seam and private-preview ledger are retained for compatibility, and local preview completion is never uploaded as authoritative shared progress. The new `world-projects-v1` capability requires its Worker deployment before universal project state is live.
+
+## Earlier provider contract
+
 Status: client contract and offline outbox implemented; authoritative Worker endpoint is not implemented or deployed. This is the BR-006 foundation, not a claim that browser storage or the current discovery Worker provides multiplayer state.
 
 ## What is shared

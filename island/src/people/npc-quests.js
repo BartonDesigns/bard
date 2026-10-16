@@ -38,7 +38,7 @@ import { citiesNear } from '../earth/atlas.js';
 
 const NOTICE = 7, OWNER_BACK = 45, VISIBLE = 95, REACH = 1.4, STEP_MAX = 45, MEMORY = 600;
 
-export function createNpcQuests({ pacing = null, scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null, others = () => [] }) {
+export function createNpcQuests({ pacing = null, scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null, others = () => [], livingManaged = false }) {
 	const FAR_EVERY = isPhone ? 40 : 25, SCENES = isPhone ? 1 : 2, BAG_EVERY = isPhone ? [150, 240] : [70, 140], FAVOUR_EVERY = isPhone ? [150, 260] : [80, 160];
 	const sources = createSources();
 	// the benches, shelters, park seats, cafe tables and doorsteps about (people/bag-spots.js)
@@ -47,7 +47,16 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	const leads = createLeads({ store: store || { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } } });
 	const LEAD_CHANCE = 0.08;
 	const scenes = [], memory = new Map(), cache = new Map(), considered = new Map(), open = [], pending = [];
-	const taken = new Set(), hurtFns = [], downed = new WeakSet();
+	const taken = new Set(), hurtFns = [], downed = new WeakSet(), activityFns = new Set();
+	let livingAdapter = null;
+	function activity(type, R, extra = {}) {
+		const q = R.q || R;
+		const event = { type, request: q, npcId: R.id || q.giver?.id || '', npcName: R.name || q.giver?.name || '', step: R.i || 0, world: worldKey(), region: here.region.id, at: Date.now(), ...extra };
+		for (const fn of activityFns) { try { fn(event); } catch { /* Journal must not break a physical scene. */ } }
+	}
+	// Business sources own their payment. A scene records its deed once; paying again
+	// here as well as through the request board would duplicate a business reward.
+	const settleScene = (q, outcome, context) => settle(q.source === 'economy' ? { ...q, reward: { ...q.reward, credits: 0 } } : q, outcome, context);
 	let clock = 0, farT = 8, lookT = 0, saveT = 15, whereT = 0, farN = 0, n = 0, bag = null;
 	const span = ([a, b]) => a + Math.random() * (b - a);
 	let bagT = span(BAG_EVERY) * 0.4, favT = span(FAVOUR_EVERY) * 0.5;
@@ -72,7 +81,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	const withKids = (p, all) => all.some((q) => q.follow === p && minor(q) && q.active);
 
 	function whereNow() {
-		const W = world(), c = cam(), H = regionalNow();
+		const W = world(), c = cam(), H = !W?.body || W.body.key === 'earth' ? regionalNow() : null;
 		if (H) {
 			const { cy, cx } = globeCell(H.lat, H.lon), ck = `${H.regionId}#${cy}.${cx}`;
 			let cities = cellNames.get(ck);
@@ -156,6 +165,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 		taken.add(q.id);
 		drive(R);
 		scenes.push(R);
+		activity('started', R);
 		return R;
 	}
 	// their feet: to the step's place, stopped while they pause, off and away with it when they keep it
@@ -174,6 +184,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	function pause(R, s, face) { R.phase = 'pause'; R.stepT = 0; R.pauseFor = s; R.face = face || null; }
 	function next(R) {
 		R.i++; R.stepT = 0; R.phase = 'step'; R.face = null;
+		activity('step', R);
 		// the unreliable drift off halfway, leaving it be
 		if (R.outcome === 'abandon' && R.i >= Math.ceil(R.q.steps.length / 2)) return end(R, 'abandon');
 		if (R.i >= R.q.steps.length) end(R, R.own ? 'own' : 'done');
@@ -184,6 +195,10 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	const HAND = { 'favour.directions': 'directions', 'favour.repair': 'fixed', 'favour.jumpstart': 'cables', 'favour.fall': 'helpUp' };
 	function arrive(R) {
 		const s = R.q.steps[R.i], T = targetOf(s), w = s.at?.who, kind = R.q.kind;
+		if (livingManaged && (s.do === 'fix' || s.do === 'chase' && R.q.source === 'economy' && !s.at?.who)) {
+			R.pauseReason = 'The physical ' + s.do + ' interaction must confirm this step.';
+			return end(R, 'far');
+		}
 		if (s.do === 'go' || s.do === 'chase') return next(R);
 		// the moment a betrayal happens when it is not a pickup: the wrong way, the money, the pockets
 		if (s.turn && R.outcome === 'betray') return betray(R);
@@ -227,7 +242,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	// took it and went: the bad deed now, and you may answer it
 	function betray(R) {
 		const q = R.q;
-		R.settled = settle(q, 'betray', { ...ctx(R.name, q.region), actorId: R.id });
+		R.settled = settleScene(q, 'betray', { ...ctx(R.name, q.region), actorId: R.id });
 		R.takenAt = { x: pos(R.p).x, z: pos(R.p).z };
 		remember(R.p, 'stole');
 		const owner = q.steps.findLast((s) => s.do === 'deliver')?.at || q.steps.findLast((s) => s.at?.who)?.at, ob = owner?.who;
@@ -263,22 +278,36 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 		if (R.ended) return;
 		R.ended = true;
 		const q = R.q;
-		if (how === 'own') remember(R.p, 'got-back');
+		// Leaving view is not proof of delivering goods, repairing a car, or finishing a
+		// physical task. The living-world adapter preserves the step for a later visit.
+		const interrupted = livingManaged && !R.settled && (how === 'far' || how === 'gone');
+		if (interrupted) activity('interrupted', R, { reason: R.pauseReason || (R.p?.P?.ragdoll ? 'The helper was hurt.' : 'Physical progress awaits the helper returning to view.') });
+		else if (how === 'own') remember(R.p, 'got-back');
 		else if (how === 'done') {
-			R.settled = settle(q, 'done', { ...ctx(R.name, q.region), actorId: R.id });
+			if (q.source === 'economy') {
+				const source = sources.list().find(s => s.id === q.source);
+				let receipt = null; try { receipt = source?.complete?.(q.id, R.id, 'done'); } catch { /* retain the unconfirmed scene */ }
+				if (!receipt?.ok) {
+					R.ended = false; R.i = q.steps.length - 1; pause(R, 2);
+					activity('interrupted', R, { reason: 'The source could not save this completion. No reward or deed was issued; confirmation will retry.' });
+					return;
+				}
+			}
+			R.settled = settleScene(q, 'done', { ...ctx(R.name, q.region), actorId: R.id });
 			remember(R.p, 'returned');
 			const w = q.steps.findLast((s) => s.do === 'deliver' || s.do === 'talk')?.at?.who;
 			if (w) remember(w, q.kind === 'bag' ? 'got-back' : 'helped');
 			witnesses(pos(R.p), 'saw-return', [R.p, w]);
-			sources.complete(q, R.id, 'done');
+			if (q.source !== 'economy') sources.complete(q, R.id, 'done');
 		} else if (how === 'far' && !R.settled) {
 			// out of sight: it ends the way it was going to
-			R.settled = R.outcome === 'abandon' ? { outcome: 'abandon' } : settle(q, R.outcome, { ...ctx(R.name, q.region), actorId: R.id });
+			R.settled = R.outcome === 'abandon' ? { outcome: 'abandon' } : settleScene(q, R.outcome, { ...ctx(R.name, q.region), actorId: R.id });
 			sources.complete(q, R.id, R.outcome);
 		} else if (how === 'abandon') sources.complete(q, R.id, 'abandon');
 		else if (R.settled && !R.completed) sources.complete(q, R.id, 'betray');
 		// a theft that got away out of your sight: a lead, where it happened
 		if ((how === 'far' || how === 'gone') && R.phase !== 'handed' && R.settled?.followUp) leadOf(q, { ...R.settled, taker: R.id }, q.region, R.takenAt || pos(R.p));
+		if (!interrupted) activity('finished', R, { outcome: how === 'done' ? 'done' : R.settled?.outcome || how, observed: how === 'done' || how === 'own' });
 		R.completed = true;
 		if (R.phase !== 'handed') letGo(R.p);
 		for (const w of R.still) letGo(w);
@@ -395,7 +424,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 		if (B.phase !== 'left') return;
 		const c = cam();
 		// you walked away: it ends the way it would have, among the people still there
-		if (flat(B.at, c) > VISIBLE) { const r = playFar(B.q, { dispoOf, ...ctx('', B.q.region) }); if (r.taker) remember(B.owner, r.outcome === 'betray' ? 'robbed' : 'got-back'); if (Math.random() < LEAD_CHANCE * 2) leadOf(B.q, r, B.q.region, B.at); clearBag(); return; }
+		if (flat(B.at, c) > VISIBLE) { if (livingManaged) { activity('interrupted', B.q, { reason: 'The bag is now out of view; its outcome has not been verified.' }); clearBag(); return; } const r = playFar(B.q, { dispoOf, ...ctx('', B.q.region) }); if (r.taker) remember(B.owner, r.outcome === 'betray' ? 'robbed' : 'got-back'); if (Math.random() < LEAD_CHANCE * 2) leadOf(B.q, r, B.q.region, B.at); clearBag(); return; }
 		// (the console's forced bag takes anyone standing about, not only those walking by)
 		const can = force ? (p) => adult(p) && !p.engaged && !p.override && !p.held && p.route?.kind !== 'seat' && p.route?.kind !== 'follow' : free;
 		const reach = force ? 40 : B.spot?.kind === 'table' || B.spot?.kind === 'doorstep' ? NOTICE + 2 : NOTICE;
@@ -515,6 +544,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 		else if (!giver.held) standStill(giver, () => { const R = scenes.find((s) => s.q.id === q.id); return R ? pos(R.p) : null; });
 		if (kind === 'directions') say(giver, `Excuse me, does anyone know the way to ${q.dest}?`, 'open', { surprise: 0.2 });
 		if (friend) { if (kind === 'pass' && !friend.held) standStill(friend, null); else keep(friend); }
+		activity('offered', q);
 		open.push({ q, giver, friend, until: clock + (kind === 'fall' ? 45 : 60), x: g.x, z: g.z, kind });
 		return q;
 	}
@@ -578,7 +608,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 			for (const p of near) {
 				seen.add(p);
 				const d = dispoOf(p.P.dna.seed), ch = decide(d, q);
-				if (!ch.take || !sources.take(q, idOf(p))) continue;
+				if (!ch.take || (livingAdapter && !livingAdapter.canTake(q, idOf(p))) || !sources.take(q, idOf(p))) continue;
 				start(q, p, d, ch.outcome);
 				return;
 			}
@@ -697,6 +727,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	}
 	function farTick(k = 1) {
 		const out = [];
+		if (livingManaged) return out;
 		for (let i = 0; i < k; i++) {
 			out.push(farEvent(here.region.id));
 			// now and then somewhere else you have been
@@ -707,6 +738,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	}
 	// the time you were away: a little of it, for the regions you know
 	(function catchUp() {
+		if (livingManaged) return;
 		const away = Date.now() - commons.savedAt(), known = commons.regions();
 		if (!known.length || away < 300000) return;
 		const k = Math.min(24, Math.floor(away / 300000));
@@ -773,6 +805,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 	function moneyLine(seed) { const t = [].concat(money.talk(`npc:${seed >>> 0}`) || []).find((x) => typeof x === 'string' && x); return t || null; }
 	function memoryOf(seed) { const M = memory.get(seed >>> 0); return M && clock - M.t < MEMORY ? M.kind : null; }
 	function dispose() {
+		whereT = 0;
 		for (const R of scenes) end(R, 'far');
 		scenes.length = 0; clearBag(); uncast();
 		for (const H of carried) dropProp(H.prop);
@@ -783,7 +816,18 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 		commons.save();
 	}
 	return {
-		update, info, handoff, dispose, farTick, memoryOf, factsFor, moneyLine, regionNow, situation: () => here.situation, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
+		update, info, handoff, dispose, farTick,
+		setLivingAdapter: (adapter) => { livingAdapter = adapter; },
+		onActivity: (fn) => { activityFns.add(fn); return () => activityFns.delete(fn); },
+		actor: (id) => everyone().find((p) => p?.P?.dna && idOf(p) === id && adult(p)) || null,
+		activities: () => [...scenes.filter((R) => !R.ended).map((R) => ({ request: R.q, npcId: R.id, npcName: R.name, step: R.i, phase: R.phase })), ...open.filter((F) => !F.taken).map((F) => ({ request: F.q, npcId: F.q.giver.id, npcName: F.q.giver.name, step: 0, phase: 'open' }))],
+		resumeRequest(q, npcId, step = 0) {
+			const p = everyone().find((a) => a?.P?.dna && idOf(a) === npcId && free(a));
+			if (!livingManaged || !p || q.source !== 'economy' || taken.has(q.id) || scenes.length >= SCENES) return false;
+			if (q.steps.some((s) => s.do === 'fix' || s.do === 'chase')) return false;
+			start(q, p, dispoOf(p.P.dna.seed), 'done', { i: Math.max(0, Math.min(q.steps.length - 1, step)) }); return true;
+		},
+		 memoryOf, factsFor, moneyLine, regionNow, situation: () => here.situation, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
 		// leads: a line for chatter, the marker and the guide's story (open leads, everywhere)
 		leadLine: leadLineFor, mark: leadMark,
 		leads: () => leads.open().map((L) => ({ id: L.id, note: leadNote(L), here: L.region === here.region.id, region: L.regionName || L.region, when: L.when })),

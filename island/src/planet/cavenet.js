@@ -9,6 +9,7 @@
 // Plain JavaScript: no drawing here (underworld.js meshes it).
 
 import { mulberry32, smoothstep, clamp } from '../noise.js';
+import { addSoulCave } from './soul-cave-plan.js';
 
 // ---------- 3D value noise (fast, seeded) ----------
 export function makeNoise3(seed) {
@@ -389,8 +390,10 @@ export function planCaves(island, profile) {
 			boulders.push({ x: bx, y: H(bx, bz) + s * 0.15, z: bz, rx: s * 1.3, ry: s * 0.9, rz: s, rot: r() * 3.14, amp: 0.35 });
 		}
 	}
-	const field = makeField({ chambers, tunnels, shaft, boulders, H, n3, holes });
-	return { chambers, tunnels, entrances, shaft, boulders, holes, village, ruins, field, n3 };
+	const plan = { chambers, tunnels, entrances, shaft, boulders, holes, village, ruins, n3 };
+	addSoulCave(plan, island, profile);
+	plan.field = makeField({ chambers, tunnels, shaft, boulders, H, n3, holes });
+	return plan;
 }
 
 // ---------- the field ----------

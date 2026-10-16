@@ -1,0 +1,312 @@
+{
+  "method": "Actual Three.js renderer and community project marks with controlled flat terrain and supplied lifecycle states. Touch-emulated phone viewport; not physical-device, live-network, or production terrain verification.",
+  "errors": [],
+  "captures": [
+    {
+      "file": "world-projects-desktop-surveying.png",
+      "phase": "surveying",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "marks": {
+        "visible": 4,
+        "maxVisible": 8,
+        "projects": [
+          {
+            "id": "fixture:gathering",
+            "kind": "gathering",
+            "stage": "surveying",
+            "position": [
+              6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:resonance",
+            "kind": "resonance",
+            "stage": "surveying",
+            "position": [
+              18,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:garden",
+            "kind": "garden",
+            "stage": "surveying",
+            "position": [
+              -6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:path",
+            "kind": "path",
+            "stage": "surveying",
+            "position": [
+              -18,
+              2,
+              0
+            ],
+            "shared": false
+          }
+        ],
+        "voices": 0
+      },
+      "calls": 13,
+      "triangles": 530
+    },
+    {
+      "file": "world-projects-desktop-preparing.png",
+      "phase": "preparing",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "marks": {
+        "visible": 4,
+        "maxVisible": 8,
+        "projects": [
+          {
+            "id": "fixture:gathering",
+            "kind": "gathering",
+            "stage": "preparing",
+            "position": [
+              6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:resonance",
+            "kind": "resonance",
+            "stage": "preparing",
+            "position": [
+              18,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:garden",
+            "kind": "garden",
+            "stage": "preparing",
+            "position": [
+              -6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:path",
+            "kind": "path",
+            "stage": "preparing",
+            "position": [
+              -18,
+              2,
+              0
+            ],
+            "shared": false
+          }
+        ],
+        "voices": 0
+      },
+      "calls": 17,
+      "triangles": 770
+    },
+    {
+      "file": "world-projects-desktop-building.png",
+      "phase": "building",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "marks": {
+        "visible": 4,
+        "maxVisible": 8,
+        "projects": [
+          {
+            "id": "fixture:gathering",
+            "kind": "gathering",
+            "stage": "building",
+            "position": [
+              6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:resonance",
+            "kind": "resonance",
+            "stage": "building",
+            "position": [
+              18,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:garden",
+            "kind": "garden",
+            "stage": "building",
+            "position": [
+              -6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:path",
+            "kind": "path",
+            "stage": "building",
+            "position": [
+              -18,
+              2,
+              0
+            ],
+            "shared": false
+          }
+        ],
+        "voices": 0
+      },
+      "calls": 17,
+      "triangles": 1058
+    },
+    {
+      "file": "world-projects-desktop-completed.png",
+      "phase": "completed",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "marks": {
+        "visible": 4,
+        "maxVisible": 8,
+        "projects": [
+          {
+            "id": "fixture:gathering",
+            "kind": "gathering",
+            "stage": "completed",
+            "position": [
+              6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:resonance",
+            "kind": "resonance",
+            "stage": "completed",
+            "position": [
+              18,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:garden",
+            "kind": "garden",
+            "stage": "completed",
+            "position": [
+              -6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:path",
+            "kind": "path",
+            "stage": "completed",
+            "position": [
+              -18,
+              2,
+              0
+            ],
+            "shared": false
+          }
+        ],
+        "voices": 0
+      },
+      "calls": 24,
+      "triangles": 2438
+    },
+    {
+      "file": "world-projects-phone-completed.png",
+      "phase": "completed",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "marks": {
+        "visible": 4,
+        "maxVisible": 8,
+        "projects": [
+          {
+            "id": "fixture:garden",
+            "kind": "garden",
+            "stage": "completed",
+            "position": [
+              -6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:gathering",
+            "kind": "gathering",
+            "stage": "completed",
+            "position": [
+              6,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:path",
+            "kind": "path",
+            "stage": "completed",
+            "position": [
+              -18,
+              2,
+              0
+            ],
+            "shared": false
+          },
+          {
+            "id": "fixture:resonance",
+            "kind": "resonance",
+            "stage": "completed",
+            "position": [
+              18,
+              2,
+              0
+            ],
+            "shared": false
+          }
+        ],
+        "voices": 0
+      },
+      "calls": 6,
+      "triangles": 1274
+    }
+  ],
+  "passed": true
+}

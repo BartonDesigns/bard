@@ -1,0 +1,54 @@
+{
+  "checked": "2026-10-14T05:02:14.284Z",
+  "services": [
+    {
+      "service": "discovery",
+      "url": "https://l99-discovery.joshbarton1921.workers.dev",
+      "ready": false,
+      "missing": [
+        "quest-continuity-v1"
+      ],
+      "cors": true,
+      "status": {
+        "day": "2026-10-14",
+        "used": 0,
+        "reserved": 0,
+        "cap": 8000,
+        "left": 8000,
+        "gens": 0,
+        "exhausted": false,
+        "done": 426,
+        "talk": {
+          "used": 0,
+          "cap": 3000,
+          "left": 3000,
+          "talks": 0
+        },
+        "planning": [
+          "social_intent",
+          "story_quest"
+        ]
+      }
+    },
+    {
+      "service": "rooms",
+      "url": "https://l99-rooms.joshbarton1921.workers.dev",
+      "ready": false,
+      "missing": [
+        "reputation-v1",
+        "persistent-reputation-v1"
+      ],
+      "cors": true,
+      "status": {
+        "ok": true,
+        "version": 1,
+        "maxPlayers": 8,
+        "features": [
+          "trade-v2",
+          "combat-v1",
+          "combat-guard-v1"
+        ]
+      }
+    }
+  ]
+}

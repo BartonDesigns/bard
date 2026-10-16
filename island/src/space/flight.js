@@ -1,3 +1,4 @@
+import { SOUL_SITE } from '../reputation/sanctuary.js';
 import * as THREE from 'three';
 import { createOrbitFrame, ORBIT, MOON, SUN, GARGANTUA, companionOf, musicThrust } from './frame.js';
 import { createOrbitView } from './view.js';
@@ -59,6 +60,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	function destinations() {
 		const near = bodies().map((b) => ({ ...b, note: distanceLabel(b.distance) }));
 		const far = [];
+		far.push({ id: 'w-SOUL', name: "Gargantua’s island", note: 'The Quiet Well', remote: { type: SOUL_SITE.type, seed: SOUL_SITE.seed, name: "Gargantua’s island" } });
 		// the Moon's colony: warp straight down to its spaceport
 		far.push({ id: 'w-COLONY', name: `Moon: ${COLONY.MOON.name}`, note: 'spaceport', remote: { type: 'MOON', seed: 1969, colony: true } });
 		if (!earth && type !== 'MOON') far.push({ id: 'w-EARTH', name: 'Earth', note: 'land', remote: { earth: true } });

@@ -7,10 +7,13 @@
 //   GET  /rooms/:code/ws?id=&name=&seed=   (WebSocket) join the room
 
 import { Room } from './room.js';
+import { Soul, soulId, SOUL_TOKEN } from './soul.js';
+import { SOUL_FEATURE } from '../../../island/src/reputation/sanctuary.js';
 import { VERSION, MAX_PLAYERS, ID_RE, newCode, cleanCode } from '../../../island/src/net/protocol.js';
 import { REPUTATION_FEATURE } from '../../../island/src/net/reputation.js';
+import { LivingRegion, LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE, LIVING_MAX_BYTES, livingIdentity, livingScope } from './living-region.js';
 
-export { Room };
+export { Room, Soul, LivingRegion };
 
 // rooms made per address an hour (kept in this instance's memory only, by a hash)
 const MAKE_PER_HOUR = 20;
@@ -23,7 +26,7 @@ function origins(env) {
 }
 function cors(origin, allowed) {
 	const h = { vary: 'Origin' };
-	if (allowed) Object.assign(h, { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400' });
+	if (allowed) Object.assign(h, { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '86400' });
 	return h;
 }
 const reply = (v, status, headers) => new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'x-content-type-options': 'nosniff', ...headers } });
@@ -47,7 +50,40 @@ export async function handle(request, env) {
 	if (origin && !ok) return reply({ error: 'origin not allowed' }, 403, { vary: 'Origin' });
 	if (request.method === 'OPTIONS') return new Response(null, { status: ok ? 204 : 403, headers: H });
 
-	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', 'combat-v1', 'combat-guard-v1', REPUTATION_FEATURE] }, 200, H);
+	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', 'combat-v1', 'combat-guard-v1', REPUTATION_FEATURE, SOUL_FEATURE, ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : [])] }, 200, H);
+
+	const living = url.pathname.match(/^\/living\/([^/]+)\/([^/]+)$/);
+	if (living && ['GET', 'POST'].includes(request.method)) {
+		if (!ok) return reply({ error: 'origin required' }, 403, H);
+		if (!env.LIVING) return reply({ error: 'Shared citizen activity is not deployed.' }, 503, H);
+		const key = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
+		if (!SOUL_TOKEN.test(key)) return reply({ error: 'Soul key required.' }, 401, H);
+		let world, region;
+		try { world = decodeURIComponent(living[1]); region = decodeURIComponent(living[2]); } catch { return reply({ error: 'Invalid region encoding.' }, 400, H); }
+		if (!livingScope(world) || !livingScope(region)) return reply({ error: 'Invalid body or region.' }, 400, H);
+		const length = Number(request.headers.get('content-length'));
+		if (Number.isFinite(length) && length > LIVING_MAX_BYTES) return reply({ error: 'Observation batch too large.' }, 413, H);
+		let body;
+		if (request.method === 'POST') {
+			body = await request.text();
+			if (new TextEncoder().encode(body).length > LIVING_MAX_BYTES) return reply({ error: 'Observation batch too large.' }, 413, H);
+		}
+		const identity = await livingIdentity(await soulId(key), world, region);
+		const q = new URL('https://living/state'); q.searchParams.set('world', world); q.searchParams.set('region', region);
+		for (const field of ['before', 'limit']) if (url.searchParams.has(field)) q.searchParams.set(field, url.searchParams.get(field));
+		const stub = env.LIVING.get(env.LIVING.idFromName(JSON.stringify([world, region])));
+		const result = await stub.fetch(new Request(q, { method: request.method, headers: { 'x-living-player': identity, 'content-type': 'application/json' }, ...(body !== undefined ? { body } : {}) }));
+		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
+	}
+
+	if (url.pathname === '/souls/me' && ['GET', 'POST'].includes(request.method)) {
+		if (!ok) return reply({ error: 'origin required' }, 403, H);
+		const key = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
+		if (!SOUL_TOKEN.test(key)) return reply({ error: 'Soul key required.' }, 401, H);
+		const id = await soulId(key), stub = env.SOULS.get(env.SOULS.idFromName(id));
+		const result = await stub.fetch(new Request('https://soul/me', request));
+		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
+	}
 
 	if (request.method === 'POST' && url.pathname === '/rooms') {
 		if (!ok) return reply({ error: 'origin required' }, 403, H);

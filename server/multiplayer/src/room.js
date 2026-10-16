@@ -7,7 +7,10 @@ import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, cl
 
 import { createCombatGuard } from './combat-guard.js';
 import { acceptReputation } from './reputation.js';
+import { soulId, SOUL_TOKEN } from './soul.js';
+import { SOUL_FEATURE } from '../../../island/src/reputation/sanctuary.js';
 import { REPUTATION_FEATURE, reputationAlive } from '../../../island/src/net/reputation.js';
+import { LIVING_FEATURE, COMMUNITY_FEATURE } from './living-region.js';
 
 const SWEEP_MS = 15000;
 // close codes the game understands
@@ -86,10 +89,11 @@ export class Room {
 		meta.emptySince = 0;
 		await this.save();
 		const now=Date.now();
-		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE], now });
+		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE, ...(this.env.SOULS ? [SOUL_FEATURE] : []), ...(this.env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE] : [])], now });
 		const memories=(meta.reputation||[]).filter(e=>reputationAlive(e,now));
 		for(let i=0;i<memories.length;i+=6)this.send(ws,{t:'reputation-snapshot',records:memories.slice(i,i+6)});
 		this.broadcast({ t: 'join', player: this.player(ws) }, ws);
+		for (const peer of this.sockets()) if (this.info(peer).soul) await this.standing(peer, ws);
 		await this.state.storage.setAlarm(Date.now() + SWEEP_MS);
 	}
 	async reputation(ws,raw) {
@@ -99,6 +103,16 @@ export class Room {
 		if(result.duplicate){this.send(ws,{t:'reputation',e:result.record,live:false});return;}
 		await this.save();
 		this.broadcast({t:'reputation',e:result.record,live:true});
+	}
+	async standing(ws, only = null) {
+		const a = this.info(ws);
+		if (!a?.soul || !this.env.SOULS) return;
+		const stub = this.env.SOULS.get(this.env.SOULS.idFromName(a.soul));
+		const r = await stub.fetch('https://soul/public');
+		if (!r.ok) return;
+		const standing = await r.json();
+		const message = { t: 'standing', actor: a.id, name: a.name, standing };
+		if (only) this.send(only, message); else this.broadcast(message);
 	}
 	// the rate limit: a bucket per player that fills at RATE a second up to BURST
 	allow(id) {
@@ -125,6 +139,17 @@ export class Room {
 		const meta = await this.load();
 		const host = meta.host === a.id;
 		switch (m.t) {
+			case 'soul-bind': {
+				if (!this.env.SOULS || !SOUL_TOKEN.test(m.key || '')) return;
+				const identity = await soulId(m.key);
+				ws.serializeAttachment({ ...a, soul: identity });
+				await this.standing(ws); return;
+			}
+			case 'soul-refresh': {
+				if (!a.soul || Date.now() - (a.soulAt || 0) < 1000) return;
+				ws.serializeAttachment({ ...a, soulAt: Date.now() });
+				await this.standing(ws); return;
+			}
 			case 'pose': {
 				const p = cleanPose(m);
 				if (!p) return;

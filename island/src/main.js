@@ -1,3 +1,12 @@
+import { createSoul } from './reputation/soul.js';
+import { createSoulWell } from './planet/soul-well.js';
+import { createLivingWorld, livingActorId } from './people/living-world.js';
+import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
+import { createCommunityProjects } from './people/community-projects.js';
+import { createCommunityProjectSites } from './people/community-project-sites.js';
+import { createCommunityProjectMarks } from './guide/community-project-marks.js';
+import { worldPosition } from './people/social-actors.js';
+import { roomsURL } from './net/config.js';
 // Island engine, stage 1. Loaded by the Bard faceplate on demand; runs as a
 // third world beside the caves and space flight, sharing the faceplate's
 // music, keyboard, play surfaces and Journey transfers.
@@ -48,7 +57,7 @@ import { createBayArea, bayUniforms } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
-import { requestsNear, takeRequest, completeRequest } from './economy/requests.js';
+import { board as requestBoard, requestsNear, takeRequest, completeRequest } from './economy/requests.js';
 import { payroll } from './economy/payroll.js';
 import { bank } from './economy/bank.js';
 import { createHouses } from './bay/houses.js';
@@ -608,7 +617,7 @@ export function createIslandWorld() {
 	// mutations in one place for the Guide, NPC conversations and the Crysis console.
 	const arms = createArmsRuntime({ world: () => world, sites: (W) => W?.worldSites || W?.sites || [], startingCredits: 1000, hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.arms = arms;
-	const guideApi = { world: () => world, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
+	const guideApi = { world: () => world, scene, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
 	const guide = createGuide(dom.mount, guideApi);
 	// the pin and direction chip for the meeting or quest place the guide is tracking
 	const waypoint = guideApi.waypoint = createWaypoint({ scene, camera, mount: dom.mount, onTap: () => guide.showQuests() });
@@ -819,8 +828,10 @@ export function createIslandWorld() {
 	combat.melee.bind({ avatar, self: you });
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
+	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
+	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
-	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, relationship: p => guide.relationshipFor(p), combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
 	// today's three goals, paid as they are done (gameplay/daily.js)
 	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
 	const note = (kind, data) => daily.note(kind, data);
@@ -835,9 +846,46 @@ export function createIslandWorld() {
 	const commons = HOOKS.commons = createCommons({ store: npcStore });
 	// (money through the bank's adapter: HOOKS.npcMoney.use(bank) attaches economy/bank.js)
 	const npcMoney = HOOKS.npcMoney = createMoney();
-	const npcQuests = HOOKS.npcQuests = createNpcQuests({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
+	const npcQuests = HOOKS.npcQuests = createNpcQuests({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, livingManaged: true, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
 	commons.follow(combat.morality, npcQuests.regionNow);
 	guideApi.npcQuests = npcQuests;
+	const livingActors = () => [...people.pool, ...families.actors(), ...social.actors.all(),
+		...(world?.colony?.crew?.people?.folk || []).map(f => ({ ...f, actor: f, npcId: livingActorId(f), position: f.pos,
+			workSpot: !f.place || f.place === 'work' ? f.goal || f.pos : null, home: f.place === 'quarters' ? f.goal || f.pos : null,
+			sites: { ...(!f.place || f.place === 'work' ? { work: 'colony-work:' + f.id } : {}), ...(f.place === 'quarters' ? { home: 'colony-home:' + f.id } : {}) } }))];
+	const livingWorld = guideApi.livingWorld = HOOKS.livingWorld = createLivingWorld({
+		worldKey: social.bodyKey, region: npcQuests.regionNow, placeName: () => combat.placeName?.() || '',
+		position: () => camera.position, world: () => world, structures: () => world?.structures,
+		requests: () => world?.city?.economy ? requestBoard : null, npcQuests, actors: livingActors, soul, url: roomsURL(),
+		persona: p => guide.personaOf(p), employerOf: id => payroll.employerOf(id), moneyFor: id => { const p = livingActors().find(a => livingActorId(a) === id); if (p?.P?.home) bank.household(p); return bank.moneyTalk(id); },
+		utcOffsetMinutes: () => { const date = new Date(), utc = date.getUTCHours() * 60 + date.getUTCMinutes(); return Number.isFinite(world?.sky?.state?.hours) ? Math.round(((world.sky.state.hours * 60 - utc + 2160) % 1440) - 720) : 0; },
+		hint: (t, ms) => hint(t, ms, 1),
+		onComplete: ({ request, receiptId }) => combat.morality.record({ id: receiptId, kind: request.deeds?.done || 'favour', target: request.giver.name, world: combat.worldKey(), place: combat.placeName(), region: npcQuests.regionNow().id }),
+		onContact: (id, context) => {
+			const actor = livingActors().find(p => p.active && livingActorId(p) === id);
+			if (actor?.M?.S?.pos && actor.M.S.pos.distanceTo(camera.position) < 8) return { actor: actor.actor || actor };
+			const at = actor?.M?.S?.pos || actor?.position || context.request?.giver;
+			if (at && Number.isFinite(at.x) && Number.isFinite(at.z)) return { message: `Look for ${context.request?.giver?.name || 'the requester'} in this region. Approach them to talk.`, at: { x: at.x, z: at.z } };
+			return null;
+		},
+	});
+	guideApi.negotiation = HOOKS.negotiation = createNegotiationRuntime({ arms, world: () => world, bodyKey: social.bodyKey,
+		position: () => camera.position, livingWorld, relationship: p => guide.relationshipFor(p), morality: () => combat.morality, structures: () => world?.structures });
+	const projectSites = createCommunityProjectSites({ world: () => world, position: () => camera.position,
+		targets: () => guide.storyContext().targets, activities: () => livingWorld.snapshot().activities, projects: () => projectSnapshot.projects });
+	let projectMarks, projectSnapshot = {projects:[]}, projectRefresh = 0;
+	const communityProjects = guideApi.communityProjects = HOOKS.communityProjects = createCommunityProjects({
+		worldKey: social.bodyKey, region: npcQuests.regionNow, world: () => world, position: () => camera.position,
+		candidates: projectSites.list, toPosition: anchor => worldPosition(world,anchor),
+		eligible: () => !!world && !world.player.state.flying && !world.player.state.diving && !world.orbit?.active() && !arcade.active() && !drive.active() && !world.boat?.boarded() && document.visibilityState !== 'hidden' && dom.mount.style.display !== 'none' && !window.L99Loading.active(),
+		situation: () => projectSites.situation(projectSnapshot.projects), livingWorld, soul, url: roomsURL(),
+		onChange: () => {projectRefresh=0;},
+		mark: target => {if(target.initial || waypoint.mark()?.projectId===target.projectId)waypoint.set(target);},
+		play: id => { const near=projectMarks?.nearest(camera.position); if(near?.id!==id)return false; window.initAudio?.(); return projectMarks.playNearest(camera.position).ok === true; },
+		hint: (text,ms) => hint(text,ms,1),
+	});
+	projectMarks = HOOKS.projectMarks = createCommunityProjectMarks({scene,world:()=>world,camera,projects:()=>projectSnapshot.projects,maxVisible:isPhone?6:8});
+	document.addEventListener('visibilitychange',()=>{if(document.hidden)communityProjects.reset();});
 	// the economy behind the people: their money in the bank, the businesses' requests among their
 	// quests, the businesses' doors among their places (a walk-in's door and tables from
 	// commercial.js, named from the registry; the rest at their doors)
@@ -1094,10 +1142,22 @@ export function createIslandWorld() {
 				{ id: 'island-police-cache', name: 'Civic police-station recovery cache', kind: 'police', x: anchor.x - 92, z: anchor.z - 82, actions: ['secure'], virtual: true },
 			];
 			for (const S of world.services?.sites?.() || []) out.push(S);
+			const businesses = world.city?.economy?.near(camera.position.x, camera.position.z, 700) || [];
+			const equipment = new Set(['outfitter', 'huntpost', 'general', 'hardware', 'grocer']);
+			for (const E of businesses) if (equipment.has(E.type)) {
+				const x = E.door?.[0] ?? E.x, z = E.door?.[1] ?? E.z;
+				out.push({ id: E.id, economyId: E.id, name: E.name, kind: ['outfitter', 'huntpost'].includes(E.type) ? 'outfitter' : 'supermarket', x, z,
+					y: world.island.heightAt(x, z), actions: ['purchase'], source: 'economy',
+					...(E.type === 'hardware' ? { stock: ['repair-roll', 'camp-lantern', 'home-supply-kit'] } : {}) });
+			}
 			for (const B of world.commercial?.list?.() || []) {
 				if (B.type !== 'shop') continue;
+				// A named business owns its own counter; do not add a second generic store
+				// over it with a separate stock lot or let its neighbours sell its goods.
+				const E = businesses.find(e => Math.hypot(e.x - B.x, e.z - B.z) < 5);
+				if (E) continue;
 				const id = `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
-				out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, actions: ['purchase'], source: 'generated-commercial' });
+				out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, w: B.w, d: B.d, actions: ['purchase'], source: 'generated-commercial' });
 			}
 			return out;
 		};
@@ -1124,6 +1184,7 @@ export function createIslandWorld() {
 			island.underClear = world.underworld.clearBody;
 		}
 		// the mushrooms this world grows, and what they do to you
+		world.soulWell = createSoulWell({ world, profile, scene, camera, mount: dom.mount, shared, soul, hint: (t, ms) => hint(t, ms, 1), blocked: () => drive.active() || !visible || window.L99Loading.active() || !!world.beyond?.active?.() });
 		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
 		// a volcanic world's mountain: lava tubes, spouts, the crater's lake, and its eruptions
 		if (!earth && (profile.relief === 'volcano' || island.peak?.volcanic)) {
@@ -1368,6 +1429,8 @@ export function createIslandWorld() {
 		HOOKS.fares?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
+		guide.routeMarks?.reset(); // keep reusable marker resources out of departing-world disposal
+		communityProjects.reset(); projectMarks.reset(); projectSnapshot={projects:[]}; projectRefresh=0;
 		social.reset();
 		world.labels?.dispose();
 		world.discovery?.dispose();
@@ -1395,6 +1458,7 @@ export function createIslandWorld() {
 		world.shells?.dispose();
 		world.shrooms?.dispose();
 		world.deep?.dispose();
+		world.soulWell?.dispose();
 		world.underworld?.dispose();
 		world.volcano?.dispose();
 		world.alien?.dispose();
@@ -1713,12 +1777,13 @@ export function createIslandWorld() {
 	function tick(now) {
 		const elapsed = Math.min(.25, Math.max(.001, (now - last) / 1000));
 		const dt = Math.min(0.05, elapsed);
+		const projectDelta = elapsed;
 		last = now;
-		if (building || !visible || !world || document.hidden || lost) { world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
-		if (window.L99Loading.active() && !arrival) return;
+		if (building || !visible || !world || document.hidden || lost) { communityProjects.reset(); world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
+		if (window.L99Loading.active() && !arrival) { communityProjects.reset(); return; }
 		// on a phone the world holds still while someone thinks of a reply: the model and
 		// the world share the GPU and the page's memory
-		if (isPhone && guide.llm?.busy?.()) return;
+		if (isPhone && guide.llm?.busy?.()) { communityProjects.reset(); return; }
 		time += dt;
 		shared.uTime.value = time;
 		stepWind(dt, shared);
@@ -1743,6 +1808,7 @@ export function createIslandWorld() {
 		W.orbit?.updateHud();
 		worldAir(1 - (W.orbit?.blend() || 0));
 		if (W.orbit?.space()) {
+			communityProjects.reset();
 			social.update(0, time, false); waypoint.update(0, time, false);
 			W.labels?.hide();
 			W.globe?.regional?.pause();
@@ -1792,7 +1858,9 @@ export function createIslandWorld() {
 		W.dwellings?.update(dt, camera.position);
 		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
+		soul.update();
 		W.underworld?.update(dt, time);
+		W.soulWell?.update(dt, time);
 		W.deep?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
 		// (on a governed tier, from up on the shore only once you are down at the water: the reef
@@ -1971,6 +2039,9 @@ export function createIslandWorld() {
 		encounterPacing.tick(dt);
 		errands.update(dt);
 		npcQuests.update(dt);
+		livingWorld.update(dt);
+		communityProjects.update(projectDelta);
+		projectRefresh-=projectDelta; if(projectRefresh<=0){projectRefresh=1;projectSnapshot=communityProjects.snapshot();} projectMarks.update(projectDelta);
 		fares.update(dt);
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
@@ -2048,6 +2119,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		communityProjects.reset();
 		governor.live(false);
 		window._worldAudioLead = undefined;
 		world?.orbit?.pause?.();
@@ -2430,6 +2502,7 @@ if (typeof window !== 'undefined') {
 		deepGo: (where = 'gate') => window.L99Island?.world?.()?.deep?.go(where) || 'no Deep Gate on this world',
 		// what the strike prompt is offering now (planet/resonance.js)
 		striking: () => { const t = HOOKS.striker?.current(); return t ? { label: t.label, at: t.pos.toArray().map((v) => Math.round(v * 10) / 10) } : null; },
+		reputation: () => ({ ...HOOKS.soul?.info(), ...HOOKS.morality?.info(), well: window.L99Island?.world()?.soulWell?.info() || null }),
 		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
 		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),
 		// the alien works (planet/alien.js): Crysis.alien() lists the sites, Crysis.alienGo(i) takes you to look at one
@@ -2476,6 +2549,8 @@ if (typeof window !== 'undefined') {
 		ragdolls: () => HOOKS.ragdolls?.info(),
 		// the fight (combat/): Crysis.combat.info(), .spawn('ashfang'), .boss('walker'), .fight(), .raid(), .ignite(); Crysis.morality()
 		get combat() { return HOOKS.combat; },
+		living: Object.assign(() => HOOKS.livingWorld?.snapshot(), { sync: () => HOOKS.livingWorld?.sync(), action: (id, action, options) => HOOKS.livingWorld?.action(id, action, options) }),
+		projects: Object.assign(() => HOOKS.communityProjects?.snapshot(), {sync:()=>HOOKS.communityProjects?.sync(),action:(id,action,options)=>HOOKS.communityProjects?.action(id,action,options),visuals:()=>HOOKS.projectMarks?.info()}),
 		// Crysis.morality(): your compass, this region's tally, the people near you and what they have
 		// done; .bag('return'|'steal'|'auto') leaves a bag near you now; .favour() someone asks another;
 		// .tick(n) n far-away quests now; .run(s) the scenes on by s seconds; .money('npc:123'); .regions()
