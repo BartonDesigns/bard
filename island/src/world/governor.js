@@ -122,14 +122,14 @@ export function setTier(t) {
 // mode(): 'auto' (governed), 'high' or 'low' (chosen; a crash or graphics loss still caps them).
 // meter: gpumeter.js's; budgetMB: what the graphics and the script heap together may hold
 // before the governor steps down (a phone's is small: Safari closes the page well before the
-// device runs out). Phones start a tier down and earn the best by running easily.
+// device runs out). All devices start a tier down and earn the best by running easily.
 export function createGovernor({ phone = false, mode = () => 'auto', meter = null, budgetMB = phone ? 700 : 2500, storage = null, now = () => Date.now() } = {}) {
 	const get = () => { try { return storage?.getItem(STORE_KEY) ?? null; } catch { return null; } };
 	const put = (r) => { try { storage?.setItem(STORE_KEY, JSON.stringify(r)); } catch { /* private mode */ } };
 	const booted = bootRecord(readRecord(get()), now());
 	let rec = booted.rec;
 	put(rec);
-	const state = governorState({ tier: phone ? 1 : 0, ceiling: rec.ceiling });
+	const state = governorState({ tier: 1, ceiling: rec.ceiling });
 	const fixed = (m) => Math.max(rec.ceiling, m === 'low' ? 2 : 0);
 	let memK = null, memT = 0, lastMode = mode();
 	// the heap over the last ten seconds, its lowest taken: the figure counts garbage not yet

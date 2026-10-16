@@ -165,7 +165,7 @@ export class Builder {
 			g.setAttribute('normal', new THREE.Float32BufferAttribute(b.n, 3));
 			g.setAttribute('uv', new THREE.Float32BufferAttribute(b.u, 2));
 			// (the lit walls keep their shading apart, in the alpha, to dim their glow by it too)
-			if (mats[k].vertexAlphas) { const c4 = new Float32Array(b.a.length * 4); for (let i = 0; i < b.a.length; i++) c4.set([b.c[i * 3], b.c[i * 3 + 1], b.c[i * 3 + 2], b.a[i]], i * 4); g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
+			if (mats[k].userData.vertexAlphas) { const c4 = new Float32Array(b.a.length * 4); for (let i = 0; i < b.a.length; i++) c4.set([b.c[i * 3], b.c[i * 3 + 1], b.c[i * 3 + 2], b.a[i]], i * 4); g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
 			else g.setAttribute('color', new THREE.Float32BufferAttribute(b.c, 3));
 			g.computeBoundingSphere();
 			const m = new THREE.Mesh(g, mats[k]);
@@ -495,7 +495,10 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	// the walls and ceilings: their glow (the light about the room) dimmed in the corners too,
 	// by the shading the builder keeps in the colour's alpha
 	const room = (o) => {
-		const m = std({ vertexAlphas: true, ...o });
+		const m = std(o);
+		// Three infers USE_COLOR_ALPHA from the geometry's four-component color.
+		// This is builder metadata, not a MeshStandardMaterial constructor option.
+		m.userData.vertexAlphas = true;
 		// (and by the wall's own colour, so a dark accent wall stays dark, not lamp-brown)
 		// (three takes the colour's alpha only from a four-component colour, so where the
 		// builder gave three the shading is read from the colour itself)
