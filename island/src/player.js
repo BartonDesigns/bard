@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { waterContact } from './world/water-contact.js';
 import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 import { DEFAULT_AIM_SENSITIVITY } from './aim-sensitivity.js';
+import { lookPrefs, lookGain, levelPitch, LEVEL, onGyro, resumeGyro } from './ui/touch-look.js';
 
 const EYE = 1.68;
 
@@ -25,10 +26,12 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	// ---------- input ----------
 	const owns = (e) => e.target === dom.canvas;
  const canLook = () => s.active && !s.inputBlocked && !dom.mount.inert && !window._KEYS_PLAY_ON && !document.hidden && !document.activeElement?.closest?.('input,textarea,select,[contenteditable]');
- function look(dx, dy, sensitivity) { if (!canLook()) return; const scale = sensitivity * (shared.aimSensitivity ?? DEFAULT_AIM_SENSITIVITY) / Math.max(1, camera.zoom || 1); s.yaw -= dx * scale; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch - dy * scale)); }
+	// (lastLook: when the view was last turned by hand, for the pitch's easing back to level)
+	let lastLook = 0;
+ function look(dx, dy, sensitivity) { if (!canLook()) return; lastLook = performance.now(); const scale = sensitivity * (shared.aimSensitivity ?? DEFAULT_AIM_SENSITIVITY) / Math.max(1, camera.zoom || 1); s.yaw -= dx * scale; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch - dy * scale)); }
  function releaseMouse() { if (document.pointerLockElement === dom.canvas) document.exitPointerLock(); }
  function lockChanged() { if (document.pointerLockElement !== dom.canvas) clearInput(); }
- function buttonLook(e) { look(e.detail.x, e.detail.y, .0042); }
+ function buttonLook(e) { look(e.detail.x, e.detail.y * (lookPrefs.invertY ? -1 : 1), .0042); }
  function focusedUI(e) { if (e.target.closest?.('input,textarea,select,button,[contenteditable]')) releaseMouse(); }
  document.addEventListener('pointerlockchange', lockChanged);
  dom.mount.addEventListener('l99-look-delta', buttonLook);
@@ -60,7 +63,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			// (the joystick leaves its rest, bottom left, for under the thumb)
 			dom.joy.classList.add('held');
 			dom.joy.style.left = e.clientX - 55 + 'px'; dom.joy.style.top = e.clientY - 55 + 'px';
-		} else touch.look.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		} else touch.look.set(e.pointerId, { x: e.clientX, y: e.clientY, t: e.timeStamp, v: 0 });
 		dom.canvas.setPointerCapture?.(e.pointerId);
 	}
 	function pMove(e) {
@@ -75,9 +78,12 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			dom.knob.style.transform = `translate(${joy.x * 38}px,${joy.y * 38}px)`;
 			s.run = m > 0.95;
 		} else if (touch.look.has(e.pointerId)) {
-			const p = touch.look.get(e.pointerId);
-			look(e.clientX - p.x, e.clientY - p.y, .0042);
-			p.x = e.clientX; p.y = e.clientY;
+			// (the drag's speed, smoothed, sets its gain: slow is fine, a fast swipe turns far)
+			const p = touch.look.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y, ms = Math.max(1, e.timeStamp - p.t);
+			p.v = p.v * 0.6 + Math.hypot(dx, dy) / ms * 0.4;
+			const k = lookGain(p.v);
+			look(dx * k, dy * k * (lookPrefs.invertY ? -1 : 1), .0042);
+			p.x = e.clientX; p.y = e.clientY; p.t = e.timeStamp;
 		} else return;
 		s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch));
 	}
@@ -94,6 +100,14 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	addEventListener('pointermove', pMove); addEventListener('pointerup', pUp); addEventListener('pointercancel', pUp);
 	function clearInput() { releaseMouse(); keys.clear(); mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.run = s.flyUp = s.flyDown = s.climbAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
 	addEventListener('blur', clearInput);
+	// the gyro, when switched on (ui/touch-look.js), turns the view on top of the drag
+	onGyro((yaw, pitch) => {
+		if (!canLook() || s.locked) return;
+		lastLook = performance.now();
+		const k = 1 / Math.max(1, camera.zoom || 1);
+		s.yaw += yaw * k; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch + pitch * k * (lookPrefs.invertY ? -1 : 1)));
+	});
+	resumeGyro(dom.mount);
 
 	// ---------- ground and walls ----------
 	const foot = village.footprints.filter((f) => !f.fence);
@@ -187,6 +201,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (keys.has('a') || keys.has('arrowleft')) mx -= 1;
 		if (keys.has('d') || keys.has('arrowright')) mx += 1;
 		const run = s.run || keys.has('shift') || !!s.auto?.run;
+		// walking on the stick with no hand on the view for a moment: the view drifts back to
+		// level (touch only; never while aiming down the sights, flying or swimming)
+		if (touch.move && !touch.look.size && Math.hypot(joy.x, joy.y) > 0.3 && performance.now() - lastLook > LEVEL.after && !s.flying && !s.swimming && (camera.zoom || 1) <= 1.01) s.pitch = levelPitch(s.pitch, dt);
 		fwd.set(-Math.sin(s.yaw), 0, -Math.cos(s.yaw));
 		right.set(Math.cos(s.yaw), 0, -Math.sin(s.yaw));
 		wish.set(0, 0, 0).addScaledVector(fwd, -mz).addScaledVector(right, mx);

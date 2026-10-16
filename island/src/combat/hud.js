@@ -68,7 +68,7 @@ export function createHud({ mount, touch = false }) {
 	const btns = {};
 	const mkBtn = (name, label, css) => {
 		const b = document.createElement('button');
-		b.type = 'button'; b.className = 'cb-btn'; b.textContent = label; b.setAttribute('aria-label', name);
+		b.type = 'button'; b.className = 'cb-btn'; b.textContent = label; b.setAttribute('aria-label', name); b.title = name;
 		b.style.cssText = css;
 		mount.appendChild(b);
 		btns[name] = b;
@@ -76,8 +76,8 @@ export function createHud({ mount, touch = false }) {
 	};
 	if (touch) {
 		mkBtn('Fire', '', 'right:calc(16px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 160px + env(safe-area-inset-bottom));width:72px;height:72px;');
-		btns.Fire.title = 'Hold and drag to fire and aim'; btns.Fire.style.flexDirection = 'column'; btns.Fire.style.gap = '3px';
-		btns.Fire.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg><span style="font:600 10px system-ui">FIRE</span>';
+		btns.Fire.title = 'Hold and drag to fire and aim';
+		btns.Fire.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
 		mkBtn('Reload', 'R', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 176px + env(safe-area-inset-bottom));width:44px;height:44px;');
 		mkBtn('Mode', 'AUTO', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 226px + env(safe-area-inset-bottom));width:44px;height:44px;font-size:9px;');
 	}
@@ -136,10 +136,10 @@ export function createHud({ mount, touch = false }) {
 				aN.textContent = W.mag; aR.textContent = `/ ${W.reserve}`;
 				aW.textContent = `${W.name}${W.modes > 1 ? ' · ' + W.mode : ''}`;
 				ammo.classList.toggle('low', W.mag <= Math.ceil(W.max * 0.25));
-				aRl.textContent = W.reloading ? (W.bow ? 'Nocking…' : 'Reloading…') : W.mag === 0 ? (W.reserve ? (touch ? 'Tap R to reload' : 'Press R to reload') : W.bow ? 'No arrows · visit an outfitter' : 'No ammo · buy a box at a shop') : W.bow ? (W.drawing ? `Release · ${Math.round(W.draw * 100)}% draw` : 'Hold to draw · release to shoot') : '';
+				aRl.textContent = W.reloading ? (W.bow ? 'Nocking…' : 'Reloading…') : W.mag === 0 ? (W.reserve ? (touch ? 'Empty · reload' : 'Press R to reload') : W.bow ? 'No arrows · visit an outfitter' : 'No ammo · buy a box at a shop') : W.bow ? (W.drawing ? `Release · ${Math.round(W.draw * 100)}% draw` : 'Hold to draw · release to shoot') : '';
 				if (btns.Fire) {
 					const label = W.bow ? (W.reloading ? 'Nocking' : W.drawing ? 'Release' : 'Draw') : 'Fire';
-					if (btns.Fire.getAttribute('aria-label') !== label) { btns.Fire.textContent = label; btns.Fire.setAttribute('aria-label', label); }
+					if (btns.Fire.getAttribute('aria-label') !== label) { btns.Fire.setAttribute('aria-label', label); btns.Fire.title = label === 'Fire' ? 'Hold and drag to fire and aim' : label; }
 					btns.Fire.style.opacity = W.reloading || !W.mag ? '0.55' : '1';
 				}
 				if (btns.Mode) { btns.Mode.textContent = W.mode.toUpperCase(); btns.Mode.style.display = vis && W.modes > 1 ? 'flex' : 'none'; }
