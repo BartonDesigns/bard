@@ -70,3 +70,21 @@ test('the per-soul budget rejects new floods atomically and still permits receip
  assert.equal((await sync(s,[d(1)])).status,200);
  assert.equal((await(await s.fetch(new Request('https://soul/me'))).json()).ledger.me.deeds,1);
 });
+
+test('reputation preflights allow authorization and JSON only from configured game origins',async()=>{
+ for(const origin of ['https://level99bard.com','https://www.level99bard.com'])for(const method of ['GET','POST']){
+  const r=await handle(new Request('https://rooms/souls/me',{method:'OPTIONS',headers:{origin,'access-control-request-method':method,'access-control-request-headers':'authorization, content-type'}}),{ALLOW_LOCALHOST:'false'});
+  assert.equal(r.status,204);assert.equal(r.headers.get('access-control-allow-origin'),origin);
+  const headers=r.headers.get('access-control-allow-headers').split(',').map(s=>s.trim());assert.ok(headers.includes('authorization'));assert.ok(headers.includes('content-type'));
+  assert.ok(r.headers.get('access-control-allow-methods').includes(method));
+ }
+ const denied=await handle(new Request('https://rooms/souls/me',{method:'OPTIONS',headers:{origin:'https://untrusted.example'}}),{});
+ assert.equal(denied.status,403);assert.equal(denied.headers.get('access-control-allow-origin'),null);
+});
+
+test('an absent soul binding is not advertised and returns a CORS-readable service error',async()=>{
+ const st=await handle(new Request('https://rooms/status',{headers:{origin:'https://level99bard.com'}}),{});
+ assert.equal((await st.json()).features.includes('persistent-reputation-v1'),false);
+ const r=await handle(new Request('https://rooms/souls/me',{headers:{origin:'https://level99bard.com',authorization:'Bearer '+'a'.repeat(64)}}),{});
+ assert.equal(r.status,503);assert.equal(r.headers.get('access-control-allow-origin'),'https://level99bard.com');
+});
