@@ -1,12 +1,15 @@
 // The planet floor harness: loads each world in headless Chromium (software GL), then walks,
-/* global window, document, Crysis, localStorage, requestAnimationFrame */
 // flies, teleports, changes the governor's tier, loses and restores the graphics and comes down
 // from orbit, and at each step compares the ground as drawn under the player (Crysis.groundProbe:
 // the scene drawn from above, its depth read back) with the ground the player stands on
 // (player.floorAt). A gap over 5 m is flagged. Logs and captures go to OUT.
+// throw and cavethrow make one step of the frame fail every frame (the bug's trigger); soak goes
+// round a world's places; scan and nan look for geometry out of all reason; rays the sunbeams.
 //
-// ROOT=<repo> OUT=<dir> [PLANETS=MAGMA:4242,TERRAN:77] [PHONE=1] [STEPS=walk,grid,tier,lost,far,orbit]
+// ROOT=<repo> OUT=<dir> [PLANETS=MAGMA:4242,TERRAN:77 or EARTH:1337] [PHONE=1] [NOSHOT=1]
+// [STEPS=walk,grid,tier,lost,far,orbit,throw,cavethrow,soak,scan,nan,rays]
 // node island/tools/planet-floor-browser.cjs
+/* global window, document, Crysis, localStorage, requestAnimationFrame */
 const fs = require('node:fs'), http = require('node:http'), path = require('node:path');
 let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
@@ -127,6 +130,27 @@ const SAMPLE = `(() => {
 			});
 			log(tag, 'scan', odd);
 			await shot('scan');
+		}
+		if (steps.includes('soak')) {
+			// round the world's places (land, cave mouths, the alien works, a chamber below), a few
+			// frames at each, sampling: then what failed in the frame and what the guard saw
+			const spots = await page.evaluate(() => {
+				const W = Crysis.world(), I = W.island, out = [];
+				const r = (() => { let s = 99; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
+				for (let k = 0; out.length < 8 && k < 400; k++) { const x = (r() * 2 - 1) * (I.half - 80), z = (r() * 2 - 1) * (I.half - 80); if (I.heightAt(x, z) > 2) out.push([Math.round(x), Math.round(z), 'land']); }
+				for (const e of (W.underworld?.entrances || []).slice(0, 3)) out.push([Math.round(e.x), Math.round(e.z), 'cave mouth']);
+				for (const s of (W.alien?.sites || []).slice(0, 3)) out.push([s.x + s.r + 8, s.z, 'alien ' + s.type]);
+				const ch = W.underworld?.plan?.chambers?.[0]; if (ch) out.push([Math.round(ch.x), Math.round(ch.z), 'chamber', ch.fy]);
+				return out;
+			});
+			for (const [x, z, what, fy] of spots) {
+				if (fy != null) await page.evaluate(({ x, z, fy }) => { const W = Crysis.world(), P = W.player.state; P.flying = false; P.pos.set(x, (W.player.floorAt(x, z, fy + 1) ?? fy) + 1.68, z); }, { x, z, fy });
+				else await tp(x, z);
+				await frames(6);
+				await sample(`soak ${what} ${x},${z}`);
+			}
+			log(tag, 'frame errors kept', await page.evaluate(() => Crysis.frameErrors?.() ?? null));
+			log(tag, 'floor guard', await page.evaluate(() => Crysis.floorGuard?.() ?? null));
 		}
 		if (steps.includes('nan')) {
 			// every drawable whose vertices are not all finite numbers, in detail: on Apple's graphics

@@ -21,9 +21,12 @@ Runs (logs and captures in the session scratchpad, `planetfloor/`):
 |---|---|---|---|
 | run1 | MAGMA 4242, desktop | spawn, walk, CPU grid of every place a floor other than the land holds you up | drawn = walked to 0.01 m; no raised floors on the 20 m grid |
 | run2 | MAGMA 4242, iPhone emulation (DPR 3, touch, iPhone UA) | governor tiers minimal, low, medium, high; context lost and restored; out past the map's edge; up to 70 km and down; landing | drawn = walked to 0.01 m at every step on land |
-| run3 | Earth 1337, iPhone emulation | spawn | drawn = walked |
+| run3 | Earth 1337, iPhone emulation | spawn, geometry scan | drawn = walked |
 | throw | MAGMA 4242 and ICE 5255, iPhone emulation, before and after the fix | one step of the frame failing every frame, then crossing the land from end to end | before: the drawn ground lags (0.4 to 0.9 m off on the measured points); after: 0.01 to 0.03 m |
 | cavethrow | MAGMA 4242, iPhone emulation, before and after the fix | down in a cave chamber, one step of the frame starts failing, then back up on the surface | before: **the surface stays hidden; the walked floor is 61.06 m and the first thing drawn under it is the cave's lava floor at 10.65 m, 50.4 m below** (capture `before-cave/...cave-throw-surface.png`); after: the ground is drawn at 61.11 m (`after-cave/...`) |
+| after the merge with main (#44) | TERRAN 77, iPhone emulation | cavethrow, CPU raised-floor grid, tiers 3 to 0, context loss and restore, past the edge, orbit and landing | back on the surface with the frame failing: walked 55.56 m, drawn 55.57 m, shown; every other step drawn = walked to 0.01 to 0.03 m |
+| soak | MEDIEVAL 5255, TOXIC 77, iPhone emulation | eight land points, the three cave mouths, a chamber | drawn = walked to 0.03 m; no frame errors kept; the guard saw no incident |
+| nan | Earth 1337, MAGMA 4242, TERRAN 77, MYSTICAL 77 | every drawable's vertices and instance matrices | no position or matrix that is not finite (two Bay landmark meshes with NaN normals, below) |
 
 So the obvious suspects are cleared on these worlds: the governor's tiers do not touch the ground; a lost and restored graphics context re-uploads the height texture correctly; the orbital climb and descent and the landing leave the ground right; past the map's edge the land is seabed and you swim.
 
@@ -60,12 +63,17 @@ The guard costs one bilinear read per grid corner (three or four) and a floor lo
 
 ## The iPhone capture (pale spikes behind the trees)
 
-The owner's portrait capture from Earth (a quest by the water) shows huge pale flat triangles and a lighter band with a hard vertical edge behind the trees. See the section "iPhone capture" at the end of this file for what the harness found.
+The owner's portrait capture from Earth (a quest by the water) shows huge pale flat triangles reaching up out of the ground behind the trees, and a lighter band with a hard vertical edge down the right half. They do not share the floor's cause, as far as can be measured here, and they were not reproduced in software GL:
+
+- **Not the ground grid.** On Earth (island spawn), MAGMA, TERRAN, ICE and the other planets the ground drawn under the player matched the walked ground at every probe, on every governor tier and after a context loss and restore.
+- **No geometry with vertices at infinity.** A scan of every drawable in the scene (`STEPS=nan`) found no position or instance matrix that is not a finite number on Earth, MAGMA or TERRAN. It did find two `bay-landmarks` meshes (540 vertices each, MeshStandardMaterial, colours #3a3c40 and #55646a) whose normals are NaN on 864 of 1620 components: their lighting is undefined, which a phone may draw black or white. That is a real defect for whoever owns `bay/` landmarks, not a cause of spikes.
+- **What the shapes look like.** Pale, flat and fully fogged means drawn at a great distance or with a vertex at infinity; tall triangles sharing edges, from a line on the ground upward, read like a grid of the graphics card's own making (the Bay ground, the globe's terrain or the water carving, all lifted on the GPU from half-float textures) with garbage in some vertices. On Apple's graphics a vertex that comes out infinite or not a number is drawn as a triangle to the edge of the view, where desktop drivers drop it, which would explain why only the iPhone shows them. The hard-edged lighter band matches the sunbeams' sheets (`world/sunrays.js`), whose light outside the sun's shadow box is a flat value with a hard edge; forced on at the island spawn in Chromium they showed nothing of the kind.
+- **Next step, on the device.** `Crysis.frameErrors()` after such a view, and a capture with `Crysis.rays('off')` to rule the sunbeams in or out.
 
 ## Tests
 
 - `node --test island/tools/planet-floor.test.mjs` (7 tests): the guard's grid is `radialGrid`, bounded and far; centred on the player the drawn ground equals the walked ground on MAGMA, TERRAN, ICE, MYSTICAL and ARID under any 4 m snap of the centre; the shader's texture read equals `heightAt`; a grid left behind misdraws by metres and leaves a void past 2.2 km (and nothing past a bounded map's edge, while the Moon runs on); the verdicts; the guard re-centres a stale grid, puts back a texture that lost its data and shows a hidden ground; the lean ground's shader edits land on three's own chunks and the guard swaps it in once when the full program will not run.
-- Harness: `ROOT=<repo> OUT=<dir> PHONE=1 PLANETS=MAGMA:4242,TERRAN:77 STEPS=walk,grid,tier,lost,far,orbit,throw,scan,rays node island/tools/planet-floor-browser.cjs` (EARTH:1337 opens Earth). Give it time on a loaded machine: the frames are waited on by count, not by time.
+- Harness: `ROOT=<repo> OUT=<dir> PHONE=1 PLANETS=MAGMA:4242,TERRAN:77 STEPS=walk,grid,tier,lost,far,orbit,throw,cavethrow,soak,scan,nan,rays node island/tools/planet-floor-browser.cjs` (EARTH:1337 opens Earth; NOSHOT=1 skips captures, which take minutes at phone size in software GL). Give it time on a loaded machine: the frames are waited on by count, not by time.
 
 ## Confirming on a phone
 
