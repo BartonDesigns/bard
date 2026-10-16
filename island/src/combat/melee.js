@@ -2,12 +2,12 @@
 // quarrel grows, melee-foes.js those who square up to you).
 //
 // You, with nothing in your hands: tap the left button (Q, or Strike on a touch screen) for a
-// quick strike, and keep tapping for the string (jab, cross, hook); hold it for a heavy one,
+// quick strike, and keep tapping for the string (jab, cross). Shift+press, or Heavy on touch,
 // drawn back while you hold and thrown when you let go. Hold the right button (Block) to guard:
 // raised just as a blow comes in, it parries and leaves them open for a counter that hits
 // harder. C (Dodge) slips the way you are moving, or back, with a moment in the middle when
-// nothing lands. Behind someone who has not seen you, Q (Takedown) chokes them out. Held Q
-// grabs whoever is in front of you and throws them; X still shoves (people/self.js). A bat, a
+// nothing lands. Behind someone who has not seen you, Q (Takedown) chokes them out. Shift+Q
+// is a charged heavy; J or Grab grabs and throws; X still shoves (people/self.js). A bat, a
 // length of pipe or a bottle lying about is picked up as you walk over it and swung instead.
 //
 // Each strike winds up, lands at its moment and recovers; one that lands holds the world still
@@ -75,6 +75,7 @@ export function createMelee(ctx) {
 	// kept a little longer (a soft lock)
 	function inFront(reach, arc = 0.55) {
 		const e = ctx.eye(); camera.getWorldDirection(_f); _f.y = 0; _f.normalize();
+		const focused = ctx.focusTarget?.();
 		let best = null, bs = 1e9;
 		for (const T of ctx.layer.map.values()) {
 			if (T.kind !== 'person' && T.kind !== 'hostile') continue;
@@ -82,8 +83,9 @@ export function createMelee(ctx) {
 			const dx = T.bound.x - e.x, dz = T.bound.z - e.z, d = Math.hypot(dx, dz);
 			if (d > reach + 0.45 || Math.abs(T.bound.y - (e.y - 0.7)) > 1.6) continue;
 			const c = (dx * _f.x + dz * _f.z) / (d || 1);
-			if (c < arc) continue;
-			const s = d + (1 - c) * 1.5 - (T === me.target ? 0.4 : 0);
+			if (c < arc || !canMelee(T) || T.child || T.P?.ragdoll || T.ref?.dead || T.removed) continue;
+			if (ctx.blocked?.(e, T.bound)) continue;
+			const s = d + (1 - c) * 1.5 - (T === focused ? 3 : T === me.target ? 0.4 : 0);
 			if (s < bs) { bs = s; best = T; }
 		}
 		return best;
@@ -111,7 +113,7 @@ export function createMelee(ctx) {
 
 	// ---------- your strikes ----------
 	const free = () => ctx.active() && !ctx.armed() && !ctx.down() && !me.take && !me.cuffed && !ctx.driving?.();
-	// the press turned into strikes: taps in rhythm, a hold that charges a heavy (melee-rules.js)
+	// Quick presses strike now; modified presses charge a heavy (melee-rules.js).
 	const striker = createStriker({
 		item: () => me.item,
 		allow: () => free() && me.staggerT <= 0,
@@ -129,13 +131,12 @@ export function createMelee(ctx) {
 	function cancelMove() { striker.cancel(); syncMove(); }
 	function syncMove() { me.move = St.move; me.m = St.m; me.mt = St.t; me.charging = St.charging; me.charge = St.charge; me.press = St.press; me.queued = St.queued; }
 	const startMove = (name) => { const ok = striker.start(name); syncMove(); return ok; };
-	const light = () => { striker.tap(); syncMove(); };
-	// the press of Strike (the left button, the touch button): a tap is light, a hold heavy
-	function pressStart() {
+	// Strike starts immediately; the separate Heavy action charges while held.
+	function pressStart(heavy = false) {
 		if (!free()) return;
 		if (me.takeT && !me.move) { takedown(me.takeT); return; }
 		if (me.held) { grapple(); return; }
-		striker.press(); syncMove();
+		striker.press({ heavy }); syncMove();
 	}
 	function pressEnd() { striker.release(); syncMove(); }
 	// a strike's landing moment: what it meets. Returns true when it met something
@@ -204,10 +205,10 @@ export function createMelee(ctx) {
 		if (r.broke && r.at) ctx.heard?.(r.at);
 		return true;
 	}
-	// each frame: the strike in progress, the hold that turns into a heavy, the next in the string;
+	// each frame: the strike in progress, an explicit heavy hold, the next in the string;
 	// a heavy thrown leaves you wobbling a moment, more when it met nothing
 	function stepMove(dt) {
-		const ev = striker.tick(dt, feel.held ? 0.05 : 1);
+		const ev = striker.tick(dt);
 		syncMove();
 		feel.coil(me.charging ? me.charge : 0, me.charging);
 		const m = me.m;
@@ -556,7 +557,7 @@ export function createMelee(ctx) {
 			if (D.t > 240) { D.m.removeFromParent(); drops.splice(i, 1); continue; }
 			if (!me.item && !ctx.armed() && Math.hypot(D.m.position.x - e.x, D.m.position.z - e.z) < 1.3 && Math.abs(D.m.position.y - (e.y - 1.6)) < 1.2) {
 				me.item = D.kind; me.uses = 0; D.m.removeFromParent(); drops.splice(i, 1);
-				ctx.hint(`You pick up the ${D.kind}. Swing it as you would your fists; hold to bring it down hard.`, 2600, 1);
+				ctx.hint(`You pick up the ${D.kind}. Strike swings it; Shift + strike (Heavy on touch) charges a heavy blow.`, 2600, 1);
 			}
 		}
 	}
@@ -596,7 +597,7 @@ export function createMelee(ctx) {
 	const mouseOk = (e) => e.pointerType === 'mouse' && (!canvas || e.target === canvas) && (!canvas?.requestPointerLock || document.pointerLockElement === canvas);
 	addEventListener('pointerdown', (e) => {
 		if (e.defaultPrevented || !mouseOk(e) || !ctx.active() || ctx.armed() || ctx.realmArmed?.()) return;
-		if (e.button === 0) pressStart();
+		if (e.button === 0) pressStart(e.shiftKey);
 		else if (e.button === 2) blockOn();
 	});
 	addEventListener('pointerup', (e) => {
@@ -610,19 +611,20 @@ export function createMelee(ctx) {
 		if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing() || !ctx.active() || ctx.armed()) return;
 		if (ctx.realmArmed?.()) return;
 		const k = e.key.toLowerCase();
-		if (k === 'q') {
-			if (me.takeT && !me.move) { takedown(me.takeT); e.preventDefault(); return; }
-			me.holdQ = performance.now(); e.preventDefault();
-		} else if (k === 'c' && !ctx.player?.()?.flying && (me.guardT > 0 || foes.list.length)) { dodge(); }
+		if (k === 'q') { pressStart(e.shiftKey); e.preventDefault(); }
+		else if (k === 'j') { grapple(); e.preventDefault(); }
+		else if (k === 'c' && !ctx.player?.()?.flying && (me.guardT > 0 || foes.list.length)) { dodge(); }
 	});
-	addEventListener('keyup', (e) => {
-		if (e.key.toLowerCase() !== 'q' || !me.holdQ) return;
-		const held = performance.now() - me.holdQ; me.holdQ = 0;
-		if (!ctx.active() || ctx.armed()) return;
-		if (held > 420 || me.held) grapple(); else light();
-	});
+	addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 'q') pressEnd(); });
+	const cancelHeldInput = () => { if (me.press || me.charging) cancelMove(); me.block = false; };
+	addEventListener('pointercancel', cancelHeldInput);
+	document.addEventListener('visibilitychange', () => { if (document.hidden) cancelHeldInput(); });
+	document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) cancelHeldInput(); });
+
 	const pad = touch ? createMeleeTouch({ mount, on: {
 		strike: (d) => (d ? pressStart() : pressEnd()),
+		heavy: (d) => (d ? pressStart(true) : pressEnd()),
+		cancel: cancelHeldInput,
 		block: (d) => (d ? blockOn() : blockOff()),
 		dodge,
 		grab: () => { if (me.takeT && !me.move) takedown(me.takeT); else grapple(); },

@@ -1,6 +1,6 @@
 // The fight under your right thumb on a touch screen, when your hands are empty. One big
-// Strike button (tap for a quick punch, the string follows on; hold for a heavy one, released
-// to throw it), and, once a fight is on, Block (hold it; raised just as a blow comes in it
+// Strike button (a quick punch on press, the string follows on) and a separate Heavy
+// button, a separate Heavy button (hold to charge, release to throw), and, once a fight is on, Block (hold it; raised just as a blow comes in it
 // parries), Dodge (the way the stick points, or back) and Grab (a tap grabs, a second tap
 // throws; it becomes Takedown, lit, when someone close has their back to you). They take the
 // weapon's places round the primary button (Fire, Aim, Reload, Mode), which are hidden while
@@ -34,14 +34,16 @@ export function createMeleeTouch({ mount, on }) {
 		mount.appendChild(b);
 		return b;
 	}
-	const strike = make('mc-strike', 'Strike'), block = make('mc-block', 'Block'), dodge = make('mc-dodge', 'Dodge'), grab = make('mc-grab', 'Grab');
-	const held = (b, fn) => {
+	const strike = make('mc-strike', 'Strike'), block = make('mc-block', 'Block'), dodge = make('mc-dodge', 'Dodge'), grab = make('mc-grab', 'Grab'), heavy = make('mc-heavy', 'Heavy strike');
+	heavy.innerHTML = ICON.strike;
+	const held = (b, fn, cancel = () => fn(false)) => {
 		let id = null;
-		b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); id = e.pointerId; b.setPointerCapture?.(id); b.classList.add('on'); fn(true); });
-		const up = (e) => { if (id === null || e.pointerId !== id) return; e.stopPropagation(); id = null; b.classList.remove('on'); fn(false); };
+		b.addEventListener('pointerdown', (e) => { if (id !== null) return; e.stopPropagation(); e.preventDefault(); id = e.pointerId; try { b.setPointerCapture?.(id); } catch {} b.classList.add('on'); fn(true); });
+		const up = (e) => { if (id === null || e.pointerId !== id) return; e.stopPropagation(); id = null; b.classList.remove('on'); e.type === 'pointerup' ? fn(false) : cancel(); };
 		b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
 	};
-	held(strike, (d) => on.strike(d));
+	held(strike, (d) => on.strike(d), () => on.cancel?.());
+	held(heavy, (d) => on.heavy(d), () => on.cancel?.());
 	held(block, (d) => on.block(d));
 	const tap = (b, fn) => b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 120); fn(); });
 	tap(dodge, () => on.dodge());
@@ -54,13 +56,13 @@ export function createMeleeTouch({ mount, on }) {
 		update(show, fight, take, holding, item) {
 			if (show === state.show && fight === state.fight && take === state.take && holding === state.holding && item === state.item) return;
 			Object.assign(state, { show, fight, take, holding, item });
-			vis(strike, show); vis(block, show && fight); vis(dodge, show && fight); vis(grab, show && (fight || take || holding));
+			vis(strike, show); vis(heavy, show); vis(block, show && fight); vis(dodge, show && fight); vis(grab, show && (fight || take || holding));
 			named(grab, take ? 'Takedown' : holding ? 'Throw' : 'Grab');
 			grab.classList.toggle('lit', take);
 			// (a blade slashes; a bat, a pipe or a bottle swings)
 			named(strike, item === 'knife' || item === 'machete' ? 'Slash' : item ? 'Swing' : 'Strike');
 		},
-		dispose() { for (const b of [strike, block, dodge, grab, style]) b.remove(); },
-		buttons: { strike, block, dodge, grab },
+		dispose() { for (const b of [strike, block, dodge, grab, heavy, style]) b.remove(); },
+		buttons: { strike, block, dodge, grab, heavy },
 	};
 }

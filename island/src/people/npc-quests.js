@@ -38,14 +38,14 @@ import { citiesNear } from '../earth/atlas.js';
 
 const NOTICE = 7, OWNER_BACK = 45, VISIBLE = 95, REACH = 1.4, STEP_MAX = 45, MEMORY = 600;
 
-export function createNpcQuests({ scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null, others = () => [] }) {
+export function createNpcQuests({ pacing = null, scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null, others = () => [] }) {
 	const FAR_EVERY = isPhone ? 40 : 25, SCENES = isPhone ? 1 : 2, BAG_EVERY = isPhone ? [150, 240] : [70, 140], FAVOUR_EVERY = isPhone ? [150, 260] : [80, 160];
 	const sources = createSources();
 	// the benches, shelters, park seats, cafe tables and doorsteps about (people/bag-spots.js)
 	const spots = places || createPlaces({ world });
 	// thefts out of your sight, kept for you to follow up (people/npc-leads.js)
 	const leads = createLeads({ store: store || { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } } });
-	const LEAD_CHANCE = 0.35;
+	const LEAD_CHANCE = 0.08;
 	const scenes = [], memory = new Map(), cache = new Map(), considered = new Map(), open = [], pending = [];
 	const taken = new Set(), hurtFns = [], downed = new WeakSet();
 	let clock = 0, farT = 8, lookT = 0, saveT = 15, whereT = 0, farN = 0, n = 0, bag = null;
@@ -317,6 +317,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 	const SEAT_UP = { bench: 0.48, park: 0.48, picnic: 0.76 };
 	function spawnBag({ force = false } = {}) {
 		if (bag) return 'a bag is already out';
+		if (!force && pacing && !pacing.ready('bag')) return 'quiet street';
 		const c = cam();
 		let spot = null;
 		try { spot = spots.pick(c.x, c.z, { min: force ? 3 : 12, max: 50 }); } catch { /* nothing built here */ }
@@ -327,6 +328,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		const at = restOn(spot), stand = standAt(spot), via = spot.door ? [spot.door.outside, spot.door.inside] : [];
 		const q = bagQuest({ owner: { id: idOf(owner), name: nameOf(owner), x: o.x, z: o.z, ref: owner }, at, region: here.region.id, where: spot, via, cash: 15 + (owner.P.dna.seed % 45) });
 		q.steps.at(-1).at.who = owner;
+		pacing?.record('bag');
 		bag = { q, owner, at, prop: propFor('bag'), t: 0, seen: new Set(), phase: 'arriving', spot, path: [...via, stand], out: via.slice().reverse(), k: 0, walk: null };
 		// (the console's bag: set down at once, its owner beside it)
 		if (force) {
@@ -347,6 +349,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		q.steps.at(-1).at.who = owner;
 		const prop = propFor('bag'); onGround(prop, at);
 		keep(owner);
+		pacing?.record('bag');
 		bag = { q, owner, at, prop, t: 0, seen: new Set(), phase: 'left', spot: { kind: 'sidewalk' }, path: [], out: [], k: 0, walk: null };
 		return q.title;
 	}
@@ -528,9 +531,11 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		let car = null;
 		try { car = (world()?.street?.parkedNear?.(g.x, g.z, 25) || []).find((k) => k.id && !String(k.id).startsWith('tr')); } catch { /* no street */ }
 		if (car) kinds.push('repair', 'jumpstart', 'groceries');
-		const kind = want && kinds.includes(want) ? want : kinds[Math.floor(Math.random() * kinds.length)];
+		const kind = want && kinds.includes(want) ? want : pacing ? pacing.choose(kinds) : kinds[Math.floor(Math.random() * kinds.length)];
+		if (!kind) return 'quiet street';
 		const a = Math.random() * 6.28, d = kind === 'pet' ? 22 : kind === 'groceries' ? 14 : 8, drop = { x: g.x + Math.cos(a) * d, y: g.y, z: g.z + Math.sin(a) * d };
 		const q = openFavour(kind, giver, { friend: kind === 'pass' || kind === 'catch' ? friend : null, drop, car: car && { x: car.x, z: car.z } });
+		if (q) pacing?.record(kind);
 		return q ? q.title : 'no favour';
 	}
 	// someone fallen near you, not yet helped: walk up and you help them up (errands.js helped)
@@ -617,12 +622,14 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 			if (flat(pos(p), c) < 10 && E?.theft && !E.busy?.()) confront(L);
 			return;
 		}
+		if (pacing && !pacing.ready('lead')) return;
 		if (flat(L.at, c) > 90 || E?.busy?.() || (castT -= 1) > 0) return;
 		castT = 3;
 		if (Math.random() > 0.35) return;
 		// a walker about now has it: the thief, still in the neighbourhood
 		const p = people.pool.filter((q) => free(q) && q.role === 'walk' && flat(pos(q), c) > 15 && flat(pos(q), c) < 60).sort((a, b) => flat(pos(a), L.at) - flat(pos(b), L.at))[0];
 		if (!p) return;
+		pacing?.record('lead');
 		cast = { id: L.id, p, prop: propFor(L.item.shape || 'bag') };
 		keep(p);
 		hint(`Someone over there is carrying a ${L.item.name} like ${L.owner.name}'s. It could be the one who took it.`, 4500);
@@ -648,6 +655,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 	// what a passer-by in the lead's region says, now and then (only some have heard)
 	function leadFor(seed) {
 		const open = leads.open(here.region.id);
+		if (pacing && !pacing.rareReady()) return null;
 		if (!open.length) return null;
 		const L = open[(seed >>> 0) % open.length];
 		return ((Math.imul(seed >>> 0, 2654435761) ^ (L.t | 0)) >>> 0) % 100 < 35 ? L : null;
@@ -658,6 +666,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (errands()?.busy?.()) return null;
 		const c = cam();
 		if (cast?.p.active) { const L = leads.get(cast.id), q = pos(cast.p); return L && { x: q.x, y: q.y, z: q.z, radius: 2, title: `The one who took ${L.owner.name}'s ${L.item.name}?`, detail: 'walk up to them' }; }
+		if (pacing && !pacing.ready('lead')) return null;
 		const L = leads.open(here.region.id).filter((x) => x.at).sort((a, b) => flat(a.at, c) - flat(b.at, c))[0];
 		return L ? { x: L.at.x, y: groundY(L.at.x, L.at.z), z: L.at.z, radius: 25, title: `Where ${L.owner.name}'s ${L.item.name} was taken`, detail: `${L.when}; the thief may still be about` } : null;
 	}

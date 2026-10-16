@@ -134,6 +134,7 @@ import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers, talkers, addLife } from './people/people.js';
 import { createDailyLife } from './economy/daily-life.js';
 import { createChatter } from './people/chatter.js';
+import { createEncounterPacing } from './people/encounter-pacing.js';
 import { createErrands } from './people/errands.js';
 import { createNpcQuests } from './people/npc-quests.js';
 import { createMoney } from './people/npc-money.js';
@@ -827,14 +828,15 @@ export function createIslandWorld() {
 	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
 	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney, potholes: () => world?.streets });
+	const encounterPacing = createEncounterPacing({ store: { get: (k) => localStorage.getItem(k), set: (k, v) => localStorage.setItem(k, v) } });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney, potholes: () => world?.streets });
 	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
 	// quests they do for each other with or without you (people/npc-quests.js)
 	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 	const commons = HOOKS.commons = createCommons({ store: npcStore });
 	// (money through the bank's adapter: HOOKS.npcMoney.use(bank) attaches economy/bank.js)
 	const npcMoney = HOOKS.npcMoney = createMoney();
-	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
+	const npcQuests = HOOKS.npcQuests = createNpcQuests({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
 	commons.follow(combat.morality, npcQuests.regionNow);
 	guideApi.npcQuests = npcQuests;
 	// the economy behind the people: their money in the bank, the businesses' requests among their
@@ -1424,6 +1426,7 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim.'; p.appendChild(combatHelp);
 		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
 			() => Math.round(shared.aimSensitivity * 100),
 			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
@@ -1953,6 +1956,7 @@ export function createIslandWorld() {
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		dogWalkers.update(dt, camera);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
+		encounterPacing.tick(dt);
 		errands.update(dt);
 		npcQuests.update(dt);
 		fares.update(dt);

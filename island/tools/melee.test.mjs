@@ -45,7 +45,7 @@ function drive({ taps = [], holds = [], item = null, until = 2 } = {}) {
 	while (t < until) {
 		for (let i = 0; i < pressAt.length; i++) {
 			const [at, hold] = pressAt[i];
-			if (!done.has(i + 'p') && t >= at) { done.add(i + 'p'); S.press(); if (!hold) S.release(); }
+			if (!done.has(i + 'p') && t >= at) { done.add(i + 'p'); S.press({ heavy: hold >= HEAVY_HOLD }); if (!hold) S.release(); }
 			if (hold && !done.has(i + 'r') && t >= at + hold) { done.add(i + 'r'); S.release(); }
 		}
 		for (const e of S.tick(dt)) lands.push({ t, name: e.name, charge: e.charge });
@@ -77,14 +77,14 @@ test('taps make a timed one-two: mashing gives the same steady beat as tapping i
 	assert.deepEqual(pause.lands.map((x) => x.name), ['jab', 'cross', 'jab']);
 });
 
-test('a hold charges a heavy that waits drawn back and goes when let go; a short hold is a tap', () => {
+test('an explicit heavy press charges until release; quick strikes do not wait for release', () => {
 	// held under the threshold: a light strike
 	assert.deepEqual(drive({ holds: [[0, HEAVY_HOLD - 0.08]] }).lands.map((x) => x.name), ['jab']);
 	// held: nothing lands while it is held, then the heavy, charged by the hold
 	const h = drive({ holds: [[0, 0.7]], until: 2 });
 	assert.deepEqual(h.lands.map((x) => x.name), ['heavy']);
 	assert.ok(h.lands[0].t >= 0.7, 'lands only after the release');
-	assert.ok(Math.abs(h.lands[0].charge - charge(0.7)) < 0.05);
+	assert.ok(Math.abs(h.lands[0].charge - charge(0.7 + HEAVY_HOLD)) < 0.05);
 	const full = drive({ holds: [[0, HEAVY_HOLD + CHARGE_FULL + 0.5]], until: 3 });
 	assert.equal(full.lands[0].charge, 1);
 	// a longer hold hits harder; charge maps to damage

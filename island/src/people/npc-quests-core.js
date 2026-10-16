@@ -177,8 +177,8 @@ export function settle(q, outcome, { actorId, name = '', money = null, commons =
 // residents of a region: the same few hundred people, met again and again
 export const RESIDENTS = 400;
 export function residentSeed(region, k) { return hashOf(`${region}#${((k % RESIDENTS) + RESIDENTS) % RESIDENTS}`); }
-const FAR_KINDS = [['bag', 0.3], ['lost', 0.14], ['pass', 0.1], ['catch', 0.08], ['repair', 0.05], ['pet', 0.05], ['snatch', 0.08], ['groceries', 0.06], ['directions', 0.06], ['jumpstart', 0.04], ['fall', 0.04]];
-export function farKind(roll) { let a = 0; for (const [k, w] of FAR_KINDS) { a += w; if (roll < a) return k; } return 'bag'; }
+const FAR_KINDS = [['bag', 0.02], ['snatch', 0.01], ['lost', 0.12], ['pass', 0.12], ['catch', 0.10], ['repair', 0.12], ['pet', 0.12], ['groceries', 0.10], ['directions', 0.12], ['jumpstart', 0.10], ['fall', 0.07]];
+export function farKind(roll) { let a = 0; for (const [k, w] of FAR_KINDS) { a += w; if (roll < a) return k; } return 'directions'; }
 // a made-up quest among residents: giver and the passers-by who might take it
 export function farQuest(region, n, roll = Math.random(), want = null) {
 	const kind = want || farKind(roll), gk = (hashOf(region + ':' + n) % RESIDENTS), gid = `npc:${residentSeed(region, gk)}`;
