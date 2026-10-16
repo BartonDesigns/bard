@@ -9,11 +9,13 @@ import { planWorkplace, levelBelow, floorAt, slabRects } from '../interiors/work
 import { fitWorkplace } from '../interiors/workplace-fitout.js';
 import { toLL } from '../earth/globeframe.js';
 import { officeScheme } from './decor.js';
+import { lightInterior, releaseInterior, configureLighting } from '../interiors/lighting.js';
 
 const WALL = 0.3;
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 export function createTowers(scene, bay, city, { isPhone = false, mount, hint = () => {}, player }) {
+	configureLighting({ isPhone });
 	const group = new THREE.Group();
 	group.name = 'towers';
 	scene.add(group);
@@ -210,7 +212,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		const o = T.o;
 		g.position.set(o.x, L.y, o.z); g.rotation.y = -o.a;
 		group.add(g);
-		return { g, col, seats, L, details, dispose: () => {g.traverse((q) => q.geometry?.dispose());labelMat?.map.dispose();labelMat?.dispose();} };
+		// lit by its own panels, strips and screens (interiors/lighting.js); the roof by the sky
+		if (L.kind !== 'roof') lightInterior(g, { id: 'tower:' + T.key + ':' + T.levels.indexOf(L), lamps: [M.panel, M.screen, M.glow], levels: [[0, L.h - 0.25]], bounds: [-T.hw, -T.hd, T.hw, T.hd], hours: L.kind === 'office' ? [7, 20] : L.kind === 'mall' ? [9, 22] : null });
+		return { g, col, seats, L, details, dispose: () => {releaseInterior(g);g.traverse((q) => q.geometry?.dispose());labelMat?.map.dispose();labelMat?.dispose();} };
 	}
 	function structure(T){
 		const geo=new THREE.BoxGeometry(1,1,1), count=T.levels.reduce((n,L)=>n+slabRects(T,L).length,0);
@@ -280,7 +284,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	// ---------- near you ----------
 	let scanT = 0;
 	function update(dt, camera, hours, nightK) {
-		for (const m of FILL) m.emissiveIntensity = 0.12 + nightK * 0.25;
+		// (the rooms' flat glow, where their light is not baked yet: no brighter after dark, the
+		// windows' lamps are the lighting's business)
+		for (const m of FILL) m.emissiveIntensity = 0.12 - nightK * 0.04;
 		M.panel.emissiveIntensity = 0.8 + nightK * 0.5;
 		const p = P(), cam = camera.position;
 		if (!p) return;

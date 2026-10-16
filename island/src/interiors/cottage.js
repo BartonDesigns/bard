@@ -8,10 +8,12 @@ import * as THREE from 'three';
 import { Builder, houseMaterials } from '../bay/housekit.js';
 import { drawAny, SOFT } from './kit.js';
 import { captureResources } from '../world/resources.js';
+import { lightInterior, releaseInterior, configureLighting } from './lighting.js';
 
 export function createCottageInteriors(scene, footprints, { isPhone = false, mats = null } = {}) {
 	const R = isPhone ? 30 : 45, MAX = isPhone ? 2 : 4;
 	const list = footprints.filter((f) => f.room), live = new Map();
+	configureLighting({ isPhone });
 	const group = new THREE.Group();
 	group.name = 'cottage-interiors';
 	scene.add(group);
@@ -40,10 +42,14 @@ export function createCottageInteriors(scene, footprints, { isPhone = false, mat
 		root.position.set(f.x, f.y, f.z);
 		root.rotation.y = f.face;
 		group.add(root);
+		// its pendant lights the furniture (interiors/lighting.js); the cottage's own walls
+		// are the village's, so the day's light is left as it falls
+		lightInterior(root, { id: 'cottage:' + Math.round(f.x) + ':' + Math.round(f.z), levels: [[0, ceil]], bounds: [x0, z0, x1, z1], sky: false, home: true });
 		f.walls.push(...col);
 		return { root, col };
 	}
 	function drop(f, H) {
+		releaseInterior(H.root);
 		group.remove(H.root);
 		H.root.traverse((q) => q.geometry?.dispose());
 		f.walls.splice(f.walls.length - H.col.length, H.col.length);

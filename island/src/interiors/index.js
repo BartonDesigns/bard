@@ -22,12 +22,17 @@ import { houseMaterials, lin } from '../bay/housekit.js';
 import { STYLE, sfDistrict } from '../bay/styles.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { createWorkplaceNavigation } from '../people/workplace-navigation.js';
+import { lightInterior, releaseInterior, configureLighting, lightingClock, lightingMovers } from './lighting.js';
 import { profileOf } from '../economy/frontage.js';
 import './estab-kit.js';
 
 const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'restaurant'], mission: ['cafe', 'restaurant', 'laundromat', 'grocer', 'bar', 'florist'], northbeach: ['cafe', 'restaurant', 'bar', 'books'], sunset: ['restaurant', 'cafe', 'laundromat', 'grocer'], any: ['cafe', 'grocer', 'books', 'restaurant', 'laundromat', 'bar', 'florist', 'boutique'] };
 // the buildings anyone may walk into (the rest are homes, or shut)
 const PUBLIC = new Set(['shop', 'store', 'office', 'school', 'site']);
+// the rooms whose air is dusty enough to see the light in (lighting.js draws its beams)
+const DUSTY = new Set(['garage', 'garage2', 'warehouse', 'parking', 'shed', 'storage', 'apparatus', 'sallyport', 'depot', 'barn', 'cellhouse', 'casemate', 'bar', 'workshop']);
+// the hours a public place keeps its lights on (the rest of the night only a few)
+const OPEN = { store: [7, 22], office: [7, 20], school: [7, 18] };
 const STYLE_OF = { victorian: 'victorian', pacheights: 'edwardian', nobhill: 'edwardian', northbeach: 'edwardian', chinatown: 'edwardian', marina: 'sunset', sunset: 'sunset', mission: 'mission' };
 
 export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 } } = {}) {
@@ -39,7 +44,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	let M = mats, MW = null;
 	const K = city.KIND;
 	const live = new Map();         // lot key -> building
-	const lamps = [...Array(isPhone ? 1 : 2)].map(() => { const l = new THREE.PointLight(0xffc88a, 0, 8, 1.6); scene.add(l); return l; });
+	configureLighting({ isPhone });
 	const stats = { built: 0, dropped: 0, lastMs: 0, maxSlice: 0, planMs: 0 };
 
 	// ---------- what a lot is, and its plan ----------
@@ -197,12 +202,36 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			if (have && have.full === full) continue;
 			if (full && !B.P.rooms.every((r) => r.k !== k || r.furnished)) { furnish(B.P, k); B.spots = null; B.nav = null; yield; }
 			const Lb = yield* buildLevel(B.P, B.M || M, B.C, k, full, night);
-			if (have) { B.root.remove(have.root); disposeTree(have.root); }
+			// a full level lit by its own fixtures (lighting.js); the shells keep their glow
+			if (full) lightInterior(Lb.root, lightSpec(B, k, Lb));
+			if (have) { releaseInterior(have.root); B.root.remove(have.root); disposeTree(have.root); }
 			B.levels[k] = Lb;
 			B.root.add(Lb.root);
 			yield;
 		}
 		B.cur = cur;
+	}
+	// what the lighting needs of a level: its solid boxes, its rooms (which are lit, which dusty),
+	// its floor and ceiling, its hours
+	function lightSpec(B, k, Lb) {
+		const P = B.P, L = P.levels[k], rooms = P.rooms.filter((r) => r.k === k);
+		const roomOf = (x, y, z) => { for (const r of rooms) if (x > r.x0 - 0.05 && x < r.x1 + 0.05 && z > r.z0 - 0.05 && z < r.z1 + 0.05) return r.id; return -1; };
+		return {
+			id: B.key + ':' + k, occluders: Lb.occ, levels: [[L.y, L.y + L.h]], bounds: [-P.W / 2, -P.D / 2, P.W / 2, P.D / 2],
+			rooms: P.rooms.length, roomOf, roomArea: (id) => { const r = P.rooms[id]; return r ? (r.x1 - r.x0) * (r.z1 - r.z0) : 0; },
+			// (a landmark's, a hospital's, a station's rooms are all lit: they never close)
+			litOf: (id) => B.use === 'site' || !!B.C.lit[id], fixtures: anchorFixtures(P, k), dust: (x, y, z, id) => DUSTY.has(P.rooms[id]?.type),
+			home: B.use === 'row' || B.use === 'apt', hours: P.hours || OPEN[B.use] || null,
+			// (a hospital keeps every light on all night; the rest keep their night lights)
+			allNight: P.service === 'hospital',
+		};
+	}
+	// the lamps a fit-out left places for (estab-fit.js: pendants over tables and booths, track
+	// lights over shelves, a light over the counter), as fixtures
+	function anchorFixtures(P, k) {
+		return (P.lightAnchors || []).filter((a) => a.level === k).map((a) => a.kind === 'track'
+			? { p: [a.x, a.y, a.z], c: [1, 0.9, 0.78], I: 7, shape: 'spot', n: [0, -1, 0], cone: [0.85, 0.55], room: a.room }
+			: { p: [a.x, a.y, a.z], c: [1, 0.82, 0.62], I: a.kind === 'pendant' ? 6 : 8, shape: 'down', n: [0, -1, 0], beam: 2, room: a.room });
 	}
 	function disposeTree(root) { root.traverse((q) => { if (q.isMesh && q.geometry && !q.geometry.userData?.shared) q.geometry.dispose(); }); }
 	let stoneM = null;
@@ -218,7 +247,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		const B = live.get(key);
 		if (!B) return;
 		live.delete(key);
-		if (B.root) { group.remove(B.root); disposeTree(B.root); }
+		if (B.root) { for (const Lb of B.levels || []) if (Lb) releaseInterior(Lb.root); group.remove(B.root); disposeTree(B.root); }
 		if (B.site) { B.site.live = false; return; }
 		city.setDoor(B.o, null);
 		if (B.P?.bayLot) city.setDoor(B.P.bayLot, null);
@@ -229,6 +258,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	let scanX = 1e9, scanZ = 1e9, scanT = 0, cands = [], job = null, towerKey = null, towerLot = null;
 	function update(camera, dt, hours, nightK) {
 		night.value = nightK;
+		lightingClock(nightK, hours);
 		const p = camera.position, x = p.x, z = p.z;
 		const high = p.y - (bay.heightAt(x, z) || 0) > 150;
 		group.visible = !high;
@@ -306,14 +336,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				if (Math.abs(D.open - D.target) > 1e-3) { D.open += Math.sign(D.target - D.open) * Math.min(Math.abs(D.target - D.open), dt * 1.8); D.apply(); }
 			}
 		}
-		// the lamps of the rooms you're in, after dark
-		const here = nightK > 0.05 ? inside(p) : null;
-		if (here) {
-			const B = here.B, F = frame(B.o), spots = [];
-			for (const l of B.P.lights || []) { if (!B.C.lit[l[3]]) continue; const [wx, wz] = F.w(l[0], l[2]); spots.push([Math.hypot(wx - x, wz - z) + Math.abs(B.P.f0 + l[1] - p.y) * 2, wx, B.P.f0 + l[1], wz]); }
-			spots.sort((a, b) => a[0] - b[0]);
-			lamps.forEach((l, i) => { const s = spots[i]; l.intensity = s ? nightK * 5 : 0; if (s) l.position.set(s[1], s[2], s[3]); });
-		} else for (const l of lamps) l.intensity = 0;
+		// (the rooms' lamps are lighting.js's: their light baked in, a few real ones near you)
 	}
 	function levelAt(B, footY) {
 		const y = footY - B.P.f0;
@@ -494,7 +517,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// centre...), and those of any other source added with addDoors({ doorsNear, walkers })
 	let walkers = [];
 	const sources = [];
-	function setWalkers(list) { walkers = list || []; for (const s of sources) s.walkers?.(walkers); }
+	function setWalkers(list) { walkers = list || []; lightingMovers(walkers); for (const s of sources) s.walkers?.(walkers); }
 	function doorsNear(x, z, r = 40) {
 		const out = [];
 		for (const B of live.values()) {

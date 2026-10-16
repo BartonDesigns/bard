@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { buildVolume } from './furnish.js';
 import { interiorMaterial, paneGlass } from './mats.js';
+import { lightInterior, releaseInterior, configureLighting } from '../../interiors/lighting.js';
 
 const TAU = Math.PI * 2;
 const inRect = (f, x, z) => {
@@ -54,6 +55,7 @@ function outOf(b, P) {
 // inside: a spire's floor plates would cut through its rooms)
 export function createInteriors(scene, shared, buildings, opts = {}) {
 	const isPhone = !!opts.isPhone;
+	configureLighting({ isPhone });
 	const group = new THREE.Group();
 	group.name = 'arch:interiors';
 	scene.add(group);
@@ -140,11 +142,19 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 			g.add(im);
 		}
 		group.add(g);
+		// its lamps and the dusk at its windows, baked with the walls' shade (interiors/lighting.js),
+		// glowing as this world's rooms do (in place of the rooms' own glow, which has no shadows)
+		lightInterior(g, {
+			id: 'arch:' + V.B.name + ':' + V.i, sky: false, emissive: true,
+			fixtures: (r.lights || []).map((L) => ({ p: [L.x, L.y, L.z], c: L.c, I: 0.4 * L.k * L.rad * L.rad, soft: L.rad * L.rad / 7, shape: 'point' })),
+			occluders: r.solids.filter((b) => !b.yaw).map((b) => [b.x - b.hw, b.z - b.hd, b.x + b.hw, b.z + b.hd, b.y0, b.y1]),
+		});
 		V.dyn = { cuts: r.cuts, lows: r.lows, box: r.solids.map((b) => ({ x: b.x, z: b.z, hw: b.hw, hd: b.hd, c: Math.cos(b.yaw), s: Math.sin(b.yaw), y0: b.y0, y1: b.y1 })) };
 		V.built = g;
 		builds++;
 	}
 	function unbuild(V) {
+		releaseInterior(V.built);
 		V.built.traverse((o) => o.geometry?.dispose());
 		group.remove(V.built);
 		V.built = null;

@@ -1,6 +1,7 @@
 // The streets by era and by season, gathered: potholes you feel and report and the crews
 // that fill them (potholes.js, roadcrew.js), the street trees' stakes, grates and fallen
-// leaves (streettrees.js), the holiday lights (holidaylights.js), the morning sprinklers
+// leaves (streettrees.js), the holiday lights (holidaylights.js), the evening's porch, path,
+// solar, tree and facade lights (nightlights.js), the morning sprinklers
 // (sprinklers.js), and the calendar's hand on the lawns (seasons.js). The trees themselves
 // are planted by the city (city.js, streettrees.js), the lamps by the street life
 // (streetlife.js), the sidewalks, kerbs and holes painted by the ground (realcity.js, the
@@ -13,6 +14,7 @@ import { createPotholes } from './potholes.js';
 import { createRoadCrew } from './roadcrew.js';
 import { createStreetDecor } from './streettrees.js';
 import { createHolidayLights } from './holidaylights.js';
+import { createNightLights } from './nightlights.js';
 import { createSprinklers } from './sprinklers.js';
 import { apply as applySeason } from './seasons.js';
 import { today, onMonth } from '../calendar.js';
@@ -28,6 +30,7 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
 	const crew = createRoadCrew({ scene, potholes, ground, camera, isPhone, hint });
 	const decor = createStreetDecor(scene, city, { isPhone });
 	const lights = createHolidayLights(scene, city, { isPhone });
+	const evening = createNightLights(scene, city, { isPhone, ground, world });
 	const sprinklers = createSprinklers(scene, city, real, { isPhone, ground });
 	applySeason(today());
 	const unMonth = onMonth((d) => { applySeason(d); lights.rebuild(); });
@@ -36,6 +39,7 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
 		crew.update(dt, night);
 		decor.update(camera);
 		lights.update(dt, camera, night);
+		evening.update(dt, camera, night, hours);
 		sprinklers.update(dt, camera, hours);
 	}
 	// the pothole favour (people/errands.js): the nearest hole not yet reported, and a report
@@ -46,8 +50,8 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
 	// for the console: the era where you stand, and everything's counts
 	function info() {
 		const c = camera.position, e = E.at(c.x, c.z);
-		return { era: e.key, neglect: +e.neglect.toFixed(2), potholes: potholes.info(), crews: crew.info(), decor: decor.info(), lights: lights.info(), sprinklers: sprinklers.info() };
+		return { era: e.key, neglect: +e.neglect.toFixed(2), potholes: potholes.info(), crews: crew.info(), decor: decor.info(), lights: lights.info(), evening: evening.info(), sprinklers: sprinklers.info() };
 	}
 	function dispose() { unMonth(); setPotholeSource(null); }
-	return { update, nearest, report, info, dispose, potholes, crew, lights, sprinklers, decor, eraAt: (x, z) => E.at(x, z) };
+	return { update, nearest, report, info, dispose, potholes, crew, lights, evening, sprinklers, decor, eraAt: (x, z) => E.at(x, z) };
 }
