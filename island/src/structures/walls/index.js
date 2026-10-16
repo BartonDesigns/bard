@@ -424,8 +424,10 @@ export function createWalls(ctx) {
 
 	// a shot that met a wall (structures/index.js hit()): returns { through, dmg } or { stop }
 	function hit(h, at, dir, dmg, type) {
+		const wh = h?.wallHit || (h?.wall && typeof h.wall === 'object' ? h.wall : null);
+		if (!wh?.W) return { stop: true };
 		const kind = type === 'blast' ? 'blast' : type === 'impact' ? 'blunt' : 'ball';
-		const res = strikeWall(h.wall, dir, kind, kind === 'blast' ? dmg * 3 : dmg, kind === 'blast' ? 0.5 : 0.08);
+		const res = strikeWall(wh, dir, kind, kind === 'blast' ? dmg * 3 : dmg, kind === 'blast' ? 0.5 : 0.08);
 		if (kind === 'ball' && res.out > 0 && type !== 'fire') return { through: true, dmg: res.out, wall: true };
 		return { stop: true, wall: true, material: res.surface };
 	}

@@ -78,6 +78,14 @@ test('a house wall broken in place: the replacement inside the wall, anchored li
 	const body = eye.clone(); body.y = h.floorY + 1.68;
 	for (let i = 0; i < 30; i++) { body.addScaledVector(n, -0.05); houses.push(body, body.y - 1.68); }
 	assert.ok(body.clone().sub(at).dot(n) > 0, 'walking into it, you are stopped');
+	// a round as combat hands it over (combat marks it wall: true, the wall's record rides as wallHit)
+	{
+		const o = walls.toWorld(ext, u + 0.4, 1.6, room ? ext.a0 : ext.a1).addScaledVector(n, -5), d = walls.toWorld(ext, u + 0.4, 1.6, room ? ext.a0 : ext.a1).sub(o).normalize();
+		const hh = walls.ray(o, d, 10);
+		assert.ok(hh, 'a round from outside meets the wall');
+		const r2 = walls.hit({ ...hh, wallHit: hh.wall, wall: true }, o.clone().addScaledVector(d, hh.t), d, 58, 'ballistic');
+		assert.ok(r2.through && r2.dmg > 10 && r2.dmg < 58, 'it goes on through, weaker');
+	}
 	// a blast against it: a breach, and through it you go
 	walls.blast(at.clone().addScaledVector(n, 0.4), 2.6, 260);
 	for (let i = 0; i < 30; i++) walls.update(0.1, null, null);          // (a wall or two rebuilt a frame)
