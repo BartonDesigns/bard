@@ -85,8 +85,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 				const h = rayBox(o, d, { x: b.x, y: g + H / 2 - 0.5, z: b.z }, [b.w / 2, H / 2 + 0.5, b.d / 2], -(b.a || 0));
 				if (h && h.t < (best?.t ?? max)) best = { t: h.t, n: h.n, surface: 'stone', box: b };
 			}
-			const sg = w.structures?.ray?.(o, d, best?.t ?? max);          // structures: a pane in the way
-			if (sg) best = sg;
+			const sg = w.structures?.ray?.(o, d, best?.t ?? max, best, max);          // structures: a pane, a wall built near you (in place of its box) in the way
+			if (sg) best = sg.none ? null : sg;
 		}
 		// the ground: marched, then refined
 		const lim = best?.t ?? max;
@@ -275,7 +275,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// the first thing a ray meets: a target in the layer or a wall: { T?, t, n, surface, part, ward }
 	function firstHit(o, d, max, shooterT = ME) {
 		const a = layer.cast(o, d, max, shooterT, rules), b = worldHit(o, d, a ? a.t : max);
-		if (b && (!a || b.t < a.t)) return { ...b, wall: true };
+		// (a wall built near you keeps its own record under wall: structures/walls/ needs it)
+		if (b && (!a || b.t < a.t)) return { ...b, wall: b.wall || true };
 		return a;
 	}
 	// a shot or blow landing on what it met (shooter: ME, a squad member, a boss)
@@ -709,6 +710,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		isEarth, zone: () => zone(), event: (e) => hooks.event?.(e),
 		ward: (T) => spark(T, { x: T.bound.x, y: T.bound.y, z: T.bound.z }, ME),
 		realmArmed: () => !!W()?.medieval,
+		// structures: a fist or a swing at a wall (walls built near you break, layer by layer)
+		wallBlow: (m) => { const e = eye(), d = camera.getWorldDirection(new THREE.Vector3()); const r = W()?.structures?.blow?.(e, d, m.reach + 0.35, m); if (r) return r; const h = worldHit(e, d, m.reach + 0.25); return h && h.surface !== 'ground' ? { material: h.surface, hard: true, at: e.clone().addScaledVector(d, h.t) } : null; },
 	});
 
 	// ---------- bosses ----------

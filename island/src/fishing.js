@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { PARKS } from './nature/parks.js';
 import { today } from './calendar.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { firstTime } from './ui/touch-skin.js';
 
 const SPECIES = {
 	lake: [['bluegill', 0.34, 0.1, 0.8, '#6f8a52', '#d98a2b'], ['largemouth bass', 0.24, 0.6, 6, '#56703d', '#e8e2c8'], ['redear sunfish', 0.14, 0.2, 1.2, '#7d8a4a', '#c9602a'], ['channel catfish', 0.14, 1, 8, '#6d6a62', '#d8d4c8'], ['common carp', 0.14, 2, 14, '#a88a45', '#e3cf94']],
@@ -460,7 +461,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 			F.near = near;
 			if (F.state === 'off') {
 				F.state = 'near';
-				if (t - hintAt > 90) { hintAt = t; hint?.('Water here: tap the rod or press H to fish', 2600); }
+				if (t - hintAt > 90 && (!mount?.classList.contains('l99-touch') || firstTime('l99-tip-fish'))) { hintAt = t; hint?.('Water here: tap the rod or press H to fish', 2600); }
 			}
 		} else if (F.state !== 'off' && (!onFoot || F.state === 'near' || F.state === 'ready' || !F.near || Math.hypot(camera.position.x - F.at.x, camera.position.z - F.at.z) > 30)) {
 			if (F.state === 'fight') stop('lost');

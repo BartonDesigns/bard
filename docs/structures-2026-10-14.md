@@ -142,7 +142,7 @@ Logic checked with the frame loop held and the world stepped by hand (player and
 
 ## Left for later and limits
 
-- commercial.js (the economy agent's file) builds shops whole near you; a wrecked one is hidden by finding its root, but its walls still push. After merging, add `if (grp.wrecked)` to its drop condition as houses.js has it.
+- commercial.js builds shops whole near you. A wrecked one is now let go (October 15: `grp.wrecked` in its candidates, its build loop and its drop condition, as houses.js has it) and built whole again once put right; `release` still hides its root for the frame before.
 - The bespoke sites (the bridge, the Discovery Museum, the Boardwalk) are not destructible; the landmarks are marked and, in a cataclysm, fall (section 7).
 - People are never hurt by debris or collapse (nobody, of any age).
 - Rounds go through one pane (section 7); holes come from blasts, cars, the tank's shell and rounds of 120 or more.

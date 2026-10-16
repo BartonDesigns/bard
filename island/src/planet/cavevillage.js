@@ -11,6 +11,7 @@
 // number (plaster, thatch, wood, metal, cloth, lit window, snow block, mushroom cap...).
 
 import * as THREE from 'three';
+import { createArtSigns, caveSignRecords } from '../signage/world-art.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { rockDetail, TRI_GLSL } from './cavemat.js';
@@ -465,6 +466,7 @@ export function* createCaveVillage(ctx) {
 	}
 
 	yield;
+	const tradeSigns = createArtSigns({ parent: group, records: caveSignRecords(stalls, civ), isPhone });
 	// ---------- paths: from the plaza to every door and every way in, lamp posts along them ----------
 	const pathLines = [];
 	for (const h of houses) if (!h.over) pathLines.push([{ x: fp.x, z: fp.z }, h.door]);
@@ -629,6 +631,7 @@ export function* createCaveVillage(ctx) {
 
 	const look = new THREE.Vector3();
 	function update(dt, t, player) {
+		tradeSigns.update(camera);
 		const cam = camera.position;
 		const d = cam.distanceTo(centre);
 		for (const f of flames) f.visible = d < 200;
@@ -694,9 +697,10 @@ export function* createCaveVillage(ctx) {
 		fire.k = 3.6 * (0.85 + 0.15 * Math.sin(t * 5.3) * Math.sin(t * 2.1 + 1));
 	}
 	function dispose() {
+		tradeSigns.dispose();
 		disposed = true;
 		for (const p of folk) if (!p.socialOwned) p.P.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		folk.length = 0;
 	}
-	return { update, dispose, folk, houses, stalls, centre, glows: glowSpots };
+	return { update, dispose, folk, houses, stalls, centre, tradeSigns, glows: glowSpots };
 }

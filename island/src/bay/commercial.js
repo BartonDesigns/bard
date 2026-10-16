@@ -22,6 +22,7 @@ import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { inCampus } from './discovery.js';
 import { flashAtlas } from '../tattoo/skinink.js';
 import { shopScheme, seedAt } from './decor.js';
+import { lightInterior, releaseInterior, configureLighting } from '../interiors/lighting.js';
 import { venueOf } from '../economy/venue.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
@@ -38,6 +39,8 @@ function flashSheet() {
 }
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
+// the hours each keeps its lights on (interiors/lighting.js dims them the rest of the night)
+const HOURS = { cafe: [6, 20], restaurant: [10, 23.5], shop: [8, 21], office: [7, 20], arcade: [10, 24], bowling: [10, 24], cinema: [10, 24], tattoo: [11, 22] };
 
 // what a commercial block is, from its kind, size and where it stands (stable for a place;
 // economy/venue.js, which the signs out front agree with)
@@ -56,6 +59,7 @@ export const COMMERCIAL_TYPES = ['cafe', 'restaurant', 'shop', 'tattoo', 'office
 export function createCommercial(scene, bay, real, city, { isPhone = false } = {}) {
 	const band = buildingBand(isPhone);
 	const BUILD_R = isPhone ? 36 : 50, DROP_R = BUILD_R + 25, MAX = isPhone ? 3 : 6;
+	configureLighting({ isPhone });
 	const group = new THREE.Group();
 	group.name = 'commercial';
 	scene.add(group);
@@ -97,7 +101,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) floorY = Math.max(floorY, bay.heightAt(b.x + ca * sx * b.w / 2 - sa * sz * b.d / 2, b.z + sa * sx * b.w / 2 + ca * sz * b.d / 2));
 		floorY += 0.12;
 		const W = b.w, D = b.d, H = Math.max(CEIL + 0.8, b.wallH - (floorY - bay.heightAt(b.x, b.z))), hw = W / 2, hd = D / 2;
-		const parts = new Map(), col = [];      // col: solid boxes [x0, z0, x1, z1, y0, y1] in the local frame
+		const parts = new Map(), col = [], glassCol = new Set(), aisles = [], products = [];      // col: solid boxes [x0, z0, x1, z1, y0, y1] in the local frame; aisles: the shelf rows [x0, x1, z] (signage/)
 		const add = (mat, g) => { if (!parts.has(mat)) parts.set(mat, []); parts.get(mat).push(g.index ? g.toNonIndexed() : g); };
 		const box = (mat, x0, y0, z0, x1, y1, z1, solid = false) => { add(mat, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); if (solid) col.push([x0, z0, x1, z1, y0, y1]); };
 		const cyl = (mat, x, y, z, r, h, seg = 10) => add(mat, new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z));
@@ -125,7 +129,8 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const [a0, a1] of [[-hw, doorX - dw / 2], [doorX + dw / 2, hw]]) {
 			if (a1 - a0 < 0.1) continue;
 			add(mats.glass, new THREE.BoxGeometry(a1 - a0, STORE - 0.35, 0.03).translate((a0 + a1) / 2, 0.35 + (STORE - 0.35) / 2, hd - WALL / 2));
-			col.push([a0, hd - WALL, a1, hd, 0, STORE]);
+			const pane = [a0, hd - WALL, a1, hd, 0, STORE];
+			col.push(pane); glassCol.add(pane);
 			for (let x = a0; x <= a1 + 0.01; x += Math.max(1.2, (a1 - a0) / Math.max(1, Math.round((a1 - a0) / 2.4)))) box(mats.trim, x - 0.05, 0.35, hd - WALL, x + 0.05, STORE, hd);
 		}
 		box(mats.trim, doorX - dw / 2 - 0.08, 0, hd - WALL, doorX - dw / 2, STORE, hd); box(mats.trim, doorX + dw / 2, 0, hd - WALL, doorX + dw / 2 + 0.08, STORE, hd);
@@ -246,8 +251,12 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			box(mats.neon, doorX - 1.1, 2.3, hd - WALL - 0.06, doorX + 1.1, 2.55, hd - WALL - 0.02);
 		} else if (type === 'shop') {
 			for (let z = inside.z0 + 1; z < inside.z1 - 2.5; z += 2.6) {
+				aisles.push([inside.x0 + 1.2, inside.x1 - 1.2, z]);
 				box(mats.white, inside.x0 + 1.2, 0, z - 0.45, inside.x1 - 1.2, 1.7, z + 0.45, true);
-				for (let x = inside.x0 + 1.3; x < inside.x1 - 1.3; x += 0.34) for (const y of [0.25, 0.8, 1.35]) for (const s of [-1, 1]) box(mats.goods[Math.floor(rnd() * 7)], x, y, z + s * 0.47 - 0.06, x + 0.26, y + 0.3, z + s * 0.47 + 0.06);
+				for (let x = inside.x0 + 1.3; x < inside.x1 - 1.3; x += 0.34) for (const y of [0.25, 0.8, 1.35]) for (const s of [-1, 1]) {
+					box(mats.goods[Math.floor(rnd() * 7)], x, y, z + s * 0.47 - 0.06, x + 0.26, y + 0.3, z + s * 0.47 + 0.06);
+					products.push({x:x+.13,y:y+.15,z:z+s*.531,side:s,row:aisles.length-1});
+				}
 			}
 			box(mats.wood, doorX + 1.6, 0, inside.z1 - 0.2, doorX + 3.6, 1, inside.z1 + 0.6, true);
 			box(mats.screen, doorX + 2.2, 1, inside.z1, doorX + 2.6, 1.3, inside.z1 + 0.05);
@@ -307,7 +316,13 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// Exactly the coarse footprint: complementary coverage prevents coplanar overlap.
 		root.position.set(b.x, floorY, b.z); root.rotation.y = -b.a; b.grp.nearBorn=updateDetailClock();anchorBuilding(root,b.x,b.z,Math.max(W,D)/2,b.grp.nearBorn);
 		group.add(root);
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => {root.traverse((o) => o.geometry?.dispose()); outside.dispose();} };
+		// lit by its own light panels, pendants, screens and signs (interiors/lighting.js)
+		lightInterior(root, {
+			id: 'biz:' + Math.round(b.x) + ':' + Math.round(b.z), occluders: col.filter((q) => !glassCol.has(q)), lamps: [mats.panel, mats.screen, mats.neon, mats.bigscreen],
+			exclude: [outside], levels: [[0, open ? H - 0.14 : CEIL]], bounds: [-hw, -hd, hw, hd], rooms: 1, roomOf: () => 0,
+			hours: HOURS[type], dust: type === 'restaurant' && open,
+		});
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, dispose: () => { releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); } };
 		return B;
 	}
 
@@ -347,9 +362,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
 		mats.panel.emissiveIntensity = 0.7 + nightK * 0.6;
-		// the rooms are lit from their ceilings: a glow on everything inside, more after dark
-		// (no extra lights, so no shaders are rebuilt)
-		for (const m of FILL) m.emissiveIntensity = 0.1 + nightK * 0.28;
+		// the rooms are lit from their ceilings: a glow on everything inside where the light is
+		// not baked yet (no extra lights, so no shaders are rebuilt), no brighter after dark
+		for (const m of FILL) m.emissiveIntensity = 0.1 - nightK * 0.03;
 		if (high) { for (const [grp] of built) if(grp.near) city?.setNear?.(grp,null); return; }
 		for (const [grp,B] of built) if(!grp.near) city?.setNear?.(grp,[B.b.x,B.b.z]);
 		if (!real?.loaded() && !city?.procBiz) return;
@@ -357,21 +372,22 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			scanX = x; scanZ = z;
 			cands = [];
 			for (const b of real?.loaded() ? real.near('boxes', x, z, BUILD_R + 20) : []) {
-				if (!b.grp?.biz || commercialStack(b.kind,b.w,b.d,b.wallH) || inCampus(b.x, b.z)) continue;
+				if (!b.grp?.biz || b.grp.wrecked || commercialStack(b.kind,b.w,b.d,b.wallH) || inCampus(b.x, b.z)) continue;
 				const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2;
 				if (d < BUILD_R) cands.push([d, b]);
 			}
 			// ...and the gridded towns' shops and offices (city.js gives them the same shape)
-			for (const b of city?.procBiz?.(x, z, BUILD_R + 20) || []) { const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2; if (d < BUILD_R) cands.push([d, b]); }
+			for (const b of city?.procBiz?.(x, z, BUILD_R + 20) || []) { if (b.grp?.wrecked) continue; const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2; if (d < BUILD_R) cands.push([d, b]); }
 			cands.sort((p, q) => p[0] - q[0]);
 			cands.length = Math.min(cands.length, MAX);
 		}
 		for (const [grp, B] of built) {
 			const d = Math.hypot(B.b.x - x, B.b.z - z) - Math.max(B.b.w, B.b.d) / 2;
-			if (d > DROP_R || (!cands.some((c) => c[1].grp === grp) && built.size > MAX)) { group.remove(B.root); B.dispose(); city?.setNear?.(grp, null); built.delete(grp); }
+			// (a wrecked shop is let go: structures/ draws its shell, and it is built whole again once put right)
+			if (d > DROP_R || grp.wrecked || (!cands.some((c) => c[1].grp === grp) && built.size > MAX)) { group.remove(B.root); B.dispose(); city?.setNear?.(grp, null); built.delete(grp); }
 		}
 		cool -= dt;
-		if (cool <= 0) for (const [, b] of cands) if (!built.has(b.grp)) {
+		if (cool <= 0) for (const [, b] of cands) if (!built.has(b.grp) && !b.grp.wrecked) {
 			let B = null;
 			try { B = build(b); } catch (e) { console.warn('commercial', e); }
 			if (B) { b.grp.detailRadius=Math.max(b.w,b.d)/2; built.set(b.grp, B); city?.setNear?.(b.grp, [b.x, b.z]); }
@@ -427,5 +443,5 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		}
 		return out;
 	}
-	return { group, update, floor, push, inside, venue, doorsNear, count: () => built.size, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length })) };
+	return { group, update, floor, push, inside, venue, doorsNear, count: () => built.size, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, products: B.products, ceil: B.ceil, name: B.b.biz?.name || '' })) };
 }

@@ -24,11 +24,12 @@
 
 import * as THREE from 'three';
 import { BLOWS, nextBlow, canMelee, canBrawl, escalate, improvised, blowDamage, brawlResponse, stageIndex } from './brawl.js';
-import { MOVES, phaseAt, canBuffer, canFollow, moveTime, nextLight, heavyOf, HEAVY_HOLD, charge as chargeOf, strikeDamage, defend, DODGE, COUNTER_WINDOW, hitStop, canTakedown, TAKEDOWN, fightDeed } from './melee-rules.js';
+import { MOVES, phaseAt, moveTime, createStriker, wobble, strikeDamage, defend, DODGE, COUNTER_WINDOW, hitStop, canTakedown, TAKEDOWN, fightDeed } from './melee-rules.js';
 import { isMinor } from './targets.js';
 import { createMeleeSound } from './melee-sound.js';
 import { createMeleeFeel } from './melee-feel.js';
 import { createFistView } from './melee-view.js';
+import { meleeItem, meleeMaterials } from './melee-items.js';
 import { createFoes } from './melee-foes.js';
 import { createMeleeTouch } from './melee-touch.js';
 
@@ -39,7 +40,7 @@ const LINES = {
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 // which side each strike comes from, for the view's roll (-1 the left hand, 1 the right)
-const SIDE = { jab: -1, cross: 1, hook: 1, heavy: 1, bat: 1, pipe: 1, bottle: 1, batHeavy: 0, pipeHeavy: 0, bottleHeavy: 0 };
+const SIDE = { jab: -1, cross: 1, hook: 1, heavy: 1, bat: 1, pipe: 1, bottle: 1, knife: 1, machete: 1, batHeavy: 0, pipeHeavy: 0, bottleHeavy: 0, knifeHeavy: 0, macheteHeavy: 0 };
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _a = new THREE.Vector3();
 
 export function createMelee(ctx) {
@@ -53,7 +54,7 @@ export function createMelee(ctx) {
 		move: null, m: null, mt: 0, hitDone: false, charging: false, charge: 0, counter: false, queued: null, target: null,
 		press: false, pressT: 0, block: false, blockT: 0, breakT: 0, dodgeT: -1, dodgeX: 0, dodgeZ: 0, dodgeSide: 0, dodgeCool: 0,
 		staggerT: 0, counterT: 0, take: null, takeT: null, cuffed: false, locked: false, attackT: -9, rock: 0,
-		fought: new Set(), told: {},
+		wobT: 0, wobMax: 0, wobSlow: 1, fought: new Set(), told: {},
 	};
 	let startT = 70 + Math.random() * 60, lineT = 0, now = 0, scanT = 0, scatterT = 120 + Math.random() * 90;
 	let bound = { avatar: null, self: null }, askedForHands = false;
@@ -110,46 +111,41 @@ export function createMelee(ctx) {
 
 	// ---------- your strikes ----------
 	const free = () => ctx.active() && !ctx.armed() && !ctx.down() && !me.take && !me.cuffed && !ctx.driving?.();
-	function startMove(name) {
-		if (!free() || me.staggerT > 0) return false;
-		const m = MOVES[name];
-		if (!m) return false;
-		me.move = name; me.m = m; me.mt = 0; me.hitDone = false; me.charge = 0; me.queued = null; me.charging = false;
-		me.counter = me.counterT > 0; me.guardT = 4; me.attackT = now;
-		if (m.kind === 'light' && !m.item) { me.last = name; me.lastT = 0; }
-		me.block = false;
-		const T = inFront(m.reach + 0.9, 0.4);
-		if (T) { me.target = T; const b = bodyOf(T); if (b) foes.threat(b.P, m); }
-		const A = third();
-		if (A) A.M.play(m.anim, moveTime(m) * 1.1, true);
-		return true;
-	}
-	// a strike asked for: now, or kept for when this one allows it
-	function request(name) {
-		if (!me.move || canFollow(me.m, me.mt)) return startMove(name);
-		if (canBuffer(me.m, me.mt)) me.queued = name;
-		return false;
-	}
-	const light = () => request(nextLight(me.last, me.lastT, me.item));
+	// the press turned into strikes: taps in rhythm, a hold that charges a heavy (melee-rules.js)
+	const striker = createStriker({
+		item: () => me.item,
+		allow: () => free() && me.staggerT <= 0,
+		onStart(name, m) {
+			me.hitDone = false; me.counter = me.counterT > 0; me.guardT = 4; me.attackT = now; me.block = false;
+			if (m.kind === 'light' && !m.item) { me.last = name; me.lastT = 0; }
+			const T = inFront(m.reach + 0.9, 0.4);
+			if (T) { me.target = T; const b = bodyOf(T); if (b) foes.threat(b.P, m); }
+			const A = third();
+			if (A) A.M.play(m.anim, moveTime(m) * 1.1, true);
+		},
+	});
+	const St = striker.state;
+	// a strike broken off (a block, a dodge, a blow taken, the hands no longer free)
+	function cancelMove() { striker.cancel(); syncMove(); }
+	function syncMove() { me.move = St.move; me.m = St.m; me.mt = St.t; me.charging = St.charging; me.charge = St.charge; me.press = St.press; me.queued = St.queued; }
+	const startMove = (name) => { const ok = striker.start(name); syncMove(); return ok; };
+	const light = () => { striker.tap(); syncMove(); };
 	// the press of Strike (the left button, the touch button): a tap is light, a hold heavy
 	function pressStart() {
 		if (!free()) return;
 		if (me.takeT && !me.move) { takedown(me.takeT); return; }
 		if (me.held) { grapple(); return; }
-		me.press = true; me.pressT = 0;
+		striker.press(); syncMove();
 	}
-	function pressEnd() {
-		if (!me.press) return;
-		me.press = false;
-		if (me.charging) { me.charging = false; return; }
-		light();
-	}
-	function strike() {
-		const m = me.m, name = me.move, e = ctx.eye();
+	function pressEnd() { striker.release(); syncMove(); }
+	// a strike's landing moment: what it meets. Returns true when it met something
+	function strike(name, m) {
+		const e = ctx.eye();
 		sound.swing(m.kind === 'heavy', null, m.item);
+		feel.thrown(name, m, me.charge);
 		const T = inFront(m.reach + 0.25, m.arc);
-		if (!T) { feel.nudge(-0.4, 0, (SIDE[name] || 0) * 0.5); return; }
-		if (!canMelee(T) || T.child) { if (T.child) ctx.ward?.(T); return; }
+		if (!T) { const hitWall = wall(m, name); if (!hitWall) feel.nudge(-0.4, 0, (SIDE[name] || 0) * 0.5); return hitWall; }
+		if (!canMelee(T) || T.child) { if (T.child) ctx.ward?.(T); return true; }
 		const dx = T.bound.x - e.x, dz = T.bound.z - e.z, dl = Math.hypot(dx, dz) || 1;
 		const dir = { x: dx / dl, y: 0, z: dz / dl };
 		const b = bodyOf(T), foe = b ? foes.find(b.P) : null;
@@ -162,7 +158,7 @@ export function createMelee(ctx) {
 		const hostile = T.kind === 'hostile', theyStruck = !!foe?.struckMe;
 		const moral = theyStruck ? { selfDefence: true, provoked: true, hostileTarget: true } : null;
 		const r = ctx.deal(T, { amount, type: 'impact', part: head ? 'head' : 'torso', src: { x: e.x, y: e.y, z: e.z }, dir, by: ME, melee: name, moral }, true);
-		if (!r || r.ignored) return;
+		if (!r || r.ignored) return true;
 		// what it counts for: the first blow of a fight, or stepping into someone else's
 		const q = b ? brawlOf(b.P) : null;
 		const deed = fightDeed({ first: !me.fought.has(T.id), theyStruck, theirBrawl: !!q, withMe: !!foe || withYou(q), hostile });
@@ -188,30 +184,52 @@ export function createMelee(ctx) {
 		else if (m.item === 'bat' && ++me.uses >= 16) { me.item = null; me.uses = 0; ctx.hint('The bat splinters.', 1400, 1); }
 		me.counter = false; me.counterT = 0;
 		ctx.heard?.(T.bound);
+		return true;
 	}
-	// each frame: the strike in progress, the hold that turns into a heavy, the next in the string
-	function stepMove(dt) {
-		if (me.press) {
-			me.pressT += dt;
-			if (me.pressT >= HEAVY_HOLD && !me.charging && (!me.move || canFollow(me.m, me.mt)) && startMove(heavyOf(me.item))) me.charging = true;
+	// a strike with nobody in reach, into a wall (structures/walls): it dents, cracks and goes
+	// through the drywall between the studs; on a stud, brick, stucco or concrete it stops dead
+	// and a bare fist hurts
+	function wall(m, name) {
+		const r = ctx.wallBlow?.(m);
+		if (!r) return false;
+		const heavy = m.kind === 'heavy', side = SIDE[name] || 0;
+		feel.stop(hitStop(m, r.hard ? 'block' : 'hit') * (r.hard ? 1.3 : 1));
+		feel.landed(heavy, side, r.hard ? 'block' : 'hit');
+		if (r.hard) feel.nudge(0.35, 0, -side * 0.6);
+		if (r.hard && !m.item) {
+			ctx.hurtPlayer?.({ amount: heavy ? 4 : 1.5, type: 'impact', part: 'hand', src: r.at, quiet: true });
+			if (!me.told.knuckles) { me.told.knuckles = true; ctx.hint(r.stud ? 'A stud behind it. That hurt.' : 'Solid. Your knuckles feel that.', 1800, 1); }
 		}
-		if (!me.move) { if (me.queued) { const q = me.queued; me.queued = null; startMove(q); } return; }
+		if (m.item === 'bat' && ++me.uses >= 16) { me.item = null; me.uses = 0; ctx.hint('The bat splinters.', 1400, 1); }
+		if (r.broke && r.at) ctx.heard?.(r.at);
+		return true;
+	}
+	// each frame: the strike in progress, the hold that turns into a heavy, the next in the string;
+	// a heavy thrown leaves you wobbling a moment, more when it met nothing
+	function stepMove(dt) {
+		const ev = striker.tick(dt, feel.held ? 0.05 : 1);
+		syncMove();
+		feel.coil(me.charging ? me.charge : 0, me.charging);
 		const m = me.m;
-		if (me.charging) { me.charge = chargeOf(me.pressT); me.mt = Math.min(me.mt + dt, m.wind * 0.85); }
-		else me.mt += dt * (feel.held ? 0.05 : 1);
 		// the step into it: a little closer to the one you are striking at
 		const P = ctx.player?.();
-		if (P && me.target && phaseAt(m, me.mt) === 'wind' && !me.charging) {
+		if (m && P && me.target && phaseAt(m, me.mt) === 'wind' && !me.charging) {
 			const e = ctx.eye(), dx = me.target.bound.x - e.x, dz = me.target.bound.z - e.z, d = Math.hypot(dx, dz);
 			if (d > m.reach - 0.2 && d < m.reach + 1.0) { const s = Math.min(3.5, (d - m.reach + 0.35) / Math.max(0.08, m.wind)); P.vel.x += (dx / d * s - P.vel.x) * 0.5; P.vel.z += (dz / d * s - P.vel.z) * 0.5; }
 		}
-		if (!me.hitDone && me.mt >= m.wind && !me.charging) { me.hitDone = true; strike(); }
-		if (me.mt >= moveTime(m)) me.move = null;
-		else if (me.queued && canFollow(m, me.mt)) { const q = me.queued; me.queued = null; startMove(q); }
+		for (let i = 0; i < ev.length; i++) {
+			const E = ev[i];
+			me.hitDone = true;
+			const met = strike(E.name, E.m);
+			if (E.m.kind === 'heavy') {
+				const w = wobble(E.charge, !met);
+				me.wobT = me.wobMax = w.t; me.wobSlow = w.slow;
+				feel.wobble(w.t, w.roll);
+			}
+		}
 	}
-
 	// ---------- defence ----------
-	function blockOn() { if (!free()) return; me.block = true; me.blockT = 0; me.guardT = 4; if (me.move && phaseAt(me.m, me.mt) !== 'active') me.move = null; me.press = false; me.charging = false; }
+	function blockOn() { if (!free()) return; me.block = true; me.blockT = 0; me.guardT = 4; if (me.move && phaseAt(me.m, me.mt) !== 'active') cancelMove(); else if (me.charging) cancelMove(); }
 	function blockOff() { me.block = false; }
 	function dodge() {
 		const P = ctx.player?.();
@@ -222,8 +240,7 @@ export function createMelee(ctx) {
 		const l = Math.hypot(x, z);
 		if (l < 0.2) { x = -fx; z = -fz; } else { x /= l; z /= l; }
 		me.dodgeT = 0; me.dodgeX = x; me.dodgeZ = z; me.dodgeSide = Math.sign(inp.mx); me.dodgeCool = DODGE.time + DODGE.cool; me.guardT = 4;
-		if (me.move && phaseAt(me.m, me.mt) === 'wind') me.move = null;
-		me.press = false; me.charging = false;
+		if ((me.move && phaseAt(me.m, me.mt) === 'wind') || me.charging) cancelMove();
 		sound.dodge();
 		feel.nudge(0.4, -me.dodgeSide * 0.4, me.dodgeSide * 1.6);
 	}
@@ -270,7 +287,7 @@ export function createMelee(ctx) {
 				sound.grunt(null, 0.92, 0.8);
 				me.staggerT = Math.max(me.staggerT, out.stagger); me.rock = 1;
 				// a blow taken breaks off a wind-up
-				if (me.move && phaseAt(me.m, me.mt) === 'wind') { me.move = null; me.charging = false; me.press = false; }
+				if ((me.move && phaseAt(me.m, me.mt) === 'wind') || me.charging) cancelMove();
 				if (A && !A.M.S.act.name) A.M.play('reel', 0.5, true);
 		}
 		return out.result;
@@ -299,7 +316,7 @@ export function createMelee(ctx) {
 		const b = bodyOf(T), P = ctx.player?.();
 		if (!b || !P || me.take) return;
 		me.take = { b, T, t: 0, done: false, x: P.pos.x, z: P.pos.z };
-		me.takeT = null; me.guardT = 4; me.press = false;
+		me.takeT = null; me.guardT = 4; cancelMove();
 		if (b.kind === 'squad') b.h.melee = true;
 		else { b.p.engaged = false; b.p.override = () => true; me.take.ov = b.p.override; }
 		b.M.act('choked'); b.M.S.act.dur = 0.7;
@@ -497,7 +514,7 @@ export function createMelee(ctx) {
 			if (q.stage === 'fists' && Math.random() < 0.15) kind = 'shove';
 			const Bw = BLOWS[kind];
 			f.blowT = Bw.time + 0.35 + Math.random() * 0.7; f.last = kind; f.lastT = 0; f.blows++;
-			M.play(kind === 'bat' || kind === 'bottle' || kind === 'pipe' ? 'swing' : kind, Bw.time);
+			M.play(Bw.item ? 'swing' : kind, Bw.time);
 			const hit = Math.random() < 0.68;
 			setTimeout(() => { if (!q.done && hit && Math.hypot(posOf(f).x - posOf(o).x, posOf(f).z - posOf(o).z) < Bw.reach + 0.4) land(q, f, o, kind); }, Bw.time * 450);
 			if (Math.random() < 0.5) setTimeout(() => sound.swing(false, posOf(f)), Bw.time * 300);
@@ -511,7 +528,8 @@ export function createMelee(ctx) {
 	const steel = new THREE.MeshStandardMaterial({ color: 0x8a9096, roughness: 0.4, metalness: 0.35 });
 	const batGeo = new THREE.CylinderGeometry(0.03, 0.016, 0.84, 10).translate(0, 0.42, 0), bottleGeo = new THREE.LatheGeometry([[0, 0], [0.034, 0], [0.036, 0.16], [0.016, 0.22], [0.012, 0.3], [0, 0.3]].map(([x, y]) => new THREE.Vector2(x, y)), 12);
 	const pipeGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.78, 8).translate(0, 0.39, 0);
-	const itemMesh = (kind) => new THREE.Mesh(kind === 'bat' ? batGeo : kind === 'pipe' ? pipeGeo : bottleGeo, kind === 'bat' ? wood : kind === 'pipe' ? steel : glass);
+	const bladeMats = meleeMaterials();
+	const itemMesh = (kind) => kind === 'knife' || kind === 'machete' ? meleeItem(kind, bladeMats) : new THREE.Mesh(kind === 'bat' ? batGeo : kind === 'pipe' ? pipeGeo : bottleGeo, kind === 'bat' ? wood : kind === 'pipe' ? steel : glass);
 	function handItem(f) {
 		let m = handMeshes.get(f);
 		if (!f.item) { if (m) { m.removeFromParent(); handMeshes.delete(f); } return; }
@@ -542,7 +560,8 @@ export function createMelee(ctx) {
 			}
 		}
 	}
-	// now and then in town, something to hand lying about: a length of pipe, a bat, a bottle
+	// now and then in town, something to hand lying about: a length of pipe, a bat, a bottle, and
+	// more rarely a hunting knife or a machete
 	function scatter(dt) {
 		scatterT -= dt;
 		if (scatterT > 0) return;
@@ -550,7 +569,7 @@ export function createMelee(ctx) {
 		if (drops.length >= 3 || !ctx.isEarth() || ctx.zone() !== 'earth-urban') return;
 		const e = ctx.eye(), a = Math.random() * 6.283, r = 7 + Math.random() * 8;
 		const r2 = Math.random();
-		drop(r2 < 0.4 ? 'pipe' : r2 < 0.75 ? 'bat' : 'bottle', { x: e.x + Math.cos(a) * r, y: e.y, z: e.z + Math.sin(a) * r });
+		drop(r2 < 0.34 ? 'pipe' : r2 < 0.64 ? 'bat' : r2 < 0.86 ? 'bottle' : r2 < 0.94 ? 'knife' : 'machete', { x: e.x + Math.cos(a) * r, y: e.y, z: e.z + Math.sin(a) * r });
 	}
 	// a quarrel starting in the street: two grown-ups near each other, near you
 	function ambient(dt) {
@@ -586,7 +605,7 @@ export function createMelee(ctx) {
 		else if (e.button === 2) blockOff();
 	});
 	addEventListener('contextmenu', (e) => { if (canvas && e.target === canvas && ctx.active() && !ctx.armed()) e.preventDefault(); });
-	addEventListener('blur', () => { me.press = false; me.charging = false; me.block = false; });
+	addEventListener('blur', () => { if (me.press || me.charging) cancelMove(); me.block = false; });
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing() || !ctx.active() || ctx.armed()) return;
 		if (ctx.realmArmed?.()) return;
@@ -630,7 +649,7 @@ export function createMelee(ctx) {
 		me.dodgeCool = Math.max(0, me.dodgeCool - dt); me.staggerT = Math.max(0, me.staggerT - dt); me.counterT = Math.max(0, me.counterT - dt);
 		me.breakT = Math.max(0, me.breakT - dt); me.rock = Math.max(0, me.rock - dt * 4);
 		if (me.block) me.blockT += dt;
-		if (!free() && !me.take && !me.cuffed) { me.press = false; me.charging = false; me.block = false; if (me.move && ctx.armed()) me.move = null; }
+		if (!free() && !me.take && !me.cuffed) { if (me.press || me.charging || (me.move && ctx.armed())) cancelMove(); me.block = false; }
 		// (a weapon drawn: whatever you were swinging is let fall)
 		if (me.item && ctx.armed()) { drop(me.item, ctx.eye()); me.item = null; }
 		// the dodge carries you
@@ -642,6 +661,11 @@ export function createMelee(ctx) {
 		}
 		// blocking: slower on your feet
 		if (me.block && P) { P.vel.x *= 1 - Math.min(1, dt * 6) * 0.5; P.vel.z *= 1 - Math.min(1, dt * 6) * 0.5; }
+		// off balance after a heavy: your feet slow, coming back as it passes
+		if (me.wobT > 0) {
+			me.wobT = Math.max(0, me.wobT - dt);
+			if (P) { const cap = 5.2 * (me.wobSlow + (1 - me.wobSlow) * (1 - me.wobT / me.wobMax)), v = Math.hypot(P.vel.x, P.vel.z); if (v > cap) { P.vel.x *= cap / v; P.vel.z *= cap / v; } }
+		}
 		stepMove(dt);
 		stepTakedown(dt);
 		holding(dt);
@@ -691,7 +715,7 @@ export function createMelee(ctx) {
 		drops.length = 0; me.held = null; me.item = null;
 		foes.clear();
 		endTakedown();
-		me.move = null; me.press = false; me.charging = false; me.block = false; me.dodgeT = -1; me.cuffed = false; me.fought.clear();
+		cancelMove(); me.block = false; me.dodgeT = -1; me.wobT = 0; me.cuffed = false; me.fought.clear();
 		lock(false);
 		feel.clear();
 	}
@@ -705,7 +729,7 @@ export function createMelee(ctx) {
 	// a strike by name (the tests, and the old names: jab, cross, hook, bat, bottle, shove, grapple)
 	function swing(kind = 'jab') {
 		if (kind === 'shove' || kind === 'grapple') { grapple(); return true; }
-		return request(MOVES[kind] ? kind : 'jab');
+		return startMove(MOVES[kind] ? kind : 'jab');
 	}
 	// for the tests: the nearest grown-up squares up to you now
 	function spar(n = 1) {

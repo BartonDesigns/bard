@@ -10,10 +10,11 @@
 
 import * as THREE from 'three';
 import { planTown, localeAt, USE_OF_KIND, hashAt } from './establishments.js';
-import { coastScan, coastClass, profileOf, hoursOf, frontSpec, fasciaOf, gapRoom, postsFor, stateAt } from './frontage.js';
+import { coastScan, coastClass, COAST_RINGS, profileOf, hoursOf, frontSpec, fasciaOf, gapRoom, postsFor, stateAt } from './frontage.js';
 import { createStorefronts } from './storefront.js';
 import { setRequestSource } from './requests.js';
 import { payroll } from './payroll.js';
+import { drawTradeBoard, artRevision } from '../signage/art.js';
 
 const CW = 256, CH = 64;                 // a board in the atlas, pixels
 const FONTS = {
@@ -33,7 +34,9 @@ function hexLin(h) {
 }
 // a board drawn into its cell: the shape in the business's colours, its name fitted across, the
 // small line under it
-function drawBoard(g, x0, y0, E) {
+function drawBoard(g, x0, y0, E, phone = false) {
+	g.clearRect(x0, y0, 256, 64);
+	if (drawTradeBoard(g, x0 + 3, y0 + 3, CW - 6, CH - 6, E, { phone })) return;
 	const { shape, font, bg, fg } = E.sign, m = 3, w = CW - 2 * m, h = CH - 2 * m, x = x0 + m, y = y0 + m;
 	g.save();
 	g.clearRect(x0, y0, CW, CH);
@@ -77,7 +80,8 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	const g = cv?.getContext('2d');
 	const tex = cv ? new THREE.CanvasTexture(cv) : null;
 	if (tex) { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; }
-	// the boards: one quad each, its cell of the atlas per instance; lit a little after dark
+	// the boards: one quad each, its cell of the atlas per instance; lit after dark while the
+	// business is open (and the bars' and the all-night places' signs), dark after hours
 	const night = { value: 0 };
 	const mat = wrap(new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, roughness: 0.55, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
 	{
@@ -85,21 +89,27 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		mat.onBeforeCompile = (sh, r) => {
 			prev?.call(mat, sh, r);
 			sh.uniforms.uSignNight = night;
-			sh.vertexShader = 'attribute vec4 aCell;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = aCell.xy + uv * aCell.zw;\n#endif');
-			sh.fragmentShader = 'uniform float uSignNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uSignNight;');
+			sh.vertexShader = 'attribute vec4 aCell;\nattribute float aLit;\nvarying float vLit;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\nvLit = aLit;\n#ifdef USE_MAP\nvMapUv = aCell.xy + uv * aCell.zw;\n#endif');
+			sh.fragmentShader = 'uniform float uSignNight;\nvarying float vLit;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uSignNight * vLit;');
 		};
 		const pk = mat.customProgramCacheKey?.bind(mat);
-		mat.customProgramCacheKey = () => (pk ? pk() : '') + '|signs1';
+		mat.customProgramCacheKey = () => (pk ? pk() : '') + '|signs2';
 	}
 	const geo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
 	const cellA = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4);
 	geo.setAttribute('aCell', cellA);
+	// (each board's sign lit or not by its business's hours: stateAt, a few times a game hour)
+	const litA = new THREE.InstancedBufferAttribute(new Float32Array(CAP).fill(1), 1);
+	geo.setAttribute('aLit', litA);
+	const signE = [];
+	const signState = {};
 	const signs = new THREE.InstancedMesh(geo, mat, CAP);
 	signs.count = 0; signs.frustumCulled = false; signs.castShadow = false; signs.receiveShadow = true; signs.visible = false;
 	signs.name = 'economy-signs';
 	group.add(signs);
 
 	// the atlas's cells: name -> cell, kept across rebuilds so a board already drawn stays
+	let artRev = artRevision();
 	const cellOf = new Map(), free = [...Array(CELLS).keys()];
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 
@@ -113,17 +123,26 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	// Bay's is carved below it; a globe town's coast is often only a metre or two down, so the
 	// sea there is anything under half a metre.)
 	// (kept by 40 m cell: the buildings of a block share their scan, and it is made once)
+	// The globe's own word for the sea where it gives one (setSea, earth/globe.js through main.js):
+	// sea.at(x, z) true on the water, false on land (low land is not sea), null where the ground
+	// is not the globe's (the Bay's survey); sea.coast(x, z) its land mask there, 0 at the
+	// coastline rising to about 0.5 well inland, or null. The globe places its coast from cells a
+	// tenth of a degree across and its relief stands a low coastal plain up as a bluff (Eureka's
+	// waterfront, a metre above Humboldt Bay, is 200 m up, the sea half a kilometre to two off),
+	// so on its ground the distances are read GLOBE_K times as generously, and a place its mask
+	// puts at the coast (under COAST_MASK) is by the water however high the relief has it.
+	const GLOBE_K = 2.5, COAST_MASK = 0.2, GLOBE_RINGS = COAST_RINGS.map((r) => r * GLOBE_K);
 	const coastCells = new Map();
 	let seaTest = null;
 	function coastAt(x, z) {
 		const i = Math.floor(x / 40), j = Math.floor(z / 40), key = i * 100003 + j;
 		let C = coastCells.get(key);
 		if (!C) {
-			const sea = bay.loaded?.() === false ? 0.5 : -0.6;
-			// (the globe's own word for the sea where it gives one: low land is not sea)
-			const Hs = seaTest ? (px, pz) => (seaTest(px, pz) ? -10 : H(px, pz) < sea ? 1 : H(px, pz)) : H;
-			const S = coastScan(Hs, (i + 0.5) * 40, (j + 0.5) * 40, sea);
-			C = { cls: coastClass(S), dir: Number.isFinite(S.dist) ? [S.dx, S.dz] : null, dist: S.dist };
+			const sea = bay.loaded?.() === false ? 0.5 : -0.6, cx = (i + 0.5) * 40, cz = (j + 0.5) * 40;
+			const mask = seaTest?.coast?.(cx, cz), globe = mask != null && Number.isFinite(mask);
+			const Hs = seaTest?.at ? (px, pz) => { const w = seaTest.at(px, pz); return w === true ? -10 : w === false && H(px, pz) < sea ? 1 : H(px, pz); } : H;
+			const S = globe ? coastScan(Hs, cx, cz, sea, GLOBE_RINGS, mask < COAST_MASK ? Infinity : 30) : coastScan(Hs, cx, cz, sea);
+			C = { cls: coastClass(S, globe ? GLOBE_K : 1), dir: Number.isFinite(S.dist) ? [S.dx, S.dz] : null, dist: S.dist };
 			if (coastCells.size > 40000) coastCells.clear();
 			coastCells.set(key, C);
 		}
@@ -275,6 +294,10 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			const F = faceOf(o, D.face);
 			const g = Math.max(H(F.cx + F.nx * 1.5, F.cz + F.nz * 1.5), o.y + (o.src ? 0.3 : 1.2));
 			const top = o.y + o.h, bd = Math.hypot(o.x - cx, o.z - cz);
+			E.door = [F.cx + F.nx * 1.4, F.cz + F.nz * 1.4];
+			E.ground = g;
+			// (the face it fronts the street with, for the glass's decals: signage/)
+			E.front = { x: F.cx, z: F.cz, nx: F.nx, nz: F.nz, run: F.run, g, height: Math.max(0, top - g), door: 0, face: D.face };
 			const P = (along, out) => [F.cx + F.tx * along + F.nx * out, F.cz + F.tz * along + F.nz * out];
 			// the awning, in its colours: the one it had made over, or a new one over the shopfront
 			if (E.awning && (D.use === 'shop' || D.use === 'row' || D.use === 'apt' || (D.use === 'retail' && F.run < 60))) {
@@ -454,7 +477,7 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			if (cellOf.has(k) || !free.length) continue;
 			const c = free.pop();
 			cellOf.set(k, c);
-			drawBoard(g, (c % COLS) * CW, Math.floor(c / COLS) * CH, E);
+			drawBoard(g, (c % COLS) * CW, Math.floor(c / COLS) * CH, E, isPhone);
 			drew++;
 		}
 		if (drew) tex.needsUpdate = true;
@@ -467,11 +490,13 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			q.setFromAxisAngle(Y, B.yaw);
 			signs.setMatrixAt(n, m4.compose(p.set(B.x, B.y, B.z), q, s.set(B.w, B.h, 1)));
 			const col = c % COLS, row = Math.floor(c / COLS);
+			signE[n] = B.E;
 			A[n * 4] = col / COLS + iu; A[n * 4 + 1] = 1 - (row + 1) / ROWS + iv; A[n * 4 + 2] = 1 / COLS - 2 * iu; A[n * 4 + 3] = 1 / ROWS - 2 * iv;
 			n++;
 		}
 		signs.count = n; signs.visible = n > 0;
 		signs.instanceMatrix.needsUpdate = true; cellA.needsUpdate = true;
+		signE.length = n; litT = -1;
 	}
 
 	// ---------- the regional kit's towns (region/settle.js) ----------
@@ -534,11 +559,30 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	// the regional towns looked over every two seconds
 	function tick(cam, hours, nightK, dt = 0.016, dow = new Date().getDay()) {
 		clock += dt; lastHours = hours;
+		if (artRev !== artRevision()) {
+			artRev = artRevision(); cellOf.clear(); free.length = 0;
+			for (let i = 0; i < CELLS; i++) free.push(i);
+			uploadBoards(regionBoards.length ? cityBoards.concat(regionBoards) : cityBoards);
+		}
 		night.value = 0.55 * nightK;
 		if (regional && clock - rT > 2) { rT = clock; applyRegional(cam.x, cam.z); }
+		// the signs by their hours, every couple of seconds after dark
+		if (nightK > 0.05 && (clock - litT > 2 || litT < 0)) {
+			litT = clock;
+			const L = litA.array;
+			let changed = false;
+			for (let i = 0; i < signE.length; i++) {
+				const E = signE[i];
+				if (!E) continue;
+				if (!E.hours) E.hours = hoursOf(E);
+				const v = stateAt(E, hours, dow, signState).sign >= 1 ? 1 : 0.04;
+				if (L[i] !== v) { L[i] = v; changed = true; }
+			}
+			if (changed) litA.needsUpdate = true;
+		}
 		SF.tick(hours, dow, nightK, clock);
 	}
-	let clock = 0;
+	let clock = 0, litT = -1;
 
 	// ---------- asking ----------
 	const everyone = () => (rplan.length ? plan.concat(rplan) : plan);
@@ -589,14 +633,16 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	});
 	return {
 		apply, near, byId, info, raw, anchors, tick,
+		// every business planned, the regional towns' too (signage/ lays their glass decals)
+		plan: () => everyone(),
 		setNight: (k) => { night.value = 0.55 * k; },
 		setLocator: (fn) => { locate = fn; },
 		// built(o): a building has its rooms built near you (its painted shopfront then goes)
 		setBuilt: (fn) => { builtFn = fn; },
 		// the regional kit's settlements (region/settle.js createSettlements), when there are any
 		setRegional: (fn) => { regional = fn; rKey = ''; },
-		// the globe's own test for the sea at a point, where it has one
-		setSea: (fn) => { seaTest = fn; coastCells.clear(); },
+		// the globe's own sea test ({ at, coast }, or a plain at(x, z)); the buildings' coast found again
+		setSea: (S) => { seaTest = typeof S === 'function' ? { at: S } : S || null; coastCells.clear(); cache.clear(); },
 		hours: (h) => { lastHours = h; },
 		list: () => everyone().map(view), mesh: signs, texture: tex, storefronts: SF,
 	};

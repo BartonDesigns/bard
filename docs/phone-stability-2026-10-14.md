@@ -158,7 +158,7 @@ memory, triangles, draw calls, counts, the people pool, and the governor's state
 
 ## Follow-ups
 
-- **Bodies from other systems.** Families, car occupants (`vehicles/life.js`), region folk, squads and gatherings should read `qualityNow().people` and cap themselves. The bodies alive reached 33 on a phone walk.
+- **Bodies from other systems.** Families, car occupants (`vehicles/life.js`), region folk, squads and gatherings should read `qualityNow().people` and cap themselves. The bodies alive reached 33 on a phone walk. (Done on October 15: each caps itself through `peopleCap(n, least)` in `world/governor.js`. Car drivers, walkers, their cache and the owners' episodes; region folk; squad members and their pool of spare bodies; a family scene's actors, set as it is staged; a gathering's crowd. On a tier down the spare bodies are let go one a frame. The car people and the region folk now let theirs go through `freeBody`, so their materials and skeletons go too and `bodyCount` comes down: before, both only disposed the geometry, and the count only went up.)
 - **Garbage per frame.** The heap before GC ran 100 to 200 MB above the heap after it, so something allocates a lot every frame. A CPU and allocation profile of the walk (the harness's `PROFILE=1 NORENDER=1` with `analyze.cjs`) was not run, because the shared machine was too loaded. That profile is the next step to find the allocating loops.
 - **Underwater life on the high tier.** The fish, sealife, underwater and caverns groups (about 0.7M triangles) are still drawn on the high tier near the island's bay.
 - **Per-body memory.** Each body's face morphs are four full-body targets, mostly zeros. A face-only morph, or adding the morphs only when someone is close, would cut a body's memory by about a third.
@@ -188,3 +188,7 @@ memory, triangles, draw calls, counts, the people pool, and the governor's state
   2. Walk downtown among people and talk to someone.
   3. If the page ever does flash white, the next load says so in the console (`[governor] the last
      visit ended without a goodbye`) and starts lighter.
+
+## October 15, 2026: re-audit
+
+The harness was re-run against main (through #43) with steps for everything that landed since: a rifle in first person, a fist fight, a rebuild site, a house shot full of holes, downtown's signs and shops, an earthquake and a December night. The skin's noise, the first-person arms, everyone's clothes, the broken walls, the rebuild site, the storefronts and the car decals now step down on phones and with the governor's tiers, and a crash on every shot at the world is fixed. See `docs/phone-audit-2026-10-15.md` for the budget table against this pass's after numbers, the governor's reach and what to check on the iPhone.

@@ -120,7 +120,7 @@ shows them: boards, fronts, the pavement's things. `Crysis.economy()` reports `r
 The coast was two rings of eight samples at 170 and 380 m against a sea level of 0.1 m on the
 globe; Eureka's waterfront stands on DEM only a metre or so above its bay and Half Moon Bay's
 centre is a kilometre from the sea. Now: rings out to 1.6 km against half a metre on the globe
-(`setSea(fn)` takes the globe's own sea test if one is wired; none is yet), cached per 40 m cell; buildings carry `shore` 0 to
+(`setSea` takes the globe's own sea test, wired since October 15, see Left to do), cached per 40 m cell; buildings carry `shore` 0 to
 3. establishments.js weights the water's trades (outfitter, bait, seafood, surf, fish market,
 boatyard, gift, ice cream) twice over plus a share on the waterfront and a smaller share near
 the coast in any setting but downtown and the woods; a fish market can now take a waterfront
@@ -194,9 +194,16 @@ staff posts, anchors, the regional towns, tick), `economy/establishments.js` (sh
 
 ## Left to do
 
-- Eureka still shows no harbour trades in the browser (`harbour: 0` within 700 m) although the
-  scan and the weights pass in node: the globe's ground at Humboldt Bay probably does not go
-  under half a metre there. Wire the globe's own sea test into `economy.setSea(fn)`.
+- Eureka showed no harbour trades in the browser (`harbour: 0`). Done on October 15: the globe's
+  coarse relief puts Eureka on a plateau about 200 m up, its sea 0.5 to 2 km off below a bluff,
+  and `coastScan` never looks for the sea from ground higher than 30 m. `economy.setSea` is now
+  wired in main.js to `earth/globe.js` `seaAt` (true under the drawn sea level where the land
+  mask says sea, or on a lake; null on the Bay's survey) and `coastMask` (the land mask, 0 at the
+  coastline). On the globe's own ground the coast's rings and classes are read 2.5 times as
+  wide, and a place the mask puts within 0.2 of the coastline is looked at however high it
+  stands. In the browser Eureka now has 65 of its 288 businesses in the water's trades
+  (outfitters 18, fish houses 21, fish markets 15, bait and tackle 10, a boatyard), Duke's
+  Fishing Outfitters with its outrigger out front (`followups/eureka-outfitter.png`).
 - The interior shot by a house café's door missed the built house; the fit-outs are checked in
   node and through `W.interiors.goTo(P, 'shop', 0, 'shop')` in the flats over shops.
 
@@ -204,3 +211,4 @@ staff posts, anchors, the regional towns, tick), `economy/establishments.js` (sh
   set-back door can leave the glazing in front of posts.
 - The far shopfront shows people as silhouettes; the real people are only in rooms built near.
 - Commuters are cast near you; nobody is followed from home to work across town.
+- Done on October 15 (integration): the display windows' hours, payment, OPEN and name decals now sit on the drawn glass in the glass vinyl material, about the drawn door (`storefront.js postGlass`, through `world.signage.storefront`), not on the wall face.

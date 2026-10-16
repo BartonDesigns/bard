@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { createDiamondPlateMaterial, projectPlateUV, applyCivicWear } from '../civic/materials.js';
 import { withCarSky } from '../bay/cars.js';
 
 const cache = new Map();
@@ -12,23 +13,13 @@ const SPEC = {
  utility: { w: 2.35, rear: -4.0, front: 3.55, cabBack: 1.65, axle: [2.6, -.5, -2.7], r: .49, roof: 2.5, paint: 0xe6a72b, stripe: 0xf4da78, label: 'PUBLIC WORKS', sub: 'STREET & BUILDING SERVICES', unit: 'SERVICE  27' },
  van: { w: 2.0, rear: -2.6, front: 2.6, cabBack: .5, axle: [1.65, -1.65], r: .41, roof: 2.5, paint: 0xe8ede9, stripe: 0x327385, label: 'GLASS SERVICE', sub: 'REPAIR & RESTORATION', unit: 'SERVICE  12' },
 };
-function microtexture() {
- const size = 64, data = new Uint8Array(size * size * 4);
- for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-  const dot = ((x + y) % 16 < 3 || (x - y + 64) % 16 < 3) ? 195 : 90;
-  data.set([dot, dot, dot, 255], (y * size + x) * 4);
- }
- const t = new THREE.DataTexture(data, size, size); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.needsUpdate = true; return t;
-}
-let tread;
 function materials(s) {
  const standard = (color, roughness, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
- tread ||= microtexture();
  const out = {
   paint: new THREE.MeshPhysicalMaterial({ color: s.paint, roughness: .29, metalness: .16, clearcoat: .7, clearcoatRoughness: .25 }),
   stripe: standard(s.stripe, .38, .18), black: standard(0x14191d, .72), tyre: standard(0x202124, .89),
   glass: new THREE.MeshPhysicalMaterial({ color: 0x547581, roughness: .13, metalness: .12, clearcoat: 1, transparent: true, opacity: .55, depthWrite: false, side: THREE.DoubleSide }),
-  metal: standard(0xabb4b9, .27, .86), plate: new THREE.MeshStandardMaterial({ color: 0x929ca3, roughness: .44, metalness: .76, bumpMap: tread, bumpScale: .018 }),
+  metal: standard(0xabb4b9, .27, .86), plate: createDiamondPlateMaterial(),
   rubber: standard(0x343a3c, .85), seat: standard(0x3b4246, .95),
   whiteLamp: new THREE.MeshStandardMaterial({ color: 0xf1f3e5, roughness: .18, emissive: 0xe9f2ff, emissiveIntensity: .45 }),
   redLamp: new THREE.MeshStandardMaterial({ color: 0xb51a16, roughness: .22, emissive: 0xd81709, emissiveIntensity: .3 }),
@@ -39,6 +30,7 @@ function materials(s) {
  for(const key of ['paint','glass','metal','plate']) {
   out[key].onBeforeCompile=withCarSky;out[key].customProgramCacheKey=()=> 'service-live-sky-1';
  }
+ applyCivicWear(out.paint,{amount:.22,tile:0});applyCivicWear(out.metal,{amount:.16,tile:2,blend:'darken'});
  return out;
 }
 function labelMap(s, kind) {
@@ -59,6 +51,7 @@ function template(kind, detailed) {
  if (!detailed) { m.glass.dispose(); m.glass = new THREE.MeshStandardMaterial({ color: 0x344d59, roughness: .25, metalness: .25, side: THREE.DoubleSide }); }
  const add = (key, g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => {
   g.rotateX(rx); g.rotateY(ry); g.rotateZ(rz); g.translate(x, y, z);
+  if(key==='plate')projectPlateUV(g);
   if (g.index) { const old = g; g = g.toNonIndexed(); old.dispose(); }
   if (!parts.has(key)) parts.set(key, []); parts.get(key).push(g);
  };

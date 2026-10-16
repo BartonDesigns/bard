@@ -122,6 +122,8 @@ export function furnish(P, only = -1) {
 			stand: (x, z, fx, fz, staff) => seats.push({ x, z, y: y0, fx, fz, sit: false, h: 0, room: rm.id, staff: !!staff }),
 			seat: (x, z, fx, fz, h) => seats.push({ x, z, y: y0, fx, fz, sit: true, h, room: rm.id }),
 			sitOn, chairs, light, anchor: (kind, x, y, z) => (P.lightAnchors || (P.lightAnchors = [])).push({ kind, x, y, z, room: rm.id, level: rm.k }),
+			// (a sign's place for the environmental graphics: an aisle marker, interiors/index.js signAnchors)
+			sign: (kind, x, y, z, o = {}) => (P.signAnchors || (P.signAnchors = [])).push({ kind, x, y, z, room: rm.id, level: rm.k, ...o }),
 		});
 		// a shop on the street, by its trade
 		function shopFit(r) {

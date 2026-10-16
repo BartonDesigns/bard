@@ -273,9 +273,10 @@ export const POST_CAP = { phone: 3, desktop: 8 };
 // way to it (unit vector), from rings of eight samples out to 1.6 km; low ground only
 // (heights above 30 m are never the waterfront, a cliff top has its own lookout)
 export const COAST_RINGS = [60, 120, 200, 320, 480, 700, 1000, 1600];
-export function coastScan(H, x, z, sea = 0.1, rings = COAST_RINGS) {
+// (top: ground higher than this is never by the water, as a hilltop a kilometre from the sea is not)
+export function coastScan(H, x, z, sea = 0.1, rings = COAST_RINGS, top = 30) {
 	const g0 = H(x, z);
-	if (!(g0 < 30)) return { dist: Infinity, dx: 0, dz: 0, low: false };
+	if (!(g0 < top)) return { dist: Infinity, dx: 0, dz: 0, low: false };
 	const ring = (k) => {
 		let sx = 0, sz = 0, n = 0;
 		for (let i = 0; i < 12; i++) {
@@ -293,11 +294,12 @@ export function coastScan(H, x, z, sea = 0.1, rings = COAST_RINGS) {
 	return { dist: Infinity, dx: 0, dz: 0, low: g0 < 15 };
 }
 // a building's place by the water: the waterfront (on the water, the boats and fish there),
-// by the harbour (a street or two back), near the coast (the town reaches it)
-export function coastClass(scan) {
+// by the harbour (a street or two back), near the coast (the town reaches it); k scales the
+// distances (the globe's coast is read more generously, economy/layer.js)
+export function coastClass(scan, k = 1) {
 	if (!scan || !Number.isFinite(scan.dist)) return 0;
-	if (scan.dist <= 200) return 3;
-	if (scan.dist <= 480) return 2;
-	if (scan.dist <= 1600) return 1;
+	if (scan.dist <= 200 * k) return 3;
+	if (scan.dist <= 480 * k) return 2;
+	if (scan.dist <= 1600 * k) return 1;
 	return 0;
 }

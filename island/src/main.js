@@ -10,6 +10,8 @@ import * as THREE from 'three';
 import { generateIsland } from './world/islandgen.js';
 import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terrain.js';
 import { updateIslandReach } from './world/surfacevisibility.js';
+import { createGroundProbe } from './world/groundprobe.js';
+import { createFloorGuard } from './world/floorguard.js';
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
@@ -172,9 +174,12 @@ import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
+import { createSignage } from './signage/index.js';
 import { createLaw } from './law/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
+import { skinTouch, firstTime } from './ui/touch-skin.js';
+import { touchLookRows } from './ui/touch-look.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -217,6 +222,16 @@ function underwaterAudio(target, dt) {
 // things made inside the engine that the Crysis console handle reaches
 const HOOKS = {};
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// no zooming the page: a double tap or a pinch on the game is play, not Safari's zoom (iOS ignores
+// user-scalable=no, and touch-action isn't inherited, so every element opts out; the rule goes in
+// first, so an element's own touch-action still wins)
+if (typeof document !== 'undefined' && !document.getElementById('no-page-zoom')) {
+	const st = document.createElement('style');
+	st.id = 'no-page-zoom';
+	st.textContent = '*,*::before,*::after{touch-action:manipulation}';
+	document.head.prepend(st);
+	for (const ev of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) document.addEventListener(ev, (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+}
 
 function css(el, s) { el.style.cssText = s; return el; }
 function button(label, title, style, hud) {
@@ -424,6 +439,8 @@ function slider(panel, label, min, max, step, get, set, fmt) {
 
 export function createIslandWorld() {
 	const dom = buildDom();
+	// a touch screen's controls: icons only, laid out by thumb (ui/touch-skin.js)
+	skinTouch(dom.mount);
 	// declared here, made once the hint and camera exist (see below)
 	let drive = { update: () => false, stop() {}, active: () => false };
 	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
@@ -1015,7 +1032,7 @@ export function createIslandWorld() {
 		if (alienPlan) alienPlan.clear.push(...planDwellings(island, alienPlan));
 		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
-		const village = stash(() => createVillage(island, shared, scene), true);
+		const village = stash(() => createVillage(island, shared, scene, { profile, isPhone, camera }), true);
 		if (bare) { village.footprints.length = 0; village.pickables.length = 0; }
 		vegetation.addContacts(village.footprints);
 		const distant = stash(() => createDistant(island, shared, scene));
@@ -1193,6 +1210,7 @@ export function createIslandWorld() {
 			// (the businesses take their food and words from where on Earth they are)
 			world.city.economy.setLocator((x, z) => globeLL(x, z));
 			world.city.economy.setRegional(() => world?.globe?.regional?.settlements);
+			world.city.economy.setSea({ at: (x, z) => world?.globe?.seaAt(x, z) ?? null, coast: (x, z) => world?.globe?.coastMask(x, z) ?? null });
 			// the working day: staff out front of the open businesses, people in and out of their doors (people/people.js)
 			{ const daily = createDailyLife(world.city.economy, { isPhone }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
@@ -1235,6 +1253,8 @@ export function createIslandWorld() {
 			world.military = HOOKS.military;
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone, roadAt: (r, x, z) => world.berms?.along(r, x, z) });
+			// the signs, decals, stickers, posters, tags and grime of the streets, shops and cars (signage/)
+			world.signage = HOOKS.signage = createSignage({ scene, world: () => world, isPhone, locate: (x, z) => globeLL(x, z), morality: () => HOOKS.npcQuests?.where?.() });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real, ponds: false });
 			// every other river, creek, lake and reservoir (bay/water.js)
@@ -1336,6 +1356,8 @@ export function createIslandWorld() {
 		world.labels?.dispose();
 		world.discovery?.dispose();
 		world.services?.dispose();
+		world.signage?.dispose();
+		world.structures?.dispose?.();          // (phone audit: its quality listener let go)
 		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();
@@ -1363,6 +1385,7 @@ export function createIslandWorld() {
 		world.colony?.dispose();
 		world.arch?.dispose();
 		world.medieval?.dispose();
+		world.village?.dispose?.();
 		world.beyond?.dispose();
 		world.boardwalk?.destroy();
 		world.rays?.dispose();
@@ -1411,6 +1434,8 @@ export function createIslandWorld() {
 		const aimNote = css(document.createElement('div'), 'font-size:12px;opacity:.75;margin:-6px 0 12px;');
 		aimNote.textContent = 'Mouse and touch · Default 115%';
 		p.appendChild(aimNote);
+		// a touch screen: invert up and down, and the gyro (ui/touch-look.js)
+		if (dom.mount.classList.contains('l99-touch')) touchLookRows(p, () => css(document.createElement('button'), 'width:100%;min-height:44px;margin-bottom:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;'));
 		if (origin) {
 			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
 			galaxy.textContent = 'Explore galaxy';
@@ -1619,15 +1644,56 @@ export function createIslandWorld() {
 	// one part of the world failing must not stop the rest: the frame goes on, and each
 	// distinct error is reported once
 	const seenErr = new Set();
+	// each distinct failure of the frame, kept on this device (a phone shows no console): the
+	// last eight with where they were thrown, for Crysis.frameErrors() on a later visit
+	function keepFrameError(key, err) {
+		try {
+			const list = JSON.parse(localStorage.getItem('l99-frame-errors') || '[]');
+			list.push({ at: new Date().toISOString(), msg: key.slice(0, 200), where: String(err?.stack || '').split('\n').slice(0, 3).join(' | ').slice(0, 300), world: shared.planet?.type || null });
+			localStorage.setItem('l99-frame-errors', JSON.stringify(list.slice(-8)));
+		} catch { /* private mode */ }
+	}
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
 		try { tick(now); } catch (err) {
 			const key = String(err?.message || err);
-			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); }
+			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
+			// The player has already moved this frame, and the steps after the failing one never
+			// ran: among them the one that keeps the ground under the camera. Left behind, the
+			// ground is drawn by the far rings of a grid centred where the failure began (hundreds
+			// of metres off, and nothing at all past 2.2 km) while you walk on the right height.
+			// So the ground follows here too, whatever else failed.
+			try { if (world && !building && visible) followGround(world, Math.min(0.05, Math.max(0.001, (now - groundT) / 1000)), surfaceOpen(world)); } catch (e2) { const k2 = 'ground: ' + String(e2?.message || e2); if (!seenErr.has(k2)) { seenErr.add(k2); console.error('[frame]', e2); } }
 			try { renderer.render(scene, camera); } catch { /* nothing more to do this frame */ }
 		}
 	}
+	// Whether the surface is shown (not from down in the caves or the Deep), and the camera-centred
+	// ground kept under the camera: the terrain, sea, grass and turf, their reach, and the floor
+	// guard's look (world/floorguard.js). Called from the frame's own place and, should any step
+	// of the frame throw, from frame()'s catch, so a failure elsewhere never leaves the ground behind.
+	let groundT = 0;
+	function surfaceOpen(W) {
+		const caveK = W.underworld?.inside?.() || 0;
+		// Keep the surface visible through mouths and skylights, even from deep shade.
+		const vista = W.underworld?.plan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
+		// (an eye above the land and in no cave sees the surface, whatever the caves' own
+		// reckoning says: that eases out over a moment, and stands still if their step failed)
+		const cam = camera.position, I = W.island;
+		const above = cam.y > I.heightAt(cam.x, cam.z) + 0.5 && I.underFloor?.(cam.x, cam.z, cam.y - 1.68) == null;
+		const open = above || ((caveK < 0.9 || !!vista) && !W.deep?.active());
+		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		return open;
+	}
+	function followGround(W, dt, open) {
+		groundT = performance.now();
+		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
+		seaView(W, camera, dt, open);
+		W.litter.update(camera);
+		updateIslandReach(W, camera, open);
+		floorGuard.check(dt, { open });
+	}
+	const floorGuard = HOOKS.floorGuard = createFloorGuard({ world: () => world, camera, renderer });
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
@@ -1686,6 +1752,7 @@ export function createIslandWorld() {
 		// the weather: frames running slow shed rain streaks; indoors the rain stays out
 		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
+		W.ocean.userData.tick?.(dt, W, camera, wx?.rainHere || 0);   // what touches the sea, the rain on it (world/ocean.js)
 		surprises.update(dt, sk, wx);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
@@ -1748,11 +1815,7 @@ export function createIslandWorld() {
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
 		const caveK = W.underworld?.inside?.() || 0;
-		// Keep the surface visible through mouths and skylights, even from deep shade.
-		const cavePlan = W.underworld?.plan;
-		const vista = cavePlan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
-		const open = (caveK < 0.9 || !!vista) && !W.deep?.active();
-		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		const open = surfaceOpen(W);
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
 			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
@@ -1774,10 +1837,7 @@ export function createIslandWorld() {
 		const show = (el, on) => { const d = on ? 'block' : 'none'; if (el.style.display !== d) el.style.display = d; };
 		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
 		actions();
-		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
-		seaView(W, camera, dt, open);
-		W.litter.update(camera);
-		updateIslandReach(W, camera, open);
+		followGround(W, dt, open);
 		W.vegetation.stream(camera, false);
 		W.vegetation.react(dt, camera.position);
 		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }
@@ -1819,9 +1879,10 @@ export function createIslandWorld() {
 			W.bizSeen = inB;
 			inkBtn.style.display = inB?.type === 'tattoo' && !studio.active() ? '' : 'none';
 		}
-		// indoors by day the eye opens up to the light from the windows
+		// indoors by day the eye opens up to the light from the windows (by night, not at all:
+		// the rooms are as dark as their lamps leave them)
 		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
-		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
+		renderer.toneMappingExposure *= 1 + indoorK * 0.55 * sk.dayK;
 		watchDoor(dt);
 		striker.update(dt, scene, !W.player.state.flying && !arcade.active() && dom.mount.style.display !== 'none');
 		strikeRipples.update(dt);
@@ -1842,6 +1903,7 @@ export function createIslandWorld() {
 		ragdolls.update(dt);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
+		W.signage?.update(dt, camera, sk.night, drive.active());
 		bridgeSound.update(dt);
 		W.streets?.update(dt, sk.night, W.sky.state.hours);
 		crosswalks.update(dt);
@@ -1947,7 +2009,7 @@ export function createIslandWorld() {
 			dom.act.textContent = want === 'board' ? '⛵ Board' : '⛵ Leave boat';
 			dom.act.title = want === 'board' ? 'Take the boat out' : 'Step off the boat';
 			dom.act.setAttribute('aria-label', dom.act.title);
-			if (want === 'board') hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
+			if (want === 'board' && (!isPhone || firstTime('l99-tip-boat'))) hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
 		}
 	}
 	let origin = null;   // the planet flight landed us from, if any
@@ -2106,7 +2168,7 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
+			if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {
@@ -2234,6 +2296,7 @@ function seaView(W, camera, dt, open) {
 	if (W.ocean.visible !== sea) W.ocean.visible = sea;
 }
 
+const groundProbe = { at: null };
 function hashString(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
 
 // one world per page
@@ -2326,6 +2389,7 @@ if (typeof window !== 'undefined') {
 		// while a citywide catastrophe lasts (false lets them back); .crack() / .shatter() the nearest
 		// pane; .vault() over what is in front of you; .advance(h) moves the crews' clock on.
 		// Crysis.demolish(x, z, k) brings the building nearest (x, z) down (k 1 all of it, 0.5 a part)
+		signage: Object.assign(() => HOOKS.signage?.info() ?? 'none here', { headlights: (on) => HOOKS.signage?.headlights(on), refresh: () => HOOKS.signage?.refresh(), where: (k, n) => HOOKS.signage?.where(k, n) }),
 		structures: Object.assign(() => HOOKS.structures?.info() ?? 'none here', {
 			cataclysm: (on) => HOOKS.structures?.cataclysm(on), crack: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.crack(x ?? p?.x, z ?? p?.z); },
 			shatter: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.shatter(x ?? p?.x, z ?? p?.z); },
@@ -2381,6 +2445,15 @@ if (typeof window !== 'undefined') {
 		// the quality governor (world/governor.js): the tier now and the best allowed, the frame time,
 		// the graphics' memory, the people's bodies alive, whether the last visit ended in a crash
 		governor: () => ({ ...HOOKS.governor?.info(), bodies: bodyCount(), pixelRatio: window.L99Island?.renderer?.()?.getPixelRatio() }),
+		// the ground as drawn under a point (world/groundprobe.js), for the harnesses: Crysis.groundProbe(x, z)
+		// draws the scene from above once and reads the height back; { keep: (o) => bool } limits what is drawn
+		// (tests: put the governor on a tier now; in AUTO it moves on from there by its own rules)
+		governorTier: (t) => { const G = HOOKS.governor; if (!G) return null; G.state.tier = Math.max(0, Math.min(3, Math.round(+t || 0))); G.state.since = G.state.sinceDown = 0; return G.info(); },
+		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
+		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
+		// the frame's own failures kept on this device (main.js keepFrameError), newest last
+		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
+		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
 		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),

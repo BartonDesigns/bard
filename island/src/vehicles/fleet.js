@@ -37,8 +37,13 @@ const wheelGeo = (kind) => wgeo[kind] || (wgeo[kind] = wheelGeometry(kind, 18));
 // someone in a far car: head and shoulders, dark against the glass
 const riderGeo = (() => { const h = new THREE.SphereGeometry(0.11, 8, 6).translate(0, 0.62, -0.02), b = new THREE.SphereGeometry(1, 8, 6).scale(0.2, 0.28, 0.13).translate(0, 0.3, 0); const g = new THREE.BufferGeometry(); const m = [h, b].map((q) => q.toNonIndexed()); const pos = new Float32Array(m.reduce((a, q) => a + q.attributes.position.array.length, 0)); let o = 0; for (const q of m) { pos.set(q.attributes.position.array, o); o += q.attributes.position.array.length; } g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })();
 
+// decals on the cars (signage/cars.js): each fleet asks for its own set once one is registered
+let decalFactory = null;
+export function setFleetDecals(f) { decalFactory = typeof f === 'function' ? f : null; }
+
 export function createFleet(group, { cap = 200, isPhone = false, night = { value: 0 }, shadows = true } = {}) {
 	const carMat = carMaterial(night, { cheap: isPhone }), glassMat = carGlassMaterial({ cheap: isPhone });
+	let decals = null;
 	let insideMat = null;
 	const riderMat = new THREE.MeshStandardMaterial({ color: 0x2a221d, roughness: 0.9 });
 	const near2 = (isPhone ? 28 : REACH[0]) ** 2, mid2 = REACH[1] ** 2, far2 = REACH[2] ** 2;
@@ -67,8 +72,13 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		if (S.color && c) c.toArray(S.color.array, S.n * 3);
 		S.n++;
 	}
-	function begin() { budget = 1; for (const S of sets.values()) S.n = 0; }
+	function begin() {
+		budget = 1; for (const S of sets.values()) S.n = 0;
+		if (!decals && decalFactory) decals = decalFactory(group, { isPhone });
+		decals?.begin();
+	}
 	function end() {
+		decals?.end();
 		for (const S of sets.values()) {
 			for (const im of S.meshes) { im.count = S.n; im.visible = S.n > 0; }
 			if (!S.n) continue;
@@ -96,13 +106,15 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 	}
 	// o: { spin, steer, riders (how many to show as silhouettes), still (a parked car: its
 	// wheels part of the body where that is cheaper), first (built now, whatever the budget:
-	// your own car) }
+	// your own car); for its decals (signage/cars.js): seed (anything stable, an id), seedAt
+	// ([x, z] it was parked at), livery ('police') }
 	function add(kind, M, c, d2, o = {}) {
 		if (!SPEC[kind]) kind = 'sedan';
 		// (a lighter tier hands each car to its coarser level nearer: world/governor.js)
 		const far = qualityNow().far;
 		if (far < 1) d2 /= far * far;
 		const t = d2 < near2 ? 0 : d2 < mid2 ? 1 : d2 < far2 ? 2 : 3;
+		if (decals && t < 2) decals.add(kind, M, d2, o);
 		const cast = t < 2;
 		if (t <= 1 && MODEL_KINDS[kind]) {
 			const K = t === 0 ? wantModel(kind, 'near') && modelKit(kind, 'near') : (wantModel(kind, 'mid'), modelKit(kind, 'mid'));
@@ -136,6 +148,6 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 	}
 	function setNight(k) { night.value = k; modelNight.value = k; }
 	const stats = () => { let draws = 0, inst = 0; for (const S of sets.values()) if (S.n) { draws += S.meshes.length; inst += S.n; } return { draws, instances: inst, sets: sets.size }; };
-	function dispose() { for (const S of sets.values()) for (const im of S.meshes) { im.removeFromParent(); im.dispose(); } sets.clear(); }
+	function dispose() { for (const S of sets.values()) for (const im of S.meshes) { im.removeFromParent(); im.dispose(); } sets.clear(); decals?.dispose(); decals = null; }
 	return { begin, add, end, setNight, stats, dispose, carMat };
 }
