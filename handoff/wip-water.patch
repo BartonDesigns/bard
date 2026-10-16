@@ -1,0 +1,1581 @@
+diff --git a/HANDOFF.md b/HANDOFF.md
+index 18b1eee..b0c3aba 100644
+--- a/HANDOFF.md
++++ b/HANDOFF.md
+@@ -1,3 +1,7 @@
++## October 16, 2026: water and shoreline
++
++No hard line where the water meets anything, engine-wide. Found: the sea's ground eased the island's floor into the Bay Area survey (13 m down under the island) across a band that began 100 m inside the island's centre, so every beach was drawn 5 to 8 m deep (opaque turquoise to the sand, the full swell on the beach); and the depth, the swash and the edge were worked out at the sea's vertices (3 to 7 m apart near you), so every contour was a straight line and a vertex's swash filled whole triangles on the sand. Now the island's beaches keep their own depths, and out to 520 m (160 on a phone) every pixel reads the ground under it: the water's cover fades with its true depth to nothing at the edge (the real wet sand shows through, tinted turquoise by red-first absorption), colour runs continuously from beach to deep. A shared shore module (`world/shore.js`, also driving the wet sand in `terrain.js`) gives the swash a rush, a stall and a drain that gathers pace, and a front broken into lobes and fingers drawn anew each wave; the sheet thins to nothing, a frothing bore at its front, lace carried down in the backwash, bubbles popping, a line of lace left on the sand that breaks up; the sand stays dark where the water ran and dries slowly, glossy only for a few seconds. Breakers (crest pitching forward, white water rolling in) on gentle open beaches only; none on steep or sheltered shores. Steep shores are wet dark rock from the waterline to the spray's reach, the surf bursts white on them and throws spray (`spray.js`, also the pier's posts). Posts, the boat and you wading ring the water with ripples and foam; rain pocks it; streams running into the sea spread a silty plume with a current line (`bay/water.js mouths`); Snell's window from below; the nearest lamps lie in the water at night and foam no longer glows. Lakes lap, creek edges creep, lava margins crust with glowing break-outs; a toxic sea's foam is scum. A planet's lakes and streams are mapped (`island.waterMap`, `shared.uWaterMap`): silt on the bed, wet mud banks, and the grass kept out of the water (one line in `grass.js`; `WATERMAP_GLSL` for the land agent). Phones: shorter per-pixel reach, less foam detail by tier, no depth pre-pass, no per-frame allocation. One line in `main.js` (`ocean.userData.tick`). Tests: `island/tools/shore.test.mjs`. See `docs/water-shoreline-2026-10-16.md`.
++
+ ## October 15, 2026: mobile controls
+ 
+ The touch HUD has one look and one layout in portrait and landscape: round, semi-transparent buttons with a white line glyph and no words under or inside them (`island/src/ui/touch-skin.js`, applied once from `main.js` on touch screens only). Glyphs are inline SVG masks matched to each button by its name (anything unknown gets a pointing-hand glyph, never words; changing captions such as Takedown, Swing or Slash are glyph swaps); every button keeps its `aria-label` (one without is named from its words) and a title. By thumb, inside the safe areas: the primary action bottom right (Fire, Strike, the pedal, the cast) at 68 px with Aim/Block/brake, Reload/Dodge/a vehicle's gun, Mode/Grab and Surrender round it at 52 px; jump and the context buttons (leave the car, the boat, the rod, which car, assist, camera) in a column above; the stick, or steering (and an aircraft's Up and Down), bottom left; things to act on nearby in a row between the thumbs; back, home and the folded contract top left; fly, gear, places, the menu, music and settings in one row top right; tips under the top row. Driving, melee, boats and fishing only show their own controls; the drive button comes out of the menu as an exit while you drive. The quest chip has its own band and nothing sits on it (measured at run time, with Safari's bars read from the visual viewport). Looking round (`ui/touch-look.js`): a floating stick in the lower left, free look anywhere else with both thumbs at once, an acceleration curve, invert up and down and gyro aiming in Sky and World, and the view easing back to level as you walk. Control tips on a phone show once (`firstTime`). Desktop unchanged apart from tooltips. Tests: `island/tools/touch-skin.test.mjs`, `island/tools/mobile-controls-browser.cjs` (now with the skin). See `docs/mobile-controls-2026-10-15.md`.
+diff --git a/docs/water-shoreline-2026-10-16.md b/docs/water-shoreline-2026-10-16.md
+new file mode 100644
+index 0000000..f240968
+--- /dev/null
++++ b/docs/water-shoreline-2026-10-16.md
+@@ -0,0 +1,180 @@
++# Water and shoreline (October 16, 2026)
++
++The owner, a visual designer and animator: "There is a hard edge of water on the shore waves.
++We see the same beautiful saturate-and-dry with the waves, but the ocean waves' edge is a hard
++line and doesn't follow a realistic, natural beach splash. Go way beyond this, and look at
++connecting areas that are off."
++
++The wet sand's darkening and drying was good. Where the water's surface met the sand there was
++a hard, straight line, and in places a flat turquoise polygon lying on the beach.
++
++## Why the edge was hard
++
++Three faults, each enough on its own:
++
++1. **The island's shallows read 5 to 8 m deep.** The sea's ground (`world/ocean.js groundAt`)
++   eased the island's own floor into the real Bay Area survey across a band from
++   `uHalf - 1400` to `uHalf - 60` metres: with the island's half of 1300 m that band starts
++   100 m *inside* the centre, so it covered every beach. Under the island the survey is open
++   sea about 13 m down, so at the waterline the water was drawn as if 5 to 8 m deep: one
++   opaque turquoise right up to the sand, and the full open swell (its strength goes by depth)
++   breaking on the beach. The terrain's depth test was all that cut it off: a hard line.
++2. **The water's depth and the swash were worked out at the sea's vertices**, which are 3 m
++   apart 10 m from you and 7 m apart at 30 m (`radialGrid(300, 70000, 3.3)`). The edge's alpha,
++   the swash's front, its foam and the colour by depth were interpolated between them, so every
++   contour was a straight line across a triangle. Where a vertex's swash stood above the sand,
++   the whole triangle filled with water: the turquoise polygon on the beach.
++3. **The water's own colour did not fade to the ground under it.** Even a centimetre of water
++   was drawn with the full body colour and the full sky sheen, so where it met the wet sand
++   (which reflects no sky) there was a step in colour and brightness.
++
++## What changed
++
++### The shore's sums, shared (`world/shore.js`, new)
++
++The swash moved here from `world/terrain.js` (which re-exports `SWASH_GLSL`), with plain
++JavaScript copies of every sum for the tests:
++
++- **Timing.** Each wave rushes up in a fifth of its period, slowing as it climbs (a quarter
++  sine), stalls for a tenth with barely a centimetre of movement, then drains over the rest,
++  slow at first and gathering pace (`1 - d^1.5`). Two trains (8.3 s and 11.9 s) with a phase
++  wandering along the shore, as before; some waves run further than others.
++- **The front is never a line.** Each wave's top carries lobes a few metres across and
++  fingers under a metre (0.07 m and 0.028 m of height: 2.3 m and 0.9 m along a 3 % beach),
++  drawn anew for each wave.
++- `swashState` gives the reach, this wave's top, the seconds since it stalled and its phase,
++  so the sea can draw the uprush, the backwash and what the wave leaves behind, and the
++  terrain can darken exactly where the water ran.
++- `swashSheet`: the sheet over the sand is a third of the height it climbs, so it thins to
++  exactly nothing at its front.
++- `waterBody(d, red absorption, murk)`: how much the water covers the ground under it. None at
++  the edge; through clear tropical water the bed still shows at 3 m.
++- `breakOn(slope, shelter)`: spilling breakers on gentle open beaches (a rise of 1 in 250 to
++  1 in 10), none on steep shores (the swell surges up them) or in shelter.
++- `shoreQuality(tier, phone)`: the reach of the per-pixel ground and the foam's detail by the
++  governor's tier, filling the object it is given (nothing made each frame).
++
++### The sea (`world/ocean.js`)
++
++- **The island's beaches are the island's.** The survey's floor only eases in where the
++  island's own floor is already deeper than 3 to 9 m (or at the map's very edge), so the far
++  blend still hides the map's square while every beach and shallow keeps its true depth. The
++  swell now fades over the shallows and the rollers take over, as the CPU's `waveHeight`
++  (which walks on the island's own heights) always assumed.
++- **The ground under every pixel.** Out to 520 m (160 m on a phone; less on the lower tiers)
++  each pixel reads the ground under itself, the island's height map or the survey (the globe's
++  coasts past the survey are read at the vertices). The water's depth there is exact, so its
++  cover fades to nothing exactly where the surface meets the sand or the rock, and the colour
++  by depth is continuous from the beach through the shallows to the deep, with no triangle
++  facets and no seam at the reach (blended over its last 30 %).
++- **The swash per pixel.** On the island's beaches the sheet is worked out per pixel from the
++  shared swash, so its front follows the same broken line the terrain wets. Near by, over the
++  beach up to the top of the run, the surface is laid just clear of the sand (its highest
++  point round each vertex, plus 4 cm) so the sheet and its foam always have a surface to be
++  drawn on; the pixels drop everything that is not water.
++- **The edge.** The water lays its own colour over the ground drawn under it by its cover,
++  none at the edge. The bed as the water should show it (bed times the water's transmission,
++  red first, plus the light scattered in it) is had from that cover and an estimate of the bed
++  (wet sand at the very edge, paler sand deeper, reef), so the real wet sand is tinted
++  turquoise under the water with no step where they meet. The sky's sheen grows in over the
++  first 2 cm of water and the sun's glints over the first 1 cm, so there is no bright rim.
++- **The swash's look.** A bore of froth at its front as it rushes up; clear thin water behind;
++  stalled and draining, the front runs thin and clear and the foam it carried breaks into lace
++  carried down the beach; bubbles pop in the backwash (small, each in its own time); a line of
++  lace left at the top of the run lies on the sand after the water has gone, breaking up and
++  fading over a few seconds. Thin running water is never glassy: churned on the uprush, combed
++  into streaks on the backwash.
++- **Foam drawn as foam.** Every foam (breakers, swash, lace, rock, posts, the current line) is
++  a density laid over a lace of bubbles: cells whose walls thicken as the foam does, read
++  through a slow warp at two scales, with holes and patches; it settles to its average where
++  finer than the pixel or on a device that draws little detail.
++- **Breakers.** On gentle open beaches the roller shoals and steepens through 3 to 0.3 m of
++  water, its crest pitching forward (the crest's points carried shoreward, more on the front
++  face), and turns to white water: a lip of foam at the crest and a bore rolling in behind it,
++  then broken patches in the inner surf. None on steep shores or in shelter (inside the
++  island's drowned crater and inside the Golden Gate the rollers are also smaller).
++- **Rock.** On steep shores the swell bursts white against the rock and pours off in streams.
++- **What stands in the water.** The pier's posts, the boat's hull (bow and stern) and you,
++  wading, ring the water with spreading ripples and a wash of foam (`userData.tick`, from one
++  line in `main.js`; 8 at once, 4 on a phone; no allocation).
++- **Rain** pocks the water near you with rings that spread and fade.
++- **Rivers meeting the sea.** Where a stream runs out into the sea (`bay/water.js mouths`), a
++  plume of silty brown-green water spreads off its mouth, the ripples lie down in it, and a
++  ragged current line of foam and scum runs along its edge.
++- **Folds.** Where the surface laid over the sand folds so a triangle faces away from you, it
++  is still shaded as the top of the water (only with the eye under water is a face turned away
++  the underside); the beach's clearance is only laid on gentle slopes (under 0.15).
++- **From below.** Inside Snell's window (about 49 degrees round straight up) the whole sky is
++  squeezed into a circle, the horizon at its rim, the sun's disc in it, with a thin bright ring
++  at the window's edge; outside it the surface mirrors the dim water below; further off it all
++  fades into the blue.
++- **Night.** The few nearest lamps along the shore (`world/nightfield.js`, filled by the
++  night lights) lie in the water as streaks drawn out by the ripples. Foam is lit by the sun by
++  day and the sky and moon by night (it no longer kept a tenth of the day's sun after dark).
++  The moon's glittering path is as it was.
++- **Another world's sea.** A toxic world's foam is a yellow-green scum (`uLiquid`).
++
++### The wet sand and rock (`world/terrain.js`)
++
++- The ground reads the same `swashState` as the sea: soaked under the sheet, and glossy where
++  this wave has just been, going dull over a few seconds as it drains (the wet band up to the
++  run's top, which the owner liked, is as it was). Freshly drained sand carries a faint sheen
++  of the sky.
++- A steep shore (a rise of one in five or more) is rock and shingle down into the sea, dark and
++  wet from the waterline up to where the spray reaches (about twice the run), drying above it
++  where the grass begins, and shiny where wet.
++
++### A planet's lakes and streams on the ground (`planet/waters.js`, `world/shore.js`)
++
++A green world's lakes lay flat over meadow, the grass blades standing up through the water and
++the bed drawn as grass. The planet's water plan now leaves a map of its water over the island
++(`island.waterMap`: r the water itself, g its banks, fading over about three cells, some 10 m),
++uploaded once as `shared.uWaterMap` (`waterMapTexture`; a blank 1 x 1 on Earth). The ground lays
++silt on the bed and darkens the banks to glossy wet mud (`terrain.js`); the grass keeps out of the
++water and thins on its wet banks (`grass.js`, one line; `WATERMAP_GLSL` for anything else that
++should keep out of the water).
++
++### Spray (`world/spray.js`)
++
++Surf bursting on the rocks near you: the sea finds the steep shores round you from the ground's
++heights (`userData.splashes`, looked for again as you move on) and each roller's crest arriving
++throws drops up and out from the waterline with a mist hanging after it; the pier's posts in the
++surf throw a smaller slap. Two slots on a desktop, one on a phone, in the spray's existing draw.
++
++### Lakes, rivers and lava (`bay/water.js`)
++
++- Lakes lap: the edge creeps up the shore and back with each wavelet, by its own amount all
++  along the shore, and the lace of foam rises with it, so the line is never still or straight.
++- Creek edges creep in and out with the ripples.
++- Lava: at its margin a flow chills to a thick dark crust against the ground, its cracks
++  closing, broken here and there where the melt breaks out and glows along the edge.
++
++## Cost
++
++Per pixel, only where the water is near and shallow: four height-map reads (the survey's
++lookups out over the Bay Area), two swash trains, the foam's lace (nine hashes, near only),
++and the loops over the touches (8 or 4), the lamps (16 or 6) and the river mouths (4), each
++cut short by distance. The deep sea pays nothing new beyond the plume and lamp tests. Vertices
++near the shore read the ground four more times for the bed's slope and, on the beach, four more
++for the surface's clearance. No new draws, no new textures, no new render targets: there is no
++depth pre-pass; the terrain's own height lookup stands in for the depth buffer everywhere,
++phones included.
++
++## Hooks for the other agents
++
++- `world/shore.js`: `swashState`, `swashLevel`, `swashRunMax` (CPU) and `SWASH_GLSL`, for
++  anything that must know where the water is on a beach (footprints washed out, things left
++  by the tide).
++- `ocean.userData.splashes(cam, t, out, n)`: where the surf is bursting now.
++- `ocean.userData.tick(dt, world, camera, rain)`: what touches the sea this frame.
++- `water.mouths(x, z, r, out, n)`: where streams meet the sea.
++- `shared.uWaterMap`, `WATERMAP_GLSL waterMapAt(w)`: a planet's lakes and streams (r) and their
++  wet banks (g), for anything that should keep out of the water or be wet beside it (the land
++  agent's vegetation and ground details).
++
++## Checks
++
++- `node --test island/tools/shore.test.mjs`: the swash's timing (rush, stall, drain gathering
++  pace), its limits and continuity, the broken front, the sheet thinning to nothing, the cover
++  at the edge, where waves break, the quality by tier, and that the sea and the ground share
++  the one swash.
+diff --git a/island/src/bay/water.js b/island/src/bay/water.js
+index 732e906..c27e9ec 100644
+--- a/island/src/bay/water.js
++++ b/island/src/bay/water.js
+@@ -98,18 +98,23 @@ vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres, float frozen){
+ 			float d = length(q - c - o);
+ 			if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+ 		}
+-		float heat = clamp(gvn(p * 0.09 - uTime * 0.02) * 0.7 + gEdge * 0.6, 0.0, 1.0);
++		float heat = clamp(gvn(p * 0.09 - uTime * 0.02) * 0.7 + gEdge * 0.3, 0.0, 1.0);
+ 		float crack = 1.0 - smoothstep(0.02, 0.1 + heat * 0.16, f2 - f1);
+ 		float melt = gvn(p * 0.6 + vec2(uTime * 0.25, -uTime * 0.1));
+ 		vec3 hot = mix(vec3(0.9, 0.18, 0.02), vec3(2.6, 1.3, 0.3), smoothstep(0.35, 0.85, melt * 0.6 + heat * 0.5)) * (1.0 + uNight * 0.6);
+ 		// (the crust: near black, faintly red where it is thin, its plates' own relief)
+ 		vec3 crust = mix(vec3(0.012, 0.009, 0.008), vec3(0.08, 0.02, 0.006), smoothstep(0.3, 0.9, heat)) * (0.7 + 0.5 * smoothstep(0.0, 0.5, f1));
+-		vec3 c = mix(crust, hot, max(crack, smoothstep(0.75, 1.0, gEdge) * 0.8));
++		// at its margin the flow chills to a thick dark crust against the ground, its cracks
++		// closing, broken here and there where the melt breaks out and glows along the edge
++		float rim = smoothstep(0.55, 0.95, gEdge);
++		float breakout = smoothstep(0.7, 0.86, gvn(p * 0.45 + vec2(uTime * 0.04, 0.0)) * 0.7 + gvn(p * 1.7 - uTime * 0.03) * 0.3) * rim;
++		vec3 c = mix(crust * (1.0 - rim * 0.45), hot, max(crack * (1.0 - rim * 0.8), breakout * 0.6));
+ 		// (far off, where the cracks are finer than a pixel, their glowing average)
+ 		float far = clamp(length(fwidth(q)) * 1.2 - 0.25, 0.0, 1.0);
+ 		c = mix(c, mix(crust, hot, 0.22 + heat * 0.25), far);
+-		// (a soft edge where it laps the ground)
+-		return vec4(c, 1.0 - smoothstep(0.9, 1.0, gEdge));
++		// (a soft edge where it laps the ground: the chilled margin thins away into it)
++		c = mix(c, crust * 0.5, smoothstep(0.82, 1.0, gEdge) * (1.0 - breakout));
++		return vec4(c, 1.0 - smoothstep(0.78, 1.0, gEdge));
+ 	}
+ 	if (uLook.x > 0.5 || frozen > 0.5) {
+ 		// ice: pale and opaque, milky where it is thick, cracked, the sky faint in it
+@@ -246,6 +251,8 @@ void main(){
+ 	}
+ 	// a soft line of foam where a quick creek laps its banks (none on the still town water)
+ 	float side = nearK * smoothstep(0.5, 0.8, abs(vUv.x));
++	// (the edge itself creeping in and out a little with the ripples, never a still line)
++	depth += (gvn(u * vec2(0.6, 1.5) - vec2(uTime * speed * 0.5, 0.0)) - 0.5) * 0.03 * side;
+ 	float lap = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.04, 0.14, depth)) * side * (1.0 - calm) * smoothstep(0.4, 0.75, gvn(u * vec2(1.4, 4.0) - vec2(uTime * speed, 0.0)));
+ 	fo = max(fo, lap * 0.45);
+ 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
+@@ -256,7 +263,10 @@ void main(){
+ 	// (the shallows along the sides clear to nothing over the wet bank, so no seam shows
+ 	// where the water meets the ground; the foam stays a little longer)
+ 	gl_FragColor.a *= mix(1.0, max(smoothstep(0.0, 0.2, depth), min(fo, 1.0) * smoothstep(0.0, 0.02, depth)), side);
+-	gl_FragColor.a *= 1.0 - smoothstep(0.82, 1.0, abs(vUv.x));
++	// (its sides torn by the bank's own unevenness, never the ribbon's straight edge)
++	gl_FragColor.a *= 1.0 - smoothstep(0.6 + 0.22 * gvn(u * vec2(0.35, 1.0) + 7.0), 1.0, abs(vUv.x));
++	// where a stream runs out over the sea's own bed, the sea takes it over (its plume, world/ocean.js)
++	gl_FragColor.a *= max(smoothstep(-0.9, -0.25, groundUnder(vW.xz)), smoothstep(0.5, 1.0, vW.y));
+ 	#include <tonemapping_fragment>
+ 	#include <colorspace_fragment>
+ 	#include <fog_fragment>
+@@ -291,8 +301,12 @@ void main(){
+ 	vec3 deep = uTint * (1.0 - uNight * 0.85);
+ 	vec3 col = mix(deep, skyIn(r, p) * mix(vec3(0.62, 0.86, 0.7), vec3(0.78, 0.88, 0.92), uTint.b * 4.0), fres);
+ 	col += uSunColor * (pow(max(dot(r, uSunDir), 0.0), 600.0) * 6.0 + pow(max(dot(r, uSunDir), 0.0), 40.0) * 0.12) * (1.0 - uNight);
++	// the water laps: its edge creeps up the shore and back with each wavelet, by its own
++	// amount all along the shore, so the line is never still or straight
++	float lapT = sin(uTime * 1.7 + vn(pl * 0.12) * 6.28) * (0.6 + 0.4 * vn(pl * 0.9 + 3.0)) * wind;
++	depth += lapT * 0.018 + (vn(pl * 0.7) - 0.5) * 0.02;
+ 	// a lace of foam where the water laps the shore, thinning to nothing at the line itself
+-	float lace = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.05, 0.2, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2)) * nearK;
++	float lace = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.05, 0.2, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2) + max(lapT, 0.0) * 0.12) * nearK;
+ 	col = mix(col, vec3(0.82, 0.84, 0.8) * (1.0 - uNight * 0.8), lace * 0.5);
+ 	float a = clamp(0.3 + deepK * 0.66 + fres * 0.2 + lace * 0.4, 0.0, 0.97);
+ 	gEdge = (1.0 - smoothstep(0.0, 0.5, depth)) * nearK;
+@@ -319,7 +333,8 @@ const HALO_FRAG = /* glsl */`
+ varying float vK; varying vec2 vP;
+ void main(){
+ 	float g = pow(1.0 - vK, 2.2) * (0.7 + 0.3 * gvn(vP * 0.08 + uTime * 0.15));
+-	gl_FragColor = vec4(vec3(1.0, 0.3, 0.05) * g * (0.6 + uNight * 0.9), 1.0);
++	// (a deep red warmth on the ground close by, not a flat orange wash)
++	gl_FragColor = vec4(vec3(0.85, 0.2, 0.04) * g * g * (0.35 + uNight * 0.4), 1.0);
+ }`;
+ 
+ // opts: heightAt (the ground as walked, CPU), ground (the road's level for a deck, as walked),
+@@ -1208,6 +1223,31 @@ export function createWater(scene, shared, opts = {}) {
+ 			lakeMats.clear();
+ 		},
+ 		riverAt: (x, z) => { const r = riverAt(x, z, 2); return r ? { name: r.L.name, level: r.level, width: r.hw * 2 } : null; },
++		// where streams run out into the sea round (x, z), for the sea's silty plume and the
++		// current line at its edge (world/ocean.js): out is filled with [x, z, ux, uz, width] for
++		// up to n mouths, nearest first; returns how many (nothing is made on the way)
++		mouths(x, z, r, out, n = 4) {
++			let c = 0;
++			if (!S.ready || lookU.value.x > 0.5) return 0;
++			for (const T of S.tiles.values()) {
++				if (!T.built || Math.max(Math.abs((T.i + 0.5) * TILE - x), Math.abs((T.j + 0.5) * TILE - z)) > TILE / 2 + r) continue;
++				for (const L of T.lines) {
++					const e = L.n - 1;
++					if (e < 1 || L.conc || L.lv[e] > 1.5 || L.w[e] < 2) continue;
++					const ex = L.x[e], ez = L.z[e], d = Math.hypot(ex - x, ez - z);
++					if (d > r) continue;
++					const l = Math.hypot(ex - L.x[e - 1], ez - L.z[e - 1]) || 1, ux = (ex - L.x[e - 1]) / l, uz = (ez - L.z[e - 1]) / l;
++					// (the sea just beyond the end: a stream that only ends at a tile's edge is not a mouth)
++					if (heightAt(ex + ux * (L.w[e] + 6), ez + uz * (L.w[e] + 6)) > -0.3) continue;
++					let i = Math.min(c, n - 1);
++					if (c >= n && d >= Math.hypot(out[i * 5] - x, out[i * 5 + 1] - z)) continue;
++					while (i > 0 && d < Math.hypot(out[(i - 1) * 5] - x, out[(i - 1) * 5 + 1] - z)) { for (let q = 0; q < 5; q++) out[i * 5 + q] = out[(i - 1) * 5 + q]; i--; }
++					out[i * 5] = ex; out[i * 5 + 1] = ez; out[i * 5 + 2] = ux; out[i * 5 + 3] = uz; out[i * 5 + 4] = L.w[e];
++					c = Math.min(n, c + 1);
++				}
++			}
++			return c;
++		},
+ 		hasRiver: (x, z) => !!riverAt(x, z, 2),
+ 		decks: () => [...decks.values()].map((D) => ({ x: D.x, z: D.z, own: D.own, span: D.span })),
+ 		// a stretch of stream near a point, for a look at it: { x, z, ux, uz, w, name }
+diff --git a/island/src/main.js b/island/src/main.js
+index 712f514..fd30665 100644
+--- a/island/src/main.js
++++ b/island/src/main.js
+@@ -1752,6 +1752,7 @@ export function createIslandWorld() {
+ 		// the weather: frames running slow shed rain streaks; indoors the rain stays out
+ 		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
+ 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
++		W.ocean.userData.tick?.(dt, W, camera, wx?.rainHere || 0);   // what touches the sea, the rain on it (world/ocean.js)
+ 		surprises.update(dt, sk, wx);
+ 		W.whale.update(dt, time, shared.uBass.value, camera.position);
+ 		// below the surface: the sea closes in, blue-green and dim
+diff --git a/island/src/planet/waters.js b/island/src/planet/waters.js
+index ff1a680..a753e01 100644
+--- a/island/src/planet/waters.js
++++ b/island/src/planet/waters.js
+@@ -123,6 +123,12 @@ function* steps(island, profile, { clear = [], realm = null } = {}) {
+ 		}
+ 	}
+ 	const inWater = (x, z) => { const q = at(x, z); return q >= 0 && wet[q] === 1; };
++	// the map of it for the ground and the grass to read (world/shore.js waterMapTexture): r the
++	// water itself (a lake's or a stream's bed), g its banks, wet for a few metres round it
++	const map = new Uint8Array(N * N * 2);
++	for (let q = 0; q < N * N; q++) if (wet[q]) map[q * 2] = map[q * 2 + 1] = 255;
++	for (let pass = 0; pass < 3; pass++) { yield; for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) { const q = j * N + i, g = Math.max(map[(q - 1) * 2 + 1], map[(q + 1) * 2 + 1], map[(q - N) * 2 + 1], map[(q + N) * 2 + 1]) * 0.55; if (g > map[q * 2 + 1]) map[q * 2 + 1] = g; } }
++	island.waterMap = map;
+ 	const source = {
+ 		name: 'planet', lakes, decks, version: () => 1, ready: () => true,
+ 		*tile(i, j) { return lines.filter((L) => { const p = L.P[Math.min(1, L.P.length - 1)], q = L.P[0]; return Math.floor((p[0] + q[0]) / 2 / 2048) === i && Math.floor((p[1] + q[1]) / 2 / 2048) === j; }); },
+diff --git a/island/src/world/grass.js b/island/src/world/grass.js
+index 05565f1..b319da1 100644
+--- a/island/src/world/grass.js
++++ b/island/src/world/grass.js
+@@ -11,6 +11,7 @@
+ import * as THREE from 'three';
+ import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL, PLANET_GLSL, planetUniforms } from './terrain.js';
+ import { grassStrip } from './textures.js';
++import { waterMapTexture } from './shore.js';
+ import { mulberry32 } from '../noise.js';
+ 
+ let stripTex = null;
+@@ -46,7 +47,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 	geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e7);
+ 
+ 	const uniforms = {
+-		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex }, uMap: { value: stripTex || (stripTex = grassStrip()) },
++		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex }, uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) }, uMap: { value: stripTex || (stripTex = grassStrip()) },
+ 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
+ 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span }, uWidth: { value: width }, uTallK: { value: heightK },
+ 		uTime: shared.uTime, uWind: shared.uWind, uGust: shared.uGust, uWindT: shared.uWindT, uWindDir: shared.uWindDir, uHigh: shared.uHigh, uBass: shared.uBass,
+@@ -65,7 +66,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 			${OCC_GLSL}
+ 			${PLANET_GLSL}
+ 			uniform float uPlGrassK, uPl2GrassK;
+-			uniform vec4 uWetS[4]; uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
++			uniform vec4 uWetS[4]; uniform sampler2D uMasks, uWaterMap; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
+ 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
+ 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet;
+ 			float gTall;
+@@ -87,6 +88,9 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
+ 				float meadow = smoothstep(0.3, 0.8, smoothstep(1.4 + n1g * 0.5, 2.3 + n1g * 0.6, h)) * smoothstep(1.3, 2.0, h);
+ 				float density = meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)) * (1.0 - canopy * 0.65) * (1.0 - occ * 0.85);
+ 				density *= 0.85 + 0.15 * vn(w * 0.4 + 5.0);
++				// (none in a planet's lakes and streams, thinning on their wet banks: world/shore.js)
++				vec2 wmg = texture2D(uWaterMap, (w + uHalf) / (uHalf * 2.0)).rg;
++				density *= 1.0 - smoothstep(0.15, 0.6, wmg.r + wmg.g * 0.25);
+ 				// around shrubs, bananas and flowers the grass crowds in and grows up the stems
+ 				density = min(1.0, density + hug * 0.6 * meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)));   // (never up through paving)
+ 				// another world: sparse on a desert, none on ash, none in snow or down a cave mouth
+diff --git a/island/src/world/ocean.js b/island/src/world/ocean.js
+index cef1705..aedb79b 100644
+--- a/island/src/world/ocean.js
++++ b/island/src/world/ocean.js
+@@ -2,12 +2,31 @@
+ // wind chop. Waves steepen and break white where the water shallows; colour
+ // comes from the real depth over sand and reef, so shallows go turquoise over
+ // lit sand with caustics and the deep goes navy. Sky and sun reflect.
++//
++// Where it meets the land there is no line. Up close every pixel reads the ground under it
++// (the sea's own vertices are metres apart), so the water's depth is known exactly where the
++// surface meets the sand or the rock; the water's own colour fades with that depth to nothing
++// and the ground shows through (the sand under a hand's depth of water is the sand), only the
++// sky's sheen and the foam left on it. On the island's beaches each wave runs up the sand as a
++// thin sheet with a frothing, broken front, stalls and drains back (world/shore.js, the same
++// sums as the wet sand under it), leaving a line of lace that breaks up and pops; on gentle
++// open beaches the swell breaks offshore into white water, on steep or sheltered shores it
++// does not, and against rock it bursts white. Posts, hulls and anyone wading ring the water
++// with ripples and foam; rain pocks it. By night the lamps along the shore lie in it as
++// streaks (world/nightfield.js) and the moon's path glitters.
+ 
+ import * as THREE from 'three';
+-import { radialGrid, HEIGHT_GLSL, NOISE_GLSL, SWASH_GLSL } from './terrain.js';
++import { radialGrid, HEIGHT_GLSL, NOISE_GLSL } from './terrain.js';
++import { SWASH_GLSL, shoreQuality } from './shore.js';
+ import { CLOUD_REFLECT_GLSL, cloudReflectU } from './sky.js';
+ import { BAY_GLSL } from '../bay/terrain.js';
+ import { GLOBE_U, GLOBE_SEA_GLSL } from '../earth/globeheight.js';
++import { NF, NF_N } from './nightfield.js';
++import { qualityNow } from './governor.js';
++
++const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
++// how many things standing in the water ring it at once (posts, hulls, you)
++const TOUCH_N = PHONE ? 4 : 8;
+ 
+ // a planet's water colour, normalised to keep the sea's brightness (its streams and lakes too: bay/water.js)
+ export function waterOf(P) {
+@@ -16,19 +35,34 @@ export function waterOf(P) {
+ 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
+ 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.water.mix);
+ }
++// what the sea is made of, for its foam: 0 water, 1 a toxic world's scummy sea
++export const liquidOf = (P) => (P?.type === 'TOXIC' ? 1 : 0);
++
+ export function createOcean(island, shared) {
+ 	// out to the Bay Area's horizons: dense underfoot, sparse tens of kilometres out
+ 	const geo = radialGrid(300, 70000, 3.3);
++	const bay = island.village?.bay;
+ 	const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+ 		uHeight: { value: shared.heightTex }, uMasks: { value: shared.maskTex },
+ 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
+ 		uCenter: { value: new THREE.Vector2() },
+ 		uWave: { value: 1 },
+ 		uWaterT: { value: waterOf(shared.planet) },
++		uLiquid: { value: liquidOf(shared.planet) },
++		// the island's drowned crater, sheltered from the swell: x, z, radius, 1 if there is one
++		uBayIs: { value: bay ? new THREE.Vector4(bay.x, bay.z, bay.r, 1) : new THREE.Vector4() },
++		// how far out each pixel reads the ground under it, and how much fine detail the foam carries
++		uShoreQ: { value: new THREE.Vector2(520, 1) },
++		uRain: { value: 0 },
+ 	}]);
++	// (live objects, not copies)
++	uniforms.uTouch = { value: [...Array(TOUCH_N)].map(() => new THREE.Vector4()) };
++	// where streams run out into the sea near you: x, z, and the way it flows times its width
++	uniforms.uMouth = { value: [...Array(4)].map(() => new THREE.Vector4()) };
++	Object.assign(uniforms, NF);
+ 	// the real Bay Area's depths beyond the island (live objects, filled as they load)
+ 	if (shared.bayU) Object.assign(uniforms, shared.bayU, GLOBE_U);          // (and the globe's coasts past the survey: earth/globeheight.js)
+-uniforms.uUnder = shared.uUnder;
++	uniforms.uUnder = shared.uUnder;
+ 	uniforms.uWave = shared.uWave || uniforms.uWave;
+ 	// shared, live objects (not copies)
+ 	Object.assign(uniforms, {
+@@ -86,28 +120,43 @@ uniforms.uUnder = shared.uUnder;
+ 		}
+ 		return g * a;
+ 	}`;
++	// the island's own sea floor eased into the real one across a wide, wavy band (switching at
++	// the island map's edge drew a square in the water's colour), out where the island's floor
++	// is already deep: its beaches and shallows are its own (the survey has open sea some 13 m
++	// down under the island, and eased in across the beaches it made them read 5 to 8 m deep:
++	// the shallows all one turquoise to the waterline, the full swell breaking on the sand);
++	// seaGround: the vertices' (the survey, then the globe past it), bayHeight the pixels' (the
++	// globe's coasts are read at the vertices: its sums are long, and its relief coarse)
++	const GROUND = (sea) => /* glsl */`
++	float groundAt(vec2 p){
++		float e = max(abs(p.x), abs(p.y)) + (sin(p.x * 0.0021 + 1.3) * sin(p.y * 0.0017 + 0.4) + sin((p.x + p.y) * 0.0009)) * 180.0;
++		float k = smoothstep(uHalf - 1400.0, uHalf - 60.0, e);
++		if (k <= 0.0) return heightAt(p);
++		float hi = heightAt(p), edge = max(abs(p.x), abs(p.y));
++		k *= max(smoothstep(-3.0, -9.0, hi), smoothstep(uHalf - 120.0, uHalf - 20.0, edge));
++		if (k <= 0.0) return hi;
++		float b = ${sea}(p);
++		return k >= 1.0 || edge >= uHalf - 20.0 ? b : mix(hi, b, k);
++	}`;
++	const VARY = /* glsl */`
++	varying vec3 vW; varying float vCrest; varying float vRoll; varying vec2 vInward; varying vec2 vAmp; varying vec2 vP0;
++	// the open sea's level here (before the beach's sheet), the bed under the vertex, how much the
++	// waves break here, the bed's slope, and 1 where the island's swash runs
++	varying float vWave; varying float vGround; varying float vBreak; varying float vSlope; varying float vShore;`;
+ 
+ 	const mat = new THREE.ShaderMaterial({
+ 		uniforms, fog: true, transparent: true, side: THREE.DoubleSide,
++		defines: { NF_N, TOUCH_N },
+ 		vertexShader: /* glsl */`
+ 			${HEIGHT_GLSL}
+ 			${BAY_GLSL}
+ 			${shared.bayU ? GLOBE_SEA_GLSL : 'float seaGround(vec2 p){ return bayHeight(p); }'}
+-			// the island's own sea bed inside its map, the real one outside
+-			// the island's own sea floor eased into the real one across a wide, wavy band
+-			// (switching at the island map's edge drew a square in the water's colour)
+-			float groundAt(vec2 p){
+-				float e = max(abs(p.x), abs(p.y)) + (sin(p.x * 0.0021 + 1.3) * sin(p.y * 0.0017 + 0.4) + sin((p.x + p.y) * 0.0009)) * 180.0;
+-				float k = smoothstep(uHalf - 1400.0, uHalf - 60.0, e);
+-				if (k <= 0.0) return heightAt(p);
+-				float b = seaGround(p);
+-				return k >= 1.0 || max(abs(p.x), abs(p.y)) >= uHalf - 20.0 ? b : mix(heightAt(p), b, k);
+-			}
++			${GROUND('seaGround')}
+ 			${WAVES}
+ 			${NOISE_GLSL}
+ 			${SWASH_GLSL}
+-			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
+-			varying vec2 vInward; varying vec2 vAmp; varying float vHv; varying vec2 vP0;
++			uniform vec4 uBayIs;
++			${VARY}
+ 			#include <fog_pars_vertex>
+ 			void main(){
+ 				vec2 p = position.xz + uCenter;
+@@ -127,40 +176,114 @@ uniforms.uUnder = shared.uUnder;
+ 				// the mesh's own vertex spacing here (see radialGrid): the waves it can carry
+ 				float m = max(abs(position.x), abs(position.z)) + 0.5;
+ 				float hv = 3.3 * 70000.0 * pow(m / 70000.0, 2.3 / 3.3) * 2.0 / 300.0;
++				// the bed's slope over a few metres near the shore: where the waves break
++				float sl = 0.0;
++				if (ground > -9.0 && hv < 40.0) {
++					float e = max(2.5, hv * 0.5);
++					sl = length(vec2(groundAt(p + vec2(e, 0.0)) - groundAt(p - vec2(e, 0.0)), groundAt(p + vec2(0.0, e)) - groundAt(p - vec2(0.0, e)))) / (2.0 * e);
++				}
++				// sheltered from the swell: inside the island's drowned crater, inside the Golden Gate
++				float shelter = max(uBayIs.w * (1.0 - smoothstep(0.45, 0.62, length(p - uBayIs.xy) / max(uBayIs.z, 1.0))), smoothstep(9000.0, 12500.0, p.x) * step(3000.0, r));
++				float brk = breakOn(sl, shelter);
+ 				float swellA = uWave * open;
+ 				vec2 pb = bend(p);
+ 				for (int i = 0; i < NW; i++) {
+ 					float kv = keep(SPEC[i].y, hv);
+ 					if (kv > 0.0) train(pb, wdir(i), SPEC[i].y, wamp(i) * swellA * kv * group(i, p), SPEC[i].w, 1.0, disp, dx, dz);
+ 				}
+-				float amp = uWave * mix(0.16, 0.5, open) * nearShore;
+-				train(p, inward, 16.0, amp * keep(16.0, hv), mix(1.1, 0.6, open), 1.0, disp, dx, dz);
+-				vInward = inward; vAmp = vec2(swellA, amp); vHv = hv; vP0 = p;
++				float amp = uWave * mix(0.16, 0.5, open) * nearShore * mix(1.0, 0.45, shelter);
++				// over a gentle beach the roller shoals, steepens, and its crest pitches forward as it breaks
++				float zone = brk * smoothstep(0.3, 0.8, depth) * (1.0 - smoothstep(1.5, 3.2, depth));
++				float k16 = 6.28318 / 16.0, fR = k16 * (dot(inward, p) - sqrt(9.8 / k16) * uTime);
++				train(p, inward, 16.0, amp * keep(16.0, hv) * (1.0 + 0.35 * zone), mix(1.1, 0.6, open), 1.0, disp, dx, dz);
++				float crest = pow(max(0.0, sin(fR)), 3.0) * keep(16.0, hv);
++				disp.xz += inward * amp * 1.3 * zone * crest * smoothstep(-0.6, 0.6, -cos(fR));
++				disp.y += amp * 0.3 * zone * crest;
++				vInward = inward; vAmp = vec2(swellA, amp); vP0 = p;
+ 				vec3 w = vec3(p.x, 0.0, p.y) + disp;
++				vWave = w.y;
+ 				// on the beach the sea is the swash: a sheet that thins to nothing as it runs up
+-				float swl = swashLevel(p, uTime, uWave);
+ 				// (the island's steep beaches only: on the Bay Area's broad flat shelves its fronts
+ 				// would sweep hundreds of metres of shallows in rings)
+-				if (ground > -0.5 && r < 3000.0) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground));
+-				vW = w; vDepth = depth; vFilm = w.y - ground; vCrest = disp.y / max(0.05, amp + swellA * 0.45 + 0.15);
+-				float k = 6.28318 / 16.0; vRoll = k * (dot(inward, p) - sqrt(9.8 / k) * uTime);
+-				vN = normalize(cross(dz, dx));
++				float shore = r < 3000.0 && max(abs(p.x), abs(p.y)) < uHalf - 30.0 ? 1.0 : 0.0;
++				float swl = swashLevel(p, uTime, uWave);
++				if (ground > -0.5 && shore > 0.5) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground));
++				// near by, over the beach up to the top of the run, the surface is laid just clear of
++				// the sand (its highest point round the vertex), so the sheet and the foam (worked out
++				// for every pixel) always have a surface to be drawn on; the pixels drop the rest
++				if (shore > 0.5 && hv < 12.0 && sl < 0.15 && ground > -0.9 && ground < swashRunMax(p, uWave) + 0.35) {
++					float e = max(0.5, hv * 0.55);
++					float gm = max(max(max(groundAt(p + vec2(e, 0.0)), groundAt(p - vec2(e, 0.0))), max(groundAt(p + vec2(0.0, e)), groundAt(p - vec2(0.0, e)))), ground);
++					w.y = max(w.y, gm + 0.04);
++				}
++				vW = w; vGround = ground; vSlope = sl; vBreak = brk; vShore = shore;
++				vCrest = disp.y / max(0.05, amp + swellA * 0.45 + 0.15);
++				vRoll = fR;
+ 				vec4 mvPosition = viewMatrix * vec4(w, 1.0);
+ 				gl_Position = projectionMatrix * mvPosition;
+ 				#include <fog_vertex>
+ 			}`,
+ 		fragmentShader: /* glsl */`
+-			uniform sampler2D uMasks; uniform float uHalf, uMid, uHigh; uniform vec4 uWaterT;
++			uniform sampler2D uMasks; uniform float uMid, uHigh, uLiquid, uRain; uniform vec4 uWaterT; uniform vec2 uShoreQ;
+ 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
++			uniform vec4 uTouch[TOUCH_N]; uniform vec4 uMouth[4];
++			uniform vec4 uNFP[NF_N]; uniform vec4 uNFC[NF_N]; uniform int uNFn;
+ 			${CLOUD_REFLECT_GLSL}
+-			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
+-			varying vec2 vInward; varying vec2 vAmp; varying float vHv; varying vec2 vP0;
++			${HEIGHT_GLSL}
++			${shared.bayU ? BAY_GLSL : 'float bayHeight(vec2 p){ return -60.0; }'}
++			${GROUND('bayHeight')}
++			${shared.bayU ? `uniform float uGOn, uGBay; uniform vec2 uGSeam;
++			// past the survey the globe's coast takes over: the vertices' ground is used there
++			bool pastSurvey(vec2 p){
++				if (uGOn < 0.5) return false;
++				if (uGBay < 0.5) return true;
++				vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (p - uR0.xy) / uR0.z;
++				return length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z > uGSeam.x;
++			}` : 'bool pastSurvey(vec2 p){ return false; }'}
++			${VARY}
+ 			${NOISE_GLSL}
+ 			${WAVES}
++			${SWASH_GLSL}
+ 			#include <fog_pars_fragment>
++			// foam's froth: cells of bubbles with holes between, settling to their average where
++			// they would be finer than the pixel (or on a device that draws little detail)
++			float froth(vec2 p, float hp){
++				vec2 q = p * 3.1 + vec2(uTime * 0.21, -uTime * 0.13);
++				float c = vn(q) * 0.55 + vn(q * 2.37 + 5.1) * 0.3 + vn(q * 5.3 - 2.7) * 0.15;
++				return mix(0.5, c, (1.0 - smoothstep(0.05, 0.3, hp)) * (0.4 + 0.6 * uShoreQ.y));
++			}
++			// foam drawn as foam: a density laid over a lace of bubbles, cells whose walls thicken
++			// as the foam does, with patches and holes, never a smooth white blob (settling to its
++			// average where finer than the pixel, or on a device that draws little detail)
++			float laceNet(vec2 p){
++				vec2 i = floor(p), f = fract(p);
++				float f1 = 9.0, f2 = 9.0;
++				for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
++					vec2 c = vec2(float(x), float(y)), q = i + c;
++					vec2 o = 0.5 + 0.4 * sin(uTime * 0.5 + 6.2832 * vec2(h21(q), h21(q + 19.7)));
++					float d = length(c + o - f);
++					if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
++				}
++				return f2 - f1;
++			}
++			float foamOf(float D, vec2 p, float hp){
++				if (D <= 0.002) return 0.0;
++				float k = (1.0 - smoothstep(0.02, 0.12, hp)) * uShoreQ.y, t = D * 0.7;
++				if (k > 0.01) {
++					// (the cells wander in size and shape: read through a slow warp, at two scales)
++					// (thin foam is scattered clots and bubbles; only denser foam joins up into a lace)
++					vec2 wq = p * 3.2 + (vec2(vn(p * 0.9 + 4.0), vn(p * 0.9 - 7.0)) - 0.5) * 2.4;
++					float net = 1.0 - smoothstep(0.06 + D * 0.12, 0.16 + D * 0.4, min(laceNet(wq), uShoreQ.y > 0.8 ? laceNet(wq * 1.9 + 11.0) * 1.3 : 9.0));
++					float f = vn(p * 7.3 + vec2(uTime * 0.11, 0.0)) * 0.6 + vn(p * 17.0 - uTime * 0.07) * 0.4;
++					float clots = smoothstep(0.95 - D * 0.7, 1.2 - D * 0.6, f);
++					float holes = smoothstep(0.25, 0.6, vn(p * 1.3 + 2.0) + D * 0.35);
++					// (bubbly inside, never one flat white)
++					float grain = 0.72 + 0.28 * vn(p * 26.0 + uTime * 0.2);
++					t = mix(t, clamp(max(net * smoothstep(0.3, 0.65, D) * holes, clots) * (0.55 + 0.35 * D) * grain, 0.0, 0.85), k);
++				}
++				return t;
++			}
+ 			void main(){
+-				// Never draw the underside of the ocean through dry land or caves.
+-				if (vFilm <= 0.0) discard;
+ 				vec3 V = normalize(cameraPosition - vW);
+ 				// ripples on top of the swell, fading with distance so the far sea stays calm
+ 				float dist = length(cameraPosition - vW);
+@@ -169,11 +292,36 @@ uniforms.uUnder = shared.uUnder;
+ 				// (the worse of the two screen axes: at a low angle the water is foreshortened, and a
+ 				// wave kept across the view aliases into moiré along it)
+ 				float hp = max(max(length(dFdx(vP0)), length(dFdy(vP0))) * 1.4, 0.002);
+-				// wind streaks: long calm slicks lying along the wind, where the ripples lie down
++				float rw = fwidth(vRoll);
++				// the ground under this very pixel (the sea's vertices are metres apart: their ground,
++				// drawn between them, cut the water along straight lines), read out to the reach
++				float pk = (1.0 - smoothstep(uShoreQ.x * 0.7, uShoreQ.x, dist)) * step(-14.0, vGround);
++				float g = vGround;
++				if (pk > 0.0 && (max(abs(vW.x), abs(vW.z)) < uHalf - 1500.0 || !pastSurvey(vW.xz))) g = mix(vGround, groundAt(vW.xz), pk);
++				// the water's level over it: the open sea's, or on the island's beaches the swash's sheet
++				vec4 S = vec4(-9.0, -9.0, -99.0, 0.0);
++				float shoreK = 0.0, lvl = vWave;
++				if (vShore > 0.001 && g > -0.6) {
++					S = swashState(vW.xz, uTime, uWave);
++					shoreK = smoothstep(-0.5, -0.1, g) * vShore;
++					lvl = mix(vWave, swashSheet(vWave, S.x, g), shoreK);
++				}
++				float film = lvl - g;
++				// the line of lace the last wave left at the top of its run, lying on the sand after
++				// the water has drained, breaking up and popping as it goes
++				float strand = 0.0;
++				if (shoreK > 0.0 && S.z > 0.0 && uShoreQ.y > 0.0 && (gl_FrontFacing || uUnder < 0.5)) {
++					float below = S.y - g, age = S.z;
++					float line = smoothstep(-0.004, 0.006, below) * (1.0 - smoothstep(0.012, 0.05 + 0.025 * vn(vW.xz * 0.7), below));
++					float lace = vn(vW.xz * 5.3 + 3.0) * 0.6 + vn(vW.xz * 13.0 - 1.0) * 0.4;
++					strand = line * smoothstep(0.28 + age * 0.06, 0.46 + age * 0.06, lace) * exp(-age * 0.22) * (1.0 - smoothstep(0.1, 0.5, hp)) * shoreK;
++				}
++				// never draw the water over dry land, nor its underside through dry land or caves
++				if (film <= 0.0 && strand < 0.01) discard;
++				// the surface's slope: the whole spectrum per pixel, the short wind waves lying down
++				// in the slicks along the wind, gusty patches rougher, so the sea is never one even texture
+ 				vec2 sw = mat2(0.82, 0.57, -0.57, 0.82) * vW.xz;
+ 				float slick = smoothstep(0.58, 0.78, vn(vec2(sw.x * 0.006, sw.y * 0.045) + vec2(uTime * 0.004, 0.0)));
+-				// the whole spectrum per pixel; the short wind waves lie down in the slicks and
+-				// gusty patches roughen, so the sea is never one even texture
+ 				float gust = 0.75 + 0.5 * vn(vW.xz * 0.004 + uTime * 0.01);
+ 				// (the ripples at the water's own place, not where the swell has carried it: the
+ 				// swell's sideways shift is only known at the mesh's vertices, far apart out there,
+@@ -182,6 +330,57 @@ uniforms.uUnder = shared.uUnder;
+ 				// the rollers toward the shore
+ 				float kr = 6.28318 / 16.0;
+ 				gL += vInward * (kr * vAmp.y * cos(kr * (dot(vInward, vP0) - sqrt(9.8 / kr) * uTime)) * keep(16.0, hp));
++				// rings spreading from what stands in the water (posts, a hull, you wading)
++				float touchF = 0.0;
++				if (dist < 160.0) {
++					for (int i = 0; i < TOUCH_N; i++) {
++						vec4 c = uTouch[i];
++						if (c.w <= 0.0) continue;
++						vec2 dv = vW.xz - c.xy; float dd = length(dv), e = dd - c.z;
++						if (e > 7.0) continue;
++						gL += dv / max(dd, 1e-3) * cos(e * 9.0 - uTime * 6.5 + c.x) * 0.1 * c.w * exp(-e * 0.7) * smoothstep(-0.05, 0.1, e) * (1.0 - smoothstep(0.05, 0.4, hp));
++						touchF = max(touchF, (1.0 - smoothstep(0.0, 0.2 + 0.4 * c.w, e)) * step(-0.05, e) * min(c.w, 1.0));
++					}
++				}
++				// rain pocking the water: a drop now and then in each cell, its ring spreading and fading
++				if (uRain > 0.01 && dist < 45.0) {
++					for (int j = 0; j < 2; j++) {
++						vec2 q = vW.xz * (1.7 + float(j) * 0.9) + float(j) * 17.3, ci = floor(q), f = fract(q) - 0.5;
++						float hs = h21(ci + 11.0), ph = fract(uTime * (0.7 + hs * 0.8) + hs * 13.0);
++						vec2 dv = f - (vec2(h21(ci + 3.7), h21(ci + 9.1)) - 0.5) * 0.5;
++						float rr = length(dv), R = ph * 0.42;
++						float ring = sin((rr - R) * 45.0) * (1.0 - smoothstep(0.0, 0.07, abs(rr - R))) * (1.0 - ph) * step(hs, uRain);
++						gL += dv / max(rr, 1e-3) * ring * 0.4 * (1.0 - smoothstep(18.0, 45.0, dist)) * (1.0 - smoothstep(0.03, 0.2, hp));
++					}
++				}
++				// a stream running out into the sea: a plume of silty water spreading off its mouth, the
++				// ripples laid down in it, and a ragged current line of foam and scum along its edge
++				float plume = 0.0, plumeEdge = 0.0;
++				for (int i = 0; i < 4; i++) {
++					vec4 M = uMouth[i];
++					float mw = length(M.zw);
++					if (mw < 0.5) continue;
++					vec2 md = M.zw / mw, rel = vW.xz - M.xy;
++					float al = dot(rel, md), ac = dot(rel, vec2(-md.y, md.x)), Lp = clamp(mw * 28.0, 60.0, 700.0);
++					if (al < -mw * 2.0 || al > Lp) continue;
++					// (a cloud of silt carried out and eddying, its edge ragged at every scale: never a wedge)
++					float spread = mw * 0.8 + max(al, 0.0) * 0.28;
++					vec2 fq2 = rel / max(mw, 1.0) * 0.35 - md * uTime * 0.04;
++					float wob = (fbm3(fq2 * 0.5 + 3.0) - 0.5) * 1.6 + (vn(vW.xz * 0.15 - uTime * 0.03) - 0.5) * 0.5;
++					float k = (1.0 - smoothstep(0.35, 1.0, abs(ac) / spread + wob)) * (1.0 - smoothstep(0.3, 1.0, al / Lp + (vn(fq2 + 9.0) - 0.5) * 0.5)) * smoothstep(-mw * 2.0, 0.0, al);
++					plume = max(plume, k);
++				}
++				plumeEdge = smoothstep(0.12, 0.3, plume) * (1.0 - smoothstep(0.38, 0.62, plume));
++				gL *= 1.0 - 0.45 * plume;
++				// thin water running over sand is never glassy: churned as it rushes up the beach,
++				// combed into streaks as it drains back down
++				if (shoreK > 0.0 && hp < 0.3) {
++					float up = 1.0 - step(0.0, S.z);
++					vec2 mq = vW.xz * vec2(2.3, 2.3) - vInward * uTime * mix(-0.7, 1.6, up);
++					float m0 = vn(mq), mx = vn(mq + vec2(0.2, 0.0)), mz = vn(mq + vec2(0.0, 0.2));
++					float m1 = vn(mq * 2.7 + 3.1), m1x = vn(mq * 2.7 + 3.1 + vec2(0.2, 0.0)), m1z = vn(mq * 2.7 + 3.1 + vec2(0.0, 0.2));
++					gL += (vec2(mx - m0, mz - m0) * 0.35 + vec2(m1x - m1, m1z - m1) * 0.2) * mix(0.45, 0.9, up) * shoreK * (1.0 - smoothstep(0.05, 0.3, hp));
++				}
+ 				// what the fine waves cannot show becomes roughness: a wider, softer sun glint
+ 				// at a grazing look the reflection swings from sky to horizon within a pixel or
+ 				// two: there the ripples are laid down, so they cannot beat into moiré
+@@ -190,13 +389,28 @@ uniforms.uUnder = shared.uUnder;
+ 				float rough = smoothstep(0.3, 6.0, hp) * (1.0 - 0.5 * slick);
+ 				vec3 N = normalize(vec3(-gL.x, 1.0, -gL.y) * vec3(1.0 - 0.5 * slick, 1.0, 1.0 - 0.5 * slick));
+ 				float r0 = 0.5 + 0.5 * clamp((gL.x + gL.y) * 3.0, -1.0, 1.0);
+-				if (!gl_FrontFacing) {
+-					// from below: a bright window of sky overhead, the rest mirrors the deep
+-					float cosI = abs(dot(N, V));
+-					float window = smoothstep(0.62, 0.72, cosI);
+-					vec3 deepU = vec3(0.02, 0.16, 0.2) * (uAmbient * 2.0 + uSunColor * max(0.0, uSunDir.y));
+-					vec3 skyU = mix(uSkyHor, uSkyZen, 0.5) * 1.1 + uSunColor * pow(max(0.0, dot(-V, uSunDir)), 40.0) * 2.0;
+-					gl_FragColor = vec4(mix(deepU, skyU, window), 1.0);
++				// (seen from above, a fold of the surface turned away is still the top of the water)
++				if (!gl_FrontFacing && uUnder > 0.5) {
++					// from below. Inside Snell's window (about 49 degrees round straight up) the whole
++					// sky is squeezed into a circle, its horizon at the rim, the sun's disc in it;
++					// outside it the surface is a mirror of the dim water below. The ripples bend the
++					// window's edge, and further off, through more water, it all fades into the blue.
++					vec3 lightU = uAmbient * 2.0 + uSunColor * max(0.0, uSunDir.y);
++					vec3 deepU = vec3(0.02, 0.15, 0.19) * lightU;
++					vec3 I = -V, Nd = -N;
++					vec3 T = refract(I, Nd, 1.333);
++					vec3 col = deepU * (0.75 + 0.4 * r0);
++					if (dot(T, T) > 0.0) {
++						vec3 skyC = skyReflect(T, uSkyZen, uSkyHor, uSunColor) * 1.05;
++						skyC += uSunColor * (pow(max(dot(T, uSunDir), 0.0), 400.0) * 8.0 + pow(max(dot(T, uSunDir), 0.0), 14.0) * 0.35) * smoothstep(-0.05, 0.1, uSunDir.y);
++						// the light let through falls away toward the rim (most of it is reflected there)
++						float cosI = abs(dot(Nd, I));
++						col = mix(col, skyC, smoothstep(0.662, 0.74, cosI));
++						// a thin bright ring where the window meets the mirror
++						col += mix(uSkyHor, uSkyZen, 0.3) * 0.25 * (1.0 - smoothstep(0.0, 0.03, abs(cosI - 0.675)));
++					}
++					col = mix(col, deepU, smoothstep(6.0, 55.0, dist));
++					gl_FragColor = vec4(col, 1.0);
+ 					#include <tonemapping_fragment>
+ 					#include <colorspace_fragment>
+ 					#include <fog_fragment>
+@@ -204,6 +418,8 @@ uniforms.uUnder = shared.uUnder;
+ 				}
+ 				float ndv = max(0.0, dot(N, V));
+ 				float F = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
++				// how deep the water is just here
++				float d = max(film, 0.0);
+ 				// the bottom you see through the water: sand, reef, caustics
+ 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
+ 				// how far into the cold open sea: round, not the island map's square, its edge
+@@ -213,30 +429,51 @@ uniforms.uUnder = shared.uUnder;
+ 				float cold = smoothstep(1900.0, 4300.0, warmR);
+ 				float inMap = 1.0 - smoothstep(0.86, 0.98, max(abs(muv.x - 0.5), abs(muv.y - 0.5)) * 2.0);
+ 				float reef = texture2D(uMasks, clamp(muv, 0.0, 1.0)).b * inMap;
+-				vec3 sand = vec3(0.86, 0.80, 0.64);
++				// (the sand at the very edge is the wet sand the ground draws there, paler further in)
++				vec3 sand = mix(vec3(0.56, 0.48, 0.36), vec3(0.84, 0.78, 0.62), smoothstep(0.05, 1.6, d));
+ 				vec3 bottom = mix(sand, vec3(0.20, 0.24, 0.16), reef * 0.85);
+ 				// off the island this is the cold North Pacific and the bay: grey-green, murky
+ 				reef *= 1.0 - cold;
+ 				// inside the Golden Gate, the bay: silty, a murkier grey-green than the open Pacific
+ 				float bayK = cold * smoothstep(9000.0, 12500.0, vW.x);
+ 				bottom = mix(bottom, mix(vec3(0.34, 0.33, 0.27), vec3(0.3, 0.29, 0.22), bayK), cold);
+-				vec2 cq = vW.xz * 0.55;
++				// the bed through moving water wobbles with the surface's slope, more the deeper it is
++				vec2 cq = (vW.xz + gL * min(d, 3.0) * 0.5) * 0.55;
+ 				float c1 = 1.0 - abs(vn(cq + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
+ 				float c2 = 1.0 - abs(vn(cq * 1.3 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
+-				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth)) * (1.0 - 0.7 * cold) * (1.0 - smoothstep(0.08, 0.35, hp));   // (gone where a pixel spans a caustic cell: they would alias)
++				// (gone where a pixel spans a caustic cell: they would alias; and in the first few
++				// centimetres, where the ground's own caustics show through)
++				float caust = pow(min(c1, c2), 6.0) * 2.4 * smoothstep(0.03, 0.4, d) * (1.0 - smoothstep(0.5, 9.0, d)) * (1.0 - 0.7 * cold) * (1.0 - smoothstep(0.08, 0.35, hp)) * (0.3 + 0.7 * uShoreQ.y);
+ 				float sunUp = clamp(uSunDir.y * 3.0, 0.0, 1.0);
+ 				bottom *= (0.55 + caust * sunUp) ;
+-				vec3 trans = exp(-mix(vec3(0.34, 0.075, 0.052), mix(vec3(0.55, 0.3, 0.3), vec3(0.7, 0.45, 0.55), bayK), cold) * vDepth);
++				vec3 sig = mix(vec3(0.45, 0.085, 0.06), mix(vec3(0.55, 0.3, 0.3), vec3(0.7, 0.45, 0.55), bayK), cold);
++				// the light's path through the water to the bed and back up to you: down, then out
++				// along the look bent by the surface (longer the lower you look, at most half again)
++				float cosT = sqrt(1.0 - (1.0 - ndv * ndv) / 1.777);
++				float de = d * (1.0 + 1.0 / max(cosT, 0.66)) * 0.5;
++				vec3 trans = exp(-sig * de * 2.0);
+ 				vec3 deep = mix(vec3(0.0, 0.06, 0.19), mix(vec3(0.016, 0.038, 0.052), vec3(0.03, 0.045, 0.038), bayK), cold);
+-				vec3 body = bottom * trans + deep * (1.0 - trans);
+ 				// light scattering in shallow tropical water: turquoise over sand, fading with depth
+-				body += mix(vec3(0.02, 0.42, 0.40), mix(vec3(0.03, 0.06, 0.06), vec3(0.05, 0.07, 0.045), bayK), cold) * (1.0 - exp(-0.55 * vDepth)) * exp(-0.09 * vDepth) * (1.0 - reef * 0.6);
++				vec3 scat = deep * (1.0 - trans) + mix(vec3(0.026, 0.55, 0.52), mix(vec3(0.03, 0.06, 0.06), vec3(0.05, 0.07, 0.045), bayK), cold) * (1.0 - exp(-0.55 * de)) * exp(-0.09 * de) * (1.0 - reef * 0.6);
+ 				vec3 light = uAmbient + uSunColor * max(0.0, uSunDir.y) * 0.9;
+-				body *= light;
++				// The bed itself is the ground drawn under the water (the wet sand, the reef): the
++				// water lays its own colour over it by its cover aB, which is nothing at the edge.
++				// What the bed should look like through d metres (bed x trans + scattered light) is
++				// then had from that cover and the bed as estimated here: the water's red-first
++				// absorption tints the real ground turquoise, with no step where the two meet.
++				float murk = clamp(cold * 0.55 + bayK * 0.45 + plume * 0.6, 0.0, 1.0);
++				float aB = waterBody(de * 2.0, sig.r, murk);
++				vec3 body = max(vec3(0.0), (scat * light + bottom * light * (trans - (1.0 - aB))) / max(aB, 1e-4));
+ 				// light through the wave faces: slopes tilted toward the sun glow, those turned away
+ 				// darken, so you see the waves even looking straight down into the water
+ 				vec2 sunH = normalize(uSunDir.xz + 1e-4);
+ 				body *= 1.0 + clamp(dot(-gL, sunH) * 2.2, -0.35, 0.45) * (1.0 - rough);
++				// AgX is calm and a little grey; give the sea back its turquoise
++				// (the cold water stays the cold North Pacific's slate and the bay's grey-green)
++				float bl = dot(body, vec3(0.2126, 0.7152, 0.0722));
++				body = max(vec3(0.0), mix(vec3(bl), body, mix(1.35, 0.85, cold)));
++				// (the plume: brown-green silt, the bed lost in it)
++				body = mix(body, vec3(0.16, 0.15, 0.09) * light, plume * 0.7);
+ 				// reflection of the sky and the sun
+ 				vec3 R = reflect(-V, N);
+ 				// (the clouds overhead in it, world/sky.js: clear on a slick, broken up on a rough sea)
+@@ -246,41 +483,79 @@ uniforms.uUnder = shared.uUnder;
+ 				float nightK = smoothstep(0.02, -0.15, uSunDir.y);
+ 				vec3 moonDir = normalize(-uSunDir + vec3(0.0, 0.35, 0.0));
+ 				float glade = (pow(max(dot(R, moonDir), 0.0), 160.0) * 9.0 + pow(max(dot(R, moonDir), 0.0), 14.0) * 0.35) * nightK;
+-				// ripples scatter the path into glitter
+-				glade *= 0.35 + 1.3 * smoothstep(0.55, 0.8, r0);
++				// ripples scatter the path into glitter, broken up (never the long-crested trains'
++				// regular bright bands)
++				glade *= (0.35 + 1.3 * smoothstep(0.55, 0.8, r0)) * mix(1.0, 1.7 * smoothstep(0.38, 0.72, vn(vP0 * 1.9 + vec2(uTime * 0.4, -uTime * 0.3))), 1.0 - smoothstep(0.1, 0.6, hp));
+ 				float dayS = smoothstep(-0.05, 0.1, uSunDir.y);
+-				vec3 col = mix(body, sky, F * 0.7) + uSunColor * spec * (0.8 + uHigh * 0.6) * dayS;
+-				col += vec3(0.75, 0.82, 1.0) * glade;
+-				// AgX is calm and a little grey; give the sea back its turquoise
+-				float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+-				// (the cold water stays the cold North Pacific's slate and the bay's grey-green)
+-				col = max(vec3(0.0), mix(vec3(lum), col, mix(1.35, 0.85, cold)));
+-				// foam: breakers where it shallows, wash on the sand, caps on the crests
+-				float surf = smoothstep(0.25, 0.6, vDepth) * (1.0 - smoothstep(1.2, 2.2, vDepth));
+-				// (the bands softened by how fast they pass under the pixel, and faded to their
+-				// average where they would be finer than it: far off they would only alias)
+-				float rw = fwidth(vRoll);
+-				float roll = mix(smoothstep(0.62 - rw * 0.6, 0.97 + rw * 0.3, sin(vRoll + 0.6)), 0.12, smoothstep(0.6, 2.0, rw));
+-				float lace = mix(0.5, fbm3(vW.xz * 0.6 + vec2(uTime * 0.4, 0.0)), 1.0 - smoothstep(0.3, 1.2, hp));
+-				float breaker = roll * surf * smoothstep(0.35, 0.65, lace + 0.15) * (1.0 - 0.6 * smoothstep(0.4, 2.0, hp));
+-				float wash = 0.0;   // the swash below draws the beach edge
+-				float cap = smoothstep(0.85, 1.1, vCrest) * smoothstep(0.55, 0.75, lace) * smoothstep(6.0, 20.0, vDepth) * near * 0.5;
+-				float foam = clamp(breaker + wash + cap * 0.7, 0.0, 1.0);
+-				col = mix(col, vec3(0.92, 0.95, 0.96) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), foam);
+-				// the edge of the sea is a film, not a wall: it thins to nothing on the sand
+-				// the swash front: a lace of foam where the sheet runs out, then clear thin water
+-				float front = smoothstep(0.0, 0.012, vFilm) * (1.0 - smoothstep(0.015, 0.07, vFilm));
+-				// bubbly lace: small cells of foam with holes, thinning as the sheet slows
+-				vec2 fq = vW.xz * 4.5 + vec2(uTime * 0.25, 0.0);
+-				float cells = vn(fq) * 0.6 + vn(fq * 2.3 + 5.1) * 0.4;
+-				float laceF = mix(0.35, smoothstep(0.52, 0.72, cells), 1.0 - smoothstep(0.04, 0.2, hp)) * (0.55 + 0.45 * vn(vW.xz * 0.4 + uTime * 0.1));
+-				col = mix(col, vec3(0.93, 0.96, 0.97) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), front * laceF * 0.6);
+-				// thin sheets are nearly clear: you see the wet sand through them, and a sheen
+-				// thin water is clear: the sand shows through it, with a sheen of sky at an angle
+-				float film = smoothstep(0.0, 0.35, vFilm) * mix(0.08, 0.9, smoothstep(0.03, 0.35, vFilm)) + F * 0.25 * (1.0 - smoothstep(0.0, 0.3, vFilm));
++				// the lamps along the shore in the water: a point on a calm patch, drawn out into a
++				// streak toward you by the ripples (the few nearest, world/nightfield.js)
++				vec3 lamps = vec3(0.0);
++				for (int i = 0; i < NF_N; i++) {
++					if (i >= uNFn) break;
++					vec3 L = uNFP[i].xyz - vW; float dl = length(L);
++					float c = max(dot(R, L / dl), 0.0);
++					lamps += uNFC[i].rgb * (pow(c, mix(1400.0, 160.0, rough)) * 2.5 + pow(c, 60.0) * 0.06) / (1.0 + dl * 0.15);
++				}
++				// the sky's sheen grows in over the first couple of centimetres of water: no bright
++				// rim where the sheet meets the sand
++				float Fe = F * 0.65 * smoothstep(0.0, 0.02, film);
++				vec3 shine = uSunColor * spec * (0.8 + uHigh * 0.6) * dayS + vec3(0.75, 0.82, 1.0) * glade + lamps;
++				shine *= smoothstep(0.0, 0.01, film);
++				// (the water's cover, the sky's sheen and the glints over the ground drawn under it)
++				float a = max(1.0 - (1.0 - aB) * (1.0 - Fe), clamp(dot(shine, vec3(0.3, 0.5, 0.2)), 0.0, 1.0));
++				vec3 col = (body * aB * (1.0 - Fe) + sky * Fe + shine) / max(a, 1e-4);
+ 				// another world's sea: acid green, black glass, violet
+-				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uWaterT.rgb, uWaterT.a * (1.0 - max(foam, front * laceF)));
+-				gl_FragColor = vec4(col, max(film, max(foam, front * laceF) * smoothstep(0.0, 0.01, vFilm)));
++				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uWaterT.rgb, uWaterT.a);
++				// ---- foam ----
++				float fq = froth(vW.xz, hp);
++				// breakers, on gentle open beaches only: the roller's crest pitches over white and
++				// rolls in behind as a bore of white water (the bands softened by how fast they pass
++				// under the pixel, and faded to their average where they would be finer than it)
++				float cyc = fract(vRoll / 6.28318 - 0.25);
++				float whiteW = mix(smoothstep(0.5 - rw * 0.1, 0.98, cyc) + (1.0 - smoothstep(0.0, 0.06 + rw * 0.1, cyc)) * 0.8, 0.3, smoothstep(0.6, 2.0, rw));
++				float surfZ = smoothstep(0.25, 0.6, d) * (1.0 - smoothstep(1.2, 2.4, d)) * vBreak;
++				float breaker = whiteW * surfZ * smoothstep(0.32, 0.6, fq + 0.12) * (1.0 - 0.6 * smoothstep(0.4, 2.0, hp));
++				// the white water spent in the inner surf, broken into patches
++				float inner = smoothstep(0.06, 0.25, d) * (1.0 - smoothstep(0.5, 1.1, d)) * vBreak * smoothstep(0.5, 0.74, fq) * (0.35 + 0.65 * smoothstep(0.2, 1.0, cyc)) * (1.0 - shoreK * 0.5);
++				float cap = smoothstep(0.85, 1.1, vCrest) * smoothstep(0.55, 0.75, fq) * smoothstep(6.0, 20.0, d) * near * 0.35;
++				// the swash: a bore of froth at its front as it rushes up, clear thin water behind;
++				// stalled and draining, the front runs thin and clear, the foam it carried breaks into
++				// lace going down the beach, and bubbles pop in the backwash
++				float swF = 0.0;
++				if (shoreK > 0.0) {
++					float rising = 1.0 - step(0.0, S.z), age = max(S.z, 0.0);
++					float fw = mix(0.006, 0.02, rising);
++					float edge = smoothstep(0.0, 0.0015, film) * (1.0 - smoothstep(fw * 0.5, fw * 1.7, film));
++					float bore = edge * smoothstep(0.3, 0.55, fq + 0.15 * rising) * mix(0.45, 0.85, rising);
++					vec2 lq = vW.xz * 1.9 + vInward * age * 0.9;
++					float lace = mix(0.5, vn(lq) * 0.6 + vn(lq * 2.6 + 4.0) * 0.4, 1.0 - smoothstep(0.1, 0.5, hp));
++					float back = step(0.0, S.z) * smoothstep(0.002, 0.01, film) * (1.0 - smoothstep(0.03, 0.09, film)) * smoothstep(0.5 + age * 0.03, 0.62 + age * 0.03, lace) * exp(-age * 0.15);
++					float bub = 0.0;
++					if (hp < 0.05 && uShoreQ.y > 0.3) {
++						vec2 bq = vW.xz * 22.0, bi = floor(bq), bf = fract(bq) - 0.5;
++						float bh = h21(bi + 5.0), life = fract(uTime * (0.35 + bh * 0.6) + bh * 9.0);
++						float br = length(bf - (vec2(h21(bi + 1.0), h21(bi + 2.0)) - 0.5) * 0.4);
++						bub = step(0.78, bh) * (1.0 - smoothstep(0.04 + life * 0.14, 0.08 + life * 0.16, br)) * (1.0 - life) * step(0.0, S.z) * (1.0 - smoothstep(0.03, 0.07, film)) * (1.0 - smoothstep(0.02, 0.05, hp));
++					}
++					swF = max(max(bore, back), max(bub * 0.75, strand)) * shoreK;
++				}
++				// lapping foam where the open sea meets a shore with no swash (the Bay Area's coasts):
++				// a lace that comes and goes with each roller, thinning to nothing at the line itself
++				float lap = smoothstep(0.0, 0.03, film) * (1.0 - smoothstep(0.08, 0.3 + 0.15 * sin(vRoll), film)) * smoothstep(0.42, 0.7, fq + 0.2 * sin(vRoll + 1.2)) * (1.0 - shoreK) * pk;
++				// against rock the swell bursts white and pours off in streams
++				float rocky = smoothstep(0.12, 0.3, vSlope);
++				float rockF = rocky * (1.0 - smoothstep(0.0, 1.4, film)) * smoothstep(0.3, 0.7, fq + 0.35 * sin(vRoll + 0.4)) * smoothstep(0.0, 0.02, film);
++				float current = plumeEdge * smoothstep(0.5, 0.75, fq + 0.25 * vn(vW.xz * 0.2 + uTime * 0.05)) * 0.45;
++				float foam = foamOf(clamp(max(max(breaker, max(inner, current)), max(cap * 0.7, max(swF, max(lap * 0.7, max(rockF * 0.85, touchF * smoothstep(0.35, 0.6, fq + 0.2)))))), 0.0, 1.0), vW.xz, hp);
++				// lit by the sun by day, the moon and sky by night (never glowing in the dark)
++				vec3 foamC = vec3(0.92, 0.95, 0.96) * (uAmbient * 0.9 + uSunColor * max(0.0, uSunDir.y) * 0.9 + vec3(0.06, 0.07, 0.09) * nightK);
++				// a toxic sea's foam is a yellow-green scum
++				foamC = mix(foamC, foamC * vec3(0.8, 0.95, 0.42), uLiquid);
++				foamC *= 0.82 + 0.18 * fq;
++				float A = foam + a * (1.0 - foam);
++				col = (foamC * foam + col * a * (1.0 - foam)) / max(A, 1e-4);
++				if (A < 0.003) discard;
++				gl_FragColor = vec4(col, A);
+ 				#include <tonemapping_fragment>
+ 				#include <colorspace_fragment>
+ 				#include <fog_fragment>
+@@ -295,6 +570,120 @@ uniforms.uUnder = shared.uUnder;
+ 		uniforms.uCenter.value.set(Math.round(cam.position.x / snap) * snap, Math.round(cam.position.z / snap) * snap);
+ 	};
+ 	mesh.userData.uniforms = uniforms;
++	// what touches the water, each frame: the pier's posts, the boat, you wading; the rain on it;
++	// the governor's tier (no allocation: the candidates are kept in a fixed pool)
++	const pool = [...Array(48)].map(() => ({ x: 0, z: 0, r: 0, k: 0, d: 0 }));
++	let posts = null, postsOf = null;
++	const lastPos = new THREE.Vector3();
++	let speed = 0, n = 0, camX = 0, camZ = 0;
++	const shoreQ = { reach: 520, detail: 1 };
++	const mouthBuf = new Float32Array(20);
++	let mouthT = 0;
++	function add(x, z, r, k) {
++		if (n >= pool.length) return;
++		const d = Math.hypot(x - camX, z - camZ);
++		if (d > 160) return;
++		const o = pool[n++]; o.x = x; o.z = z; o.r = r; o.k = k; o.d = d;
++	}
++	mesh.userData.tick = (dt, W, camera, rain = 0) => {
++		const Q = shoreQuality(qualityNow(), PHONE, shoreQ);
++		uniforms.uShoreQ.value.set(Q.reach, Q.detail);
++		uniforms.uRain.value = rain;
++		camX = camera.position.x; camZ = camera.position.z; n = 0;
++		// the pier's posts standing in the water (worked out once per village)
++		const P = W?.village?.pier;
++		if (P && postsOf !== P) {
++			postsOf = P; posts = [];
++			const sd = island.village?.seaDir;
++			if (sd) for (let s = 0; s <= P.len + 4; s += 4) for (const sx of [-1, 1]) {
++				const off = s > P.len ? 3.8 : 1.2, x = P.x + sd.x * s - sd.z * sx * off, z = P.z + sd.z * s + sd.x * sx * off;
++				if (island.heightAt(x, z) < -0.15) posts.push(x, z);
++			}
++		}
++		if (posts) for (let i = 0; i < posts.length; i += 2) add(posts[i], posts[i + 1], 0.17, 0.8);
++		// the boat's hull, bow and stern
++		const B = W?.boat?.state;
++		if (B && island.heightAt(B.x, B.z) < -0.3) {
++			const fx = -Math.sin(B.heading), fz = -Math.cos(B.heading), k = 0.6 + Math.min(1, Math.abs(B.speed || 0) * 0.15);
++			add(B.x + fx * 2.6, B.z + fz * 2.6, 1.0, k); add(B.x - fx * 2.4, B.z - fz * 2.4, 1.2, k);
++		}
++		// you, wading: rings as you move, a wash of foam round your legs
++		const pl = W?.player?.state?.pos;
++		if (pl && dt > 0) {
++			speed += (Math.hypot(pl.x - lastPos.x, pl.z - lastPos.z) / dt - speed) * Math.min(1, dt * 4);
++			lastPos.copy(pl);
++			const g = island.heightAt(pl.x, pl.z), feet = pl.y - 1.68;
++			if (g < -0.05 && feet < 0.3 && feet > g - 0.5 && !W.player.state.flying) add(pl.x, pl.z, 0.22, Math.min(1.2, 0.35 + speed * 0.25));
++		}
++		// the streams' mouths near you (a look round every second)
++		mouthT -= dt;
++		if (mouthT <= 0) {
++			mouthT = 1;
++			const m = W?.water?.mouths?.(camX, camZ, 1500, mouthBuf, 4) || 0, MU = uniforms.uMouth.value;
++			for (let i = 0; i < 4; i++) { if (i < m) MU[i].set(mouthBuf[i * 5], mouthBuf[i * 5 + 1], mouthBuf[i * 5 + 2] * mouthBuf[i * 5 + 4], mouthBuf[i * 5 + 3] * mouthBuf[i * 5 + 4]); else MU[i].set(0, 0, 0, 0); }
++		}
++		// the nearest few
++		for (let i = 1; i < n; i++) { const o = pool[i]; let j = i - 1; while (j >= 0 && pool[j].d > o.d) { pool[j + 1] = pool[j]; j--; } pool[j + 1] = o; }
++		const T = uniforms.uTouch.value;
++		for (let i = 0; i < TOUCH_N; i++) { if (i < n) T[i].set(pool[i].x, pool[i].z, pool[i].r, pool[i].k); else T[i].set(0, 0, 0, 0); }
++	};
++	// Where the swell bursts on rock near you, for the spray (world/spray.js): the steep
++	// shores round you found from the ground's heights (looked for again as you move on), each
++	// with the way the waves come at it; out: [x, y, z, strength] for the two bursting hardest
++	// just now, strength 0..1 rising as a roller's crest hits and dying away.
++	const rocks = new Float32Array(24 * 5);
++	let nRocks = 0;
++	const scanAt = { x: 1e9, z: 1e9 };
++	function scanRocks(cx, cz) {
++		nRocks = 0;
++		const H = (x, z) => island.heightAt(x, z), step = 7;
++		for (let j = -18; j <= 18 && nRocks < 24; j++) for (let i = -18; i <= 18 && nRocks < 24; i++) {
++			const x = Math.round(cx / step) * step + i * step, z = Math.round(cz / step) * step + j * step, h = H(x, z);
++			if (h < -0.4 || h > 0.5) continue;
++			const gx = (H(x + 3, z) - H(x - 3, z)) / 6, gz = (H(x, z + 3) - H(x, z - 3)) / 6, sl = Math.hypot(gx, gz);
++			if (sl < 0.28) continue;
++			// the sea must be just off it, a metre deep or more
++			if (H(x - gx / sl * 6, z - gz / sl * 6) > -0.8) continue;
++			let near = false;
++			for (let k = 0; k < nRocks && !near; k++) near = Math.hypot(rocks[k * 5] - x, rocks[k * 5 + 1] - z) < 12;
++			if (near) continue;
++			const o = nRocks++ * 5;
++			rocks[o] = x; rocks[o + 1] = z; rocks[o + 2] = gx / sl; rocks[o + 3] = gz / sl; rocks[o + 4] = ((x * 0.37 + z * 0.61) % 6.283 + 6.283) % 6.283;
++		}
++	}
++	const k16 = 6.28318 / 16, c16 = Math.sqrt(9.8 / k16);
++	mesh.userData.splashes = (cam, t, out, count = 2) => {
++		for (let i = 0; i < count * 4; i++) out[i] = 0;
++		if (island.hasOcean === false || !mesh.visible) return out;
++		if (Math.hypot(cam.x - scanAt.x, cam.z - scanAt.z) > 60) { scanAt.x = cam.x; scanAt.z = cam.z; scanRocks(cam.x, cam.z); }
++		const wave = uniforms.uWave.value;
++		for (let k = 0; k < nRocks; k++) {
++			const o = k * 5, x = rocks[o], z = rocks[o + 1], d = Math.hypot(x - cam.x, z - cam.z);
++			if (d > 110) continue;
++			// the roller's crest arriving (as the shader's: running uphill onto the rock), every
++			// wave a little different
++			const f = k16 * (rocks[o + 2] * x + rocks[o + 3] * z - c16 * t);
++			const hit = Math.pow(Math.max(0, Math.sin(f + 0.4)), 6) * (0.55 + 0.45 * Math.sin(t * 0.37 + rocks[o + 4])) * Math.min(1.5, wave);
++			keepSplash(out, count, x, z, hit * (1 - Math.max(0, (d - 70) / 40)));
++		}
++		// the pier's posts in the surf: a smaller slap and throw as each roller passes
++		if (posts) for (let i = 0; i < posts.length; i += 2) {
++			const x = posts[i], z = posts[i + 1], d = Math.hypot(x - cam.x, z - cam.z), r = Math.hypot(x, z) || 1;
++			if (d > 60 || island.heightAt(x, z) < -2.5) continue;
++			const f = k16 * (-(x * x + z * z) / r - c16 * t);
++			keepSplash(out, count, x, z, Math.pow(Math.max(0, Math.sin(f + 0.4)), 8) * 0.45 * Math.min(1.5, wave) * (1 - Math.max(0, (d - 35) / 25)));
++		}
++		return out;
++	};
++	// keep the strongest few in out (a short insertion, nothing made)
++	function keepSplash(out, count, x, z, v) {
++		for (let s = 0; s < count; s++) {
++			if (v <= out[s * 4 + 3]) continue;
++			for (let q = count - 1; q > s; q--) for (let c = 0; c < 4; c++) out[q * 4 + c] = out[(q - 1) * 4 + c];
++			out[s * 4] = x; out[s * 4 + 1] = 0.15; out[s * 4 + 2] = z; out[s * 4 + 3] = v;
++			return;
++		}
++	}
+ 	return mesh;
+ }
+ 
+diff --git a/island/src/world/shore.js b/island/src/world/shore.js
+new file mode 100644
+index 0000000..121cb80
+--- /dev/null
++++ b/island/src/world/shore.js
+@@ -0,0 +1,134 @@
++// The shore, where the sea meets the land. The swash's timing and reach are shared by the
++// sea's sheet of water (world/ocean.js) and the wet sand it leaves (world/terrain.js), so the
++// sand darkens exactly where the water ran and dries behind it; how much of the water shows at
++// a given depth (the edge thins to nothing over the sand, so there is never a line where the
++// surface meets the ground); and where the waves break (gentle open beaches only). The GLSL
++// and the plain functions below are the same sums (island/tools/shore.test.mjs checks them).
++//
++// A wave's run up the beach: a quick rush that slows as it climbs, a stall at the top, then a
++// drain that gathers pace as the sheet thins. Two trains with different periods, and a phase
++// that wanders along the shore, keep it from ever reading as one sheet breathing up and down.
++// The front is never a line: lobes a few metres across and fingers under a metre, drawn anew
++// for each wave.
++
++import * as THREE from 'three';
++
++// (the GLSL needs NOISE_GLSL's vn before it)
++export const SWASH_GLSL = /* glsl */`
++float swashRunMax(vec2 w, float wave){ return (0.42 + 0.32 * vn(w * 0.031 + 4.0)) * (0.55 + 0.45 * wave); }
++// the water's run up the sand through one wave, 0 at the foot of the backwash to 1 at the top
++float swashUp(float s){
++	if (s < 0.2) return sin(s * 7.853982);
++	if (s < 0.3) return 1.0 - 0.03 * smoothstep(0.2, 0.3, s);
++	float d = (s - 0.3) / 0.7;
++	return 0.97 * (1.0 - d * sqrt(d));
++}
++// one train at w and time t (period T): x the reach (a ground height), y this wave's top,
++// z seconds since it stalled (below zero while it rushes up), w its phase
++vec4 swashTrainS(vec2 w, float t, float T, float off, float runMax){
++	float ph = vn(w * 0.014 + off) * 2.4 + vn(w * 0.06 - off) * 0.35;
++	float c = t / T + ph, s = fract(c), n = floor(c);
++	float k = 0.55 + 0.45 * vn(vec2(n * 3.7, off));
++	vec2 q = w + vec2(n * 7.31, n * -3.17);
++	float top = runMax * k + (vn(q * 0.23 + off) - 0.5) * 0.07 + (vn(q * 0.9 - off) - 0.5) * 0.028;
++	return vec4(mix(-0.3, top, swashUp(s)), top, (s - 0.2) * T, s);
++}
++// the swash at w: whichever train reaches further just there
++vec4 swashState(vec2 w, float t, float wave){
++	float rm = swashRunMax(w, wave);
++	vec4 a = swashTrainS(w, t, 8.3, 1.7, rm), b = swashTrainS(w, t, 11.9, 6.1, rm * 0.85);
++	return a.x >= b.x ? a : b;
++}
++float swashLevel(vec2 w, float t, float wave){ return swashState(w, t, wave).x; }
++// the beach's sheet of water over ground g, the swash at reach s and the open sea's level y:
++// thin where it runs out over the sand (a third of the height it climbs)
++float swashSheet(float y, float s, float g){ return s > g ? max(min(y, s), g + (s - g) * 0.35) : s; }
++// how much the water covers the ground under it at depth d (m): none at the edge, so the ground
++// shows through and no line is drawn where the two meet; by the red light it takes first (sr,
++// its absorption per metre; the light scattered in the water veils it too), or sooner where it
++// is murky (murk 0..1)
++float waterBody(float d, float sr, float murk){ return 1.0 - exp(-max(d, 0.0) * max(max(sr, 0.22), mix(0.2, 1.2, murk))); }
++// how much the waves break on a bed of slope sl (rise over run), sheltered 0..1: spilling on
++// a gentle open beach, none on a steep shore (the swell surges up it) or in a sheltered bay
++float breakOn(float sl, float shelter){ return smoothstep(0.004, 0.012, sl) * (1.0 - smoothstep(0.1, 0.22, sl)) * (1.0 - shelter); }
++`;
++
++// ---------- the same sums on the CPU ----------
++const fract = (v) => v - Math.floor(v);
++const mod = (v, m) => v - m * Math.floor(v / m);
++const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
++// NOISE_GLSL's h21 and vn (world/terrain.js)
++export function h21(x, y) {
++	x = mod(x, 4096); y = mod(y, 4096);
++	let a = fract(x * 0.1031), b = fract(y * 0.1031), c = fract(x * 0.1031);
++	const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33);
++	a += d; b += d; c += d;
++	return fract((a + b) * c);
++}
++export function vn(x, y) {
++	const ix = Math.floor(x), iy = Math.floor(y);
++	let fx = x - ix, fy = y - iy;
++	fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
++	const a = h21(ix, iy), b = h21(ix + 1, iy), c = h21(ix, iy + 1), d = h21(ix + 1, iy + 1);
++	return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
++}
++export const swashRunMax = (x, z, wave = 1) => (0.42 + 0.32 * vn(x * 0.031 + 4, z * 0.031 + 4)) * (0.55 + 0.45 * wave);
++export function swashUp(s) {
++	if (s < 0.2) return Math.sin(s * 7.853982);
++	if (s < 0.3) return 1 - 0.03 * smooth(0.2, 0.3, s);
++	const d = (s - 0.3) / 0.7;
++	return 0.97 * (1 - d * Math.sqrt(d));
++}
++// one train: { level, top, since, phase } (as swashTrainS)
++export function swashTrain(x, z, t, T, off, runMax) {
++	const ph = vn(x * 0.014 + off, z * 0.014 + off) * 2.4 + vn(x * 0.06 - off, z * 0.06 - off) * 0.35;
++	const c = t / T + ph, s = fract(c), n = Math.floor(c);
++	const k = 0.55 + 0.45 * vn(n * 3.7, off);
++	const qx = x + n * 7.31, qz = z - n * 3.17;
++	const top = runMax * k + (vn(qx * 0.23 + off, qz * 0.23 + off) - 0.5) * 0.07 + (vn(qx * 0.9 - off, qz * 0.9 - off) - 0.5) * 0.028;
++	return { level: -0.3 + (top + 0.3) * swashUp(s), top, since: (s - 0.2) * T, phase: s };
++}
++export function swashState(x, z, t, wave = 1) {
++	const rm = swashRunMax(x, z, wave);
++	const a = swashTrain(x, z, t, 8.3, 1.7, rm), b = swashTrain(x, z, t, 11.9, 6.1, rm * 0.85);
++	return a.level >= b.level ? a : b;
++}
++export const swashLevel = (x, z, t, wave = 1) => swashState(x, z, t, wave).level;
++export const swashSheet = (y, s, g) => (s > g ? Math.max(Math.min(y, s), g + (s - g) * 0.35) : s);
++export const waterBody = (d, sr = 0.34, murk = 0) => 1 - Math.exp(-Math.max(d, 0) * Math.max(sr, 0.22, 0.2 + (1.2 - 0.2) * murk));
++// the sea's own cover at the edge (world/ocean.js): its colour by depth and the sky's sheen,
++// which grows in over the first couple of centimetres, so at the line itself there is nothing
++export function edgeAlpha(film, F = 0.02, murk = 0, sr = 0.34) {
++	if (film <= 0) return 0;
++	const Fe = F * smooth(0, 0.02, film);
++	return 1 - (1 - waterBody(film, sr, murk)) * (1 - Fe);
++}
++export const breakOn = (sl, shelter = 0) => smooth(0.004, 0.012, sl) * (1 - smooth(0.1, 0.22, sl)) * (1 - shelter);
++
++// How the shore is drawn on this device, by the governor's tier: how far out the water reads
++// the ground under every pixel (beyond it the ground is read at the sea's vertices), and how
++// much fine detail its foam, bubbles and caustics carry (0 none .. 1 all).
++// (out: an object to fill, so asking each frame makes nothing new)
++const DETAIL = { high: 1, medium: 0.75, low: 0.4, minimal: 0 }, REACH = { high: 1, medium: 0.8, low: 0.55, minimal: 0.35 };
++export function shoreQuality(tier, phone = false, out = {}) {
++	const name = tier?.name || 'high';
++	out.detail = DETAIL[name] ?? 1;
++	out.reach = (phone ? 160 : 520) * (REACH[name] ?? 1);
++	return out;
++}
++
++// A planet's lakes and streams as a map over the island (planet/waters.js island.waterMap): r the
++// water's bed, g its banks, wet a few metres round it. The ground darkens its banks to wet mud
++// and lays silt on the bed (world/terrain.js); the grass keeps out of the water (world/grass.js).
++// One texture shared by all (shared.uWaterMap); a blank one where there is no such map.
++export function waterMapTexture(island) {
++	const N = island?.N, d = island?.waterMap;
++	const tex = d && d.length === N * N * 2 ? new THREE.DataTexture(d, N, N, THREE.RGFormat, THREE.UnsignedByteType) : new THREE.DataTexture(new Uint8Array(2), 1, 1, THREE.RGFormat, THREE.UnsignedByteType);
++	tex.magFilter = tex.minFilter = THREE.LinearFilter;
++	tex.needsUpdate = true;
++	return tex;
++}
++export const WATERMAP_GLSL = /* glsl */`
++uniform sampler2D uWaterMap;
++vec2 waterMapAt(vec2 w){ return texture2D(uWaterMap, (w + uHalf) / (uHalf * 2.0)).rg; }
++`;
+diff --git a/island/src/world/spray.js b/island/src/world/spray.js
+index c85169d..710e90d 100644
+--- a/island/src/world/spray.js
++++ b/island/src/world/spray.js
+@@ -1,5 +1,6 @@
+-// Water thrown into the air: the lawn sprinklers (world/sprinklers.js) and the spray and
+-// mist at the foot of falling water (world/falls.js), drawn the one way.
++// Water thrown into the air: the lawn sprinklers (world/sprinklers.js), the spray and
++// mist at the foot of falling water (world/falls.js) and the surf bursting on the rocks as
++// each roller hits (world/ocean.js), drawn the one way.
+ //
+ // Each drop is a short streak, the path it covers in the blink of an exposure, turned
+ // along its velocity. Its flight is worked out in the vertex shader from its own seed
+@@ -236,6 +237,8 @@ function puffTexture() {
+ 
+ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
+ 	const NS = isPhone ? 4 : 10, NF = isPhone ? 2 : 4, ND = isPhone ? 6 : DECALS;
++	// the surf bursting on rock near you (world/ocean.js splashes): slots after the sprinklers'
++	const NU = isPhone ? 1 : 2, DU = isPhone ? 500 : 1400, MU = isPhone ? 10 : 20;
+ 	const DS = isPhone ? 380 : 1300, DF = isPhone ? 900 : 2200, MS = isPhone ? 12 : 22, MF = isPhone ? 18 : 36;
+ 	const group = new THREE.Group();
+ 	group.name = 'spray';
+@@ -262,11 +265,11 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
+ 		g.instanceCount = N;
+ 		return g;
+ 	}
+-	const blocks = (a, b) => [...Array(SLOTS)].map((_, s) => (s < NS ? a : s >= SLOTS - NF ? b : 0));
+-	const drops = new THREE.Mesh(instanced(blocks(DS, DF), 2, 1), new THREE.ShaderMaterial({
++	const blocks = (a, b, u) => [...Array(SLOTS)].map((_, s) => (s < NS ? a : s >= SLOTS - NF ? b : s < NS + NU ? u : 0));
++	const drops = new THREE.Mesh(instanced(blocks(DS, DF, DU), 2, 1), new THREE.ShaderMaterial({
+ 		uniforms: U, vertexShader: DROP_VERT, fragmentShader: DROP_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+ 	}));
+-	const mist = new THREE.Mesh(instanced(blocks(MS, MF), 2, 2), new THREE.ShaderMaterial({
++	const mist = new THREE.Mesh(instanced(blocks(MS, MF, MU), 2, 2), new THREE.ShaderMaterial({
+ 		uniforms: U, vertexShader: MIST_VERT, fragmentShader: MIST_FRAG, transparent: true, depthWrite: false,
+ 	}));
+ 	drops.frustumCulled = mist.frustumCulled = false;
+@@ -310,6 +313,7 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
+ 	const falls = createFalls({ world });
+ 	let force = false, q = 1, fallList = [], fallT = 0, last = [];
+ 	const fallAt = { x: 1e9, z: 1e9 };
++	const surf = new Float32Array(NU * 4);
+ 
+ 	// ---- the hiss of the spray and the rush of falling water, quiet, from what is near
+ 	let snd = null;
+@@ -406,6 +410,20 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
+ 			E[b + 4].set(1, 1 - THREE.MathUtils.smoothstep(d, 180, 260), 0, 0);
+ 			rush += 0.05 * Math.min(1, R / 4) / (1 + (d / 12) ** 2);
+ 		}
++		// the surf bursting white off the rocks as each roller hits: thrown up and out from the
++		// waterline, a mist hanging after it
++		const burst = high ? null : W.ocean?.userData?.splashes?.(cam, shared.uTime.value, surf, NU);
++		for (let s = 0; s < NU; s++) {
++			const b = (NS + s) * 5, k = burst ? surf[s * 4 + 3] : 0;
++			if (k < 0.02) continue;
++			const x = surf[s * 4], y = surf[s * 4 + 1], z = surf[s * 4 + 2];
++			E[b].set(x, y, z, 3);
++			E[b + 1].set(1.2, 0, 3.5 + 3 * Math.min(1, k), 0.9);
++			E[b + 2].set(y - 0.6, 1.6, q, 1);
++			E[b + 3].set(x, y, z, 0);
++			E[b + 4].set(Math.min(1, k * 1.4), Math.min(1, k) * 0.8, 0, 0);
++			rush += 0.03 * k;
++		}
+ 		sound(hiss, rush);
+ 	}
+ 
+diff --git a/island/src/world/terrain.js b/island/src/world/terrain.js
+index 3003ef5..a21078e 100644
+--- a/island/src/world/terrain.js
++++ b/island/src/world/terrain.js
+@@ -5,6 +5,7 @@
+ import * as THREE from 'three';
+ import { groundDetail } from './textures.js';
+ import { FAR_GLSL } from './lunarfar.js';
++import { SWASH_GLSL, WATERMAP_GLSL, waterMapTexture } from './shore.js';
+ 
+ export function radialGrid(segments, radius, power, extra = 0, far = 0) {
+ 	// a square grid whose spacing grows with distance from the centre (and, with extra
+@@ -62,24 +63,8 @@ vec2 occAt(vec2 w){
+ }
+ float moundAt(vec2 w){ vec2 o = occAt(w); return o.g * 0.24 + o.r * 0.06; }`;
+ 
+-// The swash: each wave runs up the beach fast as a thinning sheet and drains back
+-// slowly. Two trains with different periods and a phase that wanders along the shore
+-// keep it from ever looking like one sheet of water breathing up and down.
+-// Returns the water's reach (a ground height) at w and time t; runMax is the
+-// highest reach there, the top of the wet band.
+-export const SWASH_GLSL = /* glsl */`
+-float swashRunMax(vec2 w, float wave){ return (0.42 + 0.32 * vn(w * 0.031 + 4.0)) * (0.55 + 0.45 * wave); }
+-float swashTrain(vec2 w, float t, float T, float off, float runMax){
+-	float ph = vn(w * 0.014 + off) * 2.4 + vn(w * 0.06 - off) * 0.35;
+-	float s = fract(t / T + ph);
+-	float up = s < 0.24 ? sin(s / 0.24 * 1.5708) : 1.0 - smoothstep(0.24, 1.0, s);   // quick rush, slow drain
+-	float k = 0.55 + 0.45 * vn(vec2(floor(t / T + ph) * 3.7, off));                   // some waves run further
+-	return mix(-0.3, runMax * k, up);
+-}
+-float swashLevel(vec2 w, float t, float wave){
+-	float rm = swashRunMax(w, wave);
+-	return max(swashTrain(w, t, 8.3, 1.7, rm), swashTrain(w, t, 11.9, 6.1, rm * 0.85));
+-}`;
++// The swash (its timing, reach and the shore's other sums) lives with the shore: world/shore.js
++export { SWASH_GLSL };
+ 
+ export function makeHeightTexture(island) {
+ 	const tex = new THREE.DataTexture(island.height, island.N, island.N, THREE.RedFormat, THREE.FloatType);
+@@ -180,6 +165,8 @@ export function createTerrain(island, shared) {
+ 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
+ 		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
+ 		uDetail: { value: detail }, uDetailM: { value: detail.userData.mean }, uOcc: shared.uOcc, uOccO: shared.uOccO,
++		uSkyZenT: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorT: shared.uSkyHor || { value: new THREE.Color() },
++		uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) },
+ 		...planetUniforms(shared),
+ 	};
+ 	mat.onBeforeCompile = (sh) => {
+@@ -199,7 +186,7 @@ export function createTerrain(island, shared) {
+ 				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
+ 				${far ? '// the ground falls away with the curve of a small world, so the horizon is a line\n\t\t\t\ttransformed.y -= dot(position.xz, position.xz) / 3.47e6;' : ''}
+ 				vW = transformed;`);
+-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
++		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
+ 			.replace('#include <map_fragment>', `
+ 				${far ? '' : 'if (max(abs(vW.x), abs(vW.z)) > uHalf) discard;'}
+ 				holeCut(vW.xz);
+@@ -221,10 +208,18 @@ export function createTerrain(island, shared) {
+ 				vec3 sandWet = vec3(0.56, 0.48, 0.36) * (0.9 + 0.12 * n2);
+ 				// wet up to where the waves have been reaching, soaked where they are now,
+ 				// drying (lighter, duller) toward the top of the band
+-				float swL = swashLevel(vW.xz, uTime, uWave), runM = swashRunMax(vW.xz, uWave);
++				// (the swash's own sums, world/shore.js: the sea's sheet runs exactly here)
++				vec4 swS = swashState(vW.xz, uTime, uWave);
++				float swL = swS.x, runM = swashRunMax(vW.xz, uWave);
+ 				float band = 1.0 - smoothstep(runM - 0.06, runM + 0.1 + 0.05 * n2, h);
+-				float soak = 1.0 - smoothstep(swL - 0.02, swL + 0.12, h);
+-				float wet = max(band * 0.75, soak) * step(-2.0, h);
++				// soaked under the sheet; where this wave has just been the sand stays dark and
++				// saturated, drying slowly through the wave, and glossy only for the first few
++				// seconds as the water drains out of it
++				float covered = 1.0 - smoothstep(swL - 0.02, swL + 0.08, h);
++				float ran = (1.0 - smoothstep(swS.y - 0.015, swS.y + 0.02, h)) * step(0.0, swS.z);
++				float reached = ran * exp(-swS.z * 0.3);
++				float soak = max(covered, reached * 0.9);
++				float wet = max(max(band * 0.75, covered), ran * exp(-swS.z * 0.06)) * step(-2.0, h);
+ 				// footprints in soft sand, smoothed away where the sea has been
+ 				vec2 puv = (vW.xz - uPrintsO.xy) / uPrintsO.z;
+ 				float print = texture2D(uPrints, puv).r * step(abs(puv.x - 0.5), 0.49) * step(abs(puv.y - 0.5), 0.49) * (1.0 - band * 0.8);
+@@ -288,9 +283,24 @@ export function createTerrain(island, shared) {
+ 				vec3 col = mix(sand, sandySoil, smoothstep(0.0, 0.45, grassW));
+ 				col = mix(col, grass, smoothstep(0.35, 1.0, grassW));
+ 				float rockW = smoothstep(0.42, 0.62, slope + (n1 - 0.5) * 0.2) * step(0.9, h);
++				// a steep shore (a rise of one in five or more: slope here is 1 - n.y) is rock and
++				// shingle down into the sea, dark and wet from the waterline up to where the waves'
++				// spray reaches, drying above it, where the grass begins
++				float steepK = smoothstep(0.012, 0.03, slope + (n1 - 0.5) * 0.01);
++				float splashTop = runM * 2.2 + 0.3 * n2 + 0.6 * (n1 - 0.5) + 0.3 * smoothstep(0.03, 0.15, slope);
++				float shoreRock = steepK * (1.0 - smoothstep(splashTop + 0.2, splashTop + 0.7 + 0.4 * n1, h)) * step(-4.0, h);
++				rockW = max(rockW, shoreRock);
++				float rockWet = (1.0 - smoothstep(splashTop - 0.35, splashTop + 0.15, h)) * steepK * step(-3.0, h);
+ 				col = mix(col, rock, rockW);
++				col = mix(col, col * vec3(0.48, 0.5, 0.53), rockWet * rockW);
+ 				float pathW = smoothstep(0.25, 0.75, mk.r + (dd.g - 0.5) * 0.25) * step(0.5, h);
+ 				col = mix(col, dirt, pathW);
++				// a planet's lakes and streams: silt on the bed under the water, the banks dark wet
++				// mud for a few metres round it, drying away from it
++				vec2 wmap = waterMapAt(vW.xz);
++				float lakeBed = smoothstep(0.3, 0.75, wmap.r), bankWet = wmap.g * (1.0 - lakeBed * 0.6);
++				col = mix(col, plO(vec3(0.22, 0.19, 0.14)) * (0.85 + 0.25 * n2), lakeBed * 0.85);
++				col = mix(col, col * vec3(0.6, 0.6, 0.58), bankWet * 0.75 * (1.0 - lakeBed));
+ 				// the height the bump reads, per ground type, in metres
+ 				// ripples belong to open sand only, not to the meadow's edge
+ 				float gs = 1.0 - smoothstep(0.0, 0.3, grassW);
+@@ -355,9 +365,14 @@ export function createTerrain(island, shared) {
+ 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
+ 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
+ 				rough = mix(rough, 0.32, gSnowW);   // an icy glaze catches the sky
++				rough = mix(rough, 0.3, rockWet * rockW);   // wet rock at the waterline shines
++				rough = mix(rough, 0.4, bankWet * 0.7);   // and the mud along a lake or a stream
+ 				diffuseColor.rgb *= 1.0 - print * 0.12;
+ 				// moonlight catching the wet sand
+ 				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);
++				// the sand the last wave has just left is a mirror for a moment (the sea's own sheen
++				// carries on over it, world/ocean.js), dulling as it drains
++				gSheen = reached * (1.0 - grassW) * (1.0 - rockW * 0.5) * step(-0.6, h);
+ 				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 240.0) + 3.0)) * (1.0 - smoothstep(2.0, 7.0, camD));
+ 				// ice crystals glitter in the snow, a little further out than sand grains
+ 				gSparkle = max(gSparkle, gSnowW * step(0.72, gh(floor(vW.xz * 160.0) + 9.0)) * (1.0 - smoothstep(4.0, 22.0, camD)) * 0.8);`)
+@@ -367,6 +382,8 @@ export function createTerrain(island, shared) {
+ 					vec3 Vv = normalize(cameraPosition - vW), md = normalize(-uSunDir2 + vec3(0.0, 0.35, 0.0));
+ 					vec3 Rr = reflect(-Vv, normalize(vWN + vec3(0.0, 0.0, 0.0)));
+ 					totalEmissiveRadiance += vec3(0.7, 0.78, 1.0) * gMoonGlint * (pow(max(dot(Rr, md), 0.0), 60.0) * 1.6 + pow(max(dot(Rr, md), 0.0), 8.0) * 0.08);
++					float Fs = 0.02 + 0.98 * pow(1.0 - max(dot(normalize(vWN), Vv), 0.0), 5.0);
++					totalEmissiveRadiance += mix(uSkyHorT, uSkyZenT, clamp(Rr.y * 2.0, 0.0, 1.0)) * Fs * gSheen * 0.35;
+ 					// quartz grains glint: each grain a tiny mirror at its own angle
+ 					// grains about 4 mm: each glint a pin-point, not a flake
+ 					vec2 gc = floor(vW.xz * 240.0);
+diff --git a/island/tools/shore.test.mjs b/island/tools/shore.test.mjs
+new file mode 100644
+index 0000000..4afc4b2
+--- /dev/null
++++ b/island/tools/shore.test.mjs
+@@ -0,0 +1,172 @@
++// The shore's sums (src/world/shore.js): the swash's timing (a quick rush, a stall, a drain
++// that gathers pace), its reach and its broken front, the sheet it makes over the sand, how the
++// water's cover thins to nothing at the edge, where waves break, and the shore's quality by
++// tier. The GLSL the sea and the wet sand share carries the same sums. A planet's lakes and
++// streams are mapped for the ground's wet banks and to keep the grass out of the water.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import { SWASH_GLSL, WATERMAP_GLSL, h21, vn, swashUp, swashTrain, swashState, swashLevel, swashRunMax, swashSheet, waterBody, edgeAlpha, breakOn, shoreQuality, waterMapTexture } from '../src/world/shore.js';
++import { generateIsland } from '../src/world/islandgen.js';
++import { planetProfile } from '../src/planet/profile.js';
++import { planWaters } from '../src/planet/waters.js';
++
++const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
++
++test('the hash and value noise stay in 0..1', () => {
++	for (let i = 0; i < 500; i++) {
++		const x = (i * 37.13) % 5000 - 2500, z = (i * 91.7) % 7000 - 3500;
++		const h = h21(x, z), v = vn(x * 0.3, z * 0.3);
++		assert.ok(h >= 0 && h < 1, 'h21 ' + h);
++		assert.ok(v >= 0 && v <= 1, 'vn ' + v);
++	}
++});
++
++test('a wave rushes up quickly, stalls, then drains, gathering pace', () => {
++	assert.ok(near(swashUp(0), 0));
++	assert.ok(near(swashUp(0.2 - 1e-9), 1, 1e-6));
++	// the rush: rising all the way, and decelerating (each step smaller than the last)
++	let prev = -1, prevStep = Infinity;
++	for (let s = 0; s <= 0.2; s += 0.01) {
++		const u = swashUp(s);
++		assert.ok(u >= prev, 'rising at ' + s);
++		const st = u - prev;
++		if (prev >= 0) assert.ok(st <= prevStep + 1e-9, 'slowing as it climbs at ' + s.toFixed(2));
++		prevStep = prev >= 0 ? st : Infinity; prev = u;
++	}
++	// the stall: it barely moves
++	for (let s = 0.2; s <= 0.3; s += 0.01) assert.ok(swashUp(s) >= 0.969 && swashUp(s) <= 1, 'stalled at ' + s);
++	// the drain: falling all the way, quicker toward the end
++	prev = 2;
++	for (let s = 0.3; s <= 1; s += 0.01) { const u = swashUp(s); assert.ok(u <= prev + 1e-12, 'draining at ' + s); prev = u; }
++	assert.ok(swashUp(0.999) < 0.01);
++	const early = swashUp(0.3) - swashUp(0.4), late = swashUp(0.89) - swashUp(0.99);
++	assert.ok(late > early * 2, `the drain gathers pace (${early.toFixed(3)} then ${late.toFixed(3)})`);
++	// the rush is over in a fifth of the wave, the drain takes most of it
++	const t90up = [...Array(1000).keys()].map((i) => i / 1000).find((s) => swashUp(s) >= 0.9);
++	const t90dn = [...Array(1000).keys()].map((i) => i / 1000).find((s) => s > 0.3 && swashUp(s) <= 0.1);
++	assert.ok(t90up < 0.15 && t90dn - 0.3 > 0.5, `rush ${t90up}, drain ${t90dn}`);
++});
++
++test('the swash reaches no higher than its top, runs below the waterline between waves, and never jumps', () => {
++	for (let i = 0; i < 40; i++) {
++		const x = 800 + i * 3.7, z = -40 + i * 2.1, rm = swashRunMax(x, z, 1);
++		let prev = null;
++		for (let t = 100; t < 130; t += 0.01) {
++			const S = swashState(x, z, t, 1);
++			assert.ok(S.level <= S.top + 1e-9, 'level under its top');
++			assert.ok(S.level >= -0.3 - 1e-9, 'level above the backwash foot');
++			assert.ok(S.top < rm + 0.06 && S.top > -0.05, 'top within the run');
++			// (a step of 10 ms moves the front a few millimetres of height, never a jump)
++			if (prev != null) assert.ok(Math.abs(S.level - prev) < 0.03, `no jump at t=${t.toFixed(2)} (${prev} to ${S.level})`);
++			prev = S.level;
++			assert.ok(S.since < 0 ? S.phase < 0.2 : S.phase >= 0.2, 'since the stall matches the phase');
++		}
++	}
++});
++
++test('the front is broken along the shore, not a line, and differs from wave to wave', () => {
++	const t = 412.3, tops = [];
++	for (let k = 0; k < 60; k++) tops.push(swashTrain(800, k * 0.25, t, 8.3, 1.7, 0.6).top);
++	const span = Math.max(...tops) - Math.min(...tops);
++	assert.ok(span > 0.01, 'the reach wanders along 15 m of beach: ' + span.toFixed(3));
++	const a = swashTrain(800, 0, 10, 8.3, 1.7, 0.6).top, b = swashTrain(800, 0, 10 + 8.3, 8.3, 1.7, 0.6).top;
++	assert.notEqual(a, b, 'the next wave runs to a different place');
++});
++
++test('the sheet over the sand thins to nothing at the swash front', () => {
++	const y = 0.05;
++	assert.equal(swashSheet(y, -0.1, 0.2), -0.1, 'below the ground: no water');
++	// film (sheet - ground) grows smoothly from zero as the reach passes the ground
++	let prev = 0;
++	for (let s = 0.2; s < 0.6; s += 0.01) {
++		const film = swashSheet(y, s, 0.2) - 0.2;
++		assert.ok(film >= -1e-12 && film >= prev - 1e-12, 'growing');
++		prev = film;
++	}
++	assert.ok(near(swashSheet(y, 0.2 + 1e-6, 0.2) - 0.2, 0, 1e-5), 'zero at the front');
++	assert.ok(near(swashSheet(y, 0.5, 0.2) - 0.2, 0.105, 1e-9), 'a third of the climb');
++	// under the open sea's own level, the open sea holds
++	assert.equal(swashSheet(0.3, 0.2, -0.4), 0.2);
++});
++
++test('the water covers nothing at the edge and closes over with depth, sooner when murky', () => {
++	assert.equal(waterBody(0), 0);
++	assert.equal(edgeAlpha(0, 1), 0, 'no cover at the line, whatever the sheen');
++	assert.equal(edgeAlpha(-0.1, 1), 0);
++	let prev = 0;
++	for (let d = 0.001; d < 4; d += 0.01) { const a = waterBody(d); assert.ok(a > prev); prev = a; }
++	assert.ok(waterBody(0.1) < 0.06, 'a hand of water is clear');
++	assert.ok(waterBody(3) > 0.5 && waterBody(3) < 0.85, 'three metres of clear water still shows its bed');
++	assert.ok(waterBody(12) > 0.97, 'twelve metres is the sea');
++	assert.ok(waterBody(0.5, 0.34, 1) > waterBody(0.5, 0.34, 0), 'murky water closes over sooner');
++	assert.ok(waterBody(1, 0.55) > waterBody(1, 0.34), 'the cold green Pacific takes its red sooner');
++	// continuous from the line: small steps make small changes
++	for (let f = 0; f < 0.1; f += 0.0005) assert.ok(Math.abs(edgeAlpha(f + 0.0005, 0.6) - edgeAlpha(f, 0.6)) < 0.03, 'no step at ' + f.toFixed(4));
++	assert.ok(edgeAlpha(0.05, 0.5) >= 0.5, 'the sheen is all there by a few centimetres');
++});
++
++test('waves break on gentle open beaches only', () => {
++	assert.ok(breakOn(0.03) > 0.95, 'a 3 % beach breaks');
++	assert.equal(breakOn(0.001), 0, 'a dead flat shelf does not (it is all shallows)');
++	assert.equal(breakOn(0.3), 0, 'a steep shore surges instead');
++	assert.equal(breakOn(0.03, 1), 0, 'a sheltered bay is calm');
++	assert.ok(breakOn(0.03, 0.5) < breakOn(0.03, 0));
++});
++
++test('the shore asks less of a phone and of the lower tiers, and makes nothing new each frame', () => {
++	const out = {};
++	const hi = { ...shoreQuality({ name: 'high' }, false) }, ph = { ...shoreQuality({ name: 'high' }, true) }, mn = { ...shoreQuality({ name: 'minimal' }, true) };
++	assert.ok(ph.reach < hi.reach / 2, 'a phone reads the ground per pixel over a shorter reach');
++	assert.ok(mn.reach < ph.reach && mn.detail === 0);
++	assert.equal(shoreQuality({ name: 'medium' }, false, out), out, 'fills the object it is given');
++	assert.ok(out.detail < 1 && out.detail > 0);
++});
++
++test('the sea and the wet sand share the one swash', () => {
++	for (const fn of ['swashRunMax', 'swashUp', 'swashTrainS', 'swashState', 'swashLevel', 'swashSheet', 'waterBody', 'breakOn']) assert.ok(SWASH_GLSL.includes(fn + '('), fn);
++	for (const k of ['8.3', '11.9', '0.35', '7.853982', '0.97', '0.014', '0.031']) assert.ok(SWASH_GLSL.includes(k), k);
++	const terrain = fs.readFileSync(new URL('../src/world/terrain.js', import.meta.url), 'utf8');
++	const ocean = fs.readFileSync(new URL('../src/world/ocean.js', import.meta.url), 'utf8');
++	assert.ok(/import \{ SWASH_GLSL[^}]*\} from '\.\/shore\.js'/.test(terrain) && terrain.includes('swashState(vW.xz, uTime, uWave)'), 'the ground reads the shore');
++	assert.ok(/SWASH_GLSL[^\n]*from '\.\/shore\.js'/.test(ocean) && ocean.includes('swashState(vW.xz, uTime, uWave)'), 'the sea reads the same, per pixel');
++	assert.ok(!/float swashLevel\(/.test(terrain), 'no second copy left in the ground');
++	assert.equal(swashLevel(810, 3, 50), swashState(810, 3, 50).level);
++});
++
++test('the island keeps its own beaches: the survey only eases in where its floor is already deep', () => {
++	const ocean = fs.readFileSync(new URL('../src/world/ocean.js', import.meta.url), 'utf8');
++	// (the band that blended in the Bay Area survey began 100 m inside the island's centre and
++	// drew every beach 5 to 8 m deep)
++	assert.ok(/k \*= max\(smoothstep\(-3\.0, -9\.0, hi\), smoothstep\(uHalf - 120\.0, uHalf - 20\.0, edge\)\)/.test(ocean), 'the blend is held off the island\'s shallows');
++	// every pixel near you reads the ground under it, and the water fades to nothing at the edge
++	assert.ok(ocean.includes('g = mix(vGround, groundAt(vW.xz), pk)'), 'the ground per pixel');
++	assert.ok(ocean.includes('waterBody(de * 2.0, sig.r, murk)'), 'the cover by the light\'s path');
++	assert.ok(/float Fe = F \* [0-9.]+ \* smoothstep\(0\.0, 0\.02, film\)/.test(ocean), 'the sheen grows in over the first centimetres');
++	assert.ok(!/vFilm|vDepth/.test(ocean), 'no depth or film interpolated from the vertices');
++});
++
++test('a planet\'s lakes and streams are mapped: the water, then banks that fade a few metres out', async () => {
++	const seed = 77, profile = planetProfile('TERRAN', seed);
++	const island = generateIsland({ seed, profile, resolution: 512 });
++	const water = await planWaters(island, profile, {});
++	assert.ok(water && water.lakes.length + water.lines.length > 0, 'a green world has water');
++	const N = island.N, M = island.waterMap;
++	assert.equal(M.length, N * N * 2);
++	let wet = 0, bank = 0, mismatch = 0;
++	for (let q = 0; q < N * N; q++) {
++		if (M[q * 2] === 255) { wet++; if (M[q * 2 + 1] !== 255) mismatch++; }
++		else if (M[q * 2 + 1] > 0) { bank++; assert.ok(M[q * 2 + 1] <= 141, 'a bank is never as wet as the water'); }
++	}
++	assert.ok(wet > 0 && bank > wet * 0.2, `water ${wet} cells, banks ${bank}`);
++	assert.equal(mismatch, 0);
++	// (the map agrees with the water the game walks in)
++	const half = island.half, cell = island.cell;
++	for (let q = 0; q < N * N; q += 97) { const x = -half + (q % N) * cell, z = -half + Math.floor(q / N) * cell; assert.equal(M[q * 2] === 255, !!water.inWater(x, z)); }
++	const tex = waterMapTexture(island);
++	assert.equal(tex.image.width, N);
++	assert.equal(waterMapTexture({}).image.width, 1, 'a blank map where there is none (Earth)');
++	assert.ok(WATERMAP_GLSL.includes('waterMapAt('));
++	const grass = fs.readFileSync(new URL('../src/world/grass.js', import.meta.url), 'utf8');
++	assert.ok(grass.includes('uWaterMap'), 'the grass keeps out of the water');
++});
