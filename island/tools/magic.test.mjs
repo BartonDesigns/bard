@@ -184,3 +184,33 @@ test('the look modes and the keys are wired', () => {
 	const hud = fs.readFileSync(new URL('../src/magic/hud.js', import.meta.url), 'utf8');
 	assert.match(hud, /isOpen = \(\) => book\.style\.display === 'flex'/);
 });
+
+test('every spell has a look of its own, and no two look alike', async () => {
+	const THREE = await import('three');
+	const { createMagicFx } = await import('../src/magic/fx.js');
+	const { LOOK, LOOK_IDS } = await import('../src/magic/looks.js');
+	for (const s of SPELLS) assert.ok(LOOK[s.id], 'a look for ' + s.id);
+	assert.equal(LOOK_IDS.length, SPELLS.length);
+	let seen = null;
+	const fx = createMagicFx(new THREE.Scene(), { onEmit: (c, o) => seen?.add(`${o?.shape || 0}${o?.ink ? 'i' : ''}:${c.map((v) => v.toFixed(2)).join(',')}`) });
+	const v = (x, y, z) => ({ x, y, z }), d = v(0, 0, -1), T = { bound: v(0, 1, -5) };
+	const sigs = new Map();
+	for (const id of LOOK_IDS) {
+		seen = new Set();
+		const L = LOOK[id];
+		// each part drawn a few times (some draw by chance), with all it may be given
+		for (let n = 0; n < 40; n++) {
+			L.cast?.(fx, v(0, 1.5, 0)); L.trail?.(fx, v(0, 1.5, -2), d, 1); L.hit?.(fx, v(0, 1, -5), d);
+			L.beam?.(fx, v(0, 1.5, 0), v(0, 1, -10), n / 10); L.tell?.(fx, v(0, 0, -8), 5, n / 40); L.blast?.(fx, v(0, 0, -8), 5);
+			L.cone?.(fx, v(0, 1.6, 0), d, 8, 0.6); L.arc?.(fx, v(0, 1.5, 0), v(0, 1, -6)); L.orb?.(fx, v(0, 1, -4), n / 10);
+			L.tick?.(fx, v(0, 0, -6), 5, n / 10); L.self?.(fx, v(0, 1.68, 0), [v(1, 1.68, 0), v(2, 1.68, 0)]); L.on?.(fx, v(0, 1.68, 0), n / 10, d, true);
+			L.mark?.(fx, T, {}); L.body?.(fx, v(1, 1.5, 0), n / 10); L.spread?.(fx, v(0, 1, -5), v(2, 1, -6));
+			L.fall?.(fx, v(0, 3, -6), v(0.3, 0.9, 0.2), n % 2 === 0); L.cloud?.(fx, v(0, 0, -8), 6); L.strike?.(fx, v(0, 15, -8), v(0, 0, -8)); L.rain?.(fx, v(0, 0, -8), 6);
+		}
+		assert.ok(seen.size > 0, id + ' draws something');
+		sigs.set(id, [...seen].sort().join('|'));
+	}
+	const by = new Map();
+	for (const [id, sg] of sigs) { assert.ok(!by.has(sg), `${id} looks just like ${by.get(sg)}`); by.set(sg, id); }
+	fx.dispose();
+});

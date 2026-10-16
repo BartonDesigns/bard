@@ -25,7 +25,7 @@ const SPELL_KEYS = { Digit6: 0, Digit7: 1, Digit8: 2, Digit9: 3, Digit0: 4 };
 
 // world(): the world (player, island, sky); light(): the sun's height (-1 .. 1); busy(): anything
 // that has the controls (driving, a menu)
-export function createMagic({ scene, camera, mount, combat, arms, world, light, hint = () => {}, busy = () => false, isPhone = false, isTouch = false }) {
+export function createMagic({ scene, camera, mount, combat, arms, world, light, heavens = () => null, hint = () => {}, busy = () => false, isPhone = false, isTouch = false }) {
 	let saved = null;
 	try { saved = JSON.parse(store.get(KEY) || 'null'); } catch { saved = null; }
 	const state = createMagicState(saved);
@@ -34,7 +34,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	const W = () => world();
 	const worldKey = () => combat.worldKey?.() || 'here';
 	const seed = () => (W() ? seedOf(worldKey()) : null);
-	const caster = createCaster({ camera, combat, player: () => W()?.player, state, fx, light, hint, sky: { get state() { return W()?.sky?.state; } }, worldKey, seed, isPhone });
+	const caster = createCaster({ camera, combat, player: () => W()?.player, state, fx, light, heavens, hint, sky: { get state() { return W()?.sky?.state; } }, worldKey, seed, isPhone });
 	combat.hooks.shield = (blow) => caster.shieldBlow(blow);
 	combat.hooks.cloak = () => caster.cloaked();
 	const aether = createAether({

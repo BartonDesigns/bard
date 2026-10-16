@@ -48,7 +48,7 @@ const S = (id, name, school, tier, kind, mana, cd, glyph, desc, o = {}) => ({ id
 export const SPELLS = Object.freeze([
 	// ---------- Radiance ----------
 	S('sunspark', 'Sunspark', 'radiance', 1, 'bolt', 8, 0.45, '✦', 'A spark of daylight thrown from the hand. Burns hotter under the sun.', { dmg: 22, speed: 70, type: 'radiant' }),
-	S('lance-of-dawn', 'Lance of Dawn', 'radiance', 2, 'beam', 14, 4, '⟋', 'Hold to pour a lance of light along your aim, searing all it touches.', { dps: 46, range: 60, t: 3, type: 'radiant' }),
+	S('lance-of-dawn', 'Lance of Dawn', 'radiance', 2, 'lances', 14, 4, '⟋', 'Three lances fall point first where you aim, out of the sun by day or the moon by night, searing all near where they land.', { dmg: 38, r: 2.6, n: 3, spread: 3.2, range: 80, type: 'radiant' }),
 	S('solar-flare', 'Solar Flare', 'radiance', 3, 'burst', 30, 10, '☀', 'Light bursts where you aim, burning and blinding everyone near it.', { dmg: 70, r: 5, range: 80, type: 'radiant', status: { hold: 1.6 } }),
 	S('judgement', 'Judgement', 'radiance', 4, 'strike', 55, 30, '⇣', 'Call a pillar of light down from the sky. It lands a breath later and spares nothing within it.', { dmg: 170, r: 6, range: 120, delay: 1.2, type: 'radiant' }),
 	// ---------- Restoration ----------

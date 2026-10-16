@@ -78,7 +78,7 @@ Everything is kept between visits (`l99-magic`).
 
 | School | Spells, by tier |
 |---|---|
-| **Radiance** | Sunspark (bolt) · Lance of Dawn (held beam) · Solar Flare (burst that blinds) · Judgement (pillar of light from the sky) |
+| **Radiance** | Sunspark (bolt) · Lance of Dawn (three lances that fall out of the sun, or the moon at night) · Solar Flare (burst that blinds) · Judgement (pillar of light from the sky) |
 | **Restoration** | Mend · Renewal (heal over time) · Sanctuary (healing ground that slows foes) · Resurgence (two minutes in which a lethal blow is turned aside) |
 | **Warding** | Aegis (absorbs blows) · Radiant Aura (burns those close) · Bulwark (nothing reaches you for 3.5 s) · Banish (throws foes back and makes them flee) |
 | **Dawn** | Lumen (a light at your shoulder) · Dawnsight (see the aether through walls) · Swiftstride (speed, high jumps, gentle falls) · Waterstride (walk on water) · Daybreak (turns the night to dawn) · Sunwell Gate (travel to a well you have found) |
@@ -125,6 +125,30 @@ Everything is kept between visits (`l99-magic`).
   - The sight spells draw that pool over the walls while they last.
   - Each school has a short synthesised voice on the world's sound bus.
 
+## How each spell looks
+
+Every spell has a look of its own (`magic/looks.js`), drawn from Diablo IV first, then Guild Wars 2
+and World of Warcraft. The idea is that you can name a spell from its silhouette and colour alone.
+
+- **Each school has a motif.** Radiance uses gold stars and spears of light. Restoration uses leaves
+  and green rings. Warding uses hexagons and white gales. Dawn uses rose runes. Shadow uses black ink
+  smoke with violet rims and eyes. Void uses crystal shards and warped rings. Blight uses poison
+  drips and fog. Umbral uses wraiths. Storm uses forked lightning. Chrono uses clockwork runes.
+  Primal uses flame, ice and rain.
+- **Shapes:** `fx.js` draws twelve shapes: orb, star, ring, shard, flame, streak, rune, smoke, eyes,
+  cross, hex and leaf.
+- **Two kinds of particle:** glowing ones, and dark "ink" ones, so shadow and smoke read as dark and
+  not as glow.
+- **Ground marks:** rings and runes on the ground are flat decals, not points.
+- **Pools:** glow 3,200 (1,400 on a phone), ink 700 (300), decals 48 (24). Nothing is made while
+  you cast.
+- **Lance of Dawn** is now an area spell. Three lances fall point first around where you aim. By
+  day they come out of the sun in gold, and by night out of the moon in silver. A ring on the ground
+  warns where each will land.
+- **The gallery:** `node island/tools/spell-looks-browser.cjs` plays every look in a small scene of
+  its own, with no game loaded, and saves one picture per spell to `/tmp/spell-looks` (`ONLY=` picks
+  some).
+
 ## Console
 
 `Crysis.magic`:
@@ -136,7 +160,7 @@ Everything is kept between visits (`l99-magic`).
 
 ## Tests
 
-`node --test island/tools/magic.test.mjs` (11):
+`node --test island/tools/magic.test.mjs` (12):
 - every spell is whole, and no school's ladder is missing a rung;
 - the runtime handles every kind of spell;
 - weaving, affinity and the ladder, and twilight's gate;
@@ -146,7 +170,8 @@ Everything is kept between visits (`l99-magic`).
 - the aether's placement (the same every time, none in the sea, each world its own, high ground
   leaning to light, wells rare), and which strands show when and coming back;
 - the weapons on the keys 1 to 5;
-- the look modes and the keys being wired.
+- the look modes and the keys being wired;
+- every spell has a look of its own, and no two look alike.
 
 ## Found on the way: memory while the mouse is captured
 

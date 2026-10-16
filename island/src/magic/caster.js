@@ -7,6 +7,7 @@
 //   beam     held: a lance from the hand along the aim, burning (drain: healing you) while held
 //   burst    light or dark bursting where you aim (after a delay, if it has one)
 //   strike   a pillar from the sky onto where you aim, a breath later
+//   lances   lances falling point first round where you aim, out of the sun (or the moon by night)
 //   nova     out from you; cone: before you
 //   chain    lightning leaping from the first struck to the next
 //   orb      a slow ball rolling along the aim, striking all near its path
@@ -22,21 +23,27 @@
 // strikes what it meets. A status (held, slowed, afraid, rotting) is laid on a fighter's hex,
 // which the fighters read (combat/ai-squads.js) and this wears off. Bosses take the harm and
 // shrug off the rest.
+//
+// How each spell shows is its own (magic/looks.js): this calls on the look at each moment (the
+// cast, a bolt's flight and landing, a beam, a blast and its tell, a lingering area, a wraith, a
+// buff while it lasts, a status on a fighter) and falls back on a soft orb of its school's colour.
 
 import * as THREE from 'three';
 import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, strandOf } from './spells.js';
 import { GLOW, magicSound } from './fx.js';
+import { lookOf, LOOK } from './looks.js';
 
 const EYE = 1.68;
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
 const typeOf = (t) => (t === 'fire' ? 'fire' : 'energy');
 const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 'boss') && !T.surrendered;
 
-export function createCaster({ camera, combat, player, state, fx, light, hint, sky, worldKey, seed, isPhone = false }) {
+// heavens(): { sun, moon }, the directions toward each (the lances fall out of whichever is up)
+export function createCaster({ camera, combat, player, state, fx, light, heavens = () => null, hint, sky, worldKey, seed, isPhone = false }) {
 	const P = () => player()?.state;
 	const now = () => performance.now() / 1000;
 	const bolts = [], effects = [], shades = [], knocks = [], hexed = new Map(), held = new Map();
-	const buff = { shield: 0, shieldUntil: 0, cloakUntil: 0, deathUntil: 0, pactUntil: 0, quickUntil: 0, lightUntil: 0, sightUntil: 0, sightWhat: null, nightUntil: 0, hots: [], moves: [] };
+	const buff = { shield: 0, shieldUntil: 0, cloakUntil: 0, deathUntil: 0, pactUntil: 0, quickUntil: 0, lightUntil: 0, sightUntil: 0, sightWhat: null, nightUntil: 0, hots: [], moves: [], looks: new Map() };
 	const history = [];
 	let histT = 0, regenT = 0, fighting = false, gateI = 0, cursor = null, dayTween = null;
 
@@ -72,9 +79,11 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		return r;
 	}
 	// a status on a fighter (not a boss): hold, slow (for t), fear, dot (for t)
-	function hex(T, st, k = 1) {
+	function hex(T, st, k = 1, by = null) {
 		if (!st || !T || T.kind !== 'hostile' || T.removed) return;
-		const H = T.hex || (T.hex = { hold: 0, fear: 0, slowK: 1, slowT: 0, dot: 0, dotT: 0, dotAcc: 0, spread: 0 });
+		const H = T.hex || (T.hex = { hold: 0, fear: 0, slowK: 1, slowT: 0, dot: 0, dotT: 0, dotAcc: 0, spread: 0, by: null });
+		// (the spell that laid it, for how it shows on them)
+		if (by && LOOK[by]?.mark) H.by = by;
 		if (st.hold) H.hold = Math.max(H.hold, st.hold);
 		if (st.fear) H.fear = Math.max(H.fear, st.fear);
 		if (st.slow) { H.slowK = Math.min(H.slowK, st.slow); H.slowT = Math.max(H.slowT, st.t || 3); }
@@ -83,6 +92,7 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 	}
 	function stepHexes(dt) {
 		for (const [T, H] of hexed) {
+			if (H.by && T.bound) LOOK[H.by].mark(fx, T, H);
 			H.hold = Math.max(0, H.hold - dt); H.fear = Math.max(0, H.fear - dt);
 			if (H.slowT > 0) { H.slowT -= dt; if (H.slowT <= 0) H.slowK = 1; }
 			if (H.dotT > 0) {
@@ -94,7 +104,7 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 					// (a contagion passes to the nearest of their kind when they fall)
 					if ((r?.killed || T.ref?.dead) && H.spread) {
 						const next = nearestHostile(T.bound, H.spread, (q) => q !== T && !q.hex?.dotT);
-						if (next) { hex(next, { dot: H.dot, t: 10, spread: H.spread }); fx.line(T.bound, next.bound, GLOW.blight, 0.5, 0.5, 0.2, 0.6); }
+						if (next) { hex(next, { dot: H.dot, t: 10, spread: H.spread }, 1, H.by); (LOOK[H.by]?.spread || ((f, a, b) => f.line(a, b, GLOW.blight, 0.5, 0.5, 0.2, 0.6)))(fx, T.bound, next.bound); }
 						H.dotT = 0;
 					}
 				}
@@ -133,7 +143,7 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		for (const x of hostilesNear(c, r, struck)) {
 			const f = 1 - 0.5 * (x.d / r);
 			harm(x.T, dmg * k * f, spell, c);
-			hex(x.T, status, k);
+			hex(x.T, status, k, spell.id);
 			if (push) shove(x.T, c, push * f);
 		}
 	}
@@ -146,31 +156,52 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			// (aim the bolt from the hand at where the view's ray lands, so it meets the crosshair)
 			const tgt = combat.firstHit(_o, _d, 300, combat.me), end = _o.clone().addScaledVector(_d, tgt ? tgt.t : 300);
 			const dir = end.sub(from).normalize();
-			bolts.push({ spell, k, pos: from, vel: dir.multiplyScalar(spell.speed), life: 4, pierced: false, owner: 'me' });
+			bolts.push({ spell, k, pos: from, vel: dir.multiplyScalar(spell.speed), life: 4, pierced: false, owner: 'me', look: lookOf(spell) });
 		},
 		beam(spell, k) { held.set(spell.id, { spell, k, t: spell.t, acc: new Map() }); },
 		burst(spell, k) {
 			const { at } = aimPoint(spell.range);
-			const c = GLOW[spell.school];
-			fx.ring(at, spell.r, c, 30, spell.delay || 0.5, 0.25);
-			effects.push({ t: spell.delay || 0, run: () => { fx.burst(at, c, 60, spell.r * 1.6, 0.8, 0.45, 1); fx.ring(at, spell.r, c, 50, 0.5, 0.4); areaHarm(at, spell.r, spell, k, spell.dmg, spell.status); magicSound(spell.school, 0.16); } });
+			const c = GLOW[spell.school], L = lookOf(spell), D = spell.delay || 0;
+			if (L.tell) effects.push({ t: 0, every: 0.08, life: Math.max(0.16, D), step() { L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / Math.max(0.16, D)); } });
+			else fx.ring(at, spell.r, c, 30, D || 0.5, 0.25);
+			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, c, 60, spell.r * 1.6, 0.8, 0.45, 1); fx.ring(at, spell.r, c, 50, 0.5, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, spell.status); magicSound(spell.school, 0.16); } });
 		},
 		strike(spell, k) {
 			const { at } = aimPoint(spell.range);
-			const c = GLOW[spell.school];
-			effects.push({ t: 0, every: 0.08, life: spell.delay, step: () => fx.ring(at, spell.r, c, 18, 0.3, 0.2) });
-			effects.push({ t: spell.delay, run: () => { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm', 0.2); } });
+			const c = GLOW[spell.school], L = lookOf(spell);
+			effects.push({ t: 0, every: 0.08, life: spell.delay, step() { if (L.tell) L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / spell.delay); else fx.ring(at, spell.r, c, 18, 0.3, 0.2); } });
+			effects.push({ t: spell.delay, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); } areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm', 0.2); } });
+		},
+		lances(spell, k) {
+			const { at } = aimPoint(spell.range), L = lookOf(spell);
+			// (out of the sun while it is up, else the moon, else straight down; never too low to see)
+			const H = heavens() || {}, up = (q) => q && q.y > 0.05;
+			const night = !up(H.sun) && up(H.moon), src = up(H.sun) ? H.sun : night ? H.moon : { x: 0, y: 1, z: 0 };
+			const dir = new THREE.Vector3(src.x, Math.max(0.55, src.y), src.z).normalize();
+			const n = spell.n || 3;
+			for (let i = 0; i < n; i++) {
+				const a = i / n * 6.283 + 0.5, to = new THREE.Vector3(at.x + Math.cos(a) * spell.spread, 0, at.z + Math.sin(a) * spell.spread);
+				to.y = combat.ground(to.x, to.z, at.y + 20);
+				L.tell?.(fx, to, spell.r, 0, night);
+				const fall = 26, from = to.clone().addScaledVector(dir, fall), T = 0.32;
+				effects.push({ t: 0, life: 0.18 * i + T, every: 0.04, pos: from.clone(), wait: 0.18 * i,
+					move(dt) { if ((this.wait -= dt) > 0) { L.tell?.(fx, to, spell.r, 0, night); return; } this.pos.addScaledVector(dir, -fall / T * dt); if (this.pos.distanceTo(to) < 0.5 || (this.pos.y < to.y)) this.pos.copy(to); },
+					step() { if (this.wait <= 0) L.fall?.(fx, this.pos, dir, night); },
+					end() { L.blast?.(fx, to, spell.r, night); areaHarm(to, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.08); magicSound(spell.school, 0.12); } });
+			}
 		},
 		nova(spell, k) {
 			const c = { x: camera.position.x, y: camera.position.y - EYE + 0.4, z: camera.position.z };
-			fx.ring(c, spell.r, GLOW[spell.type === 'frost' ? 'frost' : spell.school], 60, 0.45, 0.4);
-			fx.burst(c, GLOW[spell.type === 'frost' ? 'frost' : spell.school], 40, spell.r * 1.2, 0.6, 0.3, 0.5);
+			const L = lookOf(spell);
+			if (L.blast) L.blast(fx, c, spell.r);
+			else { fx.ring(c, spell.r, GLOW[spell.type === 'frost' ? 'frost' : spell.school], 60, 0.45, 0.4); fx.burst(c, GLOW[spell.type === 'frost' ? 'frost' : spell.school], 40, spell.r * 1.2, 0.6, 0.3, 0.5); }
 			areaHarm(c, spell.r, spell, k, spell.dmg, spell.status, spell.push || 0);
 		},
 		cone(spell, k) {
 			aim(_o, _d);
-			const c = GLOW[spell.school], cos = Math.cos(spell.angle);
-			for (let n = 0; n < 50; n++) {
+			const c = GLOW[spell.school], cos = Math.cos(spell.angle), L = lookOf(spell);
+			if (L.cone) L.cone(fx, _o, _d, spell.range, spell.angle);
+			else for (let n = 0; n < 50; n++) {
 				_q.set(_d.x + (Math.random() - 0.5) * spell.angle * 1.6, _d.y + (Math.random() - 0.5) * 0.4, _d.z + (Math.random() - 0.5) * spell.angle * 1.6).normalize().multiplyScalar(spell.range / 0.5);
 				fx.emit(_o.x, _o.y - 0.3, _o.z, _q.x, _q.y, _q.z, 0.5, 0.3, 0.9, c, 0.8, 0, 0.5);
 			}
@@ -178,21 +209,22 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 				_p.set(x.T.bound.x - _o.x, 0, x.T.bound.z - _o.z).normalize();
 				if (_p.dot(_q.set(_d.x, 0, _d.z).normalize()) < cos) continue;
 				harm(x.T, spell.dmg * k, spell, _o);
-				hex(x.T, spell.status, k);
+				hex(x.T, spell.status, k, spell.id);
 				if (spell.push) shove(x.T, _o, spell.push);
 			}
 		},
 		chain(spell, k) {
 			const { at, T } = aimPoint(spell.range);
-			const from = hand(new THREE.Vector3()), c = GLOW.storm;
+			const from = hand(new THREE.Vector3()), c = GLOW.storm, L = lookOf(spell);
+			const arc = L.arc || ((f, a, b) => f.line(a, b, c, 0.45, 0.25, 0.2, 1.4));
 			let cur = T && hostile(T) ? T : nearestHostile(at, 6);
-			if (!cur) { fx.line(from, at, c, 0.5, 0.2, 0.18, 1.2); return; }
+			if (!cur) { arc(fx, from, at); return; }
 			const done = new Set();
 			let a = from, dmg = spell.dmg * k;
 			for (let j = 0; j <= spell.jumps && cur; j++) {
 				done.add(cur);
 				const b = { x: cur.bound.x, y: cur.bound.y + 0.2, z: cur.bound.z };
-				fx.line(a, b, c, 0.45, 0.25, 0.2, 1.4);
+				arc(fx, a, b);
 				harm(cur, dmg, spell, a);
 				hex(cur, { hold: 0.3 });
 				a = b; dmg *= 0.8;
@@ -202,62 +234,73 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		orb(spell, k) {
 			const pos = hand(new THREE.Vector3());
 			aim(_o, _d);
+			const L = lookOf(spell);
 			effects.push({ t: 0, life: spell.t, every: spell.rate, pos, vel: _d.clone().setY(0).normalize().multiplyScalar(spell.speed), trail: 0,
-				move(dt) { this.pos.addScaledVector(this.vel, dt); const gy = combat.ground(this.pos.x, this.pos.z, this.pos.y + 2); this.pos.y += (gy + 1.2 - this.pos.y) * Math.min(1, dt * 3); fx.burst(this.pos, GLOW.storm, 3, 1.5, 0.25, 0.35, 0); },
-				step() { for (const x of hostilesNear(this.pos, spell.r, struck)) { fx.line(this.pos, x.T.bound, GLOW.storm, 0.4, 0.15, 0.15, 0.8); harm(x.T, spell.dmg * k, spell, this.pos); } } });
+				move(dt) { this.pos.addScaledVector(this.vel, dt); const gy = combat.ground(this.pos.x, this.pos.z, this.pos.y + 2); this.pos.y += (gy + 1.2 - this.pos.y) * Math.min(1, dt * 3); if (L.orb) L.orb(fx, this.pos, now()); else fx.burst(this.pos, GLOW.storm, 3, 1.5, 0.25, 0.35, 0); },
+				step() { for (const x of hostilesNear(this.pos, spell.r, struck)) { if (L.arc) L.arc(fx, this.pos, x.T.bound); else fx.line(this.pos, x.T.bound, GLOW.storm, 0.4, 0.15, 0.15, 0.8); harm(x.T, spell.dmg * k, spell, this.pos); } } });
 		},
 		well(spell, k) {
 			const { at } = aimPoint(spell.range);
 			at.y += 1;
+			const L = lookOf(spell);
 			effects.push({ t: 0, life: spell.t, every: 0.1,
 				step() {
-					fx.burst(at, GLOW.void, 6, -2, 0.5, 0.35, 0);
-					for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, r = spell.r * Math.random(); fx.emit(at.x + Math.cos(a) * r, at.y + (Math.random() - 0.5) * 2, at.z + Math.sin(a) * r, -Math.cos(a) * r * 2, 0, -Math.sin(a) * r * 2, 0.5, 0.25, 0.05, GLOW.void, 0.9, 0, 0); }
+					if (L.tick) L.tick(fx, at, spell.r, now());
+					else {
+						fx.burst(at, GLOW.void, 6, -2, 0.5, 0.35, 0);
+						for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, r = spell.r * Math.random(); fx.emit(at.x + Math.cos(a) * r, at.y + (Math.random() - 0.5) * 2, at.z + Math.sin(a) * r, -Math.cos(a) * r * 2, 0, -Math.sin(a) * r * 2, 0.5, 0.25, 0.05, GLOW.void, 0.9, 0, 0); }
+					}
 					for (const x of hostilesNear(at, spell.r, struck)) {
 						const h = x.T.ref, S = h?.body?.M?.S, pos = S ? S.pos : h?.pos;
 						if (pos && x.d > 0.8) { const dx = at.x - pos.x, dz = at.z - pos.z, l = Math.hypot(dx, dz) || 1; pos.x += dx / l * spell.pull * 0.1; pos.z += dz / l * spell.pull * 0.1; }
 						if (spell.dps) harm(x.T, spell.dps * 0.1 * k, spell, at);
-						hex(x.T, spell.status ? { hold: 0.3 } : { slow: 0.3, t: 0.3 }, k);
+						hex(x.T, spell.status ? { hold: 0.3 } : { slow: 0.3, t: 0.3 }, k, spell.id);
 					}
 				},
-				end() { fx.burst(at, GLOW.void, 90, spell.r * 1.5, 0.7, 0.5, 0); fx.ring(at, spell.r, GLOW.void, 50, 0.4, 0.4); areaHarm(at, spell.r, spell, k, spell.dmg, null); magicSound('void', 0.2); } });
+				end() { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, GLOW.void, 90, spell.r * 1.5, 0.7, 0.5, 0); fx.ring(at, spell.r, GLOW.void, 50, 0.4, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, null); magicSound('void', 0.2); } });
 		},
 		cloud(spell, k) {
 			const { at } = aimPoint(spell.range);
+			const L = lookOf(spell);
 			effects.push({ t: 0, life: spell.t, every: 0.5,
 				step() {
-					for (let n = 0; n < (isPhone ? 6 : 14); n++) { const a = Math.random() * 6.283, r = spell.r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * r, at.y + 0.3 + Math.random() * 1.5, at.z + Math.sin(a) * r, 0, 0.2, 0, 1.6, 0.9, 1.6, GLOW.blight, 0.35, 0, 0.5); }
-					for (const x of hostilesNear(at, spell.r, struck)) { harm(x.T, spell.dps * 0.5 * k, spell, at); hex(x.T, spell.status, k); }
+					if (L.tick) L.tick(fx, at, spell.r, now());
+					else for (let n = 0; n < (isPhone ? 6 : 14); n++) { const a = Math.random() * 6.283, r = spell.r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * r, at.y + 0.3 + Math.random() * 1.5, at.z + Math.sin(a) * r, 0, 0.2, 0, 1.6, 0.9, 1.6, GLOW.blight, 0.35, 0, 0.5); }
+					for (const x of hostilesNear(at, spell.r, struck)) { harm(x.T, spell.dps * 0.5 * k, spell, at); hex(x.T, spell.status, k, spell.id); }
 				} });
 		},
 		zone(spell, k) {
 			const at = { x: camera.position.x, y: camera.position.y - EYE, z: camera.position.z };
+			const L = lookOf(spell);
 			effects.push({ t: 0, life: spell.t, every: 0.5,
 				step() {
-					fx.ring(at, spell.r, GLOW.restoration, 24, 0.5, 0.25);
+					if (L.tick) L.tick(fx, at, spell.r, now()); else fx.ring(at, spell.r, GLOW.restoration, 24, 0.5, 0.25);
 					const e = camera.position;
 					if (Math.hypot(e.x - at.x, e.z - at.z) < spell.r) combat.mend(spell.heal * 0.5 * k);
-					for (const x of hostilesNear(at, spell.r, struck)) hex(x.T, spell.status, k);
+					for (const x of hostilesNear(at, spell.r, struck)) hex(x.T, spell.status, k, spell.id);
 				} });
 		},
 		storm(spell, k) {
 			const { at } = aimPoint(spell.range);
 			for (const F of combat.firesNear(at.x, at.z, spell.douse)) combat.douse(F.id, 60);
+			const L = lookOf(spell);
 			effects.push({ t: 0, life: spell.t, every: spell.t / spell.strikes,
 				step() {
 					const tgt = nearestHostile(at, spell.r);
 					const a = Math.random() * 6.283, r = Math.random() * spell.r;
 					const p = tgt && Math.random() < 0.7 ? { x: tgt.bound.x, y: tgt.bound.y - 0.9, z: tgt.bound.z } : { x: at.x + Math.cos(a) * r, y: 0, z: at.z + Math.sin(a) * r };
 					if (!tgt) p.y = combat.ground(p.x, p.z, at.y + 30);
-					fx.line({ x: p.x + (Math.random() - 0.5) * 6, y: p.y + 45, z: p.z + (Math.random() - 0.5) * 6 }, p, GLOW.storm, 0.9, 0.22, 0.4, 3.5);
-					fx.burst(p, GLOW.storm, 20, 6, 0.4, 0.3, 1);
+					const top = { x: p.x + (Math.random() - 0.5) * 6, y: p.y + (L.strike ? 15 : 45), z: p.z + (Math.random() - 0.5) * 6 };
+					if (L.strike) L.strike(fx, top, p);
+					else { fx.line(top, p, GLOW.storm, 0.9, 0.22, 0.4, 3.5); fx.burst(p, GLOW.storm, 20, 6, 0.4, 0.3, 1); }
 					for (const x of hostilesNear(p, 3, struck)) harm(x.T, spell.dmg * k, spell, p);
 					combat.shake?.(0.08); magicSound('storm', 0.1);
 				} });
 			// (the rain under it)
-			effects.push({ t: 0, life: spell.t, every: 0.05, step() { for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, r = spell.r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * r, at.y + 14, at.z + Math.sin(a) * r, 0, -16, 0, 0.9, 0.06, 0.04, [0.5, 0.65, 0.8], 0.6, 0, 0); } } });
+			// (and the thunderhead over it)
+			effects.push({ t: 0, life: spell.t, every: 0.05, step() { if (L.rain) { L.rain(fx, at, spell.r); L.cloud?.(fx, at, spell.r); } else for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, r = spell.r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * r, at.y + 14, at.z + Math.sin(a) * r, 0, -16, 0, 0.9, 0.06, 0.04, [0.5, 0.65, 0.8], 0.6, 0, 0); } } });
 		},
-		heal(spell, k) { const n = combat.mend(spell.heal * k); fx.burst({ x: camera.position.x, y: camera.position.y - 0.8, z: camera.position.z }, GLOW.restoration, 30, 1.2, 0.9, 0.2, 1.4); if (!n) hint('You are not hurt.', 1400); },
+		heal(spell, k) { const n = combat.mend(spell.heal * k); if (!LOOK[spell.id]?.self) fx.burst({ x: camera.position.x, y: camera.position.y - 0.8, z: camera.position.z }, GLOW.restoration, 30, 1.2, 0.9, 0.2, 1.4); if (!n) hint('You are not hurt.', 1400); },
 		hot(spell, k) { buff.hots.push({ left: spell.t, rate: spell.heal * k / spell.t }); },
 		shield(spell, k) { buff.shield = spell.absorb * (spell.absorb > 1e5 ? 1 : k); buff.shieldUntil = now() + spell.t; },
 		deathward(spell) { buff.deathUntil = now() + spell.t; buff.deathHeal = spell.heal; },
@@ -265,7 +308,8 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			effects.push({ t: 0, life: spell.t, every: 0.25,
 				step() {
 					const c = { x: camera.position.x, y: camera.position.y - 1, z: camera.position.z };
-					for (let n = 0; n < 8; n++) { const a = Math.random() * 6.283; fx.emit(c.x + Math.cos(a) * spell.r, c.y + Math.random(), c.z + Math.sin(a) * spell.r, 0, 0.8, 0, 0.5, 0.25, 0.05, GLOW.radiance, 0.8, 0, 0); }
+					if (LOOK[spell.id]?.tick) LOOK[spell.id].tick(fx, { x: c.x, y: c.y - 0.6, z: c.z }, spell.r, now());
+					else for (let n = 0; n < 8; n++) { const a = Math.random() * 6.283; fx.emit(c.x + Math.cos(a) * spell.r, c.y + Math.random(), c.z + Math.sin(a) * spell.r, 0, 0.8, 0, 0.5, 0.25, 0.05, GLOW.radiance, 0.8, 0, 0); }
 					for (const x of hostilesNear(c, spell.r, struck)) harm(x.T, spell.dps * 0.25 * k, spell, c);
 				} });
 		},
@@ -273,7 +317,7 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			buff.moves.push({ until: now() + spell.t, speedK: spell.speedK || 1, jumpK: spell.jumpK || 1, fallK: spell.fallK || 1, waterWalk: !!spell.waterWalk });
 			if (spell.cdK) buff.quickUntil = now() + spell.t;
 		},
-		cloak(spell) { buff.cloakUntil = now() + spell.t; fx.burst({ x: camera.position.x, y: camera.position.y - 0.8, z: camera.position.z }, GLOW.shadow, 40, 2, 0.8, 0.3, 0); },
+		cloak(spell) { buff.cloakUntil = now() + spell.t; },
 		light(spell) { if (buff.lightUntil > now()) { buff.lightUntil = 0; return 'off'; } buff.lightUntil = now() + spell.t; },
 		sight(spell) { buff.sightUntil = now() + spell.t; buff.sightWhat = spell.what; buff.sightR = spell.r; if (spell.night) buff.nightUntil = now() + spell.t; },
 		pact(spell) {
@@ -281,10 +325,9 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			if (v.hp <= v.max * spell.hp + 1) { hint('You have too little life to give.', 2000); return 'refund'; }
 			combat.hurtPlayer({ amount: v.max * spell.hp, type: 'energy', part: 'torso', pact: true, quiet: true });
 			state.mana = manaMax(state); buff.pactUntil = now() + spell.t; buff.pactK = spell.power;
-			fx.burst({ x: camera.position.x, y: camera.position.y - 0.6, z: camera.position.z }, GLOW.umbral, 60, 3, 1, 0.3, 0);
 		},
 		summon(spell, k) {
-			for (let n = 0; n < spell.n; n++) shades.push({ spell, k, until: now() + spell.t, a: n / spell.n * 6.283, cool: 0.5 + n * 0.3, pos: camera.position.clone() });
+			for (let n = 0; n < spell.n; n++) shades.push({ spell, k, until: now() + spell.t, a: n / spell.n * 6.283, cool: 0.5 + n * 0.3, pos: camera.position.clone(), look: lookOf(spell) });
 			while (shades.length > 4) shades.shift();
 		},
 		blink(spell) {
@@ -297,20 +340,19 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			const to = _o.clone().addScaledVector(_d, d);
 			const gy = combat.ground(to.x, to.z, to.y + 1);
 			to.y = Math.max(to.y, gy + EYE);
-			fx.burst({ x: p.pos.x, y: p.pos.y - 0.8, z: p.pos.z }, GLOW.shadow, 40, 2.5, 0.6, 0.3, 0);
+			// (gone in smoke here; the look's own puff comes again where you land, after the cast)
+			lookOf(spell).self?.(fx, p.pos);
 			teleport(to.x, to.y, to.z);
-			fx.burst({ x: to.x, y: to.y - 0.8, z: to.z }, GLOW.shadow, 40, 2.5, 0.6, 0.3, 0);
 		},
 		recall(spell, k, o) {
 			const p = P(); if (!p) return 'refund';
 			const w = worldKey();
 			if (!state.mark || state.mark.w !== w || o.shift) {
 				state.mark = { x: p.pos.x, y: p.pos.y, z: p.pos.z, w };
-				fx.pillar({ x: p.pos.x, y: p.pos.y - EYE, z: p.pos.z }, 3, GLOW.chrono, 40, 1, 0.3, true);
 				hint('The weave is marked here. Cast again to return.', 2500);
 				return 'cheap';
 			}
-			fx.pillar({ x: p.pos.x, y: p.pos.y - EYE, z: p.pos.z }, 4, GLOW.chrono, 50, 0.7, 0.4, true);
+			lookOf(spell).self?.(fx, p.pos);
 			teleport(state.mark.x, state.mark.y, state.mark.z);
 		},
 		gate() {
@@ -318,13 +360,13 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			if (!list.length) { hint('You have found no aether well in this world yet. Look for a bright spring of light or dark.', 3500); return 'refund'; }
 			const W0 = list[gateI++ % list.length];
 			teleport(W0.x + 2.5, combat.ground(W0.x + 2.5, W0.z, W0.y + 3) + EYE, W0.z);
-			fx.pillar({ x: W0.x + 2.5, y: W0.y - 0.5, z: W0.z }, 6, GLOW.dawn, 80, 1, 0.5, true);
 			hint(`Through the light to a ${W0.strand} well (${(gateI - 1) % list.length + 1} of ${list.length}).`, 2500);
 		},
-		rewind() {
+		rewind(spell) {
 			const t0 = now() - 5, S = history.find((q) => q.t >= t0) || history[0];
 			if (!S) return 'refund';
-			fx.burst({ x: camera.position.x, y: camera.position.y - 0.8, z: camera.position.z }, GLOW.chrono, 50, 2, 0.8, 0.3, 0);
+			// (the way back drawn as you go: every place of the last five seconds)
+			lookOf(spell).self?.(fx, camera.position, history.filter((q) => q.t >= t0));
 			teleport(S.x, S.y, S.z);
 			const v = combat.vitals();
 			if (S.hp > v.hp) combat.mend(S.hp - v.hp);
@@ -333,13 +375,13 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			const { T } = aimPoint(spell.range);
 			if (!T) { hint('Nothing there to hold.', 1200); return 'refund'; }
 			if (T.kind !== 'hostile') { hint(T.kind === 'boss' ? 'It is too vast to hold in time.' : 'Stasis holds only those who fight.', 1600); return 'refund'; }
-			hex(T, { hold: spell.t });
-			effects.push({ t: 0, life: spell.t, every: 0.12, step: () => fx.burst({ x: T.bound.x, y: T.bound.y, z: T.bound.z }, GLOW.chrono, 3, 0.6, 0.6, 0.25, 0) });
+			hex(T, { hold: spell.t }, 1, spell.id);
 		},
 		douse(spell) {
 			const e = camera.position, list = combat.firesNear(e.x, e.z, spell.r);
 			for (const F of list) combat.douse(F.id, 60);
-			effects.push({ t: 0, life: 4, every: 0.04, step() { for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, r = 18 * Math.sqrt(Math.random()); fx.emit(e.x + Math.cos(a) * r, e.y + 12, e.z + Math.sin(a) * r, 0, -15, 0, 1, 0.05, 0.04, [0.55, 0.7, 0.85], 0.6, 0, 0); } } });
+			const L = lookOf(spell), at = { x: e.x, y: e.y, z: e.z };
+			effects.push({ t: 0, life: 4, every: 0.04, step() { if (L.rain) L.rain(fx, at, 18); else for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, r = 18 * Math.sqrt(Math.random()); fx.emit(e.x + Math.cos(a) * r, e.y + 12, e.z + Math.sin(a) * r, 0, -15, 0, 1, 0.05, 0.04, [0.55, 0.7, 0.85], 0.6, 0, 0); } } });
 			hint(list.length ? `Rain falls. ${list.length} fire${list.length > 1 ? 's' : ''} put out.` : 'Rain falls round you.', 2200);
 		},
 		daybreak() {
@@ -369,13 +411,23 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		if (out === 'cheap' || out === 'off') { state.mana += Math.round(spell.mana * (out === 'off' ? 1 : 0.75)); state.cds[id] = t + 1; }
 		// (any harm you do shows you: the cloak is gone)
 		if (spell.dmg || spell.dps) buff.cloakUntil = 0;
-		const c = GLOW[spell.school];
-		fx.burst(hand(_p), c, 14, 1.4, 0.35, 0.16, 0.2);
+		const c = GLOW[spell.school], L = lookOf(spell);
+		if (L.cast) L.cast(fx, hand(_p)); else fx.burst(hand(_p), c, 14, 1.4, 0.35, 0.16, 0.2);
+		// (on your body: a heal, a ward, a pact; and its look while it lasts)
+		if (L.self && SELF_AFTER.has(spell.kind)) L.self(fx, camera.position);
+		if (L.on) buff.looks.set(id, { until: t + (spell.t || 600), on: L.on, alive: ALIVE[spell.kind] || (() => true) });
 		magicSound(spell.school);
 		return true;
 	}
 	// let go of a held spell (a beam)
 	function release(id) { held.delete(id); }
+	// (kinds whose look is drawn on you once cast; a blink, a recall and a rewind draw their own)
+	const SELF_AFTER = new Set(['heal', 'hot', 'shield', 'deathward', 'cloak', 'sight', 'pact', 'summon', 'blink', 'gate', 'daybreak', 'recall', 'buff']);
+	// (and while a buff's look lasts: as long as the buff does)
+	const ALIVE = {
+		shield: () => buff.shield > 0 && buff.shieldUntil > now(), deathward: () => buff.deathUntil > now(), cloak: () => buff.cloakUntil > now(),
+		light: () => buff.lightUntil > now(), pact: () => buff.pactUntil > now(), hot: () => buff.hots.length > 0,
+	};
 
 	// ---------- each frame ----------
 	function stepBolts(dt) {
@@ -386,13 +438,14 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			const step = B.vel.length() * dt;
 			_d.copy(B.vel).normalize();
 			const h = combat.firstHit(B.pos, _d, step, combat.me);
-			const c = GLOW[spell.school];
+			const c = GLOW[spell.school], L = B.look || {};
 			// (its trail)
-			for (let n = 0; n < 3; n++) fx.emit(B.pos.x - _d.x * step * n / 3, B.pos.y - _d.y * step * n / 3, B.pos.z - _d.z * step * n / 3, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, 0.28, n ? 0.18 : 0.32, 0.04, c, 1, 0, 0);
+			if (L.trail) L.trail(fx, B.pos, _d, step);
+			else for (let n = 0; n < 3; n++) fx.emit(B.pos.x - _d.x * step * n / 3, B.pos.y - _d.y * step * n / 3, B.pos.z - _d.z * step * n / 3, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, 0.28, n ? 0.18 : 0.32, 0.04, c, 1, 0, 0);
 			if (h) {
 				const at = B.pos.clone().addScaledVector(_d, h.t);
-				if (h.T && !h.ward) { harm(h.T, (B.dmg ?? spell.dmg) * B.k, spell, at, _d); hex(h.T, spell.status, B.k); }
-				fx.burst(at, c, 16, 3, 0.4, 0.22, 0.6);
+				if (h.T && !h.ward) { harm(h.T, (B.dmg ?? spell.dmg) * B.k, spell, at, _d); hex(h.T, spell.status, B.k, spell.id); }
+				if (L.hit) L.hit(fx, at, _d); else fx.burst(at, c, 16, 3, 0.4, 0.22, 0.6);
 				if (spell.splash) { fx.ring(at, spell.splash, c, 24, 0.35, 0.3); areaHarm(at, spell.splash, spell, B.k, spell.dmg * 0.6, null); }
 				if (spell.ignite) combat.igniteAt(at.x, at.z, 5);
 				if (spell.pierce && h.T && !B.pierced) { B.pierced = true; B.pos.copy(at).addScaledVector(_d, 0.6); continue; }
@@ -410,9 +463,9 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			const from = hand(new THREE.Vector3());
 			aim(_o, _d);
 			const h = combat.firstHit(_o, _d, spell.range, combat.me), end = _o.clone().addScaledVector(_d, h ? h.t : spell.range);
-			const c = GLOW[spell.school];
-			fx.line(from, end, c, isPhone ? 1.2 : 0.6, 0.06, spell.drain ? 0.18 : 0.28, 0.05);
-			fx.burst(end, c, 2, 1.5, 0.25, 0.2, 0.3);
+			const c = GLOW[spell.school], L = lookOf(spell);
+			if (L.beam) L.beam(fx, from, end, now());
+			else { fx.line(from, end, c, isPhone ? 1.2 : 0.6, 0.06, spell.drain ? 0.18 : 0.28, 0.05); fx.burst(end, c, 2, 1.5, 0.25, 0.2, 0.3); }
 			if (h?.T && !h.ward) {
 				const acc = (H.acc.get(h.T) || 0) + spell.dps * H.k * dt;
 				if (acc >= 4) {
@@ -442,8 +495,8 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			const e = camera.position;
 			_p.set(e.x + Math.cos(S.a) * 1.6, e.y - 0.2 + Math.sin(S.a * 1.7) * 0.25, e.z + Math.sin(S.a) * 1.6);
 			S.pos.lerp(_p, Math.min(1, dt * 4));
-			fx.emit(S.pos.x, S.pos.y, S.pos.z, 0, 0.1, 0, 0.3, 0.38, 0.1, GLOW.umbral, 0.9, 0, 0);
-			fx.emit(S.pos.x + (Math.random() - 0.5) * 0.3, S.pos.y, S.pos.z + (Math.random() - 0.5) * 0.3, 0, -0.3, 0, 0.6, 0.15, 0.02, [0.2, 0.1, 0.35], 1, 0, 0);
+			if (S.look?.body) S.look.body(fx, S.pos, t);
+			else { fx.emit(S.pos.x, S.pos.y, S.pos.z, 0, 0.1, 0, 0.3, 0.38, 0.1, GLOW.umbral, 0.9, 0, 0); fx.emit(S.pos.x + (Math.random() - 0.5) * 0.3, S.pos.y, S.pos.z + (Math.random() - 0.5) * 0.3, 0, -0.3, 0, 0.6, 0.15, 0.02, [0.2, 0.1, 0.35], 1, 0, 0); }
 			S.cool -= dt;
 			if (S.cool > 0) continue;
 			S.cool = S.spell.rate;
@@ -465,11 +518,14 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		// (quickened: every cooldown runs three times as fast)
 		if (buff.quickUntil > t) for (const id of Object.keys(state.cds)) state.cds[id] -= dt * 2;
 		if (buff.shieldUntil <= t) buff.shield = 0;
-		// the small sun at your shoulder
-		if (buff.lightUntil > t) {
-			const e = camera.position;
+		// the looks of what lasts on you (the small sun at your shoulder, a ward, petals, smoke)
+		if (buff.looks.size) {
 			aim(_o, _d);
-			fx.emit(e.x - _d.z * 0.5, e.y + 0.35, e.z + _d.x * 0.5, 0, 0, 0, 0.12, 0.55, 0.45, GLOW.dawn, 1, 0, 0);
+			const moving = !!p && Math.hypot(p.vel?.x || 0, p.vel?.z || 0) > 0.5;
+			for (const [id, B] of buff.looks) {
+				if (B.until <= t || !B.alive()) { buff.looks.delete(id); continue; }
+				B.on(fx, camera.position, t, _d, moving);
+			}
 		}
 		// what the sight spells show
 		if (buff.sightUntil > t && Math.random() < dt * 4) {
@@ -529,7 +585,7 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		if (histT <= 0 && p) { histT = 0.25; history.push({ t, x: p.pos.x, y: p.pos.y, z: p.pos.z, hp: combat.vitals().hp }); while (history.length && history[0].t < t - 6) history.shift(); }
 		stepBolts(dt); stepBeams(dt, keysHeld); stepEffects(dt); stepShades(dt, t); stepHexes(dt); stepKnocks(dt); stepBuffs(dt, t);
 	}
-	function clear() { bolts.length = effects.length = shades.length = knocks.length = 0; held.clear(); for (const T of hexed.keys()) T.hex = null; hexed.clear(); history.length = 0; }
+	function clear() { bolts.length = effects.length = shades.length = knocks.length = 0; held.clear(); buff.looks.clear(); for (const T of hexed.keys()) T.hex = null; hexed.clear(); history.length = 0; }
 	return {
 		cast, release, update, clear, shieldBlow, exposure,
 		cloaked: () => buff.cloakUntil > now(),
