@@ -48,7 +48,7 @@ import { qualityNow } from '../world/governor.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 import { createScopeOptics } from './scope-optics.js';
-import { refineHandSurface, closeHandMaterial } from '../people/hand-surface.js';
+import { refineHandSurface, closeHandMaterial, handRefine } from '../people/hand-surface.js';
 import { dressArms } from '../people/sleeve.js';
 
 const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
@@ -124,8 +124,10 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			if (keep[a] && keep[b] && keep[c]) tri.push(idx[i], idx[i + 1], idx[i + 2]);
 		}
 		if (!tri.length) return null;
-		// (the lowest quality tiers keep the body's own hand surface: a quarter of the triangles)
-		const g = refineHandSurface(g0, tri, qualityNow().ratio < 0.75 ? 0 : 1);
+		// (the lowest quality tiers keep the body's own hand surface: a quarter of the triangles; a
+		// phone refines the fingers alone)
+		const R = handRefine(P, { phone: isPhone, ratio: qualityNow().ratio });
+		const g = refineHandSurface(g0, tri, R.passes, R.only);
 		const bones = P.bones.map(() => { const b = new THREE.Bone(); b.matrixAutoUpdate = false; b.matrixWorldAutoUpdate = false; return b; });
 		const skel = new THREE.Skeleton(bones, P.skeleton.boneInverses);
 		const skin = new THREE.SkinnedMesh(g, closeHandMaterial(P));

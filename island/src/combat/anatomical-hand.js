@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { handFrame } from '../crysis/held-items.js';
 import { contactField, fingerPoints, fingerQuats, fingerRig, limitPose, solveHand } from '../crysis/finger-pose.js';
-import { armTriangles, refineHandSurface, closeHandMaterial } from '../people/hand-surface.js';
+import { armTriangles, refineHandSurface, closeHandMaterial, handRefine } from '../people/hand-surface.js';
+import { qualityNow } from '../world/governor.js';
 
 // An independent copy of the player's finger rig. Combat never changes the avatar's
 // action, weapon grip, world bones, or skin material to pose these first-person hands.
-export function createAnatomicalHand(P, side) {
+export function createAnatomicalHand(P, side, { phone = false } = {}) {
 	const triangles = armTriangles(P, side);
 	if (!triangles.length) return null;
-	const geometry = refineHandSurface(P.skin.geometry, triangles, 1);
+	// (as the weapon view's arms: the fingers alone refined on a phone, none on the lowest tiers)
+	const R = handRefine(P, { phone, ratio: qualityNow().ratio });
+	const geometry = refineHandSurface(P.skin.geometry, triangles, R.passes, R.only);
 	const bones = P.bones.map(b => { const c = new THREE.Bone(); c.name = b.name; return c; });
 	const holder = new THREE.Group();
 	for (let i = 0; i < bones.length; i++) {

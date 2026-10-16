@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { stateAt } from './frontage.js';
+import { qualityNow, tierNow } from '../world/governor.js';
 
 // ---------- the room behind the glass ----------
 const GLASS_VS = /* glsl */`
@@ -301,8 +302,14 @@ function awningGeometry() {
 	return g;
 }
 
+// how much of a device's cap is drawn on a quality tier (world/governor.js): all of it on the high
+// and medium tiers, three quarters on low, a little over half on minimal. The fronts come nearest
+// first, so the far ones go (tools/phone-audit.test.mjs)
+export const frontShare = (tier = qualityNow()) => Math.min(1, (tier?.far ?? 1) / 0.8);
+
 export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 	const CAP = isPhone ? 160 : 420, FCAP = CAP * 2, ACAP = CAP;
+	let share = frontShare(), tierSeen = tierNow();
 	const night = { value: 0 };
 	// ---- the glazing ----
 	const gGeo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0));
@@ -401,10 +408,11 @@ export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 		builtFn = built;
 		fronts = list;
 		let n = 0, nf = 0, na = 0;
+		const cap = Math.round(CAP * share), fcap = Math.round(FCAP * share), acap = Math.round(ACAP * share);
 		const D = aDim.array, Sh = aShop.array, Fr = aFrame.array, Sa = aState.array;
 		for (const R of list) {
 			const sp = R.spec;
-			if (sp && n < CAP) {
+			if (sp && n < cap) {
 				// the glazing, a few centimetres proud of the wall
 				// (an office window from its sill; a shopfront from the ground, its kick plate drawn)
 				const h = sp.kind === 'office' ? sp.y1 - sp.y0 : sp.y1, kick = sp.kind === 'office' ? 0 : sp.y0;
@@ -418,12 +426,12 @@ export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 			} else R.slot = -1;
 			// the fascia behind the board, and a house's pilasters and sill either side of its window
 			for (const b of R.boxes || []) {
-				if (nf >= FCAP) break;
+				if (nf >= fcap) break;
 				put(fascia, nf, b[0], b[1], b[2], R.yaw, b[3], b[4], b[5]);
 				fascia.instanceColor.array.set(b[6], nf * 3);
 				nf++;
 			}
-			if (R.awning && na < ACAP) {
+			if (R.awning && na < acap) {
 				const A = R.awning;
 				put(awnings, na, A.x, A.y, A.z, R.yaw, A.w, A.drop, A.depth);
 				awnings.instanceColor.array.set(A.col, na * 3);
@@ -448,7 +456,7 @@ export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 				if (!R.open && (k === 'aboard')) continue;
 				if (!R.open && k === 'umbrella') k = 'furled';
 				const im = furn[k];
-				if (!im || fc[k] >= im.instanceMatrix.count) continue;
+				if (!im || fc[k] >= Math.round(im.instanceMatrix.count * share)) continue;
 				const n = fc[k]++;
 				put(im, n, e.x, e.y, e.z, e.yaw, 1, 1, 1);
 				if (e.col) im.instanceColor.array.set(e.col, n * 3); else im.instanceColor.array.fill(1, n * 3, n * 3 + 3);
@@ -461,6 +469,8 @@ export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 	let lastH = -99, lastBuilt = 0, openSig = 0;
 	function tick(hours, dow, nightK, now = 0) {
 		night.value = nightK;
+		// (a new quality tier: the fronts drawn again to its share)
+		if (tierNow() !== tierSeen) { tierSeen = tierNow(); share = frontShare(); set(fronts); }
 		const builtNow = now - lastBuilt > 0.5;
 		if (Math.abs(hours - lastH) < 1 / 60 && !builtNow) return;
 		if (builtNow) lastBuilt = now;

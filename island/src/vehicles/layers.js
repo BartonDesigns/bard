@@ -20,44 +20,56 @@ export function layerOffset(mat, role, name) {
 
 // lift the upper of each pair of overlapping faces (closer than 2.5 mm, facing the same way)
 // 2 mm along its normal, on vertices of its own; drop a face that is there twice. In place;
-// returns how many faces it lifted and dropped.
+// returns how many faces it lifted and dropped. (Run as each car model loads: written without a
+// small array per face or per comparison, which on a phone came to hundreds of MB of garbage
+// for a walk downtown.)
+const NONE = [];
 export function unfight(geo, lift = 0.002, near = 0.0025) {
 	const P = geo.attributes.position, I = geo.index;
 	if (!I) return { lifted: 0, dropped: 0 };
 	const n = I.count / 3, tri = new Float32Array(n * 13);
-	const v = (k) => [P.getX(k), P.getY(k), P.getZ(k)];
 	// per face: its corners, unit normal, plane offset
 	for (let t = 0; t < n; t++) {
-		const a = v(I.getX(t * 3)), b = v(I.getX(t * 3 + 1)), c = v(I.getX(t * 3 + 2));
-		const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], wx = c[0] - a[0], wy = c[1] - a[1], wz = c[2] - a[2];
+		const ia = I.getX(t * 3), ib = I.getX(t * 3 + 1), ic = I.getX(t * 3 + 2);
+		const ax = P.getX(ia), ay = P.getY(ia), az = P.getZ(ia), bx = P.getX(ib), by = P.getY(ib), bz = P.getZ(ib), cx = P.getX(ic), cy = P.getY(ic), cz = P.getZ(ic);
+		const ux = bx - ax, uy = by - ay, uz = bz - az, wx = cx - ax, wy = cy - ay, wz = cz - az;
 		let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
 		const l = Math.hypot(nx, ny, nz);
 		if (l < 1e-10) { tri[t * 13 + 12] = -1; continue; }
 		nx /= l; ny /= l; nz /= l;
-		tri.set([...a, ...b, ...c, nx, ny, nz], t * 13);
-		tri[t * 13 + 12] = l / 2;
+		const o = t * 13;
+		tri[o] = ax; tri[o + 1] = ay; tri[o + 2] = az; tri[o + 3] = bx; tri[o + 4] = by; tri[o + 5] = bz; tri[o + 6] = cx; tri[o + 7] = cy; tri[o + 8] = cz;
+		tri[o + 9] = nx; tri[o + 10] = ny; tri[o + 11] = nz;
+		tri[o + 12] = l / 2;
 	}
 	// faces in buckets by their plane: its offset to 2.5 mm, and its direction to an eighth (a
 	// face near the edge of a direction cell goes in its neighbours too), looked for by their
 	// own cell and the offsets either side
 	const bucket = new Map(), dOf = (t) => { const o = t * 13; return Math.round((tri[o + 9] * tri[o] + tri[o + 10] * tri[o + 1] + tri[o + 11] * tri[o + 2]) / near); };
 	const cellKey = (i, j, k, d) => (((i + 9) * 19 + (j + 9)) * 19 + (k + 9)) * 80000 + d + 40000;
+	// (each axis: its cell, and the neighbour toward it when the direction is near the edge)
+	const cell = new Int32Array(6), cells = new Uint8Array(3);
 	for (let t = 0; t < n; t++) {
 		if (tri[t * 13 + 12] <= 0) continue;
-		const o = t * 13, d = dOf(t), C = [9, 10, 11].map((m) => { const x = tri[o + m] * 8, r = Math.round(x); return Math.abs(x - r) > 0.18 ? [r, x > r ? r + 1 : r - 1] : [r]; });
-		for (const i of C[0]) for (const j of C[1]) for (const k of C[2]) { const key = cellKey(i, j, k, d); (bucket.get(key) || bucket.set(key, []).get(key)).push(t); }
+		const o = t * 13, d = dOf(t);
+		for (let m = 0; m < 3; m++) { const x = tri[o + 9 + m] * 8, r = Math.round(x); cell[m * 2] = r; cell[m * 2 + 1] = x > r ? r + 1 : r - 1; cells[m] = Math.abs(x - r) > 0.18 ? 2 : 1; }
+		for (let a = 0; a < cells[0]; a++) for (let b = 0; b < cells[1]; b++) for (let c = 0; c < cells[2]; c++) {
+			const key = cellKey(cell[a], cell[2 + b], cell[4 + c], d);
+			let list = bucket.get(key);
+			if (!list) bucket.set(key, list = []);
+			list.push(t);
+		}
 	}
-	// whether point p (3 floats) is inside face t, in its plane
-	const inside = (t, p) => {
+	// whether point (px, py, pz) is inside face t, in its plane
+	const inside = (t, px, py, pz) => {
 		const o = t * 13, ax = tri[o], ay = tri[o + 1], az = tri[o + 2];
-		const e0 = [tri[o + 6] - ax, tri[o + 7] - ay, tri[o + 8] - az], e1 = [tri[o + 3] - ax, tri[o + 4] - ay, tri[o + 5] - az], e2 = [p[0] - ax, p[1] - ay, p[2] - az];
-		const dot = (x, y) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
-		const d00 = dot(e0, e0), d01 = dot(e0, e1), d02 = dot(e0, e2), d11 = dot(e1, e1), d12 = dot(e1, e2), q = d00 * d11 - d01 * d01;
+		const e0x = tri[o + 6] - ax, e0y = tri[o + 7] - ay, e0z = tri[o + 8] - az, e1x = tri[o + 3] - ax, e1y = tri[o + 4] - ay, e1z = tri[o + 5] - az, e2x = px - ax, e2y = py - ay, e2z = pz - az;
+		const d00 = e0x * e0x + e0y * e0y + e0z * e0z, d01 = e0x * e1x + e0y * e1y + e0z * e1z, d02 = e0x * e2x + e0y * e2y + e0z * e2z, d11 = e1x * e1x + e1y * e1y + e1z * e1z, d12 = e1x * e2x + e1y * e2y + e1z * e2z, q = d00 * d11 - d01 * d01;
 		if (q <= 0) return false;
 		const u = (d11 * d02 - d01 * d12) / q, w = (d00 * d12 - d01 * d02) / q;
 		return u > 0.01 && w > 0.01 && u + w < 0.99;
 	};
-	const mid = (t) => { const o = t * 13; return [(tri[o] + tri[o + 3] + tri[o + 6]) / 3, (tri[o + 1] + tri[o + 4] + tri[o + 7]) / 3, (tri[o + 2] + tri[o + 5] + tri[o + 8]) / 3]; };
+	const midX = (t) => (tri[t * 13] + tri[t * 13 + 3] + tri[t * 13 + 6]) / 3, midY = (t) => (tri[t * 13 + 1] + tri[t * 13 + 4] + tri[t * 13 + 7]) / 3, midZ = (t) => (tri[t * 13 + 2] + tri[t * 13 + 5] + tri[t * 13 + 8]) / 3;
 	// Exporters may rotate a triangle's index order. It is still the same face,
 	// not a trim layer to lift away from the body.
 	const sameFace = (a, b) => {
@@ -73,15 +85,15 @@ export function unfight(geo, lift = 0.002, near = 0.0025) {
 	const up = new Uint8Array(n), drop = new Uint8Array(n), pairs = [];
 	for (let t = 0; t < n; t++) {
 		if (tri[t * 13 + 12] <= 0 || drop[t]) continue;
-		const o = t * 13, ct = mid(t), dt = tri[o + 9] * ct[0] + tri[o + 10] * ct[1] + tri[o + 11] * ct[2];
+		const o = t * 13, ctx = midX(t), cty = midY(t), ctz = midZ(t), dt = tri[o + 9] * ctx + tri[o + 10] * cty + tri[o + 11] * ctz;
 		const ci = Math.round(tri[o + 9] * 8), cj = Math.round(tri[o + 10] * 8), ck = Math.round(tri[o + 11] * 8), d = dOf(t);
-		for (let e = -1; e <= 1; e++) for (const s of bucket.get(cellKey(ci, cj, ck, d + e)) || []) {
+		for (let e = -1; e <= 1; e++) for (const s of bucket.get(cellKey(ci, cj, ck, d + e)) || NONE) {
 			if (s <= t || drop[s]) continue;
 			const q = s * 13;
 			if (tri[o + 9] * tri[q + 9] + tri[o + 10] * tri[q + 10] + tri[o + 11] * tri[q + 11] < 0.9986) continue;
-			const cs = mid(s);
-			if (!inside(t, cs) && !inside(s, ct)) continue;
-			const sep = tri[o + 9] * cs[0] + tri[o + 10] * cs[1] + tri[o + 11] * cs[2] - dt;
+			const csx = midX(s), csy = midY(s), csz = midZ(s);
+			if (!inside(t, csx, csy, csz) && !inside(s, ctx, cty, ctz)) continue;
+			const sep = tri[o + 9] * csx + tri[o + 10] * csy + tri[o + 11] * csz - dt;
 			if (Math.abs(sep) > near) continue;
 			const same = Math.abs(sep) < 1e-4 && sameFace(t, s);
 			if (same) { drop[s] = 1; continue; }

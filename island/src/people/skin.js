@@ -20,6 +20,12 @@
 // The quality governor (world/governor.js) scales the fine detail through one shared uniform,
 // so no tier change compiles anything: two programs on any device, one for the crowd and one
 // for your hands.
+//
+// Phones (SKIN_PHONE) read their value noise from a small shared 3D texture (skinNoiseTexture:
+// one fetch in place of eight hashes) and draw fewer octaves of it: 6 fetches a pixel on your
+// hands (13 hashed before) and 2 on the crowd (4). The low and minimal tiers turn the noise's
+// octaves off through the same uniform (uSkinQ.z), and minimal draws no pores at all; a
+// desktop on the high tier draws exactly what it did.
 
 import * as THREE from 'three';
 import { INK_GLSL, inkUniforms } from '../tattoo/skinink.js';
@@ -27,19 +33,45 @@ import { qualityNow, onQuality } from '../world/governor.js';
 
 const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-// the fine detail by quality tier (x), and how far off people keep their pores (y, metres)
+// the fine detail by quality tier (x), how far off people keep their pores (y, metres; none on
+// a phone's minimal tier), and whether the noise's octaves are drawn at all (z: off on the low
+// and minimal tiers, where the creases, nails and lines stay but nothing wanders or mottles)
 export function skinDetail(tier = 'high', phone = isPhone) {
-	return { detail: { high: 1, medium: 0.85, low: 0.6, minimal: 0.35 }[tier] ?? 1, far: phone ? 4 : 8 };
+	const far = phone ? { high: 4, medium: 4, low: 2.5, minimal: 0 } : { high: 8, medium: 8, low: 6, minimal: 4 };
+	return { detail: { high: 1, medium: 0.85, low: 0.6, minimal: 0.35 }[tier] ?? 1, far: far[tier] ?? far.high, octaves: tier === 'low' || tier === 'minimal' ? 0 : 1 };
 }
-const SKIN_Q = { value: new THREE.Vector4(1, 8, 0, 0) };
-function tierChanged(t) { const d = skinDetail(t?.name); SKIN_Q.value.set(d.detail, d.far, 0, 0); }
+const SKIN_Q = { value: new THREE.Vector4(1, 8, 1, 0) };
+function tierChanged(t) { const d = skinDetail(t?.name); SKIN_Q.value.set(d.detail, d.far, d.octaves, 0); }
 tierChanged(qualityNow());
 onQuality(tierChanged);
 
 // which programs a skin compiles to: for your own hands or the crowd, on a phone or not
 export function skinVariant({ closeup = false, phone = isPhone } = {}) {
 	const defines = closeup ? ['SKIN_HERO', 'SKIN_PORES', ...(phone ? ['SKIN_LITE'] : [])] : [phone ? 'SKIN_PORES_LITE' : 'SKIN_PORES'];
-	return { defines, key: 'crysis-skin-7' + (closeup ? '-hero' : '') + (phone ? '-lo' : '') };
+	if (phone) defines.push('SKIN_PHONE');
+	return { defines, key: 'crysis-skin-7' + (closeup ? '-hero' : '') + (phone ? '-lo2' : '') };
+}
+
+// The phones' value noise: the lattice of random values sn3 would hash, 64 to a side and
+// repeating, read with the same smooth interpolation (the fetch lands between the lattice
+// points as smoothstep puts it, so a linear filter gives sn3's own curve). 256 KB, made once.
+export const SKIN_NOISE_N = 64;
+let NOISE3 = null;
+export function skinNoiseData(N = SKIN_NOISE_N) {
+	const d = new Uint8Array(N * N * N);
+	for (let i = 0; i < d.length; i++) { let h = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35); d[i] = (h ^ (h >>> 16)) & 255; }
+	return d;
+}
+export function skinNoiseTexture() {
+	if (NOISE3) return NOISE3;
+	const t = new THREE.Data3DTexture(skinNoiseData(), SKIN_NOISE_N, SKIN_NOISE_N, SKIN_NOISE_N);
+	t.format = THREE.RedFormat; t.type = THREE.UnsignedByteType;
+	t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false;
+	t.wrapS = t.wrapT = t.wrapR = THREE.RepeatWrapping;
+	t.unpackAlignment = 1; t.name = 'skin-noise';
+	t.needsUpdate = true;
+	NOISE3 = t;
+	return t;
 }
 
 const HEAD = /* glsl */`
@@ -54,11 +86,19 @@ varying vec2 vScalpUv;
 varying vec4 vSkin;
 varying vec3 vBindP;
 float sh3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+#ifdef SKIN_PHONE
+uniform sampler3D uSkinN;
+float sn3(vec3 x) {
+	vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+	return texture(uSkinN, (i + f + 0.5) * (1.0 / 64.0)).r;
+}
+#else
 float sn3(vec3 x) {
 	vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(mix(sh3(i), sh3(i + vec3(1, 0, 0)), f.x), mix(sh3(i + vec3(0, 1, 0)), sh3(i + vec3(1, 1, 0)), f.x), f.y),
 		mix(mix(sh3(i + vec3(0, 0, 1)), sh3(i + vec3(1, 0, 1)), f.x), mix(sh3(i + vec3(0, 1, 1)), sh3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
+#endif
 // what the layers below leave for the lighting: the surface before the fine detail (the red of
 // the scattered light sees this one), the oil's share of the shine, a nail's gloss, how thin
 // the flesh is, the shade of creases and contact, and the height of the fine detail (m)
@@ -120,7 +160,8 @@ void heroSkin(inout vec3 col) {
 		+ groove(s.z, 0.00045, px) * 0.85;
 	pc *= palm * wrapA * fing * (0.75 + 0.5 * curl);
 	// on the back, loose wrinkles bowed round each joint, stretched flatter as the finger closes
-	float n1 = sn3(vBindP * 2600.0);
+	float n1 = 0.5;
+	if (uSkinQ.z > 0.5) n1 = sn3(vBindP * 2600.0);
 	float wp = aaLine((s.y + 0.0011 * a2 * sign(s.y)) / 0.0012 + n1 * 0.35, 0.15) * (1.0 - smoothstep(0.0018, 0.0064, abs(s.y)));
 	float wd = aaLine((s.z + 0.0008 * a2 * sign(s.z)) / 0.001 + n1 * 0.35, 0.15) * (1.0 - smoothstep(0.0012, 0.0044, abs(s.z)));
 	float wm = aaLine((s.x + 0.0013 * a2 * sign(s.x)) / 0.0017 + n1 * 0.4, 0.12) * (1.0 - smoothstep(0.002, 0.007, abs(s.x))) * 0.55;
@@ -166,7 +207,15 @@ void heroSkin(inout vec3 col) {
 
 	// ---- veins: the arch across the back of the hand, those down to it from between the
 	// knuckles and the two that leave it for the wrist; meandering ones up the forearm ----
-	vec2 wv = hp + (vec2(sn3(vBindP * 45.0), sn3(vBindP * 45.0 + 9.0)) - 0.5) * 0.007 + (vec2(sn3(vBindP * 130.0), sn3(vBindP * 130.0 + 5.0)) - 0.5) * 0.0015, uw = wv / vec2(S, Lh);
+	vec2 wv = hp;
+	if (uSkinQ.z > 0.5) {
+#ifdef SKIN_PHONE
+		wv += (vec2(sn3(vBindP * 45.0), sn3(vBindP * 45.0 + 9.0)) - 0.5) * 0.0075;
+#else
+		wv += (vec2(sn3(vBindP * 45.0), sn3(vBindP * 45.0 + 9.0)) - 0.5) * 0.007 + (vec2(sn3(vBindP * 130.0), sn3(vBindP * 130.0 + 5.0)) - 0.5) * 0.0015;
+#endif
+	}
+	vec2 uw = wv / vec2(S, Lh);
 	float vd = abs(uw.y - (0.42 + 0.1 * uw.x * uw.x)) * Lh + smoothstep(0.8, 1.0, abs(uw.x)) * 0.01;
 	for (int k = 0; k < 3; k++) { float uk = -0.66 + 0.66 * float(k); vd = min(vd, segD(wv, vec2(uk * S, 0.93 * Lh), vec2(uk * 0.7 * S, (0.42 + 0.049 * uk * uk) * Lh), t) + 0.0006); }
 	vd = min(vd, segD(wv, vec2(-0.85 * S, 0.5 * Lh), vec2(-1.05 * S, -0.35 * Lh), t));
@@ -216,7 +265,10 @@ void heroSkin(inout vec3 col) {
 	bed = mix(bed, vec3(0.8, 0.74, 0.66), edge * 0.75);
 	col = mix(col, bed, plate);
 	col *= 1.0 - fold * 0.3;
-	h += plate * 0.00016 - fold * 0.00006 + plate * (sn3(vec3(a * 40.0, ny * 2.0, 0.0)) - 0.5) * 0.000006;
+	h += plate * 0.00016 - fold * 0.00006;
+#ifndef SKIN_PHONE
+	h += plate * (sn3(vec3(a * 40.0, ny * 2.0, 0.0)) - 0.5) * 0.000006;
+#endif
 	skinNail = plate;
 	skinGloss = plate * (1.0 - edge * 0.6);
 
@@ -320,6 +372,7 @@ export function skinMaterial(map, tint, age, { closeup = false } = {}) {
 		sh.uniforms.uSkin = skinU;
 		sh.uniforms.uVit = vitU;
 		sh.uniforms.uSkinQ = SKIN_Q;
+		if (V.defines.includes('SKIN_PHONE')) sh.uniforms.uSkinN = { value: skinNoiseTexture() };
 		Object.assign(sh.uniforms, inkU);
 		if (handU) Object.assign(sh.uniforms, handU);
 		const defs = V.defines.map((d) => '#define ' + d + '\n').join('');
@@ -382,9 +435,14 @@ if (uVit.x > 0.5) {
 }
 // blotches: real skin's colour is a little uneven, redder here and sallower there, a few
 // centimetres across (gone far off, where it would only shimmer)
-{
+float blotchD = length(vViewPosition);
+if (blotchD < 12.0 && uSkinQ.z > 0.5) {
+#ifdef SKIN_PHONE
+	float mo = sn3(vBindP * 38.0) - 0.5;
+#else
 	float mo = sn3(vBindP * 38.0) * 0.65 + sn3(vBindP * 97.0 + 3.1) * 0.35 - 0.5;
-	diffuseColor.rgb *= 1.0 + mo * vec3(0.1, 0.13, 0.12) * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))) * uSkin.x;
+#endif
+	diffuseColor.rgb *= 1.0 + mo * vec3(0.1, 0.13, 0.12) * (1.0 - smoothstep(4.0, 12.0, blotchD)) * uSkin.x;
 }
 skinThin = vSkin.y;
 #ifdef SKIN_HERO
@@ -393,9 +451,12 @@ heroSkin(diffuseColor.rgb);
 			.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 // a slightly oilier T-zone and lips, matte cheeks: a broad soft sheen, never a patch (on dark
 // skin a bright patch reads as lost pigment); a faint grain, gone before it could shimmer
-float rq = length( fwidth( vBindP * 120.0 ) );
 float oilT = smoothstep( 0.2, 0.9, vSkin.z ) * uSkin.z;
-roughnessFactor = mix( 0.62, 0.54, oilT ) + ( sn3( vBindP * 120.0 ) - 0.5 ) * 0.03 * ( 1.0 - smoothstep( 0.2, 0.6, rq ) );
+roughnessFactor = mix( 0.62, 0.54, oilT );
+#ifndef SKIN_PHONE
+float rq = length( fwidth( vBindP * 120.0 ) );
+roughnessFactor += ( sn3( vBindP * 120.0 ) - 0.5 ) * 0.03 * ( 1.0 - smoothstep( 0.2, 0.6, rq ) );
+#endif
 skinOil = 0.25 + 0.6 * oilT;
 #ifdef SKIN_HERO
 roughnessFactor = clamp( roughnessFactor + skRough, 0.12, 0.85 );
@@ -417,9 +478,13 @@ skinBaseN = normal;
 		float fine = 1.0 - smoothstep( 0.35, 0.9, pxB * 1400.0 );
 		if ( fine > 0.0 ) {
 			vec3 q = vBindP * 1400.0;
+#ifdef SKIN_PHONE
+			float hp = smoothstep( 0.25, 0.75, sn3( q ) ) - 0.5;
+#else
 			float hp = sn3( q ) * 0.6 + sn3( q * 2.3 + 7.0 ) * 0.4;
 			hp = smoothstep( 0.25, 0.75, hp ) - 0.5;
 			hp += ( sn3( vec3( vBindP.x * 90.0, vBindP.y * 900.0, vBindP.z * 90.0 ) ) - 0.5 ) * 0.6 * ( uSkin.y - 0.6 );
+#endif
 			h += hp * 0.00004 * near * fine;
 		}
 #endif
