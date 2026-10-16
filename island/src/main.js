@@ -1026,7 +1026,7 @@ export function createIslandWorld() {
 		if (alienPlan) alienPlan.clear.push(...planDwellings(island, alienPlan));
 		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
-		const village = stash(() => createVillage(island, shared, scene), true);
+		const village = stash(() => createVillage(island, shared, scene, { profile, isPhone, camera }), true);
 		if (bare) { village.footprints.length = 0; village.pickables.length = 0; }
 		vegetation.addContacts(village.footprints);
 		const distant = stash(() => createDistant(island, shared, scene));
@@ -1378,6 +1378,7 @@ export function createIslandWorld() {
 		world.colony?.dispose();
 		world.arch?.dispose();
 		world.medieval?.dispose();
+		world.village?.dispose?.();
 		world.beyond?.dispose();
 		world.boardwalk?.destroy();
 		world.rays?.dispose();

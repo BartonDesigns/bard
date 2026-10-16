@@ -10,6 +10,9 @@ import { addPulse } from '../pulse.js';
 import { usePhoto } from './photomats.js';
 import { buildFaith } from './boatmodel.js';
 
+import { createArtSigns } from '../signage/world-art.js';
+import { artFamily } from '../signage/art.js';
+
 const WALLS = [[0.93, 0.93, 0.90], [0.58, 0.72, 0.86], [0.52, 0.75, 0.68], [0.95, 0.86, 0.56], [0.88, 0.58, 0.50], [0.93, 0.93, 0.90]];
 const ROOFS = [[0.70, 0.20, 0.17], [0.22, 0.48, 0.52], [0.52, 0.55, 0.58], [0.45, 0.22, 0.18]];
 const TRIM = [0.95, 0.95, 0.93];
@@ -46,7 +49,7 @@ const place = (g, x, y, z, ry = 0, rz = 0, rx = 0) => {
 	return g.applyMatrix4(m);
 };
 
-export function createVillage(island, shared, scene) {
+export function createVillage(island, shared, scene, { profile, isPhone = false, camera } = {}) {
 	const r = mulberry32(island.seed ^ 0x5eed);
 	const v = island.village, seaAng = Math.atan2(v.seaDir.x, v.seaDir.z);
 	const parts = { wall: [], roof: [], wood: [], glass: [], stone: [] };
@@ -224,14 +227,17 @@ export function createVillage(island, shared, scene) {
 	group.add(boat);
 	boat.visible = !v.inland;
 
+	const sx = pier.x + side.x * 3.5, sz = pier.z + side.z * 3.5;
+	const tradeSigns = createArtSigns({ parent:group, isPhone, records: [{ x:sx,z:sz,y:island.heightAt(sx,sz),yaw:seaAng+Math.PI,family:artFamily(profile),name:v.inland?'Village':'Landing Pier',label:v.inland?'Village path':'Boats & shore',trade:6,width:.75,height:2.7,bottom:.15,mount:'post',format:'banner' }] });
 	scene.add(group);
 	const DAY_GLASS = new THREE.Color(0.26, 0.34, 0.42), LAMP_GLASS = new THREE.Color(0xffc47a);
 	function update(t, night) {
+		if (camera) tradeSigns.update(camera);
 		// by day the panes show the sky they face (no black holes in the walls); by night the
 		// lamps inside
 		mats.glass.emissive.copy(DAY_GLASS).lerp(LAMP_GLASS, night);
 		mats.glass.emissiveIntensity = 0.55 * (1 - night) + night * 2.2;
 		// the boat rides the swell in boat.js
 	}
-	return { group, footprints, pickables, pier, boat, update, placed };
+	return { group, footprints, pickables, pier, boat, update, placed, tradeSigns, dispose: () => tradeSigns.dispose() };
 }

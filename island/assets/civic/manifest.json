@@ -1,0 +1,107 @@
+{
+  "generator": "OpenAI built-in imagegen",
+  "date": "2026-10-15",
+  "preparation": "Resize and WebP encoding only. Alpha retained. Runtime relief uses mathematical height data.",
+  "assets": [
+    {
+      "id": "galvanized",
+      "mobile": false,
+      "file": "galvanized-v1.webp",
+      "width": 1024,
+      "height": 1024,
+      "alpha": false,
+      "bytes": 387496,
+      "sha256": "4961b2d23062f576adaad1d3acdf6da162366e100c0f9db90054a493fdcdeaa6"
+    },
+    {
+      "id": "galvanized",
+      "mobile": true,
+      "file": "galvanized-v1-mobile.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": false,
+      "bytes": 98116,
+      "sha256": "4242f8d736e4ad63db2fc7d460c23d3eb47e9c17c585c5933685f12749430b52"
+    },
+    {
+      "id": "diamond-plate",
+      "mobile": false,
+      "file": "diamond-plate-v1.webp",
+      "width": 1024,
+      "height": 1024,
+      "alpha": false,
+      "bytes": 354506,
+      "sha256": "8e660b7cf39c19e807560f8e9d727daacf24e151dd1c894ce0f6dba83acbe0d0"
+    },
+    {
+      "id": "diamond-plate",
+      "mobile": true,
+      "file": "diamond-plate-v1-mobile.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": false,
+      "bytes": 91696,
+      "sha256": "19edefba3e1ce9be5262a878d1b057adc07857b261aa455554db5e4f7024769d"
+    },
+    {
+      "id": "enamel",
+      "mobile": false,
+      "file": "enamel-v1.webp",
+      "width": 1024,
+      "height": 1024,
+      "alpha": false,
+      "bytes": 316476,
+      "sha256": "7377e0ad533dca8ffe3ac74b0801780670f8108e50de39658bf9c4916264d8de"
+    },
+    {
+      "id": "enamel",
+      "mobile": true,
+      "file": "enamel-v1-mobile.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": false,
+      "bytes": 59490,
+      "sha256": "b87cdeeb13a18f1135035be1d0fc1a0f01e5c0582125648b326e2adf65024c39"
+    },
+    {
+      "id": "damage",
+      "mobile": false,
+      "file": "damage-v1.webp",
+      "width": 1024,
+      "height": 683,
+      "alpha": true,
+      "bytes": 437156,
+      "sha256": "56c5e2f09556a2bad4e99784a4addca8a1da6dda13f2bae0d3d4be46b1f1485a"
+    },
+    {
+      "id": "damage",
+      "mobile": true,
+      "file": "damage-v1-mobile.webp",
+      "width": 512,
+      "height": 341,
+      "alpha": true,
+      "bytes": 123908,
+      "sha256": "abf341e98cdf86020b8ac166b77420c035499a60a3ed75d5e774f59afb50bb62"
+    },
+    {
+      "id": "graffiti",
+      "mobile": false,
+      "file": "graffiti-v1.webp",
+      "width": 1536,
+      "height": 768,
+      "alpha": true,
+      "bytes": 552692,
+      "sha256": "5bcde5b53ed4c7afd8d7126606096ce218d51fe04b8cf9a99d805dd74bdb5020"
+    },
+    {
+      "id": "graffiti",
+      "mobile": true,
+      "file": "graffiti-v1-mobile.webp",
+      "width": 768,
+      "height": 384,
+      "alpha": true,
+      "bytes": 143870,
+      "sha256": "8db45405dadef3f91aa40e88efdf412cc4629c0d035e37607da9869fa5f7b94e"
+    }
+  ]
+}
