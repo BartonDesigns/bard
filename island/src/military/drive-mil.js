@@ -20,6 +20,7 @@ import { loadRapier, createCarPhysics } from '../vehicles/physics.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
 import { jetState, jetStep, heliState, heliStep } from './flight.js';
+import { stencilVehicle } from '../signage/cars.js';
 
 // how each ground vehicle drives (vehicles/physics.js FEEL's fields)
 const FEEL = {
@@ -53,7 +54,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 	// v: the parked vehicle ({ kind, x, y, z, yaw, scheme }); io: drive.js's { held, pedals, hud(text), strike(car), seat() (C: the seat's view) }
 	function board(v, io) {
 		const kind = v.kind, D = DIMS[kind], air = kind === 'jet' || kind === 'heli';
-		const mesh = vehicleMesh(kind, kit, SCHEMES[v.scheme] || SCHEMES.woodland, { phone: isPhone });
+		const mesh = stencilVehicle(vehicleMesh(kind, kit, SCHEMES[v.scheme] || SCHEMES.woodland, { phone: isPhone }), kind, { parked: true, grey: air });
 		group.add(mesh);
 		mesh.position.set(v.x, v.y, v.z); mesh.rotation.set(0, v.yaw, 0);
 		const S = { kind, mesh, car: null, loading: false, pos: new THREE.Vector3(v.x, v.y, v.z), q: new THREE.Quaternion().setFromAxisAngle(Y, v.yaw), yaw: v.yaw, spd: 0, vel: new THREE.Vector3(), throttle: 0, ground: true, gear: true, spin: 0, turret: 0, gun: 0, reload: 0, fire: 0, shells: [], camPos: null, dustT: 0, dead: false, alt: 0 };

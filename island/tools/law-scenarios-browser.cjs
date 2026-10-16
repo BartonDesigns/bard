@@ -124,6 +124,8 @@ function install() {
 			if (i > 40 && s.real && s.zone === 'earth-urban') break;
 		}
 		await page.evaluate(install);
+		// (the bases near: which are sited, how far, what they hold; and how many failed to site)
+		log('bases', JSON.stringify(await page.evaluate(() => { const I = window.Crysis.military?.(); return I && { failed: I.failed, why: I.failedWhy, bases: (I.bases || []).slice(0, 5).map((b) => [b.name, b.kind, b.status, b.km, JSON.stringify(b.units)]) }; }).catch((e) => String(e))));
 		const shot = async (name) => { try { const d = await page.evaluate(() => window.__law.shot()); const f = path.join(OUT, `${TAG}-${name}.png`); fs.writeFileSync(f, Buffer.from(d.split(',')[1], 'base64')); log('shot', f); return f; } catch (e) { log('shot failed', String(e)); return null; } };
 
 		const scenes = {
@@ -143,17 +145,37 @@ function install() {
 				});
 			},
 			// a gang crew at thirty metres, and you shooting at them
+			// (on foot first: goTo leaves you flying, and the combat answers you only on the ground; the
+			// camera put at your eye, so the shot goes from where aimAt aimed it)
 			async shootout() {
-				await page.evaluate(() => { const C = window.Crysis.combat; C.arm('warden-spark-carbine'); C.ammo(300); return C.spawn('copperline', 3, { d: 30, alert: true }); });
+				await page.evaluate(() => {
+					const C = window.Crysis.combat, p = window.Crysis.world().player.state;
+					p.flying = false; p.vel?.set?.(0, 0, 0); p.pos.y = C.ground(p.pos.x, p.pos.z, p.pos.y + 2) + 1.68;
+					C.arm('warden-spark-carbine'); C.ammo(300);
+					C.spawn('copperline', 3, { d: 30, alert: true });
+				});
+				// (the crew's bodies come in over a few frames)
+				let n = 0;
+				for (let k = 0; k < 20 && !n; k++) { await page.waitForTimeout(3000); n = await page.evaluate(() => { window.__law.step(0.2); return window.Crysis.combat.squads.alive().filter((h) => h.fid === 'copperline').length; }); }
+				let hits = 0;
 				for (let k = 0; k < 20; k++) {
-					await page.evaluate(() => { const C = window.Crysis.combat; const t = C.squads.alive().find((h) => h.fid === 'copperline'); if (t) { C.aimAt(t.id); C.shoot(30); } window.__law.step(0.6); });
+					hits += await page.evaluate(() => {
+						const C = window.Crysis.combat, p = window.Crysis.world().player.state, cam = window.L99Island.camera();
+						const t = C.squads.alive().find((h) => h.fid === 'copperline');
+						let r = null;
+						if (t) { cam.position.copy(C.eye()); C.aimAt(t.id); cam.updateMatrixWorld(); r = C.shoot(30); }
+						window.__law.step(0.6);
+						void p;
+						return r && r.kind === 'person' ? 1 : 0;
+					});
 				}
-				return 'fired';
+				return { crew: n, hits };
 			},
 			async boss() { return page.evaluate(() => { const r = window.Crysis.combat.boss('walker'); return r?.name || r; }); },
 			async invasion() { return page.evaluate(() => window.Crysis.military.api.invade()); },
 		};
-		const RUN = { gang: 90, crime: 100, shootout: 110, boss: 90, invasion: 150 };
+		// (RUN_K: each scene run on longer, to see a convoy from a base a few kilometres off arrive)
+		const RUN = Object.fromEntries(Object.entries({ gang: 90, crime: 100, shootout: 110, boss: 90, invasion: 150 }).map(([k, v]) => [k, Math.round(v * +(process.env.RUN_K || 1) / 10) * 10]));
 		// pictures staged on purpose (SCENES=corner,roadblock,response,convoy): each steps until
 		// there is something to see, turns to it, and saves the frame
 		const step = (s) => page.evaluate((n) => window.__law.step(n), s);
@@ -217,6 +239,7 @@ function install() {
 				timeline: S.samples.filter((s, i) => i % 5 === 0),
 			};
 			log(name, JSON.stringify({ peak, police: anyPolice?.t, onScene: firstPolice?.t, military: military?.t, faults: Object.fromEntries(Object.entries(S.faults).map(([k, v]) => [k, v.length])) }));
+			log(name, 'patrols', JSON.stringify(await page.evaluate(() => window.Crysis.military.api.dispatch.info()).catch((e) => String(e))));
 		}
 	} catch (e) { errors.push('harness: ' + (e.stack || e)); }
 	report.errors = errors.slice(0, 20);

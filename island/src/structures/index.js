@@ -76,6 +76,8 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 	const monuments = createMonuments(ctx);
 	// walls you break through, layer by layer (walls/): the houses' and the interiors' near you
 	const walls = createWalls({ ...ctx, world: W });
+	// (the crews poll the broken walls for a patch visit: structures/rebuild.js)
+	ctx.walls = () => walls;
 
 	// ---------- the car you drive, into what it meets ----------
 	let carPrev = null, carCool = 0;

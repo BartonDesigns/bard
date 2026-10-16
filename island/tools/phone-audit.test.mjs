@@ -168,7 +168,7 @@ test('rebuild site, storefronts and staff: nearer and fewer down the tiers, as m
 	setTier(0);
 });
 
-test('the cars\' decal sheet: a phone\'s is a third smaller, and every locale\'s pools still fit it whole', () => {
+test('the cars\' decal sheet: a phone\'s is smaller than a square 1024, and every locale\'s pools (police vans and military stencils too) still fit it whole', () => {
 	assert.deepEqual(CAR_ATLAS.desktop, { size: 2048, height: 1024, scale: 1 });
 	assert.ok(CAR_ATLAS.phone.size * CAR_ATLAS.phone.height < 1024 * 1024);
 	for (const locale of ['us-ca', 'us-tx', 'mx', 'de', 'fr', 'uk', 'jp', 'au']) {

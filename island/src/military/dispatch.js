@@ -18,15 +18,19 @@
 // pulls out, and the column is let go only once it is out of sight.
 
 import * as THREE from 'three';
-import { planDispatch, invasionPlan, nextInvasion, SPEED, toWorld } from './rules.js';
+import { planDispatch, invasionPlan, nextInvasion, SPEED, toWorld, FORCES } from './rules.js';
 import { roadRoute, along, joinRoute, trimToRoad } from './route.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
 import { routeTrouble } from '../law/ladder.js';
+import { stencilVehicle } from '../signage/cars.js';
 
 const SHOW_R = 1800, HIDE_R = 2300, STAY = 150;
 const HP = { tank: 900, apc: 420, jeep: 180, truck: 260, heli: 380, jet: 300 };
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+// the searchlight's beam: a long cone, its tip at the lamp, open toward the ground, soft at its edge
+const BEAM_GEO = new THREE.CylinderGeometry(0.15, 3.2, 1, 16, 1, true).translate(0, 0.5, 0);
+const BEAM_MAT = new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: true });
 let seq = 1;
 
 export function createDispatch({ world, combat, military, kit, group, hint, isPhone }) {
@@ -45,6 +49,9 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		if (patrols.filter((p) => p.side === 'guard' && p.state !== 'done').length >= 3) return null;
 		// (one patrol to a place at a time)
 		if (patrols.some((p) => p.side === 'guard' && p.state !== 'done' && Math.hypot(p.to.x - e.x, p.to.z - e.z) < 600)) return null;
+		// (no base sited within reach: the nearest waiting ones are sited now)
+		const reach = FORCES[e.kind]?.reach || 15000;
+		if (!military.basesState().some((S) => Math.hypot(S.x - e.x, S.z - e.z) <= reach && (S.busyUntil || 0) <= time)) military.siteNear?.(e.x, e.z, reach);
 		const bases = military.basesState();
 		const plan = planDispatch({ ...e, t: time }, bases.map((S) => ({ id: S.id, name: S.name, x: S.x, z: S.z, units: S.units, busyUntil: S.busyUntil })));
 		if (!plan) return null;
@@ -75,21 +82,27 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 
 	// ---------- drawn and in the fight ----------
 	function show(u) {
-		u.mesh = vehicleMesh(u.kind, kit, u.side === 'guard' ? (u.air ? SCHEMES.grey : SCHEMES.woodland) : SCHEMES.invader, { phone: isPhone });
+		u.mesh = stencilVehicle(vehicleMesh(u.kind, kit, u.side === 'police' ? SCHEMES.police : u.side === 'guard' ? (u.air ? SCHEMES.grey : SCHEMES.woodland) : SCHEMES.invader, { phone: isPhone }), u.kind, { side: u.side === 'ironvale' ? 'ironvale' : 'guard', n: u.i + (u.p?.id?.length || 0), grey: u.air, police: u.side === 'police' });
 		u.last = null;
 		group.add(u.mesh);
 		const D = DIMS[u.kind];
 		u.T = {
-			id: 'mv' + seq++, kind: 'vehicle', faction: u.side, surface: 'metal', name: u.side === 'guard' ? `a Meridian Guard ${u.kind === 'apc' ? 'armoured truck' : u.kind === 'heli' ? 'helicopter' : u.kind}` : `an Ironvale ${u.kind}`,
+			id: 'mv' + seq++, kind: 'vehicle', faction: u.side, surface: 'metal', name: u.side === 'police' ? 'the police helicopter' : u.side === 'guard' ? `a Meridian Guard ${u.kind === 'apc' ? 'armoured truck' : u.kind === 'heli' ? 'helicopter' : u.kind}` : `an Ironvale ${u.kind}`,
 			bound: { x: 0, y: 0, z: 0, r: Math.max(D.L, D.W) * 0.6 },
 			shapes: () => [{ type: 'box', c: { x: u.pos.x, y: u.pos.y + D.H / 2, z: u.pos.z }, h: [D.W / 2, D.H / 2, D.L / 2], yaw: -u.yaw, part: 'body' }],
 			onHit: (blow) => hurt(u, blow),
-			moral: () => ({ hostileTarget: u.side !== 'guard', lawTarget: u.side === 'guard' }),
+			moral: () => ({ hostileTarget: u.side === 'ironvale', lawTarget: u.side !== 'ironvale' }),
 		};
 		combat.layer.add(u.T);
+		// the police helicopter's searchlight: a beam down to where it is looking, after dark
+		if (u.side === 'police') {
+			u.beam = new THREE.Mesh(BEAM_GEO, BEAM_MAT); u.beam.visible = false; u.beam.renderOrder = 3; u.beam.name = 'police-searchlight';
+			group.add(u.beam);
+		}
 	}
 	function hide(u) {
 		if (u.mesh) { u.mesh.removeFromParent(); u.mesh.userData.dispose?.(); u.mesh = null; }
+		if (u.beam) { u.beam.removeFromParent(); u.beam = null; }
 		if (u.T) { combat.layer.remove(u.T.id); u.T = null; }
 		u.engine?.stop(); u.engine = null;
 	}
@@ -112,7 +125,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			if (d < bd) { bd = d; best = { pos: new THREE.Vector3(h.pos.x, h.pos.y + 1.2, h.pos.z), T: h.T }; }
 		}
 		for (const p of patrols) for (const o of p.units) {
-			if (o.side === u.side || o.dead || !o.T) continue;
+			if (o.side === u.side || o.dead || !o.T || (o.side !== 'ironvale' && u.side !== 'ironvale')) continue;
 			const d = o.pos.distanceTo(u.pos);
 			if (d < bd) { bd = d; best = { pos: o.pos.clone().add(_v.set(0, 1.2, 0)), T: o.T }; }
 		}
@@ -128,6 +141,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 	}
 	const by = (u) => ({ id: u.T?.id || 'mv', kind: 'hostile', faction: u.side });
 	function engage(u, dt) {
+		if (u.side === 'police') return;
 		u.fireT -= dt;
 		if (u.fireT > 0 || u.dead) return;
 		const tank = u.kind === 'tank', range = tank ? 320 : u.air ? 260 : 170;
@@ -173,6 +187,11 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			for (const u of airAll) u.flyS += (u.kind === 'jet' ? SPEED.jet * 0.6 : SPEED.heli) * dt;
 			const flyLen = Math.hypot(p.to.x - p.from.x, p.to.z - p.from.z);
 			if (roadDone && airAll.every((u) => u.kind === 'jet' || u.flyS >= flyLen - 60)) arrive(p);
+		} else if (p.state === 'onscene' && p.side === 'police') {
+			// the police helicopter: over where you were last seen, until the level comes down
+			const L = combat.lastSeen?.() || e;
+			if (L) { const k = Math.min(1, dt * 0.35); p.to.x += (L.x - p.to.x) * k; p.to.z += (L.z - p.to.z) * k; }
+			if (combat.wantedLevel() < 4 || p.t > 600) leave(p);
 		} else if (p.state === 'onscene') {
 			p.stayT -= dt;
 			// quiet: nobody left to fight near it
@@ -223,6 +242,12 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 				if (!u.engine && distK(u) > 0.05 && patrols.reduce((a, q) => a + q.units.filter((o) => o.engine).length, 0) < 3) u.engine = engineSound(u.kind);
 				u.engine?.set(0.6, 0.6, distK(u), 10, u.pos);
 				if (p.state === 'onscene' || (u.air && p.state === 'enroute' && u.flyS > Math.hypot(p.to.x - p.from.x, p.to.z - p.from.z) - 400)) engage(u, dt);
+				if (u.beam) {
+					// (from under its nose to the ground at the scene, a little ahead of where it looks)
+					const on = kit.night.value > 0.25 && p.state === 'onscene', gx = p.to.x, gz = p.to.z, gy = ground(gx, gz);
+					u.beam.visible = on;
+					if (on) { _v.set(gx - u.pos.x, gy - u.pos.y + 1, gz - u.pos.z); const L = _v.length(); u.beam.position.set(u.pos.x, u.pos.y - 1, u.pos.z); u.beam.quaternion.setFromUnitVectors(_up, _v.normalize()); u.beam.scale.set(1, L, 1); }
+				}
 			}
 		}
 		p.shown = !!shownNow;
@@ -239,10 +264,11 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 				return;
 			}
 			if (p.state === 'onscene' || p.state === 'boarding') {
-				// circling the scene
-				u.orbit += dt * 0.18;
-				const r = 90 + u.i * 30, x = p.to.x + Math.cos(u.orbit) * r, z = p.to.z + Math.sin(u.orbit) * r;
-				u.pos.set(x, ground(x, z) + 70 + u.i * 12, z); u.yaw = u.orbit + Math.PI; u.bank = -0.25;
+				// circling the scene (the police tighter and lower, its nose in toward it)
+				const cop = p.side === 'police';
+				u.orbit += dt * (cop ? 0.22 : 0.18);
+				const r = cop ? 65 : 90 + u.i * 30, x = p.to.x + Math.cos(u.orbit) * r, z = p.to.z + Math.sin(u.orbit) * r;
+				u.pos.set(x, ground(x, z) + (cop ? 55 : 70 + u.i * 12), z); u.yaw = u.orbit + Math.PI + (cop ? -0.6 : 0); u.bank = -0.25;
 				return;
 			}
 			const s = Math.max(0, Math.min(L, u.flyS)), x = p.from.x + dx / L * s, z = p.from.z + dz / L * s;
@@ -268,10 +294,11 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 	function arrive(p) {
 		p.state = 'onscene'; p.stayT = STAY;
 		const e = eye();
-		if (e && Math.hypot(p.to.x - e.x, p.to.z - e.z) < 1500) hint(p.side === 'guard' ? 'Meridian Guard on the scene.' : 'The Ironvale column is here!', 2500, 1);
+		if (e && Math.hypot(p.to.x - e.x, p.to.z - e.z) < 1500) hint(p.side === 'police' ? 'The police helicopter is overhead.' : p.side === 'guard' ? 'Meridian Guard on the scene.' : 'The Ironvale column is here!', 2500, 1);
 	}
 	function deploy(p) {
 		p.deployed = true;
+		if (!p.troops) return;
 		military.deployments.push({ x: p.to.x, z: p.to.z, r: 160, id: p.id });
 		const fid = p.side === 'guard' ? 'guard' : 'ironvale', n = isPhone ? Math.min(3, p.troops) : Math.min(6, p.troops);
 		const a = Math.atan2(p.from.x - p.to.x, p.from.z - p.to.z), x = p.to.x + Math.sin(a) * 18, z = p.to.z + Math.cos(a) * 18;
@@ -307,6 +334,18 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		if (p.base) for (const u of p.units) if (!u.dead) p.base.units[u.kind] = (p.base.units[u.kind] || 0) + 1;
 	}
 
+	// the police helicopter at the top of the ladder (law/, the wanted level at five): the air
+	// unit's own model in the police's navy, over where you were last seen, a searchlight on the
+	// scene after dark; it does not fire, and goes home when the level comes down
+	function policeAir(at) {
+		const e = eye();
+		if (!e || !W()?.bayArea || patrols.some((p) => p.side === 'police' && p.state !== 'done')) return null;
+		const a = Math.random() * Math.PI * 2, from = { x: at.x + Math.cos(a) * 1400, z: at.z + Math.sin(a) * 1400 };
+		const p = launch({ side: 'police', why: 'wanted', from, to: { x: at.x, z: at.z }, units: ['heli'], troops: 0, mode: 'air' });
+		combat.call?.('Air One is up. We will have eyes on the suspect shortly.', 'Harbour Police');
+		return p;
+	}
+
 	// ---------- invasions ----------
 	function invade(at = null) {
 		const e = eye(), w = W();
@@ -338,5 +377,5 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 	}
 	function clear() { for (const p of patrols) { for (const u of p.units) hide(u); } patrols.length = 0; }
 	const info = () => patrols.map((p) => { const e = eye(), lead = p.route ? along(p.route, p.s) : p.to; return { id: p.id, side: p.side, why: p.why, from: p.base?.name || 'another region', mode: p.mode, state: p.state, units: p.units.filter((u) => !u.dead).map((u) => u.kind), lost: p.units.filter((u) => u.dead).length, eta: p.state === 'enroute' ? Math.max(0, Math.round(p.eta - p.t)) : 0, km: e ? +(Math.hypot(lead.x - e.x, lead.z - e.z) / 1000).toFixed(2) : null, shown: p.shown, deployed: p.deployed }; });
-	return { event, invade, update, clear, info, patrols, launch };
+	return { event, invade, policeAir, update, clear, info, patrols, launch };
 }

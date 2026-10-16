@@ -49,13 +49,29 @@ const LIVERY_FACES = {
 	fire: { k: 'livery', svc: 'fire', word: 'FIRE RESCUE', sub: 'ENGINE 7' },
 	stripe: { k: 'livery', svc: 'stripe', col: '#e8c46a', col2: '#f4f4f0' },
 	military: { k: 'livery', svc: 'military', word: 'MERIDIAN GUARD' },
+	// the vans: the tactical team's in charcoal with reflective white, a patrol van's with gold
+	swat: { k: 'livery', svc: 'swat', word: 'POLICE', sub: 'TACTICAL UNIT' },
+	van: { k: 'livery', svc: 'van', word: 'POLICE', sub: 'HARBOUR' },
+	vanRoof: { k: 'livery', svc: 'roof', word: '41' },
+};
+// the military's stencils (militaryStencils below): the side's word and mark, the bumper codes
+// (the unit, then the company and the vehicle's number), NO STEP; light on the green and the
+// sand, dark on the air units' grey
+const MIL_CODES = ['HQ-11', 'A-12', 'A-14', 'B-21', 'B-23', 'C-31', 'C-32', 'D-41'];
+const STENCILS = {
+	guardWord: { k: 'livery', svc: 'stencil', word: 'MERIDIAN GUARD' }, ironWord: { k: 'livery', svc: 'stencil', word: 'IRONVALE LEGION' },
+	guardMark: { k: 'livery', svc: 'stencil', mark: 'guard' }, ironMark: { k: 'livery', svc: 'stencil', mark: 'ironvale' },
+	guardWordDark: { k: 'livery', svc: 'stencil', word: 'MERIDIAN GUARD', ink: '#24272a' }, guardMarkDark: { k: 'livery', svc: 'stencil', mark: 'guard', ink: '#24272a' },
+	policeWord: { k: 'livery', svc: 'stencil', word: 'HARBOUR POLICE', ink: '#f4f4f0' }, policeCode: { k: 'livery', svc: 'stencil', word: 'AIR 1', ink: '#f4f4f0' },
+	nostep: { k: 'livery', svc: 'stencil', word: 'NO STEP', small: true }, unit: { k: 'livery', svc: 'stencil', word: '4 MG' }, unitIron: { k: 'livery', svc: 'stencil', word: '9 IVL' },
+	...Object.fromEntries(MIL_CODES.map((c, i) => ['code' + i, { k: 'livery', svc: 'stencil', word: c }])),
 };
 let ATLAS = null, ATLAS_LOCALE = null;
 const CELLS = new Map();
 // the sheet's size: the pools pack into a little over half a phone's 1024 square (54%), so a
 // phone's sheet is 1024 x 640, which they fill without a repack in every locale (a third less
 // memory on the graphics and in the canvas; tools/phone-audit.test.mjs)
-export const CAR_ATLAS = { phone: { size: 1024, height: 640, scale: 0.6 }, desktop: { size: 2048, height: 1024, scale: 1 } };
+export const CAR_ATLAS = { phone: { size: 1024, height: 768, scale: 0.6 }, desktop: { size: 2048, height: 1024, scale: 1 } };
 function carAtlas() {
 	if (!ATLAS) ATLAS = createAtlas({ ...CAR_ATLAS[PHONE ? 'phone' : 'desktop'], name: 'car-decals' });
 	return ATLAS;
@@ -79,7 +95,8 @@ export function carFaces(locale = 'us-ca') {
 	for (let i = 0; i < POOLS.bumper; i++) want.set('bumper' + i, { face: { k: 'bumper', seed: i + 1 }, w: 0.28, h: 0.075 });
 	for (let i = 0; i < POOLS.window; i++) want.set('window' + i, { face: { k: 'wsticker', seed: i + 1 }, w: 0.24, h: 0.08 });
 	for (let i = 0; i < POOLS.permit; i++) want.set('permit' + i, { face: { k: 'cpermit', seed: i + 1, year: 2026, style: locale === 'de' ? 'de' : sys.id === 'jp' ? 'jp' : 'us' }, w: 0.08, h: 0.08 });
-	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'pulse' ? 0.6 : 2.4, h: k === 'roof' || k === 'pulse' ? 0.6 : 0.5 });
+	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'pulse' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'pulse' || k === 'vanRoof' ? 0.6 : 0.5 });
+	for (const [k, f] of Object.entries(STENCILS)) want.set('mil:' + k, { face: f, w: f.mark ? 0.5 : f.word?.length > 8 ? 2.4 : 0.8, h: f.mark ? 0.5 : f.word?.length > 8 ? 0.32 : 0.18 });
 	return want;
 }
 const cellOf = (k) => CELLS.get(k) || null;
@@ -151,6 +168,17 @@ function slotsOf(kind, sysPlate) {
 		local(-sideX, 0.8, -0.18, -1, 0, 0, 0, 0, 1, 1.7, 0.36, 0.002),
 		local(0, S.H + 0.012, -0.72, 0, 1, 0, 1, 0, 0, 0.5, 0.5, 0.002),
 	];
+	// a van's sides (the word on the panel below the windows, behind the front doors), its rear
+	// doors and its roof number
+	if (st === 2) {
+		const yS = Math.min(S.belt - 0.26, 0.74), zS = -S.L * 0.09, xS = Math.max(P.halfW(zS, yS), S.W / 2) + 0.006, yRr = S.belt * 0.92, zRr = Math.min(P.rearZ(0, yRr), P.rearZ(0.5, yRr)) - 0.006;
+		out.van = [
+			local(xS, yS, zS, 1, 0, 0, 0, 0, -1, Math.min(2.4, S.L * 0.47), 0.44, 0.002),
+			local(-xS, yS, zS, -1, 0, 0, 0, 0, 1, Math.min(2.4, S.L * 0.47), 0.44, 0.002),
+			local(0, S.H + 0.012, -S.L * 0.18, 0, 1, 0, 1, 0, 0, 0.6, 0.6, 0.002),
+			local(0, yRr, zRr, 0, 0, -1, -1, 0, 0, 1.3, 0.27, 0.002),
+		];
+	}
 	SLOTS.set(key, out);
 	return out;
 }
@@ -180,6 +208,12 @@ export function createFleetDecals(group, { isPhone = PHONE } = {}) {
 			const c = cellOf('liv:police');
 			emit(vinyl, M, sl.police[0], c, BACK.none, 0.1); emit(vinyl, M, sl.police[1], c, BACK.none, 0.2);
 			emit(vinyl, M, sl.police[2], cellOf('liv:roof'), BACK.none, 0.3);
+		} else if ((o.livery === 'swat' || o.livery === 'van') && sl.van) {
+			// (the lettering is reflective sheeting: it lights up in your headlights at night)
+			const c = cellOf('liv:' + o.livery);
+			emit(plates, M, sl.van[0], c, BACK.none, 0.1); emit(plates, M, sl.van[1], c, BACK.none, 0.2);
+			emit(vinyl, M, sl.van[2], cellOf('liv:vanRoof'), BACK.none, 0.3);
+			emit(plates, M, sl.van[3], c, BACK.none, 0.4);
 		}
 		if (d2 > FAR * FAR) return;
 		const pc = cellOf('plate' + D.plate);
@@ -193,6 +227,87 @@ export function createFleetDecals(group, { isPhone = PHONE } = {}) {
 	function end() { plates.commit(); vinyl.commit(); glass.commit(); }
 	function dispose() { plates.dispose(); vinyl.dispose(); glass.dispose(); }
 	return { begin, add, end, dispose, stats: () => ({ plates: plates.n, vinyl: vinyl.n, glass: glass.n }) };
+}
+
+// ---------- the military's stencils, as meshes riding on the body ----------
+// kind: military/models.js's (tank, apc, jeep, truck, heli); side 'guard' or 'ironvale'; n the
+// vehicle's place in its column (its number); grey for an air unit's paint (dark ink); parked:
+// one set for every vehicle of a kind in a motor pool (the unit's codes, no number). Each mark is
+// laid where a ray from outside meets the vehicle's own body, a little proud of it, in flat
+// paint. Built once per kind and variant; each vehicle gets its own meshes over the geometry.
+// Returns [] where the body cannot be had (node, no geometry).
+const STENCIL_SETS = new Map();
+const MIL_SPOTS = {
+	// [what, from (side +x/-x, front +z, rear -z), y, along (z on a side, x at an end), w, h]
+	tank: [['mark', 'side', 1.05, -2.1, 0.5, 0.5], ['word', 'side', 1.05, 0.6, 1.9, 0.26], ['unit', 'front', 1.08, -0.95, 0.62, 0.15], ['code', 'front', 1.08, 0.95, 0.62, 0.15], ['unit', 'rear', 1.25, -0.95, 0.62, 0.15], ['code', 'rear', 1.25, 0.95, 0.62, 0.15]],
+	apc: [['word', 'side', 1.75, -0.7, 2.4, 0.3], ['mark', 'side', 1.75, 1.75, 0.5, 0.5], ['unit', 'front', 0.95, -0.75, 0.6, 0.15], ['code', 'front', 0.95, 0.75, 0.6, 0.15], ['unit', 'rear', 1.35, -0.75, 0.6, 0.15], ['code', 'rear', 1.35, 0.75, 0.6, 0.15], ['nostep', 'side', 2.35, -2.2, 0.36, 0.09]],
+	jeep: [['mark', 'side', 1.0, 0.25, 0.38, 0.38], ['unit', 'front', 0.75, -0.55, 0.44, 0.11], ['code', 'front', 0.75, 0.55, 0.44, 0.11], ['code', 'rear', 0.85, 0.5, 0.44, 0.11]],
+	truck: [['mark', 'side', 1.55, 2.85, 0.42, 0.42], ['word', 'side', 2.2, -1.6, 2.6, 0.32], ['unit', 'front', 0.75, -0.7, 0.55, 0.13], ['code', 'front', 0.75, 0.7, 0.55, 0.13], ['code', 'rear', 1.3, 0.75, 0.55, 0.13]],
+	heli: [['word', 'side', 2.05, -4.6, 2.2, 0.28], ['mark', 'side', 1.55, 0.6, 0.6, 0.6], ['code', 'side', 2.05, -6.6, 0.7, 0.16]],
+};
+export function militaryStencils(kind, { side = 'guard', n = 0, grey = false, parked = false, police = false } = {}) {
+	const key = [kind, police ? 'police' : side, parked ? 'p' : n % MIL_CODES.length, grey ? 'g' : ''].join(':');
+	if (!STENCIL_SETS.has(key)) {
+		let meshes = [];
+		try { meshes = buildStencils(kind, police ? 'police' : side, n, grey, parked); } catch { meshes = []; }
+		STENCIL_SETS.set(key, meshes);
+	}
+	return STENCIL_SETS.get(key).map((m) => { const c = new THREE.Mesh(m.geometry, m.material); c.renderOrder = m.renderOrder; c.name = m.name; c.geometry.userData.shared = true; return c; });
+}
+// (the vehicles' geometry is military/models.js's own, handed in by military/index.js)
+let milGeo = null;
+export function setStencilBody(fn) { milGeo = fn; }
+// a military vehicle's model (military/models.js vehicleMesh, a LOD) with its stencils on its near level
+export function stencilVehicle(root, kind, opts = {}) {
+	const near = root?.levels?.[0]?.object;
+	if (near) for (const m of militaryStencils(kind, opts)) near.add(m);
+	return root;
+}
+function buildStencils(kind, side, n, grey, parked) {
+	const spots = MIL_SPOTS[kind];
+	const G = spots && milGeo ? milGeo(kind) : null;
+	const body = G?.parts?.hull || G?.parts?.body;
+	if (!body || typeof document === 'undefined') return [];
+	const A = carAtlas();
+	if (!CELLS.size) setCarLocale(ATLAS_LOCALE || 'us-ca');
+	const iron = side === 'ironvale', mesh = new THREE.Mesh(body), rc = new THREE.Raycaster(), O = new THREE.Vector3(), D = new THREE.Vector3();
+	const cellFor = (what, i) => side === 'police' ? (what === 'word' ? cellOf('mil:policeWord') : what === 'code' ? cellOf('mil:policeCode') : null) : cellOf('mil:' + (what === 'word' ? (iron ? 'ironWord' : grey ? 'guardWordDark' : 'guardWord') : what === 'mark' ? (iron ? 'ironMark' : grey ? 'guardMarkDark' : 'guardMark') : what === 'unit' ? (iron ? 'unitIron' : 'unit') : what === 'nostep' ? 'nostep' : (parked ? (iron ? 'unitIron' : 'unit') : 'code' + ((n + i) % MIL_CODES.length))));
+	const list = [];
+	spots.forEach(([what, from, y, along, w, h], i) => {
+		const sides = from === 'side' ? [1, -1] : [from === 'front' ? 1 : -1];
+		for (const s of sides) {
+			if (from === 'side') { O.set(s * 8, y, along); D.set(-s, 0, 0); } else { O.set(along, y, s * 14); D.set(0, 0, -s); }
+			rc.set(O, D); rc.far = 20;
+			const hit = rc.intersectObject(mesh, false)[0];
+			if (!hit) continue;
+			// (laid on the face it met, turned so the words read the right way from outside)
+			const N = hit.face ? hit.face.normal.clone() : D.clone().negate();
+			if (N.dot(D) > 0) N.negate();
+			if (Math.abs(N.y) > 0.75) continue;
+			const T = from === 'side' ? new THREE.Vector3(0, 0, -s) : new THREE.Vector3(-s, 0, 0);
+			const c = cellFor(what, i);
+			if (c) list.push({ c, L: local(hit.point.x, hit.point.y, hit.point.z, N.x, N.y, N.z, T.x, T.y, T.z, w, h, 0.006) });
+		}
+	});
+	if (!list.length) return [];
+	const n4 = list.length, pos = new Float32Array(n4 * 12), nor = new Float32Array(n4 * 12), uv = new Float32Array(n4 * 8), cell = new Float32Array(n4 * 16), fx = new Float32Array(n4 * 16), idx = [];
+	const V = new THREE.Vector3(), Nn = new THREE.Vector3();
+	list.forEach((q, i) => {
+		[[-0.5, -0.5, 0, 0], [0.5, -0.5, 1, 0], [0.5, 0.5, 1, 1], [-0.5, 0.5, 0, 1]].forEach(([x, y, u, v], k) => {
+			V.set(x, y, 0).applyMatrix4(q.L); Nn.set(0, 0, 1).transformDirection(q.L);
+			pos.set([V.x, V.y, V.z], (i * 4 + k) * 3); nor.set([Nn.x, Nn.y, Nn.z], (i * 4 + k) * 3); uv.set([u, v], (i * 4 + k) * 2);
+			// (a little worn: sprayed paint on a working vehicle)
+			cell.set(q.c, (i * 4 + k) * 4); fx.set([BACK.none, i * 0.17, 0.25, 0], (i * 4 + k) * 4);
+		});
+		idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+	});
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+	g.setAttribute('aCell', new THREE.BufferAttribute(cell, 4)); g.setAttribute('aFx', new THREE.BufferAttribute(fx, 4)); g.setIndex(idx);
+	g.computeBoundingSphere();
+	const m = new THREE.Mesh(g, signMaterial('paint', LAYER.paint, A.tex, { phone: PHONE }));
+	m.renderOrder = m.material.userData.renderOrder; m.name = 'stencils-' + kind;
+	return [m];
 }
 
 // ---------- the responders' liveries, as meshes riding on the body ----------

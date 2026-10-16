@@ -34,6 +34,8 @@ import { routeOf, DEST } from '../bay/freeways.js';
 import { setFleetDecals } from '../vehicles/fleet.js';
 import { createFleetDecals, setCarLocale } from './cars.js';
 import { qualityNow, onQuality } from '../world/governor.js';
+import { gridStreets } from './gridstreets.js';
+import { BLOCKS, toGrid, fromGrid } from '../bay/styles.js';
 import { requestsNear } from '../economy/requests.js';
 import { shopCampaigns, wallCampaign } from './campaigns.js';
 import { productBrand } from './brand-catalog.js';
@@ -77,7 +79,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	const offQuality = onQuality(() => { dirty = true; });
 
 	const extra = new Map();                         // owner -> records placed by other systems
-	let lastOut = [], forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
+	const glassOf = new Map(), glassAt = new Map();  // owner -> a shop's glass decals { x, z, recs }; where -> owner
+	const posKey = (x, z) => Math.round(x) + ':' + Math.round(z);
+	let boundSF = null, lastOut = [], forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
 	const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _f = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 
 	const W = () => world?.();
@@ -104,7 +108,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		const seed = hash32(locale);
 		const landAt = (x, z) => real.landAt?.(x, z);
 		const near = (x, z, r) => Math.hypot(x - cx, z - cz) < r;
-		const roads = real.near('roads', cx, cz, R);
+		// (the mapped streets, and the procedural grid towns' own: named here, gridstreets.js)
+		const roads = real.near('roads', cx, cz, R).concat(w.bayArea?.urbanAt ? gridStreets(cx, cz, Math.min(R, 360), { urbanAt: (x, z) => w.bayArea.urbanAt(x, z), inside: (x, z) => real.inside?.(x, z), BLOCKS, toGrid, fromGrid }) : []);
 		const lots = (w.city?.nearList?.() || []).filter((o) => o && near(o.x, o.z, R + 80));
 		const schools = lots.filter((o) => o.src?.kind === 7).map((o) => ({ x: o.x, z: o.z }));
 		// the streets
@@ -116,15 +121,21 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		out.push(...FW.signs); postList.push(...FW.posts); gantries.push(...FW.gantries);
 		// the shops' doors and windows: the built shop's real glass where it stands, else the face
 		const plan = w.city?.economy?.plan?.() || [], built = w.commercial?.list?.() || [];
+		const builtAt = (x, z) => built.find((q) => Math.hypot(q.x - x, q.z - z) < 3);
 		let campaigns=0, murals=0;
+		const posted = new Set();
 		for (const E of plan) {
 			if (!E.front || !near(E.x, E.z, SHOP_R)) continue;
-			const B = built.find((q) => Math.hypot(q.x - E.x, q.z - E.z) < 3);
+			const B = builtAt(E.x, E.z);
 			let front = E.front, glass = E.use === 'shop' || E.use === 'row' || E.use === 'retail' || E.use === 'apt';
 			if (B && B.glassZ !== undefined) {
 				const ca = Math.cos(B.a), sa = Math.sin(B.a);
 				front = { x: B.x - sa * B.glassZ, z: B.z + ca * B.glassZ, nx: -sa, nz: ca, run: B.hw * 2, g: B.y, door: B.doorX, height: B.ceil ?? 3.5 };
 				glass = true;
+			} else if (glassAt.has(posKey(E.x, E.z))) {
+				// (its display window drawn by the storefronts: the decals on that glass, at its door)
+				const G = glassOf.get(glassAt.get(posKey(E.x, E.z)));
+				front = G.front; glass = G.glass; posted.add(G);
 			}
 			out.push(...storefrontDecals({ ...E, x: E.x, z: E.z, request: openRequests.some(q => q.giver.id === E.id) }, front, sys, { seed, glass }));
 			if(campaigns<(lite?8:20)){const C=shopCampaigns(E,front,{phone:lite});out.push(...C.signs);postList.push(...C.posts);if(C.signs.length)campaigns++;}
@@ -132,6 +143,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			if (landAt(E.front.x, E.front.z)?.lu === 7 && hash01(E.x, E.z, 'gum') < 0.35) surfaces.push({ kind: 'ground', x: front.x + front.nx * 2.2, z: front.z + front.nz * 2.2, nx: front.nx, nz: front.nz, w: 2, gum: 1 });
 		}
 		for (const [, recs] of extra) for (const r of recs) if (near(r.x, r.z, R)) out.push(r);
+		// the storefronts' own display windows (economy/storefront.js): on the shop glass itself,
+		// unless the shop is built for real near you (its own glass then, above)
+		for (const [, G] of glassOf) if (!posted.has(G) && near(G.x, G.z, SHOP_R) && !builtAt(G.x, G.z)) out.push(...storefrontDecals(G.biz, G.front, sys, { seed, glass: G.glass }));
 		// inside the built shops: aisle markers, the department over the back wall, shelf tags
 		for (const B of built) {
 			if (B.type !== 'shop' || !B.aisles?.length || !near(B.x, B.z, IN_R)) continue;
@@ -139,6 +153,16 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			const t = /grocer|market|general|food/.test(E?.type || '') ? 'grocer' : /pharm|chem/.test(E?.type || '') ? 'pharmacy' : /hardware|tool/.test(E?.type || '') ? 'hardware' : 'any';
 			out.push(...interiorRecords(B, t, lite));
 		}
+		// ...and the grocers built inside (interiors/: the flats over shops, the halls): the aisle
+		// markers hung over the aisles between their gondolas, numbered from the door
+		for (const A of w.interiors?.signAnchors?.() || []) {
+			if (A.kind !== 'aisle' || !near(A.x, A.z, IN_R)) continue;
+			const t = /pharm|chem/.test(A.type) ? 'pharmacy' : /hardware|tool/.test(A.type) ? 'hardware' : A.fit === 'general' && !/grocer|market|food/.test(A.type) ? 'any' : 'grocer';
+			const items = ITEMS[t], l = Math.hypot(A.nx, A.nz) || 1, col = pick(rng(hash32(String(A.building), 'aisle')), ['#1c6b3a', '#1d4f9c', '#7a2a1c', '#2a3a4a', '#a8501c']);
+			out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'aisle', n: A.n, items: items[(A.n - 1) % items.length], col }, x: A.x, z: A.z, abs: A.y, nx: A.nx / l, nz: A.nz / l, w: 1.1, h: 0.38, back: BACK.readable, wear: 0 });
+		}
+		// the rules at the city parks' entrances, on their boards (bay/parkkit.js)
+		for (const P of w.parks?.rulesBoards?.(cx, cz, R) || []) out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'parkrules', name: P.name }, x: P.x, z: P.z, abs: P.y, nx: P.nx, nz: P.nz, w: P.w, h: P.h, back: BACK.none, wear: 0.12 });
 		// the alleys: the back doors' signs; the walls and bins for the writers and the grime
 		for (const r of roads) {
 			if (!r.alley) continue;
@@ -370,6 +394,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			SIGN_U.uSgHeadDir.value.copy(_f);
 		} else H.w = 0;
 		const w = W(), real = w?.real;
+		// (the storefronts post their display windows' decals here: bound once the city has them)
+		const SF = w?.city?.economy?.storefronts;
+		if (SF !== boundSF && SF?.setSignage) { boundSF?.setSignage?.(null); boundSF = SF; SF.setSignage(api); }
 		if (!real?.loaded?.() || camera.position.y > 2500) { group.visible = camera.position.y < 2500; return; }
 		group.visible = true;
 		const x = camera.position.x, z = camera.position.z;
@@ -378,7 +405,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		if (!dirty && checkT > 0 && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		checkT = 0.5;
 		openRequests = requestsNear(x,z,SHOP_R);
-		const key = [openRequests.map(q => q.id).sort().join(','), artRevision(), real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0].join('|');
+		const key = [openRequests.map(q => q.id).sort().join(','), artRevision(), real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0, w.parks?.count?.() ?? 0, w.interiors?.live?.size ?? 0].join('|');
 		if (!dirty && key === keyNow && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		dirty = false; keyNow = key; at = { x, z };
 		rebuild(x, z);
@@ -387,16 +414,27 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	function info() {
 		const counts = {};
 		for (const [k, B] of batches) counts[k] = B.n;
-		return { system: sys.id, locale, atlas: atlas.info(), batches: counts, draws: [...batches.values()].filter((B) => B.n).length + (posts.count ? 1 : 0) + (slabs.count ? 1 : 0) + (gantryMesh ? 1 : 0), ...last, extra: extra.size };
+		return { system: sys.id, locale, atlas: atlas.info(), batches: counts, draws: [...batches.values()].filter((B) => B.n).length + (posts.count ? 1 : 0) + (slabs.count ? 1 : 0) + (gantryMesh ? 1 : 0), ...last, extra: extra.size, shopGlass: glassOf.size };
 	}
-	return {
+	const api = {
 		group, update, info,
 		// records of your own (placement.js's shape), kept until removed; owner: any string
 		add(owner, records) { extra.set(owner, records); dirty = true; },
-		remove(owner) { if (extra.delete(owner)) dirty = true; },
+		remove(owner) {
+			const G = glassOf.get(owner);
+			if (G) { glassOf.delete(owner); if (glassAt.get(G.k) === owner) glassAt.delete(G.k); dirty = true; }
+			if (extra.delete(owner)) dirty = true;
+		},
 		// a shop's glass decals by your own geometry (the storefronts): biz { name, type, use, x, z },
 		// front { x, z, nx, nz, run, g, door }; glass false for an opaque door
-		storefront(owner, biz, front, { glass = true } = {}) { extra.set(owner, storefrontDecals(biz, front, sys, { seed: hash32(locale), glass })); dirty = true; },
+		storefront(owner, biz, front, { glass = true } = {}) {
+			const old = glassOf.get(owner);
+			if (old) glassAt.delete(old.k);
+			const k = posKey(biz.x, biz.z);
+			glassOf.set(owner, { x: biz.x, z: biz.z, k, biz, front, glass });
+			glassAt.set(k, owner);
+			dirty = true;
+		},
 		refresh() { dirty = true; },
 		// where the records of a face kind stand (for a look at them: Crysis.signage.where('blade'))
 		where: (k, n = 5) => lastOut.filter((r) => r.face?.k === k).slice(0, n).map((r) => ({ x: +r.x.toFixed(2), z: +r.z.toFixed(2), hy: r.hy, nx: +(r.nx || 0).toFixed(3), nz: +(r.nz || 0).toFixed(3), base: r.base ?? null })),
@@ -407,6 +445,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		dispose() {
 			if (disposed) return;
 			disposed = true;
+			boundSF?.setSignage?.(null); boundSF = null;
 			setFleetDecals(null);
 			offQuality?.();
 			for (const B of batches.values()) B.dispose();
@@ -418,4 +457,5 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			clearMaterials();
 		},
 	};
+	return api;
 }
