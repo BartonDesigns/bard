@@ -52,8 +52,12 @@ const LIVERY_FACES = {
 };
 let ATLAS = null, ATLAS_LOCALE = null;
 const CELLS = new Map();
+// the sheet's size: the pools pack into a little over half a phone's 1024 square (54%), so a
+// phone's sheet is 1024 x 640, which they fill without a repack in every locale (a third less
+// memory on the graphics and in the canvas; tools/phone-audit.test.mjs)
+export const CAR_ATLAS = { phone: { size: 1024, height: 640, scale: 0.6 }, desktop: { size: 2048, height: 1024, scale: 1 } };
 function carAtlas() {
-	if (!ATLAS) ATLAS = createAtlas({ size: PHONE ? 1024 : 2048, height: 1024, name: 'car-decals', scale: PHONE ? 0.6 : 1 });
+	if (!ATLAS) ATLAS = createAtlas({ ...CAR_ATLAS[PHONE ? 'phone' : 'desktop'], name: 'car-decals' });
 	return ATLAS;
 }
 // (re)draw the pools for a locale: plates, bumper stickers, window stickers, permits, liveries
@@ -61,6 +65,14 @@ export function setCarLocale(locale = 'us-ca') {
 	const A = carAtlas();
 	if (ATLAS_LOCALE === locale && CELLS.size) return;
 	ATLAS_LOCALE = locale;
+	const want = carFaces(locale);
+	A.reset();
+	A.sync(want);
+	CELLS.clear();
+	for (const k of want.keys()) CELLS.set(k, A.get(k));
+}
+// the faces a locale's pools want in the sheet: key -> { face, w, h }
+export function carFaces(locale = 'us-ca') {
 	const sys = systemFor(locale), want = new Map();
 	const pw = sys.plate === 'eu' || sys.plate === 'uk' ? 0.52 : 0.31, ph = sys.plate === 'eu' || sys.plate === 'uk' ? 0.115 : 0.155;
 	for (let i = 0; i < POOLS.plate; i++) want.set('plate' + i, { face: plateFace(locale, i), w: pw * 0.6, h: ph * 0.6 });
@@ -68,10 +80,7 @@ export function setCarLocale(locale = 'us-ca') {
 	for (let i = 0; i < POOLS.window; i++) want.set('window' + i, { face: { k: 'wsticker', seed: i + 1 }, w: 0.24, h: 0.08 });
 	for (let i = 0; i < POOLS.permit; i++) want.set('permit' + i, { face: { k: 'cpermit', seed: i + 1, year: 2026, style: locale === 'de' ? 'de' : sys.id === 'jp' ? 'jp' : 'us' }, w: 0.08, h: 0.08 });
 	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'pulse' ? 0.6 : 2.4, h: k === 'roof' || k === 'pulse' ? 0.6 : 0.5 });
-	A.reset();
-	A.sync(want);
-	CELLS.clear();
-	for (const k of want.keys()) CELLS.set(k, A.get(k));
+	return want;
 }
 const cellOf = (k) => CELLS.get(k) || null;
 

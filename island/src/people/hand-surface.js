@@ -12,7 +12,11 @@
 import * as THREE from 'three';
 import { skinMaterial } from './skin.js';
 
-export function refineHandSurface(source, indices, passes = 1) {
+// only (optional): a test on the source's vertex indices; then only the triangles with a corner
+// it passes are refined (the hand, say, and not the forearm, which gains little from it), and
+// the ones beside them are split along the shared edges so the surface has no cracks (a phone's
+// arms: fingersOnly below)
+export function refineHandSurface(source, indices, passes = 1, only = null) {
 	const attrs = Object.entries(source.attributes), data = Object.fromEntries(attrs.map(([k]) => [k, []]));
 	const remap = new Map(), faces = [];
 	for (const old of indices) {
@@ -23,6 +27,9 @@ export function refineHandSurface(source, indices, passes = 1) {
 		faces.push(remap.get(old));
 	}
 	let ix = faces;
+	// (which faces are refined: all, or those with a corner the test passes)
+	let sel = null;
+	if (only) { sel = new Uint8Array(indices.length / 3); for (let f = 0; f < sel.length; f++) sel[f] = only(indices[f * 3]) || only(indices[f * 3 + 1]) || only(indices[f * 3 + 2]) ? 1 : 0; }
 	for (let pass = 0; pass < passes; pass++) {
 		const edges = new Map(), next = [];
 		const midpoint = (a, b) => {
@@ -51,11 +58,37 @@ export function refineHandSurface(source, indices, passes = 1) {
 			for (let k = 0; k < 4; k++) { data.skinIndex.push(best[k]?.[0] || 0); data.skinWeight.push((best[k]?.[1] || 0) / sum); }
 			edges.set(key, out); return out;
 		};
-		for (let i = 0; i < ix.length; i += 3) {
-			const [a, b, c] = ix.slice(i, i + 3), ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
-			next.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+		if (!sel) {
+			for (let i = 0; i < ix.length; i += 3) {
+				const [a, b, c] = ix.slice(i, i + 3), ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
+				next.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+			}
+			ix = next;
+			continue;
 		}
-		ix = next;
+		// selective: every edge of a chosen face is split; a face beside them with one or two
+		// of its edges split is cut into two or three along them (no T-junctions), and one
+		// with all three split is refined like the chosen ones
+		const ek = (a, b) => (a < b ? a + ':' + b : b + ':' + a), split = new Set(), nextSel = [];
+		for (let f = 0; f < sel.length; f++) if (sel[f]) { const a = ix[f * 3], b = ix[f * 3 + 1], c = ix[f * 3 + 2]; split.add(ek(a, b)); split.add(ek(b, c)); split.add(ek(c, a)); }
+		for (let f = 0; f < sel.length; f++) {
+			const v = [ix[f * 3], ix[f * 3 + 1], ix[f * 3 + 2]], cut = [0, 1, 2].map((e) => split.has(ek(v[e], v[(e + 1) % 3])));
+			const n = cut[0] + cut[1] + cut[2];
+			if (n === 3) {
+				const [a, b, c] = v, ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
+				next.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca); nextSel.push(1, 1, 1, 1);
+			} else if (n === 0) { next.push(...v); nextSel.push(0); }
+			else if (n === 1) {
+				// (rotated so the cut edge is a-b)
+				const e = cut.indexOf(true), a = v[e], b = v[(e + 1) % 3], c = v[(e + 2) % 3], m = midpoint(a, b);
+				next.push(a, m, c, m, b, c); nextSel.push(0, 0);
+			} else {
+				// (rotated so the whole edge is c-a: a-b and b-c cut)
+				const e = (cut.indexOf(false) + 1) % 3, a = v[e], b = v[(e + 1) % 3], c = v[(e + 2) % 3], ab = midpoint(a, b), bc = midpoint(b, c);
+				next.push(ab, b, bc, a, ab, bc, a, bc, c); nextSel.push(0, 0, 0);
+			}
+		}
+		ix = next; sel = Uint8Array.from(nextSel);
 	}
 	const g = new THREE.BufferGeometry();
 	for (const [key, a] of attrs) g.setAttribute(key, key === 'skinIndex' ? new THREE.Uint16BufferAttribute(data[key], a.itemSize) : new THREE.Float32BufferAttribute(data[key], a.itemSize));
@@ -106,6 +139,21 @@ export function handLook(dna = {}) {
 	const lean = 1 - Math.min(1, Math.max(0, ((dna.weight ?? 0.5) - 0.3) / 0.6));
 	const veins = Math.min(1, 0.35 + Math.min(1, Math.max(0, (age - 25) / 45)) * 0.4 + lean * 0.25 + (dna.muscle ?? 0.5) * 0.2 + (male ? 0.1 : 0));
 	return [+hair.toFixed(3), +veins.toFixed(3)];
+}
+
+// the test refineHandSurface's only takes for a body P: a vertex on a finger or the thumb (its
+// heaviest bone), so a phone refines where the nails, the joints' creases and the grip are and
+// leaves the back of the hand, the palm and the forearm as the body has them (on a phone screen
+// they read the same: docs/phone-audit-2026-10-15.md)
+export function fingersOnly(P) {
+	const g = P.skin.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+	const finger = P.bones.map((b) => /^finger\d-\d\./.test(b.name));
+	return (v) => { let best = 0; for (let k = 1; k < 4; k++) if (sw.getComponent(v, k) > sw.getComponent(v, best)) best = k; return finger[si.getComponent(v, best)]; };
+}
+// how a first-person arm is refined on this device and tier: { passes, only } (only: the fingers)
+export function handRefine(P, { phone = false, ratio = 1 } = {}) {
+	if (ratio < 0.75) return { passes: 0, only: null };
+	return { passes: 1, only: phone ? fingersOnly(P) : null };
 }
 
 export function armTriangles(P, side) {

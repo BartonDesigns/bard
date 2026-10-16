@@ -18,12 +18,12 @@
 import * as THREE from 'three';
 import { assemblyFor, layersFor, studsFor, MAT } from './assembly.js';
 import { createPiece, strike, cellAt, throughAt, breachOf, serialise, restore, broken } from './cells.js';
-import { createWallMesher } from './mesh.js';
+import { createWallMesher, DETAIL } from './mesh.js';
 import { sectionAtlas, lathTexture, MARK } from './textures.js';
 import { createDecals } from './decals.js';
 import { createChips } from './chips.js';
 import { bid, hash } from '../ids.js';
-import { qualityNow } from '../../world/governor.js';
+import { qualityNow, onQuality } from '../../world/governor.js';
 import { setCuts } from './cuts.js';
 
 const KEY = 'l99.structures.walls.v1';
@@ -31,22 +31,55 @@ const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3
 const WET = new Set(['bath', 'mbath', 'powder', 'kitchen', 'laundry', 'restroom']);
 const SURFACE = { drywall: 'stone', plaster: 'stone', stucco: 'stone', render: 'stone', brick: 'stone', block: 'stone', concrete: 'stone', osb: 'wood', plywood: 'wood', boards: 'wood', siding: 'wood', stud: 'wood', steel: 'metal', paper: 'stone', batt: 'stone' };
 
-// the cell size, the debris and the marks by the quality tier (world/governor.js)
+// the cell size, the debris and the marks by the quality tier (world/governor.js); and how a
+// broken wall is drawn: lvl, its level of detail to start from (mesh.js DETAIL), maxVerts, the
+// most one wall may have before it is drawn a level coarser, and budget, the most all the
+// broken walls round you may have together before a newly broken one starts at the coarsest.
+// (A shot-up house drawn at the high tier's detail reaches a few hundred thousand vertices;
+// a phone keeps it to a few tens of thousands.)
 export function wallQuality(isPhone, tier = qualityNow()?.name || 'high') {
-	if (isPhone) return { cs: 0.15, chips: 100, marks: 120, life: 90 };
-	return tier === 'minimal' ? { cs: 0.15, chips: 90, marks: 140, life: 60 } : tier === 'low' ? { cs: 0.125, chips: 160, marks: 200, life: 120 } : tier === 'medium' ? { cs: 0.1, chips: 260, marks: 260, life: 180 } : { cs: 0.09, chips: 360, marks: 320, life: 240 };
+	const lowest = tier === 'minimal' ? 2 : 1;
+	if (isPhone) return { cs: 0.15, chips: 100, marks: 120, life: 90, lvl: lowest, maxVerts: 8000, budget: 60000 };
+	return tier === 'minimal' ? { cs: 0.15, chips: 90, marks: 140, life: 60, lvl: 2, maxVerts: 8000, budget: 60000 }
+		: tier === 'low' ? { cs: 0.125, chips: 160, marks: 200, life: 120, lvl: 1, maxVerts: 12000, budget: 100000 }
+			: tier === 'medium' ? { cs: 0.1, chips: 260, marks: 260, life: 180, lvl: 0, maxVerts: 24000, budget: 200000 }
+				: { cs: 0.09, chips: 360, marks: 320, life: 240, lvl: 0, maxVerts: Infinity, budget: Infinity };
+}
+// a wall's meshes within the tier's caps: built at the tier's level and a level coarser each
+// time it runs past them (pure but for the build: tools/phone-audit.test.mjs)
+export function buildWithin(build, q, spent) {
+	let lvl = Math.max(q.lvl, spent >= q.budget ? DETAIL.length - 1 : 0), out, n;
+	for (;;) {
+		out = build(DETAIL[lvl]);
+		n = 0;
+		for (const m of out) n += m.geometry.attributes.position.count;
+		if ((n <= q.maxVerts && spent + n <= q.budget) || lvl >= DETAIL.length - 1) break;
+		for (const m of out) m.geometry.dispose();
+		lvl++;
+	}
+	return { meshes: out, verts: n, lvl };
 }
 
 export function createWalls(ctx) {
 	const { scene, isPhone, sounds, debris } = ctx;
 	const W = () => ctx.world();
 	const Q = wallQuality(isPhone);
-	const mesher = createWallMesher({ atlas: sectionAtlas(), lath: lathTexture() });
+	// (the section atlas, a 1024 canvas, and the wire's texture are made the first time a wall is
+	// drawn broken: most visits never break one, and on a phone the canvas is 4 MB held for nothing)
+	let mesher = null;
+	const mesherNow = () => mesher || (mesher = createWallMesher({ atlas: sectionAtlas(), lath: lathTexture() }));
 	const decals = createDecals(scene, { cap: Q.marks });
 	const chips = createChips(scene, { cap: Q.chips, floorAt: (x, z, y) => ctx.floorAt(x, z, y + 0.3) });
 	chips.setLife(Q.life);
 	const sources = new Map();          // a builder's object (a house, an interior level) -> its walls
 	const listeners = new Set();
+	let vertsNow = 0;                   // the broken walls' vertices, all together (wallQuality's budget)
+	// a step down the tiers: the broken walls drawn finer than the new tier allows are drawn again
+	// (a step up leaves them be until they change)
+	const offQuality = onQuality(() => {
+		const lvl = wallQuality(isPhone).lvl;
+		for (const src of sources.values()) for (const Wl of src.walls) if (Wl.cells && Wl.meshes.length && (Wl.lvl ?? 0) < lvl) dirty.add(Wl);
+	});
 	let saved = load(), dirtySave = false, saveWait = 0, scanT = 0, tidyT = 0, dip = 0, cutsDirty = false;
 	const dirty = new Set();
 
@@ -107,7 +140,7 @@ export function createWalls(ctx) {
 	function unregister(key) {
 		const src = sources.get(key);
 		if (!src) return;
-		for (const Wl of src.walls) { decals.drop(Wl); dirty.delete(Wl); }
+		for (const Wl of src.walls) { decals.drop(Wl); dirty.delete(Wl); vertsNow -= Wl.verts || 0; Wl.verts = 0; }
 		chips.clear(src.id);
 		sources.delete(key);
 	}
@@ -138,7 +171,8 @@ export function createWalls(ctx) {
 	// ---------- a wall taken over ----------
 	function ensure(Wl) {
 		if (Wl.cells) return;
-		const cs = Q.cs;
+		// (the tier's cell size now: what was done is kept by position, whatever the grid)
+		const cs = wallQuality(isPhone).cs;
 		Wl.cells = Wl.pieces.map((p) => createPiece({ u0: p.u0, u1: p.u1, y0: p.y0, y1: p.y1, studs: p.studs, cs, stack: Wl.stack }));
 	}
 	// the builder's own triangles for this wall made nothing (kept to put back)
@@ -165,7 +199,8 @@ export function createWalls(ctx) {
 		const src = Wl.src;
 		hideSource(Wl);
 		for (const m of Wl.meshes) { src.root.remove(m); m.geometry.dispose(); }
-		Wl.meshes = mesher.build(Wl, src.M);
+		const spent = vertsNow - (Wl.verts || 0), B = buildWithin((o) => mesherNow().build(Wl, src.M, o), wallQuality(isPhone), spent);
+		Wl.meshes = B.meshes; Wl.verts = B.verts; Wl.lvl = B.lvl; vertsNow = spent + B.verts;
 		for (const m of Wl.meshes) src.root.add(m);
 		collide(Wl);
 		hung(Wl);
@@ -458,6 +493,7 @@ export function createWalls(ctx) {
 	function resetWall(Wl) {
 		for (const m of Wl.meshes) { Wl.src.root.remove(m); m.geometry.dispose(); }
 		Wl.meshes = [];
+		vertsNow -= Wl.verts || 0; Wl.verts = 0;
 		showSource(Wl);
 		for (const H of Wl.hung || []) { H.m.geometry.attributes.position.array.set(H.keep, H.i); H.m.geometry.attributes.position.needsUpdate = true; }
 		Wl.hung = null; Wl.throughN = 0;
@@ -522,7 +558,8 @@ export function createWalls(ctx) {
 	function info() {
 		let walls = 0, broken = 0, verts = 0, breaches = 0;
 		for (const src of sources.values()) for (const Wl of src.walls) { walls++; if (Wl.cells) { broken++; for (const m of Wl.meshes) verts += m.geometry.attributes.position.count; breaches += Wl.breach.filter(Boolean).length; } }
-		return { sources: sources.size, walls, broken, verts, breaches, cell: Q.cs, chips: chips.counts(), marks: decals.count(), kept: Object.keys(saved.b).length };
+		const q = wallQuality(isPhone);
+		return { sources: sources.size, walls, broken, verts, breaches, cell: q.cs, lvl: q.lvl, maxVerts: q.maxVerts, budget: q.budget, chips: chips.counts(), marks: decals.count(), kept: Object.keys(saved.b).length };
 	}
 	// every way through near a point, for the people's paths: [{ x, z, y, w, h, kind, nx, nz }]
 	function breaches(x, z, r = 40) {
@@ -554,5 +591,7 @@ export function createWalls(ctx) {
 		on: (f) => { listeners.add(f); return () => listeners.delete(f); },
 		forget: () => { for (const src of sources.values()) for (const Wl of src.walls) if (Wl.cells) resetWall(Wl); saved = { b: {} }; dirtySave = true; saveWait = 0; },
 		sources, decals, chips,
+		// the world going: the tier's listener let go (the meshes go with the builders' roots)
+		dispose: () => { offQuality(); dirty.clear(); },
 	};
 }
