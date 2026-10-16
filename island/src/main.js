@@ -178,6 +178,8 @@ import { createSignage } from './signage/index.js';
 import { createLaw } from './law/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
+import { skinTouch, firstTime } from './ui/touch-skin.js';
+import { touchLookRows } from './ui/touch-look.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -437,6 +439,8 @@ function slider(panel, label, min, max, step, get, set, fmt) {
 
 export function createIslandWorld() {
 	const dom = buildDom();
+	// a touch screen's controls: icons only, laid out by thumb (ui/touch-skin.js)
+	skinTouch(dom.mount);
 	// declared here, made once the hint and camera exist (see below)
 	let drive = { update: () => false, stop() {}, active: () => false };
 	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
@@ -1430,6 +1434,8 @@ export function createIslandWorld() {
 		const aimNote = css(document.createElement('div'), 'font-size:12px;opacity:.75;margin:-6px 0 12px;');
 		aimNote.textContent = 'Mouse and touch · Default 115%';
 		p.appendChild(aimNote);
+		// a touch screen: invert up and down, and the gyro (ui/touch-look.js)
+		if (dom.mount.classList.contains('l99-touch')) touchLookRows(p, () => css(document.createElement('button'), 'width:100%;min-height:44px;margin-bottom:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;'));
 		if (origin) {
 			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
 			galaxy.textContent = 'Explore galaxy';
@@ -2002,7 +2008,7 @@ export function createIslandWorld() {
 			dom.act.textContent = want === 'board' ? '⛵ Board' : '⛵ Leave boat';
 			dom.act.title = want === 'board' ? 'Take the boat out' : 'Step off the boat';
 			dom.act.setAttribute('aria-label', dom.act.title);
-			if (want === 'board') hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
+			if (want === 'board' && (!isPhone || firstTime('l99-tip-boat'))) hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
 		}
 	}
 	let origin = null;   // the planet flight landed us from, if any
@@ -2161,7 +2167,7 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
+			if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {

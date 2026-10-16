@@ -157,7 +157,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		aimBtn = document.createElement('button');
 		aimBtn.type = 'button'; aimBtn.setAttribute('aria-label', 'Aim');
 		aimBtn.title = 'Tap to toggle sights; drag to aim'; aimBtn.setAttribute('aria-pressed', 'false');
-		aimBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><span style="font:600 10px system-ui">AIM</span>';
+		aimBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>';
 		aimBtn.style.cssText = 'position:absolute;right:calc(18px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 96px + env(safe-area-inset-bottom));width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(10,16,20,.45);color:#eafaf6;display:none;align-items:center;justify-content:center;z-index:6;flex-direction:column;gap:2px;touch-action:none;';
 		for (const ev of ['pointerdown', 'touchstart']) aimBtn.addEventListener(ev, (e) => e.stopPropagation());
 		bindLookDrag(aimBtn, mount, { start: () => { if (!S.shown || mount.inert) return false; S.aimTap = !S.aimTap; aimBtn.setAttribute('aria-pressed', String(S.aimTap)); aimBtn.style.background = S.aimTap ? 'rgba(60,140,120,.6)' : 'rgba(10,16,20,.45)'; } });
