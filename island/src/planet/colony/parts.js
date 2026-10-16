@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { lathe, prism, box, cbox, ring, sweep, geodesic, geoPanes, blob, frame } from '../alienkit.js';
+import { civicWall, civicDeck } from '../../civic/placement.js';
 import { farmBay } from './farm.js';
 import { at as sign } from './signs.js';
 // lettering for the site being built (colony.js gathers X.sg into one mesh per site)
@@ -119,6 +120,9 @@ export function hub(X, h) {
 		put(X, M, HULL, S.accent, box(2.2, 0.3, 0.3), 0, 3.0, z1 + 3.2);
 		for (const sx of [-1.15, 1.15]) X.K.add('air', M.put(box(0.06, 0.1, 2.6), sx, 2.9, z1 + 1.6), {});
 		put(X, M, RUN, S.run, box(0.3, 0.3, 0.3), 0, 3.6, z1 + 3.3, 0, 0, 0, 1, true);
+		// Real side-wall anchors keep art clear of airlock doors, glass and safety lettering.
+		for(const side of [-1,1])civicWall(X.civic,M,{id:`airlock:${i}:${side}`,x:side*1.475,y:.4,z:z1+1.6,nx:side,nz:0,w:3.2,h:2.8,tags:['workshop','lounge','depot'].includes(ROLES[i%ROLES.length])});
+		civicDeck(X.civic,M,{id:`airlock:${i}`,y:.4,z:z1+1.6,w:2.68,d:3.18});
 		const door = M.p(0, 0, z1 + 6), lock = M.p(0, 0, z1 + 1.6);
 		pool(X, door.x, door.z, h.y, 7, S.window);
 		X.doors.push({ x: door.x, z: door.z, a, inner: M.p(0, 0, z1 - 1.5), lock: M.p(0, 0, z1 + 3.4) });
@@ -346,6 +350,9 @@ export function station(X, F) {
 	put(X, F, HULL, S.trim, box(9, 0.8, 16), 0, X.railH - 1.2, 0);
 	for (const z of [-7, 7]) for (const x of [-3.5, 3.5]) put(X, F, HULL, S.trim, box(0.4, X.railH - 1.6, 0.4), x, (X.railH - 1.6) / 2, z, 0, 0, 0, 1, true);
 	glass(X, F, new THREE.CylinderGeometry(4.6, 4.6, 16, 10, 1, true, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), 0, X.railH - 0.8, 0);
+	// The opaque band below the windows; its upper edge is at 1.8 metres.
+	for(const side of [-1,1])civicWall(X.civic,F,{id:`station:${F.x}:${F.z}:${side}`,x:side*6.02,y:.15,nx:side,nz:0,w:6.8,h:1.5});
+	civicDeck(X.civic,F,{id:`station:${F.x}:${F.z}`,y:X.railH-.8,w:8.95,d:15.95});
 	X.col.box(F.x, F.z, F.yaw, 6.2, 4.2, F.y + 5);
 }
 
