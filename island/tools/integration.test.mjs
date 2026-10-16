@@ -11,7 +11,7 @@ import { streetSigns, storefrontDecals, MAT } from '../src/signage/placement.js'
 import { SYSTEMS } from '../src/signage/systems.js';
 import { FACE_KINDS } from '../src/signage/faces.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../src/bay/styles.js';
-import { planDispatch, FORCES } from '../src/military/rules.js';
+import { planDispatch, FORCES, siteScore, baseLayout } from '../src/military/rules.js';
 
 // a town on the grid of the older towns (no warp), bearing 0, everywhere east of x = -2000
 const town = (inside = () => false) => ({ urbanAt: (x) => (x > -2000 ? { u: 0.6, a: 0, s: STYLE.older, d: 0.1 } : { u: 0, a: 0, s: 0 }), inside, BLOCKS, toGrid, fromGrid });
@@ -118,4 +118,12 @@ test('the rebuild crews come to patch a wall that is broken and nothing else, th
 	store.put('h2', { x: 10, z: 10, m: [[1]], c: 0, g: [], t0: store.now() });
 	tick(0.01);
 	assert.equal(R.patches.size, 0);
+});
+
+test('a surveyed base inside a town\'s reach still sites on open ground; homes on it still stop it', () => {
+	const L = baseLayout('garrison', 7);
+	const flat = { height: () => 12, water: () => false, urban: () => 1, built: () => 0, road: () => 200 };
+	assert.equal(siteScore(flat, 0, 0, 0, L.W, L.D).why, 'town');
+	assert.ok(siteScore(flat, 0, 0, 0, L.W, L.D, { townMax: 1.01 }).ok);
+	assert.equal(siteScore({ ...flat, built: () => 12 }, 0, 0, 0, L.W, L.D, { townMax: 1.01 }).why, 'homes');
 });

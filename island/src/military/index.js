@@ -15,7 +15,7 @@
 // depot }) registers them (services/interiors.js once it is merged).
 
 import * as THREE from 'three';
-import { BAY_SITES, globeSites, baseLayout, chooseSite, interiorFrames, garrisonPlan, toLocal, toWorld, padAt, hash2 } from './rules.js';
+import { BAY_SITES, globeSites, baseLayout, chooseSite, siteScore, interiorFrames, garrisonPlan, toLocal, toWorld, padAt, hash2 } from './rules.js';
 import { militaryKit } from './kit.js';
 import { buildBase, buildCheckpoint } from './base-model.js';
 import { vehicleGeometry, SCHEMES, DIMS, LOD_FAR, LOD_FAR_PHONE } from './models.js';
@@ -83,8 +83,11 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 		};
 	}
 	function site(S) {
-		const L = S.layout, best = chooseSite(sampler(), { x: S.cx, z: S.cz, yaw: S.yaw || 0 }, L.W, L.D, { tries: 16 });
-		if (!best) { S.status = 'failed'; return; }
+		// (a site whose ground the town has grown over, Diablo Flats against Concord's edge, is
+		// taken out to the nearest open ground within a couple of kilometres rather than lost)
+		const L = S.layout, smp = sampler(), at = { x: S.cx, z: S.cz, yaw: S.yaw || 0 }, o = { townMax: S.id.startsWith('bay-') ? 1.01 : 0.18 };
+		const best = chooseSite(smp, at, L.W, L.D, { tries: 16, ...o }) || chooseSite(smp, at, L.W, L.D, { tries: 40, step: Math.max(L.W, L.D) * 1.6, ...o });
+		if (!best) { S.status = 'failed'; S.why = siteScore(smp, at.x, at.z, at.yaw, L.W, L.D, o).why; return; }
 		const ll = toLL(best.x, best.z);
 		Object.assign(S, { status: 'sited', x: best.x, z: best.z, yaw: best.yaw, floor: best.floor, score: best.score, sitedLat: ll.lat, sitedLon: ll.lon });
 		S.checkpoint = checkpointFor(S);
@@ -462,7 +465,7 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 	// ---------- for the console ----------
 	function info() {
 		const p = P(), list = [...sites.values()].filter((S) => S.status !== 'failed').map((S) => ({ name: S.name, kind: S.kind, status: S.status, km: p ? +(Math.hypot((S.x ?? S.cx) - p.pos.x, (S.z ?? S.cz) - p.pos.z) / 1000).toFixed(1) : null, built: !!S.built, garrison: manned(S), losses: S.losses, hostile: S.hostile > 0, units: S.units, parked: S.built ? S.layout.parked.length - S.taken.size : 0 })).sort((a, b) => a.km - b.km);
-		return { bases: list.slice(0, 12), patrols: dispatch.info(), police: police.info(), failed: [...sites.values()].filter((S) => S.status === 'failed').length, parked: parked.length, draws: [...sets.values()].filter((S) => S.n).length + [...sites.values()].reduce((a, S) => a + (S.built ? S.built.draws : 0), 0) };
+		return { bases: list.slice(0, 12), patrols: dispatch.info(), police: police.info(), failed: [...sites.values()].filter((S) => S.status === 'failed').length, failedWhy: [...sites.values()].filter((S) => S.status === 'failed').slice(0, 6).map((S) => `${S.name}: ${S.why || '?'}`), parked: parked.length, draws: [...sets.values()].filter((S) => S.n).length + [...sites.values()].reduce((a, S) => a + (S.built ? S.built.draws : 0), 0) };
 	}
 	// go to a base (by name, a part of its name, or the nearest): you arrive outside its gate
 	function goTo(name) {
