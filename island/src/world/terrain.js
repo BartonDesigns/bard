@@ -32,14 +32,54 @@ export function radialGrid(segments, radius, power, extra = 0, far = 0) {
 	return g;
 }
 
-export const HEIGHT_GLSL = /* glsl */`
+// A square grid like radialGrid's for a ring round another: its spacing grows in step with the
+// distance from inner out, so every cell is about the same size on screen (with a power law the
+// spacing at a far ring's inner edge was four or five times the ring inside it, and the hills a
+// few kilometres off were drawn in facets tens of pixels across). A few coarse steps cover the
+// middle, where the ring inside draws. segments: even.
+export function ringGrid(segments, inner, radius, innerSteps = 8) {
+	const half = segments / 2, k = Math.log(radius / inner) / (half - innerSteps);
+	const at = (i) => { const s = i - half, a = Math.abs(s); return Math.sign(s) * (a <= innerSteps ? a / innerSteps * inner : inner * Math.exp(k * (a - innerSteps))); };
+	const g = new THREE.BufferGeometry(), n = segments + 1, pos = new Float32Array(n * n * 3), idx = [];
+	for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const q = (j * n + i) * 3; pos[q] = at(i); pos[q + 2] = at(j); }
+	for (let j = 0; j < segments; j++) for (let i = 0; i < segments; i++) { const a = j * n + i, b = a + 1, c = a + n, d = c + 1; idx.push(a, c, b, b, c, d); }
+	g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+	g.setIndex(idx);
+	g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e7);
+	return withSpacing(g);
+}
+// Gives a square grid (radialGrid's or ringGrid's) aGsp: the grid's spacing at each vertex (the
+// wider of its cells either side, on either axis), for a normal and detail taken over the grid's
+// own spacing, so relief finer than the grid does not alias into facets
+export function withSpacing(g) {
+	const p = g.attributes.position.array, n = Math.round(Math.sqrt(p.length / 3)), sp = new Float32Array(n), out = new Float32Array(n * n);
+	for (let i = 0; i < n; i++) sp[i] = Math.max(i > 0 ? Math.abs(p[i * 3] - p[(i - 1) * 3]) : 0, i < n - 1 ? Math.abs(p[(i + 1) * 3] - p[i * 3]) : 0);
+	for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) out[j * n + i] = Math.max(sp[i], sp[j]);
+	g.setAttribute('aGsp', new THREE.BufferAttribute(out, 1));
+	return g;
+}
+
+// A height lifted on the graphics card that comes out as infinity or not a number (a texture
+// not filled yet, a division by zero, a driver's garbage) is put back to a plain value, and any
+// height is held to the range ground can have. Apple's graphics draw such a vertex as a long
+// pale triangle to the edge of the view where desktop drivers drop it. The test is on the bits,
+// which no compiler's fast maths can fold away (x != x can be). Every GPU-lifted ground uses it.
+export const SAFE_GLSL = /* glsl */`
+#ifndef SAFE_H_GLSL
+#define SAFE_H_GLSL
+float safeH(float h, float d){ return (floatBitsToUint(h) & 0x7f800000u) == 0x7f800000u ? d : clamp(h, -12000.0, 12000.0); }
+#endif
+`;
+export const SAFE_H_RANGE = 12000;
+
+export const HEIGHT_GLSL = /* glsl */`${SAFE_GLSL}
 uniform sampler2D uHeight; uniform float uHalf, uCell, uN;
 float heightAt(vec2 w){
-	vec2 f = clamp((w + uHalf) / uCell, vec2(0.0), vec2(uN - 1.001));
+	vec2 f = clamp((w + uHalf) / max(uCell, 1e-3), vec2(0.0), vec2(uN - 1.001));
 	vec2 i = floor(f), u = f - i, t = (i + 0.5) / uN; float px = 1.0 / uN;
 	float a = texture2D(uHeight, t).r, b = texture2D(uHeight, t + vec2(px, 0.0)).r;
 	float c = texture2D(uHeight, t + vec2(0.0, px)).r, d = texture2D(uHeight, t + vec2(px, px)).r;
-	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+	return safeH(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), 0.0);
 }`;
 
 export const NOISE_GLSL = /* glsl */`
@@ -171,7 +211,7 @@ export function createTerrain(island, shared) {
 	};
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return farBlend(heightAt(w), w); }\n' : '#define groundH heightAt\n') + sh.vertexShader
+		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
 				vec2 wxz = position.xz + uCenter;
 				// the normal is taken over the grid's own spacing where that is wider than a height
@@ -186,7 +226,7 @@ export function createTerrain(island, shared) {
 				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
 				${far ? '// the ground falls away with the curve of a small world, so the horizon is a line\n\t\t\t\ttransformed.y -= dot(position.xz, position.xz) / 3.47e6;' : ''}
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; float gSnowIce = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				${far ? '' : 'if (max(abs(vW.x), abs(vW.z)) > uHalf) discard;'}
 				holeCut(vW.xz);
@@ -346,7 +386,8 @@ export function createTerrain(island, shared) {
 					rip = mix(rip, 0.5, smoothstep(0.35, 0.9, px));
 					vec3 ice = vec3(0.70, 0.82, 0.95), snowHi = vec3(0.96, 0.98, 1.0);
 					vec3 snow = mix(ice, snowHi, 0.22 + 0.62 * rip + 0.16 * n2) * (0.95 + 0.05 * dd.r);
-					snow = mix(snow, vec3(0.62, 0.76, 0.92), smoothstep(0.6, 0.9, vn(vW.xz * 0.018 + 7.0)) * 0.35);   // bare blue ice where the wind scoured it
+					gSnowIce = smoothstep(0.6, 0.9, vn(vW.xz * 0.018 + 7.0));
+					snow = mix(snow, vec3(0.62, 0.76, 0.92), gSnowIce * 0.35);   // bare blue ice where the wind scoured it
 					col = mix(col, snow, snowW * (1.0 - occ * 0.5));
 					gSnowW = snowW * (1.0 - occ * 0.5);
 					gDetailH = mix(gDetailH, rip * 0.11 * (1.0 - smoothstep(30.0, 90.0, camD)), gSnowW);
@@ -364,7 +405,9 @@ export function createTerrain(island, shared) {
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
-				rough = mix(rough, 0.32, gSnowW);   // an icy glaze catches the sky
+				// snow is matte (its glitter is the crystals, below); only the wind-scoured ice and the
+				// glazed crests catch the sky. All of it at 0.32 read as a wet floor, smeared with glare
+				rough = mix(rough, mix(0.74, 0.34, gSnowIce), gSnowW);
 				rough = mix(rough, 0.3, rockWet * rockW);   // wet rock at the waterline shines
 				rough = mix(rough, 0.4, bankWet * 0.7);   // and the mud along a lake or a stream
 				diffuseColor.rgb *= 1.0 - print * 0.12;
@@ -452,7 +495,7 @@ export function leanTerrainMaterial(uniforms, far = false) {
 	const m = new THREE.MeshLambertMaterial({ color: 0xffffff });
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, { uHeight: uniforms.uHeight, uHalf: uniforms.uHalf, uCell: uniforms.uCell, uN: uniforms.uN, uCenter: uniforms.uCenter, uPlG: uniforms.uPlG, uPlS: uniforms.uPlS, uHoles: uniforms.uHoles });
-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vLW;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return farBlend(heightAt(w), w); }\n' : '#define groundH heightAt\n') + sh.vertexShader
+		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vLW;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
 				vec2 wxz = position.xz + uCenter;
 				float e = max(uCell, max(abs(position.x), abs(position.z)) * 0.02);

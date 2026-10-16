@@ -37,6 +37,7 @@ import { streetTrees, treeColour, autumnNow } from './streettrees.js';       // 
 import { NIGHT_U, NIGHT_I, nightSeed, housePlan, packHouse } from './nightplan.js';      // the households' own lights after dark
 import { addNightField } from '../world/nightfield.js';
 import { qualityNow } from '../world/governor.js';
+import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -1702,9 +1703,9 @@ export function createCity(shared, scene, bay, real = null) {
 
 	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
 	// simpler leaf-card trees further out, smooth masses far away
-	let treeList = [], treeX = 1e9, treeZ = 1e9;
+	let treeList = [], treeX = 1e9, treeZ = 1e9, treeGV = -1;
 	function placeTrees(x, z) {
-		treeX = x; treeZ = z;
+		treeX = x; treeZ = z; treeGV = gradeVersion();
 		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
 		let nf = 0;
 		const aut = autumnNow();          // the deciduous street trees' autumn (streettrees.js)
@@ -1714,11 +1715,14 @@ export function createCity(shared, scene, bay, real = null) {
 			q.setFromAxisAngle(Y, yaw);
 			const tc = t.fall ? treeColour(t, aut) : t.col, lo = t.fall ? 0.35 : 0.65, hi = t.fall ? 2.6 : 1.35;
 			const tint = [0, 1, 2].map((c) => Math.min(hi, Math.max(lo, tc[c] / LEAF_REF[c])));
+			// (the ground as drawn: the roads' banks and cuts near you, berms.js, lift or lower the
+			// trees beside them, else a tree on a cut road's verge hangs in the air)
+			const gy = d < 300 ? t.y + roadDelta(t.x, t.z) : t.y;
 			if (t.fern) {
 				if (d > LOD.shrub[3] + MARGIN) continue;
 				const k = next(ferns[0]); if (k < 0) continue;
 				const s2 = t.h / fernT.height;
-				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2, s2));
+				m4.compose(p.set(t.x, gy, t.z), q, sc.set(s2, s2, s2));
 				ferns[0].setMatrixAt(k, m4); ferns[0].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 				continue;
 			}
@@ -1726,7 +1730,7 @@ export function createCity(shared, scene, bay, real = null) {
 				if (d > LOD.shrub[3] + MARGIN) continue;
 				const k = next(shrubs[0]); if (k < 0) continue; next(shrubs[1]);
 				const s2 = t.h / 1.3;
-				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2 * 0.9, s2));
+				m4.compose(p.set(t.x, gy, t.z), q, sc.set(s2, s2 * 0.9, s2));
 				shrubs[0].setMatrixAt(k, m4); shrubs[1].setMatrixAt(k, m4); shrubs[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 				continue;
 			}
@@ -1738,13 +1742,13 @@ export function createCity(shared, scene, bay, real = null) {
 				if (k < 0) continue;
 				next(tier[1]);
 				const s2 = t.h / H, sw = s2 * (t.nx || 1);
-				m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(sw, s2, sw));
+				m4.compose(p.set(t.x, gy + 0.2, t.z), q, sc.set(sw, s2, sw));
 				tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 			}
 			if (d < LOD.far[0] - MARGIN) continue;
 			// far: one point, drawn as its species' picture, tinted like the tree
 			if (nf >= TCAP) continue;
-			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = t.y + 0.2; fp.pos[nf * 3 + 2] = t.z;
+			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = gy + 0.2; fp.pos[nf * 3 + 2] = t.z;
 			fp.size[nf] = t.h * T.sizeK; fp.sp[nf] = sp;
 			fp.tint[nf * 3] = tint[0]; fp.tint[nf * 3 + 1] = tint[1]; fp.tint[nf * 3 + 2] = tint[2];
 			nf++;
@@ -2218,7 +2222,7 @@ export function createCity(shared, scene, bay, real = null) {
 			if (!on) { riseT0 = -1; rise.value.w = 0; }
 			near.castShadow = hips.castShadow = gables.castShadow = !on;
 		}
-		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
+		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
 		lastX = x; lastZ = z;
 		const list = [];
 		if (!globe) fillBlocks(x, z, 1200, list);

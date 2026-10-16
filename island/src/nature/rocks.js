@@ -114,9 +114,13 @@ float rkf(vec3 p){ return rkn(p) * 0.5 + rkn(p * 2.03 + 3.1) * 0.3 + rkn(p * 4.1
 export function rockMaterial(fogBelt) {
 	// fogBelt: { value } 0 inland .. 1 in the fog, where moss and lichen are thick
 	const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
-	m.onBeforeCompile = (sh) => {
+	// (a function, not an arrow: each layer's copy, wildground.js, says where its stones meet the
+	// ground in their own units, userData.rkFoot: the depth they are sunk by over their height)
+	m.onBeforeCompile = function (sh) {
 		sh.uniforms.uFogBelt = fogBelt;
-		sh.vertexShader = 'varying vec3 vRkW; varying vec3 vRkN;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.uniforms.uRkFoot = { value: this.userData?.rkFoot ?? 0.35 };
+		sh.vertexShader = 'varying vec3 vRkW; varying vec3 vRkN; varying float vRkY;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+			vRkY = position.y;
 			{ vec4 rw = vec4(transformed, 1.0);
 			#ifdef USE_INSTANCING
 			rw = instanceMatrix * rw;
@@ -127,7 +131,7 @@ export function rockMaterial(fogBelt) {
 			rn = mat3(instanceMatrix) * rn;
 			#endif
 			vRkN = normalize(mat3(modelMatrix) * rn); }`);
-		sh.fragmentShader = 'varying vec3 vRkW; varying vec3 vRkN; uniform float uFogBelt; float rkRough = 0.92;\n' + RN + sh.fragmentShader
+		sh.fragmentShader = 'varying vec3 vRkW; varying vec3 vRkN; varying float vRkY; uniform float uFogBelt, uRkFoot; float rkRough = 0.92;\n' + RN + sh.fragmentShader
 			.replace('#include <color_fragment>', `#include <color_fragment>
 			{
 				vec3 q = vRkW;
@@ -142,8 +146,12 @@ export function rockMaterial(fogBelt) {
 				float north = clamp(-vRkN.z, 0.0, 1.0);
 				float moss = smoothstep(0.35, 0.7, north * 0.8 + rkf(q * 0.9 + 5.0) * 0.5 - 0.1) * uFogBelt;
 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.1, 0.16, 0.04), moss * 0.8);
-				// dark and damp where it meets the soil
-				rkRough = mix(0.92, 0.75, moss);
+				// dark and damp where it meets the soil: the shade of its own overhang, soil splashed
+				// up its foot, the band wandering a little round it (no stone sits on the ground like
+				// a pebble on a table, even with no sun to cast its shadow)
+				float foot = 1.0 - smoothstep(uRkFoot - 0.04, uRkFoot + 0.2 + 0.08 * g1, vRkY);
+				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.5, 0.46, 0.4), foot * 0.85);
+				rkRough = mix(mix(0.92, 0.75, moss), 0.7, foot * 0.5);
 			}`)
 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rkRough;')
 			.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>

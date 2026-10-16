@@ -14,7 +14,7 @@
 // the towns and cities (grey by day, lit by night) round the atlas's cities near you.
 
 import * as THREE from 'three';
-import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
+import { radialGrid, ringGrid, withSpacing, NOISE_GLSL, SAFE_GLSL } from '../world/terrain.js';
 import { BAY_GLSL } from '../bay/terrain.js';
 import { WC_U, WC_GLSL } from '../bay/watercarve.js';
 import { BERM_U, BERM_GLSL } from '../bay/berms.js';
@@ -30,7 +30,7 @@ const PH = [photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 }), ph
 
 const FRAG_GLSL = /* glsl */`
 uniform highp sampler2D uGT2, uGT3, uGT4; uniform vec4 uGWin; uniform ivec3 uGI0; uniform vec3 uGF0; uniform vec2 uGSeam; uniform float uGBay, uGNight;
-uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason, uGDry;
+uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason, uGDry; uniform vec4 uGAnc;
 varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;
 float gfH(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
 // value noise on the sphere at 8192 / 2^k metres (the same lattice as the relief)
@@ -160,12 +160,12 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		// (the photos' reads, in loops the compiler can't unroll: twice and on three planes, once on a phone)
 		uGN2: { value: isPhone ? 1 : 2 }, uGDry: { value: 0 }, uGN3: { value: isPhone ? 1 : 3 },
 	};
-	function material(grid, oct, hole) {
+	function material(oct, hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.93, metalness: 0 });
-		const own = { uGGrid: { value: new THREE.Vector3(grid[1], grid[2], grid[0]) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
+		const own = { uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, WC_U, BERM_U, U, common, own);
-			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; uniform vec3 uGGrid;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;\n' + BAY_GLSL + WC_GLSL + BERM_GLSL + GLOBE_GLSL + `
+			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; attribute float aGsp;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;\n' + SAFE_GLSL + BAY_GLSL + WC_GLSL + BERM_GLSL + GLOBE_GLSL + `
 				vec3 gDP;
 				float gOut(vec2 w){ if (uGBay < 0.5) return 1e9; vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (w - uR0.xy) / uR0.z; return length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
 				float gGround(vec2 d, float oct){
@@ -176,8 +176,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 			` + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 gd = position.xz + uGOff;
-					float gr = max(abs(position.x), abs(position.z));
-					float gsp = max(0.3, 2.0 * uGGrid.y * uGGrid.x * pow(max(1e-4, pow(gr / uGGrid.x, 1.0 / uGGrid.y)), uGGrid.y - 1.0) / uGGrid.z);
+					// (the grid's own spacing here: world/terrain.js withSpacing)
+					float gsp = max(0.3, aGsp);
 					float goct = clamp(log2(${8192}.0 / (4.0 * gsp)) + 1.0, 1.0, uGOct);
 					// (the normal from the height itself, across the grid's own spacing either side: the
 					// relief finer than the grid is left out of it, so far ridges don't break into facets)
@@ -201,7 +201,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					gh += gwc;
 					vec3 objectNormal = normalize(vec3(-gx, 2.0 * ge, -gz));
 					if (any(isnan(objectNormal))) objectNormal = vec3(0.0, 1.0, 0.0);
-					if (gh != gh) gh = 0.0;
+					// (never infinity or not a number, on any GPU: world/terrain.js SAFE_GLSL)
+					gh = safeH(gh, 0.0);
 					vGN = objectNormal;
 					vGCC = uGWin.xy + gd * uGWin.zw;
 				`)
@@ -278,15 +279,30 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					bare = mix(bare, 0.7, forest * floorK);
 					// and the shade of the scattered trees in open woodland
 					c *= 1.0 - 0.35 * smoothstep(0.15, 0.45, trees) * (1.0 - forest) * smoothstep(0.55, 0.7, gq(1, 47u) * 0.6 + pS * 0.4);
+					// which way the slope faces: + toward the pole (in its own shade most of the day), - toward
+					// the sun, nothing on the flat
+					float shadeSide = clamp(-n.z * sign(uGAnc.x + 1e-4) / max(n.y, 0.25), -1.0, 1.0) * smoothstep(0.03, 0.25, slope);
+					// scree: the talus fans of broken rock at the foot of the crags, on the slopes just under
+					// rock's steepness where nothing holds the ground (above the trees, or in a dry land),
+					// broken into tongues by the 25 m and 128 m mottles
+					float open = max(1.0 - smoothstep(-1.0, 3.0, air), arid) * (1.0 - forest);
+					float screeK = smoothstep(0.16, 0.3, slope + (m1 - 0.5) * 0.12) * (1.0 - smoothstep(0.42, 0.6, slope)) * smoothstep(0.35, 0.6, m1 * 0.6 + pS * 0.4) * open;
+					vec3 scree = mix(vec3(0.42, 0.4, 0.37), gA, 0.25) * (0.8 + 0.35 * mix(0.5, vn(gM(4) + 9.0), ck));
+					c = mix(c, scree, screeK * 0.75);
 					// rock on the steep ground, and above the plants, banded
 					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15 + (m1 - 0.5) * 0.1), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
 					vec3 rock = mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35) * (0.75 + 0.25 * m1 + 0.25 * mix(0.5, vn(vec2(gM(1).x, h * 0.25)), ck));
+					// moss and lichen on the shaded faces of a wet place's rock, none in a desert or the cold
+					rock = mix(rock, vec3(0.13, 0.17, 0.08) * (0.8 + 0.4 * m2), max(0.0, shadeSide) * smoothstep(600.0, 1400.0, rain) * smoothstep(0.0, 6.0, air) * smoothstep(0.45, 0.65, m2 * 0.7 + pS * 0.3) * 0.6);
 					c = mix(c, rock, rockK);
 					// snow: the high fields' that lasts the summer, and the winter's wherever this month's
-					// air is below freezing, patchier as it thaws; off the cliffs either way
-					float keep = 1.0 - smoothstep(-12.0, -8.0, air + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5);
-					float lying = 1.0 - smoothstep(-3.0, 0.5, air + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
-					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope));
+					// air is below freezing, patchier as it thaws; off the cliffs either way. Shaded faces
+					// keep theirs a few degrees longer than sunny ones, and the line wanders with the 25 m
+					// mottle, so it lies in drifts and tongues rather than along a contour
+					float snowAir = air - shadeSide * 2.5 + (m1 - 0.5) * 1.4;
+					float keep = 1.0 - smoothstep(-12.0, -8.0, snowAir + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5);
+					float lying = 1.0 - smoothstep(-3.0, 0.5, snowAir + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
+					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope + (m1 - 0.5) * 0.12));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
 					// Ocean beaches and inland banks use their own materials. Lake banks stay
 					// damp soil/gravel with a grassy upper edge, not a tan ocean beach.
@@ -333,7 +349,9 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float rL = mix(0.5, gTri(uGRock, vec3(pm.x, h * 0.32, pm.y) * 0.5, n), uGPhK.z), sL = mix(0.5, gPh(uGSand, pm * 1.25), uGPhK.w);
 					float dL = mix(mix(mL, lL, bare), sL, max(arid * 0.7, shore));
 					gDetL = mix(mix(dL, rL, rockK), 0.5, snowK * 0.7);
-					c *= mix(1.0, 0.55 + 0.9 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
+					// (as strong as the Bay's own photo grain, about a quarter either way: at nearly half it
+					// broke every slope into a speckle)
+					c *= mix(1.0, 0.72 + 0.56 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
 					if (any(isnan(c)) || any(isinf(c))) c = vec3(0.3);
 					diffuseColor.rgb = c;
 					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(farmP, urb, rockK) : vec3(0.35);
@@ -347,7 +365,11 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 						bh = fbm3(vGW.xz * 0.06) * 2.5 * (1.0 - smoothstep(4.0, 9.0, px)) + fbm3(vGW.xz * 0.3) * 0.5 * (1.0 - smoothstep(0.9, 2.2, px));
 						bh *= 1.0 - smoothstep(1500.0, 5000.0, d2);
 						// and the photographs' own relief, a few centimetres, close by
-						bh += (gDetL - 0.5) * 0.12 * (1.0 - smoothstep(0.04, 0.25, px));
+						// (a centimetre or so: the photo's features are a few centimetres across, and at 12 cm of
+						// relief over them the bump tipped each pixel's normal by tens of degrees, a light and dark
+						// speckle on every slope, white on snow; with the photographs off it went, with shadows
+						// off it stayed)
+						bh += (gDetL - 0.5) * 0.015 * (1.0 - smoothstep(0.03, 0.15, px));
 					}
 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
@@ -366,12 +388,16 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		m.userData.own = own;
 		return m;
 	}
-	// the rings: n segments, the reach, how fast the spacing grows
-	// (a middle ring between them, out to 40 km, so the mountains a few km off are drawn every
-	// 250-500 m and not in the far ring's kilometre-wide facets; a phone makes do without it)
-	const NEAR = isPhone ? [160, 6000, 2.2] : [256, 6000, 2.2], MID = [224, 40000, 2.2], FARG = isPhone ? [128, 250000, 2.8] : [192, 250000, 2.7];
-	const nearMat = material(NEAR, isPhone ? 8 : OCT, false), midMat = material(MID, 8, true), farMat = material(FARG, isPhone ? 7 : 8, true);
-	const near = new THREE.Mesh(radialGrid(...NEAR), nearMat), mid = new THREE.Mesh(radialGrid(...MID), midMat), far = new THREE.Mesh(radialGrid(...FARG), farMat);
+	// the rings: the fine one (n segments, the reach, how fast the spacing grows), then the middle
+	// and far ones (n segments, where their fine spacing starts, the reach), their cells growing
+	// in step with the distance so each is about the same size on screen (some 1.3 degrees; a
+	// phone's far ring 3): a ring's inner edge sits inside the hole the ring within it leaves,
+	// allowing for the rings' middles being led ahead of you by up to 450 m (x 3 and 4) and snapped.
+	// (a middle ring out to 40 km, so the mountains a few km off are not drawn in the far ring's
+	// facets; a phone makes do without it)
+	const NEAR = isPhone ? [160, 6000, 2.2] : [256, 6000, 2.2], MID = [224, 4200, 40000], FARG = isPhone ? [160, 5000, 250000] : [192, 36000, 250000];
+	const nearMat = material(isPhone ? 8 : OCT, false), midMat = material(8, true), farMat = material(isPhone ? 7 : 8, true);
+	const near = new THREE.Mesh(withSpacing(radialGrid(...NEAR)), nearMat), mid = new THREE.Mesh(ringGrid(...MID), midMat), far = new THREE.Mesh(ringGrid(...FARG), farMat);
 	for (const m of [near, mid, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
 	near.visible = mid.visible = far.visible = false;
 
@@ -424,7 +450,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		midMat.userData.own.uGHole.value.set(nx - F.fx, nz - F.fz, near.visible ? 1 : 0, NEAR[1] * 0.97);
 		// each ring's offset from the anchor (the GPU adds its own few km to it)
 		nearMat.userData.own.uGOff.value.set(nx - F.fx, nz - F.fz); farMat.userData.own.uGOff.value.set(fx - F.fx, fz - F.fz); lakeOff.value.set(fx - F.fx, fz - F.fz);
-		if (mid.visible) farMat.userData.own.uGHole.value.set(mx - F.fx, mz - F.fz, 1, MID[1] * 0.97);
+		if (mid.visible) farMat.userData.own.uGHole.value.set(mx - F.fx, mz - F.fz, 1, MID[2] * 0.97);
 		else farMat.userData.own.uGHole.value.set(nx - F.fx, nz - F.fz, near.visible ? 1 : 0, NEAR[1] * 0.97);
 		// the cities round you (anchor-relative: x, z, reach, how built up)
 		for (let i = 0; i < CITIES; i++) { const c = cities[i]; if (c) common.uGCity.value[i].set(c.x - F.fx, c.z - F.fz, c.r, c.k); else common.uGCity.value[i].set(0, 0, 0, 0); }
