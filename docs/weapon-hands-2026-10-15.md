@@ -80,7 +80,8 @@ The reverse knife grip was not added: a hammer grip reads cleanly at this distan
 
 - The Warden support thumb (-20 mm) still sinks in; the bow hand's thumb and palm press about 3 mm into the riser.
 - The strong thumb wraps round the back strap rather than lying along the left side, because the receiver sits low over these grips.
-- The charge pose's ring and little fingers float 5 to 12 mm.
+- The charge pose's ring and little fingers float 5 to 12 mm. Narrowed on October 15 (integration): they no longer relax off the receiver and close on toward it where it is near (`rest`), now 2 to 5 mm (ring 2.9 / 5.4 / 3.2, little 2.1 / 2.8 / 3.6 on the Aurora, Warden and Mossback; were 6.4 / 8.6 / 6.7 and 4.2 / 5.1 / 4.5). They curl past the side of the receiver, so the last few millimetres would need a plan of their own.
+- The index at carry floated about 6 mm off the receiver (Aurora 6.7, Warden 5.9, Mossback 3.7). Fixed on October 15: the carried index is laid on the frame (`lay` in `finger-pose.js`: its spread and knuckle searched within its range for the pose whose skin rests on the surface, nearest the pose it had, its tip never lower than it was, so it stays straight and never drops onto or into the trigger guard; a version that let it curl or drop put the tip into the guard and was taken back out). Now 1.8 / 1.8 / 0.0 mm off (Aurora, Warden, Mossback). Joint limits unchanged (`limitPose` after every solve).
 - The carry framing still leaves the strong hand below the bottom edge on desktop.
 - Melee items (bat, pipe, bottle) still use the uniform `anatomical-hand.js` grip curl.
 - Not verified: iPhone hardware frame rate.

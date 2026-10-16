@@ -24,6 +24,7 @@ import { createMilDrive } from './drive-mil.js';
 import { createDispatch } from './dispatch.js';
 import { createPolice } from './police.js';
 import { keepClear, releaseClear } from '../sportsfields.js';
+import { militaryStencils, setStencilBody } from '../signage/cars.js';
 
 const SITE_R = 9000, BUILD_R = 5200, DROP_R = 7000, GARRISON_R = 320;
 const UNITS = (L) => { const u = { tank: 0, apc: 0, jeep: 0, truck: 0, heli: 0, jet: 0 }; for (const p of L.parked) u[p.kind]++; return u; };
@@ -37,6 +38,8 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 	let scanT = 0, epoch = -1, lastW = null;
 	const W = () => world();
 	const P = () => W()?.player?.state || null;
+	// (the stencils on the vehicles are laid on their own bodies: signage/cars.js)
+	setStencilBody(vehicleGeometry);
 	// the vehicles you drive and fly (drive.js boards them through board())
 	const milDrive = createMilDrive({ world, camera, combat, kit, group, hint, isPhone, mount });
 
@@ -245,14 +248,16 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 	function setFor(kind, far, cap) {
 		const k = kind + '|' + (far ? 'far' : 'near');
 		let S = sets.get(k);
-		if (S && S.cap < cap) { S.im.removeFromParent(); S.im.dispose(); sets.delete(k); S = null; }
+		if (S && S.cap < cap) { S.im.removeFromParent(); S.im.dispose(); for (const d of S.decals) { d.removeFromParent(); d.dispose(); } sets.delete(k); S = null; }
 		if (!S) {
 			const G = vehicleGeometry(kind);
 			const im = new THREE.InstancedMesh(far ? G.far : G.whole, kit.vehicle, cap);
 			im.count = 0; im.castShadow = !isPhone && !far; im.receiveShadow = true; im.frustumCulled = false; im.name = 'mil-parked-' + k;
 			im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
 			group.add(im);
-			S = { im, n: 0, cap };
+			// (near, the motor pool's stencils on them: the unit's codes, the Guard's word and mark)
+			const decals = far ? [] : militaryStencils(kind, { parked: true, grey: kind === 'heli' || kind === 'jet' }).map((m) => { const d = new THREE.InstancedMesh(m.geometry, m.material, cap); d.count = 0; d.frustumCulled = false; d.renderOrder = m.renderOrder; d.name = 'mil-stencils-' + kind; group.add(d); return d; });
+			S = { im, n: 0, cap, decals };
 			sets.set(k, S);
 		}
 		return S;
@@ -286,9 +291,10 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 			if (S.n >= S.cap) continue;
 			S.im.setMatrixAt(S.n, _m);
 			S.im.setColorAt(S.n, _c.set(SCHEMES[v.scheme] || SCHEMES.woodland));
+			for (const d of S.decals) d.setMatrixAt(S.n, _m);
 			S.n++;
 		}
-		for (const S of sets.values()) { S.im.count = S.n; S.im.instanceMatrix.needsUpdate = true; if (S.im.instanceColor) S.im.instanceColor.needsUpdate = true; S.im.visible = S.n > 0; }
+		for (const S of sets.values()) { S.im.count = S.n; S.im.instanceMatrix.needsUpdate = true; if (S.im.instanceColor) S.im.instanceColor.needsUpdate = true; S.im.visible = S.n > 0; for (const d of S.decals) { d.count = S.n; d.instanceMatrix.needsUpdate = true; d.visible = S.n > 0; } }
 		parkedDirty = false;
 	}
 	// the parked vehicle beside you, to get into (drive.js asks first)
@@ -395,7 +401,18 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 		}
 	}
 	// the police and the dispatch (they answer combat's hooks: the wanted level, trouble reported)
-	const api = { deployments, basesState: () => [...sites.values()].filter((S) => S.status === 'sited') };
+	// a base far off sited when trouble needs it (the bases are otherwise sited only within 9 km of
+	// you, so a boss or an invasion farther from one found none to answer): the nearest few still
+	// waiting within reach of (x, z), on the ground as it stands there
+	function siteNear(x, z, reach) {
+		if (!W()?.bayArea?.loaded?.()) return 0;
+		scan();
+		let n = 0;
+		const wait = [...sites.values()].filter((S) => S.status === 'pending' && Math.hypot(S.cx - x, S.cz - z) < reach).sort((a, b) => Math.hypot(a.cx - x, a.cz - z) - Math.hypot(b.cx - x, b.cz - z));
+		for (const S of wait.slice(0, 2)) { site(S); if (S.status === 'sited') n++; }
+		return n;
+	}
+	const api = { deployments, siteNear, basesState: () => [...sites.values()].filter((S) => S.status === 'sited') };
 	const police = createPolice({ world, combat, group, isPhone, night: kit.night, backup: (e) => dispatch.event(e) });
 	api.police = police;
 	const dispatch = createDispatch({ world, combat, military: api, kit, group, hint, isPhone });
@@ -438,7 +455,7 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 		for (const S of sites.values()) drop(S);
 		sites.clear(); loose.length = 0; parked = []; deployments.length = 0;
 		police.clear(); dispatch.clear();
-		for (const S of sets.values()) { S.im.count = 0; }
+		for (const S of sets.values()) { S.im.count = 0; for (const d of S.decals) d.count = 0; }
 		parkedDirty = true; epoch = -1;
 	}
 

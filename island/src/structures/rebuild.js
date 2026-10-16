@@ -49,7 +49,7 @@ export function stageTrucks(stage, glassOnly, big) {
 	return [['flat', 'glass'], ['van', '']];
 }
 const LOAD = ['skip', 'bars', 'blocks', 'glass'];
-const LOD_KIT = 110, LOD_TRUCK = 90, LOD_CRANE = 230, CREW_R = 170, FADE = 2.2;
+const LOD_KIT = 110, LOD_TRUCK = 90, LOD_CRANE = 230, CREW_R = 170, FADE = 2.2, PATCH_WAIT = 0.25;
 
 export function createRebuild(ctx) {
 	const { scene, isPhone, store, sounds } = ctx;
@@ -91,6 +91,38 @@ export function createRebuild(ctx) {
 			}
 			if (progress(rec) >= 1) { store.drop(id); ctx.repaired?.(id, rec); }
 		});
+		patchSchedule(dtH, now);
+	}
+	// ---------- patches: walls broken and nothing else ----------
+	// A wall broken through (structures/walls/: a fist through the drywall, a round through a
+	// partition, a blast in a room) with the building otherwise sound gets a small visit, not a
+	// site: the glazier's van (or the drywall man's: the same van) at the kerb, one or two of the
+	// crew carrying board in from it, a quarter of an hour after it happened and half an hour to an
+	// hour's work; then the walls are put right (walls.repair). Not while you stand in the room.
+	const patches = new Map();               // id -> { x, z, s, t0, r0, rd, patch }
+	function patchSchedule(dtH, now) {
+		const W2 = ctx.walls?.();
+		if (!W2?.damaged) return;
+		// (where each is: its building as the walls know it while it is built near you)
+		const at = new Map();
+		for (const src of W2.sources?.values?.() || []) if (src.anchor && !at.has(src.id)) at.set(src.id, src.anchor);
+		const live = new Set();
+		for (const d of W2.damaged()) {
+			if (store.get(d.id)) continue;            // (a full crew is coming for it anyway)
+			live.add(d.id);
+			const A = d.x != null ? d : at.get(d.id);
+			if (!patches.has(d.id) && A) patches.set(d.id, { x: Math.round(A.x * 10) / 10, z: Math.round(A.z * 10) / 10, s: Math.floor(hash(A.x, A.z) * 9973), t0: now, r0: null, rd: 0, patch: true, walls: d.walls.length });
+		}
+		for (const [id, rec] of patches) {
+			if (!live.has(id)) { patches.delete(id); continue; }
+			if (cataclysm) { if (rec.r0 != null) rec.r0 += dtH; continue; }
+			if (rec.r0 == null) { if (now - rec.t0 >= PATCH_WAIT) { rec.r0 = now; rec.rd = 0.5 + hash(rec.x * 0.7, rec.z * 0.7) * 0.5; } continue; }
+			if (progress(rec) < 1) continue;
+			// (you are in the room: they wait for you to go)
+			if (Math.hypot(camP.x - rec.x, camP.z - rec.z) < 16) { rec.r0 += dtH; continue; }
+			patches.delete(id);
+			W2.repair(id);
+		}
 	}
 	// ---------- a site near you ----------
 	function lotFor(id, rec) {
@@ -126,7 +158,7 @@ export function createRebuild(ctx) {
 		const S = {
 			id, rec, o, G, K, P, co, gl, tower, big: (o.h - 1.2) > 14 || o.w * o.d > 600, origin: [ox, oy, oz], blocked,
 			root: new THREE.Group(), kit: null, old: null, scaf: null, clip: 0, crane: null, mobile: null, vehicles: [], workers: [], heads: [], aims: [],
-			stage: -1, t: Math.random() * 10, beat: 0, fade: 0, leaving: false, loops: {}, anchors: [], slots: kerbSlots(G.L, P.gateU), seen: false,
+			stage: -1, t: Math.random() * 10, beat: 0, fade: 0, leaving: false, loops: {}, anchors: [], slots: kerbSlots(G.L, P.gateU), seen: false, patch: !!rec.patch,
 		};
 		S.root.position.set(ox, oy, oz);
 		group.add(S.root);
@@ -135,7 +167,7 @@ export function createRebuild(ctx) {
 		else if (!gl) buildMobile(S);
 		// the crew: how many, and each one's part
 		// (fewer of them where the quality governor has the crowds thinned)
-		const H = o.h - 1.2, n = gl ? 2 : Math.max(3, Math.round(Math.min(isPhone ? 4 : 7, 3 + Math.floor(H / 10)) * Math.min(1, 0.4 + (qualityNow()?.people ?? 1) * 0.6)));
+		const H = o.h - 1.2, n = rec.patch ? 1 + (hash(rec.x, rec.z + 3) < 0.6 ? 1 : 0) : gl ? 2 : Math.max(3, Math.round(Math.min(isPhone ? 4 : 7, 3 + Math.floor(H / 10)) * Math.min(1, 0.4 + (qualityNow()?.people ?? 1) * 0.6)));
 		for (let i = 0; i < n; i++) S.workers.push({ i, u0: (hash(i, rec.s || 1) - 0.5) * G.L * 0.7, phase: hash(i * 7, 3) * 6, look: Math.floor(hash(i * 3 + 1, (rec.s || 1) * 0.1) * 997), d: 0, leg: 0, wait: 0, x: 0, y: 0, z: 0, pose: 'talk', yaw: 0, path: null, stroke: 0 });
 		return S;
 	}
@@ -531,7 +563,7 @@ export function createRebuild(ctx) {
 		camP.copy(cam.position);
 		liveTag++;
 		crew.begin(); glow.begin();
-		if (!cataclysm) store.each(visit);
+		if (!cataclysm) { store.each(visit); for (const [id, rec] of patches) visit(id, rec); }
 		let lampSite = null, lampD = 140;
 		for (let i = list.length - 1; i >= 0; i--) {
 			const S = list[i];
@@ -711,7 +743,7 @@ export function createRebuild(ctx) {
 		const truckA = parked(S, null, 'a');
 		for (let wi = 0; wi < S.workers.length; wi++) {
 			const w = S.workers[wi];
-			const role = gl ? (w.i ? 'carry' : 'glazier') : roleOf(S, w.i, stage, scafOK);
+			const role = gl ? (w.i || (S.patch && S.workers.length === 1 && Math.floor(S.t / 40) % 2) ? 'carry' : 'glazier') : roleOf(S, w.i, stage, scafOK);
 			let pose = 'talk', u = w.u0, v = P.scafV + 0.4, y = null, face = 0, t = S.t * 0.8 + w.phase;
 			if (role === 'carry' || role === 'shoulder') {
 				// (the walk: inside the gate, out through it, across the pavement and along the kerb to
@@ -731,7 +763,7 @@ export function createRebuild(ctx) {
 					const a = w.path[k], b = w.path[k + 1], l0 = k ? w.lens[k - 1] : 0, seg = w.lens[k] - l0 || 1, f = Math.min(1, Math.max(0, (w.d - l0) / seg));
 					u = a[0] + (b[0] - a[0]) * f; v = a[1] + (b[1] - a[1]) * f;
 					const loaded = w.dir < 0;
-					pose = loaded ? (role === 'shoulder' ? 'shoulder' : stage === 3 || gl ? 'pane' : 'carry') : w.wait > 0 ? 'idle' : 'walk';
+					pose = loaded ? (role === 'shoulder' ? 'shoulder' : S.patch ? 'carry' : stage === 3 || gl ? 'pane' : 'carry') : w.wait > 0 ? 'idle' : 'walk';
 					face = Math.atan2((b[0] - a[0]) * w.dir, (b[1] - a[1]) * w.dir);
 					if (w.wait > 0) face = loaded ? Math.PI : 0;
 					t = w.wait > 0 ? 0 : w.d / 1.45;
@@ -787,6 +819,7 @@ export function createRebuild(ctx) {
 	}
 	function info() {
 		const out = [];
+		for (const [id, rec] of patches) { const S = sites.get(id); out.push({ id, x: rec.x, z: rec.z, patch: true, walls: rec.walls, progress: rec.r0 == null ? null : +progress(rec).toFixed(3), hours: +(rec.rd || 0).toFixed(2), here: !!S, workers: S?.workers.length || 0, trucks: S ? S.vehicles.map((v) => v.kind + '@' + v.state) : [] }); }
 		store.each((id, rec) => {
 			if (rec.r0 == null) return;
 			const p = progress(rec), S = sites.get(id);
@@ -810,7 +843,7 @@ export function createRebuild(ctx) {
 		}
 		return out;
 	}
-	return { group, update, progress, cataclysm: (on) => (on === undefined ? cataclysm : setCataclysm(on)), info, anchors, sites, crew, cost: () => list.map(costOf) };
+	return { group, update, progress, cataclysm: (on) => (on === undefined ? cataclysm : setCataclysm(on)), info, anchors, sites, crew, patches, cost: () => list.map(costOf) };
 }
 
 // ---------- the glow of the beacons, the light towers and the aviation lights ----------

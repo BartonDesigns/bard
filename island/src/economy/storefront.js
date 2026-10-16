@@ -432,11 +432,40 @@ export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 			}
 		}
 		glass.count = n; glass.visible = n > 0;
+		postGlass(list);
 		fascia.count = nf; fascia.visible = nf > 0;
 		awnings.count = na; awnings.visible = na > 0;
 		for (const a of [aDim, aShop, aFrame, aState, glass.instanceMatrix, fascia.instanceMatrix, fascia.instanceColor, awnings.instanceMatrix, awnings.instanceColor, aStripe]) a.needsUpdate = true;
 		furnOpen = -1;
 		lastH = -99;
+	}
+	// the door's hours, the cards it takes, the OPEN sign, the name in gold leaf: laid on this glass
+	// itself in the vinyl-on-glass material (signage/: world.signage.storefront), at the door the
+	// glazing draws; a workshop's roll-up doors take theirs as plain vinyl
+	let signage = null;
+	const posted = new Map();                // owner -> what was posted (redone when it changes)
+	function postGlass(list) {
+		if (!signage) return;
+		const keep = new Set();
+		for (const R of list) {
+			const sp = R.spec;
+			if (!sp || !(R.slot >= 0) || !R.E?.id) continue;
+			const owner = 'front:' + R.E.id, shut = sp.kind === 'bays', door = sp.kind === 'office' || shut ? 0 : R.doorX;
+			const front = { x: R.x + R.nx * 0.05, z: R.z + R.nz * 0.05, nx: R.nx, nz: R.nz, run: sp.w, g: R.y, door };
+			const key = [front.x.toFixed(2), front.z.toFixed(2), sp.w.toFixed(2), door.toFixed(2), sp.kind].join('|');
+			keep.add(owner);
+			if (posted.get(owner) === key) continue;
+			posted.set(owner, key);
+			const E = R.E;
+			signage.storefront(owner, { name: E.name, type: E.type, use: E.use, x: E.x, z: E.z, locale: E.locale, tag: E.tag }, front, { glass: !shut });
+		}
+		for (const owner of [...posted.keys()]) if (!keep.has(owner)) { posted.delete(owner); signage.remove(owner); }
+	}
+	function setSignage(S) {
+		if (signage && signage !== S) for (const owner of posted.keys()) signage.remove(owner);
+		posted.clear();
+		signage = S || null;
+		postGlass(fronts);
 	}
 	// the pavement's things, packed away when the place is shut (the boards in, the umbrellas furled)
 	const fc = {};
@@ -480,6 +509,6 @@ export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 		aState.needsUpdate = true;
 		if (sig !== openSig || furnOpen < 0) { openSig = sig; furnOpen = 1; uploadFurniture(); }
 	}
-	const info = () => ({ fronts: fronts.length, glass: glass.count, fascias: fascia.count, awnings: awnings.count, furniture: Object.fromEntries(Object.entries(furn).map(([k, im]) => [k, im.count])), open: fronts.filter((R) => R.open).length });
-	return { set, tick, info, meshes: { glass, fascia, awnings, ...furn } };
+	const info = () => ({ fronts: fronts.length, glass: glass.count, onGlass: posted.size, fascias: fascia.count, awnings: awnings.count, furniture: Object.fromEntries(Object.entries(furn).map(([k, im]) => [k, im.count])), open: fronts.filter((R) => R.open).length });
+	return { set, tick, info, setSignage, meshes: { glass, fascia, awnings, ...furn } };
 }

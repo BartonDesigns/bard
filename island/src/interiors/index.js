@@ -516,5 +516,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// counter and the tables, heat lamps over the pass, track over the shelves), in the world, for
 	// whatever lights the rooms
 	const lightAnchors = () => { const out = []; for (const B of live.values()) { if (!B.ready || !B.P.lightAnchors) continue; const F = frame(B.o); for (const a of B.P.lightAnchors) { const [x, z] = F.w(a.x, a.z); out.push({ ...a, x, z, y: B.P.f0 + a.y, building: B.key, estab: B.P.estab?.id || null }); } } return out; };
-	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
+	// where the signs inside the businesses hang (estab-fit.js K.sign: the grocers' aisle markers),
+	// in the world, the way each faces, and the business
+	const signAnchors = () => { const out = []; for (const B of live.values()) { if (!B.ready || !B.P.signAnchors) continue; const F = frame(B.o); for (const a of B.P.signAnchors) { const [x, z] = F.w(a.x, a.z), [x2, z2] = F.w(a.x + (a.nx || 0), a.z + (a.nz || 0)); out.push({ ...a, x, z, y: B.P.f0 + a.y, nx: x2 - x, nz: z2 - z, building: B.key, estab: B.P.estab?.id || null, type: B.P.estab?.type || a.fit || '' }); } } return out; };
+	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }

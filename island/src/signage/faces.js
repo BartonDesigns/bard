@@ -464,8 +464,37 @@ const CAR = {
 			text(g, f.word || 'FIRE RESCUE', x + w / 2, y + h * 0.42, h * 0.38, { col: '#e8c46a', maxW: w * 0.92, font: SERIF, track: 0.06 });
 			g.fillStyle = '#e8c46a'; g.fillRect(x + w * 0.1, y + h * 0.7, w * 0.8, h * 0.04);
 			text(g, f.sub || 'ENGINE 7', x + w / 2, y + h * 0.86, h * 0.14, { col: '#e8c46a', track: 0.3 });
+		} else if (L === 'swat' || L === 'van') {
+			// a dark van's sides: the word in reflective white, a rule under it, the unit's name, an
+			// outlined badge at the front end (a tactical van's is all white, a patrol van's gold)
+			const ink = '#f2f2ee', gold = L === 'van' ? '#c9a23a' : ink;
+			text(g, f.word || 'POLICE', x + w * 0.57, y + h * 0.38, h * 0.46, { col: ink, maxW: w * 0.72, track: 0.08 });
+			g.fillStyle = gold; g.fillRect(x + w * 0.22, y + h * 0.66, w * 0.7, h * 0.035);
+			text(g, f.sub || (L === 'van' ? 'HARBOUR' : 'TACTICAL UNIT'), x + w * 0.57, y + h * 0.83, h * 0.16, { col: ink, track: 0.3, maxW: w * 0.7 });
+			const cx = x + h * 0.48, cy = y + h * 0.48, r = h * 0.36;
+			g.beginPath(); for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i * Math.PI / 7, rr = i % 2 ? r * 0.55 : r; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } g.closePath();
+			g.lineWidth = Math.max(1.5, h * 0.035); g.strokeStyle = gold; g.stroke();
 		} else if (L === 'military') {
 			g.globalAlpha = 0.85; text(g, f.word || 'MERIDIAN GUARD', x + w / 2, y + h * 0.5, h * 0.36, { col: '#e8e4d0', font: '"DejaVu Sans Mono", "Courier New", monospace', track: 0.12, maxW: w * 0.94 }); g.globalAlpha = 1;
+		} else if (L === 'stencil') {
+			// a military vehicle's stencils, sprayed through a card in flat paint: a bumper code
+			// (the unit, then the vehicle's number), NO STEP, or the side's mark
+			const MONO = '"DejaVu Sans Mono", "Courier New", monospace', ink = f.ink || '#e6e1cc';
+			g.globalAlpha = 0.88;
+			if (f.mark === 'guard') {
+				// the Meridian Guard's mark: a chevron under a star in a ring
+				const cx = x + w / 2, cy = y + h / 2, r = Math.min(w, h) * 0.44;
+				g.strokeStyle = ink; g.lineWidth = r * 0.12; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+				g.fillStyle = ink; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.22 : r * 0.5; g.lineTo(cx + Math.cos(a) * rr, cy - r * 0.12 + Math.sin(a) * rr); } g.closePath(); g.fill();
+				g.beginPath(); g.moveTo(cx - r * 0.55, cy + r * 0.28); g.lineTo(cx, cy + r * 0.6); g.lineTo(cx + r * 0.55, cy + r * 0.28); g.lineWidth = r * 0.14; g.stroke();
+			} else if (f.mark === 'ironvale') {
+				// the Legion's: a black wedge on a pale square
+				g.fillStyle = '#d8d4c4'; g.fillRect(x + w * 0.1, y + h * 0.1, w * 0.8, h * 0.8);
+				g.fillStyle = '#16171a'; g.beginPath(); g.moveTo(x + w * 0.22, y + h * 0.78); g.lineTo(x + w * 0.5, y + h * 0.2); g.lineTo(x + w * 0.78, y + h * 0.78); g.closePath(); g.fill();
+			} else {
+				text(g, f.word || '', x + w / 2, y + h * 0.52, h * (f.small ? 0.5 : 0.74), { col: ink, font: MONO, track: 0.14, maxW: w * 0.96 });
+			}
+			g.globalAlpha = 1;
 		} else if (L === 'roof') {
 			text(g, f.word || '12', x + w / 2, y + h * 0.54, h * 0.8, { col: '#141414' });
 		} else if (L === 'stripe') {

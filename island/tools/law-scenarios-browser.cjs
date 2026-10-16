@@ -143,12 +143,29 @@ function install() {
 				});
 			},
 			// a gang crew at thirty metres, and you shooting at them
+			// (on foot first: goTo leaves you flying, and the combat answers you only on the ground; the
+			// camera put at your eye, so the shot goes from where aimAt aimed it)
 			async shootout() {
-				await page.evaluate(() => { const C = window.Crysis.combat; C.arm('warden-spark-carbine'); C.ammo(300); return C.spawn('copperline', 3, { d: 30, alert: true }); });
+				const n = await page.evaluate(async () => {
+					const C = window.Crysis.combat, p = window.Crysis.world().player.state;
+					p.flying = false; p.vel?.set?.(0, 0, 0); p.pos.y = C.ground(p.pos.x, p.pos.z, p.pos.y + 2) + 1.68;
+					C.arm('warden-spark-carbine'); C.ammo(300);
+					await C.spawn('copperline', 3, { d: 30, alert: true });
+					return C.squads.alive().filter((h) => h.fid === 'copperline').length;
+				});
+				let hits = 0;
 				for (let k = 0; k < 20; k++) {
-					await page.evaluate(() => { const C = window.Crysis.combat; const t = C.squads.alive().find((h) => h.fid === 'copperline'); if (t) { C.aimAt(t.id); C.shoot(30); } window.__law.step(0.6); });
+					hits += await page.evaluate(() => {
+						const C = window.Crysis.combat, p = window.Crysis.world().player.state, cam = window.L99Island.camera();
+						const t = C.squads.alive().find((h) => h.fid === 'copperline');
+						let r = null;
+						if (t) { cam.position.copy(C.eye()); C.aimAt(t.id); cam.updateMatrixWorld(); r = C.shoot(30); }
+						window.__law.step(0.6);
+						void p;
+						return r && r.kind === 'person' ? 1 : 0;
+					});
 				}
-				return 'fired';
+				return { crew: n, hits };
 			},
 			async boss() { return page.evaluate(() => { const r = window.Crysis.combat.boss('walker'); return r?.name || r; }); },
 			async invasion() { return page.evaluate(() => window.Crysis.military.api.invade()); },

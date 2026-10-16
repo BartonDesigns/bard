@@ -109,6 +109,18 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 			face.applyMatrix4(F); face.position.y += 1.5; face.castShadow = !isPhone;
 			B.group.add(face);
 		}
+		// a city park's rules on a board by its entrance: two posts and a framed panel (its face is the
+		// environmental graphics', signage/ parkrules; rulesBoards() says where)
+		if (P.kind === 'city') {
+			const rb = sgn ? spot(sgn.x, sgn.z, 9, 1.2, 0.2) : spot(P.x, P.z, 80, 1.2, 0.2);
+			if (rb) {
+				const yaw = sgn ? facing(sgn) + Math.PI : facing(rb) + Math.PI, F = frame(rb, yaw);
+				for (const u of [-0.5, 0.5]) box(F, mat.post, 0.09, 2.15, 0.09, u, 0, -0.05);
+				box(F, mat.roofB, 0.98, 1.3, 0.05, 0, 0.62, -0.01);
+				const nx = Math.sin(yaw), nz = Math.cos(yaw);
+				B.rules = [{ x: rb.x + nx * 0.018, z: rb.z + nz * 0.018, y: rb.y + 1.27, nx, nz, w: 0.9, h: 1.2, name: P.name }];
+			}
+		}
 		// trailhead kiosks with their map boards, a trash can and a bench beside
 		for (const T of P.trails.slice(0, 3)) {
 			const k = spot(T.x, T.z, 40, 2.5, 0.15);
@@ -232,5 +244,11 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 		}
 		return out;
 	}
-	return { group: root, update, parkAt, seatsNear, count: () => built.size, push: rooms.push, floor: rooms.floor, restrooms: rooms.where };
+	// the rules boards of the parks built near a point (signage/ lays their faces)
+	function rulesBoards(x, z, r = 400) {
+		const out = [];
+		for (const B of built.values()) if (B.rules && Math.hypot(B.P.x - x, B.P.z - z) < r + 300) for (const q of B.rules) if (Math.hypot(q.x - x, q.z - z) < r) out.push(q);
+		return out;
+	}
+	return { group: root, update, parkAt, seatsNear, rulesBoards, count: () => built.size, push: rooms.push, floor: rooms.floor, restrooms: rooms.where };
 }
