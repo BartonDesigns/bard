@@ -1,0 +1,2026 @@
+diff --git a/island/src/bay/bridge.js b/island/src/bay/bridge.js
+index baf2928..ad4a0ad 100644
+--- a/island/src/bay/bridge.js
++++ b/island/src/bay/bridge.js
+@@ -8,6 +8,7 @@
+ import * as THREE from 'three';
+ import { toWorld } from './geo.js';
+ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
++import { addNightField } from '../world/nightfield.js';
+ 
+ const ORANGE = new THREE.Color('#c0362c');
+ const MAIN = 1280, SIDE = 343, TOWER_H = 227, HALF_W = 13.7, LEG_T = 14.6;
+@@ -45,6 +46,8 @@ export function createGoldenGate(shared, scene, heightAt) {
+ 
+ 	const steel = new THREE.MeshStandardMaterial({ color: ORANGE, roughness: 0.55, metalness: 0.25 });
+ 	const concrete = new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.9 });
++	// (the towers lit from the deck after dark: floodlights.js, world/nightfield.js's landmark list)
++	addNightField(steel, { field: 'LF' }); addNightField(concrete, { field: 'LF' });
+ 	const road = new THREE.MeshStandardMaterial({ color: 0x4a4a4c, roughness: 0.85 });
+ 	// every box goes into one merged mesh per material (a few draws for the whole bridge)
+ 	const parts = new Map();
+@@ -238,9 +241,11 @@ export function createGoldenGate(shared, scene, heightAt) {
+ 		group.visible = true;
+ 		lamps.opacity = night;
+ 		reds.opacity = night * (0.6 + 0.4 * (Math.sin(t * 3) > 0 ? 1 : 0.2));
+-		steel.emissive.copy(ORANGE).multiplyScalar(0.18 * night);
+-		// the anchorages catch the floodlights and the deck lamps' spill (unlit, they read as black holes)
+-		concrete.emissive.setRGB(0.16, 0.14, 0.11).multiplyScalar(night);
++		// (the towers are floodlit from the deck: floodlights.js, through the landmark list; what is
++		// left here is the city's glow and the lamps' spill, so far off the span still reads)
++		steel.emissive.copy(ORANGE).multiplyScalar(0.035 * night);
++		// the anchorages catch the deck lamps' spill (unlit, they read as black holes)
++		concrete.emissive.setRGB(0.16, 0.14, 0.11).multiplyScalar(0.35 * night);
+ 	}
+ 	return { group, update, deckFloor, centre: c, axis: ax, length: S1 - S0 };
+ }
+diff --git a/island/src/bay/carlights.js b/island/src/bay/carlights.js
+new file mode 100644
+index 0000000..57adf1d
+--- /dev/null
++++ b/island/src/bay/carlights.js
+@@ -0,0 +1,212 @@
++// The cars' lights after dark: every car in the traffic shows its headlights to whoever is in
++// front of it and its tail lights behind (brighter as it brakes or waits at a corner, its brake
++// lights on); the nearest few, and yours, throw their low beams on the road ahead, a pool that
++// starts a few metres out, is brightest ten or so metres on and spreads and fades by thirty;
++// your own lamps also light the walls and trees ahead (world/nightfield.js, through the
++// evening's list); a car whose door is open (someone getting in or out, you) has its dome
++// light on, a warm glow in the cabin and a little light on the ground by the door.
++//
++// Two draws (the lamps as points that know which way their car faces, the beams as quads),
++// refilled each frame from the traffic's own list, no allocation: the cars move.
++
++import * as THREE from 'three';
++import { SPEC } from './cars.js';
++import { qualityNow } from '../world/governor.js';
++
++const P_ATTRS = ['position', 'aCol', 'aDir'], Q_ATTRS = ['position', 'aUV', 'aCol'], NONE = [];
++const HALOGEN = [1, 0.86, 0.66], XENON = [0.86, 0.92, 1], TAIL = [1, 0.04, 0.02], DOME = [1, 0.84, 0.6];
++
++// The brake lights' state: on while the car slows hard or stands (a red light, a corner), easing
++// in and out. prev: its speed a moment ago, v: now, k: the lamp's level; returns the new level.
++export function brakeLevel(prev, v, dt, k) {
++	const braking = v < 0.4 || (prev - v) / Math.max(dt, 1e-3) > 0.7 ? 1 : 0;
++	return k + (braking - k) * Math.min(1, dt * 8);
++}
++// The low beam on the road at x metres ahead and y across, as a share of its brightest
++export function beamAt(x, y) {
++	if (x < 0) return 0;
++	const w = 1.1 + 0.3 * x, a = Math.min(1, Math.max(0, (x - 1.5) / 5));
++	return a * a * (3 - 2 * a) * Math.exp(-2 * (y / w) * (y / w)) / (1 + (x / 13) * (x / 13));
++}
++
++const POINT_VS = /* glsl */`
++	attribute vec3 aCol; attribute vec3 aDir;
++	uniform float uScale, uK;
++	varying vec3 vCol;
++	void main() {
++		vec4 mv = modelViewMatrix * vec4(position, 1.0);
++		float d = -mv.z;
++		// a headlight (aDir.z 1) to whoever is in front of the car, a tail light (0) behind,
++		// a dome light (2) all round
++		vec3 to = normalize(cameraPosition - position);
++		float f = dot(to.xz, aDir.xy);
++		float face = aDir.z > 1.5 ? 1.0 : aDir.z > 0.5 ? smoothstep(-0.1, 0.6, f) : smoothstep(0.1, -0.5, f);
++		float px = (aDir.z > 0.5 && aDir.z < 1.5 ? 0.45 : 0.28) * uScale / max(d, 0.1);
++		float a = uK * face * (1.0 - smoothstep(260.0, 380.0, d));
++		vCol = aCol * a * clamp(px / 1.5, 0.35, 1.0);
++		gl_PointSize = max(1.5, px * (1.0 + 0.6 * face));
++		gl_Position = a > 0.002 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0);
++	}`;
++const POINT_FS = /* glsl */`
++	uniform float uExpo;
++	varying vec3 vCol;
++	void main() {
++		vec2 q = gl_PointCoord - 0.5;
++		float r2 = dot(q, q) * 4.0;
++		if (r2 > 1.0) discard;
++		float a = exp(-r2 * 10.0) * 1.4 + exp(-r2 * 2.2) * 0.16;
++		gl_FragColor = vec4(vCol * a * uExpo, 1.0);
++		#include <colorspace_fragment>
++	}`;
++// the beams: x ahead (m), y across (m); shape 0 a low beam, 1 the dome light's spill
++const BEAM_VS = /* glsl */`
++	attribute vec2 aUV; attribute vec3 aCol;
++	varying vec2 vUV; varying vec3 vCol;
++	void main() { vUV = aUV; vCol = aCol; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
++const BEAM_FS = /* glsl */`
++	uniform float uK, uExpo;
++	varying vec2 vUV; varying vec3 vCol;
++	void main() {
++		float x = vUV.x, y = vUV.y, e;
++		if (x > -50.0) {
++			float w = 1.1 + 0.3 * x, a = smoothstep(1.5, 6.5, x);
++			e = a * exp(-2.0 * (y / w) * (y / w)) / (1.0 + (x / 13.0) * (x / 13.0)) * (1.0 - smoothstep(26.0, 34.0, x));
++		} else { float r = length(vec2(x + 100.0, y)); e = pow(1.0 + 6.25 * r * r, -1.5) * (1.0 - smoothstep(0.7, 1.0, r)); }
++		if (e < 0.003) discard;
++		gl_FragColor = vec4(vCol * e * uK * uExpo, 1.0);
++		#include <colorspace_fragment>
++	}`;
++
++export function createCarLights(scene, { isPhone = false, ground = () => 0, world = () => null } = {}) {
++	const CAP_P = isPhone ? 300 : 1000, CAP_Q = isPhone ? 4 : 10, NEAR = isPhone ? 2 : 7, R = isPhone ? 160 : 320;
++	const pPos = new Float32Array(CAP_P * 3), pCol = new Float32Array(CAP_P * 3), pDir = new Float32Array(CAP_P * 3);
++	const pGeo = new THREE.BufferGeometry();
++	pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3).setUsage(THREE.DynamicDrawUsage));
++	pGeo.setAttribute('aCol', new THREE.BufferAttribute(pCol, 3).setUsage(THREE.DynamicDrawUsage));
++	pGeo.setAttribute('aDir', new THREE.BufferAttribute(pDir, 3).setUsage(THREE.DynamicDrawUsage));
++	pGeo.setDrawRange(0, 0);
++	const U = { uScale: { value: 400 }, uK: { value: 0 }, uExpo: { value: 1 } };
++	const pMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: POINT_VS, fragmentShader: POINT_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
++	const points = new THREE.Points(pGeo, pMat);
++	points.frustumCulled = false; points.visible = false; points.name = 'car-lights'; points.renderOrder = 6;
++	const qPos = new Float32Array(CAP_Q * 12), qUV = new Float32Array(CAP_Q * 8), qCol = new Float32Array(CAP_Q * 12), qIdx = new Uint16Array(CAP_Q * 6);
++	for (let i = 0; i < CAP_Q; i++) qIdx.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
++	const qGeo = new THREE.BufferGeometry();
++	qGeo.setAttribute('position', new THREE.BufferAttribute(qPos, 3).setUsage(THREE.DynamicDrawUsage));
++	qGeo.setAttribute('aUV', new THREE.BufferAttribute(qUV, 2).setUsage(THREE.DynamicDrawUsage));
++	qGeo.setAttribute('aCol', new THREE.BufferAttribute(qCol, 3).setUsage(THREE.DynamicDrawUsage));
++	qGeo.setIndex(new THREE.BufferAttribute(qIdx, 1));
++	qGeo.setDrawRange(0, 0);
++	const qMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: BEAM_VS, fragmentShader: BEAM_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -7 });
++	const beams = new THREE.Mesh(qGeo, qMat);
++	beams.frustumCulled = false; beams.visible = false; beams.name = 'car-beams'; beams.renderOrder = 3;
++	scene.add(beams, points);
++	const tmpV = new THREE.Vector2();
++	points.onBeforeRender = (r, sc, cam) => { U.uScale.value = r.getSize(tmpV).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360)); U.uExpo.value = r.toneMappingExposure * 0.85; };
++
++	let np = 0, nq = 0;
++	// (your car: where its lamps are, for the evening's list: x, y, z, dx, dz, on)
++	const head = { x: 0, y: 0, z: 0, dx: 0, dz: 1, on: 0 };
++	const nearD = new Float32Array(NEAR), nearC = new Array(NEAR).fill(null);
++	let wasDriving = false, domeT = 0;
++	function lamp(x, y, z, c, k, dx, dz, kind) {
++		if (np >= CAP_P) return;
++		pPos[np * 3] = x; pPos[np * 3 + 1] = y; pPos[np * 3 + 2] = z;
++		pCol[np * 3] = c[0] * k; pCol[np * 3 + 1] = c[1] * k; pCol[np * 3 + 2] = c[2] * k;
++		pDir[np * 3] = dx; pDir[np * 3 + 1] = dz; pDir[np * 3 + 2] = kind;
++		np++;
++	}
++	// a car's four lamps: at (x, y, z), heading (sx, cz), its kind, how hard it brakes
++	function car(x, y, z, sx, cz, kind, brake, warm) {
++		const S = SPEC[kind] || SPEC.sedan, hw = S.W / 2 - 0.25, fl = S.L / 2 - 0.08, hy = y + Math.min(0.75, 0.45 + S.H * 0.18);
++		const c = warm ? HALOGEN : XENON;
++		for (let s = -1; s <= 1; s += 2) {
++			lamp(x + sx * fl + cz * hw * s, hy, z + cz * fl - sx * hw * s, c, 3.2, sx, cz, 1);
++			lamp(x - sx * fl + cz * (hw + 0.05) * s, hy + 0.12, z - cz * fl - sx * (hw + 0.05) * s, TAIL, 1.4 + 3 * brake, sx, cz, 0);
++		}
++	}
++	// a low beam on the road ahead of a car at (x, y, z) facing (sx, cz)
++	function beam(x, y, z, sx, cz, kind, warm, k) {
++		if (nq >= CAP_Q) return;
++		const S = SPEC[kind] || SPEC.sedan, f = S.L / 2, L = 34, W = 11;
++		const g0 = ground(x + sx * (f + 2), z + cz * (f + 2)), g1 = ground(x + sx * (f + L), z + cz * (f + L));
++		const ax = x + sx * f, az = z + cz * f, bx = x + sx * (f + L), bz = z + cz * (f + L), o = nq * 12;
++		// (across: square to the heading)
++		const tx = cz * W, tz = -sx * W;
++		qPos.set([ax - tx, g0 + 0.06, az - tz, ax + tx, g0 + 0.06, az + tz, bx + tx, g1 + 0.06, bz + tz, bx - tx, g1 + 0.06, bz - tz], o);
++		qUV.set([0, -W, 0, W, L, W, L, -W], nq * 8);
++		const c = warm ? HALOGEN : XENON, kk = 0.07 * k;
++		for (let j = 0; j < 4; j++) { qCol[o + j * 3] = c[0] * kk; qCol[o + j * 3 + 1] = c[1] * kk; qCol[o + j * 3 + 2] = c[2] * kk; }
++		nq++;
++	}
++	// the dome light: a glow in the cabin, a little light on the ground by the door
++	function dome(x, z, yaw, k) {
++		const y = ground(x, z), sx = Math.sin(yaw), cz = Math.cos(yaw);
++		lamp(x, y + 1.15, z, DOME, 1.6 * k, sx, cz, 2);
++		if (nq >= CAP_Q) return;
++		const dx = x + cz * 1.4, dz = z - sx * 1.4, r = 2.6, o = nq * 12, g = ground(dx, dz) + 0.05;
++		qPos.set([dx - r, g, dz - r, dx + r, g, dz - r, dx + r, g, dz + r, dx - r, g, dz + r], o);
++		qUV.set([-101, -1, -99, -1, -99, 1, -101, 1], nq * 8);
++		const kk = 0.05 * k;
++		for (let j = 0; j < 4; j++) { qCol[o + j * 3] = DOME[0] * kk; qCol[o + j * 3 + 1] = DOME[1] * kk; qCol[o + j * 3 + 2] = DOME[2] * kk; }
++		nq++;
++	}
++	const warmOf = (id) => { let h = 0; const s = String(id || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h & 7) < 5; };
++	function update(dt, cam, night) {
++		const k = Math.max(0, Math.min(1, (night - 0.1) / 0.25));
++		U.uK.value = k;
++		const show = k > 0.01 && cam.position.y < 2000;
++		points.visible = beams.visible = show;
++		head.on = 0;
++		if (!show) return;
++		const W = world(), S = W?.street, V = W?.vehicles;
++		np = 0; nq = 0;
++		const cx = cam.position.x, cz = cam.position.z;
++		// the traffic: every car's lamps; the nearest few's beams
++		for (let i = 0; i < NEAR; i++) { nearD[i] = 1e9; nearC[i] = null; }
++		if (S?.cars && S.group?.visible !== false) for (const c of S.cars) {
++			if (c.px === undefined) continue;
++			const d = Math.abs(c.px - cx) + Math.abs(c.pz - cz);
++			if (d > R) continue;
++			c.brk = brakeLevel(c.lv ?? c.v, c.v, dt, c.brk ?? 0); c.lv = c.v;
++			if (c.warm === undefined) c.warm = warmOf(c.id);
++			const sx = Math.sin(c.yaw), sz = Math.cos(c.yaw);
++			car(c.px, c.py ?? ground(c.px, c.pz), c.pz, sx, sz, c.kind, c.brk, c.warm);
++			// (the nearest few that are ahead of you or crossing: their beams)
++			let w = -1;
++			for (let j = 0; j < NEAR; j++) if (d < nearD[j] && (w < 0 || nearD[j] > nearD[w])) w = j;
++			if (w >= 0) { nearD[w] = d; nearC[w] = c; }
++		}
++		// (a lighter tier keeps fewer beams: world/governor.js)
++		const nb = Math.max(1, Math.round(NEAR * (qualityNow()?.far ?? 1)));
++		for (let j = 0, b = 0; j < NEAR && b < nb; j++) { const c = nearC[j]; if (c) { b++; beam(c.px, c.py ?? 0, c.pz, Math.sin(c.yaw), Math.cos(c.yaw), c.kind, c.warm, 1); } }
++		// your car: its lamps, its beam (and to the evening's list); its dome light a while after you get out
++		const m = V?.mine?.car;
++		if (m) {
++			const sx = Math.sin(m.yaw), sz = Math.cos(m.yaw);
++			if (V.mine.driving) {
++				car(m.x, m.y, m.z, sx, sz, m.kind, 0, true);
++				beam(m.x, m.y, m.z, sx, sz, m.kind, true, 1.3);
++				const S2 = SPEC[m.kind] || SPEC.sedan;
++				head.x = m.x + sx * S2.L / 2; head.y = m.y + 0.7; head.z = m.z + sz * S2.L / 2; head.dx = sx; head.dz = sz; head.on = k;
++			}
++			if (wasDriving && !V.mine.driving) domeT = 12;
++			wasDriving = !!V.mine.driving;
++			if (domeT > 0) { domeT -= dt; dome(m.x, m.z, m.yaw, Math.min(1, domeT / 2)); }
++		}
++		// the owners getting into and out of their cars (vehicles/life.js)
++		for (const E of V?.life?.episodes || NONE) {
++			const t = E.t || 0, car0 = E.car;
++			if (!car0) continue;
++			const dk = E.phase === 'get-in' ? Math.min(1, t * 2) : E.phase === 'pull-out' ? Math.max(0, 1 - t / 2.5) : E.phase === 'park' ? Math.min(1, t * 2) : E.phase === 'walk-in' ? Math.max(0, 1 - t / 8) : 0;
++			if (dk > 0.01) dome(E.phase === 'pull-out' ? E.pos[0] : car0.x, E.phase === 'pull-out' ? E.pos[1] : car0.z, E.phase === 'pull-out' ? E.yaw : car0.yaw, dk);
++		}
++		pGeo.setDrawRange(0, np);
++		for (const key of P_ATTRS) { const A = pGeo.attributes[key]; A.clearUpdateRanges(); A.addUpdateRange(0, Math.max(1, np) * 3); A.needsUpdate = true; }
++		qGeo.setDrawRange(0, nq * 6);
++		for (const key of Q_ATTRS) { const A = qGeo.attributes[key]; A.clearUpdateRanges(); A.addUpdateRange(0, Math.max(1, nq) * 4 * A.itemSize); A.needsUpdate = true; }
++	}
++	function dispose() { scene.remove(beams, points); pGeo.dispose(); qGeo.dispose(); pMat.dispose(); qMat.dispose(); }
++	const info = () => ({ lamps: np, beams: nq, headlight: +head.on.toFixed(2) });
++	return { update, info, dispose, head, points, beams };
++}
+diff --git a/island/src/bay/city.js b/island/src/bay/city.js
+index 9f6368c..601ca28 100644
+--- a/island/src/bay/city.js
++++ b/island/src/bay/city.js
+@@ -499,13 +499,40 @@ export function buildingMaterial(shared, night, nearBand) {
+ 				// how many rooms are lit by the hour (uNL.x the late hour): offices and towers emptying
+ 				// through the evening to a few cleaners' and late workers' floors, homes going to bed
+ 				float occ = vKind > 1.5 && vKind < 3.5 ? mix(0.5, 0.12, smoothstep(19.0, 23.5, uNL.x)) : mix(0.42, 0.3, smoothstep(21.0, 24.0, uNL.x)) * (1.0 - 0.65 * smoothstep(24.0, 26.5, uNL.x));
+-				float lit = max(mix(occ, step(1.0 - occ, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih)) * step(cond, 0.5);
++				// (offices and towers light by the floor and the zone, whole runs of a floor at once, most
++				// windows in a lit run lit; so far off a tower is a dark mass with lit bands and patches,
++				// not an even grey: the run's own on or off holds when its windows are a pixel)
++				float offK = step(1.5, vKind) * step(vKind, 3.5);
++				float zone = step(1.0 - min(1.0, occ / 0.78), bh(vec2(floor(u / 12.0), floor(vLY / 7.8)) + floor(vCW.xz * 0.013) + 0.5));
++				float nearLit = mix(step(1.0 - occ, bh(floor(cell) + floor(vCW.xz * 0.013))), zone * step(0.22, bh(floor(cell) + 1.7)), offK);
++				float lit = max(mix(mix(occ, zone, offK), nearLit, aaW), shopGlow * step(0.25, ih)) * step(cond, 0.5);
+ 				// each lit window its own: warm lamps or cool office tubes, brighter up by the
+ 				// ceiling light, some with the blinds half down (close up; far off, the average)
+ 				vec2 fc = fract(cell), cid = floor(cell);
+ 				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
+ 				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
+ 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
++				// a tower's lobby is lit all night, warm, its tall glass bright at the street
++				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5);
++				// a lit crown on some of the tall towers (one in five over 110 m): uplights at the foot of
++				// the top floors washing up the facade, each its own scallop, brightest low, all night
++				if (vKind > 1.5 && vKind < 2.5 && vCS.y > 110.0 && roof < 0.5 && bh(floor(vIP * 0.37) + 3.1) < 0.2) {
++					float band = clamp(vCS.y * 0.08, 9.0, 22.0), y0 = vCS.y - band, cy = vLY - y0;
++					float hue = bh(floor(vIP * 0.37) + 8.3);
++					vec3 cc = hue < 0.55 ? vec3(1.0, 0.86, 0.68) : hue < 0.85 ? vec3(0.78, 0.86, 1.0) : vec3(0.55, 0.75, 1.0);
++					float scal = 0.55 + 0.45 * pow(abs(cos(3.14159 * u / 4.0)), 2.0);
++					float e = step(0.0, cy) * smoothstep(0.0, 1.2, cy) * mix(1.0, 0.35, cy / band) * scal;
++					winGlow += cc * e * uNightC * (diffuseColor.rgb * 1.6 + 0.06) * step(cond, 0.5);
++				}
++				// a parking garage (mapped: kind 3.3): its open decks every 3 m, the ribbon of each
++				// opening dark, and by night a stripe of light under each deck's ceiling, all night
++				if (vKind > 3.2 && vKind < 3.4 && roof < 0.5) {
++					float dk = fract(vLY / 3.0), open = step(0.32, dk) * step(dk, 0.86) * step(1.2, vLY) * step(vLY, vCS.y - 1.0);
++					diffuseColor.rgb = mix(vec3(0.56, 0.55, 0.52) * (0.9 + 0.2 * bh(floor(vIP * 0.5))), vec3(0.05), open);
++					glassK = 0.0;
++					vec3 gc = ih < 0.6 ? vec3(0.86, 0.92, 1.0) : vec3(1.0, 0.62, 0.3);
++					winGlow = gc * open * smoothstep(0.55, 0.84, dk) * uNightC * 0.75 * step(cond, 0.5) * (0.85 + 0.3 * bh(vec2(floor(u / 6.0), floor(vLY / 3.0))));
++				}
+ 				// after dark a wall has only the light that reaches it: the moon and the sky (the
+ 				// lights' own business), the street lamps' spill on the shop fronts at the sidewalk,
+ 				// and its household's own lamps (nightplan.js): the porch light by the front door
+@@ -540,12 +567,14 @@ export function buildingMaterial(shared, night, nearBand) {
+ 					}
+ 				}
+ 				// the dark windows are not holes: the night sky and the lit city in the glass
+-				winGlow += vec3(0.05, 0.065, 0.09) * win * (1.0 - lit) * uNightC * (0.6 + 0.8 * bh(cid + 9.1));
++				// (faint: dark glass at night shows a little of the city's glow, not a lit grey; a curtain
++				// wall of it at the old 0.05 to 0.13 read as a glowing tower)
++				winGlow += vec3(0.012, 0.016, 0.024) * win * (1.0 - lit) * uNightC * (0.6 + 0.8 * bh(cid + 9.1));
+ 			}`)
+ 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
+ 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
+ 	};
+-	m.customProgramCacheKey = () => 'baybuilding15';
++	m.customProgramCacheKey = () => 'baybuilding17';
+ 	return m;
+ }
+ 
+@@ -622,7 +651,8 @@ export function createCity(shared, scene, bay, real = null) {
+ 	const nearBand = { value: new THREE.Vector2(36, 46) };
+ 	const rise = { value: new THREE.Vector4(0, 0, 0, 0) };
+ 	let riseT0 = -1;
+-	const mat = withRise(buildingMaterial(shared, night, nearBand), rise, 'rise1');
++	// (the street lamps near you light the walls by them: world/nightfield.js, the city's own list)
++	const mat = addNightField(withRise(buildingMaterial(shared, night, nearBand), rise, 'rise1'), { field: 'SF' });
+ 	const roofMat = withRise(roofDetail(weatherRoofs(new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide }))), rise, 'roofrise1');
+ 	const CAP = 32000;
+ 	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
+@@ -1807,6 +1837,8 @@ export function createCity(shared, scene, bay, real = null) {
+ 	const glassM = new THREE.MeshStandardMaterial({ color: 0xb8c4cc, roughness: 0.25, metalness: 0.5 });
+ 	const redwhite = new THREE.MeshStandardMaterial({ color: 0xc8402e, roughness: 0.6, metalness: 0.2 });
+ 	const steelGrey = new THREE.MeshStandardMaterial({ color: 0x8e9498, roughness: 0.5, metalness: 0.4 });
++	// (lit at night by their floodlights: floodlights.js, world/nightfield.js's landmark list)
++	for (const m of [white, glassM, redwhite, steelGrey]) addNightField(m, { field: 'LF' });
+ 	function landmarks() {
+ 		const at = (lat, lon) => { const w = toWorld(lat, lon); return { ...w, g: Math.max(0, bay.heightAt(w.x, w.z)) }; };
+ 		// Salesforce Tower: 326 m, a rounded square shaft tapering to a lattice crown
+@@ -2070,7 +2102,7 @@ export function createCity(shared, scene, bay, real = null) {
+ 			else if (b.kind === 6) { kind = KIND.retail; col = jit(pick(PAL.retail, r2), r); }
+ 			else if (b.kind === 7) { kind = KIND.office; col = jit([0.86, 0.8, 0.68], r); }
+ 			else if (b.kind === 11) { kind = KIND.tower; col = jit(pick(PAL.tower, r2), r); }
+-			else if (b.kind === 12) { kind = KIND.office; col = jit([0.6, 0.59, 0.56], r); }        // a parking garage: open concrete decks (ribbon openings)
++			else if (b.kind === 12) { kind = KIND.office + 0.3; col = jit([0.6, 0.59, 0.56], r); }        // a parking garage: open concrete decks (ribbon openings, lit at night: the building shader)
+ 			else { kind = KIND.industry; col = jit(pick(PAL.industry, r2), r); }
+ 			// (a tall block mapped as a garage or a shed is an office block: glazed, not a blank wall)
+ 			if ((kind === KIND.garage || kind === KIND.plain) && top - y > 9) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
+@@ -2269,5 +2301,5 @@ export function createCity(shared, scene, bay, real = null) {
+ 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
+ 		placeTrees(x, z);
+ 	}
+-	return { economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
++	return { skyline: () => skyline, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+ }
+diff --git a/island/src/bay/floodlights.js b/island/src/bay/floodlights.js
+new file mode 100644
+index 0000000..b2201a3
+--- /dev/null
++++ b/island/src/bay/floodlights.js
+@@ -0,0 +1,370 @@
++// The landmarks, the bridges and the skyline at night: the floodlights on the towers and
++// domes (the Ferry Building's clock tower, City Hall's dome, Coit Tower, the Transamerica
++// spire, the Campanile, Hoover Tower, the Oakland Temple, the Golden Gate's towers...), the
++// lamps along the bridges' decks and their pools on the roadway, the Bay Lights shimmering on
++// the west span's cables, the high masts over the Port of Oakland's terminals, the lighthouses'
++// flashes, and the red obstruction lights on everything tall (the downtown towers in step,
++// thirty flashes a minute on the tallest, steady on the rest; Sutro Tower; the cranes).
++//
++// Cheap by design: two draws (every lamp, beacon and LED a point; every pool a quad), built
++// once when the Bay is loaded (the skyline's beacons again when its towers are known) and
++// switched in the shader by the night and the clock. The floodlights themselves light the
++// landmarks' and the bridges' own materials through the landmark list (world/nightfield.js
++// LF): the few that matter most from where you are (the strongest and nearest within a few
++// kilometres), chosen twice a second, so a tower is lit from below, brightest low, its far
++// side dark, its spire fading into the night, by its real geometry.
++
++import * as THREE from 'three';
++import { toWorld } from './geo.js';
++import { FIELDS, LF_N } from '../world/nightfield.js';
++import { qualityNow } from '../world/governor.js';
++
++const D2R = Math.PI / 180;
++// colours (linear): floodlight warm, neutral white, amber; sodium; white LED; the obstruction red
++const WARM = [1, 0.84, 0.64], NEUTRAL = [1, 0.93, 0.84], AMBER = [1, 0.7, 0.42], SODIUM = [1, 0.46, 0.12], LED = [0.8, 0.86, 1], RED = [1, 0.06, 0.02];
++
++// The red lights on a tall building's roof (FAA obstruction lighting): from 90 m up a steady
++// red at the top (two at opposite corners of a broad roof), from 150 m a flashing one, every
++// flashing light in the city in step. towers: [{ x, y, z, w, d, h, a }]. Returns
++// [{ x, y, z, flash }] (plain numbers, for the tests).
++export function beaconsFor(towers, minH = 90) {
++	const out = [];
++	for (const t of towers) {
++		if (!(t.h >= minH)) continue;
++		const top = t.y + t.h + 0.6, flash = t.h >= 150, broad = Math.max(t.w || 0, t.d || 0) > 30;
++		if (!broad) { out.push({ x: t.x, y: top, z: t.z, flash }); continue; }
++		const ca = Math.cos(t.a || 0), sa = Math.sin(t.a || 0), hx = (t.w || 0) * 0.45, hz = (t.d || 0) * 0.45;
++		for (const s of [-1, 1]) out.push({ x: t.x + ca * hx * s + sa * hz * s, y: top, z: t.z - sa * hx * s + ca * hz * s, flash });
++	}
++	return out;
++}
++// The obstruction lights' flash, all in step: thirty a minute, each a soft half second (0..1)
++export function flashAt(t) {
++	const c = ((t / 2) % 1 + 1) % 1;
++	return smooth(0, 0.06, c) * (1 - smooth(0.3, 0.45, c));
++}
++// Which floodlights light the landmarks' materials now: the n best by distance over the root of
++// their strength, within reach. F: Float32Array, stride 13 ([x, y, z, reach, r, g, b, cosO,
++// dx, dy, dz, cosI, weight]); out: Int32Array of indices; returns how many.
++export function pickFloods(F, count, cx, cy, cz, n, out, score, far = 6000) {
++	for (let i = 0; i < count; i++) {
++		const o = i * 13, d = Math.hypot(F[o] - cx, F[o + 1] - cy, F[o + 2] - cz);
++		score[i] = d < far + F[o + 3] ? d / F[o + 12] : 1e9;
++	}
++	let k = 0;
++	for (; k < n; k++) {
++		let best = -1, bd = 1e8;
++		for (let i = 0; i < count; i++) if (score[i] < bd) { bd = score[i]; best = i; }
++		if (best < 0) break;
++		score[best] = 1e9; out[k] = best;
++	}
++	return k;
++}
++function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
++
++const POINT_VS = /* glsl */`
++	attribute vec3 aCol; attribute vec4 aK; attribute float aSize;
++	uniform float uScale, uNight, uT;
++	varying vec3 vCol;
++	float lev(vec4 k) {
++		float on = smoothstep(0.12, 0.35, uNight);
++		if (k.x < 0.5) return on;
++		if (k.x < 1.5) { float c = fract(uT * 0.5); return on * smoothstep(0.0, 0.06, c) * (1.0 - smoothstep(0.3, 0.45, c)); }
++		if (k.x < 2.5) { float c = fract((uT + k.z) / k.y); return on * (0.04 + 0.96 * (1.0 - smoothstep(0.0, 0.05, abs(c - 0.05)))); }
++		// the Bay Lights: slow bands of light running along the span, a glint here and there
++		float w = 0.5 + 0.5 * sin(k.y * 0.022 - uT * 0.6 + sin(k.z * 0.09 + uT * 0.23) * 2.2);
++		float sp = step(0.94, fract(sin(dot(vec2(k.y, k.z), vec2(12.9898, 78.233)) + floor(uT * 2.5)) * 43758.5453));
++		return on * (0.1 + 0.9 * w * w * w + sp * 0.5);
++	}
++	void main() {
++		vec4 mv = modelViewMatrix * vec4(position, 1.0);
++		float d = -mv.z, L = lev(aK);
++		float px = aSize * uScale / max(d, 0.1);
++		float a = L * (1.0 - smoothstep(aK.w * 0.7, aK.w, d));
++		vCol = aCol * a * clamp(px / 1.6, 0.35, 1.0);
++		gl_PointSize = max(1.6, px);
++		gl_Position = a > 0.002 && d > 0.05 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0);
++	}`;
++const POINT_FS = /* glsl */`
++	uniform float uExpo;
++	varying vec3 vCol;
++	void main() {
++		vec2 q = gl_PointCoord - 0.5;
++		float r2 = dot(q, q) * 4.0;
++		if (r2 > 1.0) discard;
++		float a = exp(-r2 * 9.0) * 1.3 + exp(-r2 * 2.5) * 0.2;
++		gl_FragColor = vec4(vCol * a * uExpo, 1.0);
++		#include <colorspace_fragment>
++	}`;
++const POOL_VS = /* glsl */`
++	attribute vec2 aUV; attribute vec3 aCol;
++	uniform float uNight, uFar;
++	varying vec2 vUV; varying vec3 vCol;
++	void main() {
++		vec4 mv = modelViewMatrix * vec4(position, 1.0);
++		float a = smoothstep(0.12, 0.35, uNight) * (1.0 - smoothstep(uFar * 0.6, uFar, -mv.z));
++		vUV = aUV; vCol = aCol * a;
++		gl_Position = a > 0.002 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0);
++	}`;
++const POOL_FS = /* glsl */`
++	uniform float uExpo;
++	varying vec2 vUV; varying vec3 vCol;
++	void main() {
++		float r = length(vUV);
++		float e = pow(1.0 + 6.25 * r * r, -1.5) * (1.0 - smoothstep(0.72, 1.0, r));
++		if (e < 0.003) discard;
++		gl_FragColor = vec4(vCol * e * uExpo, 1.0);
++		#include <colorspace_fragment>
++	}`;
++
++export function createFloodlights(scene, { isPhone = false, ground = () => 0, world = () => null } = {}) {
++	const CAP_P = isPhone ? 2500 : 7000, CAP_Q = isPhone ? 800 : 2400, CAP_F = 160;
++	const pPos = new Float32Array(CAP_P * 3), pCol = new Float32Array(CAP_P * 3), pK = new Float32Array(CAP_P * 4), pSize = new Float32Array(CAP_P);
++	const pGeo = new THREE.BufferGeometry();
++	pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
++	pGeo.setAttribute('aCol', new THREE.BufferAttribute(pCol, 3));
++	pGeo.setAttribute('aK', new THREE.BufferAttribute(pK, 4));
++	pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
++	pGeo.setDrawRange(0, 0);
++	const U = { uScale: { value: 400 }, uNight: { value: 0 }, uT: { value: 0 }, uExpo: { value: 1 }, uFar: { value: isPhone ? 1800 : 3200 } };
++	const pMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: POINT_VS, fragmentShader: POINT_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
++	const points = new THREE.Points(pGeo, pMat);
++	points.frustumCulled = false; points.visible = false; points.name = 'flood-lights'; points.renderOrder = 6;
++	const qPos = new Float32Array(CAP_Q * 12), qUV = new Float32Array(CAP_Q * 8), qCol = new Float32Array(CAP_Q * 12), qIdx = new Uint32Array(CAP_Q * 6);
++	for (let i = 0; i < CAP_Q; i++) qIdx.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
++	const qGeo = new THREE.BufferGeometry();
++	qGeo.setAttribute('position', new THREE.BufferAttribute(qPos, 3));
++	qGeo.setAttribute('aUV', new THREE.BufferAttribute(qUV, 2));
++	qGeo.setAttribute('aCol', new THREE.BufferAttribute(qCol, 3));
++	qGeo.setIndex(new THREE.BufferAttribute(qIdx, 1));
++	qGeo.setDrawRange(0, 0);
++	const qMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: POOL_VS, fragmentShader: POOL_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 });
++	const pools = new THREE.Mesh(qGeo, qMat);
++	pools.frustumCulled = false; pools.visible = false; pools.name = 'flood-pools'; pools.renderOrder = 3;
++	scene.add(pools, points);
++	const tmpV = new THREE.Vector2();
++	points.onBeforeRender = (r, sc, cam) => { U.uScale.value = r.getSize(tmpV).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360)); U.uExpo.value = r.toneMappingExposure * 0.85; };
++
++	// the floodlights for the landmark list: stride 13 (see pickFloods)
++	const F = new Float32Array(CAP_F * 13), chosen = new Int32Array(LF_N), score = new Float32Array(CAP_F);
++	let np = 0, nq = 0, nfl = 0, nStatic = 0, qStatic = 0, built = false, skyN = -1, clock = 0, lastPick = -1;
++	const stats = { floods: 0, beacons: 0, bayLights: 0, deck: 0, masts: 0 };
++
++	function point(x, y, z, c, k, kind, a, b, far, size) {
++		if (np >= CAP_P) return;
++		pPos[np * 3] = x; pPos[np * 3 + 1] = y; pPos[np * 3 + 2] = z;
++		pCol[np * 3] = c[0] * k; pCol[np * 3 + 1] = c[1] * k; pCol[np * 3 + 2] = c[2] * k;
++		pK[np * 4] = kind; pK[np * 4 + 1] = a; pK[np * 4 + 2] = b; pK[np * 4 + 3] = far;
++		pSize[np] = size;
++		np++;
++	}
++	// a pool of light on a deck or the ground: centred at (x, y, z), r across, from a lamp h above
++	function pool(x, y, z, r, h, I, c) {
++		if (nq >= CAP_Q) return;
++		const o = nq * 12, k = I / (h * h) * 0.08;
++		qPos.set([x - r, y, z - r, x + r, y, z - r, x + r, y, z + r, x - r, y, z + r], o);
++		qUV.set([-1, -1, 1, -1, 1, 1, -1, 1], nq * 8);
++		for (let j = 0; j < 4; j++) { qCol[o + j * 3] = c[0] * k; qCol[o + j * 3 + 1] = c[1] * k; qCol[o + j * 3 + 2] = c[2] * k; }
++		nq++;
++	}
++	// a local frame at a real place (as landmarks.js at(): heading the bearing of local +z)
++	const frame = (lat, lon, heading = 0, base = null) => {
++		const w = toWorld(lat, lon), g = base ?? Math.max(0, ground(w.x, w.z)), t = -heading * D2R + Math.PI, c = Math.cos(t), s = Math.sin(t);
++		return (lx, ly, lz) => [w.x + c * lx + s * lz, g + ly, w.z - s * lx + c * lz];
++	};
++	// a floodlight at l (local) aimed at t (local): cone outer and inner half-angles (degrees),
++	// strength I (as the evening's lamps), its colour, how far its light is worth working out
++	function flood(Fr, l, t, outer, inner, I, c, reach, glow = true) {
++		if (nfl >= CAP_F) return;
++		const p = Fr(...l), q = Fr(...t);
++		let dx = q[0] - p[0], dy = q[1] - p[1], dz = q[2] - p[2];
++		const L = Math.hypot(dx, dy, dz) || 1; dx /= L; dy /= L; dz /= L;
++		F.set([p[0], p[1], p[2], reach, c[0] * I, c[1] * I, c[2] * I, Math.cos(outer * D2R), dx, dy, dz, Math.cos(inner * D2R), Math.sqrt(I)], nfl * 13);
++		nfl++; stats.floods++;
++		if (glow) point(p[0], p[1] + 0.2, p[2], c, 2.2, 0, 0, 0, 1600, 0.5);
++	}
++	// n floodlights round a point at radius r, height y, all aimed at the same spot up the tower
++	function ring(Fr, n, r, y, aim, outer, inner, I, c, reach, a0 = Math.PI / 4) {
++		for (let i = 0; i < n; i++) { const a = a0 + i / n * Math.PI * 2; flood(Fr, [Math.cos(a) * r + aim[0], y, Math.sin(a) * r + aim[2]], aim, outer, inner, I, c, reach); }
++	}
++	const beacon = (x, y, z, flash) => { point(x, y, z, RED, flash ? 7 : 4, flash ? 1 : 0, 0, 0, 14000, 1.3); stats.beacons++; };
++
++	function buildStatic() {
++		np = 0; nq = 0; nfl = 0;
++		for (const k in stats) stats[k] = 0;
++		// ---- San Francisco
++		{ // the Ferry Building: its clock tower lit from the roof round it, its long front washed
++			const Fr = frame(37.7955, -122.3937, 150);
++			ring(Fr, 4, 8.5, 16.2, [-6, 50, 0], 24, 10, 420, WARM, 90);
++			for (const z of [-60, -20, 20, 60]) for (const s of [-1, 1]) flood(Fr, [s * 19, 0.4, z], [s * 13, 10, z], 40, 18, 70, WARM, 30);
++		}
++		{ // City Hall: the dome lit from its roof, the plaza front from below
++			const Fr = frame(37.7793, -122.4193, 0);
++			ring(Fr, 6, 27, 32.4, [0, 64, 0], 24, 10, 520, NEUTRAL, 95);
++			for (const z of [-34, -12, 12, 34]) flood(Fr, [70, 0.4, z], [62, 16, z], 40, 18, 110, WARM, 40);
++		}
++		{ // Coit Tower on Telegraph Hill
++			const Fr = frame(37.80239, -122.40582, 0);
++			ring(Fr, 4, 13, 0.4, [0, 40, 0], 18, 8, 380, WARM, 80);
++		}
++		{ // the Transamerica Pyramid: the spire's top floors lit from its wings, its red light at the tip
++			const Fr = frame(37.79519, -122.40279, 0);
++			ring(Fr, 4, 11, 196, [0, 238, 0], 20, 8, 260, NEUTRAL, 70);
++			const p = Fr(0, 260.6, 0); beacon(p[0], p[1], p[2], true);
++		}
++		{ // Salesforce Tower: the red lights at its crown (the crown's own light is city.js's)
++			const Fr = frame(37.78975, -122.39687, 0);
++			for (const s of [-1, 1]) { const p = Fr(s * 10.6, 326.6, s * 10.6); beacon(p[0], p[1], p[2], true); }
++		}
++		{ // Sutro Tower: flashing at the mast's top, steady on the legs at the two decks
++			const Fr = frame(37.75523, -122.45278, 0);
++			let p = Fr(0, 298.5, 0); beacon(p[0], p[1], p[2], true);
++			for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; for (const [y, r] of [[120, 17], [181, 14]]) { p = Fr(Math.cos(a) * r, y + 2, Math.sin(a) * r); beacon(p[0], p[1], p[2], false); } }
++		}
++		{ // the Palace of Fine Arts: the rotunda glowing amber over its lagoon
++			const Fr = frame(37.8029, -122.4484, 30);
++			ring(Fr, 6, 30, 0.4, [0, 30, 0], 26, 12, 460, AMBER, 70, 0.3);
++		}
++		{ // Alcatraz's light: a white flash every five seconds; Point Bonita's, every four
++			let Fr = frame(37.82644, -122.42176, 0), p = Fr(0, 27, 0);
++			point(p[0], p[1], p[2], [1, 0.97, 0.9], 9, 2, 5, 0, 16000, 1.6);
++			Fr = frame(37.8157, -122.5298, 0); p = Fr(0, 11.4, 0);
++			point(p[0], p[1], p[2], [1, 0.97, 0.9], 9, 2, 4, 1.3, 16000, 1.4);
++			// (Fort Point's little light on its barbette)
++			Fr = frame(37.8106, -122.4771, 60); p = Fr(28, 24.8, 16);
++			point(p[0], p[1], p[2], [1, 0.9, 0.7], 3, 0, 0, 0, 5000, 0.6);
++		}
++		// ---- the East Bay, the Peninsula and San Ramon
++		{ // Oakland City Hall, the Tribune Tower's copper crown, the Temple white on its hill
++			let Fr = frame(37.8053, -122.2724, 20);
++			ring(Fr, 4, 19, 30.4, [0, 72, 0], 22, 10, 500, NEUTRAL, 85);
++			Fr = frame(37.8043, -122.2708, 20);
++			ring(Fr, 4, 9.5, 76.4, [0, 88, 0], 34, 14, 120, WARM, 30);
++			ring(Fr, 4, 13, 0.4, [0, 45, 0], 16, 7, 260, WARM, 70);
++			Fr = frame(37.8078, -122.1978, 0);
++			ring(Fr, 4, 46, 0.4, [0, 38, 0], 28, 13, 900, [1, 0.97, 0.92], 110);
++		}
++		{ // the Campanile and Hoover Tower
++			ring(frame(37.8721, -122.2578, 0), 4, 15, 0.4, [0, 56, 0], 18, 8, 450, WARM, 90);
++			ring(frame(37.4275, -122.1668, 0), 4, 17, 0.4, [0, 56, 0], 18, 8, 450, WARM, 90);
++		}
++		{ // San Ramon: City Hall's front and the library's washed from the lawn, the canopy at
++			// Bishop Ranch lit from under it
++			let Fr = frame(37.7657, -121.9552, 70);
++			for (const x of [-27, -9, 9, 27]) flood(Fr, [x, 0.4, 19.5], [x, 8, 15], 40, 18, 80, WARM, 30);
++			Fr = frame(37.7648, -121.9522, 40);
++			for (const x of [-14, 0, 14]) flood(Fr, [x, 0.4, 21], [x, 6, 17.5], 40, 18, 60, WARM, 25);
++			Fr = frame(37.7672, -121.96, 70);
++			for (let i = -3; i <= 3; i++) for (const z of [-14, 14]) { const p = Fr(i * 21, 16.2, z); point(p[0], p[1], p[2], [1, 0.86, 0.66], 2.2, 0, 0, 0, 1600, 0.45); pool(p[0], ground(p[0], p[2]) + 0.4, p[2], 14, 16, 160, [1, 0.86, 0.66]); }
++		}
++		// ---- the Golden Gate: its towers lit from the deck, its lamps' pools on the roadway
++		{
++			const c = toWorld(37.81992, -122.47829), b = -10.8 * D2R, ax = [Math.sin(b), -Math.cos(b)], lt = [Math.cos(b), Math.sin(b)];
++			const END = 983, deckY = (s) => 64 + 5.5 * Math.max(0, 1 - (s / END) * (s / END));
++			const Wb = (s, t, y) => [c.x + ax[0] * s + lt[0] * t, y, c.z + ax[1] * s + lt[1] * t];
++			for (const s0 of [-640, 640]) for (const sd of [-1, 1]) for (const e of [-1, 1]) {
++				const dy = deckY(s0) + 1;
++				// (the floodlights by the legs, both faces of each, aimed up the leg)
++				const pl = Wb(s0 + e * 9, sd * 17, dy), pt = Wb(s0, sd * 14.6, 165);
++				if (nfl < CAP_F) {
++					let dx = pt[0] - pl[0], dyy = pt[1] - pl[1], dz = pt[2] - pl[2]; const L = Math.hypot(dx, dyy, dz); dx /= L; dyy /= L; dz /= L;
++					F.set([pl[0], pl[1], pl[2], 230, 2600 * 1, 2600 * 0.78, 2600 * 0.58, Math.cos(13 * D2R), dx, dyy, dz, Math.cos(5 * D2R), Math.sqrt(2600)], nfl * 13); nfl++; stats.floods++;
++				}
++			}
++			for (let s = -END; s <= END; s += 30.5) for (const sd of [-1, 1]) { const p = Wb(s, sd * 9.6, deckY(s) + 0.66); pool(p[0], p[1], p[2], 21, 8.4, 30, SODIUM); stats.deck++; }
++		}
++		// ---- the Bay Bridge: the deck lamps, the Bay Lights on the west span, the red lights on its towers
++		{
++			const P = (lat, lon, y) => { const w = toWorld(lat, lon); return [w.x, y, w.z]; };
++			const A = P(37.78796, -122.39035, 58), Bm = P(37.79967, -122.37735, 62), C = P(37.8103, -122.3655, 58);
++			const D = P(37.814, -122.3585, 50), E = P(37.8176, -122.349, 45), Fp = P(37.8252, -122.317, 22), G = P(37.8262, -122.2985, 8);
++			const dir = [C[0] - A[0], C[2] - A[2]], dl = Math.hypot(dir[0], dir[1]), side = [-dir[1] / dl, dir[0] / dl];
++			const lerp = (a, b, u) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
++			const deckAt = (u) => (u < 0.5 ? lerp(A, Bm, u * 2) : lerp(Bm, C, (u - 0.5) * 2));
++			// the west span's towers: red at the top of each leg, flashing
++			for (const t of [0.16, 0.36, 0.64, 0.84]) for (const sd of [-1, 1]) { const q = lerp(A, C, t); beacon(q[0] + side[0] * sd * 11, 161, q[2] + side[1] * sd * 11, true); }
++			// the self-anchored span's white tower
++			{ const T = lerp(D, E, 0.35); beacon(T[0], 161, T[2], true); }
++			// the deck lamps: sodium on the west span, white LED on the new east span
++			const deck = (a, b, offs, col) => {
++				const L = Math.hypot(b[0] - a[0], b[2] - a[2]), n = Math.max(1, Math.floor(L / 45));
++				for (let i = 0; i <= n; i++) {
++					const q = lerp(a, b, i / n);
++					for (const o of offs) { const x = q[0] + side[0] * o, z = q[2] + side[1] * o, y = q[1] + 1.5; point(x, y + 8, z, col, 2.4, 0, 0, 0, 7000, 0.6); pool(x - side[0] * Math.sign(o) * 2.5, y + 0.05, z - side[1] * Math.sign(o) * 2.5, 19, 8, 30, col); stats.deck++; }
++				}
++			};
++			deck(A, Bm, [-9, 9], SODIUM); deck(Bm, C, [-9, 9], SODIUM);
++			for (const [a, b] of [[C, D], [D, E], [E, Fp], [Fp, G]]) deck(a, b, [-21, -3, 3, 21], LED);
++			// the Bay Lights: LEDs down the suspender cables of the west span's north face, every
++			// 15 m along it (30 on a phone), every 4 m down each (8), from the cable to the deck
++			const knots = [0, 0.16, 0.36, 0.5, 0.64, 0.84, 1], tops = [62, 158, 158, 70, 158, 158, 62], sags = [20, 88, 6, 6, 88, 20];
++			const cableY = (u) => { let k = 0; while (k < 5 && u > knots[k + 1]) k++; const v = (u - knots[k]) / (knots[k + 1] - knots[k]); return tops[k] + (tops[k + 1] - tops[k]) * v - sags[k] * 4 * v * (1 - v); };
++			const stepA = isPhone ? 30 : 15, stepV = isPhone ? 8 : 4;
++			for (let s = stepA; s < dl - stepA * 0.5; s += stepA) {
++				const u = s / dl, q = deckAt(u), top = cableY(u), x = q[0] - side[0] * 11, z = q[2] - side[1] * 11;
++				for (let y = q[1] + 3; y < top - 1; y += stepV) { point(x, y, z, [0.9, 0.93, 1], 1.5, 3, s, y, 9000, 0.32); stats.bayLights++; }
++			}
++		}
++		// ---- the Port of Oakland: a red light on each crane, sodium high masts over the terminals
++		{
++			const rows = [[[37.8105, -122.33], [37.801, -122.3205]], [[37.7975, -122.319], [37.794, -122.3025]]];
++			for (const [a, b] of rows) for (let k = 0; k <= 11; k++) {
++				const u = k / 11, lat = a[0] + (b[0] - a[0]) * u, lon = a[1] + (b[1] - a[1]) * u, w = toWorld(lat, lon);
++				beacon(w.x, 2 + 70, w.z, false);
++			}
++			for (const [lat, lon] of [[37.802, -122.323], [37.799, -122.317], [37.8035, -122.315], [37.7975, -122.3245], [37.8005, -122.329], [37.796, -122.312]]) {
++				const w = toWorld(lat, lon), g = Math.max(2, ground(w.x, w.z));
++				point(w.x, g + 35, w.z, SODIUM, 3, 0, 0, 0, 9000, 1.6);
++				pool(w.x, g + 0.1, w.z, 85, 35, 700, SODIUM); stats.masts++;
++			}
++		}
++		nStatic = np; qStatic = nq;
++		built = true;
++	}
++	// the skyline's red lights (city.js: every downtown's tall towers, kept for far views)
++	function buildSkyline() {
++		const sky = world()?.city?.skyline?.();
++		if (!sky || sky.length === skyN) return;
++		skyN = sky.length;
++		np = nStatic;
++		const B = beaconsFor(sky);
++		for (const q of B) beacon(q.x, q.y, q.z, q.flash);
++		upload();
++	}
++	function upload() {
++		pGeo.setDrawRange(0, np);
++		for (const k of ['position', 'aCol', 'aK', 'aSize']) { const A = pGeo.attributes[k]; A.clearUpdateRanges(); A.addUpdateRange(0, Math.max(1, np) * A.itemSize); A.needsUpdate = true; }
++		qGeo.setDrawRange(0, nq * 6);
++		for (const k of ['position', 'aUV', 'aCol']) { const A = qGeo.attributes[k]; A.clearUpdateRanges(); A.addUpdateRange(0, Math.max(1, nq) * 4 * A.itemSize); A.needsUpdate = true; }
++	}
++	// the landmark list, twice a second (no allocation)
++	function pick(cam, on) {
++		const L = FIELDS.LF, P = L.P.value, C = L.C.value, D = L.D.value;
++		const far = qualityNow()?.far ?? 1;
++		U.uFar.value = (isPhone ? 1800 : 3200) * far;
++		const n = pickFloods(F, nfl, cam.position.x, cam.position.y, cam.position.z, LF_N, chosen, score, (isPhone ? 3500 : 6000) * far);
++		for (let k = 0; k < n; k++) {
++			const o = chosen[k] * 13;
++			P[k * 4] = F[o]; P[k * 4 + 1] = F[o + 1]; P[k * 4 + 2] = F[o + 2]; P[k * 4 + 3] = F[o + 3];
++			C[k * 4] = F[o + 4] * on; C[k * 4 + 1] = F[o + 5] * on; C[k * 4 + 2] = F[o + 6] * on; C[k * 4 + 3] = F[o + 7];
++			D[k * 4] = F[o + 8]; D[k * 4 + 1] = F[o + 9]; D[k * 4 + 2] = F[o + 10]; D[k * 4 + 3] = F[o + 11];
++		}
++		L.n.value = on > 0.003 ? n : 0;
++	}
++	function update(dt, cam, night) {
++		clock += dt;
++		U.uNight.value = night; U.uT.value = clock;
++		const show = night > 0.1;
++		points.visible = pools.visible = show && built;
++		if (!show) { FIELDS.LF.n.value = 0; return; }
++		if (!built) { if (!world()?.landmarks) return; buildStatic(); upload(); }
++		if (clock - lastPick > 0.5 || lastPick < 0) { lastPick = clock; pick(cam, smooth(0.12, 0.35, night)); if (skyN < 0 || (clock % 4) < 0.6) buildSkyline(); }
++	}
++	function dispose() {
++		scene.remove(pools, points);
++		pGeo.dispose(); qGeo.dispose(); pMat.dispose(); qMat.dispose();
++		FIELDS.LF.n.value = 0;
++	}
++	const info = () => ({ ...stats, points: np, pools: nq, lit: FIELDS.LF.n.value, built, static: [nStatic, qStatic] });
++	return { update, info, dispose, points, pools, rebuild: () => { built = false; skyN = -1; } };
++}
+diff --git a/island/src/bay/houses.js b/island/src/bay/houses.js
+index e8f845e..765b24f 100644
+--- a/island/src/bay/houses.js
++++ b/island/src/bay/houses.js
+@@ -542,6 +542,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night =
+ 			id: 'house:' + Math.round(Mb.x) + ':' + Math.round(Mb.z), occluders: col, levels, bounds: [bx0, bz0, bx1, bz1], home: true,
+ 			rooms: plan.rooms.length, roomOf: (x, y, z) => { const c = plan.cellAt(x, z); return c < 0 ? -1 : plan.labels?.[y > HT.floor1 - 0.2 ? 1 : 0]?.[c] ?? -1; },
+ 			litOf: (id) => !!lit[id], dust: (x, y, z, id) => plan.rooms[id]?.type === 'garage', exclude: ['stucco', 'siding'],
++			// (to bed between half past ten and one, by the house: then one lamp stays on)
++			bed: 22.5 + (((Math.imul(Math.round(Mb.x * 2) | 0, 73856093) ^ Math.imul(Math.round(Mb.z * 2) | 0, 19349663)) >>> 0) % 1000) / 1000 * 2.5,
+ 		});
+ 		// the footprint at each level, for the floors that carry you
+ 		const lights = plan.rooms.filter((r) => r.cells.length && lit[r.id] && r.type !== 'closet').map((r) => [r.cx, (r.level ? HT.ceil1 : HT.ceil0) - 0.45, r.cz]);
+diff --git a/island/src/bay/landmarks.js b/island/src/bay/landmarks.js
+index 3830bf6..ba44e45 100644
+--- a/island/src/bay/landmarks.js
++++ b/island/src/bay/landmarks.js
+@@ -15,6 +15,7 @@
+ import * as THREE from 'three';
+ import { toWorld } from './geo.js';
+ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
++import { addNightField } from '../world/nightfield.js';
+ import { ferryBuilding, sfCityHall, oaklandCityHall, palaceHall, cellhouse, fortPoint, towerLobby, library, cityHall, shopRow, oneRoom, visitorCentre } from '../interiors/landmarks.js';
+ 
+ // piers you can walk out on (floor())
+@@ -66,6 +67,8 @@ export function createLandmarks(scene, bay) {
+ 	// (the same, seen from inside too: the shells you walk into, round or domed)
+ 	const two = (m) => { const c = m.clone(); c.side = THREE.DoubleSide; return c; };
+ 	for (const k of ['silver', 'white', 'glass', 'dark', 'lamp']) mats[k + 'In'] = two(mats[k]);
++	// lit at night by their floodlights (floodlights.js, through world/nightfield.js's landmark list)
++	for (const k of ['stone', 'granite', 'white', 'whiteIn', 'salmon', 'brick', 'redbrick', 'copper', 'tan', 'concrete', 'cellhouse', 'gold', 'craneWhite', 'craneRed']) addNightField(mats[k], { field: 'LF' });
+ 	const parts = new Map();
+ 	// (what is drawn goes to the landmarks' merged meshes, or, while an inside is being built
+ 	// as you come near it, to that inside's own)
+@@ -234,6 +237,9 @@ export function createLandmarks(scene, bay) {
+ 			const a = g[i][1], b = i + 1 < g.length ? g[i + 1][0] : g[0][0] + Math.PI * 2;
+ 			put(F, mat, new THREE.CylinderGeometry(r(gh), rb, gh, Math.max(2, Math.round(seg * (b - a) / (Math.PI * 2))), 1, true, a, b - a).translate(0, gh / 2, 0), x, y, z);
+ 		}
++		// (open the whole way up, as the lighthouse's lantern room is: no band above the gaps, whose
++		// zero height would leave the cylinder's normals NaN)
++		if (h - gh < 1e-3) return;
+ 		put(F, mat, new THREE.CylinderGeometry(rt, r(gh), h - gh, seg, 1, true).translate(0, (h + gh) / 2, 0), x, y, z);
+ 	};
+ 	// stands: tiers (each rise higher, run deeper) round an ellipse rx by rz from the field's edge
+diff --git a/island/src/bay/nightlights.js b/island/src/bay/nightlights.js
+index 1edf143..d3baa40 100644
+--- a/island/src/bay/nightlights.js
++++ b/island/src/bay/nightlights.js
+@@ -16,12 +16,13 @@
+ 
+ import * as THREE from 'three';
+ import { NIGHT_U, NIGHT_I, COLOURS, K, nightSeed, roll, housePlan, buildingPlan, doorAcross, lateHour, lampLevel, solarLevel, motionLevel, ALL_NIGHT } from './nightplan.js';
+-import { NF, NF_N } from '../world/nightfield.js';
++import { NF, NF_N, FIELDS, SF_N } from '../world/nightfield.js';
+ import { qualityNow, onQuality } from '../world/governor.js';
++import { LAMP, LAMP_KINDS } from './streetlamps.js';
+ 
+ const HOUSE = new Set([K.row, K.house, K.bay, K.houseGarageL, K.houseGarageR]);
+ const MOTION = 8;
+-const WARM = [1, 0.8, 0.56], COOL = [0.82, 0.88, 1], SOLAR = COLOURS[3];
++const WARM = [1, 0.8, 0.56], COOL = [0.82, 0.88, 1], SOLAR = COLOURS[3], SODIUM_PACK = [1, 0.5, 0.16];
+ 
+ // the shared switch: a lamp's level by its schedule (x kind: 0 a lamp, 1 solar, 2 motion;
+ // y the night it comes on at; z its late hour off; w the solar charge or the motion slot)
+@@ -108,7 +109,7 @@ const POOL_FS = /* glsl */`
+ 	}`;
+ 
+ export function createNightLights(scene, city, { isPhone = false, ground = () => 0, world = () => null } = {}) {
+-	const CAP_P = isPhone ? 5000 : 16000, CAP_Q = isPhone ? 2500 : 9000, CAP_F = isPhone ? 200 : 600;
++	const CAP_P = isPhone ? 5000 : 16000, CAP_Q = isPhone ? 2500 : 9000, CAP_F = isPhone ? 200 : 600, CAP_S = 1200;
+ 	const R0 = isPhone ? 220 : 420;
+ 	// ---- the points
+ 	const pPos = new Float32Array(CAP_P * 3), pCol = new Float32Array(CAP_P * 3), pSize = new Float32Array(CAP_P * 2), pSch = new Float32Array(CAP_P * 4);
+@@ -146,8 +147,8 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 	const F = new Float32Array(CAP_F * 16);
+ 	const motionAt = new Float32Array(MOTION * 3), motionSince = new Float32Array(MOTION).fill(1e9);
+ 
+-	let np = 0, nq = 0, nf = 0, nm = 0, seen = null, atX = 1e9, atZ = 1e9, R = R0, stats = { houses: 0, washed: 0, trees: 0, civic: 0 };
+-	onQuality(() => { seen = null; });
++	let np = 0, nq = 0, nf = 0, nm = 0, seen = null, atX = 1e9, atZ = 1e9, R = R0, stats = { houses: 0, washed: 0, trees: 0, civic: 0, murals: 0, lobbies: 0 };
++	const offQuality = onQuality(() => { seen = null; });
+ 	const sched = (A, i, kind, onK, off, w) => { A[i] = kind; A[i + 1] = onK; A[i + 2] = off; A[i + 3] = w; };
+ 	function point(x, y, z, c, k, size, kind, onK, off, w, fadeNear = 0) {
+ 		if (np >= CAP_P) return;
+@@ -183,6 +184,11 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 		const lift = 0.06;
+ 		quad(x + nx * lift, y0 + H / 2, z + nz * lift, tx * W, 0, tz * W, 0, H / 2, 0, -W, 0, W, H, c, I * 0.06, 1 + H, 0, onK, off, 0);
+ 	}
++	// a lamp's cone down a wall from above (a gooseneck over a mural): its top at (x, top, z)
++	function downWash(x, z, nx, nz, top, H, I, c, onK, off) {
++		const tx = -nz, tz = nx, W = 0.3 + H * 0.3 + 0.6, lift = 0.07;
++		quad(x + nx * lift, top - H / 2, z + nz * lift, tx * W, 0, tz * W, 0, H / 2, 0, -W, H, W, 0, c, I * 0.06, 1 + H, 0, onK, off, 0);
++	}
+ 	function field(x, y, z, reach, c, I, cosO, dx, dy, dz, cosI, kind, onK, off, w) {
+ 		if (nf >= CAP_F) return;
+ 		F.set([x, y, z, reach, c[0] * I, c[1] * I, c[2] * I, cosO, dx, dy, dz, cosI, kind, onK, off, w], nf * 16);
+@@ -326,6 +332,17 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 			}
+ 		}
+ 	}
++	function lobby(o) {
++		const ca = Math.cos(o.a || 0), sa = Math.sin(o.a || 0), w = o.w, dd = o.d;
++		for (let f = 0; f < 4; f++) {
++			const lnx = f === 1 ? 1 : f === 3 ? -1 : 0, lnz = f === 0 ? 1 : f === 2 ? -1 : 0, half = lnx ? w / 2 : dd / 2, span = lnx ? dd : w;
++			const x = o.x + ca * lnx * (half + 2.2) - sa * lnz * (half + 2.2), z = o.z + sa * lnx * (half + 2.2) + ca * lnz * (half + 2.2);
++			if (onRoad(x, z)) continue;
++			const r = Math.min(9, Math.max(4.5, span * 0.3));
++			groundPool(x, z, r, 2.6, 4, WARM, 0, 0.2, ALL_NIGHT, 0);
++			stats.lobbies++;
++		}
++	}
+ 	// the streets round you, by 20 m cells: no path light or solar stake out in the road
+ 	let roadCells = new Map();
+ 	function onRoad(x, z) {
+@@ -355,7 +372,7 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 	}
+ 	function build(cx, cz) {
+ 		atX = cx; atZ = cz; np = 0; nq = 0; nf = 0; nm = 0;
+-		stats = { houses: 0, washed: 0, trees: 0, civic: 0 };
++		stats = { houses: 0, washed: 0, trees: 0, civic: 0, murals: 0, lobbies: 0 };
+ 		R = R0 * (qualityNow()?.far ?? 1);
+ 		roadsNear(cx, cz, 160);
+ 		// the trees round you, by 16 m cells (for the front yards' and the parks' uplights)
+@@ -373,6 +390,8 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 			const base = Math.floor(o.kind);
+ 			if (HOUSE.has(base) || base === K.garage) { house(o, d, d < R * 0.5 ? trees : null); continue; }
+ 			if (o.h < 4) continue;
++			// a tower's lobby, lit all night (city.js), spills its light on the sidewalk in front of each face
++			if (base === K.tower && o.h > 20 && d < R * 0.7) lobby(o);
+ 			const P = buildingPlan(o, nightSeed(o.x, o.z));
+ 			if (P.wash) building(o, P, false);
+ 		}
+@@ -392,6 +411,19 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 			const a = r * 40, x = t.x + Math.cos(a) * 1.1, z = t.z + Math.sin(a) * 1.1;
+ 			treeLight(t, x, ground(x, z), z, 0.3, t.src === 'street' ? 25 + r * 8 : 23.5);
+ 		}
++		// the murals and the big graffiti pieces: a gooseneck lamp over a mural, a sodium wall pack
++		// over a piece on a warehouse wall, each washing its picture from above
++		for (const m of world()?.signage?.murals?.() || []) {
++			if (Math.hypot(m.x - cx, m.z - cz) > R * 0.6) continue;
++			const g = m.base ?? ground(m.x, m.z), top = g + m.hy + m.h / 2 + 0.55, c = m.mural ? WARM : SODIUM_PACK;
++			const n = m.mural && m.w > 6 ? 2 : 1;
++			for (let i = 0; i < n; i++) {
++				const u = n > 1 ? (i ? 0.25 : -0.25) * m.w : 0, x = m.x - m.nz * u, z = m.z + m.nx * u;
++				downWash(x, z, m.nx, m.nz, top, m.h + 1.2, NIGHT_I.wash * (m.mural ? 0.9 : 0.7), c, 0.25, ALL_NIGHT);
++				point(x + m.nx * 0.45, top + 0.05, z + m.nz * 0.45, c, 1.3, 0.14, 0, 0.25, ALL_NIGHT, 0);
++				stats.murals++;
++			}
++		}
+ 		pGeo.setDrawRange(0, np);
+ 		for (const k of ['position', 'aCol', 'aSize', 'aSched']) { const A = pGeo.attributes[k]; A.clearUpdateRanges(); A.addUpdateRange(0, Math.max(1, np) * A.itemSize); A.needsUpdate = true; }
+ 		qGeo.setDrawRange(0, nq * 6);
+@@ -406,7 +438,8 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 		if (kind === 1) return solarLevel(F[o + 15], hoursNow, nightNow);
+ 		return motionU.value[F[o + 15] | 0];
+ 	};
+-	const chosen = new Int32Array(NF_N), score = new Float32Array(CAP_F);
++	const chosen = new Int32Array(NF_N), score = new Float32Array(CAP_F), sScore = new Float32Array(CAP_S);
++	// (and the street lamps near you: streetlife.js and streetlamps.js, the same strength as their pools)
+ 	function pick(cam) {
+ 		const P = NF.uNFP.value, C = NF.uNFC.value, D = NF.uNFD.value;
+ 		const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z, FAR = isPhone ? 50 : 80;
+@@ -414,11 +447,26 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 			const o = i * 16, dd = Math.hypot(F[o] - cx, F[o + 1] - cy, F[o + 2] - cz);
+ 			score[i] = dd < FAR && level(o) > 0.01 ? dd : 1e9;
+ 		}
+-		let n = 0;
++		const SL = world()?.street?.lamps?.(), ns = SL && SL.on > 0.01 ? Math.min(SL.n, CAP_S) : 0, SP = SL?.pos;
++		for (let i = 0; i < ns; i++) { const dd = Math.hypot(SP[i * 3] - cx, SP[i * 3 + 1] - cy, SP[i * 3 + 2] - cz); sScore[i] = dd < FAR ? dd : 1e9; }
++		// (your headlights, while you drive, keep the first place: written every frame in update())
++		const h0 = head && head.on > 0.01 ? 1 : 0;
++		let n = h0;
+ 		for (; n < NF_N; n++) {
+-			let best = -1, bd = 1e8;
++			let best = -1, bd = 1e8, street = false;
+ 			for (let i = 0; i < nf; i++) if (score[i] < bd) { bd = score[i]; best = i; }
++			for (let i = 0; i < ns; i++) if (sScore[i] < bd) { bd = sScore[i]; best = i; street = true; }
+ 			if (best < 0) break;
++			if (street) {
++				sScore[best] = 1e9; chosen[n] = -1 - best;
++				const L = LAMP[LAMP_KINDS[SL.kind[best]]] || LAMP.cobra, k = L.I * SL.on * (1 - smooth(FAR * 0.7, FAR, bd)), o = best * 3;
++				P[n * 4] = SP[o]; P[n * 4 + 1] = SP[o + 1]; P[n * 4 + 2] = SP[o + 2]; P[n * 4 + 3] = L.h * 3.4;
++				C[n * 4] = SL.col[o] * k; C[n * 4 + 1] = SL.col[o + 1] * k; C[n * 4 + 2] = SL.col[o + 2] * k;
++				// (a cobra or LED head throws down and out, nothing up; an acorn all round)
++				C[n * 4 + 3] = L.k === 2 ? -2 : 0.02;
++				D[n * 4] = 0; D[n * 4 + 1] = -1; D[n * 4 + 2] = 0; D[n * 4 + 3] = 0.55;
++				continue;
++			}
+ 			score[best] = 1e9; chosen[n] = best;
+ 			const o = best * 16, fade = level(o) * (1 - smooth(FAR * 0.7, FAR, bd));
+ 			P[n * 4] = F[o]; P[n * 4 + 1] = F[o + 1]; P[n * 4 + 2] = F[o + 2]; P[n * 4 + 3] = F[o + 3];
+@@ -426,6 +474,21 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 			D[n * 4] = F[o + 8]; D[n * 4 + 1] = F[o + 9]; D[n * 4 + 2] = F[o + 10]; D[n * 4 + 3] = F[o + 11];
+ 		}
+ 		NF.uNFn.value = n;
++		// the city's own buildings take the street lamps alone (their porch lights are their own)
++		const SFd = FIELDS.SF, SPp = SFd.P.value, SPc = SFd.C.value, SPd = SFd.D.value;
++		for (let i = 0; i < ns; i++) { const dd = Math.hypot(SP[i * 3] - cx, SP[i * 3 + 1] - cy, SP[i * 3 + 2] - cz); sScore[i] = dd < FAR ? dd : 1e9; }
++		let m = h0;
++		for (; m < SF_N; m++) {
++			let best = -1, bd = 1e8;
++			for (let i = 0; i < ns; i++) if (sScore[i] < bd) { bd = sScore[i]; best = i; }
++			if (best < 0) break;
++			sScore[best] = 1e9;
++			const L = LAMP[LAMP_KINDS[SL.kind[best]]] || LAMP.cobra, k = L.I * SL.on * (1 - smooth(FAR * 0.7, FAR, bd)), o = best * 3;
++			SPp[m * 4] = SP[o]; SPp[m * 4 + 1] = SP[o + 1]; SPp[m * 4 + 2] = SP[o + 2]; SPp[m * 4 + 3] = L.h * 3.4;
++			SPc[m * 4] = SL.col[o] * k; SPc[m * 4 + 1] = SL.col[o + 1] * k; SPc[m * 4 + 2] = SL.col[o + 2] * k; SPc[m * 4 + 3] = L.k === 2 ? -2 : 0.02;
++			SPd[m * 4] = 0; SPd[m * 4 + 1] = -1; SPd[m * 4 + 2] = 0; SPd[m * 4 + 3] = 0.55;
++		}
++		SFd.n.value = m;
+ 	}
+ 	const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+ 	function update(dt, cam, night, hours) {
+@@ -434,7 +497,7 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 		u.x = lateHour(hours); u.y = night;
+ 		const show = night > 0.1 && cam.position.y < 3000;
+ 		points.visible = pools.visible = show;
+-		if (!show) { NF.uNFn.value = 0; return; }
++		if (!show) { NF.uNFn.value = 0; FIELDS.SF.n.value = 0; return; }
+ 		const list = city.nearList?.();
+ 		if (list !== seen || Math.hypot(cam.position.x - atX, cam.position.z - atZ) > R * 0.3) { seen = list; build(cam.position.x, cam.position.z); }
+ 		// the motion lights: awake while you are within a few metres, a while after
+@@ -445,11 +508,30 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
+ 			mu[i] = motionLevel(motionSince[i], night);
+ 		}
+ 		if (clock - lastPick > 0.2 || lastPick < 0) { lastPick = clock; pick(cam); }
++		if (head && head.on > 0.01) { headTo(NF.uNFP.value, NF.uNFC.value, NF.uNFD.value); headTo(FIELDS.SF.P.value, FIELDS.SF.C.value, FIELDS.SF.D.value); if (!NF.uNFn.value) NF.uNFn.value = 1; if (!FIELDS.SF.n.value) FIELDS.SF.n.value = 1; }
++		else if (headWas) lastPick = -1;
++		headWas = !!(head && head.on > 0.01);
++	}
++	// your car's low beams as the first light of a list: a spot ahead, a little down, 45 m
++	let head = null, headWas = false;
++	function headTo(P, C, D) {
++		const I = 110 * head.on, l = Math.hypot(head.dx, 0.1, head.dz) || 1;
++		P[0] = head.x; P[1] = head.y; P[2] = head.z; P[3] = 45;
++		C[0] = I; C[1] = I * 0.88; C[2] = I * 0.72; C[3] = Math.cos(0.5);
++		D[0] = head.dx / l; D[1] = -0.1 / l; D[2] = head.dz / l; D[3] = Math.cos(0.2);
+ 	}
+ 	function info() {
+ 		return { points: np, pools: nq, field: nf, lit: NF.uNFn.value, motion: nm, reach: Math.round(R), ...stats, hour: +lateHour(hoursNow).toFixed(2), night: +nightNow.toFixed(2) };
+ 	}
+ 	// where the first lit trees are (the capture scripts look at one)
+ 	const spots = () => Array.from({ length: Math.min(8, stats.trees) }, (_, i) => Array.from(treeSpots.subarray(i * 4, i * 4 + 4)));
+-	return { update, info, spots, points, pools, rebuild: () => { seen = null; } };
++	// let it all go (the streets' dispose, when the world closes)
++	function dispose() {
++		offQuality();
++		scene.remove(pools, points);
++		pGeo.dispose(); qGeo.dispose(); pMat.dispose(); qMat.dispose();
++		NF.uNFn.value = 0; FIELDS.SF.n.value = 0;
++		np = nq = nf = nm = 0;
++	}
++	return { update, info, spots, points, pools, dispose, rebuild: () => { seen = null; }, setHead: (h) => { head = h; } };
+ }
+diff --git a/island/src/bay/streetlamps.js b/island/src/bay/streetlamps.js
+new file mode 100644
+index 0000000..b2961f9
+--- /dev/null
++++ b/island/src/bay/streetlamps.js
+@@ -0,0 +1,101 @@
++// The street lamps by era, as light: what each kind is (how high its head, how far over the
++// road it reaches, how strong), what colour it burns, and the pool it throws on the road and
++// the sidewalk. The poles themselves are streetlife.js's; the walls and trees the nearest
++// lamps fall on are lit by nightlights.js and world/nightfield.js from the same numbers.
++//
++// By era (streetera.js): an acorn lantern on its post in an old core burns warm, the cobra
++// heads of the older streets and the arterials are high pressure sodium (that orange), a share
++// of them refitted with white LED heads (more of them on the busier roads and the newer
++// tracts), and the slim LED heads of the newest subdivisions are a cool 4000 K white.
++//
++// The pool is the light of a lamp on the ground below it: I over the distance squared times
++// the cosine, so the inverse cube of the slant distance, brightest under the head and fading
++// to nothing at two and a half times its height; a cobra head's optics throw it further along
++// the street than across. One quad each, tilted to the slope it falls on, additive, drawn
++// once a rebuild; nothing changes a frame but its one uniform.
++
++import * as THREE from 'three';
++
++// the kinds: head height (m), how far in from the kerb over the road (m), strength (the
++// interiors' units: I over d squared, 1 a well lit room's floor), pool radius in heights
++export const LAMP = {
++	cobra: { k: 0, h: 8.2, reach: 1.2, I: 30, R: 2.5 },
++	led: { k: 1, h: 7.4, reach: 0.8, I: 26, R: 2.5 },
++	acorn: { k: 2, h: 4.2, reach: 0, I: 10, R: 2.8 },
++};
++export const LAMP_KINDS = ['cobra', 'led', 'acorn'];
++// the colours (linear, about equal in brightness): sodium, a 4000 K LED, a 3000 K LED, the acorns' 2700 K
++export const LAMP_COL = { sodium: [1, 0.46, 0.12], led: [0.76, 0.84, 1], warmLed: [1, 0.72, 0.44], acorn: [1, 0.64, 0.34] };
++
++// How a lamp looks: kind ('cobra', 'led', 'acorn'), the street's era, its rank (1 residential
++// .. 6 a freeway), r a roll 0..1 for the street. { c: colour, k: kind index, col: its name }
++export function lampLook(kind, era = 'tract', rank = 1, r = 0.5) {
++	const L = LAMP[kind] || LAMP.cobra;
++	let col;
++	if (kind === 'acorn') col = r < 0.3 ? 'warmLed' : 'acorn';
++	else if (kind === 'led') col = 'led';
++	else {
++		// the cobra heads: sodium, unless this street's were refitted with LED heads (the
++		// freeways and the busier roads first, and the newer tracts)
++		const refit = (rank >= 5 ? 0.5 : rank >= 3 ? 0.35 : 0.15) + (era === 'tract' ? 0.15 : era === 'new' ? 0.4 : 0);
++		col = r < refit ? 'led' : 'sodium';
++	}
++	return { c: LAMP_COL[col], k: L.k, col };
++}
++
++// the light on the ground at d metres out from under a lamp h high, as a share of that under it
++export const poolAt = (d, h) => Math.pow(1 + (d / h) * (d / h), -1.5);
++// a pool's peak, in the same scale as the evening's pools (nightlights.js groundPool)
++export const poolPeak = (L) => L.I / (L.h * L.h) * 0.08;
++
++const VS = /* glsl */`
++	varying vec2 vUV; varying vec3 vC;
++	void main() {
++		vUV = position.xz;
++		vC = instanceColor;
++		gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
++	}`;
++const FS = /* glsl */`
++	uniform float uK, uExpo;
++	varying vec2 vUV; varying vec3 vC;
++	void main() {
++		// (the quad reaches 2.5 heights out: so the slant distance's inverse cube is this)
++		float r = length(vUV);
++		float e = pow(1.0 + 6.25 * r * r, -1.5) * (1.0 - smoothstep(0.72, 1.0, r));
++		if (e < 0.003) discard;
++		gl_FragColor = vec4(vC * e * uK * uExpo, 1.0);
++		#include <colorspace_fragment>
++	}`;
++
++// The pools for up to cap lamps: an InstancedMesh with fill() after a rebuild and setLevel()
++// each frame.
++export function lampPools(cap) {
++	const geo = new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
++	const mat = new THREE.ShaderMaterial({ uniforms: { uK: { value: 0 }, uExpo: { value: 1 } }, vertexShader: VS, fragmentShader: FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
++	const im = new THREE.InstancedMesh(geo, mat, cap);
++	im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
++	im.count = 0; im.frustumCulled = false; im.renderOrder = 3; im.name = 'street-pools';
++	im.onBeforeRender = (r) => { mat.uniforms.uExpo.value = r.toneMappingExposure * 0.85; };
++	const M = new THREE.Matrix4(), C = im.instanceColor.array;
++	// n lamps: heads at pos (xyz), colours col (rgb), kinds (LAMP_KINDS index), the street's yaw
++	im.fill = (n, pos, col, kinds, yaws, groundAt) => {
++		for (let i = 0; i < n; i++) {
++			const L = LAMP[LAMP_KINDS[kinds[i]]] || LAMP.cobra;
++			const x = pos[i * 3], z = pos[i * 3 + 2], R = L.h * L.R, Ra = L.k === 2 ? R : R * 1.25, s = R * 0.5;
++			const ax = Math.sin(yaws[i]), az = Math.cos(yaws[i]), bx = -az, bz = ax;
++			// tilted to the ground: its slope along the street and across it
++			const g = groundAt(x, z);
++			const ga = (groundAt(x + ax * s, z + az * s) - groundAt(x - ax * s, z - az * s)) / (2 * s);
++			const gb = (groundAt(x + bx * s, z + bz * s) - groundAt(x - bx * s, z - bz * s)) / (2 * s);
++			// (local x along the street, local z across it)
++			M.set(ax * Ra, 0, bx * R, x, ga * Ra, 1, gb * R, g + 0.08, az * Ra, 0, bz * R, z, 0, 0, 0, 1);
++			im.setMatrixAt(i, M);
++			const k = poolPeak(L);
++			C[i * 3] = col[i * 3] * k; C[i * 3 + 1] = col[i * 3 + 1] * k; C[i * 3 + 2] = col[i * 3 + 2] * k;
++		}
++		im.count = n;
++		im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true;
++	};
++	im.setLevel = (k) => { mat.uniforms.uK.value = k; im.visible = k > 0.002 && im.count > 0; };
++	return im;
++}
+diff --git a/island/src/bay/streetlife.js b/island/src/bay/streetlife.js
+index 8ac2eef..95af0c5 100644
+--- a/island/src/bay/streetlife.js
++++ b/island/src/bay/streetlife.js
+@@ -12,7 +12,9 @@ import { SPEC } from './cars.js';
+ import { createFleet } from '../vehicles/fleet.js';
+ import { onLandmark } from './footprints.js';
+ import { eraMap, kitFor } from './streetera.js';            // streets by era: the lamps
++import { LAMP, lampLook, lampPools } from './streetlamps.js';
+ 
++const LAMPS = 1200;
+ const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+ // car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
+ const PAINT = [[0.92, 0.92, 0.91], [0.92, 0.92, 0.91], [0.05, 0.05, 0.06], [0.05, 0.05, 0.06], [0.35, 0.36, 0.38], [0.35, 0.36, 0.38], [0.66, 0.67, 0.69], [0.66, 0.67, 0.69], [0.1, 0.2, 0.45], [0.55, 0.06, 0.06], [0.2, 0.3, 0.26], [0.45, 0.38, 0.3], [0.8, 0.8, 0.82], [0.25, 0.08, 0.1]];
+@@ -114,14 +116,27 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 	const meters = mk(meterGeo, metal, 800, false);
+ 	// the lamp heads glow at night; signals show their colour
+ 	const glowTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 32; const g = cv.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(cv); })();
+-	const lampLightGeo = new THREE.BufferGeometry(); lampLightGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(900 * 3), 3));
+-	const lampLights = new THREE.Points(lampLightGeo, new THREE.PointsMaterial({ color: 0xffc070, size: 3.2, map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
++	// each lamp's head glows its own colour (streetlamps.js: by the street's era, sodium orange
++	// on the older streets and arterials, cool LED on the new and the refitted)
++	const lampLightGeo = new THREE.BufferGeometry(); lampLightGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(LAMPS * 3), 3));
++	lampLightGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(LAMPS * 3), 3));
++	const lampLights = new THREE.Points(lampLightGeo, new THREE.PointsMaterial({ color: 0xffffff, vertexColors: true, size: 3.2, map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
+ 	lampLights.frustumCulled = false; group.add(lampLights);
+-	// the pool of warm light each lamp throws on the street below it, after dark
+-	const poolTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
+-	const poolMat = new THREE.MeshBasicMaterial({ color: 0xffb060, map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
+-	const pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolMat, 900);
+-	pools.count = 0; pools.frustumCulled = false; pools.renderOrder = 3; group.add(pools);
++	// the pool of light each lamp throws on the street and the sidewalk below it, after dark:
++	// shaped by its height and its optics (streetlamps.js), tilted to the slope it falls on
++	const pools = lampPools(LAMPS);
++	group.add(pools);
++	// what each lamp is, for the pools and for the walls and trees it lights (nightlights.js)
++	const lampKind = new Uint8Array(LAMPS), lampYaw = new Float32Array(LAMPS), lampCol = lampLightGeo.attributes.color.array;
++	let lampN = 0;
++	// one lamp: where its head is, how it looks (lampLook), which way the street runs
++	function setLamp(i, x, y, z, look, yaw) {
++		const P = lampLightGeo.attributes.position.array;
++		P[i * 3] = x; P[i * 3 + 1] = y; P[i * 3 + 2] = z;
++		lampCol[i * 3] = look.c[0]; lampCol[i * 3 + 1] = look.c[1]; lampCol[i * 3 + 2] = look.c[2];
++		lampKind[i] = look.k; lampYaw[i] = yaw;
++	}
++	const lampsOn = (k) => Math.max(0, Math.min(1, (k - 0.08) / 0.25));
+ 	const sigGeo = new THREE.BufferGeometry(); sigGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(300 * 3), 3)); sigGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(300 * 3), 3));
+ 	const sigLights = new THREE.Points(sigGeo, new THREE.PointsMaterial({ size: 0.9, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+ 	sigLights.frustumCulled = false; group.add(sigLights);
+@@ -175,7 +190,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 		const E = eraMap(real);
+ 		for (const r of roads) {
+ 			const p = r.pts, hw = r.w / 2, rank = RANK[r.cls] || 0;
+-			const lampKind = r.walked && rank <= 3 ? kitFor(E.ofRoad(r).key).lamp : 'cobra', lampEvery = lampKind === 'acorn' ? 11 : 19;
++			const era = E.ofRoad(r).key, lampKind = r.walked && rank <= 3 ? kitFor(era).lamp : 'cobra', lampEvery = lampKind === 'acorn' ? 11 : 19;
++			// (the freeways: a lamp each side every forty metres or so, as the arterials)
++			const look = lampLook(lampKind, era, rank, hash(p[0] * 0.37, p[1] * 0.53));
+ 			for (const k of [0, p.length - 2]) { const key = Math.round(p[k] / 2) + ',' + Math.round(p[k + 1] / 2); const e = ends.get(key) || { x: p[k], z: p[k + 1], n: 0, rank: 0, hw: 0 }; e.n++; e.rank = Math.max(e.rank, rank); e.hw = Math.max(e.hw, hw); ends.set(key, e); }
+ 			lanes.push(laneOf(Array.from(p), hw, r.cls === 'residential' || r.cls === 'living_street' || r.cls === 'unclassified' ? STYLE.suburb : STYLE.office, r.divided || r.cls === 'motorway' || r.link));
+ 			// walk the street every 2.2 m, both sides
+@@ -209,7 +226,12 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 						if (c >= 0) {
+ 							put(im, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz));
+ 							const nl = getNl();
+-							if (nl < 900) { if (lampKind === 'acorn') lampPos.set([kx, kg + 4.2, kz], nl * 3); else lampPos.set([x + nx * (hw - (lampKind === 'led' ? 0.8 : 1.2)) * side, kg + (lampKind === 'led' ? 7.4 : 8.2), z + nz * (hw - (lampKind === 'led' ? 0.8 : 1.2)) * side], nl * 3); setNl(nl + 1); }
++							if (nl < LAMPS) {
++								const L = LAMP[lampKind];
++								if (lampKind === 'acorn') setLamp(nl, kx, kg + L.h, kz, look, yaw);
++								else setLamp(nl, x + nx * (hw - L.reach) * side, kg + L.h, z + nz * (hw - L.reach) * side, look, yaw);
++								setNl(nl + 1);
++							}
+ 						}
+ 					}
+ 					if (k % 47 === 20 && rank >= 1) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
+@@ -233,6 +255,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 		const R = 380;
+ 		const counts = new Map(), n = (im) => { const c = counts.get(im) || 0; counts.set(im, c + 1); return c < im.instanceMatrix.count ? c : -1; };
+ 		const lampPos = lampLightGeo.attributes.position.array; let nl = 0;
++		const E = eraMap(real);
+ 		signalList.length = 0; lanes.length = 0; stopsAt.length = 0;
+ 		const grids = new Map();
+ 		for (let dz = -R; dz <= R; dz += R / 4) for (let dx = -R; dx <= R; dx += R / 4) { const u = bay.urbanAt(cx + dx, cz + dz); if (u.u > 0.15) grids.set(Math.round(u.a * 1000) + ':' + u.s, [u.a, u.s]); }
+@@ -275,7 +298,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 						// the kerb furniture on the block's side of the street
+ 						const [kx, kz] = W(...at(ST + 0.45)), kg = groundAt(kx, kz);
+ 						if (kg < 0.5 || onLandmark(kx, kz, 1)) continue;
+-						if (k % 13 === 6) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); if (nl < 900) { const [lx, lz] = W(...at(ST - 1.2)); lampPos.set([lx, kg + 8.2, lz], nl * 3); nl++; } } }
++						if (k % 13 === 6) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); if (nl < LAMPS) { const [lx, lz] = W(...at(ST - 1.2)); setLamp(nl, lx, kg + LAMP.cobra.h, lz, lampLook('cobra', E?.at(lx, lz)?.key ?? 'tract', busy ? 3 : 1, hash(i * 7.1, j * 3.3)), yaw); nl++; } } }
+ 						if (k % 37 === 18) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
+ 						if (city && k % 5 === 2 && t > ST + 4 && t < L - 4) { const c = n(meters); if (c >= 0) put(meters, c, kx, kg, kz, yaw); }
+ 						if (busy && k % 29 === 14) { const c = n(bins); if (c >= 0) put(bins, c, kx, kg, kz, yaw); }
+@@ -310,12 +333,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 		hidden.clear();
+ 		regrid();
+ 		api.onBuild?.();
+-		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true;
+-		{
+-			const A = lampLightGeo.attributes.position.array, M4 = new THREE.Matrix4();
+-			for (let k = 0; k < nl; k++) pools.setMatrixAt(k, M4.makeScale(15, 1, 15).setPosition(A[k * 3], groundAt(A[k * 3], A[k * 3 + 2]) + 0.1, A[k * 3 + 2]));          // (on the ground under it, whatever its height)
+-			pools.count = nl; pools.instanceMatrix.needsUpdate = true;
+-		}
++		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true; lampLightGeo.attributes.color.needsUpdate = true;
++		pools.fill(nl, lampPos, lampCol, lampKind, lampYaw, groundAt);
++		lampN = nl;
+ 		sigGeo.setDrawRange(0, Math.min(300, signalList.length));
+ 		signalList.slice(0, 300).forEach((s, k) => sigGeo.attributes.position.array.set([s.x, s.y, s.z], k * 3));
+ 		sigGeo.attributes.position.needsUpdate = true;
+@@ -350,8 +370,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
+ 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
+ 		if (Math.hypot(x - splitX, cam.position.y - splitY, z - splitZ) > SPLIT_M || t - splitT > SPLIT_S || t < splitT) split(x, cam.position.y, z, t);
+-		lampLights.material.opacity = nightK;
+-		poolMat.opacity = nightK * 0.5;
++		// (on at dusk by their photocells, a little before the porch lights)
++		lampLights.material.opacity = lampsOn(nightK);
++		pools.setLevel(lampsOn(nightK));
+ 		// signals cycle green, amber, red
+ 		const sc2 = sigGeo.attributes.color.array, ns = Math.min(300, signalList.length);
+ 		for (let k = 0; k < ns; k++) {
+@@ -441,7 +462,11 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+ 		}
+ 		return out;
+ 	}
+-	const api = { update, group, cars, parked, parkedNear, seatsNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
++	// the street lamps round you, for what they light besides the street (nightlights.js: the
++	// near walls and trees): { n, pos (xyz each), col (rgb each), kind (LAMP's index) }
++	const lampSet = { n: 0, pos: lampLightGeo.attributes.position.array, col: lampCol, kind: lampKind, on: 0 };
++	const lampsNear = () => { lampSet.n = lampN; lampSet.on = lampLights.material.opacity; return lampSet; };
++	const api = { update, group, cars, parked, parkedNear, seatsNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null, lamps: lampsNear };
+ 	return api;
+ }
+ 
+diff --git a/island/src/bay/streets.js b/island/src/bay/streets.js
+index b4ade68..30572f0 100644
+--- a/island/src/bay/streets.js
++++ b/island/src/bay/streets.js
+@@ -1,7 +1,8 @@
+ // The streets by era and by season, gathered: potholes you feel and report and the crews
+ // that fill them (potholes.js, roadcrew.js), the street trees' stakes, grates and fallen
+ // leaves (streettrees.js), the holiday lights (holidaylights.js), the evening's porch, path,
+-// solar, tree and facade lights (nightlights.js), the morning sprinklers
++// solar, tree and facade lights (nightlights.js), the landmarks', bridges' and skyline's
++// (floodlights.js), the cars' lamps and beams (carlights.js), the morning sprinklers
+ // (sprinklers.js), and the calendar's hand on the lawns (seasons.js). The trees themselves
+ // are planted by the city (city.js, streettrees.js), the lamps by the street life
+ // (streetlife.js), the sidewalks, kerbs and holes painted by the ground (realcity.js, the
+@@ -15,6 +16,8 @@ import { createRoadCrew } from './roadcrew.js';
+ import { createStreetDecor } from './streettrees.js';
+ import { createHolidayLights } from './holidaylights.js';
+ import { createNightLights } from './nightlights.js';
++import { createFloodlights } from './floodlights.js';
++import { createCarLights } from './carlights.js';
+ import { createSprinklers } from './sprinklers.js';
+ import { apply as applySeason } from './seasons.js';
+ import { today, onMonth } from '../calendar.js';
+@@ -31,6 +34,10 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
+ 	const decor = createStreetDecor(scene, city, { isPhone });
+ 	const lights = createHolidayLights(scene, city, { isPhone });
+ 	const evening = createNightLights(scene, city, { isPhone, ground, world });
++	// the landmarks', bridges' and skyline's lights (floodlights.js), the cars' (carlights.js)
++	const flood = createFloodlights(scene, { isPhone, ground, world });
++	const carLights = createCarLights(scene, { isPhone, ground, world });
++	evening.setHead(carLights.head);
+ 	const sprinklers = createSprinklers(scene, city, real, { isPhone, ground });
+ 	applySeason(today());
+ 	const unMonth = onMonth((d) => { applySeason(d); lights.rebuild(); });
+@@ -39,7 +46,9 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
+ 		crew.update(dt, night);
+ 		decor.update(camera);
+ 		lights.update(dt, camera, night);
++		carLights.update(dt, camera, night);
+ 		evening.update(dt, camera, night, hours);
++		flood.update(dt, camera, night);
+ 		sprinklers.update(dt, camera, hours);
+ 	}
+ 	// the pothole favour (people/errands.js): the nearest hole not yet reported, and a report
+@@ -50,8 +59,8 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
+ 	// for the console: the era where you stand, and everything's counts
+ 	function info() {
+ 		const c = camera.position, e = E.at(c.x, c.z);
+-		return { era: e.key, neglect: +e.neglect.toFixed(2), potholes: potholes.info(), crews: crew.info(), decor: decor.info(), lights: lights.info(), evening: evening.info(), sprinklers: sprinklers.info() };
++		return { era: e.key, neglect: +e.neglect.toFixed(2), potholes: potholes.info(), crews: crew.info(), decor: decor.info(), lights: lights.info(), evening: evening.info(), flood: flood.info(), cars: carLights.info(), sprinklers: sprinklers.info() };
+ 	}
+-	function dispose() { unMonth(); setPotholeSource(null); lights.dispose(); }
+-	return { update, nearest, report, info, dispose, potholes, crew, lights, evening, sprinklers, decor, eraAt: (x, z) => E.at(x, z) };
++	function dispose() { unMonth(); setPotholeSource(null); lights.dispose(); evening.dispose(); flood.dispose(); carLights.dispose(); }
++	return { update, nearest, report, info, dispose, potholes, crew, lights, evening, flood, carLights, sprinklers, decor, eraAt: (x, z) => E.at(x, z) };
+ }
+diff --git a/island/src/bay/towers.js b/island/src/bay/towers.js
+index ffdeab0..e1769b5 100644
+--- a/island/src/bay/towers.js
++++ b/island/src/bay/towers.js
+@@ -299,6 +299,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint =
+ 			let best=null,bd=1e9;
+ 			for(const o of near){
+ 				if(o.wrecked||cam.y>o.y+o.h+30||cam.y<o.y-10)continue;          // structures: a wrecked tower is its shell
++				// (a block a service has taken: its own rooms are built inside it, services/index.js; a
++				// tower's floors over them showed their stone floor and panels through the fire bay)
++				if(o.service||o.grp?.service)continue;
+ 				const dx=cam.x-o.x,dz=cam.z-o.z,ca=Math.cos(o.a),sa=Math.sin(o.a);
+ 				const ex=Math.abs(ca*dx+sa*dz)-o.w/2,ez=Math.abs(-sa*dx+ca*dz)-o.d/2;
+ 				const d=ex<0&&ez<0?Math.max(ex,ez):Math.hypot(Math.max(0,ex),Math.max(0,ez));
+diff --git a/island/src/civic/colony-art.js b/island/src/civic/colony-art.js
+index 6b3b231..3a0a3fb 100644
+--- a/island/src/civic/colony-art.js
++++ b/island/src/civic/colony-art.js
+@@ -28,19 +28,34 @@ export function createColonyArt({parent,surfaces=[],decks=[],seed=0,isPhone=fals
+  vRoughnessMapUv*=aCivicScale;
+  #endif`);};plateMat.customProgramCacheKey=()=> 'colony-civic-deck-1';
+  const plateMesh=new T.InstancedMesh(plateGeo,plateMat,Math.max(1,decks.length));plateMesh.name='civic-tread-decks';plateMesh.count=0;plateMesh.frustumCulled=false;plateMesh.receiveShadow=true;group.add(plateMesh);
++ // After dark each piece has its lamp: an LED bar over it washing it from above, as the colony's
++ // own lighting would (one additive draw for them all, its quads made when the pieces change).
++ const lampPos=new Float32Array(cap*12),lampUV=new Float32Array(cap*8),lampIdx=new Uint16Array(cap*6);
++ for(let i=0;i<cap;i++)lampIdx.set([i*4,i*4+1,i*4+2,i*4,i*4+2,i*4+3],i*6);
++ const lampGeo=new T.BufferGeometry();lampGeo.setAttribute('position',new T.BufferAttribute(lampPos,3));lampGeo.setAttribute('aUV',new T.BufferAttribute(lampUV,2));lampGeo.setIndex(new T.BufferAttribute(lampIdx,1));lampGeo.setDrawRange(0,0);
++ const lampMat=new T.ShaderMaterial({uniforms:{uK:{value:0}},transparent:true,depthWrite:false,blending:T.AdditiveBlending,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-6,
++  vertexShader:'attribute vec2 aUV; varying vec2 vUV; void main(){ vUV = aUV; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
++  // (x across from the lamp, y down from it, metres: the bar a bright line, its light a cone opening down the wall)
++  fragmentShader:'uniform float uK; varying vec2 vUV; void main(){ float x = vUV.x, y = max(vUV.y, 0.0), w = 0.6 + y * 0.35; float e = exp(-x * x / (w * w) * 1.4) * (1.0 - exp(-y * 2.0)) / (1.0 + y * y * 0.08) * 0.22; e += step(vUV.y, 0.07) * step(abs(x), 1.2) * 1.4; if (e < 0.003) discard; gl_FragColor = vec4(vec3(0.82, 0.9, 1.0) * e * uK, 1.0); }'});
++ const lampMesh=new T.Mesh(lampGeo,lampMat);lampMesh.name='civic-art-lamps';lampMesh.frustumCulled=false;lampMesh.renderOrder=4;lampMesh.visible=false;group.add(lampMesh);
++ function lamps(list){let n=0;for(const r of list){if(n>=cap)break;const H=r.h+0.9,W=Math.max(1.6,r.w*0.75),top=r.y+r.h/2+0.35,tx=r.nz,tz=-r.nx,x=r.x+r.nx*0.04,z=r.z+r.nz*0.04,o=n*12;
++  lampPos.set([x-tx*W,top-H,z-tz*W,x+tx*W,top-H,z+tz*W,x+tx*W,top,z+tz*W,x-tx*W,top,z-tz*W],o);lampUV.set([-W,H,W,H,W,0,-W,0],n*8);n++;}
++  lampGeo.setDrawRange(0,n*6);lampGeo.attributes.position.needsUpdate=true;lampGeo.attributes.aUV.needsUpdate=true;return n;}
++ let lampN=0;
+  const matrix=new T.Matrix4(),pos=new T.Vector3(),quat=new T.Quaternion(),scale=new T.Vector3(),up=new T.Vector3(0,1,0);
+  const records=colonyArtRecords(surfaces,{seed,dust});let disposed=false,rev=-1,timer=0,px=Infinity,py=Infinity,pz=Infinity,lastTier='',active=[];
+- function update(camera,dt=0){
++ function update(camera,dt=0,night=0){
+   if(disposed)return;
++  lampMat.uniforms.uK.value=night;lampMesh.visible=night>0.05&&lampN>0;
+   const x=camera.position.x,y=camera.position.y,z=camera.position.z,Q=qualityNow()||{},tier=[Q.far??1,Q.people??1].join(':'),range=(isPhone?85:160)*Math.max(.5,Q.far??1),limit=Math.max(6,Math.floor(cap*Math.min(1,Q.people??1)));
+   timer-=dt;if(timer>0&&rev===artRevision()&&tier===lastTier&&Math.hypot(x-px,y-py,z-pz)<18)return;
+   timer=.5;rev=artRevision();lastTier=tier;px=x;py=y;pz=z;
+   active=records.filter(r=>Math.hypot(x-r.x,z-r.z)<range&&Math.abs(camera.position.y-r.y)<55).sort((a,b)=>Math.hypot(x-a.x,z-a.z)-Math.hypot(x-b.x,z-b.z)).slice(0,limit);
+   const want=new Map();for(const r of active){r.key=faceKey(r.face);want.set(r.key,{face:r.face,w:r.w,h:r.h});}atlas.sync(want);paint.clear();
+-  for(const r of active){const cell=atlas.get(r.key);if(!cell)continue;paint.put(r.x,r.y,r.z,r.nx,0,r.nz,r.nz,0,-r.nx,r.w,r.h,cell,3,seed%997/997,r.wear,graffitiGraphic(r.face.k,r.face.seed)?.gloss?1:0);}paint.commit();
++  for(const r of active){const cell=atlas.get(r.key);if(!cell)continue;paint.put(r.x,r.y,r.z,r.nx,0,r.nz,r.nz,0,-r.nx,r.w,r.h,cell,3,seed%997/997,r.wear,graffitiGraphic(r.face.k,r.face.seed)?.gloss?1:0);}paint.commit();lampN=lamps(active);
+   let plates=0;const nearest=decks.map(d=>({d,range:Math.hypot(d.x-x,d.y-camera.position.y,d.z-z)})).filter(v=>v.range<range).sort((a,b)=>a.range-b.range).slice(0,isPhone?8:18);
+   for(const {d}of nearest){matrix.compose(pos.set(d.x,d.y+.006,d.z),quat.setFromAxisAngle(up,d.yaw),scale.set(d.w,1,d.d));plateMesh.setMatrixAt(plates,matrix);plateScale.setXY(plates,d.w/.4,d.d/.4);plates++;}plateMesh.count=plates;plateMesh.visible=plates>0;plateMesh.instanceMatrix.needsUpdate=true;plateScale.needsUpdate=true;
+ 
+  }
+- return {group,update,info:()=>({planned:records.length,visible:paint.n,decks:decks.length,visibleDecks:plateMesh.count,draws:(paint.n?1:0)+(plateMesh.count?1:0),atlas:atlas.info(),art:[...new Set(active.map(r=>graffitiGraphic(r.face.k,r.face.seed)?.id).filter(Boolean))]}),where:()=>active.map(r=>({x:r.x,y:r.y,z:r.z,id:r.id,art:graffitiGraphic(r.face.k,r.face.seed)})),dispose(){if(disposed)return;disposed=true;paint.dispose();releaseSignMaterials(atlas.tex);atlas.dispose();plateGeo.dispose();plateMesh.dispose();plateMat.dispose();group.removeFromParent();}};
++ return {group,update,info:()=>({planned:records.length,visible:paint.n,decks:decks.length,visibleDecks:plateMesh.count,draws:(paint.n?1:0)+(plateMesh.count?1:0)+(lampMesh.visible?1:0),atlas:atlas.info(),art:[...new Set(active.map(r=>graffitiGraphic(r.face.k,r.face.seed)?.id).filter(Boolean))]}),where:()=>active.map(r=>({x:r.x,y:r.y,z:r.z,id:r.id,art:graffitiGraphic(r.face.k,r.face.seed)})),dispose(){if(disposed)return;disposed=true;paint.dispose();releaseSignMaterials(atlas.tex);atlas.dispose();plateGeo.dispose();plateMesh.dispose();plateMat.dispose();lampGeo.dispose();lampMat.dispose();group.removeFromParent();}};
+ }
+diff --git a/island/src/interiors/index.js b/island/src/interiors/index.js
+index 9a4786e..2912b05 100644
+--- a/island/src/interiors/index.js
++++ b/island/src/interiors/index.js
+@@ -222,6 +222,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
+ 			// (a landmark's, a hospital's, a station's rooms are all lit: they never close)
+ 			litOf: (id) => B.use === 'site' || !!B.C.lit[id], fixtures: anchorFixtures(P, k), dust: (x, y, z, id) => DUSTY.has(P.rooms[id]?.type),
+ 			home: B.use === 'row' || B.use === 'apt', hours: P.hours || OPEN[B.use] || null,
++			// (a home's household to bed by its own late hour: lighting.js keeps one lamp on after)
++			bed: B.use === 'row' || B.use === 'apt' ? 22.5 + ((Math.abs(Math.round(B.o.x * 7 + B.o.z * 13)) % 997) / 997) * 3 : null,
+ 			// (a hospital keeps every light on all night; the rest keep their night lights)
+ 			allNight: P.service === 'hospital',
+ 		};
+diff --git a/island/src/interiors/lighting.js b/island/src/interiors/lighting.js
+index 6b2439d..7893f4a 100644
+--- a/island/src/interiors/lighting.js
++++ b/island/src/interiors/lighting.js
+@@ -111,7 +111,10 @@ function step(renderer, scene, camera, dt, ease) {
+ 		// (a place that is shut keeps only its night lights on; so does one open all night but
+ 		// for a hospital, once it is dark: the bays and offices at a station while the crew sleeps)
+ 		const always = !sp.hours || sp.hours[1] - sp.hours[0] >= 24;
+-		const nightMode = !sp.home && !sp.allNight && (!open || (always && S.night > 0.5)) ? 1 : 0;
++		// (a home, once its household has gone to bed (spec.bed, the late hour), keeps one lamp on
++		// and its screens: a lamp left on in the hall or by the sofa, the television)
++		const late = h < 12 ? h + 24 : h, asleep = sp.home && sp.bed != null && late >= sp.bed && late < 30.5 && S.night > 0.3;
++		const nightMode = asleep || (!sp.home && !sp.allNight && (!open || (always && S.night > 0.5))) ? 1 : 0;
+ 		const target = !open ? 0.6 : sp.home ? 0.5 + 0.5 * S.night : 1;
+ 		H.k += (target - H.k) * ease;
+ 		H.nk = (H.nk ?? nightMode) + (nightMode - (H.nk ?? nightMode)) * ease;
+@@ -407,6 +410,9 @@ function* job(H) {
+ 		o.geometry = g;
+ 		old.dispose();
+ 		o.material = variant(H, o.material, false, o.name);
++		// (the sun reaches a room only where the building lets it in: the shell's and the walls'
++		// shadows fall on it, so by day the floor is not lit through the roof)
++		o.receiveShadow = true;
+ 		H.verts += T.count;
+ 		for (const a of Object.values(g.attributes)) H.bytes += a.array.byteLength;
+ 	}
+@@ -458,9 +464,17 @@ function packNight(A) {
+ 	for (let i = 0; i < A.length; i++) o[i] = Math.max(0, Math.min(255, Math.round(A[i] * 255)));
+ 	return new THREE.BufferAttribute(o, 1, true);
+ }
+-// which fixtures stay on at night (see job)
++// which fixtures stay on at night (see job): a shut place's one in each 12 m square and its
++// screens; a hospital's all; a home's one lamp (after bedtime) and its screens
+ export function nightLights(fixtures, spec = {}) {
+-	const all = !!(spec.home || spec.allNight);
++	// (a home: one lamp kept after bedtime, a table lamp if it has one, else its brightest light)
++	if (spec.home) {
++		let keep = null;
++		for (const f of fixtures) if (f.on && !f.screen && (!keep || (f.shape === 'point') > (keep.shape === 'point') || ((f.shape === 'point') === (keep.shape === 'point') && f.I > keep.I))) keep = f;
++		for (const f of fixtures) f.night = f === keep || !!f.screen || !f.on;
++		return fixtures;
++	}
++	const all = !!spec.allNight;
+ 	const taken = new Set();
+ 	const order = fixtures.map((f, i) => i).sort((a, b) => fixtures[a].p[0] - fixtures[b].p[0] || fixtures[a].p[2] - fixtures[b].p[2] || fixtures[a].p[1] - fixtures[b].p[1]);
+ 	for (const i of order) {
+@@ -544,7 +558,10 @@ const LFB = (() => {
+ 	const mid = c.slice(i0, i1)
+ 		.replace('getPointLightInfo( pointLight, geometryPosition, directLight );', 'getPointLightInfo( pointLight, geometryPosition, directLight );\n\t\tibC0 = directLight.color;')
+ 		.replace(/RE_Direct\( directLight[^;]*;/, '{ float ib0 = dot( ibC0, vec3( 0.333 ) ); ibLoss += ( ib0 - dot( directLight.color, vec3( 0.333 ) ) ) * saturate( dot( geometryNormal, directLight.direction ) ); }');
+-	return c.slice(0, i0) + 'float ibLoss = 0.0;\nvec3 ibC0 = vec3( 0.0 );\n' + mid + c.slice(i1);
++	// (and the sun, in a room, only as much as the windows let in: a floor by a window takes it, the
++	// middle of a deep hall little; the shell's shadow, where there is one, does the rest)
++	return (c.slice(0, i0) + 'float ibLoss = 0.0;\nvec3 ibC0 = vec3( 0.0 );\n' + mid + c.slice(i1))
++		.replace('getDirectionalLightInfo( directionalLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= clamp( vIl.a * 1.6, 0.0, 1.0 );');
+ })();
+ function patch(sh, U) {
+ 	sh.uniforms.ibakeK = U.ibakeK;
+diff --git a/island/src/main.js b/island/src/main.js
+index 712f514..0727302 100644
+--- a/island/src/main.js
++++ b/island/src/main.js
+@@ -991,7 +991,7 @@ export function createIslandWorld() {
+ 		shared.biHalf = island.half;
+ 		shared.heightTex = makeHeightTexture(island);
+ 		shared.maskTex = makeMaskTexture(island);
+-		const sky = createSky(scene, shared, renderer, { isPhone, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
++		const sky = createSky(scene, shared, renderer, { isPhone, earth, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
+ 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
+ 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
+ 		const weather = createWeather(scene, shared, { isPhone, airless: !!profile.airless });
+@@ -1826,8 +1826,11 @@ export function createIslandWorld() {
+ 		// the cities' glow washes out the faint stars
+ 		if (W.bayArea?.loaded()) {
+ 			let glow = 0;
+-			for (const [dx, dz] of GLOW_AT) glow += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
++			let gx = 0, gz = 0;
++			for (const [dx, dz] of GLOW_AT) { const u = W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u; glow += u; gx += dx * u; gz += dz * u; }
+ 			shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
++			// (and which way the glow lies: the sky over the cities brightest toward them)
++			W.sky.glowToward(gx, gz, dt);
+ 		}
+ 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
+ 		const dazed = W.shrooms?.muffle() || 0;
+diff --git a/island/src/planet/colony/colony.js b/island/src/planet/colony/colony.js
+index 4796ce1..6e9e880 100644
+--- a/island/src/planet/colony/colony.js
++++ b/island/src/planet/colony/colony.js
+@@ -222,9 +222,10 @@ export function createColony(island, shared, scene, camera, profile, plan, opts
+ 	}
+ 	function update(dt) {
+ 		tradeSigns.update(camera);
+-		civicArt.update(camera,dt);
+ 		const cx = camera.position.x, cz = camera.position.z;
+ 		const sy = shared.uSunDir.value.y, night = 1 - THREE.MathUtils.smoothstep(sy, -0.12, 0.1);
++		// (the civic art lit by its lamps after dark: civic/colony-art.js)
++		civicArt.update(camera, dt, night);
+ 		U.uNight.value = night;
+ 		U.uLampK.value = 0.7 + night * 1.6;
+ 		mats.glass.emissive.setRGB(S.window[0], S.window[1], S.window[2]).multiplyScalar(0.12 * night);
+diff --git a/island/src/services/index.js b/island/src/services/index.js
+index aa60796..8666802 100644
+--- a/island/src/services/index.js
++++ b/island/src/services/index.js
+@@ -140,6 +140,8 @@ export function createServices({ scene, world, camera, people = () => null, isPh
+ 		F.plan = planOf(kind, Wd, Dd);
+ 		// the block is the service's now: no longer a shop or an office (commercial.js, the interiors)
+ 		if (!b.grid && b.ref) b.ref.grp = Object.assign([b.ref], { service: kind });
++		// (and never a tower's floors built inside it: bay/towers.js leaves a service's block alone)
++		if (b.ref) b.ref.service = kind;
+ 		if (kind === 'hospital') {
+ 			const beds = Math.max(4, Math.min(24, Math.round(Wd * Dd / 45)));
+ 			F.ward = createWard({ id: A.key, beds, charge: bill, onEvent: wardEvent });
+diff --git a/island/src/signage/index.js b/island/src/signage/index.js
+index ea67c4c..cde4095 100644
+--- a/island/src/signage/index.js
++++ b/island/src/signage/index.js
+@@ -432,6 +432,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
+ 		refresh() { dirty = true; },
+ 		// where the records of a face kind stand (for a look at them: Crysis.signage.where('blade'))
+ 		where: (k, n = 5) => lastOut.filter((r) => r.face?.k === k).slice(0, n).map((r) => ({ x: +r.x.toFixed(2), z: +r.z.toFixed(2), hy: r.hy, nx: +(r.nx || 0).toFixed(3), nz: +(r.nz || 0).toFixed(3), base: r.base ?? null, art: graffitiGraphic(r.face.k,r.face.seed) })),
++		// the big painted pieces round you, the murals and the graffiti pieces on the long walls (for
++		// the lamps over them at night: bay/nightlights.js): { x, z, hy, nx, nz, w, h, base, mural }
++		murals: () => lastOut.filter((r) => r.face && (r.face.k === 'piece' || (r.face.k === 'campaign' && r.face.format === 'mural'))).map((r) => ({ x: r.x, z: r.z, hy: r.hy, nx: r.nx || 0, nz: r.nz || 0, w: r.w, h: r.h, base: r.base ?? null, mural: r.face.k === 'campaign' })),
+ 		// (for a look at the sheeting at night without a car: the camera's lamps on)
+ 		headlights(on = true) { forceHead = !!on; return forceHead; },
+ 		atlas,
+diff --git a/island/src/world/nightfield.js b/island/src/world/nightfield.js
+index 5e2469d..a75e72d 100644
+--- a/island/src/world/nightfield.js
++++ b/island/src/world/nightfield.js
+@@ -1,64 +1,78 @@
+ // The evening's lamps on what they light, close by: the few nearest lamps outside (a porch
+-// light, the light over a garage, an uplight under a tree) handed to the materials of the
+-// things they fall on (the trees' bark and leaves, the houses' outside walls) as a short list
+-// of small lights in the shader, without three's own lights (which every material in the
+-// world would pay for, and whose number changing would rebuild every program). A light here
+-// has a place and reach, a colour and strength (its level already in), and for a spot a
+-// direction and cone. bay/nightlights.js fills the list a few times a second.
++// light, the light over a garage, an uplight under a tree, a street lamp) handed to the
++// materials of the things they fall on (the trees' bark and leaves, the houses' outside walls)
++// as a short list of small lights in the shader, without three's own lights (which every
++// material in the world would pay for, and whose number changing would rebuild every program).
++// A light here has a place and reach, a colour and strength (its level already in), and for a
++// spot a direction and cone. bay/nightlights.js fills the list a few times a second.
+ //
+ // The light it gives is the interiors' kind (lightbake.js): strength over the distance
+ // squared, times the cosine at the surface, so a porch light reads the same on a wall built
+ // close by as the far house's shader (city.js) draws it.
++//
++// There are three lists, each for its own materials (one list a material):
++//   NF  the houses' walls and the trees: every kind of lamp near you
++//   SF  the city's own buildings (city.js): the street lamps only (the far houses draw their
++//       own porch lights), so a shop front by a lamp has its pool of light on it
++//   LF  the landmarks and the bridges: their floodlights (bay/floodlights.js), chosen from a
++//       few kilometres round, so a lit tower stands out across the city
+ 
+ const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+ // how many lights a fragment looks at (a compile-time number: it never changes while running)
+ export const NF_N = PHONE ? 6 : 16;
++export const SF_N = PHONE ? 4 : 8;
++export const LF_N = PHONE ? 6 : 12;
+ 
+-// the list: xyz place, w reach; rgb colour times strength, w the cone's outer cosine (-2: all
+-// round); xyz the spot's direction, w the cone's inner cosine
+-export const NF = {
+-	uNFP: { value: new Float32Array(NF_N * 4) },
+-	uNFC: { value: new Float32Array(NF_N * 4) },
+-	uNFD: { value: new Float32Array(NF_N * 4) },
+-	uNFn: { value: 0 },
+-};
+-
+-const GLSL = /* glsl */`
+-uniform vec4 uNFP[NF_N];
+-uniform vec4 uNFC[NF_N];
+-uniform vec4 uNFD[NF_N];
+-uniform int uNFn;
+-varying vec3 vNFW;
+-vec3 nightField(vec3 p, vec3 n, float wrap) {
++// A list: xyz place, w reach; rgb colour times strength, w the cone's outer cosine (-2: all
++// round); xyz the spot's direction, w the cone's inner cosine; n how many are in use.
++function makeField(id, N) {
++	const U = {
++		[`u${id}P`]: { value: new Float32Array(N * 4) },
++		[`u${id}C`]: { value: new Float32Array(N * 4) },
++		[`u${id}D`]: { value: new Float32Array(N * 4) },
++		[`u${id}n`]: { value: 0 },
++	};
++	const glsl = /* glsl */`
++uniform vec4 u${id}P[${N}];
++uniform vec4 u${id}C[${N}];
++uniform vec4 u${id}D[${N}];
++uniform int u${id}n;
++varying vec3 v${id}W;
++vec3 field${id}(vec3 p, vec3 n, float wrap) {
+ 	vec3 e = vec3(0.0);
+-	for (int i = 0; i < NF_N; i++) {
+-		if (i >= uNFn) break;
+-		vec3 L = uNFP[i].xyz - p;
+-		float d2 = dot(L, L), r2 = uNFP[i].w * uNFP[i].w;
++	for (int i = 0; i < ${N}; i++) {
++		if (i >= u${id}n) break;
++		vec3 L = u${id}P[i].xyz - p;
++		float d2 = dot(L, L), r2 = u${id}P[i].w * u${id}P[i].w;
+ 		if (d2 > r2) continue;
+ 		L *= inversesqrt(max(d2, 1e-6));
+-		float c = uNFC[i].w > -1.5 ? smoothstep(uNFC[i].w, uNFD[i].w, dot(-L, uNFD[i].xyz)) : 1.0;
++		float c = u${id}C[i].w > -1.5 ? smoothstep(u${id}C[i].w, u${id}D[i].w, dot(-L, u${id}D[i].xyz)) : 1.0;
+ 		float nl = dot(n, L);
+ 		float lam = max(nl, 0.0) * (1.0 - wrap) + wrap * (0.5 + 0.5 * nl);
+ 		float win = 1.0 - d2 / r2;
+-		e += uNFC[i].rgb * (c * lam * win * win / (d2 + 0.2));
++		e += u${id}C[i].rgb * (c * lam * win * win / (d2 + 0.2));
+ 	}
+ 	return e;
+ }
+ `;
++	return { id, N, U, glsl, P: U[`u${id}P`], C: U[`u${id}C`], D: U[`u${id}D`], n: U[`u${id}n`] };
++}
++export const FIELDS = { NF: makeField('NF', NF_N), SF: makeField('SF', SF_N), LF: makeField('LF', LF_N) };
++// (the evening's own list, as it always was: NF.uNFP and the rest)
++export const NF = FIELDS.NF.U;
+ 
+-// Light a material by the list. wrap: how much light comes through from behind (leaves are
+-// thin: 0.5; a wall: 0). Keeps whatever the material already does to its shader.
+-export function addNightField(material, { wrap = 0 } = {}) {
++// Light a material by a list. wrap: how much light comes through from behind (leaves are
++// thin: 0.5; a wall: 0); field: 'NF' (the default), 'SF' or 'LF'. Keeps whatever the material
++// already does to its shader.
++export function addNightField(material, { wrap = 0, field = 'NF' } = {}) {
++	const Fd = FIELDS[field] || FIELDS.NF, id = Fd.id;
+ 	if (!material || material.userData.nightField) return material;
+-	material.userData.nightField = true;
++	material.userData.nightField = id;
+ 	const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey?.bind(material);
+ 	material.onBeforeCompile = (sh, r) => {
+ 		if (prev) prev.call(material, sh, r);
+-		sh.defines = sh.defines || {};
+-		sh.defines.NF_N = NF_N;
+-		Object.assign(sh.uniforms, NF);
+-		sh.vertexShader = 'varying vec3 vNFW;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
++		Object.assign(sh.uniforms, Fd.U);
++		sh.vertexShader = `varying vec3 v${id}W;\n` + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+ 	{
+ 		vec4 nfW = vec4(transformed, 1.0);
+ 		#ifdef USE_BATCHING
+@@ -67,12 +81,12 @@ export function addNightField(material, { wrap = 0 } = {}) {
+ 		#ifdef USE_INSTANCING
+ 		nfW = instanceMatrix * nfW;
+ 		#endif
+-		vNFW = (modelMatrix * nfW).xyz;
++		v${id}W = (modelMatrix * nfW).xyz;
+ 	}`);
+-		sh.fragmentShader = GLSL + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+-	if (uNFn > 0) totalEmissiveRadiance += diffuseColor.rgb * nightField(vNFW, inverseTransformDirection(normal, viewMatrix), ${wrap.toFixed(2)}) * RECIPROCAL_PI;`);
++		sh.fragmentShader = Fd.glsl + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
++	if (u${id}n > 0) totalEmissiveRadiance += diffuseColor.rgb * field${id}(v${id}W, inverseTransformDirection(normal, viewMatrix), ${wrap.toFixed(2)}) * RECIPROCAL_PI;`);
+ 	};
+-	material.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|nf' + NF_N + 'w' + wrap.toFixed(2);
++	material.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|' + id + Fd.N + 'w' + wrap.toFixed(2);
+ 	material.needsUpdate = true;
+ 	return material;
+ }
+diff --git a/island/src/world/sky.js b/island/src/world/sky.js
+index daaa316..b28e22c 100644
+--- a/island/src/world/sky.js
++++ b/island/src/world/sky.js
+@@ -6,7 +6,7 @@ import { NOISE_GLSL } from './terrain.js';
+ import { STARS_B64, STAR_COUNT } from './starcat.js';
+ import { today } from '../calendar.js';
+ import { constellations } from './constellations.js';
+-import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock } from './solar.js';
++import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock, lunarPosition, moonlightShare } from './solar.js';
+ 
+ // The real catalogue follows the observer's latitude and the chosen date. The island
+ // keeps its Bay Area latitude; the globe supplies the camera's current latitude.
+@@ -121,7 +121,7 @@ function airOf(P) {
+ 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
+ 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
+ }
+-export function createSky(scene, shared, renderer, { isPhone = false, latitude = () => BAY_LATITUDE } = {}) {
++export function createSky(scene, shared, renderer, { isPhone = false, earth = true, latitude = () => BAY_LATITUDE } = {}) {
+ 	// The air uniform is made once per page; an airless world darkens it, and the next world
+ 	// with air gets the neutral value back.
+ 	const airR = cloudReflectU(shared).uAirR;
+@@ -143,13 +143,18 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 		// a world's own dusk (planet/arch/: x how much, y how bright) and its crescent moon (xyz where, w on)
+ 		uDusk: shared.uDuskSky || (shared.uDuskSky = { value: new THREE.Vector4(0, 1, 0, 0) }), uDuskMoon: shared.uDuskMoon || (shared.uDuskMoon = { value: new THREE.Vector4(0, 0.5, -0.85, 0) }),
+ 		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
++		// the Moon tonight (xyz where, w how much of it is lit: solar.js lunarPosition), shared for
++		// whatever shows it or its light (the sea's glitter, wet sand) to read
++		uMoon: shared.uMoonDir || (shared.uMoonDir = { value: new THREE.Vector4(0, 0.5, -0.85, 1) }),
++		// the cities' glow on the sky (xz which way it lies, y how lopsided: 0 all round .. 1 one side)
++		uGlowDir: shared.uSkyGlowDir || (shared.uSkyGlowDir = { value: new THREE.Vector3(0, 0, 1) }),
+ 	};
+ 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
+ 		uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
+ 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
+ 		fragmentShader: /* glsl */`
+ 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
+-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon; uniform sampler2D uBow;
++			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon, uMoon; uniform vec3 uGlowDir; uniform sampler2D uBow;
+ 			varying vec3 vDir;
+ 			${NOISE_GLSL}
+ 			${CLOUD_GLSL}
+@@ -257,10 +262,37 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 					float shadowed = smoothstep(-0.05, 0.1, dot(rp, uSunDir) + 0.3);
+ 					col += vec3(0.92, 0.88, 0.8) * band * 0.45 * smoothstep(0.0, 0.15, d.y) * mix(0.6, 1.4, uNight) * shadowed;
+ 				}
+-				if (uNight > 0.01 && d.y > 0.0){
+-					// the moon, opposite the sun
+-					float md = max(dot(d, -uSunDir), 0.0);
+-					col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.9994, 0.9997, md) * 2.5 + pow(md, 60.0) * 0.08) * uNight * (1.0 - uDuskMoon.w);
++				// the cities' glow on a clear night: the sodium and LED light of the towns scattered
++				// in the air low over them, brightest toward them, washing out the stars there
++				if (uNight > 0.01 && uGlow > 0.01 && d.y > -0.05){
++					vec2 gdir = normalize(uGlowDir.xz + 1e-5);
++					float side = mix(1.0, 0.55 + 0.45 * dot(normalize(d.xz + 1e-5), gdir), uGlowDir.y);
++					col += vec3(1.0, 0.6, 0.34) * uGlow * uNight * side * (exp(-max(d.y, 0.0) * 9.0) * 0.03 + exp(-max(d.y, 0.0) * 2.5) * 0.006);
++				}
++				if (d.y > -0.02 && uDuskMoon.w < 0.5){
++					// the moon where it really is tonight, lit on the sun's side (its phase), with a
++					// faint earthshine on the dark side and the seas darker; pale by day
++					vec3 mo = uMoon.xyz;
++					float md = dot(d, mo);
++					float up = smoothstep(-0.02, 0.03, mo.y);
++					if (md > 0.9998){
++						const float R = 0.0105;
++						vec3 t1 = normalize(cross(mo, vec3(0.0, 1.0, 0.0) + vec3(1e-4, 0.0, 0.0))), t2 = cross(t1, mo);
++						vec2 q = vec2(dot(d, t1), dot(d, t2)) / R;
++						float r = length(q);
++						if (r < 1.0){
++							vec3 n = q.x * t1 + q.y * t2 - sqrt(max(0.0, 1.0 - r * r)) * mo;
++							float lit = smoothstep(-0.04, 0.08, dot(n, uSunDir));
++							float seas = smoothstep(0.42, 0.68, fbm5(q * 2.2 + 7.0)) * 0.42;
++							float limb = 0.82 + 0.18 * sqrt(max(0.0, 1.0 - r * r));
++							vec3 disc = vec3(0.95, 0.94, 0.9) * (lit * 2.4 * (1.0 - seas) * limb + 0.012);
++							float aa = smoothstep(1.0, 0.9, r) * up;
++							col = mix(col, max(col, disc), aa * mix(0.28, 1.0, uNight) * (1.0 - uDuskMoon.w));
++						}
++					}
++					// the glow round it in the air, as bright as the moon is
++					float glow = pow(max(md, 0.0), 900.0) * 0.12 + pow(max(md, 0.0), 60.0) * 0.05;
++					col += vec3(0.8, 0.86, 1.0) * glow * pow(uMoon.w, 2.4) * uNight * up;
+ 				}
+ 				// the dusk's crescent: a lit disc less the same disc a little higher, and its glow
+ 				if (uDuskMoon.w > 0.0){
+@@ -295,6 +327,13 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 					shade *= mix(1.0, heavy, clamp(sh * 1.4, 0.0, 1.0)) * (1.0 - uGloom * 0.45);
+ 					// at night the clouds are dark shapes against the stars, rimmed faintly by moonlight
+ 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
++					// over the towns at night their glow on the clouds' undersides: a low overcast
++					// over a city reads orange-grey, lit from below, brightest toward it
++					if (uGlow > 0.01){
++						vec2 gdir = normalize(uGlowDir.xz + 1e-5);
++						float side = mix(1.0, 0.6 + 0.4 * dot(normalize(d.xz + 1e-5), gdir), uGlowDir.y);
++						cloud += vec3(1.0, 0.62, 0.38) * uGlow * uNight * side * (0.012 + 0.05 * uCloud * uCloud) * (1.0 - 0.5 * smoothstep(0.0, 0.6, d.y));
++					}
+ 					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh);
+ 					// at a world's dusk the heaps are lit pink from below, violet in their tops
+ 					cloud = mix(cloud, mix(vec3(1.0, 0.4, 0.62), vec3(0.2, 0.13, 0.34), smoothstep(0.2, 1.0, lit)) * uDusk.y, uDusk.x * 0.9);
+@@ -625,6 +664,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 		stars.material.uniforms.uCloudOff = w.uniforms.uCloudOff; stars.material.uniforms.uShowers = w.uniforms.uShowers;
+ 	}
+ 
++	// the Moon: where it is tonight and how much of it is lit (on another world, the old moon
++	// opposite the sun, always full)
++	const MOON = { ra: 0, dec: 0, lit: 1, waxing: true, age: 15 }, moonDir = new THREE.Vector3(), moonLight = new THREE.Vector3();
+ 	let SUN = solarDate(today());
+ 	Object.assign(SUN, solarTimes(latitude(), SUN.dec, SUN.noon));
+ 	state.sun = SUN;
+@@ -663,6 +705,10 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 		// there is no direct sun at all, only the grey light from everywhere)
+ 		const overcast = W ? THREE.MathUtils.smoothstep(W.cover ?? 0, 0.6, 0.95) : 0;
+ 		const sunVis = Math.min(W ? W.sunVis : 1, 1 - overcast * 0.85);
++		orientSky();
++		if (earth) { lunarPosition(d, state.hours, SUN.noon, MOON); celestial(MOON.ra, MOON.dec * 180 / Math.PI, moonDir); }
++		else { moonDir.copy(sd).negate(); MOON.lit = 1; }
++		uniforms.uMoon.value.set(moonDir.x, moonDir.y, moonDir.z, MOON.lit);
+ 		sun.shadow.intensity = vacuum ? 0.96 : 0.78 * (0.12 + 0.88 * sunVis);
+ 		if (night < 0.5) {
+ 			sun.color.copy(sunCol);
+@@ -671,9 +717,15 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 		} else {
+ 			sun.color.copy(PAL.moon);
+ 			// (moonlight: enough to read the shapes of things by, little enough that the lamps
+-			// and lit windows are what the eye goes to)
+-			sun.intensity = 0.36 * night;
+-			sun.position.copy(sd).multiplyScalar(-SUN_D).add(focus);
++			// and lit windows are what the eye goes to; as the moon is, full or a sliver, and from
++			// where it is, its shadows long when it is low; with it down or new, only the faint
++			// light of the night sky from overhead)
++			const up = THREE.MathUtils.smoothstep(moonDir.y, -0.03, 0.1);
++			const k = up * moonlightShare(MOON.lit) * (1 - overcast * 0.8);
++			sun.intensity = 0.36 * night * (0.08 + 0.92 * k);
++			moonLight.set(0.15, 1, 0.25).normalize().lerp(moonDir, up).normalize();
++			sun.position.copy(moonLight).multiplyScalar(SUN_D).add(focus);
++			sun.shadow.intensity *= 0.25 + 0.75 * k;
+ 		}
+ 		sun.target.position.copy(focus);
+ 		// the shadow box follows the player in whole texels so edges do not crawl
+@@ -711,7 +763,6 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 		dome.position.copy(focus);
+ 		sats.position.copy(focus);
+ 		sats.userData.step(dt, elev);
+-		orientSky();
+ 		return { night, dayK, setK };
+ 	}
+ 	// (the clouds in the water on or off, as the quality setting does)
+@@ -722,5 +773,14 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
+ 	const celestial = (ra, de, out = new THREE.Vector3()) => { const a = ra / 12 * Math.PI, d = de * Math.PI / 180; return out.set(Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)).applyMatrix4(eqM).normalize(); };
+ 	const dark = () => solarDirection(SUN.lat, SUN.dec, state.hours, SUN.noon).y < Math.sin(-12 * Math.PI / 180);
+ 	const lines = (on) => { if (on !== undefined) uCon.value = on ? 1 : 0; return uCon.value > 0; };
+-	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines };
++	// which way the cities' glow lies (main.js: the urban land round you, weighted by where it is)
++	const glowToward = (gx, gz, dt) => {
++		const l = Math.hypot(gx, gz), G = uniforms.uGlowDir.value, k = Math.min(1, dt);
++		const tot = Math.max(1e-3, shared.uSkyGlow.value * 4 * 15000);
++		G.x += ((l > 1 ? gx / l : 0) - G.x) * k; G.z += ((l > 1 ? gz / l : 1) - G.z) * k;
++		G.y += (Math.min(1, l / tot) - G.y) * k;
++	};
++	// the Moon now: where (a direction) and its phase
++	const moon = () => ({ dir: moonDir.toArray().map((v) => +v.toFixed(3)), lit: +MOON.lit.toFixed(3), waxing: MOON.waxing, age: +MOON.age.toFixed(1), alt: +(Math.asin(moonDir.y) * 180 / Math.PI).toFixed(1) });
++	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines, glowToward, moon };
+ }
+diff --git a/island/src/world/solar.js b/island/src/world/solar.js
+index 3eb41e4..1f50da8 100644
+--- a/island/src/world/solar.js
++++ b/island/src/world/solar.js
+@@ -44,6 +44,35 @@ export function solarDirection(latitude, dec, hours, noon, out = {}) {
+ 	return out;
+ }
+ 
++// The Moon tonight: where it is among the stars and how much of it is lit, from the date and
++// the clock (the low-precision lunar theory: the main terms of the longitude and latitude, good
++// to about a quarter of a degree, plenty for the sky and the moonlight). date: the calendar day
++// (local), hours: the clock, noon: the day's solar noon on that clock (solarDate). Returns
++// { ra (hours), dec (radians), lit (0 new .. 1 full), waxing, age (days since new, 0..29.5) }.
++export function lunarPosition(date, hours, noon, out = {}) {
++	const n0 = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12) - Date.UTC(2000, 0, 1, 12)) / 864e5;
++	// (solar noon on the Bay is about 20:10 UT: the clock's hours from it, as days from noon UT)
++	const n = n0 + (hours - noon + 8.16) / 24;
++	const Lp = 218.3164477 + 13.17639648 * n, D = (297.8501921 + 12.19074912 * n) * RAD, M = (357.5291092 + 0.98560028 * n) * RAD;
++	const Mp = (134.9633964 + 13.06499295 * n) * RAD, F = (93.272095 + 13.22935024 * n) * RAD;
++	const lam = (Lp + 6.289 * Math.sin(Mp) + 1.274 * Math.sin(2 * D - Mp) + 0.658 * Math.sin(2 * D) + 0.214 * Math.sin(2 * Mp) - 0.186 * Math.sin(M) - 0.114 * Math.sin(2 * F)) * RAD;
++	const bet = (5.128 * Math.sin(F) + 0.281 * Math.sin(Mp + F) + 0.278 * Math.sin(Mp - F) + 0.173 * Math.sin(2 * D - F)) * RAD;
++	const g = (357.528 + 0.9856003 * n) * RAD, sun = (280.46 + 0.9856474 * n + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * RAD;
++	const eps = 23.4393 * RAD, cb = Math.cos(bet);
++	const x = cb * Math.cos(lam), y = cb * Math.sin(lam) * Math.cos(eps) - Math.sin(bet) * Math.sin(eps), z = cb * Math.sin(lam) * Math.sin(eps) + Math.sin(bet) * Math.cos(eps);
++	out.ra = ((Math.atan2(y, x) / Math.PI * 12) + 24) % 24;
++	out.dec = Math.asin(clamp(z, -1, 1));
++	const el = Math.acos(clamp(cb * Math.cos(lam - sun), -1, 1));
++	out.lit = (1 - Math.cos(el)) / 2;
++	const dl = ((lam - sun) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
++	out.waxing = dl < Math.PI;
++	out.age = dl / (2 * Math.PI) * 29.530589;
++	return out;
++}
++// How much light the Moon gives, as a share of the full moon's (the opposition surge makes a
++// half moon about a tenth of the full, not a half)
++export const moonlightShare = (lit) => Math.pow(clamp(lit, 0, 1), 2.4);
++
+ export function advanceSolarClock(hours, dt, speed, sun) {
+ 	const daylight = clamp(sun.set - sun.rise, 0, 24);
+ 	const brightHours = daylight === 0 ? 0 : Math.min(24, daylight + 0.8);
+diff --git a/island/tools/night-lighting-2.test.mjs b/island/tools/night-lighting-2.test.mjs
+new file mode 100644
+index 0000000..e1f27b6
+--- /dev/null
++++ b/island/tools/night-lighting-2.test.mjs
+@@ -0,0 +1,170 @@
++// Night lighting, part two: the Moon where it really is and as lit as it is (src/world/solar.js),
++// the street lamps by era and their pools (src/bay/streetlamps.js), the skyline's obstruction
++// lights and the landmarks' floodlights (src/bay/floodlights.js), the cars' brake lights and
++// low beams (src/bay/carlights.js), the three lists of lamps the shaders read
++// (src/world/nightfield.js), the evening's lights let go with the streets (nightlights.js
++// dispose), and the landmarks' meshes with no NaN normals (src/bay/landmarks.js).
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import { lunarPosition, moonlightShare, solarDate } from '../src/world/solar.js';
++import { LAMP, LAMP_COL, lampLook, poolAt, poolPeak } from '../src/bay/streetlamps.js';
++import { beaconsFor, flashAt, pickFloods } from '../src/bay/floodlights.js';
++import { brakeLevel, beamAt } from '../src/bay/carlights.js';
++
++globalThis.navigator ??= { userAgent: 'node' };
++
++const moonAt = (y, m, d, h) => { const date = new Date(y, m - 1, d), sd = solarDate(date); return lunarPosition(date, h, sd.noon); };
++const sep = (a, b) => {
++	// angle between two (ra hours, dec radians) places, degrees
++	const ra1 = a.ra / 12 * Math.PI, ra2 = b.ra / 12 * Math.PI;
++	return Math.acos(Math.sin(a.dec) * Math.sin(b.dec) + Math.cos(a.dec) * Math.cos(b.dec) * Math.cos(ra1 - ra2)) * 180 / Math.PI;
++};
++
++test('the Moon is where it really is, and as lit as it is', () => {
++	// the total solar eclipse of 8 April 2024 (about 11:20 on the Bay's clock): new, beside the sun
++	const e = moonAt(2024, 4, 8, 11.3), sun = solarDate(new Date(2024, 3, 8));
++	assert.ok(e.lit < 0.01, 'new at the eclipse: ' + e.lit);
++	assert.ok(sep(e, { ra: sun.ra, dec: 7.6 * Math.PI / 180 }) < 2, 'beside the sun');
++	// the total lunar eclipse of 3 March 2026 (about 03:30): full, opposite the sun
++	const f = moonAt(2026, 3, 3, 3.5);
++	assert.ok(f.lit > 0.99, 'full at the lunar eclipse: ' + f.lit);
++	assert.ok(f.age > 14 && f.age < 15.5);
++	// a week after new it is near half, waxing; a week after full, near half, waning
++	const w = moonAt(2026, 10, 17, 21);
++	assert.ok(w.waxing && w.lit > 0.3 && w.lit < 0.7, 'first quarter-ish: ' + w.lit);
++	const n = moonAt(2026, 11, 1, 21);
++	assert.ok(!n.waxing && n.lit > 0.3 && n.lit < 0.85, 'waning: ' + n.lit);
++	// it moves about 13 degrees a day among the stars
++	const a = moonAt(2026, 5, 10, 22), b = moonAt(2026, 5, 11, 22);
++	const d = sep(a, b);
++	assert.ok(d > 11 && d < 15.5, 'a day of the Moon: ' + d);
++	// a half moon gives about a tenth of the full moon's light (not half), a crescent next to none
++	assert.equal(moonlightShare(1), 1);
++	assert.ok(moonlightShare(0.5) > 0.12 && moonlightShare(0.5) < 0.25);
++	assert.ok(moonlightShare(0.1) < 0.01);
++	assert.ok(moonlightShare(0) === 0);
++});
++
++test('the street lamps burn by era: sodium on the old arterials, LED on the new', () => {
++	assert.equal(lampLook('led', 'new').col, 'led');
++	assert.equal(lampLook('cobra', 'prewar', 1, 0.9).col, 'sodium');
++	assert.equal(lampLook('cobra', 'prewar', 1, 0.05).col, 'led', 'a refitted street');
++	assert.ok(['acorn', 'warmLed'].includes(lampLook('acorn', 'historic').col), 'acorns warm');
++	// the share refitted: more on freeways and newer tracts than on old residential streets
++	const share = (era, rank) => Array.from({ length: 1000 }, (_, i) => lampLook('cobra', era, rank, (i + 0.5) / 1000)).filter((q) => q.col === 'led').length / 1000;
++	assert.ok(share('prewar', 1) < share('prewar', 3) && share('prewar', 3) < share('prewar', 6));
++	assert.ok(share('tract', 1) > share('prewar', 1));
++	// sodium is orange, LED cool: red over blue
++	assert.ok(LAMP_COL.sodium[0] / LAMP_COL.sodium[2] > 5);
++	assert.ok(LAMP_COL.led[2] >= LAMP_COL.led[0]);
++	// the pool: brightest under the head, the inverse cube of the slant distance, to nothing far out
++	assert.equal(poolAt(0, 8), 1);
++	assert.ok(Math.abs(poolAt(8, 8) - Math.pow(2, -1.5)) < 1e-9, 'at a head height out, the cosine cubed');
++	assert.ok(poolAt(20, 8) < 0.06);
++	// the acorns are lower and dimmer, their pools tighter; a cobra's is the evening's scale
++	assert.ok(LAMP.acorn.h < LAMP.cobra.h && LAMP.acorn.I < LAMP.cobra.I);
++	assert.ok(poolPeak(LAMP.cobra) > 0.02 && poolPeak(LAMP.cobra) < 0.08);
++});
++
++test('the towers carry red lights by height, every flashing one in step', () => {
++	const B = beaconsFor([
++		{ x: 0, y: 0, z: 0, w: 20, d: 20, h: 60 },             // too low
++		{ x: 100, y: 5, z: 0, w: 20, d: 20, h: 120 },          // steady, one
++		{ x: 200, y: 0, z: 0, w: 40, d: 40, h: 200, a: 0 },    // flashing, two corners
++	]);
++	assert.equal(B.length, 3);
++	assert.deepEqual([B[0].flash, B[0].y], [false, 125.6]);
++	assert.ok(B[1].flash && B[2].flash);
++	assert.ok(Math.hypot(B[1].x - B[2].x, B[1].z - B[2].z) > 40, 'at opposite corners');
++	// thirty flashes a minute, a soft half second each, the same at the same moment everywhere
++	assert.equal(flashAt(0.4), flashAt(2.4));
++	assert.ok(flashAt(0.4) > 0.9 && flashAt(1.4) === 0);
++	const lit = Array.from({ length: 2000 }, (_, i) => flashAt(i / 1000) > 0.5).filter(Boolean).length / 2000;
++	assert.ok(lit > 0.2 && lit < 0.4, 'on about a third of the time: ' + lit);
++});
++
++test('the landmarks take the floodlights that matter most from where you are', () => {
++	// stride 13: x, y, z, reach, rgb, cosO, dir, cosI, weight
++	const F = new Float32Array(13 * 4);
++	const put = (i, x, I) => F.set([x, 0, 0, 100, 1, 1, 1, 0.9, 0, 1, 0, 0.95, Math.sqrt(I)], i * 13);
++	put(0, 100, 100); put(1, 300, 2500); put(2, 50, 4); put(3, 9000, 2500);
++	const out = new Int32Array(3), score = new Float32Array(4);
++	const n = pickFloods(F, 4, 0, 0, 0, 3, out, score, 6000);
++	assert.equal(n, 3, 'the one 9 km off is out of reach');
++	assert.deepEqual([...out], [1, 0, 2], 'the strong tower lights first, the little one last');
++});
++
++test('the cars brake and light the road ahead', () => {
++	// slowing hard, or standing at a corner: the brake lights come on; cruising, off
++	let k = 0;
++	for (let i = 0; i < 30; i++) k = brakeLevel(12, 12.02, 1 / 30, k);
++	assert.ok(k < 0.05, 'cruising: ' + k);
++	for (let i = 0; i < 30; i++) k = brakeLevel(10, 9.85, 1 / 30, k);
++	assert.ok(k > 0.9, 'braking: ' + k);
++	k = 0;
++	for (let i = 0; i < 30; i++) k = brakeLevel(0, 0, 1 / 30, k);
++	assert.ok(k > 0.9, 'waiting: ' + k);
++	// the low beam: nothing behind, little right at the bumper, brightest some metres on, fading by thirty
++	assert.equal(beamAt(-1, 0), 0);
++	assert.ok(beamAt(1, 0) < 0.05);
++	const peak = Math.max(...Array.from({ length: 40 }, (_, i) => beamAt(i, 0)));
++	assert.ok(beamAt(8, 0) > 0.6 * peak);
++	assert.ok(beamAt(30, 0) < 0.3 * peak);
++	// wider further out, narrow close in
++	assert.ok(beamAt(20, 4) / beamAt(20, 0) > beamAt(5, 1.5) / beamAt(5, 0));
++});
++
++test('three lists of lamps, each for its own materials', async () => {
++	const THREE = await import('three');
++	const { addNightField, FIELDS, NF_N, SF_N, LF_N } = await import('../src/world/nightfield.js');
++	assert.equal(FIELDS.NF.P.value.length, NF_N * 4);
++	assert.equal(FIELDS.SF.P.value.length, SF_N * 4);
++	assert.equal(FIELDS.LF.P.value.length, LF_N * 4);
++	const m = addNightField(new THREE.MeshStandardMaterial(), { field: 'LF' });
++	const sh = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
++	m.onBeforeCompile(sh, null);
++	assert.equal(sh.uniforms.uLFP, FIELDS.LF.P);
++	assert.match(sh.fragmentShader, /fieldLF\(vLFW/);
++	assert.doesNotMatch(sh.fragmentShader, /uNFP/, 'one list a material');
++	assert.match(m.customProgramCacheKey(), /LF\d+w0\.00/);
++	// the city's buildings read the street lamps' list
++	assert.match(fs.readFileSync(new URL('../src/bay/city.js', import.meta.url), 'utf8'), /addNightField\(withRise\(buildingMaterial[^;]*field: 'SF'/);
++});
++
++test('the evening lets go of what it drew, with the streets', async () => {
++	const THREE = await import('three');
++	const { createNightLights } = await import('../src/bay/nightlights.js');
++	const scene = new THREE.Scene();
++	const E = createNightLights(scene, { nearList: () => [], treesAt: () => [] }, { isPhone: true });
++	assert.equal(scene.children.length, 2);
++	let disposed = 0;
++	for (const o of scene.children) { o.geometry.addEventListener('dispose', () => disposed++); o.material.addEventListener('dispose', () => disposed++); }
++	E.dispose();
++	assert.equal(scene.children.length, 0);
++	assert.equal(disposed, 4);
++	const src = fs.readFileSync(new URL('../src/bay/streets.js', import.meta.url), 'utf8');
++	assert.match(src, /function dispose\(\) \{[^}]*evening\.dispose\(\)/);
++	assert.match(src, /flood\.dispose\(\)/);
++	assert.match(src, /carLights\.dispose\(\)/);
++});
++
++test('the landmarks have no NaN normals', async () => {
++	const noop = new Proxy(function () {}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 10 }) : k === 'createRadialGradient' || k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : k === 'getImageData' ? () => ({ data: new Uint8ClampedArray(4) }) : noop), set: () => true, apply: () => noop });
++	const doc = globalThis.document;
++	globalThis.document = { createElement: () => ({ width: 0, height: 0, getContext: () => noop, style: {} }) };
++	try {
++		const THREE = await import('three');
++		const { createLandmarks } = await import('../src/bay/landmarks.js');
++		const L = createLandmarks(new THREE.Scene(), { heightAt: () => 0, loaded: () => true });
++		const bad = [];
++		L.group.traverse((m) => {
++			if (!m.isMesh || !m.geometry.attributes.normal) return;
++			const a = m.geometry.attributes.normal.array;
++			let n = 0;
++			for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) n++;
++			if (n) bad.push('#' + m.material.color?.getHexString() + ' ' + n + '/' + a.length);
++		});
++		assert.deepEqual(bad, []);
++	} finally { globalThis.document = doc; }
++});
+diff --git a/island/tools/night-lighting.test.mjs b/island/tools/night-lighting.test.mjs
+index 9c5ecad..aaafebf 100644
+--- a/island/tools/night-lighting.test.mjs
++++ b/island/tools/night-lighting.test.mjs
+@@ -130,7 +130,7 @@ test('the city\'s shader switches the porch light as the plan does', () => {
+ 	assert.match(lights, /life = 2\.5 \+ s\.w \* 9\.0/, 'the solar fade as solarLevel');
+ });
+ 
+-test('a shut place keeps about one light in every 12 m square on; a home keeps them all', async () => {
++test('a shut place keeps about one light in every 12 m square on; a home one lamp after bedtime', async () => {
+ 	globalThis.navigator ??= { userAgent: 'node' };
+ 	const { nightLights } = await import('../src/interiors/lighting.js');
+ 	const grid = () => { const l = []; for (let x = -12; x <= 12; x += 3.6) for (let z = -9; z <= 9; z += 3.6) l.push({ p: [x, 4.6, z], on: true, rm: 1, I: 10, shape: 'tube' }); return l; };
+@@ -140,7 +140,10 @@ test('a shut place keeps about one light in every 12 m square on; a home keeps t
+ 	// spread out, not bunched: none of them within 4 m of another
+ 	const K2 = shut.filter((f) => f.night);
+ 	for (const a of K2) for (const b of K2) if (a !== b) assert.ok(Math.hypot(a.p[0] - b.p[0], a.p[2] - b.p[2]) > 3.5);
+-	assert.ok(nightLights(grid(), { home: true }).every((f) => f.night), 'a home');
++	const home = nightLights([...grid(), { p: [1, 0.9, 1], on: true, rm: 1, I: 4, shape: 'point' }, { p: [2, 1, 1], on: true, rm: 1, screen: true }], { home: true });
++	assert.equal(home.filter((f) => f.night && !f.screen).length, 1, 'a home keeps one lamp');
++	assert.ok(home.find((f) => f.shape === 'point').night, 'the table lamp');
++	assert.ok(home.find((f) => f.screen).night, 'and the television');
+ 	assert.ok(nightLights(grid(), { allNight: true }).every((f) => f.night), 'a hospital');
+ 	const scr = nightLights([{ p: [0, 2, 0], on: true, rm: 2, screen: true }, { p: [0.5, 2, 0], on: true, rm: 2 }, { p: [1, 2.6, 0], on: true, rm: 2 }], {});
+ 	assert.ok(scr[0].night, 'a screen stays on');
+@@ -175,10 +178,10 @@ test('the lamps light the trees and walls by a short list the shader reads', asy
+ 	const sh = { uniforms: {}, defines: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+ 	m.onBeforeCompile(sh, null);
+ 	assert.equal(before, 1, 'its own patch kept, once');
+-	assert.equal(sh.defines.NF_N, NF_N);
+ 	assert.equal(sh.uniforms.uNFP, NF.uNFP, 'the shared list');
+-	assert.match(sh.fragmentShader, /nightField\(vNFW/);
++	assert.match(sh.fragmentShader, /uniform vec4 uNFP\[\d+\]/);
++	assert.match(sh.fragmentShader, /fieldNF\(vNFW/);
+ 	assert.match(sh.vertexShader, /vNFW = \(modelMatrix \* nfW\)\.xyz/);
+-	assert.match(m.customProgramCacheKey(), /nf\d+w0\.50/);
++	assert.match(m.customProgramCacheKey(), /NF\d+w0\.50/);
+ 	assert.equal(NF.uNFP.value.length, NF_N * 4);
+ });
