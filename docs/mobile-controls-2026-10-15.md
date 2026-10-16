@@ -118,8 +118,10 @@ so it follows the device as it turns.
 - The view drifts back to level while you walk on the stick with no hand on the view for 1.5 s
   (never while aiming down the sights, flying or swimming).
 - A double tap does nothing (the page's own zoom is off, `no-page-zoom`).
-- In portrait on a touch screen the held weapon sits a little smaller, nearer the middle and higher,
-  so the right thumb's buttons do not cover it; the crosshair stays clear of every control.
+- The weapon's framing in portrait is the weapon view's own (unchanged): the scope and barrel sit
+  right of and below the crosshair, and the smaller, translucent cluster now covers only the grip
+  and magazine. Moving the weapon up and toward the middle was tried and put the scope on the
+  crosshair, so it was left as it is. The crosshair stays clear of every control.
 
 ## Per control
 
