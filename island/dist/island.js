@@ -5718,8 +5718,10 @@ float gDetailH;
 				// saturated, drying slowly through the wave, and glossy only for the first few
 				// seconds as the water drains out of it
 				float covered = 1.0 - smoothstep(swL - 0.02, swL + 0.08, h);
-				float ran = (1.0 - smoothstep(swS.y - 0.015, swS.y + 0.02, h)) * step(0.0, swS.z);
-				float reached = ran * exp(-swS.z * 0.3);
+				// (its top edge ragged and soft, and the film drains first from the top, so the gloss
+				// thins out toward it: never a bright drawn line along the run's highest reach)
+				float ran = (1.0 - smoothstep(swS.y - 0.03 - 0.025 * n3, swS.y + 0.02, h)) * step(0.0, swS.z);
+				float reached = ran * exp(-swS.z * 0.3) * (1.0 - smoothstep(swS.y - 0.07, swS.y, h) * 0.75);
 				float soak = max(covered, reached * 0.9);
 				float wet = max(max(band * 0.75, covered), ran * exp(-swS.z * 0.06)) * step(-2.0, h);
 				// footprints in soft sand, smoothed away where the sea has been
@@ -8027,7 +8029,7 @@ vec3 field${t}(vec3 p, vec3 n, float wrap) {
 	vec2 wdir(int i){ float a = WIND + SPEC[i].x; return vec2(cos(a), sin(a)); }
 	float wamp(int i){ return SPEC[i].y * 0.0115 * SPEC[i].z; }
 	// wave groups: each train swells and fades in patches a few wavelengths across
-	float group(int i, vec2 p){ float L = SPEC[i].y; return 0.35 + 1.3 * wn1(p / (L * 5.0) + vec2(float(i) * 13.1, float(i) * 7.7) + uTime * 0.02); }
+	float group(int i, vec2 p){ float L = SPEC[i].y; return 0.5 + 1.0 * wn1(p / (L * 5.0) + vec2(float(i) * 13.1, float(i) * 7.7) + uTime * 0.02); }
 	// one Gerstner train: direction d, wavelength L, amplitude A, steepness Q
 	void train(vec2 p, vec2 d, float L, float A, float Q, float speed, inout vec3 disp, inout vec3 dx, inout vec3 dz){
 		float k = 6.28318 / L, c = sqrt(9.8 / k) * speed, f = k * (dot(d, p) - c * uTime);
@@ -8236,8 +8238,8 @@ vec3 field${t}(vec3 p, vec3 n, float wrap) {
 				// the surface's slope: the whole spectrum per pixel, the short wind waves lying down
 				// in the slicks along the wind, gusty patches rougher, so the sea is never one even texture
 				vec2 sw = mat2(0.82, 0.57, -0.57, 0.82) * vW.xz;
-				float slick = smoothstep(0.58, 0.78, vn(vec2(sw.x * 0.006, sw.y * 0.045) + vec2(uTime * 0.004, 0.0)));
-				float gust = 0.75 + 0.5 * vn(vW.xz * 0.004 + uTime * 0.01);
+				float slick = smoothstep(0.6, 0.8, vn(vec2(sw.x * 0.004, sw.y * 0.05) + vec2(uTime * 0.004, 0.0)));
+				float gust = 0.85 + 0.3 * vn(vW.xz * 0.004 + uTime * 0.01);
 				// (the ripples at the water's own place, not where the swell has carried it: the
 				// swell's sideways shift is only known at the mesh's vertices, far apart out there,
 				// and reading the ripples through it bends their phase into rings)
@@ -8382,17 +8384,23 @@ vec3 field${t}(vec3 p, vec3 n, float wrap) {
 				// light through the wave faces: slopes tilted toward the sun glow, those turned away
 				// darken, so you see the waves even looking straight down into the water
 				vec2 sunH = normalize(uSunDir.xz + 1e-4);
+				float dayS = smoothstep(-0.05, 0.1, uSunDir.y);
 				body *= 1.0 + clamp(dot(-gL, sunH) * 2.2, -0.35, 0.45) * (1.0 - rough);
 				// AgX is calm and a little grey; give the sea back its turquoise
 				// (the cold water stays the cold North Pacific's slate and the bay's grey-green)
 				float bl = dot(body, vec3(0.2126, 0.7152, 0.0722));
-				body = max(vec3(0.0), mix(vec3(bl), body, mix(1.35, 0.85, cold)));
+				body = max(vec3(0.0), mix(vec3(bl), body, mix(1.0, mix(1.35, 0.85, cold), graze)));
+				// the sun shining through the thin tops of the waves when you look toward it: a
+				// turquoise glow in the crests (a slate green in the cold sea), strongest with a low sun
+				vec2 vH = normalize(-V.xz + 1e-4);
+				float back = pow(max(0.0, dot(vH, sunH)), 3.0) * smoothstep(0.15, 0.9, vCrest) * smoothstep(1.0, 4.0, d);
+				body += uSunColor * mix(vec3(0.04, 0.4, 0.33), vec3(0.06, 0.13, 0.11), cold) * back * dayS * (1.0 - 0.6 * clamp(uSunDir.y, 0.0, 1.0)) * (1.0 - plume);
 				// (the plume: brown-green silt, the bed lost in it)
 				body = mix(body, vec3(0.16, 0.15, 0.09) * light, plume * 0.7);
 				// reflection of the sky and the sun
 				vec3 R = reflect(-V, N);
 				// (the clouds overhead in it, world/sky.js: clear on a slick, broken up on a rough sea)
-				vec3 sky = mix(skyReflect(R, uSkyZen, uSkyHor, uSunColor), mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)), rough * 0.6) * (0.82 + 0.12 * slick * near);
+				vec3 sky = mix(skyReflect(R, uSkyZen, uSkyHor, uSunColor), mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)), rough * 0.6) * (0.92 + 0.08 * slick * near);
 				float spec = pow(max(dot(R, uSunDir), 0.0), mix(500.0, 60.0, rough)) * mix(14.0, 2.0, rough) * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), mix(60.0, 12.0, rough)) * 0.8;
 				// at night the moon (opposite the sun) lays a glittering path across the water
 				float nightK = smoothstep(0.02, -0.15, uSunDir.y);
@@ -8401,7 +8409,6 @@ vec3 field${t}(vec3 p, vec3 n, float wrap) {
 				// ripples scatter the path into glitter, broken up (never the long-crested trains'
 				// regular bright bands)
 				glade *= (0.35 + 1.3 * smoothstep(0.55, 0.8, r0)) * mix(1.0, 1.7 * smoothstep(0.38, 0.72, vn(vP0 * 1.9 + vec2(uTime * 0.4, -uTime * 0.3))), 1.0 - smoothstep(0.1, 0.6, hp));
-				float dayS = smoothstep(-0.05, 0.1, uSunDir.y);
 				// the lamps along the shore in the water: a point on a calm patch, drawn out into a
 				// streak toward you by the ripples (the few nearest, world/nightfield.js)
 				vec3 lamps = vec3(0.0);
@@ -8413,7 +8420,7 @@ vec3 field${t}(vec3 p, vec3 n, float wrap) {
 				}
 				// the sky's sheen grows in over the first couple of centimetres of water: no bright
 				// rim where the sheet meets the sand
-				float Fe = F * 0.65 * smoothstep(0.0, 0.02, film);
+				float Fe = F * 0.95 * smoothstep(0.0, 0.02, film);
 				vec3 shine = uSunColor * spec * (0.8 + uHigh * 0.6) * dayS + vec3(0.75, 0.82, 1.0) * glade + lamps;
 				shine *= smoothstep(0.0, 0.01, film);
 				// (the water's cover, the sky's sheen and the glints over the ground drawn under it)
@@ -8424,12 +8431,17 @@ vec3 field${t}(vec3 p, vec3 n, float wrap) {
 				// ---- foam ----
 				float fq = froth(vW.xz, hp);
 				// breakers, on gentle open beaches only: the roller's crest pitches over white and
-				// rolls in behind as a bore of white water (the bands softened by how fast they pass
-				// under the pixel, and faded to their average where they would be finer than it)
+				// rolls in behind as a bore of white water, patchy as it spreads (the bands softened by
+				// how fast they pass under the pixel; finer than it, scattered froth, never a milky stripe)
 				float cyc = fract(vRoll / 6.28318 - 0.25);
-				float whiteW = mix(smoothstep(0.5 - rw * 0.1, 0.98, cyc) + (1.0 - smoothstep(0.0, 0.06 + rw * 0.1, cyc)) * 0.8, 0.3, smoothstep(0.6, 2.0, rw));
+				float whiteW = mix(smoothstep(0.8 - rw * 0.1, 0.98, cyc) + (1.0 - smoothstep(0.0, 0.18 + rw * 0.1, cyc)) * 0.8 * smoothstep(0.4, 0.68, fq), mix(0.05, 0.3, smoothstep(0.42, 0.75, fq)), smoothstep(0.6, 2.0, rw));
 				float surfZ = smoothstep(0.25, 0.6, d) * (1.0 - smoothstep(1.2, 2.4, d)) * vBreak;
-				float breaker = whiteW * surfZ * smoothstep(0.32, 0.6, fq + 0.12) * (1.0 - 0.6 * smoothstep(0.4, 2.0, hp));
+				// (each wave breaks in sections along its crest, a different stretch every wave, never
+				// one white line the length of the beach: the wave's count changes mid-cycle, between
+				// one bore and the next crest)
+				float waveN = floor(vRoll / 6.28318 + 0.25);
+				float section = mix(0.25, 1.0, smoothstep(0.3, 0.7, vn(vec2(dot(vW.xz, vec2(-vInward.y, vInward.x)) * 0.07, waveN * 1.73))));
+				float breaker = whiteW * surfZ * section * smoothstep(0.32, 0.6, fq + 0.12) * (1.0 - 0.6 * smoothstep(0.4, 2.0, hp));
 				// the white water spent in the inner surf, broken into patches
 				float inner = smoothstep(0.06, 0.25, d) * (1.0 - smoothstep(0.5, 1.1, d)) * vBreak * smoothstep(0.5, 0.74, fq) * (0.35 + 0.65 * smoothstep(0.2, 1.0, cyc)) * (1.0 - shoreK * 0.5);
 				float cap = smoothstep(0.85, 1.1, vCrest) * smoothstep(0.55, 0.75, fq) * smoothstep(6.0, 20.0, d) * near * 0.35;
