@@ -10,6 +10,8 @@ import * as THREE from 'three';
 import { generateIsland } from './world/islandgen.js';
 import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terrain.js';
 import { updateIslandReach } from './world/surfacevisibility.js';
+import { createGroundProbe } from './world/groundprobe.js';
+import { createFloorGuard } from './world/floorguard.js';
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
@@ -1624,15 +1626,56 @@ export function createIslandWorld() {
 	// one part of the world failing must not stop the rest: the frame goes on, and each
 	// distinct error is reported once
 	const seenErr = new Set();
+	// each distinct failure of the frame, kept on this device (a phone shows no console): the
+	// last eight with where they were thrown, for Crysis.frameErrors() on a later visit
+	function keepFrameError(key, err) {
+		try {
+			const list = JSON.parse(localStorage.getItem('l99-frame-errors') || '[]');
+			list.push({ at: new Date().toISOString(), msg: key.slice(0, 200), where: String(err?.stack || '').split('\n').slice(0, 3).join(' | ').slice(0, 300), world: shared.planet?.type || null });
+			localStorage.setItem('l99-frame-errors', JSON.stringify(list.slice(-8)));
+		} catch { /* private mode */ }
+	}
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
 		try { tick(now); } catch (err) {
 			const key = String(err?.message || err);
-			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); }
+			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
+			// The player has already moved this frame, and the steps after the failing one never
+			// ran: among them the one that keeps the ground under the camera. Left behind, the
+			// ground is drawn by the far rings of a grid centred where the failure began (hundreds
+			// of metres off, and nothing at all past 2.2 km) while you walk on the right height.
+			// So the ground follows here too, whatever else failed.
+			try { if (world && !building && visible) followGround(world, Math.min(0.05, Math.max(0.001, (now - groundT) / 1000)), surfaceOpen(world)); } catch (e2) { const k2 = 'ground: ' + String(e2?.message || e2); if (!seenErr.has(k2)) { seenErr.add(k2); console.error('[frame]', e2); } }
 			try { renderer.render(scene, camera); } catch { /* nothing more to do this frame */ }
 		}
 	}
+	// Whether the surface is shown (not from down in the caves or the Deep), and the camera-centred
+	// ground kept under the camera: the terrain, sea, grass and turf, their reach, and the floor
+	// guard's look (world/floorguard.js). Called from the frame's own place and, should any step
+	// of the frame throw, from frame()'s catch, so a failure elsewhere never leaves the ground behind.
+	let groundT = 0;
+	function surfaceOpen(W) {
+		const caveK = W.underworld?.inside?.() || 0;
+		// Keep the surface visible through mouths and skylights, even from deep shade.
+		const vista = W.underworld?.plan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
+		// (an eye above the land and in no cave sees the surface, whatever the caves' own
+		// reckoning says: that eases out over a moment, and stands still if their step failed)
+		const cam = camera.position, I = W.island;
+		const above = cam.y > I.heightAt(cam.x, cam.z) + 0.5 && I.underFloor?.(cam.x, cam.z, cam.y - 1.68) == null;
+		const open = above || ((caveK < 0.9 || !!vista) && !W.deep?.active());
+		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		return open;
+	}
+	function followGround(W, dt, open) {
+		groundT = performance.now();
+		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
+		seaView(W, camera, dt, open);
+		W.litter.update(camera);
+		updateIslandReach(W, camera, open);
+		floorGuard.check(dt, { open });
+	}
+	const floorGuard = HOOKS.floorGuard = createFloorGuard({ world: () => world, camera, renderer });
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
@@ -1753,11 +1796,7 @@ export function createIslandWorld() {
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
 		const caveK = W.underworld?.inside?.() || 0;
-		// Keep the surface visible through mouths and skylights, even from deep shade.
-		const cavePlan = W.underworld?.plan;
-		const vista = cavePlan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
-		const open = (caveK < 0.9 || !!vista) && !W.deep?.active();
-		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		const open = surfaceOpen(W);
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
 			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
@@ -1779,10 +1818,7 @@ export function createIslandWorld() {
 		const show = (el, on) => { const d = on ? 'block' : 'none'; if (el.style.display !== d) el.style.display = d; };
 		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
 		actions();
-		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
-		seaView(W, camera, dt, open);
-		W.litter.update(camera);
-		updateIslandReach(W, camera, open);
+		followGround(W, dt, open);
 		W.vegetation.stream(camera, false);
 		W.vegetation.react(dt, camera.position);
 		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }
@@ -2240,6 +2276,7 @@ function seaView(W, camera, dt, open) {
 	if (W.ocean.visible !== sea) W.ocean.visible = sea;
 }
 
+const groundProbe = { at: null };
 function hashString(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
 
 // one world per page
@@ -2388,6 +2425,15 @@ if (typeof window !== 'undefined') {
 		// the quality governor (world/governor.js): the tier now and the best allowed, the frame time,
 		// the graphics' memory, the people's bodies alive, whether the last visit ended in a crash
 		governor: () => ({ ...HOOKS.governor?.info(), bodies: bodyCount(), pixelRatio: window.L99Island?.renderer?.()?.getPixelRatio() }),
+		// the ground as drawn under a point (world/groundprobe.js), for the harnesses: Crysis.groundProbe(x, z)
+		// draws the scene from above once and reads the height back; { keep: (o) => bool } limits what is drawn
+		// (tests: put the governor on a tier now; in AUTO it moves on from there by its own rules)
+		governorTier: (t) => { const G = HOOKS.governor; if (!G) return null; G.state.tier = Math.max(0, Math.min(3, Math.round(+t || 0))); G.state.since = G.state.sinceDown = 0; return G.info(); },
+		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
+		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
+		// the frame's own failures kept on this device (main.js keepFrameError), newest last
+		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
+		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
 		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),
