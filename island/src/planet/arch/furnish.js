@@ -784,7 +784,7 @@ function litAt(x, y, z, lights, amb) {
 }
 
 // Build a volume: returns { solid (geometry), glass (geometry | null), inst [{ geo, mats: Float32Array, lit }],
-// solids, cuts, lows } in the volume's frame
+// solids, cuts, lows, lights } in the volume's frame
 export function buildVolume(V, phone) {
 	const B = new Build(V, phone);
 	// keep clear: the lift's landing, the stairs, the doors and portals
@@ -818,5 +818,5 @@ export function buildVolume(V, phone) {
 		});
 		inst.push({ geo, mats, lit, n });
 	}
-	return { solid, glass, inst, solids: B.solids, cuts: B.cuts, lows: B.lows };
+	return { solid, glass, inst, solids: B.solids, cuts: B.cuts, lows: B.lows, lights: B.lights };
 }

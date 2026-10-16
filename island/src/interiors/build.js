@@ -69,7 +69,7 @@ const levelOf = (P, y) => P.levels.reduce((b, L) => (Math.abs(L.y - y) < Math.ab
 // from the street through their windows
 export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	const L = P.levels[k], rnd = (() => { let a = (C.seed + k * 7919) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
-	const g = new Builder(), col = [], { style, wood, paint, lit, OUT } = C;
+	const g = new Builder(), col = [], glass = new Set(), { style, wood, paint, lit, OUT } = C;
 	g.ao = true;
 	const WHITE = lin([0.94, 0.93, 0.9]), TRIM = lin(style === 'victorian' ? [0.93, 0.9, 0.84] : [0.95, 0.95, 0.93]);
 	const FT = { wood, tile: lin([0.88, 0.85, 0.8]), stone: lin([0.82, 0.8, 0.76]), concrete: lin([0.66, 0.65, 0.62]), carpet: lin([0.7, 0.66, 0.6]) };
@@ -154,7 +154,8 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 			if (o.type === 'store') for (let u = o.s0 + 2.6; u < o.s1 - 0.4; u += 2.6) wbox(w, 'trim', u - 0.04, u + 0.04, o.y0, o.y1, m - 0.05, m + 0.05, lin([0.2, 0.2, 0.2]));
 			else if (o.y1 - o.y0 > 1.2) wbox(w, 'trim', o.s0, o.s1, (o.y0 + o.y1) / 2 - 0.02, (o.y0 + o.y1) / 2 + 0.02, m - 0.03, m + 0.03, TRIM);
 			wbox(w, 'glass', o.s0 + fw, o.s1 - fw, o.y0 + fw, o.y1 - fw, m - 0.003, m + 0.003, WHITE);
-			col.push(w.axis === 'x' ? [o.s0, a0, o.s1, a1, o.y0, o.y1] : [a0, o.s0, a1, o.s1, o.y0, o.y1]);
+			const pane = w.axis === 'x' ? [o.s0, a0, o.s1, a1, o.y0, o.y1] : [a0, o.s0, a1, o.s1, o.y0, o.y1];
+			col.push(pane); glass.add(pane);
 			const inSide = w.kind === 'ext' ? -w.out : 1, inn = inSide > 0 ? a1 : a0;
 			if (o.type === 'window') wbox(w, 'trim', o.s0 - 0.05, o.s1 + 0.05, o.y0 - 0.03, o.y0, inn, inn + inSide * 0.05, TRIM);
 			return;
@@ -211,7 +212,9 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 
 	yield;
 	const root = new THREE.Group(), doors = [];
-	if (!full) { for (const m of g.meshes(M, false)) root.add(m); return { root, col, doors, full, walls }; }
+	// (what stops light: the solid boxes but the glass)
+	const occ = () => col.filter((b) => !glass.has(b));
+	if (!full) { for (const m of g.meshes(M, false)) root.add(m); return { root, col, doors, full, walls, occ: occ() }; }
 	// ---- the stairs: treads over a closed stringer, a rail on the open side
 	const railC = lin(style === 'victorian' ? [0.3, 0.18, 0.1] : [0.35, 0.28, 0.2]);
 	for (const f of P.flights) {
@@ -291,5 +294,5 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		root.add(car);
 		col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + 1.4]);
 	}
-	return { root, col, doors, full, walls };
+	return { root, col, doors, full, walls, occ: occ() };
 }
