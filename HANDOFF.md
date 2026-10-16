@@ -5,6 +5,11 @@ Dark nights, lit where real lights are. The far houses' and the towns' walls no 
 ## October 14, 2026: interiors lit by their own fixtures
 
 One shared interior lighting system (`island/src/interiors/lighting.js`, sums in `lightbake.js`) used by every interior builder: the city's planned buildings and every `addSite` plan (services, landmarks, military rooms), houses, walk-in shops, towers, cottages, the realm's houses, alien dwellings, the colony and the cliff settlement. Lamps, ceiling lights, tubes, panels, signs and screens are found in the geometry and become lights; their light is baked per vertex once per building (inverse-square falloff, cosine, shadows from walls and big furniture, one bounce per room, ambient occlusion in corners, seams and under things, the sky's share through the windows scaling the day's skylight), spread over frames and cached by building id. A few real lights stand at the brightest fixtures near you for people and moving things (the nearest casts shadows on desktop); fixtures glow with halos, beams show in dusty rooms, broken ones flicker; shops and offices dim outside their hours. The walls' old flat glow is gone where the bake is. `L99Lighting.info()`. See `docs/interior-lighting-2026-10-14.md`.
+
+## October 15, 2026: close combat feel
+
+Owner feedback on the live game: fists too close together, punches unnatural. Now there is a boxer's guard framed to the screen (shoulder width on desktop; on a phone the fists sit further from the eye so they stay apart and visible). Quick taps throw a timed one-two (jab, cross, about 0.27 s apart however fast you tap). Holding charges a rear-hand power punch that coils and trembles; released, it turns, lunges, holds on contact and leaves you wobbling (more on a miss). The same timing applies to the bat, pipe, bottle, knife and machete, and to the touch Strike button. Poses, timing and camera only: the anatomical hands, joint limits, sleeves and skin are as they were. See the Feel section of `docs/close-combat-2026-10-14.md`.
+
 ## October 15, 2026: skin
 
 The hands no longer read as flat plastic, engine-wide. Skin lighting is now:

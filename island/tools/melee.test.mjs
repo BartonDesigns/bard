@@ -2,7 +2,7 @@
 // turn-taking among those squaring up, the takedown and the deeds a fight counts as.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MOVES, STRING, phaseAt, canBuffer, canFollow, moveTime, nextLight, heavyOf, HEAVY_HOLD, charge, strikeDamage, defend, PARRY_WINDOW, DODGE, sideOf, reaction, hitStop, canTakedown, createTurns, turnsFor, ringAngle, tell, fightDeed } from '../src/combat/melee-rules.js';
+import { MOVES, STRING, BEAT, RHYTHM, CHARGE_FULL, phaseAt, canBuffer, canFollow, moveTime, nextLight, heavyOf, HEAVY_HOLD, charge, createStriker, wobble, strikeDamage, defend, PARRY_WINDOW, DODGE, sideOf, reaction, hitStop, canTakedown, createTurns, turnsFor, ringAngle, tell, fightDeed } from '../src/combat/melee-rules.js';
 import { RULES, score } from '../src/combat/morality.js';
 import { BLOWS, improvised } from '../src/combat/brawl.js';
 
@@ -25,13 +25,78 @@ test('every strike winds up, lands, recovers, in that order and quickly enough',
 	assert.ok(MOVES.heavy.dmg > MOVES.hook.dmg && MOVES.heavy.knock > MOVES.hook.knock);
 });
 
-test('the string runs jab, cross, hook; a pause starts it again; something in hand swings', () => {
-	assert.deepEqual([nextLight(null, 0), nextLight('jab', 0.3), nextLight('cross', 0.3), nextLight('hook', 0.3), nextLight('cross', 2)], ['jab', 'cross', 'hook', 'jab', 'jab']);
-	assert.deepEqual(STRING, ['jab', 'cross', 'hook']);
+test('quick taps alternate jab and cross; a pause starts again from the jab; something in hand swings', () => {
+	assert.deepEqual(STRING, ['jab', 'cross']);
+	assert.deepEqual([nextLight(null, 0), nextLight('jab', 0.3), nextLight('cross', 0.3), nextLight('jab', RHYTHM + 0.1)], ['jab', 'cross', 'jab', 'jab']);
 	assert.equal(nextLight('jab', 0.1, 'pipe'), 'pipe');
 	assert.equal(heavyOf(null), 'heavy');
 	assert.equal(heavyOf('bat'), 'batHeavy');
-	assert.ok(MOVES[heavyOf('pipe')] && MOVES[heavyOf('bottle')]);
+	for (const it of ['bat', 'pipe', 'bottle', 'knife', 'machete']) assert.ok(MOVES[it] && MOVES[heavyOf(it)], it);
+	// the one-two is quick and snaps back
+	assert.ok(moveTime(MOVES.jab) <= 0.3 && moveTime(MOVES.cross) <= 0.35);
+});
+
+// a striker run at 60 frames a second: presses at the times given, held for `hold` seconds
+function drive({ taps = [], holds = [], item = null, until = 2 } = {}) {
+	const S = createStriker({ item: () => item }), starts = [], lands = [];
+	const dt = 1 / 60;
+	let t = 0, was = null;
+	const pressAt = taps.map((x) => [x, 0]).concat(holds), done = new Set();
+	while (t < until) {
+		for (let i = 0; i < pressAt.length; i++) {
+			const [at, hold] = pressAt[i];
+			if (!done.has(i + 'p') && t >= at) { done.add(i + 'p'); S.press(); if (!hold) S.release(); }
+			if (hold && !done.has(i + 'r') && t >= at + hold) { done.add(i + 'r'); S.release(); }
+		}
+		for (const e of S.tick(dt)) lands.push({ t, name: e.name, charge: e.charge });
+		if (S.state.move && (S.state.move !== was || S.state.t < dt * 1.5)) { if (!starts.length || starts[starts.length - 1].t < t - dt * 1.5 || S.state.move !== was) starts.push({ t, name: S.state.move }); }
+		was = S.state.move;
+		t += dt;
+	}
+	return { starts, lands };
+}
+
+test('taps make a timed one-two: mashing gives the same steady beat as tapping in time', () => {
+	// one tap: one jab
+	const one = drive({ taps: [0] });
+	assert.deepEqual(one.lands.map((x) => x.name), ['jab']);
+	// mashed: a tap every 40 ms for a second
+	const mash = drive({ taps: Array.from({ length: 25 }, (_, i) => i * 0.04), until: 1.6 });
+	const names = mash.lands.map((x) => x.name);
+	assert.ok(names.length >= 3 && names.length <= 5, names.join());
+	for (let i = 0; i < names.length; i++) assert.equal(names[i], i % 2 ? 'cross' : 'jab');
+	// never closer together than the beat (less the jab's shorter wind-up), and steady
+	const gaps = mash.lands.slice(1).map((x, i) => x.t - mash.lands[i].t);
+	for (const g of gaps) assert.ok(g >= BEAT - MOVES.cross.wind + MOVES.jab.wind - 0.02, `gap ${g}`);
+	assert.ok(Math.max(...gaps) - Math.min(...gaps) < 0.08, gaps.join());
+	// taps in rhythm, a third of a second apart, land one for one
+	const timed = drive({ taps: [0, 0.33, 0.66], until: 1.5 });
+	assert.deepEqual(timed.lands.map((x) => x.name), ['jab', 'cross', 'jab']);
+	// a pause, then a tap: the string starts again from the jab
+	const pause = drive({ taps: [0, 0.33, 1.4], until: 2 });
+	assert.deepEqual(pause.lands.map((x) => x.name), ['jab', 'cross', 'jab']);
+});
+
+test('a hold charges a heavy that waits drawn back and goes when let go; a short hold is a tap', () => {
+	// held under the threshold: a light strike
+	assert.deepEqual(drive({ holds: [[0, HEAVY_HOLD - 0.08]] }).lands.map((x) => x.name), ['jab']);
+	// held: nothing lands while it is held, then the heavy, charged by the hold
+	const h = drive({ holds: [[0, 0.7]], until: 2 });
+	assert.deepEqual(h.lands.map((x) => x.name), ['heavy']);
+	assert.ok(h.lands[0].t >= 0.7, 'lands only after the release');
+	assert.ok(Math.abs(h.lands[0].charge - charge(0.7)) < 0.05);
+	const full = drive({ holds: [[0, HEAVY_HOLD + CHARGE_FULL + 0.5]], until: 3 });
+	assert.equal(full.lands[0].charge, 1);
+	// a longer hold hits harder; charge maps to damage
+	assert.ok(strikeDamage(MOVES.heavy, { chargeLevel: 1 }) > strikeDamage(MOVES.heavy, { chargeLevel: 0.2 }));
+	// something in hand: a tap is its quick strike, a hold its heavy
+	assert.deepEqual(drive({ taps: [0], item: 'knife' }).lands.map((x) => x.name), ['knife']);
+	assert.deepEqual(drive({ holds: [[0, 0.6]], item: 'machete', until: 2 }).lands.map((x) => x.name), ['macheteHeavy']);
+	// a heavy leaves you wobbling: longer the more it was charged, longer still on a miss
+	const lo = wobble(0), hi = wobble(1), miss = wobble(1, true);
+	assert.ok(hi.t > lo.t && miss.t > hi.t);
+	assert.ok(miss.roll > hi.roll && hi.roll > lo.roll);
+	assert.ok(miss.slow < hi.slow && hi.slow < lo.slow && miss.slow > 0);
 });
 
 test('a hold becomes a heavy, charged by how long it is held; counters hit harder', () => {
