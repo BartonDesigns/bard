@@ -15,6 +15,13 @@ import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance, 
 import { sleeveEase, waistbandEase, armT, isRibbed, isShirted, SLEEVE_POSE_GLSL } from './garment-shape.js';
 import { torsoField, clothPoints, necklineRing, hoodGeometry, collarGeometry, carrierGeometry } from './garment-kit.js';
 import { patchKit } from './propkit.js';
+import { tierNow } from '../world/governor.js';
+
+// (phone audit: a phone, or a low quality tier, keeps the clothes' own surface: the curved split
+// that rounds the shoulders by up to 4 mm is for the folds, which a phone draws none of, and it
+// quadrupled every body's upper garments and much of the garbage made as people stream in)
+const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+export const refineCloth = (phone = PHONE, tier = tierNow()) => !phone && tier < 2;
 
 // ---------- the painting ----------
 // pattern ids (the shader's)
@@ -739,7 +746,7 @@ export function clothGeometry(A, p, o, cut, R) {
  }
  g.setAttribute('cuff',new THREE.BufferAttribute(cuff,1));
  g.setAttribute('sleeve',new THREE.BufferAttribute(sleeve,2));
- const out = finishGarmentEdges(refineGarmentSurface(g), o, cut, R);
+ const out = finishGarmentEdges(refineCloth() ? refineGarmentSurface(g) : g, o, cut, R);
  // (the sleeve's place and slack kept in two bytes a vertex: t from -1 to 2.2, slack to 35 mm)
  const sa = out.attributes.sleeve, packed = new Uint8Array(sa.count * 2);
  for (let i = 0; i < sa.count; i++) { packed[i * 2] = Math.round(Math.max(0, Math.min(1, (sa.getX(i) + 1) / 3.2)) * 255); packed[i * 2 + 1] = Math.round(Math.max(0, Math.min(1, sa.getY(i) / 0.035)) * 255); }

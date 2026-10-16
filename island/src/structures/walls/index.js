@@ -64,7 +64,10 @@ export function createWalls(ctx) {
 	const { scene, isPhone, sounds, debris } = ctx;
 	const W = () => ctx.world();
 	const Q = wallQuality(isPhone);
-	const mesher = createWallMesher({ atlas: sectionAtlas(), lath: lathTexture() });
+	// (the section atlas, a 1024 canvas, and the wire's texture are made the first time a wall is
+	// drawn broken: most visits never break one, and on a phone the canvas is 4 MB held for nothing)
+	let mesher = null;
+	const mesherNow = () => mesher || (mesher = createWallMesher({ atlas: sectionAtlas(), lath: lathTexture() }));
 	const decals = createDecals(scene, { cap: Q.marks });
 	const chips = createChips(scene, { cap: Q.chips, floorAt: (x, z, y) => ctx.floorAt(x, z, y + 0.3) });
 	chips.setLife(Q.life);
@@ -196,7 +199,7 @@ export function createWalls(ctx) {
 		const src = Wl.src;
 		hideSource(Wl);
 		for (const m of Wl.meshes) { src.root.remove(m); m.geometry.dispose(); }
-		const spent = vertsNow - (Wl.verts || 0), B = buildWithin((o) => mesher.build(Wl, src.M, o), wallQuality(isPhone), spent);
+		const spent = vertsNow - (Wl.verts || 0), B = buildWithin((o) => mesherNow().build(Wl, src.M, o), wallQuality(isPhone), spent);
 		Wl.meshes = B.meshes; Wl.verts = B.verts; Wl.lvl = B.lvl; vertsNow = spent + B.verts;
 		for (const m of Wl.meshes) src.root.add(m);
 		collide(Wl);

@@ -17,6 +17,7 @@ import { frontShare } from '../src/economy/storefront.js';
 import { TIERS, setTier, peopleCap } from '../src/world/governor.js';
 import { CAR_ATLAS, carFaces } from '../src/signage/cars.js';
 import { createAtlas } from '../src/signage/atlas.js';
+import { refineCloth } from '../src/people/garment.js';
 
 const TIER_NAMES = TIERS.map((t) => t.name);
 
@@ -177,4 +178,11 @@ test('the cars\' decal sheet: a phone\'s is a third smaller, and every locale\'s
 		assert.equal(i.repacks, 0, locale + ' packed without a repack');
 		assert.equal(i.faces, want.size, locale + ' every face in');
 	}
+});
+
+test('clothes: the curved split of the upper garments on a desktop\'s high and medium tiers only', () => {
+	assert.equal(refineCloth(false, 0), true);
+	assert.equal(refineCloth(false, 1), true);
+	assert.equal(refineCloth(false, 2), false);
+	assert.equal(refineCloth(true, 0), false);
 });
