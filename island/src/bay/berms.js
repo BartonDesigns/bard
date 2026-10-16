@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 
-const N = 256, CELL = 2, SIZE = N * CELL, STEP = 5, MAXG = 0.25, BERM = 7;
+const N = 256, CELL = 2, SIZE = N * CELL, STEP = 5, MAXG = 0.25, BERM = 7, MAXCUT = 60;
 const SKIP = new Set(['path', 'track', 'footway', 'steps', 'pedestrian', 'cycleway']);
 
 // The footpaths near you get their own finer grid (half a metre): the tread is cut level
@@ -82,7 +82,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 	const tex = new THREE.DataTexture(half, N, N, THREE.RGFormat, THREE.HalfFloatType);
 	tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
 	BERM_U.uBerm.value = tex;
-	let cx = 1e9, cz = 1e9, roadVersion = '';
+	let cx = 1e9, cz = 1e9, roadVersion = '', version = 0;
 	const tread = new Float32Array(TN * TN), treadW = new Float32Array(TN * TN), thalf = new Uint16Array(TN * TN);
 	const ttex = new THREE.DataTexture(thalf, TN, TN, THREE.RedFormat, THREE.HalfFloatType);
 	ttex.magFilter = ttex.minFilter = THREE.LinearFilter; ttex.generateMipmaps = false;
@@ -239,13 +239,19 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 				num[k] += w4 * padH(q, qx, qz); den[k] += w4;
 			}
 		}
-		for (let k = 0; k < N * N; k++) if (den[k] > 0) { const ii = k % N, j = (k - ii) / N; delta[k] = num[k] / den[k] - groundAt(x0 + (ii + 0.5) * CELL, z0 + (j + 0.5) * CELL); }
+		for (let k = 0; k < N * N; k++) if (den[k] > 0) {
+			const ii = k % N, j = (k - ii) / N, d = num[k] / den[k] - groundAt(x0 + (ii + 0.5) * CELL, z0 + (j + 0.5) * CELL);
+			// (a ground still loading reads as NaN or the -60 m placeholder: never a cut or a bank
+			// of that, and never a value the half-float texture would carry as infinity)
+			delta[k] = Number.isFinite(d) ? Math.max(-MAXCUT, Math.min(MAXCUT, d)) : 0;
+		}
 		under.fill(0);
 		underBuildings(real.near('boxes', x, z, SIZE * 0.75), x0 + CELL / 2, z0 + CELL / 2, CELL, N, under);
 		for (let k = 0; k < N * N; k++) weight[k] *= 1 - under[k];
 		for (let k = 0; k < N * N; k++) { half[k * 2] = THREE.DataUtils.toHalfFloat(delta[k] * weight[k]); half[k * 2 + 1] = THREE.DataUtils.toHalfFloat(weight[k]); }
 		tex.needsUpdate = true;
 		BERM_U.uBermR.value.set(x0, z0, SIZE, 1);
+		version++;
 	}
 
 	// the footpaths round you: each tread level across at its centre line's height, sunk a
@@ -276,7 +282,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 				}
 			}
 		}
-		for (let k = 0; k < TN * TN; k++) thalf[k] = THREE.DataUtils.toHalfFloat(tread[k]);
+		for (let k = 0; k < TN * TN; k++) thalf[k] = THREE.DataUtils.toHalfFloat(Number.isFinite(tread[k]) ? tread[k] : 0);
 		ttex.needsUpdate = true;
 		BERM_U.uTreadR.value.set(x0, z0, TSIZE, 1);
 	}
@@ -291,6 +297,19 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		return d * edge * edge * (3 - 2 * edge);
 	}
 
+	// how far the roads' grading moved the ground at (x, z), the footpaths' treads left out: what
+	// stands beside a road (the trees, city.js) rides on it, and is stood again when it changes
+	function roadDelta(x, z) {
+		const R = BERM_U.uBermR.value;
+		if (R.w < 0.5) return 0;
+		const u = (x - R.x) / CELL - 0.5, v = (z - R.y) / CELL - 0.5;
+		if (u < 0 || v < 0 || u >= N - 1 || v >= N - 1) return 0;
+		const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
+		const at = (a, b) => delta[b * N + a] * weight[b * N + a];
+		const d = (at(i, j) * (1 - fu) + at(i + 1, j) * fu) * (1 - fv) + (at(i, j + 1) * (1 - fu) + at(i + 1, j + 1) * fu) * fv;
+		const eu = (x - R.x) / R.z, ev = (z - R.y) / R.z, e = Math.min(eu, ev, 1 - eu, 1 - ev), edge = Math.max(0, Math.min(1, e / 0.08));
+		return d * edge * edge * (3 - 2 * edge);
+	}
 	// the ground as graded (the same as the GPU draws it)
 	function apply(x, z, h) {
 		const R = BERM_U.uBermR.value;
@@ -307,6 +326,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 
 	function update(camera) {
 		if (!ready()) {
+			if (BERM_U.uBermR.value.w) version++;
 			BERM_U.uBermR.value.w = BERM_U.uTreadR.value.w = 0;
 			profiles = new WeakMap();
 			cx = cz = tx = tz = 1e9; roadVersion = '';
@@ -319,7 +339,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		const rv = real.version() + ':' + (real.sourceVersion?.() || '');
 		const changed = rv !== roadVersion; roadVersion = rv;
 		const hasRoad = real.inside(x, z) || real.near('roads', x, z, SIZE * 0.75).some((r) => r.drive);
-		if (camera.position.y - groundAt(x, z) > 3000 || !hasRoad) { BERM_U.uBermR.value.w = 0; BERM_U.uTreadR.value.w = 0; cx = tx = 1e9; return; }
+		if (camera.position.y - groundAt(x, z) > 3000 || !hasRoad) { if (BERM_U.uBermR.value.w) version++; BERM_U.uBermR.value.w = 0; BERM_U.uTreadR.value.w = 0; cx = tx = 1e9; return; }
 		if (changed || Math.hypot(x - cx, z - cz) > 100) rebuild(x, z);
 		// (the trails only matter underfoot: off them when flying high)
 		if (camera.position.y - groundAt(x, z) > 120) { BERM_U.uTreadR.value.w = 0; tx = 1e9; }
@@ -339,5 +359,13 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		}
 		return hAt(P, bs);
 	}
-	return { update, apply, profile, along, pads: () => pads };
+	const api = { update, apply, roadDelta, version: () => version, profile, along, pads: () => pads };
+	live = api;
+	return api;
 }
+
+// The grading in use (one world at a time): roadDelta(x, z) for what stands on the ground beside
+// a road, and gradeVersion() to tell when the grid moved and they should be stood again
+let live = null;
+export const roadDelta = (x, z) => live ? live.roadDelta(x, z) : 0;
+export const gradeVersion = () => live ? live.version() : 0;

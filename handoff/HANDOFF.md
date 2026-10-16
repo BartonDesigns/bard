@@ -1,6 +1,6 @@
 # Handoff: unfinished work, 16 October 2026
 
-Everything through PR #48 is on main and live at level99bard.com, and water and shoreline (section 2) has since shipped. The workstreams below were stopped part way (owner's call: they were costing too much). Each one's unfinished work is saved as a patch in this folder. Apart from water, none of it is on main, built or tested.
+Everything through PR #48 is on main and live at level99bard.com, and water and shoreline (section 2) and land seams (section 3) have since shipped. The workstreams below were stopped part way (owner's call: they were costing too much). Each one's unfinished work is saved as a patch in this folder. Apart from those two, none of it is on main, built or tested.
 
 ## Picking one up in a new conversation
 
@@ -62,6 +62,8 @@ Brief:
 Check the island beach at eye level along the waterline first; that's the owner's view.
 
 ## 3. Land seams and nature QA: `wip-landseams.patch`
+
+**Shipped** (branch `claude/land-seams`), with the far hills' facets reduced as well. See `docs/nature-qa-2026-10-16.md`. The notes below are kept for the record.
 
 18 files: a new world/groundsnap.js, plus vegetation.js, grass.js, terrain.js, lodfade.js, sunrays.js, bay/berms.js, bay/terrain.js, bay/city.js, bay/streettrees.js, earth/globeterrain.js, earth/globetrees.js, nature/rocks.js, nature/wildground.js, region/flora.js, tools/nature-qa.test.mjs, docs/nature-qa-2026-10-16.md, HANDOFF.md.
 

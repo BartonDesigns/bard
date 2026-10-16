@@ -8,7 +8,7 @@
 // walking, flying and the boat.
 
 import * as THREE from 'three';
-import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
+import { radialGrid, ringGrid, NOISE_GLSL, SAFE_GLSL } from '../world/terrain.js';
 import { photoUniform } from '../world/photomats.js';
 import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
 import { PLACES } from './places.js';
@@ -240,6 +240,11 @@ export function beyondH(x, z, he, d) {
 // the near ground's grid round you: its spacing grows with distance, about a metre at 10 m
 // and two at 30 m (fine enough to hold a trail's tread), the same 60 m at its 4 km edge
 // (a phone draws fewer: about 3 m apart at 30 m)
+// the far ring: its cells grow in step with the distance from just inside the near ring's
+// hole (3.9 km round the near ring's middle, which is snapped to 32 m and the far ring's to
+// 512) out to 95 km, about 1.3 degrees each on a desktop, 1.6 on a phone (the power-law grid
+// drew the hills a few kilometres off in facets four times the near ring's)
+const FAR_GRID = () => ringGrid(typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 256 : 320, 3500, 95000, 10);
 const NEAR_SEG = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
 
 export function createBayArea(shared, scene, island, BU) {
@@ -458,7 +463,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
-			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
+			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\n' + (hole ? 'attribute float aGsp;\n' : '') + 'varying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + SAFE_GLSL + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return safeH(b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0), -60.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
@@ -473,6 +478,8 @@ export function createBayArea(shared, scene, island, BU) {
 					// (how far past the survey: past the seam the globe's ground draws, earth/globeterrain.js)
 					{ vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (bw - uR0.xy) / uR0.z; vBOut = length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
 					float be = max(3.0, length(position.xz) * 0.006);
+					// (the far ring: the slope over its own spacing; finer, it aliases into facets)
+					${hole ? 'be = max(be, aGsp * 0.5);' : ''}
 					#ifdef GROUND_LITE_V
 					// (light: the slope from the survey's own height, no lie-of-the-land colours)
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
@@ -1109,7 +1116,7 @@ export function createBayArea(shared, scene, island, BU) {
 		return m;
 	}
 	const nearMat = groundMaterial(false), farMat = groundMaterial(true);
-	const near = new THREE.Mesh(radialGrid(NEAR_SEG, NEAR_R, NEAR_POW), nearMat), far = new THREE.Mesh(radialGrid(256, 95000, 2.6), farMat);
+	const near = new THREE.Mesh(radialGrid(NEAR_SEG, NEAR_R, NEAR_POW), nearMat), far = new THREE.Mesh(FAR_GRID(), farMat);
 	for (const m of [near, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
 	near.visible = far.visible = false;
 

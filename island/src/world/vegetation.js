@@ -10,6 +10,7 @@ import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
 import * as TX from './textures.js';
 import { addPulse } from '../pulse.js';
 import { stepResonance } from '../music/performance.js';
+import { baseFromSlope } from './groundsnap.js';
 import { addLodFade, fadeRange } from './lodfade.js';
 
 // ---------- geometry helpers ----------
@@ -624,6 +625,17 @@ float rh(vec2 p){ p = mod(p, 512.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 +
 float rvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rh(i), rh(i + vec2(1, 0)), f.x), mix(rh(i + vec2(0, 1)), rh(i + vec2(1, 1)), f.x), f.y); }
 float rfbm(vec2 p){ return rvn(p) * 0.5 + rvn(p * 2.1 + 3.1) * 0.3 + rvn(p * 4.3 - 1.7) * 0.2; }
 `;
+// where a gust is pressing now (0.3 between the patches, up to 1.4 under one): the grass's own
+// cat's-paw field (grass.js patchA), carried down the wind at the same speed
+export const GUST_GLSL = /* glsl */`
+float gpH(vec2 p){ p = mod(p, 4096.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float gustPatch(vec2 w){
+	vec2 wd = normalize(uWindDir + vec2(1e-5, 0.0));
+	vec2 p = (w - wd * uWindT * 9.0) * 0.018 + 3.1, i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	float n = mix(mix(gpH(i), gpH(i + vec2(1, 0)), f.x), mix(gpH(i + vec2(0, 1)), gpH(i + vec2(1, 1)), f.x), f.y);
+	return 0.3 + 1.1 * smoothstep(0.42, 0.85, n);
+}
+`;
 // a planet's leaf colour, normalised to keep the foliage's brightness
 function leafOf(P, second) {
 	const t = second ? P?.alt?.leaf : P?.leaf?.tint, mix = second ? P?.alt?.leafMix : P?.leaf?.mix;
@@ -648,8 +660,8 @@ export function swayMaterial(params, shared, stiff) {
 			}
 			#endif` : '';
 	const hook = (sh, eye = false) => {
-		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT;
-		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
+		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT; sh.uniforms.uWindDir = shared.uWindDir;
+		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT; uniform vec2 uWindDir;\nvarying float vGroundAO;\n' + GUST_GLSL + sh.vertexShader.replace('#include <begin_vertex>', `
 			#include <begin_vertex>
 			// darker where it meets the ground: roots, the trunk foot, the base of a shrub
 			vGroundAO = mix(0.42, 1.0, smoothstep(-0.1, 1.3, position.y));
@@ -660,13 +672,16 @@ export function swayMaterial(params, shared, stiff) {
 			#endif
 			float ph = ip.x * 0.21 + ip.z * 0.17;
 			float sw = aSway * aSway * ${stiff.toFixed(2)};
+			// a gust is a patch of stronger air rolling down the wind, the same cat's-paws the grass
+			// shows (grass.js): a stand bows tree by tree as it passes, never all at once
+			float gustL = uGust * gustPatch(ip.xz);
 			// sway on the wind's own clock; a gust leans the whole plant downwind and
 			// sets the leaves fluttering; at no wind it barely stirs
-			float push = 0.02 + uWind * 0.2 + uGust * 0.35 + uBass * 0.3;
-			float flutter = 0.006 + uWind * 0.035 + uGust * 0.06;
+			float push = 0.02 + uWind * 0.2 + gustL * 0.35 + uBass * 0.3;
+			float flutter = 0.006 + uWind * 0.035 + gustL * 0.06;
 			float wt = uWindT * 2.2;
-			transformed.x += (sin(wt * 1.25 + ph) * push + uGust * 0.25 + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * flutter) * sw;
-			transformed.z += (cos(wt * 1.05 + ph * 1.3) * push * 0.7 + uGust * 0.1 + cos(uTime * 4.3 + position.x * 1.3) * flutter * 0.8) * sw;${eye ? nearGLSL : ''}`);
+			transformed.x += (sin(wt * 1.25 + ph) * push + gustL * 0.25 + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * flutter) * sw;
+			transformed.z += (cos(wt * 1.05 + ph * 1.3) * push * 0.7 + gustL * 0.1 + cos(uTime * 4.3 + position.x * 1.3) * flutter * 0.8) * sw;${eye ? nearGLSL : ''}`);
 	};
 	// leaves are thin: light both faces from the outward normal, as sunlight through
 	// a leaf does, instead of flipping the back face dark
@@ -696,7 +711,11 @@ export function swayMaterial(params, shared, stiff) {
 		float upF = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
 		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), vSnowK * smoothstep(-0.15, 0.45, upF) * 0.92);
 	}`);
-		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
+		// (a leaf's back face keeps the outward normal for its light, so it faces away from you:
+		// its sheen then read the view as grazing and lit every leaf seen from below a frosted
+		// white, palms most of all. A leaf seen from behind shows light through it, no shine)
+		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);')
+			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n\tif (!gl_FrontFacing) { material.specularColor = vec3(0.0); material.specularColorBlended = vec3(0.0); material.specularF90 = 0.0; }');
 	};
 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '') + (near ? 'n' + near.r + ',' + near.cap : '');
 	let depth = null;
@@ -947,8 +966,13 @@ export function createVegetation(island, shared, scene, flora = null) {
 			const key = Math.floor(px / CELL) + ',' + Math.floor(pz / CELL);
 			let c = cells.get(key);
 			if (!c) cells.set(key, c = { x: Math.floor(px / CELL), z: Math.floor(pz / CELL), items: {} });
+			const rot = rnd() * 6.283, scale = sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : sp.key === 'tiderock' ? 1.2 + rnd() * 2.8 : 0.8 + rnd() * 0.45;
+			// the foot on the lowest ground under it (world/groundsnap.js): on a slope the downhill
+			// side of a trunk or a stone no longer stands proud of the ground
+			const rise = Math.sqrt(Math.max(0, 1 - n.y * n.y)) / Math.max(0.2, n.y);
+			const foot = (sp.key === 'boulder' ? 0.55 : sp.key === 'tiderock' ? 0.6 : sp.tree ? 0.35 : 0.25) * scale;
 			(c.items[sp.key] || (c.items[sp.key] = [])).push({
-				x: px, y: h - (sp.key === 'boulder' ? 0.35 : sp.key === 'tiderock' ? 0.5 : 0.05), z: pz, rot: rnd() * 6.283, scale: sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : sp.key === 'tiderock' ? 1.2 + rnd() * 2.8 : 0.8 + rnd() * 0.45,
+				x: px, y: baseFromSlope(h, rise, foot, sp.key === 'boulder' ? 0.35 : sp.key === 'tiderock' ? 0.5 : 0.05), z: pz, rot, scale,
 				v: Math.floor(rnd() * sp.variants.length), tint: 0.85 + rnd() * 0.3,
 			});
 			// coconut palms lean out over the beach, toward the light and the sea
