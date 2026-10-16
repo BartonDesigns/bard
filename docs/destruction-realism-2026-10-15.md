@@ -110,6 +110,10 @@ W.info()                         // sources, walls, broken, verts, breaches, cel
 - A shot's ray: a box test per building near, a slab test per wall of the ones it enters.
 - The block shader: a loop over at most 12 cut boxes, only when there are any.
 
+## Fixed 16 October: the wall that vanished
+
+In the live game a wall disappeared at the first punch, its inside floating where it stood, and still stopped you. The houses' materials dissolve each vertex by its building's anchor and birth (`world/lodfade.js`, `aLodAnchor`); the replacement wall's meshes lacked the attribute, so their faces were measured from the world's origin and dissolved away (the rig's first house stood at the origin, which hid it). The replacement now carries whatever extra attributes the builder's meshes carry (`matchSource`), is built before the builder's triangles are hidden (they stay if it cannot be), and was checked in the full world (Danville): one punch only dents the wall, it still stops you, the hole opens after three. Also fixed there: combat marks every wall hit `wall: true`, which overwrote the wall record (now `wallHit`), so rounds on a house threw; at a house's corner the other wall's end flickered through the new face (outer faces now 2 mm proud, end caps only beside openings); dotted pinholes where merged face runs met finely traced ones (runs overlap 1.5 mm). `island/tools/destruction-house.test.mjs` builds a house through `houses.js`, punches, shoots and blasts a wall, and checks the replacement's bounds, anchors, face area and collision.
+
 ## 10. Verification
 
 - `node --test island/tools/destruction-walls.test.mjs`: assemblies by building, era and region; layers filling the wall; punches between studs (dent, crack, through in three to eight); a stud (hard, never broken by a fist, broken by a bat); rounds through a partition and a stucco wall and stopped by brick and concrete; concentrated fire; a blast's breach; breach sizes (stand, crawl, a stud bay too narrow, a hole up the wall no doorway, a plate stepped over, four hundred punches never open a framed wall); keeping across cell sizes; the drawing of every kind of wall (no NaN).
