@@ -162,10 +162,15 @@ export function planetUniforms(shared) {
 	};
 }
 
+// the ground's grid: segments, its dense radius and how its spacing grows, the airless worlds'
+// outer rings out to far, and the step its centre moves by (the floor guard rebuilds the drawn
+// surface from these: world/floorguard.js)
+export const TERRAIN_GRID = Object.freeze({ segments: 320, radius: 2200, power: 2.3, extra: 28, far: 32000, snap: 4, curve: 3.47e6 });
+
 export function createTerrain(island, shared) {
 	// (the Moon's ground runs on to the horizon: world/lunarfar.js)
-	const far = !!island.far;
-	const geo = far ? radialGrid(320, 2200, 2.3, 28, 32000) : radialGrid(320, 2200, 2.3);
+	const far = !!island.far, G = TERRAIN_GRID;
+	const geo = far ? radialGrid(G.segments, G.radius, G.power, G.extra, G.far) : radialGrid(G.segments, G.radius, G.power);
 	const mat = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
 	const detail = groundDetail();
 	const uniforms = {
@@ -407,8 +412,45 @@ export function createTerrain(island, shared) {
 	mesh.name = 'terrain';
 	mesh.userData.material175 = 'stone';
 	mesh.userData.update = (cam) => {
-		const snap = 4;
+		const snap = G.snap;
 		uniforms.uCenter.value.set(Math.round(cam.position.x / snap) * snap, Math.round(cam.position.z / snap) * snap);
 	};
+	// what the drawn surface is made from, for the floor guard: the grid's centre now, the
+	// height texture it reads and whether it runs on to the horizon
+	mesh.userData.center = uniforms.uCenter.value;
+	mesh.userData.heightTex = () => uniforms.uHeight.value;
+	mesh.userData.far = far;
+	// the lean stand-in the floor guard swaps in should this program not run (below)
+	mesh.userData.lean = () => leanTerrainMaterial(uniforms, far);
 	return mesh;
+}
+
+// A lean stand-in for the ground, for a device whose graphics cannot build or keep the full
+// program (the floor guard swaps it in when that program will not run, world/floorguard.js):
+// the same grid lifted the same way from the same texture, with the cave mouths cut, coloured
+// only by height and the planet's own sand and grass. Plain, but never a void under a floor
+// you walk on. uniforms: the full ground's own (shared, live objects).
+export function leanTerrainMaterial(uniforms, far = false) {
+	const G = TERRAIN_GRID;
+	const m = new THREE.MeshLambertMaterial({ color: 0xffffff });
+	m.onBeforeCompile = (sh) => {
+		Object.assign(sh.uniforms, { uHeight: uniforms.uHeight, uHalf: uniforms.uHalf, uCell: uniforms.uCell, uN: uniforms.uN, uCenter: uniforms.uCenter, uPlG: uniforms.uPlG, uPlS: uniforms.uPlS, uHoles: uniforms.uHoles });
+		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vLW;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return farBlend(heightAt(w), w); }\n' : '#define groundH heightAt\n') + sh.vertexShader
+			.replace('#include <beginnormal_vertex>', `
+				vec2 wxz = position.xz + uCenter;
+				float e = max(uCell, max(abs(position.x), abs(position.z)) * 0.02);
+				vec3 objectNormal = normalize(vec3(groundH(wxz - vec2(e, 0.0)) - groundH(wxz + vec2(e, 0.0)), 2.0 * e, groundH(wxz - vec2(0.0, e)) - groundH(wxz + vec2(0.0, e))));`)
+			.replace('#include <begin_vertex>', `
+				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
+				${far ? `transformed.y -= dot(position.xz, position.xz) / ${G.curve.toFixed(1)};` : ''}
+				vLW = transformed;`);
+		sh.fragmentShader = 'uniform vec3 uPlG, uPlS; uniform float uHalf; uniform vec4 uHoles[4];\nvarying vec3 vLW;\n' + sh.fragmentShader
+			.replace('#include <color_fragment>', `#include <color_fragment>
+				${far ? '' : 'if (max(abs(vLW.x), abs(vLW.z)) > uHalf) discard;'}
+				for (int i = 0; i < 4; i++) { vec4 H = uHoles[i]; if (H.z > 0.0 && length(vLW.xz - H.xy) < H.z) discard; }
+				vec3 lc = mix(uPlS, uPlG, smoothstep(1.4, 2.6, vLW.y));
+				diffuseColor.rgb = lc * lc;`);
+	};
+	m.customProgramCacheKey = () => 'island-terrain-lean-' + (far ? 'far' : 'bounded');
+	return m;
 }
