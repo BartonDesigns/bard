@@ -490,7 +490,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 	const tuftM = new THREE.MeshStandardMaterial({ map: blade, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.9 });
 	const matG = new THREE.IcosahedronGeometry(1, 1).scale(1, 0.35, 1).translate(0, 0.12, 0);
 	const bushG = (() => {
-		const parts = [new THREE.IcosahedronGeometry(0.55, 1).translate(0, 0.45, 0).toNonIndexed()];
+		const parts = [new THREE.IcosahedronGeometry(0.55, 1).translate(0, 0.45, 0)];
 		const cols = [];
 		for (let i = 0; i < parts[0].attributes.position.count; i++) cols.push(0.2, 0.3, 0.12);
 		for (let k = 0; k < 9; k++) {

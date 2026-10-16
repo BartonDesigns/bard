@@ -9,9 +9,9 @@ const CUBE_FACE = (t) => t >= 34069 && t <= 34074;
 export function meterGL(gl) {
 	const m = { tex: 0, buf: 0, rb: 0 };
 	if (!gl || gl.__meter) return gl?.__meter || { bytes: () => 0, info: () => m };
-	const texBytes = new WeakMap(), bufBytes = new WeakMap(), rbBytes = new WeakMap();
+	let texBytes = new WeakMap(), bufBytes = new WeakMap(), rbBytes = new WeakMap();
 	let unit = 0, rb = null;
-	const bound = {}, bufs = {};
+	let bound = {}, bufs = {};
 	const curTex = (target) => bound[unit + ':' + (CUBE_FACE(target) ? 34067 : target)];
 	const setTex = (tex, key, bytes) => {
 		if (!tex) return;
@@ -49,8 +49,12 @@ export function meterGL(gl) {
 	wrap('renderbufferStorageMultisample', (a) => rbSet(a[3] * a[4] * (BPP[a[2]] || 4) * Math.max(1, a[1])));
 	wrap('deleteRenderbuffer', (a) => { const n = a[0] && rbBytes.get(a[0]); if (n == null) return; m.rb -= n; rbBytes.delete(a[0]); });
 	// the screen's own buffers: colour, depth and the one being shown
-	const screen = () => (gl.drawingBufferWidth || 0) * (gl.drawingBufferHeight || 0) * 12;
-	const meter = { bytes: () => m.tex + m.buf + m.rb + screen(), info: () => ({ tex: m.tex, buf: m.buf, rb: m.rb, screen: screen() }), reset() { m.tex = m.buf = m.rb = 0; } };
+	let samples = gl.getContextAttributes?.()?.antialias ? gl.getParameter(gl.SAMPLES) || 0 : 0;
+	const screen = () => (gl.drawingBufferWidth || 0) * (gl.drawingBufferHeight || 0) * (12 + samples * 8);
+	const meter = { bytes: () => m.tex + m.buf + m.rb + screen(), info: () => ({ tex: m.tex, buf: m.buf, rb: m.rb, screen: screen() }), reset() {
+		m.tex = m.buf = m.rb = 0; texBytes = new WeakMap(); bufBytes = new WeakMap(); rbBytes = new WeakMap(); bound = {}; bufs = {}; unit = 0; rb = null;
+		samples = gl.getContextAttributes?.()?.antialias ? gl.getParameter(gl.SAMPLES) || 0 : 0;
+	} };
 	gl.__meter = meter;
 	return meter;
 }

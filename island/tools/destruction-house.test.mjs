@@ -13,6 +13,22 @@ globalThis.document = globalThis.document || { createElement: () => ({ width: 0,
 
 const { createHouses } = await import('../src/bay/houses.js');
 const { createWalls } = await import('../src/structures/walls/index.js');
+const { houseMaterials, Builder } = await import('../src/bay/housekit.js');
+
+test('room shading uses RGBA builder metadata without unsupported material options', () => {
+	const warnings = [], warn = console.warn; console.warn = (...args) => warnings.push(args.join(' '));
+	try {
+		const mats = houseMaterials(null, 0);
+		const builder = new Builder(); builder.ao = true;
+		builder.box('paint', 0, 0, 0, 2, 2, 2, [.8, .7, .6]);
+		const [mesh] = builder.meshes(mats);
+		assert.equal(mesh.geometry.getAttribute('color').itemSize, 4);
+		assert.equal(mats.paint.userData.vertexAlphas, true);
+		assert.equal(mats.paint.clone().userData.vertexAlphas, true);
+		assert.deepEqual(warnings, []);
+		mesh.geometry.dispose(); Object.values(mats).forEach(m => m.dispose?.());
+	} finally { console.warn = warn; }
+});
 
 function stage() {
 	const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();

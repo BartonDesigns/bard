@@ -962,7 +962,7 @@ function mergeGeos(list) {
 	const pos = [], nrm = [], idx = [];
 	let base = 0;
 	for (const g0 of list) {
-		const g = g0.index ? g0 : g0.toNonIndexed();
+		const g = g0; // both indexed and non-indexed inputs are handled below
 		const p = g.attributes.position, n = g.attributes.normal;
 		for (let i = 0; i < p.count; i++) { pos.push(p.getX(i), p.getY(i), p.getZ(i)); nrm.push(n.getX(i), n.getY(i), n.getZ(i)); }
 		if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(g.index.getX(i) + base);
