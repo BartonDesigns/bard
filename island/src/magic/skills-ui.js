@@ -554,6 +554,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		if (sp.range) row('Reach', `${Math.round(s2.range)} m`, s2.range !== sp.range ? `${Math.round(sp.range)} m` : null);
 		if (sp.r) row('Radius', `${r1(s2.r)} m`, s2.r !== sp.r ? `${r1(sp.r)} m` : null);
 		if (sp.t) row('Lasts', sec(s2.t), s2.t !== sp.t ? sec(sp.t) : null);
+		if (sp.bossCut) row('Bosses lose', `${Math.round(sp.bossCut * 100)}% of their life`);
 		if (sp.jumps) row('Leaps', `${sp.jumps} more foes`);
 		if (sp.speedK) row('Pace', `+${Math.round((sp.speedK - 1) * 100)}%`);
 		const S0 = sp.status, S1 = s2.status;
