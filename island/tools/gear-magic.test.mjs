@@ -271,7 +271,7 @@ test('the runtime and the screens are wired', () => {
 	const idx = src('../src/magic/index.js');
 	for (const k of ['refreshStats(state)', 'combat.setLifeMax', 'M?.gearWeapon', 'blow.melee', "kind === 'hostile' || T?.kind === 'boss'", 'caster.cast(GW.shot.spell, { free: true, quiet: true })', 'arms.trainMany', 'function infuse(']) assert.ok(idx.includes(k), k);
 	const gear = src('../src/ui/gear.js');
-	for (const k of ['function drawChar', "e.code === 'KeyC'", 'arms.wear(', 'arms.takeOff(', 'M.infuse(', "label('Magic')", 'roomFeatures.has(GEAR_FEATURE)']) assert.ok(gear.includes(k), k);
+	for (const k of ['function drawChar', 'else if (!e.repeat) { if (shown() && view === \'char\') close(); else open(\'char\'); }', 'arms.wear(', 'arms.takeOff(', 'M.infuse(', "label('Magic')", 'roomFeatures.has(GEAR_FEATURE)']) assert.ok(gear.includes(k), k);
 	assert.match(src('../src/main.js'), /magic: \(\) => HOOKS\.magic/);
 	assert.match(src('../src/combat/combat.js'), /setLifeMax: \(n\) =>/);
 	assert.match(src('../src/magic/skills-ui.js'), /composeMods\(state, others\)/);

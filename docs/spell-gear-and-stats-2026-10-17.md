@@ -22,7 +22,7 @@ main, so this branch carries them, merged with main as of `ad0743c`.
 - **Seven attributes**: Vigour, Resolve, Precision, Swiftness, Potency, Focus and Haste. Your ranks and level
   feed them, and so do your gear. They, your perks and your gear's magic become one set of numbers that the
   spells and the fight read.
-- **The Character view** (C, or Character in the gear sheet) shows all of it.
+- **The Character view** (Shift+I, or Character in the gear sheet) shows all of it. (C was taken: it is down when flying and the dodge in close combat.)
 
 ## Attributes (`magic/stats.js`)
 
@@ -281,7 +281,7 @@ the next awakening.
 
 **In the running island**: `node island/tools/character-sheet-browser.cjs` (Chromium, software WebGL):
 1. It seeds a save with four garments, a bow, fabric and ranks.
-2. C opens the Character view.
+2. **Enter world** is pressed, then Shift+I opens the Character view.
 3. A worn coat's item view opens.
 4. Ten light fabric are infused into the boots.
 5. Altered spells are cast: three sparks, two shades.

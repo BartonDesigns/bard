@@ -1,5 +1,5 @@
 // The Character view and gear magic in the running island (Chromium, software WebGL): a save with
-// garments worn at several levels and tiers, a bow in hand and some fabric; then C opens the
+// garments worn at several levels and tiers, a bow in hand and some fabric; then Shift+I opens the
 // Character view, a worn garment opens its item view, fabric is infused, altered spells are
 // cast, and nothing throws. Screenshots go to CHAR_OUT (default /tmp/bard-character).
 // Run from the repo root: node island/tools/character-sheet-browser.cjs
@@ -39,6 +39,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 		page.on('console', (m) => { if (/shader failed|Shader Error|program not valid/.test(m.text())) report.errors.push(m.text()); });
 		await page.goto(`${base}/island/dev.html`);
 		await page.waitForFunction(() => !!window.Crysis?.magic && !!window.L99Island?.world?.()?.player, null, { timeout: 900000, polling: 2000 });
+		// (the loading screen waits for you, and holds the keys until then)
+		await page.getByRole('button', { name: 'Enter world', exact: true }).click({ timeout: 900000 });
+		await page.waitForFunction(() => !window.L99Loading?.active?.(), null, { timeout: 300000, polling: 1000 });
 		await page.waitForTimeout(4000);
 		// the numbers, as the game has them
 		report.info = await page.evaluate(() => { const m = Crysis.magic; m.restat(); return { info: m.info(), sheet: m.stats() }; });
@@ -48,8 +51,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 		assert.equal(S.schools.find((q) => q.id === 'umbral').free, 3, 'the Legendary coat\'s mastery');
 		assert.ok(S.magic.length >= 10, 'awakenings across the gear');
 		console.log('PASS stats', JSON.stringify({ life: S.life, mana: S.mana, harm: S.harmTaken, attrs: Object.fromEntries(Object.entries(S.attrs).map(([k, v]) => [k, v.total])) }));
-		// the Character view, by its key
-		await page.keyboard.press('KeyC');
+		// the Character view, by its key (Shift+I)
+		await page.keyboard.press('Shift+KeyI');
 		await page.getByText('Spellcraft, as it stands now').waitFor();
 		await page.waitForTimeout(1500);
 		await page.screenshot({ path: path.join(out, 'laptop-character.png'), timeout: 300000 });
@@ -64,8 +67,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 		await page.getByText('Attuned to Umbral').first().waitFor();
 		await page.waitForTimeout(800);
 		await page.screenshot({ path: path.join(out, 'laptop-item-coat.png'), timeout: 300000 });
-		await page.getByRole('button', { name: 'Back' }).first().click();
-		await page.keyboard.press('KeyC');
+		await sheet.getByRole('button', { name: 'Back', exact: true }).click();
+		await page.keyboard.press('Shift+KeyI');
 		await page.getByText('Spellcraft, as it stands now').waitFor();
 		await sheet.getByRole('button', { name: /Fine Trailstrider Boots/ }).first().click();
 		await page.getByText('Attuned to Dawn').first().waitFor();
@@ -76,8 +79,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 		assert.equal(report.infuse.light, before - 10, 'ten threads woven in');
 		await page.screenshot({ path: path.join(out, 'laptop-item-boots.png'), timeout: 300000 });
 		console.log('PASS item view and infuse');
-		// (C from an item opens the Character view; again closes the sheet)
-		await page.keyboard.press('KeyC'); await page.keyboard.press('KeyC');
+		// (Shift+I from an item opens the Character view; again closes the sheet)
+		await page.keyboard.press('Shift+KeyI'); await page.keyboard.press('Shift+KeyI');
 		// altered spells in the world: three sparks (the radiance circlet), two shades (the coat)
 		report.cast = await page.evaluate(() => {
 			const m = Crysis.magic; m.state.mana = 999; m.state.cds = {};
@@ -91,7 +94,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 		assert.deepEqual(report.errors, []);
 		// a phone's width
 		await page.setViewportSize({ width: 390, height: 844 });
-		await page.keyboard.press('KeyC');
+		await page.keyboard.press('Shift+KeyI');
 		await page.getByText('Spellcraft, as it stands now').waitFor();
 		await page.waitForTimeout(1500);
 		await page.screenshot({ path: path.join(out, 'phone-character.png'), timeout: 300000 });

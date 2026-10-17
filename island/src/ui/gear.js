@@ -11,7 +11,7 @@ import { armamentVariant } from '../gameplay/armament-variants.js';
 //
 // Garments are worn (Wear, Take off: four slots, head to foot) and weapons held; both are
 // attuned to a school of magic that wakes as they level (gameplay/gear-magic.js), and take aether
-// fabric to grow (Infuse). The Character view (C, or from the sheet) is your statistics: the
+// fabric to grow (Infuse). The Character view (Shift+I, or from the sheet) is your statistics: the
 // seven attributes and where each comes from, life, mana and harm taken, every school's power,
 // cost and cooldown as they stand now, and the magic awake in what you wear and hold
 // (magic/stats.js statSheet, through magic().stats()).
@@ -95,17 +95,23 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	stopAll(menuBtn);
 	menu.insertBefore(menuBtn, menu.firstChild);
 	addEventListener('keydown', (e) => {
-		if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !window._KEYS_PLAY_ON && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') && mount.style.display !== 'none' && P()) { e.preventDefault(); toggle(); }
-		// (C: the Character view, or away again)
-		else if (e.code === 'KeyC' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !window._KEYS_PLAY_ON && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') && mount.style.display !== 'none' && P()) { e.preventDefault(); if (shown() && view === 'char') close(); else open('char'); }
+		// (I: the sheet; Shift+I: the Character view, or away again. C is taken: down, and the dodge)
+		if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !window._KEYS_PLAY_ON && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') && mount.style.display !== 'none' && P()) {
+			e.preventDefault();
+			if (!e.shiftKey) toggle();
+			else if (!e.repeat) { if (shown() && view === 'char') close(); else open('char'); }
+		}
 	});
 
 	let view = 'gear', shopId = null, itemUid = null, sig = '', stopSpin = null;
 	function open(v = 'gear', id = null) {
+		// (a different view, or another item, starts at its top)
+		const fresh = v !== view || (v === 'item' && id !== itemUid) || (v === 'shop' && id !== shopId);
 		view = v;
 		if (v === 'shop') shopId = id;
 		if (v === 'item') itemUid = id;
 		sheet.style.display = 'flex'; sig = ''; draw();
+		if (fresh) sheet.scrollTop = 0;
 	}
 	function close() { sheet.style.display = 'none'; stopSpin?.(); stopSpin = null; hideTip(); }
 	function toggle() { if (sheet.style.display === 'none') open(view === 'item' && !arms.state().instances?.[itemUid] ? 'gear' : view); else close(); }
@@ -163,7 +169,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (st) {
 			const cr = el('div'); cr.style.cssText = 'display:flex;align-items:center;gap:10px;';
 			const tx = el('div', '', `Level ${st.level} · ${st.life} life · ${Math.round(st.mana)} mana · ${st.harmTaken}% harm taken`); tx.style.cssText = 'flex:1;min-width:0;font-size:12px;opacity:.85;';
-			cr.append(tx, btn('Character ›', () => open('char'), '', 'Character (C)'));
+			cr.append(tx, btn('Character ›', () => open('char'), '', 'Character (Shift+I)'));
 			sheet.append(cr);
 		}
 		sheet.append(label('Wearing'), wearingRow());
