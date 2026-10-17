@@ -287,15 +287,17 @@ export function createAutoMusic(opts) {
 	// start on its bar lines and the swing is its swing. (Before, only the tempo was shared: the
 	// score's bar could start anywhere in the pattern's, a fraction of a beat apart.)
 	let seqSeen = 0;
-	const hooked = () => performance.now() - seqSeen < Math.max(400, S.stepMs * 3);
+	// (while the faceplate's sequencer runs the score waits for its steps, through a frozen page too)
+	const hooked = () => seqSeen > 0 && (performance.now() - seqSeen < Math.max(400, S.stepMs * 3) || !!window.autoSynth?.state?.()?.sequencerRunning);
 	function perfOf(t) { audioAt(performance.now()); return mapOff === null ? performance.now() : (t - mapOff) * 1000; }
-	function seqStep(stepInBar, barSteps, _step, at) {
+	function seqStep(stepInBar, barSteps, _step, at, late) {
 		if (!S.on || !S.playing || typeof at !== 'number') return;
 		seqSeen = performance.now();
 		if (stepInBar === 0 || !S.bar) { writeBar(perfOf(at) - stepInBar * S.stepMs); S.step = stepInBar; }
 		else S.bar.at = perfOf(at) - stepInBar * S.stepMs;
-		// (an odd meter's bar can be longer than the score's sixteen steps: the rest is held)
-		if (stepInBar >= S.step && stepInBar < 16) { try { playStep(stepInBar); } catch (err) { if (S.log) console.warn('[automusic] step', err); } }
+		// (an odd meter's bar can be longer than the score's sixteen steps: the rest is held; a step
+		// the page reached too late to sound keeps its place and plays nothing)
+		if (!late && stepInBar >= S.step && stepInBar < 16) { try { playStep(stepInBar); } catch (err) { if (S.log) console.warn('[automusic] step', err); } }
 		S.step = Math.max(S.step, stepInBar + 1);
 	}
 	function hookSequencer() {

@@ -39,21 +39,27 @@ const HOOKS = `(() => {
 		await new Promise((r) => setTimeout(r, 4000));
 		out.own = { notes: window.__notes.filter((n) => /^auto:/.test(n.id)).length, state: Crysis.music.state() };
 		// the faceplate's pattern running: the score plays on its steps
-		const steps = [], prev = window._lgStepTick;
-		window._lgStepTick = function () { steps.push(window._seqAt); return prev && prev.apply(this, arguments); };
+		const steps = [], mark = (_s, _b, _c, at) => steps.push(at);
+		(window._seqStepHooks || (window._seqStepHooks = new Set())).add(mark);
 		beatLoopOn = true; startSequencer();
 		await new Promise((r) => setTimeout(r, 1000));
 		window.__notes.length = 0;
-		await new Promise((r) => setTimeout(r, 6000));
+		const c0 = window.L99Beat233 ? L99Beat233.covered() : 0;
+		await new Promise((r) => setTimeout(r, 3000));
+		// the page frozen for 0.9 s: the audio thread carries the drums, the score waits
+		const e = performance.now() + 900; while (performance.now() < e);
+		await new Promise((r) => setTimeout(r, 3000));
+		out.freeze = { beatClock: !!window._seqBeat, coveredDrums: (window.L99Beat233 ? L99Beat233.covered() : 0) - c0 };
 		const auto = window.__notes.filter((n) => /^auto:/.test(n.id)).map((n) => n.at);
 		const off = auto.map((t) => steps.reduce((b, s) => Math.abs(s - t) < Math.abs(b) ? s - t : b, 9));
-		stopSequencer(); beatLoopOn = false; window._lgStepTick = prev;
+		stopSequencer(); beatLoopOn = false; window._seqStepHooks.delete(mark);
 		out.locked = { notes: auto.length, onAStep: off.filter((o) => Math.abs(o) < 0.0005).length, worstMs: Math.max(0, ...off.map((o) => Math.abs(o) * 1000)), lead: L99Clock.lead() };
 		await new Promise((r) => setTimeout(r, 2000));
 		Crysis.music.auto(false, true);
 		return out;
 	});
-	console.log(JSON.stringify({ own: { notes: r.own.notes, playing: r.own.state.playing, bpm: r.own.state.bpm }, locked: r.locked }));
+	console.log(JSON.stringify({ own: { notes: r.own.notes, playing: r.own.state.playing, bpm: r.own.state.bpm }, locked: r.locked, freeze: r.freeze }));
+	if (!r.freeze.beatClock || !r.freeze.coveredDrums) errors.push('the beat clock did not carry the drums through a freeze');
 	if (!r.locked.notes || r.locked.onAStep !== r.locked.notes) errors.push('auto music off the sequencer\'s steps');
 	console.log(errors.length ? 'FAIL ' + errors.join('; ') : 'PASS no errors, every auto music note on a step');
 	await browser.close(); server.close();

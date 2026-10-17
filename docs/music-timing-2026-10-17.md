@@ -51,6 +51,34 @@ world's auto music.
   its own clock, as before. Plays nothing while the faceplate's audio is held.
 - **SPECIAL tools' clock** waits while the audio is held, and reports its lateness.
 
+## The beat clock: the steps' times on the audio thread
+
+Chosen next by Josh: no page freeze should move or drop the beat. `L99Beat233` (index.html,
+`beat-code233`) is a small audio worklet processor that owns the sequencer's step times: the
+page sends it the tempo and swing (as the four step lengths of a beat), the loop length and the
+lead, and it tells the page each step a lead ahead, on the audio thread's own clock. The page's
+tick runs as before on that message (the step stamped with its time) and claims the step. Its
+`setTimeout` chain is gone while the beat clock runs; message wakes are also not throttled in a
+background tab.
+
+If the page reaches a step too late to start its drums (under 25 ms plus twice the output
+buffer before it), it does not claim it, and the processor plays the step's drums itself, on
+its exact time, from the face's kit rendered to samples: `_renderBeatKit233` plays each drum
+twice into an offline context through the same kit code (`_drumKit233`, split out of
+`playDrum`), at the drum's balance, trimmed. The pattern it plays is `_beatPattern233`: the
+same seed beat, built layers and recorded hits the tick plays, sent whenever it changes. Hats
+choke each other there as in the kits. A step too late to sound at all (30 ms past) drops its
+leads, metronome and launch grid instead of firing them late in a burst, and auto music
+(through `_seqStepHooks`, which now pass a `late` flag) keeps its place and plays nothing.
+
+The processor loads with the audio (`initAudio`); a sequencer started before it is ready runs
+on the timer and moves onto the beat clock at its next step. The kit re-renders on a face
+change (about 150 to 300 ms, in the background). Kill: `window._BEAT_CLOCK = false`.
+
+Not covered by the audio thread: lead notes (recorded leads, the arp, auto music) still need
+the page, and are dropped for a step it misses; SPECIAL tools and held drums (`startDrumHold`)
+still run on their own timers.
+
 ## Measured after (headless Chromium, software audio)
 
 | | before | after |
@@ -65,6 +93,8 @@ world's auto music.
 | Step dot lit vs step heard | -115 ms | +4 ms |
 | Beat moved by 190 ms stalls every 1.4 s, in 9 s | 4 | 0 to 1 |
 | Sequencer step error under load, 95th percentile | 1.4 to 1.8 ms | 1.4 to 2.0 ms (unchanged) |
+| Page frozen 0.6 s and 1.2 s, a hi-hat on every sixteenth: steps missing / off the grid | 18 to 20 missing, 11 to 22 off | 0 / 0 (11 played by the audio thread) |
+| Steps left to the audio thread while the page keeps up (start, stop, face change) | | 0 |
 
 Checks: `tools/music-timing-browser.cjs` (the faceplate scenarios above; fails off the beat),
 `tools/music-timing-world-browser.cjs` (the full game with the island open; fails on a page or
@@ -79,4 +109,4 @@ it).
 - The output delay is the browser's estimate; on Bluetooth it can be off by tens of ms. A
   tap-along calibration would measure it.
 - Dancers (`music/performance.js` beat) still free-run at the tempo, not on the heard beat.
-- On a real phone, none of it; a stall longer than 300 ms still moves the beat.
+- On a real phone, none of it. A freeze no longer moves the drums; lead notes in it are dropped.

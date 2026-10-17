@@ -7539,6 +7539,129 @@ function latencyHint(){
 root.L99Clock={lock,now,at,lead,late,lag,heard,perfAt,onAt,offAt,latencyHint,jank:()=>jank};
 })(window);
 </script>
+<script id="beat-code233">
+/* BEAT_233: the beat keeps time on the audio thread. A small processor owns the sequencer's
+   step times (tempo, swing, loop length, sent from the page) and tells the page each step a
+   lead ahead; the page plays the step as before and claims it. A step the page could not get to
+   in time (a frozen frame, a long task, a busy phone) is played here instead, from the kit
+   rendered to samples, exactly on its time: no freeze can move or drop the beat. Leads and the
+   rest follow the page and wait for it. Kill: window._BEAT_CLOCK = false. */
+(function(root){'use strict';
+function processor233(){
+ const HAT={hihat:1,openhat:1};
+ class Beat233 extends AudioWorkletProcessor{
+  constructor(){
+   super();
+   this.run=false;this.q=[];this.v=[];this.kit={};this.pat=[];this.on=false;
+   this.dur=[.125,.125,.125,.125];this.loop=16;this.h=.1;this.hum=0;this.decide=.005;this.gen=0;
+   this.port.onmessage=e=>this.msg(e.data||{});
+  }
+  msg(m){
+   if(m.cmd==='start'){this.set(m);this.run=true;this.gen=m.gen;this.next=m.at;this.k=0;this.idx=(m.idx||0)%this.loop;this.q.length=0;}
+   else if(m.cmd==='stop'){this.run=false;this.q.length=0;}
+   else if(m.cmd==='set')this.set(m);
+   else if(m.cmd==='pattern'){this.pat=m.steps||[];this.on=!!m.on;}
+   else if(m.cmd==='kit')this.kit=m.kit||{};
+   else if(m.cmd==='claim'){
+    for(const s of this.q)if(s.k===m.k)s.claimed=true;
+    // the page's own step index for that step: what follows is counted from it
+    if(typeof m.step==='number'){for(const s of this.q)if(s.k>m.k)s.idx=(m.step+s.k-m.k)%this.loop;this.idx=(m.step+this.k-m.k)%this.loop;}
+   }
+  }
+  set(m){
+   if(Array.isArray(m.dur)&&m.dur.length===4&&m.dur.every(d=>d>.005&&d<2))this.dur=m.dur;
+   if(m.loop>0)this.loop=m.loop|0;
+   if(m.h>0)this.h=Math.min(.5,m.h);
+   if(typeof m.hum==='number')this.hum=m.hum;
+   if(m.decide>0)this.decide=m.decide;
+  }
+  hit(s,f0){
+   const hits=this.pat[s.idx%Math.max(1,this.pat.length)];
+   if(!hits||!hits.length)return;
+   let n=0;
+   for(const name of hits){
+    const vs=this.kit[name];
+    if(!vs||!vs.length)continue;
+    const b=vs[(Math.random()*vs.length)|0],jit=this.hum>0?Math.random()*.01*this.hum:0;
+    const start=Math.max(f0,Math.round((s.at+jit)*sampleRate)),gain=Math.max(.05,1+(Math.random()*2-1)*.1*this.hum);
+    // a hat chokes the hat before it, as the kits do
+    if(HAT[name])for(const v of this.v)if(v.hat&&v.end>start)v.end=Math.min(v.end,start+Math.round(.014*sampleRate)),v.fade=Math.round(.014*sampleRate);
+    this.v.push({b,start,gain,hat:!!HAT[name],end:start+b[0].length,fade:0});
+    n++;
+   }
+   if(this.v.length>48)this.v.splice(0,this.v.length-48);
+   if(n)this.port.postMessage({cmd:'covered',k:s.k,at:s.at,n,gen:this.gen});
+  }
+  process(_in,outputs){
+   const out=outputs[0];if(!out||!out[0])return true;
+   const L=out[0],R=out[1]||null,n=L.length,t0=currentTime,f0=currentFrame;
+   if(this.run){
+    let guard=0;
+    while(this.next<t0+this.h&&guard++<64){
+     const s={k:this.k,idx:this.idx,at:this.next,claimed:false,done:false};
+     this.q.push(s);
+     this.port.postMessage({cmd:'step',k:s.k,idx:s.idx,at:s.at,gen:this.gen});
+     this.k++;this.idx=(this.idx+1)%this.loop;this.next+=this.dur[this.idx%4];
+    }
+   }
+   for(const s of this.q)if(!s.done&&s.at-t0<=this.decide+n/sampleRate){s.done=true;if(!s.claimed&&this.on)this.hit(s,f0);}
+   while(this.q.length&&this.q[0].done&&this.q[0].at<t0-1)this.q.shift();
+   for(let j=this.v.length-1;j>=0;j--){
+    const v=this.v[j],bl=v.b[0],br=v.b[1]||bl;
+    if(f0+n<=v.start)continue;
+    const i0=Math.max(0,v.start-f0),i1=Math.min(n,v.end-f0);
+    for(let i=i0;i<i1;i++){
+     const p=f0+i-v.start;
+     let g=v.gain;
+     if(v.fade&&v.end-(f0+i)<v.fade)g*=(v.end-(f0+i))/v.fade;
+     L[i]+=bl[p]*g;if(R)R[i]+=br[p]*g;
+    }
+    if(f0+n>=v.end)this.v.splice(j,1);
+   }
+   return true;
+  }
+ }
+ registerProcessor('l99-beat233',Beat233);
+}
+let node=null,nodeCtx=null,loading=null,gen=0,onStep=null,onCovered=null,lastSet='',lastPat='',kitKey='',rendering=false,covered=0;
+function ensure(ctx){
+ if(root._BEAT_CLOCK===false||!ctx||!ctx.audioWorklet||typeof AudioWorkletNode==='undefined')return Promise.resolve(null);
+ if(node&&nodeCtx===ctx)return Promise.resolve(node);
+ if(loading)return loading;
+ const url=URL.createObjectURL(new Blob(['('+processor233.toString()+')();'],{type:'text/javascript'}));
+ loading=ctx.audioWorklet.addModule(url).then(()=>{
+  if(ctx.state==='closed')return null;
+  const n=new AudioWorkletNode(ctx,'l99-beat233',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+  n.port.onmessage=e=>{const m=e.data;if(!m||m.gen!==gen)return;if(m.cmd==='step'&&onStep)onStep(m);else if(m.cmd==='covered'){covered+=m.n;onCovered?.(m);}};
+  n.onprocessorerror=()=>{if(node===n){node=null;nodeCtx=null;}};
+  node=n;nodeCtx=ctx;kitKey='';lastSet='';lastPat='';
+  return n;
+ }).catch(()=>null).finally(()=>{URL.revokeObjectURL(url);loading=null;});
+ return loading;
+}
+function ready(ctx){return root._BEAT_CLOCK!==false&&!!node&&nodeCtx===ctx;}
+function connect(bus){if(node&&bus&&node._bus233!==bus){try{if(node._bus233)node.disconnect();}catch(_){}node.connect(bus);node._bus233=bus;}}
+// o: {at, idx, dur, loop, h, hum}; step(m) is called with each step {k, idx, at}
+function start(o,step){if(!node)return false;gen++;onStep=step;lastSet='';node.port.postMessage(Object.assign({cmd:'start',gen},o));return true;}
+function stop(){gen++;onStep=null;if(node)node.port.postMessage({cmd:'stop'});}
+function set(o){const k=JSON.stringify(o);if(!node||k===lastSet)return;lastSet=k;node.port.postMessage(Object.assign({cmd:'set'},o));}
+function pattern(steps,on){const k=(on?'1':'0')+JSON.stringify(steps);if(!node||k===lastPat)return;lastPat=k;node.port.postMessage({cmd:'pattern',steps,on:!!on});}
+function claim(k,step){if(node)node.port.postMessage({cmd:'claim',k,step});}
+// the kit as samples, made once per kit by render() -> {name: [AudioBuffer, ...]}
+function kit(key,render){
+ if(!node||key===kitKey||rendering)return;
+ rendering=true;
+ Promise.resolve().then(render).then(k=>{
+  if(!k||!node)return;
+  const out={},moved=[];
+  for(const name in k)out[name]=k[name].map(b=>{const ch=[];for(let c=0;c<Math.min(2,b.numberOfChannels);c++){const a=b.getChannelData(c).slice();ch.push(a);moved.push(a.buffer);}return ch;});
+  node.port.postMessage({cmd:'kit',kit:out},moved);
+  kitKey=key;
+ }).catch(()=>{}).finally(()=>{rendering=false;});
+}
+root.L99Beat233={ensure,ready,connect,start,stop,set,pattern,claim,kit,covered:()=>covered,onCovered:f=>{onCovered=f;},kitKey:()=>kitKey};
+})(window);
+</script>
 <script id="peak-code177">
 /* PEAK_177: stereo-linked lookahead protection runs on the audio thread. */
 (function(root){'use strict';
@@ -11412,6 +11535,7 @@ function initAudio() {
   if (ctx) return;
   ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint: window.L99Clock ? L99Clock.latencyHint() : "interactive"});
   window.L99Clock?.lock(ctx);   // clock230: steps stamp their sounds with the step's audio time
+  window.L99Beat233?.ensure(ctx);   // music233: the beat clock's processor, ready for the first START
 
   // Create nodes
   masterGain = ctx.createGain();
@@ -14198,6 +14322,77 @@ window._dhHoldState = function () { return Object.keys(_dhActive); };
 // ===== end da082 hold ===========================================================
 
 
+// Dispatch per faceplate. Each handler returns true if it played the sound; if false,
+// we fall through to the generic kit below as a backup. (music233: its own function, so the
+// beat clock can render the same kit to samples)
+function _drumKit233(face, name, velH) {
+  // da081: the pro kits answer first for every face but BARD (chiptune is right as-is)
+  if (face !== 'BARD' && typeof playDrumPro === 'function' && playDrumPro(face, name, velH)) return;
+  if (face === 'SYNTHWAVE' && playDrumSynthwave(name)) return;
+  if (face === 'DNB'       && playDrumDnB(name))       return;
+  if (face === 'SPARKLE'   && playDrumSparkle(name))   return;
+  if (face === 'SOUL'      && playDrumSoul(name))      return;
+  if (face === 'GAS'       && playDrumGas(name))       return;
+  if (face === 'GLITCHPOP' && playDrumGlitchpop(name)) return;
+  if (face === 'HYPHY'     && typeof playDrumHyphy === 'function' && playDrumHyphy(name)) return;   // fix691: slap kit
+  if (face === 'DANCEHALL' && typeof playDrumDancehall === 'function' && playDrumDancehall(name)) return;   // vox90: organic dembow kit
+  if (face === 'KAWAII'    && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix683: lofi feel via mellow kit
+  if (face === 'BREW'      && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix713: jazz kit via warm Soul drums
+  playDrumGeneric(name);
+}
+// music233: the face's kit rendered to samples (two takes of each drum, the kits' own small
+// differences between hits kept), for the beat clock to play a step the page missed. Each drum
+// is played into an offline context: ctx and drumBus point at it for that one call.
+async function _renderBeatKit233(face) {
+  if (typeof OfflineAudioContext === 'undefined' || !ctx) return null;
+  const sr = ctx.sampleRate, out = {};
+  for (const name of DRUM_NAMES) {
+    const takes = [];
+    for (let t = 0; t < 2; t++) {
+      const off = new OfflineAudioContext(2, Math.ceil(sr * 2.2), sr);
+      const bus = off.createGain();
+      bus.gain.value = window.L99Balance223 ? window.L99Balance223.drum(face, name) : 1;
+      bus.connect(off.destination);
+      const liveCtx = ctx, liveBus = drumBus;
+      ctx = off; drumBus = bus;
+      try {
+        if (face === 'MAESTRO' && window.L99Maestro219) window.L99Maestro219.drum(off, bus, name, getFreq(0, 1, false) / 2);
+        else _drumKit233(face, name, 1);
+      } catch (e) { void e; } finally { ctx = liveCtx; drumBus = liveBus; }
+      const buf = await off.startRendering();
+      // trimmed to where it falls silent
+      let end = 0;
+      for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = d.length - 1; i > end; i--) if (Math.abs(d[i]) > 1e-4) { end = i; break; } }
+      if (end < 16) continue;
+      const len = Math.min(buf.length, end + 64), tb = new AudioBuffer({ numberOfChannels: 2, length: len, sampleRate: sr });
+      for (let c = 0; c < 2; c++) tb.copyToChannel(buf.getChannelData(Math.min(c, buf.numberOfChannels - 1)).subarray(0, len), c);
+      takes.push(tb);
+    }
+    if (takes.length) out[name] = takes;
+  }
+  return out;
+}
+// music233: what the beat clock plays for each step of the loop if the page misses it: the same
+// drums the sequencer's tick plays (the seed beat, the built layers, the recorded hits)
+function _beatPattern233() {
+  const sig = TIME_SIGNATURES[timeSigIndex] || TIME_SIGNATURES[0];
+  let own = !!window._specialDrumsActive;
+  if (window._collabRemoteDrumAt && !window._collabIsHost && performance.now() - window._collabRemoteDrumAt < 520) own = true;
+  const seed = beatLoopOn && BEAT_PATTERNS[currentFace] ? BEAT_PATTERNS[currentFace][currentBeat] : null;
+  const injects = DRUM_INJECT_PATTERNS[currentFace] || {};
+  const steps = [];
+  for (let st = 0; st < LOOP_STEPS; st++) {
+    const hits = [], seedStep = (st % sig.barSteps) % 16;
+    if (!own) {
+      if (seed) ['kick', 'snare', 'hihat'].forEach(d => { if (seed[d] && seed[d][seedStep]) hits.push(d); });
+      liveDrumLayers.forEach(d => { if (hits.indexOf(d) < 0 && injects[d] && injects[d][seedStep]) hits.push(d); });
+    }
+    if (!_armedFirstHit || st !== currentStep) Object.keys(recordedDrumSteps).forEach(d => { const pat = recordedDrumSteps[d]; if (hits.indexOf(d) < 0 && pat && pat[st]) hits.push(d); });
+    steps.push(hits);
+  }
+  return steps;
+}
+
 function playDrum(name, velocity) {
   initAudio();
   if(currentFace==='MAESTRO'&&window.L99Maestro219){const bus=ctx.createGain();bus.gain.value=typeof velocity==='number'?Math.max(.05,Math.min(1,velocity)):1;bus.connect(drumBus);window.L99Maestro219.drum(ctx,bus,name,getFreq(0,1,false)/2);setTimeout(()=>bus.disconnect(),4000);return;}
@@ -14226,21 +14421,7 @@ function playDrum(name, velocity) {
       drumBus = _hitGain;          // kits will connect to this for the duration
     }
     try {
-      // Dispatch per faceplate. Each handler returns true if it played the sound; if false,
-      // we fall through to the generic kit below as a backup.
-      // da081: the pro kits answer first for every face but BARD (chiptune is right as-is)
-      if (face !== 'BARD' && typeof playDrumPro === 'function' && playDrumPro(face, name, velH)) return;
-      if (face === 'SYNTHWAVE' && playDrumSynthwave(name)) return;
-      if (face === 'DNB'       && playDrumDnB(name))       return;
-      if (face === 'SPARKLE'   && playDrumSparkle(name))   return;
-      if (face === 'SOUL'      && playDrumSoul(name))      return;
-      if (face === 'GAS'       && playDrumGas(name))       return;
-      if (face === 'GLITCHPOP' && playDrumGlitchpop(name)) return;
-      if (face === 'HYPHY'     && typeof playDrumHyphy === 'function' && playDrumHyphy(name)) return;   // fix691: slap kit
-      if (face === 'DANCEHALL' && typeof playDrumDancehall === 'function' && playDrumDancehall(name)) return;   // vox90: organic dembow kit
-      if (face === 'KAWAII'    && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix683: lofi feel via mellow kit
-      if (face === 'BREW'      && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix713: jazz kit via warm Soul drums
-      playDrumGeneric(name);
+      _drumKit233(face, name, velH);
     } finally {
       if (_realBus) {
         drumBus = _realBus;        // restore the shared bus
@@ -16579,13 +16760,36 @@ function startSequencer() {
     window._adoptingFaceBpm = false;
   }
   const stepTime = () => (60 / bpm) / 4 * 1000; // 16th notes (straight)
+  // music233: the beat clock (window.L99Beat233): the audio thread keeps the steps' times and
+  // wakes each step; a step this page reaches too late to start in time is left to it (its drums
+  // play there, from samples, on time) and only its other sounds are dropped
+  const _beat = window.L99Beat233 || null;
+  let _beatOn = false, _beatStep = null, _beatH = 0.1;
+  const _beatReady = () => !!(_beat && typeof ctx !== 'undefined' && ctx && drumBus && _beat.ready(ctx));
+  const _beatSettings = () => ({
+    dur: [0, 1, 2, 3].map(i => (typeof getSwungStepTime === 'function' ? getSwungStepTime(i) : stepTime()) / 1000),
+    loop: LOOP_STEPS, h: (_beatH = Math.max(0.06, window.L99Clock ? L99Clock.lead() : 0.1)),
+    hum: (typeof _drumHumAmt === 'function') ? _drumHumAmt() : 0, decide: 0.005,
+  });
+  const _beatSync = () => {
+    try {
+      _beat.connect(drumBus);
+      _beat.set(_beatSettings());
+      _beat.pattern(_beatPattern233(), true);
+      const fa = window.L99FaceAudio222, face = currentFace;
+      const key = face + ':' + (fa && fa.enabled && fa.enabled() && fa.ready && fa.ready(face, 'drum:kick') ? 'samples' : 'synth');
+      _beat.kit(key, () => _renderBeatKit233(face));
+    } catch (eB) { void eB; }
+  };
+  const _onBeat = (m) => { if (!sequencerRunning || !_beatOn) return; _beatStep = m; try { tick(); } finally { _beatStep = null; } };
   function tick() {
     if (!sequencerRunning) return;
     // music233: while the audio is held (a phone call, Siri, another app, the tab put away) its
     // clock stands still; steps worked out then would all sound at once when it comes back.
     // The pattern waits where it is and picks up on the beat after.
-    if (typeof ctx !== 'undefined' && ctx && ctx.state !== 'running') { window._seqClock = null; window._seqWakeAt = null; sequencerInterval = setTimeout(tick, 120); return; }
+    if (!_beatStep && typeof ctx !== 'undefined' && ctx && ctx.state !== 'running') { window._seqClock = null; window._seqWakeAt = null; sequencerInterval = setTimeout(tick, 120); return; }
     lastStepStartedAt = Date.now();
+    let _beatLate = false, _tooLate = false;
     // fix456: stamp this step's stable audio-clock time so note ONSETS fire sample-locked
     // (the worklet honors msg.at); live play leaves _seqAt null and stays immediate.
     if (typeof ctx !== 'undefined' && ctx) {
@@ -16595,7 +16799,15 @@ function startSequencer() {
       // music233: how late this wake ran past its time (a lead before the step), so the lead grows to cover it
       if (window.L99Clock && typeof window._seqWakeAt === 'number') L99Clock.late(_rt - window._seqWakeAt);
       window._seqWakeAt = null;
-      if (typeof window._seqClock !== 'number' || window._seqClock < _rt + 0.004 || window._seqClock > _rt + _ld + 0.35) window._seqClock = _rt + Math.min(_ld, 0.03);
+      if (_beatStep) {
+        // music233: the step's time is the beat clock's; nothing re-anchors. Reached in time, the
+        // page plays it and claims it; too late to start its drums, the beat clock plays them.
+        window._seqClock = _beatStep.at;
+        if (window.L99Clock) L99Clock.late(_rt - (_beatStep.at - _beatH));
+        _beatLate = _beatStep.at - _rt < 0.025 + 2 * (ctx.baseLatency || 0.01);
+        _tooLate = _beatStep.at < _rt - 0.03;
+        if (!_beatLate) _beat.claim(_beatStep.k, currentStep);
+      } else if (typeof window._seqClock !== 'number' || window._seqClock < _rt + 0.004 || window._seqClock > _rt + _ld + 0.35) window._seqClock = _rt + Math.min(_ld, 0.03);
       window._seqAt = window._seqClock;
       // music233: the last steps' audio times, for recording and quantizing against what is heard
       window._seqLastAt = window._seqClock;
@@ -16612,16 +16824,17 @@ function startSequencer() {
     const _isBeat = _sig.beatSteps.indexOf(_stepInBar) !== -1;
     // vox334: LAUNCH GRID heartbeat -- fired inside the tick while _seqAt is
     // hot, so every grid event is sample-locked and swing-aware.
-    if (window._lgStepTick) { try { window._lgStepTick(_stepInBar, _sig.barSteps, _isBarStart); } catch (eLG) { void eLG; } }
+    if (window._lgStepTick && !_tooLate) { try { window._lgStepTick(_stepInBar, _sig.barSteps, _isBarStart); } catch (eLG) { void eLG; } }
     // music233: others that play in step with the pattern (the world's auto music) hear each step here, stamped
-    if (window._seqStepHooks) window._seqStepHooks.forEach(h => { try { h(_stepInBar, _sig.barSteps, currentStep, window._seqAt); } catch (eSH) { void eSH; } });
+    // (a step reached too late to sound is still passed on, marked, so they keep their place)
+    if (window._seqStepHooks) window._seqStepHooks.forEach(h => { try { h(_stepInBar, _sig.barSteps, currentStep, window._seqAt, _tooLate); } catch (eSH) { void eSH; } });
     // Metronome tick on beats (downbeat = higher pitch) so the meter is audible.
-    if (metronomeOn && _isBeat && typeof playMetronomeTick === 'function') {
+    if (metronomeOn && _isBeat && !_beatLate && typeof playMetronomeTick === 'function') {
       try { playMetronomeTick(_isBarStart); } catch(e) {}
     }
     // fix461: haptic metronome — beats pulse the device (downbeat accented),
     // independent of the audible click. No-ops where Vibration API is unsupported.
-    if (_isBeat && window.bardHaptic && window.bardHaptic.metronomeOn) {
+    if (_isBeat && !_tooLate && window.bardHaptic && window.bardHaptic.metronomeOn) {
       try { window.bardHaptic.beat(_isBarStart); } catch(e) {}
     }
     // ── PARAM AUTOMATION (multi-lane param-locks) ────────────────────────────
@@ -16666,6 +16879,8 @@ function startSequencer() {
     if (_dotIn > 8) setTimeout(_dots, Math.min(600, _dotIn)); else _dots();
     // Track which drums got triggered this step so we don't double-hit
     const fired = new Set();
+    // music233: a step reached too late leaves its drums to the beat clock
+    const _seqDrum = (n) => { if (!_beatLate) playDrum(n); };
     const injects = DRUM_INJECT_PATTERNS[currentFace];
     // Seed beat patterns are 16 steps. Rather than tile them continuously
     // (which drifts off the downbeat in odd meters like 7/8 or 5/4), we index
@@ -16691,9 +16906,9 @@ function startSequencer() {
     // Seed beat plays only when BEAT LOOP is on (the named preset rhythm)
     if (beatLoopOn && !_specialOwnsDrums) {
       const seed = BEAT_PATTERNS[currentFace][currentBeat];
-      if (seed.kick[seedStep])  { playDrum('kick');  fired.add('kick');  }
-      if (seed.snare[seedStep]) { playDrum('snare'); fired.add('snare'); }
-      if (seed.hihat[seedStep]) { playDrum('hihat'); fired.add('hihat'); }
+      if (seed.kick[seedStep])  { _seqDrum('kick');  fired.add('kick');  }
+      if (seed.snare[seedStep]) { _seqDrum('snare'); fired.add('snare'); }
+      if (seed.hihat[seedStep]) { _seqDrum('hihat'); fired.add('hihat'); }
     }
 
     // Live-built layers (from BUILD mode or hold-BEAT-LOOP gesture) play whenever they exist,
@@ -16705,7 +16920,7 @@ function startSequencer() {
       // Inject patterns are also 16-step — tile via seedStep so they repeat throughout a
       // longer loop. User can still record over the top for variation.
       if (pat && pat[seedStep]) {
-        playDrum(drumName);
+        _seqDrum(drumName);
         fired.add(drumName);
       }
     });
@@ -16725,7 +16940,7 @@ function startSequencer() {
             delete _sk[_sKey];
             if (_skipNow) { fired.add(drumName); return; }
           }
-          playDrum(drumName);
+          _seqDrum(drumName);
           fired.add(drumName);
         }
       });
@@ -16740,6 +16955,7 @@ function startSequencer() {
           if (_skipNow) return;                    // played live this pass already, don't double it
         }
 
+        if (_tooLate) return;   // music233: too late to sound on its step: dropped, never a burst
         const seqVoiceId = 'seq:lead:' + evtIdx + ':' + currentStep;
         // da100: the ON is sample-scheduled in the worklet (_seqAt, ~60ms ahead of
         // now). The OFF used to go out immediately from a timer, so any note under
@@ -16800,9 +17016,21 @@ function startSequencer() {
       _wait = Math.max(0, Math.min(nextDelay * 2, (window._seqClock - L99Clock.lead() - L99Clock.now(ctx)) * 1000));
       window._seqWakeAt = L99Clock.now(ctx) + _wait / 1000;
     }
+    // music233: on the beat clock, the audio thread wakes the next step
+    if (_beatOn) { _beatSync(); return; }
+    if (_beatReady() && window._BEAT_CLOCK !== false) {
+      _beatOn = true; window._seqBeat = true; _beatSync();
+      _beat.start(Object.assign({ at: window._seqClock, idx: currentStep }, _beatSettings()), _onBeat);
+      return;
+    }
     sequencerInterval = setTimeout(tick, _wait);
   }
-  tick();
+  window._seqBeat = false;
+  if (_beat && typeof ctx !== 'undefined' && ctx) _beat.ensure(ctx);
+  if (_beatReady() && window._BEAT_CLOCK !== false) {
+    _beatOn = true; window._seqBeat = true; _beatSync();
+    _beat.start(Object.assign({ at: window._seqClock, idx: 0 }, _beatSettings()), _onBeat);
+  } else tick();
   document.getElementById('btn-start').classList.add('active');
   // fix703: dynamic START -> STOP with red glow while playing.
   try {
@@ -16816,6 +17044,7 @@ function startSequencer() {
 function stopSequencer() {
   sequencerRunning = false;
   clearTimeout(sequencerInterval);
+  try { if (window.L99Beat233) window.L99Beat233.stop(); window._seqBeat = false; } catch (eB) { void eB; }
   // da100: STOP means silence. Release every sequencer-owned voice, including
   // onsets still waiting in the worklet queue, so nothing rings on after STOP.
   try {
@@ -23099,6 +23328,10 @@ function stopArp() {
   if (typeof activeVoices !== 'undefined') {
     Object.keys(activeVoices).forEach(id => { if (id.startsWith('arp:')) try { stopLead(id); } catch(e){} });
   }
+  // music233: notes the arp already sent ahead for after the key came up never begin
+  [window._workletNode, window._workletNode2, window._workletNode3].forEach(n => {
+    if (n) { try { n.port.postMessage({ cmd: 'offPrefix', prefix: 'arp:', relSec: 0.06 }); } catch (eA) { void eA; } }
+  });
 }
 function cycleArpMode() {
   const curIdx = ARP_MODES.indexOf(midiArpMode);
@@ -29449,7 +29682,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=956bddeb8e'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=49cd9876c0'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29457,7 +29690,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=956bddeb8e'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=49cd9876c0'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }

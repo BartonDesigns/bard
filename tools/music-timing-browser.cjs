@@ -75,9 +75,10 @@ const stats = (a) => { if (!a.length) return { n: 0 }; const s = a.map(Math.abs)
 			window.__notes.length = 0; midiArpMode = 'up'; window.__busy(true);
 			arpNoteOn(0, 'hold:a', 1, false); arpNoteOn(2, 'hold:b', 1, false);
 			await new Promise((r) => setTimeout(r, 4000));
-			window.__busy(false); arpNoteOff('hold:a'); arpNoteOff('hold:b'); midiArpMode = 'off';
+			window.__busy(false); const upAt = window.__real(ctx); arpNoteOff('hold:a'); arpNoteOff('hold:b'); midiArpMode = 'off';
 			const offs = (window.__offs || []).filter((o) => /^arp:/.test(o.id));
-			const notes = window.__notes.filter((n) => /^arp:/.test(n.id));
+			// (notes sent ahead for after the keys came up are called off: not counted)
+			const notes = window.__notes.filter((n) => /^arp:/.test(n.id) && n.at < upAt);
 			// a release scheduled before (or at) its own onset
 			const early = notes.filter((n) => { const o = offs.find((x) => x.id === n.id); return o && o.at <= n.at + 0.001; }).length;
 			return { at: notes.map((n) => n.at), early };
@@ -146,6 +147,61 @@ const stats = (a) => { if (!a.length) return { n: 0 }; const s = a.map(Math.abs)
 		}, [STEPS, UNSTEPS]);
 		return r;
 	}, (r) => r.shifts <= 1);
+
+	// the page frozen 0.6 s and 1.2 s while a hi-hat plays every sixteenth: every step heard, on time
+	for (const mode of ['beat', 'timer']) await run('freeze-' + mode, async () => {
+		const r = await page.evaluate(async (mode) => {
+			window._BEAT_CLOCK = mode === 'beat' ? undefined : false;
+			beatLoopOn = false; recordedDrumSteps = { hihat: new Array(LOOP_STEPS).fill(1) };
+			const covered = [];
+			window.L99Beat233?.onCovered((m) => covered.push(m.at));
+			window.__starts.length = 0;
+			await new Promise((r) => setTimeout(r, 300));
+			const from = window.__real(ctx);
+			startSequencer();
+			await new Promise((r) => setTimeout(r, 1500));
+			const beat = !!window._seqBeat;
+			const block = (ms) => { const e = performance.now() + ms; while (performance.now() < e); };
+			block(600);
+			await new Promise((r) => setTimeout(r, 1000));
+			block(1200);
+			await new Promise((r) => setTimeout(r, 1000));
+			stopSequencer(); recordedDrumSteps = {}; window._BEAT_CLOCK = undefined; window.L99Beat233?.onCovered(null);
+			await new Promise((r) => setTimeout(r, 300));
+			return { beat, main: window.__starts.filter((x) => (x.kind === 'AudioBufferSourceNode' || x.kind === 'OscillatorNode') && x.when >= from).map((x) => x.when), covered };
+		}, mode);
+		const all = [...cluster(r.main), ...r.covered].sort((a, b) => a - b);
+		if (process.env.DUMP) console.log(JSON.stringify({ main: cluster(r.main).map((t) => +t.toFixed(3)), covered: r.covered.map((t) => +t.toFixed(3)) }));
+		const t0 = all[0], end = all[all.length - 1], slots = Math.round((end - t0) / 0.125) + 1;
+		let missing = 0, doubled = 0; const off = [];
+		for (let i = 0; i < slots; i++) {
+			const at = t0 + i * 0.125, near = all.filter((t) => Math.abs(t - at) < 0.03);
+			// (the kit's own humanizing moves a hit up to 10 ms: a cluster, not two hits)
+			if (!near.length) missing++; else { if (near.length > 1) doubled++; off.push(near[0] - at); }
+		}
+		const shifted = all.filter((t) => { const k = Math.round((t - t0) / 0.125); return Math.abs(t - t0 - k * 0.125) > 0.012; }).length;
+		return { beatClock: r.beat, steps: slots, missing, doubled, offGrid: shifted, coveredByAudioThread: r.covered.length };
+	}, mode === 'beat' ? (r) => r.beatClock && r.missing === 0 && r.doubled === 0 && r.offGrid === 0 : () => true);
+
+	// starting, stopping, a new face and a new loop length while playing: the page keeps every
+	// step itself (nothing left to the audio thread while it is not held up), on the grid
+	await run('switches', async () => {
+		const r = await page.evaluate(async () => {
+			const covered0 = window.L99Beat233 ? L99Beat233.covered() : 0;
+			beatLoopOn = true;
+			for (let i = 0; i < 3; i++) { startSequencer(); await new Promise((r) => setTimeout(r, 400)); stopSequencer(); await new Promise((r) => setTimeout(r, 100)); }
+			startSequencer();
+			await new Promise((r) => setTimeout(r, 600));
+			document.querySelector('.tab-btn[data-face="HYPHY"]')?.click();
+			await new Promise((r) => setTimeout(r, 1200));
+			const face = currentFace, kit = window.L99Beat233?.kitKey();
+			document.querySelector('.tab-btn[data-face="BARD"]')?.click();
+			await new Promise((r) => setTimeout(r, 800));
+			stopSequencer(); beatLoopOn = false;
+			return { beat: !!window.L99Beat233?.ready(ctx), face, kit, coveredWhileCalm: (window.L99Beat233 ? L99Beat233.covered() : 0) - covered0 };
+		});
+		return r;
+	}, (r) => r.beat && r.coveredWhileCalm === 0 && /^HYPHY:/.test(r.kit || ''));
 
 	await run('dots', async () => {
 		const r = await page.evaluate(async ([S, U]) => {
