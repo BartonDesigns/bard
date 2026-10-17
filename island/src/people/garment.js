@@ -639,7 +639,7 @@ export function regions(o, cut) {
 	const legEnd = B ? ({ long: B.tuck ? cut.ankle + (F?.built ? (F.tall ? 0.12 : 0.045) : 0.14) : cut.ankle + (B.fit === 'wide' || B.fit === 'baggy' ? 0.005 : 0.02), capri: cut.knee - 0.17, bermuda: cut.knee - 0.03, jorts: cut.knee - 0.04, board: cut.knee + 0.01, shorts: cut.knee + 0.1, short: cut.knee + 0.2, bike: cut.knee + 0.07, knicker: cut.knee - 0.1, skirt: B.len === 'mini' ? cut.knee + 0.18 : 1e9, brief: cut.hip - 0.06 })[B.legs || 'long'] ?? cut.ankle : 0;
 	const rise = B && (B.fit === 'wide' || B.kind === 'skirt' || B.fit === 'baggy') ? 0.05 : 0.02;
 	const R = {
-		topHem, outHem, legEnd,
+		topHem, outHem, legEnd, rise,
 		top: (c, tri, k, m = 0) => inTorsoGarment(T, topHem, c, k, m),
 		outer: (c, tri, k, m = 0) => inTorsoGarment(J, outHem, c, k, m),
 		bottom: (c, tri, k, m = 0) => {

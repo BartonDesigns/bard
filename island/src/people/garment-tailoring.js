@@ -144,6 +144,8 @@ export function finishGarmentEdges(g, o, cut, R) {
     cuts.push(edge(v=>cut.neck-.005+.035*smooth(Math.abs(v[0])/.09)-v[1],.0016));
    } else if (limb===1) cuts.push(edge(v=>sleeveDistance(v,item.sleeves,cut),item.sleeves==='rolled'?.009:ribbed?.003:isShirted(item)?.0026:.0018));
   } else if (s===2 && limb===2 && R.legEnd<5) cuts.push(edge(v=>v[1]-R.legEnd-.012));
+  // (the waistband's top cut clean, not left to whole triangles, with its edge turned)
+  else if (s===2 && limb===0 && item && Number.isFinite(R.rise)) cuts.push(edge(v=>cut.waist+R.rise-.004-v[1],.0022));
   for (const f of cuts) { poly=clip(poly,f); if (poly.length<3) break; }
   if (poly.length<3) continue;
   for (let j=1;j<poly.length-1;j++) face(poly[0],poly[j],poly[j+1]);
