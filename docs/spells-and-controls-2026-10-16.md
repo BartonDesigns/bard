@@ -212,9 +212,42 @@ of the screen.
     if there is no room).
   - A bat that splinters or a bottle that shatters leaves its key.
 
+## Part 3 (October 17): beams as blasts (`magic/beam.js`)
+
+A held beam (Lance of Dawn, Soul Siphon) now works like a charged blast:
+
+- **It gathers first.** For 0.32 s (`CHARGE`), light spirals into your hands and a ball of it
+  swells there, with a rising whine. Both hands come up together, heels touching. In third
+  person the body takes a new `beam` stance (`people/motion.js`), held for as long as it pours,
+  and eases out when you let go (`M.ungesture`).
+- **Then it lets go with a punch.** A ring of light bursts out across the beam at the hands, the
+  column's head races to the end in 0.12 s, the column swells wide for a moment, and the camera
+  kicks.
+- **The column.** A white-hot core inside a sheath of the school's colour, on one open cylinder,
+  drawn additive. Pressure swells and pinches run down it, it streaks and flickers, and it widens
+  with distance so it stays big far off. Near your own eyes it thins so it doesn't blind you.
+  Shock rings are thrown off at the hands, motes stream along it, the end sprays sparks back the
+  way it came, dust rings spread where it strikes, and the camera rumbles while it pours.
+- **It drives fighters back.** Every 0.25 s a fighter in the beam is shoved along it (less for a
+  drain).
+- **Sound.** The whine rises to the release, then a roar (band-passed noise and a low hum) plays
+  while it pours and dies away when you let go (`beamVoice` in `magic/fx.js`).
+- **A tap still fires.** Once it has let go, it pours for at least 0.3 s (`MIN_BLAST`).
+- **Friends see one steady column.** The first word gathers at their hands, and each pulse (every
+  0.3 s) keeps the column alive for 0.45 s, so it no longer flickers as separate pulses.
+- **Let go, it thins to a thread and is gone** (0.2 s).
+- Three beams are made at the start and reused (yours plus two friends'), so nothing is created
+  while casting.
+
+Console: `Crysis.magic.hold('lance-of-dawn', ms)` casts and holds a beam, as a tap on the bar does.
+
+**Fixed on the way:** the spellbook counted as open until it had been opened once. Its hidden
+state lived only in its stylesheet, and `isOpen()` read the inline style. So, from the start,
+every weapon key and spell key was refused, and the first N only shut a book that was already
+hidden. It is now open only when `open()` made it so.
+
 ## Not done yet
 
 - Your hand casting is drawn without a sleeve.
 - Bosses still take the harm of a spell but none of its statuses.
-- A friend's beam is seen as its pulses, not as one steady lance.
 - Things picked up and stowed are not kept between visits (field arms are).

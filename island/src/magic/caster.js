@@ -25,7 +25,8 @@
 
 import * as THREE from 'three';
 import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, strandOf } from './spells.js';
-import { GLOW, magicSound } from './fx.js';
+import { GLOW, magicSound, beamVoice } from './fx.js';
+import { CHARGE, MIN_BLAST } from './beam.js';
 
 const EYE = 1.68;
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
@@ -35,8 +36,9 @@ const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 
 // what is cast along the aim (the rest are cast on yourself or about you)
 const AIMED = new Set(['bolt', 'beam', 'burst', 'strike', 'chain', 'orb', 'well', 'cloud', 'storm', 'stasis', 'cone']);
 
-// onCast(spell, from, to): told of each spell cast (and every 0.3 s of a held beam)
-export function createCaster({ camera, combat, player, state, fx, light, hint, sky, worldKey, seed, isPhone = false, onCast = null }) {
+// onCast(spell, from, to): told of each spell cast (and every 0.3 s of a held beam);
+// beams: how a beam looks (magic/beam.js); third(): whether you are seen in third person
+export function createCaster({ camera, combat, player, state, fx, light, hint, sky, worldKey, seed, isPhone = false, onCast = null, beams = null, third = () => false }) {
 	const P = () => player()?.state;
 	const now = () => performance.now() / 1000;
 	const bolts = [], effects = [], shades = [], knocks = [], hexed = new Map(), held = new Map();
@@ -55,6 +57,14 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		aim(_o, _d);
 		_r.set(-_d.z, 0, _d.x).normalize();
 		return out.copy(_o).addScaledVector(_d, 0.7).addScaledVector(_r, 0.28).add(_u.set(0, -0.22, 0));
+	}
+	// where a beam leaves: between your hands, below the crosshair (seen in third person: before
+	// your chest)
+	function muzzle(out) {
+		const p = P();
+		if (third() && p) return out.set(p.pos.x - Math.sin(p.yaw) * 0.6, p.pos.y - 0.45, p.pos.z - Math.cos(p.yaw) * 0.6);
+		camera.updateMatrixWorld();
+		return camera.localToWorld(out.set(0, -0.26, -0.8));
 	}
 	// the point you aim at, up to range: the first thing the aim meets, else the ground below the
 	// end of it. returns { at, T } (T: a target struck by the aim, if any)
@@ -166,7 +176,8 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 			const dir = end.sub(from).normalize();
 			bolts.push({ spell, k, pos: from, vel: dir.multiplyScalar(spell.speed), life: 4, pierced: false, owner: 'me' });
 		},
-		beam(spell, k) { held.set(spell.id, { spell, k, t: spell.t, acc: new Map() }); },
+		// (it gathers for CHARGE first, then lets go: magic/beam.js)
+		beam(spell, k) { drop(spell.id); held.set(spell.id, { spell, k, t: spell.t + CHARGE, age: -CHARGE, acc: new Map(), voice: beamVoice(spell.school), rumble: 0, push: 0 }); },
 		burst(spell, k) {
 			const { at } = aimPoint(spell.range);
 			const c = GLOW[spell.school];
@@ -394,7 +405,7 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		// from the hand to where it went, or from where you were to where you are now
 		if (onCast) {
 			const moved = was.distanceTo(camera.position) > 1;
-			const from = moved ? was : hand(new THREE.Vector3());
+			const from = moved ? was : spell.kind === 'beam' ? muzzle(new THREE.Vector3()) : hand(new THREE.Vector3());
 			let to = moved ? camera.position.clone() : from.clone();
 			if (!moved && AIMED.has(spell.kind)) { aim(_o, _d); const h = combat.firstHit(_o, _d, spell.range || 120, combat.me); to = _o.clone().addScaledVector(_d, h ? h.t : spell.range || 120); }
 			onCast(spell, from, to);
@@ -405,12 +416,13 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		// (any harm you do shows you: the cloak is gone)
 		if (spell.dmg || spell.dps) buff.cloakUntil = 0;
 		const c = GLOW[spell.school];
-		fx.burst(hand(_p), c, 14, 1.4, 0.35, 0.16, 0.2);
-		magicSound(spell.school);
+		// (a beam has its own gathering and roar: magic/beam.js, beamVoice)
+		if (spell.kind !== 'beam') { fx.burst(hand(_p), c, 14, 1.4, 0.35, 0.16, 0.2); magicSound(spell.school); }
 		return true;
 	}
-	// let go of a held spell (a beam)
-	function release(id) { held.delete(id); }
+	// let go of a held spell (a beam: it pours a breath longer if it has only just let go)
+	function release(id) { const H = held.get(id); if (H) H.let = true; }
+	function drop(id) { const H = held.get(id); if (!H) return; H.voice?.stop(); held.delete(id); }
 
 	// ---------- each frame ----------
 	function stepBolts(dt) {
@@ -440,16 +452,22 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 	function stepBeams(dt, keysHeld) {
 		for (const [id, H] of held) {
 			const spell = H.spell;
-			H.t -= dt;
-			if (H.t <= 0 || !keysHeld(id)) { held.delete(id); continue; }
-			const from = hand(new THREE.Vector3());
+			H.t -= dt; H.age += dt;
+			if (H.t <= 0 || ((H.let || !keysHeld(id)) && H.age >= MIN_BLAST)) { drop(id); continue; }
+			const from = muzzle(new THREE.Vector3());
 			aim(_o, _d);
 			const h = combat.firstHit(_o, _d, spell.range, combat.me), end = _o.clone().addScaledVector(_d, h ? h.t : spell.range);
-			const c = GLOW[spell.school];
-			fx.line(from, end, c, isPhone ? 1.2 : 0.6, 0.06, spell.drain ? 0.18 : 0.28, 0.05);
+			const c = GLOW[spell.school], near = !third();
+			// (gathering)
+			if (H.age < 0) { if (beams) beams.show('me', from, end, c, { charging: true, near }); else fx.burst(from, c, 2, 0.5, 0.2, 0.1, 0); continue; }
+			if (beams) beams.show('me', from, end, c, { near });
+			else fx.line(from, end, c, isPhone ? 1.2 : 0.6, 0.06, 0.28, 0.05);
+			// (the release kicks; the pour rumbles)
+			if (!H.fired) { H.fired = true; combat.shake?.(0.35); }
+			H.rumble -= dt;
+			if (H.rumble <= 0) { H.rumble = 0.1; combat.shake?.(0.18); }
 			H.tell = (H.tell || 0) - dt;
 			if (H.tell <= 0 && onCast) { H.tell = 0.3; onCast(spell, from, end, true); }
-			fx.burst(end, c, 2, 1.5, 0.25, 0.2, 0.3);
 			if (h?.T && !h.ward) {
 				const acc = (H.acc.get(h.T) || 0) + spell.dps * H.k * dt;
 				if (acc >= 4) {
@@ -457,6 +475,9 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 					if (spell.drain && r?.dealt) combat.mend(r.dealt * spell.drain);
 					H.acc.set(h.T, 0);
 				} else H.acc.set(h.T, acc);
+				// (the pressure of it drives a fighter back)
+				H.push -= dt;
+				if (H.push <= 0) { H.push = 0.25; shove(h.T, from, spell.drain ? 0.4 : 0.9); }
 			}
 		}
 	}
@@ -566,7 +587,7 @@ export function createCaster({ camera, combat, player, state, fx, light, hint, s
 		if (histT <= 0 && p) { histT = 0.25; history.push({ t, x: p.pos.x, y: p.pos.y, z: p.pos.z, hp: combat.vitals().hp }); while (history.length && history[0].t < t - 6) history.shift(); }
 		stepBolts(dt); stepBeams(dt, keysHeld); stepEffects(dt); stepShades(dt, t); stepHexes(dt); stepKnocks(dt); stepBuffs(dt, t);
 	}
-	function clear() { bolts.length = effects.length = shades.length = knocks.length = 0; held.clear(); for (const T of hexed.keys()) T.hex = null; hexed.clear(); history.length = 0; }
+	function clear() { for (const id of [...held.keys()]) drop(id); beams?.clear(); bolts.length = effects.length = shades.length = knocks.length = 0; for (const T of hexed.keys()) T.hex = null; hexed.clear(); history.length = 0; }
 	return {
 		cast, release, update, clear, shieldBlow, exposure,
 		cloaked: () => buff.cloakUntil > now(),
