@@ -858,7 +858,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const g = cv.getContext('2d');
 		g.setTransform(d, 0, 0, d, 0, 0);
 		g.clearRect(0, 0, cw, ch);
-		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t, { night: light() < -0.02, moonlit: !!state.moonlit?.[sp.id] });
+		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t, { night: light() < -0.02, moonlit: !!state.moonlit?.includes?.(sp.id) });
 	}
 
 	// ---------- opening and closing ----------
