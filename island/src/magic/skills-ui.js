@@ -10,7 +10,8 @@
 // key let go), and draws its sky on one small canvas. All movement is transforms and opacity.
 
 import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
-import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, computeMods, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, MASTERY_GIFT, NUMERAL, masteryLevel, masteryToNext, feedable, feedCost } from './skills.js';
+import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, MASTERY_GIFT, NUMERAL, masteryLevel, masteryToNext, feedable, feedCost } from './skills.js';
+import { composeMods } from './stats.js';
 
 const KEYS = ['6', '7', '8', '9', '0'];
 const ICON = { radiance: '☀', restoration: '✚', warding: '⛨', dawn: '☼', shadow: '☾', void: '◆', blight: '☣', umbral: '⛧', storm: 'ϟ', chrono: '⧗', primal: '♨', marksman: '⌖', athletics: '»', resilience: '⛊' };
@@ -735,7 +736,8 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const pool = Object.values(SPELL).filter((sp) => scopes.some((sc) => sc === 'all' || sc === sp.school || sc === strandOf(sp)));
 		const sp = pool.find((q) => state.known.includes(q.id)) || pool[0];
 		if (!sp) return '';
-		const others = state.perks.filter((id) => id !== p.id), now = computeMods(others), then = computeMods([...others, p.id]);
+		// (with your attributes and gear as they are: magic/stats.js)
+		const others = state.perks.filter((id) => id !== p.id), now = composeMods(state, others), then = composeMods(state, [...others, p.id]);
 		const out = [];
 		const with_ = (mods, f) => { const was = state.mods; state.mods = mods; try { return f(); } finally { state.mods = was; } };
 		for (const [stat] of fx) {

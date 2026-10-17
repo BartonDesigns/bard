@@ -168,6 +168,7 @@
 		back.onclick = event => { event.stopPropagation(); if (!current) return; const session = current; session.cancelled = true; hide(); session.options.exit?.(); if (session.settled) current = null; };
 		enter.onclick = event => {
 			event.stopPropagation();
+			if (current?.error?.code === 'GRAPHICS_RELOAD_REQUIRED') { location.reload(); return; }
 			if (!current?.settled) return;
 			const session = current;
 			if (session.error) { current = null; run(session.task, session.options); return; }
@@ -213,7 +214,18 @@
 		window.dispatchEvent(new Event('blur')); previousFocus?.focus?.({ preventScroll: true });
 	}
 	function active() { return !!view && !view.root.hidden; }
-	function stage(text) { if (active() && current && !current.settled) view.status.textContent = text; }
+	function stage(text) { if (active() && current && !current.settled && !current.failure) view.status.textContent = text; }
+	function errorView(error) {
+		clearTimeout(slowTimer); view.root.dataset.state = 'error';
+		const graphics = error?.code === 'GRAPHICS_RELOAD_REQUIRED';
+		view.status.textContent = graphics ? 'Graphics need a fresh start' : 'The world could not finish loading';
+		view.sub.textContent = graphics ? error.message : /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then retry. You can also return to Bard.';
+		view.enter.hidden = false; view.enter.textContent = graphics ? 'Reload game' : 'Try again';
+	}
+	function fail(error, options = {}) {
+		if (active() && current) { current.failure = current.error = error; errorView(error); }
+		else run(() => { throw error; }, options);
+	}
 	async function run(task, options = {}) {
 		create();
 		// Nested engine/arrival work belongs to the door's existing loading session.
@@ -231,6 +243,7 @@
 			await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 			if (session.cancelled) return false;
 			const result = await task();
+			if (session.failure) throw session.failure;
 			if (current !== session) return result;
 			session.settled = true;
 			if (session.cancelled) return result;
@@ -238,12 +251,11 @@
 			view.sub.textContent = ''; view.enter.hidden = false; view.enter.textContent = 'Enter world';
 			return result;
 		} catch (error) {
+			error = session.failure || error;
 			if (current !== session) return false;
 			session.settled = true; session.error = error;
 			if (session.cancelled) return false;
-			clearTimeout(slowTimer); view.root.dataset.state = 'error'; view.status.textContent = 'The world could not finish loading';
-			view.sub.textContent = /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then retry. You can also return to Bard.';
-			view.enter.hidden = false; view.enter.textContent = 'Try again';
+			errorView(error);
 			console.warn('[world loading]', error); return false;
 		} finally {
 			session.settled = true;
@@ -267,5 +279,5 @@
 				if (event.cancelable) event.preventDefault(); event.stopImmediatePropagation();
 			}, { capture: true, passive: false });
 	}
-	window.L99Loading = { run, stage, active, get pending() { return !!current && !current.settled; } };
+	window.L99Loading = { run, stage, fail, active, get pending() { return !!current && !current.settled; } };
 })();

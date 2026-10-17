@@ -267,6 +267,18 @@ const ITEMS = [
 		['spark-cell-pack', 'Spark Cell Pack', 'Charge cells for the Warden Spark Carbine.', 32],
 		['reed-arrow-quiver', 'Reedline Arrow Quiver', 'A quiver of arrows for the Reedline Hunting Bow.', 16],
 	].map(([id, name, use, basePrice]) => ({ id, name, kind: 'ammo', fictional: true, activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase', supermarket: 'purchase' }, marketTradable: true, basePrice, weight: 1, slot: 'utility', stackable: true, consumable: true, heatRisk: 0 })),
+	// garments woven through with aether thread: worn, not held, one to a slot (GARMENT_SLOTS).
+	// They lend attributes and, levelled, wake their magic (gear-levels.js, gear-magic.js)
+	...[
+		['wayfarers-hood', 'Wayfarer\'s Hood', 'head', 'A deep travelling hood lined with aether thread. It keeps the mind clear and the rain off.', 90],
+		['stargazer-circlet', 'Stargazer Circlet', 'head', 'A thin band of star-silver worn at the brow. Spells come quicker to one who wears it.', 140],
+		['aetherweave-coat', 'Aetherweave Coat', 'body', 'A long coat woven through with both strands of the aether. It holds life in and lends it to the weave.', 160],
+		['rangers-jacket', 'Ranger\'s Jacket', 'body', 'A waxed field jacket, patched at the elbows, that turns a blow and steadies the aim.', 130],
+		['spellbinder-gloves', 'Spellbinder Gloves', 'hands', 'Fine gloves stitched with binding knots at the fingertips. The weave comes back to them sooner.', 110],
+		['fieldcraft-gloves', 'Fieldcraft Gloves', 'hands', 'Supple leather gloves for a sure grip and quick hands.', 80],
+		['trailstrider-boots', 'Trailstrider Boots', 'feet', 'Light boots with soles that remember the trail.', 100],
+		['duskwalker-boots', 'Duskwalker Boots', 'feet', 'Soft-soled boots that make no sound after dark, and keep the mind on the path.', 120],
+	].map(([id, name, slot, use, basePrice]) => ({ id, name, kind: 'garment', fictional: true, activities: [], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase' }, marketTradable: true, basePrice, weight: 1, slot, stackable: false, consumable: false, heatRisk: 0 })),
 	// the Moon colony's errand things (planet/colony/errands.js): carried, handed over, never sold
 	...[
 		['relay-transceiver-board', 'Relay Transceiver Board', 'A spare transceiver board for the Far Side Relay, signed out of the colony depot.'],
@@ -277,6 +289,9 @@ const ITEMS = [
 ];
 
 export const ARMS_CATALOG = freeze(Object.fromEntries(ITEMS.map((item) => [item.id, item])));
+// where garments are worn, head to foot
+export const GARMENT_SLOTS = Object.freeze(['head', 'body', 'hands', 'feet']);
+export const isGarment = (itemId) => itemFor(itemId)?.kind === 'garment';
 
 export const SOURCE_CATALOG = freeze({
 	[ACQUISITION_SOURCES.PLAYER_MARKET]: {
@@ -461,6 +476,8 @@ export function createInventoryState(ownerId, options = {}) {
 		instances,
 		hand: null,
 		equipped: {},
+		// the garment on each slot, by its uid
+		worn: {},
 		journal: [],
 		updatedAt: integer(options.updatedAt),
 	};
@@ -472,7 +489,16 @@ function recount(state) {
 	for (const x of Object.values(state.instances)) items[x.i] = (items[x.i] || 0) + 1;
 	const hand = state.hand && state.instances[state.hand] ? state.hand : null;
 	const equipped = Object.fromEntries(Object.entries(state.equipped || {}).filter(([, itemId]) => items[itemId] > 0));
-	return { ...state, items, hand, equipped };
+	return { ...state, items, hand, equipped, worn: wornOf(state) };
+}
+// the worn garments that are still owned and on their own slot
+function wornOf(state) {
+	const worn = {};
+	for (const slot of GARMENT_SLOTS) {
+		const u = state.worn?.[slot], x = typeof u === 'string' ? state.instances?.[u] : null;
+		if (x && itemFor(x.i)?.kind === 'garment' && itemFor(x.i).slot === slot) worn[slot] = u;
+	}
+	return worn;
 }
 // one owned instance (null if not owned)
 export const instanceOf = (state, uid) => state?.instances?.[uid] || null;
@@ -501,6 +527,7 @@ function normalizeInventory(raw, ownerId = 'player') {
 		}
 	}
 	normalized.hand = typeof source.hand === 'string' ? source.hand : null;
+	normalized.worn = source.worn && typeof source.worn === 'object' ? { ...source.worn } : {};
 	// (version 1 held an item by its kind: the best one of that kind now)
 	if (!normalized.hand && normalized.equipped.hand) normalized.hand = instancesOf(normalized, normalized.equipped.hand)[0]?.u || null;
 	Object.assign(normalized, recount(normalized));
@@ -683,12 +710,25 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		// (a particular one by its uid, or the best of the kind)
 		const inst = tx.uid ? instanceOf(state, tx.uid) : item ? instancesOf(state, item.id)[0] : null;
 		if (!inst || (item && inst.i !== item.id)) return reject(state, tx, 'not-owned', 'The player does not have that item.');
-		const slot = String(tx.slot || itemFor(inst.i).slot || 'utility');
+		const def = itemFor(inst.i);
+		// a garment is worn on its own slot (the one there comes off), never held
+		if (def.kind === 'garment') {
+			if (tx.slot && String(tx.slot) !== def.slot) return reject(state, tx, 'wrong-slot', `That is worn on the ${def.slot}.`);
+			return applyAccepted({ ...state, worn: { ...state.worn, [def.slot]: inst.u } }, tx, { itemId: inst.i, uid: inst.u, slot: def.slot, worn: true });
+		}
+		const slot = String(tx.slot || def.slot || 'utility');
+		if (GARMENT_SLOTS.includes(slot)) return reject(state, tx, 'wrong-slot', 'Only a garment is worn there.');
 		return applyAccepted({ ...state, equipped: { ...state.equipped, [slot]: inst.i }, hand: slot === 'hand' ? inst.u : state.hand }, tx, { itemId: inst.i, uid: inst.u, slot });
 	}
 
 	if (kind === TRANSACTION_KINDS.UNEQUIP) {
 		const slot = String(tx.slot || '');
+		if (GARMENT_SLOTS.includes(slot)) {
+			if (!state.worn?.[slot]) return reject(state, tx, 'not-equipped', 'Nothing is worn there.');
+			const worn = { ...state.worn }, uid = worn[slot];
+			delete worn[slot];
+			return applyAccepted({ ...state, worn }, tx, { uid, slot, worn: false });
+		}
 		if (!slot || !state.equipped[slot]) return reject(state, tx, 'not-equipped', 'That equipment slot is already empty.');
 		const equipped = { ...state.equipped };
 		const itemId = equipped[slot];
@@ -805,5 +845,6 @@ export function inventorySummary(state) {
 		instances: Object.values(normalized.instances).map((x) => ({ ...x })),
 		hand: normalized.hand,
 		equipped: { ...normalized.equipped },
+		worn: { ...normalized.worn },
 	};
 }

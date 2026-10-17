@@ -8,15 +8,26 @@ import { armamentVariant } from '../gameplay/armament-variants.js';
 //
 // Trades work at any distance between friends in the same room: friends often wander apart,
 // and Go to is one tap away. The window says how far they are, or that they are on another world.
+//
+// Garments are worn (Wear, Take off: four slots, head to foot) and weapons held; both are
+// attuned to a school of magic that wakes as they level (gameplay/gear-magic.js), and take aether
+// fabric to grow (Infuse). The Character view (Shift+I, or from the sheet) is your statistics: the
+// seven attributes and where each comes from, life, mana and harm taken, every school's power,
+// cost and cooldown as they stand now, and the magic awake in what you wear and hold
+// (magic/stats.js statSheet, through magic().stats()).
 
-import { ARMS_CATALOG, upgradePrice } from '../gameplay/arms.js';
+import { ARMS_CATALOG, GARMENT_SLOTS, isGarment, upgradePrice } from '../gameplay/arms.js';
 import { TIERS, MAX_LEVEL, UPGRADE_MATERIAL, canCombine, groupInstances, statsOf, xpNeed } from '../gameplay/gear-levels.js';
+import { attunement, awakenings, infuseStrands, schoolGlyph, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
+import { ATTRS, ATTR_IDS } from '../magic/stats.js';
+import { SCHOOLS } from '../magic/spells.js';
 import { OPEN, accept, cancel, editSide, finished, holdLeft, newTradeId, receive, relayed, startTrade, tick, tradeWhy, worthKeeping } from '../gameplay/trade.js';
+import { GEAR_FEATURE, LEGACY_LEVEL } from '../net/protocol.js';
 import { createHand, weaponOf } from '../crysis/held-items.js';
 import { createViewmodel } from '../crysis/viewmodel.js';
 import { createStudio } from './gear-studio.js';
 import { createTradeWindow } from './trade-window.js';
-import { bar, btn, coins, el, hideTip, nameOf, showTip, slot, sound, tierColor, tierName, tipContent, useStyle, xpFrac } from './gear-look.js';
+import { bar, btn, coins, el, fmt, hideTip, nameOf, showTip, slot, sound, tierColor, tierName, tipContent, useStyle, xpFrac } from './gear-look.js';
 
 const KEEP_KEY = 'l99-trades';
 // how near a shop must be to buy, sell or upgrade there (metres)
@@ -27,7 +38,16 @@ const BAG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke=
 const stopAll = (e) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) e.addEventListener(ev, (x) => x.stopPropagation()); return e; };
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 const metres = (d) => (!Number.isFinite(d) ? '' : d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`);
-const fmt = (v, unit) => `${v}${unit === '%' ? '%' : unit ? ' ' + unit : ''}`;
+// where each garment goes, and the faint mark an empty slot shows
+const SLOT_NAMES = { head: 'Head', body: 'Body', hands: 'Hands', feet: 'Feet' };
+const SLOT_MARKS = { head: '🧣', body: '🧥', hands: '🧤', feet: '🥾' };
+const pc = (v) => `${Math.round(v * 100)}%`;
+// what an attribute's points do, in words
+export function attributeWords(id, n) {
+	const P = ATTRS[id]?.per || {}, r2 = (v) => Math.round(v * 100) / 100;
+	const W = { life: (v) => `+${Math.round(v)} life`, hpRegen: (v) => `+${r2(v)} life a second out of a fight`, armor: (v) => `${pc(v)} less harm`, weapon: (v) => `+${pc(v)} weapon harm`, weak: (v) => `+${pc(v)} on heads and weak points`, speed: (v) => `+${pc(v)} pace`, jump: (v) => `+${pc(v)} jump`, power: (v) => `+${pc(v)} spell power`, manaMax: (v) => `+${Math.round(v)} mana`, regen: (v) => `+${r2(v)} mana a second`, cd: (v) => `${pc(v)} quicker cooldowns` };
+	return n > 0 ? Object.entries(P).map(([k, v]) => W[k]?.(v * n) || '').filter(Boolean).join(' · ') : 'Nothing yet.';
+}
 // a side of a trade in words
 export function describeSide(side) {
 	const parts = groupInstances(side?.items || []).map((g) => `${g.list.length > 1 ? g.list.length + ' × ' : ''}${tierName(g.t)} ${nameOf(g.i)} (level ${g.l})`);
@@ -35,7 +55,8 @@ export function describeSide(side) {
 	return parts.length ? parts.join(', ') : 'nothing';
 }
 
-export function createGear({ arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false }) {
+// magic(): your magic (magic/index.js), for the Character view and infusing gear; it comes later
+export function createGear({ arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false, magic = () => null }) {
 	useStyle();
 	const hand = createHand(scene, { lod: 'high' });
 	const vm = createViewmodel({ camera, avatar, mount, canvas: renderer?.domElement || null, isPhone });
@@ -74,15 +95,23 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	stopAll(menuBtn);
 	menu.insertBefore(menuBtn, menu.firstChild);
 	addEventListener('keydown', (e) => {
-		if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !window._KEYS_PLAY_ON && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') && mount.style.display !== 'none' && P()) { e.preventDefault(); toggle(); }
+		// (I: the sheet; Shift+I: the Character view, or away again. C is taken: down, and the dodge)
+		if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !window._KEYS_PLAY_ON && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') && mount.style.display !== 'none' && P()) {
+			e.preventDefault();
+			if (!e.shiftKey) toggle();
+			else if (!e.repeat) { if (shown() && view === 'char') close(); else open('char'); }
+		}
 	});
 
 	let view = 'gear', shopId = null, itemUid = null, sig = '', stopSpin = null;
 	function open(v = 'gear', id = null) {
+		// (a different view, or another item, starts at its top)
+		const fresh = v !== view || (v === 'item' && id !== itemUid) || (v === 'shop' && id !== shopId);
 		view = v;
 		if (v === 'shop') shopId = id;
 		if (v === 'item') itemUid = id;
 		sheet.style.display = 'flex'; sig = ''; draw();
+		if (fresh) sheet.scrollTop = 0;
 	}
 	function close() { sheet.style.display = 'none'; stopSpin?.(); stopSpin = null; hideTip(); }
 	function toggle() { if (sheet.style.display === 'none') open(view === 'item' && !arms.state().instances?.[itemUid] ? 'gear' : view); else close(); }
@@ -103,6 +132,31 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		s.addEventListener('pointerleave', hideTip);
 		return s;
 	};
+	// a garment slot as it stands (empty: its faint mark), and the weapon in hand, for the rows
+	function wornSlot(slotId, inst, size = 52) {
+		const s = inst ? hover(slot(inst, { thumb: pic(inst), worn: true }), inst) : slot(null);
+		s.style.setProperty('--slot', `${size}px`);
+		if (inst) s.onclick = (e) => { e.stopPropagation(); hideTip(); open('item', inst.u); };
+		else { s.classList.add('bare'); s.textContent = SLOT_MARKS[slotId] || ''; s.title = `${SLOT_NAMES[slotId]}: nothing worn. Garments are sold at outfitters, ranger camps and traders.`; s.onclick = (e) => { e.stopPropagation(); hint(s.title, 2600); }; }
+		const c = el('div'); c.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;';
+		const t = el('div', 'g99-label', SLOT_NAMES[slotId] || slotId); t.style.fontSize = '9px';
+		c.append(s, t);
+		return c;
+	}
+	function wearingRow(withHand = false) {
+		const w = arms.worn?.() || {}, row = el('div');
+		row.style.cssText = 'display:flex;justify-content:center;gap:8px;flex-wrap:wrap;';
+		for (const k of GARMENT_SLOTS) row.append(wornSlot(k, w[k] || null));
+		if (withHand) {
+			const H = arms.held(), c = el('div'); c.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;margin-left:6px;';
+			const hs = H ? hover(slot(H, { thumb: pic(H) }), H) : slot(null);
+			hs.style.setProperty('--slot', '52px');
+			if (H) hs.onclick = (e) => { e.stopPropagation(); hideTip(); open('item', H.u); };
+			const t = el('div', 'g99-label', 'Hand'); t.style.fontSize = '9px';
+			c.append(hs, t); row.append(c);
+		}
+		return row;
+	}
 	const shopsHere = () => arms.shops(where());
 	const outfitter = () => shopsHere().find((sh) => sh.sourceId === 'npc-trader' && near(sh)) || null;
 	const anyShop = () => shopsHere().find(near) || null;
@@ -110,6 +164,15 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	function drawGear() {
 		const s = arms.state(), held = s.hand ? s.instances[s.hand] : null;
 		sheet.append(head('Gear'), el('div', 'g99-rule'), coins(s.credits || 0));
+		// (you, in a line, and the way to the whole Character view)
+		const st = magic()?.stats?.();
+		if (st) {
+			const cr = el('div'); cr.style.cssText = 'display:flex;align-items:center;gap:10px;';
+			const tx = el('div', '', `Level ${st.level} · ${st.life} life · ${Math.round(st.mana)} mana · ${st.harmTaken}% harm taken`); tx.style.cssText = 'flex:1;min-width:0;font-size:12px;opacity:.85;';
+			cr.append(tx, btn('Character ›', () => open('char'), '', 'Character (Shift+I)'));
+			sheet.append(cr);
+		}
+		sheet.append(label('Wearing'), wearingRow());
 		sheet.append(label('In your hand'));
 		const hr = el('div'); hr.style.cssText = 'display:flex;align-items:center;gap:10px;';
 		const hs = held ? hover(slot(held, { thumb: pic(held) }), held) : slot(null);
@@ -124,8 +187,9 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (!list.length) sheet.append(note('Start Field contracts on open Terran or arid ground for a first weapon cache. You can also buy at outfitters or recover fallen fighters’ equipment with E or Take.'));
 		else {
 			const g = el('div', 'g99-grid'); g.style.setProperty('--cols', '5'); g.style.setProperty('--slot', '56px');
+			const wornU = new Set(Object.values(s.worn || {}));
 			for (const G of groupInstances(list)) {
-				const inst = G.list[0], sl = hover(slot(inst, { thumb: pic(inst), count: G.list.length, held: G.list.some((x) => x.u === s.hand) }), inst);
+				const inst = G.list.find((x) => wornU.has(x.u)) || G.list[0], sl = hover(slot(inst, { thumb: pic(inst), count: G.list.length, held: G.list.some((x) => x.u === s.hand), worn: G.list.some((x) => wornU.has(x.u)) }), inst);
 				sl.onclick = (e) => { e.stopPropagation(); hideTip(); open('item', inst.u); };
 				g.append(sl);
 			}
@@ -159,27 +223,70 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		sheet.append(sub);
 		const variant = armamentVariant(x.i, x.t);
 		if (variant) sheet.append(el('div', '', `${variant.name} · Mark ${variant.mark}`));
+		const sch = attunement(x), S = SCHOOLS[sch];
+		if (S) { const a = el('div', '', `${schoolGlyph(sch)} Attuned to ${S.name} · ${S.strand === 'twilight' ? 'twilight' : S.strand + ' aether'}`); a.style.cssText = `color:${S.color};font:600 12px system-ui;text-shadow:0 0 8px ${S.color}66;`; sheet.append(a); }
 		sheet.append(el('div', 'g99-rule'));
-		const box = el('div'); box.style.cssText = `border-radius:12px;background:radial-gradient(circle at 50% 45%,${T.color}22,rgba(0,0,0,.35) 70%);box-shadow:inset 0 0 30px rgba(0,0,0,.7);min-height:200px;display:flex;align-items:center;justify-content:center;`;
+		const box = el('div'); box.style.cssText = `border-radius:12px;background:radial-gradient(circle at 50% 45%,${(S || T).color}22,rgba(0,0,0,.35) 70%);box-shadow:inset 0 0 30px rgba(0,0,0,.7);min-height:${isGarment(x.i) ? 150 : 200}px;display:flex;align-items:center;justify-content:center;`;
 		sheet.append(box);
-		stopSpin = studio.turntable(box, x.i, x.l, x.t, 200);
+		// (a garment has no model yet: its mark, large, in its school's light)
+		if (isGarment(x.i)) { const g = el('div', '', slot(x).firstChild?.textContent || '🧥'); g.style.cssText = `font-size:76px;line-height:1;filter:drop-shadow(0 0 ${8 + T.glow * 16}px ${(S || T).color});`; box.append(g); }
+		else stopSpin = studio.turntable(box, x.i, x.l, x.t, 200);
 		if (!box.firstChild) { const f = el('div', '', ''); f.append(slot(x)); box.append(f); }
 		// the level and experience
 		const lv = el('div'); lv.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
 		lv.append(el('div', '', x.l >= MAX_LEVEL ? 'Highest level' : `Experience ${x.x} / ${xpNeed(x.l)} to level ${x.l + 1}`), bar(xpFrac(x)));
-		sheet.append(lv, label('Stats'));
-		const tbl = el('div'); tbl.style.cssText = 'display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:center;';
-		for (const r of statsOf(x)) {
-			const nx = el('span', 'g99-up', x.l < MAX_LEVEL && r.next !== r.value ? `→ ${fmt(r.next, r.unit)}` : '');
-			nx.style.fontSize = '12px';
-			tbl.append(el('span', '', r.label), el('b', '', fmt(r.value, r.unit)), nx);
+		sheet.append(lv);
+		const rowsOf = (list, title) => {
+			if (!list.length) return;
+			const tbl = el('div'); tbl.style.cssText = 'display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:center;';
+			for (const r of list) {
+				const nx = el('span', 'g99-up', x.l < MAX_LEVEL && r.next !== r.value ? `→ ${fmt(r.next, r.unit)}` : '');
+				nx.style.fontSize = '12px';
+				const A = r.unit === 'pt' ? ATTRS[r.label.toLowerCase()] : null, name = el('span', '', A ? `${A.glyph} ${r.label}` : r.label);
+				if (A) name.style.color = A.color;
+				tbl.append(name, el('b', '', fmt(r.value, r.unit)), nx);
+			}
+			sheet.append(label(title), tbl);
+		};
+		const rows = statsOf(x);
+		rowsOf(rows.filter((r) => r.unit !== 'pt'), 'Stats');
+		rowsOf(rows.filter((r) => r.unit === 'pt'), isGarment(x.i) ? 'Attributes, while worn' : 'Attributes, while held');
+		// its magic: the four awakenings, those asleep dimmed with the level that wakes them
+		if (S) {
+			sheet.append(label('Magic'));
+			const list = el('div'); list.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+			for (const a of awakenings(x)) {
+				const r = el('div'); r.style.cssText = `display:flex;gap:9px;align-items:flex-start;${a.on ? '' : 'opacity:.45;'}`;
+				const b = el('div', '', String(a.level)); b.style.cssText = `flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 10px system-ui;border:1px solid ${a.on ? S.color : 'rgba(255,255,255,.25)'};color:${a.on ? '#0b0f12' : '#eee'};background:${a.on ? S.color : 'transparent'};box-shadow:${a.on ? `0 0 10px ${S.color}aa` : 'none'};`;
+				const t = el('div'); t.style.cssText = 'flex:1;min-width:0;line-height:1.35;font-size:12px;';
+				const n = el('b', '', `${a.name}${a.on ? '' : ` · at level ${a.level}`}`); n.style.cssText = `display:block;color:${a.on ? S.color : '#efe6d2'};font:600 12px system-ui;`;
+				t.append(n, el('span', '', a.desc));
+				r.append(b, t); list.append(r);
+			}
+			sheet.append(list);
 		}
-		sheet.append(tbl);
 		if (item?.use) { const u = note(item.use); u.style.fontStyle = 'italic'; sheet.append(u); }
 		// what can be done
 		const acts = el('div'); acts.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;';
-		acts.append(s.hand === x.u ? btn('Put away', () => { arms.hold(null); draw(); }) : btn('Hold', () => { arms.hold(x.u); sound('place'); draw(); }, 'go'));
+		const wornHere = isGarment(x.i) && s.worn?.[item.slot] === x.u;
+		if (isGarment(x.i)) acts.append(wornHere ? btn('Take off', () => { const r = arms.takeOff(item.slot); if (r.message) hint(r.message, 1800); sound('remove'); draw(); }) : btn(`Wear (${SLOT_NAMES[item.slot] || item.slot})`, () => { const r = arms.wear(x.u); if (r.message) hint(r.message, 1800); sound('place'); draw(); }, 'go'));
+		else acts.append(s.hand === x.u ? btn('Put away', () => { arms.hold(null); draw(); }) : btn('Hold', () => { arms.hold(x.u); sound('place'); draw(); }, 'go'));
 		sheet.append(label('Improve'), acts);
+		// fabric woven in: experience for it, of its school's strand
+		const M = magic();
+		if (S && M && x.l < MAX_LEVEL) {
+			const fab = M.state?.fabric || { light: 0, dark: 0 }, ir = el('div'); ir.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+			for (const strand of infuseStrands(x)) {
+				const have = fab[strand] || 0, n = Math.min(10, have);
+				const b = btn(`Infuse ${n || 10} ${strand}`, () => { const r = M.infuse(x.u, strand, 10); hint(r.message, 2400); if (r.ok) sound('done'); draw(); }, '', `Weave ${strand} aether fabric into it`);
+				b.disabled = have < 1;
+				b.style.borderColor = strand === 'light' ? '#c9a24a' : '#7a62c9';
+				ir.append(b);
+			}
+			const iw = el('span', '', `+${XP_PER_FABRIC} experience a thread · you carry ${infuseStrands(x).map((k) => `${fab[k] || 0} ${k}`).join(', ')}`); iw.style.cssText = 'font-size:12px;opacity:.8;flex:1;min-width:140px;';
+			ir.append(iw);
+			sheet.append(ir);
+		}
 		const of = outfitter(), cost = upgradePrice(x), mats = Object.values(s.instances).filter((y) => y.i === UPGRADE_MATERIAL && y.u !== x.u).length;
 		const upRow = el('div'); upRow.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
 		const up = btn(x.l >= MAX_LEVEL ? 'Max level' : `Upgrade to ${x.l + 1}`, () => { const r = arms.upgrade(x.u, of.id, where()); hint(r.message, 2600); if (r.ok) sound('done'); draw(); }, '');
@@ -222,7 +329,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 			const n = el('div', '', `${nameOf(o.itemId)}${o.owned ? ` · you have ${o.owned}` : ''}`); n.style.flex = '1';
 			const b = btn(`Buy ${o.price}`, () => { const r = arms.buy(sh.id, o.itemId, where()); hint(r.message, 2200); if (r.ok) sound('place'); draw(); }, '', `Buy for ${o.price} credits`);
 			b.disabled = !here || sh.credits < o.price;
-			row.append(hover(slot(x, { thumb: pic(x) }), x), n, b);
+			row.append(hover(slot(x, { thumb: pic(x), school: false }), x), n, b);
 			sheet.append(row);
 		}
 		if (sh.sell.length) {
@@ -240,16 +347,78 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		}
 	}
 
+	// you, as numbers: the attributes, life and mana, what you wear and hold, every school as it
+	// stands now, and the magic awake in your gear
+	function drawChar() {
+		const st = magic()?.stats?.();
+		sheet.append(head('Character', () => open('gear')), el('div', 'g99-rule'));
+		if (!st) { sheet.append(note('Your statistics show once you are out in a world.')); return; }
+		const pts = magic()?.info?.()?.points || 0;
+		const lv = el('div', '', `Level ${st.level}${pts ? ` · ${pts} skill point${pts > 1 ? 's' : ''} waiting (Tab)` : ''}`); lv.style.cssText = 'font:600 13px system-ui;color:#e9cf93;';
+		sheet.append(lv);
+		const tiles = el('div'); tiles.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
+		for (const [k, v, sub, c] of [['Life', st.life, st.lifeRegen ? `+${st.lifeRegen}/s resting` : 'resting: the usual', '#ff8a8a'], ['Mana', Math.round(st.mana), `+${st.manaRegen}/s · ${st.manaRegenFighting}/s fighting`, '#8fb0ff'], ['Harm taken', `${st.harmTaken}%`, st.harmTaken < 100 ? `${100 - st.harmTaken}% turned aside` : 'nothing turned aside', '#d8c49a']]) {
+			const t = el('div', 'g99-panel'); t.style.cssText += 'padding:7px 8px;text-align:center;';
+			const a = el('div', 'g99-label', k), b = el('div', '', String(v)), d = el('div', '', sub);
+			b.style.cssText = `font:600 20px Georgia,serif;color:${c};text-shadow:0 0 10px ${c}55;`; d.style.cssText = 'font-size:10px;opacity:.7;line-height:1.3;';
+			t.append(a, b, d); tiles.append(t);
+		}
+		sheet.append(tiles, label('Attributes'));
+		const top = Math.max(40, ...ATTR_IDS.map((k) => st.attrs[k].total));
+		for (const k of ATTR_IDS) {
+			const A = ATTRS[k], at = st.attrs[k], r = el('div'); r.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
+			const h = el('div'); h.style.cssText = 'display:flex;align-items:baseline;gap:8px;';
+			const nm = el('span', '', `${A.glyph} ${A.name}`); nm.style.cssText = `color:${A.color};font:600 13px system-ui;width:96px;flex:none;`;
+			const n = el('b', '', String(at.total)); n.style.cssText = 'font:600 15px Georgia,serif;width:28px;flex:none;text-align:right;';
+			const w = el('span', '', attributeWords(k, at.total)); w.style.cssText = 'font-size:11px;opacity:.85;flex:1;min-width:0;';
+			h.append(nm, n, w);
+			const b = el('div', 'g99-bar'), i = el('i'); i.style.cssText = `width:${Math.round(at.total / top * 100)}%;background:linear-gradient(90deg,${A.color}66,${A.color});`; b.append(i);
+			const f = el('div', '', at.from.length ? at.from.map((q) => `${q.label} ${q.n}`).join(' · ') : A.line); f.style.cssText = 'font-size:10px;opacity:.6;';
+			r.append(h, b, f); sheet.append(r);
+		}
+		sheet.append(label('Wearing and holding'), wearingRow(true));
+		// every school as it stands now: power (with the hour, affinity, perks and gear), mana and cooldowns
+		sheet.append(label('Spellcraft, as it stands now'));
+		const g = el('div'); g.style.cssText = 'display:grid;grid-template-columns:1fr auto auto auto;gap:3px 10px;align-items:center;font-size:12px;';
+		for (const t of ['School', 'Power', 'Mana', 'Cooldown']) { const c = el('span', 'g99-label', t); c.style.fontSize = '9px'; g.append(c); }
+		for (const q of st.schools) {
+			const nm = el('span', '', `${schoolGlyph(q.id)} ${q.name}${q.free ? ` · every ${q.free}${q.free === 3 ? 'rd' : 'th'} free` : ''}`); nm.style.color = q.color;
+			const pw = el('b', q.power > 100 ? 'g99-up' : q.power < 100 ? 'g99-down' : '', `${q.power}%`), mn = el('span', q.mana < 100 ? 'g99-up' : '', `${q.mana}%`), cd = el('span', q.cd < 100 ? 'g99-up' : '', `${q.cd}%`);
+			g.append(nm, pw, mn, cd);
+		}
+		sheet.append(g, note('Light spells are strongest by day, dark ones at night, twilight at dusk and dawn.'));
+		// the magic awake in what you wear and hold, item by item
+		sheet.append(label('Awake in your gear'));
+		if (!st.magic.length) sheet.append(note('Nothing yet. Weapons and garments wake at level 5, 10, 15 and 20: use them, upgrade them at an outfitter, or infuse them with aether fabric.'));
+		const byItem = new Map();
+		for (const m of st.magic) { if (!byItem.has(m.uid)) byItem.set(m.uid, []); byItem.get(m.uid).push(m); }
+		for (const [uid, list] of byItem) {
+			const S = SCHOOLS[list[0].school], x = arms.instance?.(uid), card = el('div', 'g99-panel'); card.style.cssText += 'display:flex;flex-direction:column;gap:4px;cursor:pointer;';
+			const t = el('div', '', `${schoolGlyph(list[0].school)} ${list[0].item}${x ? ` · ${tierName(x.t)}, level ${x.l}` : ''}`); t.style.cssText = `font:600 12px system-ui;color:${S.color};`;
+			card.append(t);
+			for (const m of list) { const d = el('div', '', `${m.level} · ${m.name}: ${m.desc}`); d.style.cssText = 'font-size:11px;opacity:.85;line-height:1.35;'; card.append(d); }
+			card.onclick = (e) => { e.stopPropagation(); open('item', uid); };
+			sheet.append(card);
+		}
+		sheet.append(label('The body'));
+		const body = [st.weapon && `+${st.weapon}% weapon harm`, st.weak && `+${st.weak}% on heads and weak points`, st.boss && `+${st.boss}% against great beasts and machines`, st.manaOnHit && `+${st.manaOnHit} mana a weapon hit`, st.pace && `+${st.pace}% pace`, st.jump && `+${st.jump}% jump`, st.fall && `${st.fall}% gentler falls`, st.xp && `+${st.xp}% experience`].filter(Boolean);
+		sheet.append(note(body.length ? body.join(' · ') : 'Nothing beyond the usual yet: Precision, Swiftness and the body\'s perks add to it.'));
+		const aff = el('div', '', `Affinity: ${st.affinity.light} light, ${st.affinity.dark} dark`); aff.style.cssText = 'font-size:11px;opacity:.6;';
+		sheet.append(aff);
+	}
+
 	function draw() {
 		if (!shown()) return;
 		stopSpin?.(); stopSpin = null;
 		sheet.replaceChildren();
-		if (view === 'shop') drawShop(); else if (view === 'item') drawItem(); else drawGear();
+		if (view === 'shop') drawShop(); else if (view === 'item') drawItem(); else if (view === 'char') drawChar(); else drawGear();
 	}
 
 	// ---------- trading ----------
 	const trades = new Map();
 	let activeId = null, invite = null;
+	// what the room's server understands (its welcome's features)
+	let roomFeatures = new Set();
 	const active = () => (activeId && trades.get(activeId)) || null;
 	try { for (const T of JSON.parse(store.get(KEEP_KEY) || '[]')) if (T?.id && Array.isArray(T.sides?.a?.items)) trades.set(T.id, T); } catch { /* none kept */ }
 	let keptSig = null;
@@ -276,7 +445,13 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	}
 	const win = createTradeWindow({
 		mount, studio,
-		onEdit: (side) => { const T = active(); if (T) step(editSide(T, side, Date.now())); },
+		onEdit: (side) => {
+			const T = active();
+			if (!T) return;
+			// (an older rooms server drops gear above level 10 from a trade: say so, never stall)
+			if (!roomFeatures.has(GEAR_FEATURE) && side?.items?.some((x) => x.l > LEGACY_LEVEL)) { hint(`This room's server is older: gear above level ${LEGACY_LEVEL} can be traded once it is updated.`, 4000); drawTrade(true); return; }
+			step(editSide(T, side, Date.now()));
+		},
 		onAccept: () => { const T = active(); if (T) step(accept(T, ctxFor(T.peer))); },
 		onCancel: () => { const T = active(); if (T) step(cancel(T, 'cancelled', Date.now())); },
 		onClose: () => { const T = active(); if (T && OPEN.includes(T.status)) step(cancel(T, 'cancelled', Date.now())); win.close(); },
@@ -323,6 +498,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	// what the room says (net/multiplayer.js passes everything here)
 	function heard(t, v) {
 		const now = Date.now();
+		if (t === 'welcome') roomFeatures = new Set(Array.isArray(v.features) ? v.features : []);
+		else if (t === 'closed' || (t === 'status' && v.status === 'off')) roomFeatures = new Set();
 		if (t === 'trade') {
 			const T = trades.get(v.id);
 			if (T && T.peer !== v.from) return;
@@ -386,7 +563,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		// the sheet, redrawn when what it shows changes (never under a finger in a field)
 		if (shown()) {
 			const s = arms.state();
-			const k = JSON.stringify([view, shopId, itemUid, s.revision, s.credits, multiplayer?.friends?.().map((f) => [f.id, Math.round(f.d / 5)]), view !== 'item' ? arms.shops(where()).map((x) => [x.id, Math.round(x.distance / 5)]) : outfitter()?.id || '']);
+			const mi = view === 'char' || view === 'item' || view === 'gear' ? magic()?.info?.() : null;
+			const k = JSON.stringify([view, shopId, itemUid, s.revision, s.credits, multiplayer?.friends?.().map((f) => [f.id, Math.round(f.d / 5)]), view !== 'item' ? arms.shops(where()).map((x) => [x.id, Math.round(x.distance / 5)]) : outfitter()?.id || '', mi && [mi.level, mi.points, mi.fabric, mi.life, mi.max, view === 'char' ? mi.perks.length : 0]]);
 			if (k !== sig) { sig = k; draw(); }
 		}
 	}

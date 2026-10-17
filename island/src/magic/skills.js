@@ -18,6 +18,7 @@
 // which the spells' rules (spells.js) and the caster read.
 
 import { SCHOOLS, SPELLS, SPELL, weaveBlock, weaveCost } from './spells.js';
+import { composeMods } from './stats.js';
 
 // the skills of the body: no spells, perks only
 export const BODY = Object.freeze({
@@ -264,17 +265,22 @@ export function computeMods(perks) {
 	m.fall = Math.min(0.6, m.fall);
 	return m;
 }
+// (the perks, the attributes, the gear's magic and each spell's mastery: magic/stats.js)
 export function refreshMods(s) {
-	s.mods = computeMods(s.perks || []);
-	// (and each spell's mastery: its own power, and what its levels open)
+	s.mods = composeMods(s);
+	return s.mods;
+}
+// each spell's mastery folded into mods m (its own power), and what its levels open into s
+// (s.moonlit). magic/stats.js's composeMods calls it too, so the gear's numbers keep it.
+export function applyMastery(s, m) {
 	const lit = new Set(Array.isArray(s.moonlit) ? s.moonlit : []);
 	for (const [id, pts] of Object.entries(s.mastery || {})) {
 		const L = masteryLevel(pts);
-		if (L > 1) s.mods.power[id] = (s.mods.power[id] || 0) + (L - 1) * MASTERY_POWER;
+		if (L > 1) m.power[id] = (m.power[id] || 0) + (L - 1) * MASTERY_POWER;
 		for (const [at, g] of Object.entries(MASTERY_GIFT[id] || {})) if (L >= +at && g.moonlit) lit.add(id);
 	}
 	s.moonlit = [...lit];
-	return s.mods;
+	return m;
 }
 
 // ---------- spell mastery ----------

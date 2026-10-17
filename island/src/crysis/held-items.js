@@ -36,6 +36,9 @@ export const ITEM_ICONS = {
 	'camp-lantern': '🏮', 'repair-roll': '🧰', 'station-signal-flare': '🎆',
 	'trail-rifle-box': '📦', 'scout-rifle-box': '📦', 'spark-cell-pack': '🔋', 'reed-arrow-quiver': '🏹',
 	'relay-transceiver-board': '📡', 'kestrel-flight-recorder': '🟧', 'regolith-core-sample': '🪨', 'hydroponic-harvest-crate': '🥬',
+	// garments (worn, not held: no model of their own yet)
+	'wayfarers-hood': '🧣', 'stargazer-circlet': '💠', 'aetherweave-coat': '🧥', 'rangers-jacket': '🧥',
+	'spellbinder-gloves': '🧤', 'fieldcraft-gloves': '🧤', 'trailstrider-boots': '🥾', 'duskwalker-boots': '👢',
 };
 export const iconOf = (id) => ITEM_ICONS[id] || '📦';
 

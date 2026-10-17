@@ -9,7 +9,7 @@ import { planCaves } from '../src/planet/cavenet.js';
 import { awarenessContext, contextualOpening } from '../src/people/world-awareness.js';
 const storage=()=>{const m=new Map();return{get length(){return m.size;},key:i=>[...m.keys()][i],getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)};};
 const backing=()=>{const m=new Map();return{get:async k=>structuredClone(m.get(k)),put:async(o)=>{for(const[k,v]of Object.entries(o))m.set(k,structuredClone(v));}};};
-const transport=s=>async(url,init={})=>s.fetch(new Request('https://soul/me',init));
+const transport=s=>async(url,init={})=>url.endsWith('/status')?Response.json({features:['persistent-reputation-v1']}):s.fetch(new Request('https://soul/me',init));
 const make=(st,s)=>{const morality=createMorality();return{morality,soul:createSoul({morality,storage:st,url:'https://rooms',request:transport(s)})};};
 test('offline deeds survive reload, sync exactly once, recover in a new browser and carry across worlds',async()=>{
  const st=storage(),s=new Soul({storage:backing()});let a=make(st,s);
@@ -32,11 +32,12 @@ test('failed cloud saves retain local standing and outbox',async()=>{
 test('an in-flight save cannot replace a recovered soul with the previous identity',async()=>{
  const m=createMorality(),other=createMorality();other.record({kind:'favour'});
  let finishRecovery,finishSave;
- const soul=createSoul({morality:m,storage:storage(),url:'https://rooms',request:async(url,init)=>new Promise(resolve=>{
+ const soul=createSoul({morality:m,storage:storage(),url:'https://rooms',request:async(url,init)=>url.endsWith('/status')?Response.json({features:['persistent-reputation-v1']}):new Promise(resolve=>{
   if(init.method==='GET')finishRecovery=()=>resolve(Response.json({ledger:other.snapshot(),revision:10}));
   else finishSave=()=>resolve(Response.json({ledger:createMorality().snapshot(),revision:1}));
  })});
  const recovery=soul.recover('b'.repeat(64)),save=soul.sync();
+ await new Promise(setImmediate);
  finishRecovery();await recovery;finishSave();await save;
  assert.equal(soul.recoveryKey(),'b'.repeat(64));assert.equal(m.me().deeds,1);assert.equal(soul.info().revision,10);assert.equal(soul.info().status,'saved');soul.dispose();
 });
