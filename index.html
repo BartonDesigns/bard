@@ -8306,55 +8306,61 @@ const YEE_VOICES={
  trunk:{vowel:[470,2560,3430],cents:-45,vibrato:5.9,edge:1.18,presence:1.42}
 };
 const YEE_ACCENTS={ride:17,kick:0,hihat:29,openhat:41,cymbal:53,rim:-11,clap:9,snare:-19,lotom:-37,shaker:35,cowbell:61,hitom:-27,jump:-49,perc:23};
-// music234: the shout as a voice. A glottal pulse (falling harmonics, not a raw saw) through
-// the formants of a shouted /i/, the /j/ onset closing in from above and the tail opening
-// toward "uh"; pitch scoops up, holds and falls like a hype man's call. Three takes, a little
-// apart in time, pitch and pan, make it a crew; a short slap puts them in a room.
+// music234: the YEEE as a cartoon voice (Josh: "more like Mickey Mouse"). A falsetto glottal
+// pulse, high (580 to 820 Hz) through a small throat: the formants of "ee" pushed up by the
+// kit's tract scale, pinched and nasal (thin lows, a dip near 1 kHz, a lift at the twang). The
+// pitch squeaks up into the note and slides down the long "yeeeee"; one voice, a small room.
 const SHOUT={
- town:{f0:350,tract:1,breath:.05,rasp:.08,drive:1.7},
- ghost:{f0:300,tract:1.07,breath:.08,rasp:.06,drive:1.5},
- sideshow:{f0:405,tract:.95,breath:.05,rasp:.12,drive:2},
- trunk:{f0:265,tract:1.12,breath:.06,rasp:.1,drive:2.2}
+ town:{f0:720,tract:.72,breath:.035,rasp:.02,drive:1.2},
+ ghost:{f0:640,tract:.78,breath:.05,rasp:.02,drive:1.15},
+ sideshow:{f0:820,tract:.68,breath:.035,rasp:.03,drive:1.25},
+ trunk:{f0:580,tract:.82,breath:.04,rasp:.03,drive:1.3}
 };
-// [onset, /i/, tail] in Hz, then Q and level: F1 to F4 of a shouted "ee"
-const EE=[[[290,390,560],4.5,1],[[2650,2300,1550],13,.7],[[3150,3000,2550],15,.5],[[3800,3700,3500],14,.2]];
-const TAKES=[{pan:0,delay:0,cents:0,gain:1,tract:1},{pan:-.38,delay:.017,cents:13,gain:.6,tract:.97},{pan:.42,delay:.03,cents:-10,gain:.52,tract:1.04}];
+// [onset, "ee", tail] in Hz before the tract scale, then Q and level: F1 to F4 of "ee"
+const EE=[[[290,390,470],3.2,1],[[2650,2300,2000],9,.75],[[3150,3000,2750],10,.5],[[3800,3700,3600],10,.2]];
+const TAKES=[{pan:0,delay:0,cents:0,gain:1,tract:1}];
 const voiceRes=new WeakMap();
 function shoutRes(c){let r=voiceRes.get(c);if(r)return r;const real=new Float32Array(64),imag=new Float32Array(64);
- for(let h=1;h<64;h++)imag[h]=1/h**.85;
+ for(let h=1;h<64;h++)imag[h]=1/h**1.2;
  const curves=new Map(),noise=sound.resources(c).noise;r={glottal:c.createPeriodicWave(real,imag),noise,curve(k){const q=Math.round(k*10);if(!curves.has(q)){const a=new Float32Array(2049);for(let i=0;i<a.length;i++){const x=i/1024-1;a[i]=Math.tanh(x*q/10)/Math.tanh(q/10);}curves.set(q,a);}return curves.get(q);}};
  voiceRes.set(c,r);return r;}
 function renderShout(c,bus,t,opts={},frequency=440,onEnd){
  const prof=SHOUT[opts.kit]||SHOUT.town,kit=sound.drumKits?.[opts.kit]||sound.drumKits?.town,r=shoutRes(c);
  const rootHz=Number.isFinite(frequency)&&frequency>0?frequency:440;
- const fundamental=rootHz*2**Math.round(Math.log2(prof.f0/rootHz))*2**((YEE_ACCENTS[opts.drum]||0)/2400);
+ // the key's root or fifth, whichever octave of them sits nearest the kit's voice
+ const near=x=>x*2**Math.round(Math.log2(prof.f0/x)),pick=[near(rootHz),near(rootHz*1.5)].sort((x,y)=>Math.abs(Math.log2(x/prof.f0))-Math.abs(Math.log2(y/prof.f0)))[0];
+ const fundamental=pick*2**((YEE_ACCENTS[opts.drum]||0)/2400);
  const owned=[],sources=[],node=n=>(owned.push(n),n),rawLevel=kit?.yeeLevel,level=Math.max(.55,Math.min(.82,Number.isFinite(rawLevel)?rawLevel:.7));
  const out=node(c.createGain());out.gain.value=level*.9;out.connect(bus);
  // the room: a short stereo slap, darker than the voice
- const wet=node(c.createGain()),fb=node(c.createGain()),lp=node(c.createBiquadFilter());wet.gain.value=.15;fb.gain.value=.18;lp.type='lowpass';lp.frequency.value=3200;
+ const wet=node(c.createGain()),fb=node(c.createGain()),lp=node(c.createBiquadFilter());wet.gain.value=.08;fb.gain.value=.14;lp.type='lowpass';lp.frequency.value=4200;
  const merger=c.createChannelMerger?node(c.createChannelMerger(2)):null;out.connect(lp);
  [.083,.121].forEach((d,i)=>{const dl=node(c.createDelay(.3));dl.delayTime.value=d;lp.connect(dl);dl.connect(fb);if(merger)dl.connect(merger,0,i);else dl.connect(wet);});
  fb.connect(lp);if(merger)merger.connect(wet);wet.connect(bus);
- const end=t+.62;
+ const end=t+.76;
  for(const take of TAKES){
   const t0=t+take.delay,f=fundamental*2**(take.cents/1200),tract=prof.tract*take.tract,stopAt=end+take.delay+.03;
   const src=node(c.createOscillator());src.setPeriodicWave(r.glottal);
-  src.frequency.setValueAtTime(f*.82,t0);src.frequency.exponentialRampToValueAtTime(f*1.04,t0+.07);src.frequency.exponentialRampToValueAtTime(f,t0+.16);
-  src.frequency.linearRampToValueAtTime(f*1.015,t0+.38);src.frequency.exponentialRampToValueAtTime(f*.8,t0+.6);
+  src.frequency.setValueAtTime(f*.86,t0);src.frequency.exponentialRampToValueAtTime(f*1.08,t0+.06);src.frequency.linearRampToValueAtTime(f,t0+.24);
+  src.frequency.exponentialRampToValueAtTime(f*.78,t0+.74);
   // a living pitch: two slow wobbles and a vibrato that blooms as the note holds
   for(const [hz,cents] of [[5.3,6],[7.9,4]]){const o=node(c.createOscillator()),g=node(c.createGain());o.frequency.value=hz*(1+take.delay*3);g.gain.value=cents;o.connect(g);g.connect(src.detune);sources.push(o);}
-  const vib=node(c.createOscillator()),vd=node(c.createGain());vib.frequency.value=5.6;vd.gain.setValueAtTime(0,t0);vd.gain.setValueAtTime(0,t0+.2);vd.gain.linearRampToValueAtTime(22,t0+.45);vib.connect(vd);vd.connect(src.detune);sources.push(vib);
+  const vib=node(c.createOscillator()),vd=node(c.createGain());vib.frequency.value=6.6;vd.gain.setValueAtTime(0,t0);vd.gain.setValueAtTime(0,t0+.24);vd.gain.linearRampToValueAtTime(30,t0+.55);vib.connect(vd);vd.connect(src.detune);sources.push(vib);
   // rasp: a touch of amplitude at half the pitch, the edge of a strained shout
-  const rasp=node(c.createGain()),rm=node(c.createOscillator()),rd=node(c.createGain());rasp.gain.value=1-prof.rasp;rm.frequency.setValueAtTime(f*.41,t0);rm.frequency.exponentialRampToValueAtTime(f*.52,t0+.07);rm.frequency.exponentialRampToValueAtTime(f*.4,t0+.6);rd.gain.value=prof.rasp;rm.connect(rd);rd.connect(rasp.gain);src.connect(rasp);sources.push(src,rm);
+  const rasp=node(c.createGain()),rm=node(c.createOscillator()),rd=node(c.createGain());rasp.gain.value=1-prof.rasp;rm.frequency.setValueAtTime(f*.41,t0);rm.frequency.exponentialRampToValueAtTime(f*.52,t0+.07);rm.frequency.exponentialRampToValueAtTime(f*.39,t0+.74);rd.gain.value=prof.rasp;rm.connect(rd);rd.connect(rasp.gain);src.connect(rasp);sources.push(src,rm);
   const breath=node(c.createBufferSource()),bh=node(c.createBiquadFilter()),bg=node(c.createGain());breath.buffer=r.noise;breath.loop=true;bh.type='highpass';bh.frequency.value=1100;
-  bg.gain.setValueAtTime(0,t0);bg.gain.linearRampToValueAtTime(prof.breath*3,t0+.012);bg.gain.exponentialRampToValueAtTime(prof.breath,t0+.07);bg.gain.setValueAtTime(prof.breath,t0+.45);bg.gain.linearRampToValueAtTime(prof.breath*1.6,t0+.58);
+  bg.gain.setValueAtTime(0,t0);bg.gain.linearRampToValueAtTime(prof.breath*3,t0+.012);bg.gain.exponentialRampToValueAtTime(prof.breath,t0+.07);bg.gain.setValueAtTime(prof.breath,t0+.55);bg.gain.linearRampToValueAtTime(prof.breath*1.4,t0+.72);
   breath.connect(bh);bh.connect(bg);sources.push(breath);
-  const sum=node(c.createGain()),drive=node(c.createWaveShaper()),amp=node(c.createGain());drive.curve=r.curve(prof.drive);drive.oversample='2x';sum.connect(drive);drive.connect(amp);
+  const sum=node(c.createGain()),drive=node(c.createWaveShaper()),amp=node(c.createGain());drive.curve=r.curve(prof.drive);drive.oversample='2x';sum.connect(drive);
+  // the pinch: thin lows, a nasal dip near 1 kHz, a lift where a cartoon voice twangs
+  const thin=node(c.createBiquadFilter()),dip=node(c.createBiquadFilter()),twang=node(c.createBiquadFilter());thin.type='highpass';thin.frequency.value=f*.7;thin.Q.value=.7;
+  dip.type='peaking';dip.frequency.value=1050;dip.Q.value=2.5;dip.gain.value=-8;twang.type='peaking';twang.frequency.value=Math.min(2600/tract*.85,c.sampleRate*.4);twang.Q.value=1.3;twang.gain.value=6;
+  drive.connect(thin);thin.connect(dip);dip.connect(twang);twang.connect(amp);
   EE.forEach(([hz,q,gain])=>{const bp=node(c.createBiquadFilter()),g=node(c.createGain());bp.type='bandpass';bp.Q.value=q;const fq=x=>Math.min(x/tract,c.sampleRate*.45);
-   bp.frequency.setValueAtTime(fq(hz[0]),t0);bp.frequency.exponentialRampToValueAtTime(fq(hz[1]),t0+.06);bp.frequency.setValueAtTime(fq(hz[1]),t0+.44);bp.frequency.exponentialRampToValueAtTime(fq(hz[2]),t0+.6);
+   bp.frequency.setValueAtTime(fq(hz[0]),t0);bp.frequency.exponentialRampToValueAtTime(fq(hz[1]),t0+.06);bp.frequency.setValueAtTime(fq(hz[1]),t0+.5);bp.frequency.exponentialRampToValueAtTime(fq(hz[2]),t0+.74);
    g.gain.value=gain*Math.sqrt(q);rasp.connect(bp);bg.connect(bp);bp.connect(g);g.connect(sum);});
-  amp.gain.setValueAtTime(0,t0);amp.gain.linearRampToValueAtTime(.85*take.gain,t0+.03);amp.gain.linearRampToValueAtTime(take.gain,t0+.1);amp.gain.linearRampToValueAtTime(.94*take.gain,t0+.38);
-  amp.gain.linearRampToValueAtTime(.66*take.gain,t0+.5);amp.gain.exponentialRampToValueAtTime(.0001,t0+.62);
+  amp.gain.setValueAtTime(0,t0);amp.gain.linearRampToValueAtTime(.9*take.gain,t0+.025);amp.gain.linearRampToValueAtTime(take.gain,t0+.08);amp.gain.linearRampToValueAtTime(.9*take.gain,t0+.5);
+  amp.gain.linearRampToValueAtTime(.6*take.gain,t0+.64);amp.gain.exponentialRampToValueAtTime(.0001,t0+.76);
   if(c.createStereoPanner){const pan=node(c.createStereoPanner());pan.pan.value=take.pan;amp.connect(pan);pan.connect(out);}else amp.connect(out);
   amp.gain.value=0;bg.gain.value=0;for(const n of sources.slice(-6)){n.__startAt=t0;n.__stopAt=stopAt;}
  }
