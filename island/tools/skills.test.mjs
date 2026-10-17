@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { SPELLS, SPELL, SCHOOLS, createMagicState, saveMagic, weave, weaveBlock, gather, spellPower, manaCost, manaMax, manaRegen, cooldownOf, shaped } from '../src/magic/spells.js';
-import { PAGES, SKILL, LAYOUT, PERKS, PERK, pageNodes, pageLinks, rankOf, useFor, rankFrac, xpNeed, pointsOf, addXp, addUse, perkBlock, takePerk, sanitizeSkills, computeMods, fxLines, spellBlock, isUltimate, ULTIMATE_RANK } from '../src/magic/skills.js';
+import { PAGES, SKILL, LAYOUT, PERKS, PERK, pageNodes, pageLinks, rankOf, useFor, rankFrac, xpNeed, pointsOf, addXp, addUse, perkBlock, takePerk, sanitizeSkills, computeMods, fxLines, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, masteryLevel, masteryFrac, masteryToNext, addMastery, feedSpell, feedable, feedCost } from '../src/magic/skills.js';
 
 const fresh = () => sanitizeSkills(createMagicState());
 
@@ -134,6 +134,44 @@ test('an ultimate takes mastery of its school: the ladder below it, then the hig
 	assert.equal(spellBlock(fresh(), SPELL['lance-of-dawn']), weaveBlock(fresh(), SPELL['lance-of-dawn']));
 });
 
+test('a spell grows with casting and with aether poured in; Solar Flare learns the moon at III', () => {
+	assert.deepEqual([0, 99, 100, 299, 300, 1499, 1500, 9e9].map(masteryLevel), [1, 1, 2, 2, 3, 4, 5, 5]);
+	assert.equal(masteryFrac(200), 0.5); assert.equal(masteryFrac(1500), 1); assert.equal(masteryToNext(250), 50); assert.equal(masteryToNext(1500), 0);
+	const s = fresh();
+	// only a spell you know
+	assert.equal(addMastery(s, 'solar-flare', 50), 0); assert.equal(s.mastery['solar-flare'], undefined);
+	gather(s, 'light', 1000); weave(s, 'lance-of-dawn'); weave(s, 'solar-flare');
+	const p0 = spellPower(s, SPELL['solar-flare']), lance0 = spellPower(s, SPELL['lance-of-dawn']);
+	// casting: the mana paid
+	assert.equal(addMastery(s, 'solar-flare', 120), 1);
+	assert.ok(Math.abs(spellPower(s, SPELL['solar-flare']) / p0 - (1 + MASTERY_POWER)) < 1e-9, 'its own power, and only its own');
+	assert.equal(spellPower(s, SPELL['lance-of-dawn']), lance0);
+	assert.ok(!s.moonlit['solar-flare'], 'not yet by the moon');
+	// pouring: its strand's aether, a point each
+	const light0 = s.fabric.light, dark0 = s.fabric.dark;
+	assert.deepEqual(feedSpell(s, 'solar-flare', 200), { fed: 200, levels: 1 });
+	assert.equal(s.fabric.light, light0 - 200); assert.equal(s.fabric.dark, dark0);
+	assert.equal(masteryLevel(s.mastery['solar-flare']), 3);
+	assert.ok(s.moonlit['solar-flare'], 'Moonfall: it works by night');
+	// no more than you have, and not past the last level
+	s.fabric.light = 30;
+	assert.equal(feedable(s, 'solar-flare', 100), 30);
+	s.fabric.light = 1e6;
+	feedSpell(s, 'solar-flare', 1e6);
+	assert.equal(s.mastery['solar-flare'], MASTERY[MASTERY.length - 1]);
+	assert.equal(feedSpell(s, 'solar-flare', 10).fed, 0);
+	// a twilight spell takes both strands, half each, in pairs
+	assert.deepEqual(feedCost(SPELL.thunderclap, 10), { light: 5, dark: 5 });
+	assert.deepEqual(feedCost(SPELL.shadowbolt, 10), { light: 0, dark: 10 });
+	// kept between visits; derived again on load
+	const back = sanitizeSkills(createMagicState(JSON.parse(JSON.stringify(saveMagic(s)))));
+	assert.equal(back.mastery['solar-flare'], 1500); assert.ok(back.moonlit['solar-flare']);
+	assert.ok(back.mods.power['solar-flare'] > 0.3);
+	// rubbish (and spells not known) dropped
+	const junk = sanitizeSkills(createMagicState({ v: 1, known: ['sunspark'], mastery: { sunspark: 'lots', 'solar-flare': 900, nope: 5 } }));
+	assert.deepEqual(junk.mastery, { sunspark: 0 });
+});
+
 test('skills are kept between visits, and rubbish is dropped', () => {
 	const s = fresh();
 	addXp(s, 1000); addUse(s, 'void', 300); assert.ok(takePerk(s, 'searing-light'));
@@ -152,11 +190,11 @@ test('skills are kept between visits, and rubbish is dropped', () => {
 
 test('the menu is wired: the keys, the places menu, the fight held and the world not drawn under it', () => {
 	const idx = fs.readFileSync(new URL('../src/magic/index.js', import.meta.url), 'utf8');
-	for (const k of ["e.code === 'Tab'", 'KeyN', 'menu.insertBefore', 'hooks.power', 'spellBlock(state, SPELL[id])', "addUse(state, 'athletics'"]) assert.ok(idx.includes(k), k);
+	for (const k of ["e.code === 'Tab'", 'KeyN', 'menu.insertBefore', 'hooks.power', 'spellBlock(state, SPELL[id])', 'addMastery(state, a.id, b)', 'onFeed:', "addUse(state, 'athletics'"]) assert.ok(idx.includes(k), k);
 	const main = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
 	assert.match(main, /menu: tpMenu/); assert.match(main, /magic\.menuOpen\(\)/); assert.match(main, /magic\.covering\(\)/);
 	const ui = fs.readFileSync(new URL('../src/magic/skills-ui.js', import.meta.url), 'utf8');
-	for (const k of ['pointerdown', 'wheel', 'ArrowRight', 'Escape', 'Digit6', 'stopImmediatePropagation', "addEventListener('keydown', onKey, true)"]) assert.ok(ui.includes(k), k);
+	for (const k of ['sk-feed', 'onFeed(sp.id', 'pointerdown', 'wheel', 'ArrowRight', 'Escape', 'Digit6', 'stopImmediatePropagation', "addEventListener('keydown', onKey, true)"]) assert.ok(ui.includes(k), k);
 	const combat = fs.readFileSync(new URL('../src/combat/combat.js', import.meta.url), 'utf8');
 	assert.match(combat, /hooks\.power\(T, blow\)/);
 });

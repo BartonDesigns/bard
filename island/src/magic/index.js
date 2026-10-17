@@ -14,7 +14,7 @@
 // a thread or two of light.
 
 import { createMagicState, saveMagic, weave, weaveCost, bind, gather, SPELL, SLOTS } from './spells.js';
-import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, PERK, spellBlock } from './skills.js';
+import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, PERK, spellBlock, addMastery, feedSpell, masteryLevel, NUMERAL, MASTERY_GIFT } from './skills.js';
 import { createSkillsMenu } from './skills-ui.js';
 import { createMagicFx, magicSound } from './fx.js';
 import { createAether, seedOf } from './aether.js';
@@ -48,9 +48,18 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	const worldKey = () => combat.worldKey?.() || 'here';
 	const seed = () => (W() ? seedOf(worldKey()) : null);
 	const track = (kind, a, b) => {
-		if (kind === 'cast' && b > 0) learnt(addUse(state, a.school, b));
+		if (kind === 'cast' && b > 0) { learnt(addUse(state, a.school, b)); mastered(a.id, addMastery(state, a.id, b)); }
 		else if (kind === 'hurt' && a > 0) learnt(addUse(state, 'resilience', a / 2));
 	};
+	// a spell's mastery risen: told, and what it opens named
+	function mastered(id, up) {
+		if (!up) return;
+		dirty = true;
+		const L = masteryLevel(state.mastery[id]), gift = MASTERY_GIFT[id]?.[L];
+		if (!skills?.isOpen()) hint(`${SPELL[id].name}: mastery ${NUMERAL[L - 1]}${gift ? `. ${gift.name}: ${gift.text}` : '. It strikes harder.'}`, gift ? 4200 : 2200);
+		magicSound('level', 0.12);
+		skills?.refresh();
+	}
 	const caster = createCaster({ camera, combat, player: () => W()?.player, state, fx, light, hint, sky: { get state() { return W()?.sky?.state; } }, worldKey, seed, isPhone, track });
 	combat.hooks.shield = (blow) => caster.shieldBlow(blow);
 	combat.hooks.cloak = () => caster.cloaked();
@@ -102,6 +111,15 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 			return true;
 		},
 		onBind: (i, id) => { bind(state, i, id); dirty = true; },
+		// aether poured into a spell you know: n points of its mastery
+		onFeed: (id, n) => {
+			const r = feedSpell(state, id, n);
+			if (!r.fed) return r;
+			dirty = true;
+			learnt(addXp(state, r.fed));
+			if (r.levels) mastered(id, r.levels);
+			return r;
+		},
 	});
 	// (it opens where it was left; not while driving, flying a craft or in another screen)
 	const openSkills = (k) => { if (!W()?.player) return; if (busy()) { hint('Skills and magic open once you are on your feet.', 1600); return; } skills.open(k); };
@@ -175,11 +193,12 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (the menu open: the fight holds; fully over the world: it need not be drawn, main.js)
 		menuOpen: () => skills.isOpen(),
 		covering: () => skills.covering(),
-		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], ...caster.info() }),
+		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: Object.keys(state.moonlit || {}), ...caster.info() }),
 		// (the console: experience, and a perk)
 		xp: (n = 100) => { learnt(addXp(state, n)); return { level: state.level, xp: state.xp, points: pointsOf(state) }; },
 		perk: (id) => { const ok = takePerk(state, id); if (ok) dirty = true; skills.refresh(); return ok; },
 		use: (k, n = 100) => { learnt(addUse(state, k, n)); skills.refresh(); return state.use[k]; },
+		master: (id, n = 100) => { mastered(id, addMastery(state, id, n)); skills.refresh(); return state.mastery[id]; },
 		cast: (id, o) => caster.cast(id, o || {}),
 		learn: (id) => weave(state, id),
 		// (the console: fabric of a strand, every spell known)

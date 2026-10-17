@@ -121,8 +121,9 @@ export const STARTER = Object.freeze({ known: ['sunspark', 'shadowbolt', 'mend',
 export const SLOTS = 5;
 
 export function createMagicState(from = null) {
-	// (xp, level, perks and use: your skills, magic/skills.js; mods: what the perks add up to)
-	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, xp: 0, level: 1, perks: [], use: {}, mods: null };
+	// (xp, level, perks, use and mastery: your skills, magic/skills.js; mods: what the perks and
+	// mastery add up to; moonlit: the sun spells mastered to work by the moon)
+	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, xp: 0, level: 1, perks: [], use: {}, mastery: {}, mods: null, moonlit: {} };
 	if (from && from.v === 1) {
 		if (Array.isArray(from.known)) s.known = from.known.filter((id) => SPELL[id]);
 		if (Array.isArray(from.binds)) s.binds = [...Array(SLOTS)].map((_, i) => (SPELL[from.binds[i]] && s.known.includes(from.binds[i]) ? from.binds[i] : null));
@@ -135,18 +136,19 @@ export function createMagicState(from = null) {
 		if (Number.isFinite(from.level)) s.level = from.level;
 		if (Array.isArray(from.perks)) s.perks = from.perks.filter((id) => typeof id === 'string');
 		if (from.use && typeof from.use === 'object') s.use = { ...from.use };
+		if (from.mastery && typeof from.mastery === 'object') s.mastery = { ...from.mastery };
 	}
 	return s;
 }
 // what is kept (no cooldowns: they are of the moment)
-export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {} }; }
+export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {}, mastery: s.mastery || {} }; }
 
 // What the perks you hold add to a spell's stat (magic/skills.js sums them into s.mods): the
-// share for its school, its strand and every spell
+// share for its school, its strand and every spell, and (power) the spell's own mastery
 export function modFor(mods, stat, spell) {
 	const m = mods?.[stat];
 	if (!m || !spell) return 0;
-	return (m[spell.school] || 0) + (m[strandOf(spell)] || 0) + (m.all || 0);
+	return (m[spell.school] || 0) + (m[strandOf(spell)] || 0) + (m.all || 0) + (m[spell.id] || 0);
 }
 // a spell as the perks shape it: longer, wider, further, its statuses held longer (the copy
 // is what the caster works with; its id, mana and cooldown are the catalog's)

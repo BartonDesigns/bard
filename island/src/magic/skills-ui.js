@@ -10,7 +10,7 @@
 // key let go), and draws its sky on one small canvas. All movement is transforms and opacity.
 
 import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
-import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, computeMods, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK } from './skills.js';
+import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, computeMods, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, MASTERY_GIFT, NUMERAL, masteryLevel, masteryToNext, feedable, feedCost } from './skills.js';
 
 const KEYS = ['6', '7', '8', '9', '0'];
 const ICON = { radiance: '☀', restoration: '✚', warding: '⛨', dawn: '☼', shadow: '☾', void: '◆', blight: '☣', umbral: '⛧', storm: 'ϟ', chrono: '⧗', primal: '♨', marksman: '⌖', athletics: '»', resilience: '⛊' };
@@ -179,6 +179,34 @@ const CSS = `
 .sk-req li i{font-style:normal;width:14px;text-align:center;flex:none}
 .sk-req li.ok i{color:#10b981}.sk-req li.no i{color:#f59e0b}
 .sk-req li.no{opacity:1}
+.sk-ms{margin-top:14px;padding:12px;border-radius:12px;background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.02));box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.sk-ms .top{display:flex;align-items:baseline;gap:8px}
+.sk-ms .top span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.6}
+.sk-ms .top b{font:700 18px/1 system-ui,sans-serif;color:var(--c);text-shadow:0 0 12px var(--c2);letter-spacing:.06em}
+.sk-ms .top em{margin-left:auto;font-style:normal;font-size:11.5px;opacity:.6}
+.sk-ms .seg{display:flex;gap:4px;margin-top:9px}
+.sk-ms .seg div{flex:1;position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.sk-ms .seg i{position:absolute;inset:0;transform-origin:left;background:linear-gradient(90deg,var(--c3),var(--c));box-shadow:0 0 8px var(--c2);transition:transform .12s linear}
+.sk-ms .lv{display:flex;margin-top:4px;font-size:9.5px;letter-spacing:.1em;opacity:.45}
+.sk-ms .lv span{flex:1;text-align:right}
+.sk-ms .lv span.on{opacity:1;color:var(--c);font-weight:700}
+.sk-ms ul{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px;font-size:12.5px}
+.sk-ms li{display:flex;gap:8px;align-items:baseline;opacity:.55}
+.sk-ms li.on{opacity:1}
+.sk-ms li i{font-style:normal;flex:none;min-width:24px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--c)}
+.sk-ms li b{font-weight:650}
+.sk-feed{position:relative;overflow:hidden;width:100%;margin-top:11px;height:42px;border:0;border-radius:11px;cursor:pointer;font-weight:650;font-size:13.5px;color:#fff;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1.5px var(--c);touch-action:none;user-select:none;-webkit-user-select:none;transition:background .2s,box-shadow .2s,transform .15s}
+.sk-feed:hover{background:rgba(255,255,255,.1)}
+.sk-feed.on{transform:scale(.985);background:var(--c2);box-shadow:inset 0 0 0 1.5px var(--c),0 0 22px var(--c2)}
+.sk-feed.on::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(100deg,transparent 0 14px,rgba(255,255,255,.18) 14px 18px);animation:skPour .5s linear infinite}
+@keyframes skPour{to{background-position:36px 0}}
+.sk-feed:disabled{box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);color:rgba(255,255,255,.5);cursor:default;background:rgba(255,255,255,.03)}
+.sk-feed span{position:relative}
+.sk-ms small{display:block;margin-top:6px;font-size:11px;opacity:.5;text-align:center}
+.sk-ms.up{animation:skMsUp .9s ease-out}
+@keyframes skMsUp{0%{box-shadow:inset 0 0 0 1px var(--c),0 0 0 0 var(--c)}100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),0 0 0 14px transparent}}
+.sk-n .mp{position:absolute;right:-4px;top:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#0a0d14;box-shadow:inset 0 0 0 1px var(--c);color:var(--c);font:700 9px/16px system-ui,sans-serif;letter-spacing:.04em;pointer-events:none;display:none}
+.sk-n.own .mp.on{display:block}
 .sk-act{flex:none;padding:12px 16px 14px;border-top:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.2)}
 .sk-go{height:46px;border:0;border-radius:12px;cursor:pointer;font-weight:700;font-size:14.5px;letter-spacing:.03em;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;box-shadow:0 4px 18px rgba(1,169,130,.35);transition:transform .15s,box-shadow .2s,filter .2s;position:relative;overflow:hidden}
 .sk-go:hover{transform:translateY(-1px);box-shadow:0 8px 26px rgba(1,169,130,.45)}
@@ -217,7 +245,7 @@ const CSS = `
 `;
 const STYLE_ID = 'sk-style';
 
-export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, sound = () => {}, isTouch = false, isPhone = false }) {
+export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, onFeed = () => ({ fed: 0, levels: 0 }), sound = () => {}, isTouch = false, isPhone = false }) {
 	let root = null, built = false, open = false, vis = false, page = 0, sel = null, mode = 'wide', W = 0, H = 0;
 	const P = { stage: null, track: null, pages: [], chips: [], info: null, head: {}, flash: null, toast: null, arr: [], sky: null, pv: null };
 	const nodesOf = new Map(PAGES.map((k) => [k, pageNodes(k)]));
@@ -312,7 +340,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			return { a, b, l, g, was: '', dx: x2 - x1, dy: y2 - y1 };
 		});
 		const stars = nodes.map((n, j) => {
-			const b = mk('button', 'sk-n ' + n.kind + (n.kind === 'spell' && isUltimate(n.item) ? ' ult' : ''), cons, `<span class="pr"></span><span class="o"></span>${n.kind === 'spell' && isUltimate(n.item) ? '<span class="bh"><i></i></span>' : `<span class="g">${txt(n.item.glyph)}</span>`}<span class="lb">${n.item.name}</span>`);
+			const b = mk('button', 'sk-n ' + n.kind + (n.kind === 'spell' && isUltimate(n.item) ? ' ult' : ''), cons, `<span class="pr"></span><span class="o"></span>${n.kind === 'spell' ? '<span class="mp"></span>' : ''}${n.kind === 'spell' && isUltimate(n.item) ? '<span class="bh"><i></i></span>' : `<span class="g">${txt(n.item.glyph)}</span>`}<span class="lb">${n.item.name}</span>`);
 			b.type = 'button';
 			b.style.left = n.at[0] + '%'; b.style.top = n.at[1] + '%';
 			b.style.setProperty('--i', j); b.style.setProperty('--d', `${(j * 0.7) % 5}s`);
@@ -469,6 +497,10 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 					s.b.setAttribute('aria-label', `${s.n.item.name}, ${s.n.kind}, ${{ own: s.n.kind === 'spell' ? 'known' : 'unlocked', can: 'ready to ' + (s.n.kind === 'spell' ? 'weave' : 'unlock'), near: 'locked', far: 'out of reach' }[st]}`);
 					s.was = st;
 				}
+				if (s.n.kind === 'spell') {
+					const mp = s.b.querySelector('.mp'), L = st === 'own' ? masteryLevel(state.mastery?.[s.n.id] || 0) : 1;
+					mp.classList.toggle('on', L > 1); mp.textContent = NUMERAL[L - 1];
+				}
 				if (fresh.includes(s.n.id)) { s.b.classList.remove('pop'); void s.b.offsetWidth; s.b.classList.add('pop'); setTimeout(() => s.b.classList.remove('pop'), 950); }
 			}
 			for (const L of p.links) {
@@ -495,12 +527,15 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		P.head.pts.className = 'sk-pts ' + (pts ? 'has' : 'none');
 		P.head.pts.innerHTML = `<i>${pts}</i><span class="w">${pts === 1 ? 'skill point' : 'skill points'}</span>${mode === 'tall' ? (pts === 1 ? 'point' : 'points') : ''}`;
 		P.head.pts.title = 'You earn a skill point each level. Spend them on perks (the diamonds).';
-		P.head.fab.innerHTML = `<span class="l" title="Light aether fabric: weaves light spells">☀ ${state.fabric.light}</span><span class="d" title="Dark aether fabric: weaves dark spells">☾ ${state.fabric.dark}</span><span class="m" title="Mana">✧ <b>${Math.round(state.mana)}</b>/${manaMax(state)}</span>`;
+		fabric();
 		shownSig = sig();
 		info();
 	}
+	function fabric() {
+		P.head.fab.innerHTML = `<span class="l" title="Light aether: weaves light spells and feeds them">☀ ${state.fabric.light}</span><span class="d" title="Dark aether: weaves dark spells and feeds them">☾ ${state.fabric.dark}</span><span class="m" title="Mana">✧ <b>${Math.round(state.mana)}</b>/${manaMax(state)}</span>`;
+	}
 	// (what, changed, means drawing it all again: not the mana, which only its number shows)
-	const sig = () => `${state.known.length}|${state.perks.length}|${state.level}|${Math.floor(state.xp)}|${state.fabric.light}|${state.fabric.dark}|${state.binds.join()}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join()}`;
+	const sig = () => `${state.known.length}|${state.perks.length}|${state.level}|${Math.floor(state.xp)}|${state.fabric.light}|${state.fabric.dark}|${state.binds.join()}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join()}|${Object.values(state.mastery || {}).map(masteryLevel).join('')}`;
 
 	// ---------- choosing a star, and what it does ----------
 	function select(id, sticky) {
@@ -539,6 +574,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		P.pv = mk('canvas', 'sk-pv', sc);
 		P.pv.spell = sp;
 		const k = spellPower(state, sp, { light: light() }), s2 = shaped(sp, state.mods);
+		if (st === 'own') mastery(sc, sp);
 		const stats = mk('div', 'sk-stats', sc);
 		const row = (label, val, base, wide) => { const d = mk('div', 'sk-st' + (wide ? ' w' : ''), stats); mk('span', '', d, label); const b = mk('b', '', d); b.innerHTML = base != null && base !== val ? `<s>${base}</s><span class="up">${val}</span>` : val; };
 		const type = sp.type ? ` ${DMG_WORD[sp.type] || ''}` : '';
@@ -604,6 +640,69 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			b.type = 'button'; b.disabled = !!why;
 			b.addEventListener('click', act_);
 		}
+	}
+	// a spell's mastery: its level, the way to the next, what its levels open, and the aether you
+	// can pour into it (held: it keeps pouring, faster as it goes)
+	function mastery(sc, sp) {
+		const S = SKILL[sp.school], box = mk('div', 'sk-ms', sc);
+		const top = mk('div', 'top', box);
+		mk('span', '', top, 'Mastery');
+		const lv = mk('b', '', top), nx = mk('em', '', top);
+		const seg = mk('div', 'seg', box), bars = [];
+		for (let i = 1; i < MASTERY.length; i++) bars.push(mk('i', '', mk('div', '', seg)));
+		const lvs = mk('div', 'lv', box), marks = [];
+		for (let i = 1; i < MASTERY.length; i++) marks.push(mk('span', '', lvs, NUMERAL[i]));
+		const ul = mk('ul', '', box);
+		const pw = mk('li', 'on', ul);
+		const gifts = Object.entries(MASTERY_GIFT[sp.id] || {}).map(([at, g]) => ({ at: +at, li: mk('li', '', ul, `<i>${NUMERAL[at - 1]}</i><span><b>${g.name}.</b> ${g.text}</span>`) }));
+		const c1 = feedCost(sp, 1), word = c1.light && c1.dark ? '☀☾ light and dark' : c1.light ? '☀ light' : '☾ dark';
+		const btn = mk('button', 'sk-feed', box, '<span></span>');
+		btn.type = 'button';
+		mk('small', '', box, `Hold to pour. Casting it adds mastery too.`);
+		function show() {
+			const pts = state.mastery?.[sp.id] || 0, L = masteryLevel(pts), top = L >= MASTERY.length;
+			lv.textContent = NUMERAL[L - 1];
+			nx.textContent = top ? 'Mastered' : `${pts} / ${MASTERY[L]} to ${NUMERAL[L]}`;
+			bars.forEach((b, i) => { const a = MASTERY[i], z = MASTERY[i + 1]; b.style.transform = `scaleX(${Math.max(0, Math.min(1, (pts - a) / (z - a)))})`; });
+			marks.forEach((m, i) => m.classList.toggle('on', L >= i + 2));
+			pw.innerHTML = `<i>+${Math.round((L - 1) * MASTERY_POWER * 100)}%</i><span>power on ${sp.name} (each level adds ${Math.round(MASTERY_POWER * 100)}%)</span>`;
+			for (const g of gifts) g.li.classList.toggle('on', L >= g.at);
+			const can = feedable(state, sp.id, 1);
+			btn.disabled = top || !can;
+			btn.firstChild.textContent = top ? 'Fully mastered' : can ? `Pour ${word} aether · ${masteryToNext(pts)} to ${NUMERAL[L]}` : `No ${word} aether to pour`;
+		}
+		show();
+		let t = 0, n = 0, rose = false;
+		function pour() {
+			const step = Math.min(20, 2 + n);
+			n++;
+			const r = onFeed(sp.id, step);
+			if (!r?.fed) { stop(); return; }
+			fabric(); show(); shownSig = sig();
+			if (n % 3 === 1) sound(sp.school, 0.025);
+			if (r.levels) {
+				rose = true;
+				const L = masteryLevel(state.mastery[sp.id]), g = MASTERY_GIFT[sp.id]?.[L];
+				toast(`${sp.name}: mastery ${NUMERAL[L - 1]}${g ? ` · ${g.name}` : ''}`, S.color);
+				box.classList.remove('up'); void box.offsetWidth; box.classList.add('up');
+				sound('level', 0.1);
+			}
+		}
+		function stop() {
+			if (!t && !btn.classList.contains('on')) return;
+			clearInterval(t); t = 0; n = 0;
+			btn.classList.remove('on');
+			if (rose) { rose = false; refresh([sp.id]); }
+		}
+		btn.addEventListener('pointerdown', (e) => {
+			if (btn.disabled || e.button > 0) return;
+			e.preventDefault(); btn.setPointerCapture?.(e.pointerId);
+			btn.classList.add('on'); pour();
+			t = setInterval(pour, 90);
+		});
+		for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, stop);
+		// (from the keyboard: a measure at a press)
+		btn.addEventListener('click', (e) => { if (e.detail === 0 && !btn.disabled) { btn.classList.add('on'); n = 10; pour(); stop(); } });
 	}
 	function perkInfo(sc, act, p, st) {
 		P.pv = null;
@@ -759,7 +858,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const g = cv.getContext('2d');
 		g.setTransform(d, 0, 0, d, 0, 0);
 		g.clearRect(0, 0, cw, ch);
-		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t);
+		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t, { night: light() < -0.02, moonlit: !!state.moonlit?.[sp.id] });
 	}
 
 	// ---------- opening and closing ----------
@@ -804,7 +903,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 
 // ---------- the small pictures of spells at work ----------
 // g: the 2D context; w, h: its size; u: the moment (0 .. 1, looping); c: the school's colour
-function drawSpell(g, w, h, sp, u, c, t) {
+function drawSpell(g, w, h, sp, u, c, t, env = {}) {
 	const [cr, cg, cb] = hexRgb(c);
 	const col = (a) => `rgba(${cr},${cg},${cb},${a})`;
 	const gy = h * 0.72, me = { x: w * 0.14, y: gy };
@@ -913,6 +1012,49 @@ function drawSpell(g, w, h, sp, u, c, t) {
 		// it closes with a flash
 		const end = (v - 0.9) / 0.1;
 		if (end > 0 && end < 1) { glow(hx, hy, 40 * (1 - end) + 6, 1 - end); ring(hx, hy, 10 + 60 * end, 1 - end, 2); }
+		return;
+	}
+	if (sp.id === 'solar-flare') {
+		// directed energy from wherever the sun stands; by night, once mastered, from the moon, and
+		// before that, nothing: the sun is down
+		const moon = !!env.night, can = !moon || env.moonlit;
+		const c0 = { x: w * 0.7, y: gy }, R = Math.min(w * 0.13, 38), sky = { x: Math.min(w - 14, c0.x + w * 0.16), y: Math.max(11, h * 0.12) };
+		g.fillStyle = moon ? 'rgba(200,215,255,.92)' : 'rgba(255,236,170,.96)';
+		g.beginPath(); g.arc(sky.x, sky.y, 7.5, 0, 6.283); g.fill();
+		if (moon) { g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.arc(sky.x + 3, sky.y - 2, 6.5, 0, 6.283); g.fill(); g.globalCompositeOperation = 'source-over'; }
+		const charge = Math.min(1, u / 0.3), fire = u > 0.3 && u < 0.55, q = (u - 0.55) / 0.45;
+		glow(sky.x, sky.y, 14 + (can ? charge * 14 : 0), can ? 0.5 + charge * 0.5 : 0.25);
+		figure(me);
+		const fs = [{ x: c0.x - R * 0.6, y: gy + 2 }, { x: c0.x + R * 0.1, y: gy - 3 }, { x: c0.x + R * 0.7, y: gy + 3 }];
+		const hit = can && u > 0.3 ? Math.max(0, 1 - (u - 0.3) / 0.5) : 0;
+		for (const p of fs) figure(p, 1, hit, true);
+		if (!can) {
+			// the sun is down and the moon not yet mastered
+			ring(c0.x, c0.y, R, 0.25 + 0.15 * Math.sin(t * 4), 1.2, [3, 5]);
+			g.font = '600 10px system-ui'; g.textAlign = 'center'; g.fillStyle = 'rgba(255,255,255,.55)';
+			g.fillText('The sun is down. Moonfall comes at mastery III.', w * 0.42, h * 0.24);
+			return;
+		}
+		const tint = moon ? 'rgba(215,228,255,' : 'rgba(255,244,214,';
+		if (!fire && u <= 0.3) {
+			// the aim marked on the ground, the light gathering above
+			ring(c0.x, c0.y, R, 0.4 + 0.3 * Math.sin(t * 14), 1.5, [5, 5]);
+			line(sky, { x: c0.x, y: c0.y }, 1, 0.12 * charge);
+		}
+		if (fire) {
+			// the blast: a thick column from the sky body to the ground, white at its heart
+			const f = (u - 0.3) / 0.25, wd = 14 * (1 - f * 0.5);
+			g.strokeStyle = tint + (0.28 * (1 - f) + 0.1) + ')'; g.lineWidth = wd * 2.2; g.beginPath(); g.moveTo(sky.x, sky.y); g.lineTo(c0.x, c0.y - 4); g.stroke();
+			g.strokeStyle = moon ? 'rgba(190,208,255,.8)' : col(0.75); g.lineWidth = wd; g.beginPath(); g.moveTo(sky.x, sky.y); g.lineTo(c0.x, c0.y - 4); g.stroke();
+			g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = wd * 0.3; g.beginPath(); g.moveTo(sky.x, sky.y); g.lineTo(c0.x, c0.y - 4); g.stroke();
+			glow(c0.x, c0.y - 6, R * (0.9 + f), 1);
+		}
+		if (q > 0) {
+			glow(c0.x, c0.y - 8, R * (0.6 + q * 0.9), Math.max(0, 1 - q));
+			ring(c0.x, c0.y, R * (0.4 + q * 0.9), Math.max(0, 1 - q), 3);
+			// (blinded: held where they stand)
+			fs.forEach((p) => status(p, 1 - q * 0.6));
+		}
 		return;
 	}
 	if (sp.id === 'lance-of-dawn' || K === 'lances') {

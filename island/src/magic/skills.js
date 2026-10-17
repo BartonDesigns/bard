@@ -17,7 +17,7 @@
 // (light, dark, twilight) or all. The perks you hold are summed into state.mods (refreshMods),
 // which the spells' rules (spells.js) and the caster read.
 
-import { SCHOOLS, SPELLS, SPELL, weaveBlock } from './spells.js';
+import { SCHOOLS, SPELLS, SPELL, weaveBlock, weaveCost } from './spells.js';
 
 // the skills of the body: no spells, perks only
 export const BODY = Object.freeze({
@@ -194,6 +194,9 @@ export function sanitizeSkills(s) {
 	const use = {};
 	for (const k of PAGES) use[k] = Math.max(0, Math.floor(+s.use?.[k] || 0));
 	s.use = use;
+	const mastery = {};
+	for (const id of s.known || []) if (SPELL[id]) mastery[id] = Math.max(0, Math.floor(+s.mastery?.[id] || 0));
+	s.mastery = mastery;
 	refreshMods(s);
 	return s;
 }
@@ -261,7 +264,71 @@ export function computeMods(perks) {
 	m.fall = Math.min(0.6, m.fall);
 	return m;
 }
-export function refreshMods(s) { s.mods = computeMods(s.perks || []); return s.mods; }
+export function refreshMods(s) {
+	s.mods = computeMods(s.perks || []);
+	// (and each spell's mastery: its own power, and what its levels open)
+	s.moonlit = {};
+	for (const [id, pts] of Object.entries(s.mastery || {})) {
+		const L = masteryLevel(pts);
+		if (L > 1) s.mods.power[id] = (s.mods.power[id] || 0) + (L - 1) * MASTERY_POWER;
+		for (const [at, g] of Object.entries(MASTERY_GIFT[id] || {})) if (L >= +at && g.moonlit) s.moonlit[id] = true;
+	}
+	return s.mods;
+}
+
+// ---------- spell mastery ----------
+// Each spell you know grows with you: casting it adds the mana you paid, and you can pour aether
+// into it (its own strand; a twilight spell takes half of each). Its levels (I .. V) make it
+// stronger, and on some spells open more: Solar Flare, a blast of the sun's own light, learns at
+// III to draw on the moon by night (the caster reads s.moonlit and spells.js's sun flag).
+export const MASTERY = Object.freeze([0, 100, 300, 700, 1500]);
+export const MASTERY_POWER = 0.08;
+export const NUMERAL = Object.freeze(['I', 'II', 'III', 'IV', 'V']);
+export const MASTERY_GIFT = Object.freeze({
+	'solar-flare': { 3: { moonlit: true, name: 'Moonfall', text: 'It works at night, drawing its blast down from the moon.' } },
+});
+export const masteryLevel = (pts) => MASTERY.filter((p) => pts >= p).length;
+// the share of the way to the next level (1 at the last)
+export function masteryFrac(pts) {
+	const L = masteryLevel(pts);
+	if (L >= MASTERY.length) return 1;
+	return (pts - MASTERY[L - 1]) / (MASTERY[L] - MASTERY[L - 1]);
+}
+// points to the next level (0 at the last)
+export const masteryToNext = (pts) => (masteryLevel(pts) >= MASTERY.length ? 0 : MASTERY[masteryLevel(pts)] - pts);
+// mastery gained on a spell you know: n points. Returns the levels gained.
+export function addMastery(s, id, n) {
+	if (!(n > 0) || !SPELL[id] || !s.known?.includes(id)) return 0;
+	const L0 = masteryLevel(s.mastery[id] || 0);
+	s.mastery[id] = Math.min(MASTERY[MASTERY.length - 1], (s.mastery[id] || 0) + n);
+	const up = masteryLevel(s.mastery[id]) - L0;
+	if (up) refreshMods(s);
+	return up;
+}
+// the aether a point of mastery takes from you: { light, dark } for n points
+export function feedCost(spell, n) {
+	const c = weaveCost({ ...spell, tier: 1 });
+	if (c.light && c.dark) return { light: Math.ceil(n / 2), dark: Math.ceil(n / 2) };
+	return { light: c.light ? n : 0, dark: c.dark ? n : 0 };
+}
+// how much aether you could pour in now, up to n (and not past the last level)
+export function feedable(s, id, n) {
+	const spell = SPELL[id];
+	if (!spell || !s.known?.includes(id)) return 0;
+	n = Math.min(n, MASTERY[MASTERY.length - 1] - (s.mastery[id] || 0));
+	const c = feedCost(spell, 1), both = c.light && c.dark;
+	const have = both ? Math.min(s.fabric.light, s.fabric.dark) * 2 : c.light ? s.fabric.light : s.fabric.dark;
+	const k = Math.max(0, Math.min(n, Math.floor(have)));
+	return both ? k - (k % 2) : k;
+}
+// pour aether into a spell: up to n points. Returns { fed, levels }.
+export function feedSpell(s, id, n) {
+	const k = feedable(s, id, n);
+	if (!k) return { fed: 0, levels: 0 };
+	const c = feedCost(SPELL[id], k);
+	s.fabric.light -= c.light; s.fabric.dark -= c.dark;
+	return { fed: k, levels: addMastery(s, id, k) };
+}
 
 // a perk's effects in words, one line each, for the page
 const WORD = { power: ['+', 'power'], mana: ['−', 'mana cost'], cd: ['−', 'cooldowns'], dur: ['+', 'duration'], area: ['+', 'area'], range: ['+', 'reach'], status: ['+', 'hold, fear and rot time'] };
