@@ -313,7 +313,7 @@ export function buildPerson(A, d) {
 	P.redress = (o) => dress(A, P, o);
 	dress(A, P, outfitOf(d));
 	// lashes, brows, the wet line: one small mesh, closing and lifting with the face
-	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow), brow.grey);
+	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), null, brow.grey);
 	if (dg) {
 		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
 		// (how full the tone under the brow's hairs, each their own; or as set, d.brows.fill)
@@ -603,15 +603,6 @@ function browOf(d) {
 	if (lum < 0.07) col.multiplyScalar(0.07 / Math.max(lum, 1e-4));
 	const g = greyOf(d, 12);
 	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
-}
-
-// the skin's normals at the brow's vertices (for laying the brow hairs on the skin)
-function normalsOf(g, brow) {
-	const want = new Set();
-	for (let j = 0; j < brow.length; j += 2) want.add(brow[j]);
-	const src = g.userData.src, at = new Map(), na = g.attributes.normal;
-	for (let i = 0; i < src.length; i++) if (want.has(src[i])) at.set(src[i], i);
-	return (v, out) => { const i = at.get(v); if (i === undefined) out.set(0, 0, 1); else out.fromBufferAttribute(na, i); };
 }
 
 // a body let go for good: its own geometry, materials and skeleton (the shared assets stay)
