@@ -155,7 +155,8 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 	}
 	function open() { book.style.display = 'flex'; dirty = true; draw(); if (document.pointerLockElement) document.exitPointerLock(); }
 	function close() { book.style.display = 'none'; }
-	const isOpen = () => book.style.display !== 'none';
+	// (hidden by its sheet until first opened: open is only what open() made it)
+	const isOpen = () => book.style.display === 'flex';
 	function dispose() { for (const e of [bar, mana, mode, book]) e.remove(); }
 	return { update, setMode, show, open, close, toggle: () => (isOpen() ? close() : open()), isOpen, dispose, touchUp: () => { dirty = true; } };
 }

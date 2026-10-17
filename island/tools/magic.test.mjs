@@ -227,6 +227,7 @@ test('spells reach brawlers and townsfolk, hands cast them, the body gestures, t
 	const hud = src('magic/hud.js');
 	assert.match(hud, /\.mg-bar\{position:absolute;left:50%;bottom:calc\(12px/, 'the bar at the bottom on a desktop');
 	assert.match(hud, /\.l99-touch \.mg-bar\{bottom:calc\(var\(--l99-low/, 'above the thumbs on a touch screen');
+	assert.match(hud, /const isOpen = \(\) => book\.style\.display === 'flex'/, 'the book is shut until opened, so the keys work from the start');
 });
 
 test('a beam gathers, lets go with a punch, pours, and thins away', async () => {
