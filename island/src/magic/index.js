@@ -150,6 +150,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, exposure: () => caster.exposure(),
+		// (the tests: your body, for its gestures)
+		body: () => me(),
 		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, ...caster.info() }),
 		cast: (id, o) => caster.cast(id, o || {}),
 		learn: (id) => weave(state, id),
