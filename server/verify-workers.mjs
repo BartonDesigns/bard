@@ -1,7 +1,7 @@
 // Read-only production capability check. Does not deploy or consume model inference.
 const services = [
  { name:'discovery', url:'https://l99-discovery.joshbarton1921.workers.dev', key:'planning', required:['social_intent','story_quest','negotiation_intent','community_project_intent'], features:['quest-continuity-v1','negotiation-intent-v1','community-project-intent-v1'] },
- { name:'rooms', url:'https://l99-rooms.joshbarton1921.workers.dev', key:'features', required:['trade-v2','combat-v1','combat-guard-v1','reputation-v1','persistent-reputation-v1','living-world-v1','world-projects-v1','household-life-v1'] }
+ { name:'rooms', url:'https://l99-rooms.joshbarton1921.workers.dev', key:'features', required:['trade-v2','gear-levels-20','combat-v1','combat-guard-v1','reputation-v1','persistent-reputation-v1','living-world-v1','world-projects-v1','household-life-v1'] }
 ];
 const report = await Promise.all(services.map(async service => {
  try {

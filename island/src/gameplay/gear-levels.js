@@ -1,9 +1,13 @@
 // Levels and quality for gear (gameplay/arms.js). Every item you own is its own instance with
-// an id, a level (1 to 10), a quality tier (Common to Legendary) and experience toward its
+// an id, a level (1 to 20), a quality tier (Common to Legendary) and experience toward its
 // next level. Stats are game numbers that grow with both; nothing here is a real-world spec.
-// Pure functions over plain data, shared by the inventory, the gear screen and trading.
+// Weapons and garments also lend attributes (rows in 'pt', magic/stats.js), and from level 5
+// their magic wakes (gameplay/gear-magic.js). Pure functions over plain data, shared by the
+// inventory, the gear screen and trading.
 
-export const MAX_LEVEL = 10;
+export const MAX_LEVEL = 20;
+// the level past which growth slows: 7% a level up to it, 5% a level beyond
+export const SOFT_LEVEL = 10;
 export const TIERS = Object.freeze([
 	Object.freeze({ id: 'common', name: 'Common', color: '#c9d1d3', glow: 0 }),
 	Object.freeze({ id: 'fine', name: 'Fine', color: '#6fdc8c', glow: 0.15 }),
@@ -18,12 +22,45 @@ const COST_TIER = [1, 1.2, 1.45, 1.8, 2.3];
 export const UPGRADE_MATERIAL = 'repair-roll';
 export const UID_RE = /^[a-z0-9~-]{4,24}$/;
 
-// each item's stats at level 1, Common: [label, value, unit, cap]
+// each item's stats at level 1, Common: [label, value, unit, cap]. A row in 'pt' is an
+// attribute the item lends you while held or worn (whole points; magic/stats.js ATTRS)
 const STATS = {
-	'aurora-trail-rifle': [['Accuracy', 70, '%', 99], ['Range', 60, 'u'], ['Steadiness', 50, '']],
-	'mossback-scout-rifle': [['Accuracy', 66, '%', 99], ['Range', 45, 'u'], ['Quiet', 70, '%', 99]],
-	'warden-spark-carbine': [['Deterrence', 60, '', 200], ['Reach', 25, 'u'], ['Recharge', 50, '']],
-	'reedline-hunting-bow': [['Accuracy', 62, '%', 99], ['Range', 30, 'u'], ['Quiet', 80, '%', 99]],
+	'aurora-trail-rifle': [['Accuracy', 70, '%', 99], ['Range', 60, 'u'], ['Steadiness', 50, ''], ['Precision', 3, 'pt']],
+	'mossback-scout-rifle': [['Accuracy', 66, '%', 99], ['Range', 45, 'u'], ['Quiet', 70, '%', 99], ['Precision', 2, 'pt'], ['Focus', 1, 'pt']],
+	'warden-spark-carbine': [['Deterrence', 60, '', 200], ['Reach', 25, 'u'], ['Recharge', 50, ''], ['Precision', 2, 'pt'], ['Resolve', 1, 'pt']],
+	'reedline-hunting-bow': [['Accuracy', 62, '%', 99], ['Range', 30, 'u'], ['Quiet', 80, '%', 99], ['Precision', 2, 'pt'], ['Swiftness', 1, 'pt']],
+	// garments (gameplay/arms.js GARMENTS): attributes only
+	'wayfarers-hood': [['Focus', 3, 'pt'], ['Resolve', 2, 'pt']],
+	'stargazer-circlet': [['Potency', 3, 'pt'], ['Haste', 2, 'pt']],
+	'aetherweave-coat': [['Vigour', 3, 'pt'], ['Potency', 2, 'pt']],
+	'rangers-jacket': [['Resolve', 3, 'pt'], ['Precision', 2, 'pt']],
+	'spellbinder-gloves': [['Haste', 3, 'pt'], ['Potency', 2, 'pt']],
+	'fieldcraft-gloves': [['Precision', 3, 'pt'], ['Swiftness', 2, 'pt']],
+	'trailstrider-boots': [['Swiftness', 3, 'pt'], ['Vigour', 2, 'pt']],
+	'duskwalker-boots': [['Swiftness', 3, 'pt'], ['Focus', 2, 'pt']],
+	'aetherweave-trousers': [['Focus', 3, 'pt'], ['Vigour', 2, 'pt']],
+	'rangers-trousers': [['Armour', 2, '%', 6], ['Swiftness', 2, 'pt'], ['Precision', 2, 'pt']],
+	// armour: Armour (harm turned aside, grows to a cap), Weight (kg: slows you past a light
+	// load) and Spellcraft (spells' strength lost to steel); neither of the last two grows
+	'kettle-helm': [['Armour', 5, '%', 12], ['Weight', 2.5, 'kg'], ['Spellcraft', -2, '-%'], ['Resolve', 2, 'pt']],
+	'great-helm': [['Armour', 8, '%', 18], ['Weight', 3.5, 'kg'], ['Spellcraft', -5, '-%'], ['Resolve', 3, 'pt'], ['Vigour', 1, 'pt']],
+	'gambeson': [['Armour', 6, '%', 14], ['Weight', 3, 'kg'], ['Vigour', 2, 'pt'], ['Resolve', 1, 'pt']],
+	'mail-hauberk': [['Armour', 11, '%', 24], ['Weight', 10, 'kg'], ['Spellcraft', -4, '-%'], ['Resolve', 3, 'pt'], ['Vigour', 2, 'pt']],
+	'plate-cuirass': [['Armour', 16, '%', 32], ['Weight', 14, 'kg'], ['Spellcraft', -8, '-%'], ['Resolve', 4, 'pt'], ['Vigour', 3, 'pt']],
+	'mail-chausses': [['Armour', 6, '%', 14], ['Weight', 5, 'kg'], ['Spellcraft', -2, '-%'], ['Resolve', 2, 'pt']],
+	'plate-greaves': [['Armour', 8, '%', 18], ['Weight', 6, 'kg'], ['Spellcraft', -3, '-%'], ['Resolve', 2, 'pt'], ['Vigour', 1, 'pt']],
+	'plate-gauntlets': [['Armour', 4, '%', 10], ['Weight', 1.5, 'kg'], ['Spellcraft', -4, '-%'], ['Precision', 2, 'pt']],
+	'leather-bracers': [['Armour', 2, '%', 5], ['Weight', 0.6, 'kg'], ['Precision', 2, 'pt'], ['Swiftness', 1, 'pt']],
+	'sabatons': [['Armour', 4, '%', 10], ['Weight', 2, 'kg'], ['Spellcraft', -1, '-%'], ['Resolve', 2, 'pt']],
+	'riding-boots': [['Armour', 2, '%', 5], ['Weight', 1.2, 'kg'], ['Swiftness', 2, 'pt'], ['Vigour', 1, 'pt']],
+	'ops-cap': [['Precision', 3, 'pt'], ['Focus', 1, 'pt']],
+	'ballistic-helmet': [['Armour', 7, '%', 16], ['Weight', 1.5, 'kg'], ['Resolve', 2, 'pt'], ['Precision', 2, 'pt']],
+	'combat-shirt': [['Armour', 2, '%', 5], ['Weight', 0.5, 'kg'], ['Swiftness', 2, 'pt'], ['Precision', 1, 'pt']],
+	'chest-rig': [['Armour', 4, '%', 10], ['Weight', 3, 'kg'], ['Precision', 2, 'pt'], ['Swiftness', 1, 'pt']],
+	'plate-carrier': [['Armour', 14, '%', 30], ['Weight', 9, 'kg'], ['Resolve', 3, 'pt'], ['Vigour', 2, 'pt']],
+	'combat-trousers': [['Armour', 3, '%', 7], ['Weight', 1, 'kg'], ['Swiftness', 2, 'pt'], ['Resolve', 1, 'pt']],
+	'tactical-gloves': [['Armour', 1, '%', 3], ['Weight', 0.2, 'kg'], ['Precision', 3, 'pt']],
+	'combat-boots': [['Armour', 3, '%', 7], ['Weight', 1.4, 'kg'], ['Swiftness', 2, 'pt'], ['Vigour', 1, 'pt']],
 	'hunting-net': [['Capture', 30, '%', 95], ['Reach', 6, 'u']],
 	'trail-scent-kit': [['Trail length', 120, 'u'], ['Clarity', 50, '%', 99]],
 	'door-brace': [['Hold', 40, ''], ['Setup speed', 50, '']],
@@ -38,7 +75,7 @@ const int = (v, lo, hi, d) => { const n = Number(v); return Number.isInteger(n) 
 export const tierOf = (t) => TIERS[int(t, 0, 4, 0)];
 // experience needed to go from this level to the next
 export const xpNeed = (level) => 60 * level;
-const statMult = (l, t) => (1 + 0.07 * (l - 1)) * STAT_TIER[t];
+const statMult = (l, t) => (1 + 0.07 * (Math.min(l, SOFT_LEVEL) - 1) + 0.05 * Math.max(0, l - SOFT_LEVEL)) * STAT_TIER[t];
 // the same growth as one number for an instance (combat/weapons.js scales its numbers by it)
 export const statScale = (inst) => statMult(int(inst?.l, 1, MAX_LEVEL, 1), int(inst?.t, 0, 4, 0));
 
@@ -52,8 +89,9 @@ export function cleanInstance(x, known = () => true) {
 export function statsOf(inst) {
 	const rows = STATS[inst?.i] || [];
 	const m = statMult(inst.l, inst.t), next = inst.l < MAX_LEVEL ? statMult(inst.l + 1, inst.t) : m;
-	const at = (v, k, cap) => { const n = v * k; const r = n >= 100 ? Math.round(n) : Math.round(n * 10) / 10; return cap ? Math.min(cap, r) : r; };
-	return rows.map(([label, v, unit, cap]) => ({ label, unit, value: at(v, m, cap), next: at(v, next, cap) }));
+	// (weight and a hindrance to spells are what the thing is: they do not grow)
+	const at = (v, k, cap, unit) => { if (unit === 'kg' || unit === '-%') return v; const n = v * k; const r = n >= 100 || unit === 'pt' ? Math.round(n) : Math.round(n * 10) / 10; return cap ? Math.min(cap, r) : r; };
+	return rows.map(([label, v, unit, cap]) => ({ label, unit, value: at(v, m, cap, unit), next: at(v, next, cap, unit) }));
 }
 // the same stats compared: b minus a, label by label (a or b may be null: nothing to compare)
 export function compareStats(a, b) {
@@ -62,7 +100,7 @@ export function compareStats(a, b) {
 }
 
 // what an instance is worth against a fresh one, Common, level 1
-export const valueFactor = (inst) => (1 + 0.18 * (int(inst?.l, 1, 10, 1) - 1)) * VALUE_TIER[int(inst?.t, 0, 4, 0)];
+export const valueFactor = (inst) => (1 + 0.18 * (int(inst?.l, 1, MAX_LEVEL, 1) - 1)) * VALUE_TIER[int(inst?.t, 0, 4, 0)];
 // credits for one more level at an outfitter (plus one upgrade material)
 export const upgradeCost = (inst, basePrice) => Math.round(basePrice * 0.35 * inst.l * COST_TIER[inst.t]);
 export const canUpgrade = (inst) => !!inst && inst.l < MAX_LEVEL;
@@ -70,6 +108,12 @@ export const canCombine = (a, b) => !!a && !!b && a.u !== b.u && a.i === b.i && 
 // two of a kind and tier become one of the next tier, keeping the better level
 export const combined = (a, b) => ({ u: a.u, i: a.i, l: Math.max(a.l, b.l), t: a.t + 1, x: Math.max(a.x, b.x) });
 
+// the experience it would take to reach the top level from where it stands
+export function xpToMax(inst) {
+	let n = -int(inst?.x ?? 0, 0, 1e6, 0);
+	for (let l = int(inst?.l, 1, MAX_LEVEL, 1); l < MAX_LEVEL; l++) n += xpNeed(l);
+	return Math.max(0, n);
+}
 // experience gained: levels rise while it covers the next one
 export function trained(inst, xp) {
 	let { l, x } = inst;
@@ -81,6 +125,8 @@ export function trained(inst, xp) {
 
 // a short, stable id from a transaction id and a count (FNV-1a, two seeds)
 function fnv(s, h) { for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
+// a stable whole number from a string (an item's attunement comes from its id: gear-magic.js)
+export const hashOf = (s) => fnv(String(s), 2166136261);
 export function mintUid(seed, n = 0) {
 	const s = `${seed}#${n}`;
 	return (fnv(s, 2166136261).toString(36) + fnv(s, 3323198485).toString(36)).slice(0, 14).padEnd(6, '0');

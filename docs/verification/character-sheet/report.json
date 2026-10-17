@@ -1,0 +1,469 @@
+{
+  "errors": [],
+  "info": {
+    "info": {
+      "known": 10,
+      "binds": [
+        "sunspark",
+        "shadowbolt",
+        "mend",
+        "shade",
+        "chain-lightning"
+      ],
+      "fabric": {
+        "light": 140,
+        "dark": 90
+      },
+      "affinity": {
+        "light": 180,
+        "dark": 120
+      },
+      "wells": 0,
+      "near": 8,
+      "shown": 1,
+      "level": 14,
+      "xp": 20,
+      "points": 13,
+      "perks": [
+        "searing-light"
+      ],
+      "life": 160,
+      "gear": [
+        {
+          "i": "stargazer-circlet",
+          "l": 16,
+          "t": 3,
+          "school": "radiance"
+        },
+        {
+          "i": "aetherweave-coat",
+          "l": 20,
+          "t": 4,
+          "school": "umbral"
+        },
+        {
+          "i": "spellbinder-gloves",
+          "l": 11,
+          "t": 2,
+          "school": "storm"
+        },
+        {
+          "i": "trailstrider-boots",
+          "l": 6,
+          "t": 1,
+          "school": "dawn"
+        },
+        {
+          "i": "reedline-hunting-bow",
+          "l": 18,
+          "t": 3,
+          "school": "primal"
+        }
+      ],
+      "bolts": 0,
+      "effects": 0,
+      "shades": 0,
+      "hexed": 0,
+      "held": [],
+      "shield": 0,
+      "cloak": false,
+      "mana": 162,
+      "max": 162
+    },
+    "sheet": {
+      "level": 14,
+      "attrs": {
+        "vigour": {
+          "total": 24,
+          "from": [
+            {
+              "label": "Resilience rank",
+              "n": 10
+            },
+            {
+              "label": "Aetherweave Coat",
+              "n": 11,
+              "gear": true
+            },
+            {
+              "label": "Trailstrider Boots",
+              "n": 3,
+              "gear": true
+            }
+          ]
+        },
+        "resolve": {
+          "total": 6,
+          "from": [
+            {
+              "label": "Resilience rank",
+              "n": 6
+            }
+          ]
+        },
+        "precision": {
+          "total": 13,
+          "from": [
+            {
+              "label": "Marksman rank",
+              "n": 7
+            },
+            {
+              "label": "Reedline Hunting Bow",
+              "n": 6,
+              "gear": true
+            }
+          ]
+        },
+        "swiftness": {
+          "total": 14,
+          "from": [
+            {
+              "label": "Athletics rank",
+              "n": 6
+            },
+            {
+              "label": "Trailstrider Boots",
+              "n": 5,
+              "gear": true
+            },
+            {
+              "label": "Reedline Hunting Bow",
+              "n": 3,
+              "gear": true
+            }
+          ]
+        },
+        "potency": {
+          "total": 26,
+          "from": [
+            {
+              "label": "Your three best schools",
+              "n": 7
+            },
+            {
+              "label": "Stargazer Circlet",
+              "n": 8,
+              "gear": true
+            },
+            {
+              "label": "Aetherweave Coat",
+              "n": 7,
+              "gear": true
+            },
+            {
+              "label": "Spellbinder Gloves",
+              "n": 4,
+              "gear": true
+            }
+          ]
+        },
+        "focus": {
+          "total": 6,
+          "from": [
+            {
+              "label": "Your level",
+              "n": 6
+            }
+          ]
+        },
+        "haste": {
+          "total": 13,
+          "from": [
+            {
+              "label": "Chrono rank",
+              "n": 2
+            },
+            {
+              "label": "Stargazer Circlet",
+              "n": 5,
+              "gear": true
+            },
+            {
+              "label": "Spellbinder Gloves",
+              "n": 6,
+              "gear": true
+            }
+          ]
+        }
+      },
+      "life": 160,
+      "lifeRegen": 0.48,
+      "mana": 162,
+      "manaRegen": 9.3,
+      "manaRegenFighting": 6.3,
+      "harmTaken": 98,
+      "weapon": 10,
+      "weak": 10,
+      "boss": 0,
+      "manaOnHit": 0,
+      "pace": 4,
+      "jump": 4,
+      "fall": 0,
+      "xp": 0,
+      "affinity": {
+        "light": 180,
+        "dark": 120
+      },
+      "strands": {
+        "light": "Light Aether",
+        "dark": "Dark Aether"
+      },
+      "schools": [
+        {
+          "id": "radiance",
+          "name": "Radiance",
+          "color": "#ffd27a",
+          "strand": "light",
+          "power": 241,
+          "mana": 70,
+          "cd": 81,
+          "free": 0,
+          "gear": 11
+        },
+        {
+          "id": "restoration",
+          "name": "Restoration",
+          "color": "#8ef0b0",
+          "strand": "light",
+          "power": 197,
+          "mana": 80,
+          "cd": 94,
+          "free": 0,
+          "gear": 0
+        },
+        {
+          "id": "warding",
+          "name": "Warding",
+          "color": "#9fd8ff",
+          "strand": "light",
+          "power": 197,
+          "mana": 80,
+          "cd": 94,
+          "free": 0,
+          "gear": 0
+        },
+        {
+          "id": "dawn",
+          "name": "Dawn",
+          "color": "#ffe9b0",
+          "strand": "light",
+          "power": 208,
+          "mana": 80,
+          "cd": 94,
+          "free": 0,
+          "gear": 7
+        },
+        {
+          "id": "shadow",
+          "name": "Shadow",
+          "color": "#9a7cff",
+          "strand": "dark",
+          "power": 129,
+          "mana": 87,
+          "cd": 94,
+          "free": 0,
+          "gear": 0
+        },
+        {
+          "id": "void",
+          "name": "Void",
+          "color": "#6a5cff",
+          "strand": "dark",
+          "power": 129,
+          "mana": 87,
+          "cd": 94,
+          "free": 0,
+          "gear": 0
+        },
+        {
+          "id": "blight",
+          "name": "Blight",
+          "color": "#a8d84a",
+          "strand": "dark",
+          "power": 129,
+          "mana": 87,
+          "cd": 94,
+          "free": 0,
+          "gear": 0
+        },
+        {
+          "id": "umbral",
+          "name": "Umbral",
+          "color": "#c08aff",
+          "strand": "dark",
+          "power": 144,
+          "mana": 75,
+          "cd": 80,
+          "free": 3,
+          "gear": 13
+        },
+        {
+          "id": "storm",
+          "name": "Storm",
+          "color": "#7fd8ff",
+          "strand": "twilight",
+          "power": 155,
+          "mana": 78,
+          "cd": 84,
+          "free": 0,
+          "gear": 9
+        },
+        {
+          "id": "chrono",
+          "name": "Chrono",
+          "color": "#e8d6ff",
+          "strand": "twilight",
+          "power": 143,
+          "mana": 87,
+          "cd": 94,
+          "free": 0,
+          "gear": 0
+        },
+        {
+          "id": "primal",
+          "name": "Primal",
+          "color": "#ff9a5a",
+          "strand": "twilight",
+          "power": 157,
+          "mana": 87,
+          "cd": 94,
+          "free": 0,
+          "gear": 11
+        }
+      ],
+      "magic": [
+        {
+          "item": "Stargazer Circlet",
+          "uid": "star7v",
+          "school": "radiance",
+          "level": 5,
+          "name": "Attuned",
+          "desc": "Radiance spells are 11% stronger."
+        },
+        {
+          "item": "Stargazer Circlet",
+          "uid": "star7v",
+          "school": "radiance",
+          "level": 10,
+          "name": "Flow",
+          "desc": "Radiance spells cost 12% less mana and come back 12% sooner."
+        },
+        {
+          "item": "Stargazer Circlet",
+          "uid": "star7v",
+          "school": "radiance",
+          "level": 15,
+          "name": "Altered",
+          "desc": "Sunspark flies as three sparks in a fan, each three fifths as strong."
+        },
+        {
+          "item": "Aetherweave Coat",
+          "uid": "aeth1v",
+          "school": "umbral",
+          "level": 5,
+          "name": "Attuned",
+          "desc": "Umbral spells are 13% stronger."
+        },
+        {
+          "item": "Aetherweave Coat",
+          "uid": "aeth1v",
+          "school": "umbral",
+          "level": 10,
+          "name": "Flow",
+          "desc": "Umbral spells cost 14% less mana and come back 14% sooner."
+        },
+        {
+          "item": "Aetherweave Coat",
+          "uid": "aeth1v",
+          "school": "umbral",
+          "level": 15,
+          "name": "Altered",
+          "desc": "Summon Shade calls two shades."
+        },
+        {
+          "item": "Aetherweave Coat",
+          "uid": "aeth1v",
+          "school": "umbral",
+          "level": 20,
+          "name": "Mastery",
+          "desc": "Every third Umbral spell costs nothing and starts no cooldown."
+        },
+        {
+          "item": "Spellbinder Gloves",
+          "uid": "spel6v",
+          "school": "storm",
+          "level": 5,
+          "name": "Attuned",
+          "desc": "Storm spells are 9% stronger."
+        },
+        {
+          "item": "Spellbinder Gloves",
+          "uid": "spel6v",
+          "school": "storm",
+          "level": 10,
+          "name": "Flow",
+          "desc": "Storm spells cost 10% less mana and come back 10% sooner."
+        },
+        {
+          "item": "Trailstrider Boots",
+          "uid": "trai2v",
+          "school": "dawn",
+          "level": 5,
+          "name": "Attuned",
+          "desc": "Dawn spells are 7% stronger."
+        },
+        {
+          "item": "Reedline Hunting Bow",
+          "uid": "reed0v",
+          "school": "primal",
+          "level": 5,
+          "name": "Attuned",
+          "desc": "Primal spells are 11% stronger."
+        },
+        {
+          "item": "Reedline Hunting Bow",
+          "uid": "reed0v",
+          "school": "primal",
+          "level": 10,
+          "name": "Flow",
+          "desc": "Spellstrike: each hit takes 0.6 s off your Primal spells' cooldowns."
+        },
+        {
+          "item": "Reedline Hunting Bow",
+          "uid": "reed0v",
+          "school": "primal",
+          "level": 15,
+          "name": "Altered",
+          "desc": "Searing: hits set the foe smouldering: 10 harm a second for 3 s."
+        }
+      ],
+      "weaponMagic": {
+        "uid": "reed0v",
+        "school": "primal",
+        "strike": 0.6,
+        "infuse": {
+          "school": "primal",
+          "name": "Searing",
+          "status": {
+            "dot": 10,
+            "t": 3
+          },
+          "fire": true,
+          "desc": "Hits set the foe smouldering: 10 harm a second for 3 s."
+        },
+        "shot": null
+      }
+    }
+  },
+  "infuse": {
+    "light": 130
+  },
+  "cast": {
+    "a": true,
+    "bolts": 3,
+    "b": true,
+    "shades": 2
+  },
+  "passed": true
+}

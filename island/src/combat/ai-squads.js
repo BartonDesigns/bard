@@ -35,7 +35,7 @@ import { personShapes } from './targets.js';
 import { npcHand } from './weapon-view.js';
 import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
 import { FIELD_ROLES } from './field-contracts.js';
-import { outfitFor } from './outfits.js';
+import { outfitFor, kitArmour } from './outfits.js';
 
 // the bodies: people (dressed by faction), and the two that are not
 const BODY = {
@@ -185,6 +185,8 @@ export function createSquads(ctx) {
 				if (!b) return null;
 				if (h.gone || generation !== epoch) { b.used = false; b.P.root.visible = false; b.hand?.hide(); return null; }
 				h.body = b;
+				// what they wear turns blows too: plates more than a rig, a helmet some (outfits.js)
+				if (opts.armour == null && b.P.dna?.style) { const k = kitArmour(b.P.dna.style); h.H.armour = h.H.armourMax = Math.round(h.H.armourMax * k); }
 				// Pooled bodies may have served another role: always restore this spawn's kit.
 				if (b.hand && F.gun) b.hand.set(F.gun, opts.level || 2 + (b.P.dna.seed % 4 || 0), opts.tier ?? (specialty ? 1 : b.P.dna.seed % 3 || 0));
 				// Preserve the exact weapon represented by this pooled body's hand model.
