@@ -16,7 +16,7 @@ import { ACTIONS } from './actions.js';
 export const VIEWS = {
 	front: [0, 3.9, 0.72, 0.53, 30], front34: [0.62, 3.9, 0.72, 0.53, 30], left: [Math.PI / 2, 3.9, 0.72, 0.53, 30],
 	back: [Math.PI, 3.9, 0.72, 0.53, 30], back34: [Math.PI - 0.62, 3.9, 0.72, 0.53, 30], right: [-Math.PI / 2, 3.9, 0.72, 0.53, 30],
-	face: [0.32, 0.78, 0.935, 0.925, 28], profile: [Math.PI / 2, 0.82, 0.935, 0.925, 28], hands: [-0.5, 1.15, 0.6, 0.5, 30],
+	face: [0.32, 0.78, 0.935, 0.925, 28], profile: [Math.PI / 2, 0.82, 0.935, 0.925, 28], hands: [-0.9, 0.62, 0.6, 0.5, 34],
 };
 export const LIGHTS = { day: 11, golden: 18, shade: 7.2, night: 22.5 };
 
@@ -36,7 +36,8 @@ export function createHeroView({ scene, renderer, avatar, self, world, setCine }
 		c.fov = V[4]; c.aspect = aspect; c.updateProjectionMatrix();
 		let cx = feet.x + Math.sin(a) * V[1], cz = feet.z + Math.cos(a) * V[1], ay = feet.y + V[3] * h, tx = feet.x, tz = feet.z;
 		// (the hands: the right one's wrist)
-		if (view === 'hands') { const w = me.P.bones[me.P.map['wrist.R']]?.getWorldPosition(new THREE.Vector3()); if (w) { tx = w.x; tz = w.z; ay = w.y; cx = w.x + Math.sin(a) * 0.55; cz = w.z + Math.cos(a) * 0.55; } }
+		// (the hands: the right one, a little out from the side and in front, the whole hand in view)
+		if (view === 'hands') { const w = me.P.bones[me.P.map['wrist.R']]?.getWorldPosition(new THREE.Vector3()); if (w) { tx = w.x; tz = w.z; ay = w.y - 0.07; cx = w.x + Math.sin(a) * V[1]; cz = w.z + Math.cos(a) * V[1]; c.position.set(cx, w.y + 0.08, cz); c.lookAt(tx, ay, tz); c.updateMatrixWorld(); return true; } }
 		c.position.set(cx, feet.y + V[2] * h, cz);
 		c.lookAt(tx, ay, tz);
 		c.updateMatrixWorld();
