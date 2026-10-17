@@ -24,7 +24,7 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	const m = heroDNA('male'), f = heroDNA('female');
 	assert.ok(m.male && m.sex > 0.9 && !f.male && f.sex < 0.1);
 	assert.ok(m.height > 1.8 && f.height > 1.68, 'tall');
-	assert.ok(m.muscle > 0.25 && m.muscle < 0.45 && f.muscle > 0.15 && m.weight < 0.1 && f.weight < 0.1, 'lean, not inflated');
+	assert.ok(m.muscle > 0.3 && m.muscle < 0.5 && f.muscle > 0.15 && m.weight < 0.1 && f.weight < 0.1, 'athletic, not inflated');
 	assert.ok(m.temper.confident > 0.9 && m.gait.posture < 0, 'chest up');
 	assert.equal(m.age, 29);
 	// (no feature pushed far: a face near the base mesh's even average, which reads handsome)
@@ -67,4 +67,6 @@ test('your body, its hands, friends and the settings all use the hero', () => {
 	assert.match(src('net/multiplayer.js'), /const seed = heroSeed\(heroChoice\(\)\)/);
 	assert.match(src('crysis/viewmodel.js'), /arms\.me !== avatar\.me/, 'the gun hands made again');
 	assert.match(src('main.js'), /'Your hero'/);
+	assert.match(src('people/self.js'), /hero \? 'ready' : 'rest'/, 'they stand ready');
+	assert.match(src('people/motion.js'), /ready: \{ both: arm/);
 });

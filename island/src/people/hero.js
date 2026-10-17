@@ -3,9 +3,9 @@
 // themselves; a face kept close to the base mesh's even average, with only the features that
 // read strong (a square jaw on him, high cheekbones and full lips on her), never the dozen
 // strong random ones a townsperson gets; lean rather than built (the base mesh's muscle target
-// inflates past a little); a groomed cut, and clothes made to move in: a fitted top with its
-// sleeves rolled, cargo trousers with room in them, boots and a satchel's strap across the
-// chest. No jacket: a garment over another stands well off the body here and balloons.
+// inflates past a little); a groomed cut, and clothes made to move in: a fitted dark top with
+// its sleeves rolled, straight cargo trousers tapering to boots. No jacket: a garment over
+// another stands well off the body here and balloons. And they stand ready (people/motion.js).
 //
 // Friends draw you from your seed alone (net/protocol.js cleanLook), so the hero is a seed of
 // its own: HERO_TAG in the top byte (above any seed a townsperson or an old visit was given,
@@ -40,7 +40,7 @@ export function setHeroChoice(sex, storage = globalThis.localStorage) {
 const SILVER = '#c9ccd0';
 const HERO = {
 	male: {
-		base: 0x4e70, sex: 0.96, height: 1.86, muscle: 0.34, weight: 0.04, ancestry: [0.18, 0.14, 0.68], hairColour: [0.07, 0.048, 0.032],
+		base: 0x4e70, sex: 0.96, height: 1.87, muscle: 0.46, weight: 0.04, ancestry: [0.18, 0.14, 0.68], hairColour: [0.07, 0.048, 0.032],
 		face: {
 			jaw: 0.38, 'jaw-out': 0.08, 'chin-width': 0.28, 'chin-out': 0.16, 'chin-height': 0.1, 'chin-cleft': 0.15,
 			cheekbones: 0.32, cheeks: -0.18, 'brow-ridge': 0.16, 'brow-angle': 0.04, forehead: 0.05,
@@ -50,15 +50,15 @@ const HERO = {
 		hair: { style: 'short01', vol: 1.08, fadeK: 0.3, beard: 'stubble', cut: 'textured' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			top: { kind: 'longsleeve', col: C.moss, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
+			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.charcoal, pat: 'cargo', legs: 'long', fit: 'regular' },
+			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'straight' },
 			shoes: { kind: 'boot', col: C.espresso, sole: C.black },
-			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'crossbody', col: C.espresso }],
+			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),
 	},
 	female: {
-		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.22, weight: 0.05, ancestry: [0.1, 0.22, 0.68], hairColour: [0.3, 0.13, 0.065],
+		base: 0x4e71, sex: 0.04, height: 1.74, muscle: 0.3, weight: 0.05, ancestry: [0.1, 0.22, 0.68], hairColour: [0.3, 0.13, 0.065],
 		face: {
 			cheekbones: 0.42, cheeks: -0.12, jaw: -0.2, 'chin-width': -0.2, 'chin-out': 0.06,
 			'nose-width': -0.26, 'nose-volume': -0.16, 'nose-tip': 0.1, 'nose-hump': -0.1,
@@ -70,9 +70,9 @@ const HERO = {
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'longsleeve', col: C.black, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'regular' },
+			bottom: { kind: 'cargo', col: C.charcoal, pat: 'cargo', legs: 'long', fit: 'straight' },
 			shoes: { kind: 'boot', col: C.espresso, sole: C.black },
-			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }, { kind: 'crossbody', col: C.espresso }],
+			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }],
 		}),
 	},
 };

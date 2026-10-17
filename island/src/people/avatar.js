@@ -54,7 +54,7 @@ export function createAvatar({ scene, world }) {
 	function show(x, z, heading) {
 		if (!me) return null;
 		me.M.place(x, world().island.heightAt(x, z), z, heading);
-		me.M.stand(); me.M.setPose('rest'); me.M.act(null);
+		me.M.stand(); me.M.setPose(me.P.dna.hero ? 'ready' : 'rest'); me.M.act(null);
 		me.P.root.visible = true;
 		return me;
 	}
@@ -70,7 +70,7 @@ export function createAvatar({ scene, world }) {
 		if (!was) return null;
 		const at = was.M.S.pos.clone(), heading = was.M.S.heading, shown = was.P.root.visible;
 		const now = await ready();
-		if (shown) { now.M.place(at.x, at.y, at.z, heading); now.M.stand(); now.M.setPose('rest'); now.P.root.visible = true; }
+		if (shown) { now.M.place(at.x, at.y, at.z, heading); now.M.stand(); now.M.setPose('ready'); now.P.root.visible = true; }
 		freeBody(was.P);
 		if (chairWas) freeBody(chairWas.P);
 		return now;

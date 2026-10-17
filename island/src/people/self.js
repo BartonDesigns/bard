@@ -10,6 +10,8 @@ import { isMinor } from '../combat/targets.js';
 
 const EYE = 1.68;
 const IDLE = ['pockets', 'crossed', 'phone', 'hip', 'behind'];
+// (the hero stands ready, and idles like one: people/hero.js)
+const HERO_IDLE = ['hip', 'crossed', 'behind'];
 
 export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint, ward = null }) {
 	const S = { third: false, idle: 0, pose: 'rest', down: null };
@@ -34,7 +36,8 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 		me.M.want.run = sp > 3 ? 1 : 0;
 		// (still for a while: a way of standing; moving again: arms free)
 		S.idle = sp < 0.15 ? S.idle + dt : 0;
-		const want = S.idle > 5 ? IDLE[Math.floor(t / 23) % IDLE.length] : 'rest';
+		const hero = !!me.P.dna.hero, L = hero ? HERO_IDLE : IDLE;
+		const want = S.idle > 5 ? L[Math.floor(t / 23) % L.length] : hero ? 'ready' : 'rest';
 		if (want !== S.pose) { S.pose = want; me.M.setPose(want); }
 		me.M.update(dt, t, null);
 		me.M.S.pos.set(P.pos.x, feet, P.pos.z);
