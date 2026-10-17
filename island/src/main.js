@@ -87,6 +87,7 @@ import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-re
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
 import { bodyCount } from './people/body.js';
+import { kitDaylight } from './people/kit-light.js';
 import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
@@ -2099,6 +2100,8 @@ export function createIslandWorld() {
 		const shadowEvery = qualityNow().shadowEvery;
 		renderer.shadowMap.autoUpdate = shadowEvery <= 1;
 		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
+		// (the sky in what people wear, as strong as the day, dim indoors and underground)
+		kitDaylight(renderer, W.sky, (W.houses?.inside?.(camera.position) || W.interiors?.inside?.(camera.position) ? 0.35 : 1) * (1 - caveK * 0.8) * (under ? 0.4 : 1));
 		if (arrival?.blind || magic.covering() || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy

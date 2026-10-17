@@ -39,7 +39,7 @@ export const LOOKS = Object.freeze({
 	'gambeson': { top: { kind: 'tunic', col: '#c9b994', acc: '#a89870', pat: 'quilt', fab: 'canvas', fit: 'regular', sleeves: 'long' } },
 	'mail-hauberk': { top: mailShirt() },
 	// (plate over mail, a torn tabard over the plate, belted)
-	'plate-cuirass': { top: mailShirt(), acc: [{ kind: 'cuirass', col: STEEL, acc: LEATHER, tabard: '#4a1d1b', trim: '#8c7a4e', belt: '#2e2219' }] },
+	'plate-cuirass': { top: { ...mailShirt(), fit: 'slim' }, acc: [{ kind: 'cuirass', col: STEEL, acc: LEATHER, tabard: '#4a1d1b', trim: '#8c7a4e', belt: '#2e2219' }] },
 	'mail-chausses': { bottom: mailLegs() },
 	'plate-greaves': { bottom: mailLegs(), acc: [{ kind: 'greaves', col: STEEL, acc: LEATHER }] },
 	'plate-gauntlets': { acc: [{ kind: 'gloves', col: STEEL, acc: IRON, steel: true, leather: '#2b211a' }] },
