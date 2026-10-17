@@ -280,6 +280,10 @@ vec3 garment(int s, vec3 P, vec3 N) {
 			float th = atan(N.x * sign(P.x), N.z), up = knee + 0.075 + 0.02 * cos(th * 1.6), dn = knee - 0.065 - 0.012 * cos(th * 1.6);
 			gDetail -= (line(P.y - up, 0.0022) + line(P.y - dn, 0.0022)) * 0.9;
 			c *= 1.0 - band(P.y, dn, up, 0.004) * 0.05;
+			// (worn there, as the sheet's are: the knees darker and dulled where they have knelt,
+			// unevenly, fading out round the sides)
+			float wear = band(P.y, dn - 0.03, up + 0.01, 0.035) * smoothstep(0.15, 0.6, N.z) * (0.45 + 0.55 * vn(P.xy * 34.0 + P.zz * 11.0));
+			c = mix(c, c * vec3(0.8, 0.77, 0.71), wear * 0.55);
 			// (and a dart in from the side above the knee)
 			gDetail -= line(P.y - (up + 0.05) + abs(N.x) * 0.06, 0.002) * step(0.6, abs(N.x)) * 0.6;
 		}
