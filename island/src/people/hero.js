@@ -61,7 +61,7 @@ const HERO = {
 		}),
 	},
 	female: {
-		base: 0x4e71, sex: 0.04, height: 1.74, muscle: 0.26, build: { shoulders: 0.01, waist: 0.08 }, weight: 0.05, ancestry: [0.1, 0.22, 0.68], hairColour: [0.3, 0.13, 0.065],
+		base: 0x4e71, sex: 0.04, height: 1.74, muscle: 0.26, build: { shoulders: 0.014, waist: 0.11 }, weight: 0.05, ancestry: [0.1, 0.22, 0.68], hairColour: [0.3, 0.13, 0.065],
 		face: {
 			cheekbones: 0.42, cheeks: -0.12, jaw: -0.2, 'chin-width': -0.2, 'chin-out': 0.06,
 			'nose-width': -0.26, 'nose-volume': -0.16, 'nose-tip': 0.1, 'nose-hump': -0.1,
