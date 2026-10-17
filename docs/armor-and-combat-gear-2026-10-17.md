@@ -60,6 +60,16 @@ and light.
   - **Cuirass**: a designed breastplate with a ridge down the middle, a taper into the waist, cut-away arm openings,
     a backplate and a rolled edge. The fauld lames are worked out from the plate above (`lameR`), so each one laps
     the next by the same amount and the cloth between them is pressed under the innermost plate.
+  - **Plackart** (2026-10-17, later): the chest is two plates. The breastplate stops under a separate belly plate
+    whose rolled top edge rises toward the tabard and sweeps down to the sides, lapping over the breastplate's
+    tucked-in lower edge, riveted at the sides. Under the arms only the breastplate runs down, cut close to the body
+    with a deep arm hole, and its side straps sit behind where the arm hangs.
+  - **Rerebrace**: measured from the arm alone. It used to take in the armpit and the side of the body, which swelled
+    it into a flap that swung up to 16 cm into the breastplate when the arms hung down; the worst overlap with the
+    arms at the sides is now about 3 cm, at the inside of the elbow.
+
+![Before and after, the chest](verification/armor/compare-chest-plates.png)
+
   - **Belt**: its radius is the smoothed largest radius of the plate and tabard across its width, so it no longer
     steps where the breastplate ends.
   - **Pauldrons**: a cap shaped round the shoulder joint with overlapping lames below it; each lame is weighted a

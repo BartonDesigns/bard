@@ -1650,42 +1650,69 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		sm(X); sm(F); sm(Bk);
 		const at1 = (A, y) => { const f = Math.max(0, Math.min(NY - 1.001, (y - yo) / 0.01)), i = Math.floor(f), u = f - i; return A[i] * (1 - u) + A[i + 1] * u; };
 		const cl = 0.022, yP = cut.chest - 0.035, yW = cut.waist;
+		const ss = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
 		// (the breast at its fullest a little under the chest, drawn in from there to the waist and
 		// toward the neck in one curve; the back flatter; the waist taken in)
 		let fP = 0; for (let y = yP - 0.04; y <= yP + 0.04; y += 0.01) fP = Math.max(fP, at1(F, y));
 		fP += cl + 0.014;
 		const kDown = Math.max(0, (fP - at1(F, yW) - cl) / (yP - yW) ** 2);
 		const front = (y) => Math.max(at1(F, y) + cl, fP - kDown * (y < yP ? 1 : 0.85) * (y - yP) ** 2);
-		const side = (y) => at1(X, y) + cl, back = (y) => at1(Bk, y) + cl;
+		// (close at the sides under the arms, where they hang against it)
+		const side = (y) => at1(X, y) + cl - 0.016 * ss((armpit + 0.03 - y) / 0.05), back = (y) => at1(Bk, y) + cl;
 		const keel = (y) => 0.011 * Math.max(0, Math.min(1, (yN - 0.03 - y) / 0.1));
 		const shape = (y, th) => {
-			const c0 = Math.cos(th), s0 = Math.sin(th), a = side(y), b = c0 > 0 ? front(y) : back(y), n = c0 > 0 ? 2.3 : 2.8;
+			const c0 = Math.cos(th), s0 = Math.sin(th), a = side(y), b = c0 > 0 ? front(y) : back(y), n = c0 > 0 ? 2.15 : 2.6;
 			let r = Math.pow(Math.pow(Math.abs(c0 / b), n) + Math.pow(Math.abs(s0 / a), n), -1 / n);
 			if (c0 > 0) r += keel(y) * Math.max(0, 1 - Math.abs(r * s0) / 0.075) * c0;
 			return r;
 		};
-		const shell = (y, th) => Math.max(shape(y, th), M.rad(Math.max(0, Math.min(yN - yo, y - yo)), th) + 0.014);
-		// the breastplate and backplate: cut high round the neck, scooped for the arms, the breast
+		// (never closer to the body than a finger's width: measured broadly smoothed, so where the
+		// shape runs close, under the arms, the plate does not take up the body's every bump)
+		const Ms = fitTube({ o: O, axis: UP, t0: 0, t1: yN - yo, dt: 0.01, seg: 48, smooth: 18, give: 0, wall: 0, bone: () => 'spine01', draw: false, skin: (v, x, y) => (part[v] === 0 || part[v] === 4) && !(y > armpit && inArm(x)) });
+		const shell = (y, th) => Math.max(shape(y, th), Ms.rad(Math.max(0, Math.min(yN - yo, y - yo)), th) + 0.009);
+		// the breastplate and backplate: cut high round the neck, scooped deep for the arms (mail shows
+		// in the armpit, where the arm lies against the body), the breast
 		// coming to a shallow point at the waist; the back's edges under the breast's at the sides
 		const bell = (f) => { const d = Math.abs(f - Math.PI / 2); return d < 1.0 ? Math.pow(Math.cos((d / 1.0) * Math.PI / 2), 0.55) : 0; };
-		const yTop = (th) => { const f = fOf(th), base = yN - 0.045 + 0.012 * (1 - Math.cos(f)) / 2 - 0.016 * Math.exp(-((f / 0.4) ** 2)); return base - bell(f) * (base - armpit); };
+		const yTop = (th) => { const f = fOf(th), base = yN - 0.045 + 0.012 * (1 - Math.cos(f)) / 2 - 0.016 * Math.exp(-((f / 0.4) ** 2)); return base - bell(f) * (base - armpit + 0.03); };
 		const yBot = (th) => { const f = fOf(th), u = (1 - Math.cos(f)) / 2; return (yW - 0.03 - 0.024 * Math.exp(-((f / 0.35) ** 2))) * (1 - u) + (yW - 0.005) * u; };
 		const plateBone = (t) => { const u = Math.max(0, Math.min(1, (cut.chest - yo - t) / 0.2)); return [['spine01', 1 - u * 0.45], ['spine02', u * 0.45]]; };
 		const T0 = yW - 0.06 - yo, T1 = yN - 0.02 - yo, TH = 0.0035;
-		const breast = fitTube({ o: O, axis: UP, t0: T0, t1: T1, dt: 0.011, seg: 64, arc: [-1.78, 1.78], span: (th) => [yBot(th) - yo, yTop(th) - yo], floor: (t, th) => shell(yo + t, th), skin: () => false, smooth: 0, wall: 0.001, minR: 0.001, col: c, rim: 0.0012, thick: TH, bone: plateBone });
+		// (the plackart: a second plate over the belly, its top rising to a point under the tabard
+		// and sweeping down toward the sides, lapped over the breastplate's lower edge; the
+		// breastplate stops a hand's width under that edge, so the two read as two plates and the
+		// belly can bend between them)
+		const ym = (yP + yW) / 2, PG = TH + 0.0015, OVL = 0.028;
+		const plTop = (th) => { const f = fOf(th); return ym - 0.032 + 0.11 * Math.exp(-((f / 0.6) ** 2)) - 0.01 * Math.max(0, (f - 1.2) / 0.6); };
+		// (the plackart wraps only the front: under the arms, where they hang against the body, the
+		// breastplate alone runs down to the waist)
+		const PA = 1.38, brBot = (th) => { const u = 1 - plUnder(th); return (plTop(th) - OVL) * (1 - u) + yBot(th) * u; };
+		// (the breastplate drawn in under the plackart's edge, and the plackart's edge turned out over
+		// it, so the step between them throws a shadow)
+		const plUnder = (th) => 1 - ss((fOf(th) - PA + 0.12) / 0.2);
+		const tuck = (y, th) => 0.006 * plUnder(th) * ss((plTop(th) + 0.004 - y) / 0.02), flare = (y, th) => 0.005 * ss((y - plTop(th) + 0.016) / 0.016);
+		const breast = fitTube({ o: O, axis: UP, t0: ym - 0.09 - yo, t1: T1, dt: 0.011, seg: 64, arc: [-1.78, 1.78], span: (th) => [brBot(th) - yo, yTop(th) - yo], floor: (t, th) => shell(yo + t, th) - tuck(yo + t, th), skin: () => false, smooth: 0, wall: 0.001, minR: 0.001, col: c, rim: 0.0012, thick: TH, bone: plateBone });
 		const backP = fitTube({ o: O, axis: UP, t0: T0, t1: T1, dt: 0.011, seg: 56, arc: [1.42, Math.PI * 2 - 1.42], span: (th) => [yBot(th) - yo, yTop(th) - yo], floor: (t, th) => shell(yo + t, th) - TH - 0.0015, skin: () => false, smooth: 0, wall: 0.001, minR: 0.001, col: c, rim: 0.0012, thick: TH, bone: plateBone });
 		// (their edges rolled: a round bead along the neck and the arm holes)
 		const edgeRun = (P, a0, a1, tAt, n, off = 0) => { const pts = []; for (let i = 0; i <= n; i++) { const th = a0 + ((a1 - a0) * i) / n, S = P.at(tAt(th), th, off); pts.push(S); } return pts; };
 		const bead = (pts, r = 0.0042) => sweep(pts.map((S) => ({ p: S.p.clone().addScaledVector(S.n, r * 0.35), n: S.n, bone: S.bone })), roundProf(r, 8), c, ARMOUR, 0, 1);
 		if (breast) bead(edgeRun(breast, -1.74, 1.74, (th) => yTop(th) - yo - 0.003, 56));
+		const plack = fitTube({ o: O, axis: UP, t0: T0, t1: ym + 0.06 - yo, dt: 0.011, seg: 52, arc: [-PA, PA], span: (th) => [yBot(th) - yo, plTop(th) - yo], floor: (t, th) => shell(yo + t, th) + PG + flare(yo + t, th), skin: () => false, smooth: 0, wall: 0.001, minR: 0.001, col: c, rim: 0.0012, thick: TH, bone: plateBone });
+		// (its top edge turned out in a roll, and riveted to the breastplate under it at the sides)
+		if (plack) {
+			// (only beside the tabard: under it the roll would show through the cloth)
+			for (const s of [1, -1]) bead(edgeRun(plack, s * 0.36, s * (PA - 0.03), (th) => plTop(th) - yo - 0.003, 24), 0.005);
+			for (const th of [-1.2, -0.75, 0.75, 1.2]) rivet(plack.at(plTop(th) - yo - 0.014, th, 0.0005), 0.0036);
+		}
 		if (backP) bead(edgeRun(backP, 1.46, Math.PI * 2 - 1.46, (th) => yTop(th) - yo - 0.003, 48));
-		// (leather straps buckling the back to the breast under each arm)
+		// (leather straps buckling the back to the breast under each arm, set behind where the arm
+		// hangs so it does not lie on them: from the breast's edge across onto the backplate)
 		const strapC = q.acc || '#3a2a1e', buckleC = '#4a4842';
-		if (breast) for (const s of [1, -1]) {
-			const th = s * 1.6, y0 = armpit - 0.03;
-			const pts = []; for (let i = 0; i <= 6; i++) pts.push(breast.at(y0 - yo - i * 0.012, th - s * 0.18 + s * i * 0.04, TH + 0.002));
-			sweep(pts, strapProf(0.022, 0.003), strapC, LEATHER, 0, 0.5);
-			const B0 = breast.at(y0 - yo - 0.035, th - s * 0.06, TH + 0.005), fr = new THREE.TorusGeometry(0.012, 0.0022, 4, 4);
+		if (breast && backP) for (const s of [1, -1]) {
+			const y0 = armpit - 0.05, on = (y, a, h) => (Math.abs(a) <= 1.76 ? breast.at(y, a, h) : backP.at(y, a, h + TH + 0.0015));
+			const pts = []; for (let i = 0; i <= 6; i++) pts.push(on(y0 - yo - i * 0.012, s * (1.66 + i * 0.045), TH + 0.002));
+			sweep(pts, strapProf(0.02, 0.0025), strapC, LEATHER, 0, 0.5);
+			const B0 = on(y0 - yo - 0.024, s * 1.72, TH + 0.004), fr = new THREE.TorusGeometry(0.011, 0.002, 4, 4);
 			fr.rotateZ(Math.PI / 4); fr.lookAt(B0.n); fr.translate(B0.p.x, B0.p.y, B0.p.z); put(fr, B0.bone, buckleC, ARMOUR);
 		}
 		// the fauld: lames hung from the breastplate's lower edge to the hips, each flaring a little
@@ -1696,7 +1723,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		// inside that plate's inside, flaring out only below its edge, so no lame cuts through
 		// the one over it)
 		const lameR = (k, y, th) => {
-			const tp = fauldTop(k, th), above = k ? lameR(k - 1, tp, th) : shell(tp, th) + 0.001 - (Math.abs(th) > 1.42 ? TH + 0.0015 : 0);
+			const tp = fauldTop(k, th), above = k ? lameR(k - 1, tp, th) : shell(tp, th) + 0.001 + (Math.abs(th) > 1.42 ? -(TH + 0.0015) : Math.abs(th) <= PA ? PG : 0);
 			return above - TH - 0.0015 + shell(y, th) - shell(tp, th) + FL * Math.max(0, tp - OV - y);
 		};
 		const fauldR = (y, th) => {
@@ -1706,7 +1733,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		};
 		// (the inside of the innermost plate at each height and way round, for what is under it)
 		const plateIn = (y, th) => {
-			let r = y >= yBot(th) ? shell(y, th) + 0.001 - TH - (Math.abs(th) > 1.42 ? TH + 0.0015 : 0) : Infinity;
+			let r = y >= yBot(th) ? shell(y, th) + 0.001 - TH - tuck(y, th) - (Math.abs(th) > 1.42 ? TH + 0.0015 : 0) : Infinity;
 			for (let k = 0; k < nL; k++) { const tp = fauldTop(k, th); if (y <= tp && y >= tp - hL - 0.012) r = Math.min(r, lameR(k, y, th) - TH); }
 			return r === Infinity ? 0 : r;
 		};
@@ -1718,9 +1745,9 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			});
 			if (L) for (const th of [1.32, -1.32, Math.PI - 0.5, 0.5 - Math.PI]) rivet(L.at(fauldTop(k, th) - hL * 0.45 - yo, th, 0.0005), 0.0038);
 		}
-		if (breast) for (const th of [-1.2, -0.65, 0.65, 1.2]) rivet(breast.at(yBot(th) - yo + 0.008, th, 0.0005), 0.0036);
+		if (plack) for (const th of [-1.2, -0.65, 0.65, 1.2]) rivet(plack.at(yBot(th) - yo + 0.008, th, 0.0005), 0.0036);
 		// (the outermost plate at each height and way round, for what is worn over it)
-		const armR = (y, th) => Math.max(y >= yBot(th) - 0.002 ? shell(y, th) + TH : 0, fauldR(y, th));
+		const armR = (y, th) => Math.max(y >= yBot(th) - 0.002 ? shell(y, th) + TH + (y <= plTop(th) + 0.002 && Math.abs(th) <= PA ? PG + flare(y, th) : 0) : 0, fauldR(y, th));
 		// (the mail and cloth under the plate pressed in under it, the shift in how the clothes
 		// meet the body moved with them, cloth-collide.js)
 		const cp = P0.cloth?.attributes.position, ci = P0.cloth?.attributes.clothInset, slot = P0.cloth?.attributes.slot;
@@ -1867,12 +1894,15 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				e = Math.max(e, Math.sqrt((t / 0.75) ** 2 + (a / fb) ** 2 + b * b));
 			}
 			const Rp = Math.min(0.085 * kH, Math.max(0.05, e)) + 0.022, Rd = Rp * 0.75;
-			const inA = thetaOf(d, V3(-sx, 0, 0)), capBone = [['shoulder01.' + sd, 0.4], [ub, 0.6]];
+			const inA = thetaOf(d, V3(-sx, 0, 0));
 			const capLo = (th) => -Rd * 0.55 + Rd * 0.62 * Math.max(0, Math.cos(angGap(th, inA))) ** 2;
 			const cap = fitTube({
 				o: C, axis: d, t0: -Rd * 0.6, t1: Rd, dt: 0.0065, seg: 56, span: (th) => [capLo(th), Rd],
 				floor: (t, th) => { const k = Math.sqrt(Math.max(0, 1 - (t / Rd) ** 2)), c0 = Math.cos(th), s1 = Math.sin(th); return k / Math.sqrt((c0 / (Rp * fb)) ** 2 + (s1 / Rp) ** 2); },
-				skin: () => false, smooth: 0, wall: 0, minR: 0.0003, closeB: 0.001, col: c, thick: TH, rim: 0.0015, bone: () => capBone,
+				skin: () => false, smooth: 0, wall: 0, minR: 0.0003, closeB: 0.001, col: c, thick: TH, rim: 0.0015,
+				// (its inner side, toward the neck, rides the collarbone more than the arm, so it does not
+				// swing into the backplate as the arm swings)
+				bone: (t, th) => { const m = Math.max(0, Math.cos(angGap(th, inA))) ** 2; return [['shoulder01.' + sd, 0.4 + 0.45 * m], [ub, 0.6 - 0.45 * m]]; },
 			});
 			if (cap) { const pts = edgeRun(cap, 0, Math.PI * 2, (th) => capLo(th) + 0.003, 56); pts.pop(); sweep(pts.map((S2) => ({ p: S2.p.clone().addScaledVector(S2.n, 0.0016), n: S2.n, bone: S2.bone })), roundProf(0.0045, 8), c, ARMOUR, 0, 1, true); }
 			// (the lames, measured round the arm, each lapping over the next)
@@ -1886,13 +1916,19 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				});
 				if (L) for (const s2 of [1, -1]) rivet(L.at(tk + 0.02, outA + s2 * (w - 0.16), 0.0004), 0.0034);
 			}
-			// (the rerebrace)
-			fitTube({
-				o: S, axis: ax, t0: 0.12, t1: len - 0.04, col: c, wall: 0.008, seg: 28, thick: TH,
-				skin: (v, x) => part[v] === 1 && Math.sign(x) === sx, cloth: (x, y, z, slot, limb) => limb === 1 && Math.sign(x) === sx,
+			// (the rerebrace: a tube round the arm's own flesh, measured from the arm alone so the
+			// armpit and the side of the body under it are not taken in (they swell it into a flap
+			// that swings into the breastplate when the arm hangs), close on the side toward the
+			// body and a little fuller outside, the sleeve pressed in under it)
+			const nearArm = (x, y, z) => { const dx = x - S.x, dy = y - S.y, dz = z - S.z, t = dx * ax.x + dy * ax.y + dz * ax.z; return Math.hypot(dx - ax.x * t, dy - ax.y * t, dz - ax.z * t) < 0.075 * kH; };
+			const uaM = fitTube({ o: S, axis: ax, t0: 0.1, t1: len - 0.02, dt: 0.01, seg: 28, smooth: 10, give: 0, wall: 0, draw: false, bone: () => ub, skin: (v, x, y, z) => part[v] === 1 && Math.sign(x) === sx && nearArm(x, y, z) });
+			const rere = uaM && fitTube({
+				o: S, axis: ax, t0: 0.12, t1: len - 0.04, dt: 0.01, col: c, seg: 28, thick: TH, skin: () => false, smooth: 0, wall: 0, minR: 0.001,
+				floor: (t, th) => uaM.rad(t, th) + 0.005 + 0.009 * Math.max(0, Math.cos(angGap(th, outA))) + 0.006 * Math.max(0, (t - (len - 0.1)) / 0.06),
 				lift: (t) => ({ seam: Math.abs(t - (len - 0.1)) < 0.003 ? 0.7 : 0 }),
 				bone: () => ub,
 			});
+			rere?.press((x, y, z, slot, limb) => limb === 1 && Math.sign(x) === sx);
 		}
 		return armR;
 	};
