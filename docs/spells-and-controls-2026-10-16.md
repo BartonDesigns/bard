@@ -117,6 +117,15 @@ Everything is kept between visits (`l99-magic`).
   catastrophes.
 - **Light:** Lumen and Nightsight lift the eye's exposure in the dark (one factor in `main.js`).
   No scene lights are added, so no materials recompile.
+- **Elements** (`magic/elements.js`): what lands sets off its element's affliction, with a look of
+  its own on the body. Radiant sears (25% of the blow again over 3 s). Fire burns (40% over 4 s).
+  Frost chills (60% pace for 3 s), and the third chill in a row freezes for 1.5 s. Storm jolts
+  (0.35 s) and 30% leaps to the nearest other foe. Shadow leaves dread (15% more from you for
+  4 s). Void unravels (30% strikes again 0.9 s later). Blight rots (30% over 6 s). Follow-on damage
+  is a share of the blow as it landed and never sets off another. Bosses take the damage and the
+  dread but are never slowed, frozen or jolted. A foe your element kills goes down its way: burned
+  to ash, seared to light, shattered, scattered as sparks, dissolved to shadow, folded into
+  nothing, or melted.
 - **Aether and your name:** a mote gives more of the strand your reputation leans to (up to twice
   the light at +100, twice the dark at -100) and less of the other, down to half (`aetherShare`).
   Sparing a foe still gives light fabric, and a kill gives dark.
@@ -169,7 +178,7 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
 
 ## Tests
 
-`node --test island/tools/magic.test.mjs` (13):
+`node --test island/tools/magic.test.mjs` (14):
 - every spell is whole, and no school's ladder is missing a rung;
 - the runtime handles every kind of spell;
 - weaving, affinity and the ladder, and twilight's gate;
@@ -181,7 +190,8 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
 - the weapons on the keys 1 to 5;
 - the look modes and the keys being wired;
 - every spell has a look of its own, and no two look alike;
-- Solar Flare needs the sun until it channels the moon, and the aether leans to your name.
+- Solar Flare needs the sun until it channels the moon, and the aether leans to your name;
+- each element does its own thing to the one it strikes.
 
 ## Found on the way: memory while the mouse is captured
 

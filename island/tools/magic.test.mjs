@@ -233,3 +233,38 @@ test('Solar Flare needs the sun until it channels the moon; aether leans to your
 	assert.equal(aetherShare('light', 0), 1); assert.equal(aetherShare('dark', 500), 0.5, 'bounded');
 	assert.deepEqual(gatherShare(50), { light: 1.5, dark: 0.75 });
 });
+
+test('each element does its own thing to the one it strikes', async () => {
+	const THREE = await import('three');
+	const { createMagicFx } = await import('../src/magic/fx.js');
+	const { ELEMENTS, createAfflictions } = await import('../src/magic/elements.js');
+	// every damage type a spell deals has an affliction, named and worded for the menu
+	for (const s of SPELLS) if (s.type) assert.ok(ELEMENTS[s.type]?.name && ELEMENTS[s.type].text.length > 20, `${s.id}: ${s.type} has an effect`);
+	const fx = createMagicFx(new THREE.Scene());
+	const dealt = [], hexes = [];
+	const foe = (kind = 'hostile') => ({ kind, bound: { x: 0, y: 1, z: -5 } }), other = foe();
+	const A = createAfflictions({ fx, deal: (T, n, type) => dealt.push({ T, n, type }), hex: (T, st) => hexes.push({ T, st }), near: (T) => (T === other ? null : other) });
+	const run = (s) => { for (let t = 0; t < s; t += 0.1) A.step(0.1); };
+	const sum = (type) => dealt.filter((d) => d.type === type).reduce((a, d) => a + d.n, 0);
+	// fire burns for 40% of the blow over 4 s, all of it, and no more
+	const f = foe(); A.apply(f, 'fire', 100, f.bound); run(5);
+	assert.ok(Math.abs(sum('fire') - 40) < 0.01, 'burned ' + sum('fire'));
+	// blight rots 30% over 6 s; radiant sears 25% over 3 s
+	A.apply(foe(), 'blight', 100, f.bound); A.apply(foe(), 'radiant', 100, f.bound); run(7);
+	assert.ok(Math.abs(sum('blight') - 30) < 0.01 && Math.abs(sum('radiant') - 25) < 0.01, `${sum('blight')} ${sum('radiant')}`);
+	// frost slows, and the third chill in a row freezes
+	const c = foe(); for (let i = 0; i < 3; i++) A.apply(c, 'frost', 10, c.bound);
+	assert.deepEqual(hexes.filter((h) => h.T === c).map((h) => Object.keys(h.st)[0]), ['slow', 'slow', 'hold']);
+	assert.ok(A.info(c).frozen > 1);
+	// storm jolts and leaps 30% to the next foe
+	const s = foe(); A.apply(s, 'storm', 50, s.bound);
+	assert.ok(hexes.some((h) => h.T === s && h.st.hold === 0.35) && dealt.some((d) => d.T === other && d.n === 15));
+	// shadow: dread, 15% more from you for 4 s
+	const d = foe(); A.apply(d, 'shadow', 10, d.bound); assert.equal(A.vuln(d), 0.15); run(4.2); assert.equal(A.vuln(d), 0);
+	// void: 30% again a moment later
+	const v = foe(); A.apply(v, 'void', 100, v.bound); const before = sum('void'); run(1.2); assert.ok(Math.abs(sum('void') - before - 30) < 0.01);
+	// anything vast takes the damage and the dread, but is never slowed, frozen or jolted
+	const b = foe('boss'); hexes.length = 0; for (let i = 0; i < 3; i++) A.apply(b, 'frost', 10, b.bound); A.apply(b, 'storm', 10, b.bound); A.apply(b, 'shadow', 10, b.bound);
+	assert.equal(hexes.length, 0); assert.equal(A.vuln(b), 0.15);
+	fx.dispose();
+});

@@ -32,6 +32,7 @@ import * as THREE from 'three';
 import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, strandOf, moonlit } from './spells.js';
 import { GLOW, magicSound } from './fx.js';
 import { lookOf, LOOK } from './looks.js';
+import { createAfflictions } from './elements.js';
 
 const EYE = 1.68;
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
@@ -70,14 +71,23 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 	}
 
 	// ---------- harm and hexes ----------
+	// a spell's blow on T: dread makes it land harder, and what lands sets off its element's
+	// affliction (magic/elements.js)
 	function harm(T, amount, spell, at, dir = null) {
 		if (!T || amount <= 0) return null;
-		const blow = { amount, type: typeOf(spell.type), part: 'body', src: at, dir: dir || { x: T.bound.x - at.x, y: 0.3, z: T.bound.z - at.z }, by: combat.me, spell: spell.type };
+		const blow = { amount: amount * (1 + afflict.vuln(T)), type: typeOf(spell.type), part: 'body', src: at, dir: dir || { x: T.bound.x - at.x, y: 0.3, z: T.bound.z - at.z }, by: combat.me, spell: spell.type };
 		const r = combat.deal(T, blow, true);
 		const c = GLOW[spell.type === 'frost' ? 'frost' : spell.school];
-		if (r?.dealt) fx.burst({ x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }, c, 8, 3, 0.4, 0.2);
+		if (r?.dealt) { fx.burst({ x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }, c, 8, 3, 0.4, 0.2); if (r.killed) afflict.fell(T, spell.type); else if (amount < 1e5) afflict.apply(T, spell.type, r.dealt, at); }
 		return r;
 	}
+	// (an affliction's own follow-on blow: a burn's tick, an echo, a leap; it afflicts nothing more)
+	const afflict = createAfflictions({
+		fx,
+		deal: (T, amount, type, at) => combat.deal(T, { amount, type: typeOf(type), part: 'body', src: { x: at.x, y: at.y, z: at.z }, by: combat.me, spell: type, quiet: true }, true),
+		hex: (T, st) => hex(T, st),
+		near: (T, r) => nearestHostile(T.bound, r, (q) => q !== T),
+	});
 	// a status on a fighter (not a boss): hold, slow (for t), fear, dot (for t)
 	function hex(T, st, k = 1, by = null) {
 		if (!st || !T || T.kind !== 'hostile' || T.removed) return;
@@ -650,16 +660,17 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		histT -= dt;
 		const p = P();
 		if (histT <= 0 && p) { histT = 0.25; history.push({ t, x: p.pos.x, y: p.pos.y, z: p.pos.z, hp: combat.vitals().hp }); while (history.length && history[0].t < t - 6) history.shift(); }
-		stepBolts(dt); stepBeams(dt, keysHeld); stepEffects(dt); stepShades(dt, t); stepHexes(dt); stepKnocks(dt); stepBuffs(dt, t);
+		stepBolts(dt); stepBeams(dt, keysHeld); stepEffects(dt); stepShades(dt, t); stepHexes(dt); afflict.step(dt); stepKnocks(dt); stepBuffs(dt, t);
 	}
-	function clear() { bolts.length = effects.length = shades.length = knocks.length = 0; held.clear(); buff.looks.clear(); for (const T of hexed.keys()) T.hex = null; hexed.clear(); history.length = 0; }
+	function clear() { bolts.length = effects.length = shades.length = knocks.length = 0; held.clear(); buff.looks.clear(); for (const T of hexed.keys()) T.hex = null; hexed.clear(); afflict.clear(); history.length = 0; }
 	return {
 		cast, release, update, clear, shieldBlow, exposure,
 		cloaked: () => buff.cloakUntil > now(),
 		sighting: () => buff.sightUntil > now(),
 		sightWhat: () => (buff.sightUntil > now() ? buff.sightWhat : null),
 		setCursor: (c) => { cursor = c; },
-		info: () => ({ bolts: bolts.length, effects: effects.length, shades: shades.length, hexed: hexed.size, held: [...held.keys()], shield: Math.round(buff.shield), cloak: buff.cloakUntil > now(), mana: Math.round(state.mana), max: manaMax(state) }),
+		afflictions: (T) => afflict.info(T),
+		info: () => ({ bolts: bolts.length, effects: effects.length, shades: shades.length, hexed: hexed.size, afflicted: afflict.size(), held: [...held.keys()], shield: Math.round(buff.shield), cloak: buff.cloakUntil > now(), mana: Math.round(state.mana), max: manaMax(state) }),
 		strandOf, SCHOOLS,
 	};
 }
