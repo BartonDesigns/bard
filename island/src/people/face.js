@@ -108,24 +108,69 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 	// share of them (grey) drawn grey
 	const B = F.brow, n0 = new THREE.Vector3(), n1 = new THREE.Vector3(), cx = (eyeC[0].x + eyeC[1].x) / 2;
 	// (a woman's finer than a man's)
-	const fine = P.dna.male ? 1 : 0.82, dens = (0.7 + rnd() * 0.6) * fine, thick = (0.8 + rnd() * 0.45) * fine;
+	const fine = P.dna.male ? 1 : 0.82, dens0 = (0.7 + rnd() * 0.6) * fine, thick0 = (0.8 + rnd() * 0.45) * fine;
+	// everyone's brows as brows grow: of a natural weight (each their own, from the draws above),
+	// many fine short hairs lying tidily, over the brow's own tone; or groomed to set values
+	// (P.dna.brows: dens, thick, len, tidy, wid)
+	const G = P.dna.brows || {}, dens = G.dens ?? dens0 * 1.15, thick = G.thick ?? thick0 * 0.68, blen = G.len ?? 0.72, tidy = G.tidy ?? 0.55, bwid = G.wid ?? (P.dna.brows ? 0.0014 : 0.0008);
 	// the skin round the brows (its vertices and normals, in a fine grid), so that every
 	// hair lies on it, a hair's width out, whatever the brow ridge's shape
 	const onSkin = skinNear(A, p, B);
-	for (let j = 0; j + 2 < B.length; j += 2) {
-		const va = B[j], vb = B[j + 2], ta = B[j + 1] / 65535, tb = B[j + 3] / 65535;
-		if (tb < ta) continue;
-		const a = new THREE.Vector3(...at(va)), b = new THREE.Vector3(...at(vb)), side = Math.sign(a.x - cx) || 1;
+	// each brow's arch, cleaned: the face data repeats some of its points (the hairs between a
+	// point and itself all grew there, in clumps) and lists a few on the skin inside the brow
+	// ridge, centimetres behind it (the hairs there were lost in the head, leaving gaps). Each
+	// arch: its points in order, the repeats and the sunken ones dropped (2 to 3 cm behind their
+	// neighbours; the tail, curving back round the temple, is a centimetre), t by length along it
+	const arches = [];
+	for (let j = 0, cur = null, lastT = -1; j < B.length; j += 2) {
+		const t = B[j + 1] / 65535;
+		// (a brow ends where t falls back: the other one begins)
+		if (!cur || t < lastT) arches.push(cur = []);
+		lastT = t;
+		const q = new THREE.Vector3(...at(B[j]));
+		if (!cur.length || cur[cur.length - 1].q.distanceTo(q) > 1e-4) cur.push({ q, v: B[j], t: 0 });
+	}
+	for (let k = 0; k < arches.length; k++) {
+		const L = arches[k].filter((o, i, all) => { const a = all[i - 1] || all[i + 1], b = all[i + 1] || all[i - 1]; return !a || o.q.z > Math.min(a.q.z, b.q.z) - 0.015 * S; });
+		let run = 0;
+		for (let i = 1; i < L.length; i++) { run += L[i].q.distanceTo(L[i - 1].q); L[i].t = run; }
+		for (const o of L) o.t /= run || 1;
+		arches[k] = L;
+	}
+	// the brow's own tone first, under its hairs: a soft ribbon along each arch on the skin,
+	// fullest at the inner end, so the hairs read as one brow and not as strokes; one strip an
+	// arch, each point's width across it taken from its neighbours either side (pieces laid
+	// segment by segment overlapped at every joint, and the overlaps showed as dark blocks)
+	for (const L of arches) {
+		let prev = null;
+		for (let i = 0; i < L.length; i++) {
+			const { q: o, v, t } = L[i];
+			const along = L[Math.min(L.length - 1, i + 1)].q.clone().sub(L[Math.max(0, i - 1)].q);
+			if (along.lengthSq() < 1e-12) along.set(1, 0, 0);
+			along.normalize();
+			normalOf(v, n0);
+			const across = new THREE.Vector3().crossVectors(n0, along).normalize();
+			if (across.y < 0) across.multiplyScalar(-1);
+			const hw = (0.0075 * (1 - t) + 0.0028 * t) * thick * S * 0.85;
+			const pair = [-1, 1].map((sd) => { const q = o.clone().addScaledVector(across, sd * hw + 0.0006 * S); onSkin(q, 0.0004); return vert(q.x, q.y, q.z, sd < 0 ? 0 : 1, t, 5, v); });
+			if (prev) I.push(prev[0], pair[0], pair[1], prev[0], pair[1], prev[1]);
+			prev = pair;
+		}
+	}
+	for (const [k, L] of arches.entries()) for (let i = 0; i + 1 < L.length; i++) {
+		const { q: a, v: va, t: ta } = L[i], { q: b, v: vb, t: tb } = L[i + 1], side = Math.sign(a.x - cx) || 1;
 		normalOf(va, n0); normalOf(vb, n1);
-		const count = Math.round(54 * dens * (1.15 - ta * 0.5));
+		// (as many as this stretch of the arch holds: thick at the inner end, thinning to the tail)
+		const count = Math.round(54 * 13 * dens * (1.15 - ta * 0.5) * (tb - ta));
 		for (let h = 0; h < count; h++) {
 			const f = rnd(), t = ta + (tb - ta) * f, n = n0.clone().lerp(n1, f).normalize();
 			const band = (0.0075 * (1 - t) + 0.0028 * t) * thick * S;
 			const root = a.clone().lerp(b, f).add(new THREE.Vector3(0, (rnd() - 0.45) * band, 0)).addScaledVector(n, 0.0005);
-			const ang = THREE.MathUtils.lerp(1.3, -0.35, Math.min(1, t * 1.25)) + (rnd() - 0.5) * 0.45;
+			// (the inner hairs up and out, not straight up: a comb there, else)
+			const ang = THREE.MathUtils.lerp(P.dna.brows ? 1.3 : 1.0, -0.35, Math.min(1, t * 1.25)) + (rnd() - 0.5) * 0.45 * tidy;
 			const dir = new THREE.Vector3(Math.cos(ang) * side, Math.sin(ang), 0);
 			dir.addScaledVector(n, -dir.dot(n)).normalize();
-			const len = (0.005 + rnd() * 0.004) * S, wid = 0.0014 * S, kind = grey && hash(j * 131 + h) < grey ? 4 : 2;
+			const len = (0.005 + rnd() * 0.004) * S * blen, wid = bwid * S, kind = grey && hash((k * 64 + i) * 131 + h) < grey ? 4 : 2;
 			const tip = root.clone().addScaledVector(dir, len).addScaledVector(n, 0.0006);
 			onSkin(root, 0.0006); onSkin(tip, 0.0008);
 			const sv = new THREE.Vector3().crossVectors(n, dir).normalize().multiplyScalar(wid / 2);
@@ -185,7 +230,8 @@ function skinNear(A, p, verts) {
 // brows' colour, greyCol: their grey hairs')
 export function detailMaterial(hairCol, greyCol = hairCol) {
 	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-	const U = { uHair: { value: new THREE.Color(hairCol) }, uGrey: { value: new THREE.Color(greyCol) } };
+	// (uFill: how full the brow's own tone under its hairs)
+	const U = { uHair: { value: new THREE.Color(hairCol) }, uGrey: { value: new THREE.Color(greyCol) }, uFill: { value: 1.8 } };
 	m.userData.U = U;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U);
@@ -194,6 +240,7 @@ export function detailMaterial(hairCol, greyCol = hairCol) {
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 uniform vec3 uHair;
 uniform vec3 uGrey;
+uniform float uFill;
 varying float vKind;
 varying vec2 vSt;
 float dh(float x) { return fract(sin(x * 91.7) * 43758.5453); }
@@ -213,10 +260,18 @@ float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 	} else if (k == 2 || k == 4) {
 		// a brow hair: thin, tapering to the tip; matt and in its own shade, as hair lying
 		// thick on skin is (a shine on so fine a thing only greys it)
+		// (each a little see-through: many together make the brow, softly)
 		float w = 0.5 * (1.0 - vSt.y * 0.8);
-		a = 1.0 - smoothstep(w * 0.45, w, abs(vSt.x - 0.5));
+		a = (1.0 - smoothstep(w * 0.45, w, abs(vSt.x - 0.5))) * 0.8;
 		c = k == 4 ? uGrey : uHair;
-		gRgh = 0.85; gSpec = 0.15; gLit = 0.7;
+		gRgh = 0.85; gSpec = 0.15; gLit = 0.82;
+	} else if (k == 5) {
+		// the brow's own tone under its hairs: soft across, fullest at the inner end, fading to
+		// the tail
+		float across = 1.0 - smoothstep(0.05, 0.5, abs(vSt.x - 0.5));
+		a = min(0.65, across * (0.3 + 0.14 * (1.0 - vSt.y)) * uFill) * smoothstep(0.0, 0.06, vSt.y) * (1.0 - smoothstep(0.8, 1.0, vSt.y));
+		c = uHair * 1.08;
+		gRgh = 0.9; gSpec = 0.1; gLit = 0.75;
 	} else {
 		// the wet line: clear, glossy, a little pink where it meets the lid
 		a = sin(vSt.y * 3.14159) * 0.45;
@@ -230,7 +285,7 @@ float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRgh;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.directSpecular *= gSpec; reflectedLight.indirectSpecular *= gSpec; reflectedLight.directDiffuse *= gLit; reflectedLight.indirectDiffuse *= gLit;');
 	};
-	m.customProgramCacheKey = () => 'crysis-face-detail-3';
+	m.customProgramCacheKey = () => 'crysis-face-detail-8';
 	return m;
 }
 

@@ -316,6 +316,8 @@ export function buildPerson(A, d) {
 	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow), brow.grey);
 	if (dg) {
 		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
+		// (how full the tone under the brow's hairs, each their own; or as set, d.brows.fill)
+		dm.material.userData.U.uFill.value = d.brows?.fill ?? 1.6 + ((d.seed * 0.618034) % 1) * 0.4;
 		dm.frustumCulled = false; dm.renderOrder = 1;
 		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
@@ -592,7 +594,13 @@ function coverScalp(P, hair) {
 }
 
 function browOf(d) {
-	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * 0.6));
+	// (a shade darker than fair hair; dark hair's brows lifted a little off black, which only
+	// reads as a stroke; or as set, d.browTone)
+	const top = Math.max(...d.hairColour), tone = d.browTone ?? 0.85 + 1.15 * (1 - clamp((top - 0.06) / 0.24));
+	const col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * tone));
+	// (and never quite black: the darkest a deep brown-black)
+	const lum = Math.max(col.r, col.g, col.b);
+	if (lum < 0.07) col.multiplyScalar(0.07 / Math.max(lum, 1e-4));
 	const g = greyOf(d, 12);
 	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
 }
