@@ -39,7 +39,8 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	// (dressed to move in, groomed, and never grey)
 	assert.equal(m.style.outer, null, 'no jacket to balloon on him');
 	assert.equal(f.style.outer.kind, 'flannel'); assert.equal(f.style.outer.pat, 'plaid'); assert.equal(f.style.outer.fit, 'fitted', 'a fitted plaid overshirt');
-	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.008 && d.style.bottom.hang < 0.02 && d.style.bottom.fit === 'straight' && d.style.bottom.tuck && d.style.shoes.tall, 'rugged trousers tapering into tall boots'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
+	assert.ok(m.style.bottom.tuck && m.style.shoes.tall && !f.style.bottom.tuck && !f.style.shoes.tall, 'his into tall boots, hers over hiking boots');
+	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.008 && d.style.bottom.hang < 0.02 && d.style.bottom.fit === 'straight', 'trousers cut straight and tapering'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
 	assert.ok(m.style.acc.some((q) => q.kind === 'carrier'), 'his carrier');
 	assert.ok(m.build.shoulders > f.build.shoulders && m.build.waist > 0 && f.build.waist > 0, 'the V');

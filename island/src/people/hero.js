@@ -79,8 +79,9 @@ const HERO = {
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none', tuck: true },
 			outer: { kind: 'flannel', col: '#a3262a', acc: C.black, acc2: '#e8e0d0', pat: 'plaid', fit: 'fitted', sleeves: 'rolled', open: true, collar: true, fab: 'canvas', drape: 0.35 },
-			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'cargo', legs: 'long', fit: 'straight', hang: 0.012, tuck: true },
-			shoes: { kind: 'boot', tall: true, col: '#5a4632', sole: '#17130f' },
+			// (tapered trousers over mid-height hiking boots, the hem resting on their collars)
+			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'cargo', legs: 'long', fit: 'straight', hang: 0.012 },
+			shoes: { kind: 'boot', col: '#5a4632', sole: '#17130f' },
 			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }],
 		}),
 	},
