@@ -17,7 +17,7 @@
 // quicker (power, mana, cd), one spell of the school changed (alter), every few spells free
 // (free), and the weapon in hand's hits (gearWeapon: magic/index.js and magic/caster.js).
 
-import { computeMods, rankOf, applyMastery } from './skills.js';
+import { computeMods, rankOf, applyMastery, masteryLevel, MASTERY_POWER, NUMERAL } from './skills.js';
 import { SCHOOLS, STRANDS, manaMax, manaRegen, spellPower, cooldownOf, modFor } from './spells.js';
 import { gearMagic, attributesOf as itemAttributes } from '../gameplay/gear-magic.js';
 import { ARMS_CATALOG } from '../gameplay/arms.js';
@@ -89,6 +89,27 @@ export function composeMods(s, perks = s.perks || []) {
 	m.life = Math.round(m.life);
 	m.manaMax = Math.round(m.manaMax);
 	return m;
+}
+// Where a spell's strength comes from, past its own: [{ label, n (a share), kind }], kind perk,
+// gear (one row an item, by name), attr (Potency) or mastery. Time of day and affinity are
+// spellPower's own and not here.
+export function powerSources(s, spell) {
+	const out = [], add = (label, n, kind) => { if (n > 0.0005) out.push({ label, n, kind }); };
+	add('Perks', modFor(computeMods(s.perks || []), 'power', spell), 'perk');
+	for (const inst of s.gear || []) add(ARMS_CATALOG[inst.i]?.name || inst.i, gearMagic([inst]).power[spell.school] || 0, 'gear');
+	const pot = attributesOf(s).potency.total;
+	add(`Potency ${pot}`, pot * ATTRS.potency.per.power, 'attr');
+	const L = masteryLevel(s.mastery?.[spell.id] || 0);
+	add(`Mastery ${NUMERAL[L - 1]}`, (L - 1) * MASTERY_POWER, 'mastery');
+	return out;
+}
+// the worn item that changes this spell (its L15 alteration): { item, desc } or null
+export function alteredBy(s, spell) {
+	for (const inst of s.gear || []) {
+		const a = gearMagic([inst]).alter[spell.id];
+		if (a) return { item: ARMS_CATALOG[inst.i]?.name || inst.i, desc: a.desc };
+	}
+	return null;
 }
 // state.mods made anew, with the attributes and the gear's magic kept for the sheet
 export function refreshStats(s) {

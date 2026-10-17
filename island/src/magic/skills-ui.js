@@ -11,7 +11,7 @@
 
 import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
 import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, MASTERY_GIFT, NUMERAL, masteryLevel, masteryToNext, feedable, feedCost } from './skills.js';
-import { composeMods } from './stats.js';
+import { composeMods, powerSources, alteredBy } from './stats.js';
 
 const KEYS = ['6', '7', '8', '9', '0'];
 const ICON = { radiance: '☀', restoration: '✚', warding: '⛨', dawn: '☼', shadow: '☾', void: '◆', blight: '☣', umbral: '⛧', storm: 'ϟ', chrono: '⧗', primal: '♨', marksman: '⌖', athletics: '»', resilience: '⛊' };
@@ -170,6 +170,13 @@ const CSS = `
 .sk-st.w{grid-column:span 2}
 .sk-st .up{color:#5eead4}
 .sk-now{margin-top:8px;font-size:11.5px;opacity:.62}
+.sk-src{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.sk-src>span{font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);opacity:.85}
+.sk-src b{font-weight:650;margin-right:2px}
+.sk-src .perk b{color:#5eead4}.sk-src .gear b{color:#ffd27a}.sk-src .attr b{color:#ffd27a}.sk-src .mastery b{color:#c4b5fd}
+.sk-src .gear{border-color:rgba(255,210,122,.25)}
+.sk-alt{margin-top:9px;padding:8px 10px;border-radius:9px;background:rgba(255,210,122,.07);border:1px solid rgba(255,210,122,.22);font-size:12px;line-height:1.4}
+.sk-alt b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#ffd27a;margin-bottom:2px}
 .sk-fx{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
 .sk-fx li{padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.04);font-size:13px;display:flex;gap:8px;align-items:baseline}
 .sk-fx li::before{content:'✦';color:var(--c);font-size:11px}
@@ -536,7 +543,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		P.head.fab.innerHTML = `<span class="l" title="Light aether: weaves light spells and feeds them">☀ ${state.fabric.light}</span><span class="d" title="Dark aether: weaves dark spells and feeds them">☾ ${state.fabric.dark}</span><span class="m" title="Mana">✧ <b>${Math.round(state.mana)}</b>/${manaMax(state)}</span>`;
 	}
 	// (what, changed, means drawing it all again: not the mana, which only its number shows)
-	const sig = () => `${state.known.length}|${state.perks.length}|${state.level}|${Math.floor(state.xp)}|${state.fabric.light}|${state.fabric.dark}|${state.binds.join()}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join()}|${Object.values(state.mastery || {}).map(masteryLevel).join('')}`;
+	const sig = () => `${state.known.length}|${state.perks.length}|${state.level}|${Math.floor(state.xp)}|${state.fabric.light}|${state.fabric.dark}|${state.binds.join()}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join()}|${Object.values(state.mastery || {}).map(masteryLevel).join('')}|${(state.gear || []).map((x) => `${x.u}:${x.l}`).join()}`;
 
 	// ---------- choosing a star, and what it does ----------
 	function select(id, sticky) {
@@ -573,13 +580,15 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	}
 	function spellInfo(sc, act, sp, st) {
 		P.pv = mk('canvas', 'sk-pv', sc);
-		P.pv.spell = sp;
 		const k = spellPower(state, sp, { light: light() }), s2 = shaped(sp, state.mods);
+		// (the preview shows it as your gear has it: a fan of sparks, a shard through everyone)
+		P.pv.spell = s2;
 		if (st === 'own') mastery(sc, sp);
 		const stats = mk('div', 'sk-stats', sc);
 		const row = (label, val, base, wide) => { const d = mk('div', 'sk-st' + (wide ? ' w' : ''), stats); mk('span', '', d, label); const b = mk('b', '', d); b.innerHTML = base != null && base !== val ? `<s>${base}</s><span class="up">${val}</span>` : val; };
 		const type = sp.type ? ` ${DMG_WORD[sp.type] || ''}` : '';
-		if (sp.dmg) row(sp.kind === 'chain' ? 'Harm, first' : sp.kind === 'orb' || sp.kind === 'storm' ? 'Harm a strike' : 'Harm', `${Math.round(sp.dmg * k)}${type}`);
+		if (sp.dmg && s2.split > 1) row('Harm', `${s2.split} × ${Math.round(sp.dmg * (s2.dmgK || 1) * k)}${type}`, `${Math.round(sp.dmg * k)}`);
+		else if (sp.dmg) row(sp.kind === 'chain' ? 'Harm, first' : sp.kind === 'orb' || sp.kind === 'storm' ? 'Harm a strike' : 'Harm', `${Math.round(sp.dmg * k)}${type}`);
 		if (sp.dps) row('Harm a second', `${Math.round(sp.dps * k)}${type}`);
 		if (sp.heal && sp.kind === 'heal') row('Heals', `${Math.round(sp.heal * k)}`);
 		if (sp.heal && sp.kind === 'hot') row('Heals in all', `${Math.round(sp.heal * k)}`);
@@ -592,20 +601,37 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		if (sp.r) row('Radius', `${r1(s2.r)} m`, s2.r !== sp.r ? `${r1(sp.r)} m` : null);
 		if (sp.t) row('Lasts', sec(s2.t), s2.t !== sp.t ? sec(sp.t) : null);
 		if (sp.bossCut) row('Bosses lose', `${Math.round(sp.bossCut * 100)}% of their life`);
-		if (sp.jumps) row('Leaps', `${sp.jumps} more foes`);
+		if (s2.jumps) row('Leaps', `${s2.jumps} more foes`, sp.jumps !== s2.jumps ? `${sp.jumps || 0}` : null);
+		// (what your gear's alteration adds: magic/caster.js does it)
+		if (s2.n > 1 && s2.n !== sp.n) row('Calls', `${s2.n}`, `${sp.n || 1}`);
+		if (s2.renew) row('Heals after', `${Math.round(sp.heal * k * s2.renew)} over ${sec(s2.renewT)}`);
+		if (s2.aura) row('Radiant aura', `${Math.round(s2.aura.dps * k)} a second for ${sec(s2.aura.t)}`);
+		if (s2.burn) row('Burning ground', `${Math.round(s2.burn.dps * k)} fire a second for ${sec(s2.burn.t)}`, null, true);
+		if (s2.pierce === 'all') row('Passes through', 'Everyone in its path');
+		if (s2.cloakAfter) row('Cloaked after', sec(s2.cloakAfter));
+		if (s2.waterWalk) row('Water', 'Walk across it');
+		if (s2.recallHeal) row('On return', `Heals ${Math.round(s2.recallHeal * 100)}% of your wounds`);
 		if (sp.speedK) row('Pace', `+${Math.round((sp.speedK - 1) * 100)}%`);
-		const S0 = sp.status, S1 = s2.status;
-		if (S0) {
+		const S1 = s2.status || {}, S0 = sp.status || {};
+		if (sp.status || s2.status) {
 			const bits = [];
 			if (S0.hold) bits.push(`holds ${sec(S1.hold)}`);
 			if (S0.fear) bits.push(`frightens ${sec(S1.fear)}`);
 			if (S0.slow) bits.push(`slows to ${Math.round(S0.slow * 100)}% pace`);
 			if (S0.dot) bits.push(`rots ${Math.round(S0.dot * k)} a second for ${sec(S1.t)}`);
-			if (S0.spread) bits.push('spreads when its victim falls');
+			if (S1.spread) bits.push('spreads when its victim falls');
 			if (bits.length) row('On those struck', bits.join(', '), null, true);
 		}
 		const strand = strandOf(sp);
-		mk('div', 'sk-now', sc, `Power now ×${(Math.round(k * 100) / 100).toFixed(2)}: ${strand === 'light' ? 'light spells are stronger by day' : strand === 'dark' ? 'dark spells are stronger by night' : 'twilight spells are strongest at dusk and dawn'}, and with your affinity${state.perks.some((id) => PERK[id].page === sp.school) ? ' and perks' : ''}.`);
+		// what your gear does to it, then where its strength comes from
+		const alt = alteredBy(state, sp);
+		if (alt) mk('div', 'sk-alt', sc, `<b>${alt.item}</b><span>${alt.desc}</span>`);
+		const src = powerSources(state, sp);
+		if (src.length) {
+			const d = mk('div', 'sk-src', sc);
+			for (const q of src) mk('span', q.kind, d, `<b>+${Math.round(q.n * 100)}%</b> ${q.label}`);
+		}
+		mk('div', 'sk-now', sc, `Power now ×${(Math.round(k * 100) / 100).toFixed(2)}: ${strand === 'light' ? 'light spells are stronger by day' : strand === 'dark' ? 'dark spells are stronger by night' : 'twilight spells are strongest at dusk and dawn'}, and with your affinity${src.length ? `, ${src.map((q) => q.kind === 'gear' ? 'gear' : q.kind === 'perk' ? 'perks' : q.kind === 'attr' ? 'Potency' : 'mastery').filter((w, i, a) => a.indexOf(w) === i).join(', ')}` : ''}.`);
 		// what it takes
 		if (st !== 'own') {
 			const req = mk('ul', 'sk-req', sc);
@@ -936,13 +962,20 @@ function drawSpell(g, w, h, sp, u, c, t, env = {}) {
 		const x = hand.x + (end.x - hand.x) * (sp.pierce ? travel : Math.min(1, travel)), y = hand.y + (end.y - 14 - hand.y) * travel;
 		const hitA = slow ? 0 : Math.max(0, 1 - (u - 0.45) / 0.3);
 		figure(me);
-		for (const [i, p] of foes.entries()) figure(p, 1, (i === 0 || (sp.pierce && i < 3 && x > p.x)) && u > (slow ? 2 : 0.45) ? hitA : slow && Math.abs(x - p.x) < 34 ? 0.6 : 0, true);
+		const fan = Math.max(1, Math.min(3, sp.split | 0));
+		for (const [i, p] of foes.entries()) figure(p, 1, (i < fan || (sp.pierce && i < 3 && x > p.x)) && u > (slow ? 2 : 0.45) ? hitA : slow && Math.abs(x - p.x) < 34 ? 0.6 : 0, true);
 		if (u < (slow ? 1 : 0.46) || sp.pierce && u < 0.6) {
-			for (let i = 1; i < 6; i++) glow(x - i * 6 * (slow ? 0.3 : 1), y, (slow ? 9 : 4) * (1 - i / 7), 0.5);
-			glow(x, y, slow ? 12 : 7);
+			// (a fan: the others fly to the foes beside, a little apart)
+			for (let j = 0; j < fan; j++) {
+				const E = foes[j], bx = hand.x + (E.x - hand.x) * Math.min(1, travel), by = hand.y + (E.y - 14 - hand.y) * travel + (j === 1 ? -1 : j === 2 ? 1 : 0) * 12 * Math.sin(Math.PI * Math.min(1, travel));
+				const px = j ? bx : x, py = j ? by : y, sz = fan > 1 ? 0.8 : 1;
+				for (let i = 1; i < 6; i++) glow(px - i * 6 * (slow ? 0.3 : 1), py, (slow ? 9 : 4) * (1 - i / 7) * sz, 0.5);
+				glow(px, py, (slow ? 12 : 7) * sz);
+			}
 			if (slow) for (const p of foes) if (Math.abs(x - p.x) < 34) line({ x, y }, { x: p.x, y: p.y - 12 }, 1.2, 0.8, 8);
 		} else {
 			const q = (u - 0.45) / 0.4;
+			for (let j = 1; j < fan; j++) glow(foes[j].x, foes[j].y - 14, 14 * (1 - q) + 3, 1 - q);
 			glow(T0.x, T0.y - 14, 18 * (1 - q) + 4, 1 - q);
 			if (sp.splash) ring(T0.x, T0.y, 6 + 26 * q, 1 - q);
 			status(T0, 1 - q * 0.5);

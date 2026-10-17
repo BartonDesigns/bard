@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { MAX_LEVEL, SOFT_LEVEL, statsOf, statScale, trained, xpNeed, xpToMax, combined } from '../src/gameplay/gear-levels.js';
 import { ARMS_CATALOG, GARMENT_SLOTS, createInventoryState, applyInventoryTransaction, serializeInventory, deserializeInventory, sellPrice, cleanTradeSide } from '../src/gameplay/arms.js';
 import { AWAKEN, attunement, awakenings, awakenedBetween, gearMagic, infuseStrands, attributesOf as itemAttrs, isWeaponId, ALTERATIONS, SPELLSHOT, infusionOf, masteryEvery, schoolGlyph } from '../src/gameplay/gear-magic.js';
-import { ATTRS, ATTR_IDS, BASE_CAP, BASE_LIFE, ARMOR_CAP, baseAttributes, attributesOf, composeMods, refreshStats, statSheet } from '../src/magic/stats.js';
+import { ATTRS, ATTR_IDS, BASE_CAP, BASE_LIFE, ARMOR_CAP, baseAttributes, attributesOf, composeMods, refreshStats, statSheet, powerSources, alteredBy } from '../src/magic/stats.js';
 import { SCHOOLS, SPELL, createMagicState, spellPower, manaCost, cooldownOf, manaMax, shaped } from '../src/magic/spells.js';
 import { sanitizeSkills, addUse, useFor, computeMods, addMastery } from '../src/magic/skills.js';
 import { createCaster } from '../src/magic/caster.js';
@@ -171,6 +171,22 @@ test('your statistics become the spells\' own numbers', () => {
 	assert.equal(sh.life, BASE_LIFE);
 	assert.ok(sh.schools.find((q) => q.id === 'shadow').free === masteryEvery(4));
 	assert.ok(sh.magic.length === 4 && sh.magic.every((m) => m.school === 'shadow'));
+});
+
+test('the skills menu can say where a spell\'s strength comes from, and what your gear changes', () => {
+	const hood = attuned('wayfarers-hood', 'shadow', 20, 4);
+	const s = withGear([hood]), sp = SPELL.shadowbolt;
+	s.known.push(sp.id); s.mastery = { [sp.id]: 300 }; refreshStats(s);
+	const src = powerSources(s, sp), by = (k) => src.filter((q) => q.kind === k);
+	assert.equal(by('gear').length, 1);
+	assert.ok(by('gear')[0].label.length > 0 && by('gear')[0].n > 0, 'the hood, by name');
+	assert.ok(Math.abs(by('mastery')[0].n - 0.16) < 1e-9 && by('mastery')[0].label === 'Mastery III');
+	assert.equal(by('attr').length, attributesOf(s).potency.total ? 1 : 0, 'Potency, when you have it');
+	const sum = src.reduce((a, q) => a + q.n, 0);
+	assert.ok(Math.abs(sum - (spellPower(s, sp) / spellPower({ ...s, mods: { ...s.mods, power: {} } }, sp) - 1)) < 1e-9, 'the parts add up to the whole');
+	assert.equal(powerSources(s, SPELL.sunspark).filter((q) => q.kind === 'gear').length, 0, 'not another school\'s');
+	assert.ok(alteredBy(s, SPELL.shadowstep)?.desc.includes('cloaked'));
+	assert.equal(alteredBy(s, sp), null);
 });
 
 test('a garment\'s alteration reshapes its spell; the catalog is left alone', () => {
