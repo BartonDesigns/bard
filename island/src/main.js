@@ -194,6 +194,8 @@ import { createSignage } from './signage/index.js';
 import { createLaw } from './law/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
+import { installAirFog, AIR } from './world/airfog.js';
+import { createPlumes, ambientPlumes } from './world/plumes.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { touchLookRows } from './ui/touch-look.js';
 
@@ -201,20 +203,9 @@ const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
 const GLOW_AT = [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0], [-15000, 0], [0, 15000], [0, -15000]];
 
-// Under water, light is absorbed red first, then green: near things keep their colour,
-// far things go blue-green. The fog chunk does this per channel when the fog density is
-// negative (the flag costs nothing: the density is squared). Above water it is unchanged.
-THREE.ShaderChunk.fog_fragment = `
-#ifdef USE_FOG
-	#ifdef FOG_EXP2
-		float fogD2 = fogDensity * fogDensity * vFogDepth * vFogDepth;
-		vec3 fogFactor3 = fogDensity < 0.0 ? 1.0 - exp(-fogD2 * vec3(2.6, 1.0, 0.7)) : vec3(1.0 - exp(-fogD2));
-	#else
-		vec3 fogFactor3 = vec3(smoothstep(fogNear, fogFar, vFogDepth));
-	#endif
-	gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor3);
-#endif
-`;
+// The air: haze thickest low down and lit toward the sun, whole by the far plane; under water
+// (a negative density) light absorbed red first, then green (world/airfog.js)
+installAirFog();
 
 // Muffle the whole Bard under water: a low-pass between the faceplate's master output
 // and the speakers, eased in as you go under and out as you surface.
@@ -238,6 +229,7 @@ function underwaterAudio(target, dt) {
 // things made inside the engine that the Crysis console handle reaches
 const HOOKS = {};
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const TOUCH_UI = isPhone || !!globalThis.matchMedia?.('(pointer: coarse)')?.matches;
 // no zooming the page: a double tap or a pinch on the game is play, not Safari's zoom (iOS ignores
 // user-scalable=no, and touch-action isn't inherited, so every element opts out; the rule goes in
 // first, so an element's own touch-action still wins)
@@ -1135,6 +1127,9 @@ export function createIslandWorld() {
 		if (bare) { village.footprints.length = 0; village.pickables.length = 0; }
 		vegetation.addContacts(village.footprints);
 		const distant = stash(() => createDistant(island, shared, scene));
+		// columns of smoke and steam seen from afar: fires, wrecks, chimneys, stacks (world/plumes.js)
+		const plumes = createPlumes(scene, shared, { isPhone });
+		ambientPlumes(plumes, { island, profile, earth, realm: realmPlan });
 		const fauna = stash(() => createFauna(island, shared, scene));
 		const landFauna = stash(() => createLandFauna(land, island, shared, scene, camera, vegetation));
 		await yieldBuild('Preparing the shoreline');
@@ -1167,7 +1162,7 @@ export function createIslandWorld() {
 		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
-		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
 		// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
 		seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
 		seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
@@ -1480,6 +1475,7 @@ export function createIslandWorld() {
 		communityProjects.reset(); projectMarks.reset(); projectSnapshot={projects:[]}; projectRefresh=0;
 		social.reset();
 		world.labels?.dispose();
+		world.plumes?.dispose();
 		world.discovery?.dispose();
 		world.services?.dispose();
 		world.signage?.dispose();
@@ -1551,7 +1547,7 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
-		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim. Keys 1 to 5 take up your weapons (again puts it away), 6 to 0 cast your spells, N opens the spellbook. Alt / Option frees the mouse to look about by dragging; a double tap of Alt / Option returns to aiming.'; p.appendChild(combatHelp);
+		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim. Hold C to crouch (lower, harder to hit); C while sprinting slides. Keys 1 to 5 take up your weapons (again puts it away), 6 to 0 cast your spells, N opens the spellbook. Alt / Option frees the mouse to look about by dragging; a double tap of Alt / Option returns to aiming.'; p.appendChild(combatHelp);
 		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
 			() => Math.round(shared.aimSensitivity * 100),
 			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
@@ -1759,7 +1755,11 @@ export function createIslandWorld() {
 			const t = P.flying ? 'Climb' : P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
 			dom.jump.title = t; dom.jump.setAttribute('aria-label', t);
 		}
-		const dd = P.flying ? 'block' : 'none'; if (dom.down.style.display !== dd) dom.down.style.display = dd;
+		// (on foot on a touch screen the same button crouches: a tap down or up, a slide from a sprint)
+		const crouchUI = !P.flying && !P.swimming && !B?.boarded?.() && TOUCH_UI;
+		const dd = P.flying || crouchUI ? 'block' : 'none'; if (dom.down.style.display !== dd) dom.down.style.display = dd;
+		const dl = P.flying ? '⇣' : '⇩'; if (dom.down.textContent !== dl) { dom.down.textContent = dl; const t = P.flying ? 'Descend' : 'Crouch (C); from a sprint, slide'; dom.down.title = t; dom.down.setAttribute('aria-label', t); }
+		const db = !P.flying && P.crouch ? '#01a982' : 'rgba(8,20,26,.55)'; if (dom.down.style.background !== db) dom.down.style.background = db;
 		const fb = P.flying ? '#01a982' : 'rgba(8,20,26,.55)'; if (dom.fly.style.background !== fb) dom.fly.style.background = fb;
 		if (!P.flying && !W.orbit?.active?.()) P.boost = 1;
 		const speed = flightMultiplier(P.boost), speedTitle = `Flight speed ${speed}×; next ${nextFlightSpeed(speed, !!P.orbit?.deep?.())}× (B)`;
@@ -1814,7 +1814,7 @@ export function createIslandWorld() {
 		const cam = camera.position, I = W.island;
 		const above = cam.y > I.heightAt(cam.x, cam.z) + 0.5 && I.underFloor?.(cam.x, cam.z, cam.y - 1.68) == null;
 		const open = above || ((caveK < 0.9 || !!vista) && !W.deep?.active());
-		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group, W.plumes?.mesh]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
 		return open;
 	}
 	function followGround(W, dt, open) {
@@ -1956,6 +1956,11 @@ export function createIslandWorld() {
 			scene.fog.color.lerp(new THREE.Color(cg[0], cg[1], cg[2]), caveK);
 			scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.012, caveK);
 		}
+		// the air's shape (world/airfog.js): thick low down, lit toward the sun, whole by the far
+		// plane; none of it under water, in a cave or where there is no air
+		const airK = under || W.island.far || shared.planet?.airless ? 0 : 1 - caveK;
+		AIR.air.z = airK; AIR.air.w = airK > 0 ? camera.far * 0.98 : 0;
+		AIR.sun.w *= airK;
 		// the cities' glow washes out the faint stars
 		if (W.bayArea?.loaded()) {
 			let glow = 0;
@@ -1982,6 +1987,7 @@ export function createIslandWorld() {
 		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
 		W.distant.group.visible = !W.bayArea;
 		if (!W.bayArea) W.distant.update(time, sk.night);
+		W.plumes.update(dt, camera, W.sky);
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bayArea?.update(camera, sk.night);
@@ -2118,7 +2124,8 @@ export function createIslandWorld() {
 		// a mushroom eaten: sizes swell and shrink (the field of view, from where it stood), and
 		// the frame is drawn through its effect; sober, it draws nothing and the frame is as ever
 		W.shrooms?.update(dt, time);
-		const fovK = arcade.active() ? 1 : W.shrooms?.fov() ?? 1;
+		// (and the player's own: wider in a sprint or a slide, player.js)
+		const fovK = arcade.active() ? 1 : (W.shrooms?.fov() ?? 1) * (W.player.state.fovK || 1);
 		if (fovK !== 1 && !tick.fov0) tick.fov0 = camera.fov;
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
@@ -2217,6 +2224,7 @@ export function createIslandWorld() {
 		for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => { if (world) world.player.state[key] = false; });
 	};
 	hold(dom.jump, 'flyUp'); hold(dom.down, 'flyDown');
+	dom.down.addEventListener('pointerdown', (e) => { e.stopPropagation(); const P = world?.player.state; if (P && !P.flying && !P.swimming) world.player.crouch(); });
 	dom.jump.addEventListener('pointerdown', (e) => {
 		e.stopPropagation();
 		const P = world?.player.state;

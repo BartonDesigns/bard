@@ -1,7 +1,7 @@
 // The fight on screen, kept small: a thin health bar (armour above it), the magazine and reserve
 // with the fire mode, a crosshair that opens with the spread and flashes a hit marker, wedges
 // round it pointing to where a blow came from, a boss's bar across the top with its phase, the
-// wanted stars, short call-outs, and on a touch screen Fire, Reload and Mode buttons by the
+// wanted stars, short call-outs, a feed of who fell to whom nearby (yours marked), and on a touch screen Fire, Reload and Mode buttons by the
 // thumb. Shown only when it matters (a weapon in hand, a fight on, a recent hit).
 
 const CSS = `
@@ -34,6 +34,9 @@ const CSS = `
 .cb-star .on{color:#ffd24a;text-shadow:0 0 6px rgba(255,180,40,.8)}.cb-star .off{color:rgba(255,255,255,.25)}
 .cb-calls{position:absolute;left:calc(14px + env(safe-area-inset-left));top:40%;display:flex;flex-direction:column;gap:4px;max-width:46vw}
 .cb-calls div{background:rgba(10,16,20,.5);padding:4px 8px;border-radius:6px;font-weight:500;transition:opacity .6s}
+.cb-feed{position:absolute;right:calc(14px + env(safe-area-inset-right));top:calc(48px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:56vw}
+.cb-feed div{background:rgba(10,16,20,.55);padding:3px 8px;border-radius:4px;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:opacity .5s}
+.cb-feed div.me{box-shadow:inset 3px 0 0 #01a982}.cb-feed em{font-style:normal;opacity:.7;font-weight:500;margin:0 6px}.cb-feed .a{color:#9ff0d4}.cb-feed .v{color:#ffb08a}.cb-feed .h{color:#ffd27a;margin-left:6px}
 .cb-ko{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(6,10,14,.55);opacity:0;transition:opacity .5s;font:700 22px system-ui,sans-serif;letter-spacing:2px}
 .cb-ko small{font:500 13px system-ui,sans-serif;letter-spacing:0;opacity:.8;margin-top:8px}
 .cb-btn{position:absolute;pointer-events:auto;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:rgba(10,16,20,.45);color:#eafaf6;display:none;align-items:center;justify-content:center;touch-action:none;font:700 12px system-ui,sans-serif;user-select:none;-webkit-user-select:none}
@@ -61,6 +64,7 @@ export function createHud({ mount, touch = false }) {
 	const bT = boss.querySelector('.t'), bP = boss.querySelector('.p'), bBar = boss.querySelector('.cb-bar'), bFill = bBar.querySelector('div'), bPh = boss.querySelector('.ph');
 	const star = el('cb-star');
 	const calls = el('cb-calls');
+	const feedEl = el('cb-feed');
 	const ko = el('cb-ko', 'KNOCKED OUT<small></small>');
 	const koSmall = ko.querySelector('small');
 
@@ -83,7 +87,7 @@ export function createHud({ mount, touch = false }) {
 	}
 
 	let hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
-	const callList = [];
+	const callList = [], feedList = [];
 	return {
 		root, btns,
 		// a hit landed: kill true for the last one
@@ -100,6 +104,19 @@ export function createHud({ mount, touch = false }) {
 			while (callList.length > 4) callList.shift().d.remove();
 		},
 		phase(name) { bPh.textContent = name; bossPhT = 2.8; },
+		// someone fell: who to whom, with what; mine marks it as yours, head a headshot
+		feed(killer, victim, how = '', { mine = false, head = false } = {}) {
+			const d = document.createElement('div');
+			if (mine) d.className = 'me';
+			const a = document.createElement('span'); a.className = 'a'; a.textContent = killer;
+			const w = document.createElement('em'); w.textContent = how ? `✕ ${how}` : '✕';
+			const v = document.createElement('span'); v.className = 'v'; v.textContent = victim;
+			d.append(a, w, v);
+			if (head) { const h = document.createElement('span'); h.className = 'h'; h.textContent = '◎'; h.title = 'Headshot'; d.appendChild(h); }
+			feedEl.appendChild(d);
+			feedList.push({ d, t: 5.5 });
+			while (feedList.length > 5) feedList.shift().d.remove();
+		},
 		// once a frame: S = { show, spread (px), health: { hp, max, armour, armourMax }, weapon: {
 		// name, mag, reserve, mode, reloading }, boss: { name, phase, frac, notches }, stars, ko }
 		update(dt, S) {
@@ -156,6 +173,7 @@ export function createHud({ mount, touch = false }) {
 			bPh.style.opacity = bossPhT > 0 ? String(Math.min(1, bossPhT)) : '0';
 			if (S.stars !== lastStars) { lastStars = S.stars; star.innerHTML = [1, 2, 3, 4, 5].map((i) => `<span class="${i <= S.stars ? 'on' : 'off'}">★</span>`).join(''); }
 			star.style.opacity = S.stars > 0 && !S.ko ? '1' : '0';
+			for (let i = feedList.length - 1; i >= 0; i--) { const c = feedList[i]; c.t -= dt; c.d.style.opacity = String(Math.min(1, c.t)); if (c.t <= 0) { c.d.remove(); feedList.splice(i, 1); } }
 			for (let i = callList.length - 1; i >= 0; i--) { const c = callList[i]; c.t -= dt; c.d.style.opacity = String(Math.min(1, c.t * 2)); if (c.t <= 0) { c.d.remove(); callList.splice(i, 1); } }
 			ko.style.opacity = S.ko ? '1' : '0';
 			if (S.ko) koSmall.textContent = S.koText || '';

@@ -131,7 +131,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 
 	// ---------- the pieces ----------
-	const fx = createFx({ isPhone, ground: (x, z) => ground(x, z) });
+	const fx = createFx({ isPhone, ground: (x, z) => ground(x, z), plumes: () => W()?.plumes });
 	const layer = createLayer();
 	const relations = createRelations(load('l99-factions', null));
 	const morality = createMorality({ store });
@@ -305,6 +305,11 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (hit.ward) { spark(T, p, by); return { ward: true }; }
 		const blow = { amount: dmg, type, part: hit.part, src: from.clone ? from.clone() : from, dir: { x: dir.x, y: dir.y, z: dir.z }, by: by === ME ? ME : by?.T || by };
 		fx.impact(p, hit.n || { x: -dir.x, y: -dir.y, z: -dir.z }, T.surface || 'stone', type === 'energy');
+		// through a person: the spatter on what stands behind them, or the ground beyond
+		if (T.surface === 'person' && (type === 'ballistic' || type === 'pierce') && !T.child) {
+			const q = p.clone().addScaledVector(dir, 0.35), back = worldHit(q, dir, 3.2);
+			fx.spatter(p, dir, back ? { p: q.addScaledVector(dir, back.t), n: back.n } : null, hit.part === 'head' ? 1.3 : 1);
+		}
 		return deal(T, blow, by === ME);
 	}
 	// harm to a target, by its rules: shared things on a guest go to the host
@@ -580,6 +585,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			const M = fireMeta.get(F.id);
 			if (!M) continue;
 			M.t += dt; M.emit -= dt;
+			// the smoke over it, seen from across the land while it burns and long after
+			{ const big = M.kind === 'building' && M.b, g = ground(F.x, F.z); fx.column('fire:' + F.id, { x: F.x, y: g + (big ? (M.b.wallH || 6) : 1), z: F.z, h: big ? 120 + F.heat * 90 : M.kind === 'car' ? 80 : 45, r: big ? Math.max(3, Math.max(M.b.w, M.b.d) * 0.22) : 2, spread: big ? 5 : 6, shade: 0.07, k: 0.3 + 0.7 * F.heat, life: 1.5, fade: big ? 120 : 70 }); }
 			// a crew comes on Earth
 			// (an engine from the nearest station when there is one: services/index.js; else they walk in)
 			if (isEarth() && !M.crew && M.t > 10 && (M.kind === 'building' || M.kind === 'car')) {
@@ -672,12 +679,22 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		mayStation: (fid, x, z) => mayStation({ ...FACTIONS[fid], id: fid }, x, z, [...(hooks.posts?.() || []), ...campsNear(x, z)]),
 		trespass: (h) => !!hooks.trespass?.(h),
 		onSurrender: (h) => { if (Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 60) hint(`${h.F.name}: one of them throws down their weapon and surrenders. They are out of the fight.`, 4000, 1); },
-		onDeath: (h) => { recovery.add(h); gangDeath(h); hooks.death?.(h); },
+		onDeath: (h, blow) => { recovery.add(h); gangDeath(h); hooks.death?.(h); feedDeath(h, blow); },
 		onSpared: (h, d) => { if (d < 50) morality.record({ kind: 'spare', target: h.T.name, faction: h.fid, place: placeName(), world: worldKey }); },
 		onPhase: (B0) => net.boss(B0, true),
 		onBossDown: (B0) => bossDown(B0),
 		onDestroyed: (S) => { if (S.lastMine) { morality.record({ kind: 'arson', target: 'a car', place: placeName(), world: worldKey, ctx: { occupied: !!S.fled } }); crime('car', S.pos || eye(), true); } },
 	};
+	// the kill feed: who fell to whom within sight of the fight (yours always), and with what
+	const plainName = (n) => String(n || 'someone').replace(/^an? /i, '').replace(/^\w/, (c) => c.toUpperCase());
+	function feedDeath(h, blow) {
+		const mine = blow?.by === ME, e = eye();
+		if (!mine && Math.hypot(h.pos.x - e.x, h.pos.z - e.z) > 150) return;
+		const by = blow?.by, killer = mine ? 'You' : by?.name ? plainName(by.name) : by?.faction && FACTIONS[by.faction] ? FACTIONS[by.faction].name : null;
+		if (!killer) return;
+		const how = blow?.melee ? 'hands' : blow?.type === 'blast' ? 'blast' : blow?.type === 'fire' ? 'fire' : mine && Wp ? Wp.S.name : '';
+		hud.feed(killer, plainName(h.T?.name), how, { mine, head: blow?.part === 'head' });
+	}
 	function buildingCover(x, z, r) { const b = boxesNear(x, z, r).find((q) => q.w > 2); return b ? { x: b.x, z: b.z, r: Math.max(b.w, b.d) / 2 } : null; }
 	// the fighters kept out of buildings: the boxes round each cell of the street, looked up a
 	// few times a second rather than every step of every body

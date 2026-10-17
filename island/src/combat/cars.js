@@ -111,6 +111,7 @@ export function createCars(ctx) {
 				S.emit = 0.04;
 				fx.flame(bonnet, 1.2); fx.flame({ x: S.x, y: S.y + sp.H * 0.7, z: S.z }, 1);
 				if (Math.random() < 0.3) fx.smokePuff({ x: S.x, y: S.y + sp.H + 0.5, z: S.z }, 0.08, 1.4, 3);
+				fx.column?.('car:' + S.id, { x: S.x, y: S.y + sp.H, z: S.z, h: 90, r: 1.8, spread: 7, shade: 0.06, k: 0.9, life: 1, fade: 90 });
 				S.burnT -= 0.04;
 				if (S.burnT <= 0) explode(S);
 			}

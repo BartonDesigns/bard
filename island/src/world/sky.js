@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { NOISE_GLSL } from './terrain.js';
 import { STARS_B64, STAR_COUNT } from './starcat.js';
 import { today } from '../calendar.js';
+import { AIR } from './airfog.js';
 import { constellations } from './constellations.js';
 import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock, lunarPosition, moonlightShare } from './solar.js';
 
@@ -101,6 +102,8 @@ const AGX_M = [
 	[1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187],
 ];
 const mat3x = (m, v) => [0, 1, 2].map((r) => m[r] * v[0] + m[3 + r] * v[1] + m[6 + r] * v[2]);
+// a low sun's gold (as the dome's shader mixes it)
+const GOLD = new THREE.Color(1.0, 0.8, 0.42);
 function agx(c, exposure, out) {
 	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
 	v = v.map((x) => {
@@ -654,7 +657,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	scene.fog = new THREE.FogExp2(0xa9c4dc, 0.00026);
 
 	const state = { hours: shared.startHours ?? 10.5, speed: 1, real: false };
-	const tmpA = new THREE.Color(), tmpB = new THREE.Color(), tmpC = new THREE.Color();
+	const tmpA = new THREE.Color(), tmpB = new THREE.Color(), tmpC = new THREE.Color(), tmpD = new THREE.Color(), tmpE = new THREE.Color();
 	// the weather drives the clouds, rain, bows and lightning in the sky (weather.js)
 	let weather = null;
 	function attach(w) {
@@ -756,6 +759,18 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		// sea meet the sky. The fog gets the haze as the sky shows it instead.
 		if (renderer.toneMapping === THREE.AgXToneMapping) agx(haze, renderer.toneMappingExposure, scene.fog.color);
 		else scene.fog.color.copy(haze);
+		// the haze looking into the sun, as the dome glows that way (world/airfog.js): a little
+		// of the sun's colour by day, and the gold of a low sun along the horizon under it
+		{
+			const lowK = (1 - THREE.MathUtils.smoothstep(elev, 0.04, 0.4)) * (elev > -0.02 ? 1 : 0) * (1 - night);
+			const into = tmpD.copy(sunCol).multiplyScalar(0.32 * (1 - overcast * 0.7)).add(tmpE.copy(sunCol).lerp(GOLD, 0.6).multiplyScalar(1.5 * lowK * (1 - uniforms.uCloud.value * 0.35))).add(haze);
+			if (dk.x > 0) into.lerp(haze, dk.x);
+			if (air.w > 0) into.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(into.r * 0.299 + into.g * 0.587 + into.b * 0.114), air.w * (1 - dk.x));
+			if (renderer.toneMapping === THREE.AgXToneMapping) agx(into, renderer.toneMappingExposure, tmpE); else tmpE.copy(into);
+			AIR.sunCol.x = tmpE.r; AIR.sunCol.y = tmpE.g; AIR.sunCol.z = tmpE.b;
+			AIR.sun.x = sd.x; AIR.sun.y = sd.y; AIR.sun.z = sd.z;
+			AIR.sun.w = vacuum ? 0 : (1 - night) * (0.3 + 0.7 * sunVis);
+		}
 		// (the water's reflections: shared.cloudReflect false keeps them to the plain sky)
 		shared.uCloudR.value.set(uniforms.uCloudOff.value.x, uniforms.uCloudOff.value.y, uniforms.uCloud.value, shared.cloudReflect === false ? 0 : 1);
 		shared.uCloudR2.value.set(night, shared.uTime.value, uniforms.uGloom.value, uniforms.uCirrus.value);
