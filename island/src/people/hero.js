@@ -74,7 +74,7 @@ const HERO = {
 			// (tailored cargo trousers: laid over the legs and hung, garment.js trouserHull; their
 			// seams, fly, pockets and knees in the cloth, pat 'tech'; tucked into tall boots built
 			// over the feet; a belt and bellows pockets built on them)
-			bottom: { kind: 'cargo', col: C.olive, pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.16, shin: 0.08, ease: 0.011, knee: 0.008, room: 0.009 }, tuck: true },
+			bottom: { kind: 'cargo', col: C.olive, pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.16, shin: 0.08, ease: 0.013, knee: 0.008, room: 0.007 }, tuck: true },
 			shoes: { kind: 'boot', tall: true, built: true, col: '#4a3628', sole: '#1b1917', mid: '#352a20', lace: '#2a231e' },
 			acc: [
 				{ kind: 'carrier', compact: true, col: '#5d5c41', acc: '#4c4b35' },
@@ -105,7 +105,7 @@ const HERO = {
 			outer: { kind: 'flannel', col: '#a3262a', acc: C.black, acc2: '#e8e0d0', pat: 'plaid', scale: 8.5, fit: 'fitted', sleeves: 'rolled', open: true, collar: true, pocket: true, fab: 'canvas', drape: 0.35 },
 			// (tailored khaki trousers, zipped pockets slanting down the thighs, meeting the collars of
 			// mid-height hiking boots built over the feet; the overshirt's chest pocket buttoned)
-			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.25, shin: 0.25, ease: 0.006, knee: 0.004, room: 0.002 }, tuck: true, zips: true },
+			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.25, shin: 0.25, ease: 0.006, knee: 0.002, room: 0 }, tuck: true, zips: true },
 			shoes: { kind: 'boot', built: true, col: '#6a4c34', sole: '#1b1917', mid: '#4a3a2c', lace: '#3a2a20' },
 			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),

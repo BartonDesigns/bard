@@ -679,24 +679,29 @@ export function offsets(o) {
 // (taper) and below the knee (shin), with room round the knee (room) and more at its front to
 // bend into (knee). Never past the body's middle at the crotch. Returns, for each
 // cloth vertex of a trouser leg, how far it should stand off the skin (else -1).
-export function trouserHull(P, SL, src, cut, hull) {
+export function trouserHull(P, SL, src, cut, hull, centre = null) {
 	const DY = 0.01, NA = 32, top = cut.hip - 0.03, NY = Math.ceil(top / DY) + 2;
 	const taper = hull.taper ?? 0.07, shin = hull.shin ?? taper * 0.6, seat = hull.seat ?? 0.3, ease = hull.ease ?? 0.006, knee = hull.knee ?? 0.006, room = hull.room ?? 0;
 	const legs = [0, 1].map(() => ({ cx: new Float64Array(NY), cz: new Float64Array(NY), n: new Float64Array(NY), R: new Float32Array(NY * NA) }));
 	const out = new Float32Array(P.count).fill(-1);
 	const isLeg = (i) => src[i] >= 0 && SL[i] % 10 === 2 && SL[i] >= 20 && P.getY(i) < top;
 	const bin = (y) => Math.max(0, Math.min(NY - 1, Math.round(y / DY)));
-	// (the leg's middle at each height: on the line through its joints, hip, knee and ankle, where
-	// there are joints to go by; else the mean of the cloth's points there, smoothed down the leg,
-	// which a coarse cage with few points to a height pulls off the middle)
+	// (the leg's middle at each height: the middle of the skin's own section there, centre(side,
+	// y); else on the line through its joints, hip, knee and ankle (the bones lie off the middle,
+	// the femur behind it, the tibia in front); else the mean of the cloth's points there,
+	// smoothed down the leg, which a coarse cage with few points to a height pulls off the middle)
 	for (let i = 0; i < P.count; i++) if (isLeg(i)) { const L = legs[P.getX(i) < 0 ? 1 : 0], b = bin(P.getY(i)); L.cx[b] += P.getX(i); L.cz[b] += P.getZ(i); L.n[b]++; }
 	for (const [side, L] of legs.entries()) {
 		const J = cut.leg ? (side === 0 ? (cut.leg.L[0][0] >= 0 ? cut.leg.L : cut.leg.R) : (cut.leg.L[0][0] < 0 ? cut.leg.L : cut.leg.R)) : null;
 		if (J) {
 			for (let b = 0; b < NY; b++) {
-				const y = b * DY, [a, c] = y > J[1][1] ? [J[0], J[1]] : [J[1], J[2]], t = Math.max(0, Math.min(1, (y - a[1]) / ((c[1] - a[1]) || 1)));
+				const y = b * DY, own = centre?.(side, y);
+				if (own) { L.cx[b] = own[0]; L.cz[b] = own[1]; continue; }
+				const [a, c] = y > J[1][1] ? [J[0], J[1]] : [J[1], J[2]], t = Math.max(0, Math.min(1, (y - a[1]) / ((c[1] - a[1]) || 1)));
 				L.cx[b] = a[0] + (c[0] - a[0]) * t; L.cz[b] = a[2] + (c[2] - a[2]) * t;
 			}
+			const sx = Float64Array.from(L.cx), sz = Float64Array.from(L.cz);
+			for (let b = 0; b < NY; b++) { let x = 0, z = 0, w = 0; for (let d = -2; d <= 2; d++) { const q = Math.max(0, Math.min(NY - 1, b + d)); x += sx[q]; z += sz[q]; w++; } L.cx[b] = x / w; L.cz[b] = z / w; }
 			continue;
 		}
 		let lx = 0, lz = 0, any = false;
@@ -738,6 +743,27 @@ export function trouserHull(P, SL, src, cut, hull) {
 	}
 	for (let i = 0; i < P.count; i++) if (isLeg(i)) { const L = legs[P.getX(i) < 0 ? 1 : 0], q = polar(L, i); out[i] = Math.max(0, L.H[q.b * NA + q.a] - q.r) + ease; }
 	return out;
+}
+
+// The middle of each leg's skin at each height (side 0: x >= 0), from where the edges of the
+// skin's own triangles of thigh and shin cross the height: (side, y) => [x, z], or null where
+// there is no section (above the thigh, below the shin, or too little of one)
+function legCentres(A, p, part, cut) {
+	const DY = 0.01, NY = Math.ceil((cut.hip + 0.05) / DY) + 2, F = A.body;
+	const box = [0, 1].map(() => Array.from({ length: NY }, () => [Infinity, -Infinity, Infinity, -Infinity]));
+	if (!F) return () => null;
+	for (let t = 0; t < F.length; t += 6) for (let e = 0; e < 3; e++) {
+		let a = F[t + e * 2], b = F[t + ((e + 1) % 3) * 2];
+		if (part[a] < 4 || part[a] > 5 || part[b] < 4 || part[b] > 5) continue;
+		if (p[a * 3 + 1] > p[b * 3 + 1]) [a, b] = [b, a];
+		const ya = p[a * 3 + 1], yb = p[b * 3 + 1];
+		for (let k = Math.max(0, Math.ceil(ya / DY)); k * DY <= yb && k < NY; k++) {
+			const u = (k * DY - ya) / ((yb - ya) || 1), x = p[a * 3] + (p[b * 3] - p[a * 3]) * u, z = p[a * 3 + 2] + (p[b * 3 + 2] - p[a * 3 + 2]) * u;
+			const q = box[x < 0 ? 1 : 0][k];
+			q[0] = Math.min(q[0], x); q[1] = Math.max(q[1], x); q[2] = Math.min(q[2], z); q[3] = Math.max(q[3], z);
+		}
+	}
+	return (side, y) => { const q = box[side]?.[Math.round(y / DY)]; return q && q[1] - q[0] > 0.03 && q[3] - q[2] > 0.03 ? [(q[0] + q[1]) / 2, (q[2] + q[3]) / 2] : null; };
 }
 
 export function clothGeometry(A, p, o, cut, R) {
@@ -815,7 +841,7 @@ export function clothGeometry(A, p, o, cut, R) {
 	const legHang = B?.hang || 0;
 	const flareTop = cut.hip - 0.06, flareLen = Math.max(0.2, flareTop - cut.ankle);
 	// (tailored trousers: laid over the leg's sections and hung, trouserHull)
-	const hullK = B?.hull ? trouserHull(P, SL, src, cut, B.hull) : null;
+	const hullK = B?.hull ? trouserHull(P, SL, src, cut, B.hull, legCentres(A, p, part, cut)) : null;
 	const tuck = o.top?.tuck, K = new Float32Array(P.count);
 	for (let i = 0; i < P.count; i++) {
 		if (src[i] < 0) continue;
@@ -852,7 +878,8 @@ export function clothGeometry(A, p, o, cut, R) {
    const hem=s===0?R.topHem:s===1?R.outHem:R.legEnd;
    const nearHem=Math.exp(-Math.pow((y-hem-.035)/.065,2));
    const compression=s===2?Math.exp(-Math.pow((y-cut.knee)/.09,2)):limb===1?Math.exp(-Math.pow((y-cut.elbow)/.07,2)):Math.exp(-Math.pow((y-cut.waist)/.09,2));
-   k += (.5+.5*Math.sin(y*72+a*3.2))*compression*.008 + (1+Math.sin(a*9+y*4))*.004*nearHem;
+   // (bunching at the knee, the elbow, the waist; less of it in a slim leg)
+   k += (.5+.5*Math.sin(y*72+a*3.2))*compression*.008*(s===2&&garment.fit==='slim'?.5:1) + (1+Math.sin(a*9+y*4))*.004*nearHem;
    // A sleeve has ease, but a light shirt is not padded at the deltoid.
    if(s<2 && limb===1 && garment.kind!=='puffer')k*=.6+.4*Math.max(0,Math.min(1,(cut.shoulder-y)/.22));
    if(s<2 && limb===0) {
