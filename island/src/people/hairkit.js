@@ -17,7 +17,7 @@ import { CAPSULES } from './hair-collide.js';
 import { guideUniform } from './hair-motion.js';
 import { fittedHairFrame } from './hair-frame.js';
 import { LONG_GROOMS, groomStyle, groomChunk } from './long-groom.js';
-import { hairline } from './hair.js';
+import { hairline, skinMask } from './hair.js';
 
 const DIR = new URL('../assets/people/hair/', import.meta.url).href;
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -249,12 +249,23 @@ function offFace(FF, K, V, o, out) {
 function styleChunk(A, P, p, St, kind, vol, fadeY = -99, coily = false) {
 	const { nv, refs, wts, off, den, sref } = St, F = fixed(A, St, kind);
 	const sc = [0, 1, 2].map((a) => { const [i, j] = sref[a]; return (i === j ? P._S : Math.abs(p[i * 3 + a] - p[j * 3 + a]) / den[a]) * vol / 40000; });
-	const V = new Float32Array(nv * 3), K = P.skull, d = new THREE.Vector3(), FF = kind === 0 && faceFront(P, p);
+	const V = new Float32Array(nv * 3), K = P.skull, d = new THREE.Vector3(), FF = kind === 0 && faceFront(P, p), skin = skinMask(A);
 	const sd = ((P.dna?.seed ?? 0) % 1000) * 0.37;
 	const low = coily ? new Uint8Array(nv) : null;
 	for (let v = 0; v < nv; v++) {
 		let x = 0, y = 0, z = 0;
 		for (let k = 0; k < 3; k++) { const r = refs[v * 3 + k] * 3, w = wts[v * 3 + k]; x += w * p[r]; y += w * p[r + 1]; z += w * p[r + 2]; }
+		// (a style tied to the base mesh's hair helper, a shell a centimetre or so outside the
+		// scalp, is brought down onto the scalp: each vertex in by how far its tie stands off
+		// the skin, the hair's own thickness kept above it; less and less below the head, so
+		// long hair hangs as it was made)
+		if (kind === 0 && !skin[refs[v * 3]]) {
+			d.set(x - K.c.x, y - K.c.y, z - K.c.z);
+			const ra = d.length() || 1;
+			d.multiplyScalar(1 / ra);
+			const lift = Math.max(0, ra - K.radius(d)) * sm(K.eyeY - 0.16, K.eyeY - 0.06, y);
+			x -= d.x * lift; y -= d.y * lift; z -= d.z * lift;
+		}
 		// (down a fade the hair lies closer, thinning into the painted crop)
 		let k = fadeY > -9 ? 0.35 + 0.65 * sm(fadeY - 0.035, fadeY + 0.02, y) : 1;
 		// (coily hair grows from the scalp: close and dense at the hairline, rounding out

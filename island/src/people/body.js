@@ -470,7 +470,8 @@ function hairUp(A, P) {
 	// the hair: the real style, or the procedural cut while it comes
 	if (W.style && has(W.style.id)) {
 		P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
-		coverScalp(P, P.hair.geometry);
+		// (a long groom parts its layers over the scalp, which the paint fills: it keeps all of it)
+		coverScalp(P, styleNow(W.style.id).groom ? null : P.hair.geometry);
 		// it falls over the collar and the shoulders, not through them (hair-collide.js)
 		const o = P.outfit || {}, off = offsets(o), caps = hairCapsules(P, o, Math.max(off.top, off.outer));
 		const hair = P.hair;
