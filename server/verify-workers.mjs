@@ -9,7 +9,13 @@ const report = await Promise.all(services.map(async service => {
   if(!response.ok) throw Error(`HTTP ${response.status}`);
   const status=await response.json(), missing=[...service.required.filter(k=>!status[service.key]?.includes(k)),...(service.features||[]).filter(k=>!status.features?.includes(k))];
   const cors=response.headers.get('access-control-allow-origin')==='https://level99bard.com';
-  return { service:service.name, url:service.url, ready:!missing.length&&cors, missing, cors, status };
+  let preflight=null;
+  if(service.name==='rooms') {
+   const check=await fetch(service.url+'/souls/me',{method:'OPTIONS',headers:{origin:'https://level99bard.com','access-control-request-method':'POST','access-control-request-headers':'authorization, content-type','user-agent':'Mozilla/5.0 Bard-Worker-Verification'},signal:AbortSignal.timeout(30000)});
+   const headers=(check.headers.get('access-control-allow-headers')||'').toLowerCase().split(',').map(s=>s.trim()),methods=(check.headers.get('access-control-allow-methods')||'').split(',').map(s=>s.trim());
+   preflight={status:check.status,allowedHeaders:headers,ready:check.ok&&check.headers.get('access-control-allow-origin')==='https://level99bard.com'&&['authorization','content-type'].every(h=>headers.includes(h))&&['GET','POST'].every(m=>methods.includes(m))};
+  }
+  return { service:service.name, url:service.url, ready:!missing.length&&cors&&preflight?.ready!==false, missing, cors, preflight, status };
  } catch(error) { return {service:service.name,ready:false,error:error.message}; }
 }));
 console.log(JSON.stringify({checked:new Date().toISOString(),services:report},null,2));

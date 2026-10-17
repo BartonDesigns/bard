@@ -150,6 +150,7 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 		crashedLastTime: booted.crashed,
 		// one frame: dt (s), the smoothed frame time; true when the tier changed
 		update(dt, frameMs) {
+			state.avg = frameMs; // diagnostics also report frames in explicit High/Low
 			const m = mode();
 			if ((memT -= dt) <= 0) { memT = 1; memK = memory(); }
 			if (m === 'auto') {
