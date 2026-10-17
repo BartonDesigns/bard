@@ -185,9 +185,15 @@ vec3 garment(int s, vec3 P, vec3 N) {
 	int fab = int(gFab + 0.5);
 	gRough = fab == 0 ? 0.92 : fab == 1 ? 0.88 : fab == 2 ? 0.85 : fab == 3 ? 0.48 : fab == 4 ? 0.97 : fab == 5 ? 0.5 : fab == 7 ? 0.8 : fab == 8 ? 0.62 : 0.38;
 	gMetal = fab == 6 ? 0.7 : 0.0;
-	// flat across the front and back, round the sides: a planar coordinate for checks and plaid
-	float hz = abs(N.z) > abs(N.x) ? P.x : P.z;
+	// flat across the front and back panels, round the side panels only at the very sides (where
+	// a side seam would be): a planar coordinate for checks and plaid; a sleeve's wraps round the
+	// arm and runs along it, as cloth cut for a sleeve does (no jumps or stretching round it)
+	float hz = abs(N.x) > 0.88 ? P.z : P.x;
 	vec2 pl = vec2(hz, P.y);
+	if (vLimb > 0.5 && vLimb < 1.5 && vSleeveT > -0.5) pl = vec2(armAngle(P) * 0.048, vSleeveT * 0.29);
+	// (the body's: round the body from the middle of the front, so the checks run on unbroken
+	// round the sides, joined at the middle of the back, where a shirt has its seam)
+	else if (vLimb < 0.5) pl = vec2(atan(P.x, P.z - uMisc.y) * 0.14, P.y);
 	float side = 1.0 - smoothstep(0.0, 0.07, abs(N.z));
 	float arm = step(0.5, vLimb) * (1.0 - step(1.5, vLimb));
 	float front = step(uMisc.y, P.z);
@@ -507,7 +513,7 @@ export function paint(m, o) {
 		c[s * 4 + 2].set(g.acc2 || g.acc || g.col || '#888888');
 		c[s * 4 + 3].set(s === 3 ? (g.socks || o.bottom?.socks || g.col || '#888888') : s === 2 && g.socks ? g.socks : '#000000');
 		let pat = PAT[g.pat] ?? 0;
-		let scale = g.pat === 'breton' ? 14 : g.pat === 'stripe' ? (g.kind === 'boardshorts' ? 6 : 12) : g.pat === 'plaid' ? 7 : g.pat === 'check' ? 16 : g.pat === 'dots' ? 11 : 10;
+		let scale = g.scale ?? (g.pat === 'breton' ? 14 : g.pat === 'stripe' ? (g.kind === 'boardshorts' ? 6 : 12) : g.pat === 'plaid' ? 7 : g.pat === 'check' ? 16 : g.pat === 'dots' ? 11 : 10);
 		let flag = 0;
 		if (s === 1) flag = g.open ? 1 : 0;
 		if (s === 2) flag = g.cuff ? 1 : 0;

@@ -98,7 +98,8 @@ const HERO = {
 		style: () => ({
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none', tuck: true },
-			outer: { kind: 'flannel', col: '#a3262a', acc: C.black, acc2: '#e8e0d0', pat: 'plaid', fit: 'fitted', sleeves: 'rolled', open: true, collar: true, fab: 'canvas', drape: 0.35 },
+			// (the plaid a little bigger than most, as the sheet's: scale, checks per metre)
+			outer: { kind: 'flannel', col: '#a3262a', acc: C.black, acc2: '#e8e0d0', pat: 'plaid', scale: 8.5, fit: 'fitted', sleeves: 'rolled', open: true, collar: true, fab: 'canvas', drape: 0.35 },
 			// (tailored khaki trousers meeting the collars of mid-height hiking boots built over the feet)
 			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.075, ease: 0.005, knee: 0.006 }, tuck: true },
 			shoes: { kind: 'boot', built: true, col: '#6a4c34', sole: '#1b1917', mid: '#4a3a2c', lace: '#3a2a20' },
