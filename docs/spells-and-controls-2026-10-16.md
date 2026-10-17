@@ -150,7 +150,7 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   warns where each will land.
 - **Solar Flare** brings down a column of directed light from the sun's real place in the sky onto
   where you aim, then bursts. By night it is refused and costs nothing, unless it channels the moon
-  (`state.moonlit`, kept by the skills side from the spell's mastery, level III;
+  (`state.moonlit`, an array of ids the skills side fills when the spell reaches mastery III;
   `Crysis.magic.moonlit()` on the console). Then it comes from the moon, in silver, a fifth weaker.
 - **Gargantua**, Void's fifth rung: a black hole rises on the horizon and over ten seconds draws in
   and destroys every hostile fighter within 600 m, and takes a quarter of any boss's life.

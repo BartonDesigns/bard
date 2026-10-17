@@ -217,13 +217,14 @@ test('every spell has a look of its own, and no two look alike', async () => {
 
 test('Solar Flare needs the sun until it channels the moon; aether leans to your name', () => {
 	const s = createMagicState();
-	assert.equal(SPELL['solar-flare'].sun, true);
+	assert.equal(SPELL['solar-flare'].night, 'moon');
 	assert.equal(moonlit(s, 'solar-flare'), false);
 	assert.equal(grantMoonlit(s, 'sunspark'), false, 'only a spell of the sun can channel the moon');
 	assert.equal(grantMoonlit(s, 'solar-flare'), true);
 	assert.equal(grantMoonlit(s, 'solar-flare'), false, 'once');
-	assert.deepEqual(s.moonlit, { 'solar-flare': true });
-	assert.equal('moonlit' in saveMagic(s), false, 'derived from mastery, not kept here');
+	const back = createMagicState(JSON.parse(JSON.stringify(saveMagic(s))));
+	assert.equal(moonlit(back, 'solar-flare'), true, 'kept between visits');
+	assert.deepEqual(createMagicState({ v: 1, moonlit: ['sunspark', 'nope', 'solar-flare'] }).moonlit, ['solar-flare'], 'rubbish dropped');
 	const src = fs.readFileSync(new URL('../src/magic/caster.js', import.meta.url), 'utf8');
 	assert.match(src, /night && \(!moonlit\(state, spell\.id\)/, 'refused by night unless moonlit');
 	// a saint gathers twice the light and half the dark; a monster the other way; no name, as it was
