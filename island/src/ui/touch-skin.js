@@ -51,6 +51,7 @@ export const GLYPHS = {
 	fist: "<path d='M7 11V8.5a1.5 1.5 0 0 1 3 0V11m0-2.5V7a1.5 1.5 0 0 1 3 0v4m0-3a1.5 1.5 0 0 1 3 0v3.5m0-2a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5A5.5 5.5 0 0 1 5 14.5V13a2 2 0 0 1 2-2h3'/>",
 	swing: "<path d='M5 19 17 7'/><path d='M14.5 4.5a3 3 0 0 1 5 5l-3 3-5-5z'/><path d='M3.5 20.5l2-2'/>",
 	slash: "<path d='M4.5 19.5l2.5-2.5M5.5 14.5l4 4'/><path d='M8 16 18.5 5.5c1 2.5 0 6.5-3 9.5L11.5 18.5'/>",
+	heavy: "<path d='M7 4h10v7H7zM10 11v8h4v-8M4 12v6m-2-2 2 2 2-2M20 12v6m-2-2 2 2 2-2'/>",
 	block: "<path d='M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z'/>",
 	dodge: "<path d='M4 12h11M11 7l5 5-5 5M19.5 5v14'/>",
 	grab: "<path d='M8 13V6.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V12m0-5a1.5 1.5 0 0 1 3 0v6a7 7 0 0 1-7 7H9a5 5 0 0 1-4.6-3l-1.2-2.8a1.4 1.4 0 0 1 2.4-1.4L8 15'/>",
@@ -118,6 +119,7 @@ const RULES = [
 	[(a) => a === 'Slash', 'slash'],
 	[(a) => /^Strike$|^Strike \(Q\)/.test(a), 'fist'],
 	[(a) => a === 'Block', 'block'],
+	[(a) => a === 'Heavy strike', 'heavy'],
 	[(a) => a === 'Dodge', 'dodge'],
 	[(a) => a === 'Grab', 'grab'],
 	[(a) => a === 'Takedown', 'takedown'],
@@ -235,6 +237,7 @@ ${S} .mc-strike{${P}}
 ${S} .mc-block{${L1}}
 ${S} .mc-dodge{${D1}}
 ${S} .mc-grab{${D2}}
+${S} .mc-heavy{right:calc(150px + var(--sr))!important;bottom:calc(84px + var(--sb))!important;}
 ${S}>[data-skin][aria-label^="Surrender"]{${SLOT}${L2}z-index:6;}
 ${S} .l99-mil[data-mil="fire"]{${SLOT}${D1}width:60px!important;height:60px!important;--gs:26px;}
 ${S} .l99-mil[data-mil="up"]{${SLOT}left:calc(22px + var(--sl))!important;right:auto!important;bottom:calc(94px + var(--sb))!important;}

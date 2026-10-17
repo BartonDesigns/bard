@@ -21,6 +21,19 @@ import * as THREE from 'three';
 import { civicTexture } from '../civic/materials.js';
 import { layerBias } from './layers.js';
 import { WALL_GLSL, GRIME_GLSL } from '../bay/weathering.js';
+import { qualityNow } from '../world/governor.js';
+
+export const SIGNAGE_RECOVERY_KEY = 'l99-signage-lite';
+const browserStorage = () => { try { return globalThis.localStorage; } catch { return null; } };
+export function recentSignageRecovery(storage = browserStorage(), now = Date.now()) {
+	try { const at = Number(storage?.getItem(SIGNAGE_RECOVERY_KEY)); return at > 0 && now >= at && now - at < 3 * 86400000; } catch { return false; }
+}
+let recovery = recentSignageRecovery();
+export function recoverSignage(storage = browserStorage()) {
+	recovery = true;
+	try { storage?.setItem(SIGNAGE_RECOVERY_KEY, String(Date.now())); } catch { /* private mode */ }
+}
+const useCompact = () => recovery || qualityNow().fx === 'low';
 
 // shared by every signage material: the headlights (xyz where, w how strong), which way
 // they point, how dark it is, the daylight for the foil
@@ -30,7 +43,13 @@ export const SIGN_U = {
 	uSgNight: { value: 0 },
 	uSgDay: { value: 1 },
 	uSgTime: { value: 0 },
+	uSgSunDir: { value: new THREE.Vector3(.3, .8, .4).normalize() },
+	uSgSunColor: { value: new THREE.Color(1, .95, .86) },
+	uSgAmbient: { value: new THREE.Color(.3, .35, .4) },
 };
+export function bindSignLighting(shared) {
+	for (const [sign, world] of [['uSgSunDir', 'uSunDir'], ['uSgSunColor', 'uSunColor'], ['uSgAmbient', 'uAmbient']]) if (shared[world]) SIGN_U[sign] = shared[world];
+}
 const SPEC = {
 	retro: { roughness: 0.42, metalness: 0.0, far: 420 },
 	cloth: { roughness: 0.98, metalness: 0.0, far: 160 },
@@ -56,7 +75,7 @@ float sgN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
 `;
 
 // the decal's own look, after the map: alpha, back, wear, the material's quirks
-function fragBody(kind) {
+function fragBody(kind, compact = false) {
 	return /* glsl */`
 	vec2 sgUv = vSgUv;
 	float sgMode = floor(vSgFx.x + 0.5), sgSeed = vSgFx.y, sgWear = vSgFx.z, sgExtra = vSgFx.w;
@@ -64,7 +83,7 @@ function fragBody(kind) {
 	if (sgBack && sgMode > 2.5) discard;
 	if (sgBack && sgMode > 0.5 && sgMode < 1.5) sgUv.x = 1.0 - sgUv.x;
 	${kind === 'grime' ? `
-	vec4 sgTex = grimeDecal(sgUv, sgExtra, sgSeed * 37.0);
+	vec4 sgTex = ${compact ? 'vec4(mix(vec3(.11,.09,.07),vec3(.25,.13,.06),step(.5,sgExtra)), smoothstep(.0,.18,sgUv.x)*smoothstep(.0,.18,1.0-sgUv.x)*smoothstep(.0,.12,sgUv.y)*smoothstep(.0,.12,1.0-sgUv.y)*sgN(sgUv*8.0+sgSeed*37.0))' : 'grimeDecal(sgUv, sgExtra, sgSeed * 37.0)'};
 	diffuseColor = vec4(sgTex.rgb, sgTex.a * (0.55 + 0.45 * sgWear));
 	` : `
 	vec4 sgTex = texture2D(map, vSgCell.xy + clamp(sgUv, 0.0, 1.0) * vSgCell.zw);
@@ -79,9 +98,11 @@ function fragBody(kind) {
 	`}
 	${kind === 'retro' ? `
 	// the blank's back: bare aluminium in the same shape
+	${compact ? 'if (sgBack && sgMode < .5) diffuseColor.rgb = vec3(.32, .35, .37);' : `
 	vec3 cn=abs(vSgN);vec2 cp=cn.x>cn.z?vSgW.zy:vSgW.xy;
 	if (sgBack && sgMode < 0.5) diffuseColor.rgb = texture2D(uCivicMetal,cp*3.0).rgb*.68;
 	else diffuseColor.rgb *= mix(vec3(1),texture2D(uCivicEnamel,sgUv*1.6).rgb,.15+sgWear*.12);
+	`}
 	` : ''}
 	${kind === 'glass' ? `
 	// frosted film: translucent white wherever the cut is
@@ -131,23 +152,65 @@ function emissiveBody(kind) {
 }
 
 const cache = new Map();
+// The recovery path has no PBR, environment maps, shadow loops or civic samplers.
+// It retains atlas/back-face rules, daylight, headlights, fog, wear and cloth motion.
+function compactMaterial(kind, map, far) {
+	const m = new THREE.ShaderMaterial({
+		uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...SIGN_U, map: { value: map }, uSgFar: far },
+		fog: true, lights: false,
+		vertexShader: COMMON_V + `
+		#include <fog_pars_vertex>
+		void main() {
+			vec3 transformed = position;
+			${kind === 'cloth' ? 'transformed.z += .085 * uv.x * sin(uv.x*7.0 + uv.y*2.0 - uSgTime*2.4 + aFx.y*6.28);' : ''}
+			vec4 sgw = vec4(transformed, 1.0); vec3 sgn = normal;
+			#ifdef USE_INSTANCING
+			sgw = instanceMatrix * sgw; sgn = mat3(instanceMatrix) * sgn;
+			#endif
+			sgw = modelMatrix * sgw; vSgW = sgw.xyz; vSgN = normalize(mat3(modelMatrix) * sgn);
+			vSgUv = uv; vSgCell = aCell; vSgFx = aFx;
+			vec4 mvPosition = viewMatrix * sgw; gl_Position = projectionMatrix * mvPosition;
+			#include <fog_vertex>
+		}`,
+		fragmentShader: COMMON_F.replace('uniform sampler2D uCivicMetal; uniform sampler2D uCivicEnamel;', '') + `
+		uniform sampler2D map;
+		uniform vec3 uSgSunDir, uSgSunColor, uSgAmbient;
+		#include <fog_pars_fragment>
+		void main() {
+			vec4 diffuseColor = vec4(1.0);
+			${fragBody(kind, true)}
+			vec3 n = normalize(vSgN) * (gl_FrontFacing ? 1.0 : -1.0);
+			vec3 light = uSgAmbient + uSgSunColor * max(dot(n, uSgSunDir), 0.0) * uSgDay;
+			vec3 totalEmissiveRadiance = vec3(0.0);
+			${emissiveBody(kind)}
+			gl_FragColor = vec4(diffuseColor.rgb * light + totalEmissiveRadiance, diffuseColor.a);
+			#include <tonemapping_fragment>
+			#include <colorspace_fragment>
+			#include <fog_fragment>
+		}`,
+	});
+	m.map = map; // atlas ownership and disposal, also used by material replacement
+	return m;
+}
+
 // a material for kind (retro, vinyl, glass, paper, foil, paint, grime) at layer, its map the atlas
 export function signMaterial(kind, layer, map, { phone = false } = {}) {
-	const key = kind + layer + (phone ? 'p' : '') + (map?.uuid || '');
+	const compact = useCompact(), key = kind + layer + (phone ? 'p' : '') + (map?.uuid || '') + (compact ? ':lite' : ':full');
 	if (cache.has(key)) return cache.get(key);
 	const S = SPEC[kind] || SPEC.vinyl, B = layerBias(layer, { phone });
-	const m = new THREE.MeshStandardMaterial({
+	const far = { value: S.far * (phone ? 0.65 : 1) };
+	const m = compact ? compactMaterial(kind, map, far) : new THREE.MeshStandardMaterial({
 		map: kind === 'grime' ? null : map, roughness: S.roughness, metalness: S.metalness,
-		transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0.0,
-		polygonOffset: true, polygonOffsetFactor: B.factor, polygonOffsetUnits: B.units,
 	});
+	Object.assign(m, { transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaTest: 0,
+		polygonOffset: true, polygonOffsetFactor: B.factor, polygonOffsetUnits: B.units });
 	// Flat decals need one double-sided pass: two-pass transparency flips winding
 	// and would make gl_FrontFacing treat a blank sign back as its printed front.
 	m.forceSinglePass = true;
-	m.name = `signage-${kind}-${layer}`;
-	const far = { value: S.far * (phone ? 0.65 : 1) };
+	m.name = `signage-${kind}-${layer}${compact ? '-lite' : ''}`;
 	m.userData.far = far;
-	m.onBeforeCompile = (sh) => {
+	m.userData.signage = { kind, layer, phone, compact };
+	if (!compact) m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, SIGN_U, { uSgFar: far });
 		if(kind==='retro'){sh.uniforms.uCivicMetal={value:civicTexture('galvanized',phone)};sh.uniforms.uCivicEnamel={value:civicTexture('enamel',phone)};}
 		sh.vertexShader = COMMON_V + sh.vertexShader
@@ -168,13 +231,30 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)metalnessFactor=.82;':kind==='paint'?'\nif(vSgFx.w>.5)metalnessFactor=.45*(1.0-sgWear);':''))
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + emissiveBody(kind));
 	};
-	m.customProgramCacheKey = () => 'signage-civic-3' + kind;
+	m.customProgramCacheKey = () => (compact ? 'signage-lite-1' : 'signage-civic-3') + kind;
 	// (grime has no map, but its uv must still reach the shader)
 	if (kind === 'grime') m.defines = { USE_UV: '' };
 	m.userData.renderOrder = B.renderOrder;
 	m.userData.lift = B.lift;
 	cache.set(key, m);
+	m.addEventListener('dispose', () => { if (cache.get(key) === m) cache.delete(key); });
 	return m;
+}
+export function currentSignMaterial(material) {
+	const d = material?.userData.signage;
+	return d ? signMaterial(d.kind, d.layer, material.map, { phone: d.phone }) : material;
+}
+export function syncSignageMaterials(scene) {
+	const compact = useCompact(), retired = new Set(); let changed = 0;
+	const replace = m => {
+		const d = m?.userData.signage;
+		if (!d || d.compact === compact) return m;
+		const next = currentSignMaterial(m);
+		retired.add(m); changed++; return next;
+	};
+	scene.traverse(o => { if (o.material) o.material = Array.isArray(o.material) ? o.material.map(replace) : replace(o.material); });
+	for (const m of retired) m.dispose();
+	return changed;
 }
 export function clearMaterials() { for (const m of cache.values()) m.dispose(); cache.clear(); }
 

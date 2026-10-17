@@ -83,7 +83,7 @@ export function createLLM() {
 			const r = await fetch(cloud + '/status');
 			if (!r.ok) throw Error('status ' + r.status);
 			const j = await r.json();
-			cloudPlanning = Array.isArray(j.planning) ? j.planning.filter((k) => k === 'social_intent' || k === 'story_quest') : [];
+			cloudPlanning = Array.isArray(j.planning) ? j.planning.filter((k) => ['social_intent', 'story_quest', 'negotiation_intent'].includes(k)) : [];
 			status.ready = true; status.progress = 1; status.text = j.talk && j.talk.left <= 0 ? 'Shared voice: resting until tomorrow (people use their own lines)' : 'Shared voice (free, in the cloud)'; emit();
 		} catch (e) {
 			status.text = 'The shared voice is not reachable; people use their own lines.'; emit();
@@ -102,7 +102,7 @@ export function createLLM() {
 	}
 	async function chatNow(messages, onToken, signal, opts = {}) {
 		if (signal?.aborted) throw new DOMException('Conversation cancelled', 'AbortError');
-		const planning = opts.planning && ['social_intent', 'story_quest'].includes(opts.planning.kind) ? opts.planning : null;
+		const planning = opts.planning && ['social_intent', 'story_quest', 'negotiation_intent'].includes(opts.planning.kind) ? opts.planning : null;
 		const temperature = opts.temperature ?? 0.6, cap = Math.min(opts.maxTokens ?? (planning ? 700 : 320), planning ? 900 : 512);
 		if (kind === 'webllm') {
 			if (loading) await loading;

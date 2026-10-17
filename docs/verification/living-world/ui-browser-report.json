@@ -1,0 +1,39 @@
+{
+  "method": "Controlled real Guide, negotiation runtime/ledger and inventory fixture with a deterministic activity facade and model responses. Desktop and touch-emulated mobile Chromium; not full-world gameplay, a human playtest, a real phone, or live cloud simulation.",
+  "errors": [],
+  "screenshots": [
+    "activity-desktop.png",
+    "agreement-desktop.png",
+    "activity-phone.png",
+    "agreement-phone.png"
+  ],
+  "desktop": {
+    "passed": true,
+    "quotedPrice": 20,
+    "modelParaphrase": true,
+    "staleOfferBlocked": true,
+    "explicitConsent": true,
+    "unverifiedTaskBlocked": true,
+    "verifiedExchangeOnce": true,
+    "overflow": {
+      "width": 422,
+      "viewport": 1280,
+      "over": false
+    }
+  },
+  "phone": {
+    "passed": true,
+    "quotedPrice": 20,
+    "modelParaphrase": true,
+    "staleOfferBlocked": true,
+    "explicitConsent": true,
+    "unverifiedTaskBlocked": true,
+    "verifiedExchangeOnce": true,
+    "overflow": {
+      "width": 368,
+      "viewport": 390,
+      "over": false
+    }
+  },
+  "passed": true
+}

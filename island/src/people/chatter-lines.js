@@ -91,6 +91,8 @@ export function remarkFor(ctx = {}) {
 	if (S.role === 'jog') return { text: pick(JOGGER, n), gesture: null, feel: { joy: 0.2 } };
 	if (S.phone) return { text: pick(ON_PHONE, n), gesture: 'explain', feel: {} };
 	if (E.storm > 0.5) return { text: pick(STORM, n), gesture: 'point', feel: { surprise: 0.6 } };
+	if(c.relationship?.trust<=-4) return {text:pick(['I remember. Keep your distance, please.','We still have something to put right.'],n),gesture:'shake',feel:{sad:.3}};
+	if(c.relationship?.trust>=3) return {text:pick(['There you are! Thanks for coming through for me.','Good to see you again. Come by when you have a moment.','Hey! I was hoping we’d cross paths.'],n),gesture:'wave',feel:{joy:.7}};
 	if (S.money && ((n * 3266489917) >>> 0) % 100 < 12) return { text: S.money, gesture: 'explain', feel: {} };
 	if (S.lead && (Math.imul(n, 668265263) >>> 0) % 100 < 45) return { text: S.lead, gesture: 'explain', feel: { surprise: 0.3 } };
 	if (S.deed && DEED[S.deed] && ((n * 2246822519) >>> 0) % 100 < 70) return { text: pick(DEED[S.deed], n), gesture: S.deed === 'stole' ? 'shrug' : S.deed === 'robbed' ? 'shake' : 'explain', feel: S.deed === 'robbed' ? { sad: 0.6, anger: 0.4 } : S.deed === 'stole' ? {} : { joy: 0.5, surprise: 0.3 } };

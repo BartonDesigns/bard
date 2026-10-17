@@ -79,6 +79,7 @@ export function createRoomClient({ url, id, name, seed, WS = globalThis.WebSocke
 			case 'hit': { const h = cleanHit(m); if (h && C.players.has(m.from)) emit('hit', { ...h, from: m.from }); break; }
 			case 'cs': { const c = cleanCombatState(m); if (c) emit('cs', c); break; }
 			case 'rules': emit('rules', cleanRules(m.r)); break;
+			case 'standing': if ((m.actor === id || C.players.has(m.actor)) && Number.isFinite(m.standing?.reputation) && Number.isSafeInteger(m.standing?.epoch)) emit('standing', m); break;
 			case 'reputation': { const e=cleanReputationRecord(m.e); if(e)emit('reputation',{e,live:m.live===true}); break; }
 			case 'reputation-snapshot': { if(Array.isArray(m.records) && m.records.length<=6)emit('reputation-snapshot',m.records.map(cleanReputationRecord).filter(Boolean)); break; }
 			case 'trade-ack': if (typeof m.id === 'string') emit('trade-ack', { id: m.id, op: m.op, there: m.there !== false }); break;

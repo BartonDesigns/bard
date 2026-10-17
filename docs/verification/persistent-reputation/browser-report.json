@@ -1,0 +1,706 @@
+{
+  "method": "Production bundle in Chromium software WebGL with touch emulation, actual player collision and authenticated local server handler; separate workerd socket test. Not physical Safari.",
+  "errors": [],
+  "walk": {
+    "frames": 2402,
+    "maxStep": 0.18276426832884377,
+    "position": [
+      3.2298626619059103,
+      7.261396604067315,
+      -3.230621367955316e-17
+    ],
+    "depth": 138.27267027377047,
+    "inside": 1,
+    "well": {
+      "name": "The Quiet Well",
+      "at": [
+        0,
+        6,
+        0
+      ],
+      "entrance": [
+        400,
+        30.5486421585083,
+        0
+      ],
+      "ritual": false
+    },
+    "sameWorld": true
+  },
+  "before": {
+    "status": "saved",
+    "savedLocally": true,
+    "pending": 0,
+    "revision": 2,
+    "epoch": 0,
+    "cleansedAt": 0,
+    "error": "",
+    "feature": "persistent-reputation-v1",
+    "me": {
+      "mercy": -2,
+      "law": -11,
+      "protect": -4,
+      "honest": -6,
+      "deeds": 2
+    },
+    "world": {
+      "mercy": 0,
+      "law": 0,
+      "protect": 0,
+      "honest": 0,
+      "deeds": 0
+    },
+    "title": "Unknown",
+    "reactions": {
+      "title": "Unknown",
+      "reputation": -5,
+      "bounty": 0,
+      "greet": [
+        "Morning.",
+        "Safe travels.",
+        "Watch yourself out there."
+      ],
+      "priceK": 1.02,
+      "song": "They sing of you in the taverns now: \"robbed a traveller, and never looked back.\"",
+      "graffiti": ""
+    },
+    "recent": [
+      "Did the keeper a favour",
+      "Robbed a traveller"
+    ],
+    "places": 0,
+    "lifetime": 2,
+    "well": {
+      "name": "The Quiet Well",
+      "at": [
+        0,
+        6,
+        0
+      ],
+      "entrance": [
+        400,
+        30.5486421585083,
+        0
+      ],
+      "ritual": false
+    }
+  },
+  "story": "THE GUIDE\nThe shared voice is not reachable; people use their own lines.\n⚙\n✕\nPeople\nQuests\nStory\nConversations\nTODAY · 0 of 3 done\n○ Do 2 favours for people (0/2) · 80 credits\n○ Stop a bag thief · 120 credits\n○ Cross the street at a crosswalk 3 times (0/3) · 40 credits\nAll three: a bonus of 150 credits\nWHO THEY SAY YOU ARE\nNobody knows your name yet · standing -5\nMerciful -2 · Lawful -11 · Protector -4 · Honest -6\nThey sing of you in the taverns now: \"robbed a traveller, and never looked back.\"\nReputation saved across visits and rooms.\nYour standing does not fade with time. To release it, fly to Gargantua’s island and walk into the soul tunnel to the Quiet Well.\nSave soul recovery key\nRestore a saved soul\nFAVOURS\nStranger · 0 done\n▱▱▱▱▱▱▱▱▱▱ 1 more to Passer-by who helped\nFARES\nOff duty · 0 rides\n▱▱▱▱▱▱▱▱▱▱ 1 more to New driver\nEarned 0 credits · 0 five-star rides\nLATELY\nRobbed a traveller\nDid the keeper a favour\n🎙\n🔊\n➤",
+  "cleanse": {
+    "status": "saved",
+    "savedLocally": true,
+    "pending": 0,
+    "revision": 3,
+    "epoch": 1,
+    "cleansedAt": 1791945736601,
+    "error": "",
+    "feature": "persistent-reputation-v1",
+    "me": {
+      "mercy": 0,
+      "law": 0,
+      "protect": 0,
+      "honest": 0,
+      "deeds": 0
+    },
+    "world": {
+      "mercy": 0,
+      "law": 0,
+      "protect": 0,
+      "honest": 0,
+      "deeds": 0
+    },
+    "title": "Unknown",
+    "reactions": {
+      "title": "Unknown",
+      "reputation": 0,
+      "bounty": 0,
+      "greet": [
+        "Morning.",
+        "Safe travels.",
+        "Watch yourself out there."
+      ],
+      "priceK": 1,
+      "song": "",
+      "graffiti": ""
+    },
+    "recent": [
+      "Did the keeper a favour",
+      "Robbed a traveller"
+    ],
+    "places": 0,
+    "lifetime": 2,
+    "well": {
+      "name": "The Quiet Well",
+      "at": [
+        0,
+        6,
+        0
+      ],
+      "entrance": [
+        400,
+        30.5486421585083,
+        0
+      ],
+      "ritual": false
+    }
+  },
+  "portraitButton": {
+    "x": 97.5,
+    "y": 586,
+    "width": 195,
+    "height": 68
+  },
+  "render": {
+    "lost": false,
+    "programs": [
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      },
+      {
+        "runnable": true
+      }
+    ],
+    "triangles": 503987
+  },
+  "passed": true
+}

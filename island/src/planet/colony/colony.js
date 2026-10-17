@@ -222,9 +222,10 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	}
 	function update(dt) {
 		tradeSigns.update(camera);
-		civicArt.update(camera,dt);
 		const cx = camera.position.x, cz = camera.position.z;
 		const sy = shared.uSunDir.value.y, night = 1 - THREE.MathUtils.smoothstep(sy, -0.12, 0.1);
+		// (the civic art lit by its lamps after dark: civic/colony-art.js)
+		civicArt.update(camera, dt, night);
 		U.uNight.value = night;
 		U.uLampK.value = 0.7 + night * 1.6;
 		mats.glass.emissive.setRGB(S.window[0], S.window[1], S.window[2]).multiplyScalar(0.12 * night);

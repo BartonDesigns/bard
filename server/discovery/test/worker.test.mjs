@@ -287,6 +287,7 @@ section('bounded NPC planners');
 	const call = env.AI.calls[0].input;
 	ok(call.messages[0].content.includes('bounded planner') && !call.messages[0].content.includes('DO NOT COPY THIS') && call.max_tokens === 220, 'social instructions are fixed and unknown context fields are stripped');
 	ok((await state(env)).planning.includes('story_quest') && (await state(env)).talk.talks === 1, 'planner support advertised and requests use conversation ledger');
+	ok((await state(env)).features.includes('quest-continuity-v1'), 'quest continuity version is independently advertised');
 	ok((await send(env, { kind: 'arbitrary_prompt', context: {} })).status === 400 && env.AI.calls.length === 1, 'unknown planner modes refused before inference');
 	ok((await send(env, social, { origin: 'https://evil.example' })).status === 403, 'planner retains origin gate');
 	ok((await send(env, social, { extra: { padding: 'x'.repeat(6500) } })).status === 413, 'planner retains request size cap');
@@ -319,6 +320,38 @@ section('bounded NPC planners');
 	ok((await send(instant, { kind: 'story_quest', context })).status === 503, 'conversation-only quests cannot complete instantly');
 	const spent = makeEnv({ TALK_NEURONS: '1', AI: mockAI({ reply: action }) });
 	ok((await send(spent, social)).status === 503 && spent.AI.calls.length === 0, 'planner cannot exceed free conversation allowance');
+}
+
+section('grounded conversational negotiation');
+{
+	const context = {sellerId:'rae',bodyKey:'earth',stock:[{id:'knife-1',name:'Knife',price:1000}],services:[{id:'kit',label:'Recover the real survey kit'}],playerRequest:'What could I do for you to make twenty enough for the knife?',arbitrarySystem:'DO NOT COPY THIS'};
+	const proposal = {intent:'service',confidence:.97,itemId:'knife-1',amount:20,question:null};
+	const send = (env, ctx=context) => handle(new Request('https://api.test/talk',{method:'POST',headers:{origin:SITE,'content-type':'application/json','cf-connecting-ip':'203.0.113.22'},body:JSON.stringify({npc:{name:'Rae',job:'shopkeeper'},history:[{role:'user',content:ctx.playerRequest}],planning:{kind:'negotiation_intent',context:ctx}})}),env);
+	const env=makeEnv({AI:mockAI({reply:proposal})}), r=await send(env);
+	ok(r.status===200 && JSON.parse((await r.json()).reply).amount===20,'negotiation returns a grounded service counteroffer proposal');
+	ok(env.AI.calls[0].input.messages[0].content.includes('separate game-controlled screen') && !env.AI.calls[0].input.messages[0].content.includes('DO NOT COPY THIS'),'fixed negotiation prompt retains explicit consent and strips unknown fields');
+	ok((await state(env)).planning.includes('negotiation_intent') && (await state(env)).features.includes('negotiation-intent-v1'),'negotiation capability is advertised independently');
+	for(const bad of [{...proposal,itemId:'invented'},{...proposal,amount:1},{...proposal,intent:'transfer'},{...proposal,confirmed:true},{...proposal,confidence:.5}]) {
+		const e=makeEnv({AI:mockAI({reply:bad})});ok((await send(e)).status===503,'fabricated stock, prices, transfers and uncertainty fail closed');
+	}
+	const missing=makeEnv({AI:mockAI({reply:proposal})});
+	ok((await send(missing,{...context,sellerId:''})).status===400 && missing.AI.calls.length===0,'seller identity required before inference');
+	const denied=makeEnv({AI:mockAI({reply:proposal})});
+	ok((await send(denied,{...context,playerRequest:'Do not buy the knife for 20'})).status===503,'negated purchase cannot become a negotiation proposal');
+}
+
+section('grounded community project proposals');
+{
+	const context={bodyKey:'earth',scopeKey:'earth:coast',candidates:[{id:'clearing',name:'Coastal clearing',kinds:['path','garden'],coordinates:'private unknown field'}],projects:[],playerRequest:'Could we bring this neglected plot back to life?',instructions:'DO NOT COPY THIS'};
+	const proposal={intent:'propose',confidence:.98,candidateId:'clearing',projectKind:'garden',question:null};
+	const send=(env,ctx=context)=>handle(new Request('https://api.test/talk',{method:'POST',headers:{origin:SITE,'content-type':'application/json','cf-connecting-ip':'203.0.113.23'},body:JSON.stringify({npc:{name:'Mara',job:'gardener'},history:[{role:'user',content:ctx.playerRequest}],planning:{kind:'community_project_intent',context:ctx}})}),env);
+	const env=makeEnv({AI:mockAI({reply:proposal})}), response=await send(env);
+	ok(response.status===200 && JSON.parse((await response.json()).reply).candidateId==='clearing','natural project language returns a bounded real-site proposal');
+	ok(env.AI.calls[0].input.messages[0].content.includes('separate review button') && !env.AI.calls[0].input.messages[0].content.includes('DO NOT COPY THIS') && !env.AI.calls[0].input.messages[0].content.includes('private unknown field'),'project planner strips unsupported data and preserves explicit review');
+	ok((await state(env)).planning.includes('community_project_intent') && (await state(env)).features.includes('community-project-intent-v1'),'community planning capability advertised separately');
+	for(const bad of [{...proposal,candidateId:'invented'},{...proposal,projectKind:'resonance'},{...proposal,intent:'complete'},{...proposal,spend:1000},{...proposal,confidence:.8}])ok((await send(makeEnv({AI:mockAI({reply:bad})}))).status===503,'invented site, unsupported kind, mutation, money and uncertainty rejected');
+	ok((await send(makeEnv({AI:mockAI({reply:proposal})}),{...context,playerRequest:'Do not restore this garden'})).status===503,'negated project request cannot create a proposal');
+	const missing=makeEnv({AI:mockAI({reply:proposal})});ok((await send(missing,{...context,scopeKey:''})).status===400 && missing.AI.calls.length===0,'world and region required before model inference');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

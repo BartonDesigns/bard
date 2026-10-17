@@ -1,0 +1,295 @@
+{
+  "method": "Production island/dist/island.js, actual TERRAN terrain and named guide places, offline project runtime. Test moves the camera/player to existing places; it does not inject project stages or accelerate work. Chromium software WebGL at phone viewport, not a physical phone or live shared-cloud test.",
+  "bundleSha256": "10bfc2003a7af8bc1c72270d70b4b450f4b050d7fc447ca61d54226c162dbecd",
+  "errors": [],
+  "steps": [
+    "Entered the real generated world",
+    "Proposed a project at an actual observed place",
+    "Completed a real elapsed on-site survey"
+  ],
+  "target": {
+    "id": "place-the-village",
+    "name": "the village",
+    "targets": 5
+  },
+  "initial": {
+    "mode": "local",
+    "scope": {
+      "key": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:soul-16sxknp",
+      "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+      "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+      "name": "the island"
+    },
+    "projects": [],
+    "history": [],
+    "candidates": [
+      {
+        "id": "place-the-village",
+        "siteId": "place-the-village",
+        "name": "the village",
+        "anchor": {
+          "x": -270.9016787770016,
+          "y": 5.832114525911114,
+          "z": -4.0800903708516945
+        },
+        "kinds": [
+          "path",
+          "garden",
+          "gathering",
+          "resonance"
+        ],
+        "source": "place",
+        "inRange": true,
+        "canPropose": true
+      }
+    ],
+    "active": null,
+    "pending": false,
+    "error": "",
+    "savedLocally": true
+  },
+  "proposed": {
+    "state": {
+      "mode": "local",
+      "scope": {
+        "key": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:soul-16sxknp",
+        "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+        "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+        "name": "the island"
+      },
+      "projects": [
+        {
+          "id": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+          "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+          "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+          "siteId": "place-the-village",
+          "name": "the village",
+          "kind": "garden",
+          "anchor": {
+            "x": -270.9016787770016,
+            "y": 5.832114525911114,
+            "z": -4.0800903708516945
+          },
+          "npcId": null,
+          "npcName": null,
+          "createdBy": "player",
+          "createdAt": 1792173883392,
+          "updatedAt": 1792173883392,
+          "status": "surveying",
+          "surveyCount": 0,
+          "workCount": 0,
+          "requiredWork": 3,
+          "readyAt": null,
+          "completedAt": null,
+          "blockedReason": null,
+          "contributors": [],
+          "contributionCount": 0,
+          "history": [
+            {
+              "id": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:project-event:1",
+              "at": 1792173883392,
+              "type": "project-proposed",
+              "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+              "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+              "projectId": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+              "siteId": "place-the-village",
+              "actorId": "player"
+            }
+          ],
+          "contributedServiceIds": [],
+          "shared": false,
+          "serviceSources": []
+        }
+      ],
+      "history": [
+        {
+          "id": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:project-event:1",
+          "at": 1792173883392,
+          "type": "project-proposed",
+          "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+          "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+          "projectId": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+          "siteId": "place-the-village",
+          "actorId": "player"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "place-the-village",
+          "siteId": "place-the-village",
+          "name": "the village",
+          "anchor": {
+            "x": -270.9016787770016,
+            "y": 5.832114525911114,
+            "z": -4.0800903708516945
+          },
+          "kinds": [
+            "garden"
+          ],
+          "source": "place",
+          "inRange": true,
+          "canPropose": true
+        }
+      ],
+      "active": null,
+      "pending": false,
+      "error": "",
+      "savedLocally": true
+    },
+    "visuals": {
+      "visible": 1,
+      "maxVisible": 6,
+      "projects": [
+        {
+          "id": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+          "kind": "garden",
+          "stage": "surveying",
+          "position": [
+            -270.9016787770016,
+            5.832114525911114,
+            -4.0800903708516945
+          ],
+          "shared": false
+        }
+      ],
+      "voices": 0
+    }
+  },
+  "surveyed": {
+    "mode": "local",
+    "scope": {
+      "key": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:soul-16sxknp",
+      "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+      "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+      "name": "the island"
+    },
+    "projects": [
+      {
+        "id": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+        "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+        "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+        "siteId": "place-the-village",
+        "name": "the village",
+        "kind": "garden",
+        "anchor": {
+          "x": -270.9016787770016,
+          "y": 5.832114525911114,
+          "z": -4.0800903708516945
+        },
+        "npcId": null,
+        "npcName": null,
+        "createdBy": "player",
+        "createdAt": 1792173883392,
+        "updatedAt": 1792173936466,
+        "status": "preparing",
+        "surveyCount": 1,
+        "workCount": 0,
+        "requiredWork": 3,
+        "readyAt": null,
+        "completedAt": null,
+        "blockedReason": null,
+        "contributors": [
+          {
+            "actorId": "player",
+            "surveyCount": 1,
+            "workCount": 0,
+            "serviceCount": 0
+          }
+        ],
+        "contributionCount": 1,
+        "history": [
+          {
+            "id": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:project-event:1",
+            "at": 1792173883392,
+            "type": "project-proposed",
+            "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+            "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+            "projectId": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+            "siteId": "place-the-village",
+            "actorId": "player"
+          },
+          {
+            "id": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:project-event:2",
+            "at": 1792173936466,
+            "type": "project-contribution",
+            "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+            "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+            "projectId": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+            "siteId": "place-the-village",
+            "actorId": "player",
+            "kind": "survey",
+            "provenance": "player-observed"
+          }
+        ],
+        "contributedServiceIds": [],
+        "shared": false,
+        "serviceSources": []
+      }
+    ],
+    "history": [
+      {
+        "id": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:project-event:1",
+        "at": 1792173883392,
+        "type": "project-proposed",
+        "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+        "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+        "projectId": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+        "siteId": "place-the-village",
+        "actorId": "player"
+      },
+      {
+        "id": "%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:project-event:2",
+        "at": 1792173936466,
+        "type": "project-contribution",
+        "world": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+        "region": "TERRAN:[\"\",\"\",\"\",1337,\"TERRAN\"]:island",
+        "projectId": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+        "siteId": "place-the-village",
+        "actorId": "player",
+        "kind": "survey",
+        "provenance": "player-observed"
+      }
+    ],
+    "candidates": [
+      {
+        "id": "place-the-village",
+        "siteId": "place-the-village",
+        "name": "the village",
+        "anchor": {
+          "x": -270.9016787770016,
+          "y": 5.832114525911114,
+          "z": -4.0800903708516945
+        },
+        "kinds": [
+          "garden"
+        ],
+        "source": "place",
+        "inRange": true,
+        "canPropose": true
+      }
+    ],
+    "active": null,
+    "pending": false,
+    "error": "",
+    "savedLocally": true
+  },
+  "finalVisuals": {
+    "visible": 1,
+    "maxVisible": 6,
+    "projects": [
+      {
+        "id": "project:%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D:TERRAN%3A%5B%22%22%2C%22%22%2C%22%22%2C1337%2C%22TERRAN%22%5D%3Aisland:place-the-village",
+        "kind": "garden",
+        "stage": "preparing",
+        "position": [
+          -270.9016787770016,
+          5.832114525911114,
+          -4.0800903708516945
+        ],
+        "shared": false
+      }
+    ],
+    "voices": 0
+  },
+  "passed": true
+}

@@ -14,6 +14,7 @@ import { eraMap, treeRow, treeFor } from './streetera.js';
 import { today } from '../calendar.js';
 import { leafDrift, autumnK, crownColour } from './seasons.js';
 import { qualityNow } from '../world/governor.js';
+import { roadDelta, gradeVersion } from './berms.js';
 
 const BUILT = new Set([1, 2, 6, 7, 13]);           // land use where a street has its trees: homes, parks, schools, shops, the core
 const hash = (x, z) => { let h = Math.imul(Math.floor(x * 10) | 0, 374761393) ^ Math.imul(Math.floor(z * 10) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -138,9 +139,9 @@ export function createStreetDecor(scene, city, { isPhone = false } = {}) {
 	for (const im of [stakes, grates, leaves]) { im.count = 0; im.frustumCulled = false; im.receiveShadow = true; group.add(im); }
 	stakes.castShadow = true;
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
-	let seen = null, atX = 1e9, atZ = 1e9, drift = 0;
+	let seen = null, atX = 1e9, atZ = 1e9, drift = 0, gv = -1;
 	function build(x, z) {
-		atX = x; atZ = z;
+		atX = x; atZ = z; gv = gradeVersion();
 		drift = leafDrift(today());
 		leafMat.opacity = Math.min(1, drift * 1.2);
 		let ns = 0, ng = 0, nl = 0;
@@ -148,13 +149,15 @@ export function createStreetDecor(scene, city, { isPhone = false } = {}) {
 		for (const t of city.treesAt(x, z, Rq)) {
 			if (t.src !== 'street' || (t.x - x) ** 2 + (t.z - z) ** 2 > Rq * Rq) continue;
 			const yaw = hash(t.x * 1.3, t.z * 0.7) * 6.283;
-			if (t.stake && ns < CAP) { m4.compose(p.set(t.x, t.y + 0.3, t.z), q.setFromAxisAngle(Y, yaw), sc.set(1, 1, 1)); stakes.setMatrixAt(ns++, m4); }
-			if (t.well && ng < CAP) { m4.compose(p.set(t.x, t.y + 0.33, t.z), q.setFromAxisAngle(Y, yaw - yaw % (Math.PI / 2)), sc.set(1, 1, 1)); grates.setMatrixAt(ng++, m4); }
+			// (on the ground as graded beside the road, as the tree itself is: city.js placeTrees)
+			const ty = t.y + roadDelta(t.x, t.z);
+			if (t.stake && ns < CAP) { m4.compose(p.set(t.x, ty + 0.3, t.z), q.setFromAxisAngle(Y, yaw), sc.set(1, 1, 1)); stakes.setMatrixAt(ns++, m4); }
+			if (t.well && ng < CAP) { m4.compose(p.set(t.x, ty + 0.33, t.z), q.setFromAxisAngle(Y, yaw - yaw % (Math.PI / 2)), sc.set(1, 1, 1)); grates.setMatrixAt(ng++, m4); }
 			if (t.fall && drift > 0.02 && nl < LCAP) {
 				// a drift round the trunk, out to most of the crown, and one blown off to the side
 				const rr = Math.max(2, t.h * 0.32 * (t.nx || 1));
-				m4.compose(p.set(t.x, t.y + 0.34, t.z), q.setFromAxisAngle(Y, yaw), sc.set(rr * 2, 1, rr * 2)); leaves.setMatrixAt(nl++, m4);
-				if (nl < LCAP) { const a = yaw * 3.1, o = rr * 0.9; m4.compose(p.set(t.x + Math.cos(a) * o, t.y + 0.345, t.z + Math.sin(a) * o), q.setFromAxisAngle(Y, a), sc.set(rr * 1.2, 1, rr * 1.2)); leaves.setMatrixAt(nl++, m4); }
+				m4.compose(p.set(t.x, ty + 0.34, t.z), q.setFromAxisAngle(Y, yaw), sc.set(rr * 2, 1, rr * 2)); leaves.setMatrixAt(nl++, m4);
+				if (nl < LCAP) { const a = yaw * 3.1, o = rr * 0.9; m4.compose(p.set(t.x + Math.cos(a) * o, ty + 0.345, t.z + Math.sin(a) * o), q.setFromAxisAngle(Y, a), sc.set(rr * 1.2, 1, rr * 1.2)); leaves.setMatrixAt(nl++, m4); }
 			}
 		}
 		stakes.count = ns; grates.count = ng; leaves.count = nl;
@@ -165,7 +168,7 @@ export function createStreetDecor(scene, city, { isPhone = false } = {}) {
 		if (cam.position.y > 3000) { group.visible = false; return; }
 		group.visible = true;
 		// the city rebuilt its trees, or you have come a way since
-		if (list !== seen || Math.hypot(x - atX, z - atZ) > R * 0.4) { seen = list; build(x, z); }
+		if (list !== seen || Math.hypot(x - atX, z - atZ) > R * 0.4 || gradeVersion() !== gv) { seen = list; build(x, z); }
 	}
 	return { update, group, info: () => ({ stakes: stakes.count, grates: grates.count, leaves: leaves.count, drift: +drift.toFixed(2) }) };
 }

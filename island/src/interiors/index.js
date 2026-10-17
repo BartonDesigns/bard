@@ -222,6 +222,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			// (a landmark's, a hospital's, a station's rooms are all lit: they never close)
 			litOf: (id) => B.use === 'site' || !!B.C.lit[id], fixtures: anchorFixtures(P, k), dust: (x, y, z, id) => DUSTY.has(P.rooms[id]?.type),
 			home: B.use === 'row' || B.use === 'apt', hours: P.hours || OPEN[B.use] || null,
+			// (a home's household to bed by its own late hour: lighting.js keeps one lamp on after)
+			bed: B.use === 'row' || B.use === 'apt' ? 22.5 + ((Math.abs(Math.round(B.o.x * 7 + B.o.z * 13)) % 997) / 997) * 3 : null,
 			// (a hospital keeps every light on all night; the rest keep their night lights)
 			allNight: P.service === 'hospital',
 		};

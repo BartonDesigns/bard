@@ -17,3 +17,21 @@ new_sqlite_classes = ["Room"]
 [vars]
 ALLOWED_ORIGINS = "https://level99bard.com,https://www.level99bard.com"
 ALLOW_LOCALHOST = "true"
+
+# Personal reputation is deliberately separate from expiring multiplayer rooms.
+[[durable_objects.bindings]]
+name = "SOULS"
+class_name = "Soul"
+
+[[migrations]]
+tag = "v2-souls"
+new_sqlite_classes = ["Soul"]
+
+# Shared citizen requests survive both room expiry and every visitor leaving.
+[[durable_objects.bindings]]
+name = "LIVING"
+class_name = "LivingRegion"
+
+[[migrations]]
+tag = "v3-living-regions"
+new_sqlite_classes = ["LivingRegion"]

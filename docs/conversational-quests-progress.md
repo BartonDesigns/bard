@@ -25,3 +25,7 @@ The Cloudflare Worker needs a separate deployment. This workspace has no Cloudfl
 ## Continue
 
 Final browser checks passed: conversational acceptance belongs to the current NPC; shared quest completion is remembered exactly once before and after reload. Save the evidence and publish through a feature PR. Connect the existing Cloudflare account to deploy the Worker. Keep frontend and Worker deployment status separate. Do not overwrite older social, quest or flight content.
+
+## 14 October 2026: living-world and bargaining integration
+
+The `codex/living-world-negotiation` branch reconciles main `b05ea02` with the persistent reputation/relationship work in PR #25. Public nearby activity now informs NPC conversation; Story shows observed work, participants, outcomes, contact, scheduling choices and acknowledgments. Negotiation classifies natural phrasing, validates real seller/stock/service facts, and requires explicit confirmation before a purchase. See `living-world-and-negotiation.md` for current scope, verification and the two distinct Worker release steps. Merchant assets remain device-local, and source reports are client-observed rather than authoritative physics. This checkpoint supersedes older release assumptions without deleting their history; no live release is asserted.

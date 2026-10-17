@@ -37,6 +37,7 @@ import { streetTrees, treeColour, autumnNow } from './streettrees.js';       // 
 import { NIGHT_U, NIGHT_I, nightSeed, housePlan, packHouse } from './nightplan.js';      // the households' own lights after dark
 import { addNightField } from '../world/nightfield.js';
 import { qualityNow } from '../world/governor.js';
+import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -499,13 +500,40 @@ export function buildingMaterial(shared, night, nearBand) {
 				// how many rooms are lit by the hour (uNL.x the late hour): offices and towers emptying
 				// through the evening to a few cleaners' and late workers' floors, homes going to bed
 				float occ = vKind > 1.5 && vKind < 3.5 ? mix(0.5, 0.12, smoothstep(19.0, 23.5, uNL.x)) : mix(0.42, 0.3, smoothstep(21.0, 24.0, uNL.x)) * (1.0 - 0.65 * smoothstep(24.0, 26.5, uNL.x));
-				float lit = max(mix(occ, step(1.0 - occ, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih)) * step(cond, 0.5);
+				// (offices and towers light by the floor and the zone, whole runs of a floor at once, most
+				// windows in a lit run lit; so far off a tower is a dark mass with lit bands and patches,
+				// not an even grey: the run's own on or off holds when its windows are a pixel)
+				float offK = step(1.5, vKind) * step(vKind, 3.5);
+				float zone = step(1.0 - min(1.0, occ / 0.78), bh(vec2(floor(u / 12.0), floor(vLY / 7.8)) + floor(vCW.xz * 0.013) + 0.5));
+				float nearLit = mix(step(1.0 - occ, bh(floor(cell) + floor(vCW.xz * 0.013))), zone * step(0.22, bh(floor(cell) + 1.7)), offK);
+				float lit = max(mix(mix(occ, zone, offK), nearLit, aaW), shopGlow * step(0.25, ih)) * step(cond, 0.5);
 				// each lit window its own: warm lamps or cool office tubes, brighter up by the
 				// ceiling light, some with the blinds half down (close up; far off, the average)
 				vec2 fc = fract(cell), cid = floor(cell);
 				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
 				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
+				// a tower's lobby is lit all night, warm, its tall glass bright at the street
+				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5);
+				// a lit crown on some of the tall towers (one in five over 110 m): uplights at the foot of
+				// the top floors washing up the facade, each its own scallop, brightest low, all night
+				if (vKind > 1.5 && vKind < 2.5 && vCS.y > 110.0 && roof < 0.5 && bh(floor(vIP * 0.37) + 3.1) < 0.2) {
+					float band = clamp(vCS.y * 0.08, 9.0, 22.0), y0 = vCS.y - band, cy = vLY - y0;
+					float hue = bh(floor(vIP * 0.37) + 8.3);
+					vec3 cc = hue < 0.55 ? vec3(1.0, 0.86, 0.68) : hue < 0.85 ? vec3(0.78, 0.86, 1.0) : vec3(0.55, 0.75, 1.0);
+					float scal = 0.55 + 0.45 * pow(abs(cos(3.14159 * u / 4.0)), 2.0);
+					float e = step(0.0, cy) * smoothstep(0.0, 1.2, cy) * mix(1.0, 0.35, cy / band) * scal;
+					winGlow += cc * e * uNightC * (diffuseColor.rgb * 1.6 + 0.06) * step(cond, 0.5);
+				}
+				// a parking garage (mapped: kind 3.3): its open decks every 3 m, the ribbon of each
+				// opening dark, and by night a stripe of light under each deck's ceiling, all night
+				if (vKind > 3.2 && vKind < 3.4 && roof < 0.5) {
+					float dk = fract(vLY / 3.0), open = step(0.32, dk) * step(dk, 0.86) * step(1.2, vLY) * step(vLY, vCS.y - 1.0);
+					diffuseColor.rgb = mix(vec3(0.56, 0.55, 0.52) * (0.9 + 0.2 * bh(floor(vIP * 0.5))), vec3(0.05), open);
+					glassK = 0.0;
+					vec3 gc = ih < 0.6 ? vec3(0.86, 0.92, 1.0) : vec3(1.0, 0.62, 0.3);
+					winGlow = gc * open * smoothstep(0.55, 0.84, dk) * uNightC * 0.75 * step(cond, 0.5) * (0.85 + 0.3 * bh(vec2(floor(u / 6.0), floor(vLY / 3.0))));
+				}
 				// after dark a wall has only the light that reaches it: the moon and the sky (the
 				// lights' own business), the street lamps' spill on the shop fronts at the sidewalk,
 				// and its household's own lamps (nightplan.js): the porch light by the front door
@@ -540,12 +568,14 @@ export function buildingMaterial(shared, night, nearBand) {
 					}
 				}
 				// the dark windows are not holes: the night sky and the lit city in the glass
-				winGlow += vec3(0.05, 0.065, 0.09) * win * (1.0 - lit) * uNightC * (0.6 + 0.8 * bh(cid + 9.1));
+				// (faint: dark glass at night shows a little of the city's glow, not a lit grey; a curtain
+				// wall of it at the old 0.05 to 0.13 read as a glowing tower)
+				winGlow += vec3(0.012, 0.016, 0.024) * win * (1.0 - lit) * uNightC * (0.6 + 0.8 * bh(cid + 9.1));
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding15';
+	m.customProgramCacheKey = () => 'baybuilding17';
 	return m;
 }
 
@@ -622,7 +652,8 @@ export function createCity(shared, scene, bay, real = null) {
 	const nearBand = { value: new THREE.Vector2(36, 46) };
 	const rise = { value: new THREE.Vector4(0, 0, 0, 0) };
 	let riseT0 = -1;
-	const mat = withRise(buildingMaterial(shared, night, nearBand), rise, 'rise1');
+	// (the street lamps near you light the walls by them: world/nightfield.js, the city's own list)
+	const mat = addNightField(withRise(buildingMaterial(shared, night, nearBand), rise, 'rise1'), { field: 'SF' });
 	const roofMat = withRise(roofDetail(weatherRoofs(new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide }))), rise, 'roofrise1');
 	const CAP = 32000;
 	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
@@ -1702,9 +1733,9 @@ export function createCity(shared, scene, bay, real = null) {
 
 	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
 	// simpler leaf-card trees further out, smooth masses far away
-	let treeList = [], treeX = 1e9, treeZ = 1e9;
+	let treeList = [], treeX = 1e9, treeZ = 1e9, treeGV = -1;
 	function placeTrees(x, z) {
-		treeX = x; treeZ = z;
+		treeX = x; treeZ = z; treeGV = gradeVersion();
 		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
 		let nf = 0;
 		const aut = autumnNow();          // the deciduous street trees' autumn (streettrees.js)
@@ -1714,11 +1745,14 @@ export function createCity(shared, scene, bay, real = null) {
 			q.setFromAxisAngle(Y, yaw);
 			const tc = t.fall ? treeColour(t, aut) : t.col, lo = t.fall ? 0.35 : 0.65, hi = t.fall ? 2.6 : 1.35;
 			const tint = [0, 1, 2].map((c) => Math.min(hi, Math.max(lo, tc[c] / LEAF_REF[c])));
+			// (the ground as drawn: the roads' banks and cuts near you, berms.js, lift or lower the
+			// trees beside them, else a tree on a cut road's verge hangs in the air)
+			const gy = d < 300 ? t.y + roadDelta(t.x, t.z) : t.y;
 			if (t.fern) {
 				if (d > LOD.shrub[3] + MARGIN) continue;
 				const k = next(ferns[0]); if (k < 0) continue;
 				const s2 = t.h / fernT.height;
-				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2, s2));
+				m4.compose(p.set(t.x, gy, t.z), q, sc.set(s2, s2, s2));
 				ferns[0].setMatrixAt(k, m4); ferns[0].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 				continue;
 			}
@@ -1726,7 +1760,7 @@ export function createCity(shared, scene, bay, real = null) {
 				if (d > LOD.shrub[3] + MARGIN) continue;
 				const k = next(shrubs[0]); if (k < 0) continue; next(shrubs[1]);
 				const s2 = t.h / 1.3;
-				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2 * 0.9, s2));
+				m4.compose(p.set(t.x, gy, t.z), q, sc.set(s2, s2 * 0.9, s2));
 				shrubs[0].setMatrixAt(k, m4); shrubs[1].setMatrixAt(k, m4); shrubs[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 				continue;
 			}
@@ -1738,13 +1772,13 @@ export function createCity(shared, scene, bay, real = null) {
 				if (k < 0) continue;
 				next(tier[1]);
 				const s2 = t.h / H, sw = s2 * (t.nx || 1);
-				m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(sw, s2, sw));
+				m4.compose(p.set(t.x, gy + 0.2, t.z), q, sc.set(sw, s2, sw));
 				tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 			}
 			if (d < LOD.far[0] - MARGIN) continue;
 			// far: one point, drawn as its species' picture, tinted like the tree
 			if (nf >= TCAP) continue;
-			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = t.y + 0.2; fp.pos[nf * 3 + 2] = t.z;
+			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = gy + 0.2; fp.pos[nf * 3 + 2] = t.z;
 			fp.size[nf] = t.h * T.sizeK; fp.sp[nf] = sp;
 			fp.tint[nf * 3] = tint[0]; fp.tint[nf * 3 + 1] = tint[1]; fp.tint[nf * 3 + 2] = tint[2];
 			nf++;
@@ -1807,6 +1841,8 @@ export function createCity(shared, scene, bay, real = null) {
 	const glassM = new THREE.MeshStandardMaterial({ color: 0xb8c4cc, roughness: 0.25, metalness: 0.5 });
 	const redwhite = new THREE.MeshStandardMaterial({ color: 0xc8402e, roughness: 0.6, metalness: 0.2 });
 	const steelGrey = new THREE.MeshStandardMaterial({ color: 0x8e9498, roughness: 0.5, metalness: 0.4 });
+	// (lit at night by their floodlights: floodlights.js, world/nightfield.js's landmark list)
+	for (const m of [white, glassM, redwhite, steelGrey]) addNightField(m, { field: 'LF' });
 	function landmarks() {
 		const at = (lat, lon) => { const w = toWorld(lat, lon); return { ...w, g: Math.max(0, bay.heightAt(w.x, w.z)) }; };
 		// Salesforce Tower: 326 m, a rounded square shaft tapering to a lattice crown
@@ -2070,7 +2106,7 @@ export function createCity(shared, scene, bay, real = null) {
 			else if (b.kind === 6) { kind = KIND.retail; col = jit(pick(PAL.retail, r2), r); }
 			else if (b.kind === 7) { kind = KIND.office; col = jit([0.86, 0.8, 0.68], r); }
 			else if (b.kind === 11) { kind = KIND.tower; col = jit(pick(PAL.tower, r2), r); }
-			else if (b.kind === 12) { kind = KIND.office; col = jit([0.6, 0.59, 0.56], r); }        // a parking garage: open concrete decks (ribbon openings)
+			else if (b.kind === 12) { kind = KIND.office + 0.3; col = jit([0.6, 0.59, 0.56], r); }        // a parking garage: open concrete decks (ribbon openings, lit at night: the building shader)
 			else { kind = KIND.industry; col = jit(pick(PAL.industry, r2), r); }
 			// (a tall block mapped as a garage or a shed is an office block: glazed, not a blank wall)
 			if ((kind === KIND.garage || kind === KIND.plain) && top - y > 9) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
@@ -2218,7 +2254,7 @@ export function createCity(shared, scene, bay, real = null) {
 			if (!on) { riseT0 = -1; rise.value.w = 0; }
 			near.castShadow = hips.castShadow = gables.castShadow = !on;
 		}
-		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
+		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
 		lastX = x; lastZ = z;
 		const list = [];
 		if (!globe) fillBlocks(x, z, 1200, list);
@@ -2269,5 +2305,5 @@ export function createCity(shared, scene, bay, real = null) {
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
 		placeTrees(x, z);
 	}
-	return { economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { skyline: () => skyline, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }

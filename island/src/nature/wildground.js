@@ -75,6 +75,21 @@ export function habitat(bay, real, H) {
 	};
 }
 
+// Whether (x, z) is paved: on a street or drive in drives (its carriageway, its sidewalk if it
+// has one, and a margin), or where the coarse land map is all but wholly paving or roof (a car
+// park, a yard: its cells are coarse, so a street's verge, half road in its cell, is not paving)
+export function onPaving(real, drives, x, z) {
+	if (real?.inside(x, z)) { const L = real.landAt(x, z); if (L && (L.road > 0.85 || L.roof > 0.5)) return true; }
+	for (const q of drives) {
+		const p = q.pts, m = (q.w || 6) / 2 + (q.walked ? 1.7 : 0) + 0.6;
+		for (let i = 0; i + 3 < p.length; i += 2) {
+			const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2));
+			if ((x - p[i] - dx * t) ** 2 + (z - p[i + 1] - dz * t) ** 2 < m * m) return true;
+		}
+	}
+	return false;
+}
+
 export function createWildGround(scene, bay, { shared, real, isPhone = false, ground = null, globe = null } = {}) {
 	const H = ground || ((x, z) => bay.heightAt(x, z));
 	const K = isPhone ? 0.45 : 1;                                      // density
@@ -136,6 +151,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	};
 	const sw = (S, R) => ({ material: fadeOf(S.material, R).material, depth: S.depth });
 	const mk = (key, variants, mats, R, cap, o) => layer(key, variants, mats.map((M) => M.isMaterial ? fadeOf(M, R * RK).material : sw(M, R * RK)), R, cap, o);
+	// where a rock layer meets the ground in the shapes' own units (its sink over its height:
+	// put() below), for the damp dark band at its foot (rocks.js)
+	const footAt = (L, k) => { for (const { im } of L.meshes) im.material.userData.rkFoot = k; };
 
 	// (the shapes are made a few a frame, so no one frame stalls)
 	const shrubMats = [woodM, leafM];
@@ -169,14 +187,17 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		},
 		() => {
 			Lrk = mk('rock', [boulder(201, 'round'), boulder(202, 'bedded'), boulder(203, 'blocky')], [rockM], 200, 900 * K, { shadow: true });
+			footAt(Lrk, 0.35);
 		},
 		() => { outs.push(outcrop(301, 'bedded')); },
 		() => { outs.push(outcrop(302, 'blocky')); },
 		() => {
 			Lout = mk('outcrop', [...outs, outcrop(303, 'round')], [rockM], 320, 240 * K, { shadow: true });
+			footAt(Lout, 0.45);
 		},
 		() => {
 			Lst = mk('stone', [stone(401), stone(402)], [rockM], 40, 2000 * K);
+			footAt(Lst, 0.3);
 			Llf = mk('leaves', [leafLitter(0), leafLitter(1), leafLitter(2)], [litterM], 26, 4500 * K);
 			Lsk = mk('sticks', [sticks(501), sticks(502)], [stickM], 30, 700 * K);
 			Lcn = mk('cones', [cone(601), acorns(602)], [stickM], 18, 1400 * K);
@@ -219,7 +240,14 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 			tW = w;
 			return best - w / 2;
 		};
+		// what is paved in the cell: the streets and drives (their carriageway, sidewalk and a
+		// margin) and the coarse map's paving (car parks, yards, roofs). The cell's centre may be
+		// wild while a road crosses its corner: each plant and stone asks for its own spot, and
+		// none stands on asphalt (bunch grass came up through the Muir Woods car park)
+		const drives = real ? real.near('roads', cx, cz, C).filter((q) => q && q.pts && q.drive && !q.bridge) : [];
+		const paved = (x, z) => onPaving(real, drives, x, z);
 		const put = (L, x, z, yaw, sx, sy, col, v, sink = 0.05, lie = false) => {
+			if (paved(x, z)) return;
 			const a = out[L.key] || (out[L.key] = []), h = H(x, z);
 			let nx = 0, nz = 0;
 			if (lie) { const e = 0.6, gx = H(x - e, z) - H(x + e, z), gz = H(x, z - e) - H(x, z + e), l = Math.hypot(gx, 2 * e, gz); nx = gx / l; nz = gz / l; }
@@ -418,9 +446,13 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		}
 		if (arid > 0.4) {
 			if (hot > 0.5) {
-				// hot desert: creosote and bursage spaced evenly apart on bare ground
-				scatter(Math.round(7 * K), () => 0.9, (x, z) => { const s2 = 0.8 + r() * 0.6; put(Lcb, x, z, r() * 6.28, s2, s2 * 1.1, J([0.75, 0.72, 0.4], 0.1), Math.floor(r() * 2), 0.1); });
-				scatter(Math.round(10 * K), () => 0.5, (x, z) => put(Ls, x, z, r() * 6.28, 0.7, 0.6, tone(0.6), 0, 0.03));
+				// hot desert: creosote and bursage spaced evenly apart on bare ground. The hyper-arid
+				// cores (the central Sahara, the Empty Quarter, the Atacama: a few centimetres of rain a
+				// year) are bare sand and stone, their few shrubs down the dry washes; the green
+				// thicket that stood on the Tassili's dunes was a wet scrub's density
+				const sparse = sm(25, 220, rain), wash = (x, z) => (sparse > 0.35 ? 0.9 : drift(x, z, 70, 8) > 0.66 ? 0.9 : 0.04);
+				scatter(Math.round(7 * K * (0.15 + 0.85 * sparse)), wash, (x, z) => { const s2 = (0.8 + r() * 0.6) * (0.6 + 0.4 * sparse); put(Lcb, x, z, r() * 6.28, s2, s2 * 1.1, J([0.62 + 0.1 * sparse, 0.6 + 0.1 * sparse, 0.4], 0.1), Math.floor(r() * 2), 0.1); });
+				scatter(Math.round(10 * K * (0.1 + 0.9 * sparse)), (x, z) => wash(x, z) * 0.55, (x, z) => put(Ls, x, z, r() * 6.28, 0.7, 0.6, tone(0.6), 0, 0.03));
 			} else {
 				// sagebrush steppe: silver-grey sage to the horizon, bunchgrass between
 				scatter(Math.round(34 * K * arid), (x, z) => 0.5 + drift(x, z, 14, 4) * 0.5, (x, z) => { const s2 = 0.7 + r() * 0.7; put(Lsg, x, z, r() * 6.28, s2, s2, J([0.95, 0.95, 0.85], 0.1), Math.floor(r() * 2), 0.08); });

@@ -1,3 +1,12 @@
+import { createSoul } from './reputation/soul.js';
+import { createSoulWell } from './planet/soul-well.js';
+import { createLivingWorld, livingActorId } from './people/living-world.js';
+import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
+import { createCommunityProjects } from './people/community-projects.js';
+import { createCommunityProjectSites } from './people/community-project-sites.js';
+import { createCommunityProjectMarks } from './guide/community-project-marks.js';
+import { worldPosition } from './people/social-actors.js';
+import { roomsURL } from './net/config.js';
 // Island engine, stage 1. Loaded by the Bard faceplate on demand; runs as a
 // third world beside the caves and space flight, sharing the faceplate's
 // music, keyboard, play surfaces and Journey transfers.
@@ -48,7 +57,7 @@ import { createBayArea, bayUniforms } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
-import { requestsNear, takeRequest, completeRequest } from './economy/requests.js';
+import { board as requestBoard, requestsNear, takeRequest, completeRequest } from './economy/requests.js';
 import { payroll } from './economy/payroll.js';
 import { bank } from './economy/bank.js';
 import { createHouses } from './bay/houses.js';
@@ -73,6 +82,9 @@ import { createShaderWarm } from './world/shaderwarm.js';
 import { captureResources } from './world/resources.js';
 import { preferLite, clearLite, GPU_LITE } from './world/gpulite.js';
 import { createGovernor, qualityNow } from './world/governor.js';
+import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
+import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
+import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
 import { bodyCount } from './people/body.js';
 import { createBoardwalk } from './bay/boardwalk.js';
@@ -83,6 +95,7 @@ import { createInteriors } from './interiors/index.js';
 import { createStructures } from './structures/index.js';
 import { createCataclysm } from './cataclysm/index.js';
 import { createServices } from './services/index.js';
+import { createMagic } from './magic/index.js';
 import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
 import { planDwellings, createDwellings } from './interiors/alien.js';
@@ -134,6 +147,7 @@ import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers, talkers, addLife } from './people/people.js';
 import { createDailyLife } from './economy/daily-life.js';
 import { createChatter } from './people/chatter.js';
+import { createEncounterPacing } from './people/encounter-pacing.js';
 import { createErrands } from './people/errands.js';
 import { createNpcQuests } from './people/npc-quests.js';
 import { createMoney } from './people/npc-money.js';
@@ -314,7 +328,7 @@ const HUD_CSS = `
 
 `;
 
-function buildDom() {
+function buildDom(canvas = document.createElement('canvas')) {
 	const mount = css(document.createElement('div'), 'position:fixed;inset:0;z-index:40;display:none;background:#000;overflow:hidden;touch-action:none;');
 	mount.id = 'l99-island-mount';
 	// (the jump and descend buttons, and the resting joystick, only on touch screens: the
@@ -322,7 +336,7 @@ function buildDom() {
 	mount.classList.toggle('l99-touch', isPhone || matchMedia('(pointer: coarse)').matches);
 	const style = document.createElement('style');
 	style.textContent = HUD_CSS;
-	const canvas = css(document.createElement('canvas'), 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;');
+	css(canvas, 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;');
 	const joy = css(document.createElement('div'), 'position:absolute;width:110px;height:110px;box-sizing:border-box;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);pointer-events:none;transition:opacity .2s;');
 	joy.className = 'l99-joy';
 	const knob = css(document.createElement('div'), 'position:absolute;left:31px;top:31px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.45);');
@@ -438,28 +452,29 @@ function slider(panel, label, min, max, step, get, set, fmt) {
 }
 
 export function createIslandWorld() {
-	const dom = buildDom();
+	const storage = (() => { try { return localStorage; } catch { return null; } })();
+	const initialMode = graphicsMode(storage), SAFE = new URLSearchParams(location.search).has('safe');
+	// No HUD, observers, or game listeners exist until a valid graphics context does.
+	const graphics = createGraphicsRenderer({ canvas: document.createElement('canvas'), Renderer: THREE.WebGLRenderer,
+		replaceCanvas: () => document.createElement('canvas'), storage, phone: isPhone, safe: SAFE, mode: initialMode });
+	const renderer = graphics.renderer;
+	const recovery = createGraphicsRecovery(), draw = renderer.render.bind(renderer);
+	renderer.render = (...args) => {
+		if (recovery.blocked()) throw graphicsReloadError();
+		if (renderer.getContext().isContextLost()) return;
+		return draw(...args);
+	};
+	const dom = buildDom(graphics.canvas);
 	// a touch screen's controls: icons only, laid out by thumb (ui/touch-skin.js)
 	skinTouch(dom.mount);
 	// declared here, made once the hint and camera exist (see below)
 	let drive = { update: () => false, stop() {}, active: () => false };
-	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
-	// lets leaves and grass edges fade (alpha to coverage) instead of stair-stepping
-	// after a graphics reset a browser may refuse this page new graphics until the tab is closed
-	// (Safari does): say so plainly instead of three's error
-	const BLOCKED = 'The browser has paused 3D graphics for this page after a graphics reset. Close this tab and open the site in a new one (or restart the browser).';
-	// (?safe on the site's address: no anti-aliasing, no shadows, one pixel per pixel, to tell a
-	// graphics card's limits from the rest)
-	const SAFE = new URLSearchParams(location.search).has('safe');
-	let renderer;
-	try { renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: !SAFE && !isPhone, powerPreference: 'high-performance' }); } catch (e) { console.warn('[island]', e); throw new Error(BLOCKED); }
-	if (renderer.getContext().isContextLost()) throw new Error(BLOCKED);
 	// three numbers a program's textures across both its stages and warns past the one stage's
 	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
 	// (32 there), and each stage keeps inside its 16 (the smoke's samplers check)
 	// the shader last linked (if the graphics are lost while one is being built, it is the one):
 	// its size and its own uniforms, for the console
-	const linking = { what: '' };
+	const linking = { what: '', failedGround: false };
 	{
 		const gl = renderer.getContext(), src = new WeakMap(), ss = gl.shaderSource.bind(gl), lp = gl.linkProgram.bind(gl), at = gl.attachShader.bind(gl), parts = new WeakMap();
 		gl.shaderSource = (sh, text) => { if (sh) src.set(sh, text); ss(sh, text); };
@@ -476,6 +491,11 @@ export function createIslandWorld() {
 		const text = (gl.getShaderSource(vs) || '') + (gl.getShaderSource(fs) || '');
 		const defs = [...new Set((text.match(/#define (USE_\w+|\w*SHADOW\w*|ALPHA\w+|DOUBLE_SIDED|FLIP_SIDED|INSTANCED\w*)/g) || []).map((d) => d.slice(8)))];
 		const own = [...new Set((text.match(/uniform\s+\w+\s+(u[A-Z]\w*)/g) || []).map((x) => x.split(/\s+/).pop()))];
+		// Remember the first ground failure, even if many other programs fail before
+		// the browser finally dispatches contextlost. The last linked shader alone
+		// can be an unrelated tiny effect by then.
+		if (own.includes('uBayOn')) { linking.failedGround = true; preferLite(); }
+		if (own.includes('uSgFar')) recoverSignage(storage);
 		console.error('[shader failed]', Math.round(text.length / 1000) + ' KB', 'lost:', gl.isContextLost(), 'link:', gl.getProgramInfoLog(program), 'vs:', gl.getShaderInfoLog(vs), 'fs:', gl.getShaderInfoLog(fs), 'defines:', defs.join(' '), 'uniforms:', own.join(' '));
 	};
 	const fullUnits = () => { const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); };
@@ -490,16 +510,24 @@ export function createIslandWorld() {
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
 		lost = true;
+		const blocked = recovery.lost();
+		if (blocked || /signage-|uSgFar/.test(linking.what)) recoverSignage(storage);
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
 		// (the light ground only when it was the ground being built: a loss elsewhere is no reason)
-		if (/uBayOn/.test(linking.what)) preferLite();
+		if (linking.failedGround || /uBayOn/.test(linking.what)) preferLite();
 		governor.lost();
 		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
+		shaderWarm.reset();
+		if (blocked) {
+			window.L99Loading.fail(graphicsReloadError(), { exit: () => api.close() });
+			return;
+		}
 		hint('The graphics were reset. Restoring…', 6000, 3);
 		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 8000);
 	});
 	dom.canvas.addEventListener('webglcontextrestored', () => {
+		if (recovery.blocked()) return; // The recovery screen owns the next user action.
 		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
 		applyQuality();
 		// (the frame clock starts again from now, not from before the loss)
@@ -512,8 +540,7 @@ export function createIslandWorld() {
 	renderer.outputColorSpace = THREE.SRGBColorSpace;
 	renderer.shadowMap.enabled = !SAFE;
 	renderer.shadowMap.type = THREE.PCFShadowMap;
-	const maxRatio = SAFE ? 1 : Math.min(window.devicePixelRatio || 1, isPhone ? 1.5 : 1.75);
-	let pixelRatio = isPhone ? Math.min(maxRatio, 1.25) : maxRatio;
+	let pixelRatio = renderRatio({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio, phone: isPhone, safe: SAFE || graphics.lighter, mode: initialMode });
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = HOOKS.scene = new THREE.Scene();
@@ -528,6 +555,7 @@ export function createIslandWorld() {
 	};
 	// (the cars' paint and glass reflect this sky)
 	bindCarSky(shared);
+	bindSignLighting(shared);
 	// ground occupancy around the player (filled by vegetation, read by terrain and grass)
 	// r: bare, shaded earth (trees, palms, rocks); g: a soil mound that grass hugs (every plant)
 	shared.occ = new THREE.DataTexture(new Uint8Array(256 * 256 * 2), 256, 256, THREE.RGFormat, THREE.UnsignedByteType);
@@ -580,11 +608,10 @@ export function createIslandWorld() {
 		shared.prints.needsUpdate = true;
 	}
 
-	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'high';
-	// the graphics setting: high on a computer, governed on a phone (world/governor.js: a tier
-	// down to start, stepped by the frames and the memory), unless this device was set otherwise
-	try { quality = localStorage.getItem('l99-quality') || (isPhone ? 'auto' : 'high'); } catch { quality = isPhone ? 'auto' : 'high'; }
-	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage: (() => { try { return localStorage; } catch { return null; } })() });
+	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = initialMode;
+	// Desktop also adapts to slow frames; an explicit saved High/Low choice is retained.
+	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage });
+	if (graphics.lighter && !SAFE && governor.state.ceiling < 2) governor.lost();
 	if (governor.crashedLastTime) console.warn('[governor] the last visit ended without a goodbye: starting lighter', JSON.stringify(governor.info()));
 	applyQuality();
 	let panelClock = null;
@@ -608,7 +635,7 @@ export function createIslandWorld() {
 	// mutations in one place for the Guide, NPC conversations and the Crysis console.
 	const arms = createArmsRuntime({ world: () => world, sites: (W) => W?.worldSites || W?.sites || [], startingCredits: 1000, hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.arms = arms;
-	const guideApi = { world: () => world, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
+	const guideApi = { world: () => world, scene, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
 	const guide = createGuide(dom.mount, guideApi);
 	// the pin and direction chip for the meeting or quest place the guide is tracking
 	const waypoint = guideApi.waypoint = createWaypoint({ scene, camera, mount: dom.mount, onTap: () => guide.showQuests() });
@@ -811,6 +838,8 @@ export function createIslandWorld() {
 	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
+	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), isPhone, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
 	guideApi.combat=combat;
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
@@ -819,24 +848,64 @@ export function createIslandWorld() {
 	combat.melee.bind({ avatar, self: you });
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
+	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
+	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
-	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, relationship: p => guide.relationshipFor(p), combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
 	// today's three goals, paid as they are done (gameplay/daily.js)
 	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
 	const note = (kind, data) => daily.note(kind, data);
 	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
 	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney, potholes: () => world?.streets });
+	const encounterPacing = createEncounterPacing({ store: { get: (k) => localStorage.getItem(k), set: (k, v) => localStorage.setItem(k, v) } });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney, potholes: () => world?.streets });
 	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
 	// quests they do for each other with or without you (people/npc-quests.js)
 	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 	const commons = HOOKS.commons = createCommons({ store: npcStore });
 	// (money through the bank's adapter: HOOKS.npcMoney.use(bank) attaches economy/bank.js)
 	const npcMoney = HOOKS.npcMoney = createMoney();
-	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
+	const npcQuests = HOOKS.npcQuests = createNpcQuests({ pacing: encounterPacing, scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, livingManaged: true, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
 	commons.follow(combat.morality, npcQuests.regionNow);
 	guideApi.npcQuests = npcQuests;
+	const livingActors = () => [...people.pool, ...families.actors(), ...social.actors.all(),
+		...(world?.colony?.crew?.people?.folk || []).map(f => ({ ...f, actor: f, npcId: livingActorId(f), position: f.pos,
+			workSpot: !f.place || f.place === 'work' ? f.goal || f.pos : null, home: f.place === 'quarters' ? f.goal || f.pos : null,
+			sites: { ...(!f.place || f.place === 'work' ? { work: 'colony-work:' + f.id } : {}), ...(f.place === 'quarters' ? { home: 'colony-home:' + f.id } : {}) } }))];
+	const livingWorld = guideApi.livingWorld = HOOKS.livingWorld = createLivingWorld({
+		worldKey: social.bodyKey, region: npcQuests.regionNow, placeName: () => combat.placeName?.() || '',
+		position: () => camera.position, world: () => world, structures: () => world?.structures,
+		requests: () => world?.city?.economy ? requestBoard : null, npcQuests, actors: livingActors, soul, url: roomsURL(),
+		persona: p => guide.personaOf(p), employerOf: id => payroll.employerOf(id), moneyFor: id => { const p = livingActors().find(a => livingActorId(a) === id); if (p?.P?.home) bank.household(p); return bank.moneyTalk(id); },
+		utcOffsetMinutes: () => { const date = new Date(), utc = date.getUTCHours() * 60 + date.getUTCMinutes(); return Number.isFinite(world?.sky?.state?.hours) ? Math.round(((world.sky.state.hours * 60 - utc + 2160) % 1440) - 720) : 0; },
+		hint: (t, ms) => hint(t, ms, 1),
+		onComplete: ({ request, receiptId }) => combat.morality.record({ id: receiptId, kind: request.deeds?.done || 'favour', target: request.giver.name, world: combat.worldKey(), place: combat.placeName(), region: npcQuests.regionNow().id }),
+		onContact: (id, context) => {
+			const actor = livingActors().find(p => p.active && livingActorId(p) === id);
+			if (actor?.M?.S?.pos && actor.M.S.pos.distanceTo(camera.position) < 8) return { actor: actor.actor || actor };
+			const at = actor?.M?.S?.pos || actor?.position || context.request?.giver;
+			if (at && Number.isFinite(at.x) && Number.isFinite(at.z)) return { message: `Look for ${context.request?.giver?.name || 'the requester'} in this region. Approach them to talk.`, at: { x: at.x, z: at.z } };
+			return null;
+		},
+	});
+	guideApi.negotiation = HOOKS.negotiation = createNegotiationRuntime({ arms, world: () => world, bodyKey: social.bodyKey,
+		position: () => camera.position, livingWorld, relationship: p => guide.relationshipFor(p), morality: () => combat.morality, structures: () => world?.structures });
+	const projectSites = createCommunityProjectSites({ world: () => world, position: () => camera.position,
+		targets: () => guide.storyContext().targets, activities: () => livingWorld.snapshot().activities, projects: () => projectSnapshot.projects });
+	let projectMarks, projectSnapshot = {projects:[]}, projectRefresh = 0;
+	const communityProjects = guideApi.communityProjects = HOOKS.communityProjects = createCommunityProjects({
+		worldKey: social.bodyKey, region: npcQuests.regionNow, world: () => world, position: () => camera.position,
+		candidates: projectSites.list, toPosition: anchor => worldPosition(world,anchor),
+		eligible: () => !!world && !world.player.state.flying && !world.player.state.diving && !world.orbit?.active() && !arcade.active() && !drive.active() && !world.boat?.boarded() && document.visibilityState !== 'hidden' && dom.mount.style.display !== 'none' && !window.L99Loading.active(),
+		situation: () => projectSites.situation(projectSnapshot.projects), livingWorld, soul, url: roomsURL(),
+		onChange: () => {projectRefresh=0;},
+		mark: target => {if(target.initial || waypoint.mark()?.projectId===target.projectId)waypoint.set(target);},
+		play: id => { const near=projectMarks?.nearest(camera.position); if(near?.id!==id)return false; window.initAudio?.(); return projectMarks.playNearest(camera.position).ok === true; },
+		hint: (text,ms) => hint(text,ms,1),
+	});
+	projectMarks = HOOKS.projectMarks = createCommunityProjectMarks({scene,world:()=>world,camera,projects:()=>projectSnapshot.projects,maxVisible:isPhone?6:8});
+	document.addEventListener('visibilitychange',()=>{if(document.hidden)communityProjects.reset();});
 	// the economy behind the people: their money in the bank, the businesses' requests among their
 	// quests, the businesses' doors among their places (a walk-in's door and tables from
 	// commercial.js, named from the registry; the rest at their doors)
@@ -948,10 +1017,17 @@ export function createIslandWorld() {
 		window.L99Loading.stage('Your place is ready');
 	}
 	function build(params) {
+		if (recovery.blocked()) return Promise.reject(graphicsReloadError());
 		if (buildPromise) return buildPromise;
 		building = true;
 		buildPromise = buildWorld(params).catch(error => { teardown(); throw error; }).finally(() => { building = false; buildPromise = null; });
 		return buildPromise;
+	}
+	const yieldBuild = async (label) => { window.L99Loading.stage(label); await new Promise((resolve) => setTimeout(resolve, 0)); };
+	function seaLifeVisibility(W, dt, time, under) {
+		const bay = W.island.village.bay;
+		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
+		W.sealife.update(dt, time, inBay); W.reef.update(inBay, camera.position, under); W.fish.update(dt, time, inBay); W.inverts.update(dt, time, inBay);
 	}
 	async function buildWorld(params) {
 		const seed = (params.seed >>> 0) || 1337;
@@ -971,6 +1047,7 @@ export function createIslandWorld() {
 		const profile = planetProfile(earth ? 'TROPICAL' : params.biome, seed);
 		shared.planet = profile;
 		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768, profile, land: earth ? 'island' : null });
+		await yieldBuild('Planning the landscape');
 		island.profileHaze = profile.air?.haze || 1;
 		// the ball fields above the village (or the world's own arena): the ground levelled under them before anything is made of it
 		const fieldPlan = planIslandFields(island, earth ? null : profile);
@@ -991,7 +1068,8 @@ export function createIslandWorld() {
 		shared.biHalf = island.half;
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
-		const sky = createSky(scene, shared, renderer, { isPhone, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
+		await yieldBuild('Preparing the surroundings');
+		const sky = createSky(scene, shared, renderer, { isPhone, earth, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 		const weather = createWeather(scene, shared, { isPhone, airless: !!profile.airless });
@@ -1038,6 +1116,7 @@ export function createIslandWorld() {
 		const distant = stash(() => createDistant(island, shared, scene));
 		const fauna = stash(() => createFauna(island, shared, scene));
 		const landFauna = stash(() => createLandFauna(land, island, shared, scene, camera, vegetation));
+		await yieldBuild('Preparing the shoreline');
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
 		// arriving at a kept or shared spot: start there, so what streams in first is that place
@@ -1068,6 +1147,7 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		await yieldBuild('Preparing places to explore');
 		// Equipment sources are data-facing first.  Generated shops are added as they stream
 		// in; the small island board keeps the conversational loop playable before Earth has
 		// finished loading.  These records do not imply a shared backend or real-world site
@@ -1083,10 +1163,22 @@ export function createIslandWorld() {
 				{ id: 'island-police-cache', name: 'Civic police-station recovery cache', kind: 'police', x: anchor.x - 92, z: anchor.z - 82, actions: ['secure'], virtual: true },
 			];
 			for (const S of world.services?.sites?.() || []) out.push(S);
+			const businesses = world.city?.economy?.near(camera.position.x, camera.position.z, 700) || [];
+			const equipment = new Set(['outfitter', 'huntpost', 'general', 'hardware', 'grocer']);
+			for (const E of businesses) if (equipment.has(E.type)) {
+				const x = E.door?.[0] ?? E.x, z = E.door?.[1] ?? E.z;
+				out.push({ id: E.id, economyId: E.id, name: E.name, kind: ['outfitter', 'huntpost'].includes(E.type) ? 'outfitter' : 'supermarket', x, z,
+					y: world.island.heightAt(x, z), actions: ['purchase'], source: 'economy',
+					...(E.type === 'hardware' ? { stock: ['repair-roll', 'camp-lantern', 'home-supply-kit'] } : {}) });
+			}
 			for (const B of world.commercial?.list?.() || []) {
 				if (B.type !== 'shop') continue;
+				// A named business owns its own counter; do not add a second generic store
+				// over it with a separate stock lot or let its neighbours sell its goods.
+				const E = businesses.find(e => Math.hypot(e.x - B.x, e.z - B.z) < 5);
+				if (E) continue;
 				const id = `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
-				out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, actions: ['purchase'], source: 'generated-commercial' });
+				out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, w: B.w, d: B.d, actions: ['purchase'], source: 'generated-commercial' });
 			}
 			return out;
 		};
@@ -1113,6 +1205,7 @@ export function createIslandWorld() {
 			island.underClear = world.underworld.clearBody;
 		}
 		// the mushrooms this world grows, and what they do to you
+		world.soulWell = createSoulWell({ world, profile, scene, camera, mount: dom.mount, shared, soul, hint: (t, ms) => hint(t, ms, 1), blocked: () => drive.active() || !visible || window.L99Loading.active() || !!world.beyond?.active?.() });
 		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
 		// a volcanic world's mountain: lava tubes, spouts, the crater's lake, and its eruptions
 		if (!earth && (profile.relief === 'volcano' || island.peak?.volcanic)) {
@@ -1182,9 +1275,14 @@ export function createIslandWorld() {
 			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
 			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint, voyage,
 		});
-		// warm every shader once, behind the loading card, so turning your head never stalls
+		// Establish real visibility before warming: the first surface frame must not
+		// upload every underwater/cave material simply because no update ran yet.
 		player.update(0, 0);
 		sky.update(0, camera.position);
+		const contact = waterContact(island, camera.position, player.floorAt(camera.position.x, camera.position.z, camera.position.y - 1.68), 0, shared.uWave.value);
+		const under = contact.under && !world.deep?.active();
+		underwater.update(0, 0, under, contact.surface ?? 0); caverns.update(0, 0, under);
+		seaLifeVisibility(world, 0, 0, under); world.underworld?.update(0, 0); world.deep?.update(0, 0);
 		vegetation.stream(camera, true);
 		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
 		litter.update(camera);
@@ -1331,7 +1429,7 @@ export function createIslandWorld() {
 				{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
 				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
-				shaderWarm.all({ n: 3 });
+				// New district materials are warmed by the bounded frame queue.
 			});
 			const w0 = world;
 		}
@@ -1352,6 +1450,8 @@ export function createIslandWorld() {
 		HOOKS.fares?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
+		guide.routeMarks?.reset(); // keep reusable marker resources out of departing-world disposal
+		communityProjects.reset(); projectMarks.reset(); projectSnapshot={projects:[]}; projectRefresh=0;
 		social.reset();
 		world.labels?.dispose();
 		world.discovery?.dispose();
@@ -1379,6 +1479,7 @@ export function createIslandWorld() {
 		world.shells?.dispose();
 		world.shrooms?.dispose();
 		world.deep?.dispose();
+		world.soulWell?.dispose();
 		world.underworld?.dispose();
 		world.volcano?.dispose();
 		world.alien?.dispose();
@@ -1424,6 +1525,7 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim. Keys 1 to 5 take up your weapons (again puts it away), 6 to 0 cast your spells, N opens the spellbook. Alt / Option frees the mouse to look about by dragging; a double tap of Alt / Option returns to aiming.'; p.appendChild(combatHelp);
 		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
 			() => Math.round(shared.aimSensitivity * 100),
 			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
@@ -1565,12 +1667,11 @@ export function createIslandWorld() {
 	function applyQuality() {
 		governor.apply();
 		const Q = qualityNow();
-		pixelRatio = SAFE ? 1 : Math.max(0.5, maxRatio * Q.ratio);
-		renderer.setPixelRatio(pixelRatio);
 		renderer.shadowMap.enabled = !SAFE && Q.shadows;
 		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = Q.reflect;
+		syncSignageMaterials(scene);
 		world?.rays?.quality(Q.fx);
 		world?.spray?.quality(Q.fx);
 		resize();
@@ -1584,7 +1685,8 @@ export function createIslandWorld() {
 
 	function resize() {
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
-		renderer.setSize(w, h, false);
+		pixelRatio = renderRatio({ width: w, height: h, dpr: window.devicePixelRatio, ratio: qualityNow().ratio, phone: isPhone, safe: SAFE || graphics.lighter, mode: quality });
+		renderer.setDrawingBufferSize(w, h, pixelRatio);
 		camera.aspect = w / Math.max(1, h);
 		camera.updateProjectionMatrix();
 	}
@@ -1657,6 +1759,7 @@ export function createIslandWorld() {
 		if (!running) return;
 		requestAnimationFrame(frame);
 		try { tick(now); } catch (err) {
+			if (lost || recovery.blocked()) return;
 			const key = String(err?.message || err);
 			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
 			// The player has already moved this frame, and the steps after the failing one never
@@ -1695,13 +1798,15 @@ export function createIslandWorld() {
 	}
 	const floorGuard = HOOKS.floorGuard = createFloorGuard({ world: () => world, camera, renderer });
 	function tick(now) {
-		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+		const elapsed = Math.min(.25, Math.max(.001, (now - last) / 1000));
+		const dt = Math.min(0.05, elapsed);
+		const projectDelta = elapsed;
 		last = now;
-		if (building || !visible || !world || document.hidden || lost) { world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
-		if (window.L99Loading.active() && !arrival) return;
+		if (building || !visible || !world || document.hidden || lost) { communityProjects.reset(); world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
+		if (window.L99Loading.active() && !arrival) { communityProjects.reset(); return; }
 		// on a phone the world holds still while someone thinks of a reply: the model and
 		// the world share the GPU and the page's memory
-		if (isPhone && guide.llm?.busy?.()) return;
+		if (isPhone && guide.llm?.busy?.()) { communityProjects.reset(); return; }
 		time += dt;
 		shared.uTime.value = time;
 		stepWind(dt, shared);
@@ -1726,6 +1831,7 @@ export function createIslandWorld() {
 		W.orbit?.updateHud();
 		worldAir(1 - (W.orbit?.blend() || 0));
 		if (W.orbit?.space()) {
+			communityProjects.reset();
 			social.update(0, time, false); waypoint.update(0, time, false);
 			W.labels?.hide();
 			W.globe?.regional?.pause();
@@ -1775,17 +1881,14 @@ export function createIslandWorld() {
 		W.dwellings?.update(dt, camera.position);
 		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
+		soul.update();
 		W.underworld?.update(dt, time);
+		W.soulWell?.update(dt, time);
 		W.deep?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
-		const bay = W.island.village.bay;
 		// (on a governed tier, from up on the shore only once you are down at the water: the reef
 		// and its life drawn through the surface from the spawn's hill were millions of triangles)
-		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
-		W.sealife.update(dt, time, inBay);
-		W.reef.update(inBay, camera.position, under);
-		W.fish.update(dt, time, inBay);
-		W.inverts.update(dt, time, inBay);
+		seaLifeVisibility(W, dt, time, under);
 		shared.uUnder.value = under ? 1 : 0;
 		if (under) {
 			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 14));
@@ -1827,8 +1930,11 @@ export function createIslandWorld() {
 		// the cities' glow washes out the faint stars
 		if (W.bayArea?.loaded()) {
 			let glow = 0;
-			for (const [dx, dz] of GLOW_AT) glow += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+			let gx = 0, gz = 0;
+			for (const [dx, dz] of GLOW_AT) { const u = W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u; glow += u; gx += dx * u; gz += dz * u; }
 			shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
+			// (and which way the glow lies: the sky over the cities brightest toward them)
+			W.sky.glowToward(gx, gz, dt);
 		}
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 		const dazed = W.shrooms?.muffle() || 0;
@@ -1882,7 +1988,7 @@ export function createIslandWorld() {
 		// indoors by day the eye opens up to the light from the windows (by night, not at all:
 		// the rooms are as dark as their lamps leave them)
 		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
-		renderer.toneMappingExposure *= 1 + indoorK * 0.55 * sk.dayK;
+		renderer.toneMappingExposure *= (1 + indoorK * 0.55 * sk.dayK) * magic.exposure();
 		watchDoor(dt);
 		striker.update(dt, scene, !W.player.state.flying && !arcade.active() && dom.mount.style.display !== 'none');
 		strikeRipples.update(dt);
@@ -1891,7 +1997,7 @@ export function createIslandWorld() {
 		share.update(dt);
 		multiplayer.update(dt, time);
 		gear.update(dt);
-		if (!window.L99Loading.active()) combat.update(dt);
+		if (!window.L99Loading.active()) { combat.update(dt); magic.update(dt); }
 		HOOKS.military?.update(dt, sk.night);
 		HOOKS.cataclysm?.update(dt, sk);
 		if (!window.L99Loading.active()) HOOKS.law?.update(dt);
@@ -1947,14 +2053,18 @@ export function createIslandWorld() {
 		if (arcade.active()) fishing.drop();
 		fishing.update(dt, time, !arcade.active() && !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);
-		shaderWarm.tick(dt);
+		shaderWarm.tick(dt, { frameMs: frameAvg });
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		dogWalkers.update(dt, camera);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
+		encounterPacing.tick(dt);
 		errands.update(dt);
 		npcQuests.update(dt);
+		livingWorld.update(dt);
+		communityProjects.update(projectDelta);
+		projectRefresh-=projectDelta; if(projectRefresh<=0){projectRefresh=1;projectSnapshot=communityProjects.snapshot();} projectMarks.update(projectDelta);
 		fares.update(dt);
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
@@ -1992,9 +2102,9 @@ export function createIslandWorld() {
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy
 		// run (world/governor.js)
-		frameAvg += (dt * 1000 - frameAvg) * 0.05;
+		frameAvg += (elapsed * 1000 - frameAvg) * 0.05;
 		// (on a phone stepped down to the lighter tiers the local voice model, 100 MB, is let go too)
-		if (governor.update(dt, frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
+		if (governor.update(elapsed, frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
 	}
 
 	// the context button: board or leave the boat; the jump button dives in the sea
@@ -2032,6 +2142,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		communityProjects.reset();
 		governor.live(false);
 		window._worldAudioLead = undefined;
 		world?.orbit?.pause?.();
@@ -2148,6 +2259,7 @@ export function createIslandWorld() {
 			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close() }) : enter();
 		},
 		async enter(params = {}) {
+			if (recovery.blocked()) throw graphicsReloadError();
 			// on Earth the ship waits in orbit: ⇪ always has somewhere to go
 			origin = params.origin || (params.earth !== false ? EARTH_ORIGIN : null);
 			// a kept or shared spot: one loading card, with its name, until share.js has you there
@@ -2406,6 +2518,8 @@ if (typeof window !== 'undefined') {
 		// to the door of the nearest ('police', 'fire', 'armory'; a room: serviceGo('armory', 'warRoom'));
 		// Crysis.serviceCall() calls an ambulance out to near you
 		services: () => window.L99Island?.world?.()?.services?.info() ?? 'Earth only',
+		// magic (magic/): Crysis.magic.info(), .give('light', 100), .all(), .cast('sunspark'), .learn(id), .bind(slot, id)
+		get magic() { return HOOKS.magic; },
 		serviceGo: (kind = 'hospital', room = null) => window.L99Island?.world?.()?.services?.go(kind, room) ?? 'Earth only',
 		serviceCall: (severity = 0.6, minor = false) => window.L99Island?.world?.()?.services?.testCall(severity, minor) ?? 'Earth only',
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
@@ -2414,6 +2528,7 @@ if (typeof window !== 'undefined') {
 		deepGo: (where = 'gate') => window.L99Island?.world?.()?.deep?.go(where) || 'no Deep Gate on this world',
 		// what the strike prompt is offering now (planet/resonance.js)
 		striking: () => { const t = HOOKS.striker?.current(); return t ? { label: t.label, at: t.pos.toArray().map((v) => Math.round(v * 10) / 10) } : null; },
+		reputation: () => ({ ...HOOKS.soul?.info(), ...HOOKS.morality?.info(), well: window.L99Island?.world()?.soulWell?.info() || null }),
 		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
 		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),
 		// the alien works (planet/alien.js): Crysis.alien() lists the sites, Crysis.alienGo(i) takes you to look at one
@@ -2460,6 +2575,8 @@ if (typeof window !== 'undefined') {
 		ragdolls: () => HOOKS.ragdolls?.info(),
 		// the fight (combat/): Crysis.combat.info(), .spawn('ashfang'), .boss('walker'), .fight(), .raid(), .ignite(); Crysis.morality()
 		get combat() { return HOOKS.combat; },
+		living: Object.assign(() => HOOKS.livingWorld?.snapshot(), { sync: () => HOOKS.livingWorld?.sync(), action: (id, action, options) => HOOKS.livingWorld?.action(id, action, options) }),
+		projects: Object.assign(() => HOOKS.communityProjects?.snapshot(), {sync:()=>HOOKS.communityProjects?.sync(),action:(id,action,options)=>HOOKS.communityProjects?.action(id,action,options),visuals:()=>HOOKS.projectMarks?.info()}),
 		// Crysis.morality(): your compass, this region's tally, the people near you and what they have
 		// done; .bag('return'|'steal'|'auto') leaves a bag near you now; .favour() someone asks another;
 		// .tick(n) n far-away quests now; .run(s) the scenes on by s seconds; .money('npc:123'); .regions()

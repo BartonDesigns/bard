@@ -78,15 +78,11 @@ export function wobble(c, missed = false) {
 	return { t: 0.35 + 0.4 * k + (missed ? 0.35 : 0), roll: 0.025 + 0.04 * k + (missed ? 0.035 : 0), slow: Math.max(0.25, 0.6 - 0.25 * k - (missed ? 0.15 : 0)) };
 }
 
-// The press, turned into strikes (pure, so the rhythm can be tested): press() and release()
-// from the button, tick(dt, slow) each frame. A tap is a light strike (the next of the string,
-// or the item's quick one), kept for the beat if one is under way; a hold past HEAVY_HOLD starts
-// the heavy, which waits at the end of its wind-up while the hold goes on, charging, and goes
-// when the press is let go. tick() returns the strikes' landing moments ({ name, m, charge })
-// in a list it reuses. item() says what is in hand; allow(name) may refuse a strike (rocked, in
-// a takedown); onStart(name, m) hears each one begin.
+// Quick strikes start on press, with one buffered follow-up. Heavy is a deliberate
+// modified press (Shift on desktop, Heavy on touch) and releases when let go.
+// Only animation impact timing and recovery remain; no tap/hold recognition delay.
 export function createStriker({ item = () => null, allow = () => true, onStart = null } = {}) {
-	const S = { move: null, m: null, t: 0, since: 0, queued: null, press: false, pressT: 0, charging: false, charge: 0, last: null, lastT: 9, landed: false };
+	const S = { move: null, m: null, t: 0, since: 0, queued: null, press: false, pressT: 0, charging: false, charge: 0, last: null, lastT: 9, landed: false, heavyPress: false };
 	const events = [];
 	function start(name) {
 		const m = MOVES[name];
@@ -100,27 +96,33 @@ export function createStriker({ item = () => null, allow = () => true, onStart =
 	function tap() {
 		const name = S.queued || nextLight(S.last, S.lastT, item());
 		if (ready()) { S.queued = null; return start(name); }
-		if (canBuffer(S.m, S.t) && !S.queued) S.queued = name;
+		if (allow(name) && !S.queued) S.queued = name;
 		return false;
 	}
 	return {
 		state: S,
 		start,
 		tap,
-		press() { S.press = true; S.pressT = 0; },
+		press({ heavy = false } = {}) {
+			if (S.press || !allow(heavy ? heavyOf(item()) : nextLight(S.last, S.lastT, item()))) return false;
+			S.press = true; S.pressT = heavy ? HEAVY_HOLD : 0; S.heavyPress = heavy;
+			if (!heavy) return tap();
+			if (ready() && start(heavyOf(item()))) { S.charging = true; S.queued = null; return true; }
+			S.queued = heavyOf(item()); return false;
+		},
 		release() {
 			if (!S.press) return;
 			S.press = false;
 			if (S.charging) { S.charging = false; return; }
-			tap();
+			// A quick strike already began on press. Release must never add another.
 		},
-		cancel() { S.press = false; S.charging = false; S.queued = null; S.move = null; },
+		cancel() { S.press = false; S.heavyPress = false; S.charging = false; S.queued = null; S.move = null; },
 		tick(dt, slow = 1) {
 			events.length = 0;
 			S.lastT += dt;
 			if (S.press) {
 				S.pressT += dt;
-				if (S.pressT >= HEAVY_HOLD && !S.charging && (!S.move || canFollow(S.m, S.t)) && start(heavyOf(item()))) { S.charging = true; S.queued = null; }
+				if (S.heavyPress && !S.charging && ready() && start(heavyOf(item()))) { S.charging = true; S.queued = null; }
 			}
 			if (!S.move) return events;
 			const m = S.m;
@@ -129,7 +131,7 @@ export function createStriker({ item = () => null, allow = () => true, onStart =
 			else S.t += dt * slow;
 			if (!S.landed && !S.charging && S.t >= m.wind) { S.landed = true; events.push({ name: S.move, m, charge: S.charge }); }
 			// (the kept press goes on the beat, or as soon as this strike is over)
-			if (S.queued && (ready() || S.t >= moveTime(m))) { const q = S.queued; S.queued = null; start(q); }
+			if (S.queued && (ready() || S.t >= moveTime(m))) { const q = S.queued; S.queued = null; if (start(q) && S.press && S.heavyPress && S.m.kind === 'heavy') S.charging = true; }
 			else if (S.t >= moveTime(m)) S.move = null;
 			return events;
 		},

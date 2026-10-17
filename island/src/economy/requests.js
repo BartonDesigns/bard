@@ -163,27 +163,49 @@ export function requestsFor(E, places, { day = 0, now = 0, homes = [], hole = nu
 }
 
 // a board of requests over the registry: open ones round a point, taken by someone, done
-export function createBoard({ near = () => [], homes = () => [], clock = () => Date.now(), payroll = gamePayroll, dayMs = 24 * 60 * 60 * 1000 } = {}) {
-	const known = new Map(), made = new Set();
+export function createBoard({ near = () => [], homes = () => [], clock = () => Date.now(), payroll = gamePayroll, dayMs = 24 * 60 * 60 * 1000, storage = null, scope = 'local' } = {}) {
+	const known = new Map(), made = new Set(), listeners = new Set();
+	let scopeKey = String(scope), saving = true, claimGuard = null;
+	const key = () => 'l99-business-requests-v1:' + encodeURIComponent(scopeKey);
+	function save() {
+		if (!storage) return true;
+		try { storage.setItem(key(), JSON.stringify({ version: 1, requests: [...known.values()].slice(-600) })); saving = true; return true; }
+		catch { saving = false; return false; }
+	}
+	function load() {
+		known.clear(); made.clear();
+		try {
+			const data = JSON.parse(storage?.getItem(key()) || 'null');
+			for (const R of (data?.requests || []).slice(-600)) {
+				if (typeof R?.id === 'string' && Array.isArray(R.steps) && R.giver && ['open', 'taken', 'done', 'failed', 'betrayed'].includes(R.status)) known.set(R.id, R);
+			}
+		} catch { /* An unavailable save never invents a receipt. */ }
+	}
+	function emit(type, request, extra = {}) { for (const fn of listeners) { try { fn({ type, request, scope: scopeKey, ...extra }); } catch { /* Observer cannot undo a source transaction. */ } } }
+	load();
 	function near2(x, z, r = 400) {
 		const now = clock(), day = Math.floor(now / dayMs), places = near(x, z, r + 600);
+		let changed = false;
 		const H = homes(x, z, r + 300);
 		for (const E of places) {
 			if (Math.hypot(E.x - x, E.z - z) > r) continue;
 			const key = E.id + '@' + day;
 			if (made.has(key)) continue;
-			made.add(key);
+			made.add(key); changed = true;
 			const hole = potholes?.near?.(E.door?.[0] ?? E.x, E.door?.[1] ?? E.z, 150) || null;
 			for (const R of requestsFor(E, places, { day, now, homes: H, hole })) if (!known.has(R.id)) known.set(R.id, { ...R, status: 'open', taker: null });
 		}
 		// (the old and lapsed forgotten)
 		if (known.size > 600) for (const [id, R] of known) if (R.expires < now - 3600000) known.delete(id);
+		if (changed) save();
 		return [...known.values()].filter((R) => R.status === 'open' && R.expires > now && Math.hypot(R.giver.x - x, R.giver.z - z) < r).sort((a, b) => Math.hypot(a.giver.x - x, a.giver.z - z) - Math.hypot(b.giver.x - x, b.giver.z - z));
 	}
 	function take(id, takerId) {
 		const R = known.get(id);
-		if (!R || R.status !== 'open' || R.expires < clock()) return null;
+		if (!R || R.status !== 'open' || R.expires < clock() || (claimGuard && !claimGuard(R, takerId))) return null;
 		R.status = 'taken'; R.taker = takerId;
+		if (!save()) { R.status = 'open'; R.taker = null; return null; }
+		emit('taken', R);
 		return R;
 	}
 	// outcome: 'done' (paid), 'failed' (no pay), or a betrayal ('steal', 'robbery', 'kept-wallet')
@@ -191,15 +213,50 @@ export function createBoard({ near = () => [], homes = () => [], clock = () => D
 		const R = known.get(id);
 		if (!R || R.status !== 'taken' || R.taker !== takerId) return { ok: false, reason: R ? 'not yours' : 'unknown request' };
 		if (outcome === 'done') {
-			R.status = 'done';
-			const paid = payroll.payFrom(R.reward.from, takerId, R.reward.credits, 'request: ' + R.kind);
-			if (R.kind === 'pothole' && R.hole) potholes?.report?.(R.hole);          // (the crew is sent)
-			return { ok: true, paid, deed: R.deeds.done, request: R };
+			// Commit a terminal receipt before issuing money: reloads cannot pay twice.
+			R.status = 'done'; R.completedAt = clock(); R.receiptId = `request:${scopeKey}:${id}:done`;
+			if (!save()) { R.status = 'taken'; delete R.completedAt; delete R.receiptId; return { ok: false, reason: 'Could not save this completion; try again.' }; }
+			const paid = R.rewardMode === 'discount' ? 0 : payroll.payFrom(R.reward.from, takerId, R.reward.credits, 'request: ' + R.kind);
+			if (R.kind === 'pothole' && R.hole) potholes?.report?.(R.hole);
+			R.paid = paid; save(); emit('completed', R, { paid });
+			return { ok: true, paid, deed: R.deeds.done, request: R, receiptId: R.receiptId };
 		}
 		R.status = outcome === 'failed' ? 'failed' : 'betrayed';
+		save(); emit('completed', R, { paid: 0 });
 		return { ok: true, paid: 0, deed: outcome === 'failed' ? null : R.deeds.betray || outcome, request: R };
 	}
-	return { near: near2, take, complete, get: (id) => known.get(id) || null, counts: () => { const c = { open: 0, taken: 0, done: 0, failed: 0, betrayed: 0 }; for (const R of known.values()) c[R.status === 'open' && R.expires < clock() ? 'failed' : R.status]++; return c; } };
+	function release(id, takerId) {
+		const R = known.get(id); if (!R || R.status !== 'taken' || R.taker !== takerId) return false;
+		R.status = 'open'; R.taker = null; save(); emit('released', R); return true;
+	}
+	function agreeReward(id, takerId, { rewardMode, agreementId } = {}) {
+		const R = known.get(id);
+		if (!R || R.status !== 'taken' || R.taker !== takerId || rewardMode !== 'discount' || typeof agreementId !== 'string' || !agreementId) return false;
+		if (R.agreementId && R.agreementId !== agreementId) return false;
+		const previous = { rewardMode: R.rewardMode, agreementId: R.agreementId };
+		R.rewardMode = rewardMode; R.agreementId = agreementId;
+		if (!save()) { Object.assign(R, previous); return false; }
+		return true;
+	}
+	function clearAgreement(id, takerId, agreementId) {
+		const R = known.get(id);
+		if (R?.taker === takerId && R.releasedAgreementId === agreementId && R.rewardMode === 'cash') return true;
+		if (!R || R.taker !== takerId || R.agreementId !== agreementId || R.rewardMode !== 'discount') return false;
+		const previous = { rewardMode: R.rewardMode, agreementId: R.agreementId };
+		R.rewardMode = 'cash'; R.agreementId = null; R.releasedAgreementId = agreementId;
+		if (!save()) { Object.assign(R, previous); return false; }
+		// A cancelled item agreement restores the original work reward once. Persist
+		// the conversion before emitting a payout so reloads cannot replay it.
+		if (R.status === 'done' && !R.paid) { R.paid = payroll.payFrom(R.reward.from, takerId, R.reward.credits, 'request: ' + R.kind); save(); }
+		return true;
+	}
+	return { near: near2, take, complete, release, agreeReward, clearAgreement,
+		list: () => [...known.values()],
+		onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+		setClaimGuard: (fn) => { claimGuard = fn; },
+		setScope: (next) => { next = String(next); if (next !== scopeKey) { save(); scopeKey = next; load(); } },
+		status: () => ({ scope: scopeKey, savedLocally: saving }),
+		get: (id) => known.get(id) || null, counts: () => { const c = { open: 0, taken: 0, done: 0, failed: 0, betrayed: 0 }; for (const R of known.values()) c[R.status === 'open' && R.expires < clock() ? 'failed' : R.status]++; return c; } };
 }
 
 // the potholes (bay/streets.js gives them: near(x, z, r) the nearest not yet reported, report(hole))
@@ -208,7 +265,10 @@ export function setPotholeSource(src) { potholes = src; }
 
 // the game's board (the city gives it the registry: economy/layer.js)
 export let board = createBoard();
-export function setRequestSource({ near, homes, clock }) { board = createBoard({ near, homes, clock }); }
+export function setRequestSource({ near, homes, clock }) {
+	let storage = null; try { storage = globalThis.localStorage; } catch { /* private mode */ }
+	board = createBoard({ near, homes, clock, storage });
+}
 export const requestsNear = (x, z, r) => board.near(x, z, r);
 export const takeRequest = (id, takerId) => board.take(id, takerId);
 export const completeRequest = (id, takerId, outcome) => board.complete(id, takerId, outcome);

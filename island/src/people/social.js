@@ -110,7 +110,7 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		}
 		return null;
 	}
-	function command(record, text, { target = null, quest = null } = {}) {
+	function command(record, text, { target = null, quest = null, relationship = null } = {}) {
 		const intent = parseSocialIntent(text);
 		if (!intent) return null;
 		if (!record || record.bodyKey !== bodyKey()) return 'We need to be on the same world to arrange that.';
@@ -120,6 +120,7 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		const actor = actors.all().find(p => p.residentId === current.id && p.active);
 		if (!actor) return 'I need to be here with you before I can take that task. Come back to my area and speak to me again.';
 		if (['follow', 'quest', 'scout'].includes(intent) && (current.dna?.age ?? current.persona?.age ?? 18) < 18) return 'I need to stay here with my family. Ask one of the adults to help.';
+		if (['follow','quest','scout'].includes(intent) && relationship?.trust <= -4) return 'After what happened between us, I’m not ready to put myself in your hands. Start by keeping a smaller promise; words alone won’t repair this.';
 		state.setPosition(current.id, positionFor(world(), actor.M.S.pos));
 		if (intent === 'warn' || intent === 'calm') {
 			const reaction = intent === 'warn' ? state.warn(current.id) : state.calm(current.id);

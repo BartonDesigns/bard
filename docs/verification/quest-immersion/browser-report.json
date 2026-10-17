@@ -1,0 +1,227 @@
+{
+  "method": "Production engine/NPC conversation fixture with deterministic model outputs and positioned physical evidence. Chromium software WebGL with touch emulation, not a human playtest or physical Safari.",
+  "errors": [],
+  "chapters": [
+    {
+      "quest": {
+        "title": "A route together 1",
+        "premise": "Look closely at The Old Mouth, then return with your impressions.",
+        "bodyKey": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+        "steps": [
+          {
+            "type": "visit",
+            "targetId": "place-the-old-mouth",
+            "targetName": "The Old Mouth",
+            "completedAt": 1791954206870
+          },
+          {
+            "type": "return",
+            "targetId": "home:person-lql5eqmrdhzz",
+            "targetName": "Jamal's meeting place",
+            "completedAt": 1791954206871
+          },
+          {
+            "type": "talk",
+            "npcId": "person-lql5eqmrdhzz",
+            "npcName": "Jamal Harris",
+            "completedAt": 1791954209670
+          }
+        ],
+        "offeredBy": "person-lql5eqmrdhzz",
+        "id": "story-amp7jq-1",
+        "status": "complete",
+        "cursor": 3,
+        "offeredAt": 1791954206833,
+        "acceptedAt": 1791954206849,
+        "finishedAt": 1791954209670,
+        "evidence": [
+          {
+            "type": "presence",
+            "targetId": "place-the-old-mouth",
+            "at": 1791954206870
+          },
+          {
+            "type": "presence",
+            "targetId": "home:person-lql5eqmrdhzz",
+            "at": 1791954206871
+          },
+          {
+            "id": "report:1791954209670:story-amp7jq-1",
+            "type": "talk",
+            "npcId": "person-lql5eqmrdhzz",
+            "at": 1791954209670
+          }
+        ],
+        "chapter": 1
+      },
+      "relationship": {
+        "name": "Jamal Harris",
+        "trust": 3,
+        "complete": 1,
+        "chapters": 1,
+        "label": "A promise kept",
+        "last": "You kept your word and finished “A route together 1”.",
+        "wound": "",
+        "facts": [
+          "You promised to help with “A route together 1”.",
+          "You kept your word and finished “A route together 1”."
+        ]
+      }
+    },
+    {
+      "quest": {
+        "title": "A route together 2",
+        "premise": "Look closely at the village, then return with your impressions.",
+        "bodyKey": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+        "steps": [
+          {
+            "type": "visit",
+            "targetId": "place-the-village",
+            "targetName": "the village",
+            "completedAt": 1791954209743
+          },
+          {
+            "type": "return",
+            "targetId": "home:person-lql5eqmrdhzz",
+            "targetName": "Jamal's meeting place",
+            "completedAt": 1791954209744
+          },
+          {
+            "type": "talk",
+            "npcId": "person-lql5eqmrdhzz",
+            "npcName": "Jamal Harris",
+            "completedAt": 1791954211048
+          }
+        ],
+        "offeredBy": "person-lql5eqmrdhzz",
+        "id": "story-y01oo5-2",
+        "status": "complete",
+        "cursor": 3,
+        "offeredAt": 1791954209714,
+        "acceptedAt": 1791954209726,
+        "finishedAt": 1791954211048,
+        "evidence": [
+          {
+            "type": "presence",
+            "targetId": "place-the-village",
+            "at": 1791954209743
+          },
+          {
+            "type": "presence",
+            "targetId": "home:person-lql5eqmrdhzz",
+            "at": 1791954209744
+          },
+          {
+            "id": "report:1791954211048:story-y01oo5-2",
+            "type": "talk",
+            "npcId": "person-lql5eqmrdhzz",
+            "at": 1791954211048
+          }
+        ],
+        "chapter": 2
+      },
+      "relationship": {
+        "name": "Jamal Harris",
+        "trust": 6,
+        "complete": 2,
+        "chapters": 2,
+        "label": "Reliable ally",
+        "last": "You chose to mark your route together. The markers stand at the surveyed stops.",
+        "wound": "",
+        "facts": [
+          "You kept your word and finished “A route together 2”.",
+          "You chose to mark your route together. The markers stand at the surveyed stops."
+        ]
+      }
+    },
+    {
+      "quest": {
+        "title": "A route together 3",
+        "premise": "Look closely at The Old Mouth and the village, then return with your impressions.",
+        "bodyKey": "[\"\",\"\",\"\",1337,\"TERRAN\"]",
+        "steps": [
+          {
+            "type": "visit",
+            "targetId": "place-the-old-mouth",
+            "targetName": "The Old Mouth",
+            "completedAt": 1791954211136
+          },
+          {
+            "type": "visit",
+            "targetId": "place-the-village",
+            "targetName": "the village",
+            "completedAt": 1791954211137
+          },
+          {
+            "type": "return",
+            "targetId": "home:person-lql5eqmrdhzz",
+            "targetName": "Jamal's meeting place",
+            "completedAt": 1791954211137
+          },
+          {
+            "type": "talk",
+            "npcId": "person-lql5eqmrdhzz",
+            "npcName": "Jamal Harris",
+            "completedAt": 1791954211191
+          }
+        ],
+        "offeredBy": "person-lql5eqmrdhzz",
+        "id": "story-yj39wj-3",
+        "status": "complete",
+        "cursor": 4,
+        "offeredAt": 1791954211125,
+        "acceptedAt": 1791954211128,
+        "finishedAt": 1791954211191,
+        "evidence": [
+          {
+            "type": "presence",
+            "targetId": "place-the-old-mouth",
+            "at": 1791954211136
+          },
+          {
+            "type": "presence",
+            "targetId": "place-the-village",
+            "at": 1791954211137
+          },
+          {
+            "type": "presence",
+            "targetId": "home:person-lql5eqmrdhzz",
+            "at": 1791954211137
+          },
+          {
+            "id": "report:1791954211191:story-yj39wj-3",
+            "type": "talk",
+            "npcId": "person-lql5eqmrdhzz",
+            "at": 1791954211191
+          }
+        ],
+        "chapter": 3
+      },
+      "relationship": {
+        "name": "Jamal Harris",
+        "trust": 9,
+        "complete": 3,
+        "chapters": 3,
+        "label": "Trusted friend",
+        "last": "You kept your word and finished “A route together 3”.",
+        "wound": "",
+        "facts": [
+          "You promised to help with “A route together 3”.",
+          "You kept your word and finished “A route together 3”."
+        ]
+      }
+    }
+  ],
+  "story": "THE GUIDE\nThe shared voice is not reachable; people use their own lines.\n⚙\n✕\nPeople\nQuests\nStory\nConversations\nPEOPLE WHO KNOW YOU\nJamal Harris · Trusted friend\nYou kept your word and finished “A route together 3”.\nWHAT WE LEFT BEHIND\nA route together 2 · Jamal Harris\nMarked route: small signs remain at your surveyed stops.\nthe village\nTODAY · 0 of 3 done\n○ Do 2 favours for people (0/2) · 80 credits\n○ Stop a bag thief · 120 credits\n○ Cross the street at a crosswalk 3 times (0/3) · 40 credits\nAll three: a bonus of 150 credits\nWHO THEY SAY YOU ARE\nYour wider reputation is still taking shape · standing +5\nMerciful 6 · Lawful 3 · Protector 6 · Honest 6\nThey sing of you in the taverns now: \"did jamal harris a favour, and never looked back.\"\nReputation saved on this device. Cloud save pending.\nYour standing does not fade with time. To release it, fly to Gargantua’s island and walk into the soul tunnel to the Quiet Well.\nSave soul recovery key\nRestore a saved soul\nFAVOURS\nStranger · 0 done\n▱▱▱▱▱▱▱▱▱▱ 1 more to Passer-by who helped\nFARES\nOff duty · 0 rides\n▱▱▱▱▱▱▱▱▱▱ 1 more to New driver\nEarned 0 credits · 0 five-star rides\nLATELY\nDid Jamal Harris a favour\nDid Jamal Harris a favour\nDid Jamal Harris a favour\n🎙\n🔊\n➤\nUsing device voice",
+  "markers": {
+    "visible": 1,
+    "positions": [
+      [
+        -261.2504012909736,
+        5.753545850625574,
+        -6.261949166433368
+      ]
+    ]
+  },
+  "passed": true
+}

@@ -73,7 +73,7 @@ test('a lost-item favour from asking to reward, people held and let go', async (
 	const R = createErrands(T.mk([giver]));
 	run(R, 1, 41);                                                    // the first ask waits a little after arrival
 	const orig = Math.random; Math.random = () => 0.01;
-	const ask = R.maybeAsk(giver); Math.random = orig;
+	const ask = R.maybeAsk(giver, { want: 'lost' }); Math.random = orig;
 	assert.ok(ask?.text?.length > 10);
 	assert.ok(giver.held && giver.override, 'the person asking waits');
 	assert.ok(R.asking(giver));
@@ -103,7 +103,7 @@ test('a catch favour follows the friend; walking off ends it; fear and children 
 	assert.equal(R.maybeAsk(T.body(0, -3, { P: { dna: { child: true, seed: 9 }, root: { visible: true } } })), null);
 	assert.equal(R.maybeAsk(giver, { afraid: true }), null);
 	let kinds = new Set();
-	for (let k = 0; k < 6 && !kinds.has('catch'); k++) { R.cancel(); run(R, 1, 61); const a = R.maybeAsk(giver); if (a) kinds.add(R.info().errand?.kind); }
+	for (let k = 0; k < 6 && !kinds.has('catch'); k++) { R.cancel(); run(R, 1, 61); const a = R.maybeAsk(giver, { want: 'catch' }); if (a) kinds.add(R.info().errand?.kind); }
 	Math.random = orig;
 	assert.ok(kinds.has('catch'));
 	assert.ok(friend.held, 'the friend is kept in the world');
@@ -266,4 +266,39 @@ test('a dog left behind is lost again; giving up lets it wander off', async () =
 	walk(at()[0] + 200, at()[1], 30, () => !R.info().pet);
 	assert.equal(R.info().pet, null);
 	assert.ok(!dogIn(T.scene));
+});
+
+test('all six local task runtimes complete their actual objectives and release their actors', async () => {
+ const { createErrands } = await import('../src/people/errands.js');
+ for (const kind of ['escort', 'firstaid', 'courier', 'checkin', 'survey', 'cleanup']) {
+  const T = stage(), giver = T.body(2, -2), friend = T.body(25, -20);
+  const R = createErrands(T.mk([giver, friend]));
+  assert.ok(R.maybeAsk(giver, { force: true, want: kind }), kind);
+  assert.equal(R.info().errand.kind, kind); R.accept();
+  if (kind === 'escort') {
+   const at = R.mark(); T.P.pos.set(at.x, at.y + 1.7, at.z); R.update(.1);
+   assert.ok(R.info().errand, 'escort cannot finish without the person');
+   giver.M.S.pos.set(at.x, at.y, at.z); R.update(.1);
+  } else if (kind === 'firstaid' || kind === 'courier' || kind === 'checkin') {
+   T.P.pos.set(friend.M.S.pos.x, 1.7, friend.M.S.pos.z); run(R, .1, 22);
+   if (kind === 'checkin') { assert.equal(R.info().errand.stage, 'reportback'); assert.equal(T.paid.length, 0); T.P.pos.set(2, 1.7, -2); R.update(.1); }
+  } else {
+   for (let i = 0; i < 3; i++) { const at = R.mark(); T.P.pos.set(at.x, at.y + 1.7, at.z); run(R, .1, 22); }
+   assert.equal(R.info().errand.stage, 'reportback'); assert.equal(T.paid.length, 0);
+   T.P.pos.set(2, 1.7, -2); R.update(.1);
+  }
+  assert.equal(R.info().errand, null, kind); assert.equal(T.paid.length, 1, kind);
+  run(R, 1, 10); assert.equal(T.paid.length, 1); assert.ok(!giver.held && !friend.held, kind); R.dispose();
+ }
+});
+
+test('timed delivery expires without payment and interrupted tasks release every actor', async () => {
+ const { createErrands } = await import('../src/people/errands.js');
+ for (const kind of ['firstaid', 'courier', 'checkin']) {
+  const T = stage(), giver = T.body(2, -2), friend = T.body(25, -20), R = createErrands(T.mk([giver, friend]));
+  assert.ok(R.maybeAsk(giver, { force: true, want: kind })); R.accept();
+  if (kind === 'checkin') { friend.active = false; R.update(.1); } else run(R, 1, 125);
+  assert.equal(R.info().errand, null); assert.equal(T.paid.length, 0); run(R, 1, 12);
+  assert.ok(!giver.held && !friend.held); R.dispose();
+ }
 });

@@ -18,6 +18,7 @@ import { hardwood, shrub, palm, banana, fern, swayMaterial, Builder, tube, strip
 import * as TX from '../world/textures.js';
 import { addLodFade } from '../world/lodfade.js';
 import { mulberry32 } from '../noise.js';
+import { baseHeight, baseFromSlope, tiltFromGradient } from '../world/groundsnap.js';
 
 // each kit's word for a plant -> its form, its colour, its size (m), and for a broadleaf its crown
 const FORM = {
@@ -39,6 +40,8 @@ const REF = { eucalypt: '#6e8478', conifer: '#36502e', column: '#36502e', palm: 
 // forms with a far tier (the rest are small, and simply fade out where they stop mattering)
 const TALL = new Set(['broad', 'eucalypt', 'conifer', 'column', 'palm', 'flattop', 'baobab', 'banyan', 'emergent', 'bamboo']);
 const LOW = new Set(['grass', 'fern']);
+// how wide a form's foot is (m) for its size: a trunk and its flare, a shrub's or a tuft's spread
+const footOf = (form, size) => LOW.has(form) ? Math.min(0.35, 0.3 * size) : form === 'shrub' || form === 'cactus' ? Math.min(0.9, 0.25 * size) : form === 'banyan' || form === 'baobab' || form === 'emergent' ? Math.min(2.5, 0.08 * size) : Math.min(1.2, 0.035 * size + 0.15);
 
 // ---------- the forms Builder makes here ----------
 const BARK = new THREE.Color(0.62, 0.55, 0.47);
@@ -496,9 +499,11 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 	const DENS = { jungle: 2.2, island: 1, eastvillage: 1.1, southasia: 0.8, southcity: 0.15, eastcity: 0.15, bazaar: 0.2, mediterranean: 0.9, village: 0.9, farm: 0.4, alpine: 1, snow: 1, polar: 0.5, himalaya: 0.6, andes: 0.6, steppe: 1.6, savanna: 1.1, sahel: 0.6, desert: 0.25, pueblo: 0.5, outback: 0.7 };
 	const counts = new Map();
 	// one plant: into the tier(s) its distance puts it in
-	function put(v, mi, d, x, y, z, yaw, size, word, base, C, culture, t) {
+	function put(v, mi, d, x, y, z, yaw, size, word, base, C, culture, t, gx = 0, gz = 0, lie = 0) {
 		const m = v.models[mi], s = size / m.H;
-		Q.setFromAxisAngle(UP, yaw); SC.setScalar(s); M4.compose(P.set(x, y, z), Q, SC);
+		// (low plants lie a little with the slope; trees stand upright)
+		if (lie > 0) tiltFromGradient(gx, gz, yaw, lie, Q); else Q.setFromAxisAngle(UP, yaw);
+		SC.setScalar(s); M4.compose(P.set(x, y, z), Q, SC);
 		const col = tintOf(seasonal(word, base, C, culture), v.form, TC);
 		const tone = 0.85 + t * 0.3;
 		col.multiplyScalar(tone);
@@ -546,9 +551,13 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 				for (let q = 0; q < nT; q++) {
 					const px = cx + dx + (q ? (r() - 0.5) * 4 : 0), pz = cz + dz + (q ? (r() - 0.5) * 4 : 0);
 					if (wet(px, pz) || blocked(px, pz, LOW.has(form) ? 1 : Math.max(3, size * 0.45))) continue;
-					const y = ground(px, pz), e = 3, s = Math.max(Math.abs(ground(px + e, pz) - y), Math.abs(ground(px, pz + e) - y)) / e;
+					const y = ground(px, pz), e = 3, gx = (ground(px + e, pz) - y) / e, gz = (ground(px, pz + e) - y) / e, s = Math.max(Math.abs(gx), Math.abs(gz));
 					if (s > 0.8) continue;
-					put(v, Math.floor(mi * v.models.length), d, px, y - 0.1, pz, yaw + q * 2.1, sz * (q ? 0.7 + r() * 0.5 : 1), word, base, C, culture, t);
+					// the foot on the lowest ground under it, a little sunk (world/groundsnap.js): on a
+					// slope the downhill side of a trunk no longer floats
+					const low = LOW.has(form), szq = sz * (q ? 0.7 + r() * 0.5 : 1);
+					const yb = baseFromSlope(y, Math.hypot(gx, gz), footOf(form, szq), low ? 0.04 : 0.1);
+					put(v, Math.floor(mi * v.models.length), d, px, yb, pz, yaw + q * 2.1, szq, word, base, C, culture, t, gx, gz, low ? 0.6 : 0);
 				}
 				used.add(v.key);
 			}
@@ -568,7 +577,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 						const j1 = (h & 255) / 255, j2 = ((h >>> 8) & 255) / 255, ad = (k * da - a0) * along + (j1 - 0.5) * 3;
 						const dx = ax ? ad : off + (j2 - 0.5) * 2, dz = ax ? -(off + (j2 - 0.5) * 2) : -ad, d = Math.hypot(dx, dz), px = cx + dx, pz = cz + dz;
 						if (d > R || wet(px, pz) || blocked(px, pz, 4)) continue;
-						put(v, Math.floor(j1 * v.models.length), d, px, ground(px, pz) - 0.1, pz, j2 * 6.283, 26 + j1 * 16, 'eucalyptus', FORM.eucalyptus[1], C, culture, j2);
+						put(v, Math.floor(j1 * v.models.length), d, px, baseHeight(ground, px, pz, 0.6, 0.1), pz, j2 * 6.283, 26 + j1 * 16, 'eucalyptus', FORM.eucalyptus[1], C, culture, j2);
 					}
 				}
 			}
@@ -579,7 +588,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 			const F = FORM[T.word], d = Math.hypot(T.x - cx, T.z - cz);
 			if (!F || d > R || wet(T.x, T.z)) continue;
 			const v = variantOf(keyOf(T.word, F[0], F[3], snow), kit.id);
-			put(v, 0, d, T.x, ground(T.x, T.z) - 0.1, T.z, T.yaw || 0, T.size || F[2], T.word, F[1], C, culture, 0.6);
+			put(v, 0, d, T.x, baseHeight(ground, T.x, T.z, footOf(F[0], T.size || F[2]), 0.1), T.z, T.yaw || 0, T.size || F[2], T.word, F[1], C, culture, 0.6);
 			used.add(v.key);
 		}
 		// what this kit no longer grows is let go

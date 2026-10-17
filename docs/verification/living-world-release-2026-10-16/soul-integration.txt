@@ -1,0 +1,1 @@
+PASS: real workerd storage, two sockets, authenticated attribution, new room/new socket identity, eight-second cleansing, shared refresh, stale-epoch rejection.

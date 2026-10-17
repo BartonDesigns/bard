@@ -44,6 +44,35 @@ export function solarDirection(latitude, dec, hours, noon, out = {}) {
 	return out;
 }
 
+// The Moon tonight: where it is among the stars and how much of it is lit, from the date and
+// the clock (the low-precision lunar theory: the main terms of the longitude and latitude, good
+// to about a quarter of a degree, plenty for the sky and the moonlight). date: the calendar day
+// (local), hours: the clock, noon: the day's solar noon on that clock (solarDate). Returns
+// { ra (hours), dec (radians), lit (0 new .. 1 full), waxing, age (days since new, 0..29.5) }.
+export function lunarPosition(date, hours, noon, out = {}) {
+	const n0 = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12) - Date.UTC(2000, 0, 1, 12)) / 864e5;
+	// (solar noon on the Bay is about 20:10 UT: the clock's hours from it, as days from noon UT)
+	const n = n0 + (hours - noon + 8.16) / 24;
+	const Lp = 218.3164477 + 13.17639648 * n, D = (297.8501921 + 12.19074912 * n) * RAD, M = (357.5291092 + 0.98560028 * n) * RAD;
+	const Mp = (134.9633964 + 13.06499295 * n) * RAD, F = (93.272095 + 13.22935024 * n) * RAD;
+	const lam = (Lp + 6.289 * Math.sin(Mp) + 1.274 * Math.sin(2 * D - Mp) + 0.658 * Math.sin(2 * D) + 0.214 * Math.sin(2 * Mp) - 0.186 * Math.sin(M) - 0.114 * Math.sin(2 * F)) * RAD;
+	const bet = (5.128 * Math.sin(F) + 0.281 * Math.sin(Mp + F) + 0.278 * Math.sin(Mp - F) + 0.173 * Math.sin(2 * D - F)) * RAD;
+	const g = (357.528 + 0.9856003 * n) * RAD, sun = (280.46 + 0.9856474 * n + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * RAD;
+	const eps = 23.4393 * RAD, cb = Math.cos(bet);
+	const x = cb * Math.cos(lam), y = cb * Math.sin(lam) * Math.cos(eps) - Math.sin(bet) * Math.sin(eps), z = cb * Math.sin(lam) * Math.sin(eps) + Math.sin(bet) * Math.cos(eps);
+	out.ra = ((Math.atan2(y, x) / Math.PI * 12) + 24) % 24;
+	out.dec = Math.asin(clamp(z, -1, 1));
+	const el = Math.acos(clamp(cb * Math.cos(lam - sun), -1, 1));
+	out.lit = (1 - Math.cos(el)) / 2;
+	const dl = ((lam - sun) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+	out.waxing = dl < Math.PI;
+	out.age = dl / (2 * Math.PI) * 29.530589;
+	return out;
+}
+// How much light the Moon gives, as a share of the full moon's (the opposition surge makes a
+// half moon about a tenth of the full, not a half)
+export const moonlightShare = (lit) => Math.pow(clamp(lit, 0, 1), 2.4);
+
 export function advanceSolarClock(hours, dt, speed, sun) {
 	const daylight = clamp(sun.set - sun.rise, 0, 24);
 	const brightHours = daylight === 0 ? 0 : Math.min(24, daylight + 0.8);

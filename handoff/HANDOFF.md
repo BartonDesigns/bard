@@ -1,6 +1,6 @@
 # Handoff: unfinished work, 16 October 2026
 
-Everything through PR #48 is on main and live at level99bard.com, and water and shoreline (section 2) has since shipped. The workstreams below were stopped part way (owner's call: they were costing too much). Each one's unfinished work is saved as a patch in this folder. Apart from water, none of it is on main, built or tested.
+Everything through PR #48 is on main and live at level99bard.com, and all three workstreams below have since shipped. They were stopped part way (owner's call: they were costing too much). Each one's unfinished work is saved as a patch in this folder. All three are now on main.
 
 ## Picking one up in a new conversation
 
@@ -26,6 +26,8 @@ House rules:
 - resolve `index.html` / `island/dist/island.js` merge conflicts by taking main's and rebuilding.
 
 ## 1. Night lighting, part 2: `wip-night2.patch`
+
+**Shipped** (branch `claude/night-lights-2`). See `docs/night-lighting-2-2026-10-16.md`. The notes below are kept for the record.
 
 23 files: bridge.js, carlights.js (new), floodlights.js (new), streetlamps.js (new), landmarks.js, nightlights.js, city.js, houses.js, towers.js, streets.js, streetlife.js, civic/colony-art.js, interiors/index.js, interiors/lighting.js, sky.js, nightfield.js, services/index.js, signage/index.js, main.js and others. Docs and tests may be incomplete.
 
@@ -62,6 +64,8 @@ Brief:
 Check the island beach at eye level along the waterline first; that's the owner's view.
 
 ## 3. Land seams and nature QA: `wip-landseams.patch`
+
+**Shipped** (branch `claude/land-seams`), with the far hills' facets reduced as well. See `docs/nature-qa-2026-10-16.md`. The notes below are kept for the record.
 
 18 files: a new world/groundsnap.js, plus vegetation.js, grass.js, terrain.js, lodfade.js, sunrays.js, bay/berms.js, bay/terrain.js, bay/city.js, bay/streettrees.js, earth/globeterrain.js, earth/globetrees.js, nature/rocks.js, nature/wildground.js, region/flora.js, tools/nature-qa.test.mjs, docs/nature-qa-2026-10-16.md, HANDOFF.md.
 

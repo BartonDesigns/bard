@@ -16,6 +16,12 @@ import { mulberry32 } from '../noise.js';
 
 let stripTex = null;
 
+// three's light loop with the sun's shadow kept: gSunLit, how much of the first shadowing
+// directional light (the sun) reaches this fragment (1 where there are no shadows)
+export const SUNLIT_BEGIN = THREE.ShaderChunk.lights_fragment_begin.replace(
+	'vDirectionalShadowCoord[ i ] ) : 1.0;',
+	'vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\tgSunLit = min(gSunLit, length(directLight.color) / max(length(directionalLight.color), 1e-4));');
+
 export function createGrass(island, shared, count = 20000, span = 84, opts = {}) {
 	const width = opts.width ?? 0.42, heightK = opts.height ?? 1, seed = opts.seed ?? 99;
 	const blade = new THREE.BufferGeometry();
@@ -68,7 +74,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			uniform float uPlGrassK, uPl2GrassK;
 			uniform vec4 uWetS[4]; uniform sampler2D uMasks, uWaterMap; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK;
 			float gTall;
 			` + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
@@ -108,6 +114,9 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				rise = rise * rise * (3.0 - 2.0 * rise);
 				float grow = step(aRand.y, density) * rise;
 				vEdge = smoothstep(0.35, 0.9, dCam);
+				// under a canopy the blades get no sun to glow with (the shadow map says so too, where
+				// there is one: the fragment shader below; this holds where shadows are off)
+				vShadeK = 1.0 - canopy * 0.85;
 				// wet from a sprinkler (world/spray.js): darker and glossier
 				vWet = 0.0;
 				for (int k = 0; k < 4; k++) vWet = max(vWet, uWetS[k].w * (1.0 - smoothstep(0.65, 1.0, length(w - uWetS[k].xy) / max(uWetS[k].z, 0.1))));
@@ -121,6 +130,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				tall *= 1.0 - occ * 0.6;
 				tall *= 1.0 + hug * 0.9;
 				tall *= mix(1.0, 0.5, mk.g) * uTallK * grow;
+				// a tuft whose foot is within a stride of the eye (flying low, or the eye down in the
+				// grass) shrinks away, so no blade is ever stretched across the whole view
+				float eyeD = length(vec3(w.x - cameraPosition.x, h - cameraPosition.y, w.y - cameraPosition.z));
+				tall *= smoothstep(0.25, 0.9, eyeD);
 				gTall = tall;
 				float ang = aRand.y * 6.2831;
 				vGUv = uv; vTip = aTip;
@@ -174,7 +187,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				p.y = cos(lean) * ly;
 				// you part the grass: blades near your feet bend away from you
 				vec2 away = w - uCam; float ad = length(away);
-				float push = (1.0 - smoothstep(0.25, 1.1, ad)) * aTip;
+				// (only at a walker's eye height over the ground: flying past, or with the eye down in
+				// the grass, there are no legs there, and the tips pulled toward the lens made long spikes)
+				float eyeH = cameraPosition.y - h;
+				float push = (1.0 - smoothstep(0.25, 1.1, ad)) * aTip * smoothstep(1.1, 1.45, eyeH) * (1.0 - smoothstep(2.2, 3.0, eyeH));
 				p.xz += away / max(ad, 0.05) * push * ly * 0.8;
 				p.y -= push * ly * 0.45;
 				// the tuft's foot sits a little in the soil, so there is no hard base line
@@ -185,7 +201,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		// both faces of a blade are lit as the meadow is (up), never as their dark underside
 		sh.fragmentShader = `
 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet;
+			// the sun's glow through the blades and their sheen, added after the lights, as much as
+			// the sun reaches them: in a wood's shade the turf glowed pale, unshadowed
+			vec3 gGlow = vec3(0.0); float gSunLit = 1.0;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK;
 			` + sh.fragmentShader
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
 			.replace('#include <map_fragment>', `
@@ -212,18 +231,20 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// tall grass goes to seed: pale straw tips
 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.36) * vec3(0.62, 0.58, 0.36), smoothstep(0.7, 1.0, vGUv.y) * smoothstep(0.3, 0.8, vTall228) * 0.7);
 				diffuseColor.rgb *= 1.0 - 0.35 * vWet;`)
+			.replace('#include <lights_fragment_begin>', SUNLIT_BEGIN)
+			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\t\t\t\ttotalEmissiveRadiance += gGlow * gSunLit * vShadeK;')
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				// blades glow when the sun is behind them; the highs make the field shimmer
 				float back = pow(max(0.0, dot(normalize(vGW - cameraPosition), uSunDir)), 4.0) * max(0.0, uSunDir.y + 0.1);
-				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.45 * vTip * (1.0 - vEdge * 0.8);
+				gGlow += diffuseColor.rgb * uSunColor * back * 0.45 * vTip * (1.0 - vEdge * 0.8);
 				// sheen: blades are glossy along their length; looking toward the sun the field
 				// silvers, the tips lighting up yellow-green where light comes through
 				vec3 Vg = normalize(cameraPosition - vGW);
 				float toward = pow(max(0.0, dot(-Vg, uSunDir) * 0.5 + 0.5), 6.0) * smoothstep(0.0, 0.2, uSunDir.y) * (1.0 + vWet * 4.0);
-				totalEmissiveRadiance += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor * (1.0 - vEdge * 0.8);
+				gGlow += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor * (1.0 - vEdge * 0.8);
 				totalEmissiveRadiance += diffuseColor.rgb * uHigh * 0.3 * vTip * (0.5 + 0.5 * sin(uTime * 6.0 + vGW.x * 0.7 + vGW.z * 0.5));`);
 	};
-	mat.customProgramCacheKey = () => 'island-grass2';
+	mat.customProgramCacheKey = () => 'island-grass3';
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.frustumCulled = false;
 	mesh.receiveShadow = true;

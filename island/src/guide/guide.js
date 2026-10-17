@@ -9,7 +9,14 @@
 import { awarenessContext, contextualOpening, contextualReply } from '../people/world-awareness.js';
 import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
 import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent, offlineSocialIntent } from '../people/social-intent.js';
+import { buildNegotiationContext, buildNegotiationMessages, decodeNegotiationIntent, offlineNegotiationIntent } from './negotiation-intent.js';
+import { activityCards, activityScopeText, agreementTerms } from './living-activity-view.js';
+import { buildCommunityProjectContext, buildCommunityProjectMessages, decodeCommunityProjectIntent, offlineCommunityProjectIntent, communityProjectRelevant, livingScheduleIntent } from './community-project-intent.js';
+import { communityProjectCards, projectScopeText, projectKindLabel, projectHistoryLines, communityProjectFacts } from './community-project-view.js';
+import { livingActorId } from '../people/living-world.js';
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
+import { createQuestChronicle, soulScope, reportRequest } from './quest-chronicle.js';
+import { createRouteMarks, routeMarkSpot } from './route-marks.js';
 import { parseSocialIntent } from '../people/social-state.js';
 import { worldPosition } from '../people/social-actors.js';
 import { parseGameTime, realSecondsFor, formatClock, formatReal, talksOfMeeting, placePhrases, MEET_TAG_RE, EARLY, GRACE } from '../people/appointments.js';
@@ -99,12 +106,12 @@ export function createGuide(mount, api) {
 	const journal = store.get('crysis-journal', {});
 	const archive = createDialogueArchive();
 	let dialogueStyle = normalizeDialogueStyle(store.get('crysis-dialogue-style', {}));
-	let view = 'guide', viewEpoch = 0;
+	let view = 'guide', viewEpoch = 0, projectProgressView = null;
 	const guideMeta = {id:'guide',name:'The Guide',kind:'guide',bodyKey:''};
 	function threadMeta(P) { return {id:P.id || P.threadId,name:P.persona.name,bodyKey:api.social?.bodyKey() || '',kind:'npc'}; }
 	function archiveTurn(meta,role,text) { archive.append(meta,role,text); }
 	function importConversations() { for(const r of api.social?.state.list() || []) archive.importHistory({id:r.id,name:r.persona.name,bodyKey:r.bodyKey,kind:'npc'},r.history); }
-	function resetView(next) { busy?.abort(); viewEpoch++; view=next; log.replaceChildren(); input.value=''; settings.style.display='none'; log.style.display='flex'; tabs.style.display='flex'; archiveControls.style.display='none'; bar.style.display='flex'; }
+	function resetView(next) { busy?.abort(); viewEpoch++; view=next; projectProgressView=null; log.replaceChildren(); input.value=''; settings.style.display='none'; log.style.display='flex'; tabs.style.display='flex'; archiveControls.style.display='none'; bar.style.display='flex'; }
 	function renderGuide() { resetView('guide'); for(const t of archive.thread('guide')?.turns.slice(-30) || []) say(t.content,t.role==='user'?'me':'guide'); }
 
 	// ---------- where things are ----------
@@ -173,6 +180,7 @@ export function createGuide(mount, api) {
 			done: QUESTS.filter((q) => journal[q[0]]).map((q) => q[1]), todo: [...quests.filter((q) => !q.done).map((q) => q.title), ...QUESTS.filter((q) => !journal[q[0]] && (q[0] !== 'home' || store.get('crysis-home', null))).map((q) => q[1])],
 			land: W.land?.profile?.thesis, sea: W.eco?.profile?.thesis,
 			arms: arms ? { inventory: arms.inventory, nearby: arms.nearby } : null,
+			community:communityProjectFacts(api.communityProjects?.snapshot?.()),
 		};
 	}
 
@@ -193,6 +201,9 @@ export function createGuide(mount, api) {
 	}
 	// Models propose intentions and stories; saved game state decides what can happen.
 	const stories = createStoryQuests();
+	const chronicle = createQuestChronicle({ scope: () => ({ id:soulScope(api.soul?.credentials?.() || 'local'), ...api.combat?.morality?.info() }) });
+	const routeMarks = api.scene ? createRouteMarks({scene:api.scene,world:api.world,camera:api.camera,chronicle}) : null;
+	let appointmentHistory = false;
 	function residentKey(id) {
 		let hash = 14695981039346656037n;
 		for (const c of id) hash = BigInt.asUintN(64, (hash ^ BigInt(c.charCodeAt(0))) * 1099511628211n);
@@ -215,7 +226,7 @@ export function createGuide(mount, api) {
 		}
 		if (resident) { const actor=S.actors.all().find(p=>p.residentId===resident.id); if(actor) for(const t of places) t.scoutable=Math.hypot(t.x-actor.M.S.pos.x,t.z-actor.M.S.pos.z)<=180 && S.scoutNearby(actor,[t])?.id===t.id; }
 		const context = stories.context({ bodyKey, targets: places, npcs });
-		return { ...context, speaker: resident ? residentKey(resident.id) : null, workplace:resident?.workContext || null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
+		return { ...context, speaker: resident ? residentKey(resident.id) : null, arc:resident?chronicle.brief(bodyKey,residentKey(resident.id)):null, relationship:resident?chronicle.relationship(bodyKey,residentKey(resident.id)):null, workplace:resident?.workContext || null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
 	}
 	function questNotice(result) {
 		if (result?.ok === false) return result.error || 'That quest cannot be changed right now.';
@@ -231,6 +242,8 @@ export function createGuide(mount, api) {
 		finally { clearTimeout(timer); signal?.removeEventListener('abort',abort); }
 	}
 	function questChanged(q, announce=true) {
+		const owner=api.social?.state.list(q.bodyKey).find(r=>residentKey(r.id)===q.offeredBy);
+		chronicle.observe(q,owner?.persona.name);
 		if (announce) api.hint(q.status==='complete'?`Quest complete: ${q.title}`:`Quest updated: ${q.title}`,3500);
 		if (q.status!=='complete') return;
 		if(q.reward && !q.rewardPaid) {const paid=stories.claimReward(q.id,q.bodyKey,tx=>api.arms?.apply(tx)); if(paid.ok && !paid.already) api.hint(`Quest reward: ${paid.credits} credits added to your inventory.`,4500);else if(!paid.ok && announce) api.hint(`Quest complete. ${paid.error}`,6000);}
@@ -238,15 +251,19 @@ export function createGuide(mount, api) {
 		if (!resident) return;
 		api.multiplayer?.reportQuest?.(q,resident);
 		if (resident.storyCompletions?.includes(q.id)) return;
+		api.combat?.morality?.record({ id: 'quest:' + q.id, kind: 'favour', target: resident.persona.name, world: api.multiplayer?.worldKey?.() || q.bodyKey });
 		resident.storyCompletions=[...(resident.storyCompletions || []),q.id].slice(-64);
 		api.social.state.remember(resident.id,'event',`You and the traveller completed "${q.title}" together. ${q.premise}`);
 	}
 	function storySummary(q) {
 		const context = storyContext(), label = step => context.targets.find(t=>t.id===step.targetId)?.name || context.npcs.find(n=>n.id===step.npcId)?.name || step.targetName || step.npcName || 'the marked place';
-		return `${q.title}\n${q.premise}\n${q.reward ? `Reward: ${q.reward.credits} inventory credits${q.rewardPaid?' · paid':q.status==='complete'?' · pending':' · on completion'}\n` : ''}` + q.steps.map((s,i)=>`${i+1}. ${s.type==='talk'?'Speak to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
+		return `${q.chapter ? `Chapter ${q.chapter} of 3 · ` : ''}${q.title}\n${q.premise}\n${q.chapter ? 'What lasts: trust, a shared story'+(q.chapter===2?' and a choice about the route.':'.')+'\n' : q.reward ? `Reward: ${q.reward.credits} inventory credits${q.rewardPaid?' · paid':q.status==='complete'?' · pending':' · on completion'}\n` : ''}` + q.steps.map((s,i)=>`${i<q.cursor?'✓':i===q.cursor?'→':'○'} ${s.type==='talk'?'Report to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
 	}
 	async function offerStory(resident, text, signal) {
 		const context = storyContext(resident);
+		if (chronicle.pending(context.bodyKey,context.speaker).length) { showRouteChoice(resident); return 'Before we start something else: should we mark the route for others, or keep it quiet?'; }
+		const unfinished=stories.list(context.bodyKey).find(q=>q.offeredBy===context.speaker&&['offered','active'].includes(q.status));
+		if (unfinished) return `Let’s finish what we already discussed.\n${storySummary(unfinished)}`;
 		const compact={...context,targets:[...context.targets.filter(t=>!t.id.startsWith('home:')).slice(0,5),...context.targets.filter(t=>t.id==='home:'+residentKey(resident.id))],npcs:context.npcs.filter(n=>n.id===residentKey(resident.id)),previous:context.previous.slice(-2).map(q=>({title:q.title,status:q.status,steps:q.steps.map(s=>({type:s.type,targetId:s.targetId,npcId:s.npcId}))})),request:text.slice(0,300)};
 		const raw = await planChat([{role:'system',content:questPrompt(compact)},{role:'user',content:text}],signal,{kind:'story_quest',context:compact});
 		if (signal.aborted || !partner || partner.id!==resident.id || api.social.bodyKey()!==context.bodyKey) return null;
@@ -254,18 +271,53 @@ export function createGuide(mount, api) {
 		if (!proposed?.ok) proposed = stories.propose(fallbackQuest(context,{npcId:residentKey(resident.id),position:api.camera.position,persona:resident.persona}),context);
 		if (!proposed.ok) return 'I do not have a reachable quest here yet. Let us meet near a village or another landmark.';
 		const q = proposed.quest;
+		const landmarks=q.steps.filter(s=>s.targetId&&!s.targetId.startsWith('home:')&&!s.targetId.startsWith('workplace:')).map(s=>context.targets.find(t=>t.id===s.targetId)).filter(t=>t&&!t.under&&t.y>.3).map(t=>{const pos=routeMarkSpot(api.world(),t);return {id:t.id,name:t.name,pos:api.social.positionFor(api.world(),pos || t),markerEligible:!!pos};});
+		chronicle.register(q,resident.persona.name,landmarks);
 		return `${storySummary(q)}\nInterested? Say “I’m in”, or open Quests to accept or decline.${questNotice(proposed) ? '\n'+questNotice(proposed) : ''}`;
 	}
 	function storyReply(text) {
 		const bodyKey = api.social.bodyKey(), qs=stories.list(bodyKey), offered=qs.filter(q=>q.status==='offered' && (!q.offeredBy || q.offeredBy===residentKey(partner?.id || ''))).at(-1);
+		if (reportRequest(text) && (readyReports().length || qs.some(q=>q.status==='active'&&q.offeredBy===residentKey(partner?.id||'')))) return reportStory(text);
 		if (/^(?:yes[,.! ]*)?(?:i['’]?m in|i am in|let['’]?s do it|sounds good|i accept|accept(?: the quest)?|sign me up)[.! ]*$/i.test(text.trim()) && offered) {
-			const result=stories.accept(offered.id,bodyKey); return questNotice(result) || `Agreed. ${offered.title} is in your Quests journal. Your first objective is ready.`;
+			const result=stories.accept(offered.id,bodyKey); if(result.ok)questChanged(result.quest,false); return questNotice(result) || `Come back and tell me what stood out. ${offered.title} is in your journal.`;
 		}
-		if (/^(?:no thanks|decline(?: the quest)?|not now)[.! ]*$/i.test(text.trim()) && offered) { stories.cancel(offered.id,bodyKey); return 'No problem. We can find a different adventure another time.'; }
+		if (/^(?:no thanks|decline(?: the quest)?|not now)[.! ]*$/i.test(text.trim()) && offered) { const r=stories.cancel(offered.id,bodyKey);if(r.ok)questChanged(r.quest,false); return 'No problem. We can find a different adventure another time.'; }
 		if (/^(?:quest status|my quests|what(?:’s|'s| is) (?:my|the) next (?:step|objective)|how is my quest going)[?! .]*$/i.test(text.trim())) {
 			const active=qs.find(q=>q.status==='active'); return active ? storySummary(active) : 'You have no active story quest. Ask me for an adventure.';
 		}
 		return null;
+	}
+	function readyReports(resident=partner?.id && api.social?.state.get(partner.id)) {
+		if(!resident)return [];
+		return stories.list(resident.bodyKey).filter(q=>q.status==='active'&&q.steps[q.cursor]?.type==='talk'&&q.steps[q.cursor].npcId===residentKey(resident.id));
+	}
+	function reportStory(text, requestedId=null) {
+		const at=partner?.p?.M?.S?.pos,cam=api.camera.position;
+		if(!at || Math.hypot(at.x-cam.x,at.z-cam.z)>8 || Math.abs(at.y+1.7-cam.y)>3) return 'Come back so we can talk about it in person. I want to hear what you noticed.';
+		const ready=readyReports(), selected=requestedId?ready.find(q=>q.id===requestedId):ready.find(q=>text.toLowerCase().includes(q.title.toLowerCase())) || (ready.length===1?ready[0]:null);
+		if (!selected) return ready.length>1?'Which of our walks are you reporting on? Tell me its title.':'We still have something to check before we can call that finished. Your journal shows what remains.';
+		const completed=stories.event({id:'report:'+Date.now()+':'+selected.id,type:'talk',bodyKey:selected.bodyKey,npcId:residentKey(partner.id),questId:selected.id});
+		for(const q of completed)questChanged(q);
+		const q=completed[0]; if(!q)return 'Let’s check where we left off.';
+		api.social.state.remember(partner.id,'event',`The traveller returned in person to discuss “${q.title}”. Their own report, not independently verified observations: ${text.slice(0,320)}`);
+		showRouteChoice(api.social.state.get(partner.id));
+		return q.status==='complete'?`You came back and kept your word. That matters to me.${q.chapter===2?' Now, do we put markers at the surveyed stops, or leave the route quiet?':q.chapter===3?' We have a story here now, not just another place we passed through.':' Next time, I’d like to build on what we found.'}`:`Thanks for checking in. ${storySummary(q)}`;
+	}
+	function showRouteChoice(resident) {
+		if(!resident || partner?.id!==resident.id)return;
+		const pending=chronicle.pending(resident.bodyKey,residentKey(resident.id))[0];if(!pending)return;
+		const canMark=pending.landmarks.some(t=>t.markerEligible!==false);
+		if(!canMark)say('There isn’t a level, dry place for a sign at these stops. Let’s keep this route in the journal.','guide');
+		const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+		for(const [choice,label]of [['marked','Mark the route'],['quiet','Keep it quiet']]) {
+			const b=el('button',btnCss,label);if(choice==='marked'&&!canMark){b.disabled=true;b.style.opacity='.45';}
+			b.onclick=()=>{
+				if(partner?.id!==resident.id)return;
+				const r=chronicle.decide(pending.id,choice);if(!r.ok){say(r.error,'note');return;}row.remove();if(r.already)return;routeMarks?.update();
+				const line=choice==='marked'?'Then let’s leave a sign for the next person. Your route markers are in place at the surveyed stops.':'Then we leave it as we found it. The route stays in your journal, without signs in the landscape.';
+				api.social.state.remember(resident.id,'event',line);perform(line,true);if(r.persisted===false)say(chronicle.status().error,'note');
+			};row.append(b);
+		}log.append(row);
 	}
 
 	// ---------- meetings: an arrangement made in conversation is kept by the game ----------
@@ -401,12 +453,19 @@ export function createGuide(mount, api) {
 		return null;
 	}
 	// The journal's marker: the meeting you are tracking, else the soonest, else a quest's next place.
+	let livingContact = null;
 	function waypointMark() {
 		// a catastrophe: someone trapped, hurt, a fire to fight (cataclysm/quests.js) comes first
 		const emergency = api.cataclysm?.mark?.();
 		if (emergency) return emergency;
 		const W = api.world(), S = W?.sky?.state, B = book(), key = api.social?.bodyKey();
 		if (!W || !S || !key) return null;
+		if(livingContact){
+			if(livingContact.bodyKey!==key || Math.hypot(livingContact.x-api.camera.position.x,livingContact.z-api.camera.position.z)<4)livingContact=null;
+			else return livingContact;
+		}
+		const living=api.livingWorld?.mark?.();
+		if(living && (!living.bodyKey || living.bodyKey===key))return living;
 		const open = (B?.list(key) || []).filter(a => a.status === 'agreed').sort((a, b) => a.due - b.due);
 		const a = open.find(x => x.id === tracked) || open[0];
 		if (a) {
@@ -454,12 +513,17 @@ export function createGuide(mount, api) {
 	}
 
 	// ---------- the journal: noticed as you play ----------
-	let tick = 0, lastPlace = '';
+	let tick = 0, lastPlace = '', projectProgressTick = 0;
 	function watch(dt) {
+		projectProgressTick+=Math.max(0,Number(dt)||0);
+		if(projectProgressTick>=.2 || dt===0){projectProgressTick=0;updateProjectProgress();}
 		tick += dt;
 		if (tick < 1) return;
 		tick = 0;
 		const W = api.world(); if (!W) return;
+		if (!appointmentHistory && api.social) { appointmentHistory=true; api.social.onAppointment(e=>chronicle.meeting(e.appointment,e.type,residentKey(e.appointment.npcId))); }
+		for(const p of api.social?.actors.all() || []) if(p.residentId) {const r=api.social.state.get(p.residentId);if(r)for(const e of p.awarenessEvents || [])chronicle.witness(r.bodyKey,residentKey(r.id),r.persona.name,e,api.combat?.morality.info().cleansedAt || 0);}
+		routeMarks?.update();
 		const cam = api.camera.position, P = W.player.state, g = W.island.heightAt(cam.x, cam.z), hours = W.sky.state.hours;
 		api.waypoint?.set(waypointMark());
 		const questWorld=storyContext();
@@ -586,6 +650,7 @@ You can act in the world by writing a command in double brackets at the end of y
 [[time: HOUR]] sets the hour (0-24). [[fly: on]] or [[fly: off]]. [[face: PLACE]] turns the player toward a place. [[wind: 0-1.5]].
 For game-only gear actions, use [[arms: purchase rifle]], [[arms: secure shotgun at the police station]], or [[arms: hunt with the bow]] only when the player clearly asks. Never provide real-world weapon instructions; the arms system resolves availability, inventory and local consequences. Nearby sources and current gear are in WORLD NOW.
 Only use a command when the player asks for it or clearly agrees. Suggest things to do from the player's journal. To add something to the player's journal, write [[quest: PLACE]].
+Community projects have their own review and work controls. Discuss only their saved status in WORLD NOW; never claim to construct, complete, purchase or change ownership through conversation. A proposal, survey or pending work is not a completed improvement.
 THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	let busy = null;
@@ -602,11 +667,18 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	function personContext(p=partner?.p,resident=partner?.id && api.social?.state.get(partner.id)) {
 		const completed=stories.list(api.social?.bodyKey()).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident?.id||'')).map(q=>q.title);
-		const c=awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		const relationship=resident?chronicle.relationship(resident.bodyKey,residentKey(resident.id)):null;
+		const c=awarenessContext({...api.combat?.perception?.(p),relationship,work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		const promised=resident&&stories.list(resident.bodyKey).find(q=>q.offeredBy===residentKey(resident.id)&&q.status==='active');
+		if(promised)c.facts.push(`The traveller promised to help with “${promised.title}”. ${readyReports(resident).some(q=>q.id===promised.id)?'They have reached the report-back step; ask what they noticed, do not declare it finished yet.':'The next objective is still unfinished. Ask how it is going, without assuming failure or inventing a deadline.'}`);
 		// (a favour under way with this person: they know what they asked, errands.js)
 		const fav=api.errands?.factFor?.(p); if(fav) c.facts=[...c.facts,fav].slice(0,7);
 		// (what they did or saw lately, and their money talk: people/npc-quests.js)
 		const own=api.npcQuests?.factsFor?.(p)||[]; if(own.length) c.facts=[...c.facts,...own].slice(0,8);
+		const living=api.livingWorld?.factsFor?.(p)||[]; if(living.length)c.facts=[...c.facts,...living].slice(-10);
+		const community=communityProjectFacts(api.communityProjects?.snapshot?.());if(community.length)c.facts=[...c.facts,...community].slice(-10);
+		const market=api.negotiation?.contextFor?.(p);
+		if(market?.sellerId)c.facts=[...c.facts,`Trade: ${market.reason || 'Only the current quoted terms are binding.'}${market.pendingOffer ? ' Current offer: '+market.pendingOffer.itemName+' for '+market.pendingOffer.price+' credits; '+market.pendingOffer.status+'.' : ''}`].slice(-10);
 		return c;
 	}
 
@@ -624,7 +696,6 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		archive.importHistory(threadMeta(partner),rec.history);
 		resetView('npc');
 		api.people?.engage(p);
-		if (resident && !personContext(p,resident).afraid) for (const q of stories.event({id:'talk:'+Date.now()+':'+resident.id,type:'talk',bodyKey:resident.bodyKey,npcId:residentKey(resident.id)})) questChanged(q);
 		title.textContent = partner.persona.name.toUpperCase();
 		input.placeholder = `Say something to ${partner.persona.first}`;
 		show(true);
@@ -637,6 +708,17 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		rec.met=true; perform(opening,true);
 		if(resident) api.social.state.remember(resident.id,'assistant',opening);
 		if(awareness.afraid) {p.M.feel('surprise',.85);p.M.gesture('shake');}
+		else if(awareness.relationship?.trust>=3) {p.M.feel('joy',.45);p.M.gesture('nod');}
+		else if(awareness.relationship?.trust<0) {p.M.feel('sad',.25);p.M.gesture('shake');}
+		if(resident&&!awareness.afraid) {
+			for(const q of readyReports(resident)) {say(`You’re back about “${q.title}”. What stayed with you?`,'guide');const b=el('button',btnCss,'Report back: '+q.title);b.onclick=()=>{
+				if(partner?.id!==resident.id)return;busy?.abort();
+				const text=`I'm back from ${q.title}.`;say(text,'me');archiveTurn(threadMeta(partner),'user',text);api.social.state.remember(resident.id,'user',text);
+				const aware=personContext(partner.p,resident),reply=aware.afraid?contextualOpening(aware):reportStory(text,q.id);
+				perform(reply,true);api.social.state.remember(resident.id,'assistant',reply);
+			};log.append(b);}
+			showRouteChoice(resident);
+		}
 		const recap = resident && gatheringRecap(resident);
 		if (recap) perform(recap, true);
 		if(!awareness.afraid) offer(p.talk?.open?.());
@@ -708,6 +790,112 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		].filter(Boolean);
 		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts:facts.slice(0,10), places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
 	}
+	function showAgreement(offer, P2 = partner) {
+		const terms = agreementTerms(offer);
+		if (!terms || partner !== P2) return;
+		say(terms.line, 'note');
+		if (!terms.action) return;
+		const row = el('div', 'display:flex;gap:8px;flex-wrap:wrap;');
+		const agree = el('button', btnCss, terms.label), cancel = el('button', btnCss, 'Leave this offer');
+		async function run(action) {
+			if (partner !== P2) return;
+			const current = api.negotiation?.contextFor?.(P2.p)?.pendingOffer;
+			if (!current || current.id !== offer.id) { row.remove(); say('That offer is no longer current. Ask for the latest terms.', 'note'); return; }
+			agree.disabled = cancel.disabled = true;
+			const decision=action==='cancel'?'Leave this offer.':`${action==='confirm'?'Confirm the terms for':'Complete the agreed exchange for'} ${offer.itemName} at ${offer.price} credits${offer.condition?.label ? ', with this condition: '+offer.condition.label : ''}.`;
+			say(decision,'me');archiveTurn(threadMeta(P2),'user',decision);if(P2.id)api.social.state.remember(P2.id,'user',decision);
+			try {
+				const result = await api.negotiation?.[action]?.(P2.p, offer.id);
+				if (partner !== P2) return;
+				row.remove();
+				const message = result?.message || result?.error || 'No exchange was made.';
+				perform(message, true); if(P2.id)api.social.state.remember(P2.id, 'assistant', message);
+				if (action !== 'cancel') showAgreement(result?.offer || api.negotiation?.contextFor?.(P2.p)?.pendingOffer, P2);
+			} catch { if(partner===P2){say('The agreement could not be checked. Please try again.', 'note');agree.disabled=cancel.disabled=false;} }
+		}
+		agree.onclick=()=>run(terms.action); cancel.onclick=()=>run('cancel'); row.append(agree,cancel);log.append(row);
+	}
+	async function negotiate(text, P2, signal) {
+		const context = api.negotiation?.contextFor?.(P2.p);
+		if (!context) return null;
+		let local=offlineNegotiationIntent(text,context);
+		// The older gear parser knows catalog aliases such as "get a rifle". It
+		// may select a quote, but must never bypass this explicit-consent boundary.
+		const gear=api.arms?.parse?.(text);
+		if(gear?.kind==='purchase' && gear.item && local.kind==='none')local=context.stock?.some(s=>s.id===gear.item)?{kind:'quote',itemId:gear.item,amount:null,confidence:1}:{kind:'clarify',question:'Which of this seller’s available items would you like a quote for?'};
+		if(context.available===false || !context.sellerId || !context.stock?.length&&!context.pendingOffer)return local.kind!=='none'?{message:context.reason||'I do not have available stock to make that offer.'}:null;
+		const options = {context,text,history:P2.id ? api.social.state.get(P2.id)?.history : P2.history};
+		let intent = local;
+		// Unusual language is classified against actual seller stock, not a list of
+		// magic phrases. This is a proposal only, never authority to buy or pay.
+		if (intent.kind === 'none' && intent.reason === 'unrecognized' || intent.kind === 'clarify') {
+			const raw = await planChat(buildNegotiationMessages(options), signal, {kind:'negotiation_intent',context:buildNegotiationContext(options)});
+			if (raw) intent = decodeNegotiationIntent(raw, options);
+		}
+		if (signal.aborted || partner !== P2 || api.negotiation?.contextFor?.(P2.p)?.bodyKey !== context.bodyKey) return null;
+		if (intent.kind === 'none') return null;
+		if (intent.kind === 'clarify') return {message:intent.question};
+		if (['review','status'].includes(intent.kind)) return {message:'Here are the current terms. You choose whether to proceed.',offer:context.pendingOffer};
+		if (intent.kind === 'decline') return await api.negotiation?.cancel?.(P2.p,context.pendingOffer?.id) || {message:'We can leave that offer for now.'};
+		try { return await api.negotiation.propose(P2.p,intent); }
+		catch { return {message:'I cannot check a reliable offer right now. No exchange was made.'}; }
+	}
+	const communityScope = snapshot => snapshot?.scope?.key || [snapshot?.scope?.world || api.social?.bodyKey?.(),snapshot?.scope?.region || snapshot?.scope?.id].filter(Boolean).join(':');
+	async function projectConversation(text, P2, signal) {
+		const snapshot=api.communityProjects?.snapshot?.();
+		if(!snapshot)return null;
+		const scope=communityScope(snapshot), context={bodyKey:snapshot.scope?.world || api.social?.bodyKey?.(),scopeKey:scope,candidates:snapshot.candidates.filter(c=>!snapshot.projects.some(p=>p.siteId===(c.siteId || c.id))),projects:snapshot.projects};
+		const options={context,text,history:P2 ? (P2.id ? api.social.state.get(P2.id)?.history : P2.history) : history};
+		let intent=offlineCommunityProjectIntent(text,context);
+		if(intent.kind==='none' && intent.reason==='unrecognized' && communityProjectRelevant(text) || intent.kind==='clarify') {
+			const raw=await planChat(buildCommunityProjectMessages(options),signal,{kind:'community_project_intent',context:buildCommunityProjectContext(options)});
+			if(raw)intent=decodeCommunityProjectIntent(raw,options);
+		}
+		if(signal.aborted || partner!==P2 || communityScope(api.communityProjects.snapshot())!==scope)return null;
+		if(intent.kind==='none')return null;
+		if(intent.kind==='clarify')return {message:intent.question};
+		if(intent.kind==='status')return {message:'The community journal shows what people are working on, who has helped, and what is still needed.',open:true};
+		const candidate=snapshot.candidates.find(c=>c.id===intent.candidateId);
+		return {message:`A ${projectKindLabel(intent.projectKind).toLowerCase()} at ${candidate.name} could make a lasting difference. Review the site first. It needs a survey and three contributions of work, followed by about a day to take shape.`,review:{candidateId:candidate.id,kind:intent.projectKind,scope}};
+	}
+	function showProjectReview(review, P2=partner) {
+		if(partner!==P2)return;
+		const epoch=viewEpoch, snapshot=api.communityProjects?.snapshot?.(), candidate=snapshot?.candidates?.find(c=>c.id===review.candidateId);
+		if(!candidate || !candidate.kinds.includes(review.kind) || communityScope(snapshot)!==review.scope)return;
+		if(snapshot.projects.some(p=>p.siteId===(candidate.siteId || candidate.id))){say('This site already has a community project. Open Story to check its progress.','note');return;}
+		say(`${projectKindLabel(review.kind)} · ${candidate.name}\nSurvey here for 5 seconds, then contribute three 30-second sessions of work. Once the work is accepted, the improvement takes about 24 hours to settle in. No money or ownership changes are part of this proposal.`,'note');
+		const row=el('div','display:flex;gap:8px;flex-wrap:wrap;'), confirm=el('button',btnCss,'Propose '+projectKindLabel(review.kind).toLowerCase()), cancel=el('button',btnCss,'Leave this idea');
+		confirm.onclick=async()=>{
+			if(partner!==P2 || viewEpoch!==epoch)return;
+			if(communityScope(api.communityProjects.snapshot())!==review.scope){row.remove();say('You have moved to another area. Review a site here first.','note');return;}
+			confirm.disabled=cancel.disabled=true;
+			const decision=`Propose a ${projectKindLabel(review.kind).toLowerCase()} at ${candidate.name}.`;say(decision,'me');archiveTurn(P2?threadMeta(P2):guideMeta,'user',decision);if(P2?.id)api.social.state.remember(P2.id,'user',decision);
+			try {
+				const result=await api.communityProjects.action(review.candidateId,'propose',{kind:review.kind});
+				if(partner!==P2 || viewEpoch!==epoch)return;
+				row.remove();const message=result?.message || result?.error || 'The proposal could not be saved.';
+				if(P2){perform(message,true);if(P2.id)api.social.state.remember(P2.id,'assistant',message);}
+				else {say(message,'note');archiveTurn(guideMeta,'assistant',message);}
+				if(result?.ok){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
+			}catch{if(viewEpoch===epoch && partner===P2){say('The proposal could not be checked. Please try again.','note');confirm.disabled=cancel.disabled=false;}}
+		};
+		cancel.onclick=()=>row.remove();row.append(confirm,cancel);log.append(row);scroll();
+	}
+	function showScheduleReview(intent,P2) {
+		if(partner!==P2)return;
+		const epoch=viewEpoch, scope=api.livingWorld?.snapshot?.().scope?.key, row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+		const button=el('button',btnCss,intent.label), leave=el('button',btnCss,'Leave things as they are');
+		button.onclick=async()=>{
+			if(partner!==P2 || viewEpoch!==epoch)return;
+			const current=api.livingWorld.snapshot();
+			if(current.scope?.key!==scope || !current.activities.some(a=>a.id===intent.requestId && a.npcId===livingActorId(P2.p) && a.canIntervene && a.choices.some(c=>c.id===intent.choiceId && c.effect===intent.effect))){row.remove();say('That activity has changed. Ask me about the current work.','note');return;}
+			button.disabled=leave.disabled=true;
+			const decision=`${intent.label}: ${intent.title}.`;say(decision,'me');archiveTurn(threadMeta(P2),'user',decision);if(P2.id)api.social.state.remember(P2.id,'user',decision);
+			try{const result=await api.livingWorld.action(intent.requestId,'intervene',{choiceId:intent.choiceId});if(partner!==P2 || viewEpoch!==epoch)return;row.remove();const message=result?.message || result?.error || 'No change was agreed.';perform(message,true);if(P2.id)api.social.state.remember(P2.id,'assistant',message);}
+			catch{if(partner===P2 && viewEpoch===epoch){say('The request could not be checked. Please try again.','note');button.disabled=leave.disabled=false;}}
+		};
+		leave.onclick=()=>row.remove();row.append(button,leave);log.append(row);
+	}
 	async function askPerson(text) {
 		const P2 = partner, p = P2.p;
 		archiveTurn(threadMeta(P2),'user',text);
@@ -726,6 +914,15 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		// a world's own people answer their own errands first (planet/colony/errands.js)
 		const awareness=personContext(p,resident);
 		if(awareness.afraid) reply=contextualReply(awareness,text);
+		const schedule=reply ? null : livingScheduleIntent(text,api.livingWorld?.snapshot?.(),livingActorId(p));
+		if(schedule?.kind==='clarify')reply=schedule.question;
+		else if(schedule?.kind==='schedule')reply=`You mean “${schedule.title}”? We can discuss ${schedule.effect==='prioritize'?'making it a priority':schedule.effect==='defer'?'putting it off for a safer moment':'picking it back up'}.`;
+		const community=reply ? null : await projectConversation(text,P2,ctrl.signal);
+		if(ctrl.signal.aborted || partner!==P2){if(busy===ctrl)busy=null;return;}
+		if(community)reply=community.message;
+		const negotiation = reply ? null : await negotiate(text,P2,ctrl.signal);
+		if (ctrl.signal.aborted || partner !== P2) { if(busy===ctrl)busy=null;return; }
+		if (negotiation) reply=negotiation.message || negotiation.error || 'No exchange was made.';
 		const own = reply ? null : p.talk?.reply?.(text);
 		// asked whether they need a hand: a favour of their own (people/errands.js), said yes to here
 		let favour = null;
@@ -734,7 +931,9 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			if (o) { reply = o.text; favour = { choices: [{ label: "I'll do it", fn: () => { api.errands.accept(); return { say: '[[mood: happy]] [[gesture: nod]] Thank you! Really.' }; } }, { label: 'Not now', fn: () => { api.errands.cancel(); return { say: '[[mood: calm]] No problem. Thanks for asking.' }; } }] }; }
 		}
 		if (own?.say) reply = own.say;
-		const armsResult = reply ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
+		const gearRequest=api.arms?.parse?.(text);
+		if(!reply&&gearRequest?.kind==='purchase'&&gearRequest.item)reply='Ask a shopkeeper for a quote and review their terms before buying. Nothing has been purchased.';
+		const armsResult = reply || gearRequest?.kind==='purchase' ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
 		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
 		if (resident) {
 			api.social.state.setPosition(resident.id, api.social.positionFor(api.world(), p.M.S.pos));
@@ -746,7 +945,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			// A gear action has already been validated by the arms adapter. Keep that
 			// response instead of letting the social intent layer reinterpret it as a
 			// generic order for the resident.
-			if (!reply) reply = api.social.command(resident, text, { target, quest: quests.find(q => !q.done) });
+			if (!reply) reply = api.social.command(resident, text, { relationship:awareness.relationship, target, quest: quests.find(q => !q.done) });
 			if (reply && parseSocialIntent(text)==='scout' && resident.mode==='scout' && resident.task && target?.name) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:'place-'+norm(target.name).replace(/ /g,'-')});
 		}
 		let meetNoteText = null, meetHandled = false;
@@ -759,19 +958,21 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			if (!reply) {
 				const context=storyContext(resident), destinations=context.targets.slice(0,8).map(t=>({...t,distance:Math.hypot(t.x-p.M.S.pos.x,t.z-p.M.S.pos.z)}));
 				const currentOffer=stories.list(context.bodyKey).filter(q=>q.status==='offered' && q.offeredBy===residentKey(resident.id)).at(-1);
-				const options={text:text.slice(0,600),resident,destinations,history:resident.history.slice(-3).map(m=>({role:m.role,content:m.content.slice(0,180)})),questContext:(currentOffer?'Current offer from this person: '+currentOffer.title+'. ':'No current quest offer. ')+stories.list(context.bodyKey).filter(q=>q.status==='active').map(q=>q.title).join('; ')};
+				const ready=readyReports(resident);
+				const options={text:text.slice(0,600),resident,destinations,history:resident.history.slice(-3).map(m=>({role:m.role,content:m.content.slice(0,180)})),questContext:(currentOffer?'Current offer from this person: '+currentOffer.title+'. ':'No current quest offer. ')+(ready.length?'Report ready for: '+ready.map(q=>q.title).join('; ')+'. ':'No report ready. ')+stories.list(context.bodyKey).filter(q=>q.status==='active').map(q=>q.title).join('; ')};
 				let intention=offlineSocialIntent(text,{destinations,hasQuestOffer:!!currentOffer});
 				if (intention.reason!=='not-an-order') {
 					const raw=await planChat(buildSocialIntentMessages(options),ctrl.signal,{kind:'social_intent',context:buildSocialIntentContext(options)});
-					if (raw) { intention=decodeSocialIntent(raw,{text,destinations,hasQuestOffer:!!currentOffer}); if(intention.kind==='none' && !['conversation','not-an-order'].includes(intention.reason)) reply='I could not work out a supported action from that. Could you clarify what you want me to do?'; }
+					if (raw) { intention=decodeSocialIntent(raw,{text,destinations,hasQuestOffer:!!currentOffer,hasQuestReport:ready.length>0}); if(intention.kind==='none' && !['conversation','not-an-order'].includes(intention.reason)) reply='I could not work out a supported action from that. Could you clarify what you want me to do?'; }
 				}
 				if (ctrl.signal.aborted || partner!==P2 || api.social.bodyKey()!==context.bodyKey) { if(busy===ctrl) busy=null; return; }
 				if (intention.kind==='clarify') reply=intention.question;
+				if (intention.kind==='quest_report') reply=reportStory(text);
 				if (intention.kind==='quest_request') reply=await offerStory(resident,text,ctrl.signal);
 				if (['quest_accept','quest_decline'].includes(intention.kind)) reply=currentOffer?storyReply(intention.kind==='quest_accept'?"I'm in":'no thanks'):'Which quest would you like to discuss?';
 				if (intention.kind==='action') {
 					const target=intention.targetId==='nearby'?api.social.scoutNearby(p,targets()):destinations.find(t=>t.id===intention.targetId);
-					reply=api.social.command(resident,intention.command,{target,quest:stories.list(context.bodyKey).find(q=>q.status==='active') || quests.find(q=>!q.done)});
+					reply=api.social.command(resident,intention.command,{relationship:awareness.relationship,target,quest:stories.list(context.bodyKey).find(q=>q.status==='active') || quests.find(q=>!q.done)});
 					if (intention.intent==='scout' && resident.mode==='scout' && resident.task && target?.id) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:target.id});
 				}
 			}
@@ -779,7 +980,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 		try {
 			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
-				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: [...awareness.facts,...(resident?.memories?.slice(-3).map(m => m.content)||[])] }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
+				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: [...awareness.facts,...(resident?.memories?.slice(-3).map(m => m.content)||[])] }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status. Price negotiations, task discounts, ownership and agreements are governed by the game ledger; never invent stock or an offer, or treat ordinary conversation as purchase consent.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
 					if (ctrl.signal.aborted || partner !== P2) return;
 					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').replace(/\[\[\s*meet[^\]]*$/i, '').trim(); scroll();
 					from = bodySync(p, t, from);
@@ -796,9 +997,16 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
 		if (own && (own.note || own.choices)) offer({ ...own, say: null });
 		if (favour) offer({ ...favour, say: null });
+		if (negotiation?.offer) showAgreement(negotiation.offer,P2);
+		if(community?.review)showProjectReview(community.review,P2);
+		if(community?.open){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
+		if(schedule?.kind==='schedule')showScheduleReview(schedule,P2);
 		archiveTurn(threadMeta(P2),'assistant',clean);
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
+		// A joined check-in can observe a real exchange here. Sending a prompt,
+		// previewing a task or receiving an unvalidated model proposal cannot finish it.
+		try{const observed=api.livingWorld?.conversationObserved?.(p);observed?.catch?.(()=>{});}catch{/* the activity journal reports its own save errors */}
 		if (voiceOut) speak(clean, P2.persona);
 		if (busy === ctrl) busy = null;
 		scroll();
@@ -820,8 +1028,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (busy) busy.abort();
 		const ctrl = new AbortController(); busy = ctrl;
 		let reply = null;
+		const community=await projectConversation(text,null,ctrl.signal);
+		if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner){if(busy===ctrl)busy=null;return;}
+		if(community)reply=community.message;
 		try {
-			if (llm.kind() !== 'none' && llm.status.ready) {
+			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
 				history.push({ role: 'user', content: text });
 				while (history.length > 12) history.shift();
 				reply = await llm.chat([{ role: 'system', content: systemPrompt() }, ...history], (t) => { if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) return; bubble.textContent = t.replace(ACTION_RE, '').trim(); scroll(); }, ctrl.signal);
@@ -836,6 +1047,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const clean = reply.replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		bubble.textContent = clean || '…';
 		archiveTurn(guideMeta,'assistant',clean);
+		if(community?.review)showProjectReview(community.review,null);
+		if(community?.open){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
 		for (const [c, a] of acts) { const r = act(c, a); if (r) say(r, 'note'); }
 		if (voiceOut) speak(clean);
 		if (busy === ctrl) busy = null;
@@ -897,7 +1110,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// ---------- the panel ----------
 	const css = (el, s) => { el.style.cssText = s; return el; };
 	const el = (tag, s, text) => { const e = document.createElement(tag); if (s) css(e, s); if (text) e.textContent = text; return e; };
-	const btnCss = 'min-width:40px;min-height:40px;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#eafaf6;font:600 13px system-ui;cursor:pointer;';
+	const btnCss = 'min-width:40px;min-height:40px;max-width:100%;white-space:normal;overflow-wrap:anywhere;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#eafaf6;font:600 13px system-ui;cursor:pointer;';
 	const open = el('button', 'position:absolute;width:44px;min-height:44px;border-radius:12px;border:1px solid rgba(1,169,130,.7);background:rgba(8,20,26,.55);color:#9fe8d0;font:600 18px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;', '✦');
 	open.dataset.hud = 'rail 40';
 	open.title = 'Talk to the guide (G)'; open.setAttribute('aria-label', 'Talk to the guide');
@@ -913,7 +1126,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const residentsB = el('button', btnCss, 'People'); residentsB.setAttribute('aria-label', 'Remembered people');
 	head.append(title, statusEl, gearB, closeB);
 	const questB = el('button', btnCss, 'Quests'); questB.setAttribute('aria-label','Story quests');
-	const tabs = el('div','display:flex;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');const storyB=el('button',btnCss,'Story');storyB.setAttribute('aria-label','Your story: standing, favours and fares');tabs.append(residentsB,questB,storyB,archiveB);
+	const tabs = el('div','display:flex;flex-wrap:wrap;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');const storyB=el('button',btnCss,'Story');storyB.setAttribute('aria-label','Your story: local activity, standing, favours and fares');tabs.append(residentsB,questB,storyB,archiveB);
 	const archiveControls=el('div','display:none;flex-shrink:0;padding:6px 12px;gap:6px;flex-wrap:wrap;');
 	const archiveSearch=el('input','min-width:0;flex:1;padding:8px;background:#172225;border:1px solid #586567;border-radius:8px;color:#fff;');archiveSearch.type='search';archiveSearch.placeholder='Search every conversation';archiveSearch.setAttribute('aria-label','Search conversations');
 	const archiveExport=el('button',btnCss,'Export'); archiveControls.append(archiveSearch,archiveExport);
@@ -939,6 +1152,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const b = el('div', who === 'me' ? 'align-self:flex-end;max-width:85%;padding:8px 11px;border-radius:12px 12px 4px 12px;background:rgba(1,169,130,.22);border:1px solid rgba(1,169,130,.35);'
 			: who === 'note' ? 'align-self:center;font:12px system-ui;color:rgba(255,255,255,.55);' : 'align-self:flex-start;max-width:90%;padding:8px 11px;border-radius:12px 12px 12px 4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);', text);
 		b.style.whiteSpace = 'pre-line';
+		b.style.overflowWrap='anywhere';b.style.boxSizing='border-box';if(who==='note')b.style.maxWidth='100%';
 		log.append(b); scroll();
 		return b;
 	}
@@ -1024,8 +1238,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			say(`${q.status.toUpperCase()} · ${q.cursor}/${q.steps.length} objectives\n${storySummary(q)}`, 'guide');
 			if (q.status==='offered' || q.status==='active') {
 				const row=el('div','display:flex;gap:8px;');
-				if (q.status==='offered') { const accept=el('button',btnCss,'Accept quest'); accept.onclick=()=>{const result=stories.accept(q.id,bodyKey);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(accept); }
-				const cancel=el('button',btnCss,q.status==='offered'?'Decline':'Cancel quest');cancel.onclick=()=>{const result=stories.cancel(q.id,bodyKey);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(cancel);log.append(row);
+				if (q.status==='offered') { const accept=el('button',btnCss,'Accept quest'); accept.onclick=()=>{const result=stories.accept(q.id,bodyKey);if(result.ok)questChanged(result.quest,false);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(accept); }
+				const cancel=el('button',btnCss,q.status==='offered'?'Decline':'Cancel quest');cancel.onclick=()=>{const result=stories.cancel(q.id,bodyKey);if(result.ok)questChanged(result.quest,false);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(cancel);log.append(row);
 			}
 		}
 		if (stories.status().error) say(stories.status().error,'note');
@@ -1034,19 +1248,168 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const caves = el('button', btnCss, 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
 	}
 	// your story so far: who the world takes you for, and what you have done for it
+	let livingActivityPage=0,livingActivityScope=null,communityPage=0,communityPageScope=null;
+	function updateProjectProgress() {
+		const record=projectProgressView;
+		if(!record || record.epoch!==viewEpoch || view!=='story' || panel.style.display==='none')return;
+		const snapshot=api.communityProjects?.progress?.() || api.communityProjects?.snapshot?.(), active=snapshot?.active;
+		if(communityScope(snapshot)!==record.scope || !active || active.projectId!==record.projectId || active.kind!==record.kind){record.line.textContent='Work stopped. Return to the site and start again.';record.finish.disabled=true;record.resume.hidden=false;return;}
+		const elapsed=Math.max(0,Number(active.elapsedMs)||0), duration=Math.max(1,Number(active.durationMs)||1), ready=elapsed>=duration;
+		record.line.textContent=ready?'Your contribution is ready to record.':`${active.kind==='survey'?'Surveying':'Working'} · ${Math.min(Math.floor(elapsed/1000),Math.ceil(duration/1000))}/${Math.ceil(duration/1000)} seconds. Stay here until finished.`;
+		record.progress.value=Math.min(1,elapsed/duration);record.finish.disabled=!ready || record.pending;record.finish.style.opacity=record.finish.disabled?'.45':'1';record.resume.hidden=true;
+	}
+	function showCommunityProjects() {
+		const snapshot=api.communityProjects?.snapshot?.();
+		if(!snapshot)return;
+		say('COMMUNITY PROJECTS','note');say(projectScopeText(snapshot),'note');
+		if(snapshot.error)say(snapshot.error,'note');
+		const epoch=viewEpoch, scope=communityScope(snapshot);
+		if(scope!==communityPageScope){communityPageScope=scope;communityPage=0;}
+		const pages=Math.max(1,Math.ceil(snapshot.projects.length/12));communityPage=Math.min(communityPage,pages-1);
+		const cards=communityProjectCards(snapshot,Date.now(),communityPage*12);
+		const valid=()=>view==='story' && viewEpoch===epoch && communityScope(api.communityProjects?.snapshot?.())===scope;
+		async function actProject(id,operation,args={},row=null) {
+			if(!valid())return;
+			if(row)for(const b of row.querySelectorAll('button'))b.disabled=true;
+			if(projectProgressView)projectProgressView.pending=true;
+			try{const result=await api.communityProjects.action(id,operation,args);if(!valid())return;const scrollTop=log.scrollTop;if(operation==='start' && result?.ok)communityPage=0;showStory();log.scrollTop=scrollTop;if(result?.message || result?.error)say(result.message || result.error,'note');}
+			catch{if(valid()){say('This project could not be checked. Please try again.','note');if(row)for(const b of row.querySelectorAll('button'))b.disabled=false;if(projectProgressView)projectProgressView.pending=false;}}
+		}
+		if(!cards.length)say('A little work here can leave something lasting. Choose a nearby site, survey it, and help bring it to life.','note');
+		for(const card of cards) {
+			say(card.line,'guide');
+			const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+			function button(label,operation,args){const b=el('button',btnCss,label);b.onclick=()=>actProject(card.id,operation,args,row);row.append(b);return b;}
+			button('Show project site','mark');
+			if(card.active) {
+				const line=el('div','color:#b8d8ce;'),progress=el('progress','width:100%;height:8px;flex-shrink:0;accent-color:#5bd8ad;');progress.max=1;progress.setAttribute('aria-label',card.active.kind==='survey'?'Survey progress':'Work progress');log.append(line,progress);
+				const finish=button('Record '+(card.active.kind==='survey'?'survey':'work'),'finish');finish.disabled=true;
+				button('Pause work','cancel');const resume=el('button',btnCss,'Review current work');resume.hidden=true;resume.onclick=showStory;row.append(resume);
+				projectProgressView={epoch,scope,projectId:card.id,kind:card.active.kind,line,progress,finish,resume,pending:false};
+			}else if(!card.done && !card.paused && !card.readyAt && snapshot.mode!=='offline') {
+				const kind=card.survey<1?'survey':'work';
+				if(kind==='survey' || card.work<3) { const start=button(kind==='survey'?'Survey site · 5 sec':'Help build · 30 sec','start',{kind});start.disabled=!!snapshot.active; }
+				for(const service of (card.serviceSources||[]).slice(0,3)) {
+					const requestId=typeof service==='string'?service:service.requestId || service.id;
+					if(requestId)button('Contribute '+(service.title || service.label || 'completed local work'),'contribute-service',{requestId});
+				}
+			}
+			if(card.done && card.kind==='resonance')button('Play the stones','play');
+			log.append(row);
+			const history=projectHistoryLines(card),events=history.slice(-2);
+			for(const event of events)say(event,'note');
+			if(history.length>2){const more=el('button',btnCss,'Read project history'),section=el('div','display:none;');for(const line of history)section.append(el('div','margin:8px 0;color:#b8c7c2;font-size:12px;white-space:pre-wrap;',line));more.onclick=()=>{const open=section.style.display==='none';section.style.display=open?'block':'none';more.textContent=open?'Close project history':'Read project history';};log.append(more,section);}
+		}
+		if(pages>1){const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');if(communityPage>0){const b=el('button',btnCss,'Earlier community projects');b.onclick=()=>{communityPage--;showStory();};row.append(b);}if(communityPage<pages-1){const b=el('button',btnCss,'More community projects');b.onclick=()=>{communityPage++;showStory();};row.append(b);}log.append(row);}
+		const availableSites=(snapshot.candidates || []).filter(c=>!snapshot.projects.some(p=>p.siteId===(c.siteId || c.id)));
+		if(availableSites.length) {
+			say('PLACES TO IMPROVE','note');
+			for(const candidate of availableSites.slice(0,4)) {
+				say(candidate.name,'note');const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+				const at=candidate.anchor, distance=at?Math.hypot(api.camera.position.x-at.x,api.camera.position.z-at.z):Infinity;
+				const near=candidate.canPropose ?? candidate.inRange ?? distance<=6;
+				if(near && snapshot.mode!=='offline')for(const kind of candidate.kinds) {
+					const b=el('button',btnCss,'Review '+projectKindLabel(kind).toLowerCase());
+					b.onclick=()=>{if(valid())showProjectReview({candidateId:candidate.id,kind,scope},null);};row.append(b);
+				}else {const b=el('button',btnCss,'Visit this site');b.onclick=()=>actProject(candidate.id,'mark',{},row);row.append(b);}
+				log.append(row);
+			}
+		}
+		updateProjectProgress();
+	}
+	function showLivingActivity() {
+		const snapshot=api.livingWorld?.snapshot?.();
+		if (!snapshot) return;
+		say('LIFE AROUND YOU','note');
+		if(snapshot.scope)say(activityScopeText(snapshot),'note');
+		if(snapshot.catchup?.text||snapshot.catchup?.message)say(snapshot.catchup.text||snapshot.catchup.message,'note');
+		if(snapshot.error)say(snapshot.error,'note');
+		for(const resident of (snapshot.residents || []).slice(0,4))say(resident.line+' Currently '+resident.activity.replaceAll('-', ' ')+'.','note');
+		const scope=snapshot.scope?.key||snapshot.scope?.name||snapshot.scope;
+		if(scope!==livingActivityScope){livingActivityScope=scope;livingActivityPage=0;}
+		const count=snapshot.activities?.length||0,pages=Math.max(1,Math.ceil(count/6));livingActivityPage=Math.min(livingActivityPage,pages-1);
+		const cards=activityCards(snapshot,livingActivityPage*6), epoch=viewEpoch;
+		if(!cards.length)say('No local activity has been recorded here yet. Meet residents and explore to discover what they are working on.','note');
+		for(const card of cards){
+			say(card.line,'guide'); for(const line of card.history)say(line,'note');
+			const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+			async function actLiving(action,options={}) {
+				if(view!=='story'||viewEpoch!==epoch)return;
+				for(const b of row.children)b.disabled=true;
+				try{
+					const result=await api.livingWorld.action(card.id,action,options);
+					if(view!=='story'||viewEpoch!==epoch)return;
+					if(result?.actor){talkTo(result.actor);return;}
+					if(result?.at && Number.isFinite(result.at.x) && Number.isFinite(result.at.z)){
+						livingContact={...result.at,y:Number.isFinite(result.at.y)?result.at.y:api.world().island.heightAt(result.at.x,result.at.z),bodyKey:api.social?.bodyKey(),radius:4,title:'Find '+(card.npcName||'the resident'),detail:card.title};
+						api.waypoint?.set(waypointMark());
+					}
+					if(result?.choices?.length){
+						say(result.message||'What would you like to propose?','note');
+						for(const c of result.choices.slice(0,4)){const b=el('button',btnCss,c.label);b.onclick=()=>actLiving('intervene',{choiceId:c.id});row.append(b);}
+					}else{showStory();if(result?.message||result?.error)say(result.message||result.error,'note');}
+				}catch{if(view==='story'&&viewEpoch===epoch)say('That activity could not be checked. Please try again.','note');}
+				finally{for(const b of row.children)b.disabled=false;}
+			}
+			function button(label,action,options){const b=el('button',btnCss,label);b.onclick=()=>actLiving(action,options);row.append(b);}
+			if(card.canJoin)button('Lend a hand','join');
+			if(card.canContact)button('Find '+(card.npcName||'the resident'),'contact');
+			if(card.pendingAck)button('Acknowledge result','acknowledge');
+			else if(card.canProgress)button('Continue task','progress');
+			if(card.canLeave||card.canRelease)button('Leave activity','release');
+			if(card.canIntervene){
+				if(card.choices.length)for(const c of card.choices)button(c.label,'intervene',{choiceId:c.id});
+				else button('Discuss alternatives','intervene');
+			}
+			log.append(row);
+		}
+		if(pages>1){
+			const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+			if(livingActivityPage>0){const b=el('button',btnCss,'Earlier activities');b.onclick=()=>{livingActivityPage--;showStory();};row.append(b);}
+			if(livingActivityPage<pages-1){const b=el('button',btnCss,'More local activity');b.onclick=()=>{livingActivityPage++;showStory();};row.append(b);}
+			log.append(row);
+		}
+		const shown=new Set(cards.flatMap(c=>c.history));
+		const recent=(snapshot.history||[]).slice(-5).map(e=>typeof e==='string'?e:e.text||e.message).filter(t=>t&&!shown.has(t));
+		if(recent.length){say('RECENT LOCAL EVENTS','note');for(const line of recent)say(String(line).slice(0,320),'note');}
+		const routines=(snapshot.routines||[]).slice(0,4);
+		if(routines.length)say(routines.map(a=>`${a.name||'A resident'} · ${String(a.activity||'daily life').replaceAll('-',' ')}`).join('\n'),'note');
+	}
 	function showStory() {
 		endTalk(); resetView('story'); show(true);
 		const M = api.combat?.morality, R = M?.reactions?.(), me = M?.me?.() || {}, E = api.errands?.info?.() || {}, F = api.fares?.info?.() || {};
 		const bar = (k) => '▰'.repeat(Math.round(k * 10)) + '▱'.repeat(10 - Math.round(k * 10));
 		const rung = (ladder, count, what) => { const r = rankOf(ladder, count); return `${r.title} · ${count} ${what}${r.next ? `\n${bar(r.k)} ${r.next.at - count} more to ${r.next.title}` : '\nThe top of the ladder.'}`; };
+		const bonds=chronicle.bonds(api.social?.bodyKey()).filter(b=>b.last);
+		if(bonds.length){say('PEOPLE WHO KNOW YOU','note');for(const b of bonds.slice(-8))say(`${b.name} · ${b.label}\n${b.last}`,'guide');}
+		const projects=chronicle.projects(api.social?.bodyKey());
+		if(projects.length){say('WHAT WE LEFT BEHIND','note');for(const p of projects.slice(-8))say(`${p.name} · ${p.npc}\n${p.choice==='marked'?'Marked route: small signs remain at your surveyed stops.':'Quiet route: saved in your journal; the landscape stays untouched.'}\n${p.landmarks.map(t=>t.name).join(' → ')}`,'guide');}
+		showLivingActivity();
+		showCommunityProjects();
+		if(chronicle.status().error)say(chronicle.status().error,'note');
 		const D = api.daily?.list?.();
 		if (D) {
 			say(`TODAY · ${D.goals.filter((g) => g.done).length} of ${D.goals.length} done${D.bonus ? ' · bonus paid' : ''}`, 'note');
 			say(D.goals.map((g) => `${g.done ? '✓' : '○'} ${g.text}${g.need > 1 && !g.done ? ` (${g.got}/${g.need})` : ''} · ${g.credits} credits`).join('\n') + (D.bonus ? '' : '\nAll three: a bonus of 150 credits'), 'guide');
 		}
 		say('WHO THEY SAY YOU ARE', 'note');
-		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Nobody knows your name yet'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
+		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Your wider reputation is still taking shape'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
 		if (R?.song) say(R.song, 'note');
+		const soul = api.soul, saved = soul?.info();
+		if (saved) {
+			say(saved.status === 'saved' && !saved.pending ? 'Reputation saved across visits and rooms.' : saved.savedLocally ? (saved.cloudAvailable === false ? 'Reputation saved on this device.' : 'Reputation saved on this device. Cloud save pending.') : 'Reputation is not safely saved yet. Save your recovery key.', 'note');
+			if (saved.error) say(saved.error, 'note');
+			say('Your standing does not fade with time. To release it, fly to Gargantua’s island and walk into the soul tunnel to the Quiet Well.', 'note');
+			const copy = el('button', btnCss, 'Save soul recovery key');
+			copy.onclick = async () => { try { await navigator.clipboard.writeText(soul.recoveryKey()); say('Recovery key copied. Keep it private and safe. It restores this soul on another device.', 'note'); } catch { say('Clipboard unavailable. Use a browser with clipboard access to save your recovery key.', 'note'); } };
+			const restore = el('button', btnCss, 'Restore a saved soul');
+			restore.onclick = () => {
+				const input = el('input', 'padding:10px;color:#fff;background:#10252d;border:1px solid #777;border-radius:8px;'); input.type = 'password'; input.autocomplete = 'off'; input.placeholder = 'Private recovery key'; input.setAttribute('aria-label','Private soul recovery key');
+				const use = el('button', btnCss, 'Restore'); use.onclick = async () => { use.disabled = true; try { await soul.recover(input.value); input.value = ''; api.multiplayer?.linkSoul?.(soul); showStory(); } catch(e) { say(e.message, 'note'); use.disabled = false; } }; log.append(input, use);
+			};
+			log.append(copy, restore);
+		}
+
 		say('FAVOURS', 'note');
 		say(rung('favours', E.done || 0, 'done') + (E.kept ? `\nWallets kept: ${E.kept}` : ''), 'guide');
 		if (E.errand) {
@@ -1199,5 +1562,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!rec || rec.seed !== p.P.dna.seed) { rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed }; people.set(p, rec); }
 		return rec.persona;
 	}
-	return { voice, personaOf, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
+	return { voice, personaOf, chronicle, routeMarks, relationshipFor:p=>p?.residentId?chronicle.relationship(api.social.bodyKey(),residentKey(p.residentId)):null, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }

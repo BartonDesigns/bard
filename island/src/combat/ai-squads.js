@@ -316,7 +316,7 @@ export function createSquads(ctx) {
 		let best = null, bd = h.B.sight * (h.alert ? 1.8 : 1);
 		const dMe = Math.hypot(eye.x - h.pos.x, eye.z - h.pos.z);
 		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && F.kind !== 'military' && ctx.wanted() > 0) || (F.kind === 'military' && (ctx.wanted() >= 5 || !!ctx.trespass?.(h))) || (F.kind === 'mercs' && ctx.bounty() > 0);
-		if (hateMe && !ctx.playerDown() && dMe < bd) { best = ME; bd = dMe; }
+		if (hateMe && !ctx.playerDown() && !ctx.cloaked?.() && dMe < bd) { best = ME; bd = dMe; }
 		for (const o of list) {
 			if (o === h || o.dead || o.surrendered || o.crew || o.recall || o.fid === h.fid || !relations.hostile(h.fid, o.fid) || ctx.ignore?.(h, o)) continue;
 			const d = Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z);
@@ -433,6 +433,11 @@ export function createSquads(ctx) {
 			tickHealth(h.H, dt);
 			if (h.crew) { crewStep(h, dt, d); bounds(h); continue; }
 			if (h.surrendered) { yieldStep(h, dt, d); bounds(h); continue; }
+			// held still or put to flight by a spell (magic/caster.js lays h.T.hex on and wears it off)
+			const hx = h.T.hex;
+			if (hx && (hx.hold > 0 || hx.fear > 0)) { hexStep(h, dt, hx, eye); bounds(h); continue; }
+			// (cloaked, you are lost to those hunting you)
+			if (h.target === ME && ctx.cloaked?.()) { h.target = null; h.los = false; }
 			// a target, and sight of it, a few times a second
 			h.losT -= dt; h.targetT -= dt;
 			if (h.losT <= 0) {
@@ -473,8 +478,18 @@ export function createSquads(ctx) {
 			if (h.deadT > 6.5) release(h);
 		}
 	}
+	// a fighter under a spell: held, it stands (a drone hangs where it is); afraid, it runs from you
+	function hexStep(h, dt, hx, eye) {
+		const M = h.body?.M;
+		if (hx.hold > 0) { if (M) { M.want.speed = 0; M.want.run = 0; } return; }
+		const ax = h.pos.x - eye.x, az = h.pos.z - eye.z, l = Math.hypot(ax, az) || 1;
+		h.target = null; h.los = false;
+		if (M) { M.want.heading = Math.atan2(ax / l, az / l); M.want.speed = h.B.speed * 1.2 * (hx.slowK || 1); M.want.run = 1; }
+		else if (h.kind === 'crawler') { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * h.B.speed * dt; h.pos.z += az / l * h.B.speed * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); h.mesh.position.copy(h.pos); h.mesh.rotation.set(0, h.yaw, 0); }
+	}
 	function walk(h, gx, gz, speed, run) {
 		const M = h.body.M;
+		speed *= h.T.hex?.slowK || 1;
 		// no headway for a while (a wall, a car in the way): a sidestep along it, then on
 		if (h.side > 0) { gx = h.pos.x + h.sideX * 4; gz = h.pos.z + h.sideZ * 4; }
 		const dx = gx - h.pos.x, dz = gz - h.pos.z, d = Math.hypot(dx, dz);
@@ -635,6 +650,7 @@ export function createSquads(ctx) {
 			if (h.goalT <= 0) { h.goalT = rnd(3, 6); h.yaw += rnd(-1.5, 1.5); }
 			speed = 1.2;
 		}
+		speed *= h.T.hex?.slowK || 1;
 		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
 		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
 		const rear = h.leap > 0.35 ? Math.sin((0.9 - h.leap) / 0.55 * Math.PI / 2) * 0.5 : 0;

@@ -31,7 +31,7 @@ export function addLodFade(material, mode, band = null) {
 	const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey?.bind(material);
 	const uBand = { value: new THREE.Vector4(...(band || [NONE_IN[0], NONE_IN[1], NONE_OUT[0], NONE_OUT[1]])) };
 	material.onBeforeCompile = (sh, r) => {
-		if (prev) prev(sh, r);
+		if (prev) prev.call(material, sh, r);
 		const calc = mode === 'attribute' ? 'vLodK = aFade;' : mode === 'building' ? `float dL = max(0.0, length(aLodAnchor.xy - cameraPosition.xz) - aLodAnchor.z); vLodK = vec2(0.0, (1.0 - smoothstep(uLodBand.z, uLodBand.w, dL)) * smoothstep(0.0,.5,max(0.0,uDetailNow-aLodAnchor.w)));` : `
 			{
 				#ifdef USE_INSTANCING
