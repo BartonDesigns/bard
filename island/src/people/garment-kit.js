@@ -175,7 +175,9 @@ export function collarGeometry(cut, ring, { polo = false, lo = false, out: furth
 		const T = S.clone().add(V(0, stand, 0)).addScaledVector(out, -0.002);
 		const fold = T.clone().addScaledVector(out, 0.006).add(V(0, 0.002, 0));
 		const point = smooth((Math.abs(a) - 2.15) / 0.75) * (polo ? 0.6 : 1);
-		const Fe = S.clone().addScaledVector(out, fall * 0.55 + 0.012 * point).add(V(0, 0.004 - 0.032 * point, 0));
+		// (an open collar's points lie down on the chest, spread to the sides, not out from it)
+		const lie = open ? point : 0;
+		const Fe = S.clone().addScaledVector(out, fall * 0.55 * (1 - 0.65 * lie) + 0.012 * point * (1 - lie)).add(V(Math.sign(S.x) * 0.014 * lie, 0.004 - 0.032 * point - 0.012 * lie, 0));
 		cols.push([S, T, fold, fold.clone().lerp(Fe, 0.5).addScaledVector(out, 0.004), Fe]);
 	}
 	const rows = [];

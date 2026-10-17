@@ -97,7 +97,8 @@ const HERO = {
 			'eye-size': 0.12, 'eye-tilt': 0.15, 'upper-lip': 0.22, 'lower-lip': 0.3, 'cupids-bow': 0.25, 'mouth-width': 0.05, 'mouth-corners': 0.08,
 			'brow-ridge': -0.1, 'brow-angle': 0.1, forehead: -0.05, 'ear-out': -0.1, 'head-oval': 0.4, 'head-heart': 0.28, 'head-fat': -0.22, 'neck-width': -0.12,
 		},
-		hair: { style: 'ponytail01', vol: 1, beard: '', cut: 'pony' },
+		// (the sheet's ponytail is full, not slicked: a little more volume than the style as made)
+		hair: { style: 'ponytail01', vol: 1.07, beard: '', cut: 'pony' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none', tuck: true },

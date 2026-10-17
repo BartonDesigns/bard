@@ -1223,7 +1223,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const O0 = o.outer;
 	if (O0 && O0.open && (isShirted(O0) || O0.collar) && !(T0 && (isShirted(T0) || T0.collar))) {
 		const off = offsets(o);
-		put(collarGeometry(cut, kitRing(), { lo: !!P0.lo, out: Math.max(0, off.outer - off.top), open: true }), 'spine01', O0.col, 0, O0.fab === 'canvas' ? 2 : 0);
+		put(collarGeometry(cut, kitRing(), { lo: !!P0.lo, out: Math.max(0, off.outer - off.top), open: true }), 'spine01', O0.pat === 'plaid' || O0.pat === 'check' ? new THREE.Color(O0.col).multiplyScalar(0.8).getHex() : O0.col, 0, O0.fab === 'canvas' ? 2 : 0);
 	}
 	// the bun of hair worn up, and a headscarf
 	if (o.hair?.bun && hairCol) { const bun = new THREE.SphereGeometry(0.05, 12, 8); bun.translate(cx, top - 0.02, sk.z0 + 0.01); put(bun, 'head', hairCol); }
