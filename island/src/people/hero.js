@@ -55,7 +55,9 @@ const HERO = {
 			'nose-width': -0.12, 'nose-hump': -0.08, 'nose-length': 0.04, 'eye-tilt': 0.05, 'eye-open': -0.08, 'eye-spacing': -0.02,
 			'mouth-width': 0.04, 'upper-lip': 0.02, 'lower-lip': 0.08, 'head-square': 0.3, 'head-oval': 0.25, 'head-fat': -0.3, 'neck-width': 0.18,
 		},
-		hair: { style: 'short01', vol: 1.12, fadeK: 0, beard: 'stubble', cut: 'textured' },
+		// (cut: the painted crop under the hair follows its hairline, people/hair.js scalpMask; the
+		// swept cut's is crisp, where a faded cut's blurs a band of hair colour over the temples)
+		hair: { style: 'short01', vol: 1.12, fadeK: 0, beard: 'stubble', cut: 'swept' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
 			// (a fitted charcoal top, its sleeves pushed up the forearms)
