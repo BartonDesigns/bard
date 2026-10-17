@@ -126,7 +126,7 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 		for (const [o, n, t, from] of [[a, n0, ta, va], [b, n1, tb, vb]]) {
 			const along = b.clone().sub(a).normalize(), across = new THREE.Vector3().crossVectors(n, along).normalize();
 			if (across.y < 0) across.multiplyScalar(-1);
-			const hw = (0.0075 * (1 - t) + 0.0028 * t) * thick * S * 0.55;
+			const hw = (0.0075 * (1 - t) + 0.0028 * t) * thick * S * (P.dna.brows?.fill ? 0.85 : 0.55);
 			for (const sd of [-1, 1]) { const q = o.clone().addScaledVector(across, sd * hw + 0.0006 * S); onSkin(q, 0.0004); quad.push(vert(q.x, q.y, q.z, sd < 0 ? 0 : 1, t, 5, from)); }
 		}
 		I.push(quad[0], quad[2], quad[3], quad[0], quad[3], quad[1]);
@@ -237,7 +237,7 @@ float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 		float w = 0.5 * (1.0 - vSt.y * 0.8);
 		a = 1.0 - smoothstep(w * 0.45, w, abs(vSt.x - 0.5));
 		c = k == 4 ? uGrey : uHair;
-		gRgh = 0.85; gSpec = 0.15; gLit = 0.7;
+		gRgh = 0.85; gSpec = 0.15; gLit = uFill > 1.0 ? 0.82 : 0.7;
 	} else if (k == 5) {
 		// the brow's own tone under its hairs: soft across, fullest at the inner end, fading to
 		// the tail
@@ -258,7 +258,7 @@ float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRgh;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.directSpecular *= gSpec; reflectedLight.indirectSpecular *= gSpec; reflectedLight.directDiffuse *= gLit; reflectedLight.indirectDiffuse *= gLit;');
 	};
-	m.customProgramCacheKey = () => 'crysis-face-detail-4';
+	m.customProgramCacheKey = () => 'crysis-face-detail-5';
 	return m;
 }
 
