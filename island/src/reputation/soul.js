@@ -5,8 +5,12 @@ import { SOUL_FEATURE } from './sanctuary.js';
 const KEY = 'l99-soul-v1', EVENT = 'l99-soul-deed:';
 const tokenPattern = /^[a-f0-9]{64}$/;
 const token = () => [...crypto.getRandomValues(new Uint8Array(32))].map(v => v.toString(16).padStart(2, '0')).join('');
-export function createSoul({ morality, storage = globalThis.localStorage, url = roomsURL(), request = globalThis.fetch?.bind(globalThis), changed = () => {} } = {}) {
+const CLOUD_UNAVAILABLE = 'Cloud reputation is not available yet. Your deeds remain saved on this device.';
+const CLOUD_OFFLINE = 'Cloud reputation is temporarily unavailable. Your deeds remain saved on this device.';
+const CAPABILITY_TTL = 5 * 60000;
+export function createSoul({ morality, storage = globalThis.localStorage, url = roomsURL(), request = globalThis.fetch?.bind(globalThis), changed = () => {}, now = () => Date.now() } = {}) {
 	let state, busy = null, due = 0, stopped = false, status = 'local', error = '', saving = true;
+	let capability = null, capabilityUntil = 0, checking = null, retryAt = 0, failures = 0, cloudError = '';
 	const volatile = new Map();
 	try { state = JSON.parse(storage.getItem(KEY)); } catch { /* new soul */ }
 	if (!tokenPattern.test(state?.token || '')) state = { token: token(), base: morality.snapshot(), revision: -1 };
@@ -33,18 +37,51 @@ export function createSoul({ morality, storage = globalThis.localStorage, url = 
 		forget(pending().filter(e => e.epoch < (state.base.epoch || 0)));
 		paint();
 	}
-	async function call(body, key = state.token) {
+	function pauseCloud(message = CLOUD_OFFLINE, delay = Math.min(CAPABILITY_TTL, 30000 * 2 ** Math.min(failures++, 4))) {
+		cloudError = message; retryAt = now() + delay; capabilityUntil = 0;
+		return Error(message);
+	}
+	async function read(path, options) {
 		const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
 		try {
-			const r = await request(url.replace(/\/$/, '') + '/souls/me', { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + key, ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), signal: controller.signal });
-			const data = await r.json();
-			if (!r.ok && r.status !== 409) throw Error(r.status === 404 ? 'Cloud reputation is not available yet. Your deeds remain saved on this device.' : data.error || 'Could not save your standing.');
-			return { data, conflict: r.status === 409 };
-		} finally { clearTimeout(timer); }
+			const r = await request(url.replace(/\/$/, '') + path, { ...options, signal: controller.signal });
+			let data;
+			try { data = await r.json(); } catch (e) { if (r.ok) throw e; data = {}; }
+			return { r, data };
+		} catch { throw pauseCloud(); }
+		finally { clearTimeout(timer); }
+	}
+	async function cloudReady() {
+		if (!url || !request || stopped) throw Error(CLOUD_UNAVAILABLE);
+		if (now() < retryAt) throw Error(cloudError);
+		if (capability === true && now() < capabilityUntil) return;
+		if (checking) return checking;
+		// Older rooms Workers do not accept Authorization. Probe their public status
+		// before sending a private soul key or triggering a credentialed preflight.
+		checking = (async () => {
+			const { r, data } = await read('/status', { method: 'GET', cache: 'no-store' });
+			if (!r.ok) throw pauseCloud();
+			capability = Array.isArray(data.features) && data.features.includes(SOUL_FEATURE);
+			if (!capability) throw pauseCloud(CLOUD_UNAVAILABLE, CAPABILITY_TTL);
+			capabilityUntil = now() + CAPABILITY_TTL;
+		})();
+		try { await checking; } finally { checking = null; }
+	}
+	async function call(body, key = state.token) {
+		await cloudReady();
+		if (stopped) throw Error(CLOUD_UNAVAILABLE);
+		const { r, data } = await read('/souls/me', { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + key, ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+		if (!r.ok && r.status !== 409) {
+			if (r.status === 404 && body) { capability = false; throw pauseCloud(CLOUD_UNAVAILABLE, CAPABILITY_TTL); }
+			if (r.status === 429 || r.status >= 500) throw pauseCloud();
+			throw Error(data.error || 'Could not save your standing.');
+		}
+		failures = 0; retryAt = 0; cloudError = '';
+		return { data, conflict: r.status === 409 };
 	}
 	function sync() {
 		if (busy) return busy;
-		if (!url || !request || stopped) return Promise.resolve(false);
+		if (!url || !request || stopped || now() < retryAt) return Promise.resolve(false);
 		busy = (async () => {
 			const savingSoul = state.token;
 			try {
@@ -54,8 +91,8 @@ export function createSoul({ morality, storage = globalThis.localStorage, url = 
 				if (state.revision < 0) body.legacy = state.base;
 				const { data, conflict } = await call(body, savingSoul);
 				if (state.token !== savingSoul) return false;
-				receive(data, conflict ? [] : batch); status = 'saved'; error = ''; due = Date.now() + (pending().length ? 1000 : 30000); changed(info()); return true;
-			} catch (e) { if (state.token === savingSoul) { status = 'local'; error = e.message; due = Date.now() + 30000; changed(info()); } return false; }
+				receive(data, conflict ? [] : batch); status = 'saved'; error = ''; due = now() + (pending().length ? 1000 : 30000); changed(info()); return true;
+			} catch (e) { if (state.token === savingSoul) { status = 'local'; error = e.message; due = Math.max(retryAt, now() + 30000); changed(info()); } return false; }
 			finally { busy = null; }
 		})();
 		return busy;
@@ -64,9 +101,9 @@ export function createSoul({ morality, storage = globalThis.localStorage, url = 
 		const d = { id: e.id, soul: state.token, epoch: e.epoch || 0, kind: e.kind, target: e.target, place: e.place, world: e.world, region: e.region, ctx: Object.fromEntries(e.ctx.map(k => [k, true])), t: e.t };
 		volatile.set(d.id, d);
 		try { storage.setItem(EVENT + d.id, JSON.stringify(d)); saving = true; } catch { saving = false; error = 'New deeds could not be saved on this device.'; }
-		due = Math.min(due, Date.now() + 750);
+		due = Math.min(due, now() + 750);
 	});
-	function info() { return { status, savedLocally: saving, pending: pending().length, revision: state.revision, epoch: state.base.epoch || 0, cleansedAt: state.base.cleansedAt || 0, error, feature: SOUL_FEATURE }; }
+	function info() { return { status, savedLocally: saving, pending: pending().length, revision: state.revision, epoch: state.base.epoch || 0, cleansedAt: state.base.cleansedAt || 0, error, feature: SOUL_FEATURE, cloudAvailable: capability, retryAt }; }
 	async function begin(pose) {
 		while (pending().length) { if (!await sync()) throw Error('Save your standing before cleansing. Check your connection.'); }
 		if (!await sync()) throw Error('The Quiet Well needs a connection to remember your cleansing.');
@@ -86,11 +123,11 @@ export function createSoul({ morality, storage = globalThis.localStorage, url = 
 		const { data } = await call(null, key);
 		if (!data.ledger) throw Error('No soul was found for that key.');
 		// The old soul and its queued deeds remain on the server/device; this switches identity.
-		state = { token: key, base: data.ledger, revision: data.revision }; status = 'saved'; error = ''; due = Date.now() + 30000; writeState(); paint(); changed(info());
+		state = { token: key, base: data.ledger, revision: data.revision }; status = 'saved'; error = ''; due = now() + 30000; writeState(); paint(); changed(info());
 	}
 	paint();
 	return { sync, begin, cleanse, recover, info, recoveryKey: () => state.token, credentials: () => state.token,
-		update() { if (Date.now() >= due) { due = Date.now() + 30000; void sync(); } },
+		update() { if (now() >= Math.max(due, retryAt)) { due = now() + 30000; void sync(); } },
 		dispose() { stopped = true; unsubscribe(); },
 	};
 }

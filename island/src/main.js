@@ -83,6 +83,8 @@ import { captureResources } from './world/resources.js';
 import { preferLite, clearLite, GPU_LITE } from './world/gpulite.js';
 import { createGovernor, qualityNow } from './world/governor.js';
 import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
+import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
+import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
 import { bodyCount } from './people/body.js';
 import { createBoardwalk } from './bay/boardwalk.js';
@@ -456,6 +458,12 @@ export function createIslandWorld() {
 	const graphics = createGraphicsRenderer({ canvas: document.createElement('canvas'), Renderer: THREE.WebGLRenderer,
 		replaceCanvas: () => document.createElement('canvas'), storage, phone: isPhone, safe: SAFE, mode: initialMode });
 	const renderer = graphics.renderer;
+	const recovery = createGraphicsRecovery(), draw = renderer.render.bind(renderer);
+	renderer.render = (...args) => {
+		if (recovery.blocked()) throw graphicsReloadError();
+		if (renderer.getContext().isContextLost()) return;
+		return draw(...args);
+	};
 	const dom = buildDom(graphics.canvas);
 	// a touch screen's controls: icons only, laid out by thumb (ui/touch-skin.js)
 	skinTouch(dom.mount);
@@ -487,6 +495,7 @@ export function createIslandWorld() {
 		// the browser finally dispatches contextlost. The last linked shader alone
 		// can be an unrelated tiny effect by then.
 		if (own.includes('uBayOn')) { linking.failedGround = true; preferLite(); }
+		if (own.includes('uSgFar')) recoverSignage(storage);
 		console.error('[shader failed]', Math.round(text.length / 1000) + ' KB', 'lost:', gl.isContextLost(), 'link:', gl.getProgramInfoLog(program), 'vs:', gl.getShaderInfoLog(vs), 'fs:', gl.getShaderInfoLog(fs), 'defines:', defs.join(' '), 'uniforms:', own.join(' '));
 	};
 	const fullUnits = () => { const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); };
@@ -501,6 +510,8 @@ export function createIslandWorld() {
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
 		lost = true;
+		const blocked = recovery.lost();
+		if (blocked || /signage-|uSgFar/.test(linking.what)) recoverSignage(storage);
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
 		// (the light ground only when it was the ground being built: a loss elsewhere is no reason)
@@ -508,10 +519,15 @@ export function createIslandWorld() {
 		governor.lost();
 		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
 		shaderWarm.reset();
+		if (blocked) {
+			window.L99Loading.fail(graphicsReloadError(), { exit: () => api.close() });
+			return;
+		}
 		hint('The graphics were reset. Restoring…', 6000, 3);
 		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 8000);
 	});
 	dom.canvas.addEventListener('webglcontextrestored', () => {
+		if (recovery.blocked()) return; // The recovery screen owns the next user action.
 		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
 		applyQuality();
 		// (the frame clock starts again from now, not from before the loss)
@@ -539,6 +555,7 @@ export function createIslandWorld() {
 	};
 	// (the cars' paint and glass reflect this sky)
 	bindCarSky(shared);
+	bindSignLighting(shared);
 	// ground occupancy around the player (filled by vegetation, read by terrain and grass)
 	// r: bare, shaded earth (trees, palms, rocks); g: a soil mound that grass hugs (every plant)
 	shared.occ = new THREE.DataTexture(new Uint8Array(256 * 256 * 2), 256, 256, THREE.RGFormat, THREE.UnsignedByteType);
@@ -1000,6 +1017,7 @@ export function createIslandWorld() {
 		window.L99Loading.stage('Your place is ready');
 	}
 	function build(params) {
+		if (recovery.blocked()) return Promise.reject(graphicsReloadError());
 		if (buildPromise) return buildPromise;
 		building = true;
 		buildPromise = buildWorld(params).catch(error => { teardown(); throw error; }).finally(() => { building = false; buildPromise = null; });
@@ -1653,6 +1671,7 @@ export function createIslandWorld() {
 		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = Q.reflect;
+		syncSignageMaterials(scene);
 		world?.rays?.quality(Q.fx);
 		world?.spray?.quality(Q.fx);
 		resize();
@@ -1740,6 +1759,7 @@ export function createIslandWorld() {
 		if (!running) return;
 		requestAnimationFrame(frame);
 		try { tick(now); } catch (err) {
+			if (lost || recovery.blocked()) return;
 			const key = String(err?.message || err);
 			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
 			// The player has already moved this frame, and the steps after the failing one never
@@ -2240,6 +2260,7 @@ export function createIslandWorld() {
 			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close() }) : enter();
 		},
 		async enter(params = {}) {
+			if (recovery.blocked()) throw graphicsReloadError();
 			// on Earth the ship waits in orbit: ⇪ always has somewhere to go
 			origin = params.origin || (params.earth !== false ? EARTH_ORIGIN : null);
 			// a kept or shared spot: one loading card, with its name, until share.js has you there

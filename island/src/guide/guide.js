@@ -1397,7 +1397,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (R?.song) say(R.song, 'note');
 		const soul = api.soul, saved = soul?.info();
 		if (saved) {
-			say(saved.status === 'saved' && !saved.pending ? 'Reputation saved across visits and rooms.' : saved.savedLocally ? 'Reputation saved on this device. Cloud save pending.' : 'Reputation is not safely saved yet. Save your recovery key.', 'note');
+			say(saved.status === 'saved' && !saved.pending ? 'Reputation saved across visits and rooms.' : saved.savedLocally ? (saved.cloudAvailable === false ? 'Reputation saved on this device.' : 'Reputation saved on this device. Cloud save pending.') : 'Reputation is not safely saved yet. Save your recovery key.', 'note');
 			if (saved.error) say(saved.error, 'note');
 			say('Your standing does not fade with time. To release it, fly to Gargantua’s island and walk into the soul tunnel to the Quiet Well.', 'note');
 			const copy = el('button', btnCss, 'Save soul recovery key');

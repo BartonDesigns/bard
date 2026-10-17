@@ -256,8 +256,10 @@ export function createTerrain(island, shared) {
 				// saturated, drying slowly through the wave, and glossy only for the first few
 				// seconds as the water drains out of it
 				float covered = 1.0 - smoothstep(swL - 0.02, swL + 0.08, h);
-				float ran = (1.0 - smoothstep(swS.y - 0.015, swS.y + 0.02, h)) * step(0.0, swS.z);
-				float reached = ran * exp(-swS.z * 0.3);
+				// (its top edge ragged and soft, and the film drains first from the top, so the gloss
+				// thins out toward it: never a bright drawn line along the run's highest reach)
+				float ran = (1.0 - smoothstep(swS.y - 0.03 - 0.025 * n3, swS.y + 0.02, h)) * step(0.0, swS.z);
+				float reached = ran * exp(-swS.z * 0.3) * (1.0 - smoothstep(swS.y - 0.07, swS.y, h) * 0.75);
 				float soak = max(covered, reached * 0.9);
 				float wet = max(max(band * 0.75, covered), ran * exp(-swS.z * 0.06)) * step(-2.0, h);
 				// footprints in soft sand, smoothed away where the sea has been
