@@ -292,8 +292,8 @@ Screenshots are in [verification/character-sheet/](verification/character-sheet/
 
 ## Not done yet
 
-- **Garments on the body**: worn garments do not change the avatar's look, and have no 3D model in the gear sheet.
-  Both are look changes for the owner to see first.
+- **Garments on the body**: done, see [armor-and-combat-gear-2026-10-17.md](armor-and-combat-gear-2026-10-17.md).
+  Garments still have no 3D model in the gear sheet.
 - **Re-attuning**: an item cannot be re-attuned. Its school is fixed by its id.
 - **Where garments come from**: they are not yet found in the world (field contracts' caches, aether wells). Only
   shops sell them.

@@ -38,6 +38,29 @@ const STATS = {
 	'fieldcraft-gloves': [['Precision', 3, 'pt'], ['Swiftness', 2, 'pt']],
 	'trailstrider-boots': [['Swiftness', 3, 'pt'], ['Vigour', 2, 'pt']],
 	'duskwalker-boots': [['Swiftness', 3, 'pt'], ['Focus', 2, 'pt']],
+	'aetherweave-trousers': [['Focus', 3, 'pt'], ['Vigour', 2, 'pt']],
+	'rangers-trousers': [['Armour', 2, '%', 6], ['Swiftness', 2, 'pt'], ['Precision', 2, 'pt']],
+	// armour: Armour (harm turned aside, grows to a cap), Weight (kg: slows you past a light
+	// load) and Spellcraft (spells' strength lost to steel); neither of the last two grows
+	'kettle-helm': [['Armour', 5, '%', 12], ['Weight', 2.5, 'kg'], ['Spellcraft', -2, '-%'], ['Resolve', 2, 'pt']],
+	'great-helm': [['Armour', 8, '%', 18], ['Weight', 3.5, 'kg'], ['Spellcraft', -5, '-%'], ['Resolve', 3, 'pt'], ['Vigour', 1, 'pt']],
+	'gambeson': [['Armour', 6, '%', 14], ['Weight', 3, 'kg'], ['Vigour', 2, 'pt'], ['Resolve', 1, 'pt']],
+	'mail-hauberk': [['Armour', 11, '%', 24], ['Weight', 10, 'kg'], ['Spellcraft', -4, '-%'], ['Resolve', 3, 'pt'], ['Vigour', 2, 'pt']],
+	'plate-cuirass': [['Armour', 16, '%', 32], ['Weight', 14, 'kg'], ['Spellcraft', -8, '-%'], ['Resolve', 4, 'pt'], ['Vigour', 3, 'pt']],
+	'mail-chausses': [['Armour', 6, '%', 14], ['Weight', 5, 'kg'], ['Spellcraft', -2, '-%'], ['Resolve', 2, 'pt']],
+	'plate-greaves': [['Armour', 8, '%', 18], ['Weight', 6, 'kg'], ['Spellcraft', -3, '-%'], ['Resolve', 2, 'pt'], ['Vigour', 1, 'pt']],
+	'plate-gauntlets': [['Armour', 4, '%', 10], ['Weight', 1.5, 'kg'], ['Spellcraft', -4, '-%'], ['Precision', 2, 'pt']],
+	'leather-bracers': [['Armour', 2, '%', 5], ['Weight', 0.6, 'kg'], ['Precision', 2, 'pt'], ['Swiftness', 1, 'pt']],
+	'sabatons': [['Armour', 4, '%', 10], ['Weight', 2, 'kg'], ['Spellcraft', -1, '-%'], ['Resolve', 2, 'pt']],
+	'riding-boots': [['Armour', 2, '%', 5], ['Weight', 1.2, 'kg'], ['Swiftness', 2, 'pt'], ['Vigour', 1, 'pt']],
+	'ops-cap': [['Precision', 3, 'pt'], ['Focus', 1, 'pt']],
+	'ballistic-helmet': [['Armour', 7, '%', 16], ['Weight', 1.5, 'kg'], ['Resolve', 2, 'pt'], ['Precision', 2, 'pt']],
+	'combat-shirt': [['Armour', 2, '%', 5], ['Weight', 0.5, 'kg'], ['Swiftness', 2, 'pt'], ['Precision', 1, 'pt']],
+	'chest-rig': [['Armour', 4, '%', 10], ['Weight', 3, 'kg'], ['Precision', 2, 'pt'], ['Swiftness', 1, 'pt']],
+	'plate-carrier': [['Armour', 14, '%', 30], ['Weight', 9, 'kg'], ['Resolve', 3, 'pt'], ['Vigour', 2, 'pt']],
+	'combat-trousers': [['Armour', 3, '%', 7], ['Weight', 1, 'kg'], ['Swiftness', 2, 'pt'], ['Resolve', 1, 'pt']],
+	'tactical-gloves': [['Armour', 1, '%', 3], ['Weight', 0.2, 'kg'], ['Precision', 3, 'pt']],
+	'combat-boots': [['Armour', 3, '%', 7], ['Weight', 1.4, 'kg'], ['Swiftness', 2, 'pt'], ['Vigour', 1, 'pt']],
 	'hunting-net': [['Capture', 30, '%', 95], ['Reach', 6, 'u']],
 	'trail-scent-kit': [['Trail length', 120, 'u'], ['Clarity', 50, '%', 99]],
 	'door-brace': [['Hold', 40, ''], ['Setup speed', 50, '']],
@@ -66,7 +89,8 @@ export function cleanInstance(x, known = () => true) {
 export function statsOf(inst) {
 	const rows = STATS[inst?.i] || [];
 	const m = statMult(inst.l, inst.t), next = inst.l < MAX_LEVEL ? statMult(inst.l + 1, inst.t) : m;
-	const at = (v, k, cap, unit) => { const n = v * k; const r = n >= 100 || unit === 'pt' ? Math.round(n) : Math.round(n * 10) / 10; return cap ? Math.min(cap, r) : r; };
+	// (weight and a hindrance to spells are what the thing is: they do not grow)
+	const at = (v, k, cap, unit) => { if (unit === 'kg' || unit === '-%') return v; const n = v * k; const r = n >= 100 || unit === 'pt' ? Math.round(n) : Math.round(n * 10) / 10; return cap ? Math.min(cap, r) : r; };
 	return rows.map(([label, v, unit, cap]) => ({ label, unit, value: at(v, m, cap, unit), next: at(v, next, cap, unit) }));
 }
 // the same stats compared: b minus a, label by label (a or b may be null: nothing to compare)

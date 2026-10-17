@@ -9,7 +9,7 @@ import { armamentVariant } from '../gameplay/armament-variants.js';
 // Trades work at any distance between friends in the same room: friends often wander apart,
 // and Go to is one tap away. The window says how far they are, or that they are on another world.
 //
-// Garments are worn (Wear, Take off: four slots, head to foot) and weapons held; both are
+// Garments are worn (Wear, Take off: five slots, head to foot) and weapons held; both are
 // attuned to a school of magic that wakes as they level (gameplay/gear-magic.js), and take aether
 // fabric to grow (Infuse). The Character view (Shift+I, or from the sheet) is your statistics: the
 // seven attributes and where each comes from, life, mana and harm taken, every school's power,
@@ -39,8 +39,8 @@ const stopAll = (e) => { for (const ev of ['pointerdown', 'touchstart', 'keydown
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 const metres = (d) => (!Number.isFinite(d) ? '' : d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`);
 // where each garment goes, and the faint mark an empty slot shows
-const SLOT_NAMES = { head: 'Head', body: 'Body', hands: 'Hands', feet: 'Feet' };
-const SLOT_MARKS = { head: '🧣', body: '🧥', hands: '🧤', feet: '🥾' };
+const SLOT_NAMES = { head: 'Head', body: 'Top', legs: 'Legs', hands: 'Hands', feet: 'Feet' };
+const SLOT_MARKS = { head: '⛑️', body: '🧥', legs: '👖', hands: '🧤', feet: '🥾' };
 const pc = (v) => `${Math.round(v * 100)}%`;
 // what an attribute's points do, in words
 export function attributeWords(id, n) {
@@ -357,7 +357,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		const lv = el('div', '', `Level ${st.level}${pts ? ` · ${pts} skill point${pts > 1 ? 's' : ''} waiting (Tab)` : ''}`); lv.style.cssText = 'font:600 13px system-ui;color:#e9cf93;';
 		sheet.append(lv);
 		const tiles = el('div'); tiles.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
-		for (const [k, v, sub, c] of [['Life', st.life, st.lifeRegen ? `+${st.lifeRegen}/s resting` : 'resting: the usual', '#ff8a8a'], ['Mana', Math.round(st.mana), `+${st.manaRegen}/s · ${st.manaRegenFighting}/s fighting`, '#8fb0ff'], ['Harm taken', `${st.harmTaken}%`, st.harmTaken < 100 ? `${100 - st.harmTaken}% turned aside` : 'nothing turned aside', '#d8c49a']]) {
+		for (const [k, v, sub, c] of [['Life', st.life, st.lifeRegen ? `+${st.lifeRegen}/s resting` : 'resting: the usual', '#ff8a8a'], ['Mana', Math.round(st.mana), `+${st.manaRegen}/s · ${st.manaRegenFighting}/s fighting`, '#8fb0ff'], ['Harm taken', `${st.harmTaken}%`, st.harmTaken < 100 ? `${100 - st.harmTaken}% turned aside` : 'nothing turned aside', '#d8c49a'], ['Load', `${st.load} kg`, st.loadPace ? `${st.loadPace}% slower` : 'light enough to run free', '#c9c2a2']]) {
 			const t = el('div', 'g99-panel'); t.style.cssText += 'padding:7px 8px;text-align:center;';
 			const a = el('div', 'g99-label', k), b = el('div', '', String(v)), d = el('div', '', sub);
 			b.style.cssText = `font:600 20px Georgia,serif;color:${c};text-shadow:0 0 10px ${c}55;`; d.style.cssText = 'font-size:10px;opacity:.7;line-height:1.3;';
@@ -552,6 +552,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		slow -= dt;
 		if (slow > 0) return;
 		slow = 0.25;
+		// you, dressed in what you wear (people/avatar.js builds you again when it changes)
+		avatar?.dress?.(Object.fromEntries(Object.entries(arms.worn?.() || {}).map(([k, x]) => [k, x.i])));
 		const now = Date.now();
 		for (const X of [...trades.values()]) {
 			if (finished(X, now)) { trades.delete(X.id); if (activeId === X.id) activeId = null; continue; }
@@ -572,6 +574,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	const api = {
 		update, open, close, heard, suspend: () => { close(); win.close(); thirdAimHeld = thirdAimTap = false; hand.dispose(); vm.aim(false); if (P()) vm.update(0, null, P(), false, world(), performance.now() / 1000); if (thirdAimBtn) thirdAimBtn.style.display = 'none'; }, busy: () => shown() || win.shown(),
 		held: () => arms.held(),
+		// what you wear, { slot: instance } (net/multiplayer.js shows it to friends)
+		worn: () => arms.worn?.() || {},
 		// beside each friend in the room panel and on their tag
 		actions: (r) => [['Trade', () => ask(r.id)]],
 		info: () => { const T = active(); return { open: shown(), view, item: itemUid, held: arms.held(), viewmodel: vm.info(), window: win.shown(), trade: T && { id: T.id, role: T.role, status: T.status, why: T.why, sides: T.sides, v: T.v, ok: T.ok, peer: T.peer, hold: holdLeft(T, Date.now()) }, kept: [...trades.values()].map((x) => ({ id: x.id, status: x.status })) }; },

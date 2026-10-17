@@ -95,7 +95,7 @@ export function slot(inst, { thumb = '', count = 0, held = false, fresh = false,
 }
 
 // a stat's value in words: 'pt' rows are attributes the item lends (+3)
-export const fmt = (v, unit) => (unit === 'pt' ? `+${v}` : `${v}${unit === '%' ? '%' : unit ? ' ' + unit : ''}`);
+export const fmt = (v, unit) => (unit === 'pt' ? `+${v}` : unit === '-%' ? `${v < 0 ? '−' : '+'}${Math.abs(v)}%` : `${v}${unit === '%' ? '%' : unit ? ' ' + unit : ''}`);
 // a tooltip's content: name in its tier's colour, tier and level, the stats, and the change
 // against `vs` (green better, red worse) with a word for what is compared
 export function tipContent(inst, vs = null, vsLabel = '') {

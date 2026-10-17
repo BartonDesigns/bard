@@ -278,6 +278,31 @@ const ITEMS = [
 		['fieldcraft-gloves', 'Fieldcraft Gloves', 'hands', 'Supple leather gloves for a sure grip and quick hands.', 80],
 		['trailstrider-boots', 'Trailstrider Boots', 'feet', 'Light boots with soles that remember the trail.', 100],
 		['duskwalker-boots', 'Duskwalker Boots', 'feet', 'Soft-soled boots that make no sound after dark, and keep the mind on the path.', 120],
+		['aetherweave-trousers', 'Aetherweave Trousers', 'legs', 'Close-cut trousers of the same aether cloth as the coat, threaded at the seams.', 120],
+		['rangers-trousers', 'Ranger\'s Trousers', 'legs', 'Waxed field trousers, double at the knee, pockets for everything.', 100],
+		// armour of the old kingdoms: steel and mail, strong against a blade and a bullet alike,
+		// heavy on the legs and in the way of the weave (gear-levels.js: Armour, Weight, Spellcraft)
+		['kettle-helm', 'Kettle Helm', 'head', 'An open steel war hat with a wide brim that turns a blow from above.', 150],
+		['great-helm', 'Great Helm', 'head', 'A closed steel helm with a slit to see by. Little gets through, and little is heard.', 260],
+		['gambeson', 'Gambeson', 'body', 'A thick quilted coat of linen layers: light armour on its own, and padding under mail.', 140],
+		['mail-hauberk', 'Mail Hauberk', 'body', 'A shirt of riveted iron rings to the thigh, over a padded coat.', 320],
+		['plate-cuirass', 'Plate Cuirass', 'body', 'A steel breast and back plate with shoulder guards, over mail.', 520],
+		['mail-chausses', 'Mail Chausses', 'legs', 'Mail leggings laced to the belt, over padded hose.', 220],
+		['plate-greaves', 'Plate Greaves', 'legs', 'Steel plates for the thighs and shins, strapped over mail.', 360],
+		['plate-gauntlets', 'Plate Gauntlets', 'hands', 'Articulated steel gauntlets. A fist like a hammer; fingers too stiff for fine weaving.', 200],
+		['leather-bracers', 'Leather Bracers', 'hands', 'Hardened leather vambraces over riding gloves: a bowman\'s guard that keeps the fingers free.', 95],
+		['sabatons', 'Sabatons', 'feet', 'Laminated steel shoes over riding boots.', 180],
+		['riding-boots', 'Riding Boots', 'feet', 'Tall boots of oiled leather, made for the stirrup and the long road.', 110],
+		// modern combat gear: a plate carrier and its pouches, a ballistic helmet with night
+		// vision and a headset, a combat shirt and trousers with knee pads (no real makers or marks)
+		['ops-cap', 'Ops Cap', 'head', 'A field cap with a clip-on headset. Nothing turns a bullet, but you hear everything.', 90],
+		['ballistic-helmet', 'Ballistic Helmet', 'head', 'A high-cut helmet with a night-vision mount, rails and a headset.', 340],
+		['combat-shirt', 'Combat Shirt', 'body', 'A camouflaged combat shirt with a cool, plain body for under a vest.', 110],
+		['chest-rig', 'Chest Rig', 'body', 'Magazine pouches and a radio on a light harness over a combat shirt. Fast, and little armour.', 190],
+		['plate-carrier', 'Plate Carrier', 'body', 'Front and back plates, a cummerbund and a full front of pouches over a combat shirt.', 460],
+		['combat-trousers', 'Combat Trousers', 'legs', 'Camouflaged trousers with knee pads in the knees.', 130],
+		['tactical-gloves', 'Tactical Gloves', 'hands', 'Thin armoured-knuckle gloves that keep a trigger feel.', 90],
+		['combat-boots', 'Combat Boots', 'feet', 'Laced combat boots, light and stiff in the ankle.', 130],
 	].map(([id, name, slot, use, basePrice]) => ({ id, name, kind: 'garment', fictional: true, activities: [], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase' }, marketTradable: true, basePrice, weight: 1, slot, stackable: false, consumable: false, heatRisk: 0 })),
 	// the Moon colony's errand things (planet/colony/errands.js): carried, handed over, never sold
 	...[
@@ -289,8 +314,8 @@ const ITEMS = [
 ];
 
 export const ARMS_CATALOG = freeze(Object.fromEntries(ITEMS.map((item) => [item.id, item])));
-// where garments are worn, head to foot
-export const GARMENT_SLOTS = Object.freeze(['head', 'body', 'hands', 'feet']);
+// where garments are worn, head to foot: a hat or helm, a top or armour, trousers, gloves, shoes
+export const GARMENT_SLOTS = Object.freeze(['head', 'body', 'legs', 'hands', 'feet']);
 export const isGarment = (itemId) => itemFor(itemId)?.kind === 'garment';
 
 export const SOURCE_CATALOG = freeze({

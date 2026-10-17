@@ -20,6 +20,7 @@
 import { computeMods, rankOf, applyMastery, masteryLevel, MASTERY_POWER, NUMERAL } from './skills.js';
 import { SCHOOLS, STRANDS, manaMax, manaRegen, spellPower, cooldownOf, modFor } from './spells.js';
 import { gearMagic, attributesOf as itemAttributes } from '../gameplay/gear-magic.js';
+import { statsOf } from '../gameplay/gear-levels.js';
 import { ARMS_CATALOG } from '../gameplay/arms.js';
 
 // per: what one point of it gives (life and manaMax in points, regen in points a second, the
@@ -40,6 +41,29 @@ export const BASE_CAP = 30;
 export const BASE_LIFE = 100;
 // the most harm turned aside, perks and Resolve together
 export const ARMOR_CAP = 0.6;
+
+// what armour costs: past a light load (kg) each kilo slows you a little, to a floor
+export const FREE_LOAD = 8;
+export const LOAD_PACE = 0.01;
+export const LOAD_FLOOR = 0.3;
+// What you wear as armour (gameplay/gear-levels.js rows): armour (a share of harm turned
+// aside), kg carried, and spellcraft (a share of spells' strength lost to steel, negative),
+// with each item's part: { armor, kg, spell, items: [{ name, armor, kg, spell }] }
+export function armourOf(gear = []) {
+	const out = { armor: 0, kg: 0, spell: 0, items: [] };
+	for (const inst of gear) {
+		if (!inst) continue;
+		const row = (label) => statsOf(inst).find((r) => r.label === label)?.value || 0;
+		const it = { name: ARMS_CATALOG[inst.i]?.name || inst.i, armor: row('Armour') / 100, kg: row('Weight'), spell: row('Spellcraft') / 100 };
+		if (!it.armor && !it.kg && !it.spell) continue;
+		out.armor += it.armor; out.kg += it.kg; out.spell += it.spell;
+		out.items.push(it);
+	}
+	out.kg = Math.round(out.kg * 10) / 10;
+	return out;
+}
+// the pace lost to a load of kg (a share)
+export const loadPace = (kg) => Math.min(LOAD_FLOOR, Math.max(0, kg - FREE_LOAD) * LOAD_PACE);
 
 // what grows with you: { attr: [[where from, points]] }
 export function baseAttributes(s) {
@@ -81,6 +105,12 @@ export function composeMods(s, perks = s.perks || []) {
 		}
 	}
 	for (const stat of ['power', 'mana', 'cd']) for (const [school, v] of Object.entries(G[stat])) m[stat][school] = (m[stat][school] || 0) + v;
+	// the armour you wear: harm turned aside, the weight of it, steel in the way of the weave
+	const W = armourOf(s.gear || []);
+	m.armor += W.armor;
+	m.speed -= loadPace(W.kg); m.jump -= loadPace(W.kg) * 0.8;
+	if (W.spell) m.power.all = (m.power.all || 0) + W.spell;
+	m.load = W.kg;
 	m.alter = G.alter;
 	m.free = G.free;
 	m.gearWeapon = G.weapon;
@@ -101,6 +131,8 @@ export function powerSources(s, spell) {
 	add(`Potency ${pot}`, pot * ATTRS.potency.per.power, 'attr');
 	const L = masteryLevel(s.mastery?.[spell.id] || 0);
 	add(`Mastery ${NUMERAL[L - 1]}`, (L - 1) * MASTERY_POWER, 'mastery');
+	// (and what steel takes away)
+	for (const it of armourOf(s.gear || []).items) if (it.spell < 0) out.push({ label: it.name, n: it.spell, kind: 'steel' });
 	return out;
 }
 // the worn item that changes this spell (its L15 alteration): { item, desc } or null
@@ -136,7 +168,7 @@ export function statSheet(s, { light = 0.5 } = {}) {
 		mana: manaMax(s),
 		manaRegen: Math.round(manaRegen(s, false) * 10) / 10,
 		manaRegenFighting: Math.round(manaRegen(s, true) * 10) / 10,
-		harmTaken: 100 - pct(M.armor || 0),
+		harmTaken: 100 - pct(M.armor || 0), load: M.load || 0, loadPace: pct(loadPace(M.load || 0)),
 		weapon: pct(M.weapon || 0), weak: pct(M.weak || 0), boss: pct(M.boss || 0), manaOnHit: M.manaOnHit || 0,
 		pace: pct(M.speed || 0), jump: pct(M.jump || 0), fall: pct(M.fall || 0), xp: pct(M.xp || 0),
 		affinity: { ...s.affinity }, strands: STRANDS,

@@ -175,6 +175,7 @@ const CSS = `
 .sk-src b{font-weight:650;margin-right:2px}
 .sk-src .perk b{color:#5eead4}.sk-src .gear b{color:#ffd27a}.sk-src .attr b{color:#ffd27a}.sk-src .mastery b{color:#c4b5fd}
 .sk-src .gear{border-color:rgba(255,210,122,.25)}
+.sk-src .steel b{color:#ff9a8a}.sk-src .steel{border-color:rgba(255,140,120,.25)}
 .sk-el{display:flex;gap:10px;align-items:flex-start;margin-top:9px;padding:9px 11px;border-radius:10px;background:var(--elb,rgba(255,255,255,.05));border:1px solid var(--elc,rgba(255,255,255,.12));font-size:12px;line-height:1.4}
 .sk-el>i{font-style:normal;font-size:18px;line-height:1;width:22px;text-align:center;color:var(--ell,#fff);filter:drop-shadow(0 0 6px var(--elc,transparent))}
 .sk-el b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ell,#fff);margin-bottom:2px}
@@ -656,9 +657,9 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const src = powerSources(state, sp);
 		if (src.length) {
 			const d = mk('div', 'sk-src', sc);
-			for (const q of src) mk('span', q.kind, d, `<b>+${Math.round(q.n * 100)}%</b> ${q.label}`);
+			for (const q of src) mk('span', q.kind, d, `<b>${q.n < 0 ? '−' : '+'}${Math.abs(Math.round(q.n * 100))}%</b> ${q.label}`);
 		}
-		mk('div', 'sk-now', sc, `Power now ×${(Math.round(k * 100) / 100).toFixed(2)}: ${strand === 'light' ? 'light spells are stronger by day' : strand === 'dark' ? 'dark spells are stronger by night' : 'twilight spells are strongest at dusk and dawn'}, and with your affinity${src.length ? `, ${src.map((q) => q.kind === 'gear' ? 'gear' : q.kind === 'perk' ? 'perks' : q.kind === 'attr' ? 'Potency' : 'mastery').filter((w, i, a) => a.indexOf(w) === i).join(', ')}` : ''}.`);
+		mk('div', 'sk-now', sc, `Power now ×${(Math.round(k * 100) / 100).toFixed(2)}: ${strand === 'light' ? 'light spells are stronger by day' : strand === 'dark' ? 'dark spells are stronger by night' : 'twilight spells are strongest at dusk and dawn'}, and with your affinity${src.length ? `, ${src.map((q) => q.kind === 'gear' ? 'gear' : q.kind === 'perk' ? 'perks' : q.kind === 'attr' ? 'Potency' : q.kind === 'steel' ? 'less for the steel you wear' : 'mastery').filter((w, i, a) => a.indexOf(w) === i).join(', ')}` : ''}.`);
 		// what it takes
 		if (st !== 'own') {
 			const req = mk('ul', 'sk-req', sc);

@@ -573,7 +573,7 @@ export function regions(o, cut) {
 			if (F.kind === 'sandal') return k.foot > 1 && c[1] < 0.022 - m;
 			const socks = F.socks || B?.socks;
 			if (socks && k.shin && c[1] < cut.knee - 0.06 - m && (B?.legs !== 'long')) return true;
-			const top = F.kind === 'boot' ? cut.ankle + 0.09 : F.kind === 'trail' ? cut.ankle + 0.01 : cut.ankle - 0.02;
+			const top = F.kind === 'boot' ? (F.tall ? cut.knee - 0.05 : cut.ankle + 0.09) : F.kind === 'trail' ? cut.ankle + 0.01 : cut.ankle - 0.02;
 			return k.foot > 1 || c[1] < top - m;
 		},
 	};
@@ -758,7 +758,7 @@ export function clothGeometry(A, p, o, cut, R) {
 // one geometry for all of them, each vertex bound whole to the bone it rides
 export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const { map, heads, eyes } = P0;
-	const out = { pos: [], nor: [], col: [], si: [], kit: [] };
+	const out = { pos: [], nor: [], col: [], si: [], sw: [], kit: [] };
 	const colour = new THREE.Color();
 	// (bone: a name, or a function of the height for a strap that runs down the body)
 	const put = (geo, bone, c, gloss = 0, fab = 0) => {
@@ -768,7 +768,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		colour.set(c);
 		for (let i = 0; i < pa.count; i++) {
 			out.pos.push(pa.getX(i), pa.getY(i), pa.getZ(i)); out.nor.push(na.getX(i), na.getY(i), na.getZ(i));
-			out.col.push(colour.r, colour.g, colour.b); out.si.push(bi ?? map[bone(pa.getY(i))] ?? 0); out.kit.push(gloss, fab, 0);
+			out.col.push(colour.r, colour.g, colour.b); out.si.push(bi ?? map[bone(pa.getY(i))] ?? 0, 0, 0, 0); out.sw.push(1, 0, 0, 0); out.kit.push(gloss, fab, 0);
 		}
 	};
 	// the straps of the bags they carry (bags.js fitted them to this body)
@@ -783,8 +783,148 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		g.scale(rx + grow, 1, rz + grow); g.translate(cx, 0, cz);
 		return g;
 	};
+	// ---------- armour and combat gear (people/armor-looks.js) ----------
+	// (armour steel: kit gloss 3, polished but lit by the sky the world has, propkit.js)
+	const ARMOUR = 3, V3 = (x, y, z) => new THREE.Vector3(x, y, z), kH = cut.height / 1.7;
+	const skinP = P0.p, nSkin = skinP ? Math.min(skinP.length, 13380 * 3) : 0;
+	// the skin round one leg (sx: its side) between two heights: its centre and how far out it
+	// reaches (the arms, out to the sides, are left out)
+	const legGirth = (y0, y1, sx) => {
+		let n = 0, ax = 0, az = 0, r = 0;
+		const keep = (i) => { const x = skinP[i] * sx, y = skinP[i + 1]; return y >= y0 && y <= y1 && x > 0.008 && x < 0.17 * kH; };
+		for (let i = 0; i < nSkin; i += 3) if (keep(i)) { ax += skinP[i]; az += skinP[i + 2]; n++; }
+		if (!n) return { x: sx * 0.09 * kH, z: 0, r: 0.06 * kH };
+		ax /= n; az /= n;
+		for (let i = 0; i < nSkin; i += 3) if (keep(i)) r = Math.max(r, Math.hypot(skinP[i] - ax, skinP[i + 2] - az));
+		return { x: ax, z: az, r };
+	};
+	const jointY = (b) => heads[map[b]]?.y ?? 0;
+	// the skin round a limb along its bone (sd: its side; kind: the body part, partOf), from t0
+	// to t1 metres down the bone: the axis's point at the middle, the bone's way, how far out
+	// (way: the limb's way when the bone's own is not it; over: reach over that garment there too,
+	// 0 the top .. 2 the bottom)
+	const limbGirth = (bone, kind, t0, t1, way = null, over = false) => {
+		const bi = map[bone], h = heads[bi], dir = way || P0.rest.dirs[bi], sx = Math.sign(h?.x || 1), part = P0.part;
+		if (!h || !dir || !part) return { o: h || V3(0, 0, 0), dir: dir || V3(0, -1, 0), r: 0.045 * kH };
+		// (two passes: the flesh's own middle, which the bone runs near but not through, then how
+		// far out it reaches from there)
+		const pts = [], mid = V3(0, 0, 0);
+		for (let i = 0, v = 0; i < nSkin; i += 3, v++) {
+			if (part[v] !== kind || Math.sign(skinP[i]) !== sx) continue;
+			const dx = skinP[i] - h.x, dy = skinP[i + 1] - h.y, dz = skinP[i + 2] - h.z, t = dx * dir.x + dy * dir.y + dz * dir.z;
+			if (t < t0 || t > t1) continue;
+			const px = dx - dir.x * t, py = dy - dir.y * t, pz = dz - dir.z * t;
+			pts.push(px, py, pz); mid.x += px; mid.y += py; mid.z += pz;
+		}
+		const n = pts.length / 3;
+		if (!n) return { o: h.clone().addScaledVector(dir, (t0 + t1) / 2), dir, r: 0.045 * kH };
+		mid.multiplyScalar(1 / n);
+		let r = 0;
+		for (let i = 0; i < pts.length; i += 3) r = Math.max(r, Math.hypot(pts[i] - mid.x, pts[i + 1] - mid.y, pts[i + 2] - mid.z));
+		const cp = over !== false && P0.cloth?.attributes.position, sl = P0.cloth?.attributes.slot, near = r * 1.4 + 0.02, skinR = r;
+		if (cp && sl) for (let i = 0; i < cp.count; i++) {
+			const x = cp.getX(i); if (Math.sign(x) !== sx || sl.getX(i) % 10 !== over) continue;
+			const dx = x - h.x, dy = cp.getY(i) - h.y, dz = cp.getZ(i) - h.z, t = dx * dir.x + dy * dir.y + dz * dir.z;
+			if (t < t0 || t > t1) continue;
+			const d = Math.hypot(dx - dir.x * t - mid.x, dy - dir.y * t - mid.y, dz - dir.z * t - mid.z);
+			if (d < near) r = Math.max(r, d);
+		}
+		return { o: h.clone().addScaledVector(dir, (t0 + t1) / 2).add(mid), dir, r, skinR };
+	};
+	// a band round a limb (cover: how much of the way round, centred on the outside), its
+	// axis along the bone
+	// (mid: where round the cover is centred, 0 the front; the outside when not given)
+	const limbBand = (g0, h, r0, r1, cover, sx, bone, c, gloss = ARMOUR, along = 0, mid = sx > 0 ? Math.PI / 2 : -Math.PI / 2) => {
+		const g = new THREE.CylinderGeometry(r1, r0, h, 18, 1, true, mid - cover / 2, cover);
+		g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, -1, 0), g0.dir));
+		const at = g0.o.clone().addScaledVector(g0.dir, along); g.translate(at.x, at.y, at.z);
+		put(g, bone, c, gloss);
+	};
+	// a glove made to the hand: the hand's own skin a few millimetres proud, bound to the bones
+	// as the skin is so it bends with every finger, up the forearm `cuff` metres past the wrist
+	// (knuckle: { col, gloss, rise }, a guard over the knuckles, the shell raised and coloured there)
+	const gloveShell = (sd, proud, cuff, c, gloss = 0, fab = 0, knuckle = null) => {
+		const part = P0.part, faces = A.body, wi = map['wrist.' + sd], w = heads[wi], fore = P0.rest.dirs[map['lowerarm01.' + sd]];
+		if (!part || !faces || !w || !fore) return false;
+		const sx = Math.sign(w.x) || 1;
+		const keep = (v) => {
+			if (v * 3 >= nSkin || Math.sign(skinP[v * 3]) !== sx) return false;
+			if (part[v] === 3) return true;
+			if (part[v] !== 2) return false;
+			const t = (w.x - skinP[v * 3]) * fore.x + (w.y - skinP[v * 3 + 1]) * fore.y + (w.z - skinP[v * 3 + 2]) * fore.z;
+			return t < cuff;
+		};
+		const tris = [], nor = new Map(), ctr = V3(0, 0, 0), a = V3(0, 0, 0), b = V3(0, 0, 0), e = V3(0, 0, 0);
+		for (let i = 0; i < faces.length; i += 6) {
+			const t = [faces[i], faces[i + 2], faces[i + 4]];
+			if (!t.every(keep)) continue;
+			tris.push(t);
+			a.set(skinP[t[1] * 3] - skinP[t[0] * 3], skinP[t[1] * 3 + 1] - skinP[t[0] * 3 + 1], skinP[t[1] * 3 + 2] - skinP[t[0] * 3 + 2]);
+			b.set(skinP[t[2] * 3] - skinP[t[0] * 3], skinP[t[2] * 3 + 1] - skinP[t[0] * 3 + 1], skinP[t[2] * 3 + 2] - skinP[t[0] * 3 + 2]);
+			e.crossVectors(a, b);
+			for (const v of t) { if (!nor.has(v)) { nor.set(v, V3(0, 0, 0)); ctr.x += skinP[v * 3]; ctr.y += skinP[v * 3 + 1]; ctr.z += skinP[v * 3 + 2]; } nor.get(v).add(e); }
+		}
+		if (!tris.length) return false;
+		ctr.multiplyScalar(1 / nor.size);
+		// (the body's winding, read from the shell itself: its normals point away from its middle)
+		let out1 = 0; for (const [v, n] of nor) out1 += n.x * (skinP[v * 3] - ctr.x) + n.y * (skinP[v * 3 + 1] - ctr.y) + n.z * (skinP[v * 3 + 2] - ctr.z);
+		const flip = out1 < 0 ? -1 : 1;
+		for (const n of nor.values()) n.normalize().multiplyScalar(flip);
+		// (the knuckles: midway between the first finger's and the little finger's, on the back of
+		// the hand, which faces out from the body in the rest pose)
+		let K = null, nb = null;
+		const k2 = heads[map['finger2-1.' + sd]], k5 = heads[map['finger5-1.' + sd]];
+		if (knuckle && k2 && k5) {
+			K = k2.clone().add(k5).multiplyScalar(0.5);
+			nb = V3(0, 0, 0).crossVectors(P0.rest.dirs[wi], k5.clone().sub(k2)).normalize(); if (nb.x * sx < 0) nb.negate();
+		}
+		const kc = new THREE.Color(knuckle?.col || c), base = new THREE.Color(c);
+		for (const t of flip > 0 ? tris : tris.map((q) => [q[0], q[2], q[1]])) for (const v of t) {
+			const n = nor.get(v);
+			let k = 0;
+			if (K) {
+				const d = Math.hypot(skinP[v * 3] - K.x, skinP[v * 3 + 1] - K.y, skinP[v * 3 + 2] - K.z);
+				k = Math.max(0, 1 - d / 0.034) * Math.max(0, Math.min(1, (n.dot(nb) - 0.2) / 0.4));
+				k = k > 0.25 ? Math.min(1, k * 1.6) : 0;
+			}
+			const lift = proud + k * (knuckle?.rise || 0);
+			colour.copy(base).lerp(kc, k > 0 ? 1 : 0);
+			out.pos.push(skinP[v * 3] + n.x * lift, skinP[v * 3 + 1] + n.y * lift, skinP[v * 3 + 2] + n.z * lift); out.nor.push(n.x, n.y, n.z);
+			out.col.push(colour.r, colour.g, colour.b); out.kit.push(k > 0 && knuckle?.gloss != null ? knuckle.gloss : gloss, fab, 0);
+			let sum = 0; for (let q = 0; q < 4; q++) sum += A.weights[v * 4 + q];
+			for (let q = 0; q < 4; q++) { out.si.push(A.ids[v * 4 + q]); out.sw.push(A.weights[v * 4 + q] / (sum || 1)); }
+		}
+		return true;
+	};
+	// a headset: a cup over each ear and a boom mic to the mouth (band: over the top, for a cap)
+	const headset = (col, band) => {
+		for (const s of [-1, 1]) { const cup = new THREE.CylinderGeometry(0.044, 0.044, 0.036, 16); cup.rotateZ(Math.PI / 2); cup.translate(cx + s * (rx + 0.03), eyeY - 0.035, cz - 0.008); put(cup, 'head', col, 0.3); }
+		const boom = new THREE.CatmullRomCurve3([V3(cx + rx + 0.03, eyeY - 0.06, cz + 0.01), V3(cx + rx * 0.85, eyeY - 0.1, cz + rz * 0.6), V3(cx + 0.03, eyeY - 0.108, sk.z1 + 0.018)]);
+		put(new THREE.TubeGeometry(boom, 8, 0.0035, 5, false), 'head', '#1a1b19', 0.3);
+		if (band) { const b = new THREE.TorusGeometry(1, 0.03, 5, 20, Math.PI); b.scale(rx + 0.034, top - eyeY + 0.07, 0.3); b.translate(cx, eyeY - 0.03, cz - 0.01); put(b, 'head', col, 0.3); }
+	};
+	// a steel helm of the old kingdoms: a kettle hat with its wide brim, or a great helm closed
+	// to the chin with a slit to see by
+	const steelHelm = (q, c) => {
+		if (q.form === 'kettle') {
+			const rim = eyeY + 0.045;
+			put(dome(top + 0.03 - rim, 0.03), 'head', c, ARMOUR);
+			const brim = new THREE.LatheGeometry([new THREE.Vector2(1.0, rim + 0.002), new THREE.Vector2(1.62, rim - 0.03)], 24);
+			brim.scale(rx + 0.03, 1, rz + 0.03); brim.translate(cx, 0, cz); put(brim, 'head', c, ARMOUR);
+			const comb = new THREE.BoxGeometry(0.008, 0.02, (rz + 0.03) * 1.7); comb.translate(cx, top + 0.035, cz); put(comb, 'head', c, ARMOUR);
+			return;
+		}
+		const y0 = eyeY - 0.15, y1 = top + 0.01, R = rx + 0.05, Rz = rz + 0.055;
+		const can = new THREE.CylinderGeometry(1, 1.05, y1 - y0, 24, 2, true); can.scale(R, 1, Rz); can.translate(cx, (y0 + y1) / 2, cz + 0.006); put(can, 'head', c, ARMOUR);
+		const lid = new THREE.SphereGeometry(1, 24, 6, 0, Math.PI * 2, 0, Math.PI / 2); lid.scale(R, 0.045, Rz); lid.translate(cx, y1, cz + 0.006); put(lid, 'head', c, ARMOUR);
+		// the slit, the cross that strengthens the face, and the breaths
+		const slit = new THREE.BoxGeometry(R * 1.45, 0.013, 0.03); slit.translate(cx, eyeY + 0.006, cz + Rz - 0.005); put(slit, 'head', q.acc || '#121314', 0);
+		const bar = new THREE.BoxGeometry(0.02, y1 - y0 - 0.04, 0.012); bar.translate(cx, (y0 + y1) / 2 - 0.01, cz + Rz + 0.008); put(bar, 'head', '#b8975a', ARMOUR);
+		for (let i = 0; i < 6; i++) { const h = new THREE.CylinderGeometry(0.004, 0.004, 0.02, 6); h.rotateX(Math.PI / 2); h.translate(cx + 0.03 + (i % 3) * 0.016, eyeY - 0.07 - Math.floor(i / 3) * 0.018, cz + Rz - 0.002); put(h, 'head', '#121314', 0); }
+	};
 	for (const q of o.acc || []) {
 		const c = q.col || '#333333', a2 = q.acc || c;
+		if (q.kind === 'helmet' && q.form) { steelHelm(q, c); continue; }
 		if (q.kind === 'cap' || q.kind === 'visor') {
 			const rim = eyeY + 0.045;
 			if (q.kind === 'cap') put(dome(top + 0.012 - rim, 0.012), 'head', c);
@@ -813,6 +953,19 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				for (let j = 0; j < seg; j++) for (let i = 0; i < n - 1; i++) { const p0 = j * n + i, p1 = p0 + n; idx.push(p0, p0 + 1, p1, p0 + 1, p1 + 1, p1); }
 				const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); hg.setIndex(idx);
 				put(hg, 'head', c, 0.12, 2);
+				// a night-vision mount at the brow with its monocular turned up, its counterweight
+				// behind, rails along the sides, and a headset under it
+				const zf = cz + rz + grow + 0.006;
+				if (q.nvg) {
+					const ym = eyeY + 0.07;
+					const shroud = new THREE.BoxGeometry(0.042, 0.036, 0.02); shroud.translate(cx, ym, zf + 0.004); put(shroud, 'head', '#1e1f1c', 0.3);
+					const arm = new THREE.BoxGeometry(0.022, 0.05, 0.02); arm.rotateX(-0.55); arm.translate(cx, ym + 0.028, zf + 0.022); put(arm, 'head', '#1e1f1c', 0.3);
+					const tube = new THREE.CylinderGeometry(0.017, 0.019, 0.075, 12); tube.rotateX(-0.4); tube.translate(cx, ym + 0.07, zf + 0.04); put(tube, 'head', '#232521', 0.4);
+					const lens = new THREE.CylinderGeometry(0.0145, 0.0145, 0.004, 12); lens.rotateX(-0.4); lens.translate(cx, ym + 0.106, zf + 0.055); put(lens, 'head', '#3d6a52', 1);
+					const cw = new THREE.BoxGeometry(0.064, 0.036, 0.026); cw.translate(cx, eyeY + 0.04, cz - rz - grow - 0.014); put(cw, 'head', '#2b2c28', 0.2);
+				}
+				if (q.nvg || q.comms) for (const sd of [-1, 1]) { const rail = new THREE.BoxGeometry(0.012, 0.018, 0.1); rail.translate(cx + sd * (rx + grow + 0.006), eyeY + 0.05, cz - 0.004); put(rail, 'head', '#2a2b27', 0.3); }
+				if (q.comms) headset('#2b2d2a', false);
 			} else put(dome(deep, grow, 18, q.kind === 'hood' || q.kind === 'hazhood' ? 0.62 : 0), 'head', c, q.kind === 'helmet' ? 0.7 : 0);
 			if (q.kind === 'beanie') { const cuff = new THREE.CylinderGeometry(1, 1.02, 0.05, 18, 1, true); cuff.scale(rx + 0.024, 1, rz + 0.024); cuff.translate(cx, eyeY + 0.055, cz); put(cuff, 'head', c); }
 			if (q.kind === 'helmet' && q.cage) for (let k = 0; k < 3; k++) { const bar = new THREE.CylinderGeometry(0.006, 0.006, rx * 1.6, 6); bar.rotateZ(Math.PI / 2); bar.translate(cx, eyeY - 0.05 - k * 0.035, sk.z1 + 0.045); put(bar, 'head', '#d8d8d8', 0.6); }
@@ -883,6 +1036,26 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const band = new THREE.TorusGeometry(1, 0.035, 6, 20, Math.PI); band.scale(rx + 0.03, top - eyeY + 0.06, 0.35); band.translate(cx, eyeY - 0.02, cz - 0.01);
 			put(band, 'head', c, 0.4);
 			for (const s of [-1, 1]) { const cup = new THREE.CylinderGeometry(0.038, 0.038, 0.03, 16); cup.rotateZ(Math.PI / 2); cup.translate(cx + s * (rx + 0.018), eyeY - 0.03, cz - 0.01); put(cup, 'head', c, 0.4); }
+		} else if (q.kind === 'gloves' && P0.part && A.body) {
+			// gloves made to the hands (gloveShell): a gauntlet in steel with a flared cuff and a
+			// ridge over the knuckles; bracers, a long laced cuff over a thin glove; a combat
+			// glove with a hard knuckle guard and a strap at the wrist
+			for (const s of ['L', 'R']) {
+				const steel = !!q.steel, wb = 'wrist.' + s, sx = Math.sign(heads[map[wb]]?.x || (s === 'L' ? 1 : -1));
+				// (over the knuckles: a steel ridge, or a combat glove's moulded guard)
+				const kn = steel ? { col: c, gloss: ARMOUR, rise: 0.006 } : q.knuckle ? { col: q.acc || c, gloss: 0.3, rise: 0.005 } : null;
+				gloveShell(s, steel ? 0.0075 : 0.0032, steel ? 0.03 : q.bracers ? 0.012 : 0.02, c, steel ? ARMOUR : 0, steel ? 0 : 3, kn);
+				const len = heads[map[wb]].distanceTo(heads[map['lowerarm01.' + s]]);
+				const g0 = limbGirth('lowerarm01.' + s, 2, len - 0.13, len - 0.02);
+				if (steel) {
+					limbBand(g0, 0.1, g0.r + 0.01, g0.r + 0.022, Math.PI * 2, sx, 'lowerarm01.' + s, c, ARMOUR, 0.01);
+					limbBand(g0, 0.008, g0.r + 0.025, g0.r + 0.025, Math.PI * 2, sx, 'lowerarm01.' + s, c, ARMOUR, -0.038);
+				} else if (q.bracers) {
+					const g1 = limbGirth('lowerarm01.' + s, 2, len * 0.35, len - 0.02);
+					limbBand(g1, len * 0.62, g1.r + 0.008, g1.r + 0.016, Math.PI * 2, sx, 'lowerarm01.' + s, c, 0, 0);
+					for (const k of [-0.32, 0, 0.32]) limbBand(g1, 0.008, g1.r + 0.017, g1.r + 0.017, Math.PI * 2, sx, 'lowerarm01.' + s, q.acc || c, 0, k * len * 0.6);
+				} else limbBand(g0, 0.035, g0.r + 0.006, g0.r + 0.008, Math.PI * 2, sx, 'lowerarm01.' + s, q.acc || c, 0, 0.05);
+			}
 		} else if (q.kind === 'gloves' || q.kind === 'mitt') {
 			for (const s of q.kind === 'mitt' ? ['L'] : ['L', 'R']) {
 				const wi = map['wrist.' + s], w = heads[wi], dir = P0.rest.dirs[wi];
@@ -891,8 +1064,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				box.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
 				const cen = w.clone().addScaledVector(dir, 0.085 * big);
 				box.translate(cen.x, cen.y, cen.z);
-				put(box, 'wrist.' + s, c);
-				if (q.kind === 'gloves') { const cuff = new THREE.CylinderGeometry(0.042, 0.045, 0.05, 10); cuff.translate(w.x, w.y + 0.01, w.z); put(cuff, 'wrist.' + s, q.acc || c); }
+				put(box, 'wrist.' + s, c, 0);
 			}
 		}
 	}
@@ -927,11 +1099,77 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			// and a reflective band) (garment-kit.js)
 			const pieces = carrierGeometry(cut, kitField(), { police: !!q.police, lo: !!P0.lo });
 			const flap = new THREE.Color(a2).multiplyScalar(0.82).getHex();
-			for (const { geo, part: pc } of pieces) put(geo, pc === 'strap' ? 'spine01' : torso, pc === 'band' || pc === 'pouch' ? a2 : pc === 'flap' ? flap : pc === 'tape' ? '#80868d' : c, pc === 'tape' ? 0.5 : 0, pc === 'tape' ? 0 : 2);
+			// (a chest rig: the pouches on their harness, no plates and no cummerbund)
+			for (const { geo, part: pc } of pieces) if (!(q.rig && (pc === 'plate' || pc === 'tape' || pc === 'band'))) put(geo, pc === 'strap' ? 'spine01' : torso, pc === 'band' || pc === 'pouch' ? a2 : pc === 'flap' ? flap : pc === 'tape' ? '#80868d' : c, pc === 'tape' ? 0.5 : 0, pc === 'tape' ? 0 : 2);
 			if (q.police) {
 				const w = Math.min(0.33, cut.shoulderX * 1.6), y = cut.chest + 0.06, x = w * 0.26;
 				const bd = new THREE.CylinderGeometry(0.02, 0.02, 0.005, 6); bd.rotateX(Math.PI / 2); bd.translate(x, y, kitField().front(x, y) + 0.012 + 0.024 + 0.002); put(bd, 'spine01', q.badge || '#d9c46a', 2);
 			}
+		} else if (q.kind === 'cuirass') {
+			// a steel breast and back plate (the carrier's plates, in steel) on leather straps,
+			// a skirt of lames over the hips, and a pauldron on each shoulder
+			for (const { geo, part: pc } of carrierGeometry(cut, kitField(), { lo: !!P0.lo })) if (pc === 'plate' || pc === 'strap') put(geo, pc === 'strap' ? 'spine01' : torso, pc === 'strap' ? a2 : c, pc === 'strap' ? 0 : ARMOUR);
+			const hipL = legGirth(cut.hip - 0.02, cut.hip + 0.06, 1), hipR = legGirth(cut.hip - 0.02, cut.hip + 0.06, -1);
+			const fx = Math.max(Math.abs(hipL.x) + hipL.r, Math.abs(hipR.x) + hipR.r) + 0.022, fz = Math.max(hipL.r, hipR.r) + 0.05, fzc = (hipL.z + hipR.z) / 2;
+			for (let i = 0; i < 2; i++) { const f = new THREE.CylinderGeometry(1, 1.08, 0.06, 24, 1, true); f.scale(fx + i * 0.008, 1, fz + i * 0.008); f.translate(0, cut.waist - 0.02 - i * 0.05, fzc); put(f, 'spine03', c, ARMOUR); }
+			// (a pauldron: a cap over the point of the shoulder, three lames lapping down the
+			// outside of the arm, each a little narrower, their edges rolled)
+			for (const sd of ['L', 'R']) {
+				const ub = 'upperarm01.' + sd, S = heads[map[ub]]; if (!S) continue;
+				const sx = Math.sign(S.x) || 1, g0 = limbGirth(ub, 1, 0.07, 0.16), r = g0.r + 0.016;
+				const cap = new THREE.SphereGeometry(1, 18, 6, 0, Math.PI * 2, 0, Math.PI * 0.4);
+				cap.scale(r + 0.008, 0.038 * kH, r + 0.004); cap.rotateZ(-sx * 0.42);
+				cap.translate(S.x + sx * 0.008, S.y + 0.03, S.z);
+				put(cap, ub, c, ARMOUR);
+				for (let i = 0; i < 3; i++) {
+					const along = 0.045 + i * 0.032 - g0.o.distanceTo(S), rr = r - i * 0.004, wrap = Math.PI * (1.05 - i * 0.1);
+					limbBand(g0, 0.04, rr + 0.005, rr, wrap, sx, ub, c, ARMOUR, along);
+					limbBand(g0, 0.005, rr + 0.0075, rr + 0.007, wrap, sx, ub, i === 2 ? a2 : c, i === 2 ? 0 : ARMOUR, along + 0.018);
+				}
+			}
+		} else if (q.kind === 'greaves') {
+			// steel over the thighs (cuisses) and shins (greaves), each along its bone and tapered to
+			// the leg, a cop at the knee with a wing to the outside, buckled straps behind
+			for (const sd of ['L', 'R']) {
+				const ub = 'upperleg01.' + sd, lb = 'lowerleg01.' + sd, U = heads[map[ub]], L = heads[map[lb]], F = heads[map['foot.' + sd]]; if (!U || !L || !F) continue;
+				const sx = Math.sign(U.x) || 1, lu = U.distanceTo(L), ll = L.distanceTo(F);
+				const shell = (bone, kind, t0, t1, cover, wall, strap, way) => {
+					const g0 = limbGirth(bone, kind, t0, t1, way, 2), gt = limbGirth(bone, kind, t0, t0 + 0.06, way, 2), gb = limbGirth(bone, kind, t1 - 0.06, t1, way, 2);
+					limbBand(g0, t1 - t0, gb.r + wall, gt.r + wall, cover, sx, bone, c, ARMOUR, 0, 0);
+					for (const k of strap) limbBand(g0, 0.016, g0.r + wall + 0.002, g0.r + wall + 0.002, Math.PI * 2 - cover + 0.5, sx, bone, a2, 0, k * (t1 - t0), Math.PI);
+					return g0;
+				};
+				shell(ub, 4, 0.13, lu - 0.05, Math.PI * 1.05, 0.016, [-0.25, 0.3], L.clone().sub(U).normalize());
+				const g1 = shell(lb, 5, 0.06, ll - 0.06, Math.PI * 1.6, 0.01, [-0.3, 0.32], F.clone().sub(L).normalize());
+				const gk = limbGirth(lb, 5, 0, 0.05, g1.dir, 2), kr = gk.r + 0.015;
+				const at = L.clone().add(gk.o.clone().sub(L).projectOnPlane(g1.dir)).addScaledVector(V3(0, 0, 1), kr * 0.5);
+				const cop = new THREE.SphereGeometry(1, 14, 8, -Math.PI / 2, Math.PI, 0, Math.PI); cop.scale(kr * 0.8, 0.065 * kH, kr * 0.6); cop.translate(at.x, at.y, at.z); put(cop, lb, c, ARMOUR);
+				const wing = new THREE.SphereGeometry(1, 10, 6); wing.scale(0.008, 0.05 * kH, kr * 0.5); wing.translate(at.x + sx * kr * 0.72, at.y, at.z - kr * 0.42); put(wing, lb, c, ARMOUR);
+			}
+		} else if (q.kind === 'kneepads') {
+			// a hard pad over each knee on a strap
+			for (const sd of ['L', 'R']) {
+				const sx = Math.sign(heads[map['upperleg01.' + sd]]?.x || (sd === 'L' ? 1 : -1)), knee = jointY('lowerleg01.' + sd);
+				const g0 = legGirth(knee - 0.05, knee + 0.05, sx), r = g0.r + 0.03;
+				const pad = new THREE.SphereGeometry(1, 12, 8, -Math.PI / 2, Math.PI, 0, Math.PI); pad.scale(0.052 * kH, 0.07 * kH, 0.034 * kH); pad.translate(g0.x, knee - 0.012, g0.z + r - 0.004); put(pad, 'lowerleg01.' + sd, c, 0.3);
+				const strap = new THREE.CylinderGeometry(r + 0.002, r + 0.002, 0.018, 16, 1, true); strap.translate(g0.x, knee - 0.06, g0.z); put(strap, 'lowerleg01.' + sd, '#22231f');
+			}
+		} else if (q.kind === 'sabatons') {
+			// laminated steel over the top of each foot, and a cuff at the ankle
+			for (const sd of ['L', 'R']) {
+				const fi = map['foot.' + sd], A0 = heads[fi], dir = P0.rest.dirs[fi]; if (!A0 || !dir) continue;
+				const g = new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.62);
+				g.scale(0.06 * kH, 0.05 * kH, 0.13 * kH);
+				g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), V3(dir.x, 0, dir.z).normalize()));
+				const at = A0.clone().addScaledVector(dir, 0.07 * kH); g.translate(at.x, Math.max(0.035, at.y - 0.02), at.z);
+				put(g, 'foot.' + sd, c, ARMOUR);
+				const cuff = new THREE.CylinderGeometry(0.058 * kH, 0.064 * kH, 0.045, 14, 1, true); cuff.translate(A0.x, A0.y + 0.01, A0.z); put(cuff, 'foot.' + sd, c, ARMOUR);
+			}
+		} else if (q.kind === 'comms') {
+			headset(c, true);
+		} else if (q.kind === 'circlet') {
+			const band = new THREE.CylinderGeometry(1, 1, 0.011, 32, 1, true); band.scale(rx + 0.013, 1, rz + 0.015); band.translate(cx, eyeY + 0.055, cz); put(band, 'head', c, 2);
+			const gem = new THREE.OctahedronGeometry(0.011); gem.scale(1, 1.3, 0.6); gem.translate(cx, eyeY + 0.058, cz + rz + 0.017); put(gem, 'head', a2, 1);
 		} else if (q.kind === 'trucker') {
 			// a camouflage front panel on a pale mesh back, the bill in the front's colour
 			const rim = eyeY + 0.045, deep = top + 0.012 - rim;
@@ -975,10 +1213,8 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(out.nor, 3));
 	g.setAttribute('color', new THREE.Float32BufferAttribute(out.col, 3));
 	g.setAttribute('kit', new THREE.Float32BufferAttribute(out.kit, 3));
-	const n = out.si.length, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-	for (let i = 0; i < n; i++) { si[i * 4] = out.si[i]; sw[i * 4] = 1; }
-	g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4));
-	g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+	g.setAttribute('skinIndex', new THREE.BufferAttribute(new Uint16Array(out.si), 4));
+	g.setAttribute('skinWeight', new THREE.BufferAttribute(new Float32Array(out.sw), 4));
 	g.computeBoundingSphere();
 	return g;
 }

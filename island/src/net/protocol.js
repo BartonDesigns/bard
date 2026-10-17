@@ -53,6 +53,8 @@ export function cleanPose(p) {
 	// the item in their hand, if any (a game catalogue id, gameplay/arms.js), with its level
 	// (1 to MAX_LEVEL, gameplay/gear-levels.js) and quality tier (0-4), which friends see as its
 	// trim and glow
+	// what they wear, head to foot (people/armor-looks.js wearCode), which friends see on them
+	if (typeof p.wr === 'string' && /^[0-9a-z]{1,2}(\.[0-9a-z]{1,2}){0,5}$/.test(p.wr)) o.wr = p.wr;
 	if (ITEM_RE.test(p.h || '')) {
 		o.h = p.h;
 		if (Number.isInteger(p.hl) && p.hl >= 1 && p.hl <= MAX_LEVEL) o.hl = p.hl;

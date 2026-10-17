@@ -238,10 +238,13 @@ export function patchKit(m, a = '#ffffff', b = '#ffffff') {
 			.replace('#include <color_fragment>', `#include <color_fragment>
 diffuseColor.rgb *= vKit.z > 1.5 ? uKitB : vKit.z > 0.5 ? uKitA : vec3(1.0);
 diffuseColor.rgb *= kFabric(vRest, vRestN, vKit.y);
-if (vKit.y > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= 0.5;`)
-			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = vKit.x > 1.5 ? 0.24 : mix(0.82, 0.12, vKit.x); metalnessFactor = vKit.x > 1.5 ? 1.0 : vKit.x * 0.3;');
+if (vKit.y > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= 0.5;
+// (armour steel, gloss 3: part metal, so it keeps its grey where the world gives no reflection,
+// a little brighter where it faces the sky)
+if (vKit.x > 2.5) diffuseColor.rgb *= 1.05 + 0.35 * vRestN.y;`)
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = vKit.x > 2.5 ? 0.3 : vKit.x > 1.5 ? 0.24 : mix(0.82, 0.12, vKit.x); metalnessFactor = vKit.x > 2.5 ? 0.35 : vKit.x > 1.5 ? 1.0 : vKit.x * 0.3;');
 	};
-	m.customProgramCacheKey = () => 'crysis-kit-1';
+	m.customProgramCacheKey = () => 'crysis-kit-2';
 	return m;
 }
 // a shared material for a bag in these colours (its own and its accent)

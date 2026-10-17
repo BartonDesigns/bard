@@ -9,7 +9,8 @@ import * as THREE from 'three';
 import { MAX_LEVEL, SOFT_LEVEL, statsOf, statScale, trained, xpNeed, xpToMax, combined } from '../src/gameplay/gear-levels.js';
 import { ARMS_CATALOG, GARMENT_SLOTS, createInventoryState, applyInventoryTransaction, serializeInventory, deserializeInventory, sellPrice, cleanTradeSide } from '../src/gameplay/arms.js';
 import { AWAKEN, attunement, awakenings, awakenedBetween, gearMagic, infuseStrands, attributesOf as itemAttrs, isWeaponId, ALTERATIONS, SPELLSHOT, infusionOf, masteryEvery, schoolGlyph } from '../src/gameplay/gear-magic.js';
-import { ATTRS, ATTR_IDS, BASE_CAP, BASE_LIFE, ARMOR_CAP, baseAttributes, attributesOf, composeMods, refreshStats, statSheet, powerSources, alteredBy } from '../src/magic/stats.js';
+import { ATTRS, ATTR_IDS, BASE_CAP, BASE_LIFE, ARMOR_CAP, baseAttributes, attributesOf, composeMods, refreshStats, statSheet, powerSources, alteredBy, armourOf, loadPace, FREE_LOAD } from '../src/magic/stats.js';
+import { LOOKS, dressInGear, gearKey, wearCode, wornOfCode } from '../src/people/armor-looks.js';
 import { SCHOOLS, SPELL, createMagicState, spellPower, manaCost, cooldownOf, manaMax, shaped } from '../src/magic/spells.js';
 import { sanitizeSkills, addUse, useFor, computeMods, addMastery } from '../src/magic/skills.js';
 import { createCaster } from '../src/magic/caster.js';
@@ -40,11 +41,14 @@ test('gear goes to level 20: the first ten as before, slower growth past them', 
 	assert.ok(cleanTradeSide({ items: [{ ...lamp, l: MAX_LEVEL }] }) && cleanTradeSide({ items: [{ ...lamp, l: MAX_LEVEL + 1 }] }) === null);
 });
 
-test('garments: two for each slot, sold at outfitters, worn by their own id, one to a slot', () => {
-	assert.equal(GARMENTS.length, 8);
-	for (const slot of GARMENT_SLOTS) assert.equal(GARMENTS.filter((g) => g.slot === slot).length, 2, slot);
+test('garments: five slots head to foot, aether cloth, steel and combat gear, sold at outfitters, one to a slot', () => {
+	assert.deepEqual([...GARMENT_SLOTS], ['head', 'body', 'legs', 'hands', 'feet']);
+	assert.equal(GARMENTS.length, 29);
+	for (const slot of GARMENT_SLOTS) assert.ok(GARMENTS.filter((g) => g.slot === slot).length >= 5, slot);
 	for (const g of GARMENTS) {
-		assert.ok(statsOf({ u: 'aaaa', i: g.id, l: 1, t: 0 }).every((r) => r.unit === 'pt' && ATTRS[r.label.toLowerCase()]), g.id + ' lends attributes');
+		const rows = statsOf({ u: 'aaaa', i: g.id, l: 1, t: 0 });
+		assert.ok(rows.some((r) => r.unit === 'pt') && rows.every((r) => (r.unit === 'pt' && ATTRS[r.label.toLowerCase()]) || /^(Armour|Weight|Spellcraft)$/.test(r.label)), g.id + ' lends attributes, and only armour besides');
+		assert.ok(LOOKS[g.id], g.id + ' has a look');
 		assert.ok(sellPrice(g.id, 'npc-trader') > 0, g.id + ' bought back at an outfitter');
 		assert.equal(sellPrice(g.id, 'supermarket'), null);
 	}
@@ -140,7 +144,7 @@ test('attributes: your ranks and level lend some, your gear the rest', () => {
 test('your statistics become the spells\' own numbers', () => {
 	const s0 = fresh(), sp = SPELL.shadowbolt;
 	const p0 = spellPower(s0, sp), m0 = manaCost(s0, sp), c0 = cooldownOf(s0, sp), max0 = manaMax(s0);
-	assert.deepEqual({ ...composeMods(s0), alter: null, free: null, gearWeapon: null, life: 0 }, { ...computeMods([]), alter: null, free: null, gearWeapon: null, life: 0 }, 'nothing worn, nothing gained: the perks alone');
+	assert.deepEqual({ ...composeMods(s0), alter: null, free: null, gearWeapon: null, life: 0, load: 0 }, { ...computeMods([]), alter: null, free: null, gearWeapon: null, life: 0, load: 0 }, 'nothing worn, nothing gained: the perks alone');
 	const hood = attuned('wayfarers-hood', 'shadow', 20, 4), gloves = attuned('spellbinder-gloves', 'radiance', 1, 0);
 	const s = withGear([hood, gloves]);
 	assert.ok(spellPower(s, sp) > p0 * 1.12, 'attuned, and Potency');
@@ -187,6 +191,54 @@ test('the skills menu can say where a spell\'s strength comes from, and what you
 	assert.equal(powerSources(s, SPELL.sunspark).filter((q) => q.kind === 'gear').length, 0, 'not another school\'s');
 	assert.ok(alteredBy(s, SPELL.shadowstep)?.desc.includes('cloaked'));
 	assert.equal(alteredBy(s, sp), null);
+});
+
+test('armour: steel turns the most and weighs the most and gets in the way of the weave; modern plates are lighter', () => {
+	const set = (ids, l = 1) => ids.map((i, k) => ({ u: `ar${k}xyz`, i, l, t: 0, x: 0 }));
+	const plate = armourOf(set(['great-helm', 'plate-cuirass', 'plate-greaves', 'plate-gauntlets', 'sabatons']));
+	const modern = armourOf(set(['ballistic-helmet', 'plate-carrier', 'combat-trousers', 'tactical-gloves', 'combat-boots']));
+	const cloth = armourOf(set(['wayfarers-hood', 'aetherweave-coat', 'aetherweave-trousers', 'spellbinder-gloves', 'duskwalker-boots']));
+	assert.ok(plate.armor > modern.armor && modern.armor > cloth.armor, 'steel, then plates, then cloth');
+	assert.ok(plate.kg > modern.kg && modern.kg > FREE_LOAD && cloth.kg === 0);
+	assert.ok(plate.spell < -0.15 && modern.spell === 0 && cloth.spell === 0, 'only steel hinders spells');
+	assert.equal(loadPace(FREE_LOAD), 0);
+	assert.ok(loadPace(plate.kg) > loadPace(modern.kg));
+	// armour grows with the level to its cap; weight and the hindrance never change
+	const hi = armourOf(set(['plate-cuirass'], 20)), lo = armourOf(set(['plate-cuirass'], 1));
+	assert.ok(hi.armor > lo.armor && hi.armor <= 0.32 && hi.kg === lo.kg && hi.spell === lo.spell);
+	// in your numbers: harm turned aside, slower, spells weaker
+	const s0 = fresh(), s = withGear(set(['great-helm', 'plate-cuirass', 'plate-greaves', 'plate-gauntlets', 'sabatons']));
+	assert.ok(s.mods.armor > 0.35 && s.mods.armor <= ARMOR_CAP);
+	assert.ok(s.mods.speed < s0.mods.speed && s.mods.load === plate.kg);
+	assert.ok(spellPower(s, SPELL.sunspark) < spellPower(s0, SPELL.sunspark), 'steel takes from the weave');
+	assert.ok(powerSources(s, SPELL.sunspark).some((q) => q.kind === 'steel' && q.n < 0));
+	assert.ok(statSheet(s).load === plate.kg && statSheet(s).loadPace > 0);
+});
+
+test('what you wear is what you look like, slot by slot, and friends are told in a few characters', () => {
+	const style = { top: { kind: 'tee', col: '#fff' }, outer: { kind: 'jacket' }, bottom: { kind: 'jeans' }, shoes: { kind: 'sneaker' }, acc: [{ kind: 'beanie' }, { kind: 'watch' }, { kind: 'gloves' }] };
+	const knight = dressInGear(style, { head: 'great-helm', body: 'plate-cuirass', legs: 'plate-greaves', hands: 'plate-gauntlets', feet: 'sabatons' });
+	assert.equal(knight.top.pat, 'mail');
+	assert.equal(knight.outer, null);
+	assert.equal(knight.bottom.pat, 'mail');
+	const kinds = knight.acc.map((q) => q.kind);
+	assert.ok(!kinds.includes('beanie') && kinds.includes('watch'), 'the helm takes the hat\'s place, the watch stays');
+	for (const k of ['cuirass', 'greaves', 'sabatons', 'helmet']) assert.ok(kinds.includes(k), k);
+	assert.equal(knight.acc.filter((q) => q.kind === 'gloves').length, 1);
+	assert.ok(knight.acc.find((q) => q.kind === 'gloves').steel);
+	const op = dressInGear(style, { head: 'ballistic-helmet', body: 'plate-carrier', legs: 'combat-trousers' });
+	assert.ok(op.acc.find((q) => q.kind === 'helmet').nvg && op.acc.some((q) => q.kind === 'carrier') && op.acc.some((q) => q.kind === 'kneepads'));
+	assert.equal(op.top.camo, 'multicam');
+	assert.equal(op.shoes.kind, 'sneaker', 'what is not worn stays as it was');
+	assert.deepEqual(style.acc.map((q) => q.kind), ['beanie', 'watch', 'gloves'], 'the clothes underneath are left alone');
+	// told to friends
+	const worn = { head: 'kettle-helm', body: 'gambeson', feet: 'riding-boots' };
+	const code = wearCode(worn);
+	assert.ok(code.length <= 14 && /^[0-9a-z.]+$/.test(code));
+	assert.deepEqual(wornOfCode(code), worn);
+	assert.deepEqual(cleanPose({ p: [0, 1, 0], wr: code }).wr, code);
+	assert.equal(cleanPose({ p: [0, 1, 0], wr: '<script>' }).wr, undefined);
+	assert.notEqual(gearKey(worn), gearKey({}));
 });
 
 test('a garment\'s alteration reshapes its spell; the catalog is left alone', () => {

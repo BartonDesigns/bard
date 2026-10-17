@@ -1,8 +1,9 @@
 // What the armed sides wear, so you can tell them apart at a glance: the city gangs in street
 // clothes in their colours (hoodies, track jackets, a bandana over the face), the militias in
-// camouflage (woodland or desert) or the modern militia's mix (a camo or plain hoodie under a
-// plate carrier, a baseball or camouflage trucker cap), the soldiers at the bases in full
-// pattern uniform, helmet and carrier, the police in navy shirts, peaked caps and a badge,
+// camouflage (woodland or desert) or kitted as irregulars are now (a combat shirt or hoodie
+// under a plate carrier or chest rig, a cap and headset or a helmet with night vision, a
+// shemagh, knee pads), the soldiers at the bases in full pattern uniform, a high-cut helmet
+// and carrier, the police in navy shirts, peaked caps and a badge,
 // the invaders in their own grey pattern. Every outfit grows from the person's seed, so the
 // same fighter always wears the same thing. Pure: colours and garment kinds only; the body
 // (people/body.js) cuts and paints them. No real insignia, brands or unit marks.
@@ -13,6 +14,8 @@ export const CAMO = Object.freeze({
 	desert: ['#c8b48a', '#a68d62', '#d9caa6', '#7d6a4c'],
 	urban: ['#7c8085', '#55595e', '#a6a9ad', '#2f3236'],
 	steppe: ['#8a8a74', '#62664f', '#b0aa8c', '#3e4034'],
+	// the multi-terrain pattern most armies and contractors wear now
+	multicam: ['#8b7f5e', '#5f5b3e', '#b3a37c', '#3a3427'],
 });
 
 // a little generator from a seed (mulberry32)
@@ -43,41 +46,72 @@ function urban(r, a, b) {
 	if (r() < 0.35) o.acc.push({ kind: 'chain', col: '#d4af6a' });
 	return o;
 }
-// the militias: camouflage, or the modern militia's mix with a carrier and a cap
+// the militias, kitted the way irregulars are now: a combat shirt or a hoodie, camouflage or
+// plain cargos, coyote boots; over it a plate carrier or a chest rig (or nothing, the old
+// woodland and desert patterns head to foot); on the head a ballcap with a headset, a boonie
+// or a high-cut helmet, some with night vision; a shemagh at the neck or a balaclava, knee
+// pads, gloves, shooting glasses
 function militia(r, a, b, scheme) {
-	const o = { gen: 'alien', top: null, outer: null, bottom: null, shoes: boots(), acc: [] };
-	const modern = r() < 0.55;
+	const o = { gen: 'alien', top: null, outer: null, bottom: null, shoes: boots(r() < 0.6 ? '#8a7556' : '#2a241c'), acc: [] };
+	const modern = r() < 0.65, pattern = r() < 0.45 ? 'multicam' : scheme;
+	const solid = () => pick(r, ['#4b4f3a', '#6a6450', '#2f3236', '#5c5a45', CAMO[scheme][0]]);
 	if (modern) {
-		o.top = r() < 0.5 ? camo('hoodie', scheme, { fit: 'regular', sleeves: 'long' }) : { kind: 'hoodie', col: pick(r, ['#36383c', '#4f5a36', '#565c63', '#1b1b1d', a]), acc: b, pat: 'plain', fit: 'regular', sleeves: 'long' };
-		o.bottom = r() < 0.6 ? camo('cargo', scheme, { legs: 'long', fit: 'regular' }) : { kind: 'cargo', col: pick(r, ['#a89a74', '#5f6440', '#36383c']), pat: 'cargo', legs: 'long', fit: 'regular' };
-		o.acc.push(carrier(pick(r, ['#4b4f3a', '#6a6450', '#2f3236', CAMO[scheme][0]]), CAMO[scheme][1]));
-		o.acc.push(r() < 0.5 ? { kind: 'trucker', col: CAMO[scheme][0], acc: '#e9e4d6', camo: scheme } : { kind: 'cap', col: pick(r, [a, '#36383c', '#5f6440', '#a89a74']), acc: b });
+		// the shirt: a combat shirt in pattern, a plain one, or a hoodie in the side's colour
+		const shirt = r();
+		o.top = shirt < 0.45 ? camo('longsleeve', pattern, { fit: 'regular', sleeves: 'long' }) : shirt < 0.7 ? { kind: 'longsleeve', col: solid(), pat: 'plain', fit: 'regular', sleeves: 'long' } : { kind: 'hoodie', col: pick(r, ['#36383c', '#4f5a36', '#565c63', '#1b1b1d', a]), acc: b, pat: 'plain', fit: 'regular', sleeves: 'long' };
+		o.bottom = r() < 0.6 ? camo('cargo', pattern, { legs: 'long', fit: 'regular' }) : { kind: 'cargo', col: pick(r, ['#a89a74', '#5f6440', '#36383c']), pat: 'cargo', legs: 'long', fit: 'regular' };
+		// what they carry it all on
+		const rig = r();
+		if (rig < 0.6) o.acc.push(carrier(solid(), CAMO[pattern][1]));
+		else o.acc.push({ kind: 'carrier', rig: true, col: solid(), acc: CAMO[pattern][1] });
+		// the head: a cap and a headset, a boonie, or a helmet
+		const head = r();
+		if (head < 0.45) { o.acc.push(r() < 0.6 ? { kind: 'cap', col: pick(r, [a, '#36383c', '#5f6440', '#a89a74', CAMO[pattern][0]]), acc: b } : { kind: 'trucker', col: CAMO[pattern][0], acc: '#e9e4d6', camo: pattern }); if (r() < 0.5) o.acc.push({ kind: 'comms', col: '#2b2d2a' }); }
+		else if (head < 0.62) o.acc.push({ kind: 'bucket', col: CAMO[pattern][0], camo: pattern });
+		else o.acc.push({ kind: 'helmet', col: pick(r, [CAMO[pattern][1], '#6e6a52', '#2f3236']), visor: null, camo: pattern, combat: true, nvg: r() < 0.35, comms: r() < 0.7 });
+		if (r() < 0.4) o.acc.push({ kind: 'kneepads', col: '#3a3a32' });
+		if (r() < 0.25) o.acc.push({ kind: 'sunglasses', col: '#1b1b1d' });
 	} else {
 		o.top = camo('longsleeve', scheme, { fit: 'regular', sleeves: 'long' });
 		o.outer = r() < 0.5 ? camo('jacket', scheme, { fit: 'regular', sleeves: 'long', open: r() < 0.4 }) : null;
 		o.bottom = camo('cargo', scheme, { legs: 'long', fit: 'regular' });
 		o.acc.push(r() < 0.5 ? { kind: 'cap', col: CAMO[scheme][0], acc: CAMO[scheme][1], camo: scheme } : { kind: 'bucket', col: CAMO[scheme][0], camo: scheme });
-		if (r() < 0.4) o.acc.push({ kind: 'bandana', col: CAMO[scheme][3], acc: CAMO[scheme][1] });
 		o.rollable = true;
 	}
-	if (r() < 0.6) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
+	// a shemagh at the neck or over the face, or a balaclava under a helmet
+	const face = r();
+	if (face < 0.3) o.acc.push({ kind: 'bandana', col: pick(r, ['#c9bfa4', '#3a3a32', CAMO[scheme][3]]), acc: pick(r, ['#2a2b2e', '#7a2a24', CAMO[scheme][1]]) });
+	if (r() < 0.65) o.acc.push({ kind: 'gloves', col: pick(r, ['#2a2b2e', '#5f5845', '#8a7556']) });
 	// some roll their sleeves (the last draw: the rest stays as it was): the shirt's, or the
 	// jacket's over a short-sleeved one
 	if (o.rollable && r() < 0.35) { if (o.outer) { o.outer.sleeves = 'rolled'; o.top.sleeves = 'short'; } else o.top.sleeves = 'rolled'; }
 	delete o.rollable;
 	return o;
 }
-// the soldiers at the bases: full pattern uniform, helmet, carrier, gloves
+// the soldiers at the bases: full pattern uniform, a high-cut helmet with a headset (night
+// vision on some), a plate carrier, knee pads, gloves
 function soldier(r, scheme, officer = false) {
-	const o = { gen: 'alien', top: camo('longsleeve', scheme, { fit: 'regular', sleeves: 'long' }), outer: camo('jacket', scheme, { fit: 'regular', sleeves: 'long' }), bottom: camo('cargo', scheme, { legs: 'long', fit: 'regular' }), shoes: boots('#3a2f22'), acc: [] };
+	const o = { gen: 'alien', top: camo('longsleeve', scheme, { fit: 'regular', sleeves: 'long' }), outer: camo('jacket', scheme, { fit: 'regular', sleeves: 'long' }), bottom: camo('cargo', scheme, { legs: 'long', fit: 'regular' }), shoes: boots(scheme === 'multicam' || scheme === 'desert' ? '#8a7556' : '#3a2f22'), acc: [] };
 	if (officer) o.acc.push({ kind: 'beret', col: '#2c3a2a' });
-	else o.acc.push({ kind: 'helmet', col: CAMO[scheme][1], visor: null, camo: scheme, combat: true });
+	else o.acc.push({ kind: 'helmet', col: CAMO[scheme][1], visor: null, camo: scheme, combat: true, nvg: r() < 0.45, comms: r() < 0.85 });
 	o.acc.push(carrier(CAMO[scheme][3], CAMO[scheme][1]));
 	if (r() < 0.8) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
+	if (!officer && r() < 0.6) o.acc.push({ kind: 'kneepads', col: '#2f2f29' });
 	// about a third with the jacket's sleeves rolled to below the elbow over a pattern tee
 	// (the last draw, so the rest of the kit stays as it was)
 	if (r() < 0.33) { o.top = camo('tee', scheme, { fit: 'regular', sleeves: 'short' }); o.outer.sleeves = 'rolled'; }
 	return o;
+}
+// how much a fighter's kit adds to their armour (ai-squads.js scales the side's own by it):
+// plates turn the most, a helmet some, a rig a little; nothing at all is thinner
+export function kitArmour(o) {
+	const acc = o?.acc || [];
+	let k = 0.75;
+	if (acc.some((q) => q.kind === 'carrier' && !q.rig && !q.police)) k += 0.4;
+	else if (acc.some((q) => q.kind === 'carrier')) k += 0.2;
+	if (acc.some((q) => q.kind === 'helmet' && q.combat)) k += 0.15;
+	if (acc.some((q) => q.kind === 'kneepads')) k += 0.03;
+	return Math.round(k * 100) / 100;
 }
 // the police: navy uniform shirt and trousers, peaked cap, a vest with a badge
 function police(r) {
@@ -104,7 +138,7 @@ export function outfitFor({ fid, kind, colors = ['#444444', '#999999'], masked =
 	if (fid === 'swat') return tactical(r);
 	if (kind === 'gang') return urban(r, a, b);
 	if (kind === 'militia') return militia(r, a, b, r() < 0.3 ? 'desert' : 'woodland');
-	if (kind === 'military') return soldier(r, 'woodland', r() < 0.08);
+	if (kind === 'military') return soldier(r, r() < 0.5 ? 'multicam' : 'woodland', r() < 0.08);
 	if (kind === 'invaders') return soldier(r, 'steppe');
 	if (kind === 'police') return police(r);
 	if (kind === 'raiders' && !masked) return militia(r, a, b, 'desert');
@@ -120,7 +154,7 @@ export function outfitFor({ fid, kind, colors = ['#444444', '#999999'], masked =
 export function lookOf(o) {
 	const accs = (o.acc || []).map((q) => q.kind);
 	if (accs.includes('peaked') || (accs.includes('carrier') && o.acc.some((q) => q.police))) return 'police';
-	if (o.top?.pat === 'camo' && (accs.includes('helmet') || accs.includes('beret'))) return 'soldier';
+	if (o.top?.pat === 'camo' && o.outer?.pat === 'camo' && (accs.includes('helmet') || accs.includes('beret'))) return 'soldier';
 	if (accs.includes('carrier')) return 'modern-militia';
 	if (o.top?.pat === 'camo' || o.bottom?.pat === 'camo') return 'camouflage';
 	if (o.top?.kind === 'hoodie' || o.outer?.kind === 'track' || accs.includes('bandana')) return 'urban';
