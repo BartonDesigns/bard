@@ -435,7 +435,7 @@ if (uVit.x > 1.5 && length(vViewPosition) < 6.0) {
 	float fk = sn3(vBindP * 360.0 + vec3(uVit.z, uVit.w, uVit.z * 0.7)) * 0.75 + sn3(vBindP * 820.0 + vec3(uVit.w, uVit.z, 1.3)) * 0.25;
 	float fm = smoothstep(0.15, 0.5, vSkin.w) * (1.0 - smoothstep(0.2, 0.8, vScalp));
 	fm *= smoothstep(uVit.y - 0.074, uVit.y - 0.062, vBindP.y) * (1.0 - smoothstep(uVit.y - 0.006, uVit.y + 0.006, vBindP.y)) * (1.0 - smoothstep(0.045, 0.062, abs(vBindP.x)));
-	diffuseColor.rgb *= mix(vec3(1.0), vec3(0.86, 0.74, 0.65), smoothstep(0.64, 0.73, fk) * fm * (0.55 + 0.45 * sn3(vBindP * 40.0)));
+	diffuseColor.rgb *= mix(vec3(1.0), vec3(0.86, 0.74, 0.65), smoothstep(0.64, 0.73, fk) * fm * (0.55 + 0.45 * fract(fk * 7.13)));
 }
 // vitiligo: soft-edged pale patches where the pigment has gone, for the few who have it
 if (uVit.x > 0.5 && uVit.x < 1.5) {
