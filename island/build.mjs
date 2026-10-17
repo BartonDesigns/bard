@@ -16,6 +16,9 @@ const atlas = await esbuild.context({ ...common, entryPoints: ['src/earth/data/i
 	const fs = await import('node:fs');
 	const src = 'node_modules/@dimforge/rapier3d-compat/dist/rapier.mjs';
 	if (fs.existsSync(src) && (!fs.existsSync('dist/rapier.mjs') || fs.statSync(src).mtimeMs > fs.statSync('dist/rapier.mjs').mtimeMs)) fs.copyFileSync(src, 'dist/rapier.mjs');
+	// Rapier advertises this map to DevTools. Ship the matching map as well;
+	// it is only requested by debugging tools and adds no gameplay fetch.
+	if (fs.existsSync(src + '.map')) fs.copyFileSync(src + '.map', 'dist/rapier.mjs.map');
 }
 if (watch) { await ctx.watch(); await atlas.watch(); } else { await ctx.rebuild(); await atlas.rebuild(); await ctx.dispose(); await atlas.dispose(); }
 // the site loads the engine by a URL that changes with it (index.html), so a browser never keeps

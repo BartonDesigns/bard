@@ -152,7 +152,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// roll) (true when it made the world's own trouble itself) and campOk(camp)
 	// (magic/: shield takes a blow aimed at you and returns what gets through, or null; cloak
 	// says whether you are hidden from those hunting you)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null };
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, casting: null, remoteSpell: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -721,6 +721,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		deed: (kind, target, c = {}) => morality.record({ kind, target, place: placeName(), world: worldKey, ctx: c }),
 		active: () => active() && !me.ko && !P()?.flying && !P()?.swimming && !recovery.busy,
 		armed: () => !!held(), down: () => me.ko > 0, driving: () => !!drive?.active?.(),
+		// (a spell leaving your hand: the fists stand down for it, magic/hands.js)
+		casting: () => !!hooks.casting?.(),
 		isEarth, zone: () => zone(), event: (e) => hooks.event?.(e),
 		ward: (T) => spark(T, { x: T.bound.x, y: T.bound.y, z: T.bound.z }, ME),
 		realmArmed: () => !!W()?.medieval,
@@ -932,7 +934,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			notice(e.kind,at,e.kind==='vehicle-impact'?'drove a vehicle into a person':e.kind==='robbery'?'held someone up at gunpoint':e.kind==='arson'?'set a fire':'attacked a person',e.actor,e.name);
 			civilians.alarm(at.x,at.z,35,at.y);return;
 		}
-		if (t === 'fx') { const q=v.s?.[0]; if(q) notice('shots',{x:q[0],y:q[1],z:q[2]},'fired a weapon nearby',v.id || 'remote',multiplayer?.friend?.(v.id)?.name || 'another player'); for (const q of v.s) { const a = { x: q[0], y: q[1], z: q[2] }, b = { x: q[3], y: q[4], z: q[5] }; fx.tracer(a, b, q[6]); fx.muzzle(a, _v.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize(), q[6]); if (q[7]) fx.impact(b, null, 'stone'); } return; }
+		if (t === 'fx') { const q=v.s?.[0]; if(q) notice('shots',{x:q[0],y:q[1],z:q[2]},'fired a weapon nearby',v.id || 'remote',multiplayer?.friend?.(v.id)?.name || 'another player'); for (const q of v.s) { const a = { x: q[0], y: q[1], z: q[2] }, b = { x: q[3], y: q[4], z: q[5] }; if (q[6] === 7) { hooks.remoteSpell?.(a, b, q[7], v.id); continue; } fx.tracer(a, b, q[6]); fx.muzzle(a, _v.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize(), q[6]); if (q[7]) fx.impact(b, null, 'stone'); } return; }
 		if (t === 'hit') {
 			// on you (PvP), or a guest's hit on something shared, for the host to decide
 			if (v.id === 'me') { if (rules.pvp) { const r = remotes.get(v.from); hurtPlayer({ amount: v.d, type: v.k || 'ballistic', part: v.p, src: r ? { x: r.at[0], y: r.at[1], z: r.at[2] } : null, by: { id: 'rp:' + v.from, kind: 'remote' } }); } return; }
@@ -1104,6 +1106,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// a medkit's work (gameplay/item-use.js): you, or the hurt near you
 		mend: (n) => { const before = me.H.hp; if (me.ko > 0 || me.H.state !== 'ok') return 0; me.H.hp = Math.min(me.H.max, me.H.hp + Math.max(0, n)); return me.H.hp - before; },
 		hurt0: () => me.H.max - me.H.hp,
+		// a spell of yours for friends in the room to see (magic/index.js: style 7 is a spell)
+		sendFx: (a, b, style, impact) => net.fx(a, b, style, impact),
 		// your health as it stands (magic/: a death ward, a rewind)
 		vitals: () => ({ hp: me.H.hp, max: me.H.max, ko: me.ko > 0, state: me.H.state }),
 		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),

@@ -7,7 +7,7 @@
 import { SPELLS, SPELL, SCHOOLS, SLOTS, weaveCost, weaveBlock, manaCost, cooldownLeft, manaMax, TWILIGHT_NEEDS } from './spells.js';
 
 const CSS = `
-.mg-bar{position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + 28px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:flex-end;pointer-events:none;z-index:6;font:600 11px/1 system-ui,-apple-system,Segoe UI,sans-serif;color:#eef6f4;transition:opacity .4s}
+.mg-bar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:flex-end;pointer-events:none;z-index:6;font:600 11px/1 system-ui,-apple-system,Segoe UI,sans-serif;color:#eef6f4;transition:opacity .4s}
 .mg-bar .grp{display:flex;gap:4px}
 .mg-bar .sep{width:1px;height:30px;background:rgba(255,255,255,.18);margin:0 4px;align-self:center}
 .mg-s{position:relative;width:40px;height:40px;border-radius:9px;background:rgba(10,16,20,.55);box-shadow:0 0 0 1px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -18,7 +18,7 @@ const CSS = `
 .mg-s.held{box-shadow:0 0 0 2px #7fe0c0}
 .mg-s.dim .g{opacity:.35}
 .mg-s.empty{opacity:.45}
-.mg-mana{position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + 74px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);height:4px;border-radius:2px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.1);pointer-events:none;z-index:6}
+.mg-mana{position:absolute;left:50%;bottom:calc(60px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);height:4px;border-radius:2px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.1);pointer-events:none;z-index:6}
 .mg-mana>div{height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,#5a7cff,#a8c4ff);transition:transform .15s}
 .mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 system-ui,sans-serif;color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
 .mg-fab b{font-weight:700}.mg-fab .l{color:#ffd27a}.mg-fab .d{color:#b39aff}
@@ -51,10 +51,13 @@ const CSS = `
 .mg-card button.on{background:rgba(127,224,192,.35)}
 .mg-x{border:0;background:rgba(255,255,255,.08);color:inherit;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px}
 .mg-help{font-size:12px;opacity:.72;margin-top:12px;line-height:1.5}
+/* (on a touch screen the thumbs' controls hold the bottom corners: the bar sits above their stack) */
+.l99-touch .mg-bar{bottom:calc(var(--l99-low,88px) + 28px + env(safe-area-inset-bottom))}
+.l99-touch .mg-mana{bottom:calc(var(--l99-low,88px) + 74px + env(safe-area-inset-bottom))}
 `;
 const STYLE_ID = 'mg-hud-style';
 const KEYS = ['6', '7', '8', '9', '0'];
-const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Scout', 'warden-spark-carbine': 'Carb', 'reedline-hunting-bow': 'Bow' };
+const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Scout', 'warden-spark-carbine': 'Carb', 'reedline-hunting-bow': 'Bow', bat: 'Bat', pipe: 'Pipe', bottle: 'Bottle', knife: 'Knife', machete: 'Blade' };
 
 export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave, onBind, isTouch = false }) {
 	if (!document.getElementById(STYLE_ID)) { const s = document.createElement('style'); s.id = STYLE_ID; s.textContent = CSS; document.head.appendChild(s); }
@@ -153,6 +156,7 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onWeave,
 	// (open only once shown: the sheet starts hidden by its class, with no inline display)
 	function open() { book.style.display = 'flex'; dirty = true; draw(); if (document.pointerLockElement) document.exitPointerLock(); }
 	function close() { book.style.display = 'none'; }
+	// (hidden by its sheet until first opened: open is only what open() made it)
 	const isOpen = () => book.style.display === 'flex';
 	function dispose() { for (const e of [bar, mana, mode, book]) e.remove(); }
 	return { update, setMode, show, open, close, toggle: () => (isOpen() ? close() : open()), isOpen, dispose, touchUp: () => { dirty = true; } };

@@ -181,10 +181,18 @@ export function createVillage(island, shared, scene, { profile, isPhone = false,
 	pierParts.push(paint(place(box(8, 0.2, 5, 1.3), 0, deckY, pier.len + 2), [0.78, 0.68, 0.54]));
 	for (let s = 0; s <= pier.len + 4; s += 4) for (const sx of [-1, 1]) {
 		const wx = pier.x + v.seaDir.x * s + side.x * sx * 1.2, wz = pier.z + v.seaDir.z * s + side.z * sx * 1.2;
-		const bed = island.heightAt(wx, wz), ph = deckY - bed + 0.6;
-		pierParts.push(paint(place(new THREE.CylinderGeometry(0.14, 0.17, ph, 6), sx * (s > pier.len ? 3.8 : 1.2), deckY - ph / 2 + 0.3, s), [0.36, 0.30, 0.24]));
+		// (along the walk the posts run on up through the deck to carry the handrail; under the
+		// head, where there is no rail, they stop just above the boards)
+		const bed = island.heightAt(wx, wz), top = deckY + (s > pier.len ? 0.3 : 0.96), ph = top - bed;
+		pierParts.push(paint(place(new THREE.CylinderGeometry(0.14, 0.17, ph, 6), sx * (s > pier.len ? 3.8 : 1.2), top - ph / 2, s), [0.36, 0.30, 0.24]));
 	}
-	for (const sx of [-1, 1]) pierParts.push(paint(place(box(0.08, 0.08, pier.len), sx * 1.25, deckY + 0.9, pier.len / 2), [0.55, 0.48, 0.4]));
+	// and one more at the rail's seaward end, so it never runs out past its last post
+	if (pier.len % 4 > 0.3) for (const sx of [-1, 1]) {
+		const bed = island.heightAt(pier.x + v.seaDir.x * pier.len + side.x * sx * 1.2, pier.z + v.seaDir.z * pier.len + side.z * sx * 1.2), top = deckY + 0.96, ph = top - bed;
+		pierParts.push(paint(place(new THREE.CylinderGeometry(0.14, 0.17, ph, 6), sx * 1.2, top - ph / 2, pier.len), [0.36, 0.30, 0.24]));
+	}
+	// the handrail, laid along the tops of the posts
+	for (const sx of [-1, 1]) pierParts.push(paint(place(box(0.08, 0.08, pier.len), sx * 1.2, deckY + 0.9, pier.len / 2), [0.55, 0.48, 0.4]));
 	// (an inland landfall has no water to build out over: no pier, and no boat)
 	if (!v.inland) {
 		for (const g of pierParts) { if (!g.attributes.uv) continue; parts.wood.push(g.applyMatrix4(pierM)); }

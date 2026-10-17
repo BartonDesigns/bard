@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="./favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-<script src="./loading-screen.js?v=b4c37f8229"></script>
+<script src="./loading-screen.js?v=ba3ba5f9bc"></script>
 <script>
 /* ?debug on the address: an on-screen console (phones have none), with a Copy button. Only
    errors, warnings and the game's own diagnostic lines; nothing is sent anywhere. */
@@ -19614,7 +19614,8 @@ function _audioVerify() {
 }
 function _audioRebuild(why) { _audioSwap(why); }   // da064: old name kept for any external caller
 function unlockAudio() {
-  if (_audioUnlocked) return;
+  if (_audioUnlocked && ctx && ctx.state === 'running') return;
+  _audioUnlocked = false;
   try {
     initAudio();
     // AUDIO THREAD WARM-UP — the AudioContext can report state='running'
@@ -19637,7 +19638,7 @@ function unlockAudio() {
     // da063: resume if suspended, then let the CLOCK decide. The overlay
     // stays up until the clock has actually moved, so 'tap to enable' can
     // never dismiss over a context that renders nothing.
-    if (ctx && ctx.state === 'suspended') {
+    if (ctx && (ctx.state === 'suspended' || ctx.state === 'interrupted')) {
       try { ctx.resume().catch(function () {}); } catch (eRs) {}
     }
     if (ctx) {
@@ -29332,7 +29333,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=524d0afa23'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=f567b00fde'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29340,7 +29341,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=524d0afa23'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=f567b00fde'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }

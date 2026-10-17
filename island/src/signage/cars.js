@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { carGeometry, SPEC, specOf } from '../bay/cars.js';
 import { createAtlas } from './atlas.js';
 import { createBatch } from './batch.js';
-import { signMaterial } from './materials.js';
+import { signMaterial, currentSignMaterial } from './materials.js';
 import { LAYER } from './layers.js';
 import { hash32, rng, pick } from './rand.js';
 import { carDecalSet, POOLS, BACK } from './placement.js';
@@ -252,7 +252,7 @@ export function militaryStencils(kind, { side = 'guard', n = 0, grey = false, pa
 		try { meshes = buildStencils(kind, police ? 'police' : side, n, grey, parked); } catch { meshes = []; }
 		STENCIL_SETS.set(key, meshes);
 	}
-	return STENCIL_SETS.get(key).map((m) => { const c = new THREE.Mesh(m.geometry, m.material); c.renderOrder = m.renderOrder; c.name = m.name; c.geometry.userData.shared = true; return c; });
+	return STENCIL_SETS.get(key).map((m) => { const c = new THREE.Mesh(m.geometry, currentSignMaterial(m.material)); c.renderOrder = m.renderOrder; c.name = m.name; c.geometry.userData.shared = true; return c; });
 }
 // (the vehicles' geometry is military/models.js's own, handed in by military/index.js)
 let milGeo = null;
@@ -316,7 +316,7 @@ const LIVERIES = new Map();
 export function vehicleLivery(kind) {
 	// (built once per kind; each vehicle gets its own meshes over the shared geometry)
 	if (!LIVERIES.has(kind)) LIVERIES.set(kind, buildLivery(kind));
-	return LIVERIES.get(kind).map((m) => { const c = new THREE.Mesh(m.geometry, m.material); c.renderOrder = m.renderOrder; c.name = m.name; c.geometry.userData.shared = true; return c; });
+	return LIVERIES.get(kind).map((m) => { const c = new THREE.Mesh(m.geometry, currentSignMaterial(m.material)); c.renderOrder = m.renderOrder; c.name = m.name; c.geometry.userData.shared = true; return c; });
 }
 function buildLivery(kind) {
 	const A = carAtlas();
