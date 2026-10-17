@@ -49,11 +49,16 @@ const HERO = {
 		// (hair colours are used as they are, lit by the strands' own shade: hairkit.js; a dark
 		// chestnut is dark in the numbers)
 		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 0.5, thick: 0.62 },
+		// (the sheet's face: the brow a little heavy over lightly hooded eyes; a straight nose with
+		// a defined tip; cheekbones high with a gentle hollow below, never gaunt; a firm jaw and
+		// chin; a defined bow to the lip, a fuller lower lip, the corners a touch up; ears close)
 		face: {
-			jaw: 0.42, 'jaw-out': 0.08, 'chin-width': 0.24, 'chin-out': 0.2, 'chin-height': 0.1, 'chin-cleft': 0.12,
-			cheekbones: 0.32, cheeks: -0.25, 'brow-ridge': 0.2, 'brow-angle': 0.04, forehead: 0.05, temples: -0.05,
-			'nose-width': -0.12, 'nose-hump': -0.08, 'nose-length': 0.04, 'eye-tilt': 0.05, 'eye-open': -0.08, 'eye-spacing': -0.02,
-			'mouth-width': 0.04, 'upper-lip': 0.02, 'lower-lip': 0.08, 'head-square': 0.3, 'head-oval': 0.25, 'head-fat': -0.3, 'neck-width': 0.18,
+			jaw: 0.44, 'jaw-out': 0.1, 'chin-width': 0.22, 'chin-out': 0.18, 'chin-height': 0.12, 'chin-cleft': 0.12,
+			cheekbones: 0.36, cheeks: -0.2, 'cheek-inner': -0.1, 'brow-ridge': 0.28, 'brow-angle': 0.04, forehead: 0.05, 'forehead-height': -0.05, temples: -0.05,
+			'nose-width': -0.12, 'nose-hump': -0.08, 'nose-length': 0.04, 'nose-curve': -0.05, 'nose-point': 0.05, 'nose-volume': -0.05,
+			'eye-tilt': 0.05, 'eye-open': -0.12, 'eye-spacing': -0.02,
+			'mouth-width': 0.04, 'upper-lip': 0.05, 'lower-lip': 0.12, 'cupids-bow': 0.15, philtrum: 0.1, 'mouth-corners': 0.05,
+			'ear-out': -0.15, 'ear-size': -0.05, 'head-square': 0.3, 'head-oval': 0.25, 'head-fat': -0.3, 'neck-width': 0.22,
 		},
 		// (cut: the painted crop under the hair follows its hairline, people/hair.js scalpMask; the
 		// swept cut's is crisp, where a faded cut's blurs a band of hair colour over the temples)
@@ -81,11 +86,13 @@ const HERO = {
 		// long legs, a smaller head; a runner's or a climber's)
 		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, lean: 0.25, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05 },
 		ancestry: [0.1, 0.22, 0.68], hairColour: [0.2, 0.065, 0.026], iris: 5, freckles: true, brows: { dens: 0.48, thick: 0.55 },
+		// (hers: high cheekbones, a slim nose with its tip lifted, full lips with a clear bow,
+		// almond eyes, a soft but defined jaw and chin; ears close)
 		face: {
-			cheekbones: 0.45, cheeks: -0.18, jaw: -0.12, 'chin-width': -0.18, 'chin-out': 0.08,
-			'nose-width': -0.26, 'nose-volume': -0.16, 'nose-tip': 0.12, 'nose-hump': -0.1,
-			'eye-size': 0.15, 'eye-tilt': 0.15, 'upper-lip': 0.2, 'lower-lip': 0.28, 'cupids-bow': 0.2, 'mouth-width': 0.04,
-			'brow-ridge': -0.1, 'brow-angle': 0.1, 'head-oval': 0.4, 'head-heart': 0.28, 'head-fat': -0.22, 'neck-width': -0.15,
+			cheekbones: 0.45, cheeks: -0.15, 'cheek-inner': -0.05, jaw: -0.08, 'chin-width': -0.15, 'chin-out': 0.1,
+			'nose-width': -0.24, 'nose-volume': -0.16, 'nose-tip': 0.15, 'nose-point': 0.08, 'nose-hump': -0.1,
+			'eye-size': 0.12, 'eye-tilt': 0.15, 'upper-lip': 0.22, 'lower-lip': 0.3, 'cupids-bow': 0.25, 'mouth-width': 0.05, 'mouth-corners': 0.08,
+			'brow-ridge': -0.1, 'brow-angle': 0.1, forehead: -0.05, 'ear-out': -0.1, 'head-oval': 0.4, 'head-heart': 0.28, 'head-fat': -0.22, 'neck-width': -0.12,
 		},
 		hair: { style: 'ponytail01', vol: 1, beard: '', cut: 'pony' },
 		style: () => ({
