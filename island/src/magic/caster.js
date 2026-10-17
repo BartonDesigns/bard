@@ -92,7 +92,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		const blow = { amount: amount * (1 + afflict.vuln(T)), type: typeOf(spell.type), part: 'body', src: at, dir: dir || { x: T.bound.x - at.x, y: 0.3, z: T.bound.z - at.z }, by: combat.me, spell: spell.type };
 		const r = combat.deal(T, blow, true);
 		const c = GLOW[spell.type === 'frost' ? 'frost' : spell.school];
-		if (r?.dealt) { fx.burst({ x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }, c, 8, 3, 0.4, 0.2); if (r.killed) afflict.fell(T, spell.type); else if (amount < 1e5) afflict.apply(T, spell.type, r.dealt, at); }
+		if (r?.dealt) { const at2 = { x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }; fx.burst(at2, c, 8, 3, 0.4, 0.2); fx.flash?.(at2, c, r.killed ? Math.max(0.6, r.dealt / 60) : r.dealt / 60); if (r.killed) afflict.fell(T, spell.type); else if (amount < 1e5) afflict.apply(T, spell.type, r.dealt, at); }
 		return r;
 	}
 	// (an affliction's own follow-on blow: a burn's tick, an echo, a leap; it afflicts nothing more)

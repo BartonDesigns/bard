@@ -55,7 +55,7 @@ void main() {
 	gl_FragColor = vec4((vC.rgb * a + vec3(hot * hot * 0.55)) * vC.a * vF, 1.0);
 #endif
 }`;
-const VERT = 'attribute float size; attribute vec4 color; attribute vec2 kind; varying vec4 vC; varying vec2 vK; varying float vF; uniform float scale; void main(){ vC = color; vK = kind; vec4 mv = modelViewMatrix * vec4(position, 1.0); float d = max(0.1, -mv.z); float px = size * scale / d; vF = 1.0 - 0.75 * smoothstep(90.0, 300.0, px); \n#ifdef INK\n vF *= smoothstep(0.7, 2.2, d); \n#endif\n gl_PointSize = min(180.0, px); gl_Position = size > 0.0 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0); }';
+const VERT = 'attribute float size; attribute vec4 color; attribute vec2 kind; varying vec4 vC; varying vec2 vK; varying float vF; uniform float scale; void main(){ vC = color; vK = kind; vec4 mv = modelViewMatrix * vec4(position, 1.0); float d = max(0.1, -mv.z); float px = size * scale / d; vF = 1.0 - 0.8 * smoothstep(60.0, 200.0, px); \n#ifdef INK\n vF *= smoothstep(0.7, 2.2, d); \n#else\n vF *= 0.25 + 0.75 * smoothstep(0.4, 2.5, d); \n#endif\n gl_PointSize = min(150.0, px); gl_Position = size > 0.0 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0); }';
 
 // (the decals: the same shapes laid flat on the ground, a sigil, a ripple, a shockwave, frost)
 const DECAL_VERT = 'attribute vec4 iColor; attribute vec2 iKind; varying vec4 vC; varying vec2 vK; varying float vF; varying vec2 vUv; void main(){ vC = iColor; vK = iKind; vF = 1.0; vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }';
@@ -270,7 +270,18 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 	function dispose() { for (const L of [glow, ink]) { scene.remove(L.pts); L.g.dispose(); L.mat.dispose(); } scene.remove(xray); xray.material.dispose(); scene.remove(flat.mesh); flat.geo.dispose(); flat.mat.dispose(); gargantua.dispose(); }
 	// (the black hole, kept alive by calling this each step: where, radius, strength, the eye)
 	const hole = (p, r, a = 1, e = null) => gargantua.set(p, r, a, e);
-	return { emit, burst, ring, line, bolt, pillar, circle, spiral, decal, hole, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
+	// (a hit's weight: a white-hot core and its colour flaring out where it lands, k 0 to 1 by how
+	// hard; the hardest of a frame is kept for the view's own kick and flash, taken by takeFlash)
+	let felt = null;
+	const WHITE = [1, 0.97, 0.9];
+	function flash(p, c, k = 0.5) {
+		k = Math.max(0.05, Math.min(1, k));
+		emit(p.x, p.y, p.z, 0, 0, 0, 0.07, 0.5 + 1.4 * k, 0.9 + 2 * k, WHITE, 0.9);
+		emit(p.x, p.y, p.z, 0, 0, 0, 0.18, 1 + 2.5 * k, 2 + 5 * k, c, 0.55);
+		if (!felt || k > felt.k) felt = { x: p.x, y: p.y, z: p.z, c, k };
+	}
+	const takeFlash = () => { const f = felt; felt = null; return f; };
+	return { emit, burst, ring, line, bolt, pillar, circle, spiral, decal, hole, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
 }
 
 // ---------- the voices ----------

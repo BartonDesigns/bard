@@ -21,6 +21,7 @@ const CSS = `
 .mg-mana{position:absolute;left:50%;bottom:calc(60px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);height:4px;border-radius:2px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.1);pointer-events:none;z-index:6}
 .mg-mana>div{height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,#5a7cff,#a8c4ff);transition:transform .15s}
 .mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 system-ui,sans-serif;color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
+@media (max-width:660px){#l99-island-mount:not(.l99-touch) .mg-bar{left:calc(50% - 34px)}}
 .mg-fab b{font-weight:700}.mg-fab .l{color:#ffd27a}.mg-fab .d{color:#b39aff}
 .mg-mode{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 system-ui,sans-serif;padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
 .mg-book{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(4,8,12,.62);font:500 13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:#eef6f4}

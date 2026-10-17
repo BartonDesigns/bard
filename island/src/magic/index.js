@@ -135,6 +135,28 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		else if (e.kind === 'kill' || e.kind === 'kill-surrendered') { gather(state, 'dark', e.kind === 'kill' ? 1 : 3); dirty = true; }
 	});
 	let player = null, lastH = 0, wasBeam = false;
+	// (a hard hit near you is felt: the view kicks and the edges of the screen flare in its colour,
+	// both scaled by how hard it struck and how near; fx.flash keeps the hardest of each frame)
+	const pulse = document.createElement('div');
+	pulse.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:5;opacity:0;mix-blend-mode:screen';
+	mount.appendChild(pulse);
+	let pulseA = 0;
+	function feel(dt) {
+		const f = fx.takeFlash();
+		if (f) {
+			const d = Math.hypot(f.x - camera.position.x, f.y - camera.position.y, f.z - camera.position.z);
+			const k = f.k * Math.max(0, Math.min(1, 1.15 - d / 45));
+			if (k > 0.06) {
+				combat.shake?.(0.3 * k);
+				if (0.32 * k > pulseA) {
+					pulseA = 0.32 * k;
+					const [r, g, b] = f.c.map((v) => Math.round(Math.min(1, v) * 255));
+					pulse.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},0) 45%, rgba(${r},${g},${b},0.9) 100%)`;
+				}
+			}
+		}
+		if (pulseA > 0) { pulseA = Math.max(0, pulseA - dt * 2.2); pulse.style.opacity = pulseA.toFixed(3); }
+	}
 	function update(dt) {
 		const Wd = W();
 		if (!Wd?.player) return;
@@ -153,13 +175,14 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		stepRemote(dt);
 		aether.update(dt, camera.position);
 		fx.update(dt, caster.sighting());
+		feel(dt);
 		if (innerHeight !== lastH) { lastH = innerHeight; fx.resize(innerHeight, camera.fov); }
 		hud.show(!busy());
 		hud.update(performance.now() / 1000);
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 5; if (dirty) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); beams.dispose(); fx.dispose(); hands.dispose(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.casting = combat.hooks.remoteSpell = null; }
+	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); beams.dispose(); fx.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.casting = combat.hooks.remoteSpell = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, exposure: () => caster.exposure(),
