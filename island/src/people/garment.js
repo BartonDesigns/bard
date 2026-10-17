@@ -15,6 +15,8 @@ import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance, 
 import { sleeveEase, waistbandEase, armT, isRibbed, isShirted, SLEEVE_POSE_GLSL } from './garment-shape.js';
 import { torsoField, clothPoints, necklineRing, hoodGeometry, collarGeometry, carrierGeometry } from './garment-kit.js';
 import { patchKit } from './propkit.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { CAMO } from '../combat/outfits.js';
 import { tierNow } from '../world/governor.js';
 
 // (phone audit: a phone, or a low quality tier, keeps the clothes' own surface: the curved split
@@ -299,9 +301,9 @@ vec3 garment(int s, vec3 P, vec3 N) {
 	else if (k == 28) {
 		// camouflage: three layers of soft-edged blotches over the base, laid in the body's own metres
 		float aa = 0.03;
-		float n1 = vn(P.xy * 8.0 + vec2(P.z * 6.0, 1.7)) * 0.7 + vn(P.xy * 23.0 + P.z * 9.0) * 0.3;
-		float n2 = vn(P.zy * 11.0 + vec2(3.1, P.x * 7.0)) * 0.75 + vn(P.xy * 31.0 + 5.0) * 0.25;
-		float n3 = vn(P.xy * 17.0 + vec2(P.z * 13.0, 7.3));
+		float n1 = vn(P.xy * vec2(13.0, 9.0) + vec2(P.z * 10.0, 1.7)) * 0.7 + vn(P.xy * 37.0 + P.z * 14.0) * 0.3;
+		float n2 = vn(P.zy * vec2(18.0, 12.0) + vec2(3.1, P.x * 11.0)) * 0.75 + vn(P.xy * 49.0 + 5.0) * 0.25;
+		float n3 = vn(P.xy * vec2(30.0, 22.0) + vec2(P.z * 21.0, 7.3)) * 0.8 + vn(P.xy * 70.0 + 2.0) * 0.2;
 		c = mix(base, a, smoothstep(0.55 - aa, 0.55 + aa, n1));
 		c = mix(c, b, smoothstep(0.6 - aa, 0.6 + aa, n2));
 		c = mix(c, base * 0.42, smoothstep(0.7 - aa, 0.7 + aa, n3));
@@ -787,18 +789,6 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	// (armour steel: kit gloss 3, polished but lit by the sky the world has, propkit.js)
 	const ARMOUR = 3, V3 = (x, y, z) => new THREE.Vector3(x, y, z), kH = cut.height / 1.7;
 	const skinP = P0.p, nSkin = skinP ? Math.min(skinP.length, 13380 * 3) : 0;
-	// the skin round one leg (sx: its side) between two heights: its centre and how far out it
-	// reaches (the arms, out to the sides, are left out)
-	const legGirth = (y0, y1, sx) => {
-		let n = 0, ax = 0, az = 0, r = 0;
-		const keep = (i) => { const x = skinP[i] * sx, y = skinP[i + 1]; return y >= y0 && y <= y1 && x > 0.008 && x < 0.17 * kH; };
-		for (let i = 0; i < nSkin; i += 3) if (keep(i)) { ax += skinP[i]; az += skinP[i + 2]; n++; }
-		if (!n) return { x: sx * 0.09 * kH, z: 0, r: 0.06 * kH };
-		ax /= n; az /= n;
-		for (let i = 0; i < nSkin; i += 3) if (keep(i)) r = Math.max(r, Math.hypot(skinP[i] - ax, skinP[i + 2] - az));
-		return { x: ax, z: az, r };
-	};
-	const jointY = (b) => heads[map[b]]?.y ?? 0;
 	// the skin round a limb along its bone (sd: its side; kind: the body part, partOf), from t0
 	// to t1 metres down the bone: the axis's point at the middle, the bone's way, how far out
 	// (way: the limb's way when the bone's own is not it; over: reach over that garment there too,
@@ -884,23 +874,197 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			let k = 0;
 			if (K) {
 				const d = Math.hypot(skinP[v * 3] - K.x, skinP[v * 3 + 1] - K.y, skinP[v * 3 + 2] - K.z);
-				k = Math.max(0, 1 - d / 0.034) * Math.max(0, Math.min(1, (n.dot(nb) - 0.2) / 0.4));
+				k = Math.max(0, 1 - d / (knuckle?.reach || 0.034)) * Math.max(0, Math.min(1, (n.dot(nb) - 0.2) / 0.4));
 				k = k > 0.25 ? Math.min(1, k * 1.6) : 0;
 			}
 			const lift = proud + k * (knuckle?.rise || 0);
 			colour.copy(base).lerp(kc, k > 0 ? 1 : 0);
 			out.pos.push(skinP[v * 3] + n.x * lift, skinP[v * 3 + 1] + n.y * lift, skinP[v * 3 + 2] + n.z * lift); out.nor.push(n.x, n.y, n.z);
-			out.col.push(colour.r, colour.g, colour.b); out.kit.push(k > 0 && knuckle?.gloss != null ? knuckle.gloss : gloss, fab, 0);
+			out.col.push(colour.r, colour.g, colour.b); out.kit.push(k > 0 && knuckle?.gloss != null ? knuckle.gloss : gloss, k > 0 && knuckle?.gloss === ARMOUR ? 0 : fab, 0);
 			let sum = 0; for (let q = 0; q < 4; q++) sum += A.weights[v * 4 + q];
 			for (let q = 0; q < 4; q++) { out.si.push(A.ids[v * 4 + q]); out.sw.push(A.weights[v * 4 + q] / (sum || 1)); }
 		}
 		return true;
 	};
+	// ---------- plate made to the body ----------
+	// Plate as a smooth shell round an axis (a bone, the torso, the head): the body and what is
+	// worn over it measured in rings along the axis (seg sectors round each), each ring's reach
+	// smoothed into broad curves that never sink under the clothes, then stood off by the wall.
+	// Its edges are rings and the borders of cover(t, θ, p) (θ 0 at ref, the front; p the point
+	// on the curve), so they run clean; lift(t, θ, p) gives { lift, seam, tone } for lames,
+	// ridges and slits; edge(d) how far a point d rows in from an edge stands out (a rolled rim,
+	// a padded bag's rounded border); paint(t, θ, p) a colour in place of col (camouflage, a
+	// device on a tabard). closeA/closeB: the first or last metres drawn in to a dome. bone(t, θ):
+	// the bone a ring rides, or [[bone, weight], ...] for cloth shared between two. Made of cloth
+	// (fab) or steel (gloss 3, dulled and stained with use). floor(t, θ): a reach it never sinks
+	// under (the rad of what it is worn over, on the same axis). Returns the finished surface,
+	// at(t, θ, off) → { p, n, bone }, for what is fixed on it (pouches, a buckle), and rad(t, θ),
+	// how far out it stands; or null.
+	const PT = V3(0, 0, 0), STAINC = new THREE.Color('#3b2b20');
+	const fitTube = ({ o, axis, t0, t1, dt = 0.016, seg = 32, arc = null, span = null, floor = null, skin, cloth = null, wall = 0.008, cover = null, lift = null, bone, closeA = 0, closeB = 0, smooth = 12, give = 0.008, rim = 0.0035, edge = null, wear = 0.38, rimCol = null, col, paint = null, stain = null, fab = 0, gloss = ARMOUR, ref = V3(0, 0, 1), minR = 0.02, draw = true }) => {
+		const a = axis.clone().normalize(), f = ref.clone().projectOnPlane(a);
+		if (f.lengthSq() < 1e-6) f.set(1, 0, 0).projectOnPlane(a);
+		f.normalize();
+		const sv = V3(0, 0, 0).crossVectors(a, f), ns = Math.max(2, Math.round((t1 - t0) / dt)) + 1, step = (t1 - t0) / (ns - 1);
+		if (P0.lo) seg = Math.max(16, seg >> 1);
+		const R = new Float32Array(ns * seg), got = new Uint8Array(ns * seg);
+		const take = (x, y, z) => {
+			const dx = x - o.x, dy = y - o.y, dz = z - o.z, t = dx * a.x + dy * a.y + dz * a.z;
+			if (t < t0 - step || t > t1 + step) return;
+			const i = Math.max(0, Math.min(ns - 1, Math.round((t - t0) / step)));
+			const px = dx - a.x * t, py = dy - a.y * t, pz = dz - a.z * t, r = Math.hypot(px, py, pz);
+			const th = Math.atan2(px * sv.x + py * sv.y + pz * sv.z, px * f.x + py * f.y + pz * f.z);
+			const j = ((Math.round(th / (Math.PI * 2) * seg) % seg) + seg) % seg, k = i * seg + j;
+			if (r > R[k]) R[k] = r; got[k] = 1;
+		};
+		for (let i = 0, v = 0; i < nSkin; i += 3, v++) if (skin(v, skinP[i], skinP[i + 1], skinP[i + 2])) take(skinP[i], skinP[i + 1], skinP[i + 2]);
+		const cp = P0.cloth?.attributes.position, sl = P0.cloth?.attributes.slot;
+		if (cloth && cp && sl) for (let i = 0; i < cp.count; i++) { const x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i), s = sl.getX(i); if (cloth(x, y, z, s % 10, Math.floor(s / 10 + 0.01))) take(x, y, z); }
+		// (empty sectors: from their ring's nearest; an empty ring: from the ring beside it)
+		for (let i = 0; i < ns; i++) {
+			if (![...got.subarray(i * seg, i * seg + seg)].some(Boolean)) continue;
+			for (let j = 0; j < seg; j++) {
+				const k = i * seg + j; if (got[k]) continue;
+				for (let d = 1; d < seg; d++) { const l = i * seg + ((j - d + seg) % seg), r = i * seg + ((j + d) % seg); if (got[l] || got[r]) { R[k] = Math.max(got[l] ? R[l] : 0, got[r] ? R[r] : 0); break; } }
+			}
+			for (let j = 0; j < seg; j++) got[i * seg + j] = 1;
+		}
+		for (let pass = 0; pass < 2; pass++) for (let i0 = 0; i0 < ns; i0++) {
+			const i = pass ? ns - 1 - i0 : i0, n = pass ? i + 1 : i - 1;
+			if (got[i * seg] || n < 0 || n >= ns || !got[n * seg]) continue;
+			for (let j = 0; j < seg; j++) { R[i * seg + j] = R[n * seg + j]; got[i * seg + j] = 1; }
+		}
+		for (let k = 0; k < R.length; k++) R[k] = Math.max(R[k], minR);
+		const raw = R.slice(), S = R.slice();
+		for (let it = 0; it < smooth; it++) for (let i = 0; i < ns; i++) for (let j = 0; j < seg; j++) {
+			const k = i * seg + j, l = i * seg + ((j + seg - 1) % seg), r = i * seg + ((j + 1) % seg);
+			let s = S[l] + S[r] + S[k] * 2, w = 4;
+			if (i > 0) { s += S[k - seg]; w++; } if (i < ns - 1) { s += S[k + seg]; w++; }
+			// (a fold of cloth may stand a little proud of the curve: the wall covers it)
+			S[k] = Math.max(raw[k] - give, s / w);
+		}
+		// (the domed ends)
+		const domed = (t, r) => {
+			if (closeA && t < t0 + closeA) { const u = (t0 + closeA - t) / closeA; return r * Math.sqrt(Math.max(0, 1 - u * u)); }
+			if (closeB && t > t1 - closeB) { const u = (t - (t1 - closeB)) / closeB; return r * Math.sqrt(Math.max(0, 1 - u * u)); }
+			return r;
+		};
+		// (the smoothed reach anywhere on the grid; a domed end takes it from where the dome starts)
+		const reach = (t, th) => {
+			const tc = Math.min(t1 - closeB, Math.max(t0 + closeA, t)), fi = Math.max(0, Math.min(ns - 1, (tc - t0) / step)), i = Math.min(ns - 2, Math.floor(fi)), u = fi - i;
+			const fj = ((((th / (Math.PI * 2)) % 1) + 1) % 1) * seg, j = Math.floor(fj) % seg, w = fj - Math.floor(fj), j1 = (j + 1) % seg;
+			const r = (S[i * seg + j] * (1 - w) + S[i * seg + j1] * w) * (1 - u) + (S[(i + 1) * seg + j] * (1 - w) + S[(i + 1) * seg + j1] * w) * u;
+			return domed(t, r);
+		};
+		// arc: only the sectors between two angles; span(θ): the rows run between two places
+		// along the axis that differ round it (a helmet's rim cut high over the ears), so the
+		// edges follow the cut and do not step
+		const W = seg + 1, NV = ns * W;
+		const thOf = (j) => (arc ? arc[0] + ((arc[1] - arc[0]) * j) / seg : (j / seg) * Math.PI * 2 - (j / seg > 0.5 ? Math.PI * 2 : 0));
+		const tOf = (i, j) => { if (!span) return t0 + i * step; const [A, Bt] = span(thOf(j)); return A + ((Bt - A) * i) / (ns - 1); };
+		const dirAt = (th, d) => { const c = Math.cos(th), s = Math.sin(th); return d.set(f.x * c + sv.x * s, f.y * c + sv.y * s, f.z * c + sv.z * s); };
+		const D3 = V3(0, 0, 0);
+		// (a point on the curve, stood off by the wall, and out by h more)
+		const point = (t, th, h = 0, to = V3(0, 0, 0)) => { const r = reach(t, th), rr = r > 1e-4 ? Math.max(r, floor ? floor(t, th) : 0) + wall + h : 0; dirAt(th, D3); return to.set(o.x + a.x * t + D3.x * rr, o.y + a.y * t + D3.y * rr, o.z + a.z * t + D3.z * rr); };
+		// (which quads are kept, and so how far each point lies in from an edge)
+		const onV = new Uint8Array(NV);
+		for (let i = 0; i < ns; i++) for (let j = 0; j <= seg; j++) { const t = tOf(i, j), th = thOf(j % W); onV[i * W + j] = !cover || cover(t, th, point(t, th, 0, PT)) ? 1 : 0; }
+		const quad = (i, j) => i >= 0 && i < ns - 1 && j >= 0 && j < seg && onV[i * W + j] && onV[(i + 1) * W + j] && onV[i * W + j + 1] && onV[(i + 1) * W + j + 1];
+		const D = new Uint8Array(NV).fill(255), Q = [];
+		const wrapQ = (i, j) => quad(i, arc ? j : (j + seg) % seg);
+		for (let i = 0; i < ns; i++) for (let j = 0; j <= seg; j++) {
+			const inner = wrapQ(i, j) && wrapQ(i - 1, j) && wrapQ(i, j - 1) && wrapQ(i - 1, j - 1);
+			if (!inner && !(i === 0 && closeA) && !(i === ns - 1 && closeB)) { D[i * W + j] = 0; Q.push(i * W + j); }
+		}
+		for (let h = 0; h < Q.length; h++) {
+			const k = Q[h], i = Math.floor(k / W), j = k % W, d = D[k] + 1; if (d > 6) continue;
+			for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+				const ii = i + di; let jj = j + dj; if (ii < 0 || ii >= ns) continue;
+				if (arc) { if (jj < 0 || jj > seg) continue; } else if (jj < 0) jj = seg - 1; else if (jj > seg) jj = 1;
+				const kk = ii * W + jj; if (D[kk] > d) { D[kk] = d; Q.push(kk); if (!arc && (jj === 0 || jj === seg)) { const tw = ii * W + (jj ? 0 : seg); if (D[tw] > d) { D[tw] = d; Q.push(tw); } } }
+			}
+		}
+		const steel = stain ?? gloss === ARMOUR, baseC = new THREE.Color(col), wornC = rimCol ? new THREE.Color(rimCol) : null;
+		const V = new Float32Array(NV * 3), Cc = new Float32Array(NV * 3), B = [], tint = new THREE.Color(), seamC = new THREE.Color('#141517');
+		for (let i = 0; i < ns; i++) for (let j = 0; j <= seg; j++) {
+			const k = i * W + j, t = tOf(i, j), th = thOf(j), p = point(t, th);
+			const L = lift ? lift(t, th, p) : null, d = D[k];
+			const e = edge ? edge(d) : d === 0 ? rim : 0;
+			point(t, th, (L?.lift || 0) + e, D3);
+			V[k * 3] = D3.x; V[k * 3 + 1] = D3.y; V[k * 3 + 2] = D3.z;
+			tint.copy((paint && paint(t, th, p)) || baseC);
+			if (d === 0) { if (wornC) tint.copy(wornC); else if (steel) tint.lerp(new THREE.Color('#c8ccd2'), wear); }
+			if (steel) {
+				// (use: the steel dulled and stained in patches, rust brown in the worst of them,
+				// a little darker toward its lower edge)
+				const X = V[k * 3], Y = V[k * 3 + 1], Z = V[k * 3 + 2];
+				const s1 = Math.sin(X * 23 + Y * 7) * Math.sin(Y * 19 - Z * 11) * Math.sin(Z * 17 + X * 13), s2 = Math.sin(X * 41 - Z * 29) * Math.sin(Y * 37 + X * 17);
+				tint.multiplyScalar(0.84 + 0.16 * s1 * s1 + 0.08 * (i / Math.max(1, ns - 1)) * (a.y > 0.5 ? 1 : 0));
+				if (s2 > 0.55 && d > 0) tint.lerp(STAINC, (s2 - 0.55) * 0.9);
+			}
+			if (L?.seam) tint.lerp(seamC, Math.min(1, L.seam));
+			if (L?.tone) tint.multiplyScalar(L.tone);
+			Cc[k * 3] = tint.r; Cc[k * 3 + 1] = tint.g; Cc[k * 3 + 2] = tint.b;
+			const b = bone(t, th);
+			B.push(typeof b === 'string' ? [[map[b] ?? 0, 1]] : b.map(([n, w]) => [map[n] ?? 0, w]));
+		}
+		// the finished surface, for what is fixed on it
+		const surf = (t, th, to) => point(t, th, lift ? lift(t, th, point(t, th))?.lift || 0 : 0, to);
+		const at = (t, th, off = 0) => {
+			const p = surf(t, th, V3(0, 0, 0)), dT = surf(t + 0.004, th, V3(0, 0, 0)).sub(surf(t - 0.004, th, V3(0, 0, 0))), dS = surf(t, th + 0.02, V3(0, 0, 0)).sub(surf(t, th - 0.02, V3(0, 0, 0)));
+			const n = V3(0, 0, 0).crossVectors(dT, dS).normalize();
+			if (n.dot(dirAt(th, V3(0, 0, 0))) < 0) n.negate();
+			return { p: p.addScaledVector(n, off), n, bone: bone(t, th) };
+		};
+		// (how far out the finished surface stands, for what is worn over it: floor)
+		const rad = (t, th) => (t < t0 || t > t1 ? 0 : Math.max(reach(t, th), floor ? floor(t, th) : 0) + wall + (lift ? lift(t, th, point(t, th))?.lift || 0 : 0));
+		if (!draw) return { at, rad };
+		const I = [];
+		for (let i = 0; i < ns - 1; i++) for (let j = 0; j < seg; j++) if (quad(i, j)) { const p = i * W + j, q = p + W; I.push(p, p + 1, q, p + 1, q + 1, q); }
+		if (!I.length) return null;
+		const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(V, 3)); g.setIndex(I); g.computeVertexNormals();
+		const na = g.attributes.normal;
+		for (const k of I) {
+			out.pos.push(V[k * 3], V[k * 3 + 1], V[k * 3 + 2]); out.nor.push(na.getX(k), na.getY(k), na.getZ(k)); out.col.push(Cc[k * 3], Cc[k * 3 + 1], Cc[k * 3 + 2]);
+			const b = B[k]; let sum = 0; for (const [, w] of b) sum += w;
+			for (let q = 0; q < 4; q++) { out.si.push(b[q]?.[0] ?? 0); out.sw.push(b[q] ? b[q][1] / (sum || 1) : 0); }
+			out.kit.push(gloss, fab, 0);
+		}
+		g.dispose();
+		return { at, rad };
+	};
+	// the angle round an axis (as fitTube measures it) that faces the way w does
+	const thetaOf = (axis, w, ref = V3(0, 0, 1)) => { const a = axis.clone().normalize(), f = ref.clone().projectOnPlane(a).normalize(), s = V3(0, 0, 0).crossVectors(a, f); return Math.atan2(w.dot(s), w.dot(f)); };
+	const angGap = (x, y) => Math.abs(((x - y + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+	// how far along a bone the skin point v lies
+	const alongBone = (v, from, to) => { const d = to.clone().sub(from), L = d.length(); return ((skinP[v * 3] - from.x) * d.x + (skinP[v * 3 + 1] - from.y) * d.y + (skinP[v * 3 + 2] - from.z) * d.z) / (L || 1); };
+	// laminated plate along a run (t: how far along, in metres): each lame a step out over the
+	// next (up: the first lame outermost), swelling toward its free edge, which is worn bright,
+	// and a dark seam where one ends
+	const lames = (t, width, step = 0.0045, up = true, saw = 0.0025) => {
+		const k = Math.floor(t / width), f = t / width - k, free = up ? f : 1 - f;
+		return { lift: Math.max(0, up ? 3 - k : k) * step + saw * free * free, seam: f > 0.88 ? (f - 0.88) / 0.12 : f < 0.05 ? 1 - f / 0.05 : 0, tone: free > 0.66 && free < 0.86 ? 1.22 : 1 };
+	};
 	// a headset: a cup over each ear and a boom mic to the mouth (band: over the top, for a cap)
-	const headset = (col, band) => {
-		for (const s of [-1, 1]) { const cup = new THREE.CylinderGeometry(0.044, 0.044, 0.036, 16); cup.rotateZ(Math.PI / 2); cup.translate(cx + s * (rx + 0.03), eyeY - 0.035, cz - 0.008); put(cup, 'head', col, 0.3); }
-		const boom = new THREE.CatmullRomCurve3([V3(cx + rx + 0.03, eyeY - 0.06, cz + 0.01), V3(cx + rx * 0.85, eyeY - 0.1, cz + rz * 0.6), V3(cx + 0.03, eyeY - 0.108, sk.z1 + 0.018)]);
-		put(new THREE.TubeGeometry(boom, 8, 0.0035, 5, false), 'head', '#1a1b19', 0.3);
+	// a headset: a cup over each ear (a rounded shell, its outer cap stood proud), a boom mic to
+	// the mouth with its windscreen; on a cap a band over the top, on a helmet an arm up to each
+	// rail (on: the helmet's shell and where its rim lies)
+	const headset = (col, band, on = null) => {
+		const dark = new THREE.Color(col).multiplyScalar(0.7).getHex();
+		for (const s of [-1, 1]) {
+			const x = cx + s * (rx + 0.03), y = eyeY - 0.034, z = cz - 0.006;
+			const cup = new RoundedBoxGeometry(0.032, 0.076, 0.062, 3, 0.015); cup.translate(x, y, z); put(cup, 'head', col, 0.25, 3);
+			const cap = new RoundedBoxGeometry(0.01, 0.052, 0.042, 2, 0.006); cap.translate(x + s * 0.018, y + 0.004, z - 0.002); put(cap, 'head', dark, 0.3);
+			const knob = new THREE.CylinderGeometry(0.007, 0.007, 0.01, 10); knob.rotateZ(Math.PI / 2); knob.translate(x + s * 0.026, y - 0.02, z + 0.016); put(knob, 'head', '#141413', 0.4);
+			if (on) {
+				const S = on.shell.at(on.tAt(s * Math.PI / 2, 0.019), s * Math.PI / 2, 0.006);
+				const arm = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V3(x + s * 0.004, y + 0.04, z), V3((x + S.p.x) / 2 + s * 0.006, (y + 0.04 + S.p.y) / 2, z), S.p]), 6, 0.0045, 6, false);
+				put(arm, 'head', '#1c1d1a', 0.3);
+			}
+		}
+		const boom = new THREE.CatmullRomCurve3([V3(cx + rx + 0.036, eyeY - 0.055, cz + 0.022), V3(cx + rx * 0.88, eyeY - 0.098, cz + rz * 0.62), V3(cx + 0.032, eyeY - 0.106, sk.z1 + 0.016)]);
+		put(new THREE.TubeGeometry(boom, 10, 0.0032, 6, false), 'head', '#1a1b19', 0.3);
+		const mic = new THREE.SphereGeometry(0.009, 10, 8); mic.scale(1.3, 1, 1); mic.translate(cx + 0.024, eyeY - 0.106, sk.z1 + 0.018); put(mic, 'head', '#1a1a18', 0, 4);
 		if (band) { const b = new THREE.TorusGeometry(1, 0.03, 5, 20, Math.PI); b.scale(rx + 0.034, top - eyeY + 0.07, 0.3); b.translate(cx, eyeY - 0.03, cz - 0.01); put(b, 'head', col, 0.3); }
 	};
 	// a steel helm of the old kingdoms: a kettle hat with its wide brim, or a great helm closed
@@ -914,14 +1078,87 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const comb = new THREE.BoxGeometry(0.008, 0.02, (rz + 0.03) * 1.7); comb.translate(cx, top + 0.035, cz); put(comb, 'head', c, ARMOUR);
 			return;
 		}
-		const y0 = eyeY - 0.15, y1 = top + 0.01, R = rx + 0.05, Rz = rz + 0.055;
-		const can = new THREE.CylinderGeometry(1, 1.05, y1 - y0, 24, 2, true); can.scale(R, 1, Rz); can.translate(cx, (y0 + y1) / 2, cz + 0.006); put(can, 'head', c, ARMOUR);
-		const lid = new THREE.SphereGeometry(1, 24, 6, 0, Math.PI * 2, 0, Math.PI / 2); lid.scale(R, 0.045, Rz); lid.translate(cx, y1, cz + 0.006); put(lid, 'head', c, ARMOUR);
-		// the slit, the cross that strengthens the face, and the breaths
-		const slit = new THREE.BoxGeometry(R * 1.45, 0.013, 0.03); slit.translate(cx, eyeY + 0.006, cz + Rz - 0.005); put(slit, 'head', q.acc || '#121314', 0);
-		const bar = new THREE.BoxGeometry(0.02, y1 - y0 - 0.04, 0.012); bar.translate(cx, (y0 + y1) / 2 - 0.01, cz + Rz + 0.008); put(bar, 'head', '#b8975a', ARMOUR);
-		for (let i = 0; i < 6; i++) { const h = new THREE.CylinderGeometry(0.004, 0.004, 0.02, 6); h.rotateX(Math.PI / 2); h.translate(cx + 0.03 + (i % 3) * 0.016, eyeY - 0.07 - Math.floor(i / 3) * 0.018, cz + Rz - 0.002); put(h, 'head', '#121314', 0); }
+		closeHelm(q, c);
 	};
+	// a vertex-coloured piece: colourAt(x, y, z) gives each point its colour (bone: as put)
+	const putShade = (geo, bone, colourAt, gloss = ARMOUR, fab = 0) => {
+		geo.computeVertexNormals();
+		const g = geo.index ? geo.toNonIndexed() : geo, pa = g.attributes.position, na = g.attributes.normal;
+		for (let i = 0; i < pa.count; i++) {
+			const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i), cc = colourAt(x, y, z);
+			out.pos.push(x, y, z); out.nor.push(na.getX(i), na.getY(i), na.getZ(i)); out.col.push(cc.r, cc.g, cc.b);
+			out.si.push(typeof bone === 'function' ? map[bone(y)] ?? 0 : map[bone] ?? 0, 0, 0, 0); out.sw.push(1, 0, 0, 0); out.kit.push(gloss, fab, 0);
+		}
+	};
+	// camouflage printed on kit (a scheme from combat/outfits.js), laid in the body's own metres:
+	// soft blotches of its three colours over the base, the darkest in small broken shapes
+	const hash3 = (x, y, z) => { const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return h - Math.floor(h); };
+	const vn3 = (x, y, z) => {
+		const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z), fx = x - ix, fy = y - iy, fz = z - iz;
+		const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz), L = (a, b, t) => a + (b - a) * t;
+		const h = (a, b, c) => hash3(ix + a, iy + b, iz + c);
+		return L(L(L(h(0, 0, 0), h(1, 0, 0), u), L(h(0, 1, 0), h(1, 1, 0), u), v), L(L(h(0, 0, 1), h(1, 0, 1), u), L(h(0, 1, 1), h(1, 1, 1), u), v), w);
+	};
+	const camoPaint = (name, base = null) => {
+		const P = (CAMO[name] || CAMO.multicam).map((h) => new THREE.Color(h)), B0 = base ? new THREE.Color(base) : P[0];
+		return (x, y, z) => {
+			const n1 = vn3(x * 15 + 3.1, y * 10, z * 15) * 0.7 + vn3(x * 43, y * 31, z * 43) * 0.3;
+			const n2 = vn3(z * 13 + 7.7, y * 9 + 1.3, x * 13) * 0.75 + vn3(x * 51 + 2, y * 47, z * 51) * 0.25;
+			const n3 = vn3(x * 26 + 11.3, y * 21, z * 26 + 5.1);
+			let c = B0;
+			if (n1 > 0.56) c = P[1];
+			if (n2 > 0.6) c = P[2];
+			if (n3 > 0.69) c = P[3];
+			return c;
+		};
+	};
+	// rings joined into a tube: [{ y, rx, rz, x, z }] top to bottom
+	const ringTube = (rings, seg = 32) => {
+		const V = [], I = [];
+		for (const R of rings) for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; V.push(R.x + Math.sin(a) * R.rx, R.y, R.z + Math.cos(a) * R.rz); }
+		for (let r = 0; r < rings.length - 1; r++) for (let i = 0; i < seg; i++) { const p = r * (seg + 1) + i, q = p + seg + 1; I.push(p, q, p + 1, p + 1, q, q + 1); }
+		const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3)); g.setIndex(I);
+		return g;
+	};
+	// a closed knight's helm, the kind the old kingdoms' knights fought in: an egg of steel shut to
+	// the chin, its visor drawn to a blunt prow with a narrow sight above it and breaths cut low on
+	// one cheek, a comb along the crown, and a gorget of two lames from the chin to the collar
+	function closeHelm(q, c) {
+		const base = new THREE.Color(c), worn = base.clone().lerp(new THREE.Color('#c8ccd2'), 0.35);
+		const yo = eyeY - 0.135, cy = eyeY - 0.004, Ry = top + 0.03 - cy;
+		// made to the head (fitTube): its broad smoothing draws the nose and brow out into the
+		// visor's prow; the sight a dark slit with a lip over it, breaths on the right cheek, the
+		// visor's hinge line, a comb from brow to nape, the rim flared over the gorget
+		const R = (x, z) => Math.hypot(x - cx, z - cz);
+		fitTube({
+			o: V3(cx, yo, cz), axis: V3(0, 1, 0), t0: 0, t1: top + 0.022 - yo, dt: 0.01, seg: 48, col: c, wall: 0.017, smooth: 16, give: 0.012, closeB: 0.045, rim: 0.003,
+			skin: (v, x, y, z) => P0.part[v] === 0 && y > yo - 0.01 && R(x, z) < 0.16,
+			lift: (t, th) => {
+				const y = yo + t, f = Math.abs(th), front = f < 1.2;
+				let lift = 0.016 * Math.exp(-((th / 0.42) ** 2)) * Math.max(0, Math.min(1, (eyeY + 0.01 - y) / 0.03)) + (t < 0.02 ? (0.02 - t) * 0.5 : 0);
+				lift += 0.006 * (Math.exp(-((th / 0.07) ** 2)) + Math.exp(-(((f - Math.PI) / 0.07) ** 2))) * Math.max(0, Math.min(1, (y - eyeY - 0.04) / 0.02));
+				if (front && y > eyeY - 0.006 && y < eyeY + 0.01) return { lift: lift - 0.006, seam: 1, tone: 0.5 };
+				if (front && y >= eyeY + 0.01 && y < eyeY + 0.024) lift += 0.004;
+				const breath = th < -0.35 && th > -1.05 && y > eyeY - 0.085 && y < eyeY - 0.035 && Math.sin(th * 46) > 0.35;
+				const hinge = f < 1.7 && Math.abs(y - (eyeY + 0.03)) < 0.0025;
+				return { lift, seam: breath ? 1 : hinge ? 0.75 : 0, tone: 0.9 + 0.14 * Math.max(0, (y - cy) / Ry) };
+			},
+			bone: () => 'head',
+		});
+		// the gorget, its upper lame round the throat and the lower over the collar
+		let n = 0, nx = 0, nz = 0, rn = 0;
+		for (let i = 0, v = 0; i < nSkin; i += 3, v++) if (P0.part?.[v] === 0 && skinP[i + 1] > cut.neck + 0.01 && skinP[i + 1] < cut.neck + 0.06 && Math.abs(skinP[i]) < 0.09) { nx += skinP[i]; nz += skinP[i + 2]; n++; }
+		if (n) { nx /= n; nz /= n; for (let i = 0, v = 0; i < nSkin; i += 3, v++) if (P0.part?.[v] === 0 && skinP[i + 1] > cut.neck + 0.01 && skinP[i + 1] < cut.neck + 0.06 && Math.abs(skinP[i]) < 0.09) rn = Math.max(rn, Math.hypot(skinP[i] - nx, skinP[i + 2] - nz)); }
+		rn = rn || 0.06; const tz = (cut.frontZ + cut.backZ) / 2, dz = (cut.frontZ - cut.backZ) / 2;
+		const gor = ringTube([
+			{ y: yo + 0.02, rx: rn + 0.024, rz: rn + 0.028, x: nx, z: nz },
+			{ y: cut.neck + 0.012, rx: rn + 0.022, rz: rn + 0.026, x: nx, z: nz },
+			{ y: cut.neck - 0.012, rx: rn + 0.038, rz: rn + 0.042, x: nx, z: (nz + tz) / 2 },
+			{ y: cut.neck - 0.02, rx: rn + 0.046, rz: rn + 0.05, x: 0, z: (nz + tz) / 2 },
+			{ y: cut.neck - 0.062, rx: rn + 0.068, rz: Math.min(dz * 0.92, rn + 0.07), x: 0, z: tz },
+		], P0.lo ? 20 : 32);
+		putShade(gor, (y) => (y > cut.neck - 0.005 ? 'head' : 'spine01'), (x, y) => (Math.abs(y - (cut.neck - 0.014)) < 0.004 ? worn : y < cut.neck - 0.056 ? worn : base));
+	}
 	for (const q of o.acc || []) {
 		const c = q.col || '#333333', a2 = q.acc || c;
 		if (q.kind === 'helmet' && q.form) { steelHelm(q, c); continue; }
@@ -937,35 +1174,71 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const deep = q.kind === 'beanie' ? top - eyeY - 0.03 : q.kind === 'helmet' ? top - eyeY + 0.03 : top - eyeY + 0.08;
 			const grow = q.kind === 'beanie' ? 0.016 : q.kind === 'helmet' ? 0.03 : 0.035;
 			if (q.kind === 'helmet' && q.combat) {
-				// a combat helmet: its brow above the eyebrows, cut over the ears, down to the nape
-				// behind; a cloth cover, a lip round the edge
-				const seg = 24, rows = 8, pos = [], idx = [], crown = top + grow + 0.008;
-				const rim = (a) => eyeY + 0.048 * Math.max(0, Math.cos(a)) ** 1.5 + 0.004 - 0.032 * Math.max(0, -Math.cos(a)) ** 1.2;
-				for (let j = 0; j <= seg; j++) {
-					const a = j / seg * Math.PI * 2, sa = Math.sin(a), ca = Math.cos(a), r0 = rim(a);
-					const px = Math.sign(sa) * Math.abs(sa) ** 0.85, pz = Math.sign(ca) * Math.abs(ca) ** 0.85;
-					for (let i = 0; i <= rows + 1; i++) {
-						const t = Math.min(i, rows) / rows, e = t * Math.PI / 2, r = Math.sin(e) * (i > rows ? 1.04 : 1), y = i > rows ? r0 - 0.003 : r0 + Math.cos(e) * (crown - r0);
-						pos.push(cx + px * r * (rx + grow), y, cz + pz * r * (rz + grow + 0.006));
+				// a high-cut combat helmet made to the head (fitTube): the shell stood off the skull
+				// on its pads, its brow above the eyebrows, cut high over the ears and down to the
+				// nape behind, a rubber trim round the edge; rails along the sides, loop patches on
+				// the crown, a shroud at the brow; night vision (dual tubes, stowed up on their mount)
+				// with a battery pack behind and its cable over the crown, a strobe; a headset on
+				// the rails
+				const yo = eyeY - 0.05, tTop = top + 0.038 - yo, rail = '#2a2b27';
+				const knots = [[0, 0.04], [0.7, 0.036], [1.1, 0.026], [1.35, 0.048], [1.95, 0.046], [2.4, 0.004], [Math.PI, -0.026]];
+				const rimY = (th) => {
+					const f = Math.min(Math.PI, Math.abs(th)); let k = 1; while (k < knots.length - 1 && knots[k][0] < f) k++;
+					const [a0, y0] = knots[k - 1], [a1, y1] = knots[k], u = Math.max(0, Math.min(1, (f - a0) / (a1 - a0)));
+					return eyeY + y0 + (y1 - y0) * u * u * (3 - 2 * u);
+				};
+				const side = (th) => Math.min(Math.abs(Math.abs(th) - Math.PI / 2), 9);
+				const R = (x, z) => Math.hypot(x - cx, z - cz);
+				const shell = fitTube({
+					o: V3(cx, yo, cz), axis: V3(0, 1, 0), t0: 0, t1: tTop, dt: 0.008, seg: 64, wall: 0.03, smooth: 18, give: 0.006, closeB: 0.065,
+					span: (th) => [rimY(th) - yo, tTop], col: c, gloss: 0.14, fab: 3, stain: false,
+					skin: (v, x, y, z) => P0.part[v] === 0 && y > yo - 0.01 && R(x, z) < 0.16,
+					edge: (d) => (d === 0 ? 0.0045 : d === 1 ? 0.002 : 0), rimCol: '#262622',
+					lift: (t, th) => {
+						const h = yo + t - rimY(th);
+						// (the rails, one along each side above the cut)
+						if (side(th) < 0.95 && h > 0.008 && h < 0.03) return { lift: 0.0055, tone: 1 };
+						return null;
+					},
+					paint: (t, th) => {
+						const h = yo + t - rimY(th);
+						if (side(th) < 0.95 && h > 0.008 && h < 0.03) return new THREE.Color(rail);
+						// (loop patches on the crown and the back)
+						if ((Math.abs(th) < 0.42 && h > 0.06 && h < 0.1) || (Math.abs(Math.abs(th) - Math.PI) < 0.5 && h > 0.05 && h < 0.09)) return new THREE.Color(c).multiplyScalar(0.8);
+						return null;
+					},
+					bone: () => 'head',
+				});
+				if (shell) {
+					const mount = (geo, S, up = V3(0, 1, 0)) => { const z = S.n.clone(), y = up.clone().projectOnPlane(z).normalize(), x = V3(0, 0, 0).crossVectors(y, z); geo.applyMatrix4(new THREE.Matrix4().makeBasis(x, y, z).setPosition(S.p)); return geo; };
+					const tAt = (th, h) => rimY(th) + h - yo;
+					// (the shroud at the brow)
+					const shroudS = shell.at(tAt(0, 0.022), 0);
+					put(mount(new RoundedBoxGeometry(0.05, 0.034, 0.012, 2, 0.004).translate(0, 0, 0.005), shroudS), 'head', '#1f201d', 0.3);
+					if (q.nvg) {
+						// the night vision turned up: an arm from the shroud, a bridge, two tubes
+						// looking up and out, the lenses, the eyecups; its battery pack behind
+						const P = shroudS.p.clone().addScaledVector(shroudS.n, 0.012), dark = '#1d1e1b';
+						const arm = new RoundedBoxGeometry(0.024, 0.036, 0.016, 2, 0.004); arm.rotateX(-0.35); arm.translate(P.x, P.y + 0.014, P.z + 0.01); put(arm, 'head', dark, 0.3);
+						const bridge = new RoundedBoxGeometry(0.084, 0.024, 0.03, 2, 0.008); bridge.rotateX(-0.3); bridge.translate(P.x, P.y + 0.034, P.z + 0.03); put(bridge, 'head', dark, 0.3);
+						for (const s of [-1, 1]) {
+							const T = (g, k) => { g.rotateX(-0.22); g.translate(P.x + s * 0.03, P.y + 0.034 + k * 0.975, P.z + 0.034 - k * 0.22); return g; };
+							put(T(new THREE.CylinderGeometry(0.0145, 0.0155, 0.058, 16), 0.034), 'head', '#232521', 0.4);
+							put(T(new THREE.CylinderGeometry(0.017, 0.0165, 0.012, 16), -0.004), 'head', '#141413', 0.1, 3);
+							put(T(new THREE.CylinderGeometry(0.0125, 0.0125, 0.003, 16), 0.0635), 'head', '#2e5444', 1);
+						}
+						const bp = shell.at(tAt(Math.PI, 0.05), Math.PI);
+						put(mount(new RoundedBoxGeometry(0.085, 0.05, 0.026, 2, 0.008).translate(0, 0, 0.012), bp), 'head', q.pack || '#2c2d29', 0.15, 3);
+						// (its cable from the pack over the crown to the mount)
+						const pts = [bp.p.clone().addScaledVector(bp.n, 0.014).add(V3(0, 0.026, 0))];
+						for (const [th, k] of [[Math.PI, 0.55], [Math.PI, 0.8], [0, 0.9], [0, 0.7], [0, 0.45]]) pts.push(shell.at(tAt(th, 0) + (tTop - tAt(th, 0)) * k, th, 0.004).p);
+						pts.push(P.clone().add(V3(0, 0.02, -0.004)));
+						put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.0028, 5, false), 'head', '#161614', 0.2);
+						const strobe = shell.at(tTop * 0.86, Math.PI * 0.82);
+						put(mount(new RoundedBoxGeometry(0.03, 0.03, 0.018, 2, 0.005).translate(0, 0, 0.009), strobe), 'head', '#1b1c1a', 0.3);
 					}
+					if (q.comms) headset('#2b2d2a', false, { shell, tAt });
 				}
-				const n = rows + 2;
-				for (let j = 0; j < seg; j++) for (let i = 0; i < n - 1; i++) { const p0 = j * n + i, p1 = p0 + n; idx.push(p0, p0 + 1, p1, p0 + 1, p1 + 1, p1); }
-				const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); hg.setIndex(idx);
-				put(hg, 'head', c, 0.12, 2);
-				// a night-vision mount at the brow with its monocular turned up, its counterweight
-				// behind, rails along the sides, and a headset under it
-				const zf = cz + rz + grow + 0.006;
-				if (q.nvg) {
-					const ym = eyeY + 0.07;
-					const shroud = new THREE.BoxGeometry(0.042, 0.036, 0.02); shroud.translate(cx, ym, zf + 0.004); put(shroud, 'head', '#1e1f1c', 0.3);
-					const arm = new THREE.BoxGeometry(0.022, 0.05, 0.02); arm.rotateX(-0.55); arm.translate(cx, ym + 0.028, zf + 0.022); put(arm, 'head', '#1e1f1c', 0.3);
-					const tube = new THREE.CylinderGeometry(0.017, 0.019, 0.075, 12); tube.rotateX(-0.4); tube.translate(cx, ym + 0.07, zf + 0.04); put(tube, 'head', '#232521', 0.4);
-					const lens = new THREE.CylinderGeometry(0.0145, 0.0145, 0.004, 12); lens.rotateX(-0.4); lens.translate(cx, ym + 0.106, zf + 0.055); put(lens, 'head', '#3d6a52', 1);
-					const cw = new THREE.BoxGeometry(0.064, 0.036, 0.026); cw.translate(cx, eyeY + 0.04, cz - rz - grow - 0.014); put(cw, 'head', '#2b2c28', 0.2);
-				}
-				if (q.nvg || q.comms) for (const sd of [-1, 1]) { const rail = new THREE.BoxGeometry(0.012, 0.018, 0.1); rail.translate(cx + sd * (rx + grow + 0.006), eyeY + 0.05, cz - 0.004); put(rail, 'head', '#2a2b27', 0.3); }
-				if (q.comms) headset('#2b2d2a', false);
 			} else put(dome(deep, grow, 18, q.kind === 'hood' || q.kind === 'hazhood' ? 0.62 : 0), 'head', c, q.kind === 'helmet' ? 0.7 : 0);
 			if (q.kind === 'beanie') { const cuff = new THREE.CylinderGeometry(1, 1.02, 0.05, 18, 1, true); cuff.scale(rx + 0.024, 1, rz + 0.024); cuff.translate(cx, eyeY + 0.055, cz); put(cuff, 'head', c); }
 			if (q.kind === 'helmet' && q.cage) for (let k = 0; k < 3; k++) { const bar = new THREE.CylinderGeometry(0.006, 0.006, rx * 1.6, 6); bar.rotateZ(Math.PI / 2); bar.translate(cx, eyeY - 0.05 - k * 0.035, sk.z1 + 0.045); put(bar, 'head', '#d8d8d8', 0.6); }
@@ -1043,13 +1316,44 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			for (const s of ['L', 'R']) {
 				const steel = !!q.steel, wb = 'wrist.' + s, sx = Math.sign(heads[map[wb]]?.x || (s === 'L' ? 1 : -1));
 				// (over the knuckles: a steel ridge, or a combat glove's moulded guard)
-				const kn = steel ? { col: c, gloss: ARMOUR, rise: 0.006 } : q.knuckle ? { col: q.acc || c, gloss: 0.3, rise: 0.005 } : null;
-				gloveShell(s, steel ? 0.0075 : 0.0032, steel ? 0.03 : q.bracers ? 0.012 : 0.02, c, steel ? ARMOUR : 0, steel ? 0 : 3, kn);
+				// (a gauntlet: a glove of dark leather, the back of the hand and the knuckles in steel)
+				const kn = steel ? null : q.knuckle ? { col: q.acc || c, gloss: 0.3, rise: 0.005 } : null;
+				gloveShell(s, steel ? 0.0045 : 0.0032, steel ? 0.03 : q.bracers ? 0.012 : 0.02, steel ? q.leather || '#2b211a' : c, steel ? 0.2 : 0, 3, kn);
 				const len = heads[map[wb]].distanceTo(heads[map['lowerarm01.' + s]]);
 				const g0 = limbGirth('lowerarm01.' + s, 2, len - 0.13, len - 0.02);
 				if (steel) {
-					limbBand(g0, 0.1, g0.r + 0.01, g0.r + 0.022, Math.PI * 2, sx, 'lowerarm01.' + s, c, ARMOUR, 0.01);
-					limbBand(g0, 0.008, g0.r + 0.025, g0.r + 0.025, Math.PI * 2, sx, 'lowerarm01.' + s, c, ARMOUR, -0.038);
+					// (the vambrace closed round the forearm, its cuff flaring over the gauntlet, and a
+					// couter cupping the elbow)
+					const E = heads[map['lowerarm01.' + s]], Wr = heads[map[wb]], af = Wr.clone().sub(E).normalize(), back = thetaOf(af, V3(0, 0, -1));
+					const mine = (x) => Math.sign(x) === sx;
+					fitTube({
+						o: E, axis: af, t0: 0.05, t1: len - 0.01, col: c, wall: 0.008, seg: 28,
+						skin: (v, x) => P0.part[v] === 2 && mine(x), cloth: (x, y, z, slot, limb) => limb === 1 && mine(x),
+						lift: (t) => ({ lift: t > len - 0.06 ? (t - len + 0.06) * 0.25 : 0, seam: Math.abs(t - (len - 0.06)) < 0.003 ? 0.8 : 0 }),
+						bone: () => 'lowerarm01.' + s,
+					});
+					// (the back of the hand in lames of steel from the wrist to the knuckles)
+					const k2 = heads[map['finger2-1.' + s]], k5 = heads[map['finger5-1.' + s]];
+					if (k2 && k5) {
+						const K = k2.clone().add(k5).multiplyScalar(0.5), ah = K.clone().sub(Wr), lh = ah.length(), hb = thetaOf(ah, V3(sx, 0, 0));
+						// (not the thumb: the skin the thumb's bones carry)
+						const thumb = new Set(['finger1-1.', 'finger1-2.', 'finger1-3.', 'metacarpal1.'].map((n) => map[n + s]));
+						const onThumb = (v) => { let w = 0; for (let k = 0; k < 4; k++) if (thumb.has(A.ids[v * 4 + k])) w += A.weights[v * 4 + k]; return w > 0.25; };
+						fitTube({
+							o: Wr, axis: ah, t0: 0.005, t1: lh + 0.014, dt: 0.006, col: c, wall: 0.006, seg: 32, smooth: 8, give: 0.004,
+							skin: (v, x) => P0.part[v] === 3 && mine(x) && alongBone(v, Wr, K) < lh + 0.02 && !onThumb(v),
+							cover: (t, th) => angGap(th, hb) < 1.2,
+							lift: (t) => lames(t, 0.02, 0.0012, true, 0.0025),
+							bone: () => wb,
+						});
+					}
+					fitTube({
+						o: E, axis: af, t0: -0.06, t1: 0.06, col: c, wall: 0.014, seg: 28,
+						skin: (v, x) => (P0.part[v] === 1 || P0.part[v] === 2) && mine(x), cloth: (x, y, z, slot, limb) => limb === 1 && mine(x),
+						cover: (t, th) => angGap(th, back) < 1.5,
+						lift: (t, th) => ({ lift: 0.012 * Math.max(0, 1 - (t / 0.06) ** 2) * Math.max(0, Math.cos(angGap(th, back))) }),
+						bone: () => 'lowerarm01.' + s,
+					});
 				} else if (q.bracers) {
 					const g1 = limbGirth('lowerarm01.' + s, 2, len * 0.35, len - 0.02);
 					limbBand(g1, len * 0.62, g1.r + 0.008, g1.r + 0.016, Math.PI * 2, sx, 'lowerarm01.' + s, c, 0, 0);
@@ -1093,6 +1397,130 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const tip = new THREE.ConeGeometry(0.05, 0.07, 3); tip.rotateX(Math.PI); tip.scale(1.4, 1, 0.35); tip.translate(cx, y1 - 0.03, sk.z1 + 0.02);
 			put(tip, 'head', c);
 			const knot = new THREE.SphereGeometry(0.018, 6, 5); knot.translate(cx, y0 - 0.01, sk.z0 - 0.004); put(knot, 'head', a2);
+		} else if (q.kind === 'carrier' && !q.police && P0.part) {
+			// a plate carrier made to the body (fitTube), or a chest rig (q.rig): padded plate bags
+			// front and back with the swimmer's cut at the top corners and rows of webbing, a
+			// cummerbund round the sides, straps over the shoulders. On the front a shingle of
+			// three magazine pouches with the magazines in them, an admin pouch above with a loop
+			// patch, a dangler pouch below the plate; a radio on the left with its antenna and the
+			// cable up to the talk switch on the strap, a medical pouch on the right, a tourniquet;
+			// a zip-on panel and a drag handle behind. A chest rig: four magazine pouches on a
+			// panel, its harness and a strap round the waist. In camouflage where it is printed
+			const part = P0.part, tz = (cut.frontZ + cut.backZ) / 2, armpit = cut.chest - 0.02, inArm = (x) => Math.abs(x) > cut.shoulderX * 0.78;
+			const yPB = cut.waist + (q.rig ? 0.03 : 0.005), yPT = Math.min(cut.chest + 0.12, cut.neck - 0.045), yo = yPB - 0.08, O = V3(0, yo, tz), UP = V3(0, 1, 0);
+			const hw = Math.min(0.13, cut.shoulderX * 0.64), thF = Math.atan2(hw, (cut.frontZ - tz) * 0.92), thB = Math.atan2(hw, (tz - cut.backZ) * 0.92);
+			const skinT = (v, x, y) => part[v] === 0 && y > yo - 0.03 && y < yPT + 0.04 && !(y > armpit && inArm(x));
+			const clothT = (x, y, z, slot, limb) => limb !== 1 && y > yo - 0.03 && y < yPT + 0.04 && !(y > armpit && inArm(x));
+			const bodyBone = (t) => torso(yo + t), sm = (e0, e1, x) => { const u = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
+			const pcol = q.camo ? camoPaint(q.camo) : null, pouchCol = q.camo ? camoPaint(q.camo, a2) : null;
+			// (rows of webbing to hang pouches on, a stitched bar tack at each column)
+			const molle = (y0) => (t, th, p) => {
+				const u = (yo + t - y0) / 0.038; if (u < 0) return null;
+				const f = u - Math.floor(u); if (f > 0.66) return null;
+				return { lift: 0.0022, tone: Math.abs(((p.x / 0.038) % 1 + 1) % 1 - 0.5) > 0.44 ? 0.72 : 0.9 };
+			};
+			const bag = (d) => -0.02 * Math.max(0, 1 - d / 3) ** 2;
+			const kit = (geo, bone, col, gloss = 0.05, fab = 2) => (q.camo && typeof col !== 'string' ? putShade(geo, bone, col, gloss, fab) : put(geo, bone, typeof col === 'string' ? col : c, gloss, fab));
+			const solid = (k) => (q.camo ? k : null);
+			const tie = (geo, S) => { const z = S.n.clone(), y = UP.clone().projectOnPlane(z).normalize(), x = V3(0, 0, 0).crossVectors(y, z); return geo.applyMatrix4(new THREE.Matrix4().makeBasis(x, y, z).setPosition(S.p)); };
+			// (a pouch, its back on the surface at S: the body, a flap or the magazine in it)
+			const magPouch = (S, bone, w = 0.066, h = 0.11, d = 0.036) => {
+				kit(tie(new RoundedBoxGeometry(w, h, d, 2, 0.007).translate(0, -h / 2, d / 2), S), bone, solid(pouchCol) || a2);
+				// (the magazine, narrow across and deep, its top showing; the bungee over it to a
+				// pull tab hanging on the front)
+				const mag = new RoundedBoxGeometry(0.028, 0.056, d * 0.78, 2, 0.004).translate(0, 0.004, d / 2);
+				put(tie(mag, S), bone, q.mags || '#2a2b28', 0.25, 3);
+				put(tie(new THREE.BoxGeometry(0.0035, 0.0035, d * 0.9).translate(0, 0.034, d / 2), S), bone, '#141413', 0, 0);
+				put(tie(new RoundedBoxGeometry(0.014, 0.02, 0.004, 1, 0.0015).translate(0, 0.024, d + 0.002), S), bone, '#1d1d1b', 0.1, 3);
+				put(tie(new THREE.BoxGeometry(w * 1.02, 0.008, 0.003).translate(0, -h * 0.55, d + 0.0012), S), bone, '#1d1d1b', 0, 2);
+			};
+			const frontAt = (tube, y, x, off = 0) => tube.at(y - yo, Math.atan2(x, Math.max(0.05, tube.rad(y - yo, 0) - 0.01)), off);
+			let front = null, back = null;
+			if (!q.rig) {
+				front = fitTube({
+					o: O, axis: UP, t0: yPB - 0.01 - yo, t1: yPT - yo, dt: 0.008, arc: [-thF, thF], seg: 26, wall: 0.03, smooth: 90, give: 0.03,
+					span: (th) => { const f = Math.abs(th) / thF; return [yPB - yo + 0.014 * sm(0.7, 1, f), yPT - yo - 0.07 * sm(0.38, 1, f)]; },
+					col: c, paint: pcol, gloss: 0.05, fab: 2, stain: false, edge: bag, skin: skinT, cloth: clothT, lift: molle(yPB + 0.01), bone: bodyBone,
+				});
+				back = fitTube({
+					o: O, axis: UP, t0: yPB - 0.01 - yo, t1: yPT - yo + 0.02, dt: 0.008, arc: [Math.PI - thB, Math.PI + thB], seg: 26, wall: 0.028, smooth: 90, give: 0.03,
+					span: (th) => { const f = Math.abs(th - Math.PI) / thB; return [yPB - yo + 0.014 * sm(0.7, 1, f), yPT - yo + 0.02 - 0.06 * sm(0.42, 1, f)]; },
+					col: c, paint: pcol, gloss: 0.05, fab: 2, stain: false, edge: bag, skin: skinT, cloth: clothT, lift: molle(yPB + 0.01), bone: bodyBone,
+				});
+				// (the cummerbund, each side from under the front plate round to under the back)
+				for (const sd of [1, -1]) {
+					const A = sd * thF * 0.8, Bt = sd * (Math.PI - thB * 0.8);
+					fitTube({
+						o: O, axis: UP, t0: yPB - 0.012 - yo, t1: yPB + 0.15 - yo, dt: 0.008, arc: sd > 0 ? [A, Bt] : [Bt, A], seg: 28, wall: 0.017, smooth: 14, give: 0.012,
+						col: c, paint: pcol, gloss: 0.05, fab: 2, stain: false, edge: (d) => -0.008 * Math.max(0, 1 - d / 2), skin: skinT, cloth: clothT, lift: molle(yPB), bone: bodyBone,
+					});
+				}
+			} else {
+				// (a chest rig's panel)
+				front = fitTube({
+					o: O, axis: UP, t0: yPB - 0.04 - yo, t1: yPB + 0.15 - yo, dt: 0.008, arc: [-thF * 1.05, thF * 1.05], seg: 28, wall: 0.02, smooth: 14, give: 0.012,
+					col: c, paint: pcol, gloss: 0.05, fab: 2, stain: false, edge: (d) => -0.01 * Math.max(0, 1 - d / 3) ** 2, skin: skinT, cloth: clothT, bone: bodyBone,
+				});
+				// (the strap round the waist)
+				fitTube({
+					o: O, axis: UP, t0: yPB - 0.04 - yo, t1: yPB - 0.012 - yo, dt: 0.007, seg: 40, wall: 0.012, skin: skinT, cloth: clothT,
+					col: '#262621', gloss: 0.05, fab: 2, stain: false, edge: () => 0, bone: bodyBone,
+				});
+			}
+			// (the straps over the shoulders, from the old cut: garment-kit.js)
+			for (const { geo, part: pc } of carrierGeometry(cut, kitField(), { lo: !!P0.lo })) if (pc === 'strap') kit(geo, 'spine01', solid(pcol) || c);
+			if (front) {
+				const fb = (y) => torso(y);
+				if (!q.rig) {
+					// the shingle of magazine pouches
+					const yTopM = yPB + 0.122;
+					for (const i of [-1, 0, 1]) magPouch(frontAt(front, yTopM, i * 0.071, 0.002), fb(yTopM - 0.05));
+					// the admin pouch, its loop patch and its zip
+					const yA = Math.min(yPT - 0.07, yPB + 0.225), A0 = frontAt(front, yA, 0, 0.002);
+					kit(tie(new RoundedBoxGeometry(0.17, 0.09, 0.022, 2, 0.006).translate(0, 0, 0.011), A0), fb(yA), solid(pouchCol) || a2);
+					put(tie(new RoundedBoxGeometry(0.08, 0.048, 0.004, 1, 0.002).translate(-0.03, 0.006, 0.0225), A0), fb(yA), new THREE.Color(a2).multiplyScalar(0.72).getHex(), 0, 3);
+					put(tie(new THREE.BoxGeometry(0.15, 0.004, 0.004).translate(0, 0.041, 0.019), A0), fb(yA), '#151513', 0.3);
+					put(tie(new RoundedBoxGeometry(0.01, 0.02, 0.004, 1, 0.0015).translate(0.06, 0.03, 0.023), A0), fb(yA), '#1a1a18', 0.3);
+					// the dangler under the plate
+					const probe = fitTube({ o: O, axis: UP, t0: yo - 0.08 - yo, t1: yPB - yo + 0.02, dt: 0.01, seg: 32, wall: 0.03, skin: (v, x, y) => (part[v] === 0 || part[v] === 4) && y > yo - 0.1 && y < yPB + 0.05, cloth: (x, y, z, slot, limb) => limb !== 1 && y > yo - 0.1 && y < yPB + 0.05, col: c, draw: false, bone: bodyBone });
+					const Dn = probe.at(yPB - 0.046 - yo, 0, 0.004);
+					kit(tie(new RoundedBoxGeometry(0.2, 0.08, 0.044, 3, 0.016).translate(0, 0, 0.022), Dn), torso(yPB), solid(pouchCol) || a2);
+					put(tie(new THREE.BoxGeometry(0.17, 0.004, 0.004).translate(0, 0.034, 0.042), Dn), torso(yPB), '#151513', 0.3);
+				} else {
+					const yTopM = yPB + 0.13;
+					for (const i of [-1.5, -0.5, 0.5, 1.5]) magPouch(frontAt(front, yTopM, i * 0.066, 0.002), fb(yTopM - 0.05), 0.062, 0.12, 0.034);
+				}
+				// the radio on the left, its antenna, the cable up to the talk switch on the strap
+				const sideAt = (y, th, off) => (q.rig ? front.at(y - yo, th, off) : null);
+				const rTh = Math.PI / 2 + 0.2, rY = yPB + 0.075;
+				const probeS = fitTube({ o: O, axis: UP, t0: yo - yo, t1: yPT - yo, dt: 0.012, seg: 40, wall: q.rig ? 0.012 : 0.02, skin: skinT, cloth: clothT, col: c, draw: false, bone: bodyBone });
+				const Rr = sideAt(rY, rTh, 0) || probeS.at(rY - yo, rTh, 0.002);
+				kit(tie(new RoundedBoxGeometry(0.066, 0.12, 0.04, 2, 0.007).translate(0, 0, 0.02), Rr), torso(rY), solid(pouchCol) || a2);
+				const radio = tie(new RoundedBoxGeometry(0.056, 0.035, 0.03, 2, 0.005).translate(0, 0.07, 0.02), Rr); put(radio, torso(rY), '#232421', 0.3, 3);
+				const top0 = V3(0, 0.09, 0.024).applyMatrix4(new THREE.Matrix4().makeBasis(V3(0, 0, 0).crossVectors(UP.clone().projectOnPlane(Rr.n).normalize(), Rr.n), UP.clone().projectOnPlane(Rr.n).normalize(), Rr.n).setPosition(Rr.p));
+				const ant = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([top0, top0.clone().add(V3(0.004, 0.09, -0.012)), top0.clone().add(V3(0.006, 0.19, -0.04))]), 8, 0.0035, 6, false);
+				put(ant, torso(rY), '#161614', 0.2);
+				const ptt = front.at(Math.min(yPT - 0.06, yPB + 0.2) - yo, thF * 0.82, q.rig ? 0.02 : 0.004);
+				put(tie(new RoundedBoxGeometry(0.034, 0.04, 0.018, 2, 0.006).translate(0, 0, 0.009), ptt), torso(ptt.p.y), '#1b1c1a', 0.3);
+				const mid = probeS.at(yPB + 0.16 - yo, (rTh + thF) / 2, 0.012).p;
+				put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([top0.clone().add(V3(-0.01, -0.012, 0.004)), mid, ptt.p.clone().addScaledVector(ptt.n, 0.008).add(V3(0, -0.02, 0))]), 16, 0.003, 5, false), 'spine02', '#141413', 0.2);
+				// the medical pouch on the right, its red pull tab; a tourniquet on the front
+				const mTh = -(Math.PI / 2 + 0.2), Mr = sideAt(rY, mTh, 0) || probeS.at(rY - yo, mTh, 0.002);
+				kit(tie(new RoundedBoxGeometry(0.095, 0.11, 0.05, 3, 0.012).translate(0, 0, 0.025), Mr), torso(rY), solid(pouchCol) || a2);
+				put(tie(new RoundedBoxGeometry(0.03, 0.026, 0.005, 1, 0.002).translate(0, 0.06, 0.03), Mr), torso(rY), '#8a2a22', 0.1, 3);
+				const tq = probeS.at(yPB + 0.075 - yo, -(thF + 0.32), q.rig ? 0.01 : 0.022);
+				const tqG = new THREE.CylinderGeometry(0.013, 0.013, 0.1, 10); put(tie(tqG.translate(0, 0, 0.012), tq), torso(tq.p.y), '#121212', 0.2, 2);
+				put(tie(new RoundedBoxGeometry(0.02, 0.016, 0.006, 1, 0.002).translate(0, 0.055, 0.016), tq), torso(tq.p.y), '#9a2b22', 0.1, 3);
+			}
+			if (back) {
+				// the zip-on panel and the drag handle
+				const yM = (yPB + yPT) / 2, Bk = back.at(yM - yo, Math.PI, 0.002);
+				kit(tie(new RoundedBoxGeometry(hw * 1.75, (yPT - yPB) * 0.8, 0.034, 3, 0.014).translate(0, -0.01, 0.017), Bk), torso(yM), solid(pouchCol) || a2);
+				put(tie(new THREE.BoxGeometry(0.004, (yPT - yPB) * 0.72, 0.004).translate(hw * 0.84, -0.01, 0.03), Bk), torso(yM), '#151513', 0.3);
+				put(tie(new THREE.BoxGeometry(0.004, (yPT - yPB) * 0.72, 0.004).translate(-hw * 0.84, -0.01, 0.03), Bk), torso(yM), '#151513', 0.3);
+				const Hd = back.at(yPT - 0.01 - yo, Math.PI, 0.004), hd = new THREE.TorusGeometry(0.03, 0.007, 5, 10, Math.PI);
+				put(tie(hd.scale(1, 0.9, 1.6).translate(0, 0.004, 0.004), Hd), 'spine01', '#22231f', 0.1, 2);
+			}
 		} else if (q.kind === 'carrier') {
 			// front and back plates made to the chest and back, a cummerbund round the waist,
 			// straps over the shoulders, pouches on the plate (a police vest: a radio, a badge
@@ -1106,64 +1534,156 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				const bd = new THREE.CylinderGeometry(0.02, 0.02, 0.005, 6); bd.rotateX(Math.PI / 2); bd.translate(x, y, kitField().front(x, y) + 0.012 + 0.024 + 0.002); put(bd, 'spine01', q.badge || '#d9c46a', 2);
 			}
 		} else if (q.kind === 'cuirass') {
-			// a steel breast and back plate (the carrier's plates, in steel) on leather straps,
-			// a skirt of lames over the hips, and a pauldron on each shoulder
-			for (const { geo, part: pc } of carrierGeometry(cut, kitField(), { lo: !!P0.lo })) if (pc === 'plate' || pc === 'strap') put(geo, pc === 'strap' ? 'spine01' : torso, pc === 'strap' ? a2 : c, pc === 'strap' ? 0 : ARMOUR);
-			const hipL = legGirth(cut.hip - 0.02, cut.hip + 0.06, 1), hipR = legGirth(cut.hip - 0.02, cut.hip + 0.06, -1);
-			const fx = Math.max(Math.abs(hipL.x) + hipL.r, Math.abs(hipR.x) + hipR.r) + 0.022, fz = Math.max(hipL.r, hipR.r) + 0.05, fzc = (hipL.z + hipR.z) / 2;
-			for (let i = 0; i < 2; i++) { const f = new THREE.CylinderGeometry(1, 1.08, 0.06, 24, 1, true); f.scale(fx + i * 0.008, 1, fz + i * 0.008); f.translate(0, cut.waist - 0.02 - i * 0.05, fzc); put(f, 'spine03', c, ARMOUR); }
-			// (a pauldron: a cap over the point of the shoulder, three lames lapping down the
-			// outside of the arm, each a little narrower, their edges rolled)
+			// a cuirass made to the body (fitTube): breast and back plate with a ridge down the breast,
+			// cut away for the arms, the gorget over its top; below the waist a fauld of lames, each
+			// stepping out over the one above; a pauldron domed over each shoulder, its lames lapping
+			// down the arm; plate down the upper arm. Over it a tabard (q.tabard): a narrow panel down
+			// the breast and back with the order's device on it, widening below the belt into a
+			// skirt to the knee, its hem torn; a belt of dark leather with an iron buckle at the waist
+			const part = P0.part, tz = (cut.frontZ + cut.backZ) / 2, armpit = cut.chest - 0.02, yTop = cut.neck - 0.035;
+			const yo = cut.hip - 0.085, inArm = (x) => Math.abs(x) > cut.shoulderX * 0.78, fauld = cut.waist - 0.015;
+			const bodySkin = (v, x, y) => (part[v] === 0 || (part[v] === 4 && y > yo)) && !(y > armpit && inArm(x));
+			const bodyCloth = (x, y, z, slot, limb) => limb !== 1 && !(y > armpit && inArm(x)) && y > yo - 0.02;
+			// (how far the plate stands out at each height: the ridge down the breast, the fauld's lames)
+			const plate = (y, th) => {
+				if (y < fauld) return lames(fauld - y, 0.042, 0.0065, false, 0.003);
+				return { lift: Math.abs(th) < 0.5 ? 0.008 * Math.exp(-((th / 0.16) ** 2)) * Math.min(1, (y - cut.waist) / 0.08) : 0, tone: 0.92 + 0.12 * Math.cos(th) };
+			};
+			const plateT = fitTube({
+				o: V3(0, yo, tz), axis: V3(0, 1, 0), t0: 0, t1: yTop - yo, seg: 40, col: c, wall: 0.009,
+				skin: bodySkin, cloth: bodyCloth,
+				cover: (t, th) => {
+					const y = yo + t, f = Math.abs(th), side = Math.min(f, Math.PI - f);
+					return !(y > armpit && side > 0.98);
+				},
+				lift: (t, th) => plate(yo + t, th),
+				bone: (t) => torso(yo + t),
+			});
+			const legL = heads[map['upperleg01.L']], legR = heads[map['upperleg01.R']], knee = heads[map['lowerleg01.L']];
+			let tabT = null;
+			if (q.tabard && plateT && legL && legR && knee) {
+				const cloth = new THREE.Color(q.tabard), trim = new THREE.Color(q.trim || '#8c7a4e'), yBot = knee.y + 0.07, yT = cut.chest + 0.07, sL = Math.sign(legL.x) || 1;
+				const yc = cut.chest - 0.03;
+				// (over the plate, hanging from the fauld and flaring a little below it; torn: the hem
+				// ragged, a few deep rents)
+				const hem = (th) => 0.03 * (0.5 + 0.5 * Math.sin(th * 23 + 1.3) * Math.sin(th * 9.7)) + (Math.sin(th * 5.3 + 0.4) > 0.9 ? 0.06 : 0);
+				tabT = fitTube({
+					o: V3(0, yBot, tz), axis: V3(0, 1, 0), t0: 0, t1: yT - yBot, dt: 0.01, seg: 72, smooth: 20, give: 0.02, wall: 0.004, floor: (t, th) => { const tp = t + yBot - yo; return plateT.rad(Math.max(0.001, tp), th) + Math.max(0, -tp) * 0.12; }, col: q.tabard, gloss: 0, fab: 2, stain: false, edge: () => 0, rimCol: cloth.clone().multiplyScalar(0.55),
+					skin: (v, x, y) => bodySkin(v, x, y) || part[v] === 4, cloth: (x, y, z, slot, limb) => limb !== 1 && !(y > armpit && inArm(x)) && y > yBot - 0.02,
+					cover: (t, th) => {
+						const y = yBot + t, f = Math.abs(th), w = y > cut.waist ? 0.4 : 0.66;
+						return (f < w || Math.PI - f < w) && t > hem(th);
+					},
+					paint: (t, th, p) => {
+						if (Math.abs(th) > 0.6) return null;
+						// the order's device, a sword point down: blade, guard, pommel
+						const dx = Math.abs(p.x), dy = p.y - yc;
+						if ((dx < 0.011 && dy > -0.1 && dy < 0.06) || (dx < 0.05 && Math.abs(dy - 0.045) < 0.009) || Math.hypot(dx, dy - 0.08) < 0.014) return trim;
+						return null;
+					},
+					bone: (t, th) => {
+						const y = yBot + t;
+						if (y > cut.hip) return torso(y);
+						// (below the hip the skirt goes with the thighs, each side with its own)
+						const u = Math.min(1, (cut.hip - y) / 0.2), wl = Math.max(0, Math.min(1, 0.5 + Math.sin(th) * sL * 1.4));
+						return [[torso(cut.hip), 1 - u * 0.85], ['upperleg01.L', u * 0.85 * wl], ['upperleg01.R', u * 0.85 * (1 - wl)]];
+					},
+				});
+			}
+			// (the belt, its buckle at the front)
+			const belt = fitTube({
+				o: V3(0, fauld - 0.03, tz), axis: V3(0, 1, 0), t0: 0, t1: 0.045, dt: 0.009, seg: 48, col: q.belt || '#2e2219', gloss: 0.25, fab: 3, stain: false, rim: 0.002, rimCol: '#1d1610',
+				skin: bodySkin, cloth: bodyCloth, wall: 0.005,
+				floor: (t, th) => Math.max(plateT ? plateT.rad(t + fauld - 0.03 - yo, th) : 0, tabT ? tabT.rad(t + fauld - 0.03 - (knee.y + 0.07), th) : 0),
+				bone: (t) => torso(fauld - 0.03 + t),
+			});
+			if (belt) {
+				const B0 = belt.at(0.0225, 0, 0.004), frame = new THREE.TorusGeometry(0.022, 0.0042, 4, 4);
+				frame.rotateZ(Math.PI / 4); frame.scale(1, 1.15, 1);
+				frame.lookAt(B0.n); frame.translate(B0.p.x, B0.p.y, B0.p.z); put(frame, B0.bone, '#3d3c39', ARMOUR);
+				const tongue = new THREE.BoxGeometry(0.004, 0.03, 0.004); tongue.lookAt(B0.n); tongue.translate(B0.p.x, B0.p.y, B0.p.z); put(tongue, B0.bone, '#3d3c39', ARMOUR);
+			}
 			for (const sd of ['L', 'R']) {
-				const ub = 'upperarm01.' + sd, S = heads[map[ub]]; if (!S) continue;
-				const sx = Math.sign(S.x) || 1, g0 = limbGirth(ub, 1, 0.07, 0.16), r = g0.r + 0.016;
-				const cap = new THREE.SphereGeometry(1, 18, 6, 0, Math.PI * 2, 0, Math.PI * 0.4);
-				cap.scale(r + 0.008, 0.038 * kH, r + 0.004); cap.rotateZ(-sx * 0.42);
-				cap.translate(S.x + sx * 0.008, S.y + 0.03, S.z);
-				put(cap, ub, c, ARMOUR);
-				for (let i = 0; i < 3; i++) {
-					const along = 0.045 + i * 0.032 - g0.o.distanceTo(S), rr = r - i * 0.004, wrap = Math.PI * (1.05 - i * 0.1);
-					limbBand(g0, 0.04, rr + 0.005, rr, wrap, sx, ub, c, ARMOUR, along);
-					limbBand(g0, 0.005, rr + 0.0075, rr + 0.007, wrap, sx, ub, i === 2 ? a2 : c, i === 2 ? 0 : ARMOUR, along + 0.018);
-				}
+				const ub = 'upperarm01.' + sd, S = heads[map[ub]], E = heads[map['lowerarm01.' + sd]]; if (!S || !E) continue;
+				const sx = Math.sign(S.x) || 1, len = S.distanceTo(E), ax = E.clone().sub(S).normalize(), outside = thetaOf(ax, V3(sx, 0, 0));
+				const mine = (x) => x * sx > Math.abs(S.x) * 0.55;
+				// (the pauldron: a dome and lapping lames, a rolled ridge at its top edge)
+				fitTube({
+					o: S, axis: ax, t0: -0.075, t1: 0.15 * kH, col: c, wall: 0.016, closeA: 0.06, seg: 36,
+					skin: (v, x) => (part[v] === 1 || part[v] === 0) && mine(x), cloth: (x, y, z, slot, limb) => mine(x) && limb !== 2,
+					cover: (t, th) => angGap(th, outside) < 1.95, minR: 0.05, rim: 0.005,
+					lift: (t, th) => (t > 0 ? lames(t, 0.042, 0.006, true, 0.003) : { lift: 3 * 0.006 + 0.003 * Math.max(0, Math.cos(angGap(th, outside) * 1.4)), tone: 0.95 + 0.1 * Math.cos(angGap(th, outside)) }),
+					bone: () => ub,
+				});
+				// (the rerebrace)
+				fitTube({
+					o: S, axis: ax, t0: 0.15 * kH - 0.02, t1: len - 0.035, col: c, wall: 0.006, seg: 28,
+					skin: (v, x) => part[v] === 1 && Math.sign(x) === sx, cloth: (x, y, z, slot, limb) => limb === 1 && Math.sign(x) === sx,
+					lift: (t) => ({ seam: Math.abs(t - (len - 0.1)) < 0.003 ? 0.7 : 0 }),
+					bone: () => ub,
+				});
 			}
 		} else if (q.kind === 'greaves') {
-			// steel over the thighs (cuisses) and shins (greaves), each along its bone and tapered to
-			// the leg, a cop at the knee with a wing to the outside, buckled straps behind
+			// plate made to the legs (fitTube): cuisses down the thighs with lames at the hip, a
+			// poleyn swelling over each knee, greaves closed round the shins with a ridge down the shin
+			const part = P0.part;
 			for (const sd of ['L', 'R']) {
 				const ub = 'upperleg01.' + sd, lb = 'lowerleg01.' + sd, U = heads[map[ub]], L = heads[map[lb]], F = heads[map['foot.' + sd]]; if (!U || !L || !F) continue;
-				const sx = Math.sign(U.x) || 1, lu = U.distanceTo(L), ll = L.distanceTo(F);
-				const shell = (bone, kind, t0, t1, cover, wall, strap, way) => {
-					const g0 = limbGirth(bone, kind, t0, t1, way, 2), gt = limbGirth(bone, kind, t0, t0 + 0.06, way, 2), gb = limbGirth(bone, kind, t1 - 0.06, t1, way, 2);
-					limbBand(g0, t1 - t0, gb.r + wall, gt.r + wall, cover, sx, bone, c, ARMOUR, 0, 0);
-					for (const k of strap) limbBand(g0, 0.016, g0.r + wall + 0.002, g0.r + wall + 0.002, Math.PI * 2 - cover + 0.5, sx, bone, a2, 0, k * (t1 - t0), Math.PI);
-					return g0;
-				};
-				shell(ub, 4, 0.13, lu - 0.05, Math.PI * 1.05, 0.016, [-0.25, 0.3], L.clone().sub(U).normalize());
-				const g1 = shell(lb, 5, 0.06, ll - 0.06, Math.PI * 1.6, 0.01, [-0.3, 0.32], F.clone().sub(L).normalize());
-				const gk = limbGirth(lb, 5, 0, 0.05, g1.dir, 2), kr = gk.r + 0.015;
-				const at = L.clone().add(gk.o.clone().sub(L).projectOnPlane(g1.dir)).addScaledVector(V3(0, 0, 1), kr * 0.5);
-				const cop = new THREE.SphereGeometry(1, 14, 8, -Math.PI / 2, Math.PI, 0, Math.PI); cop.scale(kr * 0.8, 0.065 * kH, kr * 0.6); cop.translate(at.x, at.y, at.z); put(cop, lb, c, ARMOUR);
-				const wing = new THREE.SphereGeometry(1, 10, 6); wing.scale(0.008, 0.05 * kH, kr * 0.5); wing.translate(at.x + sx * kr * 0.72, at.y, at.z - kr * 0.42); put(wing, lb, c, ARMOUR);
+				const sx = Math.sign(U.x) || 1, lu = U.distanceTo(L), ll = L.distanceTo(F), mine = (x) => Math.sign(x) === sx;
+				const au = L.clone().sub(U).normalize(), al = F.clone().sub(L).normalize(), inner = thetaOf(au, V3(-sx, 0, 0));
+				fitTube({
+					o: U, axis: au, t0: 0.06, t1: lu - 0.03, col: c, wall: 0.01, seg: 32, give: 0.003,
+					skin: (v, x) => part[v] === 4 && mine(x), cloth: (x, y, z, slot, limb) => limb === 2 && slot === 2 && mine(x),
+					cover: (t, th) => t > 0.15 || angGap(th, inner) > 1.1,
+					lift: (t) => (t < 0.15 ? lames(t, 0.045, 0.004, true, 0.003) : null),
+					bone: () => ub,
+				});
+				fitTube({
+					o: L, axis: al, t0: -0.055, t1: 0.05, col: c, wall: 0.012, seg: 32,
+					skin: (v, x) => (part[v] === 4 || part[v] === 5) && mine(x), cloth: (x, y, z, slot, limb) => limb === 2 && mine(x),
+					cover: (t, th) => Math.abs(th) < 1.45,
+					lift: (t, th) => ({ lift: 0.012 * Math.max(0, 1 - (t / 0.055) ** 2) * Math.max(0, Math.cos(th)), seam: Math.abs(t - 0.022) < 0.004 ? 0.7 : 0 }),
+					bone: () => lb,
+				});
+				fitTube({
+					o: L, axis: al, t0: 0.055, t1: ll - 0.035, col: c, wall: 0.01, seg: 32, give: 0.003,
+					skin: (v, x) => part[v] === 5 && mine(x), cloth: (x, y, z, slot, limb) => limb === 2 && slot === 2 && mine(x),
+					lift: (t, th) => ({ lift: 0.004 * Math.exp(-((th / 0.2) ** 2)), tone: 0.92 + 0.1 * Math.cos(th) }),
+					bone: () => lb,
+				});
 			}
-		} else if (q.kind === 'kneepads') {
-			// a hard pad over each knee on a strap
+		} else if (q.kind === 'kneepads' && P0.part) {
+			// a hard pad over each knee made to it (fitTube): a padded sleeve front with a moulded
+			// cap over the kneecap, strapped behind above and below the knee
 			for (const sd of ['L', 'R']) {
-				const sx = Math.sign(heads[map['upperleg01.' + sd]]?.x || (sd === 'L' ? 1 : -1)), knee = jointY('lowerleg01.' + sd);
-				const g0 = legGirth(knee - 0.05, knee + 0.05, sx), r = g0.r + 0.03;
-				const pad = new THREE.SphereGeometry(1, 12, 8, -Math.PI / 2, Math.PI, 0, Math.PI); pad.scale(0.052 * kH, 0.07 * kH, 0.034 * kH); pad.translate(g0.x, knee - 0.012, g0.z + r - 0.004); put(pad, 'lowerleg01.' + sd, c, 0.3);
-				const strap = new THREE.CylinderGeometry(r + 0.002, r + 0.002, 0.018, 16, 1, true); strap.translate(g0.x, knee - 0.06, g0.z); put(strap, 'lowerleg01.' + sd, '#22231f');
+				const lb = 'lowerleg01.' + sd, U = heads[map['upperleg01.' + sd]], L = heads[map[lb]], F = heads[map['foot.' + sd]]; if (!U || !L || !F) continue;
+				const sx = Math.sign(U.x) || 1, mine = (x) => Math.sign(x) === sx, al = F.clone().sub(L).normalize();
+				const skin = (v, x) => (P0.part[v] === 4 || P0.part[v] === 5) && mine(x), cloth = (x, y, z, slot, limb) => limb === 2 && mine(x);
+				const capCol = new THREE.Color(c).multiplyScalar(0.62);
+				fitTube({
+					o: L, axis: al, t0: -0.07, t1: 0.075, dt: 0.007, arc: [-1.2, 1.2], seg: 26, wall: 0.016, smooth: 14, give: 0.006, col: c, gloss: 0.08, fab: 2, stain: false,
+					span: (th) => { const f = Math.abs(th) / 1.2; return [-0.07 + 0.025 * f * f, 0.075 - 0.02 * f * f]; },
+					edge: (d) => -0.01 * Math.max(0, 1 - d / 3) ** 2, skin, cloth,
+					lift: (t, th) => { const e = (t / 0.05) ** 2 + (th / 0.75) ** 2; return e < 1 ? { lift: 0.009 * Math.sqrt(1 - e), tone: 1 } : null; },
+					paint: (t, th) => ((t / 0.05) ** 2 + (th / 0.75) ** 2 < 1 ? capCol : null),
+					bone: () => lb,
+				});
+				for (const [ta, tb] of [[-0.085, -0.066], [0.07, 0.089]]) fitTube({
+					o: L, axis: al, t0: ta, t1: tb, dt: 0.006, seg: 32, wall: 0.006, smooth: 8, col: '#1f1f1c', gloss: 0.05, fab: 2, stain: false, edge: () => 0, skin, cloth, bone: () => lb,
+				});
 			}
 		} else if (q.kind === 'sabatons') {
-			// laminated steel over the top of each foot, and a cuff at the ankle
+			// laminated steel over each foot and whatever is worn on it, its lames stepping down
+			// across the instep to the toe
 			for (const sd of ['L', 'R']) {
 				const fi = map['foot.' + sd], A0 = heads[fi], dir = P0.rest.dirs[fi]; if (!A0 || !dir) continue;
-				const g = new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.62);
-				g.scale(0.06 * kH, 0.05 * kH, 0.13 * kH);
-				g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), V3(dir.x, 0, dir.z).normalize()));
-				const at = A0.clone().addScaledVector(dir, 0.07 * kH); g.translate(at.x, Math.max(0.035, at.y - 0.02), at.z);
-				put(g, 'foot.' + sd, c, ARMOUR);
-				const cuff = new THREE.CylinderGeometry(0.058 * kH, 0.064 * kH, 0.045, 14, 1, true); cuff.translate(A0.x, A0.y + 0.01, A0.z); put(cuff, 'foot.' + sd, c, ARMOUR);
+				const sx = Math.sign(A0.x) || 1, fwd = V3(dir.x, 0, dir.z).normalize(), mine = (x) => Math.sign(x) === sx;
+				fitTube({
+					o: V3(A0.x, 0.02, A0.z), axis: fwd, t0: -0.05, t1: 0.22 * kH, col: c, wall: 0.008, seg: 28, ref: V3(0, 1, 0), closeB: 0.04,
+					skin: (v, x, y) => P0.part[v] === 6 && mine(x) && y > 0.015, cloth: (x, y, z, slot) => slot === 3 && mine(x) && y > 0.015,
+					cover: (t, th) => Math.abs(th) < 1.6, lift: (t) => lames(t + 0.05, 0.03, 0.0006, false, 0.0035),
+					bone: () => 'foot.' + sd,
+				});
 			}
 		} else if (q.kind === 'comms') {
 			headset(c, true);

@@ -19,6 +19,10 @@ const SHOTS = [
 	['knight-hand', [['knight']], [0.75, 0.95, -0.75, 0.2, 0.78, 0, 30]],
 	['operator-hand', [['operator', 77]], [0.75, 0.95, -0.75, 0.2, 0.78, 0, 30]],
 	['knight-legs', [['knight']], [0.6, 0.6, -1.6, 0, 0.45, 0, 32]],
+	['knight-back', [['knight']], [-0.9, 1.5, 2.1, 0, 1.15, 0, 32]],
+	['operator-front', [['operator', 77]], [0, 1.35, -1.6, 0, 1.2, 0, 32]],
+	['operator-back', [['operator', 77]], [-0.9, 1.5, 2.1, 0, 1.15, 0, 32]],
+	['rigged-close', [['rigged', 3311, true]], [0.9, 1.5, -2.1, 0, 1.15, 0, 32]],
 	['mage-close', [['mage', 9172, true]], [-0.8, 1.5, -2.0, 0, 1.15, 0, 32]],
 	['militia', MIL, [0, 1.2, -8.6, 0, 0.95, 0, 30], 0.9],
 ];
@@ -37,7 +41,10 @@ const SHOTS = [
 	page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
 	await page.goto(`http://127.0.0.1:${server.address().port}/?w=1600&h=800`);
 	await page.waitForFunction(() => window.AP_READY, null, { timeout: 240000 });
+	// (SHOTS=a,b: only those)
+	const only = process.env.SHOTS ? process.env.SHOTS.split(',') : null;
 	for (const [name, list, c, gap] of SHOTS) {
+		if (only && !only.includes(name)) continue;
 		const info = await page.evaluate(([l, g]) => window.AP.lineup(l, g), [list, gap]);
 		const url = await page.evaluate((c) => window.AP.cam(...c), c);
 		fs.writeFileSync(path.join(OUT, name + '.png'), Buffer.from(url.split(',')[1], 'base64'));

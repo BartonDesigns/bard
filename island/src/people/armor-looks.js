@@ -13,7 +13,7 @@
 
 import { CAMO } from '../combat/outfits.js';
 
-const STEEL = '#9a9ea3', IRON = '#7d8186', MAIL = '#6d7074', LEATHER = '#4a3424', GOLD = '#c9a45c';
+const STEEL = '#55595e', IRON = '#55595e', MAIL = '#55585c', LEATHER = '#4a3424', GOLD = '#c9a45c';
 const MC = CAMO.multicam;
 const multicam = (kind, extra = {}) => ({ kind, col: MC[0], acc: MC[1], acc2: MC[2], pat: 'camo', camo: 'multicam', ...extra });
 const combatShirt = () => multicam('longsleeve', { fit: 'regular', sleeves: 'long', tuck: true });
@@ -38,10 +38,11 @@ export const LOOKS = Object.freeze({
 	'great-helm': { acc: [{ kind: 'helmet', form: 'great', col: STEEL, acc: '#121314' }] },
 	'gambeson': { top: { kind: 'tunic', col: '#c9b994', acc: '#a89870', pat: 'quilt', fab: 'canvas', fit: 'regular', sleeves: 'long' } },
 	'mail-hauberk': { top: mailShirt() },
-	'plate-cuirass': { top: mailShirt(), acc: [{ kind: 'cuirass', col: STEEL, acc: LEATHER }] },
+	// (plate over mail, a torn tabard over the plate, belted)
+	'plate-cuirass': { top: mailShirt(), acc: [{ kind: 'cuirass', col: STEEL, acc: LEATHER, tabard: '#4a1d1b', trim: '#8c7a4e', belt: '#2e2219' }] },
 	'mail-chausses': { bottom: mailLegs() },
 	'plate-greaves': { bottom: mailLegs(), acc: [{ kind: 'greaves', col: STEEL, acc: LEATHER }] },
-	'plate-gauntlets': { acc: [{ kind: 'gloves', col: STEEL, acc: IRON, steel: true }] },
+	'plate-gauntlets': { acc: [{ kind: 'gloves', col: STEEL, acc: IRON, steel: true, leather: '#2b211a' }] },
 	'leather-bracers': { acc: [{ kind: 'gloves', col: '#5a3b22', acc: '#3a2616', bracers: true }] },
 	'sabatons': { shoes: { kind: 'boot', col: LEATHER, sole: '#1a1410' }, acc: [{ kind: 'sabatons', col: STEEL }] },
 	'riding-boots': { shoes: { kind: 'boot', col: '#4a2e1c', sole: '#1a120c', tall: true } },
@@ -50,7 +51,7 @@ export const LOOKS = Object.freeze({
 	'ballistic-helmet': { acc: [{ kind: 'helmet', combat: true, col: '#6e6a52', camo: 'multicam', nvg: true, comms: true }] },
 	'combat-shirt': { top: combatShirt() },
 	'chest-rig': { top: combatShirt(), acc: [{ kind: 'carrier', rig: true, col: '#4e4d3c', acc: '#5f5c45' }] },
-	'plate-carrier': { top: combatShirt(), acc: [{ kind: 'carrier', col: '#5c5a45', acc: MC[1] }] },
+	'plate-carrier': { top: combatShirt(), acc: [{ kind: 'carrier', col: MC[0], acc: MC[1], camo: 'multicam' }] },
 	'combat-trousers': { bottom: multicam('cargo', { legs: 'long', fit: 'regular' }), acc: [{ kind: 'kneepads', col: '#3a3a32' }] },
 	'tactical-gloves': { acc: [{ kind: 'gloves', col: '#3b3a33', acc: '#24241f', knuckle: true }] },
 	'combat-boots': { shoes: { kind: 'boot', col: '#8a7556', sole: '#2a241c' } },
@@ -77,6 +78,8 @@ export function dressInGear(style, worn = {}) {
 		if (slot === 'feet' && L.shoes) o.shoes = { ...L.shoes };
 		// (a bandana or a balaclava stays under a helm, but not under a great helm)
 		if (slot === 'head' && (L.acc || []).some((q) => q.form === 'great')) o.acc = o.acc.filter((q) => !/^(bandana|glasses|sunglasses|earrings)$/.test(q.kind));
+		// (under modern headgear, sunglasses are the black-framed shooting kind)
+		if (slot === 'head' && (L.acc || []).some((q) => q.combat || q.kind === 'comms')) o.acc = o.acc.map((q) => (q.kind === 'sunglasses' ? { ...q, col: '#1b1c1e', wire: false, shape: 'rect' } : q));
 		for (const q of L.acc || []) o.acc.push({ ...q });
 	}
 	return o;

@@ -94,7 +94,8 @@ function soldier(r, scheme, officer = false) {
 	const o = { gen: 'alien', top: camo('longsleeve', scheme, { fit: 'regular', sleeves: 'long' }), outer: camo('jacket', scheme, { fit: 'regular', sleeves: 'long' }), bottom: camo('cargo', scheme, { legs: 'long', fit: 'regular' }), shoes: boots(scheme === 'multicam' || scheme === 'desert' ? '#8a7556' : '#3a2f22'), acc: [] };
 	if (officer) o.acc.push({ kind: 'beret', col: '#2c3a2a' });
 	else o.acc.push({ kind: 'helmet', col: CAMO[scheme][1], visor: null, camo: scheme, combat: true, nvg: r() < 0.45, comms: r() < 0.85 });
-	o.acc.push(carrier(CAMO[scheme][3], CAMO[scheme][1]));
+	// (a carrier printed in the uniform's pattern, or ranger green over woodland)
+	o.acc.push(scheme === 'multicam' ? { ...carrier(CAMO.multicam[0], CAMO.multicam[1]), camo: 'multicam' } : carrier('#454a36', '#3c4a2c'));
 	if (r() < 0.8) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
 	if (!officer && r() < 0.6) o.acc.push({ kind: 'kneepads', col: '#2f2f29' });
 	// about a third with the jacket's sleeves rolled to below the elbow over a pattern tee

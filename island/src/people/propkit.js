@@ -240,11 +240,24 @@ diffuseColor.rgb *= vKit.z > 1.5 ? uKitB : vKit.z > 0.5 ? uKitA : vec3(1.0);
 diffuseColor.rgb *= kFabric(vRest, vRestN, vKit.y);
 if (vKit.y > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= 0.5;
 // (armour steel, gloss 3: part metal, so it keeps its grey where the world gives no reflection,
-// a little brighter where it faces the sky)
-if (vKit.x > 2.5) diffuseColor.rgb *= 1.05 + 0.35 * vRestN.y;`)
-			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = vKit.x > 2.5 ? 0.3 : vKit.x > 1.5 ? 0.24 : mix(0.82, 0.12, vKit.x); metalnessFactor = vKit.x > 2.5 ? 0.35 : vKit.x > 1.5 ? 1.0 : vKit.x * 0.3;');
+// a little brighter where it faces the sky; dulled with grime in patches, where it is rough and
+// dark and a little rust brown, and scored with fine bright scratches where it is clean)
+float kSteel = 0.3;
+if (vKit.x > 2.5) {
+	float grime = kNoise(vRest * 11.0) * 0.6 + kNoise(vRest * 37.0) * 0.4;
+	float clean = smoothstep(0.32, 0.72, grime);
+	vec3 sa = abs(vRestN);
+	vec2 suv = sa.x > sa.y && sa.x > sa.z ? vRest.zy : (sa.y > sa.z ? vRest.xz : vRest.xy);
+	vec2 sw = vec2(suv.x * 9.0 + suv.y * 3.0, suv.y * 9.0 - suv.x * 2.0) * vec2(40.0, 900.0);
+	float scratch = smoothstep(0.8, 0.95, kNoise(vec3(sw, 0.0))) * kFade(sw) * clean;
+	diffuseColor.rgb *= (0.86 + 0.26 * vRestN.y) * mix(0.6, 1.06, clean);
+	diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.95, 0.8, 0.66), (1.0 - clean) * 0.55);
+	diffuseColor.rgb += scratch * 0.12;
+	kSteel = mix(0.62, 0.27, clean) - scratch * 0.1;
+}`)
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = vKit.x > 2.5 ? kSteel : vKit.x > 1.5 ? 0.24 : mix(0.82, 0.12, vKit.x); metalnessFactor = vKit.x > 2.5 ? 0.4 : vKit.x > 1.5 ? 1.0 : vKit.x * 0.3;');
 	};
-	m.customProgramCacheKey = () => 'crysis-kit-2';
+	m.customProgramCacheKey = () => 'crysis-kit-3';
 	return m;
 }
 // a shared material for a bag in these colours (its own and its accent)
