@@ -34,12 +34,12 @@ export function groomChunk(P,recipe,volume=1){
    if(t<.43){
     const q=t/.43,theta=.13+q*1.51;
     dir.set(Math.sin(endpointPhi)*Math.sin(theta),Math.cos(theta),Math.cos(endpointPhi)*Math.sin(theta));
-    const r=K.radius(dir)+(.009+layer*.008)*scale;
+    const r=K.radius(dir)+(.006+layer*.008)*scale;
     point.copy(dir).multiplyScalar(r).add(c);point.x+=recipe.part*(1-q)+side*.003;
    }else{
     const q=(t-.43)/.57,theta=1.64;
     dir.set(Math.sin(endpointPhi)*Math.sin(theta),Math.cos(theta),Math.cos(endpointPhi)*Math.sin(theta));
-    const r=K.radius(dir)+(.009+layer*.008)*scale;
+    const r=K.radius(dir)+(.006+layer*.008)*scale;
     point.copy(dir).multiplyScalar(r).add(c);
     point.y-=length*q;
     // Locks clear the cheeks, then settle behind the shoulder instead of covering the face.

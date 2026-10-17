@@ -128,7 +128,7 @@ export function fitSuit(P, c, env) {
 		const crown = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.3), band = new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.13);
 		for (const g of [crown, band]) {
 			const p = g.attributes.position, v = new THREE.Vector3();
-			for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).normalize(); const r = sk.radius(v) + 0.008; p.setXYZ(i, sk.c.x + v.x * r - hb.x, sk.c.y + v.y * r - hb.y, sk.c.z + v.z * r - hb.z); }
+			for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).normalize(); const r = (sk.shell || sk.radius)(v) + 0.008; p.setXYZ(i, sk.c.x + v.x * r - hb.x, sk.c.y + v.y * r - hb.y, sk.c.z + v.z * r - hb.z); }
 			g.computeVertexNormals(); (parts.own ||= []).push(g);
 		}
 		const a = new THREE.Mesh(crown, k.capTop), b = new THREE.Mesh(band, k.capBand);
@@ -138,7 +138,7 @@ export function fitSuit(P, c, env) {
 	// the helmet: clear bubble, gold visor, hard shell, lamps, neck ring
 	{
 		let rMax = 0;
-		for (const d of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0.7, 0.7, 0], [0, 0.7, 0.7], [0, 0.7, -0.7]]) rMax = Math.max(rMax, sk.radius(new THREE.Vector3(...d).normalize()));
+		for (const d of [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0.7, 0.7, 0], [0, 0.7, 0.7], [0, 0.7, -0.7]]) rMax = Math.max(rMax, (sk.shell || sk.radius)(new THREE.Vector3(...d).normalize()));
 		const R = rMax + 0.06, G = new THREE.Group();
 		G.add(mk(k.ball, k.glass, R), mk(k.visorG, k.visor, R + 0.006), mk(k.shellG, k.hard, R + 0.01));
 		for (const sx of [-1, 1]) { const l = mk(k.box, k.lamp, 0.03, 0.025, 0.02); l.position.set(sx * R * 0.82, R * 0.42, R * 0.4); const h = mk(k.box, k.hard, 0.05, 0.045, 0.06); h.position.set(sx * R * 0.84, R * 0.42, R * 0.33); G.add(h, l); }

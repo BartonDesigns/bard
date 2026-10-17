@@ -354,6 +354,7 @@ function dress(A, P, o) {
 	P.skull = P.skull || skullOf(A, p, P);
 	const sc = scalpMask(A, P, p, P.skull, bodyGeo.userData.src, cutName, { recede: H.recede, thin: H.thin });
 	bodyGeo.setAttribute('scalp', new THREE.BufferAttribute(sc, 1));
+	bodyGeo.userData.scalp0 = sc.slice();
 	P.skin = add(bodyGeo, P.skinMat);
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
 	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
@@ -459,6 +460,8 @@ function hairUp(A, P) {
 	// the hair: the real style, or the procedural cut while it comes
 	if (W.style && has(W.style.id)) {
 		P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+		// (a long groom parts its layers over the scalp, which the paint fills: it keeps all of it)
+		coverScalp(P, styleNow(W.style.id).groom ? null : P.hair.geometry);
 		// it falls over the collar and the shoulders, not through them (hair-collide.js)
 		const o = P.outfit || {}, off = offsets(o), caps = hairCapsules(P, o, Math.max(off.top, off.outer));
 		const hair = P.hair;
@@ -466,6 +469,7 @@ function hairUp(A, P) {
 		hair.onBeforeRender = () => { animate(); poseCapsules(P, caps, hair.material.userData.U, hair); };
 	}
 	else if (W.cut) {
+		coverScalp(P, null);
 		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
 		// (grey coming in evenly, root to tip)
 		// (greying all over, as there are no single hairs to grey)
@@ -538,6 +542,37 @@ function faceMorphs(A, g, S) {
 
 // brows: the hair's natural colour (a dye leaves them be), a shade darker; going grey hair
 // by hair on the head's own curve, some years behind it
+// The crop painted on the scalp (hair.js scalpMask) runs down to the lowest a hair may root, the
+// sideburns and the temples included; a style's own hairline is mostly higher. Under a style, keep
+// the paint to where its hair lies over the scalp (fading out a centimetre or two from the
+// nearest strand, as a hairline thins), never a band of paint where it leaves the skin bare, by
+// the eyes and over the temples; a cut grown from the mask itself (hair: null) keeps it all.
+function coverScalp(P, hair) {
+	const sk = P.skin?.geometry, at = sk?.attributes.scalp, s0 = sk?.userData.scalp0;
+	if (!at || !s0) return;
+	if (!hair) { at.array.set(s0); at.needsUpdate = true; return; }
+	const hp = hair.attributes.position, cell = 0.02, grid = new Map(), pos = sk.attributes.position;
+	const key = (a, b, c) => a + ',' + b + ',' + c;
+	for (let i = 0; i < hp.count; i++) {
+		const k = key(Math.floor(hp.getX(i) / cell), Math.floor(hp.getY(i) / cell), Math.floor(hp.getZ(i) / cell));
+		let L = grid.get(k);
+		if (!L) grid.set(k, L = []);
+		L.push(i);
+	}
+	for (let i = 0; i < at.count; i++) {
+		if (!(s0[i] > 0)) { at.array[i] = s0[i]; continue; }
+		const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), gx = Math.floor(x / cell), gy = Math.floor(y / cell), gz = Math.floor(z / cell);
+		let best = Infinity;
+		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+			const L = grid.get(key(gx + a, gy + b, gz + c));
+			if (L) for (const j of L) { const d = (hp.getX(j) - x) ** 2 + (hp.getY(j) - y) ** 2 + (hp.getZ(j) - z) ** 2; if (d < best) best = d; }
+		}
+		const t = Math.min(1, Math.max(0, (Math.sqrt(best) - 0.01) / 0.01));
+		at.array[i] = s0[i] * (1 - t * t * (3 - 2 * t));
+	}
+	at.needsUpdate = true;
+}
+
 function browOf(d) {
 	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * 0.6));
 	const g = greyOf(d, 12);
