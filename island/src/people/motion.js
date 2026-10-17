@@ -540,7 +540,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 			for (let f = 1; f <= 5; f++) for (let j = 1; j <= 3; j++) {
 				const i = map['finger' + f + '-' + j + '.' + side];
 				if (i === undefined) continue;
-				const relaxed = f === 1 ? 0.08 + j * 0.04 : (0.1 + f * 0.05) * (j === 2 ? 1.2 : j === 3 ? 0.8 : 1);
+				// (the thumb never quite straight: at rest it lies a little in toward the palm)
+				const relaxed = f === 1 ? 0.22 + j * 0.06 : (0.1 + f * 0.05) * (j === 2 ? 1.2 : j === 3 ? 0.8 : 1);
 				let c = relaxed + (1.25 - relaxed) * Math.max(P2.curl, S.grip[side] * 0.85);
 				if (f === 2 && gp?.point && lead) c = 0.02;
 				// a long arm in both hands: the strong hand's index lies straight along the frame

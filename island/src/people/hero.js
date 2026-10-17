@@ -75,7 +75,7 @@ const HERO = {
 			// seams, fly, pockets and knees in the cloth, pat 'tech'; tucked into tall boots built
 			// over the feet; a belt and bellows pockets built on them)
 			bottom: { kind: 'cargo', col: C.olive, pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.16, shin: 0.08, ease: 0.011, knee: 0.008, room: 0.009 }, tuck: true },
-			shoes: { kind: 'boot', tall: true, built: true, col: '#5a4632', sole: '#1b1917', mid: '#3e3328', lace: '#2a231e' },
+			shoes: { kind: 'boot', tall: true, built: true, col: '#4a3628', sole: '#1b1917', mid: '#352a20', lace: '#2a231e' },
 			acc: [
 				{ kind: 'carrier', compact: true, col: '#5d5c41', acc: '#4c4b35' },
 				{ kind: 'belt', col: '#262422', buckle: '#7d796f', loop: C.olive },

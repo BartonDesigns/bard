@@ -255,7 +255,7 @@ function pouch(p, n, w, h, d, { flap = true, lo = false } = {}) {
 // waist shows below it, its top cut down round the neck and clipped at the corners, webbing
 // across front and back, a drag handle, the straps lying along the shoulders)
 export function carrierGeometry(cut, field, { police = false, lo = false, compact = false } = {}) {
-	const t = cut.chest + (compact ? 0.095 : 0.12), b = cut.waist + (compact ? 0.065 : 0.005), w = Math.min(compact ? 0.3 : 0.33, cut.shoulderX * (compact ? 1.45 : 1.6)), clear = 0.012, thick = compact ? 0.02 : 0.024;
+	const t = cut.chest + (compact ? 0.095 : 0.12), b = cut.waist + (compact ? 0.065 : 0.005), w = Math.min(compact ? 0.32 : 0.33, cut.shoulderX * 1.6), clear = 0.012, thick = compact ? 0.02 : 0.024;
 	const nx = lo ? 4 : compact ? 9 : 7, ny = lo ? 3 : compact ? 8 : 6, out = [];
 	// (the top edge: straight, or scooped round the neck and clipped at the corners)
 	const topAt = (x, half) => compact ? t - 0.04 * Math.max(0, 1 - (x / (half * 0.55)) ** 2) - 0.025 * smooth((Math.abs(x) / half - 0.72) / 0.28) : t;
