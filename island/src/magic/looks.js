@@ -32,7 +32,29 @@ const rnd = (a = 1) => (Math.random() - 0.5) * 2 * a;
 const ang = (dx, dz) => Math.atan2(dx, dz);
 
 // ---------- shared motions ----------
+// the hard parts (fx.spark, fx.seg): a missile's body as a spear of light (a white core inside its
+// colour, len long behind its head), and an impact's force: a hot flash, a ring snapping out,
+// rays thrown through along the blow, debris falling, a scorch left on the ground
+function spear(fx, p, d, len, w, core, edge, life = 0.05) {
+	const t = { x: p.x - d.x * len, y: p.y - d.y * len, z: p.z - d.z * len };
+	fx.seg(t, p, edge, w, life, 0.9);
+	fx.seg({ x: p.x - d.x * len * 0.55, y: p.y - d.y * len * 0.55, z: p.z - d.z * len * 0.55 }, p, core, w * 0.45, life);
+}
+function slam(fx, at, d, core, edge, k = 1, ground = true) {
+	fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.08, 0.6 * k, 1.8 * k, C.white, 1, 0, 0, ORB);
+	fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.2, 0.3 * k, 3.2 * k, edge, 1, 0, 0, RING);
+	const dx = d?.x || 0, dy = d?.y || 0, dz = d?.z || 0;
+	for (let n = Math.round(14 * k); n > 0; n--) {
+		const a = Math.random() * 6.283, e = (Math.random() - 0.35) * 1.5, sp = (12 + Math.random() * 16) * Math.sqrt(k);
+		// (thrown on through, along the blow, more than back at you)
+		fx.spark(at.x, at.y, at.z, Math.cos(a) * Math.cos(e) * sp + dx * sp * 0.8, Math.sin(e) * sp + dy * sp * 0.5, Math.sin(a) * Math.cos(e) * sp + dz * sp * 0.8, 0.14 + Math.random() * 0.14, 0.035, 0.05 + 0.04 * k, n % 3 ? core : C.white, 1, 4, 5);
+	}
+	for (let n = Math.round(8 * k); n > 0; n--) fx.spark(at.x, at.y, at.z, rnd(5 * k), 3 + Math.random() * 5 * k, rnd(5 * k), 0.5 + Math.random() * 0.5, 0.05, 0.04, edge, 1, 16, 0.6);
+	if (ground) fx.decal({ x: at.x, y: at.y - 1, z: at.z }, 0.3 * k, 1.2 * k, 0.35, edge, 0.9, RING);
+}
 function trailOf(fx, pos, d, step, core, edge, s, o = ORB, n = 3) {
+	spear(fx, pos, d, Math.max(1.6, step * 2), s * 0.32, C.white, core);
+	if (Math.random() < 0.6) fx.spark(pos.x, pos.y, pos.z, -d.x * 6 + rnd(2), -d.y * 6 + rnd(2), -d.z * 6 + rnd(2), 0.18, 0.04, s * 0.08, edge, 1, 3, 3);
 	for (let k = 0; k < n; k++) fx.emit(pos.x - d.x * step * k / n, pos.y - d.y * step * k / n, pos.z - d.z * step * k / n, rnd(0.3), rnd(0.3), rnd(0.3), 0.35, k ? s * 0.7 : s, s * 0.1, k ? edge : core, 1, 0, 0, o);
 }
 // smoke behind a bolt, with a glow of its colour round it so it shows on dark ground too
@@ -44,7 +66,8 @@ function smokeTrail(fx, pos, d, step, ink, rim, s = 0.5, n = 2) {
 	}
 }
 function embers(fx, at, c, n, v = 2, life = 1.2, s = 0.1, g = 3) {
-	for (let k = 0; k < n; k++) fx.emit(at.x + rnd(0.3), at.y + rnd(0.3), at.z + rnd(0.3), rnd(v), Math.random() * v * 1.5, rnd(v), life * (0.5 + Math.random()), s, s * 0.3, c, 1, g, 0.6, STAR);
+	for (let k = 0; k < n; k++) if (k % 2) fx.spark(at.x + rnd(0.3), at.y + rnd(0.3), at.z + rnd(0.3), rnd(v * 1.5), Math.random() * v * 2, rnd(v * 1.5), life * 0.6, 0.05, s * 0.4, c, 1, g * 2, 1);
+	else fx.emit(at.x + rnd(0.3), at.y + rnd(0.3), at.z + rnd(0.3), rnd(v), Math.random() * v * 1.5, rnd(v), life * (0.5 + Math.random()), s, s * 0.3, c, 1, g, 0.6, STAR);
 }
 function inkPuff(fx, at, ink, n = 8, r = 1, s = 1, life = 1.2, a = 0.6, rim = null) {
 	for (let k = 0; k < n; k++) {
@@ -60,7 +83,11 @@ function sigil(fx, at, r, core, edge, life = 0.6, spin = 0, spokes = 6, stand = 
 	if (stand) for (let k = 0; k < spokes; k++) { const a = spin * 1.5 + k / spokes * 6.283; fx.emit(at.x + Math.cos(a) * r * 0.62, at.y + 0.2, at.z + Math.sin(a) * r * 0.62, 0, 0.4, 0, life * 0.7, 0.35, 0.2, core, 0.9, 0, 0, STAR); }
 }
 // a shockwave along the ground
-const wave = (fx, at, r, c, life = 0.45, a = 0.9) => fx.decal(at, r * 0.2, r * 1.25, life, c, a, RING);
+function wave(fx, at, r, c, life = 0.45, a = 0.9) {
+	fx.decal(at, r * 0.2, r * 1.25, life, c, a, RING);
+	// (its front: hard dashes racing out across the ground)
+	for (let k = 0; k < 20; k++) { const g = k / 20 * 6.283 + rnd(0.1), v = r * 1.25 / life; fx.spark(at.x + Math.cos(g) * r * 0.2, at.y + 0.15, at.z + Math.sin(g) * r * 0.2, Math.cos(g) * v, 0.3, Math.sin(g) * v, life * 0.85, 0.06, 0.07, c, a, 0, 1.5); }
+}
 // a wraith: a head with eyes, a body thinning down to a tail of smoke
 function wraith(fx, p, core, edge, ink, t, s = 1) {
 	fx.emit(p.x, p.y + 0.35 * s, p.z, 0, 0, 0, 0.08, 0.42 * s, 0.42 * s, core, 1, 0, 0, ORB);
@@ -91,7 +118,7 @@ export const LOOK = {
 	sunspark: {
 		cast: (fx, h) => fx.burst(h, C.sun, 8, 1.6, 0.25, 0.2, 0.2, STAR),
 		trail: (fx, p, d, s) => { trailOf(fx, p, d, s, C.white, C.gold, 0.85, STAR, 3); if (Math.random() < 0.7) embers(fx, p, C.gold, 1, 0.8, 0.6, 0.12, 1); },
-		hit: (fx, at) => { fx.burst(at, C.sun, 24, 5, 0.5, 0.5, 0.6, STAR); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.3, 0.8, 3, C.white, 1, 0, 0, STAR); },
+		hit: (fx, at, d) => { slam(fx, at, d, C.sun, C.gold, 0.9); fx.burst(at, C.sun, 12, 5, 0.4, 0.4, 0.6, STAR); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.22, 0.8, 3.4, C.white, 1, 0, 0, STAR); },
 	},
 	'lance-of-dawn': {
 		// (three spears out of the sun, point first; by night out of the moon, in silver)
@@ -101,14 +128,18 @@ export const LOOK = {
 			const edge = night ? C.moon : C.gold, len = 7;
 			// the point, then the shaft trailing back up toward the sky it came from
 			fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.06, 0.9, 0.9, C.white, 1, 0, 0, O('shard', { rot: Math.atan2(d.x, d.y) }));
-			for (let k = 1; k <= 12; k++) { const u = k / 12; fx.emit(p.x + d.x * len * u, p.y + d.y * len * u, p.z + d.z * len * u, 0, 0, 0, 0.07 + u * 0.12, 0.55 - u * 0.3, 0.08, k < 3 ? C.white : edge, 1 - u * 0.5, 0, 0, ORB); }
+			spear(fx, p, { x: -d.x, y: -d.y, z: -d.z }, len, 0.32, C.white, edge, 0.06);
+			fx.seg(p, { x: p.x + d.x * len * 2.2, y: p.y + d.y * len * 2.2, z: p.z + d.z * len * 2.2 }, edge, 0.12, 0.12, 0.5);
+			for (let k = 1; k <= 4; k++) { const u = k / 4; fx.emit(p.x + d.x * len * u, p.y + d.y * len * u, p.z + d.z * len * u, 0, 0, 0, 0.07 + u * 0.12, 0.5 - u * 0.3, 0.08, edge, 0.5 - u * 0.3, 0, 0, ORB); }
 			if (Math.random() < 0.7) fx.emit(p.x + d.x * len * Math.random(), p.y + d.y * len * Math.random(), p.z + d.z * len * Math.random(), rnd(0.5), rnd(0.5), rnd(0.5), 0.5, 0.16, 0.03, edge, 1, 0, 0.5, STAR);
 		},
 		blast: (fx, at, r, night) => {
 			const edge = night ? C.moon : C.gold;
 			// (the spear stands where it struck, for a moment)
-			for (let k = 0; k < 9; k++) fx.emit(at.x, at.y + 0.3 + k * 0.34, at.z, 0, 0, 0, 1, 0.42 - k * 0.03, 0.06, k < 2 ? C.white : edge, 1, 0, 0, ORB);
+			const top = { x: at.x + rnd(0.3), y: at.y + 3.2, z: at.z + rnd(0.3) };
+			fx.seg(at, top, edge, 0.3, 1.1, 0.9); fx.seg(at, top, C.white, 0.12, 1.1);
 			fx.emit(at.x, at.y + 0.5, at.z, 0, 0, 0, 0.25, 0.8, 3, C.white, 1, 0, 0, STAR);
+			slam(fx, { x: at.x, y: at.y + 0.4, z: at.z }, { x: 0, y: -1, z: 0 }, C.white, edge, 1.3);
 			wave(fx, at, r * 1.2, edge, 0.5);
 			fx.decal(at, r * 0.5, r * 0.6, 1.2, edge, 0.7, O('star', { spin: 0.5 }));
 			fx.burst(at, edge, 18, r * 1.8, 0.45, 0.28, 2, STAR);
@@ -138,7 +169,11 @@ export const LOOK = {
 		tell: (fx, at, r, u) => { if (u < 0.08) sigil(fx, at, r, C.gold, C.sun, 1.6, 0, 8); fx.pillar(at, 40, C.sun, 2, 0.2, 0.12, false, STREAK); },
 		blast: (fx, at, r) => {
 			// (a sword of light falls from the sky)
-			for (let k = 0; k < 40; k++) fx.emit(at.x + rnd(0.25), at.y + 40 - k, at.z + rnd(0.25), 0, -60, 0, 0.35, 0.8, 0.35, k % 3 ? C.white : C.gold, 1, 0, 0, STREAK);
+			const hilt = { x: at.x, y: at.y + 9, z: at.z }, sky = { x: at.x, y: at.y + 40, z: at.z };
+			fx.seg(sky, at, C.gold, 1.6, 0.45, 0.8); fx.seg(sky, at, C.white, 0.6, 0.45);
+			fx.seg({ x: hilt.x - 2.6, y: hilt.y, z: hilt.z }, { x: hilt.x + 2.6, y: hilt.y, z: hilt.z }, C.gold, 0.7, 0.6); fx.seg({ x: hilt.x, y: hilt.y, z: hilt.z - 2.6 }, { x: hilt.x, y: hilt.y, z: hilt.z + 2.6 }, C.gold, 0.7, 0.6);
+			slam(fx, { x: at.x, y: at.y + 0.5, z: at.z }, { x: 0, y: -1, z: 0 }, C.white, C.gold, 2.2);
+			for (let k = 0; k < 12; k++) fx.emit(at.x + rnd(0.25), at.y + 40 - k * 3, at.z + rnd(0.25), 0, -60, 0, 0.35, 0.8, 0.35, k % 3 ? C.white : C.gold, 1, 0, 0, STREAK);
 			for (let k = 0; k < 6; k++) fx.emit(at.x, at.y + 1 + k * 2.5, at.z, 0, -3, 0, 0.6, 1.4, 3, C.sun, 0.8, 0, 0, RING);
 			wave(fx, at, r * 1.4, C.white, 0.5);
 			fx.burst(at, C.gold, 60, 9, 1, 0.5, 2, STAR);
@@ -177,8 +212,8 @@ export const LOOK = {
 	// ===== Shadow: black smoke round violet hearts, red eyes, a black sun =====
 	shadowbolt: {
 		cast: (fx, h) => inkPuff(fx, h, C.inkShadow, 3, 0.1, 0.4, 0.6, 0.6, C.violet),
-		trail: (fx, p, d, s) => { smokeTrail(fx, p, d, s, C.inkShadow, C.violet, 0.7, 2); fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.08, 0.5, 0.45, C.violet, 1, 0, 0, ORB); if (Math.random() < 0.6) fx.emit(p.x, p.y, p.z, rnd(1), rnd(1), rnd(1), 0.35, 0.18, 0.03, C.lilac, 1, 0, 1, ORB); },
-		hit: (fx, at) => { inkPuff(fx, at, C.inkShadow, 10, 0.6, 1.2, 1.2, 0.75, C.violet); fx.burst(at, C.violet, 16, 3.5, 0.45, 0.35, 0.3); },
+		trail: (fx, p, d, s) => { spear(fx, p, d, Math.max(1.8, s * 2.2), 0.3, C.lilac, C.violet); smokeTrail(fx, p, d, s, C.inkShadow, C.violet, 0.7, 2); fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.08, 0.5, 0.45, C.violet, 1, 0, 0, ORB); if (Math.random() < 0.6) fx.emit(p.x, p.y, p.z, rnd(1), rnd(1), rnd(1), 0.35, 0.18, 0.03, C.lilac, 1, 0, 1, ORB); },
+		hit: (fx, at, d) => { slam(fx, at, d, C.lilac, C.violet, 1); inkPuff(fx, at, C.inkShadow, 10, 0.6, 1.2, 1.2, 0.75, C.violet); fx.burst(at, C.violet, 10, 3.5, 0.45, 0.35, 0.3); },
 	},
 	shadowstep: { self: (fx, at) => { const g = { x: at.x, y: at.y - 0.8, z: at.z }; inkPuff(fx, g, C.inkShadow, 14, 0.6, 1.4, 1.4, 0.8, C.violet); fx.burst(g, C.violet, 24, 3, 0.5, 0.3, 0); fx.decal({ x: at.x, y: at.y - 1.68, z: at.z }, 0.3, 1.4, 0.9, C.violet, 0.8, RING); } },
 	'umbral-cloak': {
@@ -186,28 +221,30 @@ export const LOOK = {
 		on: (fx, at) => { if (Math.random() < 0.5) { const x = at.x + rnd(0.5), y = at.y - 1.2 + Math.random() * 0.8, z = at.z + rnd(0.5); fx.emit(x, y, z, 0, 0.6, 0, 1, 0.35, 0.9, C.inkShadow, 0.4, 0, 0, SMOKE); fx.emit(x, y, z, 0, 0.6, 0, 0.8, 0.3, 0.8, C.violet, 0.12, 0, 0, GLOWSMOKE); } },
 	},
 	'night-terror': {
-		cone: (fx, o, d, range, angle) => { for (let k = 0; k < 24; k++) { const a = ang(d.x, d.z) + rnd(angle), v = range / 0.6 * (0.4 + Math.random() * 0.6); fx.emit(o.x, o.y - 0.4, o.z, Math.sin(a) * v, rnd(0.6), Math.cos(a) * v, 0.9, 0.6, 2.4, C.inkShadow, 0.7, 0, 1.2, SMOKE); if (k % 2) fx.emit(o.x, o.y - 0.4, o.z, Math.sin(a) * v, rnd(0.6), Math.cos(a) * v, 0.8, 0.6, 2.2, C.violet, 0.15, 0, 1.2, GLOWSMOKE); } for (let k = 0; k < 10; k++) { const a = ang(d.x, d.z) + rnd(angle), v = range / 0.6 * (0.4 + Math.random() * 0.6); fx.emit(o.x, o.y - 0.3, o.z, Math.sin(a) * v, rnd(0.4), Math.cos(a) * v, 0.9, 0.55, 0.55, C.redEye, 1, 0, 1.2, EYES); } },
+		cone: (fx, o, d, range, angle) => { for (let k = 0; k < 24; k++) { const a = ang(d.x, d.z) + rnd(angle), v = range / 0.6 * (0.4 + Math.random() * 0.6); fx.emit(o.x, o.y - 0.4, o.z, Math.sin(a) * v, rnd(0.6), Math.cos(a) * v, 0.9, 0.6, 2.4, C.inkShadow, 0.7, 0, 1.2, SMOKE); if (k % 2) fx.emit(o.x, o.y - 0.4, o.z, Math.sin(a) * v, rnd(0.6), Math.cos(a) * v, 0.8, 0.6, 2.2, C.violet, 0.15, 0, 1.2, GLOWSMOKE); } for (let k = 0; k < 10; k++) { const a = ang(d.x, d.z) + rnd(angle), v = range / 0.6 * (0.4 + Math.random() * 0.6); fx.emit(o.x, o.y - 0.3, o.z, Math.sin(a) * v, rnd(0.4), Math.cos(a) * v, 0.9, 0.55, 0.55, C.redEye, 1, 0, 1.2, EYES); }
+			// (and claws: raking red strokes, three abreast, torn out across the cone)
+			for (let k = 0; k < 6; k++) { const a = ang(d.x, d.z) + rnd(angle * 0.8), v = range / 0.3; for (let j = -1; j <= 1; j++) fx.spark(o.x + Math.cos(a) * j * 0.25, o.y - 0.4 + j * 0.15, o.z - Math.sin(a) * j * 0.25, Math.sin(a) * v, rnd(1), Math.cos(a) * v, 0.28, 0.06, 0.09, j ? C.blood : C.redEye, 1, 0, 2); } },
 		mark: (fx, T) => { if (Math.random() < 0.25) fx.emit(T.bound.x + rnd(0.3), T.bound.y + 0.6, T.bound.z + rnd(0.3), 0, 0.5, 0, 0.5, 0.3, 0.3, C.redEye, 1, 0, 0, EYES); },
 	},
 	eclipse: {
 		tell: (fx, at, r, u) => { fx.emit(at.x, at.y + 2.2, at.z, 0, 0, 0, 0.12, r * 0.5 * (0.4 + u), r * 0.5 * (0.4 + u), C.inkVoid, 0.95, 0, 0, DARK_ORB); fx.emit(at.x, at.y + 2.2, at.z, 0, 0, 0, 0.12, r * 0.55 * (0.4 + u), r * 0.55 * (0.4 + u), C.corona, 0.9, 0, 0, RING); if (u < 0.2) fx.decal(at, r * 0.8, r * 0.7, 1, C.corona, 0.4, RING); },
-		blast: (fx, at, r) => { fx.emit(at.x, at.y + 2.2, at.z, 0, 0, 0, 0.5, r * 0.5, r * 1.6, C.corona, 0.85, 0, 0, RING); fx.emit(at.x, at.y + 2.2, at.z, 0, 0, 0, 0.4, r * 0.3, r * 1.0, C.white, 1, 0, 0, RING); inkPuff(fx, at, C.inkShadow, 20, r * 0.6, 2, 1.4, 0.75, C.violet); fx.burst(at, C.violet, 40, r * 1.4, 0.6, 0.35, 0.6); wave(fx, at, r * 0.9, C.corona, 0.6, 0.45); },
+		blast: (fx, at, r) => { slam(fx, { x: at.x, y: at.y + 1, z: at.z }, null, C.corona, C.violet, 1.6); fx.emit(at.x, at.y + 2.2, at.z, 0, 0, 0, 0.5, r * 0.5, r * 1.6, C.corona, 0.85, 0, 0, RING); fx.emit(at.x, at.y + 2.2, at.z, 0, 0, 0, 0.4, r * 0.3, r * 1.0, C.white, 1, 0, 0, RING); inkPuff(fx, at, C.inkShadow, 20, r * 0.6, 2, 1.4, 0.75, C.violet); fx.burst(at, C.violet, 40, r * 1.4, 0.6, 0.35, 0.6); wave(fx, at, r * 0.9, C.corona, 0.6, 0.45); },
 		mark: (fx, T) => { if (Math.random() < 0.3) fx.emit(T.bound.x, T.bound.y + 0.9, T.bound.z, 0, 0, 0, 0.25, 0.6, 0.6, C.corona, 0.7, 0, 0, RING); },
 	},
 	// ===== Void: crystal shards, warped rings, a black heart =====
 	'void-shard': {
 		cast: (fx, h) => fx.burst(h, C.azure, 8, 1.6, 0.3, 0.22, 0, SHARD),
-		trail: (fx, p, d, s) => { fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.07, 0.9, 0.9, C.azure, 1, 0, 0, O('shard', { rot: Math.atan2(-d.x, d.y || 1e-3) })); for (let k = 0; k < 3; k++) fx.emit(p.x - d.x * s * k / 3, p.y - d.y * s * k / 3, p.z - d.z * s * k / 3, rnd(0.6), rnd(0.6), rnd(0.6), 0.6, 0.26, 0.05, C.indigo, 1, 0, 0.5, SHARD); },
-		hit: (fx, at) => { fx.burst(at, C.azure, 22, 6, 0.5, 0.35, 0.3, SHARD); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.3, 0.4, 2.2, C.indigo, 1, 0, 0, RING); },
+		trail: (fx, p, d, s) => { spear(fx, p, d, 1.2, 0.4, C.white, C.azure); fx.seg({ x: p.x - d.x * 2.6, y: p.y - d.y * 2.6, z: p.z - d.z * 2.6 }, p, C.indigo, 0.12, 0.08); fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.07, 0.9, 0.9, C.azure, 1, 0, 0, O('shard', { rot: Math.atan2(-d.x, d.y || 1e-3) })); for (let k = 0; k < 3; k++) fx.emit(p.x - d.x * s * k / 3, p.y - d.y * s * k / 3, p.z - d.z * s * k / 3, rnd(0.6), rnd(0.6), rnd(0.6), 0.6, 0.26, 0.05, C.indigo, 1, 0, 0.5, SHARD); },
+		hit: (fx, at, d) => { slam(fx, at, d, C.azure, C.indigo, 1); fx.burst(at, C.azure, 16, 7, 0.5, 0.35, 0.3, SHARD); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.3, 0.4, 2.2, C.indigo, 1, 0, 0, RING); },
 	},
-	repulse: { cone: (fx, o, d, range) => { for (let k = 0; k < 4; k++) fx.emit(o.x + d.x * 1.5, o.y - 0.3, o.z + d.z * 1.5, d.x * range * (1 + k * 0.3), d.y * 2, d.z * range * (1 + k * 0.3), 0.5, 0.6, 3.5 + k, k % 2 ? C.indigo : C.azure, 0.8, 0, 1, RING); for (let k = 0; k < 24; k++) { const a = ang(d.x, d.z) + rnd(0.7), v = range * 2 * (0.5 + Math.random() * 0.5); fx.emit(o.x, o.y - 0.3, o.z, Math.sin(a) * v, rnd(1), Math.cos(a) * v, 0.45, 0.35, 0.08, C.azure, 1, 0, 1, SHARD); } } },
+	repulse: { cone: (fx, o, d, range) => { for (let k = 0; k < 26; k++) { const a = ang(d.x, d.z) + rnd(0.8), v = range / 0.25 * (0.7 + Math.random() * 0.3); fx.spark(o.x, o.y - 0.3 + rnd(0.6), o.z, Math.sin(a) * v, rnd(2), Math.cos(a) * v, 0.3, 0.05, 0.08, k % 3 ? C.azure : C.white, 1, 0, 3); } for (let k = 0; k < 4; k++) fx.emit(o.x + d.x * 1.5, o.y - 0.3, o.z + d.z * 1.5, d.x * range * (1 + k * 0.3), d.y * 2, d.z * range * (1 + k * 0.3), 0.5, 0.6, 3.5 + k, k % 2 ? C.indigo : C.azure, 0.8, 0, 1, RING); for (let k = 0; k < 24; k++) { const a = ang(d.x, d.z) + rnd(0.7), v = range * 2 * (0.5 + Math.random() * 0.5); fx.emit(o.x, o.y - 0.3, o.z, Math.sin(a) * v, rnd(1), Math.cos(a) * v, 0.45, 0.35, 0.08, C.azure, 1, 0, 1, SHARD); } } },
 	'gravity-well': {
 		tick: (fx, at, r, t) => { fx.spiral(at, r, C.indigo, 12, 0.5, 0.35, 3, true); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.3, r * 0.28, C.inkVoid, 0.9, 0, 0, DARK_ORB); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.36, r * 0.34, C.azure, 0.7, 0, 0, RING); if (Math.random() < 0.25) fx.decal({ x: at.x, y: at.y - 1, z: at.z }, r * 1.1, r * 0.2, 0.7, C.indigo, 0.7, O('rune', { rot: t, spin: -3 })); },
-		blast: (fx, at, r) => { fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.35, r * 0.2, r * 2.4, C.azure, 1, 0, 0, RING); fx.burst(at, C.indigo, 50, r * 1.6, 0.6, 0.4, 0, SHARD); wave(fx, { x: at.x, y: at.y - 1, z: at.z }, r * 1.4, C.azure, 0.5); },
+		blast: (fx, at, r) => { slam(fx, at, null, C.azure, C.indigo, 1.5, false); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.35, r * 0.2, r * 2.4, C.azure, 1, 0, 0, RING); fx.burst(at, C.indigo, 50, r * 1.6, 0.6, 0.4, 0, SHARD); wave(fx, { x: at.x, y: at.y - 1, z: at.z }, r * 1.4, C.azure, 0.5); },
 	},
 	'event-horizon': {
 		tick: (fx, at, r, t) => { fx.spiral(at, r, C.violet, 16, 0.6, 0.4, 4, true); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.45, r * 0.42, C.inkVoid, 1, 0, 0, DARK_ORB); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.5, r * 0.5, C.white, 0.85, 0, 0, RING); fx.circle(at, r * 0.7, C.azure, 16, 0.14, 0.22, t * 3, ORB, 0); if (Math.random() < 0.25) fx.decal({ x: at.x, y: at.y - 1, z: at.z }, r * 0.9, r * 0.8, 0.7, C.violet, 0.4, O('ring')); },
-		blast: (fx, at, r) => { fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.5, r * 0.3, r * 2, C.white, 0.85, 0, 0, RING); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.6, r * 0.4, r * 1.6, C.violet, 1, 0, 0, RING); fx.burst(at, C.azure, 70, r * 2, 0.7, 0.4, 0, SHARD); wave(fx, { x: at.x, y: at.y - 1, z: at.z }, r * 1.0, C.violet, 0.6, 0.5); },
+		blast: (fx, at, r) => { slam(fx, at, null, C.white, C.violet, 1.8, false); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.5, r * 0.3, r * 2, C.white, 0.85, 0, 0, RING); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.6, r * 0.4, r * 1.6, C.violet, 1, 0, 0, RING); fx.burst(at, C.azure, 70, r * 2, 0.7, 0.4, 0, SHARD); wave(fx, { x: at.x, y: at.y - 1, z: at.z }, r * 1.0, C.violet, 0.6, 0.5); },
 		mark: (fx, T) => { if (Math.random() < 0.25) fx.line(T.bound, { x: T.bound.x, y: T.bound.y + 1.2, z: T.bound.z }, C.violet, 0.3, 0.12, 0.14); },
 	},
 	gargantua: {
@@ -230,12 +267,12 @@ export const LOOK = {
 	// ===== Blight: poison and its fog, ash, souls, spores =====
 	'hex-of-decay': {
 		trail: (fx, p, d, s) => { trailOf(fx, p, d, s, C.acid, C.poison, 0.5, ORB, 2); smokeTrail(fx, p, d, s, C.inkBlight, C.poison, 0.45, 1); },
-		hit: (fx, at) => { inkPuff(fx, at, C.inkBlight, 6, 0.4, 0.9, 1, 0.6, C.poison); fx.emit(at.x, at.y + 0.8, at.z, 0, 0.3, 0, 1.2, 1.4, 1.6, C.poison, 0.95, 0, 0, RUNE_STILL); },
+		hit: (fx, at, d) => { slam(fx, at, d, C.acid, C.poison, 0.8); inkPuff(fx, at, C.inkBlight, 6, 0.4, 0.9, 1, 0.6, C.poison); fx.emit(at.x, at.y + 0.8, at.z, 0, 0.3, 0, 1.2, 1.4, 1.6, C.poison, 0.95, 0, 0, RUNE_STILL); },
 		mark: (fx, T) => { if (Math.random() < 0.4) fx.emit(T.bound.x + rnd(0.25), T.bound.y + 0.3, T.bound.z + rnd(0.25), 0, -0.2, 0, 0.8, 0.22, 0.1, C.poison, 1, 4, 0.2, DRIP); if (Math.random() < 0.06) fx.emit(T.bound.x, T.bound.y + 1.1, T.bound.z, 0, 0.2, 0, 0.6, 0.6, 0.7, C.poison, 0.8, 0, 0, RUNE_STILL); },
 	},
 	withering: {
 		trail: (fx, p, d, s) => { trailOf(fx, p, d, s, C.amber, C.ash, 0.45, ORB, 2); if (Math.random() < 0.8) fx.emit(p.x, p.y, p.z, rnd(0.4), -0.3, rnd(0.4), 1.2, 0.22, 0.08, C.ash, 1, 1.5, 0.4, LEAF); },
-		hit: (fx, at) => { for (let k = 0; k < 20; k++) fx.emit(at.x + rnd(0.5), at.y + 0.8 + rnd(0.4), at.z + rnd(0.5), rnd(0.6), 0.2, rnd(0.6), 1.6, 0.25, 0.1, k % 2 ? C.ash : C.amber, 1, 1.2, 0.5, LEAF); inkPuff(fx, at, C.inkAsh, 4, 0.3, 0.8, 1.2, 0.5, C.ash); },
+		hit: (fx, at, d) => { slam(fx, at, d, C.amber, C.ash, 0.8); for (let k = 0; k < 20; k++) fx.emit(at.x + rnd(0.5), at.y + 0.8 + rnd(0.4), at.z + rnd(0.5), rnd(0.6), 0.2, rnd(0.6), 1.6, 0.25, 0.1, k % 2 ? C.ash : C.amber, 1, 1.2, 0.5, LEAF); inkPuff(fx, at, C.inkAsh, 4, 0.3, 0.8, 1.2, 0.5, C.ash); },
 		mark: (fx, T) => { if (Math.random() < 0.4) fx.emit(T.bound.x + rnd(0.3), T.bound.y + 0.7, T.bound.z + rnd(0.3), rnd(0.2), 0, rnd(0.2), 1.3, 0.2, 0.08, C.ash, 1, 1, 0.4, LEAF); },
 	},
 	'plague-cloud': { tick: (fx, at, r) => { for (let k = 0; k < 7; k++) { const a = Math.random() * 6.283, rr = r * Math.sqrt(Math.random()), x = at.x + Math.cos(a) * rr, y = at.y + 0.4 + Math.random() * 1.2, z = at.z + Math.sin(a) * rr; fx.emit(x, y, z, rnd(0.2), 0.15, rnd(0.2), 2, 1.4, 2.8, C.inkBlight, 0.4, 0, 0.3, SMOKE); fx.emit(x, y, z, rnd(0.2), 0.15, rnd(0.2), 1.8, 1.6, 3, C.poison, 0.16, 0, 0.3, GLOWSMOKE); } for (let k = 0; k < 10; k++) { const a = Math.random() * 6.283, rr = r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * rr, at.y + 0.2 + Math.random(), at.z + Math.sin(a) * rr, 0, 0.6, 0, 0.9, 0.18, 0.4, C.acid, 0.9, 0, 0, RING); } fx.decal(at, r * 0.9, r, 0.6, C.poison, 0.35, O('smoke', { spin: 0.5 })); } },
@@ -250,7 +287,7 @@ export const LOOK = {
 	},
 	contagion: {
 		trail: (fx, p, d, s) => { trailOf(fx, p, d, s, C.acid, C.poison, 0.45, ORB, 2); if (Math.random() < 0.7) fx.emit(p.x, p.y, p.z, rnd(0.6), rnd(0.6), rnd(0.6), 0.7, 0.16, 0.32, C.acid, 1, 0, 0.5, RING); },
-		hit: (fx, at) => { for (let k = 0; k < 18; k++) fx.emit(at.x, at.y, at.z, rnd(3), Math.random() * 2, rnd(3), 1, 0.2, 0.45, k % 2 ? C.acid : C.poison, 1, 2, 1.5, RING); inkPuff(fx, at, C.inkBlight, 5, 0.3, 0.8, 1, 0.5, C.acid); },
+		hit: (fx, at, d) => { slam(fx, at, d, C.acid, C.poison, 0.8); for (let k = 0; k < 18; k++) fx.emit(at.x, at.y, at.z, rnd(3), Math.random() * 2, rnd(3), 1, 0.2, 0.45, k % 2 ? C.acid : C.poison, 1, 2, 1.5, RING); inkPuff(fx, at, C.inkBlight, 5, 0.3, 0.8, 1, 0.5, C.acid); },
 		mark: (fx, T) => { if (Math.random() < 0.4) fx.emit(T.bound.x + rnd(0.3), T.bound.y + 0.4 + Math.random() * 0.6, T.bound.z + rnd(0.3), 0, 0.4, 0, 0.7, 0.14, 0.32, C.acid, 1, 0, 0, RING); },
 		spread: (fx, a, b) => { for (let k = 0; k < 12; k++) { const u = k / 12; fx.emit(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u + Math.sin(u * Math.PI) * 1.2, a.z + (b.z - a.z) * u, 0, 0, 0, 0.5 + u * 0.3, 0.3, 0.15, C.acid, 1, 0, 0, RING); } },
 	},
@@ -270,9 +307,9 @@ export const LOOK = {
 		on: (fx, at) => { if (Math.random() < 0.35) fx.emit(at.x + rnd(0.5), at.y - 0.6, at.z + rnd(0.5), 0, -0.4, 0, 0.8, 0.16, 0.08, C.blood, 1, 6, 0.2, DRIP); },
 	},
 	// ===== Storm: forked lightning =====
-	thunderclap: { blast: (fx, at, r) => { wave(fx, at, r * 0.75, C.volt, 0.4, 0.55); fx.emit(at.x, at.y + 0.4, at.z, 0, 0, 0, 0.18, 0.5, r * 0.8, C.white, 0.8, 0, 0, ORB); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + rnd(0.3); fx.bolt({ x: at.x, y: at.y + 0.3, z: at.z }, { x: at.x + Math.cos(a) * r, y: at.y + 0.2, z: at.z + Math.sin(a) * r }, C.volt, 0.3, 0.2, 5, 0.6, 1); } fx.decal(at, r * 0.5, r * 0.7, 1, C.arc, 0.8, O('star')); } },
+	thunderclap: { blast: (fx, at, r) => { slam(fx, { x: at.x, y: at.y + 0.6, z: at.z }, null, C.white, C.volt, 1.4, false); wave(fx, at, r * 0.75, C.volt, 0.4, 0.55); fx.emit(at.x, at.y + 0.4, at.z, 0, 0, 0, 0.18, 0.5, r * 0.8, C.white, 0.8, 0, 0, ORB); for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283 + rnd(0.3); fx.bolt({ x: at.x, y: at.y + 0.3, z: at.z }, { x: at.x + Math.cos(a) * r, y: at.y + 0.2, z: at.z + Math.sin(a) * r }, C.volt, 0.3, 0.2, 5, 0.6, 1); } fx.decal(at, r * 0.5, r * 0.7, 1, C.arc, 0.8, O('star')); } },
 	'chain-lightning': {
-		arc: (fx, a, b) => { fx.bolt(a, b, C.white, 0.3, 0.16, 9, 1.4, 2); fx.bolt(a, b, C.arc, 0.22, 0.3, 7, 1.8, 1); fx.burst(b, C.volt, 12, 4, 0.3, 0.25, 0.5, STAR); },
+		arc: (fx, a, b) => { fx.bolt(a, b, C.white, 0.3, 0.16, 9, 1.4, 2); fx.bolt(a, b, C.arc, 0.22, 0.3, 7, 1.8, 1); slam(fx, b, null, C.white, C.arc, 0.7, false); fx.burst(b, C.volt, 8, 4, 0.3, 0.25, 0.5, STAR); },
 	},
 	'ball-lightning': {
 		orb: (fx, p, t) => { fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.1, 1.5 + Math.sin(t * 30) * 0.2, 1.4, C.plasma, 1, 0, 0, ORB); fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.1, 0.8, 0.8, C.white, 1, 0, 0, STAR); if (Math.random() < 0.7) { const a = Math.random() * 6.283, e = rnd(1.2); fx.bolt(p, { x: p.x + Math.cos(a) * Math.cos(e) * 1.6, y: p.y + Math.sin(e) * 1.6, z: p.z + Math.sin(a) * Math.cos(e) * 1.6 }, C.plasma, 0.1, 0.12, 3, 0.4, 0); } },
@@ -280,7 +317,7 @@ export const LOOK = {
 	},
 	tempest: {
 		cloud: (fx, at, r) => { if (Math.random() < 0.4) for (let k = 0; k < 3; k++) { const a = Math.random() * 6.283, rr = r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * rr, at.y + 12 + rnd(1.5), at.z + Math.sin(a) * rr, rnd(0.5), 0, rnd(0.5), 2.5, 3, 5, C.inkStorm, 0.55, 0, 0.2, SMOKE); } },
-		strike: (fx, from, to) => { fx.bolt(from, to, C.white, 0.25, 0.35, 10, 3, 2); fx.bolt(from, to, C.arc, 0.2, 0.55, 7, 3.5, 1); fx.burst(to, C.volt, 18, 6, 0.4, 0.3, 1, STAR); wave(fx, to, 3, C.volt, 0.35); },
+		strike: (fx, from, to) => { slam(fx, { x: to.x, y: to.y + 0.4, z: to.z }, { x: 0, y: -1, z: 0 }, C.white, C.volt, 1.2); fx.bolt(from, to, C.white, 0.25, 0.35, 10, 3, 2); fx.bolt(from, to, C.arc, 0.2, 0.55, 7, 3.5, 1); fx.burst(to, C.volt, 18, 6, 0.4, 0.3, 1, STAR); wave(fx, to, 3, C.volt, 0.35); },
 		rain: (fx, at, r) => { for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, rr = r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * rr, at.y + 12, at.z + Math.sin(a) * rr, 0, -16, 0, 0.75, 0.16, 0.12, C.rain, 0.6, 0, 0, STREAK); } },
 	},
 	// ===== Chrono: clock faces, gear rings, crystal =====
@@ -295,11 +332,13 @@ export const LOOK = {
 	rewind: { self: (fx, at, path) => { const n = path?.length || 0; for (let k = 0; k < n; k++) { const q = path[k]; fx.emit(q.x, q.y - 0.6, q.z, 0, 0, 0, 0.4 + k / n * 0.8, 0.6, 0.25, k % 2 ? C.rewind : C.clock, 0.9, 0, 0, RING); } fx.spiral({ x: at.x, y: at.y - 0.8, z: at.z }, 1.4, C.rewind, 28, 0.6, 0.3, 2, true, STAR); fx.decal({ x: at.x, y: at.y - 1.68, z: at.z }, 1.3, 0.3, 0.8, C.rewind, 0.8, O('rune', { spin: -6 })); } },
 	// ===== Primal: fire, ice, rain =====
 	cinder: {
-		trail: (fx, p, d, s) => { for (let k = 0; k < 3; k++) fx.emit(p.x - d.x * s * k / 3 + rnd(0.08), p.y - d.y * s * k / 3, p.z - d.z * s * k / 3 + rnd(0.08), rnd(0.3), 0.8, rnd(0.3), 0.35, k ? 0.6 : 0.8, 0.12, k ? C.fire : C.flameCore, 1, 0, 0, FLAME); if (Math.random() < 0.7) embers(fx, p, C.amber, 1, 0.6, 0.7, 0.1, -1); if (Math.random() < 0.4) smokeTrail(fx, p, d, s, C.inkSmoke, null, 0.35, 1); },
-		hit: (fx, at) => { for (let k = 0; k < 18; k++) fx.emit(at.x + rnd(0.4), at.y + rnd(0.2), at.z + rnd(0.4), rnd(1), 2 + Math.random() * 2, rnd(1), 0.7, 0.8, 0.15, k % 3 ? C.fire : C.flameCore, 1, 0, 1, FLAME); embers(fx, at, C.amber, 12, 3, 1.2, 0.1, 4); inkPuff(fx, at, C.inkSmoke, 5, 0.4, 0.9, 1.6, 0.45); fx.decal({ x: at.x, y: at.y - 1, z: at.z }, 0.5, 1.4, 1.2, C.fire, 0.6, O('flame')); },
+		trail: (fx, p, d, s) => { spear(fx, p, d, Math.max(1.4, s * 1.8), 0.42, C.flameCore, C.fire); for (let k = 0; k < 3; k++) fx.emit(p.x - d.x * s * k / 3 + rnd(0.08), p.y - d.y * s * k / 3, p.z - d.z * s * k / 3 + rnd(0.08), rnd(0.3), 0.8, rnd(0.3), 0.35, k ? 0.6 : 0.8, 0.12, k ? C.fire : C.flameCore, 1, 0, 0, FLAME); if (Math.random() < 0.7) embers(fx, p, C.amber, 1, 0.6, 0.7, 0.1, -1); if (Math.random() < 0.4) smokeTrail(fx, p, d, s, C.inkSmoke, null, 0.35, 1); },
+		hit: (fx, at, d) => { slam(fx, at, d, C.flameCore, C.fire, 1.2); for (let k = 0; k < 18; k++) fx.emit(at.x + rnd(0.4), at.y + rnd(0.2), at.z + rnd(0.4), rnd(1), 2 + Math.random() * 2, rnd(1), 0.7, 0.8, 0.15, k % 3 ? C.fire : C.flameCore, 1, 0, 1, FLAME); embers(fx, at, C.amber, 12, 3, 1.2, 0.1, 4); inkPuff(fx, at, C.inkSmoke, 5, 0.4, 0.9, 1.6, 0.45); fx.decal({ x: at.x, y: at.y - 1, z: at.z }, 0.5, 1.4, 1.2, C.fire, 0.6, O('flame')); },
 	},
 	'frost-nova': {
-		blast: (fx, at, r) => { for (let k = 0; k < 36; k++) { const a = k / 36 * 6.283, v = r / 0.35; fx.emit(at.x, at.y + 0.3, at.z, Math.cos(a) * v, 0.5, Math.sin(a) * v, 0.4, 0.6, 0.35, k % 2 ? C.ice : C.frost, 1, 0, 5, O('shard', { rot: -a + 1.5708 })); } for (let k = 0; k < 28; k++) { const a = Math.random() * 6.283, rr = r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * rr, at.y + 0.1, at.z + Math.sin(a) * rr, 0, 0, 0, 2.2, 0.45, 0.4, C.frost, 0.75, 0, 0, STAR); } wave(fx, at, r * 0.85, C.white, 0.4, 0.5); fx.decal(at, r * 0.9, r, 2.2, C.ice, 0.45, O('star', { rot: 0.3 })); },
+		blast: (fx, at, r) => { for (let k = 0; k < 36; k++) { const a = k / 36 * 6.283, v = r / 0.35; fx.emit(at.x, at.y + 0.3, at.z, Math.cos(a) * v, 0.5, Math.sin(a) * v, 0.4, 0.6, 0.35, k % 2 ? C.ice : C.frost, 1, 0, 5, O('shard', { rot: -a + 1.5708 })); } for (let k = 0; k < 28; k++) { const a = Math.random() * 6.283, rr = r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * rr, at.y + 0.1, at.z + Math.sin(a) * rr, 0, 0, 0, 2.2, 0.45, 0.4, C.frost, 0.75, 0, 0, STAR); } wave(fx, at, r * 0.85, C.white, 0.4, 0.5); fx.decal(at, r * 0.9, r, 2.2, C.ice, 0.45, RING);
+			// (the ground cracks white, and ice spikes up along the cracks)
+			for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283 + rnd(0.2), L = r * (0.7 + Math.random() * 0.4); fx.line({ x: at.x, y: at.y + 0.08, z: at.z }, { x: at.x + Math.cos(a) * L, y: at.y + 0.08, z: at.z + Math.sin(a) * L }, k % 2 ? C.ice : C.white, 1.5, 1.6, 0.14, 0.7); for (let j = 1; j <= 3; j++) { const u = j / 4 * L, x = at.x + Math.cos(a) * u, z = at.z + Math.sin(a) * u; fx.seg({ x: x + Math.cos(a) * 0.25, y: at.y + 0.6 + Math.random() * 0.7, z: z + Math.sin(a) * 0.25 }, { x, y: at.y, z }, j % 2 ? C.white : C.frost, 0.2, 2, 1, 1); } } },
 		mark: (fx, T) => { if (Math.random() < 0.4) fx.emit(T.bound.x + rnd(0.35), T.bound.y + rnd(0.7), T.bound.z + rnd(0.35), 0, 0, 0, 0.8, 0.35, 0.35, C.ice, 0.9, 0, 0, SHARD); },
 	},
 	'call-rain': { rain: (fx, at, r) => { for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, rr = r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * rr, at.y + 12, at.z + Math.sin(a) * rr, 0, -15, 0, 0.85, 0.14, 0.1, C.rain, 0.6, 0, 0, STREAK); } if (Math.random() < 0.5) { const a = Math.random() * 6.283, rr = 8 * Math.sqrt(Math.random()); fx.decal({ x: at.x + Math.cos(a) * rr, y: at.y - 1.68, z: at.z + Math.sin(a) * rr }, 0.05, 0.8, 0.8, C.rain, 0.8, RING); } } },

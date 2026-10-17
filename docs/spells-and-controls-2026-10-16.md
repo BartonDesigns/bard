@@ -149,10 +149,24 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   Primal uses flame, ice and rain.
 - **Shapes:** `fx.js` draws twelve shapes: orb, star, ring, shard, flame, streak, rune, smoke, eyes,
   cross, hex and leaf.
-- **Two kinds of particle:** glowing ones, and dark "ink" ones, so shadow and smoke read as dark and
-  not as glow.
+- **Three kinds of particle:** glowing ones, dark "ink" ones (so shadow and smoke read as dark and
+  not as glow), and hard streaks. Streaks have a white-hot core and a sharp edge and come in two
+  forms:
+  - Sparks, stretched along their own flight.
+  - Segments, used for lightning, a bolt's spear, a beam's core and a falling lance.
+- **Force over fluff (October 17):** the shared bursts, lines, lightning, rings, pillars and swirls
+  now throw hard sparks and strokes as well as glow.
+  - Bolts fly as spears of light with a white core.
+  - Hits slam: a hot flash, a ring snapping out, rays thrown on through along the blow, falling
+    debris and a ring on the ground.
+  - The forms that changed:
+    - Judgement drops a blade with a crossguard.
+    - Lance of Dawn falls as true shafts and stands where it struck.
+    - Frost Nova cracks the ground and raises ice spikes.
+    - Night Terror rakes red claws.
+    - Repulse throws a hard front of force.
 - **Ground marks:** rings and runes on the ground are flat decals, not points.
-- **Pools:** glow 3,200 (1,400 on a phone), ink 700 (300), decals 48 (24). Nothing is made while
+- **Pools:** glow 3,200 (1,400 on a phone), ink 700 (300), streaks 1,600 (500), decals 48 (24). Nothing is made while
   you cast.
 - **Lance of Dawn** is now an area spell. Three lances fall point first around where you aim. By
   day they come out of the sun in gold, and by night out of the moon in silver. A ring on the ground
@@ -165,7 +179,7 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   and destroys every hostile fighter within 600 m, and takes a quarter of any boss's life.
 - **The gallery:** `node island/tools/spell-looks-browser.cjs` plays every look in a small scene of
   its own, with no game loaded, and saves one picture per spell to `/tmp/spell-looks` (`ONLY=` picks
-  some).
+  some; `FLIGHT=1` catches bolts mid-flight).
 
 ## Console
 

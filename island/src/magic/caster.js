@@ -563,7 +563,9 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			_d.copy(B.vel).normalize();
 			const h = combat.firstHit(B.pos, _d, step, combat.me);
 			const c = GLOW[spell.school], L = B.look || {};
-			// (its trail)
+			// (its trail; and under it a hard tracer, the bolt's own streak of force behind its head)
+			const tr = Math.max(1.4, step * 2.5), tc = GLOW[spell.type === 'frost' ? 'frost' : spell.school];
+			fx.seg?.({ x: B.pos.x - _d.x * tr, y: B.pos.y - _d.y * tr, z: B.pos.z - _d.z * tr }, B.pos, tc, spell.kind === 'orb' ? 0.22 : 0.13, 0.06);
 			if (L.trail) L.trail(fx, B.pos, _d, step);
 			else for (let n = 0; n < 3; n++) fx.emit(B.pos.x - _d.x * step * n / 3, B.pos.y - _d.y * step * n / 3, B.pos.z - _d.z * step * n / 3, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, 0.28, n ? 0.18 : 0.32, 0.04, c, 1, 0, 0);
 			if (h) {

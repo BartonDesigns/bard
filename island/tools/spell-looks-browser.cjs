@@ -2,7 +2,7 @@
 // (a caster, three foes, ground and sky) in headless Chromium, one capture per spell, so the 47 can
 // be set side by side and told apart. Nothing of the game is loaded: only three, fx.js and looks.js.
 //
-// OUT=<dir> [ONLY=sunspark,eclipse] node island/tools/spell-looks-browser.cjs
+// OUT=<dir> [ONLY=sunspark,eclipse] [FLIGHT=1: bolts mid-flight] node island/tools/spell-looks-browser.cjs
 /* global Game, document */
 const fs = require('node:fs'), path = require('node:path');
 let chromium;
@@ -18,6 +18,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 	const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 	await page.setContent('<body style="margin:0;background:#000"><canvas id="c" width="480" height="300"></canvas></body>');
 	await page.addScriptTag({ content: bundle });
+	if (process.env.FLIGHT) await page.evaluate(() => { window.__flight = true; });
 	const ids = await page.evaluate(() => {
 		const { THREE, createMagicFx, SPELLS } = Game;
 		const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, preserveDrawingBuffer: true });
@@ -52,9 +53,10 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 			L.cast?.(fx, hand);
 			if (k === 'bolt') {
 				// (a bolt flies to the first foe and lands; the trail still hangs in the air)
+				// (FLIGHT=1: caught mid-flight instead)
 				const to = foes[0], N = 16;
-				run(N * dt, (_, n) => { const u = n / N, p = v(hand.x + (to.x - hand.x) * u, hand.y + (to.y - hand.y) * u, hand.z + (to.z - hand.z) * u); const d = v(to.x - hand.x, to.y - hand.y, to.z - hand.z), l = Math.hypot(d.x, d.y, d.z); L.trail?.(fx, p, v(d.x / l, d.y / l, d.z / l), l / N); });
-				L.hit?.(fx, to, dir); run(0.12); if (L.mark) run(0.6, () => L.mark(fx, T, {}));
+				run((window.__flight ? 10 : N) * dt, (_, n) => { const u = n / N, p = v(hand.x + (to.x - hand.x) * u, hand.y + (to.y - hand.y) * u, hand.z + (to.z - hand.z) * u); const d = v(to.x - hand.x, to.y - hand.y, to.z - hand.z), l = Math.hypot(d.x, d.y, d.z); L.trail?.(fx, p, v(d.x / l, d.y / l, d.z / l), l / N); });
+				if (!window.__flight) { L.hit?.(fx, to, dir); run(0.12); } if (L.mark) run(0.6, () => L.mark(fx, T, {}));
 			} else if (k === 'beam') run(0.6, (tt) => L.beam?.(fx, hand, foes[0], tt));
 			else if (k === 'burst' || k === 'strike') { const D = spell.delay || 0.5; run(D, (tt, n) => { if (n % 2 === 0) L.tell?.(fx, at, spell.r, tt / D); }); L.blast?.(fx, at, spell.r); run(k === 'strike' ? 0.18 : 0.12); if (L.mark) run(0.4, () => L.mark(fx, T, {})); }
 			else if (k === 'lances') {
