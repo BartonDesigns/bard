@@ -32,7 +32,7 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.ok(m.face.jaw > 0.2 && m.face['brow-ridge'] > 0.1, 'his jaw and brow');
 	assert.ok(f.face.cheekbones > 0.3 && f.face['lower-lip'] > 0.15 && f.face.jaw < 0, 'her cheekbones and lips');
 	// (dressed to move in, groomed, and never grey)
-	for (const d of [m, f]) { assert.notEqual(d.style.outer.fab, 'leather', 'matte, nothing shiny to balloon'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
+	for (const d of [m, f]) { assert.equal(d.style.outer, null, 'no jacket to balloon'); assert.equal(d.style.top.fit, 'fitted'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
 	assert.equal(f.style.shoes.kind, 'boot');
 	assert.equal(m.style.hair.style, 'short01');
