@@ -42,14 +42,17 @@ export function createHeroView({ scene, renderer, avatar, self, world, setCine }
 		c.updateMatrixWorld();
 		return true;
 	}
-	// the flat grey (and its wireframe) over every part of the body, or its own materials back
+	// the flat grey (and its wireframe) over every part of the body, or its own materials back.
+	// Each part its own grey, carrying its own material's data: the body reads uniforms off
+	// some of them every frame (the hair's capsules, people/hair-collide.js)
 	function setLook(g = S.grey, wire = S.wire) {
 		const me = body(); if (!me) return;
-		grey.wireframe = !!wire;
 		me.P.root.traverse((o) => {
 			if (!o.isMesh) return;
-			if (g || wire) { if (!saved.has(o)) saved.set(o, o.material); o.material = grey; }
-			else if (saved.has(o)) { o.material = saved.get(o); }
+			if (g || wire) {
+				if (!saved.has(o)) { saved.set(o, o.material); const m = grey.clone(); m.userData = o.material.userData; o.material = m; }
+				o.material.wireframe = !!wire;
+			} else if (saved.has(o)) { o.material.dispose(); o.material = saved.get(o); }
 		});
 		if (!g && !wire) saved.clear();
 	}
