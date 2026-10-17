@@ -74,7 +74,7 @@ export const POSES = {
 const HOLD = { kid: arm({ abd: 0.5, flex: 0.3, roll: -0.1, bend: 0.25, pro: 0.5, wflex: -0.1, curl: 0.5 }), adult: arm({ abd: 0.2, flex: 0.1, bend: 0.22, pro: 0.45, curl: 0.5 }) };
 // gestures: functions of progress u (0..1), time s (seconds) and size k (temperament);
 // arm.lead / arm.off targets, head motion, beats (small emphatic dips), feelings
-const GDUR = { explain: 3.2, shrug: 1.6, nod: 1.2, shake: 1.3, point: 1.8, wave: 2.0, laugh: 1.8, think: 2.8, open: 2.2, emphatic: 1.4, bow: 1.6 };
+const GDUR = { cast: 0.95, cast2: 1.4, explain: 3.2, shrug: 1.6, nod: 1.2, shake: 1.3, point: 1.8, wave: 2.0, laugh: 1.8, think: 2.8, open: 2.2, emphatic: 1.4, bow: 1.6 };
 const GESTURES = {
 	explain: (u, s, k) => ({ arm: { lead: arm({ abd: 0.2, flex: 0.45 * k, roll: 0.3, bend: 1.4, pro: 1.1, curl: 0.15 }), off: arm({ abd: 0.15, flex: 0.3 * k, roll: 0.25, bend: 1.2, pro: 0.9, curl: 0.2 }) }, beat: Math.max(0, Math.sin(s * 5.2)) - 0.3, head: { pitch: Math.sin(s * 2.6) * 0.04 } }),
 	open: (u, s, k) => ({ arm: { lead: arm({ abd: 0.45 * k, flex: 0.4, roll: -0.2, bend: 1.0, pro: 1.6, curl: 0.05 }), off: arm({ abd: 0.45 * k, flex: 0.4, roll: -0.2, bend: 1.0, pro: 1.6, curl: 0.05 }) }, head: { roll: 0.06 } }),
@@ -87,6 +87,10 @@ const GESTURES = {
 	laugh: (u, s) => ({ arm: { lead: arm({ abd: 0.1, flex: 0.35, roll: 0.9, bend: 1.3, pro: -0.2, curl: 0.4 }) }, head: { pitch: -0.14 * Math.sin(Math.min(1, u * 2) * Math.PI) + Math.sin(s * 14) * 0.03 }, feel: { joy: 1 } }),
 	think: () => ({ arm: { lead: arm({ abd: 0.05, flex: 1.05, roll: 1.0, bend: 2.3, pro: 0.6, curl: 0.55, wflex: 0.2 }), off: arm({ abd: 0.05, flex: 0.55, roll: 1.25, bend: 1.8, pro: 0.2, curl: 0.5 }) }, head: { roll: 0.1, pitch: 0.06, yaw: 0.12 } }),
 	bow: (u) => ({ head: { pitch: 0.3 * Math.sin(u * Math.PI) }, feel: { joy: 0.3 } }),
+	// a spell cast (magic/): the hand thrust out toward the aim, palm first, held a breath and let
+	// down; cast2, a great one, with both hands
+	cast: (u) => { const e = u < 0.18 ? Math.sin(u / 0.18 * Math.PI / 2) : u < 0.55 ? 1 : Math.max(0, 1 - (u - 0.55) / 0.45); return { arm: { lead: arm({ abd: 0.2, flex: 1.35 * e, roll: 0, bend: 0.25 + 0.6 * (1 - e), pro: 1.3, curl: 0.05, wflex: -0.8 * e }) } }; },
+	cast2: (u) => { const e = u < 0.25 ? Math.sin(u / 0.25 * Math.PI / 2) : u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.4); const a = arm({ abd: 0.3, flex: 1.3 * e, roll: 0, bend: 0.3 + 0.6 * (1 - e), pro: 1.3, curl: 0.05, wflex: -0.8 * e }); return { arm: { lead: a, off: a }, head: { pitch: -0.08 * e } }; },
 };
 export const GESTURE_NAMES = Object.keys(GESTURES);
 

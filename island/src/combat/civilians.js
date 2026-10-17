@@ -44,6 +44,11 @@ export function createCivilians(ctx) {
 		const s = known.get(p);
 		if (!s) return false;
 		if (s.dead) return true;
+		// under a spell (magic/caster.js lays it on T.hex): held where they stand, or put to flight
+		// from where it was cast, slowed while it lasts
+		const hx = s.T.hex;
+		if (hx && hx.hold > 0) { p.M.want.speed = 0; p.M.want.run = 0; p.M.act(null); return true; }
+		if (hx && hx.fear > 0) { s.from.x = hx.fx; s.from.z = hx.fz; s.panic = Math.max(s.panic, hx.fear); s.cower = 0; s.calm = false; }
 		if (s.hands > 0) {
 			// hands up, held up
 			s.hands -= dt;
@@ -65,8 +70,8 @@ export function createCivilians(ctx) {
 		// (a little to one side, so a crowd scatters rather than files away)
 		const side = s.side || (s.side = Math.random() < 0.5 ? -0.4 : 0.4);
 		M.want.heading = Math.atan2(ax + az * side, az - ax * side);
-		M.want.speed = s.calm ? 1.5 : 3.6 + Math.random() * 0.2;
-		M.want.run = s.calm ? 0 : 1;
+		M.want.speed = (s.calm ? 1.5 : 3.6 + Math.random() * 0.2) * (hx?.slowK || 1);
+		M.want.run = s.calm || (hx?.slowK || 1) < 0.6 ? 0 : 1;
 		M.S.look.target = null;
 		return true;
 	}
@@ -148,6 +153,8 @@ export function createCivilians(ctx) {
 				}
 			} else if (s && !s.dead) layer.remove(s.T.id);
 			if (!s) continue;
+			// (a spell's hold or terror takes their steering from the crowd; a brawl keeps its own)
+			if (!s.dead && s.T.hex && (s.T.hex.hold > 0 || s.T.hex.fear > 0) && !p.override) { p.engaged = false; p.override = override; }
 			// the fallen: lie a while, then fade (the crowd fades and lets them go)
 			if (s.dead) {
 				s.dead += dt;
