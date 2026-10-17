@@ -50,20 +50,21 @@ const HERO = {
 		// chestnut is dark in the numbers. Brows groomed: short hairs swept the one way over a
 		// full tone of their own, a little lighter than the numbers, as the hair reads lit)
 		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 0.78, thick: 0.62, len: 0.72, tidy: 0.55, fill: 1.55 }, browTone: 1.3,
-		// (the sheet's face: the brow a little heavy over lightly hooded eyes; a straight nose with
-		// a defined tip; cheekbones high with a gentle hollow below, never gaunt; a firm jaw and
-		// chin; a defined bow to the lip, a fuller lower lip, the corners a touch up; ears close)
+		// (the sheet's face: the brow heavy over hooded eyes; a straight nose with a defined tip;
+		// cheekbones high with a hollow below, never gaunt; a square jaw and a firm chin; a
+		// defined bow to the lip, a fuller lower lip; ears close; a strong neck)
 		face: {
-			jaw: 0.44, 'jaw-out': 0.1, 'chin-width': 0.22, 'chin-out': 0.18, 'chin-height': 0.12, 'chin-cleft': 0.12,
-			cheekbones: 0.36, cheeks: -0.2, 'cheek-inner': -0.1, 'brow-ridge': 0.28, 'brow-angle': 0.04, forehead: 0.05, 'forehead-height': -0.05, temples: -0.05,
-			'nose-width': -0.12, 'nose-hump': -0.08, 'nose-length': 0.04, 'nose-curve': -0.05, 'nose-point': 0.05, 'nose-volume': -0.05,
-			'eye-tilt': 0.05, 'eye-open': -0.12, 'eye-spacing': -0.02,
-			'mouth-width': 0.04, 'upper-lip': 0.05, 'lower-lip': 0.12, 'cupids-bow': 0.15, philtrum: 0.1, 'mouth-corners': 0.05,
-			'ear-out': -0.15, 'ear-size': -0.05, 'head-square': 0.3, 'head-oval': 0.25, 'head-fat': -0.3, 'neck-width': 0.22,
+			jaw: 0.45, 'jaw-out': 0.2, 'chin-width': 0.3, 'chin-out': 0.18, 'chin-height': 0.12, 'chin-cleft': 0.15,
+			cheekbones: 0.45, cheeks: -0.25, 'cheek-inner': -0.12, 'brow-ridge': 0.38, 'brow-angle': 0.06, forehead: 0.05, 'forehead-height': -0.05, temples: -0.05,
+			'nose-width': -0.1, 'nose-hump': -0.08, 'nose-length': 0.04, 'nose-curve': -0.05, 'nose-point': 0.05, 'nose-volume': -0.05,
+			'eye-tilt': 0.05, 'eye-open': -0.18, 'eye-spacing': -0.02,
+			'mouth-width': 0.06, 'upper-lip': 0.05, 'lower-lip': 0.12, 'cupids-bow': 0.15, philtrum: 0.1, 'mouth-corners': 0.02,
+			'ear-out': -0.15, 'ear-size': -0.05, 'head-square': 0.4, 'head-oval': 0.2, 'head-fat': -0.3, 'neck-width': 0.35,
 		},
-		// (cut: the painted crop under the hair follows its hairline, people/hair.js scalpMask; the
-		// swept cut's is crisp, where a faded cut's blurs a band of hair colour over the temples)
-		hair: { style: 'short01', vol: 1.12, fadeK: 0, beard: 'stubble', stubble: 1, cut: 'swept' },
+		// (the sheet's hair: medium length, tousled and swept, over the temples and the tops of the
+		// ears, people/hairkit.js; cut: the painted crop under it follows its hairline,
+		// people/hair.js scalpMask, crisp, where a faded cut's blurs a band over the temples)
+		hair: { style: 'grump', vol: 0.95, fadeK: 0, beard: 'stubble', stubble: 1, cut: 'swept' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
 			// (a fitted charcoal top, its sleeves pushed up the forearms; room enough over the

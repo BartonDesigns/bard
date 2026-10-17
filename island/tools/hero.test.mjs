@@ -58,7 +58,7 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	// never in the one before it is declared: that threw, and every hero build with it)
 	const kf = src0.indexOf('const kitField'), bk = src0.indexOf("q.kind === 'belt'"), ck = src0.indexOf("q.kind === 'cargo'");
 	assert.ok(kf > 0 && bk > kf && ck > kf, 'the belt and the pockets built after the torso is measured');
-	assert.equal(m.style.hair.style, 'short01');
+	assert.equal(m.style.hair.style, 'grump');
 	assert.equal(m.style.hair.beard, 'stubble');
 	assert.equal(f.style.hair.style, 'ponytail01');
 	assert.equal(f.style.hair.beard, '');
