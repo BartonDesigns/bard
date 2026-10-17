@@ -927,15 +927,17 @@ export function clothGeometry(A, p, o, cut, R) {
 // one geometry for all of them, each vertex bound whole to the bone it rides
 export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const { map, heads, eyes } = P0;
-	const out = { pos: [], nor: [], col: [], si: [], sw: [], kit: [] };
+	const out = { pos: [], nor: [], col: [], si: [], sw: [], kit: [], idx: [] };
 	const colour = new THREE.Color();
 	// (bone: a name, or a function of the height for a strap that runs down the body)
 	// (bone: a bone's name, a function of the height giving one, or { skin }: each point weighted
 	// as the skin nearest it is, for what must move with the skin rather than ride one bone)
+	// (kept indexed: each piece's shared corners skinned once, not once a triangle)
 	const put = (geo, bone, c, gloss = 0, fab = 0) => {
 		geo.computeVertexNormals();
-		const g = geo.index ? geo.toNonIndexed() : geo;
-		const pa = g.attributes.position, na = g.attributes.normal, near = bone?.skin, bi = near || typeof bone === 'function' ? null : map[bone] ?? 0;
+		const pa = geo.attributes.position, na = geo.attributes.normal, near = bone?.skin, bi = near || typeof bone === 'function' ? null : map[bone] ?? 0, base = out.pos.length / 3;
+		if (geo.index) for (const k of geo.index.array) out.idx.push(base + k);
+		else for (let i = 0; i < pa.count; i++) out.idx.push(base + i);
 		colour.set(c);
 		for (let i = 0; i < pa.count; i++) {
 			out.pos.push(pa.getX(i), pa.getY(i), pa.getZ(i)); out.nor.push(na.getX(i), na.getY(i), na.getZ(i));
@@ -1207,6 +1209,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	g.setAttribute('kit', new THREE.Float32BufferAttribute(out.kit, 3));
 	g.setAttribute('skinIndex', new THREE.BufferAttribute(Uint16Array.from(out.si), 4));
 	g.setAttribute('skinWeight', new THREE.BufferAttribute(Float32Array.from(out.sw), 4));
+	g.setIndex(out.idx);
 	g.computeBoundingSphere();
 	return g;
 }
