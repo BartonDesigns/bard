@@ -49,7 +49,7 @@ export const SPELLS = Object.freeze([
 	// ---------- Radiance ----------
 	S('sunspark', 'Sunspark', 'radiance', 1, 'bolt', 8, 0.45, '✦', 'A spark of daylight thrown from the hand. Burns hotter under the sun.', { dmg: 22, speed: 70, type: 'radiant' }),
 	S('lance-of-dawn', 'Lance of Dawn', 'radiance', 2, 'lances', 14, 4, '⟋', 'Three lances fall point first where you aim, out of the sun by day or the moon by night, searing all near where they land.', { dmg: 38, r: 2.6, n: 3, spread: 3.2, range: 80, type: 'radiant' }),
-	S('solar-flare', 'Solar Flare', 'radiance', 3, 'flare', 30, 10, '☀', 'A column of the sun\'s own light strikes where you aim, out of wherever the sun stands, burning and blinding everyone near it. Mastered, it channels the moon by night.', { dmg: 70, r: 5, range: 80, delay: 0.55, night: 'moon', type: 'radiant', status: { hold: 1.6 } }),
+	S('solar-flare', 'Solar Flare', 'radiance', 3, 'flare', 30, 10, '☀', 'A column of the sun\'s own light strikes where you aim, out of wherever the sun stands, burning and blinding everyone near it. Mastered, it channels the moon by night.', { dmg: 70, r: 5, range: 80, delay: 0.55, sun: true, type: 'radiant', status: { hold: 1.6 } }),
 	S('judgement', 'Judgement', 'radiance', 4, 'strike', 55, 30, '⇣', 'Call a pillar of light down from the sky. It lands a breath later and spares nothing within it.', { dmg: 170, r: 6, range: 120, delay: 1.2, type: 'radiant' }),
 	// ---------- Restoration ----------
 	S('mend', 'Mend', 'restoration', 1, 'heal', 16, 6, '✚', 'Close your wounds with a touch of light.', { heal: 30 }),
@@ -124,7 +124,7 @@ export const STARTER = Object.freeze({ known: ['sunspark', 'shadowbolt', 'mend',
 export const SLOTS = 5;
 
 export function createMagicState(from = null) {
-	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, moonlit: [] };
+	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, moonlit: {} };
 	if (from && from.v === 1) {
 		if (Array.isArray(from.known)) s.known = from.known.filter((id) => SPELL[id]);
 		if (Array.isArray(from.binds)) s.binds = [...Array(SLOTS)].map((_, i) => (SPELL[from.binds[i]] && s.known.includes(from.binds[i]) ? from.binds[i] : null));
@@ -133,17 +133,17 @@ export function createMagicState(from = null) {
 		if (from.mark && Number.isFinite(from.mark.x)) s.mark = { x: from.mark.x, y: from.mark.y, z: from.mark.z, w: from.mark.w || null };
 		if (Array.isArray(from.wells)) s.wells = from.wells.filter((w) => Number.isFinite(w?.x)).slice(0, 64);
 		if (from.gathered && typeof from.gathered === 'object') s.gathered = { ...from.gathered };
-		if (Array.isArray(from.moonlit)) s.moonlit = from.moonlit.filter((id) => SPELL[id]?.night === 'moon');
 	}
 	return s;
 }
 // what is kept (no cooldowns: they are of the moment)
-export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, moonlit: s.moonlit }; }
+export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered }; }
 
-// A spell of the sun (night: 'moon') works by night only once it channels the moon: the skills
-// side grants that when it is mastered or fed enough aether (grantMoonlit), and it is kept
-export const moonlit = (s, id) => !!s.moonlit?.includes(id);
-export function grantMoonlit(s, id) { if (SPELL[id]?.night !== 'moon' || moonlit(s, id)) return false; (s.moonlit ||= []).push(id); return true; }
+// A spell of the sun (sun: true) works by night only once it channels the moon: state.moonlit
+// ({ id: true }) is kept by the skills side from the spell's mastery (rebuilt on load, not saved
+// here); grantMoonlit sets it by hand (the console)
+export const moonlit = (s, id) => !!s.moonlit?.[id];
+export function grantMoonlit(s, id) { if (!SPELL[id]?.sun || moonlit(s, id)) return false; (s.moonlit ||= {})[id] = true; return true; }
 
 // Your name in the aether: a mote gives more of the strand your deeds lean to (reputation, -100
 // to 100: up to twice the light for a saint, twice the dark for a monster) and less of the other
@@ -152,6 +152,8 @@ export function aetherShare(strand, rep = 0) {
 	const k = Math.max(-1, Math.min(1, (+rep || 0) / 100)) * (strand === 'dark' ? -1 : 1);
 	return k >= 0 ? 1 + k : 1 + k * 0.5;
 }
+// (both at once, for the menu: { light, dark } multipliers for a reputation)
+export const gatherShare = (rep = 0) => ({ light: aetherShare('light', rep), dark: aetherShare('dark', rep) });
 
 export const manaMax = (s) => Math.min(260, 100 + 4 * s.known.length + Math.floor((s.affinity.light + s.affinity.dark) / 40));
 // mana a second: more out of a fight

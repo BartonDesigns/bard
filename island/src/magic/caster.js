@@ -177,7 +177,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// for spell.delay, then the blast. By night only once it channels the moon (moonlit), in
 			// silver and a fifth weaker; under no moon, or unmastered, it is not cast and costs nothing.
 			const H = heavens() || {}, up = (q) => q && q.y > 0.05, night = !up(H.sun);
-			if (night && (!moonlit(state, spell.id) || !up(H.moon))) { hint(moonlit(state, spell.id) ? 'There is no moon up to channel.' : `${spell.name} needs the sun. Master it to channel the moon by night.`, 2200); return 'refund'; }
+			if (night && (!moonlit(state, spell.id) || !up(H.moon))) { hint(moonlit(state, spell.id) ? 'There is no moon up to channel.' : `${spell.name} needs the sun. Master it to draw on the moon.`, 2200); return 'refund'; }
 			const src = night ? H.moon : H.sun, dir = new THREE.Vector3(src?.x || 0, Math.max(0.35, src?.y || 1), src?.z || 0).normalize();
 			const { at } = aimPoint(spell.range), L = lookOf(spell), D = spell.delay || 0.5, kk = night ? k * 0.8 : k;
 			const top = { x: at.x + dir.x * 70, y: at.y + dir.y * 70, z: at.z + dir.z * 70 };
