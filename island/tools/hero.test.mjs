@@ -41,15 +41,15 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	// (dressed to move in, groomed, and never grey)
 	assert.equal(m.style.outer, null, 'no jacket to balloon on him');
 	assert.equal(f.style.outer.kind, 'flannel'); assert.equal(f.style.outer.pat, 'plaid'); assert.equal(f.style.outer.fit, 'fitted', 'a fitted plaid overshirt');
-	assert.ok(!m.style.bottom.tuck && m.style.shoes.tall && !f.style.bottom.tuck && !f.style.shoes.tall, 'his hems over tall boots, hers over hiking boots');
+	assert.ok(m.style.bottom.tuck && m.style.shoes.tall && f.style.bottom.tuck && !f.style.shoes.tall && m.style.shoes.built && f.style.shoes.built, 'into boots built over the feet: his tall, hers mid-height');
 	assert.ok(Math.max(...m.hairColour) < 0.1 && f.hairColour[0] > 2 * f.hairColour[1], 'dark chestnut; auburn');
-	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.008 && d.style.bottom.hang < 0.02 && d.style.bottom.fit === 'straight', 'trousers cut straight and tapering'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
+	for (const d of [m, f]) { assert.ok(d.style.bottom.hull && d.style.bottom.hull.taper > 0.03 && d.style.bottom.pat === 'tech', 'tailored over the legs, seams and pockets in the cloth'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
-	assert.ok(m.style.acc.some((q) => q.kind === 'carrier'), 'his carrier');
+	assert.ok(m.style.acc.some((q) => q.kind === 'carrier' && q.compact) && m.style.acc.some((q) => q.kind === 'belt') && m.style.acc.some((q) => q.kind === 'cargo'), 'his compact carrier, a belt, bellows pockets');
 	assert.ok(m.build.shoulders > f.build.shoulders && m.build.waist > 0 && f.build.waist > 0, 'the V');
 	assert.equal(f.style.shoes.kind, 'boot');
 	const src0 = fs.readFileSync(new URL('../src/people/garment.js', import.meta.url), 'utf8');
-	assert.match(src0, /B\.tuck \? cut\.ankle \+ 0\.14/, 'trousers end at the boots');
+	assert.match(src0, /F\?\.built \? \(F\.tall \? 0\.163 : 0\.083\)/, 'trousers end under the boots\' collars');
 	assert.match(src0, /F\.tall \? 0\.17 : 0\.09/, 'tall boots');
 	assert.match(src0, /const legHang = B\?\.hang/, 'a straight hang');
 	assert.equal(m.style.hair.style, 'short01');

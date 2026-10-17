@@ -248,28 +248,34 @@ function pouch(p, n, w, h, d, { flap = true, lo = false } = {}) {
 // a little off the clothes, a cummerbund round the waist joining them, the shoulder straps up
 // over the shoulders, the pouches on the front (a police vest: a radio on the strap instead,
 // and a reflective band). Pieces as { geo, part: 'plate'|'band'|'strap'|'pouch'|'flap'|'tape' }.
-export function carrierGeometry(cut, field, { police = false, lo = false } = {}) {
-	const t = cut.chest + 0.12, b = cut.waist + 0.005, w = Math.min(0.33, cut.shoulderX * 1.6), clear = 0.012, thick = 0.024;
-	const nx = lo ? 4 : 7, ny = lo ? 3 : 6, out = [];
+// (compact: a low-profile carrier, as a hero wears one: shorter, ending above the belt so the
+// waist shows below it, its top cut down round the neck and clipped at the corners, webbing
+// across front and back, a drag handle, the straps lying along the shoulders)
+export function carrierGeometry(cut, field, { police = false, lo = false, compact = false } = {}) {
+	const t = cut.chest + (compact ? 0.095 : 0.12), b = cut.waist + (compact ? 0.065 : 0.005), w = Math.min(compact ? 0.3 : 0.33, cut.shoulderX * (compact ? 1.45 : 1.6)), clear = 0.012, thick = compact ? 0.02 : 0.024;
+	const nx = lo ? 4 : compact ? 9 : 7, ny = lo ? 3 : compact ? 8 : 6, out = [];
+	// (the top edge: straight, or scooped round the neck and clipped at the corners)
+	const topAt = (x, half) => compact ? t - 0.04 * Math.max(0, 1 - (x / (half * 0.55)) ** 2) - 0.025 * smooth((Math.abs(x) / half - 0.72) / 0.28) : t;
 	const plate = (front) => {
 		// A plate is stiff: a gently curved panel resting on the most prominent part of the chest
 		// or back (row by row, the furthest point, carried a little up and down so it does not
 		// dip into hollows), never following every bulge; it stays clear of the clothes everywhere.
 		const sgn = front ? 1 : -1, surf = (x, y) => sgn * (front ? field.front(x, y) : field.back(x, y));
 		const ys = [], halves = [], rowMax = [];
+		const yAt = (j, x, half) => b + ((front ? topAt(x, half) : t) - b) * j / ny;
 		for (let j = 0; j <= ny; j++) {
-			const y = b + (t - b) * j / ny, half = w / 2 * (1 - 0.18 * smooth((j / ny - 0.7) / 0.3));
+			const half = w / 2 * (1 - (compact ? 0.1 : 0.18) * smooth((j / ny - 0.7) / 0.3));
 			let m = -1e9;
-			for (let i = 0; i <= nx; i++) { const x = -half + 2 * half * i / nx; m = Math.max(m, surf(x, y) + 1.4 * x * x); }
-			ys.push(y); halves.push(half); rowMax.push(m);
+			for (let i = 0; i <= nx; i++) { const x = -half + 2 * half * i / nx; m = Math.max(m, surf(x, yAt(j, x, half)) + 1.4 * x * x); }
+			ys.push(b + (t - b) * j / ny); halves.push(half); rowMax.push(m);
 		}
 		const env = rowMax.map((m, j) => Math.max(m, ((rowMax[j - 1] ?? m) + (rowMax[j + 1] ?? m)) / 2 - 0.004));
 		const grid = [], normals = [];
 		for (let j = 0; j <= ny; j++) {
 			const row = [];
 			for (let i = 0; i <= nx; i++) {
-				const x = -halves[j] + 2 * halves[j] * i / nx;
-				row.push(V(x, ys[j], sgn * (Math.max(surf(x, ys[j]), env[j] - 1.4 * x * x) + clear)));
+				const x = -halves[j] + 2 * halves[j] * i / nx, y = yAt(j, x, halves[j]);
+				row.push(V(x, y, sgn * (Math.max(surf(x, y), env[j] - 1.4 * x * x) + clear)));
 			}
 			grid.push(row);
 		}
@@ -288,7 +294,7 @@ export function carrierGeometry(cut, field, { police = false, lo = false } = {})
 	const F = plate(true), B = plate(false);
 	out.push({ geo: F.geo, part: 'plate' }, { geo: B.geo, part: 'plate' });
 	// the cummerbund: a band round the waist from plate to plate, around the sides
-	const y0 = b + 0.005, y1 = b + 0.12, seg = lo ? 10 : 18, band = [[], []], bn = [[], []];
+	const y0 = b + 0.005, y1 = b + (compact ? 0.1 : 0.12), seg = lo ? 10 : 18, band = [[], []], bn = [[], []];
 	for (let k = 0; k <= seg; k++) {
 		for (const [r, y] of [[0, y0], [1, y1]]) {
 			const zc = (field.front(0, y) + field.back(0, y)) / 2, rz = (field.front(0, y) - field.back(0, y)) / 2 + clear * 0.6, rx = field.half(y) + 0.005;
@@ -305,7 +311,9 @@ export function carrierGeometry(cut, field, { police = false, lo = false } = {})
 	}
 	// the shoulder straps: from the front plate's top over the shoulder to the back's
 	for (const sd of [-1, 1]) {
-		const x = sd * w * 0.3, top = cut.neck + 0.02 + 0.02 * smooth(Math.abs(x) / 0.12);
+		// (over the top of the shoulder where it lies: the trapezius falls from the neck's base
+		// to a little above the shoulder's joint)
+		const x = sd * w * 0.3, top = compact ? cut.neck + 0.004 - (cut.neck + 0.004 - (cut.shoulder + 0.045)) * smooth((Math.abs(x) - 0.045) / Math.max(0.05, cut.shoulderX - 0.045)) - 0.008 : cut.neck + 0.02 + 0.02 * smooth(Math.abs(x) / 0.12);
 		const fz = field.front(x, t) + clear, bz = field.back(x, t) - clear, mz = (fz + bz) / 2;
 		const pts = spline([V(x, t - 0.02, fz + 0.01), V(x, (t + top) / 2 + 0.01, fz - 0.005), V(x * 1.05, top + 0.012, mz), V(x, (t + top) / 2 + 0.01, bz + 0.005), V(x, t - 0.02, bz - 0.01)], lo ? 6 : 12);
 		const grid = [], nor = [];
@@ -325,6 +333,39 @@ export function carrierGeometry(cut, field, { police = false, lo = false } = {})
 		const j = Math.round(v * ny), i = Math.round(u * nx);
 		return { p: F.grid[j][i].clone().addScaledVector(F.normals[j][i], thick * 0.85), n: F.normals[j][i] };
 	};
+	// (a point of a plate's outer face, between its grid points)
+	const surfAt = (Pl, u, v) => {
+		const fj = clamp(v, 0, 1) * ny, fi = clamp(u, 0, 1) * nx, j0 = Math.min(ny - 1, Math.floor(fj)), i0 = Math.min(nx - 1, Math.floor(fi)), jv = fj - j0, iu = fi - i0;
+		const g = Pl.grid, nn = Pl.normals, mix = (A) => A[j0][i0].clone().lerp(A[j0][i0 + 1], iu).lerp(A[j0 + 1][i0].clone().lerp(A[j0 + 1][i0 + 1], iu), jv);
+		const n = mix(nn).normalize();
+		return { p: mix(g).addScaledVector(n, thick), n };
+	};
+	// webbing: strips across a plate at heights v (from u0 to u1), each an inch wide
+	const webbing = (Pl, vs, u0 = 0.07, u1 = 0.93) => {
+		for (const v of vs) {
+			const rows = [[], []], nr = [[], []], dv = 0.026 / Math.max(0.05, t - b);
+			for (let i = 0; i <= 10; i++) for (const [r, vv] of [[0, v - dv / 2], [1, v + dv / 2]]) { const q = surfAt(Pl, u0 + (u1 - u0) * i / 10, vv); rows[r].push(q.p.addScaledVector(q.n, 0.0008)); nr[r].push(q.n); }
+			out.push({ geo: slab(rows, nr, 0.0028, 0.0006), part: 'web' });
+		}
+	};
+	if (compact) {
+		// webbing over the front's upper part and over the whole back; three flat pouches low on
+		// the front; a patch for a name or a flag on the chest; a handle at the back's top
+		webbing(F, [0.5, 0.62, 0.74]);
+		webbing(B, [0.18, 0.32, 0.46, 0.6, 0.74]);
+		for (let i = -1; i <= 1; i++) {
+			const q = onPlate(0.5 + i * 0.29, 0.2);
+			for (const [k, g] of pouch(q.p, q.n, 0.068, 0.095, 0.02, { lo }).entries()) out.push({ geo: g, part: k ? 'flap' : 'pouch' });
+		}
+		const pc = surfAt(F, 0.5, 0.86), up = V(0, 1, 0).addScaledVector(pc.n, -pc.n.y).normalize(), across = new THREE.Vector3().crossVectors(up, pc.n).normalize();
+		const patch = [[], []], pn = [[], []];
+		for (let i = 0; i <= 2; i++) for (const r of [0, 1]) { patch[r].push(pc.p.clone().addScaledVector(across, (i / 2 - 0.5) * 0.085).addScaledVector(up, (r - 0.5) * 0.05).addScaledVector(pc.n, 0.001)); pn[r].push(pc.n); }
+		out.push({ geo: slab(patch, pn, 0.002, 0.0006), part: 'patch' });
+		const hp = surfAt(B, 0.5, 0.97), hpts = spline([hp.p.clone().add(V(-0.035, -0.006, 0)), hp.p.clone().add(V(-0.02, 0.022, -0.006)), hp.p.clone().add(V(0.02, 0.022, -0.006)), hp.p.clone().add(V(0.035, -0.006, 0))], lo ? 4 : 8);
+		const hg = [hpts.map((p) => p.clone().add(V(0, 0, 0.004))), hpts.map((p) => p.clone().add(V(0, 0, -0.004)))], hn = [hpts.map(() => V(0, 1, 0)), hpts.map(() => V(0, 1, 0))];
+		out.push({ geo: slab(hg, hn, 0.004, 0.001), part: 'web' });
+		return out;
+	}
 	if (police) {
 		// a radio on the left strap, a reflective band across the chest
 		const r = onPlate(0.8, 0.86);
@@ -347,4 +388,213 @@ export function carrierGeometry(cut, field, { police = false, lo = false } = {})
 		for (const [k, g] of pouch(c.p, c.n, 0.09, 0.06, 0.022, { lo }).entries()) out.push({ geo: g, part: k ? 'flap' : 'pouch' });
 	}
 	return out;
+}
+
+// ---------- boots, a belt, cargo pockets: built, not painted ----------
+
+// the convex hull of points in a plane (monotone chain), counter-clockwise
+function hull2(pts) {
+	const P = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+	if (P.length < 3) return P;
+	const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+	const lo = [], up = [];
+	for (const p of P) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+	for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+	up.pop(); lo.pop();
+	return lo.concat(up);
+}
+// a closed outline resampled to n points evenly along it, pushed out by e (from its middle)
+function outline(h, n, e) {
+	const L = [0];
+	for (let i = 1; i <= h.length; i++) { const a = h[i - 1], b = h[i % h.length]; L.push(L[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+	const total = L[h.length], cx = h.reduce((s, p) => s + p[0], 0) / h.length, cz = h.reduce((s, p) => s + p[1], 0) / h.length, out = [];
+	for (let k = 0; k < n; k++) {
+		const d = k / n * total; let i = 0; while (L[i + 1] < d) i++;
+		const a = h[i], b = h[(i + 1) % h.length], u = (d - L[i]) / Math.max(1e-9, L[i + 1] - L[i]);
+		const x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, l = Math.hypot(x - cx, z - cz) || 1;
+		out.push([x + (x - cx) / l * e, z + (z - cz) / l * e]);
+	}
+	return out;
+}
+// rings of an outline at given heights (each ring's height per point: y(i)), walled between,
+// the bottom closed
+function prism(ring, ys, close = true) {
+	const n = ring.length, pos = [], idx = [];
+	for (const y of ys) for (let i = 0; i < n; i++) pos.push(ring[i][0], typeof y === 'function' ? y(i) : y, ring[i][1]);
+	for (let r = 0; r < ys.length - 1; r++) for (let i = 0; i < n; i++) { const a = r * n + i, b = r * n + (i + 1) % n, c = a + n, d = b + n; idx.push(a, b, c, b, d, c); }
+	if (close) { const c = pos.length / 3; let x = 0, z = 0, y = 0; for (let i = 0; i < n; i++) { x += ring[i][0]; z += ring[i][1]; y += pos[i * 3 + 1]; } pos.push(x / n, y / n, z / n); for (let i = 0; i < n; i++) idx.push(c, (i + 1) % n, i); }
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+	return g;
+}
+// A boot made over a foot: foot, the foot's points; shin, the lower leg's (x, y, z flat); top,
+// how high it comes; off, how far its leather stands off the skin. The sole: an outsole whose
+// heel stands taller than the forefoot (the heel's breast where they meet), a midsole above it
+// set in a little, so the two read apart, the toe lifted a little off the ground (toe spring);
+// over the instep and up the shin a tongue, laces crossing it from eyelet to eyelet and on up
+// the shaft from hook to hook; round the top a padded collar. Pieces { geo, part, on: 'foot'|'shin' }.
+export function bootGeometry(foot, shin, { top, off = 0.014, lo = false } = {}) {
+	const out = [], N = lo ? 18 : 30;
+	const base = [];
+	for (let q = 0; q < foot.length; q += 3) if (foot[q + 1] < 0.035) base.push([foot[q], foot[q + 2]]);
+	if (base.length < 8) return out;
+	const h = hull2(base);
+	let z0 = Infinity, z1 = -Infinity, cx = 0;
+	for (const p of h) { z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); cx += p[0]; }
+	cx /= h.length;
+	const Lf = z1 - z0, heelZ = z0 + Lf * 0.27;
+	const spring = (z) => Math.max(0, (z - (z1 - Lf * 0.2)) / (Lf * 0.2)) * 0.007;
+	// the outsole: taller at the heel (a little blend at the breast)
+	const outer = outline(h, N, off + 0.006), mid = outline(h, N, off + 0.003);
+	const yHeel = (z) => 0.012 + 0.009 * (1 - smooth((z - heelZ + 0.006) / 0.012));
+	out.push({ geo: prism(outer, [(i) => spring(outer[i][1]), (i) => yHeel(outer[i][1]) + spring(outer[i][1])]), part: 'sole', on: 'foot' });
+	out.push({ geo: prism(mid, [(i) => yHeel(mid[i][1]) + spring(mid[i][1]) - 0.001, (i) => yHeel(mid[i][1]) + 0.011 + spring(mid[i][1])], false), part: 'mid', on: 'foot' });
+	// the instep's line, toe box to ankle, then up the front of the shin to the top
+	const instep = [];
+	for (let k = 0; k <= 8; k++) {
+		const z = z1 - Lf * (0.34 + 0.4 * k / 8);
+		let y = 0;
+		for (let q = 0; q < foot.length; q += 3) if (Math.abs(foot[q] - cx) < 0.02 && Math.abs(foot[q + 2] - z) < 0.012) y = Math.max(y, foot[q + 1]);
+		if (y > 0.02) instep.push(V(cx, y + off + 0.004, z));
+	}
+	const up = [];
+	if (shin.length) {
+		let sx = 0, n = 0, yLo = Infinity;
+		for (let q = 0; q < shin.length; q += 3) { yLo = Math.min(yLo, shin[q + 1]); if (shin[q + 1] < top) { sx += shin[q]; n++; } }
+		sx /= Math.max(1, n);
+		const yStart = (instep[instep.length - 1]?.y ?? yLo) + 0.015;
+		for (let k = 0; k <= 5; k++) {
+			const y = yStart + (top - 0.012 - yStart) * k / 5;
+			let z = -Infinity;
+			for (let q = 0; q < shin.length; q += 3) if (Math.abs(shin[q + 1] - y) < 0.012 && Math.abs(shin[q] - sx) < 0.03) z = Math.max(z, shin[q + 2]);
+			if (Number.isFinite(z)) up.push(V(sx, y, z + off + 0.006));
+		}
+	}
+	// a strip along a path, its width across (x), standing off along the normal
+	const strip = (pts, wid, thick, part, on) => {
+		if (pts.length < 2) return;
+		const rows = [[], []], nr = [[], []];
+		for (let k = 0; k < pts.length; k++) {
+			const tan = pts[Math.min(pts.length - 1, k + 1)].clone().sub(pts[Math.max(0, k - 1)]).normalize(), n = new THREE.Vector3().crossVectors(V(1, 0, 0), tan).normalize();
+			if (n.y < 0 && n.z < 0.5) n.multiplyScalar(-1);
+			for (const [r, sx] of [[0, -1], [1, 1]]) { rows[r].push(pts[k].clone().add(V(sx * wid / 2, 0, 0))); nr[r].push(n); }
+		}
+		out.push({ geo: slab(rows, nr, thick, 0.0015), part, on });
+	};
+	strip(instep, 0.042, 0.005, 'tongue', 'foot');
+	strip(up, 0.046, 0.005, 'tongue', 'shin');
+	// the laces: crossing over the tongue, eyelet to eyelet, then hook to hook up the shaft
+	const lace = (p, n, k, on) => {
+		const across = V(1, 0, 0), along = new THREE.Vector3().crossVectors(n, across).normalize();
+		for (const s of [-1, 1]) {
+			const d = across.clone().multiplyScalar(0.026).addScaledVector(along, s * 0.007);
+			const g = new THREE.CylinderGeometry(0.0018, 0.0018, d.length() * 2, 4, 1);
+			g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.clone().normalize()));
+			g.translate(p.x + n.x * 0.006, p.y + n.y * 0.006, p.z + n.z * 0.006);
+			out.push({ geo: g, part: 'lace', on });
+		}
+		for (const s of [-1, 1]) {
+			const e = new THREE.CylinderGeometry(0.0034, 0.0034, 0.003, lo ? 5 : 8);
+			e.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), n));
+			e.translate(p.x + s * 0.026, p.y + n.y * 0.004, p.z + n.z * 0.004);
+			out.push({ geo: e, part: k % 2 && on === 'shin' ? 'hook' : 'eyelet', on });
+		}
+	};
+	const along = (pts, step, on) => {
+		let acc = step / 2;
+		for (let k = 1; k < pts.length; k++) {
+			const a = pts[k - 1], b = pts[k], L = a.distanceTo(b);
+			const tan = b.clone().sub(a).normalize(), n = new THREE.Vector3().crossVectors(V(1, 0, 0), tan).normalize();
+			if (n.y < 0 && n.z < 0.5) n.multiplyScalar(-1);
+			for (; acc < L; acc += step) lace(a.clone().lerp(b, acc / L), n, k, on);
+			acc -= L;
+		}
+	};
+	along(instep.slice(1), 0.021, 'foot');
+	along(up, 0.024, 'shin');
+	// the padded collar round the top of the shaft
+	if (shin.length) {
+		let cx2 = 0, cz2 = 0, n = 0;
+		for (let q = 0; q < shin.length; q += 3) if (Math.abs(shin[q + 1] - top) < 0.012) { cx2 += shin[q]; cz2 += shin[q + 2]; n++; }
+		if (n) {
+			cx2 /= n; cz2 /= n;
+			let rx = 0, rz = 0;
+			for (let q = 0; q < shin.length; q += 3) if (Math.abs(shin[q + 1] - top) < 0.012) { rx = Math.max(rx, Math.abs(shin[q] - cx2)); rz = Math.max(rz, Math.abs(shin[q + 2] - cz2)); }
+			// (a tube round the shaft's own ellipse: its thickness the same all round)
+			const rim = [];
+			for (let k = 0; k < 24; k++) { const a = k / 24 * 2 * Math.PI; rim.push(V(cx2 + Math.cos(a) * (rx + off + 0.004), top, cz2 + Math.sin(a) * (rz + off + 0.004))); }
+			const ring = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim, true), lo ? 16 : 32, 0.0075, lo ? 5 : 7, true);
+			out.push({ geo: ring, part: 'collar', on: 'shin' });
+		}
+	}
+	return out;
+}
+
+// A belt round the trousers' waistband: field, the dressed torso (torsoField); at height y (its
+// middle), w wide; loops of the trousers standing over it; a buckle at the front
+export function beltGeometry(cut, field, { y, w = 0.036, out: stand = 0.01, lo = false } = {}) {
+	const pieces = [], seg = lo ? 16 : 32, rows = [[], []], nr = [[], []];
+	const ring = (yy, a, grow) => {
+		const zc = (field.front(0, yy) + field.back(0, yy)) / 2, rz = (field.front(0, yy) - field.back(0, yy)) / 2 + stand + grow, rx = field.half(yy) + stand + grow;
+		const ca = Math.cos(a), sa = Math.sin(a);
+		return { p: V(rx * Math.sign(sa) * Math.pow(Math.abs(sa), 0.75), yy, zc + rz * Math.sign(ca) * Math.pow(Math.abs(ca), 0.75)), zc };
+	};
+	for (let k = 0; k <= seg; k++) {
+		const a = k / seg * 2 * Math.PI;
+		for (const [r, yy] of [[0, y - w / 2], [1, y + w / 2]]) { const q = ring(yy, a, 0); rows[r].push(q.p); nr[r].push(V(q.p.x, 0, q.p.z - q.zc).normalize()); }
+	}
+	pieces.push({ geo: slab(rows, nr, 0.004, 0.001), part: 'belt' });
+	// the loops: a little taller than the belt, standing over it
+	for (const a of [0.42, -0.42, 1.25, -1.25, Math.PI]) {
+		const q = ring(y, a, 0.0045), n = V(q.p.x, 0, q.p.z - q.zc).normalize(), side = new THREE.Vector3().crossVectors(V(0, 1, 0), n).normalize();
+		const g = new THREE.BoxGeometry(0.012, w + 0.014, 0.003);
+		g.applyMatrix4(new THREE.Matrix4().makeBasis(side, V(0, 1, 0), n).setPosition(q.p.clone().addScaledVector(n, 0.001)));
+		pieces.push({ geo: g, part: 'loop' });
+	}
+	// the buckle: a plate with a frame, a little proud of the belt
+	const q = ring(y, 0, 0.004);
+	const buckle = new THREE.BoxGeometry(0.046, w + 0.006, 0.006);
+	buckle.translate(q.p.x, q.p.y, q.p.z + 0.002);
+	pieces.push({ geo: buckle, part: 'buckle' });
+	return pieces;
+}
+
+// A bellows cargo pocket on each thigh's outer side: thigh, its points (x, y, z flat); side
+// +1 or -1 (which way is out); y, the pocket's middle height; h, w its size; stand, how far out
+// from the skin it lies (the trousers' cloth is under it); with a flap over its top
+export function cargoPocketGeometry(thigh, side, { y, h = 0.16, w = 0.13, stand = 0.026, lo = false } = {}) {
+	const near = [];
+	for (let q = 0; q < thigh.length; q += 3) if (Math.abs(thigh[q + 1] - y) < h / 2 + 0.03 && Math.sign(thigh[q]) === side) near.push(thigh[q], thigh[q + 1], thigh[q + 2]);
+	if (near.length < 30) return [];
+	let cx = 0, cz = 0;
+	for (let q = 0; q < near.length; q += 3) { cx += near[q]; cz += near[q + 2]; }
+	cx /= near.length / 3; cz /= near.length / 3;
+	// the thigh's radius each way, at each height (the pocket follows its curve)
+	const radius = (yy, a) => {
+		let r = 0;
+		for (let q = 0; q < near.length; q += 3) {
+			if (Math.abs(near[q + 1] - yy) > 0.015) continue;
+			const dx = near[q] - cx, dz = near[q + 2] - cz, d = Math.atan2(dz, dx) - a;
+			if (Math.cos(d) > 0.97) r = Math.max(r, Math.hypot(dx, dz));
+		}
+		return r || 0.07;
+	};
+	const pieces = [], na = lo ? 3 : 6, nh = lo ? 3 : 6;
+	// (centred a little forward of the side, as cargo pockets sit)
+	const a0 = side > 0 ? 0.18 : Math.PI - 0.18, arc = w / 0.085;
+	const sheet = (y0, y1, grow, part) => {
+		const grid = [], nor = [];
+		for (let j = 0; j <= nh; j++) {
+			const yy = y0 + (y1 - y0) * j / nh, row = [], nrow = [];
+			for (let i = 0; i <= na; i++) {
+				const a = a0 + (i / na - 0.5) * arc * (side > 0 ? 1 : -1), r = radius(yy, a) + stand + grow;
+				row.push(V(cx + Math.cos(a) * r, yy, cz + Math.sin(a) * r)); nrow.push(V(Math.cos(a), 0, Math.sin(a)));
+			}
+			grid.push(row); nor.push(nrow);
+		}
+		pieces.push({ geo: slab(grid, nor, 0.007, 0.002), part });
+	};
+	sheet(y - h / 2, y + h / 2 - 0.035, 0, 'pocket');
+	sheet(y + h / 2 - 0.05, y + h / 2, 0.006, 'flap');
+	return pieces;
 }

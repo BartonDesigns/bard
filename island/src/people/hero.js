@@ -58,12 +58,20 @@ const HERO = {
 		hair: { style: 'short01', vol: 1.12, fadeK: 0.25, beard: 'stubble', cut: 'textured' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled', tuck: true },
+			// (a fitted charcoal top, its sleeves pushed up the forearms)
+			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled', push: true, tuck: true },
 			outer: null,
-			// (the hems resting over the tops of tall boots, whose shafts hold them out)
-			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'straight', hang: 0.014 },
-			shoes: { kind: 'boot', tall: true, col: '#5a4632', sole: '#17130f' },
-			acc: [{ kind: 'carrier', col: '#6a5f48', acc: '#4e4636' }, { kind: 'watch', col: C.black, acc: SILVER, metal: true }],
+			// (tailored cargo trousers: laid over the legs and hung, garment.js trouserHull; their
+			// seams, fly, pockets and knees in the cloth, pat 'tech'; tucked into tall boots built
+			// over the feet; a belt and bellows pockets built on them)
+			bottom: { kind: 'cargo', col: C.olive, pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.07, ease: 0.006, knee: 0.007 }, tuck: true },
+			shoes: { kind: 'boot', tall: true, built: true, col: '#5a4632', sole: '#1b1917', mid: '#3e3328', lace: '#2a231e' },
+			acc: [
+				{ kind: 'carrier', compact: true, col: '#5d5c41', acc: '#4c4b35' },
+				{ kind: 'belt', col: '#262422', buckle: '#7d796f', loop: C.olive },
+				{ kind: 'cargo', col: C.olive },
+				{ kind: 'watch', col: C.black, acc: SILVER, metal: true },
+			],
 		}),
 	},
 	female: {
@@ -82,9 +90,9 @@ const HERO = {
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none', tuck: true },
 			outer: { kind: 'flannel', col: '#a3262a', acc: C.black, acc2: '#e8e0d0', pat: 'plaid', fit: 'fitted', sleeves: 'rolled', open: true, collar: true, fab: 'canvas', drape: 0.35 },
-			// (tapered trousers over mid-height hiking boots, the hem resting on their collars)
-			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'cargo', legs: 'long', fit: 'straight', hang: 0.012 },
-			shoes: { kind: 'boot', col: '#5a4632', sole: '#17130f' },
+			// (tailored khaki trousers meeting the collars of mid-height hiking boots built over the feet)
+			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'tech', legs: 'long', fit: 'slim', hull: { taper: 0.075, ease: 0.005, knee: 0.006 }, tuck: true },
+			shoes: { kind: 'boot', built: true, col: '#6a4c34', sole: '#1b1917', mid: '#4a3a2c', lace: '#3a2a20' },
 			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),
 	},
