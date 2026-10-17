@@ -132,6 +132,24 @@ test('a build makes the head smaller about the top of the neck, and the legs lon
 	assert.ok(Math.abs(q[1] - (1 - 1.1)) < 1e-6 && q[4] === 1 && q[7] === Math.fround(1.7), 'below the hip drawn down, the rest kept');
 });
 
+test('a build fills the arms out about their bones, fullest mid-segment, nothing at the joints', async () => {
+	const { shapeBuild } = await import('../src/people/build.js');
+	// an arm along x: shoulder joint at 0.2, elbow at 0.5, wrist at 0.75 (each joint's marker a
+	// vertex of its own); skin 4 cm off the axis at the middle of the upper arm, at the elbow, and
+	// a third down the forearm; a torso point and the feet and head for the height
+	const at = [[0.2, 1.5, 0], [0.5, 1.5, 0], [0.75, 1.5, 0], [0.35, 1.5, 0.04], [0.5, 1.5, 0.04], [0.583, 1.5, 0.04], [0, 1.5, 0.1], [0, 0, 0], [0, 2, 0]];
+	const A = { bones: [{ name: 'spine01', ids: [] }, { name: 'upperarm01.L', ids: [0] }, { name: 'lowerarm01.L', ids: [1] }, { name: 'wrist.L', ids: [2] }, { name: 'upperarm02.L', ids: [] }], ids: new Uint8Array(36), weights: new Uint16Array(36) };
+	const own = [1, 2, 3, 4, 2, 2, 0, 0, 0];
+	for (let v = 0; v < at.length; v++) { A.ids[v * 4] = own[v]; A.weights[v * 4] = 1000; }
+	const p = Float32Array.from(at.flat());
+	shapeBuild(p, A, { arms: [0.1, 0.08] });
+	assert.ok(Math.abs(p[3 * 3 + 2] - 0.044) < 1e-4, 'the upper arm 10% fuller at its middle: ' + p[11]);
+	assert.ok(Math.abs(p[4 * 3 + 2] - 0.04) < 1e-4, 'nothing at the elbow');
+	assert.ok(p[5 * 3 + 2] > 0.04 * 1.07, 'the forearm fuller near the elbow');
+	assert.ok(p[6 * 3 + 2] === Math.fround(0.1), 'the torso untouched');
+	assert.deepEqual([p[0], p[3], p[6]].map((x) => +x.toFixed(6)), [0.2, 0.5, 0.75], 'the joints stay');
+});
+
 test('the hero moves as the concept sheet does: sprint, leap, crouch, stance, reach', () => {
 	for (const name of ['sprint', 'leap', 'scout', 'stance', 'climb']) {
 		const k = ACTIONS[name]?.keys?.[0]?.[1];

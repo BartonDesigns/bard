@@ -856,8 +856,8 @@ export function clothGeometry(A, p, o, cut, R) {
    // A sleeve has ease, but a light shirt is not padded at the deltoid.
    if(s<2 && limb===1 && garment.kind!=='puffer')k*=.6+.4*Math.max(0,Math.min(1,(cut.shoulder-y)/.22));
    if(s<2 && limb===0) {
-    const shoulder=Math.max(0,Math.min(1,(cut.neck-y)/.12));
-    k *= .25+.75*shoulder;
+    const shoulder=Math.max(0,Math.min(1,(cut.neck-y)/.12)), sh0=garment.shoulderEase??.25;
+    k *= sh0+(1-sh0)*shoulder;
     if(!garment.tuck && y<cut.chest && y>hem) {
      const zc=(cut.drapeFront+cut.drapeBack)/2, rx=Math.max(cut.waistX,cut.shoulderX*.9), rz=(cut.drapeFront-cut.drapeBack)/2;
      const ell=Math.hypot(x/rx,(z-zc)/rz), hang=Math.min(1,(cut.shoulder-.04-y)/.12);
@@ -885,6 +885,9 @@ export function clothGeometry(A, p, o, cut, R) {
 		K.set(K2);
 	}
 	for (const L of same.values()) { let k = 0; for (const i of L) k += K[i]; k /= L.length; for (const i of L) K[i] = k; }
+	// (inside a boot built over the foot the trousers stay inside it, whatever the smoothing
+	// brought down from the blousing above: none of the hem standing out through the shaft)
+	if (B?.tuck && o.shoes?.built) { const bt = cut.ankle + (o.shoes.tall ? 0.17 : 0.09); for (let i = 0; i < P.count; i++) if (src[i] >= 0 && SL[i] % 10 === 2 && SL[i] >= 20 && P.getY(i) < bt + 0.006) K[i] = Math.min(K[i], 0.008); }
 	// the layers in order where they lie over the same skin, each a little outside the one
 	// under it: trousers, then the top over them (or under them, tucked in), then the jacket
 	const order = tuck ? [0, 2, 1] : [2, 0, 1], layer = new Map();

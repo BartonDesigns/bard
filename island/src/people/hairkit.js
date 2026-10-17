@@ -83,7 +83,7 @@ const BEARDS = {
 };
 export const SHELLS = { short: { len: 0.004, layers: 3 }, full: { len: 0.008, layers: 4 }, goatee: { len: 0.006, layers: 3 }, circle: { len: 0.005, layers: 3 }, chinstrap: { len: 0.004, layers: 3 } };
 export function beardFor(d, H, r) {
-	if (H.beard !== undefined) return H.beard ? { kind: H.beard, stubble: H.beard === 'stubble' ? 0.7 : 0.35, asset: !SHELLS[H.beard] && H.beard !== 'stubble' } : null;
+	if (H.beard !== undefined) return H.beard ? { kind: H.beard, stubble: H.beard === 'stubble' ? (H.stubble ?? 0.7) : 0.35, asset: !SHELLS[H.beard] && H.beard !== 'stubble' } : null;
 	if (!d.male || d.child || d.age < 18) return null;
 	const L = BEARDS[d.age < 30 ? 'young' : d.age < 55 ? 'mid' : 'old'];
 	const sparse = (d.ancestry?.[1] || 0) > 0.6 ? 0.6 : 1;

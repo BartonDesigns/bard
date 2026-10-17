@@ -43,12 +43,13 @@ export function setHeroChoice(sex, storage = globalThis.localStorage) {
 const SILVER = '#c9ccd0';
 const HERO = {
 	male: {
-		// (a climber's or a fighter's build: shoulders out over a compact waist, long legs, a head
-		// in proportion; lean, so the muscle target is light: people/build.js shapes the rest)
-		base: 0x4e70, sex: 0.96, height: 1.86, muscle: 0.3, weight: 0.03, lean: 0.2, build: { shoulders: 0.018, waist: 0.08, head: -0.05, legs: 0.04 },
+		// (a climber's or a fighter's build: shoulders out over a compact waist, full arms, long
+		// legs, a head in proportion; lean, so the muscle target is light: people/build.js shapes the rest)
+		base: 0x4e70, sex: 0.96, height: 1.86, muscle: 0.3, weight: 0.03, lean: 0.2, build: { shoulders: 0.018, waist: 0.08, head: -0.05, legs: 0.04, arms: [0.12, 0.1] },
 		// (hair colours are used as they are, lit by the strands' own shade: hairkit.js; a dark
-		// chestnut is dark in the numbers)
-		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 0.5, thick: 0.62 },
+		// chestnut is dark in the numbers. Brows groomed: short hairs swept the one way over a
+		// full tone of their own, a little lighter than the numbers, as the hair reads lit)
+		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 0.78, thick: 0.62, len: 0.72, tidy: 0.55, fill: 1.55 }, browTone: 1.3,
 		// (the sheet's face: the brow a little heavy over lightly hooded eyes; a straight nose with
 		// a defined tip; cheekbones high with a gentle hollow below, never gaunt; a firm jaw and
 		// chin; a defined bow to the lip, a fuller lower lip, the corners a touch up; ears close)
@@ -62,11 +63,12 @@ const HERO = {
 		},
 		// (cut: the painted crop under the hair follows its hairline, people/hair.js scalpMask; the
 		// swept cut's is crisp, where a faded cut's blurs a band of hair colour over the temples)
-		hair: { style: 'short01', vol: 1.12, fadeK: 0, beard: 'stubble', cut: 'swept' },
+		hair: { style: 'short01', vol: 1.12, fadeK: 0, beard: 'stubble', stubble: 1, cut: 'swept' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			// (a fitted charcoal top, its sleeves pushed up the forearms)
-			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled', push: true, tuck: true },
+			// (a fitted charcoal top, its sleeves pushed up the forearms; room enough over the
+			// trapezius that the shoulders never show through it as they move)
+			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled', push: true, tuck: true, shoulderEase: 0.6 },
 			outer: null,
 			// (tailored cargo trousers: laid over the legs and hung, garment.js trouserHull; their
 			// seams, fly, pockets and knees in the cloth, pat 'tech'; tucked into tall boots built
@@ -84,8 +86,8 @@ const HERO = {
 	female: {
 		// (her own build, not his made smaller: defined shoulders, a long waist drawn in, strong
 		// long legs, a smaller head; a runner's or a climber's)
-		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, lean: 0.25, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05 },
-		ancestry: [0.1, 0.22, 0.68], hairColour: [0.2, 0.065, 0.026], iris: 5, freckles: true, brows: { dens: 0.48, thick: 0.55 },
+		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, lean: 0.25, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05, arms: [0.05, 0.04] },
+		ancestry: [0.1, 0.22, 0.68], hairColour: [0.2, 0.065, 0.026], iris: 5, freckles: true, brows: { dens: 0.66, thick: 0.55, len: 0.75, tidy: 0.55, fill: 1.4 },
 		// (hers: high cheekbones, a slim nose with its tip lifted, full lips with a clear bow,
 		// almond eyes, a soft but defined jaw and chin; ears close)
 		face: {
