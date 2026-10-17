@@ -8237,7 +8237,60 @@ root.L99Studio181={captureOn:captureOn215,captureOff:captureOff215,captureState:
 
 
 <style id="hyphy182-style">
-#special-panel .yee182{padding:14px;background:radial-gradient(ellipse at top right,#2464b34d,transparent 70%),#090f1c;color:#f5edb3;font:12px/1.4 ui-monospace,monospace;text-shadow:none}#special-panel .yee182 button{font:inherit;color:inherit;border:1px solid #6488b8;background:#132543;border-radius:10px;min-height:48px;padding:9px;touch-action:manipulation;cursor:pointer}#special-panel .yee-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#special-panel .yee-modes button{min-width:0;font-size:10px}#special-panel .yee-modes [aria-pressed=true]{background:#264e90;border-color:#ffe06c}#special-panel .yee-modes .queued{border-style:dashed;border-color:#ffe06c}#special-panel .yee-transport{width:100%;margin:12px 0;background:#e8cd60;color:#0e182d;font-weight:bold}#special-panel .yee-pads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#special-panel .yee-pads button{display:flex;flex-direction:column;justify-content:center;gap:8px;min-height:112px;touch-action:none;user-select:none;-webkit-user-select:none}#special-panel .yee-pads strong{font-size:clamp(17px,4vw,28px);font-weight:900;letter-spacing:-.04em}#special-panel .yee-pads small{font-size:9px;opacity:.8}#special-panel .yee-pads [data-action=yeee]{background:#eace66;color:#151e31}#special-panel .yee-pads [aria-pressed=true]{background:#3373be;box-shadow:inset 0 0 0 2px #ffe06c;color:white}#special-panel .yee-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}#special-panel .yee-macros label{position:relative;min-width:0;font-size:11px}#special-panel .yee-macros output{float:right}#special-panel .yee-macros input{display:block;width:100%;height:40px;margin:0;accent-color:#ffe06c}#special-panel .yee-meter{display:grid;grid-template-columns:repeat(16,1fr);gap:4px;margin:0 0 12px}#special-panel .yee-meter i{height:5px;background:#314367;border-radius:2px}#special-panel .yee-meter .lit{background:#ffe06c}#special-panel .yee182 button:focus-visible{outline:2px solid white;outline-offset:2px}#special-panel .yee182 p{min-height:32px;margin:12px 0 0;color:#b2c4dd;font-size:11px}
+/* music234: the YEEE MACHINE as one calm groove box, Warriors blue and gold. Display words in heavy italic, everything else small mono caps. */
+#special-panel .sp-head.yee-head{background:#0f1f40;border-bottom:1px solid #22385f;padding:12px 14px}
+#special-panel .sp-head.yee-head .sp-title{white-space:nowrap;font:italic 900 17px/1 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:-.01em;color:#ffc72c}
+#special-panel .sp-head.yee-head .sp-sub{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;color:#8ea3c7}
+#special-panel .yee182{--g:#ffc72c;--g2:#ffe08a;--ink:#0a1428;--s1:#12234a;--s2:#1a3366;--ln:#2b4677;--tx:#eef2fb;--mu:#8ea3c7;display:grid;gap:16px;min-width:0;max-width:100%;box-sizing:border-box;padding:14px;background:linear-gradient(180deg,#0f1f40,#0a1428 70%);color:var(--tx);font:500 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-shadow:none}
+#special-panel .yee182 button{font:inherit;color:inherit;background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:0;cursor:pointer;touch-action:manipulation;transition:background .15s,border-color .15s,color .15s,transform .08s,box-shadow .15s}
+#special-panel .yee182 button:hover{border-color:#47679f}
+#special-panel .yee182 button:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+#special-panel .yee182 .yee-deck{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+#special-panel .yee182 .yee-play{min-width:100px;min-height:56px;padding:0 16px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--g);border-color:var(--g);color:var(--ink);font-weight:800;letter-spacing:.14em}
+#special-panel .yee182 .yee-play i{font-style:normal;font-size:13px}
+#special-panel .yee182 .yee-play[aria-pressed=true]{background:transparent;color:var(--g)}
+#special-panel .yee182 .yee-beat{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;min-height:56px;background:var(--s1);border:1px solid var(--ln);border-radius:10px}
+#special-panel .yee182 .yee-beat button{min-height:54px;border:0;background:transparent;font-size:22px;line-height:1;color:var(--mu)}
+#special-panel .yee182 .yee-beat button:hover{color:var(--g)}
+#special-panel .yee182 .yee-beat-name{display:grid;gap:4px;min-width:0;text-align:center}
+#special-panel .yee182 .yee-beat-name small{font-size:9px;letter-spacing:.18em;color:var(--mu)}
+#special-panel .yee182 .yee-beat-name strong{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:italic 900 17px/1.05 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:0;color:var(--tx)}
+#special-panel .yee182 .yee-beat.queued strong,#special-panel .yee182 .yee-beat.queued small{color:var(--g)}
+#special-panel .yee182 .yee-meter{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:3px;margin-top:-8px}
+#special-panel .yee182 .yee-meter i{height:4px;border-radius:2px;background:#1f3459;transition:background .08s,box-shadow .08s}
+#special-panel .yee182 .yee-meter i:nth-child(4n+1){background:#2e4a7b}
+#special-panel .yee182 .yee-meter i:nth-child(4n):not(:last-child){margin-right:6px}
+#special-panel .yee182 .yee-meter i.lit{background:var(--g);box-shadow:0 0 8px #ffc72c99}
+#special-panel .yee182 .yee-pads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#special-panel .yee182 .yee-pads button{min-height:100px;padding:12px 12px 10px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:10px;text-align:left;background:linear-gradient(160deg,#1a3366,#12234a);user-select:none;-webkit-user-select:none;touch-action:none}
+#special-panel .yee182 .yee-pads strong{font:italic 900 clamp(19px,5.2vw,26px)/.98 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:-.015em}
+#special-panel .yee182 .yee-pads small{font-size:9px;letter-spacing:.1em;color:var(--mu)}
+#special-panel .yee182 .yee-pads [data-action=yeee]{background:linear-gradient(160deg,#ffd75e,#ffc72c);border-color:#ffc72c;color:var(--ink);box-shadow:0 6px 20px #ffc72c26}
+#special-panel .yee182 .yee-pads [data-action=yeee] small{color:#6b5410}
+#special-panel .yee182 .yee-pads [aria-pressed=true]{transform:scale(.97);border-color:var(--g);box-shadow:inset 0 0 0 1px var(--g),0 0 22px #ffc72c33}
+#special-panel .yee182 .yee-pads [data-action=yeee][aria-pressed=true]{background:#ffe08a}
+#special-panel .yee182 .yee-sec{display:grid;gap:8px;min-width:0}
+#special-panel .yee182 .yee-label{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:9px;letter-spacing:.18em;color:var(--mu)}
+#special-panel .yee182 .yee-label b{font-weight:700;color:var(--g2)}
+#special-panel .yee182 .yee-label span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;letter-spacing:.06em}
+#special-panel .yee182 .yee-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:3px;background:#0a1428;border:1px solid var(--ln);border-radius:10px}
+#special-panel .yee182 .yee-seg button{min-width:0;min-height:40px;border:0;border-radius:7px;background:transparent;font-size:10px;letter-spacing:.1em;color:var(--mu)}
+#special-panel .yee182 .yee-seg button:hover{color:var(--tx)}
+#special-panel .yee182 .yee-seg [aria-pressed=true]{background:var(--s2);color:var(--g);box-shadow:inset 0 0 0 1px #ffc72c59}
+#special-panel .yee182 .yee-drums{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+#special-panel .yee182 .yee-drum{min-width:0;min-height:54px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+#special-panel .yee182 .yee-drum span{font-size:15px;line-height:1;color:var(--g2);opacity:.8}
+#special-panel .yee182 .yee-drum small{max-width:100%;overflow:hidden;white-space:nowrap;font-size:8px;letter-spacing:.04em;color:var(--mu)}
+#special-panel .yee182 .yee-drum[aria-pressed=true]{background:var(--s2);border-color:var(--g)}
+#special-panel .yee182 .yee-drum[aria-pressed=true] span{opacity:1;color:var(--g)}
+#special-panel .yee182 .yee-drum[aria-pressed=true] small{color:var(--g)}
+#special-panel .yee182 .yee-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+#special-panel .yee182 .yee-macros label{display:grid;grid-template-columns:1fr auto;gap:2px 8px;min-width:0;font-size:9px;letter-spacing:.18em;color:var(--mu)}
+#special-panel .yee182 .yee-macros output{color:var(--g2);letter-spacing:.04em}
+#special-panel .yee182 .yee-macros input{grid-column:1/-1;display:block;width:100%;height:32px;margin:0;accent-color:var(--g)}
+#special-panel .yee182 p{min-height:15px;margin:0;padding-top:10px;border-top:1px solid #1d3157;font-size:10px;letter-spacing:.04em;color:var(--mu)}
+@media(max-width:420px){#special-panel .yee182{padding:12px;gap:14px}#special-panel .yee182 .yee-play{min-width:88px;padding:0 12px}#special-panel .yee182 .yee-drum{min-height:50px}#special-panel .yee182 .yee-drum small{font-size:7px}}
+@media(prefers-reduced-motion:reduce){#special-panel .yee182 button,#special-panel .yee182 .yee-meter i{transition:none}#special-panel .yee182 .yee-pads [aria-pressed=true]{transform:none}}
 
 </style>
 <script id="hyphy182-code">
@@ -8304,11 +8357,11 @@ function renderShout(c,bus,t,opts={},frequency=440,onEnd){
  return v;
 }
 const DRUM_RACK=[
- {id:'ride',label:'RIDE',icon:'◍'}, {id:'kick',label:'KICK',icon:'●'}, {id:'hihat',label:'HI-HAT',icon:'✕'},
- {id:'openhat',label:'OPEN HAT',icon:'◔'}, {id:'cymbal',label:'CRASH',icon:'◯'}, {id:'rim',label:'RIM',icon:'○'},
- {id:'clap',label:'CLAP',icon:'❋'}, {id:'snare',label:'SNARE',icon:'▬'}, {id:'lotom',label:'LO-TOM',icon:'▼'},
- {id:'shaker',label:'SHAKER',icon:'◇'}, {id:'cowbell',label:'COWBELL',icon:'◆'}, {id:'hitom',label:'HI-TOM',icon:'▲'},
- {id:'jump',label:'JUMP',icon:'↑'}, {id:'perc',label:'PERC',icon:'◆'}
+ {id:'kick',label:'KICK',short:'KICK',icon:'●'}, {id:'snare',label:'SNARE',short:'SNARE',icon:'▬'}, {id:'clap',label:'CLAP',short:'CLAP',icon:'❋'},
+ {id:'rim',label:'RIM',short:'RIM',icon:'○'}, {id:'hihat',label:'HI-HAT',short:'HAT',icon:'✕'}, {id:'openhat',label:'OPEN HAT',short:'OPEN',icon:'◔'},
+ {id:'ride',label:'RIDE',short:'RIDE',icon:'◍'}, {id:'cymbal',label:'CRASH',short:'CRASH',icon:'◯'}, {id:'lotom',label:'LO-TOM',short:'LO TOM',icon:'▼'},
+ {id:'hitom',label:'HI-TOM',short:'HI TOM',icon:'▲'}, {id:'cowbell',label:'COWBELL',short:'BELL',icon:'◆'}, {id:'shaker',label:'SHAKER',short:'SHAKE',icon:'◇'},
+ {id:'perc',label:'PERC',short:'PERC',icon:'◈'}, {id:'jump',label:'JUMP',short:'JUMP',icon:'↑'}
 ];
 const KIT_RACK=[
  {id:'town',label:'TOWN KIT',sub:'wide knock + bright clap'},
@@ -8326,32 +8379,28 @@ function groove(mode){
 function mount(panel,onClose){if(current)current.dispose();const beats=beatCatalog();let running=false,starting=false,disposed=false,timer=0,token=0,next=0,step=0,mode=typeof currentBeat==='number'&&beats[currentBeat]?currentBeat:0,queuedMode=null,kitIndex=0,activeDrum='kick',roll=false,ghost=false,drop=false,ctxRef,config,bank,events=new Set(),rollEvents=new Set(),timeline=[],pointers=new Map(),keys=new Set();
  // Build the entire tree once. Reading innerHTML normalizes empty attributes;
  // string-replacing serialized data-run was silently dropping the whole rack.
- panel.innerHTML=`<div class="sp-head"><span class="sp-title">YEEE MACHINE</span><span class="sp-sub">BAY AREA / LIVE</span><button type="button" class="sp-close">CLOSE</button></div>
- <div class="yee182"><div class="yee-meter" aria-hidden="true">${Array.from({length:16},(_,i)=>'<i data-led="'+i+'"></i>').join('')}</div>
- <div class="yee-rack-head"><strong>HYPHY BEATS</strong><span data-beat-label></span></div>
- <div class="yee-beat-nav"><button type="button" data-beat-prev aria-label="Previous Hyphy beat">‹</button><div class="yee-modes" data-beat-scroller role="group" aria-label="Hyphy beats"></div><button type="button" data-beat-next aria-label="Next Hyphy beat">›</button></div>
- <div class="yee-rack-hint">SWIPE LEFT FOR MORE BEATS · OR USE ‹ ›</div>
- <button type="button" class="yee-transport" data-run aria-pressed="false">▶ PLAY BEAT</button>
- <div class="yee-pads"><button data-action="yeee"><strong>YEEE!</strong><small>TAP · FORMANT SHOUT</small></button><button data-action="roll"><strong>GO DUMB</strong><small>HOLD · TIGHT ROLL</small></button><button data-action="ghost"><strong>GHOST IT</strong><small>HOLD · STRIP THE BEAT</small></button><button data-action="drop"><strong>BRING IT BACK</strong><small>TAP · NEXT-BEAT DROP</small></button></div>
- <div class="yee-rack-head"><strong>DRUM RACK · 14 SOUNDS</strong><span data-kit-label>TOWN KIT</span></div>
- <div class="yee-kit-nav"><button type="button" data-kit-prev aria-label="Previous drum kit">‹</button><div data-kit-strip></div><button type="button" data-kit-next aria-label="Next drum kit">›</button></div>
- <div class="yee-drum-nav"><button type="button" data-drum-prev aria-label="Show previous drums">‹</button><div class="yee-drum-scroller" data-drum-scroller role="group" aria-label="Hyphy drum sounds"><div class="yee-drum-track" data-drum-track></div></div><button type="button" data-drum-next aria-label="Show more drums">›</button></div>
- <div class="yee-rack-hint">SWIPE LEFT OR USE ‹ › · TAP TO HEAR A DRUM AND CHANGE THE YEEE VOICE</div>
+ panel.innerHTML=`<div class="sp-head yee-head"><span class="sp-title">YEEE MACHINE</span><span class="sp-sub">THE BAY</span><button type="button" class="sp-close">CLOSE</button></div>
+ <div class="yee182">
+ <div class="yee-deck"><button type="button" class="yee-play" data-run aria-pressed="false"></button><div class="yee-beat" role="group" aria-label="Hyphy beat"><button type="button" data-beat-prev aria-label="Previous beat">‹</button><div class="yee-beat-name"><small data-beat-label></small><strong data-beat-name></strong></div><button type="button" data-beat-next aria-label="Next beat">›</button></div></div>
+ <div class="yee-meter" aria-hidden="true">${Array.from({length:16},(_,i)=>'<i data-led="'+i+'"></i>').join('')}</div>
+ <div class="yee-pads"><button data-action="yeee"><strong>YEEE!</strong><small>TAP · SHOUT</small></button><button data-action="roll"><strong>GO DUMB</strong><small>HOLD · SNARE ROLL</small></button><button data-action="ghost"><strong>GHOST IT</strong><small>HOLD · STRIP DOWN</small></button><button data-action="drop"><strong>BRING IT BACK</strong><small>TAP · NEXT BEAT</small></button></div>
+ <div class="yee-sec"><div class="yee-label"><b>KIT</b><span data-kit-label></span></div><div class="yee-seg" data-kit-strip role="group" aria-label="Drum kit"></div></div>
+ <div class="yee-sec"><div class="yee-label"><b>DRUMS</b><span>TAP TO HEAR · VOICES THE YEEE</span></div><div class="yee-drums" data-drum-track role="group" aria-label="Hyphy drum sounds"></div></div>
  <div class="yee-macros" data-audio-effect><label>KNOCK <output data-knock-value>65%</output><input data-knock aria-label="Knock" type="range" min="0" max="100" value="65"></label><label>SWING <output data-swing-value>28%</output><input data-swing aria-label="Swing" type="range" min="0" max="100" value="28"></label></div>
- <p data-status role="status">Tap PLAY BEAT for the groove, or YEEE! for a shout.</p></div>`;
- const el=q=>panel.querySelector(q),run=el('[data-run]'),status=el('[data-status]'),knock=el('[data-knock]'),swing=el('[data-swing]'),track=el('[data-drum-track]'),scroller=el('[data-drum-scroller]'),kitLabel=el('[data-kit-label]'),beatScroller=el('[data-beat-scroller]');
- beatScroller.innerHTML=beats.map((_,i)=>'<button type="button" data-mode="'+i+'" aria-pressed="false"></button>').join('');
- panel.querySelectorAll('[data-mode]').forEach((b,i)=>b.textContent=beats[i].name);
- track.innerHTML=DRUM_RACK.map(d=>'<button type="button" class="yee-drum" data-drum="'+d.id+'" aria-pressed="'+(d.id===activeDrum)+'"><span>'+d.icon+'</span><small>'+d.label+'</small></button>').join('');
- const kitStrip=el('[data-kit-strip]');kitStrip.innerHTML=KIT_RACK.map((k,i)=>'<button type="button" data-kit="'+i+'" aria-pressed="'+(i===kitIndex)+'">'+k.label+'</button>').join('');
+ <p data-status role="status">Play a beat, or tap YEEE! for a shout.</p></div>`;
+ const el=q=>panel.querySelector(q),run=el('[data-run]'),status=el('[data-status]'),knock=el('[data-knock]'),swing=el('[data-swing]'),track=el('[data-drum-track]'),kitLabel=el('[data-kit-label]'),beatName=el('[data-beat-name]'),beatBox=el('.yee-beat');
+ track.innerHTML=DRUM_RACK.map(d=>'<button type="button" class="yee-drum" data-drum="'+d.id+'" aria-label="'+d.label+'" title="'+d.label+'" aria-pressed="'+(d.id===activeDrum)+'"><span aria-hidden="true">'+d.icon+'</span><small aria-hidden="true">'+d.short+'</small></button>').join('');
+ const kitStrip=el('[data-kit-strip]');kitStrip.innerHTML=KIT_RACK.map((k,i)=>'<button type="button" data-kit="'+i+'" aria-label="'+k.label+'" aria-pressed="'+(i===kitIndex)+'">'+k.label.replace(' KIT','')+'</button>').join('');
  function say(s){status.textContent=s;}
+ function setRun(state){run.innerHTML=state==='stop'?'<i aria-hidden="true">■</i>STOP':state==='wait'?'<i aria-hidden="true">…</i>WAIT':'<i aria-hidden="true">▶</i>PLAY';}
+ setRun('play');
  function kit(){return KIT_RACK[kitIndex]||KIT_RACK[0];}
  function audioConfig(drum=activeDrum){return {...(config||{}),kit:kit().id,drum,bpm,knock:+knock.value/100};}
  function markRack(){
-  kitLabel.textContent=kit().label+' · '+kit().sub;
+  kitLabel.textContent=kit().sub;
   panel.querySelectorAll('[data-kit]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.kit===kitIndex)));
   panel.querySelectorAll('[data-drum]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.drum===activeDrum)));
-  panel.querySelectorAll('[data-action="yeee"] small').forEach(b=>b.textContent='TAP · '+DRUM_RACK.find(d=>d.id===activeDrum).label+' VOICE');
+  panel.querySelectorAll('[data-action="yeee"] small').forEach(b=>b.textContent='TAP · '+DRUM_RACK.find(d=>d.id===activeDrum).short+' VOICE');
  }
  function audition(name){
   activeDrum=name;markRack();
@@ -8370,9 +8419,9 @@ function mount(panel,onClose){if(current)current.dispose();const beats=beatCatal
  for(const f of kind==='bell'?[540,800]:[Math.min(3000,base*2)]){const o=node(c.createOscillator());o.type=kind==='bell'?'square':'sine';o.frequency.setValueAtTime(f,t);if(kind==='whistle')o.frequency.exponentialRampToValueAtTime(f*.89,t+duration);o.connect(amp);sources.push(o);}
  let left=sources.length;const v={end:t+duration+.03,stop(){amp.gain.cancelScheduledValues(c.currentTime);amp.gain.setTargetAtTime(0,c.currentTime,.005);sources.forEach(n=>{try{n.stop(c.currentTime+.03)}catch(e){}});}};sources.forEach(n=>{n.onended=()=>{if(!--left){owned.forEach(x=>x.disconnect());events.delete(v);}};n.start(t);n.stop(v.end);});return collect(v);}
  function releaseRoll(){roll=false;rollEvents.forEach(v=>v.stop?.());rollEvents.clear();}
- function stop(){releaseRoll();token++;starting=false;running=false;clearInterval(timer);events.forEach(v=>v.stop?.());events.clear();timeline=[];roll=ghost=drop=false;queuedMode=null;markModes();pointers.clear();keys.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));panel.querySelectorAll('[data-led]').forEach(b=>b.classList.remove('lit'));run.textContent='▶ PLAY BEAT';run.setAttribute('aria-pressed','false');if(bank){bank.disconnect();bank=null;}root._specialDrumsActive=false;say('Stopped.');}
+ function stop(){releaseRoll();token++;starting=false;running=false;clearInterval(timer);events.forEach(v=>v.stop?.());events.clear();timeline=[];roll=ghost=drop=false;queuedMode=null;markModes();pointers.clear();keys.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));panel.querySelectorAll('[data-led]').forEach(b=>b.classList.remove('lit'));setRun('play');run.setAttribute('aria-pressed','false');if(bank){bank.disconnect();bank=null;}root._specialDrumsActive=false;say('Stopped.');}
  async function ready(){const ticket=token;initAudio();const c=ctx;if(c.state!=='running')await c.resume();if(c.state!=='running')throw Error('Tap again to enable audio.');if(ticket!==token||!allowed())throw Error('Playback cancelled.');ctxRef=c;if(!bank){bank=c.createGain();bank.gain.value=.8;bank.connect(masterGain);}return c;}
- async function start(){if(running||starting){stop();return false;}starting=true;const ticket=++token;run.textContent='ENABLING AUDIO…';try{await ready();if(ticket!==token||!allowed())return false;root.L99Studio181?.stop();if(sequencerRunning)stopSequencer();config={...root.L99Studio181.valid(null,'HYPHY'),sound:'SUB-PRESSURE',pattern:groove(mode),kit:kit().id,bpm,glide:.16,sub:.68,color:.42,drive:.35,mix:.8,automation:false,duck:.48};running=true;step=0;next=ctxRef.currentTime+.04;root._specialDrumsActive=true;run.textContent='■ STOP BEAT';run.setAttribute('aria-pressed','true');timer=setInterval(pump,25);say('Playing '+beats[mode].name+' · '+kit().label+' · '+bpm+' BPM');pump();return running;}catch(e){if(ticket===token){stop();say(e.message);}return false;}finally{if(ticket===token)starting=false;}}
+ async function start(){if(running||starting){stop();return false;}starting=true;const ticket=++token;setRun('wait');try{await ready();if(ticket!==token||!allowed())return false;root.L99Studio181?.stop();if(sequencerRunning)stopSequencer();config={...root.L99Studio181.valid(null,'HYPHY'),sound:'SUB-PRESSURE',pattern:groove(mode),kit:kit().id,bpm,glide:.16,sub:.68,color:.42,drive:.35,mix:.8,automation:false,duck:.48};running=true;step=0;next=ctxRef.currentTime+.04;root._specialDrumsActive=true;setRun('stop');run.setAttribute('aria-pressed','true');timer=setInterval(pump,25);say('Playing '+beats[mode].name+' · '+kit().label+' · '+bpm+' BPM');pump();return running;}catch(e){if(ticket===token){stop();say(e.message);}return false;}finally{if(ticket===token)starting=false;}}
  function pump(){try{tick();}catch(e){stop();say('Playback stopped: '+e.message);}}
  function tick(){if(!running)return;if(!allowed()||ctxRef.state!=='running'){stop();return;}const c=ctxRef;if(next<c.currentTime-.04)next=c.currentTime+.025;while(next<c.currentTime+.075){const i=step%32,dt=60/bpm/4,beat=i%4===0;if(queuedMode!==null&&i%16===0){mode=queuedMode;queuedMode=null;config.pattern=groove(mode);markModes();say('Playing '+beats[mode].name);}config.bpm=bpm;config.punch=+knock.value/100;config.drive=.15+config.punch*.4;config.mix=.58+config.punch*.25;const t=next+(i%2?dt*(+swing.value/100)*.42:0),s={...config.pattern[i]};
  if(ghost){s.on=false;s.kick=s.snare=0;s.hat=i%4===0?.25:0;}
@@ -8383,22 +8432,16 @@ function mount(panel,onClose){if(current)current.dispose();const beats=beatCatal
  timeline.push({time:t,step:i});step++;next+=dt;}
  while(timeline.length&&timeline[0].time<=c.currentTime){const p=timeline.shift();panel.querySelectorAll('[data-led]').forEach((b,i)=>b.classList.toggle('lit',i===p.step%16));}for(const v of events)if(v.end<c.currentTime){events.delete(v);rollEvents.delete(v);}
  }
- function markModes(){const selected=queuedMode??mode;panel.querySelectorAll('[data-mode]').forEach(b=>{b.setAttribute('aria-pressed',String(+b.dataset.mode===mode));b.classList.toggle('queued',+b.dataset.mode===queuedMode);});el('[data-beat-label]').textContent=(selected+1)+' / '+beats.length+(queuedMode!==null?' · QUEUED':'');el('[data-beat-prev]').disabled=selected===0;el('[data-beat-next]').disabled=selected===beats.length-1;}
- function selectMode(index){index=Math.max(0,Math.min(beats.length-1,index));if(running){queuedMode=index===mode?null:index;say(queuedMode===null?'Playing '+beats[mode].name:beats[index].name+' queued · next bar');}else{mode=index;queuedMode=null;say(beats[mode].name+' selected · tap PLAY BEAT');}markModes();const button=panel.querySelectorAll('[data-mode]')[index];if(button){const x=button.offsetLeft,right=x+button.offsetWidth;if(x<beatScroller.scrollLeft||right>beatScroller.scrollLeft+beatScroller.clientWidth)beatScroller.scrollTo({left:Math.max(0,x-8),behavior:'smooth'});}}
+ function markModes(){const selected=queuedMode??mode,queued=queuedMode!==null;beatName.textContent=beats[selected]?.name||'';el('[data-beat-label]').textContent=queued?'NEXT BAR':'BEAT '+(selected+1)+' / '+beats.length;beatBox.classList.toggle('queued',queued);}
+ function selectMode(index){index=(index%beats.length+beats.length)%beats.length;if(running){queuedMode=index===mode?null:index;say(queuedMode===null?'Playing '+beats[mode].name:beats[index].name+' queued · next bar');}else{mode=index;queuedMode=null;say(beats[mode].name+' selected · tap PLAY');}markModes();}
  panel.querySelectorAll('[data-drum]').forEach(b=>{b.onclick=async()=>{activeDrum=b.dataset.drum;markRack();try{await ready();audition(activeDrum);}catch(e){say(e.message);}};});
- panel.querySelector('[data-kit-prev]').onclick=()=>{kitIndex=(kitIndex+KIT_RACK.length-1)%KIT_RACK.length;if(config)config.kit=kit().id;markRack();say(kit().label+' selected · YEEE is voiced for '+activeDrum.toUpperCase());};
- panel.querySelector('[data-kit-next]').onclick=()=>{kitIndex=(kitIndex+1)%KIT_RACK.length;if(config)config.kit=kit().id;markRack();say(kit().label+' selected · YEEE is voiced for '+activeDrum.toUpperCase());};
- panel.querySelectorAll('[data-kit]').forEach(b=>b.onclick=()=>{kitIndex=+b.dataset.kit;if(config)config.kit=kit().id;markRack();say(kit().label+' selected · swipe the rack for all drums');});
- // Native overflow handles touch swipes and cancels taps when a finger scrolls.
- // Do not also mutate scrollLeft on touch pointermove: that fights Safari.
+ panel.querySelectorAll('[data-kit]').forEach(b=>b.onclick=()=>{kitIndex=+b.dataset.kit;if(config)config.kit=kit().id;markRack();say(kit().label+' · '+kit().sub);});
  el('[data-beat-prev]').onclick=()=>selectMode((queuedMode??mode)-1);
  el('[data-beat-next]').onclick=()=>selectMode((queuedMode??mode)+1);
- el('[data-drum-prev]').onclick=()=>scroller.scrollBy({left:-scroller.clientWidth*.85,behavior:'smooth'});
- el('[data-drum-next]').onclick=()=>scroller.scrollBy({left:scroller.clientWidth*.85,behavior:'smooth'});
  markRack();markModes();
  let lastYeee=-1;async function action(name,down){if(!down){if(name==='roll')releaseRoll();if(name==='ghost')ghost=false;return;}if(name==='yeee'){const ticket=token;try{await ready();if(ticket!==token||!allowed())return;if(ctxRef.currentTime-lastYeee<.14)return;lastYeee=ctxRef.currentTime;oneShot('yeee',ctxRef.currentTime+.006,audioConfig());say('YEEE! · '+kit().label+' / '+activeDrum.toUpperCase());}catch(e){say(e.message);}return;}if(!running){if(starting)return;const ok=await start();if(!ok)return;}if(!allowed())return;if(name==='roll')roll=[...pointers.values(),...keys].includes('roll');if(name==='ghost'){releaseRoll();ghost=[...pointers.values(),...keys].includes('ghost');}if(name==='drop'){drop=true;say('Drop armed · next beat');}}
  panel.querySelectorAll('[data-action]').forEach(b=>{b.type='button';b.setAttribute('aria-pressed','false');b.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();b.setPointerCapture(e.pointerId);pointers.set(e.pointerId,b.dataset.action);b.setAttribute('aria-pressed','true');action(b.dataset.action,true);};const release=e=>{const name=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(name&&!([...pointers.values(),...keys].includes(name))){action(name,false);b.setAttribute('aria-pressed','false');}};b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;b.onkeydown=e=>{if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();keys.add(b.dataset.action);b.setAttribute('aria-pressed','true');action(b.dataset.action,true);}};b.onkeyup=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();keys.delete(b.dataset.action);if(![...pointers.values()].includes(b.dataset.action))action(b.dataset.action,false);b.setAttribute('aria-pressed','false');}};b.onblur=()=>{keys.delete(b.dataset.action);if(![...pointers.values()].includes(b.dataset.action))action(b.dataset.action,false);b.setAttribute('aria-pressed','false');};b.onclick=e=>{if(e.detail===0&&!keys.size)action(b.dataset.action,true).then(()=>action(b.dataset.action,false));};});
- panel.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>selectMode(+b.dataset.mode));run.onclick=start;el('.sp-close').onclick=onClose;
+ run.onclick=start;el('.sp-close').onclick=onClose;
  for(const k of ['knock','swing'])el('[data-'+k+']').oninput=e=>el('[data-'+k+'-value]').textContent=e.target.value+'%';
  const visibility=()=>{if(document.hidden)stop();},blur=()=>{releaseRoll();ghost=false;keys.clear();pointers.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));};document.addEventListener('visibilitychange',visibility);root.addEventListener('blur',blur);root.addEventListener('pagehide',stop);
  current={stop,dispose(){if(disposed)return;stop();disposed=true;document.removeEventListener('visibilitychange',visibility);root.removeEventListener('blur',blur);root.removeEventListener('pagehide',stop);if(current===this)current=null;}};root.L99PeakSliders180?.refresh();
@@ -8442,49 +8485,6 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
   #world-sheet176 .cp-hud-btn,#world-sheet176 .cp-action-btn{box-sizing:border-box!important;}
   #world-actions176:has(.world-sheet-action184){display:none!important;}
 }
-
-</style>
-<style id="hyphy184-style">
-#special-panel .yee-rack-head{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 6px;color:#ffe06c;font-size:11px;letter-spacing:.08em}
-#special-panel .yee-rack-head span{font-size:10px;color:#b9c9df;letter-spacing:0;text-align:right;max-width:64%}
-#special-panel .yee-kit-nav{display:grid;grid-template-columns:38px minmax(0,1fr) 38px;align-items:center;gap:6px}
-#special-panel .yee-kit-nav>button{min-height:40px;padding:4px;font-size:25px;line-height:1}
-#special-panel .yee-kit-nav [data-kit-strip]{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;min-width:0}
-#special-panel .yee-kit-nav [data-kit]{min-height:40px;padding:4px 2px;font-size:8px;letter-spacing:-.02em;line-height:1.1}
-#special-panel .yee-kit-nav [data-kit][aria-pressed=true]{background:#2f679e;border-color:#ffe06c;color:#fff5a5}
-#special-panel .yee-drum-scroller{width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;touch-action:pan-x;cursor:grab;border:1px solid #6488b855;border-radius:10px;background:#07101e;margin-top:8px}
-#special-panel .yee-drum-scroller:active{cursor:grabbing}
-#special-panel .yee-drum-track{display:flex;gap:6px;width:max-content;padding:8px}
-#special-panel .yee-drum{width:70px;min-width:70px;min-height:68px!important;padding:5px 4px!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;scroll-snap-align:start;background:#142847!important}
-#special-panel .yee-drum span{font-size:21px;line-height:1;color:#ffe06c}
-#special-panel .yee-drum small{font-size:8px;line-height:1;white-space:nowrap;color:#c7d6e8}
-#special-panel .yee-drum[aria-pressed=true]{background:#3478a5!important;border-color:#ffe06c!important;box-shadow:0 0 10px #ffe06c55;color:#fff}
-#special-panel .yee-rack-hint{margin-top:6px;color:#93aac5;font-size:9px;letter-spacing:.02em;line-height:1.2;text-align:center}
-#special-panel .yee-pads [data-action=yeee]{box-shadow:0 0 18px #ffe06c44}
-@media(max-width:480px){#special-panel .yee-kit-nav [data-kit]{font-size:7px}#special-panel .yee-drum{width:64px;min-width:64px}#special-panel .yee-rack-hint{font-size:8px}}
-
-</style>
-<style id="hyphy185-style">
-/* Intrinsic widths must never widen the special panel on a phone. */
-#special-panel .yee182{min-width:0;max-width:100%;box-sizing:border-box}
-#special-panel .yee-beat-nav,#special-panel .yee-drum-nav{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:6px;align-items:center;min-width:0}
-#special-panel .yee-beat-nav>button,#special-panel .yee-drum-nav>button{padding:4px;min-height:48px;font-size:26px;line-height:1;touch-action:manipulation}
-#special-panel .yee-beat-nav>button:disabled{opacity:.3;cursor:default}
-#special-panel .yee-modes{position:relative;display:flex;gap:6px;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:4px 2px 8px;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#ffe06c #132543;touch-action:pan-x}
-#special-panel .yee-modes button{flex:0 0 132px;min-width:132px;min-height:48px;font-size:11px;white-space:nowrap;scroll-snap-align:start;touch-action:pan-x}
-#special-panel .yee-modes::-webkit-scrollbar,#special-panel .yee-drum-scroller::-webkit-scrollbar{height:4px}
-#special-panel .yee-modes::-webkit-scrollbar-thumb,#special-panel .yee-drum-scroller::-webkit-scrollbar-thumb{background:#ffe06c;border-radius:4px}
-#special-panel .yee-drum-nav{margin-top:8px}
-#special-panel .yee-drum-scroller{min-width:0;box-sizing:border-box;margin-top:0;scrollbar-color:#ffe06c #132543}
-#special-panel .yee-drum{touch-action:pan-x}
-#special-panel .yee-kit-nav{grid-template-columns:44px minmax(0,1fr) 44px}
-#special-panel .yee-kit-nav>button{min-height:48px}
-#special-panel .yee-kit-nav [data-kit-strip]{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
-#special-panel .yee-kit-nav [data-kit]{min-height:44px;font-size:10px;letter-spacing:0}
-#special-panel .yee-rack-head{gap:8px;flex-wrap:wrap}
-#special-panel .yee-rack-hint{font-size:10px;line-height:1.5}
-#special-panel .yee-transport{min-height:52px;font-size:14px}
-@media(min-width:560px){#special-panel .yee-kit-nav [data-kit-strip]{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 </style>
 <style id="ux213-style">#fx-guide213{margin:4px 0 14px;padding:10px;border:1px solid var(--btn-text);border-radius:9px;font:12px/1.6 system-ui}#fx-guide213 summary{min-height:44px;display:list-item;align-content:center;cursor:pointer}#fx-guide213 dt{font-weight:700;margin-top:10px}#fx-guide213 dd{margin:2px 0 10px}#fx-guide213 summary:focus-visible{outline:2px solid currentColor;outline-offset:3px}#fx-panel label{flex-wrap:wrap;row-gap:4px}#fx-panel select{min-height:44px}#studio181 .studio-export213 p{font-size:12px}</style>
@@ -27597,13 +27597,14 @@ window.bardHaptic = (function(){
     },
     HYPHY: {
       title: 'YEEE MACHINE',
-      blurb: 'Three Bay Area pockets. Sliding sub, knock drums and a playable formant shout.',
+      blurb: 'Eight Bay Area beats. Sliding sub, knock drums and a playable shout.',
       items: [
-        ['POCKETS', 'Town Business, Ghost Ride and Sideshow follow your key and tempo. Changes land at the next two-bar downbeat.'],
+        ['BEATS', 'Step through them with ‹ ›. They follow your key and tempo; while one plays, a change lands on the next bar.'],
         ['YEEE!', 'Tap a synthesized shout. Works with or without the beat.'],
         ['GO DUMB', 'Hold for a tight, accented sixteenth-note roll over the bass and kick. Release cuts the roll immediately.'],
         ['GHOST IT', 'Hold to strip the bass and drums down to a light hat pulse.'],
         ['BRING IT BACK', 'Queue a bass-and-kick drop with a shout on the next beat.'],
+        ['KIT / DRUMS', 'Four kits. Tap a drum to hear it; it also sets the YEEE voice.'],
         ['KNOCK / SWING', 'Shape punch and the offbeat pocket. Peak Guard stays active.'],
       ],
     },
