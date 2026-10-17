@@ -63,16 +63,18 @@ export function createHeroView({ scene, renderer, avatar, self, world, setCine }
 	}
 	function stats() {
 		const me = body(); if (!me) return null;
-		let tris = 0, meshes = 0;
-		const mats = new Set();
+		let tris = 0, meshes = 0, bytes = 0;
+		const mats = new Set(), geos = new Set();
 		me.P.root.traverse((o) => {
 			if (!o.isMesh || !o.visible) return;
 			meshes++;
 			const g = o.geometry, n = g.index ? g.index.count : g.attributes.position.count;
 			tris += (n / 3) * (o.isInstancedMesh ? o.count : 1);
 			(Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m));
+			// (the geometry's own memory, decoded: shared pieces counted once)
+			if (!geos.has(g)) { geos.add(g); for (const a of Object.values(g.attributes)) bytes += a.array.byteLength; if (g.index) bytes += g.index.array.byteLength; }
 		});
-		return { hero: avatar.hero, tris: Math.round(tris), meshes, materials: mats.size, bones: me.P.bones.length, buildMs: Math.round(me.P.buildMs || 0), calls: renderer.info.render.calls, height: +(me.P.dna.height || 0).toFixed(2) };
+		return { hero: avatar.hero, tris: Math.round(tris), meshes, materials: mats.size, bones: me.P.bones.length, geoKB: Math.round(bytes / 1024), buildMs: Math.round(me.P.buildMs || 0), calls: renderer.info.render.calls, height: +(me.P.dna.height || 0).toFixed(2) };
 	}
 	// one view rendered to an image (the same framing every time)
 	function shot(o = {}) {
