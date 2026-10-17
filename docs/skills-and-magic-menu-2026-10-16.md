@@ -68,7 +68,8 @@ stars are the spells (circles) and the perks (diamonds), joined by lines:
 - **Experience** comes from the mana you spend casting, the fabric you weave (and gather), the
   harm your weapons deal, the harm you live through, the ground you cover on foot (a point every
   15 m, not flying or riding), mercy (25) and kills (10).
-- **Levels:** 100 experience to level 2, then 35 more for each level after. A level gives one
+- **Levels:** 100 experience to level 2, then 35 more for each level after, and steeper past 30. Experience
+  stops at 99; the hundredth is earned ([spell-gear-and-stats-2026-10-17.md](spell-gear-and-stats-2026-10-17.md)). A level gives one
   skill point; you start with one. Going up a level shows a banner and plays a chord.
 - **Ranks:** each skill's rank rises with its own use: a school with the mana spent on it (and
   fabric woven into it), Marksman with weapon harm, Athletics with ground covered, Resilience with

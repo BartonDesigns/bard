@@ -13,11 +13,14 @@
 //   Focus      a deeper mana pool that fills faster           your level
 //   Haste      spells come back sooner                        your Chrono rank
 //
+// The hundredth level (magic/trials.js) adds five to every one.
+//
 // The gear's own magic is scoped like a perk's: its school's spells stronger, cheaper and
 // quicker (power, mana, cd), one spell of the school changed (alter), every few spells free
 // (free), and the weapon in hand's hits (gearWeapon: magic/index.js and magic/caster.js).
 
-import { computeMods, rankOf } from './skills.js';
+import { computeMods, rankOf, levelOf, LEVEL_CAP } from './skills.js';
+import { trialsOf, trialsOpen, riteBlock, ASCENDED_ATTRIBUTE } from './trials.js';
 import { SCHOOLS, STRANDS, manaMax, manaRegen, spellPower, cooldownOf, modFor } from './spells.js';
 import { gearMagic, attributesOf as itemAttributes } from '../gameplay/gear-magic.js';
 import { ARMS_CATALOG } from '../gameplay/arms.js';
@@ -54,7 +57,10 @@ export function baseAttributes(s) {
 		focus: [['Your level', ((s.level || 1) - 1) / 2]],
 		haste: [['Chrono rank', r('chrono') / 5]],
 	};
-	for (const k of ATTR_IDS) from[k] = from[k].map(([label, n]) => [label, Math.min(BASE_CAP, Math.floor(n))]);
+	for (const k of ATTR_IDS) {
+		from[k] = from[k].map(([label, n]) => [label, Math.min(BASE_CAP, Math.floor(n))]);
+		if (s.ascended) from[k].push(['The hundredth', ASCENDED_ATTRIBUTE]);
+	}
 	return from;
 }
 
@@ -96,8 +102,9 @@ export function refreshStats(s) {
 }
 
 // The sheet: everything about you as numbers, for the Character view (ui/gear.js).
-// light: the sun's height now (spells' strength by the time of day)
-export function statSheet(s, { light = 0.5 } = {}) {
+// light: the sun's height now (spells' strength by the time of day); trial: what the trials
+// read from your gear (magic/trials.js)
+export function statSheet(s, { light = 0.5, trial = {} } = {}) {
 	const M = s.mods || composeMods(s), A = attributesOf(s), G = gearMagic(s.gear || []);
 	const pct = (v) => Math.round(v * 100);
 	const schools = Object.entries(SCHOOLS).map(([id, S]) => {
@@ -107,7 +114,8 @@ export function statSheet(s, { light = 0.5 } = {}) {
 		return { id, name: S.name, color: S.color, strand: S.strand, power: pct(spellPower(s, probe, { light })), mana: pct(mana), cd: pct(cooldownOf(s, probe) / 10), free: M.free?.[id] || 0, gear: pct(G.power[id] || 0) };
 	});
 	return {
-		level: s.level || 1,
+		level: levelOf(s), ascended: !!s.ascended, cap: LEVEL_CAP,
+		trials: trialsOf(s, trial), trialsOpen: trialsOpen(s), rite: s.ascended ? null : riteBlock(s, trial),
 		attrs: A,
 		life: BASE_LIFE + (M.life || 0),
 		lifeRegen: Math.round((M.hpRegen || 0) * 100) / 100,

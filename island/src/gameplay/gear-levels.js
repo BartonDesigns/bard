@@ -1,12 +1,17 @@
 // Levels and quality for gear (gameplay/arms.js). Every item you own is its own instance with
-// an id, a level (1 to 20), a quality tier (Common to Legendary) and experience toward its
-// next level. Stats are game numbers that grow with both; nothing here is a real-world spec.
-// Weapons and garments also lend attributes (rows in 'pt', magic/stats.js), and from level 5
-// their magic wakes (gameplay/gear-magic.js). Pure functions over plain data, shared by the
-// inventory, the gear screen and trading.
+// an id, a level, a quality tier (Common to Legendary) and experience toward its next level.
+// Experience and outfitters carry it to level 99 (LEVEL_CAP). The hundredth, 100★, is earned:
+// a weapon or garment at 99 has a trial of its own (ASCEND_TRIALS), and its experience counts
+// that trial instead (trialStep). Stats are game numbers that grow with level and tier; nothing
+// here is a real-world spec. Weapons and garments also lend attributes (rows in 'pt',
+// magic/stats.js), and their magic wakes as they climb (gameplay/gear-magic.js). Pure
+// functions over plain data, shared by the inventory, the gear screen and trading.
 
-export const MAX_LEVEL = 20;
-// the level past which growth slows: 7% a level up to it, 5% a level beyond
+// the most experience and outfitters reach; the hundredth beyond it is earned by a trial
+export const LEVEL_CAP = 99;
+export const ASCENDED = 100;
+export const MAX_LEVEL = ASCENDED;
+// the level past which growth slows: 7% a level up to it, 5% a level to 20, then ever slower
 export const SOFT_LEVEL = 10;
 export const TIERS = Object.freeze([
 	Object.freeze({ id: 'common', name: 'Common', color: '#c9d1d3', glow: 0 }),
@@ -50,9 +55,18 @@ const STATS = {
 
 const int = (v, lo, hi, d) => { const n = Number(v); return Number.isInteger(n) && n >= lo && n <= hi ? n : d; };
 export const tierOf = (t) => TIERS[int(t, 0, 4, 0)];
-// experience needed to go from this level to the next
-export const xpNeed = (level) => 60 * level;
-const statMult = (l, t) => (1 + 0.07 * (Math.min(l, SOFT_LEVEL) - 1) + 0.05 * Math.max(0, l - SOFT_LEVEL)) * STAT_TIER[t];
+// experience needed to go from this level to the next: 60 a level to 10, then 600 and 8 more a
+// level (about 87,000 from 1 to 99)
+export const xpNeed = (level) => (level <= SOFT_LEVEL ? 60 * level : 600 + 8 * (level - SOFT_LEVEL));
+// growth with level: 7% a level to 10, 5% a level to 20, then ever more slowly to three times at
+// 99; the hundredth a tenth more again
+export function levelGrowth(l) {
+	if (l <= SOFT_LEVEL) return 1 + 0.07 * (l - 1);
+	if (l <= 20) return 1.63 + 0.05 * (l - SOFT_LEVEL);
+	if (l <= LEVEL_CAP) return 2.13 + 0.87 * Math.pow((l - 20) / (LEVEL_CAP - 20), 0.7);
+	return 3.3;
+}
+const statMult = (l, t) => levelGrowth(l) * STAT_TIER[t];
 // the same growth as one number for an instance (combat/weapons.js scales its numbers by it)
 export const statScale = (inst) => statMult(int(inst?.l, 1, MAX_LEVEL, 1), int(inst?.t, 0, 4, 0));
 
@@ -75,29 +89,51 @@ export function compareStats(a, b) {
 	return (B.length ? B : A).map((row, k) => ({ label: row.label, unit: row.unit, a: A[k]?.value ?? 0, b: B[k]?.value ?? 0, delta: Math.round(((B[k]?.value ?? 0) - (A[k]?.value ?? 0)) * 10) / 10 }));
 }
 
-// what an instance is worth against a fresh one, Common, level 1
-export const valueFactor = (inst) => (1 + 0.18 * (int(inst?.l, 1, MAX_LEVEL, 1) - 1)) * VALUE_TIER[int(inst?.t, 0, 4, 0)];
+// what an instance is worth against a fresh one, Common, level 1 (18% a level to 20, 6% after)
+export const valueFactor = (inst) => { const l = int(inst?.l, 1, MAX_LEVEL, 1); return (1 + 0.18 * (Math.min(l, 20) - 1) + 0.06 * Math.max(0, l - 20)) * VALUE_TIER[int(inst?.t, 0, 4, 0)]; };
 // credits for one more level at an outfitter (plus one upgrade material)
 export const upgradeCost = (inst, basePrice) => Math.round(basePrice * 0.35 * inst.l * COST_TIER[inst.t]);
-export const canUpgrade = (inst) => !!inst && inst.l < MAX_LEVEL;
+export const canUpgrade = (inst) => !!inst && inst.l < LEVEL_CAP;
 export const canCombine = (a, b) => !!a && !!b && a.u !== b.u && a.i === b.i && a.t === b.t && a.t < TIERS.length - 1;
-// two of a kind and tier become one of the next tier, keeping the better level
-export const combined = (a, b) => ({ u: a.u, i: a.i, l: Math.max(a.l, b.l), t: a.t + 1, x: Math.max(a.x, b.x) });
+// two of a kind and tier become one of the next tier, keeping the better level (and that one's
+// experience, or its trial's progress at 99)
+export function combined(a, b) {
+	const hi = a.l === b.l ? (a.x >= b.x ? a : b) : a.l > b.l ? a : b;
+	return { u: a.u, i: a.i, l: hi.l, t: a.t + 1, x: hi.x };
+}
 
-// the experience it would take to reach the top level from where it stands
+// the experience it would take to reach level 99 from where it stands
 export function xpToMax(inst) {
 	let n = -int(inst?.x ?? 0, 0, 1e6, 0);
-	for (let l = int(inst?.l, 1, MAX_LEVEL, 1); l < MAX_LEVEL; l++) n += xpNeed(l);
+	for (let l = int(inst?.l, 1, MAX_LEVEL, 1); l < LEVEL_CAP; l++) n += xpNeed(l);
 	return Math.max(0, n);
 }
-// experience gained: levels rise while it covers the next one
+// experience gained: levels rise while it covers the next one, to 99. At 99 experience no
+// longer counts (x is the trial's progress there: trialStep).
 export function trained(inst, xp) {
+	if (inst.l >= LEVEL_CAP) return inst;
 	let { l, x } = inst;
 	x += Math.max(0, Math.round(xp));
-	while (l < MAX_LEVEL && x >= xpNeed(l)) { x -= xpNeed(l); l++; }
-	if (l >= MAX_LEVEL) x = 0;
+	while (l < LEVEL_CAP && x >= xpNeed(l)) { x -= xpNeed(l); l++; }
+	if (l >= LEVEL_CAP) x = 0;
 	return { ...inst, l, x };
 }
+
+// What the hundredth takes, by what an item is (gameplay/arms.js: a catalog item's `ascend`): a
+// weapon brings down one of the great beasts or machines while in hand; a garment carries its
+// own school through 300 spells cast while it is worn.
+export const ASCEND_TRIALS = Object.freeze({
+	weapon: Object.freeze({ n: 1, what: 'boss' }),
+	garment: Object.freeze({ n: 300, what: 'casts' }),
+});
+// n more toward an item's trial at 99, of `of`: done, it is 100★ (anything else is unchanged)
+export function trialStep(inst, n, of) {
+	if (inst?.l !== LEVEL_CAP || !(of > 0)) return inst;
+	const x = Math.min(of, (inst.x || 0) + Math.max(0, Math.floor(n)));
+	return x >= of ? { ...inst, l: ASCENDED, x: 0 } : { ...inst, x };
+}
+// a level as it is shown: 100★ for the hundredth
+export const levelText = (l) => (l >= ASCENDED ? `${ASCENDED}★` : String(l));
 
 // a short, stable id from a transaction id and a count (FNV-1a, two seeds)
 function fnv(s, h) { for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }

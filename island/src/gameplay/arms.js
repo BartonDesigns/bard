@@ -6,7 +6,7 @@
 // ask for a hunting or home-defence action without turning the game into a
 // real-world weapons simulator.
 
-import { MAX_LEVEL, UPGRADE_MATERIAL, canCombine, cleanInstance, combined, mintUid, trained, upgradeCost, valueFactor } from './gear-levels.js';
+import { ASCEND_TRIALS, LEVEL_CAP, UPGRADE_MATERIAL, canCombine, cleanInstance, combined, mintUid, trained, trialStep, upgradeCost, valueFactor } from './gear-levels.js';
 
 // 2: every item owned is an instance with an id, a level and a quality tier (gameplay/gear-levels.js)
 export const INVENTORY_VERSION = 2;
@@ -35,6 +35,7 @@ export const TRANSACTION_KINDS = Object.freeze({
 	SELL: 'sell',
 	TRADE: 'trade',
 	TRAIN: 'train',
+	TRIAL: 'trial',
 	UPGRADE: 'upgrade',
 	COMBINE: 'combine',
 });
@@ -83,6 +84,7 @@ const ITEMS = [
 		stackable: false,
 		consumable: false,
 		heatRisk: 8,
+		ascend: 'weapon',
 	},
 	{
 		id: 'mossback-scout-rifle',
@@ -99,6 +101,7 @@ const ITEMS = [
 		stackable: false,
 		consumable: false,
 		heatRisk: 6,
+		ascend: 'weapon',
 	},
 	{
 		id: 'warden-spark-carbine',
@@ -115,6 +118,7 @@ const ITEMS = [
 		stackable: false,
 		consumable: false,
 		heatRisk: 18,
+		ascend: 'weapon',
 	},
 	{
 		id: 'reedline-hunting-bow',
@@ -131,6 +135,7 @@ const ITEMS = [
 		stackable: false,
 		consumable: false,
 		heatRisk: 3,
+		ascend: 'weapon',
 	},
 	{
 		id: 'hunting-net',
@@ -278,7 +283,7 @@ const ITEMS = [
 		['fieldcraft-gloves', 'Fieldcraft Gloves', 'hands', 'Supple leather gloves for a sure grip and quick hands.', 80],
 		['trailstrider-boots', 'Trailstrider Boots', 'feet', 'Light boots with soles that remember the trail.', 100],
 		['duskwalker-boots', 'Duskwalker Boots', 'feet', 'Soft-soled boots that make no sound after dark, and keep the mind on the path.', 120],
-	].map(([id, name, slot, use, basePrice]) => ({ id, name, kind: 'garment', fictional: true, activities: [], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase' }, marketTradable: true, basePrice, weight: 1, slot, stackable: false, consumable: false, heatRisk: 0 })),
+	].map(([id, name, slot, use, basePrice]) => ({ id, name, kind: 'garment', fictional: true, activities: [], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase' }, marketTradable: true, basePrice, weight: 1, slot, stackable: false, consumable: false, heatRisk: 0, ascend: 'garment' })),
 	// the Moon colony's errand things (planet/colony/errands.js): carried, handed over, never sold
 	...[
 		['relay-transceiver-board', 'Relay Transceiver Board', 'A spare transceiver board for the Far Side Relay, signed out of the colony depot.'],
@@ -292,6 +297,8 @@ export const ARMS_CATALOG = freeze(Object.fromEntries(ITEMS.map((item) => [item.
 // where garments are worn, head to foot
 export const GARMENT_SLOTS = Object.freeze(['head', 'body', 'hands', 'feet']);
 export const isGarment = (itemId) => itemFor(itemId)?.kind === 'garment';
+// the trial an item's hundredth takes at level 99 (gear-levels.js ASCEND_TRIALS), or null
+export const ascendTrialOf = (itemId) => ASCEND_TRIALS[itemFor(itemId)?.ascend] || null;
 
 export const SOURCE_CATALOG = freeze({
 	[ACQUISITION_SOURCES.PLAYER_MARKET]: {
@@ -778,11 +785,22 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		return { ok: true, state: next, receipt: receipt(id, kind, true, next.revision, { uid: inst.u, level: next.instances[inst.u].l }) };
 	}
 
+	// a step of an item's trial at level 99 (counted like experience, not journaled); done, it
+	// is 100★
+	if (kind === TRANSACTION_KINDS.TRIAL) {
+		const inst = instanceOf(state, tx.uid), trial = inst && ascendTrialOf(inst.i);
+		if (!inst) return reject(state, tx, 'not-owned', 'The player does not have that item.');
+		if (!trial || inst.l !== LEVEL_CAP) return reject(state, tx, 'no-trial', 'Only a weapon or garment at level 99 has a trial.');
+		const after = trialStep(inst, clamp(tx.n, 0, 1000), trial.n);
+		const next = recount({ ...state, instances: { ...state.instances, [inst.u]: after }, revision: state.revision + 1, updatedAt: integer(tx.at, state.updatedAt) });
+		return { ok: true, state: next, receipt: receipt(id, kind, true, next.revision, { uid: inst.u, level: after.l, progress: after.x }) };
+	}
+
 	// one level more at an outfitter, for credits and one upgrade material
 	if (kind === TRANSACTION_KINDS.UPGRADE) {
 		const inst = instanceOf(state, tx.uid);
 		if (!inst) return reject(state, tx, 'not-owned', 'The player does not have that item.');
-		if (inst.l >= MAX_LEVEL) return reject(state, tx, 'max-level', 'That item is already at its highest level.');
+		if (inst.l >= LEVEL_CAP) return reject(state, tx, 'max-level', inst.l > LEVEL_CAP ? 'That item is already at its highest level.' : 'That item is at level 99: its hundredth is earned by its trial.');
 		if (String(tx.sourceId || '') !== ACQUISITION_SOURCES.NPC_TRADER) return reject(state, tx, 'not-here', 'Upgrades are done at an outfitter.');
 		const cost = upgradePrice(inst);
 		if (tx.cost !== undefined && integer(tx.cost, -1) !== cost) return reject(state, tx, 'price-mismatch', 'The upgrade price changed.');

@@ -6,8 +6,9 @@
 import { MAX_LEVEL } from '../gameplay/gear-levels.js';
 
 export const VERSION = 1;
-// gear above the old top level (10) travels in trades: a server without this word drops it
-export const GEAR_FEATURE = 'gear-levels-20';
+// gear above the old top level (10), to 99 and 100★, travels in trades: a server without this
+// word drops it
+export const GEAR_FEATURE = 'gear-levels-100';
 export const LEGACY_LEVEL = 10;
 export const MAX_PLAYERS = 8;
 // one message's size, in characters

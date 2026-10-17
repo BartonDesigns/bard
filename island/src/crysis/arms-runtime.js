@@ -22,8 +22,8 @@ import {
 	sellPrice,
 	upgradePrice,
 } from '../gameplay/arms.js';
-import { canCombine, canUpgrade } from '../gameplay/gear-levels.js';
-import { awakenedBetween } from '../gameplay/gear-magic.js';
+import { LEVEL_CAP, canCombine, canUpgrade } from '../gameplay/gear-levels.js';
+import { awakenedBetween, ascendTrial } from '../gameplay/gear-magic.js';
 import { normalizeSiteKind, resolveSiteAccess, siteDefinition } from '../world/site-catalog.js';
 
 const SOURCE_BY_SITE = Object.freeze({
@@ -347,7 +347,8 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	// experience for an item (carrying it about, a hunt): gathered, then counted every so often
 	let pendingXp = 0, pendingUid = null, xpClock = 0;
 	function train(uid, xp) {
-		if (!state.instances?.[uid]) return;
+		// (at 99 experience no longer counts: the hundredth is its trial's)
+		if (!(state.instances?.[uid]?.l < LEVEL_CAP)) return;
 		const before = state.instances[uid].l;
 		const out = transact({ id: txId('train', state.instances[uid].i, 'xp'), kind: TRANSACTION_KINDS.TRAIN, uid, xp, at: now() });
 		if (!out.ok) return;
@@ -355,8 +356,8 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		const after = out.state.instances[uid];
 		if (after.l > before) {
 			// (and the magic a level wakes in it: gameplay/gear-magic.js)
-			const woke = awakenedBetween(after, before, after.l).at(-1);
-			hint(`${findItem(after.i).name} reached level ${after.l}.${woke ? ` ${woke.name}: ${woke.desc}` : ''}`, woke ? 6000 : 3500);
+			const woke = awakenedBetween(after, before, after.l).at(-1), trial = after.l === LEVEL_CAP && ascendTrial(after);
+			hint(`${findItem(after.i).name} reached level ${after.l}.${woke ? ` ${woke.name}: ${woke.desc}` : ''}${trial ? ` Its trial for the hundredth: ${trial.desc}` : ''}`, woke || trial ? 6000 : 3500);
 		}
 	}
 	// carrying the item in hand while you travel on foot: about one point every 15 m
@@ -377,6 +378,22 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		if (changed) save(state);
 		return up;
 	}
+	// steps of items' trials at level 99 ({ uid: n }); returns the items that reached 100★
+	function trialMany(steps) {
+		const up = [];
+		let changed = false;
+		for (const [uid, n] of Object.entries(steps || {})) {
+			const x = state.instances?.[uid];
+			if (!x || x.l !== LEVEL_CAP || !(n >= 1)) continue;
+			const out = transact({ id: txId('trial', x.i, 'trial'), kind: TRANSACTION_KINDS.TRIAL, uid, n: Math.floor(n), at: now() });
+			if (!out.ok) continue;
+			state = out.state; changed = true;
+			const after = state.instances[uid];
+			if (after.l > x.l) up.push({ uid, name: findItem(x.i).name, from: x.l, to: after.l, awake: awakenedBetween(after, x.l, after.l) });
+		}
+		if (changed) save(state);
+		return up;
+	}
 	function carry(dt, metres) {
 		const uid = state.hand;
 		if (!uid) return;
@@ -389,7 +406,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 
 	function command(text, context = {}) { return execute(parseArmsRequest(text), context); }
 	function update(dt = 0, position = null) { scanClock -= Math.max(0, +dt || 0); if (position && (scanClock <= 0 || !lastPosition || distance(position, lastPosition) > 8)) { scanClock = 0.5; nearby(position); } return lastNearby; }
-	return { setPurchasePolicy: policy => { purchasePolicy = policy; }, catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), wear, takeOff, worn, revision: () => state.revision, instance: (uid) => (state.instances?.[uid] ? { ...state.instances[uid] } : null), upgrade, combine, train, trainMany, carry, apply, applied, spendCredits, lockTrades, locked: () => tradeLocks.size > 0, canAttemptTheft: (input) => C.canAttemptTheft(input) };
+	return { setPurchasePolicy: policy => { purchasePolicy = policy; }, catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), wear, takeOff, worn, revision: () => state.revision, instance: (uid) => (state.instances?.[uid] ? { ...state.instances[uid] } : null), instances: () => Object.values(state.instances || {}).map((x) => ({ ...x })), upgrade, combine, train, trainMany, trialMany, carry, apply, applied, spendCredits, lockTrades, locked: () => tradeLocks.size > 0, canAttemptTheft: (input) => C.canAttemptTheft(input) };
 }
 
 export { ARMS_CATALOG, SOURCE_CATALOG };

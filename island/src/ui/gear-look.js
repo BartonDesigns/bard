@@ -5,8 +5,8 @@ import { armamentVariant } from '../gameplay/armament-variants.js';
 // small sounds for placing, removing and accepting. All drawn here: no images, no fonts loaded.
 
 import { ARMS_CATALOG } from '../gameplay/arms.js';
-import { TIERS, statsOf, compareStats, xpNeed, MAX_LEVEL } from '../gameplay/gear-levels.js';
-import { attunement, schoolGlyph, nextAwakening } from '../gameplay/gear-magic.js';
+import { TIERS, statsOf, compareStats, xpNeed, LEVEL_CAP, levelText } from '../gameplay/gear-levels.js';
+import { attunement, schoolGlyph, nextAwakening, ascendTrial } from '../gameplay/gear-magic.js';
 import { SCHOOLS } from '../magic/spells.js';
 import { iconOf } from '../crysis/held-items.js';
 import { soundBus } from '../world/soundbus.js';
@@ -33,6 +33,7 @@ const CSS = `
 .g99-slot.item:hover{transform:translateY(-1px)}
 .g99-slot img{width:90%;height:90%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.6))}
 .g99-slot .lv{position:absolute;right:2px;bottom:1px;font:800 10px system-ui;color:#fff;text-shadow:0 1px 2px #000,0 0 3px #000;pointer-events:none}
+.g99-slot .lv.top{font-size:9px;color:#ffd27a;text-shadow:0 0 6px #ffb340,0 1px 2px #000}
 .g99-slot .n{position:absolute;left:3px;top:1px;font:800 10px system-ui;color:#f4e3b0;text-shadow:0 1px 2px #000;pointer-events:none}
 .g99-slot.held::after{content:'✋';position:absolute;left:2px;bottom:0;font-size:10px}
 .g99-slot .sc{position:absolute;right:3px;top:1px;font:700 10px system-ui;color:var(--sc);text-shadow:0 0 4px var(--sc),0 1px 2px #000;pointer-events:none}
@@ -70,7 +71,12 @@ export function btn(label, fn, cls = '', title = '') {
 }
 export function coins(n) { const d = el('div', 'g99-coins'); d.append(el('span', 'g99-coin'), el('span', '', `${(n || 0).toLocaleString()}`)); return d; }
 export function bar(frac) { const b = el('div', 'g99-bar'), i = el('i'); i.style.width = `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`; b.append(i); return b; }
-export const xpFrac = (x) => (x.l >= MAX_LEVEL ? 1 : x.x / xpNeed(x.l));
+// the bar under an item: experience to its next level, its trial's progress at 99, full at 100★
+export function xpFrac(x) {
+	if (x.l < LEVEL_CAP) return x.x / xpNeed(x.l);
+	const T = x.l === LEVEL_CAP && ascendTrial(x);
+	return T ? T.n / T.of : 1;
+}
 
 // an item slot: the item's picture (or icon), its tier's edge and glow, level and count
 // (school: its attunement's mark, top right; false for a shop's sample, whose school is not yet
@@ -86,7 +92,7 @@ export function slot(inst, { thumb = '', count = 0, held = false, fresh = false,
 	if (fresh) s.classList.add('new');
 	s.style.setProperty('--tc', T.color); s.style.setProperty('--tg', String(0.25 + T.glow));
 	if (thumb) { const im = el('img'); im.src = thumb; im.alt = ''; s.append(im); } else s.append(iconOf(inst.i));
-	s.append(el('span', 'lv', String(inst.l)));
+	s.append(el('span', inst.l >= LEVEL_CAP ? 'lv top' : 'lv', levelText(inst.l)));
 	if (count > 1) s.append(el('span', 'n', `×${count}`));
 	const sch = school && attunement(inst);
 	if (sch) { const g = el('span', 'sc', schoolGlyph(sch)); s.style.setProperty('--sc', SCHOOLS[sch].color); s.append(g); }
@@ -101,7 +107,8 @@ export const fmt = (v, unit) => (unit === 'pt' ? `+${v}` : `${v}${unit === '%' ?
 export function tipContent(inst, vs = null, vsLabel = '') {
 	const d = el('div');
 	const nm = el('b', '', nameOf(inst.i)); nm.style.color = tierColor(inst.t);
-	d.append(nm, el('div', '', `${tierName(inst.t)} · Level ${inst.l}${inst.l < MAX_LEVEL ? ` (${inst.x}/${xpNeed(inst.l)} xp)` : ' (max)'}`));
+	const trial = inst.l === LEVEL_CAP && ascendTrial(inst);
+	d.append(nm, el('div', '', `${tierName(inst.t)} · Level ${levelText(inst.l)}${inst.l < LEVEL_CAP ? ` (${inst.x}/${xpNeed(inst.l)} xp)` : trial ? ` (its trial: ${trial.n}/${trial.of})` : inst.l > LEVEL_CAP ? '' : ' (max)'}`));
 	const variant = armamentVariant(inst.i, inst.t);
 	if (variant) d.append(el('div', '', `${variant.name} · Mark ${variant.mark}`));
 	const sch = attunement(inst);

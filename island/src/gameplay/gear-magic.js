@@ -1,26 +1,32 @@
 // The magic in gear. Every weapon and garment (gameplay/arms.js) is attuned to one school of
 // magic (magic/spells.js), fixed by its own id: two hoods are rarely alike, a hood keeps its
 // school through upgrades, combining (the one you keep) and trades. As it levels its magic
-// wakes, at 5, 10, 15 and 20, while you hold the weapon or wear the garment:
+// wakes, at 5, 25, 50 and 75, while you hold the weapon or wear the garment, and once more at
+// the hundredth, which its trial earns at 99 (gear-levels.js ASCEND_TRIALS):
 //
-//   5   Attuned   its school's spells strike harder (and heal and ward more)
-//   10  Flow      a garment: the school's spells cost less and come back sooner;
-//                 a weapon: each hit takes time off the school's cooldowns (Spellstrike)
-//   15  Altered   a garment changes how one of the school's spells works (ALTERATIONS);
-//                 a weapon: its hits carry the school's nature (INFUSIONS)
-//   20  Mastery   a garment: every few spells of its school cost nothing;
-//                 a weapon: every few hits it looses one of the school's spells (SPELLSHOT)
+//   5     Attuned   its school's spells strike harder (and heal and ward more)
+//   25    Flow      a garment: the school's spells cost less and come back sooner;
+//                   a weapon: each hit takes time off the school's cooldowns (Spellstrike)
+//   50    Altered   a garment changes how one of the school's spells works (ALTERATIONS);
+//                   a weapon: its hits carry the school's nature (INFUSIONS)
+//   75    Mastery   a garment: every few spells of its school cost nothing;
+//                   a weapon: every few hits it looses one of the school's spells (SPELLSHOT)
+//   100★  Ascended  a garment: its school stronger still, and its free spell one sooner;
+//                   a weapon: its hits harder, and its Spellshot one hit sooner
 //
 // The better its quality tier, the stronger the numbers. Gear is levelled by use, at an
 // outfitter, or by infusing it with aether fabric of its school's strand.
 // Pure: no three, no DOM (island/tools/gear-magic.test.mjs). magic/stats.js sums it.
 
 import { ARMS_CATALOG } from './arms.js';
-import { hashOf, statsOf } from './gear-levels.js';
+import { ASCEND_TRIALS, ASCENDED, LEVEL_CAP, hashOf, statsOf } from './gear-levels.js';
 import { SCHOOLS, SPELL, SPELLS } from '../magic/spells.js';
 
-export const AWAKEN = Object.freeze([5, 10, 15, 20]);
-export const AWAKEN_NAMES = Object.freeze(['Attuned', 'Flow', 'Altered', 'Mastery']);
+export const AWAKEN = Object.freeze([5, 25, 50, 75, ASCENDED]);
+export const AWAKEN_NAMES = Object.freeze(['Attuned', 'Flow', 'Altered', 'Mastery', 'Ascended']);
+// what the hundredth adds: a tenth more power (a garment's school, a weapon's hits), and the free
+// spell or the Spellshot one sooner (never sooner than every second)
+export const ASCENDED_POWER = 0.1;
 // experience a thread of fabric gives when infused into gear
 export const XP_PER_FABRIC = 3;
 
@@ -131,9 +137,20 @@ export function awakenings(inst) {
 		`${S} spells are ${pc(attunedPower(t))} stronger.`,
 		weapon ? `Spellstrike: each hit takes ${strikeCut(t)} s off your ${S} spells' cooldowns.` : `${S} spells cost ${pc(flowShare(t))} less mana and come back ${pc(flowShare(t))} sooner.`,
 		weapon ? `${I.name}: ${I.desc[0].toLowerCase()}${I.desc.slice(1)}` : A.desc,
-		weapon ? `Spellshot: every ${spellshotEvery(t)} hits, it looses ${shot.name} of its own.` : `Every ${['', '', '', 'third', 'fourth', 'fifth'][masteryEvery(t)]} ${S} spell costs nothing and starts no cooldown.`,
+		weapon ? `Spellshot: every ${spellshotEvery(t)} hits, it looses ${shot.name} of its own.` : `Every ${ORD[masteryEvery(t)]} ${S} spell costs nothing and starts no cooldown.`,
+		weapon ? `Its hits strike ${pc(ASCENDED_POWER)} harder, and its Spellshot comes every ${ascendedEvery(spellshotEvery(t))} hits.` : `${S} spells are ${pc(ASCENDED_POWER)} stronger still, and every ${ORD[ascendedEvery(masteryEvery(t))]} one is free.`,
 	];
 	return AWAKEN.map((level, k) => ({ level, name: AWAKEN_NAMES[k], desc: rows[k], on: l >= level }));
+}
+const ORD = ['', '', 'second', 'third', 'fourth', 'fifth', 'sixth'];
+const ascendedEvery = (n) => Math.max(2, n - 1);
+// the trial an item's hundredth takes, in words, with its progress at 99 (null: none, or done)
+export function ascendTrial(inst) {
+	const school = attunement(inst);
+	if (!school || levelOf(inst) > LEVEL_CAP) return null;
+	const weapon = isWeaponId(inst.i), T = ASCEND_TRIALS[weapon ? 'weapon' : 'garment'];
+	const desc = weapon ? 'Bring down one of the great beasts or machines with it in hand.' : `Cast ${T.n} ${SCHOOLS[school].name} spells while wearing it.`;
+	return { n: levelOf(inst) === LEVEL_CAP ? Math.min(T.n, inst.x || 0) : 0, of: T.n, desc, open: levelOf(inst) === LEVEL_CAP };
 }
 // the next awakening still asleep (null: all awake)
 export const nextAwakening = (inst) => awakenings(inst).find((a) => !a.on) || null;
@@ -145,7 +162,8 @@ export function awakenedBetween(inst, a, b) {
 // What the gear you wear and hold adds up to. list: the worn garments and the weapon in hand
 // (instances). Returns { attrs: { attr: n }, power, mana, cd: { school: share }, alter:
 // { spellId: alteration }, free: { school: every }, weapon: null | { uid, school, strike,
-// infuse, shot: { spell, every } }, lines: [what is awake, in words] }
+// infuse, shot: { spell, every }, harm: a share more at the hundredth }, lines: [what is awake,
+// in words] }
 export function gearMagic(list) {
 	const out = { attrs: {}, power: {}, mana: {}, cd: {}, alter: {}, free: {}, weapon: null, lines: [] };
 	for (const inst of list || []) {
@@ -154,10 +172,11 @@ export function gearMagic(list) {
 		const school = attunement(inst), t = tierOf(inst), l = levelOf(inst), weapon = isWeaponId(inst.i);
 		if (!school) continue;
 		const name = ARMS_CATALOG[inst.i]?.name || inst.i;
-		if (weapon) out.weapon = { uid: inst.u, school, strike: 0, infuse: null, shot: null };
+		if (weapon) out.weapon = { uid: inst.u, school, strike: 0, infuse: null, shot: null, harm: 0 };
 		const rows = awakenings(inst);
 		for (const a of rows) if (a.on) out.lines.push({ item: name, uid: inst.u, school, level: a.level, name: a.name, desc: a.desc });
-		if (l >= AWAKEN[0]) out.power[school] = (out.power[school] || 0) + attunedPower(t);
+		const up = l >= AWAKEN[4];
+		if (l >= AWAKEN[0]) out.power[school] = (out.power[school] || 0) + attunedPower(t) + (up && !weapon ? ASCENDED_POWER : 0);
 		if (l >= AWAKEN[1]) {
 			if (weapon) out.weapon.strike = strikeCut(t);
 			else { out.mana[school] = (out.mana[school] || 0) + flowShare(t); out.cd[school] = (out.cd[school] || 0) + flowShare(t); }
@@ -167,10 +186,11 @@ export function gearMagic(list) {
 			else out.alter[ALTERATIONS[school].spell] = ALTERATIONS[school];
 		}
 		if (l >= AWAKEN[3]) {
-			if (weapon) out.weapon.shot = { spell: SPELLSHOT[school], every: spellshotEvery(t) };
+			if (weapon) out.weapon.shot = { spell: SPELLSHOT[school], every: up ? ascendedEvery(spellshotEvery(t)) : spellshotEvery(t) };
 			// (two garments of one school: the more generous one counts)
-			else out.free[school] = Math.min(out.free[school] || 99, masteryEvery(t));
+			else out.free[school] = Math.min(out.free[school] || 99, up ? ascendedEvery(masteryEvery(t)) : masteryEvery(t));
 		}
+		if (up && weapon) out.weapon.harm = ASCENDED_POWER;
 	}
 	return out;
 }

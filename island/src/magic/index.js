@@ -20,14 +20,21 @@
 // mana), time off its school's cooldowns, and every few hits a spell of its own. What you wear
 // and hold learns as you go (gear experience, counted every few seconds), and takes aether
 // fabric of its school's strand to grow faster (infuse).
+//
+// Level 99 is as far as experience goes, for you and for gear. Your hundredth comes through the
+// trials (magic/trials.js): the deeds are counted here from the fight's own record, the gear read
+// from what you own and wear, each trial told as it is done, and the rite made at an aether
+// well at dusk or dawn. A weapon or garment at 99 has a trial of its own (a great beast felled
+// with it in hand, its school's spells cast while it is worn), counted with gear experience.
 
 import { createMagicState, saveMagic, weave, weaveCost, bind, gather, manaMax, SPELL, SLOTS } from './spells.js';
-import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, rankOf, PAGES, PERK, spellBlock } from './skills.js';
+import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, rankOf, levelOf, LEVEL_CAP, PAGES, PERK, spellBlock } from './skills.js';
+import { trialsOf, trialsOpen, trialsDone, newlyDone, countDeed, riteBlock, ascend, TRIALS, RITE } from './trials.js';
 import { refreshStats, statSheet, BASE_LIFE } from './stats.js';
-import { attunement, infuseStrands, isWeaponId, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
-import { MAX_LEVEL, xpToMax } from '../gameplay/gear-levels.js';
+import { ascendTrial, attunement, infuseStrands, isWeaponId, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
+import { LEVEL_CAP as GEAR_CAP, xpToMax } from '../gameplay/gear-levels.js';
 import { createSkillsMenu } from './skills-ui.js';
-import { createMagicFx, magicSound } from './fx.js';
+import { createMagicFx, magicSound, GLOW } from './fx.js';
 import { createAether, seedOf } from './aether.js';
 import { createCaster } from './caster.js';
 import { createMagicHud } from './hud.js';
@@ -52,7 +59,45 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	function learnt(r) {
 		dirty = true;
 		const levels = typeof r === 'number' ? r : r?.levels || 0;
-		if (levels > 0) { hud?.levelUp(state.level, pointsOf(state)); magicSound('level', 0.16); skills?.refresh(); }
+		if (levels <= 0) return;
+		magicSound('level', 0.16); skills?.refresh();
+		if (state.level < LEVEL_CAP) { hud?.levelUp(state.level, pointsOf(state)); return; }
+		// (99: experience goes no further; the trials open, and those done already are counted)
+		const was = newlyDone(state, trialContext()).length;
+		hud?.levelUp(state.level, pointsOf(state), `The trials of the hundredth are open · ${was} of ${TRIALS.length} done · Shift+I`);
+	}
+	// what the trials read from your gear: your best weapon's level, and the slots worn at 75 or more
+	function trialContext() {
+		let weaponTop = 0;
+		for (const x of arms.instances?.() || []) if (isWeaponId(x.i)) weaponTop = Math.max(weaponTop, x.l);
+		const wornTop = Object.values(arms.worn?.() || {}).filter((x) => x.l >= 75).length;
+		return { weaponTop, wornTop };
+	}
+	// trials done since last told, told (only once they are open, at 99)
+	function tellTrials() {
+		if (state.ascended || !trialsOpen(state)) return;
+		const ctx = trialContext(), ids = newlyDone(state, ctx);
+		if (!ids.length) return;
+		dirty = true;
+		const n = trialsDone(state, ctx), names = ids.map((id) => TRIALS.find((t) => t.id === id).name).join(', ');
+		hint(`Trial done: ${names} (${n} of ${TRIALS.length}).${n === TRIALS.length ? ` ${RITE}` : ''}`, n === TRIALS.length ? 7000 : 4000);
+		magicSound('level', 0.1);
+	}
+	// the rite, made where an aether well is gathered: the hundredth
+	function rite(m) {
+		const ctx = trialContext(), at = { well: true, light: light() };
+		if (!ascend(state, ctx, at)) {
+			const why = riteBlock(state, ctx, at);
+			if (trialsOpen(state) && !state.ascended && trialsDone(state, ctx) === TRIALS.length && why) hint(why, 4000);
+			return false;
+		}
+		dirty = true;
+		restat(true);
+		hud?.ascend?.(pointsOf(state));
+		magicSound('level', 0.22);
+		fx.pillar({ x: m.x, y: (m.y ?? camera.position.y - 1.6), z: m.z }, 60, GLOW.dawn, isPhone ? 80 : 200, 2.5, 1.2, true);
+		skills?.refresh();
+		return true;
 	}
 	// ---------- your statistics: what you wear and hold, your ranks and level ----------
 	const gearNow = () => [...Object.values(arms.worn?.() || {}), arms.held?.()].filter(Boolean);
@@ -60,7 +105,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	// (made anew when any of what feeds them has changed; force: now, whatever)
 	function restat(force = false) {
 		const g = gearNow();
-		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}`;
+		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.ascended}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}`;
 		if (!force && sig === statSig) return false;
 		statSig = sig; state.gear = g;
 		refreshStats(state);
@@ -69,24 +114,30 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	}
 	restat(true);
 	// experience for what you wear and hold, gathered and counted every few seconds
-	const gearXp = {};
+	// (and the steps of items' trials at 99, counted the same way)
+	const gearXp = {}, trialSteps = {};
 	let gearT = 8;
 	const gainGear = (uid, n) => { if (uid && n > 0) gearXp[uid] = (gearXp[uid] || 0) + n; };
+	const stepTrial = (uid, n = 1) => { if (uid) trialSteps[uid] = (trialSteps[uid] || 0) + n; };
 	function announce(up) {
 		for (const x of up) {
 			const woke = x.awake.at(-1);
-			hint(`${x.name} reached level ${x.to}.${woke ? ` ${woke.name}: ${woke.desc}` : ''}`, woke ? 6000 : 3500);
+			const inst = x.to === GEAR_CAP ? arms.instance?.(x.uid) : null, trial = inst && ascendTrial(inst);
+			hint(`${x.name} reached ${x.to >= 100 ? 'the hundredth level, 100★' : `level ${x.to}`}.${woke ? ` ${woke.name}: ${woke.desc}` : ''}${trial ? ` Its trial for the hundredth: ${trial.desc}` : ''}`, woke || trial ? 6000 : 3500);
 			if (woke) magicSound('level', 0.12);
 		}
 		if (up.length) restat(true);
 	}
 	function flushGear() {
-		const gains = {};
+		const gains = {}, steps = {};
 		for (const [u, n] of Object.entries(gearXp)) {
-			if (!arms.instance?.(u)) { delete gearXp[u]; continue; }
+			// (gone, or at 99: experience no longer counts for it)
+			if (!(arms.instance?.(u)?.l < GEAR_CAP)) { delete gearXp[u]; continue; }
 			if (n >= 1) { gains[u] = Math.floor(n); gearXp[u] -= gains[u]; }
 		}
+		for (const [u, n] of Object.entries(trialSteps)) { if (n >= 1) steps[u] = n; delete trialSteps[u]; }
 		if (Object.keys(gains).length) announce(arms.trainMany?.(gains) || []);
+		if (Object.keys(steps).length) announce(arms.trialMany?.(steps) || []);
 	}
 	const fx = createMagicFx(scene, { isPhone });
 	const W = () => world();
@@ -95,8 +146,11 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	const track = (kind, a, b) => {
 		if (kind === 'cast' && b > 0) {
 			learnt(addUse(state, a.school, b));
-			// (garments learn from the weave they carry, twice as fast for their own school)
-			for (const g of Object.values(arms.worn?.() || {})) gainGear(g.u, b / 6 * (attunement(g) === a.school ? 2 : 1));
+			// (garments learn from the weave they carry, twice as fast for their own school; at 99 a
+			// spell of their own school is a step of their trial)
+			for (const g of Object.values(arms.worn?.() || {})) {
+				if (g.l === GEAR_CAP) { if (attunement(g) === a.school) stepTrial(g.u); } else gainGear(g.u, b / 6 * (attunement(g) === a.school ? 2 : 1));
+			}
 		} else if (kind === 'hurt' && a > 0) {
 			learnt(addUse(state, 'resilience', a / 2));
 			const w = arms.worn?.() || {};
@@ -149,7 +203,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		if (!x || !attunement(x)) return { ok: false, message: 'Only weapons and garments take the weave.' };
 		const can = infuseStrands(x);
 		if (!can.includes(strand)) return { ok: false, message: `It takes ${can.join(' or ')} fabric.` };
-		if (x.l >= MAX_LEVEL) return { ok: false, message: 'It is at its highest level.' };
+		if (x.l >= GEAR_CAP) return { ok: false, message: x.l > GEAR_CAP ? 'It is at its highest level.' : 'It is at level 99: its hundredth is earned by its trial, not woven.' };
 		// (gear is held still while a trade is open: the fabric would be spent for nothing)
 		if (arms.locked?.()) return { ok: false, message: 'Finish the pending trade first.' };
 		n = Math.min(Math.floor(+n || 0), state.fabric[strand], Math.ceil(xpToMax(x) / XP_PER_FABRIC));
@@ -172,6 +226,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 			gather(state, m.strand, n); dirty = true;
 			learnt(addXp(state, n * 2));
 			magicSound('gather', 0.1);
+			// (a well is where the rite of the hundredth is made)
+			if (m.well && rite(m)) return;
 			hint(m.well ? `An aether well: +${n} ${m.strand} fabric. You will know the way back to it.` : `+${n} ${m.strand} aether fabric`, m.well ? 3500 : 1200);
 		},
 	});
@@ -243,8 +299,10 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	addEventListener('keydown', onKey); addEventListener('keyup', onKeyUp); addEventListener('pointermove', onMove); addEventListener('blur', clearKeys);
 	// mercy and its opposite, in the fabric (combat/morality.js's events)
 	const unMoral = combat.morality?.on?.((e) => {
-		if (e.kind === 'spare') { gather(state, 'light', 2); dirty = true; hint('Mercy shown: +2 light aether fabric', 1600); learnt(addXp(state, 25)); }
+		if (e.kind === 'spare') { gather(state, 'light', 2); countDeed(state, 'spare'); dirty = true; hint('Mercy shown: +2 light aether fabric', 1600); learnt(addXp(state, 25)); }
 		else if (e.kind === 'kill' || e.kind === 'kill-surrendered') { gather(state, 'dark', e.kind === 'kill' ? 1 : 3); dirty = true; learnt(addXp(state, 10)); }
+		// (a great beast brought down: a deed for the trials, and a weapon's own trial at 99)
+		else if (e.kind === 'boss-slain') { countDeed(state, 'boss-slain'); dirty = true; const H = arms.held?.(); if (H && isWeaponId(H.i) && H.l === GEAR_CAP) stepTrial(H.u); }
 	});
 	let player = null, lastH = 0, walked = 0;
 	const lastPos = { x: NaN, z: NaN };
@@ -265,7 +323,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		statT -= dt;
 		if (statT <= 0) { statT = 0.25; if (restat() && skills?.isOpen()) skills.refresh(); }
 		gearT -= dt;
-		if (gearT <= 0) { gearT = 8; flushGear(); }
+		if (gearT <= 0) { gearT = 8; flushGear(); tellTrials(); }
 		afterHits();
 		caster.update(dt, keysHeld);
 		aether.update(dt, camera.position);
@@ -283,9 +341,11 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (the menu open: the fight holds; fully over the world: it need not be drawn, main.js)
 		menuOpen: () => skills.isOpen(),
 		covering: () => skills.covering(),
-		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], life: BASE_LIFE + (state.mods?.life || 0), gear: state.gear.map((x) => ({ i: x.i, l: x.l, t: x.t, school: attunement(x) })), ...caster.info() }),
+		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), levelShown: levelOf(state), ascended: !!state.ascended, deeds: { ...state.deeds }, perks: [...state.perks], life: BASE_LIFE + (state.mods?.life || 0), gear: state.gear.map((x) => ({ i: x.i, l: x.l, t: x.t, school: attunement(x) })), ...caster.info() }),
 		// your statistics as a sheet (the Character view, ui/gear.js), and fabric into gear
-		stats: () => statSheet(state, { light: light() }),
+		stats: () => statSheet(state, { light: light(), trial: trialContext() }),
+		// the trials of the hundredth as they stand
+		trials: () => ({ open: trialsOpen(state), ascended: !!state.ascended, list: trialsOf(state, trialContext()), rite: state.ascended ? null : riteBlock(state, trialContext()) }),
 		infuse, restat: () => restat(true),
 		// (the console: experience, and a perk)
 		xp: (n = 100) => { learnt(addXp(state, n)); return { level: state.level, xp: state.xp, points: pointsOf(state) }; },

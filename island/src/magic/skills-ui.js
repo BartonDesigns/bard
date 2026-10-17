@@ -10,7 +10,7 @@
 // key let go), and draws its sky on one small canvas. All movement is transforms and opacity.
 
 import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
-import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK } from './skills.js';
+import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK, LEVEL_CAP, levelOf } from './skills.js';
 import { composeMods } from './stats.js';
 
 const KEYS = ['6', '7', '8', '9', '0'];
@@ -488,10 +488,11 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			P.chips[PAGES.indexOf(k)].classList.toggle('can', can);
 		}
 		// the header
-		const need = xpNeed(state.level), f = Math.min(1, state.xp / need), C = 2 * Math.PI * 18;
+		// (at 99 experience goes no further: the hundredth is earned by the trials)
+		const top = state.level >= LEVEL_CAP, need = xpNeed(state.level), f = top ? 1 : Math.min(1, state.xp / need), C = 2 * Math.PI * 18;
 		P.head.arc.setAttribute('stroke-dashoffset', `${C * (1 - f)}`);
-		P.head.lvl.textContent = state.level;
-		P.head.xp.textContent = `${Math.floor(state.xp)} / ${need} to level ${state.level + 1}`;
+		P.head.lvl.textContent = levelOf(state);
+		P.head.xp.textContent = state.ascended ? 'The hundredth: 100★' : top ? 'Level 99: the trials of the hundredth (Shift+I)' : `${Math.floor(state.xp)} / ${need} to level ${state.level + 1}`;
 		const pts = pointsOf(state);
 		P.head.pts.className = 'sk-pts ' + (pts ? 'has' : 'none');
 		P.head.pts.innerHTML = `<i>${pts}</i><span class="w">${pts === 1 ? 'skill point' : 'skill points'}</span>${mode === 'tall' ? (pts === 1 ? 'point' : 'points') : ''}`;
@@ -501,7 +502,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		info();
 	}
 	// (what, changed, means drawing it all again: not the mana, which only its number shows)
-	const sig = () => `${state.known.length}|${state.perks.length}|${state.level}|${Math.floor(state.xp)}|${state.fabric.light}|${state.fabric.dark}|${state.binds.join()}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join()}`;
+	const sig = () => `${state.known.length}|${state.perks.length}|${state.level}|${state.ascended}|${Math.floor(state.xp)}|${state.fabric.light}|${state.fabric.dark}|${state.binds.join()}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join()}`;
 
 	// ---------- choosing a star, and what it does ----------
 	function select(id, sticky) {

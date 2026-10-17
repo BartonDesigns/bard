@@ -197,7 +197,7 @@ const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' +
 	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 7, ht: 4 });
 	const hp = b.of('pose').at(-1);
 	ok(hp?.h === 'camp-lantern' && hp.hl === 7 && hp.ht === 4, 'a held item passes with its level and tier');
-	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 70, ht: -1 });
+	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: MAX_LEVEL + 1, ht: -1 });
 	const hq = b.of('pose').at(-1);
 	ok(hq?.h === 'camp-lantern' && !('hl' in hq) && !('ht' in hq), 'a bad level or tier is dropped');
 }

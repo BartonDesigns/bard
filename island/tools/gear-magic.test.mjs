@@ -1,14 +1,15 @@
 // Gear magic and your statistics (src/gameplay/gear-magic.js, src/magic/stats.js): gear to level
-// 20, garments worn on four slots, every weapon and garment attuned to a school, its magic waking
-// at 5, 10, 15 and 20, the seven attributes and where they come from, everything folded into the
-// spells' own numbers, and the caster doing what the altered spells and the weapons' hits ask.
+// 99 by experience and 100★ by its trial, garments worn on four slots, every weapon and garment
+// attuned to a school, its magic waking at 5, 25, 50, 75 and the hundredth, the seven attributes
+// and where they come from, everything folded into the spells' own numbers, and the caster doing
+// what the altered spells and the weapons' hits ask.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as THREE from 'three';
-import { MAX_LEVEL, SOFT_LEVEL, statsOf, statScale, trained, xpNeed, xpToMax, combined } from '../src/gameplay/gear-levels.js';
-import { ARMS_CATALOG, GARMENT_SLOTS, createInventoryState, applyInventoryTransaction, serializeInventory, deserializeInventory, sellPrice, cleanTradeSide } from '../src/gameplay/arms.js';
-import { AWAKEN, attunement, awakenings, awakenedBetween, gearMagic, infuseStrands, attributesOf as itemAttrs, isWeaponId, ALTERATIONS, SPELLSHOT, infusionOf, masteryEvery, schoolGlyph } from '../src/gameplay/gear-magic.js';
+import { MAX_LEVEL, LEVEL_CAP, ASCENDED, SOFT_LEVEL, statsOf, statScale, trained, trialStep, levelText, xpNeed, xpToMax, combined, upgradeCost } from '../src/gameplay/gear-levels.js';
+import { ARMS_CATALOG, GARMENT_SLOTS, createInventoryState, applyInventoryTransaction, serializeInventory, deserializeInventory, sellPrice, cleanTradeSide, ascendTrialOf } from '../src/gameplay/arms.js';
+import { AWAKEN, ascendTrial, attunement, awakenings, awakenedBetween, gearMagic, infuseStrands, attributesOf as itemAttrs, isWeaponId, ALTERATIONS, SPELLSHOT, infusionOf, masteryEvery, schoolGlyph } from '../src/gameplay/gear-magic.js';
 import { ATTRS, ATTR_IDS, BASE_CAP, BASE_LIFE, ARMOR_CAP, baseAttributes, attributesOf, composeMods, refreshStats, statSheet } from '../src/magic/stats.js';
 import { SCHOOLS, SPELL, createMagicState, spellPower, manaCost, cooldownOf, manaMax, shaped } from '../src/magic/spells.js';
 import { sanitizeSkills, addUse, useFor, computeMods } from '../src/magic/skills.js';
@@ -24,20 +25,54 @@ function attuned(i, school, l = 1, t = 0) {
 const fresh = () => sanitizeSkills(createMagicState(null));
 const withGear = (gear, s = fresh()) => { s.gear = gear; refreshStats(s); return s; };
 
-test('gear goes to level 20: the first ten as before, slower growth past them', () => {
-	assert.equal(MAX_LEVEL, 20); assert.equal(SOFT_LEVEL, 10);
+test('gear climbs to 99 by experience; the hundredth is earned by its trial', () => {
+	assert.equal(LEVEL_CAP, 99); assert.equal(ASCENDED, 100); assert.equal(MAX_LEVEL, 100); assert.equal(SOFT_LEVEL, 10);
 	const at = (l, t = 0) => statScale({ l, t });
-	assert.ok(Math.abs(at(10) - 1.63) < 1e-9, 'level 10 grows as it always did');
-	assert.ok(Math.abs(at(20) - 2.13) < 1e-9, 'then 5% a level');
-	assert.ok(at(20, 4) > at(20, 3) && at(11) > at(10));
+	assert.ok(Math.abs(at(10) - 1.63) < 1e-9 && Math.abs(at(20) - 2.13) < 1e-9, 'the first twenty grow as they did');
+	for (let l = 2; l <= ASCENDED; l++) assert.ok(at(l) > at(l - 1), `level ${l} grows`);
+	assert.ok(Math.abs(at(99) - 3) < 1e-9 && Math.abs(at(100) - 3.3) < 1e-9, 'three times at 99, a tenth more at the hundredth');
+	assert.ok(at(99) - at(98) < at(21) - at(20), 'ever slower');
+	assert.ok(at(99, 4) > at(99, 3));
 	const lamp = { u: 'lamp01', i: 'camp-lantern', l: 1, t: 0, x: 0 };
-	assert.equal(trained(lamp, 1e9).l, MAX_LEVEL, 'experience carries it to the top and no further');
-	assert.equal(xpToMax(lamp), Array.from({ length: MAX_LEVEL - 1 }, (_, k) => xpNeed(k + 1)).reduce((a, b) => a + b));
-	assert.equal(xpToMax({ ...lamp, l: MAX_LEVEL }), 0);
-	// the wire carries the new top, and nothing past it
+	assert.equal(trained(lamp, 1e9).l, LEVEL_CAP, 'experience carries it to 99 and no further');
+	const total = Array.from({ length: LEVEL_CAP - 1 }, (_, k) => xpNeed(k + 1)).reduce((a, b) => a + b);
+	assert.equal(xpToMax(lamp), total); assert.ok(total > 80000 && total < 95000, `a long climb (${total})`);
+	assert.equal(xpToMax({ ...lamp, l: LEVEL_CAP }), 0);
+	assert.deepEqual(trained({ ...lamp, l: LEVEL_CAP, x: 7 }, 5000), { ...lamp, l: LEVEL_CAP, x: 7 }, 'at 99 experience no longer counts: x is its trial');
+	// a trial's steps, and the hundredth
+	const top = { ...lamp, l: LEVEL_CAP };
+	assert.deepEqual(trialStep(top, 120, 300), { ...top, x: 120 });
+	assert.deepEqual(trialStep({ ...top, x: 299 }, 5, 300), { ...top, l: ASCENDED, x: 0 });
+	assert.equal(trialStep({ ...top, l: 50 }, 5, 300).l, 50, 'only at 99');
+	assert.equal(levelText(ASCENDED), '100★'); assert.equal(levelText(99), '99');
+	assert.ok(upgradeCost({ l: 98, t: 4 }, 240) > upgradeCost({ l: 10, t: 4 }, 240));
+	// the wire carries the hundredth, and nothing past it
 	assert.equal(cleanPose({ p: [0, 0, 0], h: 'camp-lantern', hl: MAX_LEVEL, ht: 4 }).hl, MAX_LEVEL);
 	assert.ok(!('hl' in cleanPose({ p: [0, 0, 0], h: 'camp-lantern', hl: MAX_LEVEL + 1 })));
 	assert.ok(cleanTradeSide({ items: [{ ...lamp, l: MAX_LEVEL }] }) && cleanTradeSide({ items: [{ ...lamp, l: MAX_LEVEL + 1 }] }) === null);
+});
+
+test('an outfitter stops at 99; a weapon or garment earns its hundredth by its trial', () => {
+	assert.equal(ascendTrialOf('reedline-hunting-bow').n, 1);
+	assert.equal(ascendTrialOf('wayfarers-hood').n, 300);
+	assert.equal(ascendTrialOf('camp-lantern'), null, 'a tool stops at 99');
+	let s = createInventoryState('me', { credits: 1e7 });
+	for (const [id, n] of [['wayfarers-hood', 1], ['camp-lantern', 1], ['repair-roll', 3]]) for (let k = 0; k < n; k++) s = applyInventoryTransaction(s, { id: `b-${id}-${k}`, kind: 'purchase', sourceId: 'npc-trader', itemId: id, quantity: 1 }).state;
+	const find = (i) => Object.values(s.instances).find((x) => x.i === i);
+	const hood = find('wayfarers-hood'), lamp = find('camp-lantern');
+	s = { ...s, instances: { ...s.instances, [hood.u]: { ...hood, l: LEVEL_CAP }, [lamp.u]: { ...lamp, l: LEVEL_CAP } } };
+	const up = applyInventoryTransaction(s, { id: 'u1', kind: 'upgrade', uid: hood.u, sourceId: 'npc-trader' });
+	assert.ok(!up.ok && /trial/.test(up.receipt.message), 'no outfitter makes the hundredth');
+	assert.equal(applyInventoryTransaction(s, { id: 't0', kind: 'trial', uid: lamp.u, n: 5 }).receipt.code, 'no-trial');
+	let r = applyInventoryTransaction(s, { id: 't1', kind: 'trial', uid: hood.u, n: 299 });
+	assert.ok(r.ok && r.state.instances[hood.u].l === LEVEL_CAP && r.state.instances[hood.u].x === 299 && r.state.journal.length === s.journal.length, 'counted, not journaled');
+	r = applyInventoryTransaction(r.state, { id: 't2', kind: 'trial', uid: hood.u, n: 1 });
+	assert.equal(r.state.instances[hood.u].l, ASCENDED, 'the three hundredth spell: 100★');
+	assert.equal(applyInventoryTransaction(r.state, { id: 't3', kind: 'trial', uid: hood.u, n: 1 }).ok, false, 'nothing past it');
+	assert.equal(deserializeInventory(serializeInventory(r.state)).instances[hood.u].l, ASCENDED, 'kept between visits');
+	// combining keeps the higher one, and its trial's progress
+	assert.deepEqual(combined({ u: 'aaaa', i: 'x', l: 99, t: 1, x: 40 }, { u: 'bbbb', i: 'x', l: 60, t: 1, x: 500 }), { u: 'aaaa', i: 'x', l: 99, t: 2, x: 40 });
+	assert.equal(combined({ u: 'aaaa', i: 'x', l: 60, t: 1, x: 5 }, { u: 'bbbb', i: 'x', l: 99, t: 1, x: 80 }).x, 80);
 });
 
 test('garments: two for each slot, sold at outfitters, worn by their own id, one to a slot', () => {
@@ -81,7 +116,7 @@ test('every weapon and garment is attuned to a school, the same one always', () 
 	assert.equal(Object.keys(counts).length, 11);
 	assert.ok(Math.min(...Object.values(counts)) > 120, 'garments spread over the schools');
 	const coat = { u: 'abcd1234', i: 'aetherweave-coat', l: 3, t: 1, x: 0 };
-	assert.equal(attunement(coat), attunement({ ...coat, l: 20, t: 4 }), 'levels and tiers leave it be');
+	assert.equal(attunement(coat), attunement({ ...coat, l: ASCENDED, t: 4 }), 'levels and tiers leave it be');
 	assert.equal(attunement(combined(coat, { ...coat, u: 'zzzz9999' })), attunement(coat), 'combining keeps the one you open');
 	assert.equal(attunement({ u: 'abcd', i: 'camp-lantern' }), null, 'tools carry no magic');
 	assert.deepEqual(infuseStrands(attuned('wayfarers-hood', 'radiance')), ['light']);
@@ -90,18 +125,25 @@ test('every weapon and garment is attuned to a school, the same one always', () 
 	for (const k of Object.keys(SCHOOLS)) assert.ok(schoolGlyph(k), k + ' glyph');
 });
 
-test('the magic wakes at 5, 10, 15 and 20, and the better the tier the stronger', () => {
-	assert.deepEqual([...AWAKEN], [5, 10, 15, 20]);
-	const hood = attuned('wayfarers-hood', 'shadow', 14, 2);
+test('the magic wakes at 5, 25, 50, 75 and the hundredth, and the better the tier the stronger', () => {
+	assert.deepEqual([...AWAKEN], [5, 25, 50, 75, 100]);
+	const hood = attuned('wayfarers-hood', 'shadow', 49, 2);
 	const rows = awakenings(hood);
-	assert.deepEqual(rows.map((r) => r.on), [true, true, false, false]);
+	assert.deepEqual(rows.map((r) => r.on), [true, true, false, false, false]);
 	assert.match(rows[0].desc, /Shadow spells are 9% stronger/);
 	assert.match(rows[2].desc, /Shadowstep leaves you cloaked/);
-	assert.deepEqual(awakenedBetween(hood, 14, 16).map((a) => a.level), [15]);
-	const bow = attuned('reedline-hunting-bow', 'primal', 20, 4);
+	assert.match(rows[4].desc, /10% stronger still, and every third one is free/);
+	assert.deepEqual(awakenedBetween(hood, 49, 51).map((a) => a.level), [50]);
+	const bow = attuned('reedline-hunting-bow', 'primal', ASCENDED, 4);
 	const brow = awakenings(bow);
 	assert.ok(brow.every((r) => r.on));
-	assert.match(brow[1].desc, /Spellstrike/); assert.match(brow[2].desc, /Searing/); assert.match(brow[3].desc, /Cinder/);
+	assert.match(brow[1].desc, /Spellstrike/); assert.match(brow[2].desc, /Searing/); assert.match(brow[3].desc, /Cinder/); assert.match(brow[4].desc, /Spellshot comes every 2 hits/);
+	// the trial, in words, at 99 only
+	assert.equal(ascendTrial(attuned('wayfarers-hood', 'void', 98)).open, false, 'not open below 99');
+	const t99 = ascendTrial({ ...attuned('wayfarers-hood', 'void', LEVEL_CAP), x: 42 });
+	assert.deepEqual([t99.n, t99.of, t99.open], [42, 300, true]); assert.match(t99.desc, /Cast 300 Void spells while wearing it/);
+	assert.match(ascendTrial(attuned('aurora-trail-rifle', 'storm', LEVEL_CAP)).desc, /great beasts/);
+	assert.equal(ascendTrial(bow), null, 'none past the hundredth');
 	// every school has its alteration, infusion and spellshot, and they name real spells
 	for (const k of Object.keys(SCHOOLS)) {
 		assert.ok(SPELL[ALTERATIONS[k].spell]?.school === k, k + ' alters one of its own');
@@ -110,13 +152,18 @@ test('the magic wakes at 5, 10, 15 and 20, and the better the tier the stronger'
 	}
 	assert.ok(masteryEvery(4) < masteryEvery(0));
 	// what it all adds up to
-	const G = gearMagic([hood, attuned('duskwalker-boots', 'shadow', 20, 4), bow]);
+	const boots = attuned('duskwalker-boots', 'shadow', 75, 4);
+	const G = gearMagic([hood, boots, bow]);
 	assert.ok(Math.abs(G.power.shadow - (0.09 + 0.13)) < 1e-9, 'two shadow garments stack');
 	assert.ok(G.mana.shadow > 0 && G.cd.shadow > 0);
 	assert.equal(G.free.shadow, masteryEvery(4));
 	assert.equal(G.alter.shadowstep, ALTERATIONS.shadow);
 	assert.ok(G.weapon.uid === bow.u && G.weapon.strike > 0 && G.weapon.infuse.status.dot > 0 && G.weapon.shot.spell === 'cinder');
+	assert.equal(G.weapon.shot.every, 2, 'the hundredth: Spellshot one hit sooner');
+	assert.equal(G.weapon.harm, 0.1);
 	assert.equal(G.attrs.precision, itemAttrs(bow).find((a) => a.attr === 'precision').n);
+	const up = gearMagic([{ ...boots, l: ASCENDED }]);
+	assert.ok(Math.abs(up.power.shadow - (0.13 + 0.1)) < 1e-9 && up.free.shadow === masteryEvery(4) - 1, 'a garment at the hundredth');
 	assert.deepEqual(gearMagic([attuned('wayfarers-hood', 'void', 4)]).lines, [], 'asleep below level 5');
 });
 
@@ -141,7 +188,7 @@ test('your statistics become the spells\' own numbers', () => {
 	const s0 = fresh(), sp = SPELL.shadowbolt;
 	const p0 = spellPower(s0, sp), m0 = manaCost(s0, sp), c0 = cooldownOf(s0, sp), max0 = manaMax(s0);
 	assert.deepEqual({ ...composeMods(s0), alter: null, free: null, gearWeapon: null, life: 0 }, { ...computeMods([]), alter: null, free: null, gearWeapon: null, life: 0 }, 'nothing worn, nothing gained: the perks alone');
-	const hood = attuned('wayfarers-hood', 'shadow', 20, 4), gloves = attuned('spellbinder-gloves', 'radiance', 1, 0);
+	const hood = attuned('wayfarers-hood', 'shadow', 75, 4), gloves = attuned('spellbinder-gloves', 'radiance', 1, 0);
 	const s = withGear([hood, gloves]);
 	assert.ok(spellPower(s, sp) > p0 * 1.12, 'attuned, and Potency');
 	assert.ok(manaCost(s, sp) < m0 && cooldownOf(s, sp) < c0 * 0.9, 'flow and Haste');
@@ -166,7 +213,7 @@ test('your statistics become the spells\' own numbers', () => {
 });
 
 test('a garment\'s alteration reshapes its spell; the catalog is left alone', () => {
-	const mods = (school) => withGear([attuned('wayfarers-hood', school, 15)]).mods;
+	const mods = (school) => withGear([attuned('wayfarers-hood', school, 50)]).mods;
 	assert.equal(shaped(SPELL.sunspark, mods('radiance')).split, 3);
 	assert.equal(shaped(SPELL['void-shard'], mods('void')).pierce, 'all');
 	assert.equal(shaped(SPELL['hex-of-decay'], mods('blight')).status.spread, 10);
@@ -212,35 +259,35 @@ const run = (R, secs) => { for (let t = 0; t < secs; t += 0.05) R.C.update(0.05)
 
 test('the caster does what an altered spell asks', () => {
 	// three sparks
-	let R = rig([attuned('stargazer-circlet', 'radiance', 15)]);
+	let R = rig([attuned('stargazer-circlet', 'radiance', 50)]);
 	assert.ok(R.C.cast('sunspark')); assert.equal(R.C.info().bolts, 3);
 	assert.equal(rig().C.cast('sunspark') && 1, 1);
 	// a shard through everyone in its path
-	R = rig([attuned('stargazer-circlet', 'void', 15)], { foes: [-6, -9, -12] });
+	R = rig([attuned('stargazer-circlet', 'void', 50)], { foes: [-6, -9, -12] });
 	R.C.cast('void-shard'); run(R, 0.5);
 	assert.deepEqual(R.dealt.map((d) => d.id), ['f0', 'f1', 'f2']);
 	const plain = rig([], { foes: [-6, -9, -12] }); plain.C.cast('void-shard'); run(plain, 0.5);
 	assert.deepEqual(plain.dealt.map((d) => d.id), ['f0', 'f1'], 'unaltered: through the first only');
 	// a step that leaves you cloaked
-	R = rig([attuned('stargazer-circlet', 'shadow', 15)]);
+	R = rig([attuned('stargazer-circlet', 'shadow', 50)]);
 	assert.ok(R.C.cast('shadowstep')); assert.equal(R.C.cloaked(), true);
 	// a mend that lingers
-	R = rig([attuned('stargazer-circlet', 'restoration', 15)]);
+	R = rig([attuned('stargazer-circlet', 'restoration', 50)]);
 	R.C.cast('mend'); const first = R.mends.length; run(R, 2);
 	assert.ok(R.mends.length > first + 10, 'it goes on healing');
 	// a recall that mends
-	R = rig([attuned('stargazer-circlet', 'chrono', 15)]);
+	R = rig([attuned('stargazer-circlet', 'chrono', 50)]);
 	R.C.cast('mark-and-recall'); R.state.cds = {}; R.pos.set(30, 1.68, 0);
 	R.C.cast('mark-and-recall');
 	assert.ok(R.mends.includes(25) && R.pos.x === 0, 'back at the mark, a quarter mended');
 	// burning ground where Cinder lands
-	R = rig([attuned('stargazer-circlet', 'primal', 15)], { foes: [-8] });
+	R = rig([attuned('stargazer-circlet', 'primal', 50)], { foes: [-8] });
 	R.C.cast('cinder'); run(R, 2);
 	assert.ok(R.dealt.length > 3, 'the ground goes on burning the foe in it');
 });
 
 test('a garment\'s mastery makes every few spells free; a weapon\'s spellshot casts what you do not know', () => {
-	const R = rig([attuned('stargazer-circlet', 'radiance', 20, 4)]);
+	const R = rig([attuned('stargazer-circlet', 'radiance', 75, 4)]);
 	const cost = manaCost(R.state, SPELL.sunspark), every = masteryEvery(4);
 	for (let n = 1; n < every; n++) { R.state.cds = {}; assert.ok(R.C.cast('sunspark')); }
 	assert.equal(R.state.mana, 1000 - cost * (every - 1));
@@ -276,4 +323,5 @@ test('the runtime and the screens are wired', () => {
 	assert.match(src('../src/combat/combat.js'), /setLifeMax: \(n\) =>/);
 	assert.match(src('../src/magic/skills-ui.js'), /composeMods\(state, others\)/);
 	assert.match(src('../src/net/protocol.js'), /p\.hl <= MAX_LEVEL/);
+	assert.match(src('../src/net/protocol.js'), /GEAR_FEATURE = 'gear-levels-100'/);
 });
