@@ -122,8 +122,8 @@ export const SLOTS = 5;
 
 export function createMagicState(from = null) {
 	// (xp, level, perks, use and mastery: your skills, magic/skills.js; mods: what the perks and
-	// mastery add up to; moonlit: the ids of the sun spells mastered to work by the moon)
-	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, xp: 0, level: 1, perks: [], use: {}, mastery: {}, mods: null, moonlit: [] };
+	// mastery add up to; moonlit: the sun spells mastered to work by the moon)
+	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, xp: 0, level: 1, perks: [], use: {}, mastery: {}, mods: null, moonlit: {} };
 	if (from && from.v === 1) {
 		if (Array.isArray(from.known)) s.known = from.known.filter((id) => SPELL[id]);
 		if (Array.isArray(from.binds)) s.binds = [...Array(SLOTS)].map((_, i) => (SPELL[from.binds[i]] && s.known.includes(from.binds[i]) ? from.binds[i] : null));

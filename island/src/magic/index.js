@@ -193,7 +193,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (the menu open: the fight holds; fully over the world: it need not be drawn, main.js)
 		menuOpen: () => skills.isOpen(),
 		covering: () => skills.covering(),
-		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: [...(state.moonlit || [])], ...caster.info() }),
+		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: Object.keys(state.moonlit || {}), ...caster.info() }),
 		// (the console: experience, and a perk)
 		xp: (n = 100) => { learnt(addXp(state, n)); return { level: state.level, xp: state.xp, points: pointsOf(state) }; },
 		perk: (id) => { const ok = takePerk(state, id); if (ok) dirty = true; skills.refresh(); return ok; },
