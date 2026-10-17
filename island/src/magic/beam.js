@@ -34,7 +34,8 @@ void main(){
 	vU = u; vA = atan(position.z, position.x);
 	float swell = 1.0 + 0.16 * sin(m * 1.3 - uTime * 38.0) + 0.07 * sin(m * 3.1 - uTime * 61.0);
 	float flare = 1.0 + uFlare * exp(-m * 2.2);
-	float r = uR * swell * flare;
+	// (widening as it goes, as a blast does, so it stays great far off)
+	float r = uR * swell * flare * min(2.6, 1.0 + 0.04 * m);
 	vec4 w = modelMatrix * vec4(position.x * r, m, position.z * r, 1.0);
 	vW = w.xyz; vN = normalize(mat3(modelMatrix) * vec3(position.x, 0.0, position.z));
 	gl_Position = projectionMatrix * viewMatrix * w;
@@ -136,7 +137,7 @@ export function createBeams(scene, fx, { isPhone = false } = {}) {
 				B.grp.visible = B.impact.visible = false;
 				B.muzzle.visible = true;
 				B.muzzle.position.copy(B.from);
-				B.muzzle.scale.setScalar(sc * (0.12 + 0.4 * k * k) * (0.9 + Math.random() * 0.2));
+				B.muzzle.scale.setScalar((B.near ? 0.5 : 1) * (0.12 + 0.4 * k * k) * (0.9 + Math.random() * 0.2));
 				B.muzzle.material.color.setRGB(hot[0], hot[1], hot[2]);
 				const n = Math.ceil(5 * lite);
 				for (let i = 0; i < n; i++) {
@@ -157,17 +158,17 @@ export function createBeams(scene, fx, { isPhone = false } = {}) {
 			B.grp.position.copy(B.from);
 			B.grp.quaternion.setFromUnitVectors(UP, _d);
 			const flick = 0.92 + Math.random() * 0.16;
-			for (const [m, r, al, col] of [[B.sheath, 0.36, 0.7, c], [B.core, 0.12, 1.5, hot]]) {
+			for (const [m, r, al, col] of [[B.sheath, B.near ? 0.3 : 0.4, 0.7, c], [B.core, B.near ? 0.09 : 0.13, 1.5, hot]]) {
 				const U = m.material.uniforms;
 				U.uTime.value = B.time; U.uLen.value = len; U.uOut.value = S.out;
-				U.uR.value = r * sc * S.r; U.uFlare.value = B.near ? 0.5 : 0.9;
+				U.uR.value = r * S.r; U.uFlare.value = B.near ? 0.25 : 0.9;
 				U.uAlpha.value = al * S.a * flick; U.uNear.value = B.near ? 1.6 : 0.5;
 				U.uColor.value.setRGB(col[0], col[1], col[2]);
 			}
 			// (the balls of light: in the hands, and where it strikes)
 			B.muzzle.visible = true;
 			B.muzzle.position.copy(B.from);
-			B.muzzle.scale.setScalar(sc * 0.55 * S.r * flick);
+			B.muzzle.scale.setScalar((B.near ? 0.22 : 0.6) * S.r * flick);
 			_b.copy(B.from).addScaledVector(_d, len * S.out);
 			B.impact.visible = S.out >= 1;
 			B.impact.position.copy(_b).addScaledVector(_d, -0.3);

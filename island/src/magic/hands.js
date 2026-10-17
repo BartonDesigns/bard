@@ -69,7 +69,8 @@ export function createCastHands({ camera, fx, isPhone = false }) {
 			A.grp.visible = !!A.hand;
 			any = true;
 			// (the school's light in the palm)
-			if (A.c && k > 0.6) {
+			// (a beam's light is its own, between the hands: magic/beam.js)
+			if (A.c && k > 0.6 && A.to !== BEAM) {
 				A.grp.updateWorldMatrix(true, false);
 				_p.set(0, 0.07, -0.03).applyMatrix4(A.grp.matrixWorld);
 				fx.emit(_p.x, _p.y, _p.z, (Math.random() - 0.5) * 0.3, 0.2 + Math.random() * 0.3, (Math.random() - 0.5) * 0.3, 0.3, 0.12, 0.02, A.c, 1, 0, 1);
