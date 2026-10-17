@@ -49,7 +49,7 @@ const HERO = {
 		// (hair colours are used as they are, lit by the strands' own shade: hairkit.js; a dark
 		// chestnut is dark in the numbers. Brows groomed: short hairs swept the one way over a
 		// full tone of their own, a little lighter than the numbers, as the hair reads lit)
-		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 0.78, thick: 0.62, len: 0.72, tidy: 0.55, fill: 1.55 }, browTone: 1.3,
+		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 0.7, thick: 0.66, len: 0.66, tidy: 0.5, fill: 2.1 }, browTone: 1.75,
 		// (the sheet's face: the brow heavy over hooded eyes; a straight nose with a defined tip;
 		// cheekbones high with a hollow below, never gaunt; a square jaw and a firm chin; a
 		// defined bow to the lip, a fuller lower lip; ears close; a strong neck)
@@ -88,7 +88,7 @@ const HERO = {
 		// (her own build, not his made smaller: defined shoulders, a long waist drawn in, strong
 		// long legs, a smaller head; a runner's or a climber's)
 		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, lean: 0.25, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05, arms: [0.05, 0.04] },
-		ancestry: [0.1, 0.22, 0.68], hairColour: [0.2, 0.065, 0.026], iris: 5, freckles: true, brows: { dens: 0.66, thick: 0.55, len: 0.75, tidy: 0.55, fill: 1.4 },
+		ancestry: [0.1, 0.22, 0.68], hairColour: [0.2, 0.065, 0.026], iris: 5, freckles: true, brows: { dens: 0.62, thick: 0.58, len: 0.7, tidy: 0.5, fill: 1.9 },
 		// (hers: high cheekbones, a slim nose with its tip lifted, full lips with a clear bow,
 		// almond eyes, a soft but defined jaw and chin; ears close)
 		face: {
