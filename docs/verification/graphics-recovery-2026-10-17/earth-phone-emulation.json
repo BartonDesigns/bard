@@ -1,0 +1,87 @@
+{
+  "errors": [],
+  "graphicsWarnings": [],
+  "loading": {
+    "engineMs": 855.7000000029802,
+    "worldMs": 51256.39999999851,
+    "readyMs": 52112.10000000149
+  },
+  "play": {
+    "frames": [
+      2960.60000000149,
+      77.79999999701977,
+      58.399999998509884,
+      1299.2000000029802,
+      67.70000000298023,
+      98.89999999850988,
+      124.60000000149012,
+      1437,
+      1908.6999999955297,
+      3797.39999999851,
+      2271.3000000044703,
+      3455.5,
+      5397.10000000149,
+      94.39999999850988,
+      7793,
+      3893,
+      2871.10000000149,
+      2998.7999999970198,
+      2855.2999999970198,
+      3076
+    ],
+    "governor": {
+      "tier": "minimal",
+      "ceiling": "minimal",
+      "mode": "high",
+      "frameMs": 177,
+      "memory": "45% of 700 MB",
+      "gpuMB": 115,
+      "crashedLastTime": false,
+      "crashes": 1,
+      "bodies": 0,
+      "pixelRatio": 0.55
+    },
+    "draw": {
+      "frame": 34,
+      "calls": 166,
+      "triangles": 2862720,
+      "points": 36996,
+      "lines": 132
+    },
+    "programs": 121,
+    "buffer": [
+      214,
+      464
+    ],
+    "antialias": false,
+    "lost": false,
+    "maxLongTask": 14161,
+    "frameErrors": []
+  },
+  "signage": {
+    "compact": 11,
+    "full": 0,
+    "position": [
+      55590,
+      174,
+      -940
+    ]
+  },
+  "restored": {
+    "quality": {
+      "tier": "minimal",
+      "ceiling": "minimal",
+      "mode": "high",
+      "frameMs": 35,
+      "memory": "45% of 700 MB",
+      "gpuMB": 109,
+      "crashedLastTime": false,
+      "crashes": 1,
+      "bodies": 0,
+      "pixelRatio": 0.55
+    },
+    "errors": [],
+    "world": true
+  },
+  "passed": true
+}

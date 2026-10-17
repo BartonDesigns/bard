@@ -19,7 +19,7 @@ export function rememberGraphicsLoss(storage, now = Date.now()) {
 export function renderRatio({ width, height, dpr = 1, ratio = 1, phone = false, safe = false, mode = 'auto' }) {
 	const cap = safe ? 1 : mode === 'high' ? 1.75 : 1.25;
 	const budget = (safe ? 1200000 : mode === 'high' ? 4000000 : phone ? 1500000 : 2400000) * ratio * ratio;
-	return Math.min(Math.max(.25, Math.min(dpr || 1, cap) * (safe ? 1 : ratio)), Math.sqrt(budget / Math.max(1, width * height)));
+	return Math.min(Math.max(.25, Math.min(dpr || 1, cap) * ratio), Math.sqrt(budget / Math.max(1, width * height)));
 }
 
 // Validate before Three reads .precision. A lost context can be non-null yet

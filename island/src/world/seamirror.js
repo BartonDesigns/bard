@@ -14,6 +14,7 @@
 
 import * as THREE from 'three';
 import { qualityNow } from './governor.js';
+import { createShaderWarm } from './shaderwarm.js';
 
 // the picture's size, as a share of the screen's each way, by tier (none on the lighter ones)
 const SCALE = { high: 0.5, medium: 0.35 }, MAX_W = 960;
@@ -29,7 +30,7 @@ export function createSeaMirror(renderer, { phone = false, safe = false } = {}) 
 	const cam = new THREE.PerspectiveCamera();
 	cam.matrixAutoUpdate = true;
 	// the sea's uniforms (live objects, shared with world/ocean.js)
-	const uniforms = { uRefl: { value: rt.texture }, uReflM: { value: new THREE.Matrix4() }, uReflOn: { value: 0 } };
+	const uniforms = { uRefl: { value: null }, uReflM: { value: new THREE.Matrix4() }, uReflOn: { value: 0 } };
 
 	const normal = new THREE.Vector3(0, 1, 0), mirrorAt = new THREE.Vector3(0, LEVEL, 0);
 	const camAt = new THREE.Vector3(), view = new THREE.Vector3(), target = new THREE.Vector3(), look = new THREE.Vector3();
@@ -37,8 +38,13 @@ export function createSeaMirror(renderer, { phone = false, safe = false } = {}) 
 	const bias = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
 	const size = new THREE.Vector2(), clearC = new THREE.Color();
 	const shown = [], saved = [];
-	// warm: 0 not yet, 1 compiling, 2 ready
-	let warm = 0, warmFor = null;
+	let warm = null, warmScene = null, warmFor = null;
+	function reset() {
+		warm?.reset(); warm = warmScene = warmFor = null;
+		uniforms.uReflOn.value = 0; uniforms.uRefl.value = null;
+		// Disabling a pass must release its attachments, not just stop its draw.
+		if (rt.width !== 1 || rt.height !== 1) rt.setSize(1, 1);
+	}
 
 	// the mirror camera for this view; false when there is nothing to mirror (below the sea)
 	function aim(camera) {
@@ -99,9 +105,9 @@ export function createSeaMirror(renderer, { phone = false, safe = false } = {}) 
 	function render(scene, camera, list, under = 0) {
 		const tier = qualityNow(), scale = phone || safe || !tier?.reflect ? 0 : SCALE[tier.name] || 0;
 		uniforms.uReflOn.value = 0;
-		if (!scale || under > 0.5) return;
+		if (!scale || under > 0.5) { reset(); return; }
 		camera.updateMatrixWorld();
-		if (!aim(camera)) return;
+		if (!aim(camera)) { reset(); return; }
 		renderer.getDrawingBufferSize(size);
 		// (on a dense screen the picture still stays near a thousand pixels across: the ripples
 		// blur it, and the land is drawn again for every one of them)
@@ -110,22 +116,22 @@ export function createSeaMirror(renderer, { phone = false, safe = false } = {}) 
 		if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
 		hideRest(scene, list);
 		try {
-			// its programs made first, out of the frame (a world arriving, or a new tier)
-			if (warm === 0 || warmFor !== list[0]) {
-				warm = 1; warmFor = list[0];
-				let done;
-				drawInto(() => {
-					try { done = renderer.compileAsync ? renderer.compileAsync(scene, cam) : (renderer.compile(scene, cam), Promise.resolve()); } catch (e) { done = Promise.reject(e); }
-				});
-				const forList = list[0];
-				Promise.resolve(done).then(() => { if (warmFor === forList) warm = 2; }, () => { if (warmFor === forList) warm = 2; });
-				return;
+			// Three.compile traverses even invisible objects. Compiling the whole
+			// scene here duplicated underground/interior/people shaders in one burst.
+			// Warm only the mirror's visible frustum, two materials at a time, including
+			// newly streamed content. Keep the procedural sky until it is ready.
+			if (!warm || warmScene !== scene || warmFor !== list[0]) {
+				warm?.reset(); warm = createShaderWarm(renderer, scene, cam);
+				warmScene = scene; warmFor = list[0];
 			}
-			if (warm !== 2) return;
+			let ready = false;
+			drawInto(() => { ready = warm.prepare({ n: 2 }); });
+			if (!ready) return;
 			drawInto(() => { renderer.clear(); renderer.render(scene, cam); });
+			uniforms.uRefl.value = rt.texture;
 			uniforms.uReflOn.value = 1;
 		} finally { restore(scene); }
 	}
-	function dispose() { rt.dispose(); }
-	return { uniforms, render, dispose, target: rt, camera: cam };
+	function dispose() { reset(); rt.dispose(); }
+	return { uniforms, render, reset, dispose, target: rt, camera: cam };
 }

@@ -73,6 +73,15 @@ export function createShaderWarm(renderer, scene, camera) {
 		if (!queue.length && t > .5) { t = 0; queue = pending(); }
 		if (queue.length) step(queue, 1);
 	}
+	// Optional render passes can defer drawing until their currently visible
+	// materials are ready. Unlike compile(scene), this never warms hidden branches.
+	function prepare({ n = 2 } = {}) {
+		if (renderer.getContext().isContextLost() || work) return false;
+		const list = pending();
+		if (!list.length) return true;
+		step(list, n);
+		return false;
+	}
 	function reset() { epoch++; run++; cancelWork?.(); cancelWork = null; queue = []; work = null; done = new WeakMap(); last.length = 0; t = 0; compiled = 0; }
-	return { all, tick, reset, recent: () => last.slice(), info: () => ({ pending: queue.length, busy: !!work, compiled }) };
+	return { all, tick, prepare, reset, recent: () => last.slice(), info: () => ({ pending: queue.length, busy: !!work, compiled }) };
 }

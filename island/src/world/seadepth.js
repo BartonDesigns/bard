@@ -26,8 +26,12 @@ export function createSeaDepth(renderer, { phone = false, safe = false } = {}) {
 	// (both faces: a hull's halves are mirrored, so one side's faces turn inward)
 	const draw = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide });
 	// the sea's uniforms (live objects): the depth, the camera's near and far, the screen's size, and on
-	const uniforms = { uSeaDepth: { value: rt.depthTexture }, uSeaDepthNF: { value: new THREE.Vector2(0.25, 16000) }, uSeaDepthPx: { value: new THREE.Vector2(1, 1) }, uSeaDepthOn: { value: 0 } };
+	const uniforms = { uSeaDepth: { value: null }, uSeaDepthNF: { value: new THREE.Vector2(0.25, 16000) }, uSeaDepthPx: { value: new THREE.Vector2(1, 1) }, uSeaDepthOn: { value: 0 } };
 	const size = new THREE.Vector2(), clearC = new THREE.Color();
+	function reset() {
+		uniforms.uSeaDepthOn.value = 0; uniforms.uSeaDepth.value = null;
+		if (rt.width !== 1 || rt.height !== 1) rt.setSize(1, 1);
+	}
 
 	// what the pass draws: obj and everything under it (or only the meshes keep(o) picks)
 	function mark(obj, keep = null) {
@@ -37,7 +41,7 @@ export function createSeaDepth(renderer, { phone = false, safe = false } = {}) {
 	function render(scene, camera, under = 0) {
 		const tier = qualityNow(), scale = phone || safe || !tier?.reflect ? 0 : SCALE[tier.name] || 0;
 		uniforms.uSeaDepthOn.value = 0;
-		if (!scale || under > 0.5 || !camera.isPerspectiveCamera) return;
+		if (!scale || under > 0.5 || !camera.isPerspectiveCamera) { reset(); return; }
 		renderer.getDrawingBufferSize(size);
 		const k = Math.min(scale, MAX_W / Math.max(1, size.x));
 		const w = Math.max(16, Math.round(size.x * k)), h = Math.max(16, Math.round(size.y * k));
@@ -61,6 +65,7 @@ export function createSeaDepth(renderer, { phone = false, safe = false } = {}) {
 		try {
 			renderer.clear(true, true, false);
 			renderer.render(scene, cam);
+			uniforms.uSeaDepth.value = rt.depthTexture;
 			uniforms.uSeaDepthOn.value = 1;
 		} finally {
 			scene.overrideMaterial = over;
@@ -69,8 +74,8 @@ export function createSeaDepth(renderer, { phone = false, safe = false } = {}) {
 			renderer.shadowMap.autoUpdate = autoS; renderer.shadowMap.needsUpdate = needS;
 		}
 	}
-	function dispose() { rt.dispose(); rt.depthTexture.dispose(); draw.dispose(); }
-	return { uniforms, render, mark, dispose, target: rt };
+	function dispose() { reset(); rt.dispose(); rt.depthTexture.dispose(); draw.dispose(); }
+	return { uniforms, render, mark, reset, dispose, target: rt };
 }
 
 // (the GLSL the sea reads it with: how far behind the water's surface, along the look, the
