@@ -175,6 +175,18 @@ const CSS = `
 .sk-src b{font-weight:650;margin-right:2px}
 .sk-src .perk b{color:#5eead4}.sk-src .gear b{color:#ffd27a}.sk-src .attr b{color:#ffd27a}.sk-src .mastery b{color:#c4b5fd}
 .sk-src .gear{border-color:rgba(255,210,122,.25)}
+.sk-el{display:flex;gap:10px;align-items:flex-start;margin-top:9px;padding:9px 11px;border-radius:10px;background:var(--elb,rgba(255,255,255,.05));border:1px solid var(--elc,rgba(255,255,255,.12));font-size:12px;line-height:1.4}
+.sk-el>i{font-style:normal;font-size:18px;line-height:1;width:22px;text-align:center;color:var(--ell,#fff);filter:drop-shadow(0 0 6px var(--elc,transparent))}
+.sk-el b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ell,#fff);margin-bottom:2px}
+.sk-el span{display:block;opacity:.85}
+.sk-el em{display:block;font-style:normal;margin-top:4px;font-weight:650;color:var(--ell,#fff)}
+.sk-el.el-radiant{--ell:#ffd27a;--elc:rgba(255,210,122,.3);--elb:rgba(255,210,122,.07)}
+.sk-el.el-fire{--ell:#ff9a4d;--elc:rgba(255,140,60,.32);--elb:rgba(255,120,40,.08)}
+.sk-el.el-frost{--ell:#bfeaff;--elc:rgba(170,225,255,.32);--elb:rgba(170,225,255,.07)}
+.sk-el.el-storm{--ell:#9fd4ff;--elc:rgba(140,200,255,.32);--elb:rgba(140,200,255,.07)}
+.sk-el.el-shadow{--ell:#c4a6ff;--elc:rgba(150,100,255,.32);--elb:rgba(120,70,255,.08)}
+.sk-el.el-void{--ell:#8fc4ff;--elc:rgba(100,130,255,.32);--elb:rgba(80,70,255,.08)}
+.sk-el.el-blight{--ell:#b6f05a;--elc:rgba(150,240,60,.3);--elb:rgba(130,220,40,.07)}
 .sk-alt{margin-top:9px;padding:8px 10px;border-radius:9px;background:rgba(255,210,122,.07);border:1px solid rgba(255,210,122,.22);font-size:12px;line-height:1.4}
 .sk-alt b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#ffd27a;margin-bottom:2px}
 .sk-fx{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
@@ -253,7 +265,7 @@ const CSS = `
 `;
 const STYLE_ID = 'sk-style';
 
-export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, onFeed = () => ({ fed: 0, levels: 0 }), sound = () => {}, isTouch = false, isPhone = false }) {
+export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, onFeed = () => ({ fed: 0, levels: 0 }), elements = {}, sound = () => {}, isTouch = false, isPhone = false }) {
 	let root = null, built = false, open = false, vis = false, page = 0, sel = null, mode = 'wide', W = 0, H = 0;
 	const P = { stage: null, track: null, pages: [], chips: [], info: null, head: {}, flash: null, toast: null, arr: [], sky: null, pv: null };
 	const nodesOf = new Map(PAGES.map((k) => [k, pageNodes(k)]));
@@ -622,6 +634,21 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			if (S1.spread) bits.push('spreads when its victim falls');
 			if (bits.length) row('On those struck', bits.join(', '), null, true);
 		}
+		// what its element leaves on the one struck (magic/elements.js; bosses take only the harm and
+		// the dread)
+		const E = elements[sp.type];
+		if (E) {
+			const blow = sp.dmg ? sp.dmg * (s2.dmgK || 1) * k : 0, n = (v) => Math.round(blow * v);
+			const nums = [];
+			if (E.share) nums.push(blow ? `${n(E.share)} ${sp.type === 'blight' ? 'rot' : 'burn'} over ${sec(E.t)}` : `${Math.round(E.share * 100)}% of each blow again over ${sec(E.t)}`);
+			if (E.echo) nums.push(blow ? `${n(E.echo)} again after ${sec(E.delay)}` : `${Math.round(E.echo * 100)}% of each blow again`);
+			if (E.leap) nums.push(blow ? `${n(E.leap)} leaps to a foe within ${E.r} m` : `${Math.round(E.leap * 100)}% leaps within ${E.r} m`);
+			if (E.vuln) nums.push(`+${Math.round(E.vuln * 100)}% from you for ${sec(E.t)}`);
+			if (E.slow) nums.push(`${Math.round(E.slow * 100)}% pace for ${sec(E.t)}, frozen on the ${E.freeze === 3 ? 'third' : `${E.freeze}th`}`);
+			if (E.stun) nums.push(`jolted ${E.stun} s`);
+			const firm = E.slow ? ' Bosses are never slowed or frozen.' : E.stun ? ' Bosses are never jolted.' : '';
+			mk('div', `sk-el el-${sp.type}`, sc, `<i>${E.glyph}</i><div><b>${E.name}</b><span>${E.text}${firm}</span>${nums.length ? `<em>${blow ? 'Yours: ' : ''}${nums.join(' · ')}</em>` : ''}</div>`);
+		}
 		const strand = strandOf(sp);
 		// what your gear does to it, then where its strength comes from
 		const alt = alteredBy(state, sp);
@@ -886,7 +913,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const g = cv.getContext('2d');
 		g.setTransform(d, 0, 0, d, 0, 0);
 		g.clearRect(0, 0, cw, ch);
-		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t, { night: light() < -0.02, moonlit: !!state.moonlit?.includes?.(sp.id) });
+		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t, { night: light() < -0.02, moonlit: !!state.moonlit?.includes?.(sp.id), el: elements[sp.type] });
 	}
 
 	// ---------- opening and closing ----------
@@ -953,7 +980,14 @@ function drawSpell(g, w, h, sp, u, c, t, env = {}) {
 	// (the ground)
 	g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, gy + 1); g.lineTo(w, gy + 1); g.stroke();
 	const K = sp.kind;
-	const status = (p, a) => { if (!sp.status || a <= 0) return; g.globalAlpha = a; g.fillStyle = col(0.9); g.font = '10px system-ui'; g.textAlign = 'center'; g.fillText(sp.status.hold ? '❄' : sp.status.fear ? '!' : sp.status.dot ? '☣' : sp.status.slow ? '≀' : '', p.x, p.y - 32); g.globalAlpha = 1; };
+	// what stays on the one struck: its status, else its element's mark (env.el: magic/elements.js),
+	// with embers rising off a burn and rot
+	const status = (p, a) => {
+		const E = env.el, mark = sp.status ? (sp.status.hold ? '❄' : sp.status.fear ? '!' : sp.status.dot ? '☣' : sp.status.slow ? '≀' : '') : E?.glyph || '';
+		if (!mark || a <= 0) return;
+		g.globalAlpha = a; g.fillStyle = col(0.9); g.font = '10px system-ui'; g.textAlign = 'center'; g.fillText(mark, p.x, p.y - 32); g.globalAlpha = 1;
+		if (E?.share) for (let i = 0; i < 4; i++) { const q = (t * 0.9 + i / 4) % 1; glow(p.x + Math.sin(i * 2.1 + t * 3) * 5, p.y - 8 - q * 22, 2.6 * (1 - q), a * (1 - q)); }
+	};
 	if (K === 'bolt' || K === 'orb') {
 		const slow = K === 'orb';
 		const f = slow ? u : ease(u / 0.45), T0 = foes[0];
