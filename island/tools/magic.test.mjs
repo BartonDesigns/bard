@@ -228,3 +228,23 @@ test('spells reach brawlers and townsfolk, hands cast them, the body gestures, t
 	assert.match(hud, /\.mg-bar\{position:absolute;left:50%;bottom:calc\(12px/, 'the bar at the bottom on a desktop');
 	assert.match(hud, /\.l99-touch \.mg-bar\{bottom:calc\(var\(--l99-low/, 'above the thumbs on a touch screen');
 });
+
+test('a beam gathers, lets go with a punch, pours, and thins away', async () => {
+	const { beamShape, CHARGE, MIN_BLAST } = await import('../src/magic/beam.js');
+	assert.ok(CHARGE > 0.2 && CHARGE < 0.5 && MIN_BLAST > 0);
+	assert.deepEqual(beamShape(-0.1), { out: 0, r: 0, a: 0 }, 'nothing poured while it gathers');
+	const go = beamShape(0.01), on = beamShape(1.5);
+	assert.ok(go.out < 1 && go.r > 1.4, 'its head racing out, wide with the punch');
+	assert.equal(on.out, 1);
+	assert.ok(Math.abs(on.r - 1) < 0.01 && Math.abs(on.a - 1) < 0.01, 'settled to a steady pour');
+	assert.ok(beamShape(1.5, 0.1).r < 0.3 && beamShape(1.5, 0.3).a === 0, 'let go, it thins to nothing');
+	const src = (f) => fs.readFileSync(new URL('../src/' + f, import.meta.url), 'utf8');
+	const caster = src('magic/caster.js');
+	assert.match(caster, /age: -CHARGE/, 'it gathers before it lets go');
+	assert.match(caster, /H\.age >= MIN_BLAST/, 'a tap still lets it go');
+	assert.match(caster, /shove\(h\.T, from/, 'its pressure drives fighters back');
+	assert.match(caster, /beamVoice\(spell\.school\)/);
+	assert.match(src('magic/index.js'), /beams\.show\(`net:\$\{who\}`/, 'a friend\'s beam pours steadily');
+	assert.match(src('people/motion.js'), /beam: \(u, t\)/);
+	assert.match(src('magic/hands.js'), /A\.to = BEAM/, 'both hands');
+});
