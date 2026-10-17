@@ -15,6 +15,9 @@ import { createAether, seedOf } from './aether.js';
 import { createCaster } from './caster.js';
 import { createMagicHud } from './hud.js';
 import { createHotbar } from '../combat/hotbar.js';
+import { createCastHands } from './hands.js';
+import { encodeSpell, decodeSpell, SPELL_STYLE } from './net.js';
+import { GLOW } from './fx.js';
 
 const KEY = 'l99-magic';
 const store = {
@@ -24,8 +27,9 @@ const store = {
 const SPELL_KEYS = { Digit6: 0, Digit7: 1, Digit8: 2, Digit9: 3, Digit0: 4 };
 
 // world(): the world (player, island, sky); light(): the sun's height (-1 .. 1); busy(): anything
-// that has the controls (driving, a menu)
-export function createMagic({ scene, camera, mount, combat, arms, world, light, hint = () => {}, busy = () => false, isPhone = false, isTouch = false }) {
+// that has the controls (driving, a menu); me(): your body (people/avatar.js me: { P, M });
+// third(): whether you are seen in third person (people/self.js)
+export function createMagic({ scene, camera, mount, combat, arms, world, light, hint = () => {}, busy = () => false, isPhone = false, isTouch = false, me = () => null, third = () => false }) {
 	let saved = null;
 	try { saved = JSON.parse(store.get(KEY) || 'null'); } catch { saved = null; }
 	const state = createMagicState(saved);
@@ -34,7 +38,43 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	const W = () => world();
 	const worldKey = () => combat.worldKey?.() || 'here';
 	const seed = () => (W() ? seedOf(worldKey()) : null);
-	const caster = createCaster({ camera, combat, player: () => W()?.player, state, fx, light, hint, sky: { get state() { return W()?.sky?.state; } }, worldKey, seed, isPhone });
+	// your hands casting (first person), your body (third), and friends in the room told
+	const hands = createCastHands({ camera, fx, isPhone });
+	function onCast(spell, from, to, pulse = false) {
+		if (!pulse) {
+			if (third()) me()?.M?.gesture?.(spell.tier >= 4 ? 'cast2' : 'cast');
+			else if (!arms.held?.()) hands.cast(combat.melee?.state?.item ? 'L' : 'R', GLOW[spell.school], spell.tier >= 4);
+		}
+		const e = encodeSpell(spell.id, from, to);
+		if (e) combat.sendFx?.(e.a, e.b, SPELL_STYLE, pulse ? 1 : 0);
+	}
+	const caster = createCaster({ camera, combat, player: () => W()?.player, state, fx, light, hint, sky: { get state() { return W()?.sky?.state; } }, worldKey, seed, isPhone, onCast });
+	combat.hooks.casting = () => hands.busy();
+	// a friend's spell, seen: its light along its way, or bursting where it went
+	const remote = [];
+	combat.hooks.remoteSpell = (a, b, pulse) => {
+		const sp = decodeSpell(b);
+		if (!sp) return;
+		const c = GLOW[sp.type === 'frost' ? 'frost' : sp.school];
+		const d = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+		if (sp.kind === 'beam' || sp.kind === 'chain') { fx.line(a, b, c, 0.6, pulse ? 0.32 : 0.25, 0.25, sp.kind === 'chain' ? 1.4 : 0.05); return; }
+		if (sp.kind === 'bolt' || sp.kind === 'orb') { remote.push({ a, b, c, t: 0, T: Math.max(0.05, d / (sp.speed || 40)), big: sp.kind === 'orb' }); return; }
+		if (d > 1 && ['blink', 'recall', 'gate', 'rewind'].includes(sp.kind)) { fx.burst(a, c, 30, 2.5, 0.6, 0.3, 0); fx.burst(b, c, 30, 2.5, 0.6, 0.3, 0); return; }
+		if (d > 1) { fx.burst(b, c, 50, 4, 0.7, 0.4, 1); fx.ring(b, sp.r || 4, c, 36, 0.5, 0.35); if (sp.kind === 'strike' || sp.kind === 'storm') fx.line({ x: b.x, y: b.y + 40, z: b.z }, b, c, 0.9, 0.3, 0.45, sp.kind === 'storm' ? 3 : 0.3); return; }
+		// (cast on themselves or about them)
+		fx.burst({ x: a.x, y: a.y - 0.6, z: a.z }, c, 30, 2, 0.7, 0.25, 0.8);
+		if (sp.r) fx.ring({ x: a.x, y: a.y - 1.6, z: a.z }, sp.r, c, 36, 0.5, 0.3);
+	};
+	function stepRemote(dt) {
+		for (let i = remote.length - 1; i >= 0; i--) {
+			const R = remote[i];
+			R.t += dt;
+			const u = Math.min(1, R.t / R.T);
+			const x = R.a.x + (R.b.x - R.a.x) * u, y = R.a.y + (R.b.y - R.a.y) * u, z = R.a.z + (R.b.z - R.a.z) * u;
+			fx.emit(x, y, z, 0, 0, 0, 0.25, R.big ? 0.6 : 0.3, 0.05, R.c, 1, 0, 0);
+			if (u >= 1) { fx.burst(R.b, R.c, 16, 3, 0.4, 0.22, 0.6); remote.splice(i, 1); }
+		}
+	}
 	combat.hooks.shield = (blow) => caster.shieldBlow(blow);
 	combat.hooks.cloak = () => caster.cloaked();
 	const aether = createAether({
@@ -48,7 +88,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		},
 	});
 	const active = () => !!W()?.player && !busy() && !mount.inert && mount.style.display !== 'none' && !hud?.isOpen() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') && !window._KEYS_PLAY_ON;
-	const hotbar = createHotbar({ arms, store, ok: () => active(), hint });
+	const hotbar = createHotbar({ arms, melee: () => combat.melee, store, ok: () => active(), hint });
 	function castSlot(i, o = {}) {
 		const id = state.binds[i];
 		if (!id) { hint(`Nothing bound to ${['6', '7', '8', '9', '0'][i]}. Bind a spell in the spellbook (N).`, 1800); return false; }
@@ -92,6 +132,12 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (a new world's player: told of the mouse's mode)
 		if (player !== Wd.player) { player = Wd.player; player.state.onLookMode = (m) => hud.setMode(m); hud.setMode(player.state.lookMode); caster.clear(); aether.rescan(); }
 		caster.update(dt, keysHeld);
+		// (your hands: your own, once your body is made; the beam's from the right one; none in third person)
+		const body = me();
+		if (body?.P) hands.setBody(body.P);
+		const bs = caster.beaming(), beam = !third() && !arms.held?.() && bs ? GLOW[bs] : null;
+		if (third()) hands.root.visible = false; else hands.update(dt, beam);
+		stepRemote(dt);
 		aether.update(dt, camera.position);
 		fx.update(dt, caster.sighting());
 		if (innerHeight !== lastH) { lastH = innerHeight; fx.resize(innerHeight, camera.fov); }
@@ -100,10 +146,12 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 5; if (dirty) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); fx.dispose(); combat.hooks.shield = combat.hooks.cloak = null; }
+	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); fx.dispose(); hands.dispose(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.casting = combat.hooks.remoteSpell = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, exposure: () => caster.exposure(),
+		// (the tests: your body, for its gestures)
+		body: () => me(),
 		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, ...caster.info() }),
 		cast: (id, o) => caster.cast(id, o || {}),
 		learn: (id) => weave(state, id),
