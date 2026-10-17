@@ -128,7 +128,10 @@ export function finishGarmentEdges(g, o, cut, R) {
   const edge=(f,r=.0016)=>{f.radius=r;return f;}, ribbed=isRibbed(item);
   if (s<2 && item) {
    if (limb===0 || limb===2) {
-    cuts.push(edge(v=>v[1]-(s===0?R.topHem:R.outHem)-.012,ribbed?.0034:.0018));
+    // (a shirt worn open over another top has a shirt-tail hem: up at the side seams; garment.js
+    // discards the cloth below it the same way)
+    const tail=v=>s===1&&isShirted(item)?.035*smooth((Math.abs(v[0])-.08)/.08):0;
+    cuts.push(edge(v=>v[1]-(s===0?R.topHem:R.outHem+tail(v))-.012,ribbed?.0034:.0018));
     if (!item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>{
      const fr=smooth((v[2]+.04)/.035), scoop=s===0?(item.kind==='tank'?.045:item.kind==='crop'?.025:0):0;
      return cut.neck-.005-scoop*fr+.035*smooth(Math.abs(v[0])/.09)-.004*fr-v[1];
