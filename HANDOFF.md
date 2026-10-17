@@ -1,3 +1,17 @@
+## October 17, 2026: spells, aether fabric, weapon and spell keys, camera mode
+
+- **The keys:**
+  - 1 to 5 take up your weapons (`combat/hotbar.js`); press the same key again to put the weapon away.
+  - 6 to 0 cast your spells; N opens the spellbook.
+  - Alt / Option frees the mouse for the camera: click-drag turns the view and fires nothing. A double tap captures the mouse again to aim (`player.js` `lookMode`).
+- **The spells:**
+  - 47 spells in 11 schools: Light (Radiance, Restoration, Warding, Dawn), Dark (Shadow, Void, Blight, Umbral) and Twilight (Storm, Chrono, Primal), each a four-tier ladder (`magic/spells.js`).
+  - Spells are woven from light and dark aether fabric. Fabric comes from motes and wells in the world: light by day, dark by night, both at dusk and dawn (`magic/aether.js`). Mercy shown gives light fabric; a kill gives dark.
+  - What you weave becomes affinity: stronger, cheaper spells of that strand. Twilight spells need both strands.
+- **How they run:** `magic/caster.js`. Harm goes through `combat.deal`. Statuses are a fighter's `hex`, read in `combat/ai-squads.js`. Wards go through `combat.hooks.shield`, the cloak through `combat.hooks.cloak`.
+- **Check on a desktop:** in this container's headless Chromium, capturing the mouse makes the browser jump by about 2 GB at once, with main's own build as well. Watch Chrome's Task Manager before and after clicking in to aim.
+- **More:** `docs/spells-and-controls-2026-10-16.md`. Tests: `island/tools/magic.test.mjs`.
+
 ## October 16, 2026: night lighting, part 2
 
 Landmarks and civic art floodlit from below by their real geometry (`bay/floodlights.js`, a third lamp list `LF` in `world/nightfield.js`); bridges' deck lamps, pools and the Bay Lights; red obstruction lights on everything tall, flashing in step; the skyline lit by floor runs with warm lobbies and lit crowns; street lamps by era (`bay/streetlamps.js`: acorns, sodium cobra heads, LED refits and new tracts) with pools on the road and light on the walls and trees; cars' headlights, tail and brake lights and low beams (`bay/carlights.js`); homes to bed at their own hour with one lamp left on; the Moon where it really is with its phase and shadows (`world/solar.js lunarPosition`), the cities' glow toward the cities washing out the stars and lighting low cloud. Day interiors: no tower floors inside a service's block, and the sun reaches a room only through its windows (the fire bay is no longer lit through the roof; not measured in the page). Bugs: `nightlights.js` dispose, the landmarks' NaN normals. See `docs/night-lighting-2-2026-10-16.md`.
