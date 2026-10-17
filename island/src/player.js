@@ -17,6 +17,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		pos: new THREE.Vector3(island.spawn.x, 0, island.spawn.z),
 		vel: new THREE.Vector3(), yaw: island.spawn.yaw, pitch: -0.04,
 		grounded: false, swimming: false, diving: false, flying: false, boost: 1, run: false, locked: false,
+		// how the mouse looks (desktop): 'aim' (captured, it turns the view and the aim) or 'camera'
+		// (free cursor, a click-drag turns the view, clicks fire nothing); spells and the like
+		// scale your pace (speedK), your jump (jumpK) and your fall (fallK), or let you walk on water
+		lookMode: 'aim', speedK: 1, jumpK: 1, fallK: 1, waterWalk: false,
 	};
 	s.pos.y = island.heightAt(s.pos.x, s.pos.z) + EYE;
 	const keys = new Set();
@@ -30,7 +34,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	let lastLook = 0;
  function look(dx, dy, sensitivity) { if (!canLook()) return; lastLook = performance.now(); const scale = sensitivity * (shared.aimSensitivity ?? DEFAULT_AIM_SENSITIVITY) / Math.max(1, camera.zoom || 1); s.yaw -= dx * scale; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch - dy * scale)); }
  function releaseMouse() { if (document.pointerLockElement === dom.canvas) document.exitPointerLock(); }
- function lockChanged() { if (document.pointerLockElement !== dom.canvas) clearInput(); }
+ // (letting go of the mouse for the camera keeps the keys you hold: you walk on as you look)
+ function lockChanged() { if (document.pointerLockElement !== dom.canvas) { if (s.lookMode === 'camera') mouse = null; else clearInput(); } }
  function buttonLook(e) { look(e.detail.x, e.detail.y * (lookPrefs.invertY ? -1 : 1), .0042); }
  function focusedUI(e) { if (e.target.closest?.('input,textarea,select,button,[contenteditable]')) releaseMouse(); }
  document.addEventListener('pointerlockchange', lockChanged);
@@ -44,6 +49,29 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (k === 'b' && !e.repeat && s.flying) { cycleBoost(); e.preventDefault(); return; }
 		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = false; keys.add(k); e.preventDefault(); }
 	}
+	// Aim and camera (desktop). Alt / Option lets go of the mouse for the camera: the cursor is
+	// free, a click-drag turns the view and clicks fire nothing. A double tap of Alt / Option
+	// captures it again to aim. (The first tap of a double tap from aiming passes through the
+	// camera and straight back.)
+	let altAt = 0;
+	function setLookMode(m) {
+		if (s.lookMode === m) return;
+		s.lookMode = m;
+		dom.canvas.style.cursor = m === 'camera' ? 'grab' : '';
+		if (m === 'camera') releaseMouse();
+		else if (dom.canvas.requestPointerLock && document.pointerLockElement !== dom.canvas) { try { dom.canvas.requestPointerLock()?.catch?.(() => {}); } catch { /* the next click captures it */ } }
+		s.onLookMode?.(m);
+	}
+	function altKey(e) {
+		if (e.key !== 'Alt' || !s.active || window._KEYS_PLAY_ON || e.target.closest?.('input,textarea,[contenteditable]')) return;
+		// (Alt alone would focus a browser's menu bar on Windows)
+		e.preventDefault();
+		if (e.type !== 'keydown' || e.repeat) return;
+		const now = performance.now();
+		if (now - altAt < 350) { altAt = 0; setLookMode('aim'); }
+		else { altAt = now; setLookMode('camera'); }
+	}
+	addEventListener('keydown', altKey, true); addEventListener('keyup', altKey, true);
 	function cycleBoost() { if (!s.flying) return 1; s.boost = nextFlightSpeed(s.boost, !!s.orbit?.deep?.()); s.onBoost?.(s.boost); return s.boost; }
 	function keyUp(e) { keys.delete(e.key.toLowerCase()); }
 	let mouse = null;
@@ -52,6 +80,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.climbAssist = false;
 		const r = dom.canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
 		if (e.pointerType === 'mouse') {
+   // (the camera: a click-drag turns the view, the mouse stays free)
+   if (s.lookMode === 'camera') { if (e.button === 0) { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY }; dom.canvas.style.cursor = 'grabbing'; dom.canvas.setPointerCapture?.(e.pointerId); } return; }
    if (document.pointerLockElement !== dom.canvas && e.button === 0 && dom.canvas.requestPointerLock) {
     e.preventDefault();
     try { dom.canvas.requestPointerLock()?.catch?.(() => {}); } catch {}
@@ -88,7 +118,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch));
 	}
 	function pUp(e) {
-		if (mouse && e.pointerId === mouse.id) mouse = null;
+		if (mouse && e.pointerId === mouse.id) { mouse = null; if (s.lookMode === 'camera') dom.canvas.style.cursor = 'grab'; }
 		if (touch.move && e.pointerId === touch.move.id) {
 			touch.move = null; joy.x = joy.y = 0; s.run = false;
 			dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = '';
@@ -245,7 +275,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 		const x0 = s.pos.x, z0 = s.pos.z, wasGrounded = s.grounded, vy0 = s.vel.y;
 		// (the brush holds you back a little: nature/wildground.js)
-		const speed = (s.swimming ? 2.2 : run ? 10 : 5.2) * (s.swimming ? 1 : 1 - (island.dragAt?.(s.pos.x, s.pos.z) ?? 0));
+		const speed = (s.swimming ? 2.2 : run ? 10 : 5.2) * (s.swimming ? 1 : 1 - (island.dragAt?.(s.pos.x, s.pos.z) ?? 0)) * (s.speedK || 1);
 		const accel = s.grounded || s.swimming ? 10 : 2.5;
 		s.vel.x += (wish.x * speed - s.vel.x) * Math.min(1, accel * dt);
 		s.vel.z += (wish.z * speed - s.vel.z) * Math.min(1, accel * dt);
@@ -260,8 +290,11 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
 		const contact = waterContact(island, s.pos, ground, t, shared.uWave?.value ?? 1, s.diving);
 		const surface = contact.surface;
-		const enteringWater = !s.swimming && contact.swimming;
-		s.swimming = contact.swimming;
+		// (walking on the water: its surface is a floor while you are not under it)
+		const onWater = s.waterWalk && surface != null && Number.isFinite(surface) && !s.diving && s.pos.y - EYE > surface - 0.4;
+		const floorY = onWater ? Math.max(ground, surface) : ground;
+		const enteringWater = !s.swimming && contact.swimming && !onWater;
+		s.swimming = contact.swimming && !onWater;
 		// An underwater arrival starts at its actual depth, without being pulled up
 		// to a distant lake surface before the player has touched a control.
 		if (enteringWater && contact.under) s.diving = true;
@@ -289,12 +322,12 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		} else {
 			s.diving = false;
 			// (facing a window or a low wall close by, the jump is a vault over it: structures/vault.js)
-			if ((keys.has(' ') || s.jumpQueued) && s.grounded && !s.tryVault?.(s.jumpQueued ? 'button' : 'key')) { s.vel.y = 5.2; s.grounded = false; }
+			if ((keys.has(' ') || s.jumpQueued) && s.grounded && !s.tryVault?.(s.jumpQueued ? 'button' : 'key')) { s.vel.y = 5.2 * (s.jumpK || 1); s.grounded = false; }
 			s.jumpQueued = false;
-			s.vel.y -= 18 * (island.gravity || 1) * dt;
+			s.vel.y -= 18 * (island.gravity || 1) * (s.vel.y < 0 ? s.fallK || 1 : 1) * dt;
 			s.pos.y += s.vel.y * dt;
-			if (s.pos.y < ground + EYE) { s.pos.y = ground + EYE; s.vel.y = 0; s.grounded = true; }
-			else if (s.pos.y > ground + EYE + 0.05) s.grounded = false;
+			if (s.pos.y < floorY + EYE) { s.pos.y = floorY + EYE; s.vel.y = 0; s.grounded = true; }
+			else if (s.pos.y > floorY + EYE + 0.05) s.grounded = false;
 		}
 		// the gait: a footfall each step, and the head dipping as each foot lands
 		const G = gait(dt, Math.hypot(s.pos.x - x0, s.pos.z - z0) / Math.max(dt, 1e-3), run);
@@ -339,7 +372,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		return G;
 	}
 	function dispose() {
-		clearInput(); document.removeEventListener('pointerlockchange', lockChanged); dom.mount.removeEventListener('l99-look-delta', buttonLook); dom.mount.removeEventListener('focusin', focusedUI);
+		clearInput(); removeEventListener('keydown', altKey, true); removeEventListener('keyup', altKey, true); document.removeEventListener('pointerlockchange', lockChanged); dom.mount.removeEventListener('l99-look-delta', buttonLook); dom.mount.removeEventListener('focusin', focusedUI);
 		removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);
 		removeEventListener('pointermove', pMove); removeEventListener('pointerup', pUp); removeEventListener('pointercancel', pUp);
 		removeEventListener('blur', clearInput); dom.canvas.removeEventListener('pointerdown', pDown);
@@ -350,5 +383,5 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.jumpQueued = true;
 		return 'jump';
 	}
-	return { state: s, update, input, dispose, jump, floorAt, pushOut, clearInput, cycleBoost };
+	return { state: s, update, input, dispose, jump, floorAt, pushOut, clearInput, cycleBoost, setLookMode };
 }
