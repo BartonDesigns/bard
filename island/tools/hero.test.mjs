@@ -78,8 +78,8 @@ test('the choice is kept, and your seed with it', () => {
 
 test('your body, its hands, friends and the settings all use the hero', () => {
 	const src = (f) => fs.readFileSync(new URL('../src/' + f, import.meta.url), 'utf8');
-	assert.match(src('people/avatar.js'), /buildPerson\(A, heroDNA\(h\)\)/);
-	assert.match(src('people/avatar.js'), /async function setHero\(sex\)/);
+	assert.match(src('people/avatar.js'), /buildPerson\(A, heroDNA\(h, \{ look \}\)\)/);
+	assert.match(src('people/avatar.js'), /async function setHero\(sex, nextLook = null\)/);
 	assert.match(src('net/remotes.js'), /lookDNA\(r\.seed\)/);
 	assert.match(src('net/multiplayer.js'), /const seed = heroSeed\(heroChoice\(\)\)/);
 	assert.match(src('crysis/viewmodel.js'), /arms\.me !== avatar\.me/, 'the gun hands made again');

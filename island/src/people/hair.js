@@ -47,6 +47,9 @@ export const CUTS = {
 	pixie: { top: 0.06, sides: 0.03, back: 0.025, flow: 'part', lift: 0.008, fringe: 1 },
 	fringe: { top: 0.24, sides: 0.24, back: 0.26, drop: -0.12, flow: 'part', lift: 0.008, fringe: 1 },
 	slick: { top: 0.09, sides: 0.03, back: 0.04, flow: 'back', lift: 0.003 },
+	// swept: longer on top, lifted at the front and swept back, the sides short but full, a
+	// little wave for the layers to break (a hero's: people/hero.js)
+	swept: { top: 0.085, sides: 0.022, back: 0.032, flow: 'back', lift: 0.018, curl: 0.003 },
 	thinning: { top: 0.03, sides: 0.025, back: 0.025, flow: 'crown', lift: 0.003, thin: 1 },
 };
 // the old hair meshes' names, for the places that still pick them

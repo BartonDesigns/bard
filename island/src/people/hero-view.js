@@ -214,5 +214,7 @@ export function createHeroView({ scene, renderer, avatar, self, world, setCine }
 		setCine(null);
 		panel?.remove(); panel = null;
 	}
-	return { open, close, shot, stats, pose, setLook, frame, state: S, views: VIEWS, lights: LIGHTS };
+	// (a variant of the hero tried: its hair or face changed, the body made again; null: as made)
+	async function variant(look = null) { await avatar.setHero(avatar.hero, look); await avatar.ready(); setLook(); pose(); return !!body(); }
+	return { open, close, shot, stats, pose, setLook, frame, variant, state: S, views: VIEWS, lights: LIGHTS };
 }

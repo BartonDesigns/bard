@@ -55,7 +55,7 @@ const HERO = {
 			'nose-width': -0.12, 'nose-hump': -0.08, 'nose-length': 0.04, 'eye-tilt': 0.05, 'eye-open': -0.08, 'eye-spacing': -0.02,
 			'mouth-width': 0.04, 'upper-lip': 0.02, 'lower-lip': 0.08, 'head-square': 0.3, 'head-oval': 0.25, 'head-fat': -0.3, 'neck-width': 0.18,
 		},
-		hair: { style: 'short01', vol: 1.12, fadeK: 0.25, beard: 'stubble', cut: 'textured' },
+		hair: { style: 'short01', vol: 1.12, fadeK: 0, beard: 'stubble', cut: 'textured' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
 			// (a fitted charcoal top, its sleeves pushed up the forearms)
@@ -111,16 +111,19 @@ export function heroDNA(sex = 'male', opts = {}) {
 	d.greyShift = -20;
 	d.iris = H.iris;
 	d.brows = { ...H.brows };
+	d.browTone = H.browTone ?? 0.85;
 	d.freckles = !!H.freckles;
 	// (his hair and beard, or hers, by name: people/hairkit.js styleFor, beardFor)
 	style.printKind = 0;
-	style.hair = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, recede: 0, thin: 0, part: 1, fresh: true, ...H.hair };
+	// (opts.look: a variant tried in the hero view, people/hero-view.js: { hair, face })
+	const look = opts.look || {};
+	style.hair = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, recede: 0, thin: 0, part: 1, fresh: true, ...H.hair, ...(look.hair || {}) };
 	d.style = style;
 	d.styleSig = JSON.stringify(d.outfit);
 	// (sure of themselves: chest up, an easy stride)
 	d.temper = { outgoing: 0.7, confident: 0.95, warmth: 0.6, fidget: 0.1 };
 	d.gait = { stride: 1.05, bounce: 0.85, armSwing: 0.9, posture: -0.03, pace: 1.35 };
-	d.face = { ...H.face };
+	d.face = { ...H.face, ...(look.face || {}) };
 	// (the V: broad shoulders, a narrow waist, people/build.js)
 	d.build = { ...H.build };
 	return d;

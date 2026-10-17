@@ -8,14 +8,14 @@ import { createMotion } from './motion.js';
 import { wearOwnInk } from '../tattoo/studio.js';
 
 export function createAvatar({ scene, world }) {
-	let loading = null, me = null, hero = setHeroChoice(heroChoice()), version = 0;
+	let loading = null, me = null, hero = setHeroChoice(heroChoice()), version = 0, look = null;
 	function ready() {
 		if (me) return Promise.resolve(me);
 		const v = version, h = hero;
 		// (chosen again while it was being made: made as the one chosen now)
 		if (!loading) loading = loadPeopleAssets().then((A) => {
 			if (v !== version) return ready();
-			const P = buildPerson(A, heroDNA(h));
+			const P = buildPerson(A, heroDNA(h, { look }));
 			wearOwnInk(P);                  // (your tattoos, if you have any: tattoo/studio.js)
 			const M = createMotion(P, (x, z) => world().island.heightAt(x, z));
 			P.root.visible = false;
@@ -31,7 +31,7 @@ export function createAvatar({ scene, world }) {
 	function chair() {
 		if (chairMe) return Promise.resolve(chairMe);
 		if (!chairing) chairing = loadPeopleAssets().then((A) => {
-			const d = heroDNA(hero);
+			const d = heroDNA(hero, { look });
 			// (the same clothes' colours, cut short: the day's style changed in place, so it is
 			// still you, hair and all)
 			if (d.style) {
@@ -61,9 +61,11 @@ export function createAvatar({ scene, world }) {
 	function hide() { if (me) { me.P.root.visible = false; me.M.act(null); } }
 	// the other hero: you are made again, where you stood, as you were shown (the hands that
 	// were yours follow on their own: combat/melee-view.js, magic/hands.js, crysis/viewmodel.js)
-	async function setHero(sex) {
+	// (look: a variant to try, for the hero view only; people/hero-view.js)
+	async function setHero(sex, nextLook = null) {
 		const next = setHeroChoice(sex);
-		if (next === hero) return me;
+		if (next === hero && JSON.stringify(nextLook) === JSON.stringify(look)) return me;
+		look = nextLook;
 		hero = next;
 		const was = me, chairWas = chairMe;
 		me = null; loading = null; chairMe = null; chairing = null; version++;

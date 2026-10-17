@@ -114,6 +114,23 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 	// the skin round the brows (its vertices and normals, in a fine grid), so that every
 	// hair lies on it, a hair's width out, whatever the brow ridge's shape
 	const onSkin = skinNear(A, p, B);
+	// (the brow's own tone first, under its hairs: a soft ribbon along each arch on the skin,
+	// fullest at the inner end, so the hairs read as one brow and not as strokes; for those whose
+	// brows are groomed, people/hero.js)
+	if (P.dna.brows) for (let j = 0; j + 2 < B.length; j += 2) {
+		const va = B[j], vb = B[j + 2], ta = B[j + 1] / 65535, tb = B[j + 3] / 65535;
+		if (tb < ta) continue;
+		const a = new THREE.Vector3(...at(va)), b = new THREE.Vector3(...at(vb));
+		normalOf(va, n0); normalOf(vb, n1);
+		const quad = [];
+		for (const [o, n, t, from] of [[a, n0, ta, va], [b, n1, tb, vb]]) {
+			const along = b.clone().sub(a).normalize(), across = new THREE.Vector3().crossVectors(n, along).normalize();
+			if (across.y < 0) across.multiplyScalar(-1);
+			const hw = (0.0075 * (1 - t) + 0.0028 * t) * thick * S * 0.55;
+			for (const sd of [-1, 1]) { const q = o.clone().addScaledVector(across, sd * hw + 0.0006 * S); onSkin(q, 0.0004); quad.push(vert(q.x, q.y, q.z, sd < 0 ? 0 : 1, t, 5, from)); }
+		}
+		I.push(quad[0], quad[2], quad[3], quad[0], quad[3], quad[1]);
+	}
 	for (let j = 0; j + 2 < B.length; j += 2) {
 		const va = B[j], vb = B[j + 2], ta = B[j + 1] / 65535, tb = B[j + 3] / 65535;
 		if (tb < ta) continue;
@@ -219,6 +236,13 @@ float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 		a = 1.0 - smoothstep(w * 0.45, w, abs(vSt.x - 0.5));
 		c = k == 4 ? uGrey : uHair;
 		gRgh = 0.85; gSpec = 0.15; gLit = 0.7;
+	} else if (k == 5) {
+		// the brow's own tone under its hairs: soft across, fullest at the inner end, fading to
+		// the tail
+		float across = 1.0 - smoothstep(0.2, 0.5, abs(vSt.x - 0.5));
+		a = across * (0.3 + 0.14 * (1.0 - vSt.y)) * smoothstep(0.0, 0.06, vSt.y) * (1.0 - smoothstep(0.8, 1.0, vSt.y));
+		c = uHair * 1.08;
+		gRgh = 0.9; gSpec = 0.1; gLit = 0.75;
 	} else {
 		// the wet line: clear, glossy, a little pink where it meets the lid
 		a = sin(vSt.y * 3.14159) * 0.45;
