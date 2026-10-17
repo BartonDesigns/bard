@@ -124,6 +124,16 @@ export const ACTIONS = {
 		[0, { L: arm({ abd: 0.6, flex: 0.3, bend: 0.5, pro: 1.2 }), R: arm({ abd: 0.5, flex: -0.1, bend: 0.5, pro: 1.2 }), sp: [0.2, 0.15, 0], hp: [0, 0.1, 0, 0.12], fL: [0.2, 0.08, 0.25], fR: [-0.2, 0.08, -0.25], hd: [1.0, 0, 0] }],
 		[1, { L: arm({ abd: 0.9, flex: 0.6, bend: 0.7, pro: 1.2 }), R: arm({ abd: 0.8, flex: 0.1, bend: 0.8, pro: 1.2 }), sp: [0.2, 0.45, 0], hp: [0, 0.2, 0, 0.42], fL: [0.22, 0.08, 0.25], fR: [-0.22, 0.08, -0.25], hd: [1.0, -0.2, 0] }],
 	] },
+	// the hero's own (people/hero.js), after the concept sheet's action row: a sprint, driving off
+	// the back foot with the other knee high and the arms pumping; a leap, the legs tucked and
+	// the arms out for the landing; a scout's crouch, one knee down, a hand down to the ground,
+	// the other forearm across the raised knee, the head up and turned; a fighting stance with
+	// the hands open, the lead one forward; a climber's reach, one arm high on a hold, a foot up
+	sprint: { loop: false, keys: [[0, { L: arm({ abd: 0.14, flex: 0.95, roll: 0.35, bend: 1.65, pro: 1.2, curl: 0.6 }), R: arm({ abd: 0.16, flex: -0.7, roll: 0.25, bend: 1.35, pro: 1.2, curl: 0.6 }), sp: [0.18, 0.32, 0], hp: [-0.14, 0.14, 0, 0.07], fL: [0.1, 0.1, -0.45], fR: [-0.1, 0.42, 0.3], hd: [-0.1, -0.3, 0] }]] },
+	leap: { loop: false, keys: [[0, { L: arm({ abd: 1.05, flex: 0.65, roll: 0.25, bend: 0.5, pro: 1.5, curl: 0.25 }), R: arm({ abd: 0.95, flex: -0.45, roll: 0.25, bend: 0.65, pro: 1.5, curl: 0.25 }), sp: [0.25, 0.3, 0.05], hp: [0.1, 0.25, 0, 0.02], fL: [0.12, 0.55, 0.3], fR: [-0.12, 0.42, -0.28], hd: [0.35, -0.25, 0] }]] },
+	scout: { loop: false, keys: [[0, { L: arm({ abd: 0.2, flex: 0.75, roll: 0.55, bend: 1.35, pro: 0.9, wflex: 0.1, curl: 0.45 }), R: arm({ abd: 0.3, flex: 0.45, roll: 0.15, bend: 0.1, pro: 1.0, wflex: -1.1, curl: 0.12 }), sp: [-0.1, 0.62, -0.06], hp: [0.1, 0.3, 0, 0.5], fL: [0.2, 0, 0.32], fR: [-0.15, 0.05, -0.42], hd: [0.6, -0.55, 0] }]] },
+	stance: { loop: false, keys: [[0, { L: arm({ abd: 0.28, flex: 1.1, roll: 0.75, bend: 1.5, pro: 0.95, wflex: -0.25, curl: 0.35 }), R: arm({ abd: 0.32, flex: 0.85, roll: 0.95, bend: 2.05, pro: 0.75, wflex: -0.15, curl: 0.4 }), sp: [0.25, 0.12, 0], hp: [0.3, 0.06, 0, 0.16], fL: [0.2, 0, 0.3], fR: [-0.24, 0, -0.24], hd: [-0.25, 0.06, 0] }]] },
+	climb: { loop: false, keys: [[0, { L: arm({ abd: 0.4, flex: 0.25, roll: 0.15, bend: 0.4, pro: 1.3, curl: 0.25 }), R: arm({ abd: 0.42, flex: 2.85, roll: 0, bend: 0.12, pro: 1.7, wflex: -0.25, curl: 0.8 }), sp: [0.12, -0.08, 0.1], hp: [-0.1, 0.05, 0, 0.02], fL: [0.12, 0.42, 0.3], fR: [-0.1, 0, -0.06], hd: [-0.2, -0.5, 0] }]] },
 	// a walking stride held at its two extremes (the far crowd blends between them)
 	stride: { loop: false, keys: [
 		[0, { L: arm({ abd: 0.08, flex: -0.3, bend: 0.25 }), R: arm({ abd: 0.08, flex: 0.35, bend: 0.45 }), fL: [0.09, 0, 0.3], fR: [-0.09, 0.06, -0.28], hp: [0.08, 0, 0, 0.03] }],

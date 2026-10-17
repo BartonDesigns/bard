@@ -31,19 +31,35 @@ test('trousers are laid over the leg: hollows bridged, hung from above, tapering
 	L.forEach((p, i) => { if (p[0] < 0.1 && p[1] > 0.8) assert.ok(p[0] - K[i] > -0.001, 'not past the middle'); });
 });
 
-test('a boot is built over the foot: outsole and heel, midsole, tongue, laces, eyelets, collar', () => {
-	// a foot: an oval footprint 26 cm long, its top rising to the ankle; a shin above it
+test('a boot is built over the foot: a lofted upper with its toe box, sole, panels, tongue, laces, collar', () => {
+	// a synthetic foot (an ellipse, the instep rising to the back) and a shin above it
 	const foot = [], shin = [];
 	for (let i = 0; i < 400; i++) { const a = i / 400 * 2 * Math.PI, z = Math.sin(a) * 0.13, x = 0.1 + Math.cos(a) * 0.045 * (1 - 0.3 * (z < -0.06)); for (const y of [0.005, 0.03, 0.06]) foot.push(x, y + (y > 0.05 && z < 0 ? -z * 0.4 : 0), z); }
 	for (let j = 0; j < 30; j++) for (let i = 0; i < 24; i++) { const a = i / 24 * 2 * Math.PI, y = 0.08 + j * 0.01; shin.push(0.1 + Math.cos(a) * 0.04, y, -0.04 + Math.sin(a) * 0.045); }
-	const parts = bootGeometry(foot, shin, { top: 0.25, off: 0.02 });
+	const parts = bootGeometry(foot, shin, { top: 0.25, ankle: 0.09, off: 0.02 });
 	const kinds = new Set(parts.map((p) => p.part));
-	for (const k of ['sole', 'mid', 'tongue', 'lace', 'eyelet', 'collar']) assert.ok(kinds.has(k), k);
-	const sole = parts.find((p) => p.part === 'sole').geo; sole.computeBoundingBox();
-	assert.ok(sole.boundingBox.min.y >= 0 && sole.boundingBox.max.y < 0.03, 'the sole on the ground, its heel the tallest');
-	assert.ok(sole.boundingBox.max.z - sole.boundingBox.min.z > 0.27, 'longer than the foot');
+	for (const k of ['upper', 'cap', 'counter', 'sole', 'mid', 'tongue', 'lace', 'eyelet', 'collar']) assert.ok(kinds.has(k), k);
+	const box = (k) => { const g = parts.find((p) => p.part === k).geo; g.computeBoundingBox(); return g.boundingBox; };
+	const sole = box('sole'), upper = box('upper');
+	assert.ok(sole.min.y >= 0 && sole.max.y < 0.03, 'the sole on the ground, its heel the tallest');
+	assert.ok(sole.max.z - sole.min.z > 0.27, 'longer than the foot');
+	assert.ok(upper.min.y > 0.01 && upper.max.y > 0.249 && upper.max.y < 0.26, 'the upper from the sole to the top of the shaft');
+	assert.ok(upper.max.z > 0.13 + 0.015, 'round the toes, standing off them');
+	// (the toe box: the upper over the forefoot stands at its own height, well above the toes')
+	const g = parts.find((p) => p.part === 'upper').geo, P = g.attributes.position;
+	let toeTop = 0;
+	for (let i = 0; i < P.count; i++) if (P.getZ(i) > 0.06 && P.getZ(i) < 0.1) toeTop = Math.max(toeTop, P.getY(i));
+	assert.ok(toeTop > 0.05, 'a toe box, not toes in a sock: ' + toeTop.toFixed(3));
 	assert.ok(parts.filter((p) => p.part === 'lace').length >= 8, 'laced up');
-	assert.ok(parts.every((p) => p.on === 'foot' || p.on === 'shin'));
+	// (the laces lie on the upper's front, not off it)
+	const lace = parts.filter((p) => p.part === 'lace').map((p) => { p.geo.computeBoundingBox(); return p.geo.boundingBox; });
+	const I = g.index.array, tri = new THREE.Triangle(), q = new THREE.Vector3(), v = (i) => new THREE.Vector3(P.getX(i), P.getY(i), P.getZ(i));
+	for (const b of lace) {
+		const c = new THREE.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2);
+		let d = Infinity;
+		for (let t = 0; t < I.length; t += 3) { tri.set(v(I[t]), v(I[t + 1]), v(I[t + 2])); d = Math.min(d, tri.closestPointToPoint(c, q).distanceTo(c)); }
+		assert.ok(d < 0.01, 'a lace on the upper: ' + d.toFixed(3));
+	}
 });
 
 test('a belt goes round the waistband with its loops and a buckle; pockets sit on the outer thighs', () => {

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { HERO_TAG, heroSeed, heroOf, heroDNA, lookDNA, heroChoice, setHeroChoice } from '../src/people/hero.js';
 import { personDNA } from '../src/people/body.js';
 import { cleanLook } from '../src/net/protocol.js';
+import { ACTIONS } from '../src/people/actions.js';
 
 test('a hero is a seed of its own, which the room passes on as it is', () => {
 	for (const sex of ['male', 'female']) {
@@ -49,7 +50,8 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.ok(m.build.shoulders > f.build.shoulders && m.build.waist > 0 && f.build.waist > 0, 'the V');
 	assert.equal(f.style.shoes.kind, 'boot');
 	const src0 = fs.readFileSync(new URL('../src/people/garment.js', import.meta.url), 'utf8');
-	assert.match(src0, /F\?\.built \? \(F\.tall \? 0\.163 : 0\.083\)/, 'trousers end under the boots\' collars');
+	assert.match(src0, /F\?\.built \? \(F\.tall \? 0\.12 : 0\.045\)/, 'trousers end inside the boots\' shafts');
+	assert.match(src0, /if \(s === 3 && o\.shoes\?\.built\) continue;/, 'no sock under a built boot');
 	assert.match(src0, /F\.tall \? 0\.17 : 0\.09/, 'tall boots');
 	assert.match(src0, /const legHang = B\?\.hang/, 'a straight hang');
 	// (the belt and the pockets are built in the loop where the torso's surface can be measured,
@@ -90,6 +92,7 @@ test('your body, its hands, friends and the settings all use the hero', () => {
 	assert.match(src('main.js'), /'Your hero'/);
 	assert.match(src('people/self.js'), /hero \? 'ready' : 'rest'/, 'they stand ready');
 	assert.match(src('people/motion.js'), /ready: \{ both: arm/);
+	assert.match(src('people/self.js'), /me\.M\.act\(leap \? 'leap' : null/, 'in the air, the legs tucked');
 });
 
 test('a build broadens the shoulders, carries the arms out whole, and draws the waist in', async () => {
@@ -126,4 +129,18 @@ test('a build makes the head smaller about the top of the neck, and the legs lon
 	const q = Float32Array.from(at.flat());
 	shapeBuild(q, A, { legs: 0.1 });
 	assert.ok(Math.abs(q[1] - (1 - 1.1)) < 1e-6 && q[4] === 1 && q[7] === Math.fround(1.7), 'below the hip drawn down, the rest kept');
+});
+
+test('the hero moves as the concept sheet does: sprint, leap, crouch, stance, reach', () => {
+	for (const name of ['sprint', 'leap', 'scout', 'stance', 'climb']) {
+		const k = ACTIONS[name]?.keys?.[0]?.[1];
+		assert.ok(k && k.L && k.R && k.fL && k.fR && k.hp && k.sp && k.hd, name);
+	}
+	const { scout, stance, climb, leap, sprint } = Object.fromEntries(['scout', 'stance', 'climb', 'leap', 'sprint'].map((n) => [n, ACTIONS[n].keys[0][1]]));
+	assert.ok(scout.hp[3] > 0.4 && scout.fR[2] < -0.3, 'down on one knee, the other foot back');
+	assert.ok(scout.R.wflex < -0.8 && scout.R.bend < 0.3, 'a hand flat to the ground, the arm long');
+	assert.ok(stance.L.curl < 0.5 && stance.R.curl < 0.5 && stance.fL[2] > 0.2, 'the hands open, the lead foot forward');
+	assert.ok(climb.R.flex > 2.6 && climb.fL[1] > 0.3, 'one arm high, a foot up');
+	assert.ok(leap.fL[1] > 0.4 && leap.fR[1] > 0.3, 'the legs tucked');
+	assert.ok(sprint.fR[1] > 0.3 && sprint.fL[2] < -0.3, 'a knee high, driving off the back foot');
 });

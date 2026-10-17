@@ -283,6 +283,17 @@ vec3 garment(int s, vec3 P, vec3 N) {
 			// (and a dart in from the side above the knee)
 			gDetail -= line(P.y - (up + 0.05) + abs(N.x) * 0.06, 0.002) * step(0.6, abs(N.x)) * 0.6;
 		}
+		// zipped pockets slanting down the front of the thighs (flag bit 2): the zip's teeth, its
+		// tape a shade darker, the cloth turned in along it, a pull at the top
+		if (pat.z > 1.5 && leg > 0.5) {
+			float th = atan(N.x * sign(P.x), N.z), zt = hip - 0.02, zb = hip - 0.19;
+			float d = (th - mix(1.2, 0.55, clamp((zt - P.y) / (zt - zb), 0.0, 1.0))) * 0.085, on = step(zb, P.y) * step(P.y, zt);
+			float z = line(d, 0.0032) * on;
+			c = mix(c, c * 0.5, z * 0.75);
+			gDetail += z * (0.5 + 0.5 * sin(P.y * 2400.0)) - line(abs(d) - 0.0045, 0.0012) * on * 0.7;
+			float pull = 1.0 - smoothstep(0.0028, 0.0042, length(vec2(d - 0.003, P.y - zt + 0.012)));
+			c = mix(c, vec3(0.22, 0.21, 0.2), pull); gDetail += pull * 1.2;
+		}
 		// the back: a yoke dipping to the middle, and two pockets below it
 		if (N.z < -0.25) {
 			gDetail -= line(P.y - (hip + 0.045 - 0.25 * max(0.0, 0.12 - ax)), 0.002) * 0.9;
@@ -372,7 +383,7 @@ vec3 garment(int s, vec3 P, vec3 N) {
 	}
 	// hems: a stitched line near the bottom of tops, a turned cuff on joggers
 	if (s == 0 && abs(P.y - uHem.x - 0.018) < 0.003 && arm < 0.5) c *= 0.82;
-	if (s == 2 && uPat[2].z > 0.5 && P.y < uHem.w + 0.05) c *= 0.88 - 0.1 * abs(sin(atan(P.x, P.z) * 30.0));
+	if (s == 2 && mod(uPat[2].z, 2.0) > 0.5 && P.y < uHem.w + 0.05) c *= 0.88 - 0.1 * abs(sin(atan(P.x, P.z) * 30.0));
 	// shoes: soles, a toe cap, laces; socks above the shoe
 	if (s == 3) {
 		float fy = P.y;
@@ -432,12 +443,30 @@ vec3 tailor(int s, vec3 P, vec3 N, vec3 c, float px) {
 		}
 	}
 	if ((f & 8) != 0 && arm < 0.5 && front > 0.5) {
-		// a chest pocket on the left: its outline stitched, the cloth doubled
-		vec2 q = vec2(P.x - 0.085, P.y - chest + 0.015);
-		float bottom = -0.065 + max(0.0, 0.012 - abs(q.x) * 0.4);
-		if (abs(q.x) < 0.05 && q.y < 0.04 && q.y > bottom) {
-			float e = min(0.05 - abs(q.x), min(0.04 - q.y, q.y - bottom));
+		// a chest pocket on the left: its outline stitched, the cloth doubled (an overshirt's
+		// higher and further out, clear of its open front, with a buttoned flap)
+		vec2 q = s == 1 ? vec2(P.x - 0.108, P.y - chest - 0.025) : vec2(P.x - 0.085, P.y - chest + 0.015);
+		float hw = s == 1 ? 0.045 : 0.05, bottom = -0.065 + max(0.0, 0.012 - abs(q.x) * 0.4);
+		if (abs(q.x) < hw && q.y < 0.04 && q.y > bottom) {
+			float e = min(hw - abs(q.x), min(0.04 - q.y, q.y - bottom));
 			c *= 0.965 - line(e - 0.003, 0.001) * 0.18; gDetail += smoothstep(0.0, 0.004, e) * 0.5 - line(e - 0.003, 0.001) * 0.6;
+			if (s == 1) {
+				float fl = line(q.y - 0.012 + abs(q.x) * 0.12, 0.0016), bt = 1.0 - smoothstep(0.0036, 0.0048, length(vec2(q.x, q.y - 0.02)));
+				c *= 1.0 - fl * 0.3; gDetail -= fl * 1.1;
+				c = mix(c, vec3(0.17, 0.16, 0.15), bt * 0.9); gDetail += bt * 1.4;
+			}
+		}
+	}
+	if ((f & 2) != 0 && s == 1 && uPat[1].z > 0.5 && arm < 0.5 && front > 0.5) {
+		// an open shirt's fronts: the placket down each edge and its stitching, the buttons down
+		// the left, their holes down the right (the edge as the open front is cut, below)
+		float e = abs(P.x) - 0.035 - max(0.0, chest - P.y) * 0.12;
+		if (e < 0.03 && P.y < neck - 0.035 && P.y > hem + 0.015) {
+			float st = line(e - 0.024, 0.0012);
+			c *= 1.0 - st * 0.22; gDetail += st * 0.6 + band(e, 0.0, 0.024, 0.002) * 0.25;
+			vec2 bq = vec2(e - 0.012, mod(neck - 0.06 - P.y, 0.085) - 0.0425);
+			if (P.x > 0.0) { float bt = 1.0 - smoothstep(0.0042, 0.0056, length(bq)); c = mix(c, vec3(0.17, 0.16, 0.15), bt * 0.9); gDetail += bt * 1.4; }
+			else { float hole = (1.0 - smoothstep(0.0009, 0.0016, abs(bq.y))) * step(abs(bq.x), 0.0065); c *= 1.0 - hole * 0.4; gDetail -= hole * 1.2; }
 		}
 	}
 	if ((f & 4) != 0 && arm < 0.5 && front > 0.5) {
@@ -516,7 +545,7 @@ export function paint(m, o) {
 		let scale = g.scale ?? (g.pat === 'breton' ? 14 : g.pat === 'stripe' ? (g.kind === 'boardshorts' ? 6 : 12) : g.pat === 'plaid' ? 7 : g.pat === 'check' ? 16 : g.pat === 'dots' ? 11 : 10);
 		let flag = 0;
 		if (s === 1) flag = g.open ? 1 : 0;
-		if (s === 2) flag = g.cuff ? 1 : 0;
+		if (s === 2) flag = (g.cuff ? 1 : 0) + (g.zips ? 2 : 0);
 		if (s === 3) { scale = g.kind === 'chunky' ? 0.045 : g.kind === 'boot' ? 0.03 : g.kind === 'trail' ? 0.035 : 0.022; flag = g.kind === 'runner' || g.kind === 'trail' || g.kind === 'chunky' ? 1 : 0; }
 		if (g.pat === 'denim' && s !== 2) pat = PAT.denim;
 		const fab = FAB[g.fab] ?? (s === 3 ? FAB.leather : g.pat === 'denim' || g.pat === 'chambray' || g.kind === 'chinos' || g.kind === 'khakis' || g.kind === 'trousers' || g.kind === 'slacks' || g.kind === 'cargo' ? FAB.twill : g.kind === 'jersey' || g.kind === 'tech' || g.kind === 'runshorts' || g.kind === 'leggings' || g.kind === 'swim' || g.kind === 'bikini' ? FAB.nylon : s === 1 ? FAB.canvas : FAB.knit);
@@ -525,7 +554,7 @@ export function paint(m, o) {
 	U.uMisc.value.x = o.top?.number || 0;
 	U.uMisc.value.z = (o.printKind ?? 0) % PRINTS;
 	// how each top is made (tailor): ribbed knit, woven shirt, hoodie, chest pocket, placket
-	const make = (g, s) => !g ? 0 : (isRibbed(g) ? 1 : 0) | (isShirted(g) ? 2 : 0) | (g.kind === 'hoodie' ? 4 : 0) | (isShirted(g) && s === 0 && g.pocket !== false ? 8 : 0) | (isShirted(g) ? 16 : 0) | (/^(polo|henley)$/.test(g.kind || '') ? 32 : 0);
+	const make = (g, s) => !g ? 0 : (isRibbed(g) ? 1 : 0) | (isShirted(g) ? 2 : 0) | (g.kind === 'hoodie' ? 4 : 0) | (isShirted(g) && (s === 0 || g.pocket) && g.pocket !== false ? 8 : 0) | (isShirted(g) ? 16 : 0) | (/^(polo|henley)$/.test(g.kind || '') ? 32 : 0);
 	U.uKind.value.set(make(o.top, 0), make(o.outer, 1), 0, 0);
 }
 
@@ -541,6 +570,8 @@ export function landmarks(A, p, heads, map, height) {
   cut.sleevePlanes[side]={none:plane(shoulder,elbow,0),cap:plane(shoulder,elbow,.25),short:plane(shoulder,elbow,.6),elbow:plane(shoulder,elbow,1),rolled:plane(elbow,wrist,.3),long:plane(elbow,wrist,.9)};
   // the arm's joints at rest, for measuring how far along a sleeve a point lies
   cut.arm=cut.arm||{};cut.arm[side]={s:shoulder.toArray(),e:elbow.toArray(),w:wrist.toArray()};
+  // and the leg's: hip, knee, ankle (the middle of each section of a trouser leg, trouserHull)
+  cut.leg=cut.leg||{};cut.leg[side]=['upperleg01.','lowerleg01.','foot.'].map((b)=>heads[map[b+side]].toArray());
  }
 	// the skull and the torso's front and back, from the vertices the head and spine carry
 	const n = A.ids.length / 4, hb = map.head;
@@ -601,7 +632,7 @@ export function regions(o, cut) {
 	};
 	// (trousers bloused into tall boots end at the boots' tops: tuck)
 	// (into boots built over the feet: just under their collars, which close over the hem)
-	const legEnd = B ? ({ long: B.tuck ? cut.ankle + (F?.built ? (F.tall ? 0.163 : 0.083) : 0.14) : cut.ankle + (B.fit === 'wide' || B.fit === 'baggy' ? 0.005 : 0.02), capri: cut.knee - 0.17, bermuda: cut.knee - 0.03, jorts: cut.knee - 0.04, board: cut.knee + 0.01, shorts: cut.knee + 0.1, short: cut.knee + 0.2, bike: cut.knee + 0.07, knicker: cut.knee - 0.1, skirt: B.len === 'mini' ? cut.knee + 0.18 : 1e9, brief: cut.hip - 0.06 })[B.legs || 'long'] ?? cut.ankle : 0;
+	const legEnd = B ? ({ long: B.tuck ? cut.ankle + (F?.built ? (F.tall ? 0.12 : 0.045) : 0.14) : cut.ankle + (B.fit === 'wide' || B.fit === 'baggy' ? 0.005 : 0.02), capri: cut.knee - 0.17, bermuda: cut.knee - 0.03, jorts: cut.knee - 0.04, board: cut.knee + 0.01, shorts: cut.knee + 0.1, short: cut.knee + 0.2, bike: cut.knee + 0.07, knicker: cut.knee - 0.1, skirt: B.len === 'mini' ? cut.knee + 0.18 : 1e9, brief: cut.hip - 0.06 })[B.legs || 'long'] ?? cut.ankle : 0;
 	const rise = B && (B.fit === 'wide' || B.kind === 'skirt' || B.fit === 'baggy') ? 0.05 : 0.02;
 	const R = {
 		topHem, outHem, legEnd,
@@ -640,23 +671,34 @@ export function offsets(o) {
 }
 
 // ---------- the cloth mesh ----------
-// Tailored trousers (a bottom with hull: { taper, ease, knee }): each leg's cloth laid over the
+// Tailored trousers (a bottom with hull: { taper, shin, seat, ease, knee, room }): each leg's cloth laid over the
 // leg's own cross-sections, height by height, bridged where cloth bridges (round the back of
 // the knee, over the hollow above the ankle: the support of the section, which is its convex
-// hull), and hung from above: the cloth falls from the seat and from the kneecap, narrowing only
-// as the cut tapers it (taper: metres of radius lost per metre down), with a little room at the
-// knee's front to bend into (knee). Never past the body's middle at the crotch. Returns, for each
+// hull), and hung from above: the cloth comes in quickly off the seat (seat: metres of radius
+// it may lose per metre down there), then narrows only as the cut tapers it down the thigh
+// (taper) and below the knee (shin), with room round the knee (room) and more at its front to
+// bend into (knee). Never past the body's middle at the crotch. Returns, for each
 // cloth vertex of a trouser leg, how far it should stand off the skin (else -1).
 export function trouserHull(P, SL, src, cut, hull) {
 	const DY = 0.01, NA = 32, top = cut.hip - 0.03, NY = Math.ceil(top / DY) + 2;
-	const taper = hull.taper ?? 0.07, ease = hull.ease ?? 0.006, knee = hull.knee ?? 0.006;
+	const taper = hull.taper ?? 0.07, shin = hull.shin ?? taper * 0.6, seat = hull.seat ?? 0.3, ease = hull.ease ?? 0.006, knee = hull.knee ?? 0.006, room = hull.room ?? 0;
 	const legs = [0, 1].map(() => ({ cx: new Float64Array(NY), cz: new Float64Array(NY), n: new Float64Array(NY), R: new Float32Array(NY * NA) }));
 	const out = new Float32Array(P.count).fill(-1);
 	const isLeg = (i) => src[i] >= 0 && SL[i] % 10 === 2 && SL[i] >= 20 && P.getY(i) < top;
 	const bin = (y) => Math.max(0, Math.min(NY - 1, Math.round(y / DY)));
-	// (the leg's middle at each height, smoothed down its length)
+	// (the leg's middle at each height: on the line through its joints, hip, knee and ankle, where
+	// there are joints to go by; else the mean of the cloth's points there, smoothed down the leg,
+	// which a coarse cage with few points to a height pulls off the middle)
 	for (let i = 0; i < P.count; i++) if (isLeg(i)) { const L = legs[P.getX(i) < 0 ? 1 : 0], b = bin(P.getY(i)); L.cx[b] += P.getX(i); L.cz[b] += P.getZ(i); L.n[b]++; }
-	for (const L of legs) {
+	for (const [side, L] of legs.entries()) {
+		const J = cut.leg ? (side === 0 ? (cut.leg.L[0][0] >= 0 ? cut.leg.L : cut.leg.R) : (cut.leg.L[0][0] < 0 ? cut.leg.L : cut.leg.R)) : null;
+		if (J) {
+			for (let b = 0; b < NY; b++) {
+				const y = b * DY, [a, c] = y > J[1][1] ? [J[0], J[1]] : [J[1], J[2]], t = Math.max(0, Math.min(1, (y - a[1]) / ((c[1] - a[1]) || 1)));
+				L.cx[b] = a[0] + (c[0] - a[0]) * t; L.cz[b] = a[2] + (c[2] - a[2]) * t;
+			}
+			continue;
+		}
 		let lx = 0, lz = 0, any = false;
 		for (let b = NY - 1; b >= 0; b--) { if (L.n[b]) { L.cx[b] /= L.n[b]; L.cz[b] /= L.n[b]; lx = L.cx[b]; lz = L.cz[b]; any = true; } else if (any) { L.cx[b] = lx; L.cz[b] = lz; } }
 		for (let b = 0; b < NY; b++) if (!L.n[b]) { for (let d = 1; d < NY; d++) { const q = b + d < NY && L.n[b + d] ? b + d : b - d >= 0 && L.n[b - d] ? b - d : -1; if (q >= 0) { L.cx[b] = L.cx[q]; L.cz[b] = L.cz[q]; break; } } }
@@ -679,12 +721,16 @@ export function trouserHull(P, SL, src, cut, hull) {
 				H[b * NA + a] = m;
 			}
 		}
-		// hung from above, tapering
-		for (let b = NY - 2; b >= 0; b--) for (let a = 0; a < NA; a++) { const k = b * NA + a; H[k] = Math.max(H[k], H[k + NA] - taper * DY); }
+		// hung from above: off the seat the cloth comes in quickly to the thigh (the fold under the
+		// seat bridged, not hung from), then tapers slowly down the thigh, more slowly below the knee
+		for (let b = NY - 2; b >= 0; b--) {
+			const y = b * DY, tp = y > cut.hip - 0.15 ? seat : y > cut.knee ? taper : shin;
+			for (let a = 0; a < NA; a++) { const k = b * NA + a; H[k] = Math.max(H[k], H[k + NA] - tp * DY); }
+		}
 		// (the room at the knee's front, and never past the middle of the body)
 		for (let b = 0; b < NY; b++) for (let a = 0; a < NA; a++) {
 			const th = (a / NA) * 2 * Math.PI - Math.PI, dx = Math.cos(th), dz = Math.sin(th), k = b * NA + a;
-			H[k] += knee * Math.exp(-(((b * DY - cut.knee) / 0.07) ** 2)) * Math.max(0, dz);
+			H[k] += knee * Math.exp(-(((b * DY - cut.knee) / 0.07) ** 2)) * Math.max(0, dz) + room * Math.exp(-(((b * DY - cut.knee) / 0.14) ** 2));
 			const inward = (side === 0 ? -dx : dx);
 			if (inward > 0.05) H[k] = Math.min(H[k], (Math.abs(L.cx[b]) - 0.004) / inward);
 		}
@@ -710,6 +756,8 @@ export function clothGeometry(A, p, o, cut, R) {
 		const k = kinds(tri);
 		for (let s = 0; s < 4; s++) {
 			if (!tests[s](c, tri, k)) continue;
+			// (a boot built over the foot is the shoe: no cloth sock under it, garment-kit.js)
+			if (s === 3 && o.shoes?.built) continue;
 			// (what a closed layer over it hides wholly is left out: nothing under it to poke through)
 			if (s === 0 && hideTop && R.outer(c, tri, k, 0.04)) continue;
 			// Keep trousers beneath tops. A centroid coverage test can remove a triangle
@@ -777,9 +825,18 @@ export function clothGeometry(A, p, o, cut, R) {
 			if (tuck && y > cut.waist - 0.06) k = Math.max(k, off.top + 0.004);
 			if (legFlare && y < flareTop && SL[i] >= 20) { const t = Math.min(1, (flareTop - y) / flareLen); k += legFlare * t * (0.6 + 0.4 * t); }
 			if (legHang && y < flareTop && SL[i] >= 20) { const t = Math.min(1, (flareTop - y) / (flareLen * 0.55)); k += legHang * t * t * (3 - 2 * t); }
-			if (hullK && hullK[i] >= 0) { const blend = Math.min(1, Math.max(0, (cut.hip - 0.03 - y) / 0.06)); k = k * (1 - blend) + (off.bottom + hullK[i]) * blend; }
-			// (gathered in over the boot's top, so the hem meets the shaft instead of standing off it)
-			if (B?.tuck && SL[i] >= 20) { const gth = Math.max(0, Math.min(1, (R.legEnd + 0.06 - y) / 0.06)); k = k * (1 - gth) + 0.024 * gth; }
+			if (hullK && hullK[i] >= 0) { const blend = Math.min(1, Math.max(0, (cut.hip - 0.03 - y) / 0.06)); k = k * (1 - blend) + hullK[i] * blend; }
+			// (tucked into a boot built over the foot: a little fuller just above its collar, then
+			// in under it, inside the shaft; else gathered in over the boot's top so the hem meets it)
+			if (B?.tuck && SL[i] >= 20 && o.shoes?.built) {
+				const bt = cut.ankle + (o.shoes.tall ? 0.17 : 0.09);
+				if (y < bt + 0.004) k = 0.008;
+				else if (y < bt + 0.05) {
+					// (bloused over a tall boot's collar; into a lower one's, narrowing to it)
+					const t = Math.min(1, (bt + 0.05 - y) / 0.046), w = t * t * (3 - 2 * t);
+					k = k * (1 - w) + (o.shoes.tall ? Math.max(Math.min(k, off.shoes + 0.016), off.shoes + 0.008) : Math.min(k, off.shoes + 0.002)) * w;
+				}
+			} else if (B?.tuck && SL[i] >= 20) { const gth = Math.max(0, Math.min(1, (R.legEnd + 0.06 - y) / 0.06)); k = k * (1 - gth) + 0.024 * gth; }
 			if (B?.legs === 'skirt') k = 0.015 + Math.max(0, 0.6 - y) * 0.1;
 		}
 		if (s === 3 && (o.shoes?.kind === 'chunky' || (o.shoes?.tall && !o.shoes?.built)) && y < 0.04) k += 0.012;
@@ -870,17 +927,21 @@ export function clothGeometry(A, p, o, cut, R) {
 // one geometry for all of them, each vertex bound whole to the bone it rides
 export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const { map, heads, eyes } = P0;
-	const out = { pos: [], nor: [], col: [], si: [], kit: [] };
+	const out = { pos: [], nor: [], col: [], si: [], sw: [], kit: [] };
 	const colour = new THREE.Color();
 	// (bone: a name, or a function of the height for a strap that runs down the body)
+	// (bone: a bone's name, a function of the height giving one, or { skin }: each point weighted
+	// as the skin nearest it is, for what must move with the skin rather than ride one bone)
 	const put = (geo, bone, c, gloss = 0, fab = 0) => {
 		geo.computeVertexNormals();
 		const g = geo.index ? geo.toNonIndexed() : geo;
-		const pa = g.attributes.position, na = g.attributes.normal, bi = typeof bone === 'function' ? null : map[bone] ?? 0;
+		const pa = g.attributes.position, na = g.attributes.normal, near = bone?.skin, bi = near || typeof bone === 'function' ? null : map[bone] ?? 0;
 		colour.set(c);
 		for (let i = 0; i < pa.count; i++) {
 			out.pos.push(pa.getX(i), pa.getY(i), pa.getZ(i)); out.nor.push(na.getX(i), na.getY(i), na.getZ(i));
-			out.col.push(colour.r, colour.g, colour.b); out.si.push(bi ?? map[bone(pa.getY(i))] ?? 0); out.kit.push(gloss, fab, 0);
+			out.col.push(colour.r, colour.g, colour.b); out.kit.push(gloss, fab, 0);
+			if (near) { const w = near(pa.getX(i), pa.getY(i), pa.getZ(i)); out.si.push(...w.ids); out.sw.push(...w.w); }
+			else { out.si.push(bi ?? map[bone(pa.getY(i))] ?? 0, 0, 0, 0); out.sw.push(1, 0, 0, 0); }
 		}
 	};
 	// the straps of the bags they carry (bags.js fitted them to this body)
@@ -895,9 +956,31 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		g.scale(rx + grow, 1, rz + grow); g.translate(cx, 0, cz);
 		return g;
 	};
-	// (a body's points of one part, on one side: for what is built over the legs and feet)
+	// (a body's points of one part, on one side: for what is built over the legs and feet; the
+	// skin's own, not the cloth cage's or the helpers' the base mesh carries with it)
 	const Lx = Math.sign(heads[map['foot.L']]?.x || 1) || 1;
-	const pts = (want, sd) => { const a = []; if (P0.part && P0.p) for (let v = 0; v < P0.part.length; v++) if (P0.part[v] === want && Math.sign(P0.p[v * 3]) === sd) a.push(P0.p[v * 3], P0.p[v * 3 + 1], P0.p[v * 3 + 2]); return a; };
+	const onBody = new Uint8Array(P0.p ? P0.p.length / 3 : 0);
+	if (A.body) for (let i = 0; i < A.body.length; i += 2) onBody[A.body[i]] = 1;
+	const ptsIdx = (want, sd) => { const a = []; if (P0.part && P0.p) for (let v = 0; v < P0.part.length; v++) if (onBody[v] && P0.part[v] === want && Math.sign(P0.p[v * 3]) === sd) a.push(v); return a; };
+	const flat = (ids) => { const a = []; for (const v of ids) a.push(P0.p[v * 3], P0.p[v * 3 + 1], P0.p[v * 3 + 2]); return a; };
+	const pts = (want, sd) => flat(ptsIdx(want, sd));
+	// (the bone weights of the skin nearest a point, among ids)
+	const skinNear = (ids) => {
+		const memo = new Map();
+		return { skin: (x, y, z) => {
+			const key = Math.round(x * 4e3) + ',' + Math.round(y * 4e3) + ',' + Math.round(z * 4e3);
+			let r = memo.get(key);
+			if (!r) {
+				let best = ids[0], bd = Infinity;
+				for (const v of ids) { const dx = P0.p[v * 3] - x, dy = P0.p[v * 3 + 1] - y, dz = P0.p[v * 3 + 2] - z, d = dx * dx + dy * dy + dz * dz; if (d < bd) { bd = d; best = v; } }
+				let sum = 0;
+				for (let w = 0; w < 4; w++) sum += A.weights[best * 4 + w];
+				r = { ids: [0, 1, 2, 3].map((w) => A.ids[best * 4 + w]), w: [0, 1, 2, 3].map((w) => A.weights[best * 4 + w] / (sum || 1)) };
+				memo.set(key, r);
+			}
+			return r;
+		} };
+	};
 	for (const q of o.acc || []) {
 		const c = q.col || '#333333', a2 = q.acc || c;
 		if (q.kind === 'cap' || q.kind === 'visor') {
@@ -1076,16 +1159,18 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const g = new THREE.SphereGeometry(1, 16, 8); g.scale(rx + 0.03, 0.035, rz + 0.03); g.rotateZ(-0.2); g.translate(cx - 0.012, top - 0.005, cz); put(g, 'head', c);
 		}
 	}
-	// boots built over the feet: soles, tongues, laces, collars (garment-kit.js)
+	// boots built over the feet: the upper lofted round the skin, soles, a toe cap and a heel
+	// counter, a tongue, laces, a collar (garment-kit.js), every point moving as the skin
+	// nearest it does (so the boot bends a little at the ankle, as one does)
 	const F = o.shoes;
 	if (F?.built && P0.part && P0.p) {
 		const offS = offsets(o).shoes, top = cut.ankle + (F.tall ? 0.17 : 0.09);
 		for (const sd of [1, -1]) {
-			const s = sd === Lx ? 'L' : 'R';
-			for (const { geo, part: pc, on } of bootGeometry(pts(6, sd), pts(5, sd), { top, off: offS, lo: !!P0.lo })) {
-				const metal = pc === 'eyelet' || pc === 'hook', rubber = pc === 'sole' || pc === 'mid';
-				const col = pc === 'sole' ? (F.sole || '#1d1b19') : pc === 'mid' ? (F.mid || '#4a3c2e') : pc === 'lace' ? (F.lace || '#2b2420') : metal ? '#8f8a80' : pc === 'collar' ? new THREE.Color(F.col).multiplyScalar(0.78).getHex() : F.col;
-				put(geo, (on === 'shin' ? 'lowerleg01.' : 'foot.') + s, col, metal ? 2 : rubber ? 0.12 : pc === 'lace' ? 0.05 : 0.3, metal ? 0 : rubber ? 5 : pc === 'lace' ? 1 : 4);
+			const footI = ptsIdx(6, sd), shinI = ptsIdx(5, sd).filter((v) => P0.p[v * 3 + 1] < top + 0.04), near = skinNear(footI.concat(shinI));
+			for (const { geo, part: pc } of bootGeometry(flat(footI), flat(shinI), { top, ankle: cut.ankle, off: offS, lo: !!P0.lo })) {
+				const metal = pc === 'eyelet' || pc === 'hook', rubber = pc === 'sole' || pc === 'mid', panel = pc === 'cap' || pc === 'counter';
+				const col = pc === 'sole' ? (F.sole || '#1d1b19') : pc === 'mid' ? (F.mid || '#4a3c2e') : pc === 'lace' ? (F.lace || '#2b2420') : metal ? '#8f8a80' : pc === 'collar' || panel ? new THREE.Color(F.col).multiplyScalar(pc === 'collar' ? 0.78 : 0.86).getHex() : F.col;
+				put(geo, near, col, metal ? 2 : rubber ? 0.12 : pc === 'lace' ? 0.05 : panel ? 0.38 : 0.3, metal ? 0 : rubber ? 5 : pc === 'lace' ? 1 : 4);
 			}
 		}
 	}
@@ -1120,10 +1205,8 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(out.nor, 3));
 	g.setAttribute('color', new THREE.Float32BufferAttribute(out.col, 3));
 	g.setAttribute('kit', new THREE.Float32BufferAttribute(out.kit, 3));
-	const n = out.si.length, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-	for (let i = 0; i < n; i++) { si[i * 4] = out.si[i]; sw[i * 4] = 1; }
-	g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4));
-	g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+	g.setAttribute('skinIndex', new THREE.BufferAttribute(Uint16Array.from(out.si), 4));
+	g.setAttribute('skinWeight', new THREE.BufferAttribute(Float32Array.from(out.sw), 4));
 	g.computeBoundingSphere();
 	return g;
 }

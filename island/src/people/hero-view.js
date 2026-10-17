@@ -181,7 +181,7 @@ export function createHeroView({ scene, renderer, avatar, self, world, setCine }
 		r = row('Pose');
 		for (const p of ['rest', 'ready', 'hip', 'crossed']) button(r, p, S.pose === p && !S.action, () => pose(p, null));
 		r = row('Action');
-		for (const a of ['ready', 'stride', 'crouch', 'guard', 'reach', 'kick']) button(r, a, S.action === a, () => pose(S.pose, a, S.u));
+		for (const a of ['sprint', 'leap', 'scout', 'stance', 'climb', 'guard', 'stride']) button(r, a, S.action === a, () => pose(S.pose, a, S.u));
 		button(r, S.paused ? 'Play' : 'Pause', !S.paused, () => { S.paused = !S.paused; pose(); });
 		const sc = document.createElement('input'); sc.type = 'range'; sc.min = '0'; sc.max = '1'; sc.step = '0.01'; sc.value = String(S.u); sc.setAttribute('aria-label', 'Scrub the action');
 		sc.style.cssText = 'width:100%;min-height:32px;';

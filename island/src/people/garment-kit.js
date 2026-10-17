@@ -406,19 +406,6 @@ function hull2(pts) {
 	up.pop(); lo.pop();
 	return lo.concat(up);
 }
-// a closed outline resampled to n points evenly along it, pushed out by e (from its middle)
-function outline(h, n, e) {
-	const L = [0];
-	for (let i = 1; i <= h.length; i++) { const a = h[i - 1], b = h[i % h.length]; L.push(L[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
-	const total = L[h.length], cx = h.reduce((s, p) => s + p[0], 0) / h.length, cz = h.reduce((s, p) => s + p[1], 0) / h.length, out = [];
-	for (let k = 0; k < n; k++) {
-		const d = k / n * total; let i = 0; while (L[i + 1] < d) i++;
-		const a = h[i], b = h[(i + 1) % h.length], u = (d - L[i]) / Math.max(1e-9, L[i + 1] - L[i]);
-		const x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, l = Math.hypot(x - cx, z - cz) || 1;
-		out.push([x + (x - cx) / l * e, z + (z - cz) / l * e]);
-	}
-	return out;
-}
 // rings of an outline at given heights (each ring's height per point: y(i)), walled between,
 // the bottom closed
 function prism(ring, ys, close = true) {
@@ -430,106 +417,164 @@ function prism(ring, ys, close = true) {
 	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
 	return g;
 }
-// A boot made over a foot: foot, the foot's points; shin, the lower leg's (x, y, z flat); top,
-// how high it comes; off, how far its leather stands off the skin. The sole: an outsole whose
-// heel stands taller than the forefoot (the heel's breast where they meet), a midsole above it
-// set in a little, so the two read apart, the toe lifted a little off the ground (toe spring);
-// over the instep and up the shin a tongue, laces crossing it from eyelet to eyelet and on up
-// the shaft from hook to hook; round the top a padded collar. Pieces { geo, part, on: 'foot'|'shin' }.
-export function bootGeometry(foot, shin, { top, off = 0.014, lo = false } = {}) {
-	const out = [], N = lo ? 18 : 30;
-	const base = [];
-	for (let q = 0; q < foot.length; q += 3) if (foot[q + 1] < 0.035) base.push([foot[q], foot[q + 2]]);
+// a convex outline (counter-clockwise in x, z) pushed out by e along its own normals
+function grow(h, e) {
+	const n = h.length, out = [];
+	const nrm = (dx, dz) => { const l = Math.hypot(dx, dz) || 1; return [dz / l, -dx / l]; };
+	for (let i = 0; i < n; i++) {
+		const a = h[(i + n - 1) % n], b = h[i], c = h[(i + 1) % n];
+		const n1 = nrm(b[0] - a[0], b[1] - a[1]), n2 = nrm(c[0] - b[0], c[1] - b[1]);
+		let mx = n1[0] + n2[0], mz = n1[1] + n2[1];
+		const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l;
+		const k = e / Math.max(0.5, mx * n1[0] + mz * n1[1]);
+		out.push([b[0] + mx * k, b[1] + mz * k]);
+	}
+	return out;
+}
+// a closed outline resampled to n points evenly along it, from where it crosses the line ahead
+// of its middle (x = its centre, z most forward) and on round the same way: so the rings of a
+// loft line up front to front and back to back, however their shapes differ
+function ringFrom(h, n) {
+	const m = h.length, cx = h.reduce((a, p) => a + p[0], 0) / m;
+	let start = 0, su = 0, best = -Infinity;
+	for (let i = 0; i < m; i++) {
+		const a = h[i], b = h[(i + 1) % m];
+		if ((a[0] - cx) * (b[0] - cx) > 0 || a[0] === b[0]) continue;
+		const u = (cx - a[0]) / (b[0] - a[0]), z = a[1] + (b[1] - a[1]) * u;
+		if (z > best) { best = z; start = i; su = u; }
+	}
+	const a0 = h[start], b0 = h[(start + 1) % m];
+	const R = [[a0[0] + (b0[0] - a0[0]) * su, a0[1] + (b0[1] - a0[1]) * su]];
+	for (let k = 1; k <= m; k++) R.push(h[(start + k) % m]);
+	const L = [0];
+	for (let i = 1; i < R.length; i++) L.push(L[i - 1] + Math.hypot(R[i][0] - R[i - 1][0], R[i][1] - R[i - 1][1]));
+	L.push(L[R.length - 1] + Math.hypot(R[0][0] - R[R.length - 1][0], R[0][1] - R[R.length - 1][1]));
+	const total = L[L.length - 1], out = [];
+	for (let k = 0; k < n; k++) {
+		const d = k / n * total; let i = 0; while (i < R.length - 1 && L[i + 1] < d) i++;
+		const a = R[i], b = R[(i + 1) % R.length], u = (d - L[i]) / Math.max(1e-9, L[i + 1] - L[i]);
+		out.push([a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u]);
+	}
+	return out;
+}
+// A boot built over a foot: foot, shin, the skin's points (x, y, z flat) of the foot and the
+// lower leg; ankle, its height; top, how high the shaft comes; off, how far the leather stands
+// off the skin. The upper is lofted: at each height a ring round the convex outline of the skin
+// there (the toes bridged, the hollows under the ankle bones filled, as leather lies), stood
+// off by off, the shaft a little roomier; the toe box raised over the toes to its own height and
+// rounded down at the front, so the front is a box, not toes in a sock. Under it an outsole
+// whose heel stands taller than the forefoot (the heel's breast where they meet) and a midsole
+// set in above it, the toe lifted (toe spring); a toe cap and a heel counter stitched over the
+// upper; a tongue up the instep and the shin, laces crossing it from eyelet to eyelet and on up
+// the shaft from hook to hook; a padded collar round the top. Pieces { geo, part }.
+export function bootGeometry(foot, shin, { top, ankle = 0.1, off = 0.014, lo = false } = {}) {
+	const out = [], M = lo ? 20 : 32;
+	const P = [];
+	for (const src of [foot, shin]) for (let q = 0; q < src.length; q += 3) if (src[q + 1] < top + 0.03) P.push([src[q], src[q + 1], src[q + 2]]);
+	const base = P.filter((p) => p[1] < 0.035);
 	if (base.length < 8) return out;
-	const h = hull2(base);
 	let z0 = Infinity, z1 = -Infinity, cx = 0;
-	for (const p of h) { z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); cx += p[0]; }
-	cx /= h.length;
-	const Lf = z1 - z0, heelZ = z0 + Lf * 0.27;
+	for (const p of base) { z0 = Math.min(z0, p[2]); z1 = Math.max(z1, p[2]); cx += p[0]; }
+	cx /= base.length;
+	const Lf = z1 - z0, heelZ = z0 + Lf * 0.27, toeH = Math.max(0.05, 0.215 * Lf);
+	// (the toe box: each forefoot point raised to the box's height, rounded down at the front,
+	// and a touch wider than the toes)
+	const toeTop = (z) => { const t = Math.max(0, (z - (z1 - 0.045)) / 0.05); return toeH * (0.42 + 0.58 * Math.sqrt(Math.max(0, 1 - t * t))); };
+	for (const p of P.slice()) if (p[2] > z1 - Lf * 0.42 && p[1] < toeH) P.push([cx + (p[0] - cx) * 1.05, Math.max(p[1], toeTop(p[2]) - 0.004), p[2]]);
+	// the rings, from inside the midsole to the top of the shaft
+	const step = lo ? 0.02 : 0.012, ys = [];
+	for (let y = 0.018; y < top - step * 0.4; y += step) ys.push(y);
+	ys.push(top);
+	const rings = [];
+	let prev = null;
+	for (const y of ys) {
+		const band = [], w = Math.max(0.008, step * 0.75);
+		for (const p of P) if (Math.abs(p[1] - y) < w) band.push([p[0], p[2]]);
+		let ring = prev;
+		if (band.length >= 6) { const h = hull2(band); if (h.length >= 3) ring = ringFrom(grow(h, off + (y > ankle + 0.03 ? 0.004 : 0)), M); }
+		if (!ring) continue;
+		rings.push({ y, pts: ring.map((q) => q.slice()) });
+		prev = ring;
+	}
+	if (rings.length < 4) return out;
+	// (smoothed up and down, so the outline's steps from band to band do not show)
+	for (let pass = 0; pass < 2; pass++) {
+		const was = rings.map((r) => r.pts.map((q) => q.slice()));
+		for (let j = 1; j < rings.length - 1; j++) for (let i = 0; i < M; i++) for (let c = 0; c < 2; c++) rings[j].pts[i][c] = was[j - 1][i][c] * 0.25 + was[j][i][c] * 0.5 + was[j + 1][i][c] * 0.25;
+	}
+	// a sheet over part of the loft, rings j0..j1 and round from i0 for n points, stood out by e
+	const sheet = (j0, j1, i0, n, e, closed = false) => {
+		const pos = [], idx = [], cols = closed ? M : n;
+		for (let j = j0; j <= j1; j++) {
+			const R = rings[j].pts, cxr = R.reduce((a, q) => a + q[0], 0) / M, czr = R.reduce((a, q) => a + q[1], 0) / M;
+			for (let k = 0; k < cols; k++) {
+				const q = R[(i0 + k + M) % M], dx = q[0] - cxr, dz = q[1] - czr, l = Math.hypot(dx, dz) || 1;
+				pos.push(q[0] + dx / l * e, rings[j].y, q[1] + dz / l * e);
+			}
+		}
+		for (let j = 0; j < j1 - j0; j++) for (let k = 0; k < (closed ? cols : cols - 1); k++) {
+			const a = j * cols + k, b = j * cols + (k + 1) % cols, c = a + cols, d = b + cols;
+			idx.push(a, c, b, b, c, d);
+		}
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+		return g;
+	};
+	out.push({ geo: sheet(0, rings.length - 1, 0, M, 0, true), part: 'upper' });
+	const ringAt = (y) => { let j = 0; while (j < rings.length - 1 && rings[j + 1].y <= y) j++; return j; };
+	// the toe cap over the front of the box, the heel counter round the back
+	const jToe = ringAt(toeH * 0.92), jHeel = ringAt(ankle + 0.005), q = Math.round(M * 0.17);
+	if (jToe > 0) out.push({ geo: sheet(0, jToe, M - q, 2 * q + 1, 0.0016), part: 'cap' });
+	if (jHeel > 0) out.push({ geo: sheet(0, jHeel, Math.round(M / 2) - q, 2 * q + 1, 0.0016), part: 'counter' });
+	// the outsole and the midsole, cut to the upper's own bottom ring
 	const spring = (z) => Math.max(0, (z - (z1 - Lf * 0.2)) / (Lf * 0.2)) * 0.007;
-	// the outsole: taller at the heel (a little blend at the breast)
-	const outer = outline(h, N, off + 0.006), mid = outline(h, N, off + 0.003);
 	const yHeel = (z) => 0.012 + 0.009 * (1 - smooth((z - heelZ + 0.006) / 0.012));
-	out.push({ geo: prism(outer, [(i) => spring(outer[i][1]), (i) => yHeel(outer[i][1]) + spring(outer[i][1])]), part: 'sole', on: 'foot' });
-	out.push({ geo: prism(mid, [(i) => yHeel(mid[i][1]) + spring(mid[i][1]) - 0.001, (i) => yHeel(mid[i][1]) + 0.011 + spring(mid[i][1])], false), part: 'mid', on: 'foot' });
-	// the instep's line, toe box to ankle, then up the front of the shin to the top
-	const instep = [];
-	for (let k = 0; k <= 8; k++) {
-		const z = z1 - Lf * (0.34 + 0.4 * k / 8);
-		let y = 0;
-		for (let q = 0; q < foot.length; q += 3) if (Math.abs(foot[q] - cx) < 0.02 && Math.abs(foot[q + 2] - z) < 0.012) y = Math.max(y, foot[q + 1]);
-		if (y > 0.02) instep.push(V(cx, y + off + 0.004, z));
-	}
-	const up = [];
-	if (shin.length) {
-		let sx = 0, n = 0, yLo = Infinity;
-		for (let q = 0; q < shin.length; q += 3) { yLo = Math.min(yLo, shin[q + 1]); if (shin[q + 1] < top) { sx += shin[q]; n++; } }
-		sx /= Math.max(1, n);
-		const yStart = (instep[instep.length - 1]?.y ?? yLo) + 0.015;
-		for (let k = 0; k <= 5; k++) {
-			const y = yStart + (top - 0.012 - yStart) * k / 5;
-			let z = -Infinity;
-			for (let q = 0; q < shin.length; q += 3) if (Math.abs(shin[q + 1] - y) < 0.012 && Math.abs(shin[q] - sx) < 0.03) z = Math.max(z, shin[q + 2]);
-			if (Number.isFinite(z)) up.push(V(sx, y, z + off + 0.006));
-		}
-	}
-	// a strip along a path, its width across (x), standing off along the normal
-	const strip = (pts, wid, thick, part, on) => {
-		if (pts.length < 2) return;
+	const sole = grow(rings[0].pts, 0.005), mid = grow(rings[0].pts, 0.002);
+	out.push({ geo: prism(sole, [(i) => spring(sole[i][1]), (i) => yHeel(sole[i][1]) + spring(sole[i][1])]), part: 'sole' });
+	out.push({ geo: prism(mid, [(i) => yHeel(mid[i][1]) + spring(mid[i][1]) - 0.001, (i) => yHeel(mid[i][1]) + 0.011 + spring(mid[i][1])], false), part: 'mid' });
+	// the front of the loft from the top of the toe box up to the collar: the tongue's line
+	const line = [];
+	for (let j = ringAt(toeH + 0.004); j < rings.length; j++) if (rings[j].y < top - 0.01) line.push(V(rings[j].pts[0][0], rings[j].y, rings[j].pts[0][1]));
+	const normalAt = (k) => {
+		const a = line[Math.max(0, k - 1)], b = line[Math.min(line.length - 1, k + 1)];
+		const along = b.clone().sub(a).normalize(), n = new THREE.Vector3().crossVectors(V(1, 0, 0), along).normalize();
+		return n.z < 0 ? n.multiplyScalar(-1) : n;
+	};
+	if (line.length >= 3) {
+		// the tongue: a strip along that line, standing on the upper
 		const rows = [[], []], nr = [[], []];
-		for (let k = 0; k < pts.length; k++) {
-			const tan = pts[Math.min(pts.length - 1, k + 1)].clone().sub(pts[Math.max(0, k - 1)]).normalize(), n = new THREE.Vector3().crossVectors(V(1, 0, 0), tan).normalize();
-			if (n.y < 0 && n.z < 0.5) n.multiplyScalar(-1);
-			for (const [r, sx] of [[0, -1], [1, 1]]) { rows[r].push(pts[k].clone().add(V(sx * wid / 2, 0, 0))); nr[r].push(n); }
+		for (let k = 0; k < line.length; k++) {
+			const n = normalAt(k), p = line[k].clone().addScaledVector(n, 0.0015);
+			for (const [r, sx] of [[0, -1], [1, 1]]) { rows[r].push(p.clone().add(V(sx * 0.022, 0, 0))); nr[r].push(n); }
 		}
-		out.push({ geo: slab(rows, nr, thick, 0.0015), part, on });
-	};
-	strip(instep, 0.042, 0.005, 'tongue', 'foot');
-	strip(up, 0.046, 0.005, 'tongue', 'shin');
-	// the laces: crossing over the tongue, eyelet to eyelet, then hook to hook up the shaft
-	const lace = (p, n, k, on) => {
-		const across = V(1, 0, 0), along = new THREE.Vector3().crossVectors(n, across).normalize();
-		for (const s of [-1, 1]) {
-			const d = across.clone().multiplyScalar(0.026).addScaledVector(along, s * 0.007);
-			const g = new THREE.CylinderGeometry(0.0018, 0.0018, d.length() * 2, 4, 1);
-			g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.clone().normalize()));
-			g.translate(p.x + n.x * 0.006, p.y + n.y * 0.006, p.z + n.z * 0.006);
-			out.push({ geo: g, part: 'lace', on });
-		}
-		for (const s of [-1, 1]) {
-			const e = new THREE.CylinderGeometry(0.0034, 0.0034, 0.003, lo ? 5 : 8);
-			e.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), n));
-			e.translate(p.x + s * 0.026, p.y + n.y * 0.004, p.z + n.z * 0.004);
-			out.push({ geo: e, part: k % 2 && on === 'shin' ? 'hook' : 'eyelet', on });
-		}
-	};
-	const along = (pts, step, on) => {
-		let acc = step / 2;
-		for (let k = 1; k < pts.length; k++) {
-			const a = pts[k - 1], b = pts[k], L = a.distanceTo(b);
-			const tan = b.clone().sub(a).normalize(), n = new THREE.Vector3().crossVectors(V(1, 0, 0), tan).normalize();
-			if (n.y < 0 && n.z < 0.5) n.multiplyScalar(-1);
-			for (; acc < L; acc += step) lace(a.clone().lerp(b, acc / L), n, k, on);
+		out.push({ geo: slab(rows, nr, 0.004, 0.0015), part: 'tongue' });
+		// the laces: crossing over it, eyelet to eyelet on the foot, hook to hook up the shaft
+		let acc = 0.012, count = 0;
+		for (let k = 1; k < line.length; k++) {
+			const a = line[k - 1], b = line[k], L = a.distanceTo(b);
+			for (; acc < L; acc += line[k].y > ankle + 0.02 ? 0.024 : 0.021) {
+				const p = a.clone().lerp(b, acc / L), n = normalAt(k), along = b.clone().sub(a).normalize();
+				for (const s2 of [-1, 1]) {
+					const d = V(0.026, 0, 0).addScaledVector(along, s2 * 0.007);
+					const g = new THREE.CylinderGeometry(0.0018, 0.0018, d.length() * 2, 4, 1);
+					g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.clone().normalize()));
+					g.translate(p.x + n.x * 0.0065, p.y + n.y * 0.0065, p.z + n.z * 0.0065);
+					out.push({ geo: g, part: 'lace' });
+				}
+				for (const s2 of [-1, 1]) {
+					const e = new THREE.CylinderGeometry(0.0034, 0.0034, 0.003, lo ? 5 : 8);
+					e.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), n));
+					e.translate(p.x + s2 * 0.026 + n.x * 0.003, p.y + n.y * 0.003, p.z + n.z * 0.003);
+					out.push({ geo: e, part: p.y > ankle + 0.02 && count % 2 ? 'hook' : 'eyelet' });
+				}
+				count++;
+			}
 			acc -= L;
 		}
-	};
-	along(instep.slice(1), 0.021, 'foot');
-	along(up, 0.024, 'shin');
-	// the padded collar round the top of the shaft
-	if (shin.length) {
-		let cx2 = 0, cz2 = 0, n = 0;
-		for (let q = 0; q < shin.length; q += 3) if (Math.abs(shin[q + 1] - top) < 0.012) { cx2 += shin[q]; cz2 += shin[q + 2]; n++; }
-		if (n) {
-			cx2 /= n; cz2 /= n;
-			let rx = 0, rz = 0;
-			for (let q = 0; q < shin.length; q += 3) if (Math.abs(shin[q + 1] - top) < 0.012) { rx = Math.max(rx, Math.abs(shin[q] - cx2)); rz = Math.max(rz, Math.abs(shin[q + 2] - cz2)); }
-			// (a tube round the shaft's own ellipse: its thickness the same all round)
-			const rim = [];
-			for (let k = 0; k < 24; k++) { const a = k / 24 * 2 * Math.PI; rim.push(V(cx2 + Math.cos(a) * (rx + off + 0.004), top, cz2 + Math.sin(a) * (rz + off + 0.004))); }
-			const ring = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim, true), lo ? 16 : 32, 0.0075, lo ? 5 : 7, true);
-			out.push({ geo: ring, part: 'collar', on: 'shin' });
-		}
 	}
+	// the padded collar round the top of the shaft
+	const T = rings[rings.length - 1], rim = T.pts.map((q2) => { const cxr = T.pts.reduce((a, r) => a + r[0], 0) / M, czr = T.pts.reduce((a, r) => a + r[1], 0) / M, dx = q2[0] - cxr, dz = q2[1] - czr, l = Math.hypot(dx, dz) || 1; return V(q2[0] + dx / l * 0.004, T.y, q2[1] + dz / l * 0.004); });
+	out.push({ geo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim, true), lo ? 16 : 32, 0.0075, lo ? 5 : 7, true), part: 'collar' });
 	return out;
 }
 
