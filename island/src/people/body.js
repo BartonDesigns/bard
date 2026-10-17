@@ -328,7 +328,7 @@ export function buildPerson(A, d) {
 		P.detail = dm;
 	}
 	P.lod = (dist) => {
-		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; for (const b of P.bags || []) b.lod(dist);
+		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90 || P.accKeep; for (const b of P.bags || []) b.lod(dist);
 		// the sleeves' pose folds and hang (garment-shape.js): near people only, fading out by
 		// 22 m, nearer still on a phone or when the governor has stepped quality down
 		const U = P.clothMat?.userData.U;
@@ -405,6 +405,8 @@ function dress(A, P, o) {
 	// caps, glasses, headphones, straps: one more mesh
 	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p, bags: fits, cloth: clothGeo, part, lo: PHONE }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
+	// (boots built over the feet are among the small things, and are the feet: kept at any distance)
+	P.accKeep = !!o.shoes?.built;
 	// and the bags themselves, shared by everyone who carries one
 	P.bags = fits.map((f) => attachBag(P, f, PHONE));
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);

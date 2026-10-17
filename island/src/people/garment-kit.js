@@ -468,7 +468,7 @@ function ringFrom(h, n) {
 // upper; a tongue up the instep and the shin, laces crossing it from eyelet to eyelet and on up
 // the shaft from hook to hook; a padded collar round the top. Pieces { geo, part }.
 export function bootGeometry(foot, shin, { top, ankle = 0.1, off = 0.014, lo = false } = {}) {
-	const out = [], M = lo ? 20 : 32;
+	const out = [], M = lo ? 18 : 28;
 	const P = [];
 	for (const src of [foot, shin]) for (let q = 0; q < src.length; q += 3) if (src[q + 1] < top + 0.03) P.push([src[q], src[q + 1], src[q + 2]]);
 	const base = P.filter((p) => p[1] < 0.035);
@@ -482,7 +482,7 @@ export function bootGeometry(foot, shin, { top, ankle = 0.1, off = 0.014, lo = f
 	const toeTop = (z) => { const t = Math.max(0, (z - (z1 - 0.045)) / 0.05); return toeH * (0.42 + 0.58 * Math.sqrt(Math.max(0, 1 - t * t))); };
 	for (const p of P.slice()) if (p[2] > z1 - Lf * 0.42 && p[1] < toeH) P.push([cx + (p[0] - cx) * 1.05, Math.max(p[1], toeTop(p[2]) - 0.004), p[2]]);
 	// the rings, from inside the midsole to the top of the shaft
-	const step = lo ? 0.02 : 0.012, ys = [];
+	const step = lo ? 0.022 : 0.014, ys = [];
 	for (let y = 0.018; y < top - step * 0.4; y += step) ys.push(y);
 	ys.push(top);
 	const rings = [];
@@ -556,13 +556,13 @@ export function bootGeometry(foot, shin, { top, ankle = 0.1, off = 0.014, lo = f
 				const p = a.clone().lerp(b, acc / L), n = normalAt(k), along = b.clone().sub(a).normalize();
 				for (const s2 of [-1, 1]) {
 					const d = V(0.026, 0, 0).addScaledVector(along, s2 * 0.007);
-					const g = new THREE.CylinderGeometry(0.0018, 0.0018, d.length() * 2, 4, 1);
+					const g = new THREE.CylinderGeometry(0.0018, 0.0018, d.length() * 2, 4, 1, true);
 					g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), d.clone().normalize()));
 					g.translate(p.x + n.x * 0.0065, p.y + n.y * 0.0065, p.z + n.z * 0.0065);
 					out.push({ geo: g, part: 'lace' });
 				}
 				for (const s2 of [-1, 1]) {
-					const e = new THREE.CylinderGeometry(0.0034, 0.0034, 0.003, lo ? 5 : 8);
+					const e = new THREE.CylinderGeometry(0.0034, 0.0034, 0.003, lo ? 5 : 6);
 					e.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), n));
 					e.translate(p.x + s2 * 0.026 + n.x * 0.003, p.y + n.y * 0.003, p.z + n.z * 0.003);
 					out.push({ geo: e, part: p.y > ankle + 0.02 && count % 2 ? 'hook' : 'eyelet' });
@@ -574,7 +574,7 @@ export function bootGeometry(foot, shin, { top, ankle = 0.1, off = 0.014, lo = f
 	}
 	// the padded collar round the top of the shaft
 	const T = rings[rings.length - 1], rim = T.pts.map((q2) => { const cxr = T.pts.reduce((a, r) => a + r[0], 0) / M, czr = T.pts.reduce((a, r) => a + r[1], 0) / M, dx = q2[0] - cxr, dz = q2[1] - czr, l = Math.hypot(dx, dz) || 1; return V(q2[0] + dx / l * 0.004, T.y, q2[1] + dz / l * 0.004); });
-	out.push({ geo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim, true), lo ? 16 : 32, 0.0075, lo ? 5 : 7, true), part: 'collar' });
+	out.push({ geo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim, true), lo ? 14 : 24, 0.0075, lo ? 4 : 6, true), part: 'collar' });
 	return out;
 }
 

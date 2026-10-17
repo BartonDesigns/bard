@@ -93,6 +93,7 @@ test('your body, its hands, friends and the settings all use the hero', () => {
 	assert.match(src('people/self.js'), /hero \? 'ready' : 'rest'/, 'they stand ready');
 	assert.match(src('people/motion.js'), /ready: \{ both: arm/);
 	assert.match(src('people/self.js'), /me\.M\.act\(leap \? 'leap' : null/, 'in the air, the legs tucked');
+	assert.match(src('people/body.js'), /P\.acc\.visible = dist < 90 \|\| P\.accKeep/, 'built boots are the feet: kept at any distance');
 });
 
 test('a build broadens the shoulders, carries the arms out whole, and draws the waist in', async () => {

@@ -113,12 +113,14 @@ const HERO = {
 export function heroDNA(sex = 'male', opts = {}) {
 	const H = HERO[sex] || HERO.male;
 	const style = H.style();
+	// (opts.look: a variant tried in the hero view, people/hero-view.js: { hair, hairColour, face })
+	const look = opts.look || {};
 	const d = personDNA(H.base, { age: 29, ancestry: H.ancestry, style, ...opts });
 	d.hero = sex;
 	d.sex = H.sex; d.male = sex !== 'female';
 	d.age = 29; d.height = H.height; d.muscle = H.muscle; d.weight = H.weight; d.lean = H.lean || 0;
 	d.hair = sex === 'female' ? 'ponytail01' : 'short02';
-	d.hairColour = H.hairColour.slice();
+	d.hairColour = (look.hairColour || H.hairColour).slice();
 	d.greyShift = -20;
 	d.iris = H.iris;
 	d.brows = { ...H.brows };
@@ -126,8 +128,6 @@ export function heroDNA(sex = 'male', opts = {}) {
 	d.freckles = !!H.freckles;
 	// (his hair and beard, or hers, by name: people/hairkit.js styleFor, beardFor)
 	style.printKind = 0;
-	// (opts.look: a variant tried in the hero view, people/hero-view.js: { hair, face })
-	const look = opts.look || {};
 	style.hair = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, recede: 0, thin: 0, part: 1, fresh: true, ...H.hair, ...(look.hair || {}) };
 	d.style = style;
 	d.styleSig = JSON.stringify(d.outfit);
