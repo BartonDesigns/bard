@@ -228,24 +228,37 @@ function blackHole(scene) {
 	core.renderOrder = 2; disc.renderOrder = halo.renderOrder = 3;
 	group.add(core, disc, halo);
 	scene.add(group);
-	const H = { a: 0, want: 0, seen: 0, t: 0 }, eye = new THREE.Vector3();
+	// (the sky going out: a dark dome round the eye, deepening as the hole fills more of the view, so
+	// at its greatest the whole sky is gone, behind you too; what is near still stands in front of it)
+	const veil = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), new THREE.MeshBasicMaterial({ color: 0x030108, side: THREE.BackSide, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+	veil.name = 'magic-gargantua-veil'; veil.renderOrder = 1; veil.visible = false; veil.frustumCulled = false;
+	scene.add(veil);
+	const H = { a: 0, want: 0, seen: 0, t: 0, cover: 0 }, eye = new THREE.Vector3();
 	return {
 		group,
 		// shown at p, radius r (m), strength a, the halo turned to face e (the eye)
-		set(p, r, a, e) { group.position.set(p.x, p.y, p.z); group.scale.setScalar(Math.max(0.01, r)); H.want = a; H.seen = 0; if (e) eye.set(e.x, e.y, e.z); },
+		set(p, r, a, e) {
+			group.position.set(p.x, p.y, p.z); group.scale.setScalar(Math.max(0.01, r)); H.want = a; H.seen = 0;
+			if (e) eye.set(e.x, e.y, e.z);
+			// (how much of the sky it takes: from when it spans ~35° across to when it would span 130°)
+			const ang = Math.asin(Math.min(1, r / Math.max(r, group.position.distanceTo(eye))));
+			H.cover = Math.max(0, Math.min(1, (ang - 0.3) / 0.85));
+		},
 		step(dt) {
 			H.t += dt; H.seen += dt;
 			if (H.seen > 0.35) H.want = 0;
 			H.a += (H.want - H.a) * Math.min(1, dt * 6);
 			if (H.want === 0 && H.a < 0.01) H.a = 0;
 			group.visible = H.a > 0;
+			veil.visible = group.visible && H.cover > 0;
+			if (veil.visible) { veil.position.copy(eye); veil.material.opacity = 0.94 * H.a * H.cover * H.cover * (3 - 2 * H.cover); }
 			if (!group.visible) return;
 			halo.lookAt(eye);
 			core.scale.setScalar(Math.max(0.01, H.a));
 			for (const m of [disc.material, halo.material]) { m.uniforms.uA.value = H.a; m.uniforms.uT.value = H.t; }
 		},
-		clear() { H.a = H.want = 0; group.visible = false; },
-		dispose() { scene.remove(group); for (const m of [core, disc, halo]) { m.geometry.dispose(); m.material.dispose(); } },
+		clear() { H.a = H.want = 0; group.visible = veil.visible = false; },
+		dispose() { scene.remove(group); scene.remove(veil); for (const m of [core, disc, halo, veil]) { m.geometry.dispose(); m.material.dispose(); } },
 	};
 }
 

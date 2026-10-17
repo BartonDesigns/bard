@@ -224,7 +224,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(spell.school, 0.16); } });
 		},
 		singularity(spell, k) {
-			// Gargantua: it rises on the horizon the way you face, and over spell.t draws every foe within
+			// Gargantua: a dot on the horizon the way you face that swells, faster and faster, until it fills
+			// the whole sky (spell.size0 to spell.size m); over spell.t it draws every foe within
 			// spell.r of you into it, holding them as they slide toward it and unmaking each at its moment.
 			// Anything vast loses spell.bossCut of its life, a little at each step. Foes who come into
 			// reach while it feeds are taken too.
@@ -234,7 +235,11 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			if (fw.lengthSq() < 1e-4) fw.set(0, 0, -1);
 			fw.normalize();
 			const hx = me.x + fw.x * spell.far, hz = me.z + fw.z * spell.far, base = Math.max(me.y - EYE, combat.ground(hx, hz, me.y) ?? -1e9);
-			const hole = new THREE.Vector3(hx, base + spell.rise, hz), drawn = hole.clone(), R = spell.size, RISE = 1.2;
+			const hole = new THREE.Vector3(hx, base + spell.rise, hz), drawn = hole.clone(), RISE = 1.2;
+			// (its radius at time t: a dot, then growing by the same factor every moment, a little faster
+			// as it goes, filling the sky by 85% of its time and holding there; its heart climbs with it so its lower rim stays down on the horizon)
+			const R0 = spell.size0 || 1.5, R1 = spell.size, size = (tt) => R0 * Math.pow(R1 / R0, Math.pow(Math.min(1, tt / (spell.t * 0.85)), 1.2));
+			let R = R0;
 			const doomed = new Map(), vast = new Map();
 			let t = 0, n = 0;
 			const gather = () => {
@@ -257,7 +262,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 				step() {
 					t += 0.1; n++;
 					const u = Math.min(1, t / RISE), e = 1 - (1 - u) * (1 - u);
-					drawn.set(hole.x, hole.y - (1 - e) * R * 2.5, hole.z);
+					R = size(t);
+					drawn.set(hole.x, hole.y + R * 0.3 - (1 - e) * spell.rise * 0.6, hole.z);
 					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position);
 					else fx.burst(drawn, GLOW.void, 6, -R, 0.5, R * 0.1, 0);
 					if (n % 10 === 0) { gather(); combat.shake?.(0.05); }

@@ -2,7 +2,7 @@
 // (a caster, three foes, ground and sky) in headless Chromium, one capture per spell, so the 47 can
 // be set side by side and told apart. Nothing of the game is loaded: only three, fx.js and looks.js.
 //
-// OUT=<dir> [ONLY=sunspark,eclipse] [FLIGHT=1: bolts mid-flight] node island/tools/spell-looks-browser.cjs
+// OUT=<dir> [ONLY=sunspark,eclipse] [FLIGHT=1: bolts mid-flight] [GROW=<s>: Gargantua s seconds in] node island/tools/spell-looks-browser.cjs
 /* global Game, document */
 const fs = require('node:fs'), path = require('node:path');
 let chromium;
@@ -19,6 +19,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 	await page.setContent('<body style="margin:0;background:#000"><canvas id="c" width="480" height="300"></canvas></body>');
 	await page.addScriptTag({ content: bundle });
 	if (process.env.FLIGHT) await page.evaluate(() => { window.__flight = true; });
+	if (process.env.GROW) await page.evaluate((g) => { window.__grow = g; }, +process.env.GROW);
 	const ids = await page.evaluate(() => {
 		const { THREE, createMagicFx, SPELLS } = Game;
 		const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, preserveDrawingBuffer: true });
@@ -74,7 +75,17 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 				L.blast?.(fx, at, spell.r, false); run(0.01);
 			}
 			else if (k === 'singularity') {
-				// (Gargantua far off on the horizon, fed for a while; the nearest foe streaking into it)
+				// (Gargantua far off on the horizon, fed for a while; the nearest foe streaking into it.
+				// GROW=<s>: instead, as it stands s seconds in, at its true distance and size)
+				if (window.__grow != null) {
+					const s = spell, R = s.size0 * Math.pow(s.size / s.size0, Math.pow(Math.min(1, window.__grow / (s.t * 0.85)), 1.2)), e = camera.position;
+					camera.far = 6000; camera.updateProjectionMatrix();
+					const h = v(-30, s.rise + R * 0.3, -s.far);
+					run(0.6, (tt) => L.tick?.(fx, h, R, tt, e));
+					renderer.render(scene, camera);
+					camera.far = 200; camera.updateProjectionMatrix();
+					return;
+				}
 				const h = v(-14, 16, -120), e = camera.position;
 				run(1.2, (tt) => L.tell?.(fx, v(h.x, h.y - (1 - tt / 1.2) * 25, h.z), 10, tt / 1.2, e));
 				run(1.4, (tt, n) => { L.tick?.(fx, h, 10, tt, e); if (n === 36) L.arc?.(fx, foes[0], h); });

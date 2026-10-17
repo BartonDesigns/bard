@@ -81,7 +81,7 @@ export const SPELLS = Object.freeze([
 	S('event-horizon', 'Event Horizon', 'void', 4, 'well', 65, 60, '⊚', 'A sphere of void that holds all within it still and drinks their life.', { dmg: 60, dps: 28, r: 11, range: 70, t: 5, pull: 1.5, type: 'void', status: { hold: 5 } }),
 	// (the ultimate: a fifth rung, above Event Horizon. r is how far it reaches from you, far and rise
 	// where it hangs on the horizon, size its radius, bossCut the share of anything vast's life it takes)
-	S('gargantua', 'Gargantua', 'void', 5, 'singularity', 100, 300, '●', 'Gargantua rises on the horizon. Over ten seconds it draws in and unmakes every foe in sight, and tears a quarter of the life from anything vast.', { r: 600, t: 10, far: 340, rise: 70, size: 34, bossCut: 0.25, type: 'void' }),
+	S('gargantua', 'Gargantua', 'void', 5, 'singularity', 100, 300, '●', 'Gargantua appears as a dot on the horizon and swells until it fills the sky. Over ten seconds it draws in and unmakes every foe in sight, and tears a quarter of the life from anything vast.', { r: 600, t: 10, far: 340, rise: 40, size0: 1.5, size: 330, bossCut: 0.25, type: 'void' }),
 	// ---------- Blight ----------
 	S('hex-of-decay', 'Hex of Decay', 'blight', 1, 'bolt', 11, 3, '✣', 'A curse that rots the one it strikes for a while.', { dmg: 8, speed: 55, type: 'blight', status: { dot: 9, t: 8 } }),
 	S('withering', 'Withering', 'blight', 2, 'bolt', 16, 6, '≀', 'Drains the strength from the one it strikes: they slow and weaken.', { dmg: 18, speed: 55, type: 'blight', status: { slow: 0.4, t: 8, dot: 4 } }),

@@ -175,7 +175,8 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   where you aim, then bursts. By night it is refused and costs nothing, unless it channels the moon
   (`state.moonlit`, an array of ids the skills side fills when the spell reaches mastery III;
   `Crysis.magic.moonlit()` on the console). Then it comes from the moon, in silver, a fifth weaker.
-- **Gargantua**, Void's fifth rung: a black hole rises on the horizon and over ten seconds draws in
+- **Gargantua**, Void's fifth rung: a black hole appears as a dot on the horizon and swells until it
+  fills the whole sky by 8.5 s (a dark veil takes the sky behind you too). Over ten seconds it draws in
   and destroys every hostile fighter within 600 m, and takes a quarter of any boss's life.
 - **The gallery:** `node island/tools/spell-looks-browser.cjs` plays every look in a small scene of
   its own, with no game loaded, and saves one picture per spell to `/tmp/spell-looks` (`ONLY=` picks
