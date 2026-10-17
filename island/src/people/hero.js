@@ -45,7 +45,7 @@ const HERO = {
 	male: {
 		// (a climber's or a fighter's build: shoulders out over a compact waist, long legs, a head
 		// in proportion; lean, so the muscle target is light: people/build.js shapes the rest)
-		base: 0x4e70, sex: 0.96, height: 1.86, muscle: 0.3, weight: 0.03, build: { shoulders: 0.018, waist: 0.08, head: -0.05, legs: 0.04 },
+		base: 0x4e70, sex: 0.96, height: 1.86, muscle: 0.3, weight: 0.03, lean: 0.2, build: { shoulders: 0.018, waist: 0.08, head: -0.05, legs: 0.04 },
 		ancestry: [0.18, 0.14, 0.68], hairColour: [0.2, 0.11, 0.05], iris: 4, brows: { dens: 0.62, thick: 0.7 },
 		face: {
 			jaw: 0.32, 'jaw-out': 0.06, 'chin-width': 0.2, 'chin-out': 0.12, 'chin-height': 0.08, 'chin-cleft': 0.12,
@@ -66,7 +66,7 @@ const HERO = {
 	female: {
 		// (her own build, not his made smaller: defined shoulders, a long waist drawn in, strong
 		// long legs, a smaller head; a runner's or a climber's)
-		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05 },
+		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, lean: 0.25, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05 },
 		ancestry: [0.1, 0.22, 0.68], hairColour: [0.32, 0.12, 0.05], iris: 5, freckles: true, brows: { dens: 0.48, thick: 0.55 },
 		face: {
 			cheekbones: 0.45, cheeks: -0.18, jaw: -0.12, 'chin-width': -0.18, 'chin-out': 0.08,
@@ -94,7 +94,7 @@ export function heroDNA(sex = 'male', opts = {}) {
 	const d = personDNA(H.base, { age: 29, ancestry: H.ancestry, style, ...opts });
 	d.hero = sex;
 	d.sex = H.sex; d.male = sex !== 'female';
-	d.age = 29; d.height = H.height; d.muscle = H.muscle; d.weight = H.weight;
+	d.age = 29; d.height = H.height; d.muscle = H.muscle; d.weight = H.weight; d.lean = H.lean || 0;
 	d.hair = sex === 'female' ? 'ponytail01' : 'short02';
 	d.hairColour = H.hairColour.slice();
 	d.greyShift = -20;

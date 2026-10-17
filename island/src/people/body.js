@@ -241,7 +241,9 @@ export function buildPerson(A, d) {
 		const t = targets[['african', 'asian', 'caucasian'][a] + '-' + sx + '-' + ag], k = d.ancestry[a] * w * wa * unit;
 		for (let i = 0; i < p.length; i++) p[i] += t[i] * k;
 	}
-	for (const [sx, w] of [['female', 1 - d.sex], ['male', d.sex]]) for (const [n, amt] of [['maxmuscle-averageweight', d.muscle], ['averagemuscle-maxweight', d.weight]]) {
+	// (lean: leaner than the average body, the weight target taken away rather than added;
+	// people/hero.js)
+	for (const [sx, w] of [['female', 1 - d.sex], ['male', d.sex]]) for (const [n, amt] of [['maxmuscle-averageweight', d.muscle], ['averagemuscle-maxweight', d.weight - (d.lean || 0)]]) {
 		const t = targets['universal-' + sx + '-young-' + n];
 		for (let i = 0; i < p.length; i++) p[i] += t[i] * amt * w * unit;
 	}

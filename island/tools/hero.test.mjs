@@ -26,6 +26,8 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.ok(m.height > 1.8 && f.height > 1.68, 'tall');
 	assert.ok(m.muscle >= 0.25 && m.muscle <= 0.45 && f.muscle > 0.15 && m.weight < 0.1 && f.weight < 0.1, 'athletic, not inflated');
 	for (const d of [m, f]) assert.ok(d.build.head < 0 && d.build.legs > 0, 'a smaller head, longer legs');
+	for (const d of [m, f]) assert.ok(d.lean > 0.1 && d.lean < 0.4, 'leaner than the average body, within what the target bears');
+	assert.match(fs.readFileSync(new URL('../src/people/body.js', import.meta.url), 'utf8'), /d\.weight - \(d\.lean \|\| 0\)/, 'the weight target taken away');
 	assert.notDeepEqual(f.build, m.build, 'her build her own');
 	assert.ok(f.freckles && !m.freckles && f.brows.dens < m.brows.dens, 'her freckles; groomed brows');
 	assert.ok(m.style.top.tuck && f.style.top.tuck, 'tops tucked: no boxy hang');
