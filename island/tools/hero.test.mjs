@@ -24,18 +24,18 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	const m = heroDNA('male'), f = heroDNA('female');
 	assert.ok(m.male && m.sex > 0.9 && !f.male && f.sex < 0.1);
 	assert.ok(m.height > 1.8 && f.height > 1.68, 'tall');
-	assert.ok(m.muscle > 0.6 && f.muscle > 0.3 && m.weight < 0.2 && f.weight < 0.2, 'athletic and lean');
+	assert.ok(m.muscle > 0.25 && m.muscle < 0.45 && f.muscle > 0.15 && m.weight < 0.1 && f.weight < 0.1, 'lean, not inflated');
 	assert.ok(m.temper.confident > 0.9 && m.gait.posture < 0, 'chest up');
 	assert.equal(m.age, 29);
 	// (no feature pushed far: a face near the base mesh's even average, which reads handsome)
 	for (const d of [m, f]) for (const [k, v] of Object.entries(d.face)) assert.ok(Math.abs(v) <= 0.45, `${k} ${v}`);
-	assert.ok(m.face.jaw > 0.2 && m.face['brow-ridge'] > 0.2, 'his jaw and brow');
+	assert.ok(m.face.jaw > 0.2 && m.face['brow-ridge'] > 0.1, 'his jaw and brow');
 	assert.ok(f.face.cheekbones > 0.3 && f.face['lower-lip'] > 0.15 && f.face.jaw < 0, 'her cheekbones and lips');
 	// (dressed to move in, groomed, and never grey)
-	assert.equal(m.style.outer.kind, 'leather');
+	for (const d of [m, f]) { assert.notEqual(d.style.outer.fab, 'leather', 'matte, nothing shiny to balloon'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
 	assert.equal(f.style.shoes.kind, 'boot');
-	assert.equal(m.style.hair.style, 'short04');
+	assert.equal(m.style.hair.style, 'short01');
 	assert.equal(m.style.hair.beard, 'stubble');
 	assert.equal(f.style.hair.style, 'ponytail01');
 	assert.equal(f.style.hair.beard, '');
