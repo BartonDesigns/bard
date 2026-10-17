@@ -2,7 +2,10 @@
 // fills every part out at once, which reads as puffed up, not strong. A build reshapes the
 // frame instead: the shoulders broadened (the arms carried out with them whole, by how much
 // each vertex belongs to an arm, so nothing bends), the chest and back widening up to them,
-// and the waist drawn in: the V of the hero (people/hero.js). In the shape's own units,
+// and the waist drawn in: the V of the hero (people/hero.js); a smaller head (a hero stands
+// near eight heads tall, the base mesh nearer seven), scaled about the top of the neck so it
+// stays on it; and longer legs (all below the hip drawn down, and the whole then scaled back to
+// its height, so the trunk and the head are a little shorter). In the shape's own units,
 // before it is scaled to its height; the bones, the clothes and the hair are all fitted to it
 // afterwards. Pure (tools/hero.test.mjs).
 
@@ -10,9 +13,10 @@ const ARM = /^(upperarm|lowerarm|wrist|metacarpal|finger)/;
 const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // p: positions (x across the body, y up), A: { bones: [{ name }], ids, weights } (4 per vertex);
-// build: { shoulders: each side out by this share of the height, waist: drawn in by this share }
+// build: { shoulders: each side out by this share of the height, waist: drawn in by this share,
+// head: its size changed by this share (-0.05 smaller), legs: longer by this share }
 export function shapeBuild(p, A, build) {
-	if (!build || (!build.shoulders && !build.waist)) return;
+	if (!build || (!build.shoulders && !build.waist && !build.head && !build.legs)) return;
 	const n = p.length / 3;
 	let min = Infinity, top = -Infinity;
 	for (let i = 1; i < p.length; i += 3) { min = Math.min(min, p[i]); top = Math.max(top, p[i]); }
@@ -30,5 +34,22 @@ export function shapeBuild(p, A, build) {
 		const wb = (1 - a) * Math.exp(-(((h - 0.585) / 0.05) ** 2)) * W;
 		p[v * 3] = nx * (1 - wb);
 		p[v * 3 + 2] *= 1 - wb * 0.5;
+	}
+	if (build.head) {
+		// the head (and half the neck) scaled about the neck's top: its bone's joint
+		const hb = A.bones.findIndex((b) => b.name === 'head'), nb = A.bones.findIndex((b) => b.name === 'neck01');
+		const piv = [0, 0, 0], ids = A.bones[hb]?.ids || [];
+		for (const id of ids) for (let c = 0; c < 3; c++) piv[c] += p[id * 3 + c] / (ids.length || 1);
+		if (ids.length) for (let v = 0; v < n; v++) {
+			let sw = 0, hw = 0;
+			for (let q = 0; q < 4; q++) { const w = A.weights[v * 4 + q], b = A.ids[v * 4 + q]; sw += w; hw += b === hb ? w : b === nb ? w * 0.5 : 0; }
+			const k = 1 + build.head * (sw ? hw / sw : 0);
+			if (k !== 1) for (let c = 0; c < 3; c++) p[v * 3 + c] = piv[c] + (p[v * 3 + c] - piv[c]) * k;
+		}
+	}
+	if (build.legs) {
+		// all below the hip drawn down (the feet stay on the ground: the shape is lifted after)
+		const hipY = min + 0.5 * H;
+		for (let v = 0; v < n; v++) { const y = p[v * 3 + 1]; p[v * 3 + 1] = y < hipY ? hipY - (hipY - y) * (1 + build.legs) : y; }
 	}
 }

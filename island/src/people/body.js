@@ -307,6 +307,8 @@ export function buildPerson(A, d) {
 	// one in a hundred has vitiligo (from a hash of the seed, so no one else's looks change)
 	const vh = Math.imul((d.seed ?? 0) ^ 0x9e3779b9, 2654435761) >>> 0;
 	if (!d.skinOverride && vh % 100 === 0) skinMat.userData.vit.value.set(1, (vh >>> 8) % 97, (vh >>> 12) % 89, (vh >>> 16) % 83);
+	// (freckles for those made with them: people/hero.js)
+	if (d.freckles) skinMat.userData.vit.value.set(2, (vh >>> 8) % 97, (vh >>> 12) % 89, (vh >>> 16) % 83);
 	P.skinMat = skinMat;
 	P._p = p;
 	// their tattoos, as their life gave them (tattoo/lore.js): on the shared flash sheet

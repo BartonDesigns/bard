@@ -165,6 +165,7 @@ import { createRagdolls } from './people/ragdoll.js';
 import { createImpacts } from './vehicles/impact.js';
 import { createCarjack } from './vehicles/carjack.js';
 import { createAvatar } from './people/avatar.js';
+import { createHeroView } from './people/hero-view.js';
 import { createSelf } from './people/self.js';
 import * as CREATURES from './world/creatures.js';
 import { waterContact } from './world/water-contact.js';
@@ -679,6 +680,9 @@ export function createIslandWorld() {
 	addEventListener('keydown', (e) => { if ((e.key === 't' || e.key === 'T') && !e.repeat && world?.bizSeen?.type === 'tattoo' && !studio.active() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); studio.start(); } });
 	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active(), hint: (t, ms) => hint(t, ms, 1), ward: (p) => HOOKS.combat?.ward(p) });
 	HOOKS.self = you;
+	// a look at your hero in the game itself, for development (?heroview, Crysis.heroView)
+	const heroView = HOOKS.heroView = createHeroView({ scene, renderer, avatar, self: you, world: () => world, setCine: (fn) => { HOOKS.cine = fn; } });
+	if (/[?&]heroview\b/.test(location.search)) { const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); heroView.open(); } }, 1000); }
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
 		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
@@ -2613,6 +2617,7 @@ if (typeof window !== 'undefined') {
 		thirdPerson: () => HOOKS.self?.toggle(),
 		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
 		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
+		heroView: () => HOOKS.heroView,
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },

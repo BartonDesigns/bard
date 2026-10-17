@@ -703,7 +703,8 @@ export function clothGeometry(A, p, o, cut, R) {
      const ell=Math.hypot(x/rx,(z-zc)/rz), hang=Math.min(1,(cut.shoulder-.04-y)/.12);
      // (a ribbed waistband draws the hang back in to the hips)
      const band=isRibbed(garment)?Math.min(1,Math.max(0,(y-hem-.05)/.06)):1;
-     if(ell>0 && ell<1) k+=Math.min(.1,(1-ell)*Math.max(rx,rz))*hang*band;
+     // (how much it hangs: a fitted shirt or an open overshirt hangs less than a loose one)
+     if(ell>0 && ell<1) k+=Math.min(.1,(1-ell)*Math.max(rx,rz))*hang*band*(garment.drape??1);
     }
     k*=waistbandEase(garment,y-hem);
    }

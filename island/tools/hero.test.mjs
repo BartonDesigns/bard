@@ -24,7 +24,12 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	const m = heroDNA('male'), f = heroDNA('female');
 	assert.ok(m.male && m.sex > 0.9 && !f.male && f.sex < 0.1);
 	assert.ok(m.height > 1.8 && f.height > 1.68, 'tall');
-	assert.ok(m.muscle > 0.3 && m.muscle < 0.5 && f.muscle > 0.15 && m.weight < 0.1 && f.weight < 0.1, 'athletic, not inflated');
+	assert.ok(m.muscle >= 0.25 && m.muscle <= 0.45 && f.muscle > 0.15 && m.weight < 0.1 && f.weight < 0.1, 'athletic, not inflated');
+	for (const d of [m, f]) assert.ok(d.build.head < 0 && d.build.legs > 0, 'a smaller head, longer legs');
+	assert.notDeepEqual(f.build, m.build, 'her build her own');
+	assert.ok(f.freckles && !m.freckles && f.brows.dens < m.brows.dens, 'her freckles; groomed brows');
+	assert.ok(m.style.top.tuck && f.style.top.tuck, 'tops tucked: no boxy hang');
+	assert.ok(f.style.outer.drape < 0.5 && f.style.outer.open, 'an open overshirt that hangs a little');
 	assert.ok(m.temper.confident > 0.9 && m.gait.posture < 0, 'chest up');
 	assert.equal(m.age, 29);
 	// (no feature pushed far: a face near the base mesh's even average, which reads handsome)
@@ -33,8 +38,8 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.ok(f.face.cheekbones > 0.3 && f.face['lower-lip'] > 0.15 && f.face.jaw < 0, 'her cheekbones and lips');
 	// (dressed to move in, groomed, and never grey)
 	assert.equal(m.style.outer, null, 'no jacket to balloon on him');
-	assert.equal(f.style.outer.kind, 'flannel'); assert.equal(f.style.outer.pat, 'plaid'); assert.equal(f.style.outer.fit, 'oversized', 'a big flowing plaid shirt');
-	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.02 && d.style.bottom.tuck && d.style.shoes.tall, 'rugged trousers into tall boots'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
+	assert.equal(f.style.outer.kind, 'flannel'); assert.equal(f.style.outer.pat, 'plaid'); assert.equal(f.style.outer.fit, 'fitted', 'a fitted plaid overshirt');
+	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.008 && d.style.bottom.hang < 0.02 && d.style.bottom.fit === 'straight' && d.style.bottom.tuck && d.style.shoes.tall, 'rugged trousers tapering into tall boots'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
 	assert.ok(m.style.acc.some((q) => q.kind === 'carrier'), 'his carrier');
 	assert.ok(m.build.shoulders > f.build.shoulders && m.build.waist > 0 && f.build.waist > 0, 'the V');
@@ -43,7 +48,7 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.match(src0, /B\.tuck \? cut\.ankle \+ 0\.14/, 'trousers end at the boots');
 	assert.match(src0, /F\.tall \? 0\.17 : 0\.09/, 'tall boots');
 	assert.match(src0, /const legHang = B\?\.hang/, 'a straight hang');
-	assert.equal(m.style.hair.style, 'short01');
+	assert.equal(m.style.hair.style, 'tousled');
 	assert.equal(m.style.hair.beard, 'stubble');
 	assert.equal(f.style.hair.style, 'ponytail01');
 	assert.equal(f.style.hair.beard, '');
@@ -96,4 +101,21 @@ test('a build broadens the shoulders, carries the arms out whole, and draws the 
 	const q = Float32Array.from(at.flat());
 	shapeBuild(q, A, null);
 	assert.deepEqual([...q], at.flat().map(Math.fround), 'no build, no change');
+});
+
+test('a build makes the head smaller about the top of the neck, and the legs longer', async () => {
+	const { shapeBuild } = await import('../src/people/build.js');
+	// vertices: a foot, the hip, the neck's top (the head's joint), the crown (all head), the chin (half neck)
+	const at = [[0, 0, 0], [0, 1, 0], [0, 1.7, 0], [0, 2, 0], [0, 1.75, 0.1]];
+	const A = { bones: [{ name: 'spine01', ids: [] }, { name: 'head', ids: [2] }, { name: 'neck01', ids: [] }], ids: new Uint8Array(20), weights: new Uint16Array(20) };
+	const own = [0, 0, 1, 1, 2];
+	for (let v = 0; v < 5; v++) { A.ids[v * 4] = own[v]; A.weights[v * 4] = 1000; }
+	const p = Float32Array.from(at.flat());
+	shapeBuild(p, A, { head: -0.1 });
+	assert.ok(Math.abs(p[3 * 3 + 1] - (1.7 + 0.3 * 0.9)) < 1e-5, 'the crown 10% nearer the neck');
+	assert.ok(Math.abs(p[2 * 3 + 1] - 1.7) < 1e-6, 'the neck joint stays');
+	assert.ok(Math.abs(p[4 * 3 + 2] - 0.1 * 0.95) < 1e-5, 'the chin, half neck, half as much');
+	const q = Float32Array.from(at.flat());
+	shapeBuild(q, A, { legs: 0.1 });
+	assert.ok(Math.abs(q[1] - (1 - 1.1)) < 1e-6 && q[4] === 1 && q[7] === Math.fround(1.7), 'below the hip drawn down, the rest kept');
 });

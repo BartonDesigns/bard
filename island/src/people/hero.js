@@ -43,37 +43,43 @@ export function setHeroChoice(sex, storage = globalThis.localStorage) {
 const SILVER = '#c9ccd0';
 const HERO = {
 	male: {
-		base: 0x4e70, sex: 0.96, height: 1.87, muscle: 0.4, build: { shoulders: 0.024, waist: 0.07 }, weight: 0.04, ancestry: [0.18, 0.14, 0.68], hairColour: [0.07, 0.048, 0.032],
+		// (a climber's or a fighter's build: shoulders out over a compact waist, long legs, a head
+		// in proportion; lean, so the muscle target is light: people/build.js shapes the rest)
+		base: 0x4e70, sex: 0.96, height: 1.86, muscle: 0.3, weight: 0.03, build: { shoulders: 0.018, waist: 0.08, head: -0.05, legs: 0.04 },
+		ancestry: [0.18, 0.14, 0.68], hairColour: [0.2, 0.11, 0.05], iris: 4, brows: { dens: 0.8, thick: 0.85 },
 		face: {
-			jaw: 0.38, 'jaw-out': 0.08, 'chin-width': 0.28, 'chin-out': 0.16, 'chin-height': 0.1, 'chin-cleft': 0.15,
-			cheekbones: 0.32, cheeks: -0.18, 'brow-ridge': 0.16, 'brow-angle': 0.04, forehead: 0.05,
-			'nose-width': -0.1, 'nose-hump': -0.12, 'nose-length': 0.05, 'eye-tilt': 0.05, 'eye-open': -0.05,
-			'mouth-width': 0.05, 'lower-lip': 0.06, 'head-square': 0.38, 'head-oval': 0.22, 'head-fat': -0.3, 'neck-width': 0.38,
+			jaw: 0.32, 'jaw-out': 0.06, 'chin-width': 0.2, 'chin-out': 0.12, 'chin-height': 0.08, 'chin-cleft': 0.12,
+			cheekbones: 0.3, cheeks: -0.2, 'brow-ridge': 0.2, 'brow-angle': 0.04, forehead: 0.05, temples: -0.05,
+			'nose-width': -0.12, 'nose-hump': -0.08, 'nose-length': 0.04, 'eye-tilt': 0.05, 'eye-open': -0.08, 'eye-spacing': -0.02,
+			'mouth-width': 0.04, 'upper-lip': 0.02, 'lower-lip': 0.08, 'head-square': 0.3, 'head-oval': 0.25, 'head-fat': -0.3, 'neck-width': 0.18,
 		},
-		hair: { style: 'short01', vol: 1.08, fadeK: 0.3, beard: 'stubble', cut: 'textured' },
+		hair: { style: 'tousled', vol: 0.95, fadeK: 0.25, beard: 'stubble', cut: 'textured' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
+			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled', tuck: true },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'regular', hang: 0.032, tuck: true },
+			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'straight', hang: 0.014, tuck: true },
 			shoes: { kind: 'boot', tall: true, col: '#5a4632', sole: '#17130f' },
 			acc: [{ kind: 'carrier', col: '#6a5f48', acc: '#4e4636' }, { kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),
 	},
 	female: {
-		base: 0x4e71, sex: 0.04, height: 1.74, muscle: 0.26, build: { shoulders: 0.014, waist: 0.11 }, weight: 0.05, ancestry: [0.1, 0.22, 0.68], hairColour: [0.3, 0.13, 0.065],
+		// (her own build, not his made smaller: defined shoulders, a long waist drawn in, strong
+		// long legs, a smaller head; a runner's or a climber's)
+		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05 },
+		ancestry: [0.1, 0.22, 0.68], hairColour: [0.32, 0.12, 0.05], iris: 5, freckles: true, brows: { dens: 0.55, thick: 0.6 },
 		face: {
-			cheekbones: 0.42, cheeks: -0.12, jaw: -0.2, 'chin-width': -0.2, 'chin-out': 0.06,
-			'nose-width': -0.26, 'nose-volume': -0.16, 'nose-tip': 0.1, 'nose-hump': -0.1,
-			'eye-size': 0.15, 'eye-tilt': 0.2, 'upper-lip': 0.22, 'lower-lip': 0.26, 'cupids-bow': 0.2, 'mouth-width': 0.04,
-			'brow-ridge': -0.1, 'brow-angle': 0.12, 'head-oval': 0.4, 'head-heart': 0.28, 'head-fat': -0.22, 'neck-width': -0.1,
+			cheekbones: 0.45, cheeks: -0.18, jaw: -0.12, 'chin-width': -0.18, 'chin-out': 0.08,
+			'nose-width': -0.26, 'nose-volume': -0.16, 'nose-tip': 0.12, 'nose-hump': -0.1,
+			'eye-size': 0.15, 'eye-tilt': 0.15, 'upper-lip': 0.2, 'lower-lip': 0.28, 'cupids-bow': 0.2, 'mouth-width': 0.04,
+			'brow-ridge': -0.1, 'brow-angle': 0.1, 'head-oval': 0.4, 'head-heart': 0.28, 'head-fat': -0.22, 'neck-width': -0.15,
 		},
 		hair: { style: 'ponytail01', vol: 1, beard: '', cut: 'pony' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none' },
-			outer: { kind: 'flannel', col: C.cherry, acc: C.black, acc2: C.cream, pat: 'plaid', fit: 'oversized', sleeves: 'rolled', open: true, collar: true, fab: 'canvas' },
-			bottom: { kind: 'cargo', col: '#6a5f48', pat: 'cargo', legs: 'long', fit: 'regular', hang: 0.028, tuck: true },
+			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none', tuck: true },
+			outer: { kind: 'flannel', col: '#a3262a', acc: C.black, acc2: '#e8e0d0', pat: 'plaid', fit: 'fitted', sleeves: 'rolled', open: true, collar: true, fab: 'canvas', drape: 0.35 },
+			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'cargo', legs: 'long', fit: 'straight', hang: 0.012, tuck: true },
 			shoes: { kind: 'boot', tall: true, col: '#5a4632', sole: '#17130f' },
 			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }],
 		}),
@@ -91,7 +97,9 @@ export function heroDNA(sex = 'male', opts = {}) {
 	d.hair = sex === 'female' ? 'ponytail01' : 'short02';
 	d.hairColour = H.hairColour.slice();
 	d.greyShift = -20;
-	d.iris = sex === 'female' ? 5 : 6;
+	d.iris = H.iris;
+	d.brows = { ...H.brows };
+	d.freckles = !!H.freckles;
 	// (his hair and beard, or hers, by name: people/hairkit.js styleFor, beardFor)
 	style.printKind = 0;
 	style.hair = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, recede: 0, thin: 0, part: 1, fresh: true, ...H.hair };

@@ -108,7 +108,9 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 	// share of them (grey) drawn grey
 	const B = F.brow, n0 = new THREE.Vector3(), n1 = new THREE.Vector3(), cx = (eyeC[0].x + eyeC[1].x) / 2;
 	// (a woman's finer than a man's)
-	const fine = P.dna.male ? 1 : 0.82, dens = (0.7 + rnd() * 0.6) * fine, thick = (0.8 + rnd() * 0.45) * fine;
+	const fine = P.dna.male ? 1 : 0.82, dens0 = (0.7 + rnd() * 0.6) * fine, thick0 = (0.8 + rnd() * 0.45) * fine;
+	// (brows groomed to a set density and weight: people/hero.js; the draws above still made)
+	const dens = P.dna.brows?.dens ?? dens0, thick = P.dna.brows?.thick ?? thick0;
 	// the skin round the brows (its vertices and normals, in a fine grid), so that every
 	// hair lies on it, a hair's width out, whatever the brow ridge's shape
 	const onSkin = skinNear(A, p, B);

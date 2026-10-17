@@ -14,7 +14,7 @@ const IDLE = ['pockets', 'crossed', 'phone', 'hip', 'behind'];
 const HERO_IDLE = ['hip', 'crossed', 'behind'];
 
 export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint, ward = null }) {
-	const S = { third: false, idle: 0, pose: 'rest', down: null };
+	const S = { third: false, idle: 0, pose: 'rest', down: null, posePin: null };
 	const cam = new THREE.Vector3(), look = new THREE.Vector3(), v = new THREE.Vector3();
 	let shown = false;
 
@@ -37,7 +37,8 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 		// (still for a while: a way of standing; moving again: arms free)
 		S.idle = sp < 0.15 ? S.idle + dt : 0;
 		const hero = !!me.P.dna.hero, L = hero ? HERO_IDLE : IDLE;
-		const want = S.idle > 5 ? L[Math.floor(t / 23) % L.length] : hero ? 'ready' : 'rest';
+		// (a pose held for a look at you: people/hero-view.js)
+		const want = S.posePin || (S.idle > 5 ? L[Math.floor(t / 23) % L.length] : hero ? 'ready' : 'rest');
 		if (want !== S.pose) { S.pose = want; me.M.setPose(want); }
 		me.M.update(dt, t, null);
 		me.M.S.pos.set(P.pos.x, feet, P.pos.z);

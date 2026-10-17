@@ -1,0 +1,159 @@
+// A look at your hero (people/hero.js) inside the game itself: the same renderer, scene, sky
+// and light, so what is judged here is what is played. Opened with ?heroview in the address,
+// or Crysis.heroView.open(); for development, not players. It frames the body from set views
+// (front, three-quarter, both profiles, back, the face, the hands), turns it, shows it in a
+// flat grey (the silhouette alone) or as its wireframe, under the day's light presets, in a
+// pose or an action held at any point (scrubbed), and counts what it costs (triangles,
+// meshes, materials, draw calls, the time it took to make). shot() renders one view to an
+// image from its own camera, the same framing every time, for before-and-after comparisons.
+
+import * as THREE from 'three';
+import { POSES } from './motion.js';
+import { ACTIONS } from './actions.js';
+
+// a view: [turn about the body (0 its front), distance, camera height, aim height] (heights as
+// a share of the body's), field of view
+export const VIEWS = {
+	front: [0, 3.9, 0.72, 0.53, 30], front34: [0.62, 3.9, 0.72, 0.53, 30], left: [Math.PI / 2, 3.9, 0.72, 0.53, 30],
+	back: [Math.PI, 3.9, 0.72, 0.53, 30], back34: [Math.PI - 0.62, 3.9, 0.72, 0.53, 30], right: [-Math.PI / 2, 3.9, 0.72, 0.53, 30],
+	face: [0.32, 0.78, 0.935, 0.925, 28], profile: [Math.PI / 2, 0.82, 0.935, 0.925, 28], hands: [-0.5, 1.15, 0.6, 0.5, 30],
+};
+export const LIGHTS = { day: 11, golden: 18, shade: 7.2, night: 22.5 };
+
+export function createHeroView({ scene, renderer, avatar, self, world, setCine }) {
+	const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 2000);
+	const grey = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.82, metalness: 0 });
+	const saved = new Map();
+	const S = { open: false, view: 'front34', turn: 0, spin: false, grey: false, wire: false, pose: 'ready', action: null, u: 0.5, paused: true };
+	let panel = null, statsEl = null;
+	const body = () => avatar.me;
+
+	// the camera on a view of the body as it stands now (feet, heading, height)
+	function frame(c, view = S.view, turn = S.turn, aspect = 1) {
+		const me = body(); if (!me) return false;
+		const V = VIEWS[view] || VIEWS.front, St = me.M.S, h = me.P.dna.height || 1.75, a = St.heading + V[0] + turn;
+		const feet = St.pos;
+		c.fov = V[4]; c.aspect = aspect; c.updateProjectionMatrix();
+		let cx = feet.x + Math.sin(a) * V[1], cz = feet.z + Math.cos(a) * V[1], ay = feet.y + V[3] * h, tx = feet.x, tz = feet.z;
+		// (the hands: the right one's wrist)
+		if (view === 'hands') { const w = me.P.bones[me.P.map['wrist.R']]?.getWorldPosition(new THREE.Vector3()); if (w) { tx = w.x; tz = w.z; ay = w.y; cx = w.x + Math.sin(a) * 0.55; cz = w.z + Math.cos(a) * 0.55; } }
+		c.position.set(cx, feet.y + V[2] * h, cz);
+		c.lookAt(tx, ay, tz);
+		c.updateMatrixWorld();
+		return true;
+	}
+	// the flat grey (and its wireframe) over every part of the body, or its own materials back
+	function setLook(g = S.grey, wire = S.wire) {
+		const me = body(); if (!me) return;
+		grey.wireframe = !!wire;
+		me.P.root.traverse((o) => {
+			if (!o.isMesh) return;
+			if (g || wire) { if (!saved.has(o)) saved.set(o, o.material); o.material = grey; }
+			else if (saved.has(o)) { o.material = saved.get(o); }
+		});
+		if (!g && !wire) saved.clear();
+	}
+	// a way of standing (people/motion.js POSES) or an action held at u (people/actions.js)
+	function pose(name = S.pose, action = S.action, u = S.u) {
+		const me = body(); if (!me) return;
+		S.pose = POSES[name] ? name : 'ready'; S.action = ACTIONS[action] ? action : null; S.u = u;
+		if (self?.state) self.state.posePin = S.pose;
+		me.M.setPose(S.pose);
+		if (S.action) me.M.act(S.action, S.paused ? S.u : undefined); else me.M.act(null);
+	}
+	function stats() {
+		const me = body(); if (!me) return null;
+		let tris = 0, meshes = 0;
+		const mats = new Set();
+		me.P.root.traverse((o) => {
+			if (!o.isMesh || !o.visible) return;
+			meshes++;
+			const g = o.geometry, n = g.index ? g.index.count : g.attributes.position.count;
+			tris += (n / 3) * (o.isInstancedMesh ? o.count : 1);
+			(Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m));
+		});
+		return { hero: avatar.hero, tris: Math.round(tris), meshes, materials: mats.size, bones: me.P.bones.length, buildMs: Math.round(me.P.buildMs || 0), calls: renderer.info.render.calls, height: +(me.P.dna.height || 0).toFixed(2) };
+	}
+	// one view rendered to an image (the same framing every time)
+	function shot(o = {}) {
+		const me = body(); if (!me) return null;
+		if (o.grey !== undefined || o.wire !== undefined) setLook(o.grey ?? S.grey, o.wire ?? S.wire);
+		const el = renderer.domElement;
+		if (!frame(cam, o.view || S.view, o.turn ?? 0, el.width / el.height)) return null;
+		renderer.render(scene, cam);
+		const url = el.toDataURL('image/jpeg', 0.9);
+		if (o.grey !== undefined || o.wire !== undefined) setLook(S.grey, S.wire);
+		return url;
+	}
+
+	// ---------- the panel ----------
+	const BTN = 'min-height:32px;padding:0 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px system-ui;cursor:pointer;';
+	function button(row, label, on, fn) {
+		const b = document.createElement('button');
+		b.style.cssText = BTN + (on ? 'background:#01a982;border-color:#01a982;' : '');
+		b.textContent = label; b.setAttribute('aria-pressed', String(!!on));
+		b.onclick = (e) => { e.stopPropagation(); fn(); draw(); };
+		row.appendChild(b);
+	}
+	function row(label) {
+		const r = document.createElement('div');
+		r.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0;';
+		if (label) { const s = document.createElement('span'); s.textContent = label; s.style.cssText = 'width:54px;opacity:.75;'; r.appendChild(s); }
+		panel.appendChild(r);
+		return r;
+	}
+	function draw() {
+		if (!panel) return;
+		panel.replaceChildren();
+		const t = document.createElement('div'); t.textContent = 'HERO VIEW'; t.style.cssText = 'font-weight:700;letter-spacing:.06em;margin-bottom:4px;';
+		panel.appendChild(t);
+		let r = row('Hero');
+		for (const h of ['male', 'female']) button(r, h, avatar.hero === h, () => { avatar.setHero(h).then(() => { setLook(); pose(); draw(); }); });
+		r = row('View');
+		for (const v of Object.keys(VIEWS)) button(r, v, S.view === v, () => { S.view = v; S.turn = 0; });
+		r = row('Turn');
+		button(r, '⟲', false, () => { S.turn -= Math.PI / 8; });
+		button(r, S.spin ? 'Stop' : 'Spin', S.spin, () => { S.spin = !S.spin; });
+		button(r, '⟳', false, () => { S.turn += Math.PI / 8; });
+		r = row('Look');
+		button(r, 'Grey', S.grey, () => { S.grey = !S.grey; setLook(); });
+		button(r, 'Wire', S.wire, () => { S.wire = !S.wire; setLook(); });
+		r = row('Light');
+		for (const [k, h] of Object.entries(LIGHTS)) button(r, k, false, () => { const sky = world()?.sky; if (sky?.state) sky.state.hours = h; });
+		r = row('Pose');
+		for (const p of ['rest', 'ready', 'hip', 'crossed']) button(r, p, S.pose === p && !S.action, () => pose(p, null));
+		r = row('Action');
+		for (const a of ['ready', 'stride', 'crouch', 'guard', 'reach', 'kick']) button(r, a, S.action === a, () => pose(S.pose, a, S.u));
+		button(r, S.paused ? 'Play' : 'Pause', !S.paused, () => { S.paused = !S.paused; pose(); });
+		const sc = document.createElement('input'); sc.type = 'range'; sc.min = '0'; sc.max = '1'; sc.step = '0.01'; sc.value = String(S.u); sc.setAttribute('aria-label', 'Scrub the action');
+		sc.style.cssText = 'width:100%;min-height:32px;';
+		sc.oninput = () => { S.u = +sc.value; S.paused = true; pose(); };
+		panel.appendChild(sc);
+		statsEl = document.createElement('pre'); statsEl.style.cssText = 'margin:4px 0 0;font:11px ui-monospace,monospace;opacity:.85;white-space:pre-wrap;';
+		panel.appendChild(statsEl);
+		r = row();
+		button(r, 'Close', false, close);
+	}
+	function open() {
+		if (S.open) return true;
+		S.open = true;
+		if (self && !self.state.third) self.toggle();
+		avatar.ready().then(() => { setLook(); pose(); });
+		panel = document.createElement('div');
+		panel.style.cssText = 'position:fixed;left:8px;top:8px;z-index:60;width:min(340px,calc(100vw - 32px));max-height:calc(100vh - 16px);overflow:auto;padding:10px;border-radius:12px;background:rgba(10,16,20,.82);color:#eafaf6;font:12px system-ui;';
+		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) panel.addEventListener(ev, (e) => e.stopPropagation());
+		document.body.appendChild(panel);
+		draw();
+		// (the game's camera framed on the body while open: main.js's director hook)
+		setCine((c, dt) => { if (S.spin) S.turn += dt * 0.5; if (!frame(c, S.view, S.turn, c.aspect)) return; if (statsEl) { const s = stats(); statsEl.textContent = s ? Object.entries(s).map(([k, v]) => `${k}: ${v}`).join('  ') : ''; } });
+		return true;
+	}
+	function close() {
+		S.open = false; S.grey = S.wire = false; setLook(false, false);
+		if (self?.state) self.state.posePin = null;
+		body()?.M.act(null);
+		setCine(null);
+		panel?.remove(); panel = null;
+	}
+	return { open, close, shot, stats, pose, setLook, frame, state: S, views: VIEWS, lights: LIGHTS };
+}
