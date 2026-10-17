@@ -3,9 +3,11 @@
 // themselves; a face kept close to the base mesh's even average, with only the features that
 // read strong (a square jaw on him, high cheekbones and full lips on her), never the dozen
 // strong random ones a townsperson gets; lean rather than built (the base mesh's muscle target
-// inflates past a little); a groomed cut, and clothes made to move in: a fitted dark top with
-// its sleeves rolled, cargo trousers with room in them, boots. No jacket: a garment over
-// another stands well off the body here and balloons. And they stand ready (people/motion.js).
+// inflates past a little, so the V is shaped instead: people/build.js); a groomed cut, and kit
+// made to move in: a fitted top with its sleeves rolled under a plate carrier (straps, plates,
+// pouches: built as pieces, not puffed cloth), gloves, cargo trousers with room in them, boots.
+// No jacket: a garment over another stands well off the body here and balloons. In their own
+// colours, so a hero is never taken for one of the soldiers. And they stand ready.
 //
 // Friends draw you from your seed alone (net/protocol.js cleanLook), so the hero is a seed of
 // its own: HERO_TAG in the top byte (above any seed a townsperson or an old visit was given,
@@ -40,7 +42,7 @@ export function setHeroChoice(sex, storage = globalThis.localStorage) {
 const SILVER = '#c9ccd0';
 const HERO = {
 	male: {
-		base: 0x4e70, sex: 0.96, height: 1.87, muscle: 0.46, weight: 0.04, ancestry: [0.18, 0.14, 0.68], hairColour: [0.07, 0.048, 0.032],
+		base: 0x4e70, sex: 0.96, height: 1.87, muscle: 0.4, build: { shoulders: 0.024, waist: 0.07 }, weight: 0.04, ancestry: [0.18, 0.14, 0.68], hairColour: [0.07, 0.048, 0.032],
 		face: {
 			jaw: 0.38, 'jaw-out': 0.08, 'chin-width': 0.28, 'chin-out': 0.16, 'chin-height': 0.1, 'chin-cleft': 0.15,
 			cheekbones: 0.32, cheeks: -0.18, 'brow-ridge': 0.16, 'brow-angle': 0.04, forehead: 0.05,
@@ -50,15 +52,15 @@ const HERO = {
 		hair: { style: 'short01', vol: 1.08, fadeK: 0.3, beard: 'stubble', cut: 'textured' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
+			top: { kind: 'longsleeve', col: C.slate, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'regular' },
-			shoes: { kind: 'boot', col: C.espresso, sole: C.black },
-			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }],
+			bottom: { kind: 'cargo', col: C.khaki, pat: 'cargo', legs: 'long', fit: 'regular' },
+			shoes: { kind: 'boot', col: '#2a241c', sole: '#121110' },
+			acc: [{ kind: 'carrier', col: '#3c4a2c', acc: '#2b3320' }, { kind: 'gloves', col: '#2a2b2e' }, { kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),
 	},
 	female: {
-		base: 0x4e71, sex: 0.04, height: 1.74, muscle: 0.3, weight: 0.05, ancestry: [0.1, 0.22, 0.68], hairColour: [0.3, 0.13, 0.065],
+		base: 0x4e71, sex: 0.04, height: 1.74, muscle: 0.26, build: { shoulders: 0.01, waist: 0.08 }, weight: 0.05, ancestry: [0.1, 0.22, 0.68], hairColour: [0.3, 0.13, 0.065],
 		face: {
 			cheekbones: 0.42, cheeks: -0.12, jaw: -0.2, 'chin-width': -0.2, 'chin-out': 0.06,
 			'nose-width': -0.26, 'nose-volume': -0.16, 'nose-tip': 0.1, 'nose-hump': -0.1,
@@ -70,9 +72,9 @@ const HERO = {
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'longsleeve', col: C.black, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.charcoal, pat: 'cargo', legs: 'long', fit: 'regular' },
-			shoes: { kind: 'boot', col: C.espresso, sole: C.black },
-			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }],
+			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'regular' },
+			shoes: { kind: 'boot', col: '#2a241c', sole: '#121110' },
+			acc: [{ kind: 'carrier', col: '#2f3236', acc: '#4a4f57' }, { kind: 'gloves', col: '#1e1f22' }, { kind: 'earrings', hoop: false, col: SILVER }],
 		}),
 	},
 };
@@ -98,6 +100,8 @@ export function heroDNA(sex = 'male', opts = {}) {
 	d.temper = { outgoing: 0.7, confident: 0.95, warmth: 0.6, fidget: 0.1 };
 	d.gait = { stride: 1.05, bounce: 0.85, armSwing: 0.9, posture: -0.03, pace: 1.35 };
 	d.face = { ...H.face };
+	// (the V: broad shoulders, a narrow waist, people/build.js)
+	d.build = { ...H.build };
 	return d;
 }
 // the body for a seed: the hero's for a hero's seed, else a townsperson's

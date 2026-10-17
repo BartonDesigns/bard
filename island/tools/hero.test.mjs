@@ -34,6 +34,8 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	// (dressed to move in, groomed, and never grey)
 	for (const d of [m, f]) { assert.equal(d.style.outer, null, 'no jacket to balloon'); assert.equal(d.style.top.fit, 'fitted'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
+	for (const d of [m, f]) { assert.ok(d.style.acc.some((q) => q.kind === 'carrier'), 'a plate carrier'); assert.ok(d.style.acc.some((q) => q.kind === 'gloves')); }
+	assert.ok(m.build.shoulders > f.build.shoulders && m.build.waist > 0 && f.build.waist > 0, 'the V');
 	assert.equal(f.style.shoes.kind, 'boot');
 	assert.equal(m.style.hair.style, 'short01');
 	assert.equal(m.style.hair.beard, 'stubble');
@@ -69,4 +71,23 @@ test('your body, its hands, friends and the settings all use the hero', () => {
 	assert.match(src('main.js'), /'Your hero'/);
 	assert.match(src('people/self.js'), /hero \? 'ready' : 'rest'/, 'they stand ready');
 	assert.match(src('people/motion.js'), /ready: \{ both: arm/);
+});
+
+test('a build broadens the shoulders, carries the arms out whole, and draws the waist in', async () => {
+	const { shapeBuild } = await import('../src/people/build.js');
+	// four vertices on a body 2 high: an arm's (all upper arm), the chest's middle, the chest's
+	// side, the waist's side; the feet and the head mark the height
+	const A = { bones: [{ name: 'spine01' }, { name: 'upperarm01.L' }], ids: new Uint8Array(24), weights: new Uint16Array(24) };
+	const at = [[0.4, 1.5, 0], [0, 1.55, 0.1], [0.2, 1.55, 0.05], [0.15, 1.17, 0.1], [0, 0, 0], [0, 2, 0]];
+	const p = Float32Array.from(at.flat());
+	for (let v = 0; v < 6; v++) { A.ids[v * 4] = v === 0 ? 1 : 0; A.weights[v * 4] = 1000; }
+	shapeBuild(p, A, { shoulders: 0.02, waist: 0.1 });
+	assert.ok(Math.abs(p[0] - (0.4 + 0.04)) < 1e-6, 'the arm out whole, by 2% of the height');
+	assert.ok(Math.abs(p[3]) < 1e-6, 'the middle of the chest stays');
+	assert.ok(p[6] > 0.2 + 0.03, 'the side of the chest out with the shoulders');
+	assert.ok(p[9] < 0.15 * 0.95 && p[11] < 0.1, 'the waist drawn in');
+	assert.ok(p[13] === 0 && p[16] === 2, 'its height kept');
+	const q = Float32Array.from(at.flat());
+	shapeBuild(q, A, null);
+	assert.deepEqual([...q], at.flat().map(Math.fround), 'no build, no change');
 });

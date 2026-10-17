@@ -22,6 +22,7 @@ import { hairMotion } from './hair-motion.js';
 import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 import { fitBags, torsoSurface, attachBag, BAG_KINDS } from './bags.js';
 import { tierNow } from '../world/governor.js';
+import { shapeBuild } from './build.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -244,6 +245,8 @@ export function buildPerson(A, d) {
 		const t = targets['universal-' + sx + '-young-' + n];
 		for (let i = 0; i < p.length; i++) p[i] += t[i] * amt * w * unit;
 	}
+	// a build of its own (the hero's V: people/build.js)
+	shapeBuild(p, A, d.build);
 	// the face's own features
 	shapeFace(A.faces, p, d.face);
 	let min = Infinity, top = -Infinity;
