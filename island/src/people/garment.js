@@ -554,7 +554,8 @@ export function regions(o, cut) {
 		const neckline = cut.neck + (m > 0 ? -.005 : .045) + .035 * Math.min(1, Math.abs(c[0]) / .09) - scoop;
 		return c[1] > hem + (m > 0 ? m : -.06) && c[1] < neckline - m && !(g.sleeves === 'none' && Math.abs(c[0]) > cut.shoulderX - 0.02 && c[1] > cut.chest);
 	};
-	const legEnd = B ? ({ long: cut.ankle + (B.fit === 'wide' || B.fit === 'baggy' ? 0.005 : 0.02), capri: cut.knee - 0.17, bermuda: cut.knee - 0.03, jorts: cut.knee - 0.04, board: cut.knee + 0.01, shorts: cut.knee + 0.1, short: cut.knee + 0.2, bike: cut.knee + 0.07, knicker: cut.knee - 0.1, skirt: B.len === 'mini' ? cut.knee + 0.18 : 1e9, brief: cut.hip - 0.06 })[B.legs || 'long'] ?? cut.ankle : 0;
+	// (trousers bloused into tall boots end at the boots' tops: tuck)
+	const legEnd = B ? ({ long: B.tuck ? cut.ankle + 0.14 : cut.ankle + (B.fit === 'wide' || B.fit === 'baggy' ? 0.005 : 0.02), capri: cut.knee - 0.17, bermuda: cut.knee - 0.03, jorts: cut.knee - 0.04, board: cut.knee + 0.01, shorts: cut.knee + 0.1, short: cut.knee + 0.2, bike: cut.knee + 0.07, knicker: cut.knee - 0.1, skirt: B.len === 'mini' ? cut.knee + 0.18 : 1e9, brief: cut.hip - 0.06 })[B.legs || 'long'] ?? cut.ankle : 0;
 	const rise = B && (B.fit === 'wide' || B.kind === 'skirt' || B.fit === 'baggy') ? 0.05 : 0.02;
 	const R = {
 		topHem, outHem, legEnd,
@@ -573,7 +574,7 @@ export function regions(o, cut) {
 			if (F.kind === 'sandal') return k.foot > 1 && c[1] < 0.022 - m;
 			const socks = F.socks || B?.socks;
 			if (socks && k.shin && c[1] < cut.knee - 0.06 - m && (B?.legs !== 'long')) return true;
-			const top = F.kind === 'boot' ? cut.ankle + 0.09 : F.kind === 'trail' ? cut.ankle + 0.01 : cut.ankle - 0.02;
+			const top = F.kind === 'boot' ? cut.ankle + (F.tall ? 0.17 : 0.09) : F.kind === 'trail' ? cut.ankle + 0.01 : cut.ankle - 0.02;
 			return k.foot > 1 || c[1] < top - m;
 		},
 	};
@@ -589,7 +590,7 @@ export function offsets(o) {
 	const fitOff = (g) => !g ? 0.006 : g.fit === 'tight' ? 0.004 : g.fit === 'fitted' || g.fit === 'slim' ? 0.012 : g.fit === 'straight' ? 0.022 : g.fit === 'oversized' ? 0.047 : g.fit === 'baggy' ? 0.042 : g.fit === 'wide' ? 0.032 : 0.028;
 	const top = fitOff(T) + (T?.kind === 'knit' || T?.kind === 'hoodie' || T?.kind === 'sweat' ? 0.003 : 0);
 	const puffy = J && J.pat === 'quilt' && /puffer|quilted/i.test(J.kind) ? (J.kind === 'puffer' ? 0.02 : 0.01) : J?.fab === 'fleece' ? 0.004 : 0;
-	return { top, outer: J ? Math.max(top, fitOff(J)) + 0.008 + puffy : 0, bottom: fitOff(B), shoes: F?.kind === 'chunky' ? 0.02 : F?.kind === 'boot' ? 0.014 : F?.kind === 'sandal' ? 0.004 : 0.012 };
+	return { top, outer: J ? Math.max(top, fitOff(J)) + 0.008 + puffy : 0, bottom: fitOff(B), shoes: F?.kind === 'chunky' || F?.tall ? 0.02 : F?.kind === 'boot' ? 0.014 : F?.kind === 'sandal' ? 0.004 : 0.012 };
 }
 
 // ---------- the cloth mesh ----------
@@ -661,6 +662,9 @@ export function clothGeometry(A, p, o, cut, R) {
 	// evenly from the hip to the hem
 	const off = offsets(o), P = g.attributes.position, B = o.bottom;
 	const legFlare = B?.fit === 'wide' ? 0.045 : B?.fit === 'baggy' ? 0.04 : B?.legs === 'board' ? 0.02 : 0;
+	// rugged trousers hang straight down from the thigh instead of following the knee and the
+	// calf (hang: how far out at the shin), and bloused into boots, gather over their tops
+	const legHang = B?.hang || 0;
 	const flareTop = cut.hip - 0.06, flareLen = Math.max(0.2, flareTop - cut.ankle);
 	const tuck = o.top?.tuck, K = new Float32Array(P.count);
 	for (let i = 0; i < P.count; i++) {
@@ -670,10 +674,13 @@ export function clothGeometry(A, p, o, cut, R) {
 		if (s === 2) {
 			if (tuck && y > cut.waist - 0.06) k = Math.max(k, off.top + 0.004);
 			if (legFlare && y < flareTop && SL[i] >= 20) { const t = Math.min(1, (flareTop - y) / flareLen); k += legFlare * t * (0.6 + 0.4 * t); }
+			if (legHang && y < flareTop && SL[i] >= 20) { const t = Math.min(1, (flareTop - y) / (flareLen * 0.55)); k += legHang * t * t * (3 - 2 * t); }
+			if (B?.tuck && SL[i] >= 20) k += 0.012 * Math.exp(-(((y - R.legEnd - 0.035) / 0.03) ** 2));
 			if (B?.legs === 'skirt') k = 0.015 + Math.max(0, 0.6 - y) * 0.1;
 		}
-		if (s === 3 && o.shoes?.kind === 'chunky' && y < 0.04) k += 0.012;
-		if (s === 3 && y > cut.ankle + 0.02) k = 0.003;
+		if (s === 3 && (o.shoes?.kind === 'chunky' || o.shoes?.tall) && y < 0.04) k += 0.012;
+		// (a tall boot's shaft stands round the calf; any other hugs the ankle)
+		if (s === 3 && y > cut.ankle + 0.02) k = o.shoes?.tall ? 0.016 : 0.003;
   const garment=[o.top,o.outer,o.bottom,o.shoes][s], limb=Math.floor(SL[i]/10);
   if(s<2 && limb===1 && garment) {
    // a sleeve: cut with room at the bicep, narrowing to its cuff (garment-shape.js)

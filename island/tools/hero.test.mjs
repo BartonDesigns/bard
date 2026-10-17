@@ -32,11 +32,17 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.ok(m.face.jaw > 0.2 && m.face['brow-ridge'] > 0.1, 'his jaw and brow');
 	assert.ok(f.face.cheekbones > 0.3 && f.face['lower-lip'] > 0.15 && f.face.jaw < 0, 'her cheekbones and lips');
 	// (dressed to move in, groomed, and never grey)
-	for (const d of [m, f]) { assert.equal(d.style.outer, null, 'no jacket to balloon'); assert.equal(d.style.top.fit, 'fitted'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
+	assert.equal(m.style.outer, null, 'no jacket to balloon on him');
+	assert.equal(f.style.outer.kind, 'flannel'); assert.equal(f.style.outer.pat, 'plaid'); assert.equal(f.style.outer.fit, 'oversized', 'a big flowing plaid shirt');
+	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.02 && d.style.bottom.tuck && d.style.shoes.tall, 'rugged trousers into tall boots'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
-	for (const d of [m, f]) { assert.ok(d.style.acc.some((q) => q.kind === 'carrier'), 'a plate carrier'); assert.ok(d.style.acc.some((q) => q.kind === 'gloves')); }
+	assert.ok(m.style.acc.some((q) => q.kind === 'carrier') && m.style.acc.some((q) => q.kind === 'gloves'), 'his carrier and gloves');
 	assert.ok(m.build.shoulders > f.build.shoulders && m.build.waist > 0 && f.build.waist > 0, 'the V');
 	assert.equal(f.style.shoes.kind, 'boot');
+	const src0 = fs.readFileSync(new URL('../src/people/garment.js', import.meta.url), 'utf8');
+	assert.match(src0, /B\.tuck \? cut\.ankle \+ 0\.14/, 'trousers end at the boots');
+	assert.match(src0, /F\.tall \? 0\.17 : 0\.09/, 'tall boots');
+	assert.match(src0, /const legHang = B\?\.hang/, 'a straight hang');
 	assert.equal(m.style.hair.style, 'short01');
 	assert.equal(m.style.hair.beard, 'stubble');
 	assert.equal(f.style.hair.style, 'ponytail01');

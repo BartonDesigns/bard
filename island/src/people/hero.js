@@ -4,10 +4,11 @@
 // read strong (a square jaw on him, high cheekbones and full lips on her), never the dozen
 // strong random ones a townsperson gets; lean rather than built (the base mesh's muscle target
 // inflates past a little, so the V is shaped instead: people/build.js); a groomed cut, and kit
-// made to move in: a fitted top with its sleeves rolled under a plate carrier (straps, plates,
-// pouches: built as pieces, not puffed cloth), gloves, cargo trousers with room in them, boots.
-// No jacket: a garment over another stands well off the body here and balloons. In their own
-// colours, so a hero is never taken for one of the soldiers. And they stand ready.
+// made to move in. Him: a fitted top with its sleeves rolled under a plate carrier (straps,
+// plates, pouches: built as pieces, not puffed cloth), gloves. Her: a big plaid flannel worn
+// open and flowing over a fitted tank. Both: rugged cargo trousers that hang straight from the
+// thigh and are bloused into tall combat boots (people/garment.js hang, tuck, tall). In their
+// own colours, so a hero is never taken for one of the soldiers. And they stand ready.
 //
 // Friends draw you from your seed alone (net/protocol.js cleanLook), so the hero is a seed of
 // its own: HERO_TAG in the top byte (above any seed a townsperson or an old visit was given,
@@ -52,11 +53,11 @@ const HERO = {
 		hair: { style: 'short01', vol: 1.08, fadeK: 0.3, beard: 'stubble', cut: 'textured' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			top: { kind: 'longsleeve', col: C.slate, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
+			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.khaki, pat: 'cargo', legs: 'long', fit: 'regular' },
-			shoes: { kind: 'boot', col: '#2a241c', sole: '#121110' },
-			acc: [{ kind: 'carrier', col: '#3c4a2c', acc: '#2b3320' }, { kind: 'gloves', col: '#2a2b2e' }, { kind: 'watch', col: C.black, acc: SILVER, metal: true }],
+			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'regular', hang: 0.032, tuck: true },
+			shoes: { kind: 'boot', tall: true, col: '#2a241c', sole: '#121110' },
+			acc: [{ kind: 'carrier', col: '#6a5f48', acc: '#4e4636' }, { kind: 'gloves', col: '#2a2b2e' }, { kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),
 	},
 	female: {
@@ -70,11 +71,11 @@ const HERO = {
 		hair: { style: 'ponytail01', vol: 1, beard: '', cut: 'pony' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
-			top: { kind: 'longsleeve', col: C.black, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
-			outer: null,
-			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'regular' },
-			shoes: { kind: 'boot', col: '#2a241c', sole: '#121110' },
-			acc: [{ kind: 'carrier', col: '#2f3236', acc: '#4a4f57' }, { kind: 'gloves', col: '#1e1f22' }, { kind: 'earrings', hoop: false, col: SILVER }],
+			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none' },
+			outer: { kind: 'flannel', col: C.cherry, acc: C.black, acc2: C.cream, pat: 'plaid', fit: 'oversized', sleeves: 'rolled', open: true, collar: true, fab: 'canvas' },
+			bottom: { kind: 'cargo', col: '#6a5f48', pat: 'cargo', legs: 'long', fit: 'regular', hang: 0.028, tuck: true },
+			shoes: { kind: 'boot', tall: true, col: '#2a241c', sole: '#121110' },
+			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }],
 		}),
 	},
 };
