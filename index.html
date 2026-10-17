@@ -8294,7 +8294,9 @@ root.L99Studio181={captureOn:captureOn215,captureOff:captureOff215,captureState:
 
 </style>
 <script id="hyphy182-code">
-/* HYPHY 186: sustained upper-register YEEE chants with protected live routing. */
+/* HYPHY 186: sustained upper-register YEEE chants with protected live routing.
+   music234: the sound rebuilt. The groove plays the faceplate's own HYPHY kit (the pro kit),
+   retuned per rack kit, with an 808 under the kick; the YEEE is a voiced crew shout. */
 (function(root){'use strict';
 const sound=root.L99Sound181;let current=null;
 const YEE_VOICES={
@@ -8304,58 +8306,108 @@ const YEE_VOICES={
  trunk:{vowel:[470,2560,3430],cents:-45,vibrato:5.9,edge:1.18,presence:1.42}
 };
 const YEE_ACCENTS={ride:17,kick:0,hihat:29,openhat:41,cymbal:53,rim:-11,clap:9,snare:-19,lotom:-37,shaker:35,cowbell:61,hitom:-27,jump:-49,perc:23};
-const shoutWaves=new WeakMap();
-// A root-aligned falsetto register, independent of the selected drum's low
-// pitch. Keep the /i:/ vowel steady after the brief /j/ onset: sweeping a low
-// carrier through narrow formants for the whole note sounded like a duck.
+// music234: the shout as a voice. A glottal pulse (falling harmonics, not a raw saw) through
+// the formants of a shouted /i/, the /j/ onset closing in from above and the tail opening
+// toward "uh"; pitch scoops up, holds and falls like a hype man's call. Three takes, a little
+// apart in time, pitch and pan, make it a crew; a short slap puts them in a room.
+const SHOUT={
+ town:{f0:350,tract:1,breath:.05,rasp:.08,drive:1.7},
+ ghost:{f0:300,tract:1.07,breath:.08,rasp:.06,drive:1.5},
+ sideshow:{f0:405,tract:.95,breath:.05,rasp:.12,drive:2},
+ trunk:{f0:265,tract:1.12,breath:.06,rasp:.1,drive:2.2}
+};
+// [onset, /i/, tail] in Hz, then Q and level: F1 to F4 of a shouted "ee"
+const EE=[[[290,390,560],4.5,1],[[2650,2300,1550],13,.7],[[3150,3000,2550],15,.5],[[3800,3700,3500],14,.2]];
+const TAKES=[{pan:0,delay:0,cents:0,gain:1,tract:1},{pan:-.38,delay:.017,cents:13,gain:.6,tract:.97},{pan:.42,delay:.03,cents:-10,gain:.52,tract:1.04}];
+const voiceRes=new WeakMap();
+function shoutRes(c){let r=voiceRes.get(c);if(r)return r;const real=new Float32Array(64),imag=new Float32Array(64);
+ for(let h=1;h<64;h++)imag[h]=1/h**.85;
+ const curves=new Map(),noise=sound.resources(c).noise;r={glottal:c.createPeriodicWave(real,imag),noise,curve(k){const q=Math.round(k*10);if(!curves.has(q)){const a=new Float32Array(2049);for(let i=0;i<a.length;i++){const x=i/1024-1;a[i]=Math.tanh(x*q/10)/Math.tanh(q/10);}curves.set(q,a);}return curves.get(q);}};
+ voiceRes.set(c,r);return r;}
 function renderShout(c,bus,t,opts={},frequency=440,onEnd){
- const profile=YEE_VOICES[opts.kit]||YEE_VOICES.town,kit=sound.drumKits?.[opts.kit]||sound.drumKits?.town;
+ const prof=SHOUT[opts.kit]||SHOUT.town,kit=sound.drumKits?.[opts.kit]||sound.drumKits?.town,r=shoutRes(c);
  const rootHz=Number.isFinite(frequency)&&frequency>0?frequency:440;
- const aligned=rootHz*2**Math.round(Math.log2(680/rootHz));
- const fundamental=Math.max(430,Math.min(1080,aligned*2**((profile.cents+(YEE_ACCENTS[opts.drum]||0))/1200)));
- const owned=[],sources=[],node=n=>(owned.push(n),n),amp=node(c.createGain()),presence=node(c.createGain()),carrier=node(c.createOscillator());
- const duration=.78,rawLevel=kit?.yeeLevel,level=Math.max(.55,Math.min(.82,Number.isFinite(rawLevel)?rawLevel:.7));
- // Compensate the upper-register formant loss per kit, never the drums.
- // This node remains upstream of the main lead bus and the peak guard.
- presence.gain.value=Math.max(1.1,Math.min(2.2,profile.presence*(fundamental/680)**.55));
- amp.connect(presence);presence.connect(bus);amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(level*.88,t+.012);
- amp.gain.linearRampToValueAtTime(level,t+.065);amp.gain.linearRampToValueAtTime(level*.94,t+.42);
- amp.gain.linearRampToValueAtTime(level*.62,t+.6);amp.gain.exponentialRampToValueAtTime(.0001,t+duration);
- carrier.type='sawtooth';
- if(c.createPeriodicWave&&carrier.setPeriodicWave){
-  let waves=shoutWaves.get(c);if(!waves){waves=new Map();shoutWaves.set(c,waves);}
-  let wave=waves.get(profile);if(!wave){const real=new Float32Array(40),imag=new Float32Array(40);
-   for(let h=1;h<40;h++)imag[h]=(h%2?1:.82)/h**profile.edge;
-   wave=c.createPeriodicWave(real,imag);waves.set(profile,wave);
-  }carrier.setPeriodicWave(wave);
+ const fundamental=rootHz*2**Math.round(Math.log2(prof.f0/rootHz))*2**((YEE_ACCENTS[opts.drum]||0)/2400);
+ const owned=[],sources=[],node=n=>(owned.push(n),n),rawLevel=kit?.yeeLevel,level=Math.max(.55,Math.min(.82,Number.isFinite(rawLevel)?rawLevel:.7));
+ const out=node(c.createGain());out.gain.value=level*.9;out.connect(bus);
+ // the room: a short stereo slap, darker than the voice
+ const wet=node(c.createGain()),fb=node(c.createGain()),lp=node(c.createBiquadFilter());wet.gain.value=.15;fb.gain.value=.18;lp.type='lowpass';lp.frequency.value=3200;
+ const merger=c.createChannelMerger?node(c.createChannelMerger(2)):null;out.connect(lp);
+ [.083,.121].forEach((d,i)=>{const dl=node(c.createDelay(.3));dl.delayTime.value=d;lp.connect(dl);dl.connect(fb);if(merger)dl.connect(merger,0,i);else dl.connect(wet);});
+ fb.connect(lp);if(merger)merger.connect(wet);wet.connect(bus);
+ const end=t+.62;
+ for(const take of TAKES){
+  const t0=t+take.delay,f=fundamental*2**(take.cents/1200),tract=prof.tract*take.tract,stopAt=end+take.delay+.03;
+  const src=node(c.createOscillator());src.setPeriodicWave(r.glottal);
+  src.frequency.setValueAtTime(f*.82,t0);src.frequency.exponentialRampToValueAtTime(f*1.04,t0+.07);src.frequency.exponentialRampToValueAtTime(f,t0+.16);
+  src.frequency.linearRampToValueAtTime(f*1.015,t0+.38);src.frequency.exponentialRampToValueAtTime(f*.8,t0+.6);
+  // a living pitch: two slow wobbles and a vibrato that blooms as the note holds
+  for(const [hz,cents] of [[5.3,6],[7.9,4]]){const o=node(c.createOscillator()),g=node(c.createGain());o.frequency.value=hz*(1+take.delay*3);g.gain.value=cents;o.connect(g);g.connect(src.detune);sources.push(o);}
+  const vib=node(c.createOscillator()),vd=node(c.createGain());vib.frequency.value=5.6;vd.gain.setValueAtTime(0,t0);vd.gain.setValueAtTime(0,t0+.2);vd.gain.linearRampToValueAtTime(22,t0+.45);vib.connect(vd);vd.connect(src.detune);sources.push(vib);
+  // rasp: a touch of amplitude at half the pitch, the edge of a strained shout
+  const rasp=node(c.createGain()),rm=node(c.createOscillator()),rd=node(c.createGain());rasp.gain.value=1-prof.rasp;rm.frequency.setValueAtTime(f*.41,t0);rm.frequency.exponentialRampToValueAtTime(f*.52,t0+.07);rm.frequency.exponentialRampToValueAtTime(f*.4,t0+.6);rd.gain.value=prof.rasp;rm.connect(rd);rd.connect(rasp.gain);src.connect(rasp);sources.push(src,rm);
+  const breath=node(c.createBufferSource()),bh=node(c.createBiquadFilter()),bg=node(c.createGain());breath.buffer=r.noise;breath.loop=true;bh.type='highpass';bh.frequency.value=1100;
+  bg.gain.setValueAtTime(0,t0);bg.gain.linearRampToValueAtTime(prof.breath*3,t0+.012);bg.gain.exponentialRampToValueAtTime(prof.breath,t0+.07);bg.gain.setValueAtTime(prof.breath,t0+.45);bg.gain.linearRampToValueAtTime(prof.breath*1.6,t0+.58);
+  breath.connect(bh);bh.connect(bg);sources.push(breath);
+  const sum=node(c.createGain()),drive=node(c.createWaveShaper()),amp=node(c.createGain());drive.curve=r.curve(prof.drive);drive.oversample='2x';sum.connect(drive);drive.connect(amp);
+  EE.forEach(([hz,q,gain])=>{const bp=node(c.createBiquadFilter()),g=node(c.createGain());bp.type='bandpass';bp.Q.value=q;const fq=x=>Math.min(x/tract,c.sampleRate*.45);
+   bp.frequency.setValueAtTime(fq(hz[0]),t0);bp.frequency.exponentialRampToValueAtTime(fq(hz[1]),t0+.06);bp.frequency.setValueAtTime(fq(hz[1]),t0+.44);bp.frequency.exponentialRampToValueAtTime(fq(hz[2]),t0+.6);
+   g.gain.value=gain*Math.sqrt(q);rasp.connect(bp);bg.connect(bp);bp.connect(g);g.connect(sum);});
+  amp.gain.setValueAtTime(0,t0);amp.gain.linearRampToValueAtTime(.85*take.gain,t0+.03);amp.gain.linearRampToValueAtTime(take.gain,t0+.1);amp.gain.linearRampToValueAtTime(.94*take.gain,t0+.38);
+  amp.gain.linearRampToValueAtTime(.66*take.gain,t0+.5);amp.gain.exponentialRampToValueAtTime(.0001,t0+.62);
+  if(c.createStereoPanner){const pan=node(c.createStereoPanner());pan.pan.value=take.pan;amp.connect(pan);pan.connect(out);}else amp.connect(out);
+  amp.gain.value=0;bg.gain.value=0;for(const n of sources.slice(-6)){n.__startAt=t0;n.__stopAt=stopAt;}
  }
- carrier.frequency.setValueAtTime(fundamental*.91,t);
- carrier.frequency.exponentialRampToValueAtTime(fundamental*1.025,t+.042);
- carrier.frequency.exponentialRampToValueAtTime(fundamental,t+.095);
- carrier.frequency.setValueAtTime(fundamental,t+.46);
- carrier.frequency.exponentialRampToValueAtTime(fundamental*.945,t+duration);
- // Broad overlapping resonances keep a bright EE across every root and kit.
- profile.vowel.forEach((hz,j)=>{const f=node(c.createBiquadFilter()),g=node(c.createGain());
-  const target=Math.min(hz,c.sampleRate*.42);f.type='bandpass';f.Q.value=[1.05,2.8,3.5][j];
-  f.frequency.setValueAtTime(target*[.8,.82,.92][j],t);
-  f.frequency.exponentialRampToValueAtTime(target,t+.048);g.gain.value=[.58,.55,.32][j];
-  carrier.connect(f);f.connect(g);g.connect(amp);
- });
- const body=node(c.createGain());body.gain.value=.11;carrier.connect(body);body.connect(amp);
- const vibrato=node(c.createOscillator()),depth=node(c.createGain());vibrato.type='sine';
- vibrato.frequency.value=profile.vibrato;depth.gain.setValueAtTime(0,t);
- depth.gain.setValueAtTime(0,t+.09);depth.gain.linearRampToValueAtTime(10,t+.2);
- depth.gain.linearRampToValueAtTime(17,t+.58);vibrato.connect(depth);depth.connect(carrier.detune);
- sources.push(carrier,vibrato);let left=sources.length,ended=false;
- const v={end:t+duration+.025,sources,nodes:owned,fundamental,stop(){if(ended)return;
-  if(amp.gain.cancelAndHoldAtTime)amp.gain.cancelAndHoldAtTime(c.currentTime);
-  else{const value=amp.gain.value;amp.gain.cancelScheduledValues(c.currentTime);amp.gain.setValueAtTime(Math.max(0,value),c.currentTime);}
-  amp.gain.setTargetAtTime(0,c.currentTime,.005);
-  sources.forEach(n=>{try{n.stop(c.currentTime+.03);}catch(e){}});
- }};
- sources.forEach(n=>{n.onended=()=>{if(!--left&&!ended){ended=true;owned.forEach(x=>x.disconnect());onEnd?.(v);}};n.start(t);n.stop(v.end);});
+ let left=sources.length,ended=false;
+ const v={end:end+.75,sources,nodes:owned,fundamental,stop(){if(ended)return;const now=c.currentTime;
+  if(out.gain.cancelAndHoldAtTime)out.gain.cancelAndHoldAtTime(now);else{out.gain.cancelScheduledValues(now);out.gain.setValueAtTime(out.gain.value,now);}
+  out.gain.setTargetAtTime(0,now,.006);wet.gain.setTargetAtTime(0,now,.006);sources.forEach(n=>{try{n.stop(now+.04);}catch(e){}});}};
+ sources.forEach(n=>{n.onended=()=>{if(!--left&&!ended){ended=true;setTimeout(()=>owned.forEach(x=>{try{x.disconnect();}catch(e){}}),800);onEnd?.(v);}};n.start(n.__startAt??t);n.stop(n.__stopAt||end+.06);});
  return v;
 }
+// music234: the drums are the faceplate's own HYPHY kit (_DP_KITS.HYPHY, the kit the face's
+// beat plays), at its balance, stamped for their step; each rack kit retunes it.
+const KIT_TUNE={
+ town:{},
+ ghost:{kick:{f0:104,f1:44,dur:.42,drive:2.1},snare:{bf:172,nHz:2100,nHz2:4300,nDur:.13,crush:7},clap:{hz:1450,tail:.26,crush:7},hihat:{bp:8200,hp:5400,amp:.2,crush:9},openhat:{bp:8000,hp:5200,crush:9},ride:{bp:8000,hp:5200,crush:9}},
+ sideshow:{kick:{f0:136,f1:56,dur:.24,drive:3,clickHz:1800,clickAmp:.62},snare:{bf:214,nHz:3300,nHz2:6800,nDur:.085,nAmp:.6},clap:{hz:2200,q:1.4,tail:.15},hihat:{bp:11600,hp:7800,amp:.27},openhat:{bp:11200,hp:7400}},
+ trunk:{kick:{f0:88,f1:41,pt:.07,dur:.62,drive:2.9,clickAmp:.32},snare:{bf:182,nDur:.11},clap:{hz:1600,tail:.22},hihat:{dur:.024,amp:.21}}
+};
+const ROLL_TUNE={nDur:.07,bDur:.07};
+function kitHit(kitId,name,t,vel,extra){
+ const c=typeof ctx!=='undefined'?ctx:null;if(!c||typeof drumBus==='undefined'||!drumBus)return;
+ const base=typeof _DP_KITS!=='undefined'?_DP_KITS.HYPHY?.[name]:null,real=drumBus,hit=c.createGain();
+ hit.gain.value=Math.max(0,Math.min(1.2,vel))*(root.L99Balance223?.drum('HYPHY',name)??1);hit.connect(real);
+ const fire=()=>{drumBus=hit;try{if(base)base[0]({...base[1],...(KIT_TUNE[kitId]?.[name]||{}),...(extra||{})});else if(typeof playDrumGeneric==='function')playDrumGeneric(name);}finally{drumBus=real;}};
+ if(root.L99Clock&&t>c.currentTime+.001)root.L99Clock.at(t,fire);else fire();
+ setTimeout(()=>{try{hit.disconnect();}catch(e){}},Math.max(0,t-c.currentTime)*1000+2600);
+}
+// music234: an 808 under the kick: a sine with a soft drive (so a phone speaker hears its
+// overtones), a small drop into the note, a glide when it moves, cut by the next note.
+let curve808=null;
+function sub808(c,bus,t,hz,dur,level,from){
+ if(!curve808){curve808=new Float32Array(2049);for(let i=0;i<2049;i++){const x=i/1024-1;curve808[i]=Math.tanh(x*1.9)/Math.tanh(1.9);}}
+ const o=c.createOscillator(),shape=c.createWaveShaper(),lp=c.createBiquadFilter(),amp=c.createGain(),nodes=[o,shape,lp,amp];o.type='sine';shape.curve=curve808;lp.type='lowpass';lp.frequency.value=640;
+ if(from>0){o.frequency.setValueAtTime(from,t);o.frequency.exponentialRampToValueAtTime(hz,t+.07);}else{o.frequency.setValueAtTime(hz*1.14,t);o.frequency.exponentialRampToValueAtTime(hz,t+.04);}
+ const hold=Math.max(.06,dur),tail=Math.min(1.1,hold+.25);
+ amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(level,t+.004);amp.gain.setTargetAtTime(level*.3,t+.04,hold*.45);amp.gain.setTargetAtTime(0,t+hold,.05);
+ o.connect(shape);shape.connect(lp);lp.connect(amp);amp.connect(bus);o.start(t);o.stop(t+tail);
+ let gone=false;o.onended=()=>{gone=true;nodes.forEach(n=>{try{n.disconnect();}catch(e){}});};
+ const cut=at=>{if(gone)return;at=Math.max(at,c.currentTime);if(amp.gain.cancelAndHoldAtTime)amp.gain.cancelAndHoldAtTime(at);else amp.gain.cancelScheduledValues(at);amp.gain.setTargetAtTime(0,at,.008);try{o.stop(at+.06);}catch(e){}};
+ return {end:t+tail,release:cut,stop:()=>cut(c.currentTime)};
+}
+// music234: the hyphy whistle, played once every two bars: a scoop up, a held note that
+// blooms into vibrato, a fall, with a little breath.
+function whistle(c,bus,t,hz){
+ const o=c.createOscillator(),vib=c.createOscillator(),vd=c.createGain(),amp=c.createGain(),n=c.createBufferSource(),bp=c.createBiquadFilter(),ng=c.createGain(),nodes=[o,vib,vd,amp,n,bp,ng];
+ o.type='sine';o.frequency.setValueAtTime(hz*.8,t);o.frequency.exponentialRampToValueAtTime(hz,t+.08);o.frequency.setValueAtTime(hz,t+.34);o.frequency.exponentialRampToValueAtTime(hz*.9,t+.5);
+ vib.frequency.value=5.8;vd.gain.setValueAtTime(0,t+.12);vd.gain.linearRampToValueAtTime(18,t+.3);vib.connect(vd);vd.connect(o.detune);
+ amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(.05,t+.03);amp.gain.setValueAtTime(.05,t+.34);amp.gain.exponentialRampToValueAtTime(.0001,t+.52);o.connect(amp);amp.connect(bus);
+ n.buffer=sound.resources(c).noise;bp.type='bandpass';bp.frequency.value=Math.min(hz*2.2,c.sampleRate*.4);bp.Q.value=1.6;ng.gain.setValueAtTime(0,t);ng.gain.linearRampToValueAtTime(.006,t+.02);ng.gain.exponentialRampToValueAtTime(.0001,t+.5);n.connect(bp);bp.connect(ng);ng.connect(bus);
+ [o,vib,n].forEach(x=>{x.start(t);x.stop(t+.55);});let gone=false;o.onended=()=>{gone=true;nodes.forEach(x=>{try{x.disconnect();}catch(e){}});};
+ return {end:t+.55,stop(){if(gone)return;const now=c.currentTime;amp.gain.cancelScheduledValues(now);amp.gain.setTargetAtTime(0,now,.005);ng.gain.cancelScheduledValues(now);ng.gain.setTargetAtTime(0,now,.005);[o,vib,n].forEach(x=>{try{x.stop(now+.03);}catch(e){}});}};
+}
+function fold(hz,lo){if(!(hz>0))hz=lo;while(hz>=lo*2)hz/=2;while(hz<lo)hz*=2;return hz;}
 const DRUM_RACK=[
  {id:'kick',label:'KICK',short:'KICK',icon:'●'}, {id:'snare',label:'SNARE',short:'SNARE',icon:'▬'}, {id:'clap',label:'CLAP',short:'CLAP',icon:'❋'},
  {id:'rim',label:'RIM',short:'RIM',icon:'○'}, {id:'hihat',label:'HI-HAT',short:'HAT',icon:'✕'}, {id:'openhat',label:'OPEN HAT',short:'OPEN',icon:'◔'},
@@ -8376,7 +8428,7 @@ function groove(mode){
  const motifs=[[0,0,7,0,4,0,6,0],[0,7,0,4,0,0,6,4],[0,0,4,0,7,6,0,4]],slots=[[0,3,6,10,14,16,19,22,27,30],[0,6,9,14,16,22,25,30],[0,2,7,10,14,16,18,23,26,31]],pocket=mode%3;
  return Array.from({length:32},(_,i)=>({on:slots[pocket].includes(i),degree:motifs[pocket][Math.floor(i/2)%8],gate:i%8===0?.85:.4,velocity:i%4===0?.95:.74,ratchet:1,color:.35,kick:beat.kick[i%16]||0,snare:(beat.snare[i%16]||0)*.95,hat:(beat.hihat[i%16]||0)*(i%2===0?.48:.26)}));
 }
-function mount(panel,onClose){if(current)current.dispose();const beats=beatCatalog();let running=false,starting=false,disposed=false,timer=0,token=0,next=0,step=0,mode=typeof currentBeat==='number'&&beats[currentBeat]?currentBeat:0,queuedMode=null,kitIndex=0,activeDrum='kick',roll=false,ghost=false,drop=false,ctxRef,config,bank,events=new Set(),rollEvents=new Set(),timeline=[],pointers=new Map(),keys=new Set();
+function mount(panel,onClose){if(current)current.dispose();const beats=beatCatalog();let running=false,starting=false,disposed=false,timer=0,token=0,next=0,step=0,mode=typeof currentBeat==='number'&&beats[currentBeat]?currentBeat:0,queuedMode=null,kitIndex=0,activeDrum='kick',roll=false,ghost=false,drop=false,ctxRef,config,bank,events=new Set(),rollEvents=new Set(),timeline=[],pointers=new Map(),keys=new Set(),rollN=0,lastBass=null;
  // Build the entire tree once. Reading innerHTML normalizes empty attributes;
  // string-replacing serialized data-run was silently dropping the whole rack.
  panel.innerHTML=`<div class="sp-head yee-head"><span class="sp-title">YEEE MACHINE</span><span class="sp-sub">THE BAY</span><button type="button" class="sp-close">CLOSE</button></div>
@@ -8405,30 +8457,34 @@ function mount(panel,onClose){if(current)current.dispose();const beats=beatCatal
  function audition(name){
   activeDrum=name;markRack();
   const c=ctxRef;if(!c||c.state!=='running')return;
-  const t=c.currentTime+.006;const v=sound.hit(c,drumBus,name,t,.95,{...audioConfig(name),punch:.72});v.end=t+.7;collect(v);
+  kitHit(kit().id,name,c.currentTime+.006,.95);
   say(kit().label+' · '+DRUM_RACK.find(d=>d.id===name).label);
  }
  function allowed(){return !disposed&&!document.hidden&&currentFace==='HYPHY'&&(!root.L99Keyboard149||root.L99Keyboard149.world()==='bard');}
  function collect(v){events.add(v);return v;}
  function oneShot(kind,t,opts=audioConfig()){const c=ctxRef,bus=bank;
- if(kind==='yeee')return collect(renderShout(c,bus,t,opts,getFreq(0,1,false),v=>events.delete(v)));
- const owned=[],sources=[],node=n=>(owned.push(n),n),amp=node(c.createGain());amp.connect(bus);const duration=kind==='whistle'?.22:.12,level=kind==='whistle'?.11:.10;
- amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(level,t+.008);amp.gain.exponentialRampToValueAtTime(.0001,t+duration);
- const accents={ride:1.18,kick:.84,hihat:1.42,openhat:1.56,cymbal:1.82,rim:1.1,clap:1.28,snare:1.06,lotom:.74,shaker:1.35,cowbell:1.68,hitom:.93,jump:.68,perc:1.22};
- const base=getFreq(kind==='whistle'?7:0,1,false)*(accents[opts.drum]||1);
- for(const f of kind==='bell'?[540,800]:[Math.min(3000,base*2)]){const o=node(c.createOscillator());o.type=kind==='bell'?'square':'sine';o.frequency.setValueAtTime(f,t);if(kind==='whistle')o.frequency.exponentialRampToValueAtTime(f*.89,t+duration);o.connect(amp);sources.push(o);}
- let left=sources.length;const v={end:t+duration+.03,stop(){amp.gain.cancelScheduledValues(c.currentTime);amp.gain.setTargetAtTime(0,c.currentTime,.005);sources.forEach(n=>{try{n.stop(c.currentTime+.03)}catch(e){}});}};sources.forEach(n=>{n.onended=()=>{if(!--left){owned.forEach(x=>x.disconnect());events.delete(v);}};n.start(t);n.stop(v.end);});return collect(v);}
- function releaseRoll(){roll=false;rollEvents.forEach(v=>v.stop?.());rollEvents.clear();}
- function stop(){releaseRoll();token++;starting=false;running=false;clearInterval(timer);events.forEach(v=>v.stop?.());events.clear();timeline=[];roll=ghost=drop=false;queuedMode=null;markModes();pointers.clear();keys.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));panel.querySelectorAll('[data-led]').forEach(b=>b.classList.remove('lit'));setRun('play');run.setAttribute('aria-pressed','false');if(bank){bank.disconnect();bank=null;}root._specialDrumsActive=false;say('Stopped.');}
+ if(kind==='yeee')return collect(renderShout(c,bus,t,opts,getFreq(0,1,false),v=>events.delete(v)));}
+ function releaseRoll(){roll=false;rollN=0;rollEvents.forEach(v=>v.stop?.());rollEvents.clear();}
+ function stop(){releaseRoll();lastBass?.stop();lastBass=null;token++;starting=false;running=false;clearInterval(timer);events.forEach(v=>v.stop?.());events.clear();timeline=[];roll=ghost=drop=false;queuedMode=null;markModes();pointers.clear();keys.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));panel.querySelectorAll('[data-led]').forEach(b=>b.classList.remove('lit'));setRun('play');run.setAttribute('aria-pressed','false');if(bank){bank.disconnect();bank=null;}root._specialDrumsActive=false;say('Stopped.');}
  async function ready(){const ticket=token;initAudio();const c=ctx;if(c.state!=='running')await c.resume();if(c.state!=='running')throw Error('Tap again to enable audio.');if(ticket!==token||!allowed())throw Error('Playback cancelled.');ctxRef=c;if(!bank){bank=c.createGain();bank.gain.value=.8;bank.connect(masterGain);}return c;}
- async function start(){if(running||starting){stop();return false;}starting=true;const ticket=++token;setRun('wait');try{await ready();if(ticket!==token||!allowed())return false;root.L99Studio181?.stop();if(sequencerRunning)stopSequencer();config={...root.L99Studio181.valid(null,'HYPHY'),sound:'SUB-PRESSURE',pattern:groove(mode),kit:kit().id,bpm,glide:.16,sub:.68,color:.42,drive:.35,mix:.8,automation:false,duck:.48};running=true;step=0;next=ctxRef.currentTime+.04;root._specialDrumsActive=true;setRun('stop');run.setAttribute('aria-pressed','true');timer=setInterval(pump,25);say('Playing '+beats[mode].name+' · '+kit().label+' · '+bpm+' BPM');pump();return running;}catch(e){if(ticket===token){stop();say(e.message);}return false;}finally{if(ticket===token)starting=false;}}
+ async function start(){if(running||starting){stop();return false;}starting=true;const ticket=++token;setRun('wait');try{await ready();if(ticket!==token||!allowed())return false;root.L99Studio181?.stop();if(sequencerRunning)stopSequencer();config={kit:kit().id};running=true;step=0;next=ctxRef.currentTime+.04;root._specialDrumsActive=true;setRun('stop');run.setAttribute('aria-pressed','true');timer=setInterval(pump,25);say('Playing '+beats[mode].name+' · '+kit().label+' · '+bpm+' BPM');pump();return running;}catch(e){if(ticket===token){stop();say(e.message);}return false;}finally{if(ticket===token)starting=false;}}
  function pump(){try{tick();}catch(e){stop();say('Playback stopped: '+e.message);}}
- function tick(){if(!running)return;if(!allowed()||ctxRef.state!=='running'){stop();return;}const c=ctxRef;if(next<c.currentTime-.04)next=c.currentTime+.025;while(next<c.currentTime+.075){const i=step%32,dt=60/bpm/4,beat=i%4===0;if(queuedMode!==null&&i%16===0){mode=queuedMode;queuedMode=null;config.pattern=groove(mode);markModes();say('Playing '+beats[mode].name);}config.bpm=bpm;config.punch=+knock.value/100;config.drive=.15+config.punch*.4;config.mix=.58+config.punch*.25;const t=next+(i%2?dt*(+swing.value/100)*.42:0),s={...config.pattern[i]};
- if(ghost){s.on=false;s.kick=s.snare=0;s.hat=i%4===0?.25:0;}
- if(roll&&!ghost){s.snare=s.hat=0;const velocity=[.52,.18,.30,.18][i%4]*config.mix;const h=sound.hit(c,drumBus,'rollsnare',next,velocity,{...config,punch:.35});h.end=next+.12;rollEvents.add(h);collect(h);}
- if(drop&&beat){releaseRoll();drop=false;ghost=false;s.on=true;s.degree=0;s.kick=1;s.velocity=1;oneShot('yeee',t,audioConfig());say('YEEE!');}
- const pattern=config.pattern.slice();pattern[i]=s;root.L99Studio181.renderStep(c,bank,drumBus,i,t,{...config,pattern},d=>getFreq(d,1,false)).forEach(collect);
- if(!ghost&&!roll){if([3,11,19,27].includes(i))oneShot('bell',t,audioConfig());if(beats[mode].name!=='GHOST RIDE'&&[14,30].includes(i))oneShot('whistle',t,audioConfig());}
+ function tick(){if(!running)return;if(!allowed()||ctxRef.state!=='running'){stop();return;}const c=ctxRef,ahead=Math.max(.075,Math.min(.3,root.L99Clock?.lead?.()||0));if(next<c.currentTime-.04)next=c.currentTime+.025;while(next<c.currentTime+ahead){const i=step%32,dt=60/bpm/4,onBeat=i%4===0;if(queuedMode!==null&&i%16===0){mode=queuedMode;queuedMode=null;markModes();say('Playing '+beats[mode].name);}
+ const b=beats[mode],j=i%16,k=kit().id,knockV=+knock.value/100,t=next+(i%2?dt*(+swing.value/100)*.42:0);
+ let kick=b.kick[j]?(onBeat?1:.84):0,snare=b.snare[j]?1:0,hat=b.hihat[j]?(i%2?.3:onBeat?.6:.48):0,dropNow=false;
+ if(ghost){kick=snare=0;hat=onBeat?.42:0;}
+ if(roll&&!ghost){snare=hat=0;rollN++;kitHit(k,'snare',next,Math.min(1,.3+rollN*.045)*(onBeat?1:.8),ROLL_TUNE);}
+ if(drop&&onBeat){releaseRoll();drop=false;ghost=false;dropNow=true;kick=1.1;}
+ if(kick)kitHit(k,'kick',t,kick*(.8+.24*knockV));
+ if(snare){kitHit(k,'snare',t,.84+.16*knockV);kitHit(k,'clap',t+.004,.5);}
+ if(hat)kitHit(k,'hihat',t,hat);
+ if(kick){const kicks=[];for(let n=0;n<16;n++)if(b.kick[n])kicks.push(n);const ord=kicks.indexOf(j),last=ord===kicks.length-1&&ord>=0,pocket=mode%3,bar2=i>=16;
+  const ratio=pocket===0&&bar2&&last?1.5:pocket===1&&ord===1?2:pocket===2&&bar2&&last?2:pocket===2&&bar2&&ord===kicks.length-2?1.5:1;
+  let gap=16;for(let n=1;n<=16;n++)if(b.kick[(j+n)%16]){gap=n;break;}
+  const hz=fold(getFreq(0,1,false),41)*ratio,from=lastBass&&lastBass.end>t&&lastBass.ratio!==ratio?lastBass.hz:0;lastBass?.release(t);
+  const v=sub808(c,bank,t,hz,Math.min(gap,k==='trunk'?6:4)*dt*.94,.36+.14*knockV,from);lastBass={...v,hz,ratio};collect(v);}
+ if(dropNow){kitHit(k,'cymbal',t,.5);oneShot('yeee',t,audioConfig());say('YEEE!');}
+ if(!ghost&&!roll&&i===28)collect(whistle(c,bank,t,fold(getFreq(0,1,false)*1.5,900)));
  timeline.push({time:t,step:i});step++;next+=dt;}
  while(timeline.length&&timeline[0].time<=c.currentTime){const p=timeline.shift();panel.querySelectorAll('[data-led]').forEach((b,i)=>b.classList.toggle('lit',i===p.step%16));}for(const v of events)if(v.end<c.currentTime){events.delete(v);rollEvents.delete(v);}
  }
