@@ -368,8 +368,11 @@ function dress(A, P, o) {
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));
 	// the scalp under it, painted: a close crop, or the shade between the strands
-	const paintCol = cols.hair.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
-	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : 0.75);
+	// (under fluffy hair, the roots' own shade, nearly solid: a gap between its tufts is hair in
+	// shadow, not skin)
+	const fluffy = showHair && !H.style && FLUFFY.has(cutName);
+	const paintCol = cols.hair.clone().multiplyScalar(fluffy ? 0.55 : H.dyed ? 0.5 : 0.9);
+	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : fluffy ? 0.92 : 0.75);
 	const beard = hat?.kind === 'hazhood' ? null : beardFor(d, H, rng(d.seed ^ 0xbea4d));
 	P.skinMat.userData.beard.value.set(cols.stubble.r, cols.stubble.g, cols.stubble.b, beard ? beard.stubble : 0);
 	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));

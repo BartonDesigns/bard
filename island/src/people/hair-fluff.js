@@ -44,8 +44,8 @@ const BRUSH = {
 	slick: { locks: 200, w: 0.016, members: 3, pull: 0.6, fluff: 0.001 },
 	thinning: { locks: 120, w: 0.011, members: 3, spike: 0.1 },
 	curls: { locks: 230, w: 0.013, members: 5, pull: 0.55, wave: 0.008, waveL: 0.03, fluff: 0.004 },
-	coils: { locks: 260, w: 0.011, members: 3, pull: 0.45, wave: 0.004, waveL: 0.018, fluff: 0.004 },
-	afro: { locks: 280, w: 0.012, members: 4, pull: 0.4, wave: 0.006, waveL: 0.022, fluff: 0.005 },
+	coils: { locks: 320, w: 0.011, members: 3, pull: 0.45, wave: 0.004, waveL: 0.018, fluff: 0.004 },
+	afro: { locks: 440, w: 0.012, members: 4, pull: 0.4, wave: 0.006, waveL: 0.022, fluff: 0.005 },
 	pixie: { locks: 220, w: 0.014, members: 4, spike: 0.2, bangs: ['swept'], ahoge: 0.15 },
 	bob: { locks: 170, w: 0.022, members: 5, flick: -0.5, bangs: ['full', 'split', 'swept'], frame: 1, ahoge: 0.08 },
 	lob: { locks: 180, w: 0.022, members: 5, flick: 0.5, bangs: ['split', 'swept', null], frame: 1 },
@@ -164,14 +164,16 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 	// one tuft: two ribbons crossed along pts, w wide at the root, tapering to a point. kind:
 	// 0 a lock's core, 1 a tuft round it, 2 the undercoat, 3 a stray; ao: how deep in the hair
 	// (darker inside); sway: how freely its tip swings; bucket: the level of detail it is in
-	const tuft = (pts, fr, w, kind, ao, seed, sway, bucket, ribbons, nc = c) => {
+	// hold: how far up a long lock keeps its width before it tapers (and its blades stay whole)
+	const tuft = (pts, fr, w, kind, ao, seed, sway, bucket, ribbons, nc = c, hold = 0) => {
 		const n = pts.length - 1, Ib = I[bucket];
 		for (let r = 0; r < ribbons; r++) {
 			const base = V.length / 3;
 			for (let i = 0; i <= n; i++) {
 				const q = pts[i], f = fr[i], t = i / n;
 				// (a brush stroke: narrow at the root, widest a quarter of the way up, to a point)
-				const ww = w * 0.5 * (0.45 + 0.55 * sm(0, 0.25, t)) * Math.pow(1 - t, kind === 0 ? 0.55 : 0.8) * (r ? 0.6 : 1) + 0.0002;
+				const tt = hold ? clamp((t - hold) / (1 - hold)) : t;
+				const ww = w * 0.5 * (0.45 + 0.55 * sm(0, 0.25, t)) * Math.pow(1 - tt, kind === 0 ? 0.55 : 0.8) * (r ? 0.6 : 1) + 0.0002;
 				const ax = r ? f.up : f.side;
 				// (the standing ribbon sits out from the tuft, not half inside the head)
 				lift.copy(f.up).multiplyScalar(r ? ww * 0.8 : 0);
@@ -180,7 +182,7 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 				for (let s = -1; s <= 1; s += 2) {
 					V.push(q.x + ax.x * ww * s + lift.x, q.y + ax.y * ww * s + lift.y, q.z + ax.z * ww * s + lift.z);
 					N.push(nrm.x, nrm.y, nrm.z); T.push(f.along.x, f.along.y, f.along.z);
-					UV.push(s < 0 ? 0 : 1, t); HK.push(a, kind, seed, s2);
+					UV.push(s < 0 ? 0 : 1, t); HK.push(a, kind + (hold ? 4 : 0), seed, s2);
 				}
 				if (i < n) { const v = base + i * 2; Ib.push(v, v + 1, v + 3, v, v + 3, v + 2); }
 			}
@@ -189,29 +191,30 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 	// a lock: its core along the path, and tufts round it that draw to a point at the tip
 	const lock = (path, o) => {
 		const members = o.members ?? B.members, pull = o.pull ?? B.pull, ao = o.ao ?? 1, sway = o.sway ?? 1;
-		const bucket = o.bucket ?? 0, nc = o.nc || c, face = o.face ?? true, fluff = o.fluff ?? B.fluff;
+		const bucket = o.bucket ?? 0, nc = o.nc || c, face = o.face ?? true, fluff = o.fluff ?? B.fluff, mid = o.mid ?? 2;
 		const m = path.length - 1, fr = frameOf(path), seed = Math.floor(rnd() * 256);
 		// (a lock is long and thin, never a chip: no wider than its length allows)
 		let plen = 0;
 		for (let i = 1; i <= m; i++) plen += path[i].distanceTo(path[i - 1]);
-		const w = Math.min(o.w ?? B.w, plen * 0.4);
-		tuft(path, fr, w, o.kind ?? 0, ao, seed, sway, bucket, 2, nc);
+		const w = Math.min(o.w ?? B.w, plen * 0.4), hold = plen > 0.15 ? 0.5 : plen > 0.09 ? 0.25 : 0;
+		tuft(path, fr, w, o.kind ?? 0, ao, seed, sway, bucket, 2, nc, hold);
 		const a0 = new V3(), a1 = new V3();
 		for (let j = 0; j < members; j++) {
 			const a = rnd() * TAU, rr = Math.sqrt(rnd());
 			const ox = Math.cos(a) * rr * w * 0.55, oy = Math.sin(a) * rr * w * 0.3 + w * 0.08;
-			const lk = 0.72 + rnd() * 0.3, n = Math.max(2, Math.round(m * lk)), ph = rnd() * TAU, pts = [];
+			// (a long lock's tufts run nearly its whole length: its end is a point, not wisps)
+			const lk = hold ? 0.88 + rnd() * 0.12 : 0.72 + rnd() * 0.3, n = Math.max(2, Math.round(m * lk)), ph = rnd() * TAU, pts = [];
 			for (let i = 0; i <= n; i++) {
 				const u = i / n * lk * m, i0 = Math.min(m - 1, Math.floor(u)), f = u - i0, g = u / m;
 				const q = new V3().lerpVectors(path[i0], path[i0 + 1], f);
 				a0.lerpVectors(fr[i0].side, fr[i0 + 1].side, f); a1.lerpVectors(fr[i0].up, fr[i0 + 1].up, f);
-				const k = 1 - pull * sm(0.2, 1, g);
+				const k = 1 - pull * sm(hold ? 0.5 : 0.2, 1, g);
 				q.addScaledVector(a0, ox * k + Math.sin(ph + g * 6) * fluff * g).addScaledVector(a1, oy * k + Math.cos(ph + g * 5) * fluff * 0.6 * g);
 				if (i) keepOut(q, 0.0015, face);
 				pts.push(q);
 			}
 			// (the ones under the core in its shade)
-			tuft(pts, frameOf(pts), Math.min(w * (0.3 + rnd() * 0.25), plen * 0.18), 1, ao * (oy > w * 0.1 ? 1 : 0.82), (seed + 4 * (j + 1)) % 256, sway, Math.max(bucket, j < 2 ? 1 : 2), low ? 1 : 2, nc);
+			tuft(pts, frameOf(pts), Math.min(w * (0.3 + rnd() * 0.25), plen * 0.18), 1, ao * (oy > w * 0.1 ? 1 : 0.82), (seed + 4 * (j + 1)) % 256, sway, Math.max(bucket, j < mid ? 1 : 2), low ? 1 : 2, nc, hold);
 		}
 	};
 	const segsFor = (len) => low ? Math.max(2, Math.min(6, Math.round(len / 0.045))) : Math.max(3, Math.min(9, Math.round(len / 0.03)));
@@ -287,12 +290,19 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 			continue;
 		}
 		if (cut.flow === 'out') {
-			// coily hair, a cloud: short curling tufts lying round shells over the scalp, out to the
-			// hair's rounded outline (fuller on top and at the back), the inner ones dark
-			const sh = Math.sqrt(rnd()), so = 0.003 + cut.lift * vol * sh * (0.6 + 0.4 * sm(-0.3, 0.6, d.y)) * (d.z > 0.5 && d.y < 0.5 ? 0.5 : 1);
-			const f = new V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).addScaledVector(d, -0.5).normalize(), ln = (cut.top * 0.4 + 0.012) * (0.8 + rnd() * 0.4);
-			const path = grow(s, d, f.addScaledVector(d, -f.dot(d)).normalize(), ln, 6, 0, 0.05, so, 1, 0.1, true);
-			lock(resample(shape(path, ln, { off: so, spike: 0, flick: 0 }), 4), { ao: 0.5 + 0.5 * sh, members: B.members, bucket: sh > 0.45 ? 0 : 1 });
+			// coily hair, a cloud of curls: each tuft a little loop, lying tilted on one of the shells
+			// over the scalp out to the hair's rounded outline (fuller on top and at the back), more
+			// of them out at the edge, the inner ones darker
+			const sh = Math.pow(rnd(), 0.35), so = 0.003 + cut.lift * vol * sh * (0.6 + 0.4 * sm(-0.3, 0.6, d.y)) * (d.z > 0.5 && d.y < 0.5 ? 0.5 : 1);
+			const e1 = new V3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5), e2 = new V3();
+			e1.addScaledVector(d, -e1.dot(d)).normalize(); e2.crossVectors(d, e1).addScaledVector(d, 0.6).normalize();
+			const rc = (cut.lift > 0.03 ? 0.0055 : 0.0042) * (0.8 + rnd() * 0.45), sweep = TAU * (0.7 + rnd() * 0.5), at = c.clone().addScaledVector(d, radius(d) + so), path = [];
+			for (let j = 0; j <= 6; j++) {
+				const a = j / 6 * sweep, q = at.clone().addScaledVector(e1, Math.sin(a) * rc).addScaledVector(e2, (1 - Math.cos(a)) * rc).addScaledVector(d, j / 6 * 0.002);
+				keepOut(q, 0.002);
+				path.push(q);
+			}
+			lock(path, { w: rc * 1.5, members: sh > 0.45 ? 2 : 1, mid: 1, pull: 0.45, ao: 0.5 + 0.5 * sh, bucket: sh > 0.45 ? 0 : 1, sway: 0.4 });
 			continue;
 		}
 		const lenBase = d.y > 0.55 ? cut.top : deg > 120 ? cut.back : deg > 60 ? cut.sides : THREE.MathUtils.lerp(cut.top, cut.sides, sm(20, 60, deg));
@@ -357,11 +367,17 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 		lock(path, { w: 0.009, members: 2, pull: 0.9, kind: 3, face: false });
 	}
 
-	// the undercoat: short tufts lying flat on the scalp, the way the hair goes (to the tie, tied)
-	for (const { s, d, deg } of rootsOf(Math.round(B.locks * 0.8 * dense), 1.3)) {
-		const f = cut.tie ? new V3().subVectors(tieAt, s).addScaledVector(d, -new V3().subVectors(tieAt, s).dot(d)).normalize() : flowAt(d, deg);
-		const path = grow(s, d, f, 0.022 + rnd() * 0.01, 2, 0, 0.1, 0.0012, 1, 0.1, true);
-		tuft(path, frameOf(path), 0.018, 2, 0.5, Math.floor(rnd() * 256), 0, 1, 1);
+	// the undercoat: tufts lying flat on the scalp the way the hair goes (to the tie, tied), as
+	// long as the cut is there (to 4.5 cm), wide and close: short hair's locks are small and
+	// would leave the scalp between them
+	const under = cut.flow === 'out' ? 0.5 : cut.top < 0.1 ? 1.5 : 0.8;
+	for (const { s, d, deg } of rootsOf(Math.round(B.locks * under * dense), 1.3)) {
+		// (under coily hair, short and brushed up and back, off the face)
+		const coily = cut.flow === 'out', up = coily ? new V3(0, 1, -0.3).addScaledVector(d, -new V3(0, 1, -0.3).dot(d)) : null;
+		const f = cut.tie ? new V3().subVectors(tieAt, s).addScaledVector(d, -new V3().subVectors(tieAt, s).dot(d)).normalize() : coily ? (up.lengthSq() > 1e-6 ? up.normalize() : flowAt(d, deg)) : flowAt(d, deg);
+		const at = d.y > 0.55 ? cut.top : deg > 120 ? cut.back : cut.sides, ln = coily ? 0.015 : clamp(at * 0.9, 0.02, 0.045) * (0.85 + rnd() * 0.3);
+		const path = grow(s, d, f, ln, 2, 0, 0.1, 0.0012, 1, 0.1, true);
+		tuft(path, frameOf(path), Math.min(0.024, ln * 0.9), 2, 0.62, Math.floor(rnd() * 256), 0, 1, 1);
 	}
 
 	// ---------- packed ----------
@@ -439,13 +455,14 @@ export function fluffMaterial(root, tip) {
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize( vNormal );')
 			.replace('#include <color_fragment>', `#include <color_fragment>
 {
-	float kind = vHK.y, seed = vHK.z, v = vHUv.y, x = vHUv.x;
+	// (kind 4 and up: a long lock's, holding its width half way)
+	float held = step(3.5, vHK.y), kind = vHK.y - 4.0 * held, seed = vHK.z, v = vHUv.y, x = vHUv.x;
 	float far = smoothstep(2.5, 8.0, length(vViewPosition));
 	// the blades a ribbon is cut into, each its own length, each tapering to its point
 	float n = kind < 0.5 ? 5.0 : kind > 2.5 ? 2.0 : 3.0;
 	float u = x * n, id = floor(min(u, n - 0.001)), f = fract(min(u, n - 0.001)) - 0.5;
-	float len = 1.0 - 0.32 * hh(id * 3.7 + seed * 0.37);
-	float tt = clamp(v / len, 0.0, 1.0);
+	float len = 1.0 - (0.32 - 0.22 * held) * hh(id * 3.7 + seed * 0.37);
+	float tt = clamp((v / len - held * 0.5) / (1.0 - held * 0.5), 0.0, 1.0);
 	float bend = (hh(id + seed * 1.3) - 0.5) * 0.35 * tt;
 	float hw = 0.5 * pow(1.0 - tt, 0.7), aw = fwidth(u) * 0.75 + 0.02;
 	float blade = (1.0 - smoothstep(hw - aw, hw + aw, abs(f - bend))) * step(v, len);
@@ -462,6 +479,6 @@ export function fluffMaterial(root, tip) {
 }`)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.15;\nreflectedLight.indirectDiffuse *= 0.6 + 0.4 * vHK.x / 255.0;');
 	};
-	m.customProgramCacheKey = () => 'fluff-hair-1';
+	m.customProgramCacheKey = () => 'fluff-hair-2';
 	return m;
 }
