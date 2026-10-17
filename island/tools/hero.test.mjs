@@ -41,7 +41,8 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	// (dressed to move in, groomed, and never grey)
 	assert.equal(m.style.outer, null, 'no jacket to balloon on him');
 	assert.equal(f.style.outer.kind, 'flannel'); assert.equal(f.style.outer.pat, 'plaid'); assert.equal(f.style.outer.fit, 'fitted', 'a fitted plaid overshirt');
-	assert.ok(m.style.bottom.tuck && m.style.shoes.tall && !f.style.bottom.tuck && !f.style.shoes.tall, 'his into tall boots, hers over hiking boots');
+	assert.ok(!m.style.bottom.tuck && m.style.shoes.tall && !f.style.bottom.tuck && !f.style.shoes.tall, 'his hems over tall boots, hers over hiking boots');
+	assert.ok(Math.max(...m.hairColour) < 0.1 && f.hairColour[0] > 2 * f.hairColour[1], 'dark chestnut; auburn');
 	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.008 && d.style.bottom.hang < 0.02 && d.style.bottom.fit === 'straight', 'trousers cut straight and tapering'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
 	assert.ok(m.style.acc.some((q) => q.kind === 'carrier'), 'his carrier');
@@ -51,7 +52,7 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.match(src0, /B\.tuck \? cut\.ankle \+ 0\.14/, 'trousers end at the boots');
 	assert.match(src0, /F\.tall \? 0\.17 : 0\.09/, 'tall boots');
 	assert.match(src0, /const legHang = B\?\.hang/, 'a straight hang');
-	assert.equal(m.style.hair.style, 'tousled');
+	assert.equal(m.style.hair.style, 'short01');
 	assert.equal(m.style.hair.beard, 'stubble');
 	assert.equal(f.style.hair.style, 'ponytail01');
 	assert.equal(f.style.hair.beard, '');
