@@ -169,11 +169,85 @@ This may be particular to this headless browser, but it is worth checking on a d
 Chrome's Task Manager (Shift+Esc), watch the tab's memory before and after clicking into the
 world to aim. If it jumps by gigabytes there too, it is a bug in main, not in the spells.
 
+## Part 2 (October 17): hands, bodies, friends, things picked up, the bar
+
+The owner, on the first round: no casting animation; brawlers and townsfolk untouched by holds,
+slows and fear; friends not seeing spells; bats and pipes not on the keys; the bar in the middle
+of the screen.
+
+- **The bar:** at the bottom of the screen on a desktop. It was placed above the right-hand stack
+  of buttons (`--l99-low`), which on a tall desktop window is half way up. On a touch screen it
+  still sits above the thumbs' controls.
+- **Your hand casting (`magic/hands.js`):**
+  - Your own hand (the anatomical hand, from your body) comes up open, palm to the aim, and the
+    school's light gathers in it.
+  - It is held a breath, longer for a tier 4 spell, and for as long as a beam pours, then let down.
+  - The right hand casts; with a bat or a pipe in the right hand, the left does.
+  - With a field arm in your hands, only the light shows (the weapon's own hands stay on it).
+  - While the hand is up, the boxing guard steps aside (`combat.hooks.casting`).
+- **Your body casting:** in third person the body thrusts a hand out toward the aim (the new
+  `cast` gesture, `people/motion.js`), or both hands for a tier 4 spell (`cast2`).
+- **Brawlers and townsfolk:**
+  - Holds, slows and fear now reach the people of the town and anyone brawling with you.
+  - A townsperson held stands still. Afraid, they run from where the spell was cast; slowed, they
+    run slower (`combat/civilians.js`).
+  - A brawler held drops its guard and stands; afraid, it runs; slowed, it closes slower
+    (`combat/melee-foes.js`, reading the hex on the body).
+  - Areas still harm only the hostile: the townsfolk in one take its hold, slow or terror, never
+    its harm. A bolt still strikes whoever it meets.
+  - Stasis now holds a townsperson too. Children are never touched.
+- **Friends see your spells (`magic/net.js`):**
+  - A spell goes to the room as one of the shots friends already see, marked by its style (7),
+    from where it was cast to where it went.
+  - Which spell it was rides in the hundredths of a metre of its end, which the room keeps. So the
+    room's server needs nothing new and the live server carries it today.
+  - Friends see bolts fly, beams pour (pulsed every 0.3 s while held), bursts, strikes and storms
+    land where you aimed, blinks and gates leave and arrive, and spells on yourself flare about you.
+- **Things picked up on the keys (`combat/melee.js`, `combat/hotbar.js`):**
+  - A bat, pipe, bottle, knife or machete you pick up gets a key after your field arms.
+  - With something already in hand, or a field arm drawn, what you walk over is stowed: up to
+    three carried things.
+  - A key takes one up; the same key stows it again.
+  - Drawing a field arm stows what you were swinging rather than dropping it (it is dropped only
+    if there is no room).
+  - A bat that splinters or a bottle that shatters leaves its key.
+
+## Part 3 (October 17): beams as blasts (`magic/beam.js`)
+
+A held beam (Lance of Dawn, Soul Siphon) now works like a charged blast:
+
+- **It gathers first.** For 0.32 s (`CHARGE`), light spirals into your hands and a ball of it
+  swells there, with a rising whine. Both hands come up together, heels touching. In third
+  person the body takes a new `beam` stance (`people/motion.js`), held for as long as it pours,
+  and eases out when you let go (`M.ungesture`).
+- **Then it lets go with a punch.** A ring of light bursts out across the beam at the hands, the
+  column's head races to the end in 0.12 s, the column swells wide for a moment, and the camera
+  kicks.
+- **The column.** A white-hot core inside a sheath of the school's colour, on one open cylinder,
+  drawn additive. Pressure swells and pinches run down it, it streaks and flickers, and it widens
+  with distance so it stays big far off. Near your own eyes it thins so it doesn't blind you.
+  Shock rings are thrown off at the hands, motes stream along it, the end sprays sparks back the
+  way it came, dust rings spread where it strikes, and the camera rumbles while it pours.
+- **It drives fighters back.** Every 0.25 s a fighter in the beam is shoved along it (less for a
+  drain).
+- **Sound.** The whine rises to the release, then a roar (band-passed noise and a low hum) plays
+  while it pours and dies away when you let go (`beamVoice` in `magic/fx.js`).
+- **A tap still fires.** Once it has let go, it pours for at least 0.3 s (`MIN_BLAST`).
+- **Friends see one steady column.** The first word gathers at their hands, and each pulse (every
+  0.3 s) keeps the column alive for 0.45 s, so it no longer flickers as separate pulses.
+- **Let go, it thins to a thread and is gone** (0.2 s).
+- Three beams are made at the start and reused (yours plus two friends'), so nothing is created
+  while casting.
+
+Console: `Crysis.magic.hold('lance-of-dawn', ms)` casts and holds a beam, as a tap on the bar does.
+
+**Fixed on the way:** the spellbook counted as open until it had been opened once. Its hidden
+state lived only in its stylesheet, and `isOpen()` read the inline style. So, from the start,
+every weapon key and spell key was refused, and the first N only shut a book that was already
+hidden. It is now open only when `open()` made it so.
+
 ## Not done yet
 
-- Spells have no cast animation on your hands or your body in third person. The glow leaves
-  from the hand's place.
-- Brawlers (close combat) and civilians do not take statuses; only the armed fighters do.
-- Multiplayer does not show other players' spells.
-- Melee items picked up in the world (bat, pipe) are not on the weapon keys: they are not in the
-  inventory.
+- Your hand casting is drawn without a sleeve.
+- Bosses still take the harm of a spell but none of its statuses.
+- Things picked up and stowed are not kept between visits (field arms are).
