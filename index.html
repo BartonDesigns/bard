@@ -7506,15 +7506,37 @@ function now(ctx){return realGet&&ctx?realGet.call(ctx):(ctx?.currentTime||0);}
 // run fn with its sounds stamped for audio time t
 function at(t,fn){const was=stampAt;stampAt=num(t)?t:null;try{return fn();}finally{stampAt=was;}}
 // how far ahead steps are worked out: a little on the faceplate, more while the world is
-// drawing (its frames can hold the page up), more again on a phone
-function lead(){const w=root._worldAudioLead;return num(w)?Math.max(.03,Math.min(.3,w)):.08;}
+// drawing (its frames can hold the page up), more again on a phone; and more again for a
+// while after the page held a scheduler up (music233: the lead learns from how late the
+// timers ran, so a page that stalls 200 ms keeps its beat instead of hiccuping each time)
+let jank=0,jankAt=0;
+function settle(){const t=performance.now();if(jankAt)jank*=Math.pow(.5,Math.max(0,t-jankAt)/15000);jankAt=t;}
+function late(sec){if(!num(sec)||sec<=.004||root.document?.hidden)return;settle();jank=Math.max(jank,Math.min(.22,sec));}
+function lead(){const w=root._worldAudioLead,base=num(w)?w:.08;settle();return Math.max(.03,Math.min(.3,Math.max(base,jank>.01?jank*1.3+.03:0)));}
+// (a timer that was due part-way through a stall only sees part of it: the browser's own report
+// of each long task held on the page, where it has one, gives the whole)
+try{new PerformanceObserver(l=>{for(const e of l.getEntries())late(e.duration/1000);}).observe({type:'longtask',buffered:false});}catch(_){}
+// music233: how long after a sample is worked out it reaches the ears (the output buffer and
+// the device, a Bluetooth headset's 150 ms or more included), smoothed
+let lagCtx=null,lagS=0;
+function lag(ctx){
+ if(!ctx)return 0;
+ let l=null;
+ try{const ts=ctx.getOutputTimestamp?.();if(ts&&ts.performanceTime>0&&ts.contextTime>0){const v=now(ctx)-ts.contextTime-(performance.now()-ts.performanceTime)/1000;if(v>=0&&v<.6)l=v;}}catch(_){}
+ if(l===null){const v=(ctx.outputLatency||0)+(ctx.baseLatency||0);l=num(v)&&v>=0&&v<.6?v:0;}
+ if(lagCtx!==ctx){lagCtx=ctx;lagS=l;}else lagS+=(l-lagS)*.2;
+ return lagS;
+}
+// the audio time being heard right now, and the page time (ms) audio time t will be heard
+function heard(ctx){return now(ctx)-lag(ctx);}
+function perfAt(ctx,t){return performance.now()+(t-heard(ctx))*1000;}
 // a phone gets a roomier audio buffer: under load the small one runs dry and crackles
 function latencyHint(){
  try{const v=localStorage.getItem('l99-audio-latency');if(v==='interactive'||v==='balanced'||v==='playback')return v;}catch(_){}
  const coarse=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
  return coarse?'balanced':'interactive';
 }
-root.L99Clock={lock,now,at,lead,onAt,offAt,latencyHint};
+root.L99Clock={lock,now,at,lead,late,lag,heard,perfAt,onAt,offAt,latencyHint,jank:()=>jank};
 })(window);
 </script>
 <script id="peak-code177">
@@ -16546,8 +16568,10 @@ function startSequencer() {
   if (sequencerRunning) return;
   sequencerRunning = true;
   currentStep = 0;
-  window._seqClock = (typeof ctx !== 'undefined' && ctx ? (window.L99Clock ? L99Clock.now(ctx) + L99Clock.lead() : ctx.currentTime + 0.06) : 0);  // fix456: stable audio-clock anchor (clock230: one lead ahead)
-  window._seqAt = null;
+  // fix456: stable audio-clock anchor (clock230: one lead ahead; music233: at most 100 ms, so START
+  // answers at once while the lead is wide: the steps after catch up on their own times)
+  window._seqClock = (typeof ctx !== 'undefined' && ctx ? (window.L99Clock ? L99Clock.now(ctx) + Math.min(0.1, L99Clock.lead()) : ctx.currentTime + 0.06) : 0);
+  window._seqAt = null; window._seqWakeAt = null; window._seqRing = [];
   // Starting playback fresh from the current faceplate adopts its core BPM.
   if (typeof window._pendingFaceBpm === 'number') {
     window._adoptingFaceBpm = true; bpm = window._pendingFaceBpm; window._pendingFaceBpm = null;
@@ -16557,6 +16581,10 @@ function startSequencer() {
   const stepTime = () => (60 / bpm) / 4 * 1000; // 16th notes (straight)
   function tick() {
     if (!sequencerRunning) return;
+    // music233: while the audio is held (a phone call, Siri, another app, the tab put away) its
+    // clock stands still; steps worked out then would all sound at once when it comes back.
+    // The pattern waits where it is and picks up on the beat after.
+    if (typeof ctx !== 'undefined' && ctx && ctx.state !== 'running') { window._seqClock = null; window._seqWakeAt = null; sequencerInterval = setTimeout(tick, 120); return; }
     lastStepStartedAt = Date.now();
     // fix456: stamp this step's stable audio-clock time so note ONSETS fire sample-locked
     // (the worklet honors msg.at); live play leaves _seqAt null and stays immediate.
@@ -16564,8 +16592,16 @@ function startSequencer() {
       // clock230: the step is due at _seqClock on the audio clock. Only a stall longer than the
       // lead (the step would sound in the past) or a clock run far ahead re-anchors it.
       const _rt = window.L99Clock ? L99Clock.now(ctx) : ctx.currentTime, _ld = window.L99Clock ? L99Clock.lead() : 0.06;
+      // music233: how late this wake ran past its time (a lead before the step), so the lead grows to cover it
+      if (window.L99Clock && typeof window._seqWakeAt === 'number') L99Clock.late(_rt - window._seqWakeAt);
+      window._seqWakeAt = null;
       if (typeof window._seqClock !== 'number' || window._seqClock < _rt + 0.004 || window._seqClock > _rt + _ld + 0.35) window._seqClock = _rt + Math.min(_ld, 0.03);
       window._seqAt = window._seqClock;
+      // music233: the last steps' audio times, for recording and quantizing against what is heard
+      window._seqLastAt = window._seqClock;
+      const _ring = window._seqRing || (window._seqRing = []);
+      _ring.push({ step: currentStep, at: window._seqClock });
+      if (_ring.length > 12) _ring.shift();
       // fix458: advance happens at the scheduling point below, by the ACTUAL (swing-aware) step duration
       Promise.resolve().then(() => { window._seqAt = null; });
     }
@@ -16577,6 +16613,8 @@ function startSequencer() {
     // vox334: LAUNCH GRID heartbeat -- fired inside the tick while _seqAt is
     // hot, so every grid event is sample-locked and swing-aware.
     if (window._lgStepTick) { try { window._lgStepTick(_stepInBar, _sig.barSteps, _isBarStart); } catch (eLG) { void eLG; } }
+    // music233: others that play in step with the pattern (the world's auto music) hear each step here, stamped
+    if (window._seqStepHooks) window._seqStepHooks.forEach(h => { try { h(_stepInBar, _sig.barSteps, currentStep, window._seqAt); } catch (eSH) { void eSH; } });
     // Metronome tick on beats (downbeat = higher pitch) so the meter is audible.
     if (metronomeOn && _isBeat && typeof playMetronomeTick === 'function') {
       try { playMetronomeTick(_isBarStart); } catch(e) {}
@@ -16613,13 +16651,19 @@ function startSequencer() {
     // Update step indicators. There are only 16 dots in the strip; with LOOP_STEPS > 16
     // we map currentStep into the 16-dot grid so the indicator sweeps proportionally.
     const dotIdx = Math.floor((currentStep / LOOP_STEPS) * 16);
-    document.querySelectorAll('.step-dot').forEach((dot, i) => {
-      dot.classList.toggle('active', i === dotIdx);
-      // Accent dots that line up with a beat of the current meter.
-      const dotStep = Math.round((i / 16) * LOOP_STEPS);
-      const isBeatDot = (_sig.beatSteps.indexOf(dotStep % _sig.barSteps) !== -1);
-      dot.classList.toggle('beat-accent', isBeatDot);
-    });
+    const _dots = () => {
+      if (!sequencerRunning) return;
+      document.querySelectorAll('.step-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === dotIdx);
+        // Accent dots that line up with a beat of the current meter.
+        const dotStep = Math.round((i / 16) * LOOP_STEPS);
+        const isBeatDot = (_sig.beatSteps.indexOf(dotStep % _sig.barSteps) !== -1);
+        dot.classList.toggle('beat-accent', isBeatDot);
+      });
+    };
+    // music233: the step lights when it is heard, not a lead (and the output's delay) before
+    const _dotIn = (window.L99Clock && typeof window._seqAt === 'number') ? L99Clock.perfAt(ctx, window._seqAt) - performance.now() : 0;
+    if (_dotIn > 8) setTimeout(_dots, Math.min(600, _dotIn)); else _dots();
     // Track which drums got triggered this step so we don't double-hit
     const fired = new Set();
     const injects = DRUM_INJECT_PATTERNS[currentFace];
@@ -16754,6 +16798,7 @@ function startSequencer() {
     let _wait = nextDelay;
     if (typeof ctx !== 'undefined' && ctx && typeof window._seqClock === 'number' && window.L99Clock) {
       _wait = Math.max(0, Math.min(nextDelay * 2, (window._seqClock - L99Clock.lead() - L99Clock.now(ctx)) * 1000));
+      window._seqWakeAt = L99Clock.now(ctx) + _wait / 1000;
     }
     sequencerInterval = setTimeout(tick, _wait);
   }
@@ -16962,8 +17007,30 @@ function firedStep() {
 // Returns the index the current moment should record into: the nearest step.
 // Early in a step it is the step that just fired; past the midpoint the user
 // was aiming at the step about to fire.
+// music233: the step nearest audio time t, from the steps' own audio times (the last few the
+// sequencer worked out, and the one it works out next). Null without them.
+function nearestSeqStep(t) {
+  const ring = window._seqRing;
+  if (!sequencerRunning || !ring || !ring.length || typeof t !== 'number' || typeof window._seqClock !== 'number') return null;
+  let best = { step: currentStep, at: window._seqClock };
+  for (const r of ring) if (Math.abs(r.at - t) < Math.abs(best.at - t)) best = r;
+  // further off than a step from any of them (a stall, a re-anchor): no answer
+  return Math.abs(best.at - t) < (60 / bpm) / 4 * 1.5 ? best : null;
+}
+// music233: where a note being played now sits in the loop, measured on the audio clock: a
+// note stamped for later (the arp) at its own time, a live one at what is being heard as it
+// is played. (Counting from when the page's timer last ran put a hit on the beat a step late:
+// the timer runs a lead ahead of the sound.)
+function heardRecordStep() {
+  if (typeof ctx === 'undefined' || !ctx || !window.L99Clock || ctx.state !== 'running') return null;
+  const on = L99Clock.onAt();
+  const n = nearestSeqStep(on !== null ? on : L99Clock.heard(ctx));
+  return n ? n.step : null;
+}
 function quantizedRecordStep() {
   if (!sequencerRunning) return currentStep;
+  const _hs = heardRecordStep();
+  if (_hs !== null) return _hs;
   const stepDur = (60 / bpm) / 4 * 1000;
   const elapsed = Date.now() - lastStepStartedAt;
   if (elapsed > stepDur / 2) return currentStep;
@@ -17024,6 +17091,17 @@ function withDrumQuantize(playFn, recordFn) {
     playFn();
     if (recordFn && loopRecording) recordFn(firedStep());
     return;
+  }
+  // music233: HARD drums snap to the step nearest what is heard as the pad is hit, on the audio
+  // clock: one still to come sounds exactly on it, one just gone sounds now. (Waiting for the
+  // page's next step timer played a hit on the beat 55 ms late, 110 ms in the world: off the grid.)
+  if (drumQuantizeMode === 'HARD' && sequencerRunning && typeof ctx !== 'undefined' && ctx && window.L99Clock && ctx.state === 'running') {
+    const _n = nearestSeqStep(L99Clock.heard(ctx));
+    if (_n) {
+      if (_n.at > L99Clock.now(ctx) + 0.002) L99Clock.at(_n.at, playFn); else playFn();
+      if (recordFn && loopRecording) recordFn(_n.step);
+      return;
+    }
   }
   if (drumQuantizeMode === 'HARD' && sequencerRunning) {
     scheduleAtNextStep((tickFired) => {
@@ -21323,7 +21401,12 @@ window.startLookaheadScheduler = function(noteCallback, opts) {
     return { stop: function() {}, advance: function() {} };
   }
   const config = Object.assign({}, window._lookaheadConfig, opts || {});
-  let nextNoteTime = ctx.currentTime;
+  // music233: the true audio time (ctx.currentTime reads a step's stamp while one is set), and
+  // the lead the rest of the music uses, which grows while the page is held up
+  const clockNow = () => window.L99Clock ? L99Clock.now(ctx) : ctx.currentTime;
+  const ahead = () => (window.L99Clock && !(opts && opts.lookaheadTime)) ? Math.max(config.lookaheadTime, L99Clock.lead()) : config.lookaheadTime;
+  let nextNoteTime = (typeof config.startAt === 'number' && config.startAt > clockNow()) ? config.startAt : clockNow();
+  let wakeAt = null;   // music233: when the loop's timer was asked to wake (audio time), to see how late it ran
   let tickIndex = 0;
   let alive = true;
   let _timeoutHandle = null;
@@ -21339,14 +21422,26 @@ window.startLookaheadScheduler = function(noteCallback, opts) {
   function schedulerLoop() {
     if (!alive) return;
     // While there are notes to play before the next interval checkpoint...
-    // clock230: held up past the lookahead, carry on from now instead of firing the missed steps at once
-    if (nextNoteTime < ctx.currentTime - 0.02) nextNoteTime = ctx.currentTime + 0.01;
-    while (nextNoteTime < ctx.currentTime + config.lookaheadTime) {
+    const now = clockNow(), lead = ahead();
+    // music233: suspended (a call, the tab away), the clock stands still: wait, and come back on the beat
+    if (ctx.state !== 'running') { _timeoutHandle = setTimeout(schedulerLoop, 120); return; }
+    if (window.L99Clock && wakeAt !== null) L99Clock.late(now - wakeAt);
+    wakeAt = null;
+    // clock230: held up past the lookahead, the missed steps are not fired at once. music233: they
+    // are skipped instead, so the pattern keeps its place on the beat (it used to restart from now)
+    if (nextNoteTime < now - 0.02) {
+      const d = Math.max(0.01, getStepDuration());
+      const n = Math.ceil((now + 0.005 - nextNoteTime) / d);
+      if (n > 0 && n < 4096) { nextNoteTime += n * d; tickIndex += n; } else nextNoteTime = now + 0.01;
+    }
+    while (nextNoteTime < now + lead) {
       try { noteCallback(nextNoteTime, tickIndex); } catch(e) { console.warn('Lookahead callback error:', e); }
       nextNoteTime += getStepDuration();
       tickIndex++;
     }
-    _timeoutHandle = setTimeout(schedulerLoop, config.scheduleInterval);
+    const _w = Math.max(4, Math.min(config.scheduleInterval, (nextNoteTime - lead - clockNow()) * 1000));
+    wakeAt = clockNow() + _w / 1000;
+    _timeoutHandle = setTimeout(schedulerLoop, _w);
   }
 
   // Kick off
@@ -22789,7 +22884,16 @@ function restartArp() {
   // setInterval. Eliminates rhythm drift caused by main-thread jitter
   // (heavy WebGL frames, GC pauses). Default OFF so existing recordings
   // and tested behavior are preserved.
-  if (window._useLookaheadARP && window.startLookaheadScheduler && ctx) {
+  // music233: on by default now (window._useLookaheadARP = false brings back the old timer). Its
+  // release is stamped at its own onset plus the gate, the reason it was off (the release used
+  // to run from a timer and could land before the note began). While the pattern plays, the
+  // arp starts on the pattern's next step, so the two share the grid.
+  if (window._useLookaheadARP !== false && window.startLookaheadScheduler && ctx) {
+    let _startAt;
+    if (typeof sequencerRunning !== 'undefined' && sequencerRunning && window.L99Clock) {
+      const _n = L99Clock.now(ctx) + 0.003;
+      _startAt = (typeof window._seqLastAt === 'number' && window._seqLastAt > _n) ? window._seqLastAt : window._seqClock;
+    }
     window._arpLookaheadHandle = window.startLookaheadScheduler(
       function(targetTime, _tickIdx) {
         // Each scheduled tick invokes the same ARP step logic the setInterval
@@ -22801,7 +22905,8 @@ function restartArp() {
         window._arpTargetTime = null;
       },
       {
-        getStepDuration: function() { return rate / 1000; }  // ms → seconds
+        getStepDuration: function() { return getArpRate() / 1000; },  // ms → seconds (music233: follows a tempo change)
+        startAt: _startAt
       }
     );
     return;
@@ -22975,7 +23080,12 @@ function _arpStepBody() {
       // chord-arp sustain mode, in which case the voice rings until the
       // source key is released (handled by arpNoteOff).
       if (!isChordArpSustain) {
-        setTimeout(() => { try { stopLead(voiceId); } catch(e){} }, rate * 0.4);
+        // music233: a note stamped for later is let go at its onset plus the gate, on the audio clock
+        const _on = window.L99Clock ? L99Clock.onAt() : null;
+        if (_on !== null && typeof ctx !== 'undefined' && ctx) {
+          const _off = _on + rate * 0.4 / 1000;
+          setTimeout(() => { try { L99Clock.at(_off, () => stopLead(voiceId)); } catch(e){} }, Math.max(0, (_off - L99Clock.now(ctx)) * 1000 - 30));
+        } else setTimeout(() => { try { stopLead(voiceId); } catch(e){} }, rate * 0.4);
       }
     }
 }
@@ -26721,10 +26831,16 @@ window.bardHaptic = (function(){
       S.due = C.now(ac) + C.lead();
       var pump = function(){
         var now = C.now(ac), lead = C.lead();
+        // music233: the audio held (a call, another app): wait for it, nothing piles up for its return
+        if (ac.state !== 'running') { S.wake = null; S.clock = setTimeout(pump, 120); return; }
+        if (S.wake != null && C.late) C.late(now - S.wake);   // music233: a late wake grows the lead
         if (S.due < now) S.due = now + 0.01;   // held up longer than the lead: carry on from here
         while (S.due < now + lead) { C.at(S.due, tick); S.due += stepMs / 1000; }
-        S.clock = setTimeout(pump, Math.max(5, (S.due - lead - C.now(ac)) * 1000));
+        var w = Math.max(5, (S.due - lead - C.now(ac)) * 1000);
+        S.wake = C.now(ac) + w / 1000;
+        S.clock = setTimeout(pump, w);
       };
+      S.wake = null;
       pump();
     } else S.clock = setInterval(tick, stepMs);
   }
@@ -29333,7 +29449,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=0d53310ee8'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=956bddeb8e'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29341,7 +29457,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=0d53310ee8'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=956bddeb8e'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }

@@ -45,7 +45,7 @@ export function createAutoMusic(opts) {
 	const composer = createComposer((Math.random() * 1e9) >>> 0);
 	const live = new Map();          // voice id -> { role, timer }
 	const timers = new Set();
-	let loopT = 0, senseAt = 0;
+	let loopT = 0, senseAt = 0, wakeAt = 0;
 
 	// ---- the player: their notes are heard (the answer may quote them) and the score
 	// makes room while they play
@@ -250,7 +250,8 @@ export function createAutoMusic(opts) {
 		const locked = F.beatLoopOn || F.sequencerRunning;
 		const base = clamp(F.bpm || 100, 50, 190);
 		const want = locked ? base : clamp(base * M.tempoK, 50, 190);
-		S.bpm = S.bpm ? S.bpm + clamp(want - S.bpm, -base * 0.03, base * 0.03) : want;
+		// (locked, it is the faceplate's tempo at once: its steps are this score's steps)
+		S.bpm = S.bpm && !locked ? S.bpm + clamp(want - S.bpm, -base * 0.03, base * 0.03) : want;
 		S.stepMs = 60000 / S.bpm / 4;
 		// the mix: back off before the limiter has to
 		const t = window.getAutoAudioTelemetry?.();
@@ -281,23 +282,54 @@ export function createAutoMusic(opts) {
 		}
 	}
 
+	// ---- in step with the faceplate: while its sequencer runs, each of its steps is this score's
+	// step, played inside the sequencer's own tick and so stamped with its audio time. The bars
+	// start on its bar lines and the swing is its swing. (Before, only the tempo was shared: the
+	// score's bar could start anywhere in the pattern's, a fraction of a beat apart.)
+	let seqSeen = 0;
+	const hooked = () => performance.now() - seqSeen < Math.max(400, S.stepMs * 3);
+	function perfOf(t) { audioAt(performance.now()); return mapOff === null ? performance.now() : (t - mapOff) * 1000; }
+	function seqStep(stepInBar, barSteps, _step, at) {
+		if (!S.on || !S.playing || typeof at !== 'number') return;
+		seqSeen = performance.now();
+		if (stepInBar === 0 || !S.bar) { writeBar(perfOf(at) - stepInBar * S.stepMs); S.step = stepInBar; }
+		else S.bar.at = perfOf(at) - stepInBar * S.stepMs;
+		// (an odd meter's bar can be longer than the score's sixteen steps: the rest is held)
+		if (stepInBar >= S.step && stepInBar < 16) { try { playStep(stepInBar); } catch (err) { if (S.log) console.warn('[automusic] step', err); } }
+		S.step = Math.max(S.step, stepInBar + 1);
+	}
+	function hookSequencer() {
+		if (!hasBard()) return;
+		const H = window._seqStepHooks || (window._seqStepHooks = new Set());
+		H.add(seqStep);
+	}
+
 	// ---- the clock: steps fall due on performance time, swing delays the off sixteenths
 	function stepTime(i) { return S.bar.at + i * S.stepMs + (i % 2 ? S.bar.swing * S.stepMs * 0.5 : 0); }
 	function loop() {
 		loopT = 0;
 		if (!S.on) return;
 		const now = performance.now();
-		const act = opts.active() && !document.hidden;
+		// (the faceplate's audio held, by a call or another app: nothing would sound till it is back,
+		// and then all at once)
+		const held = hasBard() && bardCtx() && bardCtx().state !== 'running';
+		const act = opts.active() && !document.hidden && !held;
 		if (!act) {
 			if (S.playing) { S.playing = false; silence(); }
+			wakeAt = 0;
 			loopT = setTimeout(loop, 250);
 			return;
 		}
 		if (now - senseAt > 450) { senseAt = now; try { listen(); } catch (err) { if (S.log) console.warn('[automusic] listen', err); } }
-		if (!S.playing) { S.playing = true; S.step = 16; S.bar = null; wireListen(); }
+		if (!S.playing) { S.playing = true; S.step = 16; S.bar = null; wireListen(); hookSequencer(); }
+		// the faceplate's sequencer is playing the steps: only listen here
+		if (hooked()) { wakeAt = 0; loopT = setTimeout(loop, 100); return; }
 		// a long stall (seconds) starts a fresh bar; a slow frame only skips the steps it
 		// missed, so the pulse keeps its place and old notes never come in a burst
 		if (S.bar && now - stepTime(Math.min(15, S.step)) > 4000) { S.step = 16; S.bar = null; }
+		// how late this wake ran past its time: the lead grows to cover it
+		if (wakeAt) audioClock()?.late?.((now - wakeAt) / 1000);
+		wakeAt = 0;
 		for (let guard = 0; guard < 80; guard++) {
 			if (!S.bar || S.step >= 16) { writeBar(S.bar ? S.bar.at + 16 * S.stepMs : now + 30); S.step = 0; }
 			const due = stepTime(S.step);
@@ -307,14 +339,16 @@ export function createAutoMusic(opts) {
 			S.step++;
 		}
 		const next = S.step >= 16 ? S.bar.at + 16 * S.stepMs : stepTime(S.step);
-		loopT = setTimeout(loop, clamp(next - leadMs() - performance.now() - 1, 1, 250));
+		const wait = clamp(next - leadMs() - performance.now() - 1, 1, 250);
+		wakeAt = performance.now() + wait;
+		loopT = setTimeout(loop, wait);
 	}
 
 	// (passing: turned on or off for a while by something else, not kept for the next visit)
 	function auto(on, passing) {
 		S.on = on === undefined ? !S.on : !!on;
 		if (!passing) save({ on: S.on, level: S.level });
-		clearTimeout(loopT); loopT = 0;
+		clearTimeout(loopT); loopT = 0; wakeAt = 0;
 		if (S.on) loop();
 		else { S.playing = false; silence(); }
 		sync();
