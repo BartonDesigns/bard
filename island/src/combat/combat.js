@@ -1109,6 +1109,15 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hurt0: () => me.H.max - me.H.hp,
 		// your health as it stands (magic/: a death ward, a rewind)
 		vitals: () => ({ hp: me.H.hp, max: me.H.max, ko: me.ko > 0, state: me.H.state }),
+		// the top of your life (magic/stats.js: Vigour); you keep the share of it you had
+		setLifeMax: (n) => {
+			n = Math.max(1, Math.round(+n || 100));
+			if (n === me.H.max) return n;
+			const f = me.H.hp / Math.max(1, me.H.max);
+			me.H.max = n;
+			if (me.H.state === 'ok') me.H.hp = Math.max(1, Math.min(n, n * f));
+			return n;
+		},
 		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),
 		tend: (p) => civilians.tend(p),
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),

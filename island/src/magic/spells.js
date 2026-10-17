@@ -148,11 +148,14 @@ export function modFor(mods, stat, spell) {
 	if (!m || !spell) return 0;
 	return (m[spell.school] || 0) + (m[strandOf(spell)] || 0) + (m.all || 0);
 }
-// a spell as the perks shape it: longer, wider, further, its statuses held longer (the copy
-// is what the caster works with; its id, mana and cooldown are the catalog's)
+// a spell as the perks shape it: longer, wider, further, its statuses held longer, and as a
+// garment's magic changes it (mods.alter: gameplay/gear-magic.js ALTERATIONS, set on it, added
+// to it, put on its status). The copy is what the caster works with; its id, mana and cooldown
+// are the catalog's.
 export function shaped(spell, mods) {
 	const dur = modFor(mods, 'dur', spell), area = modFor(mods, 'area', spell), range = modFor(mods, 'range', spell), st = modFor(mods, 'status', spell);
-	if (!dur && !area && !range && !st) return spell;
+	const A = spell ? mods?.alter?.[spell.id] : null;
+	if (!dur && !area && !range && !st && !A) return spell;
 	const o = { ...spell };
 	if (dur && o.t) o.t = o.t * (1 + dur);
 	if (area && o.r) o.r = o.r * (1 + area);
@@ -160,6 +163,11 @@ export function shaped(spell, mods) {
 	if (range && o.range) o.range = o.range * (1 + range);
 	if (range && o.speed) o.speed = o.speed * (1 + range * 0.5);
 	if (st && o.status) { o.status = { ...o.status }; for (const k of ['hold', 'fear', 't']) if (o.status[k]) o.status[k] *= 1 + st; }
+	if (A) {
+		if (A.set) Object.assign(o, A.set);
+		if (A.add) for (const [k, v] of Object.entries(A.add)) o[k] = (o[k] || 0) + v;
+		if (A.status) o.status = { ...(o.status || {}), ...A.status };
+	}
 	return o;
 }
 

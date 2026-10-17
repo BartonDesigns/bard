@@ -835,7 +835,7 @@ export function createIslandWorld() {
 	guideApi.multiplayer=multiplayer;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	// your gear, shops and trading with friends (ui/gear.js)
-	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
+	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
