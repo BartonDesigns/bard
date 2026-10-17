@@ -427,12 +427,15 @@ diffuseColor.rgb = mix(diffuseColor.rgb, uScalp.rgb * (0.8 + 0.4 * fract(sin(dot
 // the flush: blood near the surface of the cheeks, the nose, the ears, the lips; faint, a
 // multiply of the skin's own colour, so it never reads as a patch
 diffuseColor.rgb *= mix(vec3(1.0), vec3(1.02, 0.94, 0.93), vSkin.w * uSkin.w * (1.0 - uScalp.w * smoothstep(0.2, 0.8, vScalp)));
-// freckles (uVit.x 2): small warm dots across the nose and the cheeks (where the skin flushes),
-// a few millimetres each, of uneven strength; near only, where they read as freckles
+// freckles (uVit.x 2, y the eyes' height): small warm dots in a band across the nose's bridge
+// and the upper cheeks (where the skin flushes, between the eyes' height and a little below,
+// not out to the temples), a few millimetres each, sparse, of uneven strength and light enough
+// never to read as dirt; near only, where they read as freckles
 if (uVit.x > 1.5 && length(vViewPosition) < 6.0) {
-	float fk = sn3(vBindP * 360.0 + uVit.yzw) * 0.75 + sn3(vBindP * 820.0 + uVit.zwy) * 0.25;
-	float fm = smoothstep(0.18, 0.55, vSkin.w) * (1.0 - smoothstep(0.2, 0.8, vScalp)) * smoothstep(1.35, 1.5, vBindP.y);
-	diffuseColor.rgb *= mix(vec3(1.0), vec3(0.8, 0.66, 0.56), smoothstep(0.6, 0.7, fk) * fm * (0.6 + 0.4 * sn3(vBindP * 40.0)));
+	float fk = sn3(vBindP * 360.0 + vec3(uVit.z, uVit.w, uVit.z * 0.7)) * 0.75 + sn3(vBindP * 820.0 + vec3(uVit.w, uVit.z, 1.3)) * 0.25;
+	float fm = smoothstep(0.15, 0.5, vSkin.w) * (1.0 - smoothstep(0.2, 0.8, vScalp));
+	fm *= smoothstep(uVit.y - 0.074, uVit.y - 0.062, vBindP.y) * (1.0 - smoothstep(uVit.y - 0.006, uVit.y + 0.006, vBindP.y)) * (1.0 - smoothstep(0.045, 0.062, abs(vBindP.x)));
+	diffuseColor.rgb *= mix(vec3(1.0), vec3(0.86, 0.74, 0.65), smoothstep(0.64, 0.73, fk) * fm * (0.55 + 0.45 * sn3(vBindP * 40.0)));
 }
 // vitiligo: soft-edged pale patches where the pigment has gone, for the few who have it
 if (uVit.x > 0.5 && uVit.x < 1.5) {
