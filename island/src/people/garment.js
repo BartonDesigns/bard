@@ -900,16 +900,6 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const pts = (want, sd) => { const a = []; if (P0.part && P0.p) for (let v = 0; v < P0.part.length; v++) if (P0.part[v] === want && Math.sign(P0.p[v * 3]) === sd) a.push(P0.p[v * 3], P0.p[v * 3 + 1], P0.p[v * 3 + 2]); return a; };
 	for (const q of o.acc || []) {
 		const c = q.col || '#333333', a2 = q.acc || c;
-		if (q.kind === 'belt') {
-			// a belt round the trousers' waistband, their loops over it, a buckle (garment-kit.js)
-			for (const { geo, part: pc } of beltGeometry(cut, kitField(), { y: cut.waist + 0.001, lo: !!P0.lo })) put(geo, 'root', pc === 'buckle' ? (q.buckle || '#8c877d') : pc === 'loop' ? (q.loop || o.bottom?.col || c) : c, pc === 'buckle' ? 2 : 0.1, pc === 'loop' ? 2 : pc === 'buckle' ? 0 : 1);
-			continue;
-		}
-		if (q.kind === 'cargo') {
-			// bellows pockets on the outer thighs, flapped (garment-kit.js)
-			for (const sd of [1, -1]) for (const { geo, part: pc } of cargoPocketGeometry(pts(4, sd), sd, { y: cut.knee + 0.17, lo: !!P0.lo })) put(geo, 'upperleg01.' + (sd === Lx ? 'L' : 'R'), pc === 'flap' ? new THREE.Color(c).multiplyScalar(0.92).getHex() : c, 0, 2);
-			continue;
-		}
 		if (q.kind === 'cap' || q.kind === 'visor') {
 			const rim = eyeY + 0.045;
 			if (q.kind === 'cap') put(dome(top + 0.012 - rim, 0.012), 'head', c);
@@ -1037,6 +1027,16 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const kitRing = () => ring || (ring = necklineRing(P0.cloth, cut));
 	for (const q of o.acc || []) {
 		const c = q.col || '#333333', a2 = q.acc || c;
+		if (q.kind === 'belt') {
+			// a belt round the trousers' waistband, their loops over it, a buckle (garment-kit.js)
+			for (const { geo, part: pc } of beltGeometry(cut, kitField(), { y: cut.waist + 0.001, lo: !!P0.lo })) put(geo, 'root', pc === 'buckle' ? (q.buckle || '#8c877d') : pc === 'loop' ? (q.loop || o.bottom?.col || c) : c, pc === 'buckle' ? 2 : 0.1, pc === 'loop' ? 2 : pc === 'buckle' ? 0 : 1);
+			continue;
+		}
+		if (q.kind === 'cargo') {
+			// bellows pockets on the outer thighs, flapped (garment-kit.js)
+			for (const sd of [1, -1]) for (const { geo, part: pc } of cargoPocketGeometry(pts(4, sd), sd, { y: cut.knee + 0.17, lo: !!P0.lo })) put(geo, 'upperleg01.' + (sd === Lx ? 'L' : 'R'), pc === 'flap' ? new THREE.Color(c).multiplyScalar(0.92).getHex() : c, 0, 2);
+			continue;
+		}
 		if (q.kind === 'bandana') {
 			// over the nose and mouth, a point hanging at the throat, knotted behind
 			const y0 = eyeY - 0.035, y1 = cut.neck - 0.02, h = y0 - y1;

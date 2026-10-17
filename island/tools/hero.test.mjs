@@ -52,6 +52,10 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.match(src0, /F\?\.built \? \(F\.tall \? 0\.163 : 0\.083\)/, 'trousers end under the boots\' collars');
 	assert.match(src0, /F\.tall \? 0\.17 : 0\.09/, 'tall boots');
 	assert.match(src0, /const legHang = B\?\.hang/, 'a straight hang');
+	// (the belt and the pockets are built in the loop where the torso's surface can be measured,
+	// never in the one before it is declared: that threw, and every hero build with it)
+	const kf = src0.indexOf('const kitField'), bk = src0.indexOf("q.kind === 'belt'"), ck = src0.indexOf("q.kind === 'cargo'");
+	assert.ok(kf > 0 && bk > kf && ck > kf, 'the belt and the pockets built after the torso is measured');
 	assert.equal(m.style.hair.style, 'short01');
 	assert.equal(m.style.hair.beard, 'stubble');
 	assert.equal(f.style.hair.style, 'ponytail01');
