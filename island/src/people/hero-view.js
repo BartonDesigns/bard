@@ -23,6 +23,8 @@ export const VIEWS = {
 	face: [0.32, 0.78, 0.935, 0.925, 28], profile: [Math.PI / 2, 0.82, 0.935, 0.925, 28], hands: [-0.9, 0.62, 0.6, 0.5, 34],
 	head: [0, 0.82, 0.935, 0.93, 26], headL: [Math.PI / 2, 0.82, 0.935, 0.93, 26], headR: [-Math.PI / 2, 0.82, 0.935, 0.93, 26],
 	boots: [0.55, 1.15, 0.2, 0.05, 30], bootsL: [Math.PI / 2, 1.15, 0.12, 0.05, 30],
+	// (the clothes' making: the chest and its kit, the thighs and knees)
+	torso: [0.35, 1.05, 0.74, 0.71, 30], legs: [0.5, 1.6, 0.42, 0.38, 30],
 };
 // the views drawn orthographic (proportions), and how much of the body each takes in (m)
 const ORTHO_SPAN = 2.16;
