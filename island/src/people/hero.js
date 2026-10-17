@@ -82,7 +82,7 @@ const HERO = {
 			// (tapered trousers over mid-height hiking boots, the hem resting on their collars)
 			bottom: { kind: 'cargo', col: '#8a7a5c', pat: 'cargo', legs: 'long', fit: 'straight', hang: 0.012 },
 			shoes: { kind: 'boot', col: '#5a4632', sole: '#17130f' },
-			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }],
+			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),
 	},
 };
