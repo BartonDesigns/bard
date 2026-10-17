@@ -164,6 +164,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		body: () => me(),
 		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, ...caster.info() }),
 		cast: (id, o) => caster.cast(id, o || {}),
+		// (a beam cast and held for ms, as a tap on the bar holds it)
+		hold: (id, ms = 2500) => { const ok = caster.cast(id, {}); if (ok) heldTap.set(id, performance.now() + ms); return ok; },
 		learn: (id) => weave(state, id),
 		// (the console: fabric of a strand, every spell known)
 		give: (strand = 'light', n = 100) => { gather(state, strand, n); dirty = true; return { ...state.fabric }; },
