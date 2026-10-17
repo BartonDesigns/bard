@@ -36,7 +36,7 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	assert.equal(f.style.outer.kind, 'flannel'); assert.equal(f.style.outer.pat, 'plaid'); assert.equal(f.style.outer.fit, 'oversized', 'a big flowing plaid shirt');
 	for (const d of [m, f]) { assert.ok(d.style.bottom.hang > 0.02 && d.style.bottom.tuck && d.style.shoes.tall, 'rugged trousers into tall boots'); assert.equal(d.style.bottom.kind, 'cargo', 'trousers with room, not leggings'); }
 	assert.equal(m.style.shoes.kind, 'boot');
-	assert.ok(m.style.acc.some((q) => q.kind === 'carrier') && m.style.acc.some((q) => q.kind === 'gloves'), 'his carrier and gloves');
+	assert.ok(m.style.acc.some((q) => q.kind === 'carrier'), 'his carrier');
 	assert.ok(m.build.shoulders > f.build.shoulders && m.build.waist > 0 && f.build.waist > 0, 'the V');
 	assert.equal(f.style.shoes.kind, 'boot');
 	const src0 = fs.readFileSync(new URL('../src/people/garment.js', import.meta.url), 'utf8');

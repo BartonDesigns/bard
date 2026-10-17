@@ -675,7 +675,8 @@ export function clothGeometry(A, p, o, cut, R) {
 			if (tuck && y > cut.waist - 0.06) k = Math.max(k, off.top + 0.004);
 			if (legFlare && y < flareTop && SL[i] >= 20) { const t = Math.min(1, (flareTop - y) / flareLen); k += legFlare * t * (0.6 + 0.4 * t); }
 			if (legHang && y < flareTop && SL[i] >= 20) { const t = Math.min(1, (flareTop - y) / (flareLen * 0.55)); k += legHang * t * t * (3 - 2 * t); }
-			if (B?.tuck && SL[i] >= 20) k += 0.012 * Math.exp(-(((y - R.legEnd - 0.035) / 0.03) ** 2));
+			// (gathered in over the boot's top, so the hem meets the shaft instead of standing off it)
+			if (B?.tuck && SL[i] >= 20) { const gth = Math.max(0, Math.min(1, (R.legEnd + 0.06 - y) / 0.06)); k = k * (1 - gth) + 0.024 * gth; }
 			if (B?.legs === 'skirt') k = 0.015 + Math.max(0, 0.6 - y) * 0.1;
 		}
 		if (s === 3 && (o.shoes?.kind === 'chunky' || o.shoes?.tall) && y < 0.04) k += 0.012;
