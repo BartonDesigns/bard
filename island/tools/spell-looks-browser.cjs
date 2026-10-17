@@ -65,6 +65,12 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 				const T0 = 0.32, landed = [false, false, false];
 				run(0.18 * 2 + T0 * 0.8, (tt) => pts.forEach((p, i) => { const u = (tt - 0.18 * i) / T0; if (u < 0) return; if (u >= 1) { if (!landed[i]) { landed[i] = true; L.blast?.(fx, p, spell.r, false); } return; } const h = 26 * (1 - u); L.fall?.(fx, v(p.x + d.x * h, p.y + d.y * h, p.z + d.z * h), d, false); }));
 			}
+			else if (k === 'flare') {
+				// (out of a high afternoon sun, charging, then the blast)
+				const d = v(0.35, 0.85, 0.3), l = Math.hypot(d.x, d.y, d.z), top = v(at.x + d.x / l * 70, at.y + d.y / l * 70, at.z + d.z / l * 70), D = spell.delay;
+				run(D, (tt) => { L.tell?.(fx, at, spell.r, tt / D, false); L.beam?.(fx, top, at, tt / D, false); });
+				L.blast?.(fx, at, spell.r, false); run(0.01);
+			}
 			else if (k === 'singularity') {
 				// (Gargantua far off on the horizon, fed for a while; the nearest foe streaking into it)
 				const h = v(-14, 16, -120), e = camera.position;

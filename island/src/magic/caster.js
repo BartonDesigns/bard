@@ -29,7 +29,7 @@
 // buff while it lasts, a status on a fighter) and falls back on a soft orb of its school's colour.
 
 import * as THREE from 'three';
-import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, strandOf } from './spells.js';
+import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, strandOf, moonlit } from './spells.js';
 import { GLOW, magicSound } from './fx.js';
 import { lookOf, LOOK } from './looks.js';
 
@@ -171,6 +171,18 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const c = GLOW[spell.school], L = lookOf(spell);
 			effects.push({ t: 0, every: 0.08, life: spell.delay, step() { if (L.tell) L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / spell.delay); else fx.ring(at, spell.r, c, 18, 0.3, 0.2); } });
 			effects.push({ t: spell.delay, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); } areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm', 0.2); } });
+		},
+		flare(spell, k) {
+			// Solar Flare: directed light out of wherever the sun stands, a column down onto where you aim
+			// for spell.delay, then the blast. By night only once it channels the moon (moonlit), in
+			// silver and a fifth weaker; under no moon, or unmastered, it is not cast and costs nothing.
+			const H = heavens() || {}, up = (q) => q && q.y > 0.05, night = !up(H.sun);
+			if (night && (!moonlit(state, spell.id) || !up(H.moon))) { hint(moonlit(state, spell.id) ? 'There is no moon up to channel.' : `${spell.name} needs the sun. Master it to channel the moon by night.`, 2200); return 'refund'; }
+			const src = night ? H.moon : H.sun, dir = new THREE.Vector3(src?.x || 0, Math.max(0.35, src?.y || 1), src?.z || 0).normalize();
+			const { at } = aimPoint(spell.range), L = lookOf(spell), D = spell.delay || 0.5, kk = night ? k * 0.8 : k;
+			const top = { x: at.x + dir.x * 70, y: at.y + dir.y * 70, z: at.z + dir.z * 70 };
+			effects.push({ t: 0, every: 0.05, life: D, step() { const u = 1 - Math.max(0, this.life) / D; L.tell?.(fx, at, spell.r, u, night); L.beam?.(fx, top, at, u, night); } });
+			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(spell.school, 0.16); } });
 		},
 		singularity(spell, k) {
 			// Gargantua: it rises on the horizon the way you face, and over spell.t draws every foe within

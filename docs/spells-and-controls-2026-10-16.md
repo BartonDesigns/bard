@@ -78,7 +78,7 @@ Everything is kept between visits (`l99-magic`).
 
 | School | Spells, by tier |
 |---|---|
-| **Radiance** | Sunspark (bolt) · Lance of Dawn (three lances that fall out of the sun, or the moon at night) · Solar Flare (burst that blinds) · Judgement (pillar of light from the sky) |
+| **Radiance** | Sunspark (bolt) · Lance of Dawn (three lances that fall out of the sun, or the moon at night) · Solar Flare (a column of light from wherever the sun stands, that blinds; by night from the moon once mastered) · Judgement (pillar of light from the sky) |
 | **Restoration** | Mend · Renewal (heal over time) · Sanctuary (healing ground that slows foes) · Resurgence (two minutes in which a lethal blow is turned aside) |
 | **Warding** | Aegis (absorbs blows) · Radiant Aura (burns those close) · Bulwark (nothing reaches you for 3.5 s) · Banish (throws foes back and makes them flee) |
 | **Dawn** | Lumen (a light at your shoulder) · Dawnsight (see the aether through walls) · Swiftstride (speed, high jumps, gentle falls) · Waterstride (walk on water) · Daybreak (turns the night to dawn) · Sunwell Gate (travel to a well you have found) |
@@ -117,6 +117,9 @@ Everything is kept between visits (`l99-magic`).
   catastrophes.
 - **Light:** Lumen and Nightsight lift the eye's exposure in the dark (one factor in `main.js`).
   No scene lights are added, so no materials recompile.
+- **Aether and your name:** a mote gives more of the strand your reputation leans to (up to twice
+  the light at +100, twice the dark at -100) and less of the other, down to half (`aetherShare`).
+  Sparing a foe still gives light fabric, and a kill gives dark.
 - **Daybreak** moves the sky's clock to dawn over six seconds (by night only, once every five
   minutes).
 - **Performance:**
@@ -145,6 +148,12 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
 - **Lance of Dawn** is now an area spell. Three lances fall point first around where you aim. By
   day they come out of the sun in gold, and by night out of the moon in silver. A ring on the ground
   warns where each will land.
+- **Solar Flare** brings down a column of directed light from the sun's real place in the sky onto
+  where you aim, then bursts. By night it is refused and costs nothing, unless it channels the moon
+  (`state.moonlit`, granted by the skills side when the spell is mastered or fed aether;
+  `Crysis.magic.moonlit()` on the console). Then it comes from the moon, in silver, a fifth weaker.
+- **Gargantua**, Void's fifth rung: a black hole rises on the horizon and over ten seconds draws in
+  and destroys every hostile fighter within 600 m, and takes a quarter of any boss's life.
 - **The gallery:** `node island/tools/spell-looks-browser.cjs` plays every look in a small scene of
   its own, with no game loaded, and saves one picture per spell to `/tmp/spell-looks` (`ONLY=` picks
   some).
@@ -160,7 +169,7 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
 
 ## Tests
 
-`node --test island/tools/magic.test.mjs` (12):
+`node --test island/tools/magic.test.mjs` (13):
 - every spell is whole, and no school's ladder is missing a rung;
 - the runtime handles every kind of spell;
 - weaving, affinity and the ladder, and twilight's gate;
@@ -171,7 +180,8 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   leaning to light, wells rare), and which strands show when and coming back;
 - the weapons on the keys 1 to 5;
 - the look modes and the keys being wired;
-- every spell has a look of its own, and no two look alike.
+- every spell has a look of its own, and no two look alike;
+- Solar Flare needs the sun until it channels the moon, and the aether leans to your name.
 
 ## Found on the way: memory while the mouse is captured
 

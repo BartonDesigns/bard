@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SPELLS, SPELL, SCHOOLS, WEAVE_COST, TWILIGHT_NEEDS, createMagicState, saveMagic, weave, weaveBlock, weaveCost, bind, spellPower, manaCost, castBlock, spend, cooldownLeft, manaMax, gather, strandOf } from '../src/magic/spells.js';
+import { SPELLS, SPELL, SCHOOLS, WEAVE_COST, TWILIGHT_NEEDS, createMagicState, saveMagic, weave, weaveBlock, weaveCost, bind, spellPower, manaCost, castBlock, spend, cooldownLeft, manaMax, gather, strandOf, moonlit, grantMoonlit, aetherShare } from '../src/magic/spells.js';
 import { moteAt, wellAt, aetherNear, strandsShowing, isBack, fabricOf, seedOf, cellHash, MOTE_BACK } from '../src/magic/aether.js';
 import { hotbarBinds, hotbarPress } from '../src/combat/hotbar.js';
 
@@ -16,7 +16,7 @@ test('every spell is whole, and every school a ladder with no rung missing', () 
 		assert.ok(s.tier >= 1 && s.tier <= 4 || s.tier === 5 && s.kind === 'singularity', s.id + ' tier');
 		assert.ok(s.name && s.glyph && s.desc.length > 20, s.id + ' words');
 		assert.ok(s.mana >= 0 && s.cd > 0, s.id + ' costs');
-		if (['bolt', 'burst', 'strike', 'nova', 'cone', 'chain', 'orb', 'well'].includes(s.kind)) assert.ok(s.dmg > 0, s.id + ' harms');
+		if (['bolt', 'burst', 'flare', 'strike', 'nova', 'cone', 'chain', 'orb', 'well'].includes(s.kind)) assert.ok(s.dmg > 0, s.id + ' harms');
 		if (s.kind === 'bolt') assert.ok(s.speed > 0, s.id + ' flies');
 	}
 	assert.ok(SPELLS.length >= 40, `a wide book (${SPELLS.length})`);
@@ -213,4 +213,22 @@ test('every spell has a look of its own, and no two look alike', async () => {
 	const by = new Map();
 	for (const [id, sg] of sigs) { assert.ok(!by.has(sg), `${id} looks just like ${by.get(sg)}`); by.set(sg, id); }
 	fx.dispose();
+});
+
+test('Solar Flare needs the sun until it channels the moon; aether leans to your name', () => {
+	const s = createMagicState();
+	assert.equal(SPELL['solar-flare'].night, 'moon');
+	assert.equal(moonlit(s, 'solar-flare'), false);
+	assert.equal(grantMoonlit(s, 'sunspark'), false, 'only a spell of the sun can channel the moon');
+	assert.equal(grantMoonlit(s, 'solar-flare'), true);
+	assert.equal(grantMoonlit(s, 'solar-flare'), false, 'once');
+	const back = createMagicState(JSON.parse(JSON.stringify(saveMagic(s))));
+	assert.equal(moonlit(back, 'solar-flare'), true, 'kept between visits');
+	assert.deepEqual(createMagicState({ v: 1, moonlit: ['sunspark', 'nope', 'solar-flare'] }).moonlit, ['solar-flare'], 'rubbish dropped');
+	const src = fs.readFileSync(new URL('../src/magic/caster.js', import.meta.url), 'utf8');
+	assert.match(src, /night && \(!moonlit\(state, spell\.id\)/, 'refused by night unless moonlit');
+	// a saint gathers twice the light and half the dark; a monster the other way; no name, as it was
+	assert.equal(aetherShare('light', 100), 2); assert.equal(aetherShare('dark', 100), 0.5);
+	assert.equal(aetherShare('dark', -100), 2); assert.equal(aetherShare('light', -100), 0.5);
+	assert.equal(aetherShare('light', 0), 1); assert.equal(aetherShare('dark', 500), 0.5, 'bounded');
 });

@@ -9,7 +9,7 @@
 // eyes to the cloak (combat.hooks.cloak). Life taken gives a thread of dark fabric, mercy shown
 // a thread or two of light.
 
-import { createMagicState, saveMagic, weave, bind, gather, SPELL, SLOTS } from './spells.js';
+import { createMagicState, saveMagic, weave, bind, gather, aetherShare, grantMoonlit, SPELL, SLOTS } from './spells.js';
 import { createMagicFx, magicSound } from './fx.js';
 import { createAether, seedOf } from './aether.js';
 import { createCaster } from './caster.js';
@@ -41,10 +41,12 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		fx, light, seed, state, isPhone,
 		ground: (x, z) => combat.ground(x, z, camera.position.y + 40),
 		heightAt: (x, z) => { const I = W()?.island; return I ? I.heightAt(x, z) : NaN; },
-		onGather: (m, n) => {
+		onGather: (m, n0) => {
+			// (more of the strand your name leans to, less of the other)
+			const share = aetherShare(m.strand, combat.morality?.reactions?.()?.reputation || 0), n = Math.max(1, Math.round(n0 * share));
 			gather(state, m.strand, n); dirty = true;
 			magicSound('gather', 0.1);
-			hint(m.well ? `An aether well: +${n} ${m.strand} fabric. You will know the way back to it.` : `+${n} ${m.strand} aether fabric`, m.well ? 3500 : 1200);
+			hint(m.well ? `An aether well: +${n} ${m.strand} fabric. You will know the way back to it.` : `+${n} ${m.strand} aether fabric${share > 1.15 ? ' (your name draws it)' : share < 0.85 ? ' (it shies from your name)' : ''}`, m.well ? 3500 : 1200);
 		},
 	});
 	const active = () => !!W()?.player && !busy() && !mount.inert && mount.style.display !== 'none' && !hud?.isOpen() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') && !window._KEYS_PLAY_ON;
@@ -104,6 +106,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, exposure: () => caster.exposure(),
+		// (Solar Flare channels the moon by night: the skills side grants this; here for the console)
+		moonlit: (id = 'solar-flare') => { const ok = grantMoonlit(state, id); if (ok) dirty = true; return ok; },
 		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, ...caster.info() }),
 		cast: (id, o) => caster.cast(id, o || {}),
 		learn: (id) => weave(state, id),

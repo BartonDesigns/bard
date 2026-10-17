@@ -115,14 +115,23 @@ export const LOOK = {
 		},
 	},
 	'solar-flare': {
-		tell: (fx, at, r, u) => { if (u < 0.2) fx.decal(at, r, r * 0.9, 0.55, C.amber, 0.8, O('rune', { spin: 2 })); },
-		blast: (fx, at, r) => {
+		// (a column of light out of the sun's place in the sky, narrowing onto its mark as it charges;
+		// by night out of the moon, in silver)
+		tell: (fx, at, r, u, night) => { if (u < 0.12) fx.decal(at, r, r * 0.9, 0.6, night ? C.moon : C.amber, 0.8, O('rune', { spin: 2 })); if (Math.random() < 0.5) { const a = Math.random() * 6.283; fx.emit(at.x + Math.cos(a) * r, at.y + 0.2, at.z + Math.sin(a) * r, -Math.cos(a) * r * 2, 0.5, -Math.sin(a) * r * 2, 0.45, 0.3, 0.1, night ? C.moon : C.gold, 1, 0, 0, STREAK); } },
+		beam: (fx, from, to, u, night) => {
+			const w = 2.4 - (u || 0) * 1.2, c = night ? C.moon : C.amber;
+			fx.line(from, to, c, w * 0.5, 0.13, w, 0, ORB);
+			fx.line(from, to, night ? C.white : C.sun, w * 0.6, 0.13, w * 0.45, 0, ORB);
+			fx.emit(to.x, to.y + 0.3, to.z, 0, 0, 0, 0.13, w * 2, w * 2.4, c, 0.9, 0, 0, ORB);
+		},
+		blast: (fx, at, r, night) => {
+			const c = night ? C.moon : C.amber, g = night ? C.ice : C.gold;
 			fx.emit(at.x, at.y + 1, at.z, 0, 0, 0, 0.35, 1, r * 1.6, C.white, 1, 0, 0, ORB);
-			fx.emit(at.x, at.y + 1, at.z, 0, 0, 0, 0.5, r * 0.6, r * 2.2, C.amber, 1, 0, 0, RING);
+			fx.emit(at.x, at.y + 1, at.z, 0, 0, 0, 0.5, r * 0.6, r * 2.2, c, 1, 0, 0, RING);
 			// (rays, as from a sun)
-			for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; fx.line({ x: at.x, y: at.y + 1, z: at.z }, { x: at.x + Math.cos(a) * r * 1.4, y: at.y + 1 + rnd(0.6), z: at.z + Math.sin(a) * r * 1.4 }, C.gold, 0.5, 0.3, 0.25, 0, STAR); }
-			fx.burst(at, C.sun, 40, r * 1.6, 0.7, 0.35, 1.2, STAR);
-			fx.decal(at, r * 0.8, r * 1.3, 0.9, C.amber, 0.8, O('star', { spin: 1 }));
+			for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283; fx.line({ x: at.x, y: at.y + 1, z: at.z }, { x: at.x + Math.cos(a) * r * 1.4, y: at.y + 1 + rnd(0.6), z: at.z + Math.sin(a) * r * 1.4 }, g, 0.5, 0.3, 0.25, 0, STAR); }
+			fx.burst(at, night ? C.moon : C.sun, 40, r * 1.6, 0.7, 0.35, 1.2, STAR);
+			fx.decal(at, r * 0.8, r * 1.3, 0.9, c, 0.8, O('star', { spin: 1 }));
 		},
 	},
 	judgement: {
