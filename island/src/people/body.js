@@ -15,6 +15,7 @@ import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, acce
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
+import { FLUFFY, buildFluff, fluffMaterial } from './hair-fluff.js';
 import { fadePerson } from './fade.js';
 import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
 import { hairCapsules, poseCapsules } from './hair-collide.js';
@@ -322,6 +323,9 @@ export function buildPerson(A, d) {
 	}
 	P.lod = (dist) => {
 		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; for (const b of P.bags || []) b.lod(dist);
+		// fluffy hair: all its tufts near, the locks' cores and inner layer further, the cores far off
+		const hl = P.hair?.geometry.userData.lod;
+		if (hl) { const k = PHONE ? 0.6 : 1, n = hl[dist < 6 * k ? 2 : dist < 16 * k ? 1 : 0]; if (P.hair.geometry.drawRange.count !== n) P.hair.geometry.setDrawRange(0, n); }
 		// the sleeves' pose folds and hang (garment-shape.js): near people only, fading out by
 		// 22 m, nearer still on a phone or when the governor has stepped quality down
 		const U = P.clothMat?.userData.U;
@@ -369,7 +373,7 @@ function dress(A, P, o) {
 	const beard = hat?.kind === 'hazhood' ? null : beardFor(d, H, rng(d.seed ^ 0xbea4d));
 	P.skinMat.userData.beard.value.set(cols.stubble.r, cols.stubble.g, cols.stubble.b, beard ? beard.stubble : 0);
 	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));
-	P.hairWant = { style: showHair ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
+	P.hairWant = { style: showHair && (H.style || !FLUFFY.has(cutName)) ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
 	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
@@ -467,6 +471,17 @@ function hairUp(A, P) {
 		const hair = P.hair;
 		const animate = hairMotion(P, hair, hair.material.userData.U);
 		hair.onBeforeRender = () => { animate(); poseCapsules(P, caps, hair.material.userData.U, hair); };
+	}
+	else if (W.cut && FLUFFY.has(W.cut)) {
+		// fluffy hair (hair-fluff.js): tufts in locks, brushed the cut's way, skinned to the head
+		// and, as long hair falls, the neck and the back
+		coverScalp(P, null);
+		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
+		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
+		const hair = skinned(g, fluffMaterial(root, tip));
+		P.hair = hair;
+		const animate = hairMotion(P, hair, hair.material.userData.U);
+		hair.onBeforeRender = () => animate();
 	}
 	else if (W.cut) {
 		coverScalp(P, null);

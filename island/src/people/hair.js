@@ -134,7 +134,7 @@ export function hairline(deg) {
 
 // where the scalp is painted with close-cropped hair (skin.js): inside the hairline, fading
 // out down the sides of a fade, back where the hairline recedes, less over a thinning crown
-const recedeAt = (deg, recede) => recede * (deg < 60 ? 0.03 * (1 - deg / 90) + (deg > 25 ? 0.02 * sm(25, 45, deg) * (1 - sm(50, 70, deg)) : 0) : 0);
+export const recedeAt = (deg, recede) => recede * (deg < 60 ? 0.03 * (1 - deg / 90) + (deg > 25 ? 0.02 * sm(25, 45, deg) * (1 - sm(50, 70, deg)) : 0) : 0);
 export function scalpMask(A, P, p, K, src, cutName, opts = {}) {
 	const cut = CUTS[cutName] || CUTS.short, hb = P.map.head, out = new Float32Array(src.length);
 	const crown = new THREE.Vector3(0.1, 0.9, -0.45).normalize(), d = new THREE.Vector3();
