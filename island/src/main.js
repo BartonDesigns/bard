@@ -682,6 +682,10 @@ export function createIslandWorld() {
 	HOOKS.self = you;
 	// a look at your hero in the game itself, for development (?heroview, Crysis.heroView)
 	const heroView = HOOKS.heroView = createHeroView({ scene, renderer, avatar, self: you, world: () => world, setCine: (fn) => { HOOKS.cine = fn; } });
+	// your body made in a quiet moment soon after the world is entered, not when it is first
+	// needed (the first weapon taken up, whose arms are yours, or the first look at yourself):
+	// its making takes some hundreds of milliseconds
+	{ const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); (window.requestIdleCallback || ((f) => setTimeout(f, 1)))(() => avatar.ready().catch(() => {}), { timeout: 4000 }); } }, 2000); }
 	if (/[?&]heroview\b/.test(location.search)) { const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); heroView.open(); } }, 1000); }
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;

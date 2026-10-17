@@ -163,12 +163,15 @@ export function hoodGeometry(cut, field, ring, { lo = false } = {}) {
 
 // A collar: the stand up round the neck, folded at its top and laid down over the shoulders,
 // with points at the front (a polo's softer and shorter)
-export function collarGeometry(cut, ring, { polo = false, lo = false } = {}) {
+// (out: further out, for an overshirt worn over another top; open: worn open, the collar's
+// ends running down the opening at the front, spread a little, as an open shirt's lie)
+export function collarGeometry(cut, ring, { polo = false, lo = false, out: further = 0, open = false } = {}) {
 	const nu = lo ? 14 : 24, aMax = 2.9, zc = (cut.frontZ + cut.backZ) / 2 - 0.012, cols = [];
 	const stand = polo ? 0.022 : 0.027, fall = polo ? 0.03 : 0.036;
 	for (let i = 0; i <= nu; i++) {
 		const a = (i / nu * 2 - 1) * aMax, S = ringAt(ring, a), out = V(S.x, 0, S.z - zc).normalize();
-		S.addScaledVector(out, 0.003);
+		S.addScaledVector(out, 0.003 + further);
+		if (open) { const f = smooth((Math.abs(a) - 2.25) / 0.65); S.add(V(Math.sign(S.x) * 0.012 * f, -0.045 * f, 0.004 * f)); }
 		const T = S.clone().add(V(0, stand, 0)).addScaledVector(out, -0.002);
 		const fold = T.clone().addScaledVector(out, 0.006).add(V(0, 0.002, 0));
 		const point = smooth((Math.abs(a) - 2.15) / 0.75) * (polo ? 0.6 : 1);

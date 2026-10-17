@@ -1096,6 +1096,12 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	if (T0 && (isShirted(T0) || T0.kind === 'polo' || T0.collar) && !(o.outer && !o.outer.open && o.outer.sleeves !== 'none')) {
 		put(collarGeometry(cut, kitRing(), { polo: T0.kind === 'polo', lo: !!P0.lo }), 'spine01', T0.pat === 'ringer' && T0.acc ? T0.acc : T0.col, 0, 0);
 	}
+	// an open overshirt's own collar, over whatever is under it (the plaid's main colour)
+	const O0 = o.outer;
+	if (O0 && O0.open && (isShirted(O0) || O0.collar) && !(T0 && (isShirted(T0) || T0.collar))) {
+		const off = offsets(o);
+		put(collarGeometry(cut, kitRing(), { lo: !!P0.lo, out: Math.max(0, off.outer - off.top), open: true }), 'spine01', O0.col, 0, O0.fab === 'canvas' ? 2 : 0);
+	}
 	// the bun of hair worn up, and a headscarf
 	if (o.hair?.bun && hairCol) { const bun = new THREE.SphereGeometry(0.05, 12, 8); bun.translate(cx, top - 0.02, sk.z0 + 0.01); put(bun, 'head', hairCol); }
 	if (o.hair?.scarf) {

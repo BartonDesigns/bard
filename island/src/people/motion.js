@@ -50,8 +50,9 @@ const PALM0 = 1.45;
 export const POSES = {
 	rest: { both: arm({}) },
 	// ready: the hero's way of standing (people/hero.js): arms a little off the sides, elbows soft,
-	// hands relaxed and a little curled (a tighter curl leaves the thumb standing out), chest up
-	ready: { both: arm({ abd: 0.17, flex: 0.05, roll: 0.12, bend: 0.3, curl: 0.3 }), lean: -0.03 },
+	// hands relaxed (the fingers' own cascade, the little finger most, and only a touch more: a
+	// curl past that closes them toward a loose fist and leaves the thumb standing out), chest up
+	ready: { both: arm({ abd: 0.17, flex: 0.05, roll: 0.12, bend: 0.3, curl: 0.12 }), lean: -0.03 },
 	pockets: { both: arm({ abd: 0.12, flex: -0.08, roll: 0.35, bend: 0.55, pro: 0.3, wflex: 0.3, curl: 0.9 }), swing: 0.15 },
 	crossed: { lead: arm({ abd: 0.05, flex: 0.6, roll: 1.35, bend: 1.95, pro: 0.3, curl: 0.5 }), off: arm({ abd: 0.08, flex: 0.5, roll: 1.2, bend: 1.8, pro: 0.1, curl: 0.55 }), swing: 0.05, lean: -0.02 },
 	behind: { both: arm({ abd: 0.08, flex: -0.45, roll: 1.55, bend: 1.45, pro: -0.6, curl: 0.35 }), swing: 0.05, lean: -0.03 },
