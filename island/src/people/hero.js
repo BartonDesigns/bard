@@ -4,7 +4,7 @@
 // read strong (a square jaw on him, high cheekbones and full lips on her), never the dozen
 // strong random ones a townsperson gets; lean rather than built (the base mesh's muscle target
 // inflates past a little); a groomed cut, and clothes made to move in: a fitted dark top with
-// its sleeves rolled, straight cargo trousers tapering to boots. No jacket: a garment over
+// its sleeves rolled, cargo trousers with room in them, boots. No jacket: a garment over
 // another stands well off the body here and balloons. And they stand ready (people/motion.js).
 //
 // Friends draw you from your seed alone (net/protocol.js cleanLook), so the hero is a seed of
@@ -52,7 +52,7 @@ const HERO = {
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'longsleeve', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'straight' },
+			bottom: { kind: 'cargo', col: C.olive, pat: 'cargo', legs: 'long', fit: 'regular' },
 			shoes: { kind: 'boot', col: C.espresso, sole: C.black },
 			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }],
 		}),
@@ -70,7 +70,7 @@ const HERO = {
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'longsleeve', col: C.black, pat: 'plain', fit: 'fitted', sleeves: 'rolled' },
 			outer: null,
-			bottom: { kind: 'cargo', col: C.charcoal, pat: 'cargo', legs: 'long', fit: 'straight' },
+			bottom: { kind: 'cargo', col: C.charcoal, pat: 'cargo', legs: 'long', fit: 'regular' },
 			shoes: { kind: 'boot', col: C.espresso, sole: C.black },
 			acc: [{ kind: 'watch', col: C.black, acc: SILVER, metal: true }, { kind: 'earrings', hoop: false, col: SILVER }],
 		}),
