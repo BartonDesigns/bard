@@ -267,12 +267,13 @@ export function computeMods(perks) {
 export function refreshMods(s) {
 	s.mods = computeMods(s.perks || []);
 	// (and each spell's mastery: its own power, and what its levels open)
-	s.moonlit = {};
+	const lit = new Set(Array.isArray(s.moonlit) ? s.moonlit : []);
 	for (const [id, pts] of Object.entries(s.mastery || {})) {
 		const L = masteryLevel(pts);
 		if (L > 1) s.mods.power[id] = (s.mods.power[id] || 0) + (L - 1) * MASTERY_POWER;
-		for (const [at, g] of Object.entries(MASTERY_GIFT[id] || {})) if (L >= +at && g.moonlit) s.moonlit[id] = true;
+		for (const [at, g] of Object.entries(MASTERY_GIFT[id] || {})) if (L >= +at && g.moonlit) lit.add(id);
 	}
+	s.moonlit = [...lit];
 	return s.mods;
 }
 
@@ -280,7 +281,7 @@ export function refreshMods(s) {
 // Each spell you know grows with you: casting it adds the mana you paid, and you can pour aether
 // into it (its own strand; a twilight spell takes half of each). Its levels (I .. V) make it
 // stronger, and on some spells open more: Solar Flare, a blast of the sun's own light, learns at
-// III to draw on the moon by night (the caster reads s.moonlit and spells.js's sun flag).
+// III to draw on the moon by night (s.moonlit: the ids of the spells that may; the caster reads it).
 export const MASTERY = Object.freeze([0, 100, 300, 700, 1500]);
 export const MASTERY_POWER = 0.08;
 export const NUMERAL = Object.freeze(['I', 'II', 'III', 'IV', 'V']);

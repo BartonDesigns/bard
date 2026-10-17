@@ -146,13 +146,13 @@ test('a spell grows with casting and with aether poured in; Solar Flare learns t
 	assert.equal(addMastery(s, 'solar-flare', 120), 1);
 	assert.ok(Math.abs(spellPower(s, SPELL['solar-flare']) / p0 - (1 + MASTERY_POWER)) < 1e-9, 'its own power, and only its own');
 	assert.equal(spellPower(s, SPELL['lance-of-dawn']), lance0);
-	assert.ok(!s.moonlit['solar-flare'], 'not yet by the moon');
+	assert.ok(!s.moonlit.includes('solar-flare'), 'not yet by the moon');
 	// pouring: its strand's aether, a point each
 	const light0 = s.fabric.light, dark0 = s.fabric.dark;
 	assert.deepEqual(feedSpell(s, 'solar-flare', 200), { fed: 200, levels: 1 });
 	assert.equal(s.fabric.light, light0 - 200); assert.equal(s.fabric.dark, dark0);
 	assert.equal(masteryLevel(s.mastery['solar-flare']), 3);
-	assert.ok(s.moonlit['solar-flare'], 'Moonfall: it works by night');
+	assert.ok(s.moonlit.includes('solar-flare'), 'Moonfall: it works by night');
 	// no more than you have, and not past the last level
 	s.fabric.light = 30;
 	assert.equal(feedable(s, 'solar-flare', 100), 30);
@@ -165,7 +165,7 @@ test('a spell grows with casting and with aether poured in; Solar Flare learns t
 	assert.deepEqual(feedCost(SPELL.shadowbolt, 10), { light: 0, dark: 10 });
 	// kept between visits; derived again on load
 	const back = sanitizeSkills(createMagicState(JSON.parse(JSON.stringify(saveMagic(s)))));
-	assert.equal(back.mastery['solar-flare'], 1500); assert.ok(back.moonlit['solar-flare']);
+	assert.equal(back.mastery['solar-flare'], 1500); assert.deepEqual(back.moonlit, ['solar-flare']);
 	assert.ok(back.mods.power['solar-flare'] > 0.3);
 	// rubbish (and spells not known) dropped
 	const junk = sanitizeSkills(createMagicState({ v: 1, known: ['sunspark'], mastery: { sunspark: 'lots', 'solar-flare': 900, nope: 5 } }));
