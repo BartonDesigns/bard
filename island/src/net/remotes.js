@@ -5,7 +5,8 @@
 // phone's few, a friend is only their tag. What they hold (the pose's h, at its level and tier) is in their right hand.
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
+import { loadPeopleAssets, buildPerson } from '../people/body.js';
+import { lookDNA } from '../people/hero.js';
 import { createMotion } from '../people/motion.js';
 import { carGeometry } from '../bay/cars.js';
 import { createHand } from '../crysis/held-items.js';
@@ -96,7 +97,8 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 		r.building = true;
 		try {
 			assets = assets || await loadPeopleAssets();
-			const P = buildPerson(assets, personDNA(r.seed, { age: 30 }));
+			// (a friend's hero, or the townsperson an older visit made them: people/hero.js)
+			const P = buildPerson(assets, lookDNA(r.seed));
 			const M = createMotion(P, (x, z) => ground(x, z));
 			P.root.visible = false;
 			r.body = { P, M, placed: false };

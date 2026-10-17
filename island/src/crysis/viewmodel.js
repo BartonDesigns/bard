@@ -322,6 +322,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		S.shown = !!S.model && on;
 		if (aimBtn) { const d = S.shown && longHeld() ? 'flex' : 'none'; if (aimBtn.style.display !== d) aimBtn.style.display = d; if (d === 'none') S.aimTap = false; aimBtn.setAttribute('aria-pressed', String(S.aimTap)); aimBtn.style.background = S.aimTap ? 'rgba(60,140,120,.6)' : 'rgba(10,16,20,.45)'; }
 		if (!S.shown) { optics?.reset(); setZoom(1); S.ads = 0; return; }
+		// (another hero chosen: your arms made again from them, people/avatar.js setHero)
+		if (arms && avatar?.me && arms.me !== avatar.me) { arms.group.removeFromParent(); arms.skin.geometry.dispose(); arms.skin.material.dispose(); arms.garment?.dispose?.(); arms = null; }
 		if (!arms && avatar?.me) arms = buildArms(avatar.me);
 		else if (!arms && avatar && !S.asked) { S.asked = true; avatar.ready?.(); }
 		const H = S.model.userData.hold, id = S.id;

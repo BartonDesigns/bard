@@ -664,7 +664,7 @@ export function createIslandWorld() {
 	HOOKS.ragdolls = ragdolls;
 	HOOKS.impacts = createImpacts({ people: () => ({pool:[...people.pool,...social.actors.all()]}), ragdolls, onImpact:p=>{HOOKS.combat?.vehicleImpact(p);world?.services?.injury(p);}, ward: (p) => HOOKS.combat?.ward(p) });
 	// taking a car off its driver (E beside one in the traffic): you, shown, haul them out
-	const avatar = createAvatar({ scene, world: () => world });
+	const avatar = HOOKS.avatar = createAvatar({ scene, world: () => world });
 	const carjack = createCarjack({ world: () => world, camera, drive, ragdolls, avatar, hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.carjack = carjack;
 	// you, seen (P), knocked down by the traffic, and a shove (X) (people/self.js)
@@ -1525,6 +1525,18 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		// your hero: a man or a woman (people/hero.js), made again where you stand
+		const heroL = css(document.createElement('div'), 'opacity:.9;margin-bottom:4px;'); heroL.textContent = 'Your hero';
+		const heroRow = css(document.createElement('div'), 'display:flex;gap:6px;margin-bottom:12px;');
+		heroRow.setAttribute('role', 'group'); heroRow.setAttribute('aria-label', 'Your hero');
+		for (const [sex, label] of [['male', 'Male'], ['female', 'Female']]) {
+			const on = avatar.hero === sex;
+			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid ' + (on ? '#01a982' : 'rgba(255,255,255,.25)') + ';background:' + (on ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;cursor:pointer;');
+			b.textContent = label; b.setAttribute('aria-pressed', String(on));
+			b.onclick = () => { if (avatar.hero === sex) return; avatar.setHero(sex).catch(() => {}); hint(`Your hero: ${label.toLowerCase()}. Friends see the change the next time you join a room.`, 2600, 1); buildPanel(); };
+			heroRow.appendChild(b);
+		}
+		p.append(heroL, heroRow);
 		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim. Keys 1 to 5 take up your weapons (again puts it away), 6 to 0 cast your spells, N opens the spellbook. Alt / Option frees the mouse to look about by dragging; a double tap of Alt / Option returns to aiming.'; p.appendChild(combatHelp);
 		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
 			() => Math.round(shared.aimSensitivity * 100),
@@ -2599,6 +2611,8 @@ if (typeof window !== 'undefined') {
 		jackable: () => !!HOOKS.carjack?.candidate(),
 		// see yourself (as P does), shove (as X does)
 		thirdPerson: () => HOOKS.self?.toggle(),
+		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
+		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },

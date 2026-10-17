@@ -21,8 +21,9 @@ import { createGatheringScene } from '../people/gathering-scene.js';
 import { worldPosition } from '../people/social-actors.js';
 import { toLL, toXZ } from '../earth/globeframe.js';
 import { createWaypoint } from '../ui/waypoint.js';
+import { heroSeed, heroChoice } from '../people/hero.js';
 
-const ID_KEY = 'l99-mp-id', NAME_KEY = 'crysis-name', ME_KEY = 'l99-me';
+const ID_KEY = 'l99-mp-id', NAME_KEY = 'crysis-name';
 const EYE = 1.68;
 const BTN = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
 const SMALL = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(1,169,130,.18);color:#eafaf6;font:12px system-ui;min-height:32px;cursor:pointer;';
@@ -47,7 +48,8 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 
 	const id = myId();
 	const name = () => cleanName(store.get(NAME_KEY) || 'Player ' + id.slice(1, 4).toUpperCase());
-	const seed = (+store.get(ME_KEY)) >>> 0 || 7919;
+	// (your hero's seed, people/hero.js: the one chosen when the room is joined)
+	const seed = heroSeed(heroChoice());
 	const W = () => world();
 	const remotes = createRemotes({ scene, camera, world, isPhone });
 	// the host's plans, kept here for this visit only (a guest's own journal is untouched)
