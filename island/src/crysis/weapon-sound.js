@@ -61,15 +61,25 @@ const LAYERS = {
 	aim: (v, t) => { v.burst(t, 'pink', 'bandpass', 3200, 1, 0.05, 0.02, 0.1); },
 };
 
-// distance in metres (0: your own hands)
-export function playCue(name, { distance = 0, gain = 1 } = {}) {
+// distance in metres (0: your own hands). delay: seconds before it is heard (sound's travel
+// time, for gunfire across the field). loud: a gunshot's report, which carries (it falls off
+// gently, and past a few dozen metres the land throws a softer, duller copy back a moment later)
+export function playCue(name, { distance = 0, gain = 1, delay = 0, loud = false } = {}) {
 	const L = LAYERS[name], B = L && soundBus();
 	if (!B) return false;
-	const { ctx, out } = B, t = ctx.currentTime + 0.005, far = Math.min(1, distance / 150);
+	const { ctx, out } = B, t = ctx.currentTime + 0.005 + delay, far = Math.min(1, distance / 150);
 	const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 16000 / (1 + distance / 30);
-	const g = ctx.createGain(); g.gain.value = gain * 0.6 * Math.min(1, 8 / (8 + distance));
+	const g = ctx.createGain(); g.gain.value = gain * 0.6 * (loud ? Math.pow(Math.min(1, 10 / (10 + distance)), 0.7) : Math.min(1, 8 / (8 + distance)));
 	lp.connect(g); g.connect(out);
 	L(voice(ctx, lp), t, far);
-	setTimeout(() => { lp.disconnect(); g.disconnect(); }, 1500);
+	let echo = null;
+	if (loud && distance > 40) {
+		echo = ctx.createBiquadFilter(); echo.type = 'lowpass'; echo.frequency.value = lp.frequency.value * 0.45;
+		const eg = ctx.createGain(); eg.gain.value = 0.3 + far * 0.25;
+		echo.connect(eg); eg.connect(g);
+		L(voice(ctx, echo), t + 0.18 + Math.random() * 0.25 + far * 0.35, 1);
+		echo.eg = eg;
+	}
+	setTimeout(() => { lp.disconnect(); g.disconnect(); if (echo) { echo.disconnect(); echo.eg.disconnect(); } }, 2000 + delay * 1000);
 	return true;
 }

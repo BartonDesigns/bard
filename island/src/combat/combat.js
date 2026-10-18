@@ -20,7 +20,8 @@ import { bindLookDrag } from './look-drag.js';
 import * as THREE from 'three';
 import { WEAPONS, weaponStats, createWeaponState, trigger, cancelTrigger, cancelReload, completeReload, isBow, bowPower, stepWeapon, startReload, nextMode, modeOf, spreadNow, spreadDir, damageAt, reserveOf, drawRounds } from './weapons.js';
 import { createBowArrow } from '../crysis/bow-visual.js';
-import { kitMaterial } from '../crysis/held-items.js';
+import { kitMaterial, weaponOf } from '../crysis/held-items.js';
+import { playCue } from '../crysis/weapon-sound.js';
 import { createHealth, applyDamage, tickHealth, revive } from './health.js';
 import { createLayer, canHit, warded, strike, rayBox, rayCapsule, personShapes } from './targets.js';
 import { createWanted, offend, tickWanted, clearWanted, responseFor, sighted } from './heat.js';
@@ -674,7 +675,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		me: () => ({ speed: me.speed, grounded: !!P()?.grounded || !!W()?.deep?.active?.(), vel: me.vel }),
 		projectile, firstHit, landShot, hurtPlayer, blast, missile, ignite: (id, x, z, f, mine) => ignite(id, x, z, f, !!mine), shake: (k) => shakeIt(k),
 		strikeNpc: (T, blow, at) => { if (at) fx.impact(at, null, T.surface, blow.type === 'energy'); return deal(T, blow, false); },
-		whiz: () => { sound('whiz'); hud.suppress(0.3); }, heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p),
+		whiz: () => { sound('whiz'); hud.suppress(0.3); }, heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p), gunshot: (at, gun) => gunshot(at, gun),
 		wanted: () => wanted.stars, bounty: () => morality.reactions().bounty, playerDown: () => me.ko > 0,
 		civilians: () => [...layer.map.values()].filter((T) => T.kind === 'person' && !T.child),
 		coverNear: (x, z, r) => hooks.cover?.(x, z, r) || props.coverNear(x, z, r) || buildingCover(x, z, r),
@@ -997,20 +998,36 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	const sounding = new Set();
 	function sound(kind, at = null) {
 		try {
-			if (at && Math.hypot(at.x - eye().x, at.z - eye().z) > 120) return;
+			// (a blast carries much further than the small cues, and arrives late: sound's own speed)
+			const dist = at ? Math.hypot(at.x - eye().x, at.z - eye().z) : 0, reach = kind === 'boom' ? 900 : 120;
+			if (dist > reach) return;
 			const bus = soundBus(); if (!bus) return;
 			const AC = bus.ctx;
-			const t = AC.currentTime, g = AC.createGain(), o = AC.createOscillator();
+			const t = AC.currentTime + (kind === 'boom' ? dist / 343 : 0), g = AC.createGain(), o = AC.createOscillator();
 			g.connect(bus.out);
 			sounding.add(o);
 			o.onended = () => { sounding.delete(o); o.disconnect(); g.disconnect(); };
-			const far = at ? Math.max(0.15, 1 - Math.hypot(at.x - eye().x, at.z - eye().z) / 120) : 1;
+			const far = at ? (kind === 'boom' ? Math.max(0.08, Math.pow(40 / (40 + dist), 0.6)) : Math.max(0.15, 1 - dist / 120)) : 1;
 			if (kind === 'chime') { o.type = 'sine'; o.frequency.setValueAtTime(1318, t); o.frequency.setValueAtTime(1760, t + 0.09); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18 * far, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9); }
 			else if (kind === 'boom') { o.type = 'sine'; o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(30, t + 0.6); g.gain.setValueAtTime(0.5 * far, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8); }
 			else if (kind === 'glass') { o.type = 'triangle'; o.frequency.setValueAtTime(2400, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.25); g.gain.setValueAtTime(0.12 * far, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35); }
 			else { o.type = 'square'; o.frequency.setValueAtTime(kind === 'whiz' ? 1800 : 220, t); o.frequency.exponentialRampToValueAtTime(kind === 'whiz' ? 600 : 60, t + 0.12); g.gain.setValueAtTime(0.05 * far, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14); }
 			o.connect(g); o.start(t); o.stop(t + 1);
+			if (kind === 'boom' && dist > 30) playCue('marksman', { distance: dist, delay: dist / 343, gain: 0.9, loud: true });
 		} catch { /* no audio */ }
+	}
+
+	// another's gunshot, heard where you are: the report comes late by its distance (a round that
+	// cracks past you is heard before the shot that sent it), dull and echoing from far off.
+	// A heavy firefight is thinned so it never piles up voices.
+	let shotGate = 0;
+	function gunshot(at, gun) {
+		const e = eye(), d = Math.hypot(at.x - e.x, at.y - e.y, at.z - e.z);
+		if (d > 900 || document.hidden) return;
+		const now = performance.now(), gap = d < 80 ? 35 : d < 300 ? 90 : 160;
+		if (now < shotGate) return;
+		shotGate = now + gap;
+		try { playCue(weaponOf(gun)?.sounds.fire || 'scout', { distance: d, delay: d / 343, loud: true }); } catch { /* no audio */ }
 	}
 
 	function shakeIt(k) { shake = Math.min(1, shake + k); }
