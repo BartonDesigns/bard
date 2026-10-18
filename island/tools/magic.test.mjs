@@ -180,3 +180,72 @@ test('the look modes and the keys are wired', () => {
 	const ai = fs.readFileSync(new URL('../src/combat/ai-squads.js', import.meta.url), 'utf8');
 	assert.match(ai, /hexStep/); assert.match(ai, /ctx\.cloaked/);
 });
+
+test('things picked up and carried share the keys 1 to 5, after the field arms', () => {
+	const inv = { hand: null, instances: { a: { u: 'a', i: 'warden-spark-carbine', l: 1, t: 0 } } };
+	const carried = [{ id: 'm1', kind: 'bat', held: true }, { id: 'm2', kind: 'pipe', held: false }];
+	const binds = hotbarBinds(inv, [], carried);
+	assert.deepEqual(binds.slice(0, 3), ['a', 'm1', 'm2']);
+	// a bat in hand: its key puts it away; the pipe's takes the pipe up
+	assert.deepEqual(hotbarPress(binds, 1, 'm1'), { hold: null });
+	assert.deepEqual(hotbarPress(binds, 2, 'm1'), { hold: 'm2' });
+	// broken or dropped: its key frees
+	assert.deepEqual(hotbarBinds(inv, binds, [{ id: 'm2', kind: 'pipe' }]).slice(0, 3), ['a', null, 'm2']);
+});
+
+test('a spell travels to friends as a marked shot and survives the room\'s rounding', async () => {
+	const { encodeSpell, decodeSpell, roomRound, SPELL_STYLE } = await import('../src/magic/net.js');
+	assert.equal(SPELL_STYLE, 7);
+	const r = (() => { let s = 7; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
+	for (const sp of SPELLS) {
+		for (let k = 0; k < 4; k++) {
+			const from = { x: (r() - 0.5) * 2e5, y: r() * 300, z: (r() - 0.5) * 2e5 }, to = { x: from.x + (r() - 0.5) * 200, y: from.y, z: from.z + (r() - 0.5) * 200 };
+			const e = encodeSpell(sp.id, from, to);
+			const b = { x: roomRound(e.b.x), y: roomRound(e.b.y), z: roomRound(e.b.z) };
+			assert.equal(decodeSpell(b)?.id, sp.id, sp.id);
+			assert.ok(Math.abs(b.x - to.x) < 0.2 && Math.abs(b.z - to.z) < 0.2, 'drawn where it went');
+		}
+	}
+	assert.equal(encodeSpell('nope', { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }), null);
+	// the room's own cleaner passes it through as it is
+	const { cleanFx } = await import('../src/net/protocol.js');
+	const e = encodeSpell('tempest', { x: 1, y: 2, z: 3 }, { x: 40, y: 2, z: -50 });
+	const c = cleanFx({ s: [[e.a.x, e.a.y, e.a.z, e.b.x, e.b.y, e.b.z, SPELL_STYLE, 0]] });
+	assert.equal(c.s[0][6], SPELL_STYLE);
+	assert.equal(decodeSpell({ x: c.s[0][3], y: c.s[0][4], z: c.s[0][5] }).id, 'tempest');
+});
+
+test('spells reach brawlers and townsfolk, hands cast them, the body gestures, the bar sits low', () => {
+	const src = (f) => fs.readFileSync(new URL('../src/' + f, import.meta.url), 'utf8');
+	assert.match(src('magic/caster.js'), /T\.kind !== 'hostile' && T\.kind !== 'person'/, 'townsfolk take holds, slows and fear');
+	assert.match(src('magic/caster.js'), /T\.P\.hex = H/, 'on the body, for a brawl');
+	assert.match(src('combat/civilians.js'), /s\.T\.hex/);
+	assert.match(src('combat/melee-foes.js'), /f\.T\?\.hex \|\| f\.P\?\.hex/);
+	assert.match(src('people/motion.js'), /cast2?: \(u\)/);
+	assert.match(src('magic/hands.js'), /createAnatomicalHand/);
+	assert.match(src('combat/melee.js'), /function draw\(id\)/);
+	const hud = src('magic/hud.js');
+	assert.match(hud, /\.mg-bar\{position:absolute;left:50%;bottom:calc\(12px/, 'the bar at the bottom on a desktop');
+	assert.match(hud, /\.l99-touch \.mg-bar\{bottom:calc\(var\(--l99-low/, 'above the thumbs on a touch screen');
+	assert.match(hud, /const isOpen = \(\) => book\.style\.display === 'flex'/, 'the book is shut until opened, so the keys work from the start');
+});
+
+test('a beam gathers, lets go with a punch, pours, and thins away', async () => {
+	const { beamShape, CHARGE, MIN_BLAST } = await import('../src/magic/beam.js');
+	assert.ok(CHARGE > 0.2 && CHARGE < 0.5 && MIN_BLAST > 0);
+	assert.deepEqual(beamShape(-0.1), { out: 0, r: 0, a: 0 }, 'nothing poured while it gathers');
+	const go = beamShape(0.01), on = beamShape(1.5);
+	assert.ok(go.out < 1 && go.r > 1.4, 'its head racing out, wide with the punch');
+	assert.equal(on.out, 1);
+	assert.ok(Math.abs(on.r - 1) < 0.01 && Math.abs(on.a - 1) < 0.01, 'settled to a steady pour');
+	assert.ok(beamShape(1.5, 0.1).r < 0.3 && beamShape(1.5, 0.3).a === 0, 'let go, it thins to nothing');
+	const src = (f) => fs.readFileSync(new URL('../src/' + f, import.meta.url), 'utf8');
+	const caster = src('magic/caster.js');
+	assert.match(caster, /age: -CHARGE/, 'it gathers before it lets go');
+	assert.match(caster, /H\.age >= MIN_BLAST/, 'a tap still lets it go');
+	assert.match(caster, /shove\(h\.T, from/, 'its pressure drives fighters back');
+	assert.match(caster, /beamVoice\(spell\.school\)/);
+	assert.match(src('magic/index.js'), /beams\.show\(`net:\$\{who\}`/, 'a friend\'s beam pours steadily');
+	assert.match(src('people/motion.js'), /beam: \(u, t\)/);
+	assert.match(src('magic/hands.js'), /A\.to = BEAM/, 'both hands');
+});

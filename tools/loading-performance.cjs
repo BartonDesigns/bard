@@ -7,7 +7,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  let browser,page;
  try{
   browser=await chromium.launch({executablePath:process.env.CHROME_EXECUTABLE,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage'],env:{...process.env,...(process.env.CHROME_EXECUTABLE?{LD_LIBRARY_PATH:path.dirname(process.env.CHROME_EXECUTABLE)}:{})}});
-  page=await browser.newPage({viewport:{width:640,height:420},deviceScaleFactor:2});page.setDefaultTimeout(180000);page.on('pageerror',e=>report.errors.push(e.message));
+  const phone=process.env.BARD_TEST_PHONE==='1';
+  page=await browser.newPage(phone?{viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'}:{viewport:{width:640,height:420},deviceScaleFactor:2});page.setDefaultTimeout(180000);page.on('pageerror',e=>report.errors.push(e.message));
   page.on('console',m=>{if(/vertexAlphas|already non-indexed|\[shader failed\]|program not valid|\[shaders\]/.test(m.text()))report.graphicsWarnings.push(m.text());});
   await page.addInitScript(()=>{window.longTasks=[];new PerformanceObserver(l=>{for(const e of l.getEntries())longTasks.push(e.duration);}).observe({type:'longtask',buffered:true});});
   await page.goto('http://127.0.0.1:'+server.address().port+'/?offline',{waitUntil:'domcontentloaded'});console.log('BOOT');

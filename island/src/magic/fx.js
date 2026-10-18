@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { soundBus } from '../world/soundbus.js';
+import { CHARGE } from './beam.js';
 
 // colours (linear-ish, for the additive glow) by school, and the two strands
 export const GLOW = {
@@ -116,4 +117,46 @@ export function magicSound(kind, gain = 0.12) {
 		o.start(t); o2.start(t); o.stop(t + 0.8); o2.stop(t + 0.8);
 		o.onended = () => { o.disconnect(); o2.disconnect(); f.disconnect(); g.disconnect(); };
 	} catch { /* no sound here */ }
+}
+
+// a beam's voice: a whine rising as it gathers (CHARGE), then a roar, rushing air and a low hum,
+// for as long as it pours. returns { stop() } (it dies away), or null where there is no sound
+const noises = new WeakMap();
+function noiseOf(C) {
+	let b = noises.get(C);
+	if (!b) { b = C.createBuffer(1, C.sampleRate, C.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; noises.set(C, b); }
+	return b;
+}
+export function beamVoice(kind) {
+	try {
+		const bus = soundBus(); if (!bus) return null;
+		const C = bus.ctx, t = C.currentTime, V = VOICE[kind] || VOICE.radiance, go = t + CHARGE;
+		const w = C.createOscillator(), wg = C.createGain();
+		w.type = 'sine';
+		w.frequency.setValueAtTime(V.f * 0.35, t); w.frequency.exponentialRampToValueAtTime(V.f * 1.6, go);
+		wg.gain.setValueAtTime(0.0001, t); wg.gain.exponentialRampToValueAtTime(0.06, go - 0.03); wg.gain.exponentialRampToValueAtTime(0.0001, go + 0.08);
+		w.connect(wg); wg.connect(bus.out); w.start(t); w.stop(go + 0.1);
+		w.onended = () => { w.disconnect(); wg.disconnect(); };
+		const n = C.createBufferSource(), bp = C.createBiquadFilter(), hum = C.createOscillator(), lp = C.createBiquadFilter(), out = C.createGain();
+		n.buffer = noiseOf(C); n.loop = true;
+		bp.type = 'bandpass'; bp.frequency.value = Math.max(300, Math.min(1400, V.f)); bp.Q.value = 0.7;
+		hum.type = 'sawtooth'; hum.frequency.value = Math.max(40, Math.min(110, V.f / 4));
+		lp.type = 'lowpass'; lp.frequency.value = 650;
+		n.connect(bp); bp.connect(out); hum.connect(lp); lp.connect(out); out.connect(bus.out);
+		// (silent while it gathers; a crack as it lets go, settling to a roar)
+		out.gain.setValueAtTime(0.0001, t); out.gain.setValueAtTime(0.0001, go);
+		out.gain.exponentialRampToValueAtTime(0.22, go + 0.03); out.gain.exponentialRampToValueAtTime(0.11, go + 0.45);
+		n.start(t); hum.start(t);
+		let done = false;
+		return {
+			stop() {
+				if (done) return;
+				done = true;
+				const s = C.currentTime;
+				out.gain.cancelScheduledValues(s); out.gain.setValueAtTime(Math.max(0.0001, out.gain.value), s); out.gain.exponentialRampToValueAtTime(0.0001, s + 0.25);
+				n.stop(s + 0.3); hum.stop(s + 0.3);
+				hum.onended = () => { n.disconnect(); bp.disconnect(); hum.disconnect(); lp.disconnect(); out.disconnect(); };
+			},
+		};
+	} catch { return null; }
 }

@@ -101,6 +101,17 @@ export function createFoes(ctx, api) {
 		if (f.p && f.p.override !== f.ov && !f.P.ragdoll) f.p.override = f.ov;
 		if (f.P.ragdoll) { if (f.state !== 'down') { f.state = 'down'; turns.drop(f.id); f.move = null; } return; }
 		if (f.state === 'down') { f.state = 'getup'; f.t = 0; M.play('getup', 1.15, true); }
+		// under a spell (magic/caster.js: the fighter's or the body's hex): held, it stands with its
+		// guard down; afraid, it runs from where the spell was cast; slowed, it closes slower
+		const hx = f.T?.hex || f.P?.hex;
+		if (hx && (hx.hold > 0 || hx.fear > 0)) {
+			if (f.state === 'wind' || f.state === 'strike') { turns.done(f.id); f.move = null; M.act(null); }
+			f.state = 'circle'; f.t = 0;
+			if (hx.hold > 0) { M.want.speed = 0; M.want.run = 0; S.look.target = null; return; }
+			const ax = at.x - hx.fx, az = at.z - hx.fz;
+			M.want.heading = Math.atan2(ax, az); M.want.speed = 3.6 * (hx.slowK || 1); M.want.run = 1; S.look.target = null;
+			return;
+		}
 		M.want.heading = Math.atan2(dx, dz);
 		M.want.speed = 0; M.want.run = 0;
 		S.look.target = e;
@@ -120,7 +131,7 @@ export function createFoes(ctx, api) {
 			case 'approach': {
 				if (S.act.name && S.act.name !== 'shuffle') M.act(null);
 				if (d < 3.1) { f.state = 'circle'; f.t = 0; break; }
-				M.want.speed = d > 6 ? 3.6 : 2.4; M.want.run = d > 6 ? 1 : 0.4;
+				M.want.speed = (d > 6 ? 3.6 : 2.4) * (hx?.slowK || 1); M.want.run = d > 6 && !(hx?.slowK < 0.6) ? 1 : 0.4;
 				return;
 			}
 			case 'circle': break;

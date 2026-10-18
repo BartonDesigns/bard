@@ -15,6 +15,7 @@ import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, acce
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
+import { FLUFFY, buildFluff, fluffMaterial } from './hair-fluff.js';
 import { fadePerson } from './fade.js';
 import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
 import { hairCapsules, poseCapsules } from './hair-collide.js';
@@ -312,9 +313,11 @@ export function buildPerson(A, d) {
 	P.redress = (o) => dress(A, P, o);
 	dress(A, P, outfitOf(d));
 	// lashes, brows, the wet line: one small mesh, closing and lifting with the face
-	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow), brow.grey);
+	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), null, brow.grey);
 	if (dg) {
 		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
+		// (how full the tone under the brow's hairs, each their own; or as set, d.brows.fill)
+		dm.material.userData.U.uFill.value = d.brows?.fill ?? 1.6 + ((d.seed * 0.618034) % 1) * 0.4;
 		dm.frustumCulled = false; dm.renderOrder = 1;
 		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
@@ -322,6 +325,9 @@ export function buildPerson(A, d) {
 	}
 	P.lod = (dist) => {
 		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; for (const b of P.bags || []) b.lod(dist);
+		// fluffy hair: all its tufts near, the locks' cores and inner layer further, the cores far off
+		const hl = P.hair?.geometry.userData.lod;
+		if (hl) { const k = PHONE ? 0.6 : 1, n = hl[dist < 6 * k ? 2 : dist < 16 * k ? 1 : 0]; if (P.hair.geometry.drawRange.count !== n) P.hair.geometry.setDrawRange(0, n); }
 		// the sleeves' pose folds and hang (garment-shape.js): near people only, fading out by
 		// 22 m, nearer still on a phone or when the governor has stepped quality down
 		const U = P.clothMat?.userData.U;
@@ -354,6 +360,7 @@ function dress(A, P, o) {
 	P.skull = P.skull || skullOf(A, p, P);
 	const sc = scalpMask(A, P, p, P.skull, bodyGeo.userData.src, cutName, { recede: H.recede, thin: H.thin });
 	bodyGeo.setAttribute('scalp', new THREE.BufferAttribute(sc, 1));
+	bodyGeo.userData.scalp0 = sc.slice();
 	P.skin = add(bodyGeo, P.skinMat);
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
 	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
@@ -363,12 +370,15 @@ function dress(A, P, o) {
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));
 	// the scalp under it, painted: a close crop, or the shade between the strands
-	const paintCol = cols.hair.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
-	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : 0.75);
+	// (under fluffy hair, the roots' own shade, nearly solid: a gap between its tufts is hair in
+	// shadow, not skin)
+	const fluffy = showHair && !H.style && FLUFFY.has(cutName);
+	const paintCol = cols.hair.clone().multiplyScalar(fluffy ? 0.55 : H.dyed ? 0.5 : 0.9);
+	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : fluffy ? 0.92 : 0.75);
 	const beard = hat?.kind === 'hazhood' ? null : beardFor(d, H, rng(d.seed ^ 0xbea4d));
 	P.skinMat.userData.beard.value.set(cols.stubble.r, cols.stubble.g, cols.stubble.b, beard ? beard.stubble : 0);
 	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));
-	P.hairWant = { style: showHair ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
+	P.hairWant = { style: showHair && (H.style || !FLUFFY.has(cutName)) ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
 	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
@@ -459,13 +469,27 @@ function hairUp(A, P) {
 	// the hair: the real style, or the procedural cut while it comes
 	if (W.style && has(W.style.id)) {
 		P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+		// (a long groom parts its layers over the scalp, which the paint fills: it keeps all of it)
+		coverScalp(P, styleNow(W.style.id).groom ? null : P.hair.geometry);
 		// it falls over the collar and the shoulders, not through them (hair-collide.js)
 		const o = P.outfit || {}, off = offsets(o), caps = hairCapsules(P, o, Math.max(off.top, off.outer));
 		const hair = P.hair;
 		const animate = hairMotion(P, hair, hair.material.userData.U);
 		hair.onBeforeRender = () => { animate(); poseCapsules(P, caps, hair.material.userData.U, hair); };
 	}
+	else if (W.cut && FLUFFY.has(W.cut)) {
+		// fluffy hair (hair-fluff.js): tufts in locks, brushed the cut's way, skinned to the head
+		// and, as long hair falls, the neck and the back
+		coverScalp(P, null);
+		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
+		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
+		const hair = skinned(g, fluffMaterial(root, tip));
+		P.hair = hair;
+		const animate = hairMotion(P, hair, hair.material.userData.U);
+		hair.onBeforeRender = () => animate();
+	}
 	else if (W.cut) {
+		coverScalp(P, null);
 		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
 		// (grey coming in evenly, root to tip)
 		// (greying all over, as there are no single hairs to grey)
@@ -538,19 +562,47 @@ function faceMorphs(A, g, S) {
 
 // brows: the hair's natural colour (a dye leaves them be), a shade darker; going grey hair
 // by hair on the head's own curve, some years behind it
-function browOf(d) {
-	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * 0.6));
-	const g = greyOf(d, 12);
-	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
+// The crop painted on the scalp (hair.js scalpMask) runs down to the lowest a hair may root, the
+// sideburns and the temples included; a style's own hairline is mostly higher. Under a style, keep
+// the paint to where its hair lies over the scalp (fading out a centimetre or two from the
+// nearest strand, as a hairline thins), never a band of paint where it leaves the skin bare, by
+// the eyes and over the temples; a cut grown from the mask itself (hair: null) keeps it all.
+function coverScalp(P, hair) {
+	const sk = P.skin?.geometry, at = sk?.attributes.scalp, s0 = sk?.userData.scalp0;
+	if (!at || !s0) return;
+	if (!hair) { at.array.set(s0); at.needsUpdate = true; return; }
+	const hp = hair.attributes.position, cell = 0.02, grid = new Map(), pos = sk.attributes.position;
+	const key = (a, b, c) => a + ',' + b + ',' + c;
+	for (let i = 0; i < hp.count; i++) {
+		const k = key(Math.floor(hp.getX(i) / cell), Math.floor(hp.getY(i) / cell), Math.floor(hp.getZ(i) / cell));
+		let L = grid.get(k);
+		if (!L) grid.set(k, L = []);
+		L.push(i);
+	}
+	for (let i = 0; i < at.count; i++) {
+		if (!(s0[i] > 0)) { at.array[i] = s0[i]; continue; }
+		const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), gx = Math.floor(x / cell), gy = Math.floor(y / cell), gz = Math.floor(z / cell);
+		let best = Infinity;
+		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+			const L = grid.get(key(gx + a, gy + b, gz + c));
+			if (L) for (const j of L) { const d = (hp.getX(j) - x) ** 2 + (hp.getY(j) - y) ** 2 + (hp.getZ(j) - z) ** 2; if (d < best) best = d; }
+		}
+		const t = Math.min(1, Math.max(0, (Math.sqrt(best) - 0.01) / 0.01));
+		at.array[i] = s0[i] * (1 - t * t * (3 - 2 * t));
+	}
+	at.needsUpdate = true;
 }
 
-// the skin's normals at the brow's vertices (for laying the brow hairs on the skin)
-function normalsOf(g, brow) {
-	const want = new Set();
-	for (let j = 0; j < brow.length; j += 2) want.add(brow[j]);
-	const src = g.userData.src, at = new Map(), na = g.attributes.normal;
-	for (let i = 0; i < src.length; i++) if (want.has(src[i])) at.set(src[i], i);
-	return (v, out) => { const i = at.get(v); if (i === undefined) out.set(0, 0, 1); else out.fromBufferAttribute(na, i); };
+function browOf(d) {
+	// (a shade darker than fair hair; dark hair's brows lifted a little off black, which only
+	// reads as a stroke; or as set, d.browTone)
+	const top = Math.max(...d.hairColour), tone = d.browTone ?? 0.85 + 1.15 * (1 - clamp((top - 0.06) / 0.24));
+	const col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * tone));
+	// (and never quite black: the darkest a deep brown-black)
+	const lum = Math.max(col.r, col.g, col.b);
+	if (lum < 0.07) col.multiplyScalar(0.07 / Math.max(lum, 1e-4));
+	const g = greyOf(d, 12);
+	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
 }
 
 // a body let go for good: its own geometry, materials and skeleton (the shared assets stay)

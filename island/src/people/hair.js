@@ -54,9 +54,22 @@ export const cutOf = (h) => h === 'ponytail01' ? 'pony' : h === 'short01' ? 'cro
 
 // ---------- the head's shape: a radius for every direction from the skull's centre ----------
 const AZ = 36, EL = 18;
+// the base mesh's own skin, vertex by vertex (it also carries helpers: a shell round the head a
+// centimetre or so outside the scalp, made for fitting hair, the teeth, the tongue, the eyes)
+export function skinMask(A) {
+	if (A.onSkin) return A.onSkin;
+	const m = new Uint8Array(A.ids.length / 4);
+	if (A.body) for (let i = 0; i < A.body.length; i += 2) m[A.body[i]] = 1;
+	else m.fill(1);
+	return (A.onSkin = m);
+}
+// the head: its middle, and how far its scalp reaches each way (radius(d), d a unit vector from
+// the middle), measured on the skin alone. Hair sits on the scalp, never on the hair helper's
+// shell: measured with it, every head stood a centimetre and more above its own scalp, and
+// all hair floated. shell(d): that outer envelope, for gear worn over the hair.
 export function skullOf(A, p, P) {
 	const { map, rest } = P, hb = map.head, eyeY = (P.eyeAt[0].y + P.eyeAt[1].y) / 2, eyeZ = (P.eyeAt[0].z + P.eyeAt[1].z) / 2;
-	const n = A.ids.length / 4, pts = [];
+	const n = A.ids.length / 4, pts = [], all = [], skin = skinMask(A);
 	let z0 = 1e9, z1 = -1e9, x0 = 1e9, x1 = -1e9, top = -1e9;
 	for (let v = 0; v < n; v++) {
 		let s = 0, h = 0;
@@ -64,11 +77,17 @@ export function skullOf(A, p, P) {
 		if (!s || h / s < 0.6) continue;
 		const x = p[v * 3], y = p[v * 3 + 1], z = p[v * 3 + 2];
 		if (y < eyeY - 0.11) continue;
+		all.push(x, y, z);
+		if (!skin[v]) continue;
 		pts.push(x, y, z);
 		if (y > eyeY + 0.03) { z0 = Math.min(z0, z); z1 = Math.max(z1, z); x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
 		top = Math.max(top, y);
 	}
 	const c = new THREE.Vector3((x0 + x1) / 2, eyeY + 0.012, (z0 + z1) / 2 - 0.004);
+	return { c, radius: radiusOf(pts, c), shell: radiusOf(all, c), eyeY, eyeZ, top, head: rest.heads[hb] };
+}
+// how far points reach from c each way, on a grid of directions, gaps filled, smoothed round
+function radiusOf(pts, c) {
 	const R = new Float32Array(AZ * EL);
 	for (let i = 0; i < pts.length; i += 3) {
 		const dx = pts[i] - c.x, dy = pts[i + 1] - c.y, dz = pts[i + 2] - c.z, r = Math.hypot(dx, dy, dz);
@@ -76,19 +95,32 @@ export function skullOf(A, p, P) {
 		const a = Math.floor(((az / TAU + 1) % 1) * AZ), e = Math.floor(clamp((el / Math.PI + 0.5) * EL, 0, EL - 1));
 		R[e * AZ + a] = Math.max(R[e * AZ + a], r);
 	}
-	// fill the gaps (under the jaw, inside the neck) from the rows above
+	// fill the empty directions from their measured neighbours, round the row and the rows either
+	// side, pass after pass (the bins are narrow near the crown, and few points fall in each: a
+	// guess there put the crown a centimetre and more inside itself), then under the jaw and
+	// inside the neck from the rows above; only what has nothing near it at all is guessed
+	for (let pass = 0; pass < 8; pass++) {
+		const was = Float32Array.from(R);
+		let left = 0;
+		for (let e = 0; e < EL; e++) for (let a = 0; a < AZ; a++) {
+			if (was[e * AZ + a]) continue;
+			let sum = 0, n = 0;
+			for (let de = -1; de <= 1; de++) for (let da = -1; da <= 1; da++) { const ee = e + de; if (ee < 0 || ee >= EL) continue; const w = was[ee * AZ + (a + da + AZ) % AZ]; if (w) { sum += w; n++; } }
+			if (n) R[e * AZ + a] = sum / n; else left++;
+		}
+		if (!left) break;
+	}
 	for (let e = EL - 1; e >= 0; e--) for (let a = 0; a < AZ; a++) if (!R[e * AZ + a]) R[e * AZ + a] = R[Math.min(EL - 1, e + 1) * AZ + a] || 0.08;
 	for (let e = EL - 1; e >= 0; e--) for (let a = 0; a < AZ; a++) if (R[e * AZ + a] < 0.05) R[e * AZ + a] = 0.08;
 	// one pass of smoothing round each row
 	const S = Float32Array.from(R);
 	for (let e = 0; e < EL; e++) for (let a = 0; a < AZ; a++) S[e * AZ + a] = Math.max(R[e * AZ + a], (R[e * AZ + (a + 1) % AZ] + R[e * AZ + (a + AZ - 1) % AZ]) / 2);
-	const radius = (d) => {
+	return (d) => {
 		const az = Math.atan2(d.x, d.z), el = Math.asin(clamp(d.y, -1, 1));
 		const fa = ((az / TAU + 1) % 1) * AZ - 0.5, fe = clamp((el / Math.PI + 0.5) * EL - 0.5, 0, EL - 1.001);
 		const a0 = (Math.floor(fa) + AZ) % AZ, a1 = (a0 + 1) % AZ, e0 = Math.floor(fe), e1 = Math.min(EL - 1, e0 + 1), ta = fa - Math.floor(fa), te = fe - e0;
 		return (S[e0 * AZ + a0] * (1 - ta) + S[e0 * AZ + a1] * ta) * (1 - te) + (S[e1 * AZ + a0] * (1 - ta) + S[e1 * AZ + a1] * ta) * te;
 	};
-	return { c, radius, eyeY, eyeZ, top, head: rest.heads[hb] };
 }
 
 // ---------- growing ----------
@@ -102,7 +134,7 @@ export function hairline(deg) {
 
 // where the scalp is painted with close-cropped hair (skin.js): inside the hairline, fading
 // out down the sides of a fade, back where the hairline recedes, less over a thinning crown
-const recedeAt = (deg, recede) => recede * (deg < 60 ? 0.03 * (1 - deg / 90) + (deg > 25 ? 0.02 * sm(25, 45, deg) * (1 - sm(50, 70, deg)) : 0) : 0);
+export const recedeAt = (deg, recede) => recede * (deg < 60 ? 0.03 * (1 - deg / 90) + (deg > 25 ? 0.02 * sm(25, 45, deg) * (1 - sm(50, 70, deg)) : 0) : 0);
 export function scalpMask(A, P, p, K, src, cutName, opts = {}) {
 	const cut = CUTS[cutName] || CUTS.short, hb = P.map.head, out = new Float32Array(src.length);
 	const crown = new THREE.Vector3(0.1, 0.9, -0.45).normalize(), d = new THREE.Vector3();
