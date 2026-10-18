@@ -93,8 +93,14 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const lim = best?.t ?? max;
 		let t = 0.3, prev = 0;
 		const above = (s) => o.y + d.y * s - ground(o.x + d.x * s, o.z + d.z * s, o.y + d.y * s);
+		// the sea: a round fired from above it stops at its face where the ground beneath is under it
+		const sea = w.island.hasOcean !== false && o.y > 0.2 && d.y < 0 && !w.deep?.active?.() && !w.island.far;
 		while (t < lim) {
 			const a = above(t);
+			if (sea && o.y + d.y * t < 0) {
+				const ts = -o.y / d.y;
+				if (ground(o.x + d.x * ts, o.z + d.z * ts, 0) < -0.05) return { t: ts, n: new THREE.Vector3(0, 1, 0), surface: 'water' };
+			}
 			if (a < 0) {
 				let lo = prev, hi = t;
 				for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (above(m) < 0) hi = m; else lo = m; }
@@ -399,6 +405,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 			fx.tracer(from, end, S.tracer);
 			net.fx(from, end, S.tracer, hit ? 1 : 0);
+			// the spent case out of the breech, a hand's length back from the muzzle
+			if (S.type !== 'energy') fx.wisp(from, dir);
+			if (S.type !== 'energy') fx.casing({ x: from.x - dir.x * 0.32, y: from.y - dir.y * 0.32 + 0.03, z: from.z - dir.z * 0.32 }, dir);
 		}
 		const at = eye();
 		if(Date.now()-lastShotNotice>4000) {lastShotNotice=Date.now();notice('shots',at,'fired a weapon nearby');}
@@ -665,7 +674,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		me: () => ({ speed: me.speed, grounded: !!P()?.grounded || !!W()?.deep?.active?.(), vel: me.vel }),
 		projectile, firstHit, landShot, hurtPlayer, blast, missile, ignite: (id, x, z, f, mine) => ignite(id, x, z, f, !!mine), shake: (k) => shakeIt(k),
 		strikeNpc: (T, blow, at) => { if (at) fx.impact(at, null, T.surface, blow.type === 'energy'); return deal(T, blow, false); },
-		whiz: () => sound('whiz'), heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p),
+		whiz: () => { sound('whiz'); hud.suppress(0.3); }, heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p),
 		wanted: () => wanted.stars, bounty: () => morality.reactions().bounty, playerDown: () => me.ko > 0,
 		civilians: () => [...layer.map.values()].filter((T) => T.kind === 'person' && !T.child),
 		coverNear: (x, z, r) => hooks.cover?.(x, z, r) || props.coverNear(x, z, r) || buildingCover(x, z, r),
@@ -1106,7 +1115,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- for the console and the tests ----------
 	const api = {
-		update, reset, heard, group, layer, fx, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
+		update, reset, heard, group, layer, fx, hud, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
 		projectile, blast, firstHit, landShot, ground, eye, sound: (k, at) => sound(k, at), deal: (T, blow, mine) => deal(T, blow, mine), hurtPlayer, wantedLevel: () => wanted.stars, isEarth, zone: () => (W() ? zone() : null),
 		// harm done by your vehicle's guns (military/): yours, weighed like a shot
 		strikeAs: (T, blow) => deal(T, { ...blow, by: ME }, true),

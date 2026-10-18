@@ -288,14 +288,14 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 				put(Lw, x, z, r() * 6.28, s, s, season > 0.7 && v !== 0 ? [0.85, 0.72, 0.55] : [1, 1, 1], v, 0.02);
 			});
 		}
-		const swardK = Math.min(1, E.open + E.wood * 0.7 + E.chaparral * 0.2 + E.scrub * 0.2) * (1 - Math.min(1, E.redwood * 2.5));
+		const swardK = Math.min(1, E.open + E.wood + E.chaparral * 0.2 + E.scrub * 0.2) * (1 - Math.min(1, E.redwood * 2.5));
 		// the short turf that carpets the ground between the bunches (and the oak savanna's,
 		// thinner, under the trees), thinning in drifts to bare earth, off the tread and the
 		// paving; shorter where it is grazed or windswept
 		if (swardK > 0.05) {
 			out.lazy = { sward: () => {
 				const r2 = mulberry32((ci * 2654435761) ^ (cj * 40503) ^ 0x2f6b), J2 = (base, k) => base.map((c) => c * (1 - k + r2() * 2 * k));
-				const n = Math.round(420 * swardK * (0.4 + 0.6 * K));
+				const n = Math.round(560 * swardK * (0.4 + 0.6 * K));
 				for (let i = 0; i < n; i++) {
 					const x = x0 + r2() * C, z = z0 + r2() * C, td = trails.length ? trailD(x, z) : 9;
 					const want = Math.min(1, 0.15 + 1.1 * drift(x, z, 6, 4)) * Math.min(1, Math.max(0, (td - 0.1) / 1.1));

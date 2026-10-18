@@ -14,6 +14,8 @@ const CSS = `
 .cb-hit i{position:absolute;left:12px;top:0;width:2px;height:8px;background:#fff;box-shadow:0 0 3px rgba(0,0,0,.6)}
 .cb-dmg{position:absolute;left:50%;top:50%;width:0;height:0}
 .cb-dmg i{position:absolute;left:-34px;top:-118px;width:68px;height:22px;border-radius:50% 50% 0 0/100% 100% 0 0;border-top:4px solid rgba(255,90,60,.9);opacity:0;transform-origin:34px 118px;filter:drop-shadow(0 0 4px rgba(255,60,30,.7))}
+.cb-sup{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 38%,rgba(8,10,12,.62) 100%);-webkit-mask-image:radial-gradient(ellipse at center,transparent 30%,#000 85%);mask-image:radial-gradient(ellipse at center,transparent 30%,#000 85%)}
+.cb-sup.b{-webkit-backdrop-filter:saturate(.5) brightness(.85);backdrop-filter:saturate(.5) brightness(.85)}
 .cb-edge{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(150,30,20,.55) 100%);transition:opacity .25s}
 .cb-hp{position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + 86px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);opacity:0;transition:opacity .4s}
 .cb-bar{height:5px;border-radius:3px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
@@ -50,6 +52,9 @@ export function createHud({ mount, touch = false }) {
 	const root = document.createElement('div');
 	root.className = 'cb-hud';
 	mount.appendChild(root);
+	// suppression: rounds cracking past close darken and drain the colour from the edges of sight (the drain only
+	// with a mouse: a phone's compositor pays dearly for it)
+	const sup = el('cb-sup' + (touch ? '' : ' b'));
 	const edge = el('cb-edge');
 	const cross = el('cb-x', '<i class="h"></i><i class="h"></i><i class="v"></i><i class="v"></i><b></b>');
 	const arms = [...cross.querySelectorAll('i')];
@@ -86,7 +91,7 @@ export function createHud({ mount, touch = false }) {
 		mkBtn('Mode', 'AUTO', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 226px + env(safe-area-inset-bottom));width:44px;height:44px;font-size:9px;');
 	}
 
-	let hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
+	let supK = 0, hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
 	const callList = [], feedList = [];
 	return {
 		root, btns,
@@ -98,6 +103,8 @@ export function createHud({ mount, touch = false }) {
 			w.t = 1.2; w.a = angle; w.k = k;
 			edgeT = Math.max(edgeT, 0.35 + k * 0.6);
 		},
+		// a round cracked past (k 0..1): it builds with more of them and eases off when they stop
+		suppress(k = 0.35) { supK = Math.min(1, supK + k); },
 		call(text, ms = 2600) {
 			const d = document.createElement('div'); d.textContent = text; calls.appendChild(d);
 			callList.push({ d, t: ms / 1000 });
@@ -135,6 +142,10 @@ export function createHud({ mount, touch = false }) {
 				w.e.style.transform = `rotate(${w.a}rad)`;
 			}
 			edgeT = Math.max(0, edgeT - dt * 0.8);
+			supK = Math.max(0, supK - dt * 0.45);
+			const so = S.ko ? 0 : Math.min(0.95, supK * 1.2);
+			if (sup.style.opacity !== so.toFixed(2)) sup.style.opacity = so.toFixed(2);
+			sup.style.display = so > 0 ? '' : 'none';
 			const H = S.health;
 			const low = H && H.hp / H.max < 0.3;
 			edge.style.opacity = String(Math.min(0.9, edgeT + (low && !S.ko ? 0.25 + 0.15 * Math.sin(performance.now() / 260) : 0)));

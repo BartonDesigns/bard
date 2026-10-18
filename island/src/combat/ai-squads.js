@@ -407,6 +407,7 @@ export function createSquads(ctx) {
 		} else if (atMe) ctx.whiz?.(from, end);
 		fx.tracer(from, end, style, 380);
 		fx.muzzle(from, dir, style === 2 ? 2 : 0);
+		if (style !== 2) fx.casing?.({ x: from.x - dir.x * 0.35, y: from.y - dir.y * 0.35, z: from.z - dir.z * 0.35 }, dir);
 		ctx.heard?.(from, h);
 		if (h.mag <= 0) { reloadGun(h); return; }
 		h.fireT = h.burst > 0 ? B.rate : rnd(...B.gap);

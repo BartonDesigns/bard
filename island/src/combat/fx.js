@@ -112,6 +112,14 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 	const chipBits = [], shardBits = [];
 	makeBits(chips, chipBits); makeBits(shards, shardBits);
 	bits.push(...chipBits, ...shardBits);
+	// spent cases: kicked out of the breech to the right, tumbling, ringing off the ground a
+	// couple of times and lying where they fell for a while (brass; red hulls from a shotgun)
+	const caseGeo = new THREE.CylinderGeometry(1, 1, 1, 7, 1);
+	const cases = instPool(caseGeo, new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.85 }), isPhone ? 24 : 72);
+	cases.mesh.name = 'combat-cases';
+	group.add(cases.mesh);
+	const caseBits = [];
+	for (let i = 0; i < cases.n; i++) caseBits.push({ i, life: 0, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3(), rad: 0.0058, len: 0.046, rest: false });
 
 	// marks on walls
 	const decalTex = decalTexture();
@@ -241,9 +249,47 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 		if (surf === 'person') { bleed(p, N); return; }
 		if (surf === 'creature') { sparks(p, 6, N, 0.5, 1, 0.6, 4); dust(p, 2, 0.4, 0.45, 0.35, 0.3, 0.3); return; }
 		if (surf === 'wood') { debris(p, 3, 0x8a6a45, 3, 0.05); dust(p, 2, 0.6, 0.52, 0.4, 0.3); if (n) decal(p, N, 0.1, 0); return; }
-		if (surf === 'ground') { dust(p, 4, 0.5, 0.46, 0.4, 0.5, 1); debris(p, 2, 0x6a6258, 3, 0.04); return; }
+		if (surf === 'water') { splash(p); return; }
+		if (surf === 'ground') { dust(p, 4, 0.5, 0.46, 0.4, 0.5, 1); debris(p, 2, 0x6a6258, 3, 0.04); spout(p, N); return; }
 		dust(p, 3, 0.62, 0.6, 0.57, 0.35, 0.6); debris(p, 3, 0x9a958c, 3.5, 0.04); sparks(p, 2, N, 1, 0.85, 0.6, 3);
 		if (n) decal(p, N, 0.16, 0);
+	}
+	// a round into the dirt: a spout of soil thrown up and falling back, a haze of dust left
+	// hanging, and a dark pock in the ground
+	function spout(p, n) {
+		const ny = Math.max(0.5, n.y || 1);
+		for (let k = 0; k < 9; k++) {
+			const s = 2.5 + Math.random() * 3.5;
+			smoke.emit(p.x, p.y + 0.02, p.z, (n.x || 0) * s * 0.5 + (Math.random() - 0.5) * 1.1, ny * s, (n.z || 0) * s * 0.5 + (Math.random() - 0.5) * 1.1, 0.5 + Math.random() * 0.4, 0.05 + Math.random() * 0.05, 0.08, 0.2, 0.16, 0.12, 0.9, 9.8, 0.4);
+		}
+		smoke.emit(p.x, p.y + 0.15, p.z, 0, 0.5, 0, 1.6, 0.25, 1.1, 0.48, 0.43, 0.36, 0.35, -0.05, 1.2);
+		decal({ x: p.x, y: p.y + 0.01, z: p.z }, n, 0.1, 0);
+	}
+	// a round into the sea: a white plume thrown straight up that falls back as spray, a mist
+	function splash(p) {
+		for (let k = 0; k < 12; k++) {
+			const s = 3 + Math.random() * 4.5;
+			smoke.emit(p.x + (Math.random() - 0.5) * 0.15, p.y + 0.02, p.z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.9, s, (Math.random() - 0.5) * 0.9, 0.6 + Math.random() * 0.4, 0.05 + Math.random() * 0.04, 0.1, 0.9, 0.94, 0.96, 0.85, 9.8, 0.3);
+		}
+		smoke.emit(p.x, p.y + 0.2, p.z, 0, 0.4, 0, 1.2, 0.2, 0.9, 0.88, 0.92, 0.95, 0.4, -0.05, 1.5);
+		for (let k = 0; k < 6; k++) { const a = k * 1.047 + Math.random() * 0.5; smoke.emit(p.x, p.y + 0.03, p.z, Math.cos(a) * 1.6, 0.25, Math.sin(a) * 1.6, 0.5, 0.06, 0.18, 0.92, 0.95, 0.97, 0.6, 2, 3); }
+	}
+	// a spent case thrown from the breech at p (dir: the way the gun points; kind 1: a shotgun hull)
+	const _r = new THREE.Vector3();
+	function casing(p, dir, kind = 0) {
+		const B = caseBits[cases.slot()];
+		_r.set(-dir.z, 0, dir.x);
+		if (_r.lengthSq() < 1e-4) _r.set(1, 0, 0);
+		_r.normalize();
+		const out = 2.2 + Math.random() * 1.2;
+		B.p.set(p.x, p.y, p.z);
+		B.v.set(_r.x * out - dir.x * 0.6 + (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 1.2, _r.z * out - dir.z * 0.6 + (Math.random() - 0.5) * 0.4);
+		B.r.set(Math.random() * 6.28, Math.atan2(dir.x, dir.z), Math.PI / 2);
+		B.w.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 12, 18 + Math.random() * 20);
+		B.rad = kind === 1 ? 0.0105 : 0.0058; B.len = kind === 1 ? 0.062 : 0.046;
+		B.life = 14; B.rest = false;
+		cases.mesh.setColorAt(B.i, _c.setRGB(...(kind === 1 ? [0.55, 0.08, 0.06] : [0.78, 0.58, 0.24])));
+		if (cases.mesh.instanceColor) cases.mesh.instanceColor.needsUpdate = true;
 	}
 	// a person struck: a dark red puff, and a stain on the ground below that fades
 	function bleed(p, n) {
@@ -312,6 +358,11 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 	function muzzle(p, d, style = 0) {
 		const C = TRACER_COL[style] || TRACER_COL[0];
 		glow.emit(p.x + d.x * 0.1, p.y + d.y * 0.1, p.z + d.z * 0.1, d.x * 2, d.y * 2, d.z * 2, 0.05, 0.25, 0.4, C.r, C.g, C.b, 0.9);
+		if (style !== 2) wisp(p, d);
+	}
+	// the smoke a shot leaves at the muzzle: a faint grey wisp thrown forward that slows and rises
+	function wisp(p, d) {
+		smoke.emit(p.x + d.x * 0.15, p.y + d.y * 0.15, p.z + d.z * 0.15, d.x * 1.4, d.y * 1.4 + 0.25, d.z * 1.4, 1 + Math.random() * 0.5, 0.05, 0.4, 0.72, 0.72, 0.7, 0.22, -0.15, 2.2);
 	}
 	function ring(x, y, z, r, life = 1.5, color = 0xff5a3a, grow = false) {
 		const R = rings.find((q) => q.life <= 0) || rings[0];
@@ -364,6 +415,29 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 			B.pool.mesh.setMatrixAt(B.i, _m);
 		}
 		if (moved) { chips.mesh.instanceMatrix.needsUpdate = true; shards.mesh.instanceMatrix.needsUpdate = true; }
+		let cm = false;
+		for (const B of caseBits) {
+			if (B.life <= 0) continue;
+			B.life -= dt; cm = true;
+			if (B.life <= 0) { cases.mesh.setMatrixAt(B.i, HIDE); continue; }
+			if (!B.rest) {
+				B.v.y -= 9.8 * dt;
+				B.p.addScaledVector(B.v, dt);
+				B.r.x += B.w.x * dt; B.r.y += B.w.y * dt; B.r.z += B.w.z * dt;
+				const gy = ground(B.p.x, B.p.z);
+				if (Number.isFinite(gy) && B.p.y < gy + B.rad) {
+					B.p.y = gy + B.rad;
+					// a ring off the ground, a skip, then it lies on its side and rolls a little
+					if (Math.abs(B.v.y) < 0.9) { B.rest = true; B.r.z = Math.PI / 2; B.r.x = 0; B.v.set(0, 0, 0); }
+					else { B.v.y *= -0.32; B.v.x *= 0.55; B.v.z *= 0.55; B.w.multiplyScalar(0.5); }
+				}
+			}
+			const fade = Math.min(1, B.life * 0.5);
+			_q.setFromEuler(B.r);
+			_m.compose(B.p, _q, _s.set(B.rad * fade, B.len * fade, B.rad * fade));
+			cases.mesh.setMatrixAt(B.i, _m);
+		}
+		if (cm) cases.mesh.instanceMatrix.needsUpdate = true;
 		let bl = false;
 		for (let i = 0; i < blood.n; i++) {
 			if (bloodLife[i] <= 0) continue;
@@ -405,6 +479,7 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 	function clear() {
 		for (let i = 0; i < S.length; i++) { S[i].life = 0; S[i].held = false; streaks.mesh.setMatrixAt(i, HIDE); }
 		for (const B of bits) { B.life = 0; B.pool.mesh.setMatrixAt(B.i, HIDE); }
+		for (const B of caseBits) { B.life = 0; cases.mesh.setMatrixAt(B.i, HIDE); } cases.mesh.instanceMatrix.needsUpdate = true;
 		for (const D of decalPools) { for (let i = 0; i < D.n; i++) D.mesh.setMatrixAt(i, HIDE); D.mesh.instanceMatrix.needsUpdate = true; }
 		for (let i = 0; i < splats.n; i++) { splatLife[i] = 0; splats.mesh.setMatrixAt(i, HIDE); } splats.mesh.instanceMatrix.needsUpdate = true;
 		for (const R of rings) { R.life = 0; R.m.visible = false; }
@@ -413,5 +488,5 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 	}
 	// the points' size on screen follows the viewport's height
 	const resize = (h, fov) => { const k = h / (2 * Math.tan((fov * Math.PI) / 360)); glow.m.uniforms.scale.value = smoke.m.uniforms.scale.value = k; };
-	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
+	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, wisp, splash, casing, spout, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
 }
