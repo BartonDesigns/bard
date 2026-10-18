@@ -2133,11 +2133,14 @@ export function createIslandWorld() {
 		kitDaylight(renderer, W.sky, (W.houses?.inside?.(camera.position) || W.interiors?.inside?.(camera.position) ? 0.35 : 1) * (1 - caveK * 0.8) * (under ? 0.4 : 1));
 		// the sea's mirror, before the frame that reads it (only what stands over the water: world/seamirror.js)
 		// (not on a world with no sea, nor down a cave or indoors, where the water is out of sight)
-		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
-		else seaMirror.reset();
-		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaDepth.render(scene, camera, under || shared.uUnder.value);
-		else seaDepth.reset();
-		if (arrival?.blind || magic.covering() || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
+		// (while the skills menu covers the frame nothing is drawn, so neither are they; left as they
+		// are rather than reset, so closing the menu does not warm their shaders again)
+		const covered = magic.covering(), seaOn = !arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5;
+		if (covered) { /* the menu over it all */ } else if (seaOn) {
+			seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
+			seaDepth.render(scene, camera, under || shared.uUnder.value);
+		} else { seaMirror.reset(); seaDepth.reset(); }
+		if (arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy
 		// run (world/governor.js)
