@@ -211,6 +211,13 @@ snapping shut; Summon Shade and Grave Host spikes torn up out of split ground (`
 Pact a cage of blood spikes; Aegis its plates locking with struck edges; Renewal hard green threads
 spiralling up you. `SELF=1` in the gallery catches these a tenth of a second in.
 
+Then the quieter ones: Mend a hard white cross standing up through you over a ring of mint spikes;
+Resurgence the phoenix's wings traced in gold lines over flame spikes and split ground; Lumen four
+rays turning round its small sun; Swiftstride hard wind lines cut back from your heels; Waterstride a
+crown of droplet lines thrown up with each ring; Nightsight a crossed eye of violet lines and the dark
+cracking open; Quicken gear teeth on its rings and clock hands under you; Rewind the path you came by
+drawn back in hard lines with hands spun backwards.
+
 ## Test mode
 
 **∞ Test mode** in the places menu (under Skills and magic; `Crysis.magic.test(true)` from the
