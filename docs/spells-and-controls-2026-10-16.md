@@ -194,6 +194,14 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   some; `FLIGHT=1` catches bolts mid-flight; Gargantua is drawn over a checked backdrop so the
   lensing shows, and `GROW=<s>` also shows its ending's grade at s).
 
+## Test mode
+
+**∞ Test mode** in the places menu (under Skills and magic; `Crysis.magic.test(true)` from the
+console) opens everything for trying spells without the climb: every spell known and at mastery V,
+every skill at rank 100, every perk taken, and mana, both aethers and cooldowns topped up every
+frame. What you had is saved when it is turned on and comes back when it is turned off; nothing is
+saved while it is on. It stays on across reloads until turned off.
+
 ## Console
 
 `Crysis.magic`:

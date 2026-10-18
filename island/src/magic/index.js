@@ -23,7 +23,7 @@
 
 import { createMagicState, saveMagic, weave, weaveCost, bind, gather, manaMax, aetherShare, grantMoonlit, SPELL, SLOTS } from './spells.js';
 import { ELEMENTS } from './elements.js';
-import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, rankOf, PAGES, PERK, spellBlock, addMastery, feedSpell, masteryLevel, NUMERAL, MASTERY_GIFT } from './skills.js';
+import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, rankOf, useFor, refreshMods, RANK_MAX, MASTERY, PAGES, PERKS, PERK, spellBlock, addMastery, feedSpell, masteryLevel, NUMERAL, MASTERY_GIFT } from './skills.js';
 import { refreshStats, statSheet, BASE_LIFE } from './stats.js';
 import { attunement, infuseStrands, isWeaponId, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
 import { MAX_LEVEL, xpToMax } from '../gameplay/gear-levels.js';
@@ -39,7 +39,7 @@ import { encodeSpell, decodeSpell, SPELL_STYLE } from './net.js';
 import { GLOW } from './fx.js';
 import { createLens } from './lens.js';
 
-const KEY = 'l99-magic';
+const KEY = 'l99-magic', TEST_KEY = 'l99-magic-test';
 const store = {
 	get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
 	set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
@@ -296,6 +296,54 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; openSkills(); });
 		menu.insertBefore(menuBtn, menu.firstChild);
 	}
+	// ---------- test mode (a button in the places menu, under the one above) ----------
+	// Everything open for trying spells without the climb: every spell known and mastered, every
+	// skill at its top rank, every perk taken, and mana, aether and cooldowns never running out.
+	// What you had is kept as it was saved and comes back when it is turned off; nothing earned
+	// while it is on is saved.
+	let testOn = false, testBtn = null;
+	const FULL = 99999;
+	function unlockAll() {
+		for (const id of Object.keys(SPELL)) if (!state.known.includes(id)) state.known.push(id);
+		state.affinity.light = Math.max(state.affinity.light, 400); state.affinity.dark = Math.max(state.affinity.dark, 400);
+		for (const k of PAGES) state.use[k] = useFor(RANK_MAX);
+		for (const id of state.known) state.mastery[id] = MASTERY[MASTERY.length - 1];
+		state.level = Math.max(state.level, PERKS.length);
+		// (perks in as many passes as their hanging from one another needs)
+		for (let pass = 0, took = true; took && pass < 20; pass++) { took = false; for (const p of PERKS) if (takePerk(state, p.id)) took = true; }
+		refreshMods(state);
+	}
+	function topUp() { state.mana = manaMax(state); state.fabric.light = state.fabric.dark = FULL; state.cds = {}; }
+	function setTest(on) {
+		on = !!on;
+		if (on === testOn) return testOn;
+		if (on) { store.set(KEY, JSON.stringify(saveMagic(state))); dirty = false; testOn = true; unlockAll(); topUp(); }
+		else {
+			testOn = false;
+			let saved = null;
+			try { saved = JSON.parse(store.get(KEY) || 'null'); } catch { saved = null; }
+			const back = sanitizeSkills(createMagicState(saved));
+			// (only what is saved comes back: what else the state carries, the gear, stays as it is)
+			Object.assign(state, back);
+			state.cds = {};
+		}
+		try { store.set(TEST_KEY, on ? '1' : ''); } catch { /* private mode */ }
+		if (testBtn) { testBtn.textContent = on ? '∞ Test mode: on' : '∞ Test mode: off'; testBtn.style.borderColor = on ? 'rgba(245,158,11,.7)' : 'rgba(255,255,255,.15)'; }
+		skills?.refresh?.();
+		hint(on ? 'Test mode: every spell, skill and perk open; mana, aether and cooldowns endless.' : 'Test mode off: your own spells and skills are back.', 2600);
+		return testOn;
+	}
+	if (menu) {
+		testBtn = document.createElement('button');
+		testBtn.type = 'button';
+		testBtn.textContent = '∞ Test mode: off';
+		testBtn.title = 'Every spell and skill unlocked, endless mana and aether (nothing is saved while on)';
+		testBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) testBtn.addEventListener(ev, (x) => x.stopPropagation());
+		testBtn.addEventListener('click', (e) => { e.stopPropagation(); setTest(!testOn); });
+		menu.insertBefore(testBtn, menuBtn.nextSibling);
+	}
+	if (store.get(TEST_KEY) === '1') setTest(true);
 	// (a beam is cast while its key is held; a tap on the bar holds it for a moment)
 	const keysDown = new Set(), heldTap = new Map();
 	const keysHeld = (id) => { for (const c of keysDown) if (state.binds[SPELL_KEYS[c]] === id) return true; return (heldTap.get(id) || 0) > performance.now(); };
@@ -376,10 +424,11 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		if (innerHeight !== lastH) { lastH = innerHeight; fx.resize(innerHeight, camera.fov); }
 		hud.show(!busy());
 		hud.update(performance.now() / 1000);
+		if (testOn) topUp();
 		saveT -= dt;
-		if (saveT <= 0) { saveT = 5; if (dirty) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
+		if (saveT <= 0) { saveT = 5; if (dirty && !testOn) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.remoteSpell = null; }
+	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.remoteSpell = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, skills, exposure: () => caster.exposure(),
@@ -389,6 +438,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (Solar Flare channels the moon by night: the skills side grants this; here for the console)
 		moonlit: (id = 'solar-flare') => { const ok = grantMoonlit(state, id); if (ok) dirty = true; return ok; },
 		menuOpen: () => skills.isOpen(),
+		// (test mode: Crysis.magic.test(true / false), as the button in the places menu)
+		test: (on) => (on === undefined ? testOn : setTest(on)),
 		// (the tests: your body, for its gestures)
 		body: () => me(),
 		covering: () => skills.covering(),
