@@ -857,7 +857,9 @@ export function createIslandWorld() {
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
-	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
+	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
+	// (the fog's colour under Gargantua's black sky)
+	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
@@ -1957,6 +1959,14 @@ export function createIslandWorld() {
 			scene.fog.color.lerp(new THREE.Color(cg[0], cg[1], cg[2]), caveK);
 			scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.012, caveK);
 		}
+		// Gargantua swallowing the sky (magic/fx.js): the daylight on the ground goes with it
+		const voidK = magic.darkness?.() || 0;
+		if (voidK > 0) {
+			const dim = 1 - voidK * 0.88;
+			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
+			shared.uAmbient.value.multiplyScalar(dim);
+			scene.fog.color.lerp(_voidFog, voidK * 0.9);
+		}
 		// the cities' glow washes out the faint stars
 		if (W.bayArea?.loaded()) {
 			let glow = 0;
@@ -2140,7 +2150,7 @@ export function createIslandWorld() {
 			seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
 			seaDepth.render(scene, camera, under || shared.uUnder.value);
 		} else { seaMirror.reset(); seaDepth.reset(); }
-		if (arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
+		if (arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy
 		// run (world/governor.js)
