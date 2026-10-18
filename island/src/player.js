@@ -362,7 +362,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const k = Math.min(1, dt * 12);
 		F.low += ((s.slide ? 0.85 : s.crouch ? 0.6 : 0) - F.low) * k;
 		const D = F.dip;
-		D.dv += (-150 * D.v - 17 * D.dv) * dt; D.v = Math.max(-0.38, Math.min(0.06, D.v + D.dv * dt));
+		// (in steps of at most 1/60 s, so a slow frame can't set the spring ringing)
+		for (let n = Math.ceil(dt * 60), h = dt / Math.max(n, 1); n > 0; n--) { D.dv += (-150 * D.v - 17 * D.dv) * h; D.v = Math.max(-0.38, Math.min(0.06, D.v + D.dv * h)); }
 		const lat = s.vel.x * right.x + s.vel.z * right.z;
 		F.roll += ((s.slide ? 0.07 : 0) - lat * 0.0045 - F.roll) * Math.min(1, dt * 6);
 		const step = s.grounded && !s.slide ? Math.sin(G.phase * Math.PI) * (G.foot ? 1 : -1) * 0.016 * Math.min(1, G.speed / 4) : 0;
