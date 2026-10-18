@@ -202,7 +202,7 @@ import { createContrails } from './world/contrails.js';
 import { createFarForest } from './world/farforest.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { touchLookRows } from './ui/touch-look.js';
-import { PHONE_DEVICE, GFX_PHONE, ULTRA } from './world/device.js';
+import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -2406,7 +2406,8 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
+			if (ULTRA_DROPPED) hint('Ultra graphics are off: the page closed while drawing them last time. Auto is on now; Ultra is still in the settings.', 7000);
+			else if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {
