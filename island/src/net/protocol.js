@@ -3,7 +3,12 @@
 // sends is cleaned here, on both sides: only these fields, bounded, ever travel. Nothing from
 // a conversation with a townsperson is part of any of them.
 
+import { MAX_LEVEL } from '../gameplay/gear-levels.js';
+
 export const VERSION = 1;
+// gear above the old top level (10) travels in trades: a server without this word drops it
+export const GEAR_FEATURE = 'gear-levels-20';
+export const LEGACY_LEVEL = 10;
 export const MAX_PLAYERS = 8;
 // one message's size, in characters
 export const MAX_BYTES = 3072;
@@ -46,10 +51,13 @@ export function cleanPose(p) {
 	// Geographic location survives Earth's floating/rebased render frame.
 	if (o.w === 'earth' && Array.isArray(p.g) && p.g.length === 2 && num(p.g[0],90) && num(p.g[1],180)) o.g=p.g.map(v=>Math.round(v*1e7)/1e7);
 	// the item in their hand, if any (a game catalogue id, gameplay/arms.js), with its level
-	// (1-10) and quality tier (0-4), which friends see as its trim and glow
+	// (1 to MAX_LEVEL, gameplay/gear-levels.js) and quality tier (0-4), which friends see as its
+	// trim and glow
+	// what they wear, head to foot (people/armor-looks.js wearCode), which friends see on them
+	if (typeof p.wr === 'string' && /^[0-9a-z]{1,2}(\.[0-9a-z]{1,2}){0,5}$/.test(p.wr)) o.wr = p.wr;
 	if (ITEM_RE.test(p.h || '')) {
 		o.h = p.h;
-		if (Number.isInteger(p.hl) && p.hl >= 1 && p.hl <= 10) o.hl = p.hl;
+		if (Number.isInteger(p.hl) && p.hl >= 1 && p.hl <= MAX_LEVEL) o.hl = p.hl;
 		if (Number.isInteger(p.ht) && p.ht >= 0 && p.ht <= 4) o.ht = p.ht;
 	}
 	return o;
@@ -62,7 +70,7 @@ const TRADE_ID_RE = /^[A-Za-z0-9_-]{6,40}$/;
 const KEY_RE = /^\d{1,6}\.\d{1,6}$/;
 const int = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
 // one side of an offer: credits and up to 12 item instances, each { u: its id, i: the item,
-// l: level 1-10, t: tier 0-4 (Common to Legendary), x: experience }, no id twice
+// l: level 1 to MAX_LEVEL, t: tier 0-4 (Common to Legendary), x: experience }, no id twice
 const UID_RE = /^[a-z0-9~-]{4,24}$/;
 export function cleanTradeSide(s) {
 	if (!s || typeof s !== 'object' || !int(s.credits ?? 0, 1e6)) return null;
@@ -71,7 +79,7 @@ export function cleanTradeSide(s) {
 	const items = [], seen = new Set();
 	for (const x of raw) {
 		if (!x || typeof x !== 'object' || !UID_RE.test(x.u || '') || !ITEM_RE.test(x.i || '') || seen.has(x.u)) return null;
-		if (!Number.isInteger(x.l) || x.l < 1 || x.l > 10 || !int(x.t, 4) || !int(x.x ?? 0, 1e6)) return null;
+		if (!Number.isInteger(x.l) || x.l < 1 || x.l > MAX_LEVEL || !int(x.t, 4) || !int(x.x ?? 0, 1e6)) return null;
 		seen.add(x.u);
 		items.push({ u: x.u, i: x.i, l: x.l, t: x.t, x: x.x ?? 0 });
 	}

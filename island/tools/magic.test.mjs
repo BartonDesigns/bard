@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SPELLS, SPELL, SCHOOLS, WEAVE_COST, TWILIGHT_NEEDS, createMagicState, saveMagic, weave, weaveBlock, weaveCost, bind, spellPower, manaCost, castBlock, spend, cooldownLeft, manaMax, gather, strandOf } from '../src/magic/spells.js';
+import { SPELLS, SPELL, SCHOOLS, WEAVE_COST, TWILIGHT_NEEDS, createMagicState, saveMagic, weave, weaveBlock, weaveCost, bind, spellPower, manaCost, castBlock, spend, cooldownLeft, manaMax, gather, strandOf, moonlit, grantMoonlit, aetherShare, gatherShare } from '../src/magic/spells.js';
 import { moteAt, wellAt, aetherNear, strandsShowing, isBack, fabricOf, seedOf, cellHash, MOTE_BACK } from '../src/magic/aether.js';
 import { hotbarBinds, hotbarPress } from '../src/combat/hotbar.js';
 
@@ -13,10 +13,10 @@ test('every spell is whole, and every school a ladder with no rung missing', () 
 	for (const s of SPELLS) {
 		assert.ok(!ids.has(s.id), 'unique ' + s.id); ids.add(s.id);
 		assert.ok(SCHOOLS[s.school], s.id + ' school');
-		assert.ok(s.tier >= 1 && s.tier <= 4, s.id + ' tier');
+		assert.ok(s.tier >= 1 && s.tier <= 4 || s.tier === 5 && s.kind === 'singularity', s.id + ' tier');
 		assert.ok(s.name && s.glyph && s.desc.length > 20, s.id + ' words');
 		assert.ok(s.mana >= 0 && s.cd > 0, s.id + ' costs');
-		if (['bolt', 'burst', 'strike', 'nova', 'cone', 'chain', 'orb', 'well'].includes(s.kind)) assert.ok(s.dmg > 0, s.id + ' harms');
+		if (['bolt', 'burst', 'flare', 'strike', 'nova', 'cone', 'chain', 'orb', 'well'].includes(s.kind)) assert.ok(s.dmg > 0, s.id + ' harms');
 		if (s.kind === 'bolt') assert.ok(s.speed > 0, s.id + ' flies');
 	}
 	assert.ok(SPELLS.length >= 40, `a wide book (${SPELLS.length})`);
@@ -179,6 +179,91 @@ test('the look modes and the keys are wired', () => {
 	assert.match(hb, /Digit\(\[1-5\]\)/);
 	const ai = fs.readFileSync(new URL('../src/combat/ai-squads.js', import.meta.url), 'utf8');
 	assert.match(ai, /hexStep/); assert.match(ai, /ctx\.cloaked/);
+	// (the spellbook is the skills menu now, magic/skills-ui.js: it is shut until opened)
+});
+
+test('every spell has a look of its own, and no two look alike', async () => {
+	const THREE = await import('three');
+	const { createMagicFx } = await import('../src/magic/fx.js');
+	const { LOOK, LOOK_IDS } = await import('../src/magic/looks.js');
+	for (const s of SPELLS) assert.ok(LOOK[s.id], 'a look for ' + s.id);
+	assert.equal(LOOK_IDS.length, SPELLS.length);
+	let seen = null;
+	const fx = createMagicFx(new THREE.Scene(), { onEmit: (c, o) => seen?.add(`${o?.shape || 0}${o?.ink ? 'i' : ''}:${c.map((v) => v.toFixed(2)).join(',')}`) });
+	const v = (x, y, z) => ({ x, y, z }), d = v(0, 0, -1), T = { bound: v(0, 1, -5) };
+	const sigs = new Map();
+	for (const id of LOOK_IDS) {
+		seen = new Set();
+		const L = LOOK[id];
+		// each part drawn a few times (some draw by chance), with all it may be given
+		for (let n = 0; n < 40; n++) {
+			L.cast?.(fx, v(0, 1.5, 0)); L.trail?.(fx, v(0, 1.5, -2), d, 1); L.hit?.(fx, v(0, 1, -5), d);
+			L.beam?.(fx, v(0, 1.5, 0), v(0, 1, -10), n / 10); L.tell?.(fx, v(0, 0, -8), 5, n / 40); L.blast?.(fx, v(0, 0, -8), 5);
+			L.cone?.(fx, v(0, 1.6, 0), d, 8, 0.6); L.arc?.(fx, v(0, 1.5, 0), v(0, 1, -6)); L.orb?.(fx, v(0, 1, -4), n / 10);
+			L.tick?.(fx, v(0, 0, -6), 5, n / 10); L.self?.(fx, v(0, 1.68, 0), [v(1, 1.68, 0), v(2, 1.68, 0)]); L.on?.(fx, v(0, 1.68, 0), n / 10, d, true);
+			L.mark?.(fx, T, {}); L.body?.(fx, v(1, 1.5, 0), n / 10); L.spread?.(fx, v(0, 1, -5), v(2, 1, -6));
+			L.fall?.(fx, v(0, 3, -6), v(0.3, 0.9, 0.2), n % 2 === 0); L.cloud?.(fx, v(0, 0, -8), 6); L.strike?.(fx, v(0, 15, -8), v(0, 0, -8)); L.rain?.(fx, v(0, 0, -8), 6);
+		}
+		assert.ok(seen.size > 0, id + ' draws something');
+		sigs.set(id, [...seen].sort().join('|'));
+	}
+	const by = new Map();
+	for (const [id, sg] of sigs) { assert.ok(!by.has(sg), `${id} looks just like ${by.get(sg)}`); by.set(sg, id); }
+	fx.dispose();
+});
+
+test('Solar Flare needs the sun until it channels the moon; aether leans to your name', () => {
+	const s = createMagicState();
+	assert.equal(SPELL['solar-flare'].night, 'moon');
+	assert.equal(moonlit(s, 'solar-flare'), false);
+	assert.equal(grantMoonlit(s, 'sunspark'), false, 'only a spell of the sun can channel the moon');
+	assert.equal(grantMoonlit(s, 'solar-flare'), true);
+	assert.equal(grantMoonlit(s, 'solar-flare'), false, 'once');
+	const back = createMagicState(JSON.parse(JSON.stringify(saveMagic(s))));
+	assert.equal(moonlit(back, 'solar-flare'), true, 'kept between visits');
+	assert.deepEqual(createMagicState({ v: 1, moonlit: ['sunspark', 'nope', 'solar-flare'] }).moonlit, ['solar-flare'], 'rubbish dropped');
+	const src = fs.readFileSync(new URL('../src/magic/caster.js', import.meta.url), 'utf8');
+	assert.match(src, /night && \(!moonlit\(state, spell\.id\)/, 'refused by night unless moonlit');
+	// a saint gathers twice the light and half the dark; a monster the other way; no name, as it was
+	assert.equal(aetherShare('light', 100), 2); assert.equal(aetherShare('dark', 100), 0.5);
+	assert.equal(aetherShare('dark', -100), 2); assert.equal(aetherShare('light', -100), 0.5);
+	assert.equal(aetherShare('light', 0), 1); assert.equal(aetherShare('dark', 500), 0.5, 'bounded');
+	assert.deepEqual(gatherShare(50), { light: 1.5, dark: 0.75 });
+});
+
+test('each element does its own thing to the one it strikes', async () => {
+	const THREE = await import('three');
+	const { createMagicFx } = await import('../src/magic/fx.js');
+	const { ELEMENTS, createAfflictions } = await import('../src/magic/elements.js');
+	// every damage type a spell deals has an affliction, named and worded for the menu
+	for (const s of SPELLS) if (s.type) assert.ok(ELEMENTS[s.type]?.name && ELEMENTS[s.type].text.length > 20, `${s.id}: ${s.type} has an effect`);
+	const fx = createMagicFx(new THREE.Scene());
+	const dealt = [], hexes = [];
+	const foe = (kind = 'hostile') => ({ kind, bound: { x: 0, y: 1, z: -5 } }), other = foe();
+	const A = createAfflictions({ fx, deal: (T, n, type) => dealt.push({ T, n, type }), hex: (T, st) => hexes.push({ T, st }), near: (T) => (T === other ? null : other) });
+	const run = (s) => { for (let t = 0; t < s; t += 0.1) A.step(0.1); };
+	const sum = (type) => dealt.filter((d) => d.type === type).reduce((a, d) => a + d.n, 0);
+	// fire burns for 40% of the blow over 4 s, all of it, and no more
+	const f = foe(); A.apply(f, 'fire', 100, f.bound); run(5);
+	assert.ok(Math.abs(sum('fire') - 40) < 0.01, 'burned ' + sum('fire'));
+	// blight rots 30% over 6 s; radiant sears 25% over 3 s
+	A.apply(foe(), 'blight', 100, f.bound); A.apply(foe(), 'radiant', 100, f.bound); run(7);
+	assert.ok(Math.abs(sum('blight') - 30) < 0.01 && Math.abs(sum('radiant') - 25) < 0.01, `${sum('blight')} ${sum('radiant')}`);
+	// frost slows, and the third chill in a row freezes
+	const c = foe(); for (let i = 0; i < 3; i++) A.apply(c, 'frost', 10, c.bound);
+	assert.deepEqual(hexes.filter((h) => h.T === c).map((h) => Object.keys(h.st)[0]), ['slow', 'slow', 'hold']);
+	assert.ok(A.info(c).frozen > 1);
+	// storm jolts and leaps 30% to the next foe
+	const s = foe(); A.apply(s, 'storm', 50, s.bound);
+	assert.ok(hexes.some((h) => h.T === s && h.st.hold === 0.35) && dealt.some((d) => d.T === other && d.n === 15));
+	// shadow: dread, 15% more from you for 4 s
+	const d = foe(); A.apply(d, 'shadow', 10, d.bound); assert.equal(A.vuln(d), 0.15); run(4.2); assert.equal(A.vuln(d), 0);
+	// void: 30% again a moment later
+	const v = foe(); A.apply(v, 'void', 100, v.bound); const before = sum('void'); run(1.2); assert.ok(Math.abs(sum('void') - before - 30) < 0.01);
+	// anything vast takes the damage and the dread, but is never slowed, frozen or jolted
+	const b = foe('boss'); hexes.length = 0; for (let i = 0; i < 3; i++) A.apply(b, 'frost', 10, b.bound); A.apply(b, 'storm', 10, b.bound); A.apply(b, 'shadow', 10, b.bound);
+	assert.equal(hexes.length, 0); assert.equal(A.vuln(b), 0.15);
+	fx.dispose();
 });
 
 test('things picked up and carried share the keys 1 to 5, after the field arms', () => {
@@ -227,7 +312,8 @@ test('spells reach brawlers and townsfolk, hands cast them, the body gestures, t
 	const hud = src('magic/hud.js');
 	assert.match(hud, /\.mg-bar\{position:absolute;left:50%;bottom:calc\(12px/, 'the bar at the bottom on a desktop');
 	assert.match(hud, /\.l99-touch \.mg-bar\{bottom:calc\(var\(--l99-low/, 'above the thumbs on a touch screen');
-	assert.match(hud, /const isOpen = \(\) => book\.style\.display === 'flex'/, 'the book is shut until opened, so the keys work from the start');
+	// (the spellbook is now the skills and magic menu, magic/skills-ui.js: shut until opened)
+	assert.match(src('magic/skills-ui.js'), /let root = null, built = false, open = false/, 'the menu is shut until opened, so the keys work from the start');
 });
 
 test('a beam gathers, lets go with a punch, pours, and thins away', async () => {

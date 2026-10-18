@@ -291,7 +291,7 @@ const lanterns = (P) => P.inv.items['camp-lantern'] || 0;
 	const lamp = { u: 'lamp01', i: 'camp-lantern', l: 3, t: 2, x: 4 };
 	ok(cleanTradeSide({ credits: 5, items: [lamp] })?.items[0].t === 2, 'a good side');
 	ok(cleanTradeSide({ credits: -1 }) === null && cleanTradeSide({ items: [{ ...lamp, i: 'made-up' }] }) === null && cleanTradeSide({ credits: 1.5 }) === null, 'bad credits and unknown items refused');
-	ok(cleanTradeSide({ items: [lamp, lamp] }) === null && cleanTradeSide({ items: [{ ...lamp, l: 11 }] }) === null && cleanTradeSide({ items: [{ ...lamp, t: 5 }] }) === null, 'an id twice, or a level or tier out of range, refused');
+	ok(cleanTradeSide({ items: [lamp, lamp] }) === null && cleanTradeSide({ items: [{ ...lamp, l: MAX_LEVEL + 1 }] }) === null && cleanTradeSide({ items: [{ ...lamp, l: MAX_LEVEL }] }) !== null && cleanTradeSide({ items: [{ ...lamp, t: 5 }] }) === null, 'an id twice, or a level or tier out of range, refused');
 	ok(cleanPose({ p: [0, 0, 0], h: 'camp-lantern', hl: 4, ht: 3 }).ht === 3 && !('h' in cleanPose({ p: [0, 0, 0], h: '<b>' })), 'the held item, its level and tier travel in the pose, cleaned');
 	ok(cleanTrade({ op: 'commit', id: 'trade-0001', key: '3.4', sides: { a: { credits: 1, items: [] }, b: { credits: 0, items: [lamp] } } })?.sides.b.items[0].u === 'lamp01', 'a commit survives the cleaner');
 	ok(cleanTrade({ op: 'commit', id: 'trade-0001', key: '3.4', sides: { a: { credits: 1 } } }) === null, 'a commit missing a side is refused');

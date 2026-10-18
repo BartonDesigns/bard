@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { siteScore, chooseSite, baseLayout, interiorFrames, garrisonPlan, mayStation, militiaCamps, planDispatch, policePlan, globeSites, BAY_SITES, invasionPlan, toLocal, toWorld, FORCES } from '../src/military/rules.js';
 import { FACTIONS, factionsFor, createRelations } from '../src/combat/factions.js';
-import { outfitFor, lookOf } from '../src/combat/outfits.js';
+import { outfitFor, lookOf, kitArmour } from '../src/combat/outfits.js';
 import { canMelee, escalate, STAGES, nextBlow, blowDamage, brawlResponse, improvised } from '../src/combat/brawl.js';
 
 // a flat plain at 12 m with a town to the east (x > 3000) and the sea to the south (z > 2000)
@@ -130,12 +130,18 @@ test('each side has its look: urban gangs, camouflage and modern militia, soldie
 	assert.ok(m.has('camouflage') && m.has('modern-militia'), [...m].join());
 	assert.deepEqual([...looks('guard')], ['soldier']);
 	assert.deepEqual([...looks('police')], ['police']);
-	// modern militia: a carrier and a baseball or trucker cap
-	for (let i = 1; i < 60; i++) {
+	// modern militia: a plate carrier or chest rig, and a cap, a boonie or a helmet; some with
+	// night vision, headsets, knee pads; and their kit turns blows by how much of it there is
+	const kit = new Set();
+	for (let i = 1; i < 120; i++) {
 		const o = outfitFor({ fid: 'ridgeback', kind: 'militia', colors: FACTIONS.ridgeback.colors }, i * 104729);
 		if (lookOf(o) !== 'modern-militia') continue;
-		assert.ok(o.acc.some((q) => q.kind === 'cap' || q.kind === 'trucker'));
+		assert.ok(o.acc.some((q) => /^(cap|trucker|bucket|helmet)$/.test(q.kind)));
+		for (const q of o.acc) kit.add(q.kind === 'carrier' && q.rig ? 'rig' : q.kind === 'helmet' && q.nvg ? 'nvg' : q.kind);
 	}
+	for (const k of ['carrier', 'rig', 'helmet', 'nvg', 'comms', 'kneepads']) assert.ok(kit.has(k) || (k === 'helmet' && kit.has('nvg')), k);
+	const plated = { acc: [{ kind: 'carrier' }, { kind: 'helmet', combat: true }] }, bare = { acc: [] };
+	assert.ok(kitArmour(plated) > 1 && kitArmour(bare) < 1);
 	// the same seed, the same clothes
 	assert.deepEqual(outfitFor({ fid: 'glasshouse', kind: 'gang', colors: ['#111111', '#eeeeee'] }, 42), outfitFor({ fid: 'glasshouse', kind: 'gang', colors: ['#111111', '#eeeeee'] }, 42));
 	// police and soldiers are distinct at a glance

@@ -201,7 +201,7 @@ export const M4 = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1) => new TH
 // ---------- the material ----------
 const GLSL = `
 uniform vec3 uKitA; uniform vec3 uKitB;
-varying vec3 vKit; varying vec3 vRest; varying vec3 vRestN;
+varying vec3 vKit; varying vec3 vRest; varying vec3 vRestN; varying vec2 vWear;
 float kHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float kNoise(vec3 x) {
 	vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -223,6 +223,13 @@ float kFabric(vec3 p, vec3 n, float kind) {
 	if (kind < 6.5) { vec2 w = uv * vec2(900.0, 260.0); return 0.92 + abs(sin(w.x)) * 0.14 * kFade(w) + mott * 0.08; }
 	// fur: fine streaks of hair over a soft mottle
 	return 0.9 + kNoise(p * vec3(420.0, 110.0, 420.0)) * 0.2 * kFade(p.xz * 420.0) + mott * 0.12;
+}
+// a bumped normal from a height in metres (the surface's own derivatives: no UVs needed)
+vec3 kPerturb(vec3 pos, vec3 n, float h) {
+	vec3 sx = dFdx(pos), sy = dFdy(pos), r1 = cross(sy, n), r2 = cross(n, sx);
+	float det = dot(sx, r1);
+	vec3 g = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+	return normalize(abs(det) * n - g);
 }`;
 // (garment.js puts the same on the small things people wear: one program for all of it)
 export function patchKit(m, a = '#ffffff', b = '#ffffff') {
@@ -231,17 +238,92 @@ export function patchKit(m, a = '#ffffff', b = '#ffffff') {
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uKitA = { value: A }; sh.uniforms.uKitB = { value: B };
 		sh.vertexShader = sh.vertexShader
-			.replace('#include <common>', '#include <common>\nattribute vec3 kit;\nvarying vec3 vKit; varying vec3 vRest; varying vec3 vRestN;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = kit; vRest = position; vRestN = normal;');
+			.replace('#include <common>', '#include <common>\nattribute vec3 kit; attribute vec2 wear;\nvarying vec3 vKit; varying vec3 vRest; varying vec3 vRestN; varying vec2 vWear;')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = kit; vRest = position; vRestN = normal; vWear = wear;');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL)
 			.replace('#include <color_fragment>', `#include <color_fragment>
 diffuseColor.rgb *= vKit.z > 1.5 ? uKitB : vKit.z > 0.5 ? uKitA : vec3(1.0);
-diffuseColor.rgb *= kFabric(vRest, vRestN, vKit.y);
-if (vKit.y > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= 0.5;`)
-			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = vKit.x > 1.5 ? 0.24 : mix(0.82, 0.12, vKit.x); metalnessFactor = vKit.x > 1.5 ? 1.0 : vKit.x * 0.3;');
+// materials (kit.x): below 2 a gloss from matte to glossy, 2 polished metal; from 3 each its own
+// response, its detail laid in the piece's own rest-pose metres so it holds still as it moves:
+// 3 exposed steel, 4 painted metal or shell, 5 leather, 6 nylon webbing, 7 rubber, 8 lens
+// glass, 9 moulded polymer, 10 wool. wear: x how near a worn edge, y how deep in a recess
+float kRough = -1.0, kMetal = -1.0, kH = 0.0;
+vec3 kA = abs(vRestN);
+vec2 kUV = kA.x > kA.y && kA.x > kA.z ? vRest.zy : (kA.y > kA.z ? vRest.xz : vRest.xy);
+float kEdge = vWear.x, kCav = vWear.y, kId = floor(vKit.x + 0.5);
+if (vKit.x < 2.5) diffuseColor.rgb *= kFabric(vRest, vRestN, vKit.y);
+if (vKit.y > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= 0.5;
+if (vKit.x > 2.5) {
+	float mott = kNoise(vRest * 31.0);
+	if (kId == 3.0) {
+		// steel: dark forged plate, polished bright where it is handled and rubbed (the edges),
+		// fine scratches where it is clean, grime and rust in the recesses
+		float grime = kNoise(vRest * 11.0) * 0.6 + kNoise(vRest * 37.0) * 0.4;
+		float clean = smoothstep(0.3, 0.75, grime) * (1.0 - kCav * 0.7);
+		vec2 sw = vec2(kUV.x * 9.0 + kUV.y * 3.0, kUV.y * 9.0 - kUV.x * 2.0) * vec2(40.0, 900.0);
+		float scratch = smoothstep(0.78, 0.95, kNoise(vec3(sw, 0.0))) * kFade(sw) * clean;
+		float rust = min(1.0, smoothstep(0.35, 0.7, kCav * (0.4 + kNoise(vRest * 19.0 + 7.0) * 0.9)) * (1.0 - kEdge) + smoothstep(0.9, 0.97, kNoise(vRest * 61.0 + 3.0)) * 0.2);
+		float polish = smoothstep(0.2, 0.9, kEdge);
+		// (the colour of a metal is what it reflects: steel reflects about half the light)
+		diffuseColor.rgb = sqrt(diffuseColor.rgb) * 0.88;
+		diffuseColor.rgb *= mix(0.62, 1.0, clean) * (1.0 + polish * 0.45) + scratch * 0.2;
+		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.11, 0.06) * (0.7 + mott * 0.6), min(1.0, rust) * 0.8);
+		kRough = mix(mix(0.62, 0.46, clean), 0.3, polish) - scratch * 0.06;
+		kRough = mix(kRough, 0.88, rust);
+		kMetal = mix(1.0, 0.1, rust);
+		// (hammer marks in the plate, pitting in the rust)
+		kH = (kNoise(vRest * 70.0) - 0.5) * 0.00028 + rust * (kNoise(vRest * 420.0) - 0.5) * 0.0004 * kFade(kUV * 420.0);
+	} else if (kId == 4.0) {
+		// painted: an orange-peel coat, chipped to dark metal at the worn edges
+		vec2 w = kUV * 520.0;
+		float chip = smoothstep(0.55, 0.7, kEdge * 0.8 + kNoise(vRest * 160.0) * 0.45);
+		diffuseColor.rgb *= 0.94 + mott * 0.1 - kCav * 0.3;
+		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.16, 0.15), chip);
+		kRough = mix(0.62, 0.35, chip); kMetal = chip * 0.7;
+		kH = (kNoise(vec3(w, 1.0)) - 0.5) * 0.00012 * kFade(w);
+	} else if (kId == 5.0) {
+		// leather: a pebbled grain, creased, its edges burnished dark and smooth
+		vec2 w = kUV * 900.0;
+		diffuseColor.rgb *= (0.88 + mott * 0.22) * (1.0 - kEdge * 0.3) * (1.0 - kCav * 0.35);
+		kRough = mix(0.62, 0.38, kEdge); kMetal = 0.0;
+		kH = (kNoise(vec3(w, 0.0)) - 0.5) * 0.00018 * kFade(w) + (kNoise(vRest * vec3(40.0, 160.0, 40.0)) - 0.5) * 0.0004;
+	} else if (kId == 6.0) {
+		// nylon: a coarse weave, a little dust settled on what faces up, scuffed lighter at edges
+		vec2 w = kUV * 1300.0;
+		float dust = smoothstep(0.2, 0.9, vRestN.y) * 0.12;
+		diffuseColor.rgb *= (0.92 + mott * 0.14) * (1.0 + kEdge * 0.18) * (1.0 - kCav * 0.4);
+		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.56, 0.46), dust);
+		kRough = 0.86; kMetal = 0.0;
+		kH = (kWeave(w) - 0.5) * 0.00022 * kFade(w);
+	} else if (kId == 7.0) {
+		diffuseColor.rgb *= (0.95 + mott * 0.1) * (1.0 + kEdge * 0.35) * (1.0 - kCav * 0.3);
+		kRough = 0.74; kMetal = 0.0;
+		kH = (kNoise(vRest * 900.0) - 0.5) * 0.00008 * kFade(kUV * 900.0);
+	} else if (kId == 8.0) {
+		kRough = 0.05; kMetal = 0.85;
+	} else if (kId == 9.0) {
+		vec2 w = kUV * 800.0;
+		diffuseColor.rgb *= (0.96 + mott * 0.08) * (1.0 + kEdge * 0.3) * (1.0 - kCav * 0.35);
+		kRough = mix(0.5, 0.36, kEdge); kMetal = 0.0;
+		kH = (kNoise(vec3(w, 3.0)) - 0.5) * 0.0001 * kFade(w);
+	} else if (kId == 10.0) {
+		// wool: a heavy soft weave, dirt toward the hem
+		vec2 w = kUV * 700.0;
+		float dirt = (1.0 - smoothstep(0.35, 0.75, vRest.y)) * 0.35;
+		diffuseColor.rgb *= (0.9 + mott * 0.16) * (1.0 - kCav * 0.35) * (0.88 + kWeave(w) * 0.16 * kFade(w));
+		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.16, 0.12), dirt);
+		kRough = 0.95; kMetal = 0.0;
+		kH = (kWeave(w) - 0.5) * 0.0004 * kFade(w);
+	}
+}`)
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = kRough >= 0.0 ? kRough : vKit.x > 1.5 ? 0.24 : mix(0.82, 0.12, vKit.x); metalnessFactor = kMetal >= 0.0 ? kMetal : vKit.x > 1.5 ? 1.0 : vKit.x * 0.3;')
+			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nif (kH != 0.0) normal = kPerturb(-vViewPosition, normal, kH);')
+			// (the world's sky in the steel, not a second ambient light: the scene's own lights
+			// light the rest)
+			.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n#ifdef USE_ENVMAP\niblIrradiance *= 0.0;\n#endif');
 	};
-	m.customProgramCacheKey = () => 'crysis-kit-1';
+	m.customProgramCacheKey = () => 'crysis-kit-4';
 	return m;
 }
 // a shared material for a bag in these colours (its own and its accent)
