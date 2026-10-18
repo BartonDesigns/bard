@@ -930,8 +930,9 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	// a glove made to the hand: the hand's own skin a few millimetres proud, bound to the bones
 	// as the skin is so it bends with every finger, up the forearm `cuff` metres past the wrist
 	// (knuckle: { col, gloss, rise }, a guard over the knuckles, the shell raised and coloured there;
-	// real: the combat glove's table from the kit, { faces, uv }: these faces of the body, not the
-	// cuff's, and the atlas at their corners, its detail baked)
+	// real: a glove's table from the kit, { faces, uv, lift }: these faces of the body, not the
+	// cuff's, the atlas at their corners, its detail baked, and how much further each corner
+	// stands off where a gauntlet's plates are)
 	const gloveShell = (sd, proud, cuff, c, gloss = 0, fab = 0, knuckle = null, plate = null, real = null) => {
 		const part = P0.part, faces = A.body, wi = map['wrist.' + sd], w = heads[wi], fore = P0.rest.dirs[map['lowerarm01.' + sd]];
 		if (!part || !faces || !w || !fore) return false;
@@ -980,7 +981,8 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			if (real) {
 				const q = (tn[ti] * 3 + ord[cn]) * 2, o2 = (ti * 3 + cn) * 2;
 				kuv[o2] = real.uv[q] / 65535; kuv[o2 + 1] = real.uv[q + 1] / 65535;
-				out.pos.push(skinP[v * 3] + n.x * proud, skinP[v * 3 + 1] + n.y * proud, skinP[v * 3 + 2] + n.z * proud); out.nor.push(n.x, n.y, n.z);
+				const off = proud + (real.lift ? real.lift[q >> 1] * 0.00005 : 0);
+				out.pos.push(skinP[v * 3] + n.x * off, skinP[v * 3 + 1] + n.y * off, skinP[v * 3 + 2] + n.z * off); out.nor.push(n.x, n.y, n.z);
 				out.col.push(base.r, base.g, base.b); out.kit.push(KIT_MODEL, 0, 0); out.wr.push(0, 0);
 				let sum = 0; for (let w4 = 0; w4 < 4; w4++) sum += A.weights[v * 4 + w4];
 				for (let w4 = 0; w4 < 4; w4++) { out.si.push(A.ids[v * 4 + w4]); out.sw.push(A.weights[v * 4 + w4] / (sum || 1)); }
@@ -1653,7 +1655,9 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				// (a combat glove from the kit: its knuckle guard, pads, strap and seams baked)
 				const real = !steel && !q.bracers && (q.combat || q.knuckle) ? A.kit?.glove?.[s] : null;
 				if (real && gloveShell(s, A.kit.glove.proud, 0, c, 0, 0, null, null, real)) continue;
-				gloveShell(s, steel ? 0.0045 : 0.0032, steel ? 0.03 : q.bracers ? 0.012 : 0.02, steel ? q.leather || '#2b211a' : c, steel ? LEATHER : 0, steel ? 0 : 3, kn, steel ? { col: c } : null);
+				// (a gauntlet from the kit: its plates, scales and rivets baked, the leather in its colour)
+				const gaunt = steel ? A.kit?.gauntlet?.[s] : null;
+				if (!(gaunt && gloveShell(s, A.kit.gauntlet.proud, 0, q.leather || '#2b211a', 0, 0, null, null, gaunt))) gloveShell(s, steel ? 0.0045 : 0.0032, steel ? 0.03 : q.bracers ? 0.012 : 0.02, steel ? q.leather || '#2b211a' : c, steel ? LEATHER : 0, steel ? 0 : 3, kn, steel ? { col: c } : null);
 				const len = heads[map[wb]].distanceTo(heads[map['lowerarm01.' + s]]);
 				const g0 = limbGirth('lowerarm01.' + s, 2, len - 0.13, len - 0.02);
 				if (steel) {

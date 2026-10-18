@@ -370,6 +370,23 @@ def mat(kind):
 		w = op('MULTIPLY', worn, 1.5, True)
 		col = mix(w, rgb(0.03, 0.03, 0.032), rgb(0.6, 0.6, 0.58))
 		rough = op('SUBTRACT', 0.42, op('MULTIPLY', w, 0.12)); metal = op('ADD', op('MULTIPLY', w, 0.6), 0.35); tint = val(0.0); height = noise(800, 2)
+	elif kind == 'plate':
+		# a gauntlet's forged steel: mottled from the forge and the hammer, rubbed bright on its
+		# edges and ridges, grime gone brown in the laps and round the rivets
+		col = mix(noise(40, 5), rgb(0.44, 0.45, 0.46), rgb(0.54, 0.55, 0.56))
+		col = mix(op('MULTIPLY', cav, 1.4, True), col, rgb(0.1, 0.08, 0.06))
+		col = mix(op('MULTIPLY', worn, 0.6, True), col, rgb(0.66, 0.66, 0.66))
+		rough = op('ADD', op('MULTIPLY', noise(25), 0.08), op('SUBTRACT', op('ADD', 0.3, op('MULTIPLY', cav, 0.4)), op('MULTIPLY', worn, 0.1)))
+		metal = op('SUBTRACT', 1.0, op('MULTIPLY', cav, 0.5)); tint = val(0.0)
+		height = op('ADD', op('MULTIPLY', noise(260, 2), 0.6), op('MULTIPLY', noise(2400, 2), 0.15))
+	elif kind == 'tlea':
+		# the gauntlet's glove: leather in the wearer's leather colour, a pebbled grain, darker
+		# in its creases, burnished on the edges
+		col = mix(noise(70, 4), rgb(0.5, 0.5, 0.49), rgb(0.62, 0.62, 0.6))
+		col = mix(op('MULTIPLY', cav, 0.9), col, rgb(0.25, 0.25, 0.24))
+		col = mix(op('MULTIPLY', worn, 0.4), col, rgb(0.78, 0.78, 0.76))
+		rough = op('ADD', op('MULTIPLY', noise(50), 0.1), op('SUBTRACT', 0.66, op('MULTIPLY', worn, 0.2))); tint = val(1.0)
+		height = op('ADD', noise(2000, 3, 0.6), op('MULTIPLY', noise(300, 2), 0.3))
 	elif kind == 'steel':
 		col = rgb(0.4, 0.4, 0.39); rough = val(0.36); metal = val(1.0); tint = val(0.0); height = noise(900, 2)
 	elif kind == 'foam':
@@ -387,8 +404,8 @@ def mat(kind):
 	if metal is None: metal = val(0.0)
 	if isinstance(col, tuple): col = mix(0.0, col, col)
 	bump = N.new('ShaderNodeBump')
-	bump.inputs['Strength'].default_value = {'cordura': 0.4, 'suede': 0.5, 'loop': 0.9, 'paint': 0.4, 'foam': 0.8, 'nylon': 0.5, 'nylonT': 0.6, 'nylonD': 0.6, 'webbing': 0.7, 'elastic': 0.8, 'thread': 0.6, 'patch': 0.7, 'pmag': 0.3}.get(kind, 0.25)
-	bump.inputs['Distance'].default_value = {'loop': 0.0006, 'paint': 0.00025, 'foam': 0.0008, 'nylon': 0.0003, 'nylonT': 0.0004, 'nylonD': 0.0004, 'webbing': 0.0005, 'elastic': 0.0006, 'thread': 0.0002, 'patch': 0.0003}.get(kind, 0.0002)
+	bump.inputs['Strength'].default_value = {'plate': 0.18, 'tlea': 0.45, 'cordura': 0.4, 'suede': 0.5, 'loop': 0.9, 'paint': 0.4, 'foam': 0.8, 'nylon': 0.5, 'nylonT': 0.6, 'nylonD': 0.6, 'webbing': 0.7, 'elastic': 0.8, 'thread': 0.6, 'patch': 0.7, 'pmag': 0.3}.get(kind, 0.25)
+	bump.inputs['Distance'].default_value = {'plate': 0.0003, 'tlea': 0.0003, 'loop': 0.0006, 'paint': 0.00025, 'foam': 0.0008, 'nylon': 0.0003, 'nylonT': 0.0004, 'nylonD': 0.0004, 'webbing': 0.0005, 'elastic': 0.0006, 'thread': 0.0002, 'patch': 0.0003}.get(kind, 0.0002)
 	L.new(height, bump.inputs['Height'])
 	L.new(col, bsdf.inputs['Base Color']); L.new(rough, bsdf.inputs['Roughness']); L.new(metal, bsdf.inputs['Metallic'])
 	L.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
@@ -1212,7 +1229,6 @@ def boot():
 # middle joints, a hook-and-loop strap round the wrist with its tab, and the seams stitched.
 # The right glove is the left mirrored: the same texels, face for face (meta 'rmap').
 GLOVE_PROUD = 0.0035
-GLOVE_META = None
 def load_hand():
 	V, F, meta = [], [], None
 	for line in open(os.path.join(HERE, 'ref-hand.obj')):
@@ -1278,21 +1294,25 @@ def stitch_line(mb, pts, ns, step=0.0032, lift=0.0003):
 			p = a + t * s0; n = na.lerp(nb_, s0 / L0).normalized(); s2 = n.cross(t).normalized(); tt = s2.cross(n)
 			box(mb, p + n * lift, tt, s2, n, 0.0011, 0.00045, 0.00035); s0 += step
 		acc = s0 - L0
-def glove():
-	global GLOVE_META
-	log('glove')
-	V, F, HM = load_hand(); F0 = [list(f) for f in F]
+class NS:
+	def __init__(s, **k): s.__dict__.update(k)
+HAND_META = None
+def hand_shell(name, proud, kind, cage):
+	# the game's glove made as the game makes it: the reference hand's skin stood off proud,
+	# smooth, one material; with what a glove's detail is laid out by: the hand's bones, a ray
+	# onto the shell (hit, cast) and each point's nearest finger bone
+	global HAND_META
+	V, F, HM = load_hand(); F0 = [list(f) for f in F]; HAND_META = dict(HM, F=F0)
 	B = {k: V3(*v) for k, v in HM['bones'].items()}
 	N, sgn = shell_normals(V, F)
 	if sgn < 0: F = [[a, c, b] for a, b, c in F]
-	P = [v + n * GLOVE_PROUD for v, n in zip(V, N)]
-	# the game's glove, made as the game makes it
-	me = bpy.data.meshes.new('glove'); me.from_pydata([G(p) for p in P], [], F)
-	me.materials.append(M('cordura'))
+	P = [v + n * proud for v, n in zip(V, N)]
+	me = bpy.data.meshes.new(name); me.from_pydata([G(p) for p in P], [], F)
+	me.materials.append(M(kind))
 	for p in me.polygons: p.use_smooth = True
 	me.validate(); me.update()
-	low = bpy.data.objects.new('glove', me); SC.collection.objects.link(low)
-	low['uvs'] = False; low['cage'] = 0.005; low['table'] = True
+	low = bpy.data.objects.new(name, me); SC.collection.objects.link(low)
+	low['uvs'] = False; low['cage'] = cage; low['table'] = name; low['proud'] = proud
 	bvh = BVHTree.FromPolygons([G(p) for p in P], F)
 	def hit(o, d):
 		# the glove's surface from o (game) along d, else the nearest point to o
@@ -1300,6 +1320,12 @@ def glove():
 		if h[0] is None: h = bvh.find_nearest(G(o))
 		if h[0] is None: return None, None
 		return GAME(h[0]), GAME(h[1]).normalized()
+	def cast(o, d):
+		# from inside the hand out along d: where it meets the shell, its normal facing d
+		h = bvh.ray_cast(G(o), G(d).normalized(), 0.06)
+		if h[0] is None: return None, None
+		n = GAME(h[1]).normalized()
+		return GAME(h[0]), (n if n.dot(d) > 0 else -n)
 	# (the hand's frame: its back faces out from the body; each finger's back is the hand's
 	# turned square to that finger; the thumb's nail faces round toward the index)
 	F_ = lambda k, j: B['finger%d-%d.L' % (k, j)]
@@ -1318,6 +1344,12 @@ def glove():
 			u = s1 - s0; t = clamp((p - s0).dot(u) / u.length_squared); q = s0 + u * t; dd = (p - q).length
 			if best is None or dd < best[0]: best = (dd, s0, s1, bk, tag, t)
 		return best
+	return NS(V=V, F=F, F0=F0, HM=HM, B=B, N=N, P=P, low=low, hit=hit, cast=cast, F_=F_, K=K, d=d, a=a, nb=nb, fore=fore, segs=segs, nearest=nearest)
+def glove():
+	log('glove')
+	h = hand_shell('glove', GLOVE_PROUD, 'cordura', 0.005)
+	V, F, F0, HM, B, N, P, low, hit = h.V, h.F, h.F0, h.HM, h.B, h.N, h.P, h.low, h.hit
+	F_, K, d, a, nb, fore, nearest = h.F_, h.K, h.d, h.a, h.nb, h.fore, h.nearest
 	fields = {'back': [], 'tip': [], 'up': []}
 	for p, n in zip(P, N):
 		_, s0, s1, bk, tag, t = nearest(p); u = (s1 - s0).normalized()
@@ -1474,7 +1506,214 @@ def glove():
 		stitch_line(mb, pts, nrm)
 	highs.append(mb.obj('strap-stitch', ['thread'], smooth=False, sharp=0))
 	piece(low, highs, 'glove')
-	GLOVE_META = dict(HM, F=F0)
+
+# ---------- gauntlet ----------
+# the knight's steel gauntlet, made like the combat glove on the reference hand's skin (a table
+# of its own: the same body faces, its own texels): a glove of leather; over the back of the
+# hand a fluted plate with its wrist end rolled, a knuckle plate with a boss over each knuckle,
+# scales down the back of every finger overlapping toward the tip, pointed caps on the tips,
+# rivets. Where the plates are the game's shell stands further off (the table's lift at each
+# corner), so the gauntlet has their bulk and not only their look.
+GAUNT_PROUD = 0.003
+def gauntlet():
+	log('gauntlet')
+	h = hand_shell('gauntlet', GAUNT_PROUD, 'tlea', 0.005)
+	P, N, F, low, hit, cast, B = h.P, h.N, h.F, h.low, h.hit, h.cast, h.B
+	F_, K, d, a, nb, fore = h.F_, h.K, h.d, h.a, h.nb, h.fore
+	W = B['wrist.L']
+	# the leather glove: the shell itself, stitched down each side where the back meets the palm
+	back = []
+	for p, n in zip(P, N):
+		_, s0, s1, bk, tag, t = h.nearest(p); u = (s1 - s0).normalized()
+		back.append(n.dot((bk - u * bk.dot(u)).normalized()))
+	fields = {'back': back}
+	P2, N2 = list(P), list(N)
+	F2, seam = iso_cut(P2, N2, fields, [list(f) for f in F], 'back', 0.0)
+	mh = bpy.data.meshes.new('gauntlet-hi'); mh.from_pydata([G(p) for p in P2], [], F2); mh.materials.append(M('tlea'))
+	for p in mh.polygons: p.use_smooth = True
+	mh.validate(); mh.update()
+	base = bpy.data.objects.new('gauntlet-hi', mh); SC.collection.objects.link(base)
+	highs, plates = [base], []
+	mb = MB()
+	for line in chains(seam):
+		# (past the cuff, which covers the wrist)
+		run = []
+		for v in line + [None]:
+			if v is not None and (W - P2[v]).dot(fore) <= -0.01: run.append(v); continue
+			if len(run) > 1: stitch_line(mb, [P2[q] for q in run], [N2[q] for q in run])
+			run = []
+	highs.append(mb.obj('gauntlet-stitch', ['thread'], smooth=False, sharp=0))
+	def rim(rho, T, w):
+		# a plate's edge: flat to 1 - w, then rounded down to the glove
+		return T if rho <= 1 - w else T * math.sqrt(max(0.0, 1 - ((rho - (1 - w)) / w) ** 2))
+	def plate(name, o, u, v, n, hu, hv, prof, cells=64, smooth=6, sq=6.0):
+		# a plate on the glove: a grid across u and along v, bent from a square onto a rounded
+		# rectangle (sq: how square) hu(y) by hv, standing prof(x, y, rho) off the glove (rho: 0
+		# in its middle, 1 at its edge, its rows closer toward the edge); smoothed into a sheet
+		# over the hand's own bumps but never sunk under them
+		g = [0.35 * (2 * i / cells - 1) + 0.65 * math.sin(math.pi / 2 * (2 * i / cells - 1)) for i in range(cells + 1)]
+		base, xy = [], []
+		for t_ in g:
+			row, rxy = [], []
+			for s_ in g:
+				m = max(abs(s_), abs(t_)); r = (abs(s_) ** sq + abs(t_) ** sq) ** (1 / sq)
+				k = m / r if r > 1e-9 else 0.0
+				y = hv * t_ * k; x = (hu(y) if callable(hu) else hu) * s_ * k
+				p, nn = hit(o + u * x + v * y + n * 0.03, -n)
+				if p is None: p, nn = o + u * x + v * y, n
+				row.append((p, nn)); rxy.append((x, y, m))
+			base.append(row); xy.append(rxy)
+		orig = [list(r_) for r_ in base]; C = cells
+		for _ in range(smooth):
+			nxt = [list(r_) for r_ in base]
+			for i in range(1, C):
+				for j in range(1, C):
+					q = (base[i - 1][j], base[i + 1][j], base[i][j - 1], base[i][j + 1])
+					nxt[i][j] = (sum((a_[0] for a_ in q), V3(0, 0, 0)) / 4, sum((a_[1] for a_ in q), V3(0, 0, 0)).normalized())
+			base = nxt
+			for i in range(C + 1):
+				for j in range(C + 1):
+					(p, nn), (q, _) = base[i][j], orig[i][j]
+					base[i][j] = (p + nn * max(0.0, (q - p).dot(nn)), nn)
+		mb = MB(); rows = []
+		for i in range(C + 1):
+			rows.append([mb.v(base[i][j][0] + base[i][j][1] * (0.0003 + prof(*xy[i][j]))) for j in range(C + 1)])
+		for i in range(C):
+			for j in range(C): mb.f([rows[i][j], rows[i][j + 1], rows[i + 1][j + 1], rows[i + 1][j]])
+		ob = mb.obj(name, ['plate'], sharp=0)
+		ob.data.update()
+		if sum(p.normal.dot(G(n)) for p in ob.data.polygons) < 0: ob.data.flip_normals()
+		plates.append(ob); return ob
+	def lame(name, s0, s1, bk, t0, t1, ang, T, cap=False, rows=16, cols=24, ridge=0.00035, rivets=False, outside=False):
+		# a scale over the back of a finger from t0 to t1 along the bone s0 to s1, ang either
+		# side of its back: the glove found by rays out from the bone; rounded at its edges,
+		# rising toward its far end (where it laps over the next), a ridge down its middle; a
+		# cap narrows to a rounded point
+		u = s1 - s0; u = u / u.length
+		bk = (bk - u * bk.dot(u)).normalized(); sd = u.cross(bk)
+		mb = MB(); grid = []
+		def at(t, phi, r0=None):
+			# (a ray that misses, or runs on to another finger or the palm, is put back at the
+			# finger's own reach r0)
+			r = bk * math.cos(phi) + sd * math.sin(phi); c = s0 + u * t
+			# (outside: found from outside, in toward the bone, for a bone that does not run down
+			# the middle of its finger, the thumb's)
+			p, nn = hit(c + r * 0.03, -r) if outside else cast(c, r)
+			if outside: return p, nn, (p - c).length
+			if r0 and (p is None or (p - c).length > r0 * 1.35): p, nn = c + r * r0, r
+			if p is None: p, nn = c + r * 0.008, r
+			return p, nn, (p - c).length
+		r0 = at((t0 + t1) / 2, 0.0)[2]
+		for i in range(rows + 1):
+			f = (1 - math.cos(math.pi * i / rows)) / 2; t = t0 + (t1 - t0) * f
+			ae = ang if not cap or f < 0.5 else ang * math.sqrt(max(0.0, 1 - ((f - 0.5) / 0.5) ** 2))
+			row = []
+			for j in range(cols + 1):
+				phi = ae * math.sin(math.pi * (j / cols - 0.5))
+				p, nn, rad = at(t, phi, r0)
+				e = max(0.0, min(rad * (ae - abs(phi)), t - t0, 1.0 if cap else t1 - t))
+				hh = (T + 0.0006 * f) * math.sqrt(min(1.0, e / 0.0009)) + ridge * math.exp(-(phi / 0.3) ** 2) * min(1.0, e / 0.0015)
+				row.append(mb.v(p + nn * (0.0003 + hh)))
+			grid.append(row)
+		for i in range(rows):
+			for j in range(cols): mb.f([grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]])
+		ob = mb.obj(name, ['plate'], sharp=0)
+		# (wound to face out from the bone)
+		ob.data.update()
+		out = 0.0
+		for p in ob.data.polygons:
+			pc = GAME(p.center); ax = s0 + u * (pc - s0).dot(u); out += p.normal.dot(G(pc - ax))
+		if out < 0: ob.data.flip_normals()
+		plates.append(ob)
+		spots = []
+		if rivets:
+			for sg in (-1, 1):
+				p, nn, _ = at((t0 + t1) / 2, sg * ang * 0.72, r0); spots.append((ob, p, nn))
+		return spots
+	# the plate over the back of the hand, from past the cuff to under the knuckle plate, wider
+	# toward the knuckles, three flutes fanning down it, its wrist end rolled
+	kv = (d - nb * d.dot(nb)).normalized(); ku = kv.cross(nb).normalized()
+	ks = [(F_(k, 1) - K).dot(ku) for k in (2, 3, 4, 5)]
+	span = max(abs(x) for x in ks)
+	L0 = (K - W).dot(kv); y0, y1 = 0.012, L0 - 0.004; hvm = (y1 - y0) / 2
+	om, _ = hit(W + kv * ((y0 + y1) / 2) + nb * 0.04, -nb)
+	hum = lambda y: 0.027 + (span + 0.008 - 0.027) * clamp((y + hvm) / (2 * hvm))
+	def back_prof(x, y, rho):
+		# (each flute a sharp crest, dying out toward the wrist and before the edge)
+		fl = sum(math.exp(-(abs(x / hum(y) - c) / 0.07) ** 1.3) for c in (-0.45, 0.0, 0.45)) * 0.0011 * ss((0.85 - rho) / 0.2) * ss((y / hvm + 0.9) / 0.6)
+		roll = 0.0014 * math.exp(-((rho - 0.91) / 0.03) ** 2) * ss((-y / hvm - 0.3) / 0.4)
+		return rim(rho, 0.0018, 0.07) + fl + roll
+	spots = []
+	bp = plate('back', om, ku, kv, nb, hum, hvm, back_prof, smooth=12)
+	for sx_ in (-1, 1):
+		for sy_ in (-1, 1):
+			y = sy_ * hvm * 0.8; x = sx_ * hum(y) * 0.8
+			p, nn = hit(om + ku * x + kv * y + nb * 0.03, -nb)
+			if p is not None: spots.append((bp, p, nn))
+	# the knuckle plate, a stiff sheet over the knuckles: a boss over each, higher at its near
+	# edge than the back plate it laps over
+	ok, _ = hit(K + nb * 0.04 - kv * 0.004, -nb)
+	knob = lambda x, y: sum(0.0024 * math.exp(-((x - kx) / 0.0055) ** 2 - ((y - 0.004) / 0.0062) ** 2) for kx in ks)
+	kp = plate('knuckles', ok, ku, kv, nb, span + 0.009, 0.011, lambda x, y, rho: rim(rho, 0.0026 - 0.0005 * y / 0.011, 0.12) + knob(x, y) * ss((1 - rho) / 0.25), smooth=60, sq=8.0)
+	for sx_ in (-1, 1):
+		p, nn = hit(ok + ku * sx_ * (span + 0.009) * 0.84 + nb * 0.03, -nb)
+		if p is not None: spots.append((kp, p, nn))
+	# the fingers' scales: two over the first bone, one over the second, a cap on the tip
+	for k in range(2, 6):
+		p1, p2, p3 = F_(k, 1), F_(k, 2), F_(k, 3); tip = p3 + (p3 - p2) * 0.85
+		l1, l2, l3 = (p2 - p1).length, (p3 - p2).length, (tip - p3).length
+		spots += lame('f%da' % k, p1, p2, nb, 0.006, l1 * 0.56, 1.2, 0.0016, rivets=True)
+		lame('f%db' % k, p1, p2, nb, l1 * 0.5, l1 + 0.002, 1.2, 0.0016)
+		lame('f%dc' % k, p2, p3, nb, -0.002, l2 + 0.002, 1.15, 0.0015)
+		lame('f%dd' % k, p3, tip, nb, -0.002, l3 * 0.82, 1.1, 0.0015, cap=True)
+	# the thumb's: two over its first bone, a cap
+	tb = (nb * 0.4 - a).normalized()
+	p2, p3 = F_(1, 2), F_(1, 3); tip = p3 + (p3 - p2) * 0.85; l2 = (p3 - p2).length
+	spots += lame('t1', p2, p3, tb, l2 * 0.05, l2 * 0.56, 1.0, 0.0017, rivets=True, outside=True)
+	lame('t2', p2, p3, tb, l2 * 0.5, l2 + 0.002, 1.0, 0.0016, outside=True)
+	lame('t3', p3, tip, tb, -0.002, (tip - p3).length * 0.72, 0.95, 0.0015, cap=True, outside=True)
+	# rivets: domes on the plates' tops
+	rv = MB()
+	for ob, p, n in spots:
+		bv = BVHTree.FromPolygons([v.co.copy() for v in ob.data.vertices], [list(q.vertices) for q in ob.data.polygons])
+		hh = bv.ray_cast(G(p + n * 0.03), G(-n), 0.05)
+		if hh[0] is None: continue
+		c = GAME(hh[0]); e1 = n.orthogonal().normalized(); e2 = n.cross(e1)
+		ringv = []
+		for k in range(4):
+			ang = (k / 4) * math.pi / 2
+			ringv.append([rv.v(c + n * (0.0009 * math.sin(ang) - 0.0002) + (e1 * math.cos(TAU * s_ / 12) + e2 * math.sin(TAU * s_ / 12)) * 0.0014 * math.cos(ang)) for s_ in range(12)])
+		top_ = rv.v(c + n * 0.0007)
+		for k in range(3):
+			for s_ in range(12): rv.f([ringv[k][s_], ringv[k][(s_ + 1) % 12], ringv[k + 1][(s_ + 1) % 12], ringv[k + 1][s_]])
+		for s_ in range(12): rv.f([ringv[3][s_], ringv[3][(s_ + 1) % 12], top_])
+	rob = rv.obj('gauntlet-rivets', ['plate'], sharp=0)
+	rob.data.update()
+	if sum(p.normal.dot(G(GAME(p.center) - W)) for p in rob.data.polygons) < 0: rob.data.flip_normals()
+	highs += plates + [rob]
+	# the game's shell lifted where the plates are, a little under their tops, eased between
+	pv, pf = [], []
+	for ob in plates:
+		o0 = len(pv); pv += [v.co.copy() for v in ob.data.vertices]; pf += [[o0 + i for i in q.vertices] for q in ob.data.polygons]
+	pb = BVHTree.FromPolygons(pv, pf)
+	lift = []
+	for p, n in zip(P, N):
+		# (only a plate over this point, facing the way it does: not a neighbouring finger's)
+		hh = pb.ray_cast(G(p + n * 0.008), G(-n), 0.0085)
+		ok = hh[0] is not None and hh[1].dot(G(n)) > 0.3
+		lift.append(max(0.0, (0.008 - hh[3]) - 0.0005) * 0.85 if ok else 0.0)
+	nbr = [set() for _ in P]
+	for f in F:
+		for v in f: nbr[v].update(x for x in f if x != v)
+	for _ in range(2): lift = [(lift[v] + sum(lift[w] for w in nbr[v]) / max(1, len(nbr[v]))) / 2 for v in range(len(P))]
+	lift = [min(0.006, x) for x in lift]
+	for v, (p, n) in enumerate(zip(P, N)): low.data.vertices[v].co = G(p + n * lift[v])
+	low.data.update()
+	# (its normals the unlifted shell's, as the game keeps them)
+	low.data.normals_split_custom_set_from_vertices([G(n).normalized() for n in N])
+	low['lift'] = lift
+	log('gauntlet lift max %.4f, %d of %d points lifted' % (max(lift), sum(1 for x in lift if x > 0.0003), len(lift)))
+	piece(low, highs, 'gauntlet')
 
 # ---------- UVs, bake, maps, export ----------
 def area3(o):
@@ -1624,30 +1863,35 @@ def preview(saved):
 		if g == 'boot':
 			c = off + V3(0, -0.02, 0.06)
 			shots.update({'boot': (off + V3(0.3, 0.12, 0.42), c), 'boot-side': (off + V3(0.55, 0.02, 0.06), c), 'boot-back': (off + V3(-0.25, 0.15, -0.35), c)})
-		if g == 'glove':
+		if g in ('glove', 'gauntlet'):
 			c = off + V3(0.03, -0.045, 0.06)
-			shots.update({'glove': (off + V3(0.42, 0.05, 0.12), c), 'glove-palm': (off + V3(-0.38, -0.02, 0.2), c), 'glove-wrist': (off + V3(0.3, 0.25, -0.12), off + V3(0.01, -0.01, 0.02))})
+			shots.update({g: (off + V3(0.42, 0.05, 0.12), c), g + '-palm': (off + V3(-0.38, -0.02, 0.2), c), g + '-wrist': (off + V3(0.3, 0.25, -0.12), off + V3(0.01, -0.01, 0.02))})
 	for name, (p, look) in shots.items():
-		HEAD.hide_render = name.startswith('boot') or name.startswith('glove')
+		HEAD.hide_render = name.startswith(('boot', 'glove', 'gauntlet'))
 		cam.location = G(p); cam.rotation_euler = (G(look) - cam.location).to_track_quat('-Z', 'Y').to_euler()
 		SC.render.filepath = os.path.join(OUT, 'preview-' + name + '.png'); bpy.ops.render.render(write_still=True)
 	log('previews')
 
 def glove_table(o):
 	# the atlas at each corner of each of the body's faces under the glove, in the game's corner
-	# order (glTF's v), the right hand's from the left's mirror
+	# order (glTF's v), the right hand's from the left's mirror; and how much further each
+	# corner stands off (lift, in twentieths of a millimetre), if it does
 	import base64
 	uvl = o.data.uv_layers[0].data; L = []
-	for p, tri in zip(o.data.polygons, GLOVE_META['F']):
+	for p, tri in zip(o.data.polygons, HAND_META['F']):
 		at = {o.data.loops[li].vertex_index: uvl[li].uv for li in p.loop_indices}
 		L.append([(at[v][0], 1 - at[v][1]) for v in tri])
-	R = [[L[k][ca], L[k][cb], L[k][cc]] for k, ca, cb, cc in GLOVE_META['rmap']]
+	mirror = lambda T: [[T[k][ca], T[k][cb], T[k][cc]] for k, ca, cb, cc in HAND_META['rmap']]
 	q = lambda T: base64.b64encode(np.clip(np.round(np.array(T, np.float64).reshape(-1) * 65535), 0, 65535).astype('<u2').tobytes()).decode()
 	ids = lambda f: base64.b64encode(np.array(f, '<u4').tobytes()).decode()
-	return {'L': {'faces': ids(GLOVE_META['faces']), 'uv': q(L)}, 'R': {'faces': ids(GLOVE_META['right']), 'uv': q(R)}, 'proud': GLOVE_PROUD}
+	out = {'L': {'faces': ids(HAND_META['faces']), 'uv': q(L)}, 'R': {'faces': ids(HAND_META['right']), 'uv': q(mirror(L))}, 'proud': o['proud']}
+	if 'lift' in o:
+		lf = list(o['lift']); LL = [[lf[v] for v in tri] for tri in HAND_META['F']]
+		b8 = lambda T: base64.b64encode(np.clip(np.round(np.array(T, np.float64).reshape(-1) / 0.00005), 0, 255).astype('u1').tobytes()).decode()
+		out['L']['lift'] = b8(LL); out['R']['lift'] = b8(mirror(LL))
+	return out
 def export(lows):
-	GLOVE = None
-	for o in [o for o in lows if o.get('table')]: GLOVE = glove_table(o)
+	TABLES = {o['table']: glove_table(o) for o in lows if o.get('table')}
 	lows = [o for o in lows if not o.get('table')]
 	for o in lows:
 		o.data.materials.clear(); o.location = (0, 0, 0)
@@ -1661,10 +1905,10 @@ def export(lows):
 	if outs: bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'soldier-kit.glb'), export_format='GLB', use_selection=True, export_texcoords=True, export_normals=True,
 		export_materials='NONE', export_yup=True, export_apply=True)
 	info = {o.name: {'tris': sum(len(p.vertices) - 2 for p in o.data.polygons), 'verts': len(o.data.vertices)} for o in outs}
-	json.dump({'meta': META, 'foot': FOOT_META, 'glove': GLOVE, 'stand': STAND, 'groups': info, 'size': SIZE}, open(os.path.join(OUT, 'soldier-kit.json'), 'w'), indent=1)
+	json.dump({'meta': META, 'foot': FOOT_META, 'glove': TABLES.get('glove'), 'gauntlet': TABLES.get('gauntlet'), 'stand': STAND, 'groups': info, 'size': SIZE}, open(os.path.join(OUT, 'soldier-kit.json'), 'w'), indent=1)
 	log('exported', info)
 
-# (KIT_ONLY=boot or glove: build only that, for a quick look)
+# (KIT_ONLY=boot, glove or gauntlet: build only that, for a quick look)
 ONLY = os.environ.get('KIT_ONLY')
 sy = helmet() if not ONLY else rimY(0) + 0.024
 if not ONLY: nvg(sy); headset()
@@ -1673,6 +1917,7 @@ for build in (magazine, magpouch, admin, dangler, radio, ptt, medpouch, tourniqu
 FOOT_META = None
 if ONLY in (None, 'boot'): FOOT_META = boot(); gear('boot', back=False)
 if ONLY in (None, 'glove'): glove(); gear('glove', back=False)
+if ONLY in (None, 'gauntlet'): gauntlet(); gear('gauntlet', back=False)
 lows = [l for l, _ in PIECES]
 log('pieces', len(lows), 'tris', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in lows))
 uv_and_pack(lows)

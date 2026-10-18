@@ -3,7 +3,8 @@
 // battery pouch behind, its cable and a strobe; an electronic headset hung from the rails;
 // the plate carrier's pouches, magazines, radio, talk switch, tourniquet, back panel, drag
 // handle and buckles (each in its own frame: its back at the origin, +z out); the combat boot;
-// and the combat glove's detail, baked onto the hand's own skin stood off.
+// and the combat glove's and the knight's gauntlet's detail, baked onto the hand's own skin
+// stood off.
 // Modelled once to a reference head, each piece's detail (bevels, slots, screw heads, ribbed
 // rings, grit, weave) baked into one atlas: colour, normals, and occlusion, roughness, metal
 // and how much of the wearer's colour it takes (assets/kit). Loaded with the people's assets;
@@ -24,7 +25,8 @@ export const kitModelsNow = () => ready;
 // skull's middle at eye height, +y up, +z forward), mag, magpouch, admin, ... (each in its own) }, ref (the reference head: rx, rz, top
 // over the eyes), foot (the reference foot the boot is made to: heel, toe, medial, lateral, sole,
 // shin), glove ({ proud, L, R }: each hand's body faces under the combat glove, by index into the
-// body's faces, and the atlas at their corners), tex: { albedo, normal, orm } }; a phone takes
+// body's faces, and the atlas at their corners), gauntlet (the knight's, the same with a lift at
+// each corner where its plates are), tex: { albedo, normal, orm } }; a phone takes
 // the maps made at half size (never the full ones decoded and shrunk: that peak cost it its page)
 export function loadKitModels(phone = false) {
 	if (kit) return kit;
@@ -50,11 +52,14 @@ export function loadKitModels(phone = false) {
 			g.applyMatrix4(o.matrixWorld);
 			parts[o.name] = g;
 		});
-		// (the glove's table, little-endian arrays sent as base64: per hand the body's faces under
-		// the glove and the atlas at each of their corners, as 0..65535)
+		// (the gloves' tables, little-endian arrays sent as base64: per hand the body's faces under
+		// the glove, the atlas at each of their corners as 0..65535, and for the gauntlet how much
+		// further each corner stands off, in twentieths of a millimetre)
 		const b64 = (str, T) => { const bin = atob(str), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new T(u.buffer); };
-		const glove = info.glove ? { proud: info.glove.proud, L: { faces: b64(info.glove.L.faces, Uint32Array), uv: b64(info.glove.L.uv, Uint16Array) }, R: { faces: b64(info.glove.R.faces, Uint32Array), uv: b64(info.glove.R.uv, Uint16Array) } } : null;
-		ready = { parts, ref: info.meta, foot: info.foot, glove, tex: { albedo, normal, orm } };
+		const hand = (h) => ({ faces: b64(h.faces, Uint32Array), uv: b64(h.uv, Uint16Array), lift: h.lift ? b64(h.lift, Uint8Array) : null });
+		const table = (t) => (t ? { proud: t.proud, L: hand(t.L), R: hand(t.R) } : null);
+		const glove = table(info.glove), gauntlet = table(info.gauntlet);
+		ready = { parts, ref: info.meta, foot: info.foot, glove, gauntlet, tex: { albedo, normal, orm } };
 		return ready;
 	})();
 	return kit;
