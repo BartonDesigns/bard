@@ -27,7 +27,8 @@ const pick = (r, a) => a[Math.floor(r() * a.length)];
 
 // a camo garment in a scheme
 const camo = (kind, s, extra = {}) => ({ kind, col: CAMO[s][0], acc: CAMO[s][1], acc2: CAMO[s][2], pat: 'camo', camo: s, ...extra });
-const boots = (col = '#2a241c') => ({ kind: 'boot', col, sole: '#121110' });
+// (combat: the real boot model over the shoe, people/garment.js putBoot)
+const boots = (col = '#2a241c') => ({ kind: 'boot', col, sole: '#121110', combat: true });
 // a plate carrier over whatever is underneath, its pouches in the same cloth
 const carrier = (col, pouch = col) => ({ kind: 'carrier', col, acc: pouch });
 

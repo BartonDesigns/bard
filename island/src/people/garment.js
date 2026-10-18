@@ -664,6 +664,8 @@ export function clothGeometry(A, p, o, cut, R) {
 	// then each garment stood off the skin: fitted or loose; wide and baggy legs flare
 	// evenly from the hip to the hem
 	const off = offsets(o), P = g.attributes.position, B = o.bottom;
+	// (under a real boot model the shoe is only a sock, so it never shows through it)
+	if (o.shoes?.combat && A.kit?.parts.boot) off.shoes = 0.003;
 	const legFlare = B?.fit === 'wide' ? 0.045 : B?.fit === 'baggy' ? 0.04 : B?.legs === 'board' ? 0.02 : 0;
 	const flareTop = cut.hip - 0.06, flareLen = Math.max(0.2, flareTop - cut.ankle);
 	const tuck = o.top?.tuck, K = new Float32Array(P.count);
@@ -2351,6 +2353,70 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		put(dome(top - eyeY + 0.2, 0.018, 18, 0.72), 'head', o.hair.scarf);
 		const drape = new THREE.CylinderGeometry(0.075, 0.13, 0.12, 18, 1, true); drape.translate(0, cut.neck + 0.01, (cut.backZ + cut.frontZ) / 2); put(drape, 'spine01', o.hair.scarf);
 	}
+	// combat boots as a real model (people/kit-models.js), made to each foot: the reference
+	// boot (a left one, mirrored for the right) stretched to this foot's length behind and in
+	// front of the ankle, its width to each side and its depth under the ankle, its shaft to
+	// the shin's girth; each point riding the bones of the skin nearest it, so it bends as the
+	// foot and ankle do. It stands over the shoe drawn on the skin, which it hides
+	const putBoot = (sd, col) => {
+		const K = A.kit, g = K?.parts.boot, R = K?.foot, part = P0.part;
+		const fi = map['foot.' + sd], F = heads[fi], dir = P0.rest.dirs[fi];
+		if (!g || !R || !part || !nSkin || !A.ids || !F || !dir) return false;
+		const sx = Math.sign(F.x) || 1, fz = V3(dir.x, 0, dir.z).normalize(), fx = V3(fz.z, 0, -fz.x);
+		// (this foot measured as the reference was: in the foot's frame, out to the side +x)
+		let heel = 0, toe = 0, med = 0, lat = 0, sole = 0, sc = 0, scx = 0, scz = 0, shin = 0;
+		const near = [], q = V3(0, 0, 0);
+		for (let v = 0; v * 3 < nSkin; v++) {
+			const k = part[v];
+			if ((k !== 5 && k !== 6) || Math.sign(skinP[v * 3]) !== sx) continue;
+			q.set(skinP[v * 3] - F.x, skinP[v * 3 + 1] - F.y, skinP[v * 3 + 2] - F.z);
+			const x = q.dot(fx) * sx, y = q.y, z = q.dot(fz);
+			if (y > 0.22) continue;
+			near.push(v);
+			if (y < 0) { heel = Math.min(heel, z); toe = Math.max(toe, z); med = Math.min(med, x); lat = Math.max(lat, x); sole = Math.min(sole, y); }
+			else if (y > 0.06 && y < 0.1) { sc++; scx += x; scz += z; }
+		}
+		if (!sc || heel >= 0 || toe <= 0 || sole >= 0) return false;
+		scx /= sc; scz /= sc;
+		for (const v of near) {
+			q.set(skinP[v * 3] - F.x, skinP[v * 3 + 1] - F.y, skinP[v * 3 + 2] - F.z);
+			if (q.y > 0.06 && q.y < 0.1) shin += Math.hypot(q.dot(fx) * sx - scx, q.dot(fz) - scz);
+		}
+		shin /= sc;
+		const kx0 = med / R.medial, kx1 = lat / R.lateral, kz0 = heel / R.heel, kz1 = toe / R.toe, ky = sole / R.sole, ks = shin / R.shin[2];
+		const pa = g.attributes.position, na = g.attributes.normal, ua = g.attributes.uv, ix = g.index, n = ix ? ix.count : pa.count;
+		// (where each of the model's points goes, its normal, and the skin it rides, once a point)
+		const P = new Float32Array(pa.count * 3), N = new Float32Array(pa.count * 3), B = new Int32Array(pa.count);
+		for (let i = 0; i < pa.count; i++) {
+			const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i), w = Math.max(0, Math.min(1, y / 0.05)), u = w * w * (3 - 2 * w);
+			const ax = (x < 0 ? kx0 : kx1) * (1 - u) + ks * u, az = (z < 0 ? kz0 : kz1) * (1 - u) + ks * u, ay = y < 0 ? ky : 1;
+			const X = x * (1 - u) * (x < 0 ? kx0 : kx1) + (scx + (x - R.shin[0]) * ks) * u, Z = z * (1 - u) * (z < 0 ? kz0 : kz1) + (scz + (z - R.shin[1]) * ks) * u, Y = y * ay;
+			P[i * 3] = F.x + fx.x * X * sx + fz.x * Z; P[i * 3 + 1] = F.y + Y; P[i * 3 + 2] = F.z + fx.z * X * sx + fz.z * Z;
+			const mx = na.getX(i) / ax * sx, my = na.getY(i) / ay, mz = na.getZ(i) / az, l = Math.hypot(mx, my, mz) || 1;
+			N[i * 3] = (fx.x * mx + fz.x * mz) / l; N[i * 3 + 1] = my / l; N[i * 3 + 2] = (fx.z * mx + fz.z * mz) / l;
+			let best = 1e9, bv = near[0];
+			for (const v of near) {
+				const dx = skinP[v * 3] - P[i * 3], dy = skinP[v * 3 + 1] - P[i * 3 + 1], dz = skinP[v * 3 + 2] - P[i * 3 + 2], d = dx * dx + dy * dy + dz * dz;
+				if (d < best) { best = d; bv = v; }
+			}
+			B[i] = bv;
+		}
+		const start = out.pos.length / 3, uv = new Float32Array(n * 2);
+		colour.set(col);
+		for (let k = 0; k < n; k++) {
+			// (the right boot is the left mirrored: its corners taken the other way round)
+			const kk = sx > 0 ? k : k - (k % 3) + [0, 2, 1][k % 3], i = ix ? ix.getX(kk) : kk;
+			out.pos.push(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); out.nor.push(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]); out.col.push(colour.r, colour.g, colour.b);
+			const v = B[i]; let sum = 0;
+			for (let c = 0; c < 4; c++) sum += A.weights[v * 4 + c];
+			for (let c = 0; c < 4; c++) { out.si.push(A.ids[v * 4 + c]); out.sw.push(A.weights[v * 4 + c] / (sum || 1)); }
+			out.kit.push(KIT_MODEL, 0, 0); out.wr.push(0, 0);
+			uv[k * 2] = ua.getX(i); uv[k * 2 + 1] = ua.getY(i);
+		}
+		out.uvs.push([start, uv]);
+		return true;
+	};
+	if (o.shoes?.combat && A.kit) for (const sd of ['L', 'R']) putBoot(sd, o.shoes.col || '#8a7556');
 	if (!out.pos.length) return null;
 	const g = new THREE.BufferGeometry();
 	g.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3));
