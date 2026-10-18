@@ -13,7 +13,8 @@ test('phone-safe Bay ground keeps close-up texture and color treatment', () => {
 	assert.match(lite, /nearK\s*=\s*1\.0\s*-\s*smoothstep\(18\.0,\s*105\.0,\s*dist\)/);
 	assert.match(lite, /grainK\s*=\s*nearK/);
 	assert.match(lite, /vec3 soil\s*=\s*mix/);
-	assert.match(lite, /texture2D\(uLoam/);
+	// (the loam photo, now a cell of the ground photos' atlas: world/photomats.js)
+	assert.match(lite, /loamGrain\(/);
 	assert.match(lite, /uGroundK\s*>\s*0\.5/);
 });
 

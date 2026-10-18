@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { groundDetail } from './textures.js';
+import { groundPhotoUniform, GROUND_PHOTO_GLSL } from './photomats.js';
 import { FAR_GLSL, farBlend } from './lunarfar.js';
 import { SWASH_GLSL, WATERMAP_GLSL, waterMapTexture } from './shore.js';
 
@@ -216,6 +217,7 @@ export function createTerrain(island, shared) {
 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
 		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
 		uDetail: { value: detail }, uDetailM: { value: detail.userData.mean }, uOcc: shared.uOcc, uOccO: shared.uOccO,
+		uGroundP: groundPhotoUniform()[0], uGroundPK: groundPhotoUniform()[1],
 		uSkyZenT: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorT: shared.uSkyHor || { value: new THREE.Color() },
 		uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) },
 		...planetUniforms(shared),
@@ -241,7 +243,7 @@ export function createTerrain(island, shared) {
 				vec3 transformed = vec3(wxz.x, LIFT_H(wxz), wxz.y);
 				${far ? '// the ground falls away with the curve of a small world, so the horizon is a line\n\t\t\t\ttransformed.y -= dot(position.xz, position.xz) / 3.47e6;' : ''}
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; float gSnowIce = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints, uGroundP; uniform float uGroundPK; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; float gSnowIce = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + GROUND_PHOTO_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				${far ? '' : 'if (max(abs(vW.x), abs(vW.z)) > uHalf) discard;'}
 				holeCut(vW.xz);
@@ -419,6 +421,36 @@ export function createTerrain(island, shared) {
 				col *= 1.0 - oc.g * 0.1 * grassW;
 				// under an eruption's lava the ground is black crust, so the glow reads as magma
 				col = mix(col, vec3(0.08, 0.05, 0.04), plLava(vW, uEruptT));
+				// close by, photographed ground (world/photomats.js): moss under the meadow, loam on the
+				// paths and under the trees, sand on the beach, river gravel on the rock and the lake
+				// beds. Only the photo's light, shade and flecks of colour: the world's colour keeps
+				// the hue. A 1.25 m tile at your feet, a 5 m one further out, each fading as its grain
+				// nears a pixel; the photo's brightness raises its pebbles and clods in the bump
+				if (uGroundPK > 0.5 && camD < 150.0) {
+					float kF = 1.0 - smoothstep(0.025, 0.07, px), kC = 1.0 - smoothstep(0.12, 0.3, px);
+					float gk = (1.0 - smoothstep(90.0, 150.0, camD)) * kC * (1.0 - gSnowW) * step(-1.5, h);
+					if (gk > 0.01) {
+						float wR = clamp(max(rockW, max(lakeBed, gDetailB)), 0.0, 1.0);
+						float wS = (1.0 - smoothstep(0.0, 0.6, grassW)) * (1.0 - wR);
+						float wL = clamp(max(pathW, max(occ * 0.8, smoothstep(0.3, 0.8, mk.a) * 0.6)), 0.0, 1.0) * (1.0 - wR) * (1.0 - wS);
+						float wM = max(0.0, 1.0 - wR - wS - wL);
+						vec4 pd = vec4(0.0); float pw = 0.0;
+						for (int i = 0; i < 4; i++) {
+							float w = i == 0 ? wM : i == 1 ? wL : i == 2 ? wS : wR;
+							if (w < 0.03) continue;
+							float cell = float(i);
+							vec4 v = gpRead(vW.xz * 0.2 + cell * 0.31, cell);
+							if (kF > 0.01) v = mix(v, gpRead(vW.xz * 0.8 + cell * 0.53, cell), kF);
+							pd += v * w; pw += w;
+						}
+						pd /= max(pw, 1e-3);
+						vec3 r = pd.rgb * 2.0;
+						r = mix(vec3(dot(r, vec3(0.3, 0.59, 0.11))), r, 0.6);
+						// (in display space: the square below doubles the contrast)
+						col *= mix(vec3(1.0), sqrt(max(r, vec3(0.0))), gk * mix(0.75, 0.9, max(wS, wR)));
+						gDetailH += (pd.a - 0.5) * mix(0.012, 0.035, wR) * gk * mix(0.5, 1.0, kF);
+					}
+				}
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
@@ -482,7 +514,7 @@ export function createTerrain(island, shared) {
 					normal = normalize(normal + (viewMatrix * vec4(tilt, 0.0)).xyz);
 				}`);
 	};
-	mat.customProgramCacheKey = () => 'island-terrain-' + (far ? 'far' : 'bounded') + (mat.defines?.CPU_LIFT ? '-cpu' : '');
+	mat.customProgramCacheKey = () => 'island-terrain2-' + (far ? 'far' : 'bounded') + (mat.defines?.CPU_LIFT ? '-cpu' : '');
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.frustumCulled = false;
 	mesh.receiveShadow = true;

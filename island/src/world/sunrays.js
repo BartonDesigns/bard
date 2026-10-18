@@ -265,6 +265,9 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 		if (fbTex && fbTex.image.width === w && fbTex.image.height === h) return;
 		fbTex?.dispose(); rtA?.dispose(); rtB?.dispose();
 		fbTex = new THREE.FramebufferTexture(w, h);
+		// the canvas has no alpha (alpha: false): an RGBA copy of it is refused (INVALID_OPERATION)
+		// and leaves this black, so the copy is RGB
+		fbTex.format = THREE.RGBFormat;
 		fbTex.minFilter = fbTex.magFilter = THREE.LinearFilter;
 		const q = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, stencilBuffer: false };
 		rtA = new THREE.WebGLRenderTarget(Math.max(1, w >> 2), Math.max(1, h >> 2), q);

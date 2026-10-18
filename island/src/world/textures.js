@@ -121,14 +121,16 @@ export function fernFrond() {
 }
 
 // grass: a strip of tapering blades
-export function grassStrip() {
+export function grassStrip({ ids = false } = {}) {
 	// fine blades about 2 mm wide (the card is ~0.4 m across, 512 px), four times as
 	// many as before, each a slightly curved sliver tapering to a point
-	const W = 512, H = 512, [c, g] = canvas(W, H), r = mulberry32(8);
+	// (ids: red holds each blade's own random number instead of its colour, for a shader that
+	// colours blade by blade: world/grass.js)
+	const W = 512, H = 512, [c, g] = canvas(W, H), r = mulberry32(8), q = mulberry32(31);
 	for (let i = 0; i < 72; i++) {
 		const x = 10 + r() * (W - 20), top = H * (0.02 + r() * 0.45), l = 120 + r() * 135, lean = (r() - 0.5) * 60, w = 1.6 + r() * 1.2;
-		const gr = g.createLinearGradient(0, H, 0, top);
-		gr.addColorStop(0, rgb(l * 0.62, l * 0.72, l * 0.42)); gr.addColorStop(1, rgb(l * 0.95, l, l * 0.7));
+		const gr = g.createLinearGradient(0, H, 0, top), id = 8 + q() * 239;
+		gr.addColorStop(0, rgb(ids ? id : l * 0.62, l * 0.72, l * 0.42)); gr.addColorStop(1, rgb(ids ? id : l * 0.95, l, l * 0.7));
 		g.fillStyle = gr;
 		const mx = x + lean * 0.45, my = (H + top) / 2;
 		g.beginPath();

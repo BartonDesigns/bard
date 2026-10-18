@@ -288,8 +288,18 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.crouchWas = crouchKey; s.crouchQueued = false;
 		if (s.slide) slideStep(dt, wish);
 		s.crouch = !!s.slide || (crouchKey && !s.swimming);
+		// the lie of the ground: slower up a slope, a touch quicker down a gentle one, careful
+		// down a steep one (Tobler's hiking rule, softened for play). A rise steeper than one in
+		// one is a ledge or a kerb, not a slope: the step rule below decides those.
+		let grade = 1;
+		if (s.grounded && !s.swimming && !s.slide && wish.lengthSq() > 0.01) {
+			const wl = Math.sqrt(wish.lengthSq()), y0 = s.pos.y - EYE;
+			const g = (floorAt(s.pos.x + wish.x / wl * 0.8, s.pos.z + wish.z / wl * 0.8, y0) - floorAt(s.pos.x, s.pos.z, y0)) / 0.8;
+			if (Math.abs(g) < 1) grade = Math.max(0.45, Math.min(1.08, Math.exp(-1.6 * (Math.abs(g + 0.05) - 0.05))));
+		}
+		s.gradeK = (s.gradeK ?? 1) + (grade - (s.gradeK ?? 1)) * Math.min(1, dt * 4);
 		// (the brush holds you back a little: nature/wildground.js)
-		const speed = (s.swimming ? 2.2 : s.crouch ? 2.5 : run ? 10 : 5.2) * (s.swimming ? 1 : 1 - (island.dragAt?.(s.pos.x, s.pos.z) ?? 0)) * (s.speedK || 1);
+		const speed = (s.swimming ? 2.2 : s.crouch ? 2.5 : run ? 10 : 5.2) * (s.swimming ? 1 : (1 - (island.dragAt?.(s.pos.x, s.pos.z) ?? 0)) * s.gradeK) * (s.speedK || 1);
 		const accel = s.grounded || s.swimming ? 10 : 2.5;
 		if (!s.slide) {
 			s.vel.x += (wish.x * speed - s.vel.x) * Math.min(1, accel * dt);
@@ -351,13 +361,17 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const bob = s.grounded ? -Math.cos(G.phase * Math.PI * 2) * 0.035 * Math.min(1, G.speed / 4) : 0;
 		if (s.locked) return;   // the boat has the camera
 		feel(dt, G, run, right);
-		camera.position.set(s.pos.x + right.x * F.side, s.pos.y + bob + F.dip.v - F.low, s.pos.z + right.z * F.side);
+		// the head rides the ground's small rises and dips smoothly, as legs take them up in the
+		// knees (never more than 12 cm behind; a jump, a fall or a carry follows at once)
+		if (s.grounded && wasGrounded && Math.abs(s.pos.y - F.ride) < 1) F.ride = Math.max(s.pos.y - 0.12, Math.min(s.pos.y + 0.12, F.ride + (s.pos.y - F.ride) * Math.min(1, dt * 16)));
+		else F.ride = s.pos.y;
+		camera.position.set(s.pos.x + right.x * F.side, F.ride + bob + F.dip.v - F.low, s.pos.z + right.z * F.side);
 		camera.rotation.set(s.pitch + F.dip.v * 0.25, s.yaw, F.roll, 'YXZ');
 	}
 	// How the view moves with the body, as in a shooter: it sinks as you crouch (lower still in a
 	// slide), dips on a hard landing and springs back, sways a little from foot to foot, leans
 	// into a strafe and a slide, and the field of view opens as you sprint (s.fovK: main.js)
-	const F = { low: 0, roll: 0, side: 0, fov: 1, dip: { v: 0, dv: 0 } };
+	const F = { low: 0, roll: 0, side: 0, fov: 1, ride: 0, dip: { v: 0, dv: 0 } };
 	function feel(dt, G, run, right) {
 		const k = Math.min(1, dt * 12);
 		F.low += ((s.slide ? 0.85 : s.crouch ? 0.6 : 0) - F.low) * k;
