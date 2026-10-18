@@ -26,7 +26,7 @@ const PAL = {
 // the cloud field, shared by the dome and the stars it hides: fair-weather cumulus on a
 // plane about 1.5 km up that drifts with the wind (uCloudOff, summed by weather.js) and
 // slowly changes shape, heaped up dark over the showers
-const CLOUD_GLSL = /* glsl */`
+export const CLOUD_GLSL = /* glsl */`
 uniform vec2 uCloudOff; uniform vec4 uShowers[4];
 float fbm5(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * vn(p); p = p * 2.02 + 3.1; a *= 0.5; } return s; }
 // the showers' hold on a point of the cloud plane (xz metres from you)
