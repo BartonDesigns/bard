@@ -202,7 +202,7 @@ import { createContrails } from './world/contrails.js';
 import { createFarForest } from './world/farforest.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { touchLookRows } from './ui/touch-look.js';
-import { PHONE_DEVICE, GFX_PHONE, ULTRA } from './world/device.js';
+import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -626,6 +626,14 @@ export function createIslandWorld() {
 	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = initialMode;
 	// Desktop also adapts to slow frames; an explicit saved High/Low choice is retained.
 	// (a phone on Ultra holds the desktop's graphics: a larger share of its memory before stepping down)
+	// A world loading, marked till it has drawn a few seconds: a page the browser closes in that
+	// time (its memory, most likely) leaves the mark, and the next load starts lighter
+	// (world/gpulite.js, device.js).
+	let loadingT = 0;
+	function loadingMark(on) {
+		clearTimeout(loadingT); loadingT = 0;
+		try { if (on) storage?.setItem('l99-loading', String(Date.now())); else storage?.removeItem('l99-loading'); } catch { /* private mode */ }
+	}
 	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage, ...(isPhone && ULTRA ? { budgetMB: 1400 } : {}) });
 	if (graphics.lighter && !SAFE && governor.state.ceiling < 2) governor.lost();
 	if (governor.crashedLastTime) console.warn('[governor] the last visit ended without a goodbye: starting lighter', JSON.stringify(governor.info()));
@@ -2287,7 +2295,7 @@ export function createIslandWorld() {
 	// a page put away or closed says goodbye; one that goes while a world is on screen did not
 	// (the governor's crash mark: world/governor.js)
 	document.addEventListener('visibilitychange', () => governor.live(visible && !document.hidden));
-	addEventListener('pagehide', () => governor.live(false));
+	addEventListener('pagehide', () => { governor.live(false); loadingMark(false); });
 	dom.back.onclick = (e) => { e.stopPropagation(); api.close(); };
 	function toggleFly() {
 		const P = world?.player.state;
@@ -2396,7 +2404,10 @@ export function createIslandWorld() {
 			const hours = params.spot?.hours;
 			shared.startHours = Number.isFinite(hours) ? hours : 10.5;
 			show();
-			await build(params);
+			loadingMark(true);
+			try {
+				await build(params);
+			} catch (error) { loadingMark(false); throw error; }
 			await recovery.wait();
 			if (Number.isFinite(hours) && world?.sky) world.sky.state.hours = hours;
 			if (params.earth !== false && params.at) HOOKS.goTo(params.at.lat, params.at.lon);      // globe: straight to a place
@@ -2406,10 +2417,14 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
+			// (the mark goes once the world has drawn a while: the first frames build what is left)
+			loadingT = setTimeout(() => loadingMark(false), 10000);
+			if (ULTRA_DROPPED) hint('Ultra graphics are off: the page closed while drawing them last time. Auto is on now; Ultra is still in the settings.', 7000);
+			else if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {
+			loadingMark(false);
 			HOOKS.combat?.reset();
 			HOOKS.gear?.suspend();
 			families.clear();
