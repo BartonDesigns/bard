@@ -14,8 +14,9 @@
 
 import * as THREE from 'three';
 import { guideUniform } from './hair-motion.js';
+import { GFX_PHONE } from '../world/device.js';
 
-const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const isPhone = GFX_PHONE;
 const TAU = Math.PI * 2;
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 const sm = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };

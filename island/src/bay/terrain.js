@@ -23,6 +23,7 @@ import { SEASON_U } from './seasons.js';             // streets by era: the lawn
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
 import { trackUpload } from './levelrows.js';
+import { GFX_COARSE } from '../world/device.js';
 
 // the globe past the survey (earth/globe.js): { ready(), at(x, z), seam: [a, b] (m past the
 // survey's edge: the Bay's ground stops at a, the globe's is whole by b), whenReady, hideBay() }.
@@ -53,7 +54,14 @@ uint bHash(ivec2 p){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u
 float bH01(ivec2 p){ return float(bHash(p) >> 8u) / 16777216.0; }
 float bVn(vec2 p){ vec2 i = floor(p), f = p - i; f = f * f * (3.0 - 2.0 * f); ivec2 k = ivec2(i);
 	return mix(mix(bH01(k), bH01(k + ivec2(1, 0)), f.x), mix(bH01(k + ivec2(0, 1)), bH01(k + ivec2(1, 1)), f.x), f.y); }
+// (east and north of the survey there is no sea: the Delta, the Valley and the hills of Lake
+// County, and the globe's own ground takes over from 3 km out. There the edge's height is
+// carried on level until it does: the Delta's tracts, a few metres under the sea's level behind
+// their levees, had read as sea floor and fallen 100 m, and the generator's ranges stood 200 m
+// high over the flat Valley.)
+float bNoSea(vec2 w){ vec2 q = (w - uR0.xy) / uR0.z; return q.x > float(textureSize(uB0, 0).x) - 1.0 || q.y < 0.0 ? 1.0 : 0.0; }
 float beyondH(vec2 w, float he, float d){
+	if (bNoSea(w) > 0.5) return he;
 	if (he <= 0.0) return max(-400.0, he - d * 0.03);
 	float t = smoothstep(0.0, 22000.0, d);
 	float n = bVn(w / 9000.0) * 0.6 + bVn(w / 3700.0 + 17.0) * 0.3 + bVn(w / 1500.0 - 9.0) * 0.1;
@@ -229,7 +237,9 @@ function bVn(x, y) {
 	return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
 }
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-export function beyondH(x, z, he, d) {
+// noSea: past the survey's east or north edge, where the edge is carried on level (see BAY_GLSL)
+export function beyondH(x, z, he, d, noSea = false) {
+	if (noSea) return he;
 	if (he <= 0) return Math.max(-400, he - d * 0.03);
 	const t = sstep(0, 22000, d);
 	const n = bVn(x / 9000, z / 9000) * 0.6 + bVn(x / 3700 + 17, z / 3700 + 17) * 0.3 + bVn(x / 1500 - 9, z / 1500 - 9) * 0.1;
@@ -245,8 +255,8 @@ export function beyondH(x, z, he, d) {
 // hole (3.9 km round the near ring's middle, which is snapped to 32 m and the far ring's to
 // 512) out to 95 km, about 1.3 degrees each on a desktop, 1.6 on a phone (the power-law grid
 // drew the hills a few kilometres off in facets four times the near ring's)
-const FAR_GRID = () => ringGrid(typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 256 : 320, 3500, 95000, 10);
-const NEAR_SEG = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
+const FAR_GRID = () => ringGrid(GFX_COARSE ? 256 : 320, 3500, 95000, 10);
+const NEAR_SEG = GFX_COARSE ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
 
 export function createBayArea(shared, scene, island, BU) {
 	let disposed = false;
@@ -373,7 +383,8 @@ export function createBayArea(shared, scene, island, BU) {
 		const qx = (x - L0.x0) / L0.step, qz = (z - L0.zN) / L0.step;
 		const dOut = Math.hypot(Math.max(0, -qx, qx - (L0.W - 1)), Math.max(0, -qz, qz - (L0.H - 1))) * L0.step;
 		const inS = levelIn(L0, x, z, 3000);
-		let h = beyondH(x, z, e0, dOut) + (e0 - beyondH(x, z, e0, dOut)) * inS;
+		const bh = beyondH(x, z, e0, dOut, qx > L0.W - 1 || qz < 0);
+		let h = bh + (e0 - bh) * inS;
 		// past the survey the globe's ground takes over (earth/globe.js; the same blend on the GPU)
 		if (farG?.ready()) { const k = sstep(farG.seam[0], farG.seam[1], dOut); if (k > 0) h += (farG.at(x, z) - h) * k; }
 		if (levels[1]) { const k = levelIn(levels[1], x, z, 1500); if (k > 0) h += (levelH(levels[1], x, z) - h) * k; }

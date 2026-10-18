@@ -119,7 +119,8 @@ export function setTier(t) {
 }
 
 // ---------- the governor at work (main.js) ----------
-// mode(): 'auto' (governed), 'high' or 'low' (chosen; a crash or graphics loss still caps them).
+// mode(): 'auto' (governed), 'high', 'ultra' (High on a phone drawing the desktop's graphics) or
+// 'low' (chosen; a crash or graphics loss still caps them).
 // meter: gpumeter.js's; budgetMB: what the graphics and the script heap together may hold
 // before the governor steps down (a phone's is small: Safari closes the page well before the
 // device runs out). All devices start a tier down and earn the best by running easily.

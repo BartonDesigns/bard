@@ -24,8 +24,9 @@ import { GLOBE_U, GLOBE_SEA_GLSL } from '../earth/globeheight.js';
 import { NF, NF_N } from './nightfield.js';
 import { qualityNow } from './governor.js';
 import { SEA_DEPTH_GLSL } from './seadepth.js';
+import { GFX_PHONE } from './device.js';
 
-const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+const PHONE = GFX_PHONE;
 // how many things standing in the water ring it at once (posts, hulls, you)
 const TOUCH_N = PHONE ? 4 : 8;
 

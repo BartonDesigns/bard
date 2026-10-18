@@ -26,9 +26,10 @@
 import * as THREE from 'three';
 import { qualityNow } from '../world/governor.js';
 import { bake, tessellate, tessellatedCount, findPieces, pieceFixture, quadBoxes, QUALITY, E_RANGE } from './lightbake.js';
+import { GFX_PHONE } from '../world/device.js';
 
 const S = {
-	isPhone: typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || ''),
+	isPhone: GFX_PHONE,
 	queue: [], live: new Set(), cache: new Map(), budget: 3, night: 0, hours: 12, time: 0,
 	scene: null, lights: [], lastTick: -1, lastPick: 0, movers: [], casters: new Map(), blobs: null,
 	stats: { baked: 0, cached: 0, ms: 0, lastMs: 0, verts: 0, bytes: 0, fixtures: 0 },

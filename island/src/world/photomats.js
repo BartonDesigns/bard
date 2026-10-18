@@ -9,10 +9,11 @@
 // canvas textures stay.
 
 import * as THREE from 'three';
+import { GFX_PHONE } from './device.js';
 
 const BASE = new URL('../../textures/', import.meta.url);
 // a phone cuts its swatches at half the size (a quarter of the memory)
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 const images = new Map();
 // the house atlases are not made yet (ASSET_PROMPTS_HOUSES.md): don't ask the server for them;
 // set this true when textures/houses/ is added

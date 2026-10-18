@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { GLOBE_ASSET_VERSION } from '../earth/globe-assets.js';
 import { createGalacticGargantua228 } from '../../../runtime/gargantua228.mjs';
+import { GFX_PHONE } from '../world/device.js';
 
 export const ORBIT_FRAGMENT = /* glsl */`
 precision highp float;
@@ -185,7 +186,7 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 		uRock: { value: new THREE.Color().fromArray(profile?.ground?.rock || [.44, .41, .37]).convertSRGBToLinear() },
 		uSand: { value: new THREE.Color().fromArray(profile?.ground?.sand || [.88, .78, .58]).convertSRGBToLinear() },
 		uLiquid: { value: airless || profile?.land === 'clouddeck' || ['MAGMA', 'ARID', 'ICE'].includes(profile?.type) ? 0 : 1 },
-		uDetail: { value: /iPhone|iPad|Android|Mobile/i.test(globalThis.navigator?.userAgent || '') ? 0 : 1 },
+		uDetail: { value: GFX_PHONE ? 0 : 1 },
 		uCloudColor: { value: new THREE.Color().fromArray(profile?.type === 'MAGMA' ? [.28, .23, .2] : [.9, .92, .96]).convertSRGBToLinear() },
 		uAir: { value: new THREE.Color(.12, .35, .7) }, uGlow: { value: new THREE.Color().fromArray(earth ? [0, 0, 0] : profile?.glow || [0, 0, 0]) },
 		uSnow: { value: profile?.snow || 0 }, uCoast: { value: airless ? .05 : profile?.type === 'OCEAN' ? .66 : profile?.type === 'ARID' || profile?.type === 'MAGMA' ? .3 : .51 },
@@ -203,7 +204,7 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 	// steered toward the view: turning the ship moves it across the screen, and
 	// flying toward it brings it closer.
 	const gargScene = new THREE.Scene(), gargCamera = new THREE.PerspectiveCamera(60, 1, .01, 1e12);
-	const gargantua = createGalacticGargantua228(THREE, 18000, { mobile: /iPhone|iPad|Android|Mobile/i.test(globalThis.navigator?.userAgent || '') });
+	const gargantua = createGalacticGargantua228(THREE, 18000, { mobile: GFX_PHONE });
 	gargantua.userData.gargMat.depthTest = false; gargantua.visible = false; gargScene.add(gargantua);
 	let disposed = false, map = null;
 	if (earth) {

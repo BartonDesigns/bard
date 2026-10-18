@@ -16,11 +16,12 @@ import { sleeveEase, waistbandEase, armT, isRibbed, isShirted, SLEEVE_POSE_GLSL 
 import { torsoField, clothPoints, necklineRing, hoodGeometry, collarGeometry, carrierGeometry } from './garment-kit.js';
 import { patchKit } from './propkit.js';
 import { tierNow } from '../world/governor.js';
+import { GFX_PHONE } from '../world/device.js';
 
 // (phone audit: a phone, or a low quality tier, keeps the clothes' own surface: the curved split
 // that rounds the shoulders by up to 4 mm is for the folds, which a phone draws none of, and it
 // quadrupled every body's upper garments and much of the garbage made as people stream in)
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 export const refineCloth = (phone = PHONE, tier = tierNow()) => !phone && tier < 2;
 
 // ---------- the painting ----------
