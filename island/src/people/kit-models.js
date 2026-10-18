@@ -17,15 +17,6 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 // the kit material's id for a vertex of these models (propkit.js reads the atlas for it)
 export const KIT_MODEL = 11;
 const url = (f) => new URL(`../assets/kit/${f}`, import.meta.url).href;
-function halve(t) {
-	const im = t.image;
-	if (!im || im.width <= 512) return;
-	const cv = document.createElement('canvas');
-	cv.width = im.width >> 1; cv.height = im.height >> 1;
-	cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
-	t.image = cv; t.needsUpdate = true;
-}
-
 let kit = null, ready = null;
 // the kit if it is in already (no waiting)
 export const kitModelsNow = () => ready;
@@ -34,14 +25,13 @@ export const kitModelsNow = () => ready;
 // over the eyes), foot (the reference foot the boot is made to: heel, toe, medial, lateral, sole,
 // shin), glove ({ proud, L, R }: each hand's body faces under the combat glove, by index into the
 // body's faces, and the atlas at their corners), tex: { albedo, normal, orm } }; a phone takes
-// the maps at half size
+// the maps made at half size (never the full ones decoded and shrunk: that peak cost it its page)
 export function loadKitModels(phone = false) {
 	if (kit) return kit;
 	kit = (async () => {
 		const loader = new THREE.TextureLoader();
-		const map = (n, srgb) => loader.loadAsync(url(`kit-${n}.webp`)).then((t) => {
+		const map = (n, srgb) => loader.loadAsync(url(phone ? `kit-${n}-phone.webp` : `kit-${n}.webp`)).then((t) => {
 			t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4;
-			if (phone) halve(t);
 			return t;
 		});
 		const [gltf, info, albedo, normal, orm] = await Promise.all([new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url('soldier-kit.glb')), fetch(url('soldier-kit.json')).then((r) => r.json()), map('albedo', true), map('normal', false), map('orm', false)]);

@@ -22,6 +22,10 @@ for (const [name, [o, k]] of Object.entries(maps)) {
 	const { width } = await im.metadata();
 	await (k < 1 ? im.resize(Math.round(width * k)) : im).webp({ ...o, effort: 6 }).toFile(to);
 	console.log(to, (fs.statSync(to).size / 1024).toFixed(0) + ' KB');
+	// (and a phone's, at half that: decoding the full maps on a phone cost it its page)
+	const ph = path.join(dst, `kit-${name}-phone.webp`);
+	await im.clone().resize(Math.round(width * k / 2)).webp({ ...o, effort: 6 }).toFile(ph);
+	console.log(ph, (fs.statSync(ph).size / 1024).toFixed(0) + ' KB');
 }
 // (the model quantised and meshopt-compressed; its UVs kept fine enough for the atlas)
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder });
