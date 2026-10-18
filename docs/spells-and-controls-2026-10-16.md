@@ -194,6 +194,34 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   some; `FLIGHT=1` catches bolts mid-flight; Gargantua is drawn over a checked backdrop so the
   lensing shows, and `GROW=<s>` also shows its ending's grade at s).
 
+## Sharper pass, 2026-10-18 evening
+
+The softest-looking spells in the gallery got hard forms: Ball Lightning a white-hot heart in a
+lashing cage of jagged strokes; Plague Cloud acid needles spitting out of cracking green ground;
+Soul Siphon a hard core with a turning strand and souls streaking back; Night Terror three sets of
+great raking claws across the cone; Eclipse corona spears round the disc and the ground split by
+its burst; Contagion an acid splash of falling droplets and a hard leaping arc; Withering the ground
+cracking dry; Hex of Decay thorns of rot punched up round the target (`cracks()` in looks.js). The
+palm's light now shows even before your body has given the hands a mesh (it was hidden with the
+hand), and the screen-edge flash is stronger (0.7 at its peak).
+
+Then the spells on yourself and the summons: Call Rain hard silver strokes splashing off the
+ground; Shadowstep a jagged tear where you stood; Umbral Cloak shards of dark spiralling up and a ring
+snapping shut; Summon Shade and Grave Host spikes torn up out of split ground (`spikes()`); Dark
+Pact a cage of blood spikes; Aegis its plates locking with struck edges; Renewal hard green threads
+spiralling up you. `SELF=1` in the gallery catches these a tenth of a second in.
+
+Then the quieter ones: Mend a hard white cross standing up through you over a ring of mint spikes;
+Resurgence the phoenix's wings traced in gold lines over flame spikes and split ground; Lumen four
+rays turning round its small sun; Swiftstride hard wind lines cut back from your heels; Waterstride a
+crown of droplet lines thrown up with each ring; Nightsight a crossed eye of violet lines and the dark
+cracking open; Quicken gear teeth on its rings and clock hands under you; Rewind the path you came by
+drawn back in hard lines with hands spun backwards.
+
+And the wards: Bulwark's dome slams down with its ribs struck in hard lines and the ground cracking
+under it; Sunwell Gate's rim traced in gold with rays struck out of it; Radiant Aura flame tongues
+stabbing up round its ring; Stasis crystal facets locking round the one it holds.
+
 ## Test mode
 
 **∞ Test mode** in the places menu (under Skills and magic; `Crysis.magic.test(true)` from the

@@ -379,14 +379,14 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 			const k = f.k * Math.max(0, Math.min(1, 1.15 - d / 45));
 			if (k > 0.06) {
 				combat.shake?.(0.3 * k);
-				if (0.45 * k > pulseA) {
-					pulseA = 0.45 * k;
+				if (0.7 * k > pulseA) {
+					pulseA = 0.7 * k;
 					const [r, g, b] = f.c.map((v) => Math.round(Math.min(1, v) * 255));
 					pulse.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},0) 45%, rgba(${r},${g},${b},0.9) 100%)`;
 				}
 			}
 		}
-		if (pulseA > 0) { pulseA = Math.max(0, pulseA - dt * 1.4); pulse.style.opacity = pulseA.toFixed(3); }
+		if (pulseA > 0) { pulseA = Math.max(0, pulseA - dt * 1.8); pulse.style.opacity = pulseA.toFixed(3); }
 	}
 	function update(dt) {
 		const Wd = W();
@@ -440,6 +440,9 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		menuOpen: () => skills.isOpen(),
 		// (test mode: Crysis.magic.test(true / false), as the button in the places menu)
 		test: (on) => (on === undefined ? testOn : setTest(on)),
+		// (the tests: your casting hands, for their palm light; the screen edge's flash)
+		hands: () => hands.root,
+		edge: () => +pulse.style.opacity || 0,
 		// (the tests: your body, for its gestures)
 		body: () => me(),
 		covering: () => skills.covering(),
