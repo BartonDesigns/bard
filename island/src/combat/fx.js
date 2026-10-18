@@ -249,6 +249,7 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 		if (surf === 'person') { bleed(p, N); return; }
 		if (surf === 'creature') { sparks(p, 6, N, 0.5, 1, 0.6, 4); dust(p, 2, 0.4, 0.45, 0.35, 0.3, 0.3); return; }
 		if (surf === 'wood') { debris(p, 3, 0x8a6a45, 3, 0.05); dust(p, 2, 0.6, 0.52, 0.4, 0.3); if (n) decal(p, N, 0.1, 0); return; }
+		if (surf === 'water') { splash(p); return; }
 		if (surf === 'ground') { dust(p, 4, 0.5, 0.46, 0.4, 0.5, 1); debris(p, 2, 0x6a6258, 3, 0.04); spout(p, N); return; }
 		dust(p, 3, 0.62, 0.6, 0.57, 0.35, 0.6); debris(p, 3, 0x9a958c, 3.5, 0.04); sparks(p, 2, N, 1, 0.85, 0.6, 3);
 		if (n) decal(p, N, 0.16, 0);
@@ -263,6 +264,15 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 		}
 		smoke.emit(p.x, p.y + 0.15, p.z, 0, 0.5, 0, 1.6, 0.25, 1.1, 0.48, 0.43, 0.36, 0.35, -0.05, 1.2);
 		decal({ x: p.x, y: p.y + 0.01, z: p.z }, n, 0.1, 0);
+	}
+	// a round into the sea: a white plume thrown straight up that falls back as spray, a mist
+	function splash(p) {
+		for (let k = 0; k < 12; k++) {
+			const s = 3 + Math.random() * 4.5;
+			smoke.emit(p.x + (Math.random() - 0.5) * 0.15, p.y + 0.02, p.z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.9, s, (Math.random() - 0.5) * 0.9, 0.6 + Math.random() * 0.4, 0.05 + Math.random() * 0.04, 0.1, 0.9, 0.94, 0.96, 0.85, 9.8, 0.3);
+		}
+		smoke.emit(p.x, p.y + 0.2, p.z, 0, 0.4, 0, 1.2, 0.2, 0.9, 0.88, 0.92, 0.95, 0.4, -0.05, 1.5);
+		for (let k = 0; k < 6; k++) { const a = k * 1.047 + Math.random() * 0.5; smoke.emit(p.x, p.y + 0.03, p.z, Math.cos(a) * 1.6, 0.25, Math.sin(a) * 1.6, 0.5, 0.06, 0.18, 0.92, 0.95, 0.97, 0.6, 2, 3); }
 	}
 	// a spent case thrown from the breech at p (dir: the way the gun points; kind 1: a shotgun hull)
 	const _r = new THREE.Vector3();
@@ -348,6 +358,11 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 	function muzzle(p, d, style = 0) {
 		const C = TRACER_COL[style] || TRACER_COL[0];
 		glow.emit(p.x + d.x * 0.1, p.y + d.y * 0.1, p.z + d.z * 0.1, d.x * 2, d.y * 2, d.z * 2, 0.05, 0.25, 0.4, C.r, C.g, C.b, 0.9);
+		if (style !== 2) wisp(p, d);
+	}
+	// the smoke a shot leaves at the muzzle: a faint grey wisp thrown forward that slows and rises
+	function wisp(p, d) {
+		smoke.emit(p.x + d.x * 0.15, p.y + d.y * 0.15, p.z + d.z * 0.15, d.x * 1.4, d.y * 1.4 + 0.25, d.z * 1.4, 1 + Math.random() * 0.5, 0.05, 0.4, 0.72, 0.72, 0.7, 0.22, -0.15, 2.2);
 	}
 	function ring(x, y, z, r, life = 1.5, color = 0xff5a3a, grow = false) {
 		const R = rings.find((q) => q.life <= 0) || rings[0];
@@ -473,5 +488,5 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 	}
 	// the points' size on screen follows the viewport's height
 	const resize = (h, fov) => { const k = h / (2 * Math.tan((fov * Math.PI) / 360)); glow.m.uniforms.scale.value = smoke.m.uniforms.scale.value = k; };
-	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, casing, spout, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
+	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, wisp, splash, casing, spout, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
 }
