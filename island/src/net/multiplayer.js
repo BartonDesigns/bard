@@ -14,6 +14,7 @@ import { createRoomClient } from './client.js';
 import { createRemotes } from './remotes.js';
 import { followStep, besideOf, BREAK_S } from './follow.js';
 import { cleanCode, cleanName } from './protocol.js';
+import { wearCode } from '../people/armor-looks.js';
 import { createReputationMemory, npcMemoryKey, reputationDistance, SERVICE_TTL } from './reputation.js';
 import { pack, unpack } from '../share.js';
 import { createAppointments, formatClock } from '../people/appointments.js';
@@ -177,7 +178,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (car) camera.getWorldDirection(look);
 		// (the item in hand, its level and tier)
 		const H = gear?.held?.();
-		return { t: 'pose', ...reputationPoint(at), y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', h: H?.i, hl: H?.l, ht: H?.t };
+		return { t: 'pose', ...reputationPoint(at), y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', h: H?.i, hl: H?.l, ht: H?.t, wr: wearCode(gear?.worn?.() || {}) };
 	}
 	// (timed by the clock, not by frames: a slow phone still keeps to the pace)
 	function sendAll() {

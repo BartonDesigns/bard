@@ -6,6 +6,8 @@ import { armamentVariant } from '../gameplay/armament-variants.js';
 
 import { ARMS_CATALOG } from '../gameplay/arms.js';
 import { TIERS, statsOf, compareStats, xpNeed, MAX_LEVEL } from '../gameplay/gear-levels.js';
+import { attunement, schoolGlyph, nextAwakening } from '../gameplay/gear-magic.js';
+import { SCHOOLS } from '../magic/spells.js';
 import { iconOf } from '../crysis/held-items.js';
 import { soundBus } from '../world/soundbus.js';
 
@@ -33,6 +35,9 @@ const CSS = `
 .g99-slot .lv{position:absolute;right:2px;bottom:1px;font:800 10px system-ui;color:#fff;text-shadow:0 1px 2px #000,0 0 3px #000;pointer-events:none}
 .g99-slot .n{position:absolute;left:3px;top:1px;font:800 10px system-ui;color:#f4e3b0;text-shadow:0 1px 2px #000;pointer-events:none}
 .g99-slot.held::after{content:'✋';position:absolute;left:2px;bottom:0;font-size:10px}
+.g99-slot .sc{position:absolute;right:3px;top:1px;font:700 10px system-ui;color:var(--sc);text-shadow:0 0 4px var(--sc),0 1px 2px #000;pointer-events:none}
+.g99-slot.worn::before{content:'';position:absolute;left:4px;bottom:4px;width:6px;height:6px;border-radius:50%;background:#6ff09a;box-shadow:0 0 5px #6ff09a;pointer-events:none}
+.g99-slot.bare{opacity:.5;font-size:20px;filter:grayscale(1)}
 .g99-slot.new{animation:g99snap .24s ease-out}
 .g99-slot.drop{outline:2px dashed #e9cf93;outline-offset:2px}
 @keyframes g99snap{0%{transform:scale(.5);opacity:.2}70%{transform:scale(1.08)}100%{transform:scale(1)}}
@@ -68,23 +73,29 @@ export function bar(frac) { const b = el('div', 'g99-bar'), i = el('i'); i.style
 export const xpFrac = (x) => (x.l >= MAX_LEVEL ? 1 : x.x / xpNeed(x.l));
 
 // an item slot: the item's picture (or icon), its tier's edge and glow, level and count
-export function slot(inst, { thumb = '', count = 0, held = false, fresh = false, title = '' } = {}) {
+// (school: its attunement's mark, top right; false for a shop's sample, whose school is not yet
+// known; worn: a green dot)
+export function slot(inst, { thumb = '', count = 0, held = false, fresh = false, title = '', school = true, worn = false } = {}) {
 	const s = el('button', 'g99-slot');
 	s.type = 'button';
 	if (!inst) return s;
 	const T = TIERS[inst.t] || TIERS[0];
 	s.classList.add('item');
 	if (held) s.classList.add('held');
+	if (worn) s.classList.add('worn');
 	if (fresh) s.classList.add('new');
 	s.style.setProperty('--tc', T.color); s.style.setProperty('--tg', String(0.25 + T.glow));
 	if (thumb) { const im = el('img'); im.src = thumb; im.alt = ''; s.append(im); } else s.append(iconOf(inst.i));
 	s.append(el('span', 'lv', String(inst.l)));
 	if (count > 1) s.append(el('span', 'n', `×${count}`));
+	const sch = school && attunement(inst);
+	if (sch) { const g = el('span', 'sc', schoolGlyph(sch)); s.style.setProperty('--sc', SCHOOLS[sch].color); s.append(g); }
 	s.setAttribute('aria-label', title || `${tierName(inst.t)} ${nameOf(inst.i)}, level ${inst.l}${count > 1 ? `, ${count}` : ''}`);
 	return s;
 }
 
-const fmt = (v, unit) => `${v}${unit === '%' ? '%' : unit ? ' ' + unit : ''}`;
+// a stat's value in words: 'pt' rows are attributes the item lends (+3)
+export const fmt = (v, unit) => (unit === 'pt' ? `+${v}` : unit === '-%' ? `${v < 0 ? '−' : '+'}${Math.abs(v)}%` : `${v}${unit === '%' ? '%' : unit ? ' ' + unit : ''}`);
 // a tooltip's content: name in its tier's colour, tier and level, the stats, and the change
 // against `vs` (green better, red worse) with a word for what is compared
 export function tipContent(inst, vs = null, vsLabel = '') {
@@ -93,11 +104,22 @@ export function tipContent(inst, vs = null, vsLabel = '') {
 	d.append(nm, el('div', '', `${tierName(inst.t)} · Level ${inst.l}${inst.l < MAX_LEVEL ? ` (${inst.x}/${xpNeed(inst.l)} xp)` : ' (max)'}`));
 	const variant = armamentVariant(inst.i, inst.t);
 	if (variant) d.append(el('div', '', `${variant.name} · Mark ${variant.mark}`));
+	const sch = attunement(inst);
+	if (sch) {
+		const a = el('div', '', `${schoolGlyph(sch)} Attuned to ${SCHOOLS[sch].name}`); a.style.color = SCHOOLS[sch].color;
+		d.append(a);
+	}
 	const rows = vs ? compareStats(vs, inst) : statsOf(inst).map((r) => ({ ...r, b: r.value, delta: 0 }));
 	for (const r of rows) {
 		const line = el('div', '', `${r.label}: ${fmt(r.b, r.unit)}`);
 		if (vs && r.delta) { const dd = el('span', r.delta > 0 ? 'g99-up' : 'g99-down', ` ${r.delta > 0 ? '▲ +' : '▼ '}${r.delta}`); line.append(dd); }
 		d.append(line);
+	}
+	// (its magic: how much is awake, and what wakes next)
+	if (sch) {
+		const nx = nextAwakening(inst), m = el('div', '', nx ? `Next at level ${nx.level}: ${nx.desc}` : 'All its magic is awake.');
+		m.style.cssText = `margin-top:4px;color:${SCHOOLS[sch].color};opacity:.85;`;
+		d.append(m);
 	}
 	if (vsLabel) { const v = el('div', '', vsLabel); v.style.opacity = '.7'; v.style.marginTop = '4px'; d.append(v); }
 	const use = ARMS_CATALOG[inst.i]?.use;

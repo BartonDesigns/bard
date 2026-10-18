@@ -151,8 +151,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// booked() (true: downed is an arrest, and where you come to), death(h), ambient(zone, spot,
 	// roll) (true when it made the world's own trouble itself) and campOk(camp)
 	// (magic/: shield takes a blow aimed at you and returns what gets through, or null; cloak
-	// says whether you are hidden from those hunting you)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, casting: null, remoteSpell: null };
+	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
+	// weapons deal, for your skills)
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -311,6 +312,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	function deal(T, blow, mine) {
 		if (warded(T)) return { ward: true, dealt: 0 };
 		if (!canHit(T, blow.by || null, rules)) return { ignored: true, dealt: 0 };
+		// (your weapons' blows, as your skills shape them: magic/skills.js)
+		if (mine && !blow.spell && hooks.power) blow = hooks.power(T, blow) || blow;
 		const before = T.moral?.();
 		let r;
 		if (T.shared && !host()) { net.hit(T.id, blow); r = { dealt: blow.amount, remote: true }; }
@@ -1110,6 +1113,15 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		sendFx: (a, b, style, impact) => net.fx(a, b, style, impact),
 		// your health as it stands (magic/: a death ward, a rewind)
 		vitals: () => ({ hp: me.H.hp, max: me.H.max, ko: me.ko > 0, state: me.H.state }),
+		// the top of your life (magic/stats.js: Vigour); you keep the share of it you had
+		setLifeMax: (n) => {
+			n = Math.max(1, Math.round(+n || 100));
+			if (n === me.H.max) return n;
+			const f = me.H.hp / Math.max(1, me.H.max);
+			me.H.max = n;
+			if (me.H.state === 'ok') me.H.hp = Math.max(1, Math.min(n, n * f));
+			return n;
+		},
 		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),
 		tend: (p) => civilians.tend(p),
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
