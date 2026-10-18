@@ -929,8 +929,10 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	};
 	// a glove made to the hand: the hand's own skin a few millimetres proud, bound to the bones
 	// as the skin is so it bends with every finger, up the forearm `cuff` metres past the wrist
-	// (knuckle: { col, gloss, rise }, a guard over the knuckles, the shell raised and coloured there)
-	const gloveShell = (sd, proud, cuff, c, gloss = 0, fab = 0, knuckle = null, plate = null) => {
+	// (knuckle: { col, gloss, rise }, a guard over the knuckles, the shell raised and coloured there;
+	// real: the combat glove's table from the kit, { faces, uv }: these faces of the body, not the
+	// cuff's, and the atlas at their corners, its detail baked)
+	const gloveShell = (sd, proud, cuff, c, gloss = 0, fab = 0, knuckle = null, plate = null, real = null) => {
 		const part = P0.part, faces = A.body, wi = map['wrist.' + sd], w = heads[wi], fore = P0.rest.dirs[map['lowerarm01.' + sd]];
 		if (!part || !faces || !w || !fore) return false;
 		const sx = Math.sign(w.x) || 1;
@@ -941,11 +943,13 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const t = (w.x - skinP[v * 3]) * fore.x + (w.y - skinP[v * 3 + 1]) * fore.y + (w.z - skinP[v * 3 + 2]) * fore.z;
 			return t < cuff;
 		};
-		const tris = [], nor = new Map(), ctr = V3(0, 0, 0), a = V3(0, 0, 0), b = V3(0, 0, 0), e = V3(0, 0, 0);
-		for (let i = 0; i < faces.length; i += 6) {
+		const tris = [], tn = [], nor = new Map(), ctr = V3(0, 0, 0), a = V3(0, 0, 0), b = V3(0, 0, 0), e = V3(0, 0, 0);
+		const nf = real ? real.faces.length : faces.length / 6;
+		for (let k = 0; k < nf; k++) {
+			const i = (real ? real.faces[k] : k) * 6;
 			const t = [faces[i], faces[i + 2], faces[i + 4]];
-			if (!t.every(keep)) continue;
-			tris.push(t);
+			if (real ? !t.every((v) => v * 3 < nSkin) : !t.every(keep)) continue;
+			tris.push(t); tn.push(k);
 			a.set(skinP[t[1] * 3] - skinP[t[0] * 3], skinP[t[1] * 3 + 1] - skinP[t[0] * 3 + 1], skinP[t[1] * 3 + 2] - skinP[t[0] * 3 + 2]);
 			b.set(skinP[t[2] * 3] - skinP[t[0] * 3], skinP[t[2] * 3 + 1] - skinP[t[0] * 3 + 1], skinP[t[2] * 3 + 2] - skinP[t[0] * 3 + 2]);
 			e.crossVectors(a, b);
@@ -969,8 +973,19 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		// each with a dark lap where it ends)
 		const plC = plate ? new THREE.Color(plate.col) : null;
 		const kc = new THREE.Color(knuckle?.col || c), base = new THREE.Color(c);
-		for (const t of flip > 0 ? tris : tris.map((q) => [q[0], q[2], q[1]])) for (const v of t) {
-			const n = nor.get(v);
+		// (the body's winding turned if need be; a real glove's atlas follows its corners)
+		const ord = flip > 0 ? [0, 1, 2] : [0, 2, 1], start = out.pos.length / 3, kuv = real ? new Float32Array(tris.length * 6) : null;
+		for (let ti = 0; ti < tris.length; ti++) for (let cn = 0; cn < 3; cn++) {
+			const v = tris[ti][ord[cn]], n = nor.get(v);
+			if (real) {
+				const q = (tn[ti] * 3 + ord[cn]) * 2, o2 = (ti * 3 + cn) * 2;
+				kuv[o2] = real.uv[q] / 65535; kuv[o2 + 1] = real.uv[q + 1] / 65535;
+				out.pos.push(skinP[v * 3] + n.x * proud, skinP[v * 3 + 1] + n.y * proud, skinP[v * 3 + 2] + n.z * proud); out.nor.push(n.x, n.y, n.z);
+				out.col.push(base.r, base.g, base.b); out.kit.push(KIT_MODEL, 0, 0); out.wr.push(0, 0);
+				let sum = 0; for (let w4 = 0; w4 < 4; w4++) sum += A.weights[v * 4 + w4];
+				for (let w4 = 0; w4 < 4; w4++) { out.si.push(A.ids[v * 4 + w4]); out.sw.push(A.weights[v * 4 + w4] / (sum || 1)); }
+				continue;
+			}
 			let k = 0;
 			if (K && knuckle) {
 				const d = Math.hypot(skinP[v * 3] - K.x, skinP[v * 3 + 1] - K.y, skinP[v * 3 + 2] - K.z);
@@ -987,6 +1002,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			let sum = 0; for (let q = 0; q < 4; q++) sum += A.weights[v * 4 + q];
 			for (let q = 0; q < 4; q++) { out.si.push(A.ids[v * 4 + q]); out.sw.push(A.weights[v * 4 + q] / (sum || 1)); }
 		}
+		if (real) out.uvs.push([start, kuv]);
 		return true;
 	};
 	// ---------- plate made to the body ----------
@@ -1634,6 +1650,9 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				// (over the knuckles: a steel ridge, or a combat glove's moulded guard)
 				// (a gauntlet: a glove of dark leather, the back of the hand and the knuckles in steel)
 				const kn = steel ? null : q.knuckle ? { col: q.acc || c, gloss: 0.3, rise: 0.005 } : null;
+				// (a combat glove from the kit: its knuckle guard, pads, strap and seams baked)
+				const real = !steel && !q.bracers && (q.combat || q.knuckle) ? A.kit?.glove?.[s] : null;
+				if (real && gloveShell(s, A.kit.glove.proud, 0, c, 0, 0, null, null, real)) continue;
 				gloveShell(s, steel ? 0.0045 : 0.0032, steel ? 0.03 : q.bracers ? 0.012 : 0.02, steel ? q.leather || '#2b211a' : c, steel ? LEATHER : 0, steel ? 0 : 3, kn, steel ? { col: c } : null);
 				const len = heads[map[wb]].distanceTo(heads[map['lowerarm01.' + s]]);
 				const g0 = limbGirth('lowerarm01.' + s, 2, len - 0.13, len - 0.02);

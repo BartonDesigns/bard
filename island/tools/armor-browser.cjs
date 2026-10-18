@@ -51,6 +51,8 @@ const SHOTS = [
 	['operator-boots-walk', O, [1.1, 0.4, -1.0, 0, 0.18, 0, 34], 1, 'walk'],
 	['operator-boots-crouch', O, [1.1, 0.4, -1.0, 0, 0.18, 0, 34], 1, 'crouch'],
 	['operator-hands-close', O, [0.45, 1.0, -0.6, 0.18, 0.82, 0, 26]],
+	['operator-hands-back', O, [0.75, 0.95, 0.1, 0.2, 0.82, 0, 26]],
+	['operator-hands-aim', O, [1.0, 1.45, -1.1, 0.1, 1.2, 0, 32], 1, 'aim'],
 	['operator-world', O, [0.9, 1.5, -2.1, 0, 1.15, 0, 32], 1, 'idle', 'world'],
 	['operator-walk', O, [1.6, 1.3, -1.6, 0, 1.0, 0, 34], 1, 'walk'],
 	['operator-crouch', O, [1.4, 1.2, -1.8, 0, 0.8, 0, 34], 1, 'crouch'],

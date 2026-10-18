@@ -57,6 +57,20 @@ Every kit piece now carries one UV layer of one name. Before, pieces modelled wi
 
 ![Boots before and after](verification/armor/compare-boot-models.jpg)
 
+## Combat gloves (fourth batch)
+
+Soldiers', militia and operators' combat gloves (`combat: true` in `combat/outfits.js`, and the `tactical-gloves` look) now carry baked detail:
+- a moulded knuckle guard over the four knuckles, rising on each and flexing between them;
+- pads over each finger's middle joint and the thumb's;
+- a synthetic suede palm and fingertips, a stretch back, stitched seams along the fingers;
+- a ribbed cuff with a hook-and-loop strap round the wrist, its tab and a moulded pull.
+
+The glove is still the hand's own skin stood off 3.5 mm, so it bends with every finger as before. The detail is baked onto that skin: `ref-hand.obj` is the reference operator's left hand and the start of the forearm, as the body's own faces, so the same faces exist on every body. `soldier-kit.json` `glove` lists, for each hand, those body faces and the atlas at each of their corners. The right hand's faces are matched to the left's mirror, so both share the same texels. `garment.js` `gloveShell` takes the face list in place of its own cut when the kit is loaded. The flat strap that the sleeve's camouflage showed through is gone for these gloves. The guard and pads are a rubber in the glove's own colour, so no pale seam shows where the tint changes.
+
+Zone edges (back and palm, fingertips, cuff) are cut into the surface along each field's level line (`iso_cut`), and the seams' stitches follow those lines.
+
+![Gloves before and after](verification/armor/compare-glove-models.jpg)
+
 ## How it works
 
 - **Modelling:** `island/tools/blender/soldier_kit.py`, run with Blender as a Python module (`pip install bpy`, Python 3.13).
@@ -92,7 +106,8 @@ Every kit piece now carries one UV layer of one name. Before, pieces modelled wi
 
 ## Not done yet
 
-- The plate carrier and pouches, uniforms, boots and gloves are still procedural. They are the next pieces to move to Blender.
+- The plate carrier's bags, cummerbund and straps, and the uniforms, are still fitted in code.
+- The atlas is down to 13 px/cm with the boots and gloves; a second atlas would give the next pieces room.
 - The knight's own models.
 - There is no chin strap or helmet cover (camouflage) yet.
 - GPU frame time has not been measured.

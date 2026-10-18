@@ -354,6 +354,14 @@ def mat(kind):
 		col = mix(op('MULTIPLY', worn, 0.25), rgb(0.034, 0.035, 0.032), rgb(0.1, 0.1, 0.095))
 		col = mix(op('MULTIPLY', cav, 0.6), col, rgb(0.018, 0.018, 0.017))
 		rough = op('ADD', op('MULTIPLY', noise(90), 0.1), op('SUBTRACT', 0.64, op('MULTIPLY', worn, 0.12))); tint = val(0.0); height = noise(900, 2)
+	elif kind == 'tpr':
+		# moulded rubber in the wearer's colour, darker than the cloth and with a dull sheen (a
+		# glove's knuckle guard and pads: tinted like the cloth round them, so no pale seam
+		# shows where the tint changes)
+		col = mix(noise(200, 3), rgb(0.36, 0.36, 0.35), rgb(0.42, 0.42, 0.41))
+		col = mix(op('MULTIPLY', cav, 0.7), col, rgb(0.2, 0.2, 0.19))
+		col = mix(op('MULTIPLY', worn, 0.3), col, rgb(0.55, 0.55, 0.53))
+		rough = op('ADD', op('MULTIPLY', noise(70), 0.08), 0.5); tint = val(1.0); height = noise(1600, 2)
 	elif kind == 'rubber':
 		col = mix(op('MULTIPLY', worn, 0.5), rgb(0.03, 0.03, 0.029), rgb(0.1, 0.1, 0.095))
 		rough = val(0.8); tint = val(0.0); height = noise(1400, 2)
@@ -1196,6 +1204,278 @@ def boot():
 	bpy.data.objects.remove(FO)
 	return FM
 
+# ---------- glove ----------
+# made on the reference operator's left hand (ref-hand.obj: game axes, metres, the wrist at the
+# origin; the body's own faces, so the game lays the atlas on any hand's skin face by face). The
+# game's glove is that skin stood off GLOVE_PROUD; baked onto it: a stretch back, a synthetic
+# suede palm and fingertips, a ribbed cuff, a moulded knuckle guard and pads over the fingers'
+# middle joints, a hook-and-loop strap round the wrist with its tab, and the seams stitched.
+# The right glove is the left mirrored: the same texels, face for face (meta 'rmap').
+GLOVE_PROUD = 0.0035
+GLOVE_META = None
+def load_hand():
+	V, F, meta = [], [], None
+	for line in open(os.path.join(HERE, 'ref-hand.obj')):
+		if line.startswith('# meta '): meta = json.loads(line[7:])
+		elif line.startswith('v '): V.append(V3(*map(float, line.split()[1:4])))
+		elif line.startswith('f '): F.append([int(s) - 1 for s in line.split()[1:4]])
+	return V, F, meta
+def shell_normals(V, F):
+	# as the game makes them (garment.js gloveShell): the faces' areas summed at each point,
+	# turned to point away from the middle
+	N = [V3(0, 0, 0) for _ in V]; ctr = V3(0, 0, 0)
+	for v in V: ctr += v
+	ctr /= len(V)
+	for a, b, c in F:
+		e = (V[b] - V[a]).cross(V[c] - V[a])
+		for v in (a, b, c): N[v] += e
+	s = 1.0 if sum(n.dot(V[i] - ctr) for i, n in enumerate(N)) >= 0 else -1.0
+	return [n.normalized() * s for n in N], s
+def iso_cut(P, N, fields, F, key, level):
+	# every triangle that fields[key] crosses `level` in split along that line (straight across
+	# it, the points on its edges where the field meets level), so a zone's edge runs clean;
+	# returns the new triangles and the cut's pieces as pairs of points
+	f = fields[key]; at = {}; out, segs = [], []
+	def mid(a, b):
+		k = (min(a, b), max(a, b))
+		if k not in at:
+			t = (level - f[a]) / (f[b] - f[a])
+			P.append(P[a].lerp(P[b], t)); N.append(N[a].lerp(N[b], t).normalized())
+			for g in fields.values(): g.append(g[a] + (g[b] - g[a]) * t)
+			at[k] = len(P) - 1
+		return at[k]
+	for tri in F:
+		up = [f[v] >= level for v in tri]
+		if all(up) or not any(up): out.append(tri); continue
+		# (turned so the one on its own side comes first, the winding kept)
+		k = [i for i in range(3) if up.count(up[i]) == 1][0]
+		a, b, c = tri[k], tri[(k + 1) % 3], tri[(k + 2) % 3]
+		ab, ac = mid(a, b), mid(a, c)
+		out += [[a, ab, ac], [ab, b, c], [ab, c, ac]]; segs.append((ab, ac))
+	return out, segs
+def chains(segs):
+	# the cut's pieces joined end to end into lines
+	nb = {}
+	for a, b in segs: nb.setdefault(a, []).append(b); nb.setdefault(b, []).append(a)
+	seen, lines = set(), []
+	for s in [v for v in nb if len(nb[v]) == 1] + list(nb):
+		if s in seen: continue
+		line = [s]; seen.add(s)
+		while True:
+			nx = [v for v in nb[line[-1]] if v not in seen]
+			if not nx: break
+			line.append(nx[0]); seen.add(nx[0])
+		if len(line) > 2: lines.append(line)
+	return lines
+def stitch_line(mb, pts, ns, step=0.0032, lift=0.0003):
+	# a row of stitches along points on a surface, each lying along the line
+	acc = 0.0
+	for (a, na), (b, nb_) in zip(zip(pts, ns), list(zip(pts, ns))[1:]):
+		d = b - a; L0 = d.length
+		if L0 < 1e-7: continue
+		t = d / L0; s0 = acc
+		while s0 < L0:
+			p = a + t * s0; n = na.lerp(nb_, s0 / L0).normalized(); s2 = n.cross(t).normalized(); tt = s2.cross(n)
+			box(mb, p + n * lift, tt, s2, n, 0.0011, 0.00045, 0.00035); s0 += step
+		acc = s0 - L0
+def glove():
+	global GLOVE_META
+	log('glove')
+	V, F, HM = load_hand(); F0 = [list(f) for f in F]
+	B = {k: V3(*v) for k, v in HM['bones'].items()}
+	N, sgn = shell_normals(V, F)
+	if sgn < 0: F = [[a, c, b] for a, b, c in F]
+	P = [v + n * GLOVE_PROUD for v, n in zip(V, N)]
+	# the game's glove, made as the game makes it
+	me = bpy.data.meshes.new('glove'); me.from_pydata([G(p) for p in P], [], F)
+	me.materials.append(M('cordura'))
+	for p in me.polygons: p.use_smooth = True
+	me.validate(); me.update()
+	low = bpy.data.objects.new('glove', me); SC.collection.objects.link(low)
+	low['uvs'] = False; low['cage'] = 0.005; low['table'] = True
+	bvh = BVHTree.FromPolygons([G(p) for p in P], F)
+	def hit(o, d):
+		# the glove's surface from o (game) along d, else the nearest point to o
+		h = bvh.ray_cast(G(o), G(d).normalized(), 0.1)
+		if h[0] is None: h = bvh.find_nearest(G(o))
+		if h[0] is None: return None, None
+		return GAME(h[0]), GAME(h[1]).normalized()
+	# (the hand's frame: its back faces out from the body; each finger's back is the hand's
+	# turned square to that finger; the thumb's nail faces round toward the index)
+	F_ = lambda k, j: B['finger%d-%d.L' % (k, j)]
+	K = (F_(2, 1) + F_(5, 1)) / 2; d = (K - B['wrist.L']).normalized(); a = (F_(5, 1) - F_(2, 1)).normalized()
+	nb = d.cross(a).normalized()
+	if nb.x < 0: nb = -nb
+	fore = (B['wrist.L'] - B['lowerarm01.L']).normalized()
+	segs = [(B['wrist.L'], K, nb, 0)]
+	for k in range(1, 6):
+		p1, p2, p3 = F_(k, 1), F_(k, 2), F_(k, 3); tip = p3 + (p3 - p2) * 0.85
+		back = (nb * 0.4 - a).normalized() if k == 1 else nb
+		for j, (s0, s1) in enumerate(((p1, p2), (p2, p3), (p3, tip))): segs.append((s0, s1, back, k * 10 + j + 1))
+	def nearest(p):
+		best = None
+		for s0, s1, bk, tag in segs:
+			u = s1 - s0; t = clamp((p - s0).dot(u) / u.length_squared); q = s0 + u * t; dd = (p - q).length
+			if best is None or dd < best[0]: best = (dd, s0, s1, bk, tag, t)
+		return best
+	fields = {'back': [], 'tip': [], 'up': []}
+	for p, n in zip(P, N):
+		_, s0, s1, bk, tag, t = nearest(p); u = (s1 - s0).normalized()
+		fields['back'].append(n.dot((bk - u * bk.dot(u)).normalized()))
+		fields['tip'].append((p - s0).dot(u) - 0.007 if tag % 10 == 3 else -1.0)
+		fields['up'].append((B['wrist.L'] - p).dot(fore))
+	P2, N2, F2 = list(P), list(N), [list(f) for f in F]
+	F2, seam = iso_cut(P2, N2, fields, F2, 'back', 0.12)
+	F2, tipc = iso_cut(P2, N2, fields, F2, 'tip', 0.0)
+	F2, cuffc = iso_cut(P2, N2, fields, F2, 'up', -0.006)
+	# the detailed glove: the same surface in its zones
+	ZM = ['cordura', 'suede', 'elastic']
+	def zone(tri):
+		g = lambda k: sum(fields[k][v] for v in tri) / 3
+		if g('up') > -0.006: return 2
+		if g('tip') > 0 or g('back') < 0.12: return 1
+		return 0
+	mh = bpy.data.meshes.new('glove-hi'); mh.from_pydata([G(p) for p in P2], [], F2)
+	for k in ZM: mh.materials.append(M(k))
+	for p, tri in zip(mh.polygons, F2): p.material_index = zone(tri); p.use_smooth = True
+	mh.validate(); mh.update()
+	base = bpy.data.objects.new('glove-hi', mh); SC.collection.objects.link(base)
+	highs = [base]
+	# (the seams: along the back's edge where it is not under the cuff, round the tips, and
+	# where the cuff starts)
+	mb = MB()
+	for line in chains(seam) + chains(tipc) + chains(cuffc):
+		# (only where they are not under the cuff)
+		run = []
+		for v in line + [None]:
+			if v is not None and fields['up'][v] <= -0.0055: run.append(v); continue
+			if len(run) > 1: stitch_line(mb, [P2[q] for q in run], [N2[q] for q in run])
+			run = []
+	highs.append(mb.obj('glove-stitch', ['thread'], smooth=False, sharp=0))
+	# a moulded pad on the glove: rings out from its middle o, across u and along v, a
+	# superellipse hu by hv, the top standing T off with a rounded shoulder to its edge;
+	# bump(x, y) adds to that (the knuckles), groove(x, y) takes away (where it flexes)
+	def pad(name, o, u, v, n, hu, hv, T, bump=None, groove=None, kind='rubber', rings=10, sectors=48, smooth=0):
+		# (the surface under it found first, then smoothed so the pad bridges the hand's own
+		# bumps; its rim stays on the surface)
+		base, xy = [], []
+		for r in range(1, rings + 1):
+			rho = r / rings; row, rxy = [], []
+			for s_ in range(sectors):
+				th = TAU * s_ / sectors; c, sn = math.cos(th), math.sin(th)
+				x = hu * rho * math.copysign(abs(c) ** 0.5, c); y = hv * rho * math.copysign(abs(sn) ** 0.5, sn)
+				p, nn = hit(o + u * x + v * y + n * 0.03, -n)
+				if p is None: p, nn = o + u * x + v * y, n
+				row.append((p, nn)); rxy.append((x, y))
+			base.append(row); xy.append(rxy)
+		p, nn = hit(o + n * 0.03, -n); mid_ = (p if p is not None else o, nn if nn is not None else n)
+		orig = [list(r_) for r_ in base]
+		for _ in range(smooth):
+			nxt = [list(r_) for r_ in base]
+			for r in range(rings - 1):
+				for s_ in range(sectors):
+					inner = base[r - 1][s_] if r else mid_
+					q = [base[r][(s_ - 1) % sectors], base[r][(s_ + 1) % sectors], base[r + 1][s_], inner]
+					nxt[r][s_] = (sum((a_[0] for a_ in q), V3(0, 0, 0)) / 4, sum((a_[1] for a_ in q), V3(0, 0, 0)).normalized())
+			mid_ = (sum((b_[0] for b_ in nxt[0]), V3(0, 0, 0)) / sectors, sum((b_[1] for b_ in nxt[0]), V3(0, 0, 0)).normalized())
+			base = nxt
+		# (never under the surface it was smoothed from)
+		for r in range(rings):
+			for s_ in range(sectors):
+				(p, nn), (q, _) = base[r][s_], orig[r][s_]
+				base[r][s_] = (p + nn * max(0.0, (q - p).dot(nn)), nn)
+		mb = MB(); rows = []
+		for r in range(rings):
+			rho = (r + 1) / rings; row = []
+			for s_ in range(sectors):
+				(p, nn), (x, y) = base[r][s_], xy[r][s_]
+				h = T if rho <= 0.8 else T * math.sqrt(max(0.0, 1 - ((rho - 0.8) / 0.2) ** 2))
+				if bump: h += bump(x, y) * min(1.0, (1 - rho) / 0.2)
+				if groove: h *= 1 - groove(x, y)
+				row.append(mb.v(p + nn * (0.0003 + h)))
+			rows.append(row)
+		c0 = mb.v(mid_[0] + mid_[1] * (0.0003 + T + (bump(0, 0) if bump else 0)))
+		for s_ in range(sectors): mb.f([c0, rows[0][s_], rows[0][(s_ + 1) % sectors]])
+		for r in range(rings - 1):
+			for s_ in range(sectors):
+				s1 = (s_ + 1) % sectors; mb.f([rows[r][s_], rows[r + 1][s_], rows[r + 1][s1], rows[r][s1]])
+		ob = mb.obj(name, [kind], sharp=0)
+		# (its winding to face out the way n does)
+		ob.data.update()
+		if sum(p.normal.dot(G(n)) for p in ob.data.polygons) < 0: ob.data.flip_normals()
+		return ob
+	# the knuckle guard: over the four knuckles, a rise on each, flexing between them
+	kv = (d - nb * d.dot(nb)).normalized(); ku = kv.cross(nb).normalized()
+	o, _ = hit(K + nb * 0.04 - kv * 0.0115, -nb)
+	ks = [((F_(k, 1) - o).dot(ku), (F_(k, 1) - o).dot(kv)) for k in (2, 3, 4, 5)]
+	span = max(abs(x) for x, _ in ks)
+	knob = lambda x, y: sum(0.0016 * math.exp(-((x - kx) / 0.0065) ** 2 - ((y - ky) / 0.008) ** 2) for kx, ky in ks)
+	flex = lambda x, y: sum(0.45 * math.exp(-((x - (ks[i][0] + ks[i + 1][0]) / 2) / 0.0012) ** 2) for i in range(3)) * (1 if y > -0.004 else 0.3)
+	highs.append(pad('knuckle', o, ku, kv, nb, span + 0.011, 0.0155, 0.0026, knob, flex, kind='tpr', rings=14, sectors=72, smooth=10))
+	# pads over each finger's middle joint and the thumb's
+	for k in range(1, 6):
+		p2 = F_(k, 3) if k == 1 else F_(k, 2); df = ((F_(k, 3) - F_(k, 2)) if k == 1 else (F_(k, 3) - p2)).normalized()
+		bk = (nb * 0.4 - a).normalized() if k == 1 else nb; bf = (bk - df * bk.dot(df)).normalized()
+		o2, _ = hit(p2 + bf * 0.03, -bf)
+		if o2 is None: continue
+		highs.append(pad('knuckle-%d' % k, o2, df.cross(bf).normalized(), df, bf, 0.0062, 0.0085, 0.002, kind='tpr', rings=6, sectors=32, smooth=3))
+	# the strap round the wrist, its tab over the back of the wrist
+	def facing_out(ob):
+		# (wound to face away from the forearm's axis)
+		ob.data.update(); w = B['wrist.L']
+		out = sum(p.normal.dot(G((GAME(p.center) - w) - fore * fore.dot(GAME(p.center) - w))) for p in ob.data.polygons)
+		if out < 0: ob.data.flip_normals()
+		return ob
+	e1 = (nb - fore * nb.dot(fore)).normalized(); e2 = fore.cross(e1)
+	W0, W1, ns_ = -0.004, 0.022, 64
+	acr = [W0, W0 + 0.0008, W0 + 0.002] + [W0 + (W1 - W0) * i / 8 for i in range(2, 7)] + [W1 - 0.002, W1 - 0.0008, W1]
+	hgt = [0.0002, 0.0012, 0.0019] + [0.002] * 5 + [0.0019, 0.0012, 0.0002]
+	mb = MB(); grid = []
+	for s in range(ns_):
+		th = TAU * s / ns_; rad = e1 * math.cos(th) + e2 * math.sin(th); col = []
+		for w, h in zip(acr, hgt):
+			c = B['wrist.L'] - fore * w
+			p, nn = hit(c + rad * 0.06, -rad)
+			col.append(mb.v(p + nn * (0.0003 + h)))
+		grid.append(col)
+	for s in range(ns_):
+		s1 = (s + 1) % ns_
+		for j in range(len(acr) - 1): mb.f([grid[s][j], grid[s1][j], grid[s1][j + 1], grid[s][j + 1]])
+	highs.append(facing_out(mb.obj('strap', ['webbing'], sharp=0)))
+	# (the tab: hook-and-loop lying on the strap from the back of the wrist round toward the
+	# thumb, its end rounded, a rubber pull moulded on it)
+	mb = MB(); tw = (W1 - W0) * 0.42; mid_w = (W0 + W1) / 2; rows = []
+	for i in range(25):
+		ang = -0.25 + 1.1 * i / 24; row = []
+		end = 1.0 if i < 20 else math.sqrt(max(0.0, 1 - ((i - 20) / 4.4) ** 2))
+		for j in range(7):
+			w = mid_w + tw * end * (j / 3 - 1)
+			rad = e1 * math.cos(ang) + e2 * math.sin(ang); c = B['wrist.L'] - fore * w
+			p, nn = hit(c + rad * 0.06, -rad)
+			h = 0.0034 if 0 < j < 6 else 0.0024
+			row.append(mb.v(p + nn * (0.0003 + h)))
+		rows.append(row)
+	for i in range(24):
+		for j in range(6): mb.f([rows[i][j], rows[i + 1][j], rows[i + 1][j + 1], rows[i][j + 1]])
+	highs.append(facing_out(mb.obj('tab', ['webbing'], sharp=0)))
+	ang = 0.62; rad = e1 * math.cos(ang) + e2 * math.sin(ang)
+	po, _ = hit(B['wrist.L'] - fore * mid_w + rad * 0.06, -rad)
+	if po is not None:
+		tu = (e2 * math.cos(ang) - e1 * math.sin(ang)).normalized()
+		highs.append(pad('pull', po, tu, -fore, rad, 0.007, 0.0065, 0.0042, kind='tpr', rings=5, sectors=28))
+	# stitches round the strap's edges and the tab's
+	mb = MB()
+	for w in (W0 + 0.0024, W1 - 0.0024):
+		pts, nrm = [], []
+		for s in range(ns_ + 1):
+			th = TAU * s / ns_; rad = e1 * math.cos(th) + e2 * math.sin(th)
+			p, nn = hit(B['wrist.L'] - fore * w + rad * 0.06, -rad)
+			pts.append(p + nn * 0.0022); nrm.append(nn)
+		stitch_line(mb, pts, nrm)
+	highs.append(mb.obj('strap-stitch', ['thread'], smooth=False, sharp=0))
+	piece(low, highs, 'glove')
+	GLOVE_META = dict(HM, F=F0)
+
 # ---------- UVs, bake, maps, export ----------
 def area3(o):
 	return sum(p.area for p in o.data.polygons)
@@ -1344,13 +1624,31 @@ def preview(saved):
 		if g == 'boot':
 			c = off + V3(0, -0.02, 0.06)
 			shots.update({'boot': (off + V3(0.3, 0.12, 0.42), c), 'boot-side': (off + V3(0.55, 0.02, 0.06), c), 'boot-back': (off + V3(-0.25, 0.15, -0.35), c)})
+		if g == 'glove':
+			c = off + V3(0.03, -0.045, 0.06)
+			shots.update({'glove': (off + V3(0.42, 0.05, 0.12), c), 'glove-palm': (off + V3(-0.38, -0.02, 0.2), c), 'glove-wrist': (off + V3(0.3, 0.25, -0.12), off + V3(0.01, -0.01, 0.02))})
 	for name, (p, look) in shots.items():
-		HEAD.hide_render = name.startswith('boot')
+		HEAD.hide_render = name.startswith('boot') or name.startswith('glove')
 		cam.location = G(p); cam.rotation_euler = (G(look) - cam.location).to_track_quat('-Z', 'Y').to_euler()
 		SC.render.filepath = os.path.join(OUT, 'preview-' + name + '.png'); bpy.ops.render.render(write_still=True)
 	log('previews')
 
+def glove_table(o):
+	# the atlas at each corner of each of the body's faces under the glove, in the game's corner
+	# order (glTF's v), the right hand's from the left's mirror
+	import base64
+	uvl = o.data.uv_layers[0].data; L = []
+	for p, tri in zip(o.data.polygons, GLOVE_META['F']):
+		at = {o.data.loops[li].vertex_index: uvl[li].uv for li in p.loop_indices}
+		L.append([(at[v][0], 1 - at[v][1]) for v in tri])
+	R = [[L[k][ca], L[k][cb], L[k][cc]] for k, ca, cb, cc in GLOVE_META['rmap']]
+	q = lambda T: base64.b64encode(np.clip(np.round(np.array(T, np.float64).reshape(-1) * 65535), 0, 65535).astype('<u2').tobytes()).decode()
+	ids = lambda f: base64.b64encode(np.array(f, '<u4').tobytes()).decode()
+	return {'L': {'faces': ids(GLOVE_META['faces']), 'uv': q(L)}, 'R': {'faces': ids(GLOVE_META['right']), 'uv': q(R)}, 'proud': GLOVE_PROUD}
 def export(lows):
+	GLOVE = None
+	for o in [o for o in lows if o.get('table')]: GLOVE = glove_table(o)
+	lows = [o for o in lows if not o.get('table')]
 	for o in lows:
 		o.data.materials.clear(); o.location = (0, 0, 0)
 	for o in list(SC.objects):
@@ -1363,16 +1661,18 @@ def export(lows):
 	if outs: bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'soldier-kit.glb'), export_format='GLB', use_selection=True, export_texcoords=True, export_normals=True,
 		export_materials='NONE', export_yup=True, export_apply=True)
 	info = {o.name: {'tris': sum(len(p.vertices) - 2 for p in o.data.polygons), 'verts': len(o.data.vertices)} for o in outs}
-	json.dump({'meta': META, 'foot': FOOT_META, 'stand': STAND, 'groups': info, 'size': SIZE}, open(os.path.join(OUT, 'soldier-kit.json'), 'w'), indent=1)
+	json.dump({'meta': META, 'foot': FOOT_META, 'glove': GLOVE, 'stand': STAND, 'groups': info, 'size': SIZE}, open(os.path.join(OUT, 'soldier-kit.json'), 'w'), indent=1)
 	log('exported', info)
 
-# (KIT_ONLY=boot: build only that, for a quick look)
+# (KIT_ONLY=boot or glove: build only that, for a quick look)
 ONLY = os.environ.get('KIT_ONLY')
 sy = helmet() if not ONLY else rimY(0) + 0.024
 if not ONLY: nvg(sy); headset()
 for build in (magazine, magpouch, admin, dangler, radio, ptt, medpouch, tourniquet, backpanel, handle, buckle):
 	if not ONLY: build()
-FOOT_META = boot(); gear('boot', back=False)
+FOOT_META = None
+if ONLY in (None, 'boot'): FOOT_META = boot(); gear('boot', back=False)
+if ONLY in (None, 'glove'): glove(); gear('glove', back=False)
 lows = [l for l, _ in PIECES]
 log('pieces', len(lows), 'tris', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in lows))
 uv_and_pack(lows)
