@@ -11,9 +11,10 @@ const ultraAsked = (() => { try { return store?.getItem('l99-quality') === 'ultr
 // likely for its memory: world/governor.js keeps that mark, and sets it while a world loads too)
 // comes back without it, on Auto: the desktop's graphics are more than a phone can always hold,
 // and the page closing as the world finished loading left no way to reach the setting again.
-export const ULTRA_DROPPED = PHONE_DEVICE && ultraAsked && (() => {
+export const LAST_VISIT_CRASHED = (() => {
 	try { return !!JSON.parse(store?.getItem('l99-governor') || 'null')?.live; } catch { return false; }
 })();
+export const ULTRA_DROPPED = PHONE_DEVICE && ultraAsked && LAST_VISIT_CRASHED;
 if (ULTRA_DROPPED) { try { store.setItem('l99-quality', 'auto'); } catch { /* private mode */ } }
 export const ULTRA = ultraAsked && !ULTRA_DROPPED;
 export const GFX_PHONE = PHONE_DEVICE && !ULTRA;
