@@ -1,7 +1,9 @@
 # The soldiers' head kit as real models: a high-cut ballistic helmet (shell, rubber edge
 # trim, side rails, the front shroud, loop panels), night vision stowed up on its mount with
 # the battery pouch behind and its cable, a strobe, and an electronic headset hung from the
-# rails. Each piece is modelled twice: a light game mesh with its own UVs in one shared atlas,
+# rails; and the plate carrier's kit (magazine pouches and magazines, admin pouch, dangler,
+# radio, push-to-talk, medical pouch, tourniquet, back panel, drag handle, buckles), each in
+# its own frame for the game to lay on the carrier. Each piece is modelled twice: a light game mesh with its own UVs in one shared atlas,
 # and a detailed copy (bevels, slots, screw heads, ribbed rings, grit, weave) baked down onto
 # it: normals, colour, roughness, metal, how much of the wearer's colour it takes, and
 # ambient occlusion. The game fits it to each head (people/kit-models.js).
@@ -302,6 +304,33 @@ def mat(kind):
 			col = mix(op('MULTIPLY', cav, 0.8), col, rgb(0.3, 0.29, 0.27))
 			col = mix(op('MULTIPLY', worn, 0.5), col, rgb(0.92, 0.9, 0.86))
 			rough = val(0.9); tint = val(1.0); height = op('ADD', w.outputs['Fac'], w2.outputs['Fac'])
+	elif kind in ('nylonD', 'webbing', 'elastic', 'thread'):
+		# the darker bound edges, the webbing, the elastic and the stitching, all in the
+		# wearer's colour: tighter weaves, the elastic ribbed across, the webbing in bands
+		w = N.new('ShaderNodeTexWave'); w.inputs['Scale'].default_value = {'nylonD': 900, 'webbing': 520, 'elastic': 260, 'thread': 2200}[kind]; L.new(tc.outputs['Object'], w.inputs['Vector'])
+		if kind == 'elastic': w.bands_direction = 'X'
+		w2 = N.new('ShaderNodeTexWave'); w2.inputs['Scale'].default_value = 900; w2.bands_direction = 'Y'; L.new(tc.outputs['Object'], w2.inputs['Vector'])
+		lo, hi_ = {'nylonD': (0.46, 0.56), 'webbing': (0.5, 0.6), 'elastic': (0.4, 0.5), 'thread': (0.36, 0.42)}[kind]
+		col = mix(noise(120), rgb(lo, lo, lo * 0.97), rgb(hi_, hi_, hi_ * 0.97))
+		col = mix(op('MULTIPLY', cav, 0.8), col, rgb(0.22, 0.21, 0.2))
+		col = mix(op('MULTIPLY', worn, 0.5), col, rgb(0.8, 0.78, 0.74))
+		rough = val(0.92); tint = val(1.0)
+		height = w.outputs['Fac'] if kind in ('elastic', 'thread') else op('ADD', w.outputs['Fac'], op('MULTIPLY', w2.outputs['Fac'], 0.6))
+	elif kind == 'pmag':
+		# a polymer magazine in the colour it is issued in: a fine moulded grain, worn pale on
+		# its corners
+		# its corners only lightly (small pieces read as all edge to the wear)
+		col = mix(op('MULTIPLY', worn, 0.2), rgb(0.6, 0.6, 0.58), rgb(0.8, 0.79, 0.76))
+		col = mix(op('MULTIPLY', cav, 0.7), col, rgb(0.3, 0.3, 0.28))
+		rough = op('ADD', op('MULTIPLY', noise(80), 0.08), 0.62); tint = op('SUBTRACT', 1.0, op('MULTIPLY', worn, 0.06)); height = noise(1800, 3)
+	elif kind == 'redtab':
+		col = mix(op('MULTIPLY', worn, 0.5), rgb(0.32, 0.035, 0.03), rgb(0.5, 0.12, 0.1))
+		rough = val(0.75); tint = val(0.0); height = noise(1400, 2)
+	elif kind == 'patch':
+		# a subdued patch: an embroidered fill in two greys, its threads running across
+		w = N.new('ShaderNodeTexWave'); w.inputs['Scale'].default_value = 1600; w.wave_profile = 'SAW'; L.new(tc.outputs['Object'], w.inputs['Vector'])
+		col = mix(op('GREATER_THAN', noise(70, 2), 0.5), rgb(0.12, 0.12, 0.11), rgb(0.22, 0.22, 0.2))
+		rough = val(0.85); tint = val(0.0); height = w.outputs['Fac']
 	elif kind == 'loop':
 		col = mix(noise(400, 3), rgb(0.58, 0.58, 0.56), rgb(0.7, 0.7, 0.68))
 		col = mix(op('MULTIPLY', cav, 0.6), col, rgb(0.3, 0.29, 0.27))
@@ -335,8 +364,8 @@ def mat(kind):
 	if metal is None: metal = val(0.0)
 	if isinstance(col, tuple): col = mix(0.0, col, col)
 	bump = N.new('ShaderNodeBump')
-	bump.inputs['Strength'].default_value = {'loop': 0.9, 'paint': 0.4, 'foam': 0.8, 'nylon': 0.5, 'nylonT': 0.6}.get(kind, 0.25)
-	bump.inputs['Distance'].default_value = {'loop': 0.0006, 'paint': 0.00025, 'foam': 0.0008, 'nylon': 0.0003, 'nylonT': 0.0004}.get(kind, 0.0002)
+	bump.inputs['Strength'].default_value = {'loop': 0.9, 'paint': 0.4, 'foam': 0.8, 'nylon': 0.5, 'nylonT': 0.6, 'nylonD': 0.6, 'webbing': 0.7, 'elastic': 0.8, 'thread': 0.6, 'patch': 0.7, 'pmag': 0.3}.get(kind, 0.25)
+	bump.inputs['Distance'].default_value = {'loop': 0.0006, 'paint': 0.00025, 'foam': 0.0008, 'nylon': 0.0003, 'nylonT': 0.0004, 'nylonD': 0.0004, 'webbing': 0.0005, 'elastic': 0.0006, 'thread': 0.0002, 'patch': 0.0003}.get(kind, 0.0002)
 	L.new(height, bump.inputs['Height'])
 	L.new(col, bsdf.inputs['Base Color']); L.new(rough, bsdf.inputs['Roughness']); L.new(metal, bsdf.inputs['Metallic'])
 	L.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
@@ -644,6 +673,239 @@ def headset():
 				mb = MB(); cyl(mb, c0, ax, 0.0054, 0.007, 14); kn = mb.obj('volume', ['rubber'], sharp=0.8)
 				piece(kn, [hi(kn, bevel=0.0006, segs=2), ribbed(c0, ax, 0.0055, 0.0068, ribs=16, depth=0.0005, n=64)], 'headset')
 
+# ---------- the plate carrier's kit ----------
+# each piece in its own frame, as the game lays it on the carrier (garment.js putPart): its
+# back on the surface at the origin, +z out from the body, +y up; laid out apart from the
+# head and from each other for the bake (each over a backing of its own for the occlusion),
+# and brought back to its origin for the export
+X, Y, Z = V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, 1)
+GEAR, BACKS = [], []
+def gear(group):
+	# (the pieces made since the last call go out as group, laid out in the next slot)
+	k = len(GEAR); off = V3(0.5 + (k % 4) * 0.32, -(k // 4) * 0.36, 0.0)
+	mine = [(l, hs) for l, hs in PIECES if l.get('group') == group]
+	for l, hs in mine:
+		for o in [l] + hs: o.location = G(off)
+	mb = MB(); box(mb, V3(0, 0, -0.0015), X, Y, Z, 0.15, 0.17, 0.001); b = mb.obj('back-' + group, ['nylonT'], smooth=False, sharp=0)
+	b.location = G(off); b.hide_render = True; BACKS.append(b)
+	GEAR.append((group, off))
+def rrect(w, h, r, n=4, c=V3(0, 0, 0)):
+	# a rounded rectangle's outline round c in the x-y plane, anticlockwise
+	pts = []
+	for cx, cy, a0 in ((w / 2 - r, h / 2 - r, 0), (-w / 2 + r, h / 2 - r, PI / 2), (-w / 2 + r, -h / 2 + r, PI), (w / 2 - r, -h / 2 + r, 1.5 * PI)):
+		for i in range(n + 1): a = a0 + (PI / 2) * i / n; pts.append(c + V3(cx + math.cos(a) * r, cy + math.sin(a) * r, 0))
+	return pts
+def slab(name, kind, c, hw, hh, hd, r, segs=2):
+	# a rounded block (half sizes), its corners eased in the game mesh too
+	mb = MB(); box(mb, c, X, Y, Z, hw, hh, hd); ob = mb.obj(name, [kind], sharp=0.5)
+	return lowbevel(ob, r, segs) if r else ob
+def bound(c, w, h, r, z, kind='nylonD', t=0.0022):
+	# the binding tape round a front's edge: a rolled section along its outline
+	pts = [p + V3(0, 0, z) for p in rrect(w, h, r, 4, c)]
+	mb = MB(); sweep(mb, pts, [Z.copy() for _ in pts], ring(t, 8, 1.0, 1.3), closed=True)
+	return mb.obj('binding', [kind], sharp=0)
+def stitches(pts, n, step=0.0034, ln=0.0022, kind='thread'):
+	# a row of stitches along a polyline, each a little proud of what it is sewn into
+	mb = MB()
+	for a, b in zip(pts, pts[1:]):
+		d = b - a; L0 = d.length
+		if L0 < 1e-6: continue
+		t = d / L0; s = n.cross(t)
+		for k in range(int(L0 / step)):
+			box(mb, a + t * (step * (k + 0.5)), t, s, n, ln / 2, 0.00045, 0.00035)
+	return mb.obj('stitch', [kind], smooth=False, sharp=0)
+def zip_teeth(a, b, n, kind='polymer'):
+	# a zip's teeth, alternating either side of its line, on a strip of tape
+	mb = MB(); d = b - a; L0 = d.length; t = d / L0; s = n.cross(t)
+	for k in range(int(L0 / 0.0021)):
+		c = a + t * (0.0021 * (k + 0.5)) + s * (0.0007 if k % 2 else -0.0007)
+		box(mb, c + n * 0.0006, t, s, n, 0.0007, 0.0016, 0.0007)
+	return mb.obj('teeth', [kind], smooth=False, sharp=0)
+def puller(c, kind='rubber'):
+	# a zip's slider and its pull: a cord loop through it, a moulded grip on the end
+	mb = MB(); box(mb, c, X, Y, Z, 0.0035, 0.0045, 0.0018); sl = lowbevel(mb.obj('slider', ['alu'], sharp=0.5), 0.0008, 1)
+	pts = catmull([c + V3(0, -0.002, 0.0016), c + V3(0.0005, -0.009, 0.0028), c + V3(0, -0.016, 0.0024)], 4)
+	mb = MB(); sweep(mb, pts, [Z.copy() for _ in pts], ring(0.0012, 6)); cord = mb.obj('cord', [kind], sharp=0)
+	mb = MB(); cyl(mb, c + V3(0, -0.019, 0.0024), Y, 0.0026, 0.007, 10); grip = mb.obj('grip', [kind], sharp=0.7)
+	return sl, cord, grip
+def bartacks(pts, n):
+	# the bar tacks that fix webbing down: a short dense zigzag, read as a raised bar
+	mb = MB()
+	for p in pts: box(mb, p + n * 0.0003, Y, X, n, 0.006, 0.0011, 0.0004)
+	return mb.obj('tack', ['thread'], smooth=False, sharp=0)
+
+def magazine():
+	log('magazine')
+	# a polymer rifle magazine standing out of its pouch, base plate up: the body ribbed
+	# across, the plate flared with a grip ridge, a dot moulded in its side
+	d = 0.036
+	mag = slab('mag', 'pmag', V3(0, 0.0, d / 2), 0.031, 0.03, 0.0115, 0.002)
+	hm = hi(mag, bevel=0.0006, segs=2)
+	def ribs(mb):
+		for y in (0.006, 0.013, 0.02):
+			for z in (d / 2 + 0.0115, d / 2 - 0.0115): box(mb, V3(0, y, z), X, Y, Z, 0.033, 0.0012, 0.0006)
+	boolean(hm, cutter(ribs))
+	piece(mag, [hm], 'mag')
+	plate = slab('plate', 'pmag', V3(0, 0.0345, d / 2), 0.0335, 0.0045, 0.0135, 0.0022)
+	hp = hi(plate, bevel=0.0008, segs=2)
+	boolean(hp, cutter(lambda mb: [box(mb, V3(x, 0.039, d / 2), X, Y, Z, 0.0011, 0.0012, 0.012) for x in (-0.012, -0.006, 0, 0.006, 0.012)]))
+	piece(plate, [hp], 'mag')
+	gear('mag')
+
+def magpouch():
+	log('mag pouch')
+	# a sewn pouch open at the top, its edges bound, a band of elastic across its front, the
+	# shock cord over the magazine's base plate down to a pull tab
+	w, h, d = 0.066, 0.11, 0.036
+	body = slab('mpouch', 'nylonT', V3(0, -h / 2, d / 2), w / 2, h / 2, d / 2, 0.0065, 2)
+	hb = hi(body, subsurf=2)
+	piece(body, [hb, bound(V3(0, -h / 2, 0), w - 0.002, h - 0.002, 0.0062, d - 0.0012),
+		stitches([V3(-w / 2 + 0.0065, -0.006, d + 0.0002), V3(-w / 2 + 0.0065, -h + 0.0075, d + 0.0002), V3(w / 2 - 0.0065, -h + 0.0075, d + 0.0002), V3(w / 2 - 0.0065, -0.006, d + 0.0002)], Z)], 'magpouch')
+	band = slab('elastic', 'elastic', V3(0, -h * 0.58, d + 0.0006), w / 2 + 0.001, 0.008, 0.0022, 0.0012, 1)
+	piece(band, [hi(band, bevel=0.0004, segs=2)], 'magpouch')
+	pts = catmull([V3(0, 0.022, 0.002), V3(0, 0.0408, 0.007), V3(0, 0.0412, 0.03), V3(0, 0.03, 0.0392), V3(0, 0.004, 0.0392)], 5)
+	ns = []
+	for i, p in enumerate(pts):
+		t = (pts[min(len(pts) - 1, i + 1)] - pts[max(0, i - 1)]).normalized(); ns.append((X.cross(t)).normalized())
+	mb = MB(); sweep(mb, pts, ns, ring(0.0017, 6)); cord = mb.obj('shockcord', ['rubber'], sharp=0)
+	piece(cord, [hi(cord, subsurf=1)], 'magpouch')
+	tab = slab('pulltab', 'rubber', V3(0, -0.006, d + 0.0032), 0.008, 0.012, 0.002, 0.0015, 1)
+	ht = hi(tab, bevel=0.0005, segs=2)
+	boolean(ht, cutter(lambda mb: [box(mb, V3(0, y, d + 0.0052), X, Y, Z, 0.0065, 0.0007, 0.0006) for y in (-0.012, -0.008, -0.004)]))
+	piece(tab, [ht], 'magpouch')
+	gear('magpouch')
+
+def admin():
+	log('admin pouch')
+	# a flat pouch across the chest: a loop field with a subdued patch on it, a zip along its
+	# top with its pull, the edges bound
+	body = slab('admin', 'nylonT', V3(0, 0, 0.012), 0.085, 0.045, 0.012, 0.006, 2)
+	piece(body, [hi(body, subsurf=1), bound(V3(0, 0, 0), 0.168, 0.088, 0.006, 0.0232)], 'admin')
+	lp = slab('loop', 'loop', V3(-0.03, 0.004, 0.0245), 0.042, 0.025, 0.0012, 0.0008, 1)
+	piece(lp, [hi(lp), bound(V3(-0.03, 0.004, 0), 0.084, 0.05, 0.003, 0.0255, 'nylonD', 0.0011)], 'admin')
+	pt = slab('patch', 'patch', V3(-0.03, 0.004, 0.0262), 0.025, 0.015, 0.0008, 0.0006, 1)
+	piece(pt, [hi(pt), bound(V3(-0.03, 0.004, 0), 0.05, 0.03, 0.002, 0.027, 'patch', 0.0009)], 'admin')
+	zp = slab('zip', 'polymer', V3(0, 0.04, 0.0236), 0.075, 0.0024, 0.0008, 0)
+	piece(zp, [hi(zp), zip_teeth(V3(-0.075, 0.04, 0.0238), V3(0.075, 0.04, 0.0238), Z)], 'admin')
+	sl, cord, grip = puller(V3(0.06, 0.04, 0.0252))
+	for o in (sl, cord, grip): piece(o, [hi(o, bevel=0.0003, segs=1) if o is sl else hi(o, subsurf=1)], 'admin')
+	gear('admin')
+
+def dangler():
+	log('dangler')
+	# the pouch hung under the front plate: deep and rounded, zipped along its top, seamed
+	# round its front
+	body = slab('dangler', 'nylonT', V3(0, 0, 0.022), 0.1, 0.04, 0.022, 0.014, 3)
+	seam = rrect(0.186, 0.066, 0.009, 4, V3(0, 0, 0.0442)); seam.append(seam[0])
+	piece(body, [hi(body, subsurf=2), stitches(seam, Z)], 'dangler')
+	zp = slab('zip', 'polymer', V3(0, 0.03, 0.0428), 0.085, 0.0024, 0.0008, 0)
+	piece(zp, [hi(zp), zip_teeth(V3(-0.085, 0.03, 0.043), V3(0.085, 0.03, 0.043), Z)], 'dangler')
+	sl, cord, grip = puller(V3(0.075, 0.03, 0.0444))
+	for o in (sl, cord, grip): piece(o, [hi(o, bevel=0.0003, segs=1) if o is sl else hi(o, subsurf=1)], 'dangler')
+	gear('dangler')
+
+def radio():
+	log('radio')
+	# a handheld radio in its pouch: the pouch with an elastic band, the radio's top standing
+	# out of it, gripped with ribs, two knobs and the antenna's socket
+	body = slab('rpouch', 'nylonT', V3(0, 0, 0.02), 0.033, 0.06, 0.02, 0.007, 2)
+	piece(body, [hi(body, subsurf=2), bound(V3(0, 0, 0), 0.064, 0.118, 0.007, 0.039)], 'radio')
+	band = slab('elastic', 'elastic', V3(0, -0.012, 0.0406), 0.034, 0.008, 0.0022, 0.0012, 1)
+	piece(band, [hi(band, bevel=0.0004, segs=2)], 'radio')
+	rb = slab('radio', 'polymer', V3(0, 0.062, 0.02), 0.028, 0.025, 0.015, 0.005, 2)
+	hr = hi(rb, bevel=0.0008, segs=2)
+	boolean(hr, cutter(lambda mb: [box(mb, V3(x, 0.06, 0.035), X, Y, Z, 0.0011, 0.018, 0.0008) for x in (-0.02, -0.016, -0.012, 0.012, 0.016, 0.02)]))
+	piece(rb, [hr], 'radio')
+	for x, r in ((-0.012, 0.0065), (0.012, 0.005)):
+		mb = MB(); cyl(mb, V3(x, 0.093, 0.02), Y, r, 0.012, 14); kn = mb.obj('knob', ['rubber'], sharp=0.8)
+		piece(kn, [hi(kn, bevel=0.0006, segs=2), ribbed(V3(x, 0.093, 0.02), Y, r + 0.0002, 0.011, ribs=18, depth=0.0005, n=72)], 'radio')
+	mb = MB(); cyl(mb, V3(0, 0.0885, 0.024), Y, 0.0045, 0.006, 12); sk = mb.obj('socket', ['alu'], sharp=0.8)
+	piece(sk, [hi(sk, bevel=0.0005, segs=2)], 'radio')
+	gear('radio')
+
+def ptt():
+	log('talk switch')
+	# the push-to-talk on the shoulder strap: a moulded housing, a big ribbed button, the
+	# cable's gland out of its foot
+	body = slab('ptt', 'polymer', V3(0, 0, 0.009), 0.017, 0.02, 0.009, 0.006, 2)
+	piece(body, [hi(body, bevel=0.001, segs=3)], 'ptt')
+	mb = MB(); cyl(mb, V3(0, 0.002, 0.0195), Z, 0.011, 0.004, 24); bt = mb.obj('button', ['rubber'], sharp=0.8)
+	piece(bt, [hi(bt, bevel=0.0012, segs=3), ribbed(V3(0, 0.002, 0.0195), Z, 0.0112, 0.0036, ribs=36, depth=0.0005, n=144)], 'ptt')
+	mb = MB(); cyl(mb, V3(0, -0.022, 0.009), Y, 0.004, 0.006, 10); gl = mb.obj('gland', ['rubber'], sharp=0.8)
+	piece(gl, [hi(gl, bevel=0.0005, segs=2)], 'ptt')
+	gear('ptt')
+
+def medpouch():
+	log('med pouch')
+	# the medical pouch: its flap folded over the top with a red pull tab, a loop field on
+	# its front, its edges bound
+	body = slab('med', 'nylonT', V3(0, 0, 0.025), 0.0475, 0.055, 0.025, 0.012, 3)
+	piece(body, [hi(body, subsurf=2), bound(V3(0, 0, 0), 0.093, 0.108, 0.012, 0.0488)], 'med')
+	fl = slab('flap', 'nylonT', V3(0, 0.038, 0.046), 0.0495, 0.021, 0.006, 0.005, 2)
+	piece(fl, [hi(fl, subsurf=1), bound(V3(0, 0.038, 0), 0.097, 0.04, 0.005, 0.0515)], 'med')
+	lp = slab('loop', 'loop', V3(0, -0.014, 0.0502), 0.028, 0.02, 0.0012, 0.0008, 1)
+	piece(lp, [hi(lp)], 'med')
+	tb = slab('redtab', 'redtab', V3(0, 0.06, 0.0525), 0.015, 0.013, 0.0025, 0.002, 1)
+	ht = hi(tb, bevel=0.0005, segs=2)
+	boolean(ht, cutter(lambda mb: [box(mb, V3(0, y, 0.0552), X, Y, Z, 0.012, 0.0008, 0.0007) for y in (0.054, 0.059, 0.064)]))
+	piece(tb, [ht], 'med')
+	gear('med')
+
+def tourniquet():
+	log('tourniquet')
+	# a tourniquet carried folded: its band wound flat, the windlass rod along its front in
+	# its clip, the red tab at the top
+	band = slab('tqband', 'nylon', V3(0, 0, 0.012), 0.016, 0.05, 0.012, 0.006, 2)
+	piece(band, [hi(band, subsurf=2), stitches([V3(-0.0125, -0.046, 0.0242), V3(-0.0125, 0.046, 0.0242)], Z), stitches([V3(0.0125, -0.046, 0.0242), V3(0.0125, 0.046, 0.0242)], Z)], 'tq')
+	mb = MB(); cyl(mb, V3(0, -0.004, 0.0262), Y, 0.0045, 0.08, 10); rod = mb.obj('windlass', ['polymer'], sharp=0.8)
+	piece(rod, [hi(rod, bevel=0.0006, segs=2)], 'tq')
+	cl = slab('clip', 'polymer', V3(0, 0.035, 0.0262), 0.012, 0.006, 0.0058, 0.002, 1)
+	piece(cl, [hi(cl, bevel=0.0006, segs=2)], 'tq')
+	tb = slab('redtab', 'redtab', V3(0, 0.055, 0.016), 0.01, 0.008, 0.003, 0.0018, 1)
+	piece(tb, [hi(tb, bevel=0.0005, segs=2)], 'tq')
+	gear('tq')
+
+def backpanel():
+	log('back panel')
+	# the zip-on panel on the back plate: rows of webbing across it, a loop field at its top,
+	# the zips down its sides, its edges bound (the game sizes it to the plate)
+	W, H, D = 0.21, 0.28, 0.034
+	body = slab('back', 'nylonT', V3(0, 0, D / 2), W / 2, H / 2, D / 2, 0.014, 3)
+	rows = []
+	for r in range(5):
+		y = 0.06 - r * 0.038; rows.append(slab('web', 'webbing', V3(0, y, D + 0.0008), 0.09, 0.0125, 0.0009, 0.0005, 1))
+	tacks = bartacks([V3(x, 0.06 - r * 0.038, D + 0.0016) for r in range(5) for x in (-0.09, -0.054, -0.018, 0.018, 0.054, 0.09)], Z)
+	piece(body, [hi(body, subsurf=2), bound(V3(0, 0, 0), W - 0.002, H - 0.002, 0.014, D - 0.0012)] + rows + [tacks], 'back')
+	lp = slab('loop', 'loop', V3(0, 0.106, D + 0.0012), 0.06, 0.022, 0.0012, 0.0008, 1)
+	piece(lp, [hi(lp)], 'back')
+	for x in (-0.1008, 0.1008):
+		zp = slab('zip', 'polymer', V3(x, 0, 0.0298), 0.0024, 0.126, 0.0008, 0)
+		n = V3(math.copysign(0.7, x), 0, 0.71).normalized()
+		piece(zp, [hi(zp), zip_teeth(V3(x, -0.126, 0.03), V3(x, 0.126, 0.03), n)], 'back')
+	gear('back')
+
+def handle():
+	log('drag handle')
+	# the drag handle: a loop of webbing laid flat over the top of the back, a rubber grip
+	# sleeved over its middle
+	pts = [V3(math.cos(PI * i / 16) * 0.03, 0.004 + math.sin(PI * i / 16) * 0.03, 0.004) for i in range(17)]
+	mb = MB(); sweep(mb, pts, [Z.copy() for _ in pts], rprof(0.02, 0.0034, 0.0011, 1, -0.0017)); lp = mb.obj('handle', ['nylon'], sharp=0.6)
+	piece(lp, [hi(lp, bevel=0.0004, segs=2)], 'handle')
+	gp = [V3(math.cos(a) * 0.03, 0.004 + math.sin(a) * 0.03, 0.004) for a in [PI / 3 + (PI / 3) * i / 6 for i in range(7)]]
+	mb = MB(); sweep(mb, gp, [Z.copy() for _ in gp], ring(0.0072, 12, 1.0, 0.62)); gr = mb.obj('grip', ['rubber'], sharp=0)
+	hg = hi(gr, subsurf=1)
+	piece(gr, [hg], 'handle')
+	gear('handle')
+
+def buckle():
+	log('buckle')
+	# the ladder lock that adjusts a shoulder strap: a polymer frame, its two slots
+	bk = slab('buckle', 'polymer', V3(0, 0, 0.0), 0.025, 0.008, 0.003, 0.0015, 1)
+	hb = hi(bk, bevel=0.0005, segs=2)
+	boolean(hb, cutter(lambda mb: [box(mb, V3(0, y, 0), X, Y, Z, 0.02, 0.0016, 0.004) for y in (-0.003, 0.003)]))
+	piece(bk, [hb], 'buckle')
+	gear('buckle')
+
 # ---------- UVs, bake, maps, export ----------
 def area3(o):
 	return sum(p.area for p in o.data.polygons)
@@ -683,7 +945,7 @@ def bake_all():
 	imgs = {}
 	for k in ('normal', 'col', 'rough', 'metal', 'tint', 'ao'):
 		im = bpy.data.images.new('bake-' + k, SIZE, SIZE, alpha=False, float_buffer=True)
-		im.colorspace_settings.name = 'Non-Color'; im.generated_color = (0.5, 0.5, 1, 1) if k == 'normal' else (0, 0, 0, 1); imgs[k] = im
+		im.colorspace_settings.name = 'Non-Color'; im.generated_color = (0, 0, 0, 1); imgs[k] = im
 	# each low piece bakes into the image through a texture node of its own
 	targets = []
 	for o in lows:
@@ -702,11 +964,14 @@ def bake_all():
 			bpy.ops.object.select_all(action='DESELECT')
 			for h in hs: h.select_set(True)
 			low.select_set(True); bpy.context.view_layer.objects.active = low
-			bpy.ops.object.bake(type='NORMAL' if k == 'normal' else 'EMIT', use_selected_to_active=True, cage_extrusion=0.0025, max_ray_distance=0.01, normal_space='TANGENT', use_clear=False, margin=12)
+			# (no margin: a piece's margin would run over the pieces baked before it; the
+			# islands are grown out once, after, in save)
+			bpy.ops.object.bake(type='NORMAL' if k == 'normal' else 'EMIT', use_selected_to_active=True, cage_extrusion=0.0025, max_ray_distance=0.01, normal_space='TANGENT', use_clear=False, margin=0)
 	# (the occlusion from the game meshes themselves and the head under them)
 	log('bake ao'); SC.cycles.samples = AO_SAMPLES; set_img('ao')
 	for h in highs: h.hide_render = True
 	HEAD.hide_render = False
+	for b in BACKS: b.hide_render = False
 	bpy.ops.object.select_all(action='DESELECT')
 	for o in lows: o.select_set(True)
 	bpy.context.view_layer.objects.active = lows[0]
@@ -716,6 +981,20 @@ def bake_all():
 
 def save(imgs):
 	px = {k: np.array(im.pixels[:], dtype=np.float32).reshape(SIZE, SIZE, 4) for k, im in imgs.items()}
+	# (every island grown out over the empty texels round it, each from its own edge, so the
+	# smaller mips do not draw in the background or the next island; the normals' blue says
+	# where anything was baked)
+	have = px['normal'][..., 2] > 0.25
+	for _ in range(24):
+		edge = ~have & (np.roll(have, 1, 0) | np.roll(have, -1, 0) | np.roll(have, 1, 1) | np.roll(have, -1, 1))
+		if not edge.any(): break
+		for k, a in px.items():
+			acc = np.zeros_like(a); cnt = np.zeros(have.shape, np.float32)
+			for ax, sh in ((0, 1), (0, -1), (1, 1), (1, -1)):
+				h = np.roll(have, sh, ax); acc += np.roll(a, sh, ax) * h[..., None]; cnt += h
+			a[edge] = acc[edge] / np.maximum(cnt[edge], 1)[:, None]
+		have |= edge
+	px['normal'][~have] = (0.5, 0.5, 1.0, 1.0)
 	def srgb(x): x = np.clip(x, 0, 1); return np.where(x <= 0.0031308, x * 12.92, 1.055 * np.power(x, 1 / 2.4) - 0.055)
 	one = np.ones((SIZE, SIZE, 1), np.float32)
 	alb = np.dstack([srgb(px['col'][..., :3]), one])
@@ -755,6 +1034,7 @@ def preview(saved):
 		low.data.materials.clear(); low.data.materials.append(m)
 		for h in hs: h.hide_render = True
 	HEAD.data.materials.clear(); HEAD.data.materials.append(M('skin')); show('normal'); HEAD.hide_render = False
+	for b in BACKS: b.hide_render = True
 	SC.cycles.samples = 48; SC.render.resolution_x = SC.render.resolution_y = 900
 	w = SC.world; w.use_nodes = True; w.node_tree.nodes['Background'].inputs[0].default_value = (0.45, 0.5, 0.56, 1); w.node_tree.nodes['Background'].inputs[1].default_value = 0.6
 	sun = bpy.data.objects.new('sun', bpy.data.lights.new('sun', 'SUN')); sun.data.energy = 3.5; sun.rotation_euler = (0.7, 0.2, 0.9); SC.collection.objects.link(sun)
@@ -764,11 +1044,15 @@ def preview(saved):
 		cam.location = G(p); look = G(V3(0, 0.03, 0)) - cam.location
 		cam.rotation_euler = look.to_track_quat('-Z', 'Y').to_euler()
 		SC.render.filepath = os.path.join(OUT, 'preview-' + name + '.png'); bpy.ops.render.render(write_still=True)
+	# (the carrier's kit as laid out for the bake, from the front and from above to one side)
+	for name, (p, look) in {'gear': (V3(0.98, -0.36, 3.0), V3(0.98, -0.36, 0)), 'gear-side': (V3(0.35, 0.5, 1.2), V3(0.82, -0.12, 0))}.items():
+		cam.location = G(p); cam.rotation_euler = (G(look) - cam.location).to_track_quat('-Z', 'Y').to_euler()
+		SC.render.filepath = os.path.join(OUT, 'preview-' + name + '.png'); bpy.ops.render.render(write_still=True)
 	log('previews')
 
 def export(lows):
 	for o in lows:
-		o.data.materials.clear()
+		o.data.materials.clear(); o.location = (0, 0, 0)
 	for o in list(SC.objects):
 		if o not in lows: bpy.data.objects.remove(o)
 	groups = {}
@@ -785,6 +1069,7 @@ def export(lows):
 sy = helmet()
 nvg(sy)
 headset()
+for build in (magazine, magpouch, admin, dangler, radio, ptt, medpouch, tourniquet, backpanel, handle, buckle): build()
 lows = [l for l, _ in PIECES]
 log('pieces', len(lows), 'tris', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in lows))
 uv_and_pack(lows)
