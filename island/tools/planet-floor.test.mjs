@@ -145,7 +145,9 @@ test('a ground program that will not run is replaced by the lean ground, which l
 	for (const far of [false, true]) {
 		const sh = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
 		leanTerrainMaterial(uniforms, far).onBeforeCompile(sh);
-		assert.match(sh.vertexShader, /vec3 transformed = vec3\(wxz\.x, groundH\(wxz\), wxz\.y\)/);
+		// (LIFT_H is groundH unless the guard has lifted the grid on the CPU: terrain.js cpuLift)
+		assert.match(sh.vertexShader, /vec3 transformed = vec3\(wxz\.x, LIFT_H\(wxz\), wxz\.y\)/);
+		assert.match(sh.vertexShader, /#define LIFT_H\(w\) groundH\(w\)/);
 		assert.match(sh.vertexShader, /vec3 objectNormal = normalize/);
 		assert.doesNotMatch(sh.vertexShader, /#include <begin_vertex>|#include <beginnormal_vertex>/);
 		assert.match(sh.fragmentShader, /uHoles\[i\]/);

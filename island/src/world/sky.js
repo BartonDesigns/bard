@@ -6,6 +6,7 @@ import { NOISE_GLSL } from './terrain.js';
 import { STARS_B64, STAR_COUNT } from './starcat.js';
 import { today } from '../calendar.js';
 import { AIR } from './airfog.js';
+import { qualityNow } from './governor.js';
 import { constellations } from './constellations.js';
 import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock, lunarPosition, moonlightShare } from './solar.js';
 
@@ -48,6 +49,54 @@ float cumulus(vec3 d, float cloud, float time, out float base, out float sh){
 	float cover = mix(0.8, 0.3, cloud);
 	// a storm's deck stays solid down to the horizon, where fair clouds thin out
 	return smoothstep(cover, cover + 0.12, base) * mix(smoothstep(0.01, 0.2, d.y), smoothstep(0.0, 0.03, d.y), clamp(sh * 1.6, 0.0, 1.0));
+}
+`;
+
+// The same cumulus as a layer of real depth (on desktops at the high tier): a slab from
+// 1.4 to 2.8 km up marched through along the view (a few steps, jittered per pixel), each
+// heap's dome rising where the field is thickest, its density summed toward you and its light
+// read one step toward the sun, so the heaps have sunlit sides, dark bellies and edges that
+// thin to wisps; fly up through them and they part round you. The field is the plane's own
+// (cover, drift, the showers), anchored to the ground rather than to you. Returns the cover
+// (alpha), how lit it is (as the plane's lit), and how far off it begins (m).
+const VOL_GLSL = /* glsl */`
+uniform vec3 uCamP; uniform float uVolK;
+float fbm3c(vec2 p){ return vn(p) * 0.57 + vn(p * 2.03 + 3.1) * 0.29 + vn(p * 4.1 - 5.3) * 0.14; }
+float volDen(vec3 p, float cover, float time, float sh){
+	vec2 cp = p.xz / 937.0 + uCloudOff;
+	cp += (vec2(vn(cp * 0.35 + time * 0.004), vn(cp * 0.35 + 7.3 - time * 0.0035)) - 0.5) * 0.7;
+	float base = fbm3c(cp * 0.9) * 0.6 + fbm3c(cp * 0.32 + 11.0) * 0.55 + sh * 0.8;
+	float hf = clamp((p.y - 1400.0) / 1400.0, 0.0, 1.0);
+	// (the higher in the slab, the thicker the field must be: domes on flat bases)
+	return smoothstep(cover, cover + 0.22, base - hf * hf * 0.55) * smoothstep(0.0, 0.07, hf) * (1.0 - smoothstep(0.88, 1.0, hf));
+}
+vec3 volClouds(vec3 d, float cloud, float time, float sh, vec3 sunDir){
+	float c = uCamP.y, t0, t1;
+	if (c < 1400.0) { if (d.y < 0.012) return vec3(0.0, 0.0, 1e9); t0 = (1400.0 - c) / d.y; t1 = (2800.0 - c) / d.y; }
+	else if (c > 2800.0) { if (d.y > -0.012) return vec3(0.0, 0.0, 1e9); t0 = (2800.0 - c) / d.y; t1 = (1400.0 - c) / d.y; }
+	else { t0 = 0.0; t1 = d.y > 0.012 ? (2800.0 - c) / d.y : d.y < -0.012 ? (1400.0 - c) / d.y : 9000.0; }
+	t1 = min(t1, t0 + 6000.0);
+	if (t0 > 60000.0) return vec3(0.0, 0.0, t0);
+	float cover = mix(0.8, 0.3, cloud), dt = (t1 - t0) / 10.0;
+	// (the steps' offset: a little screen noise breaks up the slices without the grain a
+	// full random offset leaves with no frames to average it over)
+	float j = 0.5 + (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5) * 0.3;
+	float Tr = 1.0, lit = 0.0, wsum = 0.0;
+	for (int i = 0; i < 10; i++) {
+		float t = t0 + (float(i) + j) * dt;
+		vec3 p = vec3(uCamP.x, c, uCamP.z) + d * t;
+		float den = volDen(p, cover, time, sh);
+		if (den < 0.01) continue;
+		// the light toward the sun: one step up its way, and the height (bellies are dark)
+		float toward = volDen(p + sunDir * 180.0, cover, time, sh);
+		float hf = clamp((p.y - 1400.0) / 1400.0, 0.0, 1.0);
+		float l = exp(-toward * 2.2) * (0.55 + 0.6 * hf) + 0.12;
+		float a = 1.0 - exp(-den * dt * 0.0045);
+		lit += Tr * a * l; wsum += Tr * a;
+		Tr *= 1.0 - a;
+		if (Tr < 0.04) break;
+	}
+	return vec3(1.0 - Tr, wsum > 1e-4 ? lit / wsum : 0.6, t0);
 }
 `;
 
@@ -138,6 +187,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uFogCol: { value: new THREE.Color() },
+		// the clouds with depth (VOL_GLSL): on, and where the eye is
+		uVolK: { value: 0 }, uCamP: { value: new THREE.Vector3() },
 		// another world's air: its sky and haze take this colour (rgb), this much (a)
 		uAir: cloudReflectU(shared).uAirR,
 		// a gas giant over its moon (xyz: where, w: its size); a ringed world's rings (on/off)
@@ -161,6 +212,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
+			${VOL_GLSL}
 			// the rainbow table (rainbow.js): angle from the antisolar point, 25 to 60 degrees
 			vec3 bowAt(float ang){
 				vec3 b = texture2D(uBow, vec2(clamp((ang - 25.0) / 35.0, 0.0, 1.0), uBowDrop)).rgb;
@@ -317,11 +369,24 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 				// cumulus on a plane above you, lit from the sun's side; dark and heaped over showers
 				float base, sh;
 				float dens = cumulus(d, uCloud, uTime, base, sh);
+				// (with depth, near: the marched layer in place of the plane, which keeps the far sky)
+				float volLit = -1.0, volMix = 0.0;
+				if (uVolK > 0.5) {
+					vec3 vc = volClouds(d, uCloud, uTime, sh, uSunDir);
+					float farK = smoothstep(26000.0, 52000.0, vc.z);
+					// (the shapes stay the plane's own: a few marched steps with no frames to average
+					// them over drew the clouds in slices. The march gives their light: sunlit tops and
+					// shaded bellies where the slab is thick, the plane's flat look where it is thin)
+					float volA = smoothstep(0.05, 0.45, vc.x) * (1.0 - farK);
+					if (volA > 0.0) volLit = clamp(vc.y * 1.15, 0.0, 1.2);
+					volMix = volA * 0.7;
+				}
 				if (dens > 0.0){
 					// lit from the sun's side: denser toward the sun means this side is in shade
 					float toward, sh2;
 					cumulus(normalize(d + vec3(uSunDir.x, 0.0, uSunDir.z) * 0.035), uCloud, uTime, toward, sh2);
 					float lit = clamp(0.62 + (base - toward) * 4.0, 0.0, 1.2);
+					if (volLit >= 0.0) lit = mix(lit, volLit, volMix);
 					float cover = mix(0.8, 0.3, uCloud);
 					// bright sunlit tops, cool grey-blue bases: a cloud with volume, not a smear
 					vec3 shade = mix(vec3(0.46, 0.52, 0.64), vec3(1.08), smoothstep(0.1, 1.0, lit)) * (0.85 + 0.25 * smoothstep(cover, cover + 0.35, base));
@@ -674,6 +739,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	Object.assign(SUN, solarTimes(latitude(), SUN.dec, SUN.noon));
 	state.sun = SUN;
 	function update(dt, focus) {
+		// (the clouds with depth: a desktop at the high tier, a world with air)
+		uniforms.uVolK.value = !isPhone && !shared.planet?.airless && qualityNow().name === 'high' ? 1 : 0;
+		if (focus) uniforms.uCamP.value.copy(focus);
 		const d = today(), lat = solarLatitude(latitude());
 		if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month || d.getFullYear() !== SUN.year) { SUN = solarDate(d); state.sun = SUN; }
 		if (lat !== SUN.lat) Object.assign(SUN, solarTimes(lat, SUN.dec, SUN.noon));

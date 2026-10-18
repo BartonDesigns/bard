@@ -406,7 +406,7 @@ export function createSquads(ctx) {
 		fx.tracer(from, end, style, 380);
 		fx.muzzle(from, dir, style === 2 ? 2 : 0);
 		ctx.heard?.(from, h);
-		if (h.mag <= 0) { h.mag = 12; h.fireT = 2.2; h.burst = 0; say(h, 'reload'); return; }
+		if (h.mag <= 0) { reloadGun(h); return; }
 		h.fireT = h.burst > 0 ? B.rate : rnd(...B.gap);
 		if (h.role === 'suppress' && Math.random() < 0.08) say(h, 'pin');
 	}
@@ -563,9 +563,11 @@ export function createSquads(ctx) {
 				h.peekT = (h.peekT ?? 0) - dt;
 				if (h.peekT <= 0) { h.peek = !h.peek; h.peekT = h.peek ? rnd(1.6, 3.4) : rnd(1.0, 2.2); }
 			} else { h.peek = true; h.peekT = 0; }
-			const down = held && !h.peek;
-			h.crouch = down ? 0.55 : 0;
-			if (down) M.act('kneel', 0); else if (M.S.act.name === 'kneel') M.act(null);
+			const down = held && !h.peek, reloading = !!b.hand?.reloading;
+			// (down behind cover with half a magazine or less: changed now, not mid-fight)
+			if (down && h.mag <= 6 && !reloading && h.fireT < 0.5) reloadGun(h, true);
+			h.crouch = down || (reloading && held) ? 0.55 : 0;
+			if (down && !reloading) M.act('kneel', 0); else if (M.S.act.name === 'kneel') M.act(null);
 			if (h.los && gd < 6) M.want.heading = toT;
 			S.look.target = h.target.id === 'me' ? eye : null;
 			if (h.los && !down && (gd < 6 || h.role === 'suppress' || strafe)) { shoot(h, dt); if (gd < 2.5 || strafe) aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); }
@@ -584,12 +586,21 @@ export function createSquads(ctx) {
 		headway(h, dt);
 		M.update(dt, time, eye);
 		b.P.lod?.(d);
-		if (b.hand && !h.noGun) { aimHold(h, aimAt); b.hand.follow(b.P, S.heading, d < 90, M, time); }
+		if (b.hand && !h.noGun) { aimHold(h, aimAt); b.hand.follow(b.P, S.heading, d < 90, M, time, dt); }
 	}
 	// the gun up and on the target while engaging (the stock at the shoulder, the strong hand's
 	// finger on the trigger), down at the ready while moving or searching
+	// a magazine changed in the hands: the gun comes down, the support hand goes to the well, off
+	// to a pouch and back (people/actions.js reload, crysis/held-items.js), with its sounds;
+	// no shooting till it is done
+	function reloadGun(h, tactical = false) {
+		const W = h.body?.hand, eye = ctx.eye();
+		const T = W?.reload?.(null, Math.hypot(h.pos.x - eye.x, h.pos.z - eye.z)) ? Math.max(1.6, W.model?.userData?.reload || 2.2) : 2.2;
+		h.mag = 12; h.burst = 0; h.fireT = Math.max(h.fireT, T + rnd(0.15, 0.4));
+		if (!tactical || Math.random() < 0.5) say(h, 'reload');
+	}
 	function aimHold(h, at) {
-		const b = h.body, up = !!at && b.M.S.speed.v < 2.2;
+		const b = h.body, up = !!at && b.M.S.speed.v < 2.2 && !b.hand?.reloading;
 		b.hand.aim?.(up);
 		if (up) b.hand.aimPitch?.(Math.atan2(at.y - (h.pos.y + 1.4), Math.max(1, Math.hypot(at.x - h.pos.x, at.z - h.pos.z))));
 		b.M.trigger?.('R', up ? 1 : 0);

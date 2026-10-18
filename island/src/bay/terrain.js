@@ -22,6 +22,7 @@ import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
 import { SEASON_U } from './seasons.js';             // streets by era: the lawns browning off in late summer
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
+import { trackUpload } from './levelrows.js';
 
 // the globe past the survey (earth/globe.js): { ready(), at(x, z), seam: [a, b] (m past the
 // survey's edge: the Bay's ground stops at a, the globe's is whole by b), whenReady, hideBay() }.
@@ -427,6 +428,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const tex = new THREE.DataTexture(half, W, H, THREE.RedFormat, THREE.HalfFloatType);
 		tex.minFilter = tex.magFilter = THREE.NearestFilter;
 		tex.needsUpdate = true;
+		trackUpload(tex);   // (lakes and rivers later change rows of it: bay/levelrows.js)
 		levels[i] = { x0, zN, step: L.step, W, H, v, tex };
 		if (i === 0) { BU.uB0.value = tex; BU.uR0.value.set(x0, zN, L.step, 0); }
 		slotsAt = null;

@@ -196,6 +196,8 @@ import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 import { installAirFog, AIR } from './world/airfog.js';
 import { createPlumes, ambientPlumes } from './world/plumes.js';
+import { createPowerlines } from './world/powerlines.js';
+import { createFarForest } from './world/farforest.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { touchLookRows } from './ui/touch-look.js';
 
@@ -1130,6 +1132,11 @@ export function createIslandWorld() {
 		// columns of smoke and steam seen from afar: fires, wrecks, chimneys, stacks (world/plumes.js)
 		const plumes = createPlumes(scene, shared, { isPhone });
 		ambientPlumes(plumes, { island, profile, earth, realm: realmPlan });
+		// pylons and their wires over the land (world/powerlines.js): on Earth once the Bay's ground is in
+		const powerlines = createPowerlines(scene, { isPhone });
+		if (!earth) powerlines.plan({ island, profile });
+		// the island's trees past their draw distance, as impostors (world/farforest.js)
+		const farForest = createFarForest(vegetation, island, shared, scene, { isPhone });
 		const fauna = stash(() => createFauna(island, shared, scene));
 		const landFauna = stash(() => createLandFauna(land, island, shared, scene, camera, vegetation));
 		await yieldBuild('Preparing the shoreline');
@@ -1162,7 +1169,7 @@ export function createIslandWorld() {
 		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
-		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
 		// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
 		seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
 		seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
@@ -1407,6 +1414,7 @@ export function createIslandWorld() {
 			island.waterAt = (x, z) => waterWorld.boardwalk?.waterAt(x, z) ?? waterWorld.water?.waterAt(x, z) ?? waterWorld.globe?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
 				if (world !== w0) return;
+				world.powerlines?.plan({ earth: true, island, heightAt: (x, z) => bayArea.heightAt(x, z) });
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
 				world.bridge = bridge;
 				seaDepth.mark(bridge.group);   // its piers in the strait
@@ -1476,6 +1484,8 @@ export function createIslandWorld() {
 		social.reset();
 		world.labels?.dispose();
 		world.plumes?.dispose();
+		world.powerlines?.dispose();
+		world.farForest?.dispose();
 		world.discovery?.dispose();
 		world.services?.dispose();
 		world.signage?.dispose();
@@ -1797,6 +1807,10 @@ export function createIslandWorld() {
 			// of metres off, and nothing at all past 2.2 km) while you walk on the right height.
 			// So the ground follows here too, whatever else failed.
 			try { if (world && !building && visible) followGround(world, Math.min(0.05, Math.max(0.001, (now - groundT) / 1000)), surfaceOpen(world)); } catch (e2) { const k2 = 'ground: ' + String(e2?.message || e2); if (!seenErr.has(k2)) { seenErr.add(k2); console.error('[frame]', e2); } }
+			// (and the Bay's and the globe's ground, which follow the camera the same way: left
+			// behind, you walk off their fine rings onto the coarse ones, metres to hundreds of
+			// metres below the land you stand on, the owner's see-through floor off the island)
+			if (world && !building && visible && farT !== now) { try { followFarGround(world, Math.min(0.05, Math.max(0.001, (now - groundT) / 1000)), farNight); } catch (e3) { const k3 = 'far ground: ' + String(e3?.message || e3); if (!seenErr.has(k3)) { seenErr.add(k3); console.error('[frame]', e3); keepFrameError(k3, e3); } } }
 			try { renderer.render(scene, camera); } catch { /* nothing more to do this frame */ }
 		}
 	}
@@ -1805,6 +1819,15 @@ export function createIslandWorld() {
 	// guard's look (world/floorguard.js). Called from the frame's own place and, should any step
 	// of the frame throw, from frame()'s catch, so a failure elsewhere never leaves the ground behind.
 	let groundT = 0;
+	// Earth's ground past the island (the Bay's survey, bay/terrain.js, and the globe's past it,
+	// earth/globe.js): camera-centred rings like the island's, kept under the camera straight
+	// after it, before the forty systems that could fail between, and from frame()'s catch
+	let farT = -1, farNight = 0;
+	function followFarGround(W, dt, night) {
+		farT = last; farNight = night;
+		W.bayArea?.update(camera, night);
+		if (!W.orbit?.active()) W.globe?.update(dt, camera, night); // orbital departure retains the ground frame
+	}
 	function surfaceOpen(W) {
 		const caveK = W.underworld?.inside?.() || 0;
 		// Keep the surface visible through mouths and skylights, even from deep shade.
@@ -1814,7 +1837,7 @@ export function createIslandWorld() {
 		const cam = camera.position, I = W.island;
 		const above = cam.y > I.heightAt(cam.x, cam.z) + 0.5 && I.underFloor?.(cam.x, cam.z, cam.y - 1.68) == null;
 		const open = above || ((caveK < 0.9 || !!vista) && !W.deep?.active());
-		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group, W.plumes?.mesh]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group, W.plumes?.mesh, W.powerlines?.group, W.farForest?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
 		return open;
 	}
 	function followGround(W, dt, open) {
@@ -1825,7 +1848,21 @@ export function createIslandWorld() {
 		updateIslandReach(W, camera, open);
 		floorGuard.check(dt, { open });
 	}
-	const floorGuard = HOOKS.floorGuard = createFloorGuard({ world: () => world, camera, renderer });
+	// (what the card really drew: the ground alone, drawn from above the player now and then and
+	// read back; undefined where the float read-back is not to be had, and the guard stops asking)
+	let floorProbe = null;
+	const drawnGround = (x, z, keep = null) => {
+		if (!renderer.extensions.has('EXT_color_buffer_float')) return undefined;
+		floorProbe ||= createGroundProbe(renderer);
+		const T = world?.terrain;
+		return floorProbe.probe(scene, x, z, { top: camera.position.y + 3000, span: 9000, keep: keep || ((o) => o === T) });
+	};
+	// (off the island on Earth: the Bay's ground and the globe's, put back under the camera)
+	const wideGround = {
+		keep: (o) => o === world?.bayArea?.group || o === world?.globe?.terrain?.group,
+		follow: () => { const W = world; if (!W) return null; followFarGround(W, 0.016, farNight); return 'the Bay and globe ground re-centred'; },
+	};
+	const floorGuard = HOOKS.floorGuard = createFloorGuard({ world: () => world, camera, renderer, probe: drawnGround, wide: wideGround, gpuEvery: isPhone ? 6 : 12 });
 	function tick(now) {
 		const elapsed = Math.min(.25, Math.max(.001, (now - last) / 1000));
 		const dt = Math.min(0.05, elapsed);
@@ -1978,6 +2015,7 @@ export function createIslandWorld() {
 		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
 		actions();
 		followGround(W, dt, open);
+		followFarGround(W, dt, sk.night);
 		W.vegetation.stream(camera, false);
 		W.vegetation.react(dt, camera.position);
 		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }
@@ -1988,10 +2026,9 @@ export function createIslandWorld() {
 		W.distant.group.visible = !W.bayArea;
 		if (!W.bayArea) W.distant.update(time, sk.night);
 		W.plumes.update(dt, camera, W.sky);
+		W.powerlines?.update(camera, dt);
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
-		W.bayArea?.update(camera, sk.night);
-		if (!W.orbit?.active()) W.globe?.update(dt, camera, sk.night); // orbital departure retains the ground frame
 		W.bridge?.update(time, sk.night);
 		W.civ?.update(camera);
 		if (W.civ) { const ll = globeLL(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
@@ -2136,7 +2173,7 @@ export function createIslandWorld() {
 		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
 		// the sea's mirror, before the frame that reads it (only what stands over the water: world/seamirror.js)
 		// (not on a world with no sea, nor down a cave or indoors, where the water is out of sight)
-		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
+		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
 		else seaMirror.reset();
 		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaDepth.render(scene, camera, under || shared.uUnder.value);
 		else seaDepth.reset();
