@@ -36,6 +36,14 @@ export const ITEM_ICONS = {
 	'camp-lantern': '🏮', 'repair-roll': '🧰', 'station-signal-flare': '🎆',
 	'trail-rifle-box': '📦', 'scout-rifle-box': '📦', 'spark-cell-pack': '🔋', 'reed-arrow-quiver': '🏹',
 	'relay-transceiver-board': '📡', 'kestrel-flight-recorder': '🟧', 'regolith-core-sample': '🪨', 'hydroponic-harvest-crate': '🥬',
+	// garments (worn, not held: no model of their own yet)
+	'wayfarers-hood': '🧣', 'stargazer-circlet': '💠', 'aetherweave-coat': '🧥', 'rangers-jacket': '🧥',
+	'spellbinder-gloves': '🧤', 'fieldcraft-gloves': '🧤', 'trailstrider-boots': '🥾', 'duskwalker-boots': '👢',
+	'aetherweave-trousers': '👖', 'rangers-trousers': '👖',
+	'kettle-helm': '🪖', 'great-helm': '⛑️', 'gambeson': '🥋', 'mail-hauberk': '⛓️', 'plate-cuirass': '🛡️', 'mail-chausses': '⛓️',
+	'plate-greaves': '🦿', 'plate-gauntlets': '🧤', 'leather-bracers': '🧤', 'sabatons': '🥾', 'riding-boots': '👢',
+	'ops-cap': '🧢', 'ballistic-helmet': '🪖', 'combat-shirt': '👕', 'chest-rig': '🎽', 'plate-carrier': '🦺', 'combat-trousers': '👖',
+	'tactical-gloves': '🧤', 'combat-boots': '🥾',
 };
 export const iconOf = (id) => ITEM_ICONS[id] || '📦';
 

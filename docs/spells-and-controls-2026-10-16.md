@@ -16,7 +16,7 @@ The owner asked for:
 | Alt / Option twice quickly | Back to aiming (the mouse is captured again) |
 | 1 to 5 | Take up the weapon on that key; press it again to put it away |
 | 6 to 0 | Cast the spell bound to that key (a beam is held) |
-| N | The spellbook |
+| Tab or N | Skills and magic: the spells and perks, a page for each skill ([skills-and-magic-menu-2026-10-16.md](skills-and-magic-menu-2026-10-16.md)) |
 | Shift + Mark and Recall | Mark anew instead of returning |
 
 The weapons you own fill the keys 1 to 5 as you come by them: the best of each kind first, in
@@ -190,7 +190,7 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
 - `.give('light', 100)`: add fabric.
 - `.all()`: know every spell.
 - `.learn(id)`, `.bind(slot, id)`, `.cast(id)`
-- `.hud.open()`: open the spellbook.
+- `.hud.open()`: open the skills and magic menu (it replaced the spellbook).
 
 ## Tests
 

@@ -2,10 +2,12 @@
 // they see as themselves, people/avatar.js), walked by the same motion rig as everyone
 // else's. Poses arrive about ten times a second and are played back about 150 ms late, so
 // there are always two to move between. A name tag floats over each. Far away, or past the
-// phone's few, a friend is only their tag. What they hold (the pose's h, at its level and tier) is in their right hand.
+// phone's few, a friend is only their tag. What they hold (the pose's h, at its level and tier) is in their right hand,
+// and what they wear (the pose's wr: people/armor-looks.js) is on them: built again when it changes.
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
+import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/body.js';
+import { dressInGear, wornOfCode } from '../people/armor-looks.js';
 import { createMotion } from '../people/motion.js';
 import { carGeometry } from '../bay/cars.js';
 import { createHand } from '../crysis/held-items.js';
@@ -96,10 +98,12 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 		r.building = true;
 		try {
 			assets = assets || await loadPeopleAssets();
-			const P = buildPerson(assets, personDNA(r.seed, { age: 30 }));
+			const wr = r.pose?.wr || '', d = personDNA(r.seed, { age: 30 });
+			if (wr && d.style) d.style = dressInGear(d.style, wornOfCode(wr));
+			const P = buildPerson(assets, d);
 			const M = createMotion(P, (x, z) => ground(x, z));
 			P.root.visible = false;
-			r.body = { P, M, placed: false };
+			r.body = { P, M, placed: false, wr };
 			if (list.get(r.id) === r) group.add(P.root);
 		} catch (e) { console.warn('[friends] body', e); }
 		r.building = false;
@@ -129,6 +133,8 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 			const a = r.at, here = r.d < Infinity;
 			r.tag.visible = here;
 			const want = here && bodied.has(r);
+			// (dressed differently now: the old body goes, a new one is built)
+			if (r.body && !r.building && (r.pose?.wr || '') !== r.body.wr) { const old = r.body.P; group.remove(old.root); freeBody(old); r.body = null; }
 			if (want && !r.body && !r.building) build(r);
 			const B = r.body;
 			if (B) B.P.root.visible = want;

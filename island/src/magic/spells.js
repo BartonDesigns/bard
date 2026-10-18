@@ -124,7 +124,9 @@ export const STARTER = Object.freeze({ known: ['sunspark', 'shadowbolt', 'mend',
 export const SLOTS = 5;
 
 export function createMagicState(from = null) {
-	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, moonlit: [] };
+	// (xp, level, perks, use and mastery: your skills, magic/skills.js; mods: what the perks and
+	// mastery add up to; moonlit: the ids of the sun spells mastered to work by the moon)
+	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, xp: 0, level: 1, perks: [], use: {}, mastery: {}, mods: null, moonlit: [] };
 	if (from && from.v === 1) {
 		if (Array.isArray(from.known)) s.known = from.known.filter((id) => SPELL[id]);
 		if (Array.isArray(from.binds)) s.binds = [...Array(SLOTS)].map((_, i) => (SPELL[from.binds[i]] && s.known.includes(from.binds[i]) ? from.binds[i] : null));
@@ -133,12 +135,17 @@ export function createMagicState(from = null) {
 		if (from.mark && Number.isFinite(from.mark.x)) s.mark = { x: from.mark.x, y: from.mark.y, z: from.mark.z, w: from.mark.w || null };
 		if (Array.isArray(from.wells)) s.wells = from.wells.filter((w) => Number.isFinite(w?.x)).slice(0, 64);
 		if (from.gathered && typeof from.gathered === 'object') s.gathered = { ...from.gathered };
+		if (Number.isFinite(from.xp)) s.xp = from.xp;
+		if (Number.isFinite(from.level)) s.level = from.level;
+		if (Array.isArray(from.perks)) s.perks = from.perks.filter((id) => typeof id === 'string');
+		if (from.use && typeof from.use === 'object') s.use = { ...from.use };
+		if (from.mastery && typeof from.mastery === 'object') s.mastery = { ...from.mastery };
 		if (Array.isArray(from.moonlit)) s.moonlit = from.moonlit.filter((id) => SPELL[id]?.night === 'moon');
 	}
 	return s;
 }
 // what is kept (no cooldowns: they are of the moment)
-export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, moonlit: s.moonlit }; }
+export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {}, mastery: s.mastery || {}, moonlit: s.moonlit || [] }; }
 
 // A spell of the sun (night: 'moon') works by night only once it channels the moon: the skills
 // side grants that when it is mastered or fed enough aether (grantMoonlit), and it is kept
@@ -155,9 +162,39 @@ export function aetherShare(strand, rep = 0) {
 // (both at once, for the menu: { light, dark } multipliers for a reputation)
 export const gatherShare = (rep = 0) => ({ light: aetherShare('light', rep), dark: aetherShare('dark', rep) });
 
-export const manaMax = (s) => Math.min(260, 100 + 4 * s.known.length + Math.floor((s.affinity.light + s.affinity.dark) / 40));
+// What the perks you hold add to a spell's stat (magic/skills.js sums them into s.mods): the
+// share for its school, its strand and every spell, and (power) the spell's own mastery
+export function modFor(mods, stat, spell) {
+	const m = mods?.[stat];
+	if (!m || !spell) return 0;
+	return (m[spell.school] || 0) + (m[strandOf(spell)] || 0) + (m.all || 0) + (m[spell.id] || 0);
+}
+// a spell as the perks shape it: longer, wider, further, its statuses held longer, and as a
+// garment's magic changes it (mods.alter: gameplay/gear-magic.js ALTERATIONS, set on it, added
+// to it, put on its status). The copy is what the caster works with; its id, mana and cooldown
+// are the catalog's.
+export function shaped(spell, mods) {
+	const dur = modFor(mods, 'dur', spell), area = modFor(mods, 'area', spell), range = modFor(mods, 'range', spell), st = modFor(mods, 'status', spell);
+	const A = spell ? mods?.alter?.[spell.id] : null;
+	if (!dur && !area && !range && !st && !A) return spell;
+	const o = { ...spell };
+	if (dur && o.t) o.t = o.t * (1 + dur);
+	if (area && o.r) o.r = o.r * (1 + area);
+	if (area && o.splash) o.splash = o.splash * (1 + area);
+	if (range && o.range) o.range = o.range * (1 + range);
+	if (range && o.speed) o.speed = o.speed * (1 + range * 0.5);
+	if (st && o.status) { o.status = { ...o.status }; for (const k of ['hold', 'fear', 't']) if (o.status[k]) o.status[k] *= 1 + st; }
+	if (A) {
+		if (A.set) Object.assign(o, A.set);
+		if (A.add) for (const [k, v] of Object.entries(A.add)) o[k] = (o[k] || 0) + v;
+		if (A.status) o.status = { ...(o.status || {}), ...A.status };
+	}
+	return o;
+}
+
+export const manaMax = (s) => Math.min(260 + (s.mods?.manaMax || 0), 100 + 4 * s.known.length + Math.floor((s.affinity.light + s.affinity.dark) / 40) + (s.mods?.manaMax || 0));
 // mana a second: more out of a fight
-export const manaRegen = (s, fighting = false) => (fighting ? 4 : 7) + Math.min(6, (s.affinity.light + s.affinity.dark) / 150);
+export const manaRegen = (s, fighting = false) => (fighting ? 4 : 7) + Math.min(6, (s.affinity.light + s.affinity.dark) / 150) + (s.mods?.regen || 0);
 
 // why a spell cannot be woven now (null: it can)
 export function weaveBlock(s, spell) {
@@ -205,12 +242,12 @@ export function spellPower(s, spell, { light = 0.5, pact = 1 } = {}) {
 	if (strand === 'light') k *= 1 + 0.25 * day - 0.1 * night;
 	else if (strand === 'dark') k *= 1 + 0.33 * night - 0.1 * day;
 	else k *= 1 + 0.33 * dusk;
-	return k * pact;
+	return k * pact * (1 + modFor(s.mods, 'power', spell));
 }
 // its mana now: a deep affinity makes its own strand cheaper (to two thirds)
 export function manaCost(s, spell) {
 	const strand = strandOf(spell), aff = strand === 'twilight' ? Math.min(s.affinity.light, s.affinity.dark) : s.affinity[strand] || 0;
-	return Math.round(spell.mana * (1 - Math.min(0.33, aff / 900)));
+	return Math.round(spell.mana * (1 - Math.min(0.33, aff / 900)) * (1 - Math.min(0.6, modFor(s.mods, 'mana', spell))));
 }
 // why a spell cannot be cast now (null: it can); now in seconds
 export function castBlock(s, id, now) {
@@ -224,10 +261,12 @@ export function castBlock(s, id, now) {
 export function spend(s, id, now, cdK = 1) {
 	const spell = SPELL[id];
 	s.mana -= manaCost(s, spell);
-	s.cds[id] = now + spell.cd / Math.max(1, cdK);
+	s.cds[id] = now + cooldownOf(s, spell) / Math.max(1, cdK);
 }
+// its cooldown, as the perks shorten it (seconds)
+export const cooldownOf = (s, spell) => spell.cd * (1 - Math.min(0.6, modFor(s.mods, 'cd', spell)));
 // the share of its cooldown still to run (0 ready .. 1 just cast)
-export const cooldownLeft = (s, id, now) => { const spell = SPELL[id], end = s.cds[id] || 0; return !spell || end <= now ? 0 : Math.min(1, (end - now) / Math.max(0.01, spell.cd)); };
+export const cooldownLeft = (s, id, now) => { const spell = SPELL[id], end = s.cds[id] || 0; return !spell || end <= now ? 0 : Math.min(1, (end - now) / Math.max(0.01, cooldownOf(s, spell))); };
 
 // fabric gathered: n of a strand
 export function gather(s, strand, n) { if (strand !== 'light' && strand !== 'dark') return false; s.fabric[strand] += Math.max(0, Math.floor(n)); return true; }

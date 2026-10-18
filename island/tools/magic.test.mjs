@@ -179,10 +179,7 @@ test('the look modes and the keys are wired', () => {
 	assert.match(hb, /Digit\(\[1-5\]\)/);
 	const ai = fs.readFileSync(new URL('../src/combat/ai-squads.js', import.meta.url), 'utf8');
 	assert.match(ai, /hexStep/); assert.match(ai, /ctx\.cloaked/);
-	// the spellbook starts hidden by its class alone, so it is open only once shown (else the keys
-	// 1 to 0 are dead from the start: the bar and the spells wait on a closed book)
-	const hud = fs.readFileSync(new URL('../src/magic/hud.js', import.meta.url), 'utf8');
-	assert.match(hud, /isOpen = \(\) => book\.style\.display === 'flex'/);
+	// (the spellbook is the skills menu now, magic/skills-ui.js: it is shut until opened)
 });
 
 test('every spell has a look of its own, and no two look alike', async () => {
@@ -315,7 +312,8 @@ test('spells reach brawlers and townsfolk, hands cast them, the body gestures, t
 	const hud = src('magic/hud.js');
 	assert.match(hud, /\.mg-bar\{position:absolute;left:50%;bottom:calc\(12px/, 'the bar at the bottom on a desktop');
 	assert.match(hud, /\.l99-touch \.mg-bar\{bottom:calc\(var\(--l99-low/, 'above the thumbs on a touch screen');
-	assert.match(hud, /const isOpen = \(\) => book\.style\.display === 'flex'/, 'the book is shut until opened, so the keys work from the start');
+	// (the spellbook is now the skills and magic menu, magic/skills-ui.js: shut until opened)
+	assert.match(src('magic/skills-ui.js'), /let root = null, built = false, open = false/, 'the menu is shut until opened, so the keys work from the start');
 });
 
 test('a beam gathers, lets go with a punch, pours, and thins away', async () => {

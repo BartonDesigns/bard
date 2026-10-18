@@ -434,6 +434,8 @@ const VOICE = {
 	radiance: { f: 880, f2: 1320, type: 'triangle' }, restoration: { f: 660, f2: 990, type: 'sine' }, warding: { f: 520, f2: 780, type: 'sine' }, dawn: { f: 990, f2: 1480, type: 'sine' },
 	shadow: { f: 220, f2: 140, type: 'sawtooth' }, void: { f: 160, f2: 60, type: 'sawtooth' }, blight: { f: 190, f2: 240, type: 'square' }, umbral: { f: 260, f2: 130, type: 'triangle' },
 	storm: { f: 120, f2: 2400, type: 'sawtooth' }, chrono: { f: 740, f2: 370, type: 'sine' }, primal: { f: 300, f2: 180, type: 'square' },
+	// (the skills of the body, and a level gained: magic/skills-ui.js)
+	marksman: { f: 440, f2: 660, type: 'triangle' }, athletics: { f: 587, f2: 880, type: 'sine' }, resilience: { f: 330, f2: 495, type: 'triangle' }, level: { f: 523, f2: 1047, type: 'sine' },
 };
 export function magicSound(kind, gain = 0.12) {
 	try {
@@ -444,9 +446,9 @@ export function magicSound(kind, gain = 0.12) {
 		o.frequency.setValueAtTime(V.f, t); o.frequency.exponentialRampToValueAtTime(V.f2, t + 0.25);
 		o2.frequency.setValueAtTime(V.f * 1.5, t); o2.frequency.exponentialRampToValueAtTime(V.f2 * 1.5, t + 0.3);
 		f.type = 'lowpass'; f.frequency.value = kind === 'storm' ? 5000 : 2600;
-		g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'gather' ? 0.7 : 0.45));
+		g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'gather' ? 0.7 : kind === 'level' ? 1.4 : 0.45));
 		o.connect(f); o2.connect(f); f.connect(g); g.connect(bus.out);
-		o.start(t); o2.start(t); o.stop(t + 0.8); o2.stop(t + 0.8);
+		o.start(t); o2.start(t); o.stop(t + 1.5); o2.stop(t + 1.5);
 		o.onended = () => { o.disconnect(); o2.disconnect(); f.disconnect(); g.disconnect(); };
 	} catch { /* no sound here */ }
 }

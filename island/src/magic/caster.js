@@ -28,8 +28,14 @@
 // cast, a bolt's flight and landing, a beam, a blast and its tell, a lingering area, a wraith, a
 // buff while it lasts, a status on a fighter) and falls back on a soft orb of its school's colour.
 
+// What you wear and hold changes some of this (gameplay/gear-magic.js, through state.mods):
+// a spell can be altered (three sparks, a bolt that passes through everyone, a step that
+// leaves you cloaked, burning ground, a heal that lingers, a ward with an aura, a recall that
+// mends), a school's every few spells can cost nothing (mods.free), and the weapon in hand's
+// hits reach in here (hexOn, arc, ward, fleet, strike) and loose spells of their own (a free cast).
+
 import * as THREE from 'three';
-import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, strandOf, moonlit } from './spells.js';
+import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf, moonlit } from './spells.js';
 import { GLOW, magicSound, beamVoice } from './fx.js';
 import { CHARGE, MIN_BLAST } from './beam.js';
 import { lookOf, LOOK } from './looks.js';
@@ -43,15 +49,18 @@ const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 
 // what is cast along the aim (the rest are cast on yourself or about you)
 const AIMED = new Set(['bolt', 'beam', 'burst', 'flare', 'strike', 'lances', 'chain', 'orb', 'well', 'cloud', 'storm', 'stasis', 'cone']);
 
-// onCast(spell, from, to): told of each spell cast (and every 0.3 s of a held beam);
-// beams: how a beam looks (magic/beam.js); third(): whether you are seen in third person;
+// track(kind, ...): what you do, for your skills (magic/skills.js): ('cast', spell, mana paid),
+// ('hurt', harm taken). onCast(spell, from, to): told of each spell cast (and every 0.3 s of a
+// held beam); beams: how a beam looks (magic/beam.js); third(): whether you are seen in third person
 // heavens(): { sun, moon }, the directions toward each (the lances and the flare fall out of whichever is up)
-export function createCaster({ camera, combat, player, state, fx, light, heavens = () => null, hint, sky, worldKey, seed, isPhone = false, onCast = null, beams = null, third = () => false }) {
+export function createCaster({ camera, combat, player, state, fx, light, heavens = () => null, hint, sky, worldKey, seed, isPhone = false, track = () => {}, onCast = null, beams = null, third = () => false }) {
 	const P = () => player()?.state;
 	const now = () => performance.now() / 1000;
 	const bolts = [], effects = [], shades = [], knocks = [], hexed = new Map(), held = new Map();
 	const buff = { shield: 0, shieldUntil: 0, cloakUntil: 0, deathUntil: 0, pactUntil: 0, quickUntil: 0, lightUntil: 0, sightUntil: 0, sightWhat: null, nightUntil: 0, hots: [], moves: [], looks: new Map() };
 	const history = [];
+	// (casts of each school since its last free one: a garment's mastery, mods.free)
+	const freeCount = {};
 	let histT = 0, regenT = 0, fighting = false, gateI = 0, cursor = null, dayTween = null;
 
 	// ---------- aim ----------
@@ -87,12 +96,13 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 	// ---------- harm and hexes ----------
 	// a spell's blow on T: dread makes it land harder, and what lands sets off its element's
 	// affliction (magic/elements.js)
-	function harm(T, amount, spell, at, dir = null) {
+	// (plain: a weapon's own leap, which carries no affliction of its own)
+	function harm(T, amount, spell, at, dir = null, plain = false) {
 		if (!T || amount <= 0) return null;
 		const blow = { amount: amount * (1 + afflict.vuln(T)), type: typeOf(spell.type), part: 'body', src: at, dir: dir || { x: T.bound.x - at.x, y: 0.3, z: T.bound.z - at.z }, by: combat.me, spell: spell.type };
 		const r = combat.deal(T, blow, true);
 		const c = GLOW[spell.type === 'frost' ? 'frost' : spell.school];
-		if (r?.dealt) { const at2 = { x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }; fx.burst(at2, c, 8, 3, 0.4, 0.2); fx.flash?.(at2, c, r.killed ? Math.max(0.6, r.dealt / 60) : r.dealt / 60); if (r.killed) afflict.fell(T, spell.type); else if (amount < 1e5) afflict.apply(T, spell.type, r.dealt, at); }
+		if (r?.dealt) { const at2 = { x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }; fx.burst(at2, c, 8, 3, 0.4, 0.2); fx.flash?.(at2, c, r.killed ? Math.max(0.6, r.dealt / 60) : r.dealt / 60); if (r.killed) afflict.fell(T, spell.type); else if (amount < 1e5 && !plain) afflict.apply(T, spell.type, r.dealt, at); }
 		return r;
 	}
 	// (an affliction's own follow-on blow: a burn's tick, an echo, a leap; it afflicts nothing more)
@@ -194,7 +204,12 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// (aim the bolt from the hand at where the view's ray lands, so it meets the crosshair)
 			const tgt = combat.firstHit(_o, _d, 300, combat.me), end = _o.clone().addScaledVector(_d, tgt ? tgt.t : 300);
 			const dir = end.sub(from).normalize();
-			bolts.push({ spell, k, pos: from, vel: dir.multiplyScalar(spell.speed), life: 4, pierced: false, owner: 'me', look: lookOf(spell) });
+			// (split: several in a fan about the aim, each the weaker for it)
+			const n = Math.max(1, spell.split | 0), dmg = spell.dmg * (spell.dmgK || 1);
+			for (let j = 0; j < n; j++) {
+				const v = n > 1 ? dir.clone().applyAxisAngle(_u.set(0, 1, 0), (j / (n - 1) - 0.5) * 0.16) : dir;
+				bolts.push({ spell, k, pos: j === n - 1 ? from : from.clone(), vel: v.multiplyScalar(spell.speed), life: 4, pierced: false, owner: 'me', dmg: n > 1 ? dmg : undefined, look: lookOf(spell) });
+			}
 		},
 		// (it gathers for CHARGE first, then lets go: magic/beam.js)
 		beam(spell, k) { drop(spell.id); held.set(spell.id, { spell, k, t: spell.t + CHARGE, age: -CHARGE, acc: new Map(), voice: beamVoice(spell.school), rumble: 0, push: 0 }); },
@@ -215,7 +230,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// Solar Flare: directed light out of wherever the sun stands, a column down onto where you aim
 			// for spell.delay, then the blast. By night only once it channels the moon (moonlit), in
 			// silver and a fifth weaker; under no moon, or unmastered, it is not cast and costs nothing.
-			const H = heavens() || {}, up = (q) => q && q.y > 0.05, night = !up(H.sun);
+			// (with no sky to ask, it falls straight down as by day)
+			const H = heavens() || { sun: { x: 0, y: 1, z: 0 } }, up = (q) => q && q.y > 0.05, night = !up(H.sun);
 			if (night && (!moonlit(state, spell.id) || !up(H.moon))) { hint(moonlit(state, spell.id) ? 'There is no moon up to channel.' : `${spell.name} needs the sun. Master it to draw on the moon.`, 2200); return 'refund'; }
 			const src = night ? H.moon : H.sun, dir = new THREE.Vector3(src?.x || 0, Math.max(0.35, src?.y || 1), src?.z || 0).normalize();
 			const { at } = aimPoint(spell.range), L = lookOf(spell), D = spell.delay || 0.5, kk = night ? k * 0.8 : k;
@@ -419,9 +435,19 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// (and the thunderhead over it)
 			effects.push({ t: 0, life: spell.t, every: 0.05, step() { if (L.rain) { L.rain(fx, at, spell.r); L.cloud?.(fx, at, spell.r); } else for (let n = 0; n < 6; n++) { const a = Math.random() * 6.283, r = spell.r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * r, at.y + 14, at.z + Math.sin(a) * r, 0, -16, 0, 0.9, 0.06, 0.04, [0.5, 0.65, 0.8], 0.6, 0, 0); } } });
 		},
-		heal(spell, k) { const n = combat.mend(spell.heal * k); if (!LOOK[spell.id]?.self) fx.burst({ x: camera.position.x, y: camera.position.y - 0.8, z: camera.position.z }, GLOW.restoration, 30, 1.2, 0.9, 0.2, 1.4); if (!n) hint('You are not hurt.', 1400); },
+		heal(spell, k, o) {
+			const n = combat.mend(spell.heal * k);
+			if (!LOOK[spell.id]?.self) fx.burst({ x: camera.position.x, y: camera.position.y - 0.8, z: camera.position.z }, GLOW.restoration, 30, 1.2, 0.9, 0.2, 1.4);
+			// (renew: it goes on healing for a while after)
+			if (spell.renew) buff.hots.push({ left: spell.renewT, rate: spell.heal * k * spell.renew / spell.renewT });
+			else if (!n && !o.quiet) hint('You are not hurt.', 1400);
+		},
 		hot(spell, k) { buff.hots.push({ left: spell.t, rate: spell.heal * k / spell.t }); },
-		shield(spell, k) { buff.shield = spell.absorb * (spell.absorb > 1e5 ? 1 : k); buff.shieldUntil = now() + spell.t; },
+		shield(spell, k) {
+			buff.shield = spell.absorb * (spell.absorb > 1e5 ? 1 : k); buff.shieldUntil = now() + spell.t;
+			// (an aura lit with it)
+			if (spell.aura) DO.aura({ ...SPELL['radiant-aura'], ...spell.aura }, k);
+		},
 		deathward(spell) { buff.deathUntil = now() + spell.t; buff.deathHeal = spell.heal; },
 		aura(spell, k) {
 			effects.push({ t: 0, life: spell.t, every: 0.25,
@@ -462,6 +488,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// (gone in smoke here; the look's own puff comes again where you land, after the cast)
 			lookOf(spell).self?.(fx, p.pos);
 			teleport(to.x, to.y, to.z);
+			// (and the dark keeps you a moment after)
+			if (spell.cloakAfter) buff.cloakUntil = Math.max(buff.cloakUntil, now() + spell.cloakAfter);
 		},
 		recall(spell, k, o) {
 			const p = P(); if (!p) return 'refund';
@@ -473,6 +501,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			}
 			lookOf(spell).self?.(fx, p.pos);
 			teleport(state.mark.x, state.mark.y, state.mark.z);
+			if (spell.recallHeal) combat.mend(combat.vitals().max * spell.recallHeal);
 		},
 		gate() {
 			const sd = seed(), list = state.wells.filter((q) => q.seed === sd);
@@ -490,10 +519,10 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const v = combat.vitals();
 			if (S.hp > v.hp) combat.mend(S.hp - v.hp);
 		},
-		stasis(spell) {
+		stasis(spell, k, o) {
 			const { T } = aimPoint(spell.range);
-			if (!T) { hint('Nothing there to hold.', 1200); return 'refund'; }
-			if (T.kind !== 'hostile' && T.kind !== 'person') { hint(T.kind === 'boss' ? 'It is too vast to hold in time.' : 'Stasis holds only the living.', 1600); return 'refund'; }
+			if (!T) { if (!o.quiet) hint('Nothing there to hold.', 1200); return 'refund'; }
+			if (T.kind !== 'hostile' && T.kind !== 'person') { if (!o.quiet) hint(T.kind === 'boss' ? 'It is too vast to hold in time.' : 'Stasis holds only the living.', 1600); return 'refund'; }
 			hex(T, { hold: spell.t }, 1, spell.id);
 		},
 		douse(spell) {
@@ -517,14 +546,21 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 	}
 
 	// ---------- casting ----------
-	// cast a spell by its id: true if it was cast (o.shift: Shift held)
+	// cast a spell by its id: true if it was cast (o.shift: Shift held). o.free: loosed by the
+	// weapon in hand (gear-magic.js Spellshot): known or not, no mana, no cooldown, no word.
+	// A garment's mastery (mods.free) makes every few casts of its school free the same way.
 	function cast(id, o = {}) {
 		const spell = SPELL[id], t = now();
-		const why = castBlock(state, id, t);
-		if (why) { hint(why, 1400); magicSound('fizzle', 0.06); return false; }
+		if (!spell) return false;
+		const every = !o.free && state.mods?.free?.[spell.school];
+		const mastery = !!every && ((freeCount[spell.school] || 0) + 1) % every === 0;
+		const why = o.free ? null : castBlock(state, id, t);
+		// (a free cast needs no mana, only the spell known and ready)
+		if (why && !(mastery && state.known.includes(id) && (state.cds[id] || 0) <= t)) { if (!o.quiet) hint(why, 1400); magicSound('fizzle', 0.06); return false; }
 		const k = spellPower(state, spell, { light: light(), pact: buff.pactUntil > t ? buff.pactK || 1.5 : 1 });
 		const was = camera.position.clone();
-		const out = DO[spell.kind]?.(spell, k, o);
+		// (the perks you hold and the gear you wear shape it: magic/skills.js, gear-magic.js)
+		const out = DO[spell.kind]?.(shaped(spell, state.mods), k, o);
 		if (out === 'refund') return false;
 		// (told: the hands and the body cast it, magic/hands.js; friends see it, magic/index.js):
 		// from the hand to where it went, or from where you were to where you are now
@@ -535,17 +571,31 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			if (!moved && AIMED.has(spell.kind)) { aim(_o, _d); const h = combat.firstHit(_o, _d, spell.range || 120, combat.me); to = _o.clone().addScaledVector(_d, h ? h.t : spell.range || 120); }
 			onCast(spell, from, to);
 		}
-		spend(state, id, t, buff.quickUntil > t ? 3 : 1);
-		// (marking costs little; letting a light go costs nothing)
-		if (out === 'cheap' || out === 'off') { state.mana += Math.round(spell.mana * (out === 'off' ? 1 : 0.75)); state.cds[id] = t + 1; }
+		const c = GLOW[spell.school];
 		// (any harm you do shows you: the cloak is gone)
 		if (spell.dmg || spell.dps) buff.cloakUntil = 0;
-		const c = GLOW[spell.school], L = lookOf(spell);
 		// (a beam has its own gathering and roar: magic/beam.js, beamVoice)
-		if (spell.kind !== 'beam') { if (L.cast) L.cast(fx, hand(_p)); else fx.burst(hand(_p), c, 14, 1.4, 0.35, 0.16, 0.2); magicSound(spell.school); }
-		// (on your body: a heal, a ward, a pact; and its look while it lasts)
-		if (L.self && SELF_AFTER.has(spell.kind)) L.self(fx, camera.position);
-		if (L.on) buff.looks.set(id, { until: t + (spell.t || 600), on: L.on, alive: ALIVE[spell.kind] || (() => true) });
+		const L = lookOf(spell);
+		const flourish = () => {
+			if (spell.kind !== 'beam') { if (L.cast) L.cast(fx, hand(_p)); else fx.burst(hand(_p), c, 14, 1.4, 0.35, 0.16, 0.2); magicSound(spell.school); }
+			// (on your body: a heal, a ward, a pact; and its look while it lasts)
+			if (L.self && SELF_AFTER.has(spell.kind)) L.self(fx, camera.position);
+			if (L.on) buff.looks.set(id, { until: t + (spell.t || 600), on: L.on, alive: ALIVE[spell.kind] || (() => true) });
+		};
+		if (o.free || mastery) {
+			if (every) freeCount[spell.school] = 0;
+			fx.ring({ x: camera.position.x, y: camera.position.y - EYE + 0.1, z: camera.position.z }, 1.4, c, 24, 0.5, 0.3);
+			if (mastery) { hint(`Mastery: ${spell.name} cost nothing.`, 1100); track('cast', spell, manaCost(state, spell) * 0.5); }
+			flourish();
+			return true;
+		}
+		if (every) freeCount[spell.school] = (freeCount[spell.school] || 0) + 1;
+		const paid = manaCost(state, spell);
+		spend(state, id, t, buff.quickUntil > t ? 3 : 1);
+		track('cast', spell, out === 'off' ? 0 : out === 'cheap' ? paid * 0.25 : paid);
+		// (marking costs little; letting a light go costs nothing)
+		if (out === 'cheap' || out === 'off') { state.mana += Math.round(spell.mana * (out === 'off' ? 1 : 0.75)); state.cds[id] = t + 1; }
+		flourish();
 		return true;
 	}
 	// let go of a held spell (a beam: it pours a breath longer if it has only just let go)
@@ -580,12 +630,24 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 				if (L.hit) L.hit(fx, at, _d); else fx.burst(at, c, 16, 3, 0.4, 0.22, 0.6);
 				if (spell.splash) { fx.ring(at, spell.splash, c, 24, 0.35, 0.3); areaHarm(at, spell.splash, spell, B.k, spell.dmg * 0.6, null); }
 				if (spell.ignite) combat.igniteAt(at.x, at.z, 5);
-				if (spell.pierce && h.T && !B.pierced) { B.pierced = true; B.pos.copy(at).addScaledVector(_d, 0.6); continue; }
+				if (spell.burn) burnAt(at, spell, B.k);
+				// (pierce: on through the first it strikes; 'all': through everyone, up to eight)
+				if (spell.pierce === 'all' && h.T && (B.hits = (B.hits || 0) + 1) < 8) { B.pos.copy(at).addScaledVector(_d, 0.6); continue; }
+				if (spell.pierce === true && h.T && !B.pierced) { B.pierced = true; B.pos.copy(at).addScaledVector(_d, 0.6); continue; }
 				bolts.splice(i, 1);
 				continue;
 			}
 			B.pos.addScaledVector(B.vel, dt);
 		}
+	}
+	// burning ground where a bolt lands (a garment's Cinder): the hostile in it take fire
+	function burnAt(at, spell, k) {
+		const B0 = spell.burn, c = GLOW.primal, p = at.clone();
+		effects.push({ t: 0, life: B0.t, every: 0.25,
+			step() {
+				for (let n = 0; n < (isPhone ? 4 : 9); n++) { const a = Math.random() * 6.283, r = B0.r * Math.sqrt(Math.random()); fx.emit(p.x + Math.cos(a) * r, p.y + 0.1, p.z + Math.sin(a) * r, 0, 1.2 + Math.random(), 0, 0.5, 0.22, 0.05, c, 0.9, 0, 0); }
+				for (const x of hostilesNear(p, B0.r, struck)) harm(x.T, B0.dps * 0.25 * k, spell, p);
+			} });
 	}
 	function stepBeams(dt, keysHeld) {
 		for (const [id, H] of held) {
@@ -656,7 +718,9 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		if (p) {
 			let sk = 1, jk = 1, fk = 1, ww = false;
 			for (const m of buff.moves) { sk = Math.max(sk, m.speedK); jk = Math.max(jk, m.jumpK); fk = Math.min(fk, m.fallK); ww = ww || m.waterWalk; }
-			p.speedK = sk; p.jumpK = jk; p.fallK = fk; p.waterWalk = ww;
+			// (and the body's perks, at all times)
+			const M = state.mods;
+			p.speedK = sk * (1 + (M?.speed || 0)); p.jumpK = jk * (1 + (M?.jump || 0)); p.fallK = fk * (1 - (M?.fall || 0)); p.waterWalk = ww;
 		}
 		// (quickened: every cooldown runs three times as fast)
 		if (buff.quickUntil > t) for (const id of Object.keys(state.cds)) state.cds[id] -= dt * 2;
@@ -690,6 +754,9 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 	function shieldBlow(blow) {
 		if (blow.pact) return blow;
 		const t = now();
+		// (the perks that harden you, and the harm taken teaching you)
+		if (state.mods?.armor) blow = { ...blow, amount: blow.amount * (1 - state.mods.armor) };
+		track('hurt', blow.amount);
 		if (buff.shield > 0 && buff.shieldUntil > t) {
 			const take = Math.min(buff.shield, blow.amount);
 			buff.shield -= take;
@@ -722,6 +789,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		regenT -= dt;
 		if (regenT <= 0) { regenT = 0.5; fighting = !!combat.squads?.alive?.().some((h) => h.alert && h.target?.id === 'me'); }
 		state.mana = Math.min(manaMax(state), state.mana + manaRegen(state, fighting) * dt);
+		// (wounds close out of a fight, with the perks for it)
+		if (state.mods?.hpRegen && !fighting) combat.mend(state.mods.hpRegen * dt);
 		// (where you were, for a rewind)
 		histT -= dt;
 		const p = P();
@@ -729,8 +798,37 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		stepBolts(dt); stepBeams(dt, keysHeld); stepEffects(dt); stepShades(dt, t); stepHexes(dt); afflict.step(dt); stepKnocks(dt); stepBuffs(dt, t);
 	}
 	function clear() { for (const id of [...held.keys()]) drop(id); beams?.clear(); bolts.length = effects.length = shades.length = knocks.length = 0; buff.looks.clear(); for (const T of hexed.keys()) T.hex = null; hexed.clear(); afflict.clear(); history.length = 0; }
+
+	// ---------- what the weapon in hand's hits carry (gear-magic.js INFUSIONS, magic/index.js) ----------
+	// a status laid on a fighter
+	const hexOn = (T, st, k = 1) => hex(T, st, k);
+	// a share of a hit leaping as lightning to the nearest other foe within hop m
+	function arc(T, amount, hop = 8) {
+		if (!T?.bound || amount <= 0) return false;
+		const next = nearestHostile(T.bound, hop, (q) => q !== T);
+		if (!next) return false;
+		fx.line({ x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }, { x: next.bound.x, y: next.bound.y + 0.2, z: next.bound.z }, GLOW.storm, 0.35, 0.22, 0.18, 1.2);
+		harm(next, amount, { type: 'storm', school: 'storm' }, T.bound, null, true);
+		return true;
+	}
+	// ward laid on you, up to max, held a while
+	function ward(n, max = 40) {
+		const t = now();
+		buff.shield = Math.min(max, (buff.shieldUntil > t ? buff.shield : 0) + n);
+		buff.shieldUntil = Math.max(buff.shieldUntil, t + 8);
+	}
+	// fleet feet for t s (the one entry, renewed)
+	function fleet(share, t = 3) {
+		const until = now() + t, m = buff.moves.find((q) => q.fleet);
+		if (m) { m.until = Math.max(m.until, until); m.speedK = Math.max(m.speedK, 1 + share); } else buff.moves.push({ until, speedK: 1 + share, jumpK: 1, fallK: 1, waterWalk: false, fleet: true });
+	}
+	// seconds off the cooldowns of a school's spells
+	function strike(school, cut) {
+		const t = now();
+		for (const id of Object.keys(state.cds)) if (SPELL[id]?.school === school && state.cds[id] > t) state.cds[id] = Math.max(t, state.cds[id] - cut);
+	}
 	return {
-		cast, release, update, clear, shieldBlow, exposure,
+		cast, release, update, clear, shieldBlow, exposure, hexOn, arc, ward, fleet, strike,
 		cloaked: () => buff.cloakUntil > now(),
 		// the school of a held spell (a beam) pouring from the hand now, or null
 		beaming: () => { for (const H of held.values()) return H.spell.school; return null; },

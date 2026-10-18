@@ -6,6 +6,7 @@ import {
 	ACTIVITIES,
 	ACQUISITION_SOURCES,
 	ARMS_CATALOG,
+	GARMENT_SLOTS,
 	SOURCE_CATALOG,
 	TRANSACTION_KINDS,
 	applyInventoryTransaction,
@@ -17,10 +18,12 @@ import {
 	resolveTheftAttempt,
 	inventorySummary,
 	instancesOf,
+	isGarment,
 	sellPrice,
 	upgradePrice,
 } from '../gameplay/arms.js';
 import { canCombine, canUpgrade } from '../gameplay/gear-levels.js';
+import { awakenedBetween } from '../gameplay/gear-magic.js';
 import { normalizeSiteKind, resolveSiteAccess, siteDefinition } from '../world/site-catalog.js';
 
 const SOURCE_BY_SITE = Object.freeze({
@@ -284,11 +287,33 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	function hold(which) {
 		const inst = which ? state.instances?.[which] || instancesOf(state, which)[0] : null;
 		if (which && !inst) return result(false, 'hold', 'You do not have that.');
+		if (inst && isGarment(inst.i)) return wear(inst.u);
 		const tx = inst ? { id: txId('equip', inst.i, 'hand'), kind: TRANSACTION_KINDS.EQUIP, uid: inst.u, slot: 'hand' } : { id: txId('unequip', 'hand', 'hand'), kind: TRANSACTION_KINDS.UNEQUIP, slot: 'hand' };
 		if (!inst && !state.equipped?.hand) return result(true, 'hold', null);
 		const out = transact(tx, { expectedRevision: state.revision });
 		if (out.ok && !out.duplicate) save(out.state);
 		return result(out.ok, 'hold', out.ok ? null : out.receipt?.message);
+	}
+	// a garment on (the one on its slot comes off), or a slot's garment off
+	function wear(uid) {
+		const inst = state.instances?.[uid];
+		if (!inst || !isGarment(inst.i)) return result(false, 'wear', 'You do not have that to wear.');
+		const out = transact({ id: txId('equip', inst.i, 'worn'), kind: TRANSACTION_KINDS.EQUIP, uid }, { expectedRevision: state.revision });
+		if (out.ok && !out.duplicate) save(out.state);
+		return result(out.ok, 'wear', out.ok ? `You put on the ${findItem(inst.i).name}.` : out.receipt?.message);
+	}
+	function takeOff(slot) {
+		if (!state.worn?.[slot]) return result(true, 'wear', null);
+		const name = findItem(state.instances?.[state.worn[slot]]?.i)?.name || 'garment';
+		const out = transact({ id: txId('unequip', slot, 'worn'), kind: TRANSACTION_KINDS.UNEQUIP, slot }, { expectedRevision: state.revision });
+		if (out.ok && !out.duplicate) save(out.state);
+		return result(out.ok, 'wear', out.ok ? `You took off the ${name}.` : out.receipt?.message);
+	}
+	// what you wear, slot by slot (instances, copied; cheap enough to ask for every frame)
+	function worn() {
+		const out = {};
+		for (const slot of GARMENT_SLOTS) { const x = state.worn?.[slot] && state.instances?.[state.worn[slot]]; if (x) out[slot] = { ...x }; }
+		return out;
 	}
 	// one side of a trade with a friend (gameplay/trade.js builds it; its id makes it land once)
 	function apply(tx) {
@@ -327,9 +352,31 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		const out = transact({ id: txId('train', state.instances[uid].i, 'xp'), kind: TRANSACTION_KINDS.TRAIN, uid, xp, at: now() });
 		if (!out.ok) return;
 		save(out.state);
-		if (out.state.instances[uid].l > before) hint(`${findItem(out.state.instances[uid].i).name} reached level ${out.state.instances[uid].l}.`, 3500);
+		const after = out.state.instances[uid];
+		if (after.l > before) {
+			// (and the magic a level wakes in it: gameplay/gear-magic.js)
+			const woke = awakenedBetween(after, before, after.l).at(-1);
+			hint(`${findItem(after.i).name} reached level ${after.l}.${woke ? ` ${woke.name}: ${woke.desc}` : ''}`, woke ? 6000 : 3500);
+		}
 	}
 	// carrying the item in hand while you travel on foot: about one point every 15 m
+	// experience for several items at once, without a hint for each (gear trained in a fight,
+	// infused with fabric): { uid: xp }; returns the items that went up a level
+	function trainMany(gains) {
+		const up = [];
+		let changed = false;
+		for (const [uid, xp] of Object.entries(gains || {})) {
+			const x = state.instances?.[uid];
+			if (!x || !(xp >= 1)) continue;
+			const out = transact({ id: txId('train', x.i, 'xp'), kind: TRANSACTION_KINDS.TRAIN, uid, xp: Math.floor(xp), at: now() });
+			if (!out.ok) continue;
+			state = out.state; changed = true;
+			const after = state.instances[uid];
+			if (after.l > x.l) up.push({ uid, name: findItem(x.i).name, from: x.l, to: after.l, awake: awakenedBetween(after, x.l, after.l) });
+		}
+		if (changed) save(state);
+		return up;
+	}
 	function carry(dt, metres) {
 		const uid = state.hand;
 		if (!uid) return;
@@ -342,7 +389,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 
 	function command(text, context = {}) { return execute(parseArmsRequest(text), context); }
 	function update(dt = 0, position = null) { scanClock -= Math.max(0, +dt || 0); if (position && (scanClock <= 0 || !lastPosition || distance(position, lastPosition) > 8)) { scanClock = 0.5; nearby(position); } return lastNearby; }
-	return { setPurchasePolicy: policy => { purchasePolicy = policy; }, catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), upgrade, combine, train, carry, apply, applied, spendCredits, lockTrades, locked: () => tradeLocks.size > 0, canAttemptTheft: (input) => C.canAttemptTheft(input) };
+	return { setPurchasePolicy: policy => { purchasePolicy = policy; }, catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), wear, takeOff, worn, revision: () => state.revision, instance: (uid) => (state.instances?.[uid] ? { ...state.instances[uid] } : null), upgrade, combine, train, trainMany, carry, apply, applied, spendCredits, lockTrades, locked: () => tradeLocks.size > 0, canAttemptTheft: (input) => C.canAttemptTheft(input) };
 }
 
 export { ARMS_CATALOG, SOURCE_CATALOG };
