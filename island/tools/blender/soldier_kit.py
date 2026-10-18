@@ -34,6 +34,7 @@ TAU, PI = math.tau, math.pi
 
 # game (x, y up, z forward) to Blender (x, -y forward, z up); the glTF export turns it back
 def G(p): return Vector((p[0], -p[2], p[1]))
+def GAME(p): return Vector((p[0], p[2], -p[1]))
 def V3(x, y, z): return Vector((x, y, z))
 def clamp(x, a=0.0, b=1.0): return max(a, min(b, x))
 def ss(u): u = clamp(u); return u * u * (3 - 2 * u)
@@ -316,6 +317,20 @@ def mat(kind):
 		col = mix(op('MULTIPLY', worn, 0.5), col, rgb(0.8, 0.78, 0.74))
 		rough = val(0.92); tint = val(1.0)
 		height = w.outputs['Fac'] if kind in ('elastic', 'thread') else op('ADD', w.outputs['Fac'], op('MULTIPLY', w2.outputs['Fac'], 0.6))
+	elif kind == 'cordura':
+		# a boot's nylon quarters in the wearer's colour: a fine grain (no woven bands, which
+		# run as stripes over a curved upper), dust in the creases, the edges rubbed
+		col = mix(noise(150), rgb(0.6, 0.6, 0.58), rgb(0.72, 0.72, 0.69))
+		col = mix(op('MULTIPLY', cav, 0.8), col, rgb(0.3, 0.29, 0.27))
+		col = mix(op('MULTIPLY', worn, 0.4), col, rgb(0.86, 0.85, 0.8))
+		rough = val(0.9); tint = val(1.0); height = op('ADD', noise(3200, 2), op('MULTIPLY', noise(900, 3), 0.4))
+	elif kind == 'suede':
+		# suede in the wearer's colour: a brushed nap, mottled where it lies different ways,
+		# darker in the creases and polished pale on the edges
+		col = mix(noise(55, 5, 0.6), rgb(0.5, 0.5, 0.48), rgb(0.66, 0.66, 0.63))
+		col = mix(op('MULTIPLY', cav, 0.9), col, rgb(0.24, 0.23, 0.21))
+		col = mix(op('MULTIPLY', worn, 0.35), col, rgb(0.8, 0.79, 0.75))
+		rough = val(0.97); tint = val(1.0); height = noise(2600, 6, 0.75)
 	elif kind == 'pmag':
 		# a polymer magazine in the colour it is issued in: a fine moulded grain, worn pale on
 		# its corners
@@ -364,7 +379,7 @@ def mat(kind):
 	if metal is None: metal = val(0.0)
 	if isinstance(col, tuple): col = mix(0.0, col, col)
 	bump = N.new('ShaderNodeBump')
-	bump.inputs['Strength'].default_value = {'loop': 0.9, 'paint': 0.4, 'foam': 0.8, 'nylon': 0.5, 'nylonT': 0.6, 'nylonD': 0.6, 'webbing': 0.7, 'elastic': 0.8, 'thread': 0.6, 'patch': 0.7, 'pmag': 0.3}.get(kind, 0.25)
+	bump.inputs['Strength'].default_value = {'cordura': 0.4, 'suede': 0.5, 'loop': 0.9, 'paint': 0.4, 'foam': 0.8, 'nylon': 0.5, 'nylonT': 0.6, 'nylonD': 0.6, 'webbing': 0.7, 'elastic': 0.8, 'thread': 0.6, 'patch': 0.7, 'pmag': 0.3}.get(kind, 0.25)
 	bump.inputs['Distance'].default_value = {'loop': 0.0006, 'paint': 0.00025, 'foam': 0.0008, 'nylon': 0.0003, 'nylonT': 0.0004, 'nylonD': 0.0004, 'webbing': 0.0005, 'elastic': 0.0006, 'thread': 0.0002, 'patch': 0.0003}.get(kind, 0.0002)
 	L.new(height, bump.inputs['Height'])
 	L.new(col, bsdf.inputs['Base Color']); L.new(rough, bsdf.inputs['Roughness']); L.new(metal, bsdf.inputs['Metallic'])
@@ -680,14 +695,15 @@ def headset():
 # and brought back to its origin for the export
 X, Y, Z = V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, 1)
 GEAR, BACKS = [], []
-def gear(group):
+def gear(group, back=True):
 	# (the pieces made since the last call go out as group, laid out in the next slot)
 	k = len(GEAR); off = V3(0.5 + (k % 4) * 0.32, -(k // 4) * 0.36, 0.0)
 	mine = [(l, hs) for l, hs in PIECES if l.get('group') == group]
 	for l, hs in mine:
 		for o in [l] + hs: o.location = G(off)
-	mb = MB(); box(mb, V3(0, 0, -0.0015), X, Y, Z, 0.15, 0.17, 0.001); b = mb.obj('back-' + group, ['nylonT'], smooth=False, sharp=0)
-	b.location = G(off); b.hide_render = True; BACKS.append(b)
+	if back:
+		mb = MB(); box(mb, V3(0, 0, -0.0015), X, Y, Z, 0.15, 0.17, 0.001); b = mb.obj('back-' + group, ['nylonT'], smooth=False, sharp=0)
+		b.location = G(off); b.hide_render = True; BACKS.append(b)
 	GEAR.append((group, off))
 def rrect(w, h, r, n=4, c=V3(0, 0, 0)):
 	# a rounded rectangle's outline round c in the x-y plane, anticlockwise
@@ -906,6 +922,280 @@ def buckle():
 	piece(bk, [hb], 'buckle')
 	gear('buckle')
 
+# ---------- the combat boot ----------
+# made round the reference foot (ref-foot.obj, the foot frame: origin at the ankle joint, +y
+# up, +z along the foot, +x out to the side; a left boot, the game mirrors it for the right):
+# the foot and ankle closed, stood off, remeshed and smoothed into one volume, cut at the top
+# of the shaft and at the sole; a moulded sole round its outline with lugs under it and blocks
+# round its wall; a rubber rand over the toe, suede over the toe and the heel, the quarters in
+# nylon, a tongue, eyelets and laces up the front, a padded collar and a pull loop at the back
+def load_foot():
+	V, F, meta = [], [], None
+	for line in open(os.path.join(HERE, 'ref-foot.obj')):
+		if line.startswith('# meta '): meta = json.loads(line[7:])
+		elif line.startswith('v '): V.append(V3(*map(float, line.split()[1:4])))
+		elif line.startswith('f '): F.append([int(s) - 1 for s in line.split()[1:4]])
+	me = bpy.data.meshes.new('ref-foot'); me.from_pydata([G(v) for v in V], [], F); me.update()
+	ob = bpy.data.objects.new('ref-foot', me); SC.collection.objects.link(ob)
+	return ob, meta
+FOOT_STAND, SHAFT = 0.017, 0.11
+# (the toe cap's edge: in front of it from this far along the foot at height h over the sole;
+# the heel counter's: behind it)
+TOEB = lambda h: FOOT_TOE - 0.085 + 0.35 * h
+HEELB = lambda h: FOOT_HEEL + 0.07 - 0.9 * h
+FOOT_TOE = FOOT_HEEL = 0.0
+# (the rand's top edge over the toe: (along the foot, height over the sole), set in boot(); and
+# its height at z, straight between them as the cut is)
+RAND = []
+def randH(z):
+	if z >= RAND[-1][0]: return RAND[-1][1]
+	for (za, ha), (zb, hb) in zip(RAND, RAND[1:]):
+		if za <= z < zb: return ha + (hb - ha) * (z - za) / (zb - za)
+	return 0.0
+def boot():
+	log('boot')
+	FO, FM = load_foot()
+	sole, toe, heel = FM['sole'], FM['toe'], FM['heel']
+	global FOOT_TOE, FOOT_HEEL
+	FOOT_TOE, FOOT_HEEL = toe, heel
+	RAND[:] = [(toe - 0.085 + 0.05 * i / 6, 0.032 * ss(i / 6)) for i in range(7)]
+	# the volume
+	sh = FO.copy(); sh.data = FO.data.copy(); sh.name = 'boot-vol'; SC.collection.objects.link(sh)
+	bm = bmesh.new(); bm.from_mesh(sh.data)
+	bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=0)
+	bmesh.ops.triangulate(bm, faces=bm.faces)
+	bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.normal_update()
+	for v in bm.verts: v.co += v.normal * FOOT_STAND
+	bm.to_mesh(sh.data); bm.free()
+	md = sh.modifiers.new('re', 'REMESH'); md.mode = 'VOXEL'; md.voxel_size = 0.003; apply_all(sh)
+	md = sh.modifiers.new('sm', 'LAPLACIANSMOOTH'); md.lambda_factor = 1.2; md.iterations = 12; md.use_volume_preserve = True; apply_all(sh)
+	# (the toes smoothed away into a roomy toe box, the front eased out a little)
+	vg = sh.vertex_groups.new(name='front')
+	for v in sh.data.vertices:
+		z = -v.co.y; w = ss((z - (toe - 0.1)) / 0.06)
+		if w > 0: vg.add([v.index], w, 'REPLACE')
+	md = sh.modifiers.new('sm2', 'LAPLACIANSMOOTH'); md.lambda_factor = 1.5; md.iterations = 40; md.use_volume_preserve = True; md.vertex_group = 'front'; apply_all(sh)
+	md = sh.modifiers.new('sm3', 'SMOOTH'); md.factor = 0.8; md.iterations = 60; md.vertex_group = 'front'; apply_all(sh)
+	sh.data.update()
+	for v in sh.data.vertices:
+		z = -v.co.y; w = ss((z - (toe - 0.06)) / 0.05)
+		if w > 0: v.co += v.normal * 0.004 * w
+	# (cut at the top of the shaft and just over the sole; Blender's z is the game's y)
+	bm = bmesh.new(); bm.from_mesh(sh.data)
+	ysole = sole - FOOT_STAND * 0.2 + 0.006
+	for co, no in (((0, 0, SHAFT), (0, 0, 1)), ((0, 0, ysole), (0, 0, -1))):
+		r = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=co, plane_no=no, clear_outer=True)
+	# (the zones' edges cut into the faces, so each runs clean rather than stepped along them;
+	# a plane in the game's frame through co, cutting only the faces whose middle keep allows)
+	def cut(co, no, keep=None):
+		fs = [f for f in bm.faces if keep is None or keep(GAME(f.calc_center_median()))]
+		if not fs: return
+		es = list({e for f in fs for e in f.edges}); vs = list({v for f in fs for v in f.verts})
+		bmesh.ops.bisect_plane(bm, geom=vs + es + fs, plane_co=G(co), plane_no=G(no))
+	z0 = toe - 0.085
+	for (za, ha), (zb, hb) in zip(RAND, RAND[1:]):
+		cut(V3(0, sole + ha, za), V3(0, zb - za, ha - hb), lambda c, za=za, zb=zb: za <= c.z < zb)
+	cut(V3(0, sole + RAND[-1][1], 0), V3(0, 1, 0), lambda c: c.z >= RAND[-1][0])
+	cut(V3(0, sole, z0), V3(0, -0.35, 1), lambda c: c.y - sole < 0.085)
+	cut(V3(0, sole + 0.075, 0), V3(0, 1, 0), lambda c: c.z > TOEB(0.075) - 0.012)
+	cut(V3(0, sole, heel + 0.07), V3(0, 0.9, 1))
+	for x in (-0.019, 0.015): cut(V3(x, 0, 0), V3(1, 0, 0), lambda c: c.z > -0.01 and c.y > sole + 0.035)
+	cut(V3(0, sole + 0.045, 0), V3(0, 1, 0), lambda c: abs(c.x + 0.002) < 0.025 and c.z > -0.01)
+	cut(V3(0, SHAFT - 0.016, 0), V3(0, 1, 0))
+	bm.to_mesh(sh.data); bm.free()
+	for p in sh.data.polygons: p.use_smooth = True
+	upper_hi = sh
+	# (the material zones on the detailed upper: rand, toe cap, heel counter, tongue, collar)
+	for k in ('cordura', 'suede', 'rubber', 'nylonD'): upper_hi.data.materials.append(M(k))
+	# (finer faces first, so the zones' edges are smooth; each overlay stands a little proud)
+	md = upper_hi.modifiers.new('sub', 'SUBSURF'); md.subdivision_type = 'SIMPLE'; md.levels = 1; md.render_levels = 1; apply_all(upper_hi)
+	def zone(c):
+		x, y, z = c.x, c.z, -c.y
+		h = y - sole
+		if z > toe - 0.085 and h < randH(z): return 2
+		if z > TOEB(h) and h < 0.075: return 1
+		if z < HEELB(h): return 1
+		if abs(x + 0.002) < 0.017 and z > 0.0 and y > sole + 0.045: return 3
+		if y > SHAFT - 0.016: return 3
+		return 0
+	for p in upper_hi.data.polygons: p.material_index = zone(p.center)
+	# (each overlay a sheet of its own along its edge, stood off and closed down to what it
+	# lies on by a clean lip, so the step runs as straight as the cut)
+	LIFT = (0.0, 0.0007, 0.0011, 0.0)
+	me = upper_hi.data; me.update()
+	co = [v.co.copy() for v in me.vertices]; nv = [v.normal.copy() for v in me.vertices]
+	F = [list(p.vertices) for p in me.polygons]; Z = [p.material_index for p in me.polygons]; sm = [p.use_smooth for p in me.polygons]
+	low_at = [9.0] * len(co)
+	for f, z in zip(F, Z):
+		for vi in f: low_at[vi] = min(low_at[vi], LIFT[z])
+	P, at = [], {}
+	def vert(vi, l):
+		# the point vi stood off by l: the vertex itself at the least lift round it, else a copy
+		k = vi if l == low_at[vi] else (vi, l)
+		if k not in at: at[k] = len(P); P.append(co[vi] + nv[vi] * l)
+		return at[k]
+	edge = {}
+	for fi, f in enumerate(F):
+		for a_, b_ in zip(f, f[1:] + f[:1]): edge[(a_, b_)] = fi
+	F2, Z2, S2 = [], [], []
+	for fi, (f, z) in enumerate(zip(F, Z)):
+		l = LIFT[z]; F2.append([vert(vi, l) for vi in f]); Z2.append(z); S2.append(sm[fi])
+		for a_, b_ in zip(f, f[1:] + f[:1]):
+			gi = edge.get((b_, a_))
+			if gi is None or LIFT[Z[gi]] >= l: continue
+			lo = LIFT[Z[gi]]
+			F2.append([vert(b_, l), vert(a_, l), vert(a_, lo), vert(b_, lo)]); Z2.append(z); S2.append(True)
+	me2 = bpy.data.meshes.new('boot-upper'); me2.from_pydata(P, [], F2)
+	for m in me.materials: me2.materials.append(m)
+	for p, z, s_ in zip(me2.polygons, Z2, S2): p.material_index = z; p.use_smooth = s_
+	me2.validate(); me2.update(); upper_hi.data = me2
+	# the game's upper: the same, decimated
+	low = upper_hi.copy(); low.data = upper_hi.data.copy(); low.name = 'boot'; SC.collection.objects.link(low)
+	low.data.materials.clear(); low.data.materials.append(M('nylonT'))
+	md = low.modifiers.new('dec', 'DECIMATE'); md.ratio = 1100 / max(1, len(low.data.polygons) * 2); md.use_collapse_triangulate = True; apply_all(low)
+	low['uvs'] = False
+	bvh = BVHTree.FromObject(upper_hi, bpy.context.evaluated_depsgraph_get())
+	def onto(p_out, d_in, off=0.0):
+		# a point on the upper's surface: cast from p_out (game) inward along d_in, stood off by off
+		hit = bvh.ray_cast(G(p_out), G(d_in).normalized(), 0.12)
+		if hit[0] is None: return None, None
+		pg = V3(hit[0].x, hit[0].z, -hit[0].y); ng = V3(hit[1].x, hit[1].z, -hit[1].y)
+		return pg + ng * off, ng
+	highs = [upper_hi]
+	# the lacing: a guide up the front from the toe cap to the top; eyelets each side, the lace
+	# crossing between them, a stitch line down each side of the eyestay
+	guide = []
+	for i in range(8):
+		t = i / 7; h = sole + 0.052 + t * (SHAFT - 0.022 - sole - 0.052)
+		zf = (toe - 0.1) * (1 - t) ** 1.6 + 0.026 * (1 - (1 - t) ** 1.6)
+		guide.append((h, zf))
+	eye = {1: [], -1: []}
+	for h, zf in guide:
+		for s in (1, -1):
+			p, n = onto(V3(s * 0.017 - 0.002, h, zf + 0.12), V3(0, -0.15, -1), 0.0)
+			if p is None: continue
+			eye[s].append((p, n))
+	mb = MB()
+	for s in (1, -1):
+		for p, n in eye[s]:
+			cyl(mb, p + n * 0.0008, n, 0, 0, 12, prof=[(0.0019, -0.0008), (0.0034, -0.0008), (0.0036, 0.0006), (0.0026, 0.0012), (0.0019, 0.0004)], cap=False)
+	eyelets = mb.obj('eyelets', ['alu'], sharp=0.7); highs.append(eyelets)
+	mb = MB()
+	n0 = min(len(eye[1]), len(eye[-1]))
+	# (each run of lace laid over the tongue between its eyelets, not cut straight through it)
+	def lace(a, b):
+		pts, ns = [], []
+		for k in range(9):
+			t = k / 8; q = a[0].lerp(b[0], t); n = a[1].lerp(b[1], t).normalized()
+			p, nn = onto(q + n * 0.04, -n, 0.0017 + 0.0006 * math.sin(PI * t))
+			if p is not None: pts.append(p); ns.append(nn)
+		if len(pts) > 2: sweep(mb, pts, ns, ring(0.0017, 6, 1.0, 0.75))
+	for i in range(n0 - 1):
+		lace(eye[1][i], eye[-1][i + 1]); lace(eye[-1][i], eye[1][i + 1])
+	if n0: lace(eye[1][0], eye[-1][0])
+	laces = mb.obj('laces', ['thread'], sharp=0); highs.append(laces)
+	# (stitching round the toe cap and the heel counter, and down each eyestay)
+	def stitch_curve(gpts):
+		pts, ns = [], []
+		for po, d in gpts:
+			p, n = onto(po, d, 0.0003)
+			if p is not None: pts.append(p); ns.append(n)
+		mb = MB()
+		for (a, na), (b, nb) in zip(zip(pts, ns), list(zip(pts, ns))[1:]):
+			dd = b - a; L0 = dd.length
+			if L0 < 1e-6 or L0 > 0.02: continue
+			t = dd / L0; nn = (na + nb).normalized(); s2 = nn.cross(t)
+			for k in range(int(L0 / 0.0032)): box(mb, a + t * (0.0032 * (k + 0.5)), t, s2, nn, 0.0011, 0.00045, 0.00035)
+		return mb.obj('stitch', ['thread'], smooth=False, sharp=0)
+	for off in (0.0, 0.004):
+		toeline = []
+		for i in range(41):
+			a = -PI / 2 + PI * i / 40; h = 0.03 + 0.045 * math.cos(a) ** 2
+			z = TOEB(h) - off
+			toeline.append((V3(math.sin(a) * 0.12, sole + h, z), V3(-math.sin(a), 0, -0.3 * math.cos(a))))
+		highs.append(stitch_curve(toeline))
+	# (the heel counter's edge: a slanted line round the back, found on the surface by a few
+	# guesses each way round)
+	heelline = []
+	for i in range(31):
+		a = PI / 2 + PI * i / 30; d = V3(math.sin(a), 0, math.cos(a)); h = 0.03
+		for _ in range(5):
+			p, n = onto(V3(0, sole + h, heel + 0.05) + d * 0.12, -d, 0.0)
+			if p is None: break
+			h = max(0.008, min(0.078, (heel + 0.07 - p.z) / 0.9))
+		heelline.append((V3(0, sole + h, heel + 0.05) + d * 0.12, -d))
+	highs.append(stitch_curve(heelline))
+	for s in (1, -1):
+		line = []
+		for k in range(31):
+			t = k / 30; h = sole + 0.052 + t * (SHAFT - 0.022 - sole - 0.052); zf = (toe - 0.1) * (1 - t) ** 1.6 + 0.026 * (1 - (1 - t) ** 1.6)
+			line.append((V3(s * 0.025 - 0.002, h, zf + 0.12), V3(0, -0.15, -1)))
+		highs.append(stitch_curve(line))
+	low['cage'] = 0.004
+	piece(low, highs, 'boot')
+	# the padded collar round the top, and the pull loop at the back
+	bm = bmesh.new(); bm.from_mesh(upper_hi.data)
+	top = [v for v in bm.verts if v.is_boundary and v.co.z > SHAFT - 0.004]
+	ring_pts = sorted([V3(v.co.x, v.co.z, -v.co.y) for v in top], key=lambda p: math.atan2(p.x, p.z - 0.0))
+	bm.free()
+	if len(ring_pts) > 12:
+		step = max(1, len(ring_pts) // 36); rp = ring_pts[::step]
+		ctr = sum(rp, V3(0, 0, 0)) / len(rp)
+		ns = [V3(p.x - ctr.x, 0, p.z - ctr.z).normalized() for p in rp]
+		pts = [p - n * 0.002 + V3(0, 0.001, 0) for p, n in zip(rp, ns)]
+		mb = MB(); sweep(mb, pts, ns, ring(0.0055, 8, 1.0, 1.25), closed=True); col_lo = mb.obj('collar', ['nylonD'], sharp=0)
+		piece(col_lo, [hi(col_lo, subsurf=1)], 'boot')
+		bk = min(rp, key=lambda p: p.z)
+		lp = [bk + V3(0, -0.012, -0.004), bk + V3(0, 0.006, -0.009), bk + V3(0, 0.018, -0.006), bk + V3(0, 0.02, 0.0), bk + V3(0, 0.008, 0.002)]
+		pts = catmull(lp, 4); mb = MB(); sweep(mb, pts, [V3(0, 0, -1) for _ in pts], rprof(0.014, 0.0026, 0.0009, 1, -0.0013)); loop_lo = mb.obj('pull', ['webbing'], sharp=0.6)
+		piece(loop_lo, [hi(loop_lo, bevel=0.0004, segs=2)], 'boot')
+	# the sole: the upper's bottom outline, eased out, a moulded slab under it with a toe spring;
+	# lugs under it and blocks round its wall in the detailed copy
+	bm = bmesh.new(); bm.from_mesh(upper_hi.data)
+	bot = [V3(v.co.x, v.co.z, -v.co.y) for v in bm.verts if v.is_boundary and v.co.z < ysole + 0.002]
+	bm.free()
+	cx = sum(p.x for p in bot) / len(bot); cz = sum(p.z for p in bot) / len(bot)
+	K = 64; outline = []
+	for i in range(K):
+		a = TAU * i / K
+		best = None
+		for p in bot:
+			ang = math.atan2(p.x - cx, p.z - cz)
+			if abs((ang - a + PI) % TAU - PI) < 0.12:
+				rr = math.hypot(p.x - cx, p.z - cz); best = rr if best is None or rr > best else best
+		outline.append(best)
+	for i in range(K):
+		if outline[i] is None: outline[i] = outline[i - 1] or 0.05
+	sm = [(outline[i - 1] + 2 * outline[i] + outline[(i + 1) % K]) / 4 for i in range(K)]
+	pts2 = [(cx + math.sin(TAU * i / K) * (sm[i] + 0.004), cz + math.cos(TAU * i / K) * (sm[i] + 0.004)) for i in range(K)]
+	y0, y1 = sole - 0.011, ysole + 0.014
+	def spring(z): return 0.009 * ss((z - (toe - 0.06)) / 0.07)
+	def slab(name, inset, lo_y, hi_y, kind='rubber'):
+		mb = MB(); bot_i, top_i = [], []
+		for (x, z) in pts2:
+			dx, dz = x - cx, z - cz; l = math.hypot(dx, dz) or 1; xi, zi = x - dx / l * inset, z - dz / l * inset
+			bot_i.append(mb.v(V3(xi, lo_y + spring(zi), zi))); top_i.append(mb.v(V3(xi, hi_y + spring(zi) * 0.5, zi)))
+		for i in range(K):
+			j = (i + 1) % K; mb.f([bot_i[i], bot_i[j], top_i[j], top_i[i]], None)
+		mb.f(top_i, None); mb.f(bot_i[::-1], None)
+		return mb.obj(name, [kind], sharp=0.7)
+	sole_lo = lowbevel(slab('sole', 0.0, y0, y1), 0.003, 2)
+	sole_hi = lowbevel(slab('sole.hi', 0.0025, y0 + 0.003, y1 - 0.0005), 0.003, 2)
+	# (the lugs: blocks under it in a chevron pattern, and round its wall)
+	mb = MB()
+	for zz in [heel - 0.004 + k * 0.018 for k in range(16)]:
+		for xx in (-0.03, -0.012, 0.006, 0.024):
+			xs = xx + (0.006 if int((zz - heel) / 0.018) % 2 else 0)
+			box(mb, V3(xs, y0 + 0.0015 + spring(zz), zz), V3(0.94, 0, 0.34 * (1 if xs > 0 else -1)).normalized(), Y, V3(0.94, 0, 0.34 * (1 if xs > 0 else -1)).normalized().cross(Y) * -1, 0.007, 0.0016, 0.0035)
+	for i in range(K):
+		x, z = pts2[i]; dx, dz = x - cx, z - cz; l = math.hypot(dx, dz) or 1; nx, nz = dx / l, dz / l
+		c = V3(x - nx * 0.0012, y0 + 0.0055 + spring(z), z - nz * 0.0012)
+		box(mb, c, V3(-nz, 0, nx), Y, V3(nx, 0, nz), 0.0024, 0.0035, 0.0012)
+	lugs = mb.obj('lugs', ['rubber'], smooth=False, sharp=0)
+	piece(sole_lo, [sole_hi, lugs], 'boot')
+	bpy.data.objects.remove(FO)
+	return FM
+
 # ---------- UVs, bake, maps, export ----------
 def area3(o):
 	return sum(p.area for p in o.data.polygons)
@@ -929,6 +1219,10 @@ def uv_and_pack(lows):
 	for o in need:
 		k = math.sqrt(area3(o) / max(1e-12, uv_area(o)))
 		for d in o.data.uv_layers.active.data: d.uv = d.uv * k
+	# (one UV layer of one name on every piece, so the pieces of a group join into one map)
+	for o in lows:
+		assert len(o.data.uv_layers) == 1, o.name
+		o.data.uv_layers[0].name = 'UV'
 	bpy.ops.object.select_all(action='DESELECT')
 	for o in lows: o.select_set(True)
 	bpy.context.view_layer.objects.active = lows[0]
@@ -966,7 +1260,7 @@ def bake_all():
 			low.select_set(True); bpy.context.view_layer.objects.active = low
 			# (no margin: a piece's margin would run over the pieces baked before it; the
 			# islands are grown out once, after, in save)
-			bpy.ops.object.bake(type='NORMAL' if k == 'normal' else 'EMIT', use_selected_to_active=True, cage_extrusion=0.0025, max_ray_distance=0.01, normal_space='TANGENT', use_clear=False, margin=0)
+			bpy.ops.object.bake(type='NORMAL' if k == 'normal' else 'EMIT', use_selected_to_active=True, cage_extrusion=low.get('cage', 0.0025), max_ray_distance=0.012, normal_space='TANGENT', use_clear=False, margin=0)
 	# (the occlusion from the game meshes themselves and the head under them)
 	log('bake ao'); SC.cycles.samples = AO_SAMPLES; set_img('ao')
 	for h in highs: h.hide_render = True
@@ -1045,7 +1339,13 @@ def preview(saved):
 		cam.rotation_euler = look.to_track_quat('-Z', 'Y').to_euler()
 		SC.render.filepath = os.path.join(OUT, 'preview-' + name + '.png'); bpy.ops.render.render(write_still=True)
 	# (the carrier's kit as laid out for the bake, from the front and from above to one side)
-	for name, (p, look) in {'gear': (V3(0.98, -0.36, 3.0), V3(0.98, -0.36, 0)), 'gear-side': (V3(0.35, 0.5, 1.2), V3(0.82, -0.12, 0))}.items():
+	shots = {'gear': (V3(0.98, -0.36, 3.0), V3(0.98, -0.36, 0)), 'gear-side': (V3(0.35, 0.5, 1.2), V3(0.82, -0.12, 0))}
+	for g, off in GEAR:
+		if g == 'boot':
+			c = off + V3(0, -0.02, 0.06)
+			shots.update({'boot': (off + V3(0.3, 0.12, 0.42), c), 'boot-side': (off + V3(0.55, 0.02, 0.06), c), 'boot-back': (off + V3(-0.25, 0.15, -0.35), c)})
+	for name, (p, look) in shots.items():
+		HEAD.hide_render = name.startswith('boot')
 		cam.location = G(p); cam.rotation_euler = (G(look) - cam.location).to_track_quat('-Z', 'Y').to_euler()
 		SC.render.filepath = os.path.join(OUT, 'preview-' + name + '.png'); bpy.ops.render.render(write_still=True)
 	log('previews')
@@ -1060,16 +1360,19 @@ def export(lows):
 	outs = [join(obs, g) for g, obs in groups.items()]
 	bpy.ops.object.select_all(action='DESELECT')
 	for o in outs: o.select_set(True)
-	bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'soldier-kit.glb'), export_format='GLB', use_selection=True, export_texcoords=True, export_normals=True,
+	if outs: bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'soldier-kit.glb'), export_format='GLB', use_selection=True, export_texcoords=True, export_normals=True,
 		export_materials='NONE', export_yup=True, export_apply=True)
 	info = {o.name: {'tris': sum(len(p.vertices) - 2 for p in o.data.polygons), 'verts': len(o.data.vertices)} for o in outs}
-	json.dump({'meta': META, 'stand': STAND, 'groups': info, 'size': SIZE}, open(os.path.join(OUT, 'soldier-kit.json'), 'w'), indent=1)
+	json.dump({'meta': META, 'foot': FOOT_META, 'stand': STAND, 'groups': info, 'size': SIZE}, open(os.path.join(OUT, 'soldier-kit.json'), 'w'), indent=1)
 	log('exported', info)
 
-sy = helmet()
-nvg(sy)
-headset()
-for build in (magazine, magpouch, admin, dangler, radio, ptt, medpouch, tourniquet, backpanel, handle, buckle): build()
+# (KIT_ONLY=boot: build only that, for a quick look)
+ONLY = os.environ.get('KIT_ONLY')
+sy = helmet() if not ONLY else rimY(0) + 0.024
+if not ONLY: nvg(sy); headset()
+for build in (magazine, magpouch, admin, dangler, radio, ptt, medpouch, tourniquet, backpanel, handle, buckle):
+	if not ONLY: build()
+FOOT_META = boot(); gear('boot', back=False)
 lows = [l for l, _ in PIECES]
 log('pieces', len(lows), 'tris', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in lows))
 uv_and_pack(lows)
