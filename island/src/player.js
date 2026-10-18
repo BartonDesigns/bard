@@ -357,7 +357,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 		// the gait: a footfall each step, and the head dipping as each foot lands
 		const G = gait(dt, s.slide ? 0 : Math.hypot(s.pos.x - x0, s.pos.z - z0) / Math.max(dt, 1e-3), run && !s.crouch);
-		if (s.grounded && !wasGrounded && vy0 < -2.5) { G.lands++; G.impact = -vy0; F.dip.dv -= Math.min(16, -vy0) * 0.2; }
+		if (s.grounded && !wasGrounded && vy0 < -2.5) { G.lands++; G.impact = -vy0; F.dip.dv -= Math.min(16, -vy0) * 0.2; s.onKick?.('land', Math.min(1, -vy0 / 12)); }
+		// the ground kicked up underfoot: a puff at each sprinting footfall (main.js: by what is underfoot)
+		if (G.count !== s.kickN) { if (s.kickN !== undefined && run && s.grounded && !s.crouch && G.speed > 5) s.onKick?.('step', Math.min(1, G.speed / 9)); s.kickN = G.count; }
 		const bob = s.grounded ? -Math.cos(G.phase * Math.PI * 2) * 0.035 * Math.min(1, G.speed / 4) : 0;
 		if (s.locked) return;   // the boat has the camera
 		feel(dt, G, run, right);
@@ -408,6 +410,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const l = Math.hypot(S.dx, S.dz) || 1; S.dx /= l; S.dz /= l;
 		}
 		s.vel.x = S.dx * S.v; s.vel.z = S.dz * S.v;
+		// (a slide ploughs up a trail of dust as it goes)
+		S.kick = (S.kick || 0) - dt;
+		if (S.kick <= 0 && s.grounded) { S.kick = 0.07; s.onKick?.('slide', Math.min(1, S.v / 12)); }
 		const moved = S.t > 0.15 && Math.hypot(s.pos.x - (S.px ?? s.pos.x), s.pos.z - (S.pz ?? s.pos.z)) < S.v * dt * 0.3;
 		S.px = s.pos.x; S.pz = s.pos.z;
 		if (S.v < 4 || S.t > 1.6 || moved || !s.grounded && S.t > 0.2) endSlide();

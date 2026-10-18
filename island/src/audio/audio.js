@@ -99,5 +99,5 @@ export function createWorldAudio({ getWorld, camera, people, busy, planet }) {
 		});
 	}
 	// one step of it by hand, for tests (with the frame's last conditions)
-	return { update, space, debug, set, record, tick: (dt, o) => update(dt, { ...last, ...o }) };
+	return { update, space, debug, set, record, tick: (dt, o) => update(dt, { ...last, ...o }), surface: () => sense.state.surface };
 }

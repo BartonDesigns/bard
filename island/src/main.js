@@ -719,6 +719,8 @@ export function createIslandWorld() {
 	guideApi.social = social;
 	HOOKS.social = social;
 	addEventListener('pagehide', () => social.flush());
+	// the colour of what a foot kicks up, by what is underfoot (audio/sensing.js's surfaces)
+	const KICK = { dirt: [0.5, 0.44, 0.36], sand: [0.72, 0.66, 0.54], grass: [0.46, 0.43, 0.34], gravel: [0.55, 0.53, 0.5], snow: [0.92, 0.94, 0.97], water: [0.8, 0.86, 0.9] };
 	// the world's audio: footsteps, the room's sound, the places' ambience (audio/*.js)
 	const worldAudio = createWorldAudio({ getWorld: () => world, camera, people, busy: () => arcade.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.boardwalk?.riding?.(), planet: () => shared.planet });
 	HOOKS.audio = worldAudio;
@@ -1148,6 +1150,15 @@ export function createIslandWorld() {
 		await yieldBuild('Preparing the shoreline');
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
+		// the ground kicked up underfoot (player.js onKick: a sprinting footfall, a slide, a hard
+		// landing): dust off dirt, sand and dry ground, a spray off shallow water, flecks of snow;
+		// nothing off a floor, a road or stone
+		player.state.onKick = (kind, k) => {
+			const fx = HOOKS.combat?.fx, surf = worldAudio.surface?.(), P = player.state;
+			if (!fx || !KICK[surf] || P.flying || P.swimming || (surf === 'grass' && kind === 'step')) return;
+			const [r, g, b] = KICK[surf], y = P.pos.y - 1.6, n = kind === 'land' ? 3 + Math.round(k * 5) : kind === 'slide' ? 2 : 1;
+			for (let i = 0; i < n; i++) fx.dust({ x: P.pos.x + (Math.random() - 0.5) * 0.5, y, z: P.pos.z + (Math.random() - 0.5) * 0.5 }, 1, r, g, b, (kind === 'land' ? 0.5 : 0.35) * (0.6 + k * 0.6), kind === 'slide' ? 0.5 : 0.3);
+		};
 		// arriving at a kept or shared spot: start there, so what streams in first is that place
 		const sp = params.spot;
 		if (sp && Number.isFinite(sp.x) && Number.isFinite(sp.z)) {
