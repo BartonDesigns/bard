@@ -23,6 +23,7 @@ import { hairMotion } from './hair-motion.js';
 import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 import { fitBags, torsoSurface, attachBag, BAG_KINDS } from './bags.js';
 import { tierNow } from '../world/governor.js';
+import { loadKitModels } from './kit-models.js';
 import { GFX_PHONE } from '../world/device.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
@@ -59,6 +60,8 @@ export function loadPeopleAssets() {
 		const text = await new Response(gz.body.pipeThrough(new DecompressionStream('gzip'))).text();
 		const D = JSON.parse(text);
 		const faces = loadFaces().catch(() => null);
+		// (the soldiers' head kit as real models; without them it is built in code)
+		const kit = loadKitModels(PHONE).catch((e) => { console.warn('[people] kit models', e); return null; });
 		const rig = await (await fetch(RIG_URL)).json();
 		// the full 64-bone rig: extra joints and their skin influences patched over the 18-bone base
 		const raw = Uint8Array.from(atob(rig.patch), (c) => c.charCodeAt(0)), view = new DataView(raw.buffer);
@@ -74,6 +77,7 @@ export function loadPeopleAssets() {
 		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
 		A.faces = await faces;
+		A.kit = await kit;
 		loaded = A;
 		return A;
 	})();

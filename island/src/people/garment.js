@@ -14,7 +14,8 @@ import { CLOTH_CAPS, clothUniforms, CLOTH_CONTACT_GLSL } from './cloth-collide.j
 import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance, armhole } from './garment-tailoring.js';
 import { sleeveEase, waistbandEase, armT, isRibbed, isShirted, SLEEVE_POSE_GLSL } from './garment-shape.js';
 import { torsoField, clothPoints, necklineRing, hoodGeometry, collarGeometry, carrierGeometry } from './garment-kit.js';
-import { patchKit } from './propkit.js';
+import { patchKit, kitAtlas } from './propkit.js';
+import { KIT_MODEL, kitModelsNow } from './kit-models.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CAMO } from '../combat/outfits.js';
 import { tierNow } from '../world/governor.js';
@@ -761,7 +762,7 @@ export function clothGeometry(A, p, o, cut, R) {
 // one geometry for all of them, each vertex bound whole to the bone it rides
 export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const { map, heads, eyes } = P0;
-	const out = { pos: [], nor: [], col: [], si: [], sw: [], kit: [], wr: [] };
+	const out = { pos: [], nor: [], col: [], si: [], sw: [], kit: [], wr: [], uvs: [] };
 	const colour = new THREE.Color();
 	// (bone: a name, or a function of the height for a strap that runs down the body)
 	// (bone: a name, [[name, weight], ...] shared between bones, or a function of the height)
@@ -780,6 +781,26 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			out.col.push(colour.r, colour.g, colour.b); pushBone(fn ? bone(pa.getY(i)) : bone); out.kit.push(gloss, fab, 0);
 			out.wr.push(wa ? wa.getX(i) : 0, wa ? wa.getY(i) : 0);
 		}
+	};
+	// a real model (people/kit-models.js) fitted to this head: scaled from the reference head
+	// to this one's width, depth and height over the eyes, about its middle at eye height;
+	// its painted parts in col
+	const putModel = (name, col) => {
+		const K = A.kit, g = K?.parts[name];
+		if (!g) return;
+		const R = K.ref, sx = rx / R.rx, sy = (top - eyeY) / R.top, sz = rz / R.rz;
+		const pa = g.attributes.position, na = g.attributes.normal, ua = g.attributes.uv, ix = g.index, n = ix ? ix.count : pa.count;
+		const start = out.pos.length / 3, uv = new Float32Array(n * 2);
+		colour.set(col);
+		for (let k = 0; k < n; k++) {
+			const i = ix ? ix.getX(k) : k;
+			out.pos.push(cx + pa.getX(i) * sx, eyeY + pa.getY(i) * sy, cz + pa.getZ(i) * sz);
+			const nx = na.getX(i) / sx, ny = na.getY(i) / sy, nz = na.getZ(i) / sz, l = Math.hypot(nx, ny, nz) || 1;
+			out.nor.push(nx / l, ny / l, nz / l); out.col.push(colour.r, colour.g, colour.b);
+			pushBone('head'); out.kit.push(KIT_MODEL, 0, 0); out.wr.push(0, 0);
+			uv[k * 2] = ua.getX(i); uv[k * 2 + 1] = ua.getY(i);
+		}
+		out.uvs.push([start, uv]);
 	};
 	// a section swept along a path: path [{ p, n, bone }] (n the way out, the normal of what it
 	// lies on), prof [[across, out], ...] its outline, anticlockwise; a strap, a rolled edge, a
@@ -1298,16 +1319,44 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		const Ms = fitTube({ o: O, axis: UP, t0: 0, t1: top + 0.02 - O.y, dt: 0.008, seg: 48, smooth: 14, give: 0, wall: 0, bone: head, draw: false, skin: (v, x, y, z) => P0.part[v] === 0 && y > cut.neck - 0.01 && Math.hypot(x - cx, z - cz) < 0.16 });
 		if (!Mh || !Ms) return;
 		const hr = (y, th, M = Mh) => M.rad(Math.max(0, Math.min(top + 0.02 - O.y, y - O.y)), th);
-		const ax = rx + 0.017, azF = rz + 0.02, azB = rz + 0.024, ay = top - yc + 0.019;
+		// (close over the head, as on a statue: a skull a finger's width off it, not a bucket)
+		const ax = rx + 0.002, azF = rz + 0.004, azB = rz + 0.006, ay = top - yc + 0.006;
 		const ell = (th) => { const c0 = Math.cos(th), s0 = Math.sin(th), az = c0 > 0 ? azF : azB; return 1 / Math.sqrt((c0 / az) ** 2 + (s0 / ax) ** 2); };
 		const TH = 0.003;
 		// (the skull: its sides and back down to the nape, the front only to the brow)
+		// hard moulding, not a round shell: each level's section drawn as the planes laid on it
+		// (six, their creases down the middle front and back and at the cheeks), the corners
+		// eased a hair; outside what it is laid on everywhere, as the planes only touch it
+		const FAC = [-5, -3, -1, 1, 3, 5].map((k) => (k * Math.PI) / 6);
+		const facet = (base, ease = 900) => {
+			const cache = new Map();
+			return (y, th) => {
+				const key = Math.round(y * 1e4);
+				let R = cache.get(key);
+				if (!R) {
+					R = FAC.map((c) => { let m = 0; for (let i = 0; i < 40; i++) { const a = c - 1.2 + (2.4 * i) / 39; m = Math.max(m, base(y, a) * Math.cos(a - c)); } return m; });
+					cache.set(key, R);
+				}
+				let sum = 0;
+				for (let j = 0; j < FAC.length; j++) { const d = Math.cos(th - FAC[j]); if (d > 0.05) sum += Math.exp(-ease * (R[j] / d)); }
+				return sum > 0 ? -Math.log(sum) / ease : base(y, th);
+			};
+		};
+		// (under the planes: an egg drawn tight over the head, its crown brought up to a point)
+		const skullBase = (y, th) => {
+			const k = y >= yc ? Math.pow(Math.max(0, 1 - ((y - yc) / ay) ** 2), 0.62) : 1 - 0.16 * ((yc - y) / (yc - yNape)) ** 2 * (1 - Math.max(0, Math.cos(th)));
+			return Math.max(ell(th) * k, y < top - 0.01 ? hr(y, th, Ms) + 0.0065 : 0);
+		};
+		const skullF = facet(skullBase);
 		const skullR = (y, th) => {
-			const k = y >= yc ? Math.sqrt(Math.max(0, 1 - ((y - yc) / ay) ** 2)) : 1 - 0.16 * ((yc - y) / (yc - yNape)) ** 2 * (1 - Math.max(0, Math.cos(th)));
-			let r = ell(th) * k;
-			const x = Math.abs(r * Math.sin(th));
-			r += 0.008 * Math.max(0, 1 - x / 0.011) * Math.max(0, Math.min(1, (y - yBrow - 0.015) / 0.03)) * Math.min(1, k * 3);
-			return Math.max(r, y < top - 0.01 ? hr(y, th) + 0.009 : 0);
+			let r = skullF(y, th);
+			const x = Math.abs(r * Math.sin(th)), xb = Math.abs(r * Math.sin(th - Math.PI));
+			// (a keel stood up along the crease front and back over the crown, and a heavy brow
+			// jutting over the sight)
+			const up = Math.max(0, Math.min(1, (y - yBrow - 0.012) / 0.03));
+			r += 0.0045 * Math.max(0, 1 - x / 0.007) * up * (Math.cos(th) > 0 ? 1 : 0) + 0.0035 * Math.max(0, 1 - xb / 0.007) * (y > yc ? 1 : 0);
+			r += 0.006 * Math.max(0, Math.cos(th)) ** 3 * (1 - Math.max(0, Math.min(1, (y - yBrow) / 0.026)));
+			return Math.max(r, y < top - 0.01 ? hr(y, th) + 0.004 : 0);
 		};
 		const skullLo = (th) => { const f = hk(th), u = Math.max(0, Math.min(1, (f - 0.9) / 0.55)); return yBrow + (yNape - yBrow) * u * u * (3 - 2 * u); };
 		const yPole = yc + ay;
@@ -1321,15 +1370,17 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		// sight; its lower edge sweeping up to the pivots)
 		// (the face's reach forward at each height, the nose and the chin taken in one smooth curve)
 		const faceD = (y) => { let m = 0; for (let k = -3; k <= 3; k++) m = Math.max(m, hr(y + k * 0.01, 0, Ms)); return m; };
-		const W = 1.52, prow = (y) => 0.004 + 0.034 * Math.pow(Math.sin(Math.PI * Math.max(0, Math.min(1, (ySight + 0.004 - y) / (ySight - yChin + 0.02)))), 0.75);
-		const visorR = (y, th) => {
+		const W = 1.52, prow = (y) => 0.003 + 0.024 * Math.pow(Math.sin(Math.PI * Math.max(0, Math.min(1, (ySight + 0.004 - y) / (ySight - yChin + 0.02)))), 0.75);
+		const visorR0 = (y, th) => {
 			const k = y >= yc ? 1 : 1 - 0.13 * ((yc - y) / (yc - yChin)) ** 2, c0 = Math.cos(th), s0 = Math.sin(th);
-			const a = ax * k + 0.0075, b = c0 > 0 ? Math.max(azF * k + 0.0075, faceD(y) + 0.012) : azB + 0.0075, n = 2.2;
+			const a = ax * k + 0.0055, b = c0 > 0 ? Math.max(azF * k + 0.0055, faceD(y) + 0.0105) : azB + 0.0055, n = 2.2;
 			let r = Math.pow(Math.pow(Math.abs(c0 / b), n) + Math.pow(Math.abs(s0 / a), n), -1 / n);
 			const x = Math.abs(r * s0);
-			if (c0 > 0) r += prow(y) * Math.pow(Math.max(0, 1 - x / 0.062), 1.2) * c0;
-			return Math.max(r, hr(y, th, Ms) + 0.02);
+			if (c0 > 0) r += prow(y) * Math.max(0, 1 - x / 0.058) * c0;
+			return Math.max(r, hr(y, th, Ms) + 0.016);
 		};
+		// (the visor in planes too, its beak a crease)
+		const visorR = facet(visorR0);
 		const visLo = (th) => yChin + (ySight - 0.028 - yChin) * Math.pow(Math.abs(th) / W, 2.2), visHi = (th) => ySight - 0.004 * (th / W) ** 2;
 				const visor = fitTube({
 			o: O, axis: UP, t0: yChin - O.y, t1: ySight - O.y, dt: 0.0045, seg: 72, arc: [-W, W], span: (th) => [visLo(th) - O.y, visHi(th) - O.y],
@@ -1353,7 +1404,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			o: O, axis: UP, t0: yThroat - O.y, t1: ySight - O.y, dt: 0.006, seg: 64, arc: [-1.6, 1.6], span: (th) => [bevLo(th) - O.y, bevHi(th) - O.y],
 			floor: (t, th) => {
 				const y = O.y + t, u = Math.max(0, Math.min(1, (y - yThroat) / (yChin + 0.02 - yThroat)));
-				let r = Math.max(hr(y, th, Ms) + 0.017, visorR(Math.min(y, yChin + 0.02), th) * u + (hr(y, th, Ms) + 0.024) * (1 - u) - 0.0055);
+				let r = Math.max(hr(y, th, Ms) + 0.013, visorR(Math.min(y, yChin + 0.02), th) * u + (hr(y, th, Ms) + 0.018) * (1 - u) - 0.0055);
 				r += 0.006 * Math.max(0, 1 - Math.abs(r * Math.sin(th)) / 0.05) * Math.max(0, Math.cos(th));
 				// (tucked under the visor where they lap)
 				return y > visLo(th) - 0.003 ? Math.min(r, visorR(y, th) - TH - 0.0025) : r;
@@ -1381,7 +1432,13 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		} else if (q.kind === 'beanie' || q.kind === 'hood' || q.kind === 'helmet' || q.kind === 'hazhood') {
 			const deep = q.kind === 'beanie' ? top - eyeY - 0.03 : q.kind === 'helmet' ? top - eyeY + 0.03 : top - eyeY + 0.08;
 			const grow = q.kind === 'beanie' ? 0.016 : q.kind === 'helmet' ? 0.03 : 0.035;
-			if (q.kind === 'helmet' && q.combat) {
+			if (q.kind === 'helmet' && q.combat && A.kit) {
+				// the helmet, its night vision and its headset as real models
+				// (people/kit-models.js); the battery pouch in the pack's colour if it has one
+				putModel('helmet', c);
+				if (q.nvg) putModel('nvg', q.pack || c);
+				if (q.comms) putModel('headset', '#2b2d2a');
+			} else if (q.kind === 'helmet' && q.combat) {
 				// a high-cut combat helmet made to the head (fitTube): the shell stood off the skull
 				// on its pads, its brow above the eyebrows, cut high over the ears and down to the
 				// nape behind, a rubber trim round the edge; rails along the sides, loop patches on
@@ -2262,6 +2319,12 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	g.setAttribute('color', new THREE.Float32BufferAttribute(out.col, 3));
 	g.setAttribute('kit', new THREE.Float32BufferAttribute(out.kit, 3));
 	g.setAttribute('wear', new THREE.Float32BufferAttribute(out.wr, 2));
+	// (the real models' place in their atlas; only where there are any)
+	if (out.uvs.length) {
+		const kuv = new Float32Array(out.pos.length / 3 * 2);
+		for (const [start, uv] of out.uvs) kuv.set(uv, start * 2);
+		g.setAttribute('kuv', new THREE.BufferAttribute(kuv, 2));
+	}
 	g.setAttribute('skinIndex', new THREE.BufferAttribute(new Uint16Array(out.si), 4));
 	g.setAttribute('skinWeight', new THREE.BufferAttribute(new Float32Array(out.sw), 4));
 	g.computeBoundingSphere();
@@ -2270,8 +2333,12 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 // one material for every accessory of every person (the bags' own, propkit.js, in white)
 let accMat = null;
 export function accessoryMaterial() {
-	if (accMat) return accMat;
-	accMat = patchKit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }));
-	accMat.userData.shared = true;
+	if (!accMat) {
+		accMat = patchKit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }));
+		accMat.userData.shared = true;
+	}
+	// (the real models' maps, once they are in)
+	const K = kitModelsNow();
+	if (K && !accMat.userData.atlas) kitAtlas(accMat, K.tex);
 	return accMat;
 }

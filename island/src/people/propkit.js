@@ -230,16 +230,31 @@ vec3 kPerturb(vec3 pos, vec3 n, float h) {
 	float det = dot(sx, r1);
 	vec3 g = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
 	return normalize(abs(det) * n - g);
-}`;
+}
+#ifdef KIT_ATLAS
+// the real models' atlas (people/kit-models.js): colour; normals; occlusion, roughness, and
+// in blue the metal (below a half) or the wearer's colour taken (above it)
+uniform sampler2D uKitAlb; uniform sampler2D uKitNor; uniform sampler2D uKitOrm; varying vec2 vKuv;
+// (a tangent frame from the surface's own derivatives: the models carry no tangents)
+vec3 kMapped(vec3 pos, vec3 n, vec2 uv, vec3 mapN) {
+	vec3 q0 = dFdx(pos), q1 = dFdy(pos); vec2 st0 = dFdx(uv), st1 = dFdy(uv);
+	vec3 q1p = cross(q1, n), q0p = cross(n, q0);
+	vec3 T = q1p * st0.x + q0p * st1.x, B = q1p * st0.y + q0p * st1.y;
+	float det = max(dot(T, T), dot(B, B)), sc = det == 0.0 ? 0.0 : inversesqrt(det);
+	return normalize(T * (mapN.x * sc) + B * (mapN.y * sc) + n * mapN.z);
+}
+#endif`;
 // (garment.js puts the same on the small things people wear: one program for all of it)
 export function patchKit(m, a = '#ffffff', b = '#ffffff') {
 	const A = new THREE.Color(a), B = new THREE.Color(b);
 	m.userData.kit = { A, B };
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uKitA = { value: A }; sh.uniforms.uKitB = { value: B };
+		const at = m.userData.atlas;
+		if (at) { sh.uniforms.uKitAlb = { value: at.albedo }; sh.uniforms.uKitNor = { value: at.normal }; sh.uniforms.uKitOrm = { value: at.orm }; }
 		sh.vertexShader = sh.vertexShader
-			.replace('#include <common>', '#include <common>\nattribute vec3 kit; attribute vec2 wear;\nvarying vec3 vKit; varying vec3 vRest; varying vec3 vRestN; varying vec2 vWear;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = kit; vRest = position; vRestN = normal; vWear = wear;');
+			.replace('#include <common>', '#include <common>\nattribute vec3 kit; attribute vec2 wear;\nvarying vec3 vKit; varying vec3 vRest; varying vec3 vRestN; varying vec2 vWear;\n#ifdef KIT_ATLAS\nattribute vec2 kuv; varying vec2 vKuv;\n#endif')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = kit; vRest = position; vRestN = normal; vWear = wear;\n#ifdef KIT_ATLAS\nvKuv = kuv;\n#endif');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL)
 			.replace('#include <color_fragment>', `#include <color_fragment>
@@ -252,6 +267,18 @@ float kRough = -1.0, kMetal = -1.0, kH = 0.0;
 vec3 kA = abs(vRestN);
 vec2 kUV = kA.x > kA.y && kA.x > kA.z ? vRest.zy : (kA.y > kA.z ? vRest.xz : vRest.xy);
 float kEdge = vWear.x, kCav = vWear.y, kId = floor(vKit.x + 0.5);
+// 11: a real model's own maps, its painted parts in the wearer's colour
+vec4 kOrm = vec4(1.0, 0.5, 0.5, 1.0);
+#ifdef KIT_ATLAS
+if (kId == 11.0) {
+	kOrm = texture2D(uKitOrm, vKuv);
+	float kTint = clamp(kOrm.b * 2.0 - 1.0, 0.0, 1.0);
+	diffuseColor.rgb = texture2D(uKitAlb, vKuv).rgb * mix(vec3(1.0), vColor.rgb * 1.2, kTint) * (0.6 + 0.4 * kOrm.r);
+	kRough = kOrm.g; kMetal = clamp(1.0 - kOrm.b * 2.0, 0.0, 1.0);
+	// (the paint's grit, finer than the atlas holds)
+	kH = (kNoise(vRest * 1400.0) - 0.5) * 0.00005 * kTint * kFade(kUV * 1400.0);
+}
+#endif
 if (vKit.x < 2.5) diffuseColor.rgb *= kFabric(vRest, vRestN, vKit.y);
 if (vKit.y > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= 0.5;
 if (vKit.x > 2.5) {
@@ -318,13 +345,22 @@ if (vKit.x > 2.5) {
 	}
 }`)
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = kRough >= 0.0 ? kRough : vKit.x > 1.5 ? 0.24 : mix(0.82, 0.12, vKit.x); metalnessFactor = kMetal >= 0.0 ? kMetal : vKit.x > 1.5 ? 1.0 : vKit.x * 0.3;')
-			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nif (kH != 0.0) normal = kPerturb(-vViewPosition, normal, kH);')
+			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nif (kH != 0.0) normal = kPerturb(-vViewPosition, normal, kH);\n#ifdef KIT_ATLAS\nif (kId == 11.0) { vec3 mapN = texture2D(uKitNor, vKuv).xyz * 2.0 - 1.0; mapN.y = -mapN.y; normal = kMapped(-vViewPosition, normal, vKuv, mapN); }\n#endif')
+			// (the models' baked occlusion on the light from the sky)
+			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n#ifdef KIT_ATLAS\nif (kId == 11.0) { reflectedLight.indirectDiffuse *= kOrm.r; reflectedLight.indirectSpecular *= mix(1.0, kOrm.r, 0.8); }\n#endif')
 			// (the world's sky in the steel, not a second ambient light: the scene's own lights
 			// light the rest)
 			.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n#ifdef USE_ENVMAP\niblIrradiance *= 0.0;\n#endif');
 	};
-	m.customProgramCacheKey = () => 'crysis-kit-4';
+	m.customProgramCacheKey = () => (m.userData.atlas ? 'crysis-kit-4a' : 'crysis-kit-4');
 	return m;
+}
+// the real models' maps on a kit material (people/kit-models.js): { albedo, normal, orm }
+export function kitAtlas(m, atlas) {
+	if (m.userData.atlas === atlas) return;
+	m.userData.atlas = atlas;
+	m.defines = { ...(m.defines || {}), KIT_ATLAS: '' };
+	m.needsUpdate = true;
 }
 // a shared material for a bag in these colours (its own and its accent)
 const mats = new Map();
