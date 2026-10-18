@@ -85,7 +85,9 @@ export function createCastHands({ camera, fx, isPhone = false }) {
 			// (shaking with the force of a beam)
 			if (beaming && k > 0.9) A.grp.position.add(_p.set((Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.005));
 			A.grp.rotation.set(A.cur[3], A.cur[4], A.cur[5], 'YXZ');
-			A.grp.visible = !!A.hand;
+			// (the hand is drawn when your body has given it one; the palm's light shows either way)
+			A.grp.visible = true;
+			if (A.hand) A.hand.mesh.visible = true;
 			any = true;
 			// (gathering in the palm as it rises, a flare as the spell leaves, a glow held, then gone)
 			const g = A.glow, ft = A.t - RISE;
