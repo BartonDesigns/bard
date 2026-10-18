@@ -688,7 +688,7 @@ export function createIslandWorld() {
 	HOOKS.tattooInfo = () => studio.info();
 	for (const ev of ['pointerdown', 'touchstart']) inkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if ((e.key === 't' || e.key === 'T') && !e.repeat && world?.bizSeen?.type === 'tattoo' && !studio.active() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); studio.start(); } });
-	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active(), hint: (t, ms) => hint(t, ms, 1), ward: (p) => HOOKS.combat?.ward(p) });
+	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active() || !!world?.boat?.boarded?.(), driving: () => (drive.active() && !carjack.active()) || !!world?.boat?.boarded?.(), hint: (t, ms) => hint(t, ms, 1), ward: (p) => HOOKS.combat?.ward(p) });
 	HOOKS.self = you;
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
