@@ -257,6 +257,8 @@ function blackHole(scene) {
 			core.scale.setScalar(Math.max(0.01, H.a));
 			for (const m of [disc.material, halo.material]) { m.uniforms.uA.value = H.a; m.uniforms.uT.value = H.t; }
 		},
+		// (how dark it has made the world: 0 to 1, for the sun and the sky's light on the ground)
+		darkness: () => (group.visible ? H.a * H.cover : 0),
 		clear() { H.a = H.want = 0; group.visible = veil.visible = false; },
 		dispose() { scene.remove(group); scene.remove(veil); for (const m of [core, disc, halo, veil]) { m.geometry.dispose(); m.material.dispose(); } },
 	};
@@ -422,7 +424,8 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 		if (!felt || k > felt.k) felt = { x: p.x, y: p.y, z: p.z, c, k };
 	}
 	const takeFlash = () => { const f = felt; felt = null; return f; };
-	return { emit, spark, seg, burst, ring, line, bolt, pillar, circle, spiral, decal, hole, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
+	const darkness = () => gargantua.darkness();
+	return { emit, spark, seg, burst, darkness, ring, line, bolt, pillar, circle, spiral, decal, hole, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
 }
 
 // ---------- the voices ----------

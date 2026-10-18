@@ -186,6 +186,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, exposure: () => caster.exposure(),
+		// (Gargantua putting out the sky: how much the world's daylight should dim, 0 to 1)
+		darkness: () => fx.darkness(),
 		// (Solar Flare channels the moon by night: the skills side grants this; here for the console)
 		moonlit: (id = 'solar-flare') => { const ok = grantMoonlit(state, id); if (ok) dirty = true; return ok; },
 		// (the tests: your body, for its gestures)
