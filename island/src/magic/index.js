@@ -392,8 +392,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (the tests: your body, for its gestures)
 		body: () => me(),
 		covering: () => skills.covering(),
-		// after the frame is drawn (main.js): the light round the black holes bent (magic/lens.js)
-		post: (renderer) => fx.lensed(lens.post(renderer, camera, fx.lenses(), performance.now() / 1000)),
+		// after the frame is drawn (main.js): the light round Gargantua's rim bent, and its ending's grade (magic/lens.js)
+		post: (renderer) => lens.post(renderer, camera, fx.lenses(), performance.now() / 1000, fx.grade()),
 		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: [...(state.moonlit || [])], life: BASE_LIFE + (state.mods?.life || 0), gear: state.gear.map((x) => ({ i: x.i, l: x.l, t: x.t, school: attunement(x) })), ...caster.info() }),
 		// your statistics as a sheet (the Character view, ui/gear.js), and fabric into gear
 		stats: () => statSheet(state, { light: light() }),

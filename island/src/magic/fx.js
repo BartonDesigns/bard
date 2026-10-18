@@ -201,17 +201,23 @@ function pool(scene, n, ink, order) {
 // Gargantua: a sphere of black, its accretion disc tipped a little toward you, and the light of the
 // far side of the disc bent round the sphere into a halo that always faces the eye. One group, made
 // once and shown only while the spell lasts; a(1) is its strength, 0 gone.
-const DISC_VERT = 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
-const DISC_FRAG = `uniform float uT; uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
+// (all of it stops at the horizon: nothing of it below uCut, the eye's height, is drawn, so it
+// stands behind the horizon and rises over it)
+const DISC_VERT = 'varying vec2 vP; varying float vY; void main(){ vP = position.xy; vY = (modelMatrix * vec4(position, 1.0)).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+const CUT = 'uniform float uCut; varying float vY;';
+const CORE_FRAG = `${CUT} void main(){ if (vY < uCut) discard; gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); }`;
+const DISC_FRAG = `${CUT} uniform float uT; uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
 	void main(){
+		if (vY < uCut) discard;
 		float r = length(vP), a = atan(vP.y, vP.x), u = (r - uIn) / (uOut - uIn);
 		float streak = 0.6 + 0.4 * sin(a * 7.0 + r * 3.0 - uT * 2.2) * sin(a * 3.0 - r * 1.7 + uT * 1.3);
 		float hot = exp(-u * 4.0), edge = smoothstep(0.0, 0.04, u) * (1.0 - smoothstep(0.75, 1.0, u));
 		vec3 c = mix(vec3(1.0, 0.52, 0.18), vec3(1.0, 0.95, 0.85), hot);
 		gl_FragColor = vec4(c * (0.5 + 1.8 * hot) * streak * edge * uA, 1.0);
 	}`;
-const HALO_FRAG = `uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
+const HALO_FRAG = `${CUT} uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
 	void main(){
+		if (vY < uCut) discard;
 		float u = (length(vP) - uIn) / (uOut - uIn);
 		float ring = exp(-u * 9.0) + 0.35 * exp(-u * 2.5);
 		vec3 c = mix(vec3(1.0, 0.6, 0.25), vec3(1.0, 0.97, 0.9), exp(-u * 6.0));
@@ -220,8 +226,9 @@ const HALO_FRAG = `uniform float uA; uniform float uIn; uniform float uOut; vary
 function blackHole(scene) {
 	const group = new THREE.Group();
 	group.name = 'magic-gargantua'; group.visible = false;
-	const ringMat = (frag, rIn, rOut) => new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uA: { value: 0 }, uIn: { value: rIn }, uOut: { value: rOut } }, vertexShader: DISC_VERT, fragmentShader: frag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-	const core = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
+	const cut = { value: -1e9 };
+	const ringMat = (frag, rIn, rOut) => new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uA: { value: 0 }, uIn: { value: rIn }, uOut: { value: rOut }, uCut: cut }, vertexShader: DISC_VERT, fragmentShader: frag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+	const core = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), new THREE.ShaderMaterial({ uniforms: { uCut: cut }, vertexShader: DISC_VERT, fragmentShader: CORE_FRAG }));
 	const disc = new THREE.Mesh(new THREE.RingGeometry(1.2, 3.2, 128, 1), ringMat(DISC_FRAG, 1.2, 3.2));
 	disc.rotation.x = -Math.PI / 2 + 0.16;
 	const halo = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.9, 128, 1), ringMat(HALO_FRAG, 1.0, 1.9));
@@ -233,13 +240,13 @@ function blackHole(scene) {
 	const veil = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), new THREE.MeshBasicMaterial({ color: 0x030108, side: THREE.BackSide, transparent: true, opacity: 0, depthWrite: false, fog: false }));
 	veil.name = 'magic-gargantua-veil'; veil.renderOrder = 1; veil.visible = false; veil.frustumCulled = false;
 	scene.add(veil);
-	const H = { a: 0, want: 0, seen: 0, t: 0, cover: 0, lensed: false }, eye = new THREE.Vector3(), lens = { p: group.position, r: 1, k: 0, bend: 1.6 };
+	const H = { a: 0, want: 0, seen: 0, t: 0, cover: 0 }, eye = new THREE.Vector3(), lens = { p: group.position, r: 1, k: 0, cut: 0 };
 	return {
 		group,
 		// shown at p, radius r (m), strength a, the halo turned to face e (the eye)
 		set(p, r, a, e) {
 			group.position.set(p.x, p.y, p.z); group.scale.setScalar(Math.max(0.01, r)); H.want = a; H.seen = 0;
-			if (e) eye.set(e.x, e.y, e.z);
+			if (e) { eye.set(e.x, e.y, e.z); cut.value = e.y; }
 			// (how much of the sky it takes: from when it spans ~35° across to when it would span 130°)
 			const ang = Math.asin(Math.min(1, r / Math.max(r, group.position.distanceTo(eye))));
 			H.cover = Math.max(0, Math.min(1, (ang - 0.3) / 0.85));
@@ -255,16 +262,13 @@ function blackHole(scene) {
 			if (!group.visible) return;
 			halo.lookAt(eye);
 			core.scale.setScalar(Math.max(0.01, H.a));
-			// (when the frame is bent round it (magic/lens.js) the lens draws its shadow, so the sphere
-			// steps aside and the sky behind it is there to be bent)
-			core.visible = !H.lensed;
-			lens.r = group.scale.x * Math.max(0.01, H.a); lens.k = H.a;
+			// (the light round its rim bent, above the horizon: magic/lens.js)
+			lens.r = group.scale.x * Math.max(0.01, H.a); lens.k = H.a; lens.cut = cut.value;
 			for (const m of [disc.material, halo.material]) { m.uniforms.uA.value = H.a; m.uniforms.uT.value = H.t; }
 		},
 		// (how dark it has made the world: 0 to 1, for the sun and the sky's light on the ground)
 		darkness: () => (group.visible ? H.a * H.cover : 0),
 		lens: () => (group.visible ? lens : null),
-		lensed(on) { H.lensed = on; },
 		clear() { H.a = H.want = 0; group.visible = veil.visible = false; },
 		dispose() { scene.remove(group); scene.remove(veil); for (const m of [core, disc, halo, veil]) { m.geometry.dispose(); m.material.dispose(); } },
 	};
@@ -403,34 +407,31 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 		if (live || L.live) { const A = L.g.attributes; A.position.needsUpdate = A.color.needsUpdate = A.size.needsUpdate = A.kind.needsUpdate = true; }
 		L.live = live;
 	}
-	// (the black holes bending the light round them this frame, for magic/lens.js: Gargantua's, and
-	// any laid by lens() for a moment; lensed: whether the frame is being bent, so a hole's own black
-	// shape can step aside for the lens's shadow)
-	const bent = [], held = [];
-	let lensed = false;
-	function lens(p, r, k = 1, bend = 1.5, life = 0.2) {
-		// (one there already is held on, not doubled)
-		const o = held.find((l) => Math.abs(l.p.x - p.x) + Math.abs(l.p.y - p.y) + Math.abs(l.p.z - p.z) < 0.05);
-		if (o) { o.r = r; o.k0 = k; o.bend = bend; o.life = Math.max(o.life, life); } else held.push({ p: { x: p.x, y: p.y, z: p.z }, r, k: 0, k0: k, bend, life });
-		return lensed;
+	// (the black hole bending the light round its rim this frame, for magic/lens.js)
+	const bent = [];
+	function lenses() { bent.length = 0; const g = gargantua.lens(); if (g) bent.push(g); return bent; }
+	// (Gargantua's ending on the whole frame, from T s, its life: from three quarters in the colours
+	// invert, then drain to grey, then go black; two seconds of black, then the world bursts back)
+	const G = { t: -1, T: 10, inv: 0, grey: 0, black: 0, burst: 0 };
+	const ramp = (x, a, b) => Math.max(0, Math.min(1, (x - a) / (b - a)));
+	function gradeFrom(T) { G.t = 0; G.T = T; }
+	function stepGrade(dt) {
+		if (G.t < 0) return;
+		const x = (G.t += dt), T = G.T, a = T * 0.75, b = a + T * 0.1, c = b + T * 0.1, d = c + 0.3, e = d + 2, f = e + 1.4;
+		G.inv = ramp(x, a, b) * (1 - ramp(x, d, d + 0.01));
+		G.grey = ramp(x, b, c) * (1 - ramp(x, e, e + 0.01));
+		G.black = ramp(x, c, d) * (1 - ramp(x, e, e + 0.06));
+		G.burst = x >= e ? Math.pow(1 - ramp(x, e, f), 2) : 0;
+		if (x > f) { G.t = -1; G.inv = G.grey = G.black = G.burst = 0; }
 	}
-	function lenses() {
-		bent.length = 0;
-		const g = gargantua.lens();
-		if (g) bent.push(g);
-		// (fading out over its last moment rather than snapping away)
-		for (const l of held) { l.k = l.k0 * Math.min(1, l.life / 0.12); bent.push(l); }
-		return bent;
-	}
-	function setLensed(on) { lensed = on; gargantua.lensed(on); }
+	const grade = () => (G.t >= 0 ? G : null);
 	function update(dt, xrayOn = false) {
-		step(glow, dt); step(ink, dt); streak.step(dt); flat.step(dt); gargantua.step(dt);
-		for (let i = held.length - 1; i >= 0; i--) if ((held[i].life -= dt) <= 0) held.splice(i, 1);
+		step(glow, dt); step(ink, dt); streak.step(dt); flat.step(dt); gargantua.step(dt); stepGrade(dt);
 		if (xrayOn && !xray.parent) scene.add(xray);
 		xray.visible = xrayOn;
 	}
 	function resize(h, fov) { glow.mat.uniforms.scale.value = ink.mat.uniforms.scale.value = xray.material.uniforms.scale.value = h / 2 / Math.tan((fov * Math.PI) / 360); }
-	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; streak.clear(); flat.clear(); gargantua.clear(); held.length = 0; }
+	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; streak.clear(); flat.clear(); gargantua.clear(); G.t = -1; G.inv = G.grey = G.black = G.burst = 0; }
 	function dispose() { for (const L of [glow, ink]) { scene.remove(L.pts); L.g.dispose(); L.mat.dispose(); } scene.remove(xray); xray.material.dispose(); scene.remove(flat.mesh); flat.geo.dispose(); flat.mat.dispose(); streak.dispose(); gargantua.dispose(); }
 	// (the black hole, kept alive by calling this each step: where, radius, strength, the eye)
 	const hole = (p, r, a = 1, e = null) => gargantua.set(p, r, a, e);
@@ -452,7 +453,7 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 	}
 	const takeFlash = () => { const f = felt; felt = null; return f; };
 	const darkness = () => gargantua.darkness();
-	return { emit, spark, seg, burst, darkness, ring, line, bolt, pillar, circle, spiral, decal, hole, lens, lenses, lensed: setLensed, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
+	return { emit, spark, seg, burst, darkness, ring, line, bolt, pillar, circle, spiral, decal, hole, lenses, grade, gradeFrom, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
 }
 
 // ---------- the voices ----------

@@ -53,10 +53,9 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 		if (only && !only.includes(id)) continue;
 		await page.evaluate((id) => {
 			const { renderer, scene, camera, fx, SPELLS, lens, backdrop, flat } = window.__g, { LOOK } = Game;
-			const bends = id === 'gargantua' || id === 'event-horizon';
+			const bends = id === 'gargantua';
 			scene.background = bends ? backdrop : flat; scene.fog.far = bends ? 4000 : 70;
-			fx.lensed(bends);
-			const draw = () => { renderer.render(scene, camera); if (bends) lens.post(renderer, camera, fx.lenses(), 1); };
+			const draw = () => { renderer.render(scene, camera); if (bends) lens.post(renderer, camera, fx.lenses(), 1, fx.grade()); };
 			const spell = SPELLS.find((s) => s.id === id), L = LOOK[id] || {};
 			const v = (x, y, z) => ({ x, y, z }), dir = v(0, -0.03, -1), hand = v(0.3, 1.45, -0.6), eye = v(0, 1.68, 0);
 			const foes = [v(0, 1.2, -8), v(-2.2, 1.2, -9.5), v(2.4, 1.2, -9)], T = { bound: foes[0] };
@@ -94,13 +93,16 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 				if (window.__grow != null) {
 					const s = spell, R = s.size0 * Math.pow(s.size / s.size0, Math.pow(Math.min(1, window.__grow / (s.t * 0.85)), 1.2)), e = camera.position;
 					camera.far = 6000; camera.updateProjectionMatrix();
-					const h = v(-30, s.rise + R * 0.3, -s.far);
+					// (as in the game: its heart a little over the eye's level, the horizon cutting it)
+					const h = v(-30, e.y + R * 0.35, -s.far);
+					// (and the ending's grade as it stands then)
+					fx.gradeFrom(s.t); fx.update(Math.max(0, window.__grow - 0.6));
 					run(0.6, (tt) => L.tick?.(fx, h, R, tt, e));
 					draw();
 					camera.far = 200; camera.updateProjectionMatrix();
 					return;
 				}
-				const h = v(-14, 16, -120), e = camera.position;
+				const e = camera.position, h = v(-14, e.y + 10 * 0.35, -120);
 				run(1.2, (tt) => L.tell?.(fx, v(h.x, h.y - (1 - tt / 1.2) * 25, h.z), 10, tt / 1.2, e));
 				run(1.4, (tt, n) => { L.tick?.(fx, h, 10, tt, e); if (n === 36) L.arc?.(fx, foes[0], h); });
 			}

@@ -243,8 +243,7 @@ export const LOOK = {
 		blast: (fx, at, r) => { slam(fx, at, null, C.azure, C.indigo, 1.5, false); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.35, r * 0.2, r * 2.4, C.azure, 1, 0, 0, RING); fx.burst(at, C.indigo, 50, r * 1.6, 0.6, 0.4, 0, SHARD); wave(fx, { x: at.x, y: at.y - 1, z: at.z }, r * 1.4, C.azure, 0.5); },
 	},
 	'event-horizon': {
-		// (its heart bends the light round it (magic/lens.js); where the frame is not bent, a dark orb stands in)
-		tick: (fx, at, r, t) => { fx.spiral(at, r, C.violet, 16, 0.6, 0.4, 4, true); if (!fx.lens?.(at, r * 0.2, 1, 1.7)) fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.45, r * 0.42, C.inkVoid, 1, 0, 0, DARK_ORB); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.5, r * 0.5, C.white, 0.85, 0, 0, RING); fx.circle(at, r * 0.7, C.azure, 16, 0.14, 0.22, t * 3, ORB, 0); if (Math.random() < 0.25) fx.decal({ x: at.x, y: at.y - 1, z: at.z }, r * 0.9, r * 0.8, 0.7, C.violet, 0.4, O('ring')); },
+		tick: (fx, at, r, t) => { fx.spiral(at, r, C.violet, 16, 0.6, 0.4, 4, true); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.45, r * 0.42, C.inkVoid, 1, 0, 0, DARK_ORB); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.14, r * 0.5, r * 0.5, C.white, 0.85, 0, 0, RING); fx.circle(at, r * 0.7, C.azure, 16, 0.14, 0.22, t * 3, ORB, 0); if (Math.random() < 0.25) fx.decal({ x: at.x, y: at.y - 1, z: at.z }, r * 0.9, r * 0.8, 0.7, C.violet, 0.4, O('ring')); },
 		blast: (fx, at, r) => { slam(fx, at, null, C.white, C.violet, 1.8, false); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.5, r * 0.3, r * 2, C.white, 0.85, 0, 0, RING); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.6, r * 0.4, r * 1.6, C.violet, 1, 0, 0, RING); fx.burst(at, C.azure, 70, r * 2, 0.7, 0.4, 0, SHARD); wave(fx, { x: at.x, y: at.y - 1, z: at.z }, r * 1.0, C.violet, 0.6, 0.5); },
 		mark: (fx, T) => { if (Math.random() < 0.25) fx.line(T.bound, { x: T.bound.x, y: T.bound.y + 1.2, z: T.bound.z }, C.violet, 0.3, 0.12, 0.14); },
 	},

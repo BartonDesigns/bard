@@ -179,16 +179,20 @@ and World of Warcraft. The idea is that you can name a spell from its silhouette
   fills the whole sky by 8.5 s (a dark veil takes the sky behind you too, and the sun, the sky's light
   and the haze on the ground dim with it: `magic.darkness()`, read in main.js). Over ten seconds it draws in
   and destroys every hostile fighter within 600 m, and takes a quarter of any boss's life.
-- **Gravitational lensing** round Gargantua and an Event Horizon (`magic/lens.js`): after the frame is
-  drawn it is copied and drawn again through up to four point lenses, so what stands behind a hole is
-  pulled round its rim into a ring, its far side shows flipped against the edge, and a thin photon ring
-  circles the shadow. The lens draws the shadow itself, so the hole's own black shape steps aside while
-  it runs (`fx.lensed`). It costs one full-screen pass, only while a hole is up. The game's canvas has
-  no alpha, so the copy is taken as RGB8; an RGBA copy fails there and comes back black.
+- **Over the horizon:** Gargantua's heart sits a little above your eye's level and nothing of it
+  below that level is drawn (`uCut` in fx.js), so it rises out from behind the horizon.
+- **Gravitational lensing** round Gargantua's rim (`magic/lens.js`): after the frame is drawn it is
+  copied and drawn again, and in a band round the rim, above the horizon, each pixel reads from just
+  past the rim, so what lies beyond is drawn out along its edge, with a thin photon ring on the edge.
+  The sphere stays in the scene, so what stands in front still hides it. The game's canvas has no
+  alpha, so the copy is taken as RGB8; an RGBA copy fails there and comes back black.
+- **Its ending:** from 75% of its time the colours of everything but the hole invert, in a wave
+  spreading out from it, then drain to grey, then go black; after two seconds of black the world
+  bursts back over-bright and over-saturated, with a kick (`fx.gradeFrom`, drawn by the same pass).
 - **The gallery:** `node island/tools/spell-looks-browser.cjs` plays every look in a small scene of
   its own, with no game loaded, and saves one picture per spell to `/tmp/spell-looks` (`ONLY=` picks
-  some; `FLIGHT=1` catches bolts mid-flight; Gargantua and Event Horizon are drawn over a checked
-  backdrop so the lensing shows).
+  some; `FLIGHT=1` catches bolts mid-flight; Gargantua is drawn over a checked backdrop so the
+  lensing shows, and `GROW=<s>` also shows its ending's grade at s).
 
 ## Console
 

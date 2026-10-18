@@ -274,12 +274,18 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			gather();
 			combat.shake?.(0.3);
 			magicSound('void', 0.25);
+			// (the world's colours invert, grey and go black at its end; after two seconds of black they
+			// burst back, with a kick: fx.js gradeFrom)
+			fx.gradeFrom?.(spell.t);
+			effects.push({ t: spell.t * 0.95 + 2.3, run: () => { combat.shake?.(0.35); magicSound('radiance', 0.25); } });
 			effects.push({ t: 0, life: spell.t, every: 0.1,
 				step() {
 					t += 0.1; n++;
 					const u = Math.min(1, t / RISE), e = 1 - (1 - u) * (1 - u);
 					R = size(t);
-					drawn.set(hole.x, hole.y + R * 0.3 - (1 - e) * spell.rise * 0.6, hole.z);
+					// (it stands over the horizon: its heart a little above your eye's level, so the horizon cuts
+					// off its lower part (fx.js), climbing up out from behind it as it comes)
+					drawn.set(hole.x, me.y + R * 0.35 - (1 - e) * R * 1.4, hole.z);
 					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position);
 					else fx.burst(drawn, GLOW.void, 6, -R, 0.5, R * 0.1, 0);
 					if (n % 10 === 0) { gather(); combat.shake?.(0.05); }
