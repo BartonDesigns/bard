@@ -12,7 +12,7 @@
 // to cast, and only one who carries both strands deeply can weave the twilight spells. Light
 // spells burn brighter by day, dark spells at night, twilight spells at dusk and dawn.
 //
-// A school is a ladder of four tiers: each spell past the first needs one of the tier below
+// A school is a ladder of four tiers (Void has a fifth, its ultimate, Gargantua): each spell past the first needs one of the tier below
 // it in the same school. Casting costs mana, which comes back on its own; each spell has its
 // own cooldown.
 
@@ -35,9 +35,9 @@ export const SCHOOLS = Object.freeze({
 
 // what one tier of spell takes to weave, in fabric of its strand (a twilight spell: this much
 // of each strand times TWILIGHT_SHARE), and the affinity a twilight spell needs in both strands
-export const WEAVE_COST = Object.freeze([10, 30, 80, 200]);
+export const WEAVE_COST = Object.freeze([10, 30, 80, 200, 500]);
 export const TWILIGHT_SHARE = 0.6;
-export const TWILIGHT_NEEDS = Object.freeze([20, 60, 150, 320]);
+export const TWILIGHT_NEEDS = Object.freeze([20, 60, 150, 320, 500]);
 
 // The spells. kind says what the runtime does (magic/caster.js); the rest are its numbers:
 // mana, cd (seconds), and per kind: dmg (per hit), dps, r (radius, m), range (m), speed (m/s),
@@ -48,8 +48,8 @@ const S = (id, name, school, tier, kind, mana, cd, glyph, desc, o = {}) => ({ id
 export const SPELLS = Object.freeze([
 	// ---------- Radiance ----------
 	S('sunspark', 'Sunspark', 'radiance', 1, 'bolt', 8, 0.45, '✦', 'A spark of daylight thrown from the hand. Burns hotter under the sun.', { dmg: 22, speed: 70, type: 'radiant' }),
-	S('lance-of-dawn', 'Lance of Dawn', 'radiance', 2, 'beam', 14, 4, '⟋', 'Hold to pour a lance of light along your aim, searing all it touches.', { dps: 46, range: 60, t: 3, type: 'radiant' }),
-	S('solar-flare', 'Solar Flare', 'radiance', 3, 'burst', 30, 10, '☀', 'Light bursts where you aim, burning and blinding everyone near it.', { dmg: 70, r: 5, range: 80, type: 'radiant', status: { hold: 1.6 } }),
+	S('lance-of-dawn', 'Lance of Dawn', 'radiance', 2, 'lances', 14, 4, '⟋', 'Three lances fall point first where you aim, out of the sun by day or the moon by night, searing all near where they land.', { dmg: 38, r: 2.6, n: 3, spread: 3.2, range: 80, type: 'radiant' }),
+	S('solar-flare', 'Solar Flare', 'radiance', 3, 'flare', 30, 10, '☀', 'A column of the sun\'s own light strikes where you aim, out of wherever the sun stands, burning and blinding everyone near it. Mastered, it channels the moon by night.', { dmg: 70, r: 5, range: 80, delay: 0.55, night: 'moon', type: 'radiant', status: { hold: 1.6 } }),
 	S('judgement', 'Judgement', 'radiance', 4, 'strike', 55, 30, '⇣', 'Call a pillar of light down from the sky. It lands a breath later and spares nothing within it.', { dmg: 170, r: 6, range: 120, delay: 1.2, type: 'radiant' }),
 	// ---------- Restoration ----------
 	S('mend', 'Mend', 'restoration', 1, 'heal', 16, 6, '✚', 'Close your wounds with a touch of light.', { heal: 30 }),
@@ -79,6 +79,9 @@ export const SPELLS = Object.freeze([
 	S('repulse', 'Repulse', 'void', 2, 'cone', 22, 10, '⇶', 'Force before you, hurling everyone in reach away.', { dmg: 20, range: 12, angle: 0.75, push: 10, type: 'void' }),
 	S('gravity-well', 'Gravity Well', 'void', 3, 'well', 38, 25, '◉', 'A knot of void where you aim draws everyone near into it, then collapses.', { dmg: 90, r: 9, range: 70, t: 3.5, pull: 4, type: 'void' }),
 	S('event-horizon', 'Event Horizon', 'void', 4, 'well', 65, 60, '⊚', 'A sphere of void that holds all within it still and drinks their life.', { dmg: 60, dps: 28, r: 11, range: 70, t: 5, pull: 1.5, type: 'void', status: { hold: 5 } }),
+	// (the ultimate: a fifth rung, above Event Horizon. r is how far it reaches from you, far and rise
+	// where it hangs on the horizon, size its radius, bossCut the share of anything vast's life it takes)
+	S('gargantua', 'Gargantua', 'void', 5, 'singularity', 100, 300, '●', 'Gargantua appears as a dot on the horizon and swells until it fills the sky. Over ten seconds it draws in and unmakes every foe in sight, and tears a quarter of the life from anything vast.', { r: 600, t: 10, far: 340, rise: 40, size0: 1.5, size: 330, bossCut: 0.25, type: 'void' }),
 	// ---------- Blight ----------
 	S('hex-of-decay', 'Hex of Decay', 'blight', 1, 'bolt', 11, 3, '✣', 'A curse that rots the one it strikes for a while.', { dmg: 8, speed: 55, type: 'blight', status: { dot: 9, t: 8 } }),
 	S('withering', 'Withering', 'blight', 2, 'bolt', 16, 6, '≀', 'Drains the strength from the one it strikes: they slow and weaken.', { dmg: 18, speed: 55, type: 'blight', status: { slow: 0.4, t: 8, dot: 4 } }),
@@ -137,11 +140,27 @@ export function createMagicState(from = null) {
 		if (Array.isArray(from.perks)) s.perks = from.perks.filter((id) => typeof id === 'string');
 		if (from.use && typeof from.use === 'object') s.use = { ...from.use };
 		if (from.mastery && typeof from.mastery === 'object') s.mastery = { ...from.mastery };
+		if (Array.isArray(from.moonlit)) s.moonlit = from.moonlit.filter((id) => SPELL[id]?.night === 'moon');
 	}
 	return s;
 }
 // what is kept (no cooldowns: they are of the moment)
-export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {}, mastery: s.mastery || {} }; }
+export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {}, mastery: s.mastery || {}, moonlit: s.moonlit || [] }; }
+
+// A spell of the sun (night: 'moon') works by night only once it channels the moon: the skills
+// side grants that when it is mastered or fed enough aether (grantMoonlit), and it is kept
+export const moonlit = (s, id) => (Array.isArray(s.moonlit) ? s.moonlit.includes(id) : !!s.moonlit?.[id]);
+export function grantMoonlit(s, id) { if (SPELL[id]?.night !== 'moon' || moonlit(s, id)) return false; (s.moonlit ||= []).push(id); return true; }
+
+// Your name in the aether: a mote gives more of the strand your deeds lean to (reputation, -100
+// to 100: up to twice the light for a saint, twice the dark for a monster) and less of the other
+// (down to half)
+export function aetherShare(strand, rep = 0) {
+	const k = Math.max(-1, Math.min(1, (+rep || 0) / 100)) * (strand === 'dark' ? -1 : 1);
+	return k >= 0 ? 1 + k : 1 + k * 0.5;
+}
+// (both at once, for the menu: { light, dark } multipliers for a reputation)
+export const gatherShare = (rep = 0) => ({ light: aetherShare('light', rep), dark: aetherShare('dark', rep) });
 
 // What the perks you hold add to a spell's stat (magic/skills.js sums them into s.mods): the
 // share for its school, its strand and every spell, and (power) the spell's own mastery
