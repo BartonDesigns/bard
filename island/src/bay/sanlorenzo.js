@@ -22,6 +22,7 @@ import { toWorld, toLatLon, H_OFF, H_SCALE } from './geo.js';
 import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
 import { beginCarve, TILE, setRiverHooks } from './carve.js';
 import { toW, merger, bulbs, rng } from './rides/kit.js';
+import { updateRows } from './levelrows.js';
 
 // the cross-sections: depth of the water at the middle, the bench (flat bank past the
 // water's edge) and its height over the water, how steeply the land is cut back beyond it,
@@ -391,10 +392,8 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		// (only the rows under the river go up to the GPU again)
 		const tex = shared?.bayU?.uB0?.value;
 		if (tex && changed.size) {
-			// (a range a row; three.js counts them in fours, as if RGBA)
-			const rows = new Set([...changed].map((key) => Math.floor(key / L.W)));
-			for (const j of rows) tex.addUpdateRange(j * L.W * 4, L.W * 4);
-			tex.needsUpdate = true;
+			// (a range a row, once the level has gone up whole: bay/levelrows.js)
+			updateRows(tex, new Set([...changed].map((key) => Math.floor(key / L.W))), L.W);
 		}
 		K.commit();
 		yield;

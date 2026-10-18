@@ -24,6 +24,7 @@ import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 import { fitBags, torsoSurface, attachBag, BAG_KINDS } from './bags.js';
 import { tierNow } from '../world/governor.js';
 import { loadKitModels } from './kit-models.js';
+import { GFX_PHONE } from '../world/device.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -35,7 +36,7 @@ const SKINS = {
 };
 
 // a phone keeps the skins at half size (a quarter of the memory; a face is small on its screen)
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 function halve(im) {
 	if (!im || im.width <= 512) return im;
 	const cv = document.createElement('canvas');

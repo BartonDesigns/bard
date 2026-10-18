@@ -47,6 +47,9 @@ export function createBloom(renderer, { isPhone = false } = {}) {
 		if (fb && fb.image.width === w && fb.image.height === h) return;
 		fb?.dispose(); rtA?.dispose(); rtB?.dispose();
 		fb = new THREE.FramebufferTexture(w, h);
+		// the canvas has no alpha (alpha: false): an RGBA copy of it is refused (INVALID_OPERATION)
+		// and leaves this black, so the copy is RGB
+		fb.format = THREE.RGBFormat;
 		fb.minFilter = fb.magFilter = THREE.LinearFilter;
 		const q = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, stencilBuffer: false };
 		rtA = new THREE.WebGLRenderTarget(Math.max(1, w >> 2), Math.max(1, h >> 2), q);

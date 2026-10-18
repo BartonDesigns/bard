@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { waterfowl, egret as egretBody, turtle as turtleBody } from '../world/creatures.js';
 import { toWorld, LEVELS, H_OFF, H_SCALE } from './geo.js';
 import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
+import { updateRows } from './levelrows.js';
 
 const RING = [[37.7653550, -121.9665241], [37.7652032, -121.9669164], [37.7650471, -121.9670750], [37.7648865, -121.9671251], [37.7646555, -121.9670361], [37.7644905, -121.9668274], [37.7644421, -121.9666242], [37.7645037, -121.9662820], [37.7645939, -121.9657783], [37.7645873, -121.9653248], [37.7644949, -121.9648378], [37.7643651, -121.9645679], [37.7640594, -121.9641755], [37.7635886, -121.9636413], [37.7635336, -121.9634298], [37.7635380, -121.9632100], [37.7636018, -121.9629957], [37.7636898, -121.9628510], [37.7638328, -121.9627647], [37.7640132, -121.9627286], [37.7641737, -121.9627536], [37.7649305, -121.9632684], [37.7647765, -121.9636246], [37.7647391, -121.9637915], [37.7647479, -121.9639529], [37.7647963, -121.9641199], [37.7648755, -121.9642507], [37.7649591, -121.9643341], [37.7651108, -121.9644009], [37.7652560, -121.9644148], [37.7653858, -121.9643731], [37.7654936, -121.9642868], [37.7657554, -121.9636802], [37.7659599, -121.9638082], [37.7649393, -121.9663182], [37.7649613, -121.9663766], [37.7650031, -121.9663849], [37.7650383, -121.9663376]];
 export const LAKE = RING.map(([a, b]) => toWorld(a, b));
@@ -177,9 +178,8 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 				const q = j * Lv.W + i, t = level - Math.min(1.2, 0.14 + S.edgeOf(x, z).d * 0.06);
 				if (t < Lv.v[q] / H_SCALE - H_OFF) { Lv.v[q] = Math.round((t + H_OFF) * H_SCALE); D[q] = THREE.DataUtils.toHalfFloat(t); rows.add(j); }
 			}
-			// (a row at a time: three.js uploads each range as one row, counted as if RGBA)
-			for (const j of rows) tex.addUpdateRange(j * Lv.W * 4, Lv.W * 4);
-			if (rows.size) tex.needsUpdate = true;
+			// (a row at a time, once the level has gone up whole: bay/levelrows.js)
+			updateRows(tex, rows, Lv.W);
 		}
 	}
 	// (a lake to dig waits for the finest survey over it to have loaded)

@@ -21,8 +21,9 @@ import { hash32, rng, pick } from './rand.js';
 import { carDecalSet, POOLS, BACK } from './placement.js';
 import { systemFor } from './systems.js';
 import { denied } from '../economy/establishments.js';
+import { GFX_PHONE } from '../world/device.js';
 
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 
 // ---------- the pools, drawn into the cars' own atlas ----------
 const DEALERS = ['Crestline Auto Plaza', 'Mission Hill Motors', 'Bayview Auto Group', 'Sunset Coast Motors', 'Ridgeway Motor Co.', 'Harborline Autos', 'Valley Oak Motors', 'Northshore Auto'].filter((n) => !denied(n));

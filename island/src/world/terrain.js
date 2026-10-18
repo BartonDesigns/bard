@@ -4,7 +4,8 @@
 
 import * as THREE from 'three';
 import { groundDetail } from './textures.js';
-import { FAR_GLSL } from './lunarfar.js';
+import { groundPhotoUniform, GROUND_PHOTO_GLSL } from './photomats.js';
+import { FAR_GLSL, farBlend } from './lunarfar.js';
 import { SWASH_GLSL, WATERMAP_GLSL, waterMapTexture } from './shore.js';
 
 export function radialGrid(segments, radius, power, extra = 0, far = 0) {
@@ -71,6 +72,17 @@ float safeH(float h, float d){ return (floatBitsToUint(h) & 0x7f800000u) == 0x7f
 #endif
 `;
 export const SAFE_H_RANGE = 12000;
+
+// the ground's shape from its vertices (terrain.js cpuLift) or from the height texture
+export const CPU_LIFT_GLSL = /* glsl */`
+#ifdef CPU_LIFT
+attribute float aH;
+attribute vec3 aGN;
+#define LIFT_H(w) aH
+#else
+#define LIFT_H(w) groundH(w)
+#endif
+`;
 
 export const HEIGHT_GLSL = /* glsl */`${SAFE_GLSL}
 uniform sampler2D uHeight; uniform float uHalf, uCell, uN;
@@ -205,28 +217,33 @@ export function createTerrain(island, shared) {
 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
 		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
 		uDetail: { value: detail }, uDetailM: { value: detail.userData.mean }, uOcc: shared.uOcc, uOccO: shared.uOccO,
+		uGroundP: groundPhotoUniform()[0], uGroundPK: groundPhotoUniform()[1],
 		uSkyZenT: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorT: shared.uSkyHor || { value: new THREE.Color() },
 		uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) },
 		...planetUniforms(shared),
 	};
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
+		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + CPU_LIFT_GLSL + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
 				vec2 wxz = position.xz + uCenter;
 				// the normal is taken over the grid's own spacing where that is wider than a height
 				// cell: sampled finer, far off, the height map aliases into rows of stair-steps
 				vec2 gsp = 2.3 * 2200.0 * pow(max(abs(position.xz) / 2200.0, vec2(1e-4)), vec2(1.3 / 2.3)) * (2.0 / 320.0);
 				float e = max(max(uCell, max(gsp.x, gsp.y) * 0.6), (max(abs(position.x), abs(position.z)) - 2200.0) * 0.04);
+			#ifdef CPU_LIFT
+				vec3 objectNormal = aGN;
+			#else
 				float hL = groundH(wxz - vec2(e, 0.0)), hR = groundH(wxz + vec2(e, 0.0));
 				float hD = groundH(wxz - vec2(0.0, e)), hU = groundH(wxz + vec2(0.0, e));
 				vec3 objectNormal = normalize(vec3(hL - hR, 2.0 * e, hD - hU));
+			#endif
 				vWN = objectNormal;`)
 			.replace('#include <begin_vertex>', `
-				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
+				vec3 transformed = vec3(wxz.x, LIFT_H(wxz), wxz.y);
 				${far ? '// the ground falls away with the curve of a small world, so the horizon is a line\n\t\t\t\ttransformed.y -= dot(position.xz, position.xz) / 3.47e6;' : ''}
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; float gSnowIce = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints, uGroundP; uniform float uGroundPK; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gSheen = 0.0; uniform vec3 uSkyZenT, uSkyHorT; float gDetailB = 0.0; float gSnowW = 0.0; float gSnowIce = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + GROUND_PHOTO_GLSL + '\n' + SWASH_GLSL + '\n' + WATERMAP_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				${far ? '' : 'if (max(abs(vW.x), abs(vW.z)) > uHalf) discard;'}
 				holeCut(vW.xz);
@@ -404,6 +421,36 @@ export function createTerrain(island, shared) {
 				col *= 1.0 - oc.g * 0.1 * grassW;
 				// under an eruption's lava the ground is black crust, so the glow reads as magma
 				col = mix(col, vec3(0.08, 0.05, 0.04), plLava(vW, uEruptT));
+				// close by, photographed ground (world/photomats.js): moss under the meadow, loam on the
+				// paths and under the trees, sand on the beach, river gravel on the rock and the lake
+				// beds. Only the photo's light, shade and flecks of colour: the world's colour keeps
+				// the hue. A 1.25 m tile at your feet, a 5 m one further out, each fading as its grain
+				// nears a pixel; the photo's brightness raises its pebbles and clods in the bump
+				if (uGroundPK > 0.5 && camD < 150.0) {
+					float kF = 1.0 - smoothstep(0.025, 0.07, px), kC = 1.0 - smoothstep(0.12, 0.3, px);
+					float gk = (1.0 - smoothstep(90.0, 150.0, camD)) * kC * (1.0 - gSnowW) * step(-1.5, h);
+					if (gk > 0.01) {
+						float wR = clamp(max(rockW, max(lakeBed, gDetailB)), 0.0, 1.0);
+						float wS = (1.0 - smoothstep(0.0, 0.6, grassW)) * (1.0 - wR);
+						float wL = clamp(max(pathW, max(occ * 0.8, smoothstep(0.3, 0.8, mk.a) * 0.6)), 0.0, 1.0) * (1.0 - wR) * (1.0 - wS);
+						float wM = max(0.0, 1.0 - wR - wS - wL);
+						vec4 pd = vec4(0.0); float pw = 0.0;
+						for (int i = 0; i < 4; i++) {
+							float w = i == 0 ? wM : i == 1 ? wL : i == 2 ? wS : wR;
+							if (w < 0.03) continue;
+							float cell = float(i);
+							vec4 v = gpRead(vW.xz * 0.2 + cell * 0.31, cell);
+							if (kF > 0.01) v = mix(v, gpRead(vW.xz * 0.8 + cell * 0.53, cell), kF);
+							pd += v * w; pw += w;
+						}
+						pd /= max(pw, 1e-3);
+						vec3 r = pd.rgb * 2.0;
+						r = mix(vec3(dot(r, vec3(0.3, 0.59, 0.11))), r, 0.6);
+						// (in display space: the square below doubles the contrast)
+						col *= mix(vec3(1.0), sqrt(max(r, vec3(0.0))), gk * mix(0.75, 0.9, max(wS, wR)));
+						gDetailH += (pd.a - 0.5) * mix(0.012, 0.035, wR) * gk * mix(0.5, 1.0, kF);
+					}
+				}
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
@@ -467,7 +514,7 @@ export function createTerrain(island, shared) {
 					normal = normalize(normal + (viewMatrix * vec4(tilt, 0.0)).xyz);
 				}`);
 	};
-	mat.customProgramCacheKey = () => 'island-terrain-' + (far ? 'far' : 'bounded');
+	mat.customProgramCacheKey = () => 'island-terrain2-' + (far ? 'far' : 'bounded') + (mat.defines?.CPU_LIFT ? '-cpu' : '');
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.frustumCulled = false;
 	mesh.receiveShadow = true;
@@ -476,6 +523,41 @@ export function createTerrain(island, shared) {
 	mesh.userData.update = (cam) => {
 		const snap = G.snap;
 		uniforms.uCenter.value.set(Math.round(cam.position.x / snap) * snap, Math.round(cam.position.z / snap) * snap);
+		if (lift && (lift.x !== uniforms.uCenter.value.x || lift.z !== uniforms.uCenter.value.y)) liftGrid();
+	};
+	// Lifted on the CPU, for a device whose graphics lift the grid wrongly (the floor guard reads
+	// the drawn ground back and turns this on, world/floorguard.js): each vertex's height and
+	// normal worked out here from the same numbers, the same way, and sent with the vertices
+	// whenever the grid's centre moves; the shader reads no texture for its shape
+	let lift = null;
+	function liftGrid() {
+		const c = uniforms.uCenter.value, p = geo.attributes.position.array, n = lift.n, H = lift.h.array, Nm = lift.nm.array;
+		const data = island.height, N = island.N, half = island.half, cell = island.cell;
+		const at = (x, z) => {
+			const fx = Math.min(Math.max((x + half) / cell, 0), N - 1.001), fz = Math.min(Math.max((z + half) / cell, 0), N - 1.001);
+			const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * N + i;
+			const h = (data[k] * (1 - u) + data[k + 1] * u) * (1 - v) + (data[k + N] * (1 - u) + data[k + N + 1] * u) * v;
+			return far ? farBlend(h, x, z, half) : h;
+		};
+		for (let k = 0, q = 0; k < n * n; k++, q += 3) { const h = at(p[q] + c.x, p[q + 2] + c.y); H[k] = Number.isFinite(h) ? Math.max(-12000, Math.min(12000, h)) : 0; }
+		// the normals from the neighbouring vertices: the grid's own spacing, as the shader's are
+		for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+			const k = j * n + i, l = j * n + Math.max(i - 1, 0), r = j * n + Math.min(i + 1, n - 1), d = Math.max(j - 1, 0) * n + i, u = Math.min(j + 1, n - 1) * n + i;
+			const dx = (H[r] - H[l]) / Math.max(p[r * 3] - p[l * 3], 1e-3), dz = (H[u] - H[d]) / Math.max(p[u * 3 + 2] - p[d * 3 + 2], 1e-3);
+			const m = 1 / Math.hypot(dx, 1, dz);
+			Nm[k * 3] = -dx * m; Nm[k * 3 + 1] = m; Nm[k * 3 + 2] = -dz * m;
+		}
+		lift.h.needsUpdate = true; lift.nm.needsUpdate = true;
+		lift.x = c.x; lift.z = c.y;
+	}
+	mesh.userData.cpuLift = (cam) => {
+		if (lift) return;
+		const n = Math.round(Math.sqrt(geo.attributes.position.count));
+		lift = { n, x: NaN, z: NaN, h: new THREE.BufferAttribute(new Float32Array(n * n), 1), nm: new THREE.BufferAttribute(new Float32Array(n * n * 3), 3) };
+		geo.setAttribute('aH', lift.h); geo.setAttribute('aGN', lift.nm);
+		for (const m of new Set([mat, mesh.material])) { m.defines = { ...m.defines, CPU_LIFT: 1 }; m.needsUpdate = true; }
+		mesh.userData.cpuLifted = true;
+		if (cam) mesh.userData.update(cam); else liftGrid();
 	};
 	// what the drawn surface is made from, for the floor guard: the grid's centre now, the
 	// height texture it reads and whether it runs on to the horizon
@@ -483,7 +565,7 @@ export function createTerrain(island, shared) {
 	mesh.userData.heightTex = () => uniforms.uHeight.value;
 	mesh.userData.far = far;
 	// the lean stand-in the floor guard swaps in should this program not run (below)
-	mesh.userData.lean = () => leanTerrainMaterial(uniforms, far);
+	mesh.userData.lean = () => { const m = leanTerrainMaterial(uniforms, far); if (lift) m.defines = { ...m.defines, CPU_LIFT: 1 }; return m; };
 	return mesh;
 }
 
@@ -497,13 +579,17 @@ export function leanTerrainMaterial(uniforms, far = false) {
 	const m = new THREE.MeshLambertMaterial({ color: 0xffffff });
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, { uHeight: uniforms.uHeight, uHalf: uniforms.uHalf, uCell: uniforms.uCell, uN: uniforms.uN, uCenter: uniforms.uCenter, uPlG: uniforms.uPlG, uPlS: uniforms.uPlS, uHoles: uniforms.uHoles });
-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vLW;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
+		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vLW;\n' + CPU_LIFT_GLSL + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return safeH(farBlend(heightAt(w), w), 0.0); }\n' : '#define groundH heightAt\n') + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
 				vec2 wxz = position.xz + uCenter;
 				float e = max(uCell, max(abs(position.x), abs(position.z)) * 0.02);
-				vec3 objectNormal = normalize(vec3(groundH(wxz - vec2(e, 0.0)) - groundH(wxz + vec2(e, 0.0)), 2.0 * e, groundH(wxz - vec2(0.0, e)) - groundH(wxz + vec2(0.0, e))));`)
+			#ifdef CPU_LIFT
+				vec3 objectNormal = aGN;
+			#else
+				vec3 objectNormal = normalize(vec3(groundH(wxz - vec2(e, 0.0)) - groundH(wxz + vec2(e, 0.0)), 2.0 * e, groundH(wxz - vec2(0.0, e)) - groundH(wxz + vec2(0.0, e))));
+			#endif`)
 			.replace('#include <begin_vertex>', `
-				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
+				vec3 transformed = vec3(wxz.x, LIFT_H(wxz), wxz.y);
 				${far ? `transformed.y -= dot(position.xz, position.xz) / ${G.curve.toFixed(1)};` : ''}
 				vLW = transformed;`);
 		sh.fragmentShader = 'uniform vec3 uPlG, uPlS; uniform float uHalf; uniform vec4 uHoles[4];\nvarying vec3 vLW;\n' + sh.fragmentShader
@@ -513,6 +599,6 @@ export function leanTerrainMaterial(uniforms, far = false) {
 				vec3 lc = mix(uPlS, uPlG, smoothstep(1.4, 2.6, vLW.y));
 				diffuseColor.rgb = lc * lc;`);
 	};
-	m.customProgramCacheKey = () => 'island-terrain-lean-' + (far ? 'far' : 'bounded');
+	m.customProgramCacheKey = () => 'island-terrain-lean-' + (far ? 'far' : 'bounded') + (m.defines?.CPU_LIFT ? '-cpu' : '');
 	return m;
 }

@@ -39,6 +39,7 @@ import { addNightField } from '../world/nightfield.js';
 import { qualityNow } from '../world/governor.js';
 import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
+import { GFX_PHONE } from '../world/device.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -642,7 +643,7 @@ const IMPOSTOR_FRAG = /* glsl */`
 	}`;
 
 const OCEAN_X = toWorld(37.76, -122.49).x;
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));       // west of here the sea is the Pacific
+const PHONE = GFX_PHONE;       // west of here the sea is the Pacific
 
 export function createCity(shared, scene, bay, real = null) {
 	const group = new THREE.Group();

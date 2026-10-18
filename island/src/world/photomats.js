@@ -9,10 +9,11 @@
 // canvas textures stay.
 
 import * as THREE from 'three';
+import { GFX_PHONE } from './device.js';
 
 const BASE = new URL('../../textures/', import.meta.url);
 // a phone cuts its swatches at half the size (a quarter of the memory)
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 const images = new Map();
 // the house atlases are not made yet (ASSET_PROMPTS_HOUSES.md): don't ask the server for them;
 // set this true when textures/houses/ is added
@@ -166,5 +167,83 @@ export const TRI_GLSL = /* glsl */`
 vec3 triPhoto(sampler2D t, vec3 p, vec3 n, float s){
 	vec3 w = pow(abs(n), vec3(4.0)); w /= w.x + w.y + w.z;
 	return texture2D(t, p.zy * s).rgb * w.x + texture2D(t, p.xz * s).rgb * w.y + texture2D(t, p.xy * s).rgb * w.z;
+}
+`;
+
+// The ground's own close-up photos in one texture (a GPU draws at most 16 at once, and the
+// Bay's ground is near that): moss, loam, sand and river gravel, each cell made to tile and
+// padded round with its own wrap, so a read near a cell's edge (and its first few mip levels)
+// never picks up its neighbour. Each cell is evened to a mean of 0.5 in every channel, so it
+// carries the photo's own light, shade and flecks of colour while the ground's painted colour
+// keeps the hue; its brightness, the grain's height for the bump, is in alpha.
+// cells: 0 moss, 1 loam, 2 sand, 3 riverbed
+export const GROUND_PHOTO_PAD = 1 / 16;
+let groundAtlas = null;
+export function groundPhotoUniform() {
+	if (groundAtlas) return groundAtlas;
+	const u = { value: grey() }, k = { value: 0 };
+	groundAtlas = [u, k];
+	image('realism191/ground.webp').then((im) => {
+		const C = PHONE ? 256 : 512, P = C * GROUND_PHOTO_PAD, S = C - 2 * P, inset = 6;
+		const cw = im.width / 2, ch = im.height / 2;
+		// (a data texture, not a canvas: a canvas keeps its colour multiplied by its alpha, and
+		// the alpha here is the height, not coverage)
+		const atlas = { data: new Uint8Array(C * C * 16) };
+		const tmp = document.createElement('canvas');
+		tmp.width = tmp.height = S;
+		const g = tmp.getContext('2d', { willReadFrequently: true });
+		for (let cell = 0; cell < 4; cell++) {
+			const cx = cell & 1, cy = cell >> 1;
+			g.clearRect(0, 0, S, S);
+			g.drawImage(im, cx * cw + inset, cy * ch + inset, cw - 2 * inset, ch - 2 * inset, 0, 0, S, S);
+			const px = g.getImageData(0, 0, S, S).data;
+			let f = new Float32Array(S * S * 3);
+			for (let i = 0, j = 0; i < px.length; i += 4, j += 3) { f[j] = px[i] / 255; f[j + 1] = px[i + 1] / 255; f[j + 2] = px[i + 2] / 255; }
+			f = tileAxis(tileAxis(f, S, 0), S, 1);
+			const mean = [0, 0, 0];
+			let lo = 1, hi = 0;
+			const L = new Float32Array(S * S);
+			for (let i = 0; i < S * S; i++) {
+				for (let c = 0; c < 3; c++) mean[c] += f[i * 3 + c];
+				L[i] = f[i * 3] * 0.3 + f[i * 3 + 1] * 0.59 + f[i * 3 + 2] * 0.11;
+			}
+			for (let c = 0; c < 3; c++) mean[c] /= S * S;
+			// the height: brightness, stretched to its own 2nd-98th percentile
+			const sorted = Float32Array.from(L).sort();
+			lo = sorted[Math.floor(sorted.length * 0.02)]; hi = sorted[Math.floor(sorted.length * 0.98)];
+			for (let y = -P; y < S + P; y++) for (let x = -P; x < S + P; x++) {
+				const sx = (x + S) % S, sy = (y + S) % S, i = sy * S + sx;
+				const o = ((cy * C + y + P) * C * 2 + cx * C + x + P) * 4;
+				for (let c = 0; c < 3; c++) atlas.data[o + c] = Math.min(255, Math.round(f[i * 3 + c] / mean[c] * 0.5 * 255));
+				atlas.data[o + 3] = Math.round(Math.min(1, Math.max(0, (L[i] - lo) / Math.max(1e-3, hi - lo))) * 255);
+			}
+		}
+		const t = new THREE.DataTexture(atlas.data, C * 2, C * 2, THREE.RGBAFormat);
+		t.colorSpace = THREE.NoColorSpace;
+		t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+		t.generateMipmaps = true;
+		t.anisotropy = 8;
+		t.needsUpdate = true;
+		u.value = t; k.value = 1;
+	}).catch(() => {});
+	return groundAtlas;
+}
+// gpTap: one cell of the ground photos at uv (in tiles), its wrap and its mip from the
+// unwrapped coordinate, so the tile's seam never shows as a line of the coarsest mip.
+// gpRead: two reads, the second turned and scaled by an irrational ratio and blended in and
+// out by slow noise, the contrast restored about the mean, so no tile repeats into a grid.
+// Both need vn() (the noise) and a sampler uGroundP.
+export const GROUND_PHOTO_GLSL = /* glsl */`
+vec4 gpTap(vec2 uv, float cell){
+	vec2 c = vec2(mod(cell, 2.0), floor(cell * 0.5));
+	const float PAD = ${GROUND_PHOTO_PAD.toFixed(5)}, IN = 1.0 - 2.0 * PAD;
+	vec2 a = (c + PAD + fract(uv) * IN) * 0.5;
+	return textureGrad(uGroundP, a, dFdx(uv) * IN * 0.5, dFdy(uv) * IN * 0.5);
+}
+vec4 gpRead(vec2 uv, float cell){
+	float k = smoothstep(0.25, 0.75, vn(uv * 0.173 + 2.9 + cell * 3.1));
+	vec2 uv2 = mat2(0.809, -0.588, 0.588, 0.809) * uv * 0.786 + vec2(0.37, 0.61);
+	vec4 v = mix(gpTap(uv, cell), gpTap(uv2, cell), k);
+	return vec4(0.5) + (v - vec4(0.5)) / sqrt(k * k + (1.0 - k) * (1.0 - k));
 }
 `;

@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { KX, KZ, LON0, LAT0, H_OFF, H_SCALE } from './geo.js';
 import { inRiverWater } from './carve.js';
+import { updateRows } from './levelrows.js';
 
 async function gunzip(res) {
 	const ds = new DecompressionStream('gzip');
@@ -112,8 +113,7 @@ export function bakedWater(bay, BU, riverLevel = () => null, riverSettled = null
 				}
 				if (++n % 40 === 0) yield;
 			}
-			for (const j of rows) tex.addUpdateRange(j * Lv.W * 4, Lv.W * 4);
-			if (rows.size) tex.needsUpdate = true;
+			updateRows(tex, rows, Lv.W);   // (bay/levelrows.js)
 			yield;
 		}
 	}
