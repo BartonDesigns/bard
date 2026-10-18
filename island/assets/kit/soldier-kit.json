@@ -24,6 +24,50 @@
   "headset": {
    "tris": 3068,
    "verts": 1674
+  },
+  "mag": {
+   "tris": 216,
+   "verts": 112
+  },
+  "magpouch": {
+   "tris": 444,
+   "verts": 230
+  },
+  "admin": {
+   "tris": 392,
+   "verts": 210
+  },
+  "dangler": {
+   "tris": 384,
+   "verts": 202
+  },
+  "radio": {
+   "tris": 408,
+   "verts": 216
+  },
+  "ptt": {
+   "tris": 236,
+   "verts": 124
+  },
+  "med": {
+   "tris": 384,
+   "verts": 200
+  },
+  "tq": {
+   "tris": 232,
+   "verts": 124
+  },
+  "back": {
+   "tris": 256,
+   "verts": 136
+  },
+  "handle": {
+   "tris": 432,
+   "verts": 220
+  },
+  "buckle": {
+   "tris": 44,
+   "verts": 24
   }
  },
  "size": 2048

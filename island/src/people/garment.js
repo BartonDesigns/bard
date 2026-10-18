@@ -802,6 +802,27 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		}
 		out.uvs.push([start, uv]);
 	};
+	// a piece of the carrier's kit as a real model (people/kit-models.js), laid on what it is
+	// fixed to: M places its frame (its back on the surface, +z out, +y up), s scales it; its
+	// painted parts in col, a colour or a colour by place (camouflage). False if not loaded
+	const putPart = (name, M, bone, col, s = null) => {
+		const g = A.kit?.parts[name];
+		if (!g) return false;
+		const T = s ? M.clone().multiply(new THREE.Matrix4().makeScale(s[0], s[1], s[2])) : M, Nm = new THREE.Matrix3().getNormalMatrix(T);
+		const pa = g.attributes.position, na = g.attributes.normal, ua = g.attributes.uv, ix = g.index, n = ix ? ix.count : pa.count;
+		const start = out.pos.length / 3, uv = new Float32Array(n * 2), v = new THREE.Vector3(), nv = new THREE.Vector3(), fn = typeof col === 'function';
+		if (!fn) colour.set(col);
+		for (let k = 0; k < n; k++) {
+			const i = ix ? ix.getX(k) : k;
+			v.fromBufferAttribute(pa, i).applyMatrix4(T); nv.fromBufferAttribute(na, i).applyMatrix3(Nm).normalize();
+			const cc = fn ? col(v.x, v.y, v.z) : colour;
+			out.pos.push(v.x, v.y, v.z); out.nor.push(nv.x, nv.y, nv.z); out.col.push(cc.r, cc.g, cc.b);
+			pushBone(typeof bone === 'function' ? bone(v.y) : bone); out.kit.push(KIT_MODEL, 0, 0); out.wr.push(0, 0);
+			uv[k * 2] = ua.getX(i); uv[k * 2 + 1] = ua.getY(i);
+		}
+		out.uvs.push([start, uv]);
+		return true;
+	};
 	// a section swept along a path: path [{ p, n, bone }] (n the way out, the normal of what it
 	// lies on), prof [[across, out], ...] its outline, anticlockwise; a strap, a rolled edge, a
 	// cable laid along what it is on, its ends capped unless the path closes on itself. wear:
@@ -2023,7 +2044,11 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const pcol = q.camo ? camoPaint(q.camo) : null, pouchCol = q.camo ? camoPaint(q.camo, a2) : null;
 			const kit = (geo, bone, col, gloss = 0.05, fab = 2) => (q.camo && typeof col !== 'string' ? putShade(geo, bone, col, gloss, fab) : put(geo, bone, typeof col === 'string' ? col : c, gloss, fab));
 			const solid = (k) => (q.camo ? k : null);
-			const tie = (geo, S) => { const z = S.n.clone(), y = UP.clone().projectOnPlane(z).normalize(), x = V3(0, 0, 0).crossVectors(y, z); return geo.applyMatrix4(new THREE.Matrix4().makeBasis(x, y, z).setPosition(S.p)); };
+			// (the frame of what is fixed at S: its back on the surface, +z out, +y up)
+			const frame = (S) => { const z = S.n.clone(), y = UP.clone().projectOnPlane(z).normalize(), x = V3(0, 0, 0).crossVectors(y, z); return new THREE.Matrix4().makeBasis(x, y, z).setPosition(S.p); };
+			const tie = (geo, S) => geo.applyMatrix4(frame(S));
+			// (the pouches, the radio and the rest as real models once they are in, people/kit-models.js)
+			const real = !!A.kit?.parts.magpouch;
 			// (a sewn box of nylon, its bound edges scuffed and holding grime in the seams, propkit.js)
 			const box = (w, h, d, r = 0.006, n = 3) => {
 				const g = new RoundedBoxGeometry(w, h, d, n, r), pa = g.attributes.position, wr = new Float32Array(pa.count * 2);
@@ -2040,6 +2065,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			// bungee over that to a pull tab on the front)
 			const magPouch = (S, bone, w = 0.066, h = 0.11, d = 0.036) => {
 				const body = solid(pouchCol) || a2;
+				if (real) { putPart('magpouch', frame(S), bone, body, [w / 0.066, h / 0.11, d / 0.036]); putPart('mag', frame(S), bone, q.mags || '#2a2b28', [w / 0.066, 1, d / 0.036]); return; }
 				kit(tie(box(w, h, d, 0.0065).translate(0, -h / 2, d / 2), S), bone, body, NYLON, 0);
 				put(tie(new THREE.BoxGeometry(w - 0.01, 0.003, d - 0.01).translate(0, 0.0004, d / 2), S), bone, '#0a0a09', NYLON);
 				put(tie(box(w + 0.002, 0.016, 0.004, 0.0015, 1).translate(0, -h * 0.58, d + 0.0005), S), bone, shade(a2, 0.68), NYLON);
@@ -2113,7 +2139,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				});
 				strap?.press((x, y, z, slot, limb) => limb === 0, 0.003);
 				// (the buckle that adjusts it, at the front)
-				if (strap) { const S = strap.at(0, sd > 0 ? -0.55 : 0.55, 0.004); put(tie(box(0.05, 0.016, 0.006, 0.002, 1), S), 'spine01', '#1a1b18', POLY); }
+				if (strap) { const S = strap.at(0, sd > 0 ? -0.55 : 0.55, 0.004); if (!(real && putPart('buckle', frame(S), 'spine01', '#1a1b18'))) put(tie(box(0.05, 0.016, 0.006, 0.002, 1), S), 'spine01', '#1a1b18', POLY); }
 			}
 			if (front) {
 				const fb = (y) => torso(y);
@@ -2123,17 +2149,22 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 					for (const i of [-1, 0, 1]) magPouch(frontAt(front, yTopM, i * 0.071, 0.002), fb(yTopM - 0.05));
 					// the admin pouch, its loop patch and its zip
 					const yA = Math.min(yPT - 0.07, yPB + 0.225), A0 = frontAt(front, yA, 0, 0.002);
+					if (real) putPart('admin', frame(A0), fb(yA), solid(pouchCol) || a2);
+					else {
 					kit(tie(box(0.17, 0.09, 0.024, 0.008).translate(0, 0, 0.012), A0), fb(yA), solid(pouchCol) || a2, NYLON, 0);
 					put(tie(box(0.084, 0.05, 0.003, 0.0015, 1).translate(-0.03, 0.004, 0.0245), A0), fb(yA), shade(a2, 0.7), NYLON);
 					put(tie(box(0.05, 0.03, 0.002, 0.001, 1).translate(-0.03, 0.004, 0.0265), A0), fb(yA), '#5d5b4f', NYLON);
 					put(tie(new THREE.BoxGeometry(0.15, 0.004, 0.003).translate(0, 0.04, 0.0235), A0), fb(yA), '#121211', POLY);
 					put(tie(box(0.008, 0.018, 0.004, 0.0015, 1).translate(0.06, 0.029, 0.026), A0), fb(yA), '#1a1a18', RUBBER);
+					}
 					// the dangler under the plate
 					const probe = fitTube({ o: O, axis: UP, t0: yo - 0.08 - yo, t1: yPB - yo + 0.02, dt: 0.01, seg: 32, wall: 0.03, skin: (v, x, y) => (part[v] === 0 || part[v] === 4) && y > yo - 0.1 && y < yPB + 0.05, cloth: (x, y, z, slot, limb) => limb !== 1 && y > yo - 0.1 && y < yPB + 0.05, col: c, draw: false, bone: bodyBone });
 					const Dn = probe.at(yPB - 0.046 - yo, 0, 0.004);
-					kit(tie(box(0.2, 0.08, 0.044, 0.016).translate(0, 0, 0.022), Dn), torso(yPB), solid(pouchCol) || a2, NYLON, 0);
-					put(tie(new THREE.BoxGeometry(0.17, 0.004, 0.003).translate(0, 0.034, 0.043), Dn), torso(yPB), '#121211', POLY);
-					put(tie(box(0.008, 0.02, 0.004, 0.0015, 1).translate(0.075, 0.024, 0.045), Dn), torso(yPB), '#1a1a18', RUBBER);
+					if (!(real && putPart('dangler', frame(Dn), torso(yPB), solid(pouchCol) || a2))) {
+						kit(tie(box(0.2, 0.08, 0.044, 0.016).translate(0, 0, 0.022), Dn), torso(yPB), solid(pouchCol) || a2, NYLON, 0);
+						put(tie(new THREE.BoxGeometry(0.17, 0.004, 0.003).translate(0, 0.034, 0.043), Dn), torso(yPB), '#121211', POLY);
+						put(tie(box(0.008, 0.02, 0.004, 0.0015, 1).translate(0.075, 0.024, 0.045), Dn), torso(yPB), '#1a1a18', RUBBER);
+					}
 				} else {
 					const yTopM = yPB + 0.13;
 					for (const i of [-1.5, -0.5, 0.5, 1.5]) magPouch(frontAt(front, yTopM, i * 0.066, 0.002), fb(yTopM - 0.05), 0.062, 0.12, 0.034);
@@ -2143,34 +2174,42 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				const rTh = Math.PI / 2 + 0.2, rY = yPB + 0.075;
 				const probeS = fitTube({ o: O, axis: UP, t0: yo - yo, t1: yPT - yo, dt: 0.012, seg: 40, wall: q.rig ? 0.012 : 0.02, skin: skinT, cloth: clothT, col: c, draw: false, bone: bodyBone });
 				const Rr = sideAt(rY, rTh, 0) || probeS.at(rY - yo, rTh, 0.002);
-				kit(tie(box(0.066, 0.12, 0.04, 0.007).translate(0, 0, 0.02), Rr), torso(rY), solid(pouchCol) || a2, NYLON, 0);
-				put(tie(box(0.056, 0.05, 0.03, 0.005).translate(0, 0.062, 0.02), Rr), torso(rY), '#232421', POLY);
-				for (const [x, r] of [[-0.012, 0.0065], [0.012, 0.005]]) put(tie(new THREE.CylinderGeometry(r, r, 0.012, 12).translate(x, 0.093, 0.02), Rr), torso(rY), '#121211', RUBBER);
+				if (!(real && putPart('radio', frame(Rr), torso(rY), solid(pouchCol) || a2))) {
+					kit(tie(box(0.066, 0.12, 0.04, 0.007).translate(0, 0, 0.02), Rr), torso(rY), solid(pouchCol) || a2, NYLON, 0);
+					put(tie(box(0.056, 0.05, 0.03, 0.005).translate(0, 0.062, 0.02), Rr), torso(rY), '#232421', POLY);
+					for (const [x, r] of [[-0.012, 0.0065], [0.012, 0.005]]) put(tie(new THREE.CylinderGeometry(r, r, 0.012, 12).translate(x, 0.093, 0.02), Rr), torso(rY), '#121211', RUBBER);
+				}
 				const top0 = V3(0, 0.09, 0.024).applyMatrix4(new THREE.Matrix4().makeBasis(V3(0, 0, 0).crossVectors(UP.clone().projectOnPlane(Rr.n).normalize(), Rr.n), UP.clone().projectOnPlane(Rr.n).normalize(), Rr.n).setPosition(Rr.p));
 				const ant = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([top0, top0.clone().add(V3(0.004, 0.09, -0.012)), top0.clone().add(V3(0.006, 0.19, -0.04))]), 8, 0.0035, 6, false);
 				put(ant, torso(rY), '#161614', 0.2);
 				const ptt = front.at(Math.min(yPT - 0.06, yPB + 0.2) - yo, thF * 0.82, q.rig ? 0.02 : 0.004);
-				put(tie(new RoundedBoxGeometry(0.034, 0.04, 0.018, 2, 0.006).translate(0, 0, 0.009), ptt), torso(ptt.p.y), '#1b1c1a', 0.3);
+				if (!(real && putPart('ptt', frame(ptt), torso(ptt.p.y), '#1b1c1a'))) put(tie(new RoundedBoxGeometry(0.034, 0.04, 0.018, 2, 0.006).translate(0, 0, 0.009), ptt), torso(ptt.p.y), '#1b1c1a', 0.3);
 				const mid = probeS.at(yPB + 0.16 - yo, (rTh + thF) / 2, 0.012).p;
 				put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([top0.clone().add(V3(-0.01, -0.012, 0.004)), mid, ptt.p.clone().addScaledVector(ptt.n, 0.008).add(V3(0, -0.02, 0))]), 16, 0.003, 5, false), 'spine02', '#141413', 0.2);
 				// the medical pouch on the right, its red pull tab; a tourniquet on the front
 				const mTh = -(Math.PI / 2 + 0.2), Mr = sideAt(rY, mTh, 0) || probeS.at(rY - yo, mTh, 0.002);
-				kit(tie(box(0.095, 0.11, 0.05, 0.012).translate(0, 0, 0.025), Mr), torso(rY), solid(pouchCol) || a2, NYLON, 0);
-				// (its flap folded over the top, its edge proud of the front)
-				kit(tie(box(0.099, 0.042, 0.012, 0.005).translate(0, 0.038, 0.046), Mr), torso(rY), solid(pouchCol) || shade(a2, 0.92), NYLON, 0);
-				put(tie(box(0.03, 0.026, 0.005, 0.002, 1).translate(0, 0.06, 0.05), Mr), torso(rY), '#8a2a22', RUBBER);
+				if (!(real && putPart('med', frame(Mr), torso(rY), solid(pouchCol) || a2))) {
+					kit(tie(box(0.095, 0.11, 0.05, 0.012).translate(0, 0, 0.025), Mr), torso(rY), solid(pouchCol) || a2, NYLON, 0);
+					// (its flap folded over the top, its edge proud of the front)
+					kit(tie(box(0.099, 0.042, 0.012, 0.005).translate(0, 0.038, 0.046), Mr), torso(rY), solid(pouchCol) || shade(a2, 0.92), NYLON, 0);
+					put(tie(box(0.03, 0.026, 0.005, 0.002, 1).translate(0, 0.06, 0.05), Mr), torso(rY), '#8a2a22', RUBBER);
+				}
 				const tq = probeS.at(yPB + 0.075 - yo, -(thF + 0.32), q.rig ? 0.01 : 0.022);
-				const tqG = new THREE.CylinderGeometry(0.013, 0.013, 0.1, 10); put(tie(tqG.translate(0, 0, 0.012), tq), torso(tq.p.y), '#121212', 0.2, 2);
-				put(tie(new RoundedBoxGeometry(0.02, 0.016, 0.006, 1, 0.002).translate(0, 0.055, 0.016), tq), torso(tq.p.y), '#9a2b22', 0.1, 3);
+				if (!(real && putPart('tq', frame(tq), torso(tq.p.y), '#121212'))) {
+					const tqG = new THREE.CylinderGeometry(0.013, 0.013, 0.1, 10); put(tie(tqG.translate(0, 0, 0.012), tq), torso(tq.p.y), '#121212', 0.2, 2);
+					put(tie(new RoundedBoxGeometry(0.02, 0.016, 0.006, 1, 0.002).translate(0, 0.055, 0.016), tq), torso(tq.p.y), '#9a2b22', 0.1, 3);
+				}
 			}
 			if (back) {
 				// the zip-on panel and the drag handle
 				const yM = (yPB + yPT) / 2, Bk = back.at(yM - yo, Math.PI, 0.002);
-				kit(tie(box(hw * 1.75, (yPT - yPB) * 0.8, 0.034, 0.014).translate(0, -0.01, 0.017), Bk), torso(yM), solid(pouchCol) || a2, NYLON, 0);
-				put(tie(new THREE.BoxGeometry(0.004, (yPT - yPB) * 0.72, 0.004).translate(hw * 0.84, -0.01, 0.03), Bk), torso(yM), '#151513', 0.3);
-				put(tie(new THREE.BoxGeometry(0.004, (yPT - yPB) * 0.72, 0.004).translate(-hw * 0.84, -0.01, 0.03), Bk), torso(yM), '#151513', 0.3);
+				if (!(real && putPart('back', frame(Bk).multiply(new THREE.Matrix4().makeTranslation(0, -0.01, 0)), torso(yM), solid(pouchCol) || a2, [(hw * 1.75) / 0.21, ((yPT - yPB) * 0.8) / 0.28, 1]))) {
+					kit(tie(box(hw * 1.75, (yPT - yPB) * 0.8, 0.034, 0.014).translate(0, -0.01, 0.017), Bk), torso(yM), solid(pouchCol) || a2, NYLON, 0);
+					put(tie(new THREE.BoxGeometry(0.004, (yPT - yPB) * 0.72, 0.004).translate(hw * 0.84, -0.01, 0.03), Bk), torso(yM), '#151513', 0.3);
+					put(tie(new THREE.BoxGeometry(0.004, (yPT - yPB) * 0.72, 0.004).translate(-hw * 0.84, -0.01, 0.03), Bk), torso(yM), '#151513', 0.3);
+				}
 				const Hd = back.at(yPT - 0.01 - yo, Math.PI, 0.004), hd = new THREE.TorusGeometry(0.03, 0.007, 5, 10, Math.PI);
-				put(tie(hd.scale(1, 0.9, 1.6).translate(0, 0.004, 0.004), Hd), 'spine01', '#22231f', 0.1, 2);
+				if (!(real && putPart('handle', frame(Hd), 'spine01', '#22231f'))) put(tie(hd.scale(1, 0.9, 1.6).translate(0, 0.004, 0.004), Hd), 'spine01', '#22231f', 0.1, 2);
 			}
 		} else if (q.kind === 'carrier') {
 			// front and back plates made to the chest and back, a cummerbund round the waist,

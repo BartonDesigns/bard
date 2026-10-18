@@ -1,6 +1,8 @@
 // The soldiers' head kit as real models (tools/blender/soldier_kit.py): a high-cut ballistic
 // helmet with its rails, shroud and loop panels; night vision stowed up on its mount with the
-// battery pouch behind, its cable and a strobe; an electronic headset hung from the rails.
+// battery pouch behind, its cable and a strobe; an electronic headset hung from the rails;
+// and the plate carrier's pouches, magazines, radio, talk switch, tourniquet, back panel,
+// drag handle and buckles (each in its own frame: its back at the origin, +z out).
 // Modelled once to a reference head, each piece's detail (bevels, slots, screw heads, ribbed
 // rings, grit, weave) baked into one atlas: colour, normals, and occlusion, roughness, metal
 // and how much of the wearer's colour it takes (assets/kit). Loaded with the people's assets;
@@ -26,8 +28,8 @@ function halve(t) {
 let kit = null, ready = null;
 // the kit if it is in already (no waiting)
 export const kitModelsNow = () => ready;
-// { parts: { helmet, nvg, headset } (indexed geometry in the kit frame: metres, origin at the
-// skull's middle at eye height, +y up, +z forward), ref (the reference head: rx, rz, top
+// { parts: { helmet, nvg, headset (indexed geometry in the kit frame: metres, origin at the
+// skull's middle at eye height, +y up, +z forward), mag, magpouch, admin, ... (each in its own) }, ref (the reference head: rx, rz, top
 // over the eyes), tex: { albedo, normal, orm } }; a phone takes the maps at half size
 export function loadKitModels(phone = false) {
 	if (kit) return kit;

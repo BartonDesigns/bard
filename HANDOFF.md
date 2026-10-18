@@ -1,3 +1,7 @@
+## October 18, 2026: the plate carrier's kit as real 3D models
+
+The carrier's magazine pouches and magazines, admin pouch, dangler, radio, push-to-talk, medical pouch, tourniquet, back panel, drag handle and strap buckles are now Blender models in the same atlas as the head kit (`soldier_kit.py`; laid out apart for the bake, each in its own frame). `people/garment.js` `putPart` lays each one where the procedural piece was (same frame, so the old pieces remain the fallback). The plate bags, cummerbund and straps are still fitted in code. The bake now grows islands out once after baking (no per-piece margin, which bled across islands). Details: `docs/soldier-kit-models-2026-10-18.md`.
+
 ## October 18, 2026: soldier kit as real 3D models, forged great helm
 
 The soldiers' helmet, night vision and headset are now real Blender models, baked to one atlas (`island/tools/blender/soldier_kit.py`, packed by `island/tools/bake-soldier-kit.mjs` into `island/assets/kit`). The game fits them to each head in `people/garment.js` `putModel`, loads them in `people/kit-models.js`, and reads the atlas as kit id 11 in `propkit.js`. If the files fail to load, the procedural kit is built instead. The knight's great helm is tighter to the head and forged in hard planes (`closeHelm`, `facet()`). Details, cost and next steps: `docs/soldier-kit-models-2026-10-18.md`.
