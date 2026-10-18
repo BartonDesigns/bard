@@ -25,6 +25,23 @@
 ![Great helm before and after](verification/armor/compare-great-helm-planes.jpg)
 ![The kit in Blender](verification/armor/soldier-kit-blender-side.png)
 
+## The plate carrier's kit (second batch)
+
+The carrier's pouches and fittings are now real models too, baked into the same atlas as the head kit:
+- magazine pouches, each with its magazine standing out of it (ribbed body, base plate with grip ridges), the elastic band, the shock cord over the base plate and its pull tab;
+- the admin pouch with its loop field, a subdued patch, the zip along its top and its pull;
+- the dangler under the front plate, seamed, zipped;
+- the radio in its pouch, ribbed, with its two knobs and the antenna's socket;
+- the push-to-talk switch on the strap, with its ribbed button;
+- the medical pouch with its bound flap, red pull tab and loop field;
+- the folded tourniquet with its windlass, clip and red tab;
+- the zip-on back panel, with rows of webbing and bar tacks, a loop field and zips down its sides;
+- the drag handle with its rubber grip, and the ladder-lock buckles on the shoulder straps.
+
+The carrier's plate bags, cummerbund and straps are still made to each body in code (they have to follow the body), and the antenna and the radio's cable are still drawn in code too. `garment.js` `putPart` lays each model in the same frame as the old pieces (its back on the surface at the point it hangs from, +z out), so the old procedural pieces are still the fallback if the files do not load. The pouches take the wearer's colours and camouflage, and the magazines take the magazine colour.
+
+![Carrier kit before and after](verification/armor/compare-carrier-kit-models.jpg)
+
 ## How it works
 
 - **Modelling:** `island/tools/blender/soldier_kit.py`, run with Blender as a Python module (`pip install bpy`, Python 3.13).
@@ -46,8 +63,8 @@
 
 ## Cost
 
-- **Triangles:** the operator's kit mesh is 63.0k, against 64.4k for the procedural version. The militia average is 40.1k, against 39.9k. Draw calls are unchanged.
-- **Download:** 1.5 MB in all.
+- **Triangles:** with the head kit, the operator's kit mesh was 63.0k, against 64.4k for the procedural version, and the militia average 40.1k against 39.9k. Draw calls are unchanged.
+- **Download:** 1.5 MB in all for the head kit; about 2.3 MB with the carrier's kit (the atlas is shared, so the extra is mostly the normal map's finer weave).
 
 | File | Size |
 |------|------|
