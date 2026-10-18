@@ -2,7 +2,7 @@
 // (a caster, three foes, ground and sky) in headless Chromium, one capture per spell, so the 47 can
 // be set side by side and told apart. Nothing of the game is loaded: only three, fx.js and looks.js.
 //
-// OUT=<dir> [ONLY=sunspark,eclipse] [FLIGHT=1: bolts mid-flight] [GROW=<s>: Gargantua s seconds in] node island/tools/spell-looks-browser.cjs
+// OUT=<dir> [ONLY=sunspark,eclipse] [FLIGHT=1: bolts mid-flight] [GROW=<s>: Gargantua s seconds in] [SELF=1: spells on yourself, just cast] node island/tools/spell-looks-browser.cjs
 /* global Game, document */
 const fs = require('node:fs'), path = require('node:path');
 let chromium;
@@ -20,6 +20,8 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 	await page.addScriptTag({ content: bundle });
 	if (process.env.FLIGHT) await page.evaluate(() => { window.__flight = true; });
 	if (process.env.GROW) await page.evaluate((g) => { window.__grow = g; }, +process.env.GROW);
+	// (SELF=1: what a spell on yourself throws out, caught a tenth of a second in)
+	if (process.env.SELF) await page.evaluate(() => { window.__self = true; });
 	const ids = await page.evaluate(() => {
 		const { THREE, createMagicFx, createLens, SPELLS } = Game;
 		const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, preserveDrawingBuffer: true });
@@ -113,10 +115,12 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 			else if (k === 'well') { const c = v(0, 1, -8); run(1.2, (tt, n) => { if (n % 3 === 0) L.tick?.(fx, c, spell.r, tt); }); }
 			else if (k === 'cloud' || k === 'zone' || k === 'aura') { const c = k === 'cloud' ? at : v(0, 0.02, 0); run(1.6, (tt, n) => { if (n % (k === 'aura' ? 8 : 15) === 0) L.tick?.(fx, c, spell.r, tt); }); }
 			else if (k === 'storm') { run(1.6, (tt, n) => { L.cloud?.(fx, at, spell.r); L.rain?.(fx, at, spell.r); if (n % 9 === 0) { const a = Math.random() * 6.28, r = Math.random() * spell.r; L.strike?.(fx, v(at.x + Math.cos(a) * r, 15, at.z + Math.sin(a) * r), v(at.x + Math.cos(a) * r, 0, at.z + Math.sin(a) * r)); } }); }
+			else if (k === 'summon' && window.__self) { L.self?.(fx, eye); run(0.12); }
 			else if (k === 'summon') { L.self?.(fx, eye); const n = spell.n || 1; run(1.2, (tt) => { for (let i = 0; i < n; i++) { const a = tt * 1.4 + i / n * 6.28; L.body?.(fx, v(Math.cos(a) * 1.6, 1.5 + Math.sin(a * 1.7) * 0.25, Math.sin(a) * 1.6), tt); } }); }
 			else if (k === 'stasis') run(1.2, () => L.mark?.(fx, T, {}));
 			else if (k === 'douse') run(1.4, () => L.rain?.(fx, v(0, 1.68, -4), 10));
 			else if (k === 'rewind') { L.self?.(fx, eye, [...Array(20)].map((_, i) => v(Math.sin(i / 3) * 2, 1.68, -i * 0.4))); run(0.3); }
+			else if (window.__self) { L.self?.(fx, eye); run(0.12); }
 			else { L.self?.(fx, eye); run(L.on ? 1.2 : 0.35, (tt) => L.on?.(fx, eye, tt, dir, true)); }
 			draw();
 		}, id);

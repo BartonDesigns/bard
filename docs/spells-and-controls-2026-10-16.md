@@ -205,6 +205,12 @@ cracking dry; Hex of Decay thorns of rot punched up round the target (`cracks()`
 palm's light now shows even before your body has given the hands a mesh (it was hidden with the
 hand), and the screen-edge flash is stronger (0.7 at its peak).
 
+Then the spells on yourself and the summons: Call Rain hard silver strokes splashing off the
+ground; Shadowstep a jagged tear where you stood; Umbral Cloak shards of dark spiralling up and a ring
+snapping shut; Summon Shade and Grave Host spikes torn up out of split ground (`spikes()`); Dark
+Pact a cage of blood spikes; Aegis its plates locking with struck edges; Renewal hard green threads
+spiralling up you. `SELF=1` in the gallery catches these a tenth of a second in.
+
 ## Test mode
 
 **∞ Test mode** in the places menu (under Skills and magic; `Crysis.magic.test(true)` from the
