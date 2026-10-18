@@ -399,6 +399,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 			fx.tracer(from, end, S.tracer);
 			net.fx(from, end, S.tracer, hit ? 1 : 0);
+			// the spent case out of the breech, a hand's length back from the muzzle
+			if (S.type !== 'energy') fx.casing({ x: from.x - dir.x * 0.32, y: from.y - dir.y * 0.32 + 0.03, z: from.z - dir.z * 0.32 }, dir);
 		}
 		const at = eye();
 		if(Date.now()-lastShotNotice>4000) {lastShotNotice=Date.now();notice('shots',at,'fired a weapon nearby');}
