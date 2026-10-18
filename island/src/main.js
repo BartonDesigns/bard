@@ -2150,7 +2150,7 @@ export function createIslandWorld() {
 			seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
 			seaDepth.render(scene, camera, under || shared.uUnder.value);
 		} else { seaMirror.reset(); seaDepth.reset(); }
-		if (arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
+		if (arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy
 		// run (world/governor.js)

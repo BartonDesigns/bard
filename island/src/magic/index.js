@@ -37,6 +37,7 @@ import { createCastHands } from './hands.js';
 import { createBeams, CHARGE } from './beam.js';
 import { encodeSpell, decodeSpell, SPELL_STYLE } from './net.js';
 import { GLOW } from './fx.js';
+import { createLens } from './lens.js';
 
 const KEY = 'l99-magic';
 const store = {
@@ -96,6 +97,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		if (Object.keys(gains).length) announce(arms.trainMany?.(gains) || []);
 	}
 	const fx = createMagicFx(scene, { isPhone });
+	const lens = createLens();
 	const W = () => world();
 	const worldKey = () => combat.worldKey?.() || 'here';
 	const seed = () => (W() ? seedOf(worldKey()) : null);
@@ -377,7 +379,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 5; if (dirty) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); beams.dispose(); fx.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.remoteSpell = null; }
+	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.remoteSpell = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, skills, exposure: () => caster.exposure(),
@@ -390,6 +392,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (the tests: your body, for its gestures)
 		body: () => me(),
 		covering: () => skills.covering(),
+		// after the frame is drawn (main.js): the light round the black holes bent (magic/lens.js)
+		post: (renderer) => fx.lensed(lens.post(renderer, camera, fx.lenses(), performance.now() / 1000)),
 		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: [...(state.moonlit || [])], life: BASE_LIFE + (state.mods?.life || 0), gear: state.gear.map((x) => ({ i: x.i, l: x.l, t: x.t, school: attunement(x) })), ...caster.info() }),
 		// your statistics as a sheet (the Character view, ui/gear.js), and fabric into gear
 		stats: () => statSheet(state, { light: light() }),

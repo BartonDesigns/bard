@@ -233,7 +233,7 @@ function blackHole(scene) {
 	const veil = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), new THREE.MeshBasicMaterial({ color: 0x030108, side: THREE.BackSide, transparent: true, opacity: 0, depthWrite: false, fog: false }));
 	veil.name = 'magic-gargantua-veil'; veil.renderOrder = 1; veil.visible = false; veil.frustumCulled = false;
 	scene.add(veil);
-	const H = { a: 0, want: 0, seen: 0, t: 0, cover: 0 }, eye = new THREE.Vector3();
+	const H = { a: 0, want: 0, seen: 0, t: 0, cover: 0, lensed: false }, eye = new THREE.Vector3(), lens = { p: group.position, r: 1, k: 0, bend: 1.6 };
 	return {
 		group,
 		// shown at p, radius r (m), strength a, the halo turned to face e (the eye)
@@ -255,10 +255,16 @@ function blackHole(scene) {
 			if (!group.visible) return;
 			halo.lookAt(eye);
 			core.scale.setScalar(Math.max(0.01, H.a));
+			// (when the frame is bent round it (magic/lens.js) the lens draws its shadow, so the sphere
+			// steps aside and the sky behind it is there to be bent)
+			core.visible = !H.lensed;
+			lens.r = group.scale.x * Math.max(0.01, H.a); lens.k = H.a;
 			for (const m of [disc.material, halo.material]) { m.uniforms.uA.value = H.a; m.uniforms.uT.value = H.t; }
 		},
 		// (how dark it has made the world: 0 to 1, for the sun and the sky's light on the ground)
 		darkness: () => (group.visible ? H.a * H.cover : 0),
+		lens: () => (group.visible ? lens : null),
+		lensed(on) { H.lensed = on; },
 		clear() { H.a = H.want = 0; group.visible = veil.visible = false; },
 		dispose() { scene.remove(group); scene.remove(veil); for (const m of [core, disc, halo, veil]) { m.geometry.dispose(); m.material.dispose(); } },
 	};
@@ -397,13 +403,34 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 		if (live || L.live) { const A = L.g.attributes; A.position.needsUpdate = A.color.needsUpdate = A.size.needsUpdate = A.kind.needsUpdate = true; }
 		L.live = live;
 	}
+	// (the black holes bending the light round them this frame, for magic/lens.js: Gargantua's, and
+	// any laid by lens() for a moment; lensed: whether the frame is being bent, so a hole's own black
+	// shape can step aside for the lens's shadow)
+	const bent = [], held = [];
+	let lensed = false;
+	function lens(p, r, k = 1, bend = 1.5, life = 0.2) {
+		// (one there already is held on, not doubled)
+		const o = held.find((l) => Math.abs(l.p.x - p.x) + Math.abs(l.p.y - p.y) + Math.abs(l.p.z - p.z) < 0.05);
+		if (o) { o.r = r; o.k0 = k; o.bend = bend; o.life = Math.max(o.life, life); } else held.push({ p: { x: p.x, y: p.y, z: p.z }, r, k: 0, k0: k, bend, life });
+		return lensed;
+	}
+	function lenses() {
+		bent.length = 0;
+		const g = gargantua.lens();
+		if (g) bent.push(g);
+		// (fading out over its last moment rather than snapping away)
+		for (const l of held) { l.k = l.k0 * Math.min(1, l.life / 0.12); bent.push(l); }
+		return bent;
+	}
+	function setLensed(on) { lensed = on; gargantua.lensed(on); }
 	function update(dt, xrayOn = false) {
 		step(glow, dt); step(ink, dt); streak.step(dt); flat.step(dt); gargantua.step(dt);
+		for (let i = held.length - 1; i >= 0; i--) if ((held[i].life -= dt) <= 0) held.splice(i, 1);
 		if (xrayOn && !xray.parent) scene.add(xray);
 		xray.visible = xrayOn;
 	}
 	function resize(h, fov) { glow.mat.uniforms.scale.value = ink.mat.uniforms.scale.value = xray.material.uniforms.scale.value = h / 2 / Math.tan((fov * Math.PI) / 360); }
-	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; streak.clear(); flat.clear(); gargantua.clear(); }
+	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; streak.clear(); flat.clear(); gargantua.clear(); held.length = 0; }
 	function dispose() { for (const L of [glow, ink]) { scene.remove(L.pts); L.g.dispose(); L.mat.dispose(); } scene.remove(xray); xray.material.dispose(); scene.remove(flat.mesh); flat.geo.dispose(); flat.mat.dispose(); streak.dispose(); gargantua.dispose(); }
 	// (the black hole, kept alive by calling this each step: where, radius, strength, the eye)
 	const hole = (p, r, a = 1, e = null) => gargantua.set(p, r, a, e);
@@ -425,7 +452,7 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 	}
 	const takeFlash = () => { const f = felt; felt = null; return f; };
 	const darkness = () => gargantua.darkness();
-	return { emit, spark, seg, burst, darkness, ring, line, bolt, pillar, circle, spiral, decal, hole, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
+	return { emit, spark, seg, burst, darkness, ring, line, bolt, pillar, circle, spiral, decal, hole, lens, lenses, lensed: setLensed, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
 }
 
 // ---------- the voices ----------

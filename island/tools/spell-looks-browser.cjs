@@ -9,7 +9,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 const root = path.resolve(__dirname, '..'), out = process.env.OUT || '/tmp/spell-looks';
 const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
-const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS } from './src/magic/spells.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
+const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { createLens } from './src/magic/lens.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS } from './src/magic/spells.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
 
 (async () => {
 	fs.mkdirSync(out, { recursive: true });
@@ -21,7 +21,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 	if (process.env.FLIGHT) await page.evaluate(() => { window.__flight = true; });
 	if (process.env.GROW) await page.evaluate((g) => { window.__grow = g; }, +process.env.GROW);
 	const ids = await page.evaluate(() => {
-		const { THREE, createMagicFx, SPELLS } = Game;
+		const { THREE, createMagicFx, createLens, SPELLS } = Game;
 		const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, preserveDrawingBuffer: true });
 		renderer.setSize(480, 300, false);
 		const scene = new THREE.Scene();
@@ -36,13 +36,27 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 		camera.position.set(5.5, 4.2, 6); camera.lookAt(0, 1.2, -4);
 		const fx = createMagicFx(scene, {});
 		fx.resize(300, 55);
-		window.__g = { THREE, renderer, scene, camera, fx, SPELLS };
+		// (the black holes bend the frame round them (magic/lens.js); a banded backdrop behind them
+		// shows the bending, which a flat grey sky would hide)
+		const lens = createLens(), cv = document.createElement('canvas');
+		cv.width = 1024; cv.height = 512;
+		const g2 = cv.getContext('2d');
+		for (let y = 0; y < 16; y++) for (let x = 0; x < 32; x++) { g2.fillStyle = (x + y) % 2 ? '#5d7184' : '#3b4a5a'; g2.fillRect(x * 32, y * 32, 32, 32); }
+		g2.fillStyle = '#e8dcc0'; for (let n = 0; n < 400; n++) g2.fillRect(Math.random() * 1024, Math.random() * 512, 2, 2);
+		const backdrop = new THREE.CanvasTexture(cv);
+		backdrop.mapping = THREE.EquirectangularReflectionMapping;
+		const flat = scene.background;
+		window.__g = { THREE, renderer, scene, camera, fx, SPELLS, lens, backdrop, flat };
 		return SPELLS.map((s) => s.id);
 	});
 	for (const id of ids) {
 		if (only && !only.includes(id)) continue;
 		await page.evaluate((id) => {
-			const { renderer, scene, camera, fx, SPELLS } = window.__g, { LOOK } = Game;
+			const { renderer, scene, camera, fx, SPELLS, lens, backdrop, flat } = window.__g, { LOOK } = Game;
+			const bends = id === 'gargantua' || id === 'event-horizon';
+			scene.background = bends ? backdrop : flat; scene.fog.far = bends ? 4000 : 70;
+			fx.lensed(bends);
+			const draw = () => { renderer.render(scene, camera); if (bends) lens.post(renderer, camera, fx.lenses(), 1); };
 			const spell = SPELLS.find((s) => s.id === id), L = LOOK[id] || {};
 			const v = (x, y, z) => ({ x, y, z }), dir = v(0, -0.03, -1), hand = v(0.3, 1.45, -0.6), eye = v(0, 1.68, 0);
 			const foes = [v(0, 1.2, -8), v(-2.2, 1.2, -9.5), v(2.4, 1.2, -9)], T = { bound: foes[0] };
@@ -82,7 +96,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 					camera.far = 6000; camera.updateProjectionMatrix();
 					const h = v(-30, s.rise + R * 0.3, -s.far);
 					run(0.6, (tt) => L.tick?.(fx, h, R, tt, e));
-					renderer.render(scene, camera);
+					draw();
 					camera.far = 200; camera.updateProjectionMatrix();
 					return;
 				}
@@ -102,7 +116,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 			else if (k === 'douse') run(1.4, () => L.rain?.(fx, v(0, 1.68, -4), 10));
 			else if (k === 'rewind') { L.self?.(fx, eye, [...Array(20)].map((_, i) => v(Math.sin(i / 3) * 2, 1.68, -i * 0.4))); run(0.3); }
 			else { L.self?.(fx, eye); run(L.on ? 1.2 : 0.35, (tt) => L.on?.(fx, eye, tt, dir, true)); }
-			renderer.render(scene, camera);
+			draw();
 		}, id);
 		await page.locator('#c').screenshot({ path: path.join(out, id + '.png') });
 		process.stdout.write(id + ' ');
