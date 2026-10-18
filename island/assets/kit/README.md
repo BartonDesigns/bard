@@ -20,7 +20,7 @@ the project.
 | `kit-albedo.webp` | colour |
 | `kit-normal.webp` | tangent-space normals (OpenGL), baked from the detailed copies |
 | `kit-orm.webp` | red: ambient occlusion; green: roughness; blue: metal below 0.5, the wearer's colour taken above it |
-| `kit-*-phone.webp` | the same three maps at half size, which phones load instead |
+| `kit-*-phone.webp` | the three maps at half size, loaded on phones instead of the full ones |
 
 To remake them:
 

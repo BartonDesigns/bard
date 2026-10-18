@@ -2,7 +2,8 @@
 // the model and its notes copied, into assets/kit (people/kit-models.js loads them). The
 // colour lossy; the normals near-lossless and the occlusion/roughness/metal-and-tint map
 // lossless (lossy WebP shares its colour planes between channels, and these channels are
-// not colours); that one at half size, as nothing in it is fine.
+// not colours); that one at half size, as nothing in it is fine. A phone's copies are half
+// again (kit-*-phone.webp): it loads those, never decoding the full maps (people/kit-models.js).
 //   node island/tools/bake-soldier-kit.mjs <the Blender script's out dir>
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,10 +23,9 @@ for (const [name, [o, k]] of Object.entries(maps)) {
 	const { width } = await im.metadata();
 	await (k < 1 ? im.resize(Math.round(width * k)) : im).webp({ ...o, effort: 6 }).toFile(to);
 	console.log(to, (fs.statSync(to).size / 1024).toFixed(0) + ' KB');
-	// (and a phone's, at half that: decoding the full maps on a phone cost it its page)
-	const ph = path.join(dst, `kit-${name}-phone.webp`);
-	await im.clone().resize(Math.round(width * k / 2)).webp({ ...o, effort: 6 }).toFile(ph);
-	console.log(ph, (fs.statSync(ph).size / 1024).toFixed(0) + ' KB');
+	const toP = path.join(dst, `kit-${name}-phone.webp`);
+	await sharp(path.join(src, `kit-${name}.png`)).removeAlpha().resize(Math.round(width * k / 2)).webp({ ...o, effort: 6 }).toFile(toP);
+	console.log(toP, (fs.statSync(toP).size / 1024).toFixed(0) + ' KB');
 }
 // (the model quantised and meshopt-compressed; its UVs kept fine enough for the atlas)
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder });

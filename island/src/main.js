@@ -198,10 +198,11 @@ import { createBeyond } from './planet/beyond.js';
 import { installAirFog, AIR } from './world/airfog.js';
 import { createPlumes, ambientPlumes } from './world/plumes.js';
 import { createPowerlines } from './world/powerlines.js';
+import { createContrails } from './world/contrails.js';
 import { createFarForest } from './world/farforest.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { touchLookRows } from './ui/touch-look.js';
-import { PHONE_DEVICE, GFX_PHONE, ULTRA } from './world/device.js';
+import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -1143,6 +1144,9 @@ export function createIslandWorld() {
 		// pylons and their wires over the land (world/powerlines.js): on Earth once the Bay's ground is in
 		const powerlines = createPowerlines(scene, { isPhone: GFX });
 		if (!earth) powerlines.plan({ island, profile });
+		// airliners far overhead and their contrails, on Earth (world/contrails.js)
+		const contrails = createContrails(scene, shared, sky, { isPhone: GFX });
+		contrails.enabled = earth && !island.far;
 		// the island's trees past their draw distance, as impostors (world/farforest.js)
 		const farForest = createFarForest(vegetation, island, shared, scene, { isPhone: GFX });
 		const fauna = stash(() => createFauna(island, shared, scene));
@@ -1186,7 +1190,7 @@ export function createIslandWorld() {
 		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
-		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
 		// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
 		seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
 		seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
@@ -1502,6 +1506,7 @@ export function createIslandWorld() {
 		world.labels?.dispose();
 		world.plumes?.dispose();
 		world.powerlines?.dispose();
+		world.contrails?.dispose();
 		world.farForest?.dispose();
 		world.discovery?.dispose();
 		world.services?.dispose();
@@ -1862,7 +1867,7 @@ export function createIslandWorld() {
 		const cam = camera.position, I = W.island;
 		const above = cam.y > I.heightAt(cam.x, cam.z) + 0.5 && I.underFloor?.(cam.x, cam.z, cam.y - 1.68) == null;
 		const open = above || ((caveK < 0.9 || !!vista) && !W.deep?.active());
-		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group, W.plumes?.mesh, W.powerlines?.group, W.farForest?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group, W.plumes?.mesh, W.powerlines?.group, W.contrails?.mesh, W.farForest?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
 		return open;
 	}
 	function followGround(W, dt, open) {
@@ -2060,6 +2065,7 @@ export function createIslandWorld() {
 		if (!W.bayArea) W.distant.update(time, sk.night);
 		W.plumes.update(dt, camera, W.sky);
 		W.powerlines?.update(camera, dt);
+		W.contrails?.update(dt, camera);
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bridge?.update(time, sk.night);
@@ -2400,7 +2406,8 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
+			if (ULTRA_DROPPED) hint('Ultra graphics are off: the page closed while drawing them last time. Auto is on now; Ultra is still in the settings.', 7000);
+			else if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {

@@ -1,6 +1,6 @@
-## October 18, 2026: the knight's gauntlets as a real model, and phone-size kit maps
+## October 18, 2026: the knight's gauntlets as a real model
 
-The knight's plate gauntlets (`plate-gauntlets`) are baked onto the hand like the combat glove, from their own table in `soldier-kit.json` (`gauntlet`): a leather glove in the set's leather colour, a fluted back plate with a rolled wrist edge, a knuckle plate with bosses, overlapping scales down every finger and the thumb with pointed caps, and rivets. The table also lifts each corner where the plates are, so the hand has their bulk. `soldier_kit.py` `gauntlet()` (with `hand_shell`, shared with `glove()`); `garment.js` uses it for `steel` gloves when the kit is loaded and keeps the vambrace, cuff and couter in code. The kit's maps now also ship at half size (`kit-*-phone.webp`, written by `bake-soldier-kit.mjs`), and phones load those instead of decoding the full maps and shrinking them. Details: `docs/soldier-kit-models-2026-10-18.md`.
+The knight's plate gauntlets (`plate-gauntlets`) are baked onto the hand like the combat glove, from their own table in `soldier-kit.json` (`gauntlet`): a leather glove in the set's leather colour, a fluted back plate with a rolled wrist edge, a knuckle plate with bosses, overlapping scales down every finger and the thumb with pointed caps, and rivets. The table also lifts each corner where the plates are, so the hand has their bulk. `soldier_kit.py` `gauntlet()` (with `hand_shell`, shared with `glove()`); `garment.js` uses it for `steel` gloves when the kit is loaded and keeps the vambrace, cuff and couter in code. Details: `docs/soldier-kit-models-2026-10-18.md`.
 
 ## October 18, 2026: combat gloves with baked detail
 
