@@ -93,8 +93,14 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const lim = best?.t ?? max;
 		let t = 0.3, prev = 0;
 		const above = (s) => o.y + d.y * s - ground(o.x + d.x * s, o.z + d.z * s, o.y + d.y * s);
+		// the sea: a round fired from above it stops at its face where the ground beneath is under it
+		const sea = w.island.hasOcean !== false && o.y > 0.2 && d.y < 0 && !w.deep?.active?.() && !w.island.far;
 		while (t < lim) {
 			const a = above(t);
+			if (sea && o.y + d.y * t < 0) {
+				const ts = -o.y / d.y;
+				if (ground(o.x + d.x * ts, o.z + d.z * ts, 0) < -0.05) return { t: ts, n: new THREE.Vector3(0, 1, 0), surface: 'water' };
+			}
 			if (a < 0) {
 				let lo = prev, hi = t;
 				for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (above(m) < 0) hi = m; else lo = m; }
@@ -400,6 +406,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			fx.tracer(from, end, S.tracer);
 			net.fx(from, end, S.tracer, hit ? 1 : 0);
 			// the spent case out of the breech, a hand's length back from the muzzle
+			if (S.type !== 'energy') fx.wisp(from, dir);
 			if (S.type !== 'energy') fx.casing({ x: from.x - dir.x * 0.32, y: from.y - dir.y * 0.32 + 0.03, z: from.z - dir.z * 0.32 }, dir);
 		}
 		const at = eye();
