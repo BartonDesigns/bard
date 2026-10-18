@@ -667,7 +667,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		me: () => ({ speed: me.speed, grounded: !!P()?.grounded || !!W()?.deep?.active?.(), vel: me.vel }),
 		projectile, firstHit, landShot, hurtPlayer, blast, missile, ignite: (id, x, z, f, mine) => ignite(id, x, z, f, !!mine), shake: (k) => shakeIt(k),
 		strikeNpc: (T, blow, at) => { if (at) fx.impact(at, null, T.surface, blow.type === 'energy'); return deal(T, blow, false); },
-		whiz: () => sound('whiz'), heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p),
+		whiz: () => { sound('whiz'); hud.suppress(0.3); }, heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p),
 		wanted: () => wanted.stars, bounty: () => morality.reactions().bounty, playerDown: () => me.ko > 0,
 		civilians: () => [...layer.map.values()].filter((T) => T.kind === 'person' && !T.child),
 		coverNear: (x, z, r) => hooks.cover?.(x, z, r) || props.coverNear(x, z, r) || buildingCover(x, z, r),
@@ -1108,7 +1108,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- for the console and the tests ----------
 	const api = {
-		update, reset, heard, group, layer, fx, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
+		update, reset, heard, group, layer, fx, hud, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
 		projectile, blast, firstHit, landShot, ground, eye, sound: (k, at) => sound(k, at), deal: (T, blow, mine) => deal(T, blow, mine), hurtPlayer, wantedLevel: () => wanted.stars, isEarth, zone: () => (W() ? zone() : null),
 		// harm done by your vehicle's guns (military/): yours, weighed like a shot
 		strikeAs: (T, blow) => deal(T, { ...blow, by: ME }, true),
