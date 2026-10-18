@@ -218,6 +218,10 @@ crown of droplet lines thrown up with each ring; Nightsight a crossed eye of vio
 cracking open; Quicken gear teeth on its rings and clock hands under you; Rewind the path you came by
 drawn back in hard lines with hands spun backwards.
 
+And the wards: Bulwark's dome slams down with its ribs struck in hard lines and the ground cracking
+under it; Sunwell Gate's rim traced in gold with rays struck out of it; Radiant Aura flame tongues
+stabbing up round its ring; Stasis crystal facets locking round the one it holds.
+
 ## Test mode
 
 **∞ Test mode** in the places menu (under Skills and magic; `Crysis.magic.test(true)` from the
