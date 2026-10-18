@@ -1,3 +1,7 @@
+## October 17, 2026: graphics pressure and unrecovered contexts
+
+Owner reports repeated “graphics did not come back” errors. Recovery now pauses builds and uses the existing actionable Reload game screen on timeout, preserves valid place/social checkpoints, and resumes at Low or lower. Explicit High cannot bypass memory pressure. Reflection warming is bounded to visible reflected materials; disabled water/shadow targets are released. Phone safe-resolution scaling follows the tier. Includes current main reflection work; open skills/audio and Floodgate branches are untouched. 53 focused checks and production-renderer fault injection pass; desktop and touch/iPhone-sized Earth recovery fixtures pass. Full suite 985/989 with three reproduced main failures and a timing-sensitive lifecycle case that passes in isolation. Native Safari/GPU verification remains open. Frontend only, no Worker update. See [graphics recovery verification](docs/graphics-pressure-recovery-2026-10-17.md).
+
 ## October 17, 2026: spells, aether fabric, weapon and spell keys, camera mode
 
 - **The keys:**

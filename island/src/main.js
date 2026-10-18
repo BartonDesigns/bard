@@ -22,6 +22,8 @@ import { updateIslandReach } from './world/surfacevisibility.js';
 import { createGroundProbe } from './world/groundprobe.js';
 import { createFloorGuard } from './world/floorguard.js';
 import { createOcean } from './world/ocean.js';
+import { createSeaMirror } from './world/seamirror.js';
+import { createSeaDepth } from './world/seadepth.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
 import { createSunRays } from './world/sunrays.js';
@@ -458,7 +460,7 @@ export function createIslandWorld() {
 	const graphics = createGraphicsRenderer({ canvas: document.createElement('canvas'), Renderer: THREE.WebGLRenderer,
 		replaceCanvas: () => document.createElement('canvas'), storage, phone: isPhone, safe: SAFE, mode: initialMode });
 	const renderer = graphics.renderer;
-	const recovery = createGraphicsRecovery(), draw = renderer.render.bind(renderer);
+	const recovery = createGraphicsRecovery({ onTimeout: failGraphicsRecovery }), draw = renderer.render.bind(renderer);
 	renderer.render = (...args) => {
 		if (recovery.blocked()) throw graphicsReloadError();
 		if (renderer.getContext().isContextLost()) return;
@@ -507,6 +509,11 @@ export function createIslandWorld() {
 	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
 	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
+	function failGraphicsRecovery() {
+		recoverSignage(storage);
+		governor.lost(3);
+		window.L99Loading.fail(graphicsReloadError(), { exit: () => api.close() });
+	}
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
 		lost = true;
@@ -516,18 +523,22 @@ export function createIslandWorld() {
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
 		// (the light ground only when it was the ground being built: a loss elsewhere is no reason)
 		if (linking.failedGround || /uBayOn/.test(linking.what)) preferLite();
-		governor.lost();
+		graphics.lighter = true;
+		governor.lost(blocked ? 3 : 2);
+		// Stop optional passes and discard their targets/unfinished warm-up. The
+		// same large attachments must not be recreated on the first restored frame.
+		seaMirror.reset(); seaDepth.reset();
+		if (!building && world) { share.keep(true, true); social.flush(); world.player.clearInput(); }
 		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
 		shaderWarm.reset();
 		if (blocked) {
-			window.L99Loading.fail(graphicsReloadError(), { exit: () => api.close() });
+			failGraphicsRecovery();
 			return;
 		}
 		hint('The graphics were reset. Restoring…', 6000, 3);
-		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 8000);
 	});
 	dom.canvas.addEventListener('webglcontextrestored', () => {
-		if (recovery.blocked()) return; // The recovery screen owns the next user action.
+		if (!recovery.restored()) return; // The recovery screen owns the next user action.
 		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
 		applyQuality();
 		// (the frame clock starts again from now, not from before the loss)
@@ -553,6 +564,12 @@ export function createIslandWorld() {
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
+	// the land, the village and the boats drawn upside down for the sea to reflect (world/seamirror.js)
+	const seaMirror = createSeaMirror(renderer, { phone: isPhone, safe: SAFE });
+	shared.mirrorU = seaMirror.uniforms;
+	// and what stands in the water, by its depth, for its tint and the foam round it (world/seadepth.js)
+	const seaDepth = createSeaDepth(renderer, { phone: isPhone, safe: SAFE });
+	shared.seaDepthU = seaDepth.uniforms;
 	// (the cars' paint and glass reflect this sky)
 	bindCarSky(shared);
 	bindSignLighting(shared);
@@ -677,7 +694,7 @@ export function createIslandWorld() {
 	HOOKS.tattooInfo = () => studio.info();
 	for (const ev of ['pointerdown', 'touchstart']) inkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if ((e.key === 't' || e.key === 'T') && !e.repeat && world?.bizSeen?.type === 'tattoo' && !studio.active() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); studio.start(); } });
-	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active(), hint: (t, ms) => hint(t, ms, 1), ward: (p) => HOOKS.combat?.ward(p) });
+	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active() || !!world?.boat?.boarded?.(), driving: () => (drive.active() && !carjack.active()) || !!world?.boat?.boarded?.(), hint: (t, ms) => hint(t, ms, 1), ward: (p) => HOOKS.combat?.ward(p) });
 	HOOKS.self = you;
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
@@ -1020,10 +1037,14 @@ export function createIslandWorld() {
 		if (recovery.blocked()) return Promise.reject(graphicsReloadError());
 		if (buildPromise) return buildPromise;
 		building = true;
-		buildPromise = buildWorld(params).catch(error => { teardown(); throw error; }).finally(() => { building = false; buildPromise = null; });
+		buildPromise = recovery.wait().then(() => buildWorld(params)).catch(error => { teardown(); throw error; }).finally(() => { building = false; buildPromise = null; });
 		return buildPromise;
 	}
-	const yieldBuild = async (label) => { window.L99Loading.stage(label); await new Promise((resolve) => setTimeout(resolve, 0)); };
+	const yieldBuild = async (label) => {
+		window.L99Loading.stage(label);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		await recovery.wait();
+	};
 	function seaLifeVisibility(W, dt, time, under) {
 		const bay = W.island.village.bay;
 		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
@@ -1147,6 +1168,9 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
+		seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
+		seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
 		await yieldBuild('Preparing places to explore');
 		// Equipment sources are data-facing first.  Generated shops are added as they stream
 		// in; the small island board keeps the conversational loop playable before Earth has
@@ -1390,6 +1414,7 @@ export function createIslandWorld() {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
 				world.bridge = bridge;
+				seaDepth.mark(bridge.group);   // its piers in the strait
 				// the bridge's deck and the Presidio Parkway up to it, to drive (drive.js follows them)
 				{
 					const pts = [], B = bridge, half = B.length / 2;
@@ -1440,6 +1465,7 @@ export function createIslandWorld() {
 	}
 
 	function teardown() {
+		seaMirror.reset(); seaDepth.reset();
 		if (!world) return;
 		picnic.clear();
 		HOOKS.combat?.reset();
@@ -1671,6 +1697,7 @@ export function createIslandWorld() {
 		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = Q.reflect;
+		if (!Q.reflect) { seaMirror.reset(); seaDepth.reset(); }
 		syncSignageMaterials(scene);
 		world?.rays?.quality(Q.fx);
 		world?.spray?.quality(Q.fx);
@@ -1680,10 +1707,12 @@ export function createIslandWorld() {
 	// the sun's shadow map at the tier's size (sky.js makes it at the device's full size)
 	function fitShadow() {
 		const sun = world?.sky?.sun, size = (isPhone ? 1024 : 2048) * qualityNow().shadowSize;
+		if (sun?.shadow && !renderer.shadowMap.enabled) { sun.shadow.dispose(); sun.shadow.map = sun.shadow.mapPass = null; return; }
 		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
 	}
 
 	function resize() {
+		if (lost || recovery.blocked()) return;
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
 		pixelRatio = renderRatio({ width: w, height: h, dpr: window.devicePixelRatio, ratio: qualityNow().ratio, phone: isPhone, safe: SAFE || graphics.lighter, mode: quality });
 		renderer.setDrawingBufferSize(w, h, pixelRatio);
@@ -1802,7 +1831,7 @@ export function createIslandWorld() {
 		const dt = Math.min(0.05, elapsed);
 		const projectDelta = elapsed;
 		last = now;
-		if (building || !visible || !world || document.hidden || lost) { communityProjects.reset(); world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
+		if (building || !visible || !world || document.hidden || lost || recovery.blocked()) { communityProjects.reset(); world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
 		if (window.L99Loading.active() && !arrival) { communityProjects.reset(); return; }
 		// on a phone the world holds still while someone thinks of a reply: the model and
 		// the world share the GPU and the page's memory
@@ -2098,6 +2127,12 @@ export function createIslandWorld() {
 		const shadowEvery = qualityNow().shadowEvery;
 		renderer.shadowMap.autoUpdate = shadowEvery <= 1;
 		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
+		// the sea's mirror, before the frame that reads it (only what stands over the water: world/seamirror.js)
+		// (not on a world with no sea, nor down a cave or indoors, where the water is out of sight)
+		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
+		else seaMirror.reset();
+		if (!arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5) seaDepth.render(scene, camera, under || shared.uUnder.value);
+		else seaDepth.reset();
 		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy
@@ -2272,6 +2307,7 @@ export function createIslandWorld() {
 			shared.startHours = Number.isFinite(hours) ? hours : 10.5;
 			show();
 			await build(params);
+			await recovery.wait();
 			if (Number.isFinite(hours) && world?.sky) world.sky.state.hours = hours;
 			if (params.earth !== false && params.at) HOOKS.goTo(params.at.lat, params.at.lon);      // globe: straight to a place
 			api.link();

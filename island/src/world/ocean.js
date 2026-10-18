@@ -23,6 +23,7 @@ import { BAY_GLSL } from '../bay/terrain.js';
 import { GLOBE_U, GLOBE_SEA_GLSL } from '../earth/globeheight.js';
 import { NF, NF_N } from './nightfield.js';
 import { qualityNow } from './governor.js';
+import { SEA_DEPTH_GLSL } from './seadepth.js';
 
 const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 // how many things standing in the water ring it at once (posts, hulls, you)
@@ -63,6 +64,10 @@ export function createOcean(island, shared) {
 	// the real Bay Area's depths beyond the island (live objects, filled as they load)
 	if (shared.bayU) Object.assign(uniforms, shared.bayU, GLOBE_U);          // (and the globe's coasts past the survey: earth/globeheight.js)
 	uniforms.uUnder = shared.uUnder;
+	// the land, the village and the boats mirrored in the water, when drawn (world/seamirror.js)
+	Object.assign(uniforms, shared.mirrorU || { uRefl: { value: null }, uReflM: { value: new THREE.Matrix4() }, uReflOn: { value: 0 } });
+	// the posts, hulls, rocks and coral standing in it, by their depth, when drawn (world/seadepth.js)
+	Object.assign(uniforms, shared.seaDepthU || { uSeaDepth: { value: null }, uSeaDepthNF: { value: new THREE.Vector2(0.25, 16000) }, uSeaDepthPx: { value: new THREE.Vector2(1, 1) }, uSeaDepthOn: { value: 0 } });
 	uniforms.uWave = shared.uWave || uniforms.uWave;
 	// shared, live objects (not copies)
 	Object.assign(uniforms, {
@@ -108,17 +113,21 @@ export function createOcean(island, shared) {
 	}
 	// how much of a wave of length L survives a sampling step h (vertex spacing or pixel size)
 	float keep(float L, float h){ return 1.0 - smoothstep(L * 0.035, L * 0.09, h); }
-	// the slope of the spectrum at p, each wave filtered for the step h, scaled by a
-	vec2 slopes(vec2 p, float h, float a){
-		vec2 g = vec2(0.0), pb = bend(p);
+	// the slope of the spectrum at p, each wave filtered for the step h, scaled by a; z how
+	// much the waves crowd the water together there (the Gerstner trains' pinch, the trace of
+	// their sideways stretch): where it runs high the crests are folding over and break white
+	vec3 slopes(vec2 p, float h, float a){
+		vec2 g = vec2(0.0), pb = bend(p); float pinch = 0.0;
 		for (int i = 0; i < NW; i++) {
 			float L = SPEC[i].y, w = keep(L, h);
 			if (w <= 0.0) continue;
 			vec2 d = wdir(i); float k = 6.28318 / L;
 			float f = k * (dot(d, pb) - sqrt(9.8 / k) * uTime);
-			g += d * (k * wamp(i) * group(i, p) * cos(f) * w);
+			float kA = k * wamp(i) * group(i, p) * w;
+			g += d * (kA * cos(f));
+			pinch += SPEC[i].w * kA * sin(f);
 		}
-		return g * a;
+		return vec3(g, pinch) * a;
 	}`;
 	// the island's own sea floor eased into the real one across a wide, wavy band (switching at
 	// the island map's edge drew a square in the water's colour), out where the island's floor
@@ -227,6 +236,8 @@ export function createOcean(island, shared) {
 			uniform sampler2D uMasks; uniform float uMid, uHigh, uLiquid, uRain; uniform vec4 uWaterT; uniform vec2 uShoreQ;
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
 			uniform vec4 uTouch[TOUCH_N]; uniform vec4 uMouth[4];
+			uniform sampler2D uRefl; uniform mat4 uReflM; uniform float uReflOn;
+			${SEA_DEPTH_GLSL}
 			uniform vec4 uNFP[NF_N]; uniform vec4 uNFC[NF_N]; uniform int uNFn;
 			${CLOUD_REFLECT_GLSL}
 			${HEIGHT_GLSL}
@@ -326,7 +337,8 @@ export function createOcean(island, shared) {
 				// (the ripples at the water's own place, not where the swell has carried it: the
 				// swell's sideways shift is only known at the mesh's vertices, far apart out there,
 				// and reading the ripples through it bends their phase into rings)
-				vec2 gL = slopes(vP0, hp, vAmp.x * gust);
+				vec3 spec3 = slopes(vP0, hp, vAmp.x * gust);
+				vec2 gL = spec3.xy;
 				// the rollers toward the shore
 				float kr = 6.28318 / 16.0;
 				gL += vInward * (kr * vAmp.y * cos(kr * (dot(vInward, vP0) - sqrt(9.8 / kr) * uTime)) * keep(16.0, hp));
@@ -451,6 +463,11 @@ export function createOcean(island, shared) {
 				// along the look bent by the surface (longer the lower you look, at most half again)
 				float cosT = sqrt(1.0 - (1.0 - ndv * ndv) / 1.777);
 				float de = d * (1.0 + 1.0 / max(cosT, 0.66)) * 0.5;
+				// a post, a hull, a rock or the coral nearer under the surface than the bed: the light
+				// comes back through only that much water (so a post's foot shows a metre down as it
+				// is, not tinted as if it stood on the bed), and where it breaks the surface, foam
+				float behind = seaDepthBehind(vW);
+				if (behind > -0.02) de = min(de, max(behind, 0.0));
 				vec3 trans = exp(-sig * de * 2.0);
 				vec3 deep = mix(vec3(0.0, 0.06, 0.19), mix(vec3(0.016, 0.038, 0.052), vec3(0.03, 0.045, 0.038), bayK), cold);
 				// light scattering in shallow tropical water: turquoise over sand, fading with depth
@@ -484,6 +501,16 @@ export function createOcean(island, shared) {
 				vec3 R = reflect(-V, N);
 				// (the clouds overhead in it, world/sky.js: clear on a slick, broken up on a rough sea)
 				vec3 sky = mix(skyReflect(R, uSkyZen, uSkyHor, uSunColor), mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)), rough * 0.6) * (0.92 + 0.08 * slick * near);
+				// the land, the trees, the village and the boats standing in it (world/seamirror.js): the
+				// mirror's picture at this point of the water, bent by the ripples, softer where it is
+				// rough; where nothing was drawn the sky stays
+				if (uReflOn > 0.5) {
+					vec4 rq = uReflM * vec4(vW.x, 0.0, vW.z, 1.0);
+					vec2 ruv = rq.xy / max(rq.w, 1e-4) + gL * 0.05 * (1.0 - 0.6 * rough);
+					vec4 rf = texture2D(uRefl, clamp(ruv, 0.001, 0.999));
+					float edgeK = smoothstep(0.0, 0.04, ruv.x) * smoothstep(0.0, 0.04, 1.0 - ruv.x) * smoothstep(0.0, 0.04, ruv.y) * smoothstep(0.0, 0.04, 1.0 - ruv.y);
+					sky = mix(sky, rf.rgb, clamp(rf.a, 0.0, 1.0) * edgeK * (1.0 - 0.45 * rough) * step(0.0, rq.w));
+				}
 				float spec = pow(max(dot(R, uSunDir), 0.0), mix(500.0, 60.0, rough)) * mix(14.0, 2.0, rough) * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), mix(60.0, 12.0, rough)) * 0.8;
 				// at night the moon (opposite the sun) lays a glittering path across the water
 				float nightK = smoothstep(0.02, -0.15, uSunDir.y);
@@ -527,7 +554,16 @@ export function createOcean(island, shared) {
 				float breaker = whiteW * surfZ * section * smoothstep(0.32, 0.6, fq + 0.12) * (1.0 - 0.6 * smoothstep(0.4, 2.0, hp));
 				// the white water spent in the inner surf, broken into patches
 				float inner = smoothstep(0.06, 0.25, d) * (1.0 - smoothstep(0.5, 1.1, d)) * vBreak * smoothstep(0.5, 0.74, fq) * (0.35 + 0.65 * smoothstep(0.2, 1.0, cyc)) * (1.0 - shoreK * 0.5);
-				float cap = smoothstep(0.85, 1.1, vCrest) * smoothstep(0.55, 0.75, fq) * smoothstep(6.0, 20.0, d) * near * 0.35;
+				// whitecaps out on open water: where the waves crowd together and their crests fold
+				// (a rare fleck in a calm, scattered caps in a breeze, white everywhere in a gale: the
+				// pinch grows with the waves' height), broken up by the froth, strongest in the gusts;
+				// anywhere past the surf (a lagoon a few metres deep whitens in a blow as the sea does)
+				float cap = smoothstep(0.1, 0.2, spec3.z) * smoothstep(0.3, 0.6, fq) * smoothstep(1.5, 4.0, d) * (0.6 + 0.4 * smoothstep(0.75, 1.1, vCrest + 0.4));
+				// further off the short waves that fold are finer than the pixel and left out: there the
+				// caps, each smaller than the pixel too, are a faint whitening by how hard it blows,
+				// stronger along the gusty lanes (never drawn as blobs of white at that size)
+				float capFar = smoothstep(0.8, 2.0, vAmp.x * gust) * 0.4 * mix(0.35, 1.0, vn(vP0 * 0.015 + uTime * vec2(0.004, 0.002)));
+				cap = max(cap, capFar * smoothstep(0.04, 0.25, hp) * smoothstep(1.5, 4.0, d));
 				// the swash: a bore of froth at its front as it rushes up, clear thin water behind;
 				// stalled and draining, the front runs thin and clear, the foam it carried breaks into
 				// lace going down the beach, and bubbles pop in the backwash
@@ -555,8 +591,10 @@ export function createOcean(island, shared) {
 				// against rock the swell bursts white and pours off in streams
 				float rocky = smoothstep(0.12, 0.3, vSlope);
 				float rockF = rocky * (1.0 - smoothstep(0.0, 1.4, film)) * smoothstep(0.3, 0.7, fq + 0.35 * sin(vRoll + 0.4)) * smoothstep(0.0, 0.02, film);
+				// a line of foam where a post, a hull or a rock meets the water, sloshing with the swell
+				float contact = behind > -0.02 ? (1.0 - smoothstep(0.03, 0.35 + 0.1 * sin(vRoll + vW.x * 0.7), behind)) * smoothstep(0.3, 0.6, fq + 0.2) * smoothstep(0.0, 0.02, film) : 0.0;
 				float current = plumeEdge * smoothstep(0.5, 0.75, fq + 0.25 * vn(vW.xz * 0.2 + uTime * 0.05)) * 0.45;
-				float foam = foamOf(clamp(max(max(breaker, max(inner, current)), max(cap * 0.7, max(swF, max(lap * 0.7, max(rockF * 0.85, touchF * smoothstep(0.35, 0.6, fq + 0.2)))))), 0.0, 1.0), vW.xz, hp);
+				float foam = foamOf(clamp(max(max(breaker, max(inner, current)), max(cap * 0.9, max(swF, max(lap * 0.7, max(max(rockF * 0.85, contact * 0.8), touchF * smoothstep(0.35, 0.6, fq + 0.2)))))), 0.0, 1.0), vW.xz, hp);
 				// lit by the sun by day, the moon and sky by night (never glowing in the dark)
 				vec3 foamC = vec3(0.92, 0.95, 0.96) * (uAmbient * 0.9 + uSunColor * max(0.0, uSunDir.y) * 0.9 + vec3(0.06, 0.07, 0.09) * nightK);
 				// a toxic sea's foam is a yellow-green scum

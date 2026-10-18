@@ -4,10 +4,12 @@ const esbuild=require('../island/node_modules/esbuild');
 (async()=>{
  const root=path.resolve(__dirname,'..'), result={};
  const fixture=await esbuild.build({entryPoints:[path.join(root,'island/tools/signage-recovery-entry.js')],bundle:true,format:'esm',write:false,logLevel:'silent'});
+ const pressure=await esbuild.build({entryPoints:[path.join(root,'island/tools/graphics-pressure-entry.js')],bundle:true,format:'esm',write:false,logLevel:'silent'});
  const server=http.createServer(async(req,res)=>{try{
   const u=new URL(req.url,'http://local');
   if(u.pathname==='/fixture'){res.setHeader('Content-Type','text/html');res.end('<!doctype html><script src="/loading-screen.js"></script>');return;}
   if(u.pathname==='/fixture.js'){res.setHeader('Content-Type','text/javascript');res.end(fixture.outputFiles[0].text);return;}
+  if(u.pathname==='/pressure.js'){res.setHeader('Content-Type','text/javascript');res.end(pressure.outputFiles[0].text);return;}
   const f=path.resolve(root,'.'+u.pathname);if(!f.startsWith(root+path.sep))throw Error('path');res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':'application/octet-stream');res.end(await fs.readFile(f));
  }catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let browser;
@@ -38,6 +40,27 @@ const esbuild=require('../island/node_modules/esbuild');
   await page.getByRole('button',{name:'Try again',exact:true}).click();await page.getByRole('button',{name:'Enter world',exact:true}).click();
   assert.equal(await page.evaluate(()=>L99Loading.active()),false);assert.deepEqual(errors,[]);
   console.log('PASS ordinary loading failure still retries and enters normally');
+  await page.goto(url);
+  result.pressure=await page.evaluate(async()=>await(await import('/pressure.js')).reflectionPressure());
+  assert.ok(result.pressure.bounded.batches.every(n=>n<=2));assert.equal(result.pressure.fullCount,44);
+  assert.ok(result.pressure.bounded.programs<result.pressure.allPrograms);
+  assert.equal(result.pressure.released.mirror,1);assert.equal(result.pressure.released.depth,1);
+  assert.equal(result.pressure.released.mirrorBound,false);assert.equal(result.pressure.released.depthBound,false);
+  assert.ok(result.pressure.released.bytes.tex<result.pressure.bounded.bytes.tex);
+  assert.ok(result.pressure.released.bytes.rb<result.pressure.bounded.bytes.rb);assert.equal(result.pressure.lost,false);
+  console.log('PASS bounded reflection warm-up and freed targets',JSON.stringify(result.pressure));
+  await page.goto(url);await page.evaluate(async()=>{localStorage.clear();window.game=(await import('/island/dist/island.js')).island();
+   L99Loading.run(()=>new Promise(resolve=>window.finishLoading=resolve));
+  });await page.waitForFunction(()=>typeof finishLoading==='function');
+  await page.evaluate(()=>{window.lostContextExtension=game.renderer().getContext().getExtension('WEBGL_lose_context');lostContextExtension.loseContext();});
+  await page.getByRole('button',{name:'Reload game',exact:true}).waitFor({timeout:12000});
+  await page.evaluate(()=>{finishLoading();});await page.waitForFunction(()=>!L99Loading.pending);
+  assert.equal(await page.getByRole('button',{name:'Enter world',exact:true}).count(),0);
+  await page.evaluate(()=>{lostContextExtension.restoreContext();});
+  await page.waitForFunction(()=>!game.renderer().getContext().isContextLost());
+  assert.equal(await page.evaluate(()=>{try{game.renderer().render(game.scene(),game.camera());return false;}catch(e){return e.code==='GRAPHICS_RELOAD_REQUIRED';}}),true);
+  await page.getByRole('button',{name:'Reload game',exact:true}).waitFor();assert.deepEqual(errors,[]);
+  console.log('PASS first-loss timeout has actionable reload; late build/restore cannot re-enable the dead session');
   result.passed=true;await fs.writeFile('/tmp/bard-signage-recovery.json',JSON.stringify(result,null,2));
  }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

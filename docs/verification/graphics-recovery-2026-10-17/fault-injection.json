@@ -1,0 +1,67 @@
+{
+  "shaders": {
+    "full": 85037,
+    "lite": 5262,
+    "dark": [
+      5,
+      3,
+      1,
+      255
+    ],
+    "headlit": [
+      255,
+      255,
+      132,
+      255
+    ],
+    "back": [
+      2,
+      2,
+      2,
+      255
+    ],
+    "programs": 9,
+    "lost": false,
+    "compact": 8
+  },
+  "first": {
+    "compact": 8,
+    "frames": 1
+  },
+  "second": {
+    "blocked": "GRAPHICS_RELOAD_REQUIRED",
+    "frames": 0,
+    "remembered": true
+  },
+  "pressure": {
+    "bounded": {
+      "batches": [
+        2,
+        2
+      ],
+      "programs": 5,
+      "bytes": {
+        "tex": 1228800,
+        "buf": 840,
+        "rb": 307200,
+        "screen": 3686400
+      }
+    },
+    "fullCount": 44,
+    "allPrograms": 45,
+    "released": {
+      "bytes": {
+        "tex": 0,
+        "buf": 840,
+        "rb": 0,
+        "screen": 3686400
+      },
+      "mirror": 1,
+      "depth": 1,
+      "mirrorBound": false,
+      "depthBound": false
+    },
+    "lost": false
+  },
+  "passed": true
+}
