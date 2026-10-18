@@ -1,3 +1,7 @@
+## October 18, 2026: combat boots as a real 3D model
+
+Soldiers' and militia combat boots are a Blender model in the kit atlas (`soldier_kit.py` `boot()`): a lugged rubber sole with toe spring, a rubber rand, suede toe cap and heel counter, cordura quarters, tongue, eyelets and laces, a padded collar and pull loop. It is modelled round a reference foot (`tools/blender/ref-foot.obj`) and `people/garment.js` `putBoot` fits it to each foot (length, width, depth, shin girth), mirrors it for the right foot and binds each point to the nearest skin's bones. Only shoes marked `combat` get it; under it the cloth shoe is only a sock. The zone edges are cut into the mesh with a clean lip, and every kit piece now has one UV layer (some helmet, headset and pouch faces read the atlas corner before). Details: `docs/soldier-kit-models-2026-10-18.md`.
+
 ## October 18, 2026: the plate carrier's kit as real 3D models
 
 The carrier's magazine pouches and magazines, admin pouch, dangler, radio, push-to-talk, medical pouch, tourniquet, back panel, drag handle and strap buckles are now Blender models in the same atlas as the head kit (`soldier_kit.py`; laid out apart for the bake, each in its own frame). `people/garment.js` `putPart` lays each one where the procedural piece was (same frame, so the old pieces remain the fallback). The plate bags, cummerbund and straps are still fitted in code. The bake now grows islands out once after baking (no per-piece margin, which bled across islands). Details: `docs/soldier-kit-models-2026-10-18.md`.

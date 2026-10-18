@@ -54,7 +54,7 @@ export const LOOKS = Object.freeze({
 	'plate-carrier': { top: combatShirt(), acc: [{ kind: 'carrier', col: MC[0], acc: MC[1], camo: 'multicam' }] },
 	'combat-trousers': { bottom: multicam('cargo', { legs: 'long', fit: 'regular' }), acc: [{ kind: 'kneepads', col: '#3a3a32' }] },
 	'tactical-gloves': { acc: [{ kind: 'gloves', col: '#3b3a33', acc: '#24241f', knuckle: true }] },
-	'combat-boots': { shoes: { kind: 'boot', col: '#8a7556', sole: '#2a241c' } },
+	'combat-boots': { shoes: { kind: 'boot', col: '#8a7556', sole: '#2a241c', combat: true } },
 });
 
 // the things on the head, the hands, the legs and the feet that a worn piece takes the place of

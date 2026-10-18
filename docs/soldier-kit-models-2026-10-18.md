@@ -42,6 +42,21 @@ The carrier's plate bags, cummerbund and straps are still made to each body in c
 
 ![Carrier kit before and after](verification/armor/compare-carrier-kit-models.jpg)
 
+## Combat boots (third batch)
+
+Soldiers' and militia combat boots are a real model now, where before they were the shoe painted on the foot's skin:
+- a moulded rubber sole with a toe spring, lugs underneath and blocks round its wall;
+- a rubber rand over the toe, suede toe cap and heel counter (each standing a little proud, stitched round), the quarters in a fine cordura, the tongue;
+- eyelets up the front with the laces crossing over the tongue, a padded collar and a pull loop.
+
+The boot is modelled round the reference operator's left foot (`island/tools/blender/ref-foot.obj`, in the foot's frame: origin at the ankle joint, +z along the foot, +x out to the side). It was made in Blender by closing the foot and ankle, standing them off, voxel-remeshing and smoothing them, then cutting the shaft and the sole. `garment.js` `putBoot` fits it to each foot. It stretches the boot to that foot's length behind and in front of the ankle, its width each side and its depth under the ankle, and the shaft to the shin's girth. It mirrors the boot for the right foot. Each point rides the bones of the skin nearest it, so the boot bends with the foot and ankle. Only shoes marked `combat` get it (`combat/outfits.js` `boots()`, and `combat-boots` in `armor-looks.js`).
+
+Under the boot the cloth shoe stands only 3 mm off the skin, like a sock, so it never shows through. The zone edges (rand, toe cap, heel counter, tongue, collar) are planes cut into the mesh, and each overlay is its own sheet closed down to the surface by a lip, so the edges run straight instead of stepping along the remeshed faces. The toe box is smoothed harder so the toes don't show.
+
+Every kit piece now carries one UV layer of one name. Before, pieces modelled with their own UVs and pieces given projected UVs joined into two layers, and the game read the first, so some faces of the helmet, headset, pouches and the boot's collar sampled the atlas's corner.
+
+![Boots before and after](verification/armor/compare-boot-models.jpg)
+
 ## How it works
 
 - **Modelling:** `island/tools/blender/soldier_kit.py`, run with Blender as a Python module (`pip install bpy`, Python 3.13).
