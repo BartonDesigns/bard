@@ -10,8 +10,9 @@
 // charred and holed. No textures.
 
 import * as THREE from 'three';
+import { GFX_PHONE } from '../world/device.js';
 
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 
 // roof types (aRoof.x)
 export const ROOF = { shingle: 0, barrel: 1, flatTile: 2, metal: 3, shake: 4, gravel: 5 };

@@ -622,7 +622,7 @@ export function createMelee(ctx) {
 		const k = e.key.toLowerCase();
 		if (k === 'q') { pressStart(e.shiftKey); e.preventDefault(); }
 		else if (k === 'j') { grapple(); e.preventDefault(); }
-		else if (k === 'c' && !ctx.player?.()?.flying && (me.guardT > 0 || foes.list.length)) { dodge(); }
+		else if (k === 'c' && !ctx.player?.()?.flying && (me.guardT > 0 || foes.list.length)) { e.l99Dodge = true; dodge(); }
 	});
 	addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 'q') pressEnd(); });
 	const cancelHeldInput = () => { if (me.press || me.charging) cancelMove(); me.block = false; };

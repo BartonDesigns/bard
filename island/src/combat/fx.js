@@ -2,8 +2,8 @@
 // tracers and flying bolts (one instanced streak mesh each), sparks, embers, fire and flashes
 // (additive points), smoke and dust (soft points), debris and glass shards (small instanced
 // chips that bounce on the ground), marks on walls (an instanced decal of a chipped hole or a
-// scorch), blood where a person is struck (a dark puff and a stain on the ground that fades;
-// nothing more), the Spark's shimmer round a warded child, and the bosses' warnings (rings on
+// scorch), blood where a person is struck (a dark puff and a stain on the ground that fades,
+// and the spatter a shot throws out behind them, on the wall or ground beyond), the Spark's shimmer round a warded child, and the bosses' warnings (rings on
 // the ground, beams). Lights are never added (that would recompile every material in the
 // scene); glow is drawn.
 
@@ -86,7 +86,7 @@ function decalTexture() {
 	return t;
 }
 
-export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
+export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => null } = {}) {
 	const group = new THREE.Group();
 	group.name = 'combat-fx';
 	const glow = pointsPool(isPhone ? 320 : 900, true), smoke = pointsPool(isPhone ? 200 : 520, false);
@@ -128,6 +128,20 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 	const blood = instPool(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: bloodTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), isPhone ? 16 : 40);
 	const bloodLife = new Float32Array(blood.n), bloodAt = [];
 	group.add(blood.mesh);
+	// the spatter thrown out behind a hit: a splash on the wall or the ground beyond the one
+	// struck, flung along the shot (the splash's +x), droplets trailing out ahead of it
+	const splatTex = (() => {
+		const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d');
+		const dot = (px, py, r, a) => { const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, `rgba(78,5,8,${a})`); g.addColorStop(0.65, `rgba(62,3,6,${a * 0.85})`); g.addColorStop(1, 'rgba(50,0,0,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); };
+		for (let i = 0; i < 9; i++) dot(30 + Math.random() * 16, 32 + (Math.random() - 0.5) * 18, 6 + Math.random() * 9, 0.85);
+		// streaks and drops flung out along +x, smaller as they go
+		for (let i = 0; i < 26; i++) { const t = Math.random(), px = 44 + t * 78, py = 32 + (Math.random() - 0.5) * (8 + t * 30); dot(px, py, Math.max(1.2, 5 * (1 - t) * Math.random() + 1), 0.9); }
+		for (let i = 0; i < 6; i++) { const py = 32 + (Math.random() - 0.5) * 14; x.strokeStyle = 'rgba(66,4,7,0.7)'; x.lineWidth = 1 + Math.random() * 2; x.beginPath(); x.moveTo(44, py); x.lineTo(70 + Math.random() * 40, py + (Math.random() - 0.5) * 10); x.stroke(); }
+		const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+	})();
+	const splats = instPool(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: splatTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide }), isPhone ? 12 : 32);
+	const splatLife = new Float32Array(splats.n), splatM = Array.from({ length: splats.n }, () => new THREE.Matrix4()), splatS = new Float32Array(splats.n);
+	group.add(splats.mesh);
 	// the Spark: a shimmering shell round a warded child
 	const wardMat = new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
 	const wards = [];
@@ -242,6 +256,31 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		_m.compose(_p.set(B.x, B.y, B.z), _q.setFromAxisAngle(_d.set(0, 1, 0), B.r), _s.setScalar(B.s));
 		blood.mesh.setMatrixAt(i, _m); blood.mesh.instanceMatrix.needsUpdate = true;
 	}
+	// a shot through someone: blood sprayed out along the shot, and where it lands (at: the wall
+	// or ground it met behind them, { p, n }; or nothing in reach, and it falls to the ground
+	// a step or two on) a splash flung that way
+	const _t = new THREE.Vector3(), _b = new THREE.Vector3(), _n = new THREE.Vector3();
+	function spatter(p, dir, at = null, k = 1) {
+		for (let i = 0; i < Math.round(8 * k); i++) {
+			const s = 2.5 + Math.random() * 4;
+			smoke.emit(p.x, p.y, p.z, dir.x * s + (Math.random() - 0.5) * 1.6, dir.y * s + Math.random() * 1.4, dir.z * s + (Math.random() - 0.5) * 1.6, 0.35 + Math.random() * 0.35, 0.035, 0.05, 0.32, 0.015, 0.025, 0.95, 9, 0.6);
+		}
+		smoke.emit(p.x + dir.x * 0.2, p.y, p.z + dir.z * 0.2, dir.x * 1.2, 0.2, dir.z * 1.2, 0.3, 0.12, 0.55, 0.38, 0.03, 0.04, 0.45, 0, 4);
+		let q = at?.p, n = at?.n;
+		if (!q) {
+			const d = 0.9 + Math.random() * 1.1, x = p.x + dir.x * d, z = p.z + dir.z * d, gy = ground(x, z);
+			if (!Number.isFinite(gy) || p.y - gy > 2.4) return;
+			q = { x, y: gy, z }; n = { x: 0, y: 1, z: 0 };
+		}
+		_n.set(n.x, n.y, n.z).normalize();
+		_t.set(dir.x, dir.y, dir.z).addScaledVector(_n, -(dir.x * _n.x + dir.y * _n.y + dir.z * _n.z));
+		if (_t.lengthSq() < 1e-4) _t.set(1, 0, 0).addScaledVector(_n, -_n.x);
+		_t.normalize(); _b.crossVectors(_n, _t);
+		const i = splats.slot(), size = (0.45 + Math.random() * 0.35) * k;
+		splatM[i].makeBasis(_t, _b, _n).scale(_s.set(size * 2, size, 1)).setPosition(q.x + _n.x * 0.015, q.y + _n.y * 0.015, q.z + _n.z * 0.015);
+		splatLife[i] = 45; splatS[i] = 1;
+		splats.mesh.setMatrixAt(i, splatM[i]); splats.mesh.instanceMatrix.needsUpdate = true;
+	}
 	// the Spark turning harm aside: a shimmer round them and a burst of light where it struck
 	function ward(c, r = 0.9, at = null) {
 		const W = wards.find((w) => w.life <= 0) || wards[0];
@@ -250,8 +289,14 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		for (let k = 0; k < 14; k++) glow.emit(q.x, q.y, q.z, (Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4, 0.5 + Math.random() * 0.4, 0.08, 0.02, 0.65, 0.95, 1, 1, -1, 2);
 		glow.emit(q.x, q.y, q.z, 0, 0, 0, 0.25, 0.4, 1.2, 1, 0.92, 0.6, 0.9);
 	}
-	// a blast: a flash, a fireball, smoke, debris and a scorch on the ground under it
+	// a column of smoke that rises far above the fight and hangs on (world/plumes.js): fires
+	// and wrecks keep theirs up while they burn; it thins away over fade seconds after
+	function column(id, o) { return plumes()?.set(id, o) || null; }
+	let blastN = 0;
+	// a blast: a flash, a fireball, smoke, debris and a scorch on the ground under it (and a
+	// big one leaves a dark column standing over the place for a while)
 	function explosion(p, r = 3, scorch = true) {
+		if (r >= 2.2) { const gy = ground(p.x, p.z); column('blast:' + (blastN++ % 4), { x: p.x, y: Number.isFinite(gy) ? gy : p.y, z: p.z, h: 50 + r * 18, r: r * 0.7, spread: 4, shade: 0.1, k: 0.75, life: 8, fade: 50 }); }
 		glow.emit(p.x, p.y, p.z, 0, 0, 0, 0.18, r * 1.6, r * 2.6, 1, 0.85, 0.55, 1);
 		for (let k = 0; k < 26; k++) {
 			const a = Math.random() * 6.283, e = Math.random() * 1.2, s = r * (1.5 + Math.random() * 2.5);
@@ -326,6 +371,13 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 			if (bloodLife[i] < 4) { const B = bloodAt[i], k = Math.max(0, bloodLife[i] / 4); _m.compose(_p.set(B.x, B.y, B.z), _q.setFromAxisAngle(_d.set(0, 1, 0), B.r), _s.setScalar(B.s * k)); blood.mesh.setMatrixAt(i, k > 0 ? _m : HIDE); bl = true; }
 		}
 		if (bl) blood.mesh.instanceMatrix.needsUpdate = true;
+		let sl = false;
+		for (let i = 0; i < splats.n; i++) {
+			if (splatLife[i] <= 0) continue;
+			splatLife[i] -= dt;
+			if (splatLife[i] < 5) { const k = Math.max(0, splatLife[i] / 5); splats.mesh.setMatrixAt(i, k > 0 ? _m.copy(splatM[i]).scale(_s.set(k, k, 1)) : HIDE); sl = true; }
+		}
+		if (sl) splats.mesh.instanceMatrix.needsUpdate = true;
 		for (const W of wards) {
 			if (W.life <= 0) continue;
 			W.life -= dt;
@@ -354,11 +406,12 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		for (let i = 0; i < S.length; i++) { S[i].life = 0; S[i].held = false; streaks.mesh.setMatrixAt(i, HIDE); }
 		for (const B of bits) { B.life = 0; B.pool.mesh.setMatrixAt(B.i, HIDE); }
 		for (const D of decalPools) { for (let i = 0; i < D.n; i++) D.mesh.setMatrixAt(i, HIDE); D.mesh.instanceMatrix.needsUpdate = true; }
+		for (let i = 0; i < splats.n; i++) { splatLife[i] = 0; splats.mesh.setMatrixAt(i, HIDE); } splats.mesh.instanceMatrix.needsUpdate = true;
 		for (const R of rings) { R.life = 0; R.m.visible = false; }
 		for (const B of beams) { B.life = 0; B.m.visible = false; }
 		streaks.mesh.instanceMatrix.needsUpdate = chips.mesh.instanceMatrix.needsUpdate = shards.mesh.instanceMatrix.needsUpdate = true;
 	}
 	// the points' size on screen follows the viewport's height
 	const resize = (h, fov) => { const k = h / (2 * Math.tan((fov * Math.PI) / 360)); glow.m.uniforms.scale.value = smoke.m.uniforms.scale.value = k; };
-	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, muzzle, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
+	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
 }

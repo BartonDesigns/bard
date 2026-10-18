@@ -17,7 +17,14 @@
 //   gridAt(i, G)                         one axis of the grid's vertex positions (radialGrid)
 //   drawnTerrainHeight(src, cx, cz, x, z) the drawn surface's height at (x, z), or null
 //   floorVerdict({ walk, ground, drawn, visible })   'ok', 'skip', 'hidden', 'void' or 'gap'
-//   createFloorGuard({ world, camera, renderer })  the runtime check: check(dt, { open })
+//   createFloorGuard({ world, camera, renderer, probe })  the runtime check: check(dt, { open })
+//
+// The CPU rebuild only knows what the card was asked to draw. What it really drew is read back
+// now and then too (probe: the ground alone drawn from above the player into a tiny target,
+// world/groundprobe.js): a phone whose graphics lift the grid wrongly (the floor drawn far
+// below a surface you walk on unseen, the owner's iPhone report) is caught there, where every
+// desktop test measured clean. Two such looks in a row and the grid is lifted on the CPU
+// instead (terrain.js cpuLift): the same ground, its heights sent with the vertices.
 
 import { TERRAIN_GRID } from './terrain.js';
 import { farBlend } from './lunarfar.js';
@@ -80,9 +87,9 @@ export function floorVerdict({ walk, ground, drawn, visible, tolerance = 4 }) {
 
 // The runtime check, run from the frame loop's ground step (main.js followGround). open says
 // whether the surface ought to be shown (not down in the caves or the Deep).
-export function createFloorGuard({ world, camera, renderer = null, every = 0.5, log = (...a) => console.warn(...a) }) {
-	let t = 0, bad = 0;
-	const stats = { checks: 0, incidents: 0, repairs: 0, last: null, lastBad: null };
+export function createFloorGuard({ world, camera, renderer = null, probe = null, wide = null, every = 0.5, gpuEvery = 8, log = (...a) => console.warn(...a) }) {
+	let t = 0, bad = 0, gpuT = 3, gpuBad = 0, wideT = 2;
+	const stats = { checks: 0, incidents: 0, repairs: 0, last: null, lastBad: null, gpu: { looks: 0, bad: 0, last: null, lifted: false }, wide: { looks: 0, bad: 0, last: null } };
 	function look(open) {
 		const W = world(), I = W?.island, T = W?.terrain, P = W?.player?.state;
 		if (!I || !T || !P || P.flying || P.swimming || P.diving || !T.userData.center) return null;
@@ -126,7 +133,59 @@ export function createFloorGuard({ world, camera, renderer = null, every = 0.5, 
 		log('[floor guard] the ground\'s program will not run on this device: the lean ground stands in');
 		return 'unbuilt';
 	}
+	// the ground as the card drew it under the player, against the floor walked there
+	function gpuLook(r) {
+		const T = world()?.terrain;
+		if (!probe || !T?.visible || T.userData.cpuLifted) return null;
+		let drawn;
+		try { drawn = probe(r.x, r.z); } catch { probe = null; stats.gpu.last = 'unsupported'; return null; }
+		if (drawn === undefined) { probe = null; stats.gpu.last = 'unsupported'; return null; }
+		stats.gpu.looks++;
+		const off = drawn == null ? Infinity : Math.abs(r.walk - drawn);
+		stats.gpu.last = drawn == null ? 'void' : off > 4 ? 'gap' : 'ok';
+		if (off <= 4) { gpuBad = 0; return 'ok'; }
+		gpuBad++;
+		stats.gpu.bad++;
+		stats.incidents++;
+		const did = [];
+		// the first time: the texture sent again and the grid re-centred; the second: lifted on the CPU
+		if (gpuBad === 1) { bad = 2; did.push(...repair()); gpuT = 1; }
+		else if (T.userData.cpuLift) { T.userData.cpuLift(camera); stats.gpu.lifted = true; stats.repairs++; did.push('lifted on the CPU'); }
+		stats.lastBad = { ...r, verdict: 'gpu-' + stats.gpu.last, drawnGpu: drawn, did, at: Math.round(performance.now()) };
+		try { globalThis.localStorage?.setItem('l99-floor-gpu', JSON.stringify({ at: new Date().toISOString(), walk: +r.walk.toFixed(2), drawn: drawn == null ? null : +drawn.toFixed(2), did, ua: globalThis.navigator?.userAgent?.slice(0, 160) })); } catch { /* private mode */ }
+		log('[floor guard] the ground as drawn on this device is', drawn == null ? 'missing' : `${(drawn - r.walk).toFixed(1)} m off`, 'under the player:', did.join(' ') || 'nothing to repair');
+		return stats.gpu.last;
+	}
+	// Past the island on Earth the ground is other camera-centred rings (the Bay's survey and the
+	// globe's, wide: { keep(o) for their meshes, follow() to put them back under the camera }):
+	// the same look, read back from what was drawn, and the same repair at the source
+	function wideLook() {
+		const W = world(), I = W?.island, P = W?.player?.state;
+		if (!wide || !probe || !I || !P || P.flying || P.swimming || P.diving || !W.bayArea?.loaded?.()) return null;
+		const x = P.pos.x, z = P.pos.z, foot = P.pos.y - 1.68;
+		if (Math.max(Math.abs(x), Math.abs(z)) < I.half + 40) return null;
+		const walk = W.player.floorAt(x, z, foot + 0.5), ground = I.heightAt(x, z);
+		if (!Number.isFinite(walk) || !Number.isFinite(ground) || walk > ground + 1.5 || ground < -0.5) return null;
+		let drawn;
+		try { drawn = probe(x, z, wide.keep); } catch { return null; }
+		if (drawn === undefined) return null;
+		stats.wide.looks++;
+		const off = drawn == null ? Infinity : Math.abs(walk - drawn);
+		stats.wide.last = drawn == null ? 'void' : off > 4 ? 'gap' : 'ok';
+		if (off <= 4) return 'ok';
+		stats.wide.bad++; stats.incidents++;
+		let did = 'nothing to repair';
+		try { did = wide.follow() || did; stats.repairs++; } catch { /* a guard, never a fault */ }
+		stats.lastBad = { x, z, walk, ground, drawn, verdict: 'wide-' + stats.wide.last, did: [did], at: Math.round(performance.now()) };
+		try { globalThis.localStorage?.setItem('l99-floor-wide', JSON.stringify({ at: new Date().toISOString(), x: Math.round(x), z: Math.round(z), walk: +walk.toFixed(2), drawn: drawn == null ? null : +drawn.toFixed(2), did })); } catch { /* private mode */ }
+		if (stats.wide.bad < 20 || stats.wide.bad % 50 === 0) log('[floor guard] off the island the ground as drawn is', drawn == null ? 'missing' : `${(drawn - walk).toFixed(1)} m off`, 'under the player:', did);
+		// (looked at again soon, to see the repair held)
+		wideT = 1;
+		return stats.wide.last;
+	}
 	function check(dt, { open = true } = {}) {
+		gpuT -= dt; wideT -= dt;
+		if (wideT <= 0 && open) { wideT = gpuEvery; try { wideLook(); } catch { /* a guard, never a fault */ } }
 		t -= dt;
 		if (t > 0) return null;
 		t = every;
@@ -136,7 +195,11 @@ export function createFloorGuard({ world, camera, renderer = null, every = 0.5, 
 		if (!r) return null;
 		stats.checks++;
 		stats.last = r.verdict;
-		if (r.verdict === 'ok' || r.verdict === 'skip') { bad = 0; return r; }
+		if (r.verdict === 'ok' || r.verdict === 'skip') {
+			bad = 0;
+			if (r.verdict === 'ok' && gpuT <= 0) { gpuT = gpuEvery; try { gpuLook(r); } catch { /* a guard, never a fault */ } }
+			return r;
+		}
 		bad++;
 		stats.incidents++;
 		const did = repair();
@@ -144,5 +207,5 @@ export function createFloorGuard({ world, camera, renderer = null, every = 0.5, 
 		if (stats.incidents < 20 || stats.incidents % 50 === 0) log('[floor guard]', r.verdict, 'walked', r.walk.toFixed(2), 'drawn', r.drawn == null ? 'none' : r.drawn.toFixed(2), 'at', Math.round(r.x), Math.round(r.z), 'grid centre', r.center.map(Math.round).join(','), did.join(' ') || 'nothing to repair');
 		return r;
 	}
-	return { check, look, stats, info: () => ({ ...stats }) };
+	return { check, look, stats, info: () => ({ ...stats, gpu: { ...stats.gpu }, wide: { ...stats.wide } }) };
 }

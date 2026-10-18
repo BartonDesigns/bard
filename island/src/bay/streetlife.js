@@ -13,6 +13,7 @@ import { createFleet } from '../vehicles/fleet.js';
 import { onLandmark } from './footprints.js';
 import { eraMap, kitFor } from './streetera.js';            // streets by era: the lamps
 import { LAMP, lampLook, lampPools } from './streetlamps.js';
+import { GFX_PHONE } from '../world/device.js';
 
 const LAMPS = 1200;
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -42,7 +43,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// Cars are the street's heaviest meshes, and from a rooftop there are thousands in view.
 	// The fleets (vehicles/fleet.js) draw them by distance: the real models and the cabins
 	// close by, coarser lofts further off, and only the nearer ones in the sun's shadow pass.
-	const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+	const isPhone = GFX_PHONE;
 	// (a phone holds fewer parked cars a kind: their instance buffers run to tens of MB)
 	const parkedFleet = createFleet(group, { cap: isPhone ? 800 : 1600, isPhone, night }), movingFleet = createFleet(group, { cap: 120, isPhone, night });
 	// The parked cars are placed into a plain store, then shared out between the levels as

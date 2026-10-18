@@ -23,11 +23,12 @@ import { ancestryFor } from '../region/cultures.js';
 import { coldOf } from '../region/climate.js';
 import { makeTeen, teensAbout, teenStyle, UNIFORM_CULTURES } from './teens.js';
 import { walkNow } from '../bay/crosswalks.js';
+import { GFX_PHONE } from '../world/device.js';
 
 // a phone keeps fewer bodies: each is a few MB of geometry and its face's morphs on the graphics,
 // and a busy downtown filled to the desktop's count was enough with the rest of the city to see
 // the page closed (the governor's tier thins the crowd further: world/governor.js)
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 const MAX = PHONE ? 16 : 26, KIDS = PHONE ? 6 : 12, NEAR = 70;
 const steps = [];
 const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                 // hiked, down the middle

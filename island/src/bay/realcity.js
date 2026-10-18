@@ -22,6 +22,7 @@ import { settleRegionSoon } from '../structures/overlap.js';   // structures: se
 import { eraMap } from './streetera.js';                     // streets by era: the era of each street
 import { paintStreet } from './potholes.js';                 // ...its sidewalk, potholes and patches in the paint layer
 import { qualityNow, onQuality } from '../world/governor.js';
+import { GFX_PHONE } from '../world/device.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -42,7 +43,7 @@ export const GREENS = [
 	[37.7960, -122.4050, 150, 130],            // (a placeholder kept small: Portsmouth Square)
 	[37.8070, -122.4330, 350, 110],            // the Marina Green
 ].map(([lat, lon, rx, rz]) => ({ ...toWorld(lat, lon), rx, rz }));
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 // how many mapped regions the ground shader tells from the procedural world at once: the
 // loaded ones nearest you (tiles side by side are merged into one box first; a phone loads
 // fewer, and its ground shader is smaller for it)

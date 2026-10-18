@@ -1,3 +1,4 @@
+import { GFX_PHONE } from './device.js';
 // The evening's lamps on what they light, close by: the few nearest lamps outside (a porch
 // light, the light over a garage, an uplight under a tree, a street lamp) handed to the
 // materials of the things they fall on (the trees' bark and leaves, the houses' outside walls)
@@ -17,7 +18,7 @@
 //   LF  the landmarks and the bridges: their floodlights (bay/floodlights.js), chosen from a
 //       few kilometres round, so a lit tower stands out across the city
 
-const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+const PHONE = GFX_PHONE;
 // how many lights a fragment looks at (a compile-time number: it never changes while running)
 export const NF_N = PHONE ? 6 : 16;
 export const SF_N = PHONE ? 4 : 8;

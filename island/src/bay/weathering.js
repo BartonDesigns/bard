@@ -1,3 +1,4 @@
+import { GFX_PHONE } from '../world/device.js';
 // Weathering: the marks weather, traffic and years leave. Streets wear dark down the wheel
 // paths, crack, get patched and sealed, drip oil, fill their gutters with grime and
 // leaves and their low spots with puddles; walls streak under the roof and the sills,
@@ -8,7 +9,7 @@
 // path on phones. How old a building is comes from what it is and where it stands, never
 // from who lives there.
 
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 export const WX_DEFS = PHONE ? '#define WX_LITE\n' : '';
 
 // shared helpers; they need vn and h21 (NOISE_GLSL) before them
