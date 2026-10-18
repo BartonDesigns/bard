@@ -1,0 +1,90 @@
+{
+ "meta": {
+  "rx": 0.0867,
+  "rz": 0.107,
+  "top": 0.1104,
+  "eyeZ": 0.0679,
+  "neck": -0.1469,
+  "ear": [
+   0.0837,
+   -0.0537,
+   -0.0074
+  ]
+ },
+ "foot": {
+  "heel": -0.0556,
+  "toe": 0.1821,
+  "medial": -0.0426,
+  "lateral": 0.0478,
+  "sole": -0.0662,
+  "shin": [
+   -0.0033,
+   -0.0033,
+   0.0321
+  ]
+ },
+ "stand": 0.0215,
+ "groups": {
+  "helmet": {
+   "tris": 5916,
+   "verts": 3081
+  },
+  "nvg": {
+   "tris": 2992,
+   "verts": 1642
+  },
+  "headset": {
+   "tris": 3068,
+   "verts": 1674
+  },
+  "mag": {
+   "tris": 216,
+   "verts": 112
+  },
+  "magpouch": {
+   "tris": 444,
+   "verts": 230
+  },
+  "admin": {
+   "tris": 392,
+   "verts": 210
+  },
+  "dangler": {
+   "tris": 384,
+   "verts": 202
+  },
+  "radio": {
+   "tris": 408,
+   "verts": 216
+  },
+  "ptt": {
+   "tris": 236,
+   "verts": 124
+  },
+  "med": {
+   "tris": 384,
+   "verts": 200
+  },
+  "tq": {
+   "tris": 232,
+   "verts": 124
+  },
+  "back": {
+   "tris": 256,
+   "verts": 136
+  },
+  "handle": {
+   "tris": 432,
+   "verts": 220
+  },
+  "buckle": {
+   "tris": 44,
+   "verts": 24
+  },
+  "boot": {
+   "tris": 2739,
+   "verts": 1424
+  }
+ },
+ "size": 2048
+}

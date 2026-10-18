@@ -114,7 +114,9 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 	const H = (n) => rest.heads[map[n]];
 	const g = dna.gait, signature = gaitSignature(dna.seed);
 	const S = {
-		pos: new THREE.Vector3(), heading: 0, want: { speed: 0, heading: 0, run: 0 },
+		// (want.travel: a way to move other than the way they face, a strafe or a step back, held
+		// for want.travelT seconds; the feet step along it while the body stays on its heading)
+		pos: new THREE.Vector3(), heading: 0, want: { speed: 0, heading: 0, run: 0, travel: null, travelT: 0 }, strafe: new Spring(0, 1.3), travel: 0,
 		speed: new Spring(0, 1.1), yaw: new Spring(0, 1.4), run: new Spring(0, 0.8),
 		phase: signature.phase, signature, look: { target: null, yaw: new Spring(0, 2.2), pitch: new Spring(0, 2.2), eyeYaw: new Spring(0, 6), eyePitch: new Spring(0, 6), idleT: 0, idleYaw: 0, idlePitch: 0 },
 		lean: new Spring(0, 1.5), turnLean: new Spring(0, 1.5), armL: new Spring(0, 2.5), armR: new Spring(0, 2.5), elbow: new Spring(0.3, 2),
@@ -185,10 +187,11 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 
 	// where a leg's foot rests on the ground, lz metres ahead of the body's centre
 	function nominal(leg, lz, out) {
-		const c = Math.cos(S.heading), s = Math.sin(S.heading);
-		// (standing, the feet a little further apart)
-		const lx = leg.side * footX * (1.5 - 0.5 * smooth(S.speed.v / 0.9));
-		out.set(S.pos.x + lx * c + lz * s, 0, S.pos.z - lx * s + lz * c);
+		const c = Math.cos(S.heading), s = Math.sin(S.heading), tc = Math.cos(S.travel), ts = Math.sin(S.travel);
+		// (standing, the feet a little further apart; stepping sideways, wider still, so the
+		// trailing foot does not cross the leading one)
+		const lx = leg.side * footX * (1.5 - 0.5 * smooth(S.speed.v / 0.9)) * (1 + 1.8 * Math.abs(Math.sin(S.strafe.v)));
+		out.set(S.pos.x + lx * c + lz * ts, 0, S.pos.z - lx * s + lz * tc);
 		out.y = groundAt(out.x, out.z);
 		return out;
 	}
@@ -253,8 +256,12 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		const heading = S.yaw.to(S.yaw.v + dh, dt);
 		const turnRate = S.yaw.dv;
 		S.heading = heading;
-		// the body moves at the smoothed speed along the smoothed heading
-		S.pos.x += Math.sin(heading) * speed * dt; S.pos.z += Math.cos(heading) * speed * dt;
+		// the body moves at the smoothed speed along the smoothed heading (or, strafing, along
+		// its way of travel: no further round than a little past square to the side)
+		S.want.travelT -= dt;
+		const offWant = S.want.travel != null && S.want.travelT > 0 ? clamp(wrap(S.want.travel - heading), -1.9, 1.9) : 0;
+		const travel = S.travel = heading + S.strafe.to(offWant, dt);
+		S.pos.x += Math.sin(travel) * speed * dt; S.pos.z += Math.cos(travel) * speed * dt;
 		constrain?.(S.pos, dt);
 		const run = clamp(S.run.to(S.want.run, dt), 0, 1);
 		// gait from speed, as people really walk: a stride (two steps) of about 0.83 of the height
@@ -603,5 +610,5 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		J.x.dv += s * k * 0.9; J.z.dv += f * k * 0.9;
 		if (hold > 0) S.freeze = Math.max(S.freeze, hold);
 	};
-	return { S, update, gesture, ungesture, setPose, feel, sit, stand, hold, act, play, jolt, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, trigger: (side, k) => { if (side === 'R') S.trigger = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
+	return { S, update, gesture, ungesture, setPose, feel, sit, stand, hold, act, play, jolt, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, trigger: (side, k) => { if (side === 'R') S.trigger = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.travel = heading; S.strafe.v = S.strafe.dv = 0; S.want.travel = null; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
 }

@@ -35,7 +35,7 @@ import { personShapes } from './targets.js';
 import { npcHand } from './weapon-view.js';
 import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
 import { FIELD_ROLES } from './field-contracts.js';
-import { outfitFor } from './outfits.js';
+import { outfitFor, kitArmour } from './outfits.js';
 
 // the bodies: people (dressed by faction), and the two that are not
 const BODY = {
@@ -53,6 +53,7 @@ const CALL = {
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const rnd = (a, b) => a + Math.random() * (b - a);
+const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
 // a faction's look (combat/outfits.js), from the fighter's own seed
@@ -185,6 +186,8 @@ export function createSquads(ctx) {
 				if (!b) return null;
 				if (h.gone || generation !== epoch) { b.used = false; b.P.root.visible = false; b.hand?.hide(); return null; }
 				h.body = b;
+				// what they wear turns blows too: plates more than a rig, a helmet some (outfits.js)
+				if (opts.armour == null && b.P.dna?.style) { const k = kitArmour(b.P.dna.style); h.H.armour = h.H.armourMax = Math.round(h.H.armourMax * k); }
 				// Pooled bodies may have served another role: always restore this spawn's kit.
 				if (b.hand && F.gun) b.hand.set(F.gun, opts.level || 2 + (b.P.dna.seed % 4 || 0), opts.tier ?? (specialty ? 1 : b.P.dna.seed % 3 || 0));
 				// Preserve the exact weapon represented by this pooled body's hand model.
@@ -239,6 +242,15 @@ export function createSquads(ctx) {
 		}
 		if (!h.alert) alertSquad(h, blow.src);
 		h.hurtT = 0.25;
+		// a round that lands knocks them: the chest and head snap back or round with it, a beat
+		// held as it lands, the aim thrown off; one behind cover ducks back down
+		if (!r.killed && !blow.melee && h.body && !h.body.P.ragdoll && r.dealt > 0) {
+			const d = blow.dir || { x: h.pos.x - (blow.src?.x ?? h.pos.x), z: h.pos.z - (blow.src?.z ?? h.pos.z) }, l = Math.hypot(d.x, d.z) || 1;
+			const k = Math.min(2.2, 0.55 + r.dealt / Math.max(1, h.H.max) * 3.5) * (blow.type === 'blast' ? 1.8 : 1) * (blow.part === 'head' ? 1.4 : 1);
+			h.body.M.jolt?.(d.x / l, d.z / l, k, blow.part === 'head' ? (Math.random() - 0.5) * 1.6 : (Math.random() - 0.5) * 0.5, k > 1.2 ? 0.06 : 0.03);
+			h.fireT = Math.max(h.fireT, rnd(0.35, 0.7));
+			if (h.inCover && h.peek) { h.peek = false; h.peekT = rnd(0.9, 1.8); }
+		}
 		if (r.killed) die(h, blow);
 		else if (!h.surrendered && h.kind === 'person' && !h.crew) {
 			const allies = (h.squad?.members || []).filter((m) => m !== h && !m.dead && !m.surrendered).length;
@@ -395,8 +407,9 @@ export function createSquads(ctx) {
 		} else if (atMe) ctx.whiz?.(from, end);
 		fx.tracer(from, end, style, 380);
 		fx.muzzle(from, dir, style === 2 ? 2 : 0);
+		if (style !== 2) fx.casing?.({ x: from.x - dir.x * 0.35, y: from.y - dir.y * 0.35, z: from.z - dir.z * 0.35 }, dir);
 		ctx.heard?.(from, h);
-		if (h.mag <= 0) { h.mag = 12; h.fireT = 2.2; h.burst = 0; say(h, 'reload'); return; }
+		if (h.mag <= 0) { reloadGun(h); return; }
 		h.fireT = h.burst > 0 ? B.rate : rnd(...B.gap);
 		if (h.role === 'suppress' && Math.random() < 0.08) say(h, 'pin');
 	}
@@ -459,10 +472,11 @@ export function createSquads(ctx) {
 	function fading(h, dt) {
 		h.deadT += dt;
 		if (h.body) {
-			// Keep recent nearby fighters long enough to inspect their equipment. Older
-			// bodies fade independently of drops, with at most twelve retained nearby.
+			// Keep recent nearby fighters long enough to inspect their equipment, and the
+			// ground a fight was on strewn with its fallen a while after (two minutes in
+			// sight). Older bodies fade independently of drops, at most twelve kept nearby.
 			const recent = list.filter((q) => q.dead && q.body).slice(-12).includes(h);
-			let keep = recent && Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z) < 40 ? 60 : 10;
+			let keep = recent && Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z) < 70 ? 120 : 25;
 			// (waiting for the ambulance: kept until it has been, gone soon after)
 			if (h.awaitMedic) keep = h.collected ? Math.min(h.deadT, keep) : 100;
 			if (h.deadT > keep) { const k = 1 - (h.deadT - keep) / 2; fadePerson(h.body.P, k); if (k <= 0) release(h); }
@@ -512,6 +526,8 @@ export function createSquads(ctx) {
 	function personStep(h, dt, d) {
 		const b = h.body, M = b.M, S = M.S, eye = ctx.eye();
 		h.pos.copy(S.pos);
+		// (the knee behind cover is held only while the fight below keeps asking for it)
+		if (S.act.name === 'kneel') M.act(null);
 		// (raised to the shoulder only while engaging; carried at the ready otherwise)
 		let aimAt = null;
 		// at close quarters with you (combat/melee-foes.js steers them: circling, their turns, a
@@ -537,10 +553,27 @@ export function createSquads(ctx) {
 			h.goalT -= dt;
 			if (!h.goal || h.goalT <= 0) chooseGoal(h, at);
 			const gd = walk(h, h.goal.x, h.goal.z, h.B.speed * (h.role === 'fallback' ? 1.1 : 1), 1);
-			h.crouch = gd <= 1.2 && h.inCover ? 0.5 : 0;
-			if (h.los && gd < 6) M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
+			const toT = Math.atan2(at.x - h.pos.x, at.z - h.pos.z), dT = Math.hypot(at.x - h.pos.x, at.z - h.pos.z);
+			// on the move in sight of the target: they keep their face and their gun on it and
+			// move along their way (a strafe, a step back), at a walk with the stock up, firing;
+			// a long way to go across open ground, or the way more than square behind them, they turn and run
+			const toG = M.want.heading, off = wrapA(toG - toT);
+			const strafe = h.los && gd > 1.2 && h.role !== 'fallback' && dT < 45 && Math.abs(off) < 1.9 && (gd < 12 || Math.abs(off) > 0.5);
+			if (strafe) { M.want.travel = toG; M.want.travelT = 0.3; M.want.heading = toT; M.want.speed = Math.min(M.want.speed, Math.abs(off) > 1.1 ? 1.9 : 2.1); M.want.run = 0; }
+			// in cover: down on a knee (hidden, reloading) and up to fire, in turns; just hit, down
+			const held = gd <= 1.2 && h.inCover && !h.noGun;
+			if (held) {
+				h.peekT = (h.peekT ?? 0) - dt;
+				if (h.peekT <= 0) { h.peek = !h.peek; h.peekT = h.peek ? rnd(1.6, 3.4) : rnd(1.0, 2.2); }
+			} else { h.peek = true; h.peekT = 0; }
+			const down = held && !h.peek, reloading = !!b.hand?.reloading;
+			// (down behind cover with half a magazine or less: changed now, not mid-fight)
+			if (down && h.mag <= 6 && !reloading && h.fireT < 0.5) reloadGun(h, true);
+			h.crouch = down || (reloading && held) ? 0.55 : 0;
+			if (down && !reloading) M.act('kneel', 0); else if (M.S.act.name === 'kneel') M.act(null);
+			if (h.los && gd < 6) M.want.heading = toT;
 			S.look.target = h.target.id === 'me' ? eye : null;
-			if (h.los && (gd < 6 || h.role === 'suppress')) { shoot(h, dt); if (gd < 2.5) aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); }
+			if (h.los && !down && (gd < 6 || h.role === 'suppress' || strafe)) { shoot(h, dt); if (gd < 2.5 || strafe) aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); }
 			else h.fireT = Math.max(h.fireT, 0.3);
 		} else {
 			if (h.alert && !h.target) { h.alert = Math.max(0, h.alert - dt * 0.05); }
@@ -556,12 +589,21 @@ export function createSquads(ctx) {
 		headway(h, dt);
 		M.update(dt, time, eye);
 		b.P.lod?.(d);
-		if (b.hand && !h.noGun) { aimHold(h, aimAt); b.hand.follow(b.P, S.heading, d < 90, M, time); }
+		if (b.hand && !h.noGun) { aimHold(h, aimAt); b.hand.follow(b.P, S.heading, d < 90, M, time, dt); }
 	}
 	// the gun up and on the target while engaging (the stock at the shoulder, the strong hand's
 	// finger on the trigger), down at the ready while moving or searching
+	// a magazine changed in the hands: the gun comes down, the support hand goes to the well, off
+	// to a pouch and back (people/actions.js reload, crysis/held-items.js), with its sounds;
+	// no shooting till it is done
+	function reloadGun(h, tactical = false) {
+		const W = h.body?.hand, eye = ctx.eye();
+		const T = W?.reload?.(null, Math.hypot(h.pos.x - eye.x, h.pos.z - eye.z)) ? Math.max(1.6, W.model?.userData?.reload || 2.2) : 2.2;
+		h.mag = 12; h.burst = 0; h.fireT = Math.max(h.fireT, T + rnd(0.15, 0.4));
+		if (!tactical || Math.random() < 0.5) say(h, 'reload');
+	}
 	function aimHold(h, at) {
-		const b = h.body, up = !!at && b.M.S.speed.v < 2.2;
+		const b = h.body, up = !!at && b.M.S.speed.v < 2.2 && !b.hand?.reloading;
 		b.hand.aim?.(up);
 		if (up) b.hand.aimPitch?.(Math.atan2(at.y - (h.pos.y + 1.4), Math.max(1, Math.hypot(at.x - h.pos.x, at.z - h.pos.z))));
 		b.M.trigger?.('R', up ? 1 : 0);
@@ -672,6 +714,6 @@ export function createSquads(ctx) {
 		return Promise.all(out).then(() => sq);
 	}
 	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); }
-	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: maxNow(), squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
+	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: maxNow(), squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length, stances: s.members.filter((m) => !m.dead).map((m) => m.body?.M.S.act.name === 'kneel' ? 'kneel' : m.body?.M.want.travelT > 0 ? 'strafe' : 'move') })), bodies: pools.person.length, queue: queue.length });
 	return { group, update, squad, spawn, hear, clear, info, alive, list, release, surrender, squads };
 }

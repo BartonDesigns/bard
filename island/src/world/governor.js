@@ -119,7 +119,8 @@ export function setTier(t) {
 }
 
 // ---------- the governor at work (main.js) ----------
-// mode(): 'auto' (governed), 'high' or 'low' (chosen; a crash or graphics loss still caps them).
+// mode(): 'auto' (governed), 'high', 'ultra' (High on a phone drawing the desktop's graphics) or
+// 'low' (chosen; a crash or graphics loss still caps them).
 // meter: gpumeter.js's; budgetMB: what the graphics and the script heap together may hold
 // before the governor steps down (a phone's is small: Safari closes the page well before the
 // device runs out). All devices start a tier down and earn the best by running easily.
@@ -130,7 +131,8 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 	let rec = booted.rec;
 	put(rec);
 	const state = governorState({ tier: 1, ceiling: rec.ceiling });
-	const fixed = (m) => Math.max(rec.ceiling, m === 'low' ? 2 : 0);
+	let memoryCeiling = 0; // Session only: a quality selection cannot undo memory relief.
+	const fixed = (m) => Math.max(rec.ceiling, memoryCeiling, m === 'low' ? 2 : 0);
 	let memK = null, memT = 0, lastMode = mode();
 	// the heap over the last ten seconds, its lowest taken: the figure counts garbage not yet
 	// collected, and the lowest is near what is really held (or the governor chases the collector)
@@ -156,14 +158,23 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 			if (m === 'auto') {
 				if (lastMode !== 'auto') { state.since = 0; state.slow = state.fast = 0; }
 				govern(state, { dt, frameMs, mem: memK });
-			} else state.tier = fixed(m);
+			} else {
+				state.tier = fixed(m);
+				state.since += dt;
+				// High keeps its visual preference, but never opts out of memory safety.
+				if (memK != null && memK > RULES.memHigh && state.since >= RULES.settle && state.tier < LOWEST) {
+					memoryCeiling = ++state.tier;
+					state.ceiling = Math.max(rec.ceiling, memoryCeiling);
+					state.since = state.sinceDown = 0;
+				}
+			}
 			lastMode = m;
 			return setTier(state.tier);
 		},
 		// the mode was chosen in the settings: its tier at once
-		apply() { state.tier = mode() !== 'auto' ? fixed(mode()) : Math.max(state.tier, rec.ceiling); return setTier(state.tier); },
+		apply() { state.tier = mode() !== 'auto' ? fixed(mode()) : Math.max(state.tier, state.ceiling); return setTier(state.tier); },
 		// the graphics were lost: a tier lower for a few days, and at once
-		lost() { rec = lossRecord(rec, now(), state.tier); put(rec); state.ceiling = rec.ceiling; state.tier = Math.max(state.tier, rec.ceiling); return setTier(state.tier); },
+		lost(minimum = 0) { rec = lossRecord(rec, now(), state.tier); rec.ceiling = Math.max(rec.ceiling, clampTier(minimum)); put(rec); state.ceiling = Math.max(rec.ceiling, memoryCeiling); state.tier = Math.max(state.tier, state.ceiling); return setTier(state.tier); },
 		// a world on screen (or not): a page that goes while this is set went without a goodbye
 		live(on) { const v = on ? now() : 0; if (!!rec.live === !!v) return; rec = { ...rec, live: v }; put(rec); },
 		info: () => ({ tier: TIERS[state.tier].name, ceiling: TIERS[state.ceiling].name, mode: mode(), frameMs: Math.round(state.avg * 10) / 10, memory: memK == null ? null : Math.round(memK * 100) + '% of ' + budgetMB + ' MB', gpuMB: meter ? Math.round(meter.bytes() / 1048576) : null, crashedLastTime: booted.crashed, crashes: rec.crashes.length }),

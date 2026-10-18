@@ -7506,15 +7506,160 @@ function now(ctx){return realGet&&ctx?realGet.call(ctx):(ctx?.currentTime||0);}
 // run fn with its sounds stamped for audio time t
 function at(t,fn){const was=stampAt;stampAt=num(t)?t:null;try{return fn();}finally{stampAt=was;}}
 // how far ahead steps are worked out: a little on the faceplate, more while the world is
-// drawing (its frames can hold the page up), more again on a phone
-function lead(){const w=root._worldAudioLead;return num(w)?Math.max(.03,Math.min(.3,w)):.08;}
+// drawing (its frames can hold the page up), more again on a phone; and more again for a
+// while after the page held a scheduler up (music233: the lead learns from how late the
+// timers ran, so a page that stalls 200 ms keeps its beat instead of hiccuping each time)
+let jank=0,jankAt=0;
+function settle(){const t=performance.now();if(jankAt)jank*=Math.pow(.5,Math.max(0,t-jankAt)/15000);jankAt=t;}
+function late(sec){if(!num(sec)||sec<=.004||root.document?.hidden)return;settle();jank=Math.max(jank,Math.min(.22,sec));}
+function lead(){const w=root._worldAudioLead,base=num(w)?w:.08;settle();return Math.max(.03,Math.min(.3,Math.max(base,jank>.01?jank*1.3+.03:0)));}
+// (a timer that was due part-way through a stall only sees part of it: the browser's own report
+// of each long task held on the page, where it has one, gives the whole)
+try{new PerformanceObserver(l=>{for(const e of l.getEntries())late(e.duration/1000);}).observe({type:'longtask',buffered:false});}catch(_){}
+// music233: how long after a sample is worked out it reaches the ears (the output buffer and
+// the device, a Bluetooth headset's 150 ms or more included), smoothed
+let lagCtx=null,lagS=0;
+function lag(ctx){
+ if(!ctx)return 0;
+ let l=null;
+ try{const ts=ctx.getOutputTimestamp?.();if(ts&&ts.performanceTime>0&&ts.contextTime>0){const v=now(ctx)-ts.contextTime-(performance.now()-ts.performanceTime)/1000;if(v>=0&&v<.6)l=v;}}catch(_){}
+ if(l===null){const v=(ctx.outputLatency||0)+(ctx.baseLatency||0);l=num(v)&&v>=0&&v<.6?v:0;}
+ if(lagCtx!==ctx){lagCtx=ctx;lagS=l;}else lagS+=(l-lagS)*.2;
+ return lagS;
+}
+// the audio time being heard right now, and the page time (ms) audio time t will be heard
+function heard(ctx){return now(ctx)-lag(ctx);}
+function perfAt(ctx,t){return performance.now()+(t-heard(ctx))*1000;}
 // a phone gets a roomier audio buffer: under load the small one runs dry and crackles
 function latencyHint(){
  try{const v=localStorage.getItem('l99-audio-latency');if(v==='interactive'||v==='balanced'||v==='playback')return v;}catch(_){}
  const coarse=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
  return coarse?'balanced':'interactive';
 }
-root.L99Clock={lock,now,at,lead,onAt,offAt,latencyHint};
+root.L99Clock={lock,now,at,lead,late,lag,heard,perfAt,onAt,offAt,latencyHint,jank:()=>jank};
+})(window);
+</script>
+<script id="beat-code233">
+/* BEAT_233: the beat keeps time on the audio thread. A small processor owns the sequencer's
+   step times (tempo, swing, loop length, sent from the page) and tells the page each step a
+   lead ahead; the page plays the step as before and claims it. A step the page could not get to
+   in time (a frozen frame, a long task, a busy phone) is played here instead, from the kit
+   rendered to samples, exactly on its time: no freeze can move or drop the beat. Leads and the
+   rest follow the page and wait for it. Kill: window._BEAT_CLOCK = false. */
+(function(root){'use strict';
+function processor233(){
+ const HAT={hihat:1,openhat:1};
+ class Beat233 extends AudioWorkletProcessor{
+  constructor(){
+   super();
+   this.run=false;this.q=[];this.v=[];this.kit={};this.pat=[];this.on=false;
+   this.dur=[.125,.125,.125,.125];this.loop=16;this.h=.1;this.hum=0;this.decide=.005;this.gen=0;
+   this.port.onmessage=e=>this.msg(e.data||{});
+  }
+  msg(m){
+   if(m.cmd==='start'){this.set(m);this.run=true;this.gen=m.gen;this.next=m.at;this.k=0;this.idx=(m.idx||0)%this.loop;this.q.length=0;}
+   else if(m.cmd==='stop'){this.run=false;this.q.length=0;}
+   else if(m.cmd==='set')this.set(m);
+   else if(m.cmd==='pattern'){this.pat=m.steps||[];this.on=!!m.on;}
+   else if(m.cmd==='kit')this.kit=m.kit||{};
+   else if(m.cmd==='claim'){
+    for(const s of this.q)if(s.k===m.k)s.claimed=true;
+    // the page's own step index for that step: what follows is counted from it
+    if(typeof m.step==='number'){for(const s of this.q)if(s.k>m.k)s.idx=(m.step+s.k-m.k)%this.loop;this.idx=(m.step+this.k-m.k)%this.loop;}
+   }
+  }
+  set(m){
+   if(Array.isArray(m.dur)&&m.dur.length===4&&m.dur.every(d=>d>.005&&d<2))this.dur=m.dur;
+   if(m.loop>0)this.loop=m.loop|0;
+   if(m.h>0)this.h=Math.min(.5,m.h);
+   if(typeof m.hum==='number')this.hum=m.hum;
+   if(m.decide>0)this.decide=m.decide;
+  }
+  hit(s,f0){
+   const hits=this.pat[s.idx%Math.max(1,this.pat.length)];
+   if(!hits||!hits.length)return;
+   let n=0;
+   for(const name of hits){
+    const vs=this.kit[name];
+    if(!vs||!vs.length)continue;
+    const b=vs[(Math.random()*vs.length)|0],jit=this.hum>0?Math.random()*.01*this.hum:0;
+    const start=Math.max(f0,Math.round((s.at+jit)*sampleRate)),gain=Math.max(.05,1+(Math.random()*2-1)*.1*this.hum);
+    // a hat chokes the hat before it, as the kits do
+    if(HAT[name])for(const v of this.v)if(v.hat&&v.end>start)v.end=Math.min(v.end,start+Math.round(.014*sampleRate)),v.fade=Math.round(.014*sampleRate);
+    this.v.push({b,start,gain,hat:!!HAT[name],end:start+b[0].length,fade:0});
+    n++;
+   }
+   if(this.v.length>48)this.v.splice(0,this.v.length-48);
+   if(n)this.port.postMessage({cmd:'covered',k:s.k,at:s.at,n,gen:this.gen});
+  }
+  process(_in,outputs){
+   const out=outputs[0];if(!out||!out[0])return true;
+   const L=out[0],R=out[1]||null,n=L.length,t0=currentTime,f0=currentFrame;
+   if(this.run){
+    let guard=0;
+    while(this.next<t0+this.h&&guard++<64){
+     const s={k:this.k,idx:this.idx,at:this.next,claimed:false,done:false};
+     this.q.push(s);
+     this.port.postMessage({cmd:'step',k:s.k,idx:s.idx,at:s.at,gen:this.gen});
+     this.k++;this.idx=(this.idx+1)%this.loop;this.next+=this.dur[this.idx%4];
+    }
+   }
+   for(const s of this.q)if(!s.done&&s.at-t0<=this.decide+n/sampleRate){s.done=true;if(!s.claimed&&this.on)this.hit(s,f0);}
+   while(this.q.length&&this.q[0].done&&this.q[0].at<t0-1)this.q.shift();
+   for(let j=this.v.length-1;j>=0;j--){
+    const v=this.v[j],bl=v.b[0],br=v.b[1]||bl;
+    if(f0+n<=v.start)continue;
+    const i0=Math.max(0,v.start-f0),i1=Math.min(n,v.end-f0);
+    for(let i=i0;i<i1;i++){
+     const p=f0+i-v.start;
+     let g=v.gain;
+     if(v.fade&&v.end-(f0+i)<v.fade)g*=(v.end-(f0+i))/v.fade;
+     L[i]+=bl[p]*g;if(R)R[i]+=br[p]*g;
+    }
+    if(f0+n>=v.end)this.v.splice(j,1);
+   }
+   return true;
+  }
+ }
+ registerProcessor('l99-beat233',Beat233);
+}
+let node=null,nodeCtx=null,loading=null,gen=0,onStep=null,onCovered=null,lastSet='',lastPat='',kitKey='',rendering=false,covered=0;
+function ensure(ctx){
+ if(root._BEAT_CLOCK===false||!ctx||!ctx.audioWorklet||typeof AudioWorkletNode==='undefined')return Promise.resolve(null);
+ if(node&&nodeCtx===ctx)return Promise.resolve(node);
+ if(loading)return loading;
+ const url=URL.createObjectURL(new Blob(['('+processor233.toString()+')();'],{type:'text/javascript'}));
+ loading=ctx.audioWorklet.addModule(url).then(()=>{
+  if(ctx.state==='closed')return null;
+  const n=new AudioWorkletNode(ctx,'l99-beat233',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+  n.port.onmessage=e=>{const m=e.data;if(!m||m.gen!==gen)return;if(m.cmd==='step'&&onStep)onStep(m);else if(m.cmd==='covered'){covered+=m.n;onCovered?.(m);}};
+  n.onprocessorerror=()=>{if(node===n){node=null;nodeCtx=null;}};
+  node=n;nodeCtx=ctx;kitKey='';lastSet='';lastPat='';
+  return n;
+ }).catch(()=>null).finally(()=>{URL.revokeObjectURL(url);loading=null;});
+ return loading;
+}
+function ready(ctx){return root._BEAT_CLOCK!==false&&!!node&&nodeCtx===ctx;}
+function connect(bus){if(node&&bus&&node._bus233!==bus){try{if(node._bus233)node.disconnect();}catch(_){}node.connect(bus);node._bus233=bus;}}
+// o: {at, idx, dur, loop, h, hum}; step(m) is called with each step {k, idx, at}
+function start(o,step){if(!node)return false;gen++;onStep=step;lastSet='';node.port.postMessage(Object.assign({cmd:'start',gen},o));return true;}
+function stop(){gen++;onStep=null;if(node)node.port.postMessage({cmd:'stop'});}
+function set(o){const k=JSON.stringify(o);if(!node||k===lastSet)return;lastSet=k;node.port.postMessage(Object.assign({cmd:'set'},o));}
+function pattern(steps,on){const k=(on?'1':'0')+JSON.stringify(steps);if(!node||k===lastPat)return;lastPat=k;node.port.postMessage({cmd:'pattern',steps,on:!!on});}
+function claim(k,step){if(node)node.port.postMessage({cmd:'claim',k,step});}
+// the kit as samples, made once per kit by render() -> {name: [AudioBuffer, ...]}
+function kit(key,render){
+ if(!node||key===kitKey||rendering)return;
+ rendering=true;
+ Promise.resolve().then(render).then(k=>{
+  if(!k||!node)return;
+  const out={},moved=[];
+  for(const name in k)out[name]=k[name].map(b=>{const ch=[];for(let c=0;c<Math.min(2,b.numberOfChannels);c++){const a=b.getChannelData(c).slice();ch.push(a);moved.push(a.buffer);}return ch;});
+  node.port.postMessage({cmd:'kit',kit:out},moved);
+  kitKey=key;
+ }).catch(()=>{}).finally(()=>{rendering=false;});
+}
+root.L99Beat233={ensure,ready,connect,start,stop,set,pattern,claim,kit,covered:()=>covered,onCovered:f=>{onCovered=f;},kitKey:()=>kitKey};
 })(window);
 </script>
 <script id="peak-code177">
@@ -8092,11 +8237,66 @@ root.L99Studio181={captureOn:captureOn215,captureOff:captureOff215,captureState:
 
 
 <style id="hyphy182-style">
-#special-panel .yee182{padding:14px;background:radial-gradient(ellipse at top right,#2464b34d,transparent 70%),#090f1c;color:#f5edb3;font:12px/1.4 ui-monospace,monospace;text-shadow:none}#special-panel .yee182 button{font:inherit;color:inherit;border:1px solid #6488b8;background:#132543;border-radius:10px;min-height:48px;padding:9px;touch-action:manipulation;cursor:pointer}#special-panel .yee-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#special-panel .yee-modes button{min-width:0;font-size:10px}#special-panel .yee-modes [aria-pressed=true]{background:#264e90;border-color:#ffe06c}#special-panel .yee-modes .queued{border-style:dashed;border-color:#ffe06c}#special-panel .yee-transport{width:100%;margin:12px 0;background:#e8cd60;color:#0e182d;font-weight:bold}#special-panel .yee-pads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#special-panel .yee-pads button{display:flex;flex-direction:column;justify-content:center;gap:8px;min-height:112px;touch-action:none;user-select:none;-webkit-user-select:none}#special-panel .yee-pads strong{font-size:clamp(17px,4vw,28px);font-weight:900;letter-spacing:-.04em}#special-panel .yee-pads small{font-size:9px;opacity:.8}#special-panel .yee-pads [data-action=yeee]{background:#eace66;color:#151e31}#special-panel .yee-pads [aria-pressed=true]{background:#3373be;box-shadow:inset 0 0 0 2px #ffe06c;color:white}#special-panel .yee-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}#special-panel .yee-macros label{position:relative;min-width:0;font-size:11px}#special-panel .yee-macros output{float:right}#special-panel .yee-macros input{display:block;width:100%;height:40px;margin:0;accent-color:#ffe06c}#special-panel .yee-meter{display:grid;grid-template-columns:repeat(16,1fr);gap:4px;margin:0 0 12px}#special-panel .yee-meter i{height:5px;background:#314367;border-radius:2px}#special-panel .yee-meter .lit{background:#ffe06c}#special-panel .yee182 button:focus-visible{outline:2px solid white;outline-offset:2px}#special-panel .yee182 p{min-height:32px;margin:12px 0 0;color:#b2c4dd;font-size:11px}
+/* music234: the YEEE MACHINE as one calm groove box, Warriors blue and gold. Display words in heavy italic, everything else small mono caps. */
+#special-panel .sp-head.yee-head{background:#0f1f40;border-bottom:1px solid #22385f;padding:12px 14px}
+#special-panel .sp-head.yee-head .sp-title{white-space:nowrap;font:italic 900 17px/1 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:-.01em;color:#ffc72c}
+#special-panel .sp-head.yee-head .sp-sub{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;color:#8ea3c7}
+#special-panel .yee182{--g:#ffc72c;--g2:#ffe08a;--ink:#0a1428;--s1:#12234a;--s2:#1a3366;--ln:#2b4677;--tx:#eef2fb;--mu:#8ea3c7;display:grid;gap:16px;min-width:0;max-width:100%;box-sizing:border-box;padding:14px;background:linear-gradient(180deg,#0f1f40,#0a1428 70%);color:var(--tx);font:500 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-shadow:none}
+#special-panel .yee182 button{font:inherit;color:inherit;background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:0;cursor:pointer;touch-action:manipulation;transition:background .15s,border-color .15s,color .15s,transform .08s,box-shadow .15s}
+#special-panel .yee182 button:hover{border-color:#47679f}
+#special-panel .yee182 button:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+#special-panel .yee182 .yee-deck{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+#special-panel .yee182 .yee-play{min-width:100px;min-height:56px;padding:0 16px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--g);border-color:var(--g);color:var(--ink);font-weight:800;letter-spacing:.14em}
+#special-panel .yee182 .yee-play i{font-style:normal;font-size:13px}
+#special-panel .yee182 .yee-play[aria-pressed=true]{background:transparent;color:var(--g)}
+#special-panel .yee182 .yee-beat{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;min-height:56px;background:var(--s1);border:1px solid var(--ln);border-radius:10px}
+#special-panel .yee182 .yee-beat button{min-height:54px;border:0;background:transparent;font-size:22px;line-height:1;color:var(--mu)}
+#special-panel .yee182 .yee-beat button:hover{color:var(--g)}
+#special-panel .yee182 .yee-beat-name{display:grid;gap:4px;min-width:0;text-align:center}
+#special-panel .yee182 .yee-beat-name small{font-size:9px;letter-spacing:.18em;color:var(--mu)}
+#special-panel .yee182 .yee-beat-name strong{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:italic 900 17px/1.05 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:0;color:var(--tx)}
+#special-panel .yee182 .yee-beat.queued strong,#special-panel .yee182 .yee-beat.queued small{color:var(--g)}
+#special-panel .yee182 .yee-meter{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:3px;margin-top:-8px}
+#special-panel .yee182 .yee-meter i{height:4px;border-radius:2px;background:#1f3459;transition:background .08s,box-shadow .08s}
+#special-panel .yee182 .yee-meter i:nth-child(4n+1){background:#2e4a7b}
+#special-panel .yee182 .yee-meter i:nth-child(4n):not(:last-child){margin-right:6px}
+#special-panel .yee182 .yee-meter i.lit{background:var(--g);box-shadow:0 0 8px #ffc72c99}
+#special-panel .yee182 .yee-pads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#special-panel .yee182 .yee-pads button{min-height:100px;padding:12px 12px 10px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:10px;text-align:left;background:linear-gradient(160deg,#1a3366,#12234a);user-select:none;-webkit-user-select:none;touch-action:none}
+#special-panel .yee182 .yee-pads strong{font:italic 900 clamp(19px,5.2vw,26px)/.98 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:-.015em}
+#special-panel .yee182 .yee-pads small{font-size:9px;letter-spacing:.1em;color:var(--mu)}
+#special-panel .yee182 .yee-pads [data-action=yeee]{background:linear-gradient(160deg,#ffd75e,#ffc72c);border-color:#ffc72c;color:var(--ink);box-shadow:0 6px 20px #ffc72c26}
+#special-panel .yee182 .yee-pads [data-action=yeee] small{color:#6b5410}
+#special-panel .yee182 .yee-pads [aria-pressed=true]{transform:scale(.97);border-color:var(--g);box-shadow:inset 0 0 0 1px var(--g),0 0 22px #ffc72c33}
+#special-panel .yee182 .yee-pads [data-action=yeee][aria-pressed=true]{background:#ffe08a}
+#special-panel .yee182 .yee-sec{display:grid;gap:8px;min-width:0}
+#special-panel .yee182 .yee-label{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:9px;letter-spacing:.18em;color:var(--mu)}
+#special-panel .yee182 .yee-label b{font-weight:700;color:var(--g2)}
+#special-panel .yee182 .yee-label span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;letter-spacing:.06em}
+#special-panel .yee182 .yee-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;padding:3px;background:#0a1428;border:1px solid var(--ln);border-radius:10px}
+#special-panel .yee182 .yee-seg button{min-width:0;min-height:40px;border:0;border-radius:7px;background:transparent;font-size:10px;letter-spacing:.1em;color:var(--mu)}
+#special-panel .yee182 .yee-seg button:hover{color:var(--tx)}
+#special-panel .yee182 .yee-seg [aria-pressed=true]{background:var(--s2);color:var(--g);box-shadow:inset 0 0 0 1px #ffc72c59}
+#special-panel .yee182 .yee-drums{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+#special-panel .yee182 .yee-drum{min-width:0;min-height:54px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+#special-panel .yee182 .yee-drum span{font-size:15px;line-height:1;color:var(--g2);opacity:.8}
+#special-panel .yee182 .yee-drum small{max-width:100%;overflow:hidden;white-space:nowrap;font-size:8px;letter-spacing:.04em;color:var(--mu)}
+#special-panel .yee182 .yee-drum[aria-pressed=true]{background:var(--s2);border-color:var(--g)}
+#special-panel .yee182 .yee-drum[aria-pressed=true] span{opacity:1;color:var(--g)}
+#special-panel .yee182 .yee-drum[aria-pressed=true] small{color:var(--g)}
+#special-panel .yee182 .yee-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+#special-panel .yee182 .yee-macros label{display:grid;grid-template-columns:1fr auto;gap:2px 8px;min-width:0;font-size:9px;letter-spacing:.18em;color:var(--mu)}
+#special-panel .yee182 .yee-macros output{color:var(--g2);letter-spacing:.04em}
+#special-panel .yee182 .yee-macros input{grid-column:1/-1;display:block;width:100%;height:32px;margin:0;accent-color:var(--g)}
+#special-panel .yee182 p{min-height:15px;margin:0;padding-top:10px;border-top:1px solid #1d3157;font-size:10px;letter-spacing:.04em;color:var(--mu)}
+@media(max-width:420px){#special-panel .yee182{padding:12px;gap:14px}#special-panel .yee182 .yee-play{min-width:88px;padding:0 12px}#special-panel .yee182 .yee-drum{min-height:50px}#special-panel .yee182 .yee-drum small{font-size:7px}}
+@media(prefers-reduced-motion:reduce){#special-panel .yee182 button,#special-panel .yee182 .yee-meter i{transition:none}#special-panel .yee182 .yee-pads [aria-pressed=true]{transform:none}}
 
 </style>
 <script id="hyphy182-code">
-/* HYPHY 186: sustained upper-register YEEE chants with protected live routing. */
+/* HYPHY 186: sustained upper-register YEEE chants with protected live routing.
+   music234: the sound rebuilt. The groove plays the faceplate's own HYPHY kit (the pro kit),
+   retuned per rack kit, with an 808 under the kick; the YEEE is a voiced crew shout. */
 (function(root){'use strict';
 const sound=root.L99Sound181;let current=null;
 const YEE_VOICES={
@@ -8106,64 +8306,120 @@ const YEE_VOICES={
  trunk:{vowel:[470,2560,3430],cents:-45,vibrato:5.9,edge:1.18,presence:1.42}
 };
 const YEE_ACCENTS={ride:17,kick:0,hihat:29,openhat:41,cymbal:53,rim:-11,clap:9,snare:-19,lotom:-37,shaker:35,cowbell:61,hitom:-27,jump:-49,perc:23};
-const shoutWaves=new WeakMap();
-// A root-aligned falsetto register, independent of the selected drum's low
-// pitch. Keep the /i:/ vowel steady after the brief /j/ onset: sweeping a low
-// carrier through narrow formants for the whole note sounded like a duck.
+// music234: the YEEE as a cartoon voice (Josh: "more like Mickey Mouse"). A falsetto glottal
+// pulse, high (580 to 820 Hz) through a small throat: the formants of "ee" pushed up by the
+// kit's tract scale, pinched and nasal (thin lows, a dip near 1 kHz, a lift at the twang). The
+// pitch squeaks up into the note and slides down the long "yeeeee"; one voice, a small room.
+const SHOUT={
+ town:{f0:720,tract:.72,breath:.035,rasp:.02,drive:1.2},
+ ghost:{f0:640,tract:.78,breath:.05,rasp:.02,drive:1.15},
+ sideshow:{f0:820,tract:.68,breath:.035,rasp:.03,drive:1.25},
+ trunk:{f0:580,tract:.82,breath:.04,rasp:.03,drive:1.3}
+};
+// [onset, "ee", tail] in Hz before the tract scale, then Q and level: F1 to F4 of "ee"
+const EE=[[[290,390,470],3.2,1],[[2650,2300,2000],9,.75],[[3150,3000,2750],10,.5],[[3800,3700,3600],10,.2]];
+const TAKES=[{pan:0,delay:0,cents:0,gain:1,tract:1}];
+const voiceRes=new WeakMap();
+function shoutRes(c){let r=voiceRes.get(c);if(r)return r;const real=new Float32Array(64),imag=new Float32Array(64);
+ for(let h=1;h<64;h++)imag[h]=1/h**1.2;
+ const curves=new Map(),noise=sound.resources(c).noise;r={glottal:c.createPeriodicWave(real,imag),noise,curve(k){const q=Math.round(k*10);if(!curves.has(q)){const a=new Float32Array(2049);for(let i=0;i<a.length;i++){const x=i/1024-1;a[i]=Math.tanh(x*q/10)/Math.tanh(q/10);}curves.set(q,a);}return curves.get(q);}};
+ voiceRes.set(c,r);return r;}
 function renderShout(c,bus,t,opts={},frequency=440,onEnd){
- const profile=YEE_VOICES[opts.kit]||YEE_VOICES.town,kit=sound.drumKits?.[opts.kit]||sound.drumKits?.town;
+ const prof=SHOUT[opts.kit]||SHOUT.town,kit=sound.drumKits?.[opts.kit]||sound.drumKits?.town,r=shoutRes(c);
  const rootHz=Number.isFinite(frequency)&&frequency>0?frequency:440;
- const aligned=rootHz*2**Math.round(Math.log2(680/rootHz));
- const fundamental=Math.max(430,Math.min(1080,aligned*2**((profile.cents+(YEE_ACCENTS[opts.drum]||0))/1200)));
- const owned=[],sources=[],node=n=>(owned.push(n),n),amp=node(c.createGain()),presence=node(c.createGain()),carrier=node(c.createOscillator());
- const duration=.78,rawLevel=kit?.yeeLevel,level=Math.max(.55,Math.min(.82,Number.isFinite(rawLevel)?rawLevel:.7));
- // Compensate the upper-register formant loss per kit, never the drums.
- // This node remains upstream of the main lead bus and the peak guard.
- presence.gain.value=Math.max(1.1,Math.min(2.2,profile.presence*(fundamental/680)**.55));
- amp.connect(presence);presence.connect(bus);amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(level*.88,t+.012);
- amp.gain.linearRampToValueAtTime(level,t+.065);amp.gain.linearRampToValueAtTime(level*.94,t+.42);
- amp.gain.linearRampToValueAtTime(level*.62,t+.6);amp.gain.exponentialRampToValueAtTime(.0001,t+duration);
- carrier.type='sawtooth';
- if(c.createPeriodicWave&&carrier.setPeriodicWave){
-  let waves=shoutWaves.get(c);if(!waves){waves=new Map();shoutWaves.set(c,waves);}
-  let wave=waves.get(profile);if(!wave){const real=new Float32Array(40),imag=new Float32Array(40);
-   for(let h=1;h<40;h++)imag[h]=(h%2?1:.82)/h**profile.edge;
-   wave=c.createPeriodicWave(real,imag);waves.set(profile,wave);
-  }carrier.setPeriodicWave(wave);
+ // the key's root or fifth, whichever octave of them sits nearest the kit's voice
+ const near=x=>x*2**Math.round(Math.log2(prof.f0/x)),pick=[near(rootHz),near(rootHz*1.5)].sort((x,y)=>Math.abs(Math.log2(x/prof.f0))-Math.abs(Math.log2(y/prof.f0)))[0];
+ const fundamental=pick*2**((YEE_ACCENTS[opts.drum]||0)/2400);
+ const owned=[],sources=[],node=n=>(owned.push(n),n),rawLevel=kit?.yeeLevel,level=Math.max(.55,Math.min(.82,Number.isFinite(rawLevel)?rawLevel:.7));
+ const out=node(c.createGain());out.gain.value=level*.9;out.connect(bus);
+ // the room: a short stereo slap, darker than the voice
+ const wet=node(c.createGain()),fb=node(c.createGain()),lp=node(c.createBiquadFilter());wet.gain.value=.08;fb.gain.value=.14;lp.type='lowpass';lp.frequency.value=4200;
+ const merger=c.createChannelMerger?node(c.createChannelMerger(2)):null;out.connect(lp);
+ [.083,.121].forEach((d,i)=>{const dl=node(c.createDelay(.3));dl.delayTime.value=d;lp.connect(dl);dl.connect(fb);if(merger)dl.connect(merger,0,i);else dl.connect(wet);});
+ fb.connect(lp);if(merger)merger.connect(wet);wet.connect(bus);
+ const end=t+.76;
+ for(const take of TAKES){
+  const t0=t+take.delay,f=fundamental*2**(take.cents/1200),tract=prof.tract*take.tract,stopAt=end+take.delay+.03;
+  const src=node(c.createOscillator());src.setPeriodicWave(r.glottal);
+  src.frequency.setValueAtTime(f*.86,t0);src.frequency.exponentialRampToValueAtTime(f*1.08,t0+.06);src.frequency.linearRampToValueAtTime(f,t0+.24);
+  src.frequency.exponentialRampToValueAtTime(f*.78,t0+.74);
+  // a living pitch: two slow wobbles and a vibrato that blooms as the note holds
+  for(const [hz,cents] of [[5.3,6],[7.9,4]]){const o=node(c.createOscillator()),g=node(c.createGain());o.frequency.value=hz*(1+take.delay*3);g.gain.value=cents;o.connect(g);g.connect(src.detune);sources.push(o);}
+  const vib=node(c.createOscillator()),vd=node(c.createGain());vib.frequency.value=6.6;vd.gain.setValueAtTime(0,t0);vd.gain.setValueAtTime(0,t0+.24);vd.gain.linearRampToValueAtTime(30,t0+.55);vib.connect(vd);vd.connect(src.detune);sources.push(vib);
+  // rasp: a touch of amplitude at half the pitch, the edge of a strained shout
+  const rasp=node(c.createGain()),rm=node(c.createOscillator()),rd=node(c.createGain());rasp.gain.value=1-prof.rasp;rm.frequency.setValueAtTime(f*.41,t0);rm.frequency.exponentialRampToValueAtTime(f*.52,t0+.07);rm.frequency.exponentialRampToValueAtTime(f*.39,t0+.74);rd.gain.value=prof.rasp;rm.connect(rd);rd.connect(rasp.gain);src.connect(rasp);sources.push(src,rm);
+  const breath=node(c.createBufferSource()),bh=node(c.createBiquadFilter()),bg=node(c.createGain());breath.buffer=r.noise;breath.loop=true;bh.type='highpass';bh.frequency.value=1100;
+  bg.gain.setValueAtTime(0,t0);bg.gain.linearRampToValueAtTime(prof.breath*3,t0+.012);bg.gain.exponentialRampToValueAtTime(prof.breath,t0+.07);bg.gain.setValueAtTime(prof.breath,t0+.55);bg.gain.linearRampToValueAtTime(prof.breath*1.4,t0+.72);
+  breath.connect(bh);bh.connect(bg);sources.push(breath);
+  const sum=node(c.createGain()),drive=node(c.createWaveShaper()),amp=node(c.createGain());drive.curve=r.curve(prof.drive);drive.oversample='2x';sum.connect(drive);
+  // the pinch: thin lows, a nasal dip near 1 kHz, a lift where a cartoon voice twangs
+  const thin=node(c.createBiquadFilter()),dip=node(c.createBiquadFilter()),twang=node(c.createBiquadFilter());thin.type='highpass';thin.frequency.value=f*.7;thin.Q.value=.7;
+  dip.type='peaking';dip.frequency.value=1050;dip.Q.value=2.5;dip.gain.value=-8;twang.type='peaking';twang.frequency.value=Math.min(2600/tract*.85,c.sampleRate*.4);twang.Q.value=1.3;twang.gain.value=6;
+  drive.connect(thin);thin.connect(dip);dip.connect(twang);twang.connect(amp);
+  EE.forEach(([hz,q,gain])=>{const bp=node(c.createBiquadFilter()),g=node(c.createGain());bp.type='bandpass';bp.Q.value=q;const fq=x=>Math.min(x/tract,c.sampleRate*.45);
+   bp.frequency.setValueAtTime(fq(hz[0]),t0);bp.frequency.exponentialRampToValueAtTime(fq(hz[1]),t0+.06);bp.frequency.setValueAtTime(fq(hz[1]),t0+.5);bp.frequency.exponentialRampToValueAtTime(fq(hz[2]),t0+.74);
+   g.gain.value=gain*Math.sqrt(q);rasp.connect(bp);bg.connect(bp);bp.connect(g);g.connect(sum);});
+  amp.gain.setValueAtTime(0,t0);amp.gain.linearRampToValueAtTime(.9*take.gain,t0+.025);amp.gain.linearRampToValueAtTime(take.gain,t0+.08);amp.gain.linearRampToValueAtTime(.9*take.gain,t0+.5);
+  amp.gain.linearRampToValueAtTime(.6*take.gain,t0+.64);amp.gain.exponentialRampToValueAtTime(.0001,t0+.76);
+  if(c.createStereoPanner){const pan=node(c.createStereoPanner());pan.pan.value=take.pan;amp.connect(pan);pan.connect(out);}else amp.connect(out);
+  amp.gain.value=0;bg.gain.value=0;for(const n of sources.slice(-6)){n.__startAt=t0;n.__stopAt=stopAt;}
  }
- carrier.frequency.setValueAtTime(fundamental*.91,t);
- carrier.frequency.exponentialRampToValueAtTime(fundamental*1.025,t+.042);
- carrier.frequency.exponentialRampToValueAtTime(fundamental,t+.095);
- carrier.frequency.setValueAtTime(fundamental,t+.46);
- carrier.frequency.exponentialRampToValueAtTime(fundamental*.945,t+duration);
- // Broad overlapping resonances keep a bright EE across every root and kit.
- profile.vowel.forEach((hz,j)=>{const f=node(c.createBiquadFilter()),g=node(c.createGain());
-  const target=Math.min(hz,c.sampleRate*.42);f.type='bandpass';f.Q.value=[1.05,2.8,3.5][j];
-  f.frequency.setValueAtTime(target*[.8,.82,.92][j],t);
-  f.frequency.exponentialRampToValueAtTime(target,t+.048);g.gain.value=[.58,.55,.32][j];
-  carrier.connect(f);f.connect(g);g.connect(amp);
- });
- const body=node(c.createGain());body.gain.value=.11;carrier.connect(body);body.connect(amp);
- const vibrato=node(c.createOscillator()),depth=node(c.createGain());vibrato.type='sine';
- vibrato.frequency.value=profile.vibrato;depth.gain.setValueAtTime(0,t);
- depth.gain.setValueAtTime(0,t+.09);depth.gain.linearRampToValueAtTime(10,t+.2);
- depth.gain.linearRampToValueAtTime(17,t+.58);vibrato.connect(depth);depth.connect(carrier.detune);
- sources.push(carrier,vibrato);let left=sources.length,ended=false;
- const v={end:t+duration+.025,sources,nodes:owned,fundamental,stop(){if(ended)return;
-  if(amp.gain.cancelAndHoldAtTime)amp.gain.cancelAndHoldAtTime(c.currentTime);
-  else{const value=amp.gain.value;amp.gain.cancelScheduledValues(c.currentTime);amp.gain.setValueAtTime(Math.max(0,value),c.currentTime);}
-  amp.gain.setTargetAtTime(0,c.currentTime,.005);
-  sources.forEach(n=>{try{n.stop(c.currentTime+.03);}catch(e){}});
- }};
- sources.forEach(n=>{n.onended=()=>{if(!--left&&!ended){ended=true;owned.forEach(x=>x.disconnect());onEnd?.(v);}};n.start(t);n.stop(v.end);});
+ let left=sources.length,ended=false;
+ const v={end:end+.75,sources,nodes:owned,fundamental,stop(){if(ended)return;const now=c.currentTime;
+  if(out.gain.cancelAndHoldAtTime)out.gain.cancelAndHoldAtTime(now);else{out.gain.cancelScheduledValues(now);out.gain.setValueAtTime(out.gain.value,now);}
+  out.gain.setTargetAtTime(0,now,.006);wet.gain.setTargetAtTime(0,now,.006);sources.forEach(n=>{try{n.stop(now+.04);}catch(e){}});}};
+ sources.forEach(n=>{n.onended=()=>{if(!--left&&!ended){ended=true;setTimeout(()=>owned.forEach(x=>{try{x.disconnect();}catch(e){}}),800);onEnd?.(v);}};n.start(n.__startAt??t);n.stop(n.__stopAt||end+.06);});
  return v;
 }
+// music234: the drums are the faceplate's own HYPHY kit (_DP_KITS.HYPHY, the kit the face's
+// beat plays), at its balance, stamped for their step; each rack kit retunes it.
+const KIT_TUNE={
+ town:{},
+ ghost:{kick:{f0:104,f1:44,dur:.42,drive:2.1},snare:{bf:172,nHz:2100,nHz2:4300,nDur:.13,crush:7},clap:{hz:1450,tail:.26,crush:7},hihat:{bp:8200,hp:5400,amp:.2,crush:9},openhat:{bp:8000,hp:5200,crush:9},ride:{bp:8000,hp:5200,crush:9}},
+ sideshow:{kick:{f0:136,f1:56,dur:.24,drive:3,clickHz:1800,clickAmp:.62},snare:{bf:214,nHz:3300,nHz2:6800,nDur:.085,nAmp:.6},clap:{hz:2200,q:1.4,tail:.15},hihat:{bp:11600,hp:7800,amp:.27},openhat:{bp:11200,hp:7400}},
+ trunk:{kick:{f0:88,f1:41,pt:.07,dur:.62,drive:2.9,clickAmp:.32},snare:{bf:182,nDur:.11},clap:{hz:1600,tail:.22},hihat:{dur:.024,amp:.21}}
+};
+const ROLL_TUNE={nDur:.07,bDur:.07};
+function kitHit(kitId,name,t,vel,extra){
+ const c=typeof ctx!=='undefined'?ctx:null;if(!c||typeof drumBus==='undefined'||!drumBus)return;
+ const base=typeof _DP_KITS!=='undefined'?_DP_KITS.HYPHY?.[name]:null,real=drumBus,hit=c.createGain();
+ hit.gain.value=Math.max(0,Math.min(1.2,vel))*(root.L99Balance223?.drum('HYPHY',name)??1);hit.connect(real);
+ const fire=()=>{drumBus=hit;try{if(base)base[0]({...base[1],...(KIT_TUNE[kitId]?.[name]||{}),...(extra||{})});else if(typeof playDrumGeneric==='function')playDrumGeneric(name);}finally{drumBus=real;}};
+ if(root.L99Clock&&t>c.currentTime+.001)root.L99Clock.at(t,fire);else fire();
+ setTimeout(()=>{try{hit.disconnect();}catch(e){}},Math.max(0,t-c.currentTime)*1000+2600);
+}
+// music234: an 808 under the kick: a sine with a soft drive (so a phone speaker hears its
+// overtones), a small drop into the note, a glide when it moves, cut by the next note.
+let curve808=null;
+function sub808(c,bus,t,hz,dur,level,from){
+ if(!curve808){curve808=new Float32Array(2049);for(let i=0;i<2049;i++){const x=i/1024-1;curve808[i]=Math.tanh(x*1.9)/Math.tanh(1.9);}}
+ const o=c.createOscillator(),shape=c.createWaveShaper(),lp=c.createBiquadFilter(),amp=c.createGain(),nodes=[o,shape,lp,amp];o.type='sine';shape.curve=curve808;lp.type='lowpass';lp.frequency.value=640;
+ if(from>0){o.frequency.setValueAtTime(from,t);o.frequency.exponentialRampToValueAtTime(hz,t+.07);}else{o.frequency.setValueAtTime(hz*1.14,t);o.frequency.exponentialRampToValueAtTime(hz,t+.04);}
+ const hold=Math.max(.06,dur),tail=Math.min(1.1,hold+.25);
+ amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(level,t+.004);amp.gain.setTargetAtTime(level*.3,t+.04,hold*.45);amp.gain.setTargetAtTime(0,t+hold,.05);
+ o.connect(shape);shape.connect(lp);lp.connect(amp);amp.connect(bus);o.start(t);o.stop(t+tail);
+ let gone=false;o.onended=()=>{gone=true;nodes.forEach(n=>{try{n.disconnect();}catch(e){}});};
+ const cut=at=>{if(gone)return;at=Math.max(at,c.currentTime);if(amp.gain.cancelAndHoldAtTime)amp.gain.cancelAndHoldAtTime(at);else amp.gain.cancelScheduledValues(at);amp.gain.setTargetAtTime(0,at,.008);try{o.stop(at+.06);}catch(e){}};
+ return {end:t+tail,release:cut,stop:()=>cut(c.currentTime)};
+}
+// music234: the hyphy whistle, played once every two bars: a scoop up, a held note that
+// blooms into vibrato, a fall, with a little breath.
+function whistle(c,bus,t,hz){
+ const o=c.createOscillator(),vib=c.createOscillator(),vd=c.createGain(),amp=c.createGain(),n=c.createBufferSource(),bp=c.createBiquadFilter(),ng=c.createGain(),nodes=[o,vib,vd,amp,n,bp,ng];
+ o.type='sine';o.frequency.setValueAtTime(hz*.8,t);o.frequency.exponentialRampToValueAtTime(hz,t+.08);o.frequency.setValueAtTime(hz,t+.34);o.frequency.exponentialRampToValueAtTime(hz*.9,t+.5);
+ vib.frequency.value=5.8;vd.gain.setValueAtTime(0,t+.12);vd.gain.linearRampToValueAtTime(18,t+.3);vib.connect(vd);vd.connect(o.detune);
+ amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(.05,t+.03);amp.gain.setValueAtTime(.05,t+.34);amp.gain.exponentialRampToValueAtTime(.0001,t+.52);o.connect(amp);amp.connect(bus);
+ n.buffer=sound.resources(c).noise;bp.type='bandpass';bp.frequency.value=Math.min(hz*2.2,c.sampleRate*.4);bp.Q.value=1.6;ng.gain.setValueAtTime(0,t);ng.gain.linearRampToValueAtTime(.006,t+.02);ng.gain.exponentialRampToValueAtTime(.0001,t+.5);n.connect(bp);bp.connect(ng);ng.connect(bus);
+ [o,vib,n].forEach(x=>{x.start(t);x.stop(t+.55);});let gone=false;o.onended=()=>{gone=true;nodes.forEach(x=>{try{x.disconnect();}catch(e){}});};
+ return {end:t+.55,stop(){if(gone)return;const now=c.currentTime;amp.gain.cancelScheduledValues(now);amp.gain.setTargetAtTime(0,now,.005);ng.gain.cancelScheduledValues(now);ng.gain.setTargetAtTime(0,now,.005);[o,vib,n].forEach(x=>{try{x.stop(now+.03);}catch(e){}});}};
+}
+function fold(hz,lo){if(!(hz>0))hz=lo;while(hz>=lo*2)hz/=2;while(hz<lo)hz*=2;return hz;}
 const DRUM_RACK=[
- {id:'ride',label:'RIDE',icon:'◍'}, {id:'kick',label:'KICK',icon:'●'}, {id:'hihat',label:'HI-HAT',icon:'✕'},
- {id:'openhat',label:'OPEN HAT',icon:'◔'}, {id:'cymbal',label:'CRASH',icon:'◯'}, {id:'rim',label:'RIM',icon:'○'},
- {id:'clap',label:'CLAP',icon:'❋'}, {id:'snare',label:'SNARE',icon:'▬'}, {id:'lotom',label:'LO-TOM',icon:'▼'},
- {id:'shaker',label:'SHAKER',icon:'◇'}, {id:'cowbell',label:'COWBELL',icon:'◆'}, {id:'hitom',label:'HI-TOM',icon:'▲'},
- {id:'jump',label:'JUMP',icon:'↑'}, {id:'perc',label:'PERC',icon:'◆'}
+ {id:'kick',label:'KICK',short:'KICK',icon:'●'}, {id:'snare',label:'SNARE',short:'SNARE',icon:'▬'}, {id:'clap',label:'CLAP',short:'CLAP',icon:'❋'},
+ {id:'rim',label:'RIM',short:'RIM',icon:'○'}, {id:'hihat',label:'HI-HAT',short:'HAT',icon:'✕'}, {id:'openhat',label:'OPEN HAT',short:'OPEN',icon:'◔'},
+ {id:'ride',label:'RIDE',short:'RIDE',icon:'◍'}, {id:'cymbal',label:'CRASH',short:'CRASH',icon:'◯'}, {id:'lotom',label:'LO-TOM',short:'LO TOM',icon:'▼'},
+ {id:'hitom',label:'HI-TOM',short:'HI TOM',icon:'▲'}, {id:'cowbell',label:'COWBELL',short:'BELL',icon:'◆'}, {id:'shaker',label:'SHAKER',short:'SHAKE',icon:'◇'},
+ {id:'perc',label:'PERC',short:'PERC',icon:'◈'}, {id:'jump',label:'JUMP',short:'JUMP',icon:'↑'}
 ];
 const KIT_RACK=[
  {id:'town',label:'TOWN KIT',sub:'wide knock + bright clap'},
@@ -8178,82 +8434,76 @@ function groove(mode){
  const motifs=[[0,0,7,0,4,0,6,0],[0,7,0,4,0,0,6,4],[0,0,4,0,7,6,0,4]],slots=[[0,3,6,10,14,16,19,22,27,30],[0,6,9,14,16,22,25,30],[0,2,7,10,14,16,18,23,26,31]],pocket=mode%3;
  return Array.from({length:32},(_,i)=>({on:slots[pocket].includes(i),degree:motifs[pocket][Math.floor(i/2)%8],gate:i%8===0?.85:.4,velocity:i%4===0?.95:.74,ratchet:1,color:.35,kick:beat.kick[i%16]||0,snare:(beat.snare[i%16]||0)*.95,hat:(beat.hihat[i%16]||0)*(i%2===0?.48:.26)}));
 }
-function mount(panel,onClose){if(current)current.dispose();const beats=beatCatalog();let running=false,starting=false,disposed=false,timer=0,token=0,next=0,step=0,mode=typeof currentBeat==='number'&&beats[currentBeat]?currentBeat:0,queuedMode=null,kitIndex=0,activeDrum='kick',roll=false,ghost=false,drop=false,ctxRef,config,bank,events=new Set(),rollEvents=new Set(),timeline=[],pointers=new Map(),keys=new Set();
+function mount(panel,onClose){if(current)current.dispose();const beats=beatCatalog();let running=false,starting=false,disposed=false,timer=0,token=0,next=0,step=0,mode=typeof currentBeat==='number'&&beats[currentBeat]?currentBeat:0,queuedMode=null,kitIndex=0,activeDrum='kick',roll=false,ghost=false,drop=false,ctxRef,config,bank,events=new Set(),rollEvents=new Set(),timeline=[],pointers=new Map(),keys=new Set(),rollN=0,lastBass=null;
  // Build the entire tree once. Reading innerHTML normalizes empty attributes;
  // string-replacing serialized data-run was silently dropping the whole rack.
- panel.innerHTML=`<div class="sp-head"><span class="sp-title">YEEE MACHINE</span><span class="sp-sub">BAY AREA / LIVE</span><button type="button" class="sp-close">CLOSE</button></div>
- <div class="yee182"><div class="yee-meter" aria-hidden="true">${Array.from({length:16},(_,i)=>'<i data-led="'+i+'"></i>').join('')}</div>
- <div class="yee-rack-head"><strong>HYPHY BEATS</strong><span data-beat-label></span></div>
- <div class="yee-beat-nav"><button type="button" data-beat-prev aria-label="Previous Hyphy beat">‹</button><div class="yee-modes" data-beat-scroller role="group" aria-label="Hyphy beats"></div><button type="button" data-beat-next aria-label="Next Hyphy beat">›</button></div>
- <div class="yee-rack-hint">SWIPE LEFT FOR MORE BEATS · OR USE ‹ ›</div>
- <button type="button" class="yee-transport" data-run aria-pressed="false">▶ PLAY BEAT</button>
- <div class="yee-pads"><button data-action="yeee"><strong>YEEE!</strong><small>TAP · FORMANT SHOUT</small></button><button data-action="roll"><strong>GO DUMB</strong><small>HOLD · TIGHT ROLL</small></button><button data-action="ghost"><strong>GHOST IT</strong><small>HOLD · STRIP THE BEAT</small></button><button data-action="drop"><strong>BRING IT BACK</strong><small>TAP · NEXT-BEAT DROP</small></button></div>
- <div class="yee-rack-head"><strong>DRUM RACK · 14 SOUNDS</strong><span data-kit-label>TOWN KIT</span></div>
- <div class="yee-kit-nav"><button type="button" data-kit-prev aria-label="Previous drum kit">‹</button><div data-kit-strip></div><button type="button" data-kit-next aria-label="Next drum kit">›</button></div>
- <div class="yee-drum-nav"><button type="button" data-drum-prev aria-label="Show previous drums">‹</button><div class="yee-drum-scroller" data-drum-scroller role="group" aria-label="Hyphy drum sounds"><div class="yee-drum-track" data-drum-track></div></div><button type="button" data-drum-next aria-label="Show more drums">›</button></div>
- <div class="yee-rack-hint">SWIPE LEFT OR USE ‹ › · TAP TO HEAR A DRUM AND CHANGE THE YEEE VOICE</div>
+ panel.innerHTML=`<div class="sp-head yee-head"><span class="sp-title">YEEE MACHINE</span><span class="sp-sub">THE BAY</span><button type="button" class="sp-close">CLOSE</button></div>
+ <div class="yee182">
+ <div class="yee-deck"><button type="button" class="yee-play" data-run aria-pressed="false"></button><div class="yee-beat" role="group" aria-label="Hyphy beat"><button type="button" data-beat-prev aria-label="Previous beat">‹</button><div class="yee-beat-name"><small data-beat-label></small><strong data-beat-name></strong></div><button type="button" data-beat-next aria-label="Next beat">›</button></div></div>
+ <div class="yee-meter" aria-hidden="true">${Array.from({length:16},(_,i)=>'<i data-led="'+i+'"></i>').join('')}</div>
+ <div class="yee-pads"><button data-action="yeee"><strong>YEEE!</strong><small>TAP · SHOUT</small></button><button data-action="roll"><strong>GO DUMB</strong><small>HOLD · SNARE ROLL</small></button><button data-action="ghost"><strong>GHOST IT</strong><small>HOLD · STRIP DOWN</small></button><button data-action="drop"><strong>BRING IT BACK</strong><small>TAP · NEXT BEAT</small></button></div>
+ <div class="yee-sec"><div class="yee-label"><b>KIT</b><span data-kit-label></span></div><div class="yee-seg" data-kit-strip role="group" aria-label="Drum kit"></div></div>
+ <div class="yee-sec"><div class="yee-label"><b>DRUMS</b><span>TAP TO HEAR · VOICES THE YEEE</span></div><div class="yee-drums" data-drum-track role="group" aria-label="Hyphy drum sounds"></div></div>
  <div class="yee-macros" data-audio-effect><label>KNOCK <output data-knock-value>65%</output><input data-knock aria-label="Knock" type="range" min="0" max="100" value="65"></label><label>SWING <output data-swing-value>28%</output><input data-swing aria-label="Swing" type="range" min="0" max="100" value="28"></label></div>
- <p data-status role="status">Tap PLAY BEAT for the groove, or YEEE! for a shout.</p></div>`;
- const el=q=>panel.querySelector(q),run=el('[data-run]'),status=el('[data-status]'),knock=el('[data-knock]'),swing=el('[data-swing]'),track=el('[data-drum-track]'),scroller=el('[data-drum-scroller]'),kitLabel=el('[data-kit-label]'),beatScroller=el('[data-beat-scroller]');
- beatScroller.innerHTML=beats.map((_,i)=>'<button type="button" data-mode="'+i+'" aria-pressed="false"></button>').join('');
- panel.querySelectorAll('[data-mode]').forEach((b,i)=>b.textContent=beats[i].name);
- track.innerHTML=DRUM_RACK.map(d=>'<button type="button" class="yee-drum" data-drum="'+d.id+'" aria-pressed="'+(d.id===activeDrum)+'"><span>'+d.icon+'</span><small>'+d.label+'</small></button>').join('');
- const kitStrip=el('[data-kit-strip]');kitStrip.innerHTML=KIT_RACK.map((k,i)=>'<button type="button" data-kit="'+i+'" aria-pressed="'+(i===kitIndex)+'">'+k.label+'</button>').join('');
+ <p data-status role="status">Play a beat, or tap YEEE! for a shout.</p></div>`;
+ const el=q=>panel.querySelector(q),run=el('[data-run]'),status=el('[data-status]'),knock=el('[data-knock]'),swing=el('[data-swing]'),track=el('[data-drum-track]'),kitLabel=el('[data-kit-label]'),beatName=el('[data-beat-name]'),beatBox=el('.yee-beat');
+ track.innerHTML=DRUM_RACK.map(d=>'<button type="button" class="yee-drum" data-drum="'+d.id+'" aria-label="'+d.label+'" title="'+d.label+'" aria-pressed="'+(d.id===activeDrum)+'"><span aria-hidden="true">'+d.icon+'</span><small aria-hidden="true">'+d.short+'</small></button>').join('');
+ const kitStrip=el('[data-kit-strip]');kitStrip.innerHTML=KIT_RACK.map((k,i)=>'<button type="button" data-kit="'+i+'" aria-label="'+k.label+'" aria-pressed="'+(i===kitIndex)+'">'+k.label.replace(' KIT','')+'</button>').join('');
  function say(s){status.textContent=s;}
+ function setRun(state){run.innerHTML=state==='stop'?'<i aria-hidden="true">■</i>STOP':state==='wait'?'<i aria-hidden="true">…</i>WAIT':'<i aria-hidden="true">▶</i>PLAY';}
+ setRun('play');
  function kit(){return KIT_RACK[kitIndex]||KIT_RACK[0];}
  function audioConfig(drum=activeDrum){return {...(config||{}),kit:kit().id,drum,bpm,knock:+knock.value/100};}
  function markRack(){
-  kitLabel.textContent=kit().label+' · '+kit().sub;
+  kitLabel.textContent=kit().sub;
   panel.querySelectorAll('[data-kit]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.kit===kitIndex)));
   panel.querySelectorAll('[data-drum]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.drum===activeDrum)));
-  panel.querySelectorAll('[data-action="yeee"] small').forEach(b=>b.textContent='TAP · '+DRUM_RACK.find(d=>d.id===activeDrum).label+' VOICE');
+  panel.querySelectorAll('[data-action="yeee"] small').forEach(b=>b.textContent='TAP · '+DRUM_RACK.find(d=>d.id===activeDrum).short+' VOICE');
  }
  function audition(name){
   activeDrum=name;markRack();
   const c=ctxRef;if(!c||c.state!=='running')return;
-  const t=c.currentTime+.006;const v=sound.hit(c,drumBus,name,t,.95,{...audioConfig(name),punch:.72});v.end=t+.7;collect(v);
+  kitHit(kit().id,name,c.currentTime+.006,.95);
   say(kit().label+' · '+DRUM_RACK.find(d=>d.id===name).label);
  }
  function allowed(){return !disposed&&!document.hidden&&currentFace==='HYPHY'&&(!root.L99Keyboard149||root.L99Keyboard149.world()==='bard');}
  function collect(v){events.add(v);return v;}
  function oneShot(kind,t,opts=audioConfig()){const c=ctxRef,bus=bank;
- if(kind==='yeee')return collect(renderShout(c,bus,t,opts,getFreq(0,1,false),v=>events.delete(v)));
- const owned=[],sources=[],node=n=>(owned.push(n),n),amp=node(c.createGain());amp.connect(bus);const duration=kind==='whistle'?.22:.12,level=kind==='whistle'?.11:.10;
- amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(level,t+.008);amp.gain.exponentialRampToValueAtTime(.0001,t+duration);
- const accents={ride:1.18,kick:.84,hihat:1.42,openhat:1.56,cymbal:1.82,rim:1.1,clap:1.28,snare:1.06,lotom:.74,shaker:1.35,cowbell:1.68,hitom:.93,jump:.68,perc:1.22};
- const base=getFreq(kind==='whistle'?7:0,1,false)*(accents[opts.drum]||1);
- for(const f of kind==='bell'?[540,800]:[Math.min(3000,base*2)]){const o=node(c.createOscillator());o.type=kind==='bell'?'square':'sine';o.frequency.setValueAtTime(f,t);if(kind==='whistle')o.frequency.exponentialRampToValueAtTime(f*.89,t+duration);o.connect(amp);sources.push(o);}
- let left=sources.length;const v={end:t+duration+.03,stop(){amp.gain.cancelScheduledValues(c.currentTime);amp.gain.setTargetAtTime(0,c.currentTime,.005);sources.forEach(n=>{try{n.stop(c.currentTime+.03)}catch(e){}});}};sources.forEach(n=>{n.onended=()=>{if(!--left){owned.forEach(x=>x.disconnect());events.delete(v);}};n.start(t);n.stop(v.end);});return collect(v);}
- function releaseRoll(){roll=false;rollEvents.forEach(v=>v.stop?.());rollEvents.clear();}
- function stop(){releaseRoll();token++;starting=false;running=false;clearInterval(timer);events.forEach(v=>v.stop?.());events.clear();timeline=[];roll=ghost=drop=false;queuedMode=null;markModes();pointers.clear();keys.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));panel.querySelectorAll('[data-led]').forEach(b=>b.classList.remove('lit'));run.textContent='▶ PLAY BEAT';run.setAttribute('aria-pressed','false');if(bank){bank.disconnect();bank=null;}root._specialDrumsActive=false;say('Stopped.');}
+ if(kind==='yeee')return collect(renderShout(c,bus,t,opts,getFreq(0,1,false),v=>events.delete(v)));}
+ function releaseRoll(){roll=false;rollN=0;rollEvents.forEach(v=>v.stop?.());rollEvents.clear();}
+ function stop(){releaseRoll();lastBass?.stop();lastBass=null;token++;starting=false;running=false;clearInterval(timer);events.forEach(v=>v.stop?.());events.clear();timeline=[];roll=ghost=drop=false;queuedMode=null;markModes();pointers.clear();keys.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));panel.querySelectorAll('[data-led]').forEach(b=>b.classList.remove('lit'));setRun('play');run.setAttribute('aria-pressed','false');if(bank){bank.disconnect();bank=null;}root._specialDrumsActive=false;say('Stopped.');}
  async function ready(){const ticket=token;initAudio();const c=ctx;if(c.state!=='running')await c.resume();if(c.state!=='running')throw Error('Tap again to enable audio.');if(ticket!==token||!allowed())throw Error('Playback cancelled.');ctxRef=c;if(!bank){bank=c.createGain();bank.gain.value=.8;bank.connect(masterGain);}return c;}
- async function start(){if(running||starting){stop();return false;}starting=true;const ticket=++token;run.textContent='ENABLING AUDIO…';try{await ready();if(ticket!==token||!allowed())return false;root.L99Studio181?.stop();if(sequencerRunning)stopSequencer();config={...root.L99Studio181.valid(null,'HYPHY'),sound:'SUB-PRESSURE',pattern:groove(mode),kit:kit().id,bpm,glide:.16,sub:.68,color:.42,drive:.35,mix:.8,automation:false,duck:.48};running=true;step=0;next=ctxRef.currentTime+.04;root._specialDrumsActive=true;run.textContent='■ STOP BEAT';run.setAttribute('aria-pressed','true');timer=setInterval(pump,25);say('Playing '+beats[mode].name+' · '+kit().label+' · '+bpm+' BPM');pump();return running;}catch(e){if(ticket===token){stop();say(e.message);}return false;}finally{if(ticket===token)starting=false;}}
+ async function start(){if(running||starting){stop();return false;}starting=true;const ticket=++token;setRun('wait');try{await ready();if(ticket!==token||!allowed())return false;root.L99Studio181?.stop();if(sequencerRunning)stopSequencer();config={kit:kit().id};running=true;step=0;next=ctxRef.currentTime+.04;root._specialDrumsActive=true;setRun('stop');run.setAttribute('aria-pressed','true');timer=setInterval(pump,25);say('Playing '+beats[mode].name+' · '+kit().label+' · '+bpm+' BPM');pump();return running;}catch(e){if(ticket===token){stop();say(e.message);}return false;}finally{if(ticket===token)starting=false;}}
  function pump(){try{tick();}catch(e){stop();say('Playback stopped: '+e.message);}}
- function tick(){if(!running)return;if(!allowed()||ctxRef.state!=='running'){stop();return;}const c=ctxRef;if(next<c.currentTime-.04)next=c.currentTime+.025;while(next<c.currentTime+.075){const i=step%32,dt=60/bpm/4,beat=i%4===0;if(queuedMode!==null&&i%16===0){mode=queuedMode;queuedMode=null;config.pattern=groove(mode);markModes();say('Playing '+beats[mode].name);}config.bpm=bpm;config.punch=+knock.value/100;config.drive=.15+config.punch*.4;config.mix=.58+config.punch*.25;const t=next+(i%2?dt*(+swing.value/100)*.42:0),s={...config.pattern[i]};
- if(ghost){s.on=false;s.kick=s.snare=0;s.hat=i%4===0?.25:0;}
- if(roll&&!ghost){s.snare=s.hat=0;const velocity=[.52,.18,.30,.18][i%4]*config.mix;const h=sound.hit(c,drumBus,'rollsnare',next,velocity,{...config,punch:.35});h.end=next+.12;rollEvents.add(h);collect(h);}
- if(drop&&beat){releaseRoll();drop=false;ghost=false;s.on=true;s.degree=0;s.kick=1;s.velocity=1;oneShot('yeee',t,audioConfig());say('YEEE!');}
- const pattern=config.pattern.slice();pattern[i]=s;root.L99Studio181.renderStep(c,bank,drumBus,i,t,{...config,pattern},d=>getFreq(d,1,false)).forEach(collect);
- if(!ghost&&!roll){if([3,11,19,27].includes(i))oneShot('bell',t,audioConfig());if(beats[mode].name!=='GHOST RIDE'&&[14,30].includes(i))oneShot('whistle',t,audioConfig());}
+ function tick(){if(!running)return;if(!allowed()||ctxRef.state!=='running'){stop();return;}const c=ctxRef,ahead=Math.max(.075,Math.min(.3,root.L99Clock?.lead?.()||0));if(next<c.currentTime-.04)next=c.currentTime+.025;while(next<c.currentTime+ahead){const i=step%32,dt=60/bpm/4,onBeat=i%4===0;if(queuedMode!==null&&i%16===0){mode=queuedMode;queuedMode=null;markModes();say('Playing '+beats[mode].name);}
+ const b=beats[mode],j=i%16,k=kit().id,knockV=+knock.value/100,t=next+(i%2?dt*(+swing.value/100)*.42:0);
+ let kick=b.kick[j]?(onBeat?1:.84):0,snare=b.snare[j]?1:0,hat=b.hihat[j]?(i%2?.3:onBeat?.6:.48):0,dropNow=false;
+ if(ghost){kick=snare=0;hat=onBeat?.42:0;}
+ if(roll&&!ghost){snare=hat=0;rollN++;kitHit(k,'snare',next,Math.min(1,.3+rollN*.045)*(onBeat?1:.8),ROLL_TUNE);}
+ if(drop&&onBeat){releaseRoll();drop=false;ghost=false;dropNow=true;kick=1.1;}
+ if(kick)kitHit(k,'kick',t,kick*(.8+.24*knockV));
+ if(snare){kitHit(k,'snare',t,.84+.16*knockV);kitHit(k,'clap',t+.004,.5);}
+ if(hat)kitHit(k,'hihat',t,hat);
+ if(kick){const kicks=[];for(let n=0;n<16;n++)if(b.kick[n])kicks.push(n);const ord=kicks.indexOf(j),last=ord===kicks.length-1&&ord>=0,pocket=mode%3,bar2=i>=16;
+  const ratio=pocket===0&&bar2&&last?1.5:pocket===1&&ord===1?2:pocket===2&&bar2&&last?2:pocket===2&&bar2&&ord===kicks.length-2?1.5:1;
+  let gap=16;for(let n=1;n<=16;n++)if(b.kick[(j+n)%16]){gap=n;break;}
+  const hz=fold(getFreq(0,1,false),41)*ratio,from=lastBass&&lastBass.end>t&&lastBass.ratio!==ratio?lastBass.hz:0;lastBass?.release(t);
+  const v=sub808(c,bank,t,hz,Math.min(gap,k==='trunk'?6:4)*dt*.94,.36+.14*knockV,from);lastBass={...v,hz,ratio};collect(v);}
+ if(dropNow){kitHit(k,'cymbal',t,.5);oneShot('yeee',t,audioConfig());say('YEEE!');}
+ if(!ghost&&!roll&&i===28)collect(whistle(c,bank,t,fold(getFreq(0,1,false)*1.5,900)));
  timeline.push({time:t,step:i});step++;next+=dt;}
  while(timeline.length&&timeline[0].time<=c.currentTime){const p=timeline.shift();panel.querySelectorAll('[data-led]').forEach((b,i)=>b.classList.toggle('lit',i===p.step%16));}for(const v of events)if(v.end<c.currentTime){events.delete(v);rollEvents.delete(v);}
  }
- function markModes(){const selected=queuedMode??mode;panel.querySelectorAll('[data-mode]').forEach(b=>{b.setAttribute('aria-pressed',String(+b.dataset.mode===mode));b.classList.toggle('queued',+b.dataset.mode===queuedMode);});el('[data-beat-label]').textContent=(selected+1)+' / '+beats.length+(queuedMode!==null?' · QUEUED':'');el('[data-beat-prev]').disabled=selected===0;el('[data-beat-next]').disabled=selected===beats.length-1;}
- function selectMode(index){index=Math.max(0,Math.min(beats.length-1,index));if(running){queuedMode=index===mode?null:index;say(queuedMode===null?'Playing '+beats[mode].name:beats[index].name+' queued · next bar');}else{mode=index;queuedMode=null;say(beats[mode].name+' selected · tap PLAY BEAT');}markModes();const button=panel.querySelectorAll('[data-mode]')[index];if(button){const x=button.offsetLeft,right=x+button.offsetWidth;if(x<beatScroller.scrollLeft||right>beatScroller.scrollLeft+beatScroller.clientWidth)beatScroller.scrollTo({left:Math.max(0,x-8),behavior:'smooth'});}}
+ function markModes(){const selected=queuedMode??mode,queued=queuedMode!==null;beatName.textContent=beats[selected]?.name||'';el('[data-beat-label]').textContent=queued?'NEXT BAR':'BEAT '+(selected+1)+' / '+beats.length;beatBox.classList.toggle('queued',queued);}
+ function selectMode(index){index=(index%beats.length+beats.length)%beats.length;if(running){queuedMode=index===mode?null:index;say(queuedMode===null?'Playing '+beats[mode].name:beats[index].name+' queued · next bar');}else{mode=index;queuedMode=null;say(beats[mode].name+' selected · tap PLAY');}markModes();}
  panel.querySelectorAll('[data-drum]').forEach(b=>{b.onclick=async()=>{activeDrum=b.dataset.drum;markRack();try{await ready();audition(activeDrum);}catch(e){say(e.message);}};});
- panel.querySelector('[data-kit-prev]').onclick=()=>{kitIndex=(kitIndex+KIT_RACK.length-1)%KIT_RACK.length;if(config)config.kit=kit().id;markRack();say(kit().label+' selected · YEEE is voiced for '+activeDrum.toUpperCase());};
- panel.querySelector('[data-kit-next]').onclick=()=>{kitIndex=(kitIndex+1)%KIT_RACK.length;if(config)config.kit=kit().id;markRack();say(kit().label+' selected · YEEE is voiced for '+activeDrum.toUpperCase());};
- panel.querySelectorAll('[data-kit]').forEach(b=>b.onclick=()=>{kitIndex=+b.dataset.kit;if(config)config.kit=kit().id;markRack();say(kit().label+' selected · swipe the rack for all drums');});
- // Native overflow handles touch swipes and cancels taps when a finger scrolls.
- // Do not also mutate scrollLeft on touch pointermove: that fights Safari.
+ panel.querySelectorAll('[data-kit]').forEach(b=>b.onclick=()=>{kitIndex=+b.dataset.kit;if(config)config.kit=kit().id;markRack();say(kit().label+' · '+kit().sub);});
  el('[data-beat-prev]').onclick=()=>selectMode((queuedMode??mode)-1);
  el('[data-beat-next]').onclick=()=>selectMode((queuedMode??mode)+1);
- el('[data-drum-prev]').onclick=()=>scroller.scrollBy({left:-scroller.clientWidth*.85,behavior:'smooth'});
- el('[data-drum-next]').onclick=()=>scroller.scrollBy({left:scroller.clientWidth*.85,behavior:'smooth'});
  markRack();markModes();
  let lastYeee=-1;async function action(name,down){if(!down){if(name==='roll')releaseRoll();if(name==='ghost')ghost=false;return;}if(name==='yeee'){const ticket=token;try{await ready();if(ticket!==token||!allowed())return;if(ctxRef.currentTime-lastYeee<.14)return;lastYeee=ctxRef.currentTime;oneShot('yeee',ctxRef.currentTime+.006,audioConfig());say('YEEE! · '+kit().label+' / '+activeDrum.toUpperCase());}catch(e){say(e.message);}return;}if(!running){if(starting)return;const ok=await start();if(!ok)return;}if(!allowed())return;if(name==='roll')roll=[...pointers.values(),...keys].includes('roll');if(name==='ghost'){releaseRoll();ghost=[...pointers.values(),...keys].includes('ghost');}if(name==='drop'){drop=true;say('Drop armed · next beat');}}
  panel.querySelectorAll('[data-action]').forEach(b=>{b.type='button';b.setAttribute('aria-pressed','false');b.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();b.setPointerCapture(e.pointerId);pointers.set(e.pointerId,b.dataset.action);b.setAttribute('aria-pressed','true');action(b.dataset.action,true);};const release=e=>{const name=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(name&&!([...pointers.values(),...keys].includes(name))){action(name,false);b.setAttribute('aria-pressed','false');}};b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;b.onkeydown=e=>{if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();keys.add(b.dataset.action);b.setAttribute('aria-pressed','true');action(b.dataset.action,true);}};b.onkeyup=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();keys.delete(b.dataset.action);if(![...pointers.values()].includes(b.dataset.action))action(b.dataset.action,false);b.setAttribute('aria-pressed','false');}};b.onblur=()=>{keys.delete(b.dataset.action);if(![...pointers.values()].includes(b.dataset.action))action(b.dataset.action,false);b.setAttribute('aria-pressed','false');};b.onclick=e=>{if(e.detail===0&&!keys.size)action(b.dataset.action,true).then(()=>action(b.dataset.action,false));};});
- panel.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>selectMode(+b.dataset.mode));run.onclick=start;el('.sp-close').onclick=onClose;
+ run.onclick=start;el('.sp-close').onclick=onClose;
  for(const k of ['knock','swing'])el('[data-'+k+']').oninput=e=>el('[data-'+k+'-value]').textContent=e.target.value+'%';
  const visibility=()=>{if(document.hidden)stop();},blur=()=>{releaseRoll();ghost=false;keys.clear();pointers.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));};document.addEventListener('visibilitychange',visibility);root.addEventListener('blur',blur);root.addEventListener('pagehide',stop);
  current={stop,dispose(){if(disposed)return;stop();disposed=true;document.removeEventListener('visibilitychange',visibility);root.removeEventListener('blur',blur);root.removeEventListener('pagehide',stop);if(current===this)current=null;}};root.L99PeakSliders180?.refresh();
@@ -8297,49 +8547,6 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
   #world-sheet176 .cp-hud-btn,#world-sheet176 .cp-action-btn{box-sizing:border-box!important;}
   #world-actions176:has(.world-sheet-action184){display:none!important;}
 }
-
-</style>
-<style id="hyphy184-style">
-#special-panel .yee-rack-head{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 6px;color:#ffe06c;font-size:11px;letter-spacing:.08em}
-#special-panel .yee-rack-head span{font-size:10px;color:#b9c9df;letter-spacing:0;text-align:right;max-width:64%}
-#special-panel .yee-kit-nav{display:grid;grid-template-columns:38px minmax(0,1fr) 38px;align-items:center;gap:6px}
-#special-panel .yee-kit-nav>button{min-height:40px;padding:4px;font-size:25px;line-height:1}
-#special-panel .yee-kit-nav [data-kit-strip]{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;min-width:0}
-#special-panel .yee-kit-nav [data-kit]{min-height:40px;padding:4px 2px;font-size:8px;letter-spacing:-.02em;line-height:1.1}
-#special-panel .yee-kit-nav [data-kit][aria-pressed=true]{background:#2f679e;border-color:#ffe06c;color:#fff5a5}
-#special-panel .yee-drum-scroller{width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;touch-action:pan-x;cursor:grab;border:1px solid #6488b855;border-radius:10px;background:#07101e;margin-top:8px}
-#special-panel .yee-drum-scroller:active{cursor:grabbing}
-#special-panel .yee-drum-track{display:flex;gap:6px;width:max-content;padding:8px}
-#special-panel .yee-drum{width:70px;min-width:70px;min-height:68px!important;padding:5px 4px!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;scroll-snap-align:start;background:#142847!important}
-#special-panel .yee-drum span{font-size:21px;line-height:1;color:#ffe06c}
-#special-panel .yee-drum small{font-size:8px;line-height:1;white-space:nowrap;color:#c7d6e8}
-#special-panel .yee-drum[aria-pressed=true]{background:#3478a5!important;border-color:#ffe06c!important;box-shadow:0 0 10px #ffe06c55;color:#fff}
-#special-panel .yee-rack-hint{margin-top:6px;color:#93aac5;font-size:9px;letter-spacing:.02em;line-height:1.2;text-align:center}
-#special-panel .yee-pads [data-action=yeee]{box-shadow:0 0 18px #ffe06c44}
-@media(max-width:480px){#special-panel .yee-kit-nav [data-kit]{font-size:7px}#special-panel .yee-drum{width:64px;min-width:64px}#special-panel .yee-rack-hint{font-size:8px}}
-
-</style>
-<style id="hyphy185-style">
-/* Intrinsic widths must never widen the special panel on a phone. */
-#special-panel .yee182{min-width:0;max-width:100%;box-sizing:border-box}
-#special-panel .yee-beat-nav,#special-panel .yee-drum-nav{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:6px;align-items:center;min-width:0}
-#special-panel .yee-beat-nav>button,#special-panel .yee-drum-nav>button{padding:4px;min-height:48px;font-size:26px;line-height:1;touch-action:manipulation}
-#special-panel .yee-beat-nav>button:disabled{opacity:.3;cursor:default}
-#special-panel .yee-modes{position:relative;display:flex;gap:6px;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:4px 2px 8px;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:#ffe06c #132543;touch-action:pan-x}
-#special-panel .yee-modes button{flex:0 0 132px;min-width:132px;min-height:48px;font-size:11px;white-space:nowrap;scroll-snap-align:start;touch-action:pan-x}
-#special-panel .yee-modes::-webkit-scrollbar,#special-panel .yee-drum-scroller::-webkit-scrollbar{height:4px}
-#special-panel .yee-modes::-webkit-scrollbar-thumb,#special-panel .yee-drum-scroller::-webkit-scrollbar-thumb{background:#ffe06c;border-radius:4px}
-#special-panel .yee-drum-nav{margin-top:8px}
-#special-panel .yee-drum-scroller{min-width:0;box-sizing:border-box;margin-top:0;scrollbar-color:#ffe06c #132543}
-#special-panel .yee-drum{touch-action:pan-x}
-#special-panel .yee-kit-nav{grid-template-columns:44px minmax(0,1fr) 44px}
-#special-panel .yee-kit-nav>button{min-height:48px}
-#special-panel .yee-kit-nav [data-kit-strip]{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
-#special-panel .yee-kit-nav [data-kit]{min-height:44px;font-size:10px;letter-spacing:0}
-#special-panel .yee-rack-head{gap:8px;flex-wrap:wrap}
-#special-panel .yee-rack-hint{font-size:10px;line-height:1.5}
-#special-panel .yee-transport{min-height:52px;font-size:14px}
-@media(min-width:560px){#special-panel .yee-kit-nav [data-kit-strip]{grid-template-columns:repeat(4,minmax(0,1fr))}}
 
 </style>
 <style id="ux213-style">#fx-guide213{margin:4px 0 14px;padding:10px;border:1px solid var(--btn-text);border-radius:9px;font:12px/1.6 system-ui}#fx-guide213 summary{min-height:44px;display:list-item;align-content:center;cursor:pointer}#fx-guide213 dt{font-weight:700;margin-top:10px}#fx-guide213 dd{margin:2px 0 10px}#fx-guide213 summary:focus-visible{outline:2px solid currentColor;outline-offset:3px}#fx-panel label{flex-wrap:wrap;row-gap:4px}#fx-panel select{min-height:44px}#studio181 .studio-export213 p{font-size:12px}</style>
@@ -11390,6 +11597,7 @@ function initAudio() {
   if (ctx) return;
   ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint: window.L99Clock ? L99Clock.latencyHint() : "interactive"});
   window.L99Clock?.lock(ctx);   // clock230: steps stamp their sounds with the step's audio time
+  window.L99Beat233?.ensure(ctx);   // music233: the beat clock's processor, ready for the first START
 
   // Create nodes
   masterGain = ctx.createGain();
@@ -14176,6 +14384,77 @@ window._dhHoldState = function () { return Object.keys(_dhActive); };
 // ===== end da082 hold ===========================================================
 
 
+// Dispatch per faceplate. Each handler returns true if it played the sound; if false,
+// we fall through to the generic kit below as a backup. (music233: its own function, so the
+// beat clock can render the same kit to samples)
+function _drumKit233(face, name, velH) {
+  // da081: the pro kits answer first for every face but BARD (chiptune is right as-is)
+  if (face !== 'BARD' && typeof playDrumPro === 'function' && playDrumPro(face, name, velH)) return;
+  if (face === 'SYNTHWAVE' && playDrumSynthwave(name)) return;
+  if (face === 'DNB'       && playDrumDnB(name))       return;
+  if (face === 'SPARKLE'   && playDrumSparkle(name))   return;
+  if (face === 'SOUL'      && playDrumSoul(name))      return;
+  if (face === 'GAS'       && playDrumGas(name))       return;
+  if (face === 'GLITCHPOP' && playDrumGlitchpop(name)) return;
+  if (face === 'HYPHY'     && typeof playDrumHyphy === 'function' && playDrumHyphy(name)) return;   // fix691: slap kit
+  if (face === 'DANCEHALL' && typeof playDrumDancehall === 'function' && playDrumDancehall(name)) return;   // vox90: organic dembow kit
+  if (face === 'KAWAII'    && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix683: lofi feel via mellow kit
+  if (face === 'BREW'      && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix713: jazz kit via warm Soul drums
+  playDrumGeneric(name);
+}
+// music233: the face's kit rendered to samples (two takes of each drum, the kits' own small
+// differences between hits kept), for the beat clock to play a step the page missed. Each drum
+// is played into an offline context: ctx and drumBus point at it for that one call.
+async function _renderBeatKit233(face) {
+  if (typeof OfflineAudioContext === 'undefined' || !ctx) return null;
+  const sr = ctx.sampleRate, out = {};
+  for (const name of DRUM_NAMES) {
+    const takes = [];
+    for (let t = 0; t < 2; t++) {
+      const off = new OfflineAudioContext(2, Math.ceil(sr * 2.2), sr);
+      const bus = off.createGain();
+      bus.gain.value = window.L99Balance223 ? window.L99Balance223.drum(face, name) : 1;
+      bus.connect(off.destination);
+      const liveCtx = ctx, liveBus = drumBus;
+      ctx = off; drumBus = bus;
+      try {
+        if (face === 'MAESTRO' && window.L99Maestro219) window.L99Maestro219.drum(off, bus, name, getFreq(0, 1, false) / 2);
+        else _drumKit233(face, name, 1);
+      } catch (e) { void e; } finally { ctx = liveCtx; drumBus = liveBus; }
+      const buf = await off.startRendering();
+      // trimmed to where it falls silent
+      let end = 0;
+      for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = d.length - 1; i > end; i--) if (Math.abs(d[i]) > 1e-4) { end = i; break; } }
+      if (end < 16) continue;
+      const len = Math.min(buf.length, end + 64), tb = new AudioBuffer({ numberOfChannels: 2, length: len, sampleRate: sr });
+      for (let c = 0; c < 2; c++) tb.copyToChannel(buf.getChannelData(Math.min(c, buf.numberOfChannels - 1)).subarray(0, len), c);
+      takes.push(tb);
+    }
+    if (takes.length) out[name] = takes;
+  }
+  return out;
+}
+// music233: what the beat clock plays for each step of the loop if the page misses it: the same
+// drums the sequencer's tick plays (the seed beat, the built layers, the recorded hits)
+function _beatPattern233() {
+  const sig = TIME_SIGNATURES[timeSigIndex] || TIME_SIGNATURES[0];
+  let own = !!window._specialDrumsActive;
+  if (window._collabRemoteDrumAt && !window._collabIsHost && performance.now() - window._collabRemoteDrumAt < 520) own = true;
+  const seed = beatLoopOn && BEAT_PATTERNS[currentFace] ? BEAT_PATTERNS[currentFace][currentBeat] : null;
+  const injects = DRUM_INJECT_PATTERNS[currentFace] || {};
+  const steps = [];
+  for (let st = 0; st < LOOP_STEPS; st++) {
+    const hits = [], seedStep = (st % sig.barSteps) % 16;
+    if (!own) {
+      if (seed) ['kick', 'snare', 'hihat'].forEach(d => { if (seed[d] && seed[d][seedStep]) hits.push(d); });
+      liveDrumLayers.forEach(d => { if (hits.indexOf(d) < 0 && injects[d] && injects[d][seedStep]) hits.push(d); });
+    }
+    if (!_armedFirstHit || st !== currentStep) Object.keys(recordedDrumSteps).forEach(d => { const pat = recordedDrumSteps[d]; if (hits.indexOf(d) < 0 && pat && pat[st]) hits.push(d); });
+    steps.push(hits);
+  }
+  return steps;
+}
+
 function playDrum(name, velocity) {
   initAudio();
   if(currentFace==='MAESTRO'&&window.L99Maestro219){const bus=ctx.createGain();bus.gain.value=typeof velocity==='number'?Math.max(.05,Math.min(1,velocity)):1;bus.connect(drumBus);window.L99Maestro219.drum(ctx,bus,name,getFreq(0,1,false)/2);setTimeout(()=>bus.disconnect(),4000);return;}
@@ -14204,21 +14483,7 @@ function playDrum(name, velocity) {
       drumBus = _hitGain;          // kits will connect to this for the duration
     }
     try {
-      // Dispatch per faceplate. Each handler returns true if it played the sound; if false,
-      // we fall through to the generic kit below as a backup.
-      // da081: the pro kits answer first for every face but BARD (chiptune is right as-is)
-      if (face !== 'BARD' && typeof playDrumPro === 'function' && playDrumPro(face, name, velH)) return;
-      if (face === 'SYNTHWAVE' && playDrumSynthwave(name)) return;
-      if (face === 'DNB'       && playDrumDnB(name))       return;
-      if (face === 'SPARKLE'   && playDrumSparkle(name))   return;
-      if (face === 'SOUL'      && playDrumSoul(name))      return;
-      if (face === 'GAS'       && playDrumGas(name))       return;
-      if (face === 'GLITCHPOP' && playDrumGlitchpop(name)) return;
-      if (face === 'HYPHY'     && typeof playDrumHyphy === 'function' && playDrumHyphy(name)) return;   // fix691: slap kit
-      if (face === 'DANCEHALL' && typeof playDrumDancehall === 'function' && playDrumDancehall(name)) return;   // vox90: organic dembow kit
-      if (face === 'KAWAII'    && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix683: lofi feel via mellow kit
-      if (face === 'BREW'      && typeof playDrumSoul === 'function' && playDrumSoul(name)) return;   // fix713: jazz kit via warm Soul drums
-      playDrumGeneric(name);
+      _drumKit233(face, name, velH);
     } finally {
       if (_realBus) {
         drumBus = _realBus;        // restore the shared bus
@@ -16546,8 +16811,10 @@ function startSequencer() {
   if (sequencerRunning) return;
   sequencerRunning = true;
   currentStep = 0;
-  window._seqClock = (typeof ctx !== 'undefined' && ctx ? (window.L99Clock ? L99Clock.now(ctx) + L99Clock.lead() : ctx.currentTime + 0.06) : 0);  // fix456: stable audio-clock anchor (clock230: one lead ahead)
-  window._seqAt = null;
+  // fix456: stable audio-clock anchor (clock230: one lead ahead; music233: at most 100 ms, so START
+  // answers at once while the lead is wide: the steps after catch up on their own times)
+  window._seqClock = (typeof ctx !== 'undefined' && ctx ? (window.L99Clock ? L99Clock.now(ctx) + Math.min(0.1, L99Clock.lead()) : ctx.currentTime + 0.06) : 0);
+  window._seqAt = null; window._seqWakeAt = null; window._seqRing = [];
   // Starting playback fresh from the current faceplate adopts its core BPM.
   if (typeof window._pendingFaceBpm === 'number') {
     window._adoptingFaceBpm = true; bpm = window._pendingFaceBpm; window._pendingFaceBpm = null;
@@ -16555,17 +16822,60 @@ function startSequencer() {
     window._adoptingFaceBpm = false;
   }
   const stepTime = () => (60 / bpm) / 4 * 1000; // 16th notes (straight)
+  // music233: the beat clock (window.L99Beat233): the audio thread keeps the steps' times and
+  // wakes each step; a step this page reaches too late to start in time is left to it (its drums
+  // play there, from samples, on time) and only its other sounds are dropped
+  const _beat = window.L99Beat233 || null;
+  let _beatOn = false, _beatStep = null, _beatH = 0.1;
+  const _beatReady = () => !!(_beat && typeof ctx !== 'undefined' && ctx && drumBus && _beat.ready(ctx));
+  const _beatSettings = () => ({
+    dur: [0, 1, 2, 3].map(i => (typeof getSwungStepTime === 'function' ? getSwungStepTime(i) : stepTime()) / 1000),
+    loop: LOOP_STEPS, h: (_beatH = Math.max(0.06, window.L99Clock ? L99Clock.lead() : 0.1)),
+    hum: (typeof _drumHumAmt === 'function') ? _drumHumAmt() : 0, decide: 0.005,
+  });
+  const _beatSync = () => {
+    try {
+      _beat.connect(drumBus);
+      _beat.set(_beatSettings());
+      _beat.pattern(_beatPattern233(), true);
+      const fa = window.L99FaceAudio222, face = currentFace;
+      const key = face + ':' + (fa && fa.enabled && fa.enabled() && fa.ready && fa.ready(face, 'drum:kick') ? 'samples' : 'synth');
+      _beat.kit(key, () => _renderBeatKit233(face));
+    } catch (eB) { void eB; }
+  };
+  const _onBeat = (m) => { if (!sequencerRunning || !_beatOn) return; _beatStep = m; try { tick(); } finally { _beatStep = null; } };
   function tick() {
     if (!sequencerRunning) return;
+    // music233: while the audio is held (a phone call, Siri, another app, the tab put away) its
+    // clock stands still; steps worked out then would all sound at once when it comes back.
+    // The pattern waits where it is and picks up on the beat after.
+    if (!_beatStep && typeof ctx !== 'undefined' && ctx && ctx.state !== 'running') { window._seqClock = null; window._seqWakeAt = null; sequencerInterval = setTimeout(tick, 120); return; }
     lastStepStartedAt = Date.now();
+    let _beatLate = false, _tooLate = false;
     // fix456: stamp this step's stable audio-clock time so note ONSETS fire sample-locked
     // (the worklet honors msg.at); live play leaves _seqAt null and stays immediate.
     if (typeof ctx !== 'undefined' && ctx) {
       // clock230: the step is due at _seqClock on the audio clock. Only a stall longer than the
       // lead (the step would sound in the past) or a clock run far ahead re-anchors it.
       const _rt = window.L99Clock ? L99Clock.now(ctx) : ctx.currentTime, _ld = window.L99Clock ? L99Clock.lead() : 0.06;
-      if (typeof window._seqClock !== 'number' || window._seqClock < _rt + 0.004 || window._seqClock > _rt + _ld + 0.35) window._seqClock = _rt + Math.min(_ld, 0.03);
+      // music233: how late this wake ran past its time (a lead before the step), so the lead grows to cover it
+      if (window.L99Clock && typeof window._seqWakeAt === 'number') L99Clock.late(_rt - window._seqWakeAt);
+      window._seqWakeAt = null;
+      if (_beatStep) {
+        // music233: the step's time is the beat clock's; nothing re-anchors. Reached in time, the
+        // page plays it and claims it; too late to start its drums, the beat clock plays them.
+        window._seqClock = _beatStep.at;
+        if (window.L99Clock) L99Clock.late(_rt - (_beatStep.at - _beatH));
+        _beatLate = _beatStep.at - _rt < 0.025 + 2 * (ctx.baseLatency || 0.01);
+        _tooLate = _beatStep.at < _rt - 0.03;
+        if (!_beatLate) _beat.claim(_beatStep.k, currentStep);
+      } else if (typeof window._seqClock !== 'number' || window._seqClock < _rt + 0.004 || window._seqClock > _rt + _ld + 0.35) window._seqClock = _rt + Math.min(_ld, 0.03);
       window._seqAt = window._seqClock;
+      // music233: the last steps' audio times, for recording and quantizing against what is heard
+      window._seqLastAt = window._seqClock;
+      const _ring = window._seqRing || (window._seqRing = []);
+      _ring.push({ step: currentStep, at: window._seqClock });
+      if (_ring.length > 12) _ring.shift();
       // fix458: advance happens at the scheduling point below, by the ACTUAL (swing-aware) step duration
       Promise.resolve().then(() => { window._seqAt = null; });
     }
@@ -16576,14 +16886,17 @@ function startSequencer() {
     const _isBeat = _sig.beatSteps.indexOf(_stepInBar) !== -1;
     // vox334: LAUNCH GRID heartbeat -- fired inside the tick while _seqAt is
     // hot, so every grid event is sample-locked and swing-aware.
-    if (window._lgStepTick) { try { window._lgStepTick(_stepInBar, _sig.barSteps, _isBarStart); } catch (eLG) { void eLG; } }
+    if (window._lgStepTick && !_tooLate) { try { window._lgStepTick(_stepInBar, _sig.barSteps, _isBarStart); } catch (eLG) { void eLG; } }
+    // music233: others that play in step with the pattern (the world's auto music) hear each step here, stamped
+    // (a step reached too late to sound is still passed on, marked, so they keep their place)
+    if (window._seqStepHooks) window._seqStepHooks.forEach(h => { try { h(_stepInBar, _sig.barSteps, currentStep, window._seqAt, _tooLate); } catch (eSH) { void eSH; } });
     // Metronome tick on beats (downbeat = higher pitch) so the meter is audible.
-    if (metronomeOn && _isBeat && typeof playMetronomeTick === 'function') {
+    if (metronomeOn && _isBeat && !_beatLate && typeof playMetronomeTick === 'function') {
       try { playMetronomeTick(_isBarStart); } catch(e) {}
     }
     // fix461: haptic metronome — beats pulse the device (downbeat accented),
     // independent of the audible click. No-ops where Vibration API is unsupported.
-    if (_isBeat && window.bardHaptic && window.bardHaptic.metronomeOn) {
+    if (_isBeat && !_tooLate && window.bardHaptic && window.bardHaptic.metronomeOn) {
       try { window.bardHaptic.beat(_isBarStart); } catch(e) {}
     }
     // ── PARAM AUTOMATION (multi-lane param-locks) ────────────────────────────
@@ -16613,15 +16926,23 @@ function startSequencer() {
     // Update step indicators. There are only 16 dots in the strip; with LOOP_STEPS > 16
     // we map currentStep into the 16-dot grid so the indicator sweeps proportionally.
     const dotIdx = Math.floor((currentStep / LOOP_STEPS) * 16);
-    document.querySelectorAll('.step-dot').forEach((dot, i) => {
-      dot.classList.toggle('active', i === dotIdx);
-      // Accent dots that line up with a beat of the current meter.
-      const dotStep = Math.round((i / 16) * LOOP_STEPS);
-      const isBeatDot = (_sig.beatSteps.indexOf(dotStep % _sig.barSteps) !== -1);
-      dot.classList.toggle('beat-accent', isBeatDot);
-    });
+    const _dots = () => {
+      if (!sequencerRunning) return;
+      document.querySelectorAll('.step-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === dotIdx);
+        // Accent dots that line up with a beat of the current meter.
+        const dotStep = Math.round((i / 16) * LOOP_STEPS);
+        const isBeatDot = (_sig.beatSteps.indexOf(dotStep % _sig.barSteps) !== -1);
+        dot.classList.toggle('beat-accent', isBeatDot);
+      });
+    };
+    // music233: the step lights when it is heard, not a lead (and the output's delay) before
+    const _dotIn = (window.L99Clock && typeof window._seqAt === 'number') ? L99Clock.perfAt(ctx, window._seqAt) - performance.now() : 0;
+    if (_dotIn > 8) setTimeout(_dots, Math.min(600, _dotIn)); else _dots();
     // Track which drums got triggered this step so we don't double-hit
     const fired = new Set();
+    // music233: a step reached too late leaves its drums to the beat clock
+    const _seqDrum = (n) => { if (!_beatLate) playDrum(n); };
     const injects = DRUM_INJECT_PATTERNS[currentFace];
     // Seed beat patterns are 16 steps. Rather than tile them continuously
     // (which drifts off the downbeat in odd meters like 7/8 or 5/4), we index
@@ -16647,9 +16968,9 @@ function startSequencer() {
     // Seed beat plays only when BEAT LOOP is on (the named preset rhythm)
     if (beatLoopOn && !_specialOwnsDrums) {
       const seed = BEAT_PATTERNS[currentFace][currentBeat];
-      if (seed.kick[seedStep])  { playDrum('kick');  fired.add('kick');  }
-      if (seed.snare[seedStep]) { playDrum('snare'); fired.add('snare'); }
-      if (seed.hihat[seedStep]) { playDrum('hihat'); fired.add('hihat'); }
+      if (seed.kick[seedStep])  { _seqDrum('kick');  fired.add('kick');  }
+      if (seed.snare[seedStep]) { _seqDrum('snare'); fired.add('snare'); }
+      if (seed.hihat[seedStep]) { _seqDrum('hihat'); fired.add('hihat'); }
     }
 
     // Live-built layers (from BUILD mode or hold-BEAT-LOOP gesture) play whenever they exist,
@@ -16661,7 +16982,7 @@ function startSequencer() {
       // Inject patterns are also 16-step — tile via seedStep so they repeat throughout a
       // longer loop. User can still record over the top for variation.
       if (pat && pat[seedStep]) {
-        playDrum(drumName);
+        _seqDrum(drumName);
         fired.add(drumName);
       }
     });
@@ -16681,7 +17002,7 @@ function startSequencer() {
             delete _sk[_sKey];
             if (_skipNow) { fired.add(drumName); return; }
           }
-          playDrum(drumName);
+          _seqDrum(drumName);
           fired.add(drumName);
         }
       });
@@ -16696,6 +17017,7 @@ function startSequencer() {
           if (_skipNow) return;                    // played live this pass already, don't double it
         }
 
+        if (_tooLate) return;   // music233: too late to sound on its step: dropped, never a burst
         const seqVoiceId = 'seq:lead:' + evtIdx + ':' + currentStep;
         // da100: the ON is sample-scheduled in the worklet (_seqAt, ~60ms ahead of
         // now). The OFF used to go out immediately from a timer, so any note under
@@ -16754,10 +17076,23 @@ function startSequencer() {
     let _wait = nextDelay;
     if (typeof ctx !== 'undefined' && ctx && typeof window._seqClock === 'number' && window.L99Clock) {
       _wait = Math.max(0, Math.min(nextDelay * 2, (window._seqClock - L99Clock.lead() - L99Clock.now(ctx)) * 1000));
+      window._seqWakeAt = L99Clock.now(ctx) + _wait / 1000;
+    }
+    // music233: on the beat clock, the audio thread wakes the next step
+    if (_beatOn) { _beatSync(); return; }
+    if (_beatReady() && window._BEAT_CLOCK !== false) {
+      _beatOn = true; window._seqBeat = true; _beatSync();
+      _beat.start(Object.assign({ at: window._seqClock, idx: currentStep }, _beatSettings()), _onBeat);
+      return;
     }
     sequencerInterval = setTimeout(tick, _wait);
   }
-  tick();
+  window._seqBeat = false;
+  if (_beat && typeof ctx !== 'undefined' && ctx) _beat.ensure(ctx);
+  if (_beatReady() && window._BEAT_CLOCK !== false) {
+    _beatOn = true; window._seqBeat = true; _beatSync();
+    _beat.start(Object.assign({ at: window._seqClock, idx: 0 }, _beatSettings()), _onBeat);
+  } else tick();
   document.getElementById('btn-start').classList.add('active');
   // fix703: dynamic START -> STOP with red glow while playing.
   try {
@@ -16771,6 +17106,7 @@ function startSequencer() {
 function stopSequencer() {
   sequencerRunning = false;
   clearTimeout(sequencerInterval);
+  try { if (window.L99Beat233) window.L99Beat233.stop(); window._seqBeat = false; } catch (eB) { void eB; }
   // da100: STOP means silence. Release every sequencer-owned voice, including
   // onsets still waiting in the worklet queue, so nothing rings on after STOP.
   try {
@@ -16962,8 +17298,30 @@ function firedStep() {
 // Returns the index the current moment should record into: the nearest step.
 // Early in a step it is the step that just fired; past the midpoint the user
 // was aiming at the step about to fire.
+// music233: the step nearest audio time t, from the steps' own audio times (the last few the
+// sequencer worked out, and the one it works out next). Null without them.
+function nearestSeqStep(t) {
+  const ring = window._seqRing;
+  if (!sequencerRunning || !ring || !ring.length || typeof t !== 'number' || typeof window._seqClock !== 'number') return null;
+  let best = { step: currentStep, at: window._seqClock };
+  for (const r of ring) if (Math.abs(r.at - t) < Math.abs(best.at - t)) best = r;
+  // further off than a step from any of them (a stall, a re-anchor): no answer
+  return Math.abs(best.at - t) < (60 / bpm) / 4 * 1.5 ? best : null;
+}
+// music233: where a note being played now sits in the loop, measured on the audio clock: a
+// note stamped for later (the arp) at its own time, a live one at what is being heard as it
+// is played. (Counting from when the page's timer last ran put a hit on the beat a step late:
+// the timer runs a lead ahead of the sound.)
+function heardRecordStep() {
+  if (typeof ctx === 'undefined' || !ctx || !window.L99Clock || ctx.state !== 'running') return null;
+  const on = L99Clock.onAt();
+  const n = nearestSeqStep(on !== null ? on : L99Clock.heard(ctx));
+  return n ? n.step : null;
+}
 function quantizedRecordStep() {
   if (!sequencerRunning) return currentStep;
+  const _hs = heardRecordStep();
+  if (_hs !== null) return _hs;
   const stepDur = (60 / bpm) / 4 * 1000;
   const elapsed = Date.now() - lastStepStartedAt;
   if (elapsed > stepDur / 2) return currentStep;
@@ -17024,6 +17382,17 @@ function withDrumQuantize(playFn, recordFn) {
     playFn();
     if (recordFn && loopRecording) recordFn(firedStep());
     return;
+  }
+  // music233: HARD drums snap to the step nearest what is heard as the pad is hit, on the audio
+  // clock: one still to come sounds exactly on it, one just gone sounds now. (Waiting for the
+  // page's next step timer played a hit on the beat 55 ms late, 110 ms in the world: off the grid.)
+  if (drumQuantizeMode === 'HARD' && sequencerRunning && typeof ctx !== 'undefined' && ctx && window.L99Clock && ctx.state === 'running') {
+    const _n = nearestSeqStep(L99Clock.heard(ctx));
+    if (_n) {
+      if (_n.at > L99Clock.now(ctx) + 0.002) L99Clock.at(_n.at, playFn); else playFn();
+      if (recordFn && loopRecording) recordFn(_n.step);
+      return;
+    }
   }
   if (drumQuantizeMode === 'HARD' && sequencerRunning) {
     scheduleAtNextStep((tickFired) => {
@@ -21323,7 +21692,12 @@ window.startLookaheadScheduler = function(noteCallback, opts) {
     return { stop: function() {}, advance: function() {} };
   }
   const config = Object.assign({}, window._lookaheadConfig, opts || {});
-  let nextNoteTime = ctx.currentTime;
+  // music233: the true audio time (ctx.currentTime reads a step's stamp while one is set), and
+  // the lead the rest of the music uses, which grows while the page is held up
+  const clockNow = () => window.L99Clock ? L99Clock.now(ctx) : ctx.currentTime;
+  const ahead = () => (window.L99Clock && !(opts && opts.lookaheadTime)) ? Math.max(config.lookaheadTime, L99Clock.lead()) : config.lookaheadTime;
+  let nextNoteTime = (typeof config.startAt === 'number' && config.startAt > clockNow()) ? config.startAt : clockNow();
+  let wakeAt = null;   // music233: when the loop's timer was asked to wake (audio time), to see how late it ran
   let tickIndex = 0;
   let alive = true;
   let _timeoutHandle = null;
@@ -21339,14 +21713,26 @@ window.startLookaheadScheduler = function(noteCallback, opts) {
   function schedulerLoop() {
     if (!alive) return;
     // While there are notes to play before the next interval checkpoint...
-    // clock230: held up past the lookahead, carry on from now instead of firing the missed steps at once
-    if (nextNoteTime < ctx.currentTime - 0.02) nextNoteTime = ctx.currentTime + 0.01;
-    while (nextNoteTime < ctx.currentTime + config.lookaheadTime) {
+    const now = clockNow(), lead = ahead();
+    // music233: suspended (a call, the tab away), the clock stands still: wait, and come back on the beat
+    if (ctx.state !== 'running') { _timeoutHandle = setTimeout(schedulerLoop, 120); return; }
+    if (window.L99Clock && wakeAt !== null) L99Clock.late(now - wakeAt);
+    wakeAt = null;
+    // clock230: held up past the lookahead, the missed steps are not fired at once. music233: they
+    // are skipped instead, so the pattern keeps its place on the beat (it used to restart from now)
+    if (nextNoteTime < now - 0.02) {
+      const d = Math.max(0.01, getStepDuration());
+      const n = Math.ceil((now + 0.005 - nextNoteTime) / d);
+      if (n > 0 && n < 4096) { nextNoteTime += n * d; tickIndex += n; } else nextNoteTime = now + 0.01;
+    }
+    while (nextNoteTime < now + lead) {
       try { noteCallback(nextNoteTime, tickIndex); } catch(e) { console.warn('Lookahead callback error:', e); }
       nextNoteTime += getStepDuration();
       tickIndex++;
     }
-    _timeoutHandle = setTimeout(schedulerLoop, config.scheduleInterval);
+    const _w = Math.max(4, Math.min(config.scheduleInterval, (nextNoteTime - lead - clockNow()) * 1000));
+    wakeAt = clockNow() + _w / 1000;
+    _timeoutHandle = setTimeout(schedulerLoop, _w);
   }
 
   // Kick off
@@ -22789,7 +23175,16 @@ function restartArp() {
   // setInterval. Eliminates rhythm drift caused by main-thread jitter
   // (heavy WebGL frames, GC pauses). Default OFF so existing recordings
   // and tested behavior are preserved.
-  if (window._useLookaheadARP && window.startLookaheadScheduler && ctx) {
+  // music233: on by default now (window._useLookaheadARP = false brings back the old timer). Its
+  // release is stamped at its own onset plus the gate, the reason it was off (the release used
+  // to run from a timer and could land before the note began). While the pattern plays, the
+  // arp starts on the pattern's next step, so the two share the grid.
+  if (window._useLookaheadARP !== false && window.startLookaheadScheduler && ctx) {
+    let _startAt;
+    if (typeof sequencerRunning !== 'undefined' && sequencerRunning && window.L99Clock) {
+      const _n = L99Clock.now(ctx) + 0.003;
+      _startAt = (typeof window._seqLastAt === 'number' && window._seqLastAt > _n) ? window._seqLastAt : window._seqClock;
+    }
     window._arpLookaheadHandle = window.startLookaheadScheduler(
       function(targetTime, _tickIdx) {
         // Each scheduled tick invokes the same ARP step logic the setInterval
@@ -22801,7 +23196,8 @@ function restartArp() {
         window._arpTargetTime = null;
       },
       {
-        getStepDuration: function() { return rate / 1000; }  // ms → seconds
+        getStepDuration: function() { return getArpRate() / 1000; },  // ms → seconds (music233: follows a tempo change)
+        startAt: _startAt
       }
     );
     return;
@@ -22975,7 +23371,12 @@ function _arpStepBody() {
       // chord-arp sustain mode, in which case the voice rings until the
       // source key is released (handled by arpNoteOff).
       if (!isChordArpSustain) {
-        setTimeout(() => { try { stopLead(voiceId); } catch(e){} }, rate * 0.4);
+        // music233: a note stamped for later is let go at its onset plus the gate, on the audio clock
+        const _on = window.L99Clock ? L99Clock.onAt() : null;
+        if (_on !== null && typeof ctx !== 'undefined' && ctx) {
+          const _off = _on + rate * 0.4 / 1000;
+          setTimeout(() => { try { L99Clock.at(_off, () => stopLead(voiceId)); } catch(e){} }, Math.max(0, (_off - L99Clock.now(ctx)) * 1000 - 30));
+        } else setTimeout(() => { try { stopLead(voiceId); } catch(e){} }, rate * 0.4);
       }
     }
 }
@@ -22989,6 +23390,10 @@ function stopArp() {
   if (typeof activeVoices !== 'undefined') {
     Object.keys(activeVoices).forEach(id => { if (id.startsWith('arp:')) try { stopLead(id); } catch(e){} });
   }
+  // music233: notes the arp already sent ahead for after the key came up never begin
+  [window._workletNode, window._workletNode2, window._workletNode3].forEach(n => {
+    if (n) { try { n.port.postMessage({ cmd: 'offPrefix', prefix: 'arp:', relSec: 0.06 }); } catch (eA) { void eA; } }
+  });
 }
 function cycleArpMode() {
   const curIdx = ARP_MODES.indexOf(midiArpMode);
@@ -26721,10 +27126,16 @@ window.bardHaptic = (function(){
       S.due = C.now(ac) + C.lead();
       var pump = function(){
         var now = C.now(ac), lead = C.lead();
+        // music233: the audio held (a call, another app): wait for it, nothing piles up for its return
+        if (ac.state !== 'running') { S.wake = null; S.clock = setTimeout(pump, 120); return; }
+        if (S.wake != null && C.late) C.late(now - S.wake);   // music233: a late wake grows the lead
         if (S.due < now) S.due = now + 0.01;   // held up longer than the lead: carry on from here
         while (S.due < now + lead) { C.at(S.due, tick); S.due += stepMs / 1000; }
-        S.clock = setTimeout(pump, Math.max(5, (S.due - lead - C.now(ac)) * 1000));
+        var w = Math.max(5, (S.due - lead - C.now(ac)) * 1000);
+        S.wake = C.now(ac) + w / 1000;
+        S.clock = setTimeout(pump, w);
       };
+      S.wake = null;
       pump();
     } else S.clock = setInterval(tick, stepMs);
   }
@@ -27248,13 +27659,14 @@ window.bardHaptic = (function(){
     },
     HYPHY: {
       title: 'YEEE MACHINE',
-      blurb: 'Three Bay Area pockets. Sliding sub, knock drums and a playable formant shout.',
+      blurb: 'Eight Bay Area beats. Sliding sub, knock drums and a playable shout.',
       items: [
-        ['POCKETS', 'Town Business, Ghost Ride and Sideshow follow your key and tempo. Changes land at the next two-bar downbeat.'],
+        ['BEATS', 'Step through them with ‹ ›. They follow your key and tempo; while one plays, a change lands on the next bar.'],
         ['YEEE!', 'Tap a synthesized shout. Works with or without the beat.'],
         ['GO DUMB', 'Hold for a tight, accented sixteenth-note roll over the bass and kick. Release cuts the roll immediately.'],
         ['GHOST IT', 'Hold to strip the bass and drums down to a light hat pulse.'],
         ['BRING IT BACK', 'Queue a bass-and-kick drop with a shout on the next beat.'],
+        ['KIT / DRUMS', 'Four kits. Tap a drum to hear it; it also sets the YEEE voice.'],
         ['KNOCK / SWING', 'Shape punch and the offbeat pocket. Peak Guard stays active.'],
       ],
     },
@@ -29333,7 +29745,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=5fe7106a41'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=f0fff08825'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29341,7 +29753,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=5fe7106a41'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=f0fff08825'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }

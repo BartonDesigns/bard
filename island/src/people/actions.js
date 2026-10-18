@@ -45,6 +45,12 @@ export const ACTIONS = {
 	crouch: { loop: false, keys: [
 		[0, { L: arm({ abd: 0.3, flex: 1.2, roll: 0.3, bend: 1.2, pro: 1.2, curl: 0.3 }), R: arm({ abd: 0.2, flex: 0.4, roll: 0.6, bend: 1.4, pro: 0.6, curl: 0.8 }), sp: [0, 0.35, 0], hp: [0, 0.2, 0, 0.5], fL: [0.28, 0, 0.1], fR: [-0.28, 0, 0.1], hd: [0, -0.35, 0] }],
 	] },
+	// down on one knee behind cover, the gun still in both hands (no arms here: the carry or
+	// the aim the fighter already holds stays on): the right knee near the ground, the left
+	// foot planted ahead, the chest low over the thigh, the legs as the holder's (combat/ai-squads.js)
+	kneel: { loop: false, keys: [
+		[0, { sp: [0.05, 0.22, 0], hp: [0, 0.1, 0, 0.42], fL: [0.2, 0, 0.25], fR: [-0.18, 0.08, -0.5], hd: [0, -0.12, 0] }],
+	] },
 	// a fielder or a keeper, ready on the balls of the feet
 	ready: { loop: false, keys: [
 		[0, { L: arm({ abd: 0.45, flex: 0.55, roll: 0.2, bend: 1.0, pro: 1.9, curl: 0.2 }), R: arm({ abd: 0.45, flex: 0.55, roll: 0.2, bend: 1.0, pro: 1.9, curl: 0.2 }), sp: [0, 0.25, 0], hp: [0, 0.15, 0, 0.16], fL: [0.26, 0, 0.05], fR: [-0.26, 0, 0.05], hd: [0, -0.2, 0] }],

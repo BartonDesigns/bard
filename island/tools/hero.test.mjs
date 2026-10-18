@@ -58,9 +58,14 @@ test('he and she are tall, athletic, sure of themselves, and look it', () => {
 	// never in the one before it is declared: that threw, and every hero build with it)
 	const kf = src0.indexOf('const kitField'), bk = src0.indexOf("q.kind === 'belt'"), ck = src0.indexOf("q.kind === 'cargo'");
 	assert.ok(kf > 0 && bk > kf && ck > kf, 'the belt and the pockets built after the torso is measured');
-	assert.equal(m.style.hair.style, 'grump');
+	// (their hair grown as fluff for their cuts, people/hair-fluff.js: no sheets by name)
+	assert.equal(m.style.hair.style, undefined);
+	assert.equal(m.style.hair.cut, 'swept');
 	assert.equal(m.style.hair.beard, 'stubble');
-	assert.equal(f.style.hair.style, 'ponytail01');
+	assert.equal(f.style.hair.style, undefined);
+	assert.equal(f.style.hair.cut, 'pony');
+	assert.deepEqual(f.style.hair.brush.bangs, [null], 'swept back off her forehead');
+	assert.equal(f.style.hair.brush.frame, 2, 'strands framing her face');
 	assert.equal(f.style.hair.beard, '');
 	assert.equal(m.style.hair.recede, 0);
 	assert.ok(m.greyShift < 0);
@@ -84,7 +89,7 @@ test('the choice is kept, and your seed with it', () => {
 
 test('your body, its hands, friends and the settings all use the hero', () => {
 	const src = (f) => fs.readFileSync(new URL('../src/' + f, import.meta.url), 'utf8');
-	assert.match(src('people/avatar.js'), /buildPerson\(A, heroDNA\(h, \{ look \}\)\)/);
+	assert.match(src('people/avatar.js'), /const d = heroDNA\(hero, \{ look \}\);\n\t\tif \(d\.style\) d\.style = dressInGear\(d\.style, worn\);\n\t\tconst P = buildPerson\(A, d\);/);
 	assert.match(src('people/avatar.js'), /async function setHero\(sex, nextLook = null\)/);
 	assert.match(src('net/remotes.js'), /lookDNA\(r\.seed\)/);
 	assert.match(src('net/multiplayer.js'), /const seed = heroSeed\(heroChoice\(\)\)/);

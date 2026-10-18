@@ -15,6 +15,7 @@ import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, acce
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
+import { FLUFFY, buildFluff, fluffMaterial } from './hair-fluff.js';
 import { fadePerson } from './fade.js';
 import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
 import { hairCapsules, poseCapsules } from './hair-collide.js';
@@ -23,6 +24,8 @@ import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 import { fitBags, torsoSurface, attachBag, BAG_KINDS } from './bags.js';
 import { tierNow } from '../world/governor.js';
 import { shapeBuild } from './build.js';
+import { loadKitModels } from './kit-models.js';
+import { GFX_PHONE } from '../world/device.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -34,7 +37,7 @@ const SKINS = {
 };
 
 // a phone keeps the skins at half size (a quarter of the memory; a face is small on its screen)
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 function halve(im) {
 	if (!im || im.width <= 512) return im;
 	const cv = document.createElement('canvas');
@@ -58,6 +61,8 @@ export function loadPeopleAssets() {
 		const text = await new Response(gz.body.pipeThrough(new DecompressionStream('gzip'))).text();
 		const D = JSON.parse(text);
 		const faces = loadFaces().catch(() => null);
+		// (the soldiers' head kit as real models; without them it is built in code)
+		const kit = loadKitModels(PHONE).catch((e) => { console.warn('[people] kit models', e); return null; });
 		const rig = await (await fetch(RIG_URL)).json();
 		// the full 64-bone rig: extra joints and their skin influences patched over the 18-bone base
 		const raw = Uint8Array.from(atob(rig.patch), (c) => c.charCodeAt(0)), view = new DataView(raw.buffer);
@@ -73,6 +78,7 @@ export function loadPeopleAssets() {
 		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
 		A.faces = await faces;
+		A.kit = await kit;
 		loaded = A;
 		return A;
 	})();
@@ -319,10 +325,11 @@ export function buildPerson(A, d) {
 	P.redress = (o) => dress(A, P, o);
 	dress(A, P, outfitOf(d));
 	// lashes, brows, the wet line: one small mesh, closing and lifting with the face
-	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow), brow.grey);
+	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), null, brow.grey);
 	if (dg) {
 		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
-		if (d.brows?.fill) dm.material.userData.U.uFill.value = d.brows.fill;
+		// (how full the tone under the brow's hairs, each their own; or as set, d.brows.fill)
+		dm.material.userData.U.uFill.value = d.brows?.fill ?? 1.6 + ((d.seed * 0.618034) % 1) * 0.4;
 		dm.frustumCulled = false; dm.renderOrder = 1;
 		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
@@ -330,6 +337,9 @@ export function buildPerson(A, d) {
 	}
 	P.lod = (dist) => {
 		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90 || P.accKeep; for (const b of P.bags || []) b.lod(dist);
+		// fluffy hair: all its tufts near, the locks' cores and inner layer further, the cores far off
+		const hl = P.hair?.geometry.userData.lod;
+		if (hl) { const k = PHONE ? 0.6 : 1, n = hl[dist < 6 * k ? 2 : dist < 16 * k ? 1 : 0]; if (P.hair.geometry.drawRange.count !== n) P.hair.geometry.setDrawRange(0, n); }
 		// the sleeves' pose folds and hang (garment-shape.js): near people only, fading out by
 		// 22 m, nearer still on a phone or when the governor has stepped quality down
 		const U = P.clothMat?.userData.U;
@@ -372,12 +382,15 @@ function dress(A, P, o) {
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));
 	// the scalp under it, painted: a close crop, or the shade between the strands
-	const paintCol = cols.hair.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
-	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : 0.75);
+	// (under fluffy hair, the roots' own shade, nearly solid: a gap between its tufts is hair in
+	// shadow, not skin)
+	const fluffy = showHair && !H.style && FLUFFY.has(cutName);
+	const paintCol = cols.hair.clone().multiplyScalar(fluffy ? 0.55 : H.dyed ? 0.5 : 0.9);
+	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : fluffy ? 0.92 : 0.75);
 	const beard = hat?.kind === 'hazhood' ? null : beardFor(d, H, rng(d.seed ^ 0xbea4d));
 	P.skinMat.userData.beard.value.set(cols.stubble.r, cols.stubble.g, cols.stubble.b, beard ? beard.stubble : 0);
 	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));
-	P.hairWant = { style: showHair ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
+	P.hairWant = { style: showHair && (H.style || !FLUFFY.has(cutName)) ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
 	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
@@ -477,6 +490,17 @@ function hairUp(A, P) {
 		const hair = P.hair;
 		const animate = hairMotion(P, hair, hair.material.userData.U);
 		hair.onBeforeRender = () => { animate(); poseCapsules(P, caps, hair.material.userData.U, hair); };
+	}
+	else if (W.cut && FLUFFY.has(W.cut)) {
+		// fluffy hair (hair-fluff.js): tufts in locks, brushed the cut's way, skinned to the head
+		// and, as long hair falls, the neck and the back
+		coverScalp(P, null);
+		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume ?? H.vol, brush: H.brush, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
+		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
+		const hair = skinned(g, fluffMaterial(root, tip));
+		P.hair = hair;
+		const animate = hairMotion(P, hair, hair.material.userData.U);
+		hair.onBeforeRender = () => animate();
 	}
 	else if (W.cut) {
 		coverScalp(P, null);
@@ -584,19 +608,15 @@ function coverScalp(P, hair) {
 }
 
 function browOf(d) {
-	// (brows a shade darker than the hair, or as dark as set: people/hero.js browTone)
-	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * (d.browTone ?? 0.6)));
+	// (a shade darker than fair hair; dark hair's brows lifted a little off black, which only
+	// reads as a stroke; or as set, d.browTone)
+	const top = Math.max(...d.hairColour), tone = d.browTone ?? 0.85 + 1.15 * (1 - clamp((top - 0.06) / 0.24));
+	const col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * tone));
+	// (and never quite black: the darkest a deep brown-black)
+	const lum = Math.max(col.r, col.g, col.b);
+	if (lum < 0.07) col.multiplyScalar(0.07 / Math.max(lum, 1e-4));
 	const g = greyOf(d, 12);
 	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
-}
-
-// the skin's normals at the brow's vertices (for laying the brow hairs on the skin)
-function normalsOf(g, brow) {
-	const want = new Set();
-	for (let j = 0; j < brow.length; j += 2) want.add(brow[j]);
-	const src = g.userData.src, at = new Map(), na = g.attributes.normal;
-	for (let i = 0; i < src.length; i++) if (want.has(src[i])) at.set(src[i], i);
-	return (v, out) => { const i = at.get(v); if (i === undefined) out.set(0, 0, 1); else out.fromBufferAttribute(na, i); };
 }
 
 // a body let go for good: its own geometry, materials and skeleton (the shared assets stay)

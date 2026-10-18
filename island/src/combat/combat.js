@@ -93,8 +93,14 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const lim = best?.t ?? max;
 		let t = 0.3, prev = 0;
 		const above = (s) => o.y + d.y * s - ground(o.x + d.x * s, o.z + d.z * s, o.y + d.y * s);
+		// the sea: a round fired from above it stops at its face where the ground beneath is under it
+		const sea = w.island.hasOcean !== false && o.y > 0.2 && d.y < 0 && !w.deep?.active?.() && !w.island.far;
 		while (t < lim) {
 			const a = above(t);
+			if (sea && o.y + d.y * t < 0) {
+				const ts = -o.y / d.y;
+				if (ground(o.x + d.x * ts, o.z + d.z * ts, 0) < -0.05) return { t: ts, n: new THREE.Vector3(0, 1, 0), surface: 'water' };
+			}
 			if (a < 0) {
 				let lo = prev, hi = t;
 				for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (above(m) < 0) hi = m; else lo = m; }
@@ -131,7 +137,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 
 	// ---------- the pieces ----------
-	const fx = createFx({ isPhone, ground: (x, z) => ground(x, z) });
+	const fx = createFx({ isPhone, ground: (x, z) => ground(x, z), plumes: () => W()?.plumes });
 	const layer = createLayer();
 	const relations = createRelations(load('l99-factions', null));
 	const morality = createMorality({ store });
@@ -151,8 +157,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// booked() (true: downed is an arrest, and where you come to), death(h), ambient(zone, spot,
 	// roll) (true when it made the world's own trouble itself) and campOk(camp)
 	// (magic/: shield takes a blow aimed at you and returns what gets through, or null; cloak
-	// says whether you are hidden from those hunting you)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, casting: null, remoteSpell: null };
+	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
+	// weapons deal, for your skills)
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -305,12 +312,19 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (hit.ward) { spark(T, p, by); return { ward: true }; }
 		const blow = { amount: dmg, type, part: hit.part, src: from.clone ? from.clone() : from, dir: { x: dir.x, y: dir.y, z: dir.z }, by: by === ME ? ME : by?.T || by };
 		fx.impact(p, hit.n || { x: -dir.x, y: -dir.y, z: -dir.z }, T.surface || 'stone', type === 'energy');
+		// through a person: the spatter on what stands behind them, or the ground beyond
+		if (T.surface === 'person' && (type === 'ballistic' || type === 'pierce') && !T.child) {
+			const q = p.clone().addScaledVector(dir, 0.35), back = worldHit(q, dir, 3.2);
+			fx.spatter(p, dir, back ? { p: q.addScaledVector(dir, back.t), n: back.n } : null, hit.part === 'head' ? 1.3 : 1);
+		}
 		return deal(T, blow, by === ME);
 	}
 	// harm to a target, by its rules: shared things on a guest go to the host
 	function deal(T, blow, mine) {
 		if (warded(T)) return { ward: true, dealt: 0 };
 		if (!canHit(T, blow.by || null, rules)) return { ignored: true, dealt: 0 };
+		// (your weapons' blows, as your skills shape them: magic/skills.js)
+		if (mine && !blow.spell && hooks.power) blow = hooks.power(T, blow) || blow;
 		const before = T.moral?.();
 		let r;
 		if (T.shared && !host()) { net.hit(T.id, blow); r = { dealt: blow.amount, remote: true }; }
@@ -391,6 +405,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 			fx.tracer(from, end, S.tracer);
 			net.fx(from, end, S.tracer, hit ? 1 : 0);
+			// the spent case out of the breech, a hand's length back from the muzzle
+			if (S.type !== 'energy') fx.wisp(from, dir);
+			if (S.type !== 'energy') fx.casing({ x: from.x - dir.x * 0.32, y: from.y - dir.y * 0.32 + 0.03, z: from.z - dir.z * 0.32 }, dir);
 		}
 		const at = eye();
 		if(Date.now()-lastShotNotice>4000) {lastShotNotice=Date.now();notice('shots',at,'fired a weapon nearby');}
@@ -580,6 +597,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			const M = fireMeta.get(F.id);
 			if (!M) continue;
 			M.t += dt; M.emit -= dt;
+			// the smoke over it, seen from across the land while it burns and long after
+			{ const big = M.kind === 'building' && M.b, g = ground(F.x, F.z); fx.column('fire:' + F.id, { x: F.x, y: g + (big ? (M.b.wallH || 6) : 1), z: F.z, h: big ? 120 + F.heat * 90 : M.kind === 'car' ? 80 : 45, r: big ? Math.max(3, Math.max(M.b.w, M.b.d) * 0.22) : 2, spread: big ? 5 : 6, shade: 0.07, k: 0.3 + 0.7 * F.heat, life: 1.5, fade: big ? 120 : 70 }); }
 			// a crew comes on Earth
 			// (an engine from the nearest station when there is one: services/index.js; else they walk in)
 			if (isEarth() && !M.crew && M.t > 10 && (M.kind === 'building' || M.kind === 'car')) {
@@ -655,7 +674,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		me: () => ({ speed: me.speed, grounded: !!P()?.grounded || !!W()?.deep?.active?.(), vel: me.vel }),
 		projectile, firstHit, landShot, hurtPlayer, blast, missile, ignite: (id, x, z, f, mine) => ignite(id, x, z, f, !!mine), shake: (k) => shakeIt(k),
 		strikeNpc: (T, blow, at) => { if (at) fx.impact(at, null, T.surface, blow.type === 'energy'); return deal(T, blow, false); },
-		whiz: () => sound('whiz'), heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p),
+		whiz: () => { sound('whiz'); hud.suppress(0.3); }, heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p),
 		wanted: () => wanted.stars, bounty: () => morality.reactions().bounty, playerDown: () => me.ko > 0,
 		civilians: () => [...layer.map.values()].filter((T) => T.kind === 'person' && !T.child),
 		coverNear: (x, z, r) => hooks.cover?.(x, z, r) || props.coverNear(x, z, r) || buildingCover(x, z, r),
@@ -672,12 +691,22 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		mayStation: (fid, x, z) => mayStation({ ...FACTIONS[fid], id: fid }, x, z, [...(hooks.posts?.() || []), ...campsNear(x, z)]),
 		trespass: (h) => !!hooks.trespass?.(h),
 		onSurrender: (h) => { if (Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 60) hint(`${h.F.name}: one of them throws down their weapon and surrenders. They are out of the fight.`, 4000, 1); },
-		onDeath: (h) => { recovery.add(h); gangDeath(h); hooks.death?.(h); },
+		onDeath: (h, blow) => { recovery.add(h); gangDeath(h); hooks.death?.(h); feedDeath(h, blow); },
 		onSpared: (h, d) => { if (d < 50) morality.record({ kind: 'spare', target: h.T.name, faction: h.fid, place: placeName(), world: worldKey }); },
 		onPhase: (B0) => net.boss(B0, true),
 		onBossDown: (B0) => bossDown(B0),
 		onDestroyed: (S) => { if (S.lastMine) { morality.record({ kind: 'arson', target: 'a car', place: placeName(), world: worldKey, ctx: { occupied: !!S.fled } }); crime('car', S.pos || eye(), true); } },
 	};
+	// the kill feed: who fell to whom within sight of the fight (yours always), and with what
+	const plainName = (n) => String(n || 'someone').replace(/^an? /i, '').replace(/^\w/, (c) => c.toUpperCase());
+	function feedDeath(h, blow) {
+		const mine = blow?.by === ME, e = eye();
+		if (!mine && Math.hypot(h.pos.x - e.x, h.pos.z - e.z) > 150) return;
+		const by = blow?.by, killer = mine ? 'You' : by?.name ? plainName(by.name) : by?.faction && FACTIONS[by.faction] ? FACTIONS[by.faction].name : null;
+		if (!killer) return;
+		const how = blow?.melee ? 'hands' : blow?.type === 'blast' ? 'blast' : blow?.type === 'fire' ? 'fire' : mine && Wp ? Wp.S.name : '';
+		hud.feed(killer, plainName(h.T?.name), how, { mine, head: blow?.part === 'head' });
+	}
 	function buildingCover(x, z, r) { const b = boxesNear(x, z, r).find((q) => q.w > 2); return b ? { x: b.x, z: b.z, r: Math.max(b.w, b.d) / 2 } : null; }
 	// the fighters kept out of buildings: the boxes round each cell of the street, looked up a
 	// few times a second rather than every step of every body
@@ -1086,7 +1115,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- for the console and the tests ----------
 	const api = {
-		update, reset, heard, group, layer, fx, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
+		update, reset, heard, group, layer, fx, hud, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
 		projectile, blast, firstHit, landShot, ground, eye, sound: (k, at) => sound(k, at), deal: (T, blow, mine) => deal(T, blow, mine), hurtPlayer, wantedLevel: () => wanted.stars, isEarth, zone: () => (W() ? zone() : null),
 		// harm done by your vehicle's guns (military/): yours, weighed like a shot
 		strikeAs: (T, blow) => deal(T, { ...blow, by: ME }, true),
@@ -1110,6 +1139,15 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		sendFx: (a, b, style, impact) => net.fx(a, b, style, impact),
 		// your health as it stands (magic/: a death ward, a rewind)
 		vitals: () => ({ hp: me.H.hp, max: me.H.max, ko: me.ko > 0, state: me.H.state }),
+		// the top of your life (magic/stats.js: Vigour); you keep the share of it you had
+		setLifeMax: (n) => {
+			n = Math.max(1, Math.round(+n || 100));
+			if (n === me.H.max) return n;
+			const f = me.H.hp / Math.max(1, me.H.max);
+			me.H.max = n;
+			if (me.H.state === 'ok') me.H.hp = Math.max(1, Math.min(n, n * f));
+			return n;
+		},
 		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),
 		tend: (p) => civilians.tend(p),
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),

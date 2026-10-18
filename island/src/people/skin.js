@@ -30,8 +30,9 @@
 import * as THREE from 'three';
 import { INK_GLSL, inkUniforms } from '../tattoo/skinink.js';
 import { qualityNow, onQuality } from '../world/governor.js';
+import { GFX_PHONE } from '../world/device.js';
 
-const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const isPhone = GFX_PHONE;
 
 // the fine detail by quality tier (x), how far off people keep their pores (y, metres; none on
 // a phone's minimal tier), and whether the noise's octaves are drawn at all (z: off on the low

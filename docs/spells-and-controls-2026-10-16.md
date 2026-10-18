@@ -16,7 +16,7 @@ The owner asked for:
 | Alt / Option twice quickly | Back to aiming (the mouse is captured again) |
 | 1 to 5 | Take up the weapon on that key; press it again to put it away |
 | 6 to 0 | Cast the spell bound to that key (a beam is held) |
-| N | The spellbook |
+| Tab or N | Skills and magic: the spells and perks, a page for each skill ([skills-and-magic-menu-2026-10-16.md](skills-and-magic-menu-2026-10-16.md)) |
 | Shift + Mark and Recall | Mark anew instead of returning |
 
 The weapons you own fill the keys 1 to 5 as you come by them: the best of each kind first, in
@@ -78,7 +78,7 @@ Everything is kept between visits (`l99-magic`).
 
 | School | Spells, by tier |
 |---|---|
-| **Radiance** | Sunspark (bolt) · Lance of Dawn (held beam) · Solar Flare (burst that blinds) · Judgement (pillar of light from the sky) |
+| **Radiance** | Sunspark (bolt) · Lance of Dawn (three lances that fall out of the sun, or the moon at night) · Solar Flare (a column of light from wherever the sun stands, that blinds; by night from the moon once mastered) · Judgement (pillar of light from the sky) |
 | **Restoration** | Mend · Renewal (heal over time) · Sanctuary (healing ground that slows foes) · Resurgence (two minutes in which a lethal blow is turned aside) |
 | **Warding** | Aegis (absorbs blows) · Radiant Aura (burns those close) · Bulwark (nothing reaches you for 3.5 s) · Banish (throws foes back and makes them flee) |
 | **Dawn** | Lumen (a light at your shoulder) · Dawnsight (see the aether through walls) · Swiftstride (speed, high jumps, gentle falls) · Waterstride (walk on water) · Daybreak (turns the night to dawn) · Sunwell Gate (travel to a well you have found) |
@@ -117,6 +117,18 @@ Everything is kept between visits (`l99-magic`).
   catastrophes.
 - **Light:** Lumen and Nightsight lift the eye's exposure in the dark (one factor in `main.js`).
   No scene lights are added, so no materials recompile.
+- **Elements** (`magic/elements.js`): what lands sets off its element's affliction, with a look of
+  its own on the body. Radiant sears (25% of the blow again over 3 s). Fire burns (40% over 4 s).
+  Frost chills (60% pace for 3 s), and the third chill in a row freezes for 1.5 s. Storm jolts
+  (0.35 s) and 30% leaps to the nearest other foe. Shadow leaves dread (15% more from you for
+  4 s). Void unravels (30% strikes again 0.9 s later). Blight rots (30% over 6 s). Follow-on damage
+  is a share of the blow as it landed and never sets off another. Bosses take the damage and the
+  dread but are never slowed, frozen or jolted. A foe your element kills goes down its way: burned
+  to ash, seared to light, shattered, scattered as sparks, dissolved to shadow, folded into
+  nothing, or melted.
+- **Aether and your name:** a mote gives more of the strand your reputation leans to (up to twice
+  the light at +100, twice the dark at -100) and less of the other, down to half (`aetherShare`).
+  Sparing a foe still gives light fabric, and a kill gives dark.
 - **Daybreak** moves the sky's clock to dawn over six seconds (by night only, once every five
   minutes).
 - **Performance:**
@@ -125,6 +137,99 @@ Everything is kept between visits (`l99-magic`).
   - The sight spells draw that pool over the walls while they last.
   - Each school has a short synthesised voice on the world's sound bus.
 
+## How each spell looks
+
+Every spell has a look of its own (`magic/looks.js`), drawn from Diablo IV first, then Guild Wars 2
+and World of Warcraft. The idea is that you can name a spell from its silhouette and colour alone.
+
+- **Each school has a motif.** Radiance uses gold stars and spears of light. Restoration uses leaves
+  and green rings. Warding uses hexagons and white gales. Dawn uses rose runes. Shadow uses black ink
+  smoke with violet rims and eyes. Void uses crystal shards and warped rings. Blight uses poison
+  drips and fog. Umbral uses wraiths. Storm uses forked lightning. Chrono uses clockwork runes.
+  Primal uses flame, ice and rain.
+- **Shapes:** `fx.js` draws twelve shapes: orb, star, ring, shard, flame, streak, rune, smoke, eyes,
+  cross, hex and leaf.
+- **Three kinds of particle:** glowing ones, dark "ink" ones (so shadow and smoke read as dark and
+  not as glow), and hard streaks. Streaks have a white-hot core and a sharp edge and come in two
+  forms:
+  - Sparks, stretched along their own flight.
+  - Segments, used for lightning, a bolt's spear, a beam's core and a falling lance.
+- **Force over fluff (October 17):** the shared bursts, lines, lightning, rings, pillars and swirls
+  now throw hard sparks and strokes as well as glow.
+  - Bolts fly as spears of light with a white core.
+  - Hits slam: a hot flash, a ring snapping out, rays thrown on through along the blow, falling
+    debris and a ring on the ground.
+  - The forms that changed:
+    - Judgement drops a blade with a crossguard.
+    - Lance of Dawn falls as true shafts and stands where it struck.
+    - Frost Nova cracks the ground and raises ice spikes.
+    - Night Terror rakes red claws.
+    - Repulse throws a hard front of force.
+- **Ground marks:** rings and runes on the ground are flat decals, not points.
+- **Pools:** glow 3,200 (1,400 on a phone), ink 700 (300), streaks 1,600 (500), decals 48 (24). Nothing is made while
+  you cast.
+- **Lance of Dawn** is now an area spell. Three lances fall point first around where you aim. By
+  day they come out of the sun in gold, and by night out of the moon in silver. A ring on the ground
+  warns where each will land.
+- **Solar Flare** brings down a column of directed light from the sun's real place in the sky onto
+  where you aim, then bursts. By night it is refused and costs nothing, unless it channels the moon
+  (`state.moonlit`, an array of ids the skills side fills when the spell reaches mastery III;
+  `Crysis.magic.moonlit()` on the console). Then it comes from the moon, in silver, a fifth weaker.
+- **Gargantua**, Void's fifth rung: a black hole appears as a dot on the horizon and swells until it
+  fills the whole sky by 8.5 s (a dark veil takes the sky behind you too, and the sun, the sky's light
+  and the haze on the ground dim with it: `magic.darkness()`, read in main.js). Over ten seconds it draws in
+  and destroys every hostile fighter within 600 m, and takes a quarter of any boss's life.
+- **Over the horizon:** Gargantua's heart sits a little above your eye's level and nothing of it
+  below that level is drawn (`uCut` in fx.js), so it rises out from behind the horizon.
+- **Gravitational lensing** round Gargantua's rim (`magic/lens.js`): after the frame is drawn it is
+  copied and drawn again, and in a band round the rim, above the horizon, each pixel reads from just
+  past the rim, so what lies beyond is drawn out along its edge, with a thin photon ring on the edge.
+  The sphere stays in the scene, so what stands in front still hides it. The game's canvas has no
+  alpha, so the copy is taken as RGB8; an RGBA copy fails there and comes back black.
+- **Its ending:** from 75% of its time the colours of everything but the hole invert, in a wave
+  spreading out from it, then drain to grey, then go black; after two seconds of black the world
+  bursts back over-bright and over-saturated, with a kick (`fx.gradeFrom`, drawn by the same pass).
+- **The gallery:** `node island/tools/spell-looks-browser.cjs` plays every look in a small scene of
+  its own, with no game loaded, and saves one picture per spell to `/tmp/spell-looks` (`ONLY=` picks
+  some; `FLIGHT=1` catches bolts mid-flight; Gargantua is drawn over a checked backdrop so the
+  lensing shows, and `GROW=<s>` also shows its ending's grade at s).
+
+## Sharper pass, 2026-10-18 evening
+
+The softest-looking spells in the gallery got hard forms: Ball Lightning a white-hot heart in a
+lashing cage of jagged strokes; Plague Cloud acid needles spitting out of cracking green ground;
+Soul Siphon a hard core with a turning strand and souls streaking back; Night Terror three sets of
+great raking claws across the cone; Eclipse corona spears round the disc and the ground split by
+its burst; Contagion an acid splash of falling droplets and a hard leaping arc; Withering the ground
+cracking dry; Hex of Decay thorns of rot punched up round the target (`cracks()` in looks.js). The
+palm's light now shows even before your body has given the hands a mesh (it was hidden with the
+hand), and the screen-edge flash is stronger (0.7 at its peak).
+
+Then the spells on yourself and the summons: Call Rain hard silver strokes splashing off the
+ground; Shadowstep a jagged tear where you stood; Umbral Cloak shards of dark spiralling up and a ring
+snapping shut; Summon Shade and Grave Host spikes torn up out of split ground (`spikes()`); Dark
+Pact a cage of blood spikes; Aegis its plates locking with struck edges; Renewal hard green threads
+spiralling up you. `SELF=1` in the gallery catches these a tenth of a second in.
+
+Then the quieter ones: Mend a hard white cross standing up through you over a ring of mint spikes;
+Resurgence the phoenix's wings traced in gold lines over flame spikes and split ground; Lumen four
+rays turning round its small sun; Swiftstride hard wind lines cut back from your heels; Waterstride a
+crown of droplet lines thrown up with each ring; Nightsight a crossed eye of violet lines and the dark
+cracking open; Quicken gear teeth on its rings and clock hands under you; Rewind the path you came by
+drawn back in hard lines with hands spun backwards.
+
+And the wards: Bulwark's dome slams down with its ribs struck in hard lines and the ground cracking
+under it; Sunwell Gate's rim traced in gold with rays struck out of it; Radiant Aura flame tongues
+stabbing up round its ring; Stasis crystal facets locking round the one it holds.
+
+## Test mode
+
+**∞ Test mode** in the places menu (under Skills and magic; `Crysis.magic.test(true)` from the
+console) opens everything for trying spells without the climb: every spell known and at mastery V,
+every skill at rank 100, every perk taken, and mana, both aethers and cooldowns topped up every
+frame. What you had is saved when it is turned on and comes back when it is turned off; nothing is
+saved while it is on. It stays on across reloads until turned off.
+
 ## Console
 
 `Crysis.magic`:
@@ -132,11 +237,11 @@ Everything is kept between visits (`l99-magic`).
 - `.give('light', 100)`: add fabric.
 - `.all()`: know every spell.
 - `.learn(id)`, `.bind(slot, id)`, `.cast(id)`
-- `.hud.open()`: open the spellbook.
+- `.hud.open()`: open the skills and magic menu (it replaced the spellbook).
 
 ## Tests
 
-`node --test island/tools/magic.test.mjs` (11):
+`node --test island/tools/magic.test.mjs` (14):
 - every spell is whole, and no school's ladder is missing a rung;
 - the runtime handles every kind of spell;
 - weaving, affinity and the ladder, and twilight's gate;
@@ -146,7 +251,10 @@ Everything is kept between visits (`l99-magic`).
 - the aether's placement (the same every time, none in the sea, each world its own, high ground
   leaning to light, wells rare), and which strands show when and coming back;
 - the weapons on the keys 1 to 5;
-- the look modes and the keys being wired.
+- the look modes and the keys being wired;
+- every spell has a look of its own, and no two look alike;
+- Solar Flare needs the sun until it channels the moon, and the aether leans to your name;
+- each element does its own thing to the one it strikes.
 
 ## Found on the way: memory while the mouse is captured
 

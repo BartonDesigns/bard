@@ -303,6 +303,28 @@ export function tuft(seed, kind = 'bunch') {
 	}
 	return { parts: [b.geometry()], height: H };
 }
+// a sward: a metre-wide patch of short turf, its blades spread evenly (not from one crown)
+// and leaning every way, to carpet the open ground between the bunches. Each blade is a
+// little brighter or duller, warmer or cooler than the next; the instance tint gives the season
+export function sward(seed) {
+	const r = mulberry32(seed), b = new Builder(), up = V(0, 1, 0);
+	for (let i = 0; i < 40; i++) {
+		const a = r() * 6.28, d = Math.sqrt(r()) * 0.55, la = r() * 6.28, dx = Math.cos(la), dz = Math.sin(la);
+		const h = 0.05 + Math.pow(r(), 1.6) * 0.17, lean = 0.1 + r() * 0.5, w = 0.008 + r() * 0.008;
+		const o = V(Math.cos(a) * d, 0, Math.sin(a) * d), side = V(-dz, 0, dx);
+		const v = 0.8 + r() * 0.4, warm = (r() - 0.5) * 0.24, seg = 2, ids = [];
+		const nn = up.clone().add(V(dx * 0.3, 0, dz * 0.3)).normalize();
+		for (let k = 0; k <= seg; k++) {
+			const t = k / seg, bend = lean * t * t;
+			const p = o.clone().add(V(dx * bend * h, h * t * (1 - bend * 0.3), dz * bend * h));
+			const ww = w * (1 - t * 0.85), l = (0.45 + 0.55 * Math.pow(t, 0.7)) * v;
+			const col = { r: l * (1 + warm), g: l, b: l * (1 - warm) };
+			ids.push(b.vert(p.clone().add(side.clone().multiplyScalar(-ww)), nn, [0, t], col, t), b.vert(p.clone().add(side.clone().multiplyScalar(ww)), nn, [1, t], col, t));
+		}
+		for (let k = 0; k < seg; k++) { const q = k * 2; b.tri(ids[q], ids[q + 1], ids[q + 2]); b.tri(ids[q + 1], ids[q + 3], ids[q + 2]); }
+	}
+	return { parts: [b.geometry()], height: 0.22 };
+}
 // the weeds of the disturbed ground: yellow star-thistle (grey-green, spiny yellow heads),
 // fennel (tall feathery, umbels), black mustard (yellow in spring); colours are baked,
 // the tint only shades

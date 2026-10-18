@@ -26,9 +26,10 @@
 import * as THREE from 'three';
 import { qualityNow } from '../world/governor.js';
 import { bake, tessellate, tessellatedCount, findPieces, pieceFixture, quadBoxes, QUALITY, E_RANGE } from './lightbake.js';
+import { GFX_PHONE } from '../world/device.js';
 
 const S = {
-	isPhone: typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || ''),
+	isPhone: GFX_PHONE,
 	queue: [], live: new Set(), cache: new Map(), budget: 3, night: 0, hours: 12, time: 0,
 	scene: null, lights: [], lastTick: -1, lastPick: 0, movers: [], casters: new Map(), blobs: null,
 	stats: { baked: 0, cached: 0, ms: 0, lastMs: 0, verts: 0, bytes: 0, fixtures: 0 },
@@ -126,7 +127,7 @@ function step(renderer, scene, camera, dt, ease) {
 		if (H.halo) { const u = H.halo.material.uniforms; u.uK.value = H.k * (0.35 + 0.65 * S.night); u.uNight.value = H.nk; u.uTime.value = S.time; u.uViewH.value = renderer.domElement.height * 0.5 * (camera.projectionMatrix?.elements[5] || 1); }
 		if (H.cones) { const u = H.cones.material.uniforms; u.uK.value = H.k * (0.45 + 0.55 * S.night); u.uNight.value = H.nk; u.uTime.value = S.time; }
 	}
-	if (camera) { place(camera, dt); blobs(camera); }
+	if (camera) { shadowLight(renderer); place(camera, dt); blobs(camera); }
 }
 
 function attach(scene, renderer) {
@@ -138,7 +139,8 @@ function attach(scene, renderer) {
 		const l = new THREE.PointLight(0xffe2c0, 0, 14, 2);
 		l.name = 'lighting:fixture';
 		// (the nearest throws shadows, on a desktop with shadows on: the people's on the floor)
-		if (i === 0 && !S.isPhone && renderer?.shadowMap?.enabled) { l.castShadow = true; l.shadow.mapSize.set(256, 256); l.shadow.camera.near = 0.1; l.shadow.camera.far = 14; l.shadow.bias = -0.004; l.shadow.radius = 3; l.shadow.autoUpdate = false; l.shadow.needsUpdate = true; }
+		// (castShadow itself follows the renderer's shadows: shadowLight below)
+		if (i === 0 && !S.isPhone) { l.castShadow = !!renderer?.shadowMap?.enabled; l.shadow.mapSize.set(256, 256); l.shadow.camera.near = 0.1; l.shadow.camera.far = 14; l.shadow.bias = -0.004; l.shadow.radius = 3; l.shadow.autoUpdate = false; l.shadow.needsUpdate = true; }
 		l.userData.f = null; l.userData.k = 0;
 		scene.add(l);
 		S.lights.push(l);
@@ -157,6 +159,17 @@ function within(H, p) {
 	tmpV.copy(p).applyMatrix4(tmpM);
 	const b = H.bounds;
 	return tmpV.x > b[0] - 0.2 && tmpV.x < b[3] + 0.2 && tmpV.y > b[1] - 0.5 && tmpV.y < b[4] + 0.5 && tmpV.z > b[2] - 0.2 && tmpV.z < b[5] + 0.2;
+}
+// the nearest light throws shadows only while the renderer draws them. Left on with shadows
+// off (a lighter tier, chosen as the frame rate fell), every lit shader kept a cube shadow
+// sampler with no shadow map drawn behind it, and the graphics refused those draws: the
+// ground, the buildings and the trees went missing wherever an interior had been near
+function shadowLight(renderer) {
+	const l = S.lights[0], want = !!l && !S.isPhone && !!renderer?.shadowMap?.enabled;
+	if (!l || l.castShadow === want) return;
+	l.castShadow = want;
+	if (want) l.shadow.needsUpdate = true;
+	else if (l.shadow.map) { l.shadow.map.dispose(); l.shadow.map = null; }
 }
 function place(camera, dt) {
 	if (!S.lights.length) return;

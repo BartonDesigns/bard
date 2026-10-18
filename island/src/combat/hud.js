@@ -1,7 +1,7 @@
 // The fight on screen, kept small: a thin health bar (armour above it), the magazine and reserve
 // with the fire mode, a crosshair that opens with the spread and flashes a hit marker, wedges
 // round it pointing to where a blow came from, a boss's bar across the top with its phase, the
-// wanted stars, short call-outs, and on a touch screen Fire, Reload and Mode buttons by the
+// wanted stars, short call-outs, a feed of who fell to whom nearby (yours marked), and on a touch screen Fire, Reload and Mode buttons by the
 // thumb. Shown only when it matters (a weapon in hand, a fight on, a recent hit).
 
 const CSS = `
@@ -14,6 +14,8 @@ const CSS = `
 .cb-hit i{position:absolute;left:12px;top:0;width:2px;height:8px;background:#fff;box-shadow:0 0 3px rgba(0,0,0,.6)}
 .cb-dmg{position:absolute;left:50%;top:50%;width:0;height:0}
 .cb-dmg i{position:absolute;left:-34px;top:-118px;width:68px;height:22px;border-radius:50% 50% 0 0/100% 100% 0 0;border-top:4px solid rgba(255,90,60,.9);opacity:0;transform-origin:34px 118px;filter:drop-shadow(0 0 4px rgba(255,60,30,.7))}
+.cb-sup{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 38%,rgba(8,10,12,.62) 100%);-webkit-mask-image:radial-gradient(ellipse at center,transparent 30%,#000 85%);mask-image:radial-gradient(ellipse at center,transparent 30%,#000 85%)}
+.cb-sup.b{-webkit-backdrop-filter:saturate(.5) brightness(.85);backdrop-filter:saturate(.5) brightness(.85)}
 .cb-edge{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(150,30,20,.55) 100%);transition:opacity .25s}
 .cb-hp{position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + 86px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);opacity:0;transition:opacity .4s}
 .cb-bar{height:5px;border-radius:3px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
@@ -34,6 +36,9 @@ const CSS = `
 .cb-star .on{color:#ffd24a;text-shadow:0 0 6px rgba(255,180,40,.8)}.cb-star .off{color:rgba(255,255,255,.25)}
 .cb-calls{position:absolute;left:calc(14px + env(safe-area-inset-left));top:40%;display:flex;flex-direction:column;gap:4px;max-width:46vw}
 .cb-calls div{background:rgba(10,16,20,.5);padding:4px 8px;border-radius:6px;font-weight:500;transition:opacity .6s}
+.cb-feed{position:absolute;right:calc(14px + env(safe-area-inset-right));top:calc(48px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:56vw}
+.cb-feed div{background:rgba(10,16,20,.55);padding:3px 8px;border-radius:4px;font:600 12px/1.3 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:opacity .5s}
+.cb-feed div.me{box-shadow:inset 3px 0 0 #01a982}.cb-feed em{font-style:normal;opacity:.7;font-weight:500;margin:0 6px}.cb-feed .a{color:#9ff0d4}.cb-feed .v{color:#ffb08a}.cb-feed .h{color:#ffd27a;margin-left:6px}
 .cb-ko{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(6,10,14,.55);opacity:0;transition:opacity .5s;font:700 22px system-ui,sans-serif;letter-spacing:2px}
 .cb-ko small{font:500 13px system-ui,sans-serif;letter-spacing:0;opacity:.8;margin-top:8px}
 .cb-btn{position:absolute;pointer-events:auto;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:rgba(10,16,20,.45);color:#eafaf6;display:none;align-items:center;justify-content:center;touch-action:none;font:700 12px system-ui,sans-serif;user-select:none;-webkit-user-select:none}
@@ -47,6 +52,9 @@ export function createHud({ mount, touch = false }) {
 	const root = document.createElement('div');
 	root.className = 'cb-hud';
 	mount.appendChild(root);
+	// suppression: rounds cracking past close darken and drain the colour from the edges of sight (the drain only
+	// with a mouse: a phone's compositor pays dearly for it)
+	const sup = el('cb-sup' + (touch ? '' : ' b'));
 	const edge = el('cb-edge');
 	const cross = el('cb-x', '<i class="h"></i><i class="h"></i><i class="v"></i><i class="v"></i><b></b>');
 	const arms = [...cross.querySelectorAll('i')];
@@ -61,6 +69,7 @@ export function createHud({ mount, touch = false }) {
 	const bT = boss.querySelector('.t'), bP = boss.querySelector('.p'), bBar = boss.querySelector('.cb-bar'), bFill = bBar.querySelector('div'), bPh = boss.querySelector('.ph');
 	const star = el('cb-star');
 	const calls = el('cb-calls');
+	const feedEl = el('cb-feed');
 	const ko = el('cb-ko', 'KNOCKED OUT<small></small>');
 	const koSmall = ko.querySelector('small');
 
@@ -82,8 +91,8 @@ export function createHud({ mount, touch = false }) {
 		mkBtn('Mode', 'AUTO', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 226px + env(safe-area-inset-bottom));width:44px;height:44px;font-size:9px;');
 	}
 
-	let hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
-	const callList = [];
+	let supK = 0, hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
+	const callList = [], feedList = [];
 	return {
 		root, btns,
 		// a hit landed: kill true for the last one
@@ -94,12 +103,27 @@ export function createHud({ mount, touch = false }) {
 			w.t = 1.2; w.a = angle; w.k = k;
 			edgeT = Math.max(edgeT, 0.35 + k * 0.6);
 		},
+		// a round cracked past (k 0..1): it builds with more of them and eases off when they stop
+		suppress(k = 0.35) { supK = Math.min(1, supK + k); },
 		call(text, ms = 2600) {
 			const d = document.createElement('div'); d.textContent = text; calls.appendChild(d);
 			callList.push({ d, t: ms / 1000 });
 			while (callList.length > 4) callList.shift().d.remove();
 		},
 		phase(name) { bPh.textContent = name; bossPhT = 2.8; },
+		// someone fell: who to whom, with what; mine marks it as yours, head a headshot
+		feed(killer, victim, how = '', { mine = false, head = false } = {}) {
+			const d = document.createElement('div');
+			if (mine) d.className = 'me';
+			const a = document.createElement('span'); a.className = 'a'; a.textContent = killer;
+			const w = document.createElement('em'); w.textContent = how ? `✕ ${how}` : '✕';
+			const v = document.createElement('span'); v.className = 'v'; v.textContent = victim;
+			d.append(a, w, v);
+			if (head) { const h = document.createElement('span'); h.className = 'h'; h.textContent = '◎'; h.title = 'Headshot'; d.appendChild(h); }
+			feedEl.appendChild(d);
+			feedList.push({ d, t: 5.5 });
+			while (feedList.length > 5) feedList.shift().d.remove();
+		},
 		// once a frame: S = { show, spread (px), health: { hp, max, armour, armourMax }, weapon: {
 		// name, mag, reserve, mode, reloading }, boss: { name, phase, frac, notches }, stars, ko }
 		update(dt, S) {
@@ -118,6 +142,10 @@ export function createHud({ mount, touch = false }) {
 				w.e.style.transform = `rotate(${w.a}rad)`;
 			}
 			edgeT = Math.max(0, edgeT - dt * 0.8);
+			supK = Math.max(0, supK - dt * 0.45);
+			const so = S.ko ? 0 : Math.min(0.95, supK * 1.2);
+			if (sup.style.opacity !== so.toFixed(2)) sup.style.opacity = so.toFixed(2);
+			sup.style.display = so > 0 ? '' : 'none';
 			const H = S.health;
 			const low = H && H.hp / H.max < 0.3;
 			edge.style.opacity = String(Math.min(0.9, edgeT + (low && !S.ko ? 0.25 + 0.15 * Math.sin(performance.now() / 260) : 0)));
@@ -156,6 +184,7 @@ export function createHud({ mount, touch = false }) {
 			bPh.style.opacity = bossPhT > 0 ? String(Math.min(1, bossPhT)) : '0';
 			if (S.stars !== lastStars) { lastStars = S.stars; star.innerHTML = [1, 2, 3, 4, 5].map((i) => `<span class="${i <= S.stars ? 'on' : 'off'}">★</span>`).join(''); }
 			star.style.opacity = S.stars > 0 && !S.ko ? '1' : '0';
+			for (let i = feedList.length - 1; i >= 0; i--) { const c = feedList[i]; c.t -= dt; c.d.style.opacity = String(Math.min(1, c.t)); if (c.t <= 0) { c.d.remove(); feedList.splice(i, 1); } }
 			for (let i = callList.length - 1; i >= 0; i--) { const c = callList[i]; c.t -= dt; c.d.style.opacity = String(Math.min(1, c.t * 2)); if (c.t <= 0) { c.d.remove(); callList.splice(i, 1); } }
 			ko.style.opacity = S.ko ? '1' : '0';
 			if (S.ko) koSmall.textContent = S.koText || '';

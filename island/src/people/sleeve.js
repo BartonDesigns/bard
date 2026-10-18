@@ -32,10 +32,11 @@
 
 import * as THREE from 'three';
 import { qualityNow, onQuality } from '../world/governor.js';
+import { kitShare } from './kit-light.js';
 
 // ---------- what a garment is made of, and how its sleeve ends ----------
 export const FAB = { jersey: 0, sweat: 1, shirting: 2, twill: 3, nylon: 4, denim: 5, canvas: 6, fleece: 7, leather: 8, knit: 9, wool: 10, flannel: 11 };
-export const PAT = { plain: 0, stripe: 1, pinstripe: 2, plaid: 3, check: 4, track: 5, camo: 6, quilt: 7, dots: 8 };
+export const PAT = { plain: 0, stripe: 1, pinstripe: 2, plaid: 3, check: 4, track: 5, camo: 6, quilt: 7, dots: 8, mail: 9, plate: 10 };
 export const CUFF = { hem: 0, rib: 1, button: 2, storm: 3, band: 4, tab: 5 };
 // (the parts of the mesh, for the shader)
 const PART = { tube: 0, cuff: 1, rim: 2, roll: 3, glove: 4, gloveCuff: 5 };
@@ -52,7 +53,7 @@ function fabricOf(g) {
 	if (g.fab === 'nylon' || g.fab === 'tech' || /^(shell|puffer|quilted|bomber|track|pufferVest|suit|rash|jersey)$/.test(g.kind)) return 'nylon';
 	if (g.kind === 'flannel' || g.pat === 'plaid') return 'flannel';
 	if (g.fab === 'canvas' || g.fab === 'linen' || /^(chore|utility|jacket|carpenter|trench)$/.test(g.kind)) return 'canvas';
-	if (g.fab === 'wool' || /^(blazer|tunic)$/.test(g.kind)) return 'wool';
+	if (g.fab === 'wool' || g.fab === 'metal' || /^(blazer|tunic)$/.test(g.kind)) return 'wool';
 	if (/^(hoodie|sweat|halfzip)$/.test(g.kind)) return 'sweat';
 	if (g.kind === 'knit' || g.pat === 'rib') return 'knit';
 	if (/^(shirt|oxford|coverup)$/.test(g.kind)) return 'shirting';
@@ -68,6 +69,7 @@ function patternOf(g) {
 	if (p === 'track') return 'track';
 	if (p === 'quilt') return 'quilt';
 	if (p === 'dots') return 'dots';
+	if (p === 'mail') return 'mail';
 	return 'plain';
 }
 function cuffOf(g, fab) {
@@ -129,7 +131,15 @@ export function sleeveSpec(o = {}) {
 	else if (inner && (inner.length === 'long' || inner.length === 'rolled')) layers.push(inner);
 	const G = o?.acc?.find?.((q) => q.kind === 'gloves');
 	let glove = null;
-	if (G) {
+	if (G?.steel) {
+		// a gauntlet: dark leather, the back of the hand and the cuff in steel lames
+		const leather = hex(G.leather, 0x2b211a), steel = hex(G.col, 0x55595e);
+		glove = { kind: 'plate', col: leather, palm: leather, knuckle: steel, wear: 0.3 };
+		// and the vambrace over the forearm, as third person straps it on (garment.js), the mail
+		// showing above it at the elbow
+		const top = layers[layers.length - 1];
+		if (top) layers[layers.length - 1] = { ...top, pat: 'plate', acc2: steel, cuff: 'hem' };
+	} else if (G) {
 		const tactical = T?.pat === 'camo' || o.acc.some((q) => q.kind === 'carrier' || q.kind === 'helmet' || q.kind === 'peaked' || q.police);
 		const col = hex(G.col, 0x2a2b2e);
 		glove = { kind: tactical ? 'tactical' : 'knit', col, palm: tactical ? new THREE.Color(col).lerp(new THREE.Color(0x6b5a44), 0.25).getHex() : col, knuckle: new THREE.Color(col).multiplyScalar(0.6).getHex(), wear: tactical ? 0.35 : 0.2 };
@@ -495,6 +505,10 @@ float garFold(float s, float th, float sh, int side, int slot) {
 	h += smoothstep(c0 + 0.004, c0 + 0.04, sh) * (0.95 * sg * sg + 0.3 * sg * garRidge(th * 8.0 + s * 12.0 + seed));
 	// creases it remembers
 	h += 0.45 * (garNoise(vec2(s * 30.0, th * 2.0 + seed)) - 0.5) + 0.1 * (garNoise(vec2(s * 80.0 + 7.0, th * 4.0 + seed)) - 0.5);
+	// mail hangs in fewer, heavier folds; under a vambrace the forearm holds none at all
+	int pt = int(lay.y + 0.5);
+	if (pt >= 9) h *= 0.55;
+	if (pt == 10) h *= smoothstep(Lf - 0.035, Lf + 0.005, s);
 	return h;
 }
 `;
@@ -537,7 +551,7 @@ varying vec4 vGarA;
 varying vec4 vGarB;
 varying float vFold;
 varying vec3 vGarP;
-float gRough = 0.85, gBump = 0.0, gSheenR = 0.8, gSpec = 0.4, gAO = 1.0;
+float gRough = 0.85, gBump = 0.0, gSheenR = 0.8, gSpec = 0.4, gAO = 1.0, gMetal = 0.0;
 // the folds' slope round the arm and along it (metres a metre), and the cloth's coordinates for them
 vec2 gFoldGrad = vec2(0.0), gUV = vec2(0.0);
 vec3 gSheen = vec3(0.0);
@@ -634,6 +648,18 @@ void garSurface(inout vec3 col, bool front) {
 		float k = smoothstep(0.25, 0.5, kn);
 		col = mix(col, cuffC, k); gRough = mix(gRough, 0.45, k); gSpec = mix(gSpec, 0.8, k);
 		gBump += k * sin(kn * 40.0) * 0.0001 * gFade(0.006, px);
+		if (pat == 1) {
+			// a gauntlet: steel lames over the back of the hand and the fingers, each stepping over
+			// the next with a dark line where it laps, leather on the palm; the cuff a steel bell
+			float back = 1.0 - pf, lame = fract(vGarA.x / 0.017), lap = gLine(lame - 0.93, 0.05);
+			vec3 steel = cuffC * (0.9 + 0.2 * gN(uv * 40.0));
+			if (part == 5) { back = 1.0; lap = gLine(vGarA.x - 0.03, 0.004); }
+			col = mix(col, steel * (1.0 - lap * 0.6), back);
+			gMetal = back * (1.0 - lap * 0.7); gRough = mix(gRough, 0.38 + 0.12 * gN(uv * 90.0), back); gSpec = mix(gSpec, 1.0, back);
+			gBump += back * lame * 0.0004 * gFade(0.006, px);
+			gSheen = vec3(0.04 * pf); gSheenR = 0.6;
+			return;
+		}
 		if (part == 5) {
 			// the cuff: neoprene, a hook-and-loop strap across the back of the wrist
 			col = base * 0.9; gRough = 0.7;
@@ -661,6 +687,16 @@ void garSurface(inout vec3 col, bool front) {
 	else if (pat == 6) col = gCamo(uv, base, acc, acc2);
 	else if (pat == 7) { float f = fract(s * 11.0); col = base * (0.84 + 0.2 * sin(f * 3.1416)) * (1.0 - gLine(f - 0.02, 0.04) * 0.35); }
 	else if (pat == 8) { vec2 q = fract(uv * 45.0) - 0.5; col = mix(base, acc, 1.0 - smoothstep(0.18, 0.22, length(q))); }
+	// mail: rows of riveted rings, each a lit crescent with dark between, fading to a grey sheen far off
+	float mailB = 0.0;
+	if (pat >= 9) {
+		vec2 q = vec2(uv.x / 0.0046, uv.y / 0.0034); q.x += 0.5 * mod(floor(q.y), 2.0);
+		vec2 f = fract(q) - 0.5; float d = length(f * vec2(1.0, 1.25));
+		float ring = 1.0 - smoothstep(0.08, 0.16, abs(d - 0.3)), lit = ring * (0.6 + 0.4 * f.y * 2.0);
+		float k = gFade(0.004, px);
+		col = base * mix(0.85, 0.35 + 1.1 * lit, k) * (0.9 + 0.2 * gN(uv * 60.0));
+		mailB = (ring - 0.5) * 0.0004 * k;
+	}
 	int f2 = fab;
 	if (part == 1 && cuff == 1) f2 = 9;
 	gBump = gWeave(f2, uv, px, tone);
@@ -763,6 +799,25 @@ void garSurface(inout vec3 col, bool front) {
 	// fuzz on fleece and sweats, a sheen on nylon and suede-like softness elsewhere
 	gSheen = fab == 7 || fab == 1 || fab == 11 || fab == 9 ? col * 0.35 : fab == 4 ? vec3(0.12) : fab == 0 ? col * 0.18 : fab == 5 ? vec3(0.05) : vec3(0.03);
 	gSheenR = fab == 4 ? 0.32 : fab == 8 ? 0.4 : 0.85;
+	if (pat >= 9) {
+		gBump = mailB; gMetal = 0.8; gRough = 0.5; gSpec = 1.0; gSheen = vec3(0.0);
+		if (pat == 10 && part == 0) {
+			// the vambrace: a steel tube to just short of the elbow, a ridge down its back, a
+			// rolled top edge and a strap at the wrist end; the mail shows above it
+			float top = geo.x - 0.03, on = 1.0 - smoothstep(top - 0.001, top + 0.001, s);
+			float back = gAng(th - geo.y - 3.14159), ridge = exp(-back * back * 18.0);
+			float roll = gLine(s - top + 0.005, 0.004), lap = gLine(s - top + 0.011, 0.0012);
+			float strap = gLine(s - 0.05, 0.009);
+			vec3 steel = sqrt(acc2) * 0.8 * (0.9 + 0.2 * gN(uv * 25.0)) * (1.0 + roll * 0.35 + ridge * 0.15);
+			float scr = smoothstep(0.82, 0.95, gN(vec2(uv.x * 400.0, uv.y * 30.0))) * gFade(0.003, px);
+			steel = mix(steel * (1.0 - lap * 0.6), uCol[11] * 0.9, strap) + scr * 0.08;
+			col = mix(col, steel, on);
+			gMetal = mix(gMetal, 1.0 - strap * 0.9, on);
+			gRough = mix(gRough, mix(0.42 + 0.1 * gN(uv * 80.0) - roll * 0.1 - scr * 0.08, 0.6, strap), on);
+			gBump = mix(gBump, ridge * 0.0012 + roll * 0.0006 + strap * 0.0005, on);
+			gAO = mix(gAO, 1.0, on);
+		}
+	}
 }
 `;
 
@@ -787,7 +842,7 @@ export function garmentMaterial(spec, frames, { lite = false } = {}) {
 	}
 	if (spec.glove) {
 		const G = spec.glove;
-		U.uLay.value[2].set(4, 0, G.wear, 0.5); U.uLayB.value[2].set(6, 0, 0, 0);
+		U.uLay.value[2].set(4, G.kind === 'plate' ? 1 : 0, G.wear, 0.5); U.uLayB.value[2].set(6, 0, 0, 0);
 		[G.col, G.palm, G.knuckle, G.knuckle, G.knuckle].forEach((c, i) => U.uCol.value[10 + i].set(c));
 	}
 	m.userData.U = U;
@@ -800,6 +855,10 @@ export function garmentMaterial(spec, frames, { lite = false } = {}) {
 		sh.fragmentShader = (lite ? '#define GAR_LITE\n' : '') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + FRAG_HEAD)
 			.replace('#include <color_fragment>', '#include <color_fragment>\n{ vec3 gc = vec3(1.0); garSurface(gc, gl_FrontFacing); diffuseColor.rgb *= gc; }')
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRough;')
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = gMetal;')
+			// (a gauntlet's steel takes the sky's reflections, people/kit-light.js; only those: the
+			// light on the cloth stays the view's own)
+			.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n#ifdef USE_ENVMAP\niblIrradiance *= 0.0;\n#endif')
 			.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 #ifndef GAR_LITE
 {
@@ -843,7 +902,7 @@ material.sheenColor = gSheen;
 material.sheenRoughness = gSheenR;
 #endif`);
 	};
-	m.customProgramCacheKey = () => 'bard-garment-4' + (lite ? '-lite' : '');
+	m.customProgramCacheKey = () => 'bard-garment-5' + (lite ? '-lite' : '');
 	return m;
 }
 
@@ -911,8 +970,10 @@ export function dressArms(P, skin, { sides = ['L', 'R'], isPhone = false, far = 
 		if (l === material.userData.lite) return;
 		const next = garmentMaterial(spec, built.frames, { lite: l }); next.userData.lite = l;
 		material.dispose(); mesh.material = material = next;
+		if (spec.glove?.kind === 'plate') kitShare(next);
 	});
 	material.userData.lite = lite;
+	if (spec.glove?.kind === 'plate') kitShare(material);
 	const scale = (P.height || 1.75) / 1.75, ride = spec.layers.length ? 1 : 0;
 	const S = { L: { bend: 0, twist: 0, reach: 0, down: new THREE.Vector3() }, R: { bend: 0, twist: 0, reach: 0, down: new THREE.Vector3() } };
 	const W = { e: new THREE.Vector3(), w: new THREE.Vector3(), s: new THREE.Vector3(), p: new THREE.Vector3(), f: new THREE.Vector3(), d: new THREE.Vector3(), m: new THREE.Matrix4(), r: new THREE.Matrix3(), inv: new THREE.Matrix4() };

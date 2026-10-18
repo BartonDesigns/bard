@@ -14,8 +14,9 @@
 
 import * as THREE from 'three';
 import { guideUniform } from './hair-motion.js';
+import { GFX_PHONE } from '../world/device.js';
 
-const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const isPhone = GFX_PHONE;
 const TAU = Math.PI * 2;
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 const sm = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -47,9 +48,9 @@ export const CUTS = {
 	pixie: { top: 0.06, sides: 0.03, back: 0.025, flow: 'part', lift: 0.008, fringe: 1 },
 	fringe: { top: 0.24, sides: 0.24, back: 0.26, drop: -0.12, flow: 'part', lift: 0.008, fringe: 1 },
 	slick: { top: 0.09, sides: 0.03, back: 0.04, flow: 'back', lift: 0.003 },
-	// swept: longer on top, lifted at the front and swept back, the sides short but full, a
-	// little wave for the layers to break (a hero's: people/hero.js)
-	swept: { top: 0.085, sides: 0.022, back: 0.032, flow: 'back', lift: 0.018, curl: 0.003 },
+	// swept: longer on top, lifted at the front and swept back, the sides over the tops of the
+	// ears, the back to the collar, a little wave for the layers to break (a hero's: people/hero.js)
+	swept: { top: 0.085, sides: 0.045, back: 0.06, flow: 'back', lift: 0.012, curl: 0.003 },
 	thinning: { top: 0.03, sides: 0.025, back: 0.025, flow: 'crown', lift: 0.003, thin: 1 },
 };
 // the old hair meshes' names, for the places that still pick them
@@ -137,7 +138,7 @@ export function hairline(deg) {
 
 // where the scalp is painted with close-cropped hair (skin.js): inside the hairline, fading
 // out down the sides of a fade, back where the hairline recedes, less over a thinning crown
-const recedeAt = (deg, recede) => recede * (deg < 60 ? 0.03 * (1 - deg / 90) + (deg > 25 ? 0.02 * sm(25, 45, deg) * (1 - sm(50, 70, deg)) : 0) : 0);
+export const recedeAt = (deg, recede) => recede * (deg < 60 ? 0.03 * (1 - deg / 90) + (deg > 25 ? 0.02 * sm(25, 45, deg) * (1 - sm(50, 70, deg)) : 0) : 0);
 export function scalpMask(A, P, p, K, src, cutName, opts = {}) {
 	const cut = CUTS[cutName] || CUTS.short, hb = P.map.head, out = new Float32Array(src.length);
 	const crown = new THREE.Vector3(0.1, 0.9, -0.45).normalize(), d = new THREE.Vector3();

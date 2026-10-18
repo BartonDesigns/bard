@@ -157,7 +157,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 
 	// (the shapes are made a few a frame, so no one frame stalls)
 	const shrubMats = [woodM, leafM];
-	let Lrt, Lbar, Lb, Lo, Ls, Lw, Lcb, Lch, Lmz, Lty, Lpo, Lsg, Lhk, Lfn, Lso, Lrk, Lout, Lst, Llf, Lsk, Lcn;
+	let Lsw, Lrt, Lbar, Lb, Lo, Ls, Lw, Lcb, Lch, Lmz, Lty, Lpo, Lsg, Lhk, Lfn, Lso, Lrk, Lout, Lst, Llf, Lsk, Lcn;
 	const outs = [];
 	const steps = [
 		() => {
@@ -165,6 +165,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 			Lo = mk('oat', [PL.tuft(13, 'oat'), PL.tuft(14, 'oat')], [bladeM], 38, 1800 * K);
 			Ls = mk('short', [PL.tuft(15, 'short')], [bladeM], 26, 2400 * K);
 			Lw = mk('weed', [PL.weed(21, 'thistle'), PL.weed(22, 'fennel'), PL.weed(23, 'mustard')], [bladeM], 45, 500 * K);
+			// the turf between the bunches: only round you (each near cell works its own out
+			// when it first comes into reach, and lets it go again: lazy below)
+			Lsw = mk('sward', [PL.sward(16), PL.sward(17), PL.sward(18)], [bladeM], 22, 5000 * K);
 		},
 		() => {
 			Lcb = mk('coyote', [PL.coyoteBrush(31), PL.coyoteBrush(32), PL.coyoteBrush(33, true)], shrubMats, 150, 900 * K, { shadow: true, woodR: 20 });
@@ -270,9 +273,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		// the grass: bunches in the open, sparse under the oaks, none under the redwoods
 		// (city.js stands redwoods wherever the fog belt is even a little wooded: no grass there)
 		const grassK = (E.open + E.wood * 0.12 + E.chaparral * 0.15) * (1 - Math.min(1, E.redwood * 2.5));
+		const gold = [0.52 + season * 0.12, 0.38 + season * 0.02, 0.14], green = [0.26, 0.44, 0.1];
+		const tone = (x, z) => { const dry = Math.min(1, Math.max(0, season * 1.25 - 0.1 + (drift(x, z, 40, 3) - 0.5) * 0.5 - E.fog * 0.25 * (1 - season))); return green.map((g, k) => (g + (gold[k] - g) * dry) * 1.7); };
 		if (grassK > 0.02) {
-			const gold = [0.52 + season * 0.12, 0.38 + season * 0.02, 0.14], green = [0.26, 0.44, 0.1];
-			const tone = (x, z) => { const dry = Math.min(1, Math.max(0, season * 1.25 - 0.1 + (drift(x, z, 40, 3) - 0.5) * 0.5 - E.fog * 0.25 * (1 - season))); return green.map((g, k) => (g + (gold[k] - g) * dry) * 1.7); };
 			scatter(Math.round(190 * K * grassK), (x, z) => (0.35 + 0.9 * drift(x, z, 9, 1)) * (trailD(x, z) > 0.3 ? 1 : 0), (x, z) => {
 				const grazed = drift(x, z, 60, 7) > 0.62, s = 0.8 + r() * 0.6;
 				const L = grazed ? Ls : r() < 0.35 + season * 0.25 ? Lo : Lb;
@@ -284,6 +287,25 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 				const s = 0.8 + r() * 0.4;
 				put(Lw, x, z, r() * 6.28, s, s, season > 0.7 && v !== 0 ? [0.85, 0.72, 0.55] : [1, 1, 1], v, 0.02);
 			});
+		}
+		const swardK = Math.min(1, E.open + E.wood + E.chaparral * 0.2 + E.scrub * 0.2) * (1 - Math.min(1, E.redwood * 2.5));
+		// the short turf that carpets the ground between the bunches (and the oak savanna's,
+		// thinner, under the trees), thinning in drifts to bare earth, off the tread and the
+		// paving; shorter where it is grazed or windswept
+		if (swardK > 0.05) {
+			out.lazy = { sward: () => {
+				const r2 = mulberry32((ci * 2654435761) ^ (cj * 40503) ^ 0x2f6b), J2 = (base, k) => base.map((c) => c * (1 - k + r2() * 2 * k));
+				const n = Math.round(560 * swardK * (0.4 + 0.6 * K));
+				for (let i = 0; i < n; i++) {
+					const x = x0 + r2() * C, z = z0 + r2() * C, td = trails.length ? trailD(x, z) : 9;
+					const want = Math.min(1, 0.15 + 1.1 * drift(x, z, 6, 4)) * Math.min(1, Math.max(0, (td - 0.1) / 1.1));
+					if (r2() > want || wet(x, z)) continue;
+					const grazed = drift(x, z, 60, 7) > 0.62, sz = 0.85 + r2() * 0.4;
+					const sy = (0.6 + r2() * 0.8) * (grazed ? 0.6 : 1) * (E.windswept ? 0.7 : 1) * (0.8 + season * 0.4);
+					put(Lsw, x, z, r2() * 6.28, sz, sy, J2(tone(x, z), 0.12), Math.floor(r2() * Lsw.n), 0.02, true);
+				}
+				return out.sward || (out.sward = []);
+			} };
 		}
 		// the brush
 		const avoidT = (x, z, w) => trailD(x, z) > w;
@@ -501,8 +523,16 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	// the cells round you in order of distance (so a layer that runs out of room keeps the
 	// nearest): [di, dj, distance], out to the farthest reach
 	let rings = null;
+	const lazyMade = new Set();
 	function fill(cx, cz) {
 		const ci = Math.floor(cx / C), cj = Math.floor(cz / C);
+		// the lazy layers of the cells now well out of their reach are let go
+		for (const ck of lazyMade) {
+			const c = cells.get(ck), [i, j] = ck.split(',').map(Number);
+			if (c && Math.hypot((i + 0.5) * C - cx, (j + 0.5) * C - cz) < Lsw.R + 2 * C) continue;
+			if (c) for (const key in c.lazy) delete c[key];
+			lazyMade.delete(ck);
+		}
 		if (!rings) {
 			rings = [];
 			const rc = Math.ceil(MAXR / C) + 1;
@@ -513,7 +543,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 			const counts = L.meshes.map(() => 0), R = L.R;
 			for (const [di, dj, dmin] of rings) {
 				if (dmin > R) break;
-				const c = cells.get((ci + di) + ',' + (cj + dj)), a = c && c[L.key];
+				const ck = (ci + di) + ',' + (cj + dj), c = cells.get(ck);
+				let a = c && c[L.key];
+				if (!a && c?.lazy?.[L.key]) { a = c.lazy[L.key](); lazyMade.add(ck); }
 				if (!a) continue;
 				for (let k = 0; k < a.length; k += ITEM) {
 					const d = Math.hypot(a[k] - cx, a[k + 2] - cz);

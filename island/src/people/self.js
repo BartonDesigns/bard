@@ -13,7 +13,10 @@ const IDLE = ['pockets', 'crossed', 'phone', 'hip', 'behind'];
 // (the hero stands ready, and idles like one: people/hero.js)
 const HERO_IDLE = ['hip', 'crossed', 'behind'];
 
-export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint, ward = null }) {
+// driving(): at the wheel of a car (drive.js) or a boat (boat.js), where the camera is your own
+// eye; busy() also covers the car scenes (vehicles/carjack.js), which show and hide your body
+// themselves
+export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint, ward = null, driving = () => false }) {
 	const S = { third: false, idle: 0, pose: 'rest', down: null, posePin: null, air: 0, leap: false };
 	const cam = new THREE.Vector3(), look = new THREE.Vector3(), v = new THREE.Vector3();
 	let shown = false;
@@ -112,8 +115,9 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 	function update(dt, t) {
 		const W = world(), P = W?.player?.state;
 		if (!P) return;
-		// (the car scenes and driving have the body and the camera to themselves)
-		if (busy()) { shown = false; return; }
+		// (the car scenes and driving have the body and the camera to themselves; at the wheel the
+		// body you walked in is put away, or it stood on at the door, its arms in front of your eyes)
+		if (busy()) { if (shown && driving()) avatar.hide(); shown = false; return; }
 		if (!P.flying && !P.swimming && !S.down) struck(P);
 		if (S.down) {
 			// on you as you fall and lie

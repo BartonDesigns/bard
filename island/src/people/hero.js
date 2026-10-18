@@ -49,7 +49,7 @@ const HERO = {
 		// (hair colours are used as they are, lit by the strands' own shade: hairkit.js; a dark
 		// chestnut is dark in the numbers. Brows groomed: short hairs swept the one way over a
 		// full tone of their own, a little lighter than the numbers, as the hair reads lit)
-		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 0.7, thick: 0.66, len: 0.66, tidy: 0.5, fill: 2.1 }, browTone: 1.75,
+		ancestry: [0.18, 0.14, 0.68], hairColour: [0.075, 0.045, 0.024], iris: 4, brows: { dens: 1.0, thick: 0.66, len: 0.7, tidy: 0.5, fill: 2.0 }, browTone: 1.75,
 		// (the sheet's face: the brow heavy over hooded eyes; a straight nose with a defined tip;
 		// cheekbones high with a hollow below, never gaunt; a square jaw and a firm chin; a
 		// defined bow to the lip, a fuller lower lip; ears close; a strong neck)
@@ -61,10 +61,11 @@ const HERO = {
 			'mouth-width': 0.06, 'upper-lip': 0.05, 'lower-lip': 0.12, 'cupids-bow': 0.15, philtrum: 0.1, 'mouth-corners': 0.02,
 			'ear-out': -0.15, 'ear-size': -0.05, 'head-square': 0.4, 'head-oval': 0.2, 'head-fat': -0.3, 'neck-width': 0.35,
 		},
-		// (the sheet's hair: medium length, tousled and swept, over the temples and the tops of the
-		// ears, people/hairkit.js; cut: the painted crop under it follows its hairline,
-		// people/hair.js scalpMask, crisp, where a faded cut's blurs a band over the temples)
-		hair: { style: 'grump', vol: 0.95, fadeK: 0, beard: 'stubble', stubble: 1, cut: 'swept' },
+		// (the sheet's hair: medium length, tousled and swept back, over the temples and the tops
+		// of the ears and down to the collar, a loose lock or two falling forward on the parting's
+		// side; grown as fluff, people/hair-fluff.js 'swept'; the painted crop under it follows
+		// its hairline, people/hair.js scalpMask)
+		hair: { vol: 0.95, fadeK: 0, beard: 'stubble', stubble: 1, cut: 'swept' },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
 			// (a fitted charcoal top, its sleeves pushed up the forearms; room enough over the
@@ -88,7 +89,7 @@ const HERO = {
 		// (her own build, not his made smaller: defined shoulders, a long waist drawn in, strong
 		// long legs, a smaller head; a runner's or a climber's)
 		base: 0x4e71, sex: 0.04, height: 1.73, muscle: 0.24, weight: 0.04, lean: 0.25, build: { shoulders: 0.012, waist: 0.1, head: -0.045, legs: 0.05, arms: [0.05, 0.04] },
-		ancestry: [0.1, 0.22, 0.68], hairColour: [0.2, 0.065, 0.026], iris: 5, freckles: true, brows: { dens: 0.62, thick: 0.58, len: 0.7, tidy: 0.5, fill: 1.9 },
+		ancestry: [0.1, 0.22, 0.68], hairColour: [0.2, 0.065, 0.026], iris: 5, freckles: true, brows: { dens: 0.9, thick: 0.58, len: 0.7, tidy: 0.5, fill: 1.8 },
 		// (hers: high cheekbones, a slim nose with its tip lifted, full lips with a clear bow,
 		// almond eyes, a soft but defined jaw and chin; ears close)
 		face: {
@@ -97,8 +98,10 @@ const HERO = {
 			'eye-size': 0.12, 'eye-tilt': 0.15, 'upper-lip': 0.22, 'lower-lip': 0.3, 'cupids-bow': 0.25, 'mouth-width': 0.05, 'mouth-corners': 0.08,
 			'brow-ridge': -0.1, 'brow-angle': 0.1, forehead: -0.05, 'ear-out': -0.1, 'head-oval': 0.4, 'head-heart': 0.28, 'head-fat': -0.22, 'neck-width': -0.12,
 		},
-		// (the sheet's ponytail is full, not slicked: a little more volume than the style as made)
-		hair: { style: 'ponytail01', vol: 1.07, beard: '', cut: 'pony' },
+		// (the sheet's ponytail: tied at the middle of the back of the head, full and loose, not
+		// slicked, a long wavy tail; swept back off the forehead, no fringe, long loose strands
+		// framing the face to the jaw either side; grown as fluff, people/hair-fluff.js)
+		hair: { vol: 1.05, beard: '', cut: 'pony', brush: { bangs: [null], frame: 2, tieY: 0.022, tailLen: 0.3, tailLift: 0.08, tailDrop: 0.6, tail: 11, fluff: 0.005, wave: 0.007, waveL: 0.06 } },
 		style: () => ({
 			gen: 'millennial', look: 'mono',
 			top: { kind: 'tank', col: C.charcoal, pat: 'plain', fit: 'fitted', sleeves: 'none', tuck: true },
@@ -130,7 +133,8 @@ export function heroDNA(sex = 'male', opts = {}) {
 	d.brows = { ...H.brows };
 	d.browTone = H.browTone ?? 0.85;
 	d.freckles = !!H.freckles;
-	// (his hair and beard, or hers, by name: people/hairkit.js styleFor, beardFor)
+	// (his hair, or hers: grown for the cut, people/hair-fluff.js, a style by name only if a look
+	// in the hero view asks for one; his stubble: people/hairkit.js beardFor)
 	style.printKind = 0;
 	style.hair = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, recede: 0, thin: 0, part: 1, fresh: true, ...H.hair, ...(look.hair || {}) };
 	d.style = style;

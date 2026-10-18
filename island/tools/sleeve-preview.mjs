@@ -10,6 +10,8 @@ import { kitLight } from '../src/crysis/held-items.js';
 import { createFistView } from '../src/combat/melee-view.js';
 import { MOVES } from '../src/combat/melee-rules.js';
 import { outfitFor } from '../src/combat/outfits.js';
+import { dressInGear } from '../src/people/armor-looks.js';
+import * as KL from '../src/people/kit-light.js';
 import { applyInk, flashAtlas } from '../src/tattoo/skinink.js';
 
 const renderer = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -38,6 +40,8 @@ export const OUTFITS = {
 	layered: { top: { kind: 'flannel', col: '#7a2a2a', acc: '#1b1b1d', acc2: '#ede4d0', pat: 'plaid', fit: 'regular', sleeves: 'long', collar: true }, outer: { kind: 'denim', col: '#4a6189', pat: 'denim', fit: 'regular', sleeves: 'long', open: true } },
 	shell: { top: { kind: 'hoodie', col: '#36383c', acc: '#1b1b1d', pat: 'plain', fit: 'regular', sleeves: 'long' }, outer: { kind: 'shell', col: '#2a7d7f', acc: '#1b1b1d', pat: 'block', fit: 'oversized', sleeves: 'long', open: false, fab: 'nylon' } },
 	swat: outfitFor({ fid: 'swat', kind: 'police' }, 4),
+	// plate armour: the steel gauntlet's back and cuff, lit by the sky as the game lights it
+	knight: dressInGear({ top: null, outer: null, acc: [] }, { body: 'plate-cuirass', hands: 'plate-gauntlets' }),
 };
 
 function dress(name) {
@@ -61,6 +65,7 @@ function dress(name) {
 function frame(dt = 1 / 60, render = true) {
 	time += dt;
 	vm.update(dt, held, state, true, world, time);
+	KL.kitDaylight?.(renderer, world.sky, 1);
 	if (render) { scene.updateMatrixWorld(true); renderer.render(scene, camera); vm.render(renderer, scene); }
 }
 function reset() {
@@ -86,6 +91,7 @@ function fist(mode) {
 	const s = fistState, mv = mode === 'strike' ? MOVES.cross : mode === 'jab' ? MOVES.jab : null;
 	s.block = mode === 'block'; s.move = mv ? mv.anim : null; s.anim = s.move; s.m = mv; s.mt = mv ? mv.wind + mv.active * .85 : 0;
 	for (let i = 0; i < 100; i++) { time += 1 / 60; fists.update(1 / 60, time, s, me); }
+	KL.kitDaylight?.(renderer, world.sky, 1);
 	scene.updateMatrixWorld(true); renderer.render(scene, camera);
 	let tris = 0, garment = 0; fists.root.traverse(o => { if (o.visible && o.geometry?.index) { tris += o.geometry.index.count / 3; if (o.name === 'garment-arms') garment += o.geometry.index.count / 3; } });
 	return { calls: renderer.info.render.calls, tris, garment, failed: failed() };

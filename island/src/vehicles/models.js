@@ -11,6 +11,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { skyEnv, withCarSky, carGlassMaterial } from '../bay/cars.js';
 import { unfight, layerOffset } from './layers.js';
+import { GFX_PHONE } from '../world/device.js';
 
 // which kinds have a model, and its files (near, and for the middle distance)
 export const MODEL_KINDS = { sports: ['sports.glb', 'sports-mid.glb'], crossover: ['crossover.glb', 'crossover-mid.glb'], delivery: ['delivery.glb', 'delivery-mid.glb'], bus: ['bus.glb', 'bus.glb'] };
@@ -19,7 +20,7 @@ export const MODEL_KINDS = { sports: ['sports.glb', 'sports-mid.glb'], crossover
 const LAYERED = { crossover: true, bus: true };
 const url = (f) => new URL(`../assets/vehicles/${f}`, import.meta.url).href;
 // a phone keeps the models' textures at half size (a quarter of the memory)
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const PHONE = GFX_PHONE;
 function halve(t) {
 	const im = t?.image;
 	if (!PHONE || !im || im.width <= 512) return;

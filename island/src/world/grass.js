@@ -53,7 +53,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 	geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e7);
 
 	const uniforms = {
-		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex }, uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) }, uMap: { value: stripTex || (stripTex = grassStrip()) },
+		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex }, uWaterMap: shared.uWaterMap ||= { value: waterMapTexture(island) }, uMap: { value: stripTex || (stripTex = grassStrip({ ids: true })) },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span }, uWidth: { value: width }, uTallK: { value: heightK },
 		uTime: shared.uTime, uWind: shared.uWind, uGust: shared.uGust, uWindT: shared.uWindT, uWindDir: shared.uWindDir, uHigh: shared.uHigh, uBass: shared.uBass,
@@ -74,7 +74,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			uniform float uPlGrassK, uPl2GrassK;
 			uniform vec4 uWetS[4]; uniform sampler2D uMasks, uWaterMap; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK; varying vec2 vBlade;
 			float gTall;
 			` + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
@@ -149,6 +149,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				tint = plG(tint);
 				tint *= 0.97 + 0.06 * aRand.x;
 				vTall228 = tallMap;
+				// (for the blades' own colours: the tuft's own number, and how dry the ground is here)
+				vBlade = vec2(aRand.x * 0.61 + aRand.y * 0.37, max(dry, (1.0 - damp) * 0.5));
 				tint *= 1.0 - occ * 0.25;
 				// toward the edge the tufts take the ground's own meadow colour (the same formula
 				// the terrain paints), so where the grass ends nothing changes colour
@@ -204,7 +206,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			// the sun's glow through the blades and their sheen, added after the lights, as much as
 			// the sun reaches them: in a wood's shade the turf glowed pale, unshadowed
 			vec3 gGlow = vec3(0.0); float gSunLit = 1.0;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold; varying float vWet; varying float vShadeK; varying vec2 vBlade;
 			` + sh.fragmentShader
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
 			.replace('#include <map_fragment>', `
@@ -226,6 +228,30 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// the blade's own shading (dark roots, bright tips) evens out toward the edge, where
 				// the tufts blend into the painted ground
 				diffuseColor.rgb = vTint * mix(mix(0.4, 1.08, rootK) * (0.62 + 0.55 * gt.g), 0.7, vEdge * 0.45);   // (evened to the blades' own average, not brighter)
+				// and blade by blade, as a real sward is: some fresh, some yellowing, some dead and
+				// bleached to straw or gone grey-brown at the foot (more where the ground is dry),
+				// each a little lighter or darker and warmer or cooler than the next. The strip's red
+				// is each blade's own number (world/textures.js); it settles to the tuft's colour as
+				// the blades fall below a pixel and toward the edge, where the painted ground takes over
+				{
+					float bv = fract(gt.r * 3.7 + vBlade.x), bv2 = fract(gt.r * 7.3 + vBlade.x * 1.9);
+					float varK = (1.0 - smoothstep(0.6, 2.2, mip)) * (1.0 - vEdge * 0.8);
+					vec3 c0 = diffuseColor.rgb, lum = vec3(dot(c0, vec3(0.3, 0.59, 0.11)));
+					vec3 straw = lum * vec3(1.32, 1.08, 0.62) * mix(1.25, 0.8, rootK * 0.5);
+					vec3 greyB = lum * vec3(0.95, 0.85, 0.72) * 0.7;
+					// a whole tuft goes one way too (the blades blur together with distance, the tufts
+					// do not): some cured to straw, some still green at heart, some darker
+					float tv = fract(vBlade.x * 13.7), tv2 = fract(vBlade.x * 29.3 + 0.37);
+					vec3 t = mix(c0, mix(c0, straw, 0.55), step(tv, 0.18 + 0.3 * vBlade.y));
+					t *= mix(vec3(1.05, 1.0, 0.9), vec3(0.94, 1.0, 1.06), tv2) * (0.86 + 0.28 * fract(tv * 7.1));
+					t = mix(c0, t, 1.0 - vEdge * 0.7);
+					float dead = step(bv, 0.1 + 0.3 * vBlade.y);
+					float yellow = step(bv, 0.22 + 0.3 * vBlade.y) * (1.0 - dead);
+					vec3 b = mix(t, mix(straw, greyB, step(0.5, bv2) * (1.0 - rootK * 0.6)), dead);
+					b = mix(b, mix(t, straw, 0.45), yellow);
+					b *= mix(vec3(1.06, 1.0, 0.86), vec3(0.92, 1.0, 1.08), bv2) * (0.84 + 0.32 * fract(bv * 5.3));
+					diffuseColor.rgb = mix(t, b, varK);
+				}
 				// a gust flips the blades to show their paler undersides
 				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.35 + vec3(0.03, 0.03, 0.0), vGust * 0.5 * vTip);
 				// tall grass goes to seed: pale straw tips
@@ -244,7 +270,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				gGlow += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor * (1.0 - vEdge * 0.8);
 				totalEmissiveRadiance += diffuseColor.rgb * uHigh * 0.3 * vTip * (0.5 + 0.5 * sin(uTime * 6.0 + vGW.x * 0.7 + vGW.z * 0.5));`);
 	};
-	mat.customProgramCacheKey = () => 'island-grass3';
+	mat.customProgramCacheKey = () => 'island-grass5';
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.frustumCulled = false;
 	mesh.receiveShadow = true;

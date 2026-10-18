@@ -38,6 +38,12 @@ test('desktop defaults to adaptive medium; explicit saved choices survive', () =
 	const g=createGovernor({storage,mode:()=>graphicsMode(storage)});g.apply();assert.equal(g.info().tier,'high');
 	storage.setItem('l99-quality','corrupt');assert.equal(graphicsMode(storage),'auto');
 });
+test('Ultra is a saved choice: High on a phone, with the desktop\'s pixel budget', () => {
+	const storage=store();storage.setItem('l99-quality','ultra');assert.equal(graphicsMode(storage),'ultra');
+	const g=createGovernor({phone:true,storage,mode:()=>graphicsMode(storage)});g.apply();assert.equal(g.info().tier,'high');
+	const w=1170,h=2532,phoneR=renderRatio({width:w,height:h,dpr:3,phone:true}),ultraR=renderRatio({width:w,height:h,dpr:3,mode:'ultra'});
+	assert.ok(ultraR>phoneR);assert.equal(ultraR,renderRatio({width:w,height:h,dpr:3,mode:'high'}));
+});
 test('Retina and 4K render buffers remain within their pixel budgets at every tier', () => {
 	for(const [w,h] of [[1920,1080],[3840,2160],[7680,4320]])for(const ratio of [1,.85,.7,.55]) {
 		const r=renderRatio({width:w,height:h,dpr:2,ratio});assert.ok(w*h*r*r<=2400000*ratio*ratio+1);

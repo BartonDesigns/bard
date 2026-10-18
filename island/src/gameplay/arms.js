@@ -267,6 +267,43 @@ const ITEMS = [
 		['spark-cell-pack', 'Spark Cell Pack', 'Charge cells for the Warden Spark Carbine.', 32],
 		['reed-arrow-quiver', 'Reedline Arrow Quiver', 'A quiver of arrows for the Reedline Hunting Bow.', 16],
 	].map(([id, name, use, basePrice]) => ({ id, name, kind: 'ammo', fictional: true, activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase', supermarket: 'purchase' }, marketTradable: true, basePrice, weight: 1, slot: 'utility', stackable: true, consumable: true, heatRisk: 0 })),
+	// garments woven through with aether thread: worn, not held, one to a slot (GARMENT_SLOTS).
+	// They lend attributes and, levelled, wake their magic (gear-levels.js, gear-magic.js)
+	...[
+		['wayfarers-hood', 'Wayfarer\'s Hood', 'head', 'A deep travelling hood lined with aether thread. It keeps the mind clear and the rain off.', 90],
+		['stargazer-circlet', 'Stargazer Circlet', 'head', 'A thin band of star-silver worn at the brow. Spells come quicker to one who wears it.', 140],
+		['aetherweave-coat', 'Aetherweave Coat', 'body', 'A long coat woven through with both strands of the aether. It holds life in and lends it to the weave.', 160],
+		['rangers-jacket', 'Ranger\'s Jacket', 'body', 'A waxed field jacket, patched at the elbows, that turns a blow and steadies the aim.', 130],
+		['spellbinder-gloves', 'Spellbinder Gloves', 'hands', 'Fine gloves stitched with binding knots at the fingertips. The weave comes back to them sooner.', 110],
+		['fieldcraft-gloves', 'Fieldcraft Gloves', 'hands', 'Supple leather gloves for a sure grip and quick hands.', 80],
+		['trailstrider-boots', 'Trailstrider Boots', 'feet', 'Light boots with soles that remember the trail.', 100],
+		['duskwalker-boots', 'Duskwalker Boots', 'feet', 'Soft-soled boots that make no sound after dark, and keep the mind on the path.', 120],
+		['aetherweave-trousers', 'Aetherweave Trousers', 'legs', 'Close-cut trousers of the same aether cloth as the coat, threaded at the seams.', 120],
+		['rangers-trousers', 'Ranger\'s Trousers', 'legs', 'Waxed field trousers, double at the knee, pockets for everything.', 100],
+		// armour of the old kingdoms: steel and mail, strong against a blade and a bullet alike,
+		// heavy on the legs and in the way of the weave (gear-levels.js: Armour, Weight, Spellcraft)
+		['kettle-helm', 'Kettle Helm', 'head', 'An open steel war hat with a wide brim that turns a blow from above.', 150],
+		['great-helm', 'Great Helm', 'head', 'A closed steel helm with a slit to see by. Little gets through, and little is heard.', 260],
+		['gambeson', 'Gambeson', 'body', 'A thick quilted coat of linen layers: light armour on its own, and padding under mail.', 140],
+		['mail-hauberk', 'Mail Hauberk', 'body', 'A shirt of riveted iron rings to the thigh, over a padded coat.', 320],
+		['plate-cuirass', 'Plate Cuirass', 'body', 'A steel breast and back plate with shoulder guards, over mail.', 520],
+		['mail-chausses', 'Mail Chausses', 'legs', 'Mail leggings laced to the belt, over padded hose.', 220],
+		['plate-greaves', 'Plate Greaves', 'legs', 'Steel plates for the thighs and shins, strapped over mail.', 360],
+		['plate-gauntlets', 'Plate Gauntlets', 'hands', 'Articulated steel gauntlets. A fist like a hammer; fingers too stiff for fine weaving.', 200],
+		['leather-bracers', 'Leather Bracers', 'hands', 'Hardened leather vambraces over riding gloves: a bowman\'s guard that keeps the fingers free.', 95],
+		['sabatons', 'Sabatons', 'feet', 'Laminated steel shoes over riding boots.', 180],
+		['riding-boots', 'Riding Boots', 'feet', 'Tall boots of oiled leather, made for the stirrup and the long road.', 110],
+		// modern combat gear: a plate carrier and its pouches, a ballistic helmet with night
+		// vision and a headset, a combat shirt and trousers with knee pads (no real makers or marks)
+		['ops-cap', 'Ops Cap', 'head', 'A field cap with a clip-on headset. Nothing turns a bullet, but you hear everything.', 90],
+		['ballistic-helmet', 'Ballistic Helmet', 'head', 'A high-cut helmet with a night-vision mount, rails and a headset.', 340],
+		['combat-shirt', 'Combat Shirt', 'body', 'A camouflaged combat shirt with a cool, plain body for under a vest.', 110],
+		['chest-rig', 'Chest Rig', 'body', 'Magazine pouches and a radio on a light harness over a combat shirt. Fast, and little armour.', 190],
+		['plate-carrier', 'Plate Carrier', 'body', 'Front and back plates, a cummerbund and a full front of pouches over a combat shirt.', 460],
+		['combat-trousers', 'Combat Trousers', 'legs', 'Camouflaged trousers with knee pads in the knees.', 130],
+		['tactical-gloves', 'Tactical Gloves', 'hands', 'Thin armoured-knuckle gloves that keep a trigger feel.', 90],
+		['combat-boots', 'Combat Boots', 'feet', 'Laced combat boots, light and stiff in the ankle.', 130],
+	].map(([id, name, slot, use, basePrice]) => ({ id, name, kind: 'garment', fictional: true, activities: [], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase' }, marketTradable: true, basePrice, weight: 1, slot, stackable: false, consumable: false, heatRisk: 0 })),
 	// the Moon colony's errand things (planet/colony/errands.js): carried, handed over, never sold
 	...[
 		['relay-transceiver-board', 'Relay Transceiver Board', 'A spare transceiver board for the Far Side Relay, signed out of the colony depot.'],
@@ -277,6 +314,9 @@ const ITEMS = [
 ];
 
 export const ARMS_CATALOG = freeze(Object.fromEntries(ITEMS.map((item) => [item.id, item])));
+// where garments are worn, head to foot: a hat or helm, a top or armour, trousers, gloves, shoes
+export const GARMENT_SLOTS = Object.freeze(['head', 'body', 'legs', 'hands', 'feet']);
+export const isGarment = (itemId) => itemFor(itemId)?.kind === 'garment';
 
 export const SOURCE_CATALOG = freeze({
 	[ACQUISITION_SOURCES.PLAYER_MARKET]: {
@@ -461,6 +501,8 @@ export function createInventoryState(ownerId, options = {}) {
 		instances,
 		hand: null,
 		equipped: {},
+		// the garment on each slot, by its uid
+		worn: {},
 		journal: [],
 		updatedAt: integer(options.updatedAt),
 	};
@@ -472,7 +514,16 @@ function recount(state) {
 	for (const x of Object.values(state.instances)) items[x.i] = (items[x.i] || 0) + 1;
 	const hand = state.hand && state.instances[state.hand] ? state.hand : null;
 	const equipped = Object.fromEntries(Object.entries(state.equipped || {}).filter(([, itemId]) => items[itemId] > 0));
-	return { ...state, items, hand, equipped };
+	return { ...state, items, hand, equipped, worn: wornOf(state) };
+}
+// the worn garments that are still owned and on their own slot
+function wornOf(state) {
+	const worn = {};
+	for (const slot of GARMENT_SLOTS) {
+		const u = state.worn?.[slot], x = typeof u === 'string' ? state.instances?.[u] : null;
+		if (x && itemFor(x.i)?.kind === 'garment' && itemFor(x.i).slot === slot) worn[slot] = u;
+	}
+	return worn;
 }
 // one owned instance (null if not owned)
 export const instanceOf = (state, uid) => state?.instances?.[uid] || null;
@@ -501,6 +552,7 @@ function normalizeInventory(raw, ownerId = 'player') {
 		}
 	}
 	normalized.hand = typeof source.hand === 'string' ? source.hand : null;
+	normalized.worn = source.worn && typeof source.worn === 'object' ? { ...source.worn } : {};
 	// (version 1 held an item by its kind: the best one of that kind now)
 	if (!normalized.hand && normalized.equipped.hand) normalized.hand = instancesOf(normalized, normalized.equipped.hand)[0]?.u || null;
 	Object.assign(normalized, recount(normalized));
@@ -683,12 +735,25 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		// (a particular one by its uid, or the best of the kind)
 		const inst = tx.uid ? instanceOf(state, tx.uid) : item ? instancesOf(state, item.id)[0] : null;
 		if (!inst || (item && inst.i !== item.id)) return reject(state, tx, 'not-owned', 'The player does not have that item.');
-		const slot = String(tx.slot || itemFor(inst.i).slot || 'utility');
+		const def = itemFor(inst.i);
+		// a garment is worn on its own slot (the one there comes off), never held
+		if (def.kind === 'garment') {
+			if (tx.slot && String(tx.slot) !== def.slot) return reject(state, tx, 'wrong-slot', `That is worn on the ${def.slot}.`);
+			return applyAccepted({ ...state, worn: { ...state.worn, [def.slot]: inst.u } }, tx, { itemId: inst.i, uid: inst.u, slot: def.slot, worn: true });
+		}
+		const slot = String(tx.slot || def.slot || 'utility');
+		if (GARMENT_SLOTS.includes(slot)) return reject(state, tx, 'wrong-slot', 'Only a garment is worn there.');
 		return applyAccepted({ ...state, equipped: { ...state.equipped, [slot]: inst.i }, hand: slot === 'hand' ? inst.u : state.hand }, tx, { itemId: inst.i, uid: inst.u, slot });
 	}
 
 	if (kind === TRANSACTION_KINDS.UNEQUIP) {
 		const slot = String(tx.slot || '');
+		if (GARMENT_SLOTS.includes(slot)) {
+			if (!state.worn?.[slot]) return reject(state, tx, 'not-equipped', 'Nothing is worn there.');
+			const worn = { ...state.worn }, uid = worn[slot];
+			delete worn[slot];
+			return applyAccepted({ ...state, worn }, tx, { uid, slot, worn: false });
+		}
 		if (!slot || !state.equipped[slot]) return reject(state, tx, 'not-equipped', 'That equipment slot is already empty.');
 		const equipped = { ...state.equipped };
 		const itemId = equipped[slot];
@@ -805,5 +870,6 @@ export function inventorySummary(state) {
 		instances: Object.values(normalized.instances).map((x) => ({ ...x })),
 		hand: normalized.hand,
 		equipped: { ...normalized.equipped },
+		worn: { ...normalized.worn },
 	};
 }

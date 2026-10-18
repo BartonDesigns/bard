@@ -18,6 +18,21 @@ const BEAM = { L: [-0.05, -0.17, -0.5, 1.6, -0.3, 1.45], R: [0.05, -0.17, -0.5, 
 const RISE = 0.12, DROP = 0.28;
 const ease = (u) => u * u * (3 - 2 * u);
 const _p = new THREE.Vector3();
+// (the light held in the palm: a soft round glow, made once)
+let glowTex = null;
+function palmTexture() {
+	if (glowTex) return glowTex;
+	const N = 64, d = new Uint8Array(N * N * 4);
+	for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+		const r = Math.hypot(x - N / 2 + 0.5, y - N / 2 + 0.5) / (N / 2), v = Math.max(0, 1 - r);
+		const a = Math.min(1, v * v * 0.8 + Math.pow(v, 8) * 1.5), i = (y * N + x) * 4;
+		d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = Math.round(a * 255);
+	}
+	glowTex = new THREE.DataTexture(d, N, N, THREE.RGBAFormat);
+	glowTex.needsUpdate = true;
+	return glowTex;
+}
+const FLASH = 0.1;
 
 export function createCastHands({ camera, fx, isPhone = false }) {
 	const root = new THREE.Group();
@@ -29,7 +44,11 @@ export function createCastHands({ camera, fx, isPhone = false }) {
 		const grp = new THREE.Group();
 		grp.visible = false;
 		root.add(grp);
-		S[side] = { grp, hand: null, t: -1, hold: 0, c: null, to: OUT, cur: Float32Array.from(REST[side]) };
+		// (the palm's light: gathering as the hand comes up, flaring as the spell leaves it)
+		const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: palmTexture(), transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+		glow.position.set(0, 0.07, -0.03); glow.renderOrder = 3; glow.visible = false;
+		grp.add(glow);
+		S[side] = { grp, glow, hand: null, t: -1, hold: 0, c: null, to: OUT, cur: Float32Array.from(REST[side]) };
 	}
 	let body = null;
 	// your own hands, once your body has been made (people/avatar.js)
@@ -66,8 +85,20 @@ export function createCastHands({ camera, fx, isPhone = false }) {
 			// (shaking with the force of a beam)
 			if (beaming && k > 0.9) A.grp.position.add(_p.set((Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.008, (Math.random() - 0.5) * 0.005));
 			A.grp.rotation.set(A.cur[3], A.cur[4], A.cur[5], 'YXZ');
-			A.grp.visible = !!A.hand;
+			// (the hand is drawn when your body has given it one; the palm's light shows either way)
+			A.grp.visible = true;
+			if (A.hand) A.hand.mesh.visible = true;
 			any = true;
+			// (gathering in the palm as it rises, a flare as the spell leaves, a glow held, then gone)
+			const g = A.glow, ft = A.t - RISE;
+			if (A.c && A.to !== BEAM) {
+				const flare = ft >= 0 && ft < FLASH ? 1 - ft / FLASH : 0;
+				const lit = A.t < RISE ? 0.35 + 0.45 * k : ft < A.hold ? 0.55 : 0.55 * k;
+				g.visible = true;
+				g.material.color.setRGB(Math.min(1, A.c[0] + flare * 0.4), Math.min(1, A.c[1] + flare * 0.4), Math.min(1, A.c[2] + flare * 0.4));
+				g.material.opacity = Math.min(1, lit + flare * 0.6);
+				g.scale.setScalar(0.07 + 0.05 * k + 0.16 * flare);
+			} else g.visible = false;
 			// (the school's light in the palm)
 			// (a beam's light is its own, between the hands: magic/beam.js)
 			if (A.c && k > 0.6 && A.to !== BEAM) {
@@ -80,6 +111,6 @@ export function createCastHands({ camera, fx, isPhone = false }) {
 		return any;
 	}
 	const busy = () => S.L.t >= 0 || S.R.t >= 0;
-	function dispose() { for (const side of ['L', 'R']) S[side].hand?.dispose(); root.removeFromParent(); }
+	function dispose() { for (const side of ['L', 'R']) { S[side].hand?.dispose(); S[side].glow.material.dispose(); } root.removeFromParent(); }
 	return { setBody, cast, update, busy, dispose, root };
 }

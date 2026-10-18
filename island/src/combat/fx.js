@@ -2,8 +2,8 @@
 // tracers and flying bolts (one instanced streak mesh each), sparks, embers, fire and flashes
 // (additive points), smoke and dust (soft points), debris and glass shards (small instanced
 // chips that bounce on the ground), marks on walls (an instanced decal of a chipped hole or a
-// scorch), blood where a person is struck (a dark puff and a stain on the ground that fades;
-// nothing more), the Spark's shimmer round a warded child, and the bosses' warnings (rings on
+// scorch), blood where a person is struck (a dark puff and a stain on the ground that fades,
+// and the spatter a shot throws out behind them, on the wall or ground beyond), the Spark's shimmer round a warded child, and the bosses' warnings (rings on
 // the ground, beams). Lights are never added (that would recompile every material in the
 // scene); glow is drawn.
 
@@ -86,7 +86,7 @@ function decalTexture() {
 	return t;
 }
 
-export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
+export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => null } = {}) {
 	const group = new THREE.Group();
 	group.name = 'combat-fx';
 	const glow = pointsPool(isPhone ? 320 : 900, true), smoke = pointsPool(isPhone ? 200 : 520, false);
@@ -112,6 +112,14 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 	const chipBits = [], shardBits = [];
 	makeBits(chips, chipBits); makeBits(shards, shardBits);
 	bits.push(...chipBits, ...shardBits);
+	// spent cases: kicked out of the breech to the right, tumbling, ringing off the ground a
+	// couple of times and lying where they fell for a while (brass; red hulls from a shotgun)
+	const caseGeo = new THREE.CylinderGeometry(1, 1, 1, 7, 1);
+	const cases = instPool(caseGeo, new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.85 }), isPhone ? 24 : 72);
+	cases.mesh.name = 'combat-cases';
+	group.add(cases.mesh);
+	const caseBits = [];
+	for (let i = 0; i < cases.n; i++) caseBits.push({ i, life: 0, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3(), rad: 0.0058, len: 0.046, rest: false });
 
 	// marks on walls
 	const decalTex = decalTexture();
@@ -128,6 +136,20 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 	const blood = instPool(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: bloodTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), isPhone ? 16 : 40);
 	const bloodLife = new Float32Array(blood.n), bloodAt = [];
 	group.add(blood.mesh);
+	// the spatter thrown out behind a hit: a splash on the wall or the ground beyond the one
+	// struck, flung along the shot (the splash's +x), droplets trailing out ahead of it
+	const splatTex = (() => {
+		const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d');
+		const dot = (px, py, r, a) => { const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, `rgba(78,5,8,${a})`); g.addColorStop(0.65, `rgba(62,3,6,${a * 0.85})`); g.addColorStop(1, 'rgba(50,0,0,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); };
+		for (let i = 0; i < 9; i++) dot(30 + Math.random() * 16, 32 + (Math.random() - 0.5) * 18, 6 + Math.random() * 9, 0.85);
+		// streaks and drops flung out along +x, smaller as they go
+		for (let i = 0; i < 26; i++) { const t = Math.random(), px = 44 + t * 78, py = 32 + (Math.random() - 0.5) * (8 + t * 30); dot(px, py, Math.max(1.2, 5 * (1 - t) * Math.random() + 1), 0.9); }
+		for (let i = 0; i < 6; i++) { const py = 32 + (Math.random() - 0.5) * 14; x.strokeStyle = 'rgba(66,4,7,0.7)'; x.lineWidth = 1 + Math.random() * 2; x.beginPath(); x.moveTo(44, py); x.lineTo(70 + Math.random() * 40, py + (Math.random() - 0.5) * 10); x.stroke(); }
+		const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+	})();
+	const splats = instPool(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: splatTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide }), isPhone ? 12 : 32);
+	const splatLife = new Float32Array(splats.n), splatM = Array.from({ length: splats.n }, () => new THREE.Matrix4()), splatS = new Float32Array(splats.n);
+	group.add(splats.mesh);
 	// the Spark: a shimmering shell round a warded child
 	const wardMat = new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
 	const wards = [];
@@ -227,9 +249,47 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		if (surf === 'person') { bleed(p, N); return; }
 		if (surf === 'creature') { sparks(p, 6, N, 0.5, 1, 0.6, 4); dust(p, 2, 0.4, 0.45, 0.35, 0.3, 0.3); return; }
 		if (surf === 'wood') { debris(p, 3, 0x8a6a45, 3, 0.05); dust(p, 2, 0.6, 0.52, 0.4, 0.3); if (n) decal(p, N, 0.1, 0); return; }
-		if (surf === 'ground') { dust(p, 4, 0.5, 0.46, 0.4, 0.5, 1); debris(p, 2, 0x6a6258, 3, 0.04); return; }
+		if (surf === 'water') { splash(p); return; }
+		if (surf === 'ground') { dust(p, 4, 0.5, 0.46, 0.4, 0.5, 1); debris(p, 2, 0x6a6258, 3, 0.04); spout(p, N); return; }
 		dust(p, 3, 0.62, 0.6, 0.57, 0.35, 0.6); debris(p, 3, 0x9a958c, 3.5, 0.04); sparks(p, 2, N, 1, 0.85, 0.6, 3);
 		if (n) decal(p, N, 0.16, 0);
+	}
+	// a round into the dirt: a spout of soil thrown up and falling back, a haze of dust left
+	// hanging, and a dark pock in the ground
+	function spout(p, n) {
+		const ny = Math.max(0.5, n.y || 1);
+		for (let k = 0; k < 9; k++) {
+			const s = 2.5 + Math.random() * 3.5;
+			smoke.emit(p.x, p.y + 0.02, p.z, (n.x || 0) * s * 0.5 + (Math.random() - 0.5) * 1.1, ny * s, (n.z || 0) * s * 0.5 + (Math.random() - 0.5) * 1.1, 0.5 + Math.random() * 0.4, 0.05 + Math.random() * 0.05, 0.08, 0.2, 0.16, 0.12, 0.9, 9.8, 0.4);
+		}
+		smoke.emit(p.x, p.y + 0.15, p.z, 0, 0.5, 0, 1.6, 0.25, 1.1, 0.48, 0.43, 0.36, 0.35, -0.05, 1.2);
+		decal({ x: p.x, y: p.y + 0.01, z: p.z }, n, 0.1, 0);
+	}
+	// a round into the sea: a white plume thrown straight up that falls back as spray, a mist
+	function splash(p) {
+		for (let k = 0; k < 12; k++) {
+			const s = 3 + Math.random() * 4.5;
+			smoke.emit(p.x + (Math.random() - 0.5) * 0.15, p.y + 0.02, p.z + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.9, s, (Math.random() - 0.5) * 0.9, 0.6 + Math.random() * 0.4, 0.05 + Math.random() * 0.04, 0.1, 0.9, 0.94, 0.96, 0.85, 9.8, 0.3);
+		}
+		smoke.emit(p.x, p.y + 0.2, p.z, 0, 0.4, 0, 1.2, 0.2, 0.9, 0.88, 0.92, 0.95, 0.4, -0.05, 1.5);
+		for (let k = 0; k < 6; k++) { const a = k * 1.047 + Math.random() * 0.5; smoke.emit(p.x, p.y + 0.03, p.z, Math.cos(a) * 1.6, 0.25, Math.sin(a) * 1.6, 0.5, 0.06, 0.18, 0.92, 0.95, 0.97, 0.6, 2, 3); }
+	}
+	// a spent case thrown from the breech at p (dir: the way the gun points; kind 1: a shotgun hull)
+	const _r = new THREE.Vector3();
+	function casing(p, dir, kind = 0) {
+		const B = caseBits[cases.slot()];
+		_r.set(-dir.z, 0, dir.x);
+		if (_r.lengthSq() < 1e-4) _r.set(1, 0, 0);
+		_r.normalize();
+		const out = 2.2 + Math.random() * 1.2;
+		B.p.set(p.x, p.y, p.z);
+		B.v.set(_r.x * out - dir.x * 0.6 + (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 1.2, _r.z * out - dir.z * 0.6 + (Math.random() - 0.5) * 0.4);
+		B.r.set(Math.random() * 6.28, Math.atan2(dir.x, dir.z), Math.PI / 2);
+		B.w.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 12, 18 + Math.random() * 20);
+		B.rad = kind === 1 ? 0.0105 : 0.0058; B.len = kind === 1 ? 0.062 : 0.046;
+		B.life = 14; B.rest = false;
+		cases.mesh.setColorAt(B.i, _c.setRGB(...(kind === 1 ? [0.55, 0.08, 0.06] : [0.78, 0.58, 0.24])));
+		if (cases.mesh.instanceColor) cases.mesh.instanceColor.needsUpdate = true;
 	}
 	// a person struck: a dark red puff, and a stain on the ground below that fades
 	function bleed(p, n) {
@@ -242,6 +302,31 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		_m.compose(_p.set(B.x, B.y, B.z), _q.setFromAxisAngle(_d.set(0, 1, 0), B.r), _s.setScalar(B.s));
 		blood.mesh.setMatrixAt(i, _m); blood.mesh.instanceMatrix.needsUpdate = true;
 	}
+	// a shot through someone: blood sprayed out along the shot, and where it lands (at: the wall
+	// or ground it met behind them, { p, n }; or nothing in reach, and it falls to the ground
+	// a step or two on) a splash flung that way
+	const _t = new THREE.Vector3(), _b = new THREE.Vector3(), _n = new THREE.Vector3();
+	function spatter(p, dir, at = null, k = 1) {
+		for (let i = 0; i < Math.round(8 * k); i++) {
+			const s = 2.5 + Math.random() * 4;
+			smoke.emit(p.x, p.y, p.z, dir.x * s + (Math.random() - 0.5) * 1.6, dir.y * s + Math.random() * 1.4, dir.z * s + (Math.random() - 0.5) * 1.6, 0.35 + Math.random() * 0.35, 0.035, 0.05, 0.32, 0.015, 0.025, 0.95, 9, 0.6);
+		}
+		smoke.emit(p.x + dir.x * 0.2, p.y, p.z + dir.z * 0.2, dir.x * 1.2, 0.2, dir.z * 1.2, 0.3, 0.12, 0.55, 0.38, 0.03, 0.04, 0.45, 0, 4);
+		let q = at?.p, n = at?.n;
+		if (!q) {
+			const d = 0.9 + Math.random() * 1.1, x = p.x + dir.x * d, z = p.z + dir.z * d, gy = ground(x, z);
+			if (!Number.isFinite(gy) || p.y - gy > 2.4) return;
+			q = { x, y: gy, z }; n = { x: 0, y: 1, z: 0 };
+		}
+		_n.set(n.x, n.y, n.z).normalize();
+		_t.set(dir.x, dir.y, dir.z).addScaledVector(_n, -(dir.x * _n.x + dir.y * _n.y + dir.z * _n.z));
+		if (_t.lengthSq() < 1e-4) _t.set(1, 0, 0).addScaledVector(_n, -_n.x);
+		_t.normalize(); _b.crossVectors(_n, _t);
+		const i = splats.slot(), size = (0.45 + Math.random() * 0.35) * k;
+		splatM[i].makeBasis(_t, _b, _n).scale(_s.set(size * 2, size, 1)).setPosition(q.x + _n.x * 0.015, q.y + _n.y * 0.015, q.z + _n.z * 0.015);
+		splatLife[i] = 45; splatS[i] = 1;
+		splats.mesh.setMatrixAt(i, splatM[i]); splats.mesh.instanceMatrix.needsUpdate = true;
+	}
 	// the Spark turning harm aside: a shimmer round them and a burst of light where it struck
 	function ward(c, r = 0.9, at = null) {
 		const W = wards.find((w) => w.life <= 0) || wards[0];
@@ -250,8 +335,14 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		for (let k = 0; k < 14; k++) glow.emit(q.x, q.y, q.z, (Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4, 0.5 + Math.random() * 0.4, 0.08, 0.02, 0.65, 0.95, 1, 1, -1, 2);
 		glow.emit(q.x, q.y, q.z, 0, 0, 0, 0.25, 0.4, 1.2, 1, 0.92, 0.6, 0.9);
 	}
-	// a blast: a flash, a fireball, smoke, debris and a scorch on the ground under it
+	// a column of smoke that rises far above the fight and hangs on (world/plumes.js): fires
+	// and wrecks keep theirs up while they burn; it thins away over fade seconds after
+	function column(id, o) { return plumes()?.set(id, o) || null; }
+	let blastN = 0;
+	// a blast: a flash, a fireball, smoke, debris and a scorch on the ground under it (and a
+	// big one leaves a dark column standing over the place for a while)
 	function explosion(p, r = 3, scorch = true) {
+		if (r >= 2.2) { const gy = ground(p.x, p.z); column('blast:' + (blastN++ % 4), { x: p.x, y: Number.isFinite(gy) ? gy : p.y, z: p.z, h: 50 + r * 18, r: r * 0.7, spread: 4, shade: 0.1, k: 0.75, life: 8, fade: 50 }); }
 		glow.emit(p.x, p.y, p.z, 0, 0, 0, 0.18, r * 1.6, r * 2.6, 1, 0.85, 0.55, 1);
 		for (let k = 0; k < 26; k++) {
 			const a = Math.random() * 6.283, e = Math.random() * 1.2, s = r * (1.5 + Math.random() * 2.5);
@@ -267,6 +358,11 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 	function muzzle(p, d, style = 0) {
 		const C = TRACER_COL[style] || TRACER_COL[0];
 		glow.emit(p.x + d.x * 0.1, p.y + d.y * 0.1, p.z + d.z * 0.1, d.x * 2, d.y * 2, d.z * 2, 0.05, 0.25, 0.4, C.r, C.g, C.b, 0.9);
+		if (style !== 2) wisp(p, d);
+	}
+	// the smoke a shot leaves at the muzzle: a faint grey wisp thrown forward that slows and rises
+	function wisp(p, d) {
+		smoke.emit(p.x + d.x * 0.15, p.y + d.y * 0.15, p.z + d.z * 0.15, d.x * 1.4, d.y * 1.4 + 0.25, d.z * 1.4, 1 + Math.random() * 0.5, 0.05, 0.4, 0.72, 0.72, 0.7, 0.22, -0.15, 2.2);
 	}
 	function ring(x, y, z, r, life = 1.5, color = 0xff5a3a, grow = false) {
 		const R = rings.find((q) => q.life <= 0) || rings[0];
@@ -319,6 +415,29 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 			B.pool.mesh.setMatrixAt(B.i, _m);
 		}
 		if (moved) { chips.mesh.instanceMatrix.needsUpdate = true; shards.mesh.instanceMatrix.needsUpdate = true; }
+		let cm = false;
+		for (const B of caseBits) {
+			if (B.life <= 0) continue;
+			B.life -= dt; cm = true;
+			if (B.life <= 0) { cases.mesh.setMatrixAt(B.i, HIDE); continue; }
+			if (!B.rest) {
+				B.v.y -= 9.8 * dt;
+				B.p.addScaledVector(B.v, dt);
+				B.r.x += B.w.x * dt; B.r.y += B.w.y * dt; B.r.z += B.w.z * dt;
+				const gy = ground(B.p.x, B.p.z);
+				if (Number.isFinite(gy) && B.p.y < gy + B.rad) {
+					B.p.y = gy + B.rad;
+					// a ring off the ground, a skip, then it lies on its side and rolls a little
+					if (Math.abs(B.v.y) < 0.9) { B.rest = true; B.r.z = Math.PI / 2; B.r.x = 0; B.v.set(0, 0, 0); }
+					else { B.v.y *= -0.32; B.v.x *= 0.55; B.v.z *= 0.55; B.w.multiplyScalar(0.5); }
+				}
+			}
+			const fade = Math.min(1, B.life * 0.5);
+			_q.setFromEuler(B.r);
+			_m.compose(B.p, _q, _s.set(B.rad * fade, B.len * fade, B.rad * fade));
+			cases.mesh.setMatrixAt(B.i, _m);
+		}
+		if (cm) cases.mesh.instanceMatrix.needsUpdate = true;
 		let bl = false;
 		for (let i = 0; i < blood.n; i++) {
 			if (bloodLife[i] <= 0) continue;
@@ -326,6 +445,13 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 			if (bloodLife[i] < 4) { const B = bloodAt[i], k = Math.max(0, bloodLife[i] / 4); _m.compose(_p.set(B.x, B.y, B.z), _q.setFromAxisAngle(_d.set(0, 1, 0), B.r), _s.setScalar(B.s * k)); blood.mesh.setMatrixAt(i, k > 0 ? _m : HIDE); bl = true; }
 		}
 		if (bl) blood.mesh.instanceMatrix.needsUpdate = true;
+		let sl = false;
+		for (let i = 0; i < splats.n; i++) {
+			if (splatLife[i] <= 0) continue;
+			splatLife[i] -= dt;
+			if (splatLife[i] < 5) { const k = Math.max(0, splatLife[i] / 5); splats.mesh.setMatrixAt(i, k > 0 ? _m.copy(splatM[i]).scale(_s.set(k, k, 1)) : HIDE); sl = true; }
+		}
+		if (sl) splats.mesh.instanceMatrix.needsUpdate = true;
 		for (const W of wards) {
 			if (W.life <= 0) continue;
 			W.life -= dt;
@@ -353,12 +479,14 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 	function clear() {
 		for (let i = 0; i < S.length; i++) { S[i].life = 0; S[i].held = false; streaks.mesh.setMatrixAt(i, HIDE); }
 		for (const B of bits) { B.life = 0; B.pool.mesh.setMatrixAt(B.i, HIDE); }
+		for (const B of caseBits) { B.life = 0; cases.mesh.setMatrixAt(B.i, HIDE); } cases.mesh.instanceMatrix.needsUpdate = true;
 		for (const D of decalPools) { for (let i = 0; i < D.n; i++) D.mesh.setMatrixAt(i, HIDE); D.mesh.instanceMatrix.needsUpdate = true; }
+		for (let i = 0; i < splats.n; i++) { splatLife[i] = 0; splats.mesh.setMatrixAt(i, HIDE); } splats.mesh.instanceMatrix.needsUpdate = true;
 		for (const R of rings) { R.life = 0; R.m.visible = false; }
 		for (const B of beams) { B.life = 0; B.m.visible = false; }
 		streaks.mesh.instanceMatrix.needsUpdate = chips.mesh.instanceMatrix.needsUpdate = shards.mesh.instanceMatrix.needsUpdate = true;
 	}
 	// the points' size on screen follows the viewport's height
 	const resize = (h, fov) => { const k = h / (2 * Math.tan((fov * Math.PI) / 360)); glow.m.uniforms.scale.value = smoke.m.uniforms.scale.value = k; };
-	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, muzzle, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
+	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, wisp, splash, casing, spout, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
 }

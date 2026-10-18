@@ -4,6 +4,8 @@ import { handle, Room } from '../src/index.js';
 import { CLOSE } from '../src/room.js';
 import { createCombatGuard } from '../src/combat-guard.js';
 import { MAX_PLAYERS, BURST, MAX_BYTES, STALE_MS, cleanEvent, cleanPose, cleanState, cleanFx, cleanHit, cleanCombatState, cleanRules } from '../../../island/src/net/protocol.js';
+import { MAX_LEVEL } from '../../../island/src/gameplay/gear-levels.js';
+import { GEAR_FEATURE } from '../../../island/src/net/protocol.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('  FAIL', msg); } };
@@ -145,7 +147,7 @@ section('host promotion');
 // ---------- trading ----------
 section('trading');
 const LAMP = { u: 'lamp-0001', i: 'camp-lantern', l: 3, t: 2, x: 40 };
-const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' + String(i).padStart(3, '0'), i: 'station-signal-flare', l: 10, t: 4, x: 999999 }));
+const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' + String(i).padStart(3, '0'), i: 'station-signal-flare', l: MAX_LEVEL, t: 4, x: 999999 }));
 {
 	const { R } = await makeRoom();
 	const a = await join(R, 'owner-aaaa', 'Ann'), b = await join(R, 'guest-bbbb', 'Ben'), c = await join(R, 'third-cccc', 'Cat');
@@ -168,7 +170,7 @@ const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' +
 		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, i: 'Bad Item!' }] } },
 		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: Array.from({ length: 13 }, (_, i) => ({ ...LAMP, u: 'lamp-' + i })) } },
 		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [LAMP, LAMP] } },
-		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, l: 11 }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, l: MAX_LEVEL + 1 }] } },
 		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, t: 5 }] } },
 		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, u: 'BAD ID' }] } },
 		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: { 'camp-lantern': 1 } } },
@@ -176,6 +178,9 @@ const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' +
 		{ t: 'trade', op: 'propose', id: 'tr-123456' },
 	]) await say(R, a, bad);
 	ok(b.of('trade').length === n, 'bad trades are dropped: op, id, credits, item, too many, an id twice, level, tier, item id, the old count form, key, no one addressed');
+	await say(R, a, { t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', v: 2, side: { credits: 0, items: [{ ...LAMP, l: MAX_LEVEL }] } });
+	ok(b.of('trade').at(-1)?.side?.items?.[0]?.l === MAX_LEVEL, 'gear at the highest level travels');
+	ok(a.of('welcome')[0]?.features?.includes(GEAR_FEATURE), 'and the room says so on welcome');
 	const own = a.of('trade').length;
 	await say(R, a, { t: 'trade', op: 'propose', id: 'tr-999999', to: 'owner-aaaa' });
 	ok(a.of('trade').length === own && !a.of('trade-ack').some((x) => x.id === 'tr-999999'), 'not to yourself');

@@ -1,29 +1,51 @@
 // You, when the camera steps back to show you (pulling a driver from their seat, and what
 // comes after): the hero you chose, a man or a woman (people/hero.js, kept in this browser;
-// changed in the settings, setHero), moved by the same motion rig as everyone else's.
+// changed in the settings, setHero), moved by the same motion rig as everyone else's, in what
+// you wear (people/armor-looks.js): dress(worn) builds you again when that changes, and version
+// counts the builds so whoever copied your arms or sleeves (crysis/viewmodel.js) knows to again.
 
 import { loadPeopleAssets, buildPerson, freeBody } from './body.js';
 import { heroDNA, heroChoice, setHeroChoice } from './hero.js';
+import { dressInGear, gearKey } from './armor-looks.js';
 import { createMotion } from './motion.js';
 import { wearOwnInk } from '../tattoo/studio.js';
 
 export function createAvatar({ scene, world }) {
-	let loading = null, me = null, hero = setHeroChoice(heroChoice()), version = 0, look = null;
+	let loading = null, me = null, hero = setHeroChoice(heroChoice()), look = null, chosen = 0;
+	let worn = {}, wornKey = gearKey({}), version = 0;
+	// you, built: your hero, dressed in what you wear over their own clothes
+	function build(A) {
+		const d = heroDNA(hero, { look });
+		if (d.style) d.style = dressInGear(d.style, worn);
+		const P = buildPerson(A, d);
+		wearOwnInk(P);                  // (your tattoos, if you have any: tattoo/studio.js)
+		const M = createMotion(P, (x, z) => world().island.heightAt(x, z));
+		P.root.visible = false;
+		scene.add(P.root);
+		version++;
+		return { P, M };
+	}
 	function ready() {
 		if (me) return Promise.resolve(me);
-		const v = version, h = hero;
+		const c = chosen;
 		// (chosen again while it was being made: made as the one chosen now)
-		if (!loading) loading = loadPeopleAssets().then((A) => {
-			if (v !== version) return ready();
-			const P = buildPerson(A, heroDNA(h, { look }));
-			wearOwnInk(P);                  // (your tattoos, if you have any: tattoo/studio.js)
-			const M = createMotion(P, (x, z) => world().island.heightAt(x, z));
-			P.root.visible = false;
-			scene.add(P.root);
-			me = { P, M };
-			return me;
-		});
+		if (!loading) loading = loadPeopleAssets().then((A) => (c !== chosen ? ready() : (me = build(A))));
 		return loading;
+	}
+	// what you wear now ({ slot: item id }): built again when it changes, where you stood
+	function dress(next = {}) {
+		const key = gearKey(next);
+		if (key === wornKey) return false;
+		worn = { ...next }; wornKey = key;
+		if (!me) return true;
+		loadPeopleAssets().then((A) => {
+			if (gearKey(worn) !== key || !me) return;
+			const old = me, was = old.P.root.visible, at = old.P.root.position.clone(), yaw = old.P.root.rotation.y;
+			me = build(A);
+			if (was) { me.M.place(at.x, at.y, at.z, yaw); me.M.stand(); me.P.root.visible = true; }
+			old.P.root.removeFromParent(); freeBody(old.P);
+		});
+		return true;
 	}
 	// you again, dressed for the tattoo chair: the same body in a sleeveless top and shorts, so
 	// the arms and legs show (built once, when first sat in)
@@ -68,7 +90,7 @@ export function createAvatar({ scene, world }) {
 		look = nextLook;
 		hero = next;
 		const was = me, chairWas = chairMe;
-		me = null; loading = null; chairMe = null; chairing = null; version++;
+		me = null; loading = null; chairMe = null; chairing = null; chosen++;
 		if (!was) return null;
 		const at = was.M.S.pos.clone(), heading = was.M.S.heading, shown = was.P.root.visible;
 		const now = await ready();
@@ -78,5 +100,5 @@ export function createAvatar({ scene, world }) {
 		return now;
 	}
 	function update(dt, t, cam) { if (me?.P.root.visible) me.M.update(dt, t, cam); }
-	return { ready, show, hide, update, chair, setHero, get hero() { return hero; }, get version() { return version; }, get me() { return me; }, get chairMe() { return chairMe; } };
+	return { ready, show, hide, update, chair, dress, setHero, get hero() { return hero; }, get me() { return me; }, get chairMe() { return chairMe; }, get version() { return version; }, get worn() { return { ...worn }; } };
 }

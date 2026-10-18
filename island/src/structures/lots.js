@@ -9,10 +9,11 @@ import { ROUTES, TRAIL } from '../bay/roads.js';
 import { toWorld } from '../bay/geo.js';
 import { realCovered } from '../bay/realcity.js';
 import { onLandmark } from '../bay/footprints.js';
+import { GFX_PHONE } from '../world/device.js';
 
 let ways = null;
 // (a phone settles the nearer lots only, as city.js trims only the nearer ones there: the far ones are a few pixels)
-const PHONE = typeof navigator !== 'undefined' && /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent || '');
+const PHONE = GFX_PHONE;
 const REACH = PHONE ? 700 : 1300;
 // the freeways (34 m) and the trail (4 m) where bay/roads.js draws them: outside the regions
 const roadsOfGrid = () => ways || (ways = [...routeRoads(Object.values(ROUTES), toWorld, (x, z) => realCovered(x, z, 70), 34), ...routeRoads([TRAIL], toWorld, (x, z) => realCovered(x, z, 70), 4, 'trunk')]);
