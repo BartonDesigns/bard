@@ -353,6 +353,30 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 		debris(p, 10, 0x2a2622, 7, 0.14);
 		const gy = ground(p.x, p.z);
 		if (scorch && Number.isFinite(gy) && p.y - gy < r) decal({ x: p.x, y: gy + 0.03, z: p.z }, { x: 0, y: 1, z: 0 }, r * 1.6, 1);
+		if (Number.isFinite(gy) && (p.y - gy < r || (gy < -0.3 && Math.abs(p.y) < r))) heave(p, r, gy);
+	}
+	// what a blast on the ground throws up: a geyser of dark earth with a dust skirt rushing out
+	// low along the ground, or out at sea a white column of water that falls back as rain
+	function heave(p, r, gy) {
+		const k = Math.min(2, r / 3), sea = gy < -0.3 && Math.abs(p.y) < r, y0 = sea ? 0.05 : gy + 0.05;
+		const n = isPhone ? 14 : 30;
+		for (let i = 0; i < n; i++) {
+			const a = Math.random() * 6.283, out = Math.random() * (sea ? 1.4 : 3), up = (sea ? 11 : 7) + Math.random() * (sea ? 10 : 9);
+			if (sea) smoke.emit(p.x + Math.cos(a) * 0.4 * k, y0, p.z + Math.sin(a) * 0.4 * k, Math.cos(a) * out * k, up * k, Math.sin(a) * out * k, 1.4 + Math.random() * 0.8, 0.6 * k, 2.4 * k, 0.88, 0.92, 0.95, 0.7, 9.8, 0.25);
+			else smoke.emit(p.x + Math.cos(a) * 0.3 * k, y0, p.z + Math.sin(a) * 0.3 * k, Math.cos(a) * out * k, up * k, Math.sin(a) * out * k, 1.1 + Math.random() * 0.7, 0.45 * k, 1.4 * k, 0.16, 0.13, 0.1, 0.95, 9.8, 0.35);
+		}
+		// the body of it: big soft masses stacked up the column, hanging a moment before they sink
+		for (let i = 0; i < (isPhone ? 4 : 7); i++) {
+			const up = (4 + i * 2.2 + Math.random() * 2) * k;
+			smoke.emit(p.x + (Math.random() - 0.5) * k, y0 + 0.5, p.z + (Math.random() - 0.5) * k, (Math.random() - 0.5) * k, up, (Math.random() - 0.5) * k, 2.4 + Math.random() * 1.2, 1.4 * k, 5 * k, sea ? 0.9 : 0.36, sea ? 0.93 : 0.32, sea ? 0.96 : 0.27, sea ? 0.5 : 0.55, sea ? 4 : 3, 0.9);
+		}
+		// the skirt: dust (or spray) thrown out flat from the foot of it, dragging to a stop
+		const m = isPhone ? 8 : 16;
+		for (let i = 0; i < m; i++) {
+			const a = i / m * 6.283 + Math.random() * 0.3, sp = (8 + Math.random() * 5) * k;
+			smoke.emit(p.x, y0 + 0.3, p.z, Math.cos(a) * sp, 0.4 + Math.random() * 0.6, Math.sin(a) * sp, 2.2 + Math.random() * 1.4, 0.6 * k, 3.2 * k, sea ? 0.85 : 0.5, sea ? 0.89 : 0.45, sea ? 0.92 : 0.37, sea ? 0.45 : 0.6, -0.1, 2.6);
+		}
+		if (sea) splash(p);
 	}
 	// a muzzle's flash (third person and friends: the view draws its own in first person)
 	function muzzle(p, d, style = 0) {
@@ -488,5 +512,5 @@ export function createFx({ isPhone = false, ground = () => -1e9, plumes = () => 
 	}
 	// the points' size on screen follows the viewport's height
 	const resize = (h, fov) => { const k = h / (2 * Math.tan((fov * Math.PI) / 360)); glow.m.uniforms.scale.value = smoke.m.uniforms.scale.value = k; };
-	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, wisp, splash, casing, spout, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
+	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, column, spatter, muzzle, wisp, splash, heave, casing, spout, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
 }
