@@ -164,7 +164,7 @@ test('rebuild site, storefronts and staff: nearer and fewer down the tiers, as m
 	assert.equal(frontShare(TIERS[0]), 1); assert.equal(frontShare(TIERS[1]), 1);
 	assert.ok(frontShare(TIERS[2]) < 1 && frontShare(TIERS[3]) < frontShare(TIERS[2]) && frontShare(TIERS[3]) > 0.4);
 	setTier(0); assert.equal(peopleCap(8, 1), 8);
-	setTier(3); assert.ok(peopleCap(8, 1) < 8 && peopleCap(3, 1) >= 1);
+	setTier(3); assert.equal(peopleCap(8, 1), 8);
 	setTier(0);
 });
 

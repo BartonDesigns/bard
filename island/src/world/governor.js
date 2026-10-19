@@ -12,14 +12,15 @@
 // what each tier asks of the world:
 //   ratio: of the device's best pixel ratio; shadows, their map's size (a fraction of the sun's
 //   own) and how often they are drawn (every frame, or every other: the shadow pass draws the
-//   city a second time); people: of the crowd the place calls for; far: of the view's reach (and
+//   city a second time); people: of the crowd the place calls for (the whole crowd on every
+//   tier: crowd size matters to the game, so the relief never takes people away); far: of the view's reach (and
 //   how near the cars hand over to their coarser shapes); reflect: the clouds in the water; fx:
 //   the sunbeams' and spray's own setting ('auto' is their phone or desktop default)
 export const TIERS = [
 	{ name: 'high', ratio: 1, shadows: true, shadowSize: 1, shadowEvery: 1, people: 1, far: 1, reflect: true, fx: 'auto' },
-	{ name: 'medium', ratio: 0.85, shadows: true, shadowSize: 0.5, shadowEvery: 2, people: 0.75, far: 0.8, reflect: true, fx: 'auto' },
-	{ name: 'low', ratio: 0.7, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 0.5, far: 0.6, reflect: false, fx: 'low' },
-	{ name: 'minimal', ratio: 0.55, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 0.3, far: 0.45, reflect: false, fx: 'low' },
+	{ name: 'medium', ratio: 0.85, shadows: true, shadowSize: 0.5, shadowEvery: 2, people: 1, far: 0.8, reflect: true, fx: 'auto' },
+	{ name: 'low', ratio: 0.7, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 1, far: 0.6, reflect: false, fx: 'low' },
+	{ name: 'minimal', ratio: 0.55, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 1, far: 0.45, reflect: false, fx: 'low' },
 ];
 export const LOWEST = TIERS.length - 1;
 
