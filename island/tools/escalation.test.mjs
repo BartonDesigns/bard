@@ -11,7 +11,7 @@ import { territoryAt, cornerSize, recruits, junctions, pickCorners, gangStance, 
 import { insideBox, pushOut, roadblockSpot, blockSlots, hiddenSpot, inCone, squadMorale, offscreenPace } from '../src/law/tactics.js';
 import { createWanted, offend, tickWanted, sighted, STARS, defend, officerHurt, tickDefence, clearWanted, DEFENCE } from '../src/combat/heat.js';
 import { policePlan } from '../src/military/rules.js';
-import { FACTIONS, createRelations } from '../src/combat/factions.js';
+import { FACTIONS, createRelations, ATTACK, attackGap } from '../src/combat/factions.js';
 import { outfitFor, lookOf } from '../src/combat/outfits.js';
 
 const seq = (...v) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]; };
@@ -84,6 +84,13 @@ test('fired on first, you answer it: a blue star, no crime; hurt an officer thre
 	assert.equal(witness(L, { kind: 'defence', at: { x: 0, z: 0 }, t: 0, witnesses: 0, heard: true }, () => 0.5), 'later');
 	assert.equal(L.reports[0].call, 'defence');
 	assert.ok(L.reports[0].due <= 10);
+});
+
+test('attacks on you are paced events: 15 minutes on their ground, 30 elsewhere, a rare raid with no ground', () => {
+	assert.equal(attackGap(FACTIONS.ashfang, 'wild'), 15 * 60);
+	assert.equal(attackGap(FACTIONS.ashfang, 'village'), 30 * 60);
+	assert.equal(attackGap(FACTIONS.halcyon, 'earth-urban'), ATTACK.raid);
+	assert.ok(ATTACK.raid > ATTACK.away && ATTACK.away > ATTACK.home);
 });
 
 test('an officer who sees it counts it at once; several witnesses make one call, sooner', () => {
