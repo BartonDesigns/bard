@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLOBE_ASSET_VERSION } from '../earth/globe-assets.js';
 import { createGalacticGargantua228 } from '../../../runtime/gargantua228.mjs';
 import { GFX_PHONE } from '../world/device.js';
+import { geoBasis } from './landing.js';
 
 export const ORBIT_FRAGMENT = /* glsl */`
 precision highp float;
@@ -220,8 +221,7 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 	const sun = new THREE.Vector3(.3, .8, -.4).normalize(), spot = new THREE.Vector3();
 	const geography = new THREE.Matrix3();
 	function anchor(lat = 0, lon = 0, sunDir) {
-		const a = lat * Math.PI / 180, b = lon * Math.PI / 180;
-		geography.set(-Math.sin(b), Math.cos(a)*Math.cos(b), Math.sin(a)*Math.cos(b), 0, Math.sin(a), -Math.cos(a), Math.cos(b), Math.cos(a)*Math.sin(b), Math.sin(a)*Math.sin(b));
+		geoBasis(lat, lon, geography);
 		if (sunDir) sun.copy(sunDir).normalize();
 	}
 	// fx: { warp 0..1, streak 0..1, heading (unit vector), heat 0..1 }
