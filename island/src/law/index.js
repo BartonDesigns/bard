@@ -103,7 +103,8 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		if (kind === 'shots') { firedT = t; if (t - shotsT < 2) return combat.wantedLevel(); shotsT = t; }
 		S.crimes++;
 		const byOfficer = officersSee(at), n = byOfficer ? 0 : witnessCount(at, kind === 'shots' ? 50 : 40);
-		const r = witness(L, { kind, at, t, police: byOfficer, witnesses: n, heard: kind === 'shots' && flag !== null });
+		// (gunfire carries to someone only where people live or work: not out in the empty country)
+		const r = witness(L, { kind, at, t, police: byOfficer, witnesses: n, heard: kind === 'shots' && flag !== null && combat.populated?.(at) !== false });
 		if (r === 'now') {
 			combat.report(kind === 'shots' && combat.wantedLevel() < 2 ? 'gunfire' : kind, at);
 			say(kind === 'shots' ? 'Shots fired! Shots fired!' : kind === 'hitPolice' || kind === 'downPolice' ? 'Officer down! All units!' : pick(ARREST), 'Harbour Police', 2);
@@ -115,7 +116,8 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		if (e.kind === 'boss' || e.kind === 'invasion' || e.kind === 'riot' || e.kind === 'wanted') { if (routeTrouble(e) === 'military') S.military++; return dispatch?.event?.(e) || null; }
 		// a fight or gunfire among others: someone has to call it in
 		const n = witnessCount(e, 60);
-		const r = witness(L, { kind: e.kind === 'brawl' ? 'brawl' : e.kind === 'gang' ? 'gang' : e.kind, at: e, t, witnesses: n, heard: e.kind === 'gang', severity: e.severity || 1, ev: e });
+		// (you fired on first, a gang's gunfire: heard where people live or work, not out in the empty country)
+		const r = witness(L, { kind: e.kind === 'brawl' ? 'brawl' : e.kind === 'gang' ? 'gang' : e.kind, at: e, t, witnesses: n, heard: (e.kind === 'gang' || e.kind === 'defence') && combat.populated?.(e) !== false, severity: e.severity || 1, ev: e });
 		return r ? 'reported' : null;
 	}
 	// the calls coming through

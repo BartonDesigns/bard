@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { createLadder, witness, dueReports, pending, responsePlan, routeTrouble, complying, arrestable, fineFor, reportDelay, SEARCH, LEVELS, searchLoop, createDamageLog, smashed, SPREE } from '../src/law/ladder.js';
 import { territoryAt, cornerSize, recruits, junctions, pickCorners, gangStance, warChance, militiaAllowed, lowMorality, GANGS, CELL } from '../src/law/gangs.js';
 import { insideBox, pushOut, roadblockSpot, blockSlots, hiddenSpot, inCone, squadMorale, offscreenPace } from '../src/law/tactics.js';
-import { createWanted, offend, tickWanted, sighted, STARS } from '../src/combat/heat.js';
+import { createWanted, offend, tickWanted, sighted, STARS, defend, officerHurt, tickDefence, clearWanted, DEFENCE } from '../src/combat/heat.js';
 import { policePlan } from '../src/military/rules.js';
 import { FACTIONS, createRelations } from '../src/combat/factions.js';
 import { outfitFor, lookOf } from '../src/combat/outfits.js';
@@ -50,6 +50,40 @@ test('one broken window is nobody\'s police matter; smashing things on purpose i
 	const W = createWanted();
 	offend(W, 'vandalism');
 	assert.equal(W.stars, 1);
+});
+
+test('fired on first, you answer it: a blue star, no crime; hurt an officer three times and they turn', () => {
+	const W = createWanted();
+	assert.equal(defend(W), true, 'turns blue');
+	assert.equal(W.blue, 1);
+	assert.equal(W.stars, 0, 'no yellow star');
+	assert.equal(defend(W), false, 'already blue');
+	assert.equal(officerHurt(W, 0), 'warn');
+	assert.equal(officerHurt(W, 0.5), 'same', 'one burst is one time');
+	assert.equal(officerHurt(W, 3), 'warn');
+	assert.equal(officerHurt(W, 6), 'turn', 'the third time');
+	assert.equal(W.blue, 0);
+	assert.equal(officerHurt(W, 9), 'crime', 'no blue: an offence as ever');
+	// the blue holds while they are still after you, and goes a while after
+	defend(W);
+	tickDefence(W, DEFENCE.last + 5, true);
+	assert.equal(W.blue, 1);
+	tickDefence(W, DEFENCE.last - 1, false);
+	assert.equal(W.blue, 1);
+	tickDefence(W, 2, false);
+	assert.equal(W.blue, 0);
+	// a yellow star (a crime of your own) ends it, and none comes while you have one
+	defend(W); offend(W, 'hitCivilian'); tickDefence(W, 0.1, true);
+	assert.equal(W.blue, 0);
+	assert.equal(defend(W), false);
+	clearWanted(W);
+	assert.equal(W.blue, 0);
+	// called in like gunfire: heard where people are, seen by passers-by
+	const L = createLadder();
+	assert.equal(witness(L, { kind: 'defence', at: { x: 0, z: 0 }, t: 0, witnesses: 0, heard: false }), null, 'out in the empty country nobody hears it');
+	assert.equal(witness(L, { kind: 'defence', at: { x: 0, z: 0 }, t: 0, witnesses: 0, heard: true }, () => 0.5), 'later');
+	assert.equal(L.reports[0].call, 'defence');
+	assert.ok(L.reports[0].due <= 10);
 });
 
 test('an officer who sees it counts it at once; several witnesses make one call, sooner', () => {
