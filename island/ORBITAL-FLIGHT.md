@@ -31,6 +31,26 @@ Do not remove the legacy engine until its active features have verified replacem
   area using the existing Crysis save system, rather than saving invalid space coordinates
   as a surface address. Arbitrary deep-space pose persistence is not implemented.
 
+## Coming down anywhere on Earth
+
+- Above 95 km, level flight round Earth stays level: whatever carries the ship round the
+  centre turns its heading and momentum with it (`frame.transport`), fading out past 5,000 km.
+- `frame.below(pos)` is the real latitude and longitude under the ship, the same point the
+  orbital texture shows there (`space/landing.js` `geoBasis` is shared with `view.js`).
+- A card in orbit names the place below with a short note on what you land in there
+  (`regionNote`: the hand-built Bay, or real globe terrain with the region's generated kit,
+  or open sea), with **Land here** (starts a descent) and **Back to** the departure (glides
+  round the planet to above it, then descends onto the kept ground, exact to the metre).
+- Through 95 km on the way down, a place more than 25 km from the anchor is charted:
+  `globe.place` moves the walkable globe there, `frame.land` rotates the orbital frame so the
+  place's east/up/south lie along x/y/z (every view ray kept), and the ship holds at 62 km
+  (still all orbit) until the ground is in. The globe streams during that descent
+  (`orbit.streams()`). Back to the departure mid-descent goes behind the travel veil.
+- Console: `Crysis.orbitOver(lat, lon, km)` (once in orbit), `Crysis.landing()`.
+- Checks: `node island/tools/orbit-landing.test.mjs`, and
+  `BARD_URL=http://127.0.0.1:8766 node island/tools/orbit-landing-browser.cjs desktop|phone`
+  (`PHONE='Pixel 7'` for another device).
+
 ## Rendering and music
 
 `src/space/frame.js` owns coordinate math and speed limits. `flight.js` bridges the

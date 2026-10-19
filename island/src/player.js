@@ -45,11 +45,11 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (!s.active || window._KEYS_PLAY_ON || e.target.closest?.('input,textarea,[contenteditable]')) return;
 		const k = e.key.toLowerCase();
 		if (['escape','tab','g','i','k'].includes(k)) releaseMouse();
-		if (k === 'f' && !e.repeat) { if (!s.orbit?.high()) { s.flying = !s.flying; s.vel.y = 0; } s.climbAssist = false; s.onFly?.(s.flying); e.preventDefault(); return; }
+		if (k === 'f' && !e.repeat) { if (!s.orbit?.high()) { s.flying = !s.flying; s.vel.y = 0; } s.climbAssist = s.descendAssist = false; s.onFly?.(s.flying); e.preventDefault(); return; }
 		if (k === 'b' && !e.repeat && s.flying) { cycleBoost(); e.preventDefault(); return; }
 		// (C on foot crouches, or slides out of a sprint; a fist fight's dodge has it first: combat/melee.js)
 		if (k === 'c' && e.l99Dodge) s.dodgeC = true;
-		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = false; keys.add(k); e.preventDefault(); }
+		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = s.descendAssist = false; keys.add(k); e.preventDefault(); }
 	}
 	// Aim and camera (desktop). Alt / Option lets go of the mouse for the camera: the cursor is
 	// free, a click-drag turns the view and clicks fire nothing. A double tap of Alt / Option
@@ -79,7 +79,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	let mouse = null;
 	function pDown(e) {
 		if (!canLook() || !owns(e)) return;
-		s.climbAssist = false;
+		s.climbAssist = s.descendAssist = false;
 		const r = dom.canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
 		if (e.pointerType === 'mouse') {
    // (the camera: a click-drag turns the view, the mouse stays free)
@@ -130,7 +130,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	addEventListener('keydown', keyDown); addEventListener('keyup', keyUp);
 	dom.canvas.addEventListener('pointerdown', pDown);
 	addEventListener('pointermove', pMove); addEventListener('pointerup', pUp); addEventListener('pointercancel', pUp);
-	function clearInput() { releaseMouse(); keys.clear(); s.dodgeC = false; s.crouchQueued = false; mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.run = s.flyUp = s.flyDown = s.climbAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
+	function clearInput() { releaseMouse(); keys.clear(); s.dodgeC = false; s.crouchQueued = false; mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.run = s.flyUp = s.flyDown = s.climbAssist = s.descendAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
 	addEventListener('blur', clearInput);
 	// the gyro, when switched on (ui/touch-look.js), turns the view on top of the drag
 	onGyro((yaw, pitch) => {
@@ -251,7 +251,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const fs = s.orbit ? s.orbit.speed(run, s.boost, agl) : (run ? 38 : 16) * hk * Math.min(9, flightMultiplier(s.boost));
 			flightQ.setFromEuler(flightE.set(s.pitch, s.yaw, s.roll || 0));
 			fwd.set(0, 0, -1).applyQuaternion(flightQ); right.set(1, 0, 0).applyQuaternion(flightQ);
-			const up = (keys.has(' ') || s.flyUp || s.climbAssist ? 1 : 0) - (keys.has('c') || s.flyDown ? 1 : 0);
+			const up = (keys.has(' ') || s.flyUp || s.climbAssist ? 1 : 0) - (keys.has('c') || s.flyDown || s.descendAssist ? 1 : 0);
 			if (s.orbit) s.orbit.up(lift); else lift.set(0, 1, 0);
 			wish.copy(fwd).multiplyScalar(-mz).addScaledVector(right, mx).addScaledVector(lift, up * .6);
 			if (wish.lengthSq() > 1) wish.normalize();
