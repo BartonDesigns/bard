@@ -21990,10 +21990,19 @@ window._kbdVel = _kbdVel;
 // permission-prompt UX and late-plugged keyboards.
 (function _midiAutoStart() {
   function kick() { try { var p = window.setupLiveMIDIRecovery(); if (p && p.catch) p.catch(function () {}); } catch (eMK) {} }
-  if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(kick, 400);
-  else window.addEventListener('DOMContentLoaded', function () { setTimeout(kick, 400); });
+  // Chrome logs a deprecation note on every requestMIDIAccess, so ask only when it can help:
+  // at load when MIDI is already allowed, on the first gesture unless the player blocked it.
+  function when(ok) {
+    try {
+      if (!navigator.permissions || !navigator.permissions.query) { kick(); return; }
+      navigator.permissions.query({ name: 'midi' }).then(function (st) { if (ok(st.state)) kick(); }, kick);
+    } catch (eMQ) { kick(); }
+  }
+  function atLoad() { setTimeout(function () { if (!midiAccess) when(function (s) { return s === 'granted'; }); }, 400); }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') atLoad();
+  else window.addEventListener('DOMContentLoaded', atLoad);
   ['pointerdown', 'keydown'].forEach(function (evn) {
-    window.addEventListener(evn, function () { if (typeof midiConnected === 'undefined' || !midiConnected) kick(); }, { once: true, capture: true });
+    window.addEventListener(evn, function () { if (!midiAccess && (typeof midiConnected === 'undefined' || !midiConnected)) when(function (s) { return s !== 'denied'; }); }, { once: true, capture: true });
   });
 })();
 // ═══ vox334: LAUNCH GRID LIVE ══════════════════════════════════════════════
@@ -23473,17 +23482,8 @@ function updateMIDIIndicator() {
 function setupMIDI() {
   try { loadMidiMap(); } catch(e) {}
 
-  // MIDI devices are reached only once the player has allowed them (or presses LEARN):
-  // asking on page load pops a permission prompt in a game most people never plug a
-  // controller into, and Chrome flags requestMIDIAccess without permission as deprecated.
-  // setupLiveMIDIRecovery keeps the hot-plug port recovery once access is granted.
-  try {
-    if (navigator.requestMIDIAccess && navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'midi' }).then(st => {
-        if (st.state === 'granted' && !midiAccess) window.setupLiveMIDIRecovery().catch(() => {});
-      }).catch(() => {});
-    }
-  } catch(e){}
+  // MIDI access itself (with hot-plug port recovery) is requested once, by _midiAutoStart
+  // (vox332) through setupLiveMIDIRecovery; a second request here only doubled the prompt.
 
   // Wire swing slider — ALWAYS runs regardless of MIDI
   const swingSl = document.getElementById('sl-swing');
