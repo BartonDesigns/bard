@@ -657,7 +657,8 @@ export function createIslandWorld() {
 	const guideApi = { world: () => world, scene, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
 	const guide = createGuide(dom.mount, guideApi);
 	// the pin and direction chip for the meeting or quest place the guide is tracking
-	const waypoint = guideApi.waypoint = createWaypoint({ scene, camera, mount: dom.mount, onTap: () => guide.showQuests() });
+	// (the wayfinder's trail lies on the floor you walk: the ground, a bridge's deck, a cave's floor)
+	const waypoint = guideApi.waypoint = createWaypoint({ scene, camera, mount: dom.mount, onTap: () => guide.showQuests(), wayfinder: true, groundAt: (x, z, y) => world?.player?.floorAt?.(x, z, y) ?? world?.island?.heightAt?.(x, z) });
 	HOOKS.waypoint = waypoint;
 	// the city director (earth/): what should be in the towns and cities you come to, the same
 	// for every player (the discovery server's brief, else the Earth atlas's); the Guide's
