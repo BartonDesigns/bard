@@ -132,21 +132,23 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 	const isView = (el) => el?.tagName === 'CANVAS' && el.clientWidth >= innerWidth * 0.5 && el.clientHeight >= innerHeight * 0.5;
 	let view = null;
 	const toPx = (q) => { point.set(q.x, q.y, q.z).project(camera); const r = (view || mount).getBoundingClientRect(); return { x: r.left + (point.x + 1) / 2 * r.width, y: r.top + (1 - point.y) / 2 * r.height, z: point.z }; };
+	let tapWhy = null;          // (what the last tap did, for the tests)
 	function tapDown(e) {
-		if (e.pointerType !== 'touch' || !isView(e.target)) return;
+		if (e.pointerType !== 'touch' || !isView(e.target)) { if (e.pointerType === 'touch') tapWhy = 'not the view: ' + e.target?.tagName; return; }
 		const r = e.target.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-		if (x < 0.42 && y > 0.35) return;
+		if (x < 0.42 && y > 0.35) { tapWhy = 'joystick'; return; }
 		taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: e.timeStamp, far: false, el: e.target });
 	}
 	function tapMove(e) { const q = taps.get(e.pointerId); if (q && Math.hypot(e.clientX - q.x, e.clientY - q.y) > 12) q.far = true; }
 	function tapUp(e) {
 		const q = taps.get(e.pointerId); taps.delete(e.pointerId);
 		// (timed by the events themselves: a slow frame between them is not a long press)
-		if (!q || q.far || e.timeStamp - q.t > 320 || !active()) return;
+		if (!q || q.far || e.timeStamp - q.t > 320 || !active()) { if (e.pointerType === 'touch') tapWhy = !q ? 'no down' : q.far ? 'moved' : !active() ? 'inactive' : 'long ' + Math.round(e.timeStamp - q.t); return; }
 		const list = [...layer.map.values()].filter((T) => Number.isFinite(focusScore(T, camera.position, { x: 0, y: 0, z: 0 }, { hostile: true, max: 65, shooter, rules, dotMin: -2 })));
 		camera.updateMatrixWorld(); view = q.el;
 		const T = pickAt(list, q.x, q.y, toPx);
-		if (!T || blocked(camera.position, T.bound)) return;
+		if (!T || blocked(camera.position, T.bound)) { tapWhy = !T ? `nobody (${list.length} near)` : 'blocked'; return; }
+		tapWhy = 'locked';
 		if (selected === T && track) return;
 		select(T, true);
 	}
@@ -206,7 +208,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 			marker.style.color = track ? '#ff9a7a' : '#ffe4a0';
 			if (label.textContent !== text) label.textContent = text;
 		},
-		info: () => ({ id: selected?.id || null, visible: seen, candidates: candidates.length, cameraAssist: !!track, offset: track ? { yaw: +track.offY.toFixed(4), pitch: +track.offP.toFixed(4) } : null }),
+		info: () => ({ id: selected?.id || null, visible: seen, candidates: candidates.length, cameraAssist: !!track, tap: tapWhy, offset: track ? { yaw: +track.offY.toFixed(4), pitch: +track.offP.toFixed(4) } : null }),
 		dispose() { clear(); marker.remove(); dock.remove(); style.remove(); removeEventListener('keydown', key); removeEventListener('pointerdown', pointer); removeEventListener('blur', clear); removeEventListener('pointerdown', tapDown, true); removeEventListener('pointermove', tapMove, true); removeEventListener('pointerup', tapUp, true); },
 	};
 }

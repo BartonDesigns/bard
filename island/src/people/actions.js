@@ -330,6 +330,35 @@ for (const [name, keys] of Object.entries(HURT)) {
 	}
 }
 
+// ---------- over something in the way (combat/npc-climb.js): its progress u is the climb's ----------
+// a hop: the left hand planted on the top (crysis/held-items.js sets it there), the weight
+// going onto it, the legs tucked and swung over to the right, down on the far side in the knees.
+// A mantle: both hands on the ledge, up onto them, a knee up onto it, stand.
+const PLANT = arm({ abd: 0.15, flex: 0.75, roll: 0.1, bend: 0.12, pro: 0.1, wflex: -0.6, curl: 0.15 });
+const BALANCE = arm({ abd: 0.95, flex: 0.35, roll: 0.2, bend: 0.45, pro: 0.6, curl: 0.3 });
+const v = (u, sp, hp, hd, rt, fL, fR, L = REST, R = REST) => [u, { sp, hp, hd, rt, fL, fR, L, R }];
+const VAULT = {
+	hop: [
+		v(0, N3, N4, N3, [0, 0], FL0, FR0),
+		v(0.24, [0, 0.38, 0], [0, 0.12, 0, 0.06], [0, -0.1, 0], [0.06, 0], [0.12, 0.08, -0.12], [-0.1, 0.32, 0.18], PLANT, BALANCE),
+		v(0.48, [0.3, 0.3, 0.25], [0.45, 0.1, 0.2, -0.2], [-0.25, 0.1, 0], [0.08, 0.45], [-0.36, 0.78, 0.1], [-0.58, 0.7, 0.22], PLANT, BALANCE),
+		v(0.7, [0.12, 0.25, 0.08], [0.18, 0.05, 0.06, -0.02], [-0.1, 0.15, 0], [0.04, 0.12], [-0.06, 0.12, 0.3], [-0.2, 0.02, 0.22], REST, BALANCE),
+		v(0.84, [0, 0.36, 0], [0, 0.12, 0, 0.2], [0, 0.1, 0], [0, 0], [0.13, 0, 0.12], [-0.13, 0, -0.06]),
+		v(1, N3, N4, N3, [0, 0], FL0, FR0),
+	],
+	mantle: [
+		v(0, N3, N4, N3, [0, 0], FL0, FR0),
+		v(0.3, [0, 0.55, 0], [0, 0.2, 0, -0.04], [0, -0.25, 0], [0.12, 0], [0.12, 0.06, -0.12], [-0.12, 0.12, -0.08], PLANT, PLANT),
+		v(0.66, [0, 0.62, 0], [0, 0.22, 0, 0.12], [0, -0.05, 0], [0.1, 0], [0.12, 0.1, -0.16], [-0.12, 0.58, 0.26], PLANT, PLANT),
+		v(0.86, [0, 0.3, 0], [0, 0.1, 0, 0.12], [0, 0.05, 0], [0.04, 0], [0.12, 0.3, -0.05], [-0.12, 0.02, 0.16], REST, REST),
+		v(1, N3, N4, N3, [0, 0], FL0, FR0),
+	],
+};
+for (const [name, keys] of Object.entries(VAULT)) {
+	ACTIONS[`vault-${name}`] = { loop: false, keys };
+	ACTIONS[`vault-${name}+`] = { loop: false, keys: keys.map(([u, q]) => [u, { sp: q.sp.map((x, i) => x + CARRY_SP[i]), hp: q.hp, hd: q.hd, rt: q.rt, fL: q.fL, fR: q.fR }]) };
+}
+
 // an action at progress u: the pose, eased between its keys (null for anything a key leaves out)
 const out = { L: arm({}), R: arm({}), sp: [0, 0, 0], hp: [0, 0, 0, 0], fL: [0, 0, 0], fR: [0, 0, 0], rt: [0, 0], hd: [0, 0, 0], has: {} };
 export function actionAt(name, u) {

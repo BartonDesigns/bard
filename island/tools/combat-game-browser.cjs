@@ -71,7 +71,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 		await page.touchscreen.tap(at.x, at.y);
 	}
 	await wait(1500);
-	R.lock = await page.evaluate(() => { const i = Crysis.combat.focus.info(); return { target: i.target?.id || i.id || null, cameraAssist: i.cameraAssist, tracking: Crysis.combat.focus.tracking?.() }; });
+	R.lock = await page.evaluate(() => { const i = Crysis.combat.focus.info(); return { target: i.target?.id || i.id || null, cameraAssist: i.cameraAssist, tracking: Crysis.combat.focus.tracking?.(), tap: i.tap }; });
 	// how close the view sits to their chest, after they have moved for a while
 	const err = () => page.evaluate((id) => {
 		const T = Crysis.combat.layer.get(id), c = window.L99Island.camera(), q = T.aim?.() || T.bound;

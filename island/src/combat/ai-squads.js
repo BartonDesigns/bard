@@ -39,6 +39,7 @@ import { outfitFor, kitArmour } from './outfits.js';
 import { bodyShapes, aimPoint } from './hitzones.js';
 import { createWounds, react, pace } from './wounds.js';
 import { applyClutch } from '../crysis/held-items.js';
+import { createClimber, climbBody } from './npc-climb.js';
 
 // the bodies: people (dressed by faction), and the two that are not
 const BODY = {
@@ -154,7 +155,8 @@ export function createSquads(ctx) {
 			const d = personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid, seed) });
 			const P = buildPerson(A, d);
 			if (F.masked) maskOn(P, F.colors?.[0] || '#ff7a2a');
-			const b = { P, M: createMotion(P, (x, z) => ctx.ground(x, z, P.root.position.y + 1.2), { constrain: (pos) => ctx.keepOut?.(pos) }), fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
+			// (over a fence or up a ledge, combat/npc-climb.js: the climb's own floor while it lasts)
+			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos) => b.climbY == null && ctx.keepOut?.(pos) }), climbY: null, fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
 			group.add(P.root);
 			pools.person.push(b);
 			res(b);
@@ -183,7 +185,7 @@ export function createSquads(ctx) {
 				pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
 				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
 				provoked: false, shotAtPlayer: 0, struckFirst: false, surrendered: 0, task: opts.task || null, post: opts.post || squad?.post || null, slot: squad ? squad.members.length : 0,
-				W: createWounds(), react: null,
+				W: createWounds(), react: null, climb: null, lowK: Math.random(),
 			};
 			h.pos.y = ctx.ground(x, z, opts.y ?? ctx.eye().y);
 			if (kind === 'person') {
@@ -203,7 +205,7 @@ export function createSquads(ctx) {
 				if (b.P.ragdoll) ctx.ragdolls.release(b.P);
 				b.P.root.visible = true; fadePerson(b.P, 1);
 				b.M.act(null); b.M.place(x, h.pos.y, z, h.yaw);
-				b.M.S.limp.side = 0; b.M.S.limp.k = 0; b.M.S.clutch = null;
+				b.M.S.limp.side = 0; b.M.S.limp.k = 0; b.M.S.clutch = null; b.M.want.low = 0; b.climbY = null;
 			} else {
 				const pool = pools[kind];
 				let m = pool.find((q) => !q.userData.used);
@@ -227,6 +229,14 @@ export function createSquads(ctx) {
 			if (squad) squad.members.push(h);
 			return h;
 		} finally { pending.delete(reservation); }
+	}
+	// the feel for what is ahead, with the walking's own tests (player.js floorAt, pushOut), per world
+	let climb0 = null, climbW = null;
+	function climber() {
+		const w = ctx.world?.(), pl = w?.player;
+		if (!pl?.floorAt || !pl.pushOut) return null;
+		if (climbW !== w) { climb0 = createClimber({ floorAt: pl.floorAt, pushOut: pl.pushOut }); climbW = w; }
+		return climb0;
 	}
 	function shapesOf(h) {
 		const p = h.pos;
@@ -562,6 +572,14 @@ export function createSquads(ctx) {
 		if (S.act.name === 'kneel') M.act(null);
 		// (raised to the shoulder only while engaging; carried at the ready otherwise)
 		let aimAt = null;
+		const armed = !!b.hand?.model && !h.noGun;
+		// over a fence or up onto a ledge (combat/npc-climb.js): the climb carries them to its end
+		if (h.climb) {
+			const at = climber()?.step(h.climb, dt);
+			b.climbY = !at || at.done ? null : at.feet;
+			if (!at || !climbBody(M, h.climb, at, armed)) { h.climb = null; if (!at) M.act(null); }
+		}
+		M.want.low = 0;
 		// at close quarters with you (combat/melee-foes.js steers them: circling, their turns, a
 		// takedown): only the body is moved here, and the gun is put away
 		if (h.melee) {
@@ -574,7 +592,9 @@ export function createSquads(ctx) {
 		// held to a post: a fight that strays too far from it is let go, and they walk back
 		const P0 = h.post;
 		if (P0 && h.target && Math.hypot(posOf(h.target).x - P0.x, posOf(h.target).z - P0.z) > (P0.r || 40) * 2.5) { h.target = null; h.alert = 0.4; h.goal = null; }
-		if (h.W.crippled) {
+		if (h.climb) {
+			// (carried by the climb)
+		} else if (h.W.crippled) {
 			// the leg gone from under them: down on that knee where they fell, still fighting
 			M.want.speed = 0; M.want.run = 0;
 			const name = `hurt-crippled${h.W.crippled}${b.hand?.model && !h.noGun ? '+' : ''}`;
@@ -606,6 +626,13 @@ export function createSquads(ctx) {
 			if (strafe) { M.want.travel = toG; M.want.travelT = 0.3; M.want.heading = toT; M.want.speed = Math.min(M.want.speed, (Math.abs(off) > 1.1 ? 1.9 : 2.1) * pc.k); M.want.run = 0; }
 			// (reeling from a round: barely moving, not firing)
 			if (h.react) { M.want.speed = Math.min(M.want.speed, 0.6); M.want.run = 0; }
+			// low on the move under fire: crouched the last stretch into cover, or all the way while
+			// the target has sight of them; a few keep low even strafing; upright and flat out
+			// across open ground or falling back
+			else if (gd > 1.2 && h.role !== 'fallback') {
+				const low = strafe ? (h.lowK > 0.5 ? 0.45 : 0) : (h.inCover && gd < 9) || (h.los && gd < 14) ? 0.7 + 0.3 * h.lowK : 0;
+				M.want.low = low; M.want.speed *= 1 - 0.18 * low;
+			}
 			// in cover: down on a knee (hidden, reloading) and up to fire, in turns; just hit, down
 			const held = gd <= 1.2 && h.inCover && !h.noGun;
 			if (held) {
@@ -630,6 +657,12 @@ export function createSquads(ctx) {
 				if (h.goalT <= 0) { h.goalT = rnd(4, 9); const c = h.squad?.dest || h.home, a = Math.random() * 6.283; h.goal = { x: c.x + Math.cos(a) * 6, z: c.z + Math.sin(a) * 6 }; }
 				if (h.goal) walk(h, h.goal.x, h.goal.z, h.squad?.dest ? 2.6 : 1.1, h.squad?.dest ? 1 : 0);
 			}
+		}
+		// running at something they can get over: over it, as you would (no turning off round it)
+		if (!h.climb && !h.W.crippled && !h.react && M.want.speed > 1.6 && S.speed.v > 1.2 && !(M.want.travelT > 0) && (h.lookT = (h.lookT || 0) - dt) <= 0) {
+			h.lookT = 0.2;
+			const hd = M.want.heading, C = climber()?.look(S.pos.x, S.pos.z, S.pos.y, Math.sin(hd), Math.cos(hd), S.speed.v);
+			if (C) { h.climb = C; b.climbY = S.pos.y; S.clutch = null; }
 		}
 		h.yaw = S.heading;
 		headway(h, dt);

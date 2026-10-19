@@ -1095,38 +1095,47 @@ export function reach(P, side, Hd, pole) {
 }
 
 // A hand pressed to a wound (combat/wounds.js puts Mo.S.clutch = { side, bone, local, a, b,
-// across, t, dur }): the palm laid flat on the hit as the body moves, the fingers along a limb or
+// across, t, dur }), or planted on a top in a vault (combat/npc-climb.js: { side, at, t, dur }): the palm laid flat on the hit as the body moves, the fingers along a limb or
 // across the body, easing on and off. After the body's motion (and, armed, after the gun's own
 // grip: then only the support hand ever lets go). Returns the weight it was laid on with.
 const _cw = new THREE.Vector3(), _ca = new THREE.Vector3(), _cb = new THREE.Vector3(), _cn = new THREE.Vector3(), _cf = new THREE.Vector3(), _ct = new THREE.Vector3(), _cp = new THREE.Vector3(), _cm = new THREE.Matrix4();
 const _ce = new THREE.Vector3(), _cx = new THREE.Vector3(), _cy = new THREE.Vector3(), _cz = new THREE.Vector3(), _c0 = new THREE.Vector3(), _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _cq = new THREE.Vector3();
 export function applyClutch(P, Mo, dt = 0) {
 	const C = Mo?.S?.clutch;
-	if (!C || !P?.bones?.[C.bone]) return 0;
+	if (!C || !C.at && !P?.bones?.[C.bone]) return 0;
 	C.t += dt;
 	if (C.t >= C.dur) { Mo.S.clutch = null; Mo.grip?.(C.side, 0); return 0; }
-	const w = Math.min(1, C.t / 0.16) * Math.min(1, (C.dur - C.t) / 0.32);
-	const bw = P.bones[C.bone].matrixWorld;
-	_cw.copy(C.local).applyMatrix4(bw); _ca.copy(C.a).applyMatrix4(bw); _cb.copy(C.b).applyMatrix4(bw);
-	// out of the body at the wound: away from the bone's line (from the skull's middle, for the head)
-	const ax = _ct.subVectors(_cb, _ca), L2 = ax.lengthSq();
-	const u = L2 > 1e-6 ? THREE.MathUtils.clamp(_cp.subVectors(_cw, _ca).dot(ax) / L2, 0, 1) : 0;
-	_cn.copy(_cw).sub(_cp.copy(_ca).addScaledVector(ax, u));
-	if (_cn.lengthSq() < 1e-8) _cn.set(Math.sin(Mo.S.heading), 0, Math.cos(Mo.S.heading));
-	_cn.normalize();
+	if (C.t < 0) return 0;
+	const w = Math.min(1, C.t / (C.at ? 0.08 : 0.16)) * Math.min(1, (C.dur - C.t) / (C.at ? 0.12 : 0.32));
 	const heading = Mo.S.heading, left = _ce.set(Math.cos(heading), 0, -Math.sin(heading));
-	// the fingers: along the limb, or across the body away from the hand
-	if (C.across || L2 < 1e-6) _cf.copy(left).multiplyScalar(C.side === 'L' ? -1 : 1).addScaledVector(UP, -0.35);
-	else _cf.copy(ax).normalize();
+	let L2 = 0;
+	if (C.at) {
+		// planted on a top (combat/npc-climb.js: a vault): the palm flat on it, the fingers on ahead
+		_cw.set(C.at.x, C.at.y, C.at.z); _cn.set(0, 1, 0);
+		_cf.set(Math.sin(heading), 0, Math.cos(heading)).addScaledVector(left, C.side === 'L' ? 0.3 : -0.3);
+	} else {
+		const bw = P.bones[C.bone].matrixWorld;
+		_cw.copy(C.local).applyMatrix4(bw); _ca.copy(C.a).applyMatrix4(bw); _cb.copy(C.b).applyMatrix4(bw);
+		// out of the body at the wound: away from the bone's line (from the skull's middle, for the head)
+		const ax = _ct.subVectors(_cb, _ca);
+		L2 = ax.lengthSq();
+		const u = L2 > 1e-6 ? THREE.MathUtils.clamp(_cp.subVectors(_cw, _ca).dot(ax) / L2, 0, 1) : 0;
+		_cn.copy(_cw).sub(_cp.copy(_ca).addScaledVector(ax, u));
+		if (_cn.lengthSq() < 1e-8) _cn.set(Math.sin(Mo.S.heading), 0, Math.cos(Mo.S.heading));
+		_cn.normalize();
+		// the fingers: along the limb, or across the body away from the hand
+		if (C.across || L2 < 1e-6) _cf.copy(left).multiplyScalar(C.side === 'L' ? -1 : 1).addScaledVector(UP, -0.35);
+		else _cf.copy(ax).normalize();
+	}
 	const n = _cx.copy(_cn).negate(), a = _cy.copy(_cf).addScaledVector(n, -_cf.dot(n)).normalize();
 	if (!handFrame(P, C.side, _cm)) return 0;
 	// (eased from where the hand is now)
 	const a0 = _c0.setFromMatrixColumn(_cm, 0), n0 = _c1.setFromMatrixColumn(_cm, 2), p0 = _c2.setFromMatrixPosition(_cm);
 	a.lerpVectors(a0, a, w).normalize(); n.lerpVectors(n0, n, w); n.addScaledVector(a, -n.dot(a)).normalize();
 	const t = C.side === 'L' ? _cz.crossVectors(n, a) : _cz.crossVectors(a, n);
-	p0.lerp(_cw.addScaledVector(_cn, 0.03), w);
+	p0.lerp(_cw.addScaledVector(_cn, C.at ? 0.025 : 0.03), w);
 	_cm.makeBasis(a, t, n).setPosition(p0);
-	const pole = _cq.set(0, -0.7, 0).addScaledVector(left, C.side === 'L' ? 0.7 : -0.7).addScaledVector(_cf.set(Math.sin(heading), 0, Math.cos(heading)), -0.15);
+	const pole = _cq.set(0, -0.7, 0).addScaledVector(left, C.side === 'L' ? 0.7 : -0.7).addScaledVector(_cf.set(Math.sin(heading), 0, Math.cos(heading)), C.at ? -0.6 : -0.15);
 	reach(P, C.side, _cm, pole);
 	return w;
 }
@@ -1206,7 +1215,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			// both arms then reach for it
 			const k = P.height / 1.75, f = _x.set(Math.sin(heading), 0, Math.cos(heading)), l = _y.set(Math.cos(heading), 0, -Math.sin(heading));
 			// (the support hand off it, on a wound: it hangs from the strong hand, the muzzle down)
-			const C = Mo?.S?.clutch, droop = C?.side === 'L' && H.kind === 'long' ? Math.min(1, C.t / 0.25) * Math.min(1, (C.dur - C.t) / 0.4) : 0;
+			const C = Mo?.S?.clutch, droop = C?.side === 'L' && H.kind === 'long' ? Math.max(0, Math.min(1, C.t / 0.25) * Math.min(1, (C.dur - C.t) / 0.4)) : 0;
 			const bow = H.kind === 'bow', a = aimBlend * (1 - droop), angle = -0.29 + (pitch + 0.29) * a - droop * 0.55;
 			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? .12 - .32 * a : -.15) * k).addScaledVector(UP, (1.02 + (bow ? .56 : .34) * a) * k).addScaledVector(f, (.24 + (bow ? .31 : .05) * a) * k);
 			const v = _z.copy(f).multiplyScalar(Math.cos(angle)).addScaledVector(l, 0.1 * (1 - a)).addScaledVector(UP, Math.sin(angle)).normalize(), u = UP.clone().addScaledVector(v, -v.y).normalize();
