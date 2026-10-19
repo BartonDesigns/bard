@@ -2,7 +2,7 @@
 // Set BARD_PLAYWRIGHT_MODULE and BARD_CHROMIUM_EXECUTABLE if they aren't installed locally.
 import { build } from 'esbuild';
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { readFile, mkdir, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
 import assert from 'node:assert/strict';

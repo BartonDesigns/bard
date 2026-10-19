@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { quote, settle, step, line, expected, deadline } from '../src/vehicles/fares-core.js';
+import { quote, settle, step, line, expected } from '../src/vehicles/fares-core.js';
 
 test('fares grow with the distance; tips reward quick, smooth driving', () => {
 	assert.ok(quote(400) < quote(1500));

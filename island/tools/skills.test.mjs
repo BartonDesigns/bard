@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { SPELLS, SPELL, SCHOOLS, createMagicState, saveMagic, weave, weaveBlock, gather, spellPower, manaCost, manaMax, manaRegen, cooldownOf, shaped } from '../src/magic/spells.js';
-import { PAGES, SKILL, LAYOUT, PERKS, PERK, pageNodes, pageLinks, rankOf, useFor, rankFrac, xpNeed, pointsOf, addXp, addUse, perkBlock, takePerk, sanitizeSkills, computeMods, fxLines, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, masteryLevel, masteryFrac, masteryToNext, addMastery, feedSpell, feedable, feedCost } from '../src/magic/skills.js';
+import { PAGES, SKILL, LAYOUT, PERKS, pageNodes, pageLinks, rankOf, useFor, rankFrac, xpNeed, pointsOf, addXp, addUse, perkBlock, takePerk, sanitizeSkills, computeMods, fxLines, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, masteryLevel, masteryFrac, masteryToNext, addMastery, feedSpell, feedable, feedCost } from '../src/magic/skills.js';
 
 const fresh = () => sanitizeSkills(createMagicState());
 
