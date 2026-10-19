@@ -92,8 +92,8 @@
     "sha256": "65eebef2a1dc1057a443d3f00fb7ad95a7a76d19e8edaa8c57c1fb665696c8e0"
   },
   "index.html": {
-    "bytes": 2249927,
-    "sha256": "8fe8ea9b3da86a0530d2ca833f9de1c1e07c18ef680eee93e1294886b7e6ff9d"
+    "bytes": 2181006,
+    "sha256": "6882ebecf535ad0e576e8a665d86bbfd444e727439ca3731b198c17ff8aa3aa0"
   },
   "runtime/caves-179.html.gz": {
     "bytes": 512275,
@@ -155,9 +155,9 @@
     "bytes": 1223,
     "sha256": "a271b0c94023d150a8ee94a3d50054f6388d50b2c5294b4f50598a5314909a95"
   },
-  "runtime/flight-179.js.gz": {
-    "bytes": 1342962,
-    "sha256": "0bd106de8afc3cd8c9b2ede565a6a5f3242afc9bd6fccf2a0b1aac9d979586c3"
+  "runtime/flight-235.js.gz": {
+    "bytes": 1348067,
+    "sha256": "63cf890afa5986cd4260f6473172dd8c5225231b550abc81e1013e33c0dfa93e"
   },
   "runtime/flight-vendors-176.json.gz": {
     "bytes": 203705,
@@ -182,10 +182,6 @@
   "runtime/orchestra220.json": {
     "bytes": 15389005,
     "sha256": "e55ef1da7c0b71e1b9c41db10240f0d3f6df042204e5d673358f3194581630a8"
-  },
-  "runtime/world-core-179.json.gz": {
-    "bytes": 435006,
-    "sha256": "cfd9a9f1ae7010f41b06ffa127c5a358953dec67e62e84c5f7f051b736e9609d"
   },
   "runtime/world-core-235.json.gz": {
     "bytes": 444646,

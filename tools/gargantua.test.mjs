@@ -1,25 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { gunzipSync } from 'node:zlib';
-import { createHash } from 'node:crypto';
 import * as THREE from '../island/node_modules/three/build/three.module.js';
 import { createGalacticGargantua228, GARGANTUA228_FRAG } from '../runtime/gargantua228.mjs';
 
 const root = new URL('../', import.meta.url);
-test('packed flight uses the editable renderer and keeps the horizon entry', () => {
-  const packed = fs.readFileSync(new URL('runtime/flight-179.js.gz', root));
-  const flight = gunzipSync(packed).toString();
+// tools/build-gargantua.mjs embeds the renderer; island/tools/runtime-pack.test.mjs checks the packing
+test('the flight engine uses the editable renderer and keeps the horizon entry', () => {
+  const flight = fs.readFileSync(new URL('runtime/src/flight.js', root), 'utf8');
   const source = fs.readFileSync(new URL('runtime/gargantua228.mjs', root), 'utf8').replace(/^export /gm, '');
   assert.ok(flight.includes(source));
   assert.equal(flight.split('// BEGIN GARGANTUA228').length, 2);
   assert.ok(flight.includes('window._galacticBH = createGalacticGargantua228(THREE, 18000);'));
   assert.ok(flight.includes('!window._galacticBH.userData.gargantua228 && cockpitCamera && window._lensPass'));
-  const hash = createHash('sha256').update(packed).digest('hex').slice(0, 12);
-  const page = fs.readFileSync(new URL('index.html', root), 'utf8');
-  const loads = page.match(/flight-179\.js\.gz(?:\?v=[0-9a-f]+)?/g);
-  assert.ok(loads.length >= 2);
-  assert.ok(loads.every(url => url.endsWith('?v=' + hash)));
   // A visual replacement must retain the existing navigation/entry system.
   assert.ok(flight.includes('function _makeAbyssalAccretion(rand, bhR)'));
   assert.ok(flight.includes('window._bhLandPos = cockpitCamera.position.clone();'));

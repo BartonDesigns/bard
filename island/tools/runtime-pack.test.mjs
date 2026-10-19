@@ -20,3 +20,12 @@ test('the page no longer rewrites the world core as it loads it', () => {
 	assert.match(boot, /execute\(blocks\[coreAt\]\)/);
 	assert.doesNotMatch(boot, /\.patch\(|\.replace\(|\.split\(/);
 });
+
+test('the page no longer rewrites the flight engine as it loads it', () => {
+	assert.equal(page.split('patchFlight').length - 1, 0);
+	assert.doesNotMatch(page, /flight-179/);
+	const boot = page.slice(page.indexOf('async function flight(){'), page.indexOf('function openFlight(){'));
+	// the vendor imports still point at blob addresses; nothing else changes the text
+	assert.match(boot, /rewrite\(files\[1\],resolved\)/);
+	assert.doesNotMatch(boot, /cachedPatch|\.patch\(/);
+});

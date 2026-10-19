@@ -167,88 +167,11 @@ window.__PLANET_TEX = {
 
 
 
-<script id="world-hud190-code">
-
-/* WORLD_HUD_190: Build 204 removes the redundant vessel toggle; passage prompts stay contextual. */
-(function (root) {
-    'use strict';
-    function vessel(){document.getElementById('cockpit-vessel-btn190')?.remove();}
-    function patchFlight(code) {
-        const original = "if(!walkMode){items.push({label:window._OBSERVER_FLIGHT170?'Pilot vessel':'Leave vessel',action:()=>{window._OBSERVER_FLIGHT170=!window._OBSERVER_FLIGHT170;shipVel.multiplyScalar(.25);surfaceVelX*=.25;surfaceVelY*=.25;surfaceVelZ*=.25;}});if(!note)note=window._OBSERVER_FLIGHT170?'Free presence':'Sky vessel';}";
-        const replacement = '/* Build 204: redundant vessel toggle removed. */';
-        if (!code.includes(original)) throw new Error('The flight controls could not be updated. Reload the page to retry.');
-        return code.replace(original, replacement);
-    }
-    root.L99WorldHUD190 = { vessel, patchFlight };
-})(window);
-
-
-</script>
 <script id="flight190-code">
-/* FLIGHT_190: repair civic materials and keep planet entry work off one blocking frame. */
+/* FLIGHT_190: the flight engine times planet entry and its cinematic by the wall clock
+   (runtime/src/flight.js). Coming back to the tab restarts both clocks, so time away is not counted. */
 (function(root){'use strict';
-function once(code,from,to,label){const at=code.indexOf(from);if(at<0||code.indexOf(from,at+from.length)>=0)throw Error('Flight update could not apply '+label+'.');return code.slice(0,at)+to+code.slice(at+from.length);}
-function patchFlight(code){
- if(code.includes('/* FLIGHT_190_APPLIED */'))return code;
- code=once(code,'var kayMat = null, kayClips = null;',`var kayMat = new THREE.MeshStandardMaterial({vertexColors:true,roughness:.86,metalness:0}), kayClips = null;\n    kayMat.name='Civic character surface';`,'character material');
- code=once(code,'var idx = new Uint16Array(itotal), vb = 0, ib = 0;','var idx = total > 65535 ? new Uint32Array(itotal) : new Uint16Array(itotal), vb = 0, ib = 0;','character index capacity');
- // The 50ms physics cap must not stretch a short cinematic into minutes at low FPS.
- code=once(code,"surfaceMode     = 'entering';\n    surfaceProgress = 0;", "surfaceMode     = 'entering';\n    window._entryFrame190=performance.now();\n    surfaceProgress = 0;",'entry clock reset');
- code=once(code,'surfaceProgress += (dt * _efRate)',`const frameTime190=performance.now(), entryDelta190=Math.max(0,(frameTime190-(window._entryFrame190||frameTime190))/1000);\n    window._entryFrame190=frameTime190;\n    surfaceProgress += (entryDelta190 * _efRate)`,'entry clock');
- code=once(code,'C.age += dt;',"const cineNow190=performance.now();C.age+=Math.max(0,(cineNow190-Math.max(C.frame190||cineNow190,window._cinematicResume190||0))/1000);C.frame190=cineNow190;",'cinematic cloud clock');
- code=once(code,"const _enteringStream = _enteringRaw && (performance.now() - window._entryBudgetT0 < 2600);","const _enteringStream = _enteringRaw;",'entry detail gate');
- code=once(code,"const _newBudget0 = (typeof window._ENTRY_CHUNK_BUDGET === 'number') ? window._ENTRY_CHUNK_BUDGET : 4;","const _newBudget0 = (typeof window._ENTRY_CHUNK_BUDGET === 'number') ? window._ENTRY_CHUNK_BUDGET : 1;",'entry build budget');
- code=once(code,'if (i < 9) { try { createChunk(cx, cz, near, undefined, !near); built++; } catch (e) {} }','if (i < 1) { try { createChunk(cx, cz, false, 24, true); built++; } catch (e) {} }','first landing tile');
- code=once(code,"createChunk(c2[0], c2[1], c2[2], undefined, !c2[2]);","createChunk(c2[0], c2[1], surfaceMode==='entering'?false:c2[2], surfaceMode==='entering'?24:undefined, surfaceMode==='entering'||!c2[2]);",'queued landing tiles');
- code=once(code,'createChunk(cx+dx, cz+dz, nearFlora, desiredSegs, treelineOnly);','createChunk(cx+dx, cz+dz, _floraLevel > 0, desiredSegs, treelineOnly);','bare entry flora');
- // compileAsync also falls back to synchronous compilation without the extension.
- // Compile the visible landing scene normally in that case, instead of every hidden object.
- code=once(code,"if (cockpitRenderer && surfaceObjects && cockpitCamera) {\n        const _wasVis = surfaceObjects.visible;","if (cockpitRenderer && surfaceObjects && cockpitCamera && cockpitRenderer.extensions.has('KHR_parallel_shader_compile')) {\n        const _wasVis = surfaceObjects.visible;",'shader prewarm');
- code=once(code,'if (window._shadersWarmed) return;',"if (window._shadersWarmed) return;\n  if(cockpitRenderer&&!cockpitRenderer.extensions.has('KHR_parallel_shader_compile')){window._shadersWarmed=true;return;}",'surface shader warm gate');
- code=once(code,'    cockpitRenderer.compile(cockpitScene, cockpitCamera);\n    if (throwaway) { cockpitScene.remove(throwaway); if (throwaway.geometry) throwaway.geometry.dispose(); }',"    try{cockpitRenderer.compileAsync(cockpitScene,cockpitCamera).catch(e=>console.warn('[flight190] Shader preparation failed:',e));}finally{if(throwaway){cockpitScene.remove(throwaway);throwaway.geometry.dispose();}}",'surface shader warm async');
- code=once(code,"if (_surfacePopulationFlushBusy || !_pendingSurfacePopulation) return;","if (_surfacePopulationFlushBusy || !_pendingSurfacePopulation || surfaceMode !== 'surface') return;",'population after landing');
- // Only build the civic population once the same terrain-first gate releases other inhabitants.
- code=once(code,'window._plantCivic(_lx, _lz, {});','window._civicPending190={seed:_cSeed,type:_cType};','defer civic build');
- const from=`  const job = _pendingSurfacePopulation;
-  _pendingSurfacePopulation = null;
-  _surfacePopulationFlushBusy = true;
-  try {
-    spawnFauna(job.seed, job.planetType);
-    spawnShelters(job.seed, job.planetType);
-    spawnNPCs(job.seed, job.planetType);
-    try { if(job.planetType!=='BAYAREA') spawnCaves(job.seed, job.planetType); } catch (e) {}   // fix577: no caves on Bay Area patchs, wild included
-    try { _spawnTownFolk(); } catch (e) {}                       // fix369: settlements come alive
-    _spawnMysticalWorld(job.seed, job.planetType);
-    if (typeof _flagSurfaceShadowMeshes === 'function') _flagSurfaceShadowMeshes();
-    // fix549: roads now exist -- build the road mask (stage 1; no render change)
-    try { _buildRoadMask(cockpitCamera.position.x, cockpitCamera.position.z); } catch (e) {}
-  } catch(e) {
-    console.warn('[fix332] deferred surface population failed; retrying after terrain remains stable:', e);
-    try { clearFauna(); } catch(e2) {}
-    _pendingSurfacePopulation = job;
-  } finally {
-    _surfacePopulationFlushBusy = false;
-  }`;
- const to=`  const job = _pendingSurfacePopulation;
-  const now190=performance.now();if(now190<(job.next190||0))return;
-  if(!job.tasks190)job.tasks190=[
-    ()=>spawnFauna(job.seed,job.planetType),
-    ()=>spawnShelters(job.seed,job.planetType),
-    ()=>spawnNPCs(job.seed,job.planetType),
-    ()=>{if(job.planetType!=='BAYAREA')spawnCaves(job.seed,job.planetType);},
-    ()=>_spawnTownFolk(),()=>_spawnMysticalWorld(job.seed,job.planetType),
-    ()=>{const c=window._civicPending190;if(c&&c.seed===job.seed&&c.type===job.planetType&&window._plantCivic)window._plantCivic(cockpitCamera.position.x,cockpitCamera.position.z,{});window._civicPending190=null;},
-    ()=>{if(typeof _flagSurfaceShadowMeshes==='function')_flagSurfaceShadowMeshes();},
-    ()=>_buildRoadMask(cockpitCamera.position.x,cockpitCamera.position.z)
-  ];
-  _surfacePopulationFlushBusy=true;
-  try{job.tasks190[0]();job.tasks190.shift();job.retries190=0;}catch(e){job.retries190=(job.retries190||0)+1;console.warn('[flight190] Surface population stage failed'+(job.retries190<2?'; retrying.':'; continuing other stages.'),e);if(job.retries190>=2){job.tasks190.shift();job.retries190=0;}}
-  finally{_surfacePopulationFlushBusy=false;job.next190=performance.now()+40;if(!job.tasks190.length&&_pendingSurfacePopulation===job)_pendingSurfacePopulation=null;}`;
- code=once(code,from,to,'population scheduling');
- return '/* FLIGHT_190_APPLIED */\n'+code;
-}
 root.document?.addEventListener('visibilitychange',()=>{root._entryFrame190=root._cinematicResume190=performance.now();});
-root.L99Flight190={patchFlight};
 })(window);
 
 </script>
@@ -521,55 +444,7 @@ root.L99Flight190={patchFlight};
     });
     return group;
   }
-  function once(code,from,to,label){
-    const at=code.indexOf(from);
-    if(at<0||code.indexOf(from,at+from.length)>=0)throw Error('Natural materials could not apply '+label+'.');
-    return code.slice(0,at)+to+code.slice(at+from.length);
-  }
-  function after(code,from,addition,label){return once(code,from,from+'\n'+addition,label);}
-  function patchFlight(code){
-    if(code.includes('/* MATERIALS_FLIGHT_191_APPLIED */'))return code;
-    code=once(code,'for(const m of mats){m.map?.dispose();m.dispose();}}flightDoors170=[];',
-      'for(const m of mats){if(!m.map?.userData?.l99Material191)m.map?.dispose();m.dispose();}}flightDoors170=[];','shared entrance texture ownership');
-    code=after(code,'      uDetailStrength: { value: 0.85 },',
-      '      uPhotoReady191:{value:0},uPhotoMean191:{value:new THREE.Vector3(.5,.5,.5)},uPhotoRockMean191:{value:new THREE.Vector3(.5,.5,.5)},uPhotoSoilMean191:{value:new THREE.Vector3(.5,.5,.5)},','natural detail uniforms');
-    code=after(code,'      uniform float uTime, uWaterY, uBass, uMid, uPlanetType, uDetailStrength;',
-      '      uniform float uPhotoReady191;uniform vec3 uPhotoMean191,uPhotoRockMean191,uPhotoSoilMean191;','natural detail shader uniforms');
-    code=once(code,'        // vox162: CLOUD SHADOWS -- drifting cumulus shade, the signature of',
-      `        // Restore close detail after broad biome tints. Reuses the sampled
-        // detail already in registers; no added texture fetches or geometry.
-        if(uPhotoReady191 > 0.5){
-          vec3 photoMean191=uPhotoMean191*wBiome+uPhotoSoilMean191*wDirt+uPhotoRockMean191*wStone;
-          vec3 photoDetail191=clamp(detail/max(photoMean191,vec3(0.06)),vec3(0.5),vec3(1.6));
-          float photoNear191=1.0-smoothstep(90.0,350.0,length(vWP-cameraPosition));
-          col*=mix(vec3(1.0),photoDetail191,photoNear191*0.30);
-        }
-        // vox162: CLOUD SHADOWS -- drifting cumulus shade, the signature of`,'near-field natural detail');
-    code=after(code,"  _bsLog('CP-6: terrain mat done, building water');",
-      "  window.L99MaterialsFlight191.terrain(THREE,surfaceTerrainMat,surfacePlanetType);",'terrain streaming');
-    code=after(code,'  if (surfaceTerrainWire && surfaceTerrainWire.material && surfaceTerrainWire.material.color) {',
-      '    window.L99MaterialsFlight191.terrain(THREE,surfaceTerrainMat,surfacePlanetType);','planet materials');
-    code=after(code,'  const _rockMat = new THREE.MeshStandardMaterial({ vertexColors:true, normalMap:_rockNrm, roughness:0.96, metalness:0.03, flatShading:true });',
-      "  window.L99MaterialsFlight191.material(THREE,_rockMat,'planet-rock',{strength:.78,replaceNormal:true,normalScale:.28,repeat:[2,2]});",'rock family');
-    code=after(code,'  const darkMat = new THREE.MeshLambertMaterial({ color: 0x4a463f });',
-      "  window.L99MaterialsFlight191.material(THREE,rockMat,'granite',{strength:.72,repeat:[3,3]});\n  window.L99MaterialsFlight191.material(THREE,darkMat,'basalt',{strength:.72,repeat:[3,3]});",'asteroid minerals');
-    code=after(code,'  const roofMat = new THREE.MeshStandardMaterial({ color: [0x7a4a3a, 0x4a5a6a, 0x5a4a3a][(rng() * 3) | 0], roughness: 0.8 });',
-      "  window.L99MaterialsFlight191.material(THREE,wallMat,'plaster',{strength:.3,repeat:[3,2],normalScale:.14});\n  window.L99MaterialsFlight191.material(THREE,roofMat,'slate',{strength:.4,repeat:[4,4],normalScale:.22});\n  window.L99MaterialsFlight191.material(THREE,trimMat,'cedar',{strength:.38,repeat:[2,2],normalScale:.16});",'home plaster and roofs');
-    code=after(code,'  const roofMat_top = new THREE.MeshStandardMaterial({color: roofCols[(rng()*roofCols.length)|0], normalMap: _nrmRoof, roughness: 0.90});',
-      "  window.L99MaterialsFlight191.material(THREE,roofMat_top,'slate',{strength:.4,repeat:[4,4]});\n  window.L99MaterialsFlight191.material(THREE,wallMat_wh,'plaster',{strength:.25,repeat:[repX,repY]});\n  window.L99MaterialsFlight191.material(THREE,wallMat_dh,'plaster',{strength:.25,repeat:[repZ,repY]});",'city roof weathering');
-    code=after(code,'    const roofMat=new THREE.MeshStandardMaterial({color:roofCols[(rng()*roofCols.length)|0],roughness:0.88});',
-      "    window.L99MaterialsFlight191.material(THREE,roofMat,'slate',{strength:.4,repeat:[3,3],normalScale:.24});",'pitched roofs');
-    code=after(code,'  const mat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.78, metalness: 0.25 });',
-      "  window.L99MaterialsFlight191.material(THREE,mat,'masonry',{strength:.72,repeat:[3,3],normalScale:.24});",'ancient ruins');
-    code=after(code,'    const ruinMat = new THREE.MeshStandardMaterial({ color: 0x9a7d5e, roughness: 1.0, fog: false });',
-      "    window.L99MaterialsFlight191.material(THREE,ruinMat,'masonry',{strength:.72,repeat:[2,2],normalScale:.28});",'surface archaeological stone');
-    code=after(code,'  const mouthRockMat = new THREE.MeshLambertMaterial({ color: pal.rock, fog:true });',
-      "  window.L99MaterialsFlight191.material(THREE,mouthRockMat,'planet-rock',{strength:.78,repeat:[2,2]});",'native cave mouth');
-    code=after(code,'  geo.setIndex(idx); geo.computeVertexNormals();\n  const wallMat = new THREE.MeshLambertMaterial({ vertexColors:true, side:THREE.DoubleSide, fog:true });',
-      "  const caveUV191=new Float32Array(N*K*2);let caveRun191=0;\n  for(let i=0;i<N;i++){if(i)caveRun191+=Math.hypot(path[i].x-path[i-1].x,path[i].y-path[i-1].y,path[i].z-path[i-1].z);for(let k=0;k<K;k++){const uv=(i*K+k)*2;caveUV191[uv]=(k/K)*Math.PI*2*path[i].r*.125;caveUV191[uv+1]=caveRun191*.125;}}\n  geo.setAttribute('uv',new THREE.BufferAttribute(caveUV191,2));\n  window.L99MaterialsFlight191.material(THREE,wallMat,'planet-rock',{strength:.75,repeat:[1,1]});",'native tunnel stone UVs');
-    return '/* MATERIALS_FLIGHT_191_APPLIED */\n'+code;
-  }
-  root.L99MaterialsFlight191={patchFlight,terrain,material,opening};
+  root.L99MaterialsFlight191={terrain,material,opening};
 })(window);
 
 </script>
@@ -1495,60 +1370,6 @@ F.terrain=function(T,mat,type){mat=baseTerrain(T,mat,type);if(!mat)return mat;le
  function apply(){if(c.mat!==mat||!c.maps)return;const u=mat.uniforms,g=c.maps[0],r=c.maps[1],keys={TERRAN:0,BAYAREA:0,OCEAN:0,ARID:2,MYSTICAL:0},rocks={ARID:3,MAGMA:2,SINGULARITY:2,MYSTICAL:0,OCEAN:7};
  u.uGroundRelief204.value=g.normal;u.uRockRelief204.value=r.normal;u.uBaseTile204.value=keys[c.type]||0;u.uRockTile204.value=rocks[c.type]===undefined?1:rocks[c.type];u.uReliefReady204.value=keys[c.type]===undefined?0:1;}
  if(c.maps)apply();else{if(!c.pending)c.pending=Promise.all([M.load(T,'ground'),M.load(T,'geology')]).then(a=>{if(a.every(Boolean))c.maps=a;else c.pending=null;return a;});c.pending.then(active(mat,apply));}return mat;};
-const flightGLSL=`
-uniform sampler2D uGroundRelief204,uRockRelief204;
-uniform float uReliefReady204,uBaseTile204,uRockTile204;
-vec2 atlasUV204(vec2 p,float tile){vec2 q=1.-abs(fract(p*.5)*2.-1.);return vec2(mod(tile,2.),1.-floor(tile*.5))*.5+.002+q*.496;}
-vec3 groundN204(vec2 p,float tile){vec3 n=texture2D(uGroundRelief204,atlasUV204(p,tile)).xyz*2.-1.;n.xy*=mirror204(p);return n;}
-vec4 stoneRelief204(vec2 p){return uRockTile204>3.5?texture2D(uGroundRelief204,atlasUV204(p,3.)):texture2D(uRockRelief204,atlasUV204(p,uRockTile204));}
-vec3 stoneN204(vec2 p){vec3 n=stoneRelief204(p).xyz*2.-1.;n.xy*=mirror204(p);return n;}
-`;
-const basePatchFlight=F.patchFlight;
-F.patchFlight=function(code){code=basePatchFlight(code);if(code.includes('/* DEPTH_FLIGHT_204 */'))return code;
- code=edit(code,'      uPhotoReady191:{value:0},','      uTextureBreath204:window.L99WorldSurfaces204.breathUniform,uGroundRelief204:{value:null},uRockRelief204:{value:null},uReliefReady204:{value:0},uBaseTile204:{value:0},uRockTile204:{value:1},\n      uPhotoReady191:{value:0},','flight uniforms');
- code=edit(code,'      uniform float uPhotoReady191;',projection+flightGLSL+'\n      uniform float uPhotoReady191;','flight GLSL');
- // Match photo detiling in both the albedo and its normal field, including rotation.
- const begin=code.indexOf('          // vox120: DETAIL NORMALS -- near-camera procedural normal perturbation');const end=code.indexOf('          vec3 L = normalize(uSunDir);',begin);if(begin<0||end<0)throw Error('Flight relief normal anchor');
- const fallbackNormals=code.slice(begin,end);
- code=code.slice(0,begin)+`          float detailNear204=1.-smoothstep(35.,180.,length(cameraPosition-vWP));
-          if(uReliefReady204>.5 && detailNear204>.001){
-            vec3 nb204=groundN204(vUV,uBaseTile204),nb2=groundN204(_dtUV,uBaseTile204);
-            vec3 nd204=groundN204(vUV,1.),nd2=groundN204(_dtUV,1.);
-            nb2.xy=mat2(.799,.602,-.602,.799)*nb2.xy;nd2.xy=mat2(.799,.602,-.602,.799)*nd2.xy;
-            vec3 nb=mix(nb204,nb2,_dtMask),nd=mix(nd204,nd2,_dtMask);
-            vec3 weights204=pow(abs(vN),vec3(4.));weights204/=max(.001,weights204.x+weights204.y+weights204.z);
-            vec3 rock204=slope204(stoneN204(vWP.zy*.125),stoneN204(vWP.xz*.125),stoneN204(vWP.xy*.125),weights204,N,1.);
-            vec3 g204=vec3(nb.x,0.,nb.y)*wBiome+vec3(nd.x,0.,nd.y)*wDirt;g204-=N*dot(N,g204);
-            N=normalize(N+(g204*.65+(rock204-N)*wStone*.85)*detailNear204);
-          }else if(uReliefReady204<.5){
-`+fallbackNormals+`
-          }
-`+code.slice(end);
- // Parallax offsets the texture only, with the same coordinates used by its normal.
- code=edit(code,'        float _dtMask = smoothstep(0.35, 0.65, fbm(vWP.xz * 0.016 + 5.7));',`
-        vec2 groundUV204=breatheUV204(vUV),rockX204=breatheUV204(vWP.zy*.125),rockY204=breatheUV204(vWP.xz*.125),rockZ204=breatheUV204(vWP.xy*.125);
-        vec3 view204=normalize(cameraPosition-vWP);float close204=1.-smoothstep(12.,65.,length(cameraPosition-vWP));
-        if(uReliefReady204>.5 && close204>.001){
-          groundUV204+=offset204(view204.xz,view204.y,texture2D(uGroundRelief204,atlasUV204(groundUV204,uBaseTile204)).a,${depth.toFixed(3)}*close204*(1.-steep));
-          rockX204+=offset204(view204.zy,view204.x,stoneRelief204(rockX204).a,${depth.toFixed(3)}*close204);
-          rockY204+=offset204(view204.xz,view204.y,stoneRelief204(rockY204).a,${depth.toFixed(3)}*close204);
-          rockZ204+=offset204(view204.xy,view204.z,stoneRelief204(rockZ204).a,${depth.toFixed(3)}*close204);
-        }
-        float _dtMask = smoothstep(0.35, 0.65, fbm(vWP.xz * 0.016 + 5.7));`,'flight parallax');
- code=code.replace('* vUV * 1.43 + vec2(7.31, 3.17)','* groundUV204 * 1.43 + vec2(7.31, 3.17)');
- code=code.replace('uDetailMap,     vUV','uDetailMap,     groundUV204').replace('uDetailMapDirt, vUV','uDetailMapDirt, groundUV204').replace('uDetailMapStone, vUV','uDetailMapStone, rockY204');
- code=code.replace('if (uTriplanar > 0.001) {','if (uTriplanar > 0.001 || (uReliefReady204 > .5 && steep > .15)) {').replace('float _triAmt = uTriplanar *','float _triAmt = max(uTriplanar,uReliefReady204) *');
- code=code.replace('uDetailMapStone, vWP.zy*_ts','uDetailMapStone, rockX204').replace('uDetailMapStone, vWP.xz*_ts','uDetailMapStone, rockY204').replace('uDetailMapStone, vWP.xy*_ts','uDetailMapStone, rockZ204');
- code=code.replace('groundN204(vUV,uBaseTile204)','groundN204(groundUV204,uBaseTile204)').replace('groundN204(vUV,1.)','groundN204(groundUV204,1.)').replace('stoneN204(vWP.zy*.125)','stoneN204(rockX204)').replace('stoneN204(vWP.xz*.125)','stoneN204(rockY204)').replace('stoneN204(vWP.xy*.125)','stoneN204(rockZ204)');
- code=code.replace(/vWP\.(zy|xz|xy)\*_ts/g,'breatheUV204(vWP.$1*_ts)');
- // Planet rock maps need their tangent detail to reach sunlight, including cave mouths.
- for(const literal of [
- 'const mouthRockMat = new THREE.MeshLambertMaterial({ color: pal.rock, fog:true });',
- 'const wallMat = new THREE.MeshLambertMaterial({ vertexColors:true, side:THREE.DoubleSide, fog:true });',
- 'const darkMat = new THREE.MeshLambertMaterial({ color: 0x4a463f });'
- ])code=code.replace(literal,literal.replace('MeshLambertMaterial','MeshStandardMaterial'));
- code=edit(code,'    const STATIC_FLORA = { rock: true };','    const STATIC_FLORA = { rock: true };\n    if(name==="mushroom"||name==="spore_cap"){inst.userData.forageMushroom204=true;inst.userData.forageSeed204=surfaceSeed;}', 'flight mushroom identification');
- return '/* DEPTH_FLIGHT_204 */\n'+code;};
 // The same material factory supplies every shared generated tree in both worlds.
 function tree(T,mat){wrap(mat,'tree204',sh=>{
  sh.vertexShader='attribute vec2 aLeafUV204;varying vec2 vLeafUV204;varying vec3 vWood204;\n'+sh.vertexShader;
@@ -1790,67 +1611,6 @@ function loops(grp,camX,camZ,worldSeed){
  for(;i<grp.children.length;i++)grp.children[i].visible=false;
 }
 function once(code,from,to,label){const n=code.split(from).length-1;checks.push({label,count:n});if(n!==1)throw Error('Celestial update anchor '+label+': '+n);return code.replace(from,to);}
-const oldFlight=F.patchFlight;
-F.patchFlight=function(code){code=oldFlight(code);if(code.includes('/* CELESTIAL_205_APPLIED */'))return code;
- code=once(code,'    if (window._PLANET_CLOUDS === undefined)','    window.L99Celestial205.clouds206(cloudMat);\n    if (window._PLANET_CLOUDS === undefined)','cloud perception');
- code=once(code,'    const surfaceLow = new THREE.Mesh(sphereGeomLow, lowMat);','    window.L99Celestial205.distant206(lowMat);\n    const surfaceLow = new THREE.Mesh(sphereGeomLow, lowMat);','distant planet perception');
- code=once(code,'  surfaceSkyMesh = new THREE.Mesh(skyGeom, surfaceSkyMat);','  window.L99Celestial205.sky(surfaceSkyMat,"flight");\n  surfaceSkyMesh = new THREE.Mesh(skyGeom, surfaceSkyMat);','flight night sky');
- code=once(code,'  starMaterialFar = far.mat;','  starMaterialFar = far.mat;\n  window.L99Celestial205.points(near.mat);window.L99Celestial205.points(far.mat);','space points');
- code=once(code,'    const gpts = new THREE.Points(gg, gm);','    window.L99Celestial205.points(gm);\n    const gpts = new THREE.Points(gg, gm);','galactic band');
- code=once(code,'  applyStarType(STAR_TYPES[2]);','  window.L99Celestial205.body(coreMat,"star");\n  applyStarType(STAR_TYPES[2]);','star perception');
- // After the planet material constructor, before first geometry uses it.
- let at=code.indexOf('    const surfaceMat = new THREE.ShaderMaterial({');let end=code.indexOf('\n    });',at);if(at<0||end<0)throw Error('planet material anchor');code=code.slice(0,end+8)+'\n    window.L99Celestial205.body(surfaceMat,"planet");'+code.slice(end+8);
- code=once(code,'  scanList = planetPool\n','  scanList = planetPool.concat(cockpitSystemStar&&cockpitSystemStar.group?[_starLandTarget()]:[])\n','scan includes sun');
- code=once(code,"  const surfType = ud.planetType || '—';","  const surfType = ud.isStar?'PHOTOSPHERE':(ud.planetType || '—');",'solar scan description');
- code=once(code,'    u.uColorA.value.set(Math.min(1, starCol.r * 1.15), Math.min(1, starCol.g * 1.1), Math.min(1, starCol.b * 1.05));','    u.uSeed.value=777+window.L99Celestial205.seed(Math.round(cockpitSystemStar.group.position.x),Math.round(cockpitSystemStar.group.position.z),Math.round(radius))*9000;\n    u.uColorA.value.set(Math.min(1, starCol.r * 1.15), Math.min(1, starCol.g * 1.1), Math.min(1, starCol.b * 1.05));','stable per-star seed');
- code=once(code,'const archR = 360 + Math.random() * 1150;','const archR = 900;','consistent loop geometry');
- code=once(code,'const tubeR = 18 + Math.random() * 26;','const tubeR = 14;','consistent loop thickness');
- code=once(code,'window._STAR_LANDING === true &&','window._STAR_LANDING !== false &&','enable deliberate sun entry');
- code=once(code,'  _pendingSurfacePopulation = { seed, planetType };','  _pendingSurfacePopulation = window._starSurface?null:{ seed, planetType };','no towns on plasma');
- code=once(code,'function _entryBridge(landX, landZ) {','function _entryBridge(landX, landZ) {\n    if(window._starSurface){const m=window._entryBridgeMesh;if(m){m.parent?.remove(m);m.geometry?.dispose();m.material?.map?.dispose();m.material?.dispose();window._entryBridgeMesh=null;}return;}','no geographic landing overlay on stars');
- code=once(code,'window._approachCloudDeck = _buildCloudDeck(approachGroup, planetCenter.y, approachR, cA);','window._approachCloudDeck = window._starSurface?[]:_buildCloudDeck(approachGroup, planetCenter.y, approachR, cA);','no solar cloud preload');
- // Attach a compact photosphere shader to the approach sphere too, before it is visible.
- code=once(code,'    const surfaceShell = new THREE.Mesh(surfaceGeom, surfaceMat);',`    if(window._starSurface)window.L99Celestial205.approach(surfaceMat,cA);
-    const surfaceShell = new THREE.Mesh(surfaceGeom, surfaceMat);`,'solar approach continuity');
- // Smooth magnetic fields anchored to seeded world cells, with no random per-frame relocation.
- const la=code.indexOf('    const R = (typeof window._SPIRE_RING'),lb=code.indexOf('\n}\n// ── BUBBLING MAGMA',la);if(la<0||lb<0)throw Error('solar loop placement');
- code=code.slice(0,la)+'    window.L99Celestial205.loops(grp,camX,camZ,surfaceSeed);'+code.slice(lb);
- code=once(code,"'    float snap = sin(ph*3.0 + floor(t*7.0)*2.399) * 0.6;   // snappy stepped jolt',","'    float snap = sin(ph*1.4 + t*.45) * .12;',",'remove stepped solar jolt');
- code=once(code,"'    float brk = smoothstep(0.12, 0.6, noise(vec2(along * 17.0 - uTime * 1.1, 3.7)));',","'    float brk = .65 + .35 * noise(vec2(along*17.-uTime*.25,3.7));',",'continuous loop filaments');
- code=once(code,"'    float pulse = 0.55 + 0.45 * sin(uTime * 1.6 - along * 9.4248);',","'    float pulse = .85 + .15 * sin(uTime*.45-along*9.4248);',",'slow loop luminosity');
- code=once(code,"'    gl_FragColor = vec4(col, alpha);',\n            '}'\n        ].join('\\n')\n    });\n    const grp = new THREE.Group(); grp.name = 'magmaSpires';","'    gl_FragColor = vec4(col*2.3 + uStarCol*.4, min(1.,alpha*1.6));',\n            '}'\n        ].join('\\n')\n    });\n    const grp = new THREE.Group(); grp.name = 'magmaSpires';",'luminous loops');
- code=once(code,"'    float t = uTime * uFlow;',","'    float t = uTime * min(uFlow,1.8)*.14;',",'slow field advection');
- code=once(code,"'    p.x += (wx + snap) * uWrithe;',","'    p.x += (wx + snap) * min(uWrithe,18.0)*sin(along*3.141593);',",'anchor loop x');
- code=once(code,"'    p.z += (wz + snap) * uWrithe;',","'    p.z += (wz + snap) * min(uWrithe,18.0)*sin(along*3.141593);',",'anchor loop z');
- code=once(code,"'    p.y += sin(ph*0.8 - t*7.0) * uWrithe * 0.6;',","'    p.y += sin(ph*.8-t*.7)*min(uWrithe,18.0)*.3*sin(along*3.141593);',",'anchor loop feet');
- code=once(code,'function _updateMagmaBubbles(dt, camX, camZ) {','function _updateMagmaBubbles(dt, camX, camZ) {\n    if(_magmaBubbles)_magmaBubbles.visible=false;return; // Plasma cells replace popping solid balls.','no solid solar bubbles');
- const from=`    const drag = Math.pow(0.90, dt * 60);
-    surfaceVelX = (surfaceVelX + (targetVel.x - surfaceVelX) * dt * 3.5) * drag;
-    surfaceVelY = (surfaceVelY + (targetVel.y - surfaceVelY) * dt * 3.5) * drag;
-    surfaceVelZ = (surfaceVelZ + (targetVel.z - surfaceVelZ) * dt * 3.5) * drag;
-
-    cockpitCamera.position.x += surfaceVelX * dt;
-    cockpitCamera.position.y += surfaceVelY * dt;
-    cockpitCamera.position.z += surfaceVelZ * dt;`;
- code=once(code,from,`    if(window._starSurface){
-      const move205=window.L99Celestial205.motion;
-      const mx=move205(surfaceVelX,targetVel.x*.35,dt),my=move205(surfaceVelY,targetVel.y*.35,dt),mz=move205(surfaceVelZ,targetVel.z*.35,dt);
-      surfaceVelX=mx.v;surfaceVelY=my.v;surfaceVelZ=mz.v;
-      cockpitCamera.position.x+=mx.d;cockpitCamera.position.y+=my.d;cockpitCamera.position.z+=mz.d;
-    }else{\n${from}\n    }`,'solar inertia');
- code=once(code,'    cockpitCamera.rotation.z += Math.sin(t*6.5)*0.004 + (mid-0.3)*0.012;','    if(!window._starSurface)cockpitCamera.rotation.z += Math.sin(t*6.5)*0.004 + (mid-0.3)*0.012;','stable solar horizon');
- code=once(code,'      const targetY = standY + _eyeH36 + window._walkJumpOffset;','      if(window._starSurface){standY=window.L99Celestial205.height(cockpitCamera.position.x,cockpitCamera.position.z,window.L99Celestial205.uniforms.uClock205.value);_eyeH36=Math.max(3,_eyeH36);}\n      const targetY = standY + _eyeH36 + window._walkJumpOffset;','photosphere clearance');
- code=once(code,'      // Foot bob — vertical sine modulation when moving (suppressed during jump)','      if(window._starSurface)cockpitCamera.position.y=Math.max(cockpitCamera.position.y,standY+1.5);\n      // Foot bob — vertical sine modulation when moving (suppressed during jump)','minimum solar eye clearance');
- code=once(code,'        this._photoActive = (_photoWant > _waterWant);','        if(window._starSurface||surfaceMode==="space"){_photoWant=0;_waterWant=0;this.active=0;}\n        this._photoActive = (_photoWant > _waterWant);','no solar focus blur');
- code=once(code,'    cockpitBloom.strength = window._bloomEnv;','    cockpitBloom.strength = window._starSurface?.08:window._bloomEnv;','bounded solar bloom');
- code=once(code,'    cockpitBloom.radius = 0.4 + bass * 0.16;','    cockpitBloom.radius = window._starSurface?.18:0.4 + bass * 0.16;','restrained solar bloom radius');
- code=once(code,'function exitSurface() {','function exitSurface() {\n  if(window._starSurface&&(surfaceMode==="surface"||surfaceMode==="underground")){window._solarLeaving205=true;window._solarLeaveFrame205=performance.now();}','solar exit clock start');
- code=once(code,'    surfaceProgress += (dt * _lpRate) / 3.0;','    surfaceProgress += ((window._solarLeaving205?window.L99Celestial205.leaveDelta():dt) * _lpRate) / 3.0;','solar departure wall clock');
- code=once(code,'    surfaceProgress += dt / SURF_LEAVE_DUR;','    surfaceProgress += (window._solarLeaving205?window.L99Celestial205.leaveDelta():dt) / SURF_LEAVE_DUR;','solar ascent wall clock');
- code=once(code,"      try{ _purgeTransientPlanetVisualsForSpace('leave-stage-complete'); }catch(e){}","      if(window._solarLeaving205){window._solarLeaving205=false;ascendState='none';ascendProgress=0;}\n      try{ _purgeTransientPlanetVisualsForSpace('leave-stage-complete'); }catch(e){}",'finish solar ascent');
- code=once(code,'      const bobActive = movingMag > 0.05 && !wlk.jumping;','      const bobActive = !window._starSurface && movingMag > 0.05 && !wlk.jumping;','no solar footsteps');
- return '/* CELESTIAL_205_APPLIED */\n'+code;
-};
 function approach(mat,hue){
  // MeshBasicMaterial hook keeps the entry controller's color/opacity properties intact.
  const compile=mat.onBeforeCompile;mat.onBeforeCompile=function(s,r){compile?.call(this,s,r);Object.assign(s.uniforms,U);s.uniforms.uSunHue205={value:hue};
@@ -1914,53 +1674,7 @@ C.body=function(m,kind){oldBody(m,kind);if(m.userData.geometry207)return;m.userD
  m.fragmentShader=m.fragmentShader.replace('vec3 vision206(',geometryGLSL+'\nvec3 vision206(').replace('return mix(c,changed,uTrip205);',`vec3 g=geometry207(p);float reveal=.60+.40*sin(uPhase205*.22+1.);
  changed+=vec3(1.,.62,.19)*g.x*.30+vec3(.28,.72,1.)*g.y*.16*reveal+vec3(1.,.83,.45)*g.z*.19;
  return mix(c,changed,uTrip205);`);m.needsUpdate=true;};
-const checks=[];function once(s,a,b,label){let n=s.split(a).length-1;checks.push({label,count:n});if(n!==1)throw Error('Universe207 '+label+': '+n);return s.replace(a,b);}
-function block(s,a,b,newText,label){let i=s.indexOf(a),j=s.indexOf(b,i);if(i<0||j<0)throw Error('Universe207 '+label);checks.push({label,count:1});return s.slice(0,i)+newText+s.slice(j);}
-const F=root.L99MaterialsFlight191,oldFlight=F.patchFlight;
-F.patchFlight=function(s){s=oldFlight(s);if(s.includes('/* UNIVERSE207_RUNTIME */'))return s;
- s=once(s,'  generateSystem(3, -5);','  _galaxyIndex=0;generateSystem(0, 0);','start at Sol');
- s=block(s,'  const isSolCell = (cx === SOL_CELL.x && cz === SOL_CELL.z);','  // fix280 SPAWN EJECTOR:',`  const spec207=starDescriptor207(cx,cz),isSolCell=spec207.home;
-  _genRng=mulberry32(spec207.seed);
-  SYSTEM_CENTER.set(spec207.x,spec207.y,spec207.z);
-  if(cockpitSystemStar){cockpitSystemStar.group.position.copy(SYSTEM_CENTER);cockpitSystemStar.pos.copy(SYSTEM_CENTER);cockpitSystemStar.group.scale.setScalar(1);window._starReveal=1;}
-  applyStarType(spec207.type);
-  if(cockpitSystemStar)cockpitSystemStar.starName=spec207.name;
-  activeSpec207=spec207;activeSince207=performance.now();
-`,'shared star identity and true size');
- s=block(s,'      const _foreign = planetPool.filter','  _genRng = null;',`      const _foreign=planetPool.filter(p=>!p.userData.isSol&&!p.userData.travelId170);
-      const count=Math.min(spec207.count,_foreign.length);
-      _foreign.forEach((p,i)=>{p.visible=i<count;p.userData.isOrbiting=i<count;p.userData.system207=spec207.key;p.userData.enabled207=i<count;
-        if(i>=count)return;
-        const pr=window.L99Universe207.rng(window.L99Universe207.hash(spec207.seed,i));
-        const palettes=PLANET_PALETTES.filter(a=>a&&a.type!=='SHEPHERD');
-        const palette=palettes[Math.floor(pr()*palettes.length)];
-        p.userData.planetName=spec207.name+' '+String.fromCharCode(98+i);delete p.userData.solName;delete p.userData.name;
-        const u=p.userData.surfaceMat?.uniforms;if(u){for(const k of ['uIsEarth','uIsMars','uBodyId','uHasEarthAlbedo'])if(u[k])u[k].value=0;}
-        respawnPlanet(p,true,palette);
-        const ud=p.userData;ud.orbitR=spec207.type.radius*(2.8+Math.pow(i+1,1.32)*1.7);ud.orbitIncl=spec207.tilt+(pr()-.5)*.09;ud.orbitEcc=pr()*.16;ud.orbitSpeed=.05/Math.pow(i+1,.8);
-        p.position.set(SYSTEM_CENTER.x+Math.cos(ud.orbitAngle)*ud.orbitR,SYSTEM_CENTER.y+Math.sin(ud.orbitAngle)*ud.orbitR*Math.sin(ud.orbitIncl),SYSTEM_CENTER.z+Math.sin(ud.orbitAngle)*ud.orbitR);
-      });
-      planetPool.filter(p=>p.userData.travelId170).forEach(p=>{p.visible=p.userData.system207===spec207.key;p.userData.isOrbiting=false;});
-    }
-  }
-`,'distinct seeded systems');
- s=block(s,'function _impostorStarForCell(cx, cz) {','// fix380: MAX_DOTS',`function _impostorStarForCell(cx,cz){return starDescriptor207(cx,cz);}\n`,'same proxy position');
- s=block(s,'function _buildNeighborStars() {','function updateGalaxyImpostors() {',`function _buildNeighborStars(){buildStars207();}
- function _updateNeighborStars(){/* frame207 updates the catalog once after camera movement. */}
- `,'continuous distant stars');
- s=block(s,'function maybeRegenerateSystem(camPos) {','// ═══════════════════════════════════════════════════════════════════════════\n// SOL SECTOR',`function maybeRegenerateSystem(camPos){selectSystem207(camPos);}\n\n`,'distance-driven activation');
- s=once(s,'function recycleFarPlanets() {','function recycleFarPlanets() {\n  if(activeSpec207)return; // Destination membership owns these planets.','prevent unseeded planet recycling');
- s=once(s,".filter(p => p && p.position)",".filter(p => p && p.position && p.visible !== false && (!p.userData.isSol || activeSpec207?.home))",'scanner excludes hidden bodies');
- s=once(s,'  planetPool.forEach(p => {\n    const toP = p.position.clone().sub(cockpitCamera.position).normalize();','  planetPool.forEach(p => {\n    if(!p.visible)return;\n    const toP = p.position.clone().sub(cockpitCamera.position).normalize();','tap targeting excludes hidden bodies');
- s=once(s,'    cockpitPlanets.children.forEach(p => { p.visible = true; });','    visibility207();','restore only current planets');
- s=once(s,'  flightHumanFrame150(performance.now());','  flightHumanFrame150(performance.now());\n  frame207();','final visibility and opacity');
- // The old Bay Area warm-up displaced the space camera after generating planets.
- s=once(s,"  try { buildEngineParticles(); } catch (e) { }","  startAtEarth207();\n  try { buildEngineParticles(); } catch (e) { }",'Earth orbit spawn');
- // Travel reservations keep their origin system rather than leaking into every system.
- s=once(s,'body.userData.travelId170=record.id;','body.userData.system207=activeSpec207?.key;body.userData.travelId170=record.id;','cave world system ownership');
- return s+'\n'+root.L99Universe207.runtime;
-};
-root.L99Universe207={version:207,CELL,PHI,hash,rng,encode,decode,descriptor,neighborhood,apparent,smooth,checks,runtime:"/* UNIVERSE207_RUNTIME */\nlet activeSpec207=null,activeSince207=0,stars207=[],starBucket207='',proxies207=[],fade207={value:1},cache207=new Map(),fadeWired207=false;\nconst U207=window.L99Universe207,C207=window.L99Celestial205;\nfunction starDescriptor207(cx,cz){const s=U207.descriptor(cx,cz,_galaxyIndex);s.type=s.home?STAR_TYPES[2]:_pickStarType(()=>s.typeRoll);return s;}\nfunction catalog207(p){\n const k=_galaxyIndex+':'+Math.floor(p.x/U207.CELL+.5)+':'+Math.floor(p.y/U207.CELL+.5)+':'+Math.floor(p.z/U207.CELL+.5);\n if(k===starBucket207)return;starBucket207=k;\n stars207=U207.neighborhood(p,_galaxyIndex).map(s=>{s.type=s.home?STAR_TYPES[2]:_pickStarType(()=>s.typeRoll);return s;});\n}\nfunction buildStars207(){\n if(_neighborStars)return;\n const n=1200,g=new THREE.BufferGeometry();_neighborStarsGeom=g;\n for(const [k,size]of [['position',3],['color',3],['radius207',1],['alpha207',1]])g.setAttribute(k,new THREE.BufferAttribute(new Float32Array(n*size),size));\n const m=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,uniforms:{uPixel207:{value:400},uTrip205:C207.uniforms.uTrip205,uPhase205:C207.uniforms.uPhase205},\n vertexShader:`attribute vec3 color;attribute float radius207,alpha207;uniform float uPixel207,uTrip205,uPhase205;varying vec3 c207;varying float a207;\n void main(){vec4 p=modelViewMatrix*vec4(position,1.);float d=max(length(p.xyz),1.);float diameter=radius207*uPixel207/d;\n gl_PointSize=clamp(max(2.,diameter*1.45)*(1.+uTrip205*.25),2.,80.);c207=color;a207=alpha207;gl_Position=projectionMatrix*p;gl_Position.z=min(gl_Position.z,gl_Position.w*.99997);}`,\n fragmentShader:`varying vec3 c207;varying float a207;uniform float uTrip205,uPhase205;void main(){vec2 q=gl_PointCoord*2.-1.;float r=dot(q,q);if(r>1.)discard;float a=exp(-r*8.)+.08*exp(-r*2.);gl_FragColor=vec4(c207*(1.+uTrip205*.3),a*a207);}`});\n _neighborStars=new THREE.Points(g,m);_neighborStars.frustumCulled=false;_neighborStars.renderOrder=-8;cockpitScene.add(_neighborStars);\n}\nfunction fadeMaterial207(mat,u){if(mat.userData.fade207)return;mat.userData.fade207=true;const before=mat.onBeforeCompile,key=mat.customProgramCacheKey.bind(mat);mat.transparent=true;mat.depthWrite=false;\n mat.onBeforeCompile=function(s,r){before?.call(this,s,r);s.uniforms.uSystemFade207=u;s.fragmentShader='uniform float uSystemFade207;\\n'+s.fragmentShader;\n  if(mat.isShaderMaterial)s.fragmentShader=s.fragmentShader.replace(/(gl_FragColor\\s*=\\s*[^;]+;)/g,'$1\\n gl_FragColor.a*=uSystemFade207;');\n  else s.fragmentShader=s.fragmentShader.replace('#include <dithering_fragment>','#include <dithering_fragment>\\n gl_FragColor.a*=uSystemFade207;');\n };mat.customProgramCacheKey=()=>key()+'systemFade207';mat.needsUpdate=true;\n}\nfunction proxy207(s){\n let p=cache207.get(s.key);if(p)return p;\n // Proxy uses the same surface shader and radius as the eventual star, not a scaled dot.\n const m=cockpitSystemStar.coreMat.clone();m.userData={};m.onBeforeCompile=()=>{};m.customProgramCacheKey=()=> 'starProxy207';Object.assign(m.uniforms,C207.uniforms);m.uniforms.uColor.value.setHex(s.type.color);m.uniforms.uFar.value=1;\n const u={value:0};fadeMaterial207(m,u);const mesh=new THREE.Mesh(cockpitSystemStar.core.geometry,m);mesh.position.set(s.x,s.y,s.z);mesh.scale.setScalar(s.type.radius);mesh.frustumCulled=false;cockpitScene.add(mesh);\n p={key:s.key,mesh,u,used:0};cache207.set(s.key,p);return p;\n}\nfunction updateStars207(){\n if(!cockpitCamera||!cockpitSystemStar)return;buildStars207();catalog207(cockpitCamera.position);\n const cp=cockpitCamera.position,H=cockpitRenderer.domElement.height,fov=cockpitCamera.fov,pixel=H/Math.tan(fov*Math.PI/360),time=performance.now();\n const scored=stars207.map(s=>({s,d:Math.hypot(s.x-cp.x,s.y-cp.y,s.z-cp.z)})).sort((a,b)=>a.d-b.d);\n const nearby=new Set(scored.slice(0,4).filter(a=>a.d<280000).map(a=>a.s.key));\n for(const p of cache207.values())p.mesh.visible=false;\n const g=_neighborStarsGeom,pa=g.attributes.position,co=g.attributes.color,ra=g.attributes.radius207,al=g.attributes.alpha207,c=new THREE.Color();let i=0;\n for(const {s,d}of scored){if(i>=pa.count)break;const envelope=1-U207.smooth(U207.CELL*2,U207.CELL*2.8,d);if(envelope<=0)continue;\n  const active=activeSpec207&&s.key===activeSpec207.key,px=U207.apparent(s.type.radius,d,H,fov),detail=nearby.has(s.key)?U207.smooth(2,7,px)*(1-U207.smooth(180000,280000,d)):0;\n  const residual=active?1-fade207.value:1;\n  pa.setXYZ(i,s.x-cp.x,s.y-cp.y,s.z-cp.z);c.setHex(s.type.color);co.setXYZ(i,.25+c.r*.75,.25+c.g*.75,.25+c.b*.75);ra.setX(i,s.type.radius);al.setX(i,envelope*(1-detail)*residual);i++;\n  if(detail>0){const p=proxy207(s);p.used=time;p.u.value=detail*envelope*residual;p.mesh.visible=p.u.value>.0001;p.mesh.material.uniforms.uTime.value=cockpitSystemStar.coreMat.uniforms.uTime.value;p.mesh.rotation.copy(cockpitSystemStar.group.rotation);}\n }\n _neighborStars.position.copy(cp);g.setDrawRange(0,i);for(const a of Object.values(g.attributes))a.needsUpdate=true;_neighborStars.material.uniforms.uPixel207.value=pixel;\n for(const [key,p]of cache207)if(!p.mesh.visible&&(time-p.used>3000||cache207.size>16)){cockpitScene.remove(p.mesh);p.mesh.material.dispose();cache207.delete(key);}\n}\nfunction selectSystem207(p){\n if(!p||surfaceMode!=='space'||window._tesseractActive||window._GIANT_LOCK)return;\n catalog207(p);let best=null,dist=Infinity;\n for(const s of stars207){const d=Math.hypot(s.x-p.x,s.y-p.y,s.z-p.z);if(d<dist){dist=d;best=s;}}\n if(!best||best.key===activeSpec207?.key)return;\n const activeDistance=activeSpec207?Math.hypot(activeSpec207.x-p.x,activeSpec207.y-p.y,activeSpec207.z-p.z):Infinity;\n // Resolve well before visible planet detail, using 3D distance and hysteresis, not bucket crossings.\n if(dist<100000&&dist<activeDistance*.65){generateSystem(best.cx,best.cz);_pendingCell=null;_swapTimer=0;}\n}\nfunction visibility207(){\n if(!activeSpec207)return;\n for(const p of planetPool){const u=p.userData;const allowed=u.isSol?activeSpec207.home:u.system207===activeSpec207.key&&(u.enabled207||u.travelId170);\n  p.visible=!!allowed;if(u.isSol&&!allowed)u.isOrbiting=false;\n }\n}\nfunction startAtEarth207(){\n const earth=planetPool.find(p=>p.userData.solName==='Earth');if(!earth)return;\n surfaceMode='space';cockpitCamera.position.copy(earth.position).add(new THREE.Vector3(0,earth.userData.radius*3,earth.userData.radius*8));cockpitCamera.lookAt(earth.position);shipQuat.copy(cockpitCamera.quaternion);shipVel.set(0,0,0);throttlePct=0;\n if(cockpitGrid)cockpitGrid.visible=false;\n}\nfunction frame207(){\n const space=surfaceMode==='space'&&!window._tesseractActive;\n if(cockpitGrid){\n  cockpitGrid.visible=space&&C207.uniforms.uTrip205.value>.02;\n  if(gridMaterial&&!gridMaterial.userData.trip207){\n   gridMaterial.userData.trip207=true;Object.assign(gridMaterial.uniforms,C207.uniforms);gridMaterial.uniforms.uGridOrigin207={value:new THREE.Vector3()};\n   gridMaterial.fragmentShader='uniform float uTrip205,uPhase205;uniform vec3 uGridOrigin207;\\n'+gridMaterial.fragmentShader\n    .replace('float wx = vWorldPos.x;','vec2 local207=vWorldPos.xz-uGridOrigin207.xz;float wx = local207.x+sin(local207.y*.12+uPhase205*.3)*2.*uTrip205;')\n    .replace('float wz = vWorldPos.z + uScroll;','float wz = local207.y+sin(local207.x*.11-uPhase205*.2)*2.*uTrip205;')\n    .replace('length(vWorldPos.xz - vec2(0.0, -uScroll))','length(local207)')\n    .replace('float frac = abs(fract(c) - 0.5) * 2.0;','float frac = min(fract(c),1.-fract(c));')\n    .replace('float aa = 0.08;','float aa = 0.009;')\n    .replaceAll('1.0, 0.95','1.0, 0.018').replaceAll('4.0, 0.97','4.0, 0.012')\n    .replace('alpha);','alpha*uTrip205*.25);');gridMaterial.needsUpdate=true;\n  }\n  if(gridMaterial?.uniforms.uGridOrigin207)gridMaterial.uniforms.uGridOrigin207.value.copy(cockpitCamera.position);\n  if(cockpitGrid.visible)cockpitGrid.position.copy(cockpitCamera.position);\n }\n if(!space){if(_neighborStars)_neighborStars.visible=false;for(const p of cache207.values())p.mesh.visible=false;return;}\n visibility207();\n if(cockpitSystemStar&&!fadeWired207){cockpitSystemStar.group.traverse(o=>{if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])fadeMaterial207(m,fade207);});fadeWired207=true;}\n fade207.value=U207.smooth(0,1600,performance.now()-activeSince207);updateStars207();\n if(_neighborStars)_neighborStars.visible=window._NEIGHBOR_SUNS!==false;\n if(window._NEIGHBOR_SUNS===false)for(const p of cache207.values())p.mesh.visible=false;\n}\n"};
+root.L99Universe207={version:207,CELL,PHI,hash,rng,encode,decode,descriptor,neighborhood,apparent,smooth};
 })(window);
 
 </script>
@@ -1969,9 +1683,8 @@ root.L99Universe207={version:207,CELL,PHI,hash,rng,encode,decode,descriptor,neig
 (function(root){'use strict';
 if(root.L99Perception208)return;
 const C=root.L99Celestial205,F=root.L99MaterialsFlight191,K=root.L99CavesMaterials191,U=C.uniforms;
-const checks=[],auras=[];
+const auras=[];
 function replaceFunction(s,name,body){const at=s.search(new RegExp('(?:vec[234]|float)\\s+'+name+'\\s*\\('));if(at<0)throw Error('208 function missing '+name);let a=s.indexOf('{',at),n=1,b=a+1;for(;b<s.length&&n;b++){if(s[b]==='{')n++;if(s[b]==='}')n--;}return s.slice(0,at)+body+s.slice(b);}
-function once(s,a,b,label){const n=s.split(a).length-1;checks.push({label,count:n});if(n!==1)throw Error('208 '+label+': '+n);return s.replace(a,b);}
 const uniforms='uniform float uTrip205,uPhase205,uClock205;\n';
 const common=`
 vec3 pigment208(float f){return .48+.48*cos(f+vec3(.15,2.25,4.35));}
@@ -2123,15 +1836,7 @@ function surfaceShader(s,pos){
 const oldTerrain=F.terrain;F.terrain=function(T,m,type){const r=oldTerrain(T,m,type);if(m){Object.assign(m.uniforms,U);const sun=m.fragmentShader.includes('varying vec3 p205;');m.fragmentShader=surfaceShader(m.fragmentShader,sun?'vec3(p205.x*.006,p205.y*.006,p205.z*.006)':'vWP*.018');m.needsUpdate=true;}return r;};
 const oldGround=K.ground;K.ground=function(T,m){const r=oldGround(T,m);Object.assign(r.uniforms,U);r.fragmentShader=surfaceShader(r.fragmentShader,'vWP*.24');r.needsUpdate=true;return r;};
 const oldRock=K.rock;K.rock=function(T,m){const r=oldRock(T,m);if(r.userData.rock208)return r;r.userData.rock208=true;const prior=r.onBeforeCompile,key=r.customProgramCacheKey.bind(r);r.onBeforeCompile=function(s,renderer){prior.call(this,s,renderer);Object.assign(s.uniforms,U);s.fragmentShader=surfaceShader(s.fragmentShader,'vRWp*.24');};r.customProgramCacheKey=()=>key()+'208';r.needsUpdate=true;return r;};
-const oldFlight=F.patchFlight;F.patchFlight=function(s){s=oldFlight(s);if(s.includes('/* PERCEPTION208_FLIGHT */'))return s;
- s=once(s,'    highTier.add(atmosHigh);','    highTier.add(atmosHigh);\n    window.L99Perception208.aura(THREE,highTier,surfaceMat,false);','planet high aura');
- s=once(s,'    midTier.add(atmosMid);','    midTier.add(atmosMid);\n    window.L99Perception208.aura(THREE,midTier,surfaceMat,false);','planet mid aura');
- s=once(s,'  applyStarType(STAR_TYPES[2]);','  window.L99Perception208.aura(THREE,cockpitSystemStar.core,coreMat,true);\n  applyStarType(STAR_TYPES[2]);','solar aura');
- s=once(s,'  frame207();','  frame207();window.L99Perception208.update();window.L99Perception208.sceneFrame(cockpitSystemStar,cockpitBloom);','effect visibility');
- s=once(s,' _neighborStars=new THREE.Points(g,m);',' window.L99Perception208.destinationStars(m);\n _neighborStars=new THREE.Points(g,m);','destination scintillation');
- return '/* PERCEPTION208_FLIGHT */\n'+s;
-};
-root.L99Perception208={version:208,common,bodyWarp,bodyColor,skyMotion,nightStars,checks,aura,update,sceneFrame,destinationStars,surfaceShader};
+root.L99Perception208={version:208,common,bodyWarp,bodyColor,skyMotion,nightStars,aura,update,sceneFrame,destinationStars,surfaceShader};
 })(window);
 
 </script>
@@ -2161,24 +1866,7 @@ function density(p,type){const rad=Math.hypot(p.x,p.z),edge=1-S(.88,1.06,rad),ve
 const oldDescriptor=U.descriptor;
 U.descriptor=function(cx,cz,id=0){const s=oldDescriptor(cx,cz,id),g=descriptor(id);if(!id){const q=local(s,g);s.exists=s.home||s.exists&&density({x:q.x/g.radius,y:q.y/g.radius,z:q.z/g.radius},root.galaxyTypeFor?.(id)||{arms:4})>.08;return s;}const p=world(s,g);Object.assign(s,p);const q=local(s,g);s.exists=s.exists&&density({x:q.x/g.radius,y:q.y/g.radius,z:q.z/g.radius},root.galaxyTypeFor?.(id)||{arms:4})>.08;return s;};
 U.neighborhood=function(p,id){const q=id?local(p,descriptor(id)):p,c=U.CELL,x=Math.floor(q.x/c+.5),y=Math.floor(q.y/c+.5),z=Math.floor(q.z/c+.5),out=[];for(let a=x-3;a<=x+3;a++)for(let b=y-3;b<=y+3;b++)for(let d=z-3;d<=z+3;d++)for(let slot=0;slot<3;slot++){const e=U.encode(a,b,d,slot),s=U.descriptor(e.x,e.z,id);if(s.exists)out.push(s);}return out;};
-const checks=[];
-function block(s,a,b,value,label){const i=s.indexOf(a),j=s.indexOf(b,i);if(i<0||j<0)throw Error('209 '+label);checks.push(label);return s.slice(0,i)+value+s.slice(j);}
-function once(s,a,b,label){if(s.split(a).length!==2)throw Error('209 '+label);checks.push(label);return s.replace(a,b);}
-const F=root.L99MaterialsFlight191,old=F.patchFlight;
-F.patchFlight=function(s){s=old(s);
- s=block(s,'function _buildDistantGalaxies() {','// Refresh impostor positions',`function _buildDistantGalaxies(){buildGalaxies209();}\n`,'fixed galaxy volumes');
- s=block(s,'window.jumpGalaxy = function(targetIndex) {','window.toggleGalaxy = function()',`window.jumpGalaxy=function(id){return targetGalaxy209(id);};\n`,'remove teleport shortcut');
- s=block(s,'  // ── vox313: GALAXY ZOOM-JUMP','  // vox259: THE SHIP FLIES', '  // Galaxy travel is integrated continuously by flight209.\n','remove timed jump');
- s=block(s,"        if ((typeof surfaceMode === 'undefined' || surfaceMode === 'space') && window._distantGalaxies && !window._galaxyZoom) {","        if (typeof surfaceMode === 'undefined' || surfaceMode !== 'surface') return;",`        if(surfaceMode==='space'&&pickGalaxy209(ev,cvs)){ev.stopPropagation();return;}\n`,'galaxy picking');
- s=block(s,'  if (_distantGalaxies) _distantGalaxies.position.copy(cockpitCamera.position);','  // Speed streaks', '  // Galaxy centers remain fixed in world coordinates.\n','remove camera tether and old aim');
- s=once(s,'  frame207();window.L99Perception208.update();','  flight209(dt);frame207();frameGalaxies209();window.L99Perception208.update();','continuous travel update');
- s=once(s,'  _galaxyIndex = (_galaxyIndex + 1) >>> 0;','  // Wormholes stay in this galaxy; full-throttle flight owns intergalactic entry.','single travel gate');
- s=once(s,"b.title = 'Jump to the next galaxy (J)';","b.title = 'Aim at a galaxy and hold 100% throttle';",'hyperlane instruction');
- s=once(s,'function selectSystem207(p){','function selectSystem207(p){\n if(galaxyTransit209)return;','no systems in transit');
- s=once(s,"showLoreWhisper('You have left the warmth of the Milky Way and entered the void of darkness. Tap a galaxy in the distance to lock it, and make the jump.');","showLoreWhisper('Deep space. Aim at a galaxy and hold 100% throttle to cross the void.');",'travel instruction');
- return s+'\n'+root.L99Galaxies209.runtime;
-};
-root.L99Galaxies209={version:209,descriptor,rotate,local,world,sample,density,checks,runtime:"/* GALAXIES209_RUNTIME */\nconst G209=window.L99Galaxies209;\nlet hud209=null;\nlet volumes209=[],galaxyTransit209=false,charge209=0,lastPosition209=null,locked209=null,lastHint209='',discovered209=new Set([0]);\ntry{for(const id of JSON.parse(localStorage.getItem('l99_discovered_galaxies209')||'[]'))if(Number.isInteger(id)&&id>=0&&id<=9)discovered209.add(id);}catch(e){}\nfunction buildGalaxies209(){\n if(_distantGalaxies)return;\n _distantGalaxies=new THREE.Group();_distantGalaxies.name='Reachable galaxies';_distantGalaxies.userData.targets=[];cockpitScene.add(_distantGalaxies);window._distantGalaxies=_distantGalaxies;\n for(let id=0;id<10;id++){\n  const g=G209.descriptor(id),type=galaxyTypeFor(id),r=U207.rng(g.seed),geo=new THREE.BufferGeometry(),pos=[],colors=[],sizes=[],base=new THREE.Color(type.col);\n  for(let i=0;i<7200;i++){const p=G209.rotate(G209.sample(type,r),g);pos.push(p.x,p.y,p.z);const warm=r(),col=base.clone().lerp(new THREE.Color(warm>.7?0xffc98e:0xd4eaff),r()*.65);colors.push(col.r,col.g,col.b);sizes.push(.7+r()*1.7);}\n  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.setAttribute('aSize',new THREE.Float32BufferAttribute(sizes,1));\n  const uniforms={uOffset:{value:new THREE.Vector3()},uRadius:{value:g.radius},uPixel:{value:500},uClock205:C207.uniforms.uClock205,uTrip205:C207.uniforms.uTrip205,uPhase205:C207.uniforms.uPhase205};\n  const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,uniforms,vertexShader:`attribute vec3 color;attribute float aSize;uniform vec3 uOffset;uniform float uRadius,uPixel,uClock205,uTrip205,uPhase205;varying vec3 vC;varying float vA;void main(){vec3 w=position*uRadius+uOffset;vec3 p=mat3(viewMatrix)*w;float d=max(length(p),1.);float px=uRadius*.00075*uPixel/d;float seed=dot(position,vec3(127.,31.,93.));float tw=.7+.3*sin(uClock205*.65+seed);gl_PointSize=clamp(px,1.,5.)*(1.+uTrip205*.35*tw);vC=color*(1.+uTrip205*.25*sin(vec3(.8,1.1,1.3)*uPhase205+seed));vA=(.30+.45*aSize)*smoothstep(2000.,18000.,d);gl_Position=projectionMatrix*vec4(p,1.);gl_Position.z=min(gl_Position.z,gl_Position.w*.99998);}`,fragmentShader:`varying vec3 vC;varying float vA;void main(){vec2 q=gl_PointCoord*2.-1.;float r=dot(q,q);if(r>1.)discard;gl_FragColor=vec4(vC,exp(-r*5.)*vA);}`});\n  const points=new THREE.Points(geo,mat);points.frustumCulled=false;points.renderOrder=-12;points.userData={targetIndex:id,type};_distantGalaxies.add(points);\n  // A sparse, matching volume of diffuse light resolves the arms at distance.\n  const hazeGeo=new THREE.BufferGeometry();hazeGeo.setAttribute('position',new THREE.Float32BufferAttribute(pos.filter((_,i)=>Math.floor(i/3)%12===0),3));\n  const hazeMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,uniforms:{...uniforms,uTint:{value:base}},vertexShader:`uniform vec3 uOffset;uniform float uRadius,uPixel;varying float vA;void main(){vec3 p=mat3(viewMatrix)*(position*uRadius+uOffset);float d=max(length(p),1.);gl_PointSize=clamp(uRadius*.055*uPixel/d,2.,100.);vA=.028*smoothstep(uRadius*.04,uRadius*.18,d);gl_Position=projectionMatrix*vec4(p,1.);gl_Position.z=min(gl_Position.z,gl_Position.w*.99999);}`,fragmentShader:`uniform vec3 uTint;varying float vA;void main(){vec2 q=gl_PointCoord*2.-1.;float r=dot(q,q);if(r>1.)discard;gl_FragColor=vec4(uTint,exp(-r*4.)*vA);}`});\n  const haze=new THREE.Points(hazeGeo,hazeMat);haze.frustumCulled=false;haze.renderOrder=-13;_distantGalaxies.add(haze);volumes209.push({g,type,points,haze,uniforms});_distantGalaxies.userData.targets.push(points);\n }\n}\nfunction aimGalaxy209(dir){let best=null,dot=.992;for(const v of volumes209){if(v.g.id===_galaxyIndex)continue;const delta=new THREE.Vector3(v.g.center.x,v.g.center.y,v.g.center.z).sub(cockpitCamera.position);const k=delta.normalize().dot(dir);if(k>dot){dot=k;best=v;}}return best;}\nfunction targetGalaxy209(id){\n buildGalaxies209();const v=volumes209.find(v=>v.g.id===id)||aimGalaxy209(cockpitCamera.getWorldDirection(new THREE.Vector3()));if(!v||v.g.id===_galaxyIndex)return false;\n locked209=v.g.id;window._galaxyAimTarget=v.g.id;window._galaxyAimType=v.type;\n showLoreWhisper(galaxyName(v.g.id)+' · Hold 100% throttle and fly toward it.');return true;\n}\nfunction pickGalaxy209(ev,cvs){if(ev.button&&ev.button!==0)return false;const b=cvs.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((ev.clientX-b.left)/b.width*2-1,1-(ev.clientY-b.top)/b.height*2),cockpitCamera);const v=aimGalaxy209(ray.ray.direction);return v?targetGalaxy209(v.g.id):false;}\nfunction enterGalaxy209(v){\n _galaxyIndex=v.g.id;galaxyTransit209=false;charge209=0;locked209=v.g.id;starBucket207='';activeSpec207=null;\n for(const p of cache207.values()){cockpitScene.remove(p.mesh);p.mesh.material.dispose();}cache207.clear();\n planetPool.forEach(p=>{p.visible=false;p.userData.isOrbiting=false;});if(cockpitSystemStar)cockpitSystemStar.group.visible=false;\n catalog207(cockpitCamera.position);selectSystem207(cockpitCamera.position);\n const first=!discovered209.has(v.g.id);discovered209.add(v.g.id);\n try{localStorage.setItem('l99_discovered_galaxies209',JSON.stringify([...discovered209]));localStorage.setItem('l99galaxy',String(_galaxyIndex));}catch(e){}\n galaxyNotice209((first?'DISCOVERED · ':'RETURNED · ')+galaxyName(v.g.id),'You can ease the throttle and explore.',6000);\n showLoreWhisper((first?'DISCOVERED · ':'RETURNED · ')+galaxyName(v.g.id));\n}\nfunction flight209(dt){\n if(!cockpitCamera||surfaceMode!=='space'||orbitMode||window._tesseractActive||window._GIANT_LOCK){lastPosition209=null;charge209=0;galaxyTransit209=false;return;}\n buildGalaxies209();dt=Math.max(0,Math.min(.05,dt||0));const p=cockpitCamera.position,full=throttlePct>=1-1e-6,dir=cockpitCamera.getWorldDirection(new THREE.Vector3()),aim=volumes209.find(v=>v.g.id===locked209&&v.g.id===_galaxyIndex&&p.distanceTo(new THREE.Vector3(v.g.center.x,v.g.center.y,v.g.center.z))>v.g.radius*.12&&new THREE.Vector3(v.g.center.x,v.g.center.y,v.g.center.z).sub(p).normalize().dot(dir)>.992)||aimGalaxy209(dir);\n window._galaxyAimTarget=aim?.g.id??null;\n // Any old residual velocity is blocked at a foreign boundary below full throttle.\n for(const v of volumes209){if(v.g.id===_galaxyIndex)continue;const center=new THREE.Vector3(v.g.center.x,v.g.center.y,v.g.center.z),d=p.distanceTo(center),edge=v.g.radius*1.03;if(d<edge){if(full){enterGalaxy209(v);break;}else {const outward=p.clone().sub(center).normalize();if(outward.lengthSq()<.1)outward.set(0,0,1);p.copy(center).addScaledVector(outward,edge+5);shipVel.set(0,0,0);charge209=0;}}}\n const clear=!cockpitSystemStar||p.distanceTo(cockpitSystemStar.pos)>Math.max(15000,cockpitSystemStar.radius*8);\n const ready=full&&!!aim&&clear;\n charge209=ready?Math.min(4,charge209+dt):0;galaxyTransit209=ready&&charge209>1.5;\n if(galaxyTransit209){const g=aim.g,center=new THREE.Vector3(g.center.x,g.center.y,g.center.z),distance=p.distanceTo(center),edge=g.radius*1.03;\n  // Approach slows smoothly, preserving the exact same volume and orientation.\n  const speed=Math.min(2400000,Math.max(180000,(distance-edge)*.38))*U207.smooth(1.5,4,charge209);\n  p.addScaledVector(dir,speed*dt);shipVel.set(0,0,0);\n  if(g.id!==_galaxyIndex&&p.distanceTo(center)<edge)enterGalaxy209(aim);\n }\n if(aim){const key=aim.g.id+':'+full;if(lastHint209!==key){lastHint209=key;showLoreWhisper(galaxyName(aim.g.id)+(full?' · Intergalactic drive charging':' · 100% throttle required'));}}\n else lastHint209='';if(aim)galaxyNotice209(galaxyName(aim.g.id),full?(galaxyTransit209?'Crossing space · ease throttle to stop':'Intergalactic drive charging'):'Aim here and hold 100% throttle',250);lastPosition209=p.clone();\n}\nfunction frameGalaxies209(){\n if(hud209)hud209.style.display=surfaceMode==='space'&&performance.now()<hudExpiry209?'block':'none';\n if(!cockpitCamera)return;const space=surfaceMode==='space'&&!window._tesseractActive;\n if(_distantGalaxies)_distantGalaxies.visible=space;\n if(window._galaxyBand)window._galaxyBand.visible=false;if(_milkyWay)_milkyWay.visible=false;\n for(const v of volumes209){v.uniforms.uOffset.value.set(v.g.center.x-cockpitCamera.position.x,v.g.center.y-cockpitCamera.position.y,v.g.center.z-cockpitCamera.position.z);v.uniforms.uPixel.value=cockpitRenderer.domElement.height/Math.tan(cockpitCamera.fov*Math.PI/360);}\n if(space&&cockpitSystemStar)cockpitSystemStar.group.visible=!!activeSpec207&&cockpitCamera.position.distanceTo(cockpitSystemStar.pos)<250000;\n if(galaxyTransit209){if(_neighborStars)_neighborStars.visible=false;for(const p of cache207.values())p.mesh.visible=false;planetPool.forEach(p=>p.visible=false);}\n}\nwindow.L99GalaxyTravel209={version:209,discoveries:()=>[...discovered209],targets:()=>volumes209.map(v=>({...v.g,name:galaxyName(v.g.id),type:v.type.key})),state:()=>({galaxy:_galaxyIndex,transit:galaxyTransit209,charge:charge209,target:window._galaxyAimTarget,locked:locked209})};\n\nlet hudExpiry209=0;function galaxyNotice209(name,status,ms){if(!hud209){hud209=document.createElement('div');hud209.id='galaxy209-status';Object.assign(hud209.style,{position:'fixed',top:'max(86px, calc(env(safe-area-inset-top) + 72px))',left:'50%',transform:'translateX(-50%)',maxWidth:'calc(100vw - 40px)',width:'max-content',padding:'8px 14px',borderRadius:'12px',background:'rgba(6,15,25,.82)',border:'1px solid rgba(152,209,244,.3)',color:'#dbeeff',font:'12px/1.5 monospace',textAlign:'center',pointerEvents:'none',zIndex:'10010'});hud209.append(document.createElement('div'),document.createElement('small'));cockpitRenderer.domElement.parentElement.append(hud209);}hud209.children[0].textContent=name;hud209.children[1].textContent=status;hudExpiry209=performance.now()+ms;hud209.style.display='block';}\n"};
+root.L99Galaxies209={version:209,descriptor,rotate,local,world,sample,density};
 })(window);
 
 </script>
@@ -2230,20 +1918,7 @@ function glow(T,pos,uniforms,base){
  const material=new T.ShaderMaterial({transparent:true,depthWrite:false,depthTest:true,blending:T.AdditiveBlending,uniforms:{...uniforms,uTint:{value:base}},vertexShader:`attribute vec3 aCenter;uniform vec3 uOffset;uniform float uRadius;varying vec2 vDisc;varying float vAlpha;void main(){vec3 view=mat3(viewMatrix)*(aCenter*uRadius+uOffset);float d=max(length(view),1.);float seed=fract(sin(dot(aCenter,vec3(127.1,311.7,74.7)))*43758.5453);vDisc=position.xy;vAlpha=.055*smoothstep(uRadius*.025,uRadius*.13,d);view.xy+=position.xy*vec2(1.,.8+seed*.4)*uRadius*(.060+seed*.035);gl_Position=projectionMatrix*vec4(view,1.);gl_Position.z=min(gl_Position.z,gl_Position.w*.99999);}`,fragmentShader:`uniform vec3 uTint;varying vec2 vDisc;varying float vAlpha;void main(){float r=dot(vDisc,vDisc);if(r>=1.)discard;float falloff=exp(-r*5.)*pow(1.-r,2.);gl_FragColor=vec4(uTint,falloff*vAlpha);}`});
  const mesh=new T.Mesh(geometry,material);mesh.name='Galaxy volumetric glow';mesh.frustumCulled=false;mesh.renderOrder=-13;return mesh;
 }
-const checks=[];function once(s,a,b,label){if(s.split(a).length!==2)throw Error('210 '+label);checks.push(label);return s.replace(a,b);}
-const F=root.L99MaterialsFlight191,prior=F.patchFlight;
-F.patchFlight=function(s){s=prior(s);
- s=once(s,'function galaxyTypeFor(index) {','GALAXY_TYPES.push(...window.L99Galaxies210.types);\nfunction galaxyTypeFor(index) {\n  if(index>=10)return GALAXY_TYPES[8+(index-10)%8];','expanded types');
- s=once(s,'return GALAXY_TYPES[g % GALAXY_TYPES.length];','return GALAXY_TYPES[g % 8];','preserve known galaxy identities');
- s=once(s,'for(let id=0;id<10;id++)','for(let id=0;id<18;id++)','expanded destinations');
- s=once(s,'id>=0&&id<=9','id>=0&&id<18','discovery persistence');
- s=once(s,'for(let i=0;i<7200;i++)','for(let i=0;i<4200;i++)','bounded particle budget');
- s=once(s,'const warm=r(),col=base.clone().lerp(new THREE.Color(warm>.7?0xffc98e:0xd4eaff),r()*.65);','const col=window.L99Galaxies210.color(THREE,type,p,r);','radial color palettes');
- const a=s.indexOf('  const hazeGeo=new THREE.BufferGeometry();'),b=s.indexOf('\n }\n}',a);if(a<0||b<0)throw Error('210 haze anchor');s=s.slice(0,a)+`  const haze=window.L99Galaxies210.glow(THREE,pos,uniforms,base);_distantGalaxies.add(haze);volumes209.push({g,type,points,haze,uniforms});_distantGalaxies.userData.targets.push(points);`+s.slice(b);checks.push('world-sized elliptical glow');
- s=once(s,'exp(-r*5.)*vA','exp(-r*5.)*pow(1.-r,2.)*vA','zero alpha at star edges');
- return s;
-};
-root.L99Galaxies210={version:210,types,color,glow,checks};
+root.L99Galaxies210={version:210,types,color,glow};
 })(window);
 
 </script>
@@ -2269,25 +1944,7 @@ function eye(key,target,dt,u,airborne,current){
  s.target=target;s.air=!!airborne;return s.y;
 }
 function once(s,from,to,label){const i=s.indexOf(from);if(i<0||s.indexOf(from,i+from.length)>=0)throw Error('Motion 211 anchor: '+label);checks.push(label);return s.slice(0,i)+to+s.slice(i+from.length);}
-const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191;
-
-const baseFlight=F.patchFlight;F.patchFlight=function(s){s=baseFlight(s);
- s=once(s,"      const wlk = window._walkState || { moveX:0, moveY:0, jumping:false, jumpVel:0, speedMode:1 };",`      const contact211=window._walkContact211;
-      if(contact211&&contact211.mode===surfaceMode&&performance.now()-contact211.time<250&&cockpitCamera.position.distanceTo(contact211.render)<.01)cockpitCamera.position.y=contact211.physicalY;
-      const wlk = window._walkState || { moveX:0, moveY:0, jumping:false, jumpVel:0, speedMode:1 };`,'restore physical eye');
- s=once(s,'      const targetY = standY + _eyeH36 + window._walkJumpOffset;',`      const targetY = standY + _eyeH36 + window._walkJumpOffset;
-      const visualY211=window._walkContact211?.render.y??cockpitCamera.position.y;`,'physical target');
- s=once(s,"wlk.jumping||window._swimDepth>0,cockpitCamera.position.y):targetY;","wlk.jumping||window._swimDepth>0,visualY211):targetY;",'render eye');
- s=once(s,'      // Footstep audio on bob peaks (skip at ultra speed — would be machine-gun)',`      if(!_dinoMounted){const c211=window._walkContact211||(window._walkContact211={render:new THREE.Vector3()});c211.physicalY=targetY;c211.render.copy(cockpitCamera.position);c211.mode=surfaceMode;c211.time=performance.now();}else window._walkContact211=null;
-      // Footstep audio on bob peaks (skip at ultra speed — would be machine-gun)`,'store contact');
- s=once(s,"if (e.key === ' ') { wasdState.jump = true; e.preventDefault(); }","if (e.key === ' ') { wasdState.jump = true; if(!e.repeat&&walkMode)wasdState.jumpQueued211=true; e.preventDefault(); }",'queue flight jump');
- s=once(s,'if (wsK.jump && !wlk.jumping) {','const jumpPressed211=!!wsK.jump||!!wsK.jumpQueued211;wsK.jumpQueued211=false;\n      if (jumpPressed211 && !wlk.jumping && !window._jumpKeyLatch) {','jump press edge');
- s=once(s,'} else if (wsK.jump && wlk.jumping && !window._jumpKeyLatch) {','} else if (jumpPressed211 && wlk.jumping && !window._jumpKeyLatch) {','buffer glider press');
- s=once(s,'if (!wsK.jump) window._jumpKeyLatch = false;','if (!jumpPressed211) window._jumpKeyLatch = false;','jump release');
- // In-world Space is always movement, even while musical keys are enabled.
- s=once(s,"    if (cockpitMode !== 'full') return;\n    // fix681:","    if (cockpitMode !== 'full' || (window.L99Keyboard149&&window.L99Keyboard149.world()!=='flight') || (typeof _kbdEditable102==='function'&&_kbdEditable102(e))) return;\n    // fix681:",'flight input owner');
- return s;
-};
+const C=root.L99CavesMaterials191;
 const baseCaves=C.patchCaves;C.patchCaves=function(s){s=baseCaves(s);
  s=once(s,"dt,1,!grounded||inWater,eyeY):phyY;","dt,1,inWater||(!grounded&&(vel.y>.6||vel.y< -2.2)),eyeY):phyY;",'cave contact hysteresis');
  s=once(s,'            for (lift = 0.25; lift <= 0.75; lift += 0.25) {','            for (lift = 0.125; lift <= 0.75; lift += 0.125) {','smaller cave steps');
@@ -2307,15 +1964,8 @@ root.L99Motion211={eye,reset,checks,version:211};root.addEventListener('blur',()
 <script id="visibility211-code">
 /* VISIBILITY_211: readable terrain, local bioluminescence, and cap interactions. */
 (function(root){'use strict';
-const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191,checks=[];
+const C=root.L99CavesMaterials191,checks=[];
 function edit(s,a,b,label){const i=s.indexOf(a);if(i<0||s.indexOf(a,i+a.length)>=0)throw Error('Visibility 211: '+label);checks.push(label);return s.slice(0,i)+b+s.slice(i+a.length);}
-const flight=F.patchFlight;F.patchFlight=function(s){s=flight(s);
- s=edit(s,'        vec3 baseTinted = col * (detail * 1.8);',`        vec3 terrainDetail211=detail*1.8;
-        if(uPhotoReady191>.5){vec3 mean211=uPhotoMean191*wBiome+uPhotoSoilMean191*wDirt+uPhotoRockMean191*wStone;terrainDetail211=mix(vec3(1.),clamp(detail/max(mean211,vec3(.06)),vec3(.55),vec3(1.65)),.65);}
-        vec3 baseTinted = col * terrainDetail211;`,'normalize terrain detail');
- s=edit(s,'        col *= mix(uDayTint, vec3(1.0), clamp(uLightStrength, 0.0, 1.0) * 0.75);','        col *= mix(max(uDayTint,vec3(.16,.19,.25)), vec3(1.0), clamp(uLightStrength, 0.0, 1.0) * 0.75);','night terrain fill');
- return s;
-};
 const rock=C.rock;C.rock=function(T,mat){mat=rock(T,mat);if(mat.userData.visibility211)return mat;mat.userData.visibility211=true;const prior=mat.onBeforeCompile,key=mat.customProgramCacheKey;
  mat.onBeforeCompile=function(sh,r){prior.call(this,sh,r);sh.fragmentShader=edit(sh.fragmentShader,'diffuseColor.rgb *= rmSurf * (0.72 + 0.72 * rmHF) * rmMv * 1.5;',`// The photo carries its own stone albedo. Do not multiply two dark albedos.
  vec3 stoneTint211=diffuseColor.rgb/max(.12,dot(diffuseColor.rgb,vec3(.2126,.7152,.0722)));
@@ -2536,13 +2186,10 @@ root.addEventListener('pagehide',()=>{if(measurement)finish('interrupted: page c
 
 (function(root){'use strict';const checks=[];
 function once(s,a,b,label){if(s.split(a).length!==2)throw Error('Expedition 216 anchor: '+label);checks.push(label);return s.replace(a,b);}
-const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191,caves=C.patchCaves,flight=F.patchFlight;
+const C=root.L99CavesMaterials191,caves=C.patchCaves;
 C.patchCaves=function(s){s=caves(s);
 s=once(s,"T:THREE,active:function(){return running&&!window.__CAVE_PAUSED&&!surfaceLoading165;},unit:function(){return 1;},camera:function(){return camera;},scene:function(){return scene;},","T:THREE,canvas216:function(){return renderer&&renderer.domElement;},active:function(){return running&&!window.__CAVE_PAUSED&&!surfaceLoading165;},unit:function(){return 1;},camera:function(){return camera;},scene:function(){return scene;},",'cave canvas');
 s=once(s,"id:function(){return over?caveDigId172():'caves:'+CC.SEED;},underground:function(){return !over;},","id:function(){return over?caveDigId172():'caves:'+CC.SEED;},name:function(){return over?(over.name169||'Surface settlement'):'Caverns · '+CC.SEED;},releaseInput216:function(){for(var key216 in keys)delete keys[key216];},underground:function(){return !over;},",'cave places');return s;};
-F.patchFlight=function(s){s=flight(s);
-s=once(s,"T:THREE,active:()=>cockpitActive&&cockpitMode==='full',unit:()=>window.L99Life133.units('flight'),camera:()=>cockpitCamera,scene:()=>cockpitScene,","T:THREE,canvas216:()=>cockpitRenderer&&cockpitRenderer.domElement,active:()=>cockpitActive&&cockpitMode==='full',unit:()=>window.L99Life133.units('flight'),camera:()=>cockpitCamera,scene:()=>cockpitScene,",'flight canvas');
-s=once(s,"id:flightDigId172,underground:()=>false,","id:flightDigId172,name:()=>window._surfOriginPlanet?.userData?.planetName||flightPlanetRecord170().name,releaseInput216:()=>{const ws=window._wasdState;if(ws)for(const k of Object.keys(ws))if(typeof ws[k]==='boolean')ws[k]=false;},underground:()=>false,",'flight places');return s;};
 root.L99ExpeditionPatches216={checks};
 })(window);
 </script>
@@ -2614,9 +2261,8 @@ root.L99Quests217={label,visible,assist,isQuest,strike,observeMaterial,mount,ref
 
 (function(root){'use strict';const checks=[];
 function apply(s,edits){for(const [a,b,label]of edits){if(s.split(a).length!==2)throw Error('Quest 217 anchor: '+label+' ('+(s.split(a).length-1)+')');s=s.replace(a,()=>b);checks.push(label);}return s;}
-const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191,caves=C.patchCaves,flight=F.patchFlight;
+const C=root.L99CavesMaterials191,caves=C.patchCaves;
 C.patchCaves=function(s){return apply(caves(s),[["if (run.site !== key || now - run.last > 12000 || now < run.last)", "if (run.site !== key || now < run.last)", "remove hidden timer"], ["run.notes = note === e.pattern[0] ? [note] : [];\n            return { ok: true, wrong: true, progress: run.notes.length, why: 'The phrase slipped. Start again; nothing is lost.' };", "return { ok: true, wrong: true, progress: run.notes.length, why: 'Try stone '+(expected+1)+'. Your correct notes are kept.' };", "recoverable echo mistakes"], ["return { pattern: pattern, target: target, press: press, ascend: ascend, view: view };", "return { pattern: pattern, target: target, press: press, ascend: ascend, view: view,progress217:function(site){var e=target(site);return e&&run.site===site.id+':'+e.id?run.notes.length:0;},reset217:function(site){var e=target(site);run={site:e?site.id+':'+e.id:'',notes:[],last:-1};} };", "site-specific progress"], ["var group = new THREE.Group(), owned = [], meshes = [];", "var group = new THREE.Group(), owned = [], meshes = [], targets217 = [];", "echo targets"], ["        group.add(ring);", "        group.add(ring);targets217.push(ring);\n        var label217=window.L99Quests217.label(THREE,i+1,{playable:1,resonator123:{site:site,note:i}});label217.position.set((i-1)*1.8,height+.5,0);group.add(label217);targets217.push(label217);\n        owned.push(label217.material);", "numbered echo labels and rings"], ["    group.position.set(x, y, z);\n    group.userData.owned121 = owned;", "    site.targets217=meshes.concat(targets217);\n    group.position.set(x, y, z);\n    group.userData.owned121 = owned;", "echo target list"], ["rec.resonators123 = (rec.resonators123 || []).concat(meshes);", "rec.resonators123 = (rec.resonators123 || []).concat(site.targets217);", "echo ray targets"], ["owned.forEach(function (m) { m.dispose(); }); owned.length = 0; pruneResonance123();", "owned.forEach(function (m) { if(m.map)m.map.dispose();m.dispose(); }); owned.length = 0; pruneResonance123();", "dispose number textures"], ["function musicHitAt(ndcX, ndcY) {", "function musicHitAt(ndcX, ndcY, exact217) {", "exact ray option"], ["    function onTouchEnd(e) {", "    function tapQuest217(x,y){if(window.L99Dig172?.equipped('caves'))return false;var h=musicHitAt(x,y,true);if(!window.L99Quests217.isQuest(h))return false;window.L99TouchMusic175.strike('caves',h,.65);return true;}\n    function onTouchEnd(e) {", "stationary target taps in movement areas"], ["}else if(!rec.left&&!rec.lookZone&&tap){tryPickup(t.clientX/window.innerWidth*2-1,1-t.clientY/window.innerHeight*2);}", "}else if(tap){var x217=t.clientX/window.innerWidth*2-1,y217=1-t.clientY/window.innerHeight*2;if(!tapQuest217(x217,y217)&&!rec.left&&!rec.lookZone)tryPickup(x217,y217);}", "tap plays and drag navigates"], ["else if(mouseDown&&!mouseMoved&&!mouseLookZone169)tryPickup(e.clientX/window.innerWidth*2-1,1-e.clientY/window.innerHeight*2);", "else if(mouseDown&&!mouseMoved){var x217=e.clientX/window.innerWidth*2-1,y217=1-e.clientY/window.innerHeight*2;if(!tapQuest217(x217,y217)&&!mouseLookZone169)tryPickup(x217,y217);}", "mouse target taps in look area"], ["if (expeditionUI123 && expeditionUI123.panel.open) {", "if ((expeditionUI123 && expeditionUI123.panel.open) || (document.getElementById('field-journal-dialog216')&&!document.getElementById('field-journal-dialog216').hidden)) {", "pause world movement in journal"], ["if (!over) for (k in chunks) if (chunks[k].resonators123) objs = objs.concat(chunks[k].resonators123);", "if (!over) for (k in chunks) if (chunks[k].resonators123) objs = objs.concat(chunks[k].resonators123);\n        resonanceSites123.forEach(function(site){if(resonanceLive123(site))for(var target217 of site.targets217||site.meshes)if(!objs.includes(target217))objs.push(target217);});", "echo targets above and below ground"], ["tree.userData.playable=1;rec.group.add(tree);", "tree.userData.playable=1;tree.userData.material175='wood';rec.group.add(tree);", "cave tree material identity"], ["                im.userData.playable = 1;", "                im.userData.playable = 1;im.userData.material175='wood';", "surface tree material identity"], ["            lg.userData.playable = 1;", "            lg.userData.playable = 1;lg.userData.material175='wood';", "camp log material identity"], ["            if(!clear)continue;\n            var tree=kit.decorate", "            if(Math.abs(x-(p.x-4))<3+Math.max(rx,rz)&&Math.abs(z-(p.z-2))<4+Math.max(rx,rz))clear=false;\n            if(!clear)continue;\n            var tree=kit.decorate", "keep tree crowns off echo approach"], ["if (res.length) return res[0];", "if(!exact217)return window.L99Quests217.assist(THREE,camera,canvas,ndcX,ndcY,objs,res[0]||null);\n        if (res.length) return res[0];", "22 pixel touch assist"], ["resonantMeshes123=resonantMeshes123.concat(site.meshes);", "resonantMeshes123=resonantMeshes123.concat(site.targets217||site.meshes);", "pickup targets"], ["    var distance = resonanceDistance123(site);\n    var result = expeditionModel123().press", "    var distance = resonanceDistance123(site);\n    if(echoPlayback123.busy){echoNoticeShow123('Listen first. Your turn follows.');return {ok:false,why:'Preview is playing'};}\n    if(!Number.isInteger(note)||note<0||note>2)return;\n    if(!echoAccess217(site,note)){echoNoticeShow123(distance>10?'Move within 10 m of the stones.':'Face the stones and find a clear view to play them.');return {ok:false,why:'Not in reach or visible'};}\n    if(window.initAudio)window.initAudio();if(!CaveAudio.ready)CaveAudio.init();\n    var result = expeditionModel123().press", "range and occlusion on every echo path"], ["    expeditionTickAt123 = -1;\n}\nfunction echoPlaybackStop123()", "    expeditionTickAt123 = -1;\n    window.L99Quests217?.refresh();return result;\n}\nfunction echoPlaybackStop123()", "echo action response"], ["echoPlayback123.notes.length = 0; echoPlayback123.busy = false;", "echoPlayback123.notes.length = 0; echoPlayback123.busy = false;echoPlayback123.index217=-1;", "clear preview marker"], ["            if (site && resonanceLive123(site)) site.lit[n] = performance.now() + 400;", "            if(site&&(!resonanceLive123(site)||resonanceDistance123(site)>10||window.__CAVE_PAUSED)){echoPlaybackStop123();return;}\n            echoPlayback123.index217=i;window.L99Quests217?.refresh();\n            if (site && resonanceLive123(site)) site.lit[n] = performance.now() + 400;", "visible preview steps and cancellation"], ["function () { echoPlayback123.busy = false; }, pattern.length * step", "function () { echoPlayback123.busy = false;echoPlayback123.index217=-1;window.L99Quests217?.refresh(); }, pattern.length * step", "preview completion"], ["function expeditionUIBuild123() {\n    if (expeditionUI123 || window._CAVE_EXPEDITION === false) return;\n    var mount = document.getElementById('l99-caves-mount') || document.body;\n    var hud = document.createElement('button'); hud.id = 'echo-hud123'; hud.type = 'button';\n    hud.setAttribute('aria-label','Open expedition journal');\n    hud.style.cssText = 'position:fixed;left:calc(env(safe-area-inset-left,0px) + 18px);top:calc(env(safe-area-inset-top,0px) + 154px);z-index:9;width:min(62vw,300px);max-width:calc(100vw - 36px);height:44px;box-sizing:border-box;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;touch-action:manipulation;padding:9px 12px;text-align:left;border:1px solid #376058;border-radius:9px;background:rgba(5,13,20,.9);color:#d9eee8;font:11px/1.5 ui-monospace,monospace;cursor:pointer;';\n    mount.appendChild(hud);\n    var panel = document.createElement('dialog'); panel.id = 'echo-journal123';\n    panel.style.cssText = 'position:fixed;inset:0;margin:auto;width:min(88vw,420px);max-height:80vh;overflow:auto;padding:20px;border:1px solid #527b70;border-radius:16px;background:#09141d;color:#e5f2ee;z-index:100100;font:14px/1.55 system-ui,sans-serif;touch-action:pan-y;';\n    panel.innerHTML = '<div style=\"display:flex;justify-content:space-between;align-items:center\"><strong>FIELD JOURNAL</strong><button type=\"button\" data-echo=\"close\" aria-label=\"Close journal\">Close</button></div><p data-echo=\"rank\"></p><p data-echo=\"objective\"></p><p data-echo=\"directions\"></p><p data-echo=\"phrase\"></p><div data-echo=\"pads\" style=\"display:flex;gap:8px\"></div><p><button type=\"button\" data-echo=\"listen\">Listen to the phrase</button></p><p data-echo=\"notice\" role=\"status\" aria-live=\"polite\"></p><hr><strong>Collected echoes</strong><div data-echo=\"collection\"></div><p style=\"font-size:12px;color:#a9bab8\">Short stone = 1 \u00b7 medium = 2 \u00b7 tall = 3. Play the displayed phrase within 12 seconds between notes. Wrong notes restart the phrase; collected echoes are safe. Each surface performance earns 30 trade coins once.</p>';\n    document.body.appendChild(panel);\n    var style = document.createElement('style');\n    style.textContent = '#echo-journal123::backdrop{background:rgba(0,0,0,.55)}#echo-journal123 button{min-height:44px;padding:8px 12px;border:1px solid #46776b;border-radius:8px;background:#122b32;color:#e4fff4;font:inherit;cursor:pointer}#echo-journal123 button:disabled{opacity:.38;cursor:default}#echo-journal123 button:focus-visible,#echo-hud123:focus-visible{outline:2px solid #c0ffe6;outline-offset:3px}';\n    document.head.appendChild(style);\n    function clearMovement() { Object.keys(keys).forEach(function(k){keys[k]=false;});move.f=0;move.s=0;move.u=0;vel.set(0,0,0); }\n    function open() { clearMovement(); expeditionUpdate123(performance.now(),true); if (!panel.open) panel.showModal(); }\n    hud.onclick = open;\n    panel.querySelector('[data-echo=\"close\"]').onclick = function () { panel.close(); };\n    panel.addEventListener('close', echoPlaybackStop123);\n    panel.addEventListener('close', clearMovement);\n    document.addEventListener('visibilitychange',function(){if(document.hidden)echoPlaybackStop123();});\n    ['pointerdown','pointerup','mousedown','mouseup','touchstart','touchend','keydown','keyup','click'].forEach(function (event) {\n        panel.addEventListener(event,function(e){ e.stopPropagation(); });\n        hud.addEventListener(event,function(e){ e.stopPropagation(); });\n    });\n    var pads = panel.querySelector('[data-echo=\"pads\"]');\n    ['1 \u00b7 LOW','2 \u00b7 MID','3 \u00b7 HIGH'].forEach(function (label,n) {\n        var b = document.createElement('button'); b.type='button'; b.textContent=label; b.style.flex='1';\n        b.onclick=function(){if(expeditionFocus123) resonancePress123(expeditionFocus123,n);expeditionUpdate123(performance.now(),true);}; pads.appendChild(b);\n    });\n    panel.querySelector('[data-echo=\"listen\"]').onclick=function(){\n        var target=expeditionModel123().target(expeditionFocus123); if(target) echoPlaybackStart123(target.pattern,expeditionFocus123);\n    };\n    var door = document.getElementById('caves-btn');\n    if (door && door.parentNode) {\n        var shellButton=document.createElement('button');shellButton.type='button';shellButton.textContent='JOURNAL';shellButton.title='Replay collected chamber echoes';shellButton.onclick=open;door.parentNode.insertBefore(shellButton,door.nextSibling);\n    }\n    expeditionUI123={hud:hud,panel:panel,collectionSignature:''};\n}\nfunction expeditionUpdate123(now, force) {\n    if (window._CAVE_EXPEDITION === false) return;\n    expeditionUIBuild123();\n    if (!force && now-expeditionTickAt123<200) return;\n    expeditionTickAt123=now;pruneResonance123();\n    var model=expeditionModel123(), view=model.view(), nearest=null, distance=Infinity, goal=null, goalDistance=Infinity;\n    resonanceSites123.forEach(function(site){\n        if (!resonanceLive123(site)) return;\n        var d=resonanceDistance123(site);\n        if(d<distance){distance=d;nearest=site;}\n        var eligible=site.surface || !view.echoes.some(function(e){return e.id===site.id;});\n        if(eligible&&d<goalDistance){goalDistance=d;goal=site;}\n        for(var i=0;i<3;i++)site.meshes[i].material.emissiveIntensity=site.lit[i]>now ? 1.5 : 0.22;\n    });\n    expeditionFocus123=nearest;\n    var objective=view.objective, target=goal, location=null;\n    if(view.phase==='ascend' && !over) {\n        var doors=CC.portalsNear(camera.position.x,camera.position.z);\n        if(doors.length) location={x:doors[0].x+6,y:doors[0].floorY,z:doors[0].z};\n    } else if(target) location=target;\n    if(!location&&!over){var candidates=CC.portalsNear(camera.position.x,camera.position.z).filter(function(p){return !view.echoes.some(function(e){return e.id==='cave:'+CC.SEED+':'+p.id;});});if(candidates.length) location={x:candidates[0].x-4,y:candidates[0].floorY,z:candidates[0].z-4};}\n    var directions=location ? (function(){var c=compassTo(location.x,location.z),dy=location.y-camera.position.y;return Math.round(c.dist)+' m '+c.dir+(Math.abs(dy)>8?' \u00b7 '+Math.round(Math.abs(dy))+' m '+(dy>0?'up':'down'):'');})() : (over?'Explore beyond the entrance to find a camp.':'Explore toward a daylight chamber.');\n    if(view.phase==='seek'&&over)directions='Enter a hillside cave to find another echo.';\n    if(view.phase==='weave'&&!over)directions='Return to the surface with your collected echo.';\n    var ui=expeditionUI123,p=ui.panel;\n    // L99_JOURNEY_LAYOUT_129: measure the toolbar; the journey never covers its buttons.\n    var toolbarBottom129 = 142;\n    ['topbar','btnMode','btnAudio'].forEach(function(id) {\n        var control = document.getElementById(id);\n        if (!control || !control.getClientRects().length) return;\n        var rect = control.getBoundingClientRect();\n        toolbarBottom129 = Math.max(toolbarBottom129, rect.bottom);\n    });\n    ui.hud.style.top = (toolbarBottom129 + 12) + 'px';\n    // On short landscape screens use the JOURNAL toolbar entry instead of crowding movement controls.\n    ui.hud.style.display = toolbarBottom129 + 68 > window.innerHeight - 210 ? 'none' : '';\n    ui.hud.textContent='JOURNEY \u00b7 '+objective;\n    ui.hud.title=view.rank+' \u00b7 '+view.completed+' woven \u00b7 '+objective+' '+directions;\n    ui.hud.setAttribute('aria-label','Open expedition journal: '+objective+' '+directions);\n    if(!p.open&&!force)return;\n    p.querySelector('[data-echo=\"rank\"]').textContent=view.rank+' \u00b7 '+view.completed+' woven \u00b7 '+view.echoes.length+'/24 echoes';\n    p.querySelector('[data-echo=\"objective\"]').textContent=objective;\n    p.querySelector('[data-echo=\"directions\"]').textContent=directions;\n    var tune=model.target(nearest),close=nearest&&distance<=10&&!window.__CAVE_PAUSED;\n    p.querySelector('[data-echo=\"phrase\"]').textContent=tune?'Phrase: '+tune.pattern.map(function(n){return n+1;}).join(' \u2192 ')+' \u00b7 '+view.progress+'/'+tune.pattern.length:'Find a new chamber echo before performing at a camp.';\n    Array.from(p.querySelector('[data-echo=\"pads\"]').children).forEach(function(b){b.disabled=!close||!tune;});\n    p.querySelector('[data-echo=\"listen\"]').disabled=!close||!tune;\n    p.querySelector('[data-echo=\"notice\"]').textContent=now<echoNoticeUntil123?echoNotice123:(view.message||'Listen and replay, or follow the numbered phrase.');\n    var signature=view.echoes.map(function(e){return e.id+e.bound+e.carried;}).join('|');\n    if(signature!==ui.collectionSignature){\n        ui.collectionSignature=signature;var list=p.querySelector('[data-echo=\"collection\"]');list.textContent='';\n        view.echoes.forEach(function(e){var row=document.createElement('p'),b=document.createElement('button');b.type='button';b.textContent='Play '+e.name+(e.bound?' \u00b7 woven':e.carried?' \u00b7 carried':' \u00b7 learned');b.onclick=function(){echoPlaybackStart123(e.pattern,null);};row.appendChild(b);list.appendChild(row);});\n    }\n}\n", "function echoAccess217(site,note) {\n    if (!resonanceLive123(site) || resonanceDistance123(site)>10 || window.__CAVE_PAUSED) return false;\n    var obj=site.meshes[note],p=obj.getWorldPosition(new THREE.Vector3()).project(camera);\n    if(p.z < -1 || p.z > 1) return false;\n    var hit=musicHitAt(p.x,p.y,true),d=hit&&hit.object.userData.resonator123;\n    return !!d&&d.site===site;\n}\nfunction echoNearest217() {\n    var view=expeditionModel123().view(),sites=resonanceSites123.filter(resonanceLive123);\n    sites.sort(function(a,b){return resonanceDistance123(a)-resonanceDistance123(b);});\n    return sites[0]||null;\n}\nfunction echoInfo217() {\n    var model=expeditionModel123(),view=model.view(),site=echoNearest217(),tune=site&&model.target(site),distance=site?resonanceDistance123(site):Infinity;\n    var complete=!!(site&&!site.surface&&view.echoes.some(function(e){return e.id===site.id;}));\n    var phase=view.phase==='weave'?2:view.phase==='ascend'?1:0;\n    var hint=view.phase==='seek'?'Find three numbered echo stones near a cave exit.':view.phase==='ascend'?'Echo learned. Follow a stone ascent into daylight. Your echo is saved.':'Carry your learned phrase to three stones beside a surface camp.';\n    if(site&&tune&&!complete)hint=distance>10?'Move within 10 m of the echo stones. '+Math.round(distance)+' m away.':'Play the displayed numbers. Wrong notes keep your progress. There is no timer.';\n    var ready=!!(site&&tune&&distance<=10&&site.meshes.some(function(_,n){return echoAccess217(site,n);}));\n    if(site&&tune&&distance<=10&&!ready)hint='Face the stones and find a clear view to play them.';\n    if(complete)hint='Echo learned and saved. Follow the stone ascent into daylight, then play it at a surface camp.';\n    if(view.phase==='seek'&&over&&!tune)hint='Enter a hillside cave to learn another echo. Completed echoes stay in your collection.';\n    var directions='';\n    if(!over&&(view.phase==='ascend'||!site)){var doors=CC.portalsNear(camera.position.x,camera.position.z);if(doors.length){var c=compassTo(doors[0].x,doors[0].z);directions='Exit chamber: '+Math.round(c.dist)+' m '+c.dir+'. ';}}\n    return {id:site&&site.id,title:site?(site.surface?'Weave an echo':'Learn a chamber echo'):'Echo journey',subtitle:'Three numbered stones \u00b7 '+view.completed+' echoes woven',phaseIndex:phase,hint:directions+hint,pattern:tune?tune.pattern:[],progress:site?model.progress217(site):0,padCount:3,ready:ready,noteReady:[0,1,2].map(function(n){return !!site&&echoAccess217(site,n);}),complete:complete,busy:echoPlayback123.busy,previewIndex:echoPlayback123.index217,notice:performance.now()<echoNoticeUntil123?echoNotice123:view.message};\n}\nfunction expeditionUIBuild123() { /* Build 217 uses the shared Journey journal. */ }\nfunction expeditionUpdate123(now,force) {\n    if(window._CAVE_EXPEDITION===false||(!force&&now-expeditionTickAt123<200))return;\n    expeditionTickAt123=now;pruneResonance123();\n    resonanceSites123.forEach(function(site){if(!resonanceLive123(site))return;var model=expeditionModel123(),t=model.target(site),p=model.progress217(site),hint=window.L99Quests217?.selected()==='echo'&&t&&!model.view().echoes.some(function(e){return e.id===site.id&&(!site.surface||e.bound);});\n        for(var i=0;i<3;i++)site.meshes[i].material.emissiveIntensity=site.lit[i]>now?.7:hint&&t.pattern[p]===i?.38:.12;\n    });\n}\nwindow.L99Echo217={\n    info:echoInfo217,\n    strike:resonancePress123,\n    play:function(id,n){var s=resonanceSites123.find(function(s){return s.id===id&&resonanceLive123(s);});if(s)resonancePress123(s,n);},\n    reset:function(id){var s=resonanceSites123.find(function(s){return s.id===id;});if(s){expeditionModel123().reset217(s);echoNoticeShow123('Phrase restarted. Collected echoes are safe.');}},\n    listen:function(id){var s=resonanceSites123.find(function(s){return s.id===id&&resonanceLive123(s);}),t=s&&expeditionModel123().target(s);if(t&&resonanceDistance123(s)<=10)echoPlaybackStart123(t.pattern,s);},\n    replay:function(id){var e=expeditionModel123().view().echoes.find(function(e){return e.id===id;});if(e)echoPlaybackStart123(e.pattern,null);},\n    stop:echoPlaybackStop123,\n    release:function(){Object.keys(keys).forEach(function(k){keys[k]=false;});move.f=move.s=move.u=0;vel.set(0,0,0);releaseAllNotes();},\n    sites:function(){return resonanceSites123.filter(resonanceLive123).map(function(s){return{id:s.id,x:s.x,y:s.y,z:s.z,surface:s.surface,targets:s.targets217||s.meshes};});},\n    export:function(){return expeditionModel123().view();}\n};\n\n", "one journal replaces duplicate echo UI"], ["ask: 'strike three stones: low, then high, then low. the trees will answer.'", "ask: 'restore a five-stone choir. open Journey journal and choose Stone choir.'", "forest keeper objective"], ["ask: 'ring the stone low, high, low. the mountain keeps a door for those who can.'", "ask: 'restore a five-stone choir. open Journey journal and choose Stone choir.'", "mountain keeper objective"], ["title: q.id, done: false, prog: '', t: 0, n0: 0", "title: q.id, done: false, prog: '', t: 0, n0: 0, started217:Date.now()", "keeper start timestamp"], ["            var rc = CaveAudio && CaveAudio.recent;\n            if (rc && rc.length >= 3) {\n                var a = rc[rc.length - 3], b = rc[rc.length - 2], c = rc[rc.length - 1];\n                if (b > a + 1 && c < b - 1) questComplete();\n            }\n", "            var restored217=window.L99Explore175?.sites('caves').some(function(s){return s.world===caveDigId172()&&s.restored&&s.restoredAt>=(q.started217||0);});\n            q.prog='restore a five-stone choir';if(restored217)questComplete();\n", "keeper shares choir completion"]]);};
-F.patchFlight=function(s){return apply(flight(s),[["return ray.intersectObjects(meshes,false)[0]||null;", "for(const o of window.L99Explore175?.meshes('flight')||[])if(!meshes.includes(o))meshes.push(o);for(const o of meshes)o.updateWorldMatrix(true,false);const hit=ray.intersectObjects(meshes,false)[0]||null;return window.L99Quests217.assist(THREE,cockpitCamera,cockpitRenderer.domElement,x,y,meshes,hit,window.L99Life133.units('flight'));", "flight choir labels and touch assist"], ["  targetGroup.add(tInst); targetGroup.add(cInst);", "  tInst.userData.material175='wood';cInst.userData.material175='wood';targetGroup.add(tInst); targetGroup.add(cInst);", "flight tree material identity"]]);};
 root.L99QuestPatches217={checks};
 })(window);</script>
 <script id="waters227">
@@ -2707,8 +2353,8 @@ function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;
  })().catch(e=>{worldReady=null;throw e;});return worldReady;}
-/* PATCHCACHE_227: patching the 5 MB flight engine (and the cave bundle) with
-   this build's fixes costs seconds of main-thread time on every load. The
+/* PATCHCACHE_227: patching the V1 cave bundle with this build's fixes
+   costs main-thread time on every load. The
    patched text is cached on the device, keyed by a fingerprint of every inline
    script in this page plus the raw runtime, so any code change is a clean miss.
    Kill: window._PATCH_CACHE = false. */
@@ -2722,10 +2368,12 @@ async function cachedPatch(name,raw,patch){
  return out;
 }
 function rewrite(code,resolved){return code.replace(/(\bfrom\s+|\bimport\s+)['"]([^'"]+)['"]/g,(m,lead,spec)=>resolved[spec]?lead+JSON.stringify(resolved[spec]):m);}
+/* BAKED_235: the flight engine ships with every change this page used to patch into it at load
+   (runtime/src/flight.js, packed by tools/pack-runtimes.mjs). Edit it there, not here. */
 async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(flightReady)return flightReady;root.__cockpitLoadError170=null;
- flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-179.js.gz?v=0bd106de8afc'),ensureWorld()]);const resolved={},urls=[];
+ flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-235.js.gz?v=63cf890afa59'),ensureWorld()]);const resolved={},urls=[];
   try{for(const [spec,code]of files[0]){const url=URL.createObjectURL(new Blob([rewrite(code,resolved)],{type:'text/javascript'}));resolved[spec]=url;urls.push(url);}
-   await frame();const patched=await cachedPatch('flight',files[1],src=>{const out=root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(src))));return root.L99Dive227?root.L99Dive227.patch(out):out;});const url=URL.createObjectURL(new Blob([rewrite(patched,resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
+   await frame();const url=URL.createObjectURL(new Blob([rewrite(files[1],resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
  })().catch(e=>{flightReady=null;root.__cockpitLoadError170=e.message||String(e);throw e;});return flightReady;}
 function openFlight(){return root.L99Loading.run(()=>flight(), {entry:true,label:'Charting the stars',enter:()=>{document.getElementById('popout-btn')?.click();}});}
@@ -2738,7 +2386,7 @@ root.L99Boot176={packed,cachedPatch,ensureWorld,core,show,hide,status,frame,flig
    packed() later reads it back from cache. Skipped on data-saver and 2G.
    Kill: window._PREFETCH_WORLDS = false. */
 (function(){
- const files=['caves-179.html.gz','world-core-235.json.gz?v=85fdd919fdbc','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-179.js.gz?v=0bd106de8afc'];
+ const files=['caves-179.html.gz','world-core-235.json.gz?v=85fdd919fdbc','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-235.js.gz?v=63cf890afa59'];
  const net=navigator.connection||{};
  if(net.saveData||/(^|-)2g$/.test(net.effectiveType||''))return;
  const idle=cb=>root.requestIdleCallback?root.requestIdleCallback(cb,{timeout:4000}):setTimeout(cb,1500);
@@ -6703,7 +6351,7 @@ root.L99Balance223={lead,drum,table};
 </script>
 <script id="audio-routes223">
 /* ROUTES_223: shared pre-master entry for flight ambience, foley and gardens.
-   Original source patches are applied before the existing flight module runs.
+   The flight engine (runtime/src/flight.js) sends its audio through context() and bus().
    No microphone input or world/gameplay behavior is changed. */
 (function(root){'use strict';
 let current=null;const buses=new Map();
@@ -6719,41 +6367,7 @@ function bus(name,level=1){const c=context(),dest=root._dcFilter;if(!c||!dest||d
  else if(n.destination223!==dest){n.disconnect();n.connect(dest);n.destination223=dest;}
  return n;
 }
-function once(code,old,next,label){if(code.split(old).length!==2)throw Error('Audio route 223 missing/ambiguous '+label);return code.replace(old,next);}
-function patchFlight(code){
- if(code.includes('/* FLIGHT_AUDIO_ROUTES_223 */'))return code;
- const begin=code.indexOf('function _getAudioCtx() {'),end=code.indexOf('function startAmbientLoop()',begin);
- if(begin<0||end<begin||!code.slice(begin,end).includes('function _getAudioDest()'))throw Error('Flight audio helper anchors changed');
- code=code.slice(0,begin)+`/* FLIGHT_AUDIO_ROUTES_223 */
-function _getAudioCtx(){return window.L99Route223.context();}
-function _getAudioDest(){return window.L99Route223.bus('flight-sfx',.9);}
-function _rgEnsureAudio223(){
- const c=window.L99Route223.context(),out=window.L99Route223.bus('flight-foley',.5);
- if(!c||!out)return false;
- _rgAC=c;_rgMaster=out;return true;
-}
-`+code.slice(end);
- const inline="try { if (!_rgAC) { _rgAC = new (window.AudioContext || window.webkitAudioContext)(); _rgMaster = _rgAC.createGain(); _rgMaster.gain.value = 0.5; _rgMaster.connect(_rgAC.destination); } if (_rgAC.state === 'suspended') _rgAC.resume(); } catch (e) {}";
- if(code.split(inline).length!==5)throw Error('Flight garden audio initializers changed');
- code=code.split(inline).join('try { if(!_rgEnsureAudio223())return; } catch(e) { return; }');
- code=once(code,`        if (!_rgAC) {
-            _rgAC = new (window.AudioContext || window.webkitAudioContext)();
-            _rgMaster = _rgAC.createGain();
-            _rgMaster.gain.value = 0.5;
-            _rgMaster.connect(_rgAC.destination);
-        }
-        if (_rgAC.state === 'suspended') _rgAC.resume();`,
- '        if(!_rgEnsureAudio223())return;', 'main garden audio initializer');
- code=once(code,'    if (!_rgAC) return;','    if (!_rgEnsureAudio223()) return;','garden note context refresh');
- code=once(code,`    const actx = window.ctx;
-    const masterGain = window.masterGain;`,
- `    const actx = _getAudioCtx();
-    const masterGain = _getAudioDest();`,'abyssal shared context');
- code=once(code,'dreadGain.connect(actx.destination);','dreadGain.connect(masterGain);','abyssal mastered output');
- code=once(code,"const out = (typeof _getAudioDest === 'function') ? _getAudioDest() : (ax && ax.destination) || null;", "const out = (typeof _getAudioDest === 'function') ? _getAudioDest() : null;",'ceremony output fallback');
- return code;
-}
-root.L99Route223={context,bus,patchFlight,snapshot:()=>({contextState:current?.state||'idle',buses:[...buses.keys()]})};
+root.L99Route223={context,bus,snapshot:()=>({contextState:current?.state||'idle',buses:[...buses.keys()]})};
 })(window);
 
 </script>
@@ -27896,29 +27510,6 @@ root.L99Room227={open,get active(){return active;}};
    the cloud deck into the real world. Capped so it can never trap you.
    Kill: window._ENTRY_DIVE = false. */
 (function(root){'use strict';
-const EDITS=[
- ["let surfaceMode     = 'space';","let surfaceMode     = 'space';\nwindow.__surfaceMode227=function(){return surfaceMode;};\nfunction orbit227(r,fov){surfaceMode='space';try{_purgeTransientPlanetVisualsForSpace('crysis-orbit');}catch(eO227){}if(surfaceObjects)surfaceObjects.visible=false;if(surfaceSkyMesh)surfaceSkyMesh.visible=false;if(surfaceOverlayMesh)surfaceOverlayMesh.visible=false;if(cockpitPlanets){cockpitPlanets.visible=true;if(typeof visibility207==='function')visibility207();else cockpitPlanets.children.forEach(p=>{p.visible=true;});}for(const g of [cockpitObstacles,cockpitWeapons,starsNear,starsFar])if(g)g.visible=true;window._OBSERVER_FLIGHT170=false;walkMode=false;window._starSurface=false;window._blackHoleSurface=false;const o=window._surfOriginPlanet,body=r&&!r.earth?(planetPool.find(p=>r.id&&p.userData.travelId170===r.id)||(o&&o.position&&o.userData&&!o.userData.isStar&&o.userData.solName!=='Earth'?o:null)):null;if(body){const R=body.userData.radius||1000;cockpitCamera.position.copy(body.position).add(new THREE.Vector3(0,R*3,R*8));cockpitCamera.lookAt(body.position);shipQuat.copy(cockpitCamera.quaternion);shipVel.set(0,0,0);throttlePct=0;}else if(typeof startAtEarth207==='function')startAtEarth207();cockpitCamera.fov=fov||72;cockpitCamera.updateProjectionMatrix();}\nwindow.__flight227={enter:function(p){return enterSurface(p);},planets:function(){return planetPool;},orbit:orbit227};","mode accessor"],
- /* leaving any Crysis world: the ship comes out in orbit round that planet (Earth in the Sol system).
-    The old flight surfaces only come back with window._V1_SURFACES = true */
- ["prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');","prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');\n if(r&&(r.earth||window._V1_SURFACES!==true)){orbit227(r,packet.fov);for(let k=0;k<4;k++){check();cockpitRenderer.render(cockpitScene,cockpitCamera);await window.L99Journey170.frame();}return;}","orbit on return"],
- ["surfaceMode     = 'entering';\n    window._entryFrame190=performance.now();","surfaceMode     = 'entering';\n    try{window.L99Dive227&&window.L99Dive227.start(planet);}catch(eD227){}\n    window._entryFrame190=performance.now();","entry hook"],
- ["if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';","if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';\n      try{window.L99Dive227&&window.L99Dive227.landed();}catch(eL227){}","landed hook"],
- ["'Above '+packet.planet.name+'. Keep climbing to reach space.'","(window._V1_SURFACES!==true||packet.planet.earth?'In orbit round '+packet.planet.name+'.':'Above '+packet.planet.name+'. Keep climbing to reach space.')","orbit whisper"],
- /* Journey leaves display:block on the ship's overlay when it arrives; parked, that inline style
-    kept the flight view (over the old surface) on top of the island on every later landing */
- ["park:()=>{setCockpitMode('closed');}","park:()=>{setCockpitMode('closed');const o227=document.getElementById('cockpit-overlay');if(o227){o227.style.display='';o227.style.opacity='';}}","park clears overlay"],
- /* V1 bookmarks and #place= links put you straight on the old surface: land them in Crysis */
- ["function teleportToBookmark(bookmark) {","function teleportToBookmark(bookmark) {\n  if(window._V1_SURFACES!==true){if(bookmark&&window.L99IslandLanding)window.L99IslandLanding.land({userData:{planetType:bookmark.type,seed:bookmark.seed,id:'place:'+bookmark.type+':'+bookmark.seed}});return;}","bookmark landing"]
-];
-let missing=[];
-/* each edit stands alone: a missing anchor is loud, and the V1 guard in ISLAND_LANDING_227 still lands you in Crysis */
-function patch(code){
- if(typeof code!=='string'||code.includes('window.__surfaceMode227'))return code;
- missing=[];
- for(const [a,b,name] of EDITS){if(code.split(a).length!==2){missing.push(name);continue;}code=code.replace(a,()=>b);}
- if(missing.length)console.error('DIVE_227: flight anchors missing ('+missing.join(', ')+'): planetfall falls back to the V1 guard');
- return code;
-}
 const EARTH=[[.19,.34,.19],[.22,.36,.62],[.60,.76,.98]];
 function palette(planet){
  const u=planet&&planet.userData||{};
@@ -27963,7 +27554,7 @@ setInterval(()=>{const m=root.__surfaceMode227?.();if(!m)return;
  prevMode=m;},120);
 function landed(){if(dive&&!dive.landedAt){dive.landedAt=performance.now();dive.room.status('breaking through the clouds…');}}
 function finish(reveal){const d=dive;if(!d)return;dive=null;cancelAnimationFrame(d.raf);d.room.close(reveal!==false);}
-root.L99Dive227={patch,start,climb,landed,finish,get active(){return !!dive;},get missing(){return missing.slice();}};
+root.L99Dive227={start,climb,landed,finish,get active(){return !!dive;}};
 })(window);
 </script>
 <script id="caveworld227">
@@ -30389,7 +29980,6 @@ function start181(){
   #cockpit-overlay>.journey-controls170[data-journey-realm="flight"]{bottom:264px!important;max-width:min(420px,calc(100vw - 32px));}
 }
 #world-sheet176 .journey-controls170:empty,#world-actions176 .journey-controls170:empty{display:none!important;}
-#cockpit-menu-panel #cockpit-vessel-btn190[hidden]{display:none!important;}
 </style>
 <style id="faceplates191-style">
 /* MATERIAL_FACEPLATES_191: generated materials, live controls and circuit layers. */

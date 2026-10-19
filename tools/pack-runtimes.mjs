@@ -23,6 +23,11 @@ export const RUNTIMES = [
 			return JSON.stringify(fs.readdirSync(dir).filter((f) => f.endsWith('.js')).sort().map((f) => fs.readFileSync(new URL(f, dir), 'utf8')));
 		},
 	},
+	{
+		// the flight engine, imported as one module (tools/build-gargantua.mjs keeps its black hole current)
+		out: 'runtime/flight-235.js.gz',
+		text: () => read('runtime/src/flight.js'),
+	},
 ];
 
 const hashOf = (bytes) => createHash('sha256').update(bytes).digest('hex').slice(0, 12);
@@ -61,6 +66,8 @@ export function pack() {
 	fs.writeFileSync(new URL('index.html', root), page);
 	const bytes = fs.readFileSync(new URL('index.html', root));
 	manifest['index.html'] = { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+	// a runtime that was replaced leaves the record too
+	for (const path of Object.keys(manifest)) if (!fs.existsSync(new URL(path, root))) delete manifest[path];
 	const sorted = Object.fromEntries(Object.keys(manifest).sort().map((k) => [k, manifest[k]]));
 	fs.writeFileSync(manifestUrl, JSON.stringify(sorted, null, 2) + '\n');
 }
