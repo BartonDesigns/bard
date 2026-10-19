@@ -1128,14 +1128,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const questB = el('button', btnCss, 'Quests'); questB.setAttribute('aria-label','Story quests');
 	const tabs = el('div','display:flex;flex-wrap:wrap;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');const storyB=el('button',btnCss,'Story');storyB.setAttribute('aria-label','Your story: local activity, standing, favours and fares');tabs.append(residentsB,questB,storyB,archiveB);
 	const archiveControls=el('div','display:none;flex-shrink:0;padding:6px 12px;gap:6px;flex-wrap:wrap;');
-	const archiveSearch=el('input','min-width:0;flex:1;padding:8px;background:#172225;border:1px solid #586567;border-radius:8px;color:#fff;');archiveSearch.type='search';archiveSearch.placeholder='Search every conversation';archiveSearch.setAttribute('aria-label','Search conversations');
+	const archiveSearch=el('input','min-width:0;flex:1;padding:8px;background:#172225;border:1px solid #586567;border-radius:8px;color:#fff;');archiveSearch.type='search';archiveSearch.name='conversation-search';archiveSearch.placeholder='Search every conversation';archiveSearch.setAttribute('aria-label','Search conversations');
 	const archiveExport=el('button',btnCss,'Export'); archiveControls.append(archiveSearch,archiveExport);
 	const settings = el('div', 'display:none;max-height:45vh;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font:12px system-ui;color:rgba(255,255,255,.8);');
 	const log = el('div', 'flex:1;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0;');
 	log.setAttribute('aria-live', 'polite');
 	const bar = el('div', 'flex-shrink:0;display:flex;gap:6px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);');
 	const input = el('input', 'flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:14px system-ui;outline:none;');
-	input.placeholder = 'Ask anything, or "take me to Alcatraz"'; input.setAttribute('aria-label', 'Message the guide');
+	input.name = 'guide-message'; input.placeholder = 'Ask anything, or "take me to Alcatraz"'; input.setAttribute('aria-label', 'Message the guide');
 	const mic = el('button', btnCss, '🎙'); mic.title = 'Speak'; mic.setAttribute('aria-label', 'Speak to the guide');
 	const spk = el('button', btnCss, voiceOut ? '🔊' : '🔈'); spk.setAttribute('aria-pressed', String(voiceOut)); spk.title = 'Read replies aloud'; spk.setAttribute('aria-label', 'Read replies aloud');
 	const send = el('button', btnCss + 'background:linear-gradient(135deg,#01a982,#10b981);border:none;', '➤'); send.setAttribute('aria-label', 'Send');
@@ -1404,7 +1404,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			copy.onclick = async () => { try { await navigator.clipboard.writeText(soul.recoveryKey()); say('Recovery key copied. Keep it private and safe. It restores this soul on another device.', 'note'); } catch { say('Clipboard unavailable. Use a browser with clipboard access to save your recovery key.', 'note'); } };
 			const restore = el('button', btnCss, 'Restore a saved soul');
 			restore.onclick = () => {
-				const input = el('input', 'padding:10px;color:#fff;background:#10252d;border:1px solid #777;border-radius:8px;'); input.type = 'password'; input.autocomplete = 'off'; input.placeholder = 'Private recovery key'; input.setAttribute('aria-label','Private soul recovery key');
+				const input = el('input', 'padding:10px;color:#fff;background:#10252d;border:1px solid #777;border-radius:8px;'); input.type = 'password'; input.name = 'soul-recovery-key'; input.autocomplete = 'off'; input.placeholder = 'Private recovery key'; input.setAttribute('aria-label','Private soul recovery key');
 				const use = el('button', btnCss, 'Restore'); use.onclick = async () => { use.disabled = true; try { await soul.recover(input.value); input.value = ''; api.multiplayer?.linkSoul?.(soul); showStory(); } catch(e) { say(e.message, 'note'); use.disabled = false; } }; log.append(input, use);
 			};
 			log.append(copy, restore);
@@ -1472,12 +1472,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function drawSettings() {
 		settings.innerHTML = '';
 		const row = (label, node) => { const r = el('label', 'display:flex;align-items:center;gap:8px;margin:6px 0;'); r.append(el('span', 'width:74px;color:rgba(255,255,255,.6);', label), node); settings.append(r); return r; };
-		const styleSelect=(label,key,options)=>{const control=el('select','flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');control.setAttribute('aria-label',label);for(const [value,text] of options){const o=el('option',null,text);o.value=value;control.append(o);}control.value=dialogueStyle[key];control.onchange=()=>{dialogueStyle=normalizeDialogueStyle({...dialogueStyle,[key]:control.value});store.set('crysis-dialogue-style',dialogueStyle);};row(label,control);};
+		const styleSelect=(label,key,options)=>{const control=el('select','flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');control.name='dialogue-'+key;control.setAttribute('aria-label',label);for(const [value,text] of options){const o=el('option',null,text);o.value=value;control.append(o);}control.value=dialogueStyle[key];control.onchange=()=>{dialogueStyle=normalizeDialogueStyle({...dialogueStyle,[key]:control.value});store.set('crysis-dialogue-style',dialogueStyle);};row(label,control);};
 		styleSelect('Language','tone',[['clean','Clean'],['mature','Mature · natural profanity and adult themes']]);
 		styleSelect('Personality','vividness',[['restrained','Understated'],['bold','Bold · strong opinions and vivid storytelling']]);
 		styleSelect('Replies','response',[['brief','Brief'],['balanced','Balanced'],['rich','Rich · more detail']]);
 		settings.append(el('div','color:rgba(255,255,255,.65);margin:6px 0;','Tone follows each character. Mature themes apply to adult NPCs; model and provider limits still apply.'));
-		const speechSelect = el('select', 'flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');
+		const speechSelect = el('select', 'flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;'); speechSelect.name = 'guide-voice';
 		speechSelect.setAttribute('aria-label', 'Voices');
 		for (const [value, text] of VOICE_MODES) { const o = el('option', null, text); o.value = value; speechSelect.append(o); }
 		speechSelect.value = speechMode;
@@ -1490,19 +1490,19 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		// the shared voice, once the discovery server is deployed (earth/config.js): phones too
 		if (DISCOVERY_URL) opts.push(['cloud', 'Free cloud voice (people only)']);
 		for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; sel.append(o); }
-		sel.value = choice.kind;
+		sel.name = 'dialogue-source'; sel.value = choice.kind;
 		row('Dialogue', sel);
 		if (choice.kind === 'webllm') {
 			const m = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 			for (const x of WEBLLM_MODELS) { const o = el('option', null, x.label); o.value = x.id; m.append(o); }
-			m.value = choice.id; m.onchange = () => { choice.id = m.value; };
+			m.name = 'dialogue-model'; m.value = choice.id; m.onchange = () => { choice.id = m.value; };
 			row('Model', m);
 			settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', hasWebGPU() ? 'Downloads once, then runs offline. Nothing you say leaves this device.' : 'This browser has no WebGPU (try Chrome or Edge on desktop or Android), or use Ollama.'));
 		}
 		if (choice.kind === 'cloud') settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', 'People answer from a small model on the game\'s own server, inside a free daily allowance. What you say to them is sent there to answer and is not kept. When the day\'s share is used, they use their own lines.'));
 		if (choice.kind === 'ollama') {
-			const u = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); u.value = choice.url; u.onchange = () => { choice.url = u.value; };
-			const n = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); n.value = choice.name; n.onchange = () => { choice.name = n.value; };
+			const u = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); u.name = 'ollama-address'; u.value = choice.url; u.onchange = () => { choice.url = u.value; };
+			const n = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); n.name = 'ollama-model'; n.value = choice.name; n.onchange = () => { choice.name = n.value; };
 			row('Address', u); row('Model', n);
 			settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', `Install Ollama, "ollama pull ${choice.name}", then start it with OLLAMA_ORIGINS=${location.origin} ollama serve`));
 		}
