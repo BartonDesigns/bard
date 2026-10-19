@@ -6,7 +6,9 @@ The 72 tiles here (`g<row>-<col>.png`, 30 degrees each) are baked by
 ## Elevation and bathymetry
 
 Terrain Tiles on AWS (Mapzen / Tilezen "Terrarium" encoding, zoom 5), resampled to a
-tenth of a degree. The tiles combine these sources:
+tenth of a degree. The height of the hills inside each cell (plane B, red) is measured
+from the same tiles at zoom 8, about 600 m a pixel (`tools/bake-globe-relief.mjs`).
+The tiles combine these sources:
 
 - SRTM, NASA
 - GMTED2010, USGS
@@ -23,7 +25,8 @@ some CC BY, for example EU-DEM and Geoscience Australia).
 
 ## Coastlines, islands and lakes
 
-Natural Earth 1:10m physical vectors: land, minor islands and lakes. Public domain.
+Natural Earth 1:10m physical vectors: land, minor islands and lakes, and the Antarctic ice
+shelves (laid on as ice by `tools/bake-globe-shelves.mjs`). Public domain.
 https://www.naturalearthdata.com/ (fetched from github.com/nvkelso/natural-earth-vector)
 
 ## The places' character

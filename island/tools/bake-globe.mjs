@@ -3,7 +3,7 @@
 // RGB PNG of seven planes stacked top to bottom (300 x 2100):
 //
 //   A  elevation (R high byte, G low: (h + 11000) * 2), the share of the cell that is land (B)
-//   B  the detail's height (R: sqrt-coded metres), how sharp its ridges (G), how terraced (B)
+//   B  the detail's height (R: sqrt(m) * 8; re-measured at zoom 8 by bake-globe-relief.mjs, run bake-globe-shelves.mjs and it after this), how sharp its ridges (G), how terraced (B)
 //   C  ranges drawn north-south (R: basin and range), ridge-and-valley north-east (G), dunes (B)
 //   D  tower karst (R), the share of the cell that is lake (G), tree cover (B)
 //   E  the ground's first colour (RGB)      F  its second colour (RGB)

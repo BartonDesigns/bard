@@ -286,7 +286,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const steady = data.win.ready && !data.win.moving;
 		const tk = Math.min(1, 150 / (Math.hypot(lead.x, lead.z) || 1));
 		treeAt.position.set(x + lead.x * tk, 0, z + lead.z * tk);
-		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version() + ':' + clearingVersion());
+		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version() + ':' + clearingVersion() + ':' + (world()?.water?.lakesVersion?.() ?? ''));
 		if (steady) towns.update(cam);
 		if (data.win.ready) regional.update(dt, cam, { night, out: !F.bay || out > SEAM_A - 3000, wind: shared.uWindDir ? { x: shared.uWindDir.value.x * (0.3 + (shared.uWind?.value || 0.5)), y: shared.uWindDir.value.y * (0.3 + (shared.uWind?.value || 0.5)) } : null });
 		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
