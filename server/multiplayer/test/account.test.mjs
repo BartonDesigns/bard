@@ -98,6 +98,10 @@ test('the game: what is saved, a restore staged and applied, and a second device
 	const b = createCloudSave({ url: URL0, storage: B, request: f, reload: () => reloaded++ });
 	const { saved } = await b.login('josh', 'correct horse');
 	assert.equal(saved.level, 12); assert.equal(saved.honor, 400);
+	// until the choice is made, nothing from this device goes up over the cloud's progress
+	assert.equal((await b.save({ force: true })).conflict, true); assert.equal(b.info().rev, 1);
+	await b.logout(); await b.login('josh', 'correct horse');
+	assert.equal((await b.peek()).summary.level, 12, 'logging out saved nothing over it either');
 	await b.load();
 	assert.equal(reloaded, 1); assert.ok(B.getItem(RESTORE_KEY), 'staged for the next load');
 	assert.ok(applyRestore(B));

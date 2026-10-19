@@ -65,7 +65,7 @@ export function createAccountPanel({ mount, menu, cloud, hint = () => {} }) {
 	function drawBtn() {
 		if (!btn) return;
 		const I = cloud.info();
-		btn.textContent = I.user ? `☁ ${I.user} · ${I.conflict ? 'newer save elsewhere' : `saved ${ago(I.savedAt)}`}` : '☁ Save your progress';
+		btn.textContent = I.user ? `☁ ${I.user} · ${I.conflict ? 'saved progress waiting' : `saved ${ago(I.savedAt)}`}` : '☁ Save your progress';
 		btn.title = I.user ? 'Your account: progress saved to the cloud' : 'Make an account so clearing the browser never loses your progress';
 	}
 
@@ -142,11 +142,11 @@ export function createAccountPanel({ mount, menu, cloud, hint = () => {} }) {
 		if (I.user) {
 			card.append(head('Your account'));
 			const who = el('div', 'acct-save');
-			who.append(el('b', '', I.user), el('span', 'acct-note', I.conflict ? 'Newer progress was saved on another device.' : `Progress saved ${ago(I.savedAt)}. It saves by itself every minute while you play.`));
+			who.append(el('b', '', I.user), el('span', 'acct-note', I.conflict ? 'Your account holds progress this device has not loaded yet.' : `Progress saved ${ago(I.savedAt)}. It saves by itself every minute while you play.`));
 			card.append(who);
 			if (I.error && !I.conflict) card.append(el('div', 'acct-err', I.error));
 			if (I.conflict) {
-				const go = el('button', 'acct-go', 'Load the newer progress'), keepHere = el('button', 'acct-ghost', 'Keep this device’s progress');
+				const go = el('button', 'acct-go', 'Load my saved progress'), keepHere = el('button', 'acct-ghost', 'Keep this device’s progress');
 				go.type = keepHere.type = 'button';
 				go.onclick = async () => { go.disabled = true; try { await cloud.load(); } catch (e) { go.disabled = false; hint(e.message, 4000); } };
 				keepHere.onclick = async () => { if (!confirm('Save this device’s progress over the newer one? The newer one will be gone.')) return; await cloud.save({ force: true, over: true }); draw(); drawBtn(); };

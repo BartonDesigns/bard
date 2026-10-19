@@ -112,6 +112,7 @@ export function createCloudSave({ url, storage = globalThis.localStorage, reques
 	// this device's progress, up to the cloud. force: even unchanged; over: past a newer save
 	async function save({ force = false, over = false } = {}) {
 		if (!me || busy) return { skipped: true };
+		if (me.conflict && !over) return { conflict: true, at: me.conflict };
 		const { keys, skipped } = collect(storage), text = JSON.stringify(keys), sig = fingerprint(text);
 		if (!force && sig === lastSig) return { unchanged: true };
 		if (text.length > SAVE_MAX) { lastError = 'Your progress is too big to save to the cloud.'; changed(info()); return { error: lastError }; }
@@ -140,7 +141,9 @@ export function createCloudSave({ url, storage = globalThis.localStorage, reques
 	}
 	// what the cloud holds, without loading it: { at, rev, level, honor } or null
 	async function peek() { const r = await call('peek', {}); return r.at ? r : null; }
-	function begin(u, r) { me = { u: cleanUsername(u), token: r.token, rev: r.rev ?? 0, savedAt: r.at || 0 }; lastSig = ''; keep(); }
+	// signed in. Progress already in the cloud waits for your choice (load it, or keep this
+	// device's): until then nothing from this device is saved over it
+	function begin(u, r) { me = { u: cleanUsername(u), token: r.token, rev: r.rev ?? 0, savedAt: r.at || 0, ...(r.at ? { conflict: r.at } : {}) }; lastSig = ''; keep(); }
 	const api = {
 		available, info,
 		// a new account, this device's progress its first save. Returns { recovery }.
