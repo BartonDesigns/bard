@@ -111,7 +111,7 @@ export function createGuide(mount, api) {
 	function threadMeta(P) { return {id:P.id || P.threadId,name:P.persona.name,bodyKey:api.social?.bodyKey() || '',kind:'npc'}; }
 	function archiveTurn(meta,role,text) { archive.append(meta,role,text); }
 	function importConversations() { for(const r of api.social?.state.list() || []) archive.importHistory({id:r.id,name:r.persona.name,bodyKey:r.bodyKey,kind:'npc'},r.history); }
-	function resetView(next) { busy?.abort(); viewEpoch++; view=next; projectProgressView=null; log.replaceChildren(); input.value=''; settings.style.display='none'; log.style.display='flex'; tabs.style.display='flex'; archiveControls.style.display='none'; bar.style.display='flex'; }
+	function resetView(next) { busy?.abort(); viewEpoch++; view=next; projectProgressView=null; questLive=[]; markTab(next); log.replaceChildren(); input.value=''; settings.style.display='none'; log.style.display='flex'; tabs.style.display='flex'; archiveControls.style.display='none'; bar.style.display='flex'; }
 	function renderGuide() { resetView('guide'); for(const t of archive.thread('guide')?.turns.slice(-30) || []) say(t.content,t.role==='user'?'me':'guide'); }
 
 	// ---------- where things are ----------
@@ -452,14 +452,92 @@ export function createGuide(mount, api) {
 		if (talksOfMeeting(spoken) && !B.agreedWith(resident.id, resident.bodyKey)) return `Nothing is settled yet. Agree a place and a time with ${resident.persona.first} to put it in your Quests.`;
 		return null;
 	}
-	// The journal's marker: the meeting you are tracking, else the soonest, else a quest's next place.
+	// The journal's marker: what you chose to track (Quests ▸ Track), else the meeting you are
+	// tracking, else the soonest, else a quest's next place.
 	let livingContact = null;
+	// what you chose to follow: { kind: 'story'|'explore'|'meeting'|'crew', id }; null follows
+	// the nearest thing due. Kept across visits, like the pin and trail settings.
+	let pinned = store.get('bard-tracked', null);
+	const wayPrefs = { waypoint: true, wayfinder: true, ...store.get('bard-waypoint-prefs', {}) };
+	let wayPrefsSent = false;
+	function setPinned(next) { pinned = next; store.set('bard-tracked', next); }
+	function setWayPrefs(next) { Object.assign(wayPrefs, next); store.set('bard-waypoint-prefs', wayPrefs); api.waypoint?.setOptions?.(wayPrefs); }
+	const floorY = (W, x, z) => { const g = W.island.heightAt(x, z); return W.player.floorAt?.(x, z, g) ?? g; };
+	function meetingMark(a) {
+		const W = api.world(), S = W?.sky?.state, B = book();
+		const q = worldPosition(W, a.place.pos); if (!q || !S) return null;
+		const now = B.clock(S.hours), late = now > a.due + EARLY, key = 'meeting:' + a.id;
+		if (a.gathering) return { key, x: q.x, y: floorY(W, q.x, q.z) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
+		return { key, x: q.x, y: floorY(W, q.x, q.z) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
+	}
+	// where a story quest's step happens: the place, or (to talk, or to ask for a scouting) the
+	// person, where they are now if they are about, else where you met them
+	function stepName(step, context = storyContext()) {
+		return context.targets.find(t => t.id === step.targetId)?.name || context.npcs.find(n => n.id === step.npcId)?.name || step.targetName || step.npcName || 'the marked place';
+	}
+	function stepPlace(step, context = storyContext()) {
+		const W = api.world(); if (!W || !step) return null;
+		if (step.type === 'talk' || step.type === 'scout') {
+			const actor = api.social?.actors.all().find(p => p.residentId && residentKey(p.residentId) === step.npcId), at = actor?.M?.S?.pos;
+			if (at && [at.x, at.z].every(Number.isFinite)) return { x: at.x, y: Number.isFinite(at.y) ? at.y : floorY(W, at.x, at.z), z: at.z, radius: 4 };
+			const home = context.targets.find(t => t.id === 'home:' + step.npcId);
+			if (home) return { x: home.x, y: home.y, z: home.z, radius: home.radius || 8 };
+			if (step.type === 'talk') return null;
+		}
+		let t = context.targets.find(t => t.id === step.targetId);
+		if (!t && step.targetName) { const f = find(step.targetName); if (f) t = { ...f, radius: 14 }; }
+		if (!t) return null;
+		return { x: t.x, y: Number.isFinite(t.y) ? t.y : floorY(W, t.x, t.z), z: t.z, radius: t.radius || 14 };
+	}
+	const STEP_VERB = { visit: 'Explore', return: 'Return to', talk: 'Talk to' };
+	function stepWords(step, context = storyContext()) {
+		return step.type === 'scout' ? `Ask ${step.npcName || stepName({ npcId: step.npcId }, context)} to scout ${step.targetName || stepName({ targetId: step.targetId }, context)}` : `${STEP_VERB[step.type] || 'Go to'} ${stepName(step, context)}`;
+	}
+	function storyMark(quest, context = storyContext()) {
+		const step = quest?.status === 'active' && quest.steps[quest.cursor];
+		const at = step && stepPlace(step, context);
+		return at && { ...at, key: 'story:' + quest.id, title: stepWords(step, context), detail: `${quest.title} · step ${quest.cursor + 1} of ${quest.steps.length}` };
+	}
+	function explorePlace(id) {
+		const W = api.world(), q = QUESTS.find(q => q[0] === id), t = W && q?.[2] ? find(q[2]) : null;
+		if (!t) return null;
+		return { x: t.x, y: Number.isFinite(t.y) ? t.y : t.under ? W.island.heightAt(t.x, t.z) : floorY(W, t.x, t.z), z: t.z, radius: t.under ? 18 : 14, name: t.name };
+	}
+	function exploreMark(id) {
+		const q = QUESTS.find(q => q[0] === id), at = !journal[id] && explorePlace(id);
+		return at && { ...at, key: 'explore:' + id, title: q[1], detail: 'Exploration' };
+	}
+	// the mark for your own choice; a finished or cancelled one lets go (the nearest thing due
+	// takes over), one that is only out of reach for now (another world, a person not about) waits
+	function pinnedMark(W, key) {
+		if (!pinned) return null;
+		if (pinned.kind === 'story') {
+			const q = stories.list(key).find(q => q.id === pinned.id);
+			if (!q) return null;
+			if (q.status !== 'active') { setPinned(null); return null; }
+			return storyMark(q);
+		}
+		if (pinned.kind === 'explore') {
+			if (journal[pinned.id] || !QUESTS.some(q => q[0] === pinned.id)) { setPinned(null); return null; }
+			return exploreMark(pinned.id);
+		}
+		if (pinned.kind === 'meeting') {
+			const a = (book()?.list(key) || []).find(a => a.id === pinned.id);
+			if (!a) return null;
+			if (a.status !== 'agreed') { setPinned(null); return null; }
+			return meetingMark(a);
+		}
+		if (pinned.kind === 'crew') { const m = W.colony?.crew?.mark?.(); return m && { ...m, key: 'crew:' + (m.key || m.title) }; }
+		return null;
+	}
 	function waypointMark() {
 		// a catastrophe: someone trapped, hurt, a fire to fight (cataclysm/quests.js) comes first
 		const emergency = api.cataclysm?.mark?.();
 		if (emergency) return emergency;
 		const W = api.world(), S = W?.sky?.state, B = book(), key = api.social?.bodyKey();
 		if (!W || !S || !key) return null;
+		const chosen = pinnedMark(W, key);
+		if (chosen) return chosen;
 		if(livingContact){
 			if(livingContact.bodyKey!==key || Math.hypot(livingContact.x-api.camera.position.x,livingContact.z-api.camera.position.z)<4)livingContact=null;
 			else return livingContact;
@@ -468,12 +546,7 @@ export function createGuide(mount, api) {
 		if(living && (!living.bodyKey || living.bodyKey===key))return living;
 		const open = (B?.list(key) || []).filter(a => a.status === 'agreed').sort((a, b) => a.due - b.due);
 		const a = open.find(x => x.id === tracked) || open[0];
-		if (a) {
-			const q = worldPosition(W, a.place.pos); if (!q) return null;
-			const now = B.clock(S.hours), late = now > a.due + EARLY;
-			if (a.gathering) return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
-			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
-		}
+		if (a) return meetingMark(a);
 		// a fare in the car, or someone hailing you (vehicles/fares.js)
 		const fare = api.fares?.mark?.();
 		if (fare) return fare;
@@ -486,10 +559,10 @@ export function createGuide(mount, api) {
 		// a world's own errands (planet/colony/errands.js)
 		const own = W.colony?.crew?.mark?.();
 		if (own) return own;
-		const quest = stories.list(key).find(q => q.status === 'active' && ['visit', 'return'].includes(q.steps[q.cursor]?.type));
-		if (quest) {
-			const t = storyContext().targets.find(t => t.id === quest.steps[quest.cursor].targetId);
-			if (t) return { x: t.x, y: t.y, z: t.z, radius: t.radius, title: `${quest.steps[quest.cursor].type === 'return' ? 'Return to' : 'Explore'} ${t.name}`, detail: quest.title };
+		const active = stories.list(key).filter(q => q.status === 'active'), context = active.length ? storyContext() : null;
+		for (const quest of active) {
+			const m = storyMark(quest, context);
+			if (m) return m;
 		}
 		return null;
 	}
@@ -516,7 +589,8 @@ export function createGuide(mount, api) {
 	let tick = 0, lastPlace = '', projectProgressTick = 0;
 	function watch(dt) {
 		projectProgressTick+=Math.max(0,Number(dt)||0);
-		if(projectProgressTick>=.2 || dt===0){projectProgressTick=0;updateProjectProgress();}
+		if(projectProgressTick>=.2 || dt===0){projectProgressTick=0;updateProjectProgress();updateQuestLive();}
+		if (!wayPrefsSent && api.waypoint?.setOptions) { wayPrefsSent = true; api.waypoint.setOptions(wayPrefs); }
 		tick += dt;
 		if (tick < 1) return;
 		tick = 0;
@@ -1115,6 +1189,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	open.dataset.hud = 'rail 40';
 	open.title = 'Talk to the guide (G)'; open.setAttribute('aria-label', 'Talk to the guide');
 	const panel = el('div', 'position:absolute;left:calc(12px + env(safe-area-inset-left));bottom:calc(12px + env(safe-area-inset-bottom));width:min(420px,calc(100vw - 24px));max-height:min(80vh,560px);display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(10,14,18,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 20px 60px rgba(0,0,0,.6);color:#f2f5f4;font:14px/1.45 system-ui;z-index:5;');
+	// (a dialog: over the touch HUD's buttons while it is open, so none sits on its close button)
+	if (mount.classList?.contains('l99-touch')) panel.style.zIndex = '16';
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'The Guide');
 	const head = el('div', 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);');
 	const title = el('div', 'flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13px system-ui;letter-spacing:.06em;color:#9fe8d0;', 'THE GUIDE');
@@ -1157,14 +1233,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return b;
 	}
 	const scroll = () => { log.scrollTop = log.scrollHeight; };
-	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else { input.blur(); localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } };
+	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { if (view !== 'quests') setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else { input.blur(); localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } };
 	function greet() {
 		const s = snapshot();
 		say(s ? `Hello. You're on ${s.place}. Ask me anything — where to go, what something is, or what to do next.` : 'Hello.', 'guide');
 		if (llm.kind() === 'none') say('Running without a model. ⚙ loads one on this device for real conversation.', 'note');
 	}
 	function showPeople() {
-		endTalk(); resetView('journal'); show(true);
+		endTalk(); resetView('people'); show(true);
 		const S = api.social, records = S?.state.list(S.bodyKey()) || [];
 		say('REMEMBERED PEOPLE', 'note');
 		if (!records.length) say('Talk to someone nearby to remember them and their home area.', 'note');
@@ -1202,50 +1278,267 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	archiveSearch.addEventListener('input',()=>{archivePage=0;renderArchive();});
 	archiveExport.onclick=()=>{const url=URL.createObjectURL(new Blob([archive.exportJSON()],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='bard-conversations.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 
-	function showQuests() {
-		endTalk(); resetView('journal'); show(true);
-		const bodyKey=api.social?.bodyKey(), list=stories.list(bodyKey);
-		const meetings=(book()?.list(bodyKey) || []).filter(a=>a.status!=='cancelled').sort((a,b)=>b.due-a.due).slice(0,8), openM=meetings.filter(a=>a.status==='agreed'||a.status==='proposed');
-		if (meetings.length) {
-			say('MEETINGS', 'note');
-			const cam=api.camera.position, W=api.world();
-			for (const a of meetings) {
-				const q=worldPosition(W,a.place.pos), far=q?` · ${fmtDist(Math.hypot(q.x-cam.x,q.z-cam.z))} ${dirTo(q.x-cam.x,q.z-cam.z)}`:'';
-				const state=a.status==='agreed'?(a.id===tracked || (!tracked && a===openM.filter(x=>x.status==='agreed').at(-1))?'◆ MARKED':'AGREED'):a.status==='proposed'?'SUGGESTED':a.status==='kept'?'✓ KEPT':'MISSED';
-				say(a.gathering ? `${a.status==='kept'?'✓ ATTENDED':state} · ${gatherTitle(a)} · hosted by ${a.npcName}\n${a.status==='agreed'?meetWhen(a).replace(/ \((.*)\)$/, ' · $1')+far:formatClock(a.due%24)}` : `${state} · Meet ${a.npcName} at ${a.place.name}\n${a.status==='agreed'||a.status==='proposed'?meetWhen(a)+far:formatClock(a.due%24)}`, a.status==='agreed'||a.status==='proposed'?'guide':'note');
-				if (a.status==='agreed'||a.status==='proposed') {
-					const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
-					if (a.status==='proposed') { const ok=el('button',btnCss,'Agree'); ok.onclick=()=>{ if(book().agree(a.id).ok){ tracked=a.id; api.social.state.remember(a.npcId,'event',`You agreed to meet the traveller at ${a.place.name} at ${formatClock(a.due%24)}.`);} showQuests(); }; row.append(ok); }
-					else { const mark=el('button',btnCss,'Show the way'); mark.onclick=()=>{ tracked=a.id; api.waypoint?.set(waypointMark()); if(q && W){ const P=W.player.state; P.yaw=Math.atan2(-(q.x-P.pos.x),-(q.z-P.pos.z)); } show(false); api.hint(`Follow the pin to ${a.place.name}.`,4000); }; row.append(mark); }
-					const no=el('button',btnCss,a.status==='proposed'?'Decline':'Cancel'); no.onclick=()=>{ book().cancel(a.id); if(a.status==='agreed') api.social.state.remember(a.npcId,'event',`The traveller called off your meeting at ${a.place.name}.`); showQuests(); }; row.append(no);
-					log.append(row);
-				}
-			}
-			if (book().status().error) say(book().status().error,'note');
+	// ---------- Quests: what you are doing, what is next, and the way there ----------
+	// (cards, not lines of chat: the step you are on stands out, the done ones step back, and
+	// each place says how far and which way, and can be tracked: pin, marker and trail)
+	const QC = { teal: '#5ff0c6', green: '#10b981', amber: '#f59e0b', grey: 'rgba(255,255,255,.45)' };
+	const qcss = {
+		section: 'display:flex;align-items:baseline;gap:8px;margin:10px 2px 0;font:700 11px/1.2 system-ui;letter-spacing:.09em;text-transform:uppercase;color:#9fe8d0;',
+		count: 'margin-left:auto;font:600 11px system-ui;letter-spacing:.02em;text-transform:none;color:rgba(255,255,255,.5);',
+		card: 'display:flex;flex-direction:column;gap:8px;padding:12px 12px 12px 14px;border-radius:12px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);box-sizing:border-box;',
+		title: 'font:600 15px/1.3 system-ui;color:#fff;overflow-wrap:anywhere;',
+		body: 'font:13px/1.45 system-ui;color:rgba(255,255,255,.7);overflow-wrap:anywhere;',
+		meta: 'font:500 12px/1.35 system-ui;color:rgba(255,255,255,.55);',
+		row: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;',
+		primary: btnCss + 'background:linear-gradient(135deg,#01a982,#10b981);border-color:transparent;color:#fff;padding:6px 14px;',
+		ghost: btnCss + 'background:transparent;color:rgba(255,255,255,.75);',
+	};
+	let questLive = [];
+	const qel = (tag, style, text) => el(tag, style, text);
+	function markTab(next) {
+		const on = { people: residentsB, quests: questB, story: storyB, archive: archiveB }[next];
+		for (const b of [residentsB, questB, storyB, archiveB]) {
+			const active = b === on;
+			b.setAttribute('aria-pressed', String(active));
+			b.style.background = active ? 'rgba(1,169,130,.22)' : 'rgba(255,255,255,.06)';
+			b.style.borderColor = active ? 'rgba(1,169,130,.7)' : 'rgba(255,255,255,.22)';
 		}
+	}
+	function questPill(text, color) {
+		const p = qel('span', `display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font:700 10.5px/1.5 system-ui;letter-spacing:.07em;text-transform:uppercase;color:${color};background:color-mix(in srgb, ${color} 18%, transparent);border:1px solid color-mix(in srgb, ${color} 40%, transparent);white-space:nowrap;`, text);
+		return p;
+	}
+	function section(label, count) {
+		const h = qel('div', qcss.section, label);
+		h.setAttribute('role', 'heading'); h.setAttribute('aria-level', '3');
+		if (count) h.append(qel('span', qcss.count, count));
+		log.append(h); return h;
+	}
+	const SHORT = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+	const shortDir = (dx, dz) => SHORT[Math.round(((Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360) / 45) % 8];
+	// how far and which way: an arrow turned to where you look, the distance and the bearing
+	// (kept current while Quests is open)
+	function bearing(at, big = false) {
+		const b = qel('span', `display:inline-flex;align-items:center;gap:6px;font:600 ${big ? 13 : 12}px/1.2 system-ui;color:${QC.teal};white-space:nowrap;font-variant-numeric:tabular-nums;`);
+		const a = qel('span', `display:inline-flex;width:${big ? 18 : 15}px;height:${big ? 18 : 15}px;align-items:center;justify-content:center;`);
+		a.innerHTML = `<svg width="${big ? 15 : 13}" height="${big ? 15 : 13}" viewBox="0 0 24 24" fill="${QC.teal}" aria-hidden="true"><path d="M12 2 20 21l-8-4.5L4 21z"/></svg>`;
+		const t = qel('span', '');
+		b.append(a, t);
+		questLive.push({ at, arrow: a, text: t });
+		paintBearing(questLive.at(-1));
+		return b;
+	}
+	function paintBearing(r) {
+		const cam = api.camera.position, dx = r.at.x - cam.x, dz = r.at.z - cam.z, d = Math.hypot(dx, dz);
+		// (where you look: the camera's forward, the negated third column of its world matrix)
+		const e = api.camera.matrixWorld.elements;
+		r.arrow.style.transform = `rotate(${Math.atan2(dx, -dz) - Math.atan2(-e[8], e[10])}rad)`;
+		const words = d < (r.at.radius || 10) ? 'You are here' : `${fmtDist(d)} · ${shortDir(dx, dz)}`;
+		if (r.text.textContent !== words) r.text.textContent = words;
+	}
+	function updateQuestLive() {
+		if (view !== 'quests' || panel.style.display === 'none') return;
+		for (const r of questLive) {
+			if (r.at.live) { const m = api.waypoint?.mark?.(); if (m) { r.at.x = m.x; r.at.z = m.z; r.at.radius = m.radius; if (r.title && r.title.textContent !== m.title) r.title.textContent = m.title; } }
+			paintBearing(r);
+		}
+	}
+	// Track: this is the one to follow. The panel closes and you turn to face it.
+	function trackButton(follow, kind, id) {
+		const on = pinned && pinned.kind === kind && pinned.id === id;
+		const b = qel('button', on ? qcss.primary : btnCss + 'border-color:rgba(1,169,130,.6);color:#9fe8d0;', on ? '◆ Tracking' : '◇ Track');
+		b.setAttribute('aria-pressed', String(!!on));
+		b.setAttribute('aria-label', on ? 'Stop tracking' : 'Track: show the way');
+		b.onclick = () => {
+			if (on) { setPinned(null); api.waypoint?.set(waypointMark()); showQuests(); return; }
+			setPinned({ kind, id });
+			if (kind === 'meeting') tracked = id;
+			if (kind === 'crew') follow?.();
+			const m = waypointMark(); api.waypoint?.set(m);
+			const W = api.world(), P = W?.player?.state;
+			if (m && P) { P.yaw = Math.atan2(-(m.x - P.pos.x), -(m.z - P.pos.z)); }
+			show(false);
+			if (!wayPrefs.waypoint && !wayPrefs.wayfinder) setWayPrefs({ waypoint: true });
+			api.hint(m ? `Tracking: ${m.title}. ${wayPrefs.wayfinder ? 'Follow the trail.' : 'Follow the marker.'}` : 'Tracking. The way shows once the place is in reach.', 4000);
+		};
+		return b;
+	}
+	function toggle(label, hintText, on, set) {
+		const b = qel('button', btnCss + 'display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 8px;');
+		b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); b.title = hintText;
+		const track = qel('span', `position:relative;flex-shrink:0;width:30px;height:18px;border-radius:9px;background:${on ? '#01a982' : 'rgba(255,255,255,.18)'};transition:background .2s ease;`);
+		const knob = qel('span', `position:absolute;top:2px;left:${on ? 14 : 2}px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:left .2s ease;`);
+		track.append(knob);
+		b.append(track, qel('span', `color:${on ? '#fff' : 'rgba(255,255,255,.6)'};`, label));
+		b.onclick = () => { set(!on); showQuests(); };
+		return b;
+	}
+	function trackingCard() {
+		const m = api.waypoint?.mark?.() || waypointMark(), mine = !!pinned && !!m && m.key === pinned.kind + ':' + pinned.id;
+		const card = qel('div', qcss.card + 'border-color:rgba(1,169,130,.45);background:linear-gradient(135deg,rgba(1,169,130,.16),rgba(1,169,130,.04));');
+		const top = qel('div', qcss.row + 'flex-wrap:nowrap;');
+		top.append(questPill(mine ? 'Tracking' : m ? 'Next up' : 'Nothing tracked', m ? QC.teal : QC.grey));
+		if (pinned) {
+			const stop = qel('button', qcss.ghost + 'margin-left:auto;min-height:32px;padding:4px 10px;font-size:12px;', 'Stop tracking');
+			stop.onclick = () => { setPinned(null); api.waypoint?.set(waypointMark()); showQuests(); };
+			top.append(stop);
+		}
+		card.append(top);
+		if (m) {
+			const t = qel('div', qcss.title, m.title);
+			card.append(t);
+			const line = qel('div', qcss.row + 'row-gap:4px;');
+			line.append(bearing({ x: m.x, z: m.z, radius: m.radius, live: true }, true));
+			if (m.detail) line.append(qel('span', qcss.meta, m.detail));
+			card.append(line);
+			questLive.at(-1).title = t;
+		} else card.append(qel('div', qcss.body, 'Pick a quest or a place below and tap Track. A pin, a marker and a trail show the way.'));
+		const toggles = qel('div', qcss.row + 'margin-top:2px;');
+		toggles.append(
+			toggle('Waypoint', 'A pin at the place and a marker over it on the screen', wayPrefs.waypoint, v => setWayPrefs({ waypoint: v })),
+			toggle('Wayfinder', 'A trail on the ground from your feet toward the place', wayPrefs.wayfinder, v => setWayPrefs({ wayfinder: v })),
+		);
+		card.append(toggles);
+		log.append(card);
+	}
+	// a step of a quest: done (a green tick, stepped back), the one you are on (bright, with the
+	// way there), or still to come (plain)
+	function stepRow(state, words, at) {
+		const r = qel('div', `display:flex;align-items:flex-start;gap:10px;padding:${state === 'now' ? '8px 10px' : '2px 10px'};border-radius:8px;${state === 'now' ? 'background:rgba(1,169,130,.12);' : ''}`);
+		const dot = qel('span', 'flex-shrink:0;width:18px;height:18px;margin-top:1px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;' + (state === 'done' ? `background:${QC.green};` : state === 'now' ? `border:2px solid ${QC.teal};box-shadow:0 0 8px rgba(95,240,198,.5);` : 'border:1.5px solid rgba(255,255,255,.35);'));
+		if (state === 'done') dot.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>';
+		else if (state === 'now') dot.append(qel('span', `width:8px;height:8px;border-radius:50%;background:${QC.teal};`));
+		const text = qel('div', 'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;');
+		text.append(qel('span', state === 'done' ? 'font:13px/1.35 system-ui;color:rgba(255,255,255,.45);' : state === 'now' ? 'font:600 14px/1.35 system-ui;color:#fff;' : 'font:13px/1.35 system-ui;color:rgba(255,255,255,.72);', words));
+		if (at) text.append(bearing(at));
+		r.append(dot, text);
+		r.setAttribute('aria-label', `${state === 'done' ? 'Done' : state === 'now' ? 'Current' : 'To come'}: ${words}`);
+		return r;
+	}
+	function progressBar(done, total, color = QC.teal) {
+		const wrap = qel('div', 'display:flex;align-items:center;gap:8px;');
+		const bar = qel('div', 'flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;');
+		bar.append(qel('div', `height:100%;width:${Math.round(100 * done / Math.max(1, total))}%;background:${color};border-radius:2px;`));
+		wrap.append(bar, qel('span', qcss.meta + 'font-variant-numeric:tabular-nums;', `${done} of ${total}`));
+		wrap.setAttribute('aria-label', `${done} of ${total} done`);
+		return wrap;
+	}
+	function questCard(q, bodyKey, context) {
+		const color = q.status === 'active' ? QC.teal : q.status === 'offered' ? QC.amber : q.status === 'complete' ? QC.green : QC.grey;
+		const card = qel('div', qcss.card + `border-left:3px solid ${color};`);
+		const top = qel('div', qcss.row);
+		top.append(questPill(q.status === 'complete' ? 'Complete' : q.status, color));
+		const reward = q.chapter ? `Chapter ${q.chapter} of 3` : q.reward ? `${q.reward.credits} credits${q.rewardPaid ? ' · paid' : ''}` : '';
+		if (reward) top.append(qel('span', qcss.meta + 'margin-left:auto;', reward));
+		card.append(top, qel('div', qcss.title, q.title));
+		if (q.status !== 'complete') card.append(qel('div', qcss.body, q.premise));
+		card.append(progressBar(q.cursor, q.steps.length, color));
+		const steps = qel('div', 'display:flex;flex-direction:column;gap:4px;');
+		q.steps.forEach((step, i) => {
+			const state = i < q.cursor ? 'done' : i === q.cursor && q.status === 'active' ? 'now' : 'next';
+			steps.append(stepRow(state, stepWords(step, context), state === 'now' ? stepPlace(step, context) : null));
+		});
+		card.append(steps);
+		if (q.status === 'offered' || q.status === 'active') {
+			const row = qel('div', qcss.row + 'margin-top:2px;');
+			if (q.status === 'offered') {
+				const accept = qel('button', qcss.primary, 'Accept quest');
+				accept.onclick = () => { const result = stories.accept(q.id, bodyKey); if (result.ok) questChanged(result.quest, false); showQuests(); if (questNotice(result)) say(questNotice(result), 'note'); };
+				row.append(accept);
+			} else if (stepPlace(q.steps[q.cursor], context)) row.append(trackButton(null, 'story', q.id));
+			const cancel = qel('button', qcss.ghost + 'margin-left:auto;', q.status === 'offered' ? 'Decline' : 'Cancel quest');
+			cancel.onclick = () => { const result = stories.cancel(q.id, bodyKey); if (result.ok) questChanged(result.quest, false); showQuests(); if (questNotice(result)) say(questNotice(result), 'note'); };
+			row.append(cancel);
+			card.append(row);
+		}
+		return card;
+	}
+	function folded(label, count) {
+		const d = qel('details', 'border-radius:10px;');
+		const s = qel('summary', 'cursor:pointer;padding:8px 2px;font:600 12px system-ui;color:rgba(255,255,255,.6);list-style-position:inside;', `${label} (${count})`);
+		const inner = qel('div', 'display:flex;flex-direction:column;gap:8px;padding-top:4px;');
+		d.append(s, inner); log.append(d);
+		return inner;
+	}
+	function showQuests() {
+		endTalk(); resetView('quests'); show(true);
+		const bodyKey = api.social?.bodyKey(), list = stories.list(bodyKey), context = storyContext();
+		trackingCard();
+
+		// ----- story quests: what you are on, then offers, then (folded) the finished ones
+		const live = list.filter(q => q.status === 'active').reverse(), offers = list.filter(q => q.status === 'offered').reverse(), done = list.filter(q => q.status === 'complete').reverse();
+		section('Story quests', list.length ? `${live.length} active${offers.length ? ` · ${offers.length} offered` : ''}` : '');
+		if (!live.length && !offers.length) {
+			const empty = qel('div', qcss.card + 'border-style:dashed;');
+			empty.append(qel('div', 'font:600 14px system-ui;color:#fff;', 'No story quest under way'), qel('div', qcss.body, 'Talk to someone nearby and ask for an adventure. They suggest a story rooted in this world.'));
+			log.append(empty);
+		}
+		for (const q of [...live, ...offers]) log.append(questCard(q, bodyKey, context));
+		if (done.length) { const inner = folded('Completed', done.length); for (const q of done) inner.append(questCard(q, bodyKey, context)); }
+		if (stories.status().error) say(stories.status().error, 'note');
+
+		// ----- meetings you agreed or were offered
+		const meetings = (book()?.list(bodyKey) || []).filter(a => a.status !== 'cancelled').sort((a, b) => b.due - a.due).slice(0, 8);
+		if (meetings.length) {
+			const now = meetings.filter(a => a.status === 'agreed' || a.status === 'proposed'), past = meetings.filter(a => !now.includes(a));
+			section('Meetings', now.length ? `${now.length} upcoming` : '');
+			const W = api.world();
+			const meetCard = (a) => {
+				const color = a.status === 'agreed' ? QC.teal : a.status === 'proposed' ? QC.amber : a.status === 'kept' ? QC.green : QC.grey;
+				const card = qel('div', qcss.card + `border-left:3px solid ${color};${now.includes(a) ? '' : 'opacity:.7;'}`);
+				const top = qel('div', qcss.row);
+				top.append(questPill(a.status === 'agreed' ? 'Agreed' : a.status === 'proposed' ? 'Suggested' : a.status === 'kept' ? (a.gathering ? 'Attended' : 'Kept') : 'Missed', color));
+				top.append(qel('span', qcss.meta + 'margin-left:auto;', now.includes(a) ? meetWhen(a).replace(/ \((.*)\)$/, ' · $1') : formatClock(a.due % 24)));
+				card.append(top, qel('div', qcss.title, a.gathering ? gatherTitle(a) : `Meet ${a.npcName} at ${a.place.name}`));
+				if (a.gathering) card.append(qel('div', qcss.meta, `Hosted by ${a.npcName} · ${a.place.name}`));
+				const at = now.includes(a) && worldPosition(W, a.place.pos);
+				if (at) { const line = qel('div', ''); line.append(bearing({ x: at.x, z: at.z, radius: a.place.radius })); card.append(line); }
+				if (now.includes(a)) {
+					const row = qel('div', qcss.row);
+					if (a.status === 'proposed') { const ok = qel('button', qcss.primary, 'Agree'); ok.onclick = () => { if (book().agree(a.id).ok) { tracked = a.id; api.social.state.remember(a.npcId, 'event', `You agreed to meet the traveller at ${a.place.name} at ${formatClock(a.due % 24)}.`); } showQuests(); }; row.append(ok); }
+					else row.append(trackButton(null, 'meeting', a.id));
+					const no = qel('button', qcss.ghost + 'margin-left:auto;', a.status === 'proposed' ? 'Decline' : 'Cancel');
+					no.onclick = () => { book().cancel(a.id); if (a.status === 'agreed') api.social.state.remember(a.npcId, 'event', `The traveller called off your meeting at ${a.place.name}.`); showQuests(); };
+					row.append(no); card.append(row);
+				}
+				return card;
+			};
+			for (const a of now) log.append(meetCard(a));
+			if (past.length) { const inner = folded('Past meetings', past.length); for (const a of past) inner.append(meetCard(a)); }
+			if (book().status().error) say(book().status().error, 'note');
+		}
+
+		// ----- a world's own errands (an off-world colony's crew, planet/colony/)
 		const own = api.world()?.colony?.crew?.journal?.();
 		if (own) {
-			say(own.title, 'note');
+			section(own.title);
 			for (const e of own.list) {
-				say(e.text, e.active ? 'guide' : 'note');
-				if (e.track) { const b = el('button', btnCss, 'Show the way'); b.onclick = () => { e.track(); api.waypoint?.set(waypointMark()); show(false); }; log.append(b); }
+				const card = qel('div', qcss.card + (e.active ? `border-left:3px solid ${QC.teal};` : 'opacity:.75;'));
+				card.append(qel('div', e.active ? qcss.title + 'font-size:14px;' : qcss.body, e.text));
+				if (e.track) card.append(trackButton(e.track, 'crew', e.text));
+				log.append(card);
 			}
-			for (const l of own.log) say(l, 'note');
+			if (own.log.length) { const inner = folded('Crew log', own.log.length); for (const l of own.log) inner.append(qel('div', qcss.meta, l)); }
 		}
-		say('STORY QUESTS', 'note');
-		if (!list.length) say('Ask someone nearby for an adventure. They can suggest a story rooted in this world.', 'note');
-		for (const q of list.slice().reverse()) {
-			say(`${q.status.toUpperCase()} · ${q.cursor}/${q.steps.length} objectives\n${storySummary(q)}`, 'guide');
-			if (q.status==='offered' || q.status==='active') {
-				const row=el('div','display:flex;gap:8px;');
-				if (q.status==='offered') { const accept=el('button',btnCss,'Accept quest'); accept.onclick=()=>{const result=stories.accept(q.id,bodyKey);if(result.ok)questChanged(result.quest,false);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(accept); }
-				const cancel=el('button',btnCss,q.status==='offered'?'Decline':'Cancel quest');cancel.onclick=()=>{const result=stories.cancel(q.id,bodyKey);if(result.ok)questChanged(result.quest,false);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(cancel);log.append(row);
-			}
-		}
-		if (stories.status().error) say(stories.status().error,'note');
-		say('EXPLORATION', 'note');
-		for (const q of QUESTS.filter(q => !q[2] || find(q[2]))) say(`${journal[q[0]] ? '✓' : '○'} ${q[1]}`, 'note');
-		const caves = el('button', btnCss, 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
+
+		// ----- exploration: the things there are to find, open ones first with the way there
+		const goals = QUESTS.filter(q => (q[0] !== 'home' || store.get('crysis-home', null)) && (!q[2] || find(q[2]))), found = goals.filter(q => journal[q[0]]), open = goals.filter(q => !journal[q[0]]);
+		section('Exploration', `${found.length} of ${goals.length} found`);
+		const card = qel('div', qcss.card + 'gap:6px;');
+		card.append(progressBar(found.length, goals.length, QC.green));
+		const goalRow = (q) => {
+			const at = !journal[q[0]] && q[2] ? explorePlace(q[0]) : null;
+			const row = qel('div', 'display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid rgba(255,255,255,.06);');
+			row.append(stepRow(journal[q[0]] ? 'done' : 'next', q[1], at));
+			row.firstChild.style.flex = '1'; row.firstChild.style.padding = '2px 0';
+			if (at) { const b = trackButton(null, 'explore', q[0]); b.style.flexShrink = '0'; row.append(b); }
+			return row;
+		};
+		for (const q of open) card.append(goalRow(q));
+		log.append(card);
+		if (found.length) { const inner = folded('Found', found.length); const box = qel('div', qcss.card + 'gap:2px;'); for (const q of found) box.append(goalRow(q)); inner.append(box); }
+		const caves = qel('button', btnCss + 'align-self:flex-start;', 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
+		log.scrollTop = 0;
 	}
 	// your story so far: who the world takes you for, and what you have done for it
 	let livingActivityPage=0,livingActivityScope=null,communityPage=0,communityPageScope=null;
