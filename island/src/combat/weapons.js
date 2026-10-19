@@ -6,7 +6,6 @@
 
 import { statScale } from '../gameplay/gear-levels.js';
 
-export const FIRE_MODES = ['semi', 'burst', 'auto'];
 export const BOW_ID = 'reedline-hunting-bow';
 export const BOW_DRAW_SECONDS = 0.85;
 export const BOW_MIN_DRAW = 0.2;
@@ -21,7 +20,6 @@ export const WEAPONS = Object.freeze({
 	'warden-spark-carbine': { name: 'Warden Spark Carbine', modes: ['auto', 'burst', 'semi'], rpm: 360, burst: 3, mag: 24, box: 'spark-cell-pack', perBox: 48, dmg: 17, type: 'energy', spread: 0.009, ads: 0.4, move: 0.018, bloom: 0.003, kick: [0.008, 0.004], range: 200, falloff: 110, reload: 1.7, tracer: 2, projectile: { speed: 150, drop: 0, splash: 1.2, life: 1.6 } },
 	'reedline-hunting-bow': { name: 'Reedline Hunting Bow', modes: ['semi'], rpm: 48, burst: 1, mag: 1, box: 'reed-arrow-quiver', perBox: 12, dmg: 90, type: 'pierce', spread: 0.003, ads: 0.4, move: 0.012, bloom: 0, kick: [0.006, 0.002], range: 150, falloff: 120, reload: 0.9, tracer: 3, projectile: { speed: 75, drop: 9.8, splash: 0, life: 4 } },
 });
-export const isWeapon = (id) => !!WEAPONS[id];
 export const boxOf = (id) => WEAPONS[id]?.box || null;
 
 // an instance's numbers: damage, accuracy, range, magazine and reload all grow with it. view:

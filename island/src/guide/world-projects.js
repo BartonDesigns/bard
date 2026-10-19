@@ -43,7 +43,6 @@ const text = (v, max = 512) => typeof v === 'string' && v.trim() ? v.trim().slic
 const id = (v) => text(v, 512);
 const finite = (v) => Number.isFinite(v);
 const cleanBody = (v) => id(v);
-const cleanScope = (v) => v === WORLD_PROJECTS_SCOPE ? v : WORLD_PROJECTS_SCOPE;
 const fail = (error) => ({ ok: false, error });
 
 function hash(value) {
@@ -185,5 +184,4 @@ export function createWorldProjects({ storage, now = Date.now } = {}) {
 	return { complete, list, state, status, save, scope: WORLD_PROJECTS_SCOPE, shared: false, backend: WORLD_PROJECTS_BACKEND };
 }
 
-export const worldProjectBlueprints = () => copy(PROJECT_KINDS);
 

@@ -413,10 +413,6 @@ export function furnish(P, only = -1) {
 			for (let k = 0; k < 10; k++) against('hay', 1.2, 0.6, 0.5 + (k % 3) * 0.5, { clear: 0.4, side: (q) => q.axis === 'z' && q.n < 0 });
 			standing('tractor', cx + bw * 0.15, rm.z1 - 4, 1.8, 3.2, 2.4, 0, 0.5);
 			light('tube');
-		} else if (t === 'dining' && rm.big) {
-			// (a big room to dine in: tables round it)
-			for (let x = rm.x0 + 2.5; x < rm.x1 - 2; x += 3.4) for (let z = rm.z0 + 2.5; z < rm.z1 - 2; z += 3.4) { const tb = standing('diningTable', x, z, 1.4, 1.4, 0.76, 0, 0.6, { chairs: 4 }); if (tb) chairs(tb); }
-			light('chandelier');
 		} else if (t === 'closet') {
 			against('shelves', Math.min(2.2, Math.max(bw, bd) - 0.6), 0.45, 1.9, { clear: 0.4 }); clutter(2); light('tube');
 		}

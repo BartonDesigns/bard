@@ -13,8 +13,6 @@
 
 import { MAT, strength, hardAt, solidTo } from './assembly.js';
 
-const W_STUD = 0.038;
-
 // a piece: u0..u1 along the wall, y0..y1 up it (the builder's coordinates), its studs (u),
 // the cell size and the layers (assembly.js layersFor)
 export function createPiece({ u0, u1, y0, y1, studs = [], cs = 0.1, stack }) {
@@ -245,4 +243,3 @@ export function restore(P, list) {
 		P.any = true;
 	}
 }
-export const studWidth = W_STUD;

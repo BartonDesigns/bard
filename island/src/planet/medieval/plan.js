@@ -720,11 +720,3 @@ export function planDungeons(realm, island, cavePlan, makeField) {
 	realm.boxes = boxes;
 }
 
-// a dungeon box's floor and frame, for the builders
-export function boxFrame(b) {
-	return {
-		toW: (lx, lz) => [b.x + lx * b.c + lz * b.s, b.z - lx * b.s + lz * b.c],
-		toL: (x, z) => { const dx = x - b.x, dz = z - b.z; return [dx * b.c - dz * b.s, dx * b.s + dz * b.c]; },
-		floor: (lz) => b.fy + (lz + b.hd) * b.slope,
-	};
-}

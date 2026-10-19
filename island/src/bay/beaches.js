@@ -42,7 +42,6 @@ const SITES = [
 	['Pigeon Point Light Station', 37.1820, -122.3935, { lot: 12, restroom: 1, light: [37.1818, -122.3944] }],
 	['Año Nuevo State Park', 37.1105, -122.3300, { lot: 18, restroom: 1, quiet: 1, seals: 30 }],
 ].map(([name, lat, lon, o]) => ({ name, lat, lon, ...o, ...toWorld(lat, lon) }));
-export const BEACHES = SITES;
 
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const M = (color, rough = 0.8, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: rough, ...extra });

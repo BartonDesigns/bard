@@ -93,8 +93,6 @@ export function createRelations(saved = null) {
 
 // which factions belong where you are (zone names above)
 export const factionsFor = (zone) => Object.entries(FACTIONS).filter(([, F]) => F.zones.includes(zone) && F.kind !== 'civilians').map(([id]) => id);
-// a colour pair for a faction's look
-export const colorsOf = (id) => FACTIONS[id]?.colors || ['#444', '#888'];
 
 // a beaten fighter's choice (pure, for the tests): yield when badly hurt and outnumbered, more
 // readily when their side is not a fierce one; never machines or creatures

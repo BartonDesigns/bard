@@ -455,7 +455,6 @@ const SPECIES = {
 		},
 	},
 };
-export const DINOSAUR_KINDS = Object.keys(SPECIES);
 
 // ---------- the skin and its bones, in the shader ----------
 const SKIN_HEAD = `

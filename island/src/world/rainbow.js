@@ -150,18 +150,3 @@ export function loadBowTexture() {
 	return t;
 }
 
-// as a texture: sqrt-encoded bytes (more steps where the light is faint), rows by drop size
-export function bowTexture() {
-	const rows = bowTable(), { W } = BOW, H = rows.length;
-	let mx = 0;
-	for (const r of rows) for (const v of r) mx = Math.max(mx, v);
-	const d = new Uint8Array(W * H * 4);
-	rows.forEach((r, y) => { for (let x = 0; x < W; x++) for (let j = 0; j < 3; j++) d[(y * W + x) * 4 + j] = Math.round(Math.sqrt(r[x * 3 + j] / mx) * 255); d.fill(255, (y * W) * 4 + 3, (y * W) * 4 + 4); });
-	for (let i = 3; i < d.length; i += 4) d[i] = 255;
-	const t = new THREE.DataTexture(d, W, H);
-	t.magFilter = t.minFilter = THREE.LinearFilter;
-	t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-	t.needsUpdate = true;
-	t.userData.scale = mx;
-	return t;
-}

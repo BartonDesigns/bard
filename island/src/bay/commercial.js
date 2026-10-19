@@ -54,7 +54,6 @@ function busyAt(type, h) {
 }
 // how many of those in are children (with their families), when children are about
 const KIDS_IN = { tattoo: 0, cafe: 0.14, restaurant: 0.2, shop: 0.16, office: 0, arcade: 0.3, bowling: 0.28, cinema: 0.22 };
-export const COMMERCIAL_TYPES = ['cafe', 'restaurant', 'shop', 'tattoo', 'office', 'arcade', 'bowling', 'cinema'];
 
 export function createCommercial(scene, bay, real, city, { isPhone = false } = {}) {
 	const band = buildingBand(isPhone);

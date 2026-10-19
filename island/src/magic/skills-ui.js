@@ -450,10 +450,10 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		return (ns.find((n) => stateOf(n) === 'can') || [...ns].reverse().find((n) => holds(state, n.id)) || ns[0]).id;
 	}
 	function swipe() {
-		let x0 = 0, y0 = 0, t0 = 0, id = null, lastX = 0, lastT = 0, v = 0, decided = false;
+		let x0 = 0, y0 = 0, id = null, lastX = 0, lastT = 0, v = 0, decided = false;
 		P.stage.addEventListener('pointerdown', (e) => {
 			if (e.button > 0 || id !== null) return;
-			id = e.pointerId; x0 = lastX = e.clientX; y0 = e.clientY; t0 = lastT = performance.now(); v = 0;
+			id = e.pointerId; x0 = lastX = e.clientX; y0 = e.clientY; lastT = performance.now(); v = 0;
 			dragging = false; dragged = false; decided = false;
 		});
 		P.stage.addEventListener('pointermove', (e) => {
@@ -991,7 +991,7 @@ function drawSpell(g, w, h, sp, u, c, t, env = {}) {
 	};
 	if (K === 'bolt' || K === 'orb') {
 		const slow = K === 'orb';
-		const f = slow ? u : ease(u / 0.45), T0 = foes[0];
+		const T0 = foes[0];
 		const end = sp.pierce ? foes[2] : T0;
 		const travel = slow ? u * 0.95 : Math.min(1, u / 0.45);
 		const x = hand.x + (end.x - hand.x) * (sp.pierce ? travel : Math.min(1, travel)), y = hand.y + (end.y - 14 - hand.y) * travel;

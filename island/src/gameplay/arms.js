@@ -387,10 +387,6 @@ export function getItem(itemId) {
 	return item ? clone(item) : null;
 }
 
-export function getSource(sourceId) {
-	const source = sourceFor(sourceId);
-	return source ? clone(source) : null;
-}
 
 export function itemSupportsActivity(itemId, activity) {
 	return Boolean(itemFor(itemId)?.activities.includes(activity));

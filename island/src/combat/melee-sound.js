@@ -147,9 +147,6 @@ const MAKE = {
 	},
 };
 
-// (for the tests: each piece rendered at a sample rate)
-export const PIECES = Object.keys(MAKE);
-export const renderPiece = (name, sr = 48000) => MAKE[name](sr);
 
 export function createMeleeSound({ eye, yaw, isPhone = false }) {
 	const cache = new WeakMap();
