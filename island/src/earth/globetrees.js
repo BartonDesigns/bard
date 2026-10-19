@@ -208,10 +208,12 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 		for (const f of FORMS) for (const im of T[f][name]) { im.count = Math.min(cnt[f], im.instanceMatrix.count); im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
 	}
 	// both tiers laid out, then shown together: never the near round one place and the far round
-	// another (trees doubled on one side, a gap on the other, until the second caught up)
+	// another (trees doubled on one side, a gap on the other, until the second caught up); where
+	// none stand yet (just arrived) the near ones show as soon as they are laid
 	function* build(cx, cz) {
 		const near = [], far = [];
 		yield* lay(cx, cz, NEAR, NSTEP, near, 'near');
+		if (!placed.near.length && !placed.far.length) { commit('near', near); placed.near = near; }
 		yield* lay(cx, cz, FAR, FSTEP, far, 'far');
 		commit('near', near); placed.near = near;
 		commit('far', far); placed.far = far;
