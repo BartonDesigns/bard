@@ -13,6 +13,7 @@
 //   resist       harm taken by kind (combat/health.js DAMAGE_TYPES)
 //   model, human its model when not its own id; human, the person it is until it turns (the
 //                Moonturned: a villager who changes when you come near or hurt them)
+//   fly          a flyer: the height it keeps over the ground (hover) and drops to (strike), in m
 //   throw        a thrower (fire pots, a curse): from past arm's reach to range it lobs one every
 //                so often (every, s) for dmg, splashing splash m; it keeps back to keep m
 //   where        when and where it comes on its own (combat/combat.js creatures()):
@@ -109,6 +110,19 @@ export const SPECIES = Object.freeze({
 		throw: { range: 16, keep: 3, every: [3, 5], dmg: 9, type: 'energy', splash: 1.4 },
 		// (the Deep sends its own: every gloom squad is of these, combat/ai-squads.js)
 		where: { night: false, zones: [], pack: [2, 4] },
+	},
+	'undertow': {
+		name: 'Undertow', faction: 'deepborn', height: 1.05,
+		hp: 500, armour: 10, walk: 1.0, run: 4.5, dmg: 30, reach: 3.0, strike: 1.1, sight: 30,
+		resist: { fire: 1.3, ballistic: 0.9 }, surface: 'creature',
+		where: { night: false, zones: ['deep'], pack: [1, 1], odds: 0.3 },
+	},
+	'lampeater': {
+		name: 'Lampeater', faction: 'nightborn', height: 0.9,
+		hp: 160, armour: 0, walk: 2.5, run: 7.0, dmg: 16, reach: 2.2, strike: 1.0, sight: 60,
+		resist: { fire: 1.8 }, surface: 'creature',
+		fly: { hover: 4, strike: 0.9 },
+		where: { night: true, zones: ['earth-urban'], pack: [1, 1], odds: 0.5 },
 	},
 	'hollow-king': {
 		name: 'The Hollow King', faction: 'nightborn', height: 4,
