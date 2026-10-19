@@ -91,12 +91,13 @@ export function createHud({ mount, touch = false }) {
 		mkBtn('Mode', 'AUTO', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 226px + env(safe-area-inset-bottom));width:44px;height:44px;font-size:9px;');
 	}
 
-	let supK = 0, hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
+	let supK = 0, hitT = 0, kill = false, headHit = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
 	const callList = [], feedList = [];
 	return {
 		root, btns,
 		// a hit landed: kill true for the last one
-		hit(k = false) { hitT = 0.22; kill = k; },
+		// (head: a round to the head or neck, marked in gold)
+		hit(k = false, head = false) { hitT = head ? 0.3 : 0.22; kill = k; headHit = head; },
 		// struck: from the angle (radians, 0 ahead, clockwise) and how hard (0..1)
 		hurt(angle, k = 0.5) {
 			const w = wedges.reduce((a, b) => (a.t < b.t ? a : b));
@@ -134,7 +135,7 @@ export function createHud({ mount, touch = false }) {
 			arms[0].style.left = `${-g - 9}px`; arms[1].style.left = `${g}px`; arms[2].style.top = `${-g - 9}px`; arms[3].style.top = `${g}px`;
 			hitT = Math.max(0, hitT - dt);
 			hit.style.opacity = hitT > 0 ? '1' : '0';
-			for (const i of hit.children) i.style.background = kill ? '#ff8a5a' : '#fff';
+			for (const i of hit.children) i.style.background = headHit ? '#ffd257' : kill ? '#ff8a5a' : '#fff';
 			hit.style.transform = `scale(${1 + hitT * (kill ? 2.4 : 1.2)})`;
 			for (const w of wedges) {
 				w.t = Math.max(0, w.t - dt);

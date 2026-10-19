@@ -1094,6 +1094,43 @@ export function reach(P, side, Hd, pole) {
 	return true;
 }
 
+// A hand pressed to a wound (combat/wounds.js puts Mo.S.clutch = { side, bone, local, a, b,
+// across, t, dur }): the palm laid flat on the hit as the body moves, the fingers along a limb or
+// across the body, easing on and off. After the body's motion (and, armed, after the gun's own
+// grip: then only the support hand ever lets go). Returns the weight it was laid on with.
+const _cw = new THREE.Vector3(), _ca = new THREE.Vector3(), _cb = new THREE.Vector3(), _cn = new THREE.Vector3(), _cf = new THREE.Vector3(), _ct = new THREE.Vector3(), _cp = new THREE.Vector3(), _cm = new THREE.Matrix4();
+const _ce = new THREE.Vector3(), _cx = new THREE.Vector3(), _cy = new THREE.Vector3(), _cz = new THREE.Vector3(), _c0 = new THREE.Vector3(), _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3(), _cq = new THREE.Vector3();
+export function applyClutch(P, Mo, dt = 0) {
+	const C = Mo?.S?.clutch;
+	if (!C || !P?.bones?.[C.bone]) return 0;
+	C.t += dt;
+	if (C.t >= C.dur) { Mo.S.clutch = null; Mo.grip?.(C.side, 0); return 0; }
+	const w = Math.min(1, C.t / 0.16) * Math.min(1, (C.dur - C.t) / 0.32);
+	const bw = P.bones[C.bone].matrixWorld;
+	_cw.copy(C.local).applyMatrix4(bw); _ca.copy(C.a).applyMatrix4(bw); _cb.copy(C.b).applyMatrix4(bw);
+	// out of the body at the wound: away from the bone's line (from the skull's middle, for the head)
+	const ax = _ct.subVectors(_cb, _ca), L2 = ax.lengthSq();
+	const u = L2 > 1e-6 ? THREE.MathUtils.clamp(_cp.subVectors(_cw, _ca).dot(ax) / L2, 0, 1) : 0;
+	_cn.copy(_cw).sub(_cp.copy(_ca).addScaledVector(ax, u));
+	if (_cn.lengthSq() < 1e-8) _cn.set(Math.sin(Mo.S.heading), 0, Math.cos(Mo.S.heading));
+	_cn.normalize();
+	const heading = Mo.S.heading, left = _ce.set(Math.cos(heading), 0, -Math.sin(heading));
+	// the fingers: along the limb, or across the body away from the hand
+	if (C.across || L2 < 1e-6) _cf.copy(left).multiplyScalar(C.side === 'L' ? -1 : 1).addScaledVector(UP, -0.35);
+	else _cf.copy(ax).normalize();
+	const n = _cx.copy(_cn).negate(), a = _cy.copy(_cf).addScaledVector(n, -_cf.dot(n)).normalize();
+	if (!handFrame(P, C.side, _cm)) return 0;
+	// (eased from where the hand is now)
+	const a0 = _c0.setFromMatrixColumn(_cm, 0), n0 = _c1.setFromMatrixColumn(_cm, 2), p0 = _c2.setFromMatrixPosition(_cm);
+	a.lerpVectors(a0, a, w).normalize(); n.lerpVectors(n0, n, w); n.addScaledVector(a, -n.dot(a)).normalize();
+	const t = C.side === 'L' ? _cz.crossVectors(n, a) : _cz.crossVectors(a, n);
+	p0.lerp(_cw.addScaledVector(_cn, 0.03), w);
+	_cm.makeBasis(a, t, n).setPosition(p0);
+	const pole = _cq.set(0, -0.7, 0).addScaledVector(left, C.side === 'L' ? 0.7 : -0.7).addScaledVector(_cf.set(Math.sin(heading), 0, Math.cos(heading)), -0.15);
+	reach(P, C.side, _cm, pole);
+	return w;
+}
+
 // Project the stock/receiver clear of the posed torso, including garment allowance.
 // Hand reach alone is insufficient: its shortest solution can put a rifle through a chest.
 const clearInv = new THREE.Matrix4(), clearPoint = new THREE.Vector3(), clearCenter = new THREE.Vector3();
@@ -1147,7 +1184,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			gripped = Mo;
 			const side = H?.side || 'R';
 			Mo.grip?.('R', on && (side === 'R' || H?.kind === 'bow') ? (H?.kind === 'bow' ? .68 : 1) : 0);
-			Mo.grip?.('L', on && (H?.L) ? 1 : 0);
+			Mo.grip?.('L', Mo.S?.clutch?.side === 'L' ? 0.45 : on && (H?.L) ? 1 : 0);
 			const want = on ? CARRY[H.kind] : null, name = Mo.S.act.name;
 			if (want && (!name || name === want)) { if (name !== want) Mo.act(want, 0); }
 			else if (!want && name === 'carry') Mo.act(null);
@@ -1168,7 +1205,9 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			// at the ready: the grip by the right hip, the muzzle ahead and low and a little across;
 			// both arms then reach for it
 			const k = P.height / 1.75, f = _x.set(Math.sin(heading), 0, Math.cos(heading)), l = _y.set(Math.cos(heading), 0, -Math.sin(heading));
-			const bow = H.kind === 'bow', a = aimBlend, angle = -0.29 + (pitch + 0.29) * a;
+			// (the support hand off it, on a wound: it hangs from the strong hand, the muzzle down)
+			const C = Mo?.S?.clutch, droop = C?.side === 'L' && H.kind === 'long' ? Math.min(1, C.t / 0.25) * Math.min(1, (C.dur - C.t) / 0.4) : 0;
+			const bow = H.kind === 'bow', a = aimBlend * (1 - droop), angle = -0.29 + (pitch + 0.29) * a - droop * 0.55;
 			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? .12 - .32 * a : -.15) * k).addScaledVector(UP, (1.02 + (bow ? .56 : .34) * a) * k).addScaledVector(f, (.24 + (bow ? .31 : .05) * a) * k);
 			const v = _z.copy(f).multiplyScalar(Math.cos(angle)).addScaledVector(l, 0.1 * (1 - a)).addScaledVector(UP, Math.sin(angle)).normalize(), u = UP.clone().addScaledVector(v, -v.y).normalize();
 			model.matrix.makeBasis(v, u, new THREE.Vector3().crossVectors(v, u)).setPosition(org);
@@ -1240,6 +1279,8 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			else _h.multiplyMatrices(model.matrix, supportHold);
 			contacts.L.copy(_h);
 			reach(P, 'L', _h, _z.copy(UP).multiplyScalar(-1).addScaledVector(l, 0.5).addScaledVector(f, -0.2));
+			// (hurt: the support hand off the gun and onto the wound, combat/wounds.js)
+			if (Mo?.S?.clutch?.side === 'L') applyClutch(P, Mo, dt);
 		}
 		if (H.kind === 'bow') {
 			contacts.L.multiplyMatrices(model.matrix, H.L.m);
@@ -1248,6 +1289,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			// The drawing elbow stays out beside the head, avoiding a wrist behind the neck.
 			reach(P, 'R', contacts.R, new THREE.Vector3(-Math.cos(heading), .08, Math.sin(heading)));
 		}
+		if (H.kind === 'one' && Mo?.S?.clutch && Mo.S.clutch.side !== (H.side || 'R')) applyClutch(P, Mo, dt);
 		flash?.update(dt);
 		model.matrixWorldNeedsUpdate = true;
 		spinMotes(model, time);
