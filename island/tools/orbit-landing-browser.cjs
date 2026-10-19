@@ -147,6 +147,7 @@ const profile = process.argv[2] || 'desktop', shots = process.argv[3] || '';
 		// 4. On the ground, the map pin lists the cities round you; one tap stands you in another.
 		const ids = await page.evaluate(() => Crysis.cities());
 		assert.ok(ids.length >= 3, JSON.stringify(ids));
+		await page.waitForTimeout(8000);   // (the last trip's veil is up to 8 s lifting on a slow machine)
 		await page.evaluate(() => Crysis.cities.go(1));
 		// (stood on its ground once the place is in)
 		await page.waitForFunction(() => !L99Island.world().player.state.flying, null, { polling: 250 });
