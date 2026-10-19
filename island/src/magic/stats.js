@@ -22,6 +22,7 @@ import { SCHOOLS, STRANDS, manaMax, manaRegen, spellPower, cooldownOf, modFor } 
 import { gearMagic, attributesOf as itemAttributes } from '../gameplay/gear-magic.js';
 import { statsOf } from '../gameplay/gear-levels.js';
 import { ARMS_CATALOG } from '../gameplay/arms.js';
+import { rankOf as honorRank, honorMods } from '../combat/honor.js';
 
 // per: what one point of it gives (life and manaMax in points, regen in points a second, the
 // rest as shares)
@@ -115,6 +116,10 @@ export function composeMods(s, perks = s.perks || []) {
 	m.free = G.free;
 	m.gearWeapon = G.weapon;
 	applyMastery(s, m);
+	// your honor's rank: combat, health and defence (combat/honor.js)
+	m.honor = honorRank(s.honor?.pts || 0);
+	const H = honorMods(m.honor);
+	m.weapon += H.weapon; m.life += H.life; m.armor += H.armor;
 	m.armor = Math.min(ARMOR_CAP, m.armor);
 	m.life = Math.round(m.life);
 	m.manaMax = Math.round(m.manaMax);

@@ -87,7 +87,9 @@ or Join, nothing connects, and a `?room=` link just opens the game as usual.
   - the plain facts of a meeting: the resident's name, the place, the time, and a gathering's
     kind, size and seed;
   - direct trade offers and protocol acknowledgements;
-  - room PvP rules, bounded hit reports, shot effects and host-announced boss states.
+  - room PvP rules, each player's PvP flag (in the pose), bounded hit reports, PvP wins
+    ('down', passed only to the one who hit that player a moment ago), shot effects and
+    host-announced boss states.
 
   Room making is limited by a salted hash of the address, kept in memory only.
 - **Origins:** only the game's own site may make or join rooms (`ALLOWED_ORIGINS`). Localhost
@@ -149,7 +151,12 @@ then in two windows join one room, open 🎒 **Gear**, and tap **Trade** next to
 
 ## Combat validation
 
-The host chooses the room's PvP rule, which defaults off. The server enforces it before
+The host chooses the room's PvP rule, which defaults off. On top of it each player raises
+their own PvP flag (the pose's `pk`); a hit passes between two players only when the room
+allows PvP and both flags are up (`pvp-flags-v1`). When a flagged player is downed, their game
+sends `down` naming who downed them and their honor rank; the server passes it to that player
+only if it relayed a hit from them to the downed player in the last 20 s, once per hit, so the
+winner earns honor (`island/src/combat/honor.js`). The server enforces all of it before
 forwarding player hits. It checks the same world, the declared held game item, range,
 damage type, valid player body parts and a per-player firing-rate damage allowance. Player
 reports normalize to the recipient's own `me` target. Shared boss hits are sent only to the
@@ -161,8 +168,10 @@ network damage. Server checks bound the existing account-free game protocol; inv
 item ownership, personal morality and ambient NPC simulation remain local browser state.
 This is not an account-backed inventory or a fully server-simulated world.
 
-After deployment, `/status.features` must contain `trade-v2`, `combat-v1` and
-`combat-guard-v1`. The URL does not change. Use the two-client check below before publishing
+After deployment, `/status.features` must contain `trade-v2`, `combat-v1`,
+`combat-guard-v1` and `pvp-flags-v1`. Until `pvp-flags-v1` is live the game falls back to the
+older rule (the host's switch alone decides who can be hit, though a player whose own flag is
+down takes no PvP harm), and PvP wins earn no honor. The URL does not change. Use the two-client check below before publishing
 the matching client build.
 
 From the repository root, `node server/verify-workers.mjs` checks both production Workers

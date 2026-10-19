@@ -43,6 +43,8 @@ import { BOSSES } from './boss-defs.js';
 import { createRelations, FACTIONS, PLAYER, ATTACK, attackGap } from './factions.js';
 import { rememberIncident } from '../people/world-awareness.js';
 import { createMorality } from './morality.js';
+import { pvpOpen } from './honor.js';
+import { PVP_FEATURE } from '../net/protocol.js';
 import { createCompass } from './compass.js';
 import { soundBus } from '../world/soundbus.js';
 import { createTargetFocus } from './target-focus.js';
@@ -152,6 +154,11 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	const me = { H: createHealth({ max: 100, regen: 9, delay: 5, down: true }), ko: 0, koText: '', lastPos: null, vel: new THREE.Vector3(), speed: 0, firing: 0, crumbs: [] };
 	const ME = { id: 'me', kind: 'player', faction: PLAYER };
 	const rules = { pvp: false };
+	// PvP is chosen twice: the host allows it in the room (rules.pvp), and you raise your own
+	// flag (combat/honor.js pvpOpen). server: the room's server weighs flags (PVP_FEATURE), so
+	// friends' flags are known; hitAt: when you last hit each friend, for a win they report
+	const pvp = { flag: false, server: false, hitAt: new Map() };
+	const pvpNow = () => pvpOpen(rules, pvp.flag);
 	// military/ fills these in: posts() the stationed posts [{ x, z, r, fid? }], trespass(h),
 	// event(e) for trouble the military or police answer, police(stars, response, have) for
 	// cruisers answering the wanted level (true when it took the call). law/ fills in crime(kind,
@@ -160,8 +167,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// roll) (true when it made the world's own trouble itself) and campOk(camp)
 	// (magic/: shield takes a blow aimed at you and returns what gets through, or null; cloak
 	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
-	// weapons deal, for your skills)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null };
+	// weapons deal, for your skills; honorRank() your honor's rank and pvpWin({ from, r, name })
+	// a friend beaten in a PvP fight, for your honor: combat/honor.js)
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null, honorRank: null, pvpWin: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -369,7 +377,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const before = T.moral?.();
 		let r;
 		if (T.shared && !host()) { net.hit(T.id, blow); r = { dealt: blow.amount, remote: true }; }
-		else if (T.kind === 'remote') { net.hit('me', blow, T.peer); r = { dealt: blow.amount }; }
+		else if (T.kind === 'remote') { net.hit('me', blow, T.peer); pvp.hitAt.set(T.peer, performance.now()); r = { dealt: blow.amount }; }
 		else r = strike(T, blow, blow.by || null, rules);
 		if (!r || r.ignored) return r;
 		if (mine) yours(T, r, blow, before);
@@ -414,7 +422,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const lawful = !!F?.lawful;
 		// they opened fire on you first (or struck first): answering them is no crime
 		const defence = !lawful && !!(T.ref?.struckFirst || blow.moral?.selfDefence);
-		if (defence) defendNow(T.bound);
+		if (defence) { defendNow(T.bound); ctx.defence = true; }
 		if (lawful) ctx.lawTarget = true;
 		if (F?.kind === 'civilians') ctx.unarmed = true;
 		if (r.killed) {
@@ -568,7 +576,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// ---------- you, hurt ----------
 	function hurtPlayer(blow) {
 		if (me.ko || !P()) return;
-		if (blow.by?.kind === 'remote' && !rules.pvp) return;
+		if (blow.by?.kind === 'remote' && !pvpNow()) return;
 		if (hooks.shield) { blow = hooks.shield(blow); if (!blow) return; }
 		const r = applyDamage(me.H, blow);
 		if (!r.dealt && !r.absorbed) return;
@@ -580,8 +588,11 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (!blow.quiet) shakeIt(Math.min(0.4, r.dealt / 50));
 		if (r.downed) knockout(blow);
 	}
-	function knockout() {
+	function knockout(blow) {
 		cancelInput();
+		// downed by a friend in a PvP fight: they are told, for their honor (combat/honor.js)
+		const by = blow?.by?.kind === 'remote' ? String(blow.by.id || '').replace(/^rp:/, '') : '';
+		if (by && pvp.server) multiplayer?.send?.({ t: 'down', by, r: hooks.honorRank?.() || 0 });
 		me.ko = 6;
 		const p = P();
 		if (p) p.locked = true;
@@ -1029,8 +1040,18 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		},
 	};
 	function heard(t, v) {
-		if (t === 'closed' || (t === 'status' && v.status !== 'on')) { rules.pvp = false; net.out.length = 0; net.hits.clear(); return; }
-		if (t === 'welcome') { Object.assign(rules, v.rules || { pvp: false }); return; }
+		if (t === 'closed' || (t === 'status' && v.status !== 'on')) { rules.pvp = false; pvp.server = false; pvp.hitAt.clear(); net.out.length = 0; net.hits.clear(); return; }
+		if (t === 'welcome') { Object.assign(rules, v.rules || { pvp: false }); pvp.server = !!v.features?.includes(PVP_FEATURE); return; }
+		// a friend you fought went down: yours, if you hit them a moment ago (the server checks too)
+		if (t === 'down') {
+			const at = pvp.hitAt.get(v.from);
+			if (!pvpNow() || !at || performance.now() - at > 20000) return;
+			pvp.hitAt.delete(v.from);
+			const name = multiplayer?.friend?.(v.from)?.name || 'a friend';
+			hud.feed('You', name, '', { mine: true });
+			hooks.pvpWin?.({ from: v.from, r: v.r | 0, name });
+			return;
+		}
 		if (t === 'rules') { Object.assign(rules, v); hint(`PvP is ${rules.pvp ? 'on' : 'off'} in this room.`, 2500, 1); return; }
 		if(t==='reputation') {
 			const e=v.e, at=multiplayer?.reputationPosition?.(e);
@@ -1041,7 +1062,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (t === 'fx') { const q=v.s?.[0]; if(q) notice('shots',{x:q[0],y:q[1],z:q[2]},'fired a weapon nearby',v.id || 'remote',multiplayer?.friend?.(v.id)?.name || 'another player'); for (const q of v.s) { const a = { x: q[0], y: q[1], z: q[2] }, b = { x: q[3], y: q[4], z: q[5] }; if (q[6] === 7) { hooks.remoteSpell?.(a, b, q[7], v.id); continue; } fx.tracer(a, b, q[6]); fx.muzzle(a, _v.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize(), q[6]); if (q[7]) fx.impact(b, null, 'stone'); } return; }
 		if (t === 'hit') {
 			// on you (PvP), or a guest's hit on something shared, for the host to decide
-			if (v.id === 'me') { if (rules.pvp) { const r = remotes.get(v.from); hurtPlayer({ amount: v.d, type: v.k || 'ballistic', part: v.p, src: r ? { x: r.at[0], y: r.at[1], z: r.at[2] } : null, by: { id: 'rp:' + v.from, kind: 'remote' } }); } return; }
+			if (v.id === 'me') { if (pvpNow()) { const r = remotes.get(v.from); hurtPlayer({ amount: v.d, type: v.k || 'ballistic', part: v.p, src: r ? { x: r.at[0], y: r.at[1], z: r.at[2] } : null, by: { id: 'rp:' + v.from, kind: 'remote' } }); } return; }
 			if (!host()) return;
 			const T = layer.get(v.id);
 			if (T?.kind==='person' && T.faction==='civ') notice('assault',T.bound,'attacked a civilian',v.from || 'remote','another player');
@@ -1054,10 +1075,18 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			for (const [id, hp, phase, dead] of v.e) bosses.get(id)?.sync(hp, phase, dead);
 		}
 	}
-	multiplayer?.linkCombat?.({ heard, rules: () => ({ ...rules }), setRules: (r) => { if (!multiplayer.isHost()) return; Object.assign(rules, { pvp: !!r.pvp }); multiplayer.send({ t: 'rules', r: { pvp: !!r.pvp } }); } });
-	// friends' bodies in the layer while PvP is on
+	function setFlag(on) {
+		pvp.flag = !!on;
+		if (!pvp.flag) pvp.hitAt.clear();
+		const why = !multiplayer?.live?.() ? 'PvP flag raised: it counts once you are in a room with friends.' : rules.pvp ? 'PvP flag raised: friends with theirs up can fight you, and you them.' : 'PvP flag raised. The host has PvP off in this room for now.';
+		hint(pvp.flag ? why : 'PvP flag lowered: no friend can hurt you.', 3000, 1);
+		return pvp.flag;
+	}
+	multiplayer?.linkCombat?.({ heard, rules: () => ({ ...rules }), setRules: (r) => { if (!multiplayer.isHost()) return; Object.assign(rules, { pvp: !!r.pvp }); multiplayer.send({ t: 'rules', r: { pvp: !!r.pvp } }); }, flag: () => pvp.flag, setFlag });
+	// friends' bodies in the layer while PvP is open to you: those with their own flag up (an
+	// older server cannot tell: then everyone, as before)
 	function stepRemotes() {
-		const list = rules.pvp ? multiplayer?.bodies?.() || [] : [];
+		const list = pvpNow() ? (multiplayer?.bodies?.() || []).filter((r) => !pvp.server || r.pk) : [];
 		const ids = new Set(list.map((r) => 'rp:' + r.id));
 		for (const id of remotes.keys()) if (!ids.has('rp:' + id)) { layer.remove('rp:' + id); remotes.delete(id); }
 		for (const r of list) {
@@ -1227,6 +1256,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
 		worldKey: () => worldKey, placeName,
+		// your PvP flag (the room panel's button): raised, friends with theirs up can fight you
+		pvpFlag: () => pvp.flag, setPvpFlag: (on) => setFlag(on), pvpOpen: () => pvpNow(),
 		// a medkit's work (gameplay/item-use.js): you, or the hurt near you
 		mend: (n) => { const before = me.H.hp; if (me.ko > 0 || me.H.state !== 'ok') return 0; me.H.hp = Math.min(me.H.max, me.H.hp + Math.max(0, n)); return me.H.hp - before; },
 		hurt0: () => me.H.max - me.H.hp,
@@ -1245,7 +1276,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		},
 		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),
 		tend: (p) => civilians.tend(p),
-		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points), blue: wanted.blue, strikes: wanted.strikes }, attacks: { play: Math.round(playT), last: Math.round(lastAttackT) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
+		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points), blue: wanted.blue, strikes: wanted.strikes }, attacks: { play: Math.round(playT), last: Math.round(lastAttackT) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, pvp: { flag: pvp.flag, server: pvp.server, open: pvpNow() }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
 		// Crysis.combat.spawn('ashfang', 3, { raid }) / ('rogue') / ('gloom') / ('patrol') / ('fire')
 		spawn: (fid = 'ashfang', n = 3, o = {}) => { const s = spotAhead(o.d ?? 25, (o.d ?? 25) + 10) || { x: eye().x + 20, z: eye().z }; return squads.squad(fid, s.x, s.z, n, o).then((sq) => sq.id); },
 		fight: (a = 'ashfang', b = 'dunecutters', n = 3, d = 30) => { const s = spotAhead(d, d + 5); if (!s) return null; squads.squad(a, s.x - 8, s.z, n, {}); squads.squad(b, s.x + 8, s.z + 3, n, {}); return 'fight'; },
