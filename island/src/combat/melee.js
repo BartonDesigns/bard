@@ -83,7 +83,7 @@ export function createMelee(ctx) {
 		let best = null, bs = 1e9;
 		for (const T of ctx.layer.map.values()) {
 			if (T.kind !== 'person' && T.kind !== 'hostile') continue;
-			if (!T.P && !T.ref?.body) continue;
+			if (!T.P && !T.ref?.body && !T.ref?.cr) continue;
 			const dx = T.bound.x - e.x, dz = T.bound.z - e.z, d = Math.hypot(dx, dz);
 			if (d > reach + 0.45 || Math.abs(T.bound.y - (e.y - 0.7)) > 1.6) continue;
 			const c = (dx * _f.x + dz * _f.z) / (d || 1);

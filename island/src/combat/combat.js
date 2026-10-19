@@ -50,6 +50,7 @@ import { soundBus } from '../world/soundbus.js';
 import { createTargetFocus } from './target-focus.js';
 import { createMelee } from './melee.js';
 import { mayStation, militiaCamps } from '../military/rules.js';
+import { SPECIES, SPECIES_IDS, speciesFor } from '../creatures/catalog.js';
 
 const EYE = 1.68;
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private */ } } };
@@ -968,6 +969,56 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		else if (roll < 0.45) { if (due('ashfang')) camp('ashfang', s); }
 		else if (roll < 0.7 || !compound()) one('rogue', 2);
 	}
+	// ---------- the creatures (creatures/catalog.js) ----------
+	// The night's monsters come out after dark (the Fog Wight on open ground and shores, the
+	// Sexton by the towns and the fields, Drain Skulkers in packs through the streets), the
+	// Deep's own foes below: one of them now and then, out of sight about you, a few at most.
+	let creatureT = 30, creatureSeen = false;
+	function creatures(dt) {
+		creatureT -= dt;
+		if (creatureT > 0) return;
+		creatureT = rnd(50, 100);
+		const p = P();
+		if (!p || p.flying || p.swimming || drive?.active?.() || me.ko || !settings.ambient || contracts.info().mission || W()?.orbit?.active?.()) return;
+		const z = zone(), night = W()?.sky?.uniforms?.uNight?.value ?? 0;
+		const kinds = speciesFor(z, night);
+		if (!kinds.length) return;
+		if (squads.alive().filter((h) => h.cr).length >= (isPhone ? 2 : 4)) return;
+		const id = kinds[Math.floor(Math.random() * kinds.length)], S = SPECIES[id];
+		const s = spotHidden(z === 'deep' ? 25 : 45, z === 'deep' ? 40 : 80);
+		if (!s) return;
+		const [a, b] = S.where.pack, n = Math.min(isPhone ? 2 : 4, a + Math.floor(Math.random() * (b - a + 1)));
+		squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2.5 });
+		if (!creatureSeen && S.where.night) { creatureSeen = true; hint('Something is moving out there in the dark.', 3200, 1); }
+	}
+	// one of them ahead of you, for trying them out (the places menu's Creatures list, and
+	// Crysis.combat.creature): awake and coming for you
+	function creatureAhead(id, n = 1, d = 14) {
+		const S = SPECIES[id];
+		if (!S) return null;
+		const s = spotAhead(d, d + 4) || { x: eye().x - Math.sin(P()?.yaw || 0) * d, z: eye().z - Math.cos(P()?.yaw || 0) * d };
+		return squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2, alert: true }).then((sq) => sq.id);
+	}
+	if (menu) {
+		// a way to meet each one, in the places menu (with Skills and magic, and Test mode)
+		const css = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		const stop = (el) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) el.addEventListener(ev, (x) => x.stopPropagation()); };
+		const btn = document.createElement('button');
+		btn.type = 'button'; btn.textContent = '☠ Creatures'; btn.title = 'Meet one of the creatures, just ahead of you'; btn.style.cssText = css;
+		const list = document.createElement('div');
+		list.style.cssText = 'display:none;flex-direction:column;gap:4px;padding-left:12px;flex:none;';
+		for (const id of SPECIES_IDS) {
+			const b = document.createElement('button');
+			b.type = 'button'; b.textContent = SPECIES[id].name; b.style.cssText = css;
+			stop(b);
+			b.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; list.style.display = 'none'; creatureAhead(id); hint(`${SPECIES[id].name}, just ahead.`, 1800); });
+			list.appendChild(b);
+		}
+		stop(btn);
+		btn.addEventListener('click', (e) => { e.stopPropagation(); list.style.display = list.style.display === 'none' ? 'flex' : 'none'; });
+		menu.insertBefore(list, menu.firstChild);
+		menu.insertBefore(btn, list);
+	}
 	// militia compounds round a point: fixed per world (military/rules.js)
 	function campsNear(x, z) {
 		const w = W();
@@ -1211,6 +1262,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		for (const [id, B0] of bosses) if (!B0.update(dt)) { B0.dispose(); bosses.delete(id); }
 		bossDirector();
 		director(dt);
+		creatures(dt);
 		stepRemotes();
 		net.update(dt);
 		relations.drift(dt);
@@ -1282,6 +1334,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		fight: (a = 'ashfang', b = 'dunecutters', n = 3, d = 30) => { const s = spotAhead(d, d + 5); if (!s) return null; squads.squad(a, s.x - 8, s.z, n, {}); squads.squad(b, s.x + 8, s.z + 3, n, {}); return 'fight'; },
 		raid: () => { const vf = W()?.village?.footprints?.find((f) => !f.fence); if (!vf) return 'no village here'; const a = Math.random() * 6.283; squads.squad('ashfang', vf.x + Math.cos(a) * 45, vf.z + Math.sin(a) * 45, 4, { raid: true, dest: { x: vf.x, z: vf.z } }); squads.squad('hearthguard', vf.x, vf.z, 3, {}); return 'raid'; },
 		boss: (kind = 'leviathan') => spawnBoss(kind)?.info() || 'unknown boss',
+		// Crysis.combat.creature('fog-wight', 1, 14): one of the creatures ahead (creatures/catalog.js)
+		creature: (id = 'fog-wight', n = 1, d = 14) => creatureAhead(id, n, d),
 		bossHit: (part = 'body', n = 500) => { const B0 = [...bosses.values()][0]; return B0 ? (B0.damage({ amount: n, part }), B0.info()) : null; },
 		camp: () => { const s = spotAhead(20, 25); if (s) props.camp(s.x, s.z, 'camp', (x, z) => ground(x, z, s.y + 2)); return props.info(); },
 		fronts: () => { props.fronts(boxesNear(eye().x, eye().z, 40), eye(), (x, z) => ground(x, z), 'fronts'); return props.info(); },
