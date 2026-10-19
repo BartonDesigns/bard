@@ -30,6 +30,7 @@ import { truckGeo, TRUCKS } from './crewtrucks.js';
 import { craneUpperGeo, hookGeo, HOOK_DROP, towerMastGeo, towerJibGeo, trolleyGeo, BOOM_FOOT } from './crewcranes.js';
 import { herasPanel, gate, barrier, cone, debrisBox, cabin, toilet, lightTower, sandHeap, wheelbarrow, generator, stock } from './crewsite.js';
 import { createCrew } from './crewfolk.js';
+import { createCrewPeople } from './crewpeople.js';
 import { siteFrame, findKerb, roadAt, planSite, workHeights, kerbSlots, drivePath, pathAt, speedAt, liftAt } from './crewplan.js';
 import { tierNow, qualityNow } from '../world/governor.js';
 
@@ -62,6 +63,8 @@ export function createRebuild(ctx) {
 	scene.add(group);
 	const lite = () => isPhone || tierNow() >= 2;
 	const crew = createCrew(group, isPhone ? 16 : 48);
+	// (the nearest of them real people you can talk to: crewpeople.js)
+	const folk = createCrewPeople(group, { isPhone });
 	const glow = createGlow(group, isPhone ? 48 : 128);
 	// two real lights for the nearest site's light towers at night (none on a phone)
 	// (floodlights: spot lights aimed down at the work, so the light falls where the lamps point)
@@ -159,7 +162,7 @@ export function createRebuild(ctx) {
 		const co = Math.floor(hash(rec.x * 0.37, rec.z * 0.37 + 11) * COMPANIES.length);
 		const [ox, oy, oz] = G.at(0, 0);
 		const S = {
-			id, rec, o, G, K, P, co, gl, tower, big: (o.h - 1.2) > 14 || o.w * o.d > 600, origin: [ox, oy, oz], blocked,
+			id, rec, o, G, K, P, co, company: COMPANIES[co].name, gl, tower, big: (o.h - 1.2) > 14 || o.w * o.d > 600, origin: [ox, oy, oz], blocked,
 			root: new THREE.Group(), kit: null, old: null, scaf: null, clip: 0, crane: null, mobile: null, vehicles: [], workers: [], heads: [], aims: [],
 			stage: -1, t: Math.random() * 10, beat: 0, fade: 0, leaving: false, loops: {}, anchors: [], slots: kerbSlots(G.L, P.gateU), seen: false, patch: !!rec.patch,
 		};
@@ -568,7 +571,7 @@ export function createRebuild(ctx) {
 		if (performance.now() - tickAt > 500 || store.now() - (lastNow ?? 0) > 0.05) { tickAt = performance.now(); const now = store.now(); schedule(Math.max(0, now - (lastNow ?? now))); lastNow = now; lotCheck = true; }
 		camP.copy(cam.position);
 		liveTag++;
-		crew.begin(); glow.begin();
+		crew.begin(); glow.begin(); folk.begin(camP);
 		if (!cataclysm) { store.each(visit); for (const [id, rec] of patches) visit(id, rec); }
 		let lampSite = null, lampD = 140;
 		for (let i = list.length - 1; i >= 0; i--) {
@@ -583,7 +586,7 @@ export function createRebuild(ctx) {
 			tick(S, dt, d);
 			if (S.heads.length && d < lampD && night > 0.05) { lampD = d; lampSite = S; }
 		}
-		crew.end(); glow.end();
+		crew.end(); glow.end(); folk.end(dt);
 		// the work lights: the nearest lit site's light towers, real light on the work by night
 		const on = lampSite && tierNow() < 2;
 		for (let i = 0; i < lamps.length; i++) {
@@ -798,7 +801,7 @@ export function createRebuild(ctx) {
 			else { pose = 'talk'; u = P.gateU - 1.4 + (w.i % 2) * 2.8; v = P.fenceV - 0.7; face = w.i % 2 ? 0.6 + Math.PI : -0.6 + Math.PI; }
 			G.atTo(u, v, AT);
 			const wy = y ?? AT[1];
-			crew.set(AT[0], wy, AT[2], G.yawF + face, pose, t, w.look, S.t + w.phase);
+			if (!folk.offer(S.id + ':' + w.i, AT[0], wy, AT[2], G.yawF + face, pose, t, w.look, S, role)) crew.set(AT[0], wy, AT[2], G.yawF + face, pose, t, w.look, S.t + w.phase);
 			w.x = AT[0]; w.y = wy; w.z = AT[2];
 			// (a hammer's blow heard as it lands)
 			if (pose === 'hammer') { const st = (t * 1.4) % 1; if (w.stroke < 0.76 && st >= 0.76) sounds.hammer(snd(AT[0], wy + 1.2, AT[2])); w.stroke = st; }
@@ -849,7 +852,7 @@ export function createRebuild(ctx) {
 		}
 		return out;
 	}
-	return { group, update, progress, cataclysm: (on) => (on === undefined ? cataclysm : setCataclysm(on)), info, anchors, sites, crew, patches, cost: () => list.map(costOf) };
+	return { group, update, progress, cataclysm: (on) => (on === undefined ? cataclysm : setCataclysm(on)), info, anchors, sites, crew, folk, dispose: () => folk.dispose(), patches, cost: () => list.map(costOf) };
 }
 
 // ---------- the glow of the beacons, the light towers and the aviation lights ----------
