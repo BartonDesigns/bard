@@ -130,19 +130,21 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 	const taps = new Map();
 	// the game's own view: a canvas filling most of the screen (the HUD has small canvases of its own)
 	const isView = (el) => el?.tagName === 'CANVAS' && el.clientWidth >= innerWidth * 0.5 && el.clientHeight >= innerHeight * 0.5;
-	const toPx = (q) => { point.set(q.x, q.y, q.z).project(camera); const r = mount.getBoundingClientRect(); return { x: r.left + (point.x + 1) / 2 * r.width, y: r.top + (1 - point.y) / 2 * r.height, z: point.z }; };
+	let view = null;
+	const toPx = (q) => { point.set(q.x, q.y, q.z).project(camera); const r = (view || mount).getBoundingClientRect(); return { x: r.left + (point.x + 1) / 2 * r.width, y: r.top + (1 - point.y) / 2 * r.height, z: point.z }; };
 	function tapDown(e) {
 		if (e.pointerType !== 'touch' || !isView(e.target)) return;
 		const r = e.target.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
 		if (x < 0.42 && y > 0.35) return;
-		taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), far: false });
+		taps.set(e.pointerId, { x: e.clientX, y: e.clientY, t: e.timeStamp, far: false, el: e.target });
 	}
 	function tapMove(e) { const q = taps.get(e.pointerId); if (q && Math.hypot(e.clientX - q.x, e.clientY - q.y) > 12) q.far = true; }
 	function tapUp(e) {
 		const q = taps.get(e.pointerId); taps.delete(e.pointerId);
-		if (!q || q.far || performance.now() - q.t > 320 || !active()) return;
+		// (timed by the events themselves: a slow frame between them is not a long press)
+		if (!q || q.far || e.timeStamp - q.t > 320 || !active()) return;
 		const list = [...layer.map.values()].filter((T) => Number.isFinite(focusScore(T, camera.position, { x: 0, y: 0, z: 0 }, { hostile: true, max: 65, shooter, rules, dotMin: -2 })));
-		camera.updateMatrixWorld();
+		camera.updateMatrixWorld(); view = q.el;
 		const T = pickAt(list, q.x, q.y, toPx);
 		if (!T || blocked(camera.position, T.bound)) return;
 		if (selected === T && track) return;
