@@ -1825,10 +1825,11 @@ export function createIslandWorld() {
 		const P = W?.player?.state;
 		if (!P) return;
 		const B = W.boat;
-		const j = B?.boarded?.() ? '' : P.flying ? '⇡' : P.swimming ? (P.diving ? '⇡' : '⤓') : '⤒';
+		// (flying, it is the plane: held it climbs, a double tap lands)
+		const j = B?.boarded?.() ? '' : P.flying ? '✈' : P.swimming ? (P.diving ? '⇡' : '⤓') : '⤒';
 		if (dom.jump.textContent !== j) {
 			dom.jump.textContent = j; dom.jump.style.display = j ? 'block' : 'none';
-			const t = P.flying ? 'Climb' : P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
+			const t = P.flying ? 'Fly up (hold); double-tap to land' : P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
 			dom.jump.title = t; dom.jump.setAttribute('aria-label', t);
 		}
 		// (on foot on a touch screen the same button crouches: a tap down or up, a slide from a sprint)
@@ -2334,7 +2335,7 @@ export function createIslandWorld() {
 		if (!P || world.boat.boarded()) return;
 		if (!P.orbit?.high()) { P.flying = !P.flying; P.vel.y = 0; }
 		P.climbAssist = P.descendAssist = false;
-		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B cycles ×1 / ×3 / ×6 / ×9. F to land.') : 'Landing.', 3500);
+		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. Hold ✈ to climb, ⇣ to sink; double-tap ✈ to land.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B cycles ×1 / ×3 / ×6 / ×9. F or a double tap of Space to land.') : 'Landing.', 3500);
 	}
 	dom.fly.addEventListener('click', (e) => { e.stopPropagation(); toggleFly(); });
 	dom.boost.addEventListener('click', (e) => { e.stopPropagation(); const P = world?.player.state; if (P?.flying) world.player.cycleBoost(); });
@@ -2347,9 +2348,14 @@ export function createIslandWorld() {
 	};
 	hold(dom.jump, 'flyUp'); hold(dom.down, 'flyDown');
 	dom.down.addEventListener('pointerdown', (e) => { e.stopPropagation(); const P = world?.player.state; if (P && !P.flying && !P.swimming) world.player.crouch(); });
+	// a quick double tap of jump takes to the air (still held, it climbs on), and on the plane
+	// it shows while flying, lands
+	let jumpAt = 0;
 	dom.jump.addEventListener('pointerdown', (e) => {
 		e.stopPropagation();
-		const P = world?.player.state;
+		const P = world?.player.state, now = performance.now();
+		if (P && !P.swimming && now - jumpAt < 300) { jumpAt = 0; toggleFly(); P.flyUp = P.flying; return; }
+		jumpAt = now;
 		if (P?.flying) return;
 		if (P?.diving) { P.vel.y = 2.4; P.diving = P.pos.y < (P.surface ?? 0) - 0.4; return; }
 		world?.player.jump();
