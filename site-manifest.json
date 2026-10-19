@@ -163,6 +163,18 @@
     "bytes": 203705,
     "sha256": "bf3829efeca13bdd36906875b60898e465ea455294ac6474e4583c2b849e0a6b"
   },
+  "runtime/hair-assets-202.json.gz": {
+    "bytes": 1660631,
+    "sha256": "c7bcbec7f76dc5398bf43532154b1634bc796e7ed0297ab7913808c3ecc2b465"
+  },
+  "runtime/hair-assets-203.json.gz": {
+    "bytes": 755820,
+    "sha256": "af6450dad934a63645ebc835a60e9841e81dcc940a456ee8be9dbc05121f72b1"
+  },
+  "runtime/hair-credits202.html": {
+    "bytes": 970,
+    "sha256": "5e58dab4163f8fb70f54a7c6eb0f5e9c6cdd734fb9b9f6110b7bb8eb4458b11e"
+  },
   "runtime/orchestra-credits220.html": {
     "bytes": 1558,
     "sha256": "215fdf4ff6da02b085d012b5a39a5be5bd0439bc0c778c54a6015d667f230757"
