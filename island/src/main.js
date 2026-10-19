@@ -1202,6 +1202,7 @@ export function createIslandWorld() {
 		await yieldBuild('Preparing the shoreline');
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
+		player.parkour.attach(scene);
 		// the ground kicked up underfoot (player.js onKick: a sprinting footfall, a slide, a hard
 		// landing): dust off dirt, sand and dry ground, a spray off shallow water, flecks of snow;
 		// nothing off a floor, a road or stone
