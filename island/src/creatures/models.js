@@ -56,7 +56,8 @@ export function loadCreature(id) {
 	return cache.get(id);
 }
 
-const PART = (name) => (/^(head|neck|ear)/.test(name) ? 'head' : /^(hips|spine|chest|robe|cloak)/.test(name) ? 'torso' : 'limb');
+// (the Lampeater's glowing abdomen is its weak point; its wings are the big mass to hit)
+const PART = (name) => (/^(head|neck|ear)/.test(name) ? 'head' : /^abdomen/.test(name) ? 'weak' : /^(hips|spine|chest|robe|cloak|wing)/.test(name) ? 'torso' : 'limb');
 const _a = new THREE.Vector3(), _b = new THREE.Vector3();
 
 // one body of a kind: { root, motion, meta, shapes(out), height }

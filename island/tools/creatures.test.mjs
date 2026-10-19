@@ -47,3 +47,12 @@ test('a rare one comes rarely', () => {
 	for (let i = 0; i < 1000; i++) n[pickSpecies(['sporeborn-miner', 'old-drain-king'], (i + 0.5) / 1000)]++;
 	assert.ok(n['old-drain-king'] > 50 && n['old-drain-king'] < 200, JSON.stringify(n));
 });
+
+test('a flyer keeps above you and drops into reach to strike', () => {
+	for (const id of SPECIES_IDS) {
+		const F = SPECIES[id].fly;
+		if (!F) continue;
+		assert.ok(F.hover > F.strike && F.strike > 0 && F.strike < 2, id);
+	}
+	assert.ok(SPECIES.lampeater.fly);
+});

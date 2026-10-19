@@ -504,7 +504,7 @@ export function createSquads(ctx) {
 			bounds(h);
 		}
 	}
-	function bounds(h) { const B = h.T.bound; B.x = h.pos.x; B.y = h.pos.y + (h.kind === 'drone' ? 0 : h.cr ? h.Sp.height * 0.45 : 0.9); B.z = h.pos.z; }
+	function bounds(h) { const B = h.T.bound; B.x = h.pos.x; B.y = h.pos.y + (h.kind === 'drone' ? 0 : h.cr ? h.Sp.height * 0.45 + (h.alt || 0) : 0.9); B.z = h.pos.z; }
 	function fading(h, dt) {
 		h.deadT += dt;
 		if (h.body) {
@@ -526,9 +526,13 @@ export function createSquads(ctx) {
 			// the death plays out (the knees go, it folds), it lies a while, then sinks away
 			const c = h.cr;
 			if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
-			c.root.position.set(h.pos.x, h.pos.y - Math.max(0, h.deadT - 8) * 0.25 * c.height, h.pos.z);
-			// (falls forward as it folds: the whole body tips over its knees)
-			c.root.rotation.set(Math.min(1, h.deadT / 1.3) ** 2 * 1.2, h.yaw, 0);
+			// (a flyer drops out of the air)
+			if (h.alt > 0) { h.vy = (h.vy || 0) + 9.8 * dt; h.alt = Math.max(0, h.alt - h.vy * dt); }
+			c.root.position.set(h.pos.x, h.pos.y + (h.alt || 0) - Math.max(0, h.deadT - 8) * 0.25 * c.height, h.pos.z);
+			// (a biped falls forward as it folds: the whole body tips over its knees; four legs
+			// and wings go over in their own death)
+			const tip = !c.meta.rig || c.meta.rig === 'biped' ? 1.2 : 0;
+			c.root.rotation.set(Math.min(1, h.deadT / 1.3) ** 2 * tip, h.yaw, 0);
 			if (h.deadT > 12) release(h);
 		} else {
 			h.mesh.rotation.z = Math.min(Math.PI * 0.9, h.deadT * 3);
@@ -547,7 +551,7 @@ export function createSquads(ctx) {
 		else if (h.cr) {
 			const sp = hx.hold > 0 ? 0 : h.Sp.run * (hx.slowK || 1);
 			if (sp) { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * sp * dt; h.pos.z += az / l * sp * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); }
-			h.cr.root.position.copy(h.pos); h.cr.root.rotation.set(0, h.yaw, 0);
+			h.cr.root.position.copy(h.pos); h.cr.root.position.y += flyAlt(h, dt, null); h.cr.root.rotation.set(0, h.yaw, 0);
 			h.cr.motion.update(dt, { speed: sp });
 		}
 	}
@@ -831,12 +835,24 @@ export function createSquads(ctx) {
 		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
 		ctx.keepOut?.(h.pos);
 		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
-		c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
+		c.root.position.copy(h.pos); c.root.position.y += flyAlt(h, dt, at);
+		c.root.rotation.set(0, h.yaw, 0);
 		// (far off, moved less often: the bones are the cost)
 		h.animT = (h.animT || 0) + dt;
 		const every = d > 70 ? 0.1 : d > 35 ? 0.05 : 0;
 		if (h.animT >= every) { c.motion.update(h.animT, { speed: Math.abs(speed), look: 0 }); h.animT = 0; }
 		c.root.visible = d < 220;
+	}
+	// a flyer (the Lampeater) keeps its height over the ground, comes lower as it closes, and drops
+	// to strike; its height in m over the ground
+	function flyAlt(h, dt, at) {
+		const F = h.Sp.fly;
+		if (!F) return 0;
+		const near = at && h.alert && Math.hypot(at.x - h.pos.x, at.z - h.pos.z) < h.Sp.reach * 2.5;
+		const goal = h.strikeT >= 0 && !h.throwing ? F.strike : near ? F.strike + 0.8 : F.hover;
+		h.alt = h.alt ?? F.hover;
+		h.alt += (goal - h.alt) * Math.min(1, dt * 2.2);
+		return h.alt;
 	}
 	// a body of a model (a kind's own, or the person a Moonturned is first), from the pool or new (each kind's model loaded once: creatures/models.js)
 	async function creatureBody(id, species = id) {

@@ -3,10 +3,11 @@
 // space (meta.joints, from tools/monsters/build.py), so every motion here is written in the
 // model's own axes (x to its left, y up, z forward) and turned into each bone's frame as it goes.
 //
-// A rig kind (meta.rig) picks the body plan: 'biped' (two legs, two arms) or 'quad' (four legs, a tail); more come with
-// their creatures. Each plan answers the same calls: a gait at a speed, an idle, a strike, a hit
-// from a side, a death. They blend: the gait's weight follows the speed, a strike or a hit is laid
-// over whatever the body is doing, and death takes it over.
+// A rig kind (meta.rig) picks the body plan: 'biped' (two legs, two arms), 'quad' (four legs, a
+// tail) or 'flyer' (wings and hanging legs); more come with their creatures. Each plan answers the
+// same calls: a gait at a speed, an idle, a strike, a hit from a side, a death. They blend: the
+// gait's weight follows the speed, a strike or a hit is laid over whatever the body is doing, and
+// death takes it over.
 
 import * as THREE from 'three';
 
@@ -212,7 +213,62 @@ export function createCreatureMotion(root, meta) {
 		}
 	}
 
-	const PLANS = { biped, quad };
+	// ---------- flyer: two pairs of wings beating, six legs hanging (the Lampeater) ----------
+	function flyer(_dt) {
+		const s = state;
+		const alive = s.death < 0 ? 1 : 0;
+		// a slow beat hovering, quicker on the move; the hind wings a little behind the fore
+		const ph = s.t * (7 + 3 * s.gait);
+		const w = Math.sin(ph), w2 = Math.sin(ph - 0.45);
+		for (const side of ['L', 'R']) {
+			const sg = side === 'L' ? 1 : -1;
+			add('wing_' + side, 0, sg * 0.08 * s.gait, sg * (w * 0.75 + 0.1) * alive);
+			add('wing2_' + side, 0, 0, sg * (w2 * 0.6 + 0.05) * alive);
+			// the legs hang, swept back on the move, stirring
+			for (const [k, n] of ['leg1', 'leg2', 'leg3'].entries()) {
+				add(`${n}a_${side}`, 0.3 * s.gait + Math.sin(s.t * 1.3 + k + sg) * 0.08, 0, 0);
+				add(`${n}b_${side}`, Math.sin(s.t * 1.1 + k) * 0.1, 0, 0);
+			}
+		}
+		// the body rides the beat, nose down on the move
+		add('hips', 0.15 * s.gait - w * 0.04 * alive, 0, 0);
+		add('abdomen', Math.sin(s.t * 2) * 0.06 + w * 0.05 * alive, Math.sin(s.t * 1.3) * 0.08, 0);
+		add('abdomen2', Math.sin(s.t * 2 - 0.5) * 0.08, Math.sin(s.t * 1.3 - 0.4) * 0.1, 0);
+		add('head', 0, s.look * 0.6, 0);
+		add('proboscis', Math.sin(s.t * 0.7) * 0.15, 0, 0);
+		// a strike: it drops its head, reaches with its forelegs (the hands) and stabs the proboscis
+		if (s.strike >= 0) {
+			const k = s.strike;
+			const reach = smooth(k / 0.4) * (1 - smooth((k - 0.6) / 0.4));
+			const stab = smooth((k - 0.4) / 0.1) * (1 - smooth((k - 0.55) / 0.3));
+			add('hips', 0.35 * reach, 0, 0);
+			add('leg1a_L', -1.1 * reach, 0, 0.2 * reach);
+			add('leg1a_R', -1.1 * reach, 0, -0.2 * reach);
+			add('leg1b_L', -0.6 * reach, 0, 0);
+			add('leg1b_R', -0.6 * reach, 0, 0);
+			add('proboscis', -1.2 * stab, 0, 0);
+			add('head', 0.3 * stab, 0, 0);
+		}
+		// a hit: thrown over in the air
+		if (s.hit >= 0) {
+			const k = Math.sin(clamp(s.hit / 0.45, 0, 1) * Math.PI) * (1 - s.hit);
+			const d = s.hitDir;
+			add('hips', d.z * 0.3 * k, 0, -d.x * 0.5 * k);
+		}
+		// death: the wings fold up over the back, the legs curl in
+		if (s.death >= 0) {
+			const k = smooth(s.death / 0.8);
+			for (const side of ['L', 'R']) {
+				const sg = side === 'L' ? 1 : -1;
+				add('wing_' + side, 0, 0, sg * 1.2 * k);
+				add('wing2_' + side, 0, 0, sg * 1.0 * k);
+				for (const n of ['leg1', 'leg2', 'leg3']) { add(`${n}a_${side}`, 0.6 * k, 0, -sg * 0.3 * k); add(`${n}b_${side}`, 0.9 * k, 0, 0); }
+			}
+			add('hips', 0, 0, 0.6 * k);
+		}
+	}
+
+	const PLANS = { biped, quad, flyer };
 	const plan = PLANS[meta.rig] || biped;
 
 	// apply: each bone's rotation is in model axes; turn it into the parent's frame, top-down
