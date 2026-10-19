@@ -7,7 +7,7 @@ import { GLYPHS, glyphFor, firstTime } from '../src/ui/touch-skin.js';
 const CONTROLS = [
 	['Back to the Bard faceplate', '◀ Bard', 'back'], ['Sky and world settings', '☀', 'sun'], ['Auto music: a generative score', '', 'music'],
 	['All controls', '☷', 'menu'], ['Fly (F)', '✈', 'plane'], ['Gear and trade (I)', '', 'bag'], ['Teleport to a place', '', 'pin'],
-	['Jump', '⤒', 'jump'], ['Climb', '⇡', 'climb'], ['Dive', '⤓', 'dive'], ['Swim up', '⇡', 'swimup'], ['Descend', '⇣', 'descend'], ['Crouch (C); from a sprint, slide', '', 'crouch'],
+	['Jump', '⤒', 'jump'], ['Fly up (hold); double-tap to land', '✈', 'plane'], ['Climb', '⇡', 'climb'], ['Dive', '⤓', 'dive'], ['Swim up', '⇡', 'swimup'], ['Descend', '⇣', 'descend'], ['Crouch (C); from a sprint, slide', '', 'crouch'],
 	['Fire', '', 'fire'], ['Draw', '', 'bow'], ['Release', '', 'bow'], ['Reload', 'R', 'reload'], ['Mode', 'AUTO', 'auto'], ['Mode', 'SEMI', 'semi'], ['Mode', 'BURST', 'burst'],
 	['Aim', '', 'aim'], ['Aim held item', 'Aim', 'aim'], ['Strike', '', 'fist'], ['Swing', '', 'swing'], ['Slash', '', 'slash'], ['Block', '', 'block'], ['Dodge', '', 'dodge'],
 	['Grab', '', 'grab'], ['Takedown', '', 'takedown'], ['Throw', '', 'throw'], ['Surrender', '✋ Surrender', 'surrender'],

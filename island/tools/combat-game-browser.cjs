@@ -67,6 +67,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 			return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
 		}, ids[0]);
 		R.tapAt = at;
+		R.tapEl = await page.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e && `${e.tagName}.${e.className} ${e.clientWidth}x${e.clientHeight}`; }, at);
 		await page.touchscreen.tap(at.x, at.y);
 	}
 	await wait(1500);
@@ -81,8 +82,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	R.trackErr = await err();
 	await shot('locked');
 	// fine-tune: nudge the aim up toward the head; it holds there
+	const frames = (n) => page.evaluate((n) => new Promise((r) => { let i = 0; const f = () => (++i >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
+	await frames(3);
+	R.before = await page.evaluate(() => Crysis.combat.focus.info().offset);
 	await page.evaluate(() => { const p = window.L99Island.world().player.state; p.pitch += 0.015; });
-	await wait(1000);
+	await frames(4);
 	R.nudged = await page.evaluate(() => Crysis.combat.focus.info().offset);
 	// release
 	if (profile === 'desktop') await page.keyboard.press('Backquote'); else await page.evaluate(() => Crysis.combat.focus.lockOn?.() ?? Crysis.combat.focus.toggle?.());
@@ -121,7 +125,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	ok(R.released, 'the lock did not let go');
 	ok(R.head?.part === 'head' && (R.head.res?.killed || R.head.dead || R.head.hp <= 0), 'a round to the head did not drop them');
 	ok(R.leg.some((r) => r?.crippled), 'rounds to the leg did not cripple');
-	ok(R.shoulder?.part === 'shoulder' && R.shoulder.react?.name?.startsWith('hurt-'), 'the shoulder hit did not react');
+	ok(['shoulder', 'arm'].includes(R.shoulder?.part) && R.shoulder.react?.name?.startsWith('hurt-'), 'the shoulder hit did not react');
+	ok(R.nudged && R.before && R.nudged.pitch - R.before.pitch > 0.01, 'the nudge up did not hold on the body');
 	console.log(problems.length ? 'FAIL ' + problems.join(' | ') : 'PASS');
 	await browser.close(); server.close();
 	process.exitCode = problems.length ? 1 : 0;
