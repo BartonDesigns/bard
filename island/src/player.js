@@ -43,12 +43,19 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
  document.addEventListener('pointerlockchange', lockChanged);
  dom.mount.addEventListener('l99-look-delta', buttonLook);
  dom.mount.addEventListener('focusin', focusedUI);
+	let spaceAt = 0;
 	function keyDown(e) {
 		if (!s.active || window._KEYS_PLAY_ON || e.target.closest?.('input,textarea,[contenteditable]')) return;
 		const k = e.key.toLowerCase();
 		if (['escape','tab','g','i','k'].includes(k)) releaseMouse();
 		if (k === 'f' && !e.repeat) { if (!s.orbit?.high()) { s.flying = !s.flying; s.vel.y = 0; } s.climbAssist = s.descendAssist = false; s.onFly?.(s.flying); e.preventDefault(); return; }
 		if (k === 'b' && !e.repeat && s.flying) { cycleBoost(); e.preventDefault(); return; }
+		// (a quick double tap of Space takes to the air or lands, as the touch screen's jump does)
+		if (k === ' ' && !e.repeat && !s.swimming) {
+			const now = performance.now();
+			if (now - spaceAt < 300) { spaceAt = 0; if (!s.orbit?.high()) { s.flying = !s.flying; s.vel.y = 0; } s.climbAssist = s.descendAssist = false; s.onFly?.(s.flying); if (!s.flying) keys.delete(' '); else keys.add(' '); e.preventDefault(); return; }
+			spaceAt = now;
+		}
 		// (C on foot crouches, or slides out of a sprint; a fist fight's dodge has it first: combat/melee.js)
 		if (k === 'c' && e.l99Dodge) s.dodgeC = true;
 		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = s.descendAssist = false; keys.add(k); e.preventDefault(); }
