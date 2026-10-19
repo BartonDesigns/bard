@@ -414,6 +414,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if(Date.now()-lastShotNotice>4000) {lastShotNotice=Date.now();notice('shots',at,'fired a weapon nearby');}
 		civilians.alarm(at.x, at.z, 30);
 		squads.hear(at.x, at.z, 70);
+		if (!isBow(w)) W()?.flush?.noise(at, S.type === 'energy' ? 0.35 : 0.6, camera.position);
 		crime('shots', at, witnesses(at) > 0);
 	}
 
@@ -501,6 +502,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (d < r && !me.ko) hurtPlayer({ amount: dmg * (1 - d / r) * (mine ? 0.5 : 1), type, part: 'torso', src: c, by });
 		if (d < r * 4) shakeIt(0.5 * (1 - d / (r * 4)));
 		civilians.alarm(c.x, c.z, 35); squads.hear(c.x, c.z, 90);
+		W()?.flush?.noise(c, 1, camera.position);
 		sound('boom', c);
 		W()?.structures?.blast?.(c, r, dmg);          // structures: the panes round it, the walls it reaches
 		// a big one sets cars and buildings near it alight
@@ -1028,6 +1030,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (now < shotGate) return;
 		shotGate = now + gap;
 		try { playCue(weaponOf(gun)?.sounds.fire || 'scout', { distance: d, delay: d / 343, loud: true }); } catch { /* no audio */ }
+		// (and the birds near it take off: world/flush.js)
+		W()?.flush?.noise(at, 0.5, e);
 	}
 
 	function shakeIt(k) { shake = Math.min(1, shake + k); }

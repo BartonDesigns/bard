@@ -200,6 +200,7 @@ import { installAirFog, AIR } from './world/airfog.js';
 import { createPlumes, ambientPlumes } from './world/plumes.js';
 import { createPowerlines } from './world/powerlines.js';
 import { createContrails } from './world/contrails.js';
+import { createFlush } from './world/flush.js';
 import { createFarForest } from './world/farforest.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { touchLookRows } from './ui/touch-look.js';
@@ -1155,6 +1156,8 @@ export function createIslandWorld() {
 		// airliners far overhead and their contrails, on Earth (world/contrails.js)
 		const contrails = createContrails(scene, shared, sky, { isPhone: GFX });
 		contrails.enabled = earth && !island.far;
+		// birds flushed out of the trees by gunfire and blasts (world/flush.js; combat calls noise())
+		const flush = createFlush(scene, shared, { isPhone: GFX, vegetation, heightAt: (x, z) => { const b = world?.bayArea; return b?.loaded?.() ? b.heightAt(x, z) : island.heightAt(x, z); } });
 		// the island's trees past their draw distance, as impostors (world/farforest.js)
 		const farForest = createFarForest(vegetation, island, shared, scene, { isPhone: GFX });
 		const fauna = stash(() => createFauna(island, shared, scene));
@@ -1198,7 +1201,7 @@ export function createIslandWorld() {
 		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
-		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, flush, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
 		// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
 		seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
 		seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
@@ -1525,6 +1528,7 @@ export function createIslandWorld() {
 		world.plumes?.dispose();
 		world.powerlines?.dispose();
 		world.contrails?.dispose();
+		world.flush?.dispose();
 		world.farForest?.dispose();
 		world.discovery?.dispose();
 		world.services?.dispose();
@@ -2101,6 +2105,7 @@ export function createIslandWorld() {
 		W.plumes.update(dt, camera, W.sky);
 		W.powerlines?.update(camera, dt);
 		W.contrails?.update(dt, camera);
+		W.flush?.update(dt, camera);
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bridge?.update(time, sk.night);
