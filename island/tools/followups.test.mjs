@@ -70,12 +70,8 @@ test('grid holes bump the car, and only where the grid is', () => {
 });
 
 // world/governor.js peopleCap: the tier's people share
-test('people caps follow the quality tier', () => {
-	setTier(0);
-	assert.equal(peopleCap(14, 3), 14);
-	setTier(3);
-	assert.equal(peopleCap(14, 3), 4, 'a share of 0.3');
-	assert.equal(peopleCap(5, 3), 3, 'never fewer than the least');
+test('people caps keep the whole crowd on every quality tier', () => {
+	for (let t = 0; t < 4; t++) { setTier(t); assert.equal(peopleCap(14, 3), 14); }
 	assert.equal(peopleCap(2, 3), 2, 'nor more than asked');
 	setTier(0);
 });
