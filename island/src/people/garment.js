@@ -1454,10 +1454,14 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const thetaOf = (axis, w, ref = V3(0, 0, 1)) => { const a = axis.clone().normalize(), f = ref.clone().projectOnPlane(a).normalize(), s = V3(0, 0, 0).crossVectors(a, f); return Math.atan2(w.dot(s), w.dot(f)); };
 	const angGap = (x, y) => Math.abs(((x - y + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
 	// how far along a bone the skin point v lies
+	// (kept for the armour pieces still to come: unused by the ones made so far)
+	// eslint-disable-next-line no-unused-vars
 	const alongBone = (v, from, to) => { const d = to.clone().sub(from), L = d.length(); return ((skinP[v * 3] - from.x) * d.x + (skinP[v * 3 + 1] - from.y) * d.y + (skinP[v * 3 + 2] - from.z) * d.z) / (L || 1); };
 	// laminated plate along a run (t: how far along, in metres): each lame a step out over the
 	// next (up: the first lame outermost), swelling toward its free edge, which is worn bright,
 	// and a dark seam where one ends
+	// (kept for the armour pieces still to come)
+	// eslint-disable-next-line no-unused-vars
 	const lames = (t, width, step = 0.0045, up = true, saw = 0.0025) => {
 		const k = Math.floor(t / width), f = t / width - k, free = up ? f : 1 - f;
 		return { lift: Math.max(0, up ? 3 - k : k) * step + saw * free * free, seam: f > 0.88 ? (f - 0.88) / 0.12 : f < 0.05 ? 1 - f / 0.05 : 0, tone: free > 0.66 && free < 0.86 ? 1.22 : 1 };
@@ -1567,6 +1571,8 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		};
 	};
 	// rings joined into a tube: [{ y, rx, rz, x, z }] top to bottom
+	// (kept for the armour pieces still to come)
+	// eslint-disable-next-line no-unused-vars
 	const ringTube = (rings, seg = 32) => {
 		const V = [], I = [];
 		for (const R of rings) for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; V.push(R.x + Math.sin(a) * R.rx, R.y, R.z + Math.cos(a) * R.rz); }
@@ -2204,7 +2210,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 		for (const sd of ['L', 'R']) {
 			const ub = 'upperarm01.' + sd, S = heads[map[ub]], E = heads[map['lowerarm01.' + sd]]; if (!S || !E) continue;
 			const sx = Math.sign(S.x) || 1, len = S.distanceTo(E), ax = E.clone().sub(S).normalize(), outA = thetaOf(ax, V3(sx, 0, 0));
-			const g = limbGirth(ub, 1, 0.04, 0.12), mine = (x) => x * sx > Math.abs(S.x) * 0.5;
+			const mine = (x) => x * sx > Math.abs(S.x) * 0.5;
 			// (the cap: an ellipsoid over the joint, flatter than it is wide and longer front to back
 			// than across, grown until it holds every bit of the shoulder under it, then stood off it)
 			const C = S.clone().add(V3(-sx * 0.012, -0.012, 0)), d = V3(sx * 0.5, 0.86, 0).normalize();
