@@ -33,7 +33,7 @@ export const TRADES = { hammer: 'a carpenter', lay: 'a mason', shovel: 'a labour
 export function workerStyle(look, r) {
 	const h = Math.abs(Math.floor(look));
 	// (the shirt and trousers by the look too, so the far figure (crewbake.js) wears the same)
-	const shirt = SHIRTS[(h * 7 + 3) % SHIRTS.length], [tc, tp] = TROUSERS[(h * 5 + 1) % TROUSERS.length], k = r();
+	const shirt = SHIRTS[(h * 7 + 3) % SHIRTS.length], [tc, tp] = TROUSERS[(h * 3 + 2) % TROUSERS.length], k = r();
 	const top = k < 0.5 ? { kind: 'tee', col: shirt, pat: 'plain', fit: 'regular', sleeves: 'short' }
 		: k < 0.8 ? { kind: 'henley', col: shirt, pat: 'plain', fit: 'regular', sleeves: 'long' }
 			: { kind: 'flannel', col: shirt, acc: '#16171a', acc2: '#d9d3c4', pat: 'plaid', fit: 'regular', sleeves: 'long', collar: true };

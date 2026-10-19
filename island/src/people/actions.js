@@ -268,6 +268,8 @@ export const ACTIONS = {
 		[0.5, { L: arm({ abd: 0.15, flex: 0.9, roll: 0.5, bend: 0.55, pro: 0.3, curl: 0.55 }), R: arm({ abd: 0.15, flex: 0.9, roll: 0.5, bend: 0.55, pro: 0.3, curl: 0.55 }), sp: [0, 0.6, 0], hp: [0, 0.2, 0, 0.44], fL: [0.2, 0, 0.25], fR: [-0.18, 0.08, -0.5], hd: [0, 0.4, 0] }],
 		[1, { L: arm({ abd: 0.15, flex: 0.55, roll: 0.5, bend: 0.75, pro: 0.3, curl: 0.55 }), R: arm({ abd: 0.15, flex: 0.55, roll: 0.5, bend: 0.75, pro: 0.3, curl: 0.55 }), sp: [0, 0.35, 0], hp: [0, 0.12, 0, 0.42], fL: [0.2, 0, 0.25], fR: [-0.18, 0.08, -0.5], hd: [0, 0.35, 0] }],
 	] },
+	// talking with the hands (a crew figure seen from afar: the right hand out, the left a little)
+	crewTalk: { loop: false, keys: [[0, { R: arm({ abd: 0.2, flex: 0.65, roll: 0.3, bend: 1.25, pro: 1.2, curl: 0.3 }), L: arm({ abd: 0.12, flex: 0.25, roll: 0.3, bend: 0.6, pro: 0.9, curl: 0.4 }), hd: [0.05, 0.2, 0] }]] },
 	// a wave (the keeper's hello, a spectator)
 	wave: { loop: true, keys: [
 		[0, { R: arm({ abd: 0.9, flex: 0.2, roll: -1.3, bend: 1.7, pro: 1.9, curl: 0.05 }) }],

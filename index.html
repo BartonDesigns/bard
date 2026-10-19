@@ -3158,7 +3158,7 @@ function download(data,name){const url=URL.createObjectURL(new Blob([JSON.string
 function stage(raw){pending=validate(raw);renderReview();return{places:pending.places.length,visits:pending.visits.length};}
 function merge(){if(!pending)return;const byId=new Map(state.places.map(p=>[p.id,p]));let added=0;for(const p of pending.places)if(!byId.has(p.id)){byId.set(p.id,p);added++;}if(byId.size>LIMIT){say('The combined backup exceeds 160 places. Remove some places first.');return false;}const visits=new Map(state.visits.map(v=>[v.realm+'|'+v.world,v]));for(const v of pending.visits){const key=v.realm+'|'+v.world,old=visits.get(key);if(!old||old.at<v.at)visits.set(key,v);}state.places=[...byId.values()];state.visits=[...visits.values()].sort((a,b)=>a.at-b.at).slice(-VISITS);pending=null;const ok=persist();renderList();renderReview();if(ok)say('Added '+added+' places. Existing places kept.');return true;}
 function renderReview(){const box=document.getElementById('places-review216');if(!box)return;box.replaceChildren();box.hidden=!pending;if(!pending)return;box.append(text('p',pending.places.length+' places and '+pending.visits.length+' visited worlds. Merge adds new places and keeps existing names and positions. Other game saves are unchanged.'),btn('Merge places',merge),btn('Cancel import',()=>{importToken++;pending=null;renderReview();say('Import cancelled.');}));}
-function renderList(){const list=document.getElementById('places-list216'),worlds=document.getElementById('visits-list216');if(!list||!worlds)return;const query=(document.getElementById('places-search216')?.value||'').toLowerCase(),filter=document.getElementById('places-filter216')?.value||'all',c=current();list.replaceChildren();worlds.replaceChildren();const view=state.places.slice().reverse().filter(p=>(filter!=='current'||(p.realm===c?.realm&&p.world===c?.world))&&(p.name+' '+(state.visits.find(v=>v.world===p.world&&v.realm===p.realm)?.name||p.world)).toLowerCase().includes(query));for(const p of view){const card=text('article','','place-card216'),world=state.visits.find(v=>v.world===p.world&&v.realm===p.realm),same=c&&p.realm===c.realm&&p.world===c.world;card.append(text('strong',p.name),text('p',(world?.name||p.world)+' · '+(p.underground?'Underground':'Surface')));const actions=text('div','','place-actions216'),go=btn(target===p.id?'Stop following':'Follow bearing',()=>target===p.id?stop():follow(p.id));go.disabled=!same;actions.append(go,btn('Rename',()=>{const label=text('label','New name'),input=document.createElement('input');input.type='text';input.value=p.name;input.maxLength=64;label.append(input);actions.replaceChildren(label,btn('Save name',()=>{const value=input.value.trim();if(!value){say('Enter a name first.');input.focus();return;}p.name=value;const ok=persist();renderList();updateRoute();if(ok)say('Place renamed.');}),btn('Cancel',renderList));input.focus();input.select();}),btn('Remove',()=>remove(p.id)));card.append(actions);if(!same)card.append(text('small','Return to this world to follow its bearing.'));list.append(card);}if(!view.length)list.append(text('p',state.places.length?'No matching places.':'Save a cave entrance, overlook or favorite place to play.'));for(const v of state.visits.slice().sort((a,b)=>b.at-a.at).filter(v=>v.name.toLowerCase().includes(query))){worlds.append(text('p',v.name+' · '+(v.realm==='flight'?'Flight surface':'Caves / surface')+' · '+new Date(v.at).toLocaleDateString()));}if(!state.visits.length)worlds.append(text('p','Cave regions and landed worlds appear here as you explore.'));const count=document.getElementById('places-count216');if(count)count.textContent=state.places.length+' / 160 places · '+state.visits.length+' visited worlds';const un=document.getElementById('places-undo216');if(un)un.hidden=!undo;}
+function renderList(){const list=document.getElementById('places-list216'),worlds=document.getElementById('visits-list216');if(!list||!worlds)return;const query=(document.getElementById('places-search216')?.value||'').toLowerCase(),filter=document.getElementById('places-filter216')?.value||'all',c=current();list.replaceChildren();worlds.replaceChildren();const view=state.places.slice().reverse().filter(p=>(filter!=='current'||(p.realm===c?.realm&&p.world===c?.world))&&(p.name+' '+(state.visits.find(v=>v.world===p.world&&v.realm===p.realm)?.name||p.world)).toLowerCase().includes(query));for(const p of view){const card=text('article','','place-card216'),world=state.visits.find(v=>v.world===p.world&&v.realm===p.realm),same=c&&p.realm===c.realm&&p.world===c.world;card.append(text('strong',p.name),text('p',(world?.name||p.world)+' · '+(p.underground?'Underground':'Surface')));const actions=text('div','','place-actions216'),go=btn(target===p.id?'Stop following':'Follow bearing',()=>target===p.id?stop():follow(p.id));go.disabled=!same;actions.append(go,btn('Rename',()=>{const label=text('label','New name'),input=document.createElement('input');input.type='text';input.name='place-rename216';input.value=p.name;input.maxLength=64;label.append(input);actions.replaceChildren(label,btn('Save name',()=>{const value=input.value.trim();if(!value){say('Enter a name first.');input.focus();return;}p.name=value;const ok=persist();renderList();updateRoute();if(ok)say('Place renamed.');}),btn('Cancel',renderList));input.focus();input.select();}),btn('Remove',()=>remove(p.id)));card.append(actions);if(!same)card.append(text('small','Return to this world to follow its bearing.'));list.append(card);}if(!view.length)list.append(text('p',state.places.length?'No matching places.':'Save a cave entrance, overlook or favorite place to play.'));for(const v of state.visits.slice().sort((a,b)=>b.at-a.at).filter(v=>v.name.toLowerCase().includes(query))){worlds.append(text('p',v.name+' · '+(v.realm==='flight'?'Flight surface':'Caves / surface')+' · '+new Date(v.at).toLocaleDateString()));}if(!state.visits.length)worlds.append(text('p','Cave regions and landed worlds appear here as you explore.'));const count=document.getElementById('places-count216');if(count)count.textContent=state.places.length+' / 160 places · '+state.visits.length+' visited worlds';const un=document.getElementById('places-undo216');if(un)un.hidden=!undo;}
 function updateRoute(){if(!document.body)return;const g=guidance();if(!route){route=text('aside','','route216');route.id='route216';route.setAttribute('aria-label','Saved place bearing');route.hidden=true;const content=text('div'),name=text('strong'),message=text('span');content.append(name,message);route.append(content,btn('Stop',stop));route._name=name;route._message=message;document.body.append(route);}const same=!!g?.available,modal=document.getElementById('field-journal-dialog216');route.hidden=!same||document.hidden||!!(modal&&!modal.hidden);if(g){route._name.textContent=g.name;route._message.textContent=g.message;}const live=document.getElementById('place-bearing216');if(live)live.textContent=g?g.message+' · Direct bearing, not a safe walking route.':'Choose Follow bearing for a saved place in this world.';}
 function applyView(){for(const realm of ['caves','flight']){const w=root.L99World175?.world(realm),canvas=w?.canvas216?.();if(canvas){if(prefs.brightness===1){canvas.classList.remove('world-view216');canvas.style.removeProperty('--world-brightness216');}else{if(canvas.style.getPropertyValue('--world-brightness216')!==String(prefs.brightness))canvas.style.setProperty('--world-brightness216',String(prefs.brightness));canvas.classList.add('world-view216');}}}}
 function setView(k,v){if(!['brightness','effects'].includes(k)||!Number.isFinite(Number(v)))return;prefs[k]=clamp(Number(v),k==='brightness'?.75:0,k==='brightness'?1.6:1);applyView();prefSave();}
@@ -8005,7 +8005,7 @@ function render215(){if(!ui?.ext215||!state?.phrases)return;const e=ui.ext215;
 }
 function mount215(panel){const host=document.createElement('div');host.className='studio-workflow215';host.innerHTML=`
  <div class="studio-audio215"><span data-audio-state215 role="status">Audio starts on your next play.</span><button data-resume215 hidden>RESUME AUDIO</button></div>
- <details class="studio-ideas215"><summary>PHRASES & ARRANGEMENT</summary><p class="studio-hint">Four two-bar phrases share this faceplate’s sound and mix. Select one to edit; build a song from their letters.</p><div data-slots215 class="studio-slots215"></div><label>Phrase name<input data-name215 maxlength="40" type="text"></label><div class="studio-toolbar"><label>Copy current phrase to<select data-copy-target215 aria-label="Copy phrase destination"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label><button data-copy-phrase215>COPY PHRASE</button></div><label>Play & export<select data-scope215><option value="phrase">Selected phrase · 2 bars</option><option value="arrangement">Arrangement · up to 16 bars</option></select></label><label>Arrangement order<input data-order215 type="text" maxlength="15" spellcheck="false" placeholder="A A B A C D" aria-describedby="arr-help215"></label><p id="arr-help215" class="studio-hint">Use A, B, C or D, separated by spaces. Maximum eight phrases. Edits to the order take effect on the next PLAY.</p><p data-arr-info215 class="studio-hint"></p></details>
+ <details class="studio-ideas215"><summary>PHRASES & ARRANGEMENT</summary><p class="studio-hint">Four two-bar phrases share this faceplate’s sound and mix. Select one to edit; build a song from their letters.</p><div data-slots215 class="studio-slots215"></div><label>Phrase name<input data-name215 name="phrase-name" maxlength="40" type="text"></label><div class="studio-toolbar"><label>Copy current phrase to<select data-copy-target215 name="copy-phrase-to" aria-label="Copy phrase destination"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label><button data-copy-phrase215>COPY PHRASE</button></div><label>Play & export<select data-scope215 name="export-scope"><option value="phrase">Selected phrase · 2 bars</option><option value="arrangement">Arrangement · up to 16 bars</option></select></label><label>Arrangement order<input data-order215 name="arrangement-order" type="text" maxlength="15" spellcheck="false" placeholder="A A B A C D" aria-describedby="arr-help215"></label><p id="arr-help215" class="studio-hint">Use A, B, C or D, separated by spaces. Maximum eight phrases. Edits to the order take effect on the next PLAY.</p><p data-arr-info215 class="studio-hint"></p></details>
  <details class="studio-capture215"><summary>CAPTURE A PERFORMANCE</summary><p data-capture-info215 class="studio-hint" role="status"></p><div class="studio-toolbar"><button data-capture-arm215>ARM TWO BARS</button><button data-capture-stop215 disabled>FINISH TAKE</button><button data-capture-apply215 disabled>APPLY TAKE</button><button data-capture-download215 disabled>DOWNLOAD TAKE</button><button data-capture-discard215 disabled>DISCARD TAKE</button></div><p class="studio-hint">Capture is explicit. It does not record NPCs, backing tracks or your microphone. The latest completed take is kept on this device. Closing Studio lets you play; changing faceplate or hiding the app ends the take.</p></details>`;
  panel.querySelector('canvas').after(host);const q=s=>host.querySelector('[data-'+s+'215]'),e=ui.ext215={host,slots:[],name:q('name'),scope:q('scope'),order:q('order'),arrInfo:q('arr-info'),audio:q('audio-state'),resume:q('resume'),captureInfo:q('capture-info'),captureArm:q('capture-arm'),captureStop:q('capture-stop'),captureApply:q('capture-apply'),captureDownload:q('capture-download'),captureDiscard:q('capture-discard'),mutes:{}};
  const now=document.createElement('p');now.className='studio-hint';now.dataset.now215='';now.setAttribute('aria-live','off');e.now=now;host.querySelector('.studio-audio215').after(now);
@@ -8019,7 +8019,7 @@ function mount215(panel){const host=document.createElement('div');host.className
  const levels=document.createElement('section');levels.className='studio-layers215';levels.setAttribute('aria-label','Studio layer balance');levels.innerHTML='<strong>LAYER BALANCE</strong><div class="studio-macros" data-levels215></div><div class="studio-mutes215"></div><p class="studio-hint">These levels and mutes affect Studio playback, dry WAV and MIDI. Bass level remains in AUTO BASS.</p>';
  panel.querySelector('.studio-mixer').prepend(levels);
  for(const [k,label,max] of [['leadLevel','MELODY LEVEL',100],['drumLevel','DRUM LEVEL',100],['swing','SWING',60]]){const l=document.createElement('label');l.className='studio-slider';l.innerHTML='<span>'+label+' <output></output></span><input type="range" min="0" max="'+max+'" value="0" aria-label="'+label+'">';levels.querySelector('[data-levels215]').append(l);e[k]=l.querySelector('input');e[k+'Value']=l.querySelector('output');e[k].addEventListener('pointerdown',checkpoint);e[k].addEventListener('keydown',ev=>{if(!ev.repeat&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(ev.key))checkpoint();});e[k].oninput=()=>{state[k]=+e[k].value/100;e[k+'Value'].textContent=e[k].value+'%';save();};}
- for(const k of ['lead','bass','drums']){const l=document.createElement('label');l.innerHTML='<input type="checkbox"> Mute '+(k==='lead'?'melody':k);const el=e.mutes[k]=l.querySelector('input');el.onchange=()=>{checkpoint();state.muted[k]=el.checked;for(const v of scheduled)if(v.layer215===k){v.stop?.();scheduled.delete(v);}commit();};levels.querySelector('.studio-mutes215').append(l);}
+ for(const k of ['lead','bass','drums']){const l=document.createElement('label');l.innerHTML='<input type="checkbox" name="mute-'+k+'"> Mute '+(k==='lead'?'melody':k);const el=e.mutes[k]=l.querySelector('input');el.onchange=()=>{checkpoint();state.muted[k]=el.checked;for(const v of scheduled)if(v.layer215===k){v.stop?.();scheduled.delete(v);}commit();};levels.querySelector('.studio-mutes215').append(l);}
  const quick=document.createElement('details');quick.className='studio-edit215';quick.innerHTML='<summary>EDIT THIS PAGE</summary><p class="studio-hint">Copy or paste eight steps, including drums. Reverse and shift affect the melody on this page only.</p><div class="studio-toolbar"><button data-page-copy215>COPY 8 STEPS</button><button data-page-paste215 disabled>PASTE 8 STEPS</button><button data-page-reverse215>REVERSE MELODY</button><button data-page-shift215>SHIFT MELODY →</button></div>';panel.querySelector('.studio-editor').after(quick);e.paste=quick.querySelector('[data-page-paste215]');
  quick.querySelector('[data-page-copy215]').onclick=()=>{pageClip215=clone(state.pattern.slice(page*8,page*8+8));render215();status('Eight steps copied. Choose another page or phrase to paste.');};
  e.paste.onclick=()=>{if(!pageClip215)return;checkpoint();state.pattern.splice(page*8,8,...clone(pageClip215));commit('Eight steps pasted. Undo restores the page.');};
@@ -8176,16 +8176,16 @@ function visual(now){requestAnimationFrame(visual);if(!api)return;syncFace();if(
 function mount(){const button=document.createElement('button');button.className='ctrl-btn';button.type='button';button.textContent='STUDIO';button.setAttribute('aria-expanded','false');document.getElementById('btn-fx-toggle').after(button);const panel=document.createElement('section');panel.id='studio181';panel.hidden=true;panel.setAttribute('data-audio-effect','');panel.innerHTML=`
  <header><strong data-title></strong><button data-close type="button" aria-label="Close production panel">×</button></header>
  <canvas width="800" height="240" aria-label="Note pattern and live logarithmic output spectrum"></canvas>
- <div class="studio-toolbar"><button data-play aria-pressed="false">PLAY</button><select data-sound aria-label="Production sound"></select><select data-rate aria-label="Modulation rate"><option value="0.5">½× BEAT</option><option value="1">1× BEAT</option><option value="2">2× BEAT</option><option value="4">4× BEAT</option><option value="8">8× BEAT</option></select></div>
- <details class="studio-mixer" open><summary>MIXER &amp; SOUND</summary><div data-macros class="studio-macros"></div><label class="studio-auto"><input data-auto type="checkbox"> Per-step tone automation</label></details>
- <section class="studio-bass" aria-label="Intelligent bass accompaniment"><div class="studio-section-heading"><strong>AUTO BASS</strong><label class="studio-auto"><input data-bass-auto type="checkbox"> ON</label></div><p class="studio-hint">A separate bass line follows your melody and kick groove. Changes settle in on the next bar.</p><div data-bass-controls class="studio-macros"></div><div data-bass-notes class="studio-bass-notes" role="group" aria-label="Generated bass notes on this page"></div><div class="studio-toolbar"><button data-bass-variation>NEW BASS VARIATION</button></div><p data-bass-state class="studio-hint" aria-live="polite"></p></section>
- <div class="studio-section-heading"><strong>MELODY</strong><label class="studio-auto"><input data-preview type="checkbox"> Hear edits</label></div>
+ <div class="studio-toolbar"><button data-play aria-pressed="false">PLAY</button><select data-sound name="production-sound" aria-label="Production sound"></select><select data-rate name="modulation-rate" aria-label="Modulation rate"><option value="0.5">½× BEAT</option><option value="1">1× BEAT</option><option value="2">2× BEAT</option><option value="4">4× BEAT</option><option value="8">8× BEAT</option></select></div>
+ <details class="studio-mixer" open><summary>MIXER &amp; SOUND</summary><div data-macros class="studio-macros"></div><label class="studio-auto"><input data-auto name="tone-automation" type="checkbox"> Per-step tone automation</label></details>
+ <section class="studio-bass" aria-label="Intelligent bass accompaniment"><div class="studio-section-heading"><strong>AUTO BASS</strong><label class="studio-auto"><input data-bass-auto name="auto-bass" type="checkbox"> ON</label></div><p class="studio-hint">A separate bass line follows your melody and kick groove. Changes settle in on the next bar.</p><div data-bass-controls class="studio-macros"></div><div data-bass-notes class="studio-bass-notes" role="group" aria-label="Generated bass notes on this page"></div><div class="studio-toolbar"><button data-bass-variation>NEW BASS VARIATION</button></div><p data-bass-state class="studio-hint" aria-live="polite"></p></section>
+ <div class="studio-section-heading"><strong>MELODY</strong><label class="studio-auto"><input data-preview name="hear-edits" type="checkbox"> Hear edits</label></div>
  <p class="studio-hint">Tap a cell to place a note. Tap it again for a rest. Each column is a sixteenth note.</p>
  <div class="studio-transform"><div><button data-transpose-down aria-label="Transpose melody down one scale step">−</button><output data-transpose></output><button data-transpose-up aria-label="Transpose melody up one scale step">+</button></div><div><button data-octave-down aria-label="Transpose melody down an octave">−</button><output data-octave></output><button data-octave-up aria-label="Transpose melody up an octave">+</button></div></div>
  <div data-pages class="studio-pages"></div><div class="studio-register"><button data-register-down aria-label="View lower piano roll register">↓</button><span data-roll-label></span><button data-register-up aria-label="View upper piano roll register">↑</button></div>
  <div data-roll class="studio-piano-roll" role="group" aria-label="Scale-locked melody piano roll"></div><div data-grid></div>
  <div class="studio-editor"><span data-note></span><div class="studio-toolbar"><button data-rest>MAKE REST</button><button data-down>NOTE −</button><button data-up>NOTE +</button><button data-step-octave-down>OCT −</button><button data-step-octave-up>OCT +</button><button data-ratchet>REPEAT ×1</button></div><div class="studio-macros" data-edit></div></div>
- <details class="studio-generator"><summary>PHRASE DESIGNER</summary><div class="studio-generator-fields"><label>SHAPE<select data-contour><option value="call">CALL &amp; RESPONSE</option><option value="root">ROOT &amp; TURNAROUND</option><option value="rise">RISING</option><option value="fall">FALLING</option></select></label><label>SEED<input data-seed type="number" min="1" max="4294967295" step="1" inputmode="numeric"></label><label class="studio-slider">DENSITY <output data-density-value></output><input data-density type="range" min="0" max="100" step="1" aria-label="Phrase density"></label></div><div class="studio-toolbar"><button data-generate>PREVIEW PHRASE</button><button data-variation>NEW SEED</button><button data-apply disabled>APPLY</button><button data-discard>DISCARD</button></div><p data-draft class="studio-hint"></p></details>
+ <details class="studio-generator"><summary>PHRASE DESIGNER</summary><div class="studio-generator-fields"><label>SHAPE<select data-contour name="phrase-shape"><option value="call">CALL &amp; RESPONSE</option><option value="root">ROOT &amp; TURNAROUND</option><option value="rise">RISING</option><option value="fall">FALLING</option></select></label><label>SEED<input data-seed name="phrase-seed" type="number" min="1" max="4294967295" step="1" inputmode="numeric"></label><label class="studio-slider">DENSITY <output data-density-value></output><input data-density type="range" min="0" max="100" step="1" aria-label="Phrase density"></label></div><div class="studio-toolbar"><button data-generate>PREVIEW PHRASE</button><button data-variation>NEW SEED</button><button data-apply disabled>APPLY</button><button data-discard>DISCARD</button></div><p data-draft class="studio-hint"></p></details>
  <div class="studio-toolbar"><button data-undo>UNDO</button><button data-redo>REDO</button><button data-copy-bar>COPY BAR 1 → 2</button><button data-clear>CLEAR MELODY</button><button data-reset>RESET PATTERN</button></div>
  <div class="studio-toolbar" aria-label="Export and restore Studio"><button data-wav>EXPORT DRY WAV</button><button data-midi>EXPORT MIDI</button><button data-save>DOWNLOAD PATTERN</button><button data-import>LOAD PATTERN</button><input data-file type="file" accept="application/json,.json" hidden></div><details class="studio-export213"><summary>Which file do I need?</summary><p class="studio-hint"><strong>Dry WAV:</strong> the selected phrase or arrangement plus the decay tail, before faceplate FX. Stereo, 44.1 kHz, 16-bit.</p><p class="studio-hint"><strong>MIDI:</strong> melody, bass when enabled, and drum note events. Your music software supplies the sounds.</p><p class="studio-hint"><strong>Pattern:</strong> all four phrases, arrangement order and the shared Studio mix. The file includes the original key, scale and tempo for reference; loading keeps your current faceplate context. This is not a recording of your live performance or world session.</p></details><p data-status role="status"></p>`;
  document.getElementById('fx-panel').after(panel);ui={panel,button,canvas:panel.querySelector('canvas'),title:panel.querySelector('[data-title]'),status:panel.querySelector('[data-status]'),play:panel.querySelector('[data-play]'),sound:panel.querySelector('[data-sound]'),rate:panel.querySelector('[data-rate]'),auto:panel.querySelector('[data-auto]'),wav:panel.querySelector('[data-wav]'),note:panel.querySelector('[data-note]'),ratchet:panel.querySelector('[data-ratchet]'),sliders:{},values:{},editValues:{},rows:{},pages:[]};
@@ -8806,8 +8806,8 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
       <div class="sliders-row">
         <div class="slider-group"><label for="sl-swing">SWING </label><input type="range" aria-label="SWING" id="sl-swing" min="0" max="1" step="0.01" value="0"></div>
         <div class="slider-group" style="flex:0 0 auto;">
-          <span id="midi-indicator" style="display:none;width:8px;height:8px;border-radius:50%;background:#0f0;box-shadow:0 0 6px #0f0;margin:4px;"></span>
-          <label style="font-size:7px;opacity:0.6;">MIDI</label>
+          <output id="midi-indicator" style="display:none;width:8px;height:8px;border-radius:50%;background:#0f0;box-shadow:0 0 6px #0f0;margin:4px;"></output>
+          <label for="midi-indicator" style="font-size:7px;opacity:0.6;">MIDI</label>
         </div>
       </div>
       <div class="sliders-row" style="gap:4px;">
@@ -8830,7 +8830,7 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
       </div>
       <!-- ── LEAD 2 (BANK 2) INDEPENDENT FX ──────────────────────────────── -->
       <div class="sliders-row" style="border-top:1px solid var(--btn-text);margin-top:4px;padding-top:4px;">
-        <div class="slider-group" style="flex:0 0 auto;"><label style="font-size:7px;opacity:0.7;">LEAD 2 FX</label></div>
+        <div class="slider-group" style="flex:0 0 auto;"><label for="sl-lpf-2" style="font-size:7px;opacity:0.7;">LEAD 2 FX</label></div>
       </div>
       <div class="sliders-row">
         <div class="slider-group"><label for="sl-lpf-2">LEAD 2 FILTER </label><input type="range" aria-label="LEAD 2 FILTER" id="sl-lpf-2" min="20" max="20000" step="1" value="20000"></div>
@@ -8853,7 +8853,7 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
       </div>
       <!-- ── DRUM FX (independent of lead FX; off by default = dry drums) ──── -->
       <div class="sliders-row" style="border-top:1px solid var(--btn-text);margin-top:4px;padding-top:4px;">
-        <div class="slider-group" style="flex:0 0 auto;"><label style="font-size:7px;opacity:0.7;">DRUM FX</label></div>
+        <div class="slider-group" style="flex:0 0 auto;"><label for="sl-drum-vol" style="font-size:7px;opacity:0.7;">DRUM FX</label></div>
       </div>
       <div class="sliders-row">
         <div class="slider-group"><label for="sl-drum-vol">DRUM VOLUME </label><input type="range" aria-label="DRUM VOLUME" id="sl-drum-vol" min="0" max="1.5" step="0.01" value="0.7"></div>
@@ -9958,7 +9958,7 @@ window._showLogsPanel = function () {
             function fallback() {
                 try {
                     var ta = document.createElement('textarea');
-                    ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;';
+                    ta.name = 'copy-buffer'; ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;';
                     document.body.appendChild(ta); ta.focus(); ta.select();
                     document.execCommand('copy'); ta.remove(); done();
                 } catch (e2) {}
@@ -18410,6 +18410,7 @@ function buildUI() {
       const currentBpm = bpm;
       const input = document.createElement('input');
       input.type = 'number';
+      input.name = 'bpm';
       input.min = 10;
       input.max = 600;
       input.step = 1;
@@ -21989,10 +21990,19 @@ window._kbdVel = _kbdVel;
 // permission-prompt UX and late-plugged keyboards.
 (function _midiAutoStart() {
   function kick() { try { var p = window.setupLiveMIDIRecovery(); if (p && p.catch) p.catch(function () {}); } catch (eMK) {} }
-  if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(kick, 400);
-  else window.addEventListener('DOMContentLoaded', function () { setTimeout(kick, 400); });
+  // Chrome logs a deprecation note on every requestMIDIAccess, so ask only when it can help:
+  // at load when MIDI is already allowed, on the first gesture unless the player blocked it.
+  function when(ok) {
+    try {
+      if (!navigator.permissions || !navigator.permissions.query) { kick(); return; }
+      navigator.permissions.query({ name: 'midi' }).then(function (st) { if (ok(st.state)) kick(); }, kick);
+    } catch (eMQ) { kick(); }
+  }
+  function atLoad() { setTimeout(function () { if (!midiAccess) when(function (s) { return s === 'granted'; }); }, 400); }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') atLoad();
+  else window.addEventListener('DOMContentLoaded', atLoad);
   ['pointerdown', 'keydown'].forEach(function (evn) {
-    window.addEventListener(evn, function () { if (typeof midiConnected === 'undefined' || !midiConnected) kick(); }, { once: true, capture: true });
+    window.addEventListener(evn, function () { if (!midiAccess && (typeof midiConnected === 'undefined' || !midiConnected)) when(function (s) { return s !== 'denied'; }); }, { once: true, capture: true });
   });
 })();
 // ═══ vox334: LAUNCH GRID LIVE ══════════════════════════════════════════════
@@ -23472,48 +23482,8 @@ function updateMIDIIndicator() {
 function setupMIDI() {
   try { loadMidiMap(); } catch(e) {}
 
-  // PRODUCTIONREADY.MD §2 — HIGH-AVAILABILITY MIDI PORT RECOVERY
-  // Replaces the prior one-shot init pattern. The autonomous hardware port
-  // recovery routine uses MIDIAccess.onstatechange to re-bind incoming
-  // channels the millisecond a device is plugged back in. Critical for live
-  // venue use where a tugged USB cable would otherwise force a page reload
-  // and destroy session state (loops, recorded performance, settings).
-  if (navigator.requestMIDIAccess) {
-    try {
-      navigator.requestMIDIAccess({ sysex: false }).then(access => {
-        midiAccess = access;
-
-        // Continuous hardware monitoring hook
-        access.onstatechange = (event) => {
-          const port = event.port;
-          if (!port || port.type !== 'input') return;
-
-          if (port.state === 'connected') {
-            console.warn(`[LIVE SAFETY] Hardware Port Recovered: ${port.name}`);
-            bindMIDIPort(port);
-            midiConnected = true;
-          } else if (port.state === 'disconnected') {
-            console.error(`[LIVE SAFETY] Hardware Connection Lost: ${port.name}. Standby for auto-recovery...`);
-            // Don't flip midiConnected to false — other ports may still be
-            // bound. Recompute by checking remaining input ports below.
-            let stillConnected = false;
-            for (const p of access.inputs.values()) {
-              if (p.state === 'connected') { stillConnected = true; break; }
-            }
-            midiConnected = stillConnected;
-          }
-          updateMIDIIndicator();
-        };
-
-        // Initial device enumeration — bind every input port currently present
-        for (const input of access.inputs.values()) {
-          bindMIDIPort(input);
-          midiConnected = true;
-        }
-        updateMIDIIndicator();
-      }).catch(() => {});
-    } catch(e){}
-  }
+  // MIDI access itself (with hot-plug port recovery) is requested once, by _midiAutoStart
+  // (vox332) through setupLiveMIDIRecovery; a second request here only doubled the prompt.
 
   // Wire swing slider — ALWAYS runs regardless of MIDI
   const swingSl = document.getElementById('sl-swing');
@@ -23531,6 +23501,8 @@ function setupMIDI() {
   const learnBtn = document.getElementById('btn-midi-learn');
   if (learnBtn) {
     learnBtn.addEventListener('click', () => {
+      // first use of MIDI: ask for the devices now, from the player's own press
+      if (!midiAccess) { try { window.setupLiveMIDIRecovery().catch(() => {}); } catch(e){} }
       if (midiLearnActive) {
         cancelMidiLearn();
         learnBtn.textContent = 'LEARN';
@@ -25040,7 +25012,7 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
       '.dj-bpm{width:52px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.2);color:#9fe;border-radius:6px;padding:3px;font:inherit;text-align:center;}',
       '#dj-mix{width:100%;height:120px;display:block;background:#05080a;border:1px solid rgba(1,169,130,0.35);border-radius:10px;margin:12px 0 6px;}',
       '.dj-master{padding-top:10px;border-top:1px solid rgba(255,255,255,0.12);display:flex;gap:14px;align-items:center;flex-wrap:wrap;}',
-      '.dj-master label{font-size:10px;color:rgba(255,255,255,0.6);display:block;letter-spacing:.06em;margin-bottom:2px;}',
+      '.dj-master label,.dj-master .dj-cap{font-size:10px;color:rgba(255,255,255,0.6);display:block;letter-spacing:.06em;margin-bottom:2px;-webkit-user-select:none;user-select:none;}',
       '.dj-master .col{flex:1;min-width:140px;}',
       '.dj-master .dj-quadcol{flex:0 0 auto;min-width:auto;text-align:center;}',
       '#dj-quad.on{background:#0a2630;color:#7df9ff;border-color:rgba(125,249,255,0.6);box-shadow:0 0 8px rgba(125,249,255,0.35);}',
@@ -25098,7 +25070,7 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
       '<div class="dj-row"><button class="dj-play" disabled>\u25B6</button><button class="dj-load">LOAD</button><button class="dj-cap" title="Capture the live synth mix onto this deck \u2014 press to start, again to stop">\u23FA CAP</button><button class="dj-loop">LOOP</button>' +
         '<span class="dj-ab"><button data-ab="A">A</button><button data-ab="-" class="on">\u2014</button><button data-ab="B">B</button></span></div>' +
       '<div class="dj-eq"></div>' +
-      '<div class="dj-row">BPM <input class="dj-bpm" inputmode="decimal"><button class="dj-tap">TAP</button><button class="dj-grid" title="Set the downbeat (beat 1) at the playhead">GRID</button>' +
+      '<div class="dj-row">BPM <input class="dj-bpm" name="deck-' + (i + 1) + '-bpm" inputmode="decimal"><button class="dj-tap">TAP</button><button class="dj-grid" title="Set the downbeat (beat 1) at the playhead">GRID</button>' +
         '<button class="dj-sync">SYNC</button><button class="dj-lock">LOCK</button><button class="dj-nudgeL">\u25C0</button><button class="dj-nudgeR">\u25B6</button></div>' +
       '<div class="dj-row" style="align-items:center">TEMPO <input class="dj-tempo" type="range" min="-50" max="50" value="0" step="0.1" style="flex:1"><span class="dj-tempolab" style="min-width:64px;text-align:right;color:rgba(255,255,255,0.6)">0% \u00B7 \u2014</span></div>' +
       '<div class="dj-row dj-jlr"><span class="lbl">JUMP</span><button data-jb="-4">-4</button><button data-jb="-1">-1</button><button data-jb="1">+1</button><button data-jb="4">+4</button>' +
@@ -25316,7 +25288,7 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
     var undo=document.createElement('button');undo.className='dj-cueundo221';undo.textContent='UNDO CLEAR';cue.appendChild(undo);undo.onclick=function(){if(!d.cueUndo221)return;d.cues=d.cueUndo221.slice();d.cueUndo221=null;saveMetaSoon(d);paintDeck221(d);deckNotice221(d,'Restored cue markers.');};
     var tempoNote=document.createElement('div');tempoNote.className='dj-micro221';tempoNote.textContent='Speed changes pitch. SYNC follows the selected reference; verify its BPM and downbeat.';d.tempo.parentElement.after(tempoNote);
     var src=document.createElement('div');src.className='dj-bpmsource221 dj-micro221';d.bpmField.parentElement.after(src);
-    var controls=document.createElement('div');controls.className='dj-row';controls.innerHTML='<label>SYNC TO <select class="dj-master-target221" aria-label="Deck '+n+' sync reference"><option value="auto">Auto: playing deck</option>'+[0,1,2,3].filter(function(j){return j!==i;}).map(function(j){return '<option value="'+j+'">Deck '+(j+1)+'</option>';}).join('')+'</select></label><button class="dj-quant221">SNAP: ON</button>';tools.querySelector('summary').after(controls);
+    var controls=document.createElement('div');controls.className='dj-row';controls.innerHTML='<label>SYNC TO <select class="dj-master-target221" name="deck-'+n+'-sync-reference" aria-label="Deck '+n+' sync reference"><option value="auto">Auto: playing deck</option>'+[0,1,2,3].filter(function(j){return j!==i;}).map(function(j){return '<option value="'+j+'">Deck '+(j+1)+'</option>';}).join('')+'</select></label><button class="dj-quant221">SNAP: ON</button>';tools.querySelector('summary').after(controls);
     controls.querySelector('select').onchange=function(e){setMasterTarget221(d,e.target.value==='auto'?'auto':+e.target.value);paintDeck221(d);};controls.querySelector('button').onclick=function(){d.quantize221=d.quantize221===false;paintDeck221(d);};
     var extra=document.createElement('div');extra.className='dj-row';extra.innerHTML='<button class="dj-demo221">LOAD DEMO</button><button class="dj-export221">SAVE DECK WAV</button>';w.appendChild(extra);
     extra.querySelector('.dj-export221').onclick=function(){exportDeck221(d);};extra.querySelector('.dj-demo221').onclick=function(){demoDeck221(d,i);};
@@ -25356,7 +25328,7 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
     var head=panel.querySelector('h2'),headButtons=head.querySelectorAll('button'),helpButton=headButtons[0],popButton=headButtons[1],closeButton=headButtons[2];
     panel.setAttribute('aria-modal','false');
     var view=document.createElement('div');view.className='dj-view225';
-    view.innerHTML='<div class="dj-view-buttons225" role="group" aria-label="Deck view"><button data-view225="pair">2 DECKS</button><button data-view225="all">ALL 4</button></div><label>LEFT <select data-pair225="0" aria-label="Left deck in two-deck view"></select></label><label>RIGHT <select data-pair225="1" aria-label="Right deck in two-deck view"></select></label><span class="dj-hidden225"></span>';
+    view.innerHTML='<div class="dj-view-buttons225" role="group" aria-label="Deck view"><button data-view225="pair">2 DECKS</button><button data-view225="all">ALL 4</button></div><label>LEFT <select data-pair225="0" name="pair-left-deck" aria-label="Left deck in two-deck view"></select></label><label>RIGHT <select data-pair225="1" name="pair-right-deck" aria-label="Right deck in two-deck view"></select></label><span class="dj-hidden225"></span>';
     panel.insertBefore(view,grid);
     var viewNote=view.querySelector('.dj-hidden225');
     var pickers=Array.from(view.querySelectorAll('[data-pair225]'));
@@ -25619,13 +25591,13 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
 
     var master = document.createElement('div'); master.className = 'dj-master';
     master.innerHTML =
-      '<div class="col"><label>CROSSFADER A \u2194 B</label><input id="dj-xfade" type="range" min="0" max="100" value="50"></div>' +
-      '<div class="col dj-quadcol"><label>QUAD MIX</label><button class="dj-panel-btn" id="dj-quad" title="2\u00D72 vector mix \u2014 blend all 4 decks with one finger (corners = decks 1-4). Overrides the crossfader while on.">OFF</button><canvas id="dj-quadpad" width="86" height="86" style="display:none"></canvas></div>' +
-      '<div class="col"><label>BED VOLUME</label><input id="dj-bed" type="range" min="0" max="100" value="85"></div>' +
+      '<div class="col"><label for="dj-xfade">CROSSFADER A \u2194 B</label><input id="dj-xfade" type="range" min="0" max="100" value="50"></div>' +
+      '<div class="col dj-quadcol"><label for="dj-quad">QUAD MIX</label><button class="dj-panel-btn" id="dj-quad" title="2\u00D72 vector mix \u2014 blend all 4 decks with one finger (corners = decks 1-4). Overrides the crossfader while on.">OFF</button><canvas id="dj-quadpad" width="86" height="86" style="display:none"></canvas></div>' +
+      '<div class="col"><label for="dj-bed">BED VOLUME</label><input id="dj-bed" type="range" min="0" max="100" value="85"></div>' +
       '<button class="dj-panel-btn" id="dj-route" title="WET = through synth FX, DRY = clean">FX: WET</button>' +
       '<button class="dj-panel-btn" id="dj-rec">\u25CF REC</button><span id="dj-rectime" style="font-size:11px;color:#f88;min-width:34px">0:00</span>' +
       '<button class="dj-panel-btn" id="dj-fmt" title="Recording format \u2014 tap to switch WAV / MP3">.WAV</button>' +
-      '<div class="col" style="min-width:150px"><label>MASTER <span id="dj-clip" class="dj-clip">CLIP</span></label><div class="dj-meter"><div id="dj-meterfill"></div></div><div class="dj-zonebar"></div></div>' +
+      '<div class="col" style="min-width:150px"><div class="dj-cap">MASTER <span id="dj-clip" class="dj-clip">CLIP</span></div><div class="dj-meter"><div id="dj-meterfill"></div></div><div class="dj-zonebar"></div></div>' +
       '<button class="dj-panel-btn" id="dj-guard" title="Master soft-clip ceiling \u2014 catches peaks so the output cannot hard-distort">GUARD: ON</button>' +
       '<button class="dj-panel-btn" id="dj-stopall">STOP ALL</button>' +
       '<button class="dj-panel-btn" id="dj-panic" title="PANIC \u2014 instantly silence everything: stop all decks AND the synth sequencer">PANIC</button>';
@@ -26571,6 +26543,9 @@ window.bardHaptic = (function(){
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-controls', uid + '-listbox');
     if (labelEl && labelEl.id){ trigger.setAttribute('aria-labelledby', labelEl.id + ' ' + uid + '-trigger'); }
+    // A bare <label> beside the select is tied to nothing; point it at the trigger (the
+    // control people actually use) so tapping it opens the menu and the browser sees it labelled.
+    if (labelEl && !labelEl.control && !labelEl.htmlFor){ labelEl.htmlFor = trigger.id; }
     var labelSpan = document.createElement('span');
     labelSpan.className = 'csel-label-txt';
     var caret = document.createElement('span');
@@ -29745,7 +29720,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=88cac2a353'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=e4989d812c'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29753,7 +29728,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=88cac2a353'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=e4989d812c'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }
