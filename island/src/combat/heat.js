@@ -11,7 +11,7 @@
 import { SEARCH } from '../law/ladder.js';
 
 export const STARS = [0, 10, 35, 70, 120, 190];
-export const OFFENCE = Object.freeze({ shots: 2, hitCivilian: 12, downCivilian: 25, hitPolice: 18, downPolice: 35, car: 14, prop: 1, robbery: 12, gunfire: 18, evade: 26 });
+export const OFFENCE = Object.freeze({ shots: 2, hitCivilian: 12, downCivilian: 25, hitPolice: 18, downPolice: 35, car: 14, prop: 3, vandalism: 10, robbery: 12, gunfire: 18, evade: 26 });
 // per star: officers at once, their armour, whether drones come
 export const RESPONSE = [
 	{ officers: 0, armour: 0, drones: 0 },

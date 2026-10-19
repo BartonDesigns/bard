@@ -6,7 +6,7 @@
 // node --test island/tools/escalation.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLadder, witness, dueReports, pending, responsePlan, routeTrouble, complying, arrestable, fineFor, reportDelay, SEARCH, LEVELS, searchLoop } from '../src/law/ladder.js';
+import { createLadder, witness, dueReports, pending, responsePlan, routeTrouble, complying, arrestable, fineFor, reportDelay, SEARCH, LEVELS, searchLoop, createDamageLog, smashed, SPREE } from '../src/law/ladder.js';
 import { territoryAt, cornerSize, recruits, junctions, pickCorners, gangStance, warChance, militiaAllowed, lowMorality, GANGS, CELL } from '../src/law/gangs.js';
 import { insideBox, pushOut, roadblockSpot, blockSlots, hiddenSpot, inCone, squadMorale, offscreenPace } from '../src/law/tactics.js';
 import { createWanted, offend, tickWanted, sighted, STARS } from '../src/combat/heat.js';
@@ -29,6 +29,27 @@ test('a crime nobody saw is nobody\'s business; one a passer-by saw is called in
 	assert.equal(due[0].call, 'assault');
 	assert.equal(due[0].seen, true);
 	assert.equal(dueReports(L, q.due + 5).length, 0, 'called in once');
+});
+
+test('one broken window is nobody\'s police matter; smashing things on purpose is vandalism', () => {
+	const D = createDamageLog();
+	assert.equal(smashed(D, { x: 0, z: 0 }, 0), null, 'one window');
+	assert.equal(smashed(D, { x: 3, z: 0 }, 10), null, 'two, a while apart');
+	assert.equal(smashed(D, { x: 6, z: 0 }, 14), 'vandalism', 'the third in half a minute');
+	assert.equal(smashed(D, { x: 8, z: 0 }, 16), 'prop', 'more of the same spree');
+	// broken here and there over the day never adds up
+	const E = createDamageLog();
+	for (let i = 0; i < 10; i++) assert.equal(smashed(E, { x: 0, z: 0 }, i * (SPREE.window * 0.6)), null);
+	// nor do things far apart
+	const F = createDamageLog();
+	for (let i = 0; i < 6; i++) assert.equal(smashed(F, { x: i * 200, z: 0 }, i), null);
+	// a spree is called in as damage to property, one patrol car's worth
+	const L = createLadder();
+	assert.equal(witness(L, { kind: 'vandalism', at: { x: 0, z: 0 }, t: 0, witnesses: 2 }, () => 0.5), 'later');
+	assert.equal(L.reports[0].call, 'damage');
+	const W = createWanted();
+	offend(W, 'vandalism');
+	assert.equal(W.stars, 1);
 });
 
 test('an officer who sees it counts it at once; several witnesses make one call, sooner', () => {
