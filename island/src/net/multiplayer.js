@@ -180,7 +180,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (car) camera.getWorldDirection(look);
 		// (the item in hand, its level and tier)
 		const H = gear?.held?.();
-		return { t: 'pose', ...reputationPoint(at), y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', h: H?.i, hl: H?.l, ht: H?.t, wr: wearCode(gear?.worn?.() || {}) };
+		return { t: 'pose', ...reputationPoint(at), y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', h: H?.i, hl: H?.l, ht: H?.t, wr: wearCode(gear?.worn?.() || {}), ...(combat?.flag?.() ? { pk: 1 } : {}) };
 	}
 	// (timed by the clock, not by frames: a slow phone still keeps to the pace)
 	function sendAll() {
@@ -189,8 +189,8 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		const p = share.busy?.() ? null : pose(), now = performance.now();
 		if (p) {
 			// about ten a second while moving; when still, only a change (pings keep you in)
-			const moved = Math.hypot(p.p[0] - sent.x, p.p[2] - sent.z) > 0.05 || Math.abs(p.p[1] - sent.y) > 0.05 || Math.abs(p.y - sent.yaw) > 0.03 || p.a !== sent.a || `${p.h}${p.hl}${p.ht}` !== sent.h;
-			if (moved && now - sent.t >= 100) { room.send(p); sent.t = now; sent.x = p.p[0]; sent.z = p.p[2]; sent.y = p.p[1]; sent.yaw = p.y; sent.a = p.a; sent.h = `${p.h}${p.hl}${p.ht}`; }
+			const moved = Math.hypot(p.p[0] - sent.x, p.p[2] - sent.z) > 0.05 || Math.abs(p.p[1] - sent.y) > 0.05 || Math.abs(p.y - sent.yaw) > 0.03 || p.a !== sent.a || `${p.h}${p.hl}${p.ht}${p.pk || ''}` !== sent.h;
+			if (moved && now - sent.t >= 100) { room.send(p); sent.t = now; sent.x = p.p[0]; sent.z = p.p[2]; sent.y = p.p[1]; sent.yaw = p.y; sent.a = p.a; sent.h = `${p.h}${p.hl}${p.ht}${p.pk || ''}`; }
 		}
 		// where you are, for a friend's Go to (and a guest's arrival): every few seconds
 		if (now - sent.spotT > 4000) {
@@ -369,7 +369,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		for (const r of remotes.list.values()) {
 			const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;';
 			const who = document.createElement('span'); who.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-			who.textContent = `${r.name}${room.host === r.id ? ' ★' : ''}${r.d < Infinity ? ` · ${r.d < 1000 ? Math.round(r.d) + ' m' : (r.d / 1000).toFixed(1) + ' km'}` : ''}`;
+			who.textContent = `${r.pose?.pk ? '⚔ ' : ''}${r.name}${room.host === r.id ? ' ★' : ''}${r.d < Infinity ? ` · ${r.d < 1000 ? Math.round(r.d) + ' m' : (r.d / 1000).toFixed(1) + ' km'}` : ''}`;
 			row.append(who, ...extra(r), button(following === r.id ? 'Stop' : 'Follow', () => (following === r.id ? unfollow() : follow(r.id))), button('Go to', () => goTo(r.id)));
 			panel.append(row);
 		}
@@ -388,8 +388,13 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 			}
 		}
 		const foot = document.createElement('div'); foot.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
-		// the room's PvP rule: the host's to set, off by default
-		if (combat) { const on = !!combat.rules().pvp; foot.append(room.isHost() ? button(`PvP: ${on ? 'on' : 'off'}`, () => { combat.setRules({ pvp: !on }); drawPanel(); }) : button(`PvP ${on ? 'on' : 'off'} (host's choice)`, () => {})); }
+		// the room's PvP rule: the host's to set, off by default; and your own flag, which you
+		// raise to fight (and be fought by) friends who raised theirs (⚔ by their names)
+		if (combat) {
+			const on = !!combat.rules().pvp, up = !!combat.flag?.();
+			foot.append(room.isHost() ? button(`PvP: ${on ? 'on' : 'off'}`, () => { combat.setRules({ pvp: !on }); drawPanel(); }) : button(`PvP ${on ? 'on' : 'off'} (host's choice)`, () => {}));
+			if (combat.setFlag) { const b = button(`⚔ Your flag: ${up ? 'up' : 'down'}`, () => { combat.setFlag(!up); sent.h = ''; drawPanel(); }); b.setAttribute('aria-pressed', String(up)); b.title = 'Raise it to fight friends who raised theirs. Down, no friend can hurt you.'; foot.append(b); }
+		}
 		foot.append(button('Copy link', () => copy()), button(room.isHost() ? 'End room' : 'Leave', () => leave()));
 		panel.append(foot);
 	}
@@ -473,7 +478,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		reputationPosition: e => {if(e.w!==worldKey())return null; const q=e.w==='earth'?toXZ(...e.g):{x:e.p[0],z:e.p[2]};return {...q,y:e.p[1]};},
 		reputationInfo: () => reputation.info(),
 		// friends where they are (for shots that may strike them when the room allows it)
-		bodies: () => [...remotes.list.values()].filter((r) => r.at && Number.isFinite(r.at[0]) && r.d < 300).map((r) => ({ id: r.id, name: r.name, at: r.at })),
+		bodies: () => [...remotes.list.values()].filter((r) => r.at && Number.isFinite(r.at[0]) && r.d < 300).map((r) => ({ id: r.id, name: r.name, at: r.at, pk: !!r.pose?.pk })),
 		friend: (fid) => { const r = remotes.list.get(fid); return r ? { id: r.id, name: r.name, d: r.d, here: r.d < Infinity } : null; },
 		friends: () => [...remotes.list.values()].map((r) => ({ id: r.id, name: r.name, d: r.d, here: r.d < Infinity })),
 		info: () => ({ available: true, status: room.status, code: room.room(), host: room.host, you: id, isHost: room.isHost(), reputation:reputation.info(), following, stopped, players: [...remotes.list.values()].map((r) => ({ id: r.id, name: r.name, d: +r.d.toFixed?.(2), at: r.at && Number.isFinite(r.at[0]) ? [r.at[0], r.at[1], r.at[2]] : null, body: !!r.body?.P.root.visible })), plans: [...plans.values()], book: book.list('mp'), crowd: crowd.info?.() }),

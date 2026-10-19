@@ -9,6 +9,9 @@ export const VERSION = 1;
 // gear above the old top level (10) travels in trades: a server without this word drops it
 export const GEAR_FEATURE = 'gear-levels-20';
 export const LEGACY_LEVEL = 10;
+// a server that weighs each player's own PvP flag (the pose's pk) and passes on a PvP win
+// ('down'): a server without this word knows neither
+export const PVP_FEATURE = 'pvp-flags-v1';
 export const MAX_PLAYERS = 8;
 // one message's size, in characters
 export const MAX_BYTES = 3072;
@@ -54,6 +57,8 @@ export function cleanPose(p) {
 	// (1 to MAX_LEVEL, gameplay/gear-levels.js) and quality tier (0-4), which friends see as its
 	// trim and glow
 	// what they wear, head to foot (people/armor-looks.js wearCode), which friends see on them
+	// their PvP flag: raised, they will fight friends who raised theirs (combat/honor.js)
+	if (p.pk === 1) o.pk = 1;
 	if (typeof p.wr === 'string' && /^[0-9a-z]{1,2}(\.[0-9a-z]{1,2}){0,5}$/.test(p.wr)) o.wr = p.wr;
 	if (ITEM_RE.test(p.h || '')) {
 		o.h = p.h;
@@ -182,6 +187,13 @@ export function cleanCombatState(c) {
 	const b = c.b;
 	if (b && BOSS_KINDS.includes(b.kind) && TARGET_RE.test(b.id || '') && num(b.x, 5e7) && num(b.y, 5e7) && num(b.z, 5e7)) o.b = { id: b.id, kind: b.kind, x: r2(b.x), y: r2(b.y), z: r2(b.z), w: str(b.w, 48) };
 	return e.length || o.b ? o : null;
+}
+// you were downed in a PvP fight: by whom, and your honor's rank (0-9), for the winner's honor
+// (combat/honor.js pvpWin). The server passes it on only to one who hit you a moment ago.
+export const DOWN_MS = 20000;
+export function cleanDown(m) {
+	if (!m || typeof m !== 'object' || !ID_RE.test(m.by || '')) return null;
+	return { by: m.by, r: Number.isInteger(m.r) && m.r >= 0 && m.r <= 9 ? m.r : 0 };
 }
 // the room's rules, set by the host: PvP off unless turned on
 export const cleanRules = (r) => ({ pvp: !!(r && typeof r === 'object' && r.pvp === true) });

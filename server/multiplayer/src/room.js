@@ -3,7 +3,7 @@
 // others. It uses the hibernation API, so a room whose players are standing still (their
 // pings answered without waking it) costs nothing while it waits.
 
-import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, GEAR_FEATURE, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, ID_RE } from '../../../island/src/net/protocol.js';
+import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, GEAR_FEATURE, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, cleanDown, DOWN_MS, PVP_FEATURE, ID_RE } from '../../../island/src/net/protocol.js';
 
 import { createCombatGuard } from './combat-guard.js';
 import { acceptReputation } from './reputation.js';
@@ -29,6 +29,8 @@ export class Room {
 		this.combat = new Map();
 		this.combatGuard = createCombatGuard();
 		this.spots = new Map();
+		// PvP hits passed on, 'from>to': when, so a 'down' can be checked against them
+		this.pvpHits = new Map();
 		this.wokeAt = Date.now();
 		try { state.setWebSocketAutoResponse?.(new globalThis.WebSocketRequestResponsePair('ping', 'pong')); } catch { /* not in tests */ }
 	}
@@ -89,7 +91,7 @@ export class Room {
 		meta.emptySince = 0;
 		await this.save();
 		const now=Date.now();
-		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE, GEAR_FEATURE, ...(this.env.SOULS ? [SOUL_FEATURE] : []), ...(this.env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE] : [])], now });
+		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE, GEAR_FEATURE, PVP_FEATURE, ...(this.env.SOULS ? [SOUL_FEATURE] : []), ...(this.env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE] : [])], now });
 		const memories=(meta.reputation||[]).filter(e=>reputationAlive(e,now));
 		for(let i=0;i<memories.length;i+=6)this.send(ws,{t:'reputation-snapshot',records:memories.slice(i,i+6)});
 		this.broadcast({ t: 'join', player: this.player(ws) }, ws);
@@ -221,11 +223,16 @@ export class Room {
 				if (!h) return;
 				const { to, ...rest } = h;
 				if (to) {
-					// on another player: only when the room has PvP on
+					// on another player: only when the room has PvP on and both raised their flag
 					if (!meta.rules?.pvp || to === a.id || (h.id !== 'me' && h.id !== 'rp:' + to)) return;
+					if (!this.poses.get(a.id)?.pk || !this.poses.get(to)?.pk) return;
 					if (!this.combatGuard.accept(a.id, h, this.poses.get(a.id), this.poses.get(to), true)) return;
 					const s = this.sockets().find((x) => this.info(x).id === to);
-					if (s) this.send(s, { t: 'hit', from: a.id, ...rest, id: 'me' });
+					if (s) {
+						this.send(s, { t: 'hit', from: a.id, ...rest, id: 'me' });
+						if (this.pvpHits.size > 64) this.pvpHits.delete(this.pvpHits.keys().next().value);
+						this.pvpHits.set(a.id + '>' + to, Date.now());
+					}
 					return;
 				}
 				// on something shared: the host decides
@@ -234,6 +241,18 @@ export class Room {
 				if (!boss || boss.dead || !this.combatGuard.accept(a.id, h, this.poses.get(a.id), { w: boss.w, p: [boss.x, boss.y, boss.z], radius: 45 })) return;
 				const hs = this.sockets().find((x) => this.info(x).id === meta.host);
 				if (hs) this.send(hs, { t: 'hit', from: a.id, ...rest });
+				return;
+			}
+			case 'down': {
+				// downed in a PvP fight: the winner told (for their honor), only when they hit
+				// this player a moment ago, and once for that hit
+				const d = cleanDown(m);
+				if (!d || d.by === a.id) return;
+				const k = d.by + '>' + a.id, at = this.pvpHits.get(k);
+				if (!at || Date.now() - at > DOWN_MS) return;
+				this.pvpHits.delete(k);
+				const s = this.sockets().find((x) => this.info(x).id === d.by);
+				if (s) this.send(s, { t: 'down', from: a.id, r: d.r });
 				return;
 			}
 			case 'cs': {
@@ -278,6 +297,7 @@ export class Room {
 		ws.serializeAttachment({ ...a, gone: true });
 		try { ws.close(1000, 'bye'); } catch { /* already */ }
 		this.poses.delete(a.id); this.spots.delete(a.id); this.seen.delete(a.id); this.bucket.delete(a.id); this.combatGuard.clear(a.id);
+		for (const k of this.pvpHits.keys()) if (k.startsWith(a.id + '>') || k.endsWith('>' + a.id)) this.pvpHits.delete(k);
 		const meta = await this.load();
 		if (!meta || meta.ended) return;
 		this.broadcast({ t: 'leave', id: a.id });

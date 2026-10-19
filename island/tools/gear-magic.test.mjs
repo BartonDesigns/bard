@@ -144,7 +144,7 @@ test('attributes: your ranks and level lend some, your gear the rest', () => {
 test('your statistics become the spells\' own numbers', () => {
 	const s0 = fresh(), sp = SPELL.shadowbolt;
 	const p0 = spellPower(s0, sp), m0 = manaCost(s0, sp), c0 = cooldownOf(s0, sp), max0 = manaMax(s0);
-	assert.deepEqual({ ...composeMods(s0), alter: null, free: null, gearWeapon: null, life: 0, load: 0 }, { ...computeMods([]), alter: null, free: null, gearWeapon: null, life: 0, load: 0 }, 'nothing worn, nothing gained: the perks alone');
+	assert.deepEqual({ ...composeMods(s0), alter: null, free: null, gearWeapon: null, life: 0, load: 0, honor: 0 }, { ...computeMods([]), alter: null, free: null, gearWeapon: null, life: 0, load: 0, honor: 0 }, 'nothing worn, nothing gained: the perks alone');
 	const hood = attuned('wayfarers-hood', 'shadow', 20, 4), gloves = attuned('spellbinder-gloves', 'radiance', 1, 0);
 	const s = withGear([hood, gloves]);
 	assert.ok(spellPower(s, sp) > p0 * 1.12, 'attuned, and Potency');
