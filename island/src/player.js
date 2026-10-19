@@ -2,13 +2,15 @@
 // where you touch), right thumb looks; WASD / arrows / Shift / Space and a
 // captured mouse look on desktop. Keys stay with the faceplate while keyboard
 // performance is on. Porches and the pier are floors, walls/trunks/rocks are
-// solid, deep water floats you on the swell.
+// solid, deep water floats you on the swell. Ledges, fences and walls are climbed and run
+// along (parkour.js).
 
 import * as THREE from 'three';
 import { waterContact } from './world/water-contact.js';
 import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 import { DEFAULT_AIM_SENSITIVITY } from './aim-sensitivity.js';
 import { lookPrefs, lookGain, levelPitch, LEVEL, onGyro, resumeGyro } from './ui/touch-look.js';
+import { createParkour } from './parkour.js';
 
 const EYE = 1.68;
 
@@ -213,6 +215,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 	}
 
+	// the climbs and the wall runs, felt for with the same two tests
+	const park = createParkour({ s, camera, floorAt, pushOut });
+
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
 	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
 	function input() {
@@ -224,9 +229,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		return { mx: Math.max(-1, Math.min(1, mx)), mz: Math.max(-1, Math.min(1, mz)) };
 	}
 	function update(dt, t) {
-		if (s.locked || s.flying || s.swimming) settleFeel();
+		if (s.locked || s.flying || s.swimming) { settleFeel(); park.grounded(); }
 		if (s.locked) return;
 		if (s.move?.(dt)) { settleFeel(); return; }          // a vault carries you (structures/vault.js)
+		if (park.step(dt)) { settleFeel(); F.ride = s.pos.y; return; }          // a climb carries you (parkour.js)
 		// (s.auto: { x, z, run } walks without a hand on the keys, for demos and tests)
 		let mx = joy.x + (s.auto?.x || 0), mz = joy.y + (s.auto?.z || 0);
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
@@ -305,13 +311,24 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			s.vel.x += (wish.x * speed - s.vel.x) * Math.min(1, accel * dt);
 			s.vel.z += (wish.z * speed - s.vel.z) * Math.min(1, accel * dt);
 		}
+		// sprinting at a fence or a low wall: over it without a jump (looked for a few times a
+		// second, a stride or so ahead, before a thin one could be run through)
+		if (s.grounded && run && !s.slide && !s.crouch && !s.swimming) {
+			const v = Math.hypot(s.vel.x, s.vel.z);
+			s.autoAt = (s.autoAt || 0) - dt;
+			if (v > 6.5 && s.autoAt <= 0) { s.autoAt = 0.06; if (park.leap(s.vel.x / v, s.vel.z / v, 'auto')) return; }
+		}
 		const nx = s.pos.x + s.vel.x * dt, nz = s.pos.z + s.vel.z * dt;
 		// refuse steps up cliffs (and up the side of a rock): measured from your feet, so a jump
 		// clears onto the top of one
 		const gNow = floorAt(s.pos.x, s.pos.z, s.pos.y - EYE), gNext = floorAt(nx, nz, s.pos.y - EYE);
+		// (what you met, if anything: which way it faces you, a wall (1) or a rise of the ground (2))
+		let met = null;
 		if (gNext - Math.max(gNow, s.pos.y - EYE) < 0.55 * Math.max(dt * 60, 1) || s.swimming) { s.pos.x = nx; s.pos.z = nz; }
-		else { s.vel.x *= 0.2; s.vel.z *= 0.2; }
+		else { const v = Math.hypot(s.vel.x, s.vel.z) || 1; met = { nx: -s.vel.x / v, nz: -s.vel.z / v, kind: 2 }; s.vel.x *= 0.2; s.vel.z *= 0.2; }
+		const px0 = s.pos.x, pz0 = s.pos.z;
 		pushOut(s.pos);
+		{ const ox = s.pos.x - px0, oz = s.pos.z - pz0, ol = Math.hypot(ox, oz); if (ol > 1e-4) met = { nx: ox / ol, nz: oz / ol, kind: 1 }; }
 		const ground = seenFloorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
 		const contact = waterContact(island, s.pos, ground, t, shared.uWave?.value ?? 1, s.diving);
@@ -347,13 +364,19 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			s.vel.y = 0; s.grounded = false;
 		} else {
 			s.diving = false;
-			// (facing a window or a low wall close by, the jump is a vault over it: structures/vault.js)
-			if ((keys.has(' ') || s.jumpQueued) && s.grounded && !s.tryVault?.(s.jumpQueued ? 'button' : 'key')) { s.vel.y = 5.2 * (s.jumpK || 1); s.grounded = false; if (s.slide) endSlide(); }
+			// (facing a window or a low wall close by, the jump is a vault over it: structures/vault.js;
+			// a ledge you can reach or a fence, a climb onto or over it: parkour.js)
+			const jumpEdge = !!s.jumpQueued || (keys.has(' ') && !s.spaceWas);
+			s.spaceWas = keys.has(' ');
+			if ((keys.has(' ') || s.jumpQueued) && s.grounded && !s.tryVault?.(s.jumpQueued ? 'button' : 'key') && !leapAhead()) { s.vel.y = 5.2 * (s.jumpK || 1); s.grounded = false; if (s.slide) endSlide(); }
 			s.jumpQueued = false;
-			s.vel.y -= 18 * (island.gravity || 1) * (s.vel.y < 0 ? s.fallK || 1 : 1) * dt;
+			// (in the air: a grab at a ledge, a run along a wall, which holds you up a while)
+			const gk = s.grounded ? 1 : park.air(dt, { run, wish, contact: met, jump: jumpEdge });
+			s.vel.y -= 18 * (island.gravity || 1) * (s.vel.y < 0 ? s.fallK || 1 : 1) * dt * gk;
 			s.pos.y += s.vel.y * dt;
 			if (s.pos.y < floorY + EYE) { s.pos.y = floorY + EYE; s.vel.y = 0; s.grounded = true; }
 			else if (s.pos.y > floorY + EYE + 0.05) s.grounded = false;
+			if (s.grounded) park.grounded();
 		}
 		// the gait: a footfall each step, and the head dipping as each foot lands
 		const G = gait(dt, s.slide ? 0 : Math.hypot(s.pos.x - x0, s.pos.z - z0) / Math.max(dt, 1e-3), run && !s.crouch);
@@ -381,7 +404,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		// (in steps of at most 1/60 s, so a slow frame can't set the spring ringing)
 		for (let n = Math.ceil(dt * 60), h = dt / Math.max(n, 1); n > 0; n--) { D.dv += (-150 * D.v - 17 * D.dv) * h; D.v = Math.max(-0.38, Math.min(0.06, D.v + D.dv * h)); }
 		const lat = s.vel.x * right.x + s.vel.z * right.z;
-		F.roll += ((s.slide ? 0.07 : 0) - lat * 0.0045 - F.roll) * Math.min(1, dt * 6);
+		F.roll += ((s.slide ? 0.07 : 0) + park.lean() - lat * 0.0045 - F.roll) * Math.min(1, dt * 6);
 		const step = s.grounded && !s.slide ? Math.sin(G.phase * Math.PI) * (G.foot ? 1 : -1) * 0.016 * Math.min(1, G.speed / 4) : 0;
 		F.side += (step - F.side) * Math.min(1, dt * 14);
 		const sprinting = run && s.grounded && !s.crouch && Math.hypot(s.vel.x, s.vel.z) > 7;
@@ -418,6 +441,11 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (S.v < 4 || S.t > 1.6 || moved || !s.grounded && S.t > 0.2) endSlide();
 	}
 	function endSlide() { s.slide = null; s.onSlide?.(false); }
+	// the jump on the ground, at something to climb: the way you are going, or the way you face
+	function leapAhead() {
+		const l = Math.hypot(wish.x, wish.z);
+		return l > 0.3 ? park.leap(wish.x / l, wish.z / l) : park.leap(-Math.sin(s.yaw), -Math.cos(s.yaw));
+	}
 	// Steps as people take them (people/motion.js): a stride of 0.83 of the height at an easy
 	// 1.3 m/s, longer as the pace picks up; the cadence that gives, capped so a brisk walk or a
 	// run is never a patter (about 2.2 steps a second walking, 2.8 running). count goes up as
@@ -457,6 +485,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);
 		removeEventListener('pointermove', pMove); removeEventListener('pointerup', pUp); removeEventListener('pointercancel', pUp);
 		removeEventListener('blur', clearInput); dom.canvas.removeEventListener('pointerdown', pDown);
+		park.dispose();
 	}
 	// the jump button dives when you are swimming at the surface
 	function jump() {
@@ -466,5 +495,5 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	}
 	// the crouch button (touch): a tap crouches or stands, or slides out of a sprint
 	function crouch(on) { if (on === undefined) on = !s.crouchHold; if (on && !s.crouchHold) s.crouchQueued = true; s.crouchHold = !!on; return s.crouchHold; }
-	return { state: s, update, input, dispose, jump, crouch, floorAt, pushOut, clearInput, cycleBoost, setLookMode };
+	return { state: s, update, input, dispose, jump, crouch, floorAt, pushOut, clearInput, cycleBoost, setLookMode, parkour: park };
 }
