@@ -10,9 +10,16 @@
 // holding the mixer's chute, laying blocks on one knee, talking with their hands. The tools
 // (hammer, shovel, block, bar) are in the mesh and shown only in the hands of whoever is using
 // them. A walker's step follows the ground they cover, so feet do not slide.
+//
+// That figure is the stand-in: once a crew is about, each part of the work is baked from a real
+// body (crewbake.js) and the workers from afar are drawn as that (one instanced mesh a pose),
+// while the nearest are real people you can talk to (crewpeople.js).
 
 import * as THREE from 'three';
 import { kitShared } from './crewkit.js';
+import { loadPeopleAssets, peopleAssetsNow } from '../people/body.js';
+import { HATS, VESTS, SHIRTS, TROUSERS } from './crewpeople.js';
+import { BAKE_POSES, BAKE_OF, bakeBody, captureSteps, assemblePose, bakeBlend } from './crewbake.js';
 
 export const POSES = { talk: 0, walk: 1, carry: 2, shoulder: 3, hammer: 4, shovel: 5, guide: 6, pour: 7, lay: 8, idle: 9, pane: 10 };
 export const TOOLS = { none: 0, hammer: 1, shovel: 2, block: 3, bar: 4, pane: 5 };
@@ -250,6 +257,48 @@ function folkMaterial() {
 	return { m, d };
 }
 
+// ---------- the crew from afar as real people (crewbake.js) ----------
+// each pose's baked body, instanced, blended between its two keys on the GPU and coloured by the
+// worker's looks from the same lists the near people wear (crewpeople.js)
+const sRGB = (h) => new THREE.Color(h).convertSRGBToLinear();
+const BAKE_U = {
+	uSkin: FOLK_U.uSkin,
+	uHat: { value: HATS.map(sRGB) },
+	uVest: { value: VESTS.map(sRGB) },
+	uShirt: { value: SHIRTS.map(sRGB) },
+	uTrou: { value: TROUSERS.map(([c]) => sRGB(c)) },
+	uNight: kitShared.uNight,
+};
+const BAKE_HEAD = /* glsl */`
+attribute vec4 position2; attribute vec3 normal2; attribute vec3 tint; attribute vec4 iLook; attribute vec2 iMix;
+uniform vec3 uSkin[5]; uniform vec3 uHat[${HATS.length}]; uniform vec3 uVest[${VESTS.length}]; uniform vec3 uShirt[${SHIRTS.length}]; uniform vec3 uTrou[${TROUSERS.length}];
+`;
+function bakeMaterial() {
+	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0, side: THREE.DoubleSide });
+	m.onBeforeCompile = (sh) => {
+		Object.assign(sh.uniforms, BAKE_U);
+		sh.vertexShader = BAKE_HEAD + 'varying vec3 vCrew; varying float vBand;\n' + sh.vertexShader
+			.replace('#include <beginnormal_vertex>', 'vec3 objectNormal = normalize(mix(normal, normal2, iMix.x));\n#ifdef USE_TANGENT\nvec3 objectTangent = vec3(tangent.xyz);\n#endif')
+			.replace('#include <begin_vertex>', `vec3 transformed = mix(position, position2.xyz, iMix.x);
+	int rg = int(position2.w + 0.5);
+	vCrew = rg == 0 ? uSkin[int(iLook.x)] : rg == 1 ? uShirt[int(iLook.w)] : rg == 2 ? uVest[int(iLook.z)] : rg == 3 ? uTrou[int(iMix.y)] : rg == 4 ? vec3(0.05, 0.035, 0.02) : rg == 5 ? vec3(0.03, 0.022, 0.016) : rg == 6 ? uHat[int(iLook.y)] : tint;
+	// (the vest's reflective bands)
+	vBand = rg == 8 ? 1.0 : 0.0;
+	if (rg == 8) vCrew = vec3(0.6, 0.62, 0.64);`);
+		sh.fragmentShader = 'uniform float uNight; varying vec3 vCrew; varying float vBand;\n' + sh.fragmentShader
+			.replace('#include <color_fragment>', '#include <color_fragment>\n\tdiffuseColor.rgb *= vCrew;')
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix(0.82, 0.45, vBand);')
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * vBand * pow(saturate(dot(normal, normalize(vViewPosition))), 1.5) * (0.06 + uNight * 1.2);');
+	};
+	m.customProgramCacheKey = () => 'crew-bake-1';
+	const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+	d.onBeforeCompile = (sh) => {
+		sh.vertexShader = 'attribute vec4 position2; attribute vec2 iMix;\n' + sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = mix(position, position2.xyz, iMix.x);');
+	};
+	d.customProgramCacheKey = () => 'crew-bake-depth-1';
+	return { m, d };
+}
+
 // ---------- the crew ----------
 // begin(); set(x, y, z, yaw, pose, t, look, t2) for each worker this frame; end(). pose a POSES
 // name, t how far through the task (for a walker: the ground covered over the stride), look a
@@ -267,21 +316,87 @@ export function createCrew(scene, cap) {
 	mesh.name = 'structures-crew';
 	scene.add(mesh);
 	const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P3 = new THREE.Vector3(), S1 = new THREE.Vector3(1, 1, 1), Y = new THREE.Vector3(0, 1, 0);
+	// the real-body figures (crewbake.js): made a step at a time once a crew is about (the body,
+	// then each pose's two keys and its mesh), each pose drawn by its own instanced mesh; until
+	// a pose is made its workers are the figure above
+	const bk = { A: peopleAssetsNow(), B: null, made: new Map(), queue: BAKE_POSES.slice(), step: 0, keys: [], wait: 0, dead: false, mat: null };
+	const bakeOf = (p) => BAKE_OF[p] || p;
+	function bakeStep() {
+		if (bk.dead || !bk.queue.length) return;
+		if (!bk.A) { if (!bk.loading) { bk.loading = true; loadPeopleAssets().then((a) => { bk.A = a; }).catch(() => { bk.dead = true; }); } return; }
+		try {
+			if (!bk.B) { bk.B = bakeBody(bk.A); return; }
+			const pose = bk.queue[0];
+			if (bk.step < 2) {
+				// (each key read back over a few frames: settled, then the body, the clothes, the kit)
+				bk.it ||= captureSteps(bk.B, pose, bk.step);
+				const r = bk.it.next();
+				if (r.done) { bk.keys[bk.step] = r.value; bk.step++; bk.it = null; }
+				return;
+			}
+			const g = assemblePose(bk.B, bk.keys[0], bk.keys[1], 0.045);
+			const iLook = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4), iMix = new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2);
+			iLook.setUsage(THREE.DynamicDrawUsage); iMix.setUsage(THREE.DynamicDrawUsage);
+			g.setAttribute('iLook', iLook); g.setAttribute('iMix', iMix);
+			bk.mat ||= bakeMaterial();
+			const im = new THREE.InstancedMesh(g, bk.mat.m, cap);
+			im.customDepthMaterial = bk.mat.d;
+			im.count = 0; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; im.visible = false;
+			im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+			im.name = 'structures-crew-' + pose;
+			scene.add(im);
+			bk.made.set(pose, { im, iLook, iMix, n: 0 });
+			bk.queue.shift(); bk.step = 0; bk.keys = [];
+			if (!bk.queue.length) { bk.B.done(); bk.B = null; }
+		} catch (e) {
+			// (the figure stays: a bake that fails is not worth the crew)
+			console.warn('crew bake', e); bk.dead = true;
+			if (bk.B) { bk.B.done(); bk.B = null; }
+			bk.it = null;
+		}
+	}
 	let n = 0;
-	function begin() { n = 0; }
+	function begin() { n = 0; for (const b of bk.made.values()) b.n = 0; }
 	function set(x, y, z, yaw, poseName, t, lk = n, t2 = t) {
+		const h = Math.abs(Math.floor(lk)), sc = 0.95 + ((h * 7) % 11) / 100;
+		const b = bk.made.get(bakeOf(poseName));
+		if (b) {
+			if (b.n >= cap) return -1;
+			const i = b.n++;
+			M.compose(P3.set(x, y, z), Q.setFromAxisAngle(Y, yaw), S1.setScalar(sc));
+			b.im.setMatrixAt(i, M);
+			b.iLook.setXYZW(i, h % 5, (h * 3 + 1) % HATS.length, h % 3 === 1 ? 1 : 0, (h * 7 + 3) % SHIRTS.length);
+			b.iMix.setXY(i, bakeBlend(poseName, t, t2), (h * 3 + 2) % TROUSERS.length);
+			S1.setScalar(1);
+			return i;
+		}
 		if (n >= cap) return -1;
 		const i = n++;
 		M.compose(P3.set(x, y, z), Q.setFromAxisAngle(Y, yaw), S1);
 		mesh.setMatrixAt(i, M);
-		const p = POSES[poseName] ?? 0, h = Math.abs(Math.floor(lk));
+		const p = POSES[poseName] ?? 0;
 		pose.setXYZW(i, p, t, t2, toolOf(poseName));
-		look.setXYZW(i, h % 5, (h * 3 + 1) % 4, h % 3 === 1 ? 1 : 0, 0.95 + ((h * 7) % 11) / 100);
+		look.setXYZW(i, h % 5, (h * 3 + 1) % 4, h % 3 === 1 ? 1 : 0, sc);
 		return i;
 	}
 	function end() {
 		mesh.count = n;
 		mesh.instanceMatrix.needsUpdate = true; pose.needsUpdate = true; look.needsUpdate = true;
+		let any = n > 0;
+		for (const b of bk.made.values()) {
+			b.im.count = b.n; b.im.visible = b.n > 0;
+			if (b.n) { any = true; b.im.instanceMatrix.needsUpdate = true; b.iLook.needsUpdate = true; b.iMix.needsUpdate = true; }
+		}
+		// (a step of the bakes every few frames, only while a crew is about)
+		if (any && bk.queue.length && --bk.wait <= 0) { bk.wait = 4; bakeStep(); }
 	}
-	return { begin, set, end, count: () => n, cap, mesh, verts: geo.attributes.position.count };
+	const count = () => { let k = n; for (const b of bk.made.values()) k += b.n; return k; };
+	function dispose() {
+		for (const b of bk.made.values()) { b.im.removeFromParent(); b.im.geometry.dispose(); b.im.dispose(); }
+		bk.made.clear(); bk.queue.length = 0;
+		if (bk.B) { bk.B.done(); bk.B = null; }
+		bk.mat?.m.dispose(); bk.mat?.d.dispose();
+	}
+	const bakes = () => ({ made: [...bk.made.keys()], left: bk.queue.length, dead: bk.dead, verts: [...bk.made.values()].reduce((a, b) => a + b.im.geometry.attributes.position.count, 0), tris: [...bk.made.values()].reduce((a, b) => a + b.im.geometry.index.count / 3, 0) });
+	return { begin, set, end, count, figures: () => n, cap, mesh, verts: geo.attributes.position.count, bakes, dispose };
 }

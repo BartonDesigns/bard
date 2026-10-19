@@ -34,7 +34,9 @@ const SITE = { company: 'Bayline Builders' };
 let row = [];
 function show(poses, gap = 1.6, mode = 'people', t0 = 0.3) {
 	row = poses.map((p, i) => ({ pose: p, x: (i - (poses.length - 1) / 2) * gap, key: mode + ':' + p + ':' + i, look: 3 + i * 5 }));
-	crew.mesh.visible = mode === 'figures';
+	// (baked: the far figures made of a real body, crewbake.js; all their poses made first)
+	if (mode === 'baked') { let k = 0; while (crew.bakes().left && !crew.bakes().dead && k++ < 2000) step(1 / 30, 'baked', t0); }
+	crew.mesh.visible = mode === 'figures' || mode === 'baked';
 	folk.group.visible = mode === 'people';
 	// (settle: build the bodies, fade them in, let the springs come to rest)
 	const steps = mode === 'people' ? 260 : 2;
@@ -47,7 +49,7 @@ function step(dt, mode, t0) {
 	for (const w of row) {
 		const t = t0 + (w.pose === 'walk' || w.pose === 'carry' || w.pose === 'shoulder' || w.pose === 'pane' ? time / 1.45 : 0);
 		if (mode === 'people') folk.offer(w.key, w.x, 0, 0, Math.PI, w.pose, t, w.look, SITE, w.pose);
-		else crew.set(w.x, 0, 0, Math.PI, w.pose, t, w.look, t);
+		else if (mode === 'baked' || !crew.bakes().made.length) crew.set(w.x, 0, 0, Math.PI, w.pose, t, w.look, t);
 	}
 	crew.end(); folk.end(dt);
 	// (a walker walks on the spot: its place held, the stride from the clock)
@@ -61,5 +63,7 @@ function cam(x, y, z, tx, ty, tz, fov = 30) {
 	renderer.render(scene, camera);
 	return renderer.domElement.toDataURL('image/png');
 }
-window.CP = { show, at, cam, step, folk, crew, stats: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries }) };
+// one pose at progress t for the far figures
+function atBaked(t) { crew.begin(); folk.begin(new T.Vector3(0, 1.6, -9)); for (const w of row) crew.set(w.x, 0, 0, Math.PI, w.pose, t, w.look, t); crew.end(); folk.end(1 / 30); }
+window.CP = { show, at, atBaked, cam, step, folk, crew, stats: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries }) };
 window.CP_READY = true;

@@ -6,7 +6,7 @@
 // with it, then thinned to a couple of thousand points as people/crowd.js does. Each worker
 // is an instance of their pose's mesh in their own colours (skin, shirt, vest, trousers, hat),
 // blended between the pose's two keys on the GPU as the work goes on. crewfolk.js draws these
-// once they are made (a pose a frame), and its old figure until then.
+// once they are made (a step every few frames), and its old figure until then.
 
 import * as THREE from 'three';
 import { buildPerson, personDNA, freeBody, rng } from '../people/body.js';
@@ -34,59 +34,78 @@ export const BAKE_OF = { idle: 'talk', glazier: 'hammer' };
 // a held action of a stride's legs and another's arms (for a walker carrying something)
 function composite(name, u) {
 	const [, arms] = name.split('+'), S = ACTIONS.stride.keys[u > 0.5 ? 1 : 0][1], X = ACTIONS[arms].keys[0][1];
-	ACTIONS.__crewBake = { loop: false, keys: [[0, { ...S, L: X.L || S.L, R: X.R || S.R, sp: X.sp, hd: X.hd }]] };
+	const K = { ...S, L: X.L || S.L, R: X.R || S.R };
+	if (X.sp) K.sp = X.sp;
+	if (X.hd) K.hd = X.hd;
+	ACTIONS.__crewBake = { loop: false, keys: [[0, K]] };
 	return '__crewBake';
 }
-const V = new THREE.Vector3(), TM = new THREE.Matrix4();
+const V = new THREE.Vector3(), TM = new THREE.Matrix4(), TOOL_FLAT = {};
 // one worker, built once for the bake and let go after (A: the people assets)
 export function bakeBody(A) {
-	const d = personDNA(0x5eedc4e3, { age: 36, style: workerStyle(7, rng(0xc4e3)) });
+	// (gloved, as the old figure was: the hands read as the work's from afar)
+	const style = workerStyle(7, rng(0xc4e3));
+	if (!style.acc.some((q) => q.kind === 'gloves')) style.acc.push({ kind: 'gloves', col: '#b89a5e', acc: '#7a6440' });
+	const d = personDNA(0x5eedc4e3, { age: 36, style });
 	d.male = true; d.sex = 0.88; d.height = 1.76; d.weight = 0.25; d.muscle = 0.35;
 	const P = buildPerson(A, d), M = createMotion(P, () => 0);
 	M.S.hand = 'R';
 	M.place(0, 0, 0, 0);
 	return { P, M, done: () => freeBody(P) };
 }
-// a pose's two keys baked into one thinned geometry: position and normal the first key,
-// position2 (w: the colour region) and normal2 the second, color what the tool and the gloves
-// are made of. Regions: 0 skin, 1 shirt, 2 vest, 3 trousers, 4 boots, 5 the hair's shade, 6
-// the hat, 7 its own colour
-export function bakePose(B, pose, CELL = 0.03) {
-	const { P, M } = B;
+// one key of a pose, the body posed and read back: every vertex where it is now, with its colour
+// region (0 skin, 1 shirt, 2 vest, 3 trousers, 4 boots, 5 the hair's shade, 6 the hat, 7 its own
+// colour, 8 the vest's bands) and its own colour (the tool and the gloves are what they are made of)
+// (a step at a time: settled, then each mesh read back, then the tool; captureKey all at once)
+export function* captureSteps(B, pose, k) {
+	const { P, M } = B, [name, u] = BAKES[pose][k];
 	const neck = P.height * 0.84;
-	const capture = ([name, u]) => {
-		M.place(0, 0, 0, 0);
-		M.act(name && name.includes('+') ? composite(name, u) : name, name ? u : undefined);
-		if (!name) M.act(null);
-		M.setPose('rest'); M.want.speed = 0; M.S.gestures.length = 0;
-		for (let i = 0; i < 40; i++) M.update(1 / 20, i / 20, null);
-		P.root.updateMatrixWorld(true);
-		const out = [], col = [];
-		for (const [mesh, kind] of [[P.skin, 0], [P.cloth, 1], [P.acc, 2]]) {
-			if (!mesh) continue;
-			mesh.skeleton.update();
-			const g = mesh.geometry, pa = g.attributes.position, sl = g.attributes.slot, sc = g.attributes.scalp, ca = g.attributes.color;
-			for (let i = 0; i < pa.count; i++) {
-				V.fromBufferAttribute(pa, i); mesh.applyBoneTransform(i, V); V.applyMatrix4(mesh.matrixWorld);
-				let r = 0;
-				if (kind === 0) r = sc && sc.getX(i) > 0.5 ? 5 : 0;
-				else if (kind === 1) r = [1, 2, 3, 4][Math.min(3, sl.getX(i) % 10)];
-				else r = V.y > neck ? 6 : 7;
-				out.push(V.x, V.y, V.z, r);
-				col.push(ca ? ca.getX(i) : 1, ca ? ca.getY(i) : 1, ca ? ca.getZ(i) : 1);
+	M.place(0, 0, 0, 0);
+	if (name) M.act(name.includes('+') ? composite(name, u) : name, u); else M.act(null);
+	M.setPose('rest'); M.want.speed = 0; M.S.gestures.length = 0;
+	for (let i = 0; i < 40; i++) M.update(1 / 20, i / 20, null);
+	P.root.updateMatrixWorld(true);
+	const out = [], col = [];
+	for (const [mesh, kind] of [[P.skin, 0], [P.cloth, 1], [P.acc, 2]]) {
+		if (!mesh) continue;
+		yield;
+		mesh.skeleton.update();
+		const g = mesh.geometry, pa = g.attributes.position, sl = g.attributes.slot || { getX: () => 0 }, sc = g.attributes.scalp, ca = g.attributes.color;
+		for (let i = 0; i < pa.count; i++) {
+			V.fromBufferAttribute(pa, i); mesh.applyBoneTransform(i, V); V.applyMatrix4(mesh.matrixWorld);
+			let r = 0;
+			if (kind === 0) r = sc && sc.getX(i) > 0.5 ? 5 : 0;
+			else if (kind === 1) {
+				r = [1, 2, 3, 4][Math.min(3, sl.getX(i) % 10)];
+				// (the vest's two reflective bands, by where they are on the body standing)
+				const hy = pa.getY(i) / P.height;
+				if (r === 2 && (Math.abs(hy - 0.625) < 0.016 || Math.abs(hy - 0.7) < 0.016)) r = 8;
 			}
+			// (the hat by where it is on the body standing, so a bowed head keeps all of it)
+			else r = pa.getY(i) > neck ? 6 : 7;
+			out.push(V.x, V.y, V.z, r);
+			col.push(ca ? ca.getX(i) : 1, ca ? ca.getY(i) : 1, ca ? ca.getZ(i) : 1);
 		}
-		// the tool where it is held
-		const tk = TOOL_OF[pose];
-		if (tk && tk !== 'pane' && toolMatrix(P, M.S, tk, name === 'crewHammer' ? u : name === 'crewShovel' ? u : 0, TM)) {
-			const g = toolGeometry(tk), pa = g.attributes.position, ca = g.attributes.color;
-			for (let i = 0; i < pa.count; i++) { V.fromBufferAttribute(pa, i).applyMatrix4(TM); out.push(V.x, V.y, V.z, 7); col.push(ca.getX(i), ca.getY(i), ca.getZ(i)); }
-		}
-		return { out, col };
-	};
-	const [K0, K1] = BAKES[pose];
-	const a = capture(K0), b = capture(K1);
+	}
+	// the tool where it is held
+	const tk = TOOL_OF[pose];
+	if (tk && toolMatrix(P, M.S, tk, name === 'crewHammer' || name === 'crewShovel' ? u : 0, TM)) {
+		// (in threes, and coloured: the pane is a plain box, drawn as glass up close, from afar its grey-green)
+		const g = TOOL_FLAT[tk] ||= toolGeometry(tk).index ? toolGeometry(tk).toNonIndexed() : toolGeometry(tk);
+		const pa = g.attributes.position, ca = g.attributes.color;
+		for (let i = 0; i < pa.count; i++) { V.fromBufferAttribute(pa, i).applyMatrix4(TM); out.push(V.x, V.y, V.z, 7); if (ca) col.push(ca.getX(i), ca.getY(i), ca.getZ(i)); else col.push(0.27, 0.42, 0.4); }
+	}
 	M.act(null);
+	return { out, col };
+}
+export function captureKey(B, pose, k) {
+	const it = captureSteps(B, pose, k);
+	for (;;) { const r = it.next(); if (r.done) return r.value; }
+}
+// a pose's two keys (captureKey) made one thinned geometry: position and normal the first key,
+// position2 (w: the colour region) and normal2 the second, tint the own colour
+export function assemblePose(B, a, b, CELL = 0.03) {
+	const { P } = B;
 	// the triangles: each mesh's own, then the tool's (in threes)
 	const idx = [];
 	let base = 0;
@@ -114,11 +133,13 @@ export function bakePose(B, pose, CELL = 0.03) {
 	g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals();
 	g.setAttribute('position2', new THREE.BufferAttribute(p2, 4));
 	g.setAttribute('normal2', n2);
-	g.setAttribute('color', new THREE.BufferAttribute(colr, 3));
+	g.setAttribute('tint', new THREE.BufferAttribute(colr, 3));
 	g.computeBoundingSphere();
 	g.boundingSphere.radius += 1.5;
 	return g;
 }
+// a pose baked all at once
+export const bakePose = (B, pose, CELL) => assemblePose(B, captureKey(B, pose, 0), captureKey(B, pose, 1), CELL);
 
 // how far between a pose's two keys a worker is (t the task's clock, t2 their own)
 const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };

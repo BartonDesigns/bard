@@ -54,7 +54,7 @@ const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'te
 		console.log('site', JSON.stringify(site));
 		if (site.error) throw Error(site.error);
 		// the camera walked up to the crew, a few seconds of the work stepped
-		const shots = [['site-wide', 14, 5, 0], ['site-near', 6.5, 2.2, 1], ['site-close', 3.2, 1.75, 2]];
+		const shots = [['site-wide', 14, 5, 0], ['site-near', 6.5, 2.2, 1], ['site-close', 3.2, 1.75, 2], ['site-far', 60, 14, 0], ['site-mid', 28, 6, 0]];
 		const result = {};
 		for (const [name, dist, h, k] of shots) {
 			for (let pass = 0; pass < 8; pass++) {
@@ -75,10 +75,11 @@ const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'te
 				const url = ren.domElement.toDataURL('image/png');
 				const F = Crysis.world().structures.rebuild.folk;
 				// (anyone near you to talk to: the talk button's own pick)
-				return { url, folk: F.info(), crewDrawn: Crysis.world().structures.rebuild.crew.count() };
+				const C = Crysis.world().structures.rebuild.crew;
+					return { url, folk: F.info(), crewDrawn: C.count(), figures: C.figures?.(), bakes: C.bakes?.() };
 			});
 			fs.writeFileSync(path.join(OUT, name + '.png'), Buffer.from(r.url.split(',')[1], 'base64'));
-			result[name] = { folk: r.folk.map((b) => `${b.pose}/${b.tool || '-'}/${b.fade}`), crewDrawn: r.crewDrawn };
+			result[name] = { folk: r.folk.map((b) => `${b.pose}/${b.tool || '-'}/${b.fade}`), crewDrawn: r.crewDrawn, figures: r.figures, bakes: r.bakes && { made: r.bakes.made.length, left: r.bakes.left, dead: r.bakes.dead } };
 			console.log(name, JSON.stringify(result[name]));
 		}
 		const talk = await page.evaluate(() => {
