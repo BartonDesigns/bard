@@ -15,6 +15,7 @@ const SHOTS = [
 	['after-work', WORK, 'people', [0, 1.5, -9.5, 0, 0.95, 0, 34]],
 	['after-work-side', WORK, 'people', [7, 1.6, -6, 0, 0.95, 0, 40]],
 	['before-more', MORE, 'figures', [0, 1.5, -9.5, 0, 0.95, 0, 34]],
+	['figures-far', [...WORK, ...MORE], 'figures', [0, 6, -40, 0, 0.95, 0, 22]],
 	['after-more', MORE, 'people', [0, 1.5, -9.5, 0, 0.95, 0, 34]],
 	['after-close-hammer', ['hammer'], 'people', [1.2, 1.5, -2.2, 0, 1.0, 0, 34], 0.2],
 	['after-close-hammer-up', ['hammer'], 'people', [1.2, 1.5, -2.2, 0, 1.0, 0, 34], 0.48],
@@ -22,6 +23,11 @@ const SHOTS = [
 	['after-close-carry', ['carry', 'shoulder'], 'people', [1.6, 1.5, -2.8, 0, 1.0, 0, 38]],
 	['after-close-pane', ['pane', 'guide'], 'people', [1.6, 1.5, -2.8, 0, 1.0, 0, 38]],
 	['after-close-face', ['talk'], 'people', [0.3, 1.65, -1.1, 0, 1.6, 0, 30]],
+	// the far figures made of a real body (crewbake.js), close enough to judge and as seen
+	['baked-work', WORK, 'baked', [0, 1.5, -9.5, 0, 0.95, 0, 34]],
+	['baked-more', MORE, 'baked', [0, 1.5, -9.5, 0, 0.95, 0, 34]],
+	['baked-face', ['talk', 'hammer'], 'baked', [0.6, 1.7, -2.6, 0, 1.45, 0, 30]],
+	['baked-far', [...WORK, ...MORE], 'baked', [0, 6, -40, 0, 0.95, 0, 22]],
 ];
 (async () => {
 	fs.mkdirSync(OUT, { recursive: true });
@@ -42,10 +48,10 @@ const SHOTS = [
 	for (const [name, poses, mode, c, t] of SHOTS) {
 		if (only && !only.includes(name)) continue;
 		const info = await page.evaluate(([p, m, t]) => window.CP.show(p, 1.6, m, t ?? 0.3), [poses, mode, t]);
-		if (t !== undefined) await page.evaluate((t) => window.CP.at(t), t);
+		if (t !== undefined) await page.evaluate(([t, m]) => (m === 'baked' ? window.CP.atBaked(t) : window.CP.at(t)), [t, mode]);
 		const url = await page.evaluate((c) => window.CP.cam(...c), c);
 		fs.writeFileSync(path.join(OUT, name + '.png'), Buffer.from(url.split(',')[1], 'base64'));
-		console.log(name, JSON.stringify(info.map((b) => [b.pose, b.tool, b.fade])).slice(0, 400));
+		console.log(name, mode === 'baked' ? JSON.stringify(await page.evaluate(() => window.CP.crew.bakes())) : JSON.stringify(info.map((b) => [b.pose, b.tool, b.fade])).slice(0, 400));
 	}
 	console.log('stats', JSON.stringify(await page.evaluate(() => window.CP.stats())));
 	console.log(errs.length ? 'ERR ' + [...new Set(errs)].join(' | ').slice(0, 1500) : 'no errors');
