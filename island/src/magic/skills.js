@@ -19,6 +19,7 @@
 
 import { SCHOOLS, SPELLS, SPELL, weaveBlock, weaveCost } from './spells.js';
 import { composeMods } from './stats.js';
+import { sanitizeHonor } from '../combat/honor.js';
 
 // the skills of the body: no spells, perks only
 export const BODY = Object.freeze({
@@ -198,6 +199,7 @@ export function sanitizeSkills(s) {
 	const mastery = {};
 	for (const id of s.known || []) if (SPELL[id]) mastery[id] = Math.max(0, Math.floor(+s.mastery?.[id] || 0));
 	s.mastery = mastery;
+	s.honor = sanitizeHonor(s.honor);
 	refreshMods(s);
 	return s;
 }

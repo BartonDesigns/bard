@@ -38,6 +38,7 @@ import { createBeams, CHARGE } from './beam.js';
 import { encodeSpell, decodeSpell, SPELL_STYLE } from './net.js';
 import { GLOW } from './fx.js';
 import { createLens } from './lens.js';
+import { pveHonor, pvpWin, addHonor, rankOf as honorRank, titleOf, honorSheet } from '../combat/honor.js';
 
 const KEY = 'l99-magic', TEST_KEY = 'l99-magic-test';
 const store = {
@@ -68,7 +69,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	// (made anew when any of what feeds them has changed; force: now, whatever)
 	function restat(force = false) {
 		const g = gearNow();
-		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}`;
+		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}|${honorRank(state.honor.pts)}`;
 		if (!force && sig === statSig) return false;
 		statSig = sig; state.gear = g;
 		refreshStats(state);
@@ -362,9 +363,32 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	function onMove(e) { if (e.pointerType !== 'mouse' || W()?.player?.state?.lookMode !== 'camera') return; const r = mount.getBoundingClientRect(); caster.setCursor({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -((e.clientY - r.top) / r.height * 2 - 1) }); }
 	const clearKeys = () => { keysDown.clear(); };
 	addEventListener('keydown', onKey); addEventListener('keyup', onKeyUp); addEventListener('pointermove', onMove); addEventListener('blur', clearKeys);
-	// mercy and its opposite, in the fabric (combat/morality.js's events)
+	// ---------- honor (combat/honor.js): earned in fair fights, PvE and PvP ----------
+	// Each rank lifts combat, health and defence (magic/stats.js folds it into state.mods).
+	// What it is given: { n, from, to } (addHonor's); why: a few words for the hint
+	function honored(r, why = '', quiet = false) {
+		if (!r?.n) return;
+		dirty = true;
+		if (r.n > 0) learnt(addXp(state, r.n));
+		if (r.to !== r.from) {
+			restat(true);
+			if (r.to > r.from) { hint(`Honor rank ${r.to}: ${titleOf(r.to)}. Your combat, health and defence rise.`, 5000, 2); magicSound('level', 0.16); }
+			else hint(`Honor lost: you are ${titleOf(r.to)} again.`, 4000, 1);
+		} else if (!quiet) hint(`${r.n > 0 ? '+' : '−'}${Math.abs(r.n)} honor${why ? `: ${why}` : ''}`, 1800);
+	}
+	const HONOR_WHY = { 'boss-slain': 'a great foe brought down', 'defend-village': 'the village held', spare: 'mercy shown', 'kill-surrendered': 'they had surrendered' };
+	combat.hooks.honorRank = () => honorRank(state.honor.pts);
+	combat.hooks.pvpWin = (v) => honored(pvpWin(state.honor, v.from, v.r), `you beat ${v.name}`);
+	// mercy and its opposite, in the fabric (combat/morality.js's events), and the honor in them
+	// (a great foe falls once, though its fall is told twice: by the blow and by the fight's end)
+	let bossFell = { target: '', t: 0 };
 	const unMoral = combat.morality?.on?.((e) => {
-		if (e.kind === 'spare') { gather(state, 'light', 2); dirty = true; hint('Mercy shown: +2 light aether fabric', 1600); learnt(addXp(state, 25)); }
+		const again = e.kind === 'boss-slain' && e.target === bossFell.target && Date.now() - bossFell.t < 30000;
+		if (e.kind === 'boss-slain') bossFell = { target: e.target, t: Date.now() };
+		const h = again ? 0 : pveHonor(e);
+		// (mercy says its honor in its own line)
+		if (h) honored(addHonor(state.honor, h, 'pve'), HONOR_WHY[e.kind] || (h < 0 ? 'no honor in that' : ''), e.kind === 'spare');
+		if (e.kind === 'spare') { gather(state, 'light', 2); dirty = true; hint(`Mercy shown: +2 light aether fabric${h ? `, +${h} honor` : ''}`, 1600); learnt(addXp(state, 25)); }
 		else if (e.kind === 'kill' || e.kind === 'kill-surrendered') { gather(state, 'dark', e.kind === 'kill' ? 1 : 3); dirty = true; learnt(addXp(state, 10)); }
 	});
 	let player = null, lastH = 0, walked = 0, wasBeam = false;
@@ -431,7 +455,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 5; if (dirty && !testOn) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.remoteSpell = null; }
+	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, skills, exposure: () => caster.exposure(),
@@ -454,6 +478,10 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: [...(state.moonlit || [])], life: BASE_LIFE + (state.mods?.life || 0), gear: state.gear.map((x) => ({ i: x.i, l: x.l, t: x.t, school: attunement(x) })), ...caster.info() }),
 		// your statistics as a sheet (the Character view, ui/gear.js), and fabric into gear
 		stats: () => statSheet(state, { light: light() }),
+		// your honor: rank, title, the way to the next, and what it lifts (the Character view)
+		honor: () => honorSheet(state.honor, combat.pvpFlag?.()),
+		// (the console and the tests: honor given, n < 0 taken; way 'pve' or 'pvp')
+		giveHonor: (n = 50, way = 'pve') => { honored(addHonor(state.honor, n, way)); return honorSheet(state.honor, combat.pvpFlag?.()); },
 		infuse, restat: () => restat(true),
 		// (the console: experience, and a perk)
 		xp: (n = 100) => { learnt(addXp(state, n)); return { level: state.level, xp: state.xp, points: pointsOf(state) }; },

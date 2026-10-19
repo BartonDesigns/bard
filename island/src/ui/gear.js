@@ -363,7 +363,27 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 			b.style.cssText = `font:600 20px Georgia,serif;color:${c};text-shadow:0 0 10px ${c}55;`; d.style.cssText = 'font-size:10px;opacity:.7;line-height:1.3;';
 			t.append(a, b, d); tiles.append(t);
 		}
-		sheet.append(tiles, label('Attributes'));
+		sheet.append(tiles);
+		// honor (combat/honor.js): earned in fair fights, its rank lifting combat, health and defence
+		const hn = magic()?.honor?.();
+		if (hn) {
+			sheet.append(label('Honor'));
+			const card = el('div', 'g99-panel'); card.style.cssText += 'display:flex;flex-direction:column;gap:6px;';
+			const t = el('div', '', `⚔ ${hn.title} · rank ${hn.rank} · ${hn.pts} honor`); t.style.cssText = 'font:600 14px Georgia,serif;color:#e9cf93;text-shadow:0 0 10px #e9cf9355;';
+			const b = el('div', 'g99-bar'), i = el('i'); i.style.cssText = `width:${Math.round(hn.frac * 100)}%;background:linear-gradient(90deg,#e9cf9366,#e9cf93);`; b.append(i);
+			b.setAttribute('role', 'progressbar'); b.setAttribute('aria-label', 'Honor to the next rank'); b.setAttribute('aria-valuenow', String(Math.round(hn.frac * 100))); b.setAttribute('aria-valuemin', '0'); b.setAttribute('aria-valuemax', '100');
+			const nx = el('div', '', hn.next ? `${hn.next.at - hn.pts} more to ${hn.next.title} · ${hn.pve} from fights in the world, ${hn.pvp} from PvP` : 'The top of the ladder.'); nx.style.cssText = 'font-size:10px;opacity:.65;';
+			card.append(t, b, nx);
+			for (const k of hn.skills) {
+				const r = el('div'); r.style.cssText = 'display:flex;align-items:baseline;gap:8px;font-size:12px;';
+				const nm = el('span', '', `${k.glyph} ${k.name} ${k.level}`); nm.style.cssText = `color:${k.color};font-weight:600;width:96px;flex:none;`;
+				const w = el('span', '', k.text); w.style.cssText = 'opacity:.85;flex:1;min-width:0;';
+				r.append(nm, w); card.append(r);
+			}
+			card.append(note(`Earn it against raiders, invaders and anyone who comes at you, by holding a village, beating a great beast or machine, sparing those who give up, and in PvP. In a room the host allows PvP and each player raises their own flag (👥 room panel). Yours is ${hn.flag ? 'up' : 'down'}. Killing the surrendered, the unarmed or the law costs honor.`));
+			sheet.append(card);
+		}
+		sheet.append(label('Attributes'));
 		const top = Math.max(40, ...ATTR_IDS.map((k) => st.attrs[k].total));
 		for (const k of ATTR_IDS) {
 			const A = ATTRS[k], at = st.attrs[k], r = el('div'); r.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
