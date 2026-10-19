@@ -311,7 +311,9 @@ test('spells reach brawlers and townsfolk, hands cast them, the body gestures, t
 	assert.match(src('combat/melee.js'), /function draw\(id\)/);
 	const hud = src('magic/hud.js');
 	assert.match(hud, /\.mg-bar\{position:absolute;left:50%;bottom:calc\(12px/, 'the bar at the bottom on a desktop');
-	assert.match(hud, /\.l99-touch \.mg-bar\{bottom:calc\(var\(--l99-low/, 'above the thumbs on a touch screen');
+	assert.match(hud, /\.l99-touch \.mg-bar\{left:calc\(12px [^}]*bottom:calc\(200px [^}]*flex-direction:column/, 'two rows on a touch screen, left of the thumb column and above its fight buttons');
+	assert.match(hud, /\.l99-touch \.mg-s\{width:44px;height:44px/, 'full-size touch targets');
+	assert.match(hud, /if \(isTouch\) \{ const hd = mk\('div', 'hd'\); hd\.append\(fab, mana\); bar\.prepend\(hd\); \}/, 'the fabric and mana head the bar on a touch screen');
 	// (the spellbook is now the skills and magic menu, magic/skills-ui.js: shut until opened)
 	assert.match(src('magic/skills-ui.js'), /let root = null, built = false, open = false/, 'the menu is shut until opened, so the keys work from the start');
 });
