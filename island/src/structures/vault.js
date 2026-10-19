@@ -16,21 +16,25 @@ const EYE = 1.68;
 const ease = (t) => t * t * (3 - 2 * t);
 const lerp = (a, b, t) => a + (b - a) * t;
 
+// a hand flat on a top, fingers over its edge (+z) and the forearm back toward you (-z); the
+// climbs use the same (parkour.js)
+export function handGeometry() {
+	const parts = [new THREE.BoxGeometry(0.09, 0.03, 0.1).translate(0, 0.015, 0)];
+	for (let i = 0; i < 4; i++) parts.push(new THREE.BoxGeometry(0.018, 0.022, 0.075).translate(-0.033 + i * 0.022, 0.012, 0.085));
+	parts.push(new THREE.BoxGeometry(0.022, 0.024, 0.06).rotateY(0.6).translate(0.058, 0.012, 0.02));
+	parts.push(new THREE.BoxGeometry(0.075, 0.07, 0.24).translate(0, 0.04, -0.15));
+	let n = 0; for (const g of parts) n += g.toNonIndexed().attributes.position.count;
+	const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+	let k = 0;
+	for (const g0 of parts) { const g = g0.toNonIndexed(); pos.set(g.attributes.position.array, k * 3); nor.set(g.attributes.normal.array, k * 3); k += g.attributes.position.count; }
+	const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+	return out;
+}
+
 export function createVault(ctx) {
 	const { scene, camera, sounds } = ctx;
 	// the hands at the plant: palms and fingers, set on the sill
-	const handGeo = (() => {
-		const parts = [new THREE.BoxGeometry(0.09, 0.03, 0.1).translate(0, 0.015, 0)];
-		for (let i = 0; i < 4; i++) parts.push(new THREE.BoxGeometry(0.018, 0.022, 0.075).translate(-0.033 + i * 0.022, 0.012, 0.085));
-		parts.push(new THREE.BoxGeometry(0.022, 0.024, 0.06).rotateY(0.6).translate(0.058, 0.012, 0.02));
-		parts.push(new THREE.BoxGeometry(0.075, 0.07, 0.24).translate(0, 0.04, -0.15));
-		let n = 0; for (const g of parts) n += g.toNonIndexed().attributes.position.count;
-		const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
-		let k = 0;
-		for (const g0 of parts) { const g = g0.toNonIndexed(); pos.set(g.attributes.position.array, k * 3); nor.set(g.attributes.normal.array, k * 3); k += g.attributes.position.count; }
-		const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-		return out;
-	})();
+	const handGeo = handGeometry();
 	const handMat = new THREE.MeshStandardMaterial({ color: 0xb08068, roughness: 0.7 });
 	const hands = [0, 1].map(() => { const m = new THREE.Mesh(handGeo, handMat); m.visible = false; m.frustumCulled = false; scene.add(m); return m; });
 	let V = null, cool = 0;
