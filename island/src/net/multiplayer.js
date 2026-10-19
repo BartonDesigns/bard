@@ -322,7 +322,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (room.status === 'off') {
 			sec.append(mk('👥 Invite friends', 'Make a room and send friends a link', () => { menu.style.display = 'none'; invite(); }, 'border-color:rgba(95,240,198,.5);'));
 			const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:4px;';
-			const inp = document.createElement('input'); inp.placeholder = 'Room code'; inp.maxLength = 8; inp.autocapitalize = 'characters';
+			const inp = document.createElement('input'); inp.name = 'room-code'; inp.setAttribute('aria-label', 'Room code'); inp.placeholder = 'Room code'; inp.maxLength = 8; inp.autocapitalize = 'characters';
 			inp.style.cssText = 'flex:1;min-width:0;padding:6px 8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:#eafaf6;font:13px ui-monospace,monospace;text-transform:uppercase;';
 			const go = mk('Join', 'Join a friend\'s room', () => { menu.style.display = 'none'; join(inp.value); }, 'padding:8px 12px;');
 			inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') go.click(); });
@@ -361,7 +361,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		head.append(ttl, button('✕', () => { panel.style.display = 'none'; }));
 		panel.append(head);
 		// your name, as friends see it
-		const nm = document.createElement('input'); nm.value = name(); nm.maxLength = 24; nm.title = 'Your name';
+		const nm = document.createElement('input'); nm.name = 'player-name'; nm.setAttribute('aria-label', 'Your name'); nm.value = name(); nm.maxLength = 24; nm.title = 'Your name';
 		nm.style.cssText = 'padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:#eafaf6;font:13px system-ui;';
 		nm.addEventListener('change', () => { store.set(NAME_KEY, cleanName(nm.value)); hint('Name saved: friends see it next time you join.', 2500, 1); });
 		panel.append(nm);
@@ -408,7 +408,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		card.style.cssText = 'position:absolute;left:50%;top:26%;transform:translateX(-50%);width:min(380px,86vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.94);border:1px solid rgba(95,240,198,.4);color:#eafaf6;font:13px system-ui;z-index:12;display:flex;flex-direction:column;gap:8px;';
 		const big = document.createElement('div'); big.style.cssText = 'font:700 30px ui-monospace,monospace;letter-spacing:.2em;text-align:center;'; big.textContent = room.room();
 		const t = document.createElement('div'); t.textContent = 'Your room is open. Friends who open this link come to you (up to 8 of you):';
-		const inp = document.createElement('input'); inp.readOnly = true; inp.value = link();
+		const inp = document.createElement('input'); inp.name = 'room-link'; inp.setAttribute('aria-label', 'Room link'); inp.readOnly = true; inp.value = link();
 		inp.style.cssText = 'width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#eafaf6;font:12px ui-monospace,monospace;';
 		const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
 		row.append(button('Share / copy', () => copy()), button('Done', () => { card.remove(); card = null; }));
