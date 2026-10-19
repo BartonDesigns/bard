@@ -12,14 +12,15 @@
 // what each tier asks of the world:
 //   ratio: of the device's best pixel ratio; shadows, their map's size (a fraction of the sun's
 //   own) and how often they are drawn (every frame, or every other: the shadow pass draws the
-//   city a second time); people: of the crowd the place calls for; far: of the view's reach (and
+//   city a second time); people: of the crowd the place calls for (the whole crowd on every
+//   tier: crowd size matters to the game, so the relief never takes people away); far: of the view's reach (and
 //   how near the cars hand over to their coarser shapes); reflect: the clouds in the water; fx:
 //   the sunbeams' and spray's own setting ('auto' is their phone or desktop default)
 export const TIERS = [
 	{ name: 'high', ratio: 1, shadows: true, shadowSize: 1, shadowEvery: 1, people: 1, far: 1, reflect: true, fx: 'auto' },
-	{ name: 'medium', ratio: 0.85, shadows: true, shadowSize: 0.5, shadowEvery: 2, people: 0.75, far: 0.8, reflect: true, fx: 'auto' },
-	{ name: 'low', ratio: 0.7, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 0.5, far: 0.6, reflect: false, fx: 'low' },
-	{ name: 'minimal', ratio: 0.55, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 0.3, far: 0.45, reflect: false, fx: 'low' },
+	{ name: 'medium', ratio: 0.85, shadows: true, shadowSize: 0.5, shadowEvery: 2, people: 1, far: 0.8, reflect: true, fx: 'auto' },
+	{ name: 'low', ratio: 0.7, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 1, far: 0.6, reflect: false, fx: 'low' },
+	{ name: 'minimal', ratio: 0.55, shadows: false, shadowSize: 0.5, shadowEvery: 2, people: 1, far: 0.45, reflect: false, fx: 'low' },
 ];
 export const LOWEST = TIERS.length - 1;
 
@@ -119,11 +120,13 @@ export function setTier(t) {
 }
 
 // ---------- the governor at work (main.js) ----------
-// mode(): 'auto' (governed), 'high', 'ultra' (High on a phone drawing the desktop's graphics) or
-// 'low' (chosen; a crash or graphics loss still caps them).
+// mode(): 'high' or 'ultra' (High on a phone drawing the desktop's graphics), the settings there
+// are; 'auto' (governed) and 'low' remain for the rules' own tests. High and Ultra start on the
+// best tier whatever the last visits went through, and step down only for this visit: when its
+// memory climbs past the budget, or its graphics are lost.
 // meter: gpumeter.js's; budgetMB: what the graphics and the script heap together may hold
 // before the governor steps down (a phone's is small: Safari closes the page well before the
-// device runs out). All devices start a tier down and earn the best by running easily.
+// device runs out). On Auto, devices start a tier down and earn the best by running easily.
 export function createGovernor({ phone = false, mode = () => 'auto', meter = null, budgetMB = phone ? 700 : 2500, storage = null, now = () => Date.now() } = {}) {
 	const get = () => { try { return storage?.getItem(STORE_KEY) ?? null; } catch { return null; } };
 	const put = (r) => { try { storage?.setItem(STORE_KEY, JSON.stringify(r)); } catch { /* private mode */ } };
@@ -132,7 +135,8 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 	put(rec);
 	const state = governorState({ tier: 1, ceiling: rec.ceiling });
 	let memoryCeiling = 0; // Session only: a quality selection cannot undo memory relief.
-	const fixed = (m) => Math.max(rec.ceiling, memoryCeiling, m === 'low' ? 2 : 0);
+	let lossCeiling = 0; // and the same for a graphics loss
+	const fixed = (m) => Math.max(memoryCeiling, lossCeiling, m === 'low' ? Math.max(rec.ceiling, 2) : 0);
 	let memK = null, memT = 0, lastMode = mode();
 	// the heap over the last ten seconds, its lowest taken: the figure counts garbage not yet
 	// collected, and the lowest is near what is really held (or the governor chases the collector)
@@ -173,13 +177,14 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 		},
 		// the mode was chosen in the settings: its tier at once
 		apply() { state.tier = mode() !== 'auto' ? fixed(mode()) : Math.max(state.tier, state.ceiling); return setTier(state.tier); },
-		// the graphics were lost: a tier lower for a few days, and at once
-		lost(minimum = 0) { rec = lossRecord(rec, now(), state.tier); rec.ceiling = Math.max(rec.ceiling, clampTier(minimum)); put(rec); state.ceiling = Math.max(rec.ceiling, memoryCeiling); state.tier = Math.max(state.tier, state.ceiling); return setTier(state.tier); },
+		// the graphics were lost: a tier lower at once (on High and Ultra for this visit only)
+		lost(minimum = 0) { lossCeiling = clampTier(Math.max(lossCeiling, state.tier + 1, minimum)); rec = lossRecord(rec, now(), state.tier); rec.ceiling = Math.max(rec.ceiling, clampTier(minimum)); put(rec); state.ceiling = Math.max(rec.ceiling, memoryCeiling, lossCeiling); state.tier = Math.max(state.tier, state.ceiling); return setTier(state.tier); },
 		// a world on screen (or not): a page that goes while this is set went without a goodbye
 		live(on) { const v = on ? now() : 0; if (!!rec.live === !!v) return; rec = { ...rec, live: v }; put(rec); },
 		info: () => ({ tier: TIERS[state.tier].name, ceiling: TIERS[state.ceiling].name, mode: mode(), frameMs: Math.round(state.avg * 10) / 10, memory: memK == null ? null : Math.round(memK * 100) + '% of ' + budgetMB + ' MB', gpuMB: meter ? Math.round(meter.bytes() / 1048576) : null, crashedLastTime: booted.crashed, crashes: rec.crashes.length }),
 		state,
 	};
+	if (lastMode !== 'auto') state.tier = fixed(lastMode);
 	setTier(state.tier);
 	return api;
 }

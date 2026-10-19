@@ -1704,9 +1704,9 @@ export function createIslandWorld() {
 		conB.onclick = () => { const on = !world.sky.lines(); world.sky.lines(on); try { localStorage.setItem('l99-conlines', on ? '1' : ''); } catch { /* private mode */ } buildPanel(); };
 		p.appendChild(conB);
 		const q = css(document.createElement('div'), 'display:flex;gap:6px;margin-top:6px;');
-		// Ultra (phones only): the desktop's full graphics. Which meshes and shaders are built is
-		// settled at load, so going into or out of Ultra reloads the page.
-		for (const mode of isPhone ? ['auto', 'high', 'low', 'ultra'] : ['auto', 'high', 'low']) {
+		// High or Ultra (phones only: the desktop's full graphics, which a computer has on High). Which
+		// meshes and shaders are built is settled at load, so going into or out of Ultra reloads the page.
+		for (const mode of isPhone ? ['high', 'ultra'] : []) {
 			const b = css(document.createElement('button'), 'flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
 			b.textContent = mode.toUpperCase();
 			b.onclick = () => {
@@ -1729,7 +1729,7 @@ export function createIslandWorld() {
 			};
 			q.appendChild(b);
 		}
-		p.appendChild(q);
+		if (isPhone) p.appendChild(q);
 		// the credits the data and the assets ask for where they are shown (OpenStreetMap, CC BY)
 		const credit = css(document.createElement('div'), 'margin-top:8px;font:11px system-ui;opacity:.6;line-height:1.35;');
 		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets, buildings and land use (San Francisco, the East Bay, the Peninsula, Marin and the South Bay): Overture Maps Foundation (CC BY 4.0), © OpenStreetMap contributors (ODbL), Microsoft and Google building footprints. Hair and beards: the MakeHuman team, culturalibre and Rehman Polanski (CC0); Elvaerwyn (CC BY 4.0), via the MakeHuman community.';
@@ -1774,7 +1774,9 @@ export function createIslandWorld() {
 	function resize() {
 		if (lost || recovery.blocked()) return;
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
-		pixelRatio = renderRatio({ width: w, height: h, dpr: window.devicePixelRatio, ratio: qualityNow().ratio, phone: GFX, safe: SAFE || graphics.lighter, mode: quality });
+		// (the resolution holds whatever the tier: the governor's relief is shadows, crowds and reach,
+		// never a blocky picture)
+		pixelRatio = renderRatio({ width: w, height: h, dpr: window.devicePixelRatio, phone: GFX, safe: SAFE || graphics.lighter, mode: quality });
 		renderer.setDrawingBufferSize(w, h, pixelRatio);
 		camera.aspect = w / Math.max(1, h);
 		camera.updateProjectionMatrix();
@@ -2431,7 +2433,7 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			if (ULTRA_DROPPED) hint('Ultra graphics are off: the page closed while drawing them last time. Auto is on now; Ultra is still in the settings.', 7000);
+			if (ULTRA_DROPPED) hint('Ultra graphics are off: the page closed while drawing them last time. High is on now; Ultra is still in the settings.', 7000);
 			else if (!isPhone || firstTime('l99-tip-move')) hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},

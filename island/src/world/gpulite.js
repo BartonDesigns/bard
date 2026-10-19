@@ -1,16 +1,13 @@
 // The lighter ground shader, for devices whose graphics cannot build the full one (Apple's
 // shader compiler has lost the graphics on the Bay's ground). Chosen by ?lite on the address,
 // or by itself after this device has once lost its graphics (main.js); ?full clears that.
-import { PHONE_DEVICE, LAST_VISIT_CRASHED, ULTRA_DROPPED } from './device.js';
-
 const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* private mode */ } return null; };
 if (q.has('full')) store('l99-gpu-lite3', null);
-// A phone whose last visit ended without a goodbye (the browser closed the page, most likely for
-// its memory, as often while the world was still loading: device.js) takes the light ground,
-// the heaviest shader there is to build, for the days below. A phone just taken off Ultra for
-// it tries the phone's own graphics first.
-if (PHONE_DEVICE && LAST_VISIT_CRASHED && !ULTRA_DROPPED && !q.has('full')) store('l99-gpu-lite3', String(Date.now()));
+// (a page closed without a goodbye no longer moves a device onto the light ground: graphics are
+// High or Ultra only. Those it was set on that way come back to the full ground once, here; one
+// whose ground shader really fails goes back onto it by itself, main.js)
+if (!store('l99-hq-only')) { store('l99-gpu-lite3', null); store('l99-hq-only', '1'); }
 // (the full one builds on Apple's devices since its height reads went into loops, bay/terrain.js;
 // the light one is for a device that lost its graphics building the ground, and for three days
 // only: then the full one is tried again. The older, lasting flags are left unread.)
