@@ -1152,10 +1152,9 @@ export function createIslandWorld() {
 		// pylons and their wires over the land (world/powerlines.js): on Earth once the Bay's ground is in
 		const powerlines = createPowerlines(scene, { isPhone: GFX });
 		if (!earth) powerlines.plan({ island, profile });
-		// airliners far overhead and their contrails, on Earth (world/contrails.js); not on a
-		// phone's graphics, where they are specks far up and their shader is one more to build
-		// just as the world finishes loading, when phones were closing the page
-		const contrails = earth && !island.far && !GFX ? createContrails(scene, shared, sky) : null;
+		// airliners far overhead and their contrails, on Earth (world/contrails.js)
+		const contrails = createContrails(scene, shared, sky, { isPhone: GFX });
+		contrails.enabled = earth && !island.far;
 		// the island's trees past their draw distance, as impostors (world/farforest.js)
 		const farForest = createFarForest(vegetation, island, shared, scene, { isPhone: GFX });
 		const fauna = stash(() => createFauna(island, shared, scene));
