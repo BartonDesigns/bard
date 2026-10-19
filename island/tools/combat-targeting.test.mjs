@@ -58,6 +58,9 @@ test('the head is the weakest point; centre mass hits harder than a limb', () =>
 	const f = createHealth({ max: 100 });
 	applyDamage(f, { amount: 10, part: 'head', melee: 'jab' });
 	assert.ok(f.hp > 100 - 10 * PARTS.head, 'a fist to the head counts for less than a bullet');
+	const v = createHealth({ max: 100, armour: 35, soak: 0.5 }), w = createHealth({ max: 100, armour: 35, soak: 0.5 });
+	const head = applyDamage(v, { amount: 17, type: 'energy', part: 'head' }).dealt, chest = applyDamage(w, { amount: 17, type: 'energy', part: 'chest' }).dealt;
+	assert.ok(head > chest * 2, 'a vest covers the chest, not the face');
 });
 
 const motion = () => { const S = { heading: 0, act: { name: null }, clutch: null }; return { S, play(n) { S.act.name = n; }, act(n) { S.act.name = n; } }; };

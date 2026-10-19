@@ -12,6 +12,8 @@ export const DAMAGE_TYPES = ['ballistic', 'energy', 'pierce', 'blast', 'fire', '
 // (combat/wounds.js)
 export const PARTS = Object.freeze({ head: 4, neck: 2.6, chest: 1.35, gut: 1.05, shoulder: 0.8, arm: 0.6, leg: 0.7, torso: 1, limb: 0.7, body: 1, weak: 2.5, plate: 0.25, wheel: 0.8 });
 // a fist, a bat or a boot (blow.melee): the head counts for less than a bullet in it
+// how much of a hit there the armour takes: a vest covers the chest and gut, not the face and throat
+export const ARMOUR_COVER = { head: 0.3, neck: 0, shoulder: 0.6, arm: 0.4, leg: 0.4 };
 export const MELEE_PARTS = Object.freeze({ ...PARTS, head: 1.8, neck: 1.5, chest: 1, gut: 1.1 });
 
 const fin = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
@@ -35,7 +37,7 @@ export function applyDamage(h, blow) {
 	if (amt <= 0) { out.ignored = true; return out; }
 	// armour soaks its share (energy wears it faster, blast slips past more)
 	if (h.armour > 0) {
-		const soak = h.soak * (type === 'blast' ? 0.6 : 1);
+		const soak = h.soak * (type === 'blast' ? 0.6 : 1) * (ARMOUR_COVER[blow.part] ?? 1);
 		const take = Math.min(h.armour, amt * soak);
 		h.armour = Math.max(0, h.armour - take * (type === 'energy' ? 1.6 : 1));
 		amt -= take; out.absorbed = take;

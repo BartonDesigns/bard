@@ -23,7 +23,7 @@ const REACT = {
 	leg: [['leg1', 1.5], ['leg2', 1.0]],
 };
 // a leg this hurt (summed over both, in shares of the body's health) limps; this much cripples
-export const LIMP_AT = 0.12, CRIPPLE_AT = 0.85;
+export const LIMP_AT = 0.08, CRIPPLE_AT = 0.4;
 
 export function createWounds() { return { legs: { L: 0, R: 0 }, crippled: null, chest: 0, last: null }; }
 
@@ -42,7 +42,7 @@ const pick = (a, rand) => a[Math.floor(rand() * a.length) % a.length];
 // opts { max (their health), armed, heading, rand }. Returns { name, dur, stagger: metres back,
 // hold: seconds off their aim, crippled: true the moment the leg gives }
 export function react(W, M, P, blow, r, { max = 100, armed = false, clutch = true, rand = Math.random } = {}) {
-	if (!W || !M || !r || !(r.dealt > 0) || r.killed || blow.melee) return null;
+	if (!W || !M || !r || !(r.dealt > 0) || r.killed || r.downed || blow.melee) return null;
 	const part = REACT[blow.part] ? blow.part : blow.part === 'torso' ? 'chest' : blow.part === 'limb' ? 'leg' : null;
 	if (!part) return null;
 	const k = r.dealt / Math.max(1, max);
