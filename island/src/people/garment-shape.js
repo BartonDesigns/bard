@@ -40,8 +40,10 @@ export function sleeveEase(g, t, dc, outerLayer = false) {
 	// down the forearm the sleeve narrows
 	if (t > 1) k *= 1 - 0.28 * smooth((t - 1) / 0.75);
 	if (g?.sleeves === 'rolled') {
-		// the roll: several turns of cloth, thick and firm, just below the elbow
+		// the roll: several turns of cloth, thick and firm, just below the elbow (or a knit
+		// sleeve pushed up: a soft gather, thinner, the cloth bunched a little above it)
 		const roll = 1 - smooth((dc - 0.035) / 0.02);
+		if (g.push) return k * (1 - roll) + (0.006 + 0.002 * L) * roll + 0.0025 * bump(dc, 0.065, 0.03);
 		return k * (1 - roll) + (0.012 + 0.003 * L) * roll;
 	}
 	const ribbed = isRibbed(g), shirted = isShirted(g);
