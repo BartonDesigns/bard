@@ -199,6 +199,8 @@ ${S} .l99-drive-hud{top:max(calc(64px + var(--st)), var(--qb))!important;}
 ${S} .cb-boss{top:max(calc(58px + var(--st)), var(--qb))!important;}
 ${S} .l99-left{top:max(calc(68px + var(--st)), var(--qb))!important;left:calc(12px + var(--sl))!important;max-width:calc(100% - 88px - var(--sl) - var(--sr))!important;}
 ${S} .cb-star{top:max(calc(70px + var(--st)), var(--qb))!important;right:calc(66px + var(--sr))!important;}
+/* the combat Lock / Next dock: left of the right column and the spell button, not on them */
+${S} .combat-focus-controls{right:calc(88px + var(--sr))!important;}
 ${S} .cb-ammo{background:rgba(12,16,20,.32)!important;border:1px solid rgba(255,255,255,.16);border-radius:12px!important;max-width:min(160px,calc(100% - 204px - var(--sl) - var(--sr)))!important;}
 ${S} .cb-ammo :is(.w,.rl){display:none!important;}
 ${S} .cb-hp{width:min(144px,calc(100% - 204px - var(--sl) - var(--sr)))!important;}

@@ -94,6 +94,24 @@ const profile = process.argv[2] || 'desktop', shots = process.argv[3] || '';
 		assert.ok(back < 1, `${back} m from the departure`);
 		console.log(`${profile}: back at the departure, ${back.toFixed(4)} m off`);
 
+		// 1b. Over open country the card offers the cities round it, and one tap is on the way down to one.
+		o = await climb();
+		await page.evaluate(() => Crysis.orbitOver(47.3, 1.0, 300));
+		await page.waitForFunction(() => document.querySelectorAll('[data-land-city]').length > 0);
+		c = await card();
+		assert.ok(c.cities.length >= 2, JSON.stringify(c.cities));
+		const pick = c.cities[0];
+		await page.locator('[data-land-city]').first().click();
+		await page.waitForTimeout(800);
+		c = await card();
+		assert.ok(Math.abs(c.below.lat - pick.lat) < .05 && Math.abs(c.below.lon - pick.lon) < .05, JSON.stringify([c.below, pick]));
+		assert.equal(c.choice, 'here');
+		console.log(`${profile}: over the Loire country the card offers ${c.cities.map((x) => x.name).join(', ')}; heading down to ${pick.name}`);
+		await page.locator('[data-land-home]').click();
+		await page.waitForFunction(() => Crysis.landing().gliding);
+		await page.waitForFunction(() => !Crysis.landing().gliding);
+		await ground(9000);
+
 		// 2. Out again, over Paris, and Land here: charted, held, then down onto Paris's own ground.
 		o = await climb();
 		await page.evaluate(() => Crysis.orbitOver(48.85, 2.35, 400));
@@ -125,6 +143,20 @@ const profile = process.argv[2] || 'desktop', shots = process.argv[3] || '';
 		const [alat, alon] = again.split(',').map(Number);
 		assert.ok(Math.abs(alat - home2.lat) < .3 && Math.abs(alon - home2.lon) < .3, `${again} vs ${home2.lat}, ${home2.lon}`);
 		console.log(`${profile}: turned back from Tokyo to ${again}`);
+
+		// 4. On the ground, the map pin lists the cities round you; one tap stands you in another.
+		const ids = await page.evaluate(() => Crysis.cities());
+		assert.ok(ids.length >= 3, JSON.stringify(ids));
+		const went = await page.evaluate(() => Crysis.cities.go(1));
+		// (stood on its ground once the place is in)
+		await page.waitForFunction(() => !L99Island.world().player.state.flying, null, { polling: 250 }).catch(async (err) => {
+			const s = await page.evaluate(() => { const P = L99Island.world().player.state; return { at: Crysis.globe().at, y: P.pos.y, flying: P.flying, orbit: L99Island.world().orbit.active(), landing: Crysis.landing() }; });
+			console.log(`${profile}: after "${went}" still flying: ${JSON.stringify(s)}`);
+			throw err;
+		});
+		const there = await page.evaluate(() => ({ at: Crysis.globe().at, flying: L99Island.world().player.state.flying }));
+		console.log(`${profile}: the map pin lists ${ids.join(', ')}; went to the second, now at ${there.at}`);
+		assert.equal(there.flying, false);
 
 		// and the world keeps running for a while with nothing wrong
 		await page.waitForTimeout(10000);

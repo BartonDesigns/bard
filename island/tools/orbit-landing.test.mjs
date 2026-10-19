@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createOrbitFrame, ORBIT } from '../src/space/frame.js';
-import { geoBasis, kmBetween, regionNote } from '../src/space/landing.js';
-import { loadAtlas } from '../src/earth/atlas.js';
+import { geoBasis, kmBetween, regionNote, citiesAround, kmLabel } from '../src/space/landing.js';
+import { loadAtlas, POP } from '../src/earth/atlas.js';
 
 const near = (a, b, epsilon = 1e-6) => assert.ok(Math.abs(a - b) < epsilon, `${a} != ${b}`);
 const player = () => ({ pos: new THREE.Vector3(1832.4, ORBIT.start, -5491.2), vel: new THREE.Vector3(12, -1400, -35), yaw: .6, pitch: -.3, roll: 0 });
@@ -68,4 +68,19 @@ test('the region note says where you will land and what is built there', async (
 	assert.equal(sea.kind, 'sea'); assert.match(sea.title, /Atlantic/);
 	assert.match(regionNote(88, 0).sub, /83\.5/);
 	near(kmBetween({ lat: 48.85, lon: 2.35 }, { lat: 51.5, lon: -0.12 }), 343, 3);
+});
+
+test('the cities to head for: the nearest first, then the biggest round it, no suburbs twice', async () => {
+	await loadAtlas();
+	const loire = citiesAround(47.3, 1.0, 6);
+	assert.ok(loire.length >= 4, JSON.stringify(loire));
+	assert.ok(loire.slice(1).every((c) => c.km >= loire[0].km));
+	assert.ok(loire.some((c) => c.pop >= 3), 'a big city in reach');
+	for (let i = 0; i < loire.length; i++) for (let j = i + 1; j < loire.length; j++) assert.ok(kmBetween(loire[i], loire[j]) > 25, `${loire[i].name} / ${loire[j].name}`);
+	const paris = citiesAround(48.856, 2.352, 4);
+	assert.match(paris[0].name, /Paris/); assert.ok(paris[0].km < 3); assert.equal(paris[0].size, POP[paris[0].pop]);
+	// far out at sea: still the nearest, wherever it is
+	const sea = citiesAround(35, -35, 3);
+	assert.equal(sea.length, 1); assert.ok(sea[0].km > 350);
+	assert.equal(kmLabel(.42), '420 m'); assert.equal(kmLabel(7.25), '7.3 km'); assert.equal(kmLabel(1240.4), '1,240 km');
 });

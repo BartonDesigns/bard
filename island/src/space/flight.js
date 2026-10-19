@@ -7,7 +7,7 @@ import { flightMultiplier, speedLabel } from '../flight-speed.js';
 import { COLONY } from '../planet/colony/styles.js';
 import { planetProfile } from '../planet/profile.js';
 import { beyondFound, beyondSeed } from '../planet/beyond.js';
-import { regionNote, kmBetween, LAT_LIMIT } from './landing.js';
+import { regionNote, kmBetween, LAT_LIMIT, citiesAround, kmLabel } from './landing.js';
 import { loadAtlas } from '../earth/atlas.js';
 
 // Worlds the warp list reaches beyond this one; each lands through the usual world build.
@@ -48,18 +48,21 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	const cardHead = document.createElement('div'); cardHead.style.cssText = 'font:600 11px system-ui;letter-spacing:.12em;color:#a5f6e2;';
 	const cardTitle = document.createElement('div'); cardTitle.style.cssText = 'font:600 16px system-ui;margin:2px 0 3px;';
 	const cardSub = document.createElement('div'); cardSub.style.cssText = 'font:12px/1.4 system-ui;color:rgba(234,250,246,.76);';
+	// the cities round the place below: tap one to be over it and on the way down
+	const cardCities = document.createElement('div'); cardCities.dataset.landingCities = ''; cardCities.style.cssText = 'display:none;flex-wrap:wrap;gap:6px;margin-top:8px;';
 	const cardRow = document.createElement('div'); cardRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;';
 	const BTN = 'flex:1;min-height:44px;padding:8px 10px;border-radius:9px;font:600 13px system-ui;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
 	const hereBtn = document.createElement('button'); hereBtn.dataset.landHere = '';
 	hereBtn.style.cssText = BTN + 'border:none;color:#fff;background:linear-gradient(135deg,#01a982,#10b981);box-shadow:0 4px 12px rgba(1,169,130,.3);';
 	const homeBtn = document.createElement('button'); homeBtn.dataset.landHome = '';
 	homeBtn.style.cssText = BTN + 'border:1px solid rgba(255,255,255,.22);color:#eafaf6;background:rgba(255,255,255,.04);';
-	cardRow.append(hereBtn, homeBtn); card.append(cardHead, cardTitle, cardSub, cardRow);
+	cardRow.append(hereBtn, homeBtn); card.append(cardHead, cardTitle, cardSub, cardCities, cardRow);
 	for (const el of [card, hereBtn, homeBtn]) for (const ev of ['pointerdown', 'touchstart']) el.addEventListener(ev, (e) => e.stopPropagation());
 	hereBtn.addEventListener('click', (e) => { e.stopPropagation(); landHere(); });
 	homeBtn.addEventListener('click', (e) => { e.stopPropagation(); returnHome(); });
 	if (earth) dom.mount.append(card);
 	let below = null, note = null, homeNote = null, anchorNote = null, noteT = 0, glide = null, charting = null, fresh = false, choice = null, cardText = '';
+	let near = [], nearAt = null;
 	const lastPos = new THREE.Vector3(); let lastOk = false;
 	const spot = new THREE.Vector3(), heading = new THREE.Vector3(0, 0, -1);
 	const deep = () => !!frame.anchor && frame.altitude(P.pos) >= SPACE;
@@ -214,9 +217,25 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	function look() {
 		if (!earth || !frame.anchor) return;
 		below = frame.below(P.pos); note = regionNote(below.lat, below.lon);
+		if (!nearAt || kmBetween(nearAt, below) > 8 || !near.length) { near = citiesAround(below.lat, below.lon, 3); nearAt = near.length ? { ...below } : null; }
 		const home = frame.home;
 		if (home && (!homeNote || homeNote.kind === 'unknown')) homeNote = regionNote(home.lat, home.lon);
 		if (fresh && (!anchorNote || anchorNote.kind === 'unknown') && Number.isFinite(frame.anchor.lat)) anchorNote = regionNote(frame.anchor.lat, frame.anchor.lon);
+	}
+	// a city from the card: straight over it at this height, and down
+	function landCity(c) {
+		if (!earth || !frame.anchor || warp || passage || glide || fresh || !c) return;
+		overAt(c.lat, c.lon, frame.altitude(P.pos));
+		landHere();
+	}
+	function overAt(lat, lon, alt = 400000) {
+		if (!earth || !frame.anchor || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return false;
+		const n = frame.dirOf(+lat, +lon);
+		P.pos.copy(frame.center).addScaledVector(n, radius + Math.max(ORBIT.entry + 10000, alt));
+		gm.lookAt(P.pos, frame.center, frame.dirOf(+lat + 10, +lon, ga)); gq.setFromRotationMatrix(gm); ge.setFromQuaternion(gq, 'YXZ');
+		P.pitch = ge.x; P.yaw = ge.y; P.roll = ge.z; P.vel.set(0, 0, 0); P.flying = true; lastOk = false; glide = null; noteT = 0;
+		if (frame.altitude(P.pos) > ORBIT.entry + 5000) frame.update(P);
+		return true;
 	}
 	function landHere() {
 		if (!earth || !frame.anchor || warp || passage) return;
@@ -339,10 +358,13 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		}
 		if (frame.altitude(P.pos) < ORBIT.end && P.roll) P.roll *= Math.exp(-Math.max(0, dt) * 1.5);
 		if (frame.anchor && frame.altitude(P.pos) < ORBIT.start * .65) {
-			const there = fresh ? anchorNote?.title : '';
+			const there = fresh ? anchorNote?.title : '', at = fresh && frame.anchor ? { ...frame.anchor } : null;
 			frame.reset(); wasSpace = false; view.sleep?.();
 			fresh = false; charting = glide = choice = null; P.descendAssist = false;
-			hint(there ? `${there}. You have control.` : 'Back above your departure area.', 3000);
+			// out in the country: the nearest city, and the way there (the map pin's Cities)
+			const c = at && Number.isFinite(at.lat) ? citiesAround(at.lat, at.lon, 1)[0] : null;
+			const city = c && c.km > 4 ? ` The nearest city is ${c.name}, ${kmLabel(c.km)} away: the map pin's Cities take you there.` : '';
+			hint(there ? `${there}. You have control.${city}` : 'Back above your departure area.', city ? 6000 : 3000);
 		}
 		lastPos.copy(P.pos); lastOk = !!frame.anchor && !warp && !glide && !bounce;
 		camera.position.copy(P.pos);
@@ -354,7 +376,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		const now = performance.now();
 		if (now >= noteT || !note || glide) { noteT = now + 300; look(); }
 		const home = (homeNote?.title || 'your departure').replace(/^The /, 'the ');
-		let head, name, sub, here = '', back = '';
+		let head, name, sub, here = '', back = '', cities = [];
 		if (glide) { head = 'RETURNING'; name = homeNote?.title || 'Your departure'; sub = 'Gliding round the planet to where you left.'; }
 		else if (fresh) {
 			head = charting ? 'CHARTING THE GROUND BELOW' : 'COMING DOWN';
@@ -366,8 +388,10 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 			name = note.title; sub = note.sub;
 			here = atHome ? '⤓ Descend here' : '⤓ Land here';
 			back = atHome ? '' : `↩ Back to ${home}`;
+			// (a city under you already is the card's own title)
+			cities = atHome ? [] : near.filter((c) => c.km > 4 || c.name !== note.title.replace(/^Near /, ''));
 		}
-		const text = [head, name, sub, here, back].join('|');
+		const text = [head, name, sub, here, back, ...cities.map((c) => c.id + c.km)].join('|');
 		if (text !== cardText) {
 			cardText = text;
 			cardHead.textContent = head; cardTitle.textContent = name; cardSub.textContent = sub;
@@ -375,6 +399,16 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 			homeBtn.textContent = back; homeBtn.style.display = back ? '' : 'none';
 			homeBtn.title = back ? `Return to ${home}, where you left the ground` : '';
 			cardRow.style.display = here || back ? 'flex' : 'none';
+			cardCities.replaceChildren(...cities.map((c) => {
+				const b = document.createElement('button'); b.dataset.landCity = c.id;
+				b.style.cssText = 'min-height:36px;padding:6px 10px;border-radius:18px;border:1px solid rgba(165,246,226,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:600 12px system-ui;cursor:pointer;white-space:nowrap;';
+				b.textContent = `⌖ ${c.name} · ${kmLabel(c.km)}`;
+				b.title = `Down on ${c.name} (${c.size})`;
+				for (const ev of ['pointerdown', 'touchstart']) b.addEventListener(ev, (e) => e.stopPropagation());
+				b.addEventListener('click', (e) => { e.stopPropagation(); landCity(c); });
+				return b;
+			}));
+			cardCities.style.display = cities.length ? 'flex' : 'none';
 		}
 		if (card.style.display !== 'block') card.style.display = 'block';
 	}
@@ -437,20 +471,14 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		bodies,
 		landHere, returnHome,
 		// above a place in orbit, looking down at it (tests, and the console: Crysis.orbitOver)
-		over: (lat, lon, alt = 400000) => {
-			if (!earth || !frame.anchor || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return false;
-			const n = frame.dirOf(+lat, +lon);
-			P.pos.copy(frame.center).addScaledVector(n, radius + Math.max(ORBIT.entry + 10000, alt));
-			gm.lookAt(P.pos, frame.center, frame.dirOf(+lat + 10, +lon, ga)); gq.setFromRotationMatrix(gm); ge.setFromQuaternion(gq, 'YXZ');
-			P.pitch = ge.x; P.yaw = ge.y; P.roll = ge.z; P.vel.set(0, 0, 0); P.flying = true; lastOk = false; glide = null; noteT = 0;
-			if (frame.altitude(P.pos) > ORBIT.entry + 5000) frame.update(P);
-			return true;
-		},
+		over: overAt,
+		// down on one of the cities the card offers (tests: Crysis.landing().cities)
+		landCity: (i = 0) => landCity(near[i]),
 		// the ground systems may stream while coming down on a newly chosen place (main.js)
 		streams: () => earth && fresh && !!frame.anchor && !frame.returning && frame.altitude(P.pos) < ORBIT.entry,
 		// the real imagery: base loaded, tiles held, the patch round the point below
 		imagery: () => view.imagery?.info() ?? null,
-		landing: () => ({ below: below && { ...below }, sun: frame.anchor && earth ? frame.below(frame.sunCenter(new THREE.Vector3())) : null, note: note && { ...note }, home: frame.home, homeName: homeNote?.title || null, choice, fresh, gliding: !!glide, charting: charting && { ...charting }, place: fresh ? anchorNote : null, card: card.style.display === 'block' ? cardText : null }),
+		landing: () => ({ below: below && { ...below }, sun: frame.anchor && earth ? frame.below(frame.sunCenter(new THREE.Vector3())) : null, note: note && { ...note }, home: frame.home, homeName: homeNote?.title || null, choice, fresh, gliding: !!glide, charting: charting && { ...charting }, place: fresh ? anchorNote : null, card: card.style.display === 'block' ? cardText : null, cities: near.map((c) => ({ ...c })) }),
 		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), gear, boost: P.boost, radius, type, companion: companion.name, solarDepth, horizon: passage ? { time: passage.t, sent: passage.sent } : null, warping: !!warp, warpTime: warp?.t ?? 0, bouncing: !!bounce, landing, heat, target: nav.target, gargantuaVisible: !!view.gargantua?.visible, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
 		pause: () => { stopPassage(true); warp = bounce = glide = null; P.vel.set(0, 0, 0); P.flyUp = P.flyDown = P.climbAssist = false; leaveStar.style.display = 'none'; },
 		cancel: () => { stopPassage(); solarDepth = heat = 0; leaveStar.style.display = 'none'; frame.reset(); view.sleep?.(); warp = bounce = glide = charting = choice = null; fresh = false; lastOk = false; card.style.display = 'none'; P.descendAssist = false; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
