@@ -4,13 +4,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SPECIES, SPECIES_IDS, speciesFor } from '../src/creatures/catalog.js';
+import { SPECIES, SPECIES_IDS, speciesFor, pickSpecies } from '../src/creatures/catalog.js';
 import { FACTIONS, PLAYER, createRelations } from '../src/combat/factions.js';
 import { pveHonor } from '../src/combat/honor.js';
 import { DAMAGE_TYPES } from '../src/combat/health.js';
 
 test('every kind has its packed model', () => {
-	for (const id of SPECIES_IDS) assert.ok(fs.existsSync(new URL(`../assets/creatures/${id}.glb`, import.meta.url)), id);
+	for (const id of SPECIES_IDS) {
+		const S = SPECIES[id];
+		for (const m of [S.model ?? id, S.human].filter(Boolean)) assert.ok(fs.existsSync(new URL(`../assets/creatures/${m}.glb`, import.meta.url)), m);
+	}
 });
 
 test('each one is of a creature side that hates you, and its harm types are real ones', () => {
@@ -32,6 +35,15 @@ test('the night ones come only after dark; the Deep keeps its own', () => {
 	assert.deepEqual(speciesFor('earth-rural', 0), []);
 	assert.ok(speciesFor('earth-rural', 1).includes('fog-wight'));
 	assert.ok(speciesFor('earth-urban', 1).includes('drain-skulker'));
+	assert.ok(speciesFor('wild', 1).includes('ridge-hound'));
+	// (the Deep's gloom squads bring the Gloomcrawlers themselves)
+	assert.ok(!speciesFor('deep', 0).includes('gloomcrawler'));
 	assert.ok(speciesFor('deep', 0).includes('sporeborn-miner'));
 	assert.ok(!speciesFor('deep', 1).includes('fog-wight'));
+});
+
+test('a rare one comes rarely', () => {
+	const n = { 'sporeborn-miner': 0, 'old-drain-king': 0 };
+	for (let i = 0; i < 1000; i++) n[pickSpecies(['sporeborn-miner', 'old-drain-king'], (i + 0.5) / 1000)]++;
+	assert.ok(n['old-drain-king'] > 50 && n['old-drain-king'] < 200, JSON.stringify(n));
 });

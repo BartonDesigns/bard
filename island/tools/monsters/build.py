@@ -57,14 +57,18 @@ def seg_dist(P, a, b, cap=1.0):
 class View:
 	"""one view of the sheet: its pixels, its mask (only the creature's part inside its box)"""
 
-	def __init__(self, img, mask, spec):
+	def __init__(self, img, mask, spec, simg=None):
 		x0, y0, x1, y1 = spec['box']
 		self.x0, self.y0 = x0, y0
 		self.img = img[y0:y1, x0:x1].astype(np.float32) / 255.0
-		m = segment(img[y0:y1, x0:x1], spec.get('tol', 14.0)) if mask is None else mask[y0:y1, x0:x1].copy()
+		m = segment((img if simg is None else simg)[y0:y1, x0:x1], spec.get('tol', 14.0)) if mask is None else mask[y0:y1, x0:x1].copy()
 		# things the other views do not show (a pick held only in the side view): cut out by hand
 		for poly in spec.get('cut', []):
 			cv2.fillPoly(m, [np.array(poly, np.int32) - [x0, y0]], 0)
+		# and a part drawn turned away in this view (a head looking off to one side): its shape
+		# as it would be from here, by hand (paint it from the other views: nopaint)
+		for poly in spec.get('add', []):
+			cv2.fillPoly(m, [np.array(poly, np.int32) - [x0, y0]], 1)
 		# thin guide lines drawn across the sheet: opened away
 		if spec.get('open'):
 			k = int(spec['open'])
@@ -157,14 +161,32 @@ def glow_mask(img, g):
 def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 	spec = json.load(open(os.path.join(HERE, 'specs', name + '.json')))
 	img = cv2.imread(os.path.join(HERE, 'sheets', spec['sheet']))
+	if spec.get('floor'):
+		# a sheet whose lower panel is a lighter grey (a floor under the turnaround): brought to
+		# the card's grey above it, so the card fit has no step to break on
+		y = int(spec['floor'])
+		up = np.median(img[y - 10:y - 3].reshape(-1, 3).astype(np.float32), 0)
+		dn = np.median(img[y + 3:y + 10].reshape(-1, 3).astype(np.float32), 0)
+		segimg = img.astype(np.float32)
+		segimg[y:] += up - dn
+		segimg = np.clip(segimg, 0, 255).astype(np.uint8)
+	else:
+		segimg = img
 	mask = None
-	F = View(img, mask, spec['front'])
-	S = View(img, mask, spec['side'])
-	B = View(img, mask, spec['back']) if spec.get('back') else None
+	F = View(img, mask, spec['front'], segimg)
+	S = View(img, mask, spec['side'], segimg)
+	B = View(img, mask, spec['back'], segimg) if spec.get('back') else None
+	# a top view (a long body seen from above: a salamander, a moth with its wings spread): with
+	# the side view it makes the hull (front and back are then only paint), its bones drawn in it
+	# as t lines
+	TV = View(img, mask, spec['top'], segimg) if spec.get('top') else None
 	fs, ss = spec['front'], spec['side']
 	H = float(spec['height'])
 	top = int(np.where(F.mask.any(1))[0].min()) + F.y0
 	px = H / (fs['ground'] - top)  # metres per sheet pixel
+	if spec.get('mpp'):
+		# (a sheet whose front is drawn at another scale than its side and top: the side's)
+		px = float(spec['mpp'])
 	cx, gy, cz, gys = fs['cx'], fs['ground'], ss['cz'], ss['ground']
 	sdir = 1 if ss.get('faces', 'left') == 'left' else -1
 	# sheet pixel -> model metres
@@ -206,7 +228,7 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 	best = np.full(len(P), np.inf, np.float32)
 	flab = np.full(len(P), -1, np.int32)
 	for i, b in enumerate(bones):
-		if 'fb' in b:
+		if 'f' not in b:
 			continue
 		d, _ = seg_dist(P, b['f'][0], b['f'][1], float(spec.get('cap', 1.0)))
 		far = d > b.get('fmax', np.inf)  # past its reach (wisps of hair round a skull)
@@ -222,8 +244,39 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 	SM = np.zeros((nb,) + S.mask.shape, bool)
 	ally, allx = np.mgrid[0:S.h, 0:S.w]
 	Pall = np.stack([allx.ravel() + S.x0, ally.ravel() + S.y0], 1).astype(np.float32)
+	long_ = bool(spec.get('long'))
+	seam = int(spec.get('seam', 0))
+	if long_:
+		# a long body (four legs, a serpent): the side view is the one that tells its bones apart
+		# (the front sees the head, the chest and the haunches stacked up), so here each side pixel
+		# goes to its nearest bone, and bones drawn on one line (a left and a right leg) share it
+		Dn = np.full((nb, len(P2)), np.inf, np.float32)
+		for i, b in enumerate(bones):
+			if not b.get('free') and not b.get('sideband'):
+				Dn[i] = seg_dist(P2, b['s'][0], b['s'][1], float(spec.get('cap', 1.0)))[0] / b.get('rs', b.get('r', 40) * 1.2)
+		sbest = Dn.min(0)
+		# (pixels of the tube limbs: the trunk's overlap at its borders keeps off them)
+		stube = np.zeros(S.mask.shape, bool)
+		tb_ = np.array([bool(b.get('tube')) for b in bones])
+		if tb_.any():
+			own = tb_[np.argmin(Dn, 0)]
+			stube[ys2[own], xs2[own]] = True
 	for i, b in enumerate(bones):
 		r = b.get('rs', b.get('r', 40) * 1.2)
+		if b.get('sideband'):
+			# a wing spread flat (the side view shows it folded, or edge-on): a thin level band
+			# through the line's height, the whole length of the side view
+			yy = (b['s'][0][1] + b['s'][1][1]) / 2 - S.y0
+			SM[i, max(0, int(yy - r)):int(yy + r) + 1, :] = True
+			continue
+		if long_ and not b.get('free'):
+			w = Dn[i] <= sbest * 1.0001 + 1e-6
+			SM[i, ys2[w], xs2[w]] = True
+			if seam:
+				# (the parts overlap a little at their borders: the side's and the top's borders
+				# between two parts never quite agree, and where they differ there would be a gap)
+				SM[i] = ndimage.binary_dilation(SM[i], iterations=seam) & S.mask & ~stube
+			continue
 		if b.get('free'):
 			# a thing the side view does not show (a spade held out to the side): a plain band
 			d, _ = seg_dist(Pall, b['s'][0], b['s'][1])
@@ -256,6 +309,25 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 	# ---------- the voxel grid ----------
 	vs = px * vox_px
 	xmin, xmax = fx(F.x0), fx(F.x0 + F.w)
+	if TV:
+		ts = spec['top']
+		tcx, tcz = ts['cx'], ts['cz']
+		# facing left, the sheet's down is the body's left (+x); facing right, its right
+		tdir = 1 if ts.get('faces', 'left') == 'left' else -1
+		if ts.get('mirror'):
+			# its two sides drawn in different poses (a leg forward one side, back the other):
+			# the side the side view shows (the near one) taken for both, so the two views agree
+			c0 = tcx - TV.y0
+			near_down = (ts.get('faces', 'left') == 'left') == (ss.get('faces', 'left') == 'left')
+			for r_ in range(TV.h):
+				r2 = int(round(2 * c0 - r_))
+				if 0 <= r2 < TV.h and ((r_ < c0) if near_down else (r_ > c0)):
+					TV.mask[r_] = TV.mask[r2]
+					TV.img[r_] = TV.img[r2]
+					TV.paint[r_] = TV.paint[r2]
+			TV.dt = ndimage.distance_transform_edt(TV.mask)
+		tx = sorted([(TV.y0 - tcx) * px * tdir, (TV.y0 + TV.h - tcx) * px * tdir])
+		xmin, xmax = min(xmin, tx[0]), max(xmax, tx[1])
 	zlo, zhi = sorted([sz(S.x0), sz(S.x0 + S.w)])
 	X = np.arange(xmin, xmax, vs)
 	Y = np.arange(0, H * 1.04, vs)
@@ -284,10 +356,40 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 	# edge a pixel is (over the most it gets there) in each view, s in 0..1, and a voxel is in
 	# where (1 - s_front)^p + (1 - s_side)^p <= 1 (an ellipse for p = 2)
 	pw = float(spec.get('round', 2.0))
+	if TV:
+		# top pixel per (x, z), and each top pixel to its nearest bone (as the long side view)
+		tu = np.round(tcz - Z / (px * tdir) - TV.x0).astype(int)
+		tv = np.round(tcx + X / (px * tdir) - TV.y0).astype(int)
+		oktu, oktv = (tu >= 0) & (tu < TV.w), (tv >= 0) & (tv < TV.h)
+		tuc, tvc = np.clip(tu, 0, TV.w - 1), np.clip(tv, 0, TV.h - 1)
+		tys_, txs_ = np.nonzero(TV.mask)
+		Pt_ = np.stack([txs_ + TV.x0, tys_ + TV.y0], 1).astype(np.float32)
+		Dt = np.full((nb, len(Pt_)), np.inf, np.float32)
+		for i, b in enumerate(bones):
+			if 't' in b and not b.get('tube'):
+				Dt[i] = seg_dist(Pt_, b['t'][0], b['t'][1], float(spec.get('cap', 1.0)))[0] / b.get('rt', b.get('r', 40))
+		tbest = Dt.min(0)
+		ttube = np.zeros(TV.mask.shape, bool)
+		tb_ = np.array([bool(b.get('tube')) for b in bones])
+		if tb_.any():
+			own = tb_[np.argmin(Dt, 0)]
+			ttube[tys_[own], txs_[own]] = True
 	for i, b in enumerate(bones):
 		r = b.get('r', 40)
 		rs = b.get('rs', r * 1.2)
-		if 'fb' in b:
+		tsv = None
+		if TV is not None and 't' in b:
+			wt = Dt[i] <= tbest * 1.0001 + 1e-6
+			treg = np.zeros(TV.mask.shape, bool)
+			treg[tys_[wt], txs_[wt]] = True
+			if seam:
+				treg = ndimage.binary_dilation(treg, iterations=seam) & TV.mask & ~ttube
+			lm = ndimage.maximum_filter(TV.dt * treg, size=int(2.5 * b.get('rt', r)) + 1)
+			sT = np.where(treg, TV.dt / np.maximum(lm, 1), 0).astype(np.float32)
+			tsv = sT[tvc][:, tuc]  # (x, z)
+			tsv[~oktv] = 0
+			tsv[:, ~oktu] = 0
+		elif 'fb' in b:
 			# a part only the back view shows (a cloak behind the body): its band in the back view
 			bys_, bxs_ = np.nonzero(B.mask)
 			Pb = np.stack([bxs_ + B.x0, bys_ + B.y0], 1).astype(np.float32)
@@ -304,21 +406,25 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 			fm_v = sF_v > 0
 		else:
 			reg = FL == i
-			if b.get('band'):
+			if b.get('band') or long_:
 				# a held thing partly behind the body (a haft in a fist, a shield's rim over the
 				# hand): all of the drawing within its reach is its own as well
 				fy_, fx_ = np.mgrid[0:F.h, 0:F.w]
 				d, _ = seg_dist(np.stack([fx_.ravel() + F.x0, fy_.ravel() + F.y0], 1).astype(np.float32), b['f'][0], b['f'][1])
-				reg = reg | (F.mask & (d <= r).reshape(F.mask.shape))
+				reg = (F.mask & (d <= r).reshape(F.mask.shape)) | (reg if not long_ else False)
 			if not reg.any():
 				continue
 			lm = ndimage.maximum_filter(F.dt * reg, size=int(2.5 * r) + 1)
 			sF = np.where(reg, F.dt / np.maximum(lm, 1), 0).astype(np.float32)
 		sreg = SM[i]
-		sdt = ndimage.distance_transform_edt(sreg)
+		# (a long body's bones split one trunk between them: depth from the whole outline, so the
+		# trunk stays one smooth piece across the seams instead of each part rounding off)
+		sdt = S.dt * sreg if long_ and not b.get('sideband') else ndimage.distance_transform_edt(sreg)
 		slm = ndimage.maximum_filter(sdt, size=int(2.5 * rs) + 1)
 		sS = np.where(sreg, sdt / np.maximum(slm, 1), 0).astype(np.float32)
-		if 'fb' in b:
+		if tsv is not None:
+			pass
+		elif 'fb' in b:
 			fm, sfv = fm_v, sF_v
 		else:
 			fm = reg[fvc][:, fuc].T.copy()
@@ -328,14 +434,51 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 		ssv = sS[svc][:, suc]  # (y, z)
 		ssv[~oksv] = 0
 		ssv[:, ~oksu] = 0
-		xi = np.nonzero(fm.any(1))[0]
-		zi = np.nonzero((ssv > 0).any(0))[0]
+		if tsv is not None and b.get('tube'):
+			# a thin limb that reaches out and down at once (a salamander's leg): a tube along its
+			# own line in 3D, cut by both outlines, so it follows the diagonal neither view shows
+			a3 = np.array([(b['t'][0][1] - tcx) * px * tdir, sy(b['s'][0][1]), sz(b['s'][0][0])], np.float32)
+			b3 = np.array([(b['t'][1][1] - tcx) * px * tdir, sy(b['s'][1][1]), sz(b['s'][1][0])], np.float32)
+			R3 = max(b.get('rt', r), rs) * px
+			lo, hi = np.minimum(a3, b3) - R3, np.maximum(a3, b3) + R3
+			ix = np.nonzero((X >= lo[0]) & (X <= hi[0]))[0]
+			iy = np.nonzero((Y >= lo[1]) & (Y <= hi[1]))[0]
+			iz = np.nonzero((Z >= lo[2]) & (Z <= hi[2]))[0]
+			if not len(ix) or not len(iy) or not len(iz):
+				continue
+			xs_, ys_, zs_ = slice(ix[0], ix[-1] + 1), slice(iy[0], iy[-1] + 1), slice(iz[0], iz[-1] + 1)
+			G = np.stack(np.meshgrid(X[xs_], Y[ys_], Z[zs_], indexing='ij'), -1).reshape(-1, 3)
+			ab = b3 - a3
+			tt = np.clip(((G - a3) @ ab) / max(float(ab @ ab), 1e-9), 0, 1)
+			dd = np.linalg.norm(G - (a3 + tt[:, None] * ab), axis=1).reshape(len(ix), len(iy), len(iz))
+			# (the outlines eased out by the seam: the two drawings of a limb never quite line up)
+			tm_ = ndimage.binary_dilation(TV.mask, iterations=seam) if seam else TV.mask
+			sm_ = ndimage.binary_dilation(S.mask, iterations=seam) if seam else S.mask
+			tmk = tm_[tvc][:, tuc] & oktv[:, None] & oktu[None]
+			smk = sm_[svc][:, suc] & oksv[:, None] & oksu[None]
+			vol = (dd <= R3) & tmk[xs_, zs_][:, None, :] & smk[ys_, zs_][None]
+			sub = occ[xs_, ys_, zs_]
+			sub[vol] = 1
+			lsub = lab[xs_, ys_, zs_]
+			lsub[vol] = i
+			continue
+		if tsv is not None:
+			xi = np.nonzero((tsv > 0).any(1))[0]
+			zi = np.nonzero((ssv > 0).any(0) & (tsv > 0).any(0))[0]
+		else:
+			xi = np.nonzero(fm.any(1))[0]
+			zi = np.nonzero((ssv > 0).any(0))[0]
 		if not len(xi) or not len(zi):
 			continue
 		xs_, zs_ = slice(xi.min(), xi.max() + 1), slice(zi.min(), zi.max() + 1)
-		a = (1 - sfv[xs_]) ** pw
 		c = (1 - ssv[:, zs_]) ** pw
-		vol = fm[xs_][:, :, None] & (ssv[:, zs_] > 0)[None] & ((a[:, :, None] + c[None]) <= 1.0)
+		if tsv is not None:
+			# from above and from the side: (x, z) by (y, z)
+			a = (1 - tsv[xs_, zs_]) ** pw
+			vol = (tsv[xs_, zs_] > 0)[:, None, :] & (ssv[:, zs_] > 0)[None] & ((a[:, None, :] + c[None]) <= 1.0)
+		else:
+			a = (1 - sfv[xs_]) ** pw
+			vol = fm[xs_][:, :, None] & (ssv[:, zs_] > 0)[None] & ((a[:, :, None] + c[None]) <= 1.0)
 		sub = (occp if b.get('free') else occ)[xs_, :, zs_]
 		sub[vol] = 1
 		lsub = (labp if b.get('free') else lab)[xs_, :, zs_]
@@ -439,6 +582,7 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 	zback = zbuf(0, 1, 2, X, Y, -1)
 	xside = zbuf(1, 2, 0, Y, Z, 1)
 	xside_n = zbuf(1, 2, 0, Y, Z, -1)
+	ytop = zbuf(0, 2, 1, X, Z, 1) if TV else None
 
 	# ---------- paint ----------
 	Fa = delight(F.img, F.mask)
@@ -534,6 +678,19 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 		if Sg is not None:
 			glo += S.sample(Sg, u, v)[0] * w
 		wsum += w
+	# top
+	if TV:
+		Ta, Tr = delight(TV.img, TV.mask), relief(TV.img)
+		Tg = glow_mask(TV.img, g) if g else None
+		u = tcz - p[:, 2] / (px * tdir)
+		v = tcx + p[:, 0] / (px * tdir)
+		vis = p[:, 1] >= grid_lookup(ytop, X, p[:, 0], Z, p[:, 2]) - tol
+		w = np.clip(n[:, 1], 0, 1) ** 2 * vis * edge(TV, u, v) * TV.sample(TV.paint, u, v)[0]
+		cols += TV.sample(Ta, u, v)[0] * w[:, None]
+		rel += TV.sample(Tr, u, v)[0] * w
+		if Tg is not None:
+			glo += TV.sample(Tg, u, v)[0] * w
+		wsum += w
 	have = wsum > 1e-3
 	cols[have] /= wsum[have, None]
 	rel[have] /= wsum[have]
@@ -548,7 +705,7 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 		# lantern's far side): the front's paint goes through it, as it would on a thin thing
 		u = cx + p[:, 0] / px
 		v = gy - p[:, 1] / px
-		fin = F.sample(F.mask.astype(np.float32), u, v)[0] > 0.5
+		fin = (F.sample(F.mask.astype(np.float32), u, v)[0] > 0.5) & (F.sample(F.paint, u, v)[0] > 0.5)
 		thru = ~have & fin
 		cols[thru] = F.sample(Fa, u[thru], v[thru])[0]
 		if os.environ.get('MDEBUG') == 'paint':
@@ -609,7 +766,10 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 	# ---------- rig ----------
 	j3 = []
 	for b in bones:
-		if 'fb' in b:
+		if TV is not None and 't' in b:
+			h_ = [(b['t'][0][1] - tcx) * px * tdir, sy(b['s'][0][1]), sz(b['s'][0][0])]
+			t_ = [(b['t'][1][1] - tcx) * px * tdir, sy(b['s'][1][1]), sz(b['s'][1][0])]
+		elif 'fb' in b:
 			h_ = [(bcx - b['fb'][0][0]) * bpx, (bground - b['fb'][0][1]) * bpx, sz(b['s'][0][0])]
 			t_ = [(bcx - b['fb'][1][0]) * bpx, (bground - b['fb'][1][1]) * bpx, sz(b['s'][1][0])]
 		else:

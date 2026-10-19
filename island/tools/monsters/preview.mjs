@@ -57,13 +57,13 @@ function pose(name, t) {
 	model?.updateMatrixWorld(true);
 }
 // view: front | side | back | three | low ; ortho: half-height in metres (null = perspective)
-function shot(view, h, ortho, fov = 30, bg = 0x8a8a8a, floor = true) {
+function shot(view, h, ortho, fov = 30, bg = 0x8a8a8a, floor = true, span = h) {
 	scene.background = new THREE.Color(bg);
 	ground.visible = floor;
 	const cy = h * 0.5;
 	const D = { front: [0, cy, 10], side: [-10, cy, 0], back: [0, cy, -10], three: [-6, cy + 1, 8], low: [-3, 0.6, 6], top: [0, 10, 0.01], face: [-3, cy, 8], ffront: [0, cy, 8], fside: [-8, cy, 0.5], rside: [10, cy, 0] }[view];
 	const isFace = view === 'face' || view === 'ffront' || view === 'fside';
-	if (isFace) { h *= 0.4; }
+	if (isFace) { h *= 0.4; span = h; }
 	const look = isFace ? meta?.headY ?? cy * 1.75 : cy;
 	let cam;
 	if (ortho) {
@@ -71,7 +71,7 @@ function shot(view, h, ortho, fov = 30, bg = 0x8a8a8a, floor = true) {
 		cam = new THREE.OrthographicCamera(-ortho * a, ortho * a, ortho, -ortho, 0.1, 50);
 	} else {
 		cam = new THREE.PerspectiveCamera(fov, W / H, 0.05, 100);
-		const d = h / Math.tan(THREE.MathUtils.degToRad(fov) / 2) * 0.62;
+		const d = span / Math.tan(THREE.MathUtils.degToRad(fov) / 2) * 0.62;
 		const v = new THREE.Vector3(...D).sub(new THREE.Vector3(0, cy, 0)).normalize().multiplyScalar(d);
 		D[0] = v.x; D[1] = look + v.y; D[2] = v.z;
 	}

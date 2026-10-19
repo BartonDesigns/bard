@@ -50,7 +50,7 @@ import { soundBus } from '../world/soundbus.js';
 import { createTargetFocus } from './target-focus.js';
 import { createMelee } from './melee.js';
 import { mayStation, militiaCamps } from '../military/rules.js';
-import { SPECIES, SPECIES_IDS, speciesFor } from '../creatures/catalog.js';
+import { SPECIES, SPECIES_IDS, speciesFor, pickSpecies } from '../creatures/catalog.js';
 
 const EYE = 1.68;
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private */ } } };
@@ -984,7 +984,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const kinds = speciesFor(z, night);
 		if (!kinds.length) return;
 		if (squads.alive().filter((h) => h.cr).length >= (isPhone ? 2 : 4)) return;
-		const id = kinds[Math.floor(Math.random() * kinds.length)], S = SPECIES[id];
+		const id = pickSpecies(kinds), S = SPECIES[id];
 		const s = spotHidden(z === 'deep' ? 25 : 45, z === 'deep' ? 40 : 80);
 		if (!s) return;
 		const [a, b] = S.where.pack, n = Math.min(isPhone ? 2 : 4, a + Math.floor(Math.random() * (b - a + 1)));
