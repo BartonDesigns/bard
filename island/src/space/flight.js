@@ -340,7 +340,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		if (frame.altitude(P.pos) < ORBIT.end && P.roll) P.roll *= Math.exp(-Math.max(0, dt) * 1.5);
 		if (frame.anchor && frame.altitude(P.pos) < ORBIT.start * .65) {
 			const there = fresh ? anchorNote?.title : '';
-			frame.reset(); wasSpace = false;
+			frame.reset(); wasSpace = false; view.sleep?.();
 			fresh = false; charting = glide = choice = null; P.descendAssist = false;
 			hint(there ? `${there}. You have control.` : 'Back above your departure area.', 3000);
 		}
@@ -448,10 +448,12 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		},
 		// the ground systems may stream while coming down on a newly chosen place (main.js)
 		streams: () => earth && fresh && !!frame.anchor && !frame.returning && frame.altitude(P.pos) < ORBIT.entry,
-		landing: () => ({ below: below && { ...below }, note: note && { ...note }, home: frame.home, homeName: homeNote?.title || null, choice, fresh, gliding: !!glide, charting: charting && { ...charting }, place: fresh ? anchorNote : null, card: card.style.display === 'block' ? cardText : null }),
+		// the real imagery: base loaded, tiles held, the patch round the point below
+		imagery: () => view.imagery?.info() ?? null,
+		landing: () => ({ below: below && { ...below }, sun: frame.anchor && earth ? frame.below(frame.sunCenter(new THREE.Vector3())) : null, note: note && { ...note }, home: frame.home, homeName: homeNote?.title || null, choice, fresh, gliding: !!glide, charting: charting && { ...charting }, place: fresh ? anchorNote : null, card: card.style.display === 'block' ? cardText : null }),
 		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), gear, boost: P.boost, radius, type, companion: companion.name, solarDepth, horizon: passage ? { time: passage.t, sent: passage.sent } : null, warping: !!warp, warpTime: warp?.t ?? 0, bouncing: !!bounce, landing, heat, target: nav.target, gargantuaVisible: !!view.gargantua?.visible, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
 		pause: () => { stopPassage(true); warp = bounce = glide = null; P.vel.set(0, 0, 0); P.flyUp = P.flyDown = P.climbAssist = false; leaveStar.style.display = 'none'; },
-		cancel: () => { stopPassage(); solarDepth = heat = 0; leaveStar.style.display = 'none'; frame.reset(); warp = bounce = glide = charting = choice = null; fresh = false; lastOk = false; card.style.display = 'none'; P.descendAssist = false; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
+		cancel: () => { stopPassage(); solarDepth = heat = 0; leaveStar.style.display = 'none'; frame.reset(); view.sleep?.(); warp = bounce = glide = charting = choice = null; fresh = false; lastOk = false; card.style.display = 'none'; P.descendAssist = false; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
 		exitStellar,
 		dispose() { stopPassage(); disposed = true; leaveStar.remove(); card.remove(); removeEventListener('keydown', onKey, true); delete P.orbit; hud.remove(); bearing.remove(); nav.dispose(); view.dispose(); },
 	};

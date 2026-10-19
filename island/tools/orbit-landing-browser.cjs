@@ -64,8 +64,22 @@ const profile = process.argv[2] || 'desktop', shots = process.argv[3] || '';
 		await page.waitForFunction(() => Crysis.landing().card?.includes('Paris'));
 		let c = await card();
 		assert.match(c.note.sub, /France/); assert.ok(Math.abs(c.below.lat - 48.85) < .05 && Math.abs(c.below.lon - 2.35) < .05);
+		// the real imagery: the globe and the sharp tiles round Paris come in
+		const sharp = () => page.waitForFunction(() => { const i = Crysis.orbitImagery(); return i.base && i.box.ready && i.loaded >= Math.min(6, i.tiles) && i.tiles > 0; }, null, { polling: 250 });
+		await sharp();
+		await page.waitForTimeout(1500);
+		let im = await page.evaluate(() => Crysis.orbitImagery());
+		assert.ok(Math.abs(im.box.lat - 48.85) < im.box.latSpan / 4, JSON.stringify(im.box));
 		await shot('orbit-over-paris');
-		console.log(`${profile}: over Paris: ${c.note.title}: ${c.note.sub}`);
+		console.log(`${profile}: over Paris: ${c.note.title}: ${c.note.sub} (imagery level ${im.box.level}, ${im.loaded}/${im.tiles} tiles)`);
+		await page.evaluate(() => Crysis.orbitOver(48.85, 2.35, 150));
+		await page.waitForFunction(() => Crysis.orbitImagery().box.latSpan < 4, null, { polling: 250 });
+		await sharp();
+		await page.waitForTimeout(1500);
+		im = await page.evaluate(() => Crysis.orbitImagery());
+		assert.equal(im.box.level, 2);
+		await shot('paris-150km');
+		console.log(`${profile}: 150 km over Paris (imagery level ${im.box.level}, ${im.loaded}/${im.tiles} tiles)`);
 		await page.locator('[data-land-home]').click();
 		await page.waitForFunction(() => Crysis.landing().gliding);
 		await shot('gliding-home');
@@ -75,6 +89,8 @@ const profile = process.argv[2] || 'desktop', shots = process.argv[3] || '';
 		assert.ok(Math.abs(c.below.lat - departure.lat) < .05 && Math.abs(c.below.lon - departure.lon) < .05, JSON.stringify(c.below));
 		await ground(9000);
 		const back = await page.evaluate((a) => { const P = L99Island.world().player.state; return Math.hypot(P.pos.x - a.x, P.pos.z - a.z); }, departure);
+		// on the ground the imagery is let go
+		assert.equal((await page.evaluate(() => Crysis.orbitImagery())).tiles, 0);
 		assert.ok(back < 1, `${back} m from the departure`);
 		console.log(`${profile}: back at the departure, ${back.toFixed(4)} m off`);
 
