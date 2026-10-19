@@ -25,10 +25,18 @@ import { NF, NF_N } from './nightfield.js';
 import { qualityNow } from './governor.js';
 import { SEA_DEPTH_GLSL } from './seadepth.js';
 import { GFX_PHONE } from './device.js';
+import { ICE_U, ICE_GLSL } from '../region/ice.js';
 
 const PHONE = GFX_PHONE;
 // how many things standing in the water ring it at once (posts, hulls, you)
 const TOUCH_N = PHONE ? 4 : 8;
+// (the pack ice is Earth's alone: elsewhere the sea has none)
+const ICE_NONE = /* glsl */`
+const float uIceOn = 0.0, uIceMonth = 0.0;
+float iceCoverG(float lat, float lon, float month){ return 0.0; }
+vec2 iceLL(vec2 p){ return vec2(0.0); }
+vec3 packIce(vec2 p, float aa){ return vec3(0.0); }
+float packMean(float cov){ return 0.0; }`;
 
 // a planet's water colour, normalised to keep the sea's brightness (its streams and lakes too: bay/water.js)
 export function waterOf(P) {
@@ -63,7 +71,7 @@ export function createOcean(island, shared) {
 	uniforms.uMouth = { value: [...Array(4)].map(() => new THREE.Vector4()) };
 	Object.assign(uniforms, NF);
 	// the real Bay Area's depths beyond the island (live objects, filled as they load)
-	if (shared.bayU) Object.assign(uniforms, shared.bayU, GLOBE_U);          // (and the globe's coasts past the survey: earth/globeheight.js)
+	if (shared.bayU) Object.assign(uniforms, shared.bayU, GLOBE_U, ICE_U);          // (and the globe's coasts past the survey: earth/globeheight.js)
 	uniforms.uUnder = shared.uUnder;
 	// the land, the village and the boats mirrored in the water, when drawn (world/seamirror.js)
 	Object.assign(uniforms, shared.mirrorU || { uRefl: { value: null }, uReflM: { value: new THREE.Matrix4() }, uReflOn: { value: 0 } });
@@ -165,6 +173,7 @@ export function createOcean(island, shared) {
 			${WAVES}
 			${NOISE_GLSL}
 			${SWASH_GLSL}
+			${shared.bayU ? ICE_GLSL : ICE_NONE}
 			uniform vec4 uBayIs;
 			${VARY}
 			#include <fog_pars_vertex>
@@ -195,13 +204,16 @@ export function createOcean(island, shared) {
 				// sheltered from the swell: inside the island's drowned crater, inside the Golden Gate
 				float shelter = max(uBayIs.w * (1.0 - smoothstep(0.45, 0.62, length(p - uBayIs.xy) / max(uBayIs.z, 1.0))), smoothstep(9000.0, 12500.0, p.x) * step(3000.0, r));
 				float brk = breakOn(sl, shelter);
-				float swellA = uWave * open;
+				// (under the pack ice the swell is damped to a slow heave: region/ice.js)
+				vec2 llI = uIceOn > 0.5 ? iceLL(p) : vec2(0.0);
+				float calmIce = uIceOn > 0.5 ? 1.0 - 0.85 * iceCoverG(llI.x, llI.y, uIceMonth) : 1.0;
+				float swellA = uWave * open * calmIce;
 				vec2 pb = bend(p);
 				for (int i = 0; i < NW; i++) {
 					float kv = keep(SPEC[i].y, hv);
 					if (kv > 0.0) train(pb, wdir(i), SPEC[i].y, wamp(i) * swellA * kv * group(i, p), SPEC[i].w, 1.0, disp, dx, dz);
 				}
-				float amp = uWave * mix(0.16, 0.5, open) * nearShore * mix(1.0, 0.45, shelter);
+				float amp = uWave * mix(0.16, 0.5, open) * nearShore * mix(1.0, 0.45, shelter) * calmIce;
 				// over a gentle beach the roller shoals, steepens, and its crest pitches forward as it breaks
 				float zone = brk * smoothstep(0.3, 0.8, depth) * (1.0 - smoothstep(1.5, 3.2, depth));
 				float k16 = 6.28318 / 16.0, fR = k16 * (dot(inward, p) - sqrt(9.8 / k16) * uTime);
@@ -256,6 +268,7 @@ export function createOcean(island, shared) {
 			${NOISE_GLSL}
 			${WAVES}
 			${SWASH_GLSL}
+			${shared.bayU ? ICE_GLSL : ICE_NONE}
 			#include <fog_pars_fragment>
 			// foam's froth: cells of bubbles with holes between, settling to their average where
 			// they would be finer than the pixel (or on a device that draws little detail)
@@ -603,6 +616,25 @@ export function createOcean(island, shared) {
 				foamC *= 0.82 + 0.18 * fq;
 				float A = foam + a * (1.0 - foam);
 				col = (foamC * foam + col * a * (1.0 - foam)) / max(A, 1e-4);
+				// ---- the pack ice ----
+				// the floes region/ice.js stands round you, drawn on the sea itself from the same
+				// lattice and hashes out to the horizon (finer than the pixel, their share of it),
+				// and where the pack is closed the grey young ice frozen between them
+				if (uIceOn > 0.5) {
+					vec3 pk = packIce(vP0, hp);
+					if (pk.z > 0.0) {
+						float deepK = smoothstep(-0.6, -1.5, vGround), far = smoothstep(3.0, 12.0, hp);
+						vec3 lit = uAmbient * 0.9 + uSunColor * max(0.0, uSunDir.y) * 0.9 + vec3(0.06, 0.07, 0.09) * nightK;
+						float young = smoothstep(0.72, 0.98, pk.z) * 0.9 * deepK;
+						vec3 youngC = vec3(0.4, 0.46, 0.5) * lit * (0.9 + 0.2 * vn(vW.xz * 0.03));
+						float Ay = young + A * (1.0 - young);
+						col = (youngC * young + col * A * (1.0 - young)) / max(Ay, 1e-4); A = Ay;
+						float floe = mix(pk.x, packMean(pk.z), far) * deepK;
+						vec3 iceC = mix(vec3(0.9, 0.93, 0.96) * (0.95 + 0.05 * vn(vW.xz * 0.11)), vec3(0.62, 0.78, 0.86), pk.y * 0.8 * (1.0 - far)) * lit;
+						float Af = floe + A * (1.0 - floe);
+						col = (iceC * floe + col * A * (1.0 - floe)) / max(Af, 1e-4); A = Af;
+					}
+				}
 				if (A < 0.003) discard;
 				gl_FragColor = vec4(col, A);
 				#include <tonemapping_fragment>

@@ -10,7 +10,8 @@
 // relief is then set so the engine's hills there spread as much (its noise spreads more for the
 // same relief where it is ridged: SPREAD), and never less than the kind of land allows (a floor:
 // a delta is nearly flat, but no land is a plane). Only land at zoom 8's reach (85 degrees) is
-// changed; everything else keeps its bytes. Re-run after bake-globe.mjs.
+// changed, and land it cannot measure that has no relief at all gets its kind of land's least;
+// everything else keeps its bytes. Re-run after bake-globe.mjs and bake-globe-shelves.mjs.
 //
 // Run from island/: node tools/bake-globe-relief.mjs   (fetches into /tmp/terrarium8, ~2.5 GB;
 // TILE8_CACHE to move it). --check reports what would change and writes nothing.
@@ -144,15 +145,18 @@ async function main() {
 	const hist = {};
 	for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 		const c = j * W + i;
-		if (SM[c] < 0 || !LAND[c]) continue;
+		if (!LAND[c]) continue;
+		const { t, q } = at(i, j);
+		// (land past zoom 8's reach or with no land in its pixels, the poles' ice and the ice shelves,
+		// keeps what it has unless it has none: then its kind of land's least, never a plane)
+		if (SM[c] < 0 && t.data[q + PLANE]) continue;
 		const lat = 90 - (j + 0.5) / RES, lon = -180 + (i + 0.5) / RES;
 		const R = regionAt(lat, lon), ch = characterOf(R);
 		if (!R?.land) continue;
-		const A = reliefFor(SM[c], ch), v = enc(Math.round(Math.sqrt(A) * 8));
-		const { t, q } = at(i, j);
+		const A = reliefFor(Math.max(0, SM[c]), ch), v = enc(Math.round(Math.sqrt(A) * 8));
 		cells++;
 		if (t.data[q + PLANE] !== v) { t.data[q + PLANE] = v; changed++; }
-		const b = SM[c] < 5 ? '<5' : SM[c] < 15 ? '5-15' : SM[c] < 40 ? '15-40' : SM[c] < 120 ? '40-120' : '120+';
+		const b = SM[c] < 0 ? 'unmeasured' : SM[c] < 5 ? '<5' : SM[c] < 15 ? '5-15' : SM[c] < 40 ? '15-40' : SM[c] < 120 ? '40-120' : '120+';
 		hist[b] = (hist[b] || 0) + 1;
 	}
 	console.log(JSON.stringify({ cells, changed, spread: hist }));
