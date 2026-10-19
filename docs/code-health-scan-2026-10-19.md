@@ -70,7 +70,7 @@ An end-to-end scan of the repository for tangled, duplicated and dead code, with
 
 | Check | Main | This branch |
 |---|---|---|
-| Node suite (`island/tools/*.test.mjs`) | 1,076 run, 4 fail | 1,082 run (+6 picnic), 3 fail; `noise.test.mjs` 4/4 |
+| Node suite (`island/tools/*.test.mjs`) | 1,076 run, 4 fail | 1,093 run after merging main at `a98019a` (with the 6 picnic and 4 noise tests), 4 fail: the same four |
 | Server unit tests (discovery, rooms, unit sets, ledger) | 117, 107, 46, 3 pass | identical |
 | Root tool tests (gargantua, audio interrupted) | 3, 1 pass | identical |
 | Faceplate parse gate (every inline script as the browser runs it) | 99/99 | 97/97 (two data blocks gone) |
@@ -80,7 +80,7 @@ An end-to-end scan of the repository for tangled, duplicated and dead code, with
 
 \* The one error was the canvas race, before fix 4. Three runs after it are clean.
 
-**Failing tests:** all three on the branch are the ones that already fail on main (the RGB asset manifest, Svalbard flora, regional vegetation refresh). The fourth main failure that run, the sequencer timing test, is timing sensitive and passed on the branch.
+**Failing tests:** the four on the branch are the four that fail on main: the RGB asset manifest, Svalbard flora, the regional vegetation refresh, and the sequencer timing test. The last is timing sensitive: run alone, it failed 2 of 3 times on main and passed 3 of 3 here.
 
 **Timing caveat:** the page-load numbers are a local server, so they show parse and compile time, not network time. On a phone network the 2.4 MB of transfer that is gone matters more.
 
