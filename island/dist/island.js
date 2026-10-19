@@ -15875,7 +15875,7 @@ vec3 ground(vec3 n, vec3 ray) {
 		color=mix(color,pow(mix(vec3(luma),color,1.18),vec3(1.12))*1.07,land);
 		// only very close does the ground take on a fine grain finer than the imagery
 		float detail=fbm(g*550.)*.65+fbm(g*1700.)*.35;
-		color*=mix(1.,.85+detail*.3,terrain.a*(1.-smoothstep(.00005,.0005,footprint)));
+		color*=mix(1.,.85+detail*.3,terrain.a*(1.-smoothstep(.00003,.00012,footprint)));
 	}
 	// airless worlds: crater-pocked grey
 	color*=mix(.72+.5*fbm(g*80.),1.,uAtmos);
@@ -15893,9 +15893,10 @@ vec3 ground(vec3 n, vec3 ray) {
 	if(uLightsOn>.5) {
 		float city=texture2D(uLights,vec2(atan(g.z,g.x)/6.2831853+.5,asin(clamp(g.y,-1.,1.))/3.14159265+.5)).r;
 		// the lights map is coarse: grey built-up ground in the imagery (not sea, forest or desert)
-		// takes most of it, broken into specks of streets where they are big enough to see
+		// takes most of it, broken into specks of streets only once each speck spans several pixels
+		// (any sooner and the specks beat against the pixel grid in rings round the point below)
 		float grey=1.-clamp((max(color.r,max(color.g,color.b))-min(color.r,min(color.g,color.b)))/max(max(color.r,max(color.g,color.b)),.02)*2.2,0.,1.);
-		float speck=mix(1.,.55+.9*smoothstep(.5,.75,noise(g*2600.)),1.-smoothstep(.0001,.0004,footprint));
+		float speck=mix(1.,.55+.9*smoothstep(.5,.75,noise(g*2600.)),1.-smoothstep(.00003,.00008,footprint));
 		lit+=vec3(1.,.74,.42)*pow(city,1.7)*1.3*mix(.3,1.2,grey)*speck*land*smoothstep(.06,-.12,day)*(1.-shadow*.8);
 	}
 	return lit+uGlow*pow(max(0.,1.-abs(continents-.51)*26.),5.)*(.2+uMusic.x*.3);
@@ -15938,7 +15939,8 @@ void main() {
 			density*=uAtmos;
 			float day=smoothstep(-.15,.2,dot(normalize(ray*((a+b)*.5)-uHome),uSun));
 			vec3 glow=mix(uAir*.04,uAir,day);
-			glow+=vec3(.015,.09,.065)*uMusic.x*(.5+.5*sin(dot(ray,vec3(3,1,2))*35.+uTime));
+			// the bass swells the air in broad slow waves (fine ones beat against the pixels as rings)
+			glow+=vec3(.015,.09,.065)*uMusic.x*(.5+.5*sin(dot(ray,vec3(3,1,2))*1.5+uTime));
 			col=mix(col,glow,clamp(1.-exp(-density),0.,.92));
 		}
 	}
