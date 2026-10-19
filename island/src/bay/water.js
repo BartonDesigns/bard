@@ -30,9 +30,9 @@ import { DEEP, crossings, edgeDist, bounds } from './watersrc.js';
 import { waterfowl } from '../world/creatures.js';
 import { waterOf } from '../world/ocean.js';
 import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
+import { smoothstep as sm } from '../noise.js';
 
 const W1 = WN + 1, TILE = 2048;
-const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const h01 = (a, b = 0) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 // inside a lake's rings (holes are islands)?
