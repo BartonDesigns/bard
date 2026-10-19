@@ -148,7 +148,8 @@ const profile = process.argv[2] || 'desktop', shots = process.argv[3] || '';
 		const ids = await page.evaluate(() => Crysis.cities());
 		assert.ok(ids.length >= 3, JSON.stringify(ids));
 		await page.evaluate(() => Crysis.cities.go(1));
-		await page.waitForTimeout(4000);
+		// (stood on its ground once the place is in)
+		await page.waitForFunction(() => !L99Island.world().player.state.flying, null, { polling: 250 });
 		const there = await page.evaluate(() => ({ at: Crysis.globe().at, flying: L99Island.world().player.state.flying }));
 		console.log(`${profile}: the map pin lists ${ids.join(', ')}; went to the second, now at ${there.at}`);
 		assert.equal(there.flying, false);
