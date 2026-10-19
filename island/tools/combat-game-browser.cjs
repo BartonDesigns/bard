@@ -59,16 +59,24 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	if (profile === 'desktop') {
 		await page.keyboard.press('Backquote');
 	} else {
-		// a tap on their chest, on the screen
-		const at = await page.evaluate((id) => {
-			const T = Crysis.combat.layer.get(id), c = window.L99Island.camera(), q = T.aim?.() || T.bound;
-			c.updateMatrixWorld(); const v = c.position.clone().set(q.x, q.y, q.z).project(c);
-			const r = document.querySelector('canvas').getBoundingClientRect();
-			return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
-		}, ids[0]);
-		R.tapAt = at;
-		R.tapEl = await page.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e && `${e.tagName}.${e.className} ${e.clientWidth}x${e.clientHeight}`; }, at);
-		await page.touchscreen.tap(at.x, at.y);
+		// a tap on their chest, on the screen (they may run on a little between the look and the
+		// tap on a slow headless frame: tapped again, as a player would, up to three times)
+		R.taps = [];
+		for (let i = 0; i < 3; i++) {
+			const at = await page.evaluate((id) => {
+				const T = Crysis.combat.layer.get(id), c = window.L99Island.camera(), q = T.aim?.() || T.bound;
+				c.updateMatrixWorld(); const v = c.position.clone().set(q.x, q.y, q.z).project(c);
+				const r = document.querySelector('canvas').getBoundingClientRect();
+				return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+			}, ids[0]);
+			R.tapAt = at;
+			R.tapEl = await page.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e && `${e.tagName}.${e.className} ${e.clientWidth}x${e.clientHeight}`; }, at);
+			await page.touchscreen.tap(at.x, at.y);
+			await wait(600);
+			const why = await page.evaluate(() => Crysis.combat.focus.info().tap);
+			R.taps.push(why);
+			if (why === 'locked') break;
+		}
 	}
 	await wait(1500);
 	R.lock = await page.evaluate(() => { const i = Crysis.combat.focus.info(); return { target: i.target?.id || i.id || null, cameraAssist: i.cameraAssist, tracking: Crysis.combat.focus.tracking?.(), tap: i.tap }; });

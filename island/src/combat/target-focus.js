@@ -146,7 +146,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 		if (!q || q.far || e.timeStamp - q.t > 320 || !active()) { if (e.pointerType === 'touch') tapWhy = !q ? 'no down' : q.far ? 'moved' : !active() ? 'inactive' : 'long ' + Math.round(e.timeStamp - q.t); return; }
 		const list = [...layer.map.values()].filter((T) => Number.isFinite(focusScore(T, camera.position, { x: 0, y: 0, z: 0 }, { hostile: true, max: 65, shooter, rules, dotMin: -2 })));
 		camera.updateMatrixWorld(); view = q.el;
-		const T = pickAt(list, q.x, q.y, toPx);
+		const T = pickAt(list, q.x, q.y, toPx, 44);          // (a fingertip: 44 px either side at the least)
 		if (!T || blocked(camera.position, T.bound)) { tapWhy = !T ? `nobody (${list.length} near)` : 'blocked'; return; }
 		tapWhy = 'locked';
 		if (selected === T && track) return;
