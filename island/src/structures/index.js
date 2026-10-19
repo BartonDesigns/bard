@@ -195,9 +195,9 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 		// combat marks every world hit wall: true)
 		if (h?.wallHit || h?.wall?.W) return walls.hit(h, at, dir, dmg, type);
 		if (h?.glass) {
-			glass.strike(h.glass, h.u, h.v, type === 'blast' ? 99 : dmg, [dir.x * 4, 0, dir.z * 4]);
-			if (type === 'blast' || type === 'fire' || dmg < 6) return { stop: true };
-			return { through: true, dmg: dmg * (type === 'energy' ? 0.7 : 0.55) };
+			const broke = !!glass.strike(h.glass, h.u, h.v, type === 'blast' ? 99 : dmg, [dir.x * 4, 0, dir.z * 4]);
+			if (type === 'blast' || type === 'fire' || dmg < 6) return { stop: true, broke };
+			return { through: true, dmg: dmg * (type === 'energy' ? 0.7 : 0.55), broke };
 		}
 		if (h?.landmark) { monuments.strike(h.landmark, at, dir, type === 'blast' ? Math.max(dmg, 60) : dmg, type, h.n); return { stop: true }; }
 		const o = h?.lot || (h?.box ? lotOf(h.box) : null) || nearestLot(at.x, at.z, 2);

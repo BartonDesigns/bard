@@ -26,6 +26,7 @@ import { createHealth, applyDamage, tickHealth, revive } from './health.js';
 import { createLayer, canHit, warded, strike, rayBox, rayCapsule, personShapes } from './targets.js';
 import { createWanted, offend, tickWanted, clearWanted, responseFor, sighted } from './heat.js';
 import { pushOut, hiddenSpot } from '../law/tactics.js';
+import { createDamageLog, smashed } from '../law/ladder.js';
 import { createFx } from './fx.js';
 import { createHud } from './hud.js';
 import { createWeaponView } from './weapon-view.js';
@@ -170,6 +171,15 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (witnessed) sighted(wanted, where);
 		return s;
 	}
+	// things of other people's you broke: one is nobody's business, a spree is vandalism
+	// (law/ladder.js smashed); none of it counts in the thick of a fight
+	const damageLog = createDamageLog();
+	function broke(at) {
+		if (!at || !isEarth()) return;
+		if (squads.alive().some((h) => h.alert && !FACTIONS[h.fid]?.lawful && FACTIONS[h.fid]?.kind !== 'civilians' && Math.hypot(h.pos.x - at.x, h.pos.z - at.z) < 80)) return;
+		const kind = smashed(damageLog, at, performance.now() / 1000);
+		if (kind) crime(kind, at, witnesses(at) > 0);
+	}
 	let gangDeaths = [];
 	const fireField = createFireField({ maxBurning: isPhone ? 3 : 5, maxChain: 3, radius: 14, life: 75 });
 	const fireMeta = new Map();
@@ -305,6 +315,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			fx.impact(p, hit.n, hit.surface, type === 'energy');
 			const sh = W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a wall's pock, a heavy round's hole
 			hit.through = sh?.through ? sh.dmg : 0;
+			if (sh?.broke && by === ME) broke(p);
 			if (sh?.through && !hit.pierced && onward) { const q = p.clone().addScaledVector(dir, 0.05), h2 = firstHit(q, dir, 250, by === ME ? ME : by?.T || by); hit.end = hit.t + 250; if (h2) { h2.pierced = true; h2.t += hit.t + 0.05; hit.end = h2.t; return landShot(h2, from, dir, by, sh.dmg, type); } return null; }          // structures: on through one pane, weaker
 			if (hit.box && (type === 'energy' || type === 'fire')) heatUp(boxId(hit.box), hit.box, dmg, by === ME);
 			return null;
@@ -357,7 +368,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const fac = T.faction, F = FACTIONS[fac];
 		if (T.kind === 'boss') { if (r.killed) morality.record({ kind: 'boss-slain', target: T.name, world: worldKey, place: placeName() }); return; }
 		if (T.kind === 'car') { const car = cars.state.get(T.id); if (car) car.lastMine = true; return; }
-		if (T.kind === 'prop') { if (r.killed) crime('prop', T.bound, ctx.witnessed); return; }
+		if (T.kind === 'prop') { if (r.killed) broke(T.bound); return; }
 		if (fac && fac !== 'world' && FACTIONS[fac]) relations.attacked(PLAYER, fac, r.killed ? 1 : 0.25);
 		const lawful = !!F?.lawful;
 		if (lawful) ctx.lawTarget = true;
@@ -759,7 +770,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		ward: (T) => spark(T, { x: T.bound.x, y: T.bound.y, z: T.bound.z }, ME),
 		realmArmed: () => !!W()?.medieval,
 		// structures: a fist or a swing at a wall (walls built near you break, layer by layer)
-		wallBlow: (m) => { const e = eye(), d = camera.getWorldDirection(new THREE.Vector3()); const r = W()?.structures?.blow?.(e, d, m.reach + 0.35, m); if (r) return r; const h = worldHit(e, d, m.reach + 0.25); return h && h.surface !== 'ground' ? { material: h.surface, hard: true, at: e.clone().addScaledVector(d, h.t) } : null; },
+		wallBlow: (m) => { const e = eye(), d = camera.getWorldDirection(new THREE.Vector3()); const r = W()?.structures?.blow?.(e, d, m.reach + 0.35, m); if (r) { if (r.broke) broke(r.at || e); return r; } const h = worldHit(e, d, m.reach + 0.25); return h && h.surface !== 'ground' ? { material: h.surface, hard: true, at: e.clone().addScaledVector(d, h.t) } : null; },
 	});
 
 	const focus = createTargetFocus({ layer, camera, mount, blocked, shooter: ME, rules, vector: () => new THREE.Vector3(), hint,
