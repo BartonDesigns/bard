@@ -5,8 +5,9 @@
 //   geoBasis(lat, lon)       the local frame at a place (x east, y up, z south) in globe axes
 //   regionNote(lat, lon)     a short note on a place: { title, sub, kind, lat, lon }
 //   kmBetween(a, b)          great-circle km between two { lat, lon }
+//   citiesAround(lat, lon)   cities to head for from a place: the nearest, then the region's biggest
 import * as THREE from 'three';
-import { atlasReady, regionAt, citiesNear } from '../earth/atlas.js';
+import { atlasReady, loadAtlas, regionAt, citiesNear, POP } from '../earth/atlas.js';
 import { kitAt } from '../region/choose.js';
 import { bayKm } from '../earth/globeframe.js';
 
@@ -62,3 +63,22 @@ export function regionNote(lat, lon) {
 	const big = c && c.km < 8 && c.pop >= 3 ? ` ${c.name} is grown street by street as you near it.` : '';
 	return { kind: 'land', title, sub: `${place ? place + '. ' : ''}Real terrain from the globe; the towns, roads, plants and people are generated${kit}.${big}${polar}`, lat, lon };
 }
+
+// Cities to head for from a place: the nearest first, then the biggest round it (a place a
+// short way from one already picked is its suburb, left out), then the rest by distance. Out
+// at sea, or where no town is near, the nearest wherever it is.
+//   -> [{ id, name, lat, lon, km, pop, size }]   (size: 'village' ... 'megacity')
+export function citiesAround(lat, lon, n = 6, radiusKm = 350) {
+	if (!atlasReady()) { loadAtlas().catch(() => {}); return []; }
+	if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
+	let near = citiesNear(lat, lon, radiusKm, 400);
+	if (!near.length) near = citiesNear(lat, lon, 2000, 1);
+	if (!near.length) return [];
+	const pick = [near[0]], apart = (c) => pick.every((p) => kmBetween(p, c) > 25);
+	for (const c of near.slice(1).filter((c) => c.pop >= 2).sort((a, b) => b.pop - a.pop || a.km - b.km)) { if (pick.length >= n) break; if (apart(c)) pick.push(c); }
+	for (const c of near.slice(1)) { if (pick.length >= n) break; if (!pick.includes(c) && apart(c)) pick.push(c); }
+	const [first, ...rest] = pick;
+	return [first, ...rest.sort((a, b) => a.km - b.km)].map((c) => ({ id: c.id, name: c.name, lat: c.lat, lon: c.lon, km: c.km, pop: c.pop, size: POP[c.pop] || 'town' }));
+}
+// '12 km', '850 m', '1,240 km'
+export const kmLabel = (km) => km < 1 ? `${Math.round(km * 100) * 10} m` : `${km < 10 ? km.toFixed(1) : Math.round(km).toLocaleString('en')} km`;

@@ -143,6 +143,7 @@ import { createDirector } from './earth/director.js';
 // the rest of the Earth, one engine with the Bay (earth/globe.js); its frame's latitude and longitude
 import { createGlobe, BAY_WILD_KM } from './earth/globe.js';
 import { toLL as globeLL, bayKm, F as globeF } from './earth/globeframe.js';
+import { citiesAround, kmLabel } from './space/landing.js';
 import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
@@ -830,7 +831,7 @@ export function createIslandWorld() {
 		hint(name, 2500);
 	}
 	// globe: anywhere on Earth by latitude and longitude, arriving in the air above it (Crysis.goTo,
-	// a landing from orbit with a place, a shared link far off)
+	// a landing from orbit with a place, a shared link far off); agl 0 is stood on the ground
 	HOOKS.goTo = (lat, lon, agl = 700) => {
 		const W = world, P = W?.player.state;
 		if (!W?.globe || !P || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return 'Earth only: Crysis.goTo(lat, lon).';
@@ -842,7 +843,7 @@ export function createIslandWorld() {
 		const p = W.globe.place(+lat, +lon);
 		P.flying = true; P.diving = false; P.vel.set(0, 0, 0); P.pitch = -0.25;
 		P.pos.set(p.x, 3000, p.z); camera.position.copy(P.pos);
-		p.ready.then(() => { if (world === W) { const g = W.island.heightAt(p.x, p.z); P.pos.y = (Number.isFinite(g) ? Math.max(0, g) : 0) + agl; camera.position.copy(P.pos); } });
+		p.ready.then(() => { if (world === W) { const g = W.island.heightAt(p.x, p.z); P.pos.y = (Number.isFinite(g) ? Math.max(0, g) : 0) + (agl > 0 ? agl : 1.7); if (agl <= 0) P.flying = false; camera.position.copy(P.pos); } });
 		return `To ${(+lat).toFixed(3)}, ${(+lon).toFixed(3)}.`;
 	};
 	const tpPlaces = [];
@@ -853,8 +854,38 @@ export function createIslandWorld() {
 		tpMenu.appendChild(b);
 		tpPlaces.push(b);
 	}
+	// the cities round you on Earth (space/landing.js citiesAround): the nearest and the region's
+	// biggest, a tap away, stood in the middle of its streets (they grow round you there)
+	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px system-ui;letter-spacing:.12em;color:#a5f6e2;');
+	cityHead.textContent = 'CITIES NEAR YOU';
+	const cityList = css(document.createElement('div'), 'flex:none;display:none;flex-direction:column;gap:4px;');
+	cityList.dataset.cities = '';
+	tpMenu.append(cityHead, cityList);
+	function goCity(c) {
+		tpMenu.style.display = 'none';
+		travel(c.name, () => { HOOKS.goTo(c.lat, c.lon, 0); hint(`${c.name}. Its streets and people grow round you.`, 3500); });
+	}
+	function refreshCities() {
+		const W = world, ll = W?.globe && !W.orbit?.active?.() ? globeLL(camera.position.x, camera.position.z) : null;
+		const list = ll ? citiesAround(ll.lat, ll.lon, 8) : [];
+		cityList.replaceChildren(...list.map((c) => {
+			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px system-ui;min-height:44px;cursor:pointer;');
+			b.dataset.city = c.id;
+			const here = c.km < 3;
+			const name = document.createElement('div'); name.style.cssText = 'font-weight:600;'; name.textContent = `${here ? '◉' : '⌖'} ${c.name}`;
+			const sub = document.createElement('div'); sub.style.cssText = 'font-size:11px;color:rgba(234,250,246,.66);'; sub.textContent = here ? `You are in this ${c.size}` : `${c.size[0].toUpperCase() + c.size.slice(1)}, ${kmLabel(c.km)} away`;
+			b.append(name, sub);
+			b.onclick = (e) => { e.stopPropagation(); goCity(c); };
+			return b;
+		}));
+		cityHead.style.display = cityList.style.display = list.length ? '' : 'none';
+		if (list.length) cityList.style.display = 'flex';
+		// (the atlas comes in the first time: the list when it has)
+		else if (ll) setTimeout(() => { if (tpMenu.style.display !== 'none' && !cityList.childElementCount) refreshCities(); }, 1200);
+	}
+	HOOKS.cities = { list: () => { refreshCities(); return [...cityList.children].map((b) => b.dataset.city); }, go: (i = 0) => { const W = world, ll = W?.globe ? globeLL(camera.position.x, camera.position.z) : null, c = ll && citiesAround(ll.lat, ll.lon, 8)[i]; if (!c) return 'No cities known here yet.'; goCity(c); return `To ${c.name}.`; } };
 	// share where you are, and homes to come back to (share.js): at the top of the menu
-	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
+	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; refreshCities(); tpMenu.style.display = 'flex'; };
 	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => { if (arrival) arrival.blind = false; return shaderWarm.all({ budget: 4000, progress }); } });
 	HOOKS.share = share;
 	// friends in a room (net/): nothing at all until a rooms server is set in net/config.js
@@ -2598,6 +2629,8 @@ if (typeof window !== 'undefined') {
 		orbitOver: (lat, lon, km = 400) => window.L99Island?.world?.()?.orbit?.over?.(lat, lon, km * 1000) ?? 'Climb to orbit first.',
 		landing: () => window.L99Island?.world?.()?.orbit?.landing?.() ?? 'no orbit',
 		orbitImagery: () => window.L99Island?.world?.()?.orbit?.imagery?.() ?? 'no orbit',
+		// the cities round you (the map pin's list): Crysis.cities() their ids, .go(i) to the i-th
+		cities: Object.assign(() => HOOKS.cities?.list() ?? [], { go: (i) => HOOKS.cities?.go(i) }),
 		// game-only hunting, home-defense and supply state. Crysis.arms() reads the
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
