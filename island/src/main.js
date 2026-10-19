@@ -780,9 +780,10 @@ export function createIslandWorld() {
 	// it only lifts once the new place is built and the frames are running smoothly again
 	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px system-ui;letter-spacing:.06em;text-align:center;padding:24px;');
 	dom.mount.appendChild(travelVeil);
-	let travelling = false;
+	let travelling = false, nextTrip = null;
 	function travel(label, move) {
-		if (travelling) return;
+		// (a trip asked for while the last one's veil is still up goes once it lifts, not never)
+		if (travelling) { nextTrip = [label, move]; return; }
 		travelling = true;
 		travelVeil.textContent = label || '';
 		travelVeil.style.opacity = '1';
@@ -794,7 +795,12 @@ export function createIslandWorld() {
 				calm = now - last < 70 ? calm + 1 : 0;
 				last = now;
 				// a dozen smooth frames in a row (or eight seconds, whatever happens)
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) { travelVeil.style.opacity = '0'; travelling = false; return; }
+				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) {
+					travelling = false;
+					if (nextTrip) { const [l, m] = nextTrip; nextTrip = null; travel(l, m); return; }
+					travelVeil.style.opacity = '0';
+					return;
+				}
 				requestAnimationFrame(watch);
 			};
 			requestAnimationFrame(watch);

@@ -147,10 +147,13 @@ const profile = process.argv[2] || 'desktop', shots = process.argv[3] || '';
 		// 4. On the ground, the map pin lists the cities round you; one tap stands you in another.
 		const ids = await page.evaluate(() => Crysis.cities());
 		assert.ok(ids.length >= 3, JSON.stringify(ids));
-		await page.waitForTimeout(8000);   // (the last trip's veil is up to 8 s lifting on a slow machine)
-		await page.evaluate(() => Crysis.cities.go(1));
+		const went = await page.evaluate(() => Crysis.cities.go(1));
 		// (stood on its ground once the place is in)
-		await page.waitForFunction(() => !L99Island.world().player.state.flying, null, { polling: 250 });
+		await page.waitForFunction(() => !L99Island.world().player.state.flying, null, { polling: 250 }).catch(async (err) => {
+			const s = await page.evaluate(() => { const P = L99Island.world().player.state; return { at: Crysis.globe().at, y: P.pos.y, flying: P.flying, orbit: L99Island.world().orbit.active(), landing: Crysis.landing() }; });
+			console.log(`${profile}: after "${went}" still flying: ${JSON.stringify(s)}`);
+			throw err;
+		});
 		const there = await page.evaluate(() => ({ at: Crysis.globe().at, flying: L99Island.world().player.state.flying }));
 		console.log(`${profile}: the map pin lists ${ids.join(', ')}; went to the second, now at ${there.at}`);
 		assert.equal(there.flying, false);
