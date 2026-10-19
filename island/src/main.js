@@ -143,6 +143,7 @@ import { createDirector } from './earth/director.js';
 // the rest of the Earth, one engine with the Bay (earth/globe.js); its frame's latitude and longitude
 import { createGlobe, BAY_WILD_KM } from './earth/globe.js';
 import { toLL as globeLL, bayKm, F as globeF } from './earth/globeframe.js';
+import { citiesAround, kmLabel } from './space/landing.js';
 import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
@@ -772,16 +773,17 @@ export function createIslandWorld() {
 	const tpBtn = button('', 'Teleport to a place', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 60');
 	tpBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
 	dom.mount.appendChild(tpBtn);
-	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5;');
+	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:7;');
 	dom.mount.appendChild(scrollable(tpMenu));
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and
 	// it only lifts once the new place is built and the frames are running smoothly again
 	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px system-ui;letter-spacing:.06em;text-align:center;padding:24px;');
 	dom.mount.appendChild(travelVeil);
-	let travelling = false;
+	let travelling = false, nextTrip = null;
 	function travel(label, move) {
-		if (travelling) return;
+		// (a trip asked for while the last one's veil is still up goes once it lifts, not never)
+		if (travelling) { nextTrip = [label, move]; return; }
 		travelling = true;
 		travelVeil.textContent = label || '';
 		travelVeil.style.opacity = '1';
@@ -793,7 +795,12 @@ export function createIslandWorld() {
 				calm = now - last < 70 ? calm + 1 : 0;
 				last = now;
 				// a dozen smooth frames in a row (or eight seconds, whatever happens)
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) { travelVeil.style.opacity = '0'; travelling = false; return; }
+				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) {
+					travelling = false;
+					if (nextTrip) { const [l, m] = nextTrip; nextTrip = null; travel(l, m); return; }
+					travelVeil.style.opacity = '0';
+					return;
+				}
 				requestAnimationFrame(watch);
 			};
 			requestAnimationFrame(watch);
@@ -830,7 +837,7 @@ export function createIslandWorld() {
 		hint(name, 2500);
 	}
 	// globe: anywhere on Earth by latitude and longitude, arriving in the air above it (Crysis.goTo,
-	// a landing from orbit with a place, a shared link far off)
+	// a landing from orbit with a place, a shared link far off); agl 0 is stood on the ground
 	HOOKS.goTo = (lat, lon, agl = 700) => {
 		const W = world, P = W?.player.state;
 		if (!W?.globe || !P || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return 'Earth only: Crysis.goTo(lat, lon).';
@@ -842,7 +849,7 @@ export function createIslandWorld() {
 		const p = W.globe.place(+lat, +lon);
 		P.flying = true; P.diving = false; P.vel.set(0, 0, 0); P.pitch = -0.25;
 		P.pos.set(p.x, 3000, p.z); camera.position.copy(P.pos);
-		p.ready.then(() => { if (world === W) { const g = W.island.heightAt(p.x, p.z); P.pos.y = (Number.isFinite(g) ? Math.max(0, g) : 0) + agl; camera.position.copy(P.pos); } });
+		p.ready.then(() => { if (world === W) { const g = W.island.heightAt(p.x, p.z); P.pos.y = (Number.isFinite(g) ? Math.max(0, g) : 0) + (agl > 0 ? agl : 1.7); if (agl <= 0) P.flying = false; camera.position.copy(P.pos); } });
 		return `To ${(+lat).toFixed(3)}, ${(+lon).toFixed(3)}.`;
 	};
 	const tpPlaces = [];
@@ -853,8 +860,38 @@ export function createIslandWorld() {
 		tpMenu.appendChild(b);
 		tpPlaces.push(b);
 	}
+	// the cities round you on Earth (space/landing.js citiesAround): the nearest and the region's
+	// biggest, a tap away, stood in the middle of its streets (they grow round you there)
+	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px system-ui;letter-spacing:.12em;color:#a5f6e2;');
+	cityHead.textContent = 'CITIES NEAR YOU';
+	const cityList = css(document.createElement('div'), 'flex:none;display:none;flex-direction:column;gap:4px;');
+	cityList.dataset.cities = '';
+	tpMenu.append(cityHead, cityList);
+	function goCity(c) {
+		tpMenu.style.display = 'none';
+		travel(c.name, () => { HOOKS.goTo(c.lat, c.lon, 0); hint(`${c.name}. Its streets and people grow round you.`, 3500); });
+	}
+	function refreshCities() {
+		const W = world, ll = W?.globe && !W.orbit?.active?.() ? globeLL(camera.position.x, camera.position.z) : null;
+		const list = ll ? citiesAround(ll.lat, ll.lon, 8) : [];
+		cityList.replaceChildren(...list.map((c) => {
+			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px system-ui;min-height:44px;cursor:pointer;');
+			b.dataset.city = c.id;
+			const here = c.km < 3;
+			const name = document.createElement('div'); name.style.cssText = 'font-weight:600;'; name.textContent = `${here ? '◉' : '⌖'} ${c.name}`;
+			const sub = document.createElement('div'); sub.style.cssText = 'font-size:11px;color:rgba(234,250,246,.66);'; sub.textContent = here ? `You are in this ${c.size}` : `${c.size[0].toUpperCase() + c.size.slice(1)}, ${kmLabel(c.km)} away`;
+			b.append(name, sub);
+			b.onclick = (e) => { e.stopPropagation(); goCity(c); };
+			return b;
+		}));
+		cityHead.style.display = cityList.style.display = list.length ? '' : 'none';
+		if (list.length) cityList.style.display = 'flex';
+		// (the atlas comes in the first time: the list when it has)
+		else if (ll) setTimeout(() => { if (tpMenu.style.display !== 'none' && !cityList.childElementCount) refreshCities(); }, 1200);
+	}
+	HOOKS.cities = { list: () => { refreshCities(); return [...cityList.children].map((b) => b.dataset.city); }, go: (i = 0) => { const W = world, ll = W?.globe ? globeLL(camera.position.x, camera.position.z) : null, c = ll && citiesAround(ll.lat, ll.lon, 8)[i]; if (!c) return 'No cities known here yet.'; goCity(c); return `To ${c.name}.`; } };
 	// share where you are, and homes to come back to (share.js): at the top of the menu
-	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
+	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; refreshCities(); tpMenu.style.display = 'flex'; };
 	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => { if (arrival) arrival.blind = false; return shaderWarm.all({ budget: 4000, progress }); } });
 	HOOKS.share = share;
 	// friends in a room (net/): nothing at all until a rooms server is set in net/config.js
@@ -2605,6 +2642,8 @@ if (typeof window !== 'undefined') {
 		orbitOver: (lat, lon, km = 400) => window.L99Island?.world?.()?.orbit?.over?.(lat, lon, km * 1000) ?? 'Climb to orbit first.',
 		landing: () => window.L99Island?.world?.()?.orbit?.landing?.() ?? 'no orbit',
 		orbitImagery: () => window.L99Island?.world?.()?.orbit?.imagery?.() ?? 'no orbit',
+		// the cities round you (the map pin's list): Crysis.cities() their ids, .go(i) to the i-th
+		cities: Object.assign(() => HOOKS.cities?.list() ?? [], { go: (i) => HOOKS.cities?.go(i) }),
 		// game-only hunting, home-defense and supply state. Crysis.arms() reads the
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
