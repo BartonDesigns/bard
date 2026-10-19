@@ -149,6 +149,20 @@ reconnect by themselves.
 To check: open `https://l99-rooms.joshbarton1921.workers.dev/status` (it shows `{"ok":true,...}`),
 then in two windows join one room, open 🎒 **Gear**, and tap **Trade** next to your friend.
 
+## Accounts and saved progress
+
+`POST /account/:op` (`src/account.js`, one Durable Object per username) lets a player keep
+their progress in the cloud: a username and password (8+ characters), a recovery code shown
+once at sign-up and after each reset (the way to set a new password; there is no email), and
+the game's saved progress (`island/src/persistence/cloud-save.js`: every key the site keeps in
+the browser, less the device's own graphics settings and caches, up to 3 MB). The server keeps
+only salted PBKDF2 hashes of passwords and SHA-256 hashes of recovery codes and session keys.
+Eight wrong tries lock an account for 15 minutes, and each address may make 10 accounts and
+try 60 logins an hour. A save names the revision it was based on, so a device that fell behind
+cannot overwrite newer progress from another one without the player choosing to.
+`ACCOUNT_PEPPER` (a Worker secret, optional) is mixed into every password hash; set it before
+the first account is made (`npx wrangler secret put ACCOUNT_PEPPER`), never change it after.
+
 ## Combat validation
 
 The host chooses the room's PvP rule, which defaults off. On top of it each player raises
@@ -169,7 +183,7 @@ item ownership, personal morality and ambient NPC simulation remain local browse
 This is not an account-backed inventory or a fully server-simulated world.
 
 After deployment, `/status.features` must contain `trade-v2`, `combat-v1`,
-`combat-guard-v1` and `pvp-flags-v1`. Until `pvp-flags-v1` is live the game falls back to the
+`combat-guard-v1`, `pvp-flags-v1` and `accounts-v1`. Until `pvp-flags-v1` is live the game falls back to the
 older rule (the host's switch alone decides who can be hit, though a player whose own flag is
 down takes no PvP harm), and PvP wins earn no honor. The URL does not change. Use the two-client check below before publishing
 the matching client build.

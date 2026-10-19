@@ -1,4 +1,6 @@
 import { createSoul } from './reputation/soul.js';
+import { createCloudSave } from './persistence/cloud-save.js';
+import { createAccountPanel } from './ui/account.js';
 import { createSoulWell } from './planet/soul-well.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
@@ -905,6 +907,9 @@ export function createIslandWorld() {
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
 	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
+	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
+	const cloudSave = createCloudSave({ url: roomsURL() });
+	const account = HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
@@ -2738,6 +2743,8 @@ if (typeof window !== 'undefined') {
 		services: () => window.L99Island?.world?.()?.services?.info() ?? 'Earth only',
 		// magic (magic/): Crysis.magic.info(), .give('light', 100), .all(), .cast('sunspark'), .learn(id), .bind(slot, id)
 		get magic() { return HOOKS.magic; },
+		// your account (ui/account.js): Crysis.account.open()
+		get account() { return HOOKS.account; },
 		serviceGo: (kind = 'hospital', room = null) => window.L99Island?.world?.()?.services?.go(kind, room) ?? 'Earth only',
 		serviceCall: (severity = 0.6, minor = false) => window.L99Island?.world?.()?.services?.testCall(severity, minor) ?? 'Earth only',
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
