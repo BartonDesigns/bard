@@ -8,8 +8,9 @@
 //
 // Two tiers: whole trees within 380 m, their simpler selves out to 2.4 km, dissolving into each
 // other (world/lodfade.js). The trees stand on a grid of the latitude and longitude, so the
-// same tree is in the same place whatever the frame (globeframe.js); they are laid out a slice
-// at a time as you move, and simply shifted when the frame does.
+// same tree is in the same place whatever the frame (globeframe.js), and every far tree is one
+// of the near tier's too (lay()), so nothing moves as you go; they are laid out a slice at a
+// time as you move, shown both tiers at once, and simply shifted when the frame does.
 
 import * as THREE from 'three';
 import { hardwood, shrub, swayMaterial, Builder, tube, strip, V } from '../world/vegetation.js';
@@ -109,52 +110,67 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 		const farmable = Math.max(sst(380, 560, c.RAIN) * sst(3, 9, c.TEMP) * (1 - (1 - sst(650, 850, c.RAIN)) * Math.max(sst(0.3, 0.45, c.TREES), sst(12, 15, c.TEMP) * sst(250, 450, h))), sst(150, 260, c.RAIN) * (1 - sst(300, 600, h)) * sst(12, 16, c.TEMP) * 0.75) * (1 - sst(0.004, 0.012, s1)) * (1 - sst(1200, 2200, h));
 		return { k: sst(0.44, 0.56, c.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * 0.12) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, s1)), air };
 	}
-	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide
+	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide.
+	// The far tier's grid is three of the near's to a side and shares its middles: in the near
+	// tier the middle of every three by three is the far tier's own tree (the same spot, kind and
+	// size), so crossing from one tier to the other a tree only changes its detail, never its place.
+	const NSTEP = isPhone ? 14 : 10, FSTEP = NSTEP * 3;
 	function* lay(cx, cz, R, step, out, tierName) {
 		const ll = { lat: F.lat - (cz - F.fz) / F.kz, lon: lonRaw(cx) };
 		const dLat = step / 110996, r0 = Math.floor((ll.lat - R / 110996) / dLat), r1 = Math.ceil((ll.lat + R / 110996) / dLat);
+		const near = tierName === 'near', mod3 = (v) => ((v % 3) + 3) % 3;
 		let n = 0;
 		for (let row = r0; row <= r1; row++) {
 			const lat = (row + 0.5) * dLat, kx = 111320 * Math.cos(lat * RAD), dLon = step / kx;
 			const half = Math.sqrt(Math.max(0, R * R - ((lat - ll.lat) * 110996) ** 2)) / kx;
+			const mid = near && mod3(row) === 1;
 			for (let col = Math.floor((ll.lon - half) / dLon); col <= Math.ceil((ll.lon + half) / dLon); col++) {
-				const r = hash(row, col, 91);
-				if (r > 0.55) continue;
-				const la = lat + (hash(row, col, 3) - 0.5) * dLat * 0.9, lo = (col + 0.5 + (hash(row, col, 5) - 0.5) * 0.9) * dLon;
-				const p = toXZ(la, lo);
-				const d2 = (p.x - cx) ** 2 + (p.z - cz) ** 2;
-				if (d2 > R * R || (tierName === 'far' && d2 < (NEAR - 60) ** 2)) continue;
-				if (!allowed(p.x, p.z)) continue;
-				const cell = data.cellAt(la, lo);
-				if (cell.TREES < 0.05 && cell.RAIN < 150) continue;
-				const h = heightAt(p.x, p.z);
-				if (h < 1) continue;
-				const bank = shoreVegetation(h, waterLevel(p.x, p.z), hash(row, col, 97));
-				if (bank === 'none') continue;
-				const e = step * 0.5, slope = Math.hypot(heightAt(p.x + e, p.z) - h, heightAt(p.x, p.z + e) - h) / e;
-				const W = woodAt(la, lo, h, slope, cell);
-				// wooded ground: trees; open ground: a few bushes and the odd tree
-				const open = r > W.k * 0.55;
-				if (open && r > 0.05 + (1 - cell.TREES) * 0.02) continue;
-				// (naturalist: out on open prairie and steppe the odd tree stands by water, a
-				// cottonwood or willow along a creek, not scattered over the grass)
-				if (open && cell.TREES < 0.25 && (cell.RV || 0) < 0.2 && hash(row, col, 41) > 0.2) continue;
-				// the form: the region's mix, leaned cold by the air up here and dry by little rain
-				const cold = sst(5, -3, W.air), dry = sst(500, 200, cell.RAIN);
-				let q = hash(row, col, 17), form = 'broad';
-				const wC = mix.treeless ? 0 : mix.conifer + cold * 0.8, wP = mix.palm * sst(15, 21, W.air), wB = mix.bush + dry * 0.6 + (open ? 0.5 : 0), wBr = mix.treeless ? 0 : mix.broad * (1 - cold * 0.7);
-				const tot = wC + wP + wB + wBr;
-				q *= tot;
-				if ((q -= wC) < 0) form = 'conifer'; else if ((q -= wP) < 0) form = 'palm'; else if ((q -= wB) < 0) form = 'bush'; else form = 'broad';
-				// (naturalist: a lone tree on dry open ground is a juniper or a pinyon, not an oak)
-				if (open && dry > 0.5 && form === 'broad' && !mix.treeless) form = 'conifer';
-				if (bank === 'bush') form = 'bush';
-				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
-				// (the foot on the lowest ground under the trunk, world/groundsnap.js: none floats downhill)
-				out.push({ x: p.x, y: baseFromSlope(h, slope, (form === 'bush' ? 0.6 : 0.5) * s, 0.2), z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
+				// (a middle of three by three: the far tier's tree there; else the near tier's own, salted apart)
+				const it = mid && mod3(col) === 1 ? plant((row - 1) / 3, (col - 1) / 3, FSTEP, 0) : plant(row, col, step, near ? 7919 : 0);
+				if (!it) continue;
+				const d2 = (it.x - cx) ** 2 + (it.z - cz) ** 2;
+				if (d2 > R * R || (!near && d2 < (NEAR - 60) ** 2)) continue;
+				out.push(it);
 				if (++n % 60 === 0) yield;
 			}
 		}
+	}
+	// the tree of one cell of a grid, or null
+	function plant(row0, col0, step, salt) {
+		const row = row0 + salt, col = col0 - salt;
+		const r = hash(row, col, 91);
+		if (r > 0.55) return null;
+		const dLat = step / 110996, lat = (row0 + 0.5) * dLat, dLon = step / (111320 * Math.cos(lat * RAD));
+		const la = lat + (hash(row, col, 3) - 0.5) * dLat * 0.9, lo = (col0 + 0.5 + (hash(row, col, 5) - 0.5) * 0.9) * dLon;
+		const p = toXZ(la, lo);
+		if (!allowed(p.x, p.z)) return null;
+		const cell = data.cellAt(la, lo);
+		if (cell.TREES < 0.05 && cell.RAIN < 150) return null;
+		const h = heightAt(p.x, p.z);
+		if (h < 1) return null;
+		const bank = shoreVegetation(h, waterLevel(p.x, p.z), hash(row, col, 97));
+		if (bank === 'none') return null;
+		const e = step * 0.5, slope = Math.hypot(heightAt(p.x + e, p.z) - h, heightAt(p.x, p.z + e) - h) / e;
+		const W = woodAt(la, lo, h, slope, cell);
+		// wooded ground: trees; open ground: a few bushes and the odd tree
+		const open = r > W.k * 0.55;
+		if (open && r > 0.05 + (1 - cell.TREES) * 0.02) return null;
+		// (naturalist: out on open prairie and steppe the odd tree stands by water, a
+		// cottonwood or willow along a creek, not scattered over the grass)
+		if (open && cell.TREES < 0.25 && (cell.RV || 0) < 0.2 && hash(row, col, 41) > 0.2) return null;
+		// the form: the region's mix, leaned cold by the air up here and dry by little rain
+		const cold = sst(5, -3, W.air), dry = sst(500, 200, cell.RAIN);
+		let q = hash(row, col, 17), form = 'broad';
+		const wC = mix.treeless ? 0 : mix.conifer + cold * 0.8, wP = mix.palm * sst(15, 21, W.air), wB = mix.bush + dry * 0.6 + (open ? 0.5 : 0), wBr = mix.treeless ? 0 : mix.broad * (1 - cold * 0.7);
+		const tot = wC + wP + wB + wBr;
+		q *= tot;
+		if ((q -= wC) < 0) form = 'conifer'; else if ((q -= wP) < 0) form = 'palm'; else if ((q -= wB) < 0) form = 'bush'; else form = 'broad';
+		// (naturalist: a lone tree on dry open ground is a juniper or a pinyon, not an oak)
+		if (open && dry > 0.5 && form === 'broad' && !mix.treeless) form = 'conifer';
+		if (bank === 'bush') form = 'bush';
+		const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
+		// (the foot on the lowest ground under the trunk, world/groundsnap.js: none floats downhill)
+		return { x: p.x, y: baseFromSlope(h, slope, (form === 'bush' ? 0.6 : 0.5) * s, 0.2), z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la };
 	}
 
 	// ---------- laying out as you move ----------
@@ -191,24 +207,29 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 		}
 		for (const f of FORMS) for (const im of T[f][name]) { im.count = Math.min(cnt[f], im.instanceMatrix.count); im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
 	}
+	// both tiers laid out, then shown together: never the near round one place and the far round
+	// another (trees doubled on one side, a gap on the other, until the second caught up)
 	function* build(cx, cz) {
 		const near = [], far = [];
-		yield* lay(cx, cz, NEAR, isPhone ? 14 : 10, near, 'near');
+		yield* lay(cx, cz, NEAR, NSTEP, near, 'near');
+		yield* lay(cx, cz, FAR, FSTEP, far, 'far');
 		commit('near', near); placed.near = near;
-		yield* lay(cx, cz, FAR, isPhone ? 40 : 28, far, 'far');
 		commit('far', far); placed.far = far;
 	}
-	let winV = -1, monthAt = -1;
+	// (something they stand clear of changed: a road, a town, a lake; the next layout takes it in,
+	// after the one under way is shown, so a stream of changes never keeps the trees from settling)
+	let winV = -1, monthAt = -1, dirty = false;
 	function update(cam, veg, on, version) {
 		group.visible = on;
 		if (!on) return;
-		if (version !== winV) { winV = version; at = null; job = null; }
-		if (veg !== mixAt) { mixAt = veg; setRegion(veg); at = null; }
+		if (version !== winV) { winV = version; dirty = true; }
+		if (veg !== mixAt) { mixAt = veg; setRegion(veg); dirty = true; }
 		const mo = today().getMonth();
-		if (mo !== monthAt) { monthAt = mo; at = null; }
+		if (mo !== monthAt) { monthAt = mo; dirty = true; }
 		const x = cam.position.x, z = cam.position.z;
-		if (epoch !== F.epoch) { epoch = F.epoch; at = null; job = null; }
-		if (!job && (!at || Math.hypot(x - at[0], z - at[1]) > 120)) { at = [x, z]; job = build(x, z); }
+		// (a jump to somewhere else: what stands is another place's, at its heights, so it goes at once)
+		if (epoch !== F.epoch) { epoch = F.epoch; at = null; job = null; placed = { near: [], far: [] }; commit('near', []); commit('far', []); }
+		if (!job && (dirty || !at || Math.hypot(x - at[0], z - at[1]) > 120)) { at = [x, z]; dirty = false; job = build(x, z); }
 		if (job) {
 			const t0 = performance.now();
 			while (performance.now() - t0 < (isPhone ? 2 : 3.5)) if (job.next().done) { job = null; break; }
