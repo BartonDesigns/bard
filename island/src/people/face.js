@@ -115,7 +115,7 @@ export function faceDetail(A, F, P, p, S, rnd, _normalOf, grey = 0) {
 	// everyone's brows as brows grow: of a natural weight (each their own, from the draws above),
 	// many fine short hairs lying tidily, over the brow's own tone; or groomed to set values
 	// (P.dna.brows: dens, thick, len, tidy, wid)
-	const G = P.dna.brows || {}, dens = G.dens ?? dens0 * 1.15, thick = G.thick ?? thick0 * 0.68, blen = G.len ?? 0.72, tidy = G.tidy ?? 0.55, bwid = G.wid ?? (P.dna.brows ? 0.0014 : 0.0008);
+	const G = P.dna.brows || {}, dens = G.dens ?? dens0 * 1.15, thick = G.thick ?? thick0 * 0.68, blen = G.len ?? 0.72, tidy = G.tidy ?? 0.55, bwid = G.wid ?? 0.0008;
 	// where each brow runs, inner end to tail: the face data's arch, cleaned (it repeats some
 	// points and lists a few on the skin inside the brow ridge, centimetres behind it)
 	const arches = [];
@@ -183,7 +183,7 @@ export function faceDetail(A, F, P, p, S, rnd, _normalOf, grey = 0) {
 			if (!r0) continue;
 			// up at the head, out along the body, down at the tail; the upper hairs lie a little
 			// down and the lower a little up, meeting along the middle
-			const ang = THREE.MathUtils.lerp(P.dna.brows ? 1.3 : 1.0, -0.35, Math.min(1, t * 1.25)) - (u - 0.5) * 0.5 * sm(0.12, 0.5, t) + (rnd() - 0.5) * 0.45 * tidy;
+			const ang = THREE.MathUtils.lerp(1.0, -0.35, Math.min(1, t * 1.25)) - (u - 0.5) * 0.5 * sm(0.12, 0.5, t) + (rnd() - 0.5) * 0.45 * tidy;
 			const len = (0.005 + rnd() * 0.004) * S * blen;
 			const r1 = onSkinAt(x + Math.cos(ang) * side * len, y + Math.sin(ang) * len, 0.0005);
 			if (!r1) continue;

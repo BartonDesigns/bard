@@ -57,6 +57,35 @@ Every kit piece now carries one UV layer of one name. Before, pieces modelled wi
 
 ![Boots before and after](verification/armor/compare-boot-models.jpg)
 
+## Combat gloves (fourth batch)
+
+Soldiers', militia and operators' combat gloves (`combat: true` in `combat/outfits.js`, and the `tactical-gloves` look) now carry baked detail:
+- a moulded knuckle guard over the four knuckles, rising on each and flexing between them;
+- pads over each finger's middle joint and the thumb's;
+- a synthetic suede palm and fingertips, a stretch back, stitched seams along the fingers;
+- a ribbed cuff with a hook-and-loop strap round the wrist, its tab and a moulded pull.
+
+The glove is still the hand's own skin stood off 3.5 mm, so it bends with every finger as before. The detail is baked onto that skin: `ref-hand.obj` is the reference operator's left hand and the start of the forearm, as the body's own faces, so the same faces exist on every body. `soldier-kit.json` `glove` lists, for each hand, those body faces and the atlas at each of their corners. The right hand's faces are matched to the left's mirror, so both share the same texels. `garment.js` `gloveShell` takes the face list in place of its own cut when the kit is loaded. The flat strap that the sleeve's camouflage showed through is gone for these gloves. The guard and pads are a rubber in the glove's own colour, so no pale seam shows where the tint changes.
+
+Zone edges (back and palm, fingertips, cuff) are cut into the surface along each field's level line (`iso_cut`), and the seams' stitches follow those lines.
+
+![Gloves before and after](verification/armor/compare-glove-models.jpg)
+
+## The knight's gauntlets (fifth batch)
+
+The knight's plate gauntlets (`plate-gauntlets`, `steel: true`) are now a real gauntlet baked onto the hand the same way as the combat glove, from a table of their own (`soldier-kit.json` `gauntlet`: the same body faces, its own texels):
+- a glove of leather in the set's leather colour, stitched down each side;
+- a fluted plate over the back of the hand, its wrist end rolled, riveted at its corners;
+- a knuckle plate with a boss over each knuckle, lapping over the back plate;
+- two scales over each finger's first bone, one over the second and a pointed cap on the tip, each lapping over the next, the first riveted at its sides;
+- two scales and a cap down the thumb.
+
+Unlike the glove, the gauntlet's shell stands further off where the plates are: the table carries a lift for each corner (in twentieths of a millimetre, up to about 4 mm), so the hand has the plates' bulk in silhouette as well as in its shading. The steel is baked as metal (not tinted); the leather takes the set's leather colour. The vambrace, the bell cuff over the wrist and the couter are still made in code.
+
+The plates are grids bent onto a rounded rectangle and laid on the glove by rays from above, then smoothed into a sheet over the knuckles' bumps but never sunk under them (`plate`). The finger scales are found by rays out from each finger's bone (`lame`), and the thumb's by rays in from outside, as its bones do not run down its middle.
+
+![Gauntlets before and after](verification/armor/compare-gauntlet-models.jpg)
+
 ## How it works
 
 - **Modelling:** `island/tools/blender/soldier_kit.py`, run with Blender as a Python module (`pip install bpy`, Python 3.13).
@@ -71,7 +100,7 @@ Every kit piece now carries one UV layer of one name. Before, pieces modelled wi
   - The colour map is lossy WebP and the normal map is lossy q92.
   - The occlusion/roughness/metal-tint map is lossless at 1024. Lossy WebP shares chroma between channels, which bled metal into the rails.
 - **Runtime:**
-  - `people/kit-models.js` loads the kit with the people's assets. On a phone it halves the maps.
+  - `people/kit-models.js` loads the kit with the people's assets. A phone loads the half-size maps (`kit-*-phone.webp`, made by the packer), never decoding the full ones.
   - `garment.js` `putModel` scales each piece from the reference head to this head's width, depth and height over the eyes.
   - The kit material treats id 11 as "read the atlas" (`propkit.js`, `KIT_ATLAS`), with derivative tangents, the green channel flipped for glTF UVs, and baked occlusion on the sky light.
   - If the files fail to load, the old procedural kit is built instead.
@@ -88,11 +117,12 @@ Every kit piece now carries one UV layer of one name. Before, pieces modelled wi
 | Normal map | 612 KB |
 | Occlusion/roughness/metal-tint map | 614 KB |
 
-- **GPU memory:** three 2048 maps with mips are about 50 MB on desktop. On phones the maps are halved.
+- **GPU memory:** three 2048 maps with mips are about 50 MB on desktop. Phones load maps made at half size (1024, the ORM 512), about a quarter of that, and never decode the full ones.
 
 ## Not done yet
 
-- The plate carrier and pouches, uniforms, boots and gloves are still procedural. They are the next pieces to move to Blender.
-- The knight's own models.
+- The plate carrier's bags, cummerbund and straps, and the uniforms, are still fitted in code.
+- The atlas is down to 12 px/cm with the boots, gloves and gauntlets; a second atlas would give the next pieces room.
+- The rest of the knight's plate (cuirass, pauldrons, vambraces, legs, sabatons) is still made in code.
 - There is no chin strap or helmet cover (camouflage) yet.
 - GPU frame time has not been measured.

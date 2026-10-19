@@ -57,7 +57,7 @@ test('everyone has the brow tone under the hairs, laid on the skin as a grid; th
 });
 
 test('the hairs are fine, many, tidy and short, as brows grow; set values still win', () => {
-	assert.match(face, /dens = G\.dens \?\? dens0 \* 1\.15, thick = G\.thick \?\? thick0 \* 0\.68, blen = G\.len \?\? 0\.72, tidy = G\.tidy \?\? 0\.55, bwid = G\.wid \?\? \(P\.dna\.brows \? 0\.0014 : 0\.0008\)/);
+	assert.match(face, /dens = G\.dens \?\? dens0 \* 1\.15, thick = G\.thick \?\? thick0 \* 0\.68, blen = G\.len \?\? 0\.72, tidy = G\.tidy \?\? 0\.55, bwid = G\.wid \?\? 0\.0008;/);
 	assert.match(face, /\* 0\.45 \* tidy/);
 	assert.match(face, /a = \(1\.0 - smoothstep\(w \* 0\.45, w, abs\(vSt\.x - 0\.5\)\)\) \* 0\.8;/, 'each hair a little see-through');
 });

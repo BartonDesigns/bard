@@ -9,7 +9,7 @@ import { createSelf } from '../src/people/self.js';
 
 function rig() {
 	const calls = [];
-	const me = { M: { want: {}, S: { pos: new THREE.Vector3(), heading: 0, act: {} }, setPose() {}, update() {}, act() {}, place() {} }, P: { root: { visible: false, position: new THREE.Vector3() } } };
+	const me = { M: { want: {}, S: { pos: new THREE.Vector3(), heading: 0, act: {} }, setPose() {}, update() {}, act() {}, place() {} }, P: { dna: {}, root: { visible: false, position: new THREE.Vector3() } } };
 	const avatar = { me, show: () => { calls.push('show'); me.P.root.visible = true; }, hide: () => { calls.push('hide'); me.P.root.visible = false; }, ready: () => Promise.resolve() };
 	const P = { pos: new THREE.Vector3(0, 1.68, 0), vel: new THREE.Vector3(), yaw: 0, pitch: 0 };
 	const W = { player: { state: P }, island: { heightAt: () => 0 }, street: null };
