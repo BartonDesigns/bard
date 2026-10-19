@@ -66,7 +66,8 @@ function basePersona(P, where, regional) {
 	const first = pick(r, NAMES[d.male ? 'm' : 'f'][group]), last = pick(r, SURNAMES[r() < 0.8 ? group : pick(r, ['af', 'as', 'eu', 'la'])]);
 	const age = Math.round(d.age);
 	const kind = where.kind || 'suburb';
-	const job = age < 23 ? pick(r, JOBS.young) : age > 66 ? pick(r, JOBS.old) : pick(r, JOBS[kind] || JOBS.suburb);
+	// (someone met at their work, a building crew's, says so: structures/crewpeople.js)
+	const job = P.job || (age < 23 ? pick(r, JOBS.young) : age > 66 ? pick(r, JOBS.old) : pick(r, JOBS[kind] || JOBS.suburb));
 	const years = Math.max(1, Math.min(age - 5, Math.round(2 + r() * 30)));
 	const style = [
 		T.outgoing > 0.65 ? 'chatty and animated' : T.outgoing < 0.3 ? 'quiet, a person of few words' : 'friendly but brief',
@@ -75,7 +76,7 @@ function basePersona(P, where, regional) {
 	].filter(Boolean).join(', ');
 	return {
 		name: `${first} ${last}`, first, age, job, place: where.name, kind, years,
-		mood: pick(r, MOODS), errand: pick(r, ERRANDS), style, temper: T,
+		mood: pick(r, MOODS), errand: P.errand || pick(r, ERRANDS), style, temper: T,
 		// the tattoos they have, and why (the same ones their body wears: tattoo/lore.js)
 		tattoos: inkStory(d),
 		hobby: pick(r, ['hiking Mount Diablo', 'pickup basketball', 'baking bread', 'a book club', 'surfing at Pacifica', 'gardening', 'birding', 'cycling the Iron Horse Trail', 'photography', 'playing guitar', 'the Warriors', 'cooking for too many people']),

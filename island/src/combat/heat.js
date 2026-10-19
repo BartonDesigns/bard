@@ -11,7 +11,7 @@
 import { SEARCH } from '../law/ladder.js';
 
 export const STARS = [0, 10, 35, 70, 120, 190];
-export const OFFENCE = Object.freeze({ shots: 2, hitCivilian: 12, downCivilian: 25, hitPolice: 18, downPolice: 35, car: 14, prop: 1, robbery: 12, gunfire: 18, evade: 26 });
+export const OFFENCE = Object.freeze({ shots: 2, hitCivilian: 12, downCivilian: 25, hitPolice: 18, downPolice: 35, car: 14, prop: 3, vandalism: 10, robbery: 12, gunfire: 18, evade: 26 });
 // per star: officers at once, their armour, whether drones come
 export const RESPONSE = [
 	{ officers: 0, armour: 0, drones: 0 },
@@ -23,7 +23,7 @@ export const RESPONSE = [
 ];
 
 export function createWanted(seedHeat = 0) {
-	return { points: seedHeat >= 60 ? STARS[1] : 0, stars: seedHeat >= 60 ? 1 : 0, quiet: 0, seen: false, peak: 0, last: null };
+	return { points: seedHeat >= 60 ? STARS[1] : 0, stars: seedHeat >= 60 ? 1 : 0, quiet: 0, seen: false, peak: 0, last: null, blue: 0, blueT: 0, strikes: 0, strikeT: -99 };
 }
 // where the police last knew you to be (a sighting, or where a crime was reported)
 export function sighted(W, at) { if (!at) return; if (!W.last) W.last = { x: at.x, z: at.z }; else { W.last.x = at.x; W.last.z = at.z; } }
@@ -53,5 +53,38 @@ export function tickWanted(W, dt, seen, at = null) {
 	return W.stars;
 }
 // knocked out, or out of Earth: the matter is closed
-export function clearWanted(W) { W.points = 0; W.stars = 0; W.quiet = 0; W.last = null; }
+export function clearWanted(W) { W.points = 0; W.stars = 0; W.quiet = 0; W.last = null; W.blue = 0; W.blueT = 0; W.strikes = 0; }
+
+// Self-defence: someone opened fire on you first and you answered. That is no crime: a blue
+// star instead of a yellow one, and the police come on your side. Hurt an officer while they
+// are with you and you get two warnings; the third time they turn on you (an officer hurt, a
+// yellow star, as ever). The blue goes when the fight has been over a while, or a yellow
+// star comes. Hits within a moment of each other (one burst) are one time.
+export const DEFENCE = Object.freeze({ last: 45, warnings: 2, burst: 1.5 });
+// you answered fire: true when it has just turned blue
+export function defend(W) {
+	if (W.stars > 0) return false;
+	const was = W.blue;
+	W.blue = 1; W.blueT = 0;
+	if (!was) W.strikes = 0;
+	return !was;
+}
+// you hurt an officer at t (seconds): 'crime' (no blue: an offence as ever), 'same' (the same
+// burst), 'warn' (a warning, nothing more) or 'turn' (the third time: the blue is gone)
+export function officerHurt(W, t) {
+	if (!W.blue) return 'crime';
+	if (t - W.strikeT < DEFENCE.burst) { W.strikeT = t; return 'same'; }
+	W.strikeT = t;
+	if (++W.strikes <= DEFENCE.warnings) return 'warn';
+	W.blue = 0; W.strikes = 0;
+	return 'turn';
+}
+// time: the blue lasts while someone is still after you (threat), and a while after
+export function tickDefence(W, dt, threat) {
+	if (!W.blue) return 0;
+	if (W.stars > 0) { W.blue = 0; W.strikes = 0; return 0; }
+	W.blueT = threat ? 0 : W.blueT + dt;
+	if (W.blueT > DEFENCE.last) { W.blue = 0; W.strikes = 0; }
+	return W.blue;
+}
 export const responseFor = (stars) => RESPONSE[Math.max(0, Math.min(5, stars | 0))];

@@ -5,6 +5,7 @@ import { GLOBE_ASSET_VERSION } from '../earth/globe-assets.js';
 import { createGalacticGargantua228 } from '../../../runtime/gargantua228.mjs';
 import { GFX_PHONE } from '../world/device.js';
 import { geoBasis } from './landing.js';
+import { createEarthMap } from './earthmap.js';
 
 export const ORBIT_FRAGMENT = /* glsl */`
 precision highp float;
@@ -14,7 +15,9 @@ uniform vec3 uHome, uMoon, uSun, uLand, uRock, uSand, uSea, uAir, uGlow, uCloudC
 uniform float uRadius, uBlend, uAspect, uTan, uEarth, uMapReady, uSeed, uTime;
 uniform float uSnow, uCoast, uMoonRadius, uGiant, uSunCos, uHeat, uWarp, uAtmos, uSolarDepth;
 uniform float uLiquid, uDetail;
-uniform sampler2D uMap;
+uniform sampler2D uMap, uPatch, uLights;
+uniform vec4 uPatchBox;
+uniform float uPatchOn, uLightsOn;
 uniform vec4 uMusic, uStreak;
 float hash(vec3 p) { p = fract(p * .1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
 float noise(vec3 p) {
@@ -70,7 +73,8 @@ float cloudField(vec3 g) {
 	vec3 p=g*24.+vec3(uTime*.001,0.,0.);
 	float fronts=fbm(p+uSeed*.13);
 	float cells=noise(p*3.1+fronts*2.);
-	return smoothstep(.56,.75,fronts+cells*.035)*uAtmos;
+	float wisp=noise(p*11.+fronts*3.);
+	return smoothstep(.59,.71,fronts+cells*.035+(wisp-.5)*.05)*uAtmos;
 }
 float relief(vec3 g) {
 	return 1.-abs(fbm(g*24.+uSeed)*2.-1.);
@@ -91,13 +95,30 @@ vec3 ground(vec3 n, vec3 ray) {
 	float snow=uSnow*smoothstep(.15,.6,abs(g.y)+continents*.4);
 	if(uEarth<.5) color=mix(color,vec3(.77,.84,.9),snow*land);
 	if(uEarth>.5 && uMapReady>.5) {
-		vec2 uv=vec2(atan(g.z,g.x)/6.2831853+.5,asin(clamp(g.y,-1.,1.))/3.14159265+.5);
+		float lon=atan(g.z,g.x), lat=asin(clamp(g.y,-1.,1.));
+		vec2 uv=vec2(lon/6.2831853+.5,lat/3.14159265+.5);
 		vec4 terrain=texture2D(uMap,uv);
 		color=terrain.rgb;
 		land=terrain.a;
+		// the sharp patch round the point under the ship (earthmap.js), feathered at its edges
+		float patchA=0.;
+		if(uPatchOn>.5) {
+			float dl=mod(degrees(lon)-uPatchBox.y+540.,360.)-180.;
+			vec2 pv=vec2(.5+dl/uPatchBox.w,.5+(degrees(lat)-uPatchBox.x)/uPatchBox.z);
+			vec2 edge=min(pv,1.-pv);
+			if(edge.x>0. && edge.y>0.) {
+				vec4 p=texture2D(uPatch,pv);   // premultiplied: no dark fringe where the tiles stop
+				float fade=smoothstep(0.,.08,edge.x)*smoothstep(0.,.08,edge.y);
+				patchA=p.a*fade;
+				color=color*(1.-patchA)+p.rgb*fade;
+			}
+		}
+		// the mosaic is a little flat beside what the eye sees from orbit: a touch more depth on land
+		float luma=dot(color,vec3(.2126,.7152,.0722));
+		color=mix(color,pow(mix(vec3(luma),color,1.18),vec3(1.12))*1.07,land);
+		// only very close does the ground take on a fine grain finer than the imagery
 		float detail=fbm(g*550.)*.65+fbm(g*1700.)*.35;
-		color*=mix(1.,.77+detail*.5,terrain.a*(1.-smoothstep(.0002,.002,footprint)));
-		color=mix(color,color*vec3(.76,.85,.66),terrain.a*.18*smoothstep(.3,.7,fbm(g*90.)));
+		color*=mix(1.,.85+detail*.3,terrain.a*(1.-smoothstep(.00003,.00012,footprint)));
 	}
 	// airless worlds: crater-pocked grey
 	color*=mix(.72+.5*fbm(g*80.),1.,uAtmos);
@@ -111,6 +132,16 @@ vec3 ground(vec3 n, vec3 ray) {
 	vec3 halfway=normalize(uSun-ray);
 	float glint=pow(max(0.,dot(n,halfway)),180.)*smoothstep(0.,.15,day);
 	vec3 lit=color*light+vec3(1.,.88,.66)*glint*(1.-land)*uLiquid*.55;
+	// Earth's night side: its cities' lights, under the clouds' shade
+	if(uLightsOn>.5) {
+		float city=texture2D(uLights,vec2(atan(g.z,g.x)/6.2831853+.5,asin(clamp(g.y,-1.,1.))/3.14159265+.5)).r;
+		// the lights map is coarse: grey built-up ground in the imagery (not sea, forest or desert)
+		// takes most of it, broken into specks of streets only once each speck spans several pixels
+		// (any sooner and the specks beat against the pixel grid in rings round the point below)
+		float grey=1.-clamp((max(color.r,max(color.g,color.b))-min(color.r,min(color.g,color.b)))/max(max(color.r,max(color.g,color.b)),.02)*2.2,0.,1.);
+		float speck=mix(1.,.55+.9*smoothstep(.5,.75,noise(g*2600.)),1.-smoothstep(.00003,.00008,footprint));
+		lit+=vec3(1.,.74,.42)*pow(city,1.7)*1.3*mix(.3,1.2,grey)*speck*land*smoothstep(.06,-.12,day)*(1.-shadow*.8);
+	}
 	return lit+uGlow*pow(max(0.,1.-abs(continents-.51)*26.),5.)*(.2+uMusic.x*.3);
 }
 void main() {
@@ -151,7 +182,8 @@ void main() {
 			density*=uAtmos;
 			float day=smoothstep(-.15,.2,dot(normalize(ray*((a+b)*.5)-uHome),uSun));
 			vec3 glow=mix(uAir*.04,uAir,day);
-			glow+=vec3(.015,.09,.065)*uMusic.x*(.5+.5*sin(dot(ray,vec3(3,1,2))*35.+uTime));
+			// the bass swells the air in broad slow waves (fine ones beat against the pixels as rings)
+			glow+=vec3(.015,.09,.065)*uMusic.x*(.5+.5*sin(dot(ray,vec3(3,1,2))*1.5+uTime));
 			col=mix(col,glow,clamp(1.-exp(-density),0.,.92));
 		}
 	}
@@ -181,7 +213,7 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 		uCamera: { value: new THREE.Matrix3() }, uGeography: { value: new THREE.Matrix3() }, uStars: { value: new THREE.Matrix3() },
 		uHome: { value: new THREE.Vector3() }, uMoon: { value: new THREE.Vector3() }, uSun: { value: new THREE.Vector3(.3, .8, -.4).normalize() },
 		uRadius: { value: radius / 1000 }, uBlend: { value: 0 }, uAspect: { value: 1 }, uTan: { value: .7 },
-		uEarth: { value: earth ? 1 : 0 }, uMapReady: { value: 0 }, uMap: { value: fallback },
+		uEarth: { value: earth ? 1 : 0 }, uMapReady: { value: 0 }, uMap: { value: fallback }, uPatch: { value: fallback }, uPatchBox: { value: new THREE.Vector4(0, 0, 1, 1) }, uPatchOn: { value: 0 }, uLights: { value: fallback }, uLightsOn: { value: 0 },
 		uSeed: { value: (seed % 10000) / 100 }, uTime: { value: 0 },
 		uLand: { value: new THREE.Color().fromArray(profile?.ground?.grass || [.34, .48, .2]).convertSRGBToLinear() }, uSea: { value: new THREE.Color('#163458') },
 		uRock: { value: new THREE.Color().fromArray(profile?.ground?.rock || [.44, .41, .37]).convertSRGBToLinear() },
@@ -215,6 +247,8 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 			uniforms.uMap.value = t; uniforms.uMapReady.value = 1;
 		}, undefined, () => { /* the procedural globe remains navigable offline */ });
 	}
+	// the real imagery, loaded on the first climb and let go back on the ground
+	const imagery = earth ? createEarthMap({ phone: GFX_PHONE }) : null;
 	// Compile during the initial world load, not on the first climb into orbit.
 	renderer.compile(scene, camera); renderer.compile(gargScene, gargCamera);
 	const inv = new THREE.Matrix3(), rot4 = new THREE.Matrix4();
@@ -229,6 +263,16 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 		const k = frame.blend(player.pos);
 		if (k <= 0) return;
 		uniforms.uBlend.value = k;
+		if (imagery) {
+			const at = frame.below(player.pos);
+			imagery.update(at.lat, at.lon, frame.altitude(player.pos));
+			const hi = imagery.base();
+			uniforms.uMap.value = hi || map || fallback; uniforms.uMapReady.value = hi || map ? 1 : 0;
+			const B = imagery.box;
+			const lights = imagery.night();
+			uniforms.uLights.value = lights || fallback; uniforms.uLightsOn.value = lights ? 1 : 0;
+			uniforms.uPatchOn.value = imagery.on() ? 1 : 0; uniforms.uPatch.value = imagery.patch; uniforms.uPatchBox.value.set(B.lat, B.lon, B.latSpan || 1, B.lonSpan || 1);
+		}
 		uniforms.uHome.value.copy(frame.center).sub(player.pos).multiplyScalar(.001);
 		uniforms.uMoon.value.copy(frame.moonCenter(spot)).sub(player.pos).multiplyScalar(.001);
 		// the Sun from where the ship is: its direction and its apparent size
@@ -258,5 +302,8 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 			const passClear = renderer.autoClear; try { renderer.autoClear = false; renderer.render(gargScene, gargCamera); } finally { renderer.autoClear = passClear; }
 		} else gargantua.visible = false;
 	}
-	return { anchor, render, uniforms, gargantua, dispose() { disposed = true; quad.geometry.dispose(); material.dispose(); map?.dispose(); fallback.dispose(); gargantua.userData.gargMat.dispose(); gargantua.userData.gargBillboard.geometry.dispose(); } };
+	return { anchor, render, uniforms, gargantua, imagery,
+		// back on the ground: the imagery's textures go (the small map stays for the next climb)
+		sleep() { if (!imagery) return; imagery.sleep(); uniforms.uPatchOn.value = uniforms.uLightsOn.value = 0; uniforms.uPatch.value = uniforms.uLights.value = fallback; uniforms.uMap.value = map || fallback; uniforms.uMapReady.value = map ? 1 : 0; },
+		dispose() { disposed = true; imagery?.dispose(); quad.geometry.dispose(); material.dispose(); map?.dispose(); fallback.dispose(); gargantua.userData.gargMat.dispose(); gargantua.userData.gargBillboard.geometry.dispose(); } };
 }

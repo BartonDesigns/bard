@@ -25,9 +25,9 @@ export const LEVELS = Object.freeze(['calm', 'reported', 'pursuit', 'backup', 't
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // what a passer-by calls it, from the fight's offence kinds (combat/heat.js OFFENCE)
-export const CALL_KIND = Object.freeze({ shots: 'shots', hitCivilian: 'assault', downCivilian: 'assault', hitPolice: 'officer', downPolice: 'officer', car: 'arson', prop: 'damage', robbery: 'robbery', gang: 'gang', brawl: 'fight' });
+export const CALL_KIND = Object.freeze({ shots: 'shots', hitCivilian: 'assault', downCivilian: 'assault', hitPolice: 'officer', downPolice: 'officer', car: 'arson', prop: 'damage', vandalism: 'damage', robbery: 'robbery', gang: 'gang', brawl: 'fight', defence: 'defence' });
 // how long the call takes, in seconds (the first witness reaching for a phone, the call taken)
-const DELAY = { shots: [5, 12], assault: [9, 20], robbery: [12, 26], arson: [8, 18], damage: [20, 40], gang: [10, 24], fight: [12, 28], officer: [0, 0] };
+const DELAY = { shots: [5, 12], assault: [9, 20], robbery: [12, 26], arson: [8, 18], damage: [20, 40], gang: [10, 24], fight: [12, 28], defence: [4, 10], officer: [0, 0] };
 export function reportDelay(call, witnesses = 1, r = Math.random) {
 	const [a, b] = DELAY[call] || [12, 25];
 	return (a + r() * (b - a)) / Math.sqrt(clamp(witnesses, 1, 4));
@@ -43,7 +43,7 @@ export function witness(L, o, r = Math.random) {
 	const call = CALL_KIND[o.kind] || 'assault';
 	if (o.police || call === 'officer') return 'now';
 	const n = o.witnesses | 0;
-	if (!n && !(o.heard && (call === 'shots' || call === 'gang'))) return null;
+	if (!n && !(o.heard && (call === 'shots' || call === 'gang' || call === 'defence'))) return null;
 	for (const q of L.reports) {
 		if (q.done || q.call !== call || Math.hypot(q.at.x - o.at.x, q.at.z - o.at.z) > 60) continue;
 		q.weight = Math.min(4, q.weight + 1);
@@ -58,7 +58,27 @@ export function witness(L, o, r = Math.random) {
 	return 'later';
 }
 // (a worse offence folded into a pending call takes its place)
-const OFFENCE_RANK = { prop: 1, shots: 2, robbery: 3, hitCivilian: 4, car: 5, downCivilian: 6, gang: 2 };
+const OFFENCE_RANK = { prop: 1, vandalism: 1.5, shots: 2, robbery: 3, hitCivilian: 4, car: 5, downCivilian: 6, gang: 2 };
+
+// Property: one window broken or a crate knocked over is not a police matter (a stray round, a
+// stumble, the wreckage of a fight). Smashing things on purpose is: the third thing of someone
+// else's you break within half a minute in one place makes it vandalism, and each one after
+// that, while the spree lasts, adds to it.
+export const SPREE = Object.freeze({ count: 3, window: 30, r: 40 });
+export function createDamageLog() { return { hits: [], spreeT: -999 }; }
+// a thing you broke at t, at { x, z }: null (nobody calls that in), 'vandalism' (it has just
+// become a spree) or 'prop' (more of the same spree)
+export function smashed(D, at, t) {
+	D.hits = D.hits.filter((h) => t - h.t < SPREE.window);
+	if (D.hits.length >= 16) D.hits.shift();
+	D.hits.push({ t, x: at.x, z: at.z });
+	let n = 0;
+	for (const h of D.hits) if (Math.hypot(h.x - at.x, h.z - at.z) < SPREE.r) n++;
+	if (n < SPREE.count) return null;
+	const more = t - D.spreeT < SPREE.window;
+	D.spreeT = t;
+	return more ? 'prop' : 'vandalism';
+}
 
 // the calls through by now (the same array each time: copy it to keep it)
 export function dueReports(L, t) {

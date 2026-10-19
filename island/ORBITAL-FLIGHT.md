@@ -55,9 +55,16 @@ Do not remove the legacy engine until its active features have verified replacem
 
 `src/space/frame.js` owns coordinate math and speed limits. `flight.js` bridges the
 existing player/HUD and `view.js` draws a camera-relative orbital pass. There is one
-WebGL context, one fullscreen mesh, one globe texture, and no extra render targets.
-The Earth texture is baked from the same local globe cells as the surface using
-`node island/tools/bake-orbit-earth.mjs`. Its credits are in `assets/globe/CREDITS.md`.
+WebGL context, one fullscreen mesh, a globe texture and a patch texture, and no extra render targets.
+Earth from orbit is real satellite imagery (`src/space/earthmap.js`, assets in
+`assets/earth/`, bake and credits in `tools/bake-earth-imagery.md`): a 4k globe (2k on
+phones), plus one canvas texture of sharp tiles round the point under the ship, 6° tiles
+when high and 2° tiles (about 600 m a pixel) when low, re-centred as you fly and let go
+when you land (`view.sleep()`). The night side shows city lights. The Sun stays where it was in
+the departure's sky, so the far side of the world is in night; `Crysis.landing().sun` is the point
+under the Sun. `Crysis.orbitImagery()` shows what is loaded. Until the
+imagery loads, the small texture baked from the globe cells (`node island/tools/bake-orbit-earth.mjs`,
+credits in `assets/globe/CREDITS.md`) is shown.
 Other planets use their seeded profile colours. If the Earth texture fails to load,
 the procedural fallback remains controllable. That fallback does not reproduce real
 continents.

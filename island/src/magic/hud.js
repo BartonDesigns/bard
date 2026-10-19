@@ -33,9 +33,29 @@ const CSS = `
 .mg-lvl.go{animation:mgLvl 4.2s ease forwards}.mg-lvl.go i{animation:mgLine 1.2s .2s ease-out forwards}
 @keyframes mgLvl{0%{opacity:0;transform:translate(-50%,10px)}10%,78%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
 @keyframes mgLine{to{width:260px}}
-/* (on a touch screen the thumbs' controls hold the bottom corners: the bar sits above their stack) */
-.l99-touch .mg-bar{bottom:calc(var(--l99-low,88px) + 28px + env(safe-area-inset-bottom))}
-.l99-touch .mg-mana{bottom:calc(var(--l99-low,88px) + 74px + env(safe-area-inset-bottom))}
+/* (on a touch screen the bar is two rows, weapons over spells, under a line with the fabric and
+   the mana bar; it keeps left of the right thumb's column (96 px) and above its fight buttons
+   (Mode, the highest, tops out at 188 px), centred in the room left of that column) */
+.l99-touch .mg-bar{left:calc(12px + env(safe-area-inset-left) + (100% - 108px - env(safe-area-inset-left) - env(safe-area-inset-right)) / 2);bottom:calc(200px + env(safe-area-inset-bottom));flex-direction:column;align-items:stretch;gap:6px}
+.l99-touch .mg-bar .grp{gap:6px}
+.l99-touch .mg-bar .sep{display:none}
+.l99-touch .mg-s{width:44px;height:44px;border-radius:11px}
+.l99-touch .mg-s .cd{border-radius:11px}
+.l99-touch .mg-s .k{left:5px;top:4px}
+.l99-touch .mg-s .g{font-size:21px}
+.l99-touch .mg-bar .hd{display:flex;align-items:center;gap:10px;height:16px;padding:0 2px 2px}
+.l99-touch .mg-bar .mg-mana{position:relative;left:auto;bottom:auto;transform:none;flex:1;width:auto}
+.l99-touch .mg-fab{margin:-8px -6px;padding:8px 6px;line-height:16px;display:flex;align-items:center;gap:8px}
+.l99-touch .mg-fab br{display:none}
+.l99-touch .mg-fab .pt{margin-left:0;order:3}
+/* (a short landscape screen: the middle of the bottom is the prompts' and the crosshair is not
+   far above it, so the two rows sit on the left, over the resting stick, by the left thumb) */
+@media (orientation:landscape) and (max-height:540px){
+.l99-touch .mg-bar{left:calc(16px + env(safe-area-inset-left));bottom:calc(116px + env(safe-area-inset-bottom));transform:none}
+.l99-touch .mg-s{width:40px;height:40px;border-radius:10px}
+.l99-touch .mg-s .cd{border-radius:10px}
+.l99-touch .mg-s .g{font-size:19px}
+}
 `;
 const STYLE_ID = 'mg-hud-style';
 const KEYS = ['6', '7', '8', '9', '0'];
@@ -50,10 +70,11 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 	const bar = mk('div', 'mg-bar', mount), wg = mk('div', 'grp', bar); mk('div', 'sep', bar); const sg = mk('div', 'grp', bar);
 	const wSlots = [...Array(5)].map((_, i) => { const e = mk('div', 'mg-s empty', wg, `<span class="k">${i + 1}</span><span class="w"></span>`); e.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); onPress(i); }); return e; });
 	const sSlots = KEYS.map((k, i) => { const e = mk('div', 'mg-s empty', sg, `<span class="k">${k}</span><span class="g"></span><div class="cd"></div>`); e.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); onCast(i, { shift: x.shiftKey, tap: true }); }); return e; });
-	if (isTouch) for (const e of [...wSlots, ...sSlots]) { e.style.width = e.style.height = '34px'; }
 	const mana = mk('div', 'mg-mana', mount, '<div></div>'), manaFill = mana.firstChild;
-	// (your fabric at the bar's end: a tap opens the skills and magic menu)
+	// (your fabric at the bar's end: a tap opens the skills and magic menu; on a touch screen it
+	// heads the bar with the mana bar beside it, over the two rows)
 	const fab = mk('div', 'mg-fab', bar);
+	if (isTouch) { const hd = mk('div', 'hd'); hd.append(fab, mana); bar.prepend(hd); }
 	fab.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); onBook(); });
 	const lvl = mk('div', 'mg-lvl', mount);
 	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · double-tap Alt / ⌥ to aim');

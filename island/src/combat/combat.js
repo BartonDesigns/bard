@@ -24,8 +24,9 @@ import { kitMaterial, weaponOf } from '../crysis/held-items.js';
 import { playCue } from '../crysis/weapon-sound.js';
 import { createHealth, applyDamage, tickHealth, revive } from './health.js';
 import { createLayer, canHit, warded, strike, rayBox, rayCapsule, personShapes } from './targets.js';
-import { createWanted, offend, tickWanted, clearWanted, responseFor, sighted } from './heat.js';
+import { createWanted, offend, tickWanted, clearWanted, responseFor, sighted, defend, officerHurt, tickDefence } from './heat.js';
 import { pushOut, hiddenSpot } from '../law/tactics.js';
+import { createDamageLog, smashed } from '../law/ladder.js';
 import { createFx } from './fx.js';
 import { createHud } from './hud.js';
 import { createWeaponView } from './weapon-view.js';
@@ -170,6 +171,41 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (witnessed) sighted(wanted, where);
 		return s;
 	}
+	// things of other people's you broke: one is nobody's business, a spree is vandalism
+	// (law/ladder.js smashed); none of it counts in the thick of a fight
+	const damageLog = createDamageLog();
+	function broke(at) {
+		if (!at || !isEarth()) return;
+		if (squads.alive().some((h) => h.alert && !FACTIONS[h.fid]?.lawful && FACTIONS[h.fid]?.kind !== 'civilians' && Math.hypot(h.pos.x - at.x, h.pos.z - at.z) < 80)) return;
+		const kind = smashed(damageLog, at, performance.now() / 1000);
+		if (kind) crime(kind, at, witnesses(at) > 0);
+	}
+	// somewhere people live or work: buildings about, or people near. Out in the empty country
+	// nobody hears the gunfire, and no contract hunters or police come out to fight there.
+	function populated(at, r = 200) {
+		if (!at) return false;
+		if (boxesNear(at.x, at.z, r).length > 3) return true;
+		for (const p of people?.()?.pool || []) { const q = p.active && p.M?.S?.pos; if (q && Math.abs(q.x - at.x) < r && Math.abs(q.z - at.z) < r) return true; }
+		return false;
+	}
+	// self-defence (combat/heat.js defend): someone not of the law who opened fire on you first,
+	// still about and after you
+	function threatened() {
+		const e = eye();
+		if (!e) return false;
+		for (const h of squads.alive()) if (h.struckFirst && h.alert && !h.surrendered && Math.hypot(h.pos.x - e.x, h.pos.z - e.z) < 150) return true;
+		return false;
+	}
+	// you answered fire: no crime, a blue star, and the police called to your side
+	function defendNow(at) {
+		if (!isEarth() || !at || !defend(wanted)) return;
+		call('You were fired on first: self-defence. The police are on your side.', '');
+		hooks.event?.({ kind: 'defence', x: at.x, z: at.z, severity: 1 });
+	}
+	// an officer you hurt while they are on your side: their squad lets it go (a warning)
+	function forgive(h) {
+		for (const m of h?.squad?.members || (h ? [h] : [])) { m.provoked = false; if (m.target?.id === 'me') { m.target = null; m.targetT = 0; } }
+	}
 	let gangDeaths = [];
 	const fireField = createFireField({ maxBurning: isPhone ? 3 : 5, maxChain: 3, radius: 14, life: 75 });
 	const fireMeta = new Map();
@@ -305,6 +341,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			fx.impact(p, hit.n, hit.surface, type === 'energy');
 			const sh = W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a wall's pock, a heavy round's hole
 			hit.through = sh?.through ? sh.dmg : 0;
+			if (sh?.broke && by === ME) broke(p);
 			if (sh?.through && !hit.pierced && onward) { const q = p.clone().addScaledVector(dir, 0.05), h2 = firstHit(q, dir, 250, by === ME ? ME : by?.T || by); hit.end = hit.t + 250; if (h2) { h2.pierced = true; h2.t += hit.t + 0.05; hit.end = h2.t; return landShot(h2, from, dir, by, sh.dmg, type); } return null; }          // structures: on through one pane, weaker
 			if (hit.box && (type === 'energy' || type === 'fire')) heatUp(boxId(hit.box), hit.box, dmg, by === ME);
 			return null;
@@ -357,9 +394,24 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const fac = T.faction, F = FACTIONS[fac];
 		if (T.kind === 'boss') { if (r.killed) morality.record({ kind: 'boss-slain', target: T.name, world: worldKey, place: placeName() }); return; }
 		if (T.kind === 'car') { const car = cars.state.get(T.id); if (car) car.lastMine = true; return; }
-		if (T.kind === 'prop') { if (r.killed) crime('prop', T.bound, ctx.witnessed); return; }
+		if (T.kind === 'prop') { if (r.killed) broke(T.bound); return; }
+		// an officer hurt while the police are on your side: two warnings, then they turn on you
+		// (an officer killed turns them at once)
+		if (isEarth() && wanted.blue && F?.lawful && F.kind !== 'military') {
+			const k = r.killed ? 'turn' : officerHurt(wanted, performance.now() / 1000);
+			if (k === 'warn' || k === 'same') {
+				forgive(T.ref);
+				if (k === 'warn') call(wanted.strikes === 1 ? 'Watch your fire! That is an officer!' : 'Last warning! Hit one of us again and you go down with them!', 'Harbour Police');
+				return;
+			}
+			wanted.blue = 0; wanted.strikes = 0;
+			call('That is it. Take the shooter down!', 'Harbour Police');
+		}
 		if (fac && fac !== 'world' && FACTIONS[fac]) relations.attacked(PLAYER, fac, r.killed ? 1 : 0.25);
 		const lawful = !!F?.lawful;
+		// they opened fire on you first (or struck first): answering them is no crime
+		const defence = !lawful && !!(T.ref?.struckFirst || blow.moral?.selfDefence);
+		if (defence) defendNow(T.bound);
 		if (lawful) ctx.lawTarget = true;
 		if (F?.kind === 'civilians') ctx.unarmed = true;
 		if (r.killed) {
@@ -370,13 +422,13 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			if (S?.raid && !ctx.surrendered) { morality.record({ kind: 'defend-village', place: placeName(), world: worldKey, ctx: {} }); relations.helped(PLAYER, 'village', 2); relations.helped('hearthguard', PLAYER, 3); }
 			for (const f of Object.keys(FACTIONS)) if (f !== fac && relations.hostile(f, fac) && squads.alive().some((h) => h.fid === f && h.alert && Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 80)) { relations.helped(f, PLAYER, 1.5); if (Math.random() < 0.3) morality.record({ kind: 'help-faction', target: FACTIONS[f].name, world: worldKey, place: placeName() }); break; }
 			if (F?.kind === 'civilians' && T.ref?.raid) morality.record({ kind: 'raid-village', place: placeName(), world: worldKey, ctx });
-			crime(lawful ? 'downPolice' : F?.kind === 'civilians' ? 'downCivilian' : 'hitCivilian', T.bound, ctx.witnessed || lawful);
+			if (!defence) crime(lawful ? 'downPolice' : F?.kind === 'civilians' ? 'downCivilian' : 'hitCivilian', T.bound, ctx.witnessed || lawful);
 			const H = held();
 			if (H) arms?.train?.(H.u, 4);
 		} else if (!ctx.hostileTarget && !hurtOnce.has(T.id)) {
 			hurtOnce.add(T.id);
 			morality.record({ kind: 'hurt', target: T.name || 'someone', faction: fac, place: placeName(), world: worldKey, ctx });
-			crime(lawful ? 'hitPolice' : 'hitCivilian', T.bound, ctx.witnessed || lawful);
+			if (!defence) crime(lawful ? 'hitPolice' : 'hitCivilian', T.bound, ctx.witnessed || lawful);
 		}
 	}
 	function witnesses(at) {
@@ -415,7 +467,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		civilians.alarm(at.x, at.z, 30);
 		squads.hear(at.x, at.z, 70);
 		if (!isBow(w)) W()?.flush?.noise(at, S.type === 'energy' ? 0.35 : 0.6, camera.position);
-		crime('shots', at, witnesses(at) > 0);
+		if (isEarth() && threatened()) defendNow(at);
+		else crime('shots', at, witnesses(at) > 0);
 	}
 
 	// ---------- projectiles: arrows, energy bolts, spit, missiles, flares ----------
@@ -679,6 +732,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		strikeNpc: (T, blow, at) => { if (at) fx.impact(at, null, T.surface, blow.type === 'energy'); return deal(T, blow, false); },
 		whiz: () => { sound('whiz'); hud.suppress(0.3); }, heard: (from) => civilians.alarm(from.x, from.z, 25), sound: (k, p) => sound(k, p), gunshot: (at, gun) => gunshot(at, gun),
 		wanted: () => wanted.stars, bounty: () => morality.reactions().bounty, playerDown: () => me.ko > 0,
+		defending: () => isEarth() && wanted.blue > 0,
 		civilians: () => [...layer.map.values()].filter((T) => T.kind === 'person' && !T.child),
 		coverNear: (x, z, r) => hooks.cover?.(x, z, r) || props.coverNear(x, z, r) || buildingCover(x, z, r),
 		holdFire: (h) => !!hooks.holdFire?.(h),
@@ -759,7 +813,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		ward: (T) => spark(T, { x: T.bound.x, y: T.bound.y, z: T.bound.z }, ME),
 		realmArmed: () => !!W()?.medieval,
 		// structures: a fist or a swing at a wall (walls built near you break, layer by layer)
-		wallBlow: (m) => { const e = eye(), d = camera.getWorldDirection(new THREE.Vector3()); const r = W()?.structures?.blow?.(e, d, m.reach + 0.35, m); if (r) return r; const h = worldHit(e, d, m.reach + 0.25); return h && h.surface !== 'ground' ? { material: h.surface, hard: true, at: e.clone().addScaledVector(d, h.t) } : null; },
+		wallBlow: (m) => { const e = eye(), d = camera.getWorldDirection(new THREE.Vector3()); const r = W()?.structures?.blow?.(e, d, m.reach + 0.35, m); if (r) { if (r.broke) broke(r.at || e); return r; } const h = worldHit(e, d, m.reach + 0.25); return h && h.surface !== 'ground' ? { material: h.surface, hard: true, at: e.clone().addScaledVector(d, h.t) } : null; },
 	});
 
 	const focus = createTargetFocus({ layer, camera, mount, blocked, shooter: ME, rules, vector: () => new THREE.Vector3(), hint,
@@ -858,6 +912,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			if (have < R.officers && !hooks.police?.(wanted.stars, R, have)) { const s = spotHidden(50, 90); if (s) squads.squad('police', s.x, s.z, Math.min(2, R.officers - have), { alert: true, armour: R.armour }); call('Dispatch: units responding.', 'Harbour Police'); }
 		}
 		// contract hunters, for a bounty
+		// (only where there are people or businesses about: not out in the empty country)
+		if (bountyT <= 0 && isEarth() && !populated(eye())) bountyT = 30;
 		if (bountyT <= 0) { bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
 		if (!settings.ambient || directorT > 0 || contracts.info().mission) return;
 		directorT = rnd(70, 130);
@@ -872,7 +928,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const roll = Math.random();
 		if (z === 'deep') squads.squad('gloom', s.x, s.z, 3, {});
 		else if (z === 'earth-urban') roll < 0.5 ? two('copperline', 'glasshouse') : squads.squad(roll < 0.75 ? 'copperline' : 'glasshouse', s.x, s.z, 3, {});
-		else if (z === 'earth-coast') roll < 0.5 ? two('saltjack', 'patrol', 2) : squads.squad('saltjack', s.x, s.z, 3, {});
+		else if (z === 'earth-coast') roll < 0.5 && populated(s) ? two('saltjack', 'patrol', 2) : squads.squad('saltjack', s.x, s.z, 3, {});
 		else if (z === 'earth-rural') { if (roll > 0.5 || !compound()) squads.squad('rangers', s.x, s.z, 3, {}); }
 		else if (z === 'village') {
 			// a raid: raiders come for the houses, the Hearthguard turn out
@@ -1114,6 +1170,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		net.update(dt);
 		relations.drift(dt);
 		if (isEarth()) tickWanted(wanted, dt, squads.alive().some((h) => FACTIONS[h.fid]?.lawful && h.F.kind !== 'military' && h.los && h.target?.id === 'me'), eye());
+		if (isEarth() && wanted.blue) tickDefence(wanted, dt, threatened());
 		fx.update(dt);
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 10; store.set('l99-factions', JSON.stringify(relations.save())); }
@@ -1128,6 +1185,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			weapon: wpn && { name: wpn.S.name, mag: wpn.mag, max: wpn.S.mag, reserve: reserve(wpn), mode: modeOf(wpn), modes: wpn.S.modes.length, reloading: wpn.reloading > 0, bow: isBow(wpn), draw: wpn.draw, drawing: wpn.drawing },
 			boss: boss && { name: boss.def.name, phase: boss.mc.M.phaseName, frac: boss.mc.frac(), notches: boss.def.phases.slice(1).map((q) => q.at) },
 			stars: isEarth() ? wanted.stars : 0,
+			blue: isEarth() && wanted.blue > 0,
 		});
 	}
 
@@ -1149,7 +1207,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// you were last seen, whether you hold a weapon, how fast you move, a sight line
 		report: (kind, at) => { const s = offend(wanted, kind, true); sighted(wanted, at || eye()); return s; },
 		lastSeen: () => wanted.last, sighted: (at) => sighted(wanted, at), armed: () => !!held(), speed: () => me.speed, blocked: (a, b) => blocked(a, b), down: () => me.ko > 0, spotHidden: (a, b) => spotHidden(a, b),
-		clearWanted: () => clearWanted(wanted), wantedState: () => ({ stars: wanted.stars, points: wanted.points, peak: wanted.peak, quiet: wanted.quiet, seen: wanted.seen, last: wanted.last }),
+		clearWanted: () => clearWanted(wanted), wantedState: () => ({ stars: wanted.stars, points: wanted.points, peak: wanted.peak, quiet: wanted.quiet, seen: wanted.seen, last: wanted.last, blue: wanted.blue, strikes: wanted.strikes }), populated: (at) => populated(at || eye()),
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
 		worldKey: () => worldKey, placeName,
@@ -1171,7 +1229,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		},
 		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),
 		tend: (p) => civilians.tend(p),
-		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
+		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points), blue: wanted.blue, strikes: wanted.strikes }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
 		// Crysis.combat.spawn('ashfang', 3, { raid }) / ('rogue') / ('gloom') / ('patrol') / ('fire')
 		spawn: (fid = 'ashfang', n = 3, o = {}) => { const s = spotAhead(o.d ?? 25, (o.d ?? 25) + 10) || { x: eye().x + 20, z: eye().z }; return squads.squad(fid, s.x, s.z, n, o).then((sq) => sq.id); },
 		fight: (a = 'ashfang', b = 'dunecutters', n = 3, d = 30) => { const s = spotAhead(d, d + 5); if (!s) return null; squads.squad(a, s.x - 8, s.z, n, {}); squads.squad(b, s.x + 8, s.z + 3, n, {}); return 'fight'; },
