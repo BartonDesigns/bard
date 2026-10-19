@@ -100,6 +100,21 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	if (profile === 'desktop') await page.keyboard.press('Backquote'); else await page.evaluate(() => Crysis.combat.focus.lockOn?.() ?? Crysis.combat.focus.toggle?.());
 	await wait(300);
 	R.released = await page.evaluate(() => !Crysis.combat.focus.info().cameraAssist);
+	if (profile === 'desktop') {
+		// the sights: a quick right click (a trackpad's two-finger click) puts them up and they stay
+		// up with the button let go; the next right click takes them down (held works as ever)
+		const click = (button, hold) => page.evaluate(async ({ button, hold }) => {
+			const c = window.L99Island.renderer().domElement;
+			Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => c });
+			const ev = (t) => new PointerEvent(t, { button, buttons: t === 'pointerdown' ? (button === 2 ? 2 : 1) : 0, pointerType: 'mouse', bubbles: true, cancelable: true });
+			c.dispatchEvent(ev('pointerdown')); await new Promise((r) => setTimeout(r, hold)); c.dispatchEvent(ev('pointerup'));
+		}, { button, hold });
+		const ads = () => page.evaluate(() => Crysis.viewmodel({}).ads);
+		await click(2, 120); await frames(6); R.scopeUp = await ads();
+		await wait(1500); await frames(3); R.scopeStays = await ads();
+		await click(2, 120); await frames(8); R.scopeDown = await ads();
+		await click(2, 900); R.scopeHeld = await ads(); await frames(6); R.scopeAfterHold = await ads();
+	}
 	// rounds to a zone: the view laid on the zone's middle, a shot from the eye
 	const fire = (id, part, dmg, side) => page.evaluate(({ id, part, dmg, side }) => {
 		const T = Crysis.combat.layer.get(id); if (!T) return null;
@@ -131,6 +146,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	ok(R.lock.cameraAssist, 'the lock-on did not take the view');
 	ok(R.trackErr.deg < 3, 'the view is off their chest by ' + R.trackErr.deg + ' degrees');
 	ok(R.released, 'the lock did not let go');
+	if (profile === 'desktop') ok(R.scopeUp > 0.5 && R.scopeStays > 0.5 && R.scopeDown < 0.5 && R.scopeAfterHold < 0.5, 'a quick right click did not keep the sights up (or the next did not take them down)');
 	ok(R.head?.part === 'head' && (R.head.res?.killed || R.head.dead || R.head.hp <= 0), 'a round to the head did not drop them');
 	ok(R.leg.some((r) => r?.crippled), 'rounds to the leg did not cripple');
 	ok(['shoulder', 'arm'].includes(R.shoulder?.part) && R.shoulder.react?.name?.startsWith('hurt-'), 'the shoulder hit did not react');
