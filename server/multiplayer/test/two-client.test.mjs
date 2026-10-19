@@ -44,7 +44,7 @@ try {
  A.client.join(code); await wait(() => A.client.status === 'on', 'host joins');
  B.client.join(code); await wait(() => B.client.status === 'on' && A.client.players.has(B.id), 'guest joins');
  check(A.client.isHost() && !B.client.isHost(), 'two clients agree on host');
- const pose = (P, w = 'earth', x = 0) => P.client.send({ t: 'pose', p: [x, 1.68, 0], g:w==='earth'?[37.77,-122.42+x/88000]:undefined, w, y: 0, h: 'aurora-trail-rifle', hl: 1, ht: 0 });
+ const pose = (P, w = 'earth', x = 0) => P.client.send({ t: 'pose', p: [x, 1.68, 0], g:w==='earth'?[37.77,-122.42+x/88000]:undefined, w, y: 0, h: 'aurora-trail-rifle', hl: 1, ht: 0, pk: 1 });
  pose(A); pose(B, 'earth', 4); await wait(() => A.of('pose').length && B.of('pose').length, 'poses arrive');
  check(B.client.players.get(A.id).pose.h === 'aurora-trail-rifle', 'held gear reaches other client');
  A.step(startTrade({ id: 'trade-live-001', peer: B.id, now: Date.now() }));
