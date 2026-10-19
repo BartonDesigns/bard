@@ -77,14 +77,13 @@ window.__PLANET_TEX = {
 <script>
 /* TESTFLAGS_227: turn off today's cave layers from the address bar, e.g.
    index.html?nowater&noforms. nowater: wet rock and stains. noforms: rock
-   species and angled formations. norail: exit ride. noriver: lakes and
-   rivers without the shader fix (invisible). oldwater: the glen's falls and
-   canal, and rivers that stop at inland lakes.
+   species and angled formations. norail: exit ride. oldwater: the glen's
+   falls and canal, and rivers that stop at inland lakes.
    ramps: old ramp cave mouths. fullsigns / fullrooms: build every sign label
    and house interior up front, as before. nolook: surface light, sea and
    grade as they were. */
 
-(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]noriver\b/.test(q))window._RIVER_FIX227=false;if(/[?&]oldwater\b/.test(q))window._WATERS227=false;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]nolook\b/.test(q))window._LOOK227=false;if(/[?&]oldtrees\b/.test(q))window._LEAVES227=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
+(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]oldwater\b/.test(q))window._WATERS227=false;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]nolook\b/.test(q))window._LOOK227=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
 </script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
 
@@ -570,13 +569,7 @@ root.L99Flight190={patchFlight};
       "  const caveUV191=new Float32Array(N*K*2);let caveRun191=0;\n  for(let i=0;i<N;i++){if(i)caveRun191+=Math.hypot(path[i].x-path[i-1].x,path[i].y-path[i-1].y,path[i].z-path[i-1].z);for(let k=0;k<K;k++){const uv=(i*K+k)*2;caveUV191[uv]=(k/K)*Math.PI*2*path[i].r*.125;caveUV191[uv+1]=caveRun191*.125;}}\n  geo.setAttribute('uv',new THREE.BufferAttribute(caveUV191,2));\n  window.L99MaterialsFlight191.material(THREE,wallMat,'planet-rock',{strength:.75,repeat:[1,1]});",'native tunnel stone UVs');
     return '/* MATERIALS_FLIGHT_191_APPLIED */\n'+code;
   }
-  function patchCore(code){
-    if(code.includes('/* OPENING_MATERIALS_191_APPLIED */')||!code.includes('root.L99CaveOpenings171={bounds179'))return code;
-    code=after(code,'root.L99CaveOpenings171={bounds179,maskMaterial179,arrival179,passage179,density179,farCut179,create,hash,floor,local,roof,point,shape,contains,clearance,mesh,near,refine};',
-      "const openingMesh191=root.L99CaveOpenings171.mesh;root.L99CaveOpenings171.mesh=(T,s)=>root.L99MaterialsFlight191.opening(T,openingMesh191(T,s),s);",'shared cave entrance material');
-    return '/* OPENING_MATERIALS_191_APPLIED */\n'+code;
-  }
-  root.L99MaterialsFlight191={patchFlight,patchCore,terrain,material,opening};
+  root.L99MaterialsFlight191={patchFlight,terrain,material,opening};
 })(window);
 
 </script>
@@ -807,52 +800,7 @@ function project(field,q,margin=.0018){
   if(gap<margin){const d=margin-gap;q.x+=nx*d;q.y+=ny*d;q.z+=nz*d;}
   return q;
 }
-function patchCore(code){
-  if(!code.includes('/* ROOTED_HAIR_162 /'))return code;
-  if(code.includes('/* ANATOMICAL_SCALP_192 */'))return code;
-  const replace=(before,after)=>{if(!code.includes(before))throw Error('Hair192 source anchor missing: '+before.slice(0,75));code=code.replace(before,after);};
-  replace('const v=y/(H-1),t=clamp((v-.83)/.17);scalp', 'const v=y/(H-1),t=clamp((v-.985)/.015);scalp');
-  replace('Math.max(core*.60,alpha*edge)', 'Math.max(core*.40,alpha*edge)');
-  replace('clamp((.46-Math.abs(u-.5+Math.sin(v*7)*.015))*35)', 'clamp((.34-Math.abs(u-.5+Math.sin(v*7)*.015))*35)');
-  replace('grey=s.grey*(.25+.75*temples)', 'grey=s.grey*(.75+.25*temples)');
-  replace('h=height(th,ph)*.58+.0015', 'h=height(th,ph)*.76+.0015');
-  replace("?.007:.0035+r()*.0045", "?.007:.0024+r()*.0034");
-  replace("const hg=new T.BufferGeometry();hg.setAttribute('position',sp);hg.setIndex(headIndex);const surf=new root.L99Surface156.Surface(T,hg),center=new T.Vector3(0,top-.105,-.003),rx=.091,ry=.111,rz=.102,rows=22,cols=48,grid=[];", `/* ANATOMICAL_SCALP_192 */
- const hg=new T.BufferGeometry();hg.setAttribute('position',sp);hg.setIndex(headIndex);const surf=new root.L99Surface156.Surface(T,hg);
- const eye=new T.Vector3();let eyeCount=0;for(const side of ['L','R'])for(const id of D.eyes[side]){eye.add(new T.Vector3(p[id*3],p[id*3+1],p[id*3+2]));eyeCount++;}eye.multiplyScalar(1/eyeCount);
- const span=Math.max(.065,top-eye.y);let lowZ=Infinity,highZ=-Infinity;
- for(let i=0;i<sp.count;i++)if(sp.getY(i)>eye.y+span*.16){lowZ=Math.min(lowZ,sp.getZ(i));highZ=Math.max(highZ,sp.getZ(i));}
- const center=new T.Vector3(eye.x,eye.y+span*.23,(lowZ+highZ)*.5),ry=top-center.y,extent=2.42,rows=24,cols=48,grid=[];
- const ray=new T.Ray(center,new T.Vector3()),ra=new T.Vector3(),rb=new T.Vector3(),rc=new T.Vector3(),rp=new T.Vector3(),bary=new T.Vector3(),tri=new T.Triangle(ra,rb,rc),sn=skin.attributes.normal;
- function scalpHit192(direction){
-  ray.direction.copy(direction);let best=Infinity,face=-1;const point=new T.Vector3();
-  const visit=node=>{
-   if(!node.box192)node.box192=new T.Box3(new T.Vector3().fromArray(node.lo),new T.Vector3().fromArray(node.hi));
-   if(!ray.intersectsBox(node.box192))return;
-   if(node.ids){for(const f of node.ids){ra.fromArray(surf.p,surf.indices[f*3]*3);rb.fromArray(surf.p,surf.indices[f*3+1]*3);rc.fromArray(surf.p,surf.indices[f*3+2]*3);if(ray.intersectTriangle(ra,rb,rc,false,rp)){const distance=rp.distanceToSquared(center);if(distance<best){best=distance;face=f;point.copy(rp);}}}}
-   else{visit(node.left);visit(node.right);}
-  };visit(surf.tree);
-  const hit=face<0?surf.nearest(center.clone().addScaledVector(direction,ry+.04)):{point,face};
-  ra.fromArray(surf.p,surf.indices[hit.face*3]*3);rb.fromArray(surf.p,surf.indices[hit.face*3+1]*3);rc.fromArray(surf.p,surf.indices[hit.face*3+2]*3);tri.getBarycoord(hit.point,bary);
-  const normal=new T.Vector3();for(let k=0;k<3;k++){const at=surf.indices[hit.face*3+k],w=k===0?bary.x:k===1?bary.y:bary.z;normal.x+=sn.getX(at)*w;normal.y+=sn.getY(at)*w;normal.z+=sn.getZ(at)*w;}normal.normalize();if(normal.dot(direction)<0)normal.negate();hit.normal=normal;return hit;
- }
- const ageRecession=d.sex>.5?clamp((d.age-42)/45)*.075:0,frontHeight=eye.y+span*(.40+ageRecession+(s.hairline-1)*.4),frontLine=Math.acos(clamp((frontHeight-center.y)/ry,-1,1));
- group.userData.fit192={eye:eye.toArray(),center:center.toArray(),frontHeight,top,source:'Per-person scalp triangles and smooth anatomical normals'};`);
-  replace("for(let j=0;j<=rows;j++)for(let i=0;i<cols;i++){const th=j/rows*2.30,ph=i/cols*tau,n=new T.Vector3(Math.sin(th)*Math.sin(ph),Math.cos(th),Math.sin(th)*Math.cos(ph)),q=center.clone().add(new T.Vector3(n.x*rx,n.y*ry,n.z*rz)),hit=surf.nearest(q);grid.push({p:hit.point.clone().sub(headCenter),n:n.normalize(),skin:tone(hit)});}", `for(let j=0;j<=rows;j++)for(let i=0;i<cols;i++){const th=j/rows*extent,ph=i/cols*tau,n=new T.Vector3(Math.sin(th)*Math.sin(ph),Math.cos(th),Math.sin(th)*Math.cos(ph)),hit=scalpHit192(n);grid.push({p:hit.point.clone().sub(headCenter),n:hit.normal,skin:tone(hit)});}
- const field=group._scalp192={center:center.clone().sub(headCenter).toArray(),extent,rows,cols,points:Float32Array.from(grid.flatMap(e=>e.p.toArray())),normals:Float32Array.from(grid.flatMap(e=>e.n.toArray()))};`);
-  replace('th=clamp(th,0,2.30);ph=((ph%tau)+tau)%tau;const y=th/2.30*rows', 'th=clamp(th,0,extent);ph=((ph%tau)+tau)%tau;const y=th/extent*rows');
-  replace('return(1.73-.43*front**3+.48*back**2+.025*Math.cos(ph*3+s.phase))*s.hairline;', 'return clamp(1.74-(1.74-frontLine)*front**3+.47*back**2+.018*Math.cos(ph*3+s.phase),0,extent-.03);');
-  replace("const data=()=>({p:[],n:[],uv:[],color:[],ix:[]}),base=data(),near=data(),far=data();function vertex(dst,q,n,u,v,c){dst.p.push(q.x,q.y,q.z);dst.n.push(n.x,n.y,n.z);dst.uv.push(u,v);dst.color.push(c.r,c.g,c.b);return dst.p.length/3-1;}", "const data=()=>({p:[],n:[],uv:[],color:[],ix:[],flex:[]}),base=data(),near=data(),far=data();const mobility=s.length>0?Math.min(1,.25+s.length*2):.07;function vertex(dst,q,n,u,v,c,flex=0){root.L99HairFix192.project(field,q);dst.p.push(q.x,q.y,q.z);dst.n.push(n.x,n.y,n.z);dst.uv.push(u,v);dst.color.push(c.r,c.g,c.b);dst.flex.push(clamp(flex)*mobility);return dst.p.length/3-1;}");
-  replace('base.ix.push(k,k+1,k+capCols+1,k+1,k+capCols+2,k+capCols+1);', 'base.ix.push(k,k+capCols+1,k+1,k+1,k+capCols+1,k+capCols+2);');
-  replace('normal,(sign+1)*.5,t,c);if(j<steps)', 'normal,(sign+1)*.5,t,c,t*t);if(j<steps)');
-  replace('vertex(dst,q,n,k/sides,t*3,pigment(phase,.6,t,.4+.3*Math.sin(spiral)));', 'vertex(dst,q,n,k/sides,t*3,pigment(phase,.6,t,.4+.3*Math.sin(spiral)),t*t);');
-  replace("g.setAttribute('color',new T.Float32BufferAttribute(dst.color,3));g.setIndex(dst.ix);", "g.setAttribute('color',new T.Float32BufferAttribute(dst.color,3));g.setAttribute('hairFlex192',new T.Float32BufferAttribute(dst.flex,1));g.setIndex(dst.ix);");
-  replace('pos=m.geometry.attributes.position,uv=m.geometry.attributes.uv,inv=', 'pos=m.geometry.attributes.position,uv=m.geometry.attributes.uv,flex=m.geometry.attributes.hairFlex192,inv=');
-  replace('const w=Math.pow(uv?uv.getY(i):.5,2);v.fromArray', 'const w=flex?Math.max(0,Math.min(1,flex.getX(i))):Math.pow(Math.max(0,Math.min(1,uv?uv.getY(i):.5)),2);v.fromArray');
-  replace('v.applyMatrix4(inv);pos.setXYZ(i,v.x,v.y,v.z);', 'v.applyMatrix4(inv);root.L99HairFix192.project(m.parent._scalp192,v);pos.setXYZ(i,v.x,v.y,v.z);');
-  return code;
-}
-root.L99HairFix192={patchCore,project};
+root.L99HairFix192={project};
 })(window);
 
 </script>
@@ -1034,75 +982,7 @@ function upgrade(T,m,kind){
 function skin(T,m,d){return upgrade(T,m,d?.age>58?'skinMature':'skin');}
 function hair(T,m,family,base=false){return upgrade(T,m,base&&['curly','coils'].includes(family)?'hairCurlyBase':['curly','coils','locs','braids'].includes(family)?'hairCurly':'hair');}
 function cloth(T,m,kind){return upgrade(T,m,kind);}
-function patchCore(code){
-  if(!code.includes('/* ROOTED_HAIR_162 /')||code.includes('/* PEOPLE_MATERIAL_HOOKS_193 */'))return code;
-  const replace=(before,after)=>{
-    const at=code.indexOf(before);
-    if(at<0||code.indexOf(before,at+before.length)>=0)throw Error('People193 source anchor missing or ambiguous: '+before.slice(0,80));
-    code=code.slice(0,at)+after+code.slice(at+before.length);
-  };
-  replace('root.L99Skin163.apply(T,m,d);m.userData.skin145=true;', 'root.L99Skin163.apply(T,m,d);root.L99People193.skin(T,m,d);m.userData.skin145=true;');
-  replace('mat.userData={hair157:true,fullResolution145:true};const m=new T.Mesh(g,mat);', 'mat.userData={hair157:true,fullResolution145:true};root.L99People193.hair(T,mat,s.family,dst===base);const m=new T.Mesh(g,mat);');
-  replace('root.L99Surfaces161.cloth(T,m,cloth);cache.set(key,m);', 'root.L99Surfaces161.cloth(T,m,cloth);root.L99People193.cloth(T,m,cloth);cache.set(key,m);');
-  replace('m.roughness=.96;m.side=T.DoubleSide;materialCache.set(key,m);', 'm.roughness=.96;m.side=T.DoubleSide;root.L99People193.cloth(T,m,name);materialCache.set(key,m);');
-  return '/* PEOPLE_MATERIAL_HOOKS_193 */\n'+code;
-}
-root.L99People193={patchCore,skin,hair,cloth,settings};
-})(window);
-
-</script>
-<script id="details194-code">
-/* CHARACTER_DETAILS_194: outward-facing, tapered fibers with coherent curl frames. */
-(function(root){
-'use strict';
-function patchCore(code){
- if(!code.includes('/* ROOTED_HAIR_162 /')||code.includes('/* CHARACTER_FIBERS_194 */'))return code;
- const replace=(a,b)=>{if(code.split(a).length!==2)throw Error('Details194 source anchor missing or ambiguous: '+a.slice(0,70));code=code.replace(a,b);};
- replace('for(let j=0;j<=12;j++){const t=j/12;let q,n;if(long)',"const pathSteps194=['coils','curly'].includes(family)?14:12;for(let j=0;j<=pathSteps194;j++){const t=j/pathSteps194;let q,n;if(long)");
- const start=code.indexOf("else if(family==='coils'||family==='curly'){");
- const end=code.indexOf('\n else{let theta=th,phi=ph;',start);
- if(start<0||end<0)throw Error('Details194 curl path missing');
- code=code.slice(0,start)+`else if(family==='coils'||family==='curly'){
-   const phase=ph*5+noise*2,theta=th+t*.33,phi=ph+t*.055*Math.sin(ph*2+s.phase);
-   const a=sample(Math.min(line(phi),theta),phi);n=a.n;
-   const next=sample(Math.min(line(phi)+.015,theta+.025),phi);
-   const flow=next.p.clone().sub(a.p);if(flow.lengthSq()<1e-9)flow.set(0,-1,0);flow.normalize();
-   const across=new T.Vector3().crossVectors(n,flow).normalize();
-   const radius=s.curl*(.8+.2*noise),angle=phase+t*tau*(family==='coils'?1.3:.9),envelope=Math.sin(Math.PI*t*.92);
-   q=a.p.addScaledVector(n,.002+height(Math.min(line(phi),theta),phi)*.78)
-     .addScaledVector(across,Math.sin(angle)*radius*envelope)
-     .addScaledVector(n,(1-Math.cos(angle))*radius*.65*envelope);
-   if(theta>line(phi)){q.y-=(theta-line(phi))*.055;q.addScaledVector(n,.001);}
-
- }`+code.slice(end);
- const cordStart=code.indexOf(' function cord(dst,frames,radius,phase,braid,curl=false)');
- const cordEnd=code.indexOf('\n const locks=',cordStart);
- if(cordStart<0||cordEnd<0)throw Error('Details194 fiber function missing');
- code=code.slice(0,cordStart)+` function cord(dst,frames,radius,phase,braid,curl=false){
-   const sides=curl?3:6,steps=frames.length-1,start=dst.p.length/3;
-   let previousAcross=null;
-   for(let j=0;j<=steps;j++){
-     const t=j/steps,f=frames[j],along=frames[Math.min(steps,j+1)].q.clone().sub(frames[Math.max(0,j-1)].q);
-     if(along.lengthSq()<1e-12)along.copy(f.n);along.normalize();
-     const across=previousAcross?previousAcross.clone().addScaledVector(along,-previousAcross.dot(along)):new T.Vector3().crossVectors(along,f.n);
-     if(across.lengthSq()<1e-8){across.crossVectors(along,Math.abs(along.y)<.9?new T.Vector3(0,1,0):new T.Vector3(1,0,0));}
-     across.normalize();previousAcross=across.clone();
-     const normal=new T.Vector3().crossVectors(across,along).normalize(),taper=Math.max(.08,1-.92*t*t);
-     for(let k=0;k<=sides;k++){
-       const angle=k/sides*tau,spiral=t*tau*8+phase,n=across.clone().multiplyScalar(Math.cos(angle)).addScaledVector(normal,Math.sin(angle)),q=f.q.clone();
-       if(braid)q.addScaledVector(across,Math.cos(spiral)*radius*.95).addScaledVector(normal,Math.sin(spiral)*radius*.95);
-       q.addScaledVector(n,radius*taper*(braid?.7:1));
-       vertex(dst,q,n,k/sides,t*3,pigment(phase,.6,t,.4+.3*Math.sin(spiral)),t*t);
-       if(j<steps&&k<sides){const a=start+j*(sides+1)+k;dst.ix.push(a,a+sides+1,a+1,a+1,a+sides+1,a+sides+2);}
-     }
-   }
- }`+code.slice(cordEnd);
- replace("['coils','curly'].includes(s.family)?260:","['coils','curly'].includes(s.family)?(root.matchMedia?.('(pointer: coarse)').matches?420:620):");
- replace('cord(near,frames,.0025,ph,false,true)','cord(near,frames,.0013,ph,false,true)');
- replace("group.userData.hair157.cards=count;","group.userData.hair157.cards=count;group.userData.fibers194={outward:true,transportedFrames:true,taperedTips:true};");
- return '/* CHARACTER_FIBERS_194 */\n'+code;
-}
-root.L99Details194={patchCore};
+root.L99People193={skin,hair,cloth,settings};
 })(window);
 
 </script>
@@ -1124,139 +1004,7 @@ function finish(T,mat,s,base){
  mat.customProgramCacheKey=()=>key()+'|hair195:edge';
  mat.userData.hair195={feathered:true,curled};
 }
-function patchCore(code){
- if(!code.includes('/* ROOTED_HAIR_162 /')||code.includes('/* COHERENT_FIBERS_195 */'))return code;
- const replace=(a,b)=>{if(code.split(a).length!==2)throw Error('Hair195 source anchor missing or ambiguous: '+a.slice(0,75));code=code.replace(a,b);};
- replace('rootShade=.68+.32*Math.min(1,v*5)','rootShade=.86+.14*Math.min(1,v*5)');
- replace("s.family==='quiff'?.7+.65*front:1","s.family==='quiff'?.95+(.65*front-.25)*clamp(th/.4):1");
- replace(' function pigment(ph,th,v=0,noise=0)',` function curlShell195(th,ph){
-  const edge=clamp((line(ph)-th)/.16),tufts=.5+.5*clamp(th/.24)*Math.sin(th*37+Math.cos(ph*9)+s.phase)*Math.sin(ph*23+th*13);
-  return .0018+height(th,ph)*(.71+.09*tufts)*Math.pow(edge,.38);
- }
- function pigment(ph,th,v=0,noise=0)`);
- replace('const capRows=19,capCols=64;','const capRows=[\'coils\',\'curly\'].includes(s.family)?28:19,capCols=[\'coils\',\'curly\'].includes(s.family)?80:64;');
- replace("h=height(th,ph)*.76+.0015+(['coils','curly'].includes(s.family)?.004*(Math.sin(th*79+ph*19)*Math.cos(ph*43+th*23)):0)","h=['coils','curly'].includes(s.family)?curlShell195(th,ph):height(th,ph)*.84+.0015");
- replace('const h=height(theta,phi)*(.58+.27*Math.min(1,t/.18)+.18*Math.sin(t*Math.PI))','const h=height(theta,phi)*(.86+.11*Math.sin(t*Math.PI))');
- replace("const pathSteps194=['coils','curly'].includes(family)?14:12;","const pathSteps194=['coils','curly'].includes(family)?10:12;");
- const start=code.indexOf("else if(family==='coils'||family==='curly'){");
- const end=code.indexOf('\n else{let theta=th,phi=ph;',start);
- if(start<0||end<0)throw Error('Hair195 curl path missing');
- code=code.slice(0,start)+`else if(family==='coils'||family==='curly'){
-   const phase=ph*5+noise*2,theta=th+t*(.21+noise*.07),phi=ph+t*.045*Math.sin(ph*2+s.phase);
-   const edge=line(phi),a=sample(Math.min(edge,theta),phi);n=a.n;
-   const next=sample(Math.min(edge+.015,theta+.025),phi);
-   const flow=next.p.clone().sub(a.p);if(flow.lengthSq()<1e-9)flow.set(0,-1,0);flow.normalize();
-   const across=new T.Vector3().crossVectors(n,flow).normalize();
-   const radius=s.curl*(.76+.28*noise),angle=phase+t*tau*(family==='coils'?1.15:.8),envelope=Math.sin(Math.PI*t*.93);
-   q=a.p.addScaledVector(n,curlShell195(Math.min(edge-.015,theta),phi)+.0009)
-     .addScaledVector(across,Math.sin(angle)*radius*envelope)
-     .addScaledVector(n,(1-Math.cos(angle))*radius*.43*envelope);
-   if(theta>edge){q.y-=(theta-edge)*.046;q.addScaledVector(n,.0012);}
-
- }`+code.slice(end);
- replace("['coils','curly'].includes(s.family)?(root.matchMedia?.('(pointer: coarse)').matches?420:620):","['coils','curly'].includes(s.family)?(root.matchMedia?.('(pointer: coarse)').matches?620:850):");
- replace('cord(near,frames,.0013,ph,false,true)','ribbon(near,frames,.0023,ph,th,v)');
- replace("detail=mesh(near,!locks&&!['coils','curly'].includes(s.family))","detail=mesh(near,!locks)");
- replace("locks?(s.family==='braids'?36:42)","locks?(s.family==='braids'?54:48)");
- replace('th=locks?.18+(i%6)/6*.9:Math.acos(1-r()*(1-Math.cos(line(ph))))','th=locks?Math.acos(1-((i*.41421356237+.11)%1)*(1-Math.cos(line(ph)-.055))):Math.acos(1-r()*(1-Math.cos(line(ph))))');
- replace('g.setIndex(dst.ix);g.computeBoundingBox();','g.setIndex(dst.ix);if(dst===base&&curled)g.computeVertexNormals();g.computeBoundingBox();');
- replace('root.L99People193.hair(T,mat,s.family,dst===base);const m=new T.Mesh(g,mat);','root.L99People193.hair(T,mat,s.family,dst===base);root.L99Hair195.finish(T,mat,s,dst===base);const m=new T.Mesh(g,mat);');
- replace('group.add(cap,detail,distant);',`group.add(cap,detail,distant);
- if(locks){
-  const roots195=data();
-  for(let i=0;i<180;i++){
-   const ph=((i*.61803398875)%1)*2.9-1.45,begin=line(ph)-.018-r()*.23,side=Math.sin(ph)>=0?1:-1,frames=[];
-   for(let j=0;j<=8;j++){
-    const t=j/8,theta=begin-t*(.46+r()*.025),phi=ph+side*t*.34,a=sample(theta,phi);
-    const q=a.p.addScaledVector(a.n,.002+height(theta,phi)*(.86+.08*Math.sin(t*Math.PI)));
-    frames.push({q,n:a.n});
-   }
-   ribbon(roots195,frames,.0045,ph,begin,r());
-  }
-  const rootsMesh195=mesh(roots195,true);rootsMesh195.name='Fine braid roots';group.add(rootsMesh195);
-  group.userData.rootTriangles195=roots195.ix.length/3;
- }
- `);
- replace('g.children[2].visible=meters>=9;','g.children[2].visible=meters>=9;if(g.children[3]?.name===\'Fine braid roots\')g.children[3].visible=meters<9;');
- replace('group.userData.hair157.trianglesNear=(base.ix.length+near.ix.length)/3;','group.userData.hair157.trianglesNear=(base.ix.length+near.ix.length)/3+(group.userData.rootTriangles195||0);');
- replace('group.userData.fibers194={outward:true,transportedFrames:true,taperedTips:true};','group.userData.fibers194={outward:true,transportedFrames:true,taperedTips:true};group.userData.fibers195={tuftShell:true,featheredRoots:true,distributedBraidRoots:true,revision:4};');
- return '/* COHERENT_FIBERS_195 */\n'+code;
-}
-root.L99Hair195={patchCore,finish};
-})(window);
-
-</script>
-<script id="wardrobe195-code">
-/* TAILORED_BOUNDARIES_195: fit the body before finishing continuous garment cuts. */
-(function(root){
-'use strict';
-function patchCore(code){
- if(!code.includes('/* FITTED_WARDROBE_156 /')||code.includes('/* TAILORED_CUTS_195 */'))return code;
- const replace=(a,b)=>{if(code.split(a).length!==2)throw Error('Wardrobe195 source anchor missing or ambiguous: '+a.slice(0,75));code=code.replace(a,b);};
- replace('da=field(a.position),db=field(b.position);','da=field(a.position,a),db=field(b.position,b);');
- replace('v=[p.getX(n),p.getY(n),p.getZ(n)];if(!shape.every(f=>f(v)>.035))', 'v=[p.getX(n),p.getY(n),p.getZ(n)],vertex195={skinIndex:g.attributes.skinIndex.array.subarray(n*4,n*4+4),skinWeight:g.attributes.skinWeight.array.subarray(n*4,n*4+4)};if(!shape.every(f=>f(v,vertex195)>.035))');
- replace('function fit(T,g,skin,d,part,name,loose=false){','function fit(T,g,skin,d,part,name,loose=false,preserve195=false){');
- replace('if(h.signed<offset&&h.distance<.16&&(!loose||point.y>.94)){point.addScaledVector(h.normal,offset-h.signed);',`const collar195=!loose&&part!==1?Math.max(0,Math.min(1,(point.y-1.42)/.10))*Math.max(0,Math.min(1,(.22-Math.abs(point.x))/.08)):0,target195=offset+collar195*((part===2?.028:.012)-offset);
- if(!preserve195&&(h.signed<target195||collar195>0)&&h.distance<.16&&(!loose||point.y>.94)){point.addScaledVector(h.normal,target195-h.signed);`);
- replace('g=clip(g,fields);root.L99Fabric156.fit(T,g,skin,d,part,cloth,false);root.L99Surfaces161.folds(T,g,d,part);',`/* TAILORED_CUTS_195 */
- // Retain a small fitting allowance, then cut the finished hem/cuff/neckline.
- // A normal-offset fit after cutting used to pull these edges into spikes.
- g=clip(g,fields.map(field=>(v,q)=>field(v,q)+.08));
- root.L99Fabric156.fit(T,g,skin,d,part,cloth,false);
- g=clip(g,fields);
- // Rebind the new interpolated edge vertices without moving the finished cuts.
- // Fabric physics needs an exact skin-triangle anchor for every final vertex.
- root.L99Fabric156.fit(T,g,skin,d,part,cloth,false,true);
- root.L99Surfaces161.folds(T,g,d,part);
- g.userData.tailoring195={version:195,fitBeforeCut:true,allowance:.08};`);
- replace('const neckline=v=>1.515+Math.min(.055,Math.max(0,Math.abs(v[0])-.065))-v[1],sleeve=(v,limit)=>Math.abs(v[0])<.20?1:(limit-.19)-((Math.abs(v[0])-.19)*.86+(1.42-v[1])*.51);',`// Preserve each body's torso silhouette rather than sawing broad waists at x=.20.
- const torso195=new Float32Array(23).fill(.20),body195=skin.geometry.attributes,arm195=skin.skeleton.bones.map(b=>/upperarm|lowerarm|wrist|metacarpal|finger/.test(b.name));
- for(let i=0;i<body195.position.count;i++){
-   const y=body195.position.getY(i);if(y<.70||y>1.56)continue;
-   let arm=0;for(let j=0;j<4;j++)if(arm195[body195.skinIndex.array[i*4+j]])arm+=body195.skinWeight.array[i*4+j];
-   if(arm>.15)continue;const bin=Math.max(0,Math.min(22,Math.round((y-.70)/.04)));
-   torso195[bin]=Math.max(torso195[bin],Math.min(.36,Math.abs(body195.position.getX(i))+.026));
- }
- const torsoWidth195=y=>{const f=Math.max(0,Math.min(22,(y-.70)/.04)),i=Math.floor(f);return torso195[i]+(torso195[Math.min(22,i+1)]-torso195[i])*(f-i);};
- const neckline=v=>1.515+Math.min(.055,Math.max(0,Math.abs(v[0])-.065))-v[1],sleeve=(v,limit,vertex)=>{
-   let arm=0;if(vertex)for(let j=0;j<4;j++)if(arm195[vertex.skinIndex[j]])arm+=vertex.skinWeight[j];
-   // A broad torso must not preserve stray pieces of sleeves at the wrist.
-   const torso=Math.min(torsoWidth195(v[1])-Math.abs(v[0]),(.20-arm)*.20);
-   return Math.max(torso,(limit-.19)-((Math.abs(v[0])-.19)*.86+(1.42-v[1])*.51));
- };`);
- replace('v=>sleeve(v,a.sleeve)', '(v,q)=>sleeve(v,a.sleeve,q)');
- replace("v=>sleeve(v,a.layer==='coat'?.67:.255)","(v,q)=>sleeve(v,a.layer==='coat'?.67:.255,q)");
- return code;
-}
-root.L99Wardrobe195={patchCore};
-})(window);
-
-</script>
-<script id="details196-code">
-/* CHARACTER_FINISH_196: continuous braid flow and rounded sleeve junctions. */
-(function(root){
-'use strict';
-function patchCore(code){
- if(!code.includes('/* COHERENT_FIBERS_195 */')||code.includes('/* CHARACTER_FINISH_APPLIED_196 */'))return code;
- const replace=(a,b)=>{if(code.split(a).length!==2)throw Error('Details196 anchor missing or ambiguous: '+a.slice(0,80));code=code.replace(a,b);};
- replace("const pathSteps194=['coils','curly'].includes(family)?10:12;","const pathSteps194=['coils','curly'].includes(family)?10:['braids','locs'].includes(family)?32:12;");
- replace('const theta=th+(line(endPhi)-th)*Math.min(1,t/.46),a=sample(theta,ph+Math.atan2(Math.sin(endPhi-ph),Math.cos(endPhi-ph))*Math.min(1,t/.46));',`const u196=Math.min(1,t/.46),flow196=u196*u196*(3-2*u196),theta=th+(line(endPhi)-th)*flow196,a=sample(theta,ph+Math.atan2(Math.sin(endPhi-ph),Math.cos(endPhi-ph))*flow196);`);
- replace('height(theta,endPhi)*(.58+.42*Math.min(1,t/.20))+.0015','height(theta,endPhi)*(.90+.10*Math.min(1,t/.20))+.002');
- replace('const f=(t-.46)/.54,front=', 'const raw196=(t-.46)/.54,f=raw196*raw196*(2-raw196),front=');
- replace('const ph=(i*.61803398875%1)*tau,th=locks?Math.acos(1-((i*.41421356237+.11)%1)*(1-Math.cos(line(ph)-.055))):',"const ph=s.family==='braids'?((i%18)+.22*Math.floor(i/18))/18*tau:(i*.61803398875%1)*tau,th=locks?(s.family==='braids'?.24+Math.floor(i/18)*.31:Math.acos(1-((i*.41421356237+.11)%1)*(1-Math.cos(line(ph)-.055)))):");
- replace('const curl=s.curl*Math.sin(f*Math.PI*3+ph*2);q.x+=curl;q.z+=s.curl*Math.cos(f*8+ph);if(front>.2&&Math.abs(q.x)<.085)q.x=side*(.085+.025*f);',`const ramp196=Math.min(1,f/.20),ease196=ramp196*ramp196*(3-2*ramp196),curl=s.curl*Math.sin(f*Math.PI*3+ph*2)*ease196;q.x+=curl;q.z+=s.curl*Math.cos(f*8+ph)*ease196;if(front>.2){const clear196=(.085+.025*f)*ease196;if(Math.abs(q.x)<clear196)q.x=side*clear196;}`);
- replace('const guard=.095+(top-.23-y)*.48;', 'const depth196=top-.23-y,guard=(.095+depth196*.48)*Math.min(1,depth196/.07);');
- replace('cord(near,frames,.0024,k*tau/3+i,true)','cord(near,frames,.0030,k*tau/3+i,true)');
- replace('const sides=curl?3:6,steps=frames.length-1', 'const sides=curl?3:braid?4:6,steps=frames.length-1');
- replace('taper=Math.max(.08,1-.92*t*t);','root196=Math.min(1,t/.09),taper=Math.max(.025,1-.975*t*t)*(.10+.90*root196*root196*(3-2*root196));');
- replace('spiral=t*tau*8+phase','spiral=t*tau*5+phase');
- replace('Math.cos(spiral)*radius*.95','Math.cos(spiral)*radius*.95*taper');
- replace('Math.sin(spiral)*radius*.95','Math.sin(spiral)*radius*.95*taper');
- replace('return Math.max(torso,(limit-.19)-((Math.abs(v[0])-.19)*.86+(1.42-v[1])*.51));',`const cuff196=(limit-.19)-((Math.abs(v[0])-.19)*.86+(1.42-v[1])*.51),h196=Math.max(0,.012-Math.abs(torso-cuff196))/.012;
-   return Math.max(torso,cuff196)+h196*h196*.003;`);
- return '/* CHARACTER_FINISH_APPLIED_196 */\n'+code;
-}
-root.L99Details196={patchCore};
+root.L99Hair195={finish};
 })(window);
 
 </script>
@@ -1272,172 +1020,7 @@ function finish(T,mat,s,base){
  if(base){const maps=root.L99Hair157.resources(T);mat.map=maps.dense;mat.normalMap=maps.normal;mat.alphaTest=0;}
  mat.userData.hair197={continuousVolume:true};
 }
-function patchCore(code){
- if(!code.includes('/* CHARACTER_FINISH_APPLIED_196 */')||code.includes('/* SCULPTED_HAIR_APPLIED_197 */'))return code;
- const replace=(a,b)=>{if(code.split(a).length!==2)throw Error('Hair197 anchor missing or ambiguous: '+a.slice(0,80));code=code.replace(a,b);};
- replace("['box-braids','Box braids','braids',.016,.008,.260,.003,0]","['box-braids','French braids','braids',.024,.014,.250,.003,0]");
- replace("['loc-bob','Loc bob','locs',.019,.011,.170,.004,0]","['loc-bob','Sculpted twist bob','locs',.030,.019,.170,.005,0]");
- replace(" const locks=s.family==='braids'||s.family==='locs',count="," const authored197=['braids','locs','bob','long'].includes(s.family);\n const locks=s.family==='braids'||s.family==='locs',count=authored197?0:");
- replace("if(!locks&&!['shaved','short'].includes(s.family))","if(!authored197&&!locks&&!['shaved','short'].includes(s.family))");
- replace('if(locks){\n  const roots195=data();','if(locks&&!authored197){\n  const roots195=data();');
- replace(' function mesh(dst,alpha){',`
- if(authored197){
-  for(const dst of [base,near,far])for(const key of Object.keys(dst))dst[key].length=0;
-  const braided=s.family==='braids',twisted=s.family==='locs',bob=s.family==='bob'||twisted;
-  const headTop197=top-headCenter.y,part197=s.part*.22,angular197=(ph)=>Math.atan2(Math.sin(ph),Math.cos(ph));
-  function mass197(th,ph){
-   const a=sample(th,ph),v=clamp(th/line(ph)),front=Math.max(0,Math.cos(ph)),side=Math.sin(ph)>=0?1:-1;
-   const volume=(.009+(s.top*s.volume-.009)*Math.pow(Math.max(0,Math.cos(th*.72)),1.35));
-   const ridge=(.0025+.002*Math.sin(ph*9+th*3))*Math.sin(ph*28+th*4)**2*Math.sin(Math.min(1,th/.24)*Math.PI*.5);
-   const crownLift=.008*Math.exp(-(((th-.62)/.6)**2))*front;
-   const part=Math.exp(-(((Math.sin(ph)*Math.sin(th)-part197)/.048)**2))*Math.max(0,Math.cos(ph));
-   a.p.addScaledVector(a.n,(volume+ridge+crownLift)*(1-.42*part));
-   return a;
-  }
-  // A continuous, subtly ridged volume replaces the visible thin dome.
-  const nr=26,nc=96;
-  for(let j=0;j<=nr;j++)for(let i=0;i<=nc;i++){
-   const ph=i/nc*tau,th=j/nr*line(ph),a=mass197(th,ph),c=pigment(ph,th,0,.62);
-   vertex(base,a.p,a.n,i/nc*12,j/nr*.75,c);
-   if(j<nr&&i<nc){const k=j*(nc+1)+i;base.ix.push(k,k+nc+1,k+1,k+1,k+nc+1,k+nc+2);}
-  }
-  function makeLock197(dst,frames,width,phase,round=.24){
-   const ns=frames.length-1,nw=4,first=dst.p.length/3;let previous;
-   for(let j=0;j<=ns;j++){
-    const t=j/ns,f=frames[j],along=frames[Math.min(ns,j+1)].q.clone().sub(frames[Math.max(0,j-1)].q).normalize();
-    let across=new T.Vector3().crossVectors(along,f.n);if(across.lengthSq()<1e-9)across.set(1,0,0);across.normalize();
-    if(previous&&previous.dot(across)<0)across.negate();previous=across.clone();
-    const normal=new T.Vector3().crossVectors(across,along).normalize();if(normal.dot(f.n)<0)normal.negate();
-    const end=clamp((1-t)/.16),taper=(.64+.36*Math.sin(t*Math.PI))*(.14+.86*Math.sqrt(end));
-    for(let k=0;k<=nw;k++){
-     const u=k/nw,x=u*2-1,q=f.q.clone().addScaledVector(across,x*width*taper*.5).addScaledVector(normal,Math.sin(u*Math.PI)*width*round*taper);
-     const n=normal.clone().addScaledVector(across,x*.24).normalize(),c=pigment(phase,.6,t,.53+.10*Math.cos(phase*4));
-     vertex(dst,q,n,u,t,c,t*t);
-     if(j<ns&&k<nw){const z=first+j*(nw+1)+k;dst.ix.push(z,z+nw+1,z+1,z+1,z+nw+1,z+nw+2);}
-    }
-   }
-  }
-  // Combed sections radiate from a deliberate part and overlap down to the temples.
-  for(let i=0;i<96;i++){
-   const ph=i/96*tau,frames=[],th0=.055+((i*7)%13)/13*.26,th1=line(ph)+.035;
-   for(let j=0;j<=18;j++){
-    const t=j/18,th=th0+(th1-th0)*t,flow=ph+Math.sin(ph)*.18*(1-t),a=mass197(th,flow);
-    a.p.addScaledVector(a.n,.0012+.002*Math.sin(t*Math.PI));frames.push({q:a.p,n:a.n});
-   }
-   makeLock197(near,frames,.013,ph,.16);
-   if(i%3===0)makeLock197(far,frames,.032,ph,.12);
-  }
-  if(!braided){
-   function drape197(ph,t,layer=0){
-    const side=Math.sin(ph)>=0?1:-1,edge=line(ph),a=mass197(edge,ph),front=Math.max(0,Math.cos(ph));
-    const target=headTop197-(.155+s.length*s.lengthScale)+.010*Math.sin(ph*7+s.phase)+(bob?.013*Math.cos(ph*2):.021*front);
-    const y=a.p.y+(target-a.p.y)*t;
-    const wave=(twisted?.008:s.curl*.72)*Math.sin(t*5.4+ph*3)*Math.sin(t*Math.PI*.8);
-    const flare=(bob?.008:.017)*Math.sin(t*Math.PI*.8);
-    const n=new T.Vector3(Math.sin(ph),.06,Math.cos(ph)).normalize();
-    const q=a.p.clone();q.y=y;q.x+=Math.sin(ph)*(flare+wave+layer);q.z+=Math.cos(ph)*(flare+wave+layer)-.008*t;
-    // The inward ends create a styled silhouette instead of a wire curtain.
-    const turn=t*t*t*(bob?.019:.011);q.x-=Math.sin(ph)*turn;q.z-=Math.cos(ph)*turn;
-    const depth=headTop197-.24-y;if(depth>0&&q.z>axis.z-.10)q.x=side*Math.max(Math.abs(q.x),.094+depth*.41);
-    return{q,n};
-   }
-   const opening=.57,cols197=84,rows197=24,first=base.p.length/3;
-   for(let j=0;j<=rows197;j++)for(let i=0;i<=cols197;i++){
-    const ph=opening+i/cols197*(tau-opening*2),t=j/rows197,a=drape197(ph,t),c=pigment(ph,1,t,.57);
-    vertex(base,a.q,a.n,i/cols197*12,.75+t*.22,c,t*t);
-    if(j<rows197&&i<cols197){const k=first+j*(cols197+1)+i;base.ix.push(k,k+cols197+1,k+1,k+1,k+cols197+1,k+cols197+2);}
-   }
-   for(let i=0;i<102;i++){
-    const ph=opening+(i+.3)/102*(tau-opening*2),frames=[];
-    for(let j=0;j<=24;j++){
-     const t=j/24,a=drape197(ph,t,.0015+((i*7)%5)*.0006);frames.push(a);
-    }
-    makeLock197(near,frames,twisted?.012:.016,ph,twisted?.34:.17);
-    if(i%3===0)makeLock197(far,frames,.032,ph,.15);
-   }
-  }else{
-   // Two French braids collect complete sections. No loose scalp-to-tip cables.
-   for(const side of [-1,1]){
-    const braidFrames=[],count197=52;
-    for(let j=0;j<=count197;j++){
-     const t=j/count197;let q,n;
-     if(t<.62){const u=t/.62,ph=side*(.42+u*1.90),th=.55+u*1.16,a=mass197(th,ph);q=a.p.addScaledVector(a.n,.009);n=a.n;}
-     else{const u=(t-.62)/.38,a=mass197(1.71,side*2.32);q=a.p.addScaledVector(a.n,.01);q.x+=side*(.020*u+.022*Math.sin(u*Math.PI));q.z+=.028*u;q.y-=s.length*s.lengthScale*.78*u;n=new T.Vector3(side,.08,.30).normalize();}
-     braidFrames.push({q,n});
-    }
-    for(let strand=0;strand<3;strand++){
-     const first=near.p.length/3,rad=.0061,ns=braidFrames.length-1,sides=7;let previous;
-     for(let j=0;j<=ns;j++){
-      const t=j/ns,f=braidFrames[j],along=braidFrames[Math.min(ns,j+1)].q.clone().sub(braidFrames[Math.max(0,j-1)].q).normalize();
-      let across=previous?previous.clone().addScaledVector(along,-previous.dot(along)):new T.Vector3().crossVectors(along,f.n);if(across.lengthSq()<1e-10)across.set(1,0,0);across.normalize();previous=across.clone();
-      const normal=new T.Vector3().crossVectors(across,along).normalize(),phase=t*tau*8+strand*tau/3;
-      const taper=(.62+.38*Math.sin(t*Math.PI*.75))*Math.max(.08,Math.min(1,(1-t)/.12));
-      const center=f.q.clone().addScaledVector(across,Math.cos(phase)*.008*taper).addScaledVector(normal,Math.sin(phase)*.0055*taper);
-      for(let k=0;k<=sides;k++){
-       const a=k/sides*tau,n=across.clone().multiplyScalar(Math.cos(a)).addScaledVector(normal,Math.sin(a)),q=center.clone().addScaledVector(n,rad*taper);
-       vertex(near,q,n,k/sides,t,pigment(strand,.7,t,.61),t*t*.75);
-       if(j<ns&&k<sides){const z=first+j*(sides+1)+k;near.ix.push(z,z+sides+1,z+1,z+1,z+sides+1,z+sides+2);}
-      }
-     }
-    }
-    makeLock197(far,braidFrames,.030,side,.28);
-   }
-  }
-  group.userData.hair197={continuous:true,style:braided?'French braids':twisted?'Sculpted twist bob':'Layered flow',revision:1};
- }
- function mesh(dst,alpha){`);
- replace('root.L99Hair195.finish(T,mat,s,dst===base);const m=', 'root.L99Hair195.finish(T,mat,s,dst===base);root.L99Hair197.finish(T,mat,s,dst===base);const m=');
- return '/* SCULPTED_HAIR_APPLIED_197 */\n'+code;
-}
-root.L99Hair197={patchCore,finish};
-})(window);
-
-</script>
-<script id="hair199-code">
-/* BEAUTIFUL_HAIR_199: authored scalp silhouettes with restrained custom braids. */
-(function(root){
-'use strict';
-function patchCore(code){
- if(!code.includes('/* SCULPTED_HAIR_APPLIED_197 */')||code.includes('/* BEAUTIFUL_HAIR_APPLIED_199 */'))return code;
- const anchor='root.L99Hair157={catalog,palette,recipe,build,distance,resources};';
- if(code.split(anchor).length!==2)throw Error('Hair199 source anchor missing or ambiguous');
- const injected=anchor+`\n const generated199=build;
- function authored199(T,D,p,d,headCenter,skinMesh){
-  const s=d.hair157||recipe(d),family=s.family;
-  if(!root.L99Hair145||!D?.hairMeshes)return generated199(T,D,p,d,headCenter,skinMesh);
-  const part=['part','quiff','curtains','bob','crop','slick','short','pixie'].includes(family);
-  const braidFamily=family==='braids'||family==='locs';
-  const long=['long','waves','ponytail','bun'].includes(family);
-  if(!part&&!long&&!braidFamily)return generated199(T,D,p,d,headCenter,skinMesh);
-  const asset=braidFamily?'ponytail01':long?'ponytail01':part&&['part','quiff','curtains','bob'].includes(family)?'short02':'short01';
-  const authoredStyle=asset==='ponytail01'?2:asset==='short02'?3:1;
-  let authored;
-  try{authored=root.L99Hair145(T,D,p,{...d,hairStyle:authoredStyle},headCenter);}catch(_){return generated199(T,D,p,d,headCenter,skinMesh);}
-  if(!authored)return generated199(T,D,p,d,headCenter,skinMesh);
-  const group=new T.Group();group.name='Beautiful hairstyle: '+s.name;group.userData.hair157={...s,authored199:true,asset};
-  authored.name='Styled strands';authored.castShadow=authored.receiveShadow=true;
-  const baseMat=authored.material;
-  if(baseMat){baseMat.roughness=.70;baseMat.metalness=0;baseMat.envMapIntensity=.34;baseMat.alphaTest=Math.max(.24,baseMat.alphaTest||0);baseMat.userData.beautifulHair199=true;}
-  group.add(authored);
-  const top=(()=>{let v=-Infinity;for(let i=1;i<p.length;i+=3)v=Math.max(v,p[i]-headCenter.y);return v;})();
-  const hairTint=new T.Color(s.hex);if(new T.Color(0x808080).r>.4)hairTint.convertSRGBToLinear();
-  const makeMat=()=>{const m=baseMat?baseMat.clone():new T.MeshStandardMaterial({color:hairTint,roughness:.72});m.map=null;m.normalMap=null;m.color.copy(hairTint);m.roughness=.68;m.envMapIntensity=.24;return m;};
-  const tube=(points,radius)=>{const g=new T.TubeGeometry(new T.CatmullRomCurve3(points),22,radius,7,false),m=makeMat(),mesh=new T.Mesh(g,m);mesh.name='Styled strands';mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);return mesh;};
-  if(false&&family==='braids'){
-   // Three compact, interleaving strands per side. The authored short cap keeps
-   // the root beautiful; these strands provide an intentional braid silhouette.
-   for(const side of [-1,1])for(let strand=0;strand<3;strand++){
-    const points=[];for(let j=0;j<=28;j++){const t=j/28,phase=t*Math.PI*6+strand*tau/3,y=top-.055-t*.50,x=side*(.052+.040*t)+Math.cos(phase)*.010,z=.016+.020*t+Math.sin(phase)*.010;points.push(new T.Vector3(x,y,z));}
-    tube(points,.0042);
-   }
-  }
-  group.userData.hair199={authoredScalp:true,faceFraming:true,restrainedLocks:family==='braids'||family==='locs'};
-  return group;
- }
- root.L99Hair157.build=authored199;`;
- return '/* BEAUTIFUL_HAIR_APPLIED_199 */\n'+code.replace(anchor,injected);
-}
-root.L99Hair199={patchCore};
+root.L99Hair197={finish};
 })(window);
 
 </script>
@@ -1457,174 +1040,7 @@ function finish(T,mat,s,base){
  mat.customProgramCacheKey=()=> 'root-to-tip202:'+base;
  mat.userData.hair202={scalpFitted:true,continuous:!['braids'].includes(s.family)};
 }
-function patchCore(code){
- if(!code.includes('/* BEAUTIFUL_HAIR_APPLIED_199 */')||code.includes('/* ROOT_TO_TIP_HAIR_APPLIED_202 */'))return code;
- const start=code.indexOf('\n if(authored197){'),end=code.indexOf('\n function mesh(dst,alpha){',start);
- if(start<0||end<0)throw Error('Hair202 geometry anchor missing');
- const geometry=`
- if(authored197){
-  for(const dst of [base,near,far])for(const key of Object.keys(dst))dst[key].length=0;
-  const braided202=s.family==='braids',twisted202=s.family==='locs',bob202=s.family==='bob';
-  const open202=.70,part202=s.part*.012,headTop202=top-headCenter.y;
-  const earLow202=headTop202-.22,earHigh202=headTop202-.055,earBins202=40;
-  const earProfile202=[new Float32Array(earBins202),new Float32Array(earBins202)];
-  for(let i=0;i<sp.count;i++){
-   const y=sp.getY(i)-headCenter.y,k=Math.floor((y-earLow202)/(earHigh202-earLow202)*earBins202);
-   if(k>=0&&k<earBins202){const x=sp.getX(i)-headCenter.x,side=x<axis.x?0:1;earProfile202[side][k]=Math.max(earProfile202[side][k],Math.abs(x));}
-  }
-  for(const profile of earProfile202)for(let k=earBins202-2;k>=0;k--)profile[k]=Math.max(profile[k],profile[k+1]);
-  function clearEar202(q,ph,side){
-   const t=Math.max(0,(q.y-earLow202)/(earHigh202-earLow202)*earBins202);
-   if(t>=earBins202-1)return;
-   const profile=earProfile202[side<0?0:1],at=Math.floor(t),local=k=>Math.max(...profile.slice(Math.max(0,k-2),Math.min(earBins202,k+3)));
-   const width=local(at)*(1-(t-at))+local(at+1)*(t-at)+.0035;
-   const blend=clamp((Math.abs(Math.sin(ph))-.80)/.10)*Math.min(1,(earBins202-1-t)/3);
-   q.x=side*(Math.abs(q.x)+Math.max(0,width-Math.abs(q.x))*blend);
-  }
-  const pathCache202=new Map();
-  function fitted202(direction,lift){
-   direction.normalize();const a=sample(Math.acos(clamp(direction.y,-1,1)),Math.atan2(direction.x,direction.z));
-   return {q:a.p.addScaledVector(a.n,lift),n:a.n};
-  }
-  function guide202(ph){
-   if(pathCache202.has(ph))return pathCache202.get(ph);
-   const angle=Math.abs(Math.atan2(Math.sin(ph),Math.cos(ph))),side=Math.sin(ph)>=0?1:-1;
-   const front=clamp((Math.PI/2-angle)/(Math.PI/2-open202)),back=clamp((angle-Math.PI/2)/(Math.PI/2));
-   const alpha=front>0?-.16+(frontLine+.16)*front:-.16-.95*back;
-   const from=new T.Vector3(side*.004+part202,Math.cos(alpha),Math.sin(alpha)).normalize();
-   const edge=1.68+.39*back,az=ph+side*.14*front;
-   const to=new T.Vector3(Math.sin(edge)*Math.sin(az),Math.cos(edge),Math.sin(edge)*Math.cos(az));
-   const points=[];
-   for(let j=0;j<=9;j++){
-    const t=j/9,dir=from.clone().lerp(to,t).normalize();
-    const lift=.0022+(.005+(s.volume-1)*.008)*Math.sin(t*Math.PI*.85);
-    points.push(fitted202(dir,lift).q);
-   }
-   const anchor=points[points.length-1],length=s.length*s.lengthScale;
-   const target=headTop202-.16-length+(bob202?.020:0)+front*(bob202?.030:.070)+.009*Math.sin(ph*19+s.phase);
-   for(let j=1;j<=12;j++){
-    const t=j/12,q=anchor.clone(),wave=(twisted202?.008:s.curl)*Math.sin(t*7+ph*2)*Math.sin(t*Math.PI*.85);
-    q.y=anchor.y+(target-anchor.y)*t;
-    const flare=.007*Math.sin(t*Math.PI)+wave;
-    q.x+=Math.sin(ph)*flare;q.z+=Math.cos(ph)*flare-.012*t;
-    q.x-=Math.sin(ph)*.006*t*t;
-    const depth=headTop202-.25-q.y;
-    if(depth>0&&q.z>axis.z-.07)q.x=side*Math.max(Math.abs(q.x),.085+depth*.37);
-    points.push(q);
-   }
-   for(const q of points)clearEar202(q,ph,side);
-   const curve=new T.CatmullRomCurve3(points,false,'centripetal');curve.arcLengthDivisions=100;
-   const result={curve,front,side};pathCache202.set(ph,result);return result;
-  }
-  function flow202(ph,t,offset=0){
-   const g=guide202(ph),q=g.curve.getPointAt(t),n=q.clone().sub(axis);
-   if(q.y<axis.y)n.y=.012;n.normalize();q.addScaledVector(n,offset);
-   return {q,n,flex:Math.pow(clamp((headTop202-.15-q.y)/.23),2)*.25};
-  }
-  function strip202(dst,frames,width,shade=1,cols=4){
-   const first=dst.p.length/3,rows=frames.length-1;let previous;
-   for(let j=0;j<=rows;j++){
-    const f=frames[j],t=j/rows,along=frames[Math.min(rows,j+1)].q.clone().sub(frames[Math.max(0,j-1)].q).normalize();
-    let across=new T.Vector3().crossVectors(along,f.n);if(across.lengthSq()<1e-8)across.set(1,0,0);across.normalize();
-    if(previous&&across.dot(previous)<0)across.negate();previous=across.clone();
-    const normal=new T.Vector3().crossVectors(across,along).normalize();if(normal.dot(f.n)<0)normal.negate();
-    const taper=(.65+.35*Math.sin(t*Math.PI))*(.03+.97*Math.sqrt(clamp((1-t)/.15)));
-    for(let k=0;k<=cols;k++){
-     const u=k/cols,x=u*2-1,q=f.q.clone().addScaledVector(across,x*width*taper*.5).addScaledVector(normal,.0006*(1-x*x));
-     const c=pigment(1,.6,t,.5);c.multiplyScalar(shade);
-     const strandNormal=normal.clone().addScaledVector(across,x*.15).normalize();
-     vertex(dst,q,strandNormal,u,t,c,f.flex||0);
-     if(j<rows&&k<cols){const z=first+j*(cols+1)+k;dst.ix.push(z,z+cols+1,z+1,z+1,z+cols+1,z+cols+2);}
-    }
-   }
-  }
-  if(!braided202){
-   // Each section runs from its own scalp root to the tip. No separate crown
-   // dome, blunt radial fringe, or detached skirt is created.
-   for(let i=0;i<190;i++){
-    const ph=open202+(i+.25)/190*(tau-2*open202),frames=[];
-    for(let j=0;j<=38;j++)frames.push(flow202(ph,j/38,.0005));
-    strip202(near,frames,twisted202?.008:.010,.95+.10*((i*7%19)/19));
-    if(i%3===0)strip202(far,frames,.022,1);
-   }
-  }else{
-   // Scalp-tight gathered sections flow backward into two woven plaits.
-   function braid202(side,t){
-    if(t<=.58){
-     const u=t/.58,alpha=frontLine-u*(frontLine+1.83);
-     return fitted202(new T.Vector3(side*.43,Math.cos(alpha),Math.sin(alpha)),.002+.0035*Math.sin(Math.min(1,u*8)*Math.PI*.5));
-    }
-    const u=(t-.58)/.42,a=braid202(side,.58);
-    a.q.x+=side*.016*Math.sin(u*Math.PI*.7);a.q.y-=s.length*s.lengthScale*.88*u;a.q.z+=.009*u;
-    a.n=new T.Vector3(side*.5,.04,-.86).normalize();return a;
-   }
-   // No scalp cap: individual gathered sections cover the scalp and leave a
-   // narrow natural part between the two plaits.
-   for(const side of [-1,1]){
-    for(let i=0;i<110;i++)for(const medial of [false,true]){
-     const u0=(i+.5)/110,ph=side*(.01+u0*(Math.PI-.02)),theta=line(ph)-.003;
-     const alpha=frontLine-u0*(frontLine+1.83);
-     const rootPoint=medial?fitted202(new T.Vector3(side*.007,Math.cos(alpha),Math.sin(alpha)),.0018):{q:sample(theta,ph).p};
-     const endPoint=braid202(side,u0*.58),frames=[];
-     for(let j=0;j<=16;j++){
-      const u=j/16,dir=rootPoint.q.clone().sub(axis).normalize().lerp(endPoint.q.clone().sub(axis).normalize(),u);
-      const f=fitted202(dir,.002+.0007*Math.sin(u*Math.PI));f.flex=0;frames.push(f);
-     }
-     strip202(near,frames,.0048,.96+.08*(i%7)/7,2);
-     if(i%2===0)strip202(far,frames,.0075,1,2);
-    }
-    for(let strand=0;strand<3;strand++){
-     const first=near.p.length/3,rows=130,cols=6;let previous;
-     for(let j=0;j<=rows;j++){
-      const t=j/rows,f=braid202(side,t),along=braid202(side,Math.min(1,t+.003)).q.sub(braid202(side,Math.max(0,t-.003)).q).normalize();
-      let across=previous?previous.clone().addScaledVector(along,-previous.dot(along)):new T.Vector3().crossVectors(along,f.n);
-      if(across.lengthSq()<1e-9)across.set(1,0,0);across.normalize();previous=across.clone();
-      const n=new T.Vector3().crossVectors(across,along).normalize(),phase=t*tau*14+strand*tau/3;
-      const taper=(.08+.92*Math.sin(Math.min(1,t*12)*Math.PI*.5))*(.7+.3*Math.sin(t*Math.PI*.8))*Math.sqrt(clamp((1-t)/.09));
-      const q=f.q.clone().addScaledVector(across,Math.sin(phase)*.006*taper).addScaledVector(n,Math.sin(phase*2)*.002*taper);
-      for(let k=0;k<=cols;k++){
-       const a=k/cols*tau,normal=across.clone().multiplyScalar(Math.cos(a)).addScaledVector(n,Math.sin(a));
-       const p=q.clone().addScaledVector(normal,.0032*taper),c=pigment(phase,1,t,.5);
-       vertex(near,p,normal,k/cols,t,c,Math.pow(clamp((t-.58)/.42),2)*.18);
-       if(j<rows&&k<cols){const z=first+j*(cols+1)+k;near.ix.push(z,z+cols+1,z+1,z+1,z+cols+1,z+cols+2);}
-      }
-     }
-    }
-    const frames=[];for(let j=0;j<=52;j++){const t=j/52,f=braid202(side,t);f.flex=Math.pow(clamp((t-.58)/.42),2)*.18;frames.push(f);}strip202(far,frames,.019);
-   }
-  }
-  // Keep triangle winding consistent with its outward shading normal. A
-  // double-sided material otherwise flips inward triangles into dark patches.
-  for(const dst of [base,near,far]){
-   const a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3(),n=new T.Vector3();
-   for(let k=0;k<dst.ix.length;k+=3){
-    const i=dst.ix[k],j=dst.ix[k+1],l=dst.ix[k+2];
-    a.fromArray(dst.p,i*3);b.fromArray(dst.p,j*3).sub(a);c.fromArray(dst.p,l*3).sub(a);
-    n.fromArray(dst.n,i*3).add(new T.Vector3().fromArray(dst.n,j*3)).add(new T.Vector3().fromArray(dst.n,l*3));
-    if(b.cross(c).dot(n)<0){dst.ix[k+1]=l;dst.ix[k+2]=j;}
-   }
-  }
-  group.userData.hair202={rootToTip:true,raisedCrown:false,style:s.id};
- }
-`;
- code=code.slice(0,start)+geometry+code.slice(end);
- const finishAnchor='root.L99People193.hair(T,mat,s.family,dst===base);root.L99Hair195.finish(T,mat,s,dst===base);root.L99Hair197.finish(T,mat,s,dst===base);';
- if(code.split(finishAnchor).length!==2)throw Error('Hair202 material anchor missing');
- code=code.replace(finishAnchor,'if(authored197)root.L99Hair202.finish(T,mat,s,dst===base);else{'+finishAnchor+'}');
- code=code.replace("cap.name='Scalp and dense undercoat';","cap.name=authored197?'No scalp shell':'Scalp and dense undercoat';if(authored197)cap.visible=false;");
- const anchor='root.L99Hair157.build=authored199;';
- if(code.split(anchor).length!==2)throw Error('Hair202 builder anchor missing');
- code=code.replace(anchor,anchor+`
- for(const [id,name] of [['box-braids','Swept double braids'],['french-bob','Inverted bob'],['wavy-lob','Soft lob'],['loc-bob','Low woven braid']]){const style=root.L99Hair157.catalog.find(s=>s.id===id);if(style)style.name=name;}
- root.L99Hair157.build=function(T,D,p,d,headCenter,skinMesh){
-  const s=d.hair157||recipe(d);
-  if(root.L99AuthoredHair202){const hair=root.L99AuthoredHair202.build(T,D,p,d,headCenter,skinMesh);if(hair)return hair;}
-  if(['long','bob','braids','locs'].includes(s.family))return generated199(T,D,p,d,headCenter,skinMesh);
-  return authored199(T,D,p,d,headCenter,skinMesh);
- };`);
- return '/* ROOT_TO_TIP_HAIR_APPLIED_202 */\n'+code;
-}
-root.L99Hair202={patchCore,finish};
+root.L99Hair202={finish};
 })(window);
 
 </script>
@@ -1708,24 +1124,6 @@ function build(T,D,p,d,headCenter,skinMesh){
  const group=new T.Group();group.name='Authored hairstyle: '+s.name;group.userData.hair157={...s,authored202:key,trianglesNear:geo.index.count/3,trianglesFar:geo.index.count/3};group.userData.hair202={authored:true,asset:a.source};group.add(mesh);return group;
 }
 root.L99AuthoredHair202={build,prepare};
-})(window);
-
-</script>
-<script id="hair203-code">
-/* HAIR_203: remaining styles use the same fitted, textured production pipeline. */
-(function(root){'use strict';
-function patchCore(code){
- if(!code.includes('/* ROOT_TO_TIP_HAIR_APPLIED_202 */')||code.includes('/* HAIR_APPLIED_203 */'))return code;
- const marker='root.L99Hair157.build=function(T,D,p,d,headCenter,skinMesh){';
- if(code.split(marker).length!==2)throw Error('Hair203 builder anchor missing');
- code=code.replace(marker,marker+`
-  const style203=d.hair157||recipe(d);
-  if(!['long','bob','braids','locs'].includes(style203.family))return root.L99AuthoredHair203.build(T,D,p,d,headCenter,skinMesh);
- `);
- code=code.replace("['loc-bob','Low woven braid']", "['loc-bob','Low woven braid'],['curtains','Soft fringe bob'],['coily-afro','Full waves'],['curly-taper','Cropped waves'],['twist-out','Swept waves']");
- return '/* HAIR_APPLIED_203 */\n'+code;
-}
-root.L99Hair203={patchCore};
 })(window);
 
 </script>
@@ -1925,23 +1323,7 @@ function groom(T,geo,seed,count,length,anatomy=null){
  out.computeBoundingBox();out.computeBoundingSphere();out.userData.groom135={roots:count,area,curved203:true,rows};return out;
 }
 
-function patchCore(code){
- code=compatibility(code);
- if(code.includes('/* COAT_GEOMETRY_203 */')||!code.includes('/* GROOM_136:'))return code;
- const begin=code.indexOf('function groom(T,geo,seed,count,length,anatomy=null){'),end=code.indexOf('\nroot.L99FaunaGenome131.create=function(T)',begin);
- if(begin<0||end<0)throw Error('Coat203 geometry anchor missing');
- const original=code.slice(begin,end).replace('function groom(', 'function originalGroom203(');
- code=code.slice(0,begin)+original+'\nfunction groom(T,geo,seed,count,length,anatomy=null){return root.L99Groom203.groom(T,geo,seed,count,length,anatomy);}'+code.slice(end);
- // Preserve the feather/down builder used by dinosaurs; mammal coats use the new groom.
- code=code.replace('root.L99Groom135={groom};','root.L99Groom135={groom:originalGroom203};');
- // Keep the shared coat builder reachable for dinosaur down and articulated limbs.
- code=code.replace('let roots=count;const limbs=[];', 'let roots=geo.userData.groom135.roots;const bodyRoots203=roots;const limbs=[];');
- code=code.replace('roots+=n;limbs.push(d);','roots+=d.userData.groom135.roots;limbs.push(d);');
- code=code.replace('bodyRoots:count,limbRoots:roots-count','bodyRoots:bodyRoots203,limbRoots:roots-bodyRoots203');
- code+='\n(function(root){const prior=root.L99FaunaGenome131.create;root.L99FaunaGenome131.create=T=>{const kit=prior(T);return{build(kind,seed){return root.L99Groom203.finish(T,kit.build(kind,seed));}};};})(window);';
- return '/* COAT_GEOMETRY_203 */\n'+code;
-}
-root.L99Groom203={patchCore,compatibility,groom,finish};
+root.L99Groom203={compatibility,groom,finish};
 })(window);
 
 </script>
@@ -2168,18 +1550,6 @@ F.patchFlight=function(code){code=basePatchFlight(code);if(code.includes('/* DEP
  code=edit(code,'    const STATIC_FLORA = { rock: true };','    const STATIC_FLORA = { rock: true };\n    if(name==="mushroom"||name==="spore_cap"){inst.userData.forageMushroom204=true;inst.userData.forageSeed204=surfaceSeed;}', 'flight mushroom identification');
  return '/* DEPTH_FLIGHT_204 */\n'+code;};
 // The same material factory supplies every shared generated tree in both worlds.
-const basePatchCore=F.patchCore;
-F.patchCore=function(code){code=basePatchCore(code);
- const breathAnchor='root.L99Breath138={recipe,consume,tick,material,state:()=>({active:active&&{...active},size:uniforms.size.value,texture:uniforms.texture.value})};';
- if(code.includes(breathAnchor)&&!code.includes('/* BREATH_WORLD_204 */'))code=edit(code,breathAnchor,breathAnchor+'\n/* BREATH_WORLD_204 */ root.L99WorldSurfaces204.installBreath();','shared mushroom driver');
- if(!code.includes('/* NATIVE_TREES_BUILD_127 */')||code.includes('/* TREE_SURFACES_204 */'))return code;
- code=edit(code,'const kit={geometry,material:mat,decorate,uniforms,cache,types,kind,last:0};','root.L99WorldSurfaces204.tree(THREE,mat);\nconst kit={geometry,material:mat,decorate,uniforms,cache,types,kind,last:0};','tree factory');
- code=edit(code,'positions=[],colors=[],leaves=[],heights=[];','positions=[],colors=[],leaves=[],heights=[],leafUV204=[];','leaf UV buffer');
- code=edit(code,'function tri(a,b,c,color,leaf){for(const v of [a,b,c]){positions.push(...v);colors.push(...color);leaves.push(leaf);heights.push(v[1]/settings.height);}}',
- 'function tri(a,b,c,color,leaf,uv){let j=0;for(const v of [a,b,c]){positions.push(...v);colors.push(...color);leaves.push(leaf);heights.push(v[1]/settings.height);leafUV204.push(...(uv?uv[j++]:[0,0]));}}','leaf UVs');
- code=edit(code,'tri(pts[0],pts[1],pts[2],col,1);tri(pts[0],pts[2],pts[3],col,1);','tri(pts[0],pts[1],pts[2],col,1,[[.5,0],[0,.41],[.5,1]]);tri(pts[0],pts[2],pts[3],col,1,[[.5,0],[.5,1],[1,.41]]);','leaf UV triangles');
- code=edit(code,"g.setAttribute('aHeight127',new THREE.Float32BufferAttribute(heights,1));","g.setAttribute('aHeight127',new THREE.Float32BufferAttribute(heights,1));g.setAttribute('aLeafUV204',new THREE.Float32BufferAttribute(leafUV204,2));",'leaf UV upload');
- return '/* TREE_SURFACES_204 */\n'+code;};
 function tree(T,mat){wrap(mat,'tree204',sh=>{
  sh.vertexShader='attribute vec2 aLeafUV204;varying vec2 vLeafUV204;varying vec3 vWood204;\n'+sh.vertexShader;
  sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvLeafUV204=aLeafUV204;vWood204=position;');
@@ -2489,7 +1859,7 @@ function approach(mat,hue){
  s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb=plasma205(vSunLocal205.xz,uSunHue205);');};mat.customProgramCacheKey=()=> 'solar-approach205';mat.needsUpdate=true;
 }
 const oldCaves=C.patchCaves;C.patchCaves=function(code){code=oldCaves(code);if(code.includes('/* SKY_CAVES_205 */'))return code;return once(code,'        overSky.frustumCulled = false;','        /* SKY_CAVES_205 */ window.L99Celestial205.sky(overSky.material,"caves");\n        overSky.frustumCulled = false;','caves night sky');};
-const oldCore=F.patchCore;F.patchCore=function(code){code=oldCore(code);const a='root.L99WorldSurfaces204.installBreath();';if(code.includes(a)&&!code.includes('root.L99Celestial205.install();'))code=once(code,a,a+'root.L99Celestial205.install();','shared perception clock');return code;};
+
 function leaveDelta(){const n=performance.now(),dt=Math.max(0,(n-(root._solarLeaveFrame205||n))/1000);root._solarLeaveFrame205=n;return Math.min(2,dt);}
 root.L99Celestial205={version:206,uniforms:U,tick,install,sky,points,body,clouds206,distant206,height,motion,loops,seed,leaveDelta,approach,sunVertex,sunFragment,checks};
 install();
@@ -2900,12 +2270,7 @@ function eye(key,target,dt,u,airborne,current){
 }
 function once(s,from,to,label){const i=s.indexOf(from);if(i<0||s.indexOf(from,i+from.length)>=0)throw Error('Motion 211 anchor: '+label);checks.push(label);return s.slice(0,i)+to+s.slice(i+from.length);}
 const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191;
-const baseCore=F.patchCore;F.patchCore=function(s){s=baseCore(s);if(!s.includes('/* MOTION_175:'))return s;
- const start=s.indexOf('function eye(key,target,dt,u,airborne,current)'),end=s.indexOf('\nfunction velocity(',start);
- if(start<0||end<0)throw Error('Motion 211 eye');
- s=s.slice(0,start)+'function eye(key,target,dt,u,airborne,current){return root.L99Motion211.eye(key,target,dt,u,airborne,current);}'+s.slice(end);
- return once(s,'function reset(key){eyes.delete(key);velocities.delete(key);}','function reset(key){eyes.delete(key);velocities.delete(key);root.L99Motion211.reset(key);}','motion reset');
-};
+
 const baseFlight=F.patchFlight;F.patchFlight=function(s){s=baseFlight(s);
  s=once(s,"      const wlk = window._walkState || { moveX:0, moveY:0, jumping:false, jumpVel:0, speedMode:1 };",`      const contact211=window._walkContact211;
       if(contact211&&contact211.mode===surfaceMode&&performance.now()-contact211.time<250&&cockpitCamera.position.distanceTo(contact211.render)<.01)cockpitCamera.position.y=contact211.physicalY;
@@ -2961,7 +2326,7 @@ const ground=C.ground;C.ground=function(T,mat){mat=ground(T,mat);if(mat.userData
  // Custom surface shader was missing the display conversion used by other cave meshes.
  const end=mat.fragmentShader.lastIndexOf('}');mat.fragmentShader=mat.fragmentShader.slice(0,end)+'\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n'+mat.fragmentShader.slice(end);mat.needsUpdate=true;return mat;
 };
-const core=F.patchCore;F.patchCore=function(s){s=core(s);if(s.includes('function down(e){const realm=root.L99Keyboard149?.world()'))s=edit(s,'const hit=hitAt(w,e);if(!playable(hit))return;const r=strike','const hit=hitAt(w,e);if(hit?.object?.userData?.shroom)return;if(!playable(hit))return;const r=strike','caps retain native interactions');if(s.includes('root.L99TouchMusic175={register:'))s+='\nwindow.L99Visibility211.bindTouch(window.L99TouchMusic175);';return s;};
+
 const caves=C.patchCaves;C.patchCaves=function(s){s=caves(s);
  s=edit(s,'    scene.add(new THREE.AmbientLight(0x1a2433, 0.55));',`    var ambient211=new THREE.AmbientLight(0xb9cbdc,.30);scene.add(ambient211);
     var navigationFill211=new THREE.PointLight(0xb8d4e3,.42,12,1.4);navigationFill211.position.set(0,.2,-1);camera.add(navigationFill211);`,'cave ambient');
@@ -3171,16 +2536,7 @@ root.addEventListener('pagehide',()=>{if(measurement)finish('interrupted: page c
 
 (function(root){'use strict';const checks=[];
 function once(s,a,b,label){if(s.split(a).length!==2)throw Error('Expedition 216 anchor: '+label);checks.push(label);return s.replace(a,b);}
-const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191,core=F.patchCore,caves=C.patchCaves,flight=F.patchFlight;
-F.patchCore=function(s){s=core(s);if(!s.includes('/* EXPLORE_175:'))return s;
-s=once(s,"\n}\nfunction close(){ui.dialog.hidden=true;ui.open.focus();}","\n root.L99Expedition216.mount(body);\n}\nfunction close(){const wasOpen216=!ui.dialog.hidden;ui.dialog.hidden=true;if(wasOpen216&&ui.returnRealm216===root.L99Keyboard149?.world())root.L99Keyboard149?.set(ui.returnKeys216);ui.open.focus();root.L99Expedition216.observe();}",'journal extension');
-s=once(s,"const open=button('Field journal',()=>{render();dialog.hidden=false;closer.focus();});","const open=button('Field journal',()=>{const music216=!!root._KEYS_PLAY_ON;render();dialog.hidden=false;ui.returnKeys216=music216;ui.returnRealm216=root.L99Keyboard149?.world();document.exitPointerLock?.();root.L99Keyboard149?.release();const realm=root.L99Keyboard149?.world();worlds[realm]?.releaseInput216?.();closer.focus();root.L99Expedition216.observe();});",'journal open');
-s=once(s,"const dialog=document.createElement('div');dialog.hidden=true;dialog.setAttribute('role','dialog');","const dialog=document.createElement('div');dialog.id='field-journal-dialog216';dialog.hidden=true;dialog.setAttribute('role','dialog');",'dialog identity');
-s=once(s,"dialog.append(title,closer,content);","const header216=document.createElement('div');header216.className='journal-header216';header216.append(title,closer);dialog.append(header216,content);",'persistent close');
-s=once(s,"Array.from(dialog.querySelectorAll('button,select'))","Array.from(dialog.querySelectorAll('button,select,input,summary,[tabindex=\"0\"]')).filter(el=>{const folded=el.closest('details:not([open])');return !el.disabled&&el.getClientRects().length&&(!folded||el===folded.querySelector('summary'));})",'journal focus');
-s=once(s,"function uiTick(){makeUI();if(!ui)return;","function uiTick(){makeUI();if(!ui)return;root.L99Expedition216.observe();",'observation');
-s=once(s,"root.L99Explore175={register,tick,meshes,struck,interests,reserve,note,tell,snapshot,restore,","root.L99Explore175={close216:()=>{if(ui)close();},open216:()=>{makeUI();ui.open.click();},clearTrail216:()=>{const st=states[root.L99Keyboard149?.world()];if(st)st.track=null;},register,tick,meshes,struck,interests,reserve,note,tell,snapshot,restore,",'journal actions');
-s=once(s,"()=>{st.track=s.id;close();}","()=>{root.L99Expedition216.stop();st.track=s.id;close();}",'single navigation target');return s;};
+const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191,caves=C.patchCaves,flight=F.patchFlight;
 C.patchCaves=function(s){s=caves(s);
 s=once(s,"T:THREE,active:function(){return running&&!window.__CAVE_PAUSED&&!surfaceLoading165;},unit:function(){return 1;},camera:function(){return camera;},scene:function(){return scene;},","T:THREE,canvas216:function(){return renderer&&renderer.domElement;},active:function(){return running&&!window.__CAVE_PAUSED&&!surfaceLoading165;},unit:function(){return 1;},camera:function(){return camera;},scene:function(){return scene;},",'cave canvas');
 s=once(s,"id:function(){return over?caveDigId172():'caves:'+CC.SEED;},underground:function(){return !over;},","id:function(){return over?caveDigId172():'caves:'+CC.SEED;},name:function(){return over?(over.name169||'Surface settlement'):'Caverns · '+CC.SEED;},releaseInput216:function(){for(var key216 in keys)delete keys[key216];},underground:function(){return !over;},",'cave places');return s;};
@@ -3258,49 +2614,19 @@ root.L99Quests217={label,visible,assist,isQuest,strike,observeMaterial,mount,ref
 
 (function(root){'use strict';const checks=[];
 function apply(s,edits){for(const [a,b,label]of edits){if(s.split(a).length!==2)throw Error('Quest 217 anchor: '+label+' ('+(s.split(a).length-1)+')');s=s.replace(a,()=>b);checks.push(label);}return s;}
-const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191,core=F.patchCore,caves=C.patchCaves,flight=F.patchFlight;
-F.patchCore=function(s){s=core(s);return s.includes('/* EXPLORE_175:')?apply(s,[["label.userData.trail175=true;g.add(label);", "Object.assign(label.userData,{explore175:s.id,degree175:i,material175:'crystal',questBody217:m});label.scale.set(.65*u,.65*u,1);g.add(label);targets217.push(label);", "choir labels are targets"], ["chimes=[];", "chimes=[],targets217=[];", "choir targets"], ["chimes.push(m);", "chimes.push(m);targets217.push(m);const ring=new T.Mesh(new T.TorusGeometry(.40*u,.028*u,6,24),mat);ring.rotation.x=Math.PI/2;ring.position.set(m.position.x,m.position.y-(.65+i*.12)*u/2+.07*u,m.position.z);Object.assign(ring.userData,{explore175:s.id,degree175:i,material175:'crystal',questBody217:m});g.add(ring);targets217.push(ring);", "choir rings"], ["const v={site:s,group:g,chimes,mats,trail,lamp,flash:-1,flashUntil:0};", "const v={site:s,group:g,chimes,targets217,mats,trail,lamp,flash:-1,flashUntil:0};", "retain targets"], ["v.group.visible?v.chimes:[]", "v.group.visible?v.targets217:[]", "raycast labels and rings"], ["s.discovered=true;s.at=Date.now();st.track=s.id;", "s.discovered=true;s.at=Date.now();if(root.L99Quests217?.selected()==='choir'&&!st.paused217)st.track=s.id;", "one guidance target"], ["if(!st.track&&nearby.length)st.track=nearby[0].id;", "if(!st.track&&!st.paused217&&root.L99Quests217?.selected()==='choir'&&nearby.length)st.track=nearby[0].id;", "respect stopped guidance"], ["if(st)st.track=null;", "if(st){st.track=null;st.paused217=true;}", "stop trail stays stopped"], ["v.trail.visible=st.track===s.id;", "v.trail.visible=st.track===s.id&&root.L99Quests217?.selected()==='choir';", "only active trail"], ["i<(s.progress||0)?.16:.025", "i===s.phrase[s.progress||0]&&root.L99Quests217?.selected()==='choir'?.23:.025", "highlight next choir note"], ["s.progress=degree===s.phrase[s.progress||0]?(s.progress||0)+1:degree===s.phrase[0]?1:0;", "if(!Number.isInteger(degree)||degree<0||degree>4)return;if(degree!==s.phrase[s.progress||0]){root.L99Quests217?.say('Try stone '+(s.phrase[s.progress||0]+1)+'. Your '+(s.progress||0)+' correct notes are kept.');return;}s.progress=(s.progress||0)+1;", "recoverable choir mistakes"], ["function meshes(realm){", "function questInfo217(realm){const st=states[realm],w=worlds[realm];if(!st||!available(realm))return null;const p=w.camera().position;\nconst list=[...st.live.values()].filter(v=>v.group.visible).sort((a,b)=>distance(a.site,p)-distance(b.site,p));const v=st.live.get(st.track)||list[0];if(!v)return null;const s=v.site,d=distance(s,p)/s.unit,ready=d<=9,pattern=s.phrase.slice();\nreturn{id:s.id,title:s.name,subtitle:'Stone choir \u00b7 five numbered stones',hint:s.restored?'Choir restored. Its music is a gathering place for nearby musicians.':ready?'Play the displayed phrase to restore this choir. Tap the stones, numbers, rings, or pads.':'Follow the pale trail to the five-stone choir. '+Math.round(d)+' m away. Move within 9 m to play.',pattern,progress:s.progress||0,padCount:5,ready,complete:s.restored};}\nfunction questSelect217(realm,id){const st=states[realm],w=worlds[realm];if(!st||!w)return;const list=[...st.live.values()].sort((a,b)=>distance(a.site,w.camera().position)-distance(b.site,w.camera().position));const v=id?st.live.get(id):list.find(v=>!v.site.restored)||list[0];st.paused217=false;st.track=v?.site.id||null;}\nfunction questPlay217(realm,id,n){const st=states[realm],w=worlds[realm],v=st?.live.get(id);if(!v||!available(realm)||!Number.isInteger(n)||n<0||n>4)return;const m=v.chimes[n];if(!m||distance(v.site,w.camera().position)>9*v.site.unit){tell('Move within 9 m of this choir.');return;}\nconst p=m.getWorldPosition(new w.T.Vector3()),q=p.clone().project(w.camera());const hit=root.L99TouchMusic175?.world217(realm)?.ray(q.x,q.y);if(q.z<-1||q.z>1||hit?.object?.userData.explore175!==id){tell('Face the choir and find a clear view to play it.');return;}\nroot.initAudio?.();root.L99TouchMusic175?.strike(realm,{object:m,point:p},.65);}\nfunction questReset217(realm,id){const v=states[realm]?.live.get(id);if(!v||v.site.restored)return;v.site.progress=0;save();tell('Phrase restarted. Restored choirs are safe.');}\nfunction questFlash217(realm,id,n){const v=states[realm]?.live.get(id);if(v){v.flash=n;v.flashUntil=performance.now()+430;}}\n\nfunction meshes(realm){", "choir journal bridge"], ["root.L99Explore175={close216:", "root.L99Explore175={questInfo217,questSelect217,questPlay217,questReset217,questFlash217,close216:", "expose choir bridge"], ["function playable(hit){if(!hit?.object?.geometry)return false;", "function playable(hit){if(root.L99Quests217?.isQuest(hit))return true;if(!hit?.object?.geometry)return false;", "playable quest labels"], ["function contact(T,hit){const o=hit.object;", "function contact(T,hit){if(hit.object?.userData?.resonator123)return hit.object.userData.resonator123.note*2;const o=hit.object;", "consistent echo degree"], ["function strike(realm,hit,pressure=.65,speed=0){const w=worlds[realm];", "function strike(realm,hit,pressure=.65,speed=0){const quest217=root.L99Quests217?.strike(realm,hit);if(quest217)return quest217;const w=worlds[realm];", "all input modes advance echo"], ["root.L99Explore175?.struck(realm,hit,d);root.L99Purpose166?", "root.L99Quests217?.observeMaterial(realm,hit,kind);root.L99Explore175?.struck(realm,hit,d);root.L99Purpose166?", "sound survey input"], ["root.L99TouchMusic175={register:", "root.L99TouchMusic175={world217:realm=>worlds[realm],register:", "world ray access"], ["return y>.64&&(x<.32||x>.68);", "const z=root.L99Keyboard149?.world()==='caves'?root._CAVE?.moveZone():null;return z?y>z.y&&(x<z.x||x>z.lookX):y>.64&&(x<.32||x>.68);", "same movement zones in both play modes"], ["root.L99Expedition216.mount(body);", "root.L99Expedition216.mount(body);root.L99Quests217.mount(body);", "unified journal"], ["const open=button('Field journal',", "const open=button('Journey journal',", "journal entry"], ["dialog.setAttribute('aria-label','Field journal');", "dialog.setAttribute('aria-label','Journey journal');", "journal accessible name"], ["title.textContent='Field journal';", "title.textContent='Journey journal';", "journal title"], ["ui.open.focus();root.L99Expedition216.observe();", "root.L99Quests217?.stop();root.L99Quests217?.refresh();ui.open.focus();root.L99Expedition216.observe();", "stop previews on close"], ["closer.focus();root.L99Expedition216.observe();", "closer.focus();root.L99Expedition216.observe();root.L99Quests217.refresh();", "synchronous modal backdrop"], ["worlds[realm]?.releaseInput216?.();closer.focus();", "worlds[realm]?.releaseInput216?.();if(realm==='caves')root.L99Echo217?.release();closer.focus();", "release touch movement on journal"], ["if(ui.status.textContent!==text)ui.status.textContent=text;", "const questText217=root.L99Quests217?.hud(text)||text;if(ui.status.textContent!==questText217)ui.status.textContent=questText217;root.L99Quests217?.refresh();", "single objective HUD"], ["intro.textContent='Play a stone choir in this order: 1 \u00b7 3 \u00b7 5 \u00b7 3 \u00b7 1. In Play surfaces mode, drag across objects to play different notes. The lower right corner always looks around.';", "intro.textContent='Echo journeys use three stones; local choirs use five. Select an activity above for its phrase and next step. In Play surfaces mode, drag to play; the lower corners keep movement and look controls.';", "distinct activity copy"], ["()=>{root.L99Expedition216.stop();st.track=s.id;close();}", "()=>{root.L99Quests217.select('choir');questSelect217(realm,s.id);close();}", "legacy follow uses activity"], ["const state={version:178,legendaryItems:", "const state={version:217,quests217:root.L99Quests217.snapshot(),echoes217:root.L99Echo217?.export(),legendaryItems:", "export quest records"]]):s;};
+const F=root.L99MaterialsFlight191,C=root.L99CavesMaterials191,caves=C.patchCaves,flight=F.patchFlight;
 C.patchCaves=function(s){return apply(caves(s),[["if (run.site !== key || now - run.last > 12000 || now < run.last)", "if (run.site !== key || now < run.last)", "remove hidden timer"], ["run.notes = note === e.pattern[0] ? [note] : [];\n            return { ok: true, wrong: true, progress: run.notes.length, why: 'The phrase slipped. Start again; nothing is lost.' };", "return { ok: true, wrong: true, progress: run.notes.length, why: 'Try stone '+(expected+1)+'. Your correct notes are kept.' };", "recoverable echo mistakes"], ["return { pattern: pattern, target: target, press: press, ascend: ascend, view: view };", "return { pattern: pattern, target: target, press: press, ascend: ascend, view: view,progress217:function(site){var e=target(site);return e&&run.site===site.id+':'+e.id?run.notes.length:0;},reset217:function(site){var e=target(site);run={site:e?site.id+':'+e.id:'',notes:[],last:-1};} };", "site-specific progress"], ["var group = new THREE.Group(), owned = [], meshes = [];", "var group = new THREE.Group(), owned = [], meshes = [], targets217 = [];", "echo targets"], ["        group.add(ring);", "        group.add(ring);targets217.push(ring);\n        var label217=window.L99Quests217.label(THREE,i+1,{playable:1,resonator123:{site:site,note:i}});label217.position.set((i-1)*1.8,height+.5,0);group.add(label217);targets217.push(label217);\n        owned.push(label217.material);", "numbered echo labels and rings"], ["    group.position.set(x, y, z);\n    group.userData.owned121 = owned;", "    site.targets217=meshes.concat(targets217);\n    group.position.set(x, y, z);\n    group.userData.owned121 = owned;", "echo target list"], ["rec.resonators123 = (rec.resonators123 || []).concat(meshes);", "rec.resonators123 = (rec.resonators123 || []).concat(site.targets217);", "echo ray targets"], ["owned.forEach(function (m) { m.dispose(); }); owned.length = 0; pruneResonance123();", "owned.forEach(function (m) { if(m.map)m.map.dispose();m.dispose(); }); owned.length = 0; pruneResonance123();", "dispose number textures"], ["function musicHitAt(ndcX, ndcY) {", "function musicHitAt(ndcX, ndcY, exact217) {", "exact ray option"], ["    function onTouchEnd(e) {", "    function tapQuest217(x,y){if(window.L99Dig172?.equipped('caves'))return false;var h=musicHitAt(x,y,true);if(!window.L99Quests217.isQuest(h))return false;window.L99TouchMusic175.strike('caves',h,.65);return true;}\n    function onTouchEnd(e) {", "stationary target taps in movement areas"], ["}else if(!rec.left&&!rec.lookZone&&tap){tryPickup(t.clientX/window.innerWidth*2-1,1-t.clientY/window.innerHeight*2);}", "}else if(tap){var x217=t.clientX/window.innerWidth*2-1,y217=1-t.clientY/window.innerHeight*2;if(!tapQuest217(x217,y217)&&!rec.left&&!rec.lookZone)tryPickup(x217,y217);}", "tap plays and drag navigates"], ["else if(mouseDown&&!mouseMoved&&!mouseLookZone169)tryPickup(e.clientX/window.innerWidth*2-1,1-e.clientY/window.innerHeight*2);", "else if(mouseDown&&!mouseMoved){var x217=e.clientX/window.innerWidth*2-1,y217=1-e.clientY/window.innerHeight*2;if(!tapQuest217(x217,y217)&&!mouseLookZone169)tryPickup(x217,y217);}", "mouse target taps in look area"], ["if (expeditionUI123 && expeditionUI123.panel.open) {", "if ((expeditionUI123 && expeditionUI123.panel.open) || (document.getElementById('field-journal-dialog216')&&!document.getElementById('field-journal-dialog216').hidden)) {", "pause world movement in journal"], ["if (!over) for (k in chunks) if (chunks[k].resonators123) objs = objs.concat(chunks[k].resonators123);", "if (!over) for (k in chunks) if (chunks[k].resonators123) objs = objs.concat(chunks[k].resonators123);\n        resonanceSites123.forEach(function(site){if(resonanceLive123(site))for(var target217 of site.targets217||site.meshes)if(!objs.includes(target217))objs.push(target217);});", "echo targets above and below ground"], ["tree.userData.playable=1;rec.group.add(tree);", "tree.userData.playable=1;tree.userData.material175='wood';rec.group.add(tree);", "cave tree material identity"], ["                im.userData.playable = 1;", "                im.userData.playable = 1;im.userData.material175='wood';", "surface tree material identity"], ["            lg.userData.playable = 1;", "            lg.userData.playable = 1;lg.userData.material175='wood';", "camp log material identity"], ["            if(!clear)continue;\n            var tree=kit.decorate", "            if(Math.abs(x-(p.x-4))<3+Math.max(rx,rz)&&Math.abs(z-(p.z-2))<4+Math.max(rx,rz))clear=false;\n            if(!clear)continue;\n            var tree=kit.decorate", "keep tree crowns off echo approach"], ["if (res.length) return res[0];", "if(!exact217)return window.L99Quests217.assist(THREE,camera,canvas,ndcX,ndcY,objs,res[0]||null);\n        if (res.length) return res[0];", "22 pixel touch assist"], ["resonantMeshes123=resonantMeshes123.concat(site.meshes);", "resonantMeshes123=resonantMeshes123.concat(site.targets217||site.meshes);", "pickup targets"], ["    var distance = resonanceDistance123(site);\n    var result = expeditionModel123().press", "    var distance = resonanceDistance123(site);\n    if(echoPlayback123.busy){echoNoticeShow123('Listen first. Your turn follows.');return {ok:false,why:'Preview is playing'};}\n    if(!Number.isInteger(note)||note<0||note>2)return;\n    if(!echoAccess217(site,note)){echoNoticeShow123(distance>10?'Move within 10 m of the stones.':'Face the stones and find a clear view to play them.');return {ok:false,why:'Not in reach or visible'};}\n    if(window.initAudio)window.initAudio();if(!CaveAudio.ready)CaveAudio.init();\n    var result = expeditionModel123().press", "range and occlusion on every echo path"], ["    expeditionTickAt123 = -1;\n}\nfunction echoPlaybackStop123()", "    expeditionTickAt123 = -1;\n    window.L99Quests217?.refresh();return result;\n}\nfunction echoPlaybackStop123()", "echo action response"], ["echoPlayback123.notes.length = 0; echoPlayback123.busy = false;", "echoPlayback123.notes.length = 0; echoPlayback123.busy = false;echoPlayback123.index217=-1;", "clear preview marker"], ["            if (site && resonanceLive123(site)) site.lit[n] = performance.now() + 400;", "            if(site&&(!resonanceLive123(site)||resonanceDistance123(site)>10||window.__CAVE_PAUSED)){echoPlaybackStop123();return;}\n            echoPlayback123.index217=i;window.L99Quests217?.refresh();\n            if (site && resonanceLive123(site)) site.lit[n] = performance.now() + 400;", "visible preview steps and cancellation"], ["function () { echoPlayback123.busy = false; }, pattern.length * step", "function () { echoPlayback123.busy = false;echoPlayback123.index217=-1;window.L99Quests217?.refresh(); }, pattern.length * step", "preview completion"], ["function expeditionUIBuild123() {\n    if (expeditionUI123 || window._CAVE_EXPEDITION === false) return;\n    var mount = document.getElementById('l99-caves-mount') || document.body;\n    var hud = document.createElement('button'); hud.id = 'echo-hud123'; hud.type = 'button';\n    hud.setAttribute('aria-label','Open expedition journal');\n    hud.style.cssText = 'position:fixed;left:calc(env(safe-area-inset-left,0px) + 18px);top:calc(env(safe-area-inset-top,0px) + 154px);z-index:9;width:min(62vw,300px);max-width:calc(100vw - 36px);height:44px;box-sizing:border-box;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;touch-action:manipulation;padding:9px 12px;text-align:left;border:1px solid #376058;border-radius:9px;background:rgba(5,13,20,.9);color:#d9eee8;font:11px/1.5 ui-monospace,monospace;cursor:pointer;';\n    mount.appendChild(hud);\n    var panel = document.createElement('dialog'); panel.id = 'echo-journal123';\n    panel.style.cssText = 'position:fixed;inset:0;margin:auto;width:min(88vw,420px);max-height:80vh;overflow:auto;padding:20px;border:1px solid #527b70;border-radius:16px;background:#09141d;color:#e5f2ee;z-index:100100;font:14px/1.55 system-ui,sans-serif;touch-action:pan-y;';\n    panel.innerHTML = '<div style=\"display:flex;justify-content:space-between;align-items:center\"><strong>FIELD JOURNAL</strong><button type=\"button\" data-echo=\"close\" aria-label=\"Close journal\">Close</button></div><p data-echo=\"rank\"></p><p data-echo=\"objective\"></p><p data-echo=\"directions\"></p><p data-echo=\"phrase\"></p><div data-echo=\"pads\" style=\"display:flex;gap:8px\"></div><p><button type=\"button\" data-echo=\"listen\">Listen to the phrase</button></p><p data-echo=\"notice\" role=\"status\" aria-live=\"polite\"></p><hr><strong>Collected echoes</strong><div data-echo=\"collection\"></div><p style=\"font-size:12px;color:#a9bab8\">Short stone = 1 \u00b7 medium = 2 \u00b7 tall = 3. Play the displayed phrase within 12 seconds between notes. Wrong notes restart the phrase; collected echoes are safe. Each surface performance earns 30 trade coins once.</p>';\n    document.body.appendChild(panel);\n    var style = document.createElement('style');\n    style.textContent = '#echo-journal123::backdrop{background:rgba(0,0,0,.55)}#echo-journal123 button{min-height:44px;padding:8px 12px;border:1px solid #46776b;border-radius:8px;background:#122b32;color:#e4fff4;font:inherit;cursor:pointer}#echo-journal123 button:disabled{opacity:.38;cursor:default}#echo-journal123 button:focus-visible,#echo-hud123:focus-visible{outline:2px solid #c0ffe6;outline-offset:3px}';\n    document.head.appendChild(style);\n    function clearMovement() { Object.keys(keys).forEach(function(k){keys[k]=false;});move.f=0;move.s=0;move.u=0;vel.set(0,0,0); }\n    function open() { clearMovement(); expeditionUpdate123(performance.now(),true); if (!panel.open) panel.showModal(); }\n    hud.onclick = open;\n    panel.querySelector('[data-echo=\"close\"]').onclick = function () { panel.close(); };\n    panel.addEventListener('close', echoPlaybackStop123);\n    panel.addEventListener('close', clearMovement);\n    document.addEventListener('visibilitychange',function(){if(document.hidden)echoPlaybackStop123();});\n    ['pointerdown','pointerup','mousedown','mouseup','touchstart','touchend','keydown','keyup','click'].forEach(function (event) {\n        panel.addEventListener(event,function(e){ e.stopPropagation(); });\n        hud.addEventListener(event,function(e){ e.stopPropagation(); });\n    });\n    var pads = panel.querySelector('[data-echo=\"pads\"]');\n    ['1 \u00b7 LOW','2 \u00b7 MID','3 \u00b7 HIGH'].forEach(function (label,n) {\n        var b = document.createElement('button'); b.type='button'; b.textContent=label; b.style.flex='1';\n        b.onclick=function(){if(expeditionFocus123) resonancePress123(expeditionFocus123,n);expeditionUpdate123(performance.now(),true);}; pads.appendChild(b);\n    });\n    panel.querySelector('[data-echo=\"listen\"]').onclick=function(){\n        var target=expeditionModel123().target(expeditionFocus123); if(target) echoPlaybackStart123(target.pattern,expeditionFocus123);\n    };\n    var door = document.getElementById('caves-btn');\n    if (door && door.parentNode) {\n        var shellButton=document.createElement('button');shellButton.type='button';shellButton.textContent='JOURNAL';shellButton.title='Replay collected chamber echoes';shellButton.onclick=open;door.parentNode.insertBefore(shellButton,door.nextSibling);\n    }\n    expeditionUI123={hud:hud,panel:panel,collectionSignature:''};\n}\nfunction expeditionUpdate123(now, force) {\n    if (window._CAVE_EXPEDITION === false) return;\n    expeditionUIBuild123();\n    if (!force && now-expeditionTickAt123<200) return;\n    expeditionTickAt123=now;pruneResonance123();\n    var model=expeditionModel123(), view=model.view(), nearest=null, distance=Infinity, goal=null, goalDistance=Infinity;\n    resonanceSites123.forEach(function(site){\n        if (!resonanceLive123(site)) return;\n        var d=resonanceDistance123(site);\n        if(d<distance){distance=d;nearest=site;}\n        var eligible=site.surface || !view.echoes.some(function(e){return e.id===site.id;});\n        if(eligible&&d<goalDistance){goalDistance=d;goal=site;}\n        for(var i=0;i<3;i++)site.meshes[i].material.emissiveIntensity=site.lit[i]>now ? 1.5 : 0.22;\n    });\n    expeditionFocus123=nearest;\n    var objective=view.objective, target=goal, location=null;\n    if(view.phase==='ascend' && !over) {\n        var doors=CC.portalsNear(camera.position.x,camera.position.z);\n        if(doors.length) location={x:doors[0].x+6,y:doors[0].floorY,z:doors[0].z};\n    } else if(target) location=target;\n    if(!location&&!over){var candidates=CC.portalsNear(camera.position.x,camera.position.z).filter(function(p){return !view.echoes.some(function(e){return e.id==='cave:'+CC.SEED+':'+p.id;});});if(candidates.length) location={x:candidates[0].x-4,y:candidates[0].floorY,z:candidates[0].z-4};}\n    var directions=location ? (function(){var c=compassTo(location.x,location.z),dy=location.y-camera.position.y;return Math.round(c.dist)+' m '+c.dir+(Math.abs(dy)>8?' \u00b7 '+Math.round(Math.abs(dy))+' m '+(dy>0?'up':'down'):'');})() : (over?'Explore beyond the entrance to find a camp.':'Explore toward a daylight chamber.');\n    if(view.phase==='seek'&&over)directions='Enter a hillside cave to find another echo.';\n    if(view.phase==='weave'&&!over)directions='Return to the surface with your collected echo.';\n    var ui=expeditionUI123,p=ui.panel;\n    // L99_JOURNEY_LAYOUT_129: measure the toolbar; the journey never covers its buttons.\n    var toolbarBottom129 = 142;\n    ['topbar','btnMode','btnAudio'].forEach(function(id) {\n        var control = document.getElementById(id);\n        if (!control || !control.getClientRects().length) return;\n        var rect = control.getBoundingClientRect();\n        toolbarBottom129 = Math.max(toolbarBottom129, rect.bottom);\n    });\n    ui.hud.style.top = (toolbarBottom129 + 12) + 'px';\n    // On short landscape screens use the JOURNAL toolbar entry instead of crowding movement controls.\n    ui.hud.style.display = toolbarBottom129 + 68 > window.innerHeight - 210 ? 'none' : '';\n    ui.hud.textContent='JOURNEY \u00b7 '+objective;\n    ui.hud.title=view.rank+' \u00b7 '+view.completed+' woven \u00b7 '+objective+' '+directions;\n    ui.hud.setAttribute('aria-label','Open expedition journal: '+objective+' '+directions);\n    if(!p.open&&!force)return;\n    p.querySelector('[data-echo=\"rank\"]').textContent=view.rank+' \u00b7 '+view.completed+' woven \u00b7 '+view.echoes.length+'/24 echoes';\n    p.querySelector('[data-echo=\"objective\"]').textContent=objective;\n    p.querySelector('[data-echo=\"directions\"]').textContent=directions;\n    var tune=model.target(nearest),close=nearest&&distance<=10&&!window.__CAVE_PAUSED;\n    p.querySelector('[data-echo=\"phrase\"]').textContent=tune?'Phrase: '+tune.pattern.map(function(n){return n+1;}).join(' \u2192 ')+' \u00b7 '+view.progress+'/'+tune.pattern.length:'Find a new chamber echo before performing at a camp.';\n    Array.from(p.querySelector('[data-echo=\"pads\"]').children).forEach(function(b){b.disabled=!close||!tune;});\n    p.querySelector('[data-echo=\"listen\"]').disabled=!close||!tune;\n    p.querySelector('[data-echo=\"notice\"]').textContent=now<echoNoticeUntil123?echoNotice123:(view.message||'Listen and replay, or follow the numbered phrase.');\n    var signature=view.echoes.map(function(e){return e.id+e.bound+e.carried;}).join('|');\n    if(signature!==ui.collectionSignature){\n        ui.collectionSignature=signature;var list=p.querySelector('[data-echo=\"collection\"]');list.textContent='';\n        view.echoes.forEach(function(e){var row=document.createElement('p'),b=document.createElement('button');b.type='button';b.textContent='Play '+e.name+(e.bound?' \u00b7 woven':e.carried?' \u00b7 carried':' \u00b7 learned');b.onclick=function(){echoPlaybackStart123(e.pattern,null);};row.appendChild(b);list.appendChild(row);});\n    }\n}\n", "function echoAccess217(site,note) {\n    if (!resonanceLive123(site) || resonanceDistance123(site)>10 || window.__CAVE_PAUSED) return false;\n    var obj=site.meshes[note],p=obj.getWorldPosition(new THREE.Vector3()).project(camera);\n    if(p.z < -1 || p.z > 1) return false;\n    var hit=musicHitAt(p.x,p.y,true),d=hit&&hit.object.userData.resonator123;\n    return !!d&&d.site===site;\n}\nfunction echoNearest217() {\n    var view=expeditionModel123().view(),sites=resonanceSites123.filter(resonanceLive123);\n    sites.sort(function(a,b){return resonanceDistance123(a)-resonanceDistance123(b);});\n    return sites[0]||null;\n}\nfunction echoInfo217() {\n    var model=expeditionModel123(),view=model.view(),site=echoNearest217(),tune=site&&model.target(site),distance=site?resonanceDistance123(site):Infinity;\n    var complete=!!(site&&!site.surface&&view.echoes.some(function(e){return e.id===site.id;}));\n    var phase=view.phase==='weave'?2:view.phase==='ascend'?1:0;\n    var hint=view.phase==='seek'?'Find three numbered echo stones near a cave exit.':view.phase==='ascend'?'Echo learned. Follow a stone ascent into daylight. Your echo is saved.':'Carry your learned phrase to three stones beside a surface camp.';\n    if(site&&tune&&!complete)hint=distance>10?'Move within 10 m of the echo stones. '+Math.round(distance)+' m away.':'Play the displayed numbers. Wrong notes keep your progress. There is no timer.';\n    var ready=!!(site&&tune&&distance<=10&&site.meshes.some(function(_,n){return echoAccess217(site,n);}));\n    if(site&&tune&&distance<=10&&!ready)hint='Face the stones and find a clear view to play them.';\n    if(complete)hint='Echo learned and saved. Follow the stone ascent into daylight, then play it at a surface camp.';\n    if(view.phase==='seek'&&over&&!tune)hint='Enter a hillside cave to learn another echo. Completed echoes stay in your collection.';\n    var directions='';\n    if(!over&&(view.phase==='ascend'||!site)){var doors=CC.portalsNear(camera.position.x,camera.position.z);if(doors.length){var c=compassTo(doors[0].x,doors[0].z);directions='Exit chamber: '+Math.round(c.dist)+' m '+c.dir+'. ';}}\n    return {id:site&&site.id,title:site?(site.surface?'Weave an echo':'Learn a chamber echo'):'Echo journey',subtitle:'Three numbered stones \u00b7 '+view.completed+' echoes woven',phaseIndex:phase,hint:directions+hint,pattern:tune?tune.pattern:[],progress:site?model.progress217(site):0,padCount:3,ready:ready,noteReady:[0,1,2].map(function(n){return !!site&&echoAccess217(site,n);}),complete:complete,busy:echoPlayback123.busy,previewIndex:echoPlayback123.index217,notice:performance.now()<echoNoticeUntil123?echoNotice123:view.message};\n}\nfunction expeditionUIBuild123() { /* Build 217 uses the shared Journey journal. */ }\nfunction expeditionUpdate123(now,force) {\n    if(window._CAVE_EXPEDITION===false||(!force&&now-expeditionTickAt123<200))return;\n    expeditionTickAt123=now;pruneResonance123();\n    resonanceSites123.forEach(function(site){if(!resonanceLive123(site))return;var model=expeditionModel123(),t=model.target(site),p=model.progress217(site),hint=window.L99Quests217?.selected()==='echo'&&t&&!model.view().echoes.some(function(e){return e.id===site.id&&(!site.surface||e.bound);});\n        for(var i=0;i<3;i++)site.meshes[i].material.emissiveIntensity=site.lit[i]>now?.7:hint&&t.pattern[p]===i?.38:.12;\n    });\n}\nwindow.L99Echo217={\n    info:echoInfo217,\n    strike:resonancePress123,\n    play:function(id,n){var s=resonanceSites123.find(function(s){return s.id===id&&resonanceLive123(s);});if(s)resonancePress123(s,n);},\n    reset:function(id){var s=resonanceSites123.find(function(s){return s.id===id;});if(s){expeditionModel123().reset217(s);echoNoticeShow123('Phrase restarted. Collected echoes are safe.');}},\n    listen:function(id){var s=resonanceSites123.find(function(s){return s.id===id&&resonanceLive123(s);}),t=s&&expeditionModel123().target(s);if(t&&resonanceDistance123(s)<=10)echoPlaybackStart123(t.pattern,s);},\n    replay:function(id){var e=expeditionModel123().view().echoes.find(function(e){return e.id===id;});if(e)echoPlaybackStart123(e.pattern,null);},\n    stop:echoPlaybackStop123,\n    release:function(){Object.keys(keys).forEach(function(k){keys[k]=false;});move.f=move.s=move.u=0;vel.set(0,0,0);releaseAllNotes();},\n    sites:function(){return resonanceSites123.filter(resonanceLive123).map(function(s){return{id:s.id,x:s.x,y:s.y,z:s.z,surface:s.surface,targets:s.targets217||s.meshes};});},\n    export:function(){return expeditionModel123().view();}\n};\n\n", "one journal replaces duplicate echo UI"], ["ask: 'strike three stones: low, then high, then low. the trees will answer.'", "ask: 'restore a five-stone choir. open Journey journal and choose Stone choir.'", "forest keeper objective"], ["ask: 'ring the stone low, high, low. the mountain keeps a door for those who can.'", "ask: 'restore a five-stone choir. open Journey journal and choose Stone choir.'", "mountain keeper objective"], ["title: q.id, done: false, prog: '', t: 0, n0: 0", "title: q.id, done: false, prog: '', t: 0, n0: 0, started217:Date.now()", "keeper start timestamp"], ["            var rc = CaveAudio && CaveAudio.recent;\n            if (rc && rc.length >= 3) {\n                var a = rc[rc.length - 3], b = rc[rc.length - 2], c = rc[rc.length - 1];\n                if (b > a + 1 && c < b - 1) questComplete();\n            }\n", "            var restored217=window.L99Explore175?.sites('caves').some(function(s){return s.world===caveDigId172()&&s.restored&&s.restoredAt>=(q.started217||0);});\n            q.prog='restore a five-stone choir';if(restored217)questComplete();\n", "keeper shares choir completion"]]);};
 F.patchFlight=function(s){return apply(flight(s),[["return ray.intersectObjects(meshes,false)[0]||null;", "for(const o of window.L99Explore175?.meshes('flight')||[])if(!meshes.includes(o))meshes.push(o);for(const o of meshes)o.updateWorldMatrix(true,false);const hit=ray.intersectObjects(meshes,false)[0]||null;return window.L99Quests217.assist(THREE,cockpitCamera,cockpitRenderer.domElement,x,y,meshes,hit,window.L99Life133.units('flight'));", "flight choir labels and touch assist"], ["  targetGroup.add(tInst); targetGroup.add(cInst);", "  tInst.userData.material175='wood';cInst.userData.material175='wood';targetGroup.add(tInst); targetGroup.add(cInst);", "flight tree material identity"]]);};
 root.L99QuestPatches217={checks};
 })(window);</script>
 <script id="waters227">
-/* WATERS_227: water that goes somewhere. A lake whose neighbours are all
-   higher used to be a dead end; now it drains to the nearest coast, taking
-   the route that climbs least, and its river runs out into the sea. The
-   lake/river surface shader is lighter (two noise octaves, not three).
-   Kill: window._WATERS227 = false. */
-(function(root){'use strict';
-const EDITS=[
- ["if(b.river!==undefined)return b.river;const next=","if(b.river!==undefined)return b.river;let next="],
- ["if(!next){b.river=null;return null;}",
-  "if(!next&&root._WATERS227!==false&&Number.isFinite(opts.sea)){let best=null;"+
-  "for(let k=0;k<16;k++){const a=k/16*Math.PI*2,ca=Math.cos(a),sa=Math.sin(a);let rise=0;"+
-  "for(let d=b.r+24;d<=760;d+=24){const x=b.x+ca*d,z=b.z+sa*d,h=opts.terrain(x,z);if(!Number.isFinite(h))break;rise=Math.max(rise,h-b.y);"+
-  "if(h<opts.sea-.6){const score=d+rise*14;if(!best||score<best.score)best={x:x+ca*28,z:z+sa*28,score};break;}}}"+
-  "if(best)next={x:best.x,z:best.z,y:opts.sea-.35,r:0,sea227:true};}"+
-  "if(!next){b.river=null;return null;}"],
- ["float height178(vec2 q){return noise178(q)*.6+noise178(q*2.03+7.0)*.28+noise178(q*4.11)*.12;}",
-  "float height178(vec2 q){return noise178(q)*.72+noise178(q*2.03+7.0)*.28;}"],
-];
-function patch(block){
- try{
-  if(root._WATERS227===false||typeof block!=='string'||!block.includes('WATERS_170')||block.includes('WATERS_227'))return block;
-  const miss=EDITS.filter(([a])=>block.split(a).length!==2);
-  if(miss.length){console.warn('WATERS_227: '+miss.length+' anchors missing, water unchanged');return block;}
-  for(const [a,b] of EDITS)block=block.replace(a,()=>b);
-  return block.replace('/* WATERS_170:','/* WATERS_227 */ /* WATERS_170:');
- }catch(e){console.warn('WATERS_227',e);return block;}
-}
-root.L99Waters227={patch};
-})(window);
 
 /* TOUCHPLAY_228: play surfaces behave like the faceplate keys. The note comes from
    where you touch the screen (low on the left, high on the right, in the faceplate's
    key and scale), it sounds for as long as you hold and then releases through the
    faceplate's own envelope, and holding Right Shift sustains and blends every note
    until you let go. Worlds can listen for strikes to draw their own response.
-   Kill: window._TOUCHPLAY228 = false. */
+   The play surfaces' side is baked into the world core (runtime/src/world-core). */
 (function(root){'use strict';
 const SPAN=15;                         // two octaves of a seven-note scale across the screen
 let serial=0,sustain=false;const live=new Map(),held=new Set(),listeners=new Set();
@@ -3319,23 +2645,7 @@ function world(){const w=root.L99Keyboard149?.world?.();return w&&w!=='bard';}
 root.addEventListener('keydown',e=>{if(e.code==='ShiftRight'&&!e.repeat&&world())sustain=true;},true);
 root.addEventListener('keyup',e=>{if(e.code!=='ShiftRight')return;sustain=false;for(const id of [...held])release(id);},true);
 root.addEventListener('blur',()=>{sustain=false;for(const id of [...held])release(id);});
-const EDITS=[
- ["function hitAt(w,e){const r=w.canvas().getBoundingClientRect();","function hitAt(w,e){const r=w.canvas().getBoundingClientRect();root.__tmX228=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));"],
- ["const d=contact(w.T,hit),kind=material(hit)","const d=root.L99TouchPlay228?root.L99TouchPlay228.degree(contact(w.T,hit)):contact(w.T,hit),kind=material(hit)"],
- ["const voice=root.L99CaveInstrument?.strike(d,velocity,duration);","const voice=root.L99TouchPlay228?root.L99TouchPlay228.play(d,velocity,duration,realm,hit):root.L99CaveInstrument?.strike(d,velocity,duration);"],
- ["const degree=contact(s.w.T,hit);","const degree=root.L99TouchPlay228?root.L99TouchPlay228.degree(contact(s.w.T,hit)):contact(s.w.T,hit);"],
- ["if(e.type!=='pointerup')s.voice?.stop();","s.voice?.stop();"],
-];
-function patch(block){
- try{
-  if(root._TOUCHPLAY228===false||typeof block!=='string'||!block.includes('TOUCH_MUSIC_175')||block.includes('TOUCHPLAY_228'))return block;
-  const miss=EDITS.filter(([a])=>block.split(a).length!==2);
-  if(miss.length){console.warn('TOUCHPLAY_228: '+miss.length+' anchors missing, play surfaces unchanged');return block;}
-  for(const [a,b] of EDITS)block=block.replace(a,()=>b);
-  return block.replace('/* TOUCH_MUSIC_175:','/* TOUCHPLAY_228 */ /* TOUCH_MUSIC_175:');
- }catch(e){console.warn('TOUCHPLAY_228',e);return block;}
-}
-root.L99TouchPlay228={patch,play,degree,release,on:f=>{listeners.add(f);return()=>listeners.delete(f);},get sustain(){return sustain;},voices:()=>live.size};
+root.L99TouchPlay228={play,degree,release,on:f=>{listeners.add(f);return()=>listeners.delete(f);},get sustain(){return sustain;},voices:()=>live.size};
 })(window);
 </script>
 <script id="leaves227">
@@ -3345,7 +2655,8 @@ root.L99TouchPlay228={patch,play,degree,release,on:f=>{listeners.add(f);return()
    Now a crown is ~110 alpha-cut cards, each carrying a painted cluster of
    leaves, lit with normals that point out from the crown so it shades as a
    soft volume. Lacier silhouettes, about a tenth of the triangles.
-   Kill: window._LEAVES227 = false. */
+   The crown geometry is baked into the world core (runtime/src/world-core);
+   this block paints the leaf texture it asks for. */
 (function(root){'use strict';
 function leafTexture(THREE){
  if(root.__leafTex227)return root.__leafTex227;
@@ -3368,35 +2679,7 @@ function leafTexture(THREE){
  if('colorSpace' in tx)tx.colorSpace=THREE.SRGBColorSpace;else tx.encoding=THREE.sRGBEncoding;
  return root.__leafTex227=tx;
 }
-const GEO=`function geometry(type,variant=0,lod='near'){
- lod=lod==='far'?'far':'near';const key=type+':'+(variant&1)+':'+lod;if(cache[key])return cache[key];if(!presets[type])throw Error('Unknown tree habitat');
- const settings={...root.ForgeRecipe.defaults,...presets[type],seed:127+types.indexOf(type)*391+(variant&1)*719};
- const data=root.ForgeRecipe.tree(settings),positions=[],colors=[],leaves=[],heights=[],uvs=[];
- const green=type==='cavern'?[.3,.56,.52]:type==='scrub'?[.4,.46,.22]:type==='alpine'?[.16,.34,.24]:[.27,.5,.19];
- function tri(a,b,c,color,leaf,ua,ub,uc){const U=[ua||[.98,.98],ub||[.98,.98],uc||[.98,.98]];let k=0;for(const v of [a,b,c]){positions.push(...v);colors.push(...color);leaves.push(leaf);heights.push(v[1]/settings.height);uvs.push(...U[k++]);}}
- for(const s of data.segments){const a=new THREE.Vector3(...s.a),b=new THREE.Vector3(...s.b),dir=b.clone().sub(a).normalize(),q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dir);const sides=lod==='far'?5:7;for(let i=0;i<sides;i++){const t=i/sides*Math.PI*2,u=(i+1)/sides*Math.PI*2;function point(v,r,angle){return new THREE.Vector3(Math.cos(angle)*r,0,Math.sin(angle)*r).applyQuaternion(q).add(v).toArray();}const p0=point(a,s.ra,t),p1=point(a,s.ra,u),p2=point(b,s.rb,t),p3=point(b,s.rb,u);tri(p0,p2,p3,[.24,.19,.13],0);tri(p0,p3,p1,[.27,.22,.16],0);}}
- const cards=lod==='far'?44:118,step=Math.max(1,Math.floor(data.leaves.length/cards)),first=positions.length/3;
- for(let i=0;i<data.leaves.length;i+=step){const l=data.leaves[i],sz=l.size*(lod==='far'?5.2:4.1)*(type==='alpine'?.8:1),m=new THREE.Matrix4().compose(new THREE.Vector3(...l.p),new THREE.Quaternion().setFromEuler(new THREE.Euler(...l.rotation)),new THREE.Vector3(sz,sz,sz)),col=green.map(v=>v*(.78+l.tone*.46));
-  const P=[[-.5,-.5,0],[.5,-.5,0],[.5,.5,0],[-.5,.5,0]].map(p=>new THREE.Vector3(...p).applyMatrix4(m).toArray());
-  tri(P[0],P[1],P[2],col,1,[0,0],[.94,0],[.94,.94]);tri(P[0],P[2],P[3],col,1,[0,0],[.94,.94],[0,.94]);}
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setAttribute('aLeaf127',new THREE.Float32BufferAttribute(leaves,1));g.setAttribute('aHeight127',new THREE.Float32BufferAttribute(heights,1));g.computeVertexNormals();
- /* crown normals: out from the canopy's centre and a little up, so the
-    whole crown shades like one soft volume instead of a hundred cards */
- const pa=g.attributes.position,na=g.attributes.normal,n=pa.count;let cx=0,cy=0,cz=0,cn=0;for(let i=first;i<n;i++){cx+=pa.getX(i);cy+=pa.getY(i);cz+=pa.getZ(i);cn++;}
- if(cn){cx/=cn;cy/=cn;cz/=cn;const v=new THREE.Vector3();for(let i=first;i<n;i++){v.set(pa.getX(i)-cx,(pa.getY(i)-cy)*.8,pa.getZ(i)-cz).normalize().multiplyScalar(.78);v.y+=.42;v.normalize();na.setXYZ(i,v.x,v.y,v.z);}na.needsUpdate=true;}
- g.computeBoundingBox();g.computeBoundingSphere();g.boundingSphere.radius+=.6;g.userData.forgeTree127=true;cache[key]=g;return g;
-}`;
-function patch(block){
- try{
-  if(root._LEAVES227===false||typeof block!=='string'||!block.includes('// Curved leaf lamina')||block.includes('LEAVES_227'))return block;
-  const a=block.indexOf("function geometry(type,variant=0,lod='near'){"),b=block.indexOf('\nfunction decorate(mesh){',a);
-  const m="const mat=new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.85});";
-  if(a<0||b<0||block.split(m).length!==2){console.warn('LEAVES_227: anchors missing, trees unchanged');return block;}
-  block=block.slice(0,a)+'/* LEAVES_227 */'+GEO+block.slice(b);
-  return block.replace(m,m+"mat.map=root.L99Leaves227.texture(THREE);mat.alphaTest=.46;mat.roughness=.9;");
- }catch(e){console.warn('LEAVES_227',e);return block;}
-}
-root.L99Leaves227={patch,texture:leafTexture};
+root.L99Leaves227={texture:leafTexture};
 })(window);
 </script>
 <script>
@@ -3417,7 +2700,9 @@ function status(message,failed){if(!wantsStatus)return;const p=panel();p.style.d
 function show(message,again){wantsStatus=true;retry=again;status(message);}
 function hide(){wantsStatus=false;if(box)box.style.display='none';}
 function execute(code){const s=document.createElement('script');s.textContent=code;let error=null;const caught=e=>{error=e.error||Error(e.message);};root.addEventListener('error',caught);try{document.head.appendChild(s);}finally{s.remove();root.removeEventListener('error',caught);}if(error)throw error;}
-function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();if(root.L99Leaves227)blocks[coreAt]=root.L99Leaves227.patch(blocks[coreAt]);if(root.L99Waters227)blocks[coreAt]=root.L99Waters227.patch(blocks[coreAt]);if(root.L99TouchPlay228)blocks[coreAt]=root.L99TouchPlay228.patch(blocks[coreAt]);/* V1_GUARD_227: a passage into Crysis may take 5 min on a slow device; timing out left you on the V1 surface */blocks[coreAt]=blocks[coreAt].replace('performance.now()-t.started>120000',"performance.now()-t.started>(t.to==='island'||t.from==='island'?300000:120000)");execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227===false?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
+/* BAKED_235: the world core ships with every change this page used to patch into it at load
+   (runtime/src/world-core, packed by tools/pack-runtimes.mjs). Edit it there, not here. */
+function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-235.json.gz?v=85fdd919fdbc'));for(;coreAt<blocks.length;coreAt++){await frame();execute(blocks[coreAt]);}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
 function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;
@@ -3453,7 +2738,7 @@ root.L99Boot176={packed,cachedPatch,ensureWorld,core,show,hide,status,frame,flig
    packed() later reads it back from cache. Skipped on data-saver and 2G.
    Kill: window._PREFETCH_WORLDS = false. */
 (function(){
- const files=['caves-179.html.gz','world-core-179.json.gz','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-179.js.gz?v=0bd106de8afc'];
+ const files=['caves-179.html.gz','world-core-235.json.gz?v=85fdd919fdbc','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-179.js.gz?v=0bd106de8afc'];
  const net=navigator.connection||{};
  if(net.saveData||/(^|-)2g$/.test(net.effectiveType||''))return;
  const idle=cb=>root.requestIdleCallback?root.requestIdleCallback(cb,{timeout:4000}):setTimeout(cb,1500);

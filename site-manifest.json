@@ -92,8 +92,8 @@
     "sha256": "65eebef2a1dc1057a443d3f00fb7ad95a7a76d19e8edaa8c57c1fb665696c8e0"
   },
   "index.html": {
-    "bytes": 5768632,
-    "sha256": "3ffa12c7e2b19689b959445db2c667be824af49244baff681eb6d7a3c9b640bb"
+    "bytes": 2249927,
+    "sha256": "8fe8ea9b3da86a0530d2ca833f9de1c1e07c18ef680eee93e1294886b7e6ff9d"
   },
   "runtime/caves-179.html.gz": {
     "bytes": 512275,
@@ -186,6 +186,10 @@
   "runtime/world-core-179.json.gz": {
     "bytes": 435006,
     "sha256": "cfd9a9f1ae7010f41b06ffa127c5a358953dec67e62e84c5f7f051b736e9609d"
+  },
+  "runtime/world-core-235.json.gz": {
+    "bytes": 444646,
+    "sha256": "85fdd919fdbc01c67987db67d2eb722a803b282ffb415c5baa3fa2c243c17aaf"
   },
   "textures/eyes-577fe3096f.webp": {
     "bytes": 60622,
