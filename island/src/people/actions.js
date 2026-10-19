@@ -237,6 +237,39 @@ export const ACTIONS = {
 		[1, { L: arm({ abd: 0.3, flex: 1.7, roll: 1.1, bend: 2.4, pro: 0.6, curl: 0.8 }), R: arm({ abd: 0.3, flex: 1.6, roll: 1.1, bend: 2.3, pro: 0.6, curl: 0.8 }), sp: [0, -0.18, 0], hp: [0, -0.05, 0, 0.1], hd: [0.1, -0.35, 0] }],
 	] },
 	cuffed: { loop: false, keys: [[0, { L: arm({ abd: 0.18, flex: -0.6, roll: -0.7, bend: 1.4, pro: 0.4, curl: 0.6 }), R: arm({ abd: 0.18, flex: -0.6, roll: -0.7, bend: 1.4, pro: 0.4, curl: 0.6 }), sp: [0, 0.12, 0], hd: [0, 0.3, 0] }]] },
+	// the building crews' work (structures/crewpeople.js), each held at a progress the site
+	// drives: a block carried in front in both hands; a bar on the right shoulder, the hand up
+	// on it; a pane carried upright at the right side, one hand under it, the other steadying
+	// it; hammering (u 0 the blow landed, 1 drawn right up), bent to the work; shovelling (dug
+	// in, lifted, turned and thrown, back); guiding a load in with the left arm up, looking up
+	// at it; holding the mixer's chute; laying blocks down on one knee (a block taken up, set)
+	crewCarry: { loop: false, keys: [[0, { L: arm({ abd: 0.14, flex: 0.42, roll: 0.5, bend: 1.05, pro: 0.15, wflex: 0.15, curl: 0.6 }), R: arm({ abd: 0.14, flex: 0.42, roll: 0.5, bend: 1.05, pro: 0.15, wflex: 0.15, curl: 0.6 }), sp: [0, -0.08, 0] }]] },
+	crewShoulder: { loop: false, keys: [[0, { R: arm({ abd: 0.3, flex: 1.3, roll: 0.1, bend: 1.85, pro: 1.0, wflex: -0.2, curl: 0.85 }), sp: [0, 0, -0.06], hd: [0.12, 0, 0.05] }]] },
+	crewPane: { loop: false, keys: [[0, { R: arm({ abd: 0.22, flex: 0.12, roll: 0.05, bend: 0.3, pro: 2.3, curl: 0.4 }), L: arm({ abd: 0.02, flex: 0.95, roll: 1.25, bend: 1.0, pro: 0.6, curl: 0.4 }), sp: [-0.1, 0, 0.06], hd: [-0.15, 0, 0] }]] },
+	crewHammer: { loop: false, keys: [
+		[0, { R: arm({ abd: 0.2, flex: 0.75, roll: 0.25, bend: 0.45, pro: 1.0, wflex: 0.2, curl: 1 }), L: arm({ abd: 0.25, flex: 0.85, roll: 0.5, bend: 1.0, pro: 0.6, curl: 0.5 }), sp: [-0.08, 0.32, 0], hp: [0, 0.12, 0, 0.06], fL: [0.17, 0, 0.16], fR: [-0.14, 0, -0.1], hd: [0, 0.3, 0] }],
+		[1, { R: arm({ abd: 0.3, flex: 2.0, roll: 0.15, bend: 1.7, pro: 1.0, wflex: -0.35, curl: 1 }), L: arm({ abd: 0.25, flex: 0.85, roll: 0.5, bend: 1.0, pro: 0.6, curl: 0.5 }), sp: [0.05, 0.22, 0], hp: [0, 0.1, 0, 0.05], fL: [0.17, 0, 0.16], fR: [-0.14, 0, -0.1], hd: [0, 0.25, 0] }],
+	] },
+	crewShovel: { loop: true, keys: [
+		[0, { R: arm({ abd: 0.12, flex: 0.15, roll: 0.35, bend: 1.0, pro: 0.9, curl: 1 }), L: arm({ abd: 0.05, flex: 0.62, roll: 0.75, bend: 0.3, pro: 0.9, curl: 1 }), sp: [-0.2, 0.32, 0], hp: [-0.1, 0.1, 0, 0.08], fL: [0.2, 0, 0.24], fR: [-0.17, 0, -0.12], hd: [0, 0.35, 0] }],
+		[0.25, { R: arm({ abd: 0.12, flex: 0.05, roll: 0.35, bend: 0.85, pro: 0.9, curl: 1 }), L: arm({ abd: 0.05, flex: 0.55, roll: 0.75, bend: 0.2, pro: 0.9, curl: 1 }), sp: [-0.2, 0.62, 0], hp: [-0.1, 0.22, 0, 0.2], fL: [0.2, 0, 0.24], fR: [-0.17, 0, -0.12], hd: [0, 0.3, 0] }],
+		[0.5, { R: arm({ abd: 0.12, flex: 0.35, roll: 0.35, bend: 1.2, pro: 0.9, curl: 1 }), L: arm({ abd: 0.05, flex: 0.95, roll: 0.7, bend: 0.5, pro: 0.9, curl: 1 }), sp: [-0.15, 0.3, 0], hp: [-0.05, 0.1, 0, 0.08], fL: [0.2, 0, 0.24], fR: [-0.17, 0, -0.12], hd: [0, 0.2, 0] }],
+		[0.68, { R: arm({ abd: 0.2, flex: 0.55, roll: 0.3, bend: 1.2, pro: 0.9, curl: 1 }), L: arm({ abd: 0.15, flex: 1.2, roll: 0.5, bend: 0.4, pro: 0.9, curl: 1 }), sp: [0.45, 0.22, 0], hp: [0.3, 0.06, 0, 0.05], fL: [0.2, 0, 0.24], fR: [-0.17, 0, -0.12], hd: [0.4, 0.15, 0] }],
+		[1, { R: arm({ abd: 0.12, flex: 0.15, roll: 0.35, bend: 1.0, pro: 0.9, curl: 1 }), L: arm({ abd: 0.05, flex: 0.62, roll: 0.75, bend: 0.3, pro: 0.9, curl: 1 }), sp: [-0.2, 0.32, 0], hp: [-0.1, 0.1, 0, 0.08], fL: [0.2, 0, 0.24], fR: [-0.17, 0, -0.12], hd: [0, 0.35, 0] }],
+	] },
+	crewGuide: { loop: true, keys: [
+		[0, { L: arm({ abd: 0.3, flex: 2.95, roll: 0, bend: 0.1, pro: 1.9, curl: 0.15 }), R: arm({ abd: 0.3, flex: 0.55, roll: 0.15, bend: 0.3, pro: 1.6, curl: 0.2 }), sp: [0, -0.08, 0], hd: [0, -0.5, 0] }],
+		[0.5, { L: arm({ abd: 0.3, flex: 2.95, roll: 0, bend: 0.75, pro: 1.9, curl: 0.15 }), R: arm({ abd: 0.3, flex: 0.55, roll: 0.15, bend: 0.3, pro: 1.6, curl: 0.2 }), sp: [0, -0.08, 0], hd: [0.08, -0.45, 0] }],
+		[1, { L: arm({ abd: 0.3, flex: 2.95, roll: 0, bend: 0.1, pro: 1.9, curl: 0.15 }), R: arm({ abd: 0.3, flex: 0.55, roll: 0.15, bend: 0.3, pro: 1.6, curl: 0.2 }), sp: [0, -0.08, 0], hd: [0, -0.5, 0] }],
+	] },
+	crewPour: { loop: false, keys: [[0, { L: arm({ abd: 0.15, flex: 0.95, roll: 0.35, bend: 0.65, pro: 0.6, curl: 0.95 }), R: arm({ abd: 0.15, flex: 0.95, roll: 0.35, bend: 0.65, pro: 0.6, curl: 0.95 }), sp: [0, 0.24, 0], hp: [0, 0.08, 0, 0.04], fL: [0.17, 0, 0.18], fR: [-0.15, 0, -0.12], hd: [0, 0.35, 0] }]] },
+	crewLay: { loop: true, keys: [
+		[0, { L: arm({ abd: 0.15, flex: 0.55, roll: 0.5, bend: 0.75, pro: 0.3, curl: 0.55 }), R: arm({ abd: 0.15, flex: 0.55, roll: 0.5, bend: 0.75, pro: 0.3, curl: 0.55 }), sp: [0, 0.35, 0], hp: [0, 0.12, 0, 0.42], fL: [0.2, 0, 0.25], fR: [-0.18, 0.08, -0.5], hd: [0, 0.35, 0] }],
+		[0.5, { L: arm({ abd: 0.15, flex: 0.9, roll: 0.5, bend: 0.55, pro: 0.3, curl: 0.55 }), R: arm({ abd: 0.15, flex: 0.9, roll: 0.5, bend: 0.55, pro: 0.3, curl: 0.55 }), sp: [0, 0.6, 0], hp: [0, 0.2, 0, 0.44], fL: [0.2, 0, 0.25], fR: [-0.18, 0.08, -0.5], hd: [0, 0.4, 0] }],
+		[1, { L: arm({ abd: 0.15, flex: 0.55, roll: 0.5, bend: 0.75, pro: 0.3, curl: 0.55 }), R: arm({ abd: 0.15, flex: 0.55, roll: 0.5, bend: 0.75, pro: 0.3, curl: 0.55 }), sp: [0, 0.35, 0], hp: [0, 0.12, 0, 0.42], fL: [0.2, 0, 0.25], fR: [-0.18, 0.08, -0.5], hd: [0, 0.35, 0] }],
+	] },
+	// talking with the hands (a crew figure seen from afar: the right hand out, the left a little)
+	crewTalk: { loop: false, keys: [[0, { R: arm({ abd: 0.2, flex: 0.65, roll: 0.3, bend: 1.25, pro: 1.2, curl: 0.3 }), L: arm({ abd: 0.12, flex: 0.25, roll: 0.3, bend: 0.6, pro: 0.9, curl: 0.4 }), hd: [0.05, 0.2, 0] }]] },
 	// a wave (the keeper's hello, a spectator)
 	wave: { loop: true, keys: [
 		[0, { R: arm({ abd: 0.9, flex: 0.2, roll: -1.3, bend: 1.7, pro: 1.9, curl: 0.05 }) }],

@@ -33,7 +33,7 @@ const CSS = `
 .cb-boss .cb-bar>s{position:absolute;top:0;bottom:0;width:2px;background:rgba(0,0,0,.6)}
 .cb-boss .ph{font:700 22px/1.3 system-ui,sans-serif;letter-spacing:2px;color:#ffd07a;opacity:0;transition:opacity .4s;margin-top:10px;text-transform:uppercase}
 .cb-star{position:absolute;right:calc(70px + env(safe-area-inset-right));top:calc(16px + env(safe-area-inset-top));font-size:18px;letter-spacing:2px;opacity:0;transition:opacity .4s}
-.cb-star .on{color:#ffd24a;text-shadow:0 0 6px rgba(255,180,40,.8)}.cb-star .off{color:rgba(255,255,255,.25)}
+.cb-star .on{color:#ffd24a;text-shadow:0 0 6px rgba(255,180,40,.8)}.cb-star .off{color:rgba(255,255,255,.25)}.cb-star .blue{color:#4aa8ff;text-shadow:0 0 6px rgba(60,140,255,.85)}
 .cb-calls{position:absolute;left:calc(14px + env(safe-area-inset-left));top:40%;display:flex;flex-direction:column;gap:4px;max-width:46vw}
 .cb-calls div{background:rgba(10,16,20,.5);padding:4px 8px;border-radius:6px;font-weight:500;transition:opacity .6s}
 .cb-feed{position:absolute;right:calc(14px + env(safe-area-inset-right));top:calc(48px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:56vw}
@@ -91,7 +91,7 @@ export function createHud({ mount, touch = false }) {
 		mkBtn('Mode', 'AUTO', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 226px + env(safe-area-inset-bottom));width:44px;height:44px;font-size:9px;');
 	}
 
-	let supK = 0, hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -1;
+	let supK = 0, hitT = 0, kill = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -2;
 	const callList = [], feedList = [];
 	return {
 		root, btns,
@@ -125,7 +125,7 @@ export function createHud({ mount, touch = false }) {
 			while (feedList.length > 5) feedList.shift().d.remove();
 		},
 		// once a frame: S = { show, spread (px), health: { hp, max, armour, armourMax }, weapon: {
-		// name, mag, reserve, mode, reloading }, boss: { name, phase, frac, notches }, stars, ko }
+		// name, mag, reserve, mode, reloading }, boss: { name, phase, frac, notches }, stars, blue, ko }
 		update(dt, S) {
 			root.style.display = S.show ? '' : 'none';
 			const vis = S.show && !S.ko;
@@ -182,8 +182,10 @@ export function createHud({ mount, touch = false }) {
 			}
 			bossPhT = Math.max(0, bossPhT - dt);
 			bPh.style.opacity = bossPhT > 0 ? String(Math.min(1, bossPhT)) : '0';
-			if (S.stars !== lastStars) { lastStars = S.stars; star.innerHTML = [1, 2, 3, 4, 5].map((i) => `<span class="${i <= S.stars ? 'on' : 'off'}">★</span>`).join(''); }
-			star.style.opacity = S.stars > 0 && !S.ko ? '1' : '0';
+			// (a blue star: self-defence, the police on your side)
+			const blue = !S.stars && !!S.blue, key = blue ? -1 : S.stars;
+			if (key !== lastStars) { lastStars = key; star.innerHTML = [1, 2, 3, 4, 5].map((i) => `<span class="${blue ? (i === 1 ? 'blue' : 'off') : i <= S.stars ? 'on' : 'off'}">★</span>`).join(''); star.title = blue ? 'Self-defence: the police are on your side' : ''; }
+			star.style.opacity = (S.stars > 0 || blue) && !S.ko ? '1' : '0';
 			for (let i = feedList.length - 1; i >= 0; i--) { const c = feedList[i]; c.t -= dt; c.d.style.opacity = String(Math.min(1, c.t)); if (c.t <= 0) { c.d.remove(); feedList.splice(i, 1); } }
 			for (let i = callList.length - 1; i >= 0; i--) { const c = callList[i]; c.t -= dt; c.d.style.opacity = String(Math.min(1, c.t * 2)); if (c.t <= 0) { c.d.remove(); callList.splice(i, 1); } }
 			ko.style.opacity = S.ko ? '1' : '0';

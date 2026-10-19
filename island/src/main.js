@@ -1680,7 +1680,7 @@ export function createIslandWorld() {
 		const rig = world.kinetic.state();
 		const kinds = [['garden', 'Bounce garden'], ['pendulum', 'Pendulum wave'], ['dominoes', 'Domino spiral'], ['chimes', 'Chime tree'], ['cradle', 'Newton’s cradle'], ['droplets', 'Droplet pool'], ['harp', 'Gravity harp'], ['stairs', 'Plinko staircase'], ['fountain', 'Ball fountain'], ['wavebars', 'Kinetic wave']];
 		const choice = css(document.createElement('select'), 'width:100%;min-height:38px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
-		choice.setAttribute('aria-label', 'Kinetic instrument');
+		choice.name = 'kinetic-instrument'; choice.setAttribute('aria-label', 'Kinetic instrument');
 		for (const [value, label] of kinds) { const o = document.createElement('option'); o.value = value; o.textContent = label; choice.appendChild(o); }
 		choice.value = world.kineticChoice || rig.kind || 'garden';
 		choice.onchange = () => { world.kineticChoice = choice.value; };
@@ -1696,7 +1696,7 @@ export function createIslandWorld() {
 			playing.textContent = `${kinds.find(([k]) => k === rig.kind)?.[1] || rig.kind} · ${rig.running ? 'playing' : 'stopped'}`;
 			p.appendChild(playing);
 			const scale = css(document.createElement('select'), 'width:100%;min-height:36px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
-			scale.setAttribute('aria-label', 'Instrument scale');
+			scale.name = 'kinetic-scale'; scale.setAttribute('aria-label', 'Instrument scale');
 			for (const [value, label] of [['faceplate', 'Current Bard scale'], ['0', 'Minor pentatonic'], ['1', 'Major pentatonic'], ['2', 'Dorian'], ['3', 'Whole tone']]) { const o = document.createElement('option'); o.value = value; o.textContent = label; scale.appendChild(o); }
 			scale.value = String(rig.scale); scale.onchange = () => { world.kinetic.configure({ scale: scale.value === 'faceplate' ? 'faceplate' : +scale.value }); buildPanel(); }; p.appendChild(scale);
 			if (rig.scale !== 'faceplate') slider(p, 'Pitch offset', -12, 12, 1, () => world.kinetic.state().root, v => world.kinetic.configure({ root: v }), v => `${v > 0 ? '+' : ''}${v} semitones`);
@@ -1740,7 +1740,7 @@ export function createIslandWorld() {
 		// snow, the sun's path, the birds, the fish, what people wear); remembered
 		const ml = css(document.createElement('div'), 'opacity:.9;margin-top:8px;'); ml.textContent = 'Month';
 		const sel = css(document.createElement('select'), 'width:100%;min-height:36px;margin-top:4px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:#1a1a1a;color:#fff;padding:0 10px;font:inherit;');
-		sel.setAttribute('aria-label', 'Month');
+		sel.name = 'world-month'; sel.setAttribute('aria-label', 'Month');
 		['Live (today)', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].forEach((t, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = t; sel.appendChild(o); });
 		sel.value = String(monthPicked());
 		sel.onchange = () => pickMonth(+sel.value);
@@ -1862,10 +1862,11 @@ export function createIslandWorld() {
 		const P = W?.player?.state;
 		if (!P) return;
 		const B = W.boat;
-		const j = B?.boarded?.() ? '' : P.flying ? '⇡' : P.swimming ? (P.diving ? '⇡' : '⤓') : '⤒';
+		// (flying, it is the plane: held it climbs, a double tap lands)
+		const j = B?.boarded?.() ? '' : P.flying ? '✈' : P.swimming ? (P.diving ? '⇡' : '⤓') : '⤒';
 		if (dom.jump.textContent !== j) {
 			dom.jump.textContent = j; dom.jump.style.display = j ? 'block' : 'none';
-			const t = P.flying ? 'Climb' : P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
+			const t = P.flying ? 'Fly up (hold); double-tap to land' : P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
 			dom.jump.title = t; dom.jump.setAttribute('aria-label', t);
 		}
 		// (on foot on a touch screen the same button crouches: a tap down or up, a slide from a sprint)
@@ -2371,7 +2372,7 @@ export function createIslandWorld() {
 		if (!P || world.boat.boarded()) return;
 		if (!P.orbit?.high()) { P.flying = !P.flying; P.vel.y = 0; }
 		P.climbAssist = P.descendAssist = false;
-		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B cycles ×1 / ×3 / ×6 / ×9. F to land.') : 'Landing.', 3500);
+		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. Hold ✈ to climb, ⇣ to sink; double-tap ✈ to land.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B cycles ×1 / ×3 / ×6 / ×9. F or a double tap of Space to land.') : 'Landing.', 3500);
 	}
 	dom.fly.addEventListener('click', (e) => { e.stopPropagation(); toggleFly(); });
 	dom.boost.addEventListener('click', (e) => { e.stopPropagation(); const P = world?.player.state; if (P?.flying) world.player.cycleBoost(); });
@@ -2384,9 +2385,14 @@ export function createIslandWorld() {
 	};
 	hold(dom.jump, 'flyUp'); hold(dom.down, 'flyDown');
 	dom.down.addEventListener('pointerdown', (e) => { e.stopPropagation(); const P = world?.player.state; if (P && !P.flying && !P.swimming) world.player.crouch(); });
+	// a quick double tap of jump takes to the air (still held, it climbs on), and on the plane
+	// it shows while flying, lands
+	let jumpAt = 0;
 	dom.jump.addEventListener('pointerdown', (e) => {
 		e.stopPropagation();
-		const P = world?.player.state;
+		const P = world?.player.state, now = performance.now();
+		if (P && !P.swimming && now - jumpAt < 300) { jumpAt = 0; toggleFly(); P.flyUp = P.flying; return; }
+		jumpAt = now;
 		if (P?.flying) return;
 		if (P?.diving) { P.vel.y = 2.4; P.diving = P.pos.y < (P.surface ?? 0) - 0.4; return; }
 		world?.player.jump();

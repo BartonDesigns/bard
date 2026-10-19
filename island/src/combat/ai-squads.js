@@ -176,7 +176,7 @@ export function createSquads(ctx) {
 				H: createHealth({ max: (F.hp || 100) * (opts.hpK || 1), armour: opts.armour ?? F.armour ?? 0, soak: 0.5, resist: B.resist || {} }),
 				pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
 				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
-				provoked: false, shotAtPlayer: 0, surrendered: 0, task: opts.task || null, post: opts.post || squad?.post || null, slot: squad ? squad.members.length : 0,
+				provoked: false, shotAtPlayer: 0, struckFirst: false, surrendered: 0, task: opts.task || null, post: opts.post || squad?.post || null, slot: squad ? squad.members.length : 0,
 			};
 			h.pos.y = ctx.ground(x, z, opts.y ?? ctx.eye().y);
 			if (kind === 'person') {
@@ -209,7 +209,7 @@ export function createSquads(ctx) {
 				get surrendered() { return h.surrendered > 0 || h.fleeing; },
 				surface: B.surface, shapes: () => shapesOf(h), ref: h,
 				onHit: (blow) => hit(h, blow),
-				moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
+				moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0 || h.struckFirst, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
 			};
 			if (h.crew) { h.T.faction = 'civ'; h.T.name = 'a firefighter'; }
 			else if (specialty) h.T.name = `${F.name} ${specialty.name.toLowerCase()}`;
@@ -329,8 +329,11 @@ export function createSquads(ctx) {
 		const dMe = Math.hypot(eye.x - h.pos.x, eye.z - h.pos.z);
 		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && F.kind !== 'military' && ctx.wanted() > 0) || (F.kind === 'military' && (ctx.wanted() >= 5 || !!ctx.trespass?.(h))) || (F.kind === 'mercs' && ctx.bounty() > 0);
 		if (hateMe && !ctx.playerDown() && !ctx.cloaked?.() && dMe < bd) { best = ME; bd = dMe; }
+		// (the police on your side after you were fired on: whoever opened fire on you is theirs)
+		const backMe = F.lawful && F.kind !== 'military' && ctx.defending?.();
 		for (const o of list) {
-			if (o === h || o.dead || o.surrendered || o.crew || o.recall || o.fid === h.fid || !relations.hostile(h.fid, o.fid) || ctx.ignore?.(h, o)) continue;
+			if (o === h || o.dead || o.surrendered || o.crew || o.recall || o.fid === h.fid || ctx.ignore?.(h, o)) continue;
+			if (!relations.hostile(h.fid, o.fid) && !(backMe && o.struckFirst && !o.F?.lawful)) continue;
 			const d = Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z);
 			if (d < bd) { bd = d; best = o.T; }
 		}
@@ -374,7 +377,7 @@ export function createSquads(ctx) {
 		const to0 = posOf(T).clone(), from = h.kind === 'drone' ? h.pos.clone() : h.kind === 'crawler' ? new THREE.Vector3(h.pos.x, h.pos.y + 0.65, h.pos.z) : muzzleOf(h);
 		const dist = from.distanceTo(to0), atMe = T.id === 'me';
 		if (dist > B.range) return;
-		if (atMe) h.shotAtPlayer = 8;
+		if (atMe) { h.shotAtPlayer = 8; if (!h.provoked && !h.F?.lawful) h.struckFirst = true; }
 		if (h.kind === 'crawler') {
 			if (dist < 5 || h.spitT > 0) return;
 			h.spitT = rnd(3.5, 5.5);
