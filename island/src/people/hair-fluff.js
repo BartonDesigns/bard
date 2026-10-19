@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { CUTS, skullOf, hairline, recedeAt } from './hair.js';
 import { guideUniform } from './hair-motion.js';
+import { CAPSULES } from './hair-collide.js';
 import { GFX_PHONE } from '../world/device.js';
 
 const isPhone = GFX_PHONE;
@@ -93,7 +94,8 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 	const B = { ...BASE, ...(BRUSH[cutName] || BRUSH.short), ...(opts.brush || {}) };
 	const rnd = opts.rnd || Math.random;
 	const K = opts.skull || skullOf(A, p, P);
-	const { c, radius, eyeY } = K;
+	// (the head without its ears, which the hair lies over: hair.js skullOf)
+	const { c, eyeY } = K, radius = K.hairRadius || K.radius, ears = K.ears || [], eyeZ = K.eyeZ ?? c.z + 0.07;
 	const low = !!opts.low || isPhone;
 	const capped = opts.capY !== undefined;
 	// this head's own: how full, how spiky, which way the front falls, which side it parts
@@ -111,8 +113,15 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 		if (q.y > c.y - 0.07) {
 			const R = radius(d.divideScalar(r || 1)) + off;
 			if (r < R) q.copy(c).addScaledVector(d, R);
-			// off the face, round it to the sides (bangs fall over the forehead, so may come in)
-			if (face && q.z > c.z + 0.03 && q.y < eyeY + 0.035 && Math.abs(q.x) < 0.078 + off) q.x = Math.sign(q.x || 1) * (0.078 + off);
+			// over the ears, not through them
+			for (const E of ears) {
+				const ex = (q.x - E.c.x) / (E.r.x + off), ey = (q.y - E.c.y) / (E.r.y + off), ez = (q.z - E.c.z) / (E.r.z + off), e2 = ex * ex + ey * ey + ez * ez;
+				if (e2 < 1) { const e = Math.sqrt(e2) || 1e-3; q.set(E.c.x + ex / e * (E.r.x + off), E.c.y + ey / e * (E.r.y + off), E.c.z + ez / e * (E.r.z + off)); }
+			}
+			// off the face, round it to the sides (bangs fall over the forehead, so may come in);
+			// in front of the face only, not the temples and the sideburns beside it (pushed out
+			// there, they stood off the head in a slab)
+			if (face && q.z > eyeZ - 0.012 && q.y < eyeY + 0.035 && Math.abs(q.x) < 0.078 + off) q.x = Math.sign(q.x || 1) * (0.078 + off);
 			return;
 		}
 		// (and over the clothes there, as thick as they are)
@@ -315,6 +324,14 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 		let len = lenBase * (0.85 + rnd() * 0.3) * (inner ? 0.9 : 1) * (cut.flow === 'out' ? vol : 1);
 		if (cut.drop !== undefined) len = Math.max(len * 0.5, s.y - (eyeY + cut.drop) + (d.y > 0.5 ? 0.05 : 0.02) + (rnd() - 0.5) * 0.02);
 		const f = flowAt(d, deg), front = isFront(d, deg);
+		// (the sideburns, in front of the ears and low: short and growing down, not swept into
+		// the ear)
+		const burn = cut.drop === undefined && !cut.tie && cut.flow !== 'out' && deg > 55 && deg < 100 && s.y - eyeY < 0.025;
+		if (burn) {
+			const k = sm(0.025, -0.01, s.y - eyeY);
+			f.lerp(new V3(0, -1, -0.35).addScaledVector(d, -new V3(0, -1, -0.35).dot(d)).normalize(), k).normalize();
+			len = Math.min(len, 0.03 - k * 0.012);
+		}
 		// (spiky hair stands up more under its weight; long hair hangs)
 		const gravity = (len > 0.08 ? 0.9 : len > 0.05 ? 0.35 : 0.1) * (1 - spike * 0.5);
 		const lift2 = cut.lift * vol, hug = clamp(0.9 - lift2 * 30);
@@ -323,9 +340,11 @@ export function buildFluff(A, P, p, cutName, opts = {}) {
 			// bangs: over the forehead to the brows
 			path = clipBelow(grow(s, d, f, Math.max(len, 0.1), 8, Math.min(lift2, 0.006), 0.6, off, 0.9, 0.25, false), bangTip(d));
 			len = Math.min(len, 0.1);
-		} else path = grow(s, d, f, len, segsFor(len) * 2, lift2, gravity, off, hug, 0.35, true);
+		// (a sideburn lies flat on the skin, no lift: standing off, it read as a stray chip)
+		} else if (burn) path = grow(s, d, f, len, segsFor(len) * 2, 0.001, gravity, 0.0015, 1, 0.08, true);
+		else path = grow(s, d, f, len, segsFor(len) * 2, lift2, gravity, off, hug, 0.35, true);
 		if (path.length < 3) continue;
-		lock(resample(shape(path, len, { face: !front, off, flick: front ? 0 : undefined }), segsFor(len)), { ...lv, face: !front });
+		lock(resample(shape(path, len, burn ? { off: 0.0015, spike: 0, flick: 0, wave: 0 } : { face: !front, off, flick: front ? 0 : undefined }), segsFor(len)), { ...lv, face: !front });
 	}
 
 	// the locks framing the face: in front of the ears, down beside the cheeks
@@ -457,16 +476,32 @@ void RE_Direct_Fluff( const in IncidentLight directLight, const in vec3 geometry
 #undef RE_Direct
 #define RE_Direct RE_Direct_Fluff
 `;
+// hair inside a capsule round the neck, the shoulders, the back or the arms (hair-collide.js) is
+// pushed out to its surface, along the way out from its axis: a ponytail or long hair the head
+// turns towards a shoulder falls over it, not through it
+// (only what hangs below the head: the nape's short hair under a hood or a puffer's collar stays
+// where it grew)
+const PUSH = `if (position.y < uCapY) for (int pass = 0; pass < 2; pass++) for (int i = 0; i < ${CAPSULES}; i++) { float r = uCapA[i].w; if (r <= 0.0) continue; vec3 a = uCapA[i].xyz, ab = uCapB[i] - a; float t = clamp(dot(transformed - a, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0); vec3 d = transformed - (a + ab * t); float l = length(d); if (l < r) transformed += (l > 1e-4 ? d / l : normalize(vec3(0.0, 0.1, -1.0))) * (r - l); }`;
 export function fluffMaterial(root, tip) {
 	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, side: THREE.DoubleSide, alphaTest: 0.4, alphaToCoverage: true });
-	const U = { uHairGuides: guideUniform(), uHairMotion: { value: new THREE.Vector3() }, uHairTime: { value: 0 }, uRoot: { value: new THREE.Color(root) }, uTip: { value: new THREE.Color(tip) }, uRing: { value: 1 } };
+	const U = {
+		uHairGuides: guideUniform(), uHairMotion: { value: new THREE.Vector3() }, uHairTime: { value: 0 }, uRoot: { value: new THREE.Color(root) }, uTip: { value: new THREE.Color(tip) }, uRing: { value: 1 },
+		// (what it falls over, posed each frame: people/hair-collide.js poseCapsules)
+		uCapA: { value: Array.from({ length: CAPSULES }, () => new THREE.Vector4()) }, uCapB: { value: Array.from({ length: CAPSULES }, () => new THREE.Vector3()) }, uCapY: { value: 99 },
+	};
 	m.userData.U = U;
-	m.onBeforeCompile = (sh) => {
+	// (alpha to coverage needs a multisampled target: where there is none, as on a phone, its
+	// soft edges are drawn solid; the blades cut by the alpha test alone there)
+	let msaa = true;
+	m.onBeforeCompile = (sh, r) => {
+		const rt = r?.getRenderTarget?.(), ms = rt ? rt.samples > 0 : !!r?.getContext?.().getContextAttributes()?.antialias;
+		if (r && !ms) { msaa = false; m.alphaToCoverage = false; }
 		Object.assign(sh.uniforms, U);
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uHairGuides[4];\nuniform float uHairTime;\nattribute vec3 hairT;\nattribute vec4 hairK;\nvarying vec3 vHT;\nvarying vec4 vHK;\nvarying vec2 vHUv;')
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\nuniform vec3 uHairGuides[4];\nuniform float uHairTime;\nuniform vec4 uCapA[${CAPSULES}];\nuniform vec3 uCapB[${CAPSULES}];\nuniform float uCapY;\nattribute vec3 hairT;\nattribute vec4 hairK;\nvarying vec3 vHT;\nvarying vec4 vHK;\nvarying vec2 vHUv;`)
+			.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n' + PUSH)
 			// (each lock swings on one of the four guides, its tip the most)
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHT = normalize(normalMatrix * hairT); vHK = hairK; vHUv = uv;\ntransformed += (uHairGuides[int(mod(hairK.z, 4.0))] + vec3(sin(uHairTime * 1.4 + hairK.z), 0.0, cos(uHairTime * 1.1 + hairK.z)) * 0.0012) * (hairK.w / 255.0);');
-		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
+		sh.fragmentShader = (msaa ? '' : '#undef ALPHA_TO_COVERAGE\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + LIGHT)
 			// (one soft mass: its normals face out of it on both sides of every ribbon)
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize( vNormal );')
@@ -496,6 +531,6 @@ export function fluffMaterial(root, tip) {
 }`)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.15;\nreflectedLight.indirectDiffuse *= 0.6 + 0.4 * vHK.x / 255.0;');
 	};
-	m.customProgramCacheKey = () => 'fluff-hair-3';
+	m.customProgramCacheKey = () => 'fluff-hair-4' + (msaa ? '' : '-c');
 	return m;
 }

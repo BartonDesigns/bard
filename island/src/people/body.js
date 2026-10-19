@@ -499,8 +499,11 @@ function hairUp(A, P) {
 		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
 		const hair = skinned(g, fluffMaterial(root, tip));
 		P.hair = hair;
+		// it falls over the collar and the shoulders, not through them, as the head turns (hair-collide.js)
+		const o = P.outfit || {}, off = offsets(o), caps = hairCapsules(P, o, Math.max(off.top, off.outer));
+		hair.material.userData.U.uCapY.value = P.cut.neck + 0.02;
 		const animate = hairMotion(P, hair, hair.material.userData.U);
-		hair.onBeforeRender = () => animate();
+		hair.onBeforeRender = () => { animate(); poseCapsules(P, caps, hair.material.userData.U, hair); };
 	}
 	else if (W.cut) {
 		coverScalp(P, null);

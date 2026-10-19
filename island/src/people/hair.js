@@ -67,13 +67,30 @@ export function skinMask(A) {
 	else m.fill(1);
 	return (A.onSkin = m);
 }
+// the ears, vertex by vertex: what the face's target that sets the ears out (people/face.js
+// 'ear-out') moves, a good part of as far as it moves anything (not the skin round them it draws a
+// little with them; 'ear-size' scales most of the side of the head)
+export function earsOf(A) {
+	if (A.onEar !== undefined) return A.onEar;
+	const axes = A.faces?.axes?.filter((ax) => ax.n === 'ear-out');
+	if (!axes?.length) return (A.onEar = null);
+	const m = new Uint8Array(A.ids.length / 4);
+	for (const ax of axes) for (const t of [ax.lo, ax.hi]) {
+		if (!t) continue;
+		const { idx, d } = t;
+		let top = 0;
+		for (let j = 0; j < idx.length; j++) top = Math.max(top, Math.hypot(d[j * 3], d[j * 3 + 1], d[j * 3 + 2]));
+		for (let j = 0; j < idx.length; j++) if (Math.hypot(d[j * 3], d[j * 3 + 1], d[j * 3 + 2]) > top * 0.15) m[idx[j]] = 1;
+	}
+	return (A.onEar = m);
+}
 // the head: its middle, and how far its scalp reaches each way (radius(d), d a unit vector from
 // the middle), measured on the skin alone. Hair sits on the scalp, never on the hair helper's
 // shell: measured with it, every head stood a centimetre and more above its own scalp, and
 // all hair floated. shell(d): that outer envelope, for gear worn over the hair.
 export function skullOf(A, p, P) {
 	const { map, rest } = P, hb = map.head, eyeY = (P.eyeAt[0].y + P.eyeAt[1].y) / 2, eyeZ = (P.eyeAt[0].z + P.eyeAt[1].z) / 2;
-	const n = A.ids.length / 4, pts = [], all = [], skin = skinMask(A);
+	const n = A.ids.length / 4, pts = [], pv = [], all = [], skin = skinMask(A);
 	let z0 = 1e9, z1 = -1e9, x0 = 1e9, x1 = -1e9, top = -1e9;
 	for (let v = 0; v < n; v++) {
 		let s = 0, h = 0;
@@ -83,12 +100,29 @@ export function skullOf(A, p, P) {
 		if (y < eyeY - 0.11) continue;
 		all.push(x, y, z);
 		if (!skin[v]) continue;
-		pts.push(x, y, z);
+		pts.push(x, y, z); pv.push(v);
 		if (y > eyeY + 0.03) { z0 = Math.min(z0, z); z1 = Math.max(z1, z); x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
 		top = Math.max(top, y);
 	}
 	const c = new THREE.Vector3((x0 + x1) / 2, eyeY + 0.012, (z0 + z1) / 2 - 0.004);
-	return { c, radius: radiusOf(pts, c), shell: radiusOf(all, c), eyeY, eyeZ, top, head: rest.heads[hb] };
+	// the ears: the skin standing out at the sides between the lobe and a little over the eyes,
+	// round the head's middle front to back. hairRadius is the head without them (with them, their
+	// bump spread to the directions round them, and hair there stood off the head in a fan), and
+	// ears, an ellipsoid each, is what hair lies over instead (people/hair-fluff.js)
+	// (the ears' vertices: those the face's ear targets move, people/face.js)
+	const isEar = earsOf(A), near = [], ear = [[], []];
+	for (let i = 0, k = 0; i < pts.length; i += 3, k++) {
+		const x = pts[i], y = pts[i + 1], z = pts[i + 2];
+		if (isEar && isEar[pv[k]]) ear[x > c.x ? 0 : 1].push(x, y, z);
+		else near.push(x, y, z);
+	}
+	const ears = ear.map((E) => {
+		if (E.length < 30) return null;
+		const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+		for (let i = 0; i < E.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], E[i + k]); hi[k] = Math.max(hi[k], E[i + k]); }
+		return { c: new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2), r: new THREE.Vector3(Math.max(0.006, (hi[0] - lo[0]) / 2), Math.max(0.012, (hi[1] - lo[1]) / 2), Math.max(0.01, (hi[2] - lo[2]) / 2)) };
+	}).filter(Boolean);
+	return { c, radius: radiusOf(pts, c), hairRadius: radiusOf(near, c), ears, shell: radiusOf(all, c), eyeY, eyeZ, top, head: rest.heads[hb] };
 }
 // how far points reach from c each way, on a grid of directions, gaps filled, smoothed round
 function radiusOf(pts, c) {
