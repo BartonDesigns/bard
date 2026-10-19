@@ -1720,6 +1720,26 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const bill = new THREE.CylinderGeometry(0.1, 0.1, 0.008, 14, 1, false, -Math.PI / 2, Math.PI);
 			bill.scale(0.95, 1, 0.75); bill.rotateX(-0.12); bill.translate(cx, rim + 0.008, cz + rz * 0.72);
 			put(bill, 'head', q.faded ? new THREE.Color(a2).lerp(new THREE.Color(c), 0.5).getHex() : q.kind === 'visor' ? a2 : c);
+		} else if (q.kind === 'hardhat') {
+			// a builder's hard hat: a tall glossy shell riding on its harness clear of the head, a
+			// ridge from the peak over the crown, the brim all round and the peak out over the eyes
+			// (the shell taller than it is wide over the head, as the harness holds it up off the crown)
+			const grow = 0.026, rim = eyeY + 0.06, deep = top + grow - rim, R0 = rx + grow, Z0 = rz + grow, tall = (deep + 0.03) / deep;
+			const lift = (g) => { g.translate(0, -rim, 0); g.scale(1, tall, 1); g.translate(0, rim, 0); return g; };
+			put(lift(dome(deep, grow, 22)), 'head', c, 9);
+			const ridge = lift(dome(deep + 0.004, grow + 0.012, 12));
+			ridge.translate(-cx, 0, -cz); ridge.scale(0.024 / (rx + grow + 0.012), 1, 1); ridge.translate(cx, 0, cz);
+			put(ridge, 'head', c, 9);
+			const brim = new THREE.LatheGeometry([new THREE.Vector2(0.985, rim + 0.012), new THREE.Vector2(1.05, rim - 0.001), new THREE.Vector2(1.055, rim - 0.009), new THREE.Vector2(0.985, rim - 0.002)], 22);
+			brim.scale(R0, 1, Z0); brim.translate(cx, 0, cz);
+			put(brim, 'head', c, 9);
+			const peak = new THREE.CylinderGeometry(1, 1, 0.009, 16, 1, false, -Math.PI / 2, Math.PI);
+			peak.scale(R0 * 0.82, 1, 0.075); peak.rotateX(-0.1); peak.translate(cx, rim + 0.002, cz + Z0 * 0.93);
+			put(peak, 'head', c, 9);
+			// (the harness's band showing under the shell at the sides and back)
+			const band = new THREE.CylinderGeometry(1, 1, 0.02, 18, 1, true);
+			band.scale(rx + 0.008, 1, rz + 0.008); band.translate(cx, rim - 0.006, cz);
+			put(band, 'head', a2, 6);
 		} else if (q.kind === 'beanie' || q.kind === 'hood' || q.kind === 'helmet' || q.kind === 'hazhood') {
 			const deep = q.kind === 'beanie' ? top - eyeY - 0.03 : q.kind === 'helmet' ? top - eyeY + 0.03 : top - eyeY + 0.08;
 			const grow = q.kind === 'beanie' ? 0.016 : q.kind === 'helmet' ? 0.03 : 0.035;

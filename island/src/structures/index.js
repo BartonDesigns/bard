@@ -324,7 +324,7 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 		recount: () => countNext(),
 		forget: () => { store.clear(); },
 		// the world going (main.js teardown): let go of what listens to the quality tier
-		dispose: () => { walls.dispose(); },
+		dispose: () => { walls.dispose(); rebuild.dispose(); },
 		landmark: (x, z) => { const p = W()?.player?.state?.pos; return monuments.state(x ?? p?.x, z ?? p?.z); },
 		glass, damage, rebuild, store, monuments, marks, debris, walls,
 	};
