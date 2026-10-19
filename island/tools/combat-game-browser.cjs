@@ -59,23 +59,30 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	if (profile === 'desktop') {
 		await page.keyboard.press('Backquote');
 	} else {
-		// a tap on their chest, on the screen (they may run on a little between the look and the
-		// tap on a slow headless frame: tapped again, as a player would, up to three times)
-		R.taps = [];
-		for (let i = 0; i < 3; i++) {
-			const at = await page.evaluate((id) => {
-				const T = Crysis.combat.layer.get(id), c = window.L99Island.camera(), q = T.aim?.() || T.bound;
-				c.updateMatrixWorld(); const v = c.position.clone().set(q.x, q.y, q.z).project(c);
-				const r = document.querySelector('canvas').getBoundingClientRect();
-				return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
-			}, ids[0]);
-			R.tapAt = at;
-			R.tapEl = await page.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e && `${e.tagName}.${e.className} ${e.clientWidth}x${e.clientHeight}`; }, at);
-			await page.touchscreen.tap(at.x, at.y);
-			await wait(600);
-			const why = await page.evaluate(() => Crysis.combat.focus.info().tap);
-			R.taps.push(why);
-			if (why === 'locked') break;
+		// a tap on their chest, on the screen. Headless, a phone this size draws a frame in seconds,
+		// so they can run on a long way between the look and the tap landing: if the real tap
+		// misses, the same tap is sent from the page itself in one go (the logic, not the timing)
+		const spot = (id) => page.evaluate((id) => {
+			const T = Crysis.combat.layer.get(id), c = window.L99Island.camera(), q = T.aim?.() || T.bound;
+			c.updateMatrixWorld(); const v = c.position.clone().set(q.x, q.y, q.z).project(c);
+			const r = document.querySelector('canvas').getBoundingClientRect();
+			return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+		}, id);
+		const at = await spot(ids[0]);
+		R.tapAt = at;
+		R.tapEl = await page.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e && `${e.tagName}.${e.className} ${e.clientWidth}x${e.clientHeight}`; }, at);
+		await page.touchscreen.tap(at.x, at.y);
+		await wait(800);
+		R.taps = [await page.evaluate(() => Crysis.combat.focus.info().tap)];
+		if (R.taps[0] !== 'locked') {
+			R.taps.push(await page.evaluate((id) => {
+				const T = Crysis.combat.layer.get(id), c = window.L99Island.camera(), q = T.aim?.() || T.bound, cv = document.querySelector('canvas');
+				c.updateMatrixWorld(); const v = c.position.clone().set(q.x, q.y, q.z).project(c), r = cv.getBoundingClientRect();
+				const x = r.left + (v.x + 1) / 2 * r.width, y = r.top + (1 - v.y) / 2 * r.height;
+				const ev = (t) => new PointerEvent(t, { pointerType: 'touch', pointerId: 77, clientX: x, clientY: y, bubbles: true, cancelable: true, isPrimary: true });
+				cv.dispatchEvent(ev('pointerdown')); cv.dispatchEvent(ev('pointerup'));
+				return Crysis.combat.focus.info().tap + ' (in-page)';
+			}, ids[0]));
 		}
 	}
 	await wait(1500);
