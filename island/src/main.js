@@ -2597,6 +2597,7 @@ if (typeof window !== 'undefined') {
 		// Crysis.orbitOver(lat, lon, km) puts the ship in orbit above a place (once in orbit); .landing() what is below
 		orbitOver: (lat, lon, km = 400) => window.L99Island?.world?.()?.orbit?.over?.(lat, lon, km * 1000) ?? 'Climb to orbit first.',
 		landing: () => window.L99Island?.world?.()?.orbit?.landing?.() ?? 'no orbit',
+		orbitImagery: () => window.L99Island?.world?.()?.orbit?.imagery?.() ?? 'no orbit',
 		// game-only hunting, home-defense and supply state. Crysis.arms() reads the
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
