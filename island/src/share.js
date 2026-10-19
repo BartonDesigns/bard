@@ -235,7 +235,7 @@ export function createShare(ctx) {
 		box = document.createElement('div');
 		box.style.cssText = 'position:absolute;left:50%;top:30%;transform:translateX(-50%);width:min(420px,86vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.92);border:1px solid rgba(255,255,255,.2);color:#eafaf6;font:13px system-ui;z-index:12;display:flex;flex-direction:column;gap:8px;';
 		const t = document.createElement('div'); t.textContent = `${d.text}\n${d.coords}`; t.style.whiteSpace = 'pre-line';
-		const inp = document.createElement('input'); inp.readOnly = true; inp.value = url;
+		const inp = document.createElement('input'); inp.name = 'share-link'; inp.setAttribute('aria-label', 'Link to this place'); inp.readOnly = true; inp.value = url;
 		inp.style.cssText = 'width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#eafaf6;font:12px ui-monospace,monospace;';
 		const ok = document.createElement('button'); ok.type = 'button'; ok.textContent = 'Done'; ok.style.cssText = BTN + 'text-align:center;';
 		ok.onclick = (e) => { e.stopPropagation(); box.remove(); box = null; };
@@ -462,6 +462,7 @@ export function createShare(ctx) {
 			if (!h.s.earth) { const w = document.createElement('span'); w.textContent = ` · ${worldName(h.s)}`; w.style.opacity = '.6'; go1.appendChild(w); }
 			const ren = mk('✎', `Rename ${h.name}`, () => {
 				const inp = document.createElement('input');
+				inp.name = 'home-name'; inp.setAttribute('aria-label', `Rename ${h.name}`);
 				inp.value = h.name; inp.maxLength = 60;
 				inp.style.cssText = 'flex:1;min-width:0;padding:6px 8px;border-radius:9px;border:1px solid rgba(1,169,130,.7);background:rgba(0,0,0,.35);color:#eafaf6;font:13px system-ui;';
 				const done = () => { if (inp.isConnected) { if (!renameHome(h.id, inp.value)) refresh(); } };
