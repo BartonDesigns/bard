@@ -11,8 +11,13 @@
 //   strike       a blow's whole time, in s (the wind-up is the first third: read it and step back)
 //   sight        how far it notices you
 //   resist       harm taken by kind (combat/health.js DAMAGE_TYPES)
+//   model, human its model when not its own id; human, the person it is until it turns (the
+//                Moonturned: a villager who changes when you come near or hurt them)
+//   throw        a thrower (fire pots, a curse): from past arm's reach to range it lobs one every
+//                so often (every, s) for dmg, splashing splash m; it keeps back to keep m
 //   where        when and where it comes on its own (combat/combat.js creatures()):
-//                night (after dark only), zones (combat.js zone()), pack (how many together)
+//                night (after dark only), zones (combat.js zone()), pack (how many together),
+//                odds (how often, against the others there: 1 when not given)
 //
 // Pure data: no three, no DOM.
 
@@ -47,8 +52,82 @@ export const SPECIES = Object.freeze({
 		resist: { fire: 0.15, ballistic: 0.75, impact: 0.8, energy: 1.3 }, surface: 'stone',
 		where: { night: false, zones: ['deep', 'arid'], pack: [1, 1] },
 	},
+	'signplate-brute': {
+		name: 'Signplate Brute', faction: 'goblins', height: 1.9,
+		hp: 320, armour: 60, walk: 1.1, run: 3.4, dmg: 28, reach: 2.4, strike: 1.3, sight: 45,
+		resist: { ballistic: 0.7, pierce: 0.8, fire: 1.1 }, surface: 'metal',
+		where: { night: true, zones: ['earth-urban', 'earth-coast', 'village'], pack: [1, 1], odds: 0.6 },
+	},
+	'flarepot': {
+		name: 'Flarepot', faction: 'goblins', height: 1.15,
+		hp: 60, armour: 0, walk: 1.8, run: 5.2, dmg: 7, reach: 1.4, strike: 0.8, sight: 50,
+		resist: { fire: 0.4 }, surface: 'creature',
+		throw: { range: 17, keep: 7, every: [2.2, 3.6], dmg: 14, type: 'fire', splash: 2.4 },
+		where: { night: true, zones: ['earth-urban', 'earth-coast', 'village'], pack: [1, 2] },
+	},
+	'spore-hexer': {
+		name: 'Spore Hexer', faction: 'goblins', height: 1.25,
+		hp: 90, armour: 5, walk: 0.9, run: 2.6, dmg: 9, reach: 1.9, strike: 1.0, sight: 50,
+		resist: { fire: 1.5, energy: 0.8 }, surface: 'creature',
+		throw: { range: 20, keep: 9, every: [3, 4.5], dmg: 10, type: 'energy', splash: 2.0 },
+		where: { night: false, zones: ['deep'], pack: [1, 2] },
+	},
+	'old-drain-king': {
+		name: 'The Old Drain King', faction: 'goblins', height: 2.4,
+		hp: 900, armour: 40, walk: 0.8, run: 2.0, dmg: 40, reach: 2.8, strike: 1.6, sight: 40,
+		resist: { ballistic: 0.85 }, surface: 'creature',
+		where: { night: false, zones: ['deep'], pack: [1, 1], odds: 0.12 },
+	},
+	'saltmarsh-mother': {
+		name: 'Saltmarsh Mother', faction: 'nightborn', height: 2.5,
+		hp: 420, armour: 10, walk: 1.0, run: 4.0, dmg: 30, reach: 3.0, strike: 1.2, sight: 50,
+		resist: { fire: 1.4, ballistic: 0.8 }, surface: 'creature',
+		where: { night: true, zones: ['earth-coast', 'wild'], pack: [1, 1], odds: 0.5 },
+	},
+	'moonturned': {
+		name: 'Moonturned', faction: 'nightborn', height: 2.2, model: 'moonturned-beast', human: 'moonturned',
+		hp: 220, armour: 5, walk: 1.3, run: 6.0, dmg: 20, reach: 2.0, strike: 0.8, sight: 50,
+		resist: { fire: 1.2 }, surface: 'creature',
+		where: { night: true, zones: ['village', 'earth-rural'], pack: [1, 2], odds: 0.7 },
+	},
+	'burnt-giant': {
+		name: 'Burnt Giant', faction: 'nightborn', height: 12,
+		hp: 2400, armour: 80, walk: 1.4, run: 3.6, dmg: 55, reach: 7, strike: 2.4, sight: 70,
+		resist: { fire: 2.0, ballistic: 0.5, pierce: 0.6 }, surface: 'wood',
+		where: { night: true, zones: ['wild', 'earth-rural'], pack: [1, 1], odds: 0.12 },
+	},
+	'ridge-hound': {
+		name: 'Ridge Hound', faction: 'nightborn', height: 1.15,
+		hp: 110, armour: 0, walk: 1.6, run: 8.5, dmg: 13, reach: 1.7, strike: 0.7, sight: 70,
+		resist: { fire: 1.3 }, surface: 'creature',
+		where: { night: true, zones: ['earth-rural', 'wild'], pack: [3, 5], odds: 0.8 },
+	},
+	'gloomcrawler': {
+		name: 'Gloomcrawler', faction: 'gloom', height: 1.0,
+		hp: 90, armour: 25, walk: 1.4, run: 6.5, dmg: 12, reach: 1.8, strike: 0.8, sight: 40,
+		resist: { fire: 1.4, ballistic: 0.85 }, surface: 'creature',
+		throw: { range: 16, keep: 3, every: [3, 5], dmg: 9, type: 'energy', splash: 1.4 },
+		// (the Deep sends its own: every gloom squad is of these, combat/ai-squads.js)
+		where: { night: false, zones: [], pack: [2, 4] },
+	},
+	'hollow-king': {
+		name: 'The Hollow King', faction: 'nightborn', height: 4,
+		hp: 1800, armour: 120, walk: 1.2, run: 3.2, dmg: 45, reach: 3.4, strike: 1.5, sight: 50,
+		resist: { ballistic: 0.6, pierce: 0.7, energy: 1.2 }, surface: 'metal',
+		// (the barrow's end, not the open world's: met from the places menu for now)
+		where: { night: false, zones: [], pack: [1, 1] },
+	},
 });
 export const SPECIES_IDS = Object.freeze(Object.keys(SPECIES));
+
+// one of ids, by their odds (rnd in 0..1)
+export function pickSpecies(ids, rnd = Math.random()) {
+	let sum = 0;
+	for (const id of ids) sum += SPECIES[id].where.odds ?? 1;
+	let t = rnd * sum;
+	for (const id of ids) { t -= SPECIES[id].where.odds ?? 1; if (t < 0) return id; }
+	return ids[ids.length - 1];
+}
 
 // which of them may come here now: zone (combat.js zone()), night (0..1, world/sky.js uNight)
 export function speciesFor(zone, night) {
