@@ -82,7 +82,7 @@ function militia(r, a, b, scheme) {
 	// a shemagh at the neck or over the face, or a balaclava under a helmet
 	const face = r();
 	if (face < 0.3) o.acc.push({ kind: 'bandana', col: pick(r, ['#c9bfa4', '#3a3a32', CAMO[scheme][3]]), acc: pick(r, ['#2a2b2e', '#7a2a24', CAMO[scheme][1]]) });
-	if (r() < 0.65) o.acc.push({ kind: 'gloves', col: pick(r, ['#2a2b2e', '#5f5845', '#8a7556']) });
+	if (r() < 0.65) o.acc.push({ kind: 'gloves', col: pick(r, ['#2a2b2e', '#5f5845', '#8a7556']), combat: true });
 	// some roll their sleeves (the last draw: the rest stays as it was): the shirt's, or the
 	// jacket's over a short-sleeved one
 	if (o.rollable && r() < 0.35) { if (o.outer) { o.outer.sleeves = 'rolled'; o.top.sleeves = 'short'; } else o.top.sleeves = 'rolled'; }
@@ -97,7 +97,7 @@ function soldier(r, scheme, officer = false) {
 	else o.acc.push({ kind: 'helmet', col: CAMO[scheme][1], visor: null, camo: scheme, combat: true, nvg: r() < 0.45, comms: r() < 0.85 });
 	// (a carrier printed in the uniform's pattern, or ranger green over woodland)
 	o.acc.push(scheme === 'multicam' ? { ...carrier(CAMO.multicam[0], CAMO.multicam[1]), camo: 'multicam' } : carrier('#454a36', '#3c4a2c'));
-	if (r() < 0.8) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
+	if (r() < 0.8) o.acc.push({ kind: 'gloves', col: '#2a2b2e', combat: true });
 	if (!officer && r() < 0.6) o.acc.push({ kind: 'kneepads', col: '#2f2f29' });
 	// about a third with the jacket's sleeves rolled to below the elbow over a pattern tee
 	// (the last draw, so the rest of the kit stays as it was)
@@ -129,7 +129,7 @@ function tactical(r) {
 	const o = { gen: 'alien', top: { kind: 'longsleeve', col: dark, acc: '#2c313a', pat: 'plain', fit: 'regular', sleeves: 'long' }, outer: null, bottom: { kind: 'cargo', col: dark, pat: 'cargo', legs: 'long', fit: 'regular' }, shoes: boots('#121214'), acc: [] };
 	o.acc.push({ kind: 'helmet', col: '#1a1d22', visor: r() < 0.5 ? '#3a4656' : null, combat: true });
 	o.acc.push({ kind: 'carrier', col: '#15181d', acc: '#2a2f38', badge: '#d9c46a', police: true });
-	o.acc.push({ kind: 'gloves', col: '#151618' });
+	o.acc.push({ kind: 'gloves', col: '#151618', combat: true });
 	return o;
 }
 
