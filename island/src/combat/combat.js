@@ -40,7 +40,7 @@ import { createCars } from './cars.js';
 import { createFireField } from './fire.js';
 import { createBoss } from './bosses.js';
 import { BOSSES } from './boss-defs.js';
-import { createRelations, FACTIONS, PLAYER } from './factions.js';
+import { createRelations, FACTIONS, PLAYER, ATTACK, attackGap } from './factions.js';
 import { rememberIncident } from '../people/world-awareness.js';
 import { createMorality } from './morality.js';
 import { pvpOpen } from './honor.js';
@@ -214,6 +214,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	function forgive(h) {
 		for (const m of h?.squad?.members || (h ? [h] : [])) { m.provoked = false; if (m.target?.id === 'me') { m.target = null; m.targetT = 0; } }
 	}
+	// attacks on you paced as events (factions.js ATTACK): play time, and when the last one came
+	let playT = 0, lastAttackT = 0;
+	const hatesMe = (fid) => relations.hostile(fid, PLAYER) || (FACTIONS[fid]?.kind === 'mercs' && morality.reactions().bounty > 0);
 	let gangDeaths = [];
 	const fireField = createFireField({ maxBurning: isPhone ? 3 : 5, maxChain: 3, radius: 14, life: 75 });
 	const fireMeta = new Map();
@@ -912,7 +915,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		return null;
 	}
 	function director(dt) {
-		directorT -= dt; bountyT -= dt; policeT -= dt;
+		directorT -= dt; bountyT -= dt; policeT -= dt; playT += dt;
 		const p = P();
 		if (!p || p.flying || p.swimming || drive?.active?.() || me.ko) return;
 		// the patrol answering a wanted level
@@ -925,7 +928,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// contract hunters, for a bounty
 		// (only where there are people or businesses about: not out in the empty country)
 		if (bountyT <= 0 && isEarth() && !populated(eye())) bountyT = 30;
-		if (bountyT <= 0) { bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
+		// (a raid, and a rare one: factions.js ATTACK)
+		if (bountyT <= 0 && playT - lastAttackT < ATTACK.raid) bountyT = 60;
+		if (bountyT <= 0) { bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { lastAttackT = playT; squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
 		if (!settings.ambient || directorT > 0 || contracts.info().mission) return;
 		directorT = rnd(70, 130);
 		if (squads.info().squads.length >= (isPhone ? 2 : 3)) return;
@@ -934,23 +939,34 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// the law's own trouble on Earth's streets (gangs by their territory, militia only out of town)
 		if (hooks.ambient?.(z, s)) return;
 		const two = (a, b, n = 3) => { squads.squad(a, s.x - 9, s.z, n, {}); squads.squad(b, s.x + 9, s.z + 4, n, {}).then((sq) => { for (const h of sq.members) { h.target = null; } }); call(`Gunfire ahead: ${FACTIONS[a].name} and ${FACTIONS[b].name}.`, ''); if (FACTIONS[a].kind === 'gang') hooks.event?.({ kind: 'gang', x: s.x, z: s.z, severity: 1 }); };
+		// a side that has it in for you comes for you only when its turn is due (factions.js
+		// ATTACK); otherwise this round brings nobody. The Deep keeps its crawlers as they are.
+		const due = (...fids) => {
+			const foes = fids.filter(hatesMe);
+			if (!foes.length || z === 'deep') return true;
+			if (foes.some((f) => playT - lastAttackT < attackGap(FACTIONS[f], z))) return false;
+			lastAttackT = playT;
+			return true;
+		};
 		// a militia only at its own compound (never roaming): the nearest one within reach, if any
-		const compound = () => { const c = campsNear(eye().x, eye().z).filter((q) => Math.hypot(q.x - eye().x, q.z - eye().z) < 260)[0]; if (!c) return false; props.clearTag('camp'); props.camp(c.x, c.z, 'camp', (x, z) => ground(x, z, eye().y + 2)); squads.squad('ridgeback', c.x, c.z, isPhone ? 3 : 4, { post: { kind: 'compound', x: c.x, z: c.z, r: c.r, loop: [[c.x - 14, c.z - 14], [c.x + 14, c.z - 14], [c.x + 14, c.z + 14], [c.x - 14, c.z + 14]] } }); return true; };
+		const compound = () => { const c = campsNear(eye().x, eye().z).filter((q) => Math.hypot(q.x - eye().x, q.z - eye().z) < 260)[0]; if (!c || !due('ridgeback')) return false; props.clearTag('camp'); props.camp(c.x, c.z, 'camp', (x, z) => ground(x, z, eye().y + 2)); squads.squad('ridgeback', c.x, c.z, isPhone ? 3 : 4, { post: { kind: 'compound', x: c.x, z: c.z, r: c.r, loop: [[c.x - 14, c.z - 14], [c.x + 14, c.z - 14], [c.x + 14, c.z + 14], [c.x - 14, c.z + 14]] } }); return true; };
+		const one = (fid, n) => { if (due(fid)) squads.squad(fid, s.x, s.z, n, {}); };
 		const roll = Math.random();
 		if (z === 'deep') squads.squad('gloom', s.x, s.z, 3, {});
-		else if (z === 'earth-urban') roll < 0.5 ? two('copperline', 'glasshouse') : squads.squad(roll < 0.75 ? 'copperline' : 'glasshouse', s.x, s.z, 3, {});
-		else if (z === 'earth-coast') roll < 0.5 && populated(s) ? two('saltjack', 'patrol', 2) : squads.squad('saltjack', s.x, s.z, 3, {});
-		else if (z === 'earth-rural') { if (roll > 0.5 || !compound()) squads.squad('rangers', s.x, s.z, 3, {}); }
+		else if (z === 'earth-urban') { if (roll < 0.5) { if (due('copperline', 'glasshouse')) two('copperline', 'glasshouse'); } else one(roll < 0.75 ? 'copperline' : 'glasshouse', 3); }
+		else if (z === 'earth-coast') { if (roll < 0.5 && populated(s)) { if (due('saltjack', 'patrol')) two('saltjack', 'patrol', 2); } else one('saltjack', 3); }
+		else if (z === 'earth-rural') { if (roll > 0.5 || !compound()) one('rangers', 3); }
 		else if (z === 'village') {
 			// a raid: raiders come for the houses, the Hearthguard turn out
 			const vf = W().village.footprints.find((f) => !f.fence);
 			const raiders = shared.planet?.type === 'ARID' && roll < 0.5 ? 'dunecutters' : 'ashfang';
+			if (!due(raiders)) return;
 			squads.squad(raiders, s.x, s.z, isPhone ? 3 : 4, { raid: true, dest: { x: vf.x, z: vf.z } });
 			squads.squad('hearthguard', vf.x, vf.z, isPhone ? 2 : 3, {});
 			call(`${FACTIONS[raiders].name} are raiding the village!`, '');
-		} else if (z === 'arid') roll < 0.5 ? two('ashfang', 'dunecutters') : roll < 0.8 ? camp('ashfang', s) : squads.squad('rogue', s.x, s.z, 2, {});
-		else if (roll < 0.45) camp('ashfang', s);
-		else if (roll < 0.7 || !compound()) squads.squad('rogue', s.x, s.z, 2, {});
+		} else if (z === 'arid') { if (roll < 0.5) { if (due('ashfang', 'dunecutters')) two('ashfang', 'dunecutters'); } else if (roll < 0.8) { if (due('ashfang')) camp('ashfang', s); } else one('rogue', 2); }
+		else if (roll < 0.45) { if (due('ashfang')) camp('ashfang', s); }
+		else if (roll < 0.7 || !compound()) one('rogue', 2);
 	}
 	// militia compounds round a point: fixed per world (military/rules.js)
 	function campsNear(x, z) {
@@ -1260,7 +1276,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		},
 		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),
 		tend: (p) => civilians.tend(p),
-		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points), blue: wanted.blue, strikes: wanted.strikes }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, pvp: { flag: pvp.flag, server: pvp.server, open: pvpNow() }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
+		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points), blue: wanted.blue, strikes: wanted.strikes }, attacks: { play: Math.round(playT), last: Math.round(lastAttackT) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, pvp: { flag: pvp.flag, server: pvp.server, open: pvpNow() }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
 		// Crysis.combat.spawn('ashfang', 3, { raid }) / ('rogue') / ('gloom') / ('patrol') / ('fire')
 		spawn: (fid = 'ashfang', n = 3, o = {}) => { const s = spotAhead(o.d ?? 25, (o.d ?? 25) + 10) || { x: eye().x + 20, z: eye().z }; return squads.squad(fid, s.x, s.z, n, o).then((sq) => sq.id); },
 		fight: (a = 'ashfang', b = 'dunecutters', n = 3, d = 30) => { const s = spotAhead(d, d + 5); if (!s) return null; squads.squad(a, s.x - 8, s.z, n, {}); squads.squad(b, s.x + 8, s.z + 3, n, {}); return 'fight'; },
