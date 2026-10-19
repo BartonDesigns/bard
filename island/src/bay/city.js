@@ -614,24 +614,30 @@ function treeImpostor(parts, texAvg) {
 }
 const IMPOSTOR_VERT = /* glsl */`
 	attribute float aSize; attribute float aSp; attribute vec3 aTint;
-	uniform float uScale; varying float vSp; varying vec3 vTint; varying float vD;
+	uniform float uScale; varying float vSp; varying vec3 vTint; varying float vD; varying float vFill;
 	#include <fog_pars_vertex>
 	void main(){
-		vec4 mvPosition = modelViewMatrix * vec4(position + vec3(0.0, aSize * 0.5, 0.0), 1.0);
-		gl_Position = projectionMatrix * mvPosition;
-		gl_PointSize = aSize * uScale / -mvPosition.z;
-		vSp = aSp; vTint = aTint; vD = length(mvPosition.xyz);
+		// (the species plus 10: one of the wild land's near scatter (city.js wildLand), gone by 790 m
+		// of you; plus 20: one of its far scatter's, grown past there so the woods keep their cover)
+		float code = floor(aSp / 10.0 + 0.01), fill = step(0.5, code) * step(code, 1.5), dH = length((modelMatrix * vec4(position, 1.0)).xz - cameraPosition.xz);
+		float gone = smoothstep(650.0, 790.0, dH);
+		vFill = fill * gone;
+		float size = aSize * (1.0 + 0.45 * gone * step(1.5, code));
+		vec4 mvPosition = modelViewMatrix * vec4(position + vec3(0.0, size * 0.5, 0.0), 1.0);
+		gl_Position = fill * step(0.999, gone) > 0.5 ? vec4(0.0, 0.0, 2.0, 1.0) : projectionMatrix * mvPosition;
+		gl_PointSize = size * uScale / -mvPosition.z;
+		vSp = aSp - 10.0 * code; vTint = aTint; vD = length(mvPosition.xyz);
 		#include <fog_vertex>
 	}`;
 const IMPOSTOR_FRAG = /* glsl */`
 	uniform sampler2D uAtlas; uniform vec3 uSunC, uAmb, uSunD; uniform vec4 uBand;
-	varying float vSp; varying vec3 vTint; varying float vD;
+	varying float vSp; varying vec3 vTint; varying float vD; varying float vFill;
 	#include <fog_pars_fragment>
 	void main(){
 		vec2 uv = vec2((gl_PointCoord.x + floor(vSp + 0.5)) / 4.0, 1.0 - gl_PointCoord.y);
 		vec4 t = texture2D(uAtlas, uv);
 		// dissolve in and out across the hand-over bands, as the other tiers do
-		float fade = smoothstep(uBand.x, uBand.y, vD) * (1.0 - smoothstep(uBand.z, uBand.w, vD));
+		float fade = smoothstep(uBand.x, uBand.y, vD) * (1.0 - smoothstep(uBand.z, uBand.w, vD)) * (1.0 - vFill);
 		float h = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
 		if (t.a < 0.45 || fade < h) discard;
 		// lit from above: the sun on the upper crown, the sky everywhere
@@ -1780,7 +1786,7 @@ export function createCity(shared, scene, bay, real = null) {
 			// far: one point, drawn as its species' picture, tinted like the tree
 			if (nf >= TCAP) continue;
 			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = gy + 0.2; fp.pos[nf * 3 + 2] = t.z;
-			fp.size[nf] = t.h * T.sizeK; fp.sp[nf] = sp;
+			fp.size[nf] = t.h * T.sizeK; fp.sp[nf] = sp + (t.fill ? 10 : t.wild ? 20 : 0);
 			fp.tint[nf * 3] = tint[0]; fp.tint[nf * 3 + 1] = tint[1]; fp.tint[nf * 3 + 2] = tint[2];
 			nf++;
 		}
@@ -2130,7 +2136,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// (out on the globe the wild land and its creeks are the globe's own: globetrees.js)
 		if (wild) {
 			wildLand(cx, cz, 1100, trees);
-			wildLand(cx, cz, 2700, trees, 22, 1100);          // beyond: a coarser, cheaper scatter for the far masses
+			wildLand(cx, cz, 2700, trees, true, 1100);        // beyond: a coarser, cheaper scatter for the far masses
 			// the willows, sycamores and redwoods along the San Lorenzo (sanlorenzo.js)
 			for (const t of riverTreesNear(cx, cz, 2700)) trees.push(t);
 			// ...and along every other creek and river's wild banks (water.js)
@@ -2155,69 +2161,87 @@ export function createCity(shared, scene, bay, real = null) {
 	// how much brush a spot of open grassland carries: drifts on a 60 m and a 20 m scale,
 	// more on north faces and in gullies
 	const brushK = (x, z, north, gully) => Math.max(0, vnoise(x / 60 + 31, z / 60 - 7) * 0.7 + vnoise(x / 20 - 5, z / 20 + 11) * 0.3 - 0.35) * (0.8 + Math.max(0, north) * 0.6 + gully * 0.8);
-	function wildLand(cx, cz, R, trees, C = 13, rIn = 0) {
+	// (the far scatter's cells are two of the near's to a side, and in the near scatter the corner
+	// cell of every two by two is the far scatter's own: across the hand-over a tree stays where it
+	// is, it never jumps to another spot as you move)
+	const WILD_C = 13, WILD_FAR_C = 26;
+	function wildLand(cx, cz, R, trees, far = false, rIn = 0) {
 		if (!real?.landAt) return;
-		const H = (x, z) => bay.heightAt(x, z), far = rIn > 0;
-		for (let gz = Math.floor((cz - R) / C); gz <= Math.floor((cz + R) / C); gz++) for (let gx = Math.floor((cx - R) / C); gx <= Math.floor((cx + R) / C); gx++) {
-			const r = hash(gx * 1.7 + 11, gz * 2.3 + 5);
-			if (r > 0.62) continue;                                                  // most cells are open ground
-			const x = (gx + hash(gx, gz * 3) * 1.6 - 0.3) * C, z = (gz + hash(gx * 5, gz) * 1.6 - 0.3) * C;
-			const dd = (x - cx) * (x - cx) + (z - cz) * (z - cz);
-			if (dd > R * R || dd < rIn * rIn) continue;
-			// open country: the mapped wild land, or anywhere beyond the maps the towns don't reach
-			const inR = real.inside(x, z);
-			if (inR) {
-				const L = real.landAt(x, z);
-				if (!L || (L.lu !== 0 && L.lu !== 11 && L.lu !== 12) || L.road > 0.2 || L.roof > 0.2) continue;
-			} else if (bay.urbanAt(x, z).u > 0.06) continue;
-			const h = H(x, z);
-			if (h < 3) continue;
-			const e = 18, hxp = H(x + e, z), hxm = H(x - e, z), hzp = H(x, z + e), hzm = H(x, z - e);
-			const slope = Math.hypot(hxp - hxm, hzp - hzm) / (2 * e);
-			if (slope > 1.1) continue;                                                 // bare rock
-			const north = Math.max(-1, Math.min(1, (hzp - hzm) / (2 * e) * 4));      // ground rising southward faces north
-			const gully = Math.max(0, Math.min(1, (hxp + hxm + hzp + hzm - 4 * h) / 6));
-			const high = Math.min(1, Math.max(0, (h - 350) / 600));
-			// groves: woodland gathers in patches rather than evenly
-			const grove = vnoise(x / 140, z / 140) * 0.7 + vnoise(x / 45 + 9, z / 45 + 3) * 0.3;
-			const wood = Math.min(1, Math.max(0, (0.08 + north * 0.55 + gully * 0.7 + slope * 0.2 - high * 0.15) * (0.25 + grove * 1.5)));
-			const chap = Math.min(1, Math.max(0, -north * 0.5 + slope * 0.9 + high * 0.6 - 0.35 - gully * 0.5));
-			const r2 = hash(gx * 3.1 + 7, gz * 1.3 + 3), g = h - 0.3;
-			const tint = (base) => jit(base, r2);
-			// the fog belt near the sea (as the ground's colours have it, terrain.js): redwoods down
-			// the canyons and on the shady slopes, in rings round where an old one stood, Douglas-fir
-			// up on the ridges, and coastal scrub, not chaparral; the blue oak and gray pine are
-			// inland trees and stay out of it
-			const fq = Math.min(1, Math.max(0, (x - 22000) / 36000)), fog = 1 - fq * fq * (3 - 2 * fq);
-			// the bluffs and headlands right on the open ocean are wind-scoured: coastal scrub and
-			// grass, with trees only down in the sheltered draws (the Marin Headlands, Devil's Slide)
-			// (a watered city park is planted: Golden Gate Park's groves of cypress, pine and eucalyptus)
-			const planted = GREENS.some((G) => Math.abs(x - G.x) < G.rx && Math.abs(z - G.z) < G.rz);
-			if (planted && r2 < 0.42) { trees.push(r2 < 0.24 ? { x, y: g, z, h: 16 + r2 * 40, cone: true, sp: 2, col: tint([0.1, 0.17, 0.08]) } : { x, y: g, z, h: 12 + r2 * 14, sp: 0, col: tint([0.2, 0.28, 0.12]) }); continue; }      // (Monterey cypress and pine; eucalyptus)
-			const windswept = !planted && fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
-			const draw = windswept ? (H(x + 60, z) + H(x - 60, z) + H(x, z + 60) + H(x, z - 60) - 4 * h) / 4 : 0;
-			if (windswept && (draw < 7 || r2 > wood * 0.3) && r2 < wood * 0.8) { if (!far && r2 < 0.5) trees.push({ x, y: g, z, h: 0.9 + r2 * 1.2, shrub: true, col: tint([0.28, 0.33, 0.2]) }); continue; }
-			if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.1 || north > 0.1 || slope < 0.3) && high < 0.5) {
-				const rh = 32 + r2 * 34 + gully * 10;
-				trees.push({ x, y: g, z, h: rh, cone: true, sp: 2, col: tint([0.12, 0.19, 0.09]) });
-				if (!far) for (let k = 0; k < 7; k++) { const a = hash(gx * 7 + k, gz * 3) * 6.283, rr = 2 + hash(gx + k * 3, gz * 5) * 9, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.05, z: qz, h: 0.7 + hash(gx * k, gz + k) * 0.6, fern: true, col: tint([0.18, 0.3, 0.1]) }); }
-				if (!far) for (let k = 0, n = 2 + Math.floor(hash(gx * 2.3, gz * 5.9) * 4); k < n; k++) { const a = k / n * 6.283 + r2 * 3, rr = 4 + hash(gx + k, gz - k) * 3, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.3, z: qz, h: rh * (0.6 + hash(gx * k, gz) * 0.3), cone: true, sp: 2, col: tint([0.12, 0.2, 0.09]) }); }
-			} else if (r2 < wood * 0.8 && fog > 0.6 && north < 0.1 && slope < 0.6) trees.push({ x, y: g, z, h: 22 + r2 * 18, cone: true, sp: 2, col: tint([0.15, 0.22, 0.12]) });      // Douglas-fir
-			else if (r2 < wood * 0.8 && !far && fog > 0.3 && north > 0.3) { trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: 1, col: tint([0.16, 0.24, 0.1]) }); for (let k = 0; k < 4; k++) { const a = hash(gx * 5 + k, gz) * 6.283, rr = 3 + hash(gx, gz * 7 + k) * 6, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.05, z: qz, h: 0.6 + hash(gx + k, gz) * 0.5, fern: true, col: tint([0.2, 0.3, 0.12]) }); } }
-			else if (r2 < wood * 0.8) trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: r2 < wood * 0.35 ? 0 : 1, col: tint(r2 < 0.3 ? [0.16, 0.24, 0.1] : [0.22, 0.28, 0.13]) });
-			else if (r2 < wood * 0.8 + chap * 0.75) { if (!far) trees.push({ x, y: g, z, h: 1.4 + r2 * 1.8, shrub: true, col: tint(fog > 0.5 ? [0.28, 0.33, 0.2] : [0.2, 0.25, 0.13]) }); }
-			else if (fog < 0.4 && r2 > 0.965 - high * 0.05) trees.push({ x, y: g, z, h: 11 + r2 * 9, cone: true, sp: 2, col: tint([0.3, 0.36, 0.26]) });   // gray pine
-			else if (fog < 0.4 && r2 > 0.92 && slope < 0.35) trees.push({ x, y: g, z, h: 7 + r2 * 5, sp: 1, col: tint([0.3, 0.33, 0.2]) });          // blue oak in the grass
-			// the open grassland's own brush: coyote brush and sage in loose drifts, thicker on the
-			// shady side and in the draws, a few poison-oak thickets gone red in the dry season
-			// (drawn on their own, in clumps of two to four)
-			if (!far && slope < 0.8 && hash(gx * 9.7 + 1, gz * 4.1 + 2) < brushK(x, z, north, gully) * 1.1) {
-				const kind = hash(gx * 5.3, gz * 2.9), c = kind < 0.55 ? [0.2, 0.27, 0.12] : kind < 0.85 ? [0.36, 0.4, 0.3] : [0.42, 0.22, 0.1];
-				for (let k = 0, n = 2 + Math.floor(hash(gx * 1.3, gz * 8.1) * 3); k < n; k++) {
-					const bx = x + (hash(gx * 3 + k, gz) - 0.5) * 9, bz = z + (hash(gx, gz * 3 + k) - 0.5) * 9;
-					if (inR) { const L2 = real.landAt(bx, bz); if (L2 && (L2.roof > 0.1 || L2.road > 0.2)) continue; }      // (not in a building or on a street)
-					trees.push({ x: bx, y: H(bx, bz) - 0.3, z: bz, h: 0.7 + hash(gx + k, gz * 7.1) * 1.2, shrub: true, col: tint(c) });
-				}
+		const C = far ? WILD_FAR_C : WILD_C;
+		// (a few cells over the edge: a tree can stand off its cell's own square)
+		for (let gz = Math.floor((cz - R) / C) - 3; gz <= Math.floor((cz + R) / C) + 3; gz++) for (let gx = Math.floor((cx - R) / C) - 3; gx <= Math.floor((cx + R) / C) + 3; gx++) {
+			const rep = far || (!(gx & 1) && !(gz & 1)), n0 = trees.length;
+			if (rep && !far) wildCell(gx >> 1, gz >> 1, WILD_FAR_C, false, cx, cz, R, rIn, trees);
+			else wildCell(gx, gz, C, far, cx, cz, R, rIn, trees);
+			// (the near scatter's own: its trees fade out well inside its reach, by your distance
+			// as you go, so none is ever seen to come or go when the scatter is laid out again;
+			// only the far scatter's carry on past them, IMPOSTOR_VERT)
+			for (let k = n0; k < trees.length; k++) { if (rep && trees[k].x === wildAt[0] && trees[k].z === wildAt[1]) trees[k].wild = true; else if (!far) trees[k].fill = true; }
+		}
+	}
+	const wildAt = [0, 0];
+	// one cell of the wild land's scatter
+	function wildCell(gx, gz, C, far, cx, cz, R, rIn, trees) {
+		const H = (x, z) => bay.heightAt(x, z);
+		const r = hash(gx * 1.7 + 11, gz * 2.3 + 5);
+		if (r > 0.62) return;                                                  // most cells are open ground
+		const x = (gx + hash(gx, gz * 3) * 1.6 - 0.3) * C, z = (gz + hash(gx * 5, gz) * 1.6 - 0.3) * C;
+		wildAt[0] = x; wildAt[1] = z;
+		const dd = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+		if (dd > R * R || dd < rIn * rIn) return;
+		// open country: the mapped wild land, or anywhere beyond the maps the towns don't reach
+		const inR = real.inside(x, z);
+		if (inR) {
+			const L = real.landAt(x, z);
+			if (!L || (L.lu !== 0 && L.lu !== 11 && L.lu !== 12) || L.road > 0.2 || L.roof > 0.2) return;
+		} else if (bay.urbanAt(x, z).u > 0.06) return;
+		const h = H(x, z);
+		if (h < 3) return;
+		const e = 18, hxp = H(x + e, z), hxm = H(x - e, z), hzp = H(x, z + e), hzm = H(x, z - e);
+		const slope = Math.hypot(hxp - hxm, hzp - hzm) / (2 * e);
+		if (slope > 1.1) return;                                                 // bare rock
+		const north = Math.max(-1, Math.min(1, (hzp - hzm) / (2 * e) * 4));      // ground rising southward faces north
+		const gully = Math.max(0, Math.min(1, (hxp + hxm + hzp + hzm - 4 * h) / 6));
+		const high = Math.min(1, Math.max(0, (h - 350) / 600));
+		// groves: woodland gathers in patches rather than evenly
+		const grove = vnoise(x / 140, z / 140) * 0.7 + vnoise(x / 45 + 9, z / 45 + 3) * 0.3;
+		const wood = Math.min(1, Math.max(0, (0.08 + north * 0.55 + gully * 0.7 + slope * 0.2 - high * 0.15) * (0.25 + grove * 1.5)));
+		const chap = Math.min(1, Math.max(0, -north * 0.5 + slope * 0.9 + high * 0.6 - 0.35 - gully * 0.5));
+		const r2 = hash(gx * 3.1 + 7, gz * 1.3 + 3), g = h - 0.3;
+		const tint = (base) => jit(base, r2);
+		// the fog belt near the sea (as the ground's colours have it, terrain.js): redwoods down
+		// the canyons and on the shady slopes, in rings round where an old one stood, Douglas-fir
+		// up on the ridges, and coastal scrub, not chaparral; the blue oak and gray pine are
+		// inland trees and stay out of it
+		const fq = Math.min(1, Math.max(0, (x - 22000) / 36000)), fog = 1 - fq * fq * (3 - 2 * fq);
+		// the bluffs and headlands right on the open ocean are wind-scoured: coastal scrub and
+		// grass, with trees only down in the sheltered draws (the Marin Headlands, Devil's Slide)
+		// (a watered city park is planted: Golden Gate Park's groves of cypress, pine and eucalyptus)
+		const planted = GREENS.some((G) => Math.abs(x - G.x) < G.rx && Math.abs(z - G.z) < G.rz);
+		if (planted && r2 < 0.42) { trees.push(r2 < 0.24 ? { x, y: g, z, h: 16 + r2 * 40, cone: true, sp: 2, col: tint([0.1, 0.17, 0.08]) } : { x, y: g, z, h: 12 + r2 * 14, sp: 0, col: tint([0.2, 0.28, 0.12]) }); return; }      // (Monterey cypress and pine; eucalyptus)
+		const windswept = !planted && fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
+		const draw = windswept ? (H(x + 60, z) + H(x - 60, z) + H(x, z + 60) + H(x, z - 60) - 4 * h) / 4 : 0;
+		if (windswept && (draw < 7 || r2 > wood * 0.3) && r2 < wood * 0.8) { if (!far && r2 < 0.5) trees.push({ x, y: g, z, h: 0.9 + r2 * 1.2, shrub: true, col: tint([0.28, 0.33, 0.2]) }); return; }
+		if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.1 || north > 0.1 || slope < 0.3) && high < 0.5) {
+			const rh = 32 + r2 * 34 + gully * 10;
+			trees.push({ x, y: g, z, h: rh, cone: true, sp: 2, col: tint([0.12, 0.19, 0.09]) });
+			if (!far) for (let k = 0; k < 7; k++) { const a = hash(gx * 7 + k, gz * 3) * 6.283, rr = 2 + hash(gx + k * 3, gz * 5) * 9, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.05, z: qz, h: 0.7 + hash(gx * k, gz + k) * 0.6, fern: true, col: tint([0.18, 0.3, 0.1]) }); }
+			if (!far) for (let k = 0, n = 2 + Math.floor(hash(gx * 2.3, gz * 5.9) * 4); k < n; k++) { const a = k / n * 6.283 + r2 * 3, rr = 4 + hash(gx + k, gz - k) * 3, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.3, z: qz, h: rh * (0.6 + hash(gx * k, gz) * 0.3), cone: true, sp: 2, col: tint([0.12, 0.2, 0.09]) }); }
+		} else if (r2 < wood * 0.8 && fog > 0.6 && north < 0.1 && slope < 0.6) trees.push({ x, y: g, z, h: 22 + r2 * 18, cone: true, sp: 2, col: tint([0.15, 0.22, 0.12]) });      // Douglas-fir
+		else if (r2 < wood * 0.8 && !far && fog > 0.3 && north > 0.3) { trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: 1, col: tint([0.16, 0.24, 0.1]) }); for (let k = 0; k < 4; k++) { const a = hash(gx * 5 + k, gz) * 6.283, rr = 3 + hash(gx, gz * 7 + k) * 6, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.05, z: qz, h: 0.6 + hash(gx + k, gz) * 0.5, fern: true, col: tint([0.2, 0.3, 0.12]) }); } }
+		else if (r2 < wood * 0.8) trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: r2 < wood * 0.35 ? 0 : 1, col: tint(r2 < 0.3 ? [0.16, 0.24, 0.1] : [0.22, 0.28, 0.13]) });
+		else if (r2 < wood * 0.8 + chap * 0.75) { if (!far) trees.push({ x, y: g, z, h: 1.4 + r2 * 1.8, shrub: true, col: tint(fog > 0.5 ? [0.28, 0.33, 0.2] : [0.2, 0.25, 0.13]) }); }
+		else if (fog < 0.4 && r2 > 0.965 - high * 0.05) trees.push({ x, y: g, z, h: 11 + r2 * 9, cone: true, sp: 2, col: tint([0.3, 0.36, 0.26]) });   // gray pine
+		else if (fog < 0.4 && r2 > 0.92 && slope < 0.35) trees.push({ x, y: g, z, h: 7 + r2 * 5, sp: 1, col: tint([0.3, 0.33, 0.2]) });          // blue oak in the grass
+		// the open grassland's own brush: coyote brush and sage in loose drifts, thicker on the
+		// shady side and in the draws, a few poison-oak thickets gone red in the dry season
+		// (drawn on their own, in clumps of two to four)
+		if (!far && slope < 0.8 && hash(gx * 9.7 + 1, gz * 4.1 + 2) < brushK(x, z, north, gully) * 1.1) {
+			const kind = hash(gx * 5.3, gz * 2.9), c = kind < 0.55 ? [0.2, 0.27, 0.12] : kind < 0.85 ? [0.36, 0.4, 0.3] : [0.42, 0.22, 0.1];
+			for (let k = 0, n = 2 + Math.floor(hash(gx * 1.3, gz * 8.1) * 3); k < n; k++) {
+				const bx = x + (hash(gx * 3 + k, gz) - 0.5) * 9, bz = z + (hash(gx, gz * 3 + k) - 0.5) * 9;
+				if (inR) { const L2 = real.landAt(bx, bz); if (L2 && (L2.roof > 0.1 || L2.road > 0.2)) continue; }      // (not in a building or on a street)
+				trees.push({ x: bx, y: H(bx, bz) - 0.3, z: bz, h: 0.7 + hash(gx + k, gz * 7.1) * 1.2, shrub: true, col: tint(c) });
 			}
 		}
 	}

@@ -28,6 +28,11 @@ export const FACTIONS = Object.freeze({
 	ironvale: { name: 'Ironvale Legion', kind: 'invaders', zones: [], colors: ['#6a6c5c', '#a33a2a'], emblem: 'a tower in a ring', gun: 'warden-spark-carbine', hp: 115, armour: 45, acc: 0.48, aggression: 0.9 },
 	rogue: { name: 'Rogue drones', kind: 'machines', zones: ['wild', 'arid'], colors: ['#3a3f46', '#ff4a2a'], emblem: 'none', hp: 60, armour: 0, acc: 0.5, aggression: 1 },
 	gloom: { name: 'Gloomcrawlers', kind: 'creatures', zones: ['deep'], colors: ['#b9c2c8', '#7affc8'], emblem: 'none', hp: 70, armour: 0, acc: 0.6, aggression: 1 },
+	// the creatures from the concept sheets (creatures/catalog.js: each kind's own life and blows;
+	// they come on their own by night, in the dungeons and in the Deep, combat.js creatures())
+	nightborn: { name: 'Nightborn', kind: 'creatures', zones: [], colors: ['#8a96a0', '#9fd8ff'], emblem: 'none', hp: 220, armour: 10, acc: 0.6, aggression: 1 },
+	goblins: { name: 'Goblins', kind: 'creatures', zones: [], colors: ['#7d7a68', '#c86a5a'], emblem: 'none', hp: 70, armour: 0, acc: 0.6, aggression: 1 },
+	deepborn: { name: 'Deepborn', kind: 'creatures', zones: [], colors: ['#5a4632', '#7aff6a'], emblem: 'none', hp: 240, armour: 30, acc: 0.6, aggression: 1 },
 	civ: { name: 'Townsfolk', kind: 'civilians', zones: [], colors: ['#ffffff', '#ffffff'], emblem: 'none', aggression: 0 },
 	village: { name: 'Villagers', kind: 'civilians', zones: ['village'], colors: ['#ffffff', '#ffffff'], emblem: 'none', aggression: 0 },
 });
@@ -49,6 +54,7 @@ const BASE = [
 	['saltjack', 'patrol', -40], ['saltjack', 'copperline', 20], ['halcyon', 'patrol', 10],
 	['rogue', 'ashfang', -60], ['rogue', 'dunecutters', -60], ['rogue', 'village', -60], ['rogue', 'hearthguard', -60], ['rogue', 'rangers', -60], ['rogue', 'ridgeback', -60],
 	['gloom', 'village', -80],
+	...['nightborn', 'goblins', 'deepborn'].flatMap((c) => [[c, 'village', -80], [c, 'civ', -70], [c, 'hearthguard', -90], [c, 'patrol', -70], [c, 'rangers', -80], [c, 'police', -70], [c, 'guard', -80]]),
 	['guard', 'police', 80], ['guard', 'patrol', 70], ['guard', 'rangers', 60], ['guard', 'civ', 60], ['police', 'civ', 60], ['police', 'patrol', 80], ['police', 'rangers', 60],
 	['copperline', 'police', -50], ['glasshouse', 'police', -50], ['saltjack', 'police', -40], ['copperline', 'guard', -40], ['glasshouse', 'guard', -40], ['ridgeback', 'guard', -20], ['ridgeback', 'police', -10],
 	['ironvale', 'guard', -100], ['ironvale', 'police', -90], ['ironvale', 'patrol', -90], ['ironvale', 'civ', -60], ['ironvale', 'rangers', -90], ['ironvale', 'ridgeback', -70], ['ironvale', 'copperline', -40], ['ironvale', 'glasshouse', -40],
@@ -57,7 +63,7 @@ const BASE = [
 for (const [a, b, v] of [...BASE]) { if (a === 'police') BASE.push(['swat', b, v]); else if (b === 'police') BASE.push([a, 'swat', v]); }
 BASE.push(['swat', 'police', 100]);
 // how each sees you to begin with
-const PLAYER_BASE = { copperline: -10, glasshouse: -10, ashfang: -60, dunecutters: -50, rogue: -100, gloom: -100, saltjack: 0, halcyon: 0, patrol: 20, rangers: 20, hearthguard: 30, village: 40, civ: 40, ridgeback: 0, guard: 25, police: 20, swat: 20, ironvale: -70 };
+const PLAYER_BASE = { copperline: -10, glasshouse: -10, ashfang: -60, dunecutters: -50, rogue: -100, gloom: -100, nightborn: -100, goblins: -100, deepborn: -100, saltjack: 0, halcyon: 0, patrol: 20, rangers: 20, hearthguard: 30, village: 40, civ: 40, ridgeback: 0, guard: 25, police: 20, swat: 20, ironvale: -70 };
 
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 const clamp = (v) => Math.max(-100, Math.min(100, v));
