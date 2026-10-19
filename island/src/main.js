@@ -168,6 +168,7 @@ import { createRagdolls } from './people/ragdoll.js';
 import { createImpacts } from './vehicles/impact.js';
 import { createCarjack } from './vehicles/carjack.js';
 import { createAvatar } from './people/avatar.js';
+import { createHeroView } from './people/hero-view.js';
 import { createSelf } from './people/self.js';
 import * as CREATURES from './world/creatures.js';
 import { waterContact } from './world/water-contact.js';
@@ -680,7 +681,7 @@ export function createIslandWorld() {
 	HOOKS.ragdolls = ragdolls;
 	HOOKS.impacts = createImpacts({ people: () => ({pool:[...people.pool,...social.actors.all()]}), ragdolls, onImpact:p=>{HOOKS.combat?.vehicleImpact(p);world?.services?.injury(p);}, ward: (p) => HOOKS.combat?.ward(p) });
 	// taking a car off its driver (E beside one in the traffic): you, shown, haul them out
-	const avatar = createAvatar({ scene, world: () => world });
+	const avatar = HOOKS.avatar = createAvatar({ scene, world: () => world });
 	const carjack = createCarjack({ world: () => world, camera, drive, ragdolls, avatar, hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.carjack = carjack;
 	// you, seen (P), knocked down by the traffic, and a shove (X) (people/self.js)
@@ -695,6 +696,13 @@ export function createIslandWorld() {
 	addEventListener('keydown', (e) => { if ((e.key === 't' || e.key === 'T') && !e.repeat && world?.bizSeen?.type === 'tattoo' && !studio.active() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); studio.start(); } });
 	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active() || !!world?.boat?.boarded?.(), driving: () => (drive.active() && !carjack.active()) || !!world?.boat?.boarded?.(), hint: (t, ms) => hint(t, ms, 1), ward: (p) => HOOKS.combat?.ward(p) });
 	HOOKS.self = you;
+	// a look at your hero in the game itself, for development (?heroview, Crysis.heroView)
+	const heroView = HOOKS.heroView = createHeroView({ scene, renderer, avatar, self: you, world: () => world, setCine: (fn) => { HOOKS.cine = fn; } });
+	// your body made in a quiet moment soon after the world is entered, not when it is first
+	// needed (the first weapon taken up, whose arms are yours, or the first look at yourself):
+	// its making takes some hundreds of milliseconds
+	{ const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); (window.requestIdleCallback || ((f) => setTimeout(f, 1)))(() => avatar.ready().catch(() => {}), { timeout: 4000 }); } }, 2000); }
+	if (/[?&]heroview\b/.test(location.search)) { const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); heroView.open(); } }, 1000); }
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
 		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
@@ -1579,6 +1587,18 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		// your hero: a man or a woman (people/hero.js), made again where you stand
+		const heroL = css(document.createElement('div'), 'opacity:.9;margin-bottom:4px;'); heroL.textContent = 'Your hero';
+		const heroRow = css(document.createElement('div'), 'display:flex;gap:6px;margin-bottom:12px;');
+		heroRow.setAttribute('role', 'group'); heroRow.setAttribute('aria-label', 'Your hero');
+		for (const [sex, label] of [['male', 'Male'], ['female', 'Female']]) {
+			const on = avatar.hero === sex;
+			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid ' + (on ? '#01a982' : 'rgba(255,255,255,.25)') + ';background:' + (on ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;cursor:pointer;');
+			b.textContent = label; b.setAttribute('aria-pressed', String(on));
+			b.onclick = () => { if (avatar.hero === sex) return; avatar.setHero(sex).catch(() => {}); hint(`Your hero: ${label.toLowerCase()}. Friends see the change the next time you join a room.`, 2600, 1); buildPanel(); };
+			heroRow.appendChild(b);
+		}
+		p.append(heroL, heroRow);
 		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim. Hold C to crouch (lower, harder to hit); C while sprinting slides. Keys 1 to 5 take up your weapons (again puts it away), 6 to 0 cast your spells, N opens the spellbook. Alt / Option frees the mouse to look about by dragging; a double tap of Alt / Option returns to aiming.'; p.appendChild(combatHelp);
 		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
 			() => Math.round(shared.aimSensitivity * 100),
@@ -2726,6 +2746,9 @@ if (typeof window !== 'undefined') {
 		jackable: () => !!HOOKS.carjack?.candidate(),
 		// see yourself (as P does), shove (as X does)
 		thirdPerson: () => HOOKS.self?.toggle(),
+		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
+		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
+		heroView: () => HOOKS.heroView,
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },

@@ -23,6 +23,7 @@ import { hairMotion } from './hair-motion.js';
 import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 import { fitBags, torsoSurface, attachBag, BAG_KINDS } from './bags.js';
 import { tierNow } from '../world/governor.js';
+import { shapeBuild } from './build.js';
 import { loadKitModels } from './kit-models.js';
 import { GFX_PHONE } from '../world/device.js';
 
@@ -246,10 +247,14 @@ export function buildPerson(A, d) {
 		const t = targets[['african', 'asian', 'caucasian'][a] + '-' + sx + '-' + ag], k = d.ancestry[a] * w * wa * unit;
 		for (let i = 0; i < p.length; i++) p[i] += t[i] * k;
 	}
-	for (const [sx, w] of [['female', 1 - d.sex], ['male', d.sex]]) for (const [n, amt] of [['maxmuscle-averageweight', d.muscle], ['averagemuscle-maxweight', d.weight]]) {
+	// (lean: leaner than the average body, the weight target taken away rather than added;
+	// people/hero.js)
+	for (const [sx, w] of [['female', 1 - d.sex], ['male', d.sex]]) for (const [n, amt] of [['maxmuscle-averageweight', d.muscle], ['averagemuscle-maxweight', d.weight - (d.lean || 0)]]) {
 		const t = targets['universal-' + sx + '-young-' + n];
 		for (let i = 0; i < p.length; i++) p[i] += t[i] * amt * w * unit;
 	}
+	// a build of its own (the hero's V: people/build.js)
+	shapeBuild(p, A, d.build);
 	// the face's own features
 	shapeFace(A.faces, p, d.face);
 	let min = Infinity, top = -Infinity;
@@ -310,6 +315,8 @@ export function buildPerson(A, d) {
 	// one in a hundred has vitiligo (from a hash of the seed, so no one else's looks change)
 	const vh = Math.imul((d.seed ?? 0) ^ 0x9e3779b9, 2654435761) >>> 0;
 	if (!d.skinOverride && vh % 100 === 0) skinMat.userData.vit.value.set(1, (vh >>> 8) % 97, (vh >>> 12) % 89, (vh >>> 16) % 83);
+	// (freckles for those made with them: people/hero.js)
+	if (d.freckles) skinMat.userData.vit.value.set(2, (eyeAt[0].y + eyeAt[1].y) / 2, (vh >>> 12) % 89, (vh >>> 16) % 83);
 	P.skinMat = skinMat;
 	P._p = p;
 	// their tattoos, as their life gave them (tattoo/lore.js): on the shared flash sheet
@@ -329,7 +336,7 @@ export function buildPerson(A, d) {
 		P.detail = dm;
 	}
 	P.lod = (dist) => {
-		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; for (const b of P.bags || []) b.lod(dist);
+		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90 || P.accKeep; for (const b of P.bags || []) b.lod(dist);
 		// fluffy hair: all its tufts near, the locks' cores and inner layer further, the cores far off
 		const hl = P.hair?.geometry.userData.lod;
 		if (hl) { const k = PHONE ? 0.6 : 1, n = hl[dist < 6 * k ? 2 : dist < 16 * k ? 1 : 0]; if (P.hair.geometry.drawRange.count !== n) P.hair.geometry.setDrawRange(0, n); }
@@ -413,6 +420,8 @@ function dress(A, P, o) {
 	// caps, glasses, headphones, straps: one more mesh
 	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p, bags: fits, cloth: clothGeo, part, lo: PHONE }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
+	// (boots built over the feet are among the small things, and are the feet: kept at any distance)
+	P.accKeep = !!o.shoes?.built;
 	// and the bags themselves, shared by everyone who carries one
 	P.bags = fits.map((f) => attachBag(P, f, PHONE));
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
@@ -486,12 +495,15 @@ function hairUp(A, P) {
 		// fluffy hair (hair-fluff.js): tufts in locks, brushed the cut's way, skinned to the head
 		// and, as long hair falls, the neck and the back
 		coverScalp(P, null);
-		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
+		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume ?? H.vol, brush: H.brush, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
 		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
 		const hair = skinned(g, fluffMaterial(root, tip));
 		P.hair = hair;
+		// it falls over the collar and the shoulders, not through them, as the head turns (hair-collide.js)
+		const o = P.outfit || {}, off = offsets(o), caps = hairCapsules(P, o, Math.max(off.top, off.outer));
+		hair.material.userData.U.uCapY.value = P.cut.neck + 0.02;
 		const animate = hairMotion(P, hair, hair.material.userData.U);
-		hair.onBeforeRender = () => animate();
+		hair.onBeforeRender = () => { animate(); poseCapsules(P, caps, hair.material.userData.U, hair); };
 	}
 	else if (W.cut) {
 		coverScalp(P, null);

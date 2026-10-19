@@ -49,6 +49,10 @@ const PALM0 = 1.45;
 // swing scales the walk's arm swing, lean the chest, look the head's droop, head its tilt
 export const POSES = {
 	rest: { both: arm({}) },
+	// ready: the hero's way of standing (people/hero.js): arms a little off the sides, elbows soft,
+	// hands relaxed (the fingers' own cascade, the little finger most, and only a touch more: a
+	// curl past that closes them toward a loose fist and leaves the thumb standing out), chest up
+	ready: { both: arm({ abd: 0.17, flex: 0.05, roll: 0.12, bend: 0.3, curl: 0.12 }), lean: -0.03 },
 	pockets: { both: arm({ abd: 0.12, flex: -0.08, roll: 0.35, bend: 0.55, pro: 0.3, wflex: 0.3, curl: 0.9 }), swing: 0.15 },
 	crossed: { lead: arm({ abd: 0.05, flex: 0.6, roll: 1.35, bend: 1.95, pro: 0.3, curl: 0.5 }), off: arm({ abd: 0.08, flex: 0.5, roll: 1.2, bend: 1.8, pro: 0.1, curl: 0.55 }), swing: 0.05, lean: -0.02 },
 	behind: { both: arm({ abd: 0.08, flex: -0.45, roll: 1.55, bend: 1.45, pro: -0.6, curl: 0.35 }), swing: 0.05, lean: -0.03 },
@@ -543,7 +547,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 			for (let f = 1; f <= 5; f++) for (let j = 1; j <= 3; j++) {
 				const i = map['finger' + f + '-' + j + '.' + side];
 				if (i === undefined) continue;
-				const relaxed = f === 1 ? 0.08 + j * 0.04 : (0.1 + f * 0.05) * (j === 2 ? 1.2 : j === 3 ? 0.8 : 1);
+				// (the thumb never quite straight: at rest it lies a little in toward the palm)
+				const relaxed = f === 1 ? 0.22 + j * 0.06 : (0.1 + f * 0.05) * (j === 2 ? 1.2 : j === 3 ? 0.8 : 1);
 				let c = relaxed + (1.25 - relaxed) * Math.max(P2.curl, S.grip[side] * 0.85);
 				if (f === 2 && gp?.point && lead) c = 0.02;
 				// a long arm in both hands: the strong hand's index lies straight along the frame

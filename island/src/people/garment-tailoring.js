@@ -128,7 +128,10 @@ export function finishGarmentEdges(g, o, cut, R) {
   const edge=(f,r=.0016)=>{f.radius=r;return f;}, ribbed=isRibbed(item);
   if (s<2 && item) {
    if (limb===0 || limb===2) {
-    cuts.push(edge(v=>v[1]-(s===0?R.topHem:R.outHem)-.012,ribbed?.0034:.0018));
+    // (a shirt worn open over another top has a shirt-tail hem: up at the side seams; garment.js
+    // discards the cloth below it the same way)
+    const tail=v=>s===1&&isShirted(item)?.035*smooth((Math.abs(v[0])-.08)/.08):0;
+    cuts.push(edge(v=>v[1]-(s===0?R.topHem:R.outHem+tail(v))-.012,ribbed?.0034:.0018));
     if (!item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>{
      const fr=smooth((v[2]+.04)/.035), scoop=s===0?(item.kind==='tank'?.045:item.kind==='crop'?.025:0):0;
      return cut.neck-.005-scoop*fr+.035*smooth(Math.abs(v[0])/.09)-.004*fr-v[1];
@@ -141,6 +144,8 @@ export function finishGarmentEdges(g, o, cut, R) {
     cuts.push(edge(v=>cut.neck-.005+.035*smooth(Math.abs(v[0])/.09)-v[1],.0016));
    } else if (limb===1) cuts.push(edge(v=>sleeveDistance(v,item.sleeves,cut),item.sleeves==='rolled'?.009:ribbed?.003:isShirted(item)?.0026:.0018));
   } else if (s===2 && limb===2 && R.legEnd<5) cuts.push(edge(v=>v[1]-R.legEnd-.012));
+  // (the waistband's top cut clean, not left to whole triangles, with its edge turned)
+  else if (s===2 && limb===0 && item && Number.isFinite(R.rise)) cuts.push(edge(v=>cut.waist+R.rise-.004-v[1],.0022));
   for (const f of cuts) { poly=clip(poly,f); if (poly.length<3) break; }
   if (poly.length<3) continue;
   for (let j=1;j<poly.length-1;j++) face(poly[0],poly[j],poly[j+1]);

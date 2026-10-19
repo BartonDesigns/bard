@@ -6,7 +6,8 @@
 // and what they wear (the pose's wr: people/armor-looks.js) is on them: built again when it changes.
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/body.js';
+import { loadPeopleAssets, buildPerson, freeBody } from '../people/body.js';
+import { lookDNA } from '../people/hero.js';
 import { dressInGear, wornOfCode } from '../people/armor-looks.js';
 import { createMotion } from '../people/motion.js';
 import { carGeometry } from '../bay/cars.js';
@@ -98,7 +99,9 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 		r.building = true;
 		try {
 			assets = assets || await loadPeopleAssets();
-			const wr = r.pose?.wr || '', d = personDNA(r.seed, { age: 30 });
+			// (a friend's hero, or the townsperson an older visit made them: people/hero.js; in
+			// what they wear, people/armor-looks.js)
+			const wr = r.pose?.wr || '', d = lookDNA(r.seed);
 			if (wr && d.style) d.style = dressInGear(d.style, wornOfCode(wr));
 			const P = buildPerson(assets, d);
 			const M = createMotion(P, (x, z) => ground(x, z));
