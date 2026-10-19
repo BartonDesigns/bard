@@ -1329,6 +1329,16 @@ export function createIslandWorld() {
 		world.orbit = createOrbitalFlight({ renderer, camera, dom, world, earth, seed, profile, shared,
 			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
 			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint, voyage,
+			// coming down from orbit somewhere new: the globe's frame moves there and its ground streams in
+			chart: (lat, lon) => {
+				const W = world;
+				if (!W?.globe) return null;
+				W.labels?.hide(); W.kinetic?.clear(); fishing.drop(); drive.stop();
+				if (W.boat?.boarded?.()) W.boat.leave();
+				return W.globe.place(lat, lon);
+			},
+			// straight back to where the climb began, behind the travel veil
+			goHome: (at, name) => travel(name, () => HOOKS.goTo(at.lat, at.lon, 900)),
 		});
 		// Establish real visibility before warming: the first surface frame must not
 		// upload every underwater/cave material simply because no update ran yet.
@@ -1878,7 +1888,8 @@ export function createIslandWorld() {
 	function followFarGround(W, dt, night) {
 		farT = last; farNight = night;
 		W.bayArea?.update(camera, night);
-		if (!W.orbit?.active()) W.globe?.update(dt, camera, night); // orbital departure retains the ground frame
+		// orbital departure retains the ground frame; a new place chosen on the way down streams its own
+		if (!W.orbit?.active() || W.orbit.streams?.()) W.globe?.update(dt, camera, night);
 	}
 	function surfaceOpen(W) {
 		const caveK = W.underworld?.inside?.() || 0;
@@ -1958,6 +1969,8 @@ export function createIslandWorld() {
 			// The retained ground stops streaming and drawing; only the orbital pass runs.
 			// The same input state and faceplate analyser continue on every frame.
 			dom.veil.style.opacity = '0'; glare.style.opacity = '0';
+			// (charting a new place on the way down: its ground comes in while the orbit is still drawn)
+			if (W.orbit.streams?.()) followFarGround(W, dt, farNight);
 			actions();
 			explore.shoot(dt);
 			W.orbit.render(time);
@@ -2315,7 +2328,7 @@ export function createIslandWorld() {
 		const P = world?.player.state;
 		if (!P || world.boat.boarded()) return;
 		if (!P.orbit?.high()) { P.flying = !P.flying; P.vel.y = 0; }
-		P.climbAssist = false;
+		P.climbAssist = P.descendAssist = false;
 		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B cycles ×1 / ×3 / ×6 / ×9. F to land.') : 'Landing.', 3500);
 	}
 	dom.fly.addEventListener('click', (e) => { e.stopPropagation(); toggleFly(); });
@@ -2324,7 +2337,7 @@ export function createIslandWorld() {
 	dom.toss.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.throwIt(); });
 	dom.place.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.putDown(); });
 	const hold = (el, key) => {
-		el.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (world?.player.state.flying) { world.player.state.climbAssist = false; world.player.state[key] = true; } });
+		el.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (world?.player.state.flying) { world.player.state.climbAssist = world.player.state.descendAssist = false; world.player.state[key] = true; } });
 		for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => { if (world) world.player.state[key] = false; });
 	};
 	hold(dom.jump, 'flyUp'); hold(dom.down, 'flyDown');
@@ -2348,7 +2361,7 @@ export function createIslandWorld() {
 		if (!world || drive.active() || arcade.active() || studio.active()) return;
 		if (world.boat.boarded()) world.boat.leave();
 		const P = world.player.state;
-		P.flying = true; P.diving = false; P.climbAssist = !P.climbAssist;
+		P.flying = true; P.diving = false; P.climbAssist = !P.climbAssist; P.descendAssist = false;
 		hint(P.climbAssist ? 'Climbing to space. Steer, look, or press ⇣ / C to take control.' : 'Climb stopped. You have control.', 4000);
 	});
 	// The original galaxy remains reachable until its complete feature set is migrated.
@@ -2576,6 +2589,9 @@ if (typeof window !== 'undefined') {
 		get kinetic() { return HOOKS.kinetic; },
 		body: () => window.L99Island?.world?.()?.body,
 		orbit: () => window.L99Island?.world?.()?.orbit?.info(),
+		// Crysis.orbitOver(lat, lon, km) puts the ship in orbit above a place (once in orbit); .landing() what is below
+		orbitOver: (lat, lon, km = 400) => window.L99Island?.world?.()?.orbit?.over?.(lat, lon, km * 1000) ?? 'Climb to orbit first.',
+		landing: () => window.L99Island?.world?.()?.orbit?.landing?.() ?? 'no orbit',
 		// game-only hunting, home-defense and supply state. Crysis.arms() reads the
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),

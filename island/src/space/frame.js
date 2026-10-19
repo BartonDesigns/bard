@@ -3,6 +3,7 @@
 // then lays the retained ground patch under the arrival at its original coordinates.
 import * as THREE from 'three';
 import { flightMultiplier } from '../flight-speed.js';
+import { geoBasis, geoLL, geoVec } from './landing.js';
 
 export const ORBIT = Object.freeze({ start: 12000, end: 60000, entry: 95000, radius: 6371000 });
 // A fixed, authored lunar ephemeris in the same inertial frame as the orbital globe.
@@ -33,10 +34,59 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius, companio
 	let anchor = null, outward = false, entries = 0, lastAltitude = 0;
 	const offset = new THREE.Vector3(), turn = new THREE.Quaternion(), euler = new THREE.Euler(0, 0, 0, 'YXZ');
 	const moon = new THREE.Vector3(), moonNormal = new THREE.Vector3(), sunDir = new THREE.Vector3(.3, .8, -.4).normalize(), spot = new THREE.Vector3();
+	// The geography the orbital globe is drawn with (view.js anchors on the same departure):
+	// a direction from the centre, unrotated, is base × that direction in globe axes.
+	const base = new THREE.Matrix3(), baseT = new THREE.Matrix3(), m3 = new THREE.Matrix3(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qi = new THREE.Quaternion(), g = new THREE.Vector3();
+	let home = null;
 	function capture(P, location = {}) {
 		anchor = { x: P.pos.x, z: P.pos.z, yaw: P.yaw, ...location };
 		center.set(anchor.x, -radius, anchor.z);
 		rotation.identity(); outward = false; lastAltitude = P.pos.y;
+		const geo = Number.isFinite(location.lat) && Number.isFinite(location.lon);
+		geoBasis(geo ? location.lat : 0, geo ? location.lon : 0, base); baseT.copy(base).transpose();
+		home = geo ? { lat: location.lat, lon: location.lon } : null;
+	}
+	// the latitude and longitude under a position (the point the orbital texture shows there)
+	function below(pos) {
+		g.copy(pos).sub(center); if (g.lengthSq() < 1) g.set(0, 1, 0);
+		g.normalize().applyQuaternion(qi.copy(rotation).invert()).applyMatrix3(base);
+		return geoLL(g);
+	}
+	// the unit direction from the centre to a latitude and longitude, in this frame
+	function dirOf(lat, lon, out = new THREE.Vector3()) { return geoVec(lat, lon, out).applyMatrix3(baseT).applyQuaternion(rotation).normalize(); }
+	// Come down somewhere other than the anchor: rotate the frame (and with it the view, the
+	// momentum, the stars and the far bodies) so the place's own east, up and south lie along
+	// x, y and z, then lay the ground there at its new engine metres. Every view ray is kept.
+	function land(P, place) {
+		if (!anchor) return false;
+		const h = altitude(P.pos);
+		// rotation' = basis(place)ᵀ · base, so that base · rotation'⁻¹ = basis(place)
+		geoBasis(place.lat, place.lon, m3).transpose().multiply(base);
+		const next = new THREE.Quaternion().setFromRotationMatrix(m4.setFromMatrix3(m3));
+		turn.copy(next).multiply(qi.copy(rotation).invert());
+		P.vel.applyQuaternion(turn);
+		q.setFromEuler(euler.set(P.pitch, P.yaw, P.roll || 0)).premultiply(turn); euler.setFromQuaternion(q, 'YXZ');
+		P.pitch = euler.x; P.yaw = euler.y; P.roll = euler.z;
+		rotation.copy(next);
+		anchor = { ...anchor, x: place.x, z: place.z, lat: place.lat, lon: place.lon, name: place.name };
+		center.set(place.x, -radius, place.z);
+		P.pos.set(place.x, h, place.z);
+		outward = false; lastAltitude = h; entries++;
+		return true;
+	}
+	// Flying round the planet keeps the horizon level: what moves the ship round the centre
+	// turns its heading and momentum with it (k: how much, 0..1), so a level course circles it.
+	const ta = new THREE.Vector3(), tb = new THREE.Vector3();
+	function transport(P, from, k = 1) {
+		if (!anchor || k <= 0) return;
+		ta.copy(from).sub(center); tb.copy(P.pos).sub(center);
+		if (ta.lengthSq() < 1 || tb.lengthSq() < 1) return;
+		turn.setFromUnitVectors(ta.normalize(), tb.normalize());
+		if (k < 1) turn.slerp(qi.identity(), 1 - k);
+		if (Math.abs(turn.w) > 1 - 1e-15) return;
+		P.vel.applyQuaternion(turn);
+		q.setFromEuler(euler.set(P.pitch, P.yaw, P.roll || 0)).premultiply(turn); euler.setFromQuaternion(q, 'YXZ');
+		P.pitch = euler.x; P.yaw = euler.y; P.roll = euler.z;
 	}
 	function altitude(pos) { return anchor ? pos.distanceTo(center) - radius : pos.y; }
 	function blend(pos) { return smooth(ORBIT.start, ORBIT.end, altitude(pos)); }
@@ -119,7 +169,7 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius, companio
 		lastAltitude = h;
 		return rebased;
 	}
-	function reset() { anchor = null; rotation.identity(); outward = false; }
+	function reset() { anchor = null; home = null; rotation.identity(); outward = false; }
 	function setSun(dir) { if (dir) sunDir.copy(dir).normalize(); }
 	function surface(pos, vel) {
 		if (!anchor) return false;
@@ -130,8 +180,11 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius, companio
 		if (inward < 0) vel.addScaledVector(moonNormal, -inward);
 		return true;
 	}
-	return { center, rotation, companion, capture, altitude, blend, up, speed, update, reset, setSun, sunCenter, gargCenter, clearance, stellarSpeed, moonCenter, moonAltitude, surface,
+	return { center, rotation, companion, capture, altitude, blend, up, speed, update, reset, setSun, sunCenter, gargCenter, clearance, stellarSpeed, moonCenter, moonAltitude, surface, below, dirOf, land, transport,
 		get anchor() { return anchor; },
+		// where the climb began (kept through any landing chosen on the way down)
+		get home() { return home; },
+		get returning() { return outward; },
 		info: (pos) => ({ earth, altitude: altitude(pos), blend: blend(pos), anchor: anchor && { ...anchor }, entries, returning: outward, moon: { altitude: moonAltitude(pos), landed: moonAltitude(pos) < 8 }, sun: anchor ? pos.distanceTo(sunCenter(spot)) : Infinity, gargantua: anchor ? pos.distanceTo(gargCenter(spot)) : Infinity }),
 	};
 }
