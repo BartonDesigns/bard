@@ -852,7 +852,7 @@ export function createRebuild(ctx) {
 		}
 		return out;
 	}
-	return { group, update, progress, cataclysm: (on) => (on === undefined ? cataclysm : setCataclysm(on)), info, anchors, sites, crew, folk, dispose: () => folk.dispose(), patches, cost: () => list.map(costOf) };
+	return { group, update, progress, cataclysm: (on) => (on === undefined ? cataclysm : setCataclysm(on)), info, anchors, sites, crew, folk, dispose: () => { folk.dispose(); crew.dispose(); }, patches, cost: () => list.map(costOf) };
 }
 
 // ---------- the glow of the beacons, the light towers and the aviation lights ----------

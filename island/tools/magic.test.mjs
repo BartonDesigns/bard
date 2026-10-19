@@ -311,9 +311,10 @@ test('spells reach brawlers and townsfolk, hands cast them, the body gestures, t
 	assert.match(src('combat/melee.js'), /function draw\(id\)/);
 	const hud = src('magic/hud.js');
 	assert.match(hud, /\.mg-bar\{position:absolute;left:50%;bottom:calc\(12px/, 'the bar at the bottom on a desktop');
-	assert.match(hud, /\.l99-touch \.mg-bar\{left:calc\(12px [^}]*bottom:calc\(200px [^}]*flex-direction:column/, 'two rows on a touch screen, left of the thumb column and above its fight buttons');
-	assert.match(hud, /\.l99-touch \.mg-s\{width:44px;height:44px/, 'full-size touch targets');
-	assert.match(hud, /if \(isTouch\) \{ const hd = mk\('div', 'hd'\); hd\.append\(fab, mana\); bar\.prepend\(hd\); \}/, 'the fabric and mana head the bar on a touch screen');
+	assert.match(hud, /\.mg-hub\{position:absolute;right:calc\(24px [^}]*bottom:calc\(226px/, 'on a touch screen a spell button tops the right thumb\'s column');
+	assert.match(hud, /const RING = \{ s: \[100, \[64, 32, 0, -32, -64\]\], w: \[162, \[40, 20, 0, -20, -40\]\] \}/, 'spells on the inner arc, weapons on the outer');
+	assert.match(hud, /if \(SPELL\[state\.binds\[last\]\]\) cast\(last\); else open\(\);/, 'a tap casts the last spell again');
+	assert.match(src('magic/index.js'), /onTest: \(\) => setTest\(!testOn\), testing: \(\) => testOn/, 'test mode beside the arcs');
 	// (the spellbook is now the skills and magic menu, magic/skills-ui.js: shut until opened)
 	assert.match(src('magic/skills-ui.js'), /let root = null, built = false, open = false/, 'the menu is shut until opened, so the keys work from the start');
 });

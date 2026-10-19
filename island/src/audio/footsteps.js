@@ -34,9 +34,10 @@ export function createFootsteps() {
 		last = G.count; landLast = G.lands;
 		const quiet = o.busy || P.flying || P.swimming || o.under || !A;
 		if (quiet) return D;
-		const surf = o.surface, wet = !o.indoor && (o.rain || 0) > 0.25 && surf !== 'water' && surf !== 'snow';
+		// (running along a wall: the strides on its face)
+		const surf = P.wallRun ? 'concrete' : o.surface, wet = !o.indoor && (o.rain || 0) > 0.25 && surf !== 'water' && surf !== 'snow';
 		const send = SEND[surf] ?? 0.65;
-		if (stepNow && P.grounded) {
+		if (stepNow && (P.grounded || P.wallRun)) {
 			// (the interval in the game's time: a slow frame rate does not stretch it)
 			if (D.lastAt) D.interval = +(clock - D.lastAt).toFixed(3);
 			D.lastAt = clock;

@@ -141,7 +141,7 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 		// the chair: where it goes
 		const pl = row(root, 'Place');
 		const sel = el('select', 'flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:#1a1a1a;color:#fff;padding:0 10px;font:inherit;');
-		sel.setAttribute('aria-label', 'Where on the body');
+		sel.name = 'tattoo-place'; sel.setAttribute('aria-label', 'Where on the body');
 		for (const [k, S] of Object.entries(SLOTS)) { const o = el('option'); o.value = k; o.textContent = S.label; sel.appendChild(o); }
 		sel.onchange = () => { if (piece()) { piece().slot = sel.value; wear(); } };
 		pl.appendChild(sel);

@@ -371,8 +371,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			rot.slerp(BASE, a);
 		}
 		if (H.kind === 'bow' && a > 0) { pos.lerp(V2.set(.10, -.14, -.90), a); rot.slerp(BASE, a); }
-		// sprinting: lowered and turned across; changing: lowered out of view
-		const sp = ease(S.sprint) * (1 - a), eq = 1 - ease(S.equip);
+		// sprinting: lowered and turned across; changing, or climbing (parkour.js): lowered out of view
+		const sp = ease(S.sprint) * (1 - a), eq = Math.max(1 - ease(S.equip), ease(clamp(P.climbK || 0, 0, 1)));
 		pos.x += -0.04 * sp + bx * still + lx * still; pos.y += -0.05 * sp - 0.28 * eq + (by + breath) * still + land * 0.6 + ly * still + S.air * 0.012;
 		pos.z += 0.03 * sp;
 		// A short gather gesture lowers the held item and frees the support hand.
