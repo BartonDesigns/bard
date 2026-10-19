@@ -12,8 +12,8 @@
 
 import { cabinOut, noise } from '../world/soundbus.js';
 import { cabinPad, groan, chord } from './palette.js';
+import { clamp } from '../noise.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // how hard the thrusters work (0..1) for a speed (m/s), how fast it rises (m/s²), and the top
 // speed it is heading for (log scales: ×1 near the ground to ×100,000 in space)

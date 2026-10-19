@@ -12,11 +12,11 @@
 // at their own pace for the model to show.
 
 import * as THREE from 'three';
+import { clamp } from '../noise.js';
 
 export const G = 9.81;
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 const tF = new THREE.Vector3(), tL = new THREE.Vector3(), tQ = new THREE.Quaternion();
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const toward = (v, t, r) => v + clamp(t - v, -r, r);
 
 // the jet's numbers: mass, thrust, the speed it flies at, how it rolls and pitches

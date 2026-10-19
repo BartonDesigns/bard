@@ -3,8 +3,8 @@
 // the kind of world, the volcano, a mushroom trip, a minigame.
 
 import { regionalNow } from '../region/here.js';
+import { clamp } from '../noise.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 // the game, a couple of times a second

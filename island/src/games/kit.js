@@ -17,6 +17,7 @@
 import { findSpot, waterLevel } from './stage.js';
 import { buildRoom, buildBackdrop } from './rooms.js';
 import { createCast } from '../people/actors.js';
+import { clamp } from '../noise.js';
 
 const STORE = 'crysis-games';
 export function readStore() {
@@ -361,5 +362,5 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 }
 
 // small shared maths
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export { clamp };
 export const rand = (a, b) => a + Math.random() * (b - a);

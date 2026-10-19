@@ -7,6 +7,7 @@
 // by tools/bake-people-faces.mjs into assets/people/faces.json.
 
 import * as THREE from 'three';
+import { smoothstep as sm } from '../noise.js';
 
 const FACES_URL = new URL('../assets/people/faces.json', import.meta.url).href;
 const b64 = (s, Type) => { const a = Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); return new Type(a.buffer); };
@@ -214,7 +215,6 @@ export function faceDetail(A, F, P, p, S, rnd, _normalOf, grey = 0) {
 }
 
 const hash = (x) => { const s = Math.sin(x * 12.9898) * 43758.5453; return s - Math.floor(s); };
-const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // a brow's line through the bone's heights (t, y): a brow's own shape (o.rise below the peak at
 // the head, o.peak the way along, o.fall below it at the tail), set at the bone's height and

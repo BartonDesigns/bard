@@ -13,6 +13,8 @@
 // Nobody here is ever hurt by the hospital: care only ever mends, and a patient only leaves
 // mended (or carried on to a bigger hospital when this one has no bed for too long).
 
+import { clamp } from '../noise.js';
+
 export const CARE = {
 	base: 40,          // credits a stay costs at the least
 	perSecond: 0.6,    // ...and for each second of care it took
@@ -21,7 +23,6 @@ export const CARE = {
 	transfer: 600,     // seconds waiting for a bed before going on to another hospital
 };
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const finite = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 
 // severity 0..1 (a scrape to the gravest), a minor or not: how soon they are seen

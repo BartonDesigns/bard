@@ -18,6 +18,8 @@
 //              a kick on one and three, a rim on two and four, hats whispering between;
 //              the faceplate's beat only lends its kick when the music is up
 
+import { clamp } from '../noise.js';
+
 export function rng(seed) {
 	let s = (seed >>> 0) || 1;
 	return () => {
@@ -28,7 +30,6 @@ export function rng(seed) {
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 	};
 }
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // the notes of one octave of a scale (the faceplate's arrays run past the octave)
 export function pitchSet(intervals) {

@@ -11,12 +11,11 @@
 //            the plants are streamed (the island's vegetation)
 
 import * as THREE from 'three';
+import { smoothstep as s } from '../noise.js';
 
 // a tier that starts at the camera / never ends
 export const NONE_IN = [-2, -1], NONE_OUT = [1e8, 1e8 + 1];
 
-// the share of the farther tier across a boundary at E, band W: 0 before, 1 past it
-const s = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // keep-range for a tier with an inner boundary [a0, a1] and outer [b0, b1] at distance d
 export function fadeRange(d, a0, a1, b0, b1) { return [1 - s(a0, a1, d), 1 - s(b0, b1, d)]; }
 

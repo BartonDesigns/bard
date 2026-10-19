@@ -3,6 +3,8 @@
 // `gathering` record of plain data, so a future multiplayer sync can share it. Who is
 // where, and when, is worked out from that record and the game clock alone.
 
+import { mulberry32 as seededRandom } from '../noise.js';
+
 // game hours: the crowd drifts in over ARRIVE before the hour, stays HOURS, and is gone LEAVE after
 export const ARRIVE = 0.6, HOURS = 1, LEAVE = 0.3;
 export const KINDS = {
@@ -16,7 +18,7 @@ export const KINDS = {
 const OPEN = /\b(park|plaza|square|beach|field|green|common|meadow|lawn|garden|gardens|stadium|pier|village|commons)\b/i;
 
 function hash(n) { n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; }
-export function seededRandom(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+export { seededRandom };
 
 // ---------- recognising the request ----------
 const ASK = /\b(gather|rally|round up|bring (?:some |a few |the |together )?(?:people|folks|everyone|friends|neighbou?rs|the (?:town|village))|get (?:some )?(?:people|everyone|folks|the (?:town|village)) together|(?:throw|host|organi[sz]e|plan|put on|set up|hold|start|have|run|do) (?:us |me )?(?:a |an |some )?(?:little |big |small )?(?:concert|party|picnic|gig|show|meet-?up|gathering|get-together|jam|dance|block party|cookout|barbecue|bbq))\b/i;

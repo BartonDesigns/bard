@@ -19,10 +19,10 @@
 // per frame. The solve runs when an item comes to hand and is kept (a few milliseconds).
 
 import * as THREE from 'three';
+import { clamp } from '../noise.js';
 
 const NAMES = [1, 2, 3, 4, 5];
 export const FINGERS = ['thumb', 'index', 'middle', 'ring', 'little'];
-const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 // a hand frame (columns a, t, n at the palm; held-items.js handFrame) from rest positions
 function restFrame(P, side, out) {

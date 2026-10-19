@@ -14,6 +14,7 @@
 // Pure data and small functions: no three, so the tests run it in node.
 
 import { hairFor, C } from './wardrobe.js';
+import { mulberry32 as rng } from '../noise.js';
 
 export const TEEN_MIN = 13, TEEN_MAX = 17;
 export const isTeenAge = (age) => Number.isFinite(age) && age >= TEEN_MIN && age < 18;
@@ -25,7 +26,6 @@ const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 const chance = (r, p) => r() < p;
 const col = (k) => C[k] || k;
-function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 // ---------- the body ----------
 // how grown (0 the child shape .. 1 a young adult's): girls through puberty about 10.5 to

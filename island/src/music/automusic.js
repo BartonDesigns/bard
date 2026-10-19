@@ -9,9 +9,9 @@
 import { createComposer, pitchSet } from './score.js';
 import { sense, adapt } from './context.js';
 import { soundBus, noise } from '../world/soundbus.js';
+import { clamp } from '../noise.js';
 
 const KEY = 'crysis-automusic';
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 // which faceplate lead plays each part: the melody on Lead 1, harmony and bass on Lead 2,
 // the answer and the arpeggio on Lead 3

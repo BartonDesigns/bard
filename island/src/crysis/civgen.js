@@ -24,6 +24,7 @@
 
 import STATS from './civstats.json' with { type: 'json' };
 import { finishTown } from '../structures/town.js';         // structures: settled lots and alleys
+import { clamp } from '../noise.js';
 
 // ---------- small tools ----------
 export function rng(seed) {
@@ -39,7 +40,6 @@ export function fromPct(P, u) {
 	for (let i = 1; i < QS.length; i++) if (u <= QS[i]) return V[i - 1] + (V[i] - V[i - 1]) * (u - QS[i - 1]) / (QS[i] - QS[i - 1]);
 	return hi;
 }
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const pickW = (tbl, u) => { let acc = 0; const tot = Object.values(tbl).reduce((a, b) => a + b, 0); for (const [k, v] of Object.entries(tbl)) { acc += v / tot; if (u <= acc) return k; } return Object.keys(tbl)[0]; };
 
 // land-use classes of the real map (see bake-realcity.py)

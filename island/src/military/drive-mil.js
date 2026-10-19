@@ -22,6 +22,7 @@ import { engineSound, oneShot } from './sound.js';
 import { jetState, jetStep, heliState, heliStep } from './flight.js';
 import { firstTime } from '../ui/touch-skin.js';
 import { stencilVehicle } from '../signage/cars.js';
+import { clamp } from '../noise.js';
 
 // how each ground vehicle drives (vehicles/physics.js FEEL's fields)
 const FEEL = {
@@ -33,7 +34,6 @@ const FEEL = {
 const specFor = (k) => { const D = DIMS[k]; return { L: D.L, W: D.W, H: D.H, clear: D.clear, wr: D.wr, wz: D.wz }; };
 const NAMES = { tank: 'Tank', apc: 'Armoured truck', jeep: 'Jeep', truck: 'Cargo truck', jet: 'Jet', heli: 'Helicopter' };
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const G = 9.81;
 const Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _m = new THREE.Matrix4();

@@ -14,12 +14,11 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { loft } from '../world/creatures.js';
 import { patchKit, vnoise, FAB } from './propkit.js';
+import { smoothstep as sstep, clamp } from '../noise.js';
 
 const V = THREE.Vector3;
 const lin = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
 const mixc = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
-const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // shoulder height h (m); proportions against it: legs L, body length B, girth G, head H,

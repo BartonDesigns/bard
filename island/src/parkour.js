@@ -26,11 +26,10 @@
 import * as THREE from 'three';
 import { soundBus, noise as noiseBuf } from './world/soundbus.js';
 import { handGeometry } from './structures/vault.js';
+import { lerp, clamp } from './noise.js';
 
 const EYE = 1.68;
 const ease = (t) => t * t * (3 - 2 * t);
-const lerp = (a, b, t) => a + (b - a) * t;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------- for any body (the player here; the people and the fighters too) ----------
 // The feel for what is ahead, with a body's own two tests: floorAt(x, z, footY) (the surface

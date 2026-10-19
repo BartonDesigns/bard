@@ -11,7 +11,7 @@
 // dissolve into a coarser body and then out at the edge of sight (world/lodfade.js).
 
 import * as THREE from 'three';
-import { mulberry32 } from '../noise.js';
+import { mulberry32, smoothstep as smooth, lerp } from '../noise.js';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
 
 // the green worlds where things still grow big (a world flight marks as wild counts too)
@@ -21,8 +21,6 @@ export const isWildWorld = (profile) => !!profile && !profile.realm && (!!profil
 const HALF_PI = Math.PI / 2;
 const ONE = new THREE.Vector3(1, 1, 1);
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const lerp = (a, b, k) => a + (b - a) * k;
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const frac = (x) => x - Math.floor(x);
 const e1 = new THREE.Euler(), q1 = new THREE.Quaternion(), m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4();

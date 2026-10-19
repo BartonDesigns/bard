@@ -26,6 +26,7 @@ import { tierNow } from '../world/governor.js';
 import { shapeBuild } from './build.js';
 import { loadKitModels } from './kit-models.js';
 import { GFX_PHONE } from '../world/device.js';
+import { mulberry32 as rng } from '../noise.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -47,7 +48,7 @@ function halve(im) {
 }
 const decode = (s, Type) => { const a = Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); return new Type(a.buffer); };
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
-export function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+export { rng };
 
 // ---------- assets, loaded once ----------
 let assets = null, loaded = null;

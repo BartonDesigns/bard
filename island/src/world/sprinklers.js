@@ -31,6 +31,7 @@
 
 import { mainOf } from '../bay/houseplan.js';
 import { BLOCKS, toGrid } from '../bay/styles.js';
+import { mulberry32 as rng } from '../noise.js';
 
 const TAU = Math.PI * 2, HALF = Math.PI / 2;
 const G = 9.81;
@@ -44,10 +45,6 @@ const RUN = { spray: [6, 10], strip: [5, 8], rotor: [15, 25], drip: [20, 35] };
 const PER = { spray: 12, strip: 6, rotor: 8 };
 const PATHS = new Set(['footway', 'path', 'pedestrian', 'cycleway', 'steps', 'track', 'bridleway']);
 
-function rng(seed) {
-	let a = seed >>> 0;
-	return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
 const keyOf = (x, z) => (Math.imul(Math.round(x * 2) | 0, 73856093) ^ Math.imul(Math.round(z * 2) | 0, 19349663)) >>> 0;
 const hash2 = (i, j, s) => rng((Math.imul(i, 92837111) ^ Math.imul(j, 689287499) ^ s) >>> 0)();
 const wrap = (a) => ((a % TAU) + TAU + Math.PI) % TAU - Math.PI;

@@ -8,6 +8,8 @@
 // past ten next door, the one across the street left on all night, the solar stakes along a
 // bed that fade by two in the morning, the motion light over the garage that wakes as you pass.
 
+import { smoothstep as smooth } from '../noise.js';
+
 // How strong each kind of lamp is: its light in the interiors' units (lightbake.js: I over the
 // distance squared is the light falling on a surface facing it; 1 is a well lit room's floor).
 // The moon gives about 0.18 on what faces it, so a porch light out-lights it for a few metres
@@ -66,7 +68,6 @@ export function motionLevel(since, night, hold = 45) {
 	if (night < 0.35 || !(since < hold + 2)) return 0;
 	return since < hold ? 1 : 1 - (since - hold) / 2;
 }
-function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
 
 // One household's lights outside. o: the city's lot ({ kind, w, d, h, cond }), seed: its
 // seed. Nothing for a boarded or burnt house (cond 1, 2), nothing but the porch on a run-down

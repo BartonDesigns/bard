@@ -3,7 +3,7 @@
 // front of you, whether a squad holds or falls back, and keeping people out of buildings.
 // law/index.js and military/police.js use them.
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+import { clamp } from '../noise.js';
 
 // is (x, z) inside a building box { x, z, w, d, a } (world.real's boxes), with a margin?
 export function insideBox(b, x, z, pad = 0) {
