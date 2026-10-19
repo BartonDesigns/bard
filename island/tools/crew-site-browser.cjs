@@ -54,31 +54,40 @@ const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'te
 		console.log('site', JSON.stringify(site));
 		if (site.error) throw Error(site.error);
 		// the camera walked up to the crew, a few seconds of the work stepped
-		const shots = [['site-wide', 14, 5, 0], ['site-near', 6.5, 2.2, 1], ['site-close', 3.2, 1.75, 2]];
+		const shots = [['site-wide', 14, 5, 0], ['site-near', 6.5, 2.2, 1], ['site-close', 3.2, 1.75, 2], ['site-far', 30, 95, 0, 7, 85], ['site-far-crew-only', 40, 30, 0, 9, 1]];
 		const result = {};
-		for (const [name, dist, h, k] of shots) {
+		for (const [name, dist, h, k, fov, near] of shots) {
 			for (let pass = 0; pass < 8; pass++) {
-				await page.evaluate(([dist, h, k]) => {
+				await page.evaluate(([dist, h, k, fov, near]) => {
 					const w = Crysis.world(), S = w.structures, s = window.__site, cam = L99Island.camera();
+					// (from past where the real people take over, zoomed in, the buildings between cut away
+					// by the near plane: the far crew)
+					window.__fov ??= cam.fov; window.__near ??= cam.near;
+					cam.fov = fov || window.__fov; cam.near = near || window.__near; cam.updateProjectionMatrix();
 					const wk = s.workers[Math.min(k, s.workers.length - 1)];
 					// (stood off the worker toward the street, looking at them)
 					const nx = s.G.n[0], nz = s.G.n[1];
 					cam.position.set(wk.x + nx * dist + nz * dist * 0.35, wk.y + h, wk.z + nz * dist - nx * dist * 0.35);
 					cam.lookAt(wk.x, wk.y + 1.1, wk.z); cam.updateMatrixWorld(true);
 					for (let i = 0; i < 20; i++) S.update(1 / 30, 0, w.sky.state.hours);
-				}, [dist, h, k]);
+				}, [dist, h, k, fov, near]);
 				await page.waitForTimeout(400);
 			}
-			const r = await page.evaluate(() => {
+			const r = await page.evaluate((only) => {
 				const I = L99Island, ren = I.renderer();
+				// (the crew alone, everything else hidden: how the far crew are lit in the world)
+				const hid = [];
+				if (only) I.scene().traverse((o) => { if (o.isMesh && o.visible && !/^structures-crew/.test(o.name)) { o.visible = false; hid.push(o); } });
 				ren.render(I.scene(), I.camera());
+				for (const o of hid) o.visible = true;
 				const url = ren.domElement.toDataURL('image/png');
 				const F = Crysis.world().structures.rebuild.folk;
 				// (anyone near you to talk to: the talk button's own pick)
-				return { url, folk: F.info(), crewDrawn: Crysis.world().structures.rebuild.crew.count() };
-			});
+				const C = Crysis.world().structures.rebuild.crew;
+				return { url, folk: F.info(), crewDrawn: C.count(), figures: C.figures?.(), bakes: C.bakes?.() };
+			}, name.endsWith('crew-only'));
 			fs.writeFileSync(path.join(OUT, name + '.png'), Buffer.from(r.url.split(',')[1], 'base64'));
-			result[name] = { folk: r.folk.map((b) => `${b.pose}/${b.tool || '-'}/${b.fade}`), crewDrawn: r.crewDrawn };
+			result[name] = { folk: r.folk.map((b) => `${b.pose}/${b.tool || '-'}/${b.fade}`), crewDrawn: r.crewDrawn, figures: r.figures, bakes: r.bakes && { made: r.bakes.made.length, left: r.bakes.left, dead: r.bakes.dead } };
 			console.log(name, JSON.stringify(result[name]));
 		}
 		const talk = await page.evaluate(() => {

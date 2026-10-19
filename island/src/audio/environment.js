@@ -75,7 +75,7 @@ export function createEnvironment() {
 			const g = ctx.createGain(), nodes = [g], rush = loopOf(nodes, 'pink', 'bandpass', 400, 0.5, g);
 			const wg = ctx.createGain(); wg.gain.value = 0; wg.connect(g); nodes.push(wg);
 			const wh = loopOf(nodes, 'pink', 'bandpass', 2000, 4, wg);
-			return { g, nodes, set: (p, t) => { rush.fl.frequency.setTargetAtTime(p.f, t, 0.3); wh.fl.frequency.setTargetAtTime(p.f * 4.5, t, 0.5); wg.gain.setTargetAtTime(p.whistle, t, 0.4); } };
+			return { g, nodes, set: (p, t) => { const ny = ctx.sampleRate / 2; rush.fl.frequency.setTargetAtTime(Math.min(p.f, ny), t, 0.3); wh.fl.frequency.setTargetAtTime(Math.min(p.f * 4.5, ny), t, 0.5); wg.gain.setTargetAtTime(p.whistle, t, 0.4); } };
 		},
 		freeway() {
 			const g = ctx.createGain(), p = ctx.createStereoPanner(), sw = ctx.createGain(), nodes = [g, p, sw];

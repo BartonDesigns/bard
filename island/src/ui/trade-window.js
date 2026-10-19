@@ -125,7 +125,7 @@ export function createTradeWindow({ mount, studio, onEdit, onAccept, onCancel, o
 			const c = el('div'); c.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap;min-height:44px;';
 			c.append(coins(side.credits));
 			if (zone === 'offer' && live) {
-				const f = el('input'); f.type = 'number'; f.min = '0'; f.max = String(me.credits); f.step = '10'; f.value = String(side.credits); f.inputMode = 'numeric';
+				const f = el('input'); f.name = 'trade-credits'; f.type = 'number'; f.min = '0'; f.max = String(me.credits); f.step = '10'; f.value = String(side.credits); f.inputMode = 'numeric';
 				f.setAttribute('aria-label', 'Credits you give');
 				f.style.cssText = 'width:84px;min-height:40px;padding:6px 8px;border-radius:8px;border:1px solid #7a6136;background:rgba(0,0,0,.45);color:#f3d27a;font:700 14px system-ui;';
 				f.addEventListener('change', () => setCredits(+f.value || 0));
