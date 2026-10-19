@@ -1,5 +1,5 @@
-// A phone whose page the browser closed (while it loaded, or after) comes back lighter: off Ultra
-// if it was on (world/device.js), else on the light ground (world/gpulite.js). Each case loads the modules
+// A phone whose page the browser closed (while it loaded, or after) comes back off Ultra, on High
+// (world/device.js), and never onto the light ground for it (world/gpulite.js). Each case loads the modules
 // fresh in their own process, with a phone's navigator and the storage the last visit left.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,18 +25,24 @@ test('Ultra on a phone stays on after a visit that said goodbye', () => {
 	assert.equal(r.store['l99-quality'], 'ultra');
 });
 
-test('a phone on Ultra whose page closed while loading comes back on Auto with phone graphics', () => {
+test('a phone on Ultra whose page closed while loading comes back on High with phone graphics', () => {
 	const r = boot({ stored: { 'l99-quality': 'ultra', 'l99-governor': crashedRecord } });
 	assert.equal(r.ULTRA, false); assert.equal(r.GFX_PHONE, true); assert.equal(r.dropped, true);
-	assert.equal(r.store['l99-quality'], 'auto');
-	// (the phone's own graphics are tried before the light ground)
+	assert.equal(r.store['l99-quality'], 'high');
 	assert.equal(r.lite, false);
 });
 
-test('a phone not on Ultra whose page closed while loading takes the light ground', () => {
+test('a phone not on Ultra whose page closed while loading keeps the full ground', () => {
 	const r = boot({ stored: { 'l99-governor': crashedRecord } });
-	assert.equal(r.crashed, true); assert.equal(r.lite, true); assert.equal(r.GFX_PHONE, true);
-	assert.ok(+r.store['l99-gpu-lite3'] > 0);
+	assert.equal(r.crashed, true); assert.equal(r.lite, false); assert.equal(r.GFX_PHONE, true);
+});
+
+test('a phone left on the light ground by a crash comes back to the full one, once', () => {
+	const r = boot({ stored: { 'l99-gpu-lite3': String(Date.now() - 60000) } });
+	assert.equal(r.lite, false); assert.equal(r.store['l99-hq-only'], '1');
+	// (after that, a ground shader that really fails still puts it back on the light one)
+	const again = boot({ stored: { 'l99-hq-only': '1', 'l99-gpu-lite3': String(Date.now() - 60000) } });
+	assert.equal(again.lite, true);
 });
 
 test('a phone whose last visit said goodbye keeps the full ground', () => {

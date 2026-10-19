@@ -1,8 +1,9 @@
 import { STORE_KEY, readRecord, lossRecord } from './governor.js';
 
 export const GRAPHICS_UNAVAILABLE = '3D graphics could not start, even with lighter settings. Try closing other 3D tabs and reopening Bard. If this keeps happening, restart the browser.';
+// High or Ultra: the lower settings (Auto, Low) are gone, and a device left on one comes back on High
 export function graphicsMode(storage) {
-	try { const v = storage?.getItem('l99-quality'); return ['auto', 'high', 'low', 'ultra'].includes(v) ? v : 'auto'; } catch { return 'auto'; }
+	try { return storage?.getItem('l99-quality') === 'ultra' ? 'ultra' : 'high'; } catch { return 'high'; }
 }
 export function recentGraphicsLoss(storage, now = Date.now()) {
 	try { const at = Number(storage?.getItem('l99-gl-lost')); return at > 0 && now >= at && now - at < 86400000; } catch { return false; }

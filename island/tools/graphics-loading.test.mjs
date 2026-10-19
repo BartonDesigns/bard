@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createGraphicsRenderer, graphicsMode, renderRatio, recentGraphicsLoss, GRAPHICS_UNAVAILABLE } from '../src/world/graphics-startup.js';
+import { createGraphicsRenderer, graphicsMode, renderRatio, recentGraphicsLoss, rememberGraphicsLoss, GRAPHICS_UNAVAILABLE } from '../src/world/graphics-startup.js';
 import { createGovernor } from '../src/world/governor.js';
 import { createShaderWarm } from '../src/world/shaderwarm.js';
 import { meterGL } from '../src/world/gpumeter.js';
@@ -32,11 +32,15 @@ test('a renderer constructor failure also releases its context before retry', ()
 	const r=createGraphicsRenderer({canvas:first,Renderer:class{constructor(){if(++calls===1)throw Error('driver reset');}},replaceCanvas:()=>second,storage:store()});
 	assert.equal(r.recovered,true);assert.equal(first.gl.dead,true);assert.equal(calls,2);
 });
-test('desktop defaults to adaptive medium; explicit saved choices survive', () => {
-	const storage=store();assert.equal(graphicsMode(storage),'auto');assert.equal(createGovernor({storage}).info().tier,'medium');
-	storage.setItem('l99-quality','high');assert.equal(graphicsMode(storage),'high');
-	const g=createGovernor({storage,mode:()=>graphicsMode(storage)});g.apply();assert.equal(g.info().tier,'high');
-	storage.setItem('l99-quality','corrupt');assert.equal(graphicsMode(storage),'auto');
+test('High is the default; Auto, Low or anything else saved comes back on High', () => {
+	const storage=store();assert.equal(graphicsMode(storage),'high');
+	const g=createGovernor({storage,mode:()=>graphicsMode(storage)});assert.equal(g.info().tier,'high');g.apply();assert.equal(g.info().tier,'high');
+	for(const v of ['auto','low','corrupt']){storage.setItem('l99-quality',v);assert.equal(graphicsMode(storage),'high');}
+});
+test('High starts on the best tier even after visits that crashed or lost the graphics', () => {
+	const storage=store();rememberGraphicsLoss(storage);
+	storage.setItem('l99-governor',JSON.stringify({ceiling:3,at:Date.now(),crashes:[Date.now()-1000],live:Date.now()-500}));
+	const g=createGovernor({phone:true,storage,mode:()=>'high'});assert.equal(g.info().tier,'high');g.update(.1,60);assert.equal(g.info().tier,'high');
 });
 test('Ultra is a saved choice: High on a phone, with the desktop\'s pixel budget', () => {
 	const storage=store();storage.setItem('l99-quality','ultra');assert.equal(graphicsMode(storage),'ultra');
