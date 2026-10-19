@@ -36,8 +36,11 @@ import { npcHand } from './weapon-view.js';
 import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
 import { FIELD_ROLES } from './field-contracts.js';
 import { outfitFor, kitArmour } from './outfits.js';
+import { SPECIES } from '../creatures/catalog.js';
+import { makeCreature } from '../creatures/models.js';
 
-// the bodies: people (dressed by faction), and the two that are not
+// the bodies: people (dressed by faction), and those that are not (a creature's own are made
+// from its kind: creatures/catalog.js)
 const BODY = {
 	drone: { speed: 7, sight: 65, range: 55, dmg: 9, burst: [1, 2], gap: [1.4, 2.2], rate: 0.35, surface: 'machine', resist: { ballistic: 0.85, energy: 1.35 } },
 	crawler: { speed: 6.5, sight: 40, range: 18, dmg: 12, burst: [1, 1], gap: [3, 5], rate: 1, surface: 'creature', resist: { fire: 1.4 } },
@@ -131,7 +134,7 @@ export function createSquads(ctx) {
 	// (as many as the quality tier's people share allows: world/governor.js; at least a squad of three)
 	const MAX0 = isPhone ? 6 : 14, maxNow = () => peopleCap(MAX0, 3);
 	const list = [];
-	const pools = { person: [], drone: [], crawler: [] };
+	const pools = { person: [], drone: [], crawler: [], creature: [] };
 	const squads = new Map();
 	let A = null, loading = null, nextId = 1, epoch = 0;
 	const pending = new Set();
@@ -166,13 +169,16 @@ export function createSquads(ctx) {
 		const generation = epoch, reservation = {};
 		pending.add(reservation);
 		try {
-			const kind = fid === 'rogue' ? 'drone' : fid === 'gloom' ? 'crawler' : 'person';
+			// (the Deep's gloomcrawlers are the Gloomcrawler kind now, a creature like the others)
+			const species = opts.species ?? (fid === 'gloom' ? 'gloomcrawler' : null);
+			const Sp = SPECIES[species];
+			const kind = Sp ? 'creature' : fid === 'rogue' ? 'drone' : fid === 'gloom' ? 'crawler' : 'person';
 			const specialty = kind === 'person' ? FIELD_ROLES[opts.specialty] : null;
-			const F = { ...(FACTIONS[fid] || {}), ...(specialty ? { gun: specialty.gun, hp: specialty.hp, armour: specialty.armour, acc: specialty.acc } : {}) };
-			const B = { ...BODY[kind], ...(specialty || {}) };
+			const F = { ...(FACTIONS[fid] || {}), ...(specialty ? { gun: specialty.gun, hp: specialty.hp, armour: specialty.armour, acc: specialty.acc } : {}), ...(Sp ? { hp: Sp.hp, armour: Sp.armour, gun: null } : {}) };
+			const B = Sp ? { speed: Sp.run, sight: Sp.sight, range: Sp.reach, dmg: Sp.dmg, surface: Sp.surface, resist: Sp.resist } : { ...BODY[kind], ...(specialty || {}) };
 			const id = opts.id || `h${fid.slice(0, 2)}${nextId++}`;
 			const h = {
-				id, fid, F, kind, B, squad, specialty, crew: fid === 'fire',
+				id, fid, F, kind, B, squad, specialty, crew: fid === 'fire', Sp, cr: null, strikeT: -1,
 				H: createHealth({ max: (F.hp || 100) * (opts.hpK || 1), armour: opts.armour ?? F.armour ?? 0, soak: 0.5, resist: B.resist || {} }),
 				pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
 				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
@@ -196,6 +202,19 @@ export function createSquads(ctx) {
 				if (b.P.ragdoll) ctx.ragdolls.release(b.P);
 				b.P.root.visible = true; fadePerson(b.P, 1);
 				b.M.act(null); b.M.place(x, h.pos.y, z, h.yaw);
+			} else if (kind === 'creature') {
+				// (one that is a person first, the Moonturned: the person's body now, the beast's kept for the change)
+				const c = await creatureBody(Sp.human ?? Sp.model ?? species, species);
+				const beast = c && Sp.human ? await creatureBody(Sp.model ?? species, species) : null;
+				if (!c || (Sp.human && !beast) || h.gone || generation !== epoch) {
+					for (const q of [c, beast]) if (q) { q.used = false; q.root.visible = false; }
+					return null;
+				}
+				h.cr = c; h.beast = beast; h.turn = beast ? -1 : 1;
+				if (beast) beast.root.visible = false;
+				c.root.visible = true; c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
+				c.motion.state.death = -1; c.motion.state.strike = -1; c.motion.state.hit = -1;
+				c.motion.update(0, { speed: 0 });
 			} else {
 				const pool = pools[kind];
 				let m = pool.find((q) => !q.userData.used);
@@ -205,7 +224,7 @@ export function createSquads(ctx) {
 				if (kind === 'drone') h.pos.y += h.hover;
 			}
 			h.T = {
-				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: 1.4 }, name: F.name ? `a ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
+				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: Sp ? Math.max(1, Sp.height * 0.55) : 1.4 }, name: Sp ? (/^the /i.test(Sp.name) ? Sp.name : `a ${Sp.name}`) : F.name ? `a ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
 				get surrendered() { return h.surrendered > 0 || h.fleeing; },
 				surface: B.surface, shapes: () => shapesOf(h), ref: h,
 				onHit: (blow) => hit(h, blow),
@@ -221,6 +240,7 @@ export function createSquads(ctx) {
 	}
 	function shapesOf(h) {
 		const p = h.pos;
+		if (h.kind === 'creature') return h.cr.shapes();
 		if (h.kind === 'drone') return [{ type: 'sphere', c: { x: p.x, y: p.y, z: p.z }, r: 0.5, part: 'body' }, { type: 'sphere', c: { x: p.x + Math.sin(h.yaw) * 0.45, y: p.y - 0.04, z: p.z + Math.cos(h.yaw) * 0.45 }, r: 0.12, part: 'weak' }];
 		if (h.kind === 'crawler') {
 			const a = Math.sin(h.yaw), c = Math.cos(h.yaw);
@@ -251,6 +271,15 @@ export function createSquads(ctx) {
 			h.fireT = Math.max(h.fireT, rnd(0.35, 0.7));
 			if (h.inCover && h.peek) { h.peek = false; h.peekT = rnd(0.9, 1.8); }
 		}
+		// a creature reels the way the blow went (and a heavy one breaks off its strike)
+		if (!r.killed && h.cr && r.dealt > 0) {
+			if (h.beast && h.turn < 0) h.turn = 0;
+			const d = blow.dir || { x: h.pos.x - (blow.src?.x ?? h.pos.x), z: h.pos.z - (blow.src?.z ?? h.pos.z) }, l = Math.hypot(d.x, d.z) || 1;
+			// (the blow's way in the creature's own frame: x to its left, z ahead)
+			const c = Math.cos(h.yaw), s = Math.sin(h.yaw), wx = d.x / l, wz = d.z / l;
+			h.cr.motion.hit(_v.set(wx * c - wz * s, 0, wx * s + wz * c));
+			if (r.dealt > h.H.max * 0.12 && h.strikeT >= 0 && h.strikeT < 0.4) { h.strikeT = -1; h.cr.motion.state.strike = -1; h.fireT = rnd(0.5, 0.9); }
+		}
 		if (r.killed) die(h, blow);
 		else if (!h.surrendered && h.kind === 'person' && !h.crew) {
 			const allies = (h.squad?.members || []).filter((m) => m !== h && !m.dead && !m.surrendered).length;
@@ -279,6 +308,7 @@ export function createSquads(ctx) {
 			ctx.ragdolls.hit(h.body.P, { vel: new THREE.Vector3(d.x, 0.1, d.z).normalize().multiplyScalar(blow?.type === 'blast' ? 7 : 3.5), mass: 400, point: new THREE.Vector3(p.x, p.y + 1.2, p.z), lift: 0.06 });
 			h.body.hand?.hide();
 		} else if (h.kind === 'drone') { fx.explosion(h.pos, 1.2, false); h.vy = 0; }
+		else if (h.cr) h.cr.motion.die();
 		else fx.dust(h.pos, 6, 0.5, 0.55, 0.5, 0.8, 0.5);
 		ctx.onDeath?.(h, blow);
 	}
@@ -289,6 +319,7 @@ export function createSquads(ctx) {
 		h.gone = true;
 		if (h.body) { if (h.body.P.ragdoll) ctx.ragdolls.release(h.body.P); h.body.P.root.visible = false; h.body.hand?.hide(); h.body.M.act(null); h.body.used = false; h.body.M.want.speed = 0; }
 		if (h.mesh) { h.mesh.visible = false; h.mesh.userData.used = false; }
+		for (const q of [h.cr, h.beast]) if (q) { q.root.visible = false; q.used = false; q.root.position.y = -1e4; }
 		if (h.squad) { const k = h.squad.members.indexOf(h); if (k >= 0) h.squad.members.splice(k, 1); if (!h.squad.members.length) squads.delete(h.squad.id); }
 	}
 
@@ -306,7 +337,7 @@ export function createSquads(ctx) {
 		for (const m of mem) {
 			if (m.dead || m.alert || m.crew) continue;
 			m.alert = 1; m.fireT = rnd(0.7, 1.4); m.goalT = 0;
-			m.role = m.specialty?.tactic || (m.kind === 'drone' ? 'orbit' : m.kind === 'crawler' ? 'rush' : k === 0 ? 'suppress' : k % 2 ? 'flank' : 'assault');
+			m.role = m.specialty?.tactic || (m.kind === 'drone' ? 'orbit' : m.kind === 'crawler' || m.kind === 'creature' ? 'rush' : k === 0 ? 'suppress' : k % 2 ? 'flank' : 'assault');
 			m.flankSide = k % 4 < 2 ? 1 : -1;
 			k++;
 		}
@@ -461,18 +492,19 @@ export function createSquads(ctx) {
 				h.losT = rnd(0.2, 0.35);
 				if (!h.target || h.targetT <= 0 || h.target.removed || (h.target.ref?.dead) || (h.target.ref?.surrendered)) { h.target = chooseTarget(h, eye); h.targetT = rnd(3, 6); }
 				const T = h.target;
-				const from = _v.set(h.pos.x, h.pos.y + (h.kind === 'drone' ? 0 : h.kind === 'crawler' ? 0.7 : 1.5), h.pos.z);
+				const from = _v.set(h.pos.x, h.pos.y + (h.kind === 'drone' ? 0 : h.kind === 'crawler' ? 0.7 : h.cr ? h.Sp.height * 0.85 : 1.5), h.pos.z);
 				h.los = !!T && !ctx.blocked(from, posOf(T));
 				if (h.los && !h.alert) alertSquad(h, posOf(T));
 				if (h.los && h.squad) h.squad.last = { x: posOf(T).x, z: posOf(T).z };
 			}
 			if (h.kind === 'drone') droneStep(h, dt);
 			else if (h.kind === 'crawler') crawlerStep(h, dt, d);
+			else if (h.cr) creatureStep(h, dt, d);
 			else personStep(h, dt, d);
 			bounds(h);
 		}
 	}
-	function bounds(h) { const B = h.T.bound; B.x = h.pos.x; B.y = h.pos.y + (h.kind === 'drone' ? 0 : 0.9); B.z = h.pos.z; }
+	function bounds(h) { const B = h.T.bound; B.x = h.pos.x; B.y = h.pos.y + (h.kind === 'drone' ? 0 : h.cr ? h.Sp.height * 0.45 : 0.9); B.z = h.pos.z; }
 	function fading(h, dt) {
 		h.deadT += dt;
 		if (h.body) {
@@ -490,6 +522,14 @@ export function createSquads(ctx) {
 			if (h.pos.y < gy + 0.2) { h.pos.y = gy + 0.2; if (!h.burst2) { h.burst2 = true; fx.explosion(h.pos, 1.4); } }
 			h.mesh.position.copy(h.pos); h.mesh.rotation.z += dt * 3;
 			if (h.deadT > 4) { h.mesh.scale.setScalar(Math.max(0.01, 1 - (h.deadT - 4))); if (h.deadT > 5) release(h); }
+		} else if (h.cr) {
+			// the death plays out (the knees go, it folds), it lies a while, then sinks away
+			const c = h.cr;
+			if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
+			c.root.position.set(h.pos.x, h.pos.y - Math.max(0, h.deadT - 8) * 0.25 * c.height, h.pos.z);
+			// (falls forward as it folds: the whole body tips over its knees)
+			c.root.rotation.set(Math.min(1, h.deadT / 1.3) ** 2 * 1.2, h.yaw, 0);
+			if (h.deadT > 12) release(h);
 		} else {
 			h.mesh.rotation.z = Math.min(Math.PI * 0.9, h.deadT * 3);
 			h.mesh.position.set(h.pos.x, h.pos.y + Math.min(0.6, h.deadT * 0.6) - Math.max(0, h.deadT - 4) * 0.4, h.pos.z);
@@ -499,11 +539,17 @@ export function createSquads(ctx) {
 	// a fighter under a spell: held, it stands (a drone hangs where it is); afraid, it runs from you
 	function hexStep(h, dt, hx, eye) {
 		const M = h.body?.M;
-		if (hx.hold > 0) { if (M) { M.want.speed = 0; M.want.run = 0; } return; }
+		if (hx.hold > 0) { if (M) { M.want.speed = 0; M.want.run = 0; } else if (h.cr) h.cr.motion.update(dt, { speed: 0 }); return; }
 		const ax = h.pos.x - eye.x, az = h.pos.z - eye.z, l = Math.hypot(ax, az) || 1;
 		h.target = null; h.los = false;
 		if (M) { M.want.heading = Math.atan2(ax / l, az / l); M.want.speed = h.B.speed * 1.2 * (hx.slowK || 1); M.want.run = 1; }
 		else if (h.kind === 'crawler') { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * h.B.speed * dt; h.pos.z += az / l * h.B.speed * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); h.mesh.position.copy(h.pos); h.mesh.rotation.set(0, h.yaw, 0); }
+		else if (h.cr) {
+			const sp = hx.hold > 0 ? 0 : h.Sp.run * (hx.slowK || 1);
+			if (sp) { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * sp * dt; h.pos.z += az / l * sp * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); }
+			h.cr.root.position.copy(h.pos); h.cr.root.rotation.set(0, h.yaw, 0);
+			h.cr.motion.update(dt, { speed: sp });
+		}
 	}
 	function walk(h, gx, gz, speed, run) {
 		const M = h.body.M;
@@ -703,6 +749,108 @@ export function createSquads(ctx) {
 		m.position.copy(h.pos); m.rotation.set(-rear, h.yaw, 0);
 		h.ph += dt * (0.5 + speed * 1.6);
 		for (const L of m.userData.legs) L.pivot.rotation.set(Math.sin(h.ph * 2 + L.ph) * 0.35, Math.cos(h.ph * 2 + L.ph) * 0.3, 0);
+	}
+
+	// a creature (creatures/catalog.js): it wanders until it notices someone it hates, then closes
+	// at its run and strikes when in reach. A blow has its wind-up (the first part of its time:
+	// the arm drawn back, readable, a step back is enough) and lands only if the target is still
+	// in reach and in front of it then.
+	// the Moonturned's change: the person's body gives way to the beast's
+	function turnBeast(h) {
+		const b = h.beast;
+		h.beast = null;
+		h.cr.root.visible = false; h.cr.used = false; h.cr.root.position.y = -1e4;
+		h.cr = b;
+		b.root.visible = true; b.root.position.copy(h.pos); b.root.rotation.set(0, h.yaw, 0);
+		b.motion.state.death = -1; b.motion.state.strike = -1;
+		b.motion.hit();
+		fx.dust({ x: h.pos.x, y: h.pos.y + 0.3, z: h.pos.z }, 6, 0.9, 0.3, 0.28, 0.26, 0.6);
+	}
+	function creatureStep(h, dt, d) {
+		let c = h.cr;
+		const S = h.Sp, T = h.target, at = T ? posOf(T) : null;
+		let speed = 0, want = h.yaw;
+		if (h.beast) {
+			// a villager still, walking the lane, until you come near or hurt it: then it turns,
+			// shuddering where it stands, and comes on as the beast
+			if (h.turn < 0 && h.alert && at && Math.hypot(at.x - h.pos.x, at.z - h.pos.z) < 16) h.turn = 0;
+			if (h.turn >= 0) {
+				h.turn += dt / 1.8;
+				h.turnK = (h.turnK || 0) + dt;
+				if (h.turnK > 0.45) { h.turnK = 0; c.motion.hit(); }
+				if (h.turn >= 0.6) { turnBeast(h); c = h.cr; }
+				c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
+				c.motion.update(dt, { speed: 0 });
+				return;
+			}
+		}
+		if (h.alert && at && !h.beast) {
+			const tx = at.x - h.pos.x, tz = at.z - h.pos.z, dd = Math.hypot(tx, tz);
+			want = Math.atan2(tx, tz);
+			h.fireT -= dt;
+			if (h.strikeT >= 0) {
+				h.strikeT += dt / S.strike;
+				// (a short lunge into the blow; a thrower stands to throw)
+				if (!h.throwing && h.strikeT > 0.3 && h.strikeT < 0.5) speed = S.walk * 1.5;
+				if (!h.struck && h.strikeT >= 0.45 && h.throwing) {
+					// a fire pot, a curse: lobbed from the hand at where you stand
+					h.struck = true;
+					const Th = S.throw, from = new THREE.Vector3(h.pos.x + Math.sin(h.yaw) * 0.4, h.pos.y + S.height * 0.85, h.pos.z + Math.cos(h.yaw) * 0.4);
+					ctx.projectile({ from, to: at.clone().add(_v.set(0, -0.3, 0)), speed: 16, drop: 9, dmg: Th.dmg, type: Th.type, owner: h.T, style: 4, splash: Th.splash, hostile: true });
+				} else if (!h.struck && h.strikeT >= 0.45) {
+					h.struck = true;
+					const ahead = (Math.sin(h.yaw) * tx + Math.cos(h.yaw) * tz) / (dd || 1);
+					if (dd < S.reach + 0.5 && ahead > 0.5) {
+						const src = _w.set(h.pos.x, h.pos.y + S.height * 0.6, h.pos.z).clone();
+						if (T.id === 'me') ctx.hurtPlayer({ amount: S.dmg * rnd(0.9, 1.1), type: 'impact', part: 'torso', src, by: h.T });
+						else ctx.strikeNpc(T, { amount: S.dmg * 2, type: 'impact', part: 'torso', src, dir: { x: tx / dd, y: 0, z: tz / dd }, by: h.T });
+						fx.dust({ x: at.x, y: at.y - 0.4, z: at.z }, 3, 0.5, 0.45, 0.4, 0.25, 0.25);
+					}
+				}
+				if (h.strikeT >= 1) { h.strikeT = -1; h.fireT = h.throwing ? rnd(...S.throw.every) : rnd(0.5, 1.3); h.throwing = false; }
+			} else if (dd < S.reach && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.6) {
+				h.strikeT = 0; h.struck = false; h.throwing = false; c.motion.strike();
+				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
+			} else if (S.throw && h.los && dd > S.reach * 1.6 && dd < S.throw.range && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.5) {
+				h.strikeT = 0; h.struck = false; h.throwing = true; c.motion.strike();
+				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
+			} else if (S.throw && dd < S.throw.keep && dd > S.reach) speed = -S.walk;
+			else if (S.throw && dd < S.throw.range * 0.8 && dd > S.reach) speed = 0;
+			else if (dd > S.reach * 0.75) speed = dd > 7 ? S.run : Math.max(S.walk, S.run * 0.5);
+		} else {
+			// wandering: a slow walk this way and that, with pauses
+			h.goalT -= dt;
+			if (h.goalT <= 0) { h.goalT = rnd(3, 7); h.wander = Math.random() < 0.35 ? 0 : 1; h.face = h.yaw + rnd(-1.4, 1.4); }
+			want = h.face ?? h.yaw;
+			speed = (h.wander ?? 1) * S.walk * 0.6;
+		}
+		speed *= h.T.hex?.slowK || 1;
+		// (turns as a body turns, not in a snap: the heavier slower)
+		const turn = (h.alert ? 3.2 : 1.6) / Math.max(0.7, S.height / 1.8);
+		h.yaw += Math.max(-turn * dt, Math.min(turn * dt, wrapA(want - h.yaw)));
+		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
+		ctx.keepOut?.(h.pos);
+		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
+		c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
+		// (far off, moved less often: the bones are the cost)
+		h.animT = (h.animT || 0) + dt;
+		const every = d > 70 ? 0.1 : d > 35 ? 0.05 : 0;
+		if (h.animT >= every) { c.motion.update(h.animT, { speed: Math.abs(speed), look: 0 }); h.animT = 0; }
+		c.root.visible = d < 220;
+	}
+	// a body of a model (a kind's own, or the person a Moonturned is first), from the pool or new (each kind's model loaded once: creatures/models.js)
+	async function creatureBody(id, species = id) {
+		const pool = pools.creature;
+		const free = pool.find((c) => !c.used && c.id === id);
+		if (free) { free.used = true; return free; }
+		try {
+			const c = await makeCreature(id);
+			c.meta.strikeTime = SPECIES[species].strike;
+			c.used = true;
+			group.add(c.root);
+			pool.push(c);
+			return c;
+		} catch (e) { console.warn('creature', id, e); return null; }
 	}
 
 	// a squad of n of a faction round a point. opts: { alert, raid (attack civilians), dest
