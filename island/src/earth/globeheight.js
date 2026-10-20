@@ -25,6 +25,12 @@ import { F, RAD, EARTH_R, lonRaw } from './globeframe.js';
 
 export const RES = 10;                 // cells a degree
 export const S0 = 8192, OCT = 10;      // the relief's octaves: 8 km down to 16 m
+// the hills drawn taller than the measured ground's (the 600 m survey the bake reads smooths away
+// the small hills, and a true 40 m across 3 km reads as flat from the ground): the plains and the
+// uplands lifted most in the octaves of 250 m to 2 km, the flattest land (the Low Countries, the
+// deltas) and the high ranges (already as tall as they should be) barely
+export const HILL_W = [0.35, 0.7, 1, 1, 1, 0.85, 0.6, 0.4, 0.3, 0.2];
+export const hillGain = (A, RG) => 1.1 * sstep(15, 70, A) * (1 - sstep(250, 550, A)) * (1 - 0.5 * sstep(0.4, 0.7, RG));
 // the directed forms, on a plane of the latitude and longitude scaled at a latitude of their
 // own: bearing of the long axis (degrees from north), how drawn out along it, the longest wave
 const FAM = [
@@ -120,13 +126,14 @@ export function createGlobeHeight(win) {
 		// on the sphere, in metres, for the relief's noise
 		const cp = Math.cos(lat * RAD), px = EARTH_R * cp * Math.cos(lon * RAD), py = EARTH_R * cp * Math.sin(lon * RAD), pz = EARTH_R * Math.sin(lat * RAD);
 		let sum = 0, w = 1, amp = 1, n2 = 0, n3 = 0, n4 = 0, n5 = 0;
+		const g = hillGain(c.A, c.RG);
 		for (let k = 0; k < OCT; k++) {
 			const m = 2 ** k / S0, q = rot(ROT[k], px, py, pz), nn = 2 * vn3(q[0] * m, q[1] * m, q[2] * m, Math.imul(k + 1, SALT)) - 1;
 			if (k === 2) n2 = nn; else if (k === 3) n3 = nn; else if (k === 4) n4 = nn; else if (k === 5) n5 = nn;
 			// (the crest a little rounded: a razor edge only aliases)
 			let r = 1 - Math.sqrt(nn * nn + 0.004); r = r * r * 3 - 1;
 			const v = nn + (r - nn) * c.RG;
-			sum += v * amp * w;
+			sum += v * amp * w * (1 + g * HILL_W[k]);
 			w = 1 + (clamp(0.55 + 0.6 * v, 0.2, 1) - 1) * c.RG;
 			amp *= 0.63 - 0.08 * c.RG;        // (the finer hills a little stronger where the land is smooth: no plain reads as a table)
 		}
@@ -225,6 +232,7 @@ export function globeUniforms() {
 export const GLOBE_GLSL = /* glsl */`
 uniform highp sampler2D uGT0, uGT1, uGT2;
 uniform vec4 uGWin, uGAnc; uniform vec2 uGOff, uGDeg; uniform ivec3 uGI0; uniform vec3 uGF0; uniform ivec3 uGOI[${OCT}]; uniform vec3 uGOF[${OCT}];
+const float G_HILL[${OCT}] = float[${OCT}](${HILL_W.map((v) => v.toFixed(2)).join(', ')});
 const mat3 G_ROT[${OCT}] = mat3[${OCT}](${ROT.map((M) => 'mat3(' + [M[0], M[3], M[6], M[1], M[4], M[7], M[2], M[5], M[8]].map((v) => v.toFixed(9)).join(', ') + ')').join(', ')});
 uniform ivec2 uGFamI[${FAM.length}]; uniform vec2 uGFamF[${FAM.length}]; uniform vec4 uGFamM[${FAM.length}];
 float gH3(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
@@ -304,6 +312,7 @@ float globeHeight(vec2 d, float oct){
 	float A = gC0.a, RG = gC1.r, TR = gC1.g, BNR = gC1.b, RV = gC1.a, DUNE = gC2.r, KARST = gC2.g;
 	vec3 dP = gSphere(d);
 	float sum = 0.0, w = 1.0, amp = 1.0, n2 = 0.0, n3 = 0.0, n4 = 0.0, n5 = 0.0;
+	float hg = 1.1 * smoothstep(15.0, 70.0, A) * (1.0 - smoothstep(250.0, 550.0, A)) * (1.0 - 0.5 * smoothstep(0.4, 0.7, RG));
 	for (int k = 0; k < ${OCT}; k++) {
 		float fk = float(k);
 		if (fk >= oct && k > 3) break;
@@ -314,7 +323,7 @@ float globeHeight(vec2 d, float oct){
 		nn *= fade;
 		float r = 1.0 - sqrt(nn * nn + 0.004); r = r * r * 3.0 - 1.0;
 		float v = mix(nn, r, RG) * fade;
-		sum += v * amp * w;
+		sum += v * amp * w * (1.0 + hg * G_HILL[k]);
 		w = mix(1.0, clamp(0.55 + 0.6 * v, 0.2, 1.0), RG);
 		amp *= 0.63 - 0.08 * RG;
 	}

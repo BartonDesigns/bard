@@ -58,6 +58,25 @@ vec2 gM(int k){ return (vec2(gQI & (4095 >> k)) + gQF) * float(1 << k); }
 // a line's share of a pixel: d from its middle, w its half-width, fw the pixel's size (m)
 float gLine(float d, float w, float fw){ return (1.0 - smoothstep(w - fw, w + fw, d)) * min(1.0, w / max(fw, 1e-3)); }
 float gLum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
+// cells of 2^k survey units: the distance to the nearest edge (in cells) and the cell's own number
+vec2 gSeed(ivec2 c, uint s){ return vec2(gfH(ivec3(c, 3), s), gfH(ivec3(c, 5), s)) * 0.8 + 0.1; }
+float gVor(int k, uint s, out float id){
+	ivec2 c = gQI >> k; vec2 f = (vec2(gQI - (c << k)) + gQF) / float(1 << k);
+	float md = 8.0; ivec2 mg = ivec2(0); vec2 mr = vec2(0.0);
+	for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+		ivec2 g = ivec2(i, j); vec2 r = vec2(g) + gSeed(c + g, s) - f; float d = dot(r, r);
+		if (d < md) { md = d; mg = g; mr = r; }
+	}
+	float ed = 8.0;
+	for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+		ivec2 g = mg + ivec2(i, j);
+		if (g == mg) continue;
+		vec2 r = vec2(g) + gSeed(c + g, s) - f;
+		ed = min(ed, dot(0.5 * (mr + r), normalize(r - mr)));
+	}
+	id = gfH(ivec3(c + mg, 9), s + 13u);
+	return ed;
+}
 // a photo's light and shade about 0.5, read twice (the second larger and turned a quarter,
 // mirrored) so its repeat doesn't show; once on a phone
 float gPh(sampler2D t, vec2 p){
@@ -241,7 +260,10 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					c *= 0.72 + 0.56 * tus;
 					// the earth showing where it is steeper or drier, between the tussocks
 					vec3 soil = mix(vec3(0.15, 0.105, 0.065), gB * 0.5, 0.3) * (0.85 + 0.3 * m2);
-					float bare = smoothstep(0.5, 0.8, (1.0 - smoothstep(150.0, 700.0, rain)) * 0.45 + slope * 1.6 + (tus - 0.5) * 0.7 + (m2 - 0.5) * 0.4);
+					// meadow country: wet and temperate (Germany, England, the Alps' foothills), grass holding the
+					// slopes, the woods in blocks with hard edges and the open ground clear of trees between
+					float meadow = smoothstep(550.0, 750.0, rain) * smoothstep(3.0, 7.0, temp) * (1.0 - smoothstep(15.0, 19.0, temp));
+					float bare = smoothstep(0.5, 0.8, (1.0 - smoothstep(150.0, 700.0, rain)) * 0.45 + slope * 1.6 * (1.0 - 0.6 * meadow) + (tus - 0.5) * 0.7 + (m2 - 0.5) * 0.4) * (1.0 - 0.8 * meadow);
 					c = mix(c, soil, bare * 0.8);
 					// the desert: pale ground with scrub dotted over it, crests where the atlas has dunes
 					float arid = 1.0 - smoothstep(180.0, 420.0, rain);
@@ -258,7 +280,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// grows them)
 					float farmable = max(smoothstep(380.0, 560.0, rain) * smoothstep(3.0, 9.0, temp) * (1.0 - (1.0 - smoothstep(650.0, 850.0, rain)) * max(smoothstep(0.3, 0.45, trees), smoothstep(12.0, 15.0, temp) * smoothstep(250.0, 450.0, h))),
 						smoothstep(150.0, 260.0, rain) * (1.0 - smoothstep(300.0, 600.0, h)) * smoothstep(12.0, 16.0, temp) * 0.75) * (1.0 - smoothstep(0.004, 0.012, slope)) * (1.0 - smoothstep(1200.0, 2200.0, h));
-					float forest = smoothstep(0.44, 0.56, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * 0.12) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
+					float forest = smoothstep(0.44 + 0.045 * meadow, 0.56 - 0.045 * meadow, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * (0.12 + 0.1 * meadow) + smoothstep(0.01, 0.06, slope) * 0.12 * meadow) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
 					float farmP = farmable * (1.0 - forest) * (1.0 - smoothstep(0.55, 0.8, trees)) * smoothstep(0.15, 0.45, pB * 0.7 + m2 * 0.3 + 0.1);
 					vec2 fq = fwidth(vec2(vGW.x, -vGW.z) * uGFd.zw) * 25.0;
 					if (farmP > 0.002) {
@@ -278,7 +300,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					c = mix(c, wood, forest);
 					bare = mix(bare, 0.7, forest * floorK);
 					// and the shade of the scattered trees in open woodland
-					c *= 1.0 - 0.35 * smoothstep(0.15, 0.45, trees) * (1.0 - forest) * smoothstep(0.55, 0.7, gq(1, 47u) * 0.6 + pS * 0.4);
+					c *= 1.0 - 0.35 * smoothstep(0.15, 0.45, trees) * (1.0 - forest) * (1.0 - 0.85 * meadow) * smoothstep(0.55, 0.7, gq(1, 47u) * 0.6 + pS * 0.4);
 					// which way the slope faces: + toward the pole (in its own shade most of the day), - toward
 					// the sun, nothing on the flat
 					float shadeSide = clamp(-n.z * sign(uGAnc.x + 1e-4) / max(n.y, 0.25), -1.0, 1.0) * smoothstep(0.03, 0.25, slope);
@@ -304,6 +326,19 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float lying = 1.0 - smoothstep(-3.0, 0.5, snowAir + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
 					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope + (m1 - 0.5) * 0.12));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
+					// the ice sheets and shelves (the snow that never goes, on the flat): cracked into plates
+					// by rifts a kilometre or two apart and the crevasses between, their walls deep blue, with
+					// patches of wind-bared blue ice, so the ice reads out to the horizon and not as a grey sheet
+					float sheet = keep * snowK * (1.0 - smoothstep(0.06, 0.18, slope));
+					if (sheet > 0.01) {
+						float idA, idB;
+						float eA = gVor(6, 61u, idA) * 1600.0, eB = gVor(2, 67u, idB) * 100.0;
+						float rift = gLine(eA, mix(2.0, 9.0, fract(idA * 7.3)), px), crev = gLine(eB, 0.9, px) * step(0.45, fract(idB * 3.1));
+						vec3 ice = vec3(0.86, 0.88, 0.92) * (0.96 + 0.07 * idA) * (0.97 + 0.05 * idB);
+						ice = mix(ice, vec3(0.62, 0.74, 0.85), smoothstep(0.62, 0.8, pM * 0.6 + pS * 0.4) * 0.6);
+						ice = mix(ice, vec3(0.3, 0.47, 0.62), max(rift, crev * 0.7));
+						c = mix(c, ice, sheet);
+					}
 					// Ocean beaches and inland banks use their own materials. Lake banks stay
 					// damp soil/gravel with a grassy upper edge, not a tan ocean beach.
 					float inland = smoothstep(0.35, 0.65, vGC.y) * step(1.0, vGC.z);
