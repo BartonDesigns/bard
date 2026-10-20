@@ -70,6 +70,7 @@ export function createChatClient({ url, id, name, region = () => null, rank = ()
 			case 'welcome':
 				tries = 0;
 				C.online = m.online | 0;
+				C.region = cleanRegion(m.region?.id, m.region?.name);
 				C.group = cleanGroup(m.group);
 				C.invites = Array.isArray(m.invites) ? m.invites : [];
 				// (a new region's texts replace the last one's)

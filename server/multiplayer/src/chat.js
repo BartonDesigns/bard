@@ -68,7 +68,7 @@ export class ChatHub {
 		const gid = await this.store.get('pg:' + a.id);
 		const g = gid && await this.group(gid);
 		this.send(ws, {
-			t: 'welcome', you: a.id, features: [CHAT_FEATURE], online: this.sockets().length, now: Date.now(),
+			t: 'welcome', you: a.id, features: [CHAT_FEATURE], online: this.sockets().length, now: Date.now(), region: a.r,
 			history: { world: (await this.store.get('h:world')) || [], region: a.r ? (await this.store.get('h:r:' + a.r.id)) || [] : [], group: g ? (await this.store.get('h:g:' + g.gid)) || [] : [] },
 			group: g ? this.view(g) : null, invites: await this.invites(a.id),
 		});
@@ -282,6 +282,7 @@ export class ChatHub {
 				for (const s of this.sockets()) {
 					const b = this.info(s);
 					if (b.id === a.id) continue;
+					if (L.length >= 120) break;
 					if (q && !b.name.toLowerCase().includes(q)) continue;
 					L.push({ ...whoOf(b), ...(b.r ? { r: b.r.name } : {}), near: !!(a.r && b.r?.id === a.r.id), g: !!(await this.store.get('pg:' + b.id)) });
 				}

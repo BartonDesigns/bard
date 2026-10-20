@@ -143,6 +143,7 @@ export function createChat({ url, multiplayer, mount, cloud = null, hint = () =>
 	comp.addEventListener('submit', (e) => { e.preventDefault(); say(); });
 	input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { input.blur(); close(); } });
 	root.append(head, tabs, body, recBar, comp);
+	root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target !== input) close(); });
 	mount.appendChild(root);
 	const layout = () => { const full = isTouch || innerWidth < 720; root.classList.toggle('full', full); root.classList.toggle('desk', !full); };
 
@@ -380,6 +381,8 @@ export function createChat({ url, multiplayer, mount, cloud = null, hint = () =>
 			if (client.status !== 'on') { hint('Chat is not connected yet.', 2500); return; }
 			ch = channel();
 			try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }); } catch { hint('Voice needs the microphone. Allow it in the browser to talk.', 4000); return; }
+			// (held through the browser's question and let go: nothing was said yet)
+			if (!pressT && !tapMode) { for (const t of stream.getTracks()) t.stop(); stream = null; hint('The microphone is ready. Hold the mic to talk.', 3000); return; }
 			const mime = pick();
 			try { R = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 24000 }); } catch { R = new MediaRecorder(stream); }
 			chunks = []; size = 0; keep = true;
