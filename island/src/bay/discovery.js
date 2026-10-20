@@ -20,12 +20,12 @@ import { toWorld } from './geo.js';
 import { buildFaith } from '../world/boatmodel.js';
 import { museumPorch, museumStroller, museumFlagpole } from './discovery-details.js';
 import { buildDiscoveryGrove } from './discovery-grove.js';
+import { sineHash as hh } from '../noise.js';
 
 export const CAMPUS = { ...toWorld(37.83560, -122.47660), r: 72 };
 export const inCampus = (x, z) => Math.hypot(x - CAMPUS.x, z - CAMPUS.z) < CAMPUS.r;
 const COVE = toWorld(37.83545, -122.47515);
 const GATE = toWorld(37.8262, -122.4790);           // the bridge's north tower, past Faith's bow
-const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 function clapboard() {
 	const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;

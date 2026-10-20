@@ -17,8 +17,8 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { sineHash as hh } from './noise.js';
 
-const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 // each theme: its game, its name, how far the shot is (from the spot to the goal line), how
 // far in from the end the goal stands, the goal's mouth, how high its floor stands off the

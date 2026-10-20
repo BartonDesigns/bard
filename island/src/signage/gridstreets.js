@@ -9,10 +9,11 @@
 //
 // Plain numbers (no scene): tested in island/tools/integration.test.mjs.
 
+import { sineHash as h2 } from '../noise.js';
+
 const TREES = ['Oak', 'Maple', 'Elm', 'Walnut', 'Cedar', 'Pine', 'Laurel', 'Willow', 'Sycamore', 'Chestnut', 'Hawthorne', 'Magnolia', 'Juniper', 'Poplar', 'Alder', 'Madrone', 'Linden', 'Birch', 'Aspen', 'Cypress'];
 const PEOPLE = ['Lincoln', 'Washington', 'Jefferson', 'Madison', 'Monroe', 'Adams', 'Jackson', 'Grant', 'Franklin', 'Hamilton', 'Garfield', 'Harrison', 'Taylor', 'Polk', 'Pierce', 'Fillmore'];
 const BOULEVARDS = ['Mission', 'Central', 'Valley', 'Park', 'University', 'Foothill', 'Bayshore', 'Industrial', 'Civic Center', 'Arroyo'];
-const h2 = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 export function ordinal(n) {
 	const t = n % 100;
 	return n + (t > 10 && t < 14 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th');

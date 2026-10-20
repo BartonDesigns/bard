@@ -10,9 +10,9 @@ import { fitWorkplace } from '../interiors/workplace-fitout.js';
 import { toLL } from '../earth/globeframe.js';
 import { officeScheme } from './decor.js';
 import { lightInterior, releaseInterior, configureLighting } from '../interiors/lighting.js';
+import { sineHash as hh } from '../noise.js';
 
 const WALL = 0.3;
-const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 export function createTowers(scene, bay, city, { isPhone = false, mount, hint = () => {}, player }) {
 	configureLighting({ isPhone });

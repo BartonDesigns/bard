@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorld } from '../geo.js';
-import { mulberry32 as rng } from '../../noise.js';
+import { mulberry32 as rng, sineHash as hash } from '../../noise.js';
 
 // the front edge of the promenade, halfway along (the Casino at the west end by Cliff
 // Street, the Giant Dipper at the east end short of the river)
@@ -21,7 +21,7 @@ export const toL = (x, z) => { const dx = x - FRAME.x, dz = z - FRAME.z; return 
 // the promenade's level, and the midway behind it
 export const DECK = 3.0;
 
-export const hash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+export { hash };
 export { rng };
 
 // ---------- paints ----------

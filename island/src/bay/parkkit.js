@@ -15,8 +15,8 @@ import { PARKS, AGENCY_STYLE } from '../nature/parks.js';
 import { toWorld } from './geo.js';
 import { inClearing } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
+import { sineHash as hh } from '../noise.js';
 
-const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const SITES = PARKS.map((p) => ({ ...p, ...toWorld(p.lat, p.lon), trails: (p.trailheads || []).map((t) => ({ ...t, ...toWorld(t.lat, t.lon) })) }));
 
 // an agency's sign face

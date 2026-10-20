@@ -24,6 +24,7 @@ import { flashAtlas } from '../tattoo/skinink.js';
 import { shopScheme, seedAt } from './decor.js';
 import { lightInterior, releaseInterior, configureLighting } from '../interiors/lighting.js';
 import { venueOf } from '../economy/venue.js';
+import { sineHash as hh } from '../noise.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
 let SHEET = null;
@@ -37,7 +38,6 @@ function flashSheet() {
 	SHEET = { tiles: F.tiles, mat: new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }) };
 	return SHEET;
 }
-const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
 // the hours each keeps its lights on (interiors/lighting.js dims them the rest of the night)
 const HOURS = { cafe: [6, 20], restaurant: [10, 23.5], shop: [8, 21], office: [7, 20], arcade: [10, 24], bowling: [10, 24], cinema: [10, 24], tattoo: [11, 22] };

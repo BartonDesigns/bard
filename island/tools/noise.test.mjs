@@ -1,10 +1,11 @@
 // noise.js holds the seeded random and the small maths that most of the world is grown
-// from (mulberry32, smoothstep, clamp, lerp). The modules that used to keep their own copies
-// now import these, so a change here moves every generated world at once: these values pin
-// what they give today.
+// from (mulberry32, smoothstep, clamp, lerp, sineHash, wrapAngle). The modules that used to
+// keep their own copies now import these, so a change here moves every generated world at
+// once: these values pin what they give today.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mulberry32, smoothstep, clamp, lerp } from '../src/noise.js';
+import { mulberry32, smoothstep, clamp, lerp, sineHash, wrapAngle } from '../src/noise.js';
+import { hash as rideHash } from '../src/bay/rides/kit.js';
 import { rng as synthRng } from '../src/audio/synth.js';
 import { rng as bodyRng } from '../src/people/body.js';
 import { rng as signRng } from '../src/signage/rand.js';
@@ -46,4 +47,16 @@ test('smoothstep, clamp and lerp', () => {
 	assert.equal(clamp(-5, 0, 2), 0);
 	assert.equal(clamp(1.5, 0, 2), 1.5);
 	assert.equal(lerp(2, 6, 0.25), 3);
+});
+
+test('the sine hash and the angle wrap', () => {
+	assert.equal(sineHash(0, 0), 0);
+	assert.equal(sineHash(1, 2), 0.48287847430947295);
+	assert.equal(sineHash(-3.5, 7.25), 0.8654398436192423);
+	for (let i = 0; i < 2000; i++) { const v = sineHash(i * 0.37 - 200, i * 1.91); assert.ok(v >= 0 && v < 1); }
+	assert.equal(rideHash, sineHash);
+	assert.equal(wrapAngle(0), 0);
+	assert.equal(wrapAngle(2), 2);
+	assert.equal(wrapAngle(Math.PI * 3), 3.1415926535897927);
+	assert.equal(wrapAngle(-7), -0.7168146928204135);
 });

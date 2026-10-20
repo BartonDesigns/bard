@@ -2,7 +2,7 @@
 // kind, size and where it stands, so the same block is always the same place. Pure, so the
 // economy (establishments.js) can give it a sign that agrees with what is inside.
 
-const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+import { sineHash as hh } from '../noise.js';
 
 // b: { x, z, w, d, kind } with kind 5 office, 6 retail (the real boxes' codes)
 export function venueOf(b) {
