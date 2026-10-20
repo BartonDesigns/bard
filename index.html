@@ -20,6 +20,7 @@
 })();
 </script>
 <script src="./loading-screen.js?v=aef31c9415"></script>
+<script src="./music-link.js?v=79a31dea1c" defer></script>
 <script>
 /* ?debug on the address: an on-screen console (phones have none), with a Copy button. Only
    errors, warnings and the game's own diagnostic lines; nothing is sent anywhere. */
@@ -7415,6 +7416,7 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
       <button class="ctrl-btn" id="btn-chords">CHORDS</button>
       <button class="ctrl-btn" id="btn-vortex">VORTEX</button>
       <button class="ctrl-btn" id="btn-beatloop">BEAT LOOP</button>
+      <button class="ctrl-btn" id="btn-music-link" type="button" aria-pressed="false" aria-label="Music from a link" title="LINK: play a YouTube or Spotify link (or paste or drop one anywhere) and let the world hear it">&#9835;</button>
       <button class="ctrl-btn" id="btn-build">BUILD</button>
       <button class="ctrl-btn" id="btn-arp">ARP</button><button class="ctrl-btn" id="btn-arp-studio" title="Arp Studio">⋯</button>
       <button class="ctrl-btn" id="btn-arrange" aria-label="Compose / Arranger">COMPOSE</button><button class="ctrl-btn" id="lead-hold-btn" onclick="window._latchToggle && window._latchToggle()" aria-label="Hold — latch lead notes so chords bigger than five fingers ring until released" title="HOLD — latch leads: press to stack unlimited notes, tap a sounding key to release it">∞ HOLD</button>
@@ -27198,7 +27200,7 @@ window._handoffCopy = function () {
         var elapsed = C.last < 0 ? 0.025 : Math.min(0.2, (now - C.last) / 1000);
         C.last = now;
         var synth = typeof analyser !== 'undefined' ? analyser : null;
-        var sources = [[synth, 1], [window._micActive ? window._micAnalyser : null, 1], [window._djReactiveAnalyser, 1.12]].filter(function (s) { return s[0] && s[0].context.state === 'running'; });
+        var sources = [[synth, 1], [window._micActive ? window._micAnalyser : null, 1], [window._linkListen ? window._linkAnalyser : null, 1], [window._djReactiveAnalyser, 1.12]].filter(function (s) { return s[0] && s[0].context.state === 'running'; });
         var base = sources.length ? sources[0][0] : null, len = base ? base.frequencyBinCount : 1024;
         if (!C.buffer || C.buffer.length !== len) C.buffer = new Uint8Array(len);
         C.buffer.fill(0);
@@ -27818,7 +27820,7 @@ root.L99Dive227={start,climb,landed,finish,get active(){return !!dive;}};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=f01c2d8de3'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=01fba3c813'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -27826,7 +27828,7 @@ root.L99Dive227={start,climb,landed,finish,get active(){return !!dive;}};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=f01c2d8de3'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=01fba3c813'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }

@@ -14,6 +14,7 @@
 //   POST name   { name } (session) -> { name, nameAt }: the player name everyone sees, changed at
 //               most once in NAME_MS (429 { next } before then). One chosen at signup is free.
 // login, reset and peek also give { name, nameAt }.
+//   POST whoami (session) -> { u, name }   (only from src/index.js, for the guilds: not a public route)
 import { usernameOk, passwordOk, cleanUsername, RECOVERY_RE, SAVE_MAX, NAME_MS, playerNameOk, cleanPlayerName } from '../../../island/src/persistence/cloud-save.js';
 
 // PBKDF2 rounds (kept per account, so it can rise later): the Workers Free plan's CPU budget
@@ -111,6 +112,8 @@ export class Account {
 		if (!(await this.session(user, token))) return json({ error: 'Please log in again.' }, 401);
 		const M = await this.meta();
 		if (op === 'peek') return json({ rev: M.rev, at: M.at, summary: M.summary, name: user.name || '', nameAt: user.nameAt || 0 });
+		// (who this session is: the guilds ask, src/index.js)
+		if (op === 'whoami') return json({ u: user.u, name: user.name || '' });
 		if (op === 'name') {
 			if (!playerNameOk(b.name)) return json({ error: 'A name is 2 to 24 characters.' }, 400);
 			const name = cleanPlayerName(b.name);
