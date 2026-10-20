@@ -500,7 +500,8 @@ export function createChat({ url, multiplayer, mount, cloud = null, hint = () =>
 			if (!self && !mutedW(v.from) && !(isOpen() && tab === v.ch)) unread[v.ch]++;
 			feedLine(v);
 			if (t === 'voice' && !self && v.ch === 'group' && autoplay && !mutedW(v.from)) play(v);
-		} else if (t === 'note') hint(v, 3500);
+		} else if (t === 'who') who = v;
+		else if (t === 'note') hint(v, 3500);
 		else if (t === 'invites') {
 			for (const i of v) if (!seenInvites.has(i.gid)) { seenInvites.add(i.gid); toastInvite(i); }
 		} else if (t === 'group') {

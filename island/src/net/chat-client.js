@@ -124,7 +124,7 @@ export function createChatClient({ url, id, name, region = () => null, rank = ()
 		status('off');
 	}
 	return Object.assign(C, {
-		start, stop, send, track, me: () => id,
+		start, stop, send, track, myId: () => id,
 		say: (ch, text) => send({ t: 'say', ch, text: cleanText(text) }),
 		voice: (ch, clip) => send({ t: 'voice', ch, ...clip }),
 		who: (q = '') => send({ t: 'who', q }),
