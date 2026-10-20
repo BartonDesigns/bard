@@ -116,7 +116,7 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 	birds.frustumCulled = false;
 	scene.add(birds);
 	const B = [...Array(NB)].map(() => ({ p: new THREE.Vector3(), v: new THREE.Vector3((Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 6), placed: false }));
-	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1.4, 1.4, 1.4), tmp = new THREE.Vector3(), acc = new THREE.Vector3();
+	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1.4, 1.4, 1.4), tmp = new THREE.Vector3(), acc = new THREE.Vector3(), al = new THREE.Vector3(), co = new THREE.Vector3();
 	let flockC = new THREE.Vector3();
 	function stepBirds(dt, cam, wind, groundAt) {
 		const show = !airless && S.rainHere < 0.45 && cam.position.y - groundAt(cam.position.x, cam.position.z) < 300;
@@ -128,7 +128,7 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 		for (const b of B) {
 			if (!b.placed) { b.p.set(flockC.x + (Math.random() - 0.5) * 30, flockC.y + (Math.random() - 0.5) * 8, flockC.z + (Math.random() - 0.5) * 30); b.placed = true; }
 			acc.set(0, 0, 0);
-			let n = 0; const al = new THREE.Vector3(), co = new THREE.Vector3();
+			let n = 0; al.set(0, 0, 0); co.set(0, 0, 0);
 			for (const o of B) {
 				if (o === b) continue;
 				const d = b.p.distanceTo(o.p);
