@@ -81,8 +81,9 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 			const x = cx + (rnd() - 0.5) * 900, z = cz + (rnd() - 0.5) * 900;
 			if (g(x, z) < 0.5) gulls.push({ x, z, y: 8 + rnd() * 25, r: 15 + rnd() * 40, sp: (0.15 + rnd() * 0.25) * (rnd() < 0.5 ? 1 : -1), ph: rnd() * 6 });
 		}
-		// deer at dawn and dusk, on open grassy ground off the streets
-		herd = [];
+		// deer at dawn and dusk, on open grassy ground off the streets (one shot down and not yet
+		// dressed stays where it fell)
+		herd = herd.filter((D) => D.dead && !D.gone && Math.hypot(D.x - cx, D.z - cz) < 400);
 		// (by day a doe or two lie up in the shade at the woods' edge, and get up as you come)
 		const dusk = h > 16.5 || h < 8.5, day = h > 8.5 && h < 16.5 && (Math.floor(cx / 900) + Math.floor(cz / 900)) % 3 === 0;
 		if (about('black_tailed_deer', h, month) || day) for (let k = 0; k < 80 && herd.length < (dusk ? (isPhone ? 4 : 7) : day ? 2 : 0); k++) {
@@ -156,17 +157,35 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 		});
 		gull.count = gulls.length; gull.instanceMatrix.needsUpdate = true;
 		// deer: grazing, heads up now and then; closer than 30 m and they bound off
-		herd.forEach((D, i) => {
+		// (one shot down lies on its side where it fell until it is dressed: cooking/hunting.js)
+		let nd = 0;
+		herd.forEach((D) => {
+			if (D.gone) return;
+			if (D.dead) {
+				D.fall = Math.min(1, (D.fall || 0) + dt * 2.5);
+				e.set(0, D.yaw, Math.PI / 2 * D.fall); q.setFromEuler(e);
+				deer.setMatrixAt(nd++, m4.compose(p.set(D.x, g(D.x, D.z) + 0.28, D.z), q, s1));
+				return;
+			}
 			const dx = D.x - cam.position.x, dz = D.z - cam.position.z, d = Math.hypot(dx, dz);
 			if (d < 30 && !D.flee) { D.flee = 3.5; D.vx = dx / d * 9; D.vz = dz / d * 9; D.yaw = Math.atan2(dx, dz); }
 			let hop = 0, pitch = Math.sin(t * 0.4 + D.ph) > 0.3 ? 0.35 : 0;          // grazing, head down
 			if (D.flee > 0) { D.flee -= dt; D.x += D.vx * dt; D.z += D.vz * dt; hop = Math.abs(Math.sin(t * 7 + D.ph)) * 0.7; pitch = -0.15; }
 			e.set(pitch * 0.2, D.yaw, 0); q.setFromEuler(e);
-			deer.setMatrixAt(i, m4.compose(p.set(D.x, g(D.x, D.z) + hop, D.z), q, s1));
+			deer.setMatrixAt(nd++, m4.compose(p.set(D.x, g(D.x, D.z) + hop, D.z), q, s1));
 			if (d < 90 && seen(cam, D.x, g(D.x, D.z) + 1, D.z, 90)) spot('black_tailed_deer');
 		});
-		deer.count = herd.length; deer.instanceMatrix.needsUpdate = true;
+		deer.count = nd; deer.instanceMatrix.needsUpdate = true;
 		small.update(dt, t, cam, hours, month);
 	}
-	return { group, update, small, journal: () => Object.keys(journal).map((id) => GUIDE[id]?.name).filter(Boolean) };
+	// the game about you that a shot can take (cooking/hunting.js): { kind, A (its record: dead, gone),
+	// x, y, z (its middle), r (its size) }, the deer and the small life's turkeys and quail
+	function quarry() {
+		if (!group.visible) return [];
+		const out = [];
+		for (const D of herd) if (!D.gone) out.push({ kind: 'deer', A: D, x: D.x, y: g(D.x, D.z) + (D.dead ? 0.3 : 0.85), z: D.z, r: D.dead ? 0.6 : 0.55 });
+		for (const Q of small.quarry?.() || []) out.push(Q);
+		return out;
+	}
+	return { group, update, small, quarry, journal: () => Object.keys(journal).map((id) => GUIDE[id]?.name).filter(Boolean) };
 }
