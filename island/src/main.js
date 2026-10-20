@@ -701,8 +701,8 @@ export function createIslandWorld() {
 	// households, their days and their food, and the moments of it you see (people/family-life.js)
 	const families = HOOKS.families = createFamilyLife({ scene, world: () => world, camera, people, isPhone, mount: dom.mount, hint,
 		wallet: { credits: () => arms.state().credits, spend: c => arms.spendCredits(c, { reason: 'community-aid' }) },
-		releaseBody: P => ragdolls.release(P), morality: () => HOOKS.morality || null });
-	addTalkers(() => families.actors().filter(p => p.active && p.P.root.visible));
+		releaseBody: P => ragdolls.release(P), morality: () => HOOKS.morality || null, say: (p, line) => HOOKS.chatter?.say?.(p, line) });
+	addTalkers(() => families.actors().filter(p => p.active && p.P.root.visible && !p.asleep));
 	const social = createNpcSocial({ scene, world: () => world, camera, people, isPhone, hint });
 	addTalkers(() => world?.underworld?.village?.()?.folk.filter(p => !p.socialOwned && p.P.root.visible) || []);
 	guideApi.social = social;

@@ -310,7 +310,7 @@ export function planHouse(grp, opt = {}) {
 			const c = i + j * nx;
 			if (!onLevel(c, r.level) || labels[r.level][c] >= 0) continue;
 			const x = cx(i), z = cz(j);
-			if (x > box.x0 && x < box.x1 && z > box.z0 && z < box.z1 && !(r.level === 0 && inGarage(x, z))) give(r, c);
+			if (x > box.x0 && x < box.x1 && z > box.z0 && z < box.z1 && !(r.level === 0 && r.type !== 'garage' && inGarage(x, z))) give(r, c);
 		}
 		return r;
 	};
@@ -1012,8 +1012,14 @@ function furnish(plan) {
 			for (const o of w.open) {
 				if (o.type === 'window') continue;
 				const d = o.type === 'garage' ? 3.0 : o.type === 'wide' ? 0.9 : 1.05;
-				const a = o.s0 - 0.1, b = o.s1 + 0.1;
-				placed.push(w.axis === 'x' ? [a, w.pos - d, b, w.pos + d] : [w.pos - d, a, w.pos + d, b]);
+				const a = o.s0 - 0.1, b = o.s1 + 0.1, m = (o.s0 + o.s1) / 2;
+				// (only on this room's side of it: the garage's car door clears the garage, not the
+				// dining room beyond its wall)
+				for (const n of [-1, 1]) {
+					if (!(w.axis === 'x' ? inRoom(m, w.pos + n * 0.3) : inRoom(w.pos + n * 0.3, m))) continue;
+					const p0 = Math.min(w.pos, w.pos + n * d), p1 = Math.max(w.pos, w.pos + n * d);
+					placed.push(w.axis === 'x' ? [a, p0, b, p1] : [p0, a, p1, b]);
+				}
 			}
 		}
 		if (stairs) {
@@ -1163,11 +1169,18 @@ function furnish(plan) {
 			against('floorLamp', 0.35, 0.35, 1.6, { corner: true, clear: 0 });
 			art(1); light('fan');
 		} else if (t === 'dining') {
-			const tw = Math.min(1.9, bw - 1.9, bd - 1.9 + 0.9), td = Math.min(1.0, Math.min(bw, bd) - 1.9);
-			if (tw > 0.9 && td > 0.7) {
-				const rot = bw >= bd ? 0 : 1, tbl = standing('diningTable', room.cx, room.cz, tw, td, 0.76, rot);
-				if (tbl) tbl.chairs = Math.max(2, Math.min(6, Math.floor(tw / 0.6) * 2));
+			const tw = Math.min(1.9, bw - 1.9, bd - 1.9 + 0.9), td = Math.min(1.0, Math.min(bw, bd) - 1.9), rot = bw >= bd ? 0 : 1;
+			let tbl = tw > 0.9 && td > 0.7 ? standing('diningTable', room.cx, room.cz, tw, td, 0.76, rot) : null;
+			// (where the middle of the room will not take it, the open floor nearest the middle that
+			// will, with room for the chairs round it; a smaller table if need be)
+			if (!tbl) {
+				const mids = room.cells.map((c) => [(X[c % nx] + X[c % nx + 1]) / 2, (Z[Math.floor(c / nx)] + Z[Math.floor(c / nx) + 1]) / 2]).sort((a, b) => Math.hypot(a[0] - room.cx, a[1] - room.cz) - Math.hypot(b[0] - room.cx, b[1] - room.cz));
+				for (const [w2, d2, pad] of [[Math.max(1.2, Math.min(1.6, tw)), 0.9, 0.55], [1.1, 0.8, 0.55], [0.9, 0.75, 0.45]]) {
+					for (const [x, z] of mids) { tbl = standing('diningTable', x, z, w2, d2, 0.76, rot, pad); if (tbl) break; }
+					if (tbl) { placed.pop(); placed.push(tbl.box.map((v, i) => v + (i < 2 ? pad : -pad))); break; }
+				}
 			}
+			if (tbl) tbl.chairs = Math.max(2, Math.min(6, Math.floor(tbl.w / 0.6) * 2));
 			against('sideboard', 1.5, 0.45, 0.85, { long: true, clear: 0.5 });
 			art(2); light('chandelier');
 		} else if (t === 'kitchen') {
