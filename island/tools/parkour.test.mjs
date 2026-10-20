@@ -163,3 +163,19 @@ test('any body (a fighter, a person) can feel for and climb the same, on its own
 	assert.ok(b.z < -4.3 && Math.abs(b.eye - 1.6) < 1e-9, 'ends standing beyond it');
 	assert.ok(C.exit >= 3.5 && C.dur > 0.4);
 });
+
+test('under a ceiling (inside a house) no wall is climbed over, nor a kick taken up it', () => {
+	const { floorAt, pushOut } = world();
+	// a room round the 2 m fence, its ceiling at 2.6
+	const ceilingAt = (x, z) => (x > 36 && x < 44 && z > -8 && z < 0 ? 2.6 : Infinity);
+	const open = feelFor({ floorAt, pushOut }), room = feelFor({ floorAt, pushOut, ceilingAt });
+	const A = open.scan(40, -3.3, 0.6, 0, -1, 0.75, 2.1);
+	assert.equal(A.kind, 'fence', 'with no ceiling the fence is there to climb');
+	assert.ok(climbFor(A, 0.6, 'air'), 'and climbed from a jump');
+	const B = room.scan(40, -3.3, 0.6, 0, -1, 0.75, 2.1);
+	assert.equal(B.kind, 'wall', 'under the ceiling it is only a wall');
+	assert.equal(climbFor(B, 0.6, 'air'), null);
+	// (outside the room the same ceilings change nothing: the 2.3 m ledge still pulls up)
+	const L = room.scan(0, -2.2, 0.6, 0, -1, 0.75, 2.1);
+	assert.equal(climbFor(L, 0.6, 'air'), 'pull');
+});

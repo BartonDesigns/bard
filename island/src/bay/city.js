@@ -904,6 +904,29 @@ export function createCity(shared, scene, bay, real = null) {
 		return o.y + o.h + R.h * Math.max(0, y);
 	}
 	const HOUSE = new Set([KIND.house, KIND.houseGarageL, KIND.houseGarageR]);
+	// the pitched roofs as floors, for someone up on one (climbed from the wall: parkour.js), and
+	// the buildings' tops as ceilings for someone inside one (no climbing out through the roof)
+	function roofFloor(x, z, y) {
+		let best = -1e9;
+		for (const o of lotsNear(x, z, 1)) {
+			if (!o.roof || o.wrecked) continue;
+			const ov = o.roof.ov ?? 0.4, c = Math.cos(o.a), sn = Math.sin(o.a), dx = x - o.x, dz = z - o.z, lx = c * dx + sn * dz, lz = -sn * dx + c * dz;
+			if (Math.abs(lx) > o.w / 2 + ov || Math.abs(lz) > o.d / 2 + ov) continue;
+			const r = roofAt(o, lx, lz);
+			if (y > r - 0.6) best = Math.max(best, r);
+		}
+		return best;
+	}
+	function ceiling(x, z, y) {
+		let best = Infinity;
+		for (const o of lotsNear(x, z, 1)) {
+			if (o.wrecked || o.h < 2.2) continue;
+			const c = Math.cos(o.a), sn = Math.sin(o.a), dx = x - o.x, dz = z - o.z, lx = c * dx + sn * dz, lz = -sn * dx + c * dz;
+			if (Math.abs(lx) > o.w / 2 || Math.abs(lz) > o.d / 2) continue;
+			if (y > o.y - 0.6 && y < o.y + o.h - 0.4) best = Math.min(best, o.y + o.h);
+		}
+		return best;
+	}
 	function decorate(list, cx, cz, R) { return cityDecorate(cc, list, cx, cz, R); }
 	const ROOF_R = PHONE ? 200 : 380;
 	function kitPut(put, k, e) { if (kit2.has(k)) (put.props[k] || (put.props[k] = [])).push(e); }
@@ -1605,5 +1628,5 @@ export function createCity(shared, scene, bay, real = null) {
 		yield;
 		placeTrees(x, z);
 	}
-	return { skyline: () => skyline, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { roofFloor, ceiling, skyline: () => skyline, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }

@@ -679,6 +679,24 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (moved) { const [x, z] = toWorld(h, lx, lz); pos.x = x; pos.z = z; }
 		}
 	}
+	// the ceiling over a body inside a house (feet at footY): its ground floor's, or the upper
+	// floor's where there is one; none over the stairwell, outside, or up above its walls
+	// (parkour.js: no climbing over its walls and out through its roof; player.js: a jump's head)
+	function ceiling(x, z, footY) {
+		let best = Infinity;
+		for (const h of houses.values()) {
+			if (!h) continue;
+			const [lx, lz] = local(h, x, z);
+			if (Math.abs(lx) > h.r || Math.abs(lz) > h.r) continue;
+			const p = h.plan, c = p.cellAt(lx, lz), st = p.stairs;
+			if (c < 0 || p.occ[c] < 0 || (st && lx > st.x0 && lx < st.x1 && lz > st.zt && lz < (st.zw ?? st.zb))) continue;
+			const y = footY - h.floorY;
+			if (y < -0.6) continue;
+			if (y < HT.ceil0 - 0.05) best = Math.min(best, h.floorY + HT.ceil0);
+			else if (p.onLevel(c, 1) && y < HT.ceil1 - 0.05) best = Math.min(best, h.floorY + HT.ceil1);
+		}
+		return best;
+	}
 	// the door in front of you, within reach
 	function doorNear(cam) {
 		let best = null;
@@ -706,6 +724,6 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 		return null;
 	}
-	return { update, floor: floorAt, push, doorNear, inside, group, M, count: () => houses.size, houses, buildMs: () => buildMs, busy: () => !!job };
+	return { update, floor: floorAt, push, ceiling, doorNear, inside, group, M, count: () => houses.size, houses, buildMs: () => buildMs, busy: () => !!job };
 }
 

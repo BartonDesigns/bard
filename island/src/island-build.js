@@ -550,6 +550,11 @@ export async function islandBuild(iw, params) {
 			{ const of = island.extraFloor, op = island.extraPush, V = iw.world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
 			// the military bases' pads, banks, roofs and towers to stand on; their walls, fence and vehicles solid
 			{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
+			// the houses' pitched roofs for you to stand on (climbed onto from outside: parkour.js; yours
+			// alone, player.js, so nothing else falls or spawns onto them); the ceilings over you indoors,
+			// which no jump or climb goes up through
+			island.roofFloor = (x, z, y) => iw.world.city.roofFloor(x, z, y);
+			island.ceilingAt = (x, z, y) => Math.min(houses.ceiling(x, z, y), iw.world.interiors?.ceiling?.(x, z, y) ?? Infinity, iw.world.city.ceiling(x, z, y));
 			// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 			{ const of = island.extraFloor, G = iw.world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
 			// New district materials are warmed by the bounded frame queue.
