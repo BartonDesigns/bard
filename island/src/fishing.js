@@ -454,7 +454,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		hand.position.set(-0.1, -0.02 + Math.min(0.16, m.len * 0.3), -0.42 - m.len * 0.35);
 		hand.rotation.set(0.25, 0.35, 0.1);
 		hand.visible = true;
-		H.fish = { ...m, pivot }; H.t = 0; H.energy = 1; H.flop = 0.6;
+		H.fish = { ...m, pivot, name: sp[0], lb }; H.t = 0; H.energy = 1; H.flop = 0.6;
 	}
 	function letGo(now = false) {
 		if (!H.fish) return;
@@ -650,8 +650,18 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		if (F.state !== 'off') { F.state = 'off'; F.fish = null; F.hold = false; }
 		showMark('');
 	}
+	// the catch in your hand ({ fish, lb }, or null), and keeping it for the kitchen instead of
+	// letting it go (cooking/index.js: it goes in your larder as fillets)
+	const holding = () => (H.fish ? { fish: H.fish.name, lb: H.fish.lb } : null);
+	function keep() {
+		const c = holding();
+		if (!c) return null;
+		letGo(true);
+		card.style.display = 'none';
+		return c;
+	}
 	// (Crysis.fishing.toggle() is the rod icon, .press() the cast / strike / reel button;
 	// .reel(down) the same held and let go, for a pad's trigger: down casts, strikes or reels,
 	// up stops reeling)
-	return { update, showCatch, drop, toggle: toggleRod, press: () => press(true), reel: (down = true) => press(!!down), rodOut, log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy };
+	return { update, showCatch, drop, toggle: toggleRod, press: () => press(true), reel: (down = true) => press(!!down), rodOut, log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy, holding, keep };
 }

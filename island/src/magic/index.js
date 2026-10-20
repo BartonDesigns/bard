@@ -25,6 +25,7 @@ import { createMagicState, saveMagic, weave, weaveCost, bind, gather, manaMax, a
 import { ELEMENTS } from './elements.js';
 import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, rankOf, useFor, refreshMods, RANK_MAX, MASTERY, PAGES, PERKS, PERK, spellBlock, addMastery, feedSpell, masteryLevel, NUMERAL, MASTERY_GIFT } from './skills.js';
 import { refreshStats, statSheet, BASE_LIFE } from './stats.js';
+import { mealSig } from '../cooking/meals.js';
 import { attunement, infuseStrands, isWeaponId, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
 import { MAX_LEVEL, xpToMax } from '../gameplay/gear-levels.js';
 import { createSkillsMenu } from './skills-ui.js';
@@ -69,7 +70,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	// (made anew when any of what feeds them has changed; force: now, whatever)
 	function restat(force = false) {
 		const g = gearNow();
-		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}|${honorRank(state.honor.pts)}`;
+		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}|${honorRank(state.honor.pts)}|${mealSig(state.fed)}`;
 		if (!force && sig === statSig) return false;
 		statSig = sig; state.gear = g;
 		refreshStats(state);
@@ -483,6 +484,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (the console and the tests: honor given, n < 0 taken; way 'pve' or 'pvp')
 		giveHonor: (n = 50, way = 'pve') => { honored(addHonor(state.honor, n, way)); return honorSheet(state.honor, combat.pvpFlag?.()); },
 		infuse, restat: () => restat(true),
+		// the meals on you today (cooking/meals.js), folded into your stats
+		setMeals: (list) => { state.fed = Array.isArray(list) ? list.slice() : []; restat(); skills?.refresh?.(); },
 		// (the console: experience, and a perk)
 		xp: (n = 100) => { learnt(addXp(state, n)); return { level: state.level, xp: state.xp, points: pointsOf(state) }; },
 		perk: (id) => { const ok = takePerk(state, id); if (ok) { dirty = true; restat(true); } skills.refresh(); return ok; },

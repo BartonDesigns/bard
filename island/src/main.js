@@ -47,6 +47,7 @@ import { bodyCount } from './people/body.js';
 import { createCataclysm } from './cataclysm/index.js';
 import { createMagic } from './magic/index.js';
 import { createFishing } from './fishing.js';
+import { createCooking } from './cooking/index.js';
 import { createArcade } from './arcade.js';
 import { worldAir } from './world/soundbus.js';
 import { REAL_U } from './bay/realcity.js';
@@ -908,6 +909,9 @@ export function createIslandWorld() {
 	combat.melee.bind({ avatar, self: you });
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
+	// cooking: your larder, the kitchens and shops, real recipes and the day's meals (cooking/index.js)
+	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
+	cooking.addMenu(tpMenu);
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
@@ -1041,6 +1045,7 @@ export function createIslandWorld() {
 	for (const ev of ['pointerdown', 'touchstart']) doorBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && doorHere && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); useDoor(); } });
 	function watchDoor(dt) {
+		cooking.update(dt);
 		doorT += dt;
 		if (doorT < 0.15) return;
 		doorT = 0;
@@ -1621,6 +1626,7 @@ if (typeof window !== 'undefined') {
 	// Crysis: the engine's name. L99Island stays the faceplate contract; this is the
 	// handle for the generated world (Crysis.ecology() prints this place's food web)
 	window.Crysis = {
+		get cooking() { return HOOKS.cooking; },
 		version: 1,
 		world: () => window.L99Island?.world?.(),
 		performance: () => window.L99Island?.world?.()?.music?.performance,
