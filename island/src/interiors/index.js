@@ -375,6 +375,23 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		}
 		return best;
 	}
+	// the ceiling over a body inside one (feet at y): the floor of the level above it, or
+	// Infinity (the building's roof is the city's: city.js ceiling)
+	function ceiling(x, z, y) {
+		let best = Infinity;
+		for (const B of live.values()) {
+			if (!B.ready) continue;
+			const [lx, lz] = localOf(B, x, z), P = B.P;
+			if (Math.abs(lx) > P.hw + 0.05 || Math.abs(lz) > P.D / 2 + 0.05) continue;
+			const fy = y - P.f0;
+			if (fy < -0.6) continue;
+			for (const L of P.levels) {
+				if (L.y < fy + 0.5 || lz < L.zb - 0.05 || L.holes.some((h) => lx > h[0] && lx < h[2] && lz > h[1] && lz < h[3])) continue;
+				best = Math.min(best, P.f0 + L.y - 0.05);
+			}
+		}
+		return best;
+	}
 	const RAD = 0.3;
 	function pushBox(q, b) {
 		const qx = Math.max(b[0], Math.min(b[2], q[0])), qz = Math.max(b[1], Math.min(b[3], q[1]));
@@ -544,5 +561,5 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// where the signs inside the businesses hang (estab-fit.js K.sign: the grocers' aisle markers),
 	// in the world, the way each faces, and the business
 	const signAnchors = () => { const out = []; for (const B of live.values()) { if (!B.ready || !B.P.signAnchors) continue; const F = frame(B.o); for (const a of B.P.signAnchors) { const [x, z] = F.w(a.x, a.z), [x2, z2] = F.w(a.x + (a.nx || 0), a.z + (a.nz || 0)); out.push({ ...a, x, z, y: B.P.f0 + a.y, nx: x2 - x, nz: z2 - z, building: B.key, estab: B.P.estab?.id || null, type: B.P.estab?.type || a.fit || '' }); } } return out; };
-	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
+	return { group, update, floor, push, ceiling, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }
