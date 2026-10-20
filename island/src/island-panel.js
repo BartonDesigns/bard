@@ -33,6 +33,7 @@ const CSS = `
 .l99-set-card{background:#1a1a1a;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;min-width:0;}
 .l99-set-card>h3{margin:0 0 10px;font:600 11px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#a5f6e2;}
 .l99-set-note{font:12px/1.5 system-ui;color:rgba(255,255,255,.7);margin:0 0 10px;}
+/* (the panel's selects stay the system's own picker, not the faceplate's retro one: data-no-custom) */
 .l99-set select{background:#2a2a2a!important;color:#fff!important;border:1px solid rgba(255,255,255,.25)!important;border-radius:9px!important;font:14px system-ui!important;min-height:44px!important;padding:0 12px!important;}
 .l99-set-go{width:100%;min-height:44px;border:0;border-radius:8px;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;font:600 14px system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);}
 `;
@@ -137,7 +138,7 @@ export function islandPanel(iw) {
 		// snow, the sun's path, the birds, the fish, what people wear); remembered
 		const ml = css(document.createElement('div'), 'opacity:.9;margin-top:8px;'); ml.textContent = 'Month';
 		const sel = css(document.createElement('select'), 'width:100%;min-height:44px;margin-top:4px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:#2a2a2a;color:#fff;padding:0 10px;font:inherit;');
-		sel.name = 'world-month'; sel.setAttribute('aria-label', 'Month');
+		sel.name = 'world-month'; sel.dataset.noCustom = 'true'; sel.setAttribute('aria-label', 'Month');
 		['Live (today)', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].forEach((m, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = m; sel.appendChild(o); });
 		sel.value = String(monthPicked());
 		sel.onchange = () => pickMonth(+sel.value);
@@ -194,7 +195,7 @@ export function islandPanel(iw) {
 		const rig = iw.world.kinetic.state();
 		const kinds = [['garden', 'Bounce garden'], ['pendulum', 'Pendulum wave'], ['dominoes', 'Domino spiral'], ['chimes', 'Chime tree'], ['cradle', 'Newton’s cradle'], ['droplets', 'Droplet pool'], ['harp', 'Gravity harp'], ['stairs', 'Plinko staircase'], ['fountain', 'Ball fountain'], ['wavebars', 'Kinetic wave']];
 		const choice = css(document.createElement('select'), 'width:100%;min-height:44px;border-radius:9px;background:#2a2a2a;color:#eafaf6;padding:5px;margin-bottom:6px;');
-		choice.name = 'kinetic-instrument'; choice.setAttribute('aria-label', 'Kinetic instrument');
+		choice.name = 'kinetic-instrument'; choice.dataset.noCustom = 'true'; choice.setAttribute('aria-label', 'Kinetic instrument');
 		for (const [value, label] of kinds) { const o = document.createElement('option'); o.value = value; o.textContent = label; choice.appendChild(o); }
 		choice.value = iw.world.kineticChoice || rig.kind || 'garden';
 		choice.onchange = () => { iw.world.kineticChoice = choice.value; };
@@ -210,7 +211,7 @@ export function islandPanel(iw) {
 			playing.textContent = `${kinds.find(([id]) => id === rig.kind)?.[1] || rig.kind} · ${rig.running ? 'playing' : 'stopped'}`;
 			k.appendChild(playing);
 			const scale = css(document.createElement('select'), 'width:100%;min-height:44px;border-radius:9px;background:#2a2a2a;color:#eafaf6;padding:5px;margin-bottom:6px;');
-			scale.name = 'kinetic-scale'; scale.setAttribute('aria-label', 'Instrument scale');
+			scale.name = 'kinetic-scale'; scale.dataset.noCustom = 'true'; scale.setAttribute('aria-label', 'Instrument scale');
 			for (const [value, label] of [['faceplate', 'Current Bard scale'], ['0', 'Minor pentatonic'], ['1', 'Major pentatonic'], ['2', 'Dorian'], ['3', 'Whole tone']]) { const o = document.createElement('option'); o.value = value; o.textContent = label; scale.appendChild(o); }
 			scale.value = String(rig.scale); scale.onchange = () => { iw.world.kinetic.configure({ scale: scale.value === 'faceplate' ? 'faceplate' : +scale.value }); buildPanel(); }; k.appendChild(scale);
 			if (rig.scale !== 'faceplate') slider(k, 'Pitch offset', -12, 12, 1, () => iw.world.kinetic.state().root, v => iw.world.kinetic.configure({ root: v }), v => `${v > 0 ? '+' : ''}${v} semitones`);
