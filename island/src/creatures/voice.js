@@ -101,6 +101,13 @@ const MAKE = {
 		}
 		return normalise(resonate(highpass(d, sr, 1200), sr, 3100, 0.004, 1));
 	},
+	// a long wail, an old woman's voice the size of the sky: a moan rising and breaking, and the
+	// wind in it
+	wail: (sr) => throat(sr, {
+		dur: 3.2, f0: 150, jitter: 0.04, breath: 0.6, seed: 61,
+		formants: [[420, 0.03, 1], [850, 0.025, 0.8], [2400, 0.012, 0.35]],
+		env: (t) => Math.min(1, t / 0.25) * (1 - clamp((t - 0.6) / 0.4, 0, 1)) * (0.8 + 0.2 * Math.sin(t * 23)),
+	}),
 	// a crystal leg tapping stone: two hard ticks, ringing a moment
 	click(sr) {
 		const n = Math.floor(sr * 0.3), d = new Float32Array(n), R = rnd(41);
