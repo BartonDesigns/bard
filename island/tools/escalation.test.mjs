@@ -95,7 +95,9 @@ test('attacks on you are paced events: 15 minutes on their ground, 30 elsewhere,
 	assert.equal(raidWobble(() => 0), 0);
 	assert.equal(raidWobble(() => 0.999999) < 35 * 60, true);
 	assert.equal(attackGap(FACTIONS.halcyon, 'earth-urban', raidWobble(() => 0.5)), 45 * 60 + 17.5 * 60);
-	assert.equal(attackGap(FACTIONS.ashfang, 'wild', 600), 15 * 60, 'the wobble is the raids\' alone');
+	assert.equal(attackGap(FACTIONS.ashfang, 'wild', 0), 15 * 60, 'never sooner than 15 minutes on its ground');
+	assert.equal(attackGap(FACTIONS.ashfang, 'wild', 35 * 60), 15 * 60 + 35 * 60 / 3, 'the same share of the wobble as a raid');
+	assert.equal(attackGap(FACTIONS.ashfang, 'village', 35 * 60), 30 * 60 + 70 * 60 / 3);
 });
 
 test('an officer who sees it counts it at once; several witnesses make one call, sooner', () => {

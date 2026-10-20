@@ -165,14 +165,14 @@
 		const sub = element('p', 'bl-sub', '', state);
 		const enter = element('button', 'bl-enter', 'Enter world', footer); enter.type = 'button'; enter.hidden = true;
 		view = { root, pause, images, title, tip, status, sub, enter, back };
-		back.onclick = event => { event.stopPropagation(); if (!current) return; const session = current; session.cancelled = true; hide(); session.options.exit?.(); if (session.settled) current = null; };
+		back.onclick = event => { event.stopPropagation(); if (!current) return; const session = current; session.cancelled = true; finish('backed out'); hide(); session.options.exit?.(); if (session.settled) current = null; };
 		enter.onclick = event => {
 			event.stopPropagation();
 			if (current?.error?.code === 'GRAPHICS_RELOAD_REQUIRED') { location.reload(); return; }
 			if (!current?.settled) return;
 			const session = current;
 			if (session.error) { current = null; run(session.task, session.options); return; }
-			current = null; hide(); session.options.enter?.();
+			current = null; finish('entered'); hide(); session.options.enter?.();
 		};
 		document.body.appendChild(root);
 		for (const type of inputEvents) root.addEventListener(type, event => { if (active()) event.stopPropagation(); });
@@ -214,9 +214,43 @@
 		window.dispatchEvent(new Event('blur')); previousFocus?.focus?.({ preventScroll: true });
 	}
 	function active() { return !!view && !view.root.hidden; }
-	function stage(text) { if (active() && current && !current.settled && !current.failure) view.status.textContent = text; }
+	function stage(text) { if (active() && current && !current.settled && !current.failure) { view.status.textContent = text; mark(text); } }
+	// The black box: every load's stages as they pass, with what the graphics and the script heap
+	// held at each, written to the device as they happen and sampled every two seconds between.
+	// A page that went mid-load without a goodbye (a phone closing it for memory, a crash) leaves
+	// its trail behind; the next visit keeps the last five (L99Loading.trail(), ?perf on screen).
+	const TRAIL_KEY = 'l99-load-trail', LOST_KEY = 'l99-load-lost';
+	const keep = { get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }, put(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } } };
+	let lostLoads = keep.get(LOST_KEY) || [], trail = null, trailTimer = 0;
+	{
+		const last = keep.get(TRAIL_KEY);
+		if (last && !last.end) {
+			lostLoads = [...lostLoads, last].slice(-5); keep.put(LOST_KEY, lostLoads);
+			console.warn('[world loading] the last load went without a goodbye at "' + (last.stages?.at(-1)?.[1] || '?') + '"', JSON.stringify(last));
+		}
+	}
+	// what the graphics (island gpumeter.js, once the engine is up) and the script heap hold, MB
+	const heldMB = () => { const heap = performance.memory?.usedJSHeapSize; let gpu = null; try { gpu = window.L99GpuMB?.() ?? null; } catch { /* not yet */ } return [gpu, heap ? Math.round(heap / 1048576) : null]; };
+	const secs = () => +((performance.now() - trail.t0) / 1000).toFixed(1);
+	const saveTrail = () => { const { t0, ...out } = trail; keep.put(TRAIL_KEY, out); };
+	function mark(text) {
+		if (!trail || trail.end) return;
+		trail.stages.push([secs(), text, ...heldMB()]);
+		if (trail.stages.length > 40) trail.stages.splice(1, 1);
+		saveTrail();
+	}
+	function begin(label) {
+		clearInterval(trailTimer);
+		trail = { at: new Date().toISOString(), page: location.pathname + location.search, phone: matchMedia?.('(pointer: coarse)').matches || false, dpr: devicePixelRatio, t0: performance.now(), stages: [], hidden: false };
+		mark(label);
+		trailTimer = setInterval(() => { if (!trail || trail.end) return clearInterval(trailTimer); trail.now = [secs(), ...heldMB()]; saveTrail(); }, 2000);
+	}
+	function finish(end) { if (!trail || trail.end) return; mark(end); trail.end = end; clearInterval(trailTimer); saveTrail(); }
+	addEventListener('pagehide', () => finish('left'));
+	document.addEventListener('visibilitychange', () => { if (trail && !trail.end && document.hidden) { trail.hidden = true; saveTrail(); } });
+	const trailInfo = () => ({ now: trail ? (({ t0, ...t }) => t)(trail) : null, lost: lostLoads });
 	function errorView(error) {
-		clearTimeout(slowTimer); view.root.dataset.state = 'error';
+		clearTimeout(slowTimer); view.root.dataset.state = 'error'; finish('failed: ' + String(error?.message || error).slice(0, 120));
 		const graphics = error?.code === 'GRAPHICS_RELOAD_REQUIRED';
 		view.status.textContent = graphics ? 'Graphics need a fresh start' : 'The world could not finish loading';
 		view.sub.textContent = graphics ? error.message : /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then retry. You can also return to Bard.';
@@ -236,7 +270,7 @@
 		if (active()) hide();
 		const session = current = { id: ++serial, task, options, settled: false, cancelled: false };
 		session.done = new Promise(resolve => { session.finish = resolve; });
-		show(); stage(options.label || 'Opening your world');
+		show(); begin(options.label || 'Opening your world'); stage(options.label || 'Opening your world');
 		try {
 			if (previous) await previous;
 			// Let the image/text paint before synchronous terrain construction begins.
@@ -247,7 +281,7 @@
 			if (current !== session) return result;
 			session.settled = true;
 			if (session.cancelled) return result;
-			clearTimeout(slowTimer); view.root.dataset.state = 'ready'; view.status.textContent = 'Your world is ready';
+			clearTimeout(slowTimer); view.root.dataset.state = 'ready'; view.status.textContent = 'Your world is ready'; mark('ready');
 			view.sub.textContent = ''; view.enter.hidden = false; view.enter.textContent = 'Enter world';
 			return result;
 		} catch (error) {
@@ -259,6 +293,7 @@
 			console.warn('[world loading]', error); return false;
 		} finally {
 			session.settled = true;
+			if (session.cancelled) finish('backed out');
 			try {
 				if (session.cancelled) { options.exit?.(); if (current === session) current = null; }
 			} finally { session.finish(); }
@@ -279,5 +314,5 @@
 				if (event.cancelable) event.preventDefault(); event.stopImmediatePropagation();
 			}, { capture: true, passive: false });
 	}
-	window.L99Loading = { run, stage, fail, active, get pending() { return !!current && !current.settled; } };
+	window.L99Loading = { run, stage, fail, active, trail: trailInfo, get pending() { return !!current && !current.settled; } };
 })();
