@@ -16,6 +16,7 @@
 
 import * as THREE from 'three';
 import { addLodFade, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { addNightField } from '../world/nightfield.js';
 import { commercialStack } from '../interiors/workplace-plan.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
@@ -108,6 +109,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// the shell: the floor, three solid walls, the storefront (glass between mullions, the
 		// doorway open), the ceiling of light panels, the walls above and the roof
 		const outside = mats.wall.clone(); outside.color.setRGB(...(b.look?.wall || city?.buildingLook?.(b)?.wall || [.91,.89,.85]), THREE.SRGBColorSpace); outside.emissiveIntensity=0; addLodFade(outside, 'building', band);
+		// (after dark the street lamps and porch lights near it fall on its outside walls, as they do
+		// on the painted block it takes over from: world/nightfield.js)
+		addNightField(outside);
 		const sc = shopScheme(type, seedAt(b.x, b.z));
 		const floorMat = type === 'office' || type === 'cinema' ? tinted(mats.carpet, sc.carpet) : type === 'restaurant' ? tinted(mats.floorW, sc.wood) : type === 'bowling' ? mats.floorW : tinted(mats.floorT, sc.tile);
 		box(floorMat, -hw, -0.4, -hd, hw, 0, hd);

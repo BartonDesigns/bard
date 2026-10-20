@@ -22,6 +22,9 @@ const PAL = {
 	nightZen: C(0.004, 0.009, 0.028), nightHor: C(0.018, 0.03, 0.065),
 	sunDay: C(1.0, 0.90, 0.74), sunSet: C(1.0, 0.52, 0.22), moon: C(0.45, 0.55, 0.8),
 };
+// a town's own light by night, from overhead (its glow off the low sky) and from below (the
+// lit streets and sidewalks): sodium and warm LED, at full in the middle of a city
+const CITY_SKY = C(0.30, 0.25, 0.21), CITY_GROUND = C(0.34, 0.27, 0.18);
 
 // the cloud field, shared by the dome and the stars it hides: fair-weather cumulus on a
 // plane about 1.5 km up that drifts with the wind (uCloudOff, summed by weather.js) and
@@ -951,6 +954,16 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) + (W?.flash || 0) * 2.5;
 		// (in vacuum only the grey ground's bounce fills the shade)
 		if (vacuum) { hemi.groundColor.setRGB(0.4, 0.4, 0.4); hemi.intensity *= 0.3; }
+		// a town by night is never as dark as open country: its lamps light the streets and the
+		// low sky, and that light comes back into every shade, so a wall turned from the moon and
+		// the lamps is still there to see, warm grey, not black. How much is how built up the
+		// ground round you is (uCityLight, island-frame.js). Everything in town takes it alike:
+		// the far painted blocks and the buildings built up close have the same night
+		const cityK = night * (shared.uCityLight?.value || 0) * (vacuum ? 0 : 1);
+		if (cityK > 0.001) {
+			hemi.color.r += CITY_SKY.r * cityK; hemi.color.g += CITY_SKY.g * cityK; hemi.color.b += CITY_SKY.b * cityK;
+			hemi.groundColor.r += CITY_GROUND.r * cityK; hemi.groundColor.g += CITY_GROUND.g * cityK; hemi.groundColor.b += CITY_GROUND.b * cityK;
+		}
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);

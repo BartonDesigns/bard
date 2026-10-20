@@ -21,6 +21,8 @@ import { AIR } from './world/airfog.js';
 const MIRROR_EASE = 1500;
 let shownAt = 0;
 const caveFog = new THREE.Color();
+// where the town's own light is read round you (island-frame's city light): here and 250 m out
+const CITY_AT = [[0, 0], [250, 0], [-250, 0], [0, 250], [0, -250]];
 
 export function islandFrame(iw, now) {
 	const { _voidFog, actions, applyQuality, arcade, autoMusic, bridgeSound, camera, carjack, chatter,
@@ -187,6 +189,13 @@ export function islandFrame(iw, now) {
 		shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
 		// (and which way the glow lies: the sky over the cities brightest toward them)
 		W.sky.glowToward(gx, gz, dt);
+	}
+	// and the town's own light by night in the shade (sky.js): how built up it is just round you
+	{
+		const U = shared.uCityLight || (shared.uCityLight = { value: 0 });
+		let u = 0;
+		if (W.bayArea?.loaded() && !W.island.far) for (const [dx, dz] of CITY_AT) u += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+		U.value += (THREE.MathUtils.smoothstep(u / CITY_AT.length, 0.04, 0.3) - U.value) * Math.min(1, dt * 0.5);
 	}
 	if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 	const dazed = W.shrooms?.muffle() || 0;
