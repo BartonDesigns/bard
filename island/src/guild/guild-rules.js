@@ -26,8 +26,8 @@ export const ID_RE = /^g[a-z0-9]{6,20}$/;
 export const COLOURS = Object.freeze(['#01a982', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981', '#e8e0cc', '#c8733a', '#2fb5a8', '#d9c46a', '#ec4899', '#6b7280']);
 // how many townsfolk a guild keeps, and how many walk with you at once
 export const NPC_MAX = 12;
-// (none on a phone for now: extra bodies wait on the phone memory budget work, and then 2)
-export const FOLLOW_MAX = Object.freeze({ desktop: 3, phone: 0 });
+// (on a phone they share the fighter cap: combat/ai-squads.js spawn)
+export const FOLLOW_MAX = Object.freeze({ desktop: 3, phone: 2 });
 // players in a guild, guilds in an alliance with one guild, invites waiting
 export const PLAYERS_MAX = 50, ALLIES_MAX = 5, INVITES_MAX = 20;
 // a townsperson struck down rests this long before they can be called again
