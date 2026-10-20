@@ -360,12 +360,12 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		}
 		const T = hit.T;
 		if (hit.ward) { spark(T, p, by); return { ward: true }; }
-		const blow = { amount: dmg, type, part: hit.part, src: from.clone ? from.clone() : from, dir: { x: dir.x, y: dir.y, z: dir.z }, by: by === ME ? ME : by?.T || by };
+		const blow = { amount: dmg, type, part: hit.part, side: hit.shape?.side || null, shape: hit.shape || null, at: { x: p.x, y: p.y, z: p.z }, src: from.clone ? from.clone() : from, dir: { x: dir.x, y: dir.y, z: dir.z }, by: by === ME ? ME : by?.T || by };
 		fx.impact(p, hit.n || { x: -dir.x, y: -dir.y, z: -dir.z }, T.surface || 'stone', type === 'energy');
 		// through a person: the spatter on what stands behind them, or the ground beyond
 		if (T.surface === 'person' && (type === 'ballistic' || type === 'pierce') && !T.child) {
 			const q = p.clone().addScaledVector(dir, 0.35), back = worldHit(q, dir, 3.2);
-			fx.spatter(p, dir, back ? { p: q.addScaledVector(dir, back.t), n: back.n } : null, hit.part === 'head' ? 1.3 : 1);
+			fx.spatter(p, dir, back ? { p: q.addScaledVector(dir, back.t), n: back.n } : null, hit.part === 'head' || hit.part === 'neck' ? 1.3 : 1);
 		}
 		return deal(T, blow, by === ME);
 	}
@@ -400,7 +400,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// your deed, weighed (the morality compass), and how the world takes it
 	const hurtOnce = new Set();
 	function yours(T, r, blow, ctx0) {
-		if (r.dealt > 0) { hud.hit(!!r.killed); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
+		if (r.dealt > 0) { hud.hit(!!r.killed, blow.part === 'head' || blow.part === 'neck'); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
 		const ctx = { ...(ctx0 || {}), ...(blow.moral || {}), witnessed: witnesses(T.bound) > 0 };
 		ctx.unseen = !ctx.witnessed;
 		const fac = T.faction, F = FACTIONS[fac];
@@ -836,6 +836,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		active: () => active() && !me.ko && !P()?.flying && !recovery.busy,
 		hostile: (T) => !!(T.P && melee.foes.has(T.P)) || !!T.moral?.()?.hostileTarget,
 	});
+	const assist = (dt) => focus.assist(P(), dt);
 
 	// ---------- bosses ----------
 	function spawnBoss(kind, at = null, id = null) {
@@ -1279,6 +1280,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 				fireShot(wpn, r.charge);
 				// the aim climbs with each shot and settles back (the view kicks the weapon itself)
 				p.pitch = Math.min(1.35, p.pitch + r.kick[0] / Math.max(1, r.fired)); p.yaw += r.kick[1] / Math.max(1, r.fired);
+				focus.kick(r.kick[0] / Math.max(1, r.fired), r.kick[1] / Math.max(1, r.fired));
 			}
 			if (r.empty && before === 0 && (mouseDown || touchFire)) { if (reserve(wpn) > 0) reload(); mouseDown = touchFire = false; }
 			if (isBow(wpn) && r.fired && reserve(wpn) > 0) reload();
@@ -1287,6 +1289,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		} else { cancelInput(); }
 		if (shake > 0) { shake = Math.max(0, shake - dt * 2); camera.rotation.x += (Math.random() - 0.5) * shake * 0.02; camera.rotation.y += (Math.random() - 0.5) * shake * 0.02; }
 		holdUps(dt);
+		if (p.aimAssist !== assist) p.aimAssist = assist;
 		focus.update(dt);
 		melee.update(dt);
 		squads.update(dt);
@@ -1387,7 +1390,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		ammo: (n = 200) => { const w = weaponNow(); if (w) { ammo.loose[w.S.id] = n; saveAmmo(); } return w && reserve(w); },
 		ambient: (on) => { if (on !== undefined) { settings.ambient = !!on; settings.save(); } return settings.ambient; },
 		// a shot fired from the eye along the view, for the tests: what it struck
-		shoot: (dmg = 30) => { camera.getWorldDirection(_v); const o = camera.position.clone(), d = _v.clone(); const h = firstHit(o, d, 300); const end = h ? o.clone().addScaledVector(d, h.t) : o.clone().addScaledVector(d, 300); fx.tracer(o.clone().add(new THREE.Vector3(0, -0.15, 0)), end, 0); const r = h ? landShot(h, o, d, ME, dmg) : null; return h ? { id: h.T?.id || 'wall', kind: h.T?.kind || h.surface, ward: !!h.ward, t: +h.t.toFixed(2), res: r && { dealt: +(r.dealt || 0).toFixed(1), killed: !!r.killed, ward: !!r.ward } } : null; },
+		shoot: (dmg = 30) => { camera.getWorldDirection(_v); const o = camera.position.clone(), d = _v.clone(); const h = firstHit(o, d, 300); const end = h ? o.clone().addScaledVector(d, h.t) : o.clone().addScaledVector(d, 300); fx.tracer(o.clone().add(new THREE.Vector3(0, -0.15, 0)), end, 0); const r = h ? landShot(h, o, d, ME, dmg) : null; return h ? { id: h.T?.id || 'wall', kind: h.T?.kind || h.surface, part: h.part || null, ward: !!h.ward, t: +h.t.toFixed(2), res: r && { dealt: +(r.dealt || 0).toFixed(1), killed: !!r.killed, ward: !!r.ward } } : null; },
 		aimAt: (id) => { const T = layer.get(id); if (!T) return false; const p = P(), e = eye(); const dx = T.bound.x - e.x, dz = T.bound.z - e.z, dy = T.bound.y + 0.3 - e.y; p.yaw = Math.atan2(-dx, -dz); p.pitch = Math.atan2(dy, Math.hypot(dx, dz)); _e.set(p.pitch, p.yaw, 0); camera.quaternion.setFromEuler(_e); return true; },
 		targets: () => [...layer.map.values()].map((T) => ({ id: T.id, kind: T.kind, faction: T.faction, child: !!T.child, d: Math.round(Math.hypot(T.bound.x - eye().x, T.bound.z - eye().z)) })),
 		compassOpen: (on = true) => compass.toggle(on),

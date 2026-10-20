@@ -278,6 +278,87 @@ export const ACTIONS = {
 	] },
 };
 
+// ---------- hurt: a round taken (combat/wounds.js picks one by where it landed) ----------
+// Each is written for a wound on the right (or a twist to the right) and mirrored for the left;
+// an armed one ('+' after the name) keeps the rifleman's bladed chest and leaves the arms to the
+// gun's grip (crysis/held-items.js), where only the support hand comes off to press the wound.
+// Unarmed, the hurt arm hangs and the other reaches across (the hand itself is laid on the wound
+// by applyClutch). Every key carries the same channels, so they ease one into the next.
+const N3 = [0, 0, 0], N4 = [0, 0, 0, 0], FL0 = [0.12, 0, 0.04], FR0 = [-0.12, 0, -0.04];
+const LIMP = arm({ abd: 0.12, flex: 0.2, roll: 0.15, bend: 0.5, pro: 1.3, curl: 0.25 });
+const ACROSS = arm({ abd: 0.2, flex: 0.85, roll: 1.15, bend: 1.7, pro: 0.6, curl: 0.4 });
+const COVER = arm({ abd: 0.3, flex: 0.75, roll: 0.9, bend: 1.9, pro: 0.6, curl: 0.6, shrug: 0.3 });
+const REST = arm({});
+const k = (u, sp, hp, hd, fL = null, fR = null, L = ACROSS, R = COVER) => [u, { sp, hp, hd, L, R, ...(fL ? { fL, fR } : {}) }];
+const HURT = {
+	// the shoulder: thrown back and round by it, then hunched forward over it, looking at it
+	shoulder1: [k(0, N3, N4, N3, null, null, REST, REST), k(0.1, [-0.5, -0.1, -0.14], [-0.15, 0, 0, 0.03], [-0.3, -0.12, -0.1], null, null, ACROSS, LIMP), k(0.36, [-0.22, 0.58, -0.12], [-0.05, 0.18, 0, 0.12], [-0.5, 0.42, 0], null, null, ACROSS, LIMP), k(0.78, [-0.16, 0.44, -0.08], [0, 0.13, 0, 0.08], [-0.32, 0.3, 0], null, null, ACROSS, LIMP), k(1, N3, N4, N3, null, null, REST, REST)],
+	// spun right round by it, a step to catch it, bent over it
+	shoulder2: [k(0, N3, N4, N3, FL0, FR0, REST, REST), k(0.14, [-0.85, 0.05, -0.2], [-0.45, 0, -0.05, 0.05], [-0.55, 0, -0.15], [0.16, 0, 0.18], [-0.1, 0, -0.2], ACROSS, LIMP), k(0.45, [-0.35, 0.5, -0.15], [-0.2, 0.15, 0, 0.12], [-0.45, 0.4, 0], [0.16, 0, 0.16], [-0.14, 0, -0.16], ACROSS, LIMP), k(1, N3, N4, N3, FL0, FR0, REST, REST)],
+	// the arm: jerked back, pulled in to the body, the head snapping round to it
+	arm1: [k(0, N3, N4, N3, null, null, REST, REST), k(0.1, [-0.35, 0.12, -0.05], [-0.1, 0, 0, 0.02], [-0.45, 0.25, 0], null, null, ACROSS, LIMP), k(0.5, [-0.2, 0.32, -0.04], [0, 0.1, 0, 0.06], [-0.35, 0.35, 0], null, null, ACROSS, LIMP), k(1, N3, N4, N3, null, null, REST, REST)],
+	// the gut: doubled right over, the knees going
+	gut1: [k(0, N3, N4, N3, null, null, REST, REST), k(0.14, [0, 0.78, 0.04], [0, 0.22, 0, 0.13], [0, 0.32, 0]), k(0.62, [0.08, 0.88, 0.06], [0, 0.26, 0, 0.17], [0.12, 0.25, 0]), k(1, N3, N4, N3, null, null, REST, REST)],
+	// doubled over and down on one knee, then up again
+	gut2: [k(0, N3, N4, N3, FL0, FR0, REST, REST), k(0.16, [-0.05, 0.85, 0], [0, 0.18, 0, 0.36], [0, 0.3, 0], [0.2, 0, 0.24], [-0.18, 0.09, -0.46]), k(0.7, [-0.05, 0.72, 0], [0, 0.15, 0, 0.38], [0, 0.22, 0], [0.2, 0, 0.24], [-0.18, 0.09, -0.48]), k(1, N3, N4, N3, FL0, FR0, REST, REST)],
+	// centre mass: knocked back off the feet's line, arched, then folding forward over it
+	chest1: [k(0, N3, N4, N3, null, null, REST, REST), k(0.12, [0, -0.38, 0], [0, -0.14, 0, 0.02], [0, -0.45, 0], null, null, ACROSS, COVER), k(0.42, [0, 0.42, 0], [0, 0.12, 0, 0.1], [0, 0.32, 0]), k(1, N3, N4, N3, null, null, REST, REST)],
+	// the legs going from under them: down onto both knees, a beat, then up
+	chest2: [k(0, N3, N4, N3, FL0, FR0, REST, REST), k(0.18, [0, 0.5, 0], [0, 0.12, 0, 0.44], [0, 0.35, 0], [0.13, 0.08, -0.42], [-0.13, 0.08, -0.42]), k(0.66, [0, 0.4, 0], [0, 0.1, 0, 0.45], [0, 0.25, 0], [0.13, 0.08, -0.44], [-0.13, 0.08, -0.44]), k(1, N3, N4, N3, FL0, FR0, REST, REST)],
+	// turned round by it (hit right of centre), staggering, bent over
+	chest3: [k(0, N3, N4, N3, null, null, REST, REST), k(0.14, [-0.75, 0.12, -0.12], [-0.4, 0, 0, 0.05], [-0.6, 0.1, 0], null, null, ACROSS, LIMP), k(0.5, [-0.35, 0.45, -0.05], [-0.15, 0.12, 0, 0.09], [-0.3, 0.3, 0]), k(1, N3, N4, N3, null, null, REST, REST)],
+	// the head (it lived: a helmet, a graze): snapped back, then bowed with a hand to it
+	head1: [k(0, N3, N4, N3, null, null, REST, REST), k(0.1, [0, -0.32, 0], [0, -0.08, 0, 0], [0, -0.65, 0.2]), k(0.42, [0, 0.48, 0], [0, 0.12, 0, 0.1], [0.1, 0.55, 0]), k(1, N3, N4, N3, null, null, REST, REST)],
+	// knocked aside, the head right over, reeling
+	head2: [k(0, N3, N4, N3, null, null, REST, REST), k(0.1, [-0.25, 0, -0.28], [-0.1, 0, -0.06, 0.02], [-0.55, 0.1, -0.5]), k(0.46, [-0.1, 0.42, -0.12], [0, 0.1, 0, 0.08], [-0.2, 0.48, -0.1]), k(1, N3, N4, N3, null, null, REST, REST)],
+	// the leg: it buckles and they go down on that knee, a hand to the thigh, then up
+	leg1: [k(0, N3, N4, N3, FL0, FR0, REST, REST), k(0.18, [-0.12, 0.48, -0.12], [-0.1, 0.15, -0.1, 0.38], [-0.3, 0.45, 0], [0.2, 0, 0.22], [-0.18, 0.1, -0.42], ACROSS, COVER), k(0.66, [-0.1, 0.36, -0.06], [-0.05, 0.12, -0.05, 0.36], [-0.2, 0.32, 0], [0.2, 0, 0.24], [-0.18, 0.09, -0.46], ACROSS, COVER), k(1, N3, N4, N3, FL0, FR0, REST, REST)],
+	// it gives, they stumble on it, catch themselves on the other foot
+	leg2: [k(0, N3, N4, N3, FL0, FR0, REST, REST), k(0.15, [0, 0.32, -0.16], [0, 0.1, -0.16, 0.2], [-0.15, 0.32, -0.1], [0.15, 0, 0.12], [-0.14, 0.06, -0.26], ACROSS, COVER), k(0.5, [-0.1, 0.42, -0.1], [0, 0.12, -0.1, 0.14], [-0.25, 0.4, 0], [0.16, 0, 0.12], [-0.14, 0, 0.04], ACROSS, COVER), k(1, N3, N4, N3, FL0, FR0, REST, REST)],
+	// crippled: down on the bad knee and staying there (held)
+	crippled: [k(0, [0.05, 0.22, 0], [0, 0.1, 0, 0.42], [0, -0.12, 0], [0.2, 0, 0.25], [-0.18, 0.08, -0.5], ACROSS, LIMP)],
+};
+const flip = (v) => v && [-v[0], v[1], -v[2], ...(v.length > 3 ? [v[3]] : [])];
+const mirrorKey = ([u, q]) => [u, { sp: flip(q.sp), hp: flip(q.hp), hd: flip(q.hd), L: q.R, R: q.L, ...(q.fL ? { fL: [-q.fR[0], q.fR[1], q.fR[2]], fR: [-q.fL[0], q.fL[1], q.fL[2]] } : {}) }];
+const armedKey = ([u, q]) => { const o = { sp: q.sp.map((v, i) => v + CARRY_SP[i]), hp: q.hp, hd: q.hd }; if (q.fL) { o.fL = q.fL; o.fR = q.fR; } return [u, o]; };
+export const HURT_NAMES = Object.keys(HURT);
+for (const [name, keys] of Object.entries(HURT)) {
+	const held = name === 'crippled';
+	for (const [side, ks] of [['R', keys], ['L', keys.map(mirrorKey)]]) {
+		ACTIONS[`hurt-${name}${side}`] = { loop: false, held, keys: ks };
+		ACTIONS[`hurt-${name}${side}+`] = { loop: false, held, keys: ks.map(armedKey) };
+	}
+}
+
+// ---------- over something in the way (combat/npc-climb.js): its progress u is the climb's ----------
+// a hop: the left hand planted on the top (crysis/held-items.js sets it there), the weight
+// going onto it, the legs tucked and swung over to the right, down on the far side in the knees.
+// A mantle: both hands on the ledge, up onto them, a knee up onto it, stand.
+const PLANT = arm({ abd: 0.15, flex: 0.75, roll: 0.1, bend: 0.12, pro: 0.1, wflex: -0.6, curl: 0.15 });
+const BALANCE = arm({ abd: 0.95, flex: 0.35, roll: 0.2, bend: 0.45, pro: 0.6, curl: 0.3 });
+const v = (u, sp, hp, hd, rt, fL, fR, L = REST, R = REST) => [u, { sp, hp, hd, rt, fL, fR, L, R }];
+const VAULT = {
+	hop: [
+		v(0, N3, N4, N3, [0, 0], FL0, FR0),
+		v(0.24, [0, 0.38, 0], [0, 0.12, 0, 0.06], [0, -0.1, 0], [0.06, 0], [0.12, 0.08, -0.12], [-0.1, 0.32, 0.18], PLANT, BALANCE),
+		v(0.48, [0.3, 0.3, 0.25], [0.45, 0.1, 0.2, -0.2], [-0.25, 0.1, 0], [0.08, 0.45], [-0.36, 0.78, 0.1], [-0.58, 0.7, 0.22], PLANT, BALANCE),
+		v(0.7, [0.12, 0.25, 0.08], [0.18, 0.05, 0.06, -0.02], [-0.1, 0.15, 0], [0.04, 0.12], [-0.06, 0.12, 0.3], [-0.2, 0.02, 0.22], REST, BALANCE),
+		v(0.84, [0, 0.36, 0], [0, 0.12, 0, 0.2], [0, 0.1, 0], [0, 0], [0.13, 0, 0.12], [-0.13, 0, -0.06]),
+		v(1, N3, N4, N3, [0, 0], FL0, FR0),
+	],
+	mantle: [
+		v(0, N3, N4, N3, [0, 0], FL0, FR0),
+		v(0.3, [0, 0.55, 0], [0, 0.2, 0, -0.04], [0, -0.25, 0], [0.12, 0], [0.12, 0.06, -0.12], [-0.12, 0.12, -0.08], PLANT, PLANT),
+		v(0.66, [0, 0.62, 0], [0, 0.22, 0, 0.12], [0, -0.05, 0], [0.1, 0], [0.12, 0.1, -0.16], [-0.12, 0.58, 0.26], PLANT, PLANT),
+		v(0.86, [0, 0.3, 0], [0, 0.1, 0, 0.12], [0, 0.05, 0], [0.04, 0], [0.12, 0.3, -0.05], [-0.12, 0.02, 0.16], REST, REST),
+		v(1, N3, N4, N3, [0, 0], FL0, FR0),
+	],
+};
+for (const [name, keys] of Object.entries(VAULT)) {
+	ACTIONS[`vault-${name}`] = { loop: false, keys };
+	ACTIONS[`vault-${name}+`] = { loop: false, keys: keys.map(([u, q]) => [u, { sp: q.sp.map((x, i) => x + CARRY_SP[i]), hp: q.hp, hd: q.hd, rt: q.rt, fL: q.fL, fR: q.fR }]) };
+}
+
 // an action at progress u: the pose, eased between its keys (null for anything a key leaves out)
 const out = { L: arm({}), R: arm({}), sp: [0, 0, 0], hp: [0, 0, 0, 0], fL: [0, 0, 0], fR: [0, 0, 0], rt: [0, 0], hd: [0, 0, 0], has: {} };
 export function actionAt(name, u) {

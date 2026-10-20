@@ -116,8 +116,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 	const S = {
 		// (want.travel: a way to move other than the way they face, a strafe or a step back, held
 		// for want.travelT seconds; the feet step along it while the body stays on its heading)
-		pos: new THREE.Vector3(), heading: 0, want: { speed: 0, heading: 0, run: 0, travel: null, travelT: 0 }, strafe: new Spring(0, 1.3), travel: 0,
-		speed: new Spring(0, 1.1), yaw: new Spring(0, 1.4), run: new Spring(0, 0.8),
+		pos: new THREE.Vector3(), heading: 0, want: { speed: 0, heading: 0, run: 0, low: 0, travel: null, travelT: 0 }, strafe: new Spring(0, 1.3), travel: 0,
+		speed: new Spring(0, 1.1), yaw: new Spring(0, 1.4), run: new Spring(0, 0.8), low: new Spring(0, 1.2),
 		phase: signature.phase, signature, look: { target: null, yaw: new Spring(0, 2.2), pitch: new Spring(0, 2.2), eyeYaw: new Spring(0, 6), eyePitch: new Spring(0, 6), idleT: 0, idleYaw: 0, idlePitch: 0 },
 		lean: new Spring(0, 1.5), turnLean: new Spring(0, 1.5), armL: new Spring(0, 2.5), armR: new Spring(0, 2.5), elbow: new Spring(0.3, 2),
 		hipY: new Spring(0, 3), sway: new Spring(0, 1.8), breath: Math.random() * 10, shiftT: Math.random() * 10, shiftSide: Math.random() < 0.5 ? -1 : 1, shiftNext: 2 + Math.random() * 6,
@@ -145,6 +145,10 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		// a blow taken (combat/melee.js): the chest and head knocked back, aside or round and
 		// springing back, the hips pushed off their line; and a beat held still as it lands
 		jolt: { p: new Spring(0, 2.6), r: new Spring(0, 2.6), y: new Spring(0, 2.2), x: new Spring(0, 2.4), z: new Spring(0, 2.4) }, freeze: 0,
+		// a limp (combat/wounds.js): the bad leg (1 left, -1 right) and how bad (0..1): they hurry
+		// off it, sink as it takes the weight and lean forward; and a hand held to a wound
+		// (crysis/held-items.js applyClutch)
+		limp: { side: 0, k: 0 }, clutch: null,
 	};
 	const hipRest = H('upperleg01.L').y;
 	const ankleH = H('foot.L').y;
@@ -264,12 +268,15 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		S.pos.x += Math.sin(travel) * speed * dt; S.pos.z += Math.cos(travel) * speed * dt;
 		constrain?.(S.pos, dt);
 		const run = clamp(S.run.to(S.want.run, dt), 0, 1);
+		// low (0..1): moving crouched, as a fighter does between cover: knees well bent, the body
+		// folded forward over them, shorter quicker steps that barely leave the ground
+		const low = clamp(S.low.to(S.want.low || 0, dt), 0, 1);
 		// gait from speed, as people really walk: a stride (two steps) of about 0.83 of the height
 		// at an easy 1.3 m/s, lengthening and quickening together as the pace picks up; the feet
 		// are down 62% of the cycle walking, much less running
 		const h = P.height;
 		const drift = gaitDrift(signature, t);
-		const stride = h * 0.83 * Math.pow(Math.max(speed, 0.25) / 1.3, 0.42) * g.stride / (signature.cadence * (1 + drift)) * (1 + run * 0.3);
+		const stride = h * 0.83 * Math.pow(Math.max(speed, 0.25) / 1.3, 0.42) * g.stride / (signature.cadence * (1 + drift)) * (1 + run * 0.3) * (1 - low * 0.12);
 		const stanceF = signature.stance - 0.24 * run;
 		// a foot touches down a little ahead of the hips and leaves well behind them (a step
 		// taken standing still sets it back under the hip)
@@ -281,6 +288,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 			for (const leg of S.legs) { if (!leg.planted) need = true; else { nominal(leg, 0, _v); if (_v.distanceTo(leg.lock) > 0.12 * h / 1.7) need = true; } }
 			rate = need ? 1.4 : 0;
 		}
+		const Lp = S.limp, lk = Lp.side ? Math.min(1, Lp.k) : 0;
+		if (lk > 0 && rate > 0) { const ub = (S.phase + (Lp.side < 0 ? 0.5 + signature.asymmetry : 0)) % 1; rate *= ub < stanceF ? 1 + 0.75 * lk : 1 - 0.3 * lk; }
 		S.phase = (S.phase + rate * dt) % 1;
 		P.clothMat?.userData.U?.uClothMove?.value.set(t, speed, S.phase, turnRate);
 		const amp = smooth(speed / 0.9);
@@ -316,7 +325,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 				ankle.lerpVectors(a0, a1, k);
 				gy = groundAt(ankle.x, ankle.z);
 				// the swing clears the ground, the ankle highest early as the knee folds
-				const lift = h * signature.lift * (0.05 + 0.05 * run) * 6.75 * su * (1 - su) * (1 - su) * (rate && amp > 0.2 ? 1 : 0.5);
+				const lift = h * signature.lift * (0.05 + 0.05 * run) * (1 - low * 0.35) * 6.75 * su * (1 - su) * (1 - su) * (rate && amp > 0.2 ? 1 : 0.5);
 				ankle.y = Math.max(ankle.y, gy + ankleH * 0.9) + lift;
 				pitch = su < 0.45 ? toeP * (1 - smooth(su / 0.45)) : heelP * smooth((su - 0.45) / 0.55);
 				leg.lock.set(ankle.x, gy, ankle.z);
@@ -370,7 +379,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		if (S.shiftNext <= 0) { S.shiftSide = -S.shiftSide; S.shiftNext = 3 + Math.random() * 9 * (1 - (dna.temper?.fidget ?? 0.5) * 0.6); }
 		const idleSway = (1 - amp) * (S.shiftSide * (0.016 + S.mood * 0.012) + Math.sin(S.shiftT * 0.35 + S.mood * 5) * 0.006);
 		const sway = S.sway.to((Math.sin(S.phase * TAU) + drift * 2) * 0.02 * signature.sway * amp * (1 - run * 0.6) + idleSway, dt);
-		const lean = S.lean.to((-0.06 + (floorPose?.lean || 0)) * sitK + g.posture + 0.03 * amp + 0.14 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
+		const lean = S.lean.to(low * 0.95 + lk * 0.1 + (-0.06 + (floorPose?.lean || 0)) * sitK + g.posture + 0.03 * amp + 0.14 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
 		const turnLean = S.turnLean.to(clamp(-turnRate * speed * 0.05, -0.12, 0.12), dt);
 		// the pelvis turns the leading hip forward (most at each heel strike) and drops a little
 		// on the side of the swinging leg
@@ -388,6 +397,10 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 			const d2 = Math.min(dx * dx + dz * dz, R * R * 0.9);
 			hipH = smin(hipH, f.ankle.y - S.pos.y + Math.sqrt(R * R - d2));
 		}
+		// (crouched: the hips well down, the knees taking it)
+		hipH -= low * 0.16 * (h / 1.75);
+		// (the bad leg taking the weight: the hips sink over it)
+		if (lk > 0) for (const f of feet) if (f.stance && f.leg.side === Lp.side && rate > 0) hipH -= lk * 0.05 * (h / 1.75) * Math.sin(Math.PI * Math.min(1, f.u / Math.max(0.1, stanceF))) * amp;
 		const hipY = hipH * (1 - sitK) + (S.seatH + 0.09) * sitK - (X.has.hp ? X.v.hp[3] * aw : 0);
 		const bob = hipH - hipStand;
 

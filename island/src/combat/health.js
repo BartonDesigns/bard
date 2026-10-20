@@ -5,8 +5,16 @@
 // Pure data and functions, shared by every combat system and the tests.
 
 export const DAMAGE_TYPES = ['ballistic', 'energy', 'pierce', 'blast', 'fire', 'impact'];
-// where a blow lands, as a multiplier (a weak point is a boss's or machine's exposed core)
-export const PARTS = Object.freeze({ head: 1.8, torso: 1, limb: 0.7, body: 1, weak: 2.5, plate: 0.25, wheel: 0.8 });
+// where a round lands, as a multiplier (a weak point is a boss's or machine's exposed core). A
+// person's own zones (combat/hitzones.js): the head is the weakest point by far (a rifle round
+// there drops anyone unarmoured), the neck nearly as bad, centre mass hits hard, the gut a
+// little less; the shoulders, arms and legs take less but the legs slow and cripple
+// (combat/wounds.js)
+export const PARTS = Object.freeze({ head: 4, neck: 2.6, chest: 1.35, gut: 1.05, shoulder: 0.8, arm: 0.6, leg: 0.7, torso: 1, limb: 0.7, body: 1, weak: 2.5, plate: 0.25, wheel: 0.8 });
+// a fist, a bat or a boot (blow.melee): the head counts for less than a bullet in it
+// how much of a hit there the armour takes: a vest covers the chest and gut, not the face and throat
+export const ARMOUR_COVER = { head: 0.3, neck: 0, shoulder: 0.6, arm: 0.4, leg: 0.4 };
+export const MELEE_PARTS = Object.freeze({ ...PARTS, head: 1.8, neck: 1.5, chest: 1, gut: 1.1 });
 
 const fin = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 
@@ -25,11 +33,11 @@ export function applyDamage(h, blow) {
 	const out = { dealt: 0, absorbed: 0, killed: false, downed: false, ignored: false };
 	if (!h || h.state !== 'ok' || !blow) { out.ignored = true; return out; }
 	const type = DAMAGE_TYPES.includes(blow.type) ? blow.type : 'ballistic';
-	let amt = Math.max(0, fin(blow.amount)) * (PARTS[blow.part] ?? 1) * fin(h.resist[type], 1);
+	let amt = Math.max(0, fin(blow.amount)) * ((blow.melee ? MELEE_PARTS : PARTS)[blow.part] ?? 1) * fin(h.resist[type], 1);
 	if (amt <= 0) { out.ignored = true; return out; }
 	// armour soaks its share (energy wears it faster, blast slips past more)
 	if (h.armour > 0) {
-		const soak = h.soak * (type === 'blast' ? 0.6 : 1);
+		const soak = h.soak * (type === 'blast' ? 0.6 : 1) * (ARMOUR_COVER[blow.part] ?? 1);
 		const take = Math.min(h.armour, amt * soak);
 		h.armour = Math.max(0, h.armour - take * (type === 'energy' ? 1.6 : 1));
 		amt -= take; out.absorbed = take;

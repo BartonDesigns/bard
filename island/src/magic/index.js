@@ -46,7 +46,7 @@ const store = {
 	set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
 };
 const SPELL_KEYS = { Digit6: 0, Digit7: 1, Digit8: 2, Digit9: 3, Digit0: 4 };
-const WEAK = new Set(['head', 'weak', 'eye', 'heart']);
+const WEAK = new Set(['head', 'neck', 'weak', 'eye', 'heart']);
 
 // world(): the world (player, island, sky); light(): the sun's height (-1 .. 1); busy(): anything
 // that has the controls (driving, a menu); menu: the places menu, which gets a way in; me(): your

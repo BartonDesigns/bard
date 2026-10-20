@@ -240,6 +240,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (s.locked) return;
 		if (s.move?.(dt)) { settleFeel(); return; }          // a vault carries you (structures/vault.js)
 		if (park.step(dt)) { settleFeel(); F.ride = s.pos.y; return; }          // a climb carries you (parkour.js)
+		s.aimAssist?.(dt);          // locked on to someone: the view held on them (combat/target-focus.js)
 		// (s.auto: { x, z, run } walks without a hand on the keys, for demos and tests)
 		let mx = joy.x + (s.auto?.x || 0), mz = joy.y + (s.auto?.z || 0);
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;

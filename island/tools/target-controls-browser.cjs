@@ -9,7 +9,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
  try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.setContent('<div id="l99-island-mount" class="l99-touch" style="position:fixed;inset:0;background:linear-gradient(#26393e,#152529);--sl:0px;--sr:0px;--st:0px;--sb:0px"><canvas></canvas></div>');
+  await page.setContent('<div id="l99-island-mount" class="l99-touch" style="position:fixed;inset:0;background:linear-gradient(#26393e,#152529);--sl:0px;--sr:0px;--st:0px;--sb:0px"><canvas style="position:absolute;inset:0;width:100%;height:100%"></canvas></div>');
   await page.addScriptTag({ content: bundle });
   await page.evaluate(() => {
    const mount = document.querySelector('#l99-island-mount');
@@ -46,10 +46,21 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
   });
   assert.deepEqual(result, { instant:true, otherFingerIgnored:true, hits:1, charging:true, cancelled:true, hidden:true, unlocked:true });
   await page.evaluate(() => { occluded=false; focus.update(.16); });
-  await page.getByRole('button', { name: 'Lock target (L or middle mouse); press again to release', exact: true }).tap();
+  await page.getByRole('button', { name: 'Lock on (the ` key, or tap a person); press again to release', exact: true }).tap();
   assert.equal(await page.evaluate(() => focus.info().id), 'a');
+  assert.equal(await page.evaluate(() => focus.info().cameraAssist), true, 'the touch button locks on and tracks');
+  // the view held on them by assist(): a player looking off to one side is brought round
+  const turned = await page.evaluate(() => { const p = { yaw: 0.3, pitch: 0, pos: camera.position }; for (let i = 0; i < 60; i++) focus.assist(p, 1 / 60); return p; });
+  assert.ok(Math.abs(turned.yaw) < 0.02 && turned.pitch < 0, 'tracked onto the chest: ' + JSON.stringify(turned));
+  await page.evaluate(() => focus.clear());
+  // a tap on the other one locks on to them
+  const at = await page.evaluate(() => { const v = new Game.Vector3(3, 1.2, -12).project(camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; });
+  await page.touchscreen.tap(at.x, at.y);
+  assert.equal(await page.evaluate(() => focus.info().id), 'b', 'tapped, locked on');
+  await page.keyboard.press('Backquote'); assert.equal(await page.evaluate(() => focus.info().id), null, 'the ` key lets go');
+  await page.keyboard.press('Backquote'); assert.equal(await page.evaluate(() => focus.info().cameraAssist), true, 'and locks on again');
   await page.evaluate(() => { allowed=false; focus.update(.16); });
   assert.equal(await page.evaluate(() => focus.info().id), null);
-  assert.deepEqual(errors, []); console.log('PASS target cycling, no camera steering, touch press/cancel, line-of-sight and portrait/landscape controls', JSON.stringify(result));
+  assert.deepEqual(errors, []); console.log('PASS target cycling, L never steers, ` and the touch button and a tap lock on and track, touch press/cancel, line-of-sight and portrait/landscape controls', JSON.stringify(result));
  } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });
