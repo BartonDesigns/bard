@@ -1,7 +1,10 @@
 // The account panel: make a username and password so your progress is saved to the cloud, log
 // in on another device to bring it back, and set a new password with your recovery code. Its
-// way in is the first row of the places menu (☁), which also says when you last saved.
+// ways in: the ☁ button on screen (lit once you are saving to an account), the first row of the
+// places menu, which also says when you last saved, and the Account tab of the settings.
 // The rules and the talking to the server: persistence/cloud-save.js.
+
+import { scrollable } from './scroll.js';
 
 const NUDGE_KEY = 'l99-account-nudge';
 const CSS = `
@@ -31,9 +34,9 @@ const CSS = `
 .acct-save b{font-size:15px}
 `;
 
-// menu: the places menu; cloud: createCloudSave's; hint(text, ms); localName(): the name this
-// device goes by (offered as the account's player name)
-export function createAccountPanel({ mount, menu, cloud, hint = () => {}, localName = () => '' }) {
+// menu: the places menu; hud: the ☁ button on screen; cloud: createCloudSave's; hint(text, ms);
+// localName(): the name this device goes by (offered as the account's player name)
+export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, localName = () => '' }) {
 	if (!document.getElementById('acct-css')) { const s = document.createElement('style'); s.id = 'acct-css'; s.textContent = CSS; document.head.appendChild(s); }
 	const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 	const root = el('div', 'acct');
@@ -41,7 +44,8 @@ export function createAccountPanel({ mount, menu, cloud, hint = () => {}, localN
 	// (nothing typed or tapped here reaches the game underneath)
 	for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'keydown', 'keyup', 'wheel', 'click', 'contextmenu']) root.addEventListener(ev, (e) => { e.stopPropagation(); if (ev === 'keydown' && e.key === 'Escape') close(); });
 	root.addEventListener('click', (e) => { if (e.target === root) close(); });
-	const card = el('div', 'acct-card');
+	// (scrolled by hand: iOS lets the world's touch-action switch off native scrolling here)
+	const card = scrollable(el('div', 'acct-card'));
 	root.append(card);
 	mount.appendChild(root);
 	let view = 'signup', note = null, busy = false;
@@ -63,9 +67,17 @@ export function createAccountPanel({ mount, menu, cloud, hint = () => {}, localN
 		btn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; open(); });
 		menu.insertBefore(btn, menu.firstChild);
 	}
+	if (hud) hud.addEventListener('click', (e) => { e.stopPropagation(); menu && (menu.style.display = 'none'); open(); });
 	function drawBtn() {
-		if (!btn) return;
 		const I = cloud.info();
+		if (hud) {
+			const t = I.user ? `Your account: ${I.user}, ${I.conflict ? 'saved progress waiting' : `saved ${ago(I.savedAt)}`}` : 'Save your progress: make an account';
+			if (hud.title !== t) hud.title = t;
+			// (lit while progress goes to an account)
+			const lit = String(!!I.user && !I.conflict);
+			if (hud.getAttribute('aria-pressed') !== lit) hud.setAttribute('aria-pressed', lit);
+		}
+		if (!btn) return;
 		btn.textContent = I.user ? `☁ ${I.user} · ${I.conflict ? 'saved progress waiting' : `saved ${ago(I.savedAt)}`}` : '☁ Save your progress';
 		btn.title = I.user ? 'Your account: progress saved to the cloud' : 'Make an account so clearing the browser never loses your progress';
 	}
@@ -221,10 +233,10 @@ export function createAccountPanel({ mount, menu, cloud, hint = () => {}, localN
 		if (cloud.info().user || !cloud.info().available) return;
 		const today = new Date().toDateString();
 		try { if (localStorage.getItem(NUDGE_KEY) === today) return; localStorage.setItem(NUDGE_KEY, today); } catch { return; }
-		hint('Make an account so you never lose your progress: ☁ Save your progress, in the map pin menu.', 6000);
+		hint('Make an account so you never lose your progress: tap ☁ on screen (or Settings › Account).', 6000);
 	}, 8 * 60 * 1000);
 	return {
-		open, close, isOpen: () => root.classList.contains('on'), refresh: drawBtn,
+		open, close, isOpen: () => root.classList.contains('on'), refresh: drawBtn, info: () => cloud.info(), ago,
 		dispose() { clearInterval(tick); clearTimeout(nudge); cloud.stop(); root.remove(); btn?.remove(); },
 	};
 }
