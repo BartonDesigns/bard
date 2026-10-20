@@ -17,6 +17,27 @@ import { Geo } from './geo.js';
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const hash = (a, b, k) => { let h = (Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 19349663) ^ Math.imul(k, 83492791)) >>> 0; return () => { h = (h + 0x6D2B79F5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 
+// The pack is laid on a lattice of the latitude and longitude alone (a cell 40 m each way: 2775
+// rows to the degree, the columns of each degree's band of rows a whole number of sixteenths of a
+// row's height wide, as wide as that latitude makes them, so the sea's float GPU finds the same
+// columns without a cosine's rounding), so a floe has one place on the Earth wherever you come from. The 3D floes stand round you; the sea's own surface (world/ocean.js,
+// ICE_GLSL) draws the same floes, from the same hashes, out to the horizon, so the pack never
+// ends in a ring round you, and the swell under it is damped.
+export const FLOE_S = 40, FLOE_ROWS = 2775;
+const DL = 1 / FLOE_ROWS;
+// the band of a row (whole degrees of latitude, by integer division), and its columns' width (deg)
+export const floeBand = (i) => Math.floor(i / FLOE_ROWS);
+export const floeBandM = (band) => Math.round(16 / Math.max(0.05, Math.cos((band + 0.5) * Math.PI / 180)));
+export const floeRowDn = (i) => DL * floeBandM(floeBand(i)) / 16;
+// a column of a row's band, round the back of the world at 180 degrees (as ICE_GLSL)
+export function floeWrapJ(j, m) {
+	const N = FLOE_ROWS * 16 * 180, jmax = Math.trunc((N - 1) / m), jmin = -Math.trunc((N + m - 1) / m);
+	return j > jmax ? jmin + (j - jmax - 1) : j < jmin ? jmax - (jmin - j - 1) : j;
+}
+// the uniforms the sea reads: on (Earth's own seas), the month, and the frame (lat = x - z / z', lon = y + x / w')
+// and the 3D floes' circle (x, z, radius less a floe: inside it the sea need not draw them)
+export const ICE_U = { uIceOn: { value: 0 }, uIceMonth: { value: 0 }, uIceLL: { value: new THREE.Vector4(0, 0, 111000, 111000) }, uIceNear: { value: new THREE.Vector3() } };
+
 // how much of the sea is ice at a latitude this month (0..1)
 export function iceCover(lat, lon, month) {
 	if (lat > 0) {
@@ -28,6 +49,67 @@ export function iceCover(lat, lon, month) {
 	const wk = 0.5 + 0.5 * Math.cos(2 * Math.PI * (month - 8.5) / 12), edge = 70 - 8 * wk;
 	return smooth(edge - 1.5, edge + 2.5, -lat);
 }
+// the same in GLSL (iceCover, the hash, the floes' outline: keep them in step)
+export const ICE_GLSL = /* glsl */`
+uniform float uIceOn, uIceMonth; uniform vec4 uIceLL; uniform vec3 uIceNear;
+float iceCoverG(float lat, float lon, float month){
+	if (lat > 0.0) {
+		float wk = 0.5 + 0.5 * cos(6.2831853 * (month - 2.5) / 12.0), edge = 77.0 - 9.0 * wk;
+		float bay = lon > -95.0 && lon < -55.0 && lat > 55.0 ? smoothstep(0.4, 0.8, wk) : 0.0;
+		return max(smoothstep(edge - 1.5, edge + 2.5, lat), bay);
+	}
+	float wk = 0.5 + 0.5 * cos(6.2831853 * (month - 8.5) / 12.0), edge = 70.0 - 8.0 * wk;
+	return smoothstep(edge - 1.5, edge + 2.5, -lat);
+}
+// the latitude and longitude of a point of the engine's ground
+vec2 iceLL(vec2 p){ return vec2(uIceLL.x - p.y / uIceLL.z, mod(uIceLL.y + p.x / uIceLL.w + 180.0, 360.0) - 180.0); }
+float iceRnd(inout uint h){ h += 0x6D2B79F5u; uint t = (h ^ (h >> 15u)) * (1u | h); t = (t + (t ^ (t >> 7u)) * (61u | t)) ^ t; return float(t ^ (t >> 14u)) / 4294967296.0; }
+float floeRim(float i){ return 0.78 + 0.22 * sin(i * 2.7 + 1.3) * cos(i * 1.9); }
+// how much of this point is floe (x), how near its rim (y), and the cover here (z); aa: the pixel's size (m)
+vec3 packIce(vec2 p, float aa){
+	vec2 ll = iceLL(p);
+	float cov = iceCoverG(ll.x, ll.y, uIceMonth);
+	if (cov < 0.004) return vec3(0.0);
+	if (aa > 12.0) return vec3(0.0, 0.0, cov);        // (finer than the pixel: the sea takes their share, packMean)
+	if (distance(p, uIceNear.xy) < uIceNear.z) return vec3(0.0, 0.0, cov);   // (the 3D floes stand here)
+	const float DL = 1.0 / ${FLOE_ROWS.toFixed(1)};
+	int i0 = int(floor(ll.x * ${FLOE_ROWS.toFixed(1)}));
+	float best = 0.0, rim = 0.0;
+	for (int a = -1; a <= 1; a++) {
+		int i = i0 + a;
+		int band = i >= 0 ? i / ${FLOE_ROWS} : -((-i - 1) / ${FLOE_ROWS}) - 1;
+		int m = int(floor(16.0 / max(0.05, cos(radians(float(band) + 0.5))) + 0.5));
+		float rowLat = (float(i) + 0.5) * DL, dn = DL * float(m) / 16.0;
+		// (the band's first and last columns, in whole numbers: 180 degrees is ${FLOE_ROWS * 16 * 180} / m of them)
+		int jmax = (${FLOE_ROWS * 16 * 180} - 1) / m, jmin = -((${FLOE_ROWS * 16 * 180} + m - 1) / m), j0 = int(floor(ll.y / dn));
+		for (int b = -1; b <= 1; b++) {
+			// (the columns either side, round the back of the world at 180 degrees)
+			int j = j0 + b;
+			if (j > jmax) j = jmin + (j - jmax - 1); else if (j < jmin) j = jmax - (jmin - j - 1);
+			float cc = iceCoverG(rowLat, (float(j) + 0.5) * dn, uIceMonth);
+			uint h = (uint(i) * 73856093u) ^ (uint(j) * 19349663u) ^ (7u * 83492791u);
+			if (iceRnd(h) > cc * 1.05) continue;
+			float fl = (float(i) + iceRnd(h)) * DL, fn = (float(j) + iceRnd(h)) * dn;
+			float rad = (8.0 + iceRnd(h) * 14.0) * (0.7 + cc * 0.8); iceRnd(h);
+			vec2 d = vec2((mod(ll.y - fn + 180.0, 360.0) - 180.0) * uIceLL.w, -(ll.x - fl) * uIceLL.z);
+			if (dot(d, d) > rad * rad * 1.5 + aa * aa) continue;      // (well clear of it)
+			float ang = iceRnd(h) * 6.2831853, sx = rad * (0.8 + iceRnd(h) * 0.4); iceRnd(h); float sz = rad * (0.8 + iceRnd(h) * 0.4);
+			float c = cos(ang), s = sin(ang);
+			vec2 u = vec2((c * d.x - s * d.y) / sx, (s * d.x + c * d.y) / sz);
+			// (inside the floe's outline: the edge of its sector, a straight side between two corners)
+			float k0 = floor(fract(atan(u.y, u.x) / 6.2831853) * 11.0), a0 = k0 / 11.0 * 6.2831853, a1 = (k0 + 1.0) / 11.0 * 6.2831853;
+			vec2 A = floeRim(k0) * vec2(cos(a0), sin(a0)), B = floeRim(mod(k0 + 1.0, 11.0)) * vec2(cos(a1), sin(a1)), E = B - A;
+			float side = (E.x * (u.y - A.y) - E.y * (u.x - A.x)) / length(E), e = aa / min(sx, sz);
+			float inF = smoothstep(-e, e, side);
+			if (inF > best) { best = inF; rim = 1.0 - smoothstep(0.0, 2.5 / min(sx, sz), side); }
+		}
+	}
+	return vec3(best, rim, cov);
+}
+// the share of the sea the floes cover where they are too small to draw, at a cover
+float packMean(float cov){ float m = 0.7 + 0.8 * cov; return 1.0 - exp(-min(1.0, cov * 1.05) * 477.6 * m * m / (S2_FLOE)); }
+`.replace('S2_FLOE', (FLOE_S * FLOE_S).toFixed(1));
+
 // how likely icebergs are here (off Greenland, Baffin Bay, Svalbard, and all round Antarctica)
 export function bergChance(lat, lon) {
 	if (lat < -55) return 0.22 * smooth(-55, -62, lat);
@@ -126,32 +208,36 @@ export function createIce(scene, { height, toXZ, toLL, isPhone = false }) {
 		let nf = 0, nr = 0;
 		const nb = [0, 0, 0];
 		const seaAt = (x, z) => height.at(x, z) < -1.5 && height.out.land <= 0.02;
-		if (cov > 0.02) {
-			const S = 40, dl = S / 111000, dn = S / (111000 * Math.max(0.05, Math.cos(ll.lat * Math.PI / 180))), Rm = isPhone ? 650 : 950;
-			const i0 = Math.floor(ll.lat / dl), j0 = Math.floor(ll.lon / dn), K = Math.ceil(Rm / S);
-			for (let a = -K; a <= K && nf < CAP; a++) for (let b = -K; b <= K && nf < CAP; b++) {
-				const r = hash(i0 + a, j0 + b, 7);
-				if (r() > cov * 1.05) continue;
-				const p = toXZ((i0 + a + r()) * dl, (j0 + b + r()) * dn);
-				if (Math.hypot(p.x - cx, p.z - cz) > Rm || !seaAt(p.x, p.z)) continue;
-				const rad = (8 + r() * 14) * (0.7 + cov * 0.8), y = 0.05 + r() * 0.2;
-				Q.setFromAxisAngle(UP, r() * Math.PI * 2); SC.set(rad * (0.8 + r() * 0.4), 0.8 + r() * 0.5, rad * (0.8 + r() * 0.4));
-				M4.compose(V.set(p.x, y, p.z), Q, SC); floes.setMatrixAt(nf++, M4);
-				list.push([p.x, p.z, rad * 0.8, y + 0.5 * SC.y]);
-				// a pressure ridge where floes pushed together
-				if (cov > 0.6 && r() < 0.08 && nr < RCAP - 30) {
-					const ang = r() * Math.PI;
-					for (let k = 0; k < 24; k++) { const t = (k / 24 - 0.5) * rad * 2.2; Q.setFromAxisAngle(V.set(r() - 0.5, 1, r() - 0.5).normalize(), r() * 3); SC.setScalar(0.8 + r() * 1.8); M4.compose(V.set(p.x + Math.cos(ang) * t + (r() - 0.5) * 1.5, y + 0.6 + r() * 0.8, p.z + Math.sin(ang) * t + (r() - 0.5) * 1.5), Q, SC); rubble.setMatrixAt(nr++, M4); }
-				}
+		if (Math.max(cov, iceCover(ll.lat - 0.02, ll.lon, month), iceCover(ll.lat + 0.02, ll.lon, month)) > 0.004) {
+			// (the lattice and the draws are ICE_GLSL's: the sea draws these same floes past them)
+			const Rm = isPhone ? 650 : 950, i0 = Math.floor(ll.lat / DL), K = Math.ceil(Rm / FLOE_S);
+			for (let a = -K; a <= K && nf < CAP; a++) {
+				const i = i0 + a, m = floeBandM(floeBand(i)), dn = floeRowDn(i), rowLat = (i + 0.5) * DL, j0 = Math.floor(ll.lon / dn);
+				for (let b = -K; b <= K && nf < CAP; b++) {
+					const j = floeWrapJ(j0 + b, m), cc = iceCover(rowLat, (j + 0.5) * dn, month), r = hash(i, j, 7);
+					if (r() > cc * 1.05) continue;
+					const p = toXZ((i + r()) * DL, (j + r()) * dn);
+					if (Math.hypot(p.x - cx, p.z - cz) > Rm || !seaAt(p.x, p.z)) continue;
+					const rad = (8 + r() * 14) * (0.7 + cc * 0.8), y = 0.05 + r() * 0.2;
+					Q.setFromAxisAngle(UP, r() * Math.PI * 2); SC.set(rad * (0.8 + r() * 0.4), 0.8 + r() * 0.5, rad * (0.8 + r() * 0.4));
+					M4.compose(V.set(p.x, y, p.z), Q, SC); floes.setMatrixAt(nf++, M4);
+					list.push([p.x, p.z, rad * 0.8, y + 0.5 * SC.y]);
+					// a pressure ridge where floes pushed together
+					if (cc > 0.6 && r() < 0.08 && nr < RCAP - 30) {
+						const ang = r() * Math.PI;
+						for (let k = 0; k < 24; k++) { const t = (k / 24 - 0.5) * rad * 2.2; Q.setFromAxisAngle(V.set(r() - 0.5, 1, r() - 0.5).normalize(), r() * 3); SC.setScalar(0.8 + r() * 1.8); M4.compose(V.set(p.x + Math.cos(ang) * t + (r() - 0.5) * 1.5, y + 0.6 + r() * 0.8, p.z + Math.sin(ang) * t + (r() - 0.5) * 1.5), Q, SC); rubble.setMatrixAt(nr++, M4); }
+					}
+					}
 			}
 		}
 		if (bc > 0.01) {
-			const S = 420, dl = S / 111000, dn = S / (111000 * Math.max(0.05, Math.cos(ll.lat * Math.PI / 180))), K = isPhone ? 6 : 9;
-			const i0 = Math.floor(ll.lat / dl), j0 = Math.floor(ll.lon / dn);
+			// (on a lattice of their own of the latitude and longitude, as the floes)
+			const S = 420, dl = S / 111000, K = isPhone ? 6 : 9, i0 = Math.floor(ll.lat / dl);
 			for (let a = -K; a <= K; a++) for (let b = -K; b <= K; b++) {
-				const r = hash(i0 + a, j0 + b, 9);
-				if (r() > bc) continue;
-				const p = toXZ((i0 + a + r()) * dl, (j0 + b + r()) * dn);
+				const i = i0 + a, dn = S / (111000 * Math.max(0.05, Math.cos((i + 0.5) * dl * Math.PI / 180))), j = Math.floor(ll.lon / dn) + b;
+				const r = hash(i, j, 9);
+				if (r() > bergChance((i + 0.5) * dl, (j + 0.5) * dn)) continue;
+				const p = toXZ((i + r()) * dl, (j + r()) * dn);
 				if (!seaAt(p.x, p.z) || height.at(p.x, p.z) > -8) continue;
 				const k = Math.floor(r() * 3);
 				if (nb[k] >= BCAP) continue;
@@ -162,6 +248,7 @@ export function createIce(scene, { height, toXZ, toLL, isPhone = false }) {
 			}
 		}
 		floes.count = nf; rubble.count = nr;
+		ICE_U.uIceNear.value.set(cx, cz, nf && nf < CAP ? (isPhone ? 650 : 950) - 45 : 0);
 		bergs.forEach((m, k) => { m.count = nb[k]; m.instanceMatrix.needsUpdate = true; });
 		floes.instanceMatrix.needsUpdate = true; rubble.instanceMatrix.needsUpdate = true;
 	}
@@ -169,6 +256,11 @@ export function createIce(scene, { height, toXZ, toLL, isPhone = false }) {
 	function update(dt, cam, { month, night = 0, cover: cloud = 0.4, lat = 0, on = true, epoch = 0 } = {}) {
 		const x = cam.position.x, z = cam.position.z;
 		group.visible = on;
+		// (the sea draws the pack past the floes: the frame's latitude and longitude for it)
+		const o = toLL(0, 0), oz = toLL(0, 1000), ox = toLL(1000, 0), dLon = ((ox.lon - o.lon + 540) % 360) - 180;
+		ICE_U.uIceOn.value = on ? 1 : 0; ICE_U.uIceMonth.value = month;
+		if (!on) ICE_U.uIceNear.value.z = 0;
+		ICE_U.uIceLL.value.set(o.lat, o.lon, 1000 / (o.lat - oz.lat), 1000 / dLon);
 		if (on && (!at || Math.hypot(x - at[0], z - at[1]) > 180 || at[2] !== epoch || Math.abs(at[3] - month) > 0.25)) { at = [x, z, epoch, month]; layout(x, z, month); }
 		// the aurora on clear dark nights in the oval (some nights brighter: the night's own number)
 		const alat = Math.abs(lat), d = new Date();

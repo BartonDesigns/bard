@@ -1242,6 +1242,8 @@ export function createWater(scene, shared, opts = {}) {
 	}
 	return {
 		group: root, update, waterAt, inWater, nameAt, kindAt, floor, info, falls, ready: () => S.ready,
+		// (which lakes are known: it changes as a source lists more, e.g. the land's own as you come near)
+		lakesVersion: () => (S.ready ? 'r' : 'w') + S.srcV,
 		dispose() {
 			if (disposed) return;
 			disposed = true; S.ready = false; job = cur = null;

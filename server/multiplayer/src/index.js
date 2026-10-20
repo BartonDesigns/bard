@@ -1,19 +1,24 @@
 // The rooms server: friends playing together. The host makes a room (a six-letter code) and
 // shares a link; each room is one Durable Object (room.js) that friends join by WebSocket.
-// No accounts: a player is an id their browser made up, and a name they chose.
+// Rooms need no account: a player is an id their browser made up, and a name they chose.
 //
 //   GET  /status               { ok, version, maxPlayers }
 //   POST /rooms                { id } -> { code }: a new room, owned by that player
 //   GET  /rooms/:code/ws?id=&name=&seed=   (WebSocket) join the room
+//   POST /account/:op          a player's username, password and saved progress (account.js)
 
 import { Room } from './room.js';
 import { Soul, soulId, SOUL_TOKEN } from './soul.js';
 import { SOUL_FEATURE } from '../../../island/src/reputation/sanctuary.js';
 import { VERSION, MAX_PLAYERS, ID_RE, GEAR_FEATURE, PVP_FEATURE, newCode, cleanCode } from '../../../island/src/net/protocol.js';
 import { REPUTATION_FEATURE } from '../../../island/src/net/reputation.js';
+import { Account } from './account.js';
+import { usernameOk, cleanUsername, SAVE_MAX, ACCOUNT_FEATURE } from '../../../island/src/persistence/cloud-save.js';
 import { LivingRegion, LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE, LIVING_MAX_BYTES, livingIdentity, livingScope } from './living-region.js';
 
-export { Room, Soul, LivingRegion };
+export { Room, Soul, LivingRegion, Account };
+// accounts made, and logins tried, per address an hour
+const SIGNUPS_PER_HOUR = 10, LOGINS_PER_HOUR = 60;
 
 // rooms made per address an hour (kept in this instance's memory only, by a hash)
 const MAKE_PER_HOUR = 20;
@@ -35,12 +40,12 @@ async function who(request, env) {
 	const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode((env.IP_SALT || 'l99') + '|' + ip)));
 	return [...h.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
-function tooMany(key) {
+function tooMany(key, max = MAKE_PER_HOUR) {
 	const now = Date.now(), hour = Math.floor(now / 3600000);
 	if (made.size > 5000) made.clear();
 	const m = made.get(key);
 	if (!m || m.hour !== hour) { made.set(key, { hour, n: 1 }); return false; }
-	return ++m.n > MAKE_PER_HOUR;
+	return ++m.n > max;
 }
 const room = (env, code) => env.ROOMS.get(env.ROOMS.idFromName(code));
 
@@ -50,7 +55,7 @@ export async function handle(request, env) {
 	if (origin && !ok) return reply({ error: 'origin not allowed' }, 403, { vary: 'Origin' });
 	if (request.method === 'OPTIONS') return new Response(null, { status: ok ? 204 : 403, headers: H });
 
-	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : [])] }, 200, H);
+	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : []), ...(env.ACCOUNTS ? [ACCOUNT_FEATURE] : [])] }, 200, H);
 
 	const living = url.pathname.match(/^\/living\/([^/]+)\/([^/]+)$/);
 	if (living && ['GET', 'POST'].includes(request.method)) {
@@ -83,6 +88,25 @@ export async function handle(request, env) {
 		if (!SOUL_TOKEN.test(key)) return reply({ error: 'Soul key required.' }, 401, H);
 		const id = await soulId(key), stub = env.SOULS.get(env.SOULS.idFromName(id));
 		const result = await stub.fetch(new Request('https://soul/me', request));
+		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
+	}
+
+	const acct = url.pathname.match(/^\/account\/(signup|login|reset|save|load|peek|logout)$/);
+	if (acct && request.method === 'POST') {
+		if (!ok) return reply({ error: 'origin required' }, 403, H);
+		if (!env.ACCOUNTS) return reply({ error: 'Accounts are not on the server yet.' }, 503, H);
+		const limit = SAVE_MAX + 8192, length = Number(request.headers.get('content-length'));
+		if (Number.isFinite(length) && length > limit) return reply({ error: 'That save is too big.' }, 413, H);
+		const text = await request.text();
+		if (text.length > limit) return reply({ error: 'That save is too big.' }, 413, H);
+		let u;
+		try { u = cleanUsername(JSON.parse(text)?.u); } catch { return reply({ error: 'bad json' }, 400, H); }
+		if (!usernameOk(u)) return reply({ error: 'A username is 3 to 20 letters, digits, - or _.' }, 400, H);
+		const op = acct[1];
+		if (op === 'signup' && tooMany('signup:' + await who(request, env), SIGNUPS_PER_HOUR)) return reply({ error: 'Too many new accounts from here. Try again later.' }, 429, H);
+		if ((op === 'login' || op === 'reset') && tooMany('login:' + await who(request, env), LOGINS_PER_HOUR)) return reply({ error: 'Too many tries from here. Try again later.' }, 429, H);
+		const stub = env.ACCOUNTS.get(env.ACCOUNTS.idFromName('user:' + u));
+		const result = await stub.fetch(new Request('https://account/' + op, { method: 'POST', headers: { authorization: request.headers.get('authorization') || '' }, body: text }));
 		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
 	}
 

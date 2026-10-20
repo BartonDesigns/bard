@@ -128,7 +128,7 @@ export function createGlobeHeight(win) {
 			const v = nn + (r - nn) * c.RG;
 			sum += v * amp * w;
 			w = 1 + (clamp(0.55 + 0.6 * v, 0.2, 1) - 1) * c.RG;
-			amp *= 0.55;
+			amp *= 0.63 - 0.08 * c.RG;        // (the finer hills a little stronger where the land is smooth: no plain reads as a table)
 		}
 		const U = lon, V = lat;
 		return assemble(c, alpine(sum * (0.7 + 0.8 * c.RG), c), n2, n3, n4, n5, (fi) => famAt(FAM[fi], 20 + fi * 8, U, V));
@@ -316,7 +316,7 @@ float globeHeight(vec2 d, float oct){
 		float v = mix(nn, r, RG) * fade;
 		sum += v * amp * w;
 		w = mix(1.0, clamp(0.55 + 0.6 * v, 0.2, 1.0), RG);
-		amp *= 0.55;
+		amp *= 0.63 - 0.08 * RG;
 	}
 	float D = sum * (0.7 + 0.8 * RG);
 	// the high ranges carved by ice (see alpine() on the CPU)
