@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { createMusicLinkEntry } from './ui/music-link.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
 import { createCommunityProjects } from './people/community-projects.js';
@@ -878,6 +879,8 @@ export function createIslandWorld() {
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
 	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
+	// music from a YouTube or Spotify link: its way in from the map pin, and the auto music making way (ui/music-link.js)
+	HOOKS.musicLink = createMusicLinkEntry({ menu: tpMenu, autoMusic, hint: (t, ms) => hint(t, ms, 1) });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
