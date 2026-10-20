@@ -1611,8 +1611,8 @@ if (typeof window !== 'undefined') {
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		gear: () => HOOKS.gear?.info(),
-		// chat: Crysis.chat() what is said and who is online; .open() / .close(); .client the line itself
-		chat: Object.assign(() => HOOKS.chat?.info(), { open: () => HOOKS.chat?.open(), close: () => HOOKS.chat?.close(), get client() { return HOOKS.chat?.client; } }),
+		// chat: Crysis.chat() what is said and who is online; .open() / .close(); .client() the line itself
+		chat: Object.assign(() => HOOKS.chat?.info(), { open: () => HOOKS.chat?.open(), close: () => HOOKS.chat?.close(), client: () => HOOKS.chat?.client }),
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()
