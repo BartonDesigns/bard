@@ -5,6 +5,20 @@
 <meta charset="UTF-8">
 <link rel="icon" href="./favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<script>
+/* progress loaded from your account (island/src/persistence/cloud-save.js applyRestore): staged
+   on the last visit, put in place before anything else reads this browser's storage */
+(function () {
+    try {
+        var raw = localStorage.getItem('l99-account-restore');
+        if (!raw) return;
+        localStorage.removeItem('l99-account-restore');
+        var r = JSON.parse(raw), k;
+        (r.remove || []).forEach(function (key) { localStorage.removeItem(key); });
+        for (k in (r.set || {})) if (Object.prototype.hasOwnProperty.call(r.set, k)) localStorage.setItem(k, r.set[k]);
+    } catch (e) { console.warn('[account] restore', e); }
+})();
+</script>
 <script src="./loading-screen.js?v=ba3ba5f9bc"></script>
 <script>
 /* ?debug on the address: an on-screen console (phones have none), with a Copy button. Only
@@ -29720,7 +29734,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=e0bcbe6cf7'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=4590f0f570'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29728,7 +29742,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=e0bcbe6cf7'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=4590f0f570'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }
