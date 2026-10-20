@@ -144,7 +144,7 @@ function leviathan(ctx, B) {
 		L.brow.getWorldPosition(eye);
 		L.eyeMat.emissiveIntensity += (2.2 - L.eyeMat.emissiveIntensity) * Math.min(1, dt * 3);
 		// (its breastplate bursts as the last of the fight begins)
-		if (r.plateBurst) { ctx.fx.glass(r.plateBurst, 30, 6, 0.6); ctx.fx.sparks(r.plateBurst, 30, null, 0.75, 0.6, 1, 12); ctx.shake?.(0.6, r.plateBurst); }
+		if (r.plateBurst) { B.lastBurst = r.plateBurst.toArray().map(Math.round); ctx.fx.glass(r.plateBurst, 30, 6, 0.6); ctx.fx.sparks(r.plateBurst, 30, null, 0.75, 0.6, 1, 12); ctx.shake?.(0.6, r.plateBurst); }
 	};
 	B.die = () => { for (const s of segs) { ctx.fx.glass(s.p, 6, 5, 0.5); ctx.fx.sparks(s.p, 10, null, 0.8, 0.6, 1, 8); } };
 	B.focus = () => head;
@@ -425,6 +425,8 @@ function fogMother(ctx, B) {
 				if (arm.down >= 1 && !arm.hit) {
 					arm.hit = true;
 					const p = arm.at;
+					// (where the hand came down against where it struck, Crysis.combat.bossStep)
+					B.lastSlam = { at: p.toArray().map(Math.round), hand: hand ? hand.getWorldPosition(new THREE.Vector3()).toArray().map(Math.round) : null };
 					ctx.shake?.(1);
 					ctx.fx.dust({ x: p.x, y: p.y + 1, z: p.z }, 40, 0.78, 0.8, 0.84, 9, 3);
 					ctx.fx.sparks(p, 20, null, 0.6, 0.8, 1, 10);

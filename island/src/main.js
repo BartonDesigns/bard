@@ -208,6 +208,7 @@ import { createFarForest } from './world/farforest.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { touchLookRows } from './ui/touch-look.js';
 import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
+import { createPerfMeter } from './ui/perfmeter.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -634,6 +635,10 @@ export function createIslandWorld() {
 	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage, ...(isPhone && ULTRA ? { budgetMB: 1400 } : {}) });
 	if (graphics.lighter && !SAFE && governor.state.ceiling < 2) governor.lost();
 	if (governor.crashedLastTime) console.warn('[governor] the last visit ended without a goodbye: starting lighter', JSON.stringify(governor.info()));
+	// what the graphics hold, for the loading screen's black box (loading-screen.js), and the
+	// on-screen frame readout (?perf, ui/perfmeter.js)
+	window.L99GpuMB = () => Math.round(gpuMeter.bytes() / 1048576);
+	const perf = HOOKS.perf = createPerfMeter({ mount: dom.mount, renderer, governor, storage, search: location.search });
 	applyQuality();
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
@@ -2312,6 +2317,7 @@ export function createIslandWorld() {
 		// the governor: a tier down when the frames or the memory say so, back up after a long easy
 		// run (world/governor.js)
 		frameAvg += (elapsed * 1000 - frameAvg) * 0.05;
+		perf.frame(elapsed * 1000, now);
 		// (on a phone stepped down to the lighter tiers the local voice model, 100 MB, is let go too)
 		if (governor.update(elapsed, frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
 	}
@@ -2654,6 +2660,10 @@ if (typeof window !== 'undefined') {
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		gear: () => HOOKS.gear?.info(),
+		// the frame readout in the corner (?perf in the address): Crysis.perf(true|false); and the
+		// loading screen's black box, the loads that went without a goodbye: Crysis.loadTrail()
+		perf: (on) => (on == null ? HOOKS.perf?.on() : HOOKS.perf?.show(on)),
+		loadTrail: () => window.L99Loading?.trail?.(),
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()

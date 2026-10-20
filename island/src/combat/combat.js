@@ -1376,6 +1376,20 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		boss: (kind = 'leviathan') => spawnBoss(kind)?.info() || 'unknown boss',
 		// Crysis.combat.creature('fog-wight', 1, 14): one of the creatures ahead (creatures/catalog.js)
 		creature: (id = 'fog-wight', n = 1, d = 14) => creatureAhead(id, n, d),
+		// for checks: the first boss's fight run on for s seconds without drawing, its states as they
+		// change and your health with them (headless frames are far too slow to watch a fight)
+		bossStep: (sec = 1, dt = 0.05) => {
+			const B0 = [...bosses.values()][0];
+			if (!B0) return null;
+			const log = [];
+			let was = '';
+			for (let t = 0; t < sec; t += dt) {
+				B0.update(dt);
+				const i = B0.info(), k = `${i.phase}:${i.state}:${i.attack || ''}`;
+				if (k !== was) { was = k; log.push({ t: +t.toFixed(2), phase: i.phase, state: i.state, attack: i.attack, me: Math.round(me.H.hp) }); }
+			}
+			return { log, info: B0.info(), me: Math.round(me.H.hp), slam: B0.lastSlam || null, burst: B0.lastBurst || null };
+		},
 		bossHit: (part = 'body', n = 500) => { const B0 = [...bosses.values()][0]; return B0 ? (B0.damage({ amount: n, part }), B0.info()) : null; },
 		camp: () => { const s = spotAhead(20, 25); if (s) props.camp(s.x, s.z, 'camp', (x, z) => ground(x, z, s.y + 2)); return props.info(); },
 		fronts: () => { props.fronts(boxesNear(eye().x, eye().z, 40), eye(), (x, z) => ground(x, z), 'fronts'); return props.info(); },
