@@ -359,10 +359,10 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		if (owner || !k.house || (isPhone && !WALK_IN_PHONE)) return;
 		// (someone already home and drawn there: no stranger walks in as well; people/family-life.js homes)
 		const homes = families?.homes;
-		if (homes?.occupants?.(k.house)?.length || homes?.whoIsHome?.(k.house, hours())?.length) return;
+		if (homes?.homeNow?.(k.house, hours())?.length || homes?.whoIsHome?.(k.house)?.length) return;
 		const h = hours(), chance = h > 17 && h < 21.5 ? 0.6 : h > 6.5 && h < 17 ? 0.35 : 0.25;
 		if (Math.random() > chance) return;
-		const hh = homes?.homeAt?.(k.house) || k.hh, adults = hh ? hh.members.filter((m) => m.age >= 18) : [];
+		const hh = homes?.homeAt?.(k.house)?.household || homes?.householdOf?.(k.house) || k.hh, adults = hh ? hh.members.filter((m) => m.age >= 18) : [];
 		const m = adults.length ? adults[Math.floor(Math.random() * adults.length)] : { seed: (Math.random() * 2 ** 31) >>> 0, age: 30 + Math.random() * 35, male: Math.random() < 0.5 };
 		owner = { k, m, hh, due: 3 + Math.random() * 4, state: 'due', t: 0, first: null };
 		assets();
