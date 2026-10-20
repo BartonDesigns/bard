@@ -10,7 +10,7 @@
 //
 // The layout, from the bottom right corner inside the safe area (both orientations):
 //   P   the primary action, 68 px: Fire (Draw/Release), Strike, the pedal (go), the cast
-//   L1  left of P, 52 px: Aim, Block, the brake
+//   L1  left of P, 52 px: Aim, Heavy strike, the brake (Block, in a fight, sits out beyond it)
 //   D1  up and left of P, 52 px: Reload, Dodge, a vehicle's gun
 //   D2  further out on that diagonal: fire Mode, Grab or Takedown
 //   L2  left of L1: Surrender
@@ -30,6 +30,8 @@ export const GLYPHS = {
 	sun: "<circle cx='12' cy='12' r='4'/><path d='M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4'/>",
 	music: "<path d='M9 18V5.5l11-2V16'/><circle cx='6.5' cy='18' r='2.5'/><circle cx='17.5' cy='16' r='2.5'/>",
 	menu: "<rect x='4' y='4' width='6.5' height='6.5' rx='1.6'/><rect x='13.5' y='4' width='6.5' height='6.5' rx='1.6'/><rect x='4' y='13.5' width='6.5' height='6.5' rx='1.6'/><rect x='13.5' y='13.5' width='6.5' height='6.5' rx='1.6'/>",
+	more: "<circle cx='5' cy='12' r='1.7' fill='#000'/><circle cx='12' cy='12' r='1.7' fill='#000'/><circle cx='19' cy='12' r='1.7' fill='#000'/>",
+	cloud: "<path d='M7 18.5h10a4 4 0 0 0 .6-8 5.5 5.5 0 0 0-10.6-1.4A4.5 4.5 0 0 0 7 18.5z'/><path d='M12 16v-5M9.8 13 12 10.8l2.2 2.2'/>",
 	close: "<path d='M6 6l12 12M18 6 6 18'/>",
 	plane: "<path d='M12 3.5c1 0 1.5 1 1.5 2.5v3.5l7 4.5v2l-7-2.2V18l2.2 1.8V21L12 20l-3.7 1v-1.2L10.5 18v-4.2l-7 2.2v-2l7-4.5V6c0-1.5.5-2.5 1.5-2.5z'/>",
 	bag: "<path d='M6 10a6 6 0 0 1 12 0v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z'/><path d='M9.5 5.5V4.5a2.5 2.5 0 0 1 5 0v1'/><path d='M9 14.5h6v3H9z'/>",
@@ -52,7 +54,8 @@ export const GLYPHS = {
 	fist: "<path d='M7 11V8.5a1.5 1.5 0 0 1 3 0V11m0-2.5V7a1.5 1.5 0 0 1 3 0v4m0-3a1.5 1.5 0 0 1 3 0v3.5m0-2a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5A5.5 5.5 0 0 1 5 14.5V13a2 2 0 0 1 2-2h3'/>",
 	swing: "<path d='M5 19 17 7'/><path d='M14.5 4.5a3 3 0 0 1 5 5l-3 3-5-5z'/><path d='M3.5 20.5l2-2'/>",
 	slash: "<path d='M4.5 19.5l2.5-2.5M5.5 14.5l4 4'/><path d='M8 16 18.5 5.5c1 2.5 0 6.5-3 9.5L11.5 18.5'/>",
-	heavy: "<path d='M7 4h10v7H7zM10 11v8h4v-8M4 12v6m-2-2 2 2 2-2M20 12v6m-2-2 2 2 2-2'/>",
+	// (a fist driving in, the lines behind it: a heavy blow; the old block-on-a-post read as a signpost)
+	heavy: "<g transform='translate(4.2 1.6) scale(.84)' stroke-width='2.4'><path d='M7 11V8.5a1.5 1.5 0 0 1 3 0V11m0-2.5V7a1.5 1.5 0 0 1 3 0v4m0-3a1.5 1.5 0 0 1 3 0v3.5m0-2a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5A5.5 5.5 0 0 1 5 14.5V13a2 2 0 0 1 2-2h3'/></g><path d='M1.5 9.5h3M1 13h3.5M1.5 16.5h3'/>",
 	block: "<path d='M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z'/>",
 	dodge: "<path d='M4 12h11M11 7l5 5-5 5M19.5 5v14'/>",
 	grab: "<path d='M8 13V6.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V12m0-5a1.5 1.5 0 0 1 3 0v6a7 7 0 0 1-7 7H9a5 5 0 0 1-4.6-3l-1.2-2.8a1.4 1.4 0 0 1 2.4-1.4L8 15'/>",
@@ -98,7 +101,8 @@ const RULES = [
 	[(a) => /^Sky and world settings/.test(a), 'sun'],
 	[(a) => /^Chat$/.test(a), 'chat'],
 	[(a) => /^Auto music/.test(a), 'music'],
-	[(a) => /^All controls/.test(a), 'menu'],
+	[(a) => /^All controls/.test(a), 'more'],
+	[(a) => /^Your account|^Save your progress/.test(a), 'cloud'],
 	[(a) => /^Fly\b/.test(a), 'plane'],
 	[(a) => /^Gear and trade/.test(a), 'bag'],
 	[(a) => /^Teleport to a place/.test(a), 'pin'],
@@ -239,10 +243,11 @@ ${S} .cb-btn[aria-label="Mode"]{right:calc(144px + var(--sr))!important;bottom:c
 ${S}>button:is([aria-label="Aim"],[aria-label="Aim held item"]){${SLOT}${L1}touch-action:none!important;}
 ${S} .mc-btn{${SLOT}touch-action:none!important;}
 ${S} .mc-strike{${P}}
-${S} .mc-block{${L1}}
+${S} .mc-block{right:calc(150px + var(--sr))!important;bottom:calc(84px + var(--sb))!important;}
 ${S} .mc-dodge{${D1}}
 ${S} .mc-grab{${D2}}
-${S} .mc-heavy{right:calc(150px + var(--sr))!important;bottom:calc(84px + var(--sb))!important;}
+/* (Heavy strike hugs Strike, left of it; Block, shown once a fight is on, sits out beyond them) */
+${S} .mc-heavy{${L1}}
 ${S}>[data-skin][aria-label^="Surrender"]{${SLOT}${L2}z-index:6;}
 ${S} .l99-mil[data-mil="fire"]{${SLOT}${D1}width:60px!important;height:60px!important;--gs:26px;}
 ${S} .l99-mil[data-mil="up"]{${SLOT}left:calc(22px + var(--sl))!important;right:auto!important;bottom:calc(94px + var(--sb))!important;}
@@ -315,7 +320,7 @@ export function skinTouch(mount) {
 		// (nothing known: the general glyph, never words)
 		const g = glyphFor(name(b), t) || glyphFor(spoken(t), t) || glyphFor(b.title || '', t) || 'tap';
 		if (!b.hasAttribute('data-skin')) { b.setAttribute('data-skin', ''); b.addEventListener('touchstart', () => {}, { passive: true }); }
-		const close = g === 'menu' && b.getAttribute('aria-expanded') === 'true' ? 'close' : g;
+		const close = (g === 'menu' || g === 'more') && b.getAttribute('aria-expanded') === 'true' ? 'close' : g;
 		if (close) { if (b.dataset.glyph !== close) b.dataset.glyph = close; } else if (b.hasAttribute('data-glyph')) b.removeAttribute('data-glyph');
 		const size = b.matches('.cb-btn:is([aria-label="Fire"],[aria-label="Draw"],[aria-label="Release"],[aria-label="Nocking"]),.mc-strike,[data-hud="prompt 20"]') ? 'p'
 			: b.matches('.cb-btn[aria-label="Mode"],.l99-quick>*,[data-cv-open]') || /^(back|sun|music|warp|home|chat)$/.test(g) ? 's' : '';

@@ -35,7 +35,12 @@ export const FACTIONS = Object.freeze({
 	deepborn: { name: 'Deepborn', kind: 'creatures', zones: [], colors: ['#5a4632', '#7aff6a'], emblem: 'none', hp: 240, armour: 30, acc: 0.6, aggression: 1 },
 	civ: { name: 'Townsfolk', kind: 'civilians', zones: [], colors: ['#ffffff', '#ffffff'], emblem: 'none', aggression: 0 },
 	village: { name: 'Villagers', kind: 'civilians', zones: ['village'], colors: ['#ffffff', '#ffffff'], emblem: 'none', aggression: 0 },
+	// the townsfolk of your own guild who walk and fight with you (guild/companions.js): they
+	// stand where you stand with everyone (createRelations reads 'guild' as you), and come out
+	// only when you call them, never by a zone
+	guild: { name: 'Your guild', kind: 'guild', zones: [], colors: ['#01a982', '#e8e0cc'], emblem: 'your guild\'s banner', gun: 'mossback-scout-rifle', hp: 100, armour: 10, acc: 0.45, aggression: 0.6 },
 });
+export const GUILD = 'guild';
 export const PLAYER = 'player';
 // Attacks on you are events, not waves: a side that has it in for you (a bad name with it, a
 // bounty on you) comes for you at most once in 15 minutes of play on its own ground and once
@@ -80,8 +85,10 @@ export function createRelations(saved = null) {
 	for (const [f, v] of Object.entries(PLAYER_BASE)) base.set(key(PLAYER, f), v);
 	const now = new Map(base);
 	if (saved && typeof saved === 'object') for (const [k, v] of Object.entries(saved)) if (Number.isFinite(v) && /^[a-z]+\|[a-z]+$/.test(k)) now.set(k, clamp(v));
-	const get = (a, b) => (a === b ? 100 : now.get(key(a, b)) ?? base.get(key(a, b)) ?? 0);
-	const set = (a, b, v) => { if (a !== b) now.set(key(a, b), clamp(v)); };
+	// (your guild's people are you, to everyone: its feelings are yours)
+	const me = (f) => (f === GUILD ? PLAYER : f);
+	const get = (a, b) => { a = me(a); b = me(b); return a === b ? 100 : now.get(key(a, b)) ?? base.get(key(a, b)) ?? 0; };
+	const set = (a, b, v) => { a = me(a); b = me(b); if (a !== b) now.set(key(a, b), clamp(v)); };
 	return {
 		get, set,
 		hostile: (a, b) => a !== b && get(a, b) <= HOSTILE,
@@ -92,7 +99,7 @@ export function createRelations(saved = null) {
 			if (a === b) return;
 			set(b, a, get(b, a) - 25 * k);
 			for (const f of Object.keys(FACTIONS)) {
-				if (f === a || f === b) continue;
+				if (f === a || f === b || f === GUILD) continue;
 				if (get(f, b) >= ALLIED) set(f, a, get(f, a) - 10 * k);
 				else if (get(f, b) <= HOSTILE) set(f, a, get(f, a) + 5 * k);
 			}
@@ -105,7 +112,7 @@ export function createRelations(saved = null) {
 			for (const [kk, v] of now) { const b0 = base.get(kk) ?? 0; if (v !== b0) now.set(kk, v + (b0 - v) * k); }
 		},
 		save() { const o = {}; for (const [k, v] of now) if (Math.abs(v - (base.get(k) ?? 0)) > 0.5) o[k] = Math.round(v * 10) / 10; return o; },
-		player: () => Object.fromEntries(Object.keys(FACTIONS).map((f) => [f, Math.round(get(PLAYER, f))])),
+		player: () => Object.fromEntries(Object.keys(FACTIONS).filter((f) => f !== GUILD).map((f) => [f, Math.round(get(PLAYER, f))])),
 	};
 }
 

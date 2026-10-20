@@ -7,6 +7,7 @@
 //   GET  /rooms/:code/ws?id=&name=&seed=   (WebSocket) join the room
 //   POST /account/:op          a player's username, password and saved progress (account.js)
 //   GET  /chat/ws?id=&name=&r=&rn=&k=   (WebSocket) world, region and group chat, and groups (chat.js)
+//   POST /guilds/:op           guilds and their alliances, for players with an account (guild.js)
 
 import { Room } from './room.js';
 import { Soul, soulId, SOUL_TOKEN } from './soul.js';
@@ -16,9 +17,13 @@ import { REPUTATION_FEATURE } from '../../../island/src/net/reputation.js';
 import { Account } from './account.js';
 import { ChatHub, CHAT_FEATURE } from './chat.js';
 import { usernameOk, cleanUsername, SAVE_MAX, ACCOUNT_FEATURE } from '../../../island/src/persistence/cloud-save.js';
+import { Guilds } from './guild.js';
+import { GUILD_FEATURE } from '../../../island/src/guild/guild-rules.js';
 import { LivingRegion, LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE, LIVING_MAX_BYTES, livingIdentity, livingScope } from './living-region.js';
 
-export { Room, Soul, LivingRegion, Account, ChatHub };
+export { Room, Soul, LivingRegion, Account, ChatHub, Guilds };
+// guild requests per address an hour, and guilds founded
+const GUILD_OPS_PER_HOUR = 600, FOUNDS_PER_HOUR = 20;
 // accounts made, and logins tried, per address an hour
 const SIGNUPS_PER_HOUR = 10, LOGINS_PER_HOUR = 60;
 
@@ -57,7 +62,7 @@ export async function handle(request, env) {
 	if (origin && !ok) return reply({ error: 'origin not allowed' }, 403, { vary: 'Origin' });
 	if (request.method === 'OPTIONS') return new Response(null, { status: ok ? 204 : 403, headers: H });
 
-	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : []), ...(env.ACCOUNTS ? [ACCOUNT_FEATURE] : []), ...(env.CHAT ? [CHAT_FEATURE] : [])] }, 200, H);
+	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : []), ...(env.ACCOUNTS ? [ACCOUNT_FEATURE] : []), ...(env.CHAT ? [CHAT_FEATURE] : []), ...(env.ACCOUNTS && env.GUILDS ? [GUILD_FEATURE] : [])] }, 200, H);
 
 	const living = url.pathname.match(/^\/living\/([^/]+)\/([^/]+)$/);
 	if (living && ['GET', 'POST'].includes(request.method)) {
@@ -109,6 +114,25 @@ export async function handle(request, env) {
 		if ((op === 'login' || op === 'reset') && tooMany('login:' + await who(request, env), LOGINS_PER_HOUR)) return reply({ error: 'Too many tries from here. Try again later.' }, 429, H);
 		const stub = env.ACCOUNTS.get(env.ACCOUNTS.idFromName('user:' + u));
 		const result = await stub.fetch(new Request('https://account/' + op, { method: 'POST', headers: { authorization: request.headers.get('authorization') || '' }, body: text }));
+		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
+	}
+
+	const gop = url.pathname.match(/^\/guilds\/(mine|found|edit|invite|uninvite|join|decline|leave|kick|rank|ally|unally|find|list)$/);
+	if (gop && request.method === 'POST') {
+		if (!ok) return reply({ error: 'origin required' }, 403, H);
+		if (!env.ACCOUNTS || !env.GUILDS) return reply({ error: 'Guilds are not on the server yet.' }, 503, H);
+		const text = await request.text();
+		if (text.length > 8192) return reply({ error: 'too big' }, 413, H);
+		let u;
+		try { u = cleanUsername(JSON.parse(text || '{}')?.u); } catch { return reply({ error: 'bad json' }, 400, H); }
+		if (!usernameOk(u)) return reply({ error: 'Please log in again.' }, 401, H);
+		const ip = await who(request, env);
+		if (tooMany('guild:' + ip, GUILD_OPS_PER_HOUR) || (gop[1] === 'found' && tooMany('found:' + ip, FOUNDS_PER_HOUR))) return reply({ error: 'Too many tries from here. Try again later.' }, 429, H);
+		// (who is signed in: their own account says, by its session)
+		const me = await env.ACCOUNTS.get(env.ACCOUNTS.idFromName('user:' + u)).fetch(new Request('https://account/whoami', { method: 'POST', headers: { authorization: request.headers.get('authorization') || '' }, body: JSON.stringify({ u }) }));
+		if (me.status !== 200) return reply({ error: 'Please log in again.' }, 401, H);
+		const stub = env.GUILDS.get(env.GUILDS.idFromName('registry')), name = String((await me.json().catch(() => ({})))?.name || '').replace(/[\r\n]/g, ' ').slice(0, 24);
+		const result = await stub.fetch(new Request('https://guild/' + gop[1], { method: 'POST', headers: { 'x-guild-user': u, 'x-guild-name': encodeURIComponent(name) }, body: text }));
 		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
 	}
 

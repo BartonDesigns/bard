@@ -57,6 +57,20 @@ export function guideTalkTo(gd, p) {
 	const recap = resident && gatheringRecap(resident);
 	if (recap) perform(recap, true);
 	if(!awareness.afraid) offer(p.talk?.open?.());
+	// (asked into your guild, guild/index.js talkOffer: they answer, and if yes they go with you)
+	const join = !awareness.afraid && api.guild?.talkOffer?.(p);
+	if (join) {
+		const b = el('button', btnCss, join.label);
+		b.onclick = () => {
+			if (gd.partner?.p !== p) return;
+			b.remove();
+			say(join.line, 'me');
+			const r = join.run();
+			say(r.text, 'note');
+			if (r.ok) setTimeout(() => { if (gd.partner?.p === p) endTalk(); }, 1600);
+		};
+		log.append(b);
+	}
 }
 
 export async function guideAskPerson(gd, text) {
