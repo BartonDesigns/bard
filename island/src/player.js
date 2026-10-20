@@ -28,6 +28,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	const keys = new Set();
 	const touch = { move: null, look: new Map() };
 	const joy = { x: 0, y: 0 };
+	// a game controller (ui/gamepad.js): the left stick walks (x, y as the touch joystick's),
+	// clicked in it runs; the right stick turns the view through padLook
+	s.pad = { x: 0, y: 0, run: false };
 
 	// ---------- input ----------
 	const owns = (e) => e.target === dom.canvas;
@@ -38,6 +41,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
  function releaseMouse() { if (document.pointerLockElement === dom.canvas) document.exitPointerLock(); }
  // (letting go of the mouse for the camera keeps the keys you hold: you walk on as you look)
  function lockChanged() { if (document.pointerLockElement !== dom.canvas) { if (s.lookMode === 'camera') mouse = null; else clearInput(); } }
+ // (a stick's turn this frame, in radians at the default sensitivity: scaled as the mouse is)
+ s.padLook = (yaw, pitch) => { if (!canLook() || (!yaw && !pitch)) return; lastLook = performance.now(); const k = (shared.aimSensitivity ?? DEFAULT_AIM_SENSITIVITY) / DEFAULT_AIM_SENSITIVITY / Math.max(1, camera.zoom || 1); s.yaw -= yaw * k; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch - pitch * k * (lookPrefs.invertY ? -1 : 1))); };
  function buttonLook(e) { look(e.detail.x, e.detail.y * (lookPrefs.invertY ? -1 : 1), .0042); }
  function focusedUI(e) { if (e.target.closest?.('input,textarea,select,button,[contenteditable]')) releaseMouse(); }
  document.addEventListener('pointerlockchange', lockChanged);
@@ -139,7 +144,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	addEventListener('keydown', keyDown); addEventListener('keyup', keyUp);
 	dom.canvas.addEventListener('pointerdown', pDown);
 	addEventListener('pointermove', pMove); addEventListener('pointerup', pUp); addEventListener('pointercancel', pUp);
-	function clearInput() { releaseMouse(); keys.clear(); s.dodgeC = false; s.crouchQueued = false; mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.run = s.flyUp = s.flyDown = s.climbAssist = s.descendAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
+	function clearInput() { releaseMouse(); keys.clear(); s.dodgeC = false; s.crouchQueued = false; mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.pad.x = s.pad.y = 0; s.pad.run = false; s.run = s.flyUp = s.flyDown = s.climbAssist = s.descendAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
 	addEventListener('blur', clearInput);
 	// the gyro, when switched on (ui/touch-look.js), turns the view on top of the drag
 	onGyro((yaw, pitch) => {
@@ -228,7 +233,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
 	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
 	function input() {
-		let mx = joy.x, mz = joy.y;
+		let mx = joy.x + s.pad.x, mz = joy.y + s.pad.y;
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
 		if (keys.has('s') || keys.has('arrowdown')) mz += 1;
 		if (keys.has('a') || keys.has('arrowleft')) mx -= 1;
@@ -242,12 +247,12 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (park.step(dt)) { settleFeel(); F.ride = s.pos.y; return; }          // a climb carries you (parkour.js)
 		s.aimAssist?.(dt);          // locked on to someone: the view held on them (combat/target-focus.js)
 		// (s.auto: { x, z, run } walks without a hand on the keys, for demos and tests)
-		let mx = joy.x + (s.auto?.x || 0), mz = joy.y + (s.auto?.z || 0);
+		let mx = joy.x + s.pad.x + (s.auto?.x || 0), mz = joy.y + s.pad.y + (s.auto?.z || 0);
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
 		if (keys.has('s') || keys.has('arrowdown')) mz += 1;
 		if (keys.has('a') || keys.has('arrowleft')) mx -= 1;
 		if (keys.has('d') || keys.has('arrowright')) mx += 1;
-		const run = s.run || keys.has('shift') || !!s.auto?.run;
+		const run = s.run || s.pad.run || keys.has('shift') || !!s.auto?.run;
 		// walking on the stick with no hand on the view for a moment: the view drifts back to
 		// level (touch only; never while aiming down the sights, flying or swimming)
 		if (touch.move && !touch.look.size && Math.hypot(joy.x, joy.y) > 0.3 && performance.now() - lastLook > LEVEL.after && !s.flying && !s.swimming && (camera.zoom || 1) <= 1.01) s.pitch = levelPitch(s.pitch, dt);

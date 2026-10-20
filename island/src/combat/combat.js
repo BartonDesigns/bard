@@ -342,17 +342,17 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 
 	// ---------- input ----------
-	let mouseDown = false, touchFire = false;
+	let mouseDown = false, touchFire = false, padFire = false;
 	// Capture edges in the event handler: a down/up between two frames is still a shot.
 	function fireInput(source, down) {
 		if (!active() || me.ko || recovery.busy) { cancelInput(); return false; }
 		const w = weaponNow();
-		if (source === 'mouse') mouseDown = down; else touchFire = down;
-		if (w) { trigger(w, mouseDown || touchFire); syncBow(w); }
+		if (source === 'mouse') mouseDown = down; else if (source === 'pad') padFire = down; else touchFire = down;
+		if (w) { trigger(w, mouseDown || touchFire || padFire); syncBow(w); }
 		return true;
 	}
 	function cancelInput() {
-		mouseDown = touchFire = false;
+		mouseDown = touchFire = padFire = false;
 		if (Wp) { cancelTrigger(Wp); cancelReload(Wp); }
 		view.cancel();
 		if (Wp) syncBow(Wp);
@@ -960,7 +960,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// your weapon
 		const wpn = active() && !me.ko && !recovery.busy ? weaponNow() : null;
 		if (wpn) {
-			trigger(wpn, mouseDown || touchFire);
+			trigger(wpn, mouseDown || touchFire || padFire);
 			syncBow(wpn);
 			const ads = view.state()?.aiming ? 1 : 0;
 			const before = wpn.mag;
@@ -972,7 +972,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 				p.pitch = Math.min(1.35, p.pitch + r.kick[0] / Math.max(1, r.fired)); p.yaw += r.kick[1] / Math.max(1, r.fired);
 				focus.kick(r.kick[0] / Math.max(1, r.fired), r.kick[1] / Math.max(1, r.fired));
 			}
-			if (r.empty && before === 0 && (mouseDown || touchFire)) { if (reserve(wpn) > 0) reload(); mouseDown = touchFire = false; }
+			if (r.empty && before === 0 && (mouseDown || touchFire || padFire)) { if (reserve(wpn) > 0) reload(); mouseDown = touchFire = padFire = false; }
 			if (isBow(wpn) && r.fired && reserve(wpn) > 0) reload();
 			syncBow(wpn);
 			if (r.fired || r.loaded) saveAmmo();
@@ -1020,6 +1020,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- for the console and the tests ----------
 	const api = {
+		// a game controller's trigger (ui/gamepad.js), held as the mouse button is
+		trigger: (down) => fireInput('pad', !!down),
 		update, reset, heard, group, layer, fx, hud, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
 		projectile, blast, firstHit, landShot, ground, eye, sound: (k, at) => sound(k, at), deal: (T, blow, mine) => deal(T, blow, mine), hurtPlayer, wantedLevel: () => wanted.stars, isEarth, zone: () => (W() ? zone() : null),
 		// harm done by your vehicle's guns (military/): yours, weighed like a shot
