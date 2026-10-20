@@ -361,7 +361,19 @@ function fill(pattern, L, u) {
 		.replace(/([A-Za-z])\s?(ly|io|ware|grid|stack|loop|mind|sync|base|forge|pixel|wave|scope|bit|nest|path|spark|works)\b/, (m, a, b2) => (pattern.includes('{X}') ? a + b2 : m));
 }
 // a name for a business of type id at (x, z) in a place, the salt trying another
+// (a name is the same every time it is asked for, and the brand check behind it is the costly
+// part of planning a town: each kept once worked out)
+const NAMED = new Map();
 export function nameFor(id, x, z, loc = 'us-ca', salt = 0) {
+	const k = id + '|' + Math.round(x * 2) + '|' + Math.round(z * 2) + '|' + loc + '|' + salt;
+	let name = NAMED.get(k);
+	if (name === undefined) {
+		if (NAMED.size > 60000) NAMED.clear();
+		NAMED.set(k, name = nameOf(id, x, z, loc, salt));
+	}
+	return name;
+}
+function nameOf(id, x, z, loc, salt) {
 	const T = TYPES[id], L = LOCALES[loc] || LOCALES.us;
 	// (the English ways of naming read oddly elsewhere: 'The Coin Acre Farm', 'Élise's Pets')
 	const english = !L.n || L.F === EN.F, own = L.n?.[id];
@@ -419,9 +431,18 @@ export function establish(b, loc = 'us-ca') {
 
 // every building of a town -> its establishments, names unique within it (a clash takes
 // another roll; buildings are taken in a fixed order, so a clash always settles the same way)
-export function planTown(list, { locale = 'us-ca' } = {}) {
+export function planTown(list, opts) {
+	const it = planTownSteps(list, opts);
+	let r = it.next();
+	while (!r.done) r = it.next();
+	return r.value;
+}
+// the same a slice at a time: yields between slices, returns the plan
+export function* planTownSteps(list, { locale = 'us-ca' } = {}) {
 	const out = [], used = new Set(), order = list.map((b, i) => [hashAt(b.x, b.z, 5), i]).sort((p, q) => p[0] - q[0]);
+	let n = 0;
 	for (const [, i] of order) {
+		if ((++n & 255) === 0) yield;
 		const b = list[i], E = establish(b, b.locale || locale);
 		if (!E) continue;
 		for (let s = 1; used.has(E.name.toLowerCase()) && s < 24; s++) E.name = nameFor(E.type, b.x, b.z, E.locale, s);

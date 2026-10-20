@@ -615,7 +615,7 @@ export function createIslandWorld() {
 	// what the graphics hold, for the loading screen's black box (loading-screen.js), and the
 	// on-screen frame readout (?perf, ui/perfmeter.js)
 	window.L99GpuMB = () => Math.round(gpuMeter.bytes() / 1048576);
-	const perf = HOOKS.perf = createPerfMeter({ mount: dom.mount, renderer, governor, scene, storage, search: location.search });
+	const perf = HOOKS.perf = createPerfMeter({ mount: dom.mount, renderer, governor, scene, camera, storage, search: location.search });
 	applyQuality();
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
