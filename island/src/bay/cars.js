@@ -418,7 +418,7 @@ export { skyEnv };
 // current); until then it is a fair day.
 export const carSky = {
 	uSkyZen: { value: new THREE.Color(0.22, 0.4, 0.75) }, uSkyHor: { value: new THREE.Color(0.68, 0.76, 0.85) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
-	uCloudR: { value: new THREE.Vector4(0, 0, 0.62, 0) }, uCloudR2: { value: new THREE.Vector4() }, uCloudR3: { value: new THREE.Vector4(0, 0, 1, 0) }, uAirR: { value: new THREE.Vector4() },
+	uCloudR: { value: new THREE.Vector4(0, 0, 0.62, 0) }, uCloudR2: { value: new THREE.Vector4() }, uCloudR3: { value: new THREE.Vector4(0, 0, 1, 0) }, uCloudR4: { value: new THREE.Vector4() }, uAirR: { value: new THREE.Vector4() },
 };
 export function bindCarSky(shared) {
 	const U = { uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uSunColor: shared.uSunColor, ...cloudReflectU(shared) };

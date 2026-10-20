@@ -85,11 +85,14 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	// a rifle: RT fires, LT puts the sights up
 	await page.evaluate(() => { const C = Crysis.combat; C.ambient(false); C.arm(); C.heal(); });
 	await wait(2500); await frames(6);
-	const shots0 = await page.evaluate(() => Crysis.combat.info().weapon?.shots ?? 0);
+	const mag = () => page.evaluate(() => { const w = Crysis.combat.info().weapon; return w ? { id: w.id, mag: w.mag, shots: w.shots } : null; });
+	const w0 = await mag();
 	await page.evaluate(() => __set(7, true)); await frames(8); await page.evaluate(() => __set(7, false)); await frames(3);
-	R.fired = (await page.evaluate(() => Crysis.combat.info().weapon?.shots ?? 0)) - shots0;
+	const w1 = await mag();
+	R.weapon = [w0, w1];
+	R.fired = w0 && w1 ? Math.max(w1.shots - w0.shots, w0.mag - w1.mag) : 0;
 	await page.evaluate(() => __set(6, true)); await frames(14);
-	R.aiming = await page.evaluate(() => Crysis.gear()?.viewmodel?.aimTap ?? Crysis.gear()?.viewmodel?.aiming ?? null);
+	R.aiming = await page.evaluate(() => Crysis.gear()?.viewmodel?.ads ?? null);
 	await shot('aiming');
 	await page.evaluate(() => __set(6, false)); await frames(3);
 	R.problems = problems;
@@ -103,6 +106,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 		assert.equal(R.skills, true, 'the tile opened skills');
 		assert.equal(R.skillsClosed, true, 'B closed skills');
 		assert.ok(R.fired > 0, 'RT fired');
+		assert.ok(R.aiming > 0.5, 'LT put the sights up');
 		assert.deepEqual(problems, []);
 		console.log('PASS', profile);
 	} finally { await browser.close(); server.close(); }

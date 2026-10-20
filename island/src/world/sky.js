@@ -50,6 +50,32 @@ float cumulus(vec3 d, float cloud, float time, out float base, out float sh){
 	// a storm's deck stays solid down to the horizon, where fair clouds thin out
 	return smoothstep(cover, cover + 0.12, base) * mix(smoothstep(0.01, 0.2, d.y), smoothstep(0.0, 0.03, d.y), clamp(sh * 1.6, 0.0, 1.0));
 }
+// the high veil (altostratus, cirrostratus): a thin sheet some 7 km up that comes in from
+// upwind. It lies along the horizon first, a band all round and higher on the side it comes
+// from, then spreads over the whole sky (uHighCl.y how thick, .z how far over; uVeil.xy its
+// drift, .zw the wind). Seen low it is seen edge-on, through kilometres of it, so a sun
+// rising behind it is lost in it. Returns its opacity along d; tex: how thick it is just there.
+uniform vec4 uHighCl, uVeil;
+float veilAt(vec3 d, out float tex, out vec2 q){
+	tex = 0.0; q = vec2(0.0);
+	if (uHighCl.y < 0.01) return 0.0;
+	float y = max(d.y, 0.0);
+	vec2 p = d.xz / (y + 0.02), wd = normalize(uVeil.zw + vec2(1e-4));
+	float r = length(p), R = uHighCl.z;
+	q = p + uVeil.xy;
+	float big = fbm3(q * 0.6 + 21.0);
+	// its ragged edge: the front coming in from upwind, and the band round the horizon
+	float edge = mix(14.0, -8.0, R) + (big - 0.5) * 7.0;
+	float front = smoothstep(edge - 2.5, edge + 2.5, -dot(p, wd));
+	float ring = smoothstep(0.0, 4.0, r - mix(16.0, -4.0, R) + (big - 0.5) * 7.0);
+	float cov = max(front, ring);
+	if (cov < 0.001) return 0.0;
+	// thicker and thinner bands through it, streaked along the wind; far off it settles to its mean
+	vec2 s = vec2(dot(q, wd) * 0.5, dot(q, vec2(-wd.y, wd.x)) * 2.2);
+	float lod = 1.0 / (1.0 + r * 0.12);
+	tex = mix(0.6, big * 1.1 + vn(s * 1.5 + 5.0) * 0.45 + vn(s * vec2(3.0, 6.0) + 9.0) * 0.3 - 0.37, lod);
+	return 1.0 - exp(-uHighCl.y * cov * (0.1 + tex * tex * 1.3) * 0.55 / (y + 0.045));
+}
 `;
 
 // The same cumulus as a layer of real depth (on desktops at the high tier): a slab from
@@ -100,13 +126,42 @@ vec3 volClouds(vec3 d, float cloud, float time, float sh, vec3 sunDir){
 }
 `;
 
+// mare's tails (cirrus uncinus), for the dome: u is the sky in the wind's frame (x down the
+// wind, y across it). Lanes across the wind, each cut into cells along it; a cell may hold
+// one hook: a tuft of ice at its downwind end and its fall streak trailing back upwind,
+// thinning and bending away to one side as the slower air below holds it back. The lanes
+// wander (a slow warp that drifts with time), so the rows never read as a grid, and the
+// streaks are fibrous along their length.
+const TAILS_GLSL = /* glsl */`
+float tails(vec2 u, float time){
+	u += (vec2(vn(u * 0.21 + 3.0 + time * 0.002), vn(u * 0.21 - 8.0 - time * 0.0017)) - 0.5) * 1.8;
+	float lane = floor(u.y);
+	float ax = u.x / 3.4 + h21(vec2(lane, 17.0)) * 7.0;
+	vec2 id = vec2(floor(ax), lane);
+	float lt = fract(ax);                         // 0 the streak's far end .. 1 the hook's head
+	if (h21(id + 0.37) < 0.42) return 0.0;
+	float bend = (h21(id + 9.1) - 0.5) * 0.5, head = 0.8 + 0.08 * h21(id + 4.0), big = 0.7 + 0.5 * h21(id + 2.3);
+	float back = max(head - lt, 0.0) / head;      // 0 at the head .. 1 at the far end
+	float y0 = fract(u.y) - 0.5 - bend * back * back - (h21(id + 6.6) - 0.5) * 0.16;
+	// the head: a small ragged tuft; the streak: fanning out and fading as it trails back from it
+	vec2 hq = vec2((lt - head) * 3.4 / 0.32, y0 / 0.15) / big;
+	float rag = fbm3(u * 6.0 + id * 3.7);
+	float tuft = (1.0 - smoothstep(0.1, 1.0, length(hq) + (rag - 0.5) * 1.4)) * (0.55 + 0.45 * vn(u * 15.0));
+	float w = mix(0.05, 0.3, sqrt(back)) * big;
+	float streak = exp(-y0 * y0 / (w * w) * 2.5) * (1.0 - smoothstep(0.45, 1.0, back)) * (1.0 - smoothstep(-0.02, 0.04, lt - head));
+	// fine fibres along it, following its bend, and its threads coming and going
+	float fib = (0.35 + 0.65 * smoothstep(0.2, 0.9, vn(vec2(u.x * 0.35, y0 * 46.0 + lane * 13.0)))) * (0.55 + 0.45 * vn(vec2(u.x * 1.3, y0 * 9.0)));
+	return max(tuft * 0.8, streak * fib * (0.9 - back * 0.5));
+}
+`;
+
 // the clouds as water shows them: the cumulus above (same field, same drift, same cover),
 // cheaper (three octaves, no showers), over the sky's own gradient and in the world's air.
 // Its own copy of the noise, so it drops into any shader. uCloudR: the cloud plane's
 // offset, cover, on (0: the plain sky); uCloudR2: night, time, gloom, cirrus; uCloudR3: the
 // cirrus' offset, the wind
 export const CLOUD_REFLECT_GLSL = /* glsl */`
-uniform vec4 uCloudR, uCloudR2, uCloudR3, uAirR;
+uniform vec4 uCloudR, uCloudR2, uCloudR3, uCloudR4, uAirR;
 float crH(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float crN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(crH(i), crH(i + vec2(1, 0)), f.x), mix(crH(i + vec2(0, 1)), crH(i + vec2(1, 1)), f.x), f.y); }
@@ -129,6 +184,16 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 			float ci = smoothstep(0.55, 0.85, crF(q * 3.0) * 0.7 + crN(q * vec2(2.0, 11.0) + 3.0) * 0.3) * uCloudR2.w * smoothstep(0.0, 0.18, r.y) * (1.0 - uCloudR2.z * 0.7);
 			sky = mix(sky, mix(vec3(1.02), sunC * 1.35, 0.4) * (1.0 - uCloudR2.x * 0.93) + hor * 0.15, ci * 0.55 * (1.0 - dens));
 		}
+		// the high veil (uCloudR4: its drift, how thick, how far over), smooth, as the dome lays it out
+		if (uCloudR4.z > 0.01) {
+			vec2 p = r.xz / (r.y + 0.02), wd = normalize(uCloudR3.zw + vec2(1e-4));
+			float big = crF((p + uCloudR4.xy) * 0.6 + 21.0) * 0.9;
+			float cov = max(smoothstep(-2.5, 2.5, -dot(p, wd) - mix(14.0, -8.0, uCloudR4.w) - (big - 0.5) * 7.0), smoothstep(0.0, 4.0, length(p) - mix(16.0, -4.0, uCloudR4.w) + (big - 0.5) * 7.0));
+			float vt = mix(0.6, big * 1.2, 1.0 / (1.0 + length(p) * 0.12));
+			float va = 1.0 - exp(-uCloudR4.z * cov * (0.1 + vt * vt * 1.3) * 0.55 / (r.y + 0.045));
+			vec3 vcol = mix(vec3(0.95, 0.96, 1.0), vec3(0.6, 0.64, 0.72), smoothstep(0.4, 1.1, big) * uCloudR4.z * 0.75) * mix(vec3(1.0), sunC, 0.4) * (1.0 - uCloudR2.x * 0.96) * (1.0 - uCloudR2.z * 0.4);
+			sky = mix(sky, vcol, va * 0.97 * (1.0 - dens));
+		}
 		sky = mix(sky, cloud, dens * 0.9);
 	}
 	return mix(sky, dot(sky, vec3(0.299, 0.587, 0.114)) * uAirR.rgb, uAirR.a);
@@ -138,8 +203,9 @@ export function cloudReflectU(shared) {
 	shared.uCloudR ||= { value: new THREE.Vector4(0, 0, 0.62, 1) };
 	shared.uCloudR2 ||= { value: new THREE.Vector4() };
 	shared.uCloudR3 ||= { value: new THREE.Vector4(0, 0, 1, 0) };
+	shared.uCloudR4 ||= { value: new THREE.Vector4() };
 	shared.uAirR ||= { value: airOf(shared.planet) };
-	return { uCloudR: shared.uCloudR, uCloudR2: shared.uCloudR2, uCloudR3: shared.uCloudR3, uAirR: shared.uAirR };
+	return { uCloudR: shared.uCloudR, uCloudR2: shared.uCloudR2, uCloudR3: shared.uCloudR3, uCloudR4: shared.uCloudR4, uAirR: shared.uAirR };
 }
 
 // three.js's AgX tone mapping (tonemapping_pars_fragment) on the CPU, for one colour:
@@ -184,6 +250,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		uW2E: { value: new THREE.Matrix3() }, uE2G: { value: new THREE.Matrix3().set(...EQ2GAL) }, uGlow: shared.uSkyGlow || (shared.uSkyGlow = { value: 0 }),
 		// the weather's (weather.js hands its own in with attach())
 		uCloudOff: { value: new THREE.Vector2() }, uCirrusOff: { value: new THREE.Vector2() }, uCirrus: { value: 0.25 }, uWindDir: shared.uWindDir,
+		// the high cloud: mare's tails, the veil (thick, how far over) and the veil's drift and wind
+		uHighCl: { value: new THREE.Vector4() }, uVeil: { value: new THREE.Vector4(0, 0, 1, 0) },
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uFogCol: { value: new THREE.Color() },
@@ -205,6 +273,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
 		uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
+		// (a second, finer row of mare's tails off phones)
+		defines: isPhone ? {} : { SKY_RICH: 1 },
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
@@ -213,6 +283,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
 			${VOL_GLSL}
+			${TAILS_GLSL}
 			// the rainbow table (rainbow.js): angle from the antisolar point, 25 to 60 degrees
 			vec3 bowAt(float ang){
 				vec3 b = texture2D(uBow, vec2(clamp((ang - 25.0) / 35.0, 0.0, 1.0), uBowDrop)).rgb;
@@ -365,6 +436,56 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 					float ci = smoothstep(0.55, 0.85, f) * uCirrus * smoothstep(0.0, 0.18, d.y) * (1.0 - uGloom * 0.7);
 					vec3 cirCol = mix(vec3(1.02), uSunColor * 1.35, 0.35 + 0.4 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93);
 					col = mix(col, cirCol + uSkyHor * 0.15, ci * 0.55);
+				}
+				// mare's tails: hooked tufts of ice up near the cirrus, each trailing a fall streak that
+				// the wind combs out and bends behind it; they come in rows, here and there over the sky
+				if (d.y > 0.0 && uHighCl.x > 0.01){
+					vec2 cc = d.xz / (d.y + 0.03) * 0.55 + uCirrusOff * 1.15;
+					vec2 wd = normalize(uWindDir + vec2(1e-4));
+					vec2 u = vec2(dot(cc, wd), dot(cc, vec2(-wd.y, wd.x))) * 4.2;
+					float rows = smoothstep(0.4, 0.66, fbm3(u * vec2(0.05, 0.13) + 31.0));
+					float ta = rows > 0.0 ? tails(u, uTime) : 0.0;
+					#ifdef SKY_RICH
+					if (rows > 0.0) ta = max(ta, tails(u * 1.7 + vec2(13.0, 5.0), uTime) * 0.7);
+					#endif
+					ta *= rows * uHighCl.x * smoothstep(0.0, 0.2, d.y) * (1.0 - uGloom * 0.7);
+					vec3 tCol = mix(vec3(1.04), uSunColor * 1.4, 0.3 + 0.45 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93);
+					col = mix(col, tCol + uSkyHor * 0.12, clamp(ta, 0.0, 1.0) * 0.62);
+				}
+				// the high veil (CLOUD_GLSL veilAt): milk-white where it is thin and lit, grey where it
+				// is thick; the sun through it a pale disc in a bright glow, ringed by a faint halo
+				// where the sheet is ice. A low sun lights it gold from beneath, and before sunrise and
+				// after sunset it glows rose; by night it hides the stars and the moon wears a corona
+				{
+					float vtex; vec2 vq;
+					float va = veilAt(d, vtex, vq);
+					if (va > 0.002){
+						float thick = smoothstep(0.4, 1.1, vtex) * uHighCl.y;
+						// here and there, a patch of small heaps under it (altocumulus), dark against the glow
+						float dap = smoothstep(0.42, 0.75, vn(vq * 24.0) * 0.75 + vn(vq * 61.0) * 0.25) * smoothstep(0.45, 0.66, fbm3(vq * 0.9 - 9.0)) / (1.0 + length(vq - uVeil.xy) * 0.7) * smoothstep(0.0, 0.25, va);
+						// (a low sun leaves its underside in shade: grey-blue, darker where it is thick)
+						float hiSun = smoothstep(0.02, 0.45, uSunDir.y);
+						vec3 vcol = mix(vec3(0.97, 0.97, 1.0), vec3(0.42, 0.46, 0.56), clamp(thick * (1.0 - hiSun * 0.35) + dap * 0.65, 0.0, 1.0));
+						vcol *= mix(vec3(1.0), uSunColor, 0.4) * (1.0 - uGloom * 0.4) * (0.72 + 0.28 * hiSun);
+						vcol += uSunColor * (pow(sd, 24.0) * 0.9 + pow(sd, 5.0) * 0.3) * (1.0 - thick * 0.6) * (1.0 - uNight);
+						vcol += gold * toward * lowK * 0.8 * (1.0 - smoothstep(0.0, 0.5, d.y));
+						// (seen edge-on far off it melts into the glow along the horizon)
+						vcol = mix(vcol, uSkyHor * 1.05 + gold * toward * lowK * 0.6, (1.0 - smoothstep(0.0, 0.07, d.y)) * 0.6);
+						float rose = smoothstep(-0.14, -0.02, uSunDir.y) * (1.0 - smoothstep(-0.02, 0.04, uSunDir.y));
+						vcol += vec3(1.0, 0.42, 0.34) * rose * (0.25 + 0.75 * toward) * (1.0 - smoothstep(0.0, 0.7, d.y)) * 0.55;
+						if (sd > 0.85){
+							float ang = acos(min(sd, 1.0));
+							vcol += vec3(1.0, 0.95, 0.88) * exp(-pow((ang - 0.384) / 0.011, 2.0)) * 0.16 * (1.0 - thick) * smoothstep(0.03, 0.2, uSunDir.y);
+						}
+						vcol *= 1.0 - uNight * 0.96;
+						vcol += vec3(1.0, 0.62, 0.38) * uGlow * uNight * 0.035;
+						vcol += vec3(0.8, 0.86, 1.0) * pow(max(dot(d, uMoon.xyz), 0.0), 80.0) * 0.3 * uMoon.w * uNight * (1.0 - thick);
+						float vk = clamp(va + dap * 0.7 * uHighCl.y, 0.0, 1.0);
+						// (the sun's own disc is far brighter than the sky round it: the sheet that only
+						// dims the sky all but puts it out, leaving the pale disc seen through cloud)
+						if (sd > 0.9990) { vk = 1.0 - pow(1.0 - vk, 3.0); vcol += uSunColor * smoothstep(0.9993, 0.9997, sd) * 1.6 * (1.0 - thick * 0.7) * (1.0 - uNight); }
+						col = mix(col, vcol, vk * 0.97);
+					}
 				}
 				// cumulus on a plane above you, lit from the sun's side; dark and heaped over showers
 				float base, sh;
@@ -556,7 +677,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		g.setAttribute('aMag', new THREE.BufferAttribute(mag, 1));
 		g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
 		const m = new THREE.ShaderMaterial({
-			uniforms: { uNight: uniforms.uNight, uTime: shared.uTime, uPx: { value: renderer.getPixelRatio() }, uGlow: uniforms.uGlow, uCloud: uniforms.uCloud, uCloudOff: uniforms.uCloudOff, uShowers: uniforms.uShowers },
+			uniforms: { uNight: uniforms.uNight, uTime: shared.uTime, uPx: { value: renderer.getPixelRatio() }, uGlow: uniforms.uGlow, uCloud: uniforms.uCloud, uCloudOff: uniforms.uCloudOff, uShowers: uniforms.uShowers, uHighCl: uniforms.uHighCl, uVeil: uniforms.uVeil },
 			vertexShader: `attribute float aMag; attribute vec3 aCol; uniform float uNight, uTime, uPx, uGlow, uCloud; varying vec3 vCol; varying float vA;
 				${NOISE_GLSL}
 				${CLOUD_GLSL}
@@ -573,6 +694,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 					// hidden behind the clouds (the dome's own cloud field)
 					float cb, csh;
 					float cover = clamp(cumulus(w, uCloud, uTime, cb, csh) * 1.3, 0.0, 1.0);
+					// (and behind the high veil)
+					float vt; vec2 vq;
+					cover = max(cover, veilAt(w, vt, vq));
 					vA = clamp(sqrt(flux) * 0.55 + 0.25, 0.0, 1.0) * smoothstep(limit, limit - 1.2, aMag) * ext * uNight * tw * (1.0 - cover);
 					gl_PointSize = clamp(1.3 + sqrt(flux) * 2.2, 1.2, 7.0) * uPx;
 					vCol = aCol;
@@ -728,8 +852,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	function attach(w) {
 		weather = w;
 		// (the dome and the stars read the weather's own uniforms, by name)
-		for (const k of ['uCloudOff', 'uCirrusOff', 'uCirrus', 'uShowers', 'uRainHere', 'uGloom', 'uFlash', 'uBolt', 'uBow', 'uBowK', 'uBowDrop', 'uMoonBowK']) uniforms[k] = w.uniforms[k];
-		stars.material.uniforms.uCloudOff = w.uniforms.uCloudOff; stars.material.uniforms.uShowers = w.uniforms.uShowers;
+		for (const k of ['uCloudOff', 'uCirrusOff', 'uCirrus', 'uHighCl', 'uVeil', 'uShowers', 'uRainHere', 'uGloom', 'uFlash', 'uBolt', 'uBow', 'uBowK', 'uBowDrop', 'uMoonBowK']) uniforms[k] = w.uniforms[k];
+		stars.material.uniforms.uCloudOff = w.uniforms.uCloudOff; stars.material.uniforms.uShowers = w.uniforms.uShowers; stars.material.uniforms.uHighCl = w.uniforms.uHighCl; stars.material.uniforms.uVeil = w.uniforms.uVeil;
 	}
 
 	// the Moon: where it is tonight and how much of it is lit (on another world, the old moon
@@ -843,6 +967,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		shared.uCloudR.value.set(uniforms.uCloudOff.value.x, uniforms.uCloudOff.value.y, uniforms.uCloud.value, shared.cloudReflect === false ? 0 : 1);
 		shared.uCloudR2.value.set(night, shared.uTime.value, uniforms.uGloom.value, uniforms.uCirrus.value);
 		shared.uCloudR3.value.set(uniforms.uCirrusOff.value.x, uniforms.uCirrusOff.value.y, uniforms.uWindDir?.value?.x ?? 1, uniforms.uWindDir?.value?.y ?? 0);
+		shared.uCloudR4.value.set(uniforms.uVeil.value.x, uniforms.uVeil.value.y, uniforms.uHighCl.value.y, uniforms.uHighCl.value.z);
 		dome.position.copy(focus);
 		sats.position.copy(focus);
 		sats.userData.step(dt, elev);
