@@ -34,8 +34,9 @@ const CSS = `
 .acct-save b{font-size:15px}
 `;
 
-// menu: the places menu; hud: the ☁ button on screen; cloud: createCloudSave's; hint(text, ms)
-export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {} }) {
+// menu: the places menu; hud: the ☁ button on screen; cloud: createCloudSave's; hint(text, ms);
+// localName(): the name this device goes by (offered as the account's player name)
+export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, localName = () => '' }) {
 	if (!document.getElementById('acct-css')) { const s = document.createElement('style'); s.id = 'acct-css'; s.textContent = CSS; document.head.appendChild(s); }
 	const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 	const root = el('div', 'acct');
@@ -155,7 +156,7 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {} })
 			card.append(head('Your account'));
 			const who = el('div', 'acct-save');
 			who.append(el('b', '', I.user), el('span', 'acct-note', I.conflict ? 'Your account holds progress this device has not loaded yet.' : `Progress saved ${ago(I.savedAt)}. It saves by itself every minute while you play.`));
-			card.append(who);
+			card.append(who, nameRow(I));
 			if (I.error && !I.conflict) card.append(el('div', 'acct-err', I.error));
 			if (I.conflict) {
 				const go = el('button', 'acct-go', 'Load my saved progress'), keepHere = el('button', 'acct-ghost', 'Keep this device’s progress');
@@ -179,7 +180,8 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {} })
 		if (view === 'signup') {
 			card.append(el('div', 'acct-note', 'Pick a username and password. Your skills, honor, gear, quests and home are saved to the cloud, so clearing the browser or changing phones loses nothing.'));
 			const u = field('Username', 'username', 'text', 'username', { maxLength: 20, placeholder: '3 to 20 letters or digits' }), p = field('Password', 'new-password', 'password', 'new-password', { minLength: 8, maxLength: 128, placeholder: 'At least 8 characters' });
-			card.append(form([u, p], 'Create account', async ([a, b]) => { const r = await cloud.signup(a, b); note = { recovery: r.recovery }; draw(); drawBtn(); hint('Account made: your progress is saved.', 3000); }));
+			const n = field('Player name (what everyone sees; the username stays private)', 'player-name', 'text', 'nickname', { maxLength: 24, minLength: 2, value: localName() || '', placeholder: '2 to 24 characters' });
+			card.append(form([u, p, n], 'Create account', async ([a, b, c]) => { const r = await cloud.signup(a, b, c); note = { recovery: r.recovery }; draw(); drawBtn(); hint('Account made: your progress is saved.', 3000); }));
 		} else if (view === 'login') {
 			const u = field('Username', 'username', 'text', 'username', { maxLength: 20 }), p = field('Password', 'current-password', 'password', 'current-password', { maxLength: 128 });
 			card.append(form([u, p], 'Log in', async ([a, b]) => { const r = await cloud.login(a, b); await afterLogin(r.saved); }));
@@ -188,6 +190,30 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {} })
 			const u = field('Username', 'username', 'text', 'username', { maxLength: 20 }), c = field('Recovery code', 'recovery-code', 'text', 'one-time-code', { maxLength: 24, placeholder: 'XXXX-XXXX-XXXX-XXXX' }), p = field('New password', 'new-password', 'password', 'new-password', { minLength: 8, maxLength: 128 });
 			card.append(form([u, c, p], 'Set new password', async ([a, b, d]) => { const r = await cloud.reset(a, b, d); note = { recovery: r.recovery, then: r.saved ? { saved: r.saved } : null }; if (!r.saved) await cloud.save({ force: true }); draw(); drawBtn(); }));
 		}
+	}
+	// your player name: everyone sees it, in chat and in rooms; changed at most once in 30 days
+	function nameRow(I) {
+		const box = el('div', 'acct-save');
+		const waiting = I.nameNext > Date.now();
+		const [l, i] = field('Player name', 'player-name', 'text', 'nickname', { maxLength: 24, minLength: 2, value: I.name || localName() || '', placeholder: '2 to 24 characters' });
+		l.firstChild.textContent = 'Player name (everyone sees it; your username stays private)';
+		i.disabled = waiting;
+		const say = el('span', 'acct-note', waiting ? `You can change it again on ${new Date(I.nameNext).toLocaleDateString([], { month: 'long', day: 'numeric' })}.` : I.name ? 'You can change it once every 30 days.' : 'Choose the name everyone sees. After that it can change once every 30 days.');
+		const err = el('div', 'acct-err');
+		box.append(l, say, err);
+		if (!waiting) {
+			const go = el('button', 'acct-alt', I.name ? 'Change name' : 'Set name');
+			go.type = 'button';
+			go.onclick = async () => {
+				const v = i.value.trim();
+				if (v === I.name) return;
+				if (I.name && !confirm(`Change your name to ${v}? You can't change it again for 30 days.`)) return;
+				go.disabled = true; err.textContent = '';
+				try { const r = await cloud.setName(v); hint(`You are ${r.name} now.`, 3000); draw(); drawBtn(); } catch (e) { err.textContent = e.message; go.disabled = false; }
+			};
+			box.append(go);
+		}
+		return box;
 	}
 	// logged in: the cloud's progress offered, or (none yet) this device's saved up
 	async function afterLogin(saved) {

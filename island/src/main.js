@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { createChat } from './ui/chat.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
 import { createCommunityProjects } from './people/community-projects.js';
@@ -886,7 +887,9 @@ export function createIslandWorld() {
 	cloudBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10a4 4 0 0 0 .6-8 5.5 5.5 0 0 0-10.6-1.4A4.5 4.5 0 0 0 7 18.5z"/><path d="M12 16v-5M9.8 13 12 10.8l2.2 2.2"/></svg>';
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) cloudBtn.addEventListener(ev, (e) => e.stopPropagation());
 	dom.mount.appendChild(cloudBtn);
-	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
+	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
@@ -1624,10 +1627,22 @@ if (typeof window !== 'undefined') {
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		gear: () => HOOKS.gear?.info(),
+		// chat: Crysis.chat() what is said and who is online; .open() / .close(); .client() the line itself
+		chat: Object.assign(() => HOOKS.chat?.info(), { open: () => HOOKS.chat?.open(), close: () => HOOKS.chat?.close(), client: () => HOOKS.chat?.client }),
 		// the frame readout in the corner (?perf in the address): Crysis.perf(true|false); and the
 		// loading screen's black box, the loads that went without a goodbye: Crysis.loadTrail()
 		perf: (on) => (on == null ? HOOKS.perf?.on() : HOOKS.perf?.show(on)),
 		loadTrail: () => window.L99Loading?.trail?.(),
+		// the high cloud now: Crysis.clouds() reads it; .clouds({ tails: 0.8, veil: 0.9, reach: 1 })
+		// holds any of them (mare's tails, the veil's thickness, how far over the sky); 'auto' lets go
+		clouds: (o) => {
+			const wx = window.L99Island?.world?.()?.weather;
+			if (!wx) return 'no weather';
+			if (o === 'auto') for (const k of ['tails', 'veil', 'reach']) wx.pin(k, null);
+			else if (o) for (const k of ['tails', 'veil', 'reach']) if (o[k] !== undefined) wx.pin(k, o[k]);
+			const S = wx.state;
+			return { mode: S.mode, cover: +S.cover.toFixed(2), cirrus: +S.cirrus.toFixed(2), tails: +S.tails.toFixed(2), veil: +S.veil.toFixed(2), reach: +S.reach.toFixed(2), sunVis: +S.sunVis.toFixed(2) };
+		},
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()
