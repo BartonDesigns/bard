@@ -181,6 +181,10 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 	const aimQ = (restDir, dir, out) => out.setFromUnitVectors(restDir, _v3.copy(dir).normalize());
 	// a bone turned so its rest axis lies along a, and its rest forward (+z) toward f: no twist
 	const fa = new THREE.Vector3(), fb = new THREE.Vector3(), fc = new THREE.Vector3(), fm1 = new THREE.Matrix4(), fm2 = new THREE.Matrix4();
+	// the legs' working values, made once: a pose is solved every frame for everyone in view, and
+	// fresh vectors for each would keep a phone's garbage collector busy (micro-stalls)
+	const ID_Q = new THREE.Quaternion(), legQ = { root: new THREE.Quaternion(), thigh: new THREE.Quaternion(), shin: new THREE.Quaternion() }, legInv = new THREE.Matrix4();
+	const legV = { hip: new THREE.Vector3(), A: new THREE.Vector3(), toA: new THREE.Vector3(), hint: new THREE.Vector3(), floor: new THREE.Vector3(), knee: new THREE.Vector3(), ankle: new THREE.Vector3(), seg: new THREE.Vector3() };
 	function frameQ(restA, a, f, out) {
 		fa.copy(restA); fb.set(0, 0, 1).addScaledVector(fa, -fa.z).normalize(); fc.crossVectors(fa, fb);
 		fm1.makeBasis(fa, fb, fc).transpose();
@@ -414,36 +418,36 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		rootB.position.set(rest.heads[rootI].x + sway + jx, rest.heads[rootI].y - hipRest + hipY, rest.heads[rootI].z + jz);
 		const hpo = X.has.hp ? X.v.hp : null;
 		_e.set(lean * 0.35 + (hpo ? hpo[1] * aw : 0), pelvisYaw + (hpo ? hpo[0] * aw : 0), pelvisRoll + (hpo ? hpo[2] * aw : 0), 'YXZ');
-		const rootQ = _q.setFromEuler(_e).clone();
-		setLocal(rootI, rootQ, new THREE.Quaternion());
+		const rootQ = legQ.root.setFromEuler(_e);
+		setLocal(rootI, rootQ, ID_Q);
 
 		// ---- legs: two-bone IK in body space ----
 		P.root.updateMatrixWorld(true);
-		const inv = new THREE.Matrix4().copy(P.root.matrixWorld).invert();
+		const inv = legInv.copy(P.root.matrixWorld).invert();
 		const rootPos = rootB.position;
 		for (const f of feet) {
 			const s = f.leg.name;
 			const iT = map['upperleg01.' + s], iS = map['lowerleg01.' + s], iF = map['foot.' + s];
-			const hip = _v.copy(rest.heads[iT]).sub(rest.heads[rootI]).applyQuaternion(rootQ).add(rootPos).clone();
-			const A = f.ankle.clone().applyMatrix4(inv);
+			const hip = legV.hip.copy(rest.heads[iT]).sub(rest.heads[rootI]).applyQuaternion(rootQ).add(rootPos);
+			const A = legV.A.copy(f.ankle).applyMatrix4(inv);
 			const l1 = rest.heads[iS].distanceTo(rest.heads[iT]), l2 = rest.heads[iF].distanceTo(rest.heads[iS]);
-			const toA = A.clone().sub(hip); let dist = toA.length();
+			const toA = legV.toA.copy(A).sub(hip); let dist = toA.length();
 			dist = clamp(dist, Math.abs(l1 - l2) + 0.01, (l1 + l2) * 0.9995);
 			const dir = toA.normalize();
 			// the knee points where the foot does, straight ahead but for the slight toe-out
 			const toeOut = pelvisYaw * 0.3 + f.leg.side * 0.1 + (hpo ? hpo[0] * aw * 0.8 : 0);
-			const kneeHint = new THREE.Vector3(f.leg.side * 0.02, 0, 1).applyAxisAngle(Y, toeOut * 0.6).normalize();
-			if (floorPose?.knees?.[s]) kneeHint.lerp(new THREE.Vector3(...floorPose.knees[s]).normalize(), sitK).normalize();
+			const kneeHint = legV.hint.set(f.leg.side * 0.02, 0, 1).applyAxisAngle(Y, toeOut * 0.6).normalize();
+			if (floorPose?.knees?.[s]) kneeHint.lerp(legV.floor.set(...floorPose.knees[s]).normalize(), sitK).normalize();
 			const bend = kneeHint.addScaledVector(dir, -kneeHint.dot(dir)).normalize();
 			const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist);
-			const knee = hip.clone().addScaledVector(dir, cosA * l1).addScaledVector(bend, Math.sqrt(Math.max(0, 1 - cosA * cosA)) * l1);
-			const ankle = hip.clone().addScaledVector(dir, dist);
+			const knee = legV.knee.copy(hip).addScaledVector(dir, cosA * l1).addScaledVector(bend, Math.sqrt(Math.max(0, 1 - cosA * cosA)) * l1);
+			const ankle = legV.ankle.copy(hip).addScaledVector(dir, dist);
 			const [rT, rS] = legRest[s];
-			setWorld(iT, frameQ(rT, knee.clone().sub(hip), bend, new THREE.Quaternion()), worldQ[rootI]);
-			setWorld(iS, frameQ(rS, ankle.clone().sub(knee), bend, new THREE.Quaternion()), worldQ[iT]);
+			setWorld(iT, frameQ(rT, legV.seg.copy(knee).sub(hip), bend, legQ.thigh), worldQ[rootI]);
+			setWorld(iS, frameQ(rS, legV.seg.copy(ankle).sub(knee), bend, legQ.shin), worldQ[iT]);
 			// the foot: forward (toes a little out), pitched through the roll-over
 			const footYaw = toeOut * (1 - (floorPose ? sitK : 0)) + (floorPose?.feet?.[s]?.[3] || 0) * sitK;
-			setWorld(iF, _q.setFromAxisAngle(Y, footYaw).multiply(_q2.setFromAxisAngle(AX, f.pitch)).clone(), worldQ[iS]);
+			setWorld(iF, _q.setFromAxisAngle(Y, footYaw).multiply(_q2.setFromAxisAngle(AX, f.pitch)), worldQ[iS]);
 		}
 
 		// ---- spine: counter-rotation, lean, breath ----

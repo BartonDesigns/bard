@@ -20,6 +20,7 @@ import { AIR } from './world/airfog.js';
 // long after the loading card clears, so its first frame is not the same as everything else's
 const MIRROR_EASE = 1500;
 let shownAt = 0;
+const caveFog = new THREE.Color();
 
 export function islandFrame(iw, now) {
 	const { _voidFog, actions, applyQuality, arcade, autoMusic, bridgeSound, camera, carjack, chatter,
@@ -162,7 +163,7 @@ export function islandFrame(iw, now) {
 		W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
 		shared.uAmbient.value.multiplyScalar(dim);
 		const cg = W.underworld.fog?.() || [0.02, 0.022, 0.026];
-		scene.fog.color.lerp(new THREE.Color(cg[0], cg[1], cg[2]), caveK);
+		scene.fog.color.lerp(caveFog.setRGB(cg[0], cg[1], cg[2]), caveK);
 		scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.012, caveK);
 	}
 	// the air's shape (world/airfog.js): thick low down, lit toward the sun, whole by the far
