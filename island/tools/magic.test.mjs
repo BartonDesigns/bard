@@ -314,7 +314,8 @@ test('spells reach brawlers and townsfolk, hands cast them, the body gestures, t
 	assert.match(hud, /\.mg-hub\{position:absolute;right:calc\(24px [^}]*bottom:calc\(226px/, 'on a touch screen a spell button tops the right thumb\'s column');
 	assert.match(hud, /const RING = \{ s: \[100, \[64, 32, 0, -32, -64\]\], w: \[162, \[40, 20, 0, -20, -40\]\] \}/, 'spells on the inner arc, weapons on the outer');
 	assert.match(hud, /if \(SPELL\[state\.binds\[last\]\]\) cast\(last\); else open\(\);/, 'a tap casts the last spell again');
-	assert.match(src('magic/index.js'), /onTest: \(\) => setTest\(!testOn\), testing: \(\) => testOn/, 'test mode beside the arcs');
+	assert.doesNotMatch(hud, /SPELLS'|WEAPONS'|Test mode/, 'the arcs carry no words and no test mode');
+	for (const id of ['aurora-trail-rifle', 'mossback-scout-rifle', 'warden-spark-carbine', 'reedline-hunting-bow', 'bat', 'pipe', 'bottle', 'knife', 'machete']) assert.match(hud, new RegExp(`\\n\\t'?${id}'?: '<`), `a picture for ${id}`);
 	// (the spellbook is now the skills and magic menu, magic/skills-ui.js: shut until opened)
 	assert.match(src('magic/skills-ui.js'), /let root = null, built = false, open = false/, 'the menu is shut until opened, so the keys work from the start');
 });

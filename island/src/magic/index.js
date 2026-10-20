@@ -285,8 +285,6 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		onPress: (i) => hotbar.press(i),
 		onBook: () => openSkills(),
 		bookOpen: () => skills.isOpen(),
-		// (test mode beside the spell arcs on a touch screen, as well as in the places menu)
-		onTest: () => setTest(!testOn), testing: () => testOn,
 		hint: (t, ms) => hint(t, ms),
 	});
 	// a way in from the places menu, at its top
