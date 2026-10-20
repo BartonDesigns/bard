@@ -957,7 +957,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// your weapon
 		const wpn = active() && !me.ko && !recovery.busy ? weaponNow() : null;
 		if (wpn) {
-			trigger(wpn, mouseDown || touchFire);
+			trigger(wpn, mouseDown || touchFire || padFire);
 			syncBow(wpn);
 			const ads = view.state()?.aiming ? 1 : 0;
 			const before = wpn.mag;
@@ -969,7 +969,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 				p.pitch = Math.min(1.35, p.pitch + r.kick[0] / Math.max(1, r.fired)); p.yaw += r.kick[1] / Math.max(1, r.fired);
 				focus.kick(r.kick[0] / Math.max(1, r.fired), r.kick[1] / Math.max(1, r.fired));
 			}
-			if (r.empty && before === 0 && (mouseDown || touchFire)) { if (reserve(wpn) > 0) reload(); mouseDown = touchFire = false; }
+			if (r.empty && before === 0 && (mouseDown || touchFire || padFire)) { if (reserve(wpn) > 0) reload(); mouseDown = touchFire = padFire = false; }
 			if (isBow(wpn) && r.fired && reserve(wpn) > 0) reload();
 			syncBow(wpn);
 			if (r.fired || r.loaded) saveAmmo();
