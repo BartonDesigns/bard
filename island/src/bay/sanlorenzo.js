@@ -23,6 +23,7 @@ import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
 import { beginCarve, TILE, setRiverHooks } from './carve.js';
 import { toW, merger, bulbs, rng } from './rides/kit.js';
 import { updateRows } from './levelrows.js';
+import { smoothstep as sm } from '../noise.js';
 
 // the cross-sections: depth of the water at the middle, the bench (flat bank past the
 // water's edge) and its height over the water, how steeply the land is cut back beyond it,
@@ -60,7 +61,6 @@ const BRIDGES = [
 	['Highway 1', 36.9827, -122.0234, 'freeway', 15, -0.25],
 ];
 const STEP = 6;                          // metres between the centre line's samples
-const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // ---------- the centre line ----------
 function centreLine() {

@@ -452,4 +452,3 @@ export function truckGeo(kind, coIndex, load = '', far = false) {
 	cache.set(key, g);
 	return g;
 }
-export const truckCacheSize = () => cache.size;

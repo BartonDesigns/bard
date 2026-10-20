@@ -6,7 +6,6 @@
 
 import * as THREE from 'three';
 import { soundBus } from '../world/soundbus.js';
-import { strikePulse } from '../pulse.js';
 
 // the key the Bard is in: its root and scale, or C major
 export function harmony() {
@@ -90,8 +89,6 @@ export function createRipples(parent, max = 8) {
 		dispose() { for (const r of pool) { parent.remove(r.m); r.m.material.dispose(); } },
 	};
 }
-// the shared ripple of a struck surface (pulse.js), for materials that take it
-export function pulseAt(point, color, reach, now) { strikePulse(point, null, reach, color, now); }
 
 // ---------- the prompt ----------
 // providers: functions returning targets { pos (world Vector3), r, label, icon, act(point), mesh? }

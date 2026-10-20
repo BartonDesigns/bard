@@ -8,8 +8,8 @@
 import { soundBus, noise } from './../world/soundbus.js';
 import { engineVoice, PHONE } from '../audio/engines.js';
 import { budgetFor } from '../audio/engine-model.js';
+import { clamp } from '../noise.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // a running engine of a kind: set(rpm 0..1, load 0..1, gain 0..1, speed m/s, where), stop().
 // The engine itself is audio/engines.js's (the gears from the speed, a turbine's spool, the

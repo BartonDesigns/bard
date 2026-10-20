@@ -1,8 +1,10 @@
 // Residents outlive their rendered bodies. Coordinates here never use a rebased Earth frame.
+
+import { jsonCopy as copy } from '../persistence/json-copy.js';
+
 const KEY = 'crysis-social-v1', BACKUP = KEY + '-backup';
 const MODES = new Set(['idle', 'follow', 'wait', 'home', 'scout', 'quest', 'meet']);
 const finite = Number.isFinite;
-const copy = value => JSON.parse(JSON.stringify(value));
 const position = p => p && (finite(p.lat) && finite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180 ? { lat: p.lat, lon: p.lon, y: finite(p.y) ? p.y : 0 } : finite(p.x) && finite(p.z) ? { x: p.x, z: p.z, y: finite(p.y) ? p.y : 0 } : null);
 export function socialDistance(a, b) {
 	if (!a || !b) return Infinity;

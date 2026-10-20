@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { flightMultiplier } from '../flight-speed.js';
 import { geoBasis, geoLL, geoVec } from './landing.js';
+import { smoothstep as smooth } from '../noise.js';
 
 export const ORBIT = Object.freeze({ start: 12000, end: 60000, entry: 95000, radius: 6371000 });
 // A fixed, authored lunar ephemeris in the same inertial frame as the orbital globe.
@@ -23,7 +24,6 @@ export function companionOf(type, earth) {
 	return { kind: 'moon', name: 'Moon', radius: MOON.radius, land: 'MOON' };
 }
 const UP = new THREE.Vector3(0, 1, 0);
-const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 export function musicThrust(bass = 0, pulse = 0) {
 	// Notes shape commanded thrust; silence has no thrust and never changes direction.
 	return 1 + Math.max(0, Math.min(1, bass)) * .08 + Math.max(0, Math.min(1, pulse)) * .04;

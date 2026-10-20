@@ -18,9 +18,9 @@
 import * as THREE from 'three';
 import { actionAt, ACTIONS } from './actions.js';
 import { gaitSignature, gaitDrift } from './gait.js';
+import { clamp } from '../noise.js';
 
 const TAU = Math.PI * 2;
-const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 
 // a critically damped spring on a number (or on each component of an array)

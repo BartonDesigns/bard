@@ -9,11 +9,11 @@ import { planetProfile } from '../planet/profile.js';
 import { beyondFound, beyondSeed } from '../planet/beyond.js';
 import { regionNote, kmBetween, LAT_LIMIT, citiesAround, kmLabel } from './landing.js';
 import { loadAtlas } from '../earth/atlas.js';
+import { smoothstep as smooth } from '../noise.js';
 
 // Worlds the warp list reaches beyond this one; each lands through the usual world build.
 const WORLDS = ['TERRAN', 'OCEAN', 'ARID', 'ICE', 'MAGMA', 'TOXIC', 'MYSTICAL', 'GAS', 'SHEPHERD', 'SINGULARITY', 'MEDIEVAL', 'TROPICAL'];
 const SPACE = 100000;
-const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const title = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 // Earth: a place this close to the anchor comes down on the ground kept there; the charting hold
 // keeps the ship this high (still all orbit, no ground drawn) until the new place's ground is in

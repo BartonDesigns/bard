@@ -4,7 +4,7 @@ import { createEncounterPacing, RARE_GAP, familyOf } from '../src/people/encount
 import { farKind } from '../src/people/npc-quests-core.js';
 import { LOCAL_TASKS, localOffer } from '../src/people/local-tasks.js';
 import { step } from '../src/people/errands-core.js';
-import { createStriker, MOVES } from '../src/combat/melee-rules.js';
+import { createStriker } from '../src/combat/melee-rules.js';
 import { createWeaponState, trigger, stepWeapon, cancelTrigger } from '../src/combat/weapons.js';
 import { focusScore } from '../src/combat/target-focus.js';
 import { contractFor, createFieldContract, advanceContract, contractReward, contractPoint } from '../src/combat/field-contracts.js';
@@ -101,7 +101,7 @@ test('contracts rotate and enforce surveys and hold time before rewards', () => 
 			assert.equal(m.stage, 'survey'); assert.notDeepEqual(contractPoint(m), m.site);
 			for (let i = 0; i < m.def.checkpoints; i++) { assert.equal(contractReward(m), null); advanceContract(m, 'inspected'); }
 		}
-		for (const wave of m.def.waves) advanceContract(m, 'cleared');
+		m.def.waves.forEach(() => advanceContract(m, 'cleared'));
 		if (m.def.holdSeconds) { assert.equal(m.stage, 'hold'); assert.equal(advanceContract(m, 'held'), false); m.hold = m.def.holdSeconds; advanceContract(m, 'held'); }
 		assert.equal(m.stage, 'recover'); assert.equal(contractReward(m), null);
 		advanceContract(m, 'collected'); assert.ok(contractReward(m));

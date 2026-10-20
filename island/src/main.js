@@ -1,7 +1,6 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
-import { createSoulWell } from './planet/soul-well.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
 import { createCommunityProjects } from './people/community-projects.js';
@@ -14,110 +13,41 @@ import { roomsURL } from './net/config.js';
 // music, keyboard, play surfaces and Journey transfers.
 
 import '../../loading-screen.js';
-import { createBiomes } from './planet/biomes.js';
 import { scrollable } from './ui/scroll.js';
-import { planetProfile } from './planet/profile.js';
 import * as THREE from 'three';
-import { generateIsland } from './world/islandgen.js';
-import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terrain.js';
 import { updateIslandReach } from './world/surfacevisibility.js';
 import { createGroundProbe } from './world/groundprobe.js';
 import { createFloorGuard } from './world/floorguard.js';
-import { createOcean } from './world/ocean.js';
 import { createSeaMirror } from './world/seamirror.js';
 import { createSeaDepth } from './world/seadepth.js';
-import { createSky } from './world/sky.js';
-import { createWeather } from './world/weather.js';
-import { createSunRays } from './world/sunrays.js';
-import { createSpray } from './world/spray.js';
-import { createVegetation } from './world/vegetation.js';
-import { createGrass } from './world/grass.js';
-import { createLitter } from './world/litter.js';
-import { createVillage } from './world/village.js';
-import { createDistant } from './world/distant.js';
-import { createPlayer } from './player.js';
-import { loadAimSensitivity, saveAimSensitivity } from './aim-sensitivity.js';
+import { loadAimSensitivity } from './aim-sensitivity.js';
 import { flightMultiplier, nextFlightSpeed, speedLabel } from './flight-speed.js';
-import { createMusic } from './music.js';
-import { createFauna } from './fauna.js';
-import { createBoat } from './boat.js';
-import { createWhale } from './whale.js';
-import { createShells } from './shells.js';
-import { createUnderwater } from './underwater.js';
-import { createSealife } from './sealife.js';
-import { createMagma } from './magma.js';
-import { createCaverns } from './caverns.js';
-import { createUnderworld } from './planet/underworld.js';
-import { createDeep, planDeep } from './planet/deep.js';
 import { createStriker, createRipples, ring } from './planet/resonance.js';
-import { planCaves, makeField } from './planet/cavenet.js';
-import { createReef } from './reef.js';
-import { buildEcology, describe } from './crysis/ecology.js';
-import { createFish } from './crysis/fish.js';
-import { createInverts } from './crysis/inverts.js';
-import { buildLandEcology, describeLand } from './crysis/land.js';
-import { createLandFauna } from './crysis/landfauna.js';
-import { createBayArea, bayUniforms } from './bay/terrain.js';
-import { createGoldenGate } from './bay/bridge.js';
-import { createLabels } from './bay/labels.js';
-import { createCity } from './bay/city.js';
+import { describe } from './crysis/ecology.js';
+import { describeLand } from './crysis/land.js';
 import { board as requestBoard, requestsNear, takeRequest, completeRequest } from './economy/requests.js';
 import { payroll } from './economy/payroll.js';
 import { bank } from './economy/bank.js';
-import { createHouses } from './bay/houses.js';
 import { createFamilyLife } from './people/family-life.js';
-import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
-import { createFreeways } from './bay/freeways.js';
 import { createBridgeSound } from './bay/bridgesound.js';
-import { createStreets } from './bay/streets.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
-import { createLake } from './bay/lake.js';
-import { createEarthWater } from './bay/earthwater.js';
-import { createWater } from './bay/water.js';
-import { planWaters } from './planet/waters.js';
-import { createTidepools } from './bay/tidepools.js';
-import { createSaltPonds } from './bay/saltponds.js';
-import { createBeaches } from './bay/beaches.js';
-import { createParkKit } from './bay/parkkit.js';
-import { createDiscovery } from './bay/discovery.js';
 import { createShaderWarm } from './world/shaderwarm.js';
-import { captureResources } from './world/resources.js';
-import { preferLite, clearLite, GPU_LITE } from './world/gpulite.js';
+import { preferLite } from './world/gpulite.js';
 import { createGovernor, qualityNow } from './world/governor.js';
 import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
 import { bodyCount } from './people/body.js';
-import { kitDaylight } from './people/kit-light.js';
-import { createBoardwalk } from './bay/boardwalk.js';
-import { createTowers } from './bay/towers.js';
-import { createForestFloor } from './bay/forestfloor.js';
-import { createCommercial } from './bay/commercial.js';
-import { createInteriors } from './interiors/index.js';
-import { createStructures } from './structures/index.js';
 import { createCataclysm } from './cataclysm/index.js';
-import { createServices } from './services/index.js';
 import { createMagic } from './magic/index.js';
-import { createContact } from './bay/contact.js';
-import { createCottageInteriors } from './interiors/cottage.js';
-import { planDwellings, createDwellings } from './interiors/alien.js';
-import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
 import { createArcade } from './arcade.js';
-import { planIslandFields, createSportsFields } from './sportsfields.js';
-import { createBerms } from './bay/berms.js';
-import { createCitySound } from './bay/citysound.js';
-import { createNatureSound } from './bay/naturesound.js';
-import { worldLevel, worldAir } from './world/soundbus.js';
-import { createRealCity, REAL_U } from './bay/realcity.js';
-import { createCivilization } from './crysis/civ.js';
-import { createDiablo } from './bay/diablo.js';
-import { createEdgelands } from './bay/edgelands.js';
+import { worldAir } from './world/soundbus.js';
+import { REAL_U } from './bay/realcity.js';
 import { createDrive } from './drive.js';
-import { createVehicles } from './vehicles/index.js';
 import { createAutoMusic } from './music/automusic.js';
 import { createExplore } from './explore.js';
 import { today, onMonth, monthPicked, pickMonth } from './calendar.js';
@@ -138,20 +68,16 @@ function applySeason(d) {
 applySeason(today());
 onMonth(applySeason);
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
-import { createLandmarks } from './bay/landmarks.js';
-import { createRoads, ROUTES } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
 import { createDirector } from './earth/director.js';
 // the rest of the Earth, one engine with the Bay (earth/globe.js); its frame's latitude and longitude
-import { createGlobe, BAY_WILD_KM } from './earth/globe.js';
-import { toLL as globeLL, bayKm, F as globeF } from './earth/globeframe.js';
+import { BAY_WILD_KM } from './earth/globe.js';
+import { toLL as globeLL, bayKm } from './earth/globeframe.js';
 import { citiesAround, kmLabel } from './space/landing.js';
 import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
-import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
-import { createPeople, addTalkers, talkers, addLife } from './people/people.js';
-import { createDailyLife } from './economy/daily-life.js';
+import { createPeople, addTalkers, talkers } from './people/people.js';
 import { createChatter } from './people/chatter.js';
 import { createEncounterPacing } from './people/encounter-pacing.js';
 import { createErrands } from './people/errands.js';
@@ -174,40 +100,23 @@ import { createAvatar } from './people/avatar.js';
 import { createHeroView } from './people/hero-view.js';
 import { createSelf } from './people/self.js';
 import * as CREATURES from './world/creatures.js';
-import { waterContact } from './world/water-contact.js';
-import { createMushrooms } from './planet/mushrooms.js';
-import { createVolcano } from './planet/volcano.js';
-import { planAlien, createAlien } from './planet/alien.js';
-import { planColony } from './planet/colony/plan.js';
-import { createColony } from './planet/colony/colony.js';
-import { planArch } from './planet/arch/plan.js';
-import { createArch } from './planet/arch/arch.js';
-import { planRealm, planDungeons } from './planet/medieval/plan.js';
-import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
 import { createMultiplayer } from './net/multiplayer.js';
 import { createWorldAudio } from './audio/audio.js';
-import { createOrbitalFlight } from './space/flight.js';
 import { worldBody, sameBody } from './space/body.js';
-import { createKinetic } from './music/kinetic.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
-import { createSignage } from './signage/index.js';
 import { createLaw } from './law/index.js';
-import { createFloaters } from './planet/floaters.js';
-import { createBeyond } from './planet/beyond.js';
-import { installAirFog, AIR } from './world/airfog.js';
-import { createPlumes, ambientPlumes } from './world/plumes.js';
-import { createPowerlines } from './world/powerlines.js';
-import { createContrails } from './world/contrails.js';
-import { createFlush } from './world/flush.js';
-import { createFarForest } from './world/farforest.js';
+import { installAirFog } from './world/airfog.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
-import { touchLookRows } from './ui/touch-look.js';
 import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
+import { islandBuild } from './island-build.js';
+import { islandTeardown } from './island-teardown.js';
+import { islandPanel } from './island-panel.js';
+import { islandFrame } from './island-frame.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -457,6 +366,60 @@ function slider(panel, label, min, max, step, get, set, fmt) {
 }
 
 export function createIslandWorld() {
+	// The island world: what the build, the frame, the settings panel and the teardown
+	// (island-build.js, island-frame.js, island-panel.js, island-teardown.js) use from this function.
+	// Each getter and setter reaches the binding of that name here.
+	const iw = {
+		get _voidFog() { return _voidFog; }, get actions() { return actions; },
+		get applyQuality() { return applyQuality; }, get arcade() { return arcade; }, get arms() { return arms; },
+		get arrival() { return arrival; }, get arriving() { return arriving; },
+		get autoMusic() { return autoMusic; }, get avatar() { return avatar; },
+		get bridgeSound() { return bridgeSound; }, get building() { return building; },
+		get buildPanel() { return buildPanel; }, get button() { return button; }, get camera() { return camera; },
+		get carjack() { return carjack; }, get chatter() { return chatter; }, get combat() { return combat; },
+		get communityProjects() { return communityProjects; }, get crosswalks() { return crosswalks; },
+		get css() { return css; }, get dogWalkers() { return dogWalkers; }, get dom() { return dom; },
+		get drive() { return drive; }, get earthDirector() { return earthDirector; },
+		get encounterPacing() { return encounterPacing; }, get errands() { return errands; },
+		get explore() { return explore; }, get families() { return families; }, get fares() { return fares; },
+		get farNight() { return farNight; }, get fishing() { return fishing; },
+		get fitShadow() { return fitShadow; }, get followFarGround() { return followFarGround; },
+		get followGround() { return followGround; }, get frame() { return frame; },
+		get frameAvg() { return frameAvg; }, set frameAvg(next) { frameAvg = next; }, get gear() { return gear; },
+		get GFX() { return GFX; }, get ghost() { return ghost; }, get glare() { return glare; },
+		get GLOW_AT() { return GLOW_AT; }, get governor() { return governor; }, get guide() { return guide; },
+		get hint() { return hint; }, get HOOKS() { return HOOKS; },
+		get indoorK() { return indoorK; }, set indoorK(next) { indoorK = next; }, get inkBtn() { return inkBtn; },
+		get isPhone() { return isPhone; }, get KICK() { return KICK; },
+		get last() { return last; }, set last(next) { last = next; }, get legacyLaunch() { return legacyLaunch; },
+		get livingWorld() { return livingWorld; }, get lost() { return lost; }, get magic() { return magic; },
+		get muffle() { return muffle; }, get multiplayer() { return multiplayer; },
+		get npcQuests() { return npcQuests; }, get origin() { return origin; },
+		get panelClock() { return panelClock; }, set panelClock(next) { panelClock = next; },
+		get people() { return people; }, get picnic() { return picnic; },
+		get placeKinetic() { return placeKinetic; }, get projectMarks() { return projectMarks; },
+		get projectRefresh() { return projectRefresh; }, set projectRefresh(next) { projectRefresh = next; },
+		get projectSnapshot() { return projectSnapshot; }, set projectSnapshot(next) { projectSnapshot = next; },
+		get quality() { return quality; }, set quality(next) { quality = next; },
+		get ragdolls() { return ragdolls; }, get recovery() { return recovery; },
+		get renderer() { return renderer; }, get replayKinetic() { return replayKinetic; },
+		get running() { return running; }, get scene() { return scene; }, get seaDepth() { return seaDepth; },
+		get seaLifeVisibility() { return seaLifeVisibility; }, get seaLook() { return seaLook; },
+		get seaMirror() { return seaMirror; }, get shaderWarm() { return shaderWarm; },
+		get share() { return share; }, get shared() { return shared; }, get slider() { return slider; },
+		get social() { return social; }, get soul() { return soul; }, get stampPrints() { return stampPrints; },
+		get state() { return state; }, get stepWind() { return stepWind; }, get striker() { return striker; },
+		get strikeRipples() { return strikeRipples; }, get studio() { return studio; },
+		get sunGlare() { return sunGlare; }, get surfaceOpen() { return surfaceOpen; },
+		get surprises() { return surprises; }, get teardown() { return teardown; }, get tick() { return tick; },
+		get time() { return time; }, set time(next) { time = next; }, get travel() { return travel; },
+		get underwaterAudio() { return underwaterAudio; },
+		get updateFlightControls() { return updateFlightControls; }, get visible() { return visible; },
+		get voyage() { return voyage; }, get watchDoor() { return watchDoor; },
+		get watchTalk() { return watchTalk; }, get watchTeleport() { return watchTeleport; },
+		get waypoint() { return waypoint; }, get world() { return world; }, set world(next) { world = next; },
+		get worldAudio() { return worldAudio; }, get yieldBuild() { return yieldBuild; }, get you() { return you; },
+	};
 	const storage = (() => { try { return localStorage; } catch { return null; } })();
 	const initialMode = graphicsMode(storage), SAFE = new URLSearchParams(location.search).has('safe');
 	// No HUD, observers, or game listeners exist until a valid graphics context does.
@@ -909,7 +872,7 @@ export function createIslandWorld() {
 	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
-	const account = HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
@@ -1105,519 +1068,9 @@ export function createIslandWorld() {
 		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
 		W.sealife.update(dt, time, inBay); W.reef.update(inBay, camera.position, under); W.fish.update(dt, time, inBay); W.inverts.update(dt, time, inBay);
 	}
-	async function buildWorld(params) {
-		const seed = (params.seed >>> 0) || 1337;
-		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
-		// Other worlds flight lands on are their own islands, alone in their seas.
-		const earth = params.earth !== false;
-		const body = worldBody(params);
-		if (world && sameBody(state.body, body)) return world;
-		if (world) teardown();
-		shared.uUnder.value = 0;
-		seaLook.t = 0; seaLook.on = true;
-		underwaterAudio(0, 1);
-		camera.near = .25; camera.far = 16000; camera.updateProjectionMatrix();
-		window.L99Loading.stage('Shaping the landscape');
-		await new Promise((r) => requestAnimationFrame(r));
-		// what kind of world: its ground, air, plants and underground (Earth's island is tropical)
-		const profile = planetProfile(earth ? 'TROPICAL' : params.biome, seed);
-		shared.planet = profile;
-		const island = generateIsland({ seed, biome: params.biome, resolution: GFX ? 640 : 768, profile, land: earth ? 'island' : null });
-		await yieldBuild('Planning the landscape');
-		island.profileHaze = profile.air?.haze || 1;
-		// the ball fields above the village (or the world's own arena): the ground levelled under them before anything is made of it
-		const fieldPlan = planIslandFields(island, earth ? null : profile);
-		// an off-world colony (the Moon's, a volcanic or toxic world's): its ground levelled and its roads worn in now
-		const colonyPlan = earth ? null : planColony(island, profile, { avoid: fieldPlan.clear, isPhone: GFX });
-		if (colonyPlan) fieldPlan.clear.push(...colonyPlan.clear);
-		// a realm of castles and towns, where this world keeps one: sited now, the land shaped round it
-		const realmPlan = earth ? null : planRealm(island, profile, { fields: fieldPlan.clear, isPhone: GFX });
-		// a cliff settlement (planet/arch/): its houses seated on the cliff tops and its paths worn in now
-		const archPlan = earth ? null : planArch(island, profile, { avoid: [...fieldPlan.clear, ...(realmPlan?.clear || [])], roads: realmPlan?.roads, isPhone: GFX });
-		if (archPlan) fieldPlan.clear.push(...archPlan.clear);
-		// the planet's second biome and its cold side, baked where the ground, plants and water can read it
-		island.biomes = createBiomes(island, profile);
-		// its streams and lakes (or ice, or lava), carved before its plants, caves and ruins are planned
-		const waterPlan = earth || profile.airless ? null : await planWaters(island, profile, { clear: [...fieldPlan.clear, ...(realmPlan?.clear || [])], realm: realmPlan });
-		if (waterPlan) island.inWater = waterPlan.inWater;
-		(shared.uBiome ||= { value: null }).value = island.biomes.tex;
-		shared.biHalf = island.half;
-		shared.heightTex = makeHeightTexture(island);
-		shared.maskTex = makeMaskTexture(island);
-		await yieldBuild('Preparing the surroundings');
-		const sky = createSky(scene, shared, renderer, { isPhone: GFX, earth, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
-		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
-		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
-		const weather = createWeather(scene, shared, { isPhone: GFX, airless: !!profile.airless });
-		sky.attach(weather);
-		const terrain = createTerrain(island, shared);
-		// the real Bay Area round the island: its heights are shared with the sea
-		shared.bayU = bayUniforms();
-		const ocean = createOcean(island, shared);
-		// turf underfoot plus a longer-reaching layer
-		// the reaching layer: out to about 55 m (40 on phones) before it melts into the ground
-		const grass = createGrass(island, shared, GFX ? 15000 : 30000, GFX ? 90 : 124, { width: 0.5, seed: 99 });
-		const turf = createGrass(island, shared, GFX ? 11000 : 18000, 20, { width: 0.34, height: 0.8, seed: 7 });
-		scene.add(terrain, ocean, grass, turf);
-		// An airless world (the Moon) is bare regolith: its sea, village, grass, plants and animals
-		// are still made (the frame loop expects them) but held in a hidden group, out of reach.
-		// (a world with no village, the hostile ones, holds just the village there)
-		const bare = profile.airless || profile.noVillage ? new THREE.Group() : null;
-		const stash = (make, always) => {
-			if (!bare || !profile.airless && !always) return make();
-			const had = new Set(scene.children), made = make();
-			for (const o of [...scene.children]) if (!had.has(o) && o !== bare) bare.add(o);
-			return made;
-		};
-		if (bare) { bare.visible = false; scene.add(bare); if (profile.airless) bare.add(ocean, grass, turf); }
-		const litter = stash(() => createLitter(island, shared, scene, GFX ? 0.6 : 1));
-		// Crysis: the land's plants and animals, grown from the seed
-		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
-		// a planet's caves are planned first, so nothing grows in their mouths
-		const cavePlan = planCaves(island, profile);
-		// ...and the realm's dungeons dug down to meet them
-		if (realmPlan) planDungeons(realmPlan, island, cavePlan, makeField);
-		// the Deep Gate (planet/deep.js): a carved hall at the end of a passage dug on toward the
-		// summit, a sealed shaft with no bottom in its floor
-		const deepPlan = cavePlan ? planDeep(island, cavePlan, makeField) : null;
-		// the works of whoever built here before: sited now, so nothing grows on them
-		const alienPlan = earth || realmPlan?.noAliens || profile.airless ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: [...fieldPlan.clear, ...(realmPlan?.clear || [])], isPhone: GFX });
-		// (and the dwellings of whoever built them: interiors/alien.js)
-		if (alienPlan) alienPlan.clear.push(...planDwellings(island, alienPlan));
-		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
-		const vegetation = createVegetation(island, shared, scene, land);
-		const village = stash(() => createVillage(island, shared, scene, { profile, isPhone: GFX, camera }), true);
-		if (bare) { village.footprints.length = 0; village.pickables.length = 0; }
-		vegetation.addContacts(village.footprints);
-		const distant = stash(() => createDistant(island, shared, scene));
-		// columns of smoke and steam seen from afar: fires, wrecks, chimneys, stacks (world/plumes.js)
-		const plumes = createPlumes(scene, shared, { isPhone: GFX });
-		ambientPlumes(plumes, { island, profile, earth, realm: realmPlan });
-		// pylons and their wires over the land (world/powerlines.js): on Earth once the Bay's ground is in
-		const powerlines = createPowerlines(scene, { isPhone: GFX });
-		if (!earth) powerlines.plan({ island, profile });
-		// airliners far overhead and their contrails, on Earth (world/contrails.js)
-		const contrails = createContrails(scene, shared, sky, { isPhone: GFX });
-		contrails.enabled = earth && !island.far;
-		// birds flushed out of the trees by gunfire and blasts (world/flush.js; combat calls noise())
-		const flush = createFlush(scene, shared, { isPhone: GFX, vegetation, heightAt: (x, z) => { const b = world?.bayArea; return b?.loaded?.() ? b.heightAt(x, z) : island.heightAt(x, z); } });
-		// the island's trees past their draw distance, as impostors (world/farforest.js)
-		const farForest = createFarForest(vegetation, island, shared, scene, { isPhone: GFX });
-		const fauna = stash(() => createFauna(island, shared, scene));
-		const landFauna = stash(() => createLandFauna(land, island, shared, scene, camera, vegetation));
-		await yieldBuild('Preparing the shoreline');
-		const player = createPlayer(island, village, vegetation, camera, dom, shared);
-		player.state.active = true;
-		player.parkour.attach(scene);
-		// the ground kicked up underfoot (player.js onKick: a sprinting footfall, a slide, a hard
-		// landing): dust off dirt, sand and dry ground, a spray off shallow water, flecks of snow;
-		// nothing off a floor, a road or stone
-		player.state.onKick = (kind, k) => {
-			const fx = HOOKS.combat?.fx, surf = worldAudio.surface?.(), P = player.state;
-			if (!fx || !KICK[surf] || P.flying || P.swimming || (surf === 'grass' && kind === 'step')) return;
-			const [r, g, b] = KICK[surf], y = P.pos.y - 1.6, n = kind === 'land' ? 3 + Math.round(k * 5) : kind === 'slide' ? 2 : 1;
-			for (let i = 0; i < n; i++) fx.dust({ x: P.pos.x + (Math.random() - 0.5) * 0.5, y, z: P.pos.z + (Math.random() - 0.5) * 0.5 }, 1, r, g, b, (kind === 'land' ? 0.5 : 0.35) * (0.6 + k * 0.6), kind === 'slide' ? 0.5 : 0.3);
-		};
-		// arriving at a kept or shared spot: start there, so what streams in first is that place
-		const sp = params.spot;
-		if (sp && Number.isFinite(sp.x) && Number.isFinite(sp.z)) {
-			const P = player.state;
-			P.pos.set(sp.x, Number.isFinite(sp.y) ? sp.y : island.heightAt(sp.x, sp.z) + 60, sp.z);
-			P.yaw = sp.yaw || 0; P.pitch = sp.pitch || 0; P.flying = true;
-			camera.position.copy(P.pos);
-		}
-		const boat = stash(() => createBoat(island, village, player, camera, shared, scene));
-		const whale = stash(() => createWhale(island, shared, scene));
-		const shells = stash(() => createShells(island, shared, camera, scene, player, dom, hint));
-		if (profile.airless) shells.update = () => {};
-		if (bare) boat.near = () => false;
-		const magma = createMagma(island, shared, scene, camera);
-		const caverns = stash(() => createCaverns(island, shared, scene, camera, magma.tube || []));
-		const underwater = stash(() => createUnderwater(island, shared, scene, camera, player, [...(magma.tube || []), ...caverns.tunnels.flat(), ...caverns.arches.flat()]));
-		// Crysis: the sea's food web and species, grown from the seed
-		const eco = buildEcology(island.seed, { volcanism: 0.8 });
-		const reef = stash(() => createReef(island, shared, scene, [...(magma.tube || []), ...caverns.tunnels.flat(), ...caverns.arches.flat()], eco));
-		const sealife = stash(() => createSealife(island, shared, scene, camera, reef.bommies));
-		const fish = stash(() => createFish(eco, island, shared, scene, camera, reef.bommies));
-		const inverts = stash(() => createInverts(eco, island, shared, scene, camera, reef.bommies));
-		const pick = [...vegetation.pickables, ...village.pickables];
-		// the reef's corals and the sea's creatures ring too (tagged by what they are made of)
-		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
-		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
-		music.register();
-		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, flush, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
-		// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
-		seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
-		seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
-		await yieldBuild('Preparing places to explore');
-		// Equipment sources are data-facing first.  Generated shops are added as they stream
-		// in; the small island board keeps the conversational loop playable before Earth has
-		// finished loading.  These records do not imply a shared backend or real-world site
-		// layout.  The authoritative multiplayer inventory remains a separate dependency.
-		world.worldSites = () => {
-			const anchor = world.village?.footprints?.find((f) => !f.fence && !f.pier) || world.island.spawn || { x: 0, z: 0 };
-			const out = [
-				{ id: 'island-ranger-camp', name: 'Island ranger camp', kind: 'outfitter', x: anchor.x + 12, z: anchor.z + 8, actions: ['purchase', 'hunt'], virtual: true },
-				{ id: 'island-supermarket', name: 'Village supermarket', kind: 'supermarket', x: anchor.x + 28, z: anchor.z + 12, actions: ['purchase'], virtual: true },
-				{ id: 'island-home-supply', name: 'Village home-supply store', kind: 'home-supply', x: anchor.x - 26, z: anchor.z + 10, actions: ['purchase'], virtual: true },
-				{ id: 'island-community-market', name: 'Community player exchange', kind: 'player-vendor', x: anchor.x - 18, z: anchor.z - 12, actions: ['purchase'], virtual: true },
-				{ id: 'island-trader', name: 'Travelling NPC trader', kind: 'npc-vendor', x: anchor.x + 4, z: anchor.z - 20, actions: ['purchase', 'hunt'], virtual: true },
-				{ id: 'island-police-cache', name: 'Civic police-station recovery cache', kind: 'police', x: anchor.x - 92, z: anchor.z - 82, actions: ['secure'], virtual: true },
-			];
-			for (const S of world.services?.sites?.() || []) out.push(S);
-			const businesses = world.city?.economy?.near(camera.position.x, camera.position.z, 700) || [];
-			const equipment = new Set(['outfitter', 'huntpost', 'general', 'hardware', 'grocer']);
-			for (const E of businesses) if (equipment.has(E.type)) {
-				const x = E.door?.[0] ?? E.x, z = E.door?.[1] ?? E.z;
-				out.push({ id: E.id, economyId: E.id, name: E.name, kind: ['outfitter', 'huntpost'].includes(E.type) ? 'outfitter' : 'supermarket', x, z,
-					y: world.island.heightAt(x, z), actions: ['purchase'], source: 'economy',
-					...(E.type === 'hardware' ? { stock: ['repair-roll', 'camp-lantern', 'home-supply-kit'] } : {}) });
-			}
-			for (const B of world.commercial?.list?.() || []) {
-				if (B.type !== 'shop') continue;
-				// A named business owns its own counter; do not add a second generic store
-				// over it with a separate stock lot or let its neighbours sell its goods.
-				const E = businesses.find(e => Math.hypot(e.x - B.x, e.z - B.z) < 5);
-				if (E) continue;
-				const id = `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
-				out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, w: B.w, d: B.d, actions: ['purchase'], source: 'generated-commercial' });
-			}
-			return out;
-		};
-		player.state.onBoost = speed => { hint(`Flying ×${speed}.`, 1500); actions(); updateFlightControls(world); };
-		// the fishing cottages' rooms, furnished as you come near (interiors/cottage.js)
-		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone: GFX });
-		// sunbeams through the trees in mist (world/sunrays.js)
-		world.rays = createSunRays(scene, shared, renderer, { isPhone: GFX, sun: sky.sun, air: sky.uniforms.uAir });
-		world.rays.quality(qualityNow().fx);
-		fitShadow();
-		// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
-		world.spray = createSpray(scene, shared, { isPhone: GFX, world: () => world });
-		world.spray.quality(qualityNow().fx);
-		if (waterPlan) {
-			world.water = createWater(scene, shared, { isPhone: GFX, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
-			const water = world.water;
-			island.waterAt = (x, z) => water.waterAt(x, z);
-		}
-		// Every generated surface, including Earth's island, owns its underground in this scene.
-		{
-			world.underworld = createUnderworld(island, shared, scene, camera, profile, { isPhone: GFX, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, plan: cavePlan, dinosaurs: !earth, bodyKey: body.key });
-			island.underFloor = world.underworld.floor;
-			island.underPush = world.underworld.push;
-			island.underClear = world.underworld.clearBody;
-		}
-		// the mushrooms this world grows, and what they do to you
-		world.soulWell = createSoulWell({ world, profile, scene, camera, mount: dom.mount, shared, soul, hint: (t, ms) => hint(t, ms, 1), blocked: () => drive.active() || !visible || window.L99Loading.active() || !!world.beyond?.active?.() });
-		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
-		// a volcanic world's mountain: lava tubes, spouts, the crater's lake, and its eruptions
-		if (!earth && (profile.relief === 'volcano' || island.peak?.volcanic)) {
-			world.volcano = createVolcano(island, shared, scene, camera, profile, { isPhone: GFX, renderer });
-			island.extraFloor = world.volcano.floor;
-			island.extraPush = world.volcano.push;
-		}
-		// the ball fields: the island's, and the Bay's as you come near them (their fences are walked into)
-		world.fields = createSportsFields({ scene, getWorld: () => world, isPhone: GFX, plan: fieldPlan });
-		{ const own = island.extraPush, fp = world.fields.push; island.extraPush = own ? (p, footY) => { own(p, footY); fp(p, footY); } : fp; }
-		{ const of = island.extraFloor, ff = world.fields.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), ff(x, z, y)) : ff; }
-		// the alien works: their platforms, causeways and halls are walked on, their walls walked into
-		if (alienPlan) {
-			const al = world.alien = createAlien(island, shared, scene, camera, profile, alienPlan, { isPhone: GFX, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
-			const of = island.extraFloor, op = island.extraPush;
-			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), al.floor(x, z, y)) : al.floor;
-			island.extraPush = op ? (p, footY) => { op(p, footY); al.push(p, footY); } : al.push;
-			const dw = world.dwellings = createDwellings(scene, alienPlan, { isPhone: GFX });
-			const of2 = island.extraFloor, op2 = island.extraPush;
-			island.extraFloor = (x, z, y) => Math.max(of2(x, z, y), dw.floor(x, z, y));
-			island.extraPush = (p, footY) => { op2(p, footY); dw.push(p, footY); };
-		}
-		// a mystical world's terraces hung in the air, walked on
-		if (island.floaters) { const fl = world.floaters = createFloaters(island, scene, profile), of = island.extraFloor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), fl.floor(x, z, y)) : fl.floor; }
-		// the world by the dark star: its Event Ring's sphere is a way beyond (planet/beyond.js)
-		if (profile.type === 'SINGULARITY' && alienPlan?.sites[0]?.kind === 'landmark') world.beyond = createBeyond({ renderer, scene, camera, island, shared, site: alienPlan.sites[0], player, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
-		if (colonyPlan) {
-			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone: GFX, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, isTouch: matchMedia('(pointer: coarse)').matches, arms, social: () => social, world: () => world });
-			const of = island.extraFloor, op = island.extraPush;
-			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), cl.floor(x, z, y)) : cl.floor;
-			island.extraPush = op ? (p, footY) => { op(p, footY); cl.push(p, footY); } : cl.push;
-		}
-		// the cliff settlement: its decks, terraces, bridges and roofs walked on, its walls walked into
-		if (archPlan) {
-			const ar = world.arch = createArch(island, shared, scene, camera, profile, archPlan, { isPhone: GFX, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
-			const of = island.extraFloor, op = island.extraPush;
-			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), ar.floor(x, z, y)) : ar.floor;
-			island.extraPush = op ? (p, footY) => { op(p, footY); ar.push(p, footY); } : ar.push;
-		}
-		// the realm: its castle, town and fields walked on and into; its dungeons reached before the caves
-		if (realmPlan) {
-			const md = world.medieval = createMedieval(realmPlan, { island, shared, scene, camera, profile, isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, player: () => world?.player.state, underworld: world.underworld });
-			const of = island.extraFloor, op = island.extraPush;
-			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), md.floor(x, z, y)) : md.floor;
-			island.extraPush = op ? (p, footY) => { op(p, footY); md.push(p, footY); } : md.push;
-			island.underFloor = md.underFloor(island.underFloor);
-			island.underPush = md.underPush(island.underPush);
-		}
-		// (the bridges where the realm's roads cross the streams are floors)
-		if (waterPlan?.source.decks.length) { const of = island.extraFloor, wf = world.water.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), wf(x, z, y)) : wf; }
-		// the Deep: walked in its own frame, ahead of the caves and dungeons while you are down there
-		if (deepPlan && world.underworld?.lighting) {
-			const dp = world.deep = createDeep(island, shared, scene, camera, profile, { plan: deepPlan, underworld: world.underworld, isPhone: GFX, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, bodyKey: body.key });
-			if (dp) {
-				const uf = island.underFloor, up = island.underPush;
-				island.underFloor = (x, z, y) => (dp.active() ? dp.floor(x, z, y) : dp.gateFloor(x, z, y) ?? uf?.(x, z, y) ?? null);
-				island.underPush = (p, footY) => { if (dp.active()) dp.push(p, footY); else { up?.(p, footY); dp.gatePush(p, footY); } };
-			} else world.deep = null;
-		}
-		world.kinetic = createKinetic({ scene });
-		world.kineticEpoch = world.globe?.frame?.epoch;
-		state.body = world.body = body;
-		state.seed = seed;
-		state.earth = earth;
-		state.biome = params.biome;
-		world.orbit = createOrbitalFlight({ renderer, camera, dom, world, earth, seed, profile, shared,
-			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
-			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint, voyage,
-			// coming down from orbit somewhere new: the globe's frame moves there and its ground streams in
-			chart: (lat, lon) => {
-				const W = world;
-				if (!W?.globe) return null;
-				W.labels?.hide(); W.kinetic?.clear(); fishing.drop(); drive.stop();
-				if (W.boat?.boarded?.()) W.boat.leave();
-				return W.globe.place(lat, lon);
-			},
-			// straight back to where the climb began, behind the travel veil
-			goHome: (at, name) => travel(name, () => HOOKS.goTo(at.lat, at.lon, 900)),
-		});
-		// Establish real visibility before warming: the first surface frame must not
-		// upload every underwater/cave material simply because no update ran yet.
-		player.update(0, 0);
-		sky.update(0, camera.position);
-		const contact = waterContact(island, camera.position, player.floorAt(camera.position.x, camera.position.z, camera.position.y - 1.68), 0, shared.uWave.value);
-		const under = contact.under && !world.deep?.active();
-		underwater.update(0, 0, under, contact.surface ?? 0); caverns.update(0, 0, under);
-		seaLifeVisibility(world, 0, 0, under); world.underworld?.update(0, 0); world.deep?.update(0, 0);
-		vegetation.stream(camera, true);
-		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
-		litter.update(camera);
-		// (shown as soon as the first few seconds of it are done; the rest is built in play)
-		window.L99Loading.stage('Lighting the world');
-		await shaderWarm.all({ budget: 2500, progress: (k) => { if (arrival) arriving(k * 0.3); } });
-		window.L99Loading.stage('Preparing the surroundings');
-		// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
-		// for everything: the island's own map on the island, the real land beyond it
-		if (earth) {
-			const bayArea = createBayArea(shared, scene, island, shared.bayU);
-			world.bayArea = bayArea;
-			// globe: the Earth past the survey, and the engine's relief on the Bay's own ground (earth/globe.js)
-			world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX, busy: () => drive.active() || !!world?.boat?.boarded?.() || !!world?.orbit?.active() });
-			// globe: the Bay's woods and wild things are California's; far off (or once the frame floats)
-			// they give way to the globe's own (their view of the Bay says it is not loaded there)
-			const bayNear = Object.create(bayArea, { loaded: { value: () => bayArea.loaded() && globeF.bay && (() => { const ll = globeLL(camera.position.x, camera.position.z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM; })() } });
-			world.labels = createLabels(dom.mount, bayArea, null);
-			world.real = createRealCity(renderer, { isPhone: GFX });
-			// Crysis: the towns beyond the survey, grown street by street as you near them
-			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
-			world.city = createCity(shared, scene, bayNear, world.real);
-			// (the businesses take their food and words from where on Earth they are)
-			world.city.economy.setLocator((x, z) => globeLL(x, z));
-			world.city.economy.setRegional(() => world?.globe?.regional?.settlements);
-			world.city.economy.setSea({ at: (x, z) => world?.globe?.seaAt(x, z) ?? null, coast: (x, z) => world?.globe?.coastMask(x, z) ?? null });
-			// the working day: staff out front of the open businesses, people in and out of their doors (people/people.js)
-			{ const daily = createDailyLife(world.city.economy, { isPhone: GFX }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
-			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
-			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone: GFX, ground: (x, z) => island.heightAt(x, z), globe: () => world?.globe });
-			// the real houses close by, built whole with their rooms
-			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone: GFX });
-			// ...and the shops, cafés, restaurants, offices and places to play, walked into
-			world.commercial = createCommercial(scene, bayArea, world.real, world.city, { isPhone: GFX });
-			// inside the towers: the lobby, the elevators, every floor, the roof
-			world.towers = createTowers(scene, bayArea, world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
-			// ...and every other building: solid, and built inside as you come to it (interiors/)
-			world.interiors = createInteriors(scene, bayArea, world.city, { isPhone: GFX, mats: world.houses.M, towers: world.towers });
-			{ const cv = world.commercial.venue, I = world.interiors; world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
-			// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
-			world.interiors.addDoors(world.commercial);
-			// the buildings as things: glass that breaks, windows and walls to vault, walls that break,
-			// buildings that fall and the crews that rebuild them (structures/)
-			world.structures = HOOKS.structures = createStructures({ scene, camera, world: () => world, isPhone: GFX, shared, car: () => {
-				const C = drive.active() ? drive.physics() : null;
-				if (!C) return null;
-				const t = C.body.translation(), v = C.body.linvel(), r = C.body.rotation();
-				return { x: t.x, y: t.y - 0.5, z: t.z, vx: v.x, vz: v.z, yaw: 2 * Math.atan2(r.y, r.w), mass: C.feel.mass, L: C.spec.L, W: C.spec.W };
-			} });
-			// the towns' hospitals, police and fire stations and armories (services/): built inside
-			// like the rest, staffed by the hour, their ambulances and engines out on the streets
-			world.services = createServices({ scene, world: () => world, camera, people: () => people, isPhone: GFX, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), arms, combat: () => HOOKS.combat });
-			// a patient's bill out of their own money (people/npc-money.js; short of it, they owe it), and
-			// the bases' barracks, war rooms and depots furnished by the services, the police cruisers
-			// leaving from their stations (military/)
-			world.services.hooks.charge = (who, credits) => { const M = HOOKS.npcMoney; if (!M || !(M.balance(who) >= credits)) return false; M.spend(who, credits, 'hospital', 'hospital'); return true; };
-			HOOKS.military?.setInteriors(world.services.militaryInteriors());
-			HOOKS.military?.setStations((x, z) => world?.services?.stationAt(x, z));
-			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
-			// the streets by era and season: potholes and their crews, the trees' stakes and leaves, holiday lights, sprinklers (bay/streets.js)
-			world.streets = createStreets({ scene, camera, world: () => world, drive, isPhone: GFX, hint: (t, ms) => hint(t, ms, 1) });
-			// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
-			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone: GFX });
-			// the cars' people, their owners, and the cars as solid things (vehicles/)
-			world.vehicles = createVehicles({ scene, world: () => world, camera, isPhone: GFX, people: () => people });
-			world.military = HOOKS.military;
-			// the freeways' barriers, sound walls and overpasses (their decks are floors)
-			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone: GFX, roadAt: (r, x, z) => world.berms?.along(r, x, z) });
-			// the signs, decals, stickers, posters, tags and grime of the streets, shops and cars (signage/)
-			world.signage = HOOKS.signage = createSignage({ scene, world: () => world, isPhone: GFX, locate: (x, z) => globeLL(x, z), morality: () => HOOKS.npcQuests?.where?.() });
-			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
-			world.lake = createLake(scene, bayArea, shared, { isPhone: GFX, real: world.real, ponds: false });
-			// every other river, creek, lake and reservoir (bay/water.js)
-			world.water = createEarthWater(scene, bayArea, shared, { isPhone: GFX, real: world.real, ground: (x, z) => island.heightAt(x, z), riverLevel: (x, z) => world?.boardwalk?.waterAt(x, z) ?? null, riverSettled: () => world?.boardwalk?.river?.settled?.() ?? !world?.boardwalk, extra: [world.lake.source] });
-			bayArea.waterName = (x, z) => world?.water?.nameAt(x, z) ?? null;
-			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
-			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone: GFX });
-			// the South Bay's salt ponds, levees and marsh, round the Dumbarton Bridge
-			world.saltPonds = createSaltPonds(scene, bayArea, shared, { isPhone: GFX });
-			// the beaches down Highway 1: lots, restrooms, camps and fires, surf, the lighthouse
-			world.beaches = createBeaches(scene, bayArea, world.real, shared, { isPhone: GFX });
-			// the parks furnished as their agencies furnish them: signs, kiosks, tables, playgrounds, courts
-			world.parks = createParkKit(scene, bayArea, world.real, { isPhone: GFX, lake: world.lake });
-			// the Bay Area Discovery Museum at Fort Baker: the barracks, the exhibits, Lookout Cove
-			world.discovery = createDiscovery(scene, bayArea, world.real, { isPhone: GFX });
-			// the Santa Cruz Beach Boardwalk: the Casino, the midway and its rides, the Giant Dipper
-			world.boardwalk = createBoardwalk(scene, bayArea, shared, { isPhone, mount: dom.mount, hint: (t, ms, pri = 1) => hint(t, ms, pri), camera, player: () => world?.player.state });
-			// the Bay Area's wild animals by habitat, month and hour, and the field journal
-			world.wildlife = createWildlife(scene, bayNear, { isPhone: GFX, real: world.real, globe: () => world?.globe, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
-			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
-			world.natureSound = createNatureSound(bayNear, (x, z) => bayArea.heightAt(x, z));
-			// the in-between places: dirt tracks, the industrial fringe, town's ragged edge, the odd camp
-			world.edge = createEdgelands(scene, { bay: bayNear, real: world.real, city: world.city, world: () => world, shared, isPhone: GFX });
-			// roads graded like real ones, with berms: the ground walked and driven on is the
-			// ground as drawn
-			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z), (x, z) => bayArea.fixedAt(x, z), { ready: () => bayArea.loaded() });
-			const own = island.heightAt, berms = world.berms;
-			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : berms.apply(x, z, bayArea.heightAt(x, z));
-			// (the ground as the GPU draws it, where people stand: bay/terrain.js)
-			island.drawnAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.drawnAt(x, z, island.heightAt);
-			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
-			const waterWorld = world;
-			island.waterAt = (x, z) => waterWorld.boardwalk?.waterAt(x, z) ?? waterWorld.water?.waterAt(x, z) ?? waterWorld.globe?.waterAt(x, z) ?? null;
-			bayArea.ready.then(() => {
-				if (world !== w0) return;
-				world.powerlines?.plan({ earth: true, island, heightAt: (x, z) => bayArea.heightAt(x, z) });
-				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
-				world.bridge = bridge;
-				seaDepth.mark(bridge.group);   // its piers in the strait
-				// the bridge's deck and the Presidio Parkway up to it, to drive (drive.js follows them)
-				{
-					const pts = [], B = bridge, half = B.length / 2;
-					for (let t = -half; t <= half + 0.1; t += 20) pts.push(B.centre.x + B.axis.x * t, B.centre.z + B.axis.y * t);
-					const south = pts.slice(0, 2), route = ROUTES['US-101 Presidio'].map(([a, b]) => toWorld(a, b));
-					const pp = [...south];
-					for (const q of route) pp.push(q.x, q.z);
-					world.real?.addRoads?.([
-						{ cls: 'motorway', name: 'US-101 · Golden Gate Bridge', w: 18, pts: new Float32Array(pts), bridge: true, end0: false, end1: false, link: false, divided: true },
-						{ cls: 'motorway', name: 'US-101 · Presidio Parkway', w: 18, pts: new Float32Array(pp), bridge: false, end0: false, end1: false, link: false, divided: true },
-					]);
-				}
-				world.landmarks = createLandmarks(scene, bayArea);
-				world.roads = createRoads(shared, scene, bayArea);
-				world.diablo = createDiablo(scene, bayArea);
-				// the Summit Building's rooms, built inside its stone as you come near
-				world.interiors?.addSite(world.diablo.site);
-				// ...and the landmarks' (bay/landmarks.js): their halls, their doors for the townsfolk; the
-				// city's own towers keep their lobbies where a landmark tower stands on one
-				for (const S of [...world.landmarks.sites, ...(world.boardwalk.sites || [])]) world.interiors?.addSite(S);
-				world.interiors?.addDoors(world.landmarks);
-				bayArea.coast?.sites?.each((S) => world.interiors?.addSite(S));
-				world.landmarks.yieldTo((x, z) => (world.city?.towersNear?.(x, z, 20) || []).length > 0);
-				world.labels.setBridge(bridge);
-				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
-				// ...and in and out of the houses, up their stairs
-				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y), world.lake?.floor?.(x, z, y) ?? -1e9, world.parks?.floor?.(x, z, y) ?? -1e9);
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); world.beaches.push?.(p, footY); world.parks?.push?.(p, footY); picnic.push(p, footY); };
-				{ const of = island.extraFloor, P = world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
-				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
-				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
-				{ const of = island.extraFloor, op = island.extraPush, S = world.structures; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), S.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); S.push(p, footY); }; }          // structures: rubble and broken walls
-				{ const of = island.extraFloor, op = island.extraPush, S = world.services; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), S.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); S.push(p, footY); }; }
-				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
-				// the military bases' pads, banks, roofs and towers to stand on; their walls, fence and vehicles solid
-				{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
-				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
-				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
-				// New district materials are warmed by the bounded frame queue.
-			});
-			const w0 = world;
-		}
-		{ const previousPush = island.extraPush; island.extraPush = (p, footY) => { previousPush?.(p, footY); picnic.push(p, footY); }; }
-		window.L99Loading.stage('Settling your arrival');
-		buildPanel();
-		return world;
-	}
+	function buildWorld(params) { return islandBuild(iw, params); }
 
-	function teardown() {
-		seaMirror.reset(); seaDepth.reset();
-		if (!world) return;
-		picnic.clear();
-		HOOKS.combat?.reset();
-		HOOKS.gear?.suspend();
-		families.clear();
-		HOOKS.errands?.dispose();
-		HOOKS.npcQuests?.dispose();
-		HOOKS.fares?.dispose();
-		HOOKS.multiplayer?.reset();
-		guide.endTalk();
-		guide.routeMarks?.reset(); // keep reusable marker resources out of departing-world disposal
-		communityProjects.reset(); projectMarks.reset(); projectSnapshot={projects:[]}; projectRefresh=0;
-		social.reset();
-		world.labels?.dispose();
-		world.plumes?.dispose();
-		world.powerlines?.dispose();
-		world.contrails?.dispose();
-		world.flush?.dispose();
-		world.farForest?.dispose();
-		world.discovery?.dispose();
-		world.services?.dispose();
-		world.signage?.dispose();
-		world.structures?.dispose?.();          // (phone audit: its quality listener let go)
-		world.kinetic?.dispose();
-		world.orbit?.dispose();
-		world.music?.dispose();
-		worldAir(1);
-		shaderWarm.reset();
-		const release = captureResources(scene, {
-			renderer,
-			textures: [shared.heightTex, shared.maskTex, world.island.biomes?.tex],
-			keepTextures: [shared.occ, shared.prints],
-		});
-		world.globe?.dispose();         // globe: the frame back to the Bay's, its hooks off
-		world.water?.dispose();
-		world.bayArea?.dispose();
-		world.real?.dispose();
-		world.streets?.dispose();
-		drive.stop();
-		world.player.dispose();
-		world.cottages?.dispose();
-		world.shells?.dispose();
-		world.shrooms?.dispose();
-		world.deep?.dispose();
-		world.soulWell?.dispose();
-		world.underworld?.dispose();
-		world.volcano?.dispose();
-		world.alien?.dispose();
-		world.colony?.dispose();
-		world.arch?.dispose();
-		world.medieval?.dispose();
-		world.village?.dispose?.();
-		world.beyond?.dispose();
-		world.boardwalk?.destroy();
-		world.rays?.dispose();
-		world.spray?.dispose();
-		release();
-		while (scene.children.length) scene.remove(scene.children[0]);
-		renderer.renderLists.dispose();
-		shared.heightTex = shared.maskTex = null;
-		shared.uBiome.value = null;
-		world = null;
-	}
+	function teardown() { return islandTeardown(iw); }
 
 	function placeKinetic(kind) {
 		const W = world, P = W?.player.state;
@@ -1639,167 +1092,7 @@ export function createIslandWorld() {
 	}
 	function replayKinetic() { if (!world || world.orbit?.active()) return; window.initAudio?.(); world.kinetic.replay(); }
 	HOOKS.kinetic = { place: placeKinetic, state: () => world?.kinetic?.state(), replay: replayKinetic, stop: () => world?.kinetic?.silence(), clear: () => world?.kinetic?.clear(), configure: (v) => world?.kinetic?.configure(v) };
-	function buildPanel() {
-		const p = dom.panel;
-		p.replaceChildren();
-		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
-		title.textContent = 'SKY & WORLD';
-		p.appendChild(title);
-		// your hero: a man or a woman (people/hero.js), made again where you stand
-		const heroL = css(document.createElement('div'), 'opacity:.9;margin-bottom:4px;'); heroL.textContent = 'Your hero';
-		const heroRow = css(document.createElement('div'), 'display:flex;gap:6px;margin-bottom:12px;');
-		heroRow.setAttribute('role', 'group'); heroRow.setAttribute('aria-label', 'Your hero');
-		for (const [sex, label] of [['male', 'Male'], ['female', 'Female']]) {
-			const on = avatar.hero === sex;
-			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid ' + (on ? '#01a982' : 'rgba(255,255,255,.25)') + ';background:' + (on ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;cursor:pointer;');
-			b.textContent = label; b.setAttribute('aria-pressed', String(on));
-			b.onclick = () => { if (avatar.hero === sex) return; avatar.setHero(sex).catch(() => {}); hint(`Your hero: ${label.toLowerCase()}. Friends see the change the next time you join a room.`, 2600, 1); buildPanel(); };
-			heroRow.appendChild(b);
-		}
-		p.append(heroL, heroRow);
-		const combatHelp = document.createElement('p'); combatHelp.style.cssText = 'font:12px/1.5 system-ui;opacity:.85'; combatHelp.textContent = 'Combat: click or Q strikes immediately. Shift + click/Q charges a heavy; release to strike. J grabs or throws. Touch: Strike or hold Heavy. L or middle mouse locks a target; Shift + L cycles. Tap Lock / Next on touch. Target markers do not steer your aim. Hold C to crouch (lower, harder to hit); C while sprinting slides. Keys 1 to 5 take up your weapons (again puts it away), 6 to 0 cast your spells, N opens the spellbook. Alt / Option frees the mouse to look about by dragging; a double tap of Alt / Option returns to aiming.'; p.appendChild(combatHelp);
-		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
-			() => Math.round(shared.aimSensitivity * 100),
-			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
-			(percent) => `${percent}%`);
-		aim.input.setAttribute('aria-label', 'Aim sensitivity');
-		aim.input.style.minHeight = '44px';
-		aim.input.style.touchAction = 'none';
-		const aimNote = css(document.createElement('div'), 'font-size:12px;opacity:.75;margin:-6px 0 12px;');
-		aimNote.textContent = 'Mouse and touch · Default 115%';
-		p.appendChild(aimNote);
-		// a touch screen: invert up and down, and the gyro (ui/touch-look.js)
-		if (dom.mount.classList.contains('l99-touch')) touchLookRows(p, () => css(document.createElement('button'), 'width:100%;min-height:44px;margin-bottom:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;'));
-		if (origin) {
-			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
-			galaxy.textContent = 'Explore galaxy';
-			galaxy.onclick = () => { dom.panel.style.display = 'none'; legacyLaunch(); };
-			p.appendChild(galaxy);
-		}
-		const musicMode = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
-		const on = !!window.L99Continuity?.musicMode?.();
-		musicMode.textContent = `Music guides wildlife: ${on ? 'on' : 'off'}`;
-		musicMode.setAttribute('aria-pressed', String(on));
-		musicMode.onclick = () => { window.L99Continuity?.musicMode?.(!on); buildPanel(); };
-		p.appendChild(musicMode);
-		const rigTitle = css(document.createElement('div'), 'margin:8px 0;font-weight:600;');
-		rigTitle.textContent = 'Kinetic instruments'; p.appendChild(rigTitle);
-		const rig = world.kinetic.state();
-		const kinds = [['garden', 'Bounce garden'], ['pendulum', 'Pendulum wave'], ['dominoes', 'Domino spiral'], ['chimes', 'Chime tree'], ['cradle', 'Newton’s cradle'], ['droplets', 'Droplet pool'], ['harp', 'Gravity harp'], ['stairs', 'Plinko staircase'], ['fountain', 'Ball fountain'], ['wavebars', 'Kinetic wave']];
-		const choice = css(document.createElement('select'), 'width:100%;min-height:38px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
-		choice.name = 'kinetic-instrument'; choice.setAttribute('aria-label', 'Kinetic instrument');
-		for (const [value, label] of kinds) { const o = document.createElement('option'); o.value = value; o.textContent = label; choice.appendChild(o); }
-		choice.value = world.kineticChoice || rig.kind || 'garden';
-		choice.onchange = () => { world.kineticChoice = choice.value; };
-		p.appendChild(choice);
-		const rigRow = css(document.createElement('div'), 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;');
-		for (const [label, action] of [['Place instrument', () => placeKinetic(choice.value)], ...(rig.kind ? [['Replay', replayKinetic], ['Stop', () => world.kinetic.silence()], ['Clear', () => world.kinetic.clear()]] : [])]) {
-			const b = css(document.createElement('button'), 'flex:1;min-height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px system-ui;cursor:pointer;padding:5px;');
-			b.textContent = label; b.onclick = () => { action(); buildPanel(); }; rigRow.appendChild(b);
-		}
-		p.appendChild(rigRow);
-		if (rig.kind) {
-			const playing = css(document.createElement('div'), 'opacity:.85;font-size:12px;margin:4px 0 8px;');
-			playing.textContent = `${kinds.find(([k]) => k === rig.kind)?.[1] || rig.kind} · ${rig.running ? 'playing' : 'stopped'}`;
-			p.appendChild(playing);
-			const scale = css(document.createElement('select'), 'width:100%;min-height:36px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
-			scale.name = 'kinetic-scale'; scale.setAttribute('aria-label', 'Instrument scale');
-			for (const [value, label] of [['faceplate', 'Current Bard scale'], ['0', 'Minor pentatonic'], ['1', 'Major pentatonic'], ['2', 'Dorian'], ['3', 'Whole tone']]) { const o = document.createElement('option'); o.value = value; o.textContent = label; scale.appendChild(o); }
-			scale.value = String(rig.scale); scale.onchange = () => { world.kinetic.configure({ scale: scale.value === 'faceplate' ? 'faceplate' : +scale.value }); buildPanel(); }; p.appendChild(scale);
-			if (rig.scale !== 'faceplate') slider(p, 'Pitch offset', -12, 12, 1, () => world.kinetic.state().root, v => world.kinetic.configure({ root: v }), v => `${v > 0 ? '+' : ''}${v} semitones`);
-		}
-		if (rig.kind === 'garden') {
-			slider(p, 'Gravity', .1, 20, .1, () => world.kinetic.state().gravity, v => world.kinetic.configure({ gravity: v }), v => v.toFixed(1));
-			slider(p, 'Bounce', 0, .98, .01, () => world.kinetic.state().restitution, v => world.kinetic.configure({ restitution: v }), v => Math.round(v * 100) + '%');
-			slider(p, 'Drop height on replay', .1, 4, .1, () => world.kinetic.state().drop, v => world.kinetic.configure({ drop: v }), v => v.toFixed(1));
-		}
-		if (rig.kind === 'droplets') slider(p, 'Droplet density', .2, 3, .1, () => world.kinetic.state().rain, v => world.kinetic.configure({ rain: v }), v => v.toFixed(1) + '×');
-		if (rig.kind === 'garden' || rig.kind === 'dominoes') {
-			slider(p, 'Cascade tempo', 30, 240, 1, () => world.kinetic.state().bpm, v => world.kinetic.configure({ bpm: v }), v => `${Math.round(v)} BPM`);
-			const sync = css(document.createElement('button'), 'min-height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;margin-bottom:8px;');
-			sync.textContent = 'Use track tempo'; sync.onclick = () => { world.kinetic.configure({ bpm: world.music.performance.bpm }); buildPanel(); }; p.appendChild(sync);
-		}
-		const S = world.sky.state;
-		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
-		const t = slider(p, 'Time of day', 0, 23.99, 0.05, () => S.hours, (v) => { S.hours = v; }, fmtH);
-		// steps: paused, real time, then 0.1× to 4× of the game clock
-		slider(p, 'Time speed', 0, 41, 1, () => S.real ? 1 : S.speed === 0 ? 0 : Math.round(S.speed * 10) + 1,
-			(v) => { S.real = v === 1; S.speed = v === 0 ? 0 : v === 1 ? 1 : (v - 1) / 10; },
-			(v) => v === 0 ? 'paused' : v === 1 ? 'real time' : ((v - 1) / 10).toFixed(1) + '×');
-		// the weather: follow the clock, or hold it; moving a slider holds that one thing
-		const WX = world.weather;
-		const wrow = css(document.createElement('div'), 'display:flex;gap:4px;margin:4px 0 8px;');
-		for (const mode of ['auto', 'clear', 'fair', 'showers', 'storm']) {
-			const b = css(document.createElement('button'), 'flex:1;min-height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (WX.state.mode === mode ? '#01a982' : 'transparent') + ';color:#fff;font:11px system-ui;padding:0 2px;');
-			b.textContent = mode[0].toUpperCase() + mode.slice(1);
-			b.onclick = () => { WX.set(mode); buildPanel(); };
-			wrow.appendChild(b);
-		}
-		const wl = css(document.createElement('div'), 'opacity:.9;margin-top:4px;'); wl.textContent = 'Weather';
-		p.append(wl, wrow);
-		slider(p, 'Rain', 0, 1, 0.01, () => WX.state.pin.rain ?? WX.state.rainHere, (v) => { WX.pin('rain', v); }, (v) => v < 0.02 ? 'dry' : v < 0.3 ? 'drizzle' : v < 0.7 ? 'shower' : 'downpour');
-		slider(p, 'Cloud cover', 0, 1, 0.01, () => world.sky.uniforms.uCloud.value, (v) => { WX.pin('cover', v); world.sky.uniforms.uCloud.value = v; }, (v) => Math.round(v * 100) + '%');
-		slider(p, 'Waves', 0, 2, 0.05, () => shared.uWave.value, (v) => { shared.uWave.value = v; world.ocean.userData.uniforms.uWave.value = v; }, (v) => v.toFixed(2));
-		// the world's sounds (nature, the city, footsteps, the wolves) under the music: world/soundbus.js
-		slider(p, 'World sounds', 0, 1.5, 0.05, () => worldLevel(), (v) => worldLevel(v), (v) => Math.round(v * 100) + '%');
-		slider(p, 'Wind', 0, 1.5, 0.05, () => shared.uWind.value, (v) => { WX.pin('wind', v); shared.uWind.value = v; }, (v) => v.toFixed(2));
-		// the month the world keeps: today's, or one picked (the hills, the flowers, the leaves, the
-		// snow, the sun's path, the birds, the fish, what people wear); remembered
-		const ml = css(document.createElement('div'), 'opacity:.9;margin-top:8px;'); ml.textContent = 'Month';
-		const sel = css(document.createElement('select'), 'width:100%;min-height:36px;margin-top:4px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:#1a1a1a;color:#fff;padding:0 10px;font:inherit;');
-		sel.name = 'world-month'; sel.setAttribute('aria-label', 'Month');
-		['Live (today)', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].forEach((t, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = t; sel.appendChild(o); });
-		sel.value = String(monthPicked());
-		sel.onchange = () => pickMonth(+sel.value);
-		p.append(ml, sel);
-		// the constellations' lines drawn faintly among the stars (the real sky has none; off by default)
-		const conB = css(document.createElement('button'), 'margin-top:8px;width:100%;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (world.sky.lines() ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;cursor:pointer;');
-		conB.textContent = world.sky.lines() ? 'CONSTELLATION LINES: ON' : 'CONSTELLATION LINES: OFF';
-		conB.onclick = () => { const on = !world.sky.lines(); world.sky.lines(on); try { localStorage.setItem('l99-conlines', on ? '1' : ''); } catch { /* private mode */ } buildPanel(); };
-		p.appendChild(conB);
-		const q = css(document.createElement('div'), 'display:flex;gap:6px;margin-top:6px;');
-		// High or Ultra (phones only: the desktop's full graphics, which a computer has on High). Which
-		// meshes and shaders are built is settled at load, so going into or out of Ultra reloads the page.
-		for (const mode of isPhone ? ['high', 'ultra'] : []) {
-			const b = css(document.createElement('button'), 'flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
-			b.textContent = mode.toUpperCase();
-			b.onclick = () => {
-				quality = mode;
-				try { localStorage.setItem('l99-quality', mode); } catch { /* private mode */ }
-				if ((mode === 'ultra') !== ULTRA) {
-					if (mode === 'ultra' && GPU_LITE) clearLite();
-					const u = new URL(location.href); u.searchParams.delete('lite');
-					location.replace(u.href);
-					return;
-				}
-				// high on a device left on the light ground (after a graphics loss): try the full one again
-				if (mode === 'high' && GPU_LITE) {
-					clearLite();
-					const u = new URL(location.href); u.searchParams.delete('lite');
-					location.replace(u.href);
-					return;
-				}
-				applyQuality(); buildPanel();
-			};
-			q.appendChild(b);
-		}
-		if (isPhone) p.appendChild(q);
-		// the credits the data and the assets ask for where they are shown (OpenStreetMap, CC BY)
-		const credit = css(document.createElement('div'), 'margin-top:8px;font:11px system-ui;opacity:.6;line-height:1.35;');
-		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets, buildings and land use (San Francisco, the East Bay, the Peninsula, Marin and the South Bay): Overture Maps Foundation (CC BY 4.0), © OpenStreetMap contributors (ODbL), Microsoft and Google building footprints. Hair and beards: the MakeHuman team, culturalibre and Rehman Polanski (CC0); Elvaerwyn (CC BY 4.0), via the MakeHuman community.';
-		p.appendChild(credit);
-		// what the site keeps on this device, by kind, each removable
-		storagePanel(p, { activeModel: () => (guide.llm.kind() === 'webllm' ? guide.llm.model() : ''), onModelRemoved: () => guide.llm.useNone() });
-		const TM = window.L99TouchMusic175;
-		if (TM) {
-			const b = css(document.createElement('button'), 'margin-top:10px;width:100%;min-height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (TM.enabled ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
-			b.textContent = TM.enabled ? 'PLAY SURFACES: ON' : 'PLAY SURFACES: OFF';
-			b.onclick = () => { TM.set(!TM.enabled); buildPanel(); };
-			p.appendChild(b);
-		}
-		autoMusic.panel(p);
-		panelClock = t;
-	}
+	function buildPanel() { return islandPanel(iw); }
 
 	// the tier the governor (or the setting) has chosen, applied: resolution, shadows (their map's
 	// size and how often they are drawn), the clouds in the water, the sunbeams and spray. The crowd,
@@ -1975,346 +1268,7 @@ export function createIslandWorld() {
 		follow: () => { const W = world; if (!W) return null; followFarGround(W, 0.016, farNight); return 'the Bay and globe ground re-centred'; },
 	};
 	const floorGuard = HOOKS.floorGuard = createFloorGuard({ world: () => world, camera, renderer, probe: drawnGround, wide: wideGround, gpuEvery: GFX ? 6 : 12 });
-	function tick(now) {
-		const elapsed = Math.min(.25, Math.max(.001, (now - last) / 1000));
-		const dt = Math.min(0.05, elapsed);
-		const projectDelta = elapsed;
-		last = now;
-		if (building || !visible || !world || document.hidden || lost || recovery.blocked()) { communityProjects.reset(); world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
-		if (window.L99Loading.active() && !arrival) { communityProjects.reset(); return; }
-		// on a phone the world holds still while someone thinks of a reply: the model and
-		// the world share the GPU and the page's memory
-		if (isPhone && guide.llm?.busy?.()) { communityProjects.reset(); return; }
-		time += dt;
-		shared.uTime.value = time;
-		stepWind(dt, shared);
-		const W = world;
-		W.player.state.inputBlocked = window.L99Loading.active() || arcade.active() || studio.active() || gear.busy() || dom.mount.classList.contains('l99-tools-open') || !!dom.mount.querySelector('[role="dialog"]:not([style*="display: none"]) input:focus');
-		if (W.player.state.inputBlocked) W.player.clearInput();
-		W.arms?.update(dt, camera.position);
-		W.music.update(dt);
-		W.orbit?.before();
-		// Keep the flight controls alive while the orbital pass owns the render loop.
-		// This makes the same ×1/×3/×6/×9 booster available in space as on the surface.
-		updateFlightControls(W);
-		if (!window.L99Loading.active()) explore.steer(dt);
-		// driving a road carries you; otherwise you walk, swim or fly
-		// (a minigame has the screen and the camera while it runs)
-		if (window.L99Loading.active()) { W.player.clearInput(); drive.stop(); }
-		else if (arcade.active()) drive.stop();
-		else if (W.boardwalk?.ride(dt, time)) drive.stop();
-		else if (studio.active()) { /* in the chair: the studio holds the camera */ }
-		else if (!carjack.update(dt, time) && !drive.update(dt)) W.player.update(dt, time);
-		W.orbit?.after(dt);
-		W.orbit?.updateHud();
-		worldAir(1 - (W.orbit?.blend() || 0));
-		if (W.orbit?.space()) {
-			communityProjects.reset();
-			social.update(0, time, false); waypoint.update(0, time, false);
-			W.labels?.hide();
-			W.globe?.regional?.pause();
-			W.kinetic?.silence();
-			worldAudio.space(dt);
-			// The retained ground stops streaming and drawing; only the orbital pass runs.
-			// The same input state and faceplate analyser continue on every frame.
-			dom.veil.style.opacity = '0'; glare.style.opacity = '0';
-			// (charting a new place on the way down: its ground comes in while the orbit is still drawn)
-			if (W.orbit.streams?.()) followFarGround(W, dt, farNight);
-			actions();
-			explore.shoot(dt);
-			W.orbit.render(time);
-			return;
-		}
-		you.update(dt, time);
-		// a director's camera (trailer/): posed after the player moves, before anything reads it
-		HOOKS.cine?.(camera, dt, time);
-		explore.shoot(dt);
-		W.fields?.update(dt, camera);
-		arcade.update(dt, time, !W.boat?.boarded?.() && !W.boardwalk?.riding());
-		stampPrints(W.player.state);
-		W.boat.update(dt, time);
-		const sk = W.sky.update(dt, camera.position);
-		W.boardwalk?.update(dt, time, camera, sk.night, W.sky.state.hours);
-		// the weather: frames running slow shed rain streaks; indoors the rain stays out
-		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
-		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
-		W.ocean.userData.tick?.(dt, W, camera, wx?.rainHere || 0);   // what touches the sea, the rain on it (world/ocean.js)
-		surprises.update(dt, sk, wx);
-		W.whale.update(dt, time, shared.uBass.value, camera.position);
-		// below the surface: the sea closes in, blue-green and dim
-		const contact = waterContact(W.island, camera.position, W.player.floorAt(camera.position.x, camera.position.z, camera.position.y - 1.68), time, shared.uWave.value);
-		const surf = contact.surface ?? 0;
-		// (the Deep lies far under the sea's level, but it is dry rock)
-		const under = contact.under && !W.deep?.active();
-		// seen from below the sea is a ceiling: it must not hide what glows beneath it
-		W.ocean.material.depthWrite = !under;
-		// ...and it is drawn before everything under it, so glows and embers show through
-		W.ocean.renderOrder = under ? -5 : 1;
-		W.underwater.update(dt, time, under, surf);
-		W.magma.update(dt, time, under, contact.sea ?? 0);
-		W.volcano?.update(dt, time);
-		W.alien?.update(dt, time);
-		W.beyond?.update(dt, time);
-		W.floaters?.update(sk.night);
-		W.colony?.update(dt, time);
-		W.arch?.update(dt, time);
-		W.dwellings?.update(dt, camera.position);
-		W.medieval?.update(dt, time, sk);
-		W.caverns.update(dt, time, under);
-		soul.update();
-		W.underworld?.update(dt, time);
-		W.soulWell?.update(dt, time);
-		W.deep?.update(dt, time);
-		// the reef and its fish only run when you are in or over the bay
-		// (on a governed tier, from up on the shore only once you are down at the water: the reef
-		// and its life drawn through the surface from the spawn's hill were millions of triangles)
-		seaLifeVisibility(W, dt, time, under);
-		shared.uUnder.value = under ? 1 : 0;
-		if (under) {
-			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 14));
-			// daylight fades fast with depth: down in the crater the lava is the light
-			const dim = 1 - depthK * 0.82;
-			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
-			shared.uAmbient.value.multiplyScalar(dim);
-			scene.fog.color.setRGB(0.03 - depthK * 0.025, 0.2 - depthK * 0.15, 0.25 - depthK * 0.16).multiplyScalar(0.25 + 0.75 * sk.dayK);
-			scene.fog.density = -(0.035 + depthK * 0.02);   // negative: per-channel absorption
-		} else {
-			// out in the Bay Area the air opens up: tens of kilometres of view, layered haze
-			const dI = Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z));
-			// on Earth the coast is always in view from the island: only a light sea haze close in
-			const openK = W.bayArea?.loaded() ? Math.max(0.9, THREE.MathUtils.smoothstep(dI, 2500, 9000)) : 0;
-			scene.fog.density = THREE.MathUtils.lerp(0.00026, 0.000024 + Math.max(0, 0.00001 * (1 - camera.position.y / 600)), openK);
-			// rain closes the distance in; the coast south of Half Moon Bay is kept crystal
-			// clear, the air over the bluffs washed clean by the wind off the sea
-			const lat = 37.76 - camera.position.z / 110996, lon = camera.position.x / (111320 * Math.cos(37.76 * Math.PI / 180)) - 122.57;
-			const clearK = THREE.MathUtils.smoothstep(lat, 37.5, 37.44) * THREE.MathUtils.smoothstep(lat, 37.02, 37.1) * THREE.MathUtils.smoothstep(lon, -122.2, -122.3);
-			scene.fog.density *= (1 + (wx.rainHere * 12 + wx.gloom * 1.5) * (1 - clearK * 0.8)) * (1 - clearK * 0.55);
-			// another world's air: dust, ash, spores, mist
-			scene.fog.density *= W.island.profileHaze || 1;
-			// (the Moon's ground runs to its horizon in clear vacuum)
-			if (W.island.far) scene.fog.density = 0.000006;
-			const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
-			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
-		}
-		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
-		const caveK = W.underworld?.inside?.() || 0;
-		const open = surfaceOpen(W);
-		if (caveK > 0) {
-			const dim = 1 - caveK * 0.96;
-			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
-			shared.uAmbient.value.multiplyScalar(dim);
-			const cg = W.underworld.fog?.() || [0.02, 0.022, 0.026];
-			scene.fog.color.lerp(new THREE.Color(cg[0], cg[1], cg[2]), caveK);
-			scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.012, caveK);
-		}
-		// the air's shape (world/airfog.js): thick low down, lit toward the sun, whole by the far
-		// plane; none of it under water, in a cave or where there is no air
-		const airK = under || W.island.far || shared.planet?.airless ? 0 : 1 - caveK;
-		AIR.air.z = airK; AIR.air.w = airK > 0 ? camera.far * 0.98 : 0;
-		AIR.sun.w *= airK;
-		// Gargantua swallowing the sky (magic/fx.js): the daylight on the ground goes with it
-		const voidK = magic.darkness?.() || 0;
-		if (voidK > 0) {
-			const dim = 1 - voidK * 0.88;
-			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
-			shared.uAmbient.value.multiplyScalar(dim);
-			scene.fog.color.lerp(_voidFog, voidK * 0.9);
-		}
-		// the cities' glow washes out the faint stars
-		if (W.bayArea?.loaded()) {
-			let glow = 0;
-			let gx = 0, gz = 0;
-			for (const [dx, dz] of GLOW_AT) { const u = W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u; glow += u; gx += dx * u; gz += dz * u; }
-			shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
-			// (and which way the glow lies: the sky over the cities brightest toward them)
-			W.sky.glowToward(gx, gz, dt);
-		}
-		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
-		const dazed = W.shrooms?.muffle() || 0;
-		if (under || dazed > 0 || muffle.k > 0.01) underwaterAudio(under ? Math.min(1, 0.75 + (surf - camera.position.y) * 0.03) : dazed, dt);
-		const sh = W.shells.update(dt, time);
-		const show = (el, on) => { const d = on ? 'block' : 'none'; if (el.style.display !== d) el.style.display = d; };
-		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
-		actions();
-		followGround(W, dt, open);
-		followFarGround(W, dt, sk.night);
-		W.vegetation.stream(camera, false);
-		W.vegetation.react(dt, camera.position);
-		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }
-		W.kinetic.update(dt, { listener: camera.position });
-		W.village.update(time, sk.night);
-		W.cottages?.update(camera.position, dt);
-		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
-		W.distant.group.visible = !W.bayArea;
-		if (!W.bayArea) W.distant.update(time, sk.night);
-		W.plumes.update(dt, camera, W.sky);
-		W.powerlines?.update(camera, dt);
-		W.contrails?.update(dt, camera);
-		W.flush?.update(dt, camera);
-		W.fauna.update(time, sk.night, camera.position);
-		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
-		W.bridge?.update(time, sk.night);
-		W.civ?.update(camera);
-		if (W.civ) { const ll = globeLL(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
-		W.real?.update(camera);
-		W.diablo?.update(dt, time, camera, sk.night);
-		W.landmarks?.update?.(dt, camera);
-		W.city?.update(camera, sk.night);
-		// the businesses' fronts by the hour, and the regional kit's towns planned too (economy/layer.js)
-		W.city?.economy?.tick(camera.position, W.sky.state.hours, sk.night, dt);
-		W.forestFloor?.update(camera);
-		W.edge?.update(dt, time, camera, sk.night);
-		W.houses?.update(camera, dt, sk.night);
-		if (W.commercial) {
-			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
-			W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
-			W.interiors?.update(camera, dt, W.sky.state.hours, sk.night);
-			W.structures?.update(dt, sk.night, W.sky.state.hours);
-			W.services?.update(dt, W.sky.state.hours, sk.night);
-			// stepping into a place: what it is, and how busy at this hour
-			const inB = W.commercial.inside(camera.position);
-			if (inB && inB !== W.bizSeen) {
-				const NAME = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', tattoo: 'Tattoo parlor · T to design your own', office: 'Office lobby', arcade: 'Arcade', bowling: 'Bowling alley', cinema: 'Cinema' };
-				const n = (inB.spots || []).filter((q) => q.taken).length;
-				hint(`${NAME[inB.type]}${n < 1 ? ' · quiet at this hour' : n > inB.seats.length * 0.35 ? ' · busy' : ''}`, 3000);
-			}
-			W.bizSeen = inB;
-			inkBtn.style.display = inB?.type === 'tattoo' && !studio.active() ? '' : 'none';
-		}
-		// indoors by day the eye opens up to the light from the windows (by night, not at all:
-		// the rooms are as dark as their lamps leave them)
-		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
-		renderer.toneMappingExposure *= (1 + indoorK * 0.55 * sk.dayK) * magic.exposure();
-		watchDoor(dt);
-		striker.update(dt, scene, !W.player.state.flying && !arcade.active() && dom.mount.style.display !== 'none');
-		strikeRipples.update(dt);
-		sunGlare(dt);
-		watchTeleport();
-		share.update(dt);
-		multiplayer.update(dt, time);
-		gear.update(dt);
-		// (the skills and magic menu open: the fight holds its breath)
-		if (!window.L99Loading.active()) { if (!magic.menuOpen()) combat.update(dt); magic.update(dt); }
-		HOOKS.military?.update(dt, sk.night);
-		HOOKS.cataclysm?.update(dt, sk);
-		if (!window.L99Loading.active()) HOOKS.law?.update(dt);
-		// where you are, kept every few seconds so a reload carries on from here
-		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
-		W.street?.update(dt, time, camera, sk.night);
-		W.contact?.update(camera, dt);
-		W.vehicles?.update(dt, time);
-		ragdolls.update(dt);
-		W.berms?.update(camera);
-		W.freeways?.update(camera);
-		W.signage?.update(dt, camera, sk.night, drive.active());
-		bridgeSound.update(dt);
-		W.streets?.update(dt, sk.night, W.sky.state.hours);
-		crosswalks.update(dt);
-		W.lake?.update(dt, time, camera, sk.night);
-		W.water?.update(dt, time, camera, sk.night);
-		W.spray?.update(dt, camera);
-		W.saltPonds?.update(dt, time, camera);
-		if (W.tidepools) {
-			W.tidepools.update(dt, time, camera);
-			// arriving on a reef: what to look for
-			const tp = camera.position.y < 60 ? W.tidepools.siteAt(camera.position.x, camera.position.z) : null;
-			if (tp && tp !== W.tpSeen) hint(`${tp.name}\nLow tide: look in the pools for ochre sea stars, green anemones and purple urchins${tp.seals ? '. Harbor seals haul out on the outer rocks.' : '.'}`, 7000);
-			if (tp) W.tpSeen = tp;
-		}
-		W.wildlife?.update(dt, time, camera, W.sky.state.hours);
-		if (W.parks) {
-			W.parks.update(dt, camera);
-			const pk = camera.position.y - W.island.heightAt(camera.position.x, camera.position.z) < 80 ? W.parks.parkAt(camera.position.x, camera.position.z) : null;
-			if (pk && pk !== W.parkSeen) hint(`${pk.name}\n${pk.note}`, 8000, 1);
-			if (pk) W.parkSeen = pk;
-		}
-		if (W.discovery) {
-			W.discovery.update(dt, camera);
-			const at = W.discovery.where(camera.position);
-			if (at && at !== 'campus' && at !== W.museumSeen) {
-				const open = W.discovery.busy(W.sky.state.hours, new Date().getDay()) > 0;
-				hint({
-					main: 'Bay Area Discovery Museum\nTot Wetlands, the Art Studio and Discovery Hall\'s climbing tower',
-					cafe: 'The museum café\nCoffee for the grown-ups, snacks for the small ones',
-					cove: 'Lookout Cove\nA little Golden Gate, a shipwreck, a fishing boat and tide pools to climb about',
-				}[at] + (open ? '' : '\nClosed now: open Tuesday to Sunday, 9 to 5'), 7000, 1);
-			}
-			if (at) W.museumSeen = at;
-		}
-		if (W.beaches) {
-			W.beaches.update(dt, time, camera, sk.night);
-			const bc = camera.position.y < 150 ? W.beaches.beachAt(camera.position.x, camera.position.z) : null;
-			if (bc && bc !== W.beachSeen && !W.tidepools?.siteAt(camera.position.x, camera.position.z)) hint(`${bc.name}${bc.quiet ? '\nA quiet stretch: few people, the sound of the surf.' : bc.big ? '\nMavericks breaks half a mile out, in winter the biggest waves on the coast.' : bc.surf ? '\nSurf zone between the checkered flags.' : bc.tents ? '\nCampsites along the back of the beach.' : ''}`, 6000);
-			if (bc) W.beachSeen = bc;
-		}
-		if (arcade.active()) fishing.drop();
-		fishing.update(dt, time, !arcade.active() && !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
-		W.roads?.update(time, sk.night);
-		shaderWarm.tick(dt, { frameMs: frameAvg });
-		guide.update(dt);
-		watchTalk(dt);
-		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
-		dogWalkers.update(dt, camera);
-		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
-		encounterPacing.tick(dt);
-		errands.update(dt);
-		npcQuests.update(dt);
-		livingWorld.update(dt);
-		communityProjects.update(projectDelta);
-		projectRefresh-=projectDelta; if(projectRefresh<=0){projectRefresh=1;projectSnapshot=communityProjects.snapshot();} projectMarks.update(projectDelta);
-		fares.update(dt);
-		families.update(dt, time, camera.position.y > -0.5);
-		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
-		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
-		people.demo(dt, time, camera.position);
-		ghost.update(dt, time, camera, sk.night);
-		picnic.update(dt, time, visible);
-		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, hours: W.sky.state.hours });
-		// (your footsteps keep the music's time: player.js)
-		if (!W.player.state.beat) W.player.state.beat = () => autoMusic.clock();
-		worldAudio.update(dt, { under, night: sk.night, hours: W.sky.state.hours, rain: wx.rainHere || 0 });
-		if (W.natureSound && W.bayArea?.loaded()) {
-			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
-			let pond = 1e9;
-			if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if ((W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) ?? W.water?.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r)) != null) pond = r; } if (pond < 1e8) break; }
-			// (anyone about within 150 m: out alone long enough, the wolves)
-			let company = 0;
-			for (const q of people.pool) if (q.active && Math.hypot(q.M.S.pos.x - cx, q.M.S.pos.z - cz) < 150) company++;
-			W.natureSound.update(dt, camera, { company, wind: shared.uWind?.value, gust: shared.uGust?.value, night: sk.night, hours: W.sky.state.hours, month: today().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
-		}
-		if (!explore.on()) W.labels?.update(camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
-		// a mushroom eaten: sizes swell and shrink (the field of view, from where it stood), and
-		// the frame is drawn through its effect; sober, it draws nothing and the frame is as ever
-		W.shrooms?.update(dt, time);
-		// (and the player's own: wider in a sprint or a slide, player.js)
-		const fovK = arcade.active() ? 1 : (W.shrooms?.fov() ?? 1) * (W.player.state.fovK || 1);
-		if (fovK !== 1 && !tick.fov0) tick.fov0 = camera.fov;
-		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
-		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
-		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
-		// (on the lighter tiers the shadows are drawn every other frame: world/governor.js)
-		const shadowEvery = qualityNow().shadowEvery;
-		renderer.shadowMap.autoUpdate = shadowEvery <= 1;
-		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
-		// (the sky in what people wear, as strong as the day, dim indoors and underground)
-		kitDaylight(renderer, W.sky, (W.houses?.inside?.(camera.position) || W.interiors?.inside?.(camera.position) ? 0.35 : 1) * (1 - caveK * 0.8) * (under ? 0.4 : 1));
-		// the sea's mirror, before the frame that reads it (only what stands over the water: world/seamirror.js)
-		// (not on a world with no sea, nor down a cave or indoors, where the water is out of sight)
-		// (while the skills menu covers the frame nothing is drawn, so neither are they; left as they
-		// are rather than reset, so closing the menu does not warm their shaders again)
-		const covered = magic.covering(), seaOn = !arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && indoorK < 0.5;
-		if (covered) { /* the menu over it all */ } else if (seaOn) {
-			seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
-			seaDepth.render(scene, camera, under || shared.uUnder.value);
-		} else { seaMirror.reset(); seaDepth.reset(); }
-		if (arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
-		W.orbit?.render(time);
-		// the governor: a tier down when the frames or the memory say so, back up after a long easy
-		// run (world/governor.js)
-		frameAvg += (elapsed * 1000 - frameAvg) * 0.05;
-		// (on a phone stepped down to the lighter tiers the local voice model, 100 MB, is let go too)
-		if (governor.update(elapsed, frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
-	}
+	function tick(now) { return islandFrame(iw, now); }
 
 	// the context button: board or leave the boat; the jump button dives in the sea
 	let actState = '';

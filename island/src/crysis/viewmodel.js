@@ -50,11 +50,10 @@ import { playCue } from './weapon-sound.js';
 import { createScopeOptics } from './scope-optics.js';
 import { refineHandSurface, closeHandMaterial, handRefine } from '../people/hand-surface.js';
 import { dressArms } from '../people/sleeve.js';
+import { clamp, wrapAngle as wrap } from '../noise.js';
 
 const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
 const ease = (x) => x * x * (3 - 2 * x);
-const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // a critically damped spring
 // (z below 1 lets it overshoot a little: the weight of a held thing catching up with a turn)
 class Spring { constructor(w = 12, z = 1) { this.v = 0; this.dv = 0; this.w = w; this.z = z; } to(x, dt) { const w = this.w, a = -w * w * (this.v - x) - 2 * this.z * w * this.dv; this.dv += a * dt; this.v += this.dv * dt; return this.v; } }

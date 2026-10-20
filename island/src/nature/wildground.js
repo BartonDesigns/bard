@@ -22,7 +22,7 @@ import { inWater } from '../bay/watercarve.js';
 import { inRiverWater } from '../bay/carve.js';
 import { toWorld } from '../bay/geo.js';
 import { onLandmark } from '../bay/footprints.js';
-import { mulberry32 } from '../noise.js';
+import { mulberry32, smoothstep as sm } from '../noise.js';
 import * as PL from './plants.js';
 import { GEOLOGY, boulder, outcrop, stone, rockMaterial } from './rocks.js';
 import { today } from '../calendar.js';
@@ -35,7 +35,6 @@ const vnoise = (x, z) => {
 	const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
 	return (a * (1 - su) + b * su) * (1 - sv) + (c * (1 - su) + d * su) * sv;
 };
-const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const C = 16;
 const GEO = GEOLOGY.map(([lat, lon, r, c, form]) => ({ ...toWorld(lat, lon), r, col: new THREE.Color(c), form }));
 const TRAILISH = /path|track|footway|bridleway/;

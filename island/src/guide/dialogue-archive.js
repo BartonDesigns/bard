@@ -1,8 +1,10 @@
 // Full, player-local dialogue history. Model context is deliberately managed elsewhere.
+
+import { jsonCopy as clone } from '../persistence/json-copy.js';
+
 const KEY = 'crysis-dialogue-archive-v1';
 const BACKUP = KEY + '-backup';
 const roles = new Set(['user', 'assistant', 'event']);
-const clone = value => JSON.parse(JSON.stringify(value));
 export function createDialogueArchive(options = {}) {
 	let storage = options.storage;
 	if (storage === undefined) { try { storage = globalThis.localStorage; } catch { storage = null; } }

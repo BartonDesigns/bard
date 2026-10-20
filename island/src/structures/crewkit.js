@@ -430,7 +430,6 @@ export function clothMaterial() {
 	mat.userData.u = U;
 	return mat;
 }
-export const NET = [0, 0], MESH = [0.5, 0];
 // quads of cloth: corners (world or local), the cell, how many times it repeats across and up,
 // held to the scaffold's height or not; grid(): a quad split into cells, its middle let sag
 export function cloth() {

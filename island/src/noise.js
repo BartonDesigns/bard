@@ -61,3 +61,7 @@ export const smoothstep = (a, b, v) => {
 };
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
+// the shader-style sine hash: a 0..1 value from two numbers (GLSL's fract(sin(dot(...))) idiom)
+export const sineHash = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+// an angle brought into -PI..PI
+export const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));

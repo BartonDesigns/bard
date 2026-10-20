@@ -490,4 +490,3 @@ const KIT = {
 // the things you walk through: hanging lights and curtains
 addKit(KIT, ['surgicalLight', 'curtain', 'laneLines']);
 for (const t of ['surgicalLight', 'curtain', 'wallScreen', 'whiteboard', 'toolWall', 'laneLines', 'lightBar']) FLAT.add(t);
-export const SERVICE_KIT = Object.keys(KIT);

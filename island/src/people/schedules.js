@@ -212,7 +212,3 @@ export function whereAt(plan, id, hour) {
 	const s = slotOf(hour);
 	return { at: plan.at[id]?.[s], act: plan.act[id]?.[s], carer: plan.carer[id]?.[s] ?? null };
 }
-// the moments of the day worth seeing: who walks who to school, who shops, who cooks
-export function momentsOf(h, plan) {
-	return plan.notes.map((n) => ({ ...n, member: h.members.find((m) => m.id === n.who) || null, child: h.members.find((m) => m.id === n.child) || null }));
-}

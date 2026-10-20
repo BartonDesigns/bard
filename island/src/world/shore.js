@@ -12,6 +12,7 @@
 // for each wave.
 
 import * as THREE from 'three';
+import { smoothstep as smooth } from '../noise.js';
 
 // (the GLSL needs NOISE_GLSL's vn before it)
 export const SWASH_GLSL = /* glsl */`
@@ -56,7 +57,6 @@ float breakOn(float sl, float shelter){ return smoothstep(0.004, 0.012, sl) * (1
 // ---------- the same sums on the CPU ----------
 const fract = (v) => v - Math.floor(v);
 const mod = (v, m) => v - m * Math.floor(v / m);
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // NOISE_GLSL's h21 and vn (world/terrain.js)
 export function h21(x, y) {
 	x = mod(x, 4096); y = mod(y, 4096);

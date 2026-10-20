@@ -50,7 +50,11 @@ Open `dev.html` from a local server to run the island on its own
 - `src/world/lodfade.js` — detail levels dissolve into each other (and out at the draw distance) instead of popping; used by the island's plants and the city's trees, whose far crowns take the size and average colour of the near trees
 - `src/people/people.js` — the population: walkers on the block pavements (crossing at corners), joggers, pairs chatting, people waiting; more downtown and by day
 - `src/drive.js` — Drive (🚗 or V): snap onto the road, street or trail you are on and it carries you at the road's own pace (25 mph on a residential street, 65 on a freeway, hiking pace on a trail); ← / → choose the next turn, ↑ straight on, ↓ turn round, Shift to hurry. Follows the real road graph where the map is real (looking through the short links of a junction to the road beyond), and the town street grids everywhere else
-- `src/main.js` — renderer, loop, HUD, settings, Journey adapter
+- `src/main.js`: renderer, loop, HUD, settings, Journey adapter. `createIslandWorld` keeps its four biggest phases beside it and shares its bindings with them through one object, `iw` (a getter, and a setter for what changes, per binding; `tools/split-contexts.test.mjs` keeps them in step, and the same for `createCity`'s `cc`, `accessoryGeometry`'s `ga`, `createGuide`'s `gd` and `createCombat`'s `cb`):
+  - `src/island-build.js`: building a world
+  - `src/island-frame.js`: one frame
+  - `src/island-panel.js`: the SKY & WORLD panel
+  - `src/island-teardown.js`: taking a world down
 
 ## Earth: the Bay Area
 
@@ -69,6 +73,7 @@ true scale:
 - `src/bay/bridge.js` — the Golden Gate Bridge at its real dimensions (walkable deck)
 - `src/bay/styles.js` — how each area is built (land-use zoning: industry, retail, campuses; tract eras; SF districts): real street-grid bearings, block sizes, house styles (SF rows, the Sunset, older towns, valley suburbs with curving streets, business parks)
 - `src/bay/city.js` — buildings on the street grids by style, the skylines, SF's tallest landmarks, the Bay Bridge. Street and yard trees are the island's leaf-card trees in Bay Area species (plane, live oak, redwood/cypress, shrubs), detailed close by and simplified further out. Up close every lot is lived in: tract houses with side yards, garage doors, porches, front doors, walks, foundation shrubs and back fences; older towns with deep porches and a driveway to a garage out back; SF rows with garages and front stairs at street level, bay windows from the first floor, and shopping streets with shopfronts, signs and awnings
+  - `src/bay/city-blocks.js` (filling the blocks with buildings) and `src/bay/city-dressing.js` (grounds, details, pulling overlapping boxes apart): parts of `createCity`, through `cc`
 - `src/bay/landmarks.js` — landmarks across SF, the East Bay, the Peninsula, the South Bay and San Ramon, the port cranes, the other bridges
 - `src/bay/discovery.js`, `discovery-details.js`, `discovery-grove.js` — the Bay Area Discovery Museum on mapped Fort Baker footprints, with walk-in exhibits, the cafe, Lookout Cove and Faith. Owner-supplied photos guide cream clapboard, shutters, porch rails/canopies, lamps, stroller parking, flags and branching coastal cypresses. Steps meet the sampled terrain, trees avoid mapped buildings/roads, and museum resources stream out and release on teardown.
 - `src/bay/roads.js` — the freeways (I-680, I-580, SR-24, I-80, I-880, US-101, I-280) and the Iron Horse Trail, with lamps and traffic at night
@@ -215,7 +220,7 @@ you somewhere, change the hour, fly). Its voice is a model on your own device:
 - **Ollama** — a local Ollama server (`OLLAMA_ORIGINS=https://level99bard.com ollama serve`).
 - **Built-in** — with no model it still answers from the world itself.
 
-`src/guide/llm.js` (backends) and `src/guide/guide.js` (world snapshot, journal, actions, panel).
+`src/guide/llm.js` (backends) and `src/guide/guide.js` (world snapshot, journal, actions, panel), with its screens in `src/guide/guide-screens.js` and talking to people and the guide in `src/guide/guide-ask.js` (through `gd`).
 
 ## Crysis
 

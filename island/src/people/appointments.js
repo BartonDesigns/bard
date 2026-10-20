@@ -6,13 +6,13 @@
 import { advanceSolarClock } from '../world/solar.js';
 import { socialDistance } from './social-state.js';
 import { ARRIVE, HOURS, validGathering } from './gatherings.js';
+import { jsonCopy as copy } from '../persistence/json-copy.js';
 
 export const APPOINTMENT_KEY = 'crysis-appointments-v1';
 // The resident turns up a little early and waits a while past the hour.
 export const EARLY = 0.25, GRACE = 1.5;
 const STATUS = new Set(['proposed', 'agreed', 'kept', 'missed', 'cancelled']);
 const finite = Number.isFinite;
-const copy = v => JSON.parse(JSON.stringify(v));
 const savedPos = p => p && (finite(p.lat) && finite(p.lon) ? { lat: p.lat, lon: p.lon, y: finite(p.y) ? p.y : 0 } : finite(p.x) && finite(p.z) ? { x: p.x, z: p.z, y: finite(p.y) ? p.y : 0 } : null);
 const wrap = h => ((h % 24) + 24) % 24;
 

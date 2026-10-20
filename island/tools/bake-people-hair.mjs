@@ -69,7 +69,7 @@ const MAXT = 5000;
 // ---------- the base mesh ----------
 const D = JSON.parse(zlib.gunzipSync(fs.readFileSync(BASE)).toString());
 const b64 = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffer, b.byteOffset, b.byteLength / T.BYTES_PER_ELEMENT); };
-const P16 = b64(D.position, Int16Array), NB = P16.length / 3;
+const P16 = b64(D.position, Int16Array);
 const base = Float32Array.from(P16, (x) => x * D.unit);
 const avg = (ids) => { const c = [0, 0, 0]; for (const i of ids) for (let k = 0; k < 3; k++) c[k] += base[i * 3 + k] / ids.length; return c; };
 const eyeL = avg(D.eyes.L), eyeR = avg(D.eyes.R), eyeY = (eyeL[1] + eyeR[1]) / 2;

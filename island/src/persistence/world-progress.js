@@ -240,4 +240,3 @@ export function validateWorldProgressEvent(event, { worldId, server = false } = 
 	return server ? serverEvent(event, { worldId }) : clientEvent(event);
 }
 
-export const worldProgressKinds = () => [...EVENT_KINDS];

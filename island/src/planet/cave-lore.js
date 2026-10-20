@@ -1,10 +1,10 @@
-// Preserved verbatim from runtime/caves-179.html.gz (decompressed source).
-// Dweller LORE at 9478; SOUL_LORE at 8991; VAULT_LORE at 5072;
-// EPOCH_ADJ/EPOCH_NOUN at 1929–1930; MILESTONES at 10720.
+// Preserved verbatim from the V1 caves source, runtime/src/caves.html.
+// Dweller LORE at 9626; SOUL_LORE at 9139; VAULT_LORE at 5136;
+// EPOCH_ADJ/EPOCH_NOUN at 1930–1931; MILESTONES at 10873.
 // Data only: preserving a story does not claim its legacy mechanics are migrated.
 
 const freeze = value => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
-export const CAVE_LORE_SOURCE = 'runtime/caves-179.html.gz';
+export const CAVE_LORE_SOURCE = 'runtime/src/caves.html';
 
 export const DWELLER_LORE = freeze({
   "elder": [

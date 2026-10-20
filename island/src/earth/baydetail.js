@@ -14,6 +14,7 @@
 // three fine slots) and the town map (uUrban), both already bound there, and uBuilt.
 
 import * as THREE from 'three';
+import { smoothstep as sst } from '../noise.js';
 
 // the built mask's corner (x, z) and cell, as tools/bake-built.py printed them
 export const BUILT_R = [-14640, -43392, 48];
@@ -53,7 +54,6 @@ export function rills(x, z) {
 	}
 	return s;
 }
-const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // the amplitude from its masks: inS in the survey (0..1), sl the survey's slope, base the
 // ground, urban how built up it is, fine a fine survey's share. (Not the creeks' carving:
 // that comes and goes as you do, and the ground must not; it sets its own heights anyway.)

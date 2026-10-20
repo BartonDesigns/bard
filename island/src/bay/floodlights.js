@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { FIELDS, LF_N } from '../world/nightfield.js';
 import { qualityNow } from '../world/governor.js';
+import { smoothstep as smooth } from '../noise.js';
 
 const D2R = Math.PI / 180;
 // colours (linear): floodlight warm, neutral white, amber; sodium; white LED; the obstruction red
@@ -60,7 +61,6 @@ export function pickFloods(F, count, cx, cy, cz, n, out, score, far = 6000) {
 	}
 	return k;
 }
-function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
 
 const POINT_VS = /* glsl */`
 	attribute vec3 aCol; attribute vec4 aK; attribute float aSize;

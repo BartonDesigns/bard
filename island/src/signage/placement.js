@@ -17,7 +17,7 @@ import { graffitiGraphic } from '../civic/graffiti-catalog.js';
 import { hash01, hash32, rng, pick } from './rand.js';
 import { LAYER } from './layers.js';
 import { RANK } from './systems.js';
-import { tradeFor, retailIdentity } from './art.js';
+import { retailIdentity } from './art.js';
 
 export const BACK = Object.freeze({ blank: 0, readable: 1, mirrored: 2, none: 3 });
 export const MAT = Object.freeze({ retro: 'retro', vinyl: 'vinyl', glass: 'glass', paper: 'paper', foil: 'foil', paint: 'paint', grime: 'grime' });

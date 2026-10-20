@@ -1,15 +1,14 @@
 // Decals on the cars: plates in the region's manner (a dealer's frame on some), bumper
 // stickers, a parking permit or the region's windscreen sticker, the odd rear-window sticker,
-// and the services' liveries, the police cruisers' doors and roof numbers, the ambulances'
-// mirrored word and chevrons, the fire engines' gold leaf. Nothing is remodelled: each mark
-// is a flat piece laid on the body where the body actually is, found once per kind by
-// sampling the lofted body (bay/cars.js) so a plate sits on the curved tail and a word on the
-// swell of the door. Plates are retroreflective, like the real ones, and light up in your
-// headlights.
+// and the services' liveries, the police cruisers' doors and roof numbers. Nothing is
+// remodelled: each mark is a flat piece laid on the body where the body actually is, found
+// once per kind by sampling the lofted body (bay/cars.js) so a plate sits on the curved tail
+// and a word on the swell of the door. Plates are retroreflective, like the real ones, and
+// light up in your headlights.
 //
 // The fleets (vehicles/fleet.js) ask for a decal set when they are made; each frame they
 // pass each near car through, and the set writes its decals beside it with no allocation.
-// The responders (services/responders.js) take their liveries as meshes of their own.
+// The responders' bodies carry their own markings (services/vehicle-model.js).
 
 import * as THREE from 'three';
 import { carGeometry, SPEC, specOf } from '../bay/cars.js';
@@ -43,12 +42,6 @@ function plateFace(locale, i) {
 const LIVERY_FACES = {
 	police: { k: 'livery', svc: 'police', word: 'POLICE', sub: 'HARBOUR' },
 	roof: { k: 'livery', svc: 'roof', word: '12' },
-	ambulance: { k: 'livery', svc: 'ambulance', word: 'AMBULANCE' },
-	ambulanceFront: { k: 'livery', svc: 'ambulance', word: 'AMBULANCE', mirror: true },
-	chevron: { k: 'livery', svc: 'chevron' },
-	pulse: { k: 'livery', svc: 'pulse' },
-	fire: { k: 'livery', svc: 'fire', word: 'FIRE RESCUE', sub: 'ENGINE 7' },
-	stripe: { k: 'livery', svc: 'stripe', col: '#e8c46a', col2: '#f4f4f0' },
 	military: { k: 'livery', svc: 'military', word: 'MERIDIAN GUARD' },
 	// the vans: the tactical team's in charcoal with reflective white, a patrol van's with gold
 	swat: { k: 'livery', svc: 'swat', word: 'POLICE', sub: 'TACTICAL UNIT' },
@@ -96,7 +89,7 @@ export function carFaces(locale = 'us-ca') {
 	for (let i = 0; i < POOLS.bumper; i++) want.set('bumper' + i, { face: { k: 'bumper', seed: i + 1 }, w: 0.28, h: 0.075 });
 	for (let i = 0; i < POOLS.window; i++) want.set('window' + i, { face: { k: 'wsticker', seed: i + 1 }, w: 0.24, h: 0.08 });
 	for (let i = 0; i < POOLS.permit; i++) want.set('permit' + i, { face: { k: 'cpermit', seed: i + 1, year: 2026, style: locale === 'de' ? 'de' : sys.id === 'jp' ? 'jp' : 'us' }, w: 0.08, h: 0.08 });
-	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'pulse' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'pulse' || k === 'vanRoof' ? 0.6 : 0.5 });
+	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'vanRoof' ? 0.6 : 0.5 });
 	for (const [k, f] of Object.entries(STENCILS)) want.set('mil:' + k, { face: f, w: f.mark ? 0.5 : f.word?.length > 8 ? 2.4 : 0.8, h: f.mark ? 0.5 : f.word?.length > 8 ? 0.32 : 0.18 });
 	return want;
 }
@@ -309,61 +302,4 @@ function buildStencils(kind, side, n, grey, parked) {
 	const m = new THREE.Mesh(g, signMaterial('paint', LAYER.paint, A.tex, { phone: PHONE }));
 	m.renderOrder = m.material.userData.renderOrder; m.name = 'stencils-' + kind;
 	return [m];
-}
-
-// ---------- the responders' liveries, as meshes riding on the body ----------
-// kind 'ambulance' | 'engine' (services/responders.js's boxes: x across, nose at +z)
-const LIVERIES = new Map();
-export function vehicleLivery(kind) {
-	// (built once per kind; each vehicle gets its own meshes over the shared geometry)
-	if (!LIVERIES.has(kind)) LIVERIES.set(kind, buildLivery(kind));
-	return LIVERIES.get(kind).map((m) => { const c = new THREE.Mesh(m.geometry, currentSignMaterial(m.material)); c.renderOrder = m.renderOrder; c.name = m.name; c.geometry.userData.shared = true; return c; });
-}
-function buildLivery(kind) {
-	const A = carAtlas();
-	if (!CELLS.size) setCarLocale(ATLAS_LOCALE || 'us-ca');
-	const list = [];
-	const put = (mat, cellKey, px, py, pz, nx, nz, w, h, ny = 0) => {
-		const c = cellOf(cellKey);
-		if (!c) return;
-		const tx = ny ? 1 : nz > 0.5 ? 1 : nz < -0.5 ? -1 : 0, tz = ny ? 0 : nx > 0.5 ? -1 : nx < -0.5 ? 1 : 0;
-		list.push({ mat, c, L: local(px, py, pz, nx, ny, nz, tx, 0, tz, w, h, 0.004) });
-	};
-	if (kind === 'ambulance') {
-		for (const s of [-1, 1]) {
-			put('vinyl', 'liv:ambulance', s * 1.051, 1.95, -1.1, s, 0, 2.6, 0.5);
-			put('vinyl', 'liv:pulse', s * 1.051, 1.9, 0.35, s, 0, 0.55, 0.55);
-		}
-		put('vinyl', 'liv:ambulanceFront', 0, 1.22, 2.56, 0, 1, 1.5, 0.3);
-		put('retro', 'liv:chevron', 0, 0.85, -3.125, 0, -1, 1.9, 0.3);
-		put('vinyl', 'liv:ambulance', 0, 2.4, -3.125, 0, -1, 1.6, 0.32);
-	} else {
-		for (const s of [-1, 1]) {
-			put('foil', 'liv:fire', s * 1.262, 1.45, 3.35, s, 0, 1.4, 0.42);
-			put('foil', 'liv:stripe', s * 1.264, 0.69, -0.2, s, 0, 8.6, 0.12);
-		}
-		put('retro', 'liv:chevron', 0, 1.2, -4.715, 0, -1, 2.3, 0.45);
-	}
-	const byMat = new Map();
-	for (const q of list) (byMat.get(q.mat) || byMat.set(q.mat, []).get(q.mat)).push(q);
-	const meshes = [];
-	for (const [mat, qs] of byMat) {
-		const n = qs.length, pos = new Float32Array(n * 12), nor = new Float32Array(n * 12), uv = new Float32Array(n * 8), cell = new Float32Array(n * 16), fx = new Float32Array(n * 16), idx = [];
-		const V = new THREE.Vector3(), N = new THREE.Vector3();
-		qs.forEach((q, i) => {
-			[[-0.5, -0.5, 0, 0], [0.5, -0.5, 1, 0], [0.5, 0.5, 1, 1], [-0.5, 0.5, 0, 1]].forEach(([x, y, u, v], k) => {
-				V.set(x, y, 0).applyMatrix4(q.L); N.set(0, 0, 1).transformDirection(q.L);
-				pos.set([V.x, V.y, V.z], (i * 4 + k) * 3); nor.set([N.x, N.y, N.z], (i * 4 + k) * 3); uv.set([u, v], (i * 4 + k) * 2);
-				cell.set(q.c, (i * 4 + k) * 4); fx.set([BACK.none, i * 0.13, 0, 0], (i * 4 + k) * 4);
-			});
-			idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
-		});
-		const g = new THREE.BufferGeometry();
-		g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-		g.setAttribute('aCell', new THREE.BufferAttribute(cell, 4)); g.setAttribute('aFx', new THREE.BufferAttribute(fx, 4)); g.setIndex(idx);
-		const m = new THREE.Mesh(g, signMaterial(mat, mat === 'retro' ? LAYER.poster : LAYER.sticker, A.tex, { phone: PHONE }));
-		m.renderOrder = m.material.userData.renderOrder; m.name = 'livery-' + kind;
-		meshes.push(m);
-	}
-	return meshes;
 }

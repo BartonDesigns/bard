@@ -1,6 +1,5 @@
 // Production character, fit-out, and activity render fixture. No substitute meshes.
 import './workplace-preview.mjs';
-import * as THREE from 'three';
 import {loadPeopleAssets,buildPerson,personDNA} from '../src/people/body.js';
 import {createMotion} from '../src/people/motion.js';
 import {workActor,disposeWorkplaceProps,workplaceActivity} from '../src/people/workplace-life.js';

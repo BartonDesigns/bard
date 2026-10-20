@@ -19,12 +19,12 @@ import { toGrid, fromGrid, BLOCKS, STYLE } from './styles.js';
 import { toWorld } from './geo.js';
 import { ROUTES } from './roads.js';
 import { realCovered } from './realcity.js';
+import { clamp } from '../noise.js';
 
 export const TILE = 320;
 const RC = 1600;                              // the road cells: fire roads and farm roads
 const hash = (a, b) => { let h = Math.imul(Math.floor(a) | 0, 374761393) ^ Math.imul(Math.floor(b) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const rng = (seed) => { let s = (seed >>> 0) || 1; return () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const vnoise = (x) => { const i = Math.floor(x), u = x - i, s = u * u * (3 - 2 * u); return hash(i, 71) * (1 - s) + hash(i + 1, 71) * s; };
 
 // where nobody camps: the Boardwalk and the wharves, the Discovery Museum, Pier 39

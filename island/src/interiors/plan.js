@@ -18,14 +18,12 @@
 // flights of stairs, landings, rails, the holes in the floors over the stairs. The rooms
 // are then furnished (furnish.js).
 
+import { mulberry32 as rng, clamp } from '../noise.js';
+
 export const ST = { storey: 3.3, ceil: 3.0, ext: 0.18, part: 0.1, vest: 1.3, run: 4.0, land: 1.25, stairW: 1.0, risers: 18, door: 2.1 };
 
-export function rng(seed) {
-	let a = seed >>> 0;
-	return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
+export { rng };
 export const seedOf = (x, z, salt = 0) => (Math.imul(Math.round(x * 2) | 0, 73856093) ^ Math.imul(Math.round(z * 2) | 0, 19349663) ^ salt) >>> 0;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 function base(S) {
 	const hw = S.W / 2 - ST.ext, hd = S.D / 2 - ST.ext;

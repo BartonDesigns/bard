@@ -8,10 +8,9 @@
 import * as THREE from 'three';
 import { flightMultiplier } from './flight-speed.js';
 import { shotFrame } from './explore-shots.js';
+import { clamp, wrapAngle as wrap } from './noise.js';
 
 const EYE = 1.68;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // the ground under a point (flying, the sea's surface is the floor)
 const gnd = (I, fly, x, z) => Math.max(I.heightAt(x, z), fly ? 0 : -1e9);
 // the headings weighed at each look ahead, either side of the one you are on

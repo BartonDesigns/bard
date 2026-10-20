@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import * as THREE from 'three';
-import {clothCapsules,poseCloth,clothUniforms,projectCloth,calibrateCloth} from '../src/people/cloth-collide.js';
+import {poseCloth,clothUniforms,projectCloth,calibrateCloth} from '../src/people/cloth-collide.js';
 import {groomChunk,LONG_GROOMS} from '../src/people/long-groom.js';
 
 test('cloth contact follows bone rotation and translation in mesh space',()=>{

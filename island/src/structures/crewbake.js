@@ -138,8 +138,6 @@ export function assemblePose(B, a, b, CELL = 0.03) {
 	g.boundingSphere.radius += 1.5;
 	return g;
 }
-// a pose baked all at once
-export const bakePose = (B, pose, CELL) => assemblePose(B, captureKey(B, pose, 0), captureKey(B, pose, 1), CELL);
 
 // how far between a pose's two keys a worker is (t the task's clock, t2 their own)
 const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };

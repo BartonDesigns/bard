@@ -3,9 +3,10 @@
 // for the ground drawn) with the same hash, so what is drawn is what you walk on.
 // Inside the land it is nothing; past the edge it takes over within FADE metres.
 
+import { smoothstep as sstep } from '../noise.js';
+
 const C1 = 1500, C2 = 420, FADE = 450;
 const fract = (v) => v - Math.floor(v);
-const sstep = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 // a hash without sine (it stays the same on CPU and GPU)
 function hash(x, y) {
 	let a = fract(x * 0.1031), b = fract(y * 0.1031), c = fract(x * 0.1031);

@@ -461,12 +461,6 @@ const CAR = {
 			g.beginPath(); for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i * Math.PI / 7, rr = i % 2 ? r * 0.55 : r; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } g.closePath(); g.fillStyle = '#c9a23a'; g.fill();
 			g.beginPath(); g.arc(cx, cy, r * 0.38, 0, Math.PI * 2); g.fillStyle = '#141a2c'; g.fill();
 			text(g, f.sub || 'HARBOUR', x + w * 0.56, y + h * 0.8, h * 0.16, { col: '#141a2c', track: 0.35, maxW: w * 0.7 });
-		} else if (L === 'ambulance') {
-			text(g, f.word || 'AMBULANCE', x + w / 2, y + h * 0.5, h * 0.5, { col: '#b8121b', maxW: w * 0.92, track: 0.05, mirror: f.mirror });
-		} else if (L === 'fire') {
-			text(g, f.word || 'FIRE RESCUE', x + w / 2, y + h * 0.42, h * 0.38, { col: '#e8c46a', maxW: w * 0.92, font: SERIF, track: 0.06 });
-			g.fillStyle = '#e8c46a'; g.fillRect(x + w * 0.1, y + h * 0.7, w * 0.8, h * 0.04);
-			text(g, f.sub || 'ENGINE 7', x + w / 2, y + h * 0.86, h * 0.14, { col: '#e8c46a', track: 0.3 });
 		} else if (L === 'swat' || L === 'van') {
 			// a dark van's sides: the word in reflective white, a rule under it, the unit's name, an
 			// outlined badge at the front end (a tactical van's is all white, a patrol van's gold)
@@ -500,12 +494,6 @@ const CAR = {
 			g.globalAlpha = 1;
 		} else if (L === 'roof') {
 			text(g, f.word || '12', x + w / 2, y + h * 0.54, h * 0.8, { col: '#141414' });
-		} else if (L === 'stripe') {
-			g.fillStyle = f.col || '#c9a23a'; g.fillRect(x, y + h * 0.15, w, h * 0.25); g.fillStyle = f.col2 || '#b8121b'; g.fillRect(x, y + h * 0.55, w, h * 0.3);
-		} else if (L === 'chevron') {
-			for (let i = -2; i < 14; i++) { g.fillStyle = i % 2 ? '#e8f04a' : '#1c7a3c'; g.beginPath(); g.moveTo(x + i * w / 10, y + h); g.lineTo(x + (i + 1) * w / 10, y + h); g.lineTo(x + (i + 1.6) * w / 10, y); g.lineTo(x + (i + 0.6) * w / 10, y); g.closePath(); g.fill(); }
-		} else if (L === 'pulse') {
-			g.fillStyle = '#ffffff'; g.fillRect(x, y, w, h); picto(g, 'pulse', x + w / 2, y + h / 2, h * 0.9, '#b8121b');
 		}
 	},
 };

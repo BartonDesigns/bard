@@ -424,4 +424,3 @@ const FITS = {
 };
 // the fire station's and the barracks' quarters share the hospital's and the station's rooms
 Object.assign(ROOM_FIT, FITS);
-export const SERVICE_ROOMS = Object.keys(FITS);

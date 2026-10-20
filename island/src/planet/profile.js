@@ -202,4 +202,3 @@ export function planetProfile(type, seed = 1) {
 	};
 }
 
-export const PLANET_TYPES = Object.keys(TYPES);

@@ -1,8 +1,8 @@
 import {createCommercial} from '../src/bay/commercial.js';
 import {createSignage} from '../src/signage/index.js';
 import * as THREE from 'three';
-import {ART_FAMILIES,loadSignArt,drawBanner,drawProduct,drawTradeBoard,drawCampaign} from '../src/signage/art.js';
-import {createArtSigns,realmSignRecords,caveSignRecords} from '../src/signage/world-art.js';
+import {ART_FAMILIES,loadSignArt,drawBanner,drawProduct,drawCampaign} from '../src/signage/art.js';
+import {createArtSigns} from '../src/signage/world-art.js';
 import {campaignFace,shopCampaigns,wallCampaign} from '../src/signage/campaigns.js';
 import {brandIdentity,productBrand} from '../src/signage/brand-catalog.js';
 const phone = location.search.includes('phone');

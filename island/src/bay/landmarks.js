@@ -17,6 +17,7 @@ import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addNightField } from '../world/nightfield.js';
 import { ferryBuilding, sfCityHall, oaklandCityHall, palaceHall, cellhouse, fortPoint, towerLobby, library, cityHall, shopRow, oneRoom, visitorCentre } from '../interiors/landmarks.js';
+import { smoothstep as smooth } from '../noise.js';
 
 // piers you can walk out on (floor())
 const PIERS = [];
@@ -27,7 +28,6 @@ const vn = (x, z) => {
 	const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
 	return (ih(i, j) * (1 - a) + ih(i + 1, j) * a) * (1 - b) + (ih(i, j + 1) * (1 - a) + ih(i + 1, j + 1) * a) * b;
 };
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // the words painted in 1969-71, during the occupation: round the water tower's tank, and in
 // red over the penitentiary's sign at the dock (one canvas: the tank's band above, the sign below)

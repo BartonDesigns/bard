@@ -104,7 +104,6 @@ const INFUSE = {
 	chrono: { name: 'Stilling', at: (k) => ({ status: { slow: 0.6, t: 2.5 * k } }), desc: (e) => `Hits slow the foe to 60% of their pace for ${secs(e.status.t)} s.` },
 	umbral: { name: 'Hungering', at: (k) => ({ mana: Math.round(3 * k) }), desc: (e) => `Each hit draws ${e.mana} mana from the foe into you.` },
 };
-export const INFUSION_NAMES = Object.freeze(Object.fromEntries(Object.entries(INFUSE).map(([k, v]) => [k, v.name])));
 // a weapon's infusion at its tier: { school, name, desc, ...effects }
 export function infusionOf(school, t = 0) {
 	const I = INFUSE[school];

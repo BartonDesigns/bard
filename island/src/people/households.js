@@ -9,8 +9,10 @@
 // All plain data from a seed: cheap to keep thousands of, the same every visit. Bodies are
 // only made for the few you can see (family-life.js).
 
+import { mulberry32 as rng } from '../noise.js';
+
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-export function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+export { rng };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 function wpick(r, L) { let x = r() * L.reduce((a, b) => a + b[1], 0); for (const [k, w] of L) if ((x -= w) < 0) return k; return L[0][0]; }
 

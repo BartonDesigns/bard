@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { isBuilding } from '../structures/overlap.js';
+import { srgbToLinear as lin } from '../world/srgb.js';
 
 const CALLS = {
 	quake: ['Get away from the buildings!', 'Is everyone okay?', 'Stay down, stay down!', 'Over to the park, everyone!', 'Watch the glass!', 'My phone has no signal.'],
@@ -20,7 +21,6 @@ const CALLS = {
 	eruption: ['Cover your mouth, the ash!', 'Get inside or get to the shelter!', 'Look at the sky...'],
 };
 const HURT = ['Ah, my leg... I cannot walk on it.', 'Help... something hit me.', 'I need a doctor.', 'I am okay, I am okay... no, I am not.'];
-const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 
 // the relief station: two canopies on poles, cots, a table of water, a generator and a light
 function reliefStation(x, y, z, yaw) {

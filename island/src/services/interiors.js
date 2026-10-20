@@ -22,9 +22,9 @@
 // for interiors.addSite (see serviceSite in services/index.js for the site around a plan).
 
 import { planShell, ST } from '../interiors/plan.js';
+import { clamp } from '../noise.js';
 
 const PT = ST.part;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // the looks of the rooms: floors and wall paint (interiors/build.js reads rm.floor, rm.paint)
 const CLINIC = { floor: 'tile', paint: [0.9, 0.93, 0.92] };
 const CLINIC_MINT = { floor: 'tile', paint: [0.78, 0.88, 0.85] };

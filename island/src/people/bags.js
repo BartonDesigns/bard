@@ -9,12 +9,12 @@
 
 import * as THREE from 'three';
 import { FAB, kit, rbox, reshape, outline, loft, ribbon, cord, prober, vnoise, kitMaterial, M4 } from './propkit.js';
+import { smoothstep as smooth01 } from '../noise.js';
 
 const V = THREE.Vector3;
 const DARK = 0x1c1d20, WEB = 0x222326, METAL = 0xb9bcc0, GOLDEN = 0xc9a65a;
 // near this, the detailed version (people who are this close are few)
 export const BAG_NEAR = 22, BAG_FAR = 90;
-const smooth01 = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // ---------- the backpack: y 0 (bottom) to H, the back panel at z = 0, the front at z = -D ----------
 export const packSize = (slim) => (slim ? { W: 0.28, H: 0.4, D: 0.1 } : { W: 0.3, H: 0.44, D: 0.15 });

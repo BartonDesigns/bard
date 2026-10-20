@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { harborSeal } from '../world/creatures.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorld } from './geo.js';
+import { smoothstep as smooth } from '../noise.js';
 
 const SITES = [
 	{ name: 'Fitzgerald Marine Reserve', lat: 37.5212, lon: -122.5183, R: 260, strike: 2.45, long: 1, wide: 0.6, seals: 6 },
@@ -36,7 +37,6 @@ const vn = (x, z) => {
 	return (ih(i, j) * (1 - a) + ih(i + 1, j) * a) * (1 - b) + (ih(i, j + 1) * (1 - a) + ih(i + 1, j + 1) * a) * b;
 };
 const fbm = (x, z) => vn(x, z) * 0.5 + vn(x * 2.1 + 5, z * 2.1 + 3) * 0.3 + vn(x * 4.3 - 7, z * 4.3 + 1) * 0.2;
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // The reef is a run of ribs, each one the worn edge of a bed of mudstone, lying side by side
 // along the strike. Across a rib, trough to trough: the trough's floor, the long bedding plane
