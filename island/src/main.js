@@ -123,6 +123,7 @@ import { islandTeardown } from './island-teardown.js';
 import { islandPanel } from './island-panel.js';
 import { islandFrame } from './island-frame.js';
 import { createPerfMeter } from './ui/perfmeter.js';
+import { createGamepad } from './ui/gamepad.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -1439,6 +1440,11 @@ export function createIslandWorld() {
 		} finally { dom.launch.disabled = false; travelVeil.style.opacity = '0'; }
 	}
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
+	// Xbox and PlayStation controllers (ui/gamepad.js): the map pin's menu and the settings
+	// panel are menus the pad's ring moves through, and B closes them
+	tpMenu.dataset.padLayer = 'hide'; dom.panel.dataset.padLayer = 'hide';
+	HOOKS.gamepad = createGamepad({ mount: dom.mount, canvas: dom.canvas, world: () => world, hooks: HOOKS, hint: (t, ms) => hint(t, ms, 1),
+		places: () => { if (tpMenu.style.display === 'none') openTp(); }, settings: () => { dom.panel.style.display = 'block'; } });
 	// (Escape closes the settings, as it does every other panel)
 	addEventListener('keydown', (e) => { if (e.key === 'Escape' && dom.panel.style.display === 'block') { e.stopPropagation(); dom.panel.style.display = 'none'; } }, true);
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
@@ -1648,6 +1654,8 @@ if (typeof window !== 'undefined') {
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		gear: () => HOOKS.gear?.info(),
+		// a game controller (ui/gamepad.js): Crysis.gamepad.info() what it reads now; .menu.open()
+		get gamepad() { return HOOKS.gamepad; },
 		// chat: Crysis.chat() what is said and who is online; .open() / .close(); .client() the line itself
 		chat: Object.assign(() => HOOKS.chat?.info(), { open: () => HOOKS.chat?.open(), close: () => HOOKS.chat?.close(), client: () => HOOKS.chat?.client }),
 		// the frame readout in the corner (?perf in the address): Crysis.perf(true|false); and the
