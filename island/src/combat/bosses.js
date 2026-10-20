@@ -56,7 +56,12 @@ function leviathan(ctx, B) {
 			if (step === 'telegraph-start') ctx.fx.ring(C.x, ctx.ground(C.x, C.z, C.y + 2), C.z, 15, 2, 0xc080ff, true);
 			if (step === 'attack') { ctx.fx.sparks(head, 30, null, 0.8, 0.6, 1, 14); if (Math.hypot(me.x - C.x, me.z - C.z) < 15 && ctx.me().grounded) ctx.hurtPlayer({ amount: 22, type: 'energy', src: C, part: 'torso', by: B.T }); ctx.shake?.(0.5, C); }
 		} else if (name === 'mites') {
-			if (step === 'attack') ctx.spawnSquad('gloom', C.x + rnd(-6, 6), C.z + rnd(-6, 6), 3, { alert: true });
+			// (Shard Mites, broken out of crystal where they land: creatures/catalog.js)
+			if (step === 'attack') {
+				const x = C.x + rnd(-6, 6), z = C.z + rnd(-6, 6), p = _v.set(x, ctx.ground(x, z, C.y + 2) + 0.3, z);
+				ctx.fx.glass(p, 16, 3, 0.16); ctx.fx.sparks(p, 16, null, 0.75, 0.55, 1, 6);
+				ctx.spawnSquad('deepborn', x, z, 4, { alert: true, species: 'shard-mite', spread: 2 });
+			}
 		}
 	};
 	B.step = (dt) => {

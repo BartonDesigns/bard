@@ -42,6 +42,9 @@ import { applyClutch } from '../crysis/held-items.js';
 import { createClimber, climbBody } from './npc-climb.js';
 import { SPECIES } from '../creatures/catalog.js';
 import { makeCreature } from '../creatures/models.js';
+import { createCreatureVoice } from '../creatures/voice.js';
+import { facetLook } from '../creatures/facets.js';
+import { crystalLegs } from '../creatures/crystal-legs.js';
 
 // the bodies: people (dressed by faction), and those that are not (a creature's own are made
 // from its kind: creatures/catalog.js)
@@ -145,6 +148,8 @@ export function createSquads(ctx) {
 	const squads = new Map();
 	let A = null, loading = null, nextId = 1, epoch = 0;
 	const pending = new Set();
+	// the creatures' growls, snarls and the rest, from where they stand (creatures/voice.js)
+	const voice = createCreatureVoice({ eye: ctx.eye, yaw: () => ctx.yaw?.() ?? 0, isPhone });
 	const assets = () => { if (A) return Promise.resolve(A); if (!loading) loading = loadPeopleAssets().then((a) => (A = a)); return loading; };
 
 	// people are made one a frame, in the background, and kept for the next squad of their side
@@ -214,17 +219,25 @@ export function createSquads(ctx) {
 				b.M.S.limp.side = 0; b.M.S.limp.k = 0; b.M.S.clutch = null; b.M.want.low = 0; b.climbY = null;
 			} else if (kind === 'creature') {
 				// (one that is a person first, the Moonturned: the person's body now, the beast's kept for the change)
-				const c = await creatureBody(Sp.human ?? Sp.model ?? species, species);
-				const beast = c && Sp.human ? await creatureBody(Sp.model ?? species, species) : null;
+				const c = await creatureBody(Sp.human ?? Sp.model ?? species, species, Sp.human ? null : Sp.look ?? null);
+				const beast = c && Sp.human ? await creatureBody(Sp.model ?? species, species, Sp.look ?? null) : null;
 				if (!c || (Sp.human && !beast) || h.gone || generation !== epoch) {
 					for (const q of [c, beast]) if (q) { q.used = false; q.root.visible = false; }
 					return null;
 				}
 				h.cr = c; h.beast = beast; h.turn = beast ? -1 : 1;
-				if (beast) beast.root.visible = false;
+				// no two alike: each its own size, build and colour (creatures/models.js); a person's
+				// skin barely turns
+				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1 });
+				if (beast) { beast.size = beast.vary(); beast.root.visible = false; }
+				// one that waits, still among the trees, for you to come too close (the Burnt Giant)
+				h.dormant = Sp.lurk && !opts.alert ? 1 : 0; h.waking = -1;
+				if (h.dormant) h.yaw = Math.random() * 6.283;
 				c.root.visible = true; c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
 				c.motion.state.death = -1; c.motion.state.strike = -1; c.motion.state.hit = -1;
-				c.motion.update(0, { speed: 0 });
+				c.motion.state.beat = null; c.motion.state.menace = 0; c.motion.drain();
+				c.facets?.reset();
+				c.motion.update(0, { speed: 0, dormant: h.dormant });
 			} else {
 				const pool = pools[kind];
 				let m = pool.find((q) => !q.userData.used);
@@ -271,7 +284,11 @@ export function createSquads(ctx) {
 
 	function hit(h, blow) {
 		if (h.dead || h.surrendered || h.fleeing || h.restrained) return null;
+		// (the Facet Wraith's shell turns most of a blow until it opens)
+		if (h.cr?.facets) blow = { ...blow, amount: blow.amount * h.cr.facets.exposure() };
 		const r = applyDamage(h.H, blow);
+		if (h.dormant && h.waking < 0) h.waking = 0;
+		h.standT = 0;
 		const by = blow.by;
 		if (by) {
 			// the one who struck them is their enemy now, whatever the old feelings
@@ -362,7 +379,7 @@ export function createSquads(ctx) {
 		const mem = h.squad ? h.squad.members : [h];
 		let k = 0;
 		for (const m of mem) {
-			if (m.dead || m.alert || m.crew) continue;
+			if (m.dead || m.alert || m.crew || m.dormant) continue;
 			m.alert = 1; m.fireT = rnd(0.7, 1.4); m.goalT = 0;
 			m.role = m.specialty?.tactic || (m.kind === 'drone' ? 'orbit' : m.kind === 'crawler' || m.kind === 'creature' ? 'rush' : k === 0 ? 'suppress' : k % 2 ? 'flank' : 'assault');
 			m.flankSide = k % 4 < 2 ? 1 : -1;
@@ -374,7 +391,12 @@ export function createSquads(ctx) {
 	}
 	// gunfire heard at (x, z): squads within earshot wake
 	function hear(x, z, r = 60) {
-		for (const h of alive()) if (!h.alert && !h.crew && Math.hypot(h.pos.x - x, h.pos.z - z) < r) alertSquad(h, { x, z });
+		for (const h of alive()) {
+			const d = Math.hypot(h.pos.x - x, h.pos.z - z);
+			// (gunfire close by wakes a sleeping giant; further off it stays a tree)
+			if (h.dormant) { if (d < Math.min(r, 30) && h.waking < 0) h.waking = 0; continue; }
+			if (!h.alert && !h.crew && d < r) alertSquad(h, { x, z });
+		}
 	}
 
 	// whom to fight: the nearest enemy in sight: you (if they hate you or you struck them),
@@ -511,6 +533,7 @@ export function createSquads(ctx) {
 			// held still or put to flight by a spell (magic/caster.js lays h.T.hex on and wears it off)
 			const hx = h.T.hex;
 			if (hx && (hx.hold > 0 || hx.fear > 0)) { hexStep(h, dt, hx, eye); bounds(h); continue; }
+			if (h.dormant) { dormantStep(h, dt, d); bounds(h); continue; }
 			// (cloaked, you are lost to those hunting you)
 			if (h.target === ME && ctx.cloaked?.()) { h.target = null; h.los = false; }
 			// a target, and sight of it, a few times a second
@@ -531,7 +554,7 @@ export function createSquads(ctx) {
 			bounds(h);
 		}
 	}
-	function bounds(h) { const B = h.T.bound; B.x = h.pos.x; B.y = h.pos.y + (h.kind === 'drone' ? 0 : h.cr ? h.Sp.height * 0.45 + (h.alt || 0) : 0.9); B.z = h.pos.z; }
+	function bounds(h) { const B = h.T.bound; B.x = h.pos.x; B.y = h.pos.y + (h.kind === 'drone' ? 0 : h.cr ? h.Sp.height * (h.cr.size || 1) * 0.45 + (h.alt || 0) : 0.9); B.z = h.pos.z; }
 	function fading(h, dt) {
 		h.deadT += dt;
 		if (h.body) {
@@ -553,6 +576,9 @@ export function createSquads(ctx) {
 			// the death plays out (the knees go, it folds), it lies a while, then sinks away
 			const c = h.cr;
 			if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
+			if (h.deadT < 4) c.facets?.update(dt, { dead: true });
+			// (a crystal thing bursts as its legs fold, and is gone)
+			if (h.Sp.shatter && h.deadT > 0.3 && c.root.visible) { c.legs?.shatter(fx); c.root.visible = false; voice.play('shatter', h.pos, 0.9); }
 			// (a flyer drops out of the air)
 			if (h.alt > 0) { h.vy = (h.vy || 0) + 9.8 * dt; h.alt = Math.max(0, h.alt - h.vy * dt); }
 			c.root.position.set(h.pos.x, h.pos.y + (h.alt || 0) - Math.max(0, h.deadT - 8) * 0.25 * c.height, h.pos.z);
@@ -864,11 +890,24 @@ export function createSquads(ctx) {
 				return;
 			}
 		}
+		let menace = 0;
 		if (h.alert && at && !h.beast) {
 			const tx = at.x - h.pos.x, tz = at.z - h.pos.z, dd = Math.hypot(tx, tz);
 			want = Math.atan2(tx, tz);
 			h.fireT -= dt;
-			if (h.strikeT >= 0) {
+			menace = h.strikeT >= 0 ? 0.4 : 1;
+			// first sight of you: it stops dead, and it lets you know (a hound lowers its head and
+			// growls, or rakes the ground; anything else twitches round to look), then it comes
+			if (!h.spotted) {
+				h.spotted = true;
+				if (dd > S.reach * 2.5 && !S.fly) {
+					h.standT = c.meta.rig === 'quad' ? rnd(1.4, 2.4) : rnd(0.7, 1.2);
+					c.motion.beat(c.meta.rig === 'quad' ? (Math.random() < 0.65 ? 'growl' : 'scrape') : 'twitch');
+				}
+			}
+			if (h.standT > 0) h.standT -= dt;
+			if (h.standT > 0) speed = 0;
+			else if (h.strikeT >= 0) {
 				h.strikeT += dt / S.strike;
 				// (a short lunge into the blow; a thrower stands to throw)
 				if (!h.throwing && h.strikeT > 0.3 && h.strikeT < 0.5) speed = S.walk * 1.5;
@@ -890,6 +929,7 @@ export function createSquads(ctx) {
 				if (h.strikeT >= 1) { h.strikeT = -1; h.fireT = h.throwing ? rnd(...S.throw.every) : rnd(0.5, 1.3); h.throwing = false; }
 			} else if (dd < S.reach && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.6) {
 				h.strikeT = 0; h.struck = false; h.throwing = false; c.motion.strike();
+				if (c.meta.rig === 'quad') voice.play('snarl', h.pos, 0.8, 1 / (S.height * (c.size || 1)) ** 0.3);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
 			} else if (S.throw && h.los && dd > S.reach * 1.6 && dd < S.throw.range && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.5) {
 				h.strikeT = 0; h.struck = false; h.throwing = true; c.motion.strike();
@@ -916,7 +956,62 @@ export function createSquads(ctx) {
 		// (far off, moved less often: the bones are the cost)
 		h.animT = (h.animT || 0) + dt;
 		const every = d > 70 ? 0.1 : d > 35 ? 0.05 : 0;
-		if (h.animT >= every) { c.motion.update(h.animT, { speed: Math.abs(speed), look: 0 }); h.animT = 0; }
+		// (one that drifts, the Facet Wraith, glides without a step)
+		if (h.animT >= every) { c.motion.update(h.animT, { speed: S.drift ? 0 : Math.abs(speed), look: 0, menace }); h.animT = 0; }
+		c.facets?.update(dt, { strike: c.motion.state.strike, alert: !!h.alert });
+		// a growl now and then as it closes on you
+		if (menace > 0.5 && c.meta.rig === 'quad' && d < 40) {
+			h.growlT = (h.growlT ?? rnd(1, 3)) - dt;
+			if (h.growlT <= 0) { h.growlT = rnd(3, 6); voice.play('growl', h.pos, 0.7, 1 / (S.height * (c.size || 1)) ** 0.3); }
+		}
+		creatureEvents(h, c, d);
+		c.root.visible = d < 220;
+	}
+	// what its body did, heard and seen: a growl, a sniff, claws raking dirt
+	const _paw = new THREE.Vector3();
+	function creatureEvents(h, c, d) {
+		const ev = c.motion.drain();
+		if (!ev.length || d > 60) return;
+		const big = 1 / (h.Sp.height * (c.size || 1)) ** 0.3;
+		for (const e of ev) {
+			if (e === 'growl') voice.play('growl', h.pos, 0.8, big);
+			else if (e === 'sniff') voice.play('sniff', h.pos, 0.5, big * 1.2);
+			else if (e === 'twitch' && (c.meta.rig === 'flyer' || c.meta.rig === 'spider')) voice.play('chitter', h.pos, 0.5, c.meta.rig === 'spider' ? 1.3 : 1);
+			else if (e === 'click') voice.play('click', h.pos, 0.45);
+			else if (e === 'scuff') {
+				const b = c.motion.state.beat, p = c.motion.at(b?.side < 0 ? 'hand_R' : 'hand_L', _paw) || _paw.copy(h.pos);
+				voice.play('scrape', p, 0.6);
+				fx.dust({ x: p.x, y: h.pos.y + 0.1, z: p.z }, 4, 0.45, 0.42, 0.36, 0.28, 0.35);
+			}
+		}
+	}
+	// a creature standing still as the trees round it until something disturbs it: you too near,
+	// a blow, gunfire close by; then it wakes (wood groaning, shuddering, its boughs coming down)
+	// and comes for you
+	function dormantStep(h, dt, d) {
+		const c = h.cr, L = h.Sp.lurk;
+		if (h.waking < 0 && d < (L.wake || 8)) h.waking = 0;
+		if (h.waking >= 0) {
+			if (h.waking === 0) {
+				voice.play('creak', h.pos, 1, 0.8);
+				ctx.shake?.(0.25);
+			}
+			h.waking += dt / (L.rise || 2.8);
+			h.wakeK = (h.wakeK || 0) + dt;
+			if (h.wakeK > 0.5) {
+				h.wakeK = 0; c.motion.hit();
+				// (bark and dead leaves shaken off it)
+				const hh = h.Sp.height * (c.size || 1);
+				fx.dust({ x: h.pos.x + rnd(-2, 2), y: h.pos.y + hh * rnd(0.4, 0.9), z: h.pos.z + rnd(-2, 2) }, 5, 1.2, 0.3, 0.24, 0.16, 0.5);
+			}
+			h.dormant = 1 - Math.min(1, h.waking);
+			if (h.waking >= 1) {
+				h.dormant = 0; h.spotted = true;
+				alertSquad(h, ctx.eye());
+			}
+		}
+		c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
+		c.motion.update(dt, { speed: 0, dormant: h.dormant });
 		c.root.visible = d < 220;
 	}
 	// a flyer (the Lampeater) keeps its height over the ground, comes lower as it closes, and drops
@@ -931,13 +1026,18 @@ export function createSquads(ctx) {
 		return h.alt;
 	}
 	// a body of a model (a kind's own, or the person a Moonturned is first), from the pool or new (each kind's model loaded once: creatures/models.js)
-	async function creatureBody(id, species = id) {
+	// (look: a model dressed as another kind, the Facet Wraith's shards round a body: creatures/facets.js;
+	// or grown on, the Shard Mite's crystal legs: creatures/crystal-legs.js)
+	async function creatureBody(id, species = id, look = null) {
 		const pool = pools.creature;
-		const free = pool.find((c) => !c.used && c.id === id);
-		if (free) { free.used = true; return free; }
+		const free = pool.find((c) => !c.used && c.id === id && c.look === look);
+		if (free) { free.used = true; free.meta.strikeTime = SPECIES[species].strike; return free; }
 		try {
 			const c = await makeCreature(id);
 			c.meta.strikeTime = SPECIES[species].strike;
+			c.look = look;
+			if (look === 'facets') c.facets = facetLook(c);
+			if (look === 'legs') c.legs = crystalLegs(c);
 			c.used = true;
 			group.add(c.root);
 			pool.push(c);
