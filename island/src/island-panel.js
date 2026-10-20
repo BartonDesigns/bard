@@ -33,6 +33,7 @@ const CSS = `
 .l99-set-card{background:#1a1a1a;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;min-width:0;}
 .l99-set-card>h3{margin:0 0 10px;font:600 11px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#a5f6e2;}
 .l99-set-note{font:12px/1.5 system-ui;color:rgba(255,255,255,.7);margin:0 0 10px;}
+.l99-set select{background:#2a2a2a!important;color:#fff!important;border:1px solid rgba(255,255,255,.25)!important;border-radius:9px!important;font:14px system-ui!important;min-height:44px!important;padding:0 12px!important;}
 .l99-set-go{width:100%;min-height:44px;border:0;border-radius:8px;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;font:600 14px system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);}
 `;
 

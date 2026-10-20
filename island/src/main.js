@@ -298,7 +298,7 @@ function buildDom(canvas = document.createElement('canvas')) {
 	loading.hidden = true; // Kept for integrations; the shared loading screen owns presentation.
 	// the settings (island-panel.js): the whole screen, over every button, in tabs; its body
 	// scrolls (no backdrop blur: a full-screen one over the world crashed SwiftShader)
-	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:rgba(10,10,10,.96);color:#e6f6f2;font:13px system-ui;display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
+	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px system-ui;display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Settings');
 	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
 	// a group with nothing showing is hidden, so it leaves no gap either; and the rail is as
