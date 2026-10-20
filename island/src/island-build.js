@@ -408,6 +408,7 @@ export async function islandBuild(iw, params) {
 	litter.update(camera);
 	// (shown as soon as the first few seconds of it are done; the rest is built in play)
 	window.L99Loading.stage('Lighting the world');
+	HOOKS.lightPad?.update(performance.now(), camera, true);
 	await shaderWarm.all({ budget: 2500, progress: (k) => { if (iw.arrival) arriving(k * 0.3); } });
 	window.L99Loading.stage('Preparing the surroundings');
 	// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
@@ -557,6 +558,12 @@ export async function islandBuild(iw, params) {
 	}
 	{ const previousPush = island.extraPush; island.extraPush = (p, footY) => { previousPush?.(p, footY); picnic.push(p, footY); }; }
 	window.L99Loading.stage('Settling your arrival');
+	// what was built after the first warm (the Bay, its towns), and the pictures the first frame
+	// will draw, handed over now in small steps: Enter then only shows them (a phone given all of
+	// it in the first frame after Enter closed the page)
+	HOOKS.lightPad?.update(performance.now(), camera, true);
+	await shaderWarm.all({ budget: 2500 });
+	await shaderWarm.textures({ budget: 2500 });
 	buildPanel();
 	return iw.world;
 }

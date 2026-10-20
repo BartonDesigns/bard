@@ -37,6 +37,7 @@ import { createBridgeSound } from './bay/bridgesound.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
 import { createShaderWarm } from './world/shaderwarm.js';
+import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
 import { createGovernor, qualityNow } from './world/governor.js';
 import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
@@ -527,7 +528,8 @@ export function createIslandWorld() {
 	renderer.outputColorSpace = THREE.SRGBColorSpace;
 	renderer.shadowMap.enabled = !SAFE;
 	renderer.shadowMap.type = THREE.PCFShadowMap;
-	let pixelRatio = renderRatio({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio, phone: GFX, safe: SAFE || graphics.lighter, mode: initialMode });
+	// (the resolution holds even after a graphics loss, Josh 2026-10-19: relief comes from the governor's tiers)
+	let pixelRatio = renderRatio({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio, phone: GFX, safe: SAFE, mode: initialMode });
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = HOOKS.scene = new THREE.Scene();
@@ -542,6 +544,9 @@ export function createIslandWorld() {
 	};
 	// the land, the village and the boats drawn upside down for the sea to reflect (world/seamirror.js)
 	const seaMirror = createSeaMirror(renderer, { phone: GFX, safe: SAFE });
+	// the point lights' count held steady, so lit shaders are not all built again when one goes out
+	// (on a phone at most four are drawn, the lit and nearest: never a fifth set of shaders)
+	HOOKS.lightPad = createLightPad(scene, GFX ? { keep: 4, cap: true } : { keep: 3 });
 	shared.mirrorU = seaMirror.uniforms;
 	// and what stands in the water, by its depth, for its tint and the foam round it (world/seadepth.js)
 	const seaDepth = createSeaDepth(renderer, { phone: GFX, safe: SAFE });
@@ -1156,7 +1161,7 @@ export function createIslandWorld() {
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
 		// (the resolution holds whatever the tier: the governor's relief is shadows, crowds and reach,
 		// never a blocky picture)
-		pixelRatio = renderRatio({ width: w, height: h, dpr: window.devicePixelRatio, phone: GFX, safe: SAFE || graphics.lighter, mode: quality });
+		pixelRatio = renderRatio({ width: w, height: h, dpr: window.devicePixelRatio, phone: GFX, safe: SAFE, mode: quality });
 		renderer.setDrawingBufferSize(w, h, pixelRatio);
 		camera.aspect = w / Math.max(1, h);
 		camera.updateProjectionMatrix();
