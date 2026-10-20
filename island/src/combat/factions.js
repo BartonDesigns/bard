@@ -40,9 +40,11 @@ export const PLAYER = 'player';
 // Attacks on you are events, not waves: a side that has it in for you (a bad name with it, a
 // bounty on you) comes for you at most once in 15 minutes of play on its own ground and once
 // in 30 elsewhere; one with no ground of its own (the contract hunters) sends a raid, rarer
-// still. One clock for every side, so they never come one after another.
-export const ATTACK = Object.freeze({ home: 15 * 60, away: 30 * 60, raid: 45 * 60 });
-export const attackGap = (F, zone) => (!F?.zones?.length ? ATTACK.raid : F.zones.includes(zone) ? ATTACK.home : ATTACK.away);
+// still, never on the dot: 45 minutes and up to 35 more (wobble, drawn afresh after each
+// attack). One clock for every side, so they never come one after another.
+export const ATTACK = Object.freeze({ home: 15 * 60, away: 30 * 60, raid: 45 * 60, wobble: 35 * 60 });
+export const raidWobble = (r = Math.random) => r() * ATTACK.wobble;
+export const attackGap = (F, zone, wobble = 0) => (!F?.zones?.length ? ATTACK.raid + wobble : F.zones.includes(zone) ? ATTACK.home : ATTACK.away);
 export const HOSTILE = -30, ALLIED = 30;
 
 // the old feelings between them (unlisted pairs are 0, neutral; listed both ways)

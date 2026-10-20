@@ -2,8 +2,8 @@
 // trouble your way, bosses, creatures, and hold-ups when you aim at someone.
 // What it uses from combat.js's createCombat comes from cb: what is set up before it can run, once
 // at the top of each call; the rest (aimAt, aimT, bountyT, creatureSeen, creatureT, directorT,
-// lastAttackT, playT, policeT, worldKey) as cb.name at each use, and it sets aimAt, aimT, bountyT,
-// creatureSeen, creatureT, directorT, lastAttackT, playT, policeT. A name not yet there needs a
+// lastAttackT, playT, policeT, wobble, worldKey) as cb.name at each use, and it sets aimAt, aimT, bountyT,
+// creatureSeen, creatureT, directorT, playT, policeT (lastAttackT and wobble through cb.attacked()). A name not yet there needs a
 // getter in createCombat's cb.
 
 import { responseFor } from './heat.js';
@@ -49,8 +49,8 @@ export function combatDirector(cb, dt) {
 	// (only where there are people or businesses about: not out in the empty country)
 	if (cb.bountyT <= 0 && isEarth() && !populated(eye())) cb.bountyT = 30;
 	// (a raid, and a rare one: factions.js ATTACK)
-	if (cb.bountyT <= 0 && cb.playT - cb.lastAttackT < ATTACK.raid) cb.bountyT = 60;
-	if (cb.bountyT <= 0) { cb.bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { cb.lastAttackT = cb.playT; squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
+	if (cb.bountyT <= 0 && cb.playT - cb.lastAttackT < ATTACK.raid + cb.wobble) cb.bountyT = 60;
+	if (cb.bountyT <= 0) { cb.bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { cb.attacked(); squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
 	if (!settings.ambient || cb.directorT > 0 || contracts.info().mission) return;
 	cb.directorT = rnd(70, 130);
 	if (squads.info().squads.length >= (isPhone ? 2 : 3)) return;
@@ -64,8 +64,8 @@ export function combatDirector(cb, dt) {
 	const due = (...fids) => {
 		const foes = fids.filter(hatesMe);
 		if (!foes.length || z === 'deep') return true;
-		if (foes.some((f) => cb.playT - cb.lastAttackT < attackGap(FACTIONS[f], z))) return false;
-		cb.lastAttackT = cb.playT;
+		if (foes.some((f) => cb.playT - cb.lastAttackT < attackGap(FACTIONS[f], z, cb.wobble))) return false;
+		cb.attacked();
 		return true;
 	};
 	// a militia only at its own compound (never roaming): the nearest one within reach, if any

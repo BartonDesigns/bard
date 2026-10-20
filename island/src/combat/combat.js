@@ -38,7 +38,7 @@ import { createFieldAudio } from './field-audio.js';
 import { createProps } from './props.js';
 import { createCars } from './cars.js';
 import { createFireField } from './fire.js';
-import { createRelations, FACTIONS, PLAYER } from './factions.js';
+import { createRelations, FACTIONS, PLAYER, raidWobble } from './factions.js';
 import { rememberIncident } from '../people/world-awareness.js';
 import { createMorality } from './morality.js';
 import { pvpOpen } from './honor.js';
@@ -87,6 +87,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		get hooks() { return hooks; }, get hud() { return hud; }, get hurtOnce() { return hurtOnce; },
 		get hurtPlayer() { return hurtPlayer; }, get ignite() { return ignite; }, get ignite2() { return ignite2; },
 		get isEarth() { return isEarth; }, get isPhone() { return isPhone; }, get landShot() { return landShot; },
+		get attacked() { return attacked; },
 		get lastAttackT() { return lastAttackT; }, set lastAttackT(next) { lastAttackT = next; },
 		get lastShotNotice() { return lastShotNotice; }, set lastShotNotice(next) { lastShotNotice = next; },
 		get layer() { return layer; }, get me() { return me; }, get ME() { return ME; },
@@ -103,6 +104,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		get spark() { return spark; }, get spotAhead() { return spotAhead; },
 		get spotForest() { return spotForest; }, get spotHidden() { return spotHidden; },
 		get squads() { return squads; }, get threatened() { return threatened; }, get view() { return view; },
+		get wobble() { return wobble; },
 		get W() { return W; }, get wanted() { return wanted; }, get witnesses() { return witnesses; },
 		get worldHit() { return worldHit; }, get worldKey() { return worldKey; }, get zone() { return zone; },
 	};
@@ -261,7 +263,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		for (const m of h?.squad?.members || (h ? [h] : [])) { m.provoked = false; if (m.target?.id === 'me') { m.target = null; m.targetT = 0; } }
 	}
 	// attacks on you paced as events (factions.js ATTACK): play time, and when the last one came
-	let playT = 0, lastAttackT = 0;
+	let playT = 0, lastAttackT = 0, wobble = raidWobble();
+	const attacked = () => { lastAttackT = playT; wobble = raidWobble(); };
 	const hatesMe = (fid) => relations.hostile(fid, PLAYER) || (FACTIONS[fid]?.kind === 'mercs' && morality.reactions().bounty > 0);
 	let gangDeaths = [];
 	const fireField = createFireField({ maxBurning: isPhone ? 3 : 5, maxChain: 3, radius: 14, life: 75 });
