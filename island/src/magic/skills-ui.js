@@ -285,6 +285,8 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		if (!document.getElementById(STYLE_ID)) { const s = document.createElement('style'); s.id = STYLE_ID; s.textContent = CSS; document.head.appendChild(s); }
 		root = mk('div', 'sk' + (isTouch ? ' touch' : ''), mount);
 		root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Skills and magic');
+		// (a game controller sends it the arrow keys, Enter and Escape: ui/gamepad.js)
+		root.dataset.pad = 'keys';
 		// (nothing in here reaches the game underneath)
 		for (const ev of ['pointerdown', 'pointerup', 'pointermove', 'touchstart', 'touchmove', 'touchend', 'wheel', 'click', 'contextmenu', 'dblclick']) root.addEventListener(ev, (e) => e.stopPropagation());
 		P.sky = mk('canvas', 'sk-sky', root);
