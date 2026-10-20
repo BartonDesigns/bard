@@ -11,7 +11,10 @@
 //   POST load   (session) -> { data, rev, at }
 //   POST peek   (session) -> { rev, at, summary }
 //   POST logout (session) -> {}
-import { usernameOk, passwordOk, cleanUsername, RECOVERY_RE, SAVE_MAX } from '../../../island/src/persistence/cloud-save.js';
+//   POST name   { name } (session) -> { name, nameAt }: the player name everyone sees, changed at
+//               most once in NAME_MS (429 { next } before then). One chosen at signup is free.
+// login, reset and peek also give { name, nameAt }.
+import { usernameOk, passwordOk, cleanUsername, RECOVERY_RE, SAVE_MAX, NAME_MS, playerNameOk, cleanPlayerName } from '../../../island/src/persistence/cloud-save.js';
 
 // PBKDF2 rounds (kept per account, so it can rise later): the Workers Free plan's CPU budget
 // allows only a few; the lockout below is what stops guessing
@@ -74,8 +77,9 @@ export class Account {
 			if (user) return json({ error: 'That username is taken.' }, 409);
 			if (!passwordOk(b.p)) return json({ error: 'A password is at least 8 characters.' }, 400);
 			const salt = hex(random(16)), rsalt = hex(random(16)), recovery = newRecovery();
-			await store.put('user', { u, salt, hash: await pbkdf2(b.p, salt, ROUNDS, pepper), rounds: ROUNDS, rsalt, rhash: await sha256(rsalt + '|' + recovery), created: now, fails: 0, lockUntil: 0 });
-			return json({ token: await this.open(), recovery, rev: 0, at: 0 });
+			const name = playerNameOk(b.name) ? cleanPlayerName(b.name) : '';
+			await store.put('user', { u, salt, hash: await pbkdf2(b.p, salt, ROUNDS, pepper), rounds: ROUNDS, rsalt, rhash: await sha256(rsalt + '|' + recovery), created: now, fails: 0, lockUntil: 0, name, nameAt: 0 });
+			return json({ token: await this.open(), recovery, rev: 0, at: 0, name, nameAt: 0 });
 		}
 		if (!user) return json({ error: op === 'login' || op === 'reset' ? 'That username and password do not match.' : 'Please log in again.' }, op === 'login' || op === 'reset' ? 403 : 401);
 		if (op === 'login' || op === 'reset') {
@@ -100,13 +104,25 @@ export class Account {
 			}
 			await store.put('user', user);
 			const M = await this.meta();
-			return json({ token: await this.open(), ...(recovery ? { recovery } : {}), rev: M.rev, at: M.at, summary: M.summary });
+			return json({ token: await this.open(), ...(recovery ? { recovery } : {}), rev: M.rev, at: M.at, summary: M.summary, name: user.name || '', nameAt: user.nameAt || 0 });
 		}
 		// ---------- signed in ----------
 		const token = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
 		if (!(await this.session(user, token))) return json({ error: 'Please log in again.' }, 401);
 		const M = await this.meta();
-		if (op === 'peek') return json({ rev: M.rev, at: M.at, summary: M.summary });
+		if (op === 'peek') return json({ rev: M.rev, at: M.at, summary: M.summary, name: user.name || '', nameAt: user.nameAt || 0 });
+		if (op === 'name') {
+			if (!playerNameOk(b.name)) return json({ error: 'A name is 2 to 24 characters.' }, 400);
+			const name = cleanPlayerName(b.name);
+			if (name === user.name) return json({ name, nameAt: user.nameAt || 0 });
+			// (the first name an account takes is free; every change after waits its turn)
+			if (user.name && user.nameAt && now - user.nameAt < NAME_MS) return json({ error: `You can change your name again on ${new Date(user.nameAt + NAME_MS).toISOString().slice(0, 10)}.`, next: user.nameAt + NAME_MS }, 429);
+			const fresh = await store.get('user');
+			fresh.nameAt = user.name ? now : 0;
+			fresh.name = name;
+			await store.put('user', fresh);
+			return json({ name, nameAt: fresh.nameAt });
+		}
 		if (op === 'logout') {
 			const h = await sha256(token);
 			await store.put('sessions', ((await store.get('sessions')) || []).filter((x) => !same(x.h, h)));
