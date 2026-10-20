@@ -8,6 +8,7 @@ import { SPECIES, SPECIES_IDS, speciesFor, pickSpecies } from '../src/creatures/
 import { FACTIONS, PLAYER, createRelations } from '../src/combat/factions.js';
 import { pveHonor } from '../src/combat/honor.js';
 import { DAMAGE_TYPES } from '../src/combat/health.js';
+import { VOICES, renderVoice } from '../src/creatures/voice.js';
 
 test('every kind has its packed model', () => {
 	for (const id of SPECIES_IDS) {
@@ -32,7 +33,9 @@ test('bringing one down is honor', () => {
 });
 
 test('the night ones come only after dark; the Deep keeps its own', () => {
-	assert.deepEqual(speciesFor('earth-rural', 0), []);
+	// (by day only the Burnt Giant, standing as a tree among the trees)
+	assert.deepEqual(speciesFor('earth-rural', 0), ['burnt-giant']);
+	assert.ok(SPECIES['burnt-giant'].lurk?.wake > 0);
 	assert.ok(speciesFor('earth-rural', 1).includes('fog-wight'));
 	assert.ok(speciesFor('earth-urban', 1).includes('drain-skulker'));
 	assert.ok(speciesFor('wild', 1).includes('ridge-hound'));
@@ -55,4 +58,15 @@ test('a flyer keeps above you and drops into reach to strike', () => {
 		assert.ok(F.hover > F.strike && F.strike > 0 && F.strike < 2, id);
 	}
 	assert.ok(SPECIES.lampeater.fly);
+});
+
+test('their voices are made, heard and never clip', () => {
+	for (const v of ['growl', 'snarl', 'sniff', 'scrape', 'creak', 'chitter']) assert.ok(VOICES.includes(v), v);
+	for (const v of VOICES) {
+		const d = renderVoice(v, 22050);
+		let peak = 0, e = 0;
+		for (const x of d) { assert.ok(Number.isFinite(x), v); peak = Math.max(peak, Math.abs(x)); e += x * x; }
+		assert.ok(peak <= 1 && peak > 0.3, `${v} peak ${peak}`);
+		assert.ok(e / d.length > 1e-4, `${v} is silent`);
+	}
 });

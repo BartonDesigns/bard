@@ -252,7 +252,7 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 		# goes to its nearest bone, and bones drawn on one line (a left and a right leg) share it
 		Dn = np.full((nb, len(P2)), np.inf, np.float32)
 		for i, b in enumerate(bones):
-			if not b.get('free') and not b.get('sideband'):
+			if not b.get('free') and not b.get('sideband') and not b.get('ghost'):
 				Dn[i] = seg_dist(P2, b['s'][0], b['s'][1], float(spec.get('cap', 1.0)))[0] / b.get('rs', b.get('r', 40) * 1.2)
 		sbest = Dn.min(0)
 		# (pixels of the tube limbs: the trunk's overlap at its borders keeps off them)
@@ -263,6 +263,9 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 			stube[ys2[own], xs2[own]] = True
 	for i, b in enumerate(bones):
 		r = b.get('rs', b.get('r', 40) * 1.2)
+		if b.get('ghost'):
+			# a bone of the rig with no flesh of its own (a crystal leg the game adds itself)
+			continue
 		if b.get('sideband'):
 			# a wing spread flat (the side view shows it folded, or edge-on): a thin level band
 			# through the line's height, the whole length of the side view
@@ -366,7 +369,7 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 		Pt_ = np.stack([txs_ + TV.x0, tys_ + TV.y0], 1).astype(np.float32)
 		Dt = np.full((nb, len(Pt_)), np.inf, np.float32)
 		for i, b in enumerate(bones):
-			if 't' in b and not b.get('tube'):
+			if 't' in b and not b.get('tube') and not b.get('ghost'):
 				Dt[i] = seg_dist(Pt_, b['t'][0], b['t'][1], float(spec.get('cap', 1.0)))[0] / b.get('rt', b.get('r', 40))
 		tbest = Dt.min(0)
 		ttube = np.zeros(TV.mask.shape, bool)
@@ -378,6 +381,8 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 		r = b.get('r', 40)
 		rs = b.get('rs', r * 1.2)
 		tsv = None
+		if b.get('ghost'):
+			continue
 		if TV is not None and 't' in b:
 			wt = Dt[i] <= tbest * 1.0001 + 1e-6
 			treg = np.zeros(TV.mask.shape, bool)
@@ -786,7 +791,7 @@ def build(name, tris=14000, tex=1024, out=None, vox_px=3):
 		return np.linalg.norm(Pt - (a + t[:, None] * ab), axis=1)
 	rad = np.array([max(b.get('r', 40), b.get('rs', b.get('r', 40) * 1.2)) * px for b in bones], np.float32)
 	reach = float(spec.get('reach', 1.6))
-	D3 = np.stack([seg3(lpts, *j3[i]) / rad[i] if not bones[i].get('free') else np.full(len(lpts), np.inf, np.float32) for i in range(nb)], 1)
+	D3 = np.stack([seg3(lpts, *j3[i]) / rad[i] if not (bones[i].get('free') or bones[i].get('ghost')) else np.full(len(lpts), np.inf, np.float32) for i in range(nb)], 1)
 	own = D3[np.arange(len(llab)), llab]
 	stray = own > reach
 	llab = np.where(stray, np.argmin(D3, 1), llab).astype(llab.dtype)

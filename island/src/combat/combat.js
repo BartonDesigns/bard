@@ -742,6 +742,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		onPickup: () => { cancelInput(); gear?.()?.weapon?.pickup?.(); }, onCollected: (source) => contracts.recovered(source) });
 	const ctx = {
 		layer, fx, isPhone, relations, ragdolls, people, world: W, ground, eye, blocked, call, hud,
+		yaw: () => P()?.yaw ?? 0,
 		me: () => ({ speed: me.speed, grounded: !!P()?.grounded || !!W()?.deep?.active?.(), vel: me.vel }),
 		projectile, firstHit, landShot, hurtPlayer, blast, missile, ignite: (id, x, z, f, mine) => ignite(id, x, z, f, !!mine), shake: (k) => shakeIt(k),
 		strikeNpc: (T, blow, at) => { if (at) fx.impact(at, null, T.surface, blow.type === 'energy'); return deal(T, blow, false); },
@@ -902,6 +903,20 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		}
 		return hiddenSpot(cands, e, dir, (x, z) => blocked(e, _v.set(x, ground(x, z, e.y) + 1.5, z)));
 	}
+	// somewhere among tall trees (for one that stands as a tree, waiting): the most wooded of a
+	// few spots round you, in plain sight or not, or none where there is no wood
+	function spotForest(dmin, dmax) {
+		const e = eye(), city = W()?.city;
+		if (!city?.treesNear) return null;
+		let best = null, bn = 3;
+		for (let k = 0; k < 12; k++) {
+			const a = Math.random() * Math.PI * 2, d = rnd(dmin, dmax), x = e.x + Math.sin(a) * d, z = e.z + Math.cos(a) * d, g = ground(x, z, e.y);
+			if (!Number.isFinite(g) || g < 0.6 || Math.abs(g - (e.y - EYE)) > 25) continue;
+			const n = city.treesNear(x, z, 18).filter((t) => !t.shrub && !t.fern && t.h > 7).length;
+			if (n > bn) { bn = n; best = { x, z, y: g }; }
+		}
+		return best;
+	}
 	function spotAhead(dmin, dmax) {
 		const e = eye();
 		for (let k = 0; k < 8; k++) {
@@ -985,7 +1000,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (!kinds.length) return;
 		if (squads.alive().filter((h) => h.cr).length >= (isPhone ? 2 : 4)) return;
 		const id = pickSpecies(kinds), S = SPECIES[id];
-		const s = spotHidden(z === 'deep' ? 25 : 45, z === 'deep' ? 40 : 80);
+		const s = S.lurk ? spotForest(40, 110) || spotHidden(45, 80) : spotHidden(z === 'deep' ? 25 : 45, z === 'deep' ? 40 : 80);
 		if (!s) return;
 		const [a, b] = S.where.pack, n = Math.min(isPhone ? 2 : 4, a + Math.floor(Math.random() * (b - a + 1)));
 		squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2.5 });
@@ -997,7 +1012,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const S = SPECIES[id];
 		if (!S) return null;
 		const s = spotAhead(d, d + 4) || { x: eye().x - Math.sin(P()?.yaw || 0) * d, z: eye().z - Math.cos(P()?.yaw || 0) * d };
-		return squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2, alert: true }).then((sq) => sq.id);
+		// (one that lurks stands there as it would in a wood: walk up to it, or wake it)
+		return squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2, alert: !S.lurk }).then((sq) => sq.id);
 	}
 	if (menu) {
 		// a way to meet each one, in the places menu (with Skills and magic, and Test mode)
@@ -1011,7 +1027,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			const b = document.createElement('button');
 			b.type = 'button'; b.textContent = SPECIES[id].name; b.style.cssText = css;
 			stop(b);
-			b.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; list.style.display = 'none'; creatureAhead(id); hint(`${SPECIES[id].name}, just ahead.`, 1800); });
+			b.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; list.style.display = 'none'; creatureAhead(id); hint(SPECIES[id].lurk ? `${SPECIES[id].name}, just ahead: still as a tree until you disturb it.` : `${SPECIES[id].name}, just ahead.`, 2400); });
 			list.appendChild(b);
 		}
 		stop(btn);
