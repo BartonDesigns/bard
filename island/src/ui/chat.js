@@ -68,7 +68,7 @@ const CSS = `
 .chat-rec.on{display:flex}
 .chat-rec span{flex:1}
 .chat-btn{padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:transparent;min-height:40px;font-size:13px!important}
-.chat-btn.go{background:linear-gradient(135deg,#01a982,#10b981);border:0;font-weight:600!important;box-shadow:0 4px 12px rgba(1,169,130,.3)}
+.chat-btn.go{background:linear-gradient(135deg,#01a982,#10b981);border:0;color:#fff!important;font-weight:600!important;box-shadow:0 4px 12px rgba(1,169,130,.3)}
 .chat-btn.alt{border:2px solid #01a982;color:#5eead4!important;font-weight:600!important}
 .chat-btn.sm{padding:5px 10px;min-height:32px;font-size:12px!important}
 .chat-sec{font:700 11px system-ui;letter-spacing:.08em;color:rgba(255,255,255,.5);text-transform:uppercase;margin-top:8px}
