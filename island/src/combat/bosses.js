@@ -1,11 +1,13 @@
-// The three set-piece bosses, their bodies and their arenas (the rules are combat/boss-defs.js
-// and boss-machine.js):
+// The set-piece bosses, their bodies and their arenas (the rules are combat/boss-defs.js and
+// boss-machine.js):
 //   the Lumen Leviathan   a serpent of living crystal that swims through the rock of the Deep's
 //                         crystal galleries: an eye always, a heart once its crest cracks
 //   the Cinder Colossus   a four-legged war machine on the ash plains of MAGMA and TOXIC
 //                         worlds: break both front knees and it kneels, its core bared
 //   the Stormwarden       a storm-grey gunship over the cliff settlements and the gas worlds:
 //                         two engine pods, then the core when its armour ring falls
+//   the Fog Mother        an old woman of fog as tall as the Golden Gate's towers, wading
+//                         beside the bridge at night: her blue heart, always
 // Every attack is warned first (a ring on the ground where it will land, a beam's line, a glow)
 // so it can be read and dodged. Each has a big health bar, phases announced on screen, and a
 // reward: Legendary gear, credits and a journal entry.
@@ -13,6 +15,11 @@
 import * as THREE from 'three';
 import { createBossMachine } from './boss-machine.js';
 import { BOSSES } from './boss-defs.js';
+import { leviathanBody } from '../creatures/leviathan.js';
+import { GFX_PHONE } from '../world/device.js';
+import { makeCreature } from '../creatures/models.js';
+import { fogLook } from '../creatures/fog.js';
+import { createCreatureVoice } from '../creatures/voice.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -22,35 +29,30 @@ function glowMat(c, k = 1) { return new THREE.MeshStandardMaterial({ color: c, e
 // ---------- the Lumen Leviathan ----------
 function leviathan(ctx, B) {
 	const N = 16, g = new THREE.Group();
-	const crystal = new THREE.MeshStandardMaterial({ color: 0x8a6bd8, emissive: 0x4a2a9a, emissiveIntensity: 0.6, roughness: 0.15, metalness: 0.35, flatShading: true });
-	const geo = new THREE.OctahedronGeometry(1, 0);
 	const segs = [];
-	for (let i = 0; i < N; i++) {
-		const r = 0.6 + 1.7 * Math.sin(Math.PI * (i + 1) / (N + 1)) * (i < 3 ? 1.15 : 1);
-		const m = new THREE.Mesh(geo, crystal); m.scale.set(r, r * 0.8, r * 1.5); g.add(m);
-		const spike = new THREE.Mesh(geo, crystal); spike.scale.set(0.25 * r, 0.9 * r, 0.25 * r); spike.position.y = r * 0.9; m.add(spike);
-		segs.push({ m, r, p: new THREE.Vector3() });
-	}
-	const eye = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), glowMat(0xd8f8ff, 2)); g.add(eye);
-	const heart = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 1), glowMat(0xff4aa0, 0.4)); g.add(heart);
+	for (let i = 0; i < N; i++) segs.push({ r: 0.6 + 1.7 * Math.sin(Math.PI * (i + 1) / (N + 1)) * (i < 3 ? 1.15 : 1), p: new THREE.Vector3() });
+	// (its body, head and plate: creatures/leviathan.js, from its sheet)
+	const L = leviathanBody({ n: N, radii: segs.map((s) => s.r), phone: GFX_PHONE });
+	g.add(L.group);
+	const pts = segs.map((s) => s.p), eye = new THREE.Vector3(), heart = L.heart;
 	const C = B.center, trail = [];
-	let a = 0, charge = null;
+	let a = 0, charge = null, jaw = 0, roar = 0;
 	const headAt = (t, out) => out.set(C.x + Math.cos(t) * 13, C.y + 5 + Math.sin(t * 1.3) * 2.5, C.z + Math.sin(t) * 13);
 	const head = headAt(0, new THREE.Vector3());
 	for (let i = 0; i < N * 6; i++) trail.push(headAt(-i * 0.02, new THREE.Vector3()));
 	B.parts = () => {
 		const out = segs.map((s) => ({ type: 'sphere', c: s.p, r: s.r * 0.95, part: 'body' }));
-		out.push({ type: 'sphere', c: eye.position, r: 0.55, part: 'eye' }, { type: 'sphere', c: heart.position, r: 0.9, part: 'heart' });
+		out.push({ type: 'sphere', c: eye, r: 0.55, part: 'eye' }, { type: 'sphere', c: heart.position, r: 0.9, part: 'heart' });
 		return out;
 	};
 	B.surface = 'crystal';
 	B.attack = (name, step, k) => {
 		const me = ctx.eye();
 		if (name === 'volley') {
-			if (step === 'telegraph') { eye.material.emissiveIntensity = 2 + k * 4; }
+			if (step === 'telegraph') { L.eyeMat.emissiveIntensity = 2 + k * 4; roar = 0.6; }
 			if (step === 'attack') for (let i = 0; i < 6; i++) setTimeout(() => !B.dead && ctx.projectile({ from: head.clone(), to: me.clone().add(_v.set(rnd(-2, 2), rnd(-0.5, 1), rnd(-2, 2))), speed: 34, drop: 0, dmg: 10, type: 'pierce', owner: B.T, style: 5, splash: 0.8, hostile: true }), i * 160);
 		} else if (name === 'charge') {
-			if (step === 'telegraph-start') { const to = me.clone(); to.y -= 1.2; charge = { from: head.clone(), to: to.clone().add(to.clone().sub(head).setLength(8)), t: 0 }; ctx.fx.beam(charge.from, charge.to, 1.8, 0xb070ff, 0.5); ctx.fx.ring(to.x, ctx.ground(to.x, to.z, to.y + 1), to.z, 3, 1.8, 0xb070ff); }
+			if (step === 'telegraph-start') { roar = 1; const to = me.clone(); to.y -= 1.2; charge = { from: head.clone(), to: to.clone().add(to.clone().sub(head).setLength(8)), t: 0 }; ctx.fx.beam(charge.from, charge.to, 1.8, 0xb070ff, 0.5); ctx.fx.ring(to.x, ctx.ground(to.x, to.z, to.y + 1), to.z, 3, 1.8, 0xb070ff); }
 			if (step === 'attack' && charge) charge.go = true;
 		} else if (name === 'pulse') {
 			if (step === 'telegraph-start') ctx.fx.ring(C.x, ctx.ground(C.x, C.z, C.y + 2), C.z, 15, 2, 0xc080ff, true);
@@ -77,18 +79,16 @@ function leviathan(ctx, B) {
 			head.lerp(_v, Math.min(1, dt * 2));
 		}
 		trail.unshift(trail.pop().copy(head));
-		for (let i = 0; i < N; i++) {
-			const s = segs[i], p = trail[Math.min(trail.length - 1, i * 5)], q = trail[Math.min(trail.length - 1, i * 5 + 3)];
-			s.p.copy(p); s.m.position.copy(p); s.m.lookAt(q);
-			s.m.rotation.z += Math.sin(B.time * 2 + i) * 0.1;
-		}
-		eye.position.copy(segs[0].p).add(_w.set(0, 0.2, 0).addScaledVector(_v.subVectors(segs[0].p, segs[1].p).normalize(), segs[0].r * 1.2));
-		eye.material.emissiveIntensity += (2 - eye.material.emissiveIntensity) * Math.min(1, dt * 3);
-		heart.position.copy(segs[5].p).add(_w.set(0, segs[5].r * 0.9, 0));
-		const open = B.mc.isOpen('heart');
-		heart.material.emissiveIntensity = open ? 2.5 + Math.sin(B.time * 6) : 0.2;
-		heart.scale.setScalar(open ? 1 : 0.6);
-		crystal.emissiveIntensity = 0.6 + (M.state === 'transition' ? Math.sin(B.time * 20) * 0.6 + 0.6 : 0) + (M.phase === 2 ? 0.5 : 0);
+		for (let i = 0; i < N; i++) segs[i].p.copy(trail[Math.min(trail.length - 1, i * 5)]);
+		// the jaw opens to roar as it winds up, and gapes through a charge
+		roar = Math.max(0, roar - dt * 0.6);
+		jaw += ((charge?.go ? 1 : roar > 0.2 ? 0.8 : 0.08 + Math.sin(B.time * 0.9) * 0.05) - jaw) * Math.min(1, dt * 5);
+		const glow = 1 + (M.state === 'transition' ? Math.sin(B.time * 20) * 0.6 + 0.6 : 0) + (M.phase === 2 ? 0.5 : 0);
+		const r = L.update(pts, B.time, { jaw, phase: M.phase, glow, cracked: M.phase === 1 ? 1 : 0 });
+		L.brow.getWorldPosition(eye);
+		L.eyeMat.emissiveIntensity += (2.2 - L.eyeMat.emissiveIntensity) * Math.min(1, dt * 3);
+		// (its breastplate bursts as the last of the fight begins)
+		if (r.plateBurst) { ctx.fx.glass(r.plateBurst, 30, 6, 0.6); ctx.fx.sparks(r.plateBurst, 30, null, 0.75, 0.6, 1, 12); ctx.shake?.(0.6, r.plateBurst); }
 	};
 	B.die = () => { for (const s of segs) { ctx.fx.glass(s.p, 6, 5, 0.5); ctx.fx.sparks(s.p, 10, null, 0.8, 0.6, 1, 8); } };
 	B.focus = () => head;
@@ -260,7 +260,144 @@ function gunship(ctx, B) {
 	return g;
 }
 
-const BUILD = { leviathan, walker, gunship };
+// ---------- the Fog Mother ----------
+// an old woman of fog as tall as the bridge's towers, wading in the strait beside the Golden Gate
+// at night, the blue heart in her chest the one place she can be hurt hard. She brings her hands
+// down on the roadway (a ring on the deck where one will fall), wails, breathes a bank of cold fog
+// down the deck, and calls Fog Wights up out of it. Her body is her sheet's (creatures/models.js,
+// creatures/fog.js makes it fog); it comes when it has loaded.
+const FOG_H = 220;
+function fogMother(ctx, B) {
+	const g = new THREE.Group();
+	const C = B.center, heart = new THREE.Vector3(C.x, C.y + FOG_H * 0.66, C.z), focus = heart;
+	const voice = createCreatureVoice({ eye: ctx.eye, yaw: () => ctx.yaw?.() ?? 0, isPhone: GFX_PHONE });
+	let c = null, look = null, k = 1, yaw = 0, arm = null, breath = null, fade = 1;
+	// where she stands and which way she faces: toward the deck, across it
+	const bridge = ctx.world?.()?.bridge;
+	if (bridge) { const t = (C.x - bridge.centre.x) * -bridge.axis.y + (C.z - bridge.centre.z) * bridge.axis.x; yaw = Math.atan2(bridge.axis.y * Math.sign(t), -bridge.axis.x * Math.sign(t)); }
+	else { const e = ctx.eye(); yaw = Math.atan2(e.x - C.x, e.z - C.z); }
+	makeCreature('fog-mother').then((body) => {
+		if (B.dead && B.deadT > 6) return;
+		c = body;
+		k = FOG_H / (c.meta.height || 3);
+		c.root.scale.setScalar(k);
+		c.root.position.set(C.x, C.y - FOG_H * 0.04, C.z);
+		c.root.rotation.set(0, yaw, 0);
+		look = fogLook(c, { phone: GFX_PHONE });
+		g.add(c.root);
+		B.T.bound.r = FOG_H * 0.6;
+	}).catch((e) => console.warn('fog mother', e));
+	const shapes = [];
+	B.parts = () => {
+		if (!c) return [{ type: 'sphere', c: heart, r: FOG_H * 0.05, part: 'heart' }];
+		const sh = c.shapes();
+		shapes.length = 0;
+		for (const z of sh) shapes.push({ type: 'capsule', a: z.a, b: z.b, r: z.r * k, part: 'body' });
+		shapes.push({ type: 'sphere', c: heart, r: FOG_H * 0.035, part: 'heart' });
+		return shapes;
+	};
+	B.surface = 'creature';
+	// a world rotation laid on a bone (its parent's frame turned into it)
+	const _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _d = new THREE.Vector3();
+	function turn(bone, q) {
+		bone.parent.getWorldQuaternion(_pq);
+		bone.quaternion.premultiply(_q.copy(_pq).invert().multiply(q).multiply(_pq));
+		bone.updateMatrixWorld(true);
+	}
+	const bone = (n) => { let b = null; c?.root.traverse((o) => { if (!b && o.isBone && o.name === n) b = o; }); return b; };
+	const deckY = (x, z) => ctx.ground(x, z, ctx.eye().y + 3);
+	B.attack = (name, step, kk) => {
+		const me = ctx.eye();
+		if (name === 'slam') {
+			if (step === 'telegraph-start') {
+				// the hand on the side you are, and where it will fall: the deck where you stand
+				const side = c ? Math.sign(Math.cos(yaw) * (me.x - C.x) - Math.sin(yaw) * (me.z - C.z)) || 1 : 1;
+				const at = new THREE.Vector3(me.x, deckY(me.x, me.z), me.z);
+				arm = { side: side > 0 ? 'L' : 'R', at, up: 0, down: 0, hit: false };
+				ctx.fx.ring(at.x, at.y + 0.3, at.z, 18, B.def.attacks.slam.warn + 0.4, 0x8ac8ff, true);
+				voice.play('growl', heart, 1, 0.35);
+			}
+			if (step === 'telegraph' && arm) arm.up = kk;
+			if (step === 'attack' && arm) arm.down = 0.001;
+			if (step === 'recover') arm = null;
+		} else if (name === 'wail') {
+			if (step === 'telegraph-start') { voice.play('wail', heart, 1.2, 0.8); B.wail = 0.001; }
+			if (step === 'attack') {
+				ctx.shake?.(0.5);
+				ctx.fx.ring(me.x, deckY(me.x, me.z) + 0.5, me.z, 30, 1.2, 0xbfd8ff, false);
+				if (Math.hypot(me.x - C.x, me.z - C.z) < FOG_H * 0.9) ctx.hurtPlayer({ amount: 16, type: 'energy', src: heart.clone(), part: 'head', by: B.T });
+			}
+		} else if (name === 'breath') {
+			if (step === 'telegraph-start') voice.play('wail', heart, 0.6, 0.5);
+			if (step === 'attack') {
+				// a bank of fog rolled down the deck toward you, from the side she stands
+				const from = new THREE.Vector3(C.x, deckY(C.x, C.z), C.z), to = new THREE.Vector3(me.x, deckY(me.x, me.z), me.z);
+				breath = { from, to, t: 0, hurt: 0 };
+			}
+		} else if (name === 'wights') {
+			if (step === 'attack') {
+				for (const sd of [-1, 1]) {
+					const x = me.x + Math.cos(yaw) * 18 * sd, z = me.z - Math.sin(yaw) * 18 * sd, p = _a.set(x, deckY(x, z) + 1, z);
+					ctx.fx.dust(p, 14, 0.75, 0.78, 0.82, 4, 2);
+					ctx.spawnSquad('nightborn', x, z, 1, { alert: true, species: 'fog-wight', spread: 1 });
+				}
+			}
+		}
+	};
+	B.step = (dt) => {
+		const M = B.mc.M;
+		if (!c) return;
+		const glow = (M.phase === 2 ? 1.8 : 1) + (M.state === 'transition' ? 0.8 : 0);
+		c.motion.update(dt, { speed: 0, look: 0 });
+		c.motion.drain();
+		// a hand: raised high over her as it winds up, then down on the deck
+		if (arm) {
+			const ua = bone('upperarm_' + arm.side);
+			if (ua) {
+				if (arm.down > 0) arm.down = Math.min(1, arm.down + dt / 0.35);
+				ua.getWorldPosition(_a);
+				const hand = bone('hand_' + arm.side);
+				hand?.getWorldPosition(_b);
+				const raised = _d.set(Math.sin(yaw) * 0.35, 1, Math.cos(yaw) * 0.35).normalize();
+				const down = _b.copy(arm.at).sub(_a).normalize();
+				const want = arm.down > 0 ? raised.clone().lerp(down, Math.min(1, arm.down * arm.down)).normalize() : raised;
+				hand?.getWorldPosition(_b);
+				const now = _b.sub(_a).normalize();
+				const w = arm.down > 0 ? 1 : Math.min(1, arm.up * 1.4);
+				_q.setFromUnitVectors(now, want);
+				turn(ua, new THREE.Quaternion().slerp(_q, w));
+				if (arm.down >= 1 && !arm.hit) {
+					arm.hit = true;
+					const p = arm.at;
+					ctx.shake?.(1);
+					ctx.fx.dust({ x: p.x, y: p.y + 1, z: p.z }, 40, 0.78, 0.8, 0.84, 9, 3);
+					ctx.fx.sparks(p, 20, null, 0.6, 0.8, 1, 10);
+					voice.play('scrape', p, 1, 0.4);
+					const e = ctx.eye();
+					if (Math.hypot(e.x - p.x, e.z - p.z) < 18 && Math.abs(e.y - p.y) < 14) ctx.hurtPlayer({ amount: 34, type: 'impact', src: p.clone(), part: 'torso', by: B.T });
+				}
+			}
+		}
+		// the fog bank rolling down the deck
+		if (breath) {
+			breath.t += dt / 2.5;
+			const front = _a.lerpVectors(breath.from, breath.to, Math.min(1, breath.t * 1.3));
+			ctx.fx.dust({ x: front.x, y: front.y + 2, z: front.z }, 3, 0.8, 0.83, 0.88, 6, 2.5);
+			const e = ctx.eye();
+			breath.hurt -= dt;
+			if (breath.hurt <= 0 && Math.hypot(e.x - front.x, e.z - front.z) < 16) { breath.hurt = 0.5; ctx.hurtPlayer({ amount: 5, type: 'energy', src: front.clone(), part: 'torso', by: B.T }); }
+			if (breath.t >= 1) breath = null;
+		}
+		look.heart(heart);
+		look.update(dt, { glow, fade, wind: _d.set(Math.sin(yaw + Math.PI), 0, Math.cos(yaw + Math.PI)) });
+	};
+	B.die = () => { voice.play('wail', heart, 1.4, 0.6); ctx.fx.sparks(heart, 40, null, 0.5, 0.8, 1, 20); };
+	B.dying = (dt) => { fade = Math.max(0, 1 - B.deadT / 5); if (c) { c.motion.update(dt, { speed: 0 }); look.update(dt, { glow: fade * 2, fade }); } };
+	B.focus = () => focus;
+	return g;
+}
+
+const BUILD = { leviathan, walker, gunship, fogmother: fogMother };
 
 // a boss at center ({ x, y, z }); id is shared in a room (the host's)
 export function createBoss(ctx, kind, center, { id = 'boss:' + kind, rand = Math.random } = {}) {

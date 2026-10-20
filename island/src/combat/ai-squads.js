@@ -41,6 +41,7 @@ import { makeCreature } from '../creatures/models.js';
 import { createCreatureVoice } from '../creatures/voice.js';
 import { facetLook } from '../creatures/facets.js';
 import { crystalLegs } from '../creatures/crystal-legs.js';
+import { hollowKing } from '../creatures/hollow-king.js';
 
 // the bodies: people (dressed by faction), and those that are not (a creature's own are made
 // from its kind: creatures/catalog.js)
@@ -962,6 +963,7 @@ export function createSquads(ctx) {
 			c.look = look;
 			if (look === 'facets') c.facets = facetLook(c);
 			if (look === 'legs') c.legs = crystalLegs(c);
+			if (look === 'sword') c.sword = hollowKing(c);
 			c.used = true;
 			group.add(c.root);
 			pool.push(c);

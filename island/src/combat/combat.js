@@ -841,7 +841,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	function spawnBoss(kind, at = null, id = null) {
 		if (!BOSSES[kind]) return null;
 		const e = eye();
-		const c = at || (() => { camera.getWorldDirection(_v); _v.y = 0; _v.normalize(); const d = kind === 'walker' ? 70 : kind === 'leviathan' ? 14 : 30; const x = e.x + _v.x * d, z = e.z + _v.z * d; return { x, y: ground(x, z, e.y), z }; })();
+		const c = at || (kind === 'fogmother' ? fogMotherSpot() : null) || (() => { camera.getWorldDirection(_v); _v.y = 0; _v.normalize(); const d = kind === 'walker' ? 70 : kind === 'leviathan' ? 14 : 30; const x = e.x + _v.x * d, z = e.z + _v.z * d; return { x, y: ground(x, z, e.y), z }; })();
 		const bid = id || 'boss:' + kind;
 		if (bosses.has(bid)) return bosses.get(bid);
 		const B0 = createBoss(ctx, kind, c, { id: bid });
@@ -853,6 +853,15 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hooks.event?.({ kind: 'boss', x: c.x, z: c.z, severity: 3, name: B0.def.name });
 		net.boss(B0, true, c);
 		return B0;
+	}
+	// where the Fog Mother rises: in the strait beside the Golden Gate, abreast of you on the deck
+	// (or, away from it, out in front of you)
+	function fogMotherSpot() {
+		const B = W()?.bridge, e = eye();
+		if (!B || Math.hypot(e.x - B.centre.x, e.z - B.centre.z) > B.length / 2 + 900) { camera.getWorldDirection(_v); _v.y = 0; _v.normalize(); return { x: e.x + _v.x * 160, y: 0, z: e.z + _v.z * 160 }; }
+		const half = B.length / 2 - 200, s = Math.max(-half, Math.min(half, (e.x - B.centre.x) * B.axis.x + (e.z - B.centre.z) * B.axis.y));
+		const side = ((e.x - B.centre.x) * -B.axis.y + (e.z - B.centre.z) * B.axis.x) > 0 ? 1 : -1, t = side * 80;
+		return { x: B.centre.x + B.axis.x * s - B.axis.y * t, y: 0, z: B.centre.z + B.axis.y * s + B.axis.x * t };
 	}
 	function bossDown(B0) {
 		const D = B0.def, R = D.reward;
@@ -873,6 +882,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const w = W(), type = shared.planet?.type, p = P();
 		if (!p || p.flying || drive?.active?.()) return;
 		const recent = (k) => seen[k] && Date.now() - seen[k] < 20 * 60 * 1000;
+		// (the Golden Gate after dark: she comes up out of the fog)
+		const B = w?.bridge, e = eye();
+		if (isEarth() && B && (w?.sky?.uniforms?.uNight?.value ?? 0) > 0.6 && Math.hypot(e.x - B.centre.x, e.z - B.centre.z) < B.length / 2 + 300 && !recent('fogmother')) { seen.fogmother = Date.now(); hint('The fog is thickening over the Gate. Something in it is standing up.', 5000, 2); spawnBoss('fogmother'); return; }
 		if (w?.deep?.active?.() && /crystal/i.test(w.deep.info?.().band || '') && !recent('leviathan')) { seen.leviathan = Date.now(); hint('The crystal sings. Something vast is moving through the rock.', 4000, 2); spawnBoss('leviathan'); return; }
 		if (!isEarth() && (type === 'MAGMA' || type === 'TOXIC') && worldT > 70 && !recent('walker') && !w?.deep?.active?.()) { seen.walker = Date.now(); hint('The ground shudders. Something huge is walking the ash plains.', 4000, 2); spawnBoss('walker'); return; }
 		if (!isEarth() && (type === 'GAS' || (w?.arch && worldT > 60)) && worldT > 80 && !recent('gunship') && !w?.deep?.active?.()) { seen.gunship = Date.now(); hint('Engines in the clouds. A gunship is circling the cliffs.', 4000, 2); spawnBoss('gunship'); }
@@ -1028,6 +1040,14 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			b.type = 'button'; b.textContent = SPECIES[id].name; b.style.cssText = css;
 			stop(b);
 			b.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; list.style.display = 'none'; creatureAhead(id); hint(SPECIES[id].lurk ? `${SPECIES[id].name}, just ahead: still as a tree until you disturb it.` : `${SPECIES[id].name}, just ahead.`, 2400); });
+			list.appendChild(b);
+		}
+		// (and the Fog Mother, who rises beside the Golden Gate: a boss, not a creature among others)
+		{
+			const b = document.createElement('button');
+			b.type = 'button'; b.textContent = 'The Fog Mother'; b.style.cssText = css;
+			stop(b);
+			b.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; list.style.display = 'none'; if (!bosses.size) spawnBoss('fogmother'); hint(W()?.bridge ? 'The Fog Mother rises in the strait beside the Golden Gate.' : 'The Fog Mother rises out there ahead of you. She belongs to the Golden Gate at night.', 4000, 1); });
 			list.appendChild(b);
 		}
 		stop(btn);
