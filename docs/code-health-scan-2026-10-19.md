@@ -119,49 +119,80 @@ Each keeps its old name in `main.js` as a one-line function that hands over. The
 - **`L99AuthoredHair202/203.prepare()`**, never called: removed.
 - **The loading panel's Cancel** (listed below as dead): on a closer look it is only used by the retired V1 caves door, and Cancel there does abandon the entry (the shell checks `showing` before it opens the caves) while the download finishes into the cache. Flight uses the shared loading screen. Nothing to fix.
 
+### 10. What #101 was holding back (`2d45723`, `891e337`, `f5aac70`)
+
+Once #101 merged:
+
+- `people/motion.js`'s clamp and `crysis/viewmodel.js`'s angle wrap import `noise.js`'s. motion.js keeps its own loop-based wrap, which differs for large angles.
+- `world/srgb.js` holds the sRGB-to-linear colour (6 copies) and `persistence/json-copy.js` the JSON copy of saved state (9 copies). `world-progress.js` keeps its own, which passes `null` and `undefined` through. `shared-helpers.test.mjs` pins both.
+- **The import cycle is gone.** The perk tree and its maths moved to `magic/perks.js`, which needs neither `skills.js` nor `stats.js`; both import it, and `skills.js` re-exports what its callers used. The engine has no import cycles now.
+- **The car atlas** stops drawing the six responder faces nothing uses. Every remaining cell (1,872, in 8 locales on both sheets) fingerprinted before and after: 1,634 pixel-identical, 238 moved in the packing and within 9/255, the dithering any repack gives.
+- `main.js` drops a `const` that only repeated `HOOKS.account`.
+
+### 11. Four more big functions split
+
+The same script and method as `createIslandWorld`: each moved part keeps its old name as a one-line function that hands over, and reads the function's bindings through one object.
+
+| Function | Was | Now | Moved to | Shared through |
+|---|---:|---:|---|---|
+| `createCity` (`bay/city.js`) | 1,681 | 897 | `bay/city-blocks.js` (filling the blocks), `bay/city-dressing.js` (grounds, details, pulling overlaps apart) | `cc` |
+| `accessoryGeometry` (`people/garment.js`) | 1,797 | 1,123 | `people/garment-gloves.js`, `garment-tube.js` (sleeves, belts, straps), `garment-armour.js` (close helm, harness) | `ga` |
+| `createGuide` (`guide/guide.js`) | 1,761 | 1,236 | `guide/guide-screens.js` (quests, projects, living activity, story, caves, archive, settings), `guide/guide-ask.js` (talking to people and the guide) | `gd` |
+| `createCombat` (`combat/combat.js`) | 1,341 | 1,025 | `combat/combat-shots.js` (shots, projectiles, blasts, knockouts, fire), `combat/combat-director.js` (the director, bosses, creatures, hold-ups) | `cb` |
+
+`island/tools/split-contexts.test.mjs` (which replaces `island-world.test.mjs`) keeps all five objects in step with their modules: every name a module takes has a getter, everything it sets has a setter, nothing that changes is copied out, and nothing is provided that no module uses.
+
+**Check:** every person's kit (151 people: each armour set, militia, soldiers and 120 townspeople) builds byte-identical geometry before and after; the city builds the same buildings, trees and kit at seven spots round San Francisco; the guide and combat tests, the node suite and the release smoke pass.
+
 ## Verification
 
-On the final tree, after merging today's main (`b437869`):
+On the final tree (main merged in at `8a9fc2f`, #101 included):
 
 | Check | Result |
 |---|---|
-| Node suite (`island/tools/*.test.mjs`) | 1,112 run, 3 fail (below) |
+| Node suite (`island/tools/*.test.mjs`) | 1,136 run, 2 fail (below) |
 | Server unit tests | rooms 118, multiplayer 50, ledger 3, discovery 117: all pass |
 | Root tool tests (gargantua, audio interrupted) | 3 and 1: pass |
 | Faceplate parse gate (every inline script as the browser runs it) | 87/87 (100/100 on today's main) |
 | `index.html` | 2.10 MB, 0.63 MB gzipped (5.80 MB and 3.13 MB on today's main) |
-| Release smoke, loading scope (7 worlds) | passed: all rendered and lit, no page or console errors, no failed requests; every world's draw counts identical to the tree before the split |
+| Release smoke, loading scope (7 worlds) | passed: all rendered and lit, no page or console errors, no failed requests. Run back to back with the merged tree before today's later commits (`8a9fc2f`), every world's draw counts are identical. (Globe Bend's counts follow the clock: the same tree drew 224 calls earlier in the evening and 222 later.) |
 | Flight boot, V1 caves, MIDI throttle (headless) | the flight boots; the V1 caves open, stay responsive and descend; CC throttle shows 2.0x, 4.0x, 0.0x; no page errors |
+| The four later splits | kit geometry byte-identical for 151 people; the city's buildings, trees, kit and props identical at seven spots round San Francisco; combat driven through `Crysis.combat` (shots, a projectile, a blast, squads, an aimed hit, a boss, wanted level, a knockout) behaves the same on both builds with no page errors; the quest immersion check completes all three chapters; the dialogue check passes |
 
-**Failing tests:** Svalbard flora and the regional vegetation refresh, which failed on main before this branch began. The third is the sequencer timing test, which fails under load (on main too) and passed 3 of 3 run alone. The real city's nearby-tiles teardown test is the same kind: it failed once under load and passes alone.
+**Failing tests:** Svalbard flora and the regional vegetation refresh, which failed on main before this branch began. The sequencer timing and real-city nearby-tiles tests can fail under heavy load (on main too) and pass alone; on the final run they passed.
 
-**Browser checks with known limits in this container:** `tools/loading-handoff-browser.cjs` passes its desktop half; its phone half times out on a tap on main as well (software GL in emulated phone mode).
+**Browser checks with known limits in this container:** `tools/loading-handoff-browser.cjs` passes its desktop half; its phone half times out on a tap on main as well (software GL in emulated phone mode). `island/tools/dialogue-browser.cjs` waited for townspeople who only come out once the world's Enter button is pressed; it presses it now and passes. `tools/combat-gameplay-check.cjs` has the same gap, and with Enter pressed its held mouse button still never fires, on the build before these splits too, so it was left as it is and combat was driven through `Crysis.combat` instead.
 
 **Timing caveat:** page-load numbers are a local server, so they show parse and compile time, not network time.
 
 ## Left for the owner, most important first
 
-### 1. V1 retirement
+### 1. V1 retirement: a product decision, not a cleanup
 
-V1 surfaces and caves are guarded off (`V1_GUARD_227`). The V1 flight engine remains the galaxy cockpit, and the island loads the shared world core for its play surfaces and Journey. `docs/flight-migration-inventory.md` is the contract for replacing them. The runtimes are now editable source (`runtime/src`), so until then a change to one is an ordinary diff.
+This is the one open item code health cannot close by itself. `docs/flight-migration-inventory.md` makes retiring V1 a migration with release gates: every V1 feature needs a disposition (migrated and tested, kept reachable, or retired by your decision), the galaxy stays V1 until Crysis matches it, and phone round trips are measured. None of that is a refactor.
+
+What V1 still is today:
+
+- **The galaxy cockpit** (`runtime/src/flight.js`, 1.35 MB packed). It is how you explore space, so it stays until the galaxy gates pass.
+- **The shared world core**, which the island runs for its play surfaces and Journey. It stays.
+- **The V1 surfaces and caves**, off by default (`V1_GUARD_227`): planetfall goes to Crysis, and the old caves (`runtime/src/caves.html`, 0.52 MB packed) only open with `window._V1_SURFACES = true`, which nothing sets.
+
+**The decision for you:** may `window._V1_SURFACES = true` stop working? It is the last way back to the old surfaces and caves. If yes, the V1 caves document and its packed file go, with the bypassed surface code in `flight.js` and the guard checks round it; the island's cave lore (`planet/cave-lore.js`, copied word for word from the V1 caves) stays, and its test, which checks it against the V1 source, would pin it on its own instead. If you would rather keep the way back until the inventory's surface items are signed off, nothing needs doing: the runtimes are ordinary editable source now (`runtime/src`), so they cost nothing to keep.
 
 Note: `docs/flight-migration-catalog.json` and `docs/cave-migration-inventory.md` cite line numbers in the pre-bake files at their audit's baseline commit; the same code lives on in `runtime/src`, at new lines.
 
-### 2. God functions in the engine
+### 2. The big functions, after the splits
 
-| Function | Lines | Note |
-|---|---:|---|
-| `createIslandWorld` (`main.js`) | 1,156 | Was 2,107. What its phases share is now listed in one place (`iw`), which maps what to untangle next. |
-| `accessoryGeometry` (`people/garment.js`) | 1,797 | |
-| `createCity` (`bay/city.js`) | 1,663 | |
-| `createGuide` (`guide/guide.js`) | 1,468 | |
-| `createCombat` (`combat/combat.js`) | 1,204 | |
+| Function | Lines | Was |
+|---|---:|---:|
+| `createGuide` (`guide/guide.js`) | 1,236 | 1,761 |
+| `createIslandWorld` (`main.js`) | 1,156 | 2,107 |
+| `accessoryGeometry` (`people/garment.js`) | 1,123 | 1,797 |
+| `createCombat` (`combat/combat.js`) | 1,025 | 1,341 |
+| `createCity` (`bay/city.js`) | 897 | 1,681 |
+
+Still long, but what each shares with its parts is now listed in one object (`gd`, `iw`, `ga`, `cb`, `cc`), which is the map for any further split. The biggest of the shared lists (the guide's, 124 names) says where its next seam is: the replies and negotiations still read most of its state.
 
 ### 3. Smaller items
 
-- **After #101 merges:** fold `people/motion.js`'s clamp and `crysis/viewmodel.js`'s angle wrap into `noise.js`.
-- **The `magic/skills.js` and `magic/stats.js` import cycle** is harmless (calls happen inside functions only). Breaking it means `skills.js` stops refreshing the mods itself and its callers in `magic/index.js` do it, which #101 also changes; best after it merges.
-- **Left on purpose:** the sRGB-to-linear helper (6 copies; a shared form needs three.js's colour management or a copy of its maths) and the one-line `JSON` copies (no shared home that fits).
-- **The car atlas** still draws the five responder livery faces nothing uses now. Removing them would move other decals' cells, so it wants a look check.
-- **Seeds without a product:** `guide/world-projects.js` and `persistence/world-progress.js` are only used by tests. They are deliberate seams waiting for the shared backend (BR-006).
-- **From today's main:** `main.js` keeps an unused `const account` beside `HOOKS.account` (the accounts change).
+- **Seeds without a product:** `guide/world-projects.js` and `persistence/world-progress.js` are only used by tests. They are deliberate seams waiting for the shared backend (BR-006), so they stay.
