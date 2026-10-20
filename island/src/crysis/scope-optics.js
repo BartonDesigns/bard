@@ -32,24 +32,28 @@ varying vec2 vScopeUv;
 	float fresnel = pow(1.0 - glassFacing, 3.0);
 	float aperture = 1.0 - smoothstep(0.42, 0.5, length(lens));
 	float imageAmount = scopeForwardReady * scopeAim * (1.0 - scopeDot) * aperture;
-	// Mild lens distortion is confined to the edge; target centre and reticle stay aligned.
-	vec2 forwardUV = 0.5 + lens * (1.0 + 0.055 * dot(lens, lens));
-	vec3 target = texture2D(scopeForward, clamp(forwardUV, 0.001, 0.999)).rgb;
-	outgoingLight = mix(outgoingLight, target * vec3(0.985, 1.0, 0.992), imageAmount);
 	// Reflected rear image is horizontally mirrored. Reflection strengthens at grazing angles
 	// and stays subtle during aiming, so the sight remains useful against a bright background.
-	vec2 rearUV = vec2(1.0 - vScopeUv.x, vScopeUv.y) + lens * dot(lens, lens) * 0.13;
-	vec3 behind = texture2D(scopeRear, clamp(rearUV, 0.001, 0.999)).rgb;
 	float reflection = scopeRearReady * (0.055 + 0.24 * fresnel) * mix(1.0, 0.58, scopeAim) * aperture;
-	outgoingLight = mix(outgoingLight, behind * vec3(0.82, 0.96, 1.0), reflection);
-	outgoingLight += totalEmissiveRadiance * imageAmount;
+	// (the glass gives way to the image; the reticle's glow stays over it)
+	outgoingLight = outgoingLight * (1.0 - imageAmount) + totalEmissiveRadiance * imageAmount;
 	diffuseColor.a = max(diffuseColor.a, imageAmount);
 	#ifdef USE_EMISSIVEMAP
 		diffuseColor.a = max(diffuseColor.a, texture2D(emissiveMap, vEmissiveMapUv).g * 0.95);
 	#endif
-	#include <opaque_fragment>`);
+	#include <opaque_fragment>`)
+			// The two pictures are the world as the screen shows it (tone mapped and encoded the
+			// same way, so the world's own shaders draw them), so they go in after this glass is.
+			.replace('#include <colorspace_fragment>', `#include <colorspace_fragment>
+	// Mild lens distortion is confined to the edge; target centre and reticle stay aligned.
+	vec2 forwardUV = 0.5 + lens * (1.0 + 0.055 * dot(lens, lens));
+	vec3 target = texture2D(scopeForward, clamp(forwardUV, 0.001, 0.999)).rgb;
+	gl_FragColor.rgb += target * vec3(0.985, 1.0, 0.992) * imageAmount;
+	vec2 rearUV = vec2(1.0 - vScopeUv.x, vScopeUv.y) + lens * dot(lens, lens) * 0.13;
+	vec3 behind = texture2D(scopeRear, clamp(rearUV, 0.001, 0.999)).rgb;
+	gl_FragColor.rgb = mix(gl_FragColor.rgb, behind * vec3(0.82, 0.96, 1.0), reflection);`);
 	};
-	material.customProgramCacheKey = () => 'live-scope-2';
+	material.customProgramCacheKey = () => 'live-scope-3';
 	material.needsUpdate = true;
 	return material;
 }
@@ -64,10 +68,20 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 	const flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
 	const lastRearPos = new THREE.Vector3(Infinity, 0, 0), lastRearQ = new THREE.Quaternion();
 	const viewport = new THREE.Vector4(), scissor = new THREE.Vector4();
+	// Each picture is drawn the way the screen is: tone mapped and encoded for display. three
+	// builds a second shader for every material it draws into an ordinary target (no tone
+	// mapping, linear out), so a plain target here would have every material in sight compiled
+	// again the first time a rifle comes out: on a phone, 15 to 20 s of frozen game and twice
+	// the shaders held in memory. Flagged as an XR target (three's own path for a target drawn
+	// like the screen: in WebGL that flag only chooses the shader's tone mapping and output
+	// encoding) the world's own shaders draw it. Its storage is plain RGBA8, so the encoded
+	// colour is kept as it is and the glass reads it straight back.
 	function target(n) {
 		const result = new THREE.WebGLRenderTarget(n, n, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, stencilBuffer: false });
 		result.texture.generateMipmaps = false;
-		result.texture.colorSpace = THREE.LinearSRGBColorSpace;
+		result.texture.colorSpace = renderer.outputColorSpace;
+		result.texture.internalFormat = 'RGBA8';
+		result.isXRRenderTarget = true;
 		return result;
 	}
 	function clearBinding() {
@@ -105,7 +119,7 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 	function capture(to, withCamera) {
 		const previous = {
 			target: renderer.getRenderTarget(), face: renderer.getActiveCubeFace?.() || 0, mip: renderer.getActiveMipmapLevel?.() || 0,
-			autoClear: renderer.autoClear, xr: renderer.xr?.enabled, tone: renderer.toneMapping,
+			autoClear: renderer.autoClear, xr: renderer.xr?.enabled,
 			shadowAuto: renderer.shadowMap.autoUpdate, shadowNeeds: renderer.shadowMap.needsUpdate,
 			scissorTest: renderer.getScissorTest(), visible: bound.visible,
 		};
@@ -115,7 +129,7 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 			// normally lives in a separate scene, so this also prevents future recursion.
 			bound.visible = false;
 			if (renderer.xr) renderer.xr.enabled = false;
-			renderer.autoClear = true; renderer.toneMapping = THREE.NoToneMapping;
+			renderer.autoClear = true;
 			renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = false;
 			renderer.setRenderTarget(to); renderer.setViewport(0, 0, to.width, to.height);
 			renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.render(scene, withCamera);
@@ -123,7 +137,7 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 			bound.visible = previous.visible;
 			renderer.setRenderTarget(previous.target, previous.face, previous.mip);
 			renderer.setViewport(viewport); renderer.setScissor(scissor); renderer.setScissorTest(previous.scissorTest);
-			renderer.autoClear = previous.autoClear; renderer.toneMapping = previous.tone;
+			renderer.autoClear = previous.autoClear;
 			renderer.shadowMap.autoUpdate = previous.shadowAuto; renderer.shadowMap.needsUpdate = previous.shadowNeeds;
 			if (renderer.xr) renderer.xr.enabled = previous.xr;
 		}
@@ -141,8 +155,10 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 		busy = true;
 		try {
 			if (!rear) rear = target(size.rear);
-			const rearGap = phone ? 1 / 3 : 0.15;
-			if (time - rearAt >= rearGap && (moved(lastRearPos, lastRearQ) || time - rearAt > 0.8)) {
+			// (the reflection is the whole world drawn again: a phone renews it once a second and a
+			// half while you move, every four seconds standing still)
+			const rearGap = phone ? 1.5 : 0.15, rearStill = phone ? 4 : 0.8;
+			if (time - rearAt >= rearGap && (moved(lastRearPos, lastRearQ) || time - rearAt > rearStill)) {
 				cameraAt(rearCam, true); capture(rear, rearCam); rearAt = time;
 				lastRearPos.copy(pos); lastRearQ.copy(q); stats.rearFrames++;
 			}

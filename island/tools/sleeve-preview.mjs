@@ -57,7 +57,7 @@ function dress(name) {
 		applyInk(P.skinMat, P, [{ slot: 'forearm.R', angle: 0.4, along: 0.55, size: 0.085, tile: F.tiles[3], fade: 0.9 }, { slot: 'forearm.L', angle: -0.6, along: 0.45, size: 0.075, tile: F.tiles[6], fade: 0.8 }], F.tex);
 	}
 	me = { P, M };
-	vm = createViewmodel({ camera, avatar: { me }, mount: null, canvas: renderer.domElement, isPhone: phoneTier });
+	vm = createViewmodel({ camera, avatar: { me }, mount: null, canvas: renderer.domElement, isPhone: phoneTier, fingers: 'now', shaders: 'now' });
 	fists = createFistView({ camera, isPhone: phoneTier });
 	held = null;
 	return { outfit: P.outfit.top?.kind, outer: P.outfit.outer?.kind || null };
