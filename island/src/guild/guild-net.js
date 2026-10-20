@@ -1,5 +1,5 @@
 // Your guild on the rooms server (server/multiplayer/src/guild.js): one call per action, as the
-// account you are signed in with (persistence/cloud-save.js auth()). Without an account, or on
+// account you are signed in with (persistence/cloud-save.js credentials()). Without an account, or on
 // a server that has no guilds yet, every call says so (notDeployed / needsAccount on the
 // error) and the game keeps your guild on this device alone.
 

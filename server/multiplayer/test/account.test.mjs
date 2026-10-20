@@ -120,3 +120,30 @@ test('the game: what is saved, a restore staged and applied, and a second device
 	await b.logout();
 	assert.equal(b.info().user, ''); assert.equal(B.getItem(ACCOUNT_KEY), null);
 });
+
+test('a player name: chosen at signup, changed at most once in 30 days', async () => {
+	const env = { ACCOUNTS: namespace() }, f = server(env);
+	const post = (op, body, token) => f(`${URL0}/account/${op}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+	const s = await post('signup', { u: 'kim', p: 'correct horse', name: '  Kim <the> Bard ' });
+	assert.equal(s.name, 'Kim the Bard');
+	assert.equal((await post('peek', { u: 'kim' }, s.token)).name, 'Kim the Bard');
+	assert.equal((await post('name', { u: 'kim', name: 'K' }, s.token)).status, 400, 'too short');
+	assert.equal((await post('name', { u: 'kim', name: 'Kim' })).status, 401, 'needs a session');
+	const c = await post('name', { u: 'kim', name: 'Kimberly' }, s.token);
+	assert.equal(c.status, 200); assert.equal(c.name, 'Kimberly'); assert.ok(c.nameAt > 0);
+	const again = await post('name', { u: 'kim', name: 'Kimmy' }, s.token);
+	assert.equal(again.status, 429); assert.match(again.error, /again on \d{4}-\d{2}-\d{2}/);
+	const l = await post('login', { u: 'kim', p: 'correct horse' });
+	assert.equal(l.name, 'Kimberly');
+	// 31 days on, it can change again
+	const U = env.ACCOUNTS.objects.get('user:kim').state.storage.M.get('user');
+	U.nameAt -= 31 * 24 * 3600 * 1000;
+	assert.equal((await post('name', { u: 'kim', name: 'Kimmy' }, s.token)).name, 'Kimmy');
+	// the game's side
+	const store = local(), cloud = createCloudSave({ url: URL0, storage: store, request: f, reload: () => {} });
+	await cloud.login('kim', 'correct horse');
+	assert.equal(cloud.info().name, 'Kimmy');
+	assert.ok(cloud.info().nameNext > Date.now());
+	await assert.rejects(cloud.setName('Kimberly'), /again on/);
+	assert.deepEqual(Object.keys(cloud.credentials()), ['u', 'token']);
+});

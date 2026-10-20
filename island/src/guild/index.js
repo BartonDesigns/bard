@@ -25,7 +25,7 @@ export function createGuild({ combat, guide = null, social = null, nearby = () =
 	try { g = readGuild(storage?.getItem(GUILD_KEY)); } catch { g = null; }
 	const refused = new Map();
 	let server = { known: false, deployed: true, invites: [], error: '' }, pushT = null;
-	const net = createGuildNet({ url, auth: () => cloud?.auth?.() || null });
+	const net = createGuildNet({ url, auth: () => cloud?.credentials?.() || null });
 	const listeners = new Set();
 	const changed = () => { for (const f of listeners) f(); };
 	function save() {
@@ -35,7 +35,7 @@ export function createGuild({ combat, guide = null, social = null, nearby = () =
 		if (g?.id && ['leader', 'officer'].includes(g.rank)) { clearTimeout(pushT); pushT = setTimeout(() => net.call('edit', { npcs: npcSummary(g) }).catch(() => {}), 4000); }
 	}
 	const companions = createCompanions({ combat, guild: () => g, save, onFoot, yaw, hint, isPhone });
-	const signedIn = () => !!cloud?.auth?.();
+	const signedIn = () => !!cloud?.credentials?.();
 
 	// ---------- the server's side of it ----------
 	// what the server says of your guild, laid over this device's (its townsfolk stay yours)

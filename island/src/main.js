@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { createChat } from './ui/chat.js';
 import { createGuild } from './guild/index.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
@@ -878,7 +879,9 @@ export function createIslandWorld() {
 	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
-	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
+	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
 	// your guild: the townsfolk you ask into it walk and fight beside you, level up and learn
 	// magic; with an account, players join it and guilds ally with it (guild/)
 	HOOKS.guild = guideApi.guild = createGuild({ combat, guide, social, nearby: () => [...people.pool, ...social.actors.all()], cloud: cloudSave, url: roomsURL(), mount: dom.mount, menu: tpMenu, onFoot: () => !!world?.player && !drive.active() && !world.orbit?.active?.() && !world.boat?.boarded?.(), yaw: () => world?.player?.yaw ?? 0, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX });
@@ -1617,10 +1620,22 @@ if (typeof window !== 'undefined') {
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		gear: () => HOOKS.gear?.info(),
+		// chat: Crysis.chat() what is said and who is online; .open() / .close(); .client() the line itself
+		chat: Object.assign(() => HOOKS.chat?.info(), { open: () => HOOKS.chat?.open(), close: () => HOOKS.chat?.close(), client: () => HOOKS.chat?.client }),
 		// the frame readout in the corner (?perf in the address): Crysis.perf(true|false); and the
 		// loading screen's black box, the loads that went without a goodbye: Crysis.loadTrail()
 		perf: (on) => (on == null ? HOOKS.perf?.on() : HOOKS.perf?.show(on)),
 		loadTrail: () => window.L99Loading?.trail?.(),
+		// the high cloud now: Crysis.clouds() reads it; .clouds({ tails: 0.8, veil: 0.9, reach: 1 })
+		// holds any of them (mare's tails, the veil's thickness, how far over the sky); 'auto' lets go
+		clouds: (o) => {
+			const wx = window.L99Island?.world?.()?.weather;
+			if (!wx) return 'no weather';
+			if (o === 'auto') for (const k of ['tails', 'veil', 'reach']) wx.pin(k, null);
+			else if (o) for (const k of ['tails', 'veil', 'reach']) if (o[k] !== undefined) wx.pin(k, o[k]);
+			const S = wx.state;
+			return { mode: S.mode, cover: +S.cover.toFixed(2), cirrus: +S.cirrus.toFixed(2), tails: +S.tails.toFixed(2), veil: +S.veil.toFixed(2), reach: +S.reach.toFixed(2), sunVis: +S.sunVis.toFixed(2) };
+		},
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()

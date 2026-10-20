@@ -6,6 +6,7 @@
 //   POST /rooms                { id } -> { code }: a new room, owned by that player
 //   GET  /rooms/:code/ws?id=&name=&seed=   (WebSocket) join the room
 //   POST /account/:op          a player's username, password and saved progress (account.js)
+//   GET  /chat/ws?id=&name=&r=&rn=&k=   (WebSocket) world, region and group chat, and groups (chat.js)
 //   POST /guilds/:op           guilds and their alliances, for players with an account (guild.js)
 
 import { Room } from './room.js';
@@ -14,12 +15,13 @@ import { SOUL_FEATURE } from '../../../island/src/reputation/sanctuary.js';
 import { VERSION, MAX_PLAYERS, ID_RE, GEAR_FEATURE, PVP_FEATURE, newCode, cleanCode } from '../../../island/src/net/protocol.js';
 import { REPUTATION_FEATURE } from '../../../island/src/net/reputation.js';
 import { Account } from './account.js';
+import { ChatHub, CHAT_FEATURE } from './chat.js';
 import { usernameOk, cleanUsername, SAVE_MAX, ACCOUNT_FEATURE } from '../../../island/src/persistence/cloud-save.js';
 import { Guilds } from './guild.js';
 import { GUILD_FEATURE } from '../../../island/src/guild/guild-rules.js';
 import { LivingRegion, LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE, LIVING_MAX_BYTES, livingIdentity, livingScope } from './living-region.js';
 
-export { Room, Soul, LivingRegion, Account, Guilds };
+export { Room, Soul, LivingRegion, Account, ChatHub, Guilds };
 // guild requests per address an hour, and guilds founded
 const GUILD_OPS_PER_HOUR = 600, FOUNDS_PER_HOUR = 20;
 // accounts made, and logins tried, per address an hour
@@ -60,7 +62,7 @@ export async function handle(request, env) {
 	if (origin && !ok) return reply({ error: 'origin not allowed' }, 403, { vary: 'Origin' });
 	if (request.method === 'OPTIONS') return new Response(null, { status: ok ? 204 : 403, headers: H });
 
-	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : []), ...(env.ACCOUNTS ? [ACCOUNT_FEATURE] : []), ...(env.ACCOUNTS && env.GUILDS ? [GUILD_FEATURE] : [])] }, 200, H);
+	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : []), ...(env.ACCOUNTS ? [ACCOUNT_FEATURE] : []), ...(env.CHAT ? [CHAT_FEATURE] : []), ...(env.ACCOUNTS && env.GUILDS ? [GUILD_FEATURE] : [])] }, 200, H);
 
 	const living = url.pathname.match(/^\/living\/([^/]+)\/([^/]+)$/);
 	if (living && ['GET', 'POST'].includes(request.method)) {
@@ -96,7 +98,7 @@ export async function handle(request, env) {
 		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
 	}
 
-	const acct = url.pathname.match(/^\/account\/(signup|login|reset|save|load|peek|logout)$/);
+	const acct = url.pathname.match(/^\/account\/(signup|login|reset|save|load|peek|logout|name)$/);
 	if (acct && request.method === 'POST') {
 		if (!ok) return reply({ error: 'origin required' }, 403, H);
 		if (!env.ACCOUNTS) return reply({ error: 'Accounts are not on the server yet.' }, 503, H);
@@ -148,6 +150,16 @@ export async function handle(request, env) {
 			if (r.status === 200) return reply({ code }, 200, H);
 		}
 		return reply({ error: 'try again' }, 503, H);
+	}
+
+	// chat: everyone online in one hub, room or no room
+	if (url.pathname === '/chat/ws' && request.method === 'GET') {
+		if (!ok) return reply({ error: 'origin required' }, 403, H);
+		if (!env.CHAT) return reply({ error: 'Chat is not on the server yet.' }, 503, H);
+		if (request.headers.get('upgrade') !== 'websocket') return reply({ error: 'websocket only' }, 426, H);
+		const q = new URL('https://chat/ws');
+		for (const k of ['id', 'name', 'r', 'rn', 'k']) q.searchParams.set(k, (url.searchParams.get(k) || '').slice(0, 80));
+		return env.CHAT.get(env.CHAT.idFromName('world')).fetch(new Request(q, request));
 	}
 
 	const m = url.pathname.match(/^\/rooms\/([A-Za-z0-9]{6})\/ws$/);
