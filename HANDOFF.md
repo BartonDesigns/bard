@@ -1,6 +1,14 @@
-## October 19, 2026: code health scan, a lighter page, one copy of the shared maths
+## October 19, 2026: code health scan: the V1 runtimes baked, a lighter page, createIslandWorld split
 
-An end-to-end scan for tangled, duplicated and dead code (branch `claude/heal-spaghetti-scan`). The authored V1 hair data (2.4 MB of the page's 3.1 MB gzipped) moved out of `index.html` into `runtime/hair-assets-202.json.gz` and `-203.json.gz`, loaded by the human asset gate that every V1 body already waits on; the page is now 0.70 MB gzipped. 70 local copies of `noise.js`'s `mulberry32`, `smoothstep`, `clamp` and `lerp` in 66 modules became imports (each proved identical by fuzzing first), with `island/tools/noise.test.mjs` pinning the generator. Removed: an unreachable dining-room branch, an unused module, 31 dead exports, dead faceplate functions and variables, and the DJ PANIC's calls to functions that do not exist. Fixed: the flight `canvas216` accessor threw while the cockpit renderer was still null. The picnic tests now run. Left for the owner, ranked: the runtime source patching of the V1 engines (23 transforms on the world core, 15 on flight), V1 retirement, the god functions (`createIslandWorld` is 2,107 lines) and four silently dead features (MIDI steering and throttle among them). See `docs/code-health-scan-2026-10-19.md`.
+An end-to-end scan for tangled, duplicated and dead code (branch `claude/heal-spaghetti-scan`), and the fixes. Full write-up: `docs/code-health-scan-2026-10-19.md`.
+
+- **The V1 runtimes ship baked.** The page no longer rewrites the world core (23 string transforms on the first island or flight open of every visit), the flight engine (15) or the retired V1 caves (13) as it loads them. Their text is plain source in `runtime/src`; `node tools/pack-runtimes.mjs` packs and stamps it. To change a runtime, edit it there; never add a patch layer to `index.html` (`island/tools/runtime-pack.test.mjs` fails if one returns). `runtime/src/README.md` lists the switches that still work. Retired: `?oldtrees`, `?noriver`, `_TOUCHPLAY228`.
+- **A lighter page:** `index.html` is 0.63 MB gzipped (3.13 MB on main). The V1 hair data moved to `runtime/hair-assets-202.json.gz` and `-203.json.gz`, loaded by the human asset gate; the patch code is gone.
+- **`createIslandWorld`** (was 2,107 lines) keeps its build, frame, panel and teardown in `island/src/island-build.js`, `island-frame.js`, `island-panel.js` and `island-teardown.js`, sharing its bindings through `iw` (`island/tools/island-world.test.mjs` keeps them in step).
+- **Fixed:** MIDI CC steering and throttle reach the flight engine again (`L99FlightControls`); the flight `canvas216` accessor no longer throws before the cockpit renderer exists.
+- **One copy each** of `mulberry32`, `smoothstep`, `clamp`, `lerp`, `sineHash` and `wrapAngle`, in `noise.js` (86 copies became imports), pinned by `island/tools/noise.test.mjs`.
+- **Removed:** dead engine code and exports, dead faceplate code, the never-called responder livery builder (the vehicles carry their own markings) and `L99AuthoredHair202/203.prepare()`.
+- **Left for the owner:** V1 retirement, the other god functions, and small items waiting on #101.
 
 ## October 18, 2026: the knight's gauntlets as a real model
 

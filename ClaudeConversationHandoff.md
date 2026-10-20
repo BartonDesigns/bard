@@ -231,6 +231,8 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
 - **The 16-sampler cap** applies per shader stage on Safari and phones.
 - **Headless speed:** town growth (`crysis/civ.js`) and water pumping happen a few ms per frame, so headless tests need `civ().flush()` or direct pumps to see results.
 - **Browser tests:** the newer test tools take `PLAYWRIGHT_MODULE` and `CHROME_EXECUTABLE` environment variables. Many areas now have checked-in browser checks (`island/tools/*-browser.cjs`, `tools/loading-handoff-browser.cjs`) and node tests (`node --test island/tools/*.test.mjs`); run the relevant ones before shipping.
+- **The V1 runtimes are source in `runtime/src`** (the world core, flight, the V1 caves), already carrying every change the page used to patch into them at load. To change one, edit it there and run `node tools/pack-runtimes.mjs`. Never add a patch layer to `index.html`: `island/tools/runtime-pack.test.mjs` fails if one comes back. `runtime/src/README.md` lists the switches that still work.
+- **`createIslandWorld`'s phases** live in `island/src/island-build.js`, `island-frame.js`, `island-panel.js` and `island-teardown.js`, and read its bindings through `iw` (stable ones destructured at the top, changing ones as `iw.name`). A binding one of them needs that `iw` lacks gets a getter (and a setter if it changes) in `main.js`; `island/tools/island-world.test.mjs` checks.
 - **The stop hook** wants no uncommitted changes at the end of a turn. With agents running, snapshot with `git add -A -- island server index.html docs HANDOFF.md`, unstage `node_modules` and `.wrangler`, then commit and push to the branch.
 
 ## 7. Suggested next steps, in order

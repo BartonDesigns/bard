@@ -40,6 +40,8 @@ An end-to-end scan of the repository for tangled, duplicated and dead code, with
 | `index.html` | 5.80 MB | 2.32 MB |
 | `index.html`, gzipped | 3.13 MB | 0.70 MB |
 
+After the bake (fix 5) the page is 2.10 MB, 0.63 MB gzipped.
+
 **Also removed (unreachable or never read):**
 - Six functions nothing calls, counting the self-test's `$` helper.
 - The SOUND toggle body after `FACE_AUDIO_222` `mount()`'s early return.
@@ -66,73 +68,100 @@ An end-to-end scan of the repository for tangled, duplicated and dead code, with
 
 **The fix:** both accessors now return null until the renderer exists; `applyView` already skips a missing canvas.
 
+### 5. The V1 runtimes ship baked (`e92d476`, `e1cf871`, `52158e8`)
+
+This was the biggest item on the owner list below. Every time the world core or the flight engine loaded, the page rewrote their source text with chains of string replacements before running it, each layer wrapping the one before: 23 transforms for the world core (on the first island or flight open of every visit), 15 for flight, 13 for the retired V1 caves.
+
+**The fix,** one runtime at a time, each its own commit:
+- The text each chain produced was captured in a real browser and is now plain source in `runtime/src`: `world-core/*.js` (one file per block), `flight.js` and `caves.html`.
+- `tools/pack-runtimes.mjs` packs them into `runtime/world-core-235.json.gz`, `flight-235.js.gz` and `caves-235.html.gz`, stamps their addresses in `index.html` with a hash, and records them in `site-manifest.json`. The page fetches and runs them as they are.
+- Every patch layer is gone from `index.html`: the `patchCore`, `patchFlight` and `patchCaves` chains, the leaves, waters, touch-play, dive and cave 227 layers, and the blocks that held nothing else. With nothing left to patch, the device patch cache (`PATCHCACHE_227`) went too, and with it the fingerprinting of every inline script at page load; the page deletes the old cache once.
+- `tools/build-gargantua.mjs` now edits `runtime/src/flight.js` and packs it.
+- `island/tools/runtime-pack.test.mjs` checks the packed files hold their source, the stamps are current, and no runtime patch comes back. `runtime/src/README.md` says how to change a runtime.
+
+**What it saves:** the world-core chain measured 206 to 287 ms and the flight chain 1.34 to 1.49 s of main-thread string work on a desktop (node, five runs); a phone is several times slower. The world core was patched on the first island or flight open of every visit; flight and caves on the first open after every deploy (then from a device cache).
+
+**What stayed the same:**
+- The one value that depended on the device (flight's terrain parallax depth, shallower on touch screens) is now chosen when its shader is built.
+- Every address-bar test flag and kill switch still works: each is read inside the baked code. Three switches that chose a patch while it was being applied are retired: `?oldtrees` (`_LEAVES227`), `?noriver` (`_RIVER_FIX227`) and `_TOUCHPLAY228`.
+
+**Checked in a browser, per runtime:**
+- The executed text matches the old pipeline's: byte for byte for the world core and the caves; for flight, byte for byte once the parallax depth is folded in, on a desktop and on an emulated phone.
+- The L99 globals differ only by the removed patch members, and every member the runtimes read still exists.
+- The flight boots with no errors, and the V1 caves open through the shell's door with no errors.
+
+### 6. MIDI steering and throttle reach the flight engine (`52c8144`)
+
+The MIDI CC map's `steer_x`, `steer_y` and `throttle` wrote page globals that have been the flight module's own variables since it became a module, so the knobs did nothing. The flight engine now publishes `L99FlightControls` (`yaw`, `pitch`, `throttle`), the CC handler calls it, and throttle follows the engine's linear scale (zero is zero). A scan of every inline script for bare uses of the engine's private names found no other code like it. In a browser, CC throttle 0.5, 1 and 0 show 2.0x, 4.0x and 0.0x on the cockpit's readout.
+
+### 7. `createIslandWorld` in four modules (`ba40cee`, `6205f46`)
+
+Its four biggest inner functions moved beside it, unchanged in what they do:
+
+| Module | Was | Lines |
+|---|---|---:|
+| `island-build.js` | `buildWorld` | 447 |
+| `island-frame.js` | `tick` | 340 |
+| `island-panel.js` | `buildPanel` | 161 |
+| `island-teardown.js` | `teardown` | 65 |
+
+Each keeps its old name in `main.js` as a one-line function that hands over. They share `createIslandWorld`'s bindings through one object, `iw`: stable bindings are destructured at the top of each module, so their code reads as before; bindings that change (`world`, `time`, `last`...) are read and set as `iw.name`, whose getter and setter reach the same binding. The move was done by a script over the syntax tree, and none of the four runs while `createIslandWorld` is still setting up (checked transitively), so every binding exists before they read it. `createIslandWorld` is now 1,156 lines and `main.js` 1,850 (from 2,896 on today's main). `island/tools/island-world.test.mjs` keeps `iw` and the modules in step.
+
+**Check:** the node suite, and the release smoke's loading scope: on the final tree all seven worlds draw exactly what they drew before the split (calls, triangles, points, lines). Earth's island, the first, is sampled the instant you enter, racing its first frames, so its counts can vary from run to run on either version; the other six never did.
+
+### 8. One copy of the sine hash and the angle wrap (`93bd1e9`)
+
+`noise.js` gained `sineHash` (10 copies replaced) and `wrapAngle` (4; the fifth, in `crysis/viewmodel.js`, waits for #101). Each file imports it under its old local name. `noise.test.mjs` pins both. Earlier, `62c866c` folded in the last two smoothstep copies once #103 merged.
+
+### 9. Dead code, and one finding corrected (`52c8144`, `d4d6db4`)
+
+- **The responder livery builder** (`signage/cars.js` `vehicleLivery`) was never called. Rendering it on today's ambulance and fire engine showed why wiring it would be wrong: the bodies (`services/vehicle-model.js`) already carry their own markings, so its decals would sit over them twice. It was written for the boxes the responders used to be. Removed; the bundle and the car atlas are unchanged.
+- **`L99AuthoredHair202/203.prepare()`**, never called: removed.
+- **The loading panel's Cancel** (listed below as dead): on a closer look it is only used by the retired V1 caves door, and Cancel there does abandon the entry (the shell checks `showing` before it opens the caves) while the download finishes into the cache. Flight uses the shared loading screen. Nothing to fix.
+
 ## Verification
 
-| Check | Main | This branch |
-|---|---|---|
-| Node suite (`island/tools/*.test.mjs`) | 1,076 run, 4 fail | 1,093 run after merging main at `a98019a` (with the 6 picnic and 4 noise tests), 4 fail: the same four |
-| Server unit tests (discovery, rooms, unit sets, ledger) | 117, 107, 46, 3 pass | identical |
-| Root tool tests (gargantua, audio interrupted) | 3, 1 pass | identical |
-| Faceplate parse gate (every inline script as the browser runs it) | 99/99 | 97/97 (two data blocks gone) |
-| Headless flight boot (`L99Boot176.flight()`) | alive, 1 page error in 1 of 2 runs | alive, 0 errors in 4 of 5 runs* |
-| Hair after the gate | 5 + 3 styles | 5 + 3 styles |
-| Faceplate DOMContentLoaded, local server | 689 to 1,192 ms | 499 to 545 ms |
+On the final tree, after merging today's main (`b437869`):
 
-\* The one error was the canvas race, before fix 4. Three runs after it are clean.
+| Check | Result |
+|---|---|
+| Node suite (`island/tools/*.test.mjs`) | 1,112 run, 3 fail (below) |
+| Server unit tests | rooms 118, multiplayer 50, ledger 3, discovery 117: all pass |
+| Root tool tests (gargantua, audio interrupted) | 3 and 1: pass |
+| Faceplate parse gate (every inline script as the browser runs it) | 87/87 (100/100 on today's main) |
+| `index.html` | 2.10 MB, 0.63 MB gzipped (5.80 MB and 3.13 MB on today's main) |
+| Release smoke, loading scope (7 worlds) | passed: all rendered and lit, no page or console errors, no failed requests; every world's draw counts identical to the tree before the split |
+| Flight boot, V1 caves, MIDI throttle (headless) | the flight boots; the V1 caves open, stay responsive and descend; CC throttle shows 2.0x, 4.0x, 0.0x; no page errors |
 
-**Failing tests:** the four on the branch are the four that fail on main: the RGB asset manifest, Svalbard flora, the regional vegetation refresh, and the sequencer timing test. The last is timing sensitive: run alone, it failed 2 of 3 times on main and passed 3 of 3 here.
+**Failing tests:** Svalbard flora and the regional vegetation refresh, which failed on main before this branch began. The third is the sequencer timing test, which fails under load (on main too) and passed 3 of 3 run alone. The real city's nearby-tiles teardown test is the same kind: it failed once under load and passes alone.
 
-**Timing caveat:** the page-load numbers are a local server, so they show parse and compile time, not network time. On a phone network the 2.4 MB of transfer that is gone matters more.
+**Browser checks with known limits in this container:** `tools/loading-handoff-browser.cjs` passes its desktop half; its phone half times out on a tap on main as well (software GL in emulated phone mode).
 
-**Island smoke:** `tools/handoff-release-smoke.cjs` in its loading scope passed on the branch. Seven worlds rendered and lit (Earth island, Bay Area, globe at Bend, Terran architecture and interior, Moon colony, Magma), every shader program ran within the sampler limits, and there were no page errors, console errors or failed requests.
+**Timing caveat:** page-load numbers are a local server, so they show parse and compile time, not network time.
 
 ## Left for the owner, most important first
 
-### 1. Runtime source patching of the V1 engines
+### 1. V1 retirement
 
-This is the real spaghetti. Every time the world core or flight engine loads, the page rewrites their source text with string replacements before running it. The patchers are themselves patched: later blocks replace `L99MaterialsFlight191.patchFlight`, `.patchCore` and `L99CavesMaterials191.patchCaves` with wrappers that call the previous version first.
+V1 surfaces and caves are guarded off (`V1_GUARD_227`). The V1 flight engine remains the galaxy cockpit, and the island loads the shared world core for its play surfaces and Journey. `docs/flight-migration-inventory.md` is the contract for replacing them. The runtimes are now editable source (`runtime/src`), so until then a change to one is an ordinary diff.
 
-- **World core: 23 transforms** on every island or flight open, not cached. Leaves, waters, touch-play, a timeout fix and the river shader fix; then `L99MaterialsFlight191.patchCore`, which is itself 7 deep (the original plus wrappers from 204, 205, motion 211, visibility 211, 216 and 217); then 11 more nested `patchCore` layers: hair 192, people 193, details 194, hair 195, wardrobe 195, details 196, hair 197, hair 199, hair 202, hair 203 and groom 203.
-- **Flight: 15 transforms.** World HUD 190, flight 190, `L99MaterialsFlight191.patchFlight` (the original plus 10 wrappers: 204, 205, 207, 208, 209, 210, motion 211, visibility 211, 216 and 217), routes 223 and dive 227.
-- **The retired V1 caves: 13 transforms.** `patchCaves` (the original plus 7 wrappers) and five cave 227 layers.
+Note: `docs/flight-migration-catalog.json` and `docs/cave-migration-inventory.md` cite line numbers in the pre-bake files at their audit's baseline commit; the same code lives on in `runtime/src`, at new lines.
 
-**Why it is fragile:** each layer finds anchors that the layer before it inserted, and throws if one is missing. A change to one link can break every link after it.
-
-**Measured cost** (the page's own patch blocks run in node against the shipped runtime files, desktop CPU, five runs): the world-core chain takes 206 to 287 ms and the flight chain 1.34 to 1.49 s, without dive 227, which would not load outside a browser. It is all main-thread string work, and a phone is several times slower. `PATCHCACHE_227` caches flight and caves on the device after the first time, but not the world core, which is patched on every island or flight open.
-
-**The fix:** bake each chain into a new runtime file once, at build time, the way `tools/build-gargantua.mjs` already patches `flight-179.js.gz`. Then delete the patch functions from about 30 blocks of `index.html` (the runtime helpers those blocks also define, such as `L99HairFix192.project`, stay).
-
-**Decision needed first:** several patches read URL test flags (`?nowater`, `?noforms`, `?noriver`, `?oldtrees`...) and kill switches (`_RIVER_FIX227`, `_LEAVES227`...) at patch time. Baking ends those unless they become runtime checks inside the baked code.
-
-### 2. V1 retirement
-
-V1 surfaces and caves are already guarded off (`V1_GUARD_227`). The V1 flight engine remains the galaxy cockpit. `docs/flight-migration-inventory.md` is the contract for replacing it.
-
-Once it is replaced, all of this can go: `runtime/flight-179`, `world-core-179`, `caves-179`, `characters-kay-176`, the two hair files, and roughly 40 patch blocks in `index.html`.
-
-### 3. God functions in the engine
+### 2. God functions in the engine
 
 | Function | Lines | Note |
 |---|---:|---|
-| `createIslandWorld` (`main.js`) | 2,107 | Every branch edits it; the `HOOKS` bag is its wiring. |
+| `createIslandWorld` (`main.js`) | 1,156 | Was 2,107. What its phases share is now listed in one place (`iw`), which maps what to untangle next. |
 | `accessoryGeometry` (`people/garment.js`) | 1,797 | |
 | `createCity` (`bay/city.js`) | 1,663 | |
 | `createGuide` (`guide/guide.js`) | 1,468 | |
 | `createCombat` (`combat/combat.js`) | 1,204 | |
 
-**Recommendation:** split `createIslandWorld` along its seams (DOM and HUD, settings panel, per-frame loop, system wiring). Do it when no other branch is open, or it will conflict with all of them.
+### 3. Smaller items
 
-### 4. Features that are silently dead
-
-- **MIDI CC steering and throttle** (`steer_x`, `steer_y`, `throttle` in the MIDI module) write `steerTargetYaw`, `steerTargetPitch` and `cockpitThrottle`. Those have been local to the flight module since it became a module, so the writes never reach it (each is `typeof`-guarded, so nothing throws). The throttle line also still uses the retired `0.2 + v * 3.8` curve. Restoring this needs the flight engine to expose a steering and throttle setter.
-- **Responder liveries:** `signage/cars.js` `vehicleLivery()` builds ambulance and fire-engine decals, but nothing calls it. Wiring it into `services/responders.js` would be a look change.
-- **The flight loading panel's Cancel** only hides the panel; the load carries on.
-- **`L99AuthoredHair202/203.prepare()`** are never called.
-
-### 5. Smaller items
-
-- **Exact helper copies still left** in PR files: `bay/water.js` and `region/ice.js` (smoothstep), `people/motion.js` (clamp). Fold them in after #101 and #103 merge.
-- **Identical copies with no shared home yet:** the sine hash (`hh`, 8), the sRGB-to-linear colour helper (`lin`, 6), the angle wrap (5) and the `JSON` clone (5).
-- **The `magic/skills.js` and `magic/stats.js` import cycle** is harmless (calls happen inside functions only). Its cause is that `refreshMods` in skills.js duplicates `refreshStats` in stats.js.
+- **After #101 merges:** fold `people/motion.js`'s clamp and `crysis/viewmodel.js`'s angle wrap into `noise.js`.
+- **The `magic/skills.js` and `magic/stats.js` import cycle** is harmless (calls happen inside functions only). Breaking it means `skills.js` stops refreshing the mods itself and its callers in `magic/index.js` do it, which #101 also changes; best after it merges.
+- **Left on purpose:** the sRGB-to-linear helper (6 copies; a shared form needs three.js's colour management or a copy of its maths) and the one-line `JSON` copies (no shared home that fits).
+- **The car atlas** still draws the five responder livery faces nothing uses now. Removing them would move other decals' cells, so it wants a look check.
 - **Seeds without a product:** `guide/world-projects.js` and `persistence/world-progress.js` are only used by tests. They are deliberate seams waiting for the shared backend (BR-006).
-- **`site-manifest.json`** is stale for `index.html`. Only `tools/build-gargantua.mjs` updates it.
+- **From today's main:** `main.js` keeps an unused `const account` beside `HOOKS.account` (the accounts change).

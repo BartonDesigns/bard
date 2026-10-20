@@ -50,7 +50,11 @@ Open `dev.html` from a local server to run the island on its own
 - `src/world/lodfade.js` — detail levels dissolve into each other (and out at the draw distance) instead of popping; used by the island's plants and the city's trees, whose far crowns take the size and average colour of the near trees
 - `src/people/people.js` — the population: walkers on the block pavements (crossing at corners), joggers, pairs chatting, people waiting; more downtown and by day
 - `src/drive.js` — Drive (🚗 or V): snap onto the road, street or trail you are on and it carries you at the road's own pace (25 mph on a residential street, 65 on a freeway, hiking pace on a trail); ← / → choose the next turn, ↑ straight on, ↓ turn round, Shift to hurry. Follows the real road graph where the map is real (looking through the short links of a junction to the road beyond), and the town street grids everywhere else
-- `src/main.js` — renderer, loop, HUD, settings, Journey adapter
+- `src/main.js`: renderer, loop, HUD, settings, Journey adapter. `createIslandWorld` keeps its four biggest phases beside it and shares its bindings with them through one object, `iw` (a getter, and a setter for what changes, per binding; `tools/island-world.test.mjs` keeps them in step):
+  - `src/island-build.js`: building a world
+  - `src/island-frame.js`: one frame
+  - `src/island-panel.js`: the SKY & WORLD panel
+  - `src/island-teardown.js`: taking a world down
 
 ## Earth: the Bay Area
 
