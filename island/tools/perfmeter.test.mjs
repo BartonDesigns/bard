@@ -48,3 +48,29 @@ test('each part is weighed against the frames with everything either side of it'
 	assert.match(L2[1], /^bay-city\s+-30 ms/);
 	assert.match(L2[2], /^globe\s+-3 ms/);
 });
+
+test('the probe puts everything back while you walk, and times that part again once you stand still', async () => {
+	const THREE = await import('three');
+	const { createPerfMeter } = await import('../src/ui/perfmeter.js');
+	const el = { style: {}, setAttribute() {}, textContent: '' };
+	globalThis.document ??= { createElement: () => el };
+	globalThis.window ??= {};
+	const scene = new THREE.Scene(), city = new THREE.Group();
+	city.name = 'bay-city';
+	city.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
+	scene.add(city);
+	const camera = new THREE.PerspectiveCamera();
+	const pm = createPerfMeter({ mount: { appendChild() {} }, renderer: { render() {}, info: { render: {} }, getPixelRatio: () => 1 }, governor: null, scene, camera, storage: memory(), search: '?perf=probe' });
+	const mesh = city.children[0];
+	let t = 0;
+	const run = (ms) => { for (const end = t + ms; t < end;) { t += 16; pm.frame(t); } };
+	run(6000 + 100 + 1000 + 2500 + 1000 + 500);           // wait, pick, the first 'all', then the city left out
+	assert.equal(mesh.layers.mask, 0, 'the city is left out while you stand still');
+	camera.position.x += 3;
+	run(32);
+	assert.notEqual(mesh.layers.mask, 0, 'walking puts it back');
+	run(800);
+	assert.notEqual(mesh.layers.mask, 0, 'still back a moment after you stop');
+	run(1400);
+	assert.equal(mesh.layers.mask, 0, 'left out again once you have stood still');
+});
