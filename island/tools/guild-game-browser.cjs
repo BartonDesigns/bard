@@ -60,18 +60,32 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 		await shot('following');
 		// raiders ahead: who fights whom, and their spells as they go
 		await page.evaluate(() => { window.__casts = []; const H = Crysis.combat.hooks, f = H.remoteSpell; H.remoteSpell = (a, b, p, who) => { if (String(who).startsWith('guild:')) window.__casts.push(who); return f?.(a, b, p, who); }; });
+		R.fps = await page.evaluate(() => new Promise((r) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else r(+(n / 3).toFixed(1)); }; requestAnimationFrame(f); }));
+		console.log('fps', R.fps);
 		R.squad = await page.evaluate(() => Crysis.combat.spawn('ashfang', 2, { d: 22, alert: true }));
 		const tFight = Date.now();
 		let fight = null;
-		while (Date.now() - tFight < 600000) {
+		while (Date.now() - tFight < (process.env.WATCH_MS ? +process.env.WATCH_MS : 600000)) {
 			await wait(5000);
-			fight = await page.evaluate(() => ({ foes: Crysis.combat.info?.().squads?.squads?.filter((s) => s.faction === 'ashfang').map((s) => ({ n: s.n, targets: s.targets })), allies: Crysis.combat.squads.allies().map((h) => ({ name: h.ally.name, target: h.target?.faction || h.target?.name || null, los: h.los, hp: Math.round(h.H.hp) })), casts: window.__casts.length, npcs: Crysis.guild.info().guild.npcs.map((m) => ({ name: m.name, level: m.level, xp: m.xp, kills: m.kills })) }));
+			fight = await page.evaluate(() => ({ foes: Crysis.combat.info?.().squads?.squads?.filter((s) => s.faction === 'ashfang').map((s) => ({ n: s.n, targets: s.targets })), allies: Crysis.combat.squads.allies().map((h) => ({ name: h.ally.name, target: h.target?.faction || h.target?.name || null, los: h.los, hp: Math.round(h.H.hp) })), foeHp: Crysis.combat.squads.list.filter((h) => h.fid === 'ashfang' && !h.dead).map((h) => Math.round(h.H.hp)), casts: window.__casts.length, npcs: Crysis.guild.info().guild.npcs.map((m) => ({ name: m.name, level: m.level, xp: m.xp, kills: m.kills })) }));
 			console.log('fight', JSON.stringify(fight));
 			if (fight.allies.some((a) => a.target)) R.engaged = true;
 			if (R.engaged && !R.fightShot) { R.fightShot = true; await shot('fighting'); }
 			if (!fight.foes?.length || fight.foes.every((f) => f.n === 0)) break;
 		}
 		R.fight = fight;
+		// (headless frames are far too slow to see a fight through, so it runs on without drawing:
+		// the game's own combat and guild steps, a twentieth of a second at a time)
+		R.stepped = [];
+		for (let k = 0; k < 12; k++) {
+			const s = await page.evaluate(() => {
+				for (let t = 0; t < 10; t += 0.05) { Crysis.combat.update(0.05); Crysis.guild.update(0.05); Crysis.combat.heal(); }
+				return { foeHp: Crysis.combat.squads.list.filter((h) => h.fid === 'ashfang' && !h.dead).map((h) => Math.round(h.H.hp)), allies: Crysis.combat.squads.allies().map((h) => ({ name: h.ally.name, hp: Math.round(h.H.hp), target: !!h.target })), casts: window.__casts.length, npcs: Crysis.guild.info().guild.npcs.map((m) => ({ name: m.name, level: m.level, xp: m.xp, kills: m.kills })) };
+			});
+			console.log('stepped', JSON.stringify(s));
+			R.stepped.push(s);
+			if (!s.foeHp.length) break;
+		}
 		R.casts = await page.evaluate(() => window.__casts.length);
 		// a level or two, and the spells that come with it
 		R.levelled = await page.evaluate((id) => Crysis.guild.test.xp(id, 2000), R.ids[2]);
