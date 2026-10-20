@@ -350,15 +350,17 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	} });
 
 	// ---------- someone walks in ----------
-	let A = null, owner = null;
-	loadPeopleAssets().then((x) => { A = x; }).catch(() => {});
+	// (the body kit is only asked for once someone is coming: nothing more held on a phone till then)
+	let A = null, owner = null, loadingA = null;
+	const assets = () => { if (!A && !loadingA) loadingA = loadPeopleAssets().then((x) => { A = x; }).catch(() => {}).finally(() => { loadingA = null; }); };
 	function walkInMaybe(k) {
-		if (owner || !k.house || !A) return;
+		if (owner || !k.house) return;
 		const h = hours(), chance = h > 17 && h < 21.5 ? 0.6 : h > 6.5 && h < 17 ? 0.35 : 0.25;
 		if (Math.random() > chance) return;
 		const hh = k.hh, adults = hh ? hh.members.filter((m) => m.age >= 18) : [];
 		const m = adults.length ? adults[Math.floor(Math.random() * adults.length)] : { seed: (Math.random() * 2 ** 31) >>> 0, age: 30 + Math.random() * 35, male: Math.random() < 0.5 };
 		owner = { k, m, hh, due: 3 + Math.random() * 4, state: 'due', t: 0, first: null };
+		assets();
 	}
 	function spawnOwner() {
 		const o = owner, k = o.k, h = k.house, pos = camera.position;
@@ -436,7 +438,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		const o = owner;
 		if (!o) return;
 		o.t += dt;
-		if (o.state === 'due') { if (o.t > o.due) { if (here?.kind === 'kitchen' && here.key === o.k.key) spawnOwner(); else owner = null; } return; }
+		if (o.state === 'due') { if (o.t > o.due && (A || o.t > o.due + 20)) { if (A && here?.kind === 'kitchen' && here.key === o.k.key) spawnOwner(); else owner = null; } return; }
 		const B = o.body;
 		if (!B) { owner = null; return; }
 		const S = B.M.S, pos = camera.position, d = Math.hypot(pos.x - S.pos.x, pos.z - S.pos.z);
