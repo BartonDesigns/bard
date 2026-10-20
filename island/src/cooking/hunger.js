@@ -35,6 +35,8 @@ export function hungerAt(h, { seed = 0, quality = 0.6, security = 'secure', fed 
 	const gift = Number.isFinite(fed) ? clamp(1 - fed / 5) * 0.8 : 0;
 	return +clamp(base + climb - gift).toFixed(3);
 }
+// a household member's hunger at hour h (people/households.js member, its household's food)
+export const hungerOf = (member, h, household = null) => hungerAt(h, { seed: member?.seed || 0, quality: household?.food?.quality ?? 0.6, security: household?.food?.security || 'secure', fed: member?.fedAt != null ? ((h - member.fedAt) % 24 + 24) % 24 : Infinity });
 // a word for it
 export const hungerWord = (x) => (x < 0.25 ? 'fed' : x < 0.5 ? 'peckish' : x < 0.75 ? 'hungry' : 'starving');
 // how much a person gets done at work, hungry (1 on a full stomach, about 0.6 starving)

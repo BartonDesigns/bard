@@ -357,9 +357,12 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	const WALK_IN_PHONE = false;
 	function walkInMaybe(k) {
 		if (owner || !k.house || (isPhone && !WALK_IN_PHONE)) return;
+		// (someone already home and drawn there: no stranger walks in as well; people/family-life.js homes)
+		const homes = families?.homes;
+		if (homes?.occupants?.(k.house)?.length || homes?.whoIsHome?.(k.house, hours())?.length) return;
 		const h = hours(), chance = h > 17 && h < 21.5 ? 0.6 : h > 6.5 && h < 17 ? 0.35 : 0.25;
 		if (Math.random() > chance) return;
-		const hh = k.hh, adults = hh ? hh.members.filter((m) => m.age >= 18) : [];
+		const hh = homes?.homeAt?.(k.house) || k.hh, adults = hh ? hh.members.filter((m) => m.age >= 18) : [];
 		const m = adults.length ? adults[Math.floor(Math.random() * adults.length)] : { seed: (Math.random() * 2 ** 31) >>> 0, age: 30 + Math.random() * 35, male: Math.random() < 0.5 };
 		owner = { k, m, hh, due: 3 + Math.random() * 4, state: 'due', t: 0, first: null };
 		assets();
@@ -390,7 +393,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		M.place(from[0], fy, from[1], Math.atan2(pos.x - from[0], pos.z - from[1]));
 		fadePerson(P, 0.02);
 		const body = { P, M, active: true, fade: 0, source: 'cooking', talk: { open: () => talkOpen(), reply: () => null } };
-		if (o.hh) P.home = { household: o.hh, member: o.m };
+		if (o.hh) { P.home = { household: o.hh, member: o.m }; o.m.embodied = true; }
 		o.body = body; o.state = 'walk'; o.t = 0;
 	}
 	function insideHouse(h, x, z) { const dx = x - h.M.x, dz = z - h.M.z, lx = h.ca * dx + h.sa * dz, lz = -h.sa * dx + h.ca * dz, c = h.plan.cellAt?.(lx, lz); return c >= 0 && h.plan.occ?.[c] >= 0; }
@@ -431,6 +434,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		const o = owner;
 		if (!o) return;
 		o.share = false; o.fed = true;
+		if (o.m) o.m.fedAt = hours();
 		if (o.hh?.well) for (const m of o.hh.members) { const w = o.hh.well[m.id]; if (w) w.mood = Math.min(1, w.mood + 0.15); }
 		recordDeed(morality(), 'feed-family', { target: `a family (${o.hh ? describeHousehold(o.hh) : 'a household'})`, place: 'the neighbourhood', cooked: true }, pending);
 		o.body?.M?.feel?.('joy', 0.7); o.body?.M?.gesture?.('nod');
@@ -456,7 +460,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		} else if (o.state === 'leave') {
 			B.M.want.speed = 0;
 			B.fade = Math.max(0, (B.fade ?? 1) - dt / 2.5); fadePerson(B.P, B.fade);
-			if (B.fade <= 0) { B.active = false; B.P.root.removeFromParent(); freeBody(B.P); o.state = 'gone'; owner = null; return; }
+			if (B.fade <= 0) { B.active = false; B.P.root.removeFromParent(); freeBody(B.P); if (o.hh) o.m.embodied = false; o.state = 'gone'; owner = null; return; }
 		}
 		if (o.state !== 'leave') { B.fade = Math.min(1, (B.fade || 0) + dt * 1.5); fadePerson(B.P, B.fade); }
 		B.M.update(dt, t, pos);
