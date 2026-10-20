@@ -7,6 +7,8 @@
 import * as THREE from 'three';
 import { isMinor, personShapes } from './targets.js';
 import { createHealth, applyDamage } from './health.js';
+import { bodyShapes, aimPoint } from './hitzones.js';
+import { createWounds, react, pace } from './wounds.js';
 
 const CALLS = ['Get down!', 'Run!', 'Everyone, this way!', 'Somebody call the patrol!', 'Over there, go!', 'Keep low!'];
 const _v = new THREE.Vector3();
@@ -23,13 +25,14 @@ export function createCivilians(ctx) {
 	function stateOf(p) {
 		let s = known.get(p);
 		if (!s) {
-			s = { p, panic: 0, from: { x: 0, z: 0 }, cower: 0, calm: false, dead: 0, H: null, T: null };
+			s = { p, panic: 0, from: { x: 0, z: 0 }, cower: 0, calm: false, dead: 0, H: null, T: null, W: null };
 			const id = 'pp' + (known.size + Math.floor(Math.random() * 1e6));
 			s.T = {
 				id, kind: 'person', faction: p.village ? 'village' : 'civ', P: p.P, child: sheltered(p), bound: { x: 0, y: 0, z: 0, r: 1.2 },
 				name: sheltered(p) ? 'a young person' : vulnerable(p) ? 'a vulnerable bystander' : 'a bystander',
 				moral: () => ({ unarmed: true, fleeing: s.panic > 0 && !s.cower, vulnerable: vulnerable(p), villager: !!p.village, surrendered: s.hands > 0 }),
-				shapes: () => { const q = p.M.S.pos; return personShapes(q.x, q.y, q.z, p.P.height || 1.7, s.cower > 0 ? 0.6 : 0); },
+				shapes: () => { const q = p.M.S.pos; return bodyShapes(p.P) || personShapes(q.x, q.y, q.z, p.P.height || 1.7, s.cower > 0 ? 0.6 : 0); },
+				aim: () => aimPoint(p.P),
 				surface: 'person',
 				get surrendered() { return s.hands > 0; },
 				onHit: (blow) => hit(s, blow),
@@ -56,6 +59,7 @@ export function createCivilians(ctx) {
 			if (s.hands <= 0) { p.M.act(null); s.panic = Math.max(s.panic, 8); }
 			return true;
 		}
+		if (s.W?.crippled) { p.M.want.speed = 0; p.M.want.run = 0; p.M.act(`hurt-crippled${s.W.crippled}`, 0); return true; }
 		if (s.panic <= 0) { p.override = null; p.M.act(null); return false; }
 		s.panic -= dt;
 		const M = p.M, at = M.S.pos;
@@ -70,8 +74,12 @@ export function createCivilians(ctx) {
 		// (a little to one side, so a crowd scatters rather than files away)
 		const side = s.side || (s.side = Math.random() < 0.5 ? -0.4 : 0.4);
 		M.want.heading = Math.atan2(ax + az * side, az - ax * side);
-		M.want.speed = (s.calm ? 1.5 : 3.6 + Math.random() * 0.2) * (hx?.slowK || 1);
-		M.want.run = s.calm || (hx?.slowK || 1) < 0.6 ? 0 : 1;
+		// (hurt in the leg: a limp, slower, no running; a leg gone: down where they are)
+		const pc = pace(s.W);
+		M.S.limp.side = pc.side === 'L' ? 1 : pc.side === 'R' ? -1 : 0; M.S.limp.k = pc.limp;
+		M.want.speed = (s.calm ? 1.5 : 3.6 + Math.random() * 0.2) * (hx?.slowK || 1) * pc.k * (s.reactT > 0 ? 0.15 : 1);
+		M.want.run = s.calm || (hx?.slowK || 1) < 0.6 || !pc.run ? 0 : 1;
+		s.reactT = (s.reactT || 0) - dt;
 		M.S.look.target = null;
 		return true;
 	}
@@ -124,7 +132,10 @@ export function createCivilians(ctx) {
 			s.from.x = blow.src?.x ?? q.x; s.from.z = blow.src?.z ?? q.z;
 			s.panic = 12; s.cower = 0; s.calm = false;
 			p.override = override;
-			p.M.gesture('shrug', 0.5);
+			// how it shows, by where it went in (combat/wounds.js)
+			s.W ||= createWounds();
+			const R = react(s.W, p.M, p.P, blow, r, { max: s.H.max, clutch: false });
+			if (R?.name) s.reactT = R.dur * 0.7; else p.M.gesture('shrug', 0.5);
 		}
 		// (a fist fight frightens only those close by: further off they stop and watch, combat/melee-foes.js)
 		alarm(q.x, q.z, blow.melee ? 7 : 18);

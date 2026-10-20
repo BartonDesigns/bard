@@ -147,8 +147,21 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 
 	// ---------- input: aim ----------
 	const longHeld = () => ['long', 'bow'].includes(S.model?.userData.hold?.kind);
-	addEventListener('pointerdown', (e) => { if (e.button === 2 && e.target === canvas && longHeld() && S.shown && (!canvas.requestPointerLock || document.pointerLockElement === canvas)) { S.aimHeld = true; e.preventDefault(); } });
-	addEventListener('pointerup', (e) => { if (e.button === 2) S.aimHeld = false; });
+	// the right button (a two-finger click on a trackpad): held, the sights stay up while it is
+	// held; a quick click puts them up and leaves them there (so a trackpad can let go and click
+	// to fire), and the next right click takes them down again
+	let aimDown = 0;
+	addEventListener('pointerdown', (e) => {
+		if (e.button !== 2 || e.target !== canvas || !longHeld() || !S.shown || (canvas.requestPointerLock && document.pointerLockElement !== canvas)) return;
+		e.preventDefault();
+		if (S.aimTap) { S.aimTap = false; aimDown = 0; return; }
+		S.aimHeld = true; aimDown = e.timeStamp;
+	});
+	addEventListener('pointerup', (e) => {
+		if (e.button !== 2) return;
+		if (S.aimHeld && aimDown && e.timeStamp - aimDown < 280) S.aimTap = true;
+		S.aimHeld = false; aimDown = 0;
+	});
 	addEventListener('contextmenu', (e) => { if (e.target === canvas && longHeld() && S.shown) e.preventDefault(); });
 	addEventListener('blur', () => { S.aimHeld = S.aimTap = false; });
 	document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) S.aimHeld = false; });
@@ -320,6 +333,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			if (S.equip === 0 || !S.model) swapIn(want ? held : null);
 		} else if (S.model) S.equip = Math.min(1, S.equip + dt / 0.38);
 		S.shown = !!S.model && on;
+		if (!aimBtn && !(S.shown && longHeld())) S.aimTap = false;
 		if (aimBtn) { const d = S.shown && longHeld() ? 'flex' : 'none'; if (aimBtn.style.display !== d) aimBtn.style.display = d; if (d === 'none') S.aimTap = false; aimBtn.setAttribute('aria-pressed', String(S.aimTap)); aimBtn.style.background = S.aimTap ? 'rgba(60,140,120,.6)' : 'rgba(10,16,20,.45)'; }
 		if (!S.shown) { optics?.reset(); setZoom(1); S.ads = 0; return; }
 		// (another hero chosen, or built again in new gear: gloves, sleeves of mail; your arms made

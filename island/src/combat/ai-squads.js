@@ -36,6 +36,10 @@ import { npcHand } from './weapon-view.js';
 import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
 import { FIELD_ROLES } from './field-contracts.js';
 import { outfitFor, kitArmour } from './outfits.js';
+import { bodyShapes, aimPoint } from './hitzones.js';
+import { createWounds, react, pace } from './wounds.js';
+import { applyClutch } from '../crysis/held-items.js';
+import { createClimber, climbBody } from './npc-climb.js';
 import { SPECIES } from '../creatures/catalog.js';
 import { makeCreature } from '../creatures/models.js';
 import { createCreatureVoice } from '../creatures/voice.js';
@@ -51,7 +55,7 @@ const BODY = {
 	person: { speed: 3.9, sight: 60, range: 70, dmg: 7, burst: [2, 5], gap: [1.0, 2.2], rate: 0.15, surface: 'person' },
 };
 const CALL = {
-	default: { contact: ['Contact!', 'There!', 'We have company!'], flank: ['Flanking left!', 'Going round!', 'Moving up!'], reload: ['Reloading!', 'Changing cells!'], down: ['Man down!', 'We lost one!'], pin: ['Keep them pinned!', 'Covering fire!'], give: ['Enough! I yield!', 'Don\'t shoot! I\'m done!'] },
+	default: { contact: ['Contact!', 'There!', 'We have company!'], flank: ['Flanking left!', 'Going round!', 'Moving up!'], reload: ['Reloading!', 'Changing cells!'], down: ['Man down!', 'We lost one!'], hit: ['I\'m hit!', 'Agh! I\'m hit!', 'Hit! I\'m hit!'], pin: ['Keep them pinned!', 'Covering fire!'], give: ['Enough! I yield!', 'Don\'t shoot! I\'m done!'] },
 	law: { contact: ['Patrol! Drop your weapon!', 'Suspect sighted!', 'Hold it right there!'], flank: ['Moving to flank!', 'Cutting them off!'], reload: ['Reloading!'], down: ['Officer down!'], pin: ['Suppressing!', 'Stay in cover!'], give: ['I\'m down, I\'m down!'] },
 	villagers: { contact: ['Raiders! Protect the houses!', 'To the walls!'], flank: ['Round the back of the barn!'], reload: ['Arrows!'], down: ['They got Tam!'], pin: ['Keep their heads down!'], give: ['Mercy!'] },
 	police: { contact: ['Police! Drop it!', 'Show me your hands!', 'Suspect in sight!'], flank: ['Cover the back!', 'Cutting across!'], reload: ['Reloading!'], down: ['Officer down! Officer down!'], pin: ['Stay behind the car!', 'Hold them there!'], give: ['Okay! Okay! I\'m down!'] },
@@ -59,6 +63,9 @@ const CALL = {
 	invaders: { contact: ['Forward! Take the town!', 'Defenders ahead!'], flank: ['Round their side!'], reload: ['Reloading!'], down: ['We lost one!'], pin: ['Pin them down!'], give: ['Enough! We yield!'] },
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
+// where one fighter's round lands on another (they are not aimed shot by shot): mostly centre
+// mass, now and then a limb, rarely the head
+const npcPart = () => { const u = Math.random(); return u < 0.08 ? 'head' : u < 0.52 ? 'chest' : u < 0.72 ? 'gut' : u < 0.87 ? 'leg' : 'shoulder'; };
 const rnd = (a, b) => a + Math.random() * (b - a);
 const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
@@ -157,7 +164,8 @@ export function createSquads(ctx) {
 			const d = personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid, seed) });
 			const P = buildPerson(A, d);
 			if (F.masked) maskOn(P, F.colors?.[0] || '#ff7a2a');
-			const b = { P, M: createMotion(P, (x, z) => ctx.ground(x, z, P.root.position.y + 1.2), { constrain: (pos) => ctx.keepOut?.(pos) }), fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
+			// (over a fence or up a ledge, combat/npc-climb.js: the climb's own floor while it lasts)
+			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos) => b.climbY == null && ctx.keepOut?.(pos) }), climbY: null, fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
 			group.add(P.root);
 			pools.person.push(b);
 			res(b);
@@ -189,6 +197,7 @@ export function createSquads(ctx) {
 				pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
 				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
 				provoked: false, shotAtPlayer: 0, struckFirst: false, surrendered: 0, task: opts.task || null, post: opts.post || squad?.post || null, slot: squad ? squad.members.length : 0,
+				W: createWounds(), react: null, climb: null, lowK: Math.random(),
 			};
 			h.pos.y = ctx.ground(x, z, opts.y ?? ctx.eye().y);
 			if (kind === 'person') {
@@ -208,6 +217,7 @@ export function createSquads(ctx) {
 				if (b.P.ragdoll) ctx.ragdolls.release(b.P);
 				b.P.root.visible = true; fadePerson(b.P, 1);
 				b.M.act(null); b.M.place(x, h.pos.y, z, h.yaw);
+				b.M.S.limp.side = 0; b.M.S.limp.k = 0; b.M.S.clutch = null; b.M.want.low = 0; b.climbY = null;
 			} else if (kind === 'creature') {
 				// (one that is a person first, the Moonturned: the person's body now, the beast's kept for the change)
 				const c = await creatureBody(Sp.human ?? Sp.model ?? species, species, Sp.human ? null : Sp.look ?? null);
@@ -238,9 +248,10 @@ export function createSquads(ctx) {
 				if (kind === 'drone') h.pos.y += h.hover;
 			}
 			h.T = {
-				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: Sp ? Math.max(1, Sp.height * 0.55) : 1.4 }, name: Sp ? (/^the /i.test(Sp.name) ? Sp.name : `a ${Sp.name}`) : F.name ? `a ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
+				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: Sp ? Math.max(1, Sp.height * 0.55) : 1.4 }, name: Sp ? (/^the /i.test(Sp.name) ? Sp.name : `${/^[aeiou]/i.test(Sp.name) ? 'an' : 'a'} ${Sp.name}`) : F.name ? `${/^[aeiou]/i.test(F.name) ? 'an' : 'a'} ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
 				get surrendered() { return h.surrendered > 0 || h.fleeing; },
 				surface: B.surface, shapes: () => shapesOf(h), ref: h,
+				aim: () => (h.body ? aimPoint(h.body.P) : null),
 				onHit: (blow) => hit(h, blow),
 				moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0 || h.struckFirst, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
 			};
@@ -252,6 +263,14 @@ export function createSquads(ctx) {
 			return h;
 		} finally { pending.delete(reservation); }
 	}
+	// the feel for what is ahead, with the walking's own tests (player.js floorAt, pushOut), per world
+	let climb0 = null, climbW = null;
+	function climber() {
+		const w = ctx.world?.(), pl = w?.player;
+		if (!pl?.floorAt || !pl.pushOut) return null;
+		if (climbW !== w) { climb0 = createClimber({ floorAt: pl.floorAt, pushOut: pl.pushOut }); climbW = w; }
+		return climb0;
+	}
 	function shapesOf(h) {
 		const p = h.pos;
 		if (h.kind === 'creature') return h.cr.shapes();
@@ -260,7 +279,7 @@ export function createSquads(ctx) {
 			const a = Math.sin(h.yaw), c = Math.cos(h.yaw);
 			return [{ type: 'capsule', a: { x: p.x - a * 0.8, y: p.y + 0.55, z: p.z - c * 0.8 }, b: { x: p.x + a * 0.3, y: p.y + 0.6, z: p.z + c * 0.3 }, r: 0.38, part: 'body' }, { type: 'sphere', c: { x: p.x + a * 0.58, y: p.y + 0.62, z: p.z + c * 0.58 }, r: 0.22, part: 'head' }];
 		}
-		return personShapes(p.x, p.y, p.z, h.body?.P.height || 1.75, h.crouch || (h.surrendered ? 0.5 : 0));
+		return (h.body && bodyShapes(h.body.P)) || personShapes(p.x, p.y, p.z, h.body?.P.height || 1.75, h.crouch || (h.surrendered ? 0.5 : 0));
 	}
 	const alive = () => list.filter((h) => !h.dead);
 
@@ -288,6 +307,14 @@ export function createSquads(ctx) {
 			h.body.M.jolt?.(d.x / l, d.z / l, k, blow.part === 'head' ? (Math.random() - 0.5) * 1.6 : (Math.random() - 0.5) * 0.5, k > 1.2 ? 0.06 : 0.03);
 			h.fireT = Math.max(h.fireT, rnd(0.35, 0.7));
 			if (h.inCover && h.peek) { h.peek = false; h.peekT = rnd(0.9, 1.8); }
+			// how it shows, by where it went in (combat/wounds.js): a hand to it, a stagger, a limp
+			const R = react(h.W, h.body.M, h.body.P, blow, r, { max: h.H.max, armed: !!h.body.hand?.model && !h.noGun });
+			if (R) {
+				h.react = { t: R.name ? R.dur : 0.4, age: 0, push: R.stagger, ax: d.x / l, az: d.z / l };
+				h.fireT = Math.max(h.fireT, R.hold);
+				if (R.crippled) { h.goal = null; say(h, 'hit', true); }
+				else if (R.part === 'head' || R.part === 'neck' || R.part === 'chest') { if (Math.random() < 0.5) say(h, 'hit'); }
+			}
 		}
 		// a creature reels the way the blow went (and a heavy one breaks off its strike)
 		if (!r.killed && h.cr && r.dealt > 0) {
@@ -460,7 +487,7 @@ export function createSquads(ctx) {
 		if (block && block.t < from.distanceTo(end) - 0.3) { end = from.clone().addScaledVector(dir, block.t); ctx.landShot(block, from, dir, h, B.dmg); }
 		else if (hitIt) {
 			if (atMe) ctx.hurtPlayer({ amount: B.dmg * rnd(0.85, 1.15), type: 'ballistic', part: 'torso', src: from, by: h.T });
-			else ctx.strikeNpc(T, { amount: B.dmg * 2.2 * rnd(0.85, 1.15), type: 'ballistic', part: Math.random() < 0.15 ? 'head' : 'torso', src: from, dir, by: h.T }, end);
+			else ctx.strikeNpc(T, { amount: B.dmg * 2.2 * rnd(0.85, 1.15), type: 'ballistic', part: npcPart(), src: from, dir, by: h.T }, end);
 		} else if (atMe) ctx.whiz?.(from, end);
 		fx.tracer(from, end, style, 380);
 		fx.muzzle(from, dir, style === 2 ? 2 : 0);
@@ -583,8 +610,9 @@ export function createSquads(ctx) {
 		}
 	}
 	function walk(h, gx, gz, speed, run) {
-		const M = h.body.M;
-		speed *= h.T.hex?.slowK || 1;
+		const M = h.body.M, pc = pace(h.W);
+		speed *= (h.T.hex?.slowK || 1) * pc.k;
+		if (!pc.run) run = 0;
 		// no headway for a while (a wall, a car in the way): a sidestep along it, then on
 		if (h.side > 0) { gx = h.pos.x + h.sideX * 4; gz = h.pos.z + h.sideZ * 4; }
 		const dx = gx - h.pos.x, dz = gz - h.pos.z, d = Math.hypot(dx, dz);
@@ -607,10 +635,28 @@ export function createSquads(ctx) {
 	function personStep(h, dt, d) {
 		const b = h.body, M = b.M, S = M.S, eye = ctx.eye();
 		h.pos.copy(S.pos);
+		// wounds (combat/wounds.js): a limp on the bad leg, and a reaction playing out, the first
+		// beat of it a stagger back along the round's line
+		const pc = pace(h.W);
+		S.limp.side = pc.side === 'L' ? 1 : pc.side === 'R' ? -1 : 0; S.limp.k = pc.limp;
+		if (h.react) {
+			const R0 = h.react;
+			R0.age += dt; R0.t -= dt;
+			if (R0.push > 0 && R0.age < 0.3 && !h.W.crippled) { const k = R0.push * Math.min(dt, 0.05) / 0.3; S.pos.x += R0.ax * k; S.pos.z += R0.az * k; }
+			if (R0.t <= 0) h.react = null;
+		}
 		// (the knee behind cover is held only while the fight below keeps asking for it)
 		if (S.act.name === 'kneel') M.act(null);
 		// (raised to the shoulder only while engaging; carried at the ready otherwise)
 		let aimAt = null;
+		const armed = !!b.hand?.model && !h.noGun;
+		// over a fence or up onto a ledge (combat/npc-climb.js): the climb carries them to its end
+		if (h.climb) {
+			const at = climber()?.step(h.climb, dt);
+			b.climbY = !at || at.done ? null : at.feet;
+			if (!at || !climbBody(M, h.climb, at, armed)) { h.climb = null; if (!at) M.act(null); }
+		}
+		M.want.low = 0;
 		// at close quarters with you (combat/melee-foes.js steers them: circling, their turns, a
 		// takedown): only the body is moved here, and the gun is put away
 		if (h.melee) {
@@ -623,12 +669,26 @@ export function createSquads(ctx) {
 		// held to a post: a fight that strays too far from it is let go, and they walk back
 		const P0 = h.post;
 		if (P0 && h.target && Math.hypot(posOf(h.target).x - P0.x, posOf(h.target).z - P0.z) > (P0.r || 40) * 2.5) { h.target = null; h.alert = 0.4; h.goal = null; }
-		if (h.alert && h.target && P0?.kind === 'tower') {
+		if (h.climb) {
+			// (carried by the climb)
+		} else if (h.W.crippled) {
+			// the leg gone from under them: down on that knee where they fell, still fighting
+			M.want.speed = 0; M.want.run = 0;
+			const name = `hurt-crippled${h.W.crippled}${b.hand?.model && !h.noGun ? '+' : ''}`;
+			if (S.act.name !== name) M.act(name, 0);
+			h.crouch = 0.55;
+			if (h.target && h.alert) {
+				const at = posOf(h.target);
+				M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
+				S.look.target = h.target.id === 'me' ? eye : null;
+				if (h.los && !h.react) { shoot(h, dt); aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); } else h.fireT = Math.max(h.fireT, 0.3);
+			}
+		} else if (h.alert && h.target && P0?.kind === 'tower') {
 			// up a watchtower: they hold the platform and fire from it
 			const at = posOf(h.target);
 			M.want.speed = 0; M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
 			S.look.target = h.target.id === 'me' ? eye : null;
-			if (h.los) { shoot(h, dt); aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); } else h.fireT = Math.max(h.fireT, 0.3);
+			if (h.los && !h.react) { shoot(h, dt); aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); } else h.fireT = Math.max(h.fireT, 0.3);
 		} else if (h.alert && h.target) {
 			const at = posOf(h.target).clone();
 			h.goalT -= dt;
@@ -640,7 +700,16 @@ export function createSquads(ctx) {
 			// a long way to go across open ground, or the way more than square behind them, they turn and run
 			const toG = M.want.heading, off = wrapA(toG - toT);
 			const strafe = h.los && gd > 1.2 && h.role !== 'fallback' && dT < 45 && Math.abs(off) < 1.9 && (gd < 12 || Math.abs(off) > 0.5);
-			if (strafe) { M.want.travel = toG; M.want.travelT = 0.3; M.want.heading = toT; M.want.speed = Math.min(M.want.speed, Math.abs(off) > 1.1 ? 1.9 : 2.1); M.want.run = 0; }
+			if (strafe) { M.want.travel = toG; M.want.travelT = 0.3; M.want.heading = toT; M.want.speed = Math.min(M.want.speed, (Math.abs(off) > 1.1 ? 1.9 : 2.1) * pc.k); M.want.run = 0; }
+			// (reeling from a round: barely moving, not firing)
+			if (h.react) { M.want.speed = Math.min(M.want.speed, 0.6); M.want.run = 0; }
+			// low on the move under fire: crouched the last stretch into cover, or all the way while
+			// the target has sight of them; a few keep low even strafing; upright and flat out
+			// across open ground or falling back
+			else if (gd > 1.2 && h.role !== 'fallback') {
+				const low = strafe ? (h.lowK > 0.5 ? 0.45 : 0) : (h.inCover && gd < 9) || (h.los && gd < 14) ? 0.7 + 0.3 * h.lowK : 0;
+				M.want.low = low; M.want.speed *= 1 - 0.18 * low;
+			}
 			// in cover: down on a knee (hidden, reloading) and up to fire, in turns; just hit, down
 			const held = gd <= 1.2 && h.inCover && !h.noGun;
 			if (held) {
@@ -651,10 +720,10 @@ export function createSquads(ctx) {
 			// (down behind cover with half a magazine or less: changed now, not mid-fight)
 			if (down && h.mag <= 6 && !reloading && h.fireT < 0.5) reloadGun(h, true);
 			h.crouch = down || (reloading && held) ? 0.55 : 0;
-			if (down && !reloading) M.act('kneel', 0); else if (M.S.act.name === 'kneel') M.act(null);
+			if (down && !reloading && !h.react) M.act('kneel', 0); else if (M.S.act.name === 'kneel') M.act(null);
 			if (h.los && gd < 6) M.want.heading = toT;
 			S.look.target = h.target.id === 'me' ? eye : null;
-			if (h.los && !down && (gd < 6 || h.role === 'suppress' || strafe)) { shoot(h, dt); if (gd < 2.5 || strafe) aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); }
+			if (h.los && !down && !h.react && (gd < 6 || h.role === 'suppress' || strafe)) { shoot(h, dt); if (gd < 2.5 || strafe) aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); }
 			else h.fireT = Math.max(h.fireT, 0.3);
 		} else {
 			if (h.alert && !h.target) { h.alert = Math.max(0, h.alert - dt * 0.05); }
@@ -666,11 +735,18 @@ export function createSquads(ctx) {
 				if (h.goal) walk(h, h.goal.x, h.goal.z, h.squad?.dest ? 2.6 : 1.1, h.squad?.dest ? 1 : 0);
 			}
 		}
+		// running at something they can get over: over it, as you would (no turning off round it)
+		if (!h.climb && !h.W.crippled && !h.react && M.want.speed > 1.6 && S.speed.v > 1.2 && !(M.want.travelT > 0) && (h.lookT = (h.lookT || 0) - dt) <= 0) {
+			h.lookT = 0.2;
+			const hd = M.want.heading, C = climber()?.look(S.pos.x, S.pos.z, S.pos.y, Math.sin(hd), Math.cos(hd), S.speed.v);
+			if (C) { h.climb = C; b.climbY = S.pos.y; S.clutch = null; }
+		}
 		h.yaw = S.heading;
 		headway(h, dt);
 		M.update(dt, time, eye);
 		b.P.lod?.(d);
 		if (b.hand && !h.noGun) { aimHold(h, aimAt); b.hand.follow(b.P, S.heading, d < 90, M, time, dt); }
+		else if (S.clutch) { b.P.root.updateMatrixWorld(true); applyClutch(b.P, M, dt); }
 	}
 	// the gun up and on the target while engaging (the stock at the shoulder, the strong hand's
 	// finger on the trigger), down at the ready while moving or searching
@@ -684,7 +760,7 @@ export function createSquads(ctx) {
 		if (!tactical || Math.random() < 0.5) say(h, 'reload');
 	}
 	function aimHold(h, at) {
-		const b = h.body, up = !!at && b.M.S.speed.v < 2.2 && !b.hand?.reloading;
+		const b = h.body, up = !!at && b.M.S.speed.v < 2.2 && !b.hand?.reloading && !h.react;
 		b.hand.aim?.(up);
 		if (up) b.hand.aimPitch?.(Math.atan2(at.y - (h.pos.y + 1.4), Math.max(1, Math.hypot(at.x - h.pos.x, at.z - h.pos.z))));
 		b.M.trigger?.('R', up ? 1 : 0);
