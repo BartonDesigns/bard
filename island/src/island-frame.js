@@ -248,6 +248,8 @@ export function islandFrame(iw, now) {
 	gear.update(dt);
 	// (the skills and magic menu open: the fight holds its breath)
 	if (!window.L99Loading.active()) { if (!magic.menuOpen()) combat.update(dt); magic.update(dt); }
+	// (your guild's townsfolk out at your side, or home: guild/companions.js)
+	if (!window.L99Loading.active() && !magic.menuOpen()) HOOKS.guild?.update(dt);
 	HOOKS.military?.update(dt, sk.night);
 	HOOKS.cataclysm?.update(dt, sk);
 	if (!window.L99Loading.active()) HOOKS.law?.update(dt);

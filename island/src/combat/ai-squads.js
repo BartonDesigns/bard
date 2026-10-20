@@ -61,6 +61,8 @@ const CALL = {
 	police: { contact: ['Police! Drop it!', 'Show me your hands!', 'Suspect in sight!'], flank: ['Cover the back!', 'Cutting across!'], reload: ['Reloading!'], down: ['Officer down! Officer down!'], pin: ['Stay behind the car!', 'Hold them there!'], give: ['Okay! Okay! I\'m down!'] },
 	military: { contact: ['Contact front!', 'Hostiles, on me!', 'Halt! Halt!'], flank: ['Bounding left!', 'Second team, flank!'], reload: ['Changing mag!'], down: ['Man down! Medic!'], pin: ['Suppress, suppress!', 'Keep fire on them!'], give: ['Cease fire, I yield!'] },
 	invaders: { contact: ['Forward! Take the town!', 'Defenders ahead!'], flank: ['Round their side!'], reload: ['Reloading!'], down: ['We lost one!'], pin: ['Pin them down!'], give: ['Enough! We yield!'] },
+	// your own guild's people (guild/companions.js)
+	guild: { contact: ['With you! I see them!', 'Contact, on your side!', 'Here they come!', 'I\'ve got your back!'], flank: ['Going round them!', 'Taking the flank!'], reload: ['Reloading, cover me!', 'Changing mags!'], down: ['They got one of ours!', 'We lost one! Keep going!'], hit: ['I\'m hit!', 'Ah! Still standing!', 'Hit, I\'m okay!'], pin: ['Keep their heads down!', 'Covering you!'], give: ['Falling back!'] },
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 // where one fighter's round lands on another (they are not aimed shot by shot): mostly centre
@@ -69,6 +71,8 @@ const npcPart = () => { const u = Math.random(); return u < 0.08 ? 'head' : u < 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+// your guild's people fight what is within this of you, and catch you up past this
+const ALLY_LEASH = 70, ALLY_CATCH = 60;
 
 // a faction's look (combat/outfits.js), from the fighter's own seed
 function styleOf(fid, seed) {
@@ -155,17 +159,20 @@ export function createSquads(ctx) {
 
 	// people are made one a frame, in the background, and kept for the next squad of their side
 	const queue = [];
-	function personBody(fid, seed) {
-		const free = pools.person.find((b) => !b.used && b.fid === fid);
+	// (one of your guild's townsfolk comes as themselves: their own body, dna, and their own
+	// hand, gun or none, kept for them by their key)
+	function personBody(fid, seed, dna = null, gun) {
+		const key = dna ? `dna:${dna.seed}` : null;
+		const free = pools.person.find((b) => !b.used && b.fid === fid && (b.key || null) === key);
 		if (free) { free.used = true; return Promise.resolve(free); }
 		return new Promise((res) => {
 			const job = () => {
 			const F = FACTIONS[fid] || {};
-			const d = personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid, seed) });
-			const P = buildPerson(A, d);
+			const d = dna ? structuredClone(dna) : personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid, seed) });
+			const P = buildPerson(A, d), g = gun !== undefined ? gun : F.gun;
 			if (F.masked) maskOn(P, F.colors?.[0] || '#ff7a2a');
 			// (over a fence or up a ledge, combat/npc-climb.js: the climb's own floor while it lasts)
-			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos) => b.climbY == null && ctx.keepOut?.(pos) }), climbY: null, fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
+			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos) => b.climbY == null && ctx.keepOut?.(pos) }), climbY: null, fid, key, used: true, hand: g ? npcHand(group, g, 2 + (seed % 4), seed % 3) : null };
 			group.add(P.root);
 			pools.person.push(b);
 			res(b);
@@ -177,7 +184,9 @@ export function createSquads(ctx) {
 
 	// one at (x, z) of a faction, in a squad
 	async function spawn(fid, x, z, squad, opts = {}) {
-		if (alive().length + pending.size >= maxNow()) return null;
+		// (your guild's people come over and above it on a computer: guild/companions.js keeps their
+		// own count; on a phone they share it, so no fight ever draws more bodies than it did before)
+		if ((!opts.ally || isPhone) && alive().length + pending.size >= maxNow()) return null;
 		// (a stationed side only at a post: a base, a checkpoint, a compound)
 		if (FACTIONS[fid]?.stationed && ctx.mayStation && !ctx.mayStation(fid, x, z)) return null;
 		const generation = epoch, reservation = {};
@@ -188,8 +197,8 @@ export function createSquads(ctx) {
 			const Sp = SPECIES[species];
 			const kind = Sp ? 'creature' : fid === 'rogue' ? 'drone' : fid === 'gloom' ? 'crawler' : 'person';
 			const specialty = kind === 'person' ? FIELD_ROLES[opts.specialty] : null;
-			const F = { ...(FACTIONS[fid] || {}), ...(specialty ? { gun: specialty.gun, hp: specialty.hp, armour: specialty.armour, acc: specialty.acc } : {}), ...(Sp ? { hp: Sp.hp, armour: Sp.armour, gun: null } : {}) };
-			const B = Sp ? { speed: Sp.run, sight: Sp.sight, range: Sp.reach, dmg: Sp.dmg, surface: Sp.surface, resist: Sp.resist } : { ...BODY[kind], ...(specialty || {}) };
+			const F = { ...(FACTIONS[fid] || {}), ...(specialty ? { gun: specialty.gun, hp: specialty.hp, armour: specialty.armour, acc: specialty.acc } : {}), ...(Sp ? { hp: Sp.hp, armour: Sp.armour, gun: null } : {}), ...(opts.F || {}) };
+			const B = Sp ? { speed: Sp.run, sight: Sp.sight, range: Sp.reach, dmg: Sp.dmg, surface: Sp.surface, resist: Sp.resist } : { ...BODY[kind], ...(specialty || {}), ...(opts.B || {}) };
 			const id = opts.id || `h${fid.slice(0, 2)}${nextId++}`;
 			const h = {
 				id, fid, F, kind, B, squad, specialty, crew: fid === 'fire', Sp, cr: null, strikeT: -1,
@@ -198,12 +207,17 @@ export function createSquads(ctx) {
 				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
 				provoked: false, shotAtPlayer: 0, struckFirst: false, surrendered: 0, task: opts.task || null, post: opts.post || squad?.post || null, slot: squad ? squad.members.length : 0,
 				W: createWounds(), react: null, climb: null, lowK: Math.random(),
+				// one of your guild's townsfolk (their record in guild/guild-rules.js), and a while
+				// they have fired on the law (only then does the law fire back on them)
+				ally: opts.ally || null, hitLaw: 0, castT: rnd(1, 2),
 			};
+			// (a mage of yours carries no gun: spells only)
+			if (h.ally && !F.gun) h.noGun = true;
 			h.pos.y = ctx.ground(x, z, opts.y ?? ctx.eye().y);
 			if (kind === 'person') {
 				await assets();
 				if (generation !== epoch) return null;
-				const b = await personBody(fid, (Math.random() * 1e9) >>> 0);
+				const b = await personBody(fid, (Math.random() * 1e9) >>> 0, opts.dna || null, opts.ally ? (F.gun || null) : undefined);
 				if (!b) return null;
 				if (h.gone || generation !== epoch) { b.used = false; b.P.root.visible = false; b.hand?.hide(); return null; }
 				h.body = b;
@@ -256,6 +270,8 @@ export function createSquads(ctx) {
 				moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0 || h.struckFirst, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
 			};
 			if (h.crew) { h.T.faction = 'civ'; h.T.name = 'a firefighter'; }
+			// (yours: on your side of every shot, never in your sights, called by their own name)
+			else if (h.ally) { h.T.kind = 'ally'; h.T.faction = PLAYER; h.T.name = h.ally.name; }
 			else if (specialty) h.T.name = `${F.name} ${specialty.name.toLowerCase()}`;
 			layer.add(h.T);
 			list.push(h);
@@ -294,6 +310,7 @@ export function createSquads(ctx) {
 		if (by) {
 			// the one who struck them is their enemy now, whatever the old feelings
 			h.provoked = h.provoked || by.id === 'me';
+			if (by.ref) h.lastHitBy = by.ref;
 			if (!h.surrendered) { h.target = by; h.targetT = 6; }
 			for (const m of h.squad?.members || []) if (!m.dead && !m.surrendered) { if (by.id === 'me') m.provoked = true; if (!m.target) { m.target = by; m.targetT = 6; } }
 		}
@@ -326,7 +343,7 @@ export function createSquads(ctx) {
 			if (r.dealt > h.H.max * 0.12 && h.strikeT >= 0 && h.strikeT < 0.4) { h.strikeT = -1; h.cr.motion.state.strike = -1; h.fireT = rnd(0.5, 0.9); }
 		}
 		if (r.killed) die(h, blow);
-		else if (!h.surrendered && h.kind === 'person' && !h.crew) {
+		else if (!h.surrendered && h.kind === 'person' && !h.crew && !h.ally) {
 			const allies = (h.squad?.members || []).filter((m) => m !== h && !m.dead && !m.surrendered).length;
 			if (shouldSurrender({ hpFrac: h.H.hp / h.H.max, allies, enemies: 1 + (by?.id === 'me' ? ctx.friendsNear?.() || 0 : 1), aggression: h.F.aggression, kind: h.F.kind })) surrender(h);
 			else if (h.H.hp < h.H.max * 0.35 && h.role !== 'fallback') { h.role = 'fallback'; h.goalT = 0; }
@@ -374,7 +391,7 @@ export function createSquads(ctx) {
 		const d = Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z);
 		if (d > 50) return;
 		h.saidT = 4;
-		ctx.call?.(pick(lines), h.F.name || 'someone');
+		ctx.call?.(pick(lines), h.ally?.first || h.F.name || 'someone');
 	}
 	function alertSquad(h, src) {
 		const mem = h.squad ? h.squad.members : [h];
@@ -405,6 +422,7 @@ export function createSquads(ctx) {
 	const ME = { id: 'me', kind: 'player', faction: PLAYER };
 	function chooseTarget(h, eye) {
 		if (h.recall) return null;
+		if (h.ally) return allyTarget(h, eye);
 		const F = h.F;
 		let best = null, bd = h.B.sight * (h.alert ? 1.8 : 1);
 		const dMe = Math.hypot(eye.x - h.pos.x, eye.z - h.pos.z);
@@ -414,7 +432,9 @@ export function createSquads(ctx) {
 		const backMe = F.lawful && F.kind !== 'military' && ctx.defending?.();
 		for (const o of list) {
 			if (o === h || o.dead || o.surrendered || o.crew || o.recall || o.fid === h.fid || ctx.ignore?.(h, o)) continue;
-			if (!relations.hostile(h.fid, o.fid) && !(backMe && o.struckFirst && !o.F?.lawful)) continue;
+			// (your guild's people: fought by whoever fights you, and the law only once they fire on it)
+			if (o.ally) { if (!(F.lawful ? o.hitLaw > 0 : hateMe || h.lastHitBy === o)) continue; }
+			else if (!relations.hostile(h.fid, o.fid) && !(backMe && o.struckFirst && !o.F?.lawful)) continue;
 			const d = Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z);
 			if (d < bd) { bd = d; best = o.T; }
 		}
@@ -424,6 +444,18 @@ export function createSquads(ctx) {
 				const d = Math.hypot(T.bound.x - h.pos.x, T.bound.z - h.pos.z);
 				if (d < bd) { bd = d; best = T; }
 			}
+		}
+		return best;
+	}
+	// one of your guild's: whoever is after you or them, near you; the law only when it opens fire
+	function allyTarget(h, eye) {
+		let best = null, bd = h.B.sight * 1.5;
+		for (const o of list) {
+			if (o === h || o.ally || o.dead || o.surrendered || o.crew || o.recall || o.fleeing || o.dormant) continue;
+			const foe = o.F?.lawful ? o.shotAtPlayer > 0 || !!o.target?.ref?.ally : o.target?.id === 'me' || !!o.target?.ref?.ally || o.provoked || o.shotAtPlayer > 0 || relations.hostile(PLAYER, o.fid);
+			if (!foe || Math.hypot(o.pos.x - eye.x, o.pos.z - eye.z) > ALLY_LEASH) continue;
+			const d = Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z);
+			if (d < bd) { bd = d; best = o.T; }
 		}
 		return best;
 	}
@@ -459,6 +491,7 @@ export function createSquads(ctx) {
 		const dist = from.distanceTo(to0), atMe = T.id === 'me';
 		if (dist > B.range) return;
 		if (atMe) { h.shotAtPlayer = 8; if (!h.provoked && !h.F?.lawful) h.struckFirst = true; }
+		if (h.ally && T.ref?.F?.lawful) h.hitLaw = 12;
 		if (h.kind === 'crawler') {
 			if (dist < 5 || h.spitT > 0) return;
 			h.spitT = rnd(3.5, 5.5);
@@ -525,9 +558,10 @@ export function createSquads(ctx) {
 			const h = list[i];
 			h.saidT = Math.max(0, (h.saidT || 0) - dt);
 			h.shotAtPlayer = Math.max(0, h.shotAtPlayer - dt);
+			if (h.hitLaw) h.hitLaw = Math.max(0, h.hitLaw - dt);
 			const d = Math.hypot(h.pos.x - eye.x, h.pos.z - eye.z);
 			if (h.dead) { fading(h, dt); continue; }
-			if (d > 280) { release(h); continue; }
+			if (d > 280 && !h.ally) { release(h); continue; }
 			tickHealth(h.H, dt);
 			if (h.crew) { crewStep(h, dt, d); bounds(h); continue; }
 			if (h.surrendered) { yieldStep(h, dt, d); bounds(h); continue; }
@@ -669,6 +703,8 @@ export function createSquads(ctx) {
 		// held to a post: a fight that strays too far from it is let go, and they walk back
 		const P0 = h.post;
 		if (P0 && h.target && Math.hypot(posOf(h.target).x - P0.x, posOf(h.target).z - P0.z) > (P0.r || 40) * 2.5) { h.target = null; h.alert = 0.4; h.goal = null; }
+		// (yours keep to you: a fight that runs off is let go, and they come back to your side)
+		if (h.ally && h.target && Math.hypot(posOf(h.target).x - eye.x, posOf(h.target).z - eye.z) > ALLY_LEASH * 1.2) { h.target = null; h.alert = 0; h.goal = null; }
 		if (h.climb) {
 			// (carried by the climb)
 		} else if (h.W.crippled) {
@@ -729,7 +765,8 @@ export function createSquads(ctx) {
 			if (h.alert && !h.target) { h.alert = Math.max(0, h.alert - dt * 0.05); }
 			// a slow patrol about home, or on to a task (a raid's target), or the post's beat
 			h.goalT -= dt;
-			if (P0 && !h.squad?.dest) postStep(h, P0, dt);
+			if (h.ally) followStep(h, dt, eye, d);
+			else if (P0 && !h.squad?.dest) postStep(h, P0, dt);
 			else {
 				if (h.goalT <= 0) { h.goalT = rnd(4, 9); const c = h.squad?.dest || h.home, a = Math.random() * 6.283; h.goal = { x: c.x + Math.cos(a) * 6, z: c.z + Math.sin(a) * 6 }; }
 				if (h.goal) walk(h, h.goal.x, h.goal.z, h.squad?.dest ? 2.6 : 1.1, h.squad?.dest ? 1 : 0);
@@ -741,6 +778,8 @@ export function createSquads(ctx) {
 			const hd = M.want.heading, C = climber()?.look(S.pos.x, S.pos.z, S.pos.y, Math.sin(hd), Math.cos(hd), S.speed.v);
 			if (C) { h.climb = C; b.climbY = S.pos.y; S.clutch = null; }
 		}
+		// (a spell of theirs, when they know one and it is time: guild/companions.js)
+		if (h.ally && !h.climb && !h.react) ctx.allyCast?.(h, dt);
 		h.yaw = S.heading;
 		headway(h, dt);
 		M.update(dt, time, eye);
@@ -764,6 +803,21 @@ export function createSquads(ctx) {
 		b.hand.aim?.(up);
 		if (up) b.hand.aimPitch?.(Math.atan2(at.y - (h.pos.y + 1.4), Math.max(1, Math.hypot(at.x - h.pos.x, at.z - h.pos.z))));
 		b.M.trigger?.('R', up ? 1 : 0);
+	}
+	// one of yours, with nothing to fight: at your back, a step to one side each, facing the way
+	// you face; left far behind (you drove, flew or were carried off), they catch you up out of
+	// your sight, as people in a party do
+	function followStep(h, dt, eye, d) {
+		const M = h.body.M, yaw = ctx.yaw?.() ?? 0, k = h.slot || 0;
+		const fx = -Math.sin(yaw), fz = -Math.cos(yaw), side = (k % 2 ? 1 : -1) * (1.5 + Math.floor(k / 2) * 1.3), back = 2.4 + Math.floor(k / 2) * 1.4;
+		const gx = eye.x - fx * back + fz * side, gz = eye.z - fz * back - fx * side;
+		if (d > ALLY_CATCH && !h.target) {
+			const gy = ctx.ground(gx, gz, eye.y);
+			M.place(gx, gy, gz, Math.atan2(fx, fz)); h.pos.set(gx, gy, gz); h.goal = null; h.climb = null; h.body.climbY = null;
+			return;
+		}
+		const gd = Math.hypot(gx - h.pos.x, gz - h.pos.z);
+		if (walk(h, gx, gz, gd > 9 ? h.B.speed * 1.2 : gd > 3.5 ? 2.6 : 1.3, gd > 9 ? 1 : 0) <= 1.2) M.want.heading = Math.atan2(fx, fz);
 	}
 	// at a post: a loop walked at a steady pace (each one spaced along it), or a spot held
 	// facing out, with a look about now and then
@@ -1061,5 +1115,6 @@ export function createSquads(ctx) {
 	}
 	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); }
 	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: maxNow(), squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length, stances: s.members.filter((m) => !m.dead).map((m) => m.body?.M.S.act.name === 'kneel' ? 'kneel' : m.body?.M.want.travelT > 0 ? 'strafe' : 'move') })), bodies: pools.person.length, queue: queue.length });
-	return { group, update, squad, spawn, hear, clear, info, alive, list, release, surrender, squads };
+	// (the world's fighters, alive: your guild's own are counted apart, allies())
+	return { group, update, squad, spawn, hear, clear, info, alive: () => alive().filter((h) => !h.ally), allies: () => list.filter((h) => h.ally && !h.dead), list, release, surrender, squads };
 }

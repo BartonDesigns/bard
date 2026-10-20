@@ -2,6 +2,7 @@ import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
 import { createChat } from './ui/chat.js';
+import { createGuild } from './guild/index.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
 import { createCommunityProjects } from './people/community-projects.js';
@@ -890,6 +891,9 @@ export function createIslandWorld() {
 	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
 	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
+	// your guild: the townsfolk you ask into it walk and fight beside you, level up and learn
+	// magic; with an account, players join it and guilds ally with it (guild/)
+	HOOKS.guild = guideApi.guild = createGuild({ combat, guide, social, nearby: () => [...people.pool, ...social.actors.all()], cloud: cloudSave, url: roomsURL(), mount: dom.mount, menu: tpMenu, onFoot: () => !!world?.player && !drive.active() && !world.orbit?.active?.() && !world.boat?.boarded?.(), yaw: () => world?.player?.yaw ?? 0, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
@@ -1793,6 +1797,8 @@ if (typeof window !== 'undefined') {
 		ragdolls: () => HOOKS.ragdolls?.info(),
 		// the fight (combat/): Crysis.combat.info(), .spawn('ashfang'), .boss('walker'), .fight(), .raid(), .ignite(); Crysis.morality()
 		get combat() { return HOOKS.combat; },
+		// your guild: Crysis.guild.info(), .found({ name, tag }), .ask(person), .candidates(), .open('folk')
+		get guild() { return HOOKS.guild; },
 		living: Object.assign(() => HOOKS.livingWorld?.snapshot(), { sync: () => HOOKS.livingWorld?.sync(), action: (id, action, options) => HOOKS.livingWorld?.action(id, action, options) }),
 		projects: Object.assign(() => HOOKS.communityProjects?.snapshot(), {sync:()=>HOOKS.communityProjects?.sync(),action:(id,action,options)=>HOOKS.communityProjects?.action(id,action,options),visuals:()=>HOOKS.projectMarks?.info()}),
 		// Crysis.morality(): your compass, this region's tally, the people near you and what they have
