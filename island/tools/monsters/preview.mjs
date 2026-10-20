@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { createCreatureMotion } from '../../src/creatures/motion.js';
+import { facetLook } from '../../src/creatures/facets.js';
 
 const q = new URLSearchParams(location.search);
 const W = +(q.get('w') || 1200), H = +(q.get('h') || 900);
@@ -102,5 +103,11 @@ function stretch(name, t) {
 	out.sort((x, y) => y[0] - x[0]);
 	return out.filter((x) => !/foot/.test(x[3][0])).slice(0, 10);
 }
-window.MP = { load, pose, shot, clay, stretch, scene, THREE };
+// a dressed look (the Facet Wraith's shards), run steps frames at a strike time (-1: none)
+function look(name, steps = 0, strike = -1) {
+	if (name !== 'facets' || !model) return;
+	const f = facetLook({ root: model, meta });
+	for (let i = 0; i < steps; i++) f.update(0.05, { strike, alert: true });
+}
+window.MP = { load, pose, shot, clay, stretch, scene, THREE, look };
 window.MP_READY = true;
