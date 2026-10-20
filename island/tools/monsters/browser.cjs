@@ -30,11 +30,14 @@ const ORTHO = process.env.ORTHO !== '0';
 	const info = await page.evaluate((m) => window.MP.load('/m.glb', m ? '/meta.json' : null), !!META);
 	console.log('model', JSON.stringify(info));
 	if (process.env.CLAY) await page.evaluate(() => window.MP.clay(false));
+	if (process.env.LOOK) await page.evaluate(([l, n, k]) => window.MP.look(l, n, k), [process.env.LOOK, +(process.env.LOOKN || 0), +(process.env.LOOKK ?? -1)]);
 	const h = info.size[1];
+	// (a long body framed by its length, not its height)
+	const span = Math.max(h, info.size[2] * 0.6, info.size[0] * 0.6);
 	for (const [view, pose, t] of SHOTS) {
 		await page.evaluate(([p, t]) => window.MP.pose(p, +t), [pose, t || 0]);
-		const ortho = ORTHO && ['front', 'side', 'back'].includes(view) ? h * 0.53 : null;
-		const url = await page.evaluate(([v, h, o]) => window.MP.shot(v, h, o), [view, h, ortho]);
+		const ortho = ORTHO && ['front', 'side', 'back'].includes(view) ? span * 0.53 : null;
+		const url = await page.evaluate(([v, h, o, s]) => window.MP.shot(v, h, o, undefined, undefined, undefined, s), [view, h, ortho, span]);
 		const name = `${view}-${pose}${t && t !== '0' ? '-' + t : ''}`;
 		fs.writeFileSync(path.join(OUT, name + '.png'), Buffer.from(url.split(',')[1], 'base64'));
 		console.log('shot', name);

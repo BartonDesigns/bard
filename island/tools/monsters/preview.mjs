@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { createCreatureMotion } from '../../src/creatures/motion.js';
+import { facetLook } from '../../src/creatures/facets.js';
 
 const q = new URLSearchParams(location.search);
 const W = +(q.get('w') || 1200), H = +(q.get('h') || 900);
@@ -57,13 +58,13 @@ function pose(name, t) {
 	model?.updateMatrixWorld(true);
 }
 // view: front | side | back | three | low ; ortho: half-height in metres (null = perspective)
-function shot(view, h, ortho, fov = 30, bg = 0x8a8a8a, floor = true) {
+function shot(view, h, ortho, fov = 30, bg = 0x8a8a8a, floor = true, span = h) {
 	scene.background = new THREE.Color(bg);
 	ground.visible = floor;
 	const cy = h * 0.5;
 	const D = { front: [0, cy, 10], side: [-10, cy, 0], back: [0, cy, -10], three: [-6, cy + 1, 8], low: [-3, 0.6, 6], top: [0, 10, 0.01], face: [-3, cy, 8], ffront: [0, cy, 8], fside: [-8, cy, 0.5], rside: [10, cy, 0] }[view];
 	const isFace = view === 'face' || view === 'ffront' || view === 'fside';
-	if (isFace) { h *= 0.4; }
+	if (isFace) { h *= 0.4; span = h; }
 	const look = isFace ? meta?.headY ?? cy * 1.75 : cy;
 	let cam;
 	if (ortho) {
@@ -71,7 +72,7 @@ function shot(view, h, ortho, fov = 30, bg = 0x8a8a8a, floor = true) {
 		cam = new THREE.OrthographicCamera(-ortho * a, ortho * a, ortho, -ortho, 0.1, 50);
 	} else {
 		cam = new THREE.PerspectiveCamera(fov, W / H, 0.05, 100);
-		const d = h / Math.tan(THREE.MathUtils.degToRad(fov) / 2) * 0.62;
+		const d = span / Math.tan(THREE.MathUtils.degToRad(fov) / 2) * 0.62;
 		const v = new THREE.Vector3(...D).sub(new THREE.Vector3(0, cy, 0)).normalize().multiplyScalar(d);
 		D[0] = v.x; D[1] = look + v.y; D[2] = v.z;
 	}
@@ -102,5 +103,11 @@ function stretch(name, t) {
 	out.sort((x, y) => y[0] - x[0]);
 	return out.filter((x) => !/foot/.test(x[3][0])).slice(0, 10);
 }
-window.MP = { load, pose, shot, clay, stretch, scene, THREE };
+// a dressed look (the Facet Wraith's shards), run steps frames at a strike time (-1: none)
+function look(name, steps = 0, strike = -1) {
+	if (name !== 'facets' || !model) return;
+	const f = facetLook({ root: model, meta });
+	for (let i = 0; i < steps; i++) f.update(0.05, { strike, alert: true });
+}
+window.MP = { load, pose, shot, clay, stretch, scene, THREE, look };
 window.MP_READY = true;

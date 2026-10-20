@@ -56,12 +56,16 @@ export function loadCreature(id) {
 	return cache.get(id);
 }
 
-const PART = (name) => (/^(head|neck|ear)/.test(name) ? 'head' : /^(hips|spine|chest|robe|cloak)/.test(name) ? 'torso' : 'limb');
+// (the Lampeater's glowing abdomen is its weak point; its wings are the big mass to hit)
+// (a rider's parts are weighed as the beast's: the goblin on the Hound Rider's back)
+const PART = (n) => { const name = n.replace(/^rider_/, ''); return /^(head|neck|ear)/.test(name) ? 'head' : /^abdomen/.test(name) ? 'weak' : /^(hips|spine|chest|robe|cloak|wing|mane|seat)/.test(name) ? 'torso' : 'limb'; };
 const _a = new THREE.Vector3(), _b = new THREE.Vector3();
 
 // one body of a kind: { root, motion, meta, shapes(out), height }
 export async function makeCreature(id) {
-	const { scene, meta } = await loadCreature(id);
+	const { scene, meta: meta0 } = await loadCreature(id);
+	// (its own copy: one model can serve two kinds, each with its own timing)
+	const meta = { ...meta0 };
 	const root = cloneSkinned(scene);
 	root.name = `creature-${id}`;
 	const motion = createCreatureMotion(root, meta);
@@ -92,5 +96,47 @@ export async function makeCreature(id) {
 		}
 		return shapes;
 	}
-	return { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2 };
+	// each one its own paint (sharing the kind's textures), so it can be tinted on its own
+	const tint = { value: new THREE.Vector3(0, 1, 1) };
+	root.traverse((o) => {
+		if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map((m) => tintable(m, tint)) : tintable(o.material, tint);
+	});
+	const bonesBy = new Map((skel?.bones || []).map((b) => [b.name, b]));
+	const bone = (n) => bonesBy.get(san(n)) || bonesBy.get(n);
+	// no two of a kind alike: a size up to a tenth either way, a little stockier or leaner,
+	// longer or shorter in the body, its head, ears and tail a touch different, and its hide's
+	// colour turned a little round the wheel, richer or paler, darker or lighter. hue: how far
+	// the colour may wander (0 keeps it: a person's skin)
+	function vary(rnd = Math.random, { hue = 1 } = {}) {
+		const r2 = () => (rnd() + rnd()) - 1; // -1..1, most near the middle
+		const k = 1 + r2() * 0.1;
+		root.scale.set(k * (1 + r2() * 0.06), k * (1 + r2() * 0.035), k * (1 + r2() * 0.05));
+		const head = bone('head'), tail = bone('tail1'), ek = 1 + r2() * 0.14;
+		head?.scale.setScalar(1 + r2() * 0.08);
+		tail?.scale.setScalar(1 + r2() * 0.12);
+		for (const n of ['ear_L', 'ear_R']) bone(n)?.scale.setScalar(ek);
+		tint.value.set(r2() * 0.24 * hue, 1 + r2() * 0.2 * Math.max(0.4, hue), 1 + r2() * 0.12);
+		return k;
+	}
+	return { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2, vary };
+}
+
+// a creature's paint with a colour turn of its own: the hide's colour (only the painted map, not
+// its glow) turned round the hue wheel by x radians, its saturation times y, its value times z
+function tintable(m0, tint) {
+	const m = m0.clone();
+	m.onBeforeCompile = (sh) => {
+		sh.uniforms.uVary = tint;
+		sh.fragmentShader = 'uniform vec3 uVary;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+	{
+		vec3 c = diffuseColor.rgb;
+		float yy = dot(c, vec3(0.299, 0.587, 0.114));
+		float ii = dot(c, vec3(0.596, -0.274, -0.322)), qq = dot(c, vec3(0.211, -0.523, 0.312));
+		float ch = cos(uVary.x), sh = sin(uVary.x);
+		float i2 = (ii * ch - qq * sh) * uVary.y, q2 = (ii * sh + qq * ch) * uVary.y;
+		diffuseColor.rgb = max(vec3(yy + 0.956 * i2 + 0.621 * q2, yy - 0.272 * i2 - 0.647 * q2, yy - 1.106 * i2 + 1.703 * q2) * uVary.z, 0.0);
+	}`);
+	};
+	m.customProgramCacheKey = () => 'creature-vary';
+	return m;
 }
