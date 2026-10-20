@@ -36,7 +36,8 @@ const float uIceOn = 0.0, uIceMonth = 0.0;
 float iceCoverG(float lat, float lon, float month){ return 0.0; }
 vec2 iceLL(vec2 p){ return vec2(0.0); }
 vec3 packIce(vec2 p, float aa){ return vec3(0.0); }
-float packMean(float cov){ return 0.0; }`;
+float packMean(float cov){ return 0.0; }
+vec4 iceField(vec2 p, float hp, float cov){ return vec4(0.0); }`;
 
 // a planet's water colour, normalised to keep the sea's brightness (its streams and lakes too: bay/water.js)
 export function waterOf(P) {
@@ -206,7 +207,7 @@ export function createOcean(island, shared) {
 				float brk = breakOn(sl, shelter);
 				// (under the pack ice the swell is damped to a slow heave: region/ice.js)
 				vec2 llI = uIceOn > 0.5 ? iceLL(p) : vec2(0.0);
-				float calmIce = uIceOn > 0.5 ? 1.0 - 0.85 * iceCoverG(llI.x, llI.y, uIceMonth) : 1.0;
+				float calmIce = uIceOn > 0.5 ? 1.0 - 0.65 * iceCoverG(llI.x, llI.y, uIceMonth) : 1.0;
 				float swellA = uWave * open * calmIce;
 				vec2 pb = bend(p);
 				for (int i = 0; i < NW; i++) {
@@ -618,21 +619,26 @@ export function createOcean(island, shared) {
 				col = (foamC * foam + col * a * (1.0 - foam)) / max(A, 1e-4);
 				// ---- the pack ice ----
 				// the floes region/ice.js stands round you, drawn on the sea itself from the same
-				// lattice and hashes out to the horizon (finer than the pixel, their share of it),
-				// and where the pack is closed the grey young ice frozen between them
+				// lattice and hashes, and under them out to the horizon the cracked field they make
 				if (uIceOn > 0.5) {
 					vec3 pk = packIce(vP0, hp);
 					if (pk.z > 0.0) {
-						float deepK = smoothstep(-0.6, -1.5, vGround), far = smoothstep(3.0, 12.0, hp);
+						float deepK = smoothstep(-0.6, -1.5, vGround), far = smoothstep(2.0, 24.0, hp);
 						vec3 lit = uAmbient * 0.9 + uSunColor * max(0.0, uSunDir.y) * 0.9 + vec3(0.06, 0.07, 0.09) * nightK;
-						float young = smoothstep(0.72, 0.98, pk.z) * 0.9 * deepK;
-						vec3 youngC = vec3(0.4, 0.46, 0.5) * lit * (0.9 + 0.2 * vn(vW.xz * 0.03));
-						float Ay = young + A * (1.0 - young);
-						col = (youngC * young + col * A * (1.0 - young)) / max(Ay, 1e-4); A = Ay;
-						float floe = mix(pk.x, packMean(pk.z), far) * deepK;
-						vec3 iceC = mix(vec3(0.9, 0.93, 0.96) * (0.95 + 0.05 * vn(vW.xz * 0.11)), vec3(0.62, 0.78, 0.86), pk.y * 0.8 * (1.0 - far)) * lit;
-						float Af = floe + A * (1.0 - floe);
-						col = (iceC * floe + col * A * (1.0 - floe)) / max(Af, 1e-4); A = Af;
+						// the field the pack makes, plates and leads and cracks, from close by to the horizon (thin
+						// enough that the swell's ripples and the sky still show through), and on it close by the
+						// floes themselves, until they are finer than the pixel
+						vec4 fld = iceField(vP0, hp, pk.z);
+						// (close by, between the floes you can stand on, it is the new ice: bluer and thinner)
+						fld.rgb = mix(mix(fld.rgb, vec3(0.5, 0.64, 0.75), 0.3), fld.rgb, far); fld.a *= mix(0.75, 1.0, far);
+						float floeA = pk.x * 0.92 * (1.0 - far);
+						vec3 floeC = mix(vec3(0.9, 0.93, 0.96) * (0.95 + 0.05 * vn(vW.xz * 0.11)), vec3(0.62, 0.78, 0.86), pk.y * 0.8);
+						float iA = (floeA + fld.a * (1.0 - floeA)) * deepK;
+						vec3 iC = (floeC * floeA + fld.rgb * fld.a * (1.0 - floeA)) / max(floeA + fld.a * (1.0 - floeA), 1e-4);
+						// (the sea's own glints and sky reflected through the ice: it lies on the water)
+						iC = iC * lit + shine * 0.2;
+						float Af = iA + A * (1.0 - iA);
+						col = (iC * iA + col * A * (1.0 - iA)) / max(Af, 1e-4); A = Af;
 					}
 				}
 				if (A < 0.003) discard;
