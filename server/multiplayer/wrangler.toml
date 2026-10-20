@@ -44,3 +44,12 @@ class_name = "Account"
 [[migrations]]
 tag = "v4-accounts"
 new_sqlite_classes = ["Account"]
+
+# Chat: world, region and group channels, and the groups (src/chat.js), one hub for everyone.
+[[durable_objects.bindings]]
+name = "CHAT"
+class_name = "ChatHub"
+
+[[migrations]]
+tag = "v5-chat"
+new_sqlite_classes = ["ChatHub"]

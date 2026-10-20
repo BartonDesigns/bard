@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { createChat } from './ui/chat.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
 import { createCommunityProjects } from './people/community-projects.js';
@@ -877,7 +878,9 @@ export function createIslandWorld() {
 	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
-	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
+	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
@@ -1613,6 +1616,8 @@ if (typeof window !== 'undefined') {
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		gear: () => HOOKS.gear?.info(),
+		// chat: Crysis.chat() what is said and who is online; .open() / .close(); .client() the line itself
+		chat: Object.assign(() => HOOKS.chat?.info(), { open: () => HOOKS.chat?.open(), close: () => HOOKS.chat?.close(), client: () => HOOKS.chat?.client }),
 		// the frame readout in the corner (?perf in the address): Crysis.perf(true|false); and the
 		// loading screen's black box, the loads that went without a goodbye: Crysis.loadTrail()
 		perf: (on) => (on == null ? HOOKS.perf?.on() : HOOKS.perf?.show(on)),

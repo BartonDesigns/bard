@@ -4,6 +4,23 @@
 
 # The rooms server (multiplayer, Cloudflare free plan)
 
+## Chat and groups update
+
+The game now has chat: everyone online (**World**), everyone in your region of the world
+(**Region**) and your **Group**, by text or short voice clips (hold the mic to talk, or tap it to
+start and tap again to send, up to 15 s). Groups are up to 8 players: invite someone, or ask to
+join theirs and its leader lets you in; the leader's room is the group's (**Play together**).
+Signed-in players are known by their account's player name (changed at most once in 30 days)
+with a tick; two people of one name talking at once, or in one group, show a three-digit number.
+
+It is one more Durable Object, `ChatHub` (`src/chat.js`, binding `CHAT`, migration
+`v5-chat`), that everyone joins by WebSocket at `GET /chat/ws`, room or no room. It keeps each
+channel's latest 40 texts (never voice), the groups, and open invites. Deploy the Worker to turn
+it on (`npm --prefix server/multiplayer run deploy`); `/status.features` must include `chat-v1`.
+Until then the game shows chat as connecting and everything else plays as before. The account
+op `POST /account/name` (the 30-day player name) ships in the same deploy.
+
+
 ## Shared reputation update
 
 The new client uses `reputation-v1` to share public crime reports and completed-work
