@@ -11,8 +11,9 @@
 // ?perf=probe also times the world's parts on the device: a few seconds into the world, each of
 // the scene's big groups is left out of the picture for a moment in turn (by its layers, so
 // nothing that sets visibility fights it) and the frame time without it read against the frame
-// time with everything; the readout then lists what each costs, most first (kept, too, in
-// l99-perf-probe). Stand still while it runs, about a minute.
+// time with everything, timed again between every two parts (so a hitch while one is timed
+// spoils only that one); the readout then lists what each costs, most first (kept, too, in
+// l99-perf-probe). Stand still while it runs, about two minutes.
 const KEY = 'l99-perf', PROBE_KEY = 'l99-perf-probe';
 const SETTLE = 1000, MEASURE = 2500, MAX_GROUPS = 18;
 
@@ -44,8 +45,10 @@ export function lostLine(lost) {
 }
 
 // the probe's findings as lines: the frame with everything, then what leaving each part out saves
+// (each row against its own `base`, the frames with everything just before and after it, when given)
 export function probeLines(base, rows) {
-	return [`probe: all ${Math.round(base)} ms`, ...rows.slice().sort((a, b) => (base - b.ms) - (base - a.ms)).map((r) => `${r.name.slice(0, 18).padEnd(18)} -${Math.max(0, Math.round(base - r.ms))} ms  ${Math.round(r.tris / 1000)}k`)];
+	const saved = (r) => (r.base ?? base) - r.ms;
+	return [`probe: all ${Math.round(base)} ms`, ...rows.slice().sort((a, b) => saved(b) - saved(a)).map((r) => `${r.name.slice(0, 18).padEnd(18)} -${Math.max(0, Math.round(saved(r)))} ms  ${Math.round(r.tris / 1000)}k`)];
 }
 
 const trisOf = (root) => {
@@ -95,8 +98,9 @@ export function createPerfMeter({ mount, renderer, governor, scene = null, stora
 		if (P.phase === 'wait') { if (!P.t) P.t = now + 6000; if (now < P.t) return; P.phase = 'pick'; }
 		if (P.phase === 'pick') {
 			const groups = (scene?.children || []).map((g) => ({ g, name: g.name || g.type, tris: trisOf(g) })).filter((x) => x.g.visible && x.tris > 0).sort((a, b) => b.tris - a.tris).slice(0, MAX_GROUPS);
-			P.steps = [{ name: 'all', tris: 0 }, ...groups];
-			P.i = 0; P.rows = []; P.phase = 'settle'; P.t = now + SETTLE; P.times = [];
+			P.steps = [{ name: 'all', tris: 0 }];
+			for (const g of groups) P.steps.push(g, { name: 'all', tris: 0 });
+			P.i = 0; P.rows = []; P.alls = []; P.phase = 'settle'; P.t = now + SETTLE; P.times = [];
 			return;
 		}
 		const S = P.steps[P.i];
@@ -105,16 +109,23 @@ export function createPerfMeter({ mount, renderer, governor, scene = null, stora
 			P.times.push(ms);
 			if (now < P.t) return;
 			const avg = P.times.reduce((a, b) => a + b, 0) / P.times.length;
-			if (S.name === 'all') P.base = avg; else P.rows.push({ name: S.name, tris: S.tris, ms: avg });
+			if (S.name === 'all') {
+				// the part timed since the last 'all' is weighed against the two either side of it
+				const r = P.rows.at(-1), last = P.alls.at(-1);
+				if (r && r.base == null) r.base = (last + avg) / 2;
+				P.alls.push(avg);
+			} else P.rows.push({ name: S.name, tris: S.tris, ms: avg });
 			putBack();
 			if (++P.i >= P.steps.length) {
+				const sorted = P.alls.slice().sort((a, b) => a - b);
+				P.base = sorted[Math.floor(sorted.length / 2)];
 				const lines = probeLines(P.base, P.rows);
 				probeText = lines.join('\n');
 				try { storage?.setItem(PROBE_KEY, JSON.stringify({ at: new Date().toISOString(), base: P.base, rows: P.rows, lines })); } catch { /* private mode */ }
 				probe = null;
 				return;
 			}
-			leaveOut(P.steps[P.i].g);
+			if (P.steps[P.i].g) leaveOut(P.steps[P.i].g);
 			P.phase = 'settle'; P.t = now + SETTLE;
 		}
 	}
