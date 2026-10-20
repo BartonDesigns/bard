@@ -92,6 +92,9 @@
 		'#l99-ml .ml-note a{color:#5eead4}',
 		'#l99-ml .ml-note button{background:none;border:none;padding:0;min-height:0;color:#5eead4;text-decoration:underline}',
 		'#l99-ml.ml-drop{outline:2px dashed #01a982;outline-offset:-2px}',
+		// a phone held upright: narrow, the player at its least (200 x 200); held sideways: the notes only when something is wrong
+		'@media (max-width:520px){#l99-ml{width:264px}}',
+		'@media (max-height:520px){#l99-ml .ml-note:not(.ml-alert){display:none}}',
 		'#l99-ml :focus-visible{outline:2px solid #01a982;outline-offset:2px}',
 	].join('\n');
 
@@ -173,6 +176,7 @@
 			if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) { x = p.x * vw; y = p.y * vh; }
 			// first time: top centre on a phone (clear of the thumbs), the right-hand side on a computer
 			else if (vw < 700) { x = (vw - w) / 2; y = 64; }
+			else if (vh < 520) { x = (vw - w) / 2; y = 8; }
 			else { x = vw - w - 16; y = 120; }
 		}
 		x = Math.max(8, Math.min(vw - w - 8, x));
@@ -197,7 +201,7 @@
 		head.addEventListener('pointercancel', end);
 	}
 
-	function say(html) { if (note) note.innerHTML = html || ''; }
+	function say(html, alert) { if (note) { note.innerHTML = html || ''; note.classList.toggle('ml-alert', !!alert); } }
 	function emit() { dispatchEvent(new CustomEvent('l99-musiclink', { detail: state() })); }
 	function setPlaying(v) { if (playing !== v) { playing = v; emit(); } }
 
@@ -261,7 +265,7 @@
 					onError: (e) => {
 						// a song its owner keeps on YouTube only: in a playlist, on to the next
 						if (L.list && skips < 6) { skips++; say('One song here only plays on YouTube itself; skipping to the next.'); setTimeout(() => { try { player.nextVideo(); } catch (_) { /* gone */ } }, 700); return; }
-						say(e.data === 101 || e.data === 150 ? 'Its owner only lets this play on YouTube itself. <a href="' + watchUrl(L) + '" target="_blank" rel="noopener">Open on YouTube</a>, then turn on Listen.' : 'YouTube could not play this one.');
+						say(e.data === 101 || e.data === 150 ? 'Its owner only lets this play on YouTube itself. <a href="' + watchUrl(L) + '" target="_blank" rel="noopener">Open on YouTube</a>, then turn on Listen.' : 'YouTube could not play this one.', true);
 						setPlaying(false);
 					},
 				},
@@ -317,8 +321,8 @@
 	function open(text) {
 		const L = typeof text === 'object' && text ? text : parse(text);
 		show();
-		if (!L) { say('That isn\'t a YouTube or Spotify link.'); return false; }
-		if (L.problem) { say(L.problem); return false; }
+		if (!L) { say('That isn\'t a YouTube or Spotify link.', true); return false; }
+		if (L.problem) { say(L.problem, true); return false; }
 		stopPlayer();
 		link = L;
 		another = false;
@@ -392,10 +396,10 @@
 			return false;
 		}
 		if (heard.on || heard.pending) return heard.on;
-		if (!navigator.mediaDevices) { say('This browser can\'t listen (it needs a secure https page).'); return false; }
+		if (!navigator.mediaDevices) { say('This browser can\'t listen (it needs a secure https page).', true); return false; }
 		kind = kind || (TAB_AUDIO ? 'tab' : 'mic');
 		const ctx = audioContext();
-		if (!ctx) { say('Sound isn\'t available here.'); return false; }
+		if (!ctx) { say('Sound isn\'t available here.', true); return false; }
 		// asked for first, while the tap still counts (Chrome's share picker needs it)
 		const asked = capture(kind);
 		try { if (ctx.state !== 'running') ctx.resume().catch(() => {}); } catch (_) { /* resumes on the next tap */ }
@@ -403,8 +407,8 @@
 		heard.pending = true;
 		try { stream = await asked; } catch (e) {
 			heard.pending = false;
-			if (kind === 'tab') say(e.name === 'NoAudio' ? 'No sound was shared. Try again and tick <b>Also share tab audio</b>, or <button type="button" data-mic>use the microphone</button>.' : 'Not shared. Try again, or <button type="button" data-mic>use the microphone</button>.');
-			else say('The microphone was not allowed.' + (PHONE ? ' On iPhone: Settings, Safari, Microphone, Allow, then reload.' : ' Allow it in the address bar and try again.'));
+			if (kind === 'tab') say(e.name === 'NoAudio' ? 'No sound was shared. Try again and tick <b>Also share tab audio</b>, or <button type="button" data-mic>use the microphone</button>.' : 'Not shared. Try again, or <button type="button" data-mic>use the microphone</button>.', true);
+			else say('The microphone was not allowed.' + (PHONE ? ' On iPhone: Settings, Safari, Microphone, Allow, then reload.' : ' Allow it in the address bar and try again.'), true);
 			return false;
 		}
 		heard.pending = false;
@@ -475,7 +479,7 @@
 		// (a link dropped on a page would otherwise take the browser away from Bard)
 		e.preventDefault();
 		const L = parse(text);
-		if (L) { e.stopPropagation(); open(L); } else if (/^\s*https?:\/\//i.test(text)) { show(); say('Only YouTube and Spotify links play here.'); }
+		if (L) { e.stopPropagation(); open(L); } else if (/^\s*https?:\/\//i.test(text)) { show(); say('Only YouTube and Spotify links play here.', true); }
 	}, true);
 	// a page that loses the tab stops the capture with it
 	addEventListener('pagehide', () => listen(false));
