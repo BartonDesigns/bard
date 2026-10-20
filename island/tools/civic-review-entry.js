@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {createServiceVehicle} from '../src/services/vehicle-model.js';
-import {civicImage,createDiamondPlateMaterial,projectPlateUV,applyCivicWear,drawCivicDecal} from '../src/civic/materials.js';
+import {civicImage,createDiamondPlateMaterial,projectPlateUV,drawCivicDecal} from '../src/civic/materials.js';
 import {signMaterial} from '../src/signage/materials.js';
 const phone=location.search.includes('phone');
 const artIds=['galvanized','enamel','damage','graffiti','graffiti-names','graffiti-revolt','graffiti-characters','graffiti-devotional'];

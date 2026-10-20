@@ -96,4 +96,3 @@ const TRIPS = {
 };
 Object.assign(WORK_ROLES, ROLES);
 Object.assign(WORK_TRIPS, TRIPS);
-export const SERVICE_ROLES = Object.keys(ROLES);

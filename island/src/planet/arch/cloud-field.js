@@ -1,8 +1,11 @@
 // CPU counterpart of clouds.js DECK_V/DECK_F. Geometry, holes and coverage use
 // the same fields; GPU sine-hash precision remains a visual approximation.
+
+import { smoothstep as mistSmooth } from '../../noise.js';
+
 const fr = v => v - Math.floor(v);
 const hash = (x, z) => fr(Math.sin(x * 127.1 + z * 311.7) * 43758.5453);
-export const mistSmooth = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+export { mistSmooth };
 export function mistNoise(x, z) {
 	const ix = Math.floor(x), iz = Math.floor(z);
 	let fx = x - ix, fz = z - iz;

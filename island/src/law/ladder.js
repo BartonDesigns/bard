@@ -21,8 +21,9 @@
 // back to its station or base. Surrender (unarmed, standing still, hands up) or being downed
 // with officers near ends it in an arrest: booked at the station and fined.
 
+import { clamp } from '../noise.js';
+
 export const LEVELS = Object.freeze(['calm', 'reported', 'pursuit', 'backup', 'tactical', 'military']);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // what a passer-by calls it, from the fight's offence kinds (combat/heat.js OFFENCE)
 export const CALL_KIND = Object.freeze({ shots: 'shots', hitCivilian: 'assault', downCivilian: 'assault', hitPolice: 'officer', downPolice: 'officer', car: 'arson', prop: 'damage', vandalism: 'damage', robbery: 'robbery', gang: 'gang', brawl: 'fight', defence: 'defence' });

@@ -6,35 +6,34 @@
 // the hour, put you in the air. A conversational model on your own device gives it
 // its voice; with no model it still answers from the world itself.
 
-import { awarenessContext, contextualOpening, contextualReply } from '../people/world-awareness.js';
-import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
-import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent, offlineSocialIntent } from '../people/social-intent.js';
+import { awarenessContext } from '../people/world-awareness.js';
+import { createLLM, hasWebGPU, crashedBefore } from './llm.js';
 import { buildNegotiationContext, buildNegotiationMessages, decodeNegotiationIntent, offlineNegotiationIntent } from './negotiation-intent.js';
-import { activityCards, activityScopeText, agreementTerms } from './living-activity-view.js';
-import { buildCommunityProjectContext, buildCommunityProjectMessages, decodeCommunityProjectIntent, offlineCommunityProjectIntent, communityProjectRelevant, livingScheduleIntent } from './community-project-intent.js';
-import { communityProjectCards, projectScopeText, projectKindLabel, projectHistoryLines, communityProjectFacts } from './community-project-view.js';
+import { agreementTerms } from './living-activity-view.js';
+import { buildCommunityProjectContext, buildCommunityProjectMessages, decodeCommunityProjectIntent, offlineCommunityProjectIntent, communityProjectRelevant } from './community-project-intent.js';
+import { projectKindLabel, communityProjectFacts } from './community-project-view.js';
 import { livingActorId } from '../people/living-world.js';
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
 import { createQuestChronicle, soulScope, reportRequest } from './quest-chronicle.js';
 import { createRouteMarks, routeMarkSpot } from './route-marks.js';
-import { parseSocialIntent } from '../people/social-state.js';
 import { worldPosition } from '../people/social-actors.js';
 import { parseGameTime, realSecondsFor, formatClock, formatReal, talksOfMeeting, placePhrases, MEET_TAG_RE, EARLY, GRACE } from '../people/appointments.js';
 import { gatherRequest, defaultGatherTime, makeGathering, HOURS as GATHER_HOURS } from '../people/gatherings.js';
 import { createDialogueArchive } from './dialogue-archive.js';
-import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
+import { normalizeDialogueStyle, dialogueStylePrompt } from '../people/dialogue-style.js';
 import { createLocalSpeech } from './local-speech.js';
 import { deviceVoiceFor } from './local-speech-plan.js';
 import { voiceShape } from '../people/chatter-lines.js';
-import { rankOf } from '../gameplay/ranks.js';
-import { chooseGuideModel, voiceMode, VOICE_MODES } from './preferences.js';
+import { chooseGuideModel, voiceMode } from './preferences.js';
 import { travelRequest, resolveTravel } from './travel.js';
 import { loadAtlas, atlasReady, cities, regions } from '../earth/atlas.js';
 import { pruneModels } from '../storage.js';
 import { DISCOVERY_URL } from '../earth/config.js';
 import { PLACES, ZONES } from '../bay/places.js';
 import { toWorld } from '../bay/geo.js';
-import { personaFor, personaPrompt, personaOffline, bodyFor, TAG_RE } from '../people/persona.js';
+import { personaFor, bodyFor, TAG_RE } from '../people/persona.js';
+import { guideArchive, guideTrackButton, guideTrackingCard, guideQuestCard, guideQuests, guideCommunityProjects, guideLivingActivity, guideStory, guideCaves, guideSettings } from './guide-screens.js';
+import { guideTalkTo, guideAskPerson, guideAsk } from './guide-ask.js';
 
 // facts the Guide can rely on (a small model should not have to remember them)
 const LANDMARKS = [
@@ -98,6 +97,71 @@ const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '
 
 export function createGuide(mount, api) {
 	// api: { world(), camera, shared, hint(text) }
+	// The guide's shared state for the modules its screens and conversations moved to
+	// (guide-screens.js, guide-ask.js). Each getter and setter reaches the binding of that name here.
+	const gd = {
+		get act() { return act; }, get ACTION_RE() { return ACTION_RE; }, get api() { return api; },
+		get archive() { return archive; },
+		get archivePage() { return archivePage; }, set archivePage(next) { archivePage = next; },
+		get archiveScope() { return archiveScope; }, get archiveSearch() { return archiveSearch; },
+		get archiveTurn() { return archiveTurn; }, get askPerson() { return askPerson; },
+		get bearing() { return bearing; }, get bodySync() { return bodySync; }, get book() { return book; },
+		get btnCss() { return btnCss; }, get busy() { return busy; }, set busy(next) { busy = next; },
+		get caveVisits() { return caveVisits; }, get choice() { return choice; },
+		get chronicle() { return chronicle; },
+		get communityPage() { return communityPage; }, set communityPage(next) { communityPage = next; },
+		get communityPageScope() { return communityPageScope; }, set communityPageScope(next) { communityPageScope = next; },
+		get communityScope() { return communityScope; }, get connect() { return connect; },
+		get dialogueStyle() { return dialogueStyle; }, set dialogueStyle(next) { dialogueStyle = next; },
+		get dirTo() { return dirTo; }, get drawSettings() { return drawSettings; }, get el() { return el; },
+		get endTalk() { return endTalk; }, get explorePlace() { return explorePlace; }, get find() { return find; },
+		get fmtDist() { return fmtDist; }, get folded() { return folded; },
+		get gatheringRecap() { return gatheringRecap; }, get gatheringReply() { return gatheringReply; },
+		get gatherTitle() { return gatherTitle; }, get giveQuest() { return giveQuest; },
+		get guideMeta() { return guideMeta; }, get history() { return history; }, get input() { return input; },
+		get journal() { return journal; },
+		get livingActivityPage() { return livingActivityPage; }, set livingActivityPage(next) { livingActivityPage = next; },
+		get livingActivityScope() { return livingActivityScope; }, set livingActivityScope(next) { livingActivityScope = next; },
+		get livingContact() { return livingContact; }, set livingContact(next) { livingContact = next; },
+		get llm() { return llm; }, get localSpeech() { return localSpeech; }, get log() { return log; },
+		get meetingFromReply() { return meetingFromReply; }, get meetingReply() { return meetingReply; },
+		get meetWhen() { return meetWhen; }, get negotiate() { return negotiate; }, get norm() { return norm; },
+		get npcFor() { return npcFor; }, get offer() { return offer; }, get offerStory() { return offerStory; },
+		get offline() { return offline; }, get partner() { return partner; }, set partner(next) { partner = next; },
+		get people() { return people; }, get perform() { return perform; },
+		get personContext() { return personContext; }, get phone() { return phone; },
+		get pinned() { return pinned; }, get planChat() { return planChat; },
+		get progressBar() { return progressBar; }, get projectConversation() { return projectConversation; },
+		get projectProgressView() { return projectProgressView; }, set projectProgressView(next) { projectProgressView = next; },
+		get QC() { return QC; }, get qcss() { return qcss; }, get qel() { return qel; },
+		get QUEST_RE() { return QUEST_RE; }, get questCard() { return questCard; },
+		get questChanged() { return questChanged; }, get questLive() { return questLive; },
+		get questNotice() { return questNotice; }, get questPill() { return questPill; },
+		get quests() { return quests; }, get QUESTS() { return QUESTS; },
+		get readyReports() { return readyReports; }, get renderArchive() { return renderArchive; },
+		get renderGuide() { return renderGuide; }, get reportStory() { return reportStory; },
+		get resetView() { return resetView; }, get residentKey() { return residentKey; }, get say() { return say; },
+		get scroll() { return scroll; }, get section() { return section; }, get setPinned() { return setPinned; },
+		get settings() { return settings; }, get setWayPrefs() { return setWayPrefs; }, get show() { return show; },
+		get showAgreement() { return showAgreement; }, get showArchive() { return showArchive; },
+		get showCaves() { return showCaves; }, get showCommunityProjects() { return showCommunityProjects; },
+		get showLivingActivity() { return showLivingActivity; },
+		get showProjectReview() { return showProjectReview; }, get showQuests() { return showQuests; },
+		get showRouteChoice() { return showRouteChoice; }, get showScheduleReview() { return showScheduleReview; },
+		get showStory() { return showStory; }, get snapshot() { return snapshot; }, get speak() { return speak; },
+		get speechMode() { return speechMode; }, set speechMode(next) { speechMode = next; },
+		get speechStatusEl() { return speechStatusEl; }, get stepPlace() { return stepPlace; },
+		get stepRow() { return stepRow; }, get stepWords() { return stepWords; }, get store() { return store; },
+		get stories() { return stories; }, get storyContext() { return storyContext; },
+		get storyReply() { return storyReply; }, get systemPrompt() { return systemPrompt; },
+		get talkTo() { return talkTo; }, get targets() { return targets; }, get threadMeta() { return threadMeta; },
+		get title() { return title; }, get toggle() { return toggle; }, get trackButton() { return trackButton; },
+		get tracked() { return tracked; }, set tracked(next) { tracked = next; },
+		get trackingCard() { return trackingCard; }, get updateProjectProgress() { return updateProjectProgress; },
+		get view() { return view; }, get viewEpoch() { return viewEpoch; }, get voiceOut() { return voiceOut; },
+		get waypointMark() { return waypointMark; }, get wayPrefs() { return wayPrefs; },
+		get whereKind() { return whereKind; },
+	};
 	const llm = createLLM();
 	// The atlas is intentionally lazy, but starting its small data module here means a
 	// global request can become a real destination while the player is still talking.
@@ -756,47 +820,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return c;
 	}
 
-	function talkTo(p) {
-		if (!p) return;
-		busy?.abort();
-		if (partner && partner.p !== p) endTalk();
-		const resident = api.social?.meet(p, whereKind());
-		if (resident) p = api.social.actors.all().find(a => a.residentId === resident.id) || p;
-		let rec = people.get(p);
-		if (resident) { rec = { persona: resident.persona, history: resident.history, id: resident.id, met: resident.history.length > 0 }; }
-		else if (!rec || rec.seed !== p.P.dna.seed) rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed };
-		people.set(p, rec);
-		partner = { p, ...rec, threadId:rec.id || 'npc:'+api.social?.bodyKey()+':'+p.P.dna.seed };
-		archive.importHistory(threadMeta(partner),rec.history);
-		resetView('npc');
-		api.people?.engage(p);
-		title.textContent = partner.persona.name.toUpperCase();
-		input.placeholder = `Say something to ${partner.persona.first}`;
-		show(true);
-		for (const turn of archive.thread(threadMeta(partner).id)?.turns.slice(-30) || []) if (turn.role === 'user' || turn.role === 'assistant') say(turn.content, turn.role === 'user' ? 'me' : 'guide');
-		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
-		if (resident) say((api.social.state.status().error ? 'Memory is available this session, but your browser could not save it. ' : 'Remembered in this browser. ') + 'Tell me what you need in your own words, or ask me for an adventure.', 'note');
-		if (resident && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
-		if(resident)for(const q of stories.list(resident.bodyKey).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident.id)))api.multiplayer?.reportQuest?.(q,resident);
-		const awareness=personContext(p,resident), opening=contextualOpening(awareness);
-		rec.met=true; perform(opening,true);
-		if(resident) api.social.state.remember(resident.id,'assistant',opening);
-		if(awareness.afraid) {p.M.feel('surprise',.85);p.M.gesture('shake');}
-		else if(awareness.relationship?.trust>=3) {p.M.feel('joy',.45);p.M.gesture('nod');}
-		else if(awareness.relationship?.trust<0) {p.M.feel('sad',.25);p.M.gesture('shake');}
-		if(resident&&!awareness.afraid) {
-			for(const q of readyReports(resident)) {say(`You’re back about “${q.title}”. What stayed with you?`,'guide');const b=el('button',btnCss,'Report back: '+q.title);b.onclick=()=>{
-				if(partner?.id!==resident.id)return;busy?.abort();
-				const text=`I'm back from ${q.title}.`;say(text,'me');archiveTurn(threadMeta(partner),'user',text);api.social.state.remember(resident.id,'user',text);
-				const aware=personContext(partner.p,resident),reply=aware.afraid?contextualOpening(aware):reportStory(text,q.id);
-				perform(reply,true);api.social.state.remember(resident.id,'assistant',reply);
-			};log.append(b);}
-			showRouteChoice(resident);
-		}
-		const recap = resident && gatheringRecap(resident);
-		if (recap) perform(recap, true);
-		if(!awareness.afraid) offer(p.talk?.open?.());
-	}
+	function talkTo(p) { return guideTalkTo(gd, p); }
 	// a world's own people can have more to say and to offer (planet/colony/errands.js):
 	// a line, a note, and choices that answer with the next of the same
 	function offer(o) {
@@ -970,164 +994,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		};
 		leave.onclick=()=>row.remove();row.append(button,leave);log.append(row);
 	}
-	async function askPerson(text) {
-		const P2 = partner, p = P2.p;
-		archiveTurn(threadMeta(P2),'user',text);
-		busy?.abort();
-		say(text, 'me');
-		if (P2.id) api.social.state.remember(P2.id, 'user', text);
-		else { P2.history.push({ role: 'user', content: text }); while (P2.history.length > 10) P2.history.shift(); }
-		const bubble = say('…', 'guide');
-		const ctrl = new AbortController(); busy = ctrl;
-		let reply = null, from = 0;
-		const world = snapshot();
-		const resident = P2.id && api.social?.state.get(P2.id);
-		// Gear requests are resolved by the authoritative world adapter before social
-		// intent or the language model. This lets “could you find us a hunting rifle?”
-		// work conversationally while ordinary dialogue remains non-mutating.
-		// a world's own people answer their own errands first (planet/colony/errands.js)
-		const awareness=personContext(p,resident);
-		if(awareness.afraid) reply=contextualReply(awareness,text);
-		const schedule=reply ? null : livingScheduleIntent(text,api.livingWorld?.snapshot?.(),livingActorId(p));
-		if(schedule?.kind==='clarify')reply=schedule.question;
-		else if(schedule?.kind==='schedule')reply=`You mean “${schedule.title}”? We can discuss ${schedule.effect==='prioritize'?'making it a priority':schedule.effect==='defer'?'putting it off for a safer moment':'picking it back up'}.`;
-		const community=reply ? null : await projectConversation(text,P2,ctrl.signal);
-		if(ctrl.signal.aborted || partner!==P2){if(busy===ctrl)busy=null;return;}
-		if(community)reply=community.message;
-		const negotiation = reply ? null : await negotiate(text,P2,ctrl.signal);
-		if (ctrl.signal.aborted || partner !== P2) { if(busy===ctrl)busy=null;return; }
-		if (negotiation) reply=negotiation.message || negotiation.error || 'No exchange was made.';
-		const own = reply ? null : p.talk?.reply?.(text);
-		// asked whether they need a hand: a favour of their own (people/errands.js), said yes to here
-		let favour = null;
-		if (!reply && !own && /\b(need (?:any )?help|can i help|any favou?rs?|anything i can do|help you with|do you need anything|need a hand)\b/i.test(text)) {
-			const o = api.errands?.offerTo?.(p);
-			if (o) { reply = o.text; favour = { choices: [{ label: "I'll do it", fn: () => { api.errands.accept(); return { say: '[[mood: happy]] [[gesture: nod]] Thank you! Really.' }; } }, { label: 'Not now', fn: () => { api.errands.cancel(); return { say: '[[mood: calm]] No problem. Thanks for asking.' }; } }] }; }
-		}
-		if (own?.say) reply = own.say;
-		const gearRequest=api.arms?.parse?.(text);
-		if(!reply&&gearRequest?.kind==='purchase'&&gearRequest.item)reply='Ask a shopkeeper for a quote and review their terms before buying. Nothing has been purchased.';
-		const armsResult = reply || gearRequest?.kind==='purchase' ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
-		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
-		if (resident) {
-			api.social.state.setPosition(resident.id, api.social.positionFor(api.world(), p.M.S.pos));
-			const named = text.match(/(?:scout|check out|investigate)\s+(.+?)[.!?]*$/i)?.[1]?.trim().replace(/[, ]*please$/i, '').trim();
-			let target = named && !/^(nearby|ahead|around here|the area)$/i.test(named.trim()) ? find(named) : null;
-			if (!named || /^(nearby|ahead|around here|the area)$/i.test(named.trim())) {
-				target = api.social.scoutNearby(p, targets());
-			}
-			// A gear action has already been validated by the arms adapter. Keep that
-			// response instead of letting the social intent layer reinterpret it as a
-			// generic order for the resident.
-			if (!reply) reply = api.social.command(resident, text, { relationship:awareness.relationship, target, quest: quests.find(q => !q.done) });
-			if (reply && parseSocialIntent(text)==='scout' && resident.mode==='scout' && resident.task && target?.name) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:'place-'+norm(target.name).replace(/ /g,'-')});
-		}
-		let meetNoteText = null, meetHandled = false;
-		if (resident && !reply) {
-			const meet = gatheringReply(text, resident, p) || meetingReply(text, resident, p);
-			if (meet) { reply = meet.reply; meetNoteText = meet.note || null; meetHandled = true; }
-		}
-		if (resident && !reply) {
-			reply = storyReply(text);
-			if (!reply) {
-				const context=storyContext(resident), destinations=context.targets.slice(0,8).map(t=>({...t,distance:Math.hypot(t.x-p.M.S.pos.x,t.z-p.M.S.pos.z)}));
-				const currentOffer=stories.list(context.bodyKey).filter(q=>q.status==='offered' && q.offeredBy===residentKey(resident.id)).at(-1);
-				const ready=readyReports(resident);
-				const options={text:text.slice(0,600),resident,destinations,history:resident.history.slice(-3).map(m=>({role:m.role,content:m.content.slice(0,180)})),questContext:(currentOffer?'Current offer from this person: '+currentOffer.title+'. ':'No current quest offer. ')+(ready.length?'Report ready for: '+ready.map(q=>q.title).join('; ')+'. ':'No report ready. ')+stories.list(context.bodyKey).filter(q=>q.status==='active').map(q=>q.title).join('; ')};
-				let intention=offlineSocialIntent(text,{destinations,hasQuestOffer:!!currentOffer});
-				if (intention.reason!=='not-an-order') {
-					const raw=await planChat(buildSocialIntentMessages(options),ctrl.signal,{kind:'social_intent',context:buildSocialIntentContext(options)});
-					if (raw) { intention=decodeSocialIntent(raw,{text,destinations,hasQuestOffer:!!currentOffer,hasQuestReport:ready.length>0}); if(intention.kind==='none' && !['conversation','not-an-order'].includes(intention.reason)) reply='I could not work out a supported action from that. Could you clarify what you want me to do?'; }
-				}
-				if (ctrl.signal.aborted || partner!==P2 || api.social.bodyKey()!==context.bodyKey) { if(busy===ctrl) busy=null; return; }
-				if (intention.kind==='clarify') reply=intention.question;
-				if (intention.kind==='quest_report') reply=reportStory(text);
-				if (intention.kind==='quest_request') reply=await offerStory(resident,text,ctrl.signal);
-				if (['quest_accept','quest_decline'].includes(intention.kind)) reply=currentOffer?storyReply(intention.kind==='quest_accept'?"I'm in":'no thanks'):'Which quest would you like to discuss?';
-				if (intention.kind==='action') {
-					const target=intention.targetId==='nearby'?api.social.scoutNearby(p,targets()):destinations.find(t=>t.id===intention.targetId);
-					reply=api.social.command(resident,intention.command,{relationship:awareness.relationship,target,quest:stories.list(context.bodyKey).find(q=>q.status==='active') || quests.find(q=>!q.done)});
-					if (intention.intent==='scout' && resident.mode==='scout' && resident.task && target?.id) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:target.id});
-				}
-			}
-		}
-
-		try {
-			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
-				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: [...awareness.facts,...(resident?.memories?.slice(-3).map(m => m.content)||[])] }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status. Price negotiations, task discounts, ownership and agreements are governed by the game ledger; never invent stock or an offer, or treat ordinary conversation as purchase consent.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
-					if (ctrl.signal.aborted || partner !== P2) return;
-					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').replace(/\[\[\s*meet[^\]]*$/i, '').trim(); scroll();
-					from = bodySync(p, t, from);
-				}, ctrl.signal, { npc: npcFor(P2.persona, world), maxTokens:dialogueTokenLimit(dialogueStyle,P2.persona.age) });
-			}
-		} catch { reply = null; }
-		if (ctrl.signal.aborted || partner !== P2) { if (busy === ctrl) busy = null; return; }
-		if (!reply) { reply = contextualReply(awareness,text) || personaOffline(P2.persona, text, world); from = 0; }
-		bodySync(p, reply + (/[.!?]$/.test(reply.trim()) ? '' : '.'), from);
-		if (!resident) reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
-		if (resident && !meetHandled) meetNoteText = meetingFromReply(reply, text, resident, p);
-		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').trim();
-		bubble.textContent = clean || '…';
-		if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
-		if (own && (own.note || own.choices)) offer({ ...own, say: null });
-		if (favour) offer({ ...favour, say: null });
-		if (negotiation?.offer) showAgreement(negotiation.offer,P2);
-		if(community?.review)showProjectReview(community.review,P2);
-		if(community?.open){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
-		if(schedule?.kind==='schedule')showScheduleReview(schedule,P2);
-		archiveTurn(threadMeta(P2),'assistant',clean);
-		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
-		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
-		// A joined check-in can observe a real exchange here. Sending a prompt,
-		// previewing a task or receiving an unvalidated model proposal cannot finish it.
-		try{const observed=api.livingWorld?.conversationObserved?.(p);observed?.catch?.(()=>{});}catch{/* the activity journal reports its own save errors */}
-		if (voiceOut) speak(clean, P2.persona);
-		if (busy === ctrl) busy = null;
-		scroll();
-		if (/\b(bye|goodbye|take care|see you)\b/i.test(text)) setTimeout(() => { if (partner === P2) { endTalk(); show(false); } }, meetNoteText ? 4000 : 1800);
-	}
-	async function ask(text) {
-		if (!text.trim()) return;
-		localSpeech.cancel();
-		if ('speechSynthesis' in window) speechSynthesis.cancel();
-		if (partner) return askPerson(text);
-		if (view!=='guide') renderGuide();
-		const requestEpoch=viewEpoch;
-		archiveTurn(guideMeta,'user',text);
-		say(text, 'me');
-		const bubble = say('…', 'guide');
-		// the world's secrets answer for themselves (surprises.js)
-		const secret = api.secret?.(text);
-		if (secret) { bubble.textContent = secret; archiveTurn(guideMeta,'assistant',secret); scroll(); return; }
-		if (busy) busy.abort();
-		const ctrl = new AbortController(); busy = ctrl;
-		let reply = null;
-		const community=await projectConversation(text,null,ctrl.signal);
-		if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner){if(busy===ctrl)busy=null;return;}
-		if(community)reply=community.message;
-		try {
-			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
-				history.push({ role: 'user', content: text });
-				while (history.length > 12) history.shift();
-				reply = await llm.chat([{ role: 'system', content: systemPrompt() }, ...history], (t) => { if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) return; bubble.textContent = t.replace(ACTION_RE, '').trim(); scroll(); }, ctrl.signal);
-				if (reply && !ctrl.signal.aborted && requestEpoch===viewEpoch && !partner) history.push({ role: 'assistant', content: reply });
-			}
-		} catch (e) { if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) return; reply = null; say('(The model did not answer: ' + e.message + '. The built-in guide answers instead.)', 'note'); }
-		if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) { if(busy===ctrl)busy=null;return; }
-		if (!reply) reply = offline(text);
-		const acts = [];
-		reply.replace(ACTION_RE, (_, c, a) => { acts.push([c, a.trim()]); return ''; });
-		reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), null); return ''; });
-		const clean = reply.replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
-		bubble.textContent = clean || '…';
-		archiveTurn(guideMeta,'assistant',clean);
-		if(community?.review)showProjectReview(community.review,null);
-		if(community?.open){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
-		for (const [c, a] of acts) { const r = act(c, a); if (r) say(r, 'note'); }
-		if (voiceOut) speak(clean);
-		if (busy === ctrl) busy = null;
-		scroll();
-	}
+	function askPerson(text) { return guideAskPerson(gd, text); }
+	function ask(text) { return guideAsk(gd, text); }
 
 	// ---------- voice ----------
 	let voiceOut = store.get('crysis-guide-voice', true);
@@ -1256,25 +1124,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		archiveSearch.placeholder=threadId?'Search this conversation':'Search every conversation';
 		renderArchive();
 	}
-	function renderArchive() {
-		log.replaceChildren();
-		const query=archiveSearch.value.trim(), thread=archiveScope && archive.thread(archiveScope);
-		const heading=el('div','color:#9fe8d0;font-weight:600;',thread?thread.name+' · conversation':'ALL CONVERSATIONS');log.append(heading);
-		if (archiveScope) { const all=el('button',btnCss,'All conversations');all.onclick=()=>showArchive();log.append(all); }
-		const rows=thread && !query ? thread.turns.slice(archivePage*30,archivePage*30+31).map((turn,index)=>({threadId:thread.id,name:thread.name,turn,index})) : archive.search(query,{threadId:archiveScope || undefined,offset:archivePage*30,limit:31});
-		if (!rows.length) say(query?'No matching messages.':'No saved messages yet. New conversations are kept here.', 'note');
-		for (const hit of rows.slice(0,30)) {
-			const item=el('div','padding:8px;border:1px solid #455255;border-radius:8px;');
-			const label=el('button',btnCss,hit.name+' · '+(hit.turn.role==='user'?'You':hit.name));label.onclick=()=>showArchive('',hit.threadId);
-			item.append(label,el('div','white-space:pre-wrap;overflow-wrap:anywhere;padding-top:6px;',hit.turn.content));log.append(item);
-		}
-		const pages=el('div','display:flex;gap:8px;');
-		if (archivePage>0) {const prev=el('button',btnCss,'Previous');prev.onclick=()=>{archivePage--;renderArchive();};pages.append(prev);}
-		if (rows.length>30) {const next=el('button',btnCss,'Next');next.onclick=()=>{archivePage++;renderArchive();};pages.append(next);}
-		log.append(pages);
-		if (archive.status().error) say('The latest messages could not be saved. Export your conversations before leaving this session. '+archive.status().error,'note');
-		log.scrollTop=0;
-	}
+	function renderArchive() { return guideArchive(gd); }
 	archiveSearch.addEventListener('input',()=>{archivePage=0;renderArchive();});
 	archiveExport.onclick=()=>{const url=URL.createObjectURL(new Blob([archive.exportJSON()],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='bard-conversations.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 
@@ -1344,25 +1194,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		}
 	}
 	// Track: this is the one to follow. The panel closes and you turn to face it.
-	function trackButton(follow, kind, id) {
-		const on = pinned && pinned.kind === kind && pinned.id === id;
-		const b = qel('button', on ? qcss.primary : btnCss + 'border-color:rgba(1,169,130,.6);color:#9fe8d0;', on ? '◆ Tracking' : '◇ Track');
-		b.setAttribute('aria-pressed', String(!!on));
-		b.setAttribute('aria-label', on ? 'Stop tracking' : 'Track: show the way');
-		b.onclick = () => {
-			if (on) { setPinned(null); api.waypoint?.set(waypointMark()); showQuests(); return; }
-			setPinned({ kind, id });
-			if (kind === 'meeting') tracked = id;
-			if (kind === 'crew') follow?.();
-			const m = waypointMark(); api.waypoint?.set(m);
-			const W = api.world(), P = W?.player?.state;
-			if (m && P) { P.yaw = Math.atan2(-(m.x - P.pos.x), -(m.z - P.pos.z)); }
-			show(false);
-			if (!wayPrefs.waypoint && !wayPrefs.wayfinder) setWayPrefs({ waypoint: true });
-			api.hint(m ? `Tracking: ${m.title}. ${wayPrefs.wayfinder ? 'Follow the trail.' : 'Follow the marker.'}` : 'Tracking. The way shows once the place is in reach.', 4000);
-		};
-		return b;
-	}
+	function trackButton(follow, kind, id) { return guideTrackButton(gd, follow, kind, id); }
 	function toggle(label, hintText, on, set) {
 		const b = qel('button', btnCss + 'display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 8px;');
 		b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); b.title = hintText;
@@ -1373,34 +1205,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		b.onclick = () => { set(!on); showQuests(); };
 		return b;
 	}
-	function trackingCard() {
-		const m = api.waypoint?.mark?.() || waypointMark(), mine = !!pinned && !!m && m.key === pinned.kind + ':' + pinned.id;
-		const card = qel('div', qcss.card + 'border-color:rgba(1,169,130,.45);background:linear-gradient(135deg,rgba(1,169,130,.16),rgba(1,169,130,.04));');
-		const top = qel('div', qcss.row + 'flex-wrap:nowrap;');
-		top.append(questPill(mine ? 'Tracking' : m ? 'Next up' : 'Nothing tracked', m ? QC.teal : QC.grey));
-		if (pinned) {
-			const stop = qel('button', qcss.ghost + 'margin-left:auto;min-height:32px;padding:4px 10px;font-size:12px;', 'Stop tracking');
-			stop.onclick = () => { setPinned(null); api.waypoint?.set(waypointMark()); showQuests(); };
-			top.append(stop);
-		}
-		card.append(top);
-		if (m) {
-			const t = qel('div', qcss.title, m.title);
-			card.append(t);
-			const line = qel('div', qcss.row + 'row-gap:4px;');
-			line.append(bearing({ x: m.x, z: m.z, radius: m.radius, live: true }, true));
-			if (m.detail) line.append(qel('span', qcss.meta, m.detail));
-			card.append(line);
-			questLive.at(-1).title = t;
-		} else card.append(qel('div', qcss.body, 'Pick a quest or a place below and tap Track. A pin, a marker and a trail show the way.'));
-		const toggles = qel('div', qcss.row + 'margin-top:2px;');
-		toggles.append(
-			toggle('Waypoint', 'A pin at the place and a marker over it on the screen', wayPrefs.waypoint, v => setWayPrefs({ waypoint: v })),
-			toggle('Wayfinder', 'A trail on the ground from your feet toward the place', wayPrefs.wayfinder, v => setWayPrefs({ wayfinder: v })),
-		);
-		card.append(toggles);
-		log.append(card);
-	}
+	function trackingCard() { return guideTrackingCard(gd); }
 	// a step of a quest: done (a green tick, stepped back), the one you are on (bright, with the
 	// way there), or still to come (plain)
 	function stepRow(state, words, at) {
@@ -1423,36 +1228,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		wrap.setAttribute('aria-label', `${done} of ${total} done`);
 		return wrap;
 	}
-	function questCard(q, bodyKey, context) {
-		const color = q.status === 'active' ? QC.teal : q.status === 'offered' ? QC.amber : q.status === 'complete' ? QC.green : QC.grey;
-		const card = qel('div', qcss.card + `border-left:3px solid ${color};`);
-		const top = qel('div', qcss.row);
-		top.append(questPill(q.status === 'complete' ? 'Complete' : q.status, color));
-		const reward = q.chapter ? `Chapter ${q.chapter} of 3` : q.reward ? `${q.reward.credits} credits${q.rewardPaid ? ' · paid' : ''}` : '';
-		if (reward) top.append(qel('span', qcss.meta + 'margin-left:auto;', reward));
-		card.append(top, qel('div', qcss.title, q.title));
-		if (q.status !== 'complete') card.append(qel('div', qcss.body, q.premise));
-		card.append(progressBar(q.cursor, q.steps.length, color));
-		const steps = qel('div', 'display:flex;flex-direction:column;gap:4px;');
-		q.steps.forEach((step, i) => {
-			const state = i < q.cursor ? 'done' : i === q.cursor && q.status === 'active' ? 'now' : 'next';
-			steps.append(stepRow(state, stepWords(step, context), state === 'now' ? stepPlace(step, context) : null));
-		});
-		card.append(steps);
-		if (q.status === 'offered' || q.status === 'active') {
-			const row = qel('div', qcss.row + 'margin-top:2px;');
-			if (q.status === 'offered') {
-				const accept = qel('button', qcss.primary, 'Accept quest');
-				accept.onclick = () => { const result = stories.accept(q.id, bodyKey); if (result.ok) questChanged(result.quest, false); showQuests(); if (questNotice(result)) say(questNotice(result), 'note'); };
-				row.append(accept);
-			} else if (stepPlace(q.steps[q.cursor], context)) row.append(trackButton(null, 'story', q.id));
-			const cancel = qel('button', qcss.ghost + 'margin-left:auto;', q.status === 'offered' ? 'Decline' : 'Cancel quest');
-			cancel.onclick = () => { const result = stories.cancel(q.id, bodyKey); if (result.ok) questChanged(result.quest, false); showQuests(); if (questNotice(result)) say(questNotice(result), 'note'); };
-			row.append(cancel);
-			card.append(row);
-		}
-		return card;
-	}
+	function questCard(q, bodyKey, context) { return guideQuestCard(gd, q, bodyKey, context); }
 	function folded(label, count) {
 		const d = qel('details', 'border-radius:10px;');
 		const s = qel('summary', 'cursor:pointer;padding:8px 2px;font:600 12px system-ui;color:rgba(255,255,255,.6);list-style-position:inside;', `${label} (${count})`);
@@ -1460,86 +1236,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		d.append(s, inner); log.append(d);
 		return inner;
 	}
-	function showQuests() {
-		endTalk(); resetView('quests'); show(true);
-		const bodyKey = api.social?.bodyKey(), list = stories.list(bodyKey), context = storyContext();
-		trackingCard();
-
-		// ----- story quests: what you are on, then offers, then (folded) the finished ones
-		const live = list.filter(q => q.status === 'active').reverse(), offers = list.filter(q => q.status === 'offered').reverse(), done = list.filter(q => q.status === 'complete').reverse();
-		section('Story quests', list.length ? `${live.length} active${offers.length ? ` · ${offers.length} offered` : ''}` : '');
-		if (!live.length && !offers.length) {
-			const empty = qel('div', qcss.card + 'border-style:dashed;');
-			empty.append(qel('div', 'font:600 14px system-ui;color:#fff;', 'No story quest under way'), qel('div', qcss.body, 'Talk to someone nearby and ask for an adventure. They suggest a story rooted in this world.'));
-			log.append(empty);
-		}
-		for (const q of [...live, ...offers]) log.append(questCard(q, bodyKey, context));
-		if (done.length) { const inner = folded('Completed', done.length); for (const q of done) inner.append(questCard(q, bodyKey, context)); }
-		if (stories.status().error) say(stories.status().error, 'note');
-
-		// ----- meetings you agreed or were offered
-		const meetings = (book()?.list(bodyKey) || []).filter(a => a.status !== 'cancelled').sort((a, b) => b.due - a.due).slice(0, 8);
-		if (meetings.length) {
-			const now = meetings.filter(a => a.status === 'agreed' || a.status === 'proposed'), past = meetings.filter(a => !now.includes(a));
-			section('Meetings', now.length ? `${now.length} upcoming` : '');
-			const W = api.world();
-			const meetCard = (a) => {
-				const color = a.status === 'agreed' ? QC.teal : a.status === 'proposed' ? QC.amber : a.status === 'kept' ? QC.green : QC.grey;
-				const card = qel('div', qcss.card + `border-left:3px solid ${color};${now.includes(a) ? '' : 'opacity:.7;'}`);
-				const top = qel('div', qcss.row);
-				top.append(questPill(a.status === 'agreed' ? 'Agreed' : a.status === 'proposed' ? 'Suggested' : a.status === 'kept' ? (a.gathering ? 'Attended' : 'Kept') : 'Missed', color));
-				top.append(qel('span', qcss.meta + 'margin-left:auto;', now.includes(a) ? meetWhen(a).replace(/ \((.*)\)$/, ' · $1') : formatClock(a.due % 24)));
-				card.append(top, qel('div', qcss.title, a.gathering ? gatherTitle(a) : `Meet ${a.npcName} at ${a.place.name}`));
-				if (a.gathering) card.append(qel('div', qcss.meta, `Hosted by ${a.npcName} · ${a.place.name}`));
-				const at = now.includes(a) && worldPosition(W, a.place.pos);
-				if (at) { const line = qel('div', ''); line.append(bearing({ x: at.x, z: at.z, radius: a.place.radius })); card.append(line); }
-				if (now.includes(a)) {
-					const row = qel('div', qcss.row);
-					if (a.status === 'proposed') { const ok = qel('button', qcss.primary, 'Agree'); ok.onclick = () => { if (book().agree(a.id).ok) { tracked = a.id; api.social.state.remember(a.npcId, 'event', `You agreed to meet the traveller at ${a.place.name} at ${formatClock(a.due % 24)}.`); } showQuests(); }; row.append(ok); }
-					else row.append(trackButton(null, 'meeting', a.id));
-					const no = qel('button', qcss.ghost + 'margin-left:auto;', a.status === 'proposed' ? 'Decline' : 'Cancel');
-					no.onclick = () => { book().cancel(a.id); if (a.status === 'agreed') api.social.state.remember(a.npcId, 'event', `The traveller called off your meeting at ${a.place.name}.`); showQuests(); };
-					row.append(no); card.append(row);
-				}
-				return card;
-			};
-			for (const a of now) log.append(meetCard(a));
-			if (past.length) { const inner = folded('Past meetings', past.length); for (const a of past) inner.append(meetCard(a)); }
-			if (book().status().error) say(book().status().error, 'note');
-		}
-
-		// ----- a world's own errands (an off-world colony's crew, planet/colony/)
-		const own = api.world()?.colony?.crew?.journal?.();
-		if (own) {
-			section(own.title);
-			for (const e of own.list) {
-				const card = qel('div', qcss.card + (e.active ? `border-left:3px solid ${QC.teal};` : 'opacity:.75;'));
-				card.append(qel('div', e.active ? qcss.title + 'font-size:14px;' : qcss.body, e.text));
-				if (e.track) card.append(trackButton(e.track, 'crew', e.text));
-				log.append(card);
-			}
-			if (own.log.length) { const inner = folded('Crew log', own.log.length); for (const l of own.log) inner.append(qel('div', qcss.meta, l)); }
-		}
-
-		// ----- exploration: the things there are to find, open ones first with the way there
-		const goals = QUESTS.filter(q => (q[0] !== 'home' || store.get('crysis-home', null)) && (!q[2] || find(q[2]))), found = goals.filter(q => journal[q[0]]), open = goals.filter(q => !journal[q[0]]);
-		section('Exploration', `${found.length} of ${goals.length} found`);
-		const card = qel('div', qcss.card + 'gap:6px;');
-		card.append(progressBar(found.length, goals.length, QC.green));
-		const goalRow = (q) => {
-			const at = !journal[q[0]] && q[2] ? explorePlace(q[0]) : null;
-			const row = qel('div', 'display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid rgba(255,255,255,.06);');
-			row.append(stepRow(journal[q[0]] ? 'done' : 'next', q[1], at));
-			row.firstChild.style.flex = '1'; row.firstChild.style.padding = '2px 0';
-			if (at) { const b = trackButton(null, 'explore', q[0]); b.style.flexShrink = '0'; row.append(b); }
-			return row;
-		};
-		for (const q of open) card.append(goalRow(q));
-		log.append(card);
-		if (found.length) { const inner = folded('Found', found.length); const box = qel('div', qcss.card + 'gap:2px;'); for (const q of found) box.append(goalRow(q)); inner.append(box); }
-		const caves = qel('button', btnCss + 'align-self:flex-start;', 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
-		log.scrollTop = 0;
-	}
+	function showQuests() { return guideQuests(gd); }
 	// your story so far: who the world takes you for, and what you have done for it
 	let livingActivityPage=0,livingActivityScope=null,communityPage=0,communityPageScope=null;
 	function updateProjectProgress() {
@@ -1551,192 +1248,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		record.line.textContent=ready?'Your contribution is ready to record.':`${active.kind==='survey'?'Surveying':'Working'} · ${Math.min(Math.floor(elapsed/1000),Math.ceil(duration/1000))}/${Math.ceil(duration/1000)} seconds. Stay here until finished.`;
 		record.progress.value=Math.min(1,elapsed/duration);record.finish.disabled=!ready || record.pending;record.finish.style.opacity=record.finish.disabled?'.45':'1';record.resume.hidden=true;
 	}
-	function showCommunityProjects() {
-		const snapshot=api.communityProjects?.snapshot?.();
-		if(!snapshot)return;
-		say('COMMUNITY PROJECTS','note');say(projectScopeText(snapshot),'note');
-		if(snapshot.error)say(snapshot.error,'note');
-		const epoch=viewEpoch, scope=communityScope(snapshot);
-		if(scope!==communityPageScope){communityPageScope=scope;communityPage=0;}
-		const pages=Math.max(1,Math.ceil(snapshot.projects.length/12));communityPage=Math.min(communityPage,pages-1);
-		const cards=communityProjectCards(snapshot,Date.now(),communityPage*12);
-		const valid=()=>view==='story' && viewEpoch===epoch && communityScope(api.communityProjects?.snapshot?.())===scope;
-		async function actProject(id,operation,args={},row=null) {
-			if(!valid())return;
-			if(row)for(const b of row.querySelectorAll('button'))b.disabled=true;
-			if(projectProgressView)projectProgressView.pending=true;
-			try{const result=await api.communityProjects.action(id,operation,args);if(!valid())return;const scrollTop=log.scrollTop;if(operation==='start' && result?.ok)communityPage=0;showStory();log.scrollTop=scrollTop;if(result?.message || result?.error)say(result.message || result.error,'note');}
-			catch{if(valid()){say('This project could not be checked. Please try again.','note');if(row)for(const b of row.querySelectorAll('button'))b.disabled=false;if(projectProgressView)projectProgressView.pending=false;}}
-		}
-		if(!cards.length)say('A little work here can leave something lasting. Choose a nearby site, survey it, and help bring it to life.','note');
-		for(const card of cards) {
-			say(card.line,'guide');
-			const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
-			function button(label,operation,args){const b=el('button',btnCss,label);b.onclick=()=>actProject(card.id,operation,args,row);row.append(b);return b;}
-			button('Show project site','mark');
-			if(card.active) {
-				const line=el('div','color:#b8d8ce;'),progress=el('progress','width:100%;height:8px;flex-shrink:0;accent-color:#5bd8ad;');progress.max=1;progress.setAttribute('aria-label',card.active.kind==='survey'?'Survey progress':'Work progress');log.append(line,progress);
-				const finish=button('Record '+(card.active.kind==='survey'?'survey':'work'),'finish');finish.disabled=true;
-				button('Pause work','cancel');const resume=el('button',btnCss,'Review current work');resume.hidden=true;resume.onclick=showStory;row.append(resume);
-				projectProgressView={epoch,scope,projectId:card.id,kind:card.active.kind,line,progress,finish,resume,pending:false};
-			}else if(!card.done && !card.paused && !card.readyAt && snapshot.mode!=='offline') {
-				const kind=card.survey<1?'survey':'work';
-				if(kind==='survey' || card.work<3) { const start=button(kind==='survey'?'Survey site · 5 sec':'Help build · 30 sec','start',{kind});start.disabled=!!snapshot.active; }
-				for(const service of (card.serviceSources||[]).slice(0,3)) {
-					const requestId=typeof service==='string'?service:service.requestId || service.id;
-					if(requestId)button('Contribute '+(service.title || service.label || 'completed local work'),'contribute-service',{requestId});
-				}
-			}
-			if(card.done && card.kind==='resonance')button('Play the stones','play');
-			log.append(row);
-			const history=projectHistoryLines(card),events=history.slice(-2);
-			for(const event of events)say(event,'note');
-			if(history.length>2){const more=el('button',btnCss,'Read project history'),section=el('div','display:none;');for(const line of history)section.append(el('div','margin:8px 0;color:#b8c7c2;font-size:12px;white-space:pre-wrap;',line));more.onclick=()=>{const open=section.style.display==='none';section.style.display=open?'block':'none';more.textContent=open?'Close project history':'Read project history';};log.append(more,section);}
-		}
-		if(pages>1){const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');if(communityPage>0){const b=el('button',btnCss,'Earlier community projects');b.onclick=()=>{communityPage--;showStory();};row.append(b);}if(communityPage<pages-1){const b=el('button',btnCss,'More community projects');b.onclick=()=>{communityPage++;showStory();};row.append(b);}log.append(row);}
-		const availableSites=(snapshot.candidates || []).filter(c=>!snapshot.projects.some(p=>p.siteId===(c.siteId || c.id)));
-		if(availableSites.length) {
-			say('PLACES TO IMPROVE','note');
-			for(const candidate of availableSites.slice(0,4)) {
-				say(candidate.name,'note');const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
-				const at=candidate.anchor, distance=at?Math.hypot(api.camera.position.x-at.x,api.camera.position.z-at.z):Infinity;
-				const near=candidate.canPropose ?? candidate.inRange ?? distance<=6;
-				if(near && snapshot.mode!=='offline')for(const kind of candidate.kinds) {
-					const b=el('button',btnCss,'Review '+projectKindLabel(kind).toLowerCase());
-					b.onclick=()=>{if(valid())showProjectReview({candidateId:candidate.id,kind,scope},null);};row.append(b);
-				}else {const b=el('button',btnCss,'Visit this site');b.onclick=()=>actProject(candidate.id,'mark',{},row);row.append(b);}
-				log.append(row);
-			}
-		}
-		updateProjectProgress();
-	}
-	function showLivingActivity() {
-		const snapshot=api.livingWorld?.snapshot?.();
-		if (!snapshot) return;
-		say('LIFE AROUND YOU','note');
-		if(snapshot.scope)say(activityScopeText(snapshot),'note');
-		if(snapshot.catchup?.text||snapshot.catchup?.message)say(snapshot.catchup.text||snapshot.catchup.message,'note');
-		if(snapshot.error)say(snapshot.error,'note');
-		for(const resident of (snapshot.residents || []).slice(0,4))say(resident.line+' Currently '+resident.activity.replaceAll('-', ' ')+'.','note');
-		const scope=snapshot.scope?.key||snapshot.scope?.name||snapshot.scope;
-		if(scope!==livingActivityScope){livingActivityScope=scope;livingActivityPage=0;}
-		const count=snapshot.activities?.length||0,pages=Math.max(1,Math.ceil(count/6));livingActivityPage=Math.min(livingActivityPage,pages-1);
-		const cards=activityCards(snapshot,livingActivityPage*6), epoch=viewEpoch;
-		if(!cards.length)say('No local activity has been recorded here yet. Meet residents and explore to discover what they are working on.','note');
-		for(const card of cards){
-			say(card.line,'guide'); for(const line of card.history)say(line,'note');
-			const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
-			async function actLiving(action,options={}) {
-				if(view!=='story'||viewEpoch!==epoch)return;
-				for(const b of row.children)b.disabled=true;
-				try{
-					const result=await api.livingWorld.action(card.id,action,options);
-					if(view!=='story'||viewEpoch!==epoch)return;
-					if(result?.actor){talkTo(result.actor);return;}
-					if(result?.at && Number.isFinite(result.at.x) && Number.isFinite(result.at.z)){
-						livingContact={...result.at,y:Number.isFinite(result.at.y)?result.at.y:api.world().island.heightAt(result.at.x,result.at.z),bodyKey:api.social?.bodyKey(),radius:4,title:'Find '+(card.npcName||'the resident'),detail:card.title};
-						api.waypoint?.set(waypointMark());
-					}
-					if(result?.choices?.length){
-						say(result.message||'What would you like to propose?','note');
-						for(const c of result.choices.slice(0,4)){const b=el('button',btnCss,c.label);b.onclick=()=>actLiving('intervene',{choiceId:c.id});row.append(b);}
-					}else{showStory();if(result?.message||result?.error)say(result.message||result.error,'note');}
-				}catch{if(view==='story'&&viewEpoch===epoch)say('That activity could not be checked. Please try again.','note');}
-				finally{for(const b of row.children)b.disabled=false;}
-			}
-			function button(label,action,options){const b=el('button',btnCss,label);b.onclick=()=>actLiving(action,options);row.append(b);}
-			if(card.canJoin)button('Lend a hand','join');
-			if(card.canContact)button('Find '+(card.npcName||'the resident'),'contact');
-			if(card.pendingAck)button('Acknowledge result','acknowledge');
-			else if(card.canProgress)button('Continue task','progress');
-			if(card.canLeave||card.canRelease)button('Leave activity','release');
-			if(card.canIntervene){
-				if(card.choices.length)for(const c of card.choices)button(c.label,'intervene',{choiceId:c.id});
-				else button('Discuss alternatives','intervene');
-			}
-			log.append(row);
-		}
-		if(pages>1){
-			const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
-			if(livingActivityPage>0){const b=el('button',btnCss,'Earlier activities');b.onclick=()=>{livingActivityPage--;showStory();};row.append(b);}
-			if(livingActivityPage<pages-1){const b=el('button',btnCss,'More local activity');b.onclick=()=>{livingActivityPage++;showStory();};row.append(b);}
-			log.append(row);
-		}
-		const shown=new Set(cards.flatMap(c=>c.history));
-		const recent=(snapshot.history||[]).slice(-5).map(e=>typeof e==='string'?e:e.text||e.message).filter(t=>t&&!shown.has(t));
-		if(recent.length){say('RECENT LOCAL EVENTS','note');for(const line of recent)say(String(line).slice(0,320),'note');}
-		const routines=(snapshot.routines||[]).slice(0,4);
-		if(routines.length)say(routines.map(a=>`${a.name||'A resident'} · ${String(a.activity||'daily life').replaceAll('-',' ')}`).join('\n'),'note');
-	}
-	function showStory() {
-		endTalk(); resetView('story'); show(true);
-		const M = api.combat?.morality, R = M?.reactions?.(), me = M?.me?.() || {}, E = api.errands?.info?.() || {}, F = api.fares?.info?.() || {};
-		const bar = (k) => '▰'.repeat(Math.round(k * 10)) + '▱'.repeat(10 - Math.round(k * 10));
-		const rung = (ladder, count, what) => { const r = rankOf(ladder, count); return `${r.title} · ${count} ${what}${r.next ? `\n${bar(r.k)} ${r.next.at - count} more to ${r.next.title}` : '\nThe top of the ladder.'}`; };
-		const bonds=chronicle.bonds(api.social?.bodyKey()).filter(b=>b.last);
-		if(bonds.length){say('PEOPLE WHO KNOW YOU','note');for(const b of bonds.slice(-8))say(`${b.name} · ${b.label}\n${b.last}`,'guide');}
-		const projects=chronicle.projects(api.social?.bodyKey());
-		if(projects.length){say('WHAT WE LEFT BEHIND','note');for(const p of projects.slice(-8))say(`${p.name} · ${p.npc}\n${p.choice==='marked'?'Marked route: small signs remain at your surveyed stops.':'Quiet route: saved in your journal; the landscape stays untouched.'}\n${p.landmarks.map(t=>t.name).join(' → ')}`,'guide');}
-		showLivingActivity();
-		showCommunityProjects();
-		if(chronicle.status().error)say(chronicle.status().error,'note');
-		const D = api.daily?.list?.();
-		if (D) {
-			say(`TODAY · ${D.goals.filter((g) => g.done).length} of ${D.goals.length} done${D.bonus ? ' · bonus paid' : ''}`, 'note');
-			say(D.goals.map((g) => `${g.done ? '✓' : '○'} ${g.text}${g.need > 1 && !g.done ? ` (${g.got}/${g.need})` : ''} · ${g.credits} credits`).join('\n') + (D.bonus ? '' : '\nAll three: a bonus of 150 credits'), 'guide');
-		}
-		say('WHO THEY SAY YOU ARE', 'note');
-		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Your wider reputation is still taking shape'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
-		if (R?.song) say(R.song, 'note');
-		const soul = api.soul, saved = soul?.info();
-		if (saved) {
-			say(saved.status === 'saved' && !saved.pending ? 'Reputation saved across visits and rooms.' : saved.savedLocally ? (saved.cloudAvailable === false ? 'Reputation saved on this device.' : 'Reputation saved on this device. Cloud save pending.') : 'Reputation is not safely saved yet. Save your recovery key.', 'note');
-			if (saved.error) say(saved.error, 'note');
-			say('Your standing does not fade with time. To release it, fly to Gargantua’s island and walk into the soul tunnel to the Quiet Well.', 'note');
-			const copy = el('button', btnCss, 'Save soul recovery key');
-			copy.onclick = async () => { try { await navigator.clipboard.writeText(soul.recoveryKey()); say('Recovery key copied. Keep it private and safe. It restores this soul on another device.', 'note'); } catch { say('Clipboard unavailable. Use a browser with clipboard access to save your recovery key.', 'note'); } };
-			const restore = el('button', btnCss, 'Restore a saved soul');
-			restore.onclick = () => {
-				const input = el('input', 'padding:10px;color:#fff;background:#10252d;border:1px solid #777;border-radius:8px;'); input.type = 'password'; input.name = 'soul-recovery-key'; input.autocomplete = 'off'; input.placeholder = 'Private recovery key'; input.setAttribute('aria-label','Private soul recovery key');
-				const use = el('button', btnCss, 'Restore'); use.onclick = async () => { use.disabled = true; try { await soul.recover(input.value); input.value = ''; api.multiplayer?.linkSoul?.(soul); showStory(); } catch(e) { say(e.message, 'note'); use.disabled = false; } }; log.append(input, use);
-			};
-			log.append(copy, restore);
-		}
-
-		say('FAVOURS', 'note');
-		say(rung('favours', E.done || 0, 'done') + (E.kept ? `\nWallets kept: ${E.kept}` : ''), 'guide');
-		if (E.errand) {
-			say(`Under way: ${E.errand.title} (${E.errand.stage})`, 'guide');
-			const give = el('button', btnCss, 'Give up on it'); give.onclick = () => { api.errands.cancel(); showStory(); }; log.append(give);
-		}
-		const leads = api.npcQuests?.leads?.() || [];
-		if (leads.length) { say('LEADS', 'note'); for (const L of leads.slice(0, 4)) say(L.note + (L.here ? ' (round here: follow the marker)' : ''), 'guide'); }
-		say('FARES', 'note');
-		say(rung('fares', F.rides || 0, 'rides') + `\nEarned ${F.earned || 0} credits · ${F.five || 0} five-star rides`, 'guide');
-		if (F.fare) say(`In the car now: ${F.fare.name}${F.fare.place ? ' to ' + F.fare.place : ''} · fare ${F.fare.fare}`, 'guide');
-		const recent = M?.log?.(5) || [];
-		if (recent.length) { say('LATELY', 'note'); for (const e of recent.slice().reverse()) say(e.line + (e.place ? ` · ${e.place}` : ''), 'note'); }
-		log.scrollTop = 0;
-	}
-	function showCaves() {
-		endTalk(); resetView('journal'); show(true);
-		const W = api.world(), cam = api.camera.position;
-		say('CAVE EXPLORATION', 'note');
-		say('Walk through a hillside mouth into the underground. Strike the three resonant stones in an alcove (look at one and press E, or tap it) to restore guiding lights. You can walk back to the surface at any time.', 'guide');
-		const caves = targets().filter(t => t.caveEntrance !== undefined).sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z));
-		if (!caves.length) say('There are no mapped land-cave entrances on this surface.', 'note');
-		for (const t of caves) {
-			say(`${t.name} · ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}`, 'guide');
-			const face = el('button', btnCss, 'Look toward '+t.name);
-			face.onclick = () => { const P = W.player.state; P.yaw = Math.atan2(-(t.x-P.pos.x),-(t.z-P.pos.z)); P.pitch = -.08; show(false); api.hint(`${t.name}: follow this bearing to the hillside mouth.`, 5000); };
-			log.append(face);
-		}
-		if (caveVisits[api.social?.bodyKey()]) say('✓ You have explored this world’s underground.', 'note');
-		const stats = W?.underworld?.elements?.stats();
-		if (stats) say(`${stats.completed} of ${stats.sites} resonance alcoves restored. ${stats.saveError || 'Progress is saved on this device.'}`, 'note');
-		const deep = W?.deep?.info();
-		if (deep) say(deep.open ? `The Deep Gate is open. Deepest reached: ${deep.deepest} m; ${deep.waystones} waystone${deep.waystones === 1 ? '' : 's'} touched; ${deep.alcoves} deep alcove${deep.alcoves === 1 ? '' : 's'} restored.` : `The Deep Gate is sealed. It lies at the end of the caves beneath the summit${W.deep.gate.via ? ', in from ' + W.deep.gate.via.name : ''}: strike one of its five stones, listen, and play the phrase back.`, 'note');
-	}
+	function showCommunityProjects() { return guideCommunityProjects(gd); }
+	function showLivingActivity() { return guideLivingActivity(gd); }
+	function showStory() { return guideStory(gd); }
+	function showCaves() { return guideCaves(gd); }
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;
 	storyB.onclick=showStory;
@@ -1762,48 +1277,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	if (crashedBefore() && choice.kind === 'none' && (!saved || saved.auto === true)) setTimeout(() => say('The on-device voice stopped last time, so the built-in guide is active for this run. You can choose another voice in ⚙.', 'note'), 4000);
 	// the phone keeps only the voice it uses (after the world has loaded)
 	if (phone) setTimeout(() => { pruneModels('(none)').then((b) => { if (b > 5e7) say(`Freed ${(b / 1e9).toFixed(2)} GB on this device: removed a voice model no longer in use.`, 'note'); }).catch(() => {}); }, 20000);
-	function drawSettings() {
-		settings.innerHTML = '';
-		const row = (label, node) => { const r = el('label', 'display:flex;align-items:center;gap:8px;margin:6px 0;'); r.append(el('span', 'width:74px;color:rgba(255,255,255,.6);', label), node); settings.append(r); return r; };
-		const styleSelect=(label,key,options)=>{const control=el('select','flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');control.name='dialogue-'+key;control.setAttribute('aria-label',label);for(const [value,text] of options){const o=el('option',null,text);o.value=value;control.append(o);}control.value=dialogueStyle[key];control.onchange=()=>{dialogueStyle=normalizeDialogueStyle({...dialogueStyle,[key]:control.value});store.set('crysis-dialogue-style',dialogueStyle);};row(label,control);};
-		styleSelect('Language','tone',[['clean','Clean'],['mature','Mature · natural profanity and adult themes']]);
-		styleSelect('Personality','vividness',[['restrained','Understated'],['bold','Bold · strong opinions and vivid storytelling']]);
-		styleSelect('Replies','response',[['brief','Brief'],['balanced','Balanced'],['rich','Rich · more detail']]);
-		settings.append(el('div','color:rgba(255,255,255,.65);margin:6px 0;','Tone follows each character. Mature themes apply to adult NPCs; model and provider limits still apply.'));
-		const speechSelect = el('select', 'flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;'); speechSelect.name = 'guide-voice';
-		speechSelect.setAttribute('aria-label', 'Voices');
-		for (const [value, text] of VOICE_MODES) { const o = el('option', null, text); o.value = value; speechSelect.append(o); }
-		speechSelect.value = speechMode;
-		// choosing again is also how a phone that could not hold the local voices tries once more
-		speechSelect.onchange = () => { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); speechMode = voiceMode(speechSelect.value); if (speechMode !== 'device') localSpeech.retry(); store.set('crysis-voices', speechMode); speechStatusEl.textContent = ''; };
-		row('Voices', speechSelect);
-		settings.append(el('div', 'color:rgba(255,255,255,.6);margin:6px 0;', 'Best available: common lines play from voices made ahead of time, other lines from the local voices (about 100 MB once; on a phone only after a few calm minutes) or the device voice. Local always loads the local voices on any device.'));
-		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
-		const opts = phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']];
-		// the shared voice, once the discovery server is deployed (earth/config.js): phones too
-		if (DISCOVERY_URL) opts.push(['cloud', 'Free cloud voice (people only)']);
-		for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; sel.append(o); }
-		sel.name = 'dialogue-source'; sel.value = choice.kind;
-		row('Dialogue', sel);
-		if (choice.kind === 'webllm') {
-			const m = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
-			for (const x of WEBLLM_MODELS) { const o = el('option', null, x.label); o.value = x.id; m.append(o); }
-			m.name = 'dialogue-model'; m.value = choice.id; m.onchange = () => { choice.id = m.value; };
-			row('Model', m);
-			settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', hasWebGPU() ? 'Downloads once, then runs offline. Nothing you say leaves this device.' : 'This browser has no WebGPU (try Chrome or Edge on desktop or Android), or use Ollama.'));
-		}
-		if (choice.kind === 'cloud') settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', 'People answer from a small model on the game\'s own server, inside a free daily allowance. What you say to them is sent there to answer and is not kept. When the day\'s share is used, they use their own lines.'));
-		if (choice.kind === 'ollama') {
-			const u = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); u.name = 'ollama-address'; u.value = choice.url; u.onchange = () => { choice.url = u.value; };
-			const n = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); n.name = 'ollama-model'; n.value = choice.name; n.onchange = () => { choice.name = n.value; };
-			row('Address', u); row('Model', n);
-			settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', `Install Ollama, "ollama pull ${choice.name}", then start it with OLLAMA_ORIGINS=${location.origin} ollama serve`));
-		}
-		const go = el('button', btnCss + 'width:100%;margin-top:4px;background:linear-gradient(135deg,#01a982,#10b981);border:none;', choice.kind === 'none' ? 'Use the built-in guide' : 'Load and use');
-		go.onclick = () => connect(true);
-		settings.append(go);
-		sel.onchange = () => { choice.kind = sel.value; drawSettings(); };
-	}
+	function drawSettings() { return guideSettings(gd); }
 	async function connect(user) {
 		if (user) { delete choice.auto; store.set('crysis-guide-model', choice); }
 		try {

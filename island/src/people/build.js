@@ -9,8 +9,9 @@
 // before it is scaled to its height; the bones, the clothes and the hair are all fitted to it
 // afterwards. Pure (tools/hero.test.mjs).
 
+import { smoothstep as sstep } from '../noise.js';
+
 const ARM = /^(upperarm|lowerarm|wrist|metacarpal|finger)/;
-const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // p: positions (x across the body, y up), A: { bones: [{ name }], ids, weights } (4 per vertex);
 // build: { shoulders: each side out by this share of the height, waist: drawn in by this share,

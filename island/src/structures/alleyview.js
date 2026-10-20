@@ -8,9 +8,9 @@
 import * as THREE from 'three';
 import { planAlleys, ALLEY_W } from './alleys.js';
 import { grid as gridAlleys } from './lots.js';
+import { srgbToLinear as lin } from '../world/srgb.js';
 
 const C = 250;
-const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 function coloured(parts) {
 	let n = 0;
 	const gs = parts.map(([g, c]) => { const q = g.toNonIndexed(); n += q.attributes.position.count; return [q, lin(c)]; });

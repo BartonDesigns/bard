@@ -20,7 +20,7 @@ import { CAST, placeFor, activity } from './crew.js';
 import { fitSuit, wear, keepHair, dropSuit, suitPaint } from './suit.js';
 import { constrainCrew } from './crew-space.js';
 
-const TAU = Math.PI * 2, RING = 13.6, DOME = 15;
+const RING = 13.6, DOME = 15;
 const hash = (s) => s.split('').reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261) >>> 0;
 // how they walk the rooms: lane points (local x, share of the module's length) clear of the furniture
 const LANES = { lounge: [[0, 0.3], [1.85, 0.36], [1.85, 0.62]], workshop: [[0.9, 0.2]], mess: [[0.5, 0.15]], med: [[0.3, 0.15]] };

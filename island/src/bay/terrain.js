@@ -24,6 +24,7 @@ import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } fr
 import { LITE_V, LITE_F } from '../world/gpulite.js';
 import { trackUpload } from './levelrows.js';
 import { GFX_COARSE } from '../world/device.js';
+import { smoothstep as sstep } from '../noise.js';
 
 // the globe past the survey (earth/globe.js): { ready(), at(x, z), seam: [a, b] (m past the
 // survey's edge: the Bay's ground stops at a, the globe's is whole by b), whenReady, hideBay() }.
@@ -227,7 +228,6 @@ function bVn(x, y) {
 	const a = bH01(i, j), b = bH01(i + 1, j), c = bH01(i, j + 1), d = bH01(i + 1, j + 1);
 	return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
 }
-const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // noSea: past the survey's east or north edge, where the edge is carried on level (see BAY_GLSL)
 export function beyondH(x, z, he, d, noSea = false) {
 	if (noSea) return he;

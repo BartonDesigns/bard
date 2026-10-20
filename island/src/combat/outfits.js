@@ -8,6 +8,8 @@
 // same fighter always wears the same thing. Pure: colours and garment kinds only; the body
 // (people/body.js) cuts and paints them. No real insignia, brands or unit marks.
 
+import { mulberry32 as seeded } from '../noise.js';
+
 // the camouflage schemes: base, blotch, second blotch, dark
 export const CAMO = Object.freeze({
 	woodland: ['#5d6440', '#3c4a2c', '#7a6a48', '#262a1f'],
@@ -19,10 +21,7 @@ export const CAMO = Object.freeze({
 });
 
 // a little generator from a seed (mulberry32)
-export function seeded(seed) {
-	let a = seed >>> 0;
-	return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
+export { seeded };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 
 // a camo garment in a scheme

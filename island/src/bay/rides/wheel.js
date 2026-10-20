@@ -201,4 +201,3 @@ export function createWheel({ group, sound, isPhone, at: [U, V] }) {
 	};
 }
 function spokeCol(i, k) { return (i + k) % 3 === 0 ? [1, 0.4, 0.3] : (i + k) % 3 === 1 ? [1, 0.85, 0.5] : [0.5, 0.8, 1]; }
-export const WHEEL_HUB = HUB;

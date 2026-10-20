@@ -1,8 +1,8 @@
 import * as THREE from 'three';
+import { clamp } from '../noise.js';
 
 const TAU = Math.PI * 2;
 const noise = (a, b = 0) => { const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return n - Math.floor(n); };
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
 function segmentDistance(x, z, a, b) {
 	const dx = b.x - a.x, dz = b.z - a.z, q = clamp(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1), 0, 1);

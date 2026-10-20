@@ -11,10 +11,10 @@
 
 import * as THREE from 'three';
 import { frameOf } from './ids.js';
+import { lerp } from '../noise.js';
 
 const EYE = 1.68;
 const ease = (t) => t * t * (3 - 2 * t);
-const lerp = (a, b, t) => a + (b - a) * t;
 
 // a hand flat on a top, fingers over its edge (+z) and the forearm back toward you (-z); the
 // climbs use the same (parkour.js)

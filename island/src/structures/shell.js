@@ -20,12 +20,12 @@
 
 import * as THREE from 'three';
 import { FACES, onFace, faceLen, hash } from './ids.js';
+import { smoothstep as smooth } from '../noise.js';
+import { srgbToLinear as lin } from '../world/srgb.js';
 
-const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 const CORE = [0.36, 0.35, 0.33], DARK = [0.05, 0.05, 0.055], SOOT = [0.05, 0.045, 0.04], RAW = [0.45, 0.45, 0.43], REBAR = [0.2, 0.11, 0.07], CEIL = [0.62, 0.61, 0.58], FORM = [0.55, 0.4, 0.22];
 const PAINT = [[0.86, 0.82, 0.72], [0.74, 0.8, 0.84], [0.78, 0.82, 0.72], [0.82, 0.8, 0.78], [0.88, 0.76, 0.66], [0.7, 0.7, 0.74]].map(lin);
 const WOODS = [[0.42, 0.3, 0.2], [0.3, 0.3, 0.32], [0.55, 0.52, 0.48], [0.2, 0.22, 0.26]].map(lin);
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const shade = (cl, k) => [cl[0] * k, cl[1] * k, cl[2] * k];
 const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 

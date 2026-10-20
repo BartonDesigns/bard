@@ -1,7 +1,6 @@
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';
-import * as THREE from 'three';
 import { createRealCity, REAL_U } from '../src/bay/realcity.js';
 import { toWorld } from '../src/bay/geo.js';
 import { REAL_REGIONS } from '../src/bay/realtiles.js';

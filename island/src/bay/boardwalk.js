@@ -38,6 +38,7 @@ import { createSwings, createTilt, createFlume, buildBackRow } from './rides/sce
 import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
 import { createMotion } from '../people/motion.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
+import { smoothstep as smooth } from '../noise.js';
 
 // the park's extent in its own frame, and how far the ground is reshaped round it
 const PARK = { u0: -272, u1: 342, v0: -176, v1: 4 };
@@ -47,7 +48,6 @@ const NEAR = 2000, FAR = 2600;
 const shoreV = (u) => 118 - 48 * smooth(-247, -442, u) + 6 * Math.sin((u + 97) / 90);
 // the San Lorenzo's mouth, just east of the Dipper (sanlorenzo.js carves the river itself)
 const RIVER_U = 446;
-function smooth(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
 // the ground as built: the midway level, sand down to the surf, Seabright's low bluff
 // across the river
 function groundY(u, v) {

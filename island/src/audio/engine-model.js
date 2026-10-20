@@ -4,7 +4,7 @@
 // (its level and the air's dulling with distance, the Doppler shift of a passing one), and
 // which few of many sources get a voice.
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+import { clamp } from '../noise.js';
 
 // cyl: cylinders (a four-stroke fires cyl / 2 times a turn); idle, red: rpm; gears: the speed
 // (m/s) each gear reaches at the red line; fuel: petrol, diesel, turbine, rotor; pops: crackles

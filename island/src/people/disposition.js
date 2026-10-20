@@ -10,8 +10,8 @@
 // numbers per person, worked out when they are needed.
 
 import { AXES } from '../combat/morality.js';
+import { mulberry32 as rng } from '../noise.js';
 
-const rng = (seed) => { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
 const clamp = (v, a = -1, b = 1) => Math.max(a, Math.min(b, v));
 const r2 = (v) => Math.round(v * 100) / 100;
 const lean = (T, a, k) => ((T?.[a] || 0) / 100) * k;

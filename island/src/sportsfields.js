@@ -23,9 +23,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PARKS } from './nature/parks.js';
 import { toWorld } from './bay/geo.js';
 import { THEMES, arenaSpec, arenaSpot, arenaTheme, arenaDeck, buildArena, hotBallLayer } from './arenas.js';
+import { sineHash as hh } from './noise.js';
 
 const YD = 0.9144;
-const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 export const LABEL = { baseball: 'Baseball diamond', soccer: 'Soccer pitch', football: 'Football field', arena: 'Arena' };
 const label = (f) => (f.kind === 'arena' ? THEMES[f.theme].label : LABEL[f.kind]);
 

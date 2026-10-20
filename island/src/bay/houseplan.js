@@ -13,6 +13,7 @@
 // rooms. The house's position seeds everything, so it is the same house every visit.
 
 import { houseRoles, fitFront, fitBack } from '../interiors/estab-fit.js';
+import { mulberry32 as rng } from '../noise.js';
 
 // heights above the ground floor, in metres
 export const HT = { ceil0: 2.6, floor1: 2.9, ceil1: 5.45, top1: 2.9, top2: 5.75, door: 2.05 };
@@ -49,10 +50,6 @@ export function houseFloor(grp, heightAt) {
 	return m + 0.15;
 }
 
-function rng(seed) {
-	let a = seed >>> 0;
-	return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
 export const houseSeed = (M) => (Math.imul(Math.round(M.x * 2) | 0, 73856093) ^ Math.imul(Math.round(M.z * 2) | 0, 19349663)) >>> 0;
 
 // Bathrooms are not uniformly spotless: the same house should keep the same lived-in

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {createTowers} from '../src/bay/towers.js';
 import {planWorkplace} from '../src/interiors/workplace-plan.js';
-import {setFrame,bayFrame} from '../src/earth/globeframe.js';
+import {setFrame} from '../src/earth/globeframe.js';
 const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(1);renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1;document.body.appendChild(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color('#a7c5d5');scene.add(new THREE.HemisphereLight(0xc9e4ff,0x545042,2.2));const sun=new THREE.DirectionalLight(0xffecd5,3);sun.position.set(-20,70,40);scene.add(sun);
 const camera=new THREE.PerspectiveCamera(66,innerWidth/innerHeight,.08,1000),p={pos:new THREE.Vector3(),vel:new THREE.Vector3()},bay={heightAt:()=>0};

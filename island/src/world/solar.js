@@ -1,7 +1,9 @@
 // The sky and regional seasons share one geometric solar cycle. The clock keeps the
 // island's Pacific-time convention; travelling changes the latitude, never the slider.
+
+import { clamp } from '../noise.js';
+
 const RAD = Math.PI / 180;
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export const BAY_LATITUDE = 37.8;
 export const solarLatitude = (lat) => Number.isFinite(lat) ? clamp(lat, -90, 90) : BAY_LATITUDE;
 export const fractionalMonth = (date) => date.getMonth() + (date.getDate() - 1) / 30;

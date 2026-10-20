@@ -19,8 +19,8 @@
 import { soundBus, noise } from '../world/soundbus.js';
 import { profileOf, gearbox, firingHz, spool, distanceGain, airCutoff, doppler, budgetFor, pickVoices } from './engine-model.js';
 import { subHum, tick } from './palette.js';
+import { clamp } from '../noise.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const PHONE = (() => { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900; } catch { return false; } })();
 const BUD = budgetFor(PHONE);
 const MASTER = 0.22;

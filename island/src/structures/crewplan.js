@@ -13,8 +13,9 @@
 // from the front face toward the street; the building is v < 0, |u| < L/2.
 
 import { frameOf, onFace, FACES, faceLen } from './ids.js';
+import { smoothstep as smooth } from '../noise.js';
 
-export const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+export { smooth };
 
 // ---------- the frame ----------
 export function siteFrame(o, f, ground = () => 0) {

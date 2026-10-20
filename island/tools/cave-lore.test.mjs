@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { gunzipSync } from 'node:zlib';
 import { test } from 'node:test';
 import { CAVE_LORE_SOURCE, DWELLER_LORE, SOUL_LORE, VAULT_LORE, EPOCH_ADJECTIVES, EPOCH_NOUNS, DEPTH_MILESTONES, caveResidentMeta, cavePersona, caveLoreReply } from '../src/planet/cave-lore.js';
 
-const source = gunzipSync(readFileSync(new URL('../../runtime/caves-179.html.gz', import.meta.url))).toString('utf8');
+const source = readFileSync(new URL('../../runtime/src/caves.html', import.meta.url), 'utf8');
 const capture = (pattern, input = source) => { const match = input.match(pattern); assert.ok(match, `Missing legacy source: ${pattern}`); return match[1]; };
 
 // Read only literal string arrays. Never execute the legacy document, even if it
@@ -26,8 +25,8 @@ function literalStrings(input) {
 const array = name => literalStrings(capture(new RegExp(`var ${name} = (\\[[\\s\\S]*?\\]);`)));
 const spec = { worldSeed: 1337, chamber: { x: 52.1, z: -17.3 }, index: 2, age: 42, activity: 'keep' };
 
-test('every preserved lore string matches the compressed legacy source exactly', () => {
- assert.equal(CAVE_LORE_SOURCE, 'runtime/caves-179.html.gz');
+test('every preserved lore string matches the legacy source exactly', () => {
+ assert.equal(CAVE_LORE_SOURCE, 'runtime/src/caves.html');
  const block = capture(/var LORE = (\{\s*elder:[\s\S]*?\n    \});/);
  const roles = Object.fromEntries(['elder', 'trader', 'parent', 'worker', 'child'].map(role => [role, literalStrings(capture(new RegExp(`${role}: (\\[[\\s\\S]*?\\])`), block))]));
  assert.deepEqual(DWELLER_LORE, roles);

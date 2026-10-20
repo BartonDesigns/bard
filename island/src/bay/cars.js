@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
+import { smoothstep as sm } from '../noise.js';
 
 // L length, W width, H height, belt (base of the glass), ws (windshield foot, from the
 // centre toward the front), rf/rr (roof front and rear), rb (rear glass foot), wz (axle),
@@ -41,7 +42,6 @@ export const SPEC = {
 	truck: { L: 7.0, W: 2.4, H: 3.3, belt: 1.5, ws: 3.1, rf: 2.8, rr: -3.4, rb: -3.48, wz: 2.3, nose: 0.1, clad: 0.3, clear: 0.45, wr: 0.49, hip: 1.35, sf: 0.12, doors: [3.0, 2.2, null], panel: 2.12, box: 2.05, cabH: 2.75, plan: 12, tumble: 0.95 },
 };
 export const KINDS = Object.keys(SPEC);
-const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // the windshield's and the rear glass's rise, 0 at the foot to 1 at the roof: nearly
 // straight, bowed a little, easing in at the foot and meeting the roof at an edge
 const glassRise = (t) => { t = Math.min(1, Math.max(0, t)); return 0.55 * t + 0.45 * (1 - (1 - t) * (1 - t)) - 0.24 * t * (1 - t) * (1 - t); };

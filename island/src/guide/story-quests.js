@@ -1,10 +1,12 @@
 // The model writes a proposal. Only observed game events can advance its objectives.
 // Persistence is independent of scene objects and of the legacy exploration journal.
+
+import { jsonCopy as copy } from '../persistence/json-copy.js';
+
 export const STORY_QUEST_KEY = 'crysis-story-quests-v1';
 const TYPES = new Set(['visit', 'return', 'talk', 'scout']);
 export const storyReward = q => ({credits:100+q.steps.length*60});
 const PHASES = new Set(['offered', 'active', 'complete', 'cancelled']);
-const copy = value => JSON.parse(JSON.stringify(value));
 const label = (value, max = 160) => typeof value === 'string' ? value.trim().slice(0, max) : '';
 const identifier = value => typeof value === 'string' && value.trim() && value.length <= 512 ? value : '';
 const finitePosition = p => p && [p.x, p.y, p.z].every(Number.isFinite);

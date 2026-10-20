@@ -452,12 +452,7 @@ export function kitFor(sport, team, number, d, extra = {}) {
 	return o;
 }
 
-// ---------- other worlds: the realm's cloth, and the suits and skins of the far worlds ----------
-export function tunicFor(r, d, { body, legs, trim, hood = false } = {}) {
-	const o = { gen: 'medieval', top: { kind: 'tunic', col: body, acc: trim || body, pat: trim ? 'hem' : 'plain', fit: 'regular', sleeves: 'long', fab: 'wool' }, outer: null, bottom: { kind: 'hose', col: legs || body, pat: 'plain', legs: 'long', fit: 'tight', fab: 'wool' }, shoes: { kind: 'boot', col: '#3a2a1c', sole: '#2a1c12' }, acc: [] };
-	if (hood) o.acc.push({ kind: 'hood', col: trim || body });
-	return o;
-}
+// ---------- other worlds: the suits and skins of the far worlds ----------
 // a suit for one of the far worlds' players: a hazmat suit, a dive skin, a heat suit
 export function suitFor(kind, a, b) {
 	const o = { gen: 'alien', top: { kind: 'suit', col: a, acc: b, pat: kind === 'hazmat' ? 'hazmat' : kind === 'heat' ? 'heat' : 'block', fit: kind === 'hazmat' ? 'oversized' : 'fitted', sleeves: 'long', fab: kind === 'hazmat' ? 'nylon' : 'tech' }, outer: null, bottom: { kind: 'suit', col: a, acc: b, pat: 'plain', legs: 'long', fit: kind === 'hazmat' ? 'baggy' : 'tight', fab: kind === 'hazmat' ? 'nylon' : 'tech' }, shoes: { kind: 'boot', col: b, sole: '#1b1b1d' }, acc: [] };

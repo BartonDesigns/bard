@@ -3,17 +3,10 @@
 // Nothing here touches Web Audio (bank.js turns the arrays into buffers), so it runs in node
 // for tests too. Every result is mono; its loudness is set by the caller.
 
+import { mulberry32 as rng } from '../noise.js';
+
 // a small seeded random
-export function rng(seed) {
-	let a = seed >>> 0;
-	return () => {
-		a = (a + 0x6D2B79F5) >>> 0;
-		let t = a;
-		t = Math.imul(t ^ (t >>> 15), t | 1);
-		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
+export { rng };
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
 
 // a two-pole filter (the audio cookbook's): lowpass, highpass, bandpass (0 dB peak)

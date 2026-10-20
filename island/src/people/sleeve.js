@@ -33,6 +33,7 @@
 import * as THREE from 'three';
 import { qualityNow, onQuality } from '../world/governor.js';
 import { kitShare } from './kit-light.js';
+import { smoothstep as smooth } from '../noise.js';
 
 // ---------- what a garment is made of, and how its sleeve ends ----------
 export const FAB = { jersey: 0, sweat: 1, shirting: 2, twill: 3, nylon: 4, denim: 5, canvas: 6, fleece: 7, leather: 8, knit: 9, wool: 10, flannel: 11 };
@@ -329,7 +330,6 @@ function weightsFor(F, s, th, pos, near) {
 	const top = [...W].sort((a, b) => b[1] - a[1]).slice(0, 4), tot = top.reduce((a, b) => a + b[1], 0) || 1;
 	return [0, 1, 2, 3].map((k) => top[k] ? [top[k][0], top[k][1] / tot] : [0, 0]);
 }
-const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // The garment over one body's forearms: one geometry for all its layers and gloves, skinned to
 // the body's own bones (the same indices as the hands' skin), and which of the hands' skin

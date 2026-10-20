@@ -15,6 +15,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { smoothstep as smooth } from '../noise.js';
 
 const L0 = -5.5, L1 = 4.4;                 // stem head, transom
 const NS = 44, NC = 12;                     // stations along, points round each half-section
@@ -24,7 +25,6 @@ const DF = 1.3, DA = 0.8, UP = 3.4;         // foredeck, aft deck, flying bridge
 const CAB = { x: 1.2, z0: -1.9, z1: 1.5, top: 3.3 };
 const GROUND = -0.6;                        // beached: the gravel, in her frame
 const zAt = (t) => L0 + (L1 - L0) * t;
-const smooth = (a, b, x) => { const k = Math.max(0, Math.min(1, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
 
 // the hull at station t (0 bow .. 1 stern): half-beam at the sheer and chine, keel depth,
 // sheer height, deadrise

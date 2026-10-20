@@ -15,8 +15,8 @@
 import { soundBus, noise } from '../world/soundbus.js';
 import { cityHum } from './palette.js';
 import { PHONE } from './engines.js';
+import { clamp } from '../noise.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const MAXV = PHONE ? 2 : 4;          // one-shots at once
 
 // ---------- the rain's textures: a loop of drops for each kind of surface ----------

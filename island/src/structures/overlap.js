@@ -350,18 +350,14 @@ export function resolveLots(list, { roads = [], landmark = null, near = null, R 
 }
 
 // ---------- the surveyed regions and the grown towns ----------
-// a region as realcity.js loads it (G.boxes, its roads in G.grid's cells): its buildings
-// settled against each other, its streets and the landmarks, in place; the boxes left out are
-// taken out of G.boxes and out of their houses' groups
-export function settleRegion(G, landmark = null, count = false) {
-	const roads = new Set();
-	for (const c of G.grid.values()) for (const r of c.roads) roads.add(r);
-	return settleBoxes(G.boxes, [...roads], landmark, count);
-}
+// a grown town's boxes settled against each other and its roads (town.js)
 export function settleBoxes(boxes, roads, landmark = null, count = true) {
 	return finish(boxes, resolve(boxes, { roads, landmark, count }));
 }
-// ...across frames: awaited by realcity.js while a region loads (a few milliseconds at a time)
+// a region as realcity.js loads it (G.boxes, its roads in G.grid's cells): its buildings
+// settled against each other, its streets and the landmarks, in place; the boxes left out are
+// taken out of G.boxes and out of their houses' groups. Across frames: awaited by realcity.js
+// while a region loads (a few milliseconds at a time)
 export async function settleRegionSoon(G, landmark = null, signal = null) {
 	const roads = new Set();
 	for (const c of G.grid.values()) for (const r of c.roads) roads.add(r);

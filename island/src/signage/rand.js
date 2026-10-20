@@ -1,6 +1,8 @@
 // Seeds for the signage: every sign, sticker and tag is the same each visit, from where it
 // stands and what it is. Plain numbers, no clock, shared by the node tests.
 
+import { mulberry32 as rng } from '../noise.js';
+
 // a 32-bit hash of any mix of numbers and strings
 export function hash32(...xs) {
 	let h = 2166136261 >>> 0;
@@ -18,14 +20,5 @@ export function hash32(...xs) {
 // 0..1 from the same
 export const hash01 = (...xs) => hash32(...xs) / 4294967296;
 // a little generator from a seed (mulberry32)
-export function rng(seed) {
-	let s = seed >>> 0;
-	return () => {
-		s = (s + 0x6d2b79f5) >>> 0;
-		let t = s;
-		t = Math.imul(t ^ (t >>> 15), t | 1);
-		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
+export { rng };
 export const pick = (r, list) => list[Math.floor(r() * list.length) % list.length];

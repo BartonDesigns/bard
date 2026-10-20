@@ -7,7 +7,6 @@
 
 import { noise, soundBus } from '../world/soundbus.js';
 
-export const CUES = ['marksman', 'scout', 'pulse', 'bow', 'dry', 'cell-out', 'cell-in', 'ready', 'charge', 'equip', 'holster', 'aim'];
 
 function voice(ctx, out) {
 	// a noise burst through a filter, shaped by an envelope

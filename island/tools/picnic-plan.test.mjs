@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PICNIC,CAST,eligiblePicnic,picnicGround,findPicnicSpot,picnicDue,shotOnBeat,picnicSeats,picnicActivity,FLOOR_POSES} from './picnic-plan.js';
+import {PICNIC,CAST,eligiblePicnic,picnicGround,findPicnicSpot,picnicDue,shotOnBeat,picnicSeats,picnicActivity,FLOOR_POSES} from '../src/encounters/picnic-plan.js';
 test('floor poses vary, and each friend takes a separate turn to stretch their legs',()=>{
  assert.equal(FLOOR_POSES.length,CAST.length);
  assert.ok(FLOOR_POSES.some(p=>p.lean>.2));assert.ok(FLOOR_POSES.some(p=>p.roll<-.2));assert.ok(FLOOR_POSES.some(p=>p.roll>.2));

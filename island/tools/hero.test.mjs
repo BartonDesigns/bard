@@ -94,7 +94,7 @@ test('your body, its hands, friends and the settings all use the hero', () => {
 	assert.match(src('net/remotes.js'), /lookDNA\(r\.seed\)/);
 	assert.match(src('net/multiplayer.js'), /const seed = heroSeed\(heroChoice\(\)\)/);
 	assert.match(src('crysis/viewmodel.js'), /arms\.me !== avatar\.me/, 'the gun hands made again');
-	assert.match(src('main.js'), /'Your hero'/);
+	assert.match(src('island-panel.js'), /'Your hero'/);
 	assert.match(src('people/self.js'), /hero \? 'ready' : 'rest'/, 'they stand ready');
 	assert.match(src('people/motion.js'), /ready: \{ both: arm/);
 	assert.match(src('people/self.js'), /me\.M\.act\(leap \? 'leap' : null/, 'in the air, the legs tucked');

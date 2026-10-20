@@ -18,14 +18,13 @@
 // offers it as a warp.
 
 import * as THREE from 'three';
-import { mulberry32 } from '../noise.js';
+import { mulberry32, smoothstep as smooth } from '../noise.js';
 import { soundBus, musicSend } from '../world/soundbus.js';
 
 const KEY = 'l99-beyond';
 const Y0 = 2400;          // the realm's floor, far above the world it hangs over
 const FOLD = 380;         // how far out before space folds you back in
 const SCALE = [0, 2, 4, 6, 7, 9, 11];   // the voices: a Lydian scale on A
-const smooth = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
 const save = (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* private mode: not kept */ } };
 export const beyondFound = () => !!load()?.found;

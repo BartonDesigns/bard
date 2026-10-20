@@ -4,8 +4,8 @@
 // the dry within them; the monsoon where it comes), the polar night and the midnight sun.
 
 import { solarDeclination, solarDaylight } from '../world/solar.js';
+import { clamp } from '../noise.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // at: atlas regionAt(); month: 0..11.99 (fractional); elev: metres; hours: 0..24
 export function climateNow(at, month, elev = 0, hours = 13) {
