@@ -12,8 +12,13 @@
 //     ("I'm just having dinner!"), a run to the far side of the house, a crouch, and then
 //     standing about shaken until they settle back into their evening.
 //
+// The city's homes the same (interiors/: San Francisco's row houses, the flats over its shops,
+// each flat of an apartment block its own household), and the flat over a business in a
+// house (bay/houses.js) whose ground floor is the business's.
+//
 // Only the house you are in or at (two on a computer) has its people shown; the household is
-// whole there, never thinned. Hooks for the rest of the game (the cooking thread's kitchen,
+// whole there, never thinned. On a phone, of the city's, only the building you are in or
+// right beside. Hooks for the rest of the game (the cooking thread's kitchen,
 // the fridge, the homeowner walking in): homeAt(pos), whoIsHome(house) (bodies drawn there),
 // homeNow(house, hour) (home by their day, drawn or not), householdOf(house),
 // occupants(), and on(fn) for what happens ('scatter', 'greet').
@@ -59,7 +64,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	const W = () => world();
 	const root = new THREE.Group(); root.name = 'home-life';
 	parent.add(root);
-	const homes = new Map();                    // house (bay/houses.js) -> H
+	const homes = new Map();                    // home (a house of bay/houses.js, or a dwelling below) -> H
 	const households = new Map();               // house key -> household (kept while near)
 	const listeners = new Set();
 	const queue = [];                           // bodies to make, one a frame
@@ -69,21 +74,23 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	const emit = (e) => { for (const f of listeners) { try { f(e); } catch (err) { console.warn('home-life listener', err); } } };
 
 	// ---------- a house's household ----------
-	const keyOf = (h) => `${Math.round(h.cx)}:${Math.round(h.cz)}`;
+	const keyOf = (h) => h.key || `${Math.round(h.cx)}:${Math.round(h.cz)}`;
 	function householdOf(h) {
 		const key = keyOf(h);
 		let hh = households.get(key);
 		if (hh) return hh;
-		// the neighbourhood's own (family-life.js) where it already has one for this door
+		// the neighbourhood's own (family-life.js) where it already has one for this door (a
+		// house's; the flats stacked over one another have none of their own there)
 		const a = areaAt?.(h.cx, h.cz);
-		hh = a?.households.find((q) => !q.unhoused && q.home && Math.abs(q.home.x - h.cx) < 1.5 && Math.abs(q.home.z - h.cz) < 1.5) || null;
+		hh = h.key ? null : a?.households.find((q) => !q.unhoused && q.home && Math.abs(q.home.x - h.cx) < 1.5 && Math.abs(q.home.z - h.cz) < 1.5) || null;
 		if (!hh) {
 			// else one that fits the house: a small place for a couple or one person, a big one
 			// for a family (the beds are counted, not the people culled)
 			const beds = (h.plan.items || []).filter((it) => it.type === 'bed').length;
 			const weights = beds <= 1 ? { couple: 18, single: 16, 'older-couple': 9, 'elder-alone': 3, 'single-parent': 3 } : beds === 2 ? { ...KINDS, multigenerational: 2, roommates: 4 } : KINDS;
-			const seed = (Math.imul(Math.round(h.cx * 2) | 0, 73856093) ^ Math.imul(Math.round(h.cz * 2) | 0, 19349663) ^ 0x6f3e) >>> 0;
-			hh = makeHousehold(seed, { x: h.cx, z: h.cz, kind: 'house' }, { id: `home-${key}`, weights });
+			let seed = (Math.imul(Math.round(h.cx * 2) | 0, 73856093) ^ Math.imul(Math.round(h.cz * 2) | 0, 19349663) ^ 0x6f3e) >>> 0;
+			if (h.key) for (let i = 0; i < h.key.length; i++) seed = Math.imul(seed ^ h.key.charCodeAt(i), 16777619) >>> 0;
+			hh = makeHousehold(seed, { x: h.cx, z: h.cz, kind: h.kind || 'house' }, { id: `home-${key}`, weights });
 			if (a) { foodFor?.(hh, a.place); a.households.push(hh); }
 		}
 		households.set(key, hh);
@@ -93,7 +100,10 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 
 	// ---------- the house's frame in the world ----------
 	const yawOf = (H) => H.h.root.rotation.y;
-	function toWorld(H, lx, lz) { const h = H.h, c = Math.cos(yawOf(H)), s = Math.sin(yawOf(H)); return [h.cx + lx * c + lz * s, h.cz - lx * s + lz * c]; }
+	function toWorld(H, lx, lz) { const h = H.h, c = Math.cos(yawOf(H)), s = Math.sin(yawOf(H)); return [(h.ox ?? h.cx) + lx * c + lz * s, (h.oz ?? h.cz) - lx * s + lz * c]; }
+	// its broken windows, and whether a wall's root is its
+	const panesOf = (h) => (h.panes ? h.panes() : h.openedPanes?.size || 0);
+	const owns = (h, root) => (h.owns ? h.owns(root) : root === h.root);
 	const floorOf = (H, spot) => H.h.floorY + (spot?.y || 0);
 
 	function occupy(h) {
@@ -101,7 +111,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		anchor.position.copy(h.root.position); anchor.quaternion.copy(h.root.quaternion);
 		root.add(anchor);
 		const hh = householdOf(h);
-		const H = { h, key: keyOf(h), hh, spots: spotsOf(h.plan), plans: null, planDay: -1, actors: new Map(), prev: new Map(), anchor, tvs: new Map(), panes: h.openedPanes?.size || 0, said: 0, greeted: false, inside: false, cover: COVERS[Math.floor(hash(h.cx, h.cz) * COVERS.length)] };
+		const H = { h, key: keyOf(h), hh, spots: spotsOf(h.plan), plans: null, planDay: -1, actors: new Map(), prev: new Map(), anchor, tvs: new Map(), panes: panesOf(h), said: 0, greeted: false, inside: false, cover: COVERS[Math.floor(hash(h.cx, h.cz) * COVERS.length)] };
 		H.coverMat = new THREE.MeshStandardMaterial({ color: H.cover, roughness: 0.92 });
 		homes.set(h, H);
 		watchWalls();
@@ -115,6 +125,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		H.coverMat.dispose();
 		H.anchor.removeFromParent();
 		homes.delete(H.h);
+		if (H.h.B) H.h.B.lived = [...homes.keys()].some((q) => q.B === H.h.B);
 	}
 	function drop(a) {
 		a.active = false;
@@ -126,20 +137,118 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 
 	// ---------- which houses have their people shown ----------
 	function choose() {
-		const w = W(), H = w?.houses?.houses, cam = camera.position;
-		if (!H) { for (const x of [...homes.values()]) vacate(x); return; }
-		const inside = w.houses.inside?.(cam)?.h || null;
-		const L = [];
-		for (const h of H.values()) {
-			if (!h?.plan?.rooms || !h.root || !Number.isFinite(h.floorY) || h.plan.estab) continue;
-			const d = Math.hypot(h.cx - cam.x, h.cz - cam.z);
-			if (h === inside || d < R + (homes.has(h) ? 8 : 0)) L.push([h === inside ? -1 : d, h]);
+		const w = W(), H = w?.houses?.houses, I = w?.interiors, cam = camera.position;
+		if (!H && !I?.live) { for (const x of [...homes.values()]) vacate(x); return; }
+		const ins = H ? w.houses.inside?.(cam) || null : null, inside = ins?.h || null;
+		const L = [], isIn = new Set();
+		if (H) for (const h of H.values()) {
+			if (!h?.plan?.rooms || !h.root || !Number.isFinite(h.floorY)) continue;
+			// (a business's house: its people only in the flat over it, where it has one)
+			const d0 = h.plan.estab ? over(h) : h;
+			if (!d0) continue;
+			const d = Math.hypot(h.cx - cam.x, h.cz - cam.z), here = h === inside && (d0 === h || ins.level > 0);
+			if (here) isIn.add(d0);
+			if (here || d < R + (homes.has(d0) ? 8 : 0)) L.push([here ? -1 : d, d0]);
+		}
+		// the city's (interiors/): each flat on its own; on a phone only the building you are in
+		// or right beside
+		const at = I?.live ? I.inside?.(cam) || null : null;
+		if (I?.live) for (const B of I.live.values()) {
+			if (!B.ready || !B.P || !B.root || !LIVED.has(B.use)) continue;
+			for (const u of dwellingsOf(B)) {
+				if (!u.ready()) continue;
+				const [lx, lz] = toLocal(u, cam.x, cam.z), dx = Math.max(u.x0 - lx, 0, lx - u.x1), dz = Math.max(u.z0 - lz, 0, lz - u.z1);
+				const dy = Math.abs(cam.y - 1.6 - u.floorY - u.y), flat = Math.hypot(dx, dz), inB = at?.B === B;
+				const here = inB && u.levels.has(at.level) && (u.whole || u.rooms.some((r) => r.k === at.level && lx > r.x0 - 0.2 && lx < r.x1 + 0.2 && lz > r.z0 - 0.2 && lz < r.z1 + 0.2));
+				if (isPhone && !inB && (flat > 4 || dy > 2.5)) continue;
+				const d = flat + dy * 2;
+				if (here) isIn.add(u);
+				if (here || d < R + (homes.has(u) ? 8 : 0)) L.push([here ? -1 : inB ? d * 0.5 : d, u]);
+			}
 		}
 		L.sort((p, q) => p[0] - q[0]);
 		const want = new Set(L.slice(0, HOUSES).map((q) => q[1]));
-		for (const x of [...homes.values()]) if (!want.has(x.h) || !H.has(x.h.grp) || H.get(x.h.grp) !== x.h) vacate(x);
+		for (const x of [...homes.values()]) if (!want.has(x.h) || !alive(x.h)) vacate(x);
 		for (const h of want) if (!homes.has(h)) occupy(h);
-		for (const x of homes.values()) x.inside = x.h === inside;
+		for (const x of homes.values()) { x.inside = isIn.has(x.h); if (x.h.B) x.h.B.lived = true; }
+	}
+	function alive(h) {
+		if (h.alive) return h.alive();
+		const H = W()?.houses?.houses;
+		return !!H && H.get(h.grp) === h;
+	}
+	// a house's frame, back from the world's
+	function toLocal(h, x, z) { const y = h.root.rotation.y, c = Math.cos(y), s = Math.sin(y), dx = x - (h.ox ?? h.cx), dz = z - (h.oz ?? h.cz); return [dx * c - dz * s, dx * s + dz * c]; }
+
+	// ---------- the homes that are not a whole house ----------
+	// the flat over a business (its ground floor the business's, bay/houseplan.js): the rooms
+	// upstairs, a household of their own (none over a bed and breakfast: those are its guests')
+	const uppers = new WeakMap();
+	function over(h) {
+		if (h.plan.estab?.fit === 'bnb') return null;
+		let u = uppers.get(h);
+		if (u !== undefined) return u;
+		const ids = new Set(h.plan.rooms.filter((r) => (r.level || 0) > 0 && !r.biz).map((r) => r.id));
+		const plan = { ...h.plan, estab: null, rooms: h.plan.rooms.map((r) => (ids.has(r.id) ? r : { id: r.id, type: r.type, skip: true })), items: (h.plan.items || []).filter((it) => ids.has(it.room)) };
+		u = plan.items.some((it) => it.type === 'bed') ? {
+			house: h, root: h.root, floorY: h.floorY, cx: h.cx, cz: h.cz, r: h.r, plan, kind: 'flat', key: `over:${Math.round(h.cx)}:${Math.round(h.cz)}`,
+			panes: () => h.openedPanes?.size || 0, owns: (root) => root === h.root, alive: () => W()?.houses?.houses?.get(h.grp) === h,
+		} : null;
+		uppers.set(h, u);
+		return u;
+	}
+	// the city's buildings (interiors/plan.js): a row house all one home (its ground floor the
+	// shop's, in a shop), an apartment block a home to each flat. Each ready once its rooms are
+	// furnished and built; its plan the rooms and furniture of that home alone.
+	const LIVED = new Set(['row', 'shop', 'apt']);
+	const RES = new Set(['living', 'kitchen', 'dining', 'family', 'bed', 'master', 'bath', 'powder', 'den', 'office', 'laundry']);
+	const dwellings = new WeakMap();
+	function dwellingsOf(B) {
+		let out = dwellings.get(B);
+		if (out) return out;
+		const P = B.P, units = P.rooms.some((r) => r.unit), groups = new Map();
+		for (const r of P.rooms) {
+			const u = units ? r.unit : RES.has(r.type) && !(B.use === 'shop' && r.k === 0) ? 0 : undefined;
+			if (u === undefined) continue;
+			(groups.get(u) || groups.set(u, []).get(u)).push(r);
+		}
+		out = [];
+		for (const [id, rooms] of groups) {
+			const x0 = Math.min(...rooms.map((r) => r.x0)), x1 = Math.max(...rooms.map((r) => r.x1)), z0 = Math.min(...rooms.map((r) => r.z0)), z1 = Math.max(...rooms.map((r) => r.z1));
+			const levels = new Set(rooms.map((r) => r.k)), k0 = Math.min(...levels), ids = new Set(rooms.map((r) => r.id));
+			const u = {
+				B, rooms, levels, whole: !units, x0, x1, z0, z1, y: P.levels[k0].y, kind: units ? 'flat' : 'row', key: `${B.key}:${id}`,
+				root: B.root, floorY: P.f0, ox: B.root.position.x, oz: B.root.position.z, r: Math.hypot(x1 - x0, z1 - z0) / 2, plan: null, none: false,
+				ready() {
+					if (u.plan) return true;
+					if (u.none || !rooms.every((r) => r.furnished) || ![...levels].every((k) => B.levels?.[k]?.full)) return false;
+					const plan = { rooms: P.rooms.map((r) => (ids.has(r.id) ? { id: r.id, type: r.type, level: r.k, y: P.levels[r.k].y, x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1 } : { id: r.id, type: r.type, skip: true })), items: P.items.filter((it) => ids.has(it.room)) };
+					// (somewhere to sleep: a bed, or a sofa long enough in a studio)
+					if (!spotsOf(plan).some((s) => s.lie)) { u.none = true; return false; }
+					u.plan = plan;
+					return true;
+				},
+				panes: () => { let n = 0; for (const k of levels) n += B.levels?.[k]?.opened?.size || 0; return n; },
+				owns: (root) => [...levels].some((k) => B.levels?.[k]?.root === root),
+				alive: () => B.ready && W()?.interiors?.live?.get(B.key) === B,
+			};
+			// (its middle, in the world)
+			const c = Math.cos(B.root.rotation.y), s = Math.sin(B.root.rotation.y), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+			u.cx = u.ox + mx * c + mz * s; u.cz = u.oz - mx * s + mz * c;
+			out.push(u);
+		}
+		dwellings.set(B, out);
+		return out;
+	}
+	// the city home a place is in (interiors/), if any
+	function dwellingAt(B, level, pos) {
+		if (!LIVED.has(B?.use) || !B.P) return null;
+		for (const u of dwellingsOf(B)) {
+			if (!u.levels.has(level)) continue;
+			const [lx, lz] = toLocal(u, pos.x, pos.z);
+			if (u.whole || u.rooms.some((r) => r.k === level && lx > r.x0 - 0.2 && lx < r.x1 + 0.2 && lz > r.z0 - 0.2 && lz < r.z1 + 0.2)) return u;
+		}
+		return null;
 	}
 
 	// ---------- who is where, now ----------
@@ -288,7 +397,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		wallsOf = walls;
 		wallsOff = walls.on((e) => {
 			if (e.type !== 'change' || !(e.holes?.length || e.breach?.length)) return;
-			for (const H of homes.values()) if (e.root === H.h.root) scatter(H, 'wall');
+			for (const H of homes.values()) if (owns(H.h, e.root)) scatter(H, 'wall');
 		});
 	}
 	function source(H) {
@@ -358,7 +467,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	// ---------- each frame ----------
 	function update(dt, t, enabled = true) {
 		if (dead) return;
-		if (!enabled || !W()?.houses) { if (homes.size) clear(); return; }
+		if (!enabled || !(W()?.houses || W()?.interiors)) { if (homes.size) clear(); return; }
 		const cam = camera.position;
 		camera.updateMatrixWorld?.();
 		_m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(_m);
@@ -378,7 +487,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		}
 		for (const H of homes.values()) {
 			// a window broken in, since the last look
-			const n = H.h.openedPanes?.size || 0;
+			const n = panesOf(H.h);
 			if (n > H.panes) scatter(H, 'window');
 			H.panes = n;
 			// the TV's picture
@@ -471,6 +580,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	}
 	function clear() {
 		for (const H of [...homes.values()]) vacate(H);
+		if (W()?.interiors?.live) for (const B of W().interiors.live.values()) B.lived = false;
 		queue.length = 0;
 	}
 	function dispose() { clear(); wallsOff?.(); wallsOff = null; dead = true; root.removeFromParent(); }
@@ -480,10 +590,16 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	function homeAt(pos) {
 		// (a house itself as well as a place)
 		if (pos?.plan?.rooms) return { house: pos, level: 0, household: householdOf(pos), home: homeNow(pos) };
-		const ins = Number.isFinite(pos?.x) ? W()?.houses?.inside?.(pos) : null;
-		if (!ins) return null;
-		const H = homes.get(ins.h);
-		return { house: ins.h, level: ins.level, household: householdOf(ins.h), home: H ? whoIsHome(ins.h) : null };
+		if (!Number.isFinite(pos?.x)) return null;
+		const ins = W()?.houses?.inside?.(pos);
+		if (!ins) {
+			// a home in the city's (interiors/): the row house, the flat
+			const I = W()?.interiors?.inside?.(pos), u = I ? dwellingAt(I.B, I.level, pos) : null;
+			return u ? { house: u, level: I.level, household: householdOf(u), home: homes.has(u) ? whoIsHome(u) : null, building: I.B } : null;
+		}
+		// (upstairs over a business: the flat's household)
+		const u = ins.h.plan?.estab && ins.level > 0 ? over(ins.h) : null, h = u || ins.h;
+		return { house: h, level: ins.level, household: householdOf(h), home: homes.has(h) ? whoIsHome(h) : null };
 	}
 	function whoIsHome(h) {
 		const H = homes.get(h);

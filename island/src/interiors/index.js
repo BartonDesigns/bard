@@ -64,7 +64,9 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			return null;
 		}
 		const k = o.kind;
-		if (k < 0.5) return 'row';
+		// (a row house that is a business: the business on the ground floor, a flat over it, never
+		// bedrooms behind the shop)
+		if (k < 0.5) return o.biz && profileOf(o.biz.type).fit ? 'shop' : 'row';
 		if (k === K.shop) return 'shop';
 		if (k === K.industry) return 'warehouse';
 		if (k === K.garage) return 'garage2';
@@ -122,6 +124,9 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				if (bayLot) { const [bx] = F.l(bayLot.x, bayLot.z); bayS = { x0: bx - bayLot.w / 2, x1: bx + bayLot.w / 2, y0: bayLot.y - f0, y1: bayLot.y + bayLot.h - f0 }; }
 			}
 			spec = { use: apt ? 'apt' : use, W, D, levels: n, reach: 3, doorX, stairSide, garage: !!garage, zb, winCols: winCols.length ? winCols : null, winRows, bay: bayS, shopType: SHOPS[dist]?.[Math.floor(rnd() * (SHOPS[dist]?.length || 1))] || SHOPS.any[Math.floor(rnd() * SHOPS.any.length)], rnd, style, party: !o.src && o.kind < 0.5 };
+			// (an apartment block with a business in it: the business on the ground floor, the flats over it)
+			const E = o.biz || o.src?.biz;
+			spec.shop = apt && !!E && !!profileOf(E.type).fit;
 			P = apt ? planApt(spec) : planRow(spec);
 			if (garage) P.garage = garage === 'L' ? [-W / 2 + 0.5, -W / 2 + 3.1] : [W / 2 - 3.1, W / 2 - 0.5];
 			P.f0 = f0; P.street = street; P.bayLot = bayLot;
@@ -273,6 +278,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			for (const o of city.lotsNear(x, z, BUILD_R)) {
 				const key = city.lotKey(o), B = live.get(key);
 				if (B) { B.o = o; B.seen = true; }
+				// (built as a home before the town made it a business: built again as one, once you are not in it)
+				if (B?.ready && B.use === 'row' && useOf(o, tall) === 'shop' && inside(p)?.B !== B) { drop(key); continue; }
 				const use = B ? B.use : useOf(o, tall);
 				if (!use) continue;
 				const d = Math.max(0, Math.hypot(o.x - x, o.z - z) - Math.max(o.w, o.d) / 2);
@@ -454,6 +461,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (!h) return null;
 		const B = h.B, P = B.P, lvY = P.levels[h.level].y;
 		const home = B.use === 'row' || B.use === 'apt';
+		// (a home's own household is in it: people/home-life.js)
+		if (B.lived && (home || (B.use === 'shop' && h.level > 0))) return null;
 		const k = B.use === 'shop' && h.level === 0 ? crowd(ZONE.retail, hours).k : home ? (hours > 18 || hours < 8 ? 0.75 : 0.35) : B.use === 'school' ? (hours > 8 && hours < 15.5 ? 0.9 : 0.02) : B.use === 'office' ? crowd(ZONE.office, hours).k : B.use === 'store' ? crowd(ZONE.retail, hours).k : B.use === 'site' ? (hours > (P.hours?.[0] ?? 9.5) && hours < (P.hours?.[1] ?? 16.5) ? 0.6 : 0) : 0.2;
 		if (!B.spots) {
 			const F = frame(B.o);

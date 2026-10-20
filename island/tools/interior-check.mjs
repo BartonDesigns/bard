@@ -319,6 +319,7 @@ for (let s = 0; s < SEEDS; s++) {
 		cityRun('shop', planRow({ ...base, use: 'shop', stairSide: side, doorX: -side * Math.min(1.2, W * 0.12), shopType: 'cafe', rnd: rng(s * 31 + W + D) }));
 	}
 	for (const W of [14, 18, 24, 30]) for (const D of [16, 22, 30, 40]) cityRun('apt', planApt({ W, D, levels: 3 + (s % 4), doorX: 0, winCols: null, winRows: [], party: s % 2 === 0, rnd: rng(s * 7 + W * D), style: 'modern' }));
+	for (const W of [14, 18, 24, 30]) for (const D of [16, 22, 30, 40]) cityRun('apt shop', planApt({ W, D, levels: 3 + (s % 4), doorX: 0, winCols: null, winRows: [], party: s % 2 === 0, shop: true, shopType: 'cafe', rnd: rng(s * 11 + W * D), style: 'modern' }));
 	for (const use of ['school', 'warehouse', 'store', 'office', 'shed', 'garage2']) for (const [W, D] of [[12, 10], [24, 20], [30, 36], [40, 30]]) cityRun('hall', planHall({ use, W, D, h: 4 + (s % 3), doorX: 0, rnd: rng(s * 13 + W), style: 'modern' }));
 	if (planSummit) cityRun('summit', planSummit({ rnd: rng(s + 5), roofY: 6.9 + (s % 4) * 0.4 }));
 }
