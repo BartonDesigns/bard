@@ -82,6 +82,27 @@ export function createShaderWarm(renderer, scene, camera) {
 		step(list, n);
 		return false;
 	}
+	// the pictures the visible materials read, handed to the GPU one at a time with a breath
+	// between, so the first frame does not upload them all at once (phones die of that burst)
+	const sent = new WeakMap();
+	function texturesOf(m, out) {
+		for (const k in m) { const t = m[k]; if (t?.isTexture) out.add(t); }
+		if (m.uniforms) for (const k in m.uniforms) { const v = m.uniforms[k]?.value; if (v?.isTexture) out.add(v); else if (Array.isArray(v)) for (const t of v) if (t?.isTexture) out.add(t); }
+	}
+	async function textures({ budget = 2500 } = {}) {
+		const generation = epoch, t0 = performance.now(), all = new Set();
+		scene.updateMatrixWorld(); view();
+		scene.traverseVisible((o) => { if ((o.isMesh || o.isPoints || o.isLine || o.isSprite) && o.material && inView(o)) for (const m of mats(o)) if (m) texturesOf(m, all); });
+		let n = 0;
+		for (const t of all) {
+			if (generation !== epoch || renderer.getContext().isContextLost() || performance.now() - t0 > budget) break;
+			if (t.isRenderTargetTexture || t.version === 0 || sent.get(t) === t.version) continue;
+			renderer.initTexture(t);
+			sent.set(t, t.version); n++;
+			await new Promise((ok) => setTimeout(ok, 0));
+		}
+		return n;
+	}
 	function reset() { epoch++; run++; cancelWork?.(); cancelWork = null; queue = []; work = null; done = new WeakMap(); last.length = 0; t = 0; compiled = 0; }
-	return { all, tick, prepare, reset, recent: () => last.slice(), info: () => ({ pending: queue.length, busy: !!work, compiled }) };
+	return { all, textures, tick, prepare, reset, recent: () => last.slice(), info: () => ({ pending: queue.length, busy: !!work, compiled }) };
 }
