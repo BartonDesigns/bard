@@ -1622,6 +1622,16 @@ if (typeof window !== 'undefined') {
 		// loading screen's black box, the loads that went without a goodbye: Crysis.loadTrail()
 		perf: (on) => (on == null ? HOOKS.perf?.on() : HOOKS.perf?.show(on)),
 		loadTrail: () => window.L99Loading?.trail?.(),
+		// the high cloud now: Crysis.clouds() reads it; .clouds({ tails: 0.8, veil: 0.9, reach: 1 })
+		// holds any of them (mare's tails, the veil's thickness, how far over the sky); 'auto' lets go
+		clouds: (o) => {
+			const wx = window.L99Island?.world?.()?.weather;
+			if (!wx) return 'no weather';
+			if (o === 'auto') for (const k of ['tails', 'veil', 'reach']) wx.pin(k, null);
+			else if (o) for (const k of ['tails', 'veil', 'reach']) if (o[k] !== undefined) wx.pin(k, o[k]);
+			const S = wx.state;
+			return { mode: S.mode, cover: +S.cover.toFixed(2), cirrus: +S.cirrus.toFixed(2), tails: +S.tails.toFixed(2), veil: +S.veil.toFixed(2), reach: +S.reach.toFixed(2), sunVis: +S.sunVis.toFixed(2) };
+		},
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()
