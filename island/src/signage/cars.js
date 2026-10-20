@@ -42,12 +42,6 @@ function plateFace(locale, i) {
 const LIVERY_FACES = {
 	police: { k: 'livery', svc: 'police', word: 'POLICE', sub: 'HARBOUR' },
 	roof: { k: 'livery', svc: 'roof', word: '12' },
-	ambulance: { k: 'livery', svc: 'ambulance', word: 'AMBULANCE' },
-	ambulanceFront: { k: 'livery', svc: 'ambulance', word: 'AMBULANCE', mirror: true },
-	chevron: { k: 'livery', svc: 'chevron' },
-	pulse: { k: 'livery', svc: 'pulse' },
-	fire: { k: 'livery', svc: 'fire', word: 'FIRE RESCUE', sub: 'ENGINE 7' },
-	stripe: { k: 'livery', svc: 'stripe', col: '#e8c46a', col2: '#f4f4f0' },
 	military: { k: 'livery', svc: 'military', word: 'MERIDIAN GUARD' },
 	// the vans: the tactical team's in charcoal with reflective white, a patrol van's with gold
 	swat: { k: 'livery', svc: 'swat', word: 'POLICE', sub: 'TACTICAL UNIT' },
@@ -95,7 +89,7 @@ export function carFaces(locale = 'us-ca') {
 	for (let i = 0; i < POOLS.bumper; i++) want.set('bumper' + i, { face: { k: 'bumper', seed: i + 1 }, w: 0.28, h: 0.075 });
 	for (let i = 0; i < POOLS.window; i++) want.set('window' + i, { face: { k: 'wsticker', seed: i + 1 }, w: 0.24, h: 0.08 });
 	for (let i = 0; i < POOLS.permit; i++) want.set('permit' + i, { face: { k: 'cpermit', seed: i + 1, year: 2026, style: locale === 'de' ? 'de' : sys.id === 'jp' ? 'jp' : 'us' }, w: 0.08, h: 0.08 });
-	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'pulse' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'pulse' || k === 'vanRoof' ? 0.6 : 0.5 });
+	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'vanRoof' ? 0.6 : 0.5 });
 	for (const [k, f] of Object.entries(STENCILS)) want.set('mil:' + k, { face: f, w: f.mark ? 0.5 : f.word?.length > 8 ? 2.4 : 0.8, h: f.mark ? 0.5 : f.word?.length > 8 ? 0.32 : 0.18 });
 	return want;
 }
