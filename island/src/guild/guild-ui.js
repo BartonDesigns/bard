@@ -225,13 +225,13 @@ export function createGuildPanel({ mount, menu, hint = () => {} }) {
 		body.append(head(`Players · ${g.players.length}`));
 		for (const p of g.players) {
 			const li = el('div', 'gld-li');
-			li.append(el('span', '', p.u), el('small', '', `${RANK[p.rank]} · joined ${ago(p.joined)}`));
-			const me = p.u === api.me();
+			li.append(el('span', '', p.me ? `${p.name} (you)` : p.name), el('small', '', `${RANK[p.rank]} · joined ${ago(p.joined)}`));
+			const me = !!p.me;
 			if (boss && !me && p.rank !== 'leader') {
-				li.append(button('gld-ghost', p.rank === 'officer' ? 'Make member' : 'Make officer', () => run(() => api.act('rank', { who: p.u, rank: p.rank === 'officer' ? 'member' : 'officer' }))));
-				li.append(button('gld-ghost', 'Hand over', () => { if (confirm(`Make ${p.u} the leader? You become an officer.`)) run(() => api.act('rank', { who: p.u, rank: 'leader' })); }));
+				li.append(button('gld-ghost', p.rank === 'officer' ? 'Make member' : 'Make officer', () => run(() => api.act('rank', { id: p.id, rank: p.rank === 'officer' ? 'member' : 'officer' }))));
+				li.append(button('gld-ghost', 'Hand over', () => { if (confirm(`Make ${p.name} the leader? You become an officer.`)) run(() => api.act('rank', { id: p.id, rank: 'leader' })); }));
 			}
-			if (may && p.rank !== 'leader' && (boss || p.rank === 'member') && !me) li.append(button('gld-ghost warn', 'Remove', () => { if (confirm(`Remove ${p.u} from the guild?`)) run(() => api.act('kick', { who: p.u })); }));
+			if (may && p.rank !== 'leader' && (boss || p.rank === 'member') && !me) li.append(button('gld-ghost warn', 'Remove', () => { if (confirm(`Remove ${p.name} from the guild?`)) run(() => api.act('kick', { id: p.id })); }));
 			body.append(li);
 		}
 		if (g.others?.length) {
@@ -247,7 +247,7 @@ export function createGuildPanel({ mount, menu, hint = () => {} }) {
 		body.append(row);
 		for (const i of g.invites || []) {
 			const li = el('div', 'gld-li');
-			li.append(el('span', '', i.u), el('small', '', `invited ${ago(i.at)}`), button('gld-ghost', 'Withdraw', () => run(() => api.act('uninvite', { to: i.u }))));
+			li.append(el('span', '', i.name), el('small', '', `invited ${ago(i.at)}`), button('gld-ghost', 'Withdraw', () => run(() => api.act('uninvite', { id: i.id }))));
 			body.append(li);
 		}
 	}

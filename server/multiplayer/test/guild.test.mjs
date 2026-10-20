@@ -74,11 +74,19 @@ test('found, invite, join, ranks, leave', async () => {
 	const j = await kim('join', { id: g.guild.id });
 	assert.equal(j.status, 200); assert.equal(j.guild.members.length, 2);
 	assert.equal((await kim('mine')).invites.length, 0);
+	// usernames stay private: members are a player name and an id
+	const seen = (await kim('mine')).guild;
+	assert.ok(!JSON.stringify(seen).includes('josh'), 'kim never sees josh\'s username');
+	const joshId = seen.members.find((m) => !m.me).id, kimId = seen.members.find((m) => m.me).id;
+	assert.match(joshId, /^p[0-9a-f]{12}$/);
 	// ranks: only the leader
 	assert.equal((await kim('invite', { to: 'ari' })).status, 403, 'a member cannot invite');
-	assert.equal((await kim('rank', { who: 'josh', rank: 'member' })).status, 403);
-	assert.equal((await josh('rank', { who: 'kim', rank: 'officer' })).status, 200);
-	assert.equal((await kim('invite', { to: 'ari' })).status, 200, 'an officer can');
+	assert.equal((await kim('rank', { id: joshId, rank: 'member' })).status, 403);
+	assert.equal((await josh('rank', { id: kimId, rank: 'officer' })).status, 200);
+	const inv = await kim('invite', { to: 'ari' });
+	assert.equal(inv.status, 200, 'an officer can');
+	assert.equal(inv.guild.invites[0].name, 'ari', 'the one who invited sees whom');
+	assert.ok(!JSON.stringify((await josh('mine')).guild.invites).includes('"ari"'), 'the others do not');
 	assert.equal((await ari('decline', { id: g.guild.id })).status, 200);
 	assert.equal((await ari('mine')).invites.length, 0);
 	// the leader leaves: the officer leads

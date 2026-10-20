@@ -46,8 +46,7 @@ export function createGuild({ combat, guide = null, social = null, nearby = () =
 			if (g?.id) { g = { ...g, id: '', rank: 'leader', players: [], allies: [], asks: [], offered: [], invites: [] }; save(); }
 			return;
 		}
-		const me = cloud?.auth?.()?.u;
-		g = { ...(g || {}), v: 1, id: sg.id, name: sg.name, tag: sg.tag, colours: sg.colours, founded: sg.founded, npcs, rank: sg.members.find((m) => m.u === me)?.rank || 'member', players: sg.members, allies: sg.allies, asks: sg.asks, offered: sg.offered, invites: sg.invites, others: sg.npcs };
+		g = { ...(g || {}), v: 1, id: sg.id, name: sg.name, tag: sg.tag, colours: sg.colours, founded: sg.founded, npcs, rank: sg.members.find((m) => m.me)?.rank || 'member', players: sg.members, allies: sg.allies, asks: sg.asks, offered: sg.offered, invites: sg.invites, others: sg.npcs };
 		save();
 	}
 	async function sync() {
@@ -172,7 +171,7 @@ export function createGuild({ combat, guide = null, social = null, nearby = () =
 
 	const panel = createGuildPanel({ mount, menu, hint, isPhone, api: null });
 	const api = {
-		get: () => g, server: () => server, signedIn, me: () => cloud?.auth?.()?.u || '', found, colour, disband, ask, dismiss, setFollow, candidates, act, sync, share, companions,
+		get: () => g, server: () => server, signedIn, found, colour, disband, ask, dismiss, setFollow, candidates, act, sync, share, companions,
 		subscribe: (f) => { listeners.add(f); return () => listeners.delete(f); },
 		hold: (on) => { companions.hold(on); changed(); },
 		open: (tab) => panel.open(tab),

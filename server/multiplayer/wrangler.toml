@@ -51,5 +51,5 @@ name = "GUILDS"
 class_name = "Guilds"
 
 [[migrations]]
-tag = "v5-guilds"
+tag = "v6-guilds"
 new_sqlite_classes = ["Guilds"]

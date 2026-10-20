@@ -129,8 +129,8 @@ export async function handle(request, env) {
 		// (who is signed in: their own account says, by its session)
 		const me = await env.ACCOUNTS.get(env.ACCOUNTS.idFromName('user:' + u)).fetch(new Request('https://account/whoami', { method: 'POST', headers: { authorization: request.headers.get('authorization') || '' }, body: JSON.stringify({ u }) }));
 		if (me.status !== 200) return reply({ error: 'Please log in again.' }, 401, H);
-		const stub = env.GUILDS.get(env.GUILDS.idFromName('registry'));
-		const result = await stub.fetch(new Request('https://guild/' + gop[1], { method: 'POST', headers: { 'x-guild-user': u }, body: text }));
+		const stub = env.GUILDS.get(env.GUILDS.idFromName('registry')), name = String((await me.json().catch(() => ({})))?.name || '').replace(/[\r\n]/g, ' ').slice(0, 24);
+		const result = await stub.fetch(new Request('https://guild/' + gop[1], { method: 'POST', headers: { 'x-guild-user': u, 'x-guild-name': encodeURIComponent(name) }, body: text }));
 		return new Response(result.body, { status: result.status, headers: { ...H, 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
 	}
 
