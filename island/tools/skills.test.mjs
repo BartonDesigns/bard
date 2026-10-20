@@ -192,7 +192,8 @@ test('the menu is wired: the keys, the places menu, the fight held and the world
 	const idx = fs.readFileSync(new URL('../src/magic/index.js', import.meta.url), 'utf8');
 	for (const k of ["e.code === 'Tab'", 'KeyN', 'menu.insertBefore', 'hooks.power', 'spellBlock(state, SPELL[id])', 'addMastery(state, a.id, b)', 'onFeed:', "addUse(state, 'athletics'"]) assert.ok(idx.includes(k), k);
 	const main = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
-	assert.match(main, /menu: tpMenu/); assert.match(main, /magic\.menuOpen\(\)/); assert.match(main, /magic\.covering\(\)/);
+	const frame = fs.readFileSync(new URL('../src/island-frame.js', import.meta.url), 'utf8');
+	assert.match(main, /menu: tpMenu/); assert.match(frame, /magic\.menuOpen\(\)/); assert.match(frame, /magic\.covering\(\)/);
 	const ui = fs.readFileSync(new URL('../src/magic/skills-ui.js', import.meta.url), 'utf8');
 	for (const k of ['sk-feed', 'onFeed(sp.id', 'pointerdown', 'wheel', 'ArrowRight', 'Escape', 'Digit6', 'stopImmediatePropagation', "addEventListener('keydown', onKey, true)"]) assert.ok(ui.includes(k), k);
 	const combat = fs.readFileSync(new URL('../src/combat/combat.js', import.meta.url), 'utf8');
