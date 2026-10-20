@@ -353,8 +353,10 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	// (the body kit is only asked for once someone is coming: nothing more held on a phone till then)
 	let A = null, owner = null, loadingA = null;
 	const assets = () => { if (!A && !loadingA) loadingA = loadPeopleAssets().then((x) => { A = x; }).catch(() => {}).finally(() => { loadingA = null; }); };
+	// (not on phones for now: a body more waits for the phones' budget, 2026-10-20)
+	const WALK_IN_PHONE = false;
 	function walkInMaybe(k) {
-		if (owner || !k.house) return;
+		if (owner || !k.house || (isPhone && !WALK_IN_PHONE)) return;
 		const h = hours(), chance = h > 17 && h < 21.5 ? 0.6 : h > 6.5 && h < 17 ? 0.35 : 0.25;
 		if (Math.random() > chance) return;
 		const hh = k.hh, adults = hh ? hh.members.filter((m) => m.age >= 18) : [];
