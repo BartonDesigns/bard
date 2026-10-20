@@ -384,6 +384,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		const M = createMotion(P, () => fy, { constrain(to, fromV) { const s = safeSocialStep(world()?.island, fromV, to, world()?.player); if (s) to.set(s.x, s.y, s.z); else to.copy(fromV); } });
 		M.setGround?.(() => fy);
 		scene.add(P.root);
+		if (isPhone) P.root.traverse((q) => { q.castShadow = false; });
 		M.place(from[0], fy, from[1], Math.atan2(pos.x - from[0], pos.z - from[1]));
 		fadePerson(P, 0.02);
 		const body = { P, M, active: true, fade: 0, source: 'cooking', talk: { open: () => talkOpen(), reply: () => null } };
@@ -457,7 +458,8 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		}
 		if (o.state !== 'leave') { B.fade = Math.min(1, (B.fade || 0) + dt * 1.5); fadePerson(B.P, B.fade); }
 		B.M.update(dt, t, pos);
-		B.P.lod?.(d);
+		// (on a phone the close-up detail stays off: one body, kept light)
+		B.P.lod?.(isPhone ? Math.max(d, 15) : d);
 	}
 
 	// ---------- the places menu: your meals and larder ----------
