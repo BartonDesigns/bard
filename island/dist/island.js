@@ -17296,7 +17296,7 @@ ${te?ae?.title||"Landing":"Departure"}`,T.update(e,Ve>=l7?Se().filter(rt=>rt.id!
 .l99-set-tab{min-height:44px;padding:8px 6px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 13px system-ui;cursor:pointer;touch-action:manipulation;}
 .l99-set-tab[aria-selected="true"]{color:#fff;border-bottom-color:#01a982;}
 .l99-set-tab:focus-visible,.l99-set-x:focus-visible{outline:2px solid #01a982;outline-offset:2px;}
-.l99-set-body{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px;align-content:start;padding-bottom:12px;}
+.l99-set-body{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px;align-content:start;align-items:start;padding-bottom:12px;}
 .l99-set-card{background:#1a1a1a;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;min-width:0;}
 .l99-set-card>h3{margin:0 0 10px;font:600 11px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#a5f6e2;}
 .l99-set-note{font:12px/1.5 system-ui;color:rgba(255,255,255,.7);margin:0 0 10px;}
