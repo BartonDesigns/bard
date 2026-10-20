@@ -33,10 +33,13 @@ import { freeBody, safeSocialStep } from './social-actors.js';
 import { F as globeFrame } from '../earth/globeframe.js';
 import { createFamilyAid } from './family-aid.js';
 import { diningSeats } from './family-layout.js';
+import { createHomeLife } from './home-life.js';
 
 const CELL = 300, NEAR = 160;
 const hash = (a, b) => { let h = Math.imul(Math.floor(a) | 0, 374761393) ^ Math.imul(Math.floor(b) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const HIVIS = '#d8f03a';
+// what comes off at the door
+const OUTDOORS = new Set(['backpack', 'cap', 'beanie', 'sunglasses', 'helmet', 'visor', 'gloves', 'mitt', 'hazhood', 'tote', 'shopper', 'handbag', 'crossbody', 'headphones']);
 
 // ---------- the small things they carry and the things that stand about ----------
 const M = {};
@@ -136,7 +139,7 @@ function windowRoom(W, D) {
 	return g;
 }
 
-export function createFamilyLife({ scene, world, camera, people = null, isPhone = false, morality = () => null, wallet = null, mount = null, hint = () => {}, loadAssets = loadPeopleAssets, releaseBody = () => {} }) {
+export function createFamilyLife({ scene, world, camera, people = null, isPhone = false, morality = () => null, wallet = null, mount = null, hint = () => {}, loadAssets = loadPeopleAssets, releaseBody = () => {}, say = () => {} }) {
 	const root = new THREE.Group(); root.name = 'family-life';
 	scene.add(root);
 	const W = () => world();
@@ -290,6 +293,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		if (spec.style) { const keep = d.style; d.style = { ...spec.style, hair: keep.hair, printKind: keep.printKind, acc: [...(spec.style.acc || [])] }; d.styleSig = JSON.stringify(d.outfit); }
 		if (spec.acc) d.style.acc = [...(d.style.acc || []), ...spec.acc];
 		if (spec.dinner) d.style.acc = (d.style.acc || []).filter(q => q.kind !== 'backpack');
+		// at home: no coat, no bag, no hat or sunglasses
+		if (spec.home) { d.style.outer = null; d.style.acc = (d.style.acc || []).filter(q => !OUTDOORS.has(q.kind)); }
 		const P = buildPerson(A, d);
 		const Mo = createMotion(P, (x, z) => ground(x, z), { constrain(to, from) {
 			const safe = safeSocialStep(W().island, from, to, W()?.player);
@@ -317,6 +322,11 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			q.g.rotation.set(0, h, q.kind === 'skateboard' ? 1.4 : 0);
 		}
 	}
+
+	// ---------- the families at home (home-life.js): the house you are in or at, lived in ----------
+	const homes = createHomeLife({ world: W, camera, parent: root, isPhone, areaAt, day: () => day, hours,
+		ready: () => { if (!A) assets(); return !!A && !dead; }, spawn: (spec) => (A ? body(spec) : null),
+		cap: () => peopleCap(isPhone ? 6 : 12, 4), releaseBody, say: (p, line) => say(p, line), foodFor: (h, place) => foodFor(h, place) });
 
 	// ---------- the moments ----------
 	// each: { kind, x, z, h, group, actors: [{ P, M, path, follow, sit, ... }], t }
@@ -563,7 +573,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		const zone = a.place;
 		if (((!wk && h > 15.3 && h < 21) || (wk && h > 11 && h < 21)) && r() < 0.35) { at('teens', h, Math.min(21, h + 1.5)); return; }
 		if (((!wk && h > 16.5 && h < 19.5) || (wk && h > 10 && h < 14)) && zone !== 'rural' && r() < 0.35) { at('groceries', h, h + 0.5); return; }
-		if (h > 17.8 && h < 19.8 && w.houses?.houses?.size && r() < 0.5) { at('dinner', 17.8, 19.8, { sidewalk: false }); return; }
+		// (dinner in the houses themselves is home-life.js's: the families round their own tables)
 		if ([2, 4, 6].includes(day) && h > 10 && h < 14 && (zone === 'oakland' || zone === 'sf' || a.desert) && r() < 0.4) { at('foodbank', 10, 14); return; }
 		if ([3, 6].includes(day) && h > 8 && h < 13 && zone !== 'rural' && r() < 0.3) at('market', 8, 13);
 	}
@@ -573,12 +583,13 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		if (dead) return;
 		if (W() !== lastWorld || globeFrame.epoch !== epoch) {
 			for (const a of areas.values()) persist(a);
-			clear(); areas.clear(); banks.clear(); gardens.clear();
+			clear(); homes.clear(); areas.clear(); banks.clear(); gardens.clear();
 			for (const p of people?.pool || []) if (p.P.home) { p.P.home.member.embodied = false; delete p.P.home; }
 			lastWorld = W(); epoch = globeFrame.epoch; lastH = null; scanT = 0;
 		}
 		enabled = enabled && !!W()?.island && !W()?.underworld?.inside?.() && !W()?.deep?.active?.() && !W()?.player?.state?.flying;
 		root.visible = enabled;
+		homes.update(dt, t, enabled);
 		if (!enabled) { clear(); return; }
 		const h = hours();
 		if (lastH !== null && h < lastH - 12) newDay();
@@ -645,6 +656,6 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		const plan = plansOf(a).get(hh.id);
 		return { id: hh.id, kind: hh.kind, describe: describe(hh), members: hh.members.map((m) => ({ id: m.id, role: m.role, age: m.age, job: m.job?.kind || null, school: m.school, now: whereAt(plan, m.id, hours()) })), notes: plan.notes, food: { budget: hh.food.budget, need: hh.food.need, security: hh.food.security, quality: +hh.food.quality.toFixed(2), plan: hh.food.plan }, well: +wellOf(hh).toFixed(2), story: storyOf(hh) };
 	}
-	function dispose() { if (dead) return; for (const a of areas.values()) persist(a); clear(); dead = true; aid.dispose(); root.removeFromParent(); }
-	return { update, stage, clear, dispose, actors: () => root.visible ? live.flatMap(V => V.actors) : [], info, household, help, quests: () => questsFor(here().households, here().place === 'island' ? 'the village' : 'the community centre'), pending: () => pending.slice(), areaAt, group: root, bell };
+	function dispose() { if (dead) return; for (const a of areas.values()) persist(a); clear(); homes.dispose(); dead = true; aid.dispose(); root.removeFromParent(); }
+	return { update, stage, clear: (kind = null) => { clear(kind); if (!kind) homes.clear(); }, dispose, actors: () => root.visible ? [...live.flatMap(V => V.actors), ...homes.actors()] : [], info, homes, household, help, quests: () => questsFor(here().households, here().place === 'island' ? 'the village' : 'the community centre'), pending: () => pending.slice(), areaAt, group: root, bell };
 }
