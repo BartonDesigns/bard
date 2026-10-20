@@ -14,11 +14,12 @@
 //
 // Only the house you are in or at (two on a computer) has its people shown; the household is
 // whole there, never thinned. Hooks for the rest of the game (the cooking thread's kitchen,
-// the fridge, the homeowner walking in): homeAt(pos), whoIsHome(house), householdOf(house),
+// the fridge, the homeowner walking in): homeAt(pos), whoIsHome(house) (bodies drawn there),
+// homeNow(house, hour) (home by their day, drawn or not), householdOf(house),
 // occupants(), and on(fn) for what happens ('scatter', 'greet').
 
 import * as THREE from 'three';
-import { spotsOf, arrange, lineFor } from './home-routine.js';
+import { spotsOf, arrange, lineFor, doingAt } from './home-routine.js';
 import { makeHousehold, KINDS } from './households.js';
 import { planDay } from './schedules.js';
 import { fadePerson } from './fade.js';
@@ -364,7 +365,8 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		if ((pickT -= dt) < 0) { pickT = 0.5; choose(); }
 		const hour = hours(), d = day();
 		if (d !== lastDay) { lastDay = d; planT = 0; }
-		if ((planT -= dt) < 0 && ready()) {
+		// (the bodies' kit only loads once there is a house to fill)
+		if ((planT -= dt) < 0 && homes.size && ready()) {
 			planT = 1;
 			let budget = cap();
 			for (const H of [...homes.values()].sort((p, q) => (q.inside ? 1 : 0) - (p.inside ? 1 : 0))) budget -= replan(H, hour, Math.max(0, budget));
@@ -476,7 +478,9 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	// ---------- for the rest of the game ----------
 	const actors = () => { const out = []; for (const H of homes.values()) for (const a of H.actors.values()) if (a.active) out.push(a); return out; };
 	function homeAt(pos) {
-		const ins = W()?.houses?.inside?.(pos);
+		// (a house itself as well as a place)
+		if (pos?.plan?.rooms) return { house: pos, level: 0, household: householdOf(pos), home: homeNow(pos) };
+		const ins = Number.isFinite(pos?.x) ? W()?.houses?.inside?.(pos) : null;
 		if (!ins) return null;
 		const H = homes.get(ins.h);
 		return { house: ins.h, level: ins.level, household: householdOf(ins.h), home: H ? whoIsHome(ins.h) : null };
@@ -486,14 +490,22 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		if (!H) return [];
 		return [...H.actors.values()].filter((a) => a.active && !a.leaving).map((a) => ({ id: a.q?.member.id, member: a.q?.member, act: a.q?.act, room: a.q?.spot.roomType, asleep: !!a.asleep, actor: a }));
 	}
+	// who of a house's household is home at an hour by their day (bodies drawn or not): members
+	// with what they are doing there
+	function homeNow(h, hour = hours()) {
+		const hh = h?.plan?.rooms ? householdOf(h) : null;
+		if (!hh) return [];
+		const plans = planDay(hh, day());
+		return hh.members.filter((m) => !m.away).map((m) => ({ member: m, ...doingAt(hh, plans, m, hour, { day: day(), sunset: sunset() }) })).filter((q) => q.act);
+	}
 	function info() {
 		return {
 			houses: [...homes.values()].map((H) => ({ at: H.key, kind: H.hh.kind, members: H.hh.members.length, inside: H.inside, spots: H.spots.length, shown: H.actors.size, tv: [...H.tvs.values()].some((S) => S.mesh.visible), doing: [...H.actors.values()].map((a) => `${Math.floor(a.P.dna.age)}:${a.scared ? 'scared' : a.shaken > 0 ? 'shaken' : a.q?.act}@${a.q?.spot.kind}`) })),
-			queued: queue.length, ready: !!ready(), cap: cap(),
+			queued: queue.length, ready: !!(homes.size && ready()), cap: cap(),
 		};
 	}
 	return {
-		update, clear, dispose, actors, info, homeAt, whoIsHome, householdOf, group: root,
+		update, clear, dispose, actors, info, homeAt, whoIsHome, homeNow, householdOf, group: root,
 		occupants: () => [...homes.values()].flatMap((H) => whoIsHome(H.h).map((q) => ({ ...q, house: H.h }))),
 		on: (f) => { listeners.add(f); return () => listeners.delete(f); },
 		// (for a look: a fight crashes into the house you are at)
