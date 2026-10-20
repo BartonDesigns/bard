@@ -1,7 +1,9 @@
 // Personal history is evidence, not something dialogue may invent or award.
 // Quests, relationships and route projects stay on this device; the soul ledger is separate.
+
+import { jsonCopy as copy } from '../persistence/json-copy.js';
+
 export const CHRONICLE_KEY = 'crysis-quest-chronicle-v1';
-const copy = x => JSON.parse(JSON.stringify(x));
 const text = (x, n = 160) => String(x || '').slice(0, n);
 const key = (body, npc) => JSON.stringify([body, npc]);
 const object = v => v && typeof v==='object' && !Array.isArray(v);

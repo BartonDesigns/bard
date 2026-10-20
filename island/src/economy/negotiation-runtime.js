@@ -4,10 +4,10 @@ import { createNegotiator } from './negotiation.js';
 import { mintUid } from '../gameplay/gear-levels.js';
 import { payroll } from './payroll.js';
 import { bank as gameBank } from './bank.js';
+import { jsonCopy as copy } from '../persistence/json-copy.js';
 
 const DAY = 86400000;
 const distance = (a, b) => a && b ? Math.hypot(a.x - b.x, a.z - b.z) : Infinity;
-const copy = value => JSON.parse(JSON.stringify(value));
 export function createNegotiationRuntime({ arms, bodyKey, position, livingWorld, relationship = () => null,
   morality = () => null, structures = () => null, now = Date.now, storage, resolveSeller = null, bank = gameBank } = {}) {
   const pendingSellerReceipts = new Set();

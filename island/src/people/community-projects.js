@@ -1,10 +1,10 @@
 // Scene observations become bounded project commands. Shared records use the
 // existing living-region authority; local previews are never uploaded as facts.
 import { COMMUNITY_FEATURE, PROJECT_WORK_MS, createProjectState, reduceProjects, projectView, projectKey } from './community-projects-core.js';
+import { jsonCopy as clone } from '../persistence/json-copy.js';
 
 const kinds = ['path', 'garden', 'gathering', 'resonance'];
 const hash = value => { let h = 2166136261; for (const c of String(value)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(36); };
-const clone = value => JSON.parse(JSON.stringify(value));
 const storageDefault = () => { try { return globalThis.localStorage; } catch { return null; } };
 const coord = p => p && ['x', 'y', 'z'].every(k => Number.isFinite(p[k]));
 const identifier = value => typeof value === 'string' && value.length > 0 && value.length <= 160 && value.trim() === value && !/[\u0000-\u001f]/.test(value);

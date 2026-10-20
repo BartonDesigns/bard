@@ -15,9 +15,9 @@
 import * as THREE from 'three';
 import { bid, frameOf, FACES, onFace, uOn, faceLen, hash } from './ids.js';
 import { buildShell, facadeOf, shellMaterial, fireSpots } from './shell.js';
+import { srgbToLinear as lin } from '../world/srgb.js';
 
 const HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
-const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 const core = [0.4, 0.39, 0.37];
 
 export function createDamage(ctx) {

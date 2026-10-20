@@ -7,9 +7,9 @@
 
 import * as THREE from 'three';
 import { soundBus } from '../world/soundbus.js';
+import { srgbToLinear as lin } from '../world/srgb.js';
 
 const ARRIVE = 20, WORK = 45, LEAVE = 14, UNSEEN = 70;          // seconds
-const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 // a box into a list of parts, vertex coloured, turned by yaw about the origin's foot
 function box(P, x, y, z, w, h, d, c, yaw = 0) {
 	const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();

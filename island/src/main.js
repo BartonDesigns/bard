@@ -872,7 +872,7 @@ export function createIslandWorld() {
 	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
-	const account = HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1) });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;

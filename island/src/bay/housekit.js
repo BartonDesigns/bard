@@ -8,8 +8,8 @@ import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import { weatherStucco } from './weathering.js';
 import { usePhoto } from '../world/photomats.js';
 import { addNightField } from '../world/nightfield.js';
+import { srgbToLinear as lin } from '../world/srgb.js';
 
-const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 export { lin };
 // the door and garage door styles are stacked in their textures, a row each (metres)
 const DOOR_ROW = 2.1, GARAGE_ROW = 2.25;

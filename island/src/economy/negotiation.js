@@ -7,6 +7,7 @@
 // copy of the player's wallet. A saved prepared agreement precedes its idempotent
 // inventory transaction, so a reload between the two writes can safely recover.
 import { applyInventoryTransaction, cleanTradeSide, getItem, TRANSACTION_KINDS, TRADE_MAX_CREDITS } from '../gameplay/arms.js';
+import { jsonCopy as copy } from '../persistence/json-copy.js';
 
 export const NEGOTIATION_VERSION = 1;
 export const QUOTE_MS = 5 * 60 * 1000;
@@ -14,7 +15,6 @@ export const RESERVATION_MS = 24 * 60 * 60 * 1000;
 const MAX_OPEN = 128;
 const STATUSES = ['quoted', 'accepted', 'prepared', 'redeemed', 'cancelled', 'expired'];
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
-const copy = (o) => JSON.parse(JSON.stringify(o));
 const safeId = (s) => typeof s === 'string' && /^[a-zA-Z0-9_.:~/-]{1,180}$/.test(s) && !['__proto__', 'prototype', 'constructor'].includes(s);
 const amount = (n) => Number.isInteger(n) && n >= 0 && n <= TRADE_MAX_CREDITS;
 const bounded = (n, lo, hi, fallback = 0) => Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : fallback;

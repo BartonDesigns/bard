@@ -5,6 +5,8 @@
 // authoritative shared backend is still pending. Do not describe this storage as
 // universal multiplayer progress: it belongs to the current browser/player.
 
+import { jsonCopy as copy } from '../persistence/json-copy.js';
+
 export const WORLD_PROJECTS_KEY = 'crysis-world-projects-v1';
 export const WORLD_PROJECTS_SCOPE = 'private-preview';
 export const WORLD_PROJECTS_BACKEND = 'br-006-shared-backend-pending';
@@ -38,7 +40,6 @@ const PROJECT_KINDS = Object.freeze({
 });
 
 const PROJECT_ORDER = Object.freeze(Object.keys(PROJECT_KINDS));
-const copy = (v) => JSON.parse(JSON.stringify(v));
 const text = (v, max = 512) => typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : '';
 const id = (v) => text(v, 512);
 const finite = (v) => Number.isFinite(v);
