@@ -361,7 +361,7 @@ export function islandFrame(iw, now) {
 	// the governor: a tier down when the frames or the memory say so, back up after a long easy
 	// run (world/governor.js)
 	iw.frameAvg += (elapsed * 1000 - iw.frameAvg) * 0.05;
-	HOOKS.perf?.frame(elapsed * 1000, now);
+	HOOKS.perf?.frame(now);
 	// (on a phone stepped down to the lighter tiers the local voice model, 100 MB, is let go too)
 	if (governor.update(elapsed, iw.frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
 }

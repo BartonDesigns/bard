@@ -38,7 +38,7 @@ export function lostLine(lost) {
 }
 
 export function createPerfMeter({ mount, renderer, governor, storage = null, search = '' }) {
-	let on = false, el = null, times = [], acc = { calls: 0, tris: 0 }, shown = { calls: 0, tris: 0 }, frames = 0, nextT = 0, plainRender = null;
+	let on = false, el = null, times = [], prev = 0, acc = { calls: 0, tris: 0 }, shown = { calls: 0, tris: 0 }, frames = 0, nextT = 0, plainRender = null;
 	// every render of a frame counted (three's own count is the last render's only)
 	function count(on) {
 		if (on && !plainRender) {
@@ -59,16 +59,20 @@ export function createPerfMeter({ mount, renderer, governor, storage = null, sea
 			mount.appendChild(el);
 		}
 		if (el) el.hidden = !on;
-		times = []; nextT = 0;
+		times = []; nextT = 0; prev = 0;
 		return on;
 	}
 	show(perfWanted(search, storage));
 	return {
 		show,
 		on: () => on,
-		// one drawn frame: its time (ms) and now (ms)
-		frame(ms, now) {
-			if (!on) return;
+		// one drawn frame, at now (ms): timed from the one before, unclamped (the game's own step
+		// is capped at a quarter second)
+		frame(now) {
+			if (!on) { prev = 0; return; }
+			const ms = prev ? now - prev : 0;
+			prev = now;
+			if (ms <= 0) return;
 			times.push(ms); frames++;
 			if (now < nextT) return;
 			shown = { calls: Math.round(acc.calls / Math.max(1, frames)), tris: Math.round(acc.tris / Math.max(1, frames)) };
