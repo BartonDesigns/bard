@@ -26,7 +26,7 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 	function head(p, out) { const S = p.M.S; return out.set(S.pos.x, S.pos.y + (p.P.height || 1.7) * 0.93, S.pos.z); }
 
 	function listening() { return voice.on() && !voice.talking(); }
-	function busy(p) { return !p.active || p.demo !== undefined || p.engaged || p.override || p.P?.ragdoll || !p.P?.root?.visible || p.M?.S?.remark; }
+	function busy(p) { return !p.active || p.asleep || p.demo !== undefined || p.engaged || p.override || p.P?.ragdoll || !p.P?.root?.visible || p.M?.S?.remark; }
 
 	// a remark: body first (they look round), then the voice when it is made. They look at
 	// you (the camera itself, so their eyes follow you past) unless told whom to look at.
