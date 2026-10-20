@@ -880,7 +880,7 @@ export function createIslandWorld() {
 	const cloudSave = createCloudSave({ url: roomsURL() });
 	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
-	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { return HOOKS.npcQuests?.regionNow?.() || null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
+	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
