@@ -2,10 +2,14 @@
 // island's lagoon. Walk up to the water and the rod icon appears beside the jump button
 // (H on a keyboard); the rod stays put away until you tap it. Then:
 //   cast: the rod swings, the line flies out, the float lands and rides the water;
-//   wait: it twitches now and then; when it goes under, strike (tap, or R);
+//   wait: it twitches now and then; when it goes under, strike (tap, click, or R);
 //   fight: hold to reel. The line's tension climbs while you reel and the fish pulls
 //     harder when it runs; keep it in the green, let go when it runs, or it snaps. Bring
 //     it in and it's yours: a card with the fish, its weight, and your best.
+// The bite and the fight are read off a marker on the water itself, under the float, that
+// follows it as the fish drags it about: a ring round it filling as you bring the fish in,
+// and under it what to do and the line's tension. Tap or click the marker, click anywhere
+// with the mouse captured, hold R, or hold the Reel button: all the one action (reel()).
 // What bites depends on the water: bluegill, bass and catfish in the lakes and reservoirs;
 // rainbow trout, smallmouth bass and pikeminnow in the rivers and creeks; striped bass,
 // halibut and leopard sharks in the bay; rockfish, surfperch and lingcod off the coast;
@@ -234,6 +238,31 @@ function makeTackle() {
 	return { rod, float, reel: { crank, y: RY, z: RZ + RR * 0.8 }, guideAt, bendU };
 }
 
+// the marker on the water under the float: a ring round it (filling as you bring the fish
+// in, coloured by the line's tension), and under it what to do, the key for it, and the
+// tension along its scale
+const MARK_CSS = `
+.fz{position:absolute;left:0;top:0;z-index:7;display:none;pointer-events:none;will-change:transform;font:600 13px/1.2 system-ui,-apple-system,Segoe UI,sans-serif;color:#eafaf6;--c:#01a982;--p:0}
+.fz-ring{position:absolute;left:-28px;top:-28px;width:56px;height:56px;border-radius:50%;pointer-events:auto;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;transition:opacity .3s,scale .3s}
+.fz-ring::before{content:'';position:absolute;inset:0;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p) * 1turn),rgba(255,255,255,.24) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));filter:drop-shadow(0 0 5px var(--c))}
+.fz-ring::after{content:'';position:absolute;inset:11px;border-radius:50%;border:1.5px solid var(--c);opacity:.6}
+.fz-tag{position:absolute;left:0;top:36px;transform:translateX(-50%);min-width:128px;padding:7px 12px 8px;box-sizing:border-box;border-radius:12px;background:rgba(8,20,26,.76);border:1px solid rgba(255,255,255,.16);box-shadow:0 4px 14px rgba(0,0,0,.35);text-align:center;white-space:nowrap;pointer-events:auto;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.fz-say{font-size:14px}
+.fz-key{display:inline-block;margin-left:7px;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.15);font-size:11px;opacity:.9;vertical-align:1px}
+.fz-key:empty{display:none}
+.fz-bar{position:relative;height:6px;margin-top:7px;border-radius:3px;background:linear-gradient(90deg,#2b5f8a 0%,#01a982 35%,#01a982 72%,#d9a21c 85%,#c8321c 100%)}
+.fz-bar>i{position:absolute;top:-3px;left:0;width:3px;height:12px;margin-left:-1.5px;border-radius:2px;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.7)}
+.fz.wait .fz-ring{opacity:.5;scale:.7;pointer-events:none}
+.fz.wait .fz-tag,.fz.bite .fz-bar{display:none}
+.fz.bite{--c:#f59e0b}
+.fz.bite .fz-ring{animation:fzBite .45s ease-in-out infinite alternate}
+.fz.bite .fz-say{font-size:17px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ffd27a}
+.fz.run .fz-ring{animation:fzRun .14s linear infinite}
+@keyframes fzBite{to{scale:1.22}}
+@keyframes fzRun{25%{translate:2px -1px}75%{translate:-2px 1px}}
+@media (prefers-reduced-motion:reduce){.fz .fz-ring{animation:none}}
+`;
+
 export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	let log = [];
 	try { log = JSON.parse(localStorage.getItem('crysis-fish-log') || '[]') || []; } catch { log = []; }
@@ -283,13 +312,15 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	btn.type = 'button';
 	btn.dataset.hud = 'prompt 20';
 	btn.style.cssText = 'position:absolute;padding:12px 22px;border-radius:24px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.78);color:#eafaf6;font:600 15px system-ui;display:none;z-index:4;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;';
-	const meter = document.createElement('div');
-	meter.dataset.hud = 'prompt 21';
-	meter.style.cssText = 'position:absolute;width:min(280px,70vw);display:none;z-index:4;pointer-events:none;font:12px system-ui;color:#eafaf6;text-align:center;';
-	meter.innerHTML = '<div data-t style="margin-bottom:4px">Hold to reel · keep it in the green</div><div style="position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#2b5f8a 0%,#01a982 35%,#01a982 72%,#d9a21c 85%,#c8321c 100%);"><div data-k style="position:absolute;top:-3px;width:4px;height:18px;border-radius:2px;background:#fff;left:0"></div></div><div style="margin-top:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.15)"><div data-p style="height:100%;width:0;border-radius:3px;background:#eafaf6"></div></div>';
+	// the marker on the water (MARK_CSS), placed each frame under the float
+	if (!document.getElementById('l99-fish-mark')) { const st = document.createElement('style'); st.id = 'l99-fish-mark'; st.textContent = MARK_CSS; document.head.appendChild(st); }
+	const mark = document.createElement('div');
+	mark.className = 'fz';
+	mark.innerHTML = '<div class="fz-ring" role="button" aria-label="Reel"></div><div class="fz-tag" role="button"><span class="fz-say"></span><span class="fz-key"></span><div class="fz-bar"><i></i></div></div>';
+	const ringEl = mark.firstChild, tagEl = mark.lastChild, sayEl = tagEl.querySelector('.fz-say'), keyEl = tagEl.querySelector('.fz-key'), tickEl = tagEl.querySelector('i');
 	const card = document.createElement('div');
 	card.style.cssText = 'position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(320px,84vw);padding:14px 16px;border-radius:16px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:13px system-ui;text-align:center;display:none;z-index:6;';
-	for (const el of [rodBtn, btn, meter, card]) { for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation()); mount?.appendChild(el); }
+	for (const el of [rodBtn, btn, mark, card]) { for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation()); mount?.appendChild(el); }
 	card.addEventListener('click', () => { card.style.display = 'none'; });
 
 	const F = { state: 'off', t: 0, at: new THREE.Vector3(), bite: 0, water: 'lake', level: 0, fish: null, tension: 0, prog: 0, hold: false, run: 0, swing: 0 };
@@ -341,8 +372,6 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		const lb = +(sp[2] + Math.pow(Math.random(), 2.2) * (sp[3] - sp[2])).toFixed(1);
 		F.fish = { sp, lb, power: 0.35 + Math.min(1, lb / sp[3]) * 0.55 };
 		F.state = 'fight'; F.t = 0; F.tension = 0.3; F.prog = 0; F.run = 0;
-		meter.style.display = 'block';
-		hint?.('Fish on!', 1200);
 	}
 	function land() {
 		const { sp, lb } = F.fish;
@@ -360,7 +389,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		if (why === 'snap') hint?.('Snap! The line broke.', 2200);
 		else if (why === 'lost') hint?.('It got away.', 2000);
 		else if (why === 'early') hint?.('Reeled in: nothing on it.', 2000);
-		F.state = 'ready'; F.fish = null; F.hold = false; F.t = 0; meter.style.display = 'none';
+		F.state = 'ready'; F.fish = null; F.hold = false; F.t = 0;
 	}
 	function press(down) {
 		const W = getWorld();
@@ -377,7 +406,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		if (!W || F.state === 'off') return;
 		if (F.state === 'near') { F.state = 'ready'; F.water = F.near.kind; F.level = F.near.level; cast(W); return; }
 		if (F.state === 'fight') hint?.('Rod away: it got off.', 1600);
-		F.state = 'near'; F.fish = null; F.hold = false; meter.style.display = 'none';
+		F.state = 'near'; F.fish = null; F.hold = false;
 	}
 	rodBtn.addEventListener('click', (e) => { e.preventDefault(); rodBtn.blur(); toggleRod(); });
 	btn.addEventListener('pointerdown', (e) => { e.preventDefault(); press(true); });
@@ -389,6 +418,28 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		if (k === 'h' && rodBtn.style.display !== 'none') { toggleRod(); e.preventDefault(); } else if (k === 'r' && btn.style.display !== 'none') press(true);
 	});
 	addEventListener('keyup', (e) => { if (e.key === 'r' || e.key === 'R') { if (F.state === 'fight') F.hold = false; } });
+	// the marker: press it to strike, hold it to reel, as the button
+	const letUp = () => { if (F.state === 'fight') F.hold = false; };
+	for (const el of [ringEl, tagEl]) {
+		el.addEventListener('pointerdown', (e) => { e.preventDefault(); try { el.setPointerCapture?.(e.pointerId); } catch { /* the pointer went already */ } press(true); });
+		for (const ev of ['pointerup', 'pointercancel']) el.addEventListener(ev, letUp);
+	}
+	// with the mouse captured there is no cursor to put on the marker: a click anywhere is the
+	// reel (before the punches and the guns hear it: combat.js and melee.js let a handled click be)
+	addEventListener('pointerdown', (e) => {
+		if (e.pointerType !== 'mouse' || e.button !== 0 || !rodOut() || F.state === 'cast') return;
+		const c = document.pointerLockElement;
+		if (!c || c !== e.target || c.tagName !== 'CANVAS') return;
+		e.preventDefault(); press(true);
+	}, true);
+	addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button === 0) letUp(); }, true);
+	// the key to show on the marker: a pad's right trigger once one is plugged in, a tap on a
+	// touch screen, else a click (or R)
+	let padAt = -1e9, pad = '';
+	const keyFor = (t) => {
+		if (t - padAt > 1) { padAt = t; const p = [...(navigator.getGamepads?.() || [])].find((g) => g?.connected); pad = p ? (/054c|playstation|dualshock|dualsense/i.test(p.id) ? 'R2' : 'RT') : ''; }
+		return pad || (mount?.classList.contains('l99-touch') ? 'Tap' : 'Click / R');
+	};
 
 	// ---- the catch in your hand: it flops, thrashes now and then, tires; then you let it go
 	// (thrown back in a low arc to the water, a splash, and it is gone)
@@ -465,7 +516,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 			}
 		} else if (F.state !== 'off' && (!onFoot || F.state === 'near' || F.state === 'ready' || !F.near || Math.hypot(camera.position.x - F.at.x, camera.position.z - F.at.z) > 30)) {
 			if (F.state === 'fight') stop('lost');
-			F.state = 'off'; F.fish = null; F.hold = false; meter.style.display = 'none';
+			F.state = 'off'; F.fish = null; F.hold = false;
 		}
 		const out = rodOut();
 		rodBtn.style.display = F.state !== 'off' ? 'flex' : 'none';
@@ -473,7 +524,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		if (rodBtn.style.background !== bg) rodBtn.style.background = bg;
 		rod.visible = bobber.visible = line.visible = out;
 		btn.style.display = out ? 'block' : 'none';
-		if (!out) return;
+		if (!out) { showMark(''); return; }
 		if (F.state === 'ready') { F.water = near.kind; F.level = near.level; }
 		setBtn({ ready: 'Cast (R)', cast: '…', wait: 'Reel in (R)', bite: 'Strike! (R)', fight: F.hold ? 'Reeling…' : 'Hold to reel (R)' }[F.state] || 'Cast (R)');
 		// the rod in your hands: out to the right, tipped up; swung back and through on the
@@ -498,7 +549,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 			if (k >= 1) { F.state = 'wait'; F.t = 0; splashAt(F.at, 0.8); }
 		} else if (F.state === 'wait') {
 			bob.y += Math.sin(t * 2.1) * 0.015 + (Math.sin(t * 7 + F.t) > 0.97 ? -0.02 : 0);
-			if (F.t > F.bite) { F.state = 'bite'; F.t = 0; splashAt(F.at, 0.5); hint?.('A bite! Strike!', 1400); }
+			if (F.t > F.bite) { F.state = 'bite'; F.t = 0; splashAt(F.at, 0.5); }
 		} else if (F.state === 'bite') {
 			bob.y -= 0.09 + Math.sin(F.t * 22) * 0.04;
 			if (F.t > 1.5) stop('lost');
@@ -520,14 +571,27 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 				bob = F.at.clone().lerp(home, Math.min(0.85, F.prog * 0.85));
 				bob.x += Math.sin(t * 3.1) * 0.6 * (F.run > 0 ? 1.6 : 0.5); bob.z += Math.cos(t * 2.3) * 0.5 * (F.run > 0 ? 1.6 : 0.5); bob.y -= 0.05;
 				if (Math.random() < dt * 3) splashAt(bob, 0.4);
-				meter.querySelector('[data-k]').style.left = `calc(${Math.min(1, F.tension) * 100}% - 2px)`;
-				meter.querySelector('[data-p]').style.width = `${F.prog * 100}%`;
-				meter.querySelector('[data-t]').textContent = F.run > 0 ? 'It runs! Ease off…' : F.hold ? 'Reeling…' : 'Hold to reel · keep it in the green';
 			}
 		}
 		// (hung from the tip, before a cast)
 		if (F.state === 'ready') bob = tmp.copy(tip).add(ctl.set(Math.sin(t * 1.7) * 0.03, -0.55, Math.cos(t * 1.3) * 0.03));
 		bobber.position.copy(bob);
+		// the marker, where the float meets the water (none while it flies or hangs)
+		if (F.state === 'wait' || F.state === 'bite' || (F.state === 'fight' && F.fish)) {
+			const fight = F.state === 'fight', run = fight && F.run > 0;
+			showMark(F.state + (run ? ' run' : ''));
+			const key = keyFor(t);
+			if (F.state === 'bite') { say('Bite!', key); setP(0); }
+			else if (fight) {
+				say(run ? 'It runs! Ease off' : F.hold ? 'Reeling\u2026' : 'Hold to reel', run || F.hold || key === 'Tap' ? '' : key);
+				setP(F.prog);
+				const k = Math.min(1, F.tension), tick = `${(k * 100).toFixed(1)}%`;
+				if (tickEl.style.left !== tick) tickEl.style.left = tick;
+				// the ring: slack blue, green in the band that brings it in, amber then red near snapping
+				setC(k < 0.25 ? '#3b82f6' : k < 0.72 ? '#01a982' : k < 0.85 ? '#f59e0b' : '#ef4444');
+			} else setP(0);
+			placeMark(tmp.set(bob.x, F.level, bob.z));
+		} else showMark('');
 		bobber.rotation.set(F.state === 'ready' ? 0 : Math.sin(t * 1.9) * 0.08, 0, F.state === 'ready' ? 0 : Math.sin(t * 1.4 + 1) * 0.08);
 		// the line: off the spool and through the rings to the tip...
 		onRod(lp, T.reel.y, T.reel.z).toArray(linePos, 0);
@@ -548,13 +612,43 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		lineGeo.attributes.position.needsUpdate = true;
 		if (splash.material.opacity > 0) { splash.material.opacity -= dt * 0.8; splash.scale.multiplyScalar(1 + dt * 2.5); }
 	}
+	// ---- the marker's parts, written only when they change
+	let markCls = '', sayTxt = null, keyTxt = null, markP = -1, markC = '';
+	function showMark(c) {
+		if (c === markCls) return;
+		markCls = c; mark.className = c ? 'fz ' + c : 'fz';
+		mark.style.display = c ? 'block' : 'none';
+		if (!c.startsWith('fight')) { setC(''); }
+	}
+	function say(a, k) {
+		if (a !== sayTxt) { sayTxt = a; sayEl.textContent = a; }
+		if (k !== keyTxt) { keyTxt = k; keyEl.textContent = k; }
+	}
+	function setP(p) { const v = Math.round(p * 100) / 100; if (v !== markP) { markP = v; mark.style.setProperty('--p', String(v)); } }
+	function setC(c) { if (c !== markC) { markC = c; if (c) mark.style.setProperty('--c', c); else mark.style.removeProperty('--c'); } }
+	// on screen at the float, kept clear of the HUD: the top row of buttons; at the bottom, the
+	// spell bar and the prompts over it; on a touch screen, the thumb buttons and the spell
+	// button down the right and the joystick's corner. Behind you, it waits at the edge.
+	const sp = new THREE.Vector3();
+	function placeMark(p) {
+		const w = mount?.clientWidth || innerWidth, h = mount?.clientHeight || innerHeight;
+		camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+		sp.copy(p).project(camera);
+		let x = (sp.x + 1) / 2 * w, y = (1 - sp.y) / 2 * h;
+		if (sp.z > 1) { x = w - x; y = h; }
+		const touch = mount?.classList.contains('l99-touch');
+		const l = touch ? 100 : 84, r = Math.max(l, w - (touch ? 200 : 84)), top = touch ? 132 : 84, b = Math.max(top, h - (touch ? 118 : 150) - 64);
+		x = Math.min(Math.max(x, l), r); y = Math.min(Math.max(y, top), b);
+		mark.style.transform = `translate3d(${Math.round(x)}px,${Math.round(y)}px,0)`;
+	}
 	function splashAt(p, k) { splash.position.set(p.x, F.level + 0.02, p.z); splash.scale.setScalar(k); splash.material.opacity = 0.8; getWorld()?.lake?.ripple?.(p.x, p.z, k); }
 	// (for a look at a catch: Crysis.fishing.showCatch('bay', 1), no fight)
 	const showCatch = (water = 'lake', i = 1, lb) => { const sp = SPECIES[water][i]; hold(sp, lb ?? (sp[2] + sp[3]) / 3); };
 	// (a game or a jump elsewhere: the rod is put away)
 	function drop() {
 		letGo(true);
-		if (F.state !== 'off') { F.state = 'off'; F.fish = null; F.hold = false; meter.style.display = 'none'; }
+		if (F.state !== 'off') { F.state = 'off'; F.fish = null; F.hold = false; }
+		showMark('');
 	}
 	// the catch in your hand ({ fish, lb }, or null), and keeping it for the kitchen instead of
 	// letting it go (cooking/index.js: it goes in your larder as fillets)
@@ -566,6 +660,8 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		card.style.display = 'none';
 		return c;
 	}
-	// (Crysis.fishing.toggle() is the rod icon, .press() the cast / strike / reel button)
-	return { update, showCatch, drop, toggle: toggleRod, press: () => press(true), rodOut, log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy, holding, keep };
+	// (Crysis.fishing.toggle() is the rod icon, .press() the cast / strike / reel button;
+	// .reel(down) the same held and let go, for a pad's trigger: down casts, strikes or reels,
+	// up stops reeling)
+	return { update, showCatch, drop, toggle: toggleRod, press: () => press(true), reel: (down = true) => press(!!down), rodOut, log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy, holding, keep };
 }

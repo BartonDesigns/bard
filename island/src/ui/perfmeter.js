@@ -8,7 +8,13 @@
 //   the draws: calls and triangles over all of a frame's passes (the sea's mirror included)
 //   the governor's tier and the drawing scale
 //   and, when a load went without a goodbye (loading-screen.js's black box), where it stopped
-const KEY = 'l99-perf';
+// ?perf=probe also times the world's parts on the device: a few seconds into the world, each of
+// the scene's big groups is left out of the picture for a moment in turn (by its layers, so
+// nothing that sets visibility fights it) and the frame time without it read against the frame
+// time with everything; the readout then lists what each costs, most first (kept, too, in
+// l99-perf-probe). Stand still while it runs, about a minute.
+const KEY = 'l99-perf', PROBE_KEY = 'l99-perf-probe';
+const SETTLE = 1000, MEASURE = 2500, MAX_GROUPS = 18;
 
 // the switch from the address, kept on the device
 export function perfWanted(search = '', storage = null) {
@@ -37,7 +43,24 @@ export function lostLine(lost) {
 	return `last load lost: "${s[1] || '?'}" at ${Math.round(t)} s` + (gpu != null ? `, ${gpu} MB` : '') + (L.hidden ? ' (in background)' : '');
 }
 
-export function createPerfMeter({ mount, renderer, governor, storage = null, search = '' }) {
+// the probe's findings as lines: the frame with everything, then what leaving each part out saves
+export function probeLines(base, rows) {
+	return [`probe: all ${Math.round(base)} ms`, ...rows.slice().sort((a, b) => (base - b.ms) - (base - a.ms)).map((r) => `${r.name.slice(0, 18).padEnd(18)} -${Math.max(0, Math.round(base - r.ms))} ms  ${Math.round(r.tris / 1000)}k`)];
+}
+
+const trisOf = (root) => {
+	let n = 0;
+	root.traverseVisible((o) => {
+		if (!o.isMesh || !o.geometry) return;
+		const g = o.geometry, c = g.index ? g.index.count : g.attributes.position?.count || 0;
+		n += c / 3 * (o.isInstancedMesh ? o.count : 1);
+	});
+	return n;
+};
+
+export function createPerfMeter({ mount, renderer, governor, scene = null, storage = null, search = '' }) {
+	let probe = new URLSearchParams(search).get('perf') === 'probe' ? { phase: 'wait', t: 0 } : null, probeText = '';
+	try { const kept = storage?.getItem(PROBE_KEY); if (kept && !probe) probeText = JSON.parse(kept).lines.join('\n'); } catch { /* none */ }
 	let on = false, el = null, times = [], prev = 0, acc = { calls: 0, tris: 0 }, shown = { calls: 0, tris: 0 }, frames = 0, nextT = 0, plainRender = null;
 	// every render of a frame counted (three's own count is the last render's only)
 	function count(on) {
@@ -63,9 +86,42 @@ export function createPerfMeter({ mount, renderer, governor, storage = null, sea
 		return on;
 	}
 	show(perfWanted(search, storage));
+	// ---------- the probe ----------
+	const hidden = new Map();
+	const leaveOut = (root) => root.traverse((o) => { hidden.set(o, o.layers.mask); o.layers.mask = 0; });
+	const putBack = () => { for (const [o, m] of hidden) o.layers.mask = m; hidden.clear(); };
+	function probeStep(now, ms) {
+		const P = probe;
+		if (P.phase === 'wait') { if (!P.t) P.t = now + 6000; if (now < P.t) return; P.phase = 'pick'; }
+		if (P.phase === 'pick') {
+			const groups = (scene?.children || []).map((g) => ({ g, name: g.name || g.type, tris: trisOf(g) })).filter((x) => x.g.visible && x.tris > 0).sort((a, b) => b.tris - a.tris).slice(0, MAX_GROUPS);
+			P.steps = [{ name: 'all', tris: 0 }, ...groups];
+			P.i = 0; P.rows = []; P.phase = 'settle'; P.t = now + SETTLE; P.times = [];
+			return;
+		}
+		const S = P.steps[P.i];
+		if (P.phase === 'settle') { if (now < P.t) return; P.phase = 'measure'; P.t = now + MEASURE; P.times = []; return; }
+		if (P.phase === 'measure') {
+			P.times.push(ms);
+			if (now < P.t) return;
+			const avg = P.times.reduce((a, b) => a + b, 0) / P.times.length;
+			if (S.name === 'all') P.base = avg; else P.rows.push({ name: S.name, tris: S.tris, ms: avg });
+			putBack();
+			if (++P.i >= P.steps.length) {
+				const lines = probeLines(P.base, P.rows);
+				probeText = lines.join('\n');
+				try { storage?.setItem(PROBE_KEY, JSON.stringify({ at: new Date().toISOString(), base: P.base, rows: P.rows, lines })); } catch { /* private mode */ }
+				probe = null;
+				return;
+			}
+			leaveOut(P.steps[P.i].g);
+			P.phase = 'settle'; P.t = now + SETTLE;
+		}
+	}
 	return {
 		show,
 		on: () => on,
+		probe: () => { probe = { phase: 'pick', t: 0 }; if (!on) show(true); },
 		// one drawn frame, at now (ms): timed from the one before, unclamped (the game's own step
 		// is capped at a quarter second)
 		frame(now) {
@@ -73,6 +129,7 @@ export function createPerfMeter({ mount, renderer, governor, storage = null, sea
 			const ms = prev ? now - prev : 0;
 			prev = now;
 			if (ms <= 0) return;
+			if (probe) probeStep(now, ms);
 			times.push(ms); frames++;
 			if (now < nextT) return;
 			shown = { calls: Math.round(acc.calls / Math.max(1, frames)), tris: Math.round(acc.tris / Math.max(1, frames)) };
@@ -85,7 +142,8 @@ export function createPerfMeter({ mount, renderer, governor, storage = null, sea
 				+ `gpu ${g.gpuMB ?? '?'} MB` + (heap ? `  heap ${Math.round(heap / 1048576)} MB` : '') + '\n'
 				+ `${shown.calls} calls  ${(shown.tris / 1000).toFixed(0)}k tris\n`
 				+ `${g.tier || '?'} (${g.mode || '?'})  scale ${renderer.getPixelRatio().toFixed(2)}`
-				+ (lost ? '\n' + lost : '');
+				+ (lost ? '\n' + lost : '')
+				+ (probe ? `\nprobe: ${probe.steps ? `${probe.i + 1} of ${probe.steps.length}, stand still` : 'starting, stand still'}` : probeText ? '\n' + probeText : '');
 			el.style.color = f.avg > 33 ? '#f59e0b' : '#fff';
 		},
 	};

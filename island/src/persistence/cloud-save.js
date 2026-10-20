@@ -186,7 +186,7 @@ export function createCloudSave({ url, storage = globalThis.localStorage, reques
 			me.name = r.name; me.nameAt = r.nameAt || 0; keep();
 			return { name: me.name, next: me.nameAt ? me.nameAt + NAME_MS : 0 };
 		},
-		// for the chat hub to check who you are (net/chat.js)
+		// for the chat hub and the guilds to check who you are (net/chat.js, guild/guild-net.js)
 		credentials: () => (me ? { u: me.u, token: me.token } : null),
 		// keep it saved while you play: every AUTOSAVE_MS when it changed, and as the page hides
 		start() {
