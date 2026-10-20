@@ -92,8 +92,8 @@
     "sha256": "65eebef2a1dc1057a443d3f00fb7ad95a7a76d19e8edaa8c57c1fb665696c8e0"
   },
   "index.html": {
-    "bytes": 2096741,
-    "sha256": "70a9a8db67428f0f94dd7f64d1f2cf372b9e1dd77d13b34adea60bfe92804113"
+    "bytes": 2096393,
+    "sha256": "36decfd66323b80edbc2b7888b0ca39d1ebc3391b6e534a75404df6c8315d358"
   },
   "runtime/caves-235.html.gz": {
     "bytes": 523507,
@@ -156,8 +156,8 @@
     "sha256": "a271b0c94023d150a8ee94a3d50054f6388d50b2c5294b4f50598a5314909a95"
   },
   "runtime/flight-235.js.gz": {
-    "bytes": 1348067,
-    "sha256": "63cf890afa5986cd4260f6473172dd8c5225231b550abc81e1013e33c0dfa93e"
+    "bytes": 1348223,
+    "sha256": "bbc11971e30d200d0f7b654aee29f50672b94bb354581843c9963d232896405a"
   },
   "runtime/flight-vendors-176.json.gz": {
     "bytes": 203705,

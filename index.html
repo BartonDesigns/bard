@@ -912,7 +912,6 @@ function resources(T,key){
   const image=new Image();image.onload=()=>{const t=new T.Texture(image);t.flipY=false;if('colorSpace' in t)t.colorSpace=T.SRGBColorSpace;else t.encoding=T.sRGBEncoding;t.generateMipmaps=true;t.minFilter=T.LinearMipmapLinearFilter;t.magFilter=T.LinearFilter;t.anisotropy=4;t.needsUpdate=true;record.texture=t;resolve(record);};image.onerror=()=>{record.failed=true;resolve(record);};image.src=root.L99HairAssets202[key].texture;
  });maps.set(key,record);return record;
 }
-function prepare(T){return Promise.all(Object.keys(root.L99HairAssets202).map(key=>resources(T,key).ready));}
 function geometry(T,raw,a,top,skinMesh,headCenter,rounds=1){
  let source=[];for(let i=0;i<raw.length;i+=3)source.push(new T.Vector3(raw[i],raw[i+1],raw[i+2]));
  let polys=[];for(let i=0;i<a.polygons.length;){const n=a.polygons[i++],v=[],uv=[];for(let j=0;j<n;j++){v.push(a.polygons[i++]);const k=a.polygons[i++];uv.push(new T.Vector2(a.uv[k*2]/65535,1-a.uv[k*2+1]/65535));}polys.push({v,uv});}
@@ -974,7 +973,7 @@ function build(T,D,p,d,headCenter,skinMesh){
  const mesh=new T.Mesh(geo,mat);mesh.visible=!!maps.texture;if(!maps.texture)maps.ready.then(()=>{if(alive)mesh.visible=true;});mesh.name='Styled strands';mesh.castShadow=mesh.receiveShadow=true;
  const group=new T.Group();group.name='Authored hairstyle: '+s.name;group.userData.hair157={...s,authored202:key,trianglesNear:geo.index.count/3,trianglesFar:geo.index.count/3};group.userData.hair202={authored:true,asset:a.source};group.add(mesh);return group;
 }
-root.L99AuthoredHair202={build,prepare};
+root.L99AuthoredHair202={build};
 })(window);
 
 </script>
@@ -999,7 +998,6 @@ function resources(T,key){
   const image=new Image();image.onload=()=>{const t=new T.Texture(image);t.flipY=false;if('colorSpace' in t)t.colorSpace=T.SRGBColorSpace;else t.encoding=T.sRGBEncoding;t.generateMipmaps=true;t.minFilter=T.LinearMipmapLinearFilter;t.magFilter=T.LinearFilter;t.anisotropy=4;t.needsUpdate=true;record.texture=t;resolve(record);};image.onerror=()=>{record.failed=true;resolve(record);};image.src=root.L99HairAssets203[key].texture;
  });maps.set(key,record);return record;
 }
-function prepare(T){return Promise.all(Object.keys(root.L99HairAssets203).map(key=>resources(T,key).ready));}
 function geometry(T,raw,a,top,skinMesh,headCenter,rounds=1){
  let source=[];for(let i=0;i<raw.length;i+=3)source.push(new T.Vector3(raw[i],raw[i+1],raw[i+2]));
  let polys=[];for(let i=0;i<a.polygons.length;){const n=a.polygons[i++],v=[],uv=[];for(let j=0;j<n;j++){v.push(a.polygons[i++]);const k=a.polygons[i++];uv.push(new T.Vector2(a.uv[k*2]/65535,1-a.uv[k*2+1]/65535));}polys.push({v,uv});}
@@ -1111,7 +1109,7 @@ function build(T,D,p,d,headCenter,skinMesh){
  const mesh=new T.Mesh(geo,mat);mesh.visible=!!maps.texture;if(!maps.texture)maps.ready.then(()=>{if(alive)mesh.visible=true;});mesh.name='Styled strands';mesh.castShadow=mesh.receiveShadow=true;
  const group=new T.Group();group.name='Authored hairstyle: '+s.name;group.userData.hair157={...s,authored203:key,trianglesNear:geo.index.count/3,trianglesFar:geo.index.count/3};group.userData.hair203={authored:true,asset:a.source};group.add(mesh);return group;
 }
-root.L99AuthoredHair203={build,prepare};
+root.L99AuthoredHair203={build};
 })(window);
 
 </script>
@@ -2248,7 +2246,7 @@ function rewrite(code,resolved){return code.replace(/(\bfrom\s+|\bimport\s+)['"]
 /* BAKED_235: the flight engine ships with every change this page used to patch into it at load
    (runtime/src/flight.js, packed by tools/pack-runtimes.mjs). Edit it there, not here. */
 async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(flightReady)return flightReady;root.__cockpitLoadError170=null;
- flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-235.js.gz?v=63cf890afa59'),ensureWorld()]);const resolved={},urls=[];
+ flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-235.js.gz?v=bbc11971e30d'),ensureWorld()]);const resolved={},urls=[];
   try{for(const [spec,code]of files[0]){const url=URL.createObjectURL(new Blob([rewrite(code,resolved)],{type:'text/javascript'}));resolved[spec]=url;urls.push(url);}
    await frame();const url=URL.createObjectURL(new Blob([rewrite(files[1],resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
@@ -2263,7 +2261,7 @@ root.L99Boot176={packed,ensureWorld,core,show,hide,status,frame,flight,openFligh
    packed() later reads it back from cache. Skipped on data-saver and 2G.
    Kill: window._PREFETCH_WORLDS = false. */
 (function(){
- const files=['caves-235.html.gz?v=da5dec18b0eb','world-core-235.json.gz?v=85fdd919fdbc','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-235.js.gz?v=63cf890afa59'];
+ const files=['caves-235.html.gz?v=da5dec18b0eb','world-core-235.json.gz?v=85fdd919fdbc','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-235.js.gz?v=bbc11971e30d'];
  const net=navigator.connection||{};
  if(net.saveData||/(^|-)2g$/.test(net.effectiveType||''))return;
  const idle=cb=>root.requestIdleCallback?root.requestIdleCallback(cb,{timeout:4000}):setTimeout(cb,1500);
@@ -21753,11 +21751,12 @@ function handleMIDI(e) {
 // ─── CC HANDLERS ──────────────────────────────────────────────────────
 function handleCC(fn, val, raw) {
   switch (fn) {
+    // the flight engine's own controls; it publishes them once it has loaded
     case 'steer_x':
-      if (typeof steerTargetYaw !== 'undefined') steerTargetYaw = (val - 0.5) * 2.0;
+      window.L99FlightControls?.yaw((val - 0.5) * 2.0);
       break;
     case 'steer_y':
-      if (typeof steerTargetPitch !== 'undefined') steerTargetPitch = (val - 0.5) * 2.0;
+      window.L99FlightControls?.pitch((val - 0.5) * 2.0);
       break;
     case 'master_vol':
       if (typeof masterGain !== 'undefined' && masterGain && typeof ctx !== 'undefined' && ctx) {
@@ -21785,10 +21784,7 @@ function handleCC(fn, val, raw) {
       }
       break;
     case 'throttle':
-      if (typeof cockpitThrottle !== 'undefined') {
-        cockpitThrottle = 0.2 + val * 3.8;
-        if (typeof updateThrottleHud === 'function') updateThrottleHud();
-      }
+      window.L99FlightControls?.throttle(val);
       break;
     case 'arp_rate':
       if (midiArpMode !== 'off' && midiArpInterval) { if (typeof restartArp === 'function') restartArp(); }

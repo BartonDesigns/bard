@@ -1124,6 +1124,13 @@ let steerYaw     = 0;   // smoothed -1..1
 let steerPitch   = 0;   // smoothed -1..1
 let steerTargetYaw   = 0;
 let steerTargetPitch = 0;
+// MIDI steering and throttle (the CC map's steer_x, steer_y and throttle) land here. These
+// are this module's own variables, so the page's MIDI code cannot write them directly.
+window.L99FlightControls = {
+  yaw(v) { steerTargetYaw = v; },
+  pitch(v) { steerTargetPitch = v; },
+  throttle(pct) { throttlePct = Math.max(0, Math.min(1, pct)); cockpitThrottle = throttlePct * 4.0; updateThrottleHud(); },
+};
 
 // ── AUTO FLIGHT (fix347) ───────────────────────────────────────────────────
 // Heading-hold cruise for both space and atmospheric flight. AUTO never enters
