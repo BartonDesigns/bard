@@ -16,6 +16,11 @@ import { toLL as globeLL } from './earth/globeframe.js';
 import { waterContact } from './world/water-contact.js';
 import { AIR } from './world/airfog.js';
 
+// on a phone the sea's mirror (a second drawing of the world, with its own shaders) waits this
+// long after the loading card clears, so its first frame is not the same as everything else's
+const MIRROR_EASE = 1500;
+let shownAt = 0;
+
 export function islandFrame(iw, now) {
 	const { _voidFog, actions, applyQuality, arcade, autoMusic, bridgeSound, camera, carjack, chatter,
 		combat, communityProjects, crosswalks, dogWalkers, dom, earthDirector, encounterPacing, errands,
@@ -30,7 +35,8 @@ export function islandFrame(iw, now) {
 	const projectDelta = elapsed;
 	iw.last = now;
 	if (iw.building || !iw.visible || !iw.world || document.hidden || iw.lost || recovery.blocked()) { communityProjects.reset(); iw.world?.kinetic?.silence(); iw.world?.globe?.regional?.pause(); return; }
-	if (window.L99Loading.active() && !iw.arrival) { communityProjects.reset(); return; }
+	if (window.L99Loading.active() && !iw.arrival) { communityProjects.reset(); shownAt = 0; return; }
+	if (!shownAt) shownAt = now;
 	// on a phone the world holds still while someone thinks of a reply: the model and
 	// the world share the GPU and the page's memory
 	if (isPhone && guide.llm?.busy?.()) { communityProjects.reset(); return; }
@@ -357,7 +363,8 @@ export function islandFrame(iw, now) {
 	// (not on a world with no sea, nor down a cave or indoors, where the water is out of sight)
 	// (while the skills menu covers the frame nothing is drawn, so neither are they; left as they
 	// are rather than reset, so closing the menu does not warm their shaders again)
-	const covered = magic.covering(), seaOn = !iw.arrival?.blind && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && iw.indoorK < 0.5;
+	HOOKS.lightPad?.update(now, camera);
+	const covered = magic.covering(), seaOn = !iw.arrival?.blind && !(isPhone && now - shownAt < MIRROR_EASE) && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && iw.indoorK < 0.5;
 	if (covered) { /* the menu over it all */ } else if (seaOn) {
 		seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
 		seaDepth.render(scene, camera, under || shared.uUnder.value);
