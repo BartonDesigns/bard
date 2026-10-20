@@ -42,6 +42,9 @@ test('the night ones come only after dark; the Deep keeps its own', () => {
 	// (the Deep's gloom squads bring the Gloomcrawlers themselves)
 	assert.ok(!speciesFor('deep', 0).includes('gloomcrawler'));
 	assert.ok(speciesFor('deep', 0).includes('sporeborn-miner'));
+	// (Shard Mites swarm, and burst when they die)
+	assert.ok(speciesFor('deep', 0).includes('shard-mite'));
+	assert.ok(SPECIES['shard-mite'].where.pack[0] >= 3 && SPECIES['shard-mite'].shatter);
 	assert.ok(!speciesFor('deep', 1).includes('fog-wight'));
 });
 
@@ -61,7 +64,7 @@ test('a flyer keeps above you and drops into reach to strike', () => {
 });
 
 test('their voices are made, heard and never clip', () => {
-	for (const v of ['growl', 'snarl', 'sniff', 'scrape', 'creak', 'chitter']) assert.ok(VOICES.includes(v), v);
+	for (const v of ['growl', 'snarl', 'sniff', 'scrape', 'creak', 'chitter', 'click', 'shatter']) assert.ok(VOICES.includes(v), v);
 	for (const v of VOICES) {
 		const d = renderVoice(v, 22050);
 		let peak = 0, e = 0;

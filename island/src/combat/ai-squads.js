@@ -40,6 +40,7 @@ import { SPECIES } from '../creatures/catalog.js';
 import { makeCreature } from '../creatures/models.js';
 import { createCreatureVoice } from '../creatures/voice.js';
 import { facetLook } from '../creatures/facets.js';
+import { crystalLegs } from '../creatures/crystal-legs.js';
 
 // the bodies: people (dressed by faction), and those that are not (a creature's own are made
 // from its kind: creatures/catalog.js)
@@ -549,6 +550,8 @@ export function createSquads(ctx) {
 			const c = h.cr;
 			if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
 			if (h.deadT < 4) c.facets?.update(dt, { dead: true });
+			// (a crystal thing bursts as its legs fold, and is gone)
+			if (h.Sp.shatter && h.deadT > 0.3 && c.root.visible) { c.legs?.shatter(fx); c.root.visible = false; voice.play('shatter', h.pos, 0.9); }
 			// (a flyer drops out of the air)
 			if (h.alt > 0) { h.vy = (h.vy || 0) + 9.8 * dt; h.alt = Math.max(0, h.alt - h.vy * dt); }
 			c.root.position.set(h.pos.x, h.pos.y + (h.alt || 0) - Math.max(0, h.deadT - 8) * 0.25 * c.height, h.pos.z);
@@ -897,7 +900,8 @@ export function createSquads(ctx) {
 		for (const e of ev) {
 			if (e === 'growl') voice.play('growl', h.pos, 0.8, big);
 			else if (e === 'sniff') voice.play('sniff', h.pos, 0.5, big * 1.2);
-			else if (e === 'twitch' && c.meta.rig === 'flyer') voice.play('chitter', h.pos, 0.5);
+			else if (e === 'twitch' && (c.meta.rig === 'flyer' || c.meta.rig === 'spider')) voice.play('chitter', h.pos, 0.5, c.meta.rig === 'spider' ? 1.3 : 1);
+			else if (e === 'click') voice.play('click', h.pos, 0.45);
 			else if (e === 'scuff') {
 				const b = c.motion.state.beat, p = c.motion.at(b?.side < 0 ? 'hand_R' : 'hand_L', _paw) || _paw.copy(h.pos);
 				voice.play('scrape', p, 0.6);
@@ -946,7 +950,8 @@ export function createSquads(ctx) {
 		return h.alt;
 	}
 	// a body of a model (a kind's own, or the person a Moonturned is first), from the pool or new (each kind's model loaded once: creatures/models.js)
-	// (look: a model dressed as another kind, the Facet Wraith's shards round a body: creatures/facets.js)
+	// (look: a model dressed as another kind, the Facet Wraith's shards round a body: creatures/facets.js;
+	// or grown on, the Shard Mite's crystal legs: creatures/crystal-legs.js)
 	async function creatureBody(id, species = id, look = null) {
 		const pool = pools.creature;
 		const free = pool.find((c) => !c.used && c.id === id && c.look === look);
@@ -956,6 +961,7 @@ export function createSquads(ctx) {
 			c.meta.strikeTime = SPECIES[species].strike;
 			c.look = look;
 			if (look === 'facets') c.facets = facetLook(c);
+			if (look === 'legs') c.legs = crystalLegs(c);
 			c.used = true;
 			group.add(c.root);
 			pool.push(c);

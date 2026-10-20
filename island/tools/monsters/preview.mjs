@@ -7,6 +7,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { createCreatureMotion } from '../../src/creatures/motion.js';
 import { facetLook } from '../../src/creatures/facets.js';
+import { crystalLegs } from '../../src/creatures/crystal-legs.js';
 
 const q = new URLSearchParams(location.search);
 const W = +(q.get('w') || 1200), H = +(q.get('h') || 900);
@@ -103,9 +104,12 @@ function stretch(name, t) {
 	out.sort((x, y) => y[0] - x[0]);
 	return out.filter((x) => !/foot/.test(x[3][0])).slice(0, 10);
 }
-// a dressed look (the Facet Wraith's shards), run steps frames at a strike time (-1: none)
+// a dressed look (the Facet Wraith's shards, the Shard Mite's legs), run steps frames at a
+// strike time (-1: none)
 function look(name, steps = 0, strike = -1) {
-	if (name !== 'facets' || !model) return;
+	if (!model) return;
+	if (name === 'legs') { crystalLegs({ root: model, meta }); return; }
+	if (name !== 'facets') return;
 	const f = facetLook({ root: model, meta });
 	for (let i = 0; i < steps; i++) f.update(0.05, { strike, alert: true });
 }

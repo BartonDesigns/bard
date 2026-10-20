@@ -4,10 +4,10 @@
 // model's own axes (x to its left, y up, z forward) and turned into each bone's frame as it goes.
 //
 // A rig kind (meta.rig) picks the body plan: 'biped' (two legs, two arms), 'quad' (four legs, a
-// tail) or 'flyer' (wings and hanging legs); more come with their creatures. Each plan answers the
-// same calls: a gait at a speed, an idle, a strike, a hit from a side, a death. They blend: the
-// gait's weight follows the speed, a strike or a hit is laid over whatever the body is doing, and
-// death takes it over.
+// tail), 'flyer' (wings and hanging legs) or 'spider' (eight legs); more come with their
+// creatures. Each plan answers the same calls: a gait at a speed, an idle, a strike, a hit from a
+// side, a death. They blend: the gait's weight follows the speed, a strike or a hit is laid over
+// whatever the body is doing, and death takes it over.
 
 import * as THREE from 'three';
 
@@ -74,6 +74,7 @@ export function createCreatureMotion(root, meta) {
 		quad: [['twitch', 3, 0.9], ['scrape', 2, 1.6], ['growl', 2, 2.2], ['sniff', 2, 1.7], ['shake', 1, 0.9]],
 		biped: [['twitch', 3, 1.0], ['tilt', 2, 2.3], ['crack', 1, 1.3]],
 		flyer: [['twitch', 1, 0.8]],
+		spider: [['twitch', 3, 0.7], ['tap', 2, 1.1]],
 	};
 	function startBeat(kind) {
 		const list = BEATS[meta.rig] || BEATS.biped;
@@ -307,6 +308,57 @@ export function createCreatureMotion(root, meta) {
 		}
 	}
 
+	// ---------- spider: eight legs and a body slung between them (the Shard Mite) ----------
+	// legs leg1..4 a (up to the knee) / b (down to the foot), 1 the front; walked four at a time
+	// (L1 R2 L3 R4, then the others), each swinging about its root and lifting as it comes forward
+	const SPIDER = [1, 2, 3, 4].flatMap((n) => [['L', n, n % 2 ? 0 : Math.PI], ['R', n, n % 2 ? Math.PI : 0]]);
+	function spider(_dt) {
+		const s = state;
+		const g = s.gait, ph = s.phase;
+		for (const [side, n, o] of SPIDER) {
+			const sg = side === 'L' ? 1 : -1;
+			const p = ph + o;
+			// (forward is a turn about y one way on the left and the other on the right)
+			const fwd = Math.sin(p) * 0.32 * g + Math.sin(s.t * 0.9 + n * 1.7 + sg) * 0.03 * (1 - g);
+			const lift = Math.max(0, Math.cos(p)) * 0.38 * g;
+			add(`leg${n}a_${side}`, 0, -sg * fwd, sg * lift);
+			add(`leg${n}b_${side}`, 0, 0, -sg * lift * 0.6);
+		}
+		// the body rides low and level, rocking a little with each set of four
+		add('hips', Math.sin(s.t * 2.1) * 0.02 + Math.sin(ph * 2) * 0.03 * g, Math.sin(ph) * 0.05 * g, 0);
+		add('chest', 0, Math.sin(ph) * -0.04 * g, Math.sin(ph) * 0.03 * g);
+		add('head', Math.sin(s.t * 0.8) * 0.05 * (1 - g), s.look * 0.6 + Math.sin(s.t * 0.47) * 0.15 * (1 - g), 0);
+		// a strike: it rears, the front pair raised and spread, and drives them down into you
+		if (s.strike >= 0) {
+			const k = s.strike;
+			const rear = smooth(k / 0.35) * (1 - smooth((k - 0.45) / 0.15));
+			const stab = smooth((k - 0.42) / 0.1) * (1 - smooth((k - 0.65) / 0.35));
+			add('hips', -0.45 * rear + 0.15 * stab, 0, 0);
+			for (const side of ['L', 'R']) {
+				const sg = side === 'L' ? 1 : -1;
+				add('leg1a_' + side, -0.9 * rear + 0.6 * stab, -sg * 0.35 * rear, sg * 0.5 * rear);
+				add('leg1b_' + side, -0.5 * rear + 0.5 * stab, 0, 0);
+				add('leg2a_' + side, -0.3 * rear, 0, sg * 0.2 * rear);
+				// (the hind legs dig in as it rears)
+				add('leg4a_' + side, 0.35 * rear, 0, 0);
+				add('leg3a_' + side, 0.25 * rear, 0, 0);
+			}
+		}
+		if (s.hit >= 0) {
+			const k = Math.sin(clamp(s.hit / 0.35, 0, 1) * Math.PI) * (1 - s.hit);
+			add('hips', s.hitDir.z * 0.25 * k, 0, -s.hitDir.x * 0.35 * k);
+		}
+		// death: the legs snap up and in under it (and then it shatters: combat/ai-squads.js)
+		if (s.death >= 0) {
+			const k = smooth(s.death / 0.3);
+			for (const [side, n] of SPIDER) {
+				const sg = side === 'L' ? 1 : -1;
+				add(`leg${n}a_${side}`, 0, 0, sg * 0.7 * k);
+				add(`leg${n}b_${side}`, 0, 0, sg * 1.1 * k);
+			}
+		}
+	}
+
 	// ---------- the beats, over the gait ----------
 	function quadBeats() {
 		const s = state, m = s.menace * (1 - s.gait * 0.4);
@@ -420,9 +472,31 @@ export function createCreatureMotion(root, meta) {
 		add('head', 0, jerk(k, 3, 1) * 0.4 * e, jerk(k, 3, 2) * 0.3 * e);
 		for (const side of ['L', 'R']) add('leg1b_' + side, jerk(k, 4, side === 'L' ? 3 : 4) * 0.5 * e, 0, 0);
 	}
-	const BEAT_PLANS = { biped: bipedBeats, quad: quadBeats, flyer: flyerBeats };
+	function spiderBeats() {
+		const m = state.menace * (1 - state.gait * 0.6);
+		// at you: up on its legs, the front pair lifted a little, quivering
+		if (m > 0) {
+			add('hips', -0.12 * m, 0, 0);
+			for (const side of ['L', 'R']) add('leg1a_' + side, -0.3 * m + Math.sin(state.t * 47) * 0.03 * m, 0, 0);
+		}
+		const b = state.beat;
+		if (!b) return;
+		const k = b.k, e = env(k, 0.04, 0.15);
+		if (b.kind === 'twitch') {
+			add('head', jerk(k, 4, 1) * 0.25 * e, jerk(k, 4, 2) * 0.5 * e, 0);
+			for (const side of ['L', 'R']) add('leg1a_' + side, jerk(k, 5, side === 'L' ? 3 : 4) * 0.5 * e, 0, 0);
+		} else if (b.kind === 'tap') {
+			// the front legs tapping at the ground in turn, tick tick tick
+			for (const side of ['L', 'R']) {
+				const sg = side === 'L' ? 1 : -1, ph = k * 6 * Math.PI + (sg > 0 ? 0 : Math.PI);
+				add('leg1a_' + side, -Math.max(0, Math.sin(ph)) * 0.5 * e, 0, sg * Math.max(0, Math.sin(ph)) * 0.25 * e);
+			}
+			once(b, 0.3, 'click'); once(b, 0.65, 'click');
+		}
+	}
+	const BEAT_PLANS = { biped: bipedBeats, quad: quadBeats, flyer: flyerBeats, spider: spiderBeats };
 
-	const PLANS = { biped, quad, flyer };
+	const PLANS = { biped, quad, flyer, spider };
 	const plan = PLANS[meta.rig] || biped;
 	const beats = BEAT_PLANS[meta.rig] || bipedBeats;
 
@@ -488,7 +562,7 @@ export function createCreatureMotion(root, meta) {
 				if (s.beatT <= 0) {
 					s.beatT = 1.5 + Math.random() * 4;
 					// (at you, it growls and twitches; it noses the ground and shakes itself only at ease)
-					const list = (BEATS[meta.rig] || BEATS.biped).filter((x) => (x[0] === 'growl' ? s.menace > 0.2 : s.menace < 0.5 || x[0] === 'twitch' || x[0] === 'scrape'));
+					const list = (BEATS[meta.rig] || BEATS.biped).filter((x) => (x[0] === 'growl' ? s.menace > 0.2 : s.menace < 0.5 || x[0] === 'twitch' || x[0] === 'scrape' || x[0] === 'tap'));
 					let w = Math.random() * list.reduce((a, x) => a + x[1], 0);
 					for (const x of list) { w -= x[1]; if (w < 0) { startBeat(x[0]); break; } }
 				}

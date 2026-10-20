@@ -14,7 +14,9 @@
 //   model, human its model when not its own id; human, the person it is until it turns (the
 //                Moonturned: a villager who changes when you come near or hurt them)
 //   look         its model dressed as something else (facets: the Facet Wraith's shard shell,
-//                creatures/facets.js); drift: it glides, no step
+//                creatures/facets.js; legs: the Shard Mite's crystal legs and plates,
+//                creatures/crystal-legs.js); drift: it glides, no step
+//   shatter      it bursts into shards when it dies, nothing left to lie there
 //   fly          a flyer: the height it keeps over the ground (hover) and drops to (strike), in m
 //   lurk         one that waits still among the trees (the Burnt Giant): it wakes when you come
 //                within wake m, strike it or fire near it, rising over rise s
@@ -142,6 +144,12 @@ export const SPECIES = Object.freeze({
 		resist: { energy: 0.6, fire: 0.8 }, surface: 'stone',
 		fly: { hover: 0.45, strike: 0.3 },
 		where: { night: false, zones: ['deep'], pack: [1, 1], odds: 0.25 },
+	},
+	'shard-mite': {
+		name: 'Shard Mite', faction: 'deepborn', height: 0.56, look: 'legs', shatter: true,
+		hp: 45, armour: 20, walk: 1.6, run: 7.0, dmg: 7, reach: 1.2, strike: 0.6, sight: 35,
+		resist: { ballistic: 0.8, impact: 1.5, blast: 1.4 }, surface: 'crystal',
+		where: { night: false, zones: ['deep'], pack: [3, 6], odds: 0.3 },
 	},
 	'hollow-king': {
 		name: 'The Hollow King', faction: 'nightborn', height: 4,
