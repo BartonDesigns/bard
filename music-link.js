@@ -2,9 +2,10 @@
    the map pin menu in the world) and its own player floats over the faceplate and the world.
    Neither service lets a page hear its sound: YouTube's terms keep the player visible (at least
    200 x 200) and its audio whole, Spotify's policy keeps its songs out of games and visuals. So
-   the world hears the music the honest way, by listening: this tab's sound on a computer
-   (Chrome's share picker, "Also share tab audio"), the microphone on a phone (it hears the
-   speaker, or the Spotify app, or a speaker in the room). What it hears feeds the same
+   the world hears the music the honest way, by listening to this tab's sound, shared through
+   the browser's own picker ("Also share tab audio" in Chrome; iOS 27's Safari has the picker
+   too). Never the microphone: it hears the room and drops the phone into call-quality sound.
+   Where a browser can't share its sound, the switch says so. What it hears feeds the same
    bass/mid/high that the faceplate's own music drives (L99Continuity.sample), so the trees,
    the grass, the sea, the sky, the fireflies and the whale answer it as they answer the Bard.
    API: L99MusicLink.open(url) -> true when it is a link we can play, .ask() the card empty,
@@ -16,8 +17,9 @@
 	const KEY = 'l99-music-link';
 	const UA = navigator.userAgent || '';
 	const PHONE = /iPhone|iPad|iPod|Android/i.test(UA) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(UA));
-	// tab sound: Chromium shares a tab's audio; Safari and Firefox do not
-	const TAB_AUDIO = !PHONE && !!navigator.mediaDevices?.getDisplayMedia && /Chrome|Chromium|Edg\//.test(UA);
+	// tab sound needs the share picker (getDisplayMedia): Chrome on a computer gives a tab's sound;
+	// Safari on iOS 27 has the picker too; older iPhones and Chrome on Android have none
+	const CAN_SHARE = !!navigator.mediaDevices?.getDisplayMedia;
 
 	function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (_) { return {}; } }
 	function save(v) { try { localStorage.setItem(KEY, JSON.stringify(Object.assign(load(), v))); } catch (_) { /* private mode: not kept */ } }
@@ -85,6 +87,7 @@
 		'#l99-ml .ml-listen{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;background:rgba(1,169,130,.1);border:1px solid rgba(94,234,212,.35);text-align:left}',
 		'#l99-ml .ml-listen:hover{background:rgba(1,169,130,.18)}',
 		'#l99-ml .ml-listen.on{background:rgba(1,169,130,.24);border-color:#01a982}',
+		'#l99-ml .ml-listen:disabled{opacity:.55;cursor:default;background:transparent;border-color:rgba(255,255,255,.15)}',
 		'#l99-ml .ml-listen b{flex:1;font-weight:600}',
 		'#l99-ml .ml-meter{display:flex;align-items:flex-end;gap:3px;height:18px}',
 		'#l99-ml .ml-meter span{width:5px;height:3px;border-radius:2px;background:#5eead4;transition:height .08s linear}',
@@ -157,7 +160,6 @@
 		note.addEventListener('click', (e) => {
 			const b = e.target.closest('button');
 			if (!b) return;
-			if (b.hasAttribute('data-mic')) listen(true, 'mic');
 			if (b.hasAttribute('data-another')) { another = true; draw(); input.value = ''; input.focus(); }
 		});
 		body.append(form, frameBox, listenBtn, note);
@@ -284,7 +286,8 @@
 	}
 	function spotifyUrl(L) { return 'https://open.spotify.com/' + L.kind + '/' + L.id; }
 	function listenHint() {
-		return heard.on ? '' : 'The world can\'t hear the player by itself: turn on <b>Let the world hear it</b>.';
+		if (heard.on) return '';
+		return CAN_SHARE ? 'The world can\'t hear the player by itself: turn on <b>Let the world hear it</b>.' : 'This browser can\'t share its sound, so the world can\'t hear the player here.';
 	}
 
 	let loads = 0;
@@ -310,10 +313,11 @@
 		form.hidden = !!link && !another;
 		frameBox.hidden = !link;
 		if (link) { const s = frameSize(link); frameBox.style.height = s.h + 'px'; }
-		listenLabel.textContent = heard.on ? (heard.kind === 'tab' ? 'The world hears this tab' : 'The world hears the mic') : 'Let the world hear it';
+		listenLabel.textContent = heard.on ? 'The world hears this tab' : CAN_SHARE ? 'Let the world hear it' : 'This browser can\'t share its sound';
+		listenBtn.disabled = !CAN_SHARE;
 		listenBtn.classList.toggle('on', heard.on);
 		listenBtn.setAttribute('aria-pressed', String(heard.on));
-		listenBtn.title = heard.on ? 'Stop listening' : TAB_AUDIO ? 'Share this tab\'s sound with the world (tick "Also share tab audio")' : 'Let the world listen through the microphone';
+		listenBtn.title = heard.on ? 'Stop listening' : CAN_SHARE ? 'Share this tab\'s sound with the world (tick "Also share tab audio")' : 'This browser has no way to share a tab\'s sound';
 		place(root.offsetLeft || null, root.offsetTop || null);
 	}
 
@@ -335,7 +339,7 @@
 			// (we don't read Spotify's player: its policy keeps its songs away from games and visuals)
 			setPlaying(true);
 		}
-		say((L.service === 'spotify' ? 'Full songs when you\'re signed in to Spotify in this browser, 30-second clips otherwise (or play it in the Spotify app and Listen). ' : '') + listenHint()
+		say((L.service === 'spotify' ? 'Full songs when you\'re signed in to Spotify in this browser, 30-second clips otherwise. ' : '') + listenHint()
 			+ ' <a href="' + (L.service === 'youtube' ? watchUrl(L) : spotifyUrl(L)) + '" target="_blank" rel="noopener">Open in ' + (L.service === 'youtube' ? 'YouTube' : 'Spotify') + '</a> · <button type="button" data-another>Another link</button>');
 		save({ last: L.service === 'youtube' ? watchUrl(L) : spotifyUrl(L) });
 		emit();
@@ -358,7 +362,7 @@
 		emit();
 	}
 
-	// ---------- listening: this tab's sound, or the microphone ----------
+	// ---------- listening: this tab's sound, shared through the browser's picker ----------
 	const heard = { on: false, kind: null, stream: null, src: null, gain: null, analyser: null, raf: 0, bins: null, own: null, pending: false };
 	function audioContext() {
 		try { if (typeof initAudio === 'function') initAudio(); } catch (_) { /* the faceplate's engine is not up */ }
@@ -367,21 +371,20 @@
 		if (!heard.own) { try { heard.own = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return null; } }
 		return heard.own;
 	}
-	async function capture(kind) {
-		const raw = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-		if (kind === 'tab') {
-			const s = await navigator.mediaDevices.getDisplayMedia({
-				video: true, audio: Object.assign({ suppressLocalAudioPlayback: false }, raw),
-				preferCurrentTab: true, selfBrowserSurface: 'include', systemAudio: 'include', surfaceSwitching: 'exclude', monitorTypeSurfaces: 'exclude',
-			});
-			// only the sound is wanted
-			s.getVideoTracks().forEach((t) => t.stop());
-			if (!s.getAudioTracks().length) { s.getTracks().forEach((t) => t.stop()); throw Object.assign(new Error('no audio'), { name: 'NoAudio' }); }
-			return s;
-		}
-		return navigator.mediaDevices.getUserMedia({ audio: raw });
+	async function capture() {
+		const s = await navigator.mediaDevices.getDisplayMedia({
+			// the picture is asked for only because the picker needs it: as little of it as it allows
+			video: { frameRate: { ideal: 1, max: 5 }, width: { ideal: 320 } },
+			audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
+			preferCurrentTab: true, selfBrowserSurface: 'include', systemAudio: 'include', surfaceSwitching: 'exclude', monitorTypeSurfaces: 'exclude',
+		});
+		if (!s.getAudioTracks().length) { s.getTracks().forEach((t) => t.stop()); throw Object.assign(new Error('no audio'), { name: 'NoAudio' }); }
+		// only the sound is wanted: a computer's Chrome keeps the sound when the picture stops; a
+		// phone's share may end with it, so there the picture is only switched off
+		s.getVideoTracks().forEach((t) => { if (PHONE) t.enabled = false; else t.stop(); });
+		return s;
 	}
-	async function listen(on, kind) {
+	async function listen(on) {
 		if (!on) {
 			if (!heard.on && !heard.stream) return false;
 			cancelAnimationFrame(heard.raf);
@@ -396,26 +399,23 @@
 			return false;
 		}
 		if (heard.on || heard.pending) return heard.on;
-		if (!navigator.mediaDevices) { say('This browser can\'t listen (it needs a secure https page).', true); return false; }
-		kind = kind || (TAB_AUDIO ? 'tab' : 'mic');
+		if (!CAN_SHARE) { say(PHONE ? 'This phone\'s browser can\'t share its sound yet (Safari on iOS 27 can; older iPhones and Chrome on Android can\'t). On a computer, Chrome can.' : 'This browser can\'t share a tab\'s sound. Chrome or Edge on a computer can.', true); return false; }
 		const ctx = audioContext();
 		if (!ctx) { say('Sound isn\'t available here.', true); return false; }
 		// asked for first, while the tap still counts (Chrome's share picker needs it)
-		const asked = capture(kind);
+		const asked = capture();
 		try { if (ctx.state !== 'running') ctx.resume().catch(() => {}); } catch (_) { /* resumes on the next tap */ }
 		let stream;
 		heard.pending = true;
 		try { stream = await asked; } catch (e) {
 			heard.pending = false;
-			if (kind === 'tab') say(e.name === 'NoAudio' ? 'No sound was shared. Try again and tick <b>Also share tab audio</b>, or <button type="button" data-mic>use the microphone</button>.' : 'Not shared. Try again, or <button type="button" data-mic>use the microphone</button>.', true);
-			else say('The microphone was not allowed.' + (PHONE ? ' On iPhone: Settings, Safari, Microphone, Allow, then reload.' : ' Allow it in the address bar and try again.'), true);
+			say(e.name === 'NoAudio' ? (PHONE ? 'The share came without sound: this phone\'s browser can share its screen but not its sound.' : 'No sound was shared. Try again and tick <b>Also share tab audio</b> (Chrome or Edge; Safari and Firefox share no sound).')
+				: PHONE && e.name === 'NotAllowedError' ? 'Not shared. If no picker showed, this phone\'s browser can\'t share its sound yet.' : 'Not shared. Tap again to try once more.', true);
 			return false;
 		}
 		heard.pending = false;
 		const src = ctx.createMediaStreamSource(stream);
 		const gain = ctx.createGain();
-		// a phone's mic hears the speaker quieter than the line level of a shared tab
-		gain.gain.value = kind === 'mic' ? 2.2 : 1;
 		if (!heard.analyser || heard.analyser.context !== ctx) {
 			heard.analyser = ctx.createAnalyser();
 			heard.analyser.fftSize = 2048;
@@ -424,11 +424,11 @@
 		// to the analyser only, never to the speakers: no echo, no feedback
 		src.connect(gain);
 		gain.connect(heard.analyser);
-		Object.assign(heard, { on: true, kind, stream, src, gain });
+		Object.assign(heard, { on: true, kind: 'tab', stream, src, gain });
 		window._linkAnalyser = heard.analyser;
 		window._linkListen = true;
 		stream.getAudioTracks().forEach((t) => t.addEventListener('ended', () => listen(false)));
-		say(kind === 'tab' ? 'Listening to this tab. Chrome shows that it\'s sharing; stop it here or there.' : 'Listening through the microphone.' + (PHONE ? ' Keep the sound on the speaker.' : ''));
+		say('Listening to this tab. The browser shows that it\'s sharing; stop it here or there.');
 		draw();
 		emit();
 		tick();
