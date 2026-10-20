@@ -44,3 +44,12 @@ class_name = "Account"
 [[migrations]]
 tag = "v4-accounts"
 new_sqlite_classes = ["Account"]
+
+# Guilds and their alliances (src/guild.js), all in one registry object.
+[[durable_objects.bindings]]
+name = "GUILDS"
+class_name = "Guilds"
+
+[[migrations]]
+tag = "v5-guilds"
+new_sqlite_classes = ["Guilds"]

@@ -174,6 +174,8 @@ export function createCloudSave({ url, storage = globalThis.localStorage, reques
 		},
 		async logout() { if (me) { await save().catch(() => {}); await call('logout', {}).catch(() => {}); } me = null; lastSig = ''; keep(); },
 		save, load, peek,
+		// who is signed in, for the other things kept with your account (guild/guild-net.js)
+		auth: () => (me ? { u: me.u, token: me.token } : null),
 		// keep it saved while you play: every AUTOSAVE_MS when it changed, and as the page hides
 		start() {
 			if (timer) return;

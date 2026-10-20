@@ -11,6 +11,7 @@
 //   POST load   (session) -> { data, rev, at }
 //   POST peek   (session) -> { rev, at, summary }
 //   POST logout (session) -> {}
+//   POST whoami (session) -> { u }   (only from src/index.js, for the guilds: not a public route)
 import { usernameOk, passwordOk, cleanUsername, RECOVERY_RE, SAVE_MAX } from '../../../island/src/persistence/cloud-save.js';
 
 // PBKDF2 rounds (kept per account, so it can rise later): the Workers Free plan's CPU budget
@@ -107,6 +108,8 @@ export class Account {
 		if (!(await this.session(user, token))) return json({ error: 'Please log in again.' }, 401);
 		const M = await this.meta();
 		if (op === 'peek') return json({ rev: M.rev, at: M.at, summary: M.summary });
+		// (who this session is: the guilds ask, src/index.js)
+		if (op === 'whoami') return json({ u: user.u });
 		if (op === 'logout') {
 			const h = await sha256(token);
 			await store.put('sessions', ((await store.get('sessions')) || []).filter((x) => !same(x.h, h)));

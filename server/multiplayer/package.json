@@ -4,11 +4,11 @@
   "type": "module",
   "description": "Multiplayer rooms for Level 99 Bard: presence, poses and the host's world, one Durable Object per room",
   "scripts": {
-    "test": "node test/room.test.mjs && node --test test/reputation.test.mjs test/soul.test.mjs test/living-region.test.mjs test/community-projects.test.mjs test/account.test.mjs",
+    "test": "node test/room.test.mjs && node --test test/reputation.test.mjs test/soul.test.mjs test/living-region.test.mjs test/community-projects.test.mjs test/account.test.mjs test/guild.test.mjs",
     "dev": "wrangler dev --port 8790",
     "deploy": "wrangler deploy",
     "check": "wrangler deploy --dry-run --outdir .wrangler/check",
-    "test:integration": "node test/two-client.test.mjs",
+    "test:integration": "node test/two-client.test.mjs && node test/guild-integration.test.mjs",
     "test:living-integration": "node test/living-integration.test.mjs && node test/household-integration.test.mjs",
     "test:projects-integration": "node test/community-projects-integration.test.mjs && node test/community-projects-alarm.test.mjs"
   },
