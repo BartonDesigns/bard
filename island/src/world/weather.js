@@ -1,6 +1,8 @@
 // Weather that keeps pace with the clock. A slow, seeded rhythm over the days turns the
 // sky from clear to fair-weather cumulus, to passing showers, now and then to a storm;
-// cirrus comes and goes on its own. Showers are real places: cells of rain a kilometre
+// cirrus comes and goes on its own, and with it now and then the high cloud: rows of mare's
+// tails, or a veil that rises from the horizon and can spread over the whole sky (likeliest
+// round dawn, when it can swallow the sunrise). Showers are real places: cells of rain a kilometre
 // or two across, born upwind and carried over the land by the wind, darkening the
 // clouds above them, trailing curtains of rain beneath, raining on you when they pass
 // over. Everything answers to the one wind (main.js stepWind: speed, gusts, veer): the
@@ -19,6 +21,7 @@ import { soundBus, noise } from './soundbus.js';
 
 const H_CLOUD = 1500;                  // cumulus base, metres above you
 const MODES = { clear: [0.05, 0.0, 0.2, 0], fair: [0.45, 0.0, 0.45, 0], showers: [0.62, 0.55, 0.6, 0.1], storm: [0.9, 1.0, 1.1, 1] };   // cover, showers, wind, storm
+const HIGH = { clear: [0, 0, 0], fair: [0.35, 0, 0], showers: [0, 0.45, 0.5], storm: [0, 0.9, 1] };   // mare's tails, veil, how far over
 
 // smooth seeded noise over one number (the weather's time, in days)
 const hh = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -28,6 +31,7 @@ const ease = (v, t, k) => v + (t - v) * Math.min(1, k);
 export function createWeather(scene, shared, { isPhone = false, airless = false } = {}) {
 	const U = {
 		uCloudOff: { value: new THREE.Vector2() }, uCirrusOff: { value: new THREE.Vector2() }, uCirrus: { value: 0.3 },
+		uHighCl: { value: new THREE.Vector4() }, uVeil: { value: new THREE.Vector4(0, 0, 1, 0) },
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uBow: { value: loadBowTexture() }, uBowK: { value: 0 }, uBowDrop: { value: 0.6 }, uMoonBowK: { value: 0 },
@@ -35,7 +39,7 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 	shared.uWet = shared.uWet || { value: 0 };
 	const S = {
 		mode: 'auto', pin: {}, day: 0, lastHours: null,
-		cover: 0.5, showerRate: 0, storm: 0, windT: 0.5, cirrus: 0.3,
+		cover: 0.5, showerRate: 0, storm: 0, windT: 0.5, cirrus: 0.3, tails: 0, veil: 0, reach: 0,
 		cells: [], rainHere: 0, drop: 0.5, sunVis: 1, moonVis: 1, flash: 0, bolts: [], nextStrike: 5, sheltered: false,
 	};
 
@@ -237,6 +241,15 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 
 	// ---------------------------------------------------------------------------
 
+	// the veil's opacity toward a direction, as the dome works it out (sky.js veilAt) less its
+	// noise: the front from upwind and the band round the horizon
+	function veilAt(dir, wd) {
+		if (S.veil < 0.01) return 0;
+		const y = Math.max(dir.y, 0), px = dir.x / (y + 0.02), pz = dir.z / (y + 0.02);
+		const ss = THREE.MathUtils.smoothstep, edge = 14 - 22 * S.reach;
+		const cov = Math.max(ss(-(px * wd.x + pz * wd.y), edge - 2.5, edge + 2.5), ss(Math.hypot(px, pz) - 16 + 20 * S.reach, 0, 4));
+		return 1 - Math.exp(-S.veil * cov * 0.6 * 0.55 / (y + 0.045));
+	}
 	const windV = new THREE.Vector3();
 	function update(dt, sky, cam, groundAt, opts = {}) {
 		dt = Math.min(dt, 0.1);
@@ -257,8 +270,23 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 		S.showerRate = ease(S.showerRate, tgt[1], k);
 		S.storm = ease(S.storm, tgt[3], k);
 		S.cirrus = ease(S.cirrus, S.mode === 'auto' ? THREE.MathUtils.smoothstep(n1(wt * 3.1 + 40), 0.35, 0.8) : S.mode === 'fair' ? 0.5 : 0.2, k);
+		// the high cloud. The veil wanders on its own slow rhythm, a little likelier round dawn;
+		// as it builds it shows first along the horizon, then reaches over the sky. Mare's tails
+		// come on a rhythm of their own and run ahead of a veil coming in, as they do before a front
+		let hi;
+		if (S.mode === 'auto') {
+			const dawn = THREE.MathUtils.smoothstep(hours, 4.5, 6) * (1 - THREE.MathUtils.smoothstep(hours, 8.5, 10));
+			// (a veil some three hours in ten, the whole sky under it one in ten; mare's tails
+			// about as often, on their own or along the edge of a veil coming in)
+			const ss = THREE.MathUtils.smoothstep;
+			const v = n1(wt * 1.6 + 133) * 0.8 + n1(wt * 6.1 + 51) * 0.2 + dawn * 0.08;
+			hi = [Math.max(ss(n1(wt * 2.3 + 71), 0.7, 0.9), ss(v, 0.56, 0.6) * (1 - ss(v, 0.64, 0.7)) * 0.8), ss(v, 0.6, 0.76), ss(v, 0.66, 0.9)];
+		} else hi = HIGH[S.mode] || HIGH.fair;
+		S.tails = ease(S.tails, S.pin.tails ?? hi[0], k);
+		S.veil = ease(S.veil, S.pin.veil ?? hi[1], k);
+		S.reach = ease(S.reach, S.pin.reach ?? hi[2], k * 0.6);
 		// no air: no cloud, rain, storms or birds
-		if (airless) S.cover = S.showerRate = S.storm = S.cirrus = 0;
+		if (airless) S.cover = S.showerRate = S.storm = S.cirrus = S.tails = S.veil = 0;
 		if (S.pin.wind === undefined) shared.uWind.value = ease(shared.uWind.value, tgt[2], dt * 0.03);
 		const W = shared.uWind.value + shared.uGust.value * 0.5, wd = shared.uWindDir.value;
 		// the wind at cloud height, in m/s, and the drift of the cloud field (1 unit ~ 940 m)
@@ -267,6 +295,10 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 		U.uCloudOff.value.x += windV.x * dt / 940 * 3; U.uCloudOff.value.y += windV.z * dt / 940 * 3;
 		U.uCirrusOff.value.x += windV.x * dt / 2600 * 5; U.uCirrusOff.value.y += windV.z * dt / 2600 * 5;
 		U.uCirrus.value = S.cirrus;
+		// (the veil, some 7 km up: 1 unit of its field is about 7 km)
+		U.uVeil.value.x += windV.x * dt / 7000 * 3; U.uVeil.value.y += windV.z * dt / 7000 * 3;
+		U.uVeil.value.z = wd.x; U.uVeil.value.w = wd.y;
+		U.uHighCl.value.set(S.tails, S.veil, S.reach, 0);
 		sky.uniforms.uCloud.value = S.cover;
 
 		// showers: born upwind, carried over, grown and spent
@@ -315,7 +347,8 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 			const hx = px + dir.x / Math.hypot(dir.x, dir.z) * reach, hz = pz + dir.z / Math.hypot(dir.x, dir.z) * reach;
 			let v = 1 - THREE.MathUtils.smoothstep(S.cover, 0.6, 0.95);
 			for (const c of S.cells) v *= 1 - THREE.MathUtils.smoothstep(-Math.hypot(c.x - hx, c.z - hz), -c.r * 1.5, -c.r * 0.9) * Math.min(1, c.I * 1.5);
-			return v;
+			// the high veil over it: a sun low behind it is lost in it
+			return v * (1 - veilAt(dir, wd) * 0.85);
 		};
 		S.sunVis = ease(S.sunVis, vis(sd), dt * 0.5);
 		S.moonVis = ease(S.moonVis, vis(tmp.copy(sd).negate()), dt * 0.5);
@@ -323,7 +356,7 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 		U.uBowK.value = S.sunVis * dayUp;
 		U.uMoonBowK.value = S.moonVis * moonUp;
 		// overcast and storm darken the day
-		S.gloom = Math.max(THREE.MathUtils.smoothstep(S.cover, 0.6, 1.0) * 0.8, S.storm * 0.85, S.rainHere * 0.6);
+		S.gloom = Math.max(THREE.MathUtils.smoothstep(S.cover, 0.6, 1.0) * 0.8, S.storm * 0.85, S.rainHere * 0.6, S.veil * THREE.MathUtils.smoothstep(S.reach, 0.6, 1.0) * 0.3);
 		U.uGloom.value = S.gloom;
 
 		// lightning, in a storm or under the heaviest showers
