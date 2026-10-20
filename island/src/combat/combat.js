@@ -18,13 +18,13 @@ import { bindLookDrag } from './look-drag.js';
 // at someone close holds them up.
 
 import * as THREE from 'three';
-import { WEAPONS, weaponStats, createWeaponState, trigger, cancelTrigger, cancelReload, completeReload, isBow, bowPower, stepWeapon, startReload, nextMode, modeOf, spreadNow, spreadDir, damageAt, reserveOf, drawRounds } from './weapons.js';
+import { WEAPONS, weaponStats, createWeaponState, trigger, cancelTrigger, cancelReload, completeReload, isBow, stepWeapon, startReload, nextMode, modeOf, spreadNow, reserveOf, drawRounds } from './weapons.js';
 import { createBowArrow } from '../crysis/bow-visual.js';
 import { kitMaterial, weaponOf } from '../crysis/held-items.js';
 import { playCue } from '../crysis/weapon-sound.js';
 import { createHealth, applyDamage, tickHealth, revive } from './health.js';
-import { createLayer, canHit, warded, strike, rayBox, rayCapsule, personShapes } from './targets.js';
-import { createWanted, offend, tickWanted, clearWanted, responseFor, sighted, defend, officerHurt, tickDefence } from './heat.js';
+import { createLayer, canHit, warded, strike, rayBox, personShapes } from './targets.js';
+import { createWanted, offend, tickWanted, clearWanted, sighted, defend, tickDefence } from './heat.js';
 import { pushOut, hiddenSpot } from '../law/tactics.js';
 import { createDamageLog, smashed } from '../law/ladder.js';
 import { createFx } from './fx.js';
@@ -38,9 +38,7 @@ import { createFieldAudio } from './field-audio.js';
 import { createProps } from './props.js';
 import { createCars } from './cars.js';
 import { createFireField } from './fire.js';
-import { createBoss } from './bosses.js';
-import { BOSSES } from './boss-defs.js';
-import { createRelations, FACTIONS, PLAYER, ATTACK, attackGap } from './factions.js';
+import { createRelations, FACTIONS, PLAYER } from './factions.js';
 import { rememberIncident } from '../people/world-awareness.js';
 import { createMorality } from './morality.js';
 import { pvpOpen } from './honor.js';
@@ -50,7 +48,9 @@ import { soundBus } from '../world/soundbus.js';
 import { createTargetFocus } from './target-focus.js';
 import { createMelee } from './melee.js';
 import { mayStation, militiaCamps } from '../military/rules.js';
-import { SPECIES, SPECIES_IDS, speciesFor, pickSpecies } from '../creatures/catalog.js';
+import { SPECIES, SPECIES_IDS } from '../creatures/catalog.js';
+import { combatLandShot, combatYours, combatFireShot, combatProjectile, combatStepProjectiles, combatBlast, combatKnockout, combatWake, combatIgnite, combatStepFire } from './combat-shots.js';
+import { combatSpawnBoss, combatDirector, combatCreatures, combatHoldUps } from './combat-director.js';
 
 const EYE = 1.68;
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private */ } } };
@@ -61,6 +61,51 @@ const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Euler(0
 const SPARK_LINES = ['The Spark! It turned it aside!', 'Thank the stars for the Spark.', 'You cannot hurt the young. Everyone knows that.', 'The Spark keeps them until they come of age.'];
 
 export function createCombat({ scene, camera, mount, world, services = () => null, people, ragdolls, arms, gear, multiplayer = null, hint = () => {}, isPhone = false, shared = {}, drive = null, menu = null, busy = () => false }) {
+	// The fight's shared state for the modules its shots and its director moved to (combat-shots.js,
+	// combat-director.js). Each getter and setter reaches the binding of that name here.
+	const cb = {
+		get _d() { return _d; }, get _v() { return _v; }, get active() { return active; },
+		get aimAt() { return aimAt; }, set aimAt(next) { aimAt = next; },
+		get aimT() { return aimT; }, set aimT(next) { aimT = next; }, get arms() { return arms; },
+		get arrowMesh() { return arrowMesh; }, get bosses() { return bosses; },
+		get bountyT() { return bountyT; }, set bountyT(next) { bountyT = next; },
+		get boxesNear() { return boxesNear; }, get boxId() { return boxId; }, get broke() { return broke; },
+		get call() { return call; }, get camera() { return camera; }, get camp() { return camp; },
+		get campsNear() { return campsNear; }, get cancelInput() { return cancelInput; },
+		get cars() { return cars; }, get civilians() { return civilians; }, get contracts() { return contracts; },
+		get creatureSeen() { return creatureSeen; }, set creatureSeen(next) { creatureSeen = next; },
+		get creatureT() { return creatureT; }, set creatureT(next) { creatureT = next; },
+		get crime() { return crime; }, get ctx() { return ctx; }, get deal() { return deal; },
+		get defendNow() { return defendNow; },
+		get directorT() { return directorT; }, set directorT(next) { directorT = next; },
+		get drive() { return drive; }, get endProjectile() { return endProjectile; }, get eye() { return eye; },
+		get EYE() { return EYE; }, get fireField() { return fireField; }, get fireMeta() { return fireMeta; },
+		get firstHit() { return firstHit; }, get flareLands() { return flareLands; },
+		get fogMotherSpot() { return fogMotherSpot; }, get forgive() { return forgive; }, get fx() { return fx; },
+		get ground() { return ground; }, get group() { return group; }, get hatesMe() { return hatesMe; },
+		get heatUp() { return heatUp; }, get held() { return held; }, get hint() { return hint; },
+		get hooks() { return hooks; }, get hud() { return hud; }, get hurtOnce() { return hurtOnce; },
+		get hurtPlayer() { return hurtPlayer; }, get ignite() { return ignite; }, get ignite2() { return ignite2; },
+		get isEarth() { return isEarth; }, get isPhone() { return isPhone; }, get landShot() { return landShot; },
+		get lastAttackT() { return lastAttackT; }, set lastAttackT(next) { lastAttackT = next; },
+		get lastShotNotice() { return lastShotNotice; }, set lastShotNotice(next) { lastShotNotice = next; },
+		get layer() { return layer; }, get me() { return me; }, get ME() { return ME; },
+		get morality() { return morality; }, get multiplayer() { return multiplayer; },
+		get neighbours() { return neighbours; }, get net() { return net; }, get notice() { return notice; },
+		get P() { return P; }, get people() { return people; }, get placeArrow() { return placeArrow; },
+		get placeName() { return placeName; }, get playT() { return playT; }, set playT(next) { playT = next; },
+		get policeT() { return policeT; }, set policeT(next) { policeT = next; },
+		get populated() { return populated; }, get projectile() { return projectile; },
+		get projectiles() { return projectiles; }, get props() { return props; }, get pvp() { return pvp; },
+		get relations() { return relations; }, get rnd() { return rnd; }, get rules() { return rules; },
+		get scorch() { return scorch; }, get services() { return services; }, get settings() { return settings; },
+		get shakeIt() { return shakeIt; }, get shared() { return shared; }, get sound() { return sound; },
+		get spark() { return spark; }, get spotAhead() { return spotAhead; },
+		get spotForest() { return spotForest; }, get spotHidden() { return spotHidden; },
+		get squads() { return squads; }, get threatened() { return threatened; }, get view() { return view; },
+		get W() { return W; }, get wanted() { return wanted; }, get witnesses() { return witnesses; },
+		get worldHit() { return worldHit; }, get worldKey() { return worldKey; }, get zone() { return zone; },
+	};
 	const W = () => world();
 	const P = () => W()?.player?.state || null;
 	const touch = isPhone || !!matchMedia?.('(pointer: coarse)')?.matches;
@@ -347,28 +392,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		return a;
 	}
 	// a shot or blow landing on what it met (shooter: ME, a squad member, a boss)
-	function landShot(hit, from, dir, by, dmg, type = 'ballistic', onward = true) {
-		const p = new THREE.Vector3().copy(from).addScaledVector(dir, hit.t);
-		if (hit.wall) {
-			fx.impact(p, hit.n, hit.surface, type === 'energy');
-			const sh = W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a wall's pock, a heavy round's hole
-			hit.through = sh?.through ? sh.dmg : 0;
-			if (sh?.broke && by === ME) broke(p);
-			if (sh?.through && !hit.pierced && onward) { const q = p.clone().addScaledVector(dir, 0.05), h2 = firstHit(q, dir, 250, by === ME ? ME : by?.T || by); hit.end = hit.t + 250; if (h2) { h2.pierced = true; h2.t += hit.t + 0.05; hit.end = h2.t; return landShot(h2, from, dir, by, sh.dmg, type); } return null; }          // structures: on through one pane, weaker
-			if (hit.box && (type === 'energy' || type === 'fire')) heatUp(boxId(hit.box), hit.box, dmg, by === ME);
-			return null;
-		}
-		const T = hit.T;
-		if (hit.ward) { spark(T, p, by); return { ward: true }; }
-		const blow = { amount: dmg, type, part: hit.part, side: hit.shape?.side || null, shape: hit.shape || null, at: { x: p.x, y: p.y, z: p.z }, src: from.clone ? from.clone() : from, dir: { x: dir.x, y: dir.y, z: dir.z }, by: by === ME ? ME : by?.T || by };
-		fx.impact(p, hit.n || { x: -dir.x, y: -dir.y, z: -dir.z }, T.surface || 'stone', type === 'energy');
-		// through a person: the spatter on what stands behind them, or the ground beyond
-		if (T.surface === 'person' && (type === 'ballistic' || type === 'pierce') && !T.child) {
-			const q = p.clone().addScaledVector(dir, 0.35), back = worldHit(q, dir, 3.2);
-			fx.spatter(p, dir, back ? { p: q.addScaledVector(dir, back.t), n: back.n } : null, hit.part === 'head' || hit.part === 'neck' ? 1.3 : 1);
-		}
-		return deal(T, blow, by === ME);
-	}
+	function landShot(...args) { return combatLandShot(cb, ...args); }
 	// harm to a target, by its rules: shared things on a guest go to the host
 	function deal(T, blow, mine) {
 		if (warded(T)) return { ward: true, dealt: 0 };
@@ -399,50 +423,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// your deed, weighed (the morality compass), and how the world takes it
 	const hurtOnce = new Set();
-	function yours(T, r, blow, ctx0) {
-		if (r.dealt > 0) { hud.hit(!!r.killed, blow.part === 'head' || blow.part === 'neck'); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
-		const ctx = { ...(ctx0 || {}), ...(blow.moral || {}), witnessed: witnesses(T.bound) > 0 };
-		ctx.unseen = !ctx.witnessed;
-		const fac = T.faction, F = FACTIONS[fac];
-		if (T.kind === 'boss') { if (r.killed) morality.record({ kind: 'boss-slain', target: T.name, world: worldKey, place: placeName() }); return; }
-		if (T.kind === 'car') { const car = cars.state.get(T.id); if (car) car.lastMine = true; return; }
-		if (T.kind === 'prop') { if (r.killed) broke(T.bound); return; }
-		// an officer hurt while the police are on your side: two warnings, then they turn on you
-		// (an officer killed turns them at once)
-		if (isEarth() && wanted.blue && F?.lawful && F.kind !== 'military') {
-			const k = r.killed ? 'turn' : officerHurt(wanted, performance.now() / 1000);
-			if (k === 'warn' || k === 'same') {
-				forgive(T.ref);
-				if (k === 'warn') call(wanted.strikes === 1 ? 'Watch your fire! That is an officer!' : 'Last warning! Hit one of us again and you go down with them!', 'Harbour Police');
-				return;
-			}
-			wanted.blue = 0; wanted.strikes = 0;
-			call('That is it. Take the shooter down!', 'Harbour Police');
-		}
-		if (fac && fac !== 'world' && FACTIONS[fac]) relations.attacked(PLAYER, fac, r.killed ? 1 : 0.25);
-		const lawful = !!F?.lawful;
-		// they opened fire on you first (or struck first): answering them is no crime
-		const defence = !lawful && !!(T.ref?.struckFirst || blow.moral?.selfDefence);
-		if (defence) { defendNow(T.bound); ctx.defence = true; }
-		if (lawful) ctx.lawTarget = true;
-		if (F?.kind === 'civilians') ctx.unarmed = true;
-		if (r.killed) {
-			const kind = ctx.surrendered ? 'kill-surrendered' : 'kill';
-			morality.record({ kind, target: T.name || 'someone', faction: fac, place: placeName(), world: worldKey, ctx });
-			// fighting off raiders at a village, or beside a side whose enemy this was
-			const S = T.ref?.squad;
-			if (S?.raid && !ctx.surrendered) { morality.record({ kind: 'defend-village', place: placeName(), world: worldKey, ctx: {} }); relations.helped(PLAYER, 'village', 2); relations.helped('hearthguard', PLAYER, 3); }
-			for (const f of Object.keys(FACTIONS)) if (f !== fac && relations.hostile(f, fac) && squads.alive().some((h) => h.fid === f && h.alert && Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 80)) { relations.helped(f, PLAYER, 1.5); if (Math.random() < 0.3) morality.record({ kind: 'help-faction', target: FACTIONS[f].name, world: worldKey, place: placeName() }); break; }
-			if (F?.kind === 'civilians' && T.ref?.raid) morality.record({ kind: 'raid-village', place: placeName(), world: worldKey, ctx });
-			if (!defence) crime(lawful ? 'downPolice' : F?.kind === 'civilians' ? 'downCivilian' : 'hitCivilian', T.bound, ctx.witnessed || lawful);
-			const H = held();
-			if (H) arms?.train?.(H.u, 4);
-		} else if (!ctx.hostileTarget && !hurtOnce.has(T.id)) {
-			hurtOnce.add(T.id);
-			morality.record({ kind: 'hurt', target: T.name || 'someone', faction: fac, place: placeName(), world: worldKey, ctx });
-			if (!defence) crime(lawful ? 'hitPolice' : 'hitCivilian', T.bound, ctx.witnessed || lawful);
-		}
-	}
+	function yours(T, r, blow, ctx0) { return combatYours(cb, T, r, blow, ctx0); }
 	function witnesses(at) {
 		if (!at) return 0;
 		let n = 0;
@@ -451,54 +432,10 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		return n;
 	}
 
-	function fireShot(w, charge = 1) {
-		const S = w.S, ads = view.state()?.aiming ? 1 : 0;
-		const m = view.muzzle(S.range);
-		const o = m.aim.origin, aim = m.aim.direction;
-		const d0 = spreadDir([aim.x, aim.y, aim.z], spreadNow(w, ads, Math.min(1, me.speed / 5)));
-		const dir = new THREE.Vector3(d0[0], d0[1], d0[2]);
-		const from = m.position;
-		me.firing = 1.5;
-		if (S.projectile) {
-			const to = new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, 80));
-			const power = isBow(w) ? bowPower(charge) : { speed: 1, damage: 1 };
-			projectile({ from, to, direction: isBow(w) ? dir : null, speed: S.projectile.speed * power.speed, drop: S.projectile.drop, dmg: S.dmg * power.damage, type: S.type, owner: ME, style: S.tracer, splash: S.projectile.splash, life: S.projectile.life, arrow: isBow(w) });
-			net.fx(from, to, S.tracer, 0);
-		} else {
-			const hit = firstHit(o, dir, S.range);
-			if (hit) landShot(hit, o, dir, ME, damageAt(S, hit.t), S.type);
-			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
-			fx.tracer(from, end, S.tracer);
-			net.fx(from, end, S.tracer, hit ? 1 : 0);
-			// the spent case out of the breech, a hand's length back from the muzzle
-			if (S.type !== 'energy') fx.wisp(from, dir);
-			if (S.type !== 'energy') fx.casing({ x: from.x - dir.x * 0.32, y: from.y - dir.y * 0.32 + 0.03, z: from.z - dir.z * 0.32 }, dir);
-		}
-		const at = eye();
-		if(Date.now()-lastShotNotice>4000) {lastShotNotice=Date.now();notice('shots',at,'fired a weapon nearby');}
-		civilians.alarm(at.x, at.z, 30);
-		squads.hear(at.x, at.z, 70);
-		if (!isBow(w)) W()?.flush?.noise(at, S.type === 'energy' ? 0.35 : 0.6, camera.position);
-		if (isEarth() && threatened()) defendNow(at);
-		else crime('shots', at, witnesses(at) > 0);
-	}
+	function fireShot(...args) { return combatFireShot(cb, ...args); }
 
 	// ---------- projectiles: arrows, energy bolts, spit, missiles, flares ----------
-	function projectile(o) {
-		const from = o.from.clone ? o.from.clone() : new THREE.Vector3(o.from.x, o.from.y, o.from.z);
-		const to = o.to.clone ? o.to.clone() : new THREE.Vector3(o.to.x, o.to.y, o.to.z);
-		const dist = from.distanceTo(to) || 1, tof = dist / o.speed;
-		// Arrows leave along the sight direction and drop naturally. Other projectiles
-		// retain their existing trajectory compensation.
-		const vel = o.direction ? o.direction.clone().normalize().multiplyScalar(o.speed) : to.clone().sub(from).divideScalar(tof);
-		if (!o.arrow) vel.y += 0.5 * (o.drop || 0) * tof;
-		const mesh = o.arrow ? arrowMesh() : null;
-		const p = { ...o, pos: from, vel, life: o.life || 4, arrowMesh: mesh, streak: mesh ? null : fx.held(o.style ?? 0, o.arrow ? 0.02 : o.missile ? 0.18 : o.style === 2 ? 0.07 : 0.06), len: o.arrow ? 0.8 : o.missile ? 1.4 : 1.2 };
-		if (mesh) placeArrow(p);
-		projectiles.push(p);
-		if (projectiles.length > 60) endProjectile(projectiles[0], null);
-		return p;
-	}
+	function projectile(o) { return combatProjectile(cb, o); }
 	function endProjectile(p, at) {
 		const i = projectiles.indexOf(p);
 		if (i >= 0) projectiles.splice(i, 1);
@@ -507,41 +444,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (p.T) layer.remove(p.T.id);
 		if (at && p.splash > 0) blast(at, p.splash, p.dmg * 0.6, p.owner, null, p.type);
 	}
-	function stepProjectiles(dt) {
-		for (const p of [...projectiles]) {
-			p.life -= dt;
-			if (p.life <= 0) { endProjectile(p, null); continue; }
-			if (p.missile) {
-				// homing, gently, on you
-				const want = _v.subVectors(eye(), p.pos).normalize().multiplyScalar(p.speed);
-				p.vel.lerp(want, Math.min(1, dt * 0.9));
-				if (Math.random() < 0.6) fx.smokePuff(p.pos, 0.6, 0.3, 0.8);
-			}
-			p.vel.y -= (p.drop || 0) * dt;
-			const step = p.vel.length() * dt, dir = _d.copy(p.vel).normalize().clone();
-			let hit = firstHit(p.pos, dir, step, p.owner === ME ? ME : p.owner);
-			// a hostile shot meets you
-			if (p.hostile && !me.ko) {
-				const e = eye(), t = rayCapsule(p.pos, dir, { x: e.x, y: e.y - EYE + 0.3, z: e.z }, { x: e.x, y: e.y - 0.1, z: e.z }, 0.4);
-				if (t <= step && (!hit || t < hit.t)) hit = { me: true, t };
-			}
-			if (hit) {
-				const at = p.pos.clone().addScaledVector(dir, hit.t);
-				if (hit.me) { hurtPlayer({ amount: p.dmg, type: p.type, part: 'torso', src: p.from || p.pos.clone(), by: p.owner }); fx.impact(at, null, 'energy', true); }
-				else if (hit.ward) { spark(hit.T, at, p.owner); }
-				else if (p.flare) { flareLands(at, hit); }
-				else landShot(hit, p.pos, dir, p.owner, p.dmg, p.type, false);
-				if (hit.through && !p.pierced) { p.pierced = true; p.dmg = hit.through; p.pos.addScaledVector(dir, hit.t + 0.05); continue; }          // structures: through one pane, flying on
-				endProjectile(p, hit.ward ? null : at);
-				continue;
-			}
-			p.pos.addScaledVector(p.vel, dt);
-			if (p.T) { p.T.bound.x = p.pos.x; p.T.bound.y = p.pos.y; p.T.bound.z = p.pos.z; }
-			if (p.arrowMesh) placeArrow(p);
-			else fx.place(p.streak, p.pos.x - dir.x * p.len, p.pos.y - dir.y * p.len, p.pos.z - dir.z * p.len, dir.x, dir.y, dir.z, p.len);
-			if (p.flare && Math.random() < 0.8) fx.flame(p.pos, 0.3);
-		}
-	}
+	function stepProjectiles(dt) { return combatStepProjectiles(cb, dt); }
 	// a gunship's missile: slow, homing, and it can be shot down
 	function missile(B0, from) {
 		const p = projectile({ from, to: eye().clone(), speed: 24, drop: 0, dmg: 18, type: 'blast', owner: B0.T, style: 4, splash: 3, hostile: true, missile: true, life: 7 });
@@ -550,29 +453,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 
 	// ---------- blasts ----------
-	function blast(at, r, dmg, by, source = null, type = 'blast') {
-		const c = at.clone ? at : new THREE.Vector3(at.x, at.y, at.z);
-		const wards = [];
-		const mine = by === ME;
-		for (const x of layer.within(c, r, mine ? ME : by, rules, wards)) {
-			if (x.T === source) continue;
-			const k = 1 - x.d / r;
-			const blow = { amount: dmg * (0.3 + 0.7 * k), type, part: 'body', src: c, dir: { x: x.T.bound.x - c.x, y: 0.3, z: x.T.bound.z - c.z }, by: mine ? ME : by };
-			const before = x.T.moral?.();
-			const res = deal(x.T, blow, mine);
-			if (mine && res?.dealt && x.T.faction === 'civ' && squads.alive().some((h) => h.alert)) morality.record({ kind: 'collateral', place: placeName(), world: worldKey, ctx: before || {} });
-		}
-		for (const T of wards) spark(T, { x: T.bound.x, y: T.bound.y, z: T.bound.z }, mine ? ME : null);
-		const e = eye(), d = Math.hypot(e.x - c.x, e.y - EYE * 0.5 - c.y, e.z - c.z);
-		if (d < r && !me.ko) hurtPlayer({ amount: dmg * (1 - d / r) * (mine ? 0.5 : 1), type, part: 'torso', src: c, by });
-		if (d < r * 4) shakeIt(0.5 * (1 - d / (r * 4)));
-		civilians.alarm(c.x, c.z, 35); squads.hear(c.x, c.z, 90);
-		W()?.flush?.noise(c, 1, camera.position);
-		sound('boom', c);
-		W()?.structures?.blast?.(c, r, dmg);          // structures: the panes round it, the walls it reaches
-		// a big one sets cars and buildings near it alight
-		if (dmg >= 60) { for (const n of neighbours(c.x, c.z, r)) if (Math.random() < 0.5) ignite(n.id, n.x, n.z, n.fuel, mine); }
-	}
+	function blast(...args) { return combatBlast(cb, ...args); }
 
 	// ---------- you, hurt ----------
 	function hurtPlayer(blow) {
@@ -589,42 +470,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (!blow.quiet) shakeIt(Math.min(0.4, r.dealt / 50));
 		if (r.downed) knockout(blow);
 	}
-	function knockout(blow) {
-		cancelInput();
-		// downed by a friend in a PvP fight: they are told, for their honor (combat/honor.js)
-		const by = blow?.by?.kind === 'remote' ? String(blow.by.id || '').replace(/^rp:/, '') : '';
-		if (by && pvp.server) multiplayer?.send?.({ t: 'down', by, r: hooks.honorRank?.() || 0 });
-		me.ko = 6;
-		const p = P();
-		if (p) p.locked = true;
-		// with the police after you and officers near, downed is an arrest (law/: booked on waking)
-		me.custody = isEarth() && !!hooks.arrest?.({ downed: true });
-		if (!me.custody) clearWanted(wanted);
-		// the fight forgets you while you are down
-		for (const h of squads.alive()) { if (h.target?.id === 'me') h.target = null; h.provoked = false; }
-		if (!me.custody) hint('You were knocked out. You come to somewhere safer.', 5000, 2);
-	}
-	function wake() {
-		const p = P();
-		me.ko = 0;
-		revive(me.H, 0.7);
-		if (!p) return;
-		// in custody: you come to at the station, booked
-		if (me.custody) {
-			me.custody = false;
-			const at = hooks.booked?.();
-			if (at) { p.pos.set(at.x, at.y, at.z); p.vel?.set?.(0, 0, 0); if (Number.isFinite(at.yaw)) p.yaw = at.yaw; p.locked = false; return; }
-		}
-		// brought round at the nearest hospital, when there is one (services/index.js)
-		const care = services()?.revive?.(p.pos);
-		if (care) { revive(me.H, care.k); p.pos.set(care.x, care.y, care.z); p.vel?.set?.(0, 0, 0); p.locked = false; return; }
-		// back along your own way, out of the fight
-		const e = p.pos, threat = squads.alive().find((h) => h.alert && Math.hypot(h.pos.x - e.x, h.pos.z - e.z) < 80);
-		let spot = null;
-		for (let i = me.crumbs.length - 1; i >= 0; i--) { const c = me.crumbs[i]; if (Math.hypot(c.x - e.x, c.z - e.z) > 45 && (!threat || Math.hypot(c.x - threat.pos.x, c.z - threat.pos.z) > 60)) { spot = c; break; } }
-		if (spot) { p.pos.set(spot.x, spot.y, spot.z); p.vel?.set?.(0, 0, 0); }
-		p.locked = false;
-	}
+	function knockout(blow) { return combatKnockout(cb, blow); }
+	function wake() { return combatWake(cb); }
 
 	// ---------- fire ----------
 	const heatMap = new Map();
@@ -638,67 +485,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		for (const b of boxesNear(x, z, r + 10)) if (b.w > 3 && b.d > 3) out.push({ id: boxId(b), x: b.x, z: b.z, fuel: 1, box: b });
 		return out;
 	}
-	function ignite(id, x, z, fuel = 1, mine = false, box = null) {
-		if (!fireField.ignite(id, x, z, { fuel })) return false;
-		const kind = id.startsWith('car:') ? 'car' : id.startsWith('b:') ? 'building' : id.startsWith('pr') ? 'prop' : 'ground';
-		const b = box || (kind === 'building' ? boxesNear(x, z, 12).find((q) => boxId(q) === id) : null);
-		const occupied = kind === 'building' && (witnesses({ x, z }) > 1 || ((b?.x * 7 + b?.z * 13) % 10 + 10) % 10 < 5);
-		fireMeta.set(id, { kind, x, z, b, occupied, t: 0, crew: false, mine, emit: 0 });
-		if (kind === 'car') cars.burn(id);
-		if (mine && kind !== 'ground') {
-			notice('arson',{x,y:ground(x,z),z},'set a fire');
-			morality.record({ kind: 'arson', target: kind === 'building' ? (occupied ? 'an occupied building' : 'an empty building') : kind === 'car' ? 'a car' : 'some stores', place: placeName(), world: worldKey, ctx: { occupied, empty: !occupied, witnessed: witnesses({ x, z }) > 0 } });
-			crime('car', { x, z }, true);
-		}
-		civilians.alarm(x, z, 30);
-		return true;
-	}
-	function stepFire(dt) {
-		for (const e of fireField.tick(dt, neighbours)) {
-			if (e.type === 'spread') { const F = fireField.fires.get(e.to); const src = fireMeta.get(e.from); if (F) ignite2(e.to, F, src?.mine); }
-			if (e.type === 'out') {
-				const M = fireMeta.get(e.id);
-				if (M?.kind === 'prop') props.burnOut(e.id);
-				if (M?.kind === 'building' && M.b) scorch(M.b);
-				fireMeta.delete(e.id);
-			}
-		}
-		const e = eye();
-		for (const F of fireField.fires.values()) {
-			const M = fireMeta.get(F.id);
-			if (!M) continue;
-			M.t += dt; M.emit -= dt;
-			// the smoke over it, seen from across the land while it burns and long after
-			{ const big = M.kind === 'building' && M.b, g = ground(F.x, F.z); fx.column('fire:' + F.id, { x: F.x, y: g + (big ? (M.b.wallH || 6) : 1), z: F.z, h: big ? 120 + F.heat * 90 : M.kind === 'car' ? 80 : 45, r: big ? Math.max(3, Math.max(M.b.w, M.b.d) * 0.22) : 2, spread: big ? 5 : 6, shade: 0.07, k: 0.3 + 0.7 * F.heat, life: 1.5, fade: big ? 120 : 70 }); }
-			// a crew comes on Earth
-			// (an engine from the nearest station when there is one: services/index.js; else they walk in)
-			if (isEarth() && !M.crew && M.t > 10 && (M.kind === 'building' || M.kind === 'car')) {
-				M.crew = true;
-				const crew = (x, z) => squads.squad('fire', x, z, 2, { task: F.id });
-				if (services()?.dispatchFire?.(F, crew)) call('Engine on the way from the station!', 'bystander');
-				else { const a = Math.random() * 6.283; crew(F.x + Math.cos(a) * 40, F.z + Math.sin(a) * 40); call('Fire crew on the way!', 'bystander'); }
-			}
-			if (M.kind === 'building' && M.b) {
-				const b = M.b, H = b.wallH || 6, g = ground(b.x, b.z);
-				const dist = Math.hypot(e.x - b.x, e.z - b.z);
-				if (dist < 140 && M.emit <= 0) {
-					M.emit = isPhone ? 0.08 : 0.04;
-					const n = Math.ceil(F.heat * 3);
-					for (let i = 0; i < n; i++) {
-						const side = Math.floor(Math.random() * 4), u = Math.random() - 0.5, c = Math.cos(b.a || 0), s = Math.sin(b.a || 0);
-						const lx = side < 2 ? u * b.w : (side === 2 ? 1 : -1) * b.w / 2, lz = side < 2 ? (side ? 1 : -1) * b.d / 2 : u * b.d;
-						const y = g + Math.random() * H * Math.min(1, F.heat * 1.3);
-						fx.flame({ x: b.x + lx * c + lz * s, y, z: b.z - lx * s + lz * c }, 1 + F.heat);
-					}
-					if (Math.random() < 0.5) fx.smokePuff({ x: b.x + rnd(-b.w / 3, b.w / 3), y: g + H + 1, z: b.z + rnd(-b.d / 3, b.d / 3) }, 0.1, 2.2 + F.heat * 2, 5);
-				}
-				if (dist < Math.max(b.w, b.d) / 2 + 2.5 && F.heat > 0.3) hurtPlayer({ amount: 6 * dt * F.heat, type: 'fire', part: 'torso', src: { x: b.x, y: g, z: b.z }, quiet: true });
-			} else if (M.kind === 'prop' || M.kind === 'ground') {
-				if (M.emit <= 0) { M.emit = 0.06; fx.flame({ x: F.x, y: ground(F.x, F.z) + 0.3, z: F.z }, 0.8 * F.heat + 0.3); if (Math.random() < 0.3) fx.smokePuff({ x: F.x, y: ground(F.x, F.z) + 1.5, z: F.z }, 0.15, 1, 3); }
-				if (Math.hypot(e.x - F.x, e.z - F.z) < 1.8) hurtPlayer({ amount: 8 * dt, type: 'fire', part: 'torso', src: { x: F.x, y: e.y, z: F.z }, quiet: true });
-			}
-		}
-	}
+	function ignite(...args) { return combatIgnite(cb, ...args); }
+	function stepFire(dt) { return combatStepFire(cb, dt); }
 	function ignite2(id, F, mine) {
 		const kind = id.startsWith('car:') ? 'car' : id.startsWith('b:') ? 'building' : id.startsWith('pr') ? 'prop' : 'ground';
 		const b = kind === 'building' ? boxesNear(F.x, F.z, 12).find((q) => boxId(q) === id) : null;
@@ -839,22 +627,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	const assist = (dt) => focus.assist(P(), dt);
 
 	// ---------- bosses ----------
-	function spawnBoss(kind, at = null, id = null) {
-		if (!BOSSES[kind]) return null;
-		const e = eye();
-		const c = at || (kind === 'fogmother' ? fogMotherSpot() : null) || (() => { camera.getWorldDirection(_v); _v.y = 0; _v.normalize(); const d = kind === 'walker' ? 70 : kind === 'leviathan' ? 14 : 30; const x = e.x + _v.x * d, z = e.z + _v.z * d; return { x, y: ground(x, z, e.y), z }; })();
-		const bid = id || 'boss:' + kind;
-		if (bosses.has(bid)) return bosses.get(bid);
-		const B0 = createBoss(ctx, kind, c, { id: bid });
-		group.add(B0.group);
-		bosses.set(bid, B0);
-		if (kind === 'walker' || kind === 'gunship') props.camp(e.x, e.z, 'arena', (x, z) => ground(x, z, e.y));
-		hud.phase(B0.def.phases[0].name);
-		call(`${B0.def.name} — ${B0.def.where}`, 'boss');
-		hooks.event?.({ kind: 'boss', x: c.x, z: c.z, severity: 3, name: B0.def.name });
-		net.boss(B0, true, c);
-		return B0;
-	}
+	function spawnBoss(...args) { return combatSpawnBoss(cb, ...args); }
 	// where the Fog Mother rises: in the strait beside the Golden Gate, abreast of you on the deck
 	// (or, away from it, out in front of you)
 	function fogMotherSpot() {
@@ -943,82 +716,13 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		}
 		return null;
 	}
-	function director(dt) {
-		directorT -= dt; bountyT -= dt; policeT -= dt; playT += dt;
-		const p = P();
-		if (!p || p.flying || p.swimming || drive?.active?.() || me.ko) return;
-		// the patrol answering a wanted level
-		if (isEarth() && wanted.stars > 0 && policeT <= 0) {
-			policeT = 8;
-			const R = responseFor(wanted.stars), have = squads.alive().filter((h) => h.fid === 'patrol' || h.fid === 'police').length;
-			// the police answer in their cruisers (military/police.js); on foot if nobody took the call
-			if (have < R.officers && !hooks.police?.(wanted.stars, R, have)) { const s = spotHidden(50, 90); if (s) squads.squad('police', s.x, s.z, Math.min(2, R.officers - have), { alert: true, armour: R.armour }); call('Dispatch: units responding.', 'Harbour Police'); }
-		}
-		// contract hunters, for a bounty
-		// (only where there are people or businesses about: not out in the empty country)
-		if (bountyT <= 0 && isEarth() && !populated(eye())) bountyT = 30;
-		// (a raid, and a rare one: factions.js ATTACK)
-		if (bountyT <= 0 && playT - lastAttackT < ATTACK.raid) bountyT = 60;
-		if (bountyT <= 0) { bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { lastAttackT = playT; squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
-		if (!settings.ambient || directorT > 0 || contracts.info().mission) return;
-		directorT = rnd(70, 130);
-		if (squads.info().squads.length >= (isPhone ? 2 : 3)) return;
-		const z = zone(), s = spotAhead(z === 'deep' ? 18 : 70, z === 'deep' ? 30 : 110);
-		if (!s) return;
-		// the law's own trouble on Earth's streets (gangs by their territory, militia only out of town)
-		if (hooks.ambient?.(z, s)) return;
-		const two = (a, b, n = 3) => { squads.squad(a, s.x - 9, s.z, n, {}); squads.squad(b, s.x + 9, s.z + 4, n, {}).then((sq) => { for (const h of sq.members) { h.target = null; } }); call(`Gunfire ahead: ${FACTIONS[a].name} and ${FACTIONS[b].name}.`, ''); if (FACTIONS[a].kind === 'gang') hooks.event?.({ kind: 'gang', x: s.x, z: s.z, severity: 1 }); };
-		// a side that has it in for you comes for you only when its turn is due (factions.js
-		// ATTACK); otherwise this round brings nobody. The Deep keeps its crawlers as they are.
-		const due = (...fids) => {
-			const foes = fids.filter(hatesMe);
-			if (!foes.length || z === 'deep') return true;
-			if (foes.some((f) => playT - lastAttackT < attackGap(FACTIONS[f], z))) return false;
-			lastAttackT = playT;
-			return true;
-		};
-		// a militia only at its own compound (never roaming): the nearest one within reach, if any
-		const compound = () => { const c = campsNear(eye().x, eye().z).filter((q) => Math.hypot(q.x - eye().x, q.z - eye().z) < 260)[0]; if (!c || !due('ridgeback')) return false; props.clearTag('camp'); props.camp(c.x, c.z, 'camp', (x, z) => ground(x, z, eye().y + 2)); squads.squad('ridgeback', c.x, c.z, isPhone ? 3 : 4, { post: { kind: 'compound', x: c.x, z: c.z, r: c.r, loop: [[c.x - 14, c.z - 14], [c.x + 14, c.z - 14], [c.x + 14, c.z + 14], [c.x - 14, c.z + 14]] } }); return true; };
-		const one = (fid, n) => { if (due(fid)) squads.squad(fid, s.x, s.z, n, {}); };
-		const roll = Math.random();
-		if (z === 'deep') squads.squad('gloom', s.x, s.z, 3, {});
-		else if (z === 'earth-urban') { if (roll < 0.5) { if (due('copperline', 'glasshouse')) two('copperline', 'glasshouse'); } else one(roll < 0.75 ? 'copperline' : 'glasshouse', 3); }
-		else if (z === 'earth-coast') { if (roll < 0.5 && populated(s)) { if (due('saltjack', 'patrol')) two('saltjack', 'patrol', 2); } else one('saltjack', 3); }
-		else if (z === 'earth-rural') { if (roll > 0.5 || !compound()) one('rangers', 3); }
-		else if (z === 'village') {
-			// a raid: raiders come for the houses, the Hearthguard turn out
-			const vf = W().village.footprints.find((f) => !f.fence);
-			const raiders = shared.planet?.type === 'ARID' && roll < 0.5 ? 'dunecutters' : 'ashfang';
-			if (!due(raiders)) return;
-			squads.squad(raiders, s.x, s.z, isPhone ? 3 : 4, { raid: true, dest: { x: vf.x, z: vf.z } });
-			squads.squad('hearthguard', vf.x, vf.z, isPhone ? 2 : 3, {});
-			call(`${FACTIONS[raiders].name} are raiding the village!`, '');
-		} else if (z === 'arid') { if (roll < 0.5) { if (due('ashfang', 'dunecutters')) two('ashfang', 'dunecutters'); } else if (roll < 0.8) { if (due('ashfang')) camp('ashfang', s); } else one('rogue', 2); }
-		else if (roll < 0.45) { if (due('ashfang')) camp('ashfang', s); }
-		else if (roll < 0.7 || !compound()) one('rogue', 2);
-	}
+	function director(dt) { return combatDirector(cb, dt); }
 	// ---------- the creatures (creatures/catalog.js) ----------
 	// The night's monsters come out after dark (the Fog Wight on open ground and shores, the
 	// Sexton by the towns and the fields, Drain Skulkers in packs through the streets), the
 	// Deep's own foes below: one of them now and then, out of sight about you, a few at most.
 	let creatureT = 30, creatureSeen = false;
-	function creatures(dt) {
-		creatureT -= dt;
-		if (creatureT > 0) return;
-		creatureT = rnd(50, 100);
-		const p = P();
-		if (!p || p.flying || p.swimming || drive?.active?.() || me.ko || !settings.ambient || contracts.info().mission || W()?.orbit?.active?.()) return;
-		const z = zone(), night = W()?.sky?.uniforms?.uNight?.value ?? 0;
-		const kinds = speciesFor(z, night);
-		if (!kinds.length) return;
-		if (squads.alive().filter((h) => h.cr).length >= (isPhone ? 2 : 4)) return;
-		const id = pickSpecies(kinds), S = SPECIES[id];
-		const s = S.lurk ? spotForest(40, 110) || spotHidden(45, 80) : spotHidden(z === 'deep' ? 25 : 45, z === 'deep' ? 40 : 80);
-		if (!s) return;
-		const [a, b] = S.where.pack, n = Math.min(isPhone ? 2 : 4, a + Math.floor(Math.random() * (b - a + 1)));
-		squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2.5 });
-		if (!creatureSeen && S.where.night) { creatureSeen = true; hint('Something is moving out there in the dark.', 3200, 1); }
-	}
+	function creatures(dt) { return combatCreatures(cb, dt); }
 	// one of them ahead of you, for trying them out (the places menu's Creatures list, and
 	// Crysis.combat.creature): awake and coming for you
 	function creatureAhead(id, n = 1, d = 14) {
@@ -1075,27 +779,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- hold-ups ----------
 	let aimT = 0, aimAt = null;
-	function holdUps(dt) {
-		if (!active() || me.ko || !view.state()?.aiming || !held()) { aimT = 0; aimAt = null; return; }
-		camera.getWorldDirection(_v);
-		const hit = layer.cast(camera.position, _v, 10, ME, rules);
-		const T = hit && !hit.ward && hit.T.kind === 'person' ? hit.T : null;
-		if (T !== aimAt) { aimAt = T; aimT = 0; }
-		if (!T) return;
-		aimT += dt;
-		if (aimT < 1) return;
-		aimT = -999;
-		const p = (people?.()?.pool || []).find((q) => q.P === T.P);
-		const r = p && civilians.holdUp(p);
-		if (!r) return;
-		if (r.first && r.credits) {
-			notice('robbery',T.bound,'held someone up at gunpoint');
-			crime('robbery', T.bound, witnesses(T.bound) > 1);
-			arms?.apply?.({ id: `rob-${Date.now().toString(36)}`, kind: 'trade', peer: 'held-up', give: { credits: 0, items: [] }, get: { credits: r.credits, items: [] } });
-			hint(`They raise their hands and hand over ${r.credits} credits.`, 2500, 1);
-			morality.record({ kind: 'robbery', target: T.name, place: placeName(), world: worldKey, ctx: { rich: r.rich, poor: !r.rich, witnessed: witnesses(T.bound) > 1, ...T.moral?.() } });
-		}
-	}
+	function holdUps(dt) { return combatHoldUps(cb, dt); }
 
 	// ---------- friends in a room ----------
 	const remotes = new Map();

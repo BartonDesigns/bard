@@ -3,7 +3,7 @@
 // one of them changes.
 // The rest of what it uses from main.js's createIslandWorld comes from iw at the top, once per
 // call; none of it changes after the world is set up. A name not yet there needs a getter in
-// main.js's iw (island/tools/island-world.test.mjs checks).
+// main.js's iw (island/tools/split-contexts.test.mjs checks).
 // What changes as the game runs it reaches through iw: origin, panelClock, quality, world. It sets
 // panelClock, quality.
 
