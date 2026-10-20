@@ -327,7 +327,7 @@ function fogMother(ctx, B) {
 	const g = new THREE.Group();
 	const C = B.center, heart = new THREE.Vector3(C.x, C.y + FOG_H * 0.66, C.z), focus = heart;
 	const voice = createCreatureVoice({ eye: ctx.eye, yaw: () => ctx.yaw?.() ?? 0, isPhone: GFX_PHONE });
-	let c = null, look = null, k = 1, yaw = 0, arm = null, breath = null, fade = 1;
+	let c = null, look = null, k = 1, yaw = 0, arm = null, breath = null, fade = 1, stretched = null;
 	// where she stands and which way she faces: toward the deck, across it
 	const bridge = ctx.world?.()?.bridge;
 	if (bridge) { const t = (C.x - bridge.centre.x) * -bridge.axis.y + (C.z - bridge.centre.z) * bridge.axis.x; yaw = Math.atan2(bridge.axis.y * Math.sign(t), -bridge.axis.x * Math.sign(t)); }
@@ -381,7 +381,7 @@ function fogMother(ctx, B) {
 			if (step === 'attack') {
 				ctx.shake?.(0.5);
 				ctx.fx.ring(me.x, deckY(me.x, me.z) + 0.5, me.z, 30, 1.2, 0xbfd8ff, false);
-				if (Math.hypot(me.x - C.x, me.z - C.z) < FOG_H * 0.9) ctx.hurtPlayer({ amount: 16, type: 'energy', src: heart.clone(), part: 'head', by: B.T });
+				if (Math.hypot(me.x - C.x, me.z - C.z) < FOG_H * 0.9) ctx.hurtPlayer({ amount: 16, type: 'energy', src: heart.clone(), part: 'body', by: B.T });
 			}
 		} else if (name === 'breath') {
 			if (step === 'telegraph-start') voice.play('wail', heart, 0.6, 0.5);
@@ -406,10 +406,28 @@ function fogMother(ctx, B) {
 		const glow = (M.phase === 2 ? 1.8 : 1) + (M.state === 'transition' ? 0.8 : 0);
 		c.motion.update(dt, { speed: 0, look: 0 });
 		c.motion.drain();
-		// a hand: raised high over her as it winds up, then down on the deck
+		// a hand: raised high over her as it winds up, then down on the deck. Her shoulders stand
+		// far higher over the strait than her arm is long, so the arm draws out as it rises, fog
+		// stretching, until the hand will reach the place it falls (and goes back after)
+		if (!arm && stretched) {
+			stretched.s += (1 - stretched.s) * Math.min(1, dt * 2.5);
+			stretched.bone.scale.setScalar(stretched.s);
+			if (Math.abs(stretched.s - 1) < 0.01) { stretched.bone.scale.setScalar(1); stretched = null; }
+		}
 		if (arm) {
 			const ua = bone('upperarm_' + arm.side);
 			if (ua) {
+				if (stretched && stretched.bone !== ua) { stretched.bone.scale.setScalar(1); stretched = null; }
+				ua.getWorldPosition(_a);
+				const h0 = bone('hand_' + arm.side);
+				if (h0) {
+					h0.getWorldPosition(_b);
+					const chord = _b.distanceTo(_a) / (ua.scale.x || 1);
+					const S = Math.max(1, Math.min(4, _a.distanceTo(arm.at) / Math.max(chord, 1e-3)));
+					const s1 = arm.down > 0 ? S : 1 + (S - 1) * Math.min(1, arm.up * 1.3);
+					ua.scale.setScalar(s1);
+					stretched = { bone: ua, s: s1 };
+				}
 				if (arm.down > 0) arm.down = Math.min(1, arm.down + dt / 0.35);
 				ua.getWorldPosition(_a);
 				const hand = bone('hand_' + arm.side);
@@ -424,7 +442,9 @@ function fogMother(ctx, B) {
 				turn(ua, new THREE.Quaternion().slerp(_q, w));
 				if (arm.down >= 1 && !arm.hit) {
 					arm.hit = true;
-					const p = arm.at;
+					// (where the hand came down: on the mark, unless the place was beyond even her reach)
+					const p = arm.at.clone();
+					if (hand) { hand.getWorldPosition(_b); if (Math.hypot(_b.x - p.x, _b.z - p.z) > 6) p.set(_b.x, deckY(_b.x, _b.z), _b.z); }
 					// (where the hand came down against where it struck, Crysis.combat.bossStep)
 					B.lastSlam = { at: p.toArray().map(Math.round), hand: hand ? hand.getWorldPosition(new THREE.Vector3()).toArray().map(Math.round) : null };
 					ctx.shake?.(1);
