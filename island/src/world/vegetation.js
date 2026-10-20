@@ -12,6 +12,10 @@ import { addPulse } from '../pulse.js';
 import { stepResonance } from '../music/performance.js';
 import { baseFromSlope } from './groundsnap.js';
 import { addLodFade, fadeRange } from './lodfade.js';
+import { GFX_PHONE } from './device.js';
+
+// how far the real tree crowns reach on a phone, as a share of a computer's
+const PHONE_REACH = 0.56;
 
 // ---------- geometry helpers ----------
 export class Builder {
@@ -829,6 +833,10 @@ export function createVegetation(island, shared, scene, flora = null) {
 		{ key: 'boulder', variants: [0, 1].map((v) => boulder(island.seed * 23 + v)), mats: ['stone'], spacing: 10, near: 320, max: 400, kind: 'stone',
 			density: (e) => e.path > 0.3 || e.h < 0.2 ? 0 : smoothstep(0.3, 0.55, e.sl) * 0.35 * e.clump(0.03, 0.4, 0.7) + e.summit * 0.08 + e.headland * 0.1 },
 	];
+	// on phones the real crowns hand over to their impostors (world/farforest.js reads farR for
+	// its band) at under 60% of the distance: the trees stand where they always do, only drawn as
+	// one card each sooner, which leaves out about two thirds of the far crowns' triangles
+	if (GFX_PHONE) for (const sp of species) if (sp.farR) sp.farR = Math.round(sp.farR * PHONE_REACH);
 	const SHADOW_R = 55;
 	// stands: each tree species holds a centre in the community field's range and
 	// prefers its habitat; the shares sum to one, so the forest is as dense as before
