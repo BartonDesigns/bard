@@ -170,7 +170,7 @@ function measureThickness(P, chains, byBone, palmN) {
 const CELL = 0.008, REACH = 0.02;
 // objects: [mesh, matrix (mesh to item space)]; box: the item-space region worth reading
 export function contactField(objects, box) {
-	const tris = [], grid = new Map(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), lo = box.min, hi = box.max;
+	const tris = [], balls = [], grid = new Map(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), lo = box.min, hi = box.max;
 	for (const [mesh, m] of objects) {
 		const g = mesh.geometry, p = g.attributes.position, ix = g.index, n = ix ? ix.count : p.count;
 		for (let i = 0; i < n; i += 3) {
@@ -183,6 +183,10 @@ export function contactField(objects, box) {
 			if (nl < 1e-12) continue;
 			const t = tris.length / 12;
 			tris.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, nx / nl, ny / nl, nz / nl);
+			// (a sphere round it: anything farther from its centre than the radius plus the nearest
+			// so far cannot be nearer, and is passed over without working out its closest point)
+			const sx = (a.x + b.x + c.x) / 3, sy = (a.y + b.y + c.y) / 3, sz = (a.z + b.z + c.z) / 3;
+			balls.push(sx, sy, sz, Math.sqrt(Math.max((a.x - sx) ** 2 + (a.y - sy) ** 2 + (a.z - sz) ** 2, (b.x - sx) ** 2 + (b.y - sy) ** 2 + (b.z - sz) ** 2, (c.x - sx) ** 2 + (c.y - sy) ** 2 + (c.z - sz) ** 2)));
 			for (let X = Math.floor(Math.max(x0, lo.x) / CELL); X <= Math.floor(Math.min(x1, hi.x) / CELL); X++)
 				for (let Y = Math.floor(Math.max(y0, lo.y) / CELL); Y <= Math.floor(Math.min(y1, hi.y) / CELL); Y++)
 					for (let Z = Math.floor(Math.max(z0, lo.z) / CELL); Z <= Math.floor(Math.min(z1, hi.z) / CELL); Z++) {
@@ -191,14 +195,35 @@ export function contactField(objects, box) {
 					}
 		}
 	}
-	const T = new Float64Array(tris);
+	const T = new Float64Array(tris), B = new Float64Array(balls);
+	// (each cell's triangles, the first time it is asked, put nearest its centre first, so the
+	// nearest so far shrinks soon and the spheres pass over most of the rest: the hands' solve
+	// asks this hundreds of thousands of times when an item comes to hand)
+	// (and each one's least distance from the cell's centre kept with it: past the point where
+	// that, less half the cell's diagonal, is beyond the nearest so far, none further on can be
+	// nearer, and the search stops)
+	const HALF = CELL * Math.sqrt(3) / 2;
+	const near = (list, X, Y, Z) => {
+		const mx = (X + 0.5) * CELL, my = (Y + 0.5) * CELL, mz = (Z + 0.5) * CELL, d = new Map();
+		for (const t of list) { const o = t * 4; d.set(t, Math.hypot(B[o] - mx, B[o + 1] - my, B[o + 2] - mz) - B[o + 3]); }
+		list.sort((u, v) => d.get(u) - d.get(v) || u - v);
+		list.cut = Float64Array.from(list, (t) => d.get(t) - HALF);
+		list.cx = X; list.cy = Y; list.cz = Z;
+	};
 	// the signed distance from (x, y, z) to the surface, or REACH where nothing is near
 	function sd(x, y, z) {
-		const list = grid.get((Math.floor(x / CELL) * 73856093) ^ (Math.floor(y / CELL) * 19349663) ^ (Math.floor(z / CELL) * 83492791));
+		const X = Math.floor(x / CELL), Y = Math.floor(y / CELL), Z = Math.floor(z / CELL);
+		const list = grid.get((X * 73856093) ^ (Y * 19349663) ^ (Z * 83492791));
 		if (!list) return REACH;
+		if (!list.cut) near(list, X, Y, Z);
+		// (two cells can share a key: then the order holds for the first only, and all are read)
+		const cut = list.cx === X && list.cy === Y && list.cz === Z ? list.cut : null;
 		let best = REACH * REACH, sign = 1;
 		for (let q = 0; q < list.length; q++) {
-			const o = list[q] * 12;
+			if (cut && cut[q] > 0 && cut[q] * cut[q] >= best) break;
+			const t = list[q], b = t * 4, ex = x - B[b], ey = y - B[b + 1], ez = z - B[b + 2], gap = Math.sqrt(ex * ex + ey * ey + ez * ez) - B[b + 3];
+			if (gap > 0 && gap * gap >= best) continue;
+			const o = t * 12;
 			const [cx, cy, cz] = closest(x, y, z, T, o);
 			const dx = x - cx, dy = y - cy, dz = z - cz, d = dx * dx + dy * dy + dz * dz;
 			if (d < best) { best = d; sign = dx * T[o + 9] + dy * T[o + 10] + dz * T[o + 11] < 0 ? -1 : 1; }
