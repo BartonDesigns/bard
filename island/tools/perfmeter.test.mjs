@@ -29,3 +29,12 @@ test('where the last lost load stopped, with what the graphics held', () => {
 	assert.equal(lostLine(lost), 'last load lost: "Shaping the landscape" at 41 s, 380 MB');
 	assert.equal(lostLine([{ stages: [[3, 'Lighting the world', 120, null]], hidden: true }]), 'last load lost: "Lighting the world" at 3 s, 120 MB (in background)');
 });
+
+test('the probe lists what leaving each part out saves, most first', async () => {
+	const { probeLines } = await import('../src/ui/perfmeter.js');
+	const L = probeLines(120, [{ name: 'ocean', tris: 180000, ms: 100 }, { name: 'vegetation', tris: 946000, ms: 70 }, { name: 'sky', tris: 2000, ms: 125 }]);
+	assert.equal(L[0], 'probe: all 120 ms');
+	assert.match(L[1], /^vegetation\s+-50 ms  946k$/);
+	assert.match(L[2], /^ocean\s+-20 ms  180k$/);
+	assert.match(L[3], /^sky\s+-0 ms  2k$/, 'a part that saves nothing reads 0, not a gain');
+});
