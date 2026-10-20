@@ -54,4 +54,21 @@ export const BOSSES = Object.freeze({
 		weak: { podL: { mult: 1.8, hp: 800, open: null }, podR: { mult: 1.8, hp: 800, open: null }, core: { mult: 3, open: [2] } },
 		reward: { credits: 7000, item: 'mossback-scout-rifle', level: 7 },
 	},
+	// the Golden Gate at night: an old woman of fog as tall as the towers, wading in the strait
+	fogmother: {
+		name: 'The Fog Mother', where: 'the Golden Gate', hp: 9000, gap: 2.6, transition: 3.5,
+		phases: [
+			{ at: 1, name: 'The Fog Rolls In', attacks: ['slam', 'wail'] },
+			{ at: 0.6, name: 'Drowned Lullaby', attacks: ['slam', 'breath', 'wights'] },
+			{ at: 0.25, name: 'Her Heart Laid Bare', attacks: ['slam', 'breath', 'wail'], speed: 1.3 },
+		],
+		attacks: {
+			slam: { warn: 2.2, active: 1.0, recover: 2.0, weight: 1.4 },
+			wail: { warn: 1.6, active: 1.2, recover: 1.6, weight: 0.8 },
+			breath: { warn: 1.8, active: 2.5, recover: 1.5, weight: 0.9 },
+			wights: { warn: 1.4, active: 0.5, recover: 1.6, weight: 0.6 },
+		},
+		weak: { heart: { mult: 3, open: null } },
+		reward: { credits: 9000, item: 'aurora-trail-rifle', level: 8 },
+	},
 });

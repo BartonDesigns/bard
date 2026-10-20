@@ -15,7 +15,8 @@
 //                Moonturned: a villager who changes when you come near or hurt them)
 //   look         its model dressed as something else (facets: the Facet Wraith's shard shell,
 //                creatures/facets.js; legs: the Shard Mite's crystal legs and plates,
-//                creatures/crystal-legs.js); drift: it glides, no step
+//                creatures/crystal-legs.js; sword: the Hollow King's greatsword and crown,
+//                creatures/hollow-king.js); drift: it glides, no step
 //   shatter      it bursts into shards when it dies, nothing left to lie there
 //   fly          a flyer: the height it keeps over the ground (hover) and drops to (strike), in m
 //   lurk         one that waits still among the trees (the Burnt Giant): it wakes when you come
@@ -152,7 +153,7 @@ export const SPECIES = Object.freeze({
 		where: { night: false, zones: ['deep'], pack: [3, 6], odds: 0.3 },
 	},
 	'hollow-king': {
-		name: 'The Hollow King', faction: 'nightborn', height: 4,
+		name: 'The Hollow King', faction: 'nightborn', height: 4, look: 'sword',
 		hp: 1800, armour: 120, walk: 1.2, run: 3.2, dmg: 45, reach: 3.4, strike: 1.5, sight: 50,
 		resist: { ballistic: 0.6, pierce: 0.7, energy: 1.2 }, surface: 'metal',
 		// (the barrow's end, not the open world's: met from the places menu for now)
