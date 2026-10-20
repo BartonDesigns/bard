@@ -185,7 +185,7 @@ function button(label, title, style, hud) {
 //         grid, so when it runs out of height it carries on in a second column leftwards
 // and beside it:
 //   prompt: bottom centre, between the thumbs, one over another (pick up, talk, doors...),
-//           with the hint on top
+//           with the hint on top; with a keyboard, over the spell bar (magic/hud.js)
 //   left: under ◀ Bard (homes, the quest purse)
 // The joystick rests bottom left, opposite the jump, until a thumb takes it.
 // A short landscape screen lays the thumb buttons in a row and puts the modes in the
@@ -203,6 +203,7 @@ const HUD_CSS = `
 #l99-island-mount :is(.l99-rail,.l99-thumb>div,.l99-prompts,.l99-left,.l99-pair)>*{position:relative !important;inset:auto !important;transform:none !important;margin:0;flex:none;pointer-events:auto;}
 #l99-island-mount :is(.l99-rail,.l99-mode)>*{direction:ltr;display:flex;align-items:center;justify-content:center;width:44px;padding:0;}
 #l99-island-mount .l99-prompts>*{max-width:100%;box-sizing:border-box;}
+#l99-island-mount:not(.l99-touch) .l99-prompts{bottom:calc(84px + env(safe-area-inset-bottom));}
 #l99-island-mount .l99-pill>*{align-items:center;justify-content:center;}
 #l99-island-mount :is(.l99-thumb>div,.l99-pair)[hidden]{display:none;}
 #l99-island-mount:not(.l99-touch) .l99-big{display:none;}

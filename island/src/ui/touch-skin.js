@@ -225,8 +225,6 @@ ${S} .l99-thumb>.l99-mode>*{order:4!important;}
 ${S} .l99-thumb [data-skin]{margin:0!important;}
 
 ${S} .l99-prompts{left:calc(112px + var(--sl))!important;right:calc(160px + var(--sr))!important;bottom:calc(16px + var(--sb))!important;flex-direction:row!important;flex-wrap:wrap-reverse!important;justify-content:center!important;align-items:flex-end!important;gap:12px!important;}
-${S} .l99-prompts>[data-hud="prompt 21"]{max-width:100%!important;}
-${S} .l99-prompts>[data-hud="prompt 21"] [data-t]{display:none!important;}
 ${S} .l99-prompts>[data-hud="prompt 99"]{position:fixed!important;left:50%!important;right:auto!important;top:max(calc(116px + var(--st)), calc(var(--qb) + 44px))!important;bottom:auto!important;transform:translateX(-50%)!important;width:max-content;max-width:calc(100% - 136px - var(--sl) - var(--sr))!important;box-sizing:border-box;z-index:7;}
 ${S} .l99-prompts>[data-hud="prompt 20"]{${SLOT}position:fixed!important;${P}z-index:7;}
 @media (orientation:landscape) and (max-height:540px){
