@@ -702,7 +702,8 @@ export function createCity(shared, scene, bay, real = null) {
 	const kit = (() => {
 		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
-		const C = (r, h, x, y, z, c, seg = 14) => colored(new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z), c);
+		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles)
+		const C = (r, h, x, y, z, c, seg = PHONE ? 6 : 14) => colored(new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z), c);
 		const body = [0.8, 0.81, 0.8], dark = [0.16, 0.17, 0.18], grille = [0.42, 0.43, 0.44];
 		// a packaged rooftop unit on its curb: the cabinet, two fans in their shrouds on top,
 		// the louvred coil down one side
@@ -727,7 +728,9 @@ export function createCity(shared, scene, bay, real = null) {
 		for (let k = 0; k < 9; k++) { const w = 0.35 + (k * 37 % 5) * 0.1, h = 0.35 + (k * 53 % 4) * 0.12; parts.push(B(w, h, 0.01, -2 + (k % 3) * 1.5 + (k * 29 % 7) * 0.08, 1.86 - h, [-0.4, 0, 0.4][Math.floor(k / 3)], wash[k % wash.length])); }
 		const lineG = mergeGeometries(parts);
 		const M = (o) => withRise(new THREE.MeshStandardMaterial({ vertexColors: true, ...o }), rise, 'kitrise');
-		const mkK = (geo, material, cap) => { const im = new THREE.InstancedMesh(geo, material, cap); im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true; group.add(im); return im; };
+		// (on a phone the roof and yard kit throws no shadow: every unit was drawn again in the
+		// shadow pass, out to the edge of the city, for shadows a few pixels across)
+		const mkK = (geo, material, cap) => { const im = new THREE.InstancedMesh(geo, material, cap); im.count = 0; im.frustumCulled = false; im.castShadow = !PHONE; im.receiveShadow = true; group.add(im); return im; };
 		const glassM = withRise(new THREE.MeshStandardMaterial({ color: 0xa9c4cf, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false }), rise, 'kitrise');
 		return {
 			ac: mkK(ac, M({ roughness: 0.55, metalness: 0.35 }), 12000),
