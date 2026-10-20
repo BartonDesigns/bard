@@ -100,6 +100,9 @@ export function islandFrame(iw, now) {
 	// ...and it is drawn before everything under it, so glows and embers show through
 	W.ocean.renderOrder = under ? -5 : 1;
 	W.underwater.update(dt, iw.time, under, surf);
+	// (a phone draws the crater's boulders and kelp only from in or at the water: through the
+	// surface from the shore they cost the GPU far more than they show)
+	if (isPhone && W.underwater.group) W.underwater.group.visible = under || camera.position.y < surf + 4;
 	W.magma.update(dt, iw.time, under, contact.sea ?? 0);
 	W.volcano?.update(dt, iw.time);
 	W.alien?.update(dt, iw.time);
