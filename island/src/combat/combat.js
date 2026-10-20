@@ -217,7 +217,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
 	// weapons deal, for your skills; honorRank() your honor's rank and pvpWin({ from, r, name })
 	// a friend beaten in a PvP fight, for your honor: combat/honor.js)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null, honorRank: null, pvpWin: null };
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null, honorRank: null, pvpWin: null, guild: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -555,7 +555,10 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		mayStation: (fid, x, z) => mayStation({ ...FACTIONS[fid], id: fid }, x, z, [...(hooks.posts?.() || []), ...campsNear(x, z)]),
 		trespass: (h) => !!hooks.trespass?.(h),
 		onSurrender: (h) => { if (Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 60) hint(`${h.F.name}: one of them throws down their weapon and surrenders. They are out of the fight.`, 4000, 1); },
-		onDeath: (h, blow) => { recovery.add(h); gangDeath(h); hooks.death?.(h); feedDeath(h, blow); },
+		// (one of your guild's struck down is carried off to rest, guild/companions.js; what others
+		// fell teaches them, and you)
+		onDeath: (h, blow) => { if (h.ally) { hooks.guild?.down?.(h, blow); feedDeath(h, blow); return; } recovery.add(h); gangDeath(h); hooks.death?.(h); feedDeath(h, blow); hooks.guild?.kill?.(h, blow); },
+		allyCast: (h, dt) => hooks.guild?.cast?.(h, dt),
 		onSpared: (h, d) => { if (d < 50) morality.record({ kind: 'spare', target: h.T.name, faction: h.fid, place: placeName(), world: worldKey }); },
 		onPhase: (B0) => net.boss(B0, true),
 		onBossDown: (B0) => bossDown(B0),

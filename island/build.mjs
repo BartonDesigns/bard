@@ -28,6 +28,8 @@ if (!watch) {
 	const v = createHash('sha1').update(fs.readFileSync('dist/island.js')).digest('hex').slice(0, 10);
 	const page = '../index.html', html = fs.readFileSync(page, 'utf8');
 	const loadingV = createHash('sha1').update(fs.readFileSync('../loading-screen.js')).digest('hex').slice(0, 10);
-	const next = html.replace(/'\.\/island\/dist\/island\.js(\?v=[0-9a-f]+)?'/g, `'./island/dist/island.js?v=${v}'`).replace(/"\.\/loading-screen\.js(\?v=[0-9a-f]+)?"/g, `"./loading-screen.js?v=${loadingV}"`);
+	const linkV = createHash('sha1').update(fs.readFileSync('../music-link.js')).digest('hex').slice(0, 10);
+	const next = html.replace(/'\.\/island\/dist\/island\.js(\?v=[0-9a-f]+)?'/g, `'./island/dist/island.js?v=${v}'`).replace(/"\.\/loading-screen\.js(\?v=[0-9a-f]+)?"/g, `"./loading-screen.js?v=${loadingV}"`)
+		.replace(/"\.\/music-link\.js(\?v=[0-9a-f]+)?"/g, `"./music-link.js?v=${linkV}"`);
 	if (next !== html) fs.writeFileSync(page, next);
 }
