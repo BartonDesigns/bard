@@ -26,7 +26,9 @@ export const BACK = { cafe: 'kitchen', bakery: 'bakehouse', counter: 'kitchen', 
 const FOOD = new Set(['cafe', 'bakery', 'counter', 'restaurant', 'pizzeria', 'diner', 'sushi', 'pub', 'tasting']);
 // a house's ground floor, re-typed: the room by the front door is the business's front; the
 // dining room and family room more of it (or a breakfast room, a waiting room); the kitchen
-// its kitchen or stockroom; a den its office; the garage its workshop or store
+// its kitchen or stockroom; a den its office; the garage its workshop or store; a bedroom
+// down there its office (a kitchen's dry store), the laundry its stockroom: nobody sleeps
+// behind the shop (a bed and breakfast's rooms are its guests', and stay)
 export function houseRoles(fit, roomType) {
 	if (!fit) return null;
 	if (roomType === 'living' || roomType === 'entry') return { fit, role: 'front' };
@@ -35,6 +37,8 @@ export function houseRoles(fit, roomType) {
 	if (roomType === 'kitchen') return fit === 'bnb' ? null : { fit: BACK[fit] || 'stock', role: 'back' };
 	if (roomType === 'den' || roomType === 'office') return fit === 'bnb' ? null : { fit: 'office', role: 'back' };
 	if (roomType === 'garage') return { fit: fit === 'garage' || fit === 'workshop' || fit === 'bike' ? 'workshop' : 'stock', role: 'back', garage: fit === 'garage' };
+	if (roomType === 'master' || roomType === 'bed') return fit === 'bnb' ? null : { fit: roomType === 'bed' && BACK[fit] === 'kitchen' ? 'stock' : 'office', role: 'back' };
+	if (roomType === 'laundry') return fit === 'bnb' ? null : { fit: 'stock', role: 'back' };
 	return null;
 }
 

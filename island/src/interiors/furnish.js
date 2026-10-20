@@ -214,7 +214,10 @@ export function furnish(P, only = -1) {
 					const ct = against('counter', Math.min(3.0, Math.max(bw, bd) - 1.4), 0.63, 0.92, { long: true, clear: 0.9, noWindow: true, extra: { uppers: 0.6 } });
 					if (ct) { ct.sink = ct.c - ct.w * 0.2; ct.range = ct.c + ct.w * 0.25; stand(ct.x + faceOf(ct.rot)[0] * 0.7, ct.z + faceOf(ct.rot)[1] * 0.7, -faceOf(ct.rot)[0], -faceOf(ct.rot)[1]); }
 					against('fridge', 0.85, 0.72, 1.8, { corner: true, clear: 0.9 });
-					const tb = standing('diningTable', cx + (rnd() - 0.5), cz + (rnd() - 0.5), 1.2, 0.8, 0.76, bw > bd ? 0 : 1, 0.6, { chairs: 4 });
+					// the table: in the middle where the sofa leaves room, else wherever it fits, else a
+					// small one for two
+					let tb = standing('diningTable', cx + (rnd() - 0.5), cz + (rnd() - 0.5), 1.2, 0.8, 0.76, bw > bd ? 0 : 1, 0.6, { chairs: 4 });
+					for (const [tw, td, n, pad] of [[1.2, 0.8, 4, 0.6], [0.9, 0.75, 2, 0.5]]) for (let z = rm.z0 + 1.1; z < rm.z1 - 1 && !tb; z += 0.4) for (let x = rm.x0 + 1.1; x < rm.x1 - 1 && !tb; x += 0.4) tb = standing('diningTable', x, z, tw, td, 0.76, bw > bd ? 0 : 1, pad, { chairs: n });
 					if (tb) { placed.pop(); placed.push(tb.box.map((v, i) => v + (i < 2 ? -0.6 : 0.6))); chairs(tb); }
 				}
 			}
