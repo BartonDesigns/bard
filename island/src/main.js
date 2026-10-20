@@ -3,6 +3,7 @@ import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
 import { createMusicLinkEntry } from './ui/music-link.js';
 import { createChat } from './ui/chat.js';
+import { createGuild } from './guild/index.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
 import { createNegotiationRuntime } from './economy/negotiation-runtime.js';
 import { createCommunityProjects } from './people/community-projects.js';
@@ -266,13 +267,14 @@ function buildDom(canvas = document.createElement('canvas')) {
 	const groups = { rail, big, side, pill, mode, prompt: prompts, left };
 	// (the modes join the rail on a short landscape screen)
 	const home = (g) => (g === 'mode' && (land.matches || mount.classList.contains('l99-touch')) ? rail : groups[g]);
-	const tools = button('☷', 'All controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));z-index:13;');
-	tools.dataset.controlLabel = 'Controls'; tools.style.order = '999';
+	// (More: every other control, in a menu; its glyph is the three dots)
+	const tools = button('•••', 'All controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));z-index:13;');
+	tools.dataset.controlLabel = 'More'; tools.style.order = '999';
 	quick.appendChild(tools);
 	tools.hidden = !mount.classList.contains('l99-touch');
 	tools.setAttribute('aria-expanded', 'false'); tools.setAttribute('aria-controls', 'l99-controls-menu'); rail.id = 'l99-controls-menu'; rail.setAttribute('aria-label', 'World controls');
-	const closeTools = () => { mount.classList.remove('l99-tools-open'); tools.setAttribute('aria-expanded', 'false'); tools.dataset.controlLabel = 'Controls'; };
-	tools.addEventListener('click', (e) => { e.stopPropagation(); const on = mount.classList.toggle('l99-tools-open'); tools.setAttribute('aria-expanded', String(on)); tools.dataset.controlLabel = on ? 'Close' : 'Controls'; });
+	const closeTools = () => { mount.classList.remove('l99-tools-open'); tools.setAttribute('aria-expanded', 'false'); tools.dataset.controlLabel = 'More'; };
+	tools.addEventListener('click', (e) => { e.stopPropagation(); const on = mount.classList.toggle('l99-tools-open'); tools.setAttribute('aria-expanded', String(on)); tools.dataset.controlLabel = on ? 'Close' : 'More'; });
 	rail.addEventListener('click', (e) => { if (e.target.closest('button')) closeTools(); }, true);
 	mount.addEventListener('pointerdown', (e) => { if (!rail.contains(e.target) && !tools.contains(e.target)) closeTools(); });
 	addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTools(); });
@@ -297,8 +299,10 @@ function buildDom(canvas = document.createElement('canvas')) {
 	hint.dataset.hud = 'prompt 99';
 	const loading = document.createElement('div');
 	loading.hidden = true; // Kept for integrations; the shared loading screen owns presentation.
-	// (beside the rail, stopping short of the thumb buttons, as the places and games menus do)
-	const panel = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(300px,78vw);box-sizing:border-box;padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;');
+	// the settings (island-panel.js): the whole screen, over every button, in tabs; its body
+	// scrolls (no backdrop blur: a full-screen one over the world crashed SwiftShader)
+	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px system-ui;display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
+	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Settings');
 	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
 	// a group with nothing showing is hidden, so it leaves no gap either; and the rail is as
 	// tall as what it shows, so it sits right on the thumb buttons
@@ -313,12 +317,12 @@ function buildDom(canvas = document.createElement('canvas')) {
 	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
 	const dock = (el) => {
 		const [g, n] = (el.dataset?.hud || '').split(' ');
-		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && ['55', '60'].includes(n)));
+		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && ['55', '60', '65'].includes(n)));
 		const to = fast ? quick : groups[g] && home(g);
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
-		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : n === '55' ? 'Gear' : 'Places';
+		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : n === '55' ? 'Gear' : n === '65' ? 'Save' : 'Places';
 		else if (to === rail) {
 			const title = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
 			el.dataset.controlLabel = /^Explore/.test(title) ? 'Explore' : /^Cycle flight/.test(title) ? 'Flight speed' : /^Camera:/.test(title) ? 'Camera view' : title;
@@ -879,11 +883,20 @@ export function createIslandWorld() {
 	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
-	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// its own button, always on screen (beside the places on a touch screen, in the rail on a computer)
+	const cloudBtn = button('', 'Your account and saved progress', 'width:44px;padding:6px 10px;display:flex;align-items:center;justify-content:center;', 'rail 65');
+	cloudBtn.dataset.cloud = '';
+	cloudBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10a4 4 0 0 0 .6-8 5.5 5.5 0 0 0-10.6-1.4A4.5 4.5 0 0 0 7 18.5z"/><path d="M12 16v-5M9.8 13 12 10.8l2.2 2.2"/></svg>';
+	for (const ev of ['pointerdown', 'touchstart', 'keydown']) cloudBtn.addEventListener(ev, (e) => e.stopPropagation());
+	dom.mount.appendChild(cloudBtn);
+	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
 	// music from a YouTube or Spotify link: its way in from the map pin, and the auto music making way (ui/music-link.js)
 	HOOKS.musicLink = createMusicLinkEntry({ menu: tpMenu, autoMusic, hint: (t, ms) => hint(t, ms, 1) });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
 	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
+	// your guild: the townsfolk you ask into it walk and fight beside you, level up and learn
+	// magic; with an account, players join it and guilds ally with it (guild/)
+	HOOKS.guild = guideApi.guild = createGuild({ combat, guide, social, nearby: () => [...people.pool, ...social.actors.all()], cloud: cloudSave, url: roomsURL(), mount: dom.mount, menu: tpMenu, onFoot: () => !!world?.player && !drive.active() && !world.orbit?.active?.() && !world.boat?.boarded?.(), yaw: () => world?.player?.yaw ?? 0, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX });
 	// (the fog's colour under Gargantua's black sky)
 	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
 	guideApi.combat=combat;
@@ -1415,6 +1428,8 @@ export function createIslandWorld() {
 		} finally { dom.launch.disabled = false; travelVeil.style.opacity = '0'; }
 	}
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
+	// (Escape closes the settings, as it does every other panel)
+	addEventListener('keydown', (e) => { if (e.key === 'Escape' && dom.panel.style.display === 'block') { e.stopPropagation(); dom.panel.style.display = 'none'; } }, true);
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
 	// A warp or a touchdown to another world: the same world build a flight landing uses.
@@ -1785,6 +1800,8 @@ if (typeof window !== 'undefined') {
 		ragdolls: () => HOOKS.ragdolls?.info(),
 		// the fight (combat/): Crysis.combat.info(), .spawn('ashfang'), .boss('walker'), .fight(), .raid(), .ignite(); Crysis.morality()
 		get combat() { return HOOKS.combat; },
+		// your guild: Crysis.guild.info(), .found({ name, tag }), .ask(person), .candidates(), .open('folk')
+		get guild() { return HOOKS.guild; },
 		living: Object.assign(() => HOOKS.livingWorld?.snapshot(), { sync: () => HOOKS.livingWorld?.sync(), action: (id, action, options) => HOOKS.livingWorld?.action(id, action, options) }),
 		projects: Object.assign(() => HOOKS.communityProjects?.snapshot(), {sync:()=>HOOKS.communityProjects?.sync(),action:(id,action,options)=>HOOKS.communityProjects?.action(id,action,options),visuals:()=>HOOKS.projectMarks?.info()}),
 		// Crysis.morality(): your compass, this region's tally, the people near you and what they have
