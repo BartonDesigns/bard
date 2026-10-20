@@ -202,11 +202,14 @@ export function planRow(S) {
 // ---------------------------------------------------------------------------------
 // apartments: a lobby, a corridor, the stair in its well, flats either side
 
-// S: { W, D, levels, doorX, winCols, winRows, party (side walls shared), rnd, style }
+// S: { W, D, levels, doorX, winCols, winRows, party (side walls shared), shop (a business on
+//      the ground floor: its shop down the one side, its back rooms off the corridor, the
+//      flats from the first floor up), shopType, rnd, style }
 export function planApt(S) {
 	const P = base(S), r = S.rnd, n = S.levels, PT = ST.part, E = ST.ext;
 	const { hw, hd } = P;
 	const cw = 0.85, zf = hd, lobby = Math.min(6, hd * 0.4);
+	const shop = !!S.shop && hw - cw - PT >= 3.2;
 	// the stair well beside the corridor, behind the lobby: two flights a storey, turning
 	// at the half landing at its far end; each floor's landing over the last, a door onto
 	// the corridor
@@ -238,17 +241,32 @@ export function planApt(S) {
 		if (k > 0) wall(P, k, 'x', wz1 + PT / 2, wx0, wx1, y, yc);
 		// the lobby on the ground floor, the corridor from it (above, from the front wall) back
 		const cz1 = k === 0 ? zf - lobby - PT : zf;
+		const cz0 = -hd + (2 * hd > 30 ? 6.5 + PT : 0);
+		const biz = shop && k === 0;
 		if (k === 0) {
-			room(P, k, 'lobby', -hw, zf - lobby, hw, zf);
-			const lw = wall(P, k, 'x', zf - lobby - PT / 2, -hw, hw, y, yc);
+			room(P, k, 'lobby', biz ? -cw : -hw, zf - lobby, hw, zf);
+			const lw = wall(P, k, 'x', zf - lobby - PT / 2, biz ? -cw : -hw, hw, y, yc);
 			open(lw, -cw + 0.05, cw - 0.05, y, y + 2.6, 'wide');
-			const fd = open(front, S.doorX - 0.7, S.doorX + 0.7, 0, 2.3, 'front');
+			// (over a business, the way in is the shop's: the residents' hall behind it)
+			const fd = biz ? null : open(front, S.doorX - 0.7, S.doorX + 0.7, 0, 2.3, 'front');
 			if (fd) fd.main = true;
 		}
-		const cz0 = -hd + (2 * hd > 30 ? 6.5 + PT : 0);
+		if (biz) {
+			// the shop: the whole of the one side, front to back, its own door and glass on the
+			// street, a door at its back onto the corridor (to its back rooms across it)
+			const x0 = -hw, x1 = -cw - PT, sx = (x0 + x1) / 2;
+			room(P, k, 'shop', x0, cz0, x1, zf, { shopType: S.shopType });
+			const sw = wall(P, k, 'z', -(cw + PT / 2), cz0, zf, y, yc);
+			doorway(sw, cz0 + 1.2, y, 0.9);
+			const sd = open(front, sx - 0.6, sx + 0.6, 0, 2.3, 'front');
+			if (sd) { sd.main = true; P.door = { x: sx, w: 1.2, y: 0, h: 2.3 }; }
+			for (const [s0, s1] of [[x0 + 0.1, sx - 0.7], [sx + 0.7, x1 - 0.1]]) if (s1 - s0 > 0.4) open(front, s0, s1, 0.45, 2.95, 'store');
+		}
 		room(P, k, 'corridor', -cw, cz0, cw, cz1);
-		// the flats either side of the corridor (the well takes a piece of the right side)
+		// the flats either side of the corridor (the well takes a piece of the right side); on a
+		// business's ground floor, its back rooms
 		for (const sd of [-1, 1]) {
+			if (biz && sd < 0) continue;
 			const x0 = sd < 0 ? -hw : sd > 0 ? cw + PT : 0, x1 = sd < 0 ? -cw - PT : hw;
 			if (x1 - x0 < 3.2) continue;
 			const spans = sd > 0 ? [[wz1 + PT, cz1], [cz0, wz0 - PT]] : [[cz0, cz1]];
@@ -256,6 +274,7 @@ export function planApt(S) {
 				const len = zbnd - za;
 				if (len < 3.5) continue;
 				const cwall = wall(P, k, 'z', sd * (cw + PT / 2), za, zbnd, y, yc);
+				if (biz) { room(P, k, 'storage', x0, za, x1, zbnd); doorway(cwall, (za + zbnd) / 2, y, 0.95); continue; }
 				const nU = Math.max(1, Math.round(len / 8));
 				slots(zbnd, za, Array(nU).fill(1)).forEach(([a, b], i) => {
 					const z0 = Math.min(a, b) + (i < nU - 1 ? PT / 2 : 0), z1 = Math.max(a, b) - (i > 0 ? PT / 2 : 0);
@@ -267,7 +286,8 @@ export function planApt(S) {
 		// the flat across the back, at the corridor's end
 		if (cz0 > -hd + 1) {
 			const bw = wall(P, k, 'x', cz0 - PT / 2, -hw, hw, y, yc);
-			room(P, k, 'living', -hw, -hd, hw, cz0 - PT, { flat: true });
+			if (biz) room(P, k, 'office', -hw, -hd, hw, cz0 - PT);
+			else room(P, k, 'living', -hw, -hd, hw, cz0 - PT, { flat: true, unit: P.units = (P.units || 0) + 1 });
 			doorway(bw, 0, y, 0.95);
 		}
 		// windows: the front's where the facade shows them, round the other sides evenly
@@ -282,27 +302,29 @@ function evenly(a, b, step) { const n = Math.max(1, Math.floor((b - a) / step)),
 // one flat: the living room and kitchen toward the outside wall, the bedroom and bath
 function flat(P, k, x0, z0, x1, z1, sd, cwall, r) {
 	const y = k * ST.storey, yc = y + ST.ceil, PT = ST.part, len = z1 - z0, deep = x1 - x0;
+	// (its rooms one home: home-life.js keeps a household to each)
+	const unit = P.units = (P.units || 0) + 1;
 	// the door off the corridor, into the living room
 	const liveFront = r() < 0.5;
 	// (too short for a bedroom as well: a studio, all one room)
-	if (len < 6) { room(P, k, 'living', x0, z0, x1, z1, { flat: true }); doorway(cwall, (z0 + z1) / 2, y, 0.95); return; }
+	if (len < 6) { room(P, k, 'living', x0, z0, x1, z1, { flat: true, unit }); doorway(cwall, (z0 + z1) / 2, y, 0.95); return; }
 	const bl = Math.min(len - 3.2, Math.max(2.7, len * 0.42));
 	const lz = liveFront ? [z0 + bl, z1] : [z0, z1 - bl];
 	const bz = liveFront ? [z0, z0 + bl - PT] : [z1 - bl + PT, z1];
-	room(P, k, 'living', x0, lz[0] + (liveFront ? PT / 2 : 0), x1, lz[1] - (liveFront ? 0 : PT / 2), { flat: true });
+	room(P, k, 'living', x0, lz[0] + (liveFront ? PT / 2 : 0), x1, lz[1] - (liveFront ? 0 : PT / 2), { flat: true, unit });
 	doorway(cwall, (lz[0] + lz[1]) / 2 + (liveFront ? 1 : -1) * Math.min(1.2, len * 0.15), y, 0.95);
 	const split = wall(P, k, 'x', liveFront ? z0 + bl : z1 - bl, x0, x1, y, yc);
 	// the bath at the corridor side of the bedroom's slice
 	const bathW = Math.min(2.3, deep * 0.4), bx = sd < 0 ? [x1 - bathW, x1] : [x0, x0 + bathW], rx = sd < 0 ? [x0, x1 - bathW - PT] : [x0 + bathW + PT, x1];
 	if (bz[1] - bz[0] > 2.4 && deep > 5) {
-		room(P, k, 'bath', bx[0], bz[0], bx[1], bz[1]);
-		room(P, k, 'bed', rx[0], bz[0], rx[1], bz[1]);
+		room(P, k, 'bath', bx[0], bz[0], bx[1], bz[1], { unit });
+		room(P, k, 'bed', rx[0], bz[0], rx[1], bz[1], { unit });
 		const bw = wall(P, k, 'z', sd < 0 ? x1 - bathW - PT / 2 : x0 + bathW + PT / 2, bz[0], bz[1], y, yc);
 		void bw;
 		doorway(split, (bx[0] + bx[1]) / 2, y, 0.8);
 		doorway(split, (rx[0] + rx[1]) / 2, y, 0.9);
 	} else {
-		room(P, k, 'bed', x0, bz[0], x1, bz[1]);
+		room(P, k, 'bed', x0, bz[0], x1, bz[1], { unit });
 		doorway(split, (x0 + x1) / 2, y, 0.9);
 	}
 }

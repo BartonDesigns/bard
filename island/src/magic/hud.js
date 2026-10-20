@@ -22,6 +22,7 @@ const CSS = `
 .mg-s .k{position:absolute;left:4px;top:3px;font-size:9px;opacity:.7}
 .mg-s .g{font-size:19px;line-height:1;text-shadow:0 0 8px currentColor}
 .mg-s .w{font-size:10px;letter-spacing:.4px;text-transform:uppercase;opacity:.9}
+.mg-s .w svg{display:block;width:26px;height:26px;opacity:.95;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .mg-s .cd{position:absolute;inset:0;border-radius:9px;pointer-events:none}
 .mg-s.held{box-shadow:0 0 0 2px #7fe0c0}
 .mg-s.dim .g{opacity:.35}
@@ -59,6 +60,7 @@ const CSS = `
 .mg-wheel .mg-s .cd{border-radius:50%}
 .mg-wheel .mg-s .k{display:none}
 .mg-wheel .mg-s .g{font-size:21px}
+.mg-wheel .mg-s .w svg{width:30px;height:30px}
 .mg-wheel .mg-s.empty{opacity:.5}
 .mg-wheel .mg-s.held{box-shadow:0 0 0 2px #7fe0c0,0 2px 10px rgba(0,0,0,.35)}
 .mg-wheel .mg-s.hot{scale:1.2;box-shadow:0 0 0 2px #fff,0 0 18px rgba(127,224,192,.7)}
@@ -67,19 +69,29 @@ const CSS = `
 .mg-wheel .mg-fab{margin:-6px;padding:6px;display:flex;align-items:center;gap:8px;line-height:16px}
 .mg-wheel .mg-fab br{display:none}
 .mg-wheel .mg-fab .pt{margin-left:auto;order:3}
-.mg-wheel .tst{font:600 12px/1 system-ui,sans-serif;color:#eef6f4;padding:8px 0;border-radius:9px;border:1px solid rgba(255,255,255,.2);background:transparent;text-align:center;cursor:pointer}
-.mg-wheel .tst.on{border-color:rgba(245,158,11,.8);background:rgba(245,158,11,.18);color:#ffd27a}
 `;
 const STYLE_ID = 'mg-hud-style';
 const KEYS = ['6', '7', '8', '9', '0'];
+// each weapon's picture in its slot: a silhouette, muzzle or blade to the upper right, on a
+// 24-unit square (the words above are only for a weapon with no picture yet)
+const WEAPON_ICON = {
+	'aurora-trail-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M1 11h15l1-1h6v2h-6l-1 1H10l-1.6 4.5H5.8l1.4-4.5H3.6L1 14.5z"/><path d="M7.5 7.5h7v2h-7z"/><path d="M9 9.5h1v1.5H9zm3 0h1v1.5h-1z"/></g>',
+	'mossback-scout-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M1 11.6l3-1.1h13.5v-.8H23v1.6h-5.5l-1 1.4h-6l-2.2 3.8H5.6l1.8-3.8H4.2L1 14z"/><circle cx="13" cy="14.2" r="1.1"/></g>',
+	'warden-spark-carbine': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M2 9.5h13V8.6h6.5v2.1H15V13h-3.4l-.5 4.5H8.6l.5-4.5H6.8L5.6 16H3l1-3H2z"/><path d="M12.4 13h2.2l.4 3.6h-2.2z"/></g>',
+	'reedline-hunting-bow': '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"><path d="M8 2.5c7 4.6 7 14.4 0 19"/><path d="M8 2.5v19" stroke-width="1"/><path d="M3 12h16.5"/></g><path d="M21.5 12l-3.4-2.2v4.4z"/><path d="M3 12l-1.4-1.6M3 12l-1.4 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+	bat: '<g transform="rotate(-45 12 12)"><path d="M1.6 11.1H11l9.6-1.5a2.4 2.4 0 0 1 0 4.8L11 12.9H1.6z"/><rect x=".2" y="10.4" width="2" height="3.2" rx=".7"/></g>',
+	pipe: '<path d="M4.2 21.4l-1.6-1.6L19.8 2.6l1.6 1.6z"/><path d="M2.4 18.4l3.2 3.2-1.6 1.6-3.2-3.2zm16-16l3.2 3.2 1.6-1.6L20 .8z"/>',
+	bottle: '<path d="M14.2 2.4l2.8 2.8-1.6 1.6.2 2.6-8.4 8.4a1.4 1.4 0 0 1-2 0l-2.2-2.2a1.4 1.4 0 0 1 0-2l8.4-8.4 2.6.2z"/>',
+	knife: '<path d="M2.4 20.2l4.4-4.4 1.6 1.6-4.4 4.4a1.1 1.1 0 0 1-1.6-1.6z"/><path d="M7.8 14.8L20.6 2.4c.9 2.6-.1 5.6-2.4 7.9l-8.2 8.1z"/>',
+	machete: '<path d="M1.8 20.6l3.8-3.8 1.8 1.8-3.8 3.8a1.3 1.3 0 0 1-1.8-1.8z"/><path d="M6.6 15.8L17.4 5c2.4-2.4 5.6-1.6 4.8 1.2-.3 1-1 1.9-1.8 2.7L8.6 17.8z"/>',
+};
 const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Scout', 'warden-spark-carbine': 'Carb', 'reedline-hunting-bow': 'Bow', bat: 'Bat', pipe: 'Pipe', bottle: 'Bottle', knife: 'Knife', machete: 'Blade' };
 
 // the arcs round the spell button: radius, then each slot's angle from straight left (up is +)
 const RING = { s: [100, [64, 32, 0, -32, -64]], w: [162, [40, 20, 0, -20, -40]] };
 
-// onBook(): open the skills and magic menu; bookOpen(): whether it is open; onTest(): test mode
-// on or off; testing(): whether it is on
-export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook = () => {}, bookOpen = () => false, onTest = null, testing = () => false, hint = () => {}, isTouch = false }) {
+// onBook(): open the skills and magic menu; bookOpen(): whether it is open
+export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook = () => {}, bookOpen = () => false, hint = () => {}, isTouch = false }) {
 	if (!document.getElementById(STYLE_ID)) { const s = document.createElement('style'); s.id = STYLE_ID; s.textContent = CSS; document.head.appendChild(s); }
 	const mk = (tag, cls, parent, html = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; parent?.appendChild(e); return e; };
 
@@ -105,15 +117,9 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 		bar.classList.add('mg-wheel');
 		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 		bar.prepend(svg);
-		// beside the arcs: the fabric, the mana and test mode
+		// beside the arcs: the fabric and the mana (test mode is in the places menu)
 		const hd = mk('div', 'hd', bar);
 		hd.append(fab, mana);
-		let tst = null;
-		if (onTest) {
-			tst = mk('div', 'tst', hd);
-			tst.setAttribute('role', 'button');
-			tst.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); onTest(); });
-		}
 		const hub = mk('div', 'mg-hub', mount, '<div class="ring"></div><div class="cd"></div><span class="g"></span>');
 		hub.setAttribute('role', 'button');
 		hub.setAttribute('aria-label', 'Spells and weapons: tap to cast again, hold for all');
@@ -134,11 +140,11 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 			const lay = (slots, [R, A]) => slots.forEach((e, i) => { const [x, y] = at(R, A[i]); e.style.left = `${x}px`; e.style.top = `${y}px`; });
 			lay(sSlots, RING.s); lay(wSlots, RING.w);
 			// (a soft rail under each arc)
-			const arc = ([R, A], word) => {
-				const [x0, y0] = at(R, A[0] + 6), [x1, y1] = at(R, A[A.length - 1] - 6), [tx, ty] = at(R, A[0] + 2200 / R);
-				return `<path d="M${x0} ${y0}A${R} ${R} 0 0 0 ${x1} ${y1}" fill="none" stroke="rgba(10,16,20,.42)" stroke-width="58" stroke-linecap="round"/><text x="${tx}" y="${ty + 4}" text-anchor="middle" fill="rgba(238,246,244,.7)" style="font:600 10px system-ui,sans-serif;letter-spacing:.12em">${word}</text>`;
+			const arc = ([R, A]) => {
+				const [x0, y0] = at(R, A[0] + 6), [x1, y1] = at(R, A[A.length - 1] - 6);
+				return `<path d="M${x0} ${y0}A${R} ${R} 0 0 0 ${x1} ${y1}" fill="none" stroke="rgba(10,16,20,.42)" stroke-width="58" stroke-linecap="round"/>`;
 			};
-			svg.innerHTML = arc(RING.s, 'SPELLS') + arc(RING.w, 'WEAPONS');
+			svg.innerHTML = arc(RING.s) + arc(RING.w);
 			// (left of the outer arc, or above it when the screen is too narrow)
 			const right = cx - RING.w[0] - 23 - 14;
 			if (right - 124 >= sl + 12) { hd.style.left = `${right - 124}px`; hd.style.top = `${cy}px`; } else { hd.style.left = `${Math.max(sl + 12, cx - 124)}px`; hd.style.top = `${cy - UP - 60}px`; }
@@ -180,7 +186,7 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 		// (a tap off the arcs shuts them)
 		bar.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); close(); });
 		if (firstTime('l99-spell-wheel')) setTimeout(() => hint('Hold the spell button for all your spells and weapons', 4200), 6000);
-		const sig = { g: '', pt: -1, t: '' };
+		const sig = { g: '', pt: -1 };
 		// the button's spell, cooldown, mana and point, and test mode's word
 		function paint(now, pts) {
 			const sid = state.binds[last], sp = SPELL[sid];
@@ -191,8 +197,6 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 			put(hub, 'dim', !!sp && state.mana < manaCost(state, sp), (v) => hub.classList.toggle('dim', v));
 			put(hub, 'm', Math.round(state.mana / manaMax(state) * 100), (v) => hubRing.style.setProperty('--m', String(Math.max(0, Math.min(1, v / 100)))));
 			if (pts !== sig.pt) { sig.pt = pts; pt.textContent = pts ? `+${pts}` : ''; pt.style.display = pts ? '' : 'none'; }
-			const t = testing() ? 'on' : 'off';
-			if (tst && t !== sig.t) { sig.t = t; tst.textContent = `∞ Test mode: ${t}`; tst.classList.toggle('on', t === 'on'); }
 			if (isOpen && bookOpen()) close();
 		}
 		// (it tops the right thumb's column, however tall that grows)
@@ -219,7 +223,9 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 				const s = ws[i], e = wSlots[i];
 				put(e, 'w', s ? `${s.id}|${s.held}` : '', () => {
 					e.classList.toggle('empty', !s); e.classList.toggle('held', !!s?.held);
-					e.querySelector('.w').textContent = s ? WEAPON_TAG[s.id] || s.name.slice(0, 4) : '';
+					const w = e.querySelector('.w'), ic = s && WEAPON_ICON[s.id];
+					if (ic) w.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ic}</svg>`;
+					else w.textContent = s ? WEAPON_TAG[s.id] || s.name.slice(0, 4) : '';
 					e.title = s ? `${s.name} (${i + 1})` : `Key ${i + 1}: no weapon`;
 				});
 			}

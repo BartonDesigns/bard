@@ -97,12 +97,12 @@ export function spotsOf(plan) {
 	// a few places to stand in each living room and kitchen, clear of the furniture: in twos,
 	// facing each other, for talking
 	for (const r of rooms) {
-		if (!r.cells?.length || !PUBLIC.has(r.type) || r.type === 'hall' || r.type === 'entry') continue;
-		const pts = clearPoints(plan, r, items);
+		if (r.skip || !(r.cells?.length || r.x1 > r.x0) || !PUBLIC.has(r.type) || r.type === 'hall' || r.type === 'entry') continue;
+		const pts = r.cells?.length ? clearPoints(plan, r, items) : clearInRect(r, items), y = r.y ?? (r.level ? 2.9 : 0);
 		for (let k = 0; k + 1 < pts.length && k < 4; k += 2) {
 			const [a, b] = [pts[k], pts[k + 1]], h = Math.atan2(b[0] - a[0], b[1] - a[1]);
-			add({ room: r.id, roomType: r.type, level: r.level || 0, y: r.level ? 2.9 : 0, kind: 'stand', x: a[0], z: a[1], heading: h, stand: true, pair: true });
-			add({ room: r.id, roomType: r.type, level: r.level || 0, y: r.level ? 2.9 : 0, kind: 'stand', x: b[0], z: b[1], heading: h + Math.PI, stand: true, pair: true });
+			add({ room: r.id, roomType: r.type, level: r.level || 0, y, kind: 'stand', x: a[0], z: a[1], heading: h, stand: true, pair: true });
+			add({ room: r.id, roomType: r.type, level: r.level || 0, y, kind: 'stand', x: b[0], z: b[1], heading: h + Math.PI, stand: true, pair: true });
 		}
 	}
 	return out;
@@ -124,6 +124,18 @@ function clearPoints(plan, room, items) {
 			if (free(ax, az) && free(bx, bz) && !out.some((p) => Math.hypot(p[0] - ax, p[1] - az) < 1.6)) { out.push([ax, az], [bx, bz]); break; }
 		}
 		if (out.length >= 4) break;
+	}
+	return out;
+}
+
+// the same in a plain rectangle of a room (interiors/plan.js: the city's row houses and flats)
+function clearInRect(room, items) {
+	const out = [], boxes = items.filter((it) => it.room === room.id && it.box).map((it) => it.box);
+	const free = (x, z) => x > room.x0 + 0.45 && x < room.x1 - 0.45 && z > room.z0 + 0.45 && z < room.z1 - 0.45 && !boxes.some((b) => x > b[0] - 0.45 && x < b[2] + 0.45 && z > b[1] - 0.45 && z < b[3] + 0.45);
+	for (let z = room.z0 + 0.95; z < room.z1 - 0.9 && out.length < 4; z += 0.8) for (let x = room.x0 + 0.95; x < room.x1 - 0.9 && out.length < 4; x += 0.8) {
+		for (const [ax, az, bx, bz] of [[x - 0.5, z, x + 0.5, z], [x, z - 0.5, x, z + 0.5]]) {
+			if (free(ax, az) && free(bx, bz) && !out.some((p) => Math.hypot(p[0] - ax, p[1] - az) < 1.6)) { out.push([ax, az], [bx, bz]); break; }
+		}
 	}
 	return out;
 }

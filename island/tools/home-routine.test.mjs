@@ -1,6 +1,8 @@
 // Families at home (people/home-routine.js): the places in a planned house, who is where at an
 // hour, and what they say when a fight comes in. Also checks houseplan.js keeps its garage
-// (the car doors open into the garage, never into a living room) and lays its dining tables.
+// (the car doors open into the garage, never into a living room) and lays its dining tables,
+// that the city's flats (interiors/plan.js) are each a home with somewhere to sleep, and that a
+// business has nobody's bedroom on its ground floor.
 //   node --test tools/home-routine.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,6 +10,9 @@ import { groupBoxes, planHouse } from '../src/bay/houseplan.js';
 import { spotsOf, arrange, lineFor } from '../src/people/home-routine.js';
 import { makeHousehold } from '../src/people/households.js';
 import { planDay } from '../src/people/schedules.js';
+import { planApt, planRow, rng } from '../src/interiors/plan.js';
+import { furnish } from '../src/interiors/furnish.js';
+import { houseRoles } from '../src/interiors/estab-fit.js';
 
 const house = (k) => {
 	const w = 9 + (k * 7) % 10, d = 8 + (k * 5) % 8, h = k % 2 ? 3 : 5.75;
@@ -87,4 +92,84 @@ test('a fight crashing in gets a line about the moment', () => {
 	assert.ok(l.length > 3);
 	assert.equal(lineFor({ why: 'window', act: 'eat', meal: 'dinner', hour: 18.8, age: 40, seed: 3, n: 0 }), l, 'seeded');
 	for (const why of ['window', 'wall', 'shots', 'fight']) for (const act of ['eat', 'tv', 'sleep', 'cook', 'homework']) assert.ok(lineFor({ why, act, hour: 20, age: 30, seed: 7, n: 1 }));
+});
+
+// a city building furnished through, and one of its homes as home-life.js sees it
+const city = (P) => { P.style = P.style || 'edwardian'; for (let k = 0; k < P.levels.length; k++) furnish(P, k); return P; };
+const homeOf = (P, rooms) => {
+	const ids = new Set(rooms.map((r) => r.id));
+	return { rooms: P.rooms.map((r) => (ids.has(r.id) ? { id: r.id, type: r.type, level: r.k, y: P.levels[r.k].y, x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1 } : { id: r.id, type: r.type, skip: true })), items: P.items.filter((it) => ids.has(it.room)) };
+};
+const apt = (W, D, n, s, extra = {}) => city(planApt({ W, D, levels: n, doorX: 0, winCols: null, winRows: [], party: s % 2 === 0, rnd: rng(s * 7 + W * D), style: 'modern', ...extra }));
+const RES = new Set(['living', 'kitchen', 'dining', 'family', 'bed', 'master', 'den']);
+
+test('every flat in a city apartment block is a home: its own rooms, somewhere to sleep, a table', () => {
+	let flats = 0, beds = 0, tables = 0;
+	for (const [W, D] of [[14, 16], [18, 22], [24, 30], [30, 40]]) for (let s = 1; s < 4; s++) {
+		const P = apt(W, D, 4, s), units = new Map();
+		for (const r of P.rooms) if (r.unit) (units.get(r.unit) || units.set(r.unit, []).get(r.unit)).push(r);
+		for (const r of P.rooms) if (RES.has(r.type)) assert.ok(r.unit, `a ${r.type} belongs to a flat`);
+		for (const rooms of units.values()) {
+			flats++;
+			assert.equal(new Set(rooms.map((r) => r.k)).size, 1, 'a flat is on one floor');
+			const spots = spotsOf(homeOf(P, rooms));
+			if (spots.some((q) => q.kind === 'bed')) beds++;
+			if (spots.some((q) => q.kind === 'dine')) tables++;
+			// (the people stand on the flat's own floor)
+			for (const q of spots) assert.equal(q.y, P.levels[rooms[0].k].y);
+		}
+	}
+	assert.ok(flats > 40, `${flats} flats`);
+	assert.ok(beds / flats > 0.6, `${beds} of ${flats} flats have a bed`);
+	assert.ok(tables / flats > 0.6, `${tables} of ${flats} flats have a table`);
+});
+
+test('a city family sleeps in its own flat at night and eats together', () => {
+	let asleep = 0, dinners = 0;
+	for (let s = 1; s < 6; s++) {
+		const P = apt(18, 22, 3, s), units = new Map();
+		for (const r of P.rooms) if (r.unit) (units.get(r.unit) || units.set(r.unit, []).get(r.unit)).push(r);
+		for (const rooms of units.values()) {
+			const spots = spotsOf(homeOf(P, rooms));
+			if (!spots.some((q) => q.kind === 'bed')) continue;
+			const h = makeHousehold(s * 31 + rooms[0].id, null, { weights: { couple: 3, single: 3, 'single-parent': 1 } });
+			for (const q of arrange(h, planDay(h, 2), spots, 3, { day: 2, sunset: 19.3 })) { assert.ok(q.spot.lie, 'asleep lying down'); asleep++; }
+			const A = arrange(h, planDay(h, 2), spots, 18.8, { day: 2, sunset: 19.3 }).filter((q) => q.act === 'eat');
+			if (A.length > 1) { dinners++; assert.equal(new Set(A.map((q) => q.spot.room)).size, 1, 'dinner in one room'); }
+		}
+	}
+	assert.ok(asleep > 20 && dinners > 3, `${asleep} asleep, ${dinners} dinners`);
+});
+
+test('a business has no bedrooms on its ground floor: flats above it, its own rooms below', () => {
+	// an apartment block with a shop in it
+	for (const [W, D] of [[14, 16], [18, 22], [24, 30]]) for (let s = 1; s < 4; s++) {
+		const P = apt(W, D, 4, s, { shop: true, shopType: 'cafe' });
+		const ground = P.rooms.filter((r) => r.k === 0);
+		assert.ok(ground.some((r) => r.type === 'shop'), 'the shop on the ground floor');
+		for (const r of ground) assert.ok(!RES.has(r.type) && !r.unit, `no ${r.type} on a shop's ground floor`);
+		assert.ok(P.rooms.some((r) => r.k > 0 && r.unit), 'flats above it');
+		assert.ok(P.door && ground.some((r) => r.type === 'shop' && P.door.x > r.x0 && P.door.x < r.x1), "the way in is the shop's");
+	}
+	// a row house that is a shop
+	for (let s = 1; s < 6; s++) {
+		const W = 6 + s, side = s % 2 ? 1 : -1;
+		const P = city(planRow({ use: 'shop', W, D: 14 + s, levels: 3, reach: 3, stairSide: side, doorX: -side * Math.min(1.2, W * 0.12), winCols: null, winRows: [], bay: null, shopType: 'cafe', rnd: rng(s * 31), style: 'edwardian' }));
+		for (const r of P.rooms) if (r.k === 0) assert.ok(!RES.has(r.type), `no ${r.type} behind the shop`);
+		assert.ok(P.rooms.some((r) => r.k > 0 && (r.type === 'bed' || r.type === 'master')), 'bedrooms upstairs');
+	}
+	// a house that is a business: its ground-floor bedrooms and laundry are the business's
+	for (const fit of ['cafe', 'office', 'clinic', 'workshop']) for (const t of ['bed', 'master', 'laundry']) assert.equal(houseRoles(fit, t)?.role, 'back', `${fit}: the ${t} is the business's`);
+	assert.equal(houseRoles('bnb', 'bed'), null, "a bed and breakfast's rooms are its guests'");
+	let biz = 0;
+	for (let k = 0; k < 60; k++) {
+		const w = 9 + (k * 7) % 10, d = 8 + (k * 5) % 8, h = k % 2 ? 3 : 5.75;
+		const boxes = [{ x: 1000 + k * 37.3, z: k * 11.1, w, d, a: 0.12 + k * 0.01, wallH: h, roofH: 2, kind: k % 3, door: 0.5 }];
+		groupBoxes(boxes);
+		const plan = planHouse(boxes, { estab: { fit: 'cafe', type: 'cafe' } });
+		if (!plan) continue;
+		for (const r of plan.rooms) if (r.level === 0 && r.cells.length && (r.type === 'bed' || r.type === 'master')) { assert.ok(r.biz, 'a ground-floor bedroom is the business\'s'); biz++; }
+		for (const it of plan.items) if (it.type === 'bed') assert.ok(plan.rooms[it.room]?.level > 0, 'no bed on the ground floor');
+	}
+	assert.ok(biz > 5, `${biz} ground-floor bedrooms taken over`);
 });
