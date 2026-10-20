@@ -184,8 +184,9 @@ export function createSquads(ctx) {
 
 	// one at (x, z) of a faction, in a squad
 	async function spawn(fid, x, z, squad, opts = {}) {
-		// (your guild's people come over and above it: guild/companions.js keeps their own count)
-		if (!opts.ally && alive().length + pending.size >= maxNow()) return null;
+		// (your guild's people come over and above it on a computer: guild/companions.js keeps their
+		// own count; on a phone they share it, so no fight ever draws more bodies than it did before)
+		if ((!opts.ally || isPhone) && alive().length + pending.size >= maxNow()) return null;
 		// (a stationed side only at a post: a base, a checkpoint, a compound)
 		if (FACTIONS[fid]?.stationed && ctx.mayStation && !ctx.mayStation(fid, x, z)) return null;
 		const generation = epoch, reservation = {};
