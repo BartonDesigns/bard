@@ -173,6 +173,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		let g = island.heightAt(x, z);
 		// other walkable surfaces the world adds (the Golden Gate Bridge's deck)
 		if (island.extraFloor) g = Math.max(g, island.extraFloor(x, z, y));
+		// (the houses' roofs, for you once you have climbed up: parkour.js)
+		if (island.roofFloor) g = Math.max(g, island.roofFloor(x, z, y));
 		for (const f of foot) {
 			const [lx, lz] = toLocal(f, x, z);
 			if (f.pier) {
@@ -228,7 +230,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	}
 
 	// the climbs and the wall runs, felt for with the same two tests
-	const park = createParkour({ s, camera, floorAt, pushOut });
+	// (the ceilings over you: inside a house, its own; island-build.js)
+	const ceilingAt = (x, z, y) => island.ceilingAt ? island.ceilingAt(x, z, y) : Infinity;
+	const park = createParkour({ s, camera, floorAt, pushOut, ceilingAt });
 
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
 	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -387,6 +391,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const gk = s.grounded ? 1 : park.air(dt, { run, wish, contact: met, jump: jumpEdge });
 			s.vel.y -= 18 * (island.gravity || 1) * (s.vel.y < 0 ? s.fallK || 1 : 1) * dt * gk;
 			s.pos.y += s.vel.y * dt;
+			// a jump indoors: the head meets the ceiling, not the room above or the sky
+			if (s.vel.y > 0 && !s.grounded) { const c = ceilingAt(s.pos.x, s.pos.z, s.pos.y - EYE - s.vel.y * dt); if (s.pos.y + 0.15 > c) { s.pos.y = Math.max(floorY + EYE, c - 0.15); s.vel.y = 0; } }
 			if (s.pos.y < floorY + EYE) { s.pos.y = floorY + EYE; s.vel.y = 0; s.grounded = true; }
 			else if (s.pos.y > floorY + EYE + 0.05) s.grounded = false;
 			if (s.grounded) park.grounded();

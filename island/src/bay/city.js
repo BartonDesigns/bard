@@ -208,6 +208,10 @@ function lichenLeaves(m) {
 	m.customProgramCacheKey = () => (pk ? pk() : '') + '|lichleaf';
 }
 
+// how far off a building's windows start to clear onto the rooms built behind them, and where
+// they are all clear (metres; inside interiors/index.js's build reach, so a building's rooms are
+// always built before its glass begins to clear)
+const DOOR_CLEAR = GFX_PHONE ? '20.0, 42.0' : '26.0, 64.0';
 export function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
@@ -215,20 +219,22 @@ export function buildingMaterial(shared, night, nearBand) {
 		sh.uniforms.uNL = NIGHT_U.uNL;
 		sh.uniforms.uNearBand = nearBand;sh.uniforms.uDetailNow=detailClock;
 		sh.uniforms.uCutN = WALL_CUTS.n; sh.uniforms.uCutA = WALL_CUTS.a; sh.uniforms.uCutB = WALL_CUTS.b;          // structures/walls: the face cut round a broken wall
-		sh.vertexShader = 'attribute float aKind; attribute float aAge; varying float vAge; attribute vec4 aNL; varying vec4 vNL; attribute vec3 aNear; attribute float aDetailBirth; uniform float uDetailNow; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.vertexShader = 'attribute float aKind; attribute float aAge; varying float vAge; attribute vec4 aNL; varying vec4 vNL; attribute vec3 aNear; attribute float aDetailBirth; uniform float uDetailNow; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
 			vNearK = (aNear.z < 0.0 || (aNear.z > 0.5 && aNear.z < 1.5)) ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, max(0.0,length(aNear.xy - cameraPosition.xz) - (aNear.z < 0.0 ? -aNear.z-1.0 : 0.0))) : 0.0;
 			vNearK *= smoothstep(0.0,.5,max(0.0,uDetailNow-aDetailBirth));
 			// (a building with its rooms built inside: its front door cut out, aNear = door x, sill y, 2 + width)
 			vDoor = aNear.z > 1.5 ? vec3(aNear.xy, aNear.z - 2.0) : vec3(0.0);
 			// (and how high its rooms go: 2 + width + 4 x whole metres; its windows open only below that)
 			vDoorTop = aNear.z > 1.5 ? floor(vDoor.z / 4.0) : 0.0; vDoor.z -= vDoorTop * 4.0;
+			// (its windows clear over half a second from when its rooms were built: aDetailBirth)
+			vDoorK = aNear.z > 1.5 ? smoothstep(0.0, 0.6, max(0.0, uDetailNow - aDetailBirth)) : 0.0;
 			vKind = aKind; vAge = aAge; vNL = aNL;
 			vLY = transformed.y * length(instanceMatrix[1].xyz);
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
+		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
 			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;${CUT_TEST}`)
@@ -444,8 +450,13 @@ export function buildingMaterial(shared, night, nearBand) {
 					// a dark stone plinth at the ground
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.29, 0.28), step(vLY, 1.9) * (1.0 - roof));
 				}
-				// a building with its rooms built: its front windows (and a bay's) are holes onto them
-				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) discard;
+				// a building with its rooms built: its front windows (and a bay's) open onto them, the
+				// glass clearing as you come (all of it painted at the far edge of the band, all of it
+				// clear at the near), so the rooms are never seen to appear: they come through the glass
+				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) {
+					float openK = vDoorK * (1.0 - smoothstep(${DOOR_CLEAR}, length(vCW.xz - cameraPosition.xz)));
+					if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < openK) discard;
+				}
 				// the condition of the place: boarded up (plywood over the openings), burnt out
 				// (the openings black, soot up the wall above them), run down (grimy glass, a
 				// pane or two broken)
@@ -893,6 +904,29 @@ export function createCity(shared, scene, bay, real = null) {
 		return o.y + o.h + R.h * Math.max(0, y);
 	}
 	const HOUSE = new Set([KIND.house, KIND.houseGarageL, KIND.houseGarageR]);
+	// the pitched roofs as floors, for someone up on one (climbed from the wall: parkour.js), and
+	// the buildings' tops as ceilings for someone inside one (no climbing out through the roof)
+	function roofFloor(x, z, y) {
+		let best = -1e9;
+		for (const o of lotsNear(x, z, 1)) {
+			if (!o.roof || o.wrecked) continue;
+			const ov = o.roof.ov ?? 0.4, c = Math.cos(o.a), sn = Math.sin(o.a), dx = x - o.x, dz = z - o.z, lx = c * dx + sn * dz, lz = -sn * dx + c * dz;
+			if (Math.abs(lx) > o.w / 2 + ov || Math.abs(lz) > o.d / 2 + ov) continue;
+			const r = roofAt(o, lx, lz);
+			if (y > r - 0.6) best = Math.max(best, r);
+		}
+		return best;
+	}
+	function ceiling(x, z, y) {
+		let best = Infinity;
+		for (const o of lotsNear(x, z, 1)) {
+			if (o.wrecked || o.h < 2.2) continue;
+			const c = Math.cos(o.a), sn = Math.sin(o.a), dx = x - o.x, dz = z - o.z, lx = c * dx + sn * dz, lz = -sn * dx + c * dz;
+			if (Math.abs(lx) > o.w / 2 || Math.abs(lz) > o.d / 2) continue;
+			if (y > o.y - 0.6 && y < o.y + o.h - 0.4) best = Math.min(best, o.y + o.h);
+		}
+		return best;
+	}
 	function decorate(list, cx, cz, R) { return cityDecorate(cc, list, cx, cz, R); }
 	const ROOF_R = PHONE ? 200 : 380;
 	function kitPut(put, k, e) { if (kit2.has(k)) (put.props[k] || (put.props[k] = [])).push(e); }
@@ -926,10 +960,10 @@ export function createCity(shared, scene, bay, real = null) {
 			const F = o.fit, ox = F ? F[0] : o.x, oz = F ? F[1] : o.z, ow = F ? F[2] : o.w, od = F ? F[3] : o.d;
 			q.setFromAxisAngle(Y, -o.a); sc.set(ow, o.h, od); p.set(ox, o.y, oz);
 			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2], THREE.SRGBColorSpace)); kinds.array[n] = o.kind; ages.array[n] = (o.age ?? 0.4) + 2 * (o.cond || 0);
-			births.array[n]=o.src?.grp?.nearBorn || 0;
 			// its household's lights after dark (nightplan.js): the porch light, the garage's
 			if (nlA) { const hk = Math.floor(o.kind), on = hk === KIND.house || hk === KIND.row || hk === KIND.houseGarageL || hk === KIND.houseGarageR || hk === KIND.garage, pk = on ? packHouse(housePlan(o, nightSeed(o.x, o.z))) : null; nlA.array.set(pk || NL0, n * 4); }
 			const nc = o.src?.grp?.near, dr = roofs && !nc ? doors.get(lotKey(o)) : null;
+			births.array[n] = nc ? o.src.grp.nearBorn || 0 : dr ? dr.born ?? 0 : 0;
 			nearA.array[n * 3] = nc ? nc[0] : dr ? dr[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : dr ? dr[1] : 0; nearA.array[n * 3 + 2] = nc ? (o.src.grp.detailRadius ? -1-o.src.grp.detailRadius : 1) : dr ? 2 + dr[2] : 0;
 			if (roofs && o.src?.grp) { let l = slotOf.get(o.src.grp); if (!l) slotOf.set(o.src.grp, l = []); l.push(n); }
 			if (roofs) o.slot = n;
@@ -1167,13 +1201,16 @@ export function createCity(shared, scene, bay, real = null) {
 	economy.setBuilt((o) => !!o.wrecked || !!o.src?.grp?.near || doors.has(lotKey(o)));
 	function setDoor(o, v) {
 		const k = lotKey(o);
-		if (v) doors.set(k, v); else doors.delete(k);
+		// (when its rooms were built: its glass clears from then, not all at once)
+		if (v) { const was = doors.get(k); v.born = was?.born ?? updateDetailClock(); doors.set(k, v); } else doors.delete(k);
 		// (the list is rebuilt as you travel: the lot as it stands in the current one)
 		const cur = lotsNear(o.x, o.z, 0.5).find((q) => lotKey(q) === k);
 		if (!cur || cur.slot === undefined || cur.src?.grp?.near) return;
 		const nearA = near.geometry.attributes.aNear, n = cur.slot;
 		nearA.array[n * 3] = v ? v[0] : 0; nearA.array[n * 3 + 1] = v ? v[1] : 0; nearA.array[n * 3 + 2] = v ? 2 + v[2] : 0;
-		nearA.needsUpdate = true;
+		const births = near.geometry.attributes.aDetailBirth;
+		births.array[n] = v ? v.born : 0;
+		nearA.needsUpdate = true; births.needsUpdate = true;
 	}
 	// the gridded houses (and a garage built onto one), and the shops and offices, given the
 	// shape of the mapped ones so houses.js and commercial.js build them the same way; kept
@@ -1296,11 +1333,13 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.trees) list.trees = list.trees.filter(out);
 		for (const k in list.props || {}) list.props[k] = list.props[k].filter((e) => !real.inside(e[0], e[2]));
 	}
-	function realBuildings(cx, cz, R, list, wild = true) {
+	function* realBuildings(cx, cz, R, list, wild = true) {
 		if (!real?.loaded()) return;
+		let n = 0;
 		const trees = list.trees || (list.trees = []);
 		const floors = new Map();
 		for (const b of real.near('boxes', cx, cz, R)) {
+			if ((++n & 511) === 0) yield;
 			const dx = b.x - cx, dz = b.z - cz;
 			if (dx * dx + dz * dz > R * R) continue;
 			// the Discovery Museum's barracks are built by bay/discovery.js
@@ -1354,16 +1393,20 @@ export function createCity(shared, scene, bay, real = null) {
 			const g = bay.heightAt(p.x, p.z);
 			if (g > 0.5 && poolOK(p)) list.push({ x: p.x, y: g - 0.9, z: p.z, w: p.w, d: p.d, h: 0.99, a: p.a, col: [0.9, 0.89, 0.85], kind: KIND.pool, roof: null });
 		}
+		yield;
 		// (out on the globe the wild land and its creeks are the globe's own: globetrees.js)
 		if (wild) {
 			wildLand(cx, cz, 1100, trees);
+			yield;
 			wildLand(cx, cz, 2700, trees, true, 1100);        // beyond: a coarser, cheaper scatter for the far masses
+			yield;
 			// the willows, sycamores and redwoods along the San Lorenzo (sanlorenzo.js)
 			for (const t of riverTreesNear(cx, cz, 2700)) trees.push(t);
 			// ...and along every other creek and river's wild banks (water.js)
 			for (const t of waterTreesNear(cx, cz, 2700)) trees.push(t);
 		}
 		for (const t of real.near('trees', cx, cz, 2700)) {
+			if ((++n & 2047) === 0) yield;
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
 			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
 			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2 || (t.x < 12000 && bay.heightAt(t.x, t.z + 1500) < -2))) { const L = real.landAt(t.x, t.z); if (L && L.lu !== 1 && L.lu !== 7 && L.lu !== 13) { const gl = (bay.heightAt(t.x + 60, t.z) + bay.heightAt(t.x - 60, t.z) + bay.heightAt(t.x, t.z + 60) + bay.heightAt(t.x, t.z - 60) - 4 * g) / 4; if (gl < 7 || r > 0.35) continue; } }       // (only a few, in a deep draw well below its sides)
@@ -1500,23 +1543,50 @@ export function createCity(shared, scene, bay, real = null) {
 			if (!on) { riseT0 = -1; rise.value.w = 0; }
 			near.castShadow = hips.castShadow = gables.castShadow = !on;
 		}
-		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
-		lastX = x; lastZ = z;
+		// the buildings round you again every 300 m, a few milliseconds a frame (the ones standing
+		// stay drawn till the new set is ready): done in one go it held a phone's frame for the
+		// best part of a second each time; the first set, and one far from where you are now (a
+		// teleport, a fast flight), is done at once
+		if (!rebuild && Math.hypot(x - lastX, z - lastZ) >= 300) { lastX = x; lastZ = z; rebuild = rebuildAt(x, z, globe); }
+		if (rebuild) {
+			const t0 = performance.now(), budget = !builtOnce || Math.hypot(x - rebuild.x, z - rebuild.z) > 900 ? Infinity : SLICE;
+			while (rebuild && performance.now() - t0 < budget) if (rebuild.gen.next().done) { rebuild = null; builtOnce = true; }
+			return;
+		}
+		if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) placeTrees(x, z);                 // (MARGIN covers these 40 m)
+	}
+	// one rebuild of the buildings, trees and kit round (x, z), in steps
+	const SLICE = PHONE ? 4 : 6;
+	let rebuild = null, builtOnce = false;
+	const rebuildAt = (x, z, globe) => ({ x, z, gen: rebuildSteps(x, z, globe) });
+	// a list's filter a slice at a time
+	function* keepSteps(arr, ok) {
+		const out = [];
+		for (let i = 0; i < arr.length; i++) { if ((i & 2047) === 2047) yield; if (ok(arr[i])) out.push(arr[i]); }
+		return out;
+	}
+	function* rebuildSteps(x, z, globe) {
 		const list = [];
 		if (!globe) fillBlocks(x, z, 1200, list);
 		clipMapped(list);
-		realBuildings(x, z, 2000, list, !globe);
+		yield;
+		yield* realBuildings(x, z, 2000, list, !globe);
+		yield;
 		settleLots(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
+		yield;
 		decorate(list, x, z, 700);
+		yield;
 		// the streets' own trees by their era, in place of the map's plain rows (streettrees.js);
 		// nearer and fewer on a lower quality tier (world/governor.js)
 		if (list.trees && real?.loaded()) { const far = qualityNow().far; list.trees = streetTrees(real, list.trees, x, z, (PHONE ? 650 : 1000) * far, (tx, tz) => bay.heightAt(tx, tz), Math.round((PHONE ? 3500 : 9000) * far)); }
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || ((t.well || L.road < 0.6) && L.roof < 0.7); });
+		yield;
 		// ...nor on a carriageway, a sidewalk, a trail or a drive, nor in a junction's sight
 		// triangle, within reach (bay/clearance.js): the land map is too coarse for a trunk
-		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); list.trees = list.trees.filter((t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5, !!t.well)); }
+		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); yield; list.trees = yield* keepSteps(list.trees, (t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5, !!t.well)); }
+		yield;
 		// ...nor on a ball field (sportsfields.js)
 		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !onLandmark(t.x, t.z, 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
 		// ...nor inside a building (every one can be walked into now): a coarse grid of them
@@ -1531,25 +1601,32 @@ export function createCity(shared, scene, bay, real = null) {
 				}
 				return false;
 			};
-			if (list.trees && G.size) list.trees = list.trees.filter((t) => !inside(t));
+			yield;
+			if (list.trees && G.size) list.trees = yield* keepSteps(list.trees, (t) => !inside(t));
 		}
+		yield;
 		// which buildings are businesses, and their signs and things out front (economy/layer.js)
-		economy.apply(list, x, z);
+		yield* economy.applySteps(list, x, z);
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees, k = list.kit, pr = list.props; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; list.props = pr; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
+		yield;
 		procGroups(list, x, z);
 		// (a phone sorts out the nearer buildings only: the pass costs it a frame or two)
 		apart(list, x, z, PHONE ? 650 : 1e9);
+		yield;
+		// (then in place: the buildings, their kit a frame on, the trees a frame after)
 		upload(list, near, [hips, gables]);
 		skylineBeside(list);
 		indexLots(list);
-		uploadKit(list.kit);
-		kit2.upload(list.props);
 		// the tall ones, for going inside (bay/towers.js)
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
+		yield;
+		uploadKit(list.kit);
+		kit2.upload(list.props);
+		yield;
 		placeTrees(x, z);
 	}
-	return { skyline: () => skyline, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { roofFloor, ceiling, skyline: () => skyline, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }
