@@ -168,6 +168,8 @@ export function createChat({ url, multiplayer, mount, cloud = null, hint = () =>
 		const now = Date.now(), P = [];
 		if (ch !== 'people') for (const m of client.log[ch] || []) if (m.from && now - m.at < NOW_MS) P.push(m.from);
 		if (ch === 'group' || ch === 'people') P.push(...(client.group?.members || []));
+		// (two people of one name in the online list need telling apart to invite the right one)
+		if (ch === 'people') P.push(...(who?.players || []));
 		if (client.me) P.push(client.me);
 		return clashes(P);
 	}
