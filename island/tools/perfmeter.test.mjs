@@ -38,3 +38,13 @@ test('the probe lists what leaving each part out saves, most first', async () =>
 	assert.match(L[2], /^ocean\s+-20 ms  180k$/);
 	assert.match(L[3], /^sky\s+-0 ms  2k$/, 'a part that saves nothing reads 0, not a gain');
 });
+
+test('each part is weighed against the frames with everything either side of it', async () => {
+	const { probeLines } = await import('../src/ui/perfmeter.js');
+	// a hitch while 'all' was first timed (400 ms) no longer makes every part look like it saves 350
+	const L = probeLines(60, [{ name: 'globe', tris: 121000, ms: 55, base: (400 + 60) / 2 }, { name: 'bay-city', tris: 1213000, ms: 30, base: 60 }]);
+	assert.equal(L[1].startsWith('globe') ? 'globe' : 'bay-city', 'globe');
+	const L2 = probeLines(60, [{ name: 'globe', tris: 121000, ms: 55, base: 58 }, { name: 'bay-city', tris: 1213000, ms: 30, base: 60 }]);
+	assert.match(L2[1], /^bay-city\s+-30 ms/);
+	assert.match(L2[2], /^globe\s+-3 ms/);
+});
