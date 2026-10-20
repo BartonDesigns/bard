@@ -17,7 +17,7 @@
 // quicker (power, mana, cd), one spell of the school changed (alter), every few spells free
 // (free), and the weapon in hand's hits (gearWeapon: magic/index.js and magic/caster.js).
 
-import { computeMods, rankOf, applyMastery, masteryLevel, MASTERY_POWER, NUMERAL } from './skills.js';
+import { computeMods, rankOf, applyMastery, masteryLevel, MASTERY_POWER, NUMERAL } from './perks.js';
 import { SCHOOLS, STRANDS, manaMax, manaRegen, spellPower, cooldownOf, modFor } from './spells.js';
 import { gearMagic, attributesOf as itemAttributes } from '../gameplay/gear-magic.js';
 import { statsOf } from '../gameplay/gear-levels.js';
