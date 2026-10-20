@@ -11,7 +11,7 @@ import { territoryAt, cornerSize, recruits, junctions, pickCorners, gangStance, 
 import { insideBox, pushOut, roadblockSpot, blockSlots, hiddenSpot, inCone, squadMorale, offscreenPace } from '../src/law/tactics.js';
 import { createWanted, offend, tickWanted, sighted, STARS, defend, officerHurt, tickDefence, clearWanted, DEFENCE } from '../src/combat/heat.js';
 import { policePlan } from '../src/military/rules.js';
-import { FACTIONS, createRelations, ATTACK, attackGap } from '../src/combat/factions.js';
+import { FACTIONS, createRelations, ATTACK, attackGap, raidWobble } from '../src/combat/factions.js';
 import { outfitFor, lookOf } from '../src/combat/outfits.js';
 
 const seq = (...v) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]; };
@@ -91,6 +91,11 @@ test('attacks on you are paced events: 15 minutes on their ground, 30 elsewhere,
 	assert.equal(attackGap(FACTIONS.ashfang, 'village'), 30 * 60);
 	assert.equal(attackGap(FACTIONS.halcyon, 'earth-urban'), ATTACK.raid);
 	assert.ok(ATTACK.raid > ATTACK.away && ATTACK.away > ATTACK.home);
+	// a raid never on the dot: 45 minutes and up to 35 more
+	assert.equal(raidWobble(() => 0), 0);
+	assert.equal(raidWobble(() => 0.999999) < 35 * 60, true);
+	assert.equal(attackGap(FACTIONS.halcyon, 'earth-urban', raidWobble(() => 0.5)), 45 * 60 + 17.5 * 60);
+	assert.equal(attackGap(FACTIONS.ashfang, 'wild', 600), 15 * 60, 'the wobble is the raids\' alone');
 });
 
 test('an officer who sees it counts it at once; several witnesses make one call, sooner', () => {

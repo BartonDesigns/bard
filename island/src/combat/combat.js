@@ -40,7 +40,7 @@ import { createCars } from './cars.js';
 import { createFireField } from './fire.js';
 import { createBoss } from './bosses.js';
 import { BOSSES } from './boss-defs.js';
-import { createRelations, FACTIONS, PLAYER, ATTACK, attackGap } from './factions.js';
+import { createRelations, FACTIONS, PLAYER, ATTACK, attackGap, raidWobble } from './factions.js';
 import { rememberIncident } from '../people/world-awareness.js';
 import { createMorality } from './morality.js';
 import { pvpOpen } from './honor.js';
@@ -216,7 +216,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		for (const m of h?.squad?.members || (h ? [h] : [])) { m.provoked = false; if (m.target?.id === 'me') { m.target = null; m.targetT = 0; } }
 	}
 	// attacks on you paced as events (factions.js ATTACK): play time, and when the last one came
-	let playT = 0, lastAttackT = 0;
+	let playT = 0, lastAttackT = 0, wobble = raidWobble();
+	const attacked = () => { lastAttackT = playT; wobble = raidWobble(); };
 	const hatesMe = (fid) => relations.hostile(fid, PLAYER) || (FACTIONS[fid]?.kind === 'mercs' && morality.reactions().bounty > 0);
 	let gangDeaths = [];
 	const fireField = createFireField({ maxBurning: isPhone ? 3 : 5, maxChain: 3, radius: 14, life: 75 });
@@ -958,8 +959,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		// (only where there are people or businesses about: not out in the empty country)
 		if (bountyT <= 0 && isEarth() && !populated(eye())) bountyT = 30;
 		// (a raid, and a rare one: factions.js ATTACK)
-		if (bountyT <= 0 && playT - lastAttackT < ATTACK.raid) bountyT = 60;
-		if (bountyT <= 0) { bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { lastAttackT = playT; squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
+		if (bountyT <= 0 && playT - lastAttackT < ATTACK.raid + wobble) bountyT = 60;
+		if (bountyT <= 0) { bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotHidden(60, 100); if (s) { attacked(); squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
 		if (!settings.ambient || directorT > 0 || contracts.info().mission) return;
 		directorT = rnd(70, 130);
 		if (squads.info().squads.length >= (isPhone ? 2 : 3)) return;
@@ -973,8 +974,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const due = (...fids) => {
 			const foes = fids.filter(hatesMe);
 			if (!foes.length || z === 'deep') return true;
-			if (foes.some((f) => playT - lastAttackT < attackGap(FACTIONS[f], z))) return false;
-			lastAttackT = playT;
+			if (foes.some((f) => playT - lastAttackT < attackGap(FACTIONS[f], z, wobble))) return false;
+			attacked();
 			return true;
 		};
 		// a militia only at its own compound (never roaming): the nearest one within reach, if any
