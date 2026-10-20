@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { createMusicLinkEntry } from './ui/music-link.js';
 import { createChat } from './ui/chat.js';
 import { createGuild } from './guild/index.js';
 import { createLivingWorld, livingActorId } from './people/living-world.js';
@@ -889,6 +890,8 @@ export function createIslandWorld() {
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) cloudBtn.addEventListener(ev, (e) => e.stopPropagation());
 	dom.mount.appendChild(cloudBtn);
 	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// music from a YouTube or Spotify link: its way in from the map pin, and the auto music making way (ui/music-link.js)
+	HOOKS.musicLink = createMusicLinkEntry({ menu: tpMenu, autoMusic, hint: (t, ms) => hint(t, ms, 1) });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
 	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
 	// your guild: the townsfolk you ask into it walk and fight beside you, level up and learn
