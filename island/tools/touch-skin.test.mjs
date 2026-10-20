@@ -6,7 +6,7 @@ import { GLYPHS, glyphFor, firstTime } from '../src/ui/touch-skin.js';
 // [aria-label or title, the button's words, the glyph it should show]
 const CONTROLS = [
 	['Back to the Bard faceplate', '◀ Bard', 'back'], ['Sky and world settings', '☀', 'sun'], ['Auto music: a generative score', '', 'music'],
-	['All controls', '☷', 'menu'], ['Fly (F)', '✈', 'plane'], ['Gear and trade (I)', '', 'bag'], ['Teleport to a place', '', 'pin'],
+	['All controls', '•••', 'more'], ['Your account and saved progress', '', 'cloud'], ['Heavy strike', '', 'heavy'], ['Fly (F)', '✈', 'plane'], ['Gear and trade (I)', '', 'bag'], ['Teleport to a place', '', 'pin'],
 	['Jump', '⤒', 'jump'], ['Fly up (hold); double-tap to land', '✈', 'plane'], ['Climb', '⇡', 'climb'], ['Dive', '⤓', 'dive'], ['Swim up', '⇡', 'swimup'], ['Descend', '⇣', 'descend'], ['Crouch (C); from a sprint, slide', '', 'crouch'],
 	['Fire', '', 'fire'], ['Draw', '', 'bow'], ['Release', '', 'bow'], ['Reload', 'R', 'reload'], ['Mode', 'AUTO', 'auto'], ['Mode', 'SEMI', 'semi'], ['Mode', 'BURST', 'burst'],
 	['Aim', '', 'aim'], ['Aim held item', 'Aim', 'aim'], ['Strike', '', 'fist'], ['Swing', '', 'swing'], ['Slash', '', 'slash'], ['Block', '', 'block'], ['Dodge', '', 'dodge'],
