@@ -35,11 +35,23 @@ function leviathan(ctx, B) {
 	const L = leviathanBody({ n: N, radii: segs.map((s) => s.r), phone: GFX_PHONE });
 	g.add(L.group);
 	const pts = segs.map((s) => s.p), eye = new THREE.Vector3(), heart = L.heart;
-	const C = B.center, trail = [];
+	const C = B.center;
 	let a = 0, charge = null, jaw = 0, roar = 0;
-	const headAt = (t, out) => out.set(C.x + Math.cos(t) * 13, C.y + 5 + Math.sin(t * 1.3) * 2.5, C.z + Math.sin(t) * 13);
-	const head = headAt(0, new THREE.Vector3());
-	for (let i = 0; i < N * 6; i++) trail.push(headAt(-i * 0.02, new THREE.Vector3()));
+	// It crawls like a snake: down on the gallery floor, its neck reared like a cobra's, its body
+	// laid in S-bends that follow the path the head took. It moves in sharp bursts: a lunge, the
+	// bends whipping through the body, then dead still but for small quick flicks of the head.
+	const SEG = 1.3, LOOP = 13, WAVE = 10, SWAY = 2.4, REAR = 4.2;
+	let wave = 0, burst = 0, hold = 0.6, speed = 0, flickIn = 0;
+	const flick = new THREE.Vector3(), flickTo = new THREE.Vector3();
+	const floor = (x, z) => ctx.ground(x, z, C.y + 2);
+	// the head's way round its loop, swaying side to side as it goes
+	const pathAt = (t, w, out) => out.set(C.x + Math.cos(t) * (LOOP + Math.sin(w) * SWAY), 0, C.z + Math.sin(t) * (LOOP + Math.sin(w) * SWAY));
+	const head = pathAt(0, 0, new THREE.Vector3());
+	head.y = floor(head.x, head.z) + REAR;
+	// (the trail of the head on the floor, newest first: the body lies along it)
+	const trail = [];
+	for (let d = 0; d < N * SEG + 6; d += 0.3) trail.push(pathAt(-d / LOOP, -d / WAVE * Math.PI * 2, new THREE.Vector3()));
+	let headY = head.y;
 	B.parts = () => {
 		const out = segs.map((s) => ({ type: 'sphere', c: s.p, r: s.r * 0.95, part: 'body' }));
 		out.push({ type: 'sphere', c: eye, r: 0.55, part: 'eye' }, { type: 'sphere', c: heart.position, r: 0.9, part: 'heart' });
@@ -69,17 +81,61 @@ function leviathan(ctx, B) {
 	B.step = (dt) => {
 		const M = B.mc.M, sp = (B.def.phases[M.phase].speed || 1);
 		if (charge?.go) {
+			// the strike: fast off the mark, the last of it a snap
 			charge.t += dt / 1.2;
-			head.lerpVectors(charge.from, charge.to, Math.min(1, charge.t));
+			const k = 1 - Math.pow(1 - Math.min(1, charge.t), 3);
+			head.lerpVectors(charge.from, charge.to, k);
+			headY = head.y;
 			if (!charge.hit && head.distanceTo(ctx.eye()) < 3) { charge.hit = true; ctx.hurtPlayer({ amount: 30, type: 'impact', src: head.clone(), part: 'torso', by: B.T }); }
 			if (charge.t >= 1) { charge = null; a = Math.atan2(head.z - C.z, head.x - C.x); }
 		} else {
-			a += dt * 0.35 * sp * (M.state === 'transition' ? 2 : 1);
-			headAt(a, _v);
-			head.lerp(_v, Math.min(1, dt * 2));
+			// a burst: full speed at once, falling away to nothing; then still
+			const fast = M.state === 'transition' ? 1.6 : 1;
+			if (burst > 0) {
+				burst -= dt;
+				speed = 17 * sp * fast * Math.pow(Math.max(0, burst) / 0.65, 1.6);
+				if (burst <= 0) hold = rnd(0.45, 1.25) / (sp * fast);
+			} else {
+				speed = 0;
+				hold -= dt;
+				if (hold <= 0) { burst = 0.65; flickTo.set(0, 0, 0); }
+			}
+			const ds = speed * dt;
+			pathAt(a, wave, _v);
+			const d = Math.hypot(_v.x - head.x, _v.z - head.z);
+			// (back on its loop after a strike, it crawls to it before going round again)
+			const on = d < 2.5;
+			a += ds / LOOP * (on ? 1 : 0.3);
+			wave += ds / WAVE * Math.PI * 2 * (on ? 1 : 0.3);
+			pathAt(a, wave, _v);
+			const go = Math.min(Math.hypot(_v.x - head.x, _v.z - head.z), ds * (on ? 1.2 : 1.6));
+			_w.set(_v.x - head.x, 0, _v.z - head.z);
+			if (_w.lengthSq() > 1e-6) head.addScaledVector(_w.normalize(), go);
+			// still, it watches: the head flicks to a new angle and holds
+			if (burst <= 0 && (flickIn -= dt) <= 0) { flickIn = rnd(0.18, 0.55); flickTo.set(rnd(-0.45, 0.45), rnd(-0.3, 0.35), rnd(-0.45, 0.45)); }
+			flick.lerp(flickTo, Math.min(1, dt * 24));
+			headY += (floor(head.x, head.z) + REAR - headY) * Math.min(1, dt * 7);
+			head.y = headY;
 		}
-		trail.unshift(trail.pop().copy(head));
-		for (let i = 0; i < N; i++) segs[i].p.copy(trail[Math.min(trail.length - 1, i * 5)]);
+		if (Math.hypot(head.x - trail[0].x, head.z - trail[0].z) > 0.3) { const p = trail.pop(); p.set(head.x, 0, head.z); trail.unshift(p); }
+		// the body along the trail, a spine point every SEG metres; the neck reared, the rest down
+		let j = 0, acc = 0, from = head;
+		for (let i = 0; i < N; i++) {
+			const want = i * SEG, P = segs[i].p;
+			if (i === 0) P.copy(head).add(flick);
+			else {
+				while (j < trail.length - 1) {
+					const l = Math.hypot(trail[j].x - from.x, trail[j].z - from.z);
+					if (acc + l >= want) { const f = (want - acc) / (l || 1); P.set(from.x + (trail[j].x - from.x) * f, 0, from.z + (trail[j].z - from.z) * f); break; }
+					acc += l; from = trail[j]; j++;
+				}
+				if (j >= trail.length - 1) P.set(trail[j].x, 0, trail[j].z);
+				const u = Math.min(1, Math.max(0, (want - SEG) / (SEG * 3.5)));
+				const rear = 1 - u * u * (3 - 2 * u);
+				const gy = floor(P.x, P.z) + L.radius(i / (N - 1)) * 0.85;
+				P.y = gy + (Math.max(headY, gy) - gy) * rear + flick.y * rear * 0.5;
+			}
+		}
 		// the jaw opens to roar as it winds up, and gapes through a charge
 		roar = Math.max(0, roar - dt * 0.6);
 		jaw += ((charge?.go ? 1 : roar > 0.2 ? 0.8 : 0.08 + Math.sin(B.time * 0.9) * 0.05) - jaw) * Math.min(1, dt * 5);
