@@ -28,6 +28,11 @@ export const RUNTIMES = [
 		out: 'runtime/flight-235.js.gz',
 		text: () => read('runtime/src/flight.js'),
 	},
+	{
+		// the retired V1 caves document, opened only with window._V1_SURFACES = true
+		out: 'runtime/caves-235.html.gz',
+		text: () => read('runtime/src/caves.html'),
+	},
 ];
 
 const hashOf = (bytes) => createHash('sha256').update(bytes).digest('hex').slice(0, 12);

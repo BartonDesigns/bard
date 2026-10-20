@@ -29,3 +29,9 @@ test('the page no longer rewrites the flight engine as it loads it', () => {
 	assert.match(boot, /rewrite\(files\[1\],resolved\)/);
 	assert.doesNotMatch(boot, /cachedPatch|\.patch\(/);
 });
+
+test('the page no longer rewrites the V1 caves document, or keeps patched copies on the device', () => {
+	assert.equal(page.split('patchCaves').length - 1, 0);
+	assert.doesNotMatch(page, /caves-179|cachedPatch/);
+	assert.match(page, /S\.source = function\(\)\{return window\.L99Boot176\.packed\('caves-235\.html\.gz\?v=[0-9a-f]+'\);\};/);
+});
