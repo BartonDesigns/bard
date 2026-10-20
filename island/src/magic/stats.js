@@ -23,6 +23,7 @@ import { gearMagic, attributesOf as itemAttributes } from '../gameplay/gear-magi
 import { statsOf } from '../gameplay/gear-levels.js';
 import { ARMS_CATALOG } from '../gameplay/arms.js';
 import { rankOf as honorRank, honorMods } from '../combat/honor.js';
+import { foldMeals } from '../cooking/meals.js';
 
 // per: what one point of it gives (life and manaMax in points, regen in points a second, the
 // rest as shares)
@@ -120,6 +121,8 @@ export function composeMods(s, perks = s.perks || []) {
 	m.honor = honorRank(s.honor?.pts || 0);
 	const H = honorMods(m.honor);
 	m.weapon += H.weapon; m.life += H.life; m.armor += H.armor;
+	// the meals you cooked and ate today (cooking/meals.js): they last the day, deaths and all
+	if (s.fed?.length) foldMeals(m, s.fed);
 	m.armor = Math.min(ARMOR_CAP, m.armor);
 	m.life = Math.round(m.life);
 	m.manaMax = Math.round(m.manaMax);

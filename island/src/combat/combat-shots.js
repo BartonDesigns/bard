@@ -99,8 +99,10 @@ export function combatFireShot(cb, w, charge = 1) {
 		net.fx(from, to, S.tracer, 0);
 	} else {
 		const hit = firstHit(o, dir, S.range);
-		if (hit) landShot(hit, o, dir, ME, damageAt(S, hit.t), S.type);
-		const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
+		// game in the open before anything else (a deer, a turkey: cooking/hunting.js)
+		const game = cb.hooks?.quarry?.(o, dir, hit ? hit.t : S.range) ?? -1;
+		if (hit && game < 0) landShot(hit, o, dir, ME, damageAt(S, hit.t), S.type);
+		const end = game >= 0 ? new THREE.Vector3().copy(o).addScaledVector(dir, game) : hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 		fx.tracer(from, end, S.tracer);
 		net.fx(from, end, S.tracer, hit ? 1 : 0);
 		// the spent case out of the breech, a hand's length back from the muzzle
@@ -148,6 +150,11 @@ export function combatStepProjectiles(cb, dt) {
 		p.vel.y -= (p.drop || 0) * dt;
 		const step = p.vel.length() * dt, dir = _d.copy(p.vel).normalize().clone();
 		let hit = firstHit(p.pos, dir, step, p.owner === ME ? ME : p.owner);
+		// your arrow into game in the open (cooking/hunting.js)
+		if (p.owner === ME && !p.flare && !p.missile) {
+			const game = cb.hooks?.quarry?.(p.pos, dir, hit ? hit.t : step) ?? -1;
+			if (game >= 0) { endProjectile(p, p.pos.clone().addScaledVector(dir, game)); continue; }
+		}
 		// a hostile shot meets you
 		if (p.hostile && !me.ko) {
 			const e = eye(), t = rayCapsule(p.pos, dir, { x: e.x, y: e.y - EYE + 0.3, z: e.z }, { x: e.x, y: e.y - 0.1, z: e.z }, 0.4);

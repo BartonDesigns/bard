@@ -217,7 +217,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
 	// weapons deal, for your skills; honorRank() your honor's rank and pvpWin({ from, r, name })
 	// a friend beaten in a PvP fight, for your honor: combat/honor.js)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null, honorRank: null, pvpWin: null };
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null, honorRank: null, pvpWin: null, quarry: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;

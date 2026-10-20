@@ -34,7 +34,7 @@ export function createSmallLife(group, bay, { real, isPhone = false, about, spot
 	function place(cx, cz, h, month) {
 		at = { x: cx, z: cz }; lastH = h;
 		seed = (Math.floor(cx / 150) * 7919 + Math.floor(cz / 150) * 104729 + 31) >>> 0 || 1;
-		for (const k in S) S[k] = [];
+		for (const k in S) S[k] = k === 'tk' || k === 'ql' ? S[k].filter((A) => A.dead && !A.gone && Math.hypot(A.x - cx, A.z - cz) < 200).slice(-2) : [];
 		const probe = (r0, r1) => { const a = rnd() * 6.283, d = r0 + rnd() * (r1 - r0), x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; return { x, z, E: land(x, z) }; };
 		for (let k = 0; k < 24; k++) {
 			const P = probe(25, 90), E = P.E;
@@ -45,13 +45,13 @@ export function createSmallLife(group, bay, { real, isPhone = false, about, spot
 				for (let i = 0; i < n; i++) { const x = P.x + (rnd() - 0.5) * 18, z = P.z + (rnd() - 0.5) * 18; S.sq.push({ x, z, hx: x + (rnd() - 0.5) * 3, hz: z + (rnd() - 0.5) * 3, yaw: rnd() * 6.28, ph: rnd() * 9, run: 0, gone: 0 }); }
 			}
 			// turkeys at the woodland's edge
-			else if (!S.tk.length && E.wood > 0.15 && E.wood < 0.7 && E.redwood < 0.2 && about('wild_turkey', h, month) && rnd() < 0.35) {
+			else if (!S.tk.some((A) => !A.dead) && E.wood > 0.15 && E.wood < 0.7 && E.redwood < 0.2 && about('wild_turkey', h, month) && rnd() < 0.35) {
 				const n = 5 + Math.floor(rnd() * 8), yaw = rnd() * 6.28;
 				for (let i = 0; i < n; i++) S.tk.push({ x: P.x + (rnd() - 0.5) * 14, z: P.z + (rnd() - 0.5) * 14, yaw: yaw + (rnd() - 0.5) * 1.2, ph: rnd() * 9, flee: 0, sp: 0.3 + rnd() * 0.25 });
 			}
 			// a covey of quail at the brush's edge, mornings and evenings
-			else if (!S.ql.length && (E.chaparral > 0.2 || E.scrub > 0.2) && (about('california_quail', h, month) || (h > 16 && h < 19.5)) && rnd() < 0.45) {
-				const n = 8 + Math.floor(rnd() * 8), yaw = rnd() * 6.28;
+			else if (!S.ql.some((A) => !A.dead) && (E.chaparral > 0.2 || E.scrub > 0.2) && (about('california_quail', h, month) || (h > 16 && h < 19.5)) && rnd() < 0.45) {
+				const n = 8 + Math.floor(rnd() * 6), yaw = rnd() * 6.28;
 				for (let i = 0; i < n; i++) S.ql.push({ x: P.x + (rnd() - 0.5) * 6, z: P.z + (rnd() - 0.5) * 6, yaw: yaw + (rnd() - 0.5), ph: rnd() * 9, flee: 0, hide: 0, i });
 			}
 		}
@@ -95,6 +95,8 @@ export function createSmallLife(group, bay, { real, isPhone = false, about, spot
 		// turkeys: a slow walk, heads bobbing to peck; closer than 18 m they walk off, quicker
 		n = 0;
 		for (const A of S.tk) {
+			if (A.gone) continue;
+			if (A.dead) { e.set(0, A.yaw, Math.PI / 2); q.setFromEuler(e); tk.setMatrixAt(n++, m4.compose(p.set(A.x, g(A.x, A.z) + 0.12, A.z), q, s1)); continue; }
 			const d = Math.hypot(A.x - px, A.z - pz);
 			if (d < 18) { A.flee = 3; A.yaw += (Math.atan2(A.x - px, A.z - pz) - A.yaw) * Math.min(1, dt * 2); }
 			const peck = Math.sin(t * 2.2 + A.ph) > 0.4 && !A.flee;
@@ -110,6 +112,8 @@ export function createSmallLife(group, bay, { real, isPhone = false, about, spot
 		// quail: scratching about; closer than 12 m, the covey runs off in a line and is gone
 		n = 0;
 		for (const A of S.ql) {
+			if (A.gone) continue;
+			if (A.dead) { e.set(0, A.yaw, Math.PI / 2); q.setFromEuler(e); ql.setMatrixAt(n++, m4.compose(p.set(A.x, g(A.x, A.z) + 0.05, A.z), q, s1)); continue; }
 			const d = Math.hypot(A.x - px, A.z - pz);
 			if (d < 12 && !A.flee && !A.hide) { A.flee = 2.5 + A.i * 0.08; A.yaw = Math.atan2(A.x - px, A.z - pz) + (Math.random() - 0.5) * 0.3; }
 			if (A.hide) { if (d > 40) A.hide = 0; continue; }
@@ -160,5 +164,10 @@ export function createSmallLife(group, bay, { real, isPhone = false, about, spot
 		}
 		for (const w of [wL, wR]) { w.count = n; w.instanceMatrix.needsUpdate = true; if (w.instanceColor) w.instanceColor.needsUpdate = true; }
 	}
-	return { update, state: () => Object.fromEntries(Object.entries(S).map(([k, v]) => [k, v.length])) };
+	// the turkeys and quail a shot can take (bay/wildlife.js quarry): a hidden quail is not there
+	const quarry = () => [
+		...S.tk.filter((A) => !A.gone).map((A) => ({ kind: 'turkey', A, x: A.x, y: g(A.x, A.z) + (A.dead ? 0.15 : 0.45), z: A.z, r: 0.38 })),
+		...S.ql.filter((A) => !A.gone && !A.hide).map((A) => ({ kind: 'quail', A, x: A.x, y: g(A.x, A.z) + 0.1, z: A.z, r: 0.16 })),
+	];
+	return { update, quarry, state: () => Object.fromEntries(Object.entries(S).map(([k, v]) => [k, v.length])) };
 }
