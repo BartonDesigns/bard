@@ -39,7 +39,7 @@ export function createCompanions({ combat, guild, save, onFoot = () => true, yaw
 		return { x: e.x - fx * 9 + fz * side, z: e.z - fz * 9 - fx * side };
 	}
 	async function call(m, at = null) {
-		if (pending.has(m.id) || byId(m.id)) return;
+		if (!max || pending.has(m.id) || byId(m.id)) return;
 		pending.add(m.id);
 		try {
 			const S = await squadNow();

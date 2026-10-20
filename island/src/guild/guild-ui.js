@@ -172,9 +172,9 @@ export function createGuildPanel({ mount, menu, hint = () => {} }) {
 		if (!g) { body.append(el('div', 'gld-note', 'Found a guild first (the Guild tab). Then anyone grown up you meet can be asked to join it.')); return; }
 		const C = api.companions, out = g.npcs.filter((m) => m.follow && !(m.downUntil > Date.now())).length;
 		const top = el('div', 'gld-row');
-		top.append(el('span', 'gld-note', `${g.npcs.length} of ${NPC_MAX} townsfolk · ${Math.min(out, C.max)} of ${C.max} walk with you at once`));
+		top.append(el('span', 'gld-note', C.max ? `${g.npcs.length} of ${NPC_MAX} townsfolk · ${Math.min(out, C.max)} of ${C.max} walk with you at once` : `${g.npcs.length} of ${NPC_MAX} townsfolk · on a phone they wait at home for now, and walk with you when you play on a computer`));
 		top.style.justifyContent = 'space-between';
-		top.append(button('gld-ghost', C.held() ? 'Call them out again' : 'Send them all home for now', () => { api.hold(!C.held()); draw(); }));
+		if (C.max) top.append(button('gld-ghost', C.held() ? 'Call them out again' : 'Send them all home for now', () => { api.hold(!C.held()); draw(); }));
 		body.append(top);
 		// asking
 		body.append(head('Ask someone near you'));

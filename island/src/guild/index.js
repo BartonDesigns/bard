@@ -151,7 +151,7 @@ export function createGuild({ combat, guide = null, social = null, nearby = () =
 		m.follow = !!on;
 		// (no more than walk with you at once: the longest at rest makes way)
 		const out = g.npcs.filter((x) => x.follow);
-		if (on && out.length > companions.max) { const k = out.find((x) => x !== m); if (k) k.follow = false; }
+		if (on && companions.max && out.length > companions.max) { const k = out.find((x) => x !== m); if (k) k.follow = false; }
 		save();
 	}
 	// the people near you who could be asked: grown, awake, not already yours
