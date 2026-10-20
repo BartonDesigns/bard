@@ -420,7 +420,9 @@ function tintOf(col, form, out) {
 	return out;
 }
 
-export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL, shared = null, extra = null }) {
+// woods: (x, z) -> { k, meadow } the globe's wooded mask there (earth/globetrees.js), or null; in
+// meadow country the trees keep to the woods and the open grass between stays clear
+export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL, shared = null, extra = null, woods = null }) {
 	const group = new THREE.Group();
 	group.name = 'regional plants';
 	scene.add(group);
@@ -546,6 +548,11 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 				const dx = (lon - ll.lon) * 111000 * Math.cos(ll.lat * Math.PI / 180), dz = -(lat - ll.lat) * 111000, d = Math.hypot(dx, dz);
 				const v = variantOf(keyOf(word, form, sub, snow), kit.id);
 				if (d > v.reach) continue;
+				// (meadow country: a tree out in the open grass only now and then, a bush along its edges)
+				if (woods && !LOW.has(form)) {
+					const W = woods(cx + dx, cz + dz);
+					if (W && W.meadow > 0.01 && t > W.k + (1 - W.k) * (1 - W.meadow * (form === 'shrub' ? 0.7 : 0.97))) continue;
+				}
 				// (grass and ferns come in drifts of a few tufts)
 				const nT = LOW.has(form) ? (isPhone ? 1 : 3) + Math.floor(t * 3) : 1;
 				for (let q = 0; q < nT; q++) {

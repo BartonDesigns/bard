@@ -36,7 +36,11 @@ export function floeWrapJ(j, m) {
 }
 // the uniforms the sea reads: on (Earth's own seas), the month, and the frame (lat = x - z / z', lon = y + x / w')
 // and the 3D floes' circle (x, z, radius less a floe: inside it the sea need not draw them)
-export const ICE_U = { uIceOn: { value: 0 }, uIceMonth: { value: 0 }, uIceLL: { value: new THREE.Vector4(0, 0, 111000, 111000) }, uIceNear: { value: new THREE.Vector3() } };
+// and the plates' survey: 50 m units east and north of (-180, -90), the east ones measured at the
+// middle of a 4-degree band of latitude (so it holds still as the frame moves): where the frame's
+// origin falls in it (whole, ivec2; part and the units per metre, vec4)
+export const ICE_U = { uIceOn: { value: 0 }, uIceMonth: { value: 0 }, uIceLL: { value: new THREE.Vector4(0, 0, 111000, 111000) }, uIceNear: { value: new THREE.Vector3() }, uIceFdI: { value: new THREE.Vector2() }, uIceFd: { value: new THREE.Vector4() } };
+export const ICE_FD = 50;
 
 // how much of the sea is ice at a latitude this month (0..1)
 export function iceCover(lat, lon, month) {
@@ -51,7 +55,7 @@ export function iceCover(lat, lon, month) {
 }
 // the same in GLSL (iceCover, the hash, the floes' outline: keep them in step)
 export const ICE_GLSL = /* glsl */`
-uniform float uIceOn, uIceMonth; uniform vec4 uIceLL; uniform vec3 uIceNear;
+uniform float uIceOn, uIceMonth; uniform vec4 uIceLL; uniform vec3 uIceNear; uniform ivec2 uIceFdI; uniform vec4 uIceFd;
 float iceCoverG(float lat, float lon, float month){
 	if (lat > 0.0) {
 		float wk = 0.5 + 0.5 * cos(6.2831853 * (month - 2.5) / 12.0), edge = 77.0 - 9.0 * wk;
@@ -108,6 +112,69 @@ vec3 packIce(vec2 p, float aa){
 }
 // the share of the sea the floes cover where they are too small to draw, at a cover
 float packMean(float cov){ float m = 0.7 + 0.8 * cov; return 1.0 - exp(-min(1.0, cov * 1.05) * 477.6 * m * m / (S2_FLOE)); }
+// ---- the pack out past the floes: one field cracked into plates ----
+// (seen from far off the floes are finer than the pixel; what reads at that range is the field
+// they make: white plates of a few hundred metres, the leads between them dark open water or the
+// grey-blue new ice frozen over it, and the fine cracks and ridges through the plates; satellite
+// pictures of the Weddell and the Ross Sea look like this)
+float iceH2(ivec2 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
+vec2 iceSeed(ivec2 c, uint s){ return vec2(iceH2(c, s), iceH2(c, s + 7u)) * 0.8 + 0.1; }
+// cells 2^k survey units wide: the distance to the nearest edge (in cells) and the cell's own number
+float iceVor(ivec2 I, vec2 Fq, int k, uint s, out float id){
+	ivec2 c = I >> k; vec2 f = (vec2(I - (c << k)) + Fq) / float(1 << k);
+	float md = 8.0; ivec2 mg = ivec2(0); vec2 mr = vec2(0.0);
+	for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+		ivec2 g = ivec2(i, j); vec2 r = vec2(g) + iceSeed(c + g, s) - f; float d = dot(r, r);
+		if (d < md) { md = d; mg = g; mr = r; }
+	}
+	float ed = 8.0;
+	for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+		ivec2 g = mg + ivec2(i, j);
+		if (g == mg) continue;
+		vec2 r = vec2(g) + iceSeed(c + g, s) - f;
+		ed = min(ed, dot(0.5 * (mr + r), normalize(r - mr)));
+	}
+	id = iceH2(c + mg, s + 13u);
+	return ed;
+}
+// a line's share of a pixel: e from its middle, w its half-width, px the pixel (m)
+float iceLine(float e, float w, float px){ return (1.0 - smoothstep(w - px, w + px, e)) * min(1.0, w / max(px, 1e-3)); }
+// the field at p (engine metres) for a pixel of hp metres and a cover: its albedo (rgb) and how
+// much of the pixel it hides (a): the plates let a little of the sea's ripple and sky through
+// (thin ice over water), the new ice in the leads more, the open leads all of it
+vec4 iceField(vec2 p, float hp, float cov){
+	vec2 q = uIceFd.xy + vec2(p.x, -p.y) * uIceFd.zw, fq = floor(q);
+	ivec2 I = uIceFdI + ivec2(fq); vec2 Fq = q - fq;
+	float idA, idB, idC;
+	float eA = iceVor(I, Fq, 3, 11u, idA) * ${8 * 50}.0;        // the plates (400 m cells)
+	float eB = iceVor(I, Fq, 1, 23u, idB) * ${2 * 50}.0;        // the cracks through them (100 m)
+	float eC = iceVor(I, Fq, 6, 37u, idC) * ${64 * 50}.0;       // the big leads (3.2 km)
+	// the marginal ice: fewer plates kept the thinner the cover
+	float keep = step(idA, mix(0.2, 1.05, smoothstep(0.15, 0.85, cov)));
+	// the plate: old ice under snow white, the younger bluer and greyer, drifts across it
+	vec3 plate = mix(vec3(0.9, 0.93, 0.96), vec3(0.7, 0.8, 0.88), smoothstep(0.55, 0.95, idA)) * (0.94 + 0.08 * idB);
+	float aP = 0.84 - 0.12 * smoothstep(0.6, 1.0, idA);
+	// the leads between plates (some kilometres-long, between the big floes), each its own width;
+	// open water in some, frozen over grey-blue in others; the cracks and ridges through the plate
+	float wA = mix(1.0, 5.0, fract(idA * 7.31)), wC = mix(3.0, 12.0, fract(idC * 5.17));
+	float leadA = iceLine(eA, wA, hp), leadC = iceLine(eC, wC, hp);
+	float lead = max(leadA, leadC);
+	float frozen = step(0.45, fract((leadC > leadA ? idC : idA) * 13.1));
+	float crack = iceLine(eB, 1.5, hp) * step(0.35, fract(idB * 3.7));
+	float ridge = iceLine(abs(eB - 4.0), 1.2, hp) * step(0.7, fract(idB * 9.3));
+	vec3 col = mix(plate, vec3(0.45, 0.63, 0.78), crack * 0.7);
+	col = mix(col, vec3(0.97, 0.98, 1.0), ridge * 0.7);
+	float a = aP;
+	vec3 nilas = vec3(0.42, 0.58, 0.7);
+	col = mix(col, nilas, lead * frozen); a = mix(a, 0.5, lead * frozen);
+	a *= 1.0 - lead * (1.0 - frozen);
+	a *= keep;
+	// (far off, where the plates are finer than a few pixels: their mean)
+	float fade = smoothstep(200.0, 900.0, hp);
+	vec3 meanC = mix(vec3(0.86, 0.9, 0.94), vec3(0.78, 0.85, 0.9), 0.3);
+	float meanA = 0.8 * mix(0.2, 1.0, smoothstep(0.15, 0.85, cov)) * 0.93;
+	return vec4(mix(col, meanC, fade), mix(a, meanA, fade));
+}
 `.replace('S2_FLOE', (FLOE_S * FLOE_S).toFixed(1));
 
 // how likely icebergs are here (off Greenland, Baffin Bay, Svalbard, and all round Antarctica)
@@ -261,6 +328,11 @@ export function createIce(scene, { height, toXZ, toLL, isPhone = false }) {
 		ICE_U.uIceOn.value = on ? 1 : 0; ICE_U.uIceMonth.value = month;
 		if (!on) ICE_U.uIceNear.value.z = 0;
 		ICE_U.uIceLL.value.set(o.lat, o.lon, 1000 / (o.lat - oz.lat), 1000 / dLon);
+		{
+			const band = 111320 * Math.cos(Math.round(o.lat / 4) * 4 * Math.PI / 180), fu = (o.lon + 180) * band / ICE_FD, fv = (o.lat + 90) * 111320 / ICE_FD;
+			ICE_U.uIceFdI.value.set(Math.floor(fu), Math.floor(fv));
+			ICE_U.uIceFd.value.set(fu - Math.floor(fu), fv - Math.floor(fv), band / (ICE_FD * ICE_U.uIceLL.value.w), 111320 / (ICE_FD * ICE_U.uIceLL.value.z));
+		}
 		if (on && (!at || Math.hypot(x - at[0], z - at[1]) > 180 || at[2] !== epoch || Math.abs(at[3] - month) > 0.25)) { at = [x, z, epoch, month]; layout(x, z, month); }
 		// the aurora on clear dark nights in the oval (some nights brighter: the night's own number)
 		const alat = Math.abs(lat), d = new Date();

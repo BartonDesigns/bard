@@ -34,7 +34,8 @@ function range3km(lat, lon) {
 test('the bake\'s spread table matches the ground the engine draws', () => {
 	for (const [RG, k] of SPREAD.slice(0, 4)) {
 		const P = {}; for (const p of PLANES) P[p] = new Float32Array(NW * NW);
-		P.E.fill(500); P.L.fill(1); P.A.fill(100); P.RG.fill(RG);
+		// (the relief of a land too flat for the hills to be lifted, hillGain: the noise as the bake reads it)
+		P.E.fill(500); P.L.fill(1); P.A.fill(10); P.RG.fill(RG);
 		const H = createGlobeHeight({ N: NW, P, gi0: 1800 - 128, gj0: 500 - 128 });
 		let acc = 0;
 		for (let c = 0; c < 16; c++) {
@@ -46,14 +47,15 @@ test('the bake\'s spread table matches the ground the engine draws', () => {
 			const ka = (m((x, h) => x[0] * h) - ma * mh) / (m((x) => x[0] * x[0]) - ma * ma), kb = (m((x, h) => x[1] * h) - mb * mh) / (m((x) => x[1] * x[1]) - mb * mb);
 			acc += Math.sqrt(m((x, h) => (h - mh - ka * (x[0] - ma) - kb * (x[1] - mb)) ** 2));
 		}
-		const got = acc / 16 / 100;
+		const got = acc / 16 / 10;
 		assert.ok(Math.abs(got - k) / k < 0.2, `ridge ${RG}: spread ${got.toFixed(3)} a metre of relief, the bake assumes ${k}`);
 	}
 });
 
 test('the plains past the Bay rise and fall like the real ones, the mountains stand', () => {
 	// (real ranges across 3 km, from the zoom 8 terrain the bake reads: Paris 39 m, Kansas 39,
-	// Ohio 32, the Harz edge 164, the Alps 680; before the bake the game had 10, 10, 13, 58)
+	// Ohio 32, the Harz edge 164, the Alps 680; before the bake the game had 10, 10, 13, 58; the
+	// plains and uplands are drawn taller than measured since, hillGain in globeheight.js)
 	const at = { paris: [48.85, 2.35, 25, 120], kansas: [38.5, -98, 12, 80], ohio: [40.2, -82.9, 15, 80], germany: [51, 10, 90, 400], alps: [46.5, 8, 500, 2500] };
 	for (const [name, [lat, lon, lo, hi]] of Object.entries(at)) {
 		const r = range3km(lat, lon);

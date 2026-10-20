@@ -108,7 +108,9 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 		// thinner where the land is farmed (its slope as the terrain has it, 1 - the normal's up)
 		const s1 = 1 - 1 / Math.hypot(1, slope);
 		const farmable = Math.max(sst(380, 560, c.RAIN) * sst(3, 9, c.TEMP) * (1 - (1 - sst(650, 850, c.RAIN)) * Math.max(sst(0.3, 0.45, c.TREES), sst(12, 15, c.TEMP) * sst(250, 450, h))), sst(150, 260, c.RAIN) * (1 - sst(300, 600, h)) * sst(12, 16, c.TEMP) * 0.75) * (1 - sst(0.004, 0.012, s1)) * (1 - sst(1200, 2200, h));
-		return { k: sst(0.44, 0.56, c.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * 0.12) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, s1)), air };
+		// (meadow country, as the terrain has it: the woods in hard-edged blocks, on the slopes more than the flat)
+		const meadow = sst(550, 750, c.RAIN) * sst(3, 7, c.TEMP) * (1 - sst(15, 19, c.TEMP));
+		return { k: sst(0.44 + 0.045 * meadow, 0.56 - 0.045 * meadow, c.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * (0.12 + 0.1 * meadow) + sst(0.01, 0.06, s1) * 0.12 * meadow) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, s1)), air, meadow };
 	}
 	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide.
 	// The far tier's grid is three of the near's to a side and shares its middles: in the near
@@ -139,7 +141,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 	function plant(row0, col0, step, salt) {
 		const row = row0 + salt, col = col0 - salt;
 		const r = hash(row, col, 91);
-		if (r > 0.55) return null;
+		if (r > 0.75) return null;
 		const dLat = step / 110996, lat = (row0 + 0.5) * dLat, dLon = step / (111320 * Math.cos(lat * RAD));
 		const la = lat + (hash(row, col, 3) - 0.5) * dLat * 0.9, lo = (col0 + 0.5 + (hash(row, col, 5) - 0.5) * 0.9) * dLon;
 		const p = toXZ(la, lo);
@@ -153,8 +155,9 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 		const e = step * 0.5, slope = Math.hypot(heightAt(p.x + e, p.z) - h, heightAt(p.x, p.z + e) - h) / e;
 		const W = woodAt(la, lo, h, slope, cell);
 		// wooded ground: trees; open ground: a few bushes and the odd tree
-		const open = r > W.k * 0.55;
-		if (open && r > 0.05 + (1 - cell.TREES) * 0.02) return null;
+		// (meadow country's woods closed, beech and spruce crown to crown)
+		const open = r > W.k * (0.55 + 0.2 * W.meadow);
+		if (open && r > (0.05 + (1 - cell.TREES) * 0.02) * (1 - 0.9 * W.meadow)) return null;
 		// (naturalist: out on open prairie and steppe the odd tree stands by water, a
 		// cottonwood or willow along a creek, not scattered over the grass)
 		if (open && cell.TREES < 0.25 && (cell.RV || 0) < 0.2 && hash(row, col, 41) > 0.2) return null;
@@ -245,5 +248,12 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 	}
 	function settle() { while (job && !job.next().done); job = null; }
 	const count = () => FORMS.reduce((a, f) => a + T[f].near[0].count + T[f].far[0].count, 0);
-	return { group, update, shift, settle, count, mix: () => mix };
+	// the wooded mask at the engine's (x, z), for the region's own plants at your feet (region/flora.js):
+	// k how wooded (0..1), meadow how much the open ground between the woods is kept clear
+	function woodsAt(x, z) {
+		const la = F.lat - (z - F.fz) / F.kz, lo = lonRaw(x), cell = data.cellAt(la, lo);
+		const h = heightAt(x, z), e = 5, slope = Math.hypot(heightAt(x + e, z) - h, heightAt(x, z + e) - h) / e;
+		return woodAt(la, lo, h, slope, cell);
+	}
+	return { group, update, shift, settle, count, woodsAt, mix: () => mix };
 }

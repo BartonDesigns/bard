@@ -4,7 +4,8 @@
 // of where you look and dulled with distance, pitched down for a big one and a little different
 // every time. A hound's growl (a rattle deep in the chest), its snarl as it springs, its snuffling
 // at the ground and its claws raking the dirt; the Burnt Giant's groan of wood waking; the
-// clicking of a thing with too many legs.
+// clicking of a thing with too many legs, its crystal feet ticking on stone, and the burst of
+// one shattering.
 
 import { soundBus } from '../world/soundbus.js';
 
@@ -99,6 +100,36 @@ const MAKE = {
 			for (let k = 0; k < 90 && i0 + k < n; k++) d[i0 + k] += (R() * 2 - 1) * Math.exp(-k / 14);
 		}
 		return normalise(resonate(highpass(d, sr, 1200), sr, 3100, 0.004, 1));
+	},
+	// a long wail, an old woman's voice the size of the sky: a moan rising and breaking, and the
+	// wind in it
+	wail: (sr) => throat(sr, {
+		dur: 3.2, f0: 150, jitter: 0.04, breath: 0.6, seed: 61,
+		formants: [[420, 0.03, 1], [850, 0.025, 0.8], [2400, 0.012, 0.35]],
+		env: (t) => Math.min(1, t / 0.25) * (1 - clamp((t - 0.6) / 0.4, 0, 1)) * (0.8 + 0.2 * Math.sin(t * 23)),
+	}),
+	// a crystal leg tapping stone: two hard ticks, ringing a moment
+	click(sr) {
+		const n = Math.floor(sr * 0.3), d = new Float32Array(n), R = rnd(41);
+		for (const t0 of [0, 0.11]) {
+			const i0 = Math.floor(t0 * sr);
+			for (let k = 0; k < 30 && i0 + k < n; k++) d[i0 + k] += (R() * 2 - 1) * Math.exp(-k / 5);
+		}
+		return normalise(sum(n, [resonate(d, sr, 4200, 0.06), 1], [resonate(d, sr, 6900, 0.04), 0.6], [highpass(d.slice(), sr, 3000), 0.5]), 0.7);
+	},
+	// a crystal body bursting: a crack, then a shower of glassy pings falling away
+	shatter(sr) {
+		const n = Math.floor(sr * 1.4), crack = new Float32Array(n), R = rnd(53);
+		for (let i = 0; i < sr * 0.05; i++) crack[i] = (R() * 2 - 1) * Math.exp(-i / (sr * 0.012));
+		const out = sum(n, [highpass(crack, sr, 700), 1]);
+		for (let j = 0; j < 26; j++) {
+			const t0 = Math.pow(R(), 1.6) * 1.0, i0 = Math.floor(t0 * sr), f = 2500 + R() * 6000, g = 0.5 * (1 - t0 * 0.7);
+			const tap = new Float32Array(n);
+			for (let k = 0; k < 20 && i0 + k < n; k++) tap[i0 + k] = (R() * 2 - 1) * Math.exp(-k / 4);
+			const ring = resonate(tap, sr, f, 0.05 + R() * 0.08, 1);
+			for (let i = i0; i < n; i++) out[i] += ring[i] * g * 6;
+		}
+		return normalise(out);
 	},
 };
 // (for the tests)
