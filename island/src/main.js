@@ -605,7 +605,7 @@ export function createIslandWorld() {
 	// what the graphics hold, for the loading screen's black box (loading-screen.js), and the
 	// on-screen frame readout (?perf, ui/perfmeter.js)
 	window.L99GpuMB = () => Math.round(gpuMeter.bytes() / 1048576);
-	const perf = HOOKS.perf = createPerfMeter({ mount: dom.mount, renderer, governor, storage, search: location.search });
+	const perf = HOOKS.perf = createPerfMeter({ mount: dom.mount, renderer, governor, scene, storage, search: location.search });
 	applyQuality();
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
@@ -1082,7 +1082,9 @@ export function createIslandWorld() {
 	};
 	function seaLifeVisibility(W, dt, time, under) {
 		const bay = W.island.village.bay;
-		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
+		// (a phone draws the fish, coral and creatures under the sea only from in or at the water:
+		// from the shore they are some 600k triangles a frame seen through the surface)
+		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (isPhone ? (under ? 40 : 4) : qualityNow().far >= 1 || under ? 40 : 6);
 		W.sealife.update(dt, time, inBay); W.reef.update(inBay, camera.position, under); W.fish.update(dt, time, inBay); W.inverts.update(dt, time, inBay);
 	}
 	function buildWorld(params) { return islandBuild(iw, params); }
@@ -1632,6 +1634,8 @@ if (typeof window !== 'undefined') {
 		// the frame readout in the corner (?perf in the address): Crysis.perf(true|false); and the
 		// loading screen's black box, the loads that went without a goodbye: Crysis.loadTrail()
 		perf: (on) => (on == null ? HOOKS.perf?.on() : HOOKS.perf?.show(on)),
+		// what each of the scene's big parts costs a frame on this device (?perf=probe does the same on arrival)
+		perfProbe: () => (HOOKS.perf?.probe(), 'probing: stand still for a minute'),
 		loadTrail: () => window.L99Loading?.trail?.(),
 		// the high cloud now: Crysis.clouds() reads it; .clouds({ tails: 0.8, veil: 0.9, reach: 1 })
 		// holds any of them (mare's tails, the veil's thickness, how far over the sky); 'auto' lets go
