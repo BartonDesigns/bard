@@ -98,11 +98,14 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	await shot('locked');
 	// fine-tune: nudge the aim up toward the head; it holds there
 	const frames = (n) => page.evaluate((n) => new Promise((r) => { let i = 0; const f = () => (++i >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
+	const tS = Date.now(), step = (n) => console.log('step', n, Math.round((Date.now() - tS) / 1000) + ' s');
+	step('nudge');
 	await frames(3);
 	R.before = await page.evaluate(() => Crysis.combat.focus.info().offset);
 	await page.evaluate(() => { const p = window.L99Island.world().player.state; p.pitch += 0.015; });
 	await frames(4);
 	R.nudged = await page.evaluate(() => Crysis.combat.focus.info().offset);
+	step('release');
 	// release
 	if (profile === 'desktop') await page.keyboard.press('Backquote'); else await page.evaluate(() => Crysis.combat.focus.lockOn?.() ?? Crysis.combat.focus.toggle?.());
 	await wait(300);
@@ -117,10 +120,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 			c.dispatchEvent(ev('pointerdown')); await new Promise((r) => setTimeout(r, hold)); c.dispatchEvent(ev('pointerup'));
 		}, { button, hold });
 		const ads = () => page.evaluate(() => Crysis.viewmodel({}).ads);
+		step('scope');
 		await click(2, 120); await frames(6); R.scopeUp = await ads();
 		await wait(1500); await frames(3); R.scopeStays = await ads();
 		await click(2, 120); await frames(8); R.scopeDown = await ads();
 		await click(2, 900); R.scopeHeld = await ads(); await frames(6); R.scopeAfterHold = await ads();
+		step('scope done');
 	}
 	// rounds to a zone: the view laid on the zone's middle, a shot from the eye
 	const fire = (id, part, dmg, side) => page.evaluate(({ id, part, dmg, side }) => {
@@ -135,8 +140,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 		if (r?.res) r.res.downed = h.H?.state === 'down';
 		return { ...r, react: h.react ? { name: h.body?.M?.S?.act?.name } : null, crippled: h.W?.crippled || null, legs: h.W && { L: +h.W.legs.L.toFixed(2), R: +h.W.legs.R.toFixed(2) }, hp: Math.round(h.H?.hp ?? -1), dead: !!h.dead, clutch: !!h.body?.M?.S?.clutch };
 	}, { id, part, dmg, side });
+	step('fire');
 	R.shoulder = await fire(ids[1], 'shoulder', 8, 'R');
+	step('fired');
 	await wait(350); await shot('shoulder-hit');
+	step('shot');
 	await wait(1500);
 	R.leg = [];
 	for (let i = 0; i < 6; i++) { const r = await fire(ids[1], 'leg', 14, 'L'); R.leg.push(r); if (r?.crippled || r?.dead) break; await wait(900); }
