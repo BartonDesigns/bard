@@ -1,14 +1,15 @@
 // The Lumen Leviathan's body, made here from its sheet (tools/monsters/sheets/lumen-leviathan.jpg):
 // a serpent of pale living crystal. Its head is a dragon's skull cut in facets, a third eye burning
 // in its brow, a crown of long crystal spikes swept back, a jaw of crystal teeth that opens as it
-// strikes. Its body is a tube bent through the points it swims along each frame, armoured in rows
-// of crystal scales leaning back toward the tail and a ridge of spines, its belly lit by blue veins.
+// strikes. Its body is a tube bent through the points it crawls along each frame, armoured in rows
+// of clear chrome scales leaning back toward the tail and a ridge of spines, its belly lit by blue
+// veins that show through them.
 // At the base of its neck a breastplate of crystal; when the fight turns (combat/boss-defs.js,
 // 'Cracked Crest') the crest and the plate go dark and cracked and its eye red, and at the last
 // ('Heartlight') the plate bursts and the heart under it blazes.
 //
 // leviathanBody({ n, radii, phone }) -> { group, update(points, t, { jaw, phase, glow }), eye,
-// heart, plate } where points are the n spine points, head first (combat/bosses.js leviathan()).
+// heart, plate, radius(u) } where points are the n spine points, head first (combat/bosses.js leviathan()).
 
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
@@ -23,11 +24,64 @@ function materials() {
 	return {
 		skull: new THREE.MeshStandardMaterial({ color: 0xbdb3e6, roughness: 0.2, metalness: 0.1, emissive: 0x2e2070, emissiveIntensity: 0.35, flatShading: true }),
 		spike: new THREE.MeshStandardMaterial({ color: 0xb9a9ef, roughness: 0.14, metalness: 0.1, emissive: 0x4a2aa0, emissiveIntensity: 0.55, flatShading: true }),
-		scale: new THREE.MeshStandardMaterial({ color: 0xc4b8f0, roughness: 0.16, metalness: 0.1, emissive: 0x40269a, emissiveIntensity: 0.4, flatShading: true }),
+		scale: chromeMaterial(),
 		tooth: new THREE.MeshStandardMaterial({ color: 0xf4f0ff, roughness: 0.2, metalness: 0.05, emissive: 0x6050a0, emissiveIntensity: 0.3, flatShading: true }),
 		mouth: new THREE.MeshStandardMaterial({ color: 0x2a1850, roughness: 0.6, emissive: 0x6a3ad0, emissiveIntensity: 0.6 }),
 		plate: new THREE.MeshStandardMaterial({ color: 0xcfc6f4, roughness: 0.18, metalness: 0.15, emissive: 0x4a3aa8, emissiveIntensity: 0.45, flatShading: true }),
 	};
+}
+
+// what the chrome reflects: the Deep's dark, a violet glow overhead and bands of coloured light,
+// so every facet catches a different colour as it turns (the world has no environment map)
+let envTex = null;
+function chromeEnvironment() {
+	if (envTex) return envTex;
+	const cv = document.createElement('canvas');
+	cv.width = 512; cv.height = 256;
+	const g = cv.getContext('2d');
+	const sky = g.createLinearGradient(0, 0, 0, 256);
+	sky.addColorStop(0, '#5a4aa0'); sky.addColorStop(0.3, '#241a50'); sky.addColorStop(0.47, '#8a7ae0'); sky.addColorStop(0.5, '#2a2050'); sky.addColorStop(0.55, '#08060f'); sky.addColorStop(1, '#141020');
+	g.fillStyle = sky; g.fillRect(0, 0, 512, 256);
+	// (streaks of spectrum, as light through crystal)
+	const hues = [195, 280, 320, 40, 160, 230, 300, 60, 180, 340];
+	hues.forEach((h, i) => {
+		const x = (i / hues.length) * 512 + 20, y = 40 + (i % 3) * 38, w = 70 + (i % 2) * 60;
+		const s = g.createLinearGradient(x, 0, x + w, 0);
+		s.addColorStop(0, `hsla(${h},95%,65%,0)`); s.addColorStop(0.5, `hsla(${h},95%,70%,0.9)`); s.addColorStop(1, `hsla(${(h + 60) % 360},95%,65%,0)`);
+		g.fillStyle = s; g.fillRect(x, y, w, 14 + (i % 3) * 8);
+	});
+	// (a few hard white glints)
+	g.fillStyle = 'rgba(255,255,255,0.95)';
+	for (let i = 0; i < 6; i++) g.fillRect(40 + i * 83, 22 + (i * 37) % 60, 26, 4);
+	envTex = new THREE.CanvasTexture(cv);
+	envTex.mapping = THREE.EquirectangularReflectionMapping;
+	envTex.colorSpace = THREE.SRGBColorSpace;
+	return envTex;
+}
+
+// the scales: panels of clear chrome. See-through where they face you (the violet body and its
+// veins show under them), mirror at the edges, and a film of rainbow over them that slides as
+// they turn
+function chromeMaterial() {
+	const m = new THREE.MeshPhysicalMaterial({
+		color: 0xe6e2ff, metalness: 1, roughness: 0.06, envMap: chromeEnvironment(), envMapIntensity: 1.6,
+		iridescence: 1, iridescenceIOR: 1.9, iridescenceThicknessRange: [160, 680],
+		emissive: 0x2a1a70, emissiveIntensity: 0.3, transparent: true, premultipliedAlpha: true, flatShading: true,
+	});
+	m.onBeforeCompile = (sh) => {
+		sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `{
+		float edge = 1.0 - abs(dot(normal, normalize(vViewPosition)));
+		vec3 spectrum = 0.5 + 0.5 * cos(6.2832 * (edge * 1.6 + vec3(0.0, 0.33, 0.67)));
+		outgoingLight += spectrum * pow(edge, 1.6) * 0.7;
+		diffuseColor.a = mix(0.22, 0.97, pow(edge, 1.3));
+	}
+	#include <opaque_fragment>`)
+			// (the light it reflects is added whole over what shows through, as on glass: the
+			// alpha only says how much of the body behind is hidden)
+			.replace('#include <premultiplied_alpha_fragment>', '');
+	};
+	m.customProgramCacheKey = () => 'leviathan-chrome';
+	return m;
 }
 
 // the tube's paint: deep violet crystal, the underside lit by veins of blue light that pulse
@@ -295,5 +349,5 @@ export function leviathanBody({ n, radii, phone = false }) {
 		if (bare) burst = true;
 		return { head: H.head, brow: H.brow, plateBurst: fresh ? plate.position : null };
 	}
-	return { group, update, heart, plate, eyeMat: H.eyeMat, brow: H.brow, head: H.head };
+	return { group, update, heart, plate, eyeMat: H.eyeMat, brow: H.brow, head: H.head, radius: rad };
 }
