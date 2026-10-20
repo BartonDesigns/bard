@@ -23,6 +23,10 @@ export const SAVE_MAX = 3_000_000, KEY_MAX = 512_000;
 // how often a changed save goes up while you play
 export const AUTOSAVE_MS = 60_000;
 
+// a player name an account holds (shown in chat and to friends): changed at most once in this
+export const NAME_MS = 30 * 24 * 3600 * 1000;
+export const cleanPlayerName = (n) => (typeof n === 'string' ? n.replace(/[\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24) : '');
+export const playerNameOk = (n) => { const c = cleanPlayerName(n); return c.length >= 2 && /[\p{L}\p{N}]/u.test(c); };
 export const cleanUsername = (u) => (typeof u === 'string' ? u.trim().toLowerCase() : '');
 export const usernameOk = (u) => USERNAME_RE.test(cleanUsername(u));
 export const passwordOk = (p) => typeof p === 'string' && p.length >= PASSWORD_MIN && p.length <= PASSWORD_MAX;
@@ -143,15 +147,15 @@ export function createCloudSave({ url, storage = globalThis.localStorage, reques
 	async function peek() { const r = await call('peek', {}); return r.at ? r : null; }
 	// signed in. Progress already in the cloud waits for your choice (load it, or keep this
 	// device's): until then nothing from this device is saved over it
-	function begin(u, r) { me = { u: cleanUsername(u), token: r.token, rev: r.rev ?? 0, savedAt: r.at || 0, ...(r.at ? { conflict: r.at } : {}) }; lastSig = ''; keep(); }
+	function begin(u, r) { me = { u: cleanUsername(u), token: r.token, rev: r.rev ?? 0, savedAt: r.at || 0, name: r.name || '', nameAt: r.nameAt || 0, ...(r.at ? { conflict: r.at } : {}) }; lastSig = ''; keep(); }
 	const api = {
 		available, info,
 		// a new account, this device's progress its first save. Returns { recovery }.
-		async signup(u, p) {
+		async signup(u, p, name = '') {
 			if (!usernameOk(u)) throw Error('A username is 3 to 20 letters, digits, - or _.');
 			if (!passwordOk(p)) throw Error(`A password is at least ${PASSWORD_MIN} characters.`);
 			const { keys } = collect(storage);
-			const r = await call('signup', { u: cleanUsername(u), p, summary: describe(keys) }, false);
+			const r = await call('signup', { u: cleanUsername(u), p, summary: describe(keys), ...(playerNameOk(name) ? { name: cleanPlayerName(name) } : {}) }, false);
 			begin(u, r);
 			await save({ force: true });
 			return { recovery: r.recovery };
@@ -174,6 +178,16 @@ export function createCloudSave({ url, storage = globalThis.localStorage, reques
 		},
 		async logout() { if (me) { await save().catch(() => {}); await call('logout', {}).catch(() => {}); } me = null; lastSig = ''; keep(); },
 		save, load, peek,
+		// your player name: everyone sees it (chat, friends), changed at most once in 30 days
+		async setName(n) {
+			if (!me) throw Error('Sign in first.');
+			if (!playerNameOk(n)) throw Error('A name is 2 to 24 characters.');
+			const r = await call('name', { name: cleanPlayerName(n) });
+			me.name = r.name; me.nameAt = r.nameAt || 0; keep();
+			return { name: me.name, next: me.nameAt ? me.nameAt + NAME_MS : 0 };
+		},
+		// for the chat hub to check who you are (net/chat.js)
+		credentials: () => (me ? { u: me.u, token: me.token } : null),
 		// keep it saved while you play: every AUTOSAVE_MS when it changed, and as the page hides
 		start() {
 			if (timer) return;
@@ -182,6 +196,6 @@ export function createCloudSave({ url, storage = globalThis.localStorage, reques
 		},
 		stop() { clearInterval(timer); timer = null; },
 	};
-	function info() { return { available: available(), user: me?.u || '', savedAt: me?.savedAt || 0, rev: me?.rev ?? 0, conflict: me?.conflict || 0, error: lastError, busy }; }
+	function info() { return { available: available(), user: me?.u || '', name: me?.name || '', nameNext: me?.nameAt ? me.nameAt + NAME_MS : 0, savedAt: me?.savedAt || 0, rev: me?.rev ?? 0, conflict: me?.conflict || 0, error: lastError, busy }; }
 	return api;
 }

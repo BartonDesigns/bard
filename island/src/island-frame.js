@@ -241,6 +241,7 @@ export function islandFrame(iw, now) {
 	watchTeleport();
 	share.update(dt);
 	multiplayer.update(dt, iw.time);
+	HOOKS.chat?.update(dt);
 	gear.update(dt);
 	// (the skills and magic menu open: the fight holds its breath)
 	if (!window.L99Loading.active()) { if (!magic.menuOpen()) combat.update(dt); magic.update(dt); }

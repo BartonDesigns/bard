@@ -75,6 +75,7 @@ export const GLYPHS = {
 	hook: "<path d='M15 3v10a4 4 0 0 1-8 0v-1.5l-2.5 2'/><circle cx='15' cy='3.5' r='.8'/>",
 	reel: "<circle cx='12' cy='12' r='7.5'/><circle cx='12' cy='12' r='2'/><path d='M13.5 10.5 17 7'/><circle cx='17.5' cy='6.5' r='1.3'/>",
 	talk: "<path d='M20 14.5a2 2 0 0 1-2 2H9.5L5 20.5V6a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2z'/>",
+	chat: "<path d='M15.5 11a1.8 1.8 0 0 1-1.8 1.8H7.5L4 16V5.8A1.8 1.8 0 0 1 5.8 4h7.9a1.8 1.8 0 0 1 1.8 1.8z'/><path d='M18 9h.2A1.8 1.8 0 0 1 20 10.8V20l-3.5-3.2h-5.7a1.8 1.8 0 0 1-1.8-1.8v-.2'/>",
 	help: "<path d='M20 14.5a2 2 0 0 1-2 2H9.5L5 20.5V6a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2z'/><path d='M10.5 8.6a2 2 0 1 1 2.6 1.9c-.6.2-1 .7-1 1.3'/><circle cx='12.1' cy='13.6' r='.35' fill='#000'/>",
 	use: "<circle cx='12' cy='12' r='8.5'/><path d='M12 8v8M8 12h8'/>",
 	medic: "<path d='M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z'/>",
@@ -95,6 +96,7 @@ export const GLYPHS = {
 const RULES = [
 	[(a) => /^Back to the Bard/.test(a), 'back'],
 	[(a) => /^Sky and world settings/.test(a), 'sun'],
+	[(a) => /^Chat$/.test(a), 'chat'],
 	[(a) => /^Auto music/.test(a), 'music'],
 	[(a) => /^All controls/.test(a), 'menu'],
 	[(a) => /^Fly\b/.test(a), 'plane'],
@@ -174,6 +176,7 @@ ${S}{--sl:env(safe-area-inset-left);--sr:env(safe-area-inset-right);--st:calc(en
 ${S} [data-skin]{box-sizing:border-box!important;width:52px!important;height:52px!important;min-width:0!important;min-height:0!important;max-width:none!important;padding:0!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.24)!important;background:rgba(12,16,20,.32)!important;color:rgba(255,255,255,.88)!important;box-shadow:0 1px 8px rgba(0,0,0,.16)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;text-shadow:none!important;opacity:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;transition:scale .08s ease,background-color .12s ease,border-color .12s ease!important;cursor:pointer;}
 ${S} [data-skin][data-glyph]{font-size:0!important;line-height:0!important;color:transparent!important;overflow:hidden!important;}
 ${S} [data-skin][data-glyph]>*{display:none!important;}
+${S} [data-skin][data-glyph]>[data-chat-badge].on{display:block!important;top:1px;right:1px;}
 ${S} [data-skin][data-glyph]::before{content:'';position:absolute;left:50%;top:50%;width:var(--gs);height:var(--gs);margin:calc(var(--gs) / -2) 0 0 calc(var(--gs) / -2);background:rgba(255,255,255,.88);-webkit-mask:var(--glyph) center/contain no-repeat;mask:var(--glyph) center/contain no-repeat;pointer-events:none;}
 ${S} [data-skin][data-glyph]::after{content:none!important;}
 ${S} [data-skin]:active,${S} [data-skin].on{background:rgba(255,255,255,.26)!important;border-color:rgba(255,255,255,.62)!important;scale:.94;}
