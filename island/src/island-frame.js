@@ -1,7 +1,8 @@
 // One frame of the island, moved out of main.js's createIslandWorld: the input, the player, the
 // sky, the weather and the sea, every system's update in its order, then the picture.
 // The rest of what it uses from main.js's createIslandWorld comes from iw at the top, once per
-// call; none of it changes after the world is set up.
+// call; none of it changes after the world is set up. A name not yet there needs a getter in
+// main.js's iw (island/tools/island-world.test.mjs checks).
 // What changes as the game runs it reaches through iw: arrival, building, drive, farNight,
 // frameAvg, indoorK, last, lost, projectMarks, projectRefresh, projectSnapshot, time, visible,
 // world. It sets frameAvg, indoorK, last, projectRefresh, projectSnapshot, time.

@@ -1,7 +1,8 @@
 // Taking a world down before another is built or the island closes, moved out of main.js's
 // createIslandWorld: every system let go and the scene emptied.
 // The rest of what it uses from main.js's createIslandWorld comes from iw at the top, once per
-// call; none of it changes after the world is set up.
+// call; none of it changes after the world is set up. A name not yet there needs a getter in
+// main.js's iw (island/tools/island-world.test.mjs checks).
 // What changes as the game runs it reaches through iw: drive, projectMarks, projectRefresh,
 // projectSnapshot, world. It sets projectRefresh, projectSnapshot, world.
 
