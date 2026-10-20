@@ -320,7 +320,7 @@ export function skinTouch(mount) {
 		const close = g === 'menu' && b.getAttribute('aria-expanded') === 'true' ? 'close' : g;
 		if (close) { if (b.dataset.glyph !== close) b.dataset.glyph = close; } else if (b.hasAttribute('data-glyph')) b.removeAttribute('data-glyph');
 		const size = b.matches('.cb-btn:is([aria-label="Fire"],[aria-label="Draw"],[aria-label="Release"],[aria-label="Nocking"]),.mc-strike,[data-hud="prompt 20"]') ? 'p'
-			: b.matches('.cb-btn[aria-label="Mode"],.l99-quick>*,[data-cv-open]') || /^(back|sun|music|warp|home)$/.test(g) ? 's' : '';
+			: b.matches('.cb-btn[aria-label="Mode"],.l99-quick>*,[data-cv-open]') || /^(back|sun|music|warp|home|chat)$/.test(g) ? 's' : '';
 		if ((b.dataset.size || '') !== size) { if (size) b.dataset.size = size; else delete b.dataset.size; }
 	}
 	const all = () => { for (const b of mount.querySelectorAll('button')) dress(b); };
