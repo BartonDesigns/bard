@@ -73,7 +73,11 @@ float veilAt(vec3 d, out float tex, out vec2 q){
 	// thicker and thinner bands through it, streaked along the wind; far off it settles to its mean
 	vec2 s = vec2(dot(q, wd) * 0.5, dot(q, vec2(-wd.y, wd.x)) * 2.2);
 	float lod = 1.0 / (1.0 + r * 0.12);
+	#ifdef SKY_LITE
+	tex = mix(0.6, big * 1.1 + vn(s * 1.5 + 5.0) * 0.6 - 0.37, lod);
+	#else
 	tex = mix(0.6, big * 1.1 + vn(s * 1.5 + 5.0) * 0.45 + vn(s * vec2(3.0, 6.0) + 9.0) * 0.3 - 0.37, lod);
+	#endif
 	return 1.0 - exp(-uHighCl.y * cov * (0.1 + tex * tex * 1.3) * 0.55 / (y + 0.045));
 }
 `;
@@ -145,12 +149,19 @@ float tails(vec2 u, float time){
 	float y0 = fract(u.y) - 0.5 - bend * back * back - (h21(id + 6.6) - 0.5) * 0.16;
 	// the head: a small ragged tuft; the streak: fanning out and fading as it trails back from it
 	vec2 hq = vec2((lt - head) * 3.4 / 0.32, y0 / 0.15) / big;
+	#ifdef SKY_LITE
+	float tuft = (1.0 - smoothstep(0.1, 1.0, length(hq) + (vn(u * 6.0 + id * 3.7) - 0.5) * 1.4)) * 0.8;
+	#else
 	float rag = fbm3(u * 6.0 + id * 3.7);
 	float tuft = (1.0 - smoothstep(0.1, 1.0, length(hq) + (rag - 0.5) * 1.4)) * (0.55 + 0.45 * vn(u * 15.0));
+	#endif
 	float w = mix(0.05, 0.3, sqrt(back)) * big;
 	float streak = exp(-y0 * y0 / (w * w) * 2.5) * (1.0 - smoothstep(0.45, 1.0, back)) * (1.0 - smoothstep(-0.02, 0.04, lt - head));
 	// fine fibres along it, following its bend, and its threads coming and going
-	float fib = (0.35 + 0.65 * smoothstep(0.2, 0.9, vn(vec2(u.x * 0.35, y0 * 46.0 + lane * 13.0)))) * (0.55 + 0.45 * vn(vec2(u.x * 1.3, y0 * 9.0)));
+	float fib = (0.35 + 0.65 * smoothstep(0.2, 0.9, vn(vec2(u.x * 0.35, y0 * 46.0 + lane * 13.0))));
+	#ifndef SKY_LITE
+	fib *= 0.55 + 0.45 * vn(vec2(u.x * 1.3, y0 * 9.0));
+	#endif
 	return max(tuft * 0.8, streak * fib * (0.9 - back * 0.5));
 }
 `;
@@ -273,8 +284,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
 		uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
-		// (a second, finer row of mare's tails off phones)
-		defines: isPhone ? {} : { SKY_RICH: 1 },
+		// (off phones a second, finer row of mare's tails and the veil's dapples and finer fibres;
+		// phones draw the cheaper sky: about half the noise per pixel of the high cloud)
+		defines: isPhone ? { SKY_LITE: 1 } : { SKY_RICH: 1 },
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
@@ -462,7 +474,11 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 					if (va > 0.002){
 						float thick = smoothstep(0.4, 1.1, vtex) * uHighCl.y;
 						// here and there, a patch of small heaps under it (altocumulus), dark against the glow
+						#ifdef SKY_LITE
+						float dap = 0.0;
+						#else
 						float dap = smoothstep(0.42, 0.75, vn(vq * 24.0) * 0.75 + vn(vq * 61.0) * 0.25) * smoothstep(0.45, 0.66, fbm3(vq * 0.9 - 9.0)) / (1.0 + length(vq - uVeil.xy) * 0.7) * smoothstep(0.0, 0.25, va);
+						#endif
 						// (a low sun leaves its underside in shade: grey-blue, darker where it is thick)
 						float hiSun = smoothstep(0.02, 0.45, uSunDir.y);
 						vec3 vcol = mix(vec3(0.97, 0.97, 1.0), vec3(0.42, 0.46, 0.56), clamp(thick * (1.0 - hiSun * 0.35) + dap * 0.65, 0.0, 1.0));
@@ -967,7 +983,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		shared.uCloudR.value.set(uniforms.uCloudOff.value.x, uniforms.uCloudOff.value.y, uniforms.uCloud.value, shared.cloudReflect === false ? 0 : 1);
 		shared.uCloudR2.value.set(night, shared.uTime.value, uniforms.uGloom.value, uniforms.uCirrus.value);
 		shared.uCloudR3.value.set(uniforms.uCirrusOff.value.x, uniforms.uCirrusOff.value.y, uniforms.uWindDir?.value?.x ?? 1, uniforms.uWindDir?.value?.y ?? 0);
-		shared.uCloudR4.value.set(uniforms.uVeil.value.x, uniforms.uVeil.value.y, uniforms.uHighCl.value.y, uniforms.uHighCl.value.z);
+		// (the veil in the water: not on phones, where every pixel of sea would pay for it)
+		shared.uCloudR4.value.set(uniforms.uVeil.value.x, uniforms.uVeil.value.y, isPhone ? 0 : uniforms.uHighCl.value.y, uniforms.uHighCl.value.z);
 		dome.position.copy(focus);
 		sats.position.copy(focus);
 		sats.userData.step(dt, elev);
