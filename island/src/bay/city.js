@@ -214,6 +214,48 @@ function lichenLeaves(m) {
 // into the one opposite: Josh 2026-10-21), easing in only at the edge of interiors/index.js's
 // build reach, so the glass is never seen to change as you walk
 const DOOR_CLEAR = GFX_PHONE ? '44.0, 56.0' : '70.0, 86.0';
+// the glass of a tower, an office or a shop front with no rooms built behind it: up close a room
+// seen through each pane (its floor, walls and lit ceiling, carried in perspective as you move:
+// interior mapping), flat painted glass only far off (Josh 2026-10-21: "that's what windows
+// should look like from far away")
+const ROOM_FAR = GFX_PHONE ? '70.0, 105.0' : '120.0, 170.0';
+const ROOM_GLSL = `
+float roomK = 0.0, roomL = 1.0;
+// the ray from the eye carried on through the pane at p (metres across the room and up from its
+// floor) into a box dim (wide, high, deep), lit where it lands; V the view ray, A along the wall,
+// N out of it
+vec3 roomBehind(vec3 V, vec3 A, vec3 N, vec2 p, vec3 dim, vec2 id) {
+	vec3 d = vec3(dot(V, A), V.y, max(0.05, -dot(V, N)));
+	float tx = d.x > 0.0 ? (dim.x - p.x) / max(d.x, 1e-4) : p.x / max(-d.x, 1e-4);
+	float ty = d.y > 0.0 ? (dim.y - p.y) / max(d.y, 1e-4) : p.y / max(-d.y, 1e-4);
+	float tz = dim.z / d.z, tm = min(tz, min(tx, ty));
+	vec3 h = vec3(p, 0.0) + d * tm;
+	float r = bh(id + 0.31), r2 = bh(id + 5.17);
+	vec3 wall = r < 0.5 ? vec3(0.84, 0.82, 0.78) : r < 0.8 ? vec3(0.7, 0.72, 0.74) : vec3(0.62, 0.55, 0.47);
+	vec3 c; float L = 1.0;
+	if (tz <= tx && tz <= ty) {
+		// the back wall: a dark run of desks or a counter along it, a door in some
+		c = wall * mix(1.0, 0.45, step(h.y, 0.78) * step(0.3, r2));
+		c = mix(c, vec3(0.3, 0.27, 0.24), step(abs(h.x - dim.x * (0.25 + 0.5 * r2)), 0.45) * step(h.y, 2.1) * step(0.55, r));
+	} else if (tx <= ty) {
+		c = wall * 0.74;
+	} else if (d.y < 0.0) {
+		// the floor: carpet or stone, a desk's shadow on it
+		c = (r2 < 0.6 ? vec3(0.3, 0.31, 0.33) : vec3(0.62, 0.6, 0.56)) * (0.85 + 0.15 * step(0.5, fract(h.x / 1.8 + h.z / 2.6)));
+	} else {
+		// the ceiling: tiles, a light panel every few of them
+		vec2 q = fract(vec2(h.x, h.z) / 2.4);
+		float pnl = step(0.3, q.x) * step(q.x, 0.7) * step(0.3, q.y) * step(q.y, 0.7);
+		c = mix(vec3(0.86, 0.86, 0.84), vec3(1.0, 0.98, 0.94) * 1.9, pnl);
+		L = 1.0 + 0.9 * pnl;
+	}
+	// darker the deeper in (the light comes from the glass), and darker than the street outside
+	// by day, all but the ceiling's lights
+	float k = 1.0 - 0.5 * h.z / dim.z;
+	roomL = L * k;
+	return c * k * 0.6;
+}
+`;
 export function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
@@ -236,7 +278,7 @@ export function buildingMaterial(shared, night, nearBand) {
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
+		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + ROOM_GLSL + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
 			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;${CUT_TEST}`)
@@ -248,6 +290,9 @@ export function buildingMaterial(shared, night, nearBand) {
 				float u = dot(vCW.xz, t), v = vCW.y;
 				float win = 0.0; vec2 cell = vec2(0.0);
 				vec3 glass = vec3(0.2, 0.24, 0.28);
+				// (the rooms seen through the glass: near, on the walls of towers, offices and shops)
+				vec3 rV = normalize(vCW - cameraPosition), rA = vec3(t.x, 0.0, t.y);
+				roomK = (1.0 - step(0.7, vCN.y)) * step(1.5, vKind) * step(vKind, 6.5) * (1.0 - smoothstep(${ROOM_FAR}, length(vCW.xz - cameraPosition.xz)));
 				// the street front (local +z), metres across it from the left edge and up from the ground
 				float front = step(0.5, vLN.z) * (1.0 - roof);
 				float fx = (vLP.x + 0.5) * vCS.x, gy = vLY - 1.2;
@@ -405,11 +450,14 @@ export function buildingMaterial(shared, night, nearBand) {
 					win = step(0.07, f.x) * step(f.y, 0.78);
 					glass = mix(diffuseColor.rgb * 0.55, vec3(0.5, 0.6, 0.7), 0.35) * (0.85 + 0.25 * bh(floor(cell / 3.0)));
 					glassK = win;
+					// (up close, a room three bays wide behind the glass, floor to ceiling)
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 4.8) * 4.8, f.y * 3.9), vec3(4.8, 3.04, 7.0), floor(vec2(u / 4.8, v / 3.9)) + floor(vIP)), roomK);
 					// at the street: a tall glazed lobby in wide bays above a dark stone plinth
 					if (vLY < 6.2) {
 						cell = vec2(u / 3.2, 0.0);
 						win = step(0.06, fract(cell.x)) * step(2.1, vLY) * step(vLY, 5.6);
 						glass = vec3(0.14, 0.16, 0.18); glassK = win * 0.8;
+						if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 9.6) * 9.6, vLY - 1.2), vec3(9.6, 4.4, 12.0), vec2(floor(u / 9.6), 0.5) + floor(vIP)) * vec3(1.0, 0.97, 0.92), roomK);
 						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, step(5.6, vLY));
 					}
 					// on about half the tall ones, a penthouse: the top level's ceilings twice as high,
@@ -440,6 +488,7 @@ export function buildingMaterial(shared, night, nearBand) {
 					vec3 scol = sh > 0.66 ? vec3(0.75, 0.16, 0.12) : sh > 0.33 ? vec3(0.12, 0.3, 0.6) : vec3(0.92, 0.9, 0.86);
 					diffuseColor.rgb = mix(diffuseColor.rgb, scol, sign * 0.9);
 					cell = vec2(u / 4.0, 0.0); win = front; glass = vec3(0.3, 0.38, 0.44); glassK = front * 0.6;
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 8.0) * 8.0, vLY - 1.2), vec3(8.0, 3.8, 9.0), vec2(floor(u / 8.0), 1.5) + floor(vIP)), roomK);
 				} else if (vKind > 6.5) {
 					// plain: fields, plazas, yards
 					win = 0.0;
@@ -449,13 +498,17 @@ export function buildingMaterial(shared, night, nearBand) {
 					win = step(0.35, f.y) * step(f.y, 0.85) * step(0.04, fract(u / 1.5));
 					glass = vec3(0.28, 0.36, 0.42);
 					glassK = win * 0.7;
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 6.0) * 6.0, (f.y - 0.08) * 4.1), vec3(6.0, 3.2, 7.0), floor(vec2(u / 6.0, v / 4.1)) + floor(vIP)), roomK);
 					// a dark stone plinth at the ground
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.29, 0.28), step(vLY, 1.9) * (1.0 - roof));
 				}
 				// a building with its rooms built: its front windows (and a bay's) open onto them, the
 				// glass clearing as you come (all of it painted at the far edge of the band, all of it
 				// clear at the near), so the rooms are never seen to appear: they come through the glass
-				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) {
+				// (a tower: the one you are at, its curtain wall open all round onto the lobby and the
+				// floor over it that towers.js builds; the flat painted glass only for the far ones)
+				float towerK = step(1.5, K) * step(K, 2.5);
+				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5 || towerK > 0.5) && K < 10.5 && (front > 0.5 || K > 9.5 || towerK > 0.5)) {
 					float openK = vDoorK * (1.0 - smoothstep(${DOOR_CLEAR}, length(vCW.xz - cameraPosition.xz)));
 					if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < openK) discard;
 				}
@@ -529,8 +582,9 @@ export function buildingMaterial(shared, night, nearBand) {
 				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
 				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
+				winGlow *= mix(1.0, roomL, roomK);
 				// a tower's lobby is lit all night, warm, its tall glass bright at the street
-				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5);
+				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5) * mix(1.0, roomL * 0.45, roomK);
 				// a lit crown on some of the tall towers (one in five over 110 m): uplights at the foot of
 				// the top floors washing up the facade, each its own scallop, brightest low, all night
 				if (vKind > 1.5 && vKind < 2.5 && vCS.y > 110.0 && roof < 0.5 && bh(floor(vIP * 0.37) + 3.1) < 0.2) {
@@ -591,7 +645,7 @@ export function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding17';
+	m.customProgramCacheKey = () => 'baybuilding18';
 	return m;
 }
 

@@ -309,7 +309,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				towerKey = tk; towerLot = null;
 				if (tk) {
 					towerLot = [...tall].find((o) => Math.round(o.x) + ':' + Math.round(o.z) === tk) || null;
-					if (towerLot) { let g0 = -1e9; const F = frame(towerLot); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) g0 = Math.max(g0, bay.heightAt(...F.w(sx * towerLot.w / 2, sz * towerLot.d / 2))); city.setDoor(towerLot, [0, g0 + 0.25 - towerLot.y, 2.8]); }
+					if (towerLot) { let g0 = -1e9; const F = frame(towerLot); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) g0 = Math.max(g0, bay.heightAt(...F.w(sx * towerLot.w / 2, sz * towerLot.d / 2))); city.setDoor(towerLot, towers.door?.() || [0, g0 + 0.25 - towerLot.y, 2.8]); }
 				}
 			}
 		}
