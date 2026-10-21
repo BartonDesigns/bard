@@ -28,7 +28,7 @@ import { inClearing, clearingVersion } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { houseEra, exteriorLook, seedAt } from './decor.js';
-import { createProps, rooftopUnit, rooftopUnitFar, nearCopies } from './lotkit.js';
+import { createProps, rooftopUnit, rooftopUnitFar } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
@@ -41,7 +41,7 @@ import { roadDelta, gradeVersion } from './berms.js';         // the roads' grad
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 import { GFX_PHONE } from '../world/device.js';
 import { orderByReach } from '../world/shadowreach.js';      // the sun's shadows from what can reach them
-import { orderBySector, chunkStore, chunkedMesh } from '../world/instancechunks.js';      // drawn a sector at a time, what is out of view left out
+import { orderBySector, sectorOf, chunkStore, chunkedMesh } from '../world/instancechunks.js';      // drawn a sector at a time, what is out of view left out
 import { cityBlocks } from './city-blocks.js';
 import { cityGrounds, cityDecorate, cityApart } from './city-dressing.js';
 import { plantingBed, BED_LEN } from './lantana.js';
@@ -786,7 +786,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// clothesline in some back yards (see decorate)
 	// where the rooftop units' near version dissolves into the far one (m: a fan's shroud is under
 	// a pixel high past it)
-	const AC_LOD = PHONE ? [180, 230] : [260, 310];
+	const AC_LOD = PHONE ? [180, 230] : [260, 310], AC_CAP = 12000, AC_NEAR = PHONE ? 1500 : 3000;
 	const kit = (() => {
 		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
@@ -819,13 +819,20 @@ export function createCity(shared, scene, bay, real = null) {
 		const glassM = withRise(new THREE.MeshStandardMaterial({ color: 0xa9c4cf, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false }), rise, 'kitrise');
 		const acM = M({ roughness: 0.55, metalness: 0.35 }), acNearM = M({ roughness: 0.55, metalness: 0.35 });
 		addLodFade(acM, 'uniform', [AC_LOD[0], AC_LOD[1], NONE_OUT[0], NONE_OUT[1]]); addLodFade(acNearM, 'uniform', [NONE_IN[0], NONE_IN[1], AC_LOD[0], AC_LOD[1]]);
-		const acFar = mkK(ac, acM, 12000), acNearI = mkK(acNear, acNearM, PHONE ? 1500 : 3000);
+		const acFar = mkK(ac, acM, chunkStore(AC_CAP, 512)), acNearI = mkK(acNear, acNearM, chunkStore(AC_NEAR, 256));
 		// (the far units throw no shadow: every one the sun's box can reach is in the near copy;
 		// and the near copy is the far one's, so what the far one shows, a unit taken down with
 		// its roof included, it shows: structures/damage.js edits only the far)
 		acFar.castShadow = false; acNearI.userData.copyOf = acFar;
+		// (both drawn in chunks a sector at a time, as the buildings are, out of view left out: the far
+		// set holds every unit out to 700 m all round you, world/instancechunks.js. Its store stays
+		// under the 20000 instances damage.js takes for the buildings' own)
+		chunk(acFar, 512, 'city-ac', true); chunk(acNearI, 256, 'city-ac-near', true);
+		// (how far a unit reaches from its foot, at its own size: its chunk's bounds)
+		let acR = 0;
+		for (const g of [ac, acNear]) { const P = g.attributes.position.array; for (let i = 0; i < P.length; i += 3) acR = Math.max(acR, Math.hypot(P[i], P[i + 2]), P[i + 1]); }
 		return {
-			ac: acFar, acNear: acNearI,
+			ac: acFar, acNear: acNearI, acR,
 			sunF: mkK(sunF, M({ roughness: 0.5 }), 3000), sunG: mkK(sunG, glassM, 3000),
 			line: mkK(lineG, M({ roughness: 0.9, side: THREE.DoubleSide }), 3000),
 		};
@@ -1033,25 +1040,43 @@ export function createCity(shared, scene, bay, real = null) {
 	function kitPut(put, k, e) { if (kit2.has(k)) (put.props[k] || (put.props[k] = [])).push(e); }
 	function uploadKit(put) {
 		const [acs, suns, lines] = put || [[], [], []];
+		// (the units a sector at a time round where the city was laid out, the first AC_CAP of them)
+		acAt = lastAt;
+		const U = acs.slice(0, AC_CAP).map(([x, y, z, a, s]) => ({ x, y, z, a, s })), O = orderBySector(U, acAt[0], acAt[1], (u) => u.s * kit.acR), C = chunked.get(kit.ac);
+		C.begin(acAt[0], acAt[1]);
+		for (let i = 0; i < U.length; i++) {
+			const { x, y, z, a, s } = U[i], k = C.put(O.sec[i], O.band[i], x, z, s * kit.acR + 0.5, y - SUNK, y + s * kit.acR + 0.5);
+			if (k >= 0) { q.setFromAxisAngle(Y, -a); kit.ac.setMatrixAt(k, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
+		}
+		kit.ac.instanceMatrix.needsUpdate = true;
+		C.end();
 		let n = 0;
-		for (const [x, y, z, a, s] of acs) { if (n >= kit.ac.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.ac.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
-		kit.ac.count = n; n = 0;
 		for (const [x, y, z, a, w, h, d] of suns) { if (n >= kit.sunF.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); m4.compose(p.set(x, y, z), q, sc.set(w, h, d)); kit.sunF.setMatrixAt(n, m4); m4.compose(p.set(x, y + 0.33 * h, z), q, sc.set(w - 0.16, h * 0.67 - 0.14, d - 0.16)); kit.sunG.setMatrixAt(n++, m4); }      // (the glass well inside its bars, or the two flicker from afar)
 		kit.sunF.count = kit.sunG.count = n; n = 0;
 		for (const [x, y, z, a, s] of lines) { if (n >= kit.line.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.line.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
 		kit.line.count = n;
-		for (const im of [kit.ac, kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+		for (const im of [kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
 		placeAC(acX, acZ);
 	}
 	// the rooftop units near you, copied from the far set every 40 m you go and whenever the far
 	// set changes (a new one laid out, a unit taken down or put back)
-	let acX = 1e9, acZ = 1e9, acV = -1;
+	let acX = 1e9, acZ = 1e9, acV = -1, acAt = [0, 0];
+	// (written into the near copy's chunks by the sector each stands in round where the far set was laid
+	// out, acAt, in the far set's own order)
 	function placeAC(x, z) {
 		acX = x; acZ = z; acV = kit.ac.instanceMatrix.version;
-		const N = kit.acNear;
-		N.count = nearCopies(kit.ac.instanceMatrix.array, kit.ac.count, N.instanceMatrix.array, N.instanceMatrix.count, x, z, AC_LOD[1] + 45);
-		N.instanceMatrix.needsUpdate = true;
-		N.computeBoundingSphere();
+		const A = kit.ac.instanceMatrix.array, n = kit.ac.count, R2 = (AC_LOD[1] + 45) ** 2, C = chunked.get(kit.acNear), B = kit.acNear.instanceMatrix.array;
+		C.begin(acAt[0], acAt[1]);
+		for (let i = 0; i < n; i++) {
+			const e = i * 16, ux = A[e + 12], uz = A[e + 14];
+			// (not one taken down with its roof, nor a gap between the far set's chunks: nothing to draw)
+			if ((ux - x) ** 2 + (uz - z) ** 2 > R2 || (!A[e] && !A[e + 1] && !A[e + 2])) continue;
+			const s = Math.hypot(A[e], A[e + 1], A[e + 2]), k = C.put(sectorOf(ux, uz, acAt[0], acAt[1], s * kit.acR), 0, ux, uz, s * kit.acR + 0.5, A[e + 13] - SUNK, A[e + 13] + s * kit.acR + 0.5);
+			if (k < 0) break;
+			for (let j = 0; j < 16; j++) B[k * 16 + j] = A[e + j];
+		}
+		kit.acNear.instanceMatrix.needsUpdate = true;
+		C.end();
 	}
 	// Neighbouring buildings from the map often overlap by a metre or so (their outlines
 	// are fitted as boxes). Where they do, their fronts run a few centimetres apart through
