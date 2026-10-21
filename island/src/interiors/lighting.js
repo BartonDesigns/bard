@@ -27,6 +27,7 @@ import * as THREE from 'three';
 import { qualityNow } from '../world/governor.js';
 import { bake, tessellate, tessellatedCount, findPieces, pieceFixture, quadBoxes, QUALITY, E_RANGE } from './lightbake.js';
 import { GFX_PHONE } from '../world/device.js';
+import { buildSlice, viewDistance } from '../world/buildslice.js';
 
 const S = {
 	isPhone: GFX_PHONE,
@@ -90,10 +91,14 @@ function step(renderer, scene, camera, dt, ease) {
 	const t0 = performance.now();
 	// (the nearest building first, unless one is under way)
 	if (camera && S.queue.length > 1 && !S.queue[0].gen) {
-		const d = (H) => H.root.getWorldPosition(tmpP).distanceToSquared(camera.position);
-		S.queue.sort((a, b) => d(a) - d(b));
+		// (of those near alike, the ones you are looking at)
+		camera.getWorldDirection(tmpF);
+		const d = (H) => { H.root.getWorldPosition(tmpP); return viewDistance(tmpP.distanceTo(camera.position), tmpP.x, tmpP.z, camera.position, tmpF); };
+		for (const H of S.queue) H.qd = d(H);
+		S.queue.sort((a, b) => a.qd - b.qd);
 	}
-	while (S.queue.length && performance.now() - t0 < S.budget) {
+	const slice = buildSlice(dt, S.budget);
+	while (S.queue.length && performance.now() - t0 < slice) {
 		const H = S.queue[0];
 		if (!H.gen) { H.state = 'baking'; H.gen = job(H); }
 		let r;
@@ -227,7 +232,7 @@ function blobMesh() {
 	mesh.count = 0; mesh.frustumCulled = false; mesh.name = 'lighting:blobs';
 	return mesh;
 }
-const tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3();
+const tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3(), tmpF = new THREE.Vector3();
 function blobs(camera) {
 	const B = S.blobs;
 	if (!B) return;
