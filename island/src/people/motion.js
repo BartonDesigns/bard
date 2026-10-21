@@ -107,6 +107,8 @@ export const TRIGGER_OFF = [0.12, 0.06, 0.04], TRIGGER_ON = [0.55, 1.05, 0.6];
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _e = new THREE.Euler();
 const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
+// (where a body's step began this frame; constrain reads it before the next body's update)
+const _from = new THREE.Vector3();
 const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
 export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}) {
@@ -269,8 +271,11 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		S.want.travelT -= dt;
 		const offWant = S.want.travel != null && S.want.travelT > 0 ? clamp(wrap(S.want.travel - heading), -1.9, 1.9) : 0;
 		const travel = S.travel = heading + S.strafe.to(offWant, dt);
+		// (constrain(to, from, dt): where the step would end, and where it began, to keep it
+		// off walls: people/walls.js)
+		_from.copy(S.pos);
 		S.pos.x += Math.sin(travel) * speed * dt; S.pos.z += Math.cos(travel) * speed * dt;
-		constrain?.(S.pos, dt);
+		constrain?.(S.pos, _from, dt);
 		const run = clamp(S.run.to(S.want.run, dt), 0, 1);
 		// low (0..1): moving crouched, as a fighter does between cover: knees well bent, the body
 		// folded forward over them, shorter quicker steps that barely leave the ground

@@ -385,8 +385,10 @@ export function createDog({ seed = 1, breed = null, isPhone = false } = {}) {
 	}
 
 	// ---------- getting about ----------
-	// toward the wanted heading and speed, turning at a rate; never onto water or off the land
-	function move(dt, ground) {
+	// toward the wanted heading and speed, turning at a rate; never onto water or off the land, and
+	// (walls(pos, from, footY), people/walls.js) never through a wall or a fence
+	const _at = { x: 0, z: 0 }, _was = { x: 0, z: 0 };
+	function move(dt, ground, walls = null) {
 		const dh = wrap(st.want.heading - st.h), turn = st.want.turn * dt;
 		st.h += clamp(dh, -turn, turn);
 		const target = st.want.speed * (Math.abs(dh) > 1.6 ? 0.3 : 1);
@@ -395,7 +397,9 @@ export function createDog({ seed = 1, breed = null, isPhone = false } = {}) {
 		const fx = Math.sin(st.h), fz = Math.cos(st.h), step = st.speed * dt;
 		const ahead = ground ? ground(st.x + fx * Math.max(0.8, b.h * 2), st.z + fz * Math.max(0.8, b.h * 2)) : 0;
 		if (ahead === null || ahead === undefined) { st.speed = 0; return false; }
+		_was.x = st.x; _was.z = st.z;
 		st.x += fx * step; st.z += fz * step;
+		if (walls) { _at.x = st.x; _at.z = st.z; walls(_at, _was, st.y); st.x = _at.x; st.z = _at.z; }
 		const y = ground ? ground(st.x, st.z) : 0;
 		if (Number.isFinite(y)) st.y += (y - st.y) * Math.min(1, dt * 10);
 		return true;
@@ -420,7 +424,7 @@ export function createDog({ seed = 1, breed = null, isPhone = false } = {}) {
 		}
 		setPose(L.phase === 'sit' ? 'sit' : 'stand');
 		st.want.speed = L.phase === 'walk' ? pace(0.55) : 0; st.want.turn = 1.6;
-		if (!move(dt, ctx.ground)) { st.want.heading = st.h + Math.PI * (0.6 + Math.random() * 0.8); L.phase = 'stand'; L.t = 0; L.next = 1; }
+		if (!move(dt, ctx.ground, ctx.walls)) { st.want.heading = st.h + Math.PI * (0.6 + Math.random() * 0.8); L.phase = 'stand'; L.t = 0; L.next = 1; }
 	}
 	// someone near: it stops and watches them, ears up; too fast at it and it shies away
 	function wary(dt, ctx, you, rushing) {
@@ -435,7 +439,7 @@ export function createDog({ seed = 1, breed = null, isPhone = false } = {}) {
 			st.want.heading = toward(you.x, you.z); st.want.speed = 0; st.want.turn = 3;
 			st.look = 0;
 		}
-		move(dt, ctx.ground);
+		move(dt, ctx.ground, ctx.walls);
 	}
 	// following: a few metres behind, trotting to catch up, sitting when you stop
 	const F = { still: 0, bark: 8 };
@@ -447,7 +451,7 @@ export function createDog({ seed = 1, breed = null, isPhone = false } = {}) {
 		else { st.want.speed *= 0.9; F.still += dt; }
 		st.want.turn = 3.5;
 		setPose(F.still > 4 ? 'sit' : 'stand');
-		if (!move(dt, ctx.ground)) F.still += dt;
+		if (!move(dt, ctx.ground, ctx.walls)) F.still += dt;
 		return d;
 	}
 	// home again: the dash to its person, jumping up at them, a spin or two, then sitting
@@ -461,11 +465,11 @@ export function createDog({ seed = 1, breed = null, isPhone = false } = {}) {
 		if (R.phase === 'dash') {
 			setPose('stand');
 			st.want.heading = toward(owner.x, owner.z); st.want.speed = d > reach ? pace(d > 3 ? 6 : 2.5) : 0; st.want.turn = 7;
-			move(dt, ctx.ground);
+			move(dt, ctx.ground, ctx.walls);
 			if (d <= reach + 0.05 || R.t > 12) { R.phase = 'jump'; R.t = 0; }
 		} else if (R.phase === 'jump') {
 			setPose('jump'); st.want.speed = 0; st.want.heading = toward(owner.x, owner.z);
-			move(dt, ctx.ground);
+			move(dt, ctx.ground, ctx.walls);
 			if (R.yip <= 0) { R.yip = 0.45 + Math.random() * 0.25; say('yip'); st.barkT = 0.15; }
 			if (R.t > 2.6) { R.phase = 'spin'; R.t = 0; say('yip'); }
 		} else if (R.phase === 'spin') {
@@ -473,7 +477,7 @@ export function createDog({ seed = 1, breed = null, isPhone = false } = {}) {
 			if (R.t > 1.4) { R.phase = 'settle'; R.t = 0; }
 		} else {
 			setPose(R.t > 1.2 ? 'sit' : 'stand'); st.want.heading = toward(owner.x, owner.z); st.want.speed = d > reach + 0.4 ? pace(1.2) : 0; st.want.turn = 4;
-			move(dt, ctx.ground);
+			move(dt, ctx.ground, ctx.walls);
 			if (R.yip <= 0) { R.yip = 2.5 + Math.random() * 3; say('yip'); st.barkT = 0.15; }
 		}
 		return R.phase;

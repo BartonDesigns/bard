@@ -23,6 +23,7 @@
 // (cataclysm(true)) nobody comes: the work waits, and resumes once it is over.
 
 import * as THREE from 'three';
+import { wallKeeper } from '../people/walls.js';
 import { bid, frameOf, onFace, faceLen, FACES, hash } from './ids.js';
 import { isBuilding } from './overlap.js';
 import { parts, cloth, clothMaterial, kitMesh, kitShared, COMPANIES, COLORS as C, rect } from './crewkit.js';
@@ -64,7 +65,7 @@ export function createRebuild(ctx) {
 	const lite = () => isPhone || tierNow() >= 2;
 	const crew = createCrew(group, isPhone ? 16 : 48);
 	// (the nearest of them real people you can talk to: crewpeople.js)
-	const folk = createCrewPeople(group, { isPhone });
+	const folk = createCrewPeople(group, { isPhone, walls: wallKeeper(ctx.world) });
 	const glow = createGlow(group, isPhone ? 48 : 128);
 	// two real lights for the nearest site's light towers at night (none on a phone)
 	// (floodlights: spot lights aimed down at the work, so the light falls where the lamps point)

@@ -71,6 +71,8 @@ const npcPart = () => { const u = Math.random(); return u < 0.08 ? 'head' : u < 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+// (where a body without legs of its own stood before this frame's step: ctx.keepOut sweeps from it)
+const _was = new THREE.Vector3();
 // your guild's people fight what is within this of you, and catch you up past this
 const ALLY_LEASH = 70, ALLY_CATCH = 60;
 
@@ -172,7 +174,7 @@ export function createSquads(ctx) {
 			const P = buildPerson(A, d), g = gun !== undefined ? gun : F.gun;
 			if (F.masked) maskOn(P, F.colors?.[0] || '#ff7a2a');
 			// (over a fence or up a ledge, combat/npc-climb.js: the climb's own floor while it lasts)
-			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos) => b.climbY == null && ctx.keepOut?.(pos) }), climbY: null, fid, key, used: true, hand: g ? npcHand(group, g, 2 + (seed % 4), seed % 3) : null };
+			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos, from) => b.climbY == null && ctx.keepOut?.(pos, from) }), climbY: null, fid, key, used: true, hand: g ? npcHand(group, g, 2 + (seed % 4), seed % 3) : null };
 			group.add(P.root);
 			pools.person.push(b);
 			res(b);
@@ -635,10 +637,10 @@ export function createSquads(ctx) {
 		const ax = h.pos.x - eye.x, az = h.pos.z - eye.z, l = Math.hypot(ax, az) || 1;
 		h.target = null; h.los = false;
 		if (M) { M.want.heading = Math.atan2(ax / l, az / l); M.want.speed = h.B.speed * 1.2 * (hx.slowK || 1); M.want.run = 1; }
-		else if (h.kind === 'crawler') { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * h.B.speed * dt; h.pos.z += az / l * h.B.speed * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); h.mesh.position.copy(h.pos); h.mesh.rotation.set(0, h.yaw, 0); }
+		else if (h.kind === 'crawler') { h.yaw = Math.atan2(ax / l, az / l); _was.copy(h.pos); h.pos.x += ax / l * h.B.speed * dt; h.pos.z += az / l * h.B.speed * dt; ctx.keepOut?.(h.pos, _was); h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); h.mesh.position.copy(h.pos); h.mesh.rotation.set(0, h.yaw, 0); }
 		else if (h.cr) {
 			const sp = hx.hold > 0 ? 0 : h.Sp.run * (hx.slowK || 1);
-			if (sp) { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * sp * dt; h.pos.z += az / l * sp * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); }
+			if (sp) { h.yaw = Math.atan2(ax / l, az / l); _was.copy(h.pos); h.pos.x += ax / l * sp * dt; h.pos.z += az / l * sp * dt; ctx.keepOut?.(h.pos, _was); h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); }
 			h.cr.root.position.copy(h.pos); h.cr.root.position.y += flyAlt(h, dt, null); h.cr.root.rotation.set(0, h.yaw, 0);
 			h.cr.motion.update(dt, { speed: sp });
 		}
@@ -812,8 +814,11 @@ export function createSquads(ctx) {
 		const fx = -Math.sin(yaw), fz = -Math.cos(yaw), side = (k % 2 ? 1 : -1) * (1.5 + Math.floor(k / 2) * 1.3), back = 2.4 + Math.floor(k / 2) * 1.4;
 		const gx = eye.x - fx * back + fz * side, gz = eye.z - fz * back - fx * side;
 		if (d > ALLY_CATCH && !h.target) {
-			const gy = ctx.ground(gx, gz, eye.y);
-			M.place(gx, gy, gz, Math.atan2(fx, fz)); h.pos.set(gx, gy, gz); h.goal = null; h.climb = null; h.body.climbY = null;
+			// (set down where there is room: from where you stand out to their place, as far as the
+			// walls allow, never inside a wall or the far side of one)
+			const at = ctx.clearSpot ? ctx.clearSpot(eye, { x: gx, z: gz }, eye.y - 1.68) : { x: gx, z: gz };
+			const gy = ctx.ground(at.x, at.z, eye.y);
+			M.place(at.x, gy, at.z, Math.atan2(fx, fz)); h.pos.set(at.x, gy, at.z); h.goal = null; h.climb = null; h.body.climbY = null;
 			return;
 		}
 		const gd = Math.hypot(gx - h.pos.x, gz - h.pos.z);
@@ -904,7 +909,9 @@ export function createSquads(ctx) {
 			speed = 1.2;
 		}
 		speed *= h.T.hex?.slowK || 1;
+		_was.copy(h.pos);
 		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
+		ctx.keepOut?.(h.pos, _was);
 		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
 		const rear = h.leap > 0.35 ? Math.sin((0.9 - h.leap) / 0.55 * Math.PI / 2) * 0.5 : 0;
 		m.position.copy(h.pos); m.rotation.set(-rear, h.yaw, 0);
@@ -1003,8 +1010,9 @@ export function createSquads(ctx) {
 		// (turns as a body turns, not in a snap: the heavier slower)
 		const turn = (h.alert ? 3.2 : 1.6) / Math.max(0.7, S.height / 1.8);
 		h.yaw += Math.max(-turn * dt, Math.min(turn * dt, wrapA(want - h.yaw)));
+		_was.copy(h.pos);
 		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
-		ctx.keepOut?.(h.pos);
+		ctx.keepOut?.(h.pos, _was);
 		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
 		c.root.position.copy(h.pos); c.root.position.y += flyAlt(h, dt, at);
 		c.root.rotation.set(0, h.yaw, 0);

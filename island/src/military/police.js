@@ -28,6 +28,7 @@ import { policePlan } from './rules.js';
 import { sirenSound } from './sound.js';
 import { blockSlots, inCone, offscreenPace } from '../law/tactics.js';
 import { searchLoop } from '../law/ladder.js';
+import { noseInto } from '../vehicles/wall-guard.js';
 
 const NAVY = new THREE.Color('#141a2c'), CHAR = new THREE.Color('#25282e');
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _y = new THREE.Vector3(0, 1, 0), _o = new THREE.Matrix4(), _t = new THREE.Matrix4();
@@ -211,6 +212,13 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 				}
 				const left = c.route.length - c.s;
 				const v = left < 40 ? Math.max(3, left * 0.25) : offscreenPace(dEye, 18);
+				// (never into a building while you can see it: pulled up at its wall instead, and the
+				// officers out from there; looked ahead every metre and a half, vehicles/wall-guard.js)
+				if (Math.abs(c.s - (c.wallS ?? -9)) > 1.5 && dEye < 260 && visible(c.pos.x, c.pos.z, 260)) {
+					const a = along(c.route, c.s + v * dt);
+					if (noseInto(w, a.x, a.z, Math.atan2(a.dx, a.dz), c.S.L / 2)) { arrive(c); continue; }
+					c.wallS = c.s;
+				}
 				c.s += v * dt;
 				const q = along(c.route, c.s);
 				c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z);
@@ -230,8 +238,17 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 				if ((all && c.t > 1.5) || c.t > 25 || (c.t > 6 && !visible(c.pos.x, c.pos.z))) depart(c);
 			} else {
 				const v = offscreenPace(dEye, 14);
-				c.s -= v * dt; const q = along(c.route, Math.max(0, c.s));
-				c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z); c.yaw = Math.atan2(-q.dx, -q.dz); c.spin += v * dt / c.S.wr;
+				// (driving off: the same, held at a wall in sight until you look away)
+				let go = true;
+				if (Math.abs(c.s - (c.wallS ?? -9)) > 1.5 && dEye < 260 && visible(c.pos.x, c.pos.z, 260)) {
+					const a = along(c.route, Math.max(0, c.s - v * dt));
+					if (noseInto(w, a.x, a.z, Math.atan2(-a.dx, -a.dz), c.S.L / 2)) go = false;
+					else c.wallS = c.s;
+				}
+				if (go) {
+					c.s -= v * dt; const q = along(c.route, Math.max(0, c.s));
+					c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z); c.yaw = Math.atan2(-q.dx, -q.dz); c.spin += v * dt / c.S.wr;
+				}
 				const hidden = !visible(c.pos.x, c.pos.z, 260);
 				if (((c.s <= 0 || c.t > 60) && hidden) || dEye > 420) drop(c);
 			}
