@@ -178,6 +178,11 @@
 #bard-loading.bl-open .bl-content{flex:1;min-height:0;margin-top:0;padding-top:0;max-width:none;display:flex;align-items:flex-end;gap:5vw}
 #bard-loading.bl-open .bl-hero{flex:1;min-width:0;max-width:620px}#bard-loading.bl-open .bl-chips{display:none}
 #bard-loading.bl-open .bl-panel{width:min(440px,46vw);align-self:stretch;margin-left:auto}
+#bard-loading .bl-home{display:flex;align-items:center;gap:12px;margin:14px 0 0;max-width:460px;padding:10px 6px 10px 14px;border:1px solid #e8d19e40;border-radius:12px;background:#09151cb3;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);font-size:13px;line-height:1.4;color:#d6dfde}
+#bard-loading .bl-home svg{flex:none;color:#e8d19e}#bard-loading .bl-home b{font-weight:600;color:#f5f1e7}#bard-loading .bl-home span{flex:1;min-width:0}
+#bard-loading .bl-home button{flex:none;width:44px;height:44px;background:none;border:0;border-radius:50%;color:#d6dfde;font-size:15px}
+#bard-loading.bl-open .bl-home{display:none}
+@media(max-width:650px){#bard-loading.bl-hometip .bl-content{padding-top:12vh}}@media(max-height:600px){#bard-loading.bl-hometip .bl-tip{display:none}#bard-loading.bl-hometip .bl-content{padding-top:2vh}}
 @keyframes bl-rise{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:none}}
 @keyframes bl-search{0%{transform:translateX(-110%)}100%{transform:translateX(520%)}}
 #bard-loading .bl-art img[data-scene=horizon]{filter:saturate(.85) contrast(1.05) brightness(.9)}
@@ -201,6 +206,7 @@
 		// a look at your character, what you carry and your account while the world builds:
 		// the tabs come from the world's engine (island ui/loading-tabs.js) once it is running
 		const chips = element('div', 'bl-chips', '', hero);
+		const home = element('div', 'bl-home', '', hero); home.hidden = true;
 		const panel = element('section', 'bl-panel', '', content); panel.hidden = true; panel.setAttribute('aria-label', 'Your character');
 		const panelHead = element('div', 'bl-panel-head', '', panel); panelHead.setAttribute('role', 'tablist');
 		const panelBody = element('div', 'bl-pbody', '', panel); panelBody.setAttribute('role', 'tabpanel');
@@ -209,7 +215,7 @@
 		const track = element('div', 'bl-track', '', state); track.setAttribute('aria-hidden', 'true'); element('div', 'bl-fill', '', track);
 		const sub = element('p', 'bl-sub', '', state);
 		const enter = element('button', 'bl-enter', 'Enter world', footer); enter.type = 'button'; enter.hidden = true;
-		view = { root, pause, images, title, tip, status, sub, enter, back, chips, panel, panelHead, panelBody };
+		view = { root, pause, images, title, tip, status, sub, enter, back, chips, panel, panelHead, panelBody, home };
 		back.onclick = event => { event.stopPropagation(); if (!current) return; const session = current; session.cancelled = true; finish('backed out'); hide(); session.options.exit?.(); if (session.settled) current = null; };
 		enter.onclick = event => {
 			event.stopPropagation();
@@ -247,7 +253,7 @@
 		backgroundObserver = new MutationObserver(records => { for (const record of records) for (const sibling of record.addedNodes) lock(sibling); });
 		backgroundObserver.observe(document.body, { childList: true });
 		view.root.hidden = false; view.root.dataset.state = 'loading'; view.enter.hidden = true;
-		view.sub.textContent = ''; closeTab(); drawChips();
+		view.sub.textContent = ''; closeTab(); drawChips(); homeTip();
 		view.root.focus({ preventScroll: true }); window.dispatchEvent(new Event('blur'));
 		showStory(pickStory());
 		paused = false; view.pause.textContent = 'Pause'; view.pause.setAttribute('aria-label', 'Pause slideshow'); rotation();
@@ -301,6 +307,25 @@
 		view.root.classList.remove('bl-open'); view.panel.hidden = true; view.panelBody.replaceChildren(); view.panelHead.replaceChildren();
 		drawChips();
 		if (refocus) (view.chips.firstChild || view.root).focus({ preventScroll: true });
+	}
+	// iPhone and iPad browsers keep their address bar and toolbar over a fifth of the screen;
+	// opened from the Home Screen, Bard runs full screen (index.html's apple-mobile-web-app
+	// meta). Said on the loading screen a few times, until it is waved away or Bard is opened that way.
+	const HOME_KEY = 'l99-home-tip';
+	function homeTip() {
+		const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+		const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches;
+		const seen = keep.get(HOME_KEY) || {};
+		view.home.hidden = true; view.root.classList.remove('bl-hometip');
+		if (!ios || standalone || seen.off || (seen.n || 0) >= 3) return;
+		keep.put(HOME_KEY, { n: (seen.n || 0) + 1 });
+		view.home.replaceChildren();
+		view.home.insertAdjacentHTML('afterbegin', '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>');
+		const text = element('span', '', '', view.home);
+		element('b', '', 'Play full screen. ', text); text.append('Tap Share, then Add to Home Screen, and open Bard from there.');
+		const x = element('button', '', '✕', view.home); x.type = 'button'; x.setAttribute('aria-label', 'Got it, don’t show this again');
+		x.onclick = event => { event.stopPropagation(); keep.put(HOME_KEY, { ...(keep.get(HOME_KEY) || {}), off: true }); view.home.hidden = true; view.root.classList.remove('bl-hometip'); (view.chips.firstChild || view.root).focus({ preventScroll: true }); };
+		view.home.hidden = false; view.root.classList.add('bl-hometip');
 	}
 	function active() { return !!view && !view.root.hidden; }
 	function stage(text) { if (active() && current && !current.settled && !current.failure) { view.status.textContent = text; mark(text); } }
