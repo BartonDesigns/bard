@@ -109,6 +109,8 @@ import { createPowerlines } from './world/powerlines.js';
 import { createContrails } from './world/contrails.js';
 import { createFlush } from './world/flush.js';
 import { createFarForest } from './world/farforest.js';
+import { createFootShade } from './world/footshade.js';
+import { liveBodies } from './people/body.js';
 
 export async function islandBuild(iw, params) {
 	const { actions, arms, arriving, buildPanel, button, camera, dom, earthDirector, fishing, fitShadow,
@@ -300,6 +302,14 @@ export async function islandBuild(iw, params) {
 	iw.world.rays = createSunRays(scene, shared, renderer, { isPhone: GFX, sun: sky.sun, air: sky.uniforms.uAir });
 	iw.world.rays.quality(qualityNow().fx);
 	fitShadow();
+	// the soft shade where people's shoes meet the ground (world/footshade.js), on whatever floor
+	// they stand: the one you would stand on there, as drawn (player.js seenFloorAt)
+	iw.world.footShade = createFootShade(scene, { bodies: liveBodies, floor: (x, z, y) => {
+		const I = iw.world.island, at = y + 0.3;
+		let g = iw.world.player?.floorAt ? iw.world.player.floorAt(x, z, at) : I.heightAt(x, z);
+		if (I.drawnAt && I.underFloor?.(x, z, at) == null) g = Math.max(g, I.drawnAt(x, z));
+		return g;
+	} });
 	// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
 	iw.world.spray = createSpray(scene, shared, { isPhone: GFX, world: () => iw.world });
 	iw.world.spray.quality(qualityNow().fx);
