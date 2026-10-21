@@ -18,6 +18,7 @@ import { hash01, hash32, rng, pick } from './rand.js';
 import { LAYER } from './layers.js';
 import { RANK } from './systems.js';
 import { retailIdentity } from './art.js';
+import { carriageways, gapLeft, medianFor, SHOULDER_R } from '../bay/fwyplan.js';   // the freeway's cross section: where its shoulders and median are
 
 export const BACK = Object.freeze({ blank: 0, readable: 1, mirrored: 2, none: 3 });
 export const MAT = Object.freeze({ retro: 'retro', vinyl: 'vinyl', glass: 'glass', paper: 'paper', foil: 'foil', paint: 'paint', grime: 'grime' });
@@ -230,6 +231,7 @@ export function freewaySigns(roads, sys, { faces = [], decks = [], route = () =>
 		return null;
 	};
 	const nearDeck = (x, z) => decks.some((q) => Math.hypot(q.x - x, q.z - z) < 70);
+	let CW = null;
 	const used = [];
 	for (const L of links) {
 		const p = L.pts, m = p.length;
@@ -263,7 +265,15 @@ export function freewaySigns(roads, sys, { faces = [], decks = [], route = () =>
 		if (!B || nearDeck(B.x, B.z) || used.some((u) => Math.hypot(u.x - B.x, u.z - B.z) < 250)) continue;
 		used.push(B);
 		const hw = M.r.w / 2, [rx, rz] = rightOf(B.ux, B.uz), sd = sys.side === 'left' ? -1 : 1;
-		const a = { x: B.x - rx * sd * (hw + 1.6), z: B.z - rz * sd * (hw + 1.6) }, b = { x: B.x + rx * sd * (hw + 1.6), z: B.z + rz * sd * (hw + 1.6) };
+		// the legs beyond the shoulders: on the right past the paved shoulder, on the left on the
+		// median wall (or past the rail where the median is ground: bay/fwyplan.js)
+		let lo = hw + 1.6, ro = hw + 1.6;
+		if (sd === 1) {
+			CW = CW || carriageways(main);
+			const m = medianFor(hw, gapLeft(CW, B.x, B.z, B.ux, B.uz));
+			lo = m.shared ? m.wall : m.wall + 0.6; ro = hw + SHOULDER_R + 0.7;
+		}
+		const a = { x: B.x - rx * sd * lo, z: B.z - rz * sd * lo }, b = { x: B.x + rx * sd * ro, z: B.z + rz * sd * ro };
 		gantries.push({ x0: a.x, z0: a.z, x1: b.x, z1: b.z, h: 6.6, ux: B.ux, uz: B.uz });
 		const dir = Math.abs(B.ux) > Math.abs(B.uz) ? (B.ux > 0 ? 'E' : 'W') : (B.uz < 0 ? 'N' : 'S');
 		const panel = (face, along, w, h) => out.push({ mat: MAT.retro, layer: LAYER.poster, face, x: B.x + rx * sd * along - B.ux * 0.35, z: B.z + rz * sd * along - B.uz * 0.35, hy: 6.6 + 0.45 + h / 2 - 0.4, nx: -B.ux, nz: -B.uz, w, h, back: BACK.blank, wear: 0, base: null, gantry: true });
