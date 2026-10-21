@@ -114,21 +114,20 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		const far = qualityNow().far;
 		if (far < 1) d2 /= far * far;
 		const t = d2 < near2 ? 0 : d2 < mid2 ? 1 : d2 < far2 ? 2 : 3;
-		if (decals && t < 2) decals.add(kind, M, d2, o);
+		const K = t <= 1 && MODEL_KINDS[kind] ? (t === 0 ? wantModel(kind, 'near') && modelKit(kind, 'near') : (wantModel(kind, 'mid'), modelKit(kind, 'mid'))) || null : null;
+		// (the decals laid on the body it is drawn with)
+		if (decals && t < 2) decals.add(kind, M, d2, o, K);
 		const cast = t < 2;
-		if (t <= 1 && MODEL_KINDS[kind]) {
-			const K = t === 0 ? wantModel(kind, 'near') && modelKit(kind, 'near') : (wantModel(kind, 'mid'), modelKit(kind, 'mid'));
-			if (K) {
-				put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c);
-				if (t === 0 && K.hubs.length === 4) wheels(kind, M, o.spin || 0, o.steer || 0, K, cast);
-				if (t === 0 && o.first) {
-					const G = cabGeo(kind);
-					insideMat ||= carMaterial(night, { cheap: isPhone, side: THREE.BackSide });
-					put(set(kind + 'cab', [[G.cabin, carMat, false], [G.shell, insideMat, false]], false, 2, false), M);
-				}
-				if (o.riders) riders(kind, M, o.riders);
-				return t;
+		if (K) {
+			put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c);
+			if (t === 0 && K.hubs.length === 4) wheels(kind, M, o.spin || 0, o.steer || 0, K, cast);
+			if (t === 0 && o.first) {
+				const G = cabGeo(kind);
+				insideMat ||= carMaterial(night, { cheap: isPhone, side: THREE.BackSide });
+				put(set(kind + 'cab', [[G.cabin, carMat, false], [G.shell, insideMat, false]], false, 2, false), M);
 			}
+			if (o.riders) riders(kind, M, o.riders);
+			return t;
 		}
 		const near = t === 0 && loftGeo(kind, 0, false, o.first);
 		if (near) {
