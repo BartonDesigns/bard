@@ -18,6 +18,7 @@ import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
 import { REAL_REGIONS, REAL_TALL } from './realtiles.js';
 import { footLifted } from './overpass.js';
+import { carriageways, isCarriageway, lanesOf, medianAlong, SHOULDER_R } from './fwyplan.js';   // the freeway's cross section
 import { settleRegionSoon } from '../structures/overlap.js';   // structures: settled footprints
 import { eraMap } from './streetera.js';                     // streets by era: the era of each street
 import { paintStreet } from './potholes.js';                 // ...its sidewalk, potholes and patches in the paint layer
@@ -758,6 +759,35 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			}
 		}
 	}
+	// A freeway carriageway's paving (fwyplan.js): its lanes, the right shoulder, and on the
+	// left the shoulder out to the median wall (to the middle, where the two directions share
+	// one) or a 3 m shoulder where the median is ground. Laid in runs of one width, the median
+	// read every 16 m or so; the paint map marks it all as a freeway's concrete.
+	function fwyPaving(r, CW, B, Y, x0, z0) {
+		const p = r.pts, hw = r.w / 2, st = [];
+		for (let i = 0; i + 3 < p.length; i += 2) {
+			const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L = Math.hypot(bx - ax, bz - az);
+			if (L < 0.01) continue;
+			const n = Math.max(1, Math.ceil(L / 16));
+			for (let k = st.length ? 1 : 0; k <= n; k++) st.push({ x: ax + (bx - ax) * k / n, z: az + (bz - az) * k / n, dx: (bx - ax) / L, dz: (bz - az) / L });
+		}
+		if (st.length < 2) return;
+		const med = medianAlong(CW, r, st);
+		// (in the builder's terms: + is to the right of the direction of travel)
+		const left = med.map((m) => Math.round(m.pave * 4) / 4), right = hw + SHOULDER_R;
+		let run = [st[0]], at = left[0];
+		const flush = () => {
+			const pts = run.map((q) => [q.x - x0, q.z - z0]), off = (right - at) / 2, half = (right + at) / 2;
+			B.line(pts, half, CONC, true, off);
+			Y?.line(pts, half, FWY, true, off);
+			// (round where one width meets the next, and at the road's ends)
+			for (const q of [run[0], run[run.length - 1]]) B.disc(q.x - x0 - q.dz * off, q.z - z0 + q.dx * off, half, CONC);
+		};
+		for (let i = 1; i < st.length; i++) {
+			run.push(st[i]);
+			if (left[i] !== at || i === st.length - 1) { flush(); run = [st[i]]; at = left[i]; }
+		}
+	}
 	function drawRoadMap(M, cx, cz) {
 		M.x = cx; M.z = cz;
 		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
@@ -766,6 +796,9 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		const B = builder(ramp), Y = builder(ramp / paintK), Lb = builder(1.8), fine = !!M.paint;
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
 		const all = near('roads', cx, cz, SIZE * 0.72), lanes = all.filter((q) => q.drive && !q.bridge);
+		// the freeways' paving first: lanes, shoulders, and the left shoulder out to the median
+		const CW = carriageways(all);
+		for (const r of all) if (isCarriageway(r) && !r.hand) fwyPaving(r, CW, B, fine ? Y : null, x0, z0);
 		for (const r of all) {
 			// (a road added by hand is driven, not painted: where it runs through a mapped region the
 			// mapped one is on the ground already)
@@ -782,10 +815,12 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			}
 			// (a bridge is its own deck, freeways.js: not painted on the ground it crosses)
 			if (r.bridge && r.drive) continue;
-			// the freeways are pale concrete, as Caltrans pours them
+			// the freeways are pale concrete, as Caltrans pours them (paved above, fwyPaving)
 			const surf = r.cls === 'motorway' && !r.link ? CONC : ASPH;
-			B.line(p, hw, surf);
-			for (const q of [p[0], p[p.length - 1]]) B.disc(q[0], q[1], hw, surf);
+			if (surf === ASPH) {
+				B.line(p, hw, surf);
+				for (const q of [p[0], p[p.length - 1]]) B.disc(q[0], q[1], hw, surf);
+			}
 			// a cul-de-sac's turning circle, sidewalk round it
 			for (const [end, q] of [[r.end0, p[0]], [r.end1, p[p.length - 1]]]) if (end) { B.disc(q[0], q[1], 14.2, CONC); B.disc(q[0], q[1], 12.5, ASPH); }
 			if (!fine) continue;
@@ -794,14 +829,19 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			// the freeway's concrete: dark tyre-worn bands down each lane's wheel paths and the
 			// slabs' transverse joints (the paint map's green)
 			if (r.cls === 'motorway' && !r.link) {
-				Y.line(p, hw, FWY, true);                   // (the whole carriageway, faintly: it marks the concrete as a freeway's)
-				const nL = Math.max(2, Math.round(r.w / 3.7)), lw = r.w / nL;
+				const { n: nL, lw } = lanesOf(r);
 				for (let k = 0; k < nL; k++) for (const e of [-0.85, 0.85]) Y.line(p, 0.42, WEAR, false, -hw + lw * (k + 0.5) + e);
 				Y.line(p, hw - 0.3, JOINT, false, 0, 0.25, 4.3);
 			}
 			if (surf === ASPH && r.drive && !r.bridge) wear(r, p, hw, Lb, Y);
 			if (self) paintStreet(r, p, Y, ramp / paintK, eraMap(self).ofRoad(r), r.walked && built(r), x0, z0);          // streets by era (potholes.js)
-			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
+			// a freeway's lanes: dashed white between them (12 ft dashes, 36 ft gaps), solid white
+			// along the right shoulder, solid yellow along the left
+			if (isCarriageway(r)) {
+				const { n: nL, lw } = lanesOf(r);
+				for (let k = 1; k < nL; k++) B.line(p, 0.1, WHITE, false, -hw + lw * k, 3.66, 11);
+				B.line(p, 0.12, WHITE, true, hw); Y.line(p, 0.12, YELLOW, true, -hw);
+			} else if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
 		if (fine) corners(all, x0, z0, B, Y);
 		// driveways and front walks

@@ -11,6 +11,8 @@ import * as THREE from 'three';
 import { ROUTES } from './roads.js';
 import { toWorld } from './geo.js';
 import { FOOT, distTo, footLifted, lanesUnder, sidewalkOf } from './overpass.js';
+import { carriageways, gapLeft, isCarriageway, medianFor, SHOULDER_R } from './fwyplan.js';
+import { lampPools, lampLook } from './streetlamps.js';
 
 // where the freeways go, for the signs (by route number and direction of travel)
 export const DEST = {
@@ -72,6 +74,16 @@ function signTexture(num, dir, dest) {
 	return t;
 }
 
+// a soft round glow for the lamp heads
+function glowTexture() {
+	const cv = document.createElement('canvas');
+	cv.width = cv.height = 32;
+	const g = cv.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+	gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+	g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+	return new THREE.CanvasTexture(cv);
+}
+
 // geometry, flat-shaded, with vertex colours
 function Geo() {
 	const P = [], C = [];
@@ -79,13 +91,35 @@ function Geo() {
 	const quad = (a, b, c, d, col) => { tri(a, b, c, col); tri(a, c, d, col); };
 	// sweep a cross-section along a path: path points {x, z, y, nx, nz} (n: the left normal),
 	// profile [[across, up], ...]; closed profiles join the last point to the first
+	// (prof can be a function of the point's index, each the same number of points)
 	const sweep = (path, prof, col, closed = false) => {
-		const n = prof.length - (closed ? 0 : 1);
+		const at = typeof prof === 'function' ? prof : () => prof, n = at(0).length - (closed ? 0 : 1);
 		for (let i = 0; i + 1 < path.length; i++) {
-			const A = path[i], B = path[i + 1];
+			const A = path[i], B = path[i + 1], PA = at(i), PB = at(i + 1);
 			const pa = (p) => [A.x + A.nx * p[0], A.y + p[1], A.z + A.nz * p[0]], pb = (p) => [B.x + B.nx * p[0], B.y + p[1], B.z + B.nz * p[0]];
 			const cc = typeof col === 'function' ? col(i) : col;
-			for (let k = 0; k < n; k++) { const p0 = prof[k], p1 = prof[(k + 1) % prof.length]; quad(pa(p0), pb(p0), pb(p1), pa(p1), cc); }
+			for (let k = 0; k < n; k++) { const k1 = (k + 1) % PA.length; quad(pa(PA[k]), pb(PB[k]), pb(PB[k1]), pa(PA[k1]), cc); }
+		}
+	};
+	// a square bar of side w from point a to point b ([x, y, z]), its faces square to the world's up
+	const beam = (a, b, w, col) => {
+		const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d) || 1;
+		d[0] /= L; d[1] /= L; d[2] /= L;
+		// (a side across it, level where it can be)
+		let sx = -d[2], sz = d[0], sl = Math.hypot(sx, sz);
+		if (sl < 1e-3) { sx = 1; sz = 0; sl = 1; }
+		sx /= sl; sz /= sl;
+		const ux = -sz * d[1], uy = sz * d[0] - sx * d[2], uz = sx * d[1];
+		const h = w / 2, c = (p, i, j) => [p[0] + (sx * i + ux * j) * h, p[1] + uy * j * h, p[2] + (sz * i + uz * j) * h];
+		const A = [c(a, -1, -1), c(a, 1, -1), c(a, 1, 1), c(a, -1, 1)], B = [c(b, -1, -1), c(b, 1, -1), c(b, 1, 1), c(b, -1, 1)];
+		for (let k = 0; k < 4; k++) quad(A[k], B[k], B[(k + 1) % 4], A[(k + 1) % 4], col);
+		quad(A[3], A[2], A[1], A[0], col); quad(B[0], B[1], B[2], B[3], col);
+	};
+	// an upright round column (sides faces) from y0 (radius r0) to y1 (radius r1)
+	const column = (x, z, y0, y1, r0, r1, sides, col) => {
+		for (let k = 0; k < sides; k++) {
+			const a0 = k / sides * Math.PI * 2, a1 = (k + 1) / sides * Math.PI * 2, c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+			quad([x + c0 * r0, y0, z + s0 * r0], [x + c1 * r0, y0, z + s1 * r0], [x + c1 * r1, y1, z + s1 * r1], [x + c0 * r1, y1, z + s0 * r1], col);
 		}
 	};
 	// an upright box, turned by yaw
@@ -110,7 +144,7 @@ function Geo() {
 		g.computeVertexNormals();
 		return new THREE.Mesh(g, mat);
 	};
-	return { sweep, skirt, box, mesh, size: () => P.length / 3 };
+	return { sweep, skirt, box, beam, column, mesh, size: () => P.length / 3 };
 }
 
 // a polyline's points every `step` metres, with the left normal (the direction's left in
@@ -129,6 +163,8 @@ function resample(pts, step) {
 
 // roadAt(r, x, z): a road's graded height (berms.js), the surface a deck ramps down to and
 // the lanes under it are cleared from, the same wherever you stand
+const LIT = 450, LAMP_GAP = 58;                                  // lit for 450 m round a ramp's ends, a pole every 58 m
+const STEEL = [0.56, 0.57, 0.58], POST = [0.46, 0.46, 0.45], HEAD = [0.3, 0.31, 0.32];
 export function createFreeways(scene, bay, real, { isPhone = false, roadAt = null } = {}) {
 	const group = new THREE.Group();
 	group.name = 'freeways';
@@ -136,6 +172,27 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 	const concrete = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, side: THREE.DoubleSide });
 	const fenceTex = chainLink();
 	const fenceMat = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: false, alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.4 });
+	// the lamps after dark: no lights (a phone rebuilds its shaders when the count changes),
+	// a glow on each head and the pool it throws on the lanes below
+	const CAP = isPhone ? 160 : 320;
+	const lamps = new THREE.Group();
+	lamps.name = 'freeway-lamps';
+	scene.add(lamps);
+	const glowGeo = new THREE.BufferGeometry();
+	glowGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(CAP * 3), 3));
+	glowGeo.setDrawRange(0, 0);
+	// (made as the street lamps' glow is, streetlife.js, so the two share one shader program)
+	const LED = lampLook('led').c;
+	glowGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(CAP * 3).map((_, i) => LED[i % 3]), 3));
+	const glow = new THREE.Points(glowGeo, new THREE.PointsMaterial({ color: 0xffffff, vertexColors: true, size: 2.2, map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
+	glow.frustumCulled = false; glow.visible = false;
+	lamps.add(glow);
+	const pools = lampPools(CAP);
+	lamps.add(pools);
+	const poolPos = new Float32Array(CAP * 3), poolCol = new Float32Array(CAP * 3), poolKind = new Uint8Array(CAP), poolYaw = new Float32Array(CAP);
+	for (let i = 0; i < CAP; i++) poolCol.set(LED, i * 3);
+	poolKind.fill(1);
+	let lampN = 0;
 	const R = isPhone ? 900 : 1400;
 	let at = { x: 1e9, z: 1e9 }, ver = -1;
 	let decks = [];                                  // for the floors: [{ pts: [{x,z,y}], hw }]
@@ -157,23 +214,130 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 		const H = (x, z) => bay.heightAt(x, z), roadH = (q, x, z) => roadAt?.(q, x, z) ?? H(x, z);
 		const all = real.near('roads', cx, cz, R), roads = all.filter((r) => r.drive);
 		const lanes = roads.filter((r) => !r.bridge);
-		const G = Geo(), F = [];                         // concrete; chain link as ribbons { a, b, v }
+		const G = Geo(), F = [], heads = [];              // concrete; chain link as ribbons { a, b, v }; lamp heads
 		const CON = [0.66, 0.64, 0.6], WALL = [0.6, 0.56, 0.49], ASPH = [0.26, 0.26, 0.27];
 		const tint = (base, i, k = 0.05) => { const h = Math.sin(i * 12.9898) * 43758.5453 % 1; const f = 1 + (Math.abs(h) - 0.5) * k * 2; return base.map((c) => c * f); };
 		// chain link between two lines along a path, each [across, up] from its points
 		const ribbon = (pts, [o0, h0], [o1, h1]) => F.push({ a: pts.map((q) => [q.x + q.nx * o0, q.y + h0, q.z + q.nz * o0]), b: pts.map((q) => [q.x + q.nx * o1, q.y + h1, q.z + q.nz * o1]), v: Math.hypot(o1 - o0, h1 - h0) / 1.85 });
 
-		// ---- the freeways: barrier down the median, sound walls beside the houses ----
+		// A davit lamp standard: a pole to 12 m, its arm curving out over the lanes on each side
+		// asked (-1 the right of the way it stands by, +1 the left) to an LED head; heads go in
+		// `heads` for their glow and their pools after dark. (x, y, z): its foot, g the ground.
+		const lampPost = (x, y, z, nx, nz, sides, g) => {
+			const top = g + 12.2;
+			G.beam([x, y - 0.1, z], [x, top - 0.6, z], 0.26, STEEL);
+			for (const sd of sides) {
+				// (the arm's curve: up out of the pole and over, 2.6 m out)
+				const pts = [[0, top - 0.9], [0.25, top - 0.25], [0.8, top + 0.05], [1.7, top + 0.18], [2.6, top + 0.22]];
+				for (let k = 0; k + 1 < pts.length; k++) {
+					const [a0, h0] = pts[k], [a1, h1] = pts[k + 1];
+					G.beam([x + nx * sd * a0, h0, z + nz * sd * a0], [x + nx * sd * a1, h1, z + nz * sd * a1], 0.12, STEEL);
+				}
+				// the head: a flat LED fitting, its lens to the road
+				const hx = x + nx * sd * 3.05, hz = z + nz * sd * 3.05;
+				G.beam([x + nx * sd * 2.55, top + 0.2, z + nz * sd * 2.55], [hx + nx * sd * 0.35, top + 0.2, hz + nz * sd * 0.35], 0.3, HEAD);
+				heads.push({ x: hx, y: top + 0.02, z: hz, yaw: Math.atan2(nz, -nx) });
+			}
+		};
+
+		// ---- the freeways: the median wall or rail, lamps, sound walls beside the houses ----
+		// (fwyplan.js: where the other direction runs, and so where the median is)
+		const CW = carriageways(roads);
+		// where the ramps leave and join: the freeway is lit for a stretch either side
+		const gores = [];
+		for (const q of roads) if (q.link && q.cls === 'motorway' && !q.bridge) { const p = q.pts, m = p.length; gores.push([p[0], p[1]], [p[m - 2], p[m - 1]]); }
+		const lit = (x, z) => gores.some(([gx, gz]) => Math.abs(gx - x) < LIT && Math.abs(gz - z) < LIT && Math.hypot(gx - x, gz - z) < LIT);
+		// a carriageway's key: of the two either side of a shared wall, the lower one builds it
+		const keyOf = (q) => q.pts[0] * 7.31 + q.pts[1];
+		// whether a column can't stand at (x, z): on a road or its shoulders, or on a freeway's
+		// paved median anywhere but the line of its wall
+		const blocked = (x, z) => lanes.some((l) => {
+			if (!near(l, x, z, 25)) return false;
+			const c = isCarriageway(l), hw = l.w / 2, d = distTo(l, x, z);
+			if (d < hw + (c ? SHOULDER_R + 0.8 : 2.2)) return true;
+			if (!c || d > hw + 12) return false;
+			// (the nearest point on its centre line, and whether (x, z) is on its left there)
+			const p = l.pts;
+			let bd = 1e9, bx = 0, bz = 0, ux = 0, uz = 0;
+			for (let i = 0; i + 3 < p.length; i += 2) {
+				const ax = p[i], az = p[i + 1], ex = p[i + 2] - ax, ez = p[i + 3] - az, l2 = ex * ex + ez * ez || 1, t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2));
+				const dd = Math.hypot(x - ax - ex * t, z - az - ez * t);
+				if (dd < bd) { bd = dd; bx = ax + ex * t; bz = az + ez * t; const L = Math.sqrt(l2); ux = ex / L; uz = ez / L; }
+			}
+			if ((x - bx) * uz - (z - bz) * ux <= 0) return false;
+			const m = medianFor(hw, gapLeft(CW, bx, bz, ux, uz));
+			return !m.shared || Math.abs(d - m.wall) > 0.9;
+		});
 		for (const r of roads) {
 			if (r.cls !== 'motorway' || r.bridge) continue;
 			const hw = r.w / 2, path = resample(r.pts, 8);
 			if (!r.link) {
-				// the median barrier on the left of the direction of travel
-				const bp = path.map((p) => { const x = p.x + p.nx * (hw + 0.45), z = p.z + p.nz * (hw + 0.45); return { x, z, y: H(x, z) - 0.06, nx: p.nx, nz: p.nz }; });
-				// (weathered: darker at the foot where the road grime splashes it)
-				G.sweep(bp, [[-0.3, -0.2], [-0.3, 0.08], [-0.1, 0.33]], [0.36, 0.35, 0.33]);
-				G.sweep(bp, [[-0.1, 0.33], [-0.075, 0.84], [0.075, 0.84], [0.1, 0.33]], (i) => tint([0.56, 0.54, 0.5], i, 0.04));
-				G.sweep(bp, [[0.1, 0.33], [0.3, 0.08], [0.3, -0.2]], [0.36, 0.35, 0.33]);
+				// the median, read at each point and steadied over its neighbours (a ramp's piece or a
+				// gap in the map shouldn't make the wall jump)
+				const raw = path.map((p) => gapLeft(CW, p.x, p.z, p.dx, p.dz, true));
+				const med = path.map((p, i) => {
+					const win = [];
+					for (let k = Math.max(0, i - 2); k <= Math.min(path.length - 1, i + 2); k++) win.push(raw[k]);
+					win.sort((a, b) => a.g - b.g);
+					const w = win[win.length >> 1];
+					return { ...medianFor(hw, w.g), other: w.r };
+				});
+				// The shared wall: Caltrans's Type 60, a tall single-slope concrete barrier (no step
+				// at the foot), built by one of the two directions. Where the two sides lie at
+				// different heights it reaches down to the lower and up past the higher.
+				const mine = (i) => med[i].shared && (!med[i].other || med[i].other.bridge || keyOf(r) <= keyOf(med[i].other) || (i && med[i - 1].other !== med[i].other) || (i + 1 < med.length && med[i + 1].other !== med[i].other));
+				let run = [];
+				const flushWall = () => {
+					if (run.length > 1) {
+						const prof = (i) => { const q = run[i], d = q.hi - q.lo; return [[-0.3, -0.25 - d], [-0.3, 0], [-0.27, 0.22], [-0.1, 1.07], [0.1, 1.07], [0.27, 0.22], [0.3, 0], [0.3, -0.25 - d]]; };
+						// (weathered: darker at the foot where the road grime splashes it)
+						G.sweep(run, (i) => prof(i).slice(0, 3), [0.38, 0.37, 0.35]);
+						G.sweep(run, (i) => prof(i).slice(2, 6), (i) => tint([0.62, 0.61, 0.58], Math.floor(i / 2), 0.035));
+						G.sweep(run, (i) => prof(i).slice(5), [0.38, 0.37, 0.35]);
+					}
+					run = [];
+				};
+				for (let i = 0; i < path.length; i++) {
+					if (!mine(i)) { flushWall(); continue; }
+					const p = path[i], o = med[i].wall, x = p.x + p.nx * o, z = p.z + p.nz * o;
+					const yL = H(x + p.nx * 0.6, z + p.nz * 0.6), yR = H(x - p.nx * 0.6, z - p.nz * 0.6), hi = Math.max(yL, yR, H(x, z)) - 0.04, lo = Math.min(yL, yR) - 0.04;
+					run.push({ x, z, y: hi, hi, lo, nx: p.nx, nz: p.nz });
+				}
+				flushWall();
+				// Where the median is ground: a metal beam guardrail beyond the left shoulder, its
+				// posts behind it, away from the traffic
+				run = [];
+				const flushRail = () => {
+					if (run.length > 1) {
+						G.sweep(run, [[0, 0.5], [0.07, 0.58], [0.0, 0.66], [0.07, 0.74], [0, 0.82]], (i) => tint(STEEL, i, 0.03));
+						G.sweep(run, [[0.07, 0.82], [0.13, 0.84]], STEEL);
+						// (a post every 4 m: at each point and halfway to the next)
+						const post = (x, y, z, nx, nz) => G.beam([x + nx * 0.2, y - 0.3, z + nz * 0.2], [x + nx * 0.2, y + 0.78, z + nz * 0.2], 0.15, POST);
+						for (let i = 0; i < run.length; i++) {
+							const q = run[i], n = run[i + 1];
+							post(q.x, q.y, q.z, q.nx, q.nz);
+							if (n) post((q.x + n.x) / 2, (q.y + n.y) / 2, (q.z + n.z) / 2, q.nx, q.nz);
+						}
+					}
+					run = [];
+				};
+				for (let i = 0; i < path.length; i++) {
+					if (med[i].shared) { flushRail(); continue; }
+					const p = path[i], o = med[i].wall, x = p.x + p.nx * o, z = p.z + p.nz * o;
+					run.push({ x, z, y: H(x, z) - 0.03, nx: p.nx, nz: p.nz });
+				}
+				flushRail();
+				// The lamps by the interchanges: davit poles on the median wall (two arms, one over
+				// each direction) or, on a split median, one arm over the lanes from beyond the rail
+				let last = -1e9, s = 0;
+				for (let i = 0; i < path.length; i++) {
+					if (i) s += Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z);
+					if (s - last < LAMP_GAP || !lit(path[i].x, path[i].z)) continue;
+					if (med[i].shared && !mine(i)) continue;
+					last = s;
+					const p = path[i], o = med[i].wall + (med[i].shared ? 0 : 0.6), x = p.x + p.nx * o, z = p.z + p.nz * o, y = H(x, z) + (med[i].shared ? 1.07 : 0);
+					lampPost(x, y, z, p.nx, p.nz, med[i].shared ? [-1, 1] : [-1], H(x, z));
+				}
 			}
 			// sound walls on the right where houses back onto the freeway, broken at ramps and
 			// cross streets
@@ -364,19 +528,26 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 				flush();
 				decks.push({ pts: run, hw });
 			}
-			// columns and bent caps, wherever the span is high and nothing drives beneath
+			// columns, wherever the span is high and nothing drives beneath: a ramp's flyover on
+			// single round columns flaring into the girder, a wide deck on two under a bent cap
 			let last = -1e9;
 			for (let i = 1; i < n - 1; i++) {
 				const q = deck[i], gy = gnd[i], clear = q.y - gy;
 				if (!q.sp || clear < 3.2 || s[i] - last < (foot ? 18 : 20)) continue;
-				if (lanes.some((l) => near(l, q.x, q.z, 25) && distTo(l, q.x, q.z) < l.w / 2 + 2.2)) continue;
+				const cols = foot || W <= 13 ? [0] : [-W * 0.26, W * 0.26];
+				if (cols.some((o) => blocked(q.x + q.nx * o, q.z + q.nz * o))) continue;
 				last = s[i];
 				// (the cap runs across the deck, along its normal)
 				const yaw = Math.atan2(q.nz, q.nx), top = q.y - (foot ? 0.9 : 1.75);
 				if (foot) { G.box(q.x, top - 0.6, q.z, W * 0.9, 0.6, 0.9, yaw, tint(CON, i, 0.03)); G.box(q.x, gy - 0.6, q.z, 0.8, top - 0.6 - gy + 0.6, 0.8, yaw, tint(CON, i + 7, 0.03)); continue; }
-				G.box(q.x, top - 1.0, q.z, W * 0.82, 1.0, 1.4, yaw, tint(CON, i, 0.03));
-				const cols = W > 13 ? [-W * 0.26, W * 0.26] : [0];
-				for (const o of cols) { G.box(q.x + q.nx * o, gy - 0.6, q.z + q.nz * o, 1.3, top - 1.0 - gy + 0.6, 1.3, yaw, tint(CON, i + 7, 0.03)); marks.piers.push({ x: q.x + q.nx * o, z: q.z + q.nz * o, y: gy, h: top - 1.0 - gy, nx: q.nx, nz: q.nz, w: 1.3 }); }
+				if (cols.length > 1) G.box(q.x, top - 1.0, q.z, W * 0.82, 1.0, 1.4, yaw, tint(CON, i, 0.03));
+				const cTop = cols.length > 1 ? top - 1.0 : top, flare = cols.length > 1 ? 0 : Math.min(2.2, (cTop - gy) * 0.2), r = cols.length > 1 ? 0.75 : 0.95;
+				for (const o of cols) {
+					const x = q.x + q.nx * o, z = q.z + q.nz * o, sides = isPhone ? 10 : 14;
+					G.column(x, z, gy - 0.6, cTop - flare, r, r, sides, tint(CON, i + 7, 0.03));
+					if (flare) G.column(x, z, cTop - flare, cTop + 0.05, r, Math.min(W * 0.3, r * 1.9), sides, tint(CON, i + 9, 0.03));
+					marks.piers.push({ x, z, y: gy, h: cTop - gy, nx: q.nx, nz: q.nz, w: r * 2 });
+				}
 			}
 			if (foot) continue;
 			// the faces over each road it crosses, with the height under the girder, both sides
@@ -438,6 +609,14 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 			m.castShadow = true;
 			group.add(m);
 		}
+		// the lamps' glow and pools, the nearest first
+		heads.sort((a, b) => Math.hypot(a.x - cx, a.z - cz) - Math.hypot(b.x - cx, b.z - cz));
+		lampN = Math.min(CAP, heads.length);
+		const gp = glowGeo.attributes.position.array;
+		for (let i = 0; i < lampN; i++) { const h = heads[i]; gp[i * 3] = h.x; gp[i * 3 + 1] = h.y; gp[i * 3 + 2] = h.z; poolPos[i * 3] = h.x; poolPos[i * 3 + 1] = h.y; poolPos[i * 3 + 2] = h.z; poolYaw[i] = h.yaw; }
+		glowGeo.attributes.position.needsUpdate = true;
+		glowGeo.setDrawRange(0, lampN);
+		pools.fill(lampN, poolPos, poolCol, poolKind, poolYaw, H);
 		builds++;
 		// the decks, indexed for floor()
 		decks.forEach((d, di) => { for (let i = 0; i + 1 < d.pts.length; i++) { const a = d.pts[i], b = d.pts[i + 1]; for (const k of new Set([cellKey(a.x, a.z), cellKey(b.x, b.z)])) { let c = grid.get(k); if (!c) grid.set(k, c = []); c.push([di, i]); } } });
@@ -462,12 +641,16 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 		return best;
 	}
 
-	function update(camera) {
+	function update(camera, night = 0) {
 		if (!real?.loaded()) return;
 		const x = camera.position.x, z = camera.position.z;
 		const v = real.version ? real.version() : 0;
-		if (camera.position.y > 3000) { group.visible = false; return; }
-		group.visible = true;
+		if (camera.position.y > 3000) { group.visible = lamps.visible = false; return; }
+		group.visible = lamps.visible = true;
+		// (on as the street lamps come on: streetlife.js)
+		const on = Math.max(0, Math.min(1, (night - 0.08) / 0.25));
+		glow.material.opacity = on; glow.visible = on > 0.002 && lampN > 0;
+		pools.setLevel(on);
 		if (Math.hypot(x - at.x, z - at.z) < R * 0.3 && v === ver) return;
 		at = { x, z }; ver = v;
 		build(x, z);
