@@ -157,6 +157,13 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 
 	// ---------- ground and walls ----------
 	const foot = village.footprints.filter((f) => !f.fence);
+	// how far from its middle each one can reach you, by any of the tests below (squared, and a
+	// little over): far from the village (out in the Bay) a footprint is passed by on that alone
+	const reach = foot.map((f) => {
+		const d = f.d || 0, body = Math.abs(d - 2.2) / 2, r = Math.max(Math.hypot(f.w / 2 + 1, d / 2 + 1), Math.hypot(f.w / 2 + 0.2, Math.max(2, f.len || 0)), Math.hypot(f.w / 2 + 0.2, body + 2.8));
+		return (r + 0.01) * (r + 0.01);
+	});
+	const far = (k, x, z) => (x - foot[k].x) * (x - foot[k].x) + (z - foot[k].z) * (z - foot[k].z) > reach[k];
 	// footprints are placed with rotationY(face): world = (lx cos + lz sin, -lx sin + lz cos)
 	const toLocal = (f, x, z) => {
 		const c = Math.cos(f.face), sn = Math.sin(f.face), dx = x - f.x, dz = z - f.z;
@@ -175,8 +182,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (island.extraFloor) g = Math.max(g, island.extraFloor(x, z, y));
 		// (the houses' roofs, for you once you have climbed up: parkour.js)
 		if (island.roofFloor) g = Math.max(g, island.roofFloor(x, z, y));
-		for (const f of foot) {
-			const [lx, lz] = toLocal(f, x, z);
+		for (let k = 0; k < foot.length; k++) {
+			if (far(k, x, z)) continue;
+			const f = foot[k], [lx, lz] = toLocal(f, x, z);
 			if (f.pier) {
 				if (Math.abs(lx) < f.w / 2 + 0.2 && lz > -2 && lz < f.len && y > f.y - 1.2) g = Math.max(g, f.y);
 			} else {
@@ -195,8 +203,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function pushOut(p) {
 		// in a cave: only its walls (the village, trees and rocks overhead are not here)
 		if (island.underFloor?.(p.x, p.z, p.y - EYE) != null) { island.underPush?.(p, p.y - EYE); return; }
-		for (const f of foot) {
-			if (f.pier) continue;
+		for (let k = 0; k < foot.length; k++) {
+			const f = foot[k];
+			if (f.pier || far(k, p.x, p.z)) continue;
 			let [lx, lz] = toLocal(f, p.x, p.z);
 			// a cottage you can walk into: its walls (and its furniture) one by one
 			if (f.walls) {
