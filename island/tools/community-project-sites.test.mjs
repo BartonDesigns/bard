@@ -48,3 +48,12 @@ test('local damage and cataclysm signal block only relevant project sites',()=>{
 	const f=fixture();f.world.structures={cataclysm:()=>true,store:{each:callback=>callback('building',{x:100,z:100,c:1})}};
 	assert.deepEqual(f.adapter.situation([{siteId:'near',anchor:{x:105,y:2,z:100}},{siteId:'far',anchor:{x:500,y:2,z:100}}]),{hazard:1,blockedSites:['near']});
 });
+test('a site\'s spot is kept from one list to the next while nothing it keeps clear of has changed',()=>{
+	const f=fixture();let looks=0;const h=f.world.island.heightAt;f.world.island.heightAt=(...a)=>{looks++;return h(...a);};
+	const first=f.adapter.list(),once=looks;assert.equal(first.length,1);assert.ok(once>0);
+	f.advance();const again=f.adapter.list();assert.deepEqual(again,first);
+	// (only the site's own ground under it is read again, not every candidate spot round it)
+	assert.ok(looks-once<=2,`read the ground ${looks-once} times again`);
+	// the city's buildings changed: worked out afresh
+	f.world.city={nearList:()=>[]};f.advance();f.adapter.list();assert.ok(looks-once>2);
+});
