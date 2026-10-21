@@ -176,7 +176,7 @@ function button(label, title, style, hud) {
 	b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
 	// hand focus back after a click, so Space and the play keys keep driving the game
 	b.addEventListener('click', () => b.blur());
-	css(b, 'position:absolute;min-width:44px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style);
+	css(b, 'position:absolute;min-width:44px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style);
 	return b;
 }
 
@@ -221,13 +221,13 @@ const HUD_CSS = `
 #l99-island-mount .l99-quick{display:none;}
 #l99-island-mount.l99-touch .l99-quick{position:absolute;top:calc(64px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));display:flex;gap:6px;z-index:14;}
 #l99-island-mount.l99-touch .l99-quick>button{position:relative!important;inset:auto!important;width:54px!important;min-height:48px;box-sizing:border-box;padding:5px!important;flex-direction:column;gap:2px;font-size:16px!important;}
-#l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 system-ui;}
+#l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 var(--bard-display,system-ui,sans-serif);}
 #l99-island-mount.l99-touch .l99-left{top:calc(120px + env(safe-area-inset-top));max-width:calc(100% - 24px);}
 #l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + env(safe-area-inset-top));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;width:min(460px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:10px;box-sizing:border-box;background:#102129fa;border:1px solid #66818a;border-radius:14px;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;box-shadow:0 8px 30px #0008;}
 #l99-island-mount.l99-touch.l99-tools-open .l99-rail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-flow:row;grid-auto-columns:auto;gap:8px;align-content:start;}
 #l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:56px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
 #l99-island-mount.l99-touch .l99-rail>button>svg{width:22px;min-width:22px;flex:none;}
-#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 13px/1.3 system-ui;text-align:left;overflow-wrap:normal;}
+#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 13px/1.3 var(--bard-display,system-ui,sans-serif);text-align:left;overflow-wrap:normal;}
 #l99-island-mount.l99-touch.l99-tools-open :is(.cb-btn,button:is([aria-label="Aim"],[aria-label="Aim held item"])){visibility:hidden;}
 #l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;width:80px!important;height:80px!important;}
 #l99-island-mount.l99-touch>button:is([aria-label="Aim"],[aria-label="Aim held item"]){right:calc(104px + env(safe-area-inset-right))!important;bottom:calc(88px + env(safe-area-inset-bottom))!important;width:64px!important;height:64px!important;touch-action:none!important;}
@@ -300,13 +300,13 @@ function buildDom(canvas = document.createElement('canvas')) {
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
 	// (the hint rides on top of the prompts, so it never covers one)
-	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
+	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
 	hint.dataset.hud = 'prompt 99';
 	const loading = document.createElement('div');
 	loading.hidden = true; // Kept for integrations; the shared loading screen owns presentation.
 	// the settings (island-panel.js): the whole screen, over every button, in tabs; its body
 	// scrolls (no backdrop blur: a full-screen one over the world crashed SwiftShader)
-	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px system-ui;display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
+	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Settings');
 	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
 	// a group with nothing showing is hidden, so it leaves no gap either; and the rail is as
@@ -767,7 +767,7 @@ export function createIslandWorld() {
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and
 	// it only lifts once the new place is built and the frames are running smoothly again
-	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px system-ui;letter-spacing:.06em;text-align:center;padding:24px;');
+	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;text-align:center;padding:24px;');
 	dom.mount.appendChild(travelVeil);
 	let travelling = false, nextTrip = null;
 	function travel(label, move) {
@@ -843,7 +843,7 @@ export function createIslandWorld() {
 	};
 	const tpPlaces = [];
 	for (const pl of PLACES_TP) {
-		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;');
+		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;');
 		b.textContent = pl[0];
 		b.onclick = (e) => { e.stopPropagation(); teleport(pl); };
 		tpMenu.appendChild(b);
@@ -851,7 +851,7 @@ export function createIslandWorld() {
 	}
 	// the cities round you on Earth (space/landing.js citiesAround): the nearest and the region's
 	// biggest, a tap away, stood in the middle of its streets (they grow round you there)
-	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px system-ui;letter-spacing:.12em;color:#a5f6e2;');
+	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.12em;color:#a5f6e2;');
 	cityHead.textContent = 'CITIES NEAR YOU';
 	const cityList = css(document.createElement('div'), 'flex:none;display:none;flex-direction:column;gap:4px;');
 	cityList.dataset.cities = '';
@@ -864,7 +864,7 @@ export function createIslandWorld() {
 		const W = world, ll = W?.globe && !W.orbit?.active?.() ? globeLL(camera.position.x, camera.position.z) : null;
 		const list = ll ? citiesAround(ll.lat, ll.lon, 8) : [];
 		cityList.replaceChildren(...list.map((c) => {
-			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px system-ui;min-height:44px;cursor:pointer;');
+			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:44px;cursor:pointer;');
 			b.dataset.city = c.id;
 			const here = c.km < 3;
 			const name = document.createElement('div'); name.style.cssText = 'font-weight:600;'; name.textContent = `${here ? '◉' : '⌖'} ${c.name}`;
@@ -1718,7 +1718,7 @@ if (typeof window !== 'undefined') {
 				const d = bank.daily(id, 90), v = d.map((q) => q.balance), lo = Math.min(...v, 0), hi = Math.max(...v, 1), W = 560, H = 160;
 				const pts = d.map((q, i) => `${(10 + i * (W - 20) / Math.max(1, d.length - 1)).toFixed(1)},${(H - 10 - (q.balance - lo) * (H - 20) / Math.max(1, hi - lo)).toFixed(1)}`).join(' ');
 				let el = document.getElementById('bank-panel');
-				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px system-ui;max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
+				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px var(--bard-body,system-ui,sans-serif);max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
 				const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 				el.innerHTML = `<b>${esc(bank.household(id))}</b> ${bank.balance(bank.household(id))} credits<br><svg width="${W}" height="${H}" style="max-width:100%"><polyline fill="none" stroke="#7fb4ff" stroke-width="2" points="${pts}"/></svg><br>` + bank.history(id).slice(0, 8).map((t) => `day ${t.day} ${esc(t.kind)} ${t.amount} ${esc(t.counterparty)}`).join('<br>');
 				return 'shown (click it to close)';

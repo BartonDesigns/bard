@@ -747,7 +747,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 	if (menu) {
 		// a way to meet each one, in the places menu (with Skills and magic, and Test mode)
-		const css = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		const css = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		const stop = (el) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) el.addEventListener(ev, (x) => x.stopPropagation()); };
 		const btn = document.createElement('button');
 		btn.type = 'button'; btn.textContent = '☠ Creatures'; btn.title = 'Meet one of the creatures, just ahead of you'; btn.style.cssText = css;

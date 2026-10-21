@@ -177,7 +177,7 @@ export function createBeyond({ renderer, scene: worldScene, camera, island, shar
 	mount.appendChild(veil);
 	const leaveBtn = document.createElement('button');
 	leaveBtn.textContent = '⟲ Leave the horizon';
-	leaveBtn.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:41;display:none;padding:8px 14px;border-radius:18px;border:1px solid rgba(255,255,255,.35);background:rgba(20,12,40,.6);color:#f2eaff;font:14px system-ui,sans-serif';
+	leaveBtn.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:41;display:none;padding:8px 14px;border-radius:18px;border:1px solid rgba(255,255,255,.35);background:rgba(20,12,40,.6);color:#f2eaff;font:14px var(--bard-body,system-ui,sans-serif)';
 	for (const ev of ['pointerdown', 'touchstart']) leaveBtn.addEventListener(ev, (e) => e.stopPropagation());
 	leaveBtn.onclick = () => leave();
 	mount.appendChild(leaveBtn);

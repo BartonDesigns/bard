@@ -26,8 +26,8 @@ import { heroSeed, heroChoice } from '../people/hero.js';
 
 const ID_KEY = 'l99-mp-id', NAME_KEY = 'crysis-name';
 const EYE = 1.68;
-const BTN = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
-const SMALL = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(1,169,130,.18);color:#eafaf6;font:12px system-ui;min-height:32px;cursor:pointer;';
+const BTN = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
+const SMALL = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(1,169,130,.18);color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);min-height:32px;cursor:pointer;';
 const stop = (el) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) el.addEventListener(ev, (e) => e.stopPropagation()); return el; };
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 
@@ -335,7 +335,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 
 	const chip = stop(document.createElement('button'));
 	chip.type = 'button'; chip.dataset.hudText = 'room';
-	chip.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:none;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.6);color:#eafaf6;font:600 12px system-ui;z-index:6;cursor:pointer;';
+	chip.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:none;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.6);color:#eafaf6;font:600 12px var(--bard-display,system-ui,sans-serif);z-index:6;cursor:pointer;';
 	chip.onclick = (e) => { e.stopPropagation(); openPanel(); };
 	mount.appendChild(chip);
 	function chipDraw() {
@@ -350,7 +350,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	}
 
 	const panel = stop(document.createElement('div'));
-	panel.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(100px + env(safe-area-inset-top));width:min(300px,82vw);max-height:60%;overflow-y:auto;padding:12px;border-radius:14px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;flex-direction:column;gap:8px;z-index:7;';
+	panel.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(100px + env(safe-area-inset-top));width:min(300px,82vw);max-height:60%;overflow-y:auto;padding:12px;border-radius:14px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;flex-direction:column;gap:8px;z-index:7;';
 	mount.appendChild(panel);
 	function openPanel() { panel.style.display = 'flex'; drawPanel(); }
 	function drawPanel() {
@@ -362,7 +362,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		panel.append(head);
 		// your name, as friends see it
 		const nm = document.createElement('input'); nm.name = 'player-name'; nm.setAttribute('aria-label', 'Your name'); nm.value = name(); nm.maxLength = 24; nm.title = 'Your name';
-		nm.style.cssText = 'padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:#eafaf6;font:13px system-ui;';
+		nm.style.cssText = 'padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);';
 		nm.addEventListener('change', () => { store.set(NAME_KEY, cleanName(nm.value)); hint('Name saved: friends see it next time you join.', 2500, 1); });
 		panel.append(nm);
 		if (room.status === 'off') { panel.append(button('👥 Invite friends', () => invite())); return; }
@@ -376,7 +376,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (!remotes.list.size) { const p = document.createElement('div'); p.style.opacity = '.7'; p.textContent = 'No one else yet. Send the link.'; panel.append(p); }
 		// the host's plans, for guests: read only, with the way shown
 		if (!room.isHost() && plans.size) {
-			const h = document.createElement('div'); h.textContent = 'THE HOST\'S PLANS'; h.style.cssText = 'font:700 11px system-ui;letter-spacing:.08em;opacity:.6;';
+			const h = document.createElement('div'); h.textContent = 'THE HOST\'S PLANS'; h.style.cssText = 'font:700 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.08em;opacity:.6;';
 			panel.append(h);
 			for (const e of plans.values()) {
 				if (e.status !== 'agreed') continue;
@@ -410,7 +410,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	function showInvite() {
 		card?.remove();
 		card = stop(document.createElement('div'));
-		card.style.cssText = 'position:absolute;left:50%;top:26%;transform:translateX(-50%);width:min(380px,86vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.94);border:1px solid rgba(95,240,198,.4);color:#eafaf6;font:13px system-ui;z-index:12;display:flex;flex-direction:column;gap:8px;';
+		card.style.cssText = 'position:absolute;left:50%;top:26%;transform:translateX(-50%);width:min(380px,86vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.94);border:1px solid rgba(95,240,198,.4);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);z-index:12;display:flex;flex-direction:column;gap:8px;';
 		const big = document.createElement('div'); big.style.cssText = 'font:700 30px ui-monospace,monospace;letter-spacing:.2em;text-align:center;'; big.textContent = room.room();
 		const t = document.createElement('div'); t.textContent = 'Your room is open. Friends who open this link come to you (up to 8 of you):';
 		const inp = document.createElement('input'); inp.name = 'room-link'; inp.setAttribute('aria-label', 'Room link'); inp.readOnly = true; inp.value = link();
@@ -429,7 +429,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		pop?.remove(); pop = null;
 		if (!r) return;
 		pop = stop(document.createElement('div'));
-		pop.style.cssText = `position:absolute;left:${Math.min(e.clientX - R.left, R.width - 200)}px;top:${Math.max(8, e.clientY - R.top - 60)}px;display:flex;gap:6px;align-items:center;padding:8px;border-radius:12px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.2);color:#eafaf6;font:13px system-ui;z-index:8;`;
+		pop.style.cssText = `position:absolute;left:${Math.min(e.clientX - R.left, R.width - 200)}px;top:${Math.max(8, e.clientY - R.top - 60)}px;display:flex;gap:6px;align-items:center;padding:8px;border-radius:12px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.2);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);z-index:8;`;
 		const n = document.createElement('b'); n.textContent = r.name;
 		pop.append(n, ...extra(r, () => { pop?.remove(); pop = null; }), button(following === r.id ? 'Stop' : 'Follow', () => { pop.remove(); pop = null; following === r.id ? unfollow() : follow(r.id); }), button('Go to', () => { pop.remove(); pop = null; goTo(r.id); }));
 		mount.appendChild(pop);

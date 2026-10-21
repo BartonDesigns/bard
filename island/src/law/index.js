@@ -259,7 +259,7 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		btn = document.createElement('button');
 		btn.type = 'button'; btn.textContent = '✋ Surrender'; btn.title = 'Surrender (H)'; btn.setAttribute('aria-label', 'Surrender');
 		// (ui/touch-skin.js gives it its place by the thumb and its icon)
-		btn.style.cssText = 'position:absolute;right:calc(16px + env(safe-area-inset-right));bottom:calc(200px + env(safe-area-inset-bottom));z-index:30;display:none;min-height:44px;padding:0 14px;border-radius:22px;border:1px solid #ffffff55;background:#1c2540cc;color:#fff;font:600 14px system-ui';
+		btn.style.cssText = 'position:absolute;right:calc(16px + env(safe-area-inset-right));bottom:calc(200px + env(safe-area-inset-bottom));z-index:30;display:none;min-height:44px;padding:0 14px;border-radius:22px;border:1px solid #ffffff55;background:#1c2540cc;color:#fff;font:600 14px var(--bard-display,system-ui,sans-serif)';
 		btn.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); surrender(); });
 		mount.appendChild(btn);
 	}

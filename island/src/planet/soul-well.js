@@ -15,7 +15,7 @@ export function createSoulWell({ world, profile, scene, camera, mount, shared, s
 	world.underworld.addGlow?.(site.x, site.y + 2, site.z, 16, [0.28, .7, .85], 1.5, 0, true);
 	const waypoint = createWaypoint({ scene, camera, mount, top: 126, onTap: () => hint('Walk through the marked tunnel. The Quiet Well lies beneath the island.', 5000) });
 	const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Cleanse your soul';
-	button.style.cssText = 'position:absolute;bottom:calc(190px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:14px 20px;border-radius:14px;border:1px solid #9cdddb;background:#102f36;color:#edfffb;font:600 16px system-ui;z-index:12;display:none;touch-action:manipulation';
+	button.style.cssText = 'position:absolute;bottom:calc(190px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:14px 20px;border-radius:14px;border:1px solid #9cdddb;background:#102f36;color:#edfffb;font:600 16px var(--bard-display,system-ui,sans-serif);z-index:12;display:none;touch-action:manipulation';
 	for (const e of ['pointerdown','pointerup','touchstart','keydown']) button.addEventListener(e, e => e.stopPropagation());
 	mount.append(button);
 	let ritual = null, generation = 0, pending = false, disposed = false, confirming = false;

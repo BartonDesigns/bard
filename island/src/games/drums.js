@@ -51,14 +51,14 @@ export const GAME = {
 			});
 			// the lanes on screen: three columns with a hit line near the bottom
 			lanes = K.el('position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none',
-				LANES.map(([name], i) => `<div style="position:absolute;left:${i * 33.33}%;width:33.33%;top:0;bottom:0;border-left:${i ? '1px solid rgba(255,255,255,.12)' : 'none'}"><div style="position:absolute;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));width:62px;height:62px;margin-left:-31px;border-radius:50%;border:3px solid ${LANES[i][1]};background:rgba(8,20,26,.45);color:#eafaf6;font:600 11px/56px system-ui;text-align:center">${name}</div></div>`).join(''));
+				LANES.map(([name], i) => `<div style="position:absolute;left:${i * 33.33}%;width:33.33%;top:0;bottom:0;border-left:${i ? '1px solid rgba(255,255,255,.12)' : 'none'}"><div style="position:absolute;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));width:62px;height:62px;margin-left:-31px;border-radius:50%;border:3px solid ${LANES[i][1]};background:rgba(8,20,26,.45);color:#eafaf6;font:600 11px/56px var(--bard-display,system-ui,sans-serif);text-align:center">${name}</div></div>`).join(''));
 			dots = [];
 			for (let i = 0; i < 30; i++) {
 				const d = document.createElement('div');
 				d.style.cssText = 'position:absolute;top:0;width:46px;height:46px;margin-left:-23px;margin-top:-23px;border-radius:50%;display:none;box-shadow:0 0 10px rgba(255,200,120,.7)';
 				lanes.appendChild(d); dots.push(d);
 			}
-			judge = K.el('position:absolute;left:50%;top:40%;transform:translateX(-50%);font:800 24px system-ui;color:#ffb347;text-shadow:0 2px 6px #000;pointer-events:none;opacity:0;transition:opacity .3s');
+			judge = K.el('position:absolute;left:50%;top:40%;transform:translateX(-50%);font:800 24px var(--bard-display,system-ui,sans-serif);color:#ffb347;text-shadow:0 2px 6px #000;pointer-events:none;opacity:0;transition:opacity .3s');
 		}
 		function reset() {
 			S = { t: 0, next: 0, score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0, step: -1, state: 'play', hitAt: [0, 0, 0] };
