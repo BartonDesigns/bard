@@ -209,9 +209,10 @@ function lichenLeaves(m) {
 }
 
 // how far off a building's windows start to clear onto the rooms built behind them, and where
-// they are all clear (metres; inside interiors/index.js's build reach, so a building's rooms are
-// always built before its glass begins to clear)
-const DOOR_CLEAR = GFX_PHONE ? '20.0, 42.0' : '26.0, 64.0';
+// they are all clear (metres): clear across the street and beyond (a firefight from one shop
+// into the one opposite: Josh 2026-10-21), easing in only at the edge of interiors/index.js's
+// build reach, so the glass is never seen to change as you walk
+const DOOR_CLEAR = GFX_PHONE ? '44.0, 56.0' : '70.0, 86.0';
 export function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {

@@ -25,6 +25,7 @@ import { createWorkplaceNavigation } from '../people/workplace-navigation.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock, lightingMovers } from './lighting.js';
 import { profileOf } from '../economy/frontage.js';
 import './estab-kit.js';
+import { buildSlice, viewDistance } from '../world/buildslice.js';
 
 const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'restaurant'], mission: ['cafe', 'restaurant', 'laundromat', 'grocer', 'bar', 'florist'], northbeach: ['cafe', 'restaurant', 'bar', 'books'], sunset: ['restaurant', 'cafe', 'laundromat', 'grocer'], any: ['cafe', 'grocer', 'books', 'restaurant', 'laundromat', 'bar', 'florist', 'boutique'] };
 // the buildings anyone may walk into (the rest are homes, or shut)
@@ -38,6 +39,7 @@ const STYLE_OF = { victorian: 'victorian', pacheights: 'edwardian', nobhill: 'ed
 export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 } } = {}) {
 	const BUILD_R = isPhone ? 55 : 85, DROP_R = BUILD_R + 30, MAX = isPhone ? 3 : 6;
 	let BUDGET = isPhone ? 3 : 4;
+	const fwd = new THREE.Vector3();
 	const group = new THREE.Group();
 	group.name = 'interiors';
 	scene.add(group);
@@ -291,7 +293,10 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				const d = Math.max(0, Math.hypot(S.o.x - x, S.o.z - z) - Math.max(S.o.w, S.o.d) / 2);
 				if (d < BUILD_R) cands.push({ d, key: S.key, o: S.o, use: 'site', site: S });
 			}
-			cands.sort((a, b) => a.d - b.d);
+			// (the nearest first; of those near alike, the ones you are looking at)
+			camera.getWorldDirection(fwd);
+			for (const c of cands) c.v = viewDistance(c.d, c.o.x, c.o.z, p, fwd);
+			cands.sort((a, b) => a.v - b.v);
 			cands.length = Math.min(cands.length, MAX);
 			for (const [key, B] of live) {
 				const d = Math.max(0, Math.hypot(B.o.x - x, B.o.z - z) - Math.max(B.o.w, B.o.d) / 2);
@@ -319,8 +324,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				if (cur !== B.cur) { job = { key: B.key, B, gen: levelsFor(B, cur), climb: true }; break; }
 			}
 		}
-		const t0 = performance.now();
-		while (job && performance.now() - t0 < BUDGET) {
+		const t0 = performance.now(), slice = buildSlice(dt, BUDGET);
+		while (job && performance.now() - t0 < slice) {
 			const t1 = performance.now();
 			let r;
 			try { r = job.gen.next(); } catch (e) { console.warn('interior', e); r = { done: true, value: null }; }
