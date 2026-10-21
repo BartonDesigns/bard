@@ -16,7 +16,7 @@ const whole = (seg) => {
 	for (const p of g) { p.deleteAttribute('uv'); }
 	return mergeGeometries(g);
 };
-const faces = (g) => { const P = g.attributes.position, N = g.attributes.normal, out = []; for (let t = 0; t < P.count; t += 3) { const c = [0, 1, 2].map((a) => (P.getComponent(t, a) + P.getComponent(t + 1, a) + P.getComponent(t + 2, a)) / 3); out.push({ c, n: [N.getX(t), N.getY(t), N.getZ(t)], key: c.map((v) => v.toFixed(4)).join(',') + '|' + [0, 1, 2].map((k) => [P.getX(t + k), P.getY(t + k), P.getZ(t + k)].map((v) => v.toFixed(4)).join(',')).join(';') }); } return out; };
+const faces = (g0) => { const g = g0.index ? g0.toNonIndexed() : g0, P = g.attributes.position, N = g.attributes.normal, out = []; for (let t = 0; t < P.count; t += 3) { const c = [0, 1, 2].map((a) => (P.getComponent(t, a) + P.getComponent(t + 1, a) + P.getComponent(t + 2, a)) / 3); out.push({ c, n: [N.getX(t), N.getY(t), N.getZ(t)], key: c.map((v) => v.toFixed(3)).join(',') + '|' + [0, 1, 2].map((k) => [P.getX(t + k), P.getY(t + k), P.getZ(t + k)].map((v) => (Math.round(v * 1000) / 1000 + 0).toFixed(3)).join(',')).join(';') }); } return out; };
 // the solid parts a hidden face can lie against: the roof (below 0), the curb, the cabinet, the shrouds
 const solid = (x, y, z) => y < 0 || (Math.abs(x) < 0.625 && y < 0.18 && Math.abs(z) < 1.05) || (Math.abs(x) < 0.55 && y > 0.18 && y < 1.18 && Math.abs(z) < 0.975)
 	|| [-0.45, 0.45].some((fz) => Math.hypot(x, z - fz) < 0.3 && y > 1.18 && y < 1.3);
@@ -37,8 +37,9 @@ test('the rooftop unit leaves out only faces lying against something solid', () 
 	assert.equal(faces(rooftopUnit(6)).length, 112);
 });
 
-test('the rooftop unit keeps its colours and normals for every face', () => {
-	const g = rooftopUnit(6);
-	for (const k of ['position', 'normal', 'color']) assert.equal(g.attributes[k].count, 112 * 3, k);
-	assert.ok(!g.index);
+test('the rooftop unit keeps its colours and normals for every face, its corners shared', () => {
+	const g = rooftopUnit(6), flat = g.toNonIndexed();
+	for (const k of ['position', 'normal', 'color']) assert.equal(flat.attributes[k].count, 112 * 3, k);
+	assert.equal(g.index.count, 112 * 3);
+	assert.ok(g.attributes.position.count < 112 * 3 * 0.5, `corners: ${g.attributes.position.count}`);
 });

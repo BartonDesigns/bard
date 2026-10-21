@@ -14,7 +14,7 @@
 // the same real cars, paint and decals as those parked at the kerbs.
 
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const colored = (geo, c) => { const g = geo.index ? geo.toNonIndexed() : geo, n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); if (g.attributes.uv) g.deleteAttribute('uv'); return g; };
 const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
@@ -43,14 +43,16 @@ const under = (c, n) => n.y < -0.99;
 // a small box at one end. The faces nothing can see are left out: the curb's underside on the
 // roof, the cabinet's on the curb, the shrouds' on the cabinet and the fans' in their shrouds,
 // and the backs of the coil and the box, inside the cabinet (32 of a phone's 144 triangles).
+// (Indexed, like all the kit: a corner shared by the triangles of a face is lit once, not once
+// for each, which halves the vertices of a box-built thing.)
 export function rooftopUnit(seg = 14) {
 	const body = [0.8, 0.81, 0.8], dark = [0.16, 0.17, 0.18], grille = [0.42, 0.43, 0.44];
 	const fan = (z) => [hide(C(0.34, 0.12, 0, 1.18, z, grille, seg), under), hide(C(0.3, 0.02, 0, 1.3, z, dark, seg), under)];
-	return M([
+	return mergeVertices(M([
 		hide(B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), under), hide(B(1.1, 1.0, 1.95, 0, 0.18, 0, body), under),
 		...fan(-0.45), ...fan(0.45),
 		hide(B(0.03, 0.62, 1.5, 0.56, 0.4, 0, grille), (c, n) => n.x < -0.99), hide(B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body), (c, n) => n.z < -0.99),
-	]);
+	]));
 }
 // the shapes, each in its own metres, length along z, standing on y 0
 function shapes() {
@@ -218,7 +220,9 @@ export function createProps(group, wrap, isPhone) {
 	for (const [k, [cap, cast, phone, mat]] of Object.entries(SPEC)) {
 		if (isPhone && !phone) continue;
 		const n = isPhone ? Math.ceil(cap / 2) : cap;
-		const im = new THREE.InstancedMesh(S[k], mat === 'solar' ? solarM : base, n);
+		// (each shape indexed: its parts are built face by face, three corners a triangle, and a
+		// corner the triangles of a face share is lit once, not twice or three times)
+		const im = new THREE.InstancedMesh(mergeVertices(S[k]), mat === 'solar' ? solarM : base, n);
 		im.count = 0; im.frustumCulled = false; im.castShadow = cast; im.receiveShadow = true;
 		im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
 		group.add(im);

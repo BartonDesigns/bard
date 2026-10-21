@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { commercialStack } from '../interiors/workplace-plan.js';
 import { toWorld } from './geo.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/vegetation.js';
 import { addLodFade, NONE_IN, detailClock, updateDetailClock } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
@@ -736,7 +736,7 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const z of [-0.25, 0, 0.25]) for (const x of [-0.5, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, z, fr));
 		for (const y of [0, 0.33, 1]) { bars.push(B(1.02, 0.03, 0.02, 0, y, -0.5, fr)); bars.push(B(0.02, 0.03, 1.0, -0.5, y, 0, fr)); bars.push(B(0.02, 0.03, 1.0, 0.5, y, 0, fr)); }
 		bars.push(B(1.06, 0.03, 1.06, 0, 1.0, 0, fr), B(1.04, 0.33, 0.01, 0, 0, -0.5, [0.85, 0.84, 0.8]));
-		const sunF = mergeGeometries(bars);
+		const sunF = mergeVertices(mergeGeometries(bars));          // (indexed: a corner lit once, not once a triangle)
 		const sunG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 		// a clothesline: two T-posts, three lines between, and the washing pegged out
 		const post = [0.55, 0.56, 0.57], line = [0.9, 0.9, 0.88], parts = [];
@@ -744,7 +744,7 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const z of [-0.4, 0, 0.4]) parts.push(B(4.8, 0.012, 0.012, 0, 1.87, z, line));
 		const wash = [[0.9, 0.9, 0.88], [0.3, 0.45, 0.7], [0.85, 0.35, 0.3], [0.95, 0.85, 0.45], [0.5, 0.65, 0.5], [0.95, 0.7, 0.75], [0.25, 0.25, 0.3]];
 		for (let k = 0; k < 9; k++) { const w = 0.35 + (k * 37 % 5) * 0.1, h = 0.35 + (k * 53 % 4) * 0.12; parts.push(B(w, h, 0.01, -2 + (k % 3) * 1.5 + (k * 29 % 7) * 0.08, 1.86 - h, [-0.4, 0, 0.4][Math.floor(k / 3)], wash[k % wash.length])); }
-		const lineG = mergeGeometries(parts);
+		const lineG = mergeVertices(mergeGeometries(parts));
 		const M = (o) => withRise(new THREE.MeshStandardMaterial({ vertexColors: true, ...o }), rise, 'kitrise');
 		// (on a phone the roof and yard kit throws no shadow: every unit was drawn again in the
 		// shadow pass, out to the edge of the city, for shadows a few pixels across)

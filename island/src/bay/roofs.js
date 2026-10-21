@@ -10,6 +10,7 @@
 // charred and holed. No textures.
 
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GFX_PHONE } from '../world/device.js';
 
 const PHONE = GFX_PHONE;
@@ -87,13 +88,17 @@ export function roofGeometry(hip) {
 			quad([e, 0.05, Z, Z], [c, 0.05, Z, Z], [c, 0, inEnd, Z], [e, 0, inEnd, Z], nE, CAP);
 		}
 	}
-	const g = new THREE.InstancedBufferGeometry();
+	const g = new THREE.BufferGeometry();
 	g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
 	g.setAttribute('aVP', new THREE.Float32BufferAttribute(VP, 2));
 	g.setAttribute('aO1', new THREE.Float32BufferAttribute(O1, 4));
 	g.setAttribute('aO2', new THREE.Float32BufferAttribute(O2, 4));
-	return g;
+	// (indexed: the corners the triangles of a face share are lifted and lit once, a third fewer
+	// for each of the thousands of roofs)
+	const out = new THREE.InstancedBufferGeometry().copy(mergeVertices(g));
+	out.instanceCount = Infinity;
+	return out;
 }
 
 // the roof material's own parts: the offsets, the parts' colours, the courses
