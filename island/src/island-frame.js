@@ -325,6 +325,7 @@ export function islandFrame(iw, now) {
 	fishing.update(dt, iw.time, !arcade.active() && !W.player.state.flying && !iw.drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 	W.roads?.update(iw.time, sk.night);
 	shaderWarm.tick(dt, { frameMs: iw.frameAvg });
+	shaderWarm.buildHeld();
 	guide.update(dt);
 	watchTalk(dt);
 	people.update(dt, iw.time, camera.position, sk.night, camera.position.y > -0.5);
