@@ -103,6 +103,73 @@ export function createShaderWarm(renderer, scene, camera) {
 		}
 		return n;
 	}
-	function reset() { epoch++; run++; cancelWork?.(); cancelWork = null; queue = []; work = null; done = new WeakMap(); last.length = 0; t = 0; compiled = 0; }
-	return { all, textures, tick, prepare, reset, recent: () => last.slice(), info: () => ({ pending: queue.length, busy: !!work, compiled }) };
+	// The gate. A material drawn for the first time builds its shaders right there, inside the
+	// frame, and a city coming into view brings a hundred or so at once: a phone stops for
+	// seconds (and can be closed for it). So in the frame's own render of the scene a draw of a
+	// material with no shaders yet goes ahead only while that frame's budget of such draws
+	// lasts (the time they took, at least one a frame); the rest are left out of that frame and
+	// built in the background (renderer.compileAsync, a few things a frame), to be drawn a frame
+	// or two later. Nothing is drawn differently once in, and nothing that has its shaders waits.
+	// The sun's shadow pass inside that render goes through the same gate (its depth materials).
+	const props = renderer.properties, held = new Set();
+	let building = new WeakSet(), firstDraw = new WeakSet();
+	let gateOn = false, inMain = false, spent = 0, passed = 0, frameN = 0, budgetMs = 24, built = 0, skipped = 0, compiling = 0;
+	const isNew = (m) => !props.get(m).programs || building.has(m) || firstDraw.has(m);
+	function gate({ budget = 24 } = {}) {
+		budgetMs = budget;
+		if (gateOn) return;
+		gateOn = true;
+		const render = renderer.render, rbd = renderer.renderBufferDirect;
+		// (only the frame's own render: any other drawn from inside it, the environment's maps
+		// made on first use for one, is never held back, or what it makes would stay wrong)
+		renderer.render = function (sc, cam) {
+			const was = inMain;
+			if (sc !== scene || renderer.getRenderTarget() !== null) {
+				inMain = false;
+				try { return render.apply(this, arguments); } finally { inMain = was; }
+			}
+			inMain = true; spent = 0; passed = 0; frameN++;
+			try { return render.apply(this, arguments); } finally { inMain = was; }
+		};
+		renderer.renderBufferDirect = function (cam, sc, geometry, material, object, group) {
+			if (!inMain || !material || !isNew(material)) return rbd.call(this, cam, sc, geometry, material, object, group);
+			if (building.has(material) || (passed > 0 && spent >= budgetMs)) {
+				skipped++;
+				// (its own material built off the frame; a shadow's depth material waits its turn)
+				if (sc && !building.has(material) && !firstDraw.has(material) && held.size < 400) held.add(object);
+				return undefined;
+			}
+			const t0 = performance.now();
+			try { return rbd.call(this, cam, sc, geometry, material, object, group); } finally { spent += performance.now() - t0; passed++; built++; firstDraw.delete(material); }
+		};
+	}
+	// a few of the held-back things' materials built a frame, in the background
+	const heldBatch = new THREE.Group();
+	function buildHeld(n = 2) {
+		if (!held.size || compiling > 2 || renderer.getContext().isContextLost()) return;
+		const take = [], mats2 = [];
+		for (const o of held) {
+			held.delete(o);
+			if (!o.material || !o.parent) continue;
+			const ms = mats(o).filter((m) => m && !props.get(m).programs);
+			if (!ms.length) continue;
+			take.push(o); mats2.push(...ms);
+			if (take.length >= n) break;
+		}
+		if (!take.length) return;
+		heldBatch.children = take;
+		let job;
+		try { job = renderer.compileAsync ? renderer.compileAsync(heldBatch, camera, scene) : (renderer.compile(heldBatch, camera, scene), Promise.resolve()); }
+		catch { job = Promise.resolve(); }
+		finally { heldBatch.children = []; }
+		// (left out while the graphics build them; then the first draw can still wait on them, where
+		// the graphics cannot say when they are done, so it counts against the frame's budget)
+		for (const m of mats2) building.add(m);
+		compiling++;
+		// (a lost context may never answer: let go after a few seconds, drawn as before)
+		const gen = epoch, B = building, F = firstDraw;
+		Promise.race([Promise.resolve(job), new Promise((ok) => setTimeout(ok, 4000))]).catch(() => {}).finally(() => { if (gen === epoch) compiling--; for (const m of mats2) { B.delete(m); F.add(m); } });
+	}
+	function reset() { epoch++; run++; cancelWork?.(); cancelWork = null; queue = []; work = null; done = new WeakMap(); last.length = 0; t = 0; compiled = 0; held.clear(); building = new WeakSet(); firstDraw = new WeakSet(); compiling = 0; }
+	return { all, textures, tick, prepare, reset, gate, buildHeld, recent: () => last.slice(), info: () => ({ pending: queue.length, busy: !!work, compiled, gate: gateOn ? { held: held.size, built, skipped, frames: frameN, budgetMs } : null }) };
 }

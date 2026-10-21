@@ -534,6 +534,10 @@ export function createIslandWorld() {
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = HOOKS.scene = new THREE.Scene();
 	const shaderWarm = createShaderWarm(renderer, scene, camera);
+	// (a frame builds only so many new shaders: the rest of what came into view a frame or two
+	// later, built in the background meanwhile; world/shaderwarm.js gate)
+	shaderWarm.gate({ budget: GFX ? 20 : 40 });
+	HOOKS.shaderWarm = shaderWarm;
 
 	const shared = {
 		aimSensitivity: loadAimSensitivity(),
@@ -1811,6 +1815,8 @@ if (typeof window !== 'undefined') {
 		governorTier: (t) => { const G = HOOKS.governor; if (!G) return null; G.state.tier = Math.max(0, Math.min(3, Math.round(+t || 0))); G.state.since = G.state.sinceDown = 0; return G.info(); },
 		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
 		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
+		// the shader warm and its gate (world/shaderwarm.js): what is held back and built in the background
+		shaders: () => HOOKS.shaderWarm?.info() ?? null,
 		// the frame's own failures kept on this device (main.js keepFrameError), newest last
 		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
 		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },

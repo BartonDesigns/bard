@@ -6530,12 +6530,16 @@ function blank(){for(const [,line] of entries)line.hidden=true;}
 function reflow(){blank();schedule();}
 function attach(scope){const inputs=[];if(scope.matches?.(selector))inputs.push(scope);if(scope.querySelectorAll)inputs.push(...scope.querySelectorAll(selector));for(const input of inputs){if(entries.has(input))continue;const host=input.parentElement;if(!host)continue;
  if(root.getComputedStyle(host).position==='static')host.classList.add('peak-slider-host180');
- const line=document.createElement('span');line.className='peak-slider-line180';line.setAttribute('aria-hidden','true');line.hidden=true;host.appendChild(line);entries.set(input,line);
+ const line=document.createElement('span');line.className='peak-slider-line180';line.setAttribute('aria-hidden','true');line.hidden=true;dress(line);host.appendChild(line);entries.set(input,line);
  const described=(input.getAttribute('aria-describedby')||'').split(/\s+/).filter(Boolean);if(!described.includes('peak-slider-help180'))described.push('peak-slider-help180');input.setAttribute('aria-describedby',described.join(' '));
  resizeObserver?.observe(input);
  }schedule();}
-function paint(state){const ceiling=Number(state?.ceiling);if(!(ceiling>0))return;const db=Math.max(-48,20*Math.log10(ceiling)),p=Math.max(0,Math.min(1,(db+48)/48)),key=p.toFixed(5)+'|'+(state.reduction<-.2);if(key===last)return;last=key;
- document.documentElement.style.setProperty('--peak-pos180',p.toFixed(5));document.documentElement.style.setProperty('--peak-line-glow180',state.reduction<-.2?'0 0 6px #ff424faa':'0 0 3px #ff424f66');
+// (set on the markers themselves, not the page's root: a custom property on <html> restyles every
+// element on the page, and the guard reports 25 times a second while music plays; 0.05 dB steps)
+let pos='.93750',glow='0 0 3px #ff424f66';
+function dress(line){line.style.setProperty('--peak-pos180',pos);line.style.setProperty('--peak-line-glow180',glow);}
+function paint(state){const ceiling=Number(state?.ceiling);if(!(ceiling>0))return;const db=Math.max(-48,20*Math.log10(ceiling)),p=Math.max(0,Math.min(1,(db+48)/48)),key=(Math.round(p*960)/960).toFixed(5)+'|'+(state.reduction<-.2);if(key===last)return;last=key;
+ pos=key.split('|')[0];glow=state.reduction<-.2?'0 0 6px #ff424faa':'0 0 3px #ff424f66';for(const [,line] of entries)dress(line);
 }
 function start(){if(started)return;started=true;const help=document.createElement('span');help.id='peak-slider-help180';help.className='peak-slider-help180';help.textContent='The red marker mirrors the live master output ceiling shown by Peak Guard. It is not a limit on this effect’s value.';document.body.appendChild(help);
  if(root.ResizeObserver)resizeObserver=new root.ResizeObserver(reflow);attach(document);paint(root.L99Peak177?.state());
@@ -27820,7 +27824,7 @@ root.L99Dive227={start,climb,landed,finish,get active(){return !!dive;}};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=f5d7498c8a'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=8f4f1a6213'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
