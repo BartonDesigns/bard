@@ -175,7 +175,8 @@ export function createDamage(ctx) {
 			M.near.getMatrixAt(q.slot, T4); out.push([M.near, q.slot, T4.clone()]); M.near.setMatrixAt(q.slot, HIDE);
 		}
 		M.city.group?.traverse((im) => {
-			if (!im.isInstancedMesh || im === M.near || im === M.hips || im === M.gables || im.count > 20000) return;
+			// (a near copy of another mesh's instances, city.js's rooftop units: it follows the one copied)
+			if (!im.isInstancedMesh || im === M.near || im === M.hips || im === M.gables || im.count > 20000 || im.userData.copyOf) return;
 			for (let i = 0; i < im.count; i++) {
 				im.getMatrixAt(i, T4);
 				const el = T4.elements;

@@ -3,6 +3,9 @@
 // ↑/↓, Space, C or the stick held hand control back; A/D or ←/→ nudge the course, and
 // dragging still looks round. On foot it walks (B: walk or run), flying it flies at the
 // chosen speed, on a road it picks the turns, and in space it cruises from body to body.
+// On foot and flying at the gentlest speed it goes after the aether showing near by (motes and
+// wells, magic/aether.js): it turns aside to one, gathers it by walking or swooping through it,
+// and carries on the way it was going.
 // The camera changes shot on the music's bars and phrases (music/automusic.js pulse()).
 
 import * as THREE from 'three';
@@ -17,6 +20,9 @@ const gnd = (I, fly, x, z) => Math.max(I.heightAt(x, z), fly ? 0 : -1e9);
 const OFFS = [-1.25, -0.8, -0.45, -0.2, 0, 0.2, 0.45, 0.8, 1.25];
 const WALK_D = [4, 9, 16, 26];
 const TRAIL = new Set(['track', 'path', 'footway', 'cycleway', 'pedestrian', 'bridleway']);
+// the aether gone after: how far it is looked for, how strongly it draws the course, how close the
+// last approach is steered straight at it, and how long one that cannot be reached is let be
+const HUNT_R = { walk: 60, fly: 110 }, HUNT_PULL = 2.6, HUNT_NEAR = 18, HUNT_SKIP = 180000;
 // the shots, round the subject: a (angle from behind), d (distance), h (height over the feet),
 // lh (height looked at), ahead (how far ahead of the subject is looked at), spin (rad/s round it)
 const WALK = [
@@ -55,20 +61,22 @@ const LIFT = ['build', 'chorus', 'bridge', 'verse'];
 const ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>';
 const CSS = '#l99-island-mount.l99-xhide :is(.l99-rail,.l99-thumb,.l99-left,.l99-joy,.l99-pair),#l99-island-mount.l99-xhide>button:not(.l99-x){opacity:0!important;pointer-events:none!important;}#l99-island-mount :is(.l99-rail,.l99-thumb,.l99-left,.l99-pair),#l99-island-mount>button{transition:opacity .8s;}';
 
-export function createExplore({ world, camera, drive, music, you, avatar, mount, button, hint, busy, isPhone }) {
+// motes(): the aether showing now, not yet gathered ([{ key, x, y, z, strand, well }]; magic/index.js)
+export function createExplore({ world, camera, drive, music, you, avatar, mount, button, hint, busy, isPhone, motes = () => null }) {
 	const H = {
 		on: false, mode: '', heading: 0, rate: 0, base: 0, ph: 0, target: 0, pitch: 0, roll: 0, run: false,
 		look: 0, lookP: 0, lookT: 0, setYaw: null, setPitch: null, thinkAt: 0, flyY: 0, stuckAt: 0, stuckX: 0, stuckZ: 0,
 		turnAt: 0, regionAt: 0, region: '', cand: '', candT: 0, key: 0, hudAt: 0, holdT: 0,
 		body: null, aim: new THREE.Vector3(), axis: new THREE.Vector3(), passR: 0, passT: 0, bodyAt: 0, lastBody: '',
 		prevMusic: false, prevThird: false,
+		prey: null, preyAt: 0, skip: new Map(),
 	};
 	// the camera's own state: offsets from the subject, eased
 	const C = {
 		shot: null, list: WALK, bars: 0, lastBars: -1, clockAt: 0, punch: 0, yaw: 0, spin: 0, off: new THREE.Vector3(), lookOff: new THREE.Vector3(),
 		lift: 0, cut: true, kind: '', energy: 0.4, barMs: 2400, barAt: 0,
 	};
-	const S = { dist: 0, minAgl: Infinity, minCam: Infinity, blocked: 0, frames: 0, shots: [], speed: 0, want: 0, tier: 1, mode: '' };
+	const S = { dist: 0, minAgl: Infinity, minCam: Infinity, blocked: 0, frames: 0, shots: [], speed: 0, want: 0, tier: 1, mode: '', gathered: 0, sought: 0, missed: 0 };
 	const AUTO = { x: 0, z: -1, run: false };
 	const BIAS = { energy: 0, tempo: 1 };
 	const V = new THREE.Vector3(), V2 = new THREE.Vector3(), F = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), DIR = new THREE.Vector3(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), QZ = new THREE.Quaternion(), ZAX = new THREE.Vector3(0, 0, 1), ORIGIN = new THREE.Vector3();
@@ -87,10 +95,10 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 	// the place's name, low on the left, as a new area comes into view
 	const third = document.createElement('div');
 	third.className = 'l99-x';
-	third.style.cssText = 'position:absolute;left:calc(28px + env(safe-area-inset-left));bottom:calc(22% + env(safe-area-inset-bottom));pointer-events:none;color:#fff;opacity:0;transition:opacity 1.6s, transform 1.6s;transform:translateX(-8px);text-shadow:0 1px 8px rgba(0,0,0,.55);font-family:system-ui;max-width:70vw;';
+	third.style.cssText = 'position:absolute;left:calc(28px + env(safe-area-inset-left));bottom:calc(22% + env(safe-area-inset-bottom));pointer-events:none;color:#fff;opacity:0;transition:opacity 1.6s, transform 1.6s;transform:translateX(-8px);text-shadow:0 1px 8px rgba(0,0,0,.55);font-family:var(--bard-body,system-ui,sans-serif);max-width:70vw;';
 	const tName = document.createElement('div'), tSub = document.createElement('div');
-	tName.style.cssText = 'font:300 24px/1.15 system-ui;letter-spacing:.06em;';
-	tSub.style.cssText = 'font:12px system-ui;letter-spacing:.14em;text-transform:uppercase;opacity:.75;margin-top:4px;border-top:1px solid rgba(255,255,255,.5);padding-top:5px;display:inline-block;';
+	tName.style.cssText = 'font:300 24px/1.15 var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;';
+	tSub.style.cssText = 'font:12px var(--bard-display,system-ui,sans-serif);letter-spacing:.14em;text-transform:uppercase;opacity:.75;margin-top:4px;border-top:1px solid rgba(255,255,255,.5);padding-top:5px;display:inline-block;';
 	third.append(tName, tSub);
 	mount.appendChild(third);
 	let thirdT = 0;
@@ -118,13 +126,14 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		H.on = true; H.mode = '';
 		H.heading = H.target = H.base = P.yaw; H.rate = 0; H.ph = Math.random() * 6; H.pitch = P.pitch; H.roll = 0;
 		H.look = H.lookP = 0; H.setYaw = H.setPitch = null; H.thinkAt = 0; H.flyY = P.pos.y; H.region = ''; H.cand = ''; H.regionAt = 0; H.body = null; H.lastBody = '';
+		H.prey = null; H.preyAt = 0;
 		H.stuckAt = 0; H.stuckX = P.pos.x; H.stuckZ = P.pos.z; H.turnAt = performance.now() + 6000;
 		H.prevMusic = music.on(); H.prevThird = !!you.state.third;
 		if (!H.prevMusic) music.auto(true, true);
 		music.bias(BIAS);
 		C.shot = null; C.lastBars = -1; C.seen = null; C.bars = 0; C.yaw = H.heading; C.spin = 0; C.lift = 0; C.punch = 0; C.kind = '';
 		C.off.copy(camera.position).sub(P.pos); C.lookOff.set(-Math.sin(P.yaw) * 4, 0, -Math.cos(P.yaw) * 4);
-		S.dist = 0; S.minAgl = S.minCam = Infinity; S.blocked = 0; S.frames = 0; S.shots.length = 0;
+		S.dist = 0; S.minAgl = S.minCam = Infinity; S.blocked = 0; S.frames = 0; S.shots.length = 0; S.gathered = S.sought = S.missed = 0;
 		lastX = P.pos.x; lastZ = P.pos.z; lastY = P.pos.y;
 		showHud(); sync();
 		hint(isPhone ? 'Exploring. Drag to look; the stick or the button hands back control.' : 'Exploring. A/D nudge, drag to look, B walk or run on foot; O, Esc or moving yourself hands back control.', 4500);
@@ -132,7 +141,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 	}
 	function stop(why) {
 		if (!H.on) return false;
-		H.on = false;
+		H.on = false; H.prey = null;
 		const W = world(), P = W?.player?.state;
 		if (P) {
 			if (P.auto === AUTO) P.auto = null;
@@ -211,7 +220,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		const now = performance.now();
 		const space = !!W.orbit?.active?.();
 		const mode = drive.active() ? 'drive' : space ? 'space' : P.flying ? 'fly' : 'walk';
-		if (mode !== H.mode) { H.mode = mode; H.thinkAt = 0; H.heading = H.target = H.base = mode === 'drive' ? drive.state.yaw : P.yaw; H.rate = 0; C.shot = null; C.list = mode === 'space' ? SPACE : mode === 'fly' ? FLY : WALK; C.kind = mode; }
+		if (mode !== H.mode) { H.mode = mode; H.thinkAt = 0; H.prey = null; H.heading = H.target = H.base = mode === 'drive' ? drive.state.yaw : P.yaw; H.rate = 0; C.shot = null; C.list = mode === 'space' ? SPACE : mode === 'fly' ? FLY : WALK; C.kind = mode; }
 		S.mode = mode;
 		// your own look: what the drag turned since we last set the heading
 		if (H.setYaw !== null && mode !== 'drive') {
@@ -244,17 +253,27 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 	function steerGround(dt, now, W, P, fly) {
 		if (now >= H.thinkAt) { H.thinkAt = now + (isPhone ? 330 : 250); think(W, P, fly, now); }
 		// ease the turn: a rate that itself eases, so the course never jerks
-		const want = clamp(wrap(H.target - H.heading) * 0.7, fly ? -0.22 : -0.55, fly ? 0.22 : 0.55);
-		H.rate += (want - H.rate) * Math.min(1, dt * 1.4);
+		// (closing on the aether: a tighter turn and an easier pace, so it is met and not circled)
+		const m = H.prey, dm = m ? Math.hypot(m.x - P.pos.x, m.z - P.pos.z) : Infinity;
+		// (the time given to reach it, counted in game time: a slow frame is not a failure)
+		if (m) m.left -= dt;
+		// (on foot, one off to the side or behind is turned round to at once, as anyone would)
+		const round = !fly && m && Math.abs(wrap(H.target - H.heading)) > 1;
+		const close = fly ? dm < 210 : dm < HUNT_NEAR * 1.5 || round;
+		const turn = fly ? (close ? 0.4 : 0.22) : close ? 1.4 : 0.55;
+		const want = clamp(wrap(H.target - H.heading) * (close ? 1.6 : 0.7), -turn, turn);
+		H.rate += (want - H.rate) * Math.min(1, dt * (close ? 3 : 1.4));
 		H.heading = wrap(H.heading + H.rate * dt);
 		P.yaw = H.heading;
-		AUTO.z = -1; AUTO.x = 0; AUTO.run = !fly && H.run;
+		AUTO.z = fly ? (close ? -0.7 : -1) : dm < 8 || round ? -0.55 : -1; AUTO.x = 0; AUTO.run = !fly && H.run && dm > HUNT_NEAR;
 		P.auto = AUTO;
 		if (fly) {
 			// keep a pleasant height over what is ahead, climbing and sinking gently, banked in the turns
 			const v = Math.max(Math.hypot(P.vel.x, P.vel.z), 8);
-			const climb = clamp((H.flyY - P.pos.y) / 3, -v * 0.22, v * 0.4);
-			const pw = Math.asin(clamp(climb / v, -0.33, 0.42));
+			// (swooping on the aether: a steeper dive)
+			const dive = H.prey ? 0.45 : 0.22;
+			const climb = clamp((H.flyY - P.pos.y) / (H.prey ? 2 : 3), -v * dive, v * 0.4);
+			const pw = Math.asin(clamp(climb / v, -Math.max(0.33, dive), 0.42));
 			H.pitch += (pw - H.pitch) * Math.min(1, dt * 0.9);
 			P.pitch = H.pitch;
 			H.roll += (clamp(H.rate * 1.3, -0.3, 0.3) - H.roll) * Math.min(1, dt * 1.2);
@@ -305,14 +324,19 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 				}
 			}
 		}
+		const m = prey(W, P, fly, now, real, wet), bm = m ? Math.atan2(x - m.x, z - m.z) : 0, dm = m ? Math.hypot(m.x - x, m.z - z) : Infinity;
 		const boxes = !fly && real ? real.near('boxes', x, z, 32) : null;
 		const trees = !fly ? W.vegetation.obstacles(x - Math.sin(H.heading) * 6, z - Math.cos(H.heading) * 6, 6, P.pos.y - EYE) : null;
 		const v = fly ? Math.max(16, Math.hypot(P.vel.x, P.vel.z)) : 0;
 		let best = -1e9, bestA = H.heading, top = -1e9;
+		// (after the aether the headings weighed are round the way to it, wherever it lies, and the
+		// wandering course and a trail only lean on the choice: the ground still decides it)
+		const centre = m ? bm : H.heading, lean = m ? 0.3 : 1;
 		for (const off of OFFS) {
-			const a = H.heading + off, dx = -Math.sin(a), dz = -Math.cos(a);
-			let s = Math.cos(wrap(a - wander)) + 0.55 * Math.cos(off);
-			if (rw) s += rw * (dx * rdx + dz * rdz) / (Math.hypot(rdx, rdz) || 1);
+			const a = centre + off, dx = -Math.sin(a), dz = -Math.cos(a);
+			let s = lean * Math.cos(wrap(a - wander)) + 0.55 * Math.cos(wrap(a - H.heading));
+			if (m) s += HUNT_PULL * Math.cos(off);
+			if (rw) s += lean * rw * (dx * rdx + dz * rdz) / (Math.hypot(rdx, rdz) || 1);
 			if (!fly) {
 				let gp = I.heightAt(x, z), dp = 0;
 				for (let i = 0; i < WALK_D.length; i++) {
@@ -343,8 +367,10 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 			if (off === 0) top = s;
 		}
 		// (a small gain is not worth a turn: keep on unless something is clearly better)
-		if (best > top + 0.15) H.target = bestA;
+		if (m || best > top + 0.15) H.target = bestA;
 		else H.target = H.heading + wrap(H.target - H.heading) * 0.5;
+		// (the last of the way to the aether, or flying to it: straight at it)
+		if (m && (fly || dm < HUNT_NEAR)) H.target = bm;
 		if (fly) {
 			// the height to keep: over the highest ground ahead, more at the faster tiers
 			const mult = flightMultiplier(P.boost), fx = -Math.sin(H.heading), fz = -Math.cos(H.heading);
@@ -353,7 +379,77 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 			if (real && v < 120) for (const b of real.near('boxes', x + fx * v * 2, z + fz * v * 2, v * 2 + 40)) g = Math.max(g, I.heightAt(b.x, b.z) + (b.wallH || 10) + 4);
 			const clear = 28 + 22 * Math.log2(mult);
 			H.flyY = Math.min(g + clear, I.flyCeiling ? Math.max(I.flyCeiling(x, z), g + 40) : 900);
+			// swooping on the aether: down to it over the last of the way, and up again after
+			if (m) { const low = m.y + 0.6; H.flyY = low + Math.max(0, H.flyY - low) * clamp((dm - 25) / 150, 0, 1); }
 		}
+	}
+	// the aether to go after, if any: the one already chosen until it is gathered, gone with the
+	// light or given up on; else every so often the nearest worth the detour (ahead counts nearer,
+	// a well is worth a longer one). On foot none across water, on a roof or in a building;
+	// flying, only one ahead with open ground round it and no building on the way down to it
+	function prey(W, P, fly, now, real, wet) {
+		const list = motes();
+		if (!list || (fly && flightMultiplier(P.boost) > 1)) { H.prey = null; return null; }
+		const x = P.pos.x, z = P.pos.z;
+		if (H.prey) {
+			const q = H.prey, d = Math.hypot(q.x - x, q.z - z);
+			if (!list.some((o) => o.key === q.key)) {
+				// gathered (or the light took it): on the way you were going before the detour
+				if (d < 10) { S.gathered++; H.base = H.heading; }
+				H.prey = null; H.preyAt = now;
+			} else if (q.left <= 0) { S.missed++; H.skip.set(q.key, now + HUNT_SKIP); H.prey = null; }
+			else return q;
+		}
+		if (now < H.preyAt) return null;
+		H.preyAt = now + 1500;
+		const R = fly ? HUNT_R.fly : HUNT_R.walk;
+		let best = null, bestC = Infinity;
+		for (const m of list) {
+			if ((H.skip.get(m.key) || 0) > now) continue;
+			const dx = m.x - x, dz = m.z - z, d = Math.hypot(dx, dz);
+			if (d > R) continue;
+			const off = Math.abs(wrap(Math.atan2(-dx, -dz) - H.heading));
+			if (fly && (off > 0.5 || d < 60)) continue;
+			const c = d * (1 + off * 0.8) / (m.well ? 3 : 1);
+			if (c >= bestC || !reach(W, P, fly, m, d, real, wet)) continue;
+			best = m; bestC = c;
+		}
+		for (const [k, t] of H.skip) if (t < now) H.skip.delete(k);
+		if (!best) return null;
+		const d = Math.hypot(best.x - x, best.z - z);
+		H.prey = { key: best.key, x: best.x, y: best.y, z: best.z, well: best.well, left: fly ? d / 8 + 30 : d / 3.5 + 12 };
+		S.sought++;
+		if (best.well) lowerThird('An aether well', 'Drawn toward');
+		return H.prey;
+	}
+	// whether the way to it is clear enough to try
+	function reach(W, P, fly, m, d, real, wet) {
+		const I = W.island, g = m.y - (m.well ? 0.4 : 1.1);
+		// (on a roof or a ledge: the floor under it is not the land's)
+		if (!Number.isFinite(g) || g > I.heightAt(m.x, m.z) + 1.2) return false;
+		if (!fly && Math.abs(g - (P.pos.y - EYE)) > Math.max(6, d * 0.35)) return false;
+		const steps = Math.max(2, Math.ceil(d / 8));
+		for (let i = 1; i <= steps; i++) {
+			const u = i / steps, px = P.pos.x + (m.x - P.pos.x) * u, pz = P.pos.z + (m.z - P.pos.z) * u;
+			if (!fly && wet(px, pz)) return false;
+		}
+		if (real) {
+			// (no building where it lies; flying, none on the way down to it either)
+			const cx = (P.pos.x + m.x) / 2, cz = (P.pos.z + m.z) / 2;
+			for (const b of real.near('boxes', fly ? cx : m.x, fly ? cz : m.z, fly ? d / 2 + 30 : 20)) {
+				const r = Math.max(b.w, b.d) * (fly ? 0.6 : 0.5) + (fly ? 8 : 1.5);
+				if (Math.hypot(m.x - b.x, m.z - b.z) < r) return false;
+				if (fly && segDist(b.x, b.z, P.pos.x, P.pos.z, m.x, m.z) < r) return false;
+			}
+		}
+		// (a trunk in the way of the last approach, or flying, any tree low on the way in)
+		const trees = W.vegetation?.obstacles?.(m.x, m.z, fly ? 10 : 1, g) || [];
+		if (trees.some((o) => Math.hypot(o.x - m.x, o.z - m.z) < o.r + (fly ? 10 : 0.6))) return false;
+		if (fly) {
+			const ux = (P.pos.x - m.x) / d, uz = (P.pos.z - m.z) / d;
+			for (const k of [25, 45]) if ((W.vegetation?.obstacles?.(m.x + ux * k, m.z + uz * k, 8, g) || []).length) return false;
+		}
+		return true;
 	}
 	// space: from body to body, a slow pass round each at a respectful distance
 	function steerSpace(dt, now, W, P) {
@@ -478,6 +574,11 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		track(cy - gnd(I, fly, cx, cz));
 	}
 	function track(clear) { S.minCam = Math.min(S.minCam, clear); }
+	// how far (px, pz) is from the segment (ax, az)-(bx, bz)
+	function segDist(px, pz, ax, az, bx, bz) {
+		const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1, u = clamp(((px - ax) * dx + (pz - az) * dz) / l2, 0, 1);
+		return Math.hypot(px - ax - dx * u, pz - az - dz * u);
+	}
 	// in space there is no ship to film: the shots are where you look as you cruise
 	function shootSpace(dt, now, P) {
 		const sh = C.shot, B = H.body, e = C.energy;
@@ -527,6 +628,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 			on: H.on, mode: H.mode, shot: C.shot?.id || null, dist: Math.round(S.dist), minAgl: Number.isFinite(S.minAgl) ? +S.minAgl.toFixed(1) : null, minCam: Number.isFinite(S.minCam) ? +S.minCam.toFixed(2) : null,
 			blocked: S.blocked, speed: +S.speed.toFixed(1), tier: S.tier, run: H.run, music: music.on(), shift: music.shift(), region: H.region, body: H.body?.name || null,
 			heading: +H.heading.toFixed(3), pitch: P ? +P.pitch.toFixed(3) : null, hudHidden: mount.classList.contains('l99-xhide'), shots: S.shots.slice(-40),
+			aether: { seeking: H.prey ? { key: H.prey.key, well: H.prey.well, dist: +Math.hypot(H.prey.x - (P?.pos.x ?? 0), H.prey.z - (P?.pos.z ?? 0)).toFixed(1) } : null, sought: S.sought, gathered: S.gathered, missed: S.missed },
 		};
 	}
 	return { start, stop, toggle, steer, shoot, on: () => H.on, info };

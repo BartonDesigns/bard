@@ -87,5 +87,17 @@ function near(i = 0, dist = 1.6, up = 0.7, side = 1) {
 	return { age: Math.floor(A.P.dna.age), act: A.q?.act };
 }
 function look(dx, dy, dz) { const t = new THREE.Vector3(); camera.getWorldDirection(t); camera.position.add(new THREE.Vector3(dx, dy, dz)); camera.lookAt(camera.position.clone().add(t)); renderer.render(scene, camera); }
-window.homeReview = { inside, scatter, look, near, families: () => families, said, HOUSES, renderer, frame, actors: () => families.actors().map((a) => ({ age: Math.floor(a.P.dna.age), x: +a.M.S.pos.x.toFixed(2), y: +(a.lying ? a.P.root.position.y : a.M.S.pos.y).toFixed(2), z: +a.M.S.pos.z.toFixed(2), act: a.q?.act, lying: !!a.lying, vis: a.P.root.visible, fade: +a.fade.toFixed(2) })) };
+// where each of them stands: the room under them, and whether a body's width (0.25 m round) is
+// clear of its walls ('wall': poking through one; 'out': out of the house)
+function placed() {
+	const H = [...houses.houses.values()].filter((h) => h?.plan?.rooms && h.root);
+	return families.actors().filter((a) => a.active && !a.lying).map((a) => {
+		const p = a.M.S.pos, h = H.sort((u, v) => Math.hypot(u.cx - p.x, u.cz - p.z) - Math.hypot(v.cx - p.x, v.cz - p.z))[0];
+		const y = h.root.rotation.y, c = Math.cos(y), s = Math.sin(y), dx = p.x - h.cx, dz = p.z - h.cz, lx = dx * c - dz * s, lz = dx * s + dz * c;
+		const lev = p.y - h.floorY > 1.5 ? 1 : 0, at = (x, z) => { const k = h.plan.cellAt(x, z); return k < 0 ? -1 : h.plan.labels?.[lev]?.[k] ?? -1; };
+		const r = at(lx, lz), clear = [[0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]].every(([u, v]) => at(lx + u, lz + v) === r);
+		return { age: Math.floor(a.P.dna.age), act: a.scared ? 'scared' : a.shaken > 0 ? 'shaken' : a.q?.act, room: r < 0 ? 'out' : clear ? h.plan.rooms[r]?.type : 'wall' };
+	});
+}
+window.homeReview = { inside, scatter, look, near, placed, families: () => families, said, HOUSES, renderer, frame, actors: () => families.actors().map((a) => ({ age: Math.floor(a.P.dna.age), x: +a.M.S.pos.x.toFixed(2), y: +(a.lying ? a.P.root.position.y : a.M.S.pos.y).toFixed(2), z: +a.M.S.pos.z.toFixed(2), act: a.q?.act, lying: !!a.lying, vis: a.P.root.visible, fade: +a.fade.toFixed(2) })) };
 window.HOME_READY = true;

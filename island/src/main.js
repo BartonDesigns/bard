@@ -49,6 +49,7 @@ import { createCataclysm } from './cataclysm/index.js';
 import { createMagic } from './magic/index.js';
 import { createFishing } from './fishing.js';
 import { createCooking } from './cooking/index.js';
+import { createOfficePerks } from './interiors/office-perks.js';
 import { createArcade } from './arcade.js';
 import { worldAir } from './world/soundbus.js';
 import { REAL_U } from './bay/realcity.js';
@@ -169,13 +170,15 @@ if (typeof document !== 'undefined' && !document.getElementById('no-page-zoom'))
 }
 
 function css(el, s) { el.style.cssText = s; return el; }
+// the More menu's one-word names, by what each button is called
+const RAIL_WORDS = [[/^Explore/, 'Explore'], [/^Cycle flight/, 'Speed'], [/^Camera/, 'Camera'], [/^Your account/, 'Account'], [/^Auto music/, 'Autoplay'], [/^Drive/, 'Drive'], [/^(Climb to space|Stop automatic climb)/, 'Space'], [/^Talk to the guide/, 'Guide'], [/^Gear/, 'Gear'], [/^Vehicle credits/, 'Credits'], [/^Games/, 'Games'], [/^Teleport/, 'Places'], [/^Fly/, 'Fly']];
 function button(label, title, style, hud) {
 	const b = document.createElement('button');
 	if (hud) b.dataset.hud = hud;
 	b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
 	// hand focus back after a click, so Space and the play keys keep driving the game
 	b.addEventListener('click', () => b.blur());
-	css(b, 'position:absolute;min-width:44px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style);
+	css(b, 'position:absolute;min-width:44px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style);
 	return b;
 }
 
@@ -220,13 +223,13 @@ const HUD_CSS = `
 #l99-island-mount .l99-quick{display:none;}
 #l99-island-mount.l99-touch .l99-quick{position:absolute;top:calc(64px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));display:flex;gap:6px;z-index:14;}
 #l99-island-mount.l99-touch .l99-quick>button{position:relative!important;inset:auto!important;width:54px!important;min-height:48px;box-sizing:border-box;padding:5px!important;flex-direction:column;gap:2px;font-size:16px!important;}
-#l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 system-ui;}
+#l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 var(--bard-display,system-ui,sans-serif);}
 #l99-island-mount.l99-touch .l99-left{top:calc(120px + env(safe-area-inset-top));max-width:calc(100% - 24px);}
-#l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + env(safe-area-inset-top));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;width:min(460px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:10px;box-sizing:border-box;background:#102129fa;border:1px solid #66818a;border-radius:14px;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;box-shadow:0 8px 30px #0008;}
+#l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + env(safe-area-inset-top));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;width:min(300px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:0;box-sizing:border-box;background:none;border:0;border-radius:0;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;}
 #l99-island-mount.l99-touch.l99-tools-open .l99-rail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-flow:row;grid-auto-columns:auto;gap:8px;align-content:start;}
-#l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:56px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
+#l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:52px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
 #l99-island-mount.l99-touch .l99-rail>button>svg{width:22px;min-width:22px;flex:none;}
-#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 13px/1.3 system-ui;text-align:left;overflow-wrap:normal;}
+#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 15px/1.2 var(--bard-display,system-ui,sans-serif);text-align:left;overflow-wrap:normal;}
 #l99-island-mount.l99-touch.l99-tools-open :is(.cb-btn,button:is([aria-label="Aim"],[aria-label="Aim held item"])){visibility:hidden;}
 #l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;width:80px!important;height:80px!important;}
 #l99-island-mount.l99-touch>button:is([aria-label="Aim"],[aria-label="Aim held item"]){right:calc(104px + env(safe-area-inset-right))!important;bottom:calc(88px + env(safe-area-inset-bottom))!important;width:64px!important;height:64px!important;touch-action:none!important;}
@@ -299,13 +302,13 @@ function buildDom(canvas = document.createElement('canvas')) {
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
 	// (the hint rides on top of the prompts, so it never covers one)
-	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
+	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
 	hint.dataset.hud = 'prompt 99';
 	const loading = document.createElement('div');
 	loading.hidden = true; // Kept for integrations; the shared loading screen owns presentation.
 	// the settings (island-panel.js): the whole screen, over every button, in tabs; its body
 	// scrolls (no backdrop blur: a full-screen one over the world crashed SwiftShader)
-	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px system-ui;display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
+	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Settings');
 	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
 	// a group with nothing showing is hidden, so it leaves no gap either; and the rail is as
@@ -320,16 +323,20 @@ function buildDom(canvas = document.createElement('canvas')) {
 	};
 	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
 	const dock = (el) => {
+		// (a phone keeps only Fly and Places beside More: gear, the cloud save and the auto music
+		// wait in the More menu with the rest)
+		if (mount.classList.contains('l99-touch') && !el.dataset?.hud && /^Auto music/.test(el.getAttribute?.('aria-label') || '')) el.dataset.hud = 'rail 66';
 		const [g, n] = (el.dataset?.hud || '').split(' ');
-		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && ['55', '60', '65'].includes(n)));
+		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && n === '60'));
 		const to = fast ? quick : groups[g] && home(g);
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
-		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : n === '55' ? 'Gear' : n === '65' ? 'Save' : 'Places';
+		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : 'Places';
 		else if (to === rail) {
+			// (one word each in the More menu)
 			const title = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
-			el.dataset.controlLabel = /^Explore/.test(title) ? 'Explore' : /^Cycle flight/.test(title) ? 'Flight speed' : /^Camera:/.test(title) ? 'Camera view' : title;
+			el.dataset.controlLabel = RAIL_WORDS.find(([re]) => re.test(title))?.[1] || title.split(/[\s:]/)[0];
 		}
 		tidy();
 	};
@@ -615,7 +622,7 @@ export function createIslandWorld() {
 	// what the graphics hold, for the loading screen's black box (loading-screen.js), and the
 	// on-screen frame readout (?perf, ui/perfmeter.js)
 	window.L99GpuMB = () => Math.round(gpuMeter.bytes() / 1048576);
-	const perf = HOOKS.perf = createPerfMeter({ mount: dom.mount, renderer, governor, scene, storage, search: location.search });
+	const perf = HOOKS.perf = createPerfMeter({ mount: dom.mount, renderer, governor, scene, camera, storage, search: location.search });
 	applyQuality();
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
@@ -699,7 +706,7 @@ export function createIslandWorld() {
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
 	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
-	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, motes: () => HOOKS.magic?.motes?.() || null, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	// some of them out with their dogs on a lead (people/dogwalkers.js)
@@ -763,7 +770,7 @@ export function createIslandWorld() {
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and
 	// it only lifts once the new place is built and the frames are running smoothly again
-	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px system-ui;letter-spacing:.06em;text-align:center;padding:24px;');
+	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;text-align:center;padding:24px;');
 	dom.mount.appendChild(travelVeil);
 	let travelling = false, nextTrip = null;
 	function travel(label, move) {
@@ -839,7 +846,7 @@ export function createIslandWorld() {
 	};
 	const tpPlaces = [];
 	for (const pl of PLACES_TP) {
-		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;');
+		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;');
 		b.textContent = pl[0];
 		b.onclick = (e) => { e.stopPropagation(); teleport(pl); };
 		tpMenu.appendChild(b);
@@ -847,7 +854,7 @@ export function createIslandWorld() {
 	}
 	// the cities round you on Earth (space/landing.js citiesAround): the nearest and the region's
 	// biggest, a tap away, stood in the middle of its streets (they grow round you there)
-	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px system-ui;letter-spacing:.12em;color:#a5f6e2;');
+	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.12em;color:#a5f6e2;');
 	cityHead.textContent = 'CITIES NEAR YOU';
 	const cityList = css(document.createElement('div'), 'flex:none;display:none;flex-direction:column;gap:4px;');
 	cityList.dataset.cities = '';
@@ -860,7 +867,7 @@ export function createIslandWorld() {
 		const W = world, ll = W?.globe && !W.orbit?.active?.() ? globeLL(camera.position.x, camera.position.z) : null;
 		const list = ll ? citiesAround(ll.lat, ll.lon, 8) : [];
 		cityList.replaceChildren(...list.map((c) => {
-			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px system-ui;min-height:44px;cursor:pointer;');
+			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:44px;cursor:pointer;');
 			b.dataset.city = c.id;
 			const here = c.km < 3;
 			const name = document.createElement('div'); name.style.cssText = 'font-weight:600;'; name.textContent = `${here ? '◉' : '⌖'} ${c.name}`;
@@ -918,6 +925,8 @@ export function createIslandWorld() {
 	// cooking: your larder, the kitchens and shops, real recipes and the day's meals (cooking/index.js)
 	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
 	cooking.addMenu(tpMenu);
+	// the office's coffee, water, vending machine and first-aid box (interiors/office-perks.js)
+	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() });
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
@@ -1052,6 +1061,7 @@ export function createIslandWorld() {
 	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && doorHere && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); useDoor(); } });
 	function watchDoor(dt) {
 		cooking.update(dt);
+		officePerks.update(dt);
 		doorT += dt;
 		if (doorT < 0.15) return;
 		doorT = 0;
@@ -1138,7 +1148,8 @@ export function createIslandWorld() {
 	function applyQuality() {
 		governor.apply();
 		const Q = qualityNow();
-		renderer.shadowMap.enabled = !SAFE && Q.shadows;
+		// (set once, never switched by the tier: switching it rebuilds every lit material's shader)
+		renderer.shadowMap.enabled = !SAFE;
 		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = Q.reflect;
@@ -1153,7 +1164,7 @@ export function createIslandWorld() {
 	function fitShadow() {
 		const sun = world?.sky?.sun, size = (GFX ? 1024 : 2048) * qualityNow().shadowSize;
 		if (sun?.shadow && !renderer.shadowMap.enabled) { sun.shadow.dispose(); sun.shadow.map = sun.shadow.mapPass = null; return; }
-		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; renderer.shadowMap.needsUpdate = true; }
 	}
 
 	function resize() {
@@ -1186,7 +1197,8 @@ export function createIslandWorld() {
 				// hills or mountains in the way?
 				let seen = 1;
 				for (const t of [80, 200, 500, 1200, 3000, 7000]) { const x = camera.position.x + sd.x * t, z = camera.position.z + sd.z * t; if (W.island.heightAt(x, z) > camera.position.y + sd.y * t + 3) { seen = 0; break; } }
-				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (1 - (W.weather?.state?.cover ?? 0) * 0.5);
+				// (as much of it as the cloud over the sun lets through: none under an overcast)
+				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (W.weather?.state?.sunVis ?? 1);
 			}
 		}
 		glareK += (want - glareK) * Math.min(1, dt * 3);
@@ -1710,7 +1722,7 @@ if (typeof window !== 'undefined') {
 				const d = bank.daily(id, 90), v = d.map((q) => q.balance), lo = Math.min(...v, 0), hi = Math.max(...v, 1), W = 560, H = 160;
 				const pts = d.map((q, i) => `${(10 + i * (W - 20) / Math.max(1, d.length - 1)).toFixed(1)},${(H - 10 - (q.balance - lo) * (H - 20) / Math.max(1, hi - lo)).toFixed(1)}`).join(' ');
 				let el = document.getElementById('bank-panel');
-				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px system-ui;max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
+				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px var(--bard-body,system-ui,sans-serif);max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
 				const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 				el.innerHTML = `<b>${esc(bank.household(id))}</b> ${bank.balance(bank.household(id))} credits<br><svg width="${W}" height="${H}" style="max-width:100%"><polyline fill="none" stroke="#7fb4ff" stroke-width="2" points="${pts}"/></svg><br>` + bank.history(id).slice(0, 8).map((t) => `day ${t.day} ${esc(t.kind)} ${t.amount} ${esc(t.counterparty)}`).join('<br>');
 				return 'shown (click it to close)';
@@ -1892,8 +1904,8 @@ if (typeof window !== 'undefined') {
 		ride: (name = 'dipper') => window.L99Island?.world?.()?.boardwalk?.rideNow(name) ?? 'No Boardwalk on this world.',
 		// the minigames: Crysis.arcade.start('bowling'), .stop(), .games()
 		get arcade() { return HOOKS.arcade; },
-		// explore: Crysis.explore() how it stands, .start(), .stop()
-		explore: Object.assign(() => HOOKS.explore?.info(), { start: () => HOOKS.explore?.start(), stop: () => HOOKS.explore?.stop() }),
+		// explore: Crysis.explore() how it stands, .start(), .stop(); .steer(dt) a step by hand (the tests)
+		explore: Object.assign(() => HOOKS.explore?.info(), { start: () => HOOKS.explore?.start(), stop: () => HOOKS.explore?.stop(), steer: (dt) => HOOKS.explore?.steer(dt) }),
 		// auto music: Crysis.music.auto(true), .state(), .log(true), .level(0.5), .queue('chorus')
 		music: { auto: (on) => HOOKS.autoMusic?.auto(on), state: () => HOOKS.autoMusic?.state(), log: (on) => HOOKS.autoMusic?.log(on), level: (v) => HOOKS.autoMusic?.level(v), queue: (to, now) => HOOKS.autoMusic?.queue(to, now) },
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },

@@ -738,17 +738,17 @@ export function createMushrooms(island, shared, scene, camera, profile, opts = {
 	}
 
 	// ---------- picking ----------
-	const btnStyle = 'position:absolute;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.78);color:#eafaf6;font:600 14px system-ui;cursor:pointer;z-index:5;';
+	const btnStyle = 'position:absolute;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.78);color:#eafaf6;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;z-index:5;';
 	const prompt = document.createElement('button');
 	prompt.type = 'button';
 	prompt.dataset.hud = 'prompt 70';
 	prompt.style.cssText = btnStyle + 'padding:10px 20px;border-radius:24px;display:none;text-align:center;max-width:86vw;';
 	const chip = document.createElement('div');
-	chip.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));display:none;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:16px;background:rgba(8,20,26,.55);border:1px solid rgba(255,255,255,.14);color:#eafaf6;font:12px system-ui;z-index:5;transition:opacity 1.2s;pointer-events:auto;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+	chip.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));display:none;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:16px;background:rgba(8,20,26,.55);border:1px solid rgba(255,255,255,.14);color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);z-index:5;transition:opacity 1.2s;pointer-events:auto;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
 	const chipText = document.createElement('span');
 	const chipX = document.createElement('button');
 	chipX.type = 'button'; chipX.textContent = '×'; chipX.title = 'Let it pass'; chipX.setAttribute('aria-label', 'End the experience');
-	chipX.style.cssText = 'width:24px;height:24px;border-radius:12px;border:0;background:rgba(255,255,255,.1);color:#eafaf6;font:600 14px system-ui;cursor:pointer;line-height:1;padding:0;';
+	chipX.style.cssText = 'width:24px;height:24px;border-radius:12px;border:0;background:rgba(255,255,255,.1);color:#eafaf6;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;line-height:1;padding:0;';
 	chip.append(chipText, chipX);
 	for (const el of [prompt, chip]) { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'mousedown']) el.addEventListener(ev, (e) => e.stopPropagation()); mount.appendChild(el); }
 	let near = null, scanT = 0;
@@ -779,7 +779,7 @@ export function createMushrooms(island, shared, scene, camera, profile, opts = {
 		}
 		if (near) {
 			const S = SHROOMS[near.kind];
-			const html = `🍄 ${S.name} — eat?${isPhone ? '' : ' <span style="opacity:.55;font-weight:400">(E)</span>'}<div style="font:400 11px system-ui;opacity:.62;margin-top:3px"><i>${S.latin}</i> · ${S.look}</div>`;
+			const html = `🍄 ${S.name} — eat?${isPhone ? '' : ' <span style="opacity:.55;font-weight:400">(E)</span>'}<div style="font:400 11px var(--bard-body,system-ui,sans-serif);opacity:.62;margin-top:3px"><i>${S.latin}</i> · ${S.look}</div>`;
 			if (prompt.innerHTML !== html) prompt.innerHTML = html;
 		}
 		const d = near ? 'block' : 'none';

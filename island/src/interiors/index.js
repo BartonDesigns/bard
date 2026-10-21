@@ -25,6 +25,7 @@ import { createWorkplaceNavigation } from '../people/workplace-navigation.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock, lightingMovers } from './lighting.js';
 import { profileOf } from '../economy/frontage.js';
 import './estab-kit.js';
+import { buildSlice, viewDistance } from '../world/buildslice.js';
 
 const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'restaurant'], mission: ['cafe', 'restaurant', 'laundromat', 'grocer', 'bar', 'florist'], northbeach: ['cafe', 'restaurant', 'bar', 'books'], sunset: ['restaurant', 'cafe', 'laundromat', 'grocer'], any: ['cafe', 'grocer', 'books', 'restaurant', 'laundromat', 'bar', 'florist', 'boutique'] };
 // the buildings anyone may walk into (the rest are homes, or shut)
@@ -38,6 +39,7 @@ const STYLE_OF = { victorian: 'victorian', pacheights: 'edwardian', nobhill: 'ed
 export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 } } = {}) {
 	const BUILD_R = isPhone ? 55 : 85, DROP_R = BUILD_R + 30, MAX = isPhone ? 3 : 6;
 	let BUDGET = isPhone ? 3 : 4;
+	const fwd = new THREE.Vector3();
 	const group = new THREE.Group();
 	group.name = 'interiors';
 	scene.add(group);
@@ -291,7 +293,10 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				const d = Math.max(0, Math.hypot(S.o.x - x, S.o.z - z) - Math.max(S.o.w, S.o.d) / 2);
 				if (d < BUILD_R) cands.push({ d, key: S.key, o: S.o, use: 'site', site: S });
 			}
-			cands.sort((a, b) => a.d - b.d);
+			// (the nearest first; of those near alike, the ones you are looking at)
+			camera.getWorldDirection(fwd);
+			for (const c of cands) c.v = viewDistance(c.d, c.o.x, c.o.z, p, fwd);
+			cands.sort((a, b) => a.v - b.v);
 			cands.length = Math.min(cands.length, MAX);
 			for (const [key, B] of live) {
 				const d = Math.max(0, Math.hypot(B.o.x - x, B.o.z - z) - Math.max(B.o.w, B.o.d) / 2);
@@ -304,7 +309,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				towerKey = tk; towerLot = null;
 				if (tk) {
 					towerLot = [...tall].find((o) => Math.round(o.x) + ':' + Math.round(o.z) === tk) || null;
-					if (towerLot) { let g0 = -1e9; const F = frame(towerLot); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) g0 = Math.max(g0, bay.heightAt(...F.w(sx * towerLot.w / 2, sz * towerLot.d / 2))); city.setDoor(towerLot, [0, g0 + 0.25 - towerLot.y, 2.8]); }
+					if (towerLot) { let g0 = -1e9; const F = frame(towerLot); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) g0 = Math.max(g0, bay.heightAt(...F.w(sx * towerLot.w / 2, sz * towerLot.d / 2))); city.setDoor(towerLot, towers.door?.() || [0, g0 + 0.25 - towerLot.y, 2.8]); }
 				}
 			}
 		}
@@ -319,8 +324,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				if (cur !== B.cur) { job = { key: B.key, B, gen: levelsFor(B, cur), climb: true }; break; }
 			}
 		}
-		const t0 = performance.now();
-		while (job && performance.now() - t0 < BUDGET) {
+		const t0 = performance.now(), slice = buildSlice(dt, BUDGET);
+		while (job && performance.now() - t0 < slice) {
 			const t1 = performance.now();
 			let r;
 			try { r = job.gen.next(); } catch (e) { console.warn('interior', e); r = { done: true, value: null }; }
@@ -382,6 +387,23 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		}
 		return best;
 	}
+	// the ceiling over a body inside one (feet at y): the floor of the level above it, or
+	// Infinity (the building's roof is the city's: city.js ceiling)
+	function ceiling(x, z, y) {
+		let best = Infinity;
+		for (const B of live.values()) {
+			if (!B.ready) continue;
+			const [lx, lz] = localOf(B, x, z), P = B.P;
+			if (Math.abs(lx) > P.hw + 0.05 || Math.abs(lz) > P.D / 2 + 0.05) continue;
+			const fy = y - P.f0;
+			if (fy < -0.6) continue;
+			for (const L of P.levels) {
+				if (L.y < fy + 0.5 || lz < L.zb - 0.05 || L.holes.some((h) => lx > h[0] && lx < h[2] && lz > h[1] && lz < h[3])) continue;
+				best = Math.min(best, P.f0 + L.y - 0.05);
+			}
+		}
+		return best;
+	}
 	const RAD = 0.3;
 	function pushBox(q, b) {
 		const qx = Math.max(b[0], Math.min(b[2], q[0])), qz = Math.max(b[1], Math.min(b[3], q[1]));
@@ -393,12 +415,15 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		} else { const d = Math.sqrt(d2); q[0] = qx + dx / d * RAD; q[1] = qz + dz / d * RAD; }
 		return true;
 	}
+	// a lot whose rooms are built (or a bay building's own, built as its lot): not a block too
+	// (asked only of the lots a body is at, not made up afresh for every push)
+	const claimed = (key) => {
+		for (const B of live.values()) if (B.ready && (B.key === key || (B.P?.bayLot && city.lotKey(B.P.bayLot) === key))) return true;
+		return false;
+	};
 	function push(pos, footY) {
-		const claimed = new Set();
 		for (const B of live.values()) {
 			if (!B.ready) continue;
-			claimed.add(B.key);
-			if (B.P?.bayLot) claimed.add(city.lotKey(B.P.bayLot));
 			const P = B.P, F = frame(B.o), q = F.l(pos.x, pos.z);
 			if (Math.abs(q[0]) > P.W / 2 + 1 || Math.abs(q[1]) > P.D / 2 + 2) continue;
 			const y0 = footY - P.f0 + 0.25, y1 = footY - P.f0 + 1.7, fy = footY - P.f0;
@@ -425,7 +450,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			const top = o.y + o.h;
 			if (footY + 0.35 > top || footY + 1.7 < o.y) continue;
 			const key = city.lotKey(o);
-			if (claimed.has(key) || underSite(o)) continue;
+			if (claimed(key) || underSite(o)) continue;
 			const F = frame(o), q = F.l(pos.x, pos.z);
 			if (pushBox(q, [-o.w / 2, -o.d / 2, o.w / 2, o.d / 2])) { const [wx, wz] = F.w(q[0], q[1]); pos.x = wx; pos.z = wz; }
 		}
@@ -553,5 +578,5 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// where the signs inside the businesses hang (estab-fit.js K.sign: the grocers' aisle markers),
 	// in the world, the way each faces, and the business
 	const signAnchors = () => { const out = []; for (const B of live.values()) { if (!B.ready || !B.P.signAnchors) continue; const F = frame(B.o); for (const a of B.P.signAnchors) { const [x, z] = F.w(a.x, a.z), [x2, z2] = F.w(a.x + (a.nx || 0), a.z + (a.nz || 0)); out.push({ ...a, x, z, y: B.P.f0 + a.y, nx: x2 - x, nz: z2 - z, building: B.key, estab: B.P.estab?.id || null, type: B.P.estab?.type || a.fit || '' }); } } return out; };
-	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
+	return { group, update, floor, push, ceiling, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }

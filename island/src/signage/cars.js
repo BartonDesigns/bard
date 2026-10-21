@@ -1,9 +1,13 @@
 // Decals on the cars: plates in the region's manner (a dealer's frame on some), bumper
 // stickers, a parking permit or the region's windscreen sticker, the odd rear-window sticker,
-// and the services' liveries, the police cruisers' doors and roof numbers. Nothing is
-// remodelled: each mark is a flat piece laid on the body where the body actually is, found
-// once per kind by sampling the lofted body (bay/cars.js) so a plate sits on the curved tail
-// and a word on the swell of the door. Plates are retroreflective, like the real ones, and
+// the brands' stickers (the illustrated marks of the shops and labels, signage/art.js) on the
+// boot or tailgate, the street's sticker slaps (graffiti.js) on the back glass, and the
+// services' liveries, the police cruisers' doors and roof numbers. Nothing is
+// remodelled: each mark is a piece laid on the body where the body actually is, found
+// once per kind by sampling the lofted body (bay/cars.js), or the real model where one is
+// drawn (vehicles/models.js), so a plate sits on the curved tail and a word on the swell of
+// the door; the stickers bend with the bumper and the glass under them (batch.js), as vinyl
+// does. Plates are retroreflective, like the real ones, and
 // light up in your headlights.
 //
 // The fleets (vehicles/fleet.js) ask for a decal set when they are made; each frame they
@@ -19,6 +23,7 @@ import { LAYER } from './layers.js';
 import { hash32, rng, pick } from './rand.js';
 import { carDecalSet, POOLS, BACK } from './placement.js';
 import { systemFor } from './systems.js';
+import { artReady } from './art.js';
 import { denied } from '../economy/establishments.js';
 import { GFX_PHONE } from '../world/device.js';
 
@@ -60,6 +65,11 @@ const STENCILS = {
 	nostep: { k: 'livery', svc: 'stencil', word: 'NO STEP', small: true }, unit: { k: 'livery', svc: 'stencil', word: '4 MG' }, unitIron: { k: 'livery', svc: 'stencil', word: '9 IVL' },
 	...Object.fromEntries(MIL_CODES.map((c, i) => ['code' + i, { k: 'livery', svc: 'stencil', word: c }])),
 };
+// the brands whose marks go on bumper stickers (a phone loads four of their sheets, a computer
+// eight): what people put on a car, a record shop, an outfitter, a roaster, a bike shop
+const STICKER_BRANDS = PHONE ? ['brands-music', 'brands-outdoor', 'brands-coffee', 'brands-transport'] : ['brands-music', 'brands-outdoor', 'brands-coffee', 'brands-transport', 'brands-retro', 'brands-apparel', 'brands-beverages', 'brands-books'];
+const STICKER_FIELDS = ['#fbfaf6', '#fbfaf6', '#f3ead2', '#e6eaee', null];
+const logoFace = (i) => ({ k: 'bbrand', family: STICKER_BRANDS[i % STICKER_BRANDS.length], trade: (Math.floor(i / STICKER_BRANDS.length) * 3 + i) % 8, field: STICKER_FIELDS[(i * 7 + 3) % STICKER_FIELDS.length] });
 let ATLAS = null, ATLAS_LOCALE = null;
 const CELLS = new Map();
 // the sheet's size: the pools pack into a little over half a phone's 1024 square (54%), so a
@@ -80,6 +90,7 @@ export function setCarLocale(locale = 'us-ca') {
 	A.sync(want);
 	CELLS.clear();
 	for (const k of want.keys()) CELLS.set(k, A.get(k));
+	marksN = marksReady();
 }
 // the faces a locale's pools want in the sheet: key -> { face, w, h }
 export function carFaces(locale = 'us-ca') {
@@ -88,23 +99,44 @@ export function carFaces(locale = 'us-ca') {
 	for (let i = 0; i < POOLS.plate; i++) want.set('plate' + i, { face: plateFace(locale, i), w: pw * 0.6, h: ph * 0.6 });
 	for (let i = 0; i < POOLS.bumper; i++) want.set('bumper' + i, { face: { k: 'bumper', seed: i + 1 }, w: 0.28, h: 0.075 });
 	for (let i = 0; i < POOLS.window; i++) want.set('window' + i, { face: { k: 'wsticker', seed: i + 1 }, w: 0.24, h: 0.08 });
+	for (let i = 0; i < POOLS.logo; i++) want.set('logo' + i, { face: logoFace(i), w: 0.17, h: 0.13 });
+	for (let i = 0; i < POOLS.slap; i++) want.set('slap' + i, { face: { k: 'sticker', seed: 401 + i * 37 }, w: 0.1, h: 0.1 });
 	for (let i = 0; i < POOLS.permit; i++) want.set('permit' + i, { face: { k: 'cpermit', seed: i + 1, year: 2026, style: locale === 'de' ? 'de' : sys.id === 'jp' ? 'jp' : 'us' }, w: 0.08, h: 0.08 });
 	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'vanRoof' ? 0.6 : 0.5 });
 	for (const [k, f] of Object.entries(STENCILS)) want.set('mil:' + k, { face: f, w: f.mark ? 0.5 : f.word?.length > 8 ? 2.4 : 0.8, h: f.mark ? 0.5 : f.word?.length > 8 ? 0.32 : 0.18 });
 	return want;
 }
 const cellOf = (k) => CELLS.get(k) || null;
+// the brands' marks are drawn in type until their sheets are in: as each comes (looked for
+// once a second), the sheet is drawn again with them
+// (the cells come out where they were: the same faces packed in the same order)
+let marksN = 0, marksT = 0;
+const marksReady = () => STICKER_BRANDS.reduce((a, f) => a + (artReady(f, PHONE) ? 1 : 0), artReady('modern', PHONE) ? 1 : 0);
+function marksIn() {
+	const now = typeof performance !== 'undefined' ? performance.now() : 0;
+	if (!ATLAS_LOCALE || marksN > STICKER_BRANDS.length || now - marksT < 1000) return;
+	marksT = now;
+	if (marksReady() === marksN) return;
+	const l = ATLAS_LOCALE; ATLAS_LOCALE = null; setCarLocale(l);
+}
 
-// ---------- where on the body: sampled from the loft ----------
+// ---------- where on the body: sampled from the loft, or the model ----------
 const PROF = new Map();
-export function bodyProfile(kind) {
-	if (PROF.has(kind)) return PROF.get(kind);
-	const S = specOf(kind), L2 = S.L / 2, step = 0.05;
+// kit: a real model's (vehicles/models.js modelKit: its parts' geometry and box), sampled in its
+// place; one profile a kind (the near and middle models are the same shape)
+export function bodyProfile(kind, kit = null) {
+	const pk = kit ? kind + ':model' : kind;
+	if (PROF.has(pk)) return PROF.get(pk);
+	const spec = specOf(kind), b = kit?.box;
+	// (a model's own size: its length, width and height, the belt where the loft's would be)
+	const S = b ? { ...spec, L: b.max.z - b.min.z, W: 2 * Math.max(b.max.x, -b.min.x), H: b.max.y, belt: spec.belt * b.max.y / spec.H } : spec;
+	const z0 = b ? b.min.z : -S.L / 2, L2 = -z0, step = 0.05;
 	const NZ = Math.ceil(S.L / step) + 1, NY = Math.ceil((S.H + 0.3) / step) + 1, NX = Math.ceil(S.W / 2 / step) + 1;
 	const half = new Float32Array(NZ * NY).fill(-1), rear = new Float32Array(NY * NX).fill(1e3), front = new Float32Array(NY * NX).fill(-1e3);
-	let geo = null;
-	try { geo = carGeometry(SPEC[kind] ? kind : 'sedan', 40, 14, { wheels: false }); } catch { geo = null; }
-	if (geo) {
+	let geos = [];
+	if (kit) geos = kit.parts.map((q) => q.geo);
+	else try { geos = [carGeometry(SPEC[kind] ? kind : 'sedan', 40, 14, { wheels: false })]; } catch { geos = []; }
+	for (const geo of geos) {
 		const p = geo.attributes.position, idx = geo.index;
 		const n = idx ? idx.count : p.count, v = (k) => (idx ? idx.getX(k) : k);
 		const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), Q = new THREE.Vector3();
@@ -119,15 +151,18 @@ export function bodyProfile(kind) {
 				if (yi >= 0 && yi < NY && xi < NX) { const k = yi * NX + xi; rear[k] = Math.min(rear[k], Q.z); front[k] = Math.max(front[k], Q.z); }
 			}
 		}
-		geo.dispose();
+		if (!kit) geo.dispose();
 	}
 	const P = {
 		S,
 		halfW: (z, y) => { const zi = Math.max(0, Math.min(NZ - 1, Math.round((z + L2) / step))), yi = Math.max(0, Math.min(NY - 1, Math.round(y / step))); const h = half[zi * NY + yi]; return h > 0 ? h : S.W / 2; },
 		rearZ: (x, y) => { const yi = Math.max(0, Math.min(NY - 1, Math.round(y / step))), xi = Math.min(NX - 1, Math.round(Math.abs(x) / step)); const z = rear[yi * NX + xi]; return z < 100 ? z : -L2; },
-		frontZ: (x, y) => { const yi = Math.max(0, Math.min(NY - 1, Math.round(y / step))), xi = Math.min(NX - 1, Math.round(Math.abs(x) / step)); const z = front[yi * NX + xi]; return z > -100 ? z : L2; },
+		frontZ: (x, y) => { const yi = Math.max(0, Math.min(NY - 1, Math.round(y / step))), xi = Math.min(NX - 1, Math.round(Math.abs(x) / step)); const z = front[yi * NX + xi]; return z > -100 ? z : S.L + z0; },
+		// (with nothing there: null)
+		rearAt: (x, y) => { const yi = Math.round(y / step), xi = Math.round(Math.abs(x) / step); if (yi < 0 || yi >= NY || xi >= NX) return null; const z = rear[yi * NX + xi]; return z < 100 ? z : null; },
+		frontAt: (x, y) => { const yi = Math.round(y / step), xi = Math.round(Math.abs(x) / step); if (yi < 0 || yi >= NY || xi >= NX) return null; const z = front[yi * NX + xi]; return z > -100 ? z : null; },
 	};
-	PROF.set(kind, P);
+	PROF.set(pk, P);
 	return P;
 }
 // the decal slots of a kind, as local matrices (size and the layer's lift folded in)
@@ -137,22 +172,61 @@ function local(px, py, pz, nx, ny, nz, tx, ty, tz, w, h, lift) {
 	_z.set(nx, ny, nz).normalize(); _x.set(tx, ty, tz); _x.addScaledVector(_z, -_x.dot(_z)).normalize(); _y.crossVectors(_z, _x);
 	return new THREE.Matrix4().makeBasis(_x.multiplyScalar(w), _y.multiplyScalar(h), _z.clone()).setPosition(px + nx * lift, py + ny * lift, pz + nz * lift);
 }
-function slotsOf(kind, sysPlate) {
-	const key = kind + sysPlate;
-	if (SLOTS.has(key)) return SLOTS.get(key);
-	const P = bodyProfile(kind), S = P.S, st = { sedan: 0, hatch: 0, sports: 0, crossover: 1, suv: 1, pickup: 1 }[kind] ?? 2;
+// how a sticker at L (on the back, or the front) bends to lie on the body: where the body is
+// under five points of it (the middle, the two ends, the top and the bottom), each found along
+// the sticker's face, a hair proud; as batch.js putMatrix's [c, b, a, e]. A point over
+// nothing (past the body's edge) takes the middle's.
+const _q = new THREE.Vector3(), _n = new THREE.Vector3();
+const GAP = 0.0025;
+function bendOf(P, L, front = false) {
+	_n.setFromMatrixColumn(L, 2).normalize();
+	if (Math.abs(_n.z) < 0.2) return null;
+	const t = (u, v) => {
+		_q.set(u, v, 0).applyMatrix4(L);
+		const z = front ? P.frontAt(_q.x, _q.y) : P.rearAt(_q.x, _q.y);
+		if (z === null) return null;
+		const d = (z - _q.z) / _n.z + GAP;
+		return Math.abs(d) < 0.1 ? d : null;
+	};
+	const c = t(0, 0);
+	if (c === null) return null;
+	const or = (d) => (d === null ? c : d);
+	const l = or(t(-0.5, 0)), r = or(t(0.5, 0)), lo = or(t(0, -0.5)), hi = or(t(0, 0.5));
+	return [c, r - l, 2 * (l + r - 2 * c), hi - lo];
+}
+// the slots of a kind as it is drawn: by its loft, or (kit) its model
+const SLOTS_MODEL = new Map();
+function slotsOf(kind, sysPlate, kit = null) {
+	const key = kind + sysPlate, SL = kit ? SLOTS_MODEL : SLOTS;
+	if (SL.has(key)) return SL.get(key);
+	const P = bodyProfile(kind, kit), S = P.S, st = { sedan: 0, hatch: 0, sports: 0, crossover: 1, suv: 1, pickup: 1 }[kind] ?? 2;
 	const wide = sysPlate === 'eu' || sysPlate === 'uk', pw = wide ? 0.52 : 0.31, ph = wide ? 0.115 : 0.155;
 	const yR = S.belt * (st < 1.5 ? 0.5 : 0.38), yF = S.belt * 0.27;
 	const zr = Math.min(P.rearZ(0, yR), P.rearZ(pw / 2, yR)) - 0.006, zf = Math.max(P.frontZ(0, yF), P.frontZ(pw / 2, yF)) + 0.006;
 	// the rear's slope at a height (for stickers on the glass)
 	const rearN = (x, y) => { const d = P.rearZ(x, y + 0.05) - P.rearZ(x, y - 0.05); const l = Math.hypot(d, 0.1); return [d / l, -0.1 / l]; };
+	// (the back of the body is there under all of a w x h sticker at x, y, and not a step)
+	const onBody = (x, y, w, h) => { let lo = 1e9, hi = -1e9; for (const u of [-0.5, 0, 0.5]) for (const v of [-0.5, 0.5]) { const z = P.rearAt(x + u * w, y + v * h); if (z === null) return false; lo = Math.min(lo, z); hi = Math.max(hi, z); } return hi - lo < 0.08; };
 	const frontN = (x, y) => { const d = P.frontZ(x, y + 0.05) - P.frontZ(x, y - 0.05); const l = Math.hypot(d, 0.1); return [-d / l, 0.1 / l]; };
 	const out = {
 		rearPlate: local(0, yR, zr, 0, 0, -1, -1, 0, 0, pw, ph, 0.002),
 		frontPlate: local(0, yF, zf, 0, 0, 1, 1, 0, 0, pw, ph, 0.002),
-		bumper: [-0.42, 0.42, 0].map((x, i) => { const y = Math.max(0.22, yR - ph / 2 - 0.08 - (i === 2 ? 0.0 : 0)), xx = i === 2 ? 0.44 : x, yy = i === 2 ? yR + ph / 2 + 0.07 : y; return local(xx, yy, Math.min(P.rearZ(xx, yy), P.rearZ(xx - 0.14, yy), P.rearZ(xx + 0.14, yy)) - 0.006, 0, 0, -1, -1, 0, 0, 0.28, 0.075, 0.003); }),
+		bumper: [-0.42, 0.42, 0].map((x, i) => {
+			// (low on the bumper, or where the body is not there (a tall car's, high off the
+			// road) beside the plate, or over it)
+			const s = i === 1 ? 1 : -1, tries = i === 2 ? [[0.44, yR + ph / 2 + 0.07], [0.42, Math.max(0.22, yR - ph / 2 - 0.08)]] : [[x, Math.max(0.22, yR - ph / 2 - 0.08)], [s * (pw / 2 + 0.2), yR], [s * 0.42, yR + ph / 2 + (i ? 0.17 : 0.27)]];
+			const [xx, yy] = tries.find(([tx, ty]) => onBody(tx, ty, 0.28, 0.075)) || tries[0];
+			return local(xx, yy, Math.min(P.rearZ(xx, yy), P.rearZ(xx - 0.14, yy), P.rearZ(xx + 0.14, yy)) - 0.006, 0, 0, -1, -1, 0, 0, 0.28, 0.075, 0.003);
+		}),
 		window: (() => { const y = Math.min(S.H - 0.12, S.belt + 0.1), x = -0.32, [ny, nz] = rearN(x, y); return local(x, y, P.rearZ(x, y) - 0.008, 0, ny, nz, -1, 0, 0, 0.24, 0.08, 0.003); })(),
+		// the brand's sticker across from the third strip, over the plate; the slap up in a top
+		// corner of the back glass, where people put the round ones
+		logo: (() => { const x = -0.44, y = yR + ph / 2 + 0.1; return local(x, y, Math.min(P.rearZ(x, y), P.rearZ(x - 0.09, y), P.rearZ(x + 0.09, y)) - 0.006, 0, 0, -1, -1, 0, 0, 0.17, 0.13, 0.003); })(),
+		slap: (() => { const y = Math.max(S.belt + 0.16, S.H - 0.2), x = Math.min(0.5, S.W * 0.26), [ny, nz] = rearN(x, y); return local(x, y, P.rearZ(x, y) - 0.008, 0, ny, nz, -1, 0, 0, 0.1, 0.1, 0.003); })(),
 		permit: (() => { const jp = sysPlate === 'jp', y = jp ? S.H - 0.1 : S.belt + 0.07, x = jp ? 0 : -0.48, [ny, nz] = frontN(x, y); return local(x, y, P.frontZ(x, y) + 0.008, 0, ny, nz, 1, 0, 0, 0.08, 0.08, 0.003); })(),
+	};
+	out.bend = {
+		bumper: out.bumper.map((L) => bendOf(P, L)), window: bendOf(P, out.window), logo: bendOf(P, out.logo), slap: bendOf(P, out.slap), permit: bendOf(P, out.permit, true),
 	};
 	// the police cruiser's doors (white panels standing proud: military/police.js), its roof
 	// number and the word on the boot
@@ -173,7 +247,7 @@ function slotsOf(kind, sysPlate) {
 			local(0, yRr, zRr, 0, 0, -1, -1, 0, 0, 1.3, 0.27, 0.002),
 		];
 	}
-	SLOTS.set(key, out);
+	SL.set(key, out);
 	return out;
 }
 
@@ -184,17 +258,18 @@ export function createFleetDecals(group, { isPhone = PHONE } = {}) {
 	if (!CELLS.size) setCarLocale(ATLAS_LOCALE || 'us-ca');
 	const cap = isPhone ? 260 : 700;
 	const plates = createBatch(group, 'retro', LAYER.poster, A.tex, cap, { phone: isPhone, name: 'plates' });
-	const vinyl = createBatch(group, 'vinyl', LAYER.sticker, A.tex, cap, { phone: isPhone, name: 'car-vinyl' });
-	const glass = createBatch(group, 'glass', LAYER.sticker, A.tex, Math.floor(cap / 3), { phone: isPhone, name: 'car-glass' });
+	const vinyl = createBatch(group, 'vinyl', LAYER.sticker, A.tex, cap, { phone: isPhone, name: 'car-vinyl', bend: true });
+	const glass = createBatch(group, 'glass', LAYER.sticker, A.tex, Math.floor(cap / 3), { phone: isPhone, name: 'car-glass', bend: true });
 	const _o = new THREE.Matrix4();
 	const sysNow = () => systemFor(ATLAS_LOCALE || 'us-ca');
-	function begin() { plates.clear(); vinyl.clear(); glass.clear(); }
-	function emit(B, M, L, cell, back, seed) { if (!cell) return; _o.multiplyMatrices(M, L); B.putMatrix(_o.elements, cell, back, seed, 0, 0); }
+	function begin() { plates.clear(); vinyl.clear(); glass.clear(); marksIn(); }
+	function emit(B, M, L, cell, back, seed, bend = null) { if (!cell) return; _o.multiplyMatrices(M, L); B.putMatrix(_o.elements, cell, back, seed, 0, 0, bend); }
 	// one car: its kind, its world matrix, distance squared from the eye; o.seed (anything
-	// stable: an id), o.livery ('police'), o.parked (seed from where it stands)
-	function add(kind, M, d2, o = {}) {
+	// stable: an id), o.livery ('police'), o.parked (seed from where it stands); kit, the real
+	// model it is drawn with (vehicles/fleet.js), if it is
+	function add(kind, M, d2, o = {}, kit = null) {
 		if (d2 > LIV_FAR * LIV_FAR) return;
-		const sys = sysNow(), sl = slotsOf(kind, sys.plate);
+		const sys = sysNow(), sl = slotsOf(kind, sys.plate, kit), bd = sl.bend;
 		const e = M.elements;
 		const seed = o.seed !== undefined ? hash32(String(o.seed)) : o.seedAt ? hash32(Math.round(o.seedAt[0] * 2), Math.round(o.seedAt[1] * 2)) : hash32(Math.round(e[12] * 2), Math.round(e[14] * 2));
 		const D = carDecalSet(seed, { sys, livery: o.livery || null, phone: isPhone });
@@ -214,9 +289,11 @@ export function createFleetDecals(group, { isPhone = PHONE } = {}) {
 		emit(plates, M, sl.rearPlate, pc, BACK.blank, (seed & 1023) / 1024);
 		if (D.front) emit(plates, M, sl.frontPlate, pc, BACK.blank, (seed & 511) / 512);
 		if (o.livery) return;
-		D.bumper.forEach((b, i) => emit(vinyl, M, sl.bumper[i], cellOf('bumper' + b), BACK.none, i * 0.3));
-		if (D.window >= 0) emit(glass, M, sl.window, cellOf('window' + D.window), BACK.mirrored, 0.5);
-		if (D.permit >= 0) emit(glass, M, sl.permit, cellOf('permit' + D.permit), BACK.mirrored, 0.7);
+		D.bumper.forEach((b, i) => emit(vinyl, M, sl.bumper[i], cellOf('bumper' + b), BACK.none, i * 0.3, bd.bumper[i]));
+		if (D.window >= 0) emit(glass, M, sl.window, cellOf('window' + D.window), BACK.mirrored, 0.5, bd.window);
+		if (D.logo >= 0) emit(vinyl, M, sl.logo, cellOf('logo' + D.logo), BACK.none, 0.9, bd.logo);
+		if (D.slap >= 0) emit(glass, M, sl.slap, cellOf('slap' + D.slap), BACK.mirrored, 0.6, bd.slap);
+		if (D.permit >= 0) emit(glass, M, sl.permit, cellOf('permit' + D.permit), BACK.mirrored, 0.7, bd.permit);
 	}
 	function end() { plates.commit(); vinyl.commit(); glass.commit(); }
 	function dispose() { plates.dispose(); vinyl.dispose(); glass.dispose(); }

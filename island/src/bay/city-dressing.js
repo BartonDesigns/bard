@@ -16,11 +16,16 @@ export function cityGrounds(cc, list, trees, x, z, w, d, a, g, y0, kind, seed) {
 	list.push({ x, y: y0, z, w: w + 2 * pad, d: d + 2 * pad, h: g + 0.13 + h1 * 0.05 - y0, a, col: jit([0.66, 0.64, 0.6], h1), kind: KIND.plain, roof: null });
 	list.push({ x, y: y0, z, w: w + 2 * pad + 0.5, d: d + 2 * pad + 0.5, h: g + 0.1 - y0, a, col: [0.5, 0.49, 0.47], kind: KIND.plain, roof: null });
 	if (kind === KIND.industry) return;
-	// planters either side of the entrance (the +d face), shrubs in them
+	// planters either side of the entrance (the +d face): most planted with yellow lantana and
+	// flax lily (bay/lantana.js), the rest with shrubs
 	for (const s of [-1, 1]) {
-		const [px, pz] = P(s * Math.min(w / 2 - 1.5, 4 + w * 0.15), d / 2 + pad * 0.55);
-		list.push({ x: px, y: g - 0.2, z: pz, w: big ? 4.2 : 2.8, d: 1.3, h: 0.75, a, col: jit([0.55, 0.52, 0.48], h2), kind: KIND.plain, roof: null });
-		for (const o of [-0.8, 0, 0.8]) { const [sx, sz] = P(s * Math.min(w / 2 - 1.5, 4 + w * 0.15) + o * (big ? 1.4 : 0.9), d / 2 + pad * 0.55); trees.push({ x: sx, y: g + 0.5, z: sz, h: 0.9 + hash(sx, sz) * 0.5, shrub: true, col: jit(pick(PAL.crown, hash(sz, sx)), h1) }); }
+		const cx = s * Math.min(w / 2 - 1.5, 4 + w * 0.15), cz = d / 2 + pad * 0.55, pw = big ? 4.2 : 2.8;
+		const [px, pz] = P(cx, cz);
+		list.push({ x: px, y: g - 0.2, z: pz, w: pw, d: 1.3, h: 0.75, a, col: jit([0.55, 0.52, 0.48], h2), kind: KIND.plain, roof: null });
+		// (its beds are laid out from the planter itself once the buildings are settled: city.js
+		// plantedBeds, so a planter moved or taken out takes its planting with it)
+		if (hash(px * 0.9 + 1.7, pz * 1.3 - 4.1) < 0.75) list[list.length - 1].planted = { kerb: g + 0.13 + h1 * 0.05 };
+		else for (const o of [-0.8, 0, 0.8]) { const [sx, sz] = P(cx + o * (big ? 1.4 : 0.9), cz); trees.push({ x: sx, y: g + 0.5, z: sz, h: 0.9 + hash(sx, sz) * 0.5, shrub: true, col: jit(pick(PAL.crown, hash(sz, sx)), h1) }); }
 	}
 	// trees along the sides, at the apron's edge
 	const every = big ? 9 : 12, sides = big ? [[w, d, 1], [w, d, -1], [d, w, 2], [d, w, -2]] : kind === KIND.office ? [[w, d, 1], [w, d, -1]] : [[w, d, 1]];
@@ -48,7 +53,9 @@ export function cityDecorate(cc, list, cx, cz, R) {
 			const ph = 0.7 + r * 0.5, pc = o.col.map((v) => v * 0.97);
 			for (const [lx, lz, w2, d2] of [[0, o.d / 2 - 0.13, o.w, 0.26], [0, -o.d / 2 + 0.13, o.w, 0.26], [o.w / 2 - 0.13, 0, 0.26, o.d - 0.5], [-o.w / 2 + 0.13, 0, 0.26, o.d - 0.5]]) { const [x, z] = W(lx, lz); list.push({ x, y: top - 0.05, z, w: w2, d: d2, h: ph + 0.05, a: o.a, col: pc, kind: KIND.parapet, roof: null, age: o.age }); }
 		}
-		if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7) {
+		// (rooftop units on the shops, offices, warehouses and flats, not on the row houses: San
+		// Francisco's homes rarely have one, and they were most of a phone's units: Josh 2026-10-21)
+		if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7 && o.kind >= 0.5) {
 			const n = Math.max(1, Math.min(area > 4000 ? 18 : o.kind === KIND.retail || o.kind === KIND.shop ? 10 : 6, Math.round(area / (o.kind === KIND.industry ? 700 : 280) * (0.6 + r * 0.8))));
 			const along = o.w > o.d, L = along ? o.w : o.d, S = along ? o.d : o.w, big = area > 1500 ? 1.6 : area > 600 ? 1.25 : 1;
 			for (let k = 0; k < n; k++) {

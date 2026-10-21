@@ -18,7 +18,7 @@ const assets = await loadPeopleAssets(), dna = personDNA(9172, { age: 37 });
 let P = buildPerson(assets, dna), M = createMotion(P, () => 0); M.place(0, 0, 0, Math.PI); scene.add(P.root);
 P.root.traverse(o => { for (const m of [o.material].flat().filter(Boolean)) if ('envMap' in m) { m.envMap = env.texture; m.envMapIntensity = .65; } });
 const phoneTier = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-const me = { P, M }, vm = createViewmodel({ camera, avatar: { me }, mount: document.body, canvas: renderer.domElement, isPhone: phoneTier }), hand = createHand(scene, { lod: 'high' });
+const me = { P, M }, vm = createViewmodel({ camera, avatar: { me }, mount: document.body, canvas: renderer.domElement, isPhone: phoneTier, fingers: 'now', shaders: 'now' }), hand = createHand(scene, { lod: 'high' });
 const state = { pos: new T.Vector3(), vel: new T.Vector3(), yaw: 0, pitch: 0, grounded: true }, world = { sky: { sun, hemi } };
 let time = 0, held = null, third = false;
 Object.defineProperty(performance, 'now', { configurable: true, value: () => time * 1000 });

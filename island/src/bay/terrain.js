@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { radialGrid, ringGrid, NOISE_GLSL, SAFE_GLSL } from '../world/terrain.js';
+import { wedgeMeshes } from '../world/gridwedges.js';
 import { groundPhotoUniform, GROUND_PHOTO_GLSL } from '../world/photomats.js';
 import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
 import { PLACES } from './places.js';
@@ -249,6 +250,7 @@ export function beyondH(x, z, he, d, noSea = false) {
 // drew the hills a few kilometres off in facets four times the near ring's)
 const FAR_GRID = () => ringGrid(GFX_COARSE ? 256 : 320, 3500, 95000, 10);
 const NEAR_SEG = GFX_COARSE ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
+const GROUND_Y = [-1300, 2600];
 
 export function createBayArea(shared, scene, island, BU) {
 	let disposed = false;
@@ -1196,8 +1198,14 @@ export function createBayArea(shared, scene, island, BU) {
 		return m;
 	}
 	const nearMat = groundMaterial(false), farMat = groundMaterial(true);
-	const near = new THREE.Mesh(radialGrid(NEAR_SEG, NEAR_R, NEAR_POW), nearMat), far = new THREE.Mesh(FAR_GRID(), farMat);
-	for (const m of [near, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
+	// (each grid as a middle and eight wedges round it, a wedge out of the view not drawn: a phone
+	// sees a tenth of the circle, and the rest went through the heavy vertex shader every frame
+	// for nothing, world/gridwedges.js. Tested over every height the ground can be lifted to: the
+	// heights' encoding runs -1000 to 2277 m, and the grading, carving and cliffs a little either way)
+	const nearW = wedgeMeshes(radialGrid(NEAR_SEG, NEAR_R, NEAR_POW), nearMat, { mid: 64, y: GROUND_Y }), farW = wedgeMeshes(FAR_GRID(), farMat, { mid: 3500, y: GROUND_Y });
+	const near = nearW.root, far = farW.root;
+	for (const m of [...nearW.meshes, ...farW.meshes]) { m.receiveShadow = true; m.userData.material175 = 'stone'; }
+	group.add(near, far);
 	near.visible = far.visible = false;
 
 	// the San Mateo coast's cliffs, farms, trail and fence

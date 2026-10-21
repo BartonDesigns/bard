@@ -157,6 +157,13 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 
 	// ---------- ground and walls ----------
 	const foot = village.footprints.filter((f) => !f.fence);
+	// how far from its middle each one can reach you, by any of the tests below (squared, and a
+	// little over): far from the village (out in the Bay) a footprint is passed by on that alone
+	const reach = foot.map((f) => {
+		const d = f.d || 0, body = Math.abs(d - 2.2) / 2, r = Math.max(Math.hypot(f.w / 2 + 1, d / 2 + 1), Math.hypot(f.w / 2 + 0.2, Math.max(2, f.len || 0)), Math.hypot(f.w / 2 + 0.2, body + 2.8));
+		return (r + 0.01) * (r + 0.01);
+	});
+	const far = (k, x, z) => (x - foot[k].x) * (x - foot[k].x) + (z - foot[k].z) * (z - foot[k].z) > reach[k];
 	// footprints are placed with rotationY(face): world = (lx cos + lz sin, -lx sin + lz cos)
 	const toLocal = (f, x, z) => {
 		const c = Math.cos(f.face), sn = Math.sin(f.face), dx = x - f.x, dz = z - f.z;
@@ -173,8 +180,11 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		let g = island.heightAt(x, z);
 		// other walkable surfaces the world adds (the Golden Gate Bridge's deck)
 		if (island.extraFloor) g = Math.max(g, island.extraFloor(x, z, y));
-		for (const f of foot) {
-			const [lx, lz] = toLocal(f, x, z);
+		// (the houses' roofs, for you once you have climbed up: parkour.js)
+		if (island.roofFloor) g = Math.max(g, island.roofFloor(x, z, y));
+		for (let k = 0; k < foot.length; k++) {
+			if (far(k, x, z)) continue;
+			const f = foot[k], [lx, lz] = toLocal(f, x, z);
 			if (f.pier) {
 				if (Math.abs(lx) < f.w / 2 + 0.2 && lz > -2 && lz < f.len && y > f.y - 1.2) g = Math.max(g, f.y);
 			} else {
@@ -193,8 +203,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function pushOut(p) {
 		// in a cave: only its walls (the village, trees and rocks overhead are not here)
 		if (island.underFloor?.(p.x, p.z, p.y - EYE) != null) { island.underPush?.(p, p.y - EYE); return; }
-		for (const f of foot) {
-			if (f.pier) continue;
+		for (let k = 0; k < foot.length; k++) {
+			const f = foot[k];
+			if (f.pier || far(k, p.x, p.z)) continue;
 			let [lx, lz] = toLocal(f, p.x, p.z);
 			// a cottage you can walk into: its walls (and its furniture) one by one
 			if (f.walls) {
@@ -228,7 +239,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	}
 
 	// the climbs and the wall runs, felt for with the same two tests
-	const park = createParkour({ s, camera, floorAt, pushOut });
+	// (the ceilings over you: inside a house, its own; island-build.js)
+	const ceilingAt = (x, z, y) => island.ceilingAt ? island.ceilingAt(x, z, y) : Infinity;
+	const park = createParkour({ s, camera, floorAt, pushOut, ceilingAt });
 
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
 	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -387,6 +400,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const gk = s.grounded ? 1 : park.air(dt, { run, wish, contact: met, jump: jumpEdge });
 			s.vel.y -= 18 * (island.gravity || 1) * (s.vel.y < 0 ? s.fallK || 1 : 1) * dt * gk;
 			s.pos.y += s.vel.y * dt;
+			// a jump indoors: the head meets the ceiling, not the room above or the sky
+			if (s.vel.y > 0 && !s.grounded) { const c = ceilingAt(s.pos.x, s.pos.z, s.pos.y - EYE - s.vel.y * dt); if (s.pos.y + 0.15 > c) { s.pos.y = Math.max(floorY + EYE, c - 0.15); s.vel.y = 0; } }
 			if (s.pos.y < floorY + EYE) { s.pos.y = floorY + EYE; s.vel.y = 0; s.grounded = true; }
 			else if (s.pos.y > floorY + EYE + 0.05) s.grounded = false;
 			if (s.grounded) park.grounded();

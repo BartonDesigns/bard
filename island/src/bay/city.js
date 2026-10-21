@@ -11,12 +11,12 @@
 import * as THREE from 'three';
 import { commercialStack } from '../interiors/workplace-plan.js';
 import { toWorld } from './geo.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/vegetation.js';
-import { addLodFade, NONE_IN, detailClock, updateDetailClock } from '../world/lodfade.js';
+import { addLodFade, NONE_IN, NONE_OUT, detailClock, updateDetailClock } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, fromGrid, eraFor } from './styles.js';
-import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
+import { houseFloor, wallTop, mainOf, isHome, garageOf } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
 import { GREENS, REAL_TALL } from './realcity.js';
 import { WALL_GLSL, weatherRoofs } from './weathering.js';
@@ -28,7 +28,7 @@ import { inClearing, clearingVersion } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { houseEra, exteriorLook, seedAt } from './decor.js';
-import { createProps } from './lotkit.js';
+import { createProps, rooftopUnit, rooftopUnitFar, nearCopies } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
@@ -40,8 +40,10 @@ import { qualityNow } from '../world/governor.js';
 import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 import { GFX_PHONE } from '../world/device.js';
+import { orderByReach, subEnds, shadowByReach } from '../world/shadowreach.js';      // the sun's shadows from what can reach them
 import { cityBlocks } from './city-blocks.js';
 import { cityGrounds, cityDecorate, cityApart } from './city-dressing.js';
+import { plantingBed, BED_LEN } from './lantana.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -208,6 +210,53 @@ function lichenLeaves(m) {
 	m.customProgramCacheKey = () => (pk ? pk() : '') + '|lichleaf';
 }
 
+// how far off a building's windows start to clear onto the rooms built behind them, and where
+// they are all clear (metres): clear across the street and beyond (a firefight from one shop
+// into the one opposite: Josh 2026-10-21), easing in only at the edge of interiors/index.js's
+// build reach, so the glass is never seen to change as you walk
+const DOOR_CLEAR = GFX_PHONE ? '44.0, 56.0' : '70.0, 86.0';
+// the glass of a tower, an office or a shop front with no rooms built behind it: up close a room
+// seen through each pane (its floor, walls and lit ceiling, carried in perspective as you move:
+// interior mapping), flat painted glass only far off (Josh 2026-10-21: "that's what windows
+// should look like from far away")
+const ROOM_FAR = GFX_PHONE ? '70.0, 105.0' : '120.0, 170.0';
+const ROOM_GLSL = `
+float roomK = 0.0, roomL = 1.0;
+// the ray from the eye carried on through the pane at p (metres across the room and up from its
+// floor) into a box dim (wide, high, deep), lit where it lands; V the view ray, A along the wall,
+// N out of it
+vec3 roomBehind(vec3 V, vec3 A, vec3 N, vec2 p, vec3 dim, vec2 id) {
+	vec3 d = vec3(dot(V, A), V.y, max(0.05, -dot(V, N)));
+	float tx = d.x > 0.0 ? (dim.x - p.x) / max(d.x, 1e-4) : p.x / max(-d.x, 1e-4);
+	float ty = d.y > 0.0 ? (dim.y - p.y) / max(d.y, 1e-4) : p.y / max(-d.y, 1e-4);
+	float tz = dim.z / d.z, tm = min(tz, min(tx, ty));
+	vec3 h = vec3(p, 0.0) + d * tm;
+	float r = bh(id + 0.31), r2 = bh(id + 5.17);
+	vec3 wall = r < 0.5 ? vec3(0.84, 0.82, 0.78) : r < 0.8 ? vec3(0.7, 0.72, 0.74) : vec3(0.62, 0.55, 0.47);
+	vec3 c; float L = 1.0;
+	if (tz <= tx && tz <= ty) {
+		// the back wall: a dark run of desks or a counter along it, a door in some
+		c = wall * mix(1.0, 0.45, step(h.y, 0.78) * step(0.3, r2));
+		c = mix(c, vec3(0.3, 0.27, 0.24), step(abs(h.x - dim.x * (0.25 + 0.5 * r2)), 0.45) * step(h.y, 2.1) * step(0.55, r));
+	} else if (tx <= ty) {
+		c = wall * 0.74;
+	} else if (d.y < 0.0) {
+		// the floor: carpet or stone, a desk's shadow on it
+		c = (r2 < 0.6 ? vec3(0.3, 0.31, 0.33) : vec3(0.62, 0.6, 0.56)) * (0.85 + 0.15 * step(0.5, fract(h.x / 1.8 + h.z / 2.6)));
+	} else {
+		// the ceiling: tiles, a light panel every few of them
+		vec2 q = fract(vec2(h.x, h.z) / 2.4);
+		float pnl = step(0.3, q.x) * step(q.x, 0.7) * step(0.3, q.y) * step(q.y, 0.7);
+		c = mix(vec3(0.86, 0.86, 0.84), vec3(1.0, 0.98, 0.94) * 1.9, pnl);
+		L = 1.0 + 0.9 * pnl;
+	}
+	// darker the deeper in (the light comes from the glass), and darker than the street outside
+	// by day, all but the ceiling's lights
+	float k = 1.0 - 0.5 * h.z / dim.z;
+	roomL = L * k;
+	return c * k * 0.6;
+}
+`;
 export function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
@@ -215,20 +264,22 @@ export function buildingMaterial(shared, night, nearBand) {
 		sh.uniforms.uNL = NIGHT_U.uNL;
 		sh.uniforms.uNearBand = nearBand;sh.uniforms.uDetailNow=detailClock;
 		sh.uniforms.uCutN = WALL_CUTS.n; sh.uniforms.uCutA = WALL_CUTS.a; sh.uniforms.uCutB = WALL_CUTS.b;          // structures/walls: the face cut round a broken wall
-		sh.vertexShader = 'attribute float aKind; attribute float aAge; varying float vAge; attribute vec4 aNL; varying vec4 vNL; attribute vec3 aNear; attribute float aDetailBirth; uniform float uDetailNow; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.vertexShader = 'attribute float aKind; attribute float aAge; varying float vAge; attribute vec4 aNL; varying vec4 vNL; attribute vec3 aNear; attribute float aDetailBirth; uniform float uDetailNow; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
 			vNearK = (aNear.z < 0.0 || (aNear.z > 0.5 && aNear.z < 1.5)) ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, max(0.0,length(aNear.xy - cameraPosition.xz) - (aNear.z < 0.0 ? -aNear.z-1.0 : 0.0))) : 0.0;
 			vNearK *= smoothstep(0.0,.5,max(0.0,uDetailNow-aDetailBirth));
 			// (a building with its rooms built inside: its front door cut out, aNear = door x, sill y, 2 + width)
 			vDoor = aNear.z > 1.5 ? vec3(aNear.xy, aNear.z - 2.0) : vec3(0.0);
 			// (and how high its rooms go: 2 + width + 4 x whole metres; its windows open only below that)
 			vDoorTop = aNear.z > 1.5 ? floor(vDoor.z / 4.0) : 0.0; vDoor.z -= vDoorTop * 4.0;
+			// (its windows clear over half a second from when its rooms were built: aDetailBirth)
+			vDoorK = aNear.z > 1.5 ? smoothstep(0.0, 0.6, max(0.0, uDetailNow - aDetailBirth)) : 0.0;
 			vKind = aKind; vAge = aAge; vNL = aNL;
 			vLY = transformed.y * length(instanceMatrix[1].xyz);
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
+		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + ROOM_GLSL + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
 			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;${CUT_TEST}`)
@@ -240,6 +291,9 @@ export function buildingMaterial(shared, night, nearBand) {
 				float u = dot(vCW.xz, t), v = vCW.y;
 				float win = 0.0; vec2 cell = vec2(0.0);
 				vec3 glass = vec3(0.2, 0.24, 0.28);
+				// (the rooms seen through the glass: near, on the walls of towers, offices and shops)
+				vec3 rV = normalize(vCW - cameraPosition), rA = vec3(t.x, 0.0, t.y);
+				roomK = (1.0 - step(0.7, vCN.y)) * step(1.5, vKind) * step(vKind, 6.5) * (1.0 - smoothstep(${ROOM_FAR}, length(vCW.xz - cameraPosition.xz)));
 				// the street front (local +z), metres across it from the left edge and up from the ground
 				float front = step(0.5, vLN.z) * (1.0 - roof);
 				float fx = (vLP.x + 0.5) * vCS.x, gy = vLY - 1.2;
@@ -397,11 +451,14 @@ export function buildingMaterial(shared, night, nearBand) {
 					win = step(0.07, f.x) * step(f.y, 0.78);
 					glass = mix(diffuseColor.rgb * 0.55, vec3(0.5, 0.6, 0.7), 0.35) * (0.85 + 0.25 * bh(floor(cell / 3.0)));
 					glassK = win;
+					// (up close, a room three bays wide behind the glass, floor to ceiling)
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 4.8) * 4.8, f.y * 3.9), vec3(4.8, 3.04, 7.0), floor(vec2(u / 4.8, v / 3.9)) + floor(vIP)), roomK);
 					// at the street: a tall glazed lobby in wide bays above a dark stone plinth
 					if (vLY < 6.2) {
 						cell = vec2(u / 3.2, 0.0);
 						win = step(0.06, fract(cell.x)) * step(2.1, vLY) * step(vLY, 5.6);
 						glass = vec3(0.14, 0.16, 0.18); glassK = win * 0.8;
+						if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 9.6) * 9.6, vLY - 1.2), vec3(9.6, 4.4, 12.0), vec2(floor(u / 9.6), 0.5) + floor(vIP)) * vec3(1.0, 0.97, 0.92), roomK);
 						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, step(5.6, vLY));
 					}
 					// on about half the tall ones, a penthouse: the top level's ceilings twice as high,
@@ -432,6 +489,7 @@ export function buildingMaterial(shared, night, nearBand) {
 					vec3 scol = sh > 0.66 ? vec3(0.75, 0.16, 0.12) : sh > 0.33 ? vec3(0.12, 0.3, 0.6) : vec3(0.92, 0.9, 0.86);
 					diffuseColor.rgb = mix(diffuseColor.rgb, scol, sign * 0.9);
 					cell = vec2(u / 4.0, 0.0); win = front; glass = vec3(0.3, 0.38, 0.44); glassK = front * 0.6;
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 8.0) * 8.0, vLY - 1.2), vec3(8.0, 3.8, 9.0), vec2(floor(u / 8.0), 1.5) + floor(vIP)), roomK);
 				} else if (vKind > 6.5) {
 					// plain: fields, plazas, yards
 					win = 0.0;
@@ -441,11 +499,20 @@ export function buildingMaterial(shared, night, nearBand) {
 					win = step(0.35, f.y) * step(f.y, 0.85) * step(0.04, fract(u / 1.5));
 					glass = vec3(0.28, 0.36, 0.42);
 					glassK = win * 0.7;
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 6.0) * 6.0, (f.y - 0.08) * 4.1), vec3(6.0, 3.2, 7.0), floor(vec2(u / 6.0, v / 4.1)) + floor(vIP)), roomK);
 					// a dark stone plinth at the ground
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.29, 0.28), step(vLY, 1.9) * (1.0 - roof));
 				}
-				// a building with its rooms built: its front windows (and a bay's) are holes onto them
-				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) discard;
+				// a building with its rooms built: its front windows (and a bay's) open onto them, the
+				// glass clearing as you come (all of it painted at the far edge of the band, all of it
+				// clear at the near), so the rooms are never seen to appear: they come through the glass
+				// (a tower: the one you are at, its curtain wall open all round onto the lobby and the
+				// floor over it that towers.js builds; the flat painted glass only for the far ones)
+				float towerK = step(1.5, K) * step(K, 2.5);
+				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5 || towerK > 0.5) && K < 10.5 && (front > 0.5 || K > 9.5 || towerK > 0.5)) {
+					float openK = vDoorK * (1.0 - smoothstep(${DOOR_CLEAR}, length(vCW.xz - cameraPosition.xz)));
+					if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < openK) discard;
+				}
 				// the condition of the place: boarded up (plywood over the openings), burnt out
 				// (the openings black, soot up the wall above them), run down (grimy glass, a
 				// pane or two broken)
@@ -516,8 +583,9 @@ export function buildingMaterial(shared, night, nearBand) {
 				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
 				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
+				winGlow *= mix(1.0, roomL, roomK);
 				// a tower's lobby is lit all night, warm, its tall glass bright at the street
-				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5);
+				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5) * mix(1.0, roomL * 0.45, roomK);
 				// a lit crown on some of the tall towers (one in five over 110 m): uplights at the foot of
 				// the top floors washing up the facade, each its own scallop, brightest low, all night
 				if (vKind > 1.5 && vKind < 2.5 && vCS.y > 110.0 && roof < 0.5 && bh(floor(vIP * 0.37) + 3.1) < 0.2) {
@@ -578,7 +646,7 @@ export function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding17';
+	m.customProgramCacheKey = () => 'baybuilding18';
 	return m;
 }
 
@@ -692,33 +760,43 @@ export function createCity(shared, scene, bay, real = null) {
 	const hipG = roofGeometry(true), gableG = roofGeometry(false);
 	for (const g of [hipG, gableG]) { g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4)); g.setAttribute('aWall', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3)); }
 	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
+	// (the buildings are written nearest first, in bands, and the sun's shadow pass draws only the
+	// bands its box can reach: the whole city went into it, kilometres of it clipped away each
+	// frame, world/shadowreach.js. reach: each mesh's bands, as last written)
+	const reach = { near: null, hips: null, gables: null, sky: null };
+	for (const k of ['near', 'hips', 'gables']) shadowByReach({ near, hips, gables }[k], () => reach[k]);
+	// (an instance's half-size: the corner of its lot, and a roof's overhang and gutter past it)
+	const lotHalf = (o) => Math.hypot(o.w || 0, o.d || 0) / 2 + 2;
 	// the props of the lived-in streets and on the roofs (lotkit.js)
 	const kit2 = createProps(group, (m) => withRise(m, rise, 'kitrise'), PHONE);
+	// the cars in the drives and carports and out front of the garages, as kit entries: the
+	// street draws them as real cars (streetlife.js), v counting each new set
+	let drives = { list: [], v: 0 };
 	// the businesses: their boards, awnings and what they put out front (economy/layer.js)
 	const economy = createEconomyLayer({ group, wrap: (m) => withRise(m, rise, 'signrise'), isPhone: PHONE, bay, real, KIND });
 	// what is on and about the buildings up close: the air conditioners on the flat roofs of
 	// the shops, offices and warehouses; a glass sunroom off the back of some houses, a
 	// clothesline in some back yards (see decorate)
+	// where the rooftop units' near version dissolves into the far one (m: a fan's shroud is under
+	// a pixel high past it)
+	const AC_LOD = PHONE ? [180, 230] : [260, 310];
 	const kit = (() => {
 		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
-		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles)
 		const C = (r, h, x, y, z, c, seg = PHONE ? 6 : 14) => colored(new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z), c);
-		const body = [0.8, 0.81, 0.8], dark = [0.16, 0.17, 0.18], grille = [0.42, 0.43, 0.44];
-		// a packaged rooftop unit on its curb: the cabinet, two fans in their shrouds on top,
-		// the louvred coil down one side
-		const ac = mergeGeometries([
-			B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), B(1.1, 1.0, 1.95, 0, 0.18, 0, body),
-			C(0.34, 0.12, 0, 1.18, -0.45, grille), C(0.3, 0.02, 0, 1.3, -0.45, dark), C(0.34, 0.12, 0, 1.18, 0.45, grille), C(0.3, 0.02, 0, 1.3, 0.45, dark),
-			B(0.03, 0.62, 1.5, 0.56, 0.4, 0, grille), B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body),
-		]);
+		// a packaged rooftop unit on its curb, its hidden faces left out (lotkit.js), and as it is
+		// seen far off, its fans flat discs: the far one holds every unit and dissolves in across
+		// AC_LOD, the near one a copy of those within reach of you, dissolving out across it
+		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles,
+		// and 3,800 round Noe Valley were 553k)
+		const ac = rooftopUnitFar(), acNear = rooftopUnit(PHONE ? 6 : 14);
 		// the sunroom: white frames, glass between (two meshes)
 		const fr = [0.95, 0.95, 0.93], bars = [];
 		for (const x of [-0.5, -0.25, 0, 0.25, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, -0.5, fr));
 		for (const z of [-0.25, 0, 0.25]) for (const x of [-0.5, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, z, fr));
 		for (const y of [0, 0.33, 1]) { bars.push(B(1.02, 0.03, 0.02, 0, y, -0.5, fr)); bars.push(B(0.02, 0.03, 1.0, -0.5, y, 0, fr)); bars.push(B(0.02, 0.03, 1.0, 0.5, y, 0, fr)); }
 		bars.push(B(1.06, 0.03, 1.06, 0, 1.0, 0, fr), B(1.04, 0.33, 0.01, 0, 0, -0.5, [0.85, 0.84, 0.8]));
-		const sunF = mergeGeometries(bars);
+		const sunF = mergeVertices(mergeGeometries(bars));          // (indexed: a corner lit once, not once a triangle)
 		const sunG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 		// a clothesline: two T-posts, three lines between, and the washing pegged out
 		const post = [0.55, 0.56, 0.57], line = [0.9, 0.9, 0.88], parts = [];
@@ -726,14 +804,21 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const z of [-0.4, 0, 0.4]) parts.push(B(4.8, 0.012, 0.012, 0, 1.87, z, line));
 		const wash = [[0.9, 0.9, 0.88], [0.3, 0.45, 0.7], [0.85, 0.35, 0.3], [0.95, 0.85, 0.45], [0.5, 0.65, 0.5], [0.95, 0.7, 0.75], [0.25, 0.25, 0.3]];
 		for (let k = 0; k < 9; k++) { const w = 0.35 + (k * 37 % 5) * 0.1, h = 0.35 + (k * 53 % 4) * 0.12; parts.push(B(w, h, 0.01, -2 + (k % 3) * 1.5 + (k * 29 % 7) * 0.08, 1.86 - h, [-0.4, 0, 0.4][Math.floor(k / 3)], wash[k % wash.length])); }
-		const lineG = mergeGeometries(parts);
+		const lineG = mergeVertices(mergeGeometries(parts));
 		const M = (o) => withRise(new THREE.MeshStandardMaterial({ vertexColors: true, ...o }), rise, 'kitrise');
 		// (on a phone the roof and yard kit throws no shadow: every unit was drawn again in the
 		// shadow pass, out to the edge of the city, for shadows a few pixels across)
 		const mkK = (geo, material, cap) => { const im = new THREE.InstancedMesh(geo, material, cap); im.count = 0; im.frustumCulled = false; im.castShadow = !PHONE; im.receiveShadow = true; group.add(im); return im; };
 		const glassM = withRise(new THREE.MeshStandardMaterial({ color: 0xa9c4cf, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false }), rise, 'kitrise');
+		const acM = M({ roughness: 0.55, metalness: 0.35 }), acNearM = M({ roughness: 0.55, metalness: 0.35 });
+		addLodFade(acM, 'uniform', [AC_LOD[0], AC_LOD[1], NONE_OUT[0], NONE_OUT[1]]); addLodFade(acNearM, 'uniform', [NONE_IN[0], NONE_IN[1], AC_LOD[0], AC_LOD[1]]);
+		const acFar = mkK(ac, acM, 12000), acNearI = mkK(acNear, acNearM, PHONE ? 1500 : 3000);
+		// (the far units throw no shadow: every one the sun's box can reach is in the near copy;
+		// and the near copy is the far one's, so what the far one shows, a unit taken down with
+		// its roof included, it shows: structures/damage.js edits only the far)
+		acFar.castShadow = false; acNearI.userData.copyOf = acFar;
 		return {
-			ac: mkK(ac, M({ roughness: 0.55, metalness: 0.35 }), 12000),
+			ac: acFar, acNear: acNearI,
 			sunF: mkK(sunF, M({ roughness: 0.5 }), 3000), sunG: mkK(sunG, glassM, 3000),
 			line: mkK(lineG, M({ roughness: 0.9, side: THREE.DoubleSide }), 3000),
 		};
@@ -803,6 +888,26 @@ export function createCity(shared, scene, bay, real = null) {
 		return { sizeK, near: tierMesh(nearT.parts, g.palm ? 900 : 2600, true, LOD.near, k, !!g.palm), mid: tierMesh(midT.parts, g.palm ? 3000 : 12000, false, LOD.mid, k, !!g.palm), H: nearT.height, Hm: midT.height };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
+	// the planters' lantana and flax lily (lantana.js): each bed in three levels, the plants in
+	// their vertex colours and the foliage's mass in the shrubs' own leaf cards (the same shader)
+	const BED = plantingBed(7311);
+	const BED_LOD = PHONE ? { detail: [NONE_IN[0], NONE_IN[1], 5, 7], mid: [5, 7, 40, 48], far: [40, 48, 260, 300] }
+		: { detail: [NONE_IN[0], NONE_IN[1], 7, 10], mid: [7, 10, 60, 70], far: [60, 70, 360, 410] };
+	const bedTier = (T, band, cap, shadow) => {
+		const body = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7), leaves = swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8);
+		for (const S of [body, leaves]) addLodFade(S.material, 'uniform', band);
+		return [[T.body, body], [T.cards, leaves]].map(([geo, S], n) => {
+			const im = new THREE.InstancedMesh(geo, S.material, cap);
+			im.count = 0; im.frustumCulled = false; im.castShadow = shadow; im.receiveShadow = true;
+			if (S.depth) im.customDepthMaterial = S.depth;
+			if (n === 1) { im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3); }
+			group.add(im);
+			return im;
+		});
+	};
+	const beds = { detail: bedTier(BED.detail, BED_LOD.detail, 64, !PHONE), mid: bedTier(BED.mid, BED_LOD.mid, PHONE ? 400 : 700, !PHONE), far: bedTier(BED.far, BED_LOD.far, PHONE ? 2000 : 3500, false), litter: [] };
+	beds.litter = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7); addLodFade(S.material, 'uniform', BED_LOD.detail); const im = new THREE.InstancedMesh(BED.litter, S.material, 32); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; group.add(im); return im; })()];
+	const bedMeshes = [...beds.detail, ...beds.mid, ...beds.far, ...beds.litter];
 	// sword ferns on the shady forest floor (under the redwoods, on the north slopes, in the draws)
 	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.2 } }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
 	// the far tier: one point per tree, drawn as its species' impostor
@@ -893,6 +998,29 @@ export function createCity(shared, scene, bay, real = null) {
 		return o.y + o.h + R.h * Math.max(0, y);
 	}
 	const HOUSE = new Set([KIND.house, KIND.houseGarageL, KIND.houseGarageR]);
+	// the pitched roofs as floors, for someone up on one (climbed from the wall: parkour.js), and
+	// the buildings' tops as ceilings for someone inside one (no climbing out through the roof)
+	function roofFloor(x, z, y) {
+		let best = -1e9;
+		for (const o of lotsNear(x, z, 1)) {
+			if (!o.roof || o.wrecked) continue;
+			const ov = o.roof.ov ?? 0.4, c = Math.cos(o.a), sn = Math.sin(o.a), dx = x - o.x, dz = z - o.z, lx = c * dx + sn * dz, lz = -sn * dx + c * dz;
+			if (Math.abs(lx) > o.w / 2 + ov || Math.abs(lz) > o.d / 2 + ov) continue;
+			const r = roofAt(o, lx, lz);
+			if (y > r - 0.6) best = Math.max(best, r);
+		}
+		return best;
+	}
+	function ceiling(x, z, y) {
+		let best = Infinity;
+		for (const o of lotsNear(x, z, 1)) {
+			if (o.wrecked || o.h < 2.2) continue;
+			const c = Math.cos(o.a), sn = Math.sin(o.a), dx = x - o.x, dz = z - o.z, lx = c * dx + sn * dz, lz = -sn * dx + c * dz;
+			if (Math.abs(lx) > o.w / 2 || Math.abs(lz) > o.d / 2) continue;
+			if (y > o.y - 0.6 && y < o.y + o.h - 0.4) best = Math.min(best, o.y + o.h);
+		}
+		return best;
+	}
 	function decorate(list, cx, cz, R) { return cityDecorate(cc, list, cx, cz, R); }
 	const ROOF_R = PHONE ? 200 : 380;
 	function kitPut(put, k, e) { if (kit2.has(k)) (put.props[k] || (put.props[k] = [])).push(e); }
@@ -906,6 +1034,17 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const [x, y, z, a, s] of lines) { if (n >= kit.line.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.line.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
 		kit.line.count = n;
 		for (const im of [kit.ac, kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+		placeAC(acX, acZ);
+	}
+	// the rooftop units near you, copied from the far set every 40 m you go and whenever the far
+	// set changes (a new one laid out, a unit taken down or put back)
+	let acX = 1e9, acZ = 1e9, acV = -1;
+	function placeAC(x, z) {
+		acX = x; acZ = z; acV = kit.ac.instanceMatrix.version;
+		const N = kit.acNear;
+		N.count = nearCopies(kit.ac.instanceMatrix.array, kit.ac.count, N.instanceMatrix.array, N.instanceMatrix.count, x, z, AC_LOD[1] + 45);
+		N.instanceMatrix.needsUpdate = true;
+		N.computeBoundingSphere();
 	}
 	// Neighbouring buildings from the map often overlap by a metre or so (their outlines
 	// are fitted as boxes). Where they do, their fronts run a few centimetres apart through
@@ -926,10 +1065,10 @@ export function createCity(shared, scene, bay, real = null) {
 			const F = o.fit, ox = F ? F[0] : o.x, oz = F ? F[1] : o.z, ow = F ? F[2] : o.w, od = F ? F[3] : o.d;
 			q.setFromAxisAngle(Y, -o.a); sc.set(ow, o.h, od); p.set(ox, o.y, oz);
 			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2], THREE.SRGBColorSpace)); kinds.array[n] = o.kind; ages.array[n] = (o.age ?? 0.4) + 2 * (o.cond || 0);
-			births.array[n]=o.src?.grp?.nearBorn || 0;
 			// its household's lights after dark (nightplan.js): the porch light, the garage's
 			if (nlA) { const hk = Math.floor(o.kind), on = hk === KIND.house || hk === KIND.row || hk === KIND.houseGarageL || hk === KIND.houseGarageR || hk === KIND.garage, pk = on ? packHouse(housePlan(o, nightSeed(o.x, o.z))) : null; nlA.array.set(pk || NL0, n * 4); }
 			const nc = o.src?.grp?.near, dr = roofs && !nc ? doors.get(lotKey(o)) : null;
+			births.array[n] = nc ? o.src.grp.nearBorn || 0 : dr ? dr.born ?? 0 : 0;
 			nearA.array[n * 3] = nc ? nc[0] : dr ? dr[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : dr ? dr[1] : 0; nearA.array[n * 3 + 2] = nc ? (o.src.grp.detailRadius ? -1-o.src.grp.detailRadius : 1) : dr ? 2 + dr[2] : 0;
 			if (roofs && o.src?.grp) { let l = slotOf.get(o.src.grp); if (!l) slotOf.set(o.src.grp, l = []); l.push(n); }
 			if (roofs) o.slot = n;
@@ -956,7 +1095,46 @@ export function createCity(shared, scene, bay, real = null) {
 		births.needsUpdate=true;body.count = n; kinds.needsUpdate = true; nearA.needsUpdate = true; ages.needsUpdate = true;
 		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); for (const im of roofs) { im.geometry.attributes.aRoof.needsUpdate = true; im.geometry.attributes.aWall.needsUpdate = true; } }
-		if (roofs) treeList = list.trees || [];
+		if (roofs) { treeList = list.trees || []; bedList = plantedBeds(list); bedX = bedFarX = 1e9; }
+	}
+	// the planted planters' beds (city-dressing.js marks them), laid out from the planters as they
+	// finally stand: a bed per 1.4 m or so along each, and spent florets on the pavement in front
+	function plantedBeds(list) {
+		const out = [];
+		for (const o of list) {
+			if (!o.planted) continue;
+			const n = Math.max(1, Math.round((o.w - 0.16) / BED_LEN)), L = (o.w - 0.16) / n, ca = Math.cos(o.a), sa = Math.sin(o.a);
+			for (let k = 0; k < n; k++) {
+				const u = (k - (n - 1) / 2) * L, x = o.x + ca * u, z = o.z + sa * u;
+				// (each one of four ways round: turned or not, mirrored or not)
+				out.push({ x, y: o.y + o.h, z, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x * 1.7, z * 2.3) * 4) });
+				const f = o.d / 2 + 0.36;
+				out.push({ x: x - sa * f, y: o.planted.kerb, z: z + ca * f, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x, z) * 4), litter: true });
+			}
+		}
+		return out;
+	}
+	// the planters' beds, by distance: their close level reaches only a few metres, so they are
+	// re-placed every couple of metres you move (a few hundred beds, quickly done)
+	let bedList = [], bedX = 1e9, bedZ = 1e9, bedFarX = 1e9, bedFarZ = 1e9;
+	function placeBeds(x, z) {
+		const far = Math.hypot(x - bedFarX, z - bedFarZ) > 20;
+		bedX = x; bedZ = z;
+		if (far) { bedFarX = x; bedFarZ = z; }
+		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
+		const put = (T) => { const k = next(T[0]); if (k < 0) return; next(T[1]); T[0].setMatrixAt(k, m4); T[1].setMatrixAt(k, m4); };
+		for (const t of bedList) {
+			const d = Math.hypot(t.x - x, t.z - z);
+			if (d > BED_LOD.far[3] + 25) continue;
+			const turn = t.bed & 1, mirror = t.bed & 2 ? -1 : 1;
+			q.setFromAxisAngle(Y, -t.a + (turn ? Math.PI : 0));
+			m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.sx * mirror, 1, 1));          // (on its planter, as built: not on the road's grading)
+			if (t.litter) { if (d < BED_LOD.detail[3] + 3) { const k = next(beds.litter[0]); if (k >= 0) beds.litter[0].setMatrixAt(k, m4); } continue; }
+			if (d < BED_LOD.detail[3] + 3) put(beds.detail);
+			if (d > BED_LOD.mid[0] - 3 && d < BED_LOD.mid[3] + 3) put(beds.mid);
+			if (far && d > BED_LOD.far[0] - 25) put(beds.far);
+		}
+		for (const im of far ? bedMeshes : [...beds.detail, ...beds.mid, ...beds.litter]) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; }
 	}
 
 	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
@@ -1020,7 +1198,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// the skylines, found once: every downtown's tall buildings, kept for far views
 	const skyline = [];
 	skyline.noGrounds = true;          // (far off: the towers alone)
-	const skyMesh = mk(boxGeo(), mat, 6000, true);
+	const skyMesh = shadowByReach(mk(boxGeo(), mat, 6000, true), () => reach.sky);
 	function findSkylines() {
 		const seen = new Set();
 		for (let z = -100000; z < 100000; z += 1000) for (let x = -20000; x < 120000; x += 1000) {
@@ -1042,7 +1220,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// A tower near enough to be built is drawn by the near buildings; its far copy in the
 	// skyline would stand in the same place a few centimetres off and flicker through it
 	// (and cover its doorway and its rooms), so the skyline leaves those out.
-	let lastList = [], skySig = 0, skyN = -1;
+	let lastList = [], skySig = 0, skyN = -1, lastAt = [0, 0];
 	function skylineBeside(list) {
 		lastList = list;
 		const G = new Map(), cell = 30, key = (x, z) => Math.floor(x / cell) + ',' + Math.floor(z / cell);
@@ -1061,7 +1239,10 @@ export function createCity(shared, scene, bay, real = null) {
 		if (sig === skySig && skyN === skyline.length) return;
 		skySig = sig; skyN = skyline.length;
 		keep.noGrounds = true;
-		upload(keep, skyMesh, null);
+		// (nearest first round where the city was last laid out; the skyline's own order kept)
+		const sky = keep === skyline ? skyline.slice() : keep;
+		reach.sky = orderByReach(sky, lastAt[0], lastAt[1], lotHalf);
+		upload(sky, skyMesh, null);
 	}
 
 	// ---------- landmarks ----------
@@ -1167,13 +1348,16 @@ export function createCity(shared, scene, bay, real = null) {
 	economy.setBuilt((o) => !!o.wrecked || !!o.src?.grp?.near || doors.has(lotKey(o)));
 	function setDoor(o, v) {
 		const k = lotKey(o);
-		if (v) doors.set(k, v); else doors.delete(k);
+		// (when its rooms were built: its glass clears from then, not all at once)
+		if (v) { const was = doors.get(k); v.born = was?.born ?? updateDetailClock(); doors.set(k, v); } else doors.delete(k);
 		// (the list is rebuilt as you travel: the lot as it stands in the current one)
 		const cur = lotsNear(o.x, o.z, 0.5).find((q) => lotKey(q) === k);
 		if (!cur || cur.slot === undefined || cur.src?.grp?.near) return;
 		const nearA = near.geometry.attributes.aNear, n = cur.slot;
 		nearA.array[n * 3] = v ? v[0] : 0; nearA.array[n * 3 + 1] = v ? v[1] : 0; nearA.array[n * 3 + 2] = v ? 2 + v[2] : 0;
-		nearA.needsUpdate = true;
+		const births = near.geometry.attributes.aDetailBirth;
+		births.array[n] = v ? v.born : 0;
+		nearA.needsUpdate = true; births.needsUpdate = true;
 	}
 	// the gridded houses (and a garage built onto one), and the shops and offices, given the
 	// shape of the mapped ones so houses.js and commercial.js build them the same way; kept
@@ -1225,20 +1409,40 @@ export function createCity(shared, scene, bay, real = null) {
 	}
 	const procNear = (x, z, r, biz) => { const out = []; for (const g of procGrp.values()) if (g.stamp === procStamp && !!g.biz === biz && Math.hypot(g[0].x - x, g[0].z - z) < r) out.push(g); return out; };
 	// every building round a point, from the last list (for walls to walk into)
+	// (40 m cells, a row of them to each z: every wall push asks, once a body, every frame, so the
+	// cells go by number, not by a string made each time; and a cell keeps the half of its widest,
+	// so one too far for any of its own to reach is passed by whole)
 	let lotGrid = new Map();
 	function indexLots(list) {
 		const G = new Map();
 		for (const o of list) {
 			if (o.h < 0.9 || o.kind === KIND.pool || !o.w) continue;
-			const k = Math.floor(o.x / 40) + ',' + Math.floor(o.z / 40);
-			(G.get(k) || G.set(k, []).get(k)).push(o);
+			const i = Math.floor(o.x / 40), j = Math.floor(o.z / 40), row = G.get(j) || G.set(j, new Map()).get(j);
+			const cell = row.get(i) || row.set(i, { lots: [], half: 0 }).get(i), h = Math.max(o.w, o.d) / 2;
+			cell.lots.push(o);
+			if (h > cell.half) cell.half = h;
 		}
 		lotGrid = G;
 	}
 	function lotsNear(x, z, r) {
-		const out = [];
-		for (let j = Math.floor((z - r - 60) / 40); j <= Math.floor((z + r + 60) / 40); j++) for (let i = Math.floor((x - r - 60) / 40); i <= Math.floor((x + r + 60) / 40); i++) {
-			for (const o of lotGrid.get(i + ',' + j) || []) if (Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2) out.push(o);
+		const out = [], i0 = Math.floor((x - r - 60) / 40), i1 = Math.floor((x + r + 60) / 40);
+		for (let j = Math.floor((z - r - 60) / 40); j <= Math.floor((z + r + 60) / 40); j++) {
+			const row = lotGrid.get(j);
+			if (!row) continue;
+			const gz = Math.max(0, j * 40 - z, z - (j + 1) * 40);
+			for (let i = i0; i <= i1; i++) {
+				const cell = row.get(i);
+				if (!cell) continue;
+				// (how near the cell's square comes, a millimetre kept for the rounding at its edges)
+				const gx = Math.max(0, i * 40 - x, x - (i + 1) * 40), reach = r + cell.half + 1e-3;
+				if (gx * gx + gz * gz > reach * reach) continue;
+				for (const o of cell.lots) {
+					// (off by more than its reach along either axis: out, without the square root)
+					const lim = r + Math.max(o.w, o.d) / 2, dx = o.x - x, dz = o.z - z;
+					if (dx > lim + 1e-6 || -dx > lim + 1e-6 || dz > lim + 1e-6 || -dz > lim + 1e-6) continue;
+					if (Math.hypot(dx, dz) < lim) out.push(o);
+				}
+			}
 		}
 		return out;
 	}
@@ -1270,20 +1474,37 @@ export function createCity(shared, scene, bay, real = null) {
 		const put = (k, lx, lz, yaw, sc, c, lift = 0, tilt = 0) => { if (!kit2.has(k)) return; const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) > 2.5) return; const e = [x, gy + lift, z, b.a + yaw, ...(typeof sc === 'number' ? [sc, sc, sc] : sc), tilt]; if (c) e.push(...c); (P[k] || (P[k] = [])).push(e); };
 		const hr = (n) => hash(b.x * 0.71 + n * 5.3, b.z * 1.13 - n * 2.1);
 		const open = (lx, lz) => { const [x, z] = W(lx, lz), L = real.landAt?.(x, z); return !L || (L.roof < 0.1 && L.road < 0.1); };
-		// where the garage is: built in at one end, or a wing beside
-		const gw = b.grp?.find((q) => q.kind === 3);
-		let gx = b.kind === 1 ? -b.w / 2 + 3 : b.kind === 2 ? b.w / 2 - 3 : null, gz = b.d / 2;
-		if (gx === null && gw) { const dx = gw.x - b.x, dz = gw.z - b.z; gx = ca * dx + sa * dz; gz = -sa * dx + ca * dz + gw.d / 2; }
+		// where the garage is, as the house is built (houseplan.js: built in at one end of the
+		// front, or a wing), and which way its drive runs out to the street (realcity.js: the
+		// mapped one, or the one made for it); the cars stand on the drive before the doors
+		const gar = b.grp ? garageOf(b.grp) : null, D = gar?.doors || [];
+		let gx = null, gz = null, ux = -sa, uz = ca;
+		if (D.length) {
+			gx = (D[0].x0 + D[D.length - 1].x1) / 2; gz = gar.front;
+			const [dx, dz] = W(gx, gz);
+			let bd = 4.5;
+			for (const q of real.near('paths', dx, dz, 20)) {
+				if (q.w < 2.2) continue;
+				for (const [ax, az, bx, bz] of [[q.ax, q.az, q.bx, q.bz], [q.bx, q.bz, q.ax, q.az]]) {
+					const d = Math.hypot(ax - dx, az - dz), L = Math.hypot(bx - ax, bz - az) || 1, vx = (bx - ax) / L, vz = (bz - az) / L;
+					if (d < bd && vx * -sa + vz * ca > 0.3) { bd = d; ux = vx; uz = vz; }
+				}
+			}
+		}
+		const turn = Math.atan2(-ux, uz) - b.a;
+		// (a car's place: before door k, its middle s metres down the drive, in the house's frame)
+		const onDrive = (k, s) => { const [dx, dz] = W((D[k].x0 + D[k].x1) / 2, gz), px = dx + ux * s - b.x, pz = dz + uz * s - b.z; return [ca * px + sa * pz, -sa * px + ca * pz]; };
 		if (gx !== null && !cnd) {
-			if (hr(1) < 0.55 && open(gx - 1.3, gz + 3)) put('car', gx - 1.3, gz + 3, 0, 1, pick(CARS, hr(2)));
-			if (hr(1) < 0.2 && open(gx + 1.3, gz + 3.2)) put('car', gx + 1.3, gz + 3.2, 0.04, 1, pick(CARS, hr(3)));
+			const c0 = onDrive(0, 3.2), c1 = D.length > 1 && onDrive(1, 3.2);
+			if (hr(1) < 0.55 && open(...c0)) put('car', ...c0, turn, 1, pick(CARS, hr(2)));
+			if (c1 && hr(1) < 0.2 && open(...c1)) put('car', ...c1, turn, 1, pick(CARS, hr(3)));
 			if (hr(4) < 0.35) put('bins', gx + Math.sign(gx || 1) * 3.4, gz + 1.2, 0, 1);
 			if (hr(5) < 0.06) put('hoop', gx + 2.2, gz + 0.2, 0, 1);
 			if (hr(6) < 0.035 && open(gx + Math.sign(gx || 1) * 4.2, gz + 4.5)) put(hr(7) < 0.55 ? 'rv' : 'boat', gx + Math.sign(gx || 1) * 4.2, gz + 4.5, 0, 1);
 		}
 		if (hr(8) < 0.6) { const s = hr(9) < 0.5 ? -1 : 1; if (open(s * (b.w / 2 + 0.7), 0)) put('cond', s * (b.w / 2 + 0.7), -b.d * 0.1, 0, 1); }
 		if (hr(10) < 0.16) { const s = hr(11) < 0.5 ? -1 : 1, lx = s * (b.w / 2 - 2), lz = -b.d / 2 - 9; if (open(lx, lz) && open(lx + 2, lz - 2) && open(lx - 2, lz + 2)) { const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) < 1.5) list.push({ x, y: gy - 1.2, z, w: 2.8, d: 2.4, h: 3.5, a: b.a + Math.PI, col: hr(12) < 0.5 ? [0.6, 0.55, 0.45] : look.wall, kind: KIND.garage, roof: { hip: false, rot: true, h: 0.9, col: look.roof, t: hr(12) < 0.3 ? ROOF.metal : ROOF.shingle, ov: 0.2, trim: 3 }, age: 0.5 }); } }
-		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', gx, gz + 3, (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
+		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', ...onDrive(0, 3.4), turn + (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
 	}
 	// the generated blocks stop where a mapped region starts: what stands on its side of the
 	// seam is its own (a block half over the line keeps only its lots on this side)
@@ -1296,11 +1517,13 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.trees) list.trees = list.trees.filter(out);
 		for (const k in list.props || {}) list.props[k] = list.props[k].filter((e) => !real.inside(e[0], e[2]));
 	}
-	function realBuildings(cx, cz, R, list, wild = true) {
+	function* realBuildings(cx, cz, R, list, wild = true) {
 		if (!real?.loaded()) return;
+		let n = 0;
 		const trees = list.trees || (list.trees = []);
 		const floors = new Map();
 		for (const b of real.near('boxes', cx, cz, R)) {
+			if ((++n & 511) === 0) yield;
 			const dx = b.x - cx, dz = b.z - cz;
 			if (dx * dx + dz * dz > R * R) continue;
 			// the Discovery Museum's barracks are built by bay/discovery.js
@@ -1354,16 +1577,20 @@ export function createCity(shared, scene, bay, real = null) {
 			const g = bay.heightAt(p.x, p.z);
 			if (g > 0.5 && poolOK(p)) list.push({ x: p.x, y: g - 0.9, z: p.z, w: p.w, d: p.d, h: 0.99, a: p.a, col: [0.9, 0.89, 0.85], kind: KIND.pool, roof: null });
 		}
+		yield;
 		// (out on the globe the wild land and its creeks are the globe's own: globetrees.js)
 		if (wild) {
 			wildLand(cx, cz, 1100, trees);
+			yield;
 			wildLand(cx, cz, 2700, trees, true, 1100);        // beyond: a coarser, cheaper scatter for the far masses
+			yield;
 			// the willows, sycamores and redwoods along the San Lorenzo (sanlorenzo.js)
 			for (const t of riverTreesNear(cx, cz, 2700)) trees.push(t);
 			// ...and along every other creek and river's wild banks (water.js)
 			for (const t of waterTreesNear(cx, cz, 2700)) trees.push(t);
 		}
 		for (const t of real.near('trees', cx, cz, 2700)) {
+			if ((++n & 2047) === 0) yield;
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
 			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
 			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2 || (t.x < 12000 && bay.heightAt(t.x, t.z + 1500) < -2))) { const L = real.landAt(t.x, t.z); if (L && L.lu !== 1 && L.lu !== 7 && L.lu !== 13) { const gl = (bay.heightAt(t.x + 60, t.z) + bay.heightAt(t.x - 60, t.z) + bay.heightAt(t.x, t.z + 60) + bay.heightAt(t.x, t.z - 60) - 4 * g) / 4; if (gl < 7 || r > 0.35) continue; } }       // (only a few, in a deep draw well below its sides)
@@ -1483,7 +1710,7 @@ export function createCity(shared, scene, bay, real = null) {
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
 		near.visible = hips.visible = gables.visible = farPts.visible = !high;
-		for (const im of [...shrubs, ...ferns, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
+		for (const im of [...shrubs, ...ferns, ...bedMeshes, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (clearingVersion() !== clearV) { clearV = clearingVersion(); lastX = 1e9; }          // a ball field laid out nearby: its trees go
 		if (coastVersion() !== coastV) { coastV = coastVersion(); lastX = 1e9; }                // the coast's farms and links laid out: theirs go
@@ -1500,23 +1727,53 @@ export function createCity(shared, scene, bay, real = null) {
 			if (!on) { riseT0 = -1; rise.value.w = 0; }
 			near.castShadow = hips.castShadow = gables.castShadow = !on;
 		}
-		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
-		lastX = x; lastZ = z;
+		// (the near rooftop units kept up as you go, a rebuild under way or not: 45 m past their band)
+		if (Math.hypot(x - acX, z - acZ) > 40 || kit.ac.instanceMatrix.version !== acV) placeAC(x, z);
+		// the buildings round you again every 300 m, a few milliseconds a frame (the ones standing
+		// stay drawn till the new set is ready): done in one go it held a phone's frame for the
+		// best part of a second each time; the first set, and one far from where you are now (a
+		// teleport, a fast flight), is done at once
+		if (!rebuild && Math.hypot(x - lastX, z - lastZ) >= 300) { lastX = x; lastZ = z; rebuild = rebuildAt(x, z, globe); }
+		if (rebuild) {
+			const t0 = performance.now(), budget = !builtOnce || Math.hypot(x - rebuild.x, z - rebuild.z) > 900 ? Infinity : SLICE;
+			while (rebuild && performance.now() - t0 < budget) if (rebuild.gen.next().done) { rebuild = null; builtOnce = true; }
+			return;
+		}
+		if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) { placeTrees(x, z); bedFarX = 1e9; }                 // (MARGIN covers these 40 m)
+		if (!high && Math.hypot(x - bedX, z - bedZ) > 2) placeBeds(x, z);
+	}
+	// one rebuild of the buildings, trees and kit round (x, z), in steps
+	const SLICE = PHONE ? 4 : 6;
+	let rebuild = null, builtOnce = false;
+	const rebuildAt = (x, z, globe) => ({ x, z, gen: rebuildSteps(x, z, globe) });
+	// a list's filter a slice at a time
+	function* keepSteps(arr, ok) {
+		const out = [];
+		for (let i = 0; i < arr.length; i++) { if ((i & 2047) === 2047) yield; if (ok(arr[i])) out.push(arr[i]); }
+		return out;
+	}
+	function* rebuildSteps(x, z, globe) {
 		const list = [];
 		if (!globe) fillBlocks(x, z, 1200, list);
 		clipMapped(list);
-		realBuildings(x, z, 2000, list, !globe);
+		yield;
+		yield* realBuildings(x, z, 2000, list, !globe);
+		yield;
 		settleLots(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
+		yield;
 		decorate(list, x, z, 700);
+		yield;
 		// the streets' own trees by their era, in place of the map's plain rows (streettrees.js);
 		// nearer and fewer on a lower quality tier (world/governor.js)
 		if (list.trees && real?.loaded()) { const far = qualityNow().far; list.trees = streetTrees(real, list.trees, x, z, (PHONE ? 650 : 1000) * far, (tx, tz) => bay.heightAt(tx, tz), Math.round((PHONE ? 3500 : 9000) * far)); }
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || ((t.well || L.road < 0.6) && L.roof < 0.7); });
+		yield;
 		// ...nor on a carriageway, a sidewalk, a trail or a drive, nor in a junction's sight
 		// triangle, within reach (bay/clearance.js): the land map is too coarse for a trunk
-		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); list.trees = list.trees.filter((t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5, !!t.well)); }
+		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); yield; list.trees = yield* keepSteps(list.trees, (t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5, !!t.well)); }
+		yield;
 		// ...nor on a ball field (sportsfields.js)
 		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !onLandmark(t.x, t.z, 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
 		// ...nor inside a building (every one can be walked into now): a coarse grid of them
@@ -1531,25 +1788,38 @@ export function createCity(shared, scene, bay, real = null) {
 				}
 				return false;
 			};
-			if (list.trees && G.size) list.trees = list.trees.filter((t) => !inside(t));
+			yield;
+			if (list.trees && G.size) list.trees = yield* keepSteps(list.trees, (t) => !inside(t));
 		}
+		yield;
 		// which buildings are businesses, and their signs and things out front (economy/layer.js)
-		economy.apply(list, x, z);
+		yield* economy.applySteps(list, x, z);
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees, k = list.kit, pr = list.props; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; list.props = pr; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
+		yield;
 		procGroups(list, x, z);
 		// (a phone sorts out the nearer buildings only: the pass costs it a frame or two)
 		apart(list, x, z, PHONE ? 650 : 1e9);
+		yield;
+		// (then in place: the buildings, their kit a frame on, the trees a frame after; written
+		// nearest first by bands, for the shadow pass, the roofs counted in the same order)
+		lastAt = [x, z];
+		const R = orderByReach(list, x, z, lotHalf);
 		upload(list, near, [hips, gables]);
+		reach.near = R; reach.hips = subEnds(list, R, (o) => o.roof?.hip); reach.gables = subEnds(list, R, (o) => o.roof && !o.roof.hip);
 		skylineBeside(list);
 		indexLots(list);
-		uploadKit(list.kit);
-		kit2.upload(list.props);
 		// the tall ones, for going inside (bay/towers.js)
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
+		yield;
+		if (acX > 1e8) { acX = x; acZ = z; }          // (the first set: its near units round where it was laid out)
+		uploadKit(list.kit);
+		kit2.upload(list.props);
+		drives = { list: list.props?.car || [], v: drives.v + 1 };
+		yield;
 		placeTrees(x, z);
 	}
-	return { skyline: () => skyline, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), bedsNear: (x, z, r) => bedList.filter((t) => !t.litter && Math.hypot(t.x - x, t.z - z) < r), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }

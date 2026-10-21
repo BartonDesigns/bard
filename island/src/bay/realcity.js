@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
-import { groupBoxes, isHome } from './houseplan.js';
+import { groupBoxes, isHome, garageOf } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
@@ -23,6 +23,7 @@ import { eraMap } from './streetera.js';                     // streets by era: 
 import { paintStreet } from './potholes.js';                 // ...its sidewalk, potholes and patches in the paint layer
 import { qualityNow, onQuality } from '../world/governor.js';
 import { GFX_PHONE } from '../world/device.js';
+import { buildSlice } from '../world/buildslice.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -102,6 +103,8 @@ export const realCovered = (x, z, m = 60) => inMapped(x, z) && inMapped(x - m, z
 export { REAL_TALL };
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
+// how far (x, z) is from the segment a-b
+const segDist = (ax, az, bx, bz, x, z) => { const ex = bx - ax, ez = bz - az, l2 = ex * ex + ez * ez || 1, t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2)); return Math.hypot(ax + ex * t - x, az + ez * t - z); };
 // a region is fetched when you come this near its edge and dropped when you are this far
 // (the buildings stand to 2 km, the trees a little further); a change this near you is
 // news to everything built round you (version()); a phone keeps less of the map in memory
@@ -150,6 +153,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	const live = new Map(), pending = new Map(), failed = new Set();
 	let self = null;          // (this city as returned, for the streets' eras: streetera.js)
 	let disposed = false, cancelled = 0;
+	let roadV = 0;            // (the regions' and the hand-laid roads changed, near or far: roadVersion())
 	let camX = 1e9, camZ = 1e9, late = 0;
 
 	// Buildings clear of the street: none standing in a carriageway or on its sidewalk (the
@@ -208,6 +212,51 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		return moves;
 	}
+	// A drive for every garage the map gives none: from the garage's doors straight out to the
+	// street it faces, concrete as the mapped ones (drawn into the ground's map, drawRoadMap;
+	// the kerb cars and the trees keep off it), so no house stands in a lot of lawn with no way
+	// to it. Where the street is not ahead of the doors (a corner lot, a garage to the side)
+	// the drive bends to the nearest kerb ahead within 50 degrees, or there is none. Across
+	// frames, a few milliseconds at a time
+	async function addDrives(G, signal) {
+		const seen = new Set(), near = [], mapped = [];
+		let t = performance.now();
+		for (const b of G.boxes) {
+			if (!b.grp || seen.has(b.grp) || !isHome(b)) continue;
+			seen.add(b.grp);
+			if (performance.now() - t > 5) { await new Promise((ok) => setTimeout(ok, 0)); if (signal?.aborted) return; t = performance.now(); }
+			const gar = garageOf(b.grp);
+			if (!gar || !gar.doors.length) continue;
+			const { M, ca, sa } = gar, d0 = gar.doors[0], d1 = gar.doors[gar.doors.length - 1];
+			const lx = (d0.x0 + d1.x1) / 2, lz = gar.front;
+			const dx = M.x + ca * lx - sa * lz, dz = M.z + sa * lx + ca * lz, nx = -sa, nz = ca;
+			// (a drive the map already has, at these doors)
+			mapped.length = 0; nearIn(G, 'paths', dx, dz, 30, mapped);
+			if (mapped.some((q) => q.w >= 2.2 && segDist(q.ax, q.az, q.bx, q.bz, dx + nx * 2, dz + nz * 2) < 3.5)) continue;
+			near.length = 0; nearIn(G, 'roads', dx, dz, 50, near);
+			let best = 1e9, bend = null;
+			for (const r of near) {
+				if (!r.drive || r.bridge || r.link || r.cls === 'motorway' || r.cls === 'trunk') continue;
+				const p = r.pts, hw = r.w / 2;
+				for (let i = 0; i + 3 < p.length; i += 2) {
+					// the doors' line straight out, where it crosses this piece of street
+					const ex = p[i + 2] - p[i], ez = p[i + 3] - p[i + 1], den = nx * ez - nz * ex;
+					if (Math.abs(den) > 1e-6) {
+						const qx = p[i] - dx, qz = p[i + 1] - dz, tt = (qx * ez - qz * ex) / den, u = (qx * nz - qz * nx) / den;
+						if (u >= 0 && u <= 1 && tt > 1.5 && tt - hw < best) { best = tt - hw; bend = null; }
+					}
+					// or the nearest kerb ahead, for the bend
+					const l2 = ex * ex + ez * ez || 1, k = Math.max(0, Math.min(1, ((dx - p[i]) * ex + (dz - p[i + 1]) * ez) / l2));
+					const cx = p[i] + ex * k - dx, cz = p[i + 1] + ez * k - dz, cd = Math.hypot(cx, cz);
+					if (cd - hw > 1 && cd - hw < 30 && (cx * nx + cz * nz) / cd > 0.64 && cd - hw + 4 < best) { best = cd - hw + 4; bend = [p[i] + ex * k - cx / cd * hw, p[i + 1] + ez * k - cz / cd * hw]; }
+				}
+			}
+			if (best > 32 || best < 0.8) continue;
+			const w = Math.min(6.4, Math.max(3.0, d1.x1 - d0.x0 + 0.5));
+			const q = bend ? { ax: dx, az: dz, bx: bend[0], bz: bend[1], w, made: true } : { ax: dx, az: dz, bx: dx + nx * (best + 0.4), bz: dz + nz * (best + 0.4), w, made: true };
+			cellIn(G.grid, q.ax, q.az).paths.push(q);
+		}
+	}
 	async function load(i, signal) {
 		const name = NAMES[i], base = new URL(`../assets/bayarea/real/${name}`, import.meta.url).href;
 		const [H, bin, px] = await Promise.all([
@@ -265,6 +314,8 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			for (const e of ['a', 'b']) for (const m of moved.get(Math.floor(p[e + 'x'] / 50) * 65536 + Math.floor(p[e + 'z'] / 50)) || []) if (Math.hypot(p[e + 'x'] - m.x, p[e + 'z'] - m.z) < m.r) { p[e + 'x'] += m.px; p[e + 'z'] += m.pz; break; }
 			if (inIb(p.ax, p.az)) cellIn(G.grid, p.ax, p.az).paths.push(p);
 		}
+		await addDrives(G, signal);
+		if (signal?.aborted) throw new DOMException('Tile cancelled', 'AbortError');
 		o = S.pools[0];
 		for (let n = 0; n < S.pools[1]; n++, o += 10) {
 			const p = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000 };
@@ -341,6 +392,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	// only when it is near (the rest find it as they are built)
 	let version = 0, genVersion = 0, quiet = 0;
 	function changed(i, x, z) {
+		roadV++;
 		if (i < 0 || gap(i, x, z) < NEWS) version++; else quiet++;
 		compose(); slots(x, z);
 		for (const M2 of MAPS) M2.x = 1e9;          // repaint the road maps
@@ -431,6 +483,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	// San Francisco approach): drivable like the mapped ones
 	const hand = { name: 'hand', bounds: [0, 0, 0, 0], reach: [1e9, 1e9, -1e9, -1e9], grid: new Map() };
 	function addRoads(list) {
+		roadV++;
 		for (const r of list) {
 			r.drive = true; r.walked = false; r.hand = true;
 			r.box = roadBox(r);
@@ -452,9 +505,19 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 	}
 	function near(kind, x, z, rad) {
+		const out = nearOwn(kind, x, z, rad);
+		for (const S of sources) S.near(kind, x, z, rad, out);
+		return out;
+	}
+	// near() in its two parts: the regions' own and the hand-laid roads (which change only with
+	// roadVersion), and what the other sources add (which can change without a word)
+	function nearOwn(kind, x, z, rad) {
 		const out = [];
 		for (const G of R.regions) nearIn(G, kind, x, z, rad, out);
 		if (kind === 'roads') nearIn(hand, kind, x, z, rad, out);
+		return out;
+	}
+	function nearSources(kind, x, z, rad, out = []) {
 		for (const S of sources) S.near(kind, x, z, rad, out);
 		return out;
 	}
@@ -529,6 +592,8 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		const res = (isPhone ? 1024 : 2048) * k;
 		M.paint.samples = isPhone || k < 1 ? 0 : 4;
 		M.paint.setSize(res, res);
+		// (its twin made again from it when next needed, roadMapSteps)
+		M.paintBack?.dispose(); M.paintBack = null;
 		M.x = 1e9;
 	}
 	sizePaint();
@@ -539,10 +604,36 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	const scene2 = new THREE.Scene();
 	const layerMat = new THREE.MeshBasicMaterial({ vertexColors: true, blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, depthTest: false, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
 
-	// flat shapes in the road map's own space (x east, y south, in metres from its corner)
-	function builder(R0) {
-		const P = [], C = [];
-		const v = (x, y, col, k) => { P.push(x, y, 0); C.push(col[0] * k, col[1] * k, col[2] * k, col[3] * k); };
+	// The shapes' vertices, kept from one road map to the next: positions (3 floats) and colours
+	// (4) in typed arrays, one pair for each builder of a map (the shapes, the paint, the lanes'
+	// wear). Made anew for each map, as plain arrays pushed to and then copied into typed ones,
+	// a map's ran to millions of vertices (a phone's coarse map downtown, over 150 MB), most of a
+	// walk's garbage. Where its target takes no multisampling (a phone's) a builder draws what it
+	// has into it each CHUNK vertices and begins again: the layers are blended by maximum, so a
+	// map drawn in pieces is the same map, and its store stays small (2.75 MB). A multisampled
+	// target (a computer's) is drawn once, whole, and its store grows to hold it.
+	const CHUNK = 3 * 32768;
+	const pool = () => ({ P: new Float32Array(3 * CHUNK), C: new Float32Array(4 * CHUNK) });
+	const POOLS = [pool(), pool(), pool()];
+	// flat shapes in the road map's own space (x east, y south, in metres from its corner);
+	// flush(mesh) draws a piece and the builder begins again (none: it grows)
+	function builder(R0, S, flush = null) {
+		let P = S.P, C = S.C, n = 0, cap = P.length / 3;
+		const grow = () => {
+			cap *= 2;
+			const P2 = new Float32Array(cap * 3), C2 = new Float32Array(cap * 4);
+			P2.set(P); C2.set(C);
+			S.P = P = P2; S.C = C = C2;
+		};
+		// (stored as floats as they come: the same numbers the plain arrays' copy made; the shapes
+		// come three vertices to a triangle, so a piece ends where a triangle does)
+		const v = (x, y, col, k) => {
+			if (n === cap) { if (flush) { flush(mesh()); n = 0; } else grow(); }
+			const i = n * 3, j = n * 4;
+			P[i] = x; P[i + 1] = y; P[i + 2] = 0;
+			C[j] = col[0] * k; C[j + 1] = col[1] * k; C[j + 2] = col[2] * k; C[j + 3] = col[3] * k;
+			n++;
+		};
 		// the value at distance d from the centre of a band of half-width hw
 		const at = (hw, d) => Math.min(1, Math.max(0, 0.5 + (hw - d) / (2 * R0)));
 		// a round blob: a fan to the inner radius, then the ramp ring out to the outer one
@@ -584,14 +675,17 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 				if (round && !dash && i + 1 < pts.length - 1) disc(bx + nx * off, by + ny * off, hw, col);
 			}
 		};
-		const mesh = () => {
+		// (views of the store, no copy: drawn at once, before the store is filled again)
+		function mesh() {
 			const g = new THREE.BufferGeometry();
-			g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-			g.setAttribute('color', new THREE.Float32BufferAttribute(C, 4));
+			g.setAttribute('position', new THREE.BufferAttribute(P.subarray(0, n * 3), 3));
+			g.setAttribute('color', new THREE.BufferAttribute(C.subarray(0, n * 4), 4));
 			const m = new THREE.Mesh(g, layerMat); m.frustumCulled = false;
 			return m;
-		};
-		return { disc, line, mesh };
+		}
+		// (what is left, drawn: the store free for the next)
+		const rest = () => { const m = mesh(); n = 0; return m; };
+		return { disc, line, mesh, rest };
 	}
 	// channels: R asphalt, G concrete, B dirt, A white lines; the paint map's R: yellow lines
 	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 1, 0], WHITE = [0, 0, 0, 1], YELLOW = [1, 0, 0, 0], WEAR = [0, 1, 0, 0], JOINT = [0, 1, 0, 0], FWY = [0, 0.35, 0, 0];       // (the paint map holds two channels: both in green)
@@ -628,12 +722,21 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			run = s - L;
 		}
 	}
-	function render(target, meshes, SIZE) {
-		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
+	// shapes drawn into a road map's target, cleared first (fresh) or added to it; let go at once
+	// (the shapes are sent to the card: they run to tens of MB)
+	const prevColor = new THREE.Color();
+	function render(target, meshes, SIZE, fresh) {
+		const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(prevColor), pa = renderer.getClearAlpha(), auto = renderer.autoClear;
 		for (const m of meshes) scene2.add(m);
 		cam.left = 0; cam.right = SIZE; cam.bottom = 0; cam.top = SIZE; cam.updateProjectionMatrix();
-		renderer.setRenderTarget(target); renderer.setClearColor(0x000000, 0); renderer.clear(true, false, false);
-		renderer.render(scene2, cam);
+		renderer.setRenderTarget(target); renderer.setClearColor(0x000000, 0);
+		if (fresh) renderer.clear(true, false, false);
+		renderer.autoClear = false;
+		try { renderer.render(scene2, cam); } finally {
+			renderer.autoClear = auto;
+			renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
+			for (const m of meshes) { scene2.remove(m); m.geometry.dispose(); }
+		}
 	}
 	// a street has sidewalks where it runs through town, not out on the mountain
 	function built(r) {
@@ -664,8 +767,8 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		return null;
 	}
 	let crossings = [];
-	function corners(all, x0, z0, B, Y) {
-		crossings = [];
+	// (into a list of its own, out: it becomes crossings when its map is drawn; a slice at a time)
+	function* corners(all, x0, z0, B, Y, out) {
 		const nodes = new Map(), nk = (x, z) => Math.round(x / 1.5) * 65536 + Math.round(z / 1.5);
 		for (const r of all) {
 			if (!r.drive || r.bridge || r.link || r.hand || !CROSS.has(r.cls) || !r.walked) continue;
@@ -680,9 +783,12 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 				if (i > 0) n.legs.push({ r, j: i, d: -1 });
 			}
 		}
+		yield;
+		let count = 0;
 		for (const n of nodes.values()) {
 			// (in town: one of its streets at least among built-up land)
 			if (n.legs.length < 3 || !n.built) continue;
+			if ((++count & 31) === 0) yield;
 			const L = landAt(n.x, n.z), city = !!L && (L.lu === 7 || L.lu === 8);
 			for (const g of n.legs) {
 				const { r, j, d } = g, p = r.pts, hw = r.w / 2;
@@ -699,7 +805,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 				const at = (a, b) => [n.x + ux * a + nx * b - x0, n.z + uz * a + nz * b - z0];
 				const c0 = reach + 0.8, c1 = c0 + 3;
 				// (each crosswalk, for whoever walks them: crosswalks.js)
-				crossings.push({ x: n.x + ux * (c0 + 1.5), z: n.z + uz * (c0 + 1.5), ux, uz, hw, city: big });
+				out.push({ x: n.x + ux * (c0 + 1.5), z: n.z + uz * (c0 + 1.5), ux, uz, hw, city: big });
 				if (big) for (let b = -hw + 0.9; b <= hw - 0.6; b += 1.2) B.line([at(c0, b), at(c1, b)], 0.3, WHITE, false);
 				else for (const a of [c0, c1]) B.line([at(a, -hw + 0.3), at(a, hw - 0.3)], 0.15, WHITE, false);
 				// the stop bar across the lane coming in (the right of traffic heading for the corner)
@@ -709,15 +815,26 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			}
 		}
 	}
-	function drawRoadMap(M, cx, cz) {
+	// A road map round (cx, cz), built a slice at a time (update: a few milliseconds a frame) and
+	// drawn into a twin of its targets, swapped in when it is whole: the one drawn before stays on
+	// the ground till then. Done in one go the fine map held a phone's frame for the best part of
+	// a second, and sent the card the whole map's shapes at once.
+	//   once: drawn straight into the targets shown, this frame (nothing is shown yet, or it is far
+	//   off)
+	function* roadMapSteps(M, cx, cz, once) {
 		M.x = cx; M.z = cz;
-		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
+		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2, fine = !!M.paint;
 		// (a phone's maps are half the size: the ramps keep two texels, or the edges stair-step)
 		const ramp = M.ramp * (isPhone ? 2 : 1);
-		const B = builder(ramp), Y = builder(ramp / paintK), Lb = builder(1.8), fine = !!M.paint;
+		const tRoad = once ? M.rt : (M.rtBack ||= M.rt.clone()), tPaint = !fine ? null : once ? M.paint : (M.paintBack ||= M.paint.clone());
+		const drawn = new Set(), into = (t) => (t && !t.samples ? (m) => { render(t, [m], SIZE, !drawn.has(t)); drawn.add(t); } : null);
+		const B = builder(ramp, POOLS[0], into(tRoad)), Y = builder(ramp / paintK, POOLS[1], into(tPaint)), Lb = builder(1.8, POOLS[2], into(tPaint));
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
 		const all = near('roads', cx, cz, SIZE * 0.72), lanes = all.filter((q) => q.drive && !q.bridge);
+		yield;
+		let count = 0;
 		for (const r of all) {
+			if ((++count & 7) === 0) yield;
 			// (a road added by hand is driven, not painted: where it runs through a mapped region the
 			// mapped one is on the ground already)
 			if (r.hand) continue;
@@ -754,18 +871,32 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			if (self) paintStreet(r, p, Y, ramp / paintK, eraMap(self).ofRoad(r), r.walked && built(r), x0, z0);          // streets by era (potholes.js)
 			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
-		if (fine) corners(all, x0, z0, B, Y);
+		const cross = [];
+		if (fine) yield* corners(all, x0, z0, B, Y, cross);
+		yield;
 		// driveways and front walks
-		for (const q of near('paths', cx, cz, SIZE * 0.72)) B.line([[q.ax - x0, q.az - z0], [q.bx - x0, q.bz - z0]], q.w / 2, CONC, false);
-		const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
-		render(M.rt, [B.mesh()], SIZE);
-		if (M.paint) render(M.paint, [Lb.mesh(), Y.mesh()], SIZE);
-		renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
-		// (the shapes are drawn: let them go now, not at the next redraw; they run to tens of MB)
-		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
+		count = 0;
+		for (const q of near('paths', cx, cz, SIZE * 0.72)) {
+			if ((++count & 255) === 0) yield;
+			B.line([[q.ax - x0, q.az - z0], [q.bx - x0, q.bz - z0]], q.w / 2, CONC, false);
+		}
+		// what is left of the shapes drawn, the twins swapped in
+		render(tRoad, [B.rest()], SIZE, !drawn.has(tRoad));
+		if (fine) render(tPaint, [Lb.rest(), Y.rest()], SIZE, !drawn.has(tPaint));
+		if (!once) { M.rtBack = M.rt; M.rt = tRoad; if (fine) { M.paintBack = M.paint; M.paint = tPaint; } }
+		if (fine) crossings = cross;
 		M.u[0].value = M.rt.texture;
 		M.u[1].value.set(x0, z0, SIZE, 1);
 		if (M.paint) M.u[2].value = M.paint.texture;
+	}
+	// the map being built (one at a time), and how long a frame gives it: its own few milliseconds,
+	// a share of a slow frame (world/buildslice.js). The first map, and one where you have gone far
+	// past the one drawn (a teleport, a fast flight), is built at once.
+	const SLICE = isPhone ? 4 : 6;
+	let job = null, lastT = 0;
+	function stepMap(dt) {
+		const t0 = performance.now(), budget = job.once ? Infinity : buildSlice(dt, SLICE);
+		while (job && performance.now() - t0 < budget) if (job.it.next().done) job = null;
 	}
 
 	function update(camera) {
@@ -776,10 +907,21 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		if (!R.loaded) { for (const M of MAPS) { M.u[1].value.w = 0; M.x = 1e9; } return; }
 		if (Math.hypot(x - slotX, z - slotZ) > 400) slots(x, z);
 		const on = camera.position.y < 3000 && R.regions.some(({ reach: b }) => x > b[0] - 800 && z > b[1] - 800 && x < b[2] + 800 && z < b[3] + 800);
+		const now = performance.now(), dt = lastT ? (now - lastT) / 1000 : 0;
+		lastT = now;
+		// (a map asked for again while it was being built, the regions changed or the paint
+		// resized, is begun again: what it had is stale)
+		if (job && (job.M.x !== job.x || job.M.z !== job.z)) job = null;
 		for (const M of MAPS) {
 			if (!on) { M.u[1].value.w = 0; M.x = 1e9; continue; }
-			if (Math.hypot(x - M.x, z - M.z) > M.move) { drawRoadMap(M, x, z); break; }      // one map a frame
+			if (!job && Math.hypot(x - M.x, z - M.z) > M.move) {          // one map at a time
+				const u = M.u[1].value, once = u.w === 0 || Math.hypot(x - (u.x + u.z / 2), z - (u.y + u.z / 2)) > M.size * 0.4;
+				job = { M, x, z, once, it: roadMapSteps(M, x, z, once) };
+				break;
+			}
 		}
+		if (job && on) stepMap(dt);
+		else job = null;
 	}
 
 	// the coarse map at a point: land use (0 wild), roads and roofs coverage
@@ -813,13 +955,14 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	function dispose() {
 		if (disposed) return;
 		disposed = true;
+		job = null;
 		unQuality();
 		for (const task of pending.values()) task.controller.abort();
 		pending.clear();
 		for (const [i, M] of MAPS.entries()) {
 			if (M.u[0].value === M.rt.texture) { M.u[0].value = EMPTY_MAPS[i]; M.u[1].value.w = 0; }
 			if (M.paint && M.u[2].value === M.paint.texture) M.u[2].value = EMPTY_MAPS[2];
-			M.rt.dispose(); M.paint?.dispose();
+			M.rt.dispose(); M.paint?.dispose(); M.rtBack?.dispose(); M.paintBack?.dispose();
 		}
 		if (REAL_U.uRealMap.value === comp?.tex || gens.some((G) => REAL_U.uRealMap.value === G.tex)) {
 			REAL_U.uRealMap.value = EMPTY_MAPS[3]; REAL_U.uRealR.value.w = 0;
@@ -828,13 +971,12 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		comp?.tex.dispose(); comp = null;
 		for (const G of gens) G.tex.dispose();
-		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
 		layerMat.dispose();
-		live.clear(); gens.length = 0; sources.length = 0; hand.grid.clear(); failed.clear();
+		live.clear(); gens.length = 0; sources.length = 0; hand.grid.clear(); failed.clear(); roadV++;
 		R.regions.length = 0; R.loaded = false;
 	}
 
 	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
-	// town came or went)
-	return (self = { R, inside, regionAt, near, update, dispose, sidewalk, landAt, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
+	// town came or went; roadVersion: the regions' or the hand-laid roads changed, anywhere)
+	return (self = { R, inside, regionAt, near, nearOwn, nearSources, roadVersion: () => roadV, update, dispose, sidewalk, landAt, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
 }

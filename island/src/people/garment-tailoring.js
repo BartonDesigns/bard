@@ -12,6 +12,17 @@ export function sleeveDistance(v, sleeve, cut) {
  return plane[3]-plane[0]*v[0]-plane[1]*v[1]-plane[2]*v[2];
 }
 
+// rows' values of one attribute laid end to end in a typed array, as rows.flatMap(v=>v[name])
+// gave them, without the list between (a garment's rows run to tens of thousands)
+function flatten(rows, name, Type) {
+ let n = 0;
+ for (const v of rows) { const a = v[name]; n += Array.isArray(a) ? a.length : 1; }
+ const out = new Type(n);
+ let k = 0;
+ for (const v of rows) { const a = v[name]; if (Array.isArray(a)) for (let j = 0; j < a.length; j++) out[k++] = a[j]; else out[k++] = a; }
+ return out;
+}
+
 // Blend bone identities, not their numeric indices. Shared by curved surface samples
 // and cut edges so a new vertex follows the same skeleton as its neighbours.
 function blendWeights(a, b, t, v) {
@@ -58,7 +69,7 @@ export function refineGarmentSurface(g) {
   indices.push(A,ab,ca,ab,B,bc,ca,bc,C,ab,bc,ca);
  }
  const out=new THREE.BufferGeometry();
- for(const name of names){const Type=name==='skinIndex'?Uint16Array:Float32Array;out.setAttribute(name,new THREE.BufferAttribute(new Type(rows.flatMap(v=>v[name])),g.attributes[name].itemSize));}
+ for(const name of names){const Type=name==='skinIndex'?Uint16Array:Float32Array;out.setAttribute(name,new THREE.BufferAttribute(flatten(rows,name,Type),g.attributes[name].itemSize));}
  out.setIndex(indices);out.userData.refinement={addedVertices:added,maxOffset};g.dispose();return out;
 }
 
@@ -95,7 +106,9 @@ export function drapePanels(g, o, cut, R) {
 // This avoids razor-thin shader-only edges while retaining the fitted sleeve topology.
 export function finishGarmentEdges(g, o, cut, R) {
  const names = Object.keys(g.attributes), rows = [], indices = [], cache = new Map(), rims = new Map();
- const read = (i) => Object.fromEntries(names.map(k => [k, Array.from({ length: g.attributes[k].itemSize }, (_, j) => g.attributes[k].array[i * g.attributes[k].itemSize + j])]));
+ // (a vertex's values, attribute by attribute, read straight from the arrays)
+ const attrs = names.map(k => g.attributes[k]);
+ const read = (i) => { const o = {}; for (let a = 0; a < names.length; a++) { const A = attrs[a], size = A.itemSize, arr = A.array, v = new Array(size); for (let j = 0; j < size; j++) v[j] = arr[i * size + j]; o[names[a]] = v; } return o; };
  const source = new Map();
  const at = (i) => { if (!source.has(i)) source.set(i, { ...read(i), key: 'v' + i, trim: [0] }); return source.get(i); };
  function mix(a, b, t) {
@@ -117,12 +130,15 @@ export function finishGarmentEdges(g, o, cut, R) {
   return out;
  }
  const ix = g.index.array;
+ // (a vertex in a region, made once and shared by the triangles round it: nothing changes it after)
+ const inRegion = new Map();
+ const regioned = (v, val) => { const key = `${v.key}s${val}`; let r = inRegion.get(key); if (!r) inRegion.set(key, r = { ...v, key, slot: [val] }); return r; };
  for (let i=0;i<ix.length;i+=3) {
   let poly = [at(ix[i]),at(ix[i+1]),at(ix[i+2])];
   const val=poly[2].slot[0], s=Math.round(val)%10, limb=Math.floor(val/10), item=[o.top,o.outer,o.bottom,o.shoes][s];
   // The shader uses a flat region ID. Intersections must not create fractional IDs
   // between an arm and torso and accidentally address a different garment palette.
-  poly=poly.map(v=>({...v,key:`${v.key}s${val}`,slot:[val]}));
+  poly=[regioned(poly[0],val),regioned(poly[1],val),regioned(poly[2],val)];
   const cuts=[];
   // each edge's turned-back return: a knit's rib and a rolled sleeve are thicker than a hem
   const edge=(f,r=.0016)=>{f.radius=r;return f;}, ribbed=isRibbed(item);
@@ -152,7 +168,7 @@ export function finishGarmentEdges(g, o, cut, R) {
   for (const f of cuts) for (let j=0;j<poly.length;j++) {
    const a=poly[j], b=poly[(j+1)%poly.length];
    if (Math.abs(f(a.position))>.0002 || Math.abs(f(b.position))>.0002) continue;
-   const key=[a.key,b.key].sort().join('|');
+   const key=a.key<b.key?a.key+'|'+b.key:b.key+'|'+a.key;
    rims.set(key,{a,b,f});
   }
  }
@@ -179,7 +195,7 @@ export function finishGarmentEdges(g, o, cut, R) {
  const out=new THREE.BufferGeometry();
  for(const name of [...names,'trim']) {
   const size=name==='trim'?1:g.attributes[name].itemSize, Type=name==='skinIndex'?Uint16Array:Float32Array;
-  out.setAttribute(name,new THREE.BufferAttribute(new Type(rows.flatMap(v=>v[name])),size));
+  out.setAttribute(name,new THREE.BufferAttribute(flatten(rows,name,Type),size));
  }
  out.setIndex(indices);out.computeBoundingSphere();out.userData.tailoring={edgeSegments:rims.size,vertices:rows.length,refinement:g.userData.refinement};
  g.dispose();return out;

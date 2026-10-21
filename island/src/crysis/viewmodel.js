@@ -43,7 +43,8 @@ import { bindLookDrag } from '../combat/look-drag.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CELL_HOLD, CHARGE_HOLD, GRIPS, cellPath, handFrame, itemModel, kitLight, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
-import { blendPose, contactField, fingerQuats, fingerRig, itemParts, limitPose, solveHand, squeeze } from './finger-pose.js';
+import { blendPose, fingerQuats, fingerRig, itemParts, limitPose, squeeze } from './finger-pose.js';
+import { fingerKey, keep, kept, packMeshes, solveJob, solveLater } from './finger-solve.js';
 import { qualityNow } from '../world/governor.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
@@ -68,10 +69,18 @@ const VIEW = {
 	shaft: { p: [0.17, -0.22, -0.38], r: [-0.15, -0.65, 0.0], eR: [0.3, -0.5, 0.0] },
 	lantern: { p: [0.15, -0.1, -0.4], r: [-0.3, 0.0, 0.0], eR: [0.28, -0.45, -0.1] },
 };
+// A long gun at the hip sits off to the right, carried on the shooting hand's side: out
+// toward the edge of the view and a little lower, its muzzle turned in less, so it runs ahead
+// beside the middle of the view instead of across it (the elbows go out with it; at the
+// sights it still comes to the middle)
+const RIGHT_SIDE = { x: 0.075, y: -0.015, yaw: -0.1 };
+const toSide = (v) => ({ ...v, p: [v.p[0] + RIGHT_SIDE.x, v.p[1] + RIGHT_SIDE.y, v.p[2]], r: [v.r[0] + RIGHT_SIDE.yaw, v.r[1], v.r[2]], eR: [v.eR[0] + RIGHT_SIDE.x, v.eR[1], v.eR[2]], eL: [v.eL[0] + RIGHT_SIDE.x, v.eL[1], v.eL[2]] });
+const LONG = VIEW.long;
+VIEW.long = toSide(LONG);
 const GUN_VIEW = {
-	'aurora-trail-rifle': { ...VIEW.long, p: [.18, -.245, -.45], r: [.20, .035, -.055] },
-	'mossback-scout-rifle': { ...VIEW.long, p: [.17, -.235, -.46], r: [.18, .025, -.045] },
-	'warden-spark-carbine': { ...VIEW.long, p: [.18, -.23, -.43], r: [.23, .03, -.07] },
+	'aurora-trail-rifle': toSide({ ...LONG, p: [.18, -.245, -.45], r: [.20, .035, -.055] }),
+	'mossback-scout-rifle': toSide({ ...LONG, p: [.17, -.235, -.46], r: [.18, .025, -.045] }),
+	'warden-spark-carbine': toSide({ ...LONG, p: [.18, -.23, -.43], r: [.23, .03, -.07] }),
 };
 const viewOf = (id, H) => H.kind === 'long' ? (GUN_VIEW[id] || VIEW.long) : H.kind === 'bow' ? VIEW.bow : /lantern/.test(id) ? VIEW.lantern : H.R?.t?.y > 0.9 ? VIEW.shaft : VIEW.one;
 // the item's x (forward) to the view's -z, its y up, its z to the right
@@ -80,7 +89,7 @@ const BASE = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().ma
 const CHARGE = { reach: 0.8, grab: 0.86, back: 0.905, release: 0.925, travel: 0.034 };
 const chargeTravel = (u) => u < CHARGE.grab ? 0 : u < CHARGE.back ? CHARGE.travel * ease((u - CHARGE.grab) / (CHARGE.back - CHARGE.grab)) : u < CHARGE.release ? CHARGE.travel : CHARGE.travel * Math.max(0, 1 - (u - CHARGE.release) / 0.012);
 
-export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone = false }) {
+export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone = false, fingers = 'later', shaders = 'later' }) {
 	const scene = new THREE.Scene();
 	const cam = new THREE.PerspectiveCamera(52, 1, 0.01, 6);
 	const sun = new THREE.DirectionalLight(0xffffff, 2), hemi = new THREE.HemisphereLight(0xbfd8ff, 0x5a5230, 0.8), fill = new THREE.DirectionalLight(0xdfe8ff, 0.4);
@@ -197,41 +206,47 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			hands[side] = rig && { rig, pose: new Float32Array(20), quats: Array.from({ length: 15 }, () => new THREE.Quaternion()), local: new THREE.Matrix4(), on: false };
 		}
 	}
-	const box = (m, size) => new THREE.Box3().setFromCenterAndSize(new THREE.Vector3().setFromMatrixPosition(m), new THREE.Vector3(size, size, size));
-	// every pose this item's hands take, solved once for this body and item (and kept)
+	// every pose this item's hands take, solved once for this body and item (and kept, here and
+	// on the device: crysis/finger-solve.js). The solve is seconds of work, so it runs in a
+	// worker while the game goes on; until it is done the hands hold the item by their grips.
+	// (fingers: 'now' solves at once, on this thread, for tuning tools and checks; shaders: 'now'
+	// draws a new item in the frame it comes up, as they also want)
+	const itemKey = () => `${S.id}:${S.item?.t || 0}:${S.item?.l || 1}`;
+	const asked = new Set();
+	const unpack = (out) => {
+		const side = (o) => Object.fromEntries(Object.entries(o).map(([k, r]) => [k, r && { ...r, params: Float32Array.from(r.params), frame: new THREE.Matrix4().fromArray(r.frame) }]));
+		const u = { L: side(out.L), R: side(out.R), ms: out.ms };
+		u.R.frame = (u.R.ready || u.R.draw)?.frame; u.L.frame = (u.L.fore || u.L.riser)?.frame;
+		// (the draw hand's frame is the bow's own, not a grip's)
+		if (u.R.draw) delete u.R.frame;
+		return u;
+	};
+	function fingerJob(model, H, plan) {
+		const long = H.kind === 'long', cell = long && model.getObjectByName('cell'), knob = long && model.getObjectByName('charger');
+		return {
+			kind: H.kind, rigs: { L: hands.L.rig, R: hands.R.rig }, plan,
+			body: packMeshes(itemParts(model, long ? ['body', 'charger', 'cell'] : ['body'])), cell: cell ? packMeshes([[cell, new THREE.Matrix4()]]) : null,
+			holdR: H.R.m.toArray(), holdL: H.L.m.toArray(), cellHold: CELL_HOLD.toArray(), chargeHold: CHARGE_HOLD.toArray(), home: knob ? knob.userData.home.slice() : null,
+		};
+	}
 	function solveFingers() {
 		const id = S.id, plan = GRIPS[id], H = S.model?.userData.hold;
-		if (!plan || !H || !hands.R || !hands.L) return null;
-		const key = `${id}:${S.item?.t || 0}:${S.item?.l || 1}`;
+		if (!plan || !H || !hands.R || !hands.L || !['long', 'bow'].includes(H.kind)) return null;
+		const key = itemKey();
 		if (solved.has(key)) return solved.get(key);
-		const t0 = performance.now(), out = { L: {}, R: {}, ms: 0 }, model = S.model;
-		if (H.kind === 'long') {
-			const body = itemParts(model, ['body', 'charger', 'cell']);
-			const fR = contactField(body, box(H.R.m, 0.24)), fL = contactField(body, box(H.L.m, 0.26));
-			const ready = solveHand(hands.R.rig, fR, H.R.m, plan.R.ready);
-			out.R.ready = ready; out.R.trigger = solveHand(hands.R.rig, fR, ready.frame, plan.R.trigger, { fit: false }); out.R.frame = ready.frame;
-			out.L.fore = solveHand(hands.L.rig, fL, H.L.m, plan.L.fore); out.L.frame = out.L.fore.frame;
-			const cell = model.getObjectByName('cell');
-			if (cell) out.L.cell = solveHand(hands.L.rig, contactField([[cell, new THREE.Matrix4()]], box(CELL_HOLD, 0.2)), CELL_HOLD, plan.L.cell);
-			const knob = model.getObjectByName('charger');
-			if (knob) {
-				// the knob's frame in item space, and the hand's frame back in the knob's
-				const home = new THREE.Matrix4().makeTranslation(...knob.userData.home), at = home.clone().multiply(CHARGE_HOLD);
-				const specs = plan.L.charge.map((sp) => sp.target ? { ...sp, target: sp.target.clone().applyMatrix4(home) } : sp);
-				const c = solveHand(hands.L.rig, contactField(body, box(at, 0.2)), at, specs);
-				c.frame.premultiply(home.invert()); out.L.charge = c;
-			}
-			out.L.open = solveHand(hands.L.rig, null, H.L.m, plan.L.open, { fit: false });
-		} else if (H.kind === 'bow') {
-			const body = itemParts(model, ['body']);
-			out.L.riser = solveHand(hands.L.rig, contactField(body, box(H.L.m, 0.24)), H.L.m, plan.L.riser, { firm: true }); out.L.frame = out.L.riser.frame;
-			// the draw hand on the string as main had it (the fingers closed round it the way the
-			// body's own curl closed them), its thumb now flexed toward the palm, never back
-			out.R.draw = solveHand(hands.R.rig, null, new THREE.Matrix4(), plan.R.draw, { fit: false });
+		const job = fingerJob(S.model, H, plan);
+		if (fingers === 'now') { const out = unpack(solveJob(job)); solved.set(key, out); return out; }
+		const sig = fingerKey(key, job), have = kept(sig);
+		if (have) { const out = unpack(have); solved.set(key, out); return out; }
+		if (!asked.has(key)) {
+			asked.add(key);
+			solveLater(job).then((res) => {
+				const out = unpack(res);
+				solved.set(key, out); keep(sig, res);
+				if (S.model && itemKey() === key) { poses = out; posesFor = S.model; }
+			}).catch((e) => console.warn('[fingers]', e?.message || e)).finally(() => asked.delete(key));
 		}
-		out.ms = +(performance.now() - t0).toFixed(1);
-		solved.set(key, out);
-		return out;
+		return null;
 	}
 	// the support hand through a reload (u, its progress over WEAPONS[id].reload, into out, which
 	// holds the hand on the guard): off the guard to the cell (.08 to .2), on it as it comes out
@@ -469,7 +484,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			arms.garment?.pose(dt, a, null, V.set(0, -1, 0).applyQuaternion(Q.copy(camera.quaternion).invert()));
 			arms.group.visible = true;
 		}
-		lightUp(W);
+		S.lastW = W; lightUp(W);
 	}
 	function setZoom(z) {
 		if (Math.abs(z - S.zoom) < 1e-4) return;
@@ -496,12 +511,23 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (!env && !envTried) {
 			envTried = true;
 			try { const pm = new THREE.PMREMGenerator(renderer); env = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); } catch { env = null; }
+			// (on the item's materials now, so their shaders are built once, with it, below)
+			lightUp(S.lastW);
 		}
 		if (worldScene && opticsWorld !== worldScene) {
 			optics?.dispose(); opticsWorld = worldScene;
 			optics = createScopeOptics({ renderer, scene: worldScene, camera, phone: isPhone });
 		}
 		optics?.update({ item: S.model, aiming: S.ads, active: S.shown, time: S.opticsTime });
+		// a new item's shaders (and your hands', in this view's own light) are built first, in
+		// the background where the browser can (renderer.compileAsync), and it is drawn once they
+		// are ready: on a phone a dozen at once froze the frame the item came up in
+		if (S.warmFor !== S.model) {
+			const m = S.model;
+			S.warmFor = m; S.warm = shaders === 'now' || !renderer.compileAsync;
+			if (!S.warm) renderer.compileAsync(scene, cam).catch(() => {}).then(() => { if (S.model === m) S.warm = true; });
+		}
+		if (!S.warm) return;
 		cam.updateProjectionMatrix();
 		const auto = renderer.autoClear;
 		renderer.autoClear = false;

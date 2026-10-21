@@ -56,6 +56,8 @@ export const POSES = {
 	pockets: { both: arm({ abd: 0.12, flex: -0.08, roll: 0.35, bend: 0.55, pro: 0.3, wflex: 0.3, curl: 0.9 }), swing: 0.15 },
 	crossed: { lead: arm({ abd: 0.05, flex: 0.6, roll: 1.35, bend: 1.95, pro: 0.3, curl: 0.5 }), off: arm({ abd: 0.08, flex: 0.5, roll: 1.2, bend: 1.8, pro: 0.1, curl: 0.55 }), swing: 0.05, lean: -0.02 },
 	behind: { both: arm({ abd: 0.08, flex: -0.45, roll: 1.55, bend: 1.45, pro: -0.6, curl: 0.35 }), swing: 0.05, lean: -0.03 },
+	// a ball under the forearm, held against the hip, the hand cupped over it
+	tuck: { lead: arm({ abd: 0.62, flex: 0.05, roll: 0.3, bend: 1.2, pro: 0.6, wflex: 0.15, curl: 0.5 }), off: arm({}), swing: 0.2 },
 	hip: { lead: arm({ abd: 0.5, flex: -0.3, roll: 1.1, bend: 1.7, pro: 0.6, wflex: -0.3, curl: 0.5 }), off: arm({}), swing: 0.4 },
 	phone: { lead: arm({ abd: 0.12, flex: 0.45, roll: 0.45, bend: 1.9, pro: 1.35, wflex: -0.25, curl: 0.45 }), off: arm({}), swing: 0.35, look: 0.45 },
 	listen: { both: arm({ abd: 0.08, flex: 0.1, roll: 0.35, bend: 0.5, pro: 0.2, curl: 0.3 }), head: 0.08 },
@@ -107,6 +109,8 @@ export const TRIGGER_OFF = [0.12, 0.06, 0.04], TRIGGER_ON = [0.55, 1.05, 0.6];
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _e = new THREE.Euler();
 const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
+// (where a body's step began this frame; constrain reads it before the next body's update)
+const _from = new THREE.Vector3();
 const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
 export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}) {
@@ -269,8 +273,11 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		S.want.travelT -= dt;
 		const offWant = S.want.travel != null && S.want.travelT > 0 ? clamp(wrap(S.want.travel - heading), -1.9, 1.9) : 0;
 		const travel = S.travel = heading + S.strafe.to(offWant, dt);
+		// (constrain(to, from, dt): where the step would end, and where it began, to keep it
+		// off walls: people/walls.js)
+		_from.copy(S.pos);
 		S.pos.x += Math.sin(travel) * speed * dt; S.pos.z += Math.cos(travel) * speed * dt;
-		constrain?.(S.pos, dt);
+		constrain?.(S.pos, _from, dt);
 		const run = clamp(S.run.to(S.want.run, dt), 0, 1);
 		// low (0..1): moving crouched, as a fighter does between cover: knees well bent, the body
 		// folded forward over them, shorter quicker steps that barely leave the ground

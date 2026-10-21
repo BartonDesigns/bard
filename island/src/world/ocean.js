@@ -26,6 +26,7 @@ import { qualityNow } from './governor.js';
 import { SEA_DEPTH_GLSL } from './seadepth.js';
 import { GFX_PHONE } from './device.js';
 import { ICE_U, ICE_GLSL } from '../region/ice.js';
+import { wedgeMeshes } from './gridwedges.js';
 
 const PHONE = GFX_PHONE;
 // how many things standing in the water ring it at once (posts, hulls, you)
@@ -652,8 +653,24 @@ export function createOcean(island, shared) {
 				#include <fog_fragment>
 			}`,
 	});
-	const mesh = new THREE.Mesh(geo, mat);
-	mesh.frustumCulled = false;
+	// (drawn as a middle and eight wedges round it, a wedge out of the view not drawn: a phone
+	// sees a tenth of the circle, and the rest went through the waves' sums every frame for
+	// nothing, world/gridwedges.js. The shader centres the grid on uCenter itself; its waves move a
+	// vertex at most about 2.3 m sideways and 2.9 m up or down a unit of uWave (the trains' Q A
+	// and A summed at their highest groups, plus the roller and its pitching crest), and the
+	// beach's sheet is laid at most about a metre over the sand: tested with room to spare)
+	const reach = () => Math.max(0, uniforms.uWave.value);
+	const W = wedgeMeshes(geo, mat, { mid: 64, y: () => [-(3 * reach() + 2), 3 * reach() + 4], pad: () => 2.5 * reach() + 1, at: uniforms.uCenter.value });
+	// the middle is the sea itself (what the frame sets on it, the wedges follow: shown, drawn in
+	// its order)
+	const mesh = W.meshes.find((m) => !m.frustumCulled);
+	mesh.removeFromParent();
+	for (const m of W.meshes) {
+		if (m === mesh) continue;
+		m.name = 'ocean-wedge';
+		Object.defineProperty(m, 'renderOrder', { get: () => mesh.renderOrder, set() {} });
+		mesh.add(m);
+	}
 	mesh.name = 'ocean';
 	mesh.renderOrder = 1;
 	mesh.userData.update = (cam) => {

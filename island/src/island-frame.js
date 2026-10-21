@@ -21,6 +21,8 @@ import { AIR } from './world/airfog.js';
 const MIRROR_EASE = 1500;
 let shownAt = 0;
 const caveFog = new THREE.Color();
+// where the town's own light is read round you (island-frame's city light): here and 250 m out
+const CITY_AT = [[0, 0], [250, 0], [-250, 0], [0, 250], [0, -250]];
 
 export function islandFrame(iw, now) {
 	const { _voidFog, actions, applyQuality, arcade, autoMusic, bridgeSound, camera, carjack, chatter,
@@ -188,6 +190,13 @@ export function islandFrame(iw, now) {
 		// (and which way the glow lies: the sky over the cities brightest toward them)
 		W.sky.glowToward(gx, gz, dt);
 	}
+	// and the town's own light by night in the shade (sky.js): how built up it is just round you
+	{
+		const U = shared.uCityLight || (shared.uCityLight = { value: 0 });
+		let u = 0;
+		if (W.bayArea?.loaded() && !W.island.far) for (const [dx, dz] of CITY_AT) u += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+		U.value += (THREE.MathUtils.smoothstep(u / CITY_AT.length, 0.04, 0.3) - U.value) * Math.min(1, dt * 0.5);
+	}
 	if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 	const dazed = W.shrooms?.muffle() || 0;
 	if (under || dazed > 0 || muffle.k > 0.01) underwaterAudio(under ? Math.min(1, 0.75 + (surf - camera.position.y) * 0.03) : dazed, dt);
@@ -213,6 +222,7 @@ export function islandFrame(iw, now) {
 	W.fauna.update(iw.time, sk.night, camera.position);
 	W.landFauna.update(dt, iw.time, sk.night, camera.position, camera.position.y > -0.5);
 	W.bridge?.update(iw.time, sk.night);
+	W.sanMateo?.update(camera, sk.night);
 	W.civ?.update(camera);
 	if (W.civ) { const ll = globeLL(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
 	W.real?.update(camera);
@@ -367,7 +377,7 @@ export function islandFrame(iw, now) {
 	HOOKS.lightPad?.update(now, camera);
 	const covered = magic.covering(), seaOn = !iw.arrival?.blind && !(isPhone && now - shownAt < MIRROR_EASE) && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && iw.indoorK < 0.5;
 	if (covered) { /* the menu over it all */ } else if (seaOn) {
-		seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
+		seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.sanMateo?.group, W.city?.group], under || shared.uUnder.value);
 		seaDepth.render(scene, camera, under || shared.uUnder.value);
 	} else { seaMirror.reset(); seaDepth.reset(); }
 	if (iw.arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }

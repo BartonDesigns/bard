@@ -294,7 +294,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		menuBtn.type = 'button';
 		menuBtn.textContent = '✦ Skills and magic';
 		menuBtn.title = 'Skills and magic (Tab or N)';
-		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) menuBtn.addEventListener(ev, (x) => x.stopPropagation());
 		menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; openSkills(); });
 		menu.insertBefore(menuBtn, menu.firstChild);
@@ -341,7 +341,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		testBtn.type = 'button';
 		testBtn.textContent = '∞ Test mode: off';
 		testBtn.title = 'Every spell and skill unlocked, endless mana and aether (nothing is saved while on)';
-		testBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		testBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) testBtn.addEventListener(ev, (x) => x.stopPropagation());
 		testBtn.addEventListener('click', (e) => { e.stopPropagation(); setTest(!testOn); });
 		menu.insertBefore(testBtn, menuBtn.nextSibling);
@@ -444,7 +444,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		wasBeam = !!bs;
 		if (third()) hands.root.visible = false; else hands.update(dt, beam);
 		stepRemote(dt);
-		aether.update(dt, camera.position);
+		// (gathered where you are, not where the camera is: Explore and the third person film you from a way off)
+		aether.update(dt, ps.pos);
 		fx.update(dt, caster.sighting());
 		feel(dt);
 		if (innerHeight !== lastH) { lastH = innerHeight; fx.resize(innerHeight, camera.fov); }
@@ -464,6 +465,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (Solar Flare channels the moon by night: the skills side grants this; here for the console)
 		moonlit: (id = 'solar-flare') => { const ok = grantMoonlit(state, id); if (ok) dirty = true; return ok; },
 		menuOpen: () => skills.isOpen(),
+		// the aether showing now, not yet gathered (Explore goes after it: explore.js)
+		motes: () => aether.shown(),
 		// (test mode: Crysis.magic.test(true / false), as the button in the places menu)
 		test: (on) => (on === undefined ? testOn : setTest(on)),
 		// (the tests: your casting hands, for their palm light; the screen edge's flash)

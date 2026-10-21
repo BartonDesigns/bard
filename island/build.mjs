@@ -9,6 +9,8 @@ const ctx = await esbuild.context({
 });
 // Keep the module worker beside the bundled client that resolves its URL.
 await esbuild.build({ ...common, entryPoints: ['src/guide/local-speech-worker.js'], outfile: 'dist/local-speech-worker.js' });
+// the hands' finger solve, off the main thread (src/crysis/finger-solve.js)
+await esbuild.build({ ...common, entryPoints: ['src/crysis/finger-worker.js'], outfile: 'dist/finger-worker.js' });
 // The atlas is fetched separately only when requested.
 const atlas = await esbuild.context({ ...common, entryPoints: ['src/earth/data/index.js'], outfile: 'dist/earth-atlas.js' });
 // the driving physics (Rapier), loaded only when someone drives (src/vehicles/physics.js)
