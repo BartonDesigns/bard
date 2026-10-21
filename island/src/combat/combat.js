@@ -137,7 +137,10 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 				if (!(b.w > 0.5)) continue;
 				const g = w.island.heightAt(b.x, b.z), H = (b.wallH || 6) + (b.roofH || 0) * 0.5;
 				const h = rayBox(o, d, { x: b.x, y: g + H / 2 - 0.5, z: b.z }, [b.w / 2, H / 2 + 0.5, b.d / 2], -(b.a || 0));
-				if (h && h.t < (best?.t ?? max)) best = { t: h.t, n: h.n, surface: 'stone', box: b };
+				// (into the room seen down a scope, through its window: interiors/index.js seeInto)
+				const into = h ? w.interiors?.seeInto?.(b, o, d) ?? -1 : -1;
+				if (into > 0) { if (into < (best?.t ?? max)) best = { t: into, n: new THREE.Vector3(-d.x, 0, -d.z), surface: 'stone', box: b, inside: true }; }
+				else if (h && h.t < (best?.t ?? max)) best = { t: h.t, n: h.n, surface: 'stone', box: b };
 			}
 			const sg = w.structures?.ray?.(o, d, best?.t ?? max, best, max);          // structures: a pane, a wall built near you (in place of its box) in the way
 			if (sg) best = sg.none ? null : sg;
