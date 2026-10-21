@@ -463,7 +463,7 @@ export async function islandBuild(iw, params) {
 		iw.world.services.hooks.charge = (who, credits) => { const M = HOOKS.npcMoney; if (!M || !(M.balance(who) >= credits)) return false; M.spend(who, credits, 'hospital', 'hospital'); return true; };
 		HOOKS.military?.setInteriors(iw.world.services.militaryInteriors());
 		HOOKS.military?.setStations((x, z) => iw.world?.services?.stationAt(x, z));
-		iw.world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), iw.world.real);
+		iw.world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), iw.world.real, iw.world.city);
 		// the streets by era and season: potholes and their crews, the trees' stakes and leaves, holiday lights, sprinklers (bay/streets.js)
 		iw.world.streets = createStreets({ scene, camera, world: () => iw.world, drive: iw.drive, isPhone: GFX, hint: (t, ms) => hint(t, ms, 1) });
 		// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)

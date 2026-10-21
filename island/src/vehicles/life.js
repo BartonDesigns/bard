@@ -283,7 +283,8 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!St) return;
 		const h = hours();
 		for (const car of St.parkedNear(cam.x, cam.z, 130, true)) {
-			if (busySpace(Math.round(car.x) + ':' + Math.round(car.z))) continue;
+			// (a car in a drive stays home: the episodes pull out of a kerb space into the lane)
+			if (car.drive || busySpace(Math.round(car.x) + ':' + Math.round(car.z))) continue;
 			const o = car.owner || (car.owner = ownerOf(car));
 			const want = present(o, h), d = Math.hypot(car.x - cam.x, car.z - cam.z), vis = d < 90 && inView(car.x, car.y, car.z);
 			// (a space met for the first time, out of sight or far off: as its owner's day has it)
@@ -301,7 +302,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!St || episodes.length) return;
 		const bucket = Math.floor(t / 20);
 		if (frac(bucket * 7919) > 0.55) return;
-		const cands = St.parkedNear(cam.x, cam.z, 45).filter((c) => { const d = Math.hypot(c.x - cam.x, c.z - cam.z); return d > 10 && inView(c.x, c.y, c.z); });
+		const cands = St.parkedNear(cam.x, cam.z, 45).filter((c) => { if (c.drive) return false; const d = Math.hypot(c.x - cam.x, c.z - cam.z); return d > 10 && inView(c.x, c.y, c.z); });
 		if (!cands.length) return;
 		const car = cands[Math.floor(frac(bucket * 104729) * cands.length)];
 		const o = car.owner || (car.owner = ownerOf(car));
