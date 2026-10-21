@@ -20,6 +20,7 @@ import { occasions, today } from '../calendar.js';
 import { houseLights } from './seasons.js';            // the holidays' strings, the same houses as from afar (holidaylights.js)
 import { carGeometry, carMaterial } from './cars.js';
 import { anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { buildSlice, viewDistance } from '../world/buildslice.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
 
 // the rooms that sometimes have a raised (tray) ceiling
@@ -560,7 +561,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	// streaming: build the nearest, one a frame; let the far ones go
 
 	let scanX = 1e9, scanZ = 1e9, cands = [], buildMs = 0, job = null;
-	const BUDGET = isPhone ? 3 : 4;
+	const BUDGET = isPhone ? 3 : 4, fwd = new THREE.Vector3();
 	function update(cam, dt, nightK = 0) {
 		updateDetailClock();night.value = nightK;
 		lightingClock(nightK);
@@ -585,7 +586,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			}
 			// ...and the gridded towns' houses (city.js gives them the same shape)
 			for (const grp of city?.procHomes?.(x, z, BUILD_R) || []) if (!grp.wrecked) cands.push([Math.hypot(grp[0].x - x, grp[0].z - z), grp]);
-			cands.sort((p, q) => p[0] - q[0]);
+			// (the nearest first; of those near alike, the ones you are looking at)
+			cam.getWorldDirection(fwd);
+			for (const c of cands) { const Mb = mainOf(c[1]) || c[1][0]; c[2] = viewDistance(c[0], Mb.x, Mb.z, cam.position, fwd); }
+			cands.sort((p, q) => p[2] - q[2]);
 			cands.length = Math.min(cands.length, MAX);
 		}
 		for (const [grp, h] of houses) {
@@ -598,8 +602,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		// one house at a time, a few milliseconds a frame
 		if (job && !cands.some((c) => c[1] === job.grp)) job = null;
 		if (!job) for (const [, grp] of cands) if (!houses.has(grp)) { job = { grp, gen: build(grp), ms: 0 }; break; }
-		const t0 = performance.now();
-		while (job && performance.now() - t0 < BUDGET) {
+		const t0 = performance.now(), slice = buildSlice(dt, BUDGET);
+		while (job && performance.now() - t0 < slice) {
 			let r;
 			const t1 = performance.now();
 			try { r = job.gen.next(); } catch (e) { console.warn('house', e); r = { done: true, value: null }; }
