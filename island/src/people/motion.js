@@ -56,6 +56,8 @@ export const POSES = {
 	pockets: { both: arm({ abd: 0.12, flex: -0.08, roll: 0.35, bend: 0.55, pro: 0.3, wflex: 0.3, curl: 0.9 }), swing: 0.15 },
 	crossed: { lead: arm({ abd: 0.05, flex: 0.6, roll: 1.35, bend: 1.95, pro: 0.3, curl: 0.5 }), off: arm({ abd: 0.08, flex: 0.5, roll: 1.2, bend: 1.8, pro: 0.1, curl: 0.55 }), swing: 0.05, lean: -0.02 },
 	behind: { both: arm({ abd: 0.08, flex: -0.45, roll: 1.55, bend: 1.45, pro: -0.6, curl: 0.35 }), swing: 0.05, lean: -0.03 },
+	// a ball under the forearm, held against the hip, the hand cupped over it
+	tuck: { lead: arm({ abd: 0.62, flex: 0.05, roll: 0.3, bend: 1.2, pro: 0.6, wflex: 0.15, curl: 0.5 }), off: arm({}), swing: 0.2 },
 	hip: { lead: arm({ abd: 0.5, flex: -0.3, roll: 1.1, bend: 1.7, pro: 0.6, wflex: -0.3, curl: 0.5 }), off: arm({}), swing: 0.4 },
 	phone: { lead: arm({ abd: 0.12, flex: 0.45, roll: 0.45, bend: 1.9, pro: 1.35, wflex: -0.25, curl: 0.45 }), off: arm({}), swing: 0.35, look: 0.45 },
 	listen: { both: arm({ abd: 0.08, flex: 0.1, roll: 0.35, bend: 0.5, pro: 0.2, curl: 0.3 }), head: 0.08 },
