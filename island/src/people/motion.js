@@ -19,6 +19,7 @@ import * as THREE from 'three';
 import { actionAt, ACTIONS } from './actions.js';
 import { gaitSignature, gaitDrift } from './gait.js';
 import { clamp } from '../noise.js';
+import { noteBody } from './personal-space.js';
 
 const TAU = Math.PI * 2;
 const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -56,6 +57,8 @@ export const POSES = {
 	pockets: { both: arm({ abd: 0.12, flex: -0.08, roll: 0.35, bend: 0.55, pro: 0.3, wflex: 0.3, curl: 0.9 }), swing: 0.15 },
 	crossed: { lead: arm({ abd: 0.05, flex: 0.6, roll: 1.35, bend: 1.95, pro: 0.3, curl: 0.5 }), off: arm({ abd: 0.08, flex: 0.5, roll: 1.2, bend: 1.8, pro: 0.1, curl: 0.55 }), swing: 0.05, lean: -0.02 },
 	behind: { both: arm({ abd: 0.08, flex: -0.45, roll: 1.55, bend: 1.45, pro: -0.6, curl: 0.35 }), swing: 0.05, lean: -0.03 },
+	// a ball under the forearm, held against the hip, the hand cupped over it
+	tuck: { lead: arm({ abd: 0.62, flex: 0.05, roll: 0.3, bend: 1.2, pro: 0.6, wflex: 0.15, curl: 0.5 }), off: arm({}), swing: 0.2 },
 	hip: { lead: arm({ abd: 0.5, flex: -0.3, roll: 1.1, bend: 1.7, pro: 0.6, wflex: -0.3, curl: 0.5 }), off: arm({}), swing: 0.4 },
 	phone: { lead: arm({ abd: 0.12, flex: 0.45, roll: 0.45, bend: 1.9, pro: 1.35, wflex: -0.25, curl: 0.45 }), off: arm({}), swing: 0.35, look: 0.45 },
 	listen: { both: arm({ abd: 0.08, flex: 0.1, roll: 0.35, bend: 0.5, pro: 0.2, curl: 0.3 }), head: 0.08 },
@@ -111,7 +114,10 @@ const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
 const _from = new THREE.Vector3();
 const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
-export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}) {
+// (space: whether you are kept clear of this body as it walks (people/personal-space.js): true,
+// 'fixed' (solid but never shuffled aside), false (you, a ghost, a baked crowd), or a function
+// answering one of those)
+export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space = true } = {}) {
 	const { bones, map, rest, dna } = P;
 	const H = (n) => rest.heads[map[n]];
 	const g = dna.gait, signature = gaitSignature(dna.seed);
@@ -250,6 +256,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		P.motionTime = t;
 		// (gone limp: the ragdoll moves the bones now, people/ragdoll.js)
 		if (P.ragdoll) return;
+		const solid = typeof space === 'function' ? space() : space;
+		if (solid) noteBody(P, S, solid);
 		dt = Math.min(dt, 0.05);
 		// (the beat a blow holds still: hit-stop)
 		if (S.freeze > 0) { S.freeze -= dt; dt *= 0.06; }
@@ -472,7 +480,19 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		L.idleT -= dt;
 		if (L.idleT <= 0) { L.idleT = 1.5 + Math.random() * 4; L.idleYaw = (Math.random() - 0.5) * (speed > 0.3 ? 0.5 : 1.2); L.idlePitch = (Math.random() - 0.4) * 0.3; }
 		let ty = L.idleYaw, tp = L.idlePitch;
-		const tgt = L.target || (cam && cam.distanceTo(S.pos) < 7 ? cam : null);
+		let tgt = L.target || (cam && cam.distanceTo(S.pos) < 7 ? cam : null);
+		// you, close by, are looked at but not stared at: a few seconds of meeting your eyes, then a
+		// glance away and back, often with a blink as the eyes move (a held gaze reads as a stare)
+		if (tgt && !L.target) {
+			L.meetT = (L.meetT ?? 1 + Math.random() * 2) - dt;
+			if (L.meetT <= 0) {
+				L.away = !L.away;
+				L.meetT = L.away ? 0.7 + Math.random() * 1.6 : 1.6 + Math.random() * 3;
+				if (L.away) { L.idleT = L.meetT + 0.5; L.idleYaw = (Math.random() < 0.5 ? -1 : 1) * (0.2 + Math.random() * 0.45); L.idlePitch = (Math.random() - 0.25) * 0.25; ty = L.idleYaw; tp = L.idlePitch; }
+				if (Math.random() < 0.5 && S.nextBlink > 0.3) S.nextBlink = 0.05;
+			}
+			if (L.away) tgt = null;
+		} else L.away = false;
 		if (tgt) {
 			const eyeHeight = P.height * 0.93 - (floorPose ? hipStand - hipY : 0);
 			const dx = tgt.x - S.pos.x, dz = tgt.z - S.pos.z, dy = tgt.y - (S.pos.y + eyeHeight);

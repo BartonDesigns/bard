@@ -85,6 +85,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	let boundSF = null, lastOut = [], forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
 	let cityLots = null, surfaceHosts = [], hostState = '';
 	const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _f = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+	const _bd = new THREE.Vector3(), _bq = new THREE.Quaternion(), _bz = new THREE.Vector3(0, 0, 1);
 
 	const W = () => world?.();
 	const ground = (x, z) => { const I = W()?.island; return I?.drawnAt ? I.drawnAt(x, z) : I?.heightAt?.(x, z) ?? 0; };
@@ -347,8 +348,16 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			for (const G of gantries) {
 				const dx = G.x1 - G.x0, dz = G.z1 - G.z0, L = Math.hypot(dx, dz), yaw = Math.atan2(dx, dz);
 				const g0 = ground(G.x0, G.z0), g1 = ground(G.x1, G.z1), top = Math.max(g0, g1) + G.h;
-				for (const [x, z, g] of [[G.x0, G.z0, g0], [G.x1, G.z1, g1]]) parts.push(new THREE.BoxGeometry(0.36, top + 2.8 - g, 0.36).translate(0, (top + 2.8 - g) / 2, 0).rotateY(yaw).translate(x, g, z));
-				for (const hy of [0.4, 2.3]) parts.push(new THREE.BoxGeometry(0.22, 0.22, L).rotateY(yaw).translate((G.x0 + G.x1) / 2 + G.ux * 0.05, top + hy, (G.z0 + G.z1) / 2 + G.uz * 0.05));
+				for (const [x, z, g] of [[G.x0, G.z0, g0], [G.x1, G.z1, g1]]) parts.push(new THREE.BoxGeometry(0.42, top + 2.8 - g, 0.42).translate(0, (top + 2.8 - g) / 2, 0).rotateY(yaw).translate(x, g, z));
+				// the sign bridge's box truss: four chords, laced corner to corner on its faces
+				const at = (t, fo, hy) => [G.x0 + dx * t + G.ux * fo, top + hy, G.z0 + dz * t + G.uz * fo];
+				for (const fo of [-0.55, 0.55]) for (const hy of [0.4, 2.3]) parts.push(bar(at(0, fo, hy), at(1, fo, hy), 0.16));
+				const bays = Math.max(2, Math.round(L / 1.9));
+				for (let k = 0; k < bays; k++) {
+					const t0 = k / bays, t1 = (k + 1) / bays, up = k % 2 === 0;
+					for (const fo of [-0.55, 0.55]) parts.push(bar(at(t0, fo, up ? 0.4 : 2.3), at(t1, fo, up ? 2.3 : 0.4), 0.07));
+					parts.push(bar(at(t0, up ? -0.55 : 0.55, 2.3), at(t1, up ? 0.55 : -0.55, 2.3), 0.07));
+				}
 				// the catwalk under the signs
 				parts.push(new THREE.BoxGeometry(0.9, 0.06, L * 0.9).rotateY(yaw).translate((G.x0 + G.x1) / 2 - G.ux * 0.6, top - 0.05, (G.z0 + G.z1) / 2 - G.uz * 0.6));
 			}
@@ -359,6 +368,11 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		}
 		lastOut = out;
 		last = { records: n, ms: Math.round(performance.now() - t0), posts: np, gantries: gantries.length, slabs: ns, morality: M };
+	}
+	// a square bar from a to b ([x, y, z])
+	function bar(a, b, w) {
+		const d = _bd.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]), L = d.length();
+		return new THREE.BoxGeometry(w, w, L).applyQuaternion(_bq.setFromUnitVectors(_bz, d.normalize())).translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
 	}
 	function mergeBoxes(parts) {
 		let nv = 0, ni = 0;

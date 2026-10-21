@@ -226,13 +226,46 @@ function handbag(near, small = false) {
 	return K.done();
 }
 
+// ---------- a guitar's gig bag: y 0 (the bottom) to H, the back panel at z = 0, the front at -D ----------
+export const CASE = { H: 1.02, D: 0.12 };
+// its half-width up the case: the lower bout, the waist, the upper bout, the neck, the head
+const CASE_W = [[0, 0.1], [0.025, 0.16], [0.07, 0.195], [0.17, 0.212], [0.29, 0.192], [0.39, 0.152], [0.46, 0.16], [0.54, 0.163], [0.61, 0.13], [0.665, 0.07], [0.7, 0.06], [0.88, 0.058], [0.91, 0.074], [0.99, 0.07], [1.02, 0.04]];
+const caseW = (y) => { for (let i = 1; i < CASE_W.length; i++) if (y <= CASE_W[i][0]) { const [y0, w0] = CASE_W[i - 1], [y1, w1] = CASE_W[i], t = (y - y0) / (y1 - y0); return w0 + (w1 - w0) * (t * t * (3 - 2 * t)); } return 0.04; };
+const caseD = (y) => (y < 0.62 ? 0.06 : y < 0.68 ? 0.06 - (y - 0.62) * 0.33 : 0.04);
+function guitarCase(near) {
+	const K = kit(), n = near ? 36 : 12, ys = [];
+	// (closer together at the rounded ends)
+	for (let i = 0, m = near ? 40 : 12; i <= m; i++) ys.push(CASE.H * (0.5 - 0.5 * Math.cos(Math.PI * i / m)));
+	// padded nylon, a little sheen; its front a touch fuller than its back
+	const rings = ys.map((y) => { const hw = caseW(y), hd = caseD(y); return outline(hw, hd, Math.min(hw, hd) * 0.92, n).map((o) => [o.x, y, (o.z < 0 ? o.z * 1.06 : o.z) - hd]); });
+	const body = loft(rings, { bottom: true, top: true });
+	K.add(body, { tint: 1, fab: FAB.nylon, gloss: 0.3, shade: (x, y) => (y < 0.02 ? 0.5 : 1) });
+	if (!near) return K.done();
+	// the zip round the edge, halfway through it, up one side, over the head and down the other
+	const zip = [];
+	for (let i = 0; i <= 48; i++) { const u = i / 48, y = 0.03 + (CASE.H - 0.06) * (u < 0.5 ? u * 2 : 2 - u * 2), sx = u < 0.5 ? 1 : -1; zip.push(new V(sx * (caseW(y) + 0.002), y, -caseD(y))); }
+	zip.splice(24, 1, new V(0, CASE.H + 0.001, -caseD(CASE.H)));
+	K.add(cord(zip, 0.0045, { seg: 96, radial: 4, shade: (t) => (Math.floor(t * 300) % 2 ? 1 : 0.75) }), { col: 0x5a5d62, gloss: 0.8 });
+	// its puller, at the head
+	K.add(rbox(0.012, 0.035, 0.004, 0.002, 0), { col: METAL, gloss: 1.5, at: M4(0.045, CASE.H - 0.06, -caseD(0.9) * 2 - 0.004) });
+	// the front pocket on the lower bout, in the accent, and its zip
+	const pw = 0.26, ph = 0.2, pd = 0.025;
+	K.add(reshape(rbox(pw, ph, pd, 0.02, 2), (x, y, z) => [x * (1 - 0.12 * (y / ph + 0.5)), y + 0.2, z - 0.12 - pd / 2 + 0.006]), { tint: 2, fab: FAB.nylon, gloss: 0.25 });
+	K.add(cord([new V(-pw * 0.42, 0.285, -0.14), new V(0, 0.288, -0.142), new V(pw * 0.42, 0.285, -0.14)], 0.003, { seg: 12, radial: 4 }), { col: 0x5a5d62, gloss: 0.8 });
+	// the carry handle on the side, at the waist
+	K.add(cord([new V(0.15, 0.36, -0.06), new V(0.178, 0.38, -0.06), new V(0.185, 0.42, -0.06), new V(0.178, 0.46, -0.06), new V(0.153, 0.48, -0.06)], 0.009, { seg: 12, radial: 6 }), { col: DARK, fab: FAB.nylon, gloss: 0.2 });
+	// the strap's rings, at the neck and the bottom
+	for (const [x, y] of [[0.06, 0.74], [-0.17, 0.1]]) K.add(new THREE.TorusGeometry(0.012, 0.0025, 4, 12), { col: METAL, gloss: 1.5, at: M4(x, y, -0.06, 0, Math.PI / 2, 0) });
+	return K.done();
+}
+
 // ---------- made once, shared ----------
 const made = new Map();
 export function bagGeometry(kind, v = 0, near = true) {
 	const key = `${kind}:${v}:${near ? 1 : 0}`;
 	let g = made.get(key);
 	if (!g) {
-		g = kind === 'backpack' ? backpack(!!v, near) : kind === 'tote' ? tote(v % 3, near) : kind === 'paper' ? paperBag(v % 3, near) : kind === 'plastic' ? plasticBag(near) : kind === 'pouch' ? handbag(near, true) : handbag(near);
+		g = kind === 'backpack' ? backpack(!!v, near) : kind === 'tote' ? tote(v % 3, near) : kind === 'paper' ? paperBag(v % 3, near) : kind === 'plastic' ? plasticBag(near) : kind === 'pouch' ? handbag(near, true) : kind === 'guitar' ? guitarCase(near) : handbag(near);
 		made.set(key, g);
 	}
 	return g;
@@ -244,9 +277,10 @@ export function bagOf(q) {
 	if (q.kind === 'shopper') return { kind: q.paper ? 'paper' : 'plastic', v: q.fill || 0 };
 	if (q.kind === 'handbag') return { kind: 'handbag', v: 0 };
 	if (q.kind === 'crossbody') return { kind: 'pouch', v: 0 };
+	if (q.kind === 'guitar') return { kind: 'guitar', v: 0 };
 	return null;
 }
-export const BAG_KINDS = new Set(['backpack', 'tote', 'shopper', 'handbag', 'crossbody']);
+export const BAG_KINDS = new Set(['backpack', 'tote', 'shopper', 'handbag', 'crossbody', 'guitar']);
 
 // ---------- fitted to a body ----------
 // the torso's surface (skin and clothes, not the arms) as flat arrays, for straps to rest on
@@ -345,6 +379,29 @@ export function fitBags(o, cut, S, heldTorso) {
 				straps.push({ geo: ribbon(pts, ups, 0.026, 0.003, { seg: 40, prof: 4 }), bone: spine, col: '#1b1b1d', fab: 1 });
 			}
 			out.push({ q, bag, bone: 'spine04', M, straps });
+		} else if (q.kind === 'guitar') {
+			// the gig bag slung on the back, its neck up past the left shoulder; one strap from the
+			// neck over that shoulder, across the chest and round the right side to its foot
+			// (leant to rest on the shoulder blades and the seat both: the furthest the body comes
+			// out behind, high and low, under where it hangs)
+			const tilt = -0.22, y0 = cut.waist - 0.36 * k, x0 = -0.05, yU = cut.chest, yL = cut.waist - 0.15;
+			let zU = back, zL = back;
+			if (S) for (let i = 0; i < S.xs.length; i++) if (Math.abs(S.xs[i] - 0.03) < 0.15) {
+				if (S.ys[i] > yU - 0.12 && S.ys[i] < cut.shoulder - 0.02) zU = Math.min(zU, S.zs[i]);
+				else if (S.ys[i] > yL - 0.14 && S.ys[i] < cut.waist) zL = Math.min(zL, S.zs[i]);
+			}
+			const lean = Math.atan2(zU - zL, yU - yL), zb = zL - 0.012 + Math.tan(lean) * (y0 - yL);
+			const M = new THREE.Matrix4().makeTranslation(x0, y0, zb).multiply(new THREE.Matrix4().makeRotationZ(tilt)).multiply(new THREE.Matrix4().makeRotationX(lean)).multiply(new THREE.Matrix4().makeScale(k, k, k));
+			const top = new V(0.06, 0.74, -0.06).applyMatrix4(M), foot = new V(-0.17, 0.1, -0.06).applyMatrix4(M), sx = cut.shoulderX;
+			const straps = [];
+			if (S) {
+				const shoulder = new V(sx * 0.55, cut.shoulder + 0.04, midZ);
+				const B = lay(S, [top, new V(sx * 0.5, cut.chest + 0.04, back - 0.01), shoulder], outward, 0.006, 10);
+				const F = lay(S, [shoulder, new V(sx * 0.4, cut.chest + 0.05, front), new V(-0.04, cut.chest - 0.1, front), new V(-sx * 0.86, cut.waist + 0.02, midZ), new V(-sx * 0.55, cut.waist - 0.04, back - 0.02), foot], outward, 0.006, 22);
+				const pts = [...B.pts, ...F.pts.slice(1)], ups = [...B.ups, ...F.ups.slice(1)];
+				straps.push({ geo: ribbon(pts, ups, 0.038, 0.004, { seg: 48, prof: 4 }), bone: spine, col: '#1b1b1d', fab: 1 });
+			}
+			out.push({ q, bag, bone: 'spine02', M, straps });
 		} else out.push({ q, bag, hand: 'L', k: q.kind === 'tote' || q.kind === 'shopper' ? Math.max(0.85, k) : k, straps: [] });
 	}
 	return out;
