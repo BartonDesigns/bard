@@ -14,7 +14,8 @@
 // the towns and cities (grey by day, lit by night) round the atlas's cities near you.
 
 import * as THREE from 'three';
-import { radialGrid, ringGrid, withSpacing, NOISE_GLSL, SAFE_GLSL } from '../world/terrain.js';
+import { radialGrid, ringGrid, withSpacing, NOISE_GLSL, SAFE_GLSL, SAFE_H_RANGE } from '../world/terrain.js';
+import { wedgeMeshes } from '../world/gridwedges.js';
 import { BAY_GLSL } from '../bay/terrain.js';
 import { WC_U, WC_GLSL } from '../bay/watercarve.js';
 import { BERM_U, BERM_GLSL } from '../bay/berms.js';
@@ -432,8 +433,14 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	// facets; a phone makes do without it)
 	const NEAR = isPhone ? [160, 6000, 2.2] : [256, 6000, 2.2], MID = [224, 4200, 40000], FARG = isPhone ? [160, 5000, 250000] : [192, 36000, 250000];
 	const nearMat = material(isPhone ? 8 : OCT, false), midMat = material(8, true), farMat = material(isPhone ? 7 : 8, true);
-	const near = new THREE.Mesh(withSpacing(radialGrid(...NEAR)), nearMat), mid = new THREE.Mesh(ringGrid(...MID), midMat), far = new THREE.Mesh(ringGrid(...FARG), farMat);
-	for (const m of [near, mid, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
+	// (each ring as a middle and eight wedges round it, a wedge out of the view not drawn: a phone
+	// sees a tenth of the circle, world/gridwedges.js. The shader only lifts each vertex, never
+	// moves it sideways, to a height safeH keeps within SAFE_H_RANGE either way)
+	const GY = [-SAFE_H_RANGE, SAFE_H_RANGE];
+	const nearW = wedgeMeshes(withSpacing(radialGrid(...NEAR)), nearMat, { mid: 64, y: GY }), midW = wedgeMeshes(ringGrid(...MID), midMat, { mid: MID[1], y: GY }), farW = wedgeMeshes(ringGrid(...FARG), farMat, { mid: FARG[1], y: GY });
+	const near = nearW.root, mid = midW.root, far = farW.root;
+	for (const m of [...nearW.meshes, ...midW.meshes, ...farW.meshes]) { m.receiveShadow = true; m.userData.material175 = 'stone'; }
+	group.add(near, mid, far);
 	near.visible = mid.visible = far.visible = false;
 
 	// the big lakes' water: flat at each lake's level, only where the lake is
@@ -449,8 +456,10 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 			.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vLk < 0.5) discard;');
 	};
 	lakeMat.customProgramCacheKey = () => 'globelake1';
-	const lakes = new THREE.Mesh(radialGrid(isPhone ? 96 : 160, 60000, 2.4), lakeMat);
-	lakes.frustumCulled = false; lakes.visible = false; lakes.renderOrder = 1;
+	// (in wedges too: flat at a lake's level, within the same range)
+	const lakesW = wedgeMeshes(radialGrid(isPhone ? 96 : 160, 60000, 2.4), lakeMat, { mid: 64, y: GY }), lakes = lakesW.root;
+	for (const m of lakesW.meshes) m.renderOrder = 1;
+	lakes.visible = false;
 	group.add(lakes);
 
 	// place the rings round the camera; bayOut: how far past the Bay's survey the camera is (m)
