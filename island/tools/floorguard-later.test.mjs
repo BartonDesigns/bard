@@ -110,3 +110,40 @@ test('a late read that fails has the guard read at once from then on', async () 
 	assert.ok(R.reads >= 1);
 	assert.ok(guard.info().gpu.looks >= 1);
 });
+
+// the scene's lights as three tallies them for a draw: each kind, with its shadow, seen
+function tally(scene) {
+	const n = {};
+	scene.traverseVisible((o) => { if (o.isLight) { const k = o.type + (o.castShadow ? '+shadow' : ''); n[k] = (n[k] || 0) + 1; } });
+	return n;
+}
+
+test('the probe draws with the lights the frame has, and leaves a shadow redraw for the frame', () => {
+	const scene = new THREE.Scene(), sun = new THREE.DirectionalLight(0xffffff, 3), ground = new THREE.Group(), pad = new THREE.Group(), city = new THREE.Group();
+	sun.castShadow = true;
+	sun.userData.self = sun;   // (a light's own data is not copied: this one could not be)
+	ground.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1)));
+	for (let k = 0; k < 4; k++) pad.add(new THREE.PointLight(0xffaa66, 0));
+	const off = new THREE.PointLight(); off.visible = false; pad.add(off);
+	const lamp = new THREE.SpotLight(); lamp.castShadow = true; city.add(new THREE.Group().add(lamp));
+	scene.add(sun, new THREE.HemisphereLight(), ground, pad, city);
+	const want = tally(scene), seen = [];
+	const R = renderer({ async: false });
+	R.shadowMap.autoUpdate = false; R.shadowMap.needsUpdate = true;
+	R.render = (s) => { if (s === scene) seen.push({ lights: tally(s), redraw: R.shadowMap.needsUpdate, drawn: s.children.filter((o) => o.visible && !o.isLight) }); };
+	const P = createGroundProbe(R), count = scene.children.length;
+	for (let k = 0; k < 2; k++) P.probe(scene, 0, 0, { top: 100, span: 200, keep: (o) => o === ground });
+	assert.equal(seen.length, 2);
+	for (const S of seen) {
+		assert.deepEqual(S.lights, want);
+		assert.equal(S.redraw, false);
+		assert.deepEqual(S.drawn, [ground]);
+	}
+	// (and all as it was after)
+	assert.equal(scene.children.length, count);
+	assert.equal(R.shadowMap.needsUpdate, true);
+	assert.equal(R.shadowMap.autoUpdate, false);
+	assert.ok(pad.visible && city.visible && sun.visible);
+	assert.deepEqual(tally(scene), want);
+	P.dispose();
+});

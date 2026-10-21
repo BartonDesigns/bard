@@ -27,6 +27,17 @@ function heightOf(px, top, near, far) {
 	return top - (near + d * (far - near));
 }
 
+// a light that counts as the one given does in three's tally (its kind, its shadow, a spot's
+// pattern, the layers it is seen on) and gives none
+function darkAs(c) {
+	const L = new c.constructor();
+	L.intensity = 0;
+	L.castShadow = c.castShadow;
+	L.layers.mask = c.layers.mask;
+	if (c.isSpotLight) L.map = c.map;
+	return L;
+}
+
 export function createGroundProbe(renderer) {
 	let rt = null, copy = null, quad = null, cam = null, buf = null;
 	function setup() {
@@ -57,9 +68,22 @@ export function createGroundProbe(renderer) {
 		cam.updateProjectionMatrix(); cam.updateMatrixWorld();
 		const hidden = [], async = later && typeof renderer.readRenderTargetPixelsAsync === 'function' && typeof renderer.getContext?.()?.fenceSync === 'function';
 		let read = null;
-		if (keep) for (const o of scene.children) if (o.visible && !keep(o)) { o.visible = false; hidden.push(o); }
-		const was = { target: renderer.getRenderTarget(), auto: renderer.shadowMap.autoUpdate, clear: renderer.autoClear, bg: scene.background, fog: scene.fog };
+		// (the lights stay, and those of the groups set aside are stood in for by dark ones of the
+		// same kind: the ground's materials are then drawn with the lights they always are, and
+		// three finds the programs it has, not links new ones mid-frame, as world/lightpad.js keeps
+		// its count)
+		const stand = [];
+		if (keep) for (const o of scene.children) {
+			if (!o.visible || o.isLight || keep(o)) continue;
+			o.traverseVisible((c) => { if (c.isLight) stand.push(darkAs(c)); });
+			o.visible = false; hidden.push(o);
+		}
+		for (const L of stand) scene.add(L);
+		// (and a shadow redraw the governor has asked for, every few frames, is left for the frame
+		// it was asked for: drawn here it would be spent with the casters set aside)
+		const was = { target: renderer.getRenderTarget(), auto: renderer.shadowMap.autoUpdate, now: renderer.shadowMap.needsUpdate, clear: renderer.autoClear, bg: scene.background };
 		renderer.shadowMap.autoUpdate = false;
+		renderer.shadowMap.needsUpdate = false;
 		renderer.autoClear = true;
 		scene.background = null;
 		try {
@@ -73,8 +97,10 @@ export function createGroundProbe(renderer) {
 			else renderer.readRenderTargetPixels(copy, 0, 0, S, S, buf);
 		} finally {
 			for (const o of hidden) o.visible = true;
+			for (const L of stand) { scene.remove(L); L.dispose?.(); }
 			renderer.setRenderTarget(was.target);
 			renderer.shadowMap.autoUpdate = was.auto;
+			renderer.shadowMap.needsUpdate = was.now;
 			renderer.autoClear = was.clear;
 			scene.background = was.bg;
 		}
