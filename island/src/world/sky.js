@@ -234,8 +234,9 @@ const AGX_M = [
 const mat3x = (m, v) => [0, 1, 2].map((r) => m[r] * v[0] + m[3 + r] * v[1] + m[6 + r] * v[2]);
 // a low sun's gold (as the dome's shader mixes it)
 const GOLD = new THREE.Color(1.0, 0.8, 0.42);
-// how much the night is opened up against the look's darker shade (world/grade.js)
-const NIGHT_OPEN = 0.38;
+// how much a low light is opened up against the look's darker shade (world/grade.js), and how
+// much of that the full night gives back (dusk wants the most; the night was tuned darker)
+const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
 function agx(c, exposure, out) {
 	exposure *= GRADE.exposure;
 	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
@@ -1009,9 +1010,10 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		const air = uniforms.uAir.value;
 		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w * (1 - dk.x));
 		// (the same exposure by night: the night is dark, lit where real lights are. The look
-		// takes the day a touch under and deepens the shade (world/grade.js); by night that is
-		// opened back up, so the town's light and the moon's stay as they were tuned)
-		renderer.toneMappingExposure = 1.15 * (1 + NIGHT_OPEN * night);
+		// takes the day a touch under and deepens the shade (world/grade.js); as the light goes
+		// that is opened back up, as an eye adapts, so a dusk street is not crushed to black and
+		// the town's light and the moon's stay as they were tuned)
+		renderer.toneMappingExposure = 1.15 * (1 + LOW_OPEN * (1 - dayK) - NIGHT_TRIM * night);
 		// The sky is tone mapped, but three.js mixes the fog in after the tone mapping, so a
 		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the
 		// sky's own horizon just above it, which drew a bright band where the far land and
