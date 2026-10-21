@@ -11,7 +11,7 @@ import { sweepOut } from './walls.js';
 
 // (the middle of you to the middle of them: a shoulder's width at their side, about arm's length
 // in front of their face, and never closer than bodies touching)
-export const SIDE = 0.55, FRONT = 0.82, TOUCH = 0.42;
+export const SIDE = 0.55, FRONT = 1.0, TOUCH = 0.42;
 // (how far out from the stop the step begins to ease, and how near anyone is looked at)
 export const EASE = 0.4, REACH = 1.4;
 // (pressing into someone this long and they step aside, at this pace)
