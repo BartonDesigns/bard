@@ -14,7 +14,7 @@
 // the same real cars, paint and decals as those parked at the kerbs.
 
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const colored = (geo, c) => { const g = geo.index ? geo.toNonIndexed() : geo, n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); if (g.attributes.uv) g.deleteAttribute('uv'); return g; };
 const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
@@ -24,6 +24,60 @@ const WHITE = [0.93, 0.93, 0.91], DARK = [0.08, 0.08, 0.09], GLASS = [0.12, 0.15
 
 function wheels(parts, xs, zs, r, y = 0) {
 	for (const x of xs) for (const z of zs) parts.push(colored(new THREE.CylinderGeometry(r, r, 0.22, 10).rotateZ(Math.PI / 2).translate(x, r + y, z), TYRE));
+}
+// a part with the faces nothing can see left out: f(centre, normal) says which (flat faces only)
+function hide(g, f) {
+	const P = g.attributes.position, N = g.attributes.normal, keep = [], c = new THREE.Vector3(), n = new THREE.Vector3();
+	for (let t = 0; t < P.count; t += 3) {
+		c.set((P.getX(t) + P.getX(t + 1) + P.getX(t + 2)) / 3, (P.getY(t) + P.getY(t + 1) + P.getY(t + 2)) / 3, (P.getZ(t) + P.getZ(t + 1) + P.getZ(t + 2)) / 3);
+		n.set(N.getX(t), N.getY(t), N.getZ(t));
+		if (!f(c, n)) keep.push(t, t + 1, t + 2);
+	}
+	const out = new THREE.BufferGeometry();
+	for (const k in g.attributes) { const A = g.attributes[k], a = new A.array.constructor(keep.length * A.itemSize); keep.forEach((v, i) => { for (let j = 0; j < A.itemSize; j++) a[i * A.itemSize + j] = A.array[v * A.itemSize + j]; }); out.setAttribute(k, new THREE.BufferAttribute(a, A.itemSize)); }
+	return out;
+}
+const under = (c, n) => n.y < -0.99;
+// A packaged rooftop unit on its curb (city.js puts them on the flat roofs, thousands of them
+// across a city): the cabinet, two fans in their shrouds on top, the louvred coil down one side,
+// a small box at one end. The faces nothing can see are left out: the curb's underside on the
+// roof, the cabinet's on the curb, the shrouds' on the cabinet and the fans' in their shrouds,
+// and the backs of the coil and the box, inside the cabinet (32 of a phone's 144 triangles).
+// (Indexed, like all the kit: a corner shared by the triangles of a face is lit once, not once
+// for each, which halves the vertices of a box-built thing.)
+export function rooftopUnit(seg = 14) {
+	const body = [0.8, 0.81, 0.8], dark = [0.16, 0.17, 0.18], grille = [0.42, 0.43, 0.44];
+	const fan = (z) => [hide(C(0.34, 0.12, 0, 1.18, z, grille, seg), under), hide(C(0.3, 0.02, 0, 1.3, z, dark, seg), under)];
+	return mergeVertices(M([
+		hide(B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), under), hide(B(1.1, 1.0, 1.95, 0, 0.18, 0, body), under),
+		...fan(-0.45), ...fan(0.45),
+		hide(B(0.03, 0.62, 1.5, 0.56, 0.4, 0, grille), (c, n) => n.x < -0.99), hide(B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body), (c, n) => n.z < -0.99),
+	]));
+}
+// The same unit as it is seen far off (city.js dissolves one into the other across a band, past
+// which a fan is a few pixels and its shroud's sides under one): the curb, the cabinet, the end
+// box, the coil's face, and each fan a flat dark disc in the shroud's own size, its colour the
+// mean of the shroud's rim and the fan (44 triangles, against 112 on a phone).
+export function rooftopUnitFar() {
+	const body = [0.8, 0.81, 0.8], grille = [0.42, 0.43, 0.44];
+	const disc = (z) => colored(new THREE.CircleGeometry(0.34, 6).rotateX(-Math.PI / 2).translate(0, 1.31, z), [0.22, 0.23, 0.24]);
+	const coil = colored(new THREE.PlaneGeometry(1.5, 0.62).rotateY(Math.PI / 2).translate(0.575, 0.71, 0), grille);
+	return mergeVertices(M([
+		hide(B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), under), hide(B(1.1, 1.0, 1.95, 0, 0.18, 0, body), under),
+		disc(-0.45), disc(0.45), coil, hide(B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body), (c, n) => n.z < -0.99),
+	]));
+}
+// The copies of an instanced mesh's instances within R of (x, z), for its near version: src and
+// dst are instance matrix arrays (16 numbers each), n of src in use, cap of dst. Returns the count.
+export function nearCopies(src, n, dst, cap, x, z, R) {
+	let k = 0;
+	for (let i = 0; i < n && k < cap; i++) {
+		const e = i * 16, dx = src[e + 12] - x, dz = src[e + 14] - z;
+		if (dx * dx + dz * dz > R * R) continue;
+		for (let j = 0; j < 16; j++) dst[k * 16 + j] = src[e + j];
+		k++;
+	}
+	return k;
 }
 // the shapes, each in its own metres, length along z, standing on y 0
 function shapes() {
@@ -191,7 +245,9 @@ export function createProps(group, wrap, isPhone) {
 	for (const [k, [cap, cast, phone, mat]] of Object.entries(SPEC)) {
 		if (isPhone && !phone) continue;
 		const n = isPhone ? Math.ceil(cap / 2) : cap;
-		const im = new THREE.InstancedMesh(S[k], mat === 'solar' ? solarM : base, n);
+		// (each shape indexed: its parts are built face by face, three corners a triangle, and a
+		// corner the triangles of a face share is lit once, not twice or three times)
+		const im = new THREE.InstancedMesh(mergeVertices(S[k]), mat === 'solar' ? solarM : base, n);
 		im.count = 0; im.frustumCulled = false; im.castShadow = cast; im.receiveShadow = true;
 		im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
 		group.add(im);

@@ -156,6 +156,31 @@ function buildGrid(rects, extra) {
 	return { X, Z, nx, nz, occ };
 }
 
+// the garage in the main block's frame (frameOf): a wing of its own, or built into the main
+// block's front at one end; its doors on its front (z1), facing the street
+function garageIn(rects, R0, M) {
+	let garage = null;
+	const gw = rects.find((r) => r.b.kind === 3);
+	if (M.kind === 1 || M.kind === 2) {
+		const left = M.kind === 1, w = R0.x1 - R0.x0;
+		const gx0 = R0.x0 + (left ? 0.35 : w - 5.75);
+		garage = { x0: left ? R0.x0 : R0.x1 - 6.2, x1: left ? R0.x0 + 6.2 : R0.x1, z0: R0.z1 - 6.4, z1: R0.z1, front: R0.z1, doors: [0, 1].map((k) => ({ x0: gx0 + k * 2.7 + 0.12, x1: gx0 + k * 2.7 + 2.58, h: 2.15 })) };
+	} else if (gw) {
+		const w = gw.x1 - gw.x0, bays = Math.min(3, Math.max(1, Math.floor(w / 2.9))), bw = w / bays;
+		garage = { x0: gw.x0, x1: gw.x1, z0: gw.z0, z1: gw.z1, front: gw.z1, doors: [...Array(bays)].map((_, k) => ({ x0: gw.x0 + k * bw + 0.3, x1: gw.x0 + (k + 1) * bw - 0.3, h: 2.2 })) };
+	}
+	return garage;
+}
+// a house's garage, for its yard and drive (bay/city.js, realcity.js): its doors in the main
+// block's frame, which turns by ca, sa about M; null where it has none
+export function garageOf(grp) {
+	const M = mainOf(grp);
+	if (!M) return null;
+	const { ca, sa, rects } = frameOf(grp, M), R0 = rects.find((r) => r.main) || rects[0];
+	const g = R0 ? garageIn(rects, R0, M) : null;
+	return g && { ...g, M, ca, sa };
+}
+
 // ---------------------------------------------------------------------------------
 // the plan
 
@@ -173,16 +198,7 @@ export function planHouse(grp, opt = {}) {
 	const tall = (x, z) => { const r = at(x, z); return !!r && r.st === 2; };
 
 	// the garage: a wing of its own, or built into the main block's front at one end
-	let garage = null;
-	const gw = rects.find((r) => r.b.kind === 3);
-	if (M.kind === 1 || M.kind === 2) {
-		const left = M.kind === 1, w = R0.x1 - R0.x0;
-		const gx0 = R0.x0 + (left ? 0.35 : w - 5.75);
-		garage = { x0: left ? R0.x0 : R0.x1 - 6.2, x1: left ? R0.x0 + 6.2 : R0.x1, z0: R0.z1 - 6.4, z1: R0.z1, front: R0.z1, doors: [0, 1].map((k) => ({ x0: gx0 + k * 2.7 + 0.12, x1: gx0 + k * 2.7 + 2.58, h: 2.15 })) };
-	} else if (gw) {
-		const w = gw.x1 - gw.x0, bays = Math.min(3, Math.max(1, Math.floor(w / 2.9))), bw = w / bays;
-		garage = { x0: gw.x0, x1: gw.x1, z0: gw.z0, z1: gw.z1, front: gw.z1, doors: [...Array(bays)].map((_, k) => ({ x0: gw.x0 + k * bw + 0.3, x1: gw.x0 + (k + 1) * bw - 0.3, h: 2.2 })) };
-	}
+	const garage = garageIn(rects, R0, M);
 	const inGarage = (x, z) => !!garage && x > garage.x0 && x < garage.x1 && z > garage.z0 && z < garage.z1;
 	const gSide = garage ? Math.sign((garage.x0 + garage.x1) / 2 - (R0.x0 + R0.x1) / 2) || 1 : (rnd() < 0.5 ? -1 : 1);
 

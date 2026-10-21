@@ -11,12 +11,12 @@
 import * as THREE from 'three';
 import { commercialStack } from '../interiors/workplace-plan.js';
 import { toWorld } from './geo.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/vegetation.js';
-import { addLodFade, NONE_IN, detailClock, updateDetailClock } from '../world/lodfade.js';
+import { addLodFade, NONE_IN, NONE_OUT, detailClock, updateDetailClock } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, fromGrid, eraFor } from './styles.js';
-import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
+import { houseFloor, wallTop, mainOf, isHome, garageOf } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
 import { GREENS, REAL_TALL } from './realcity.js';
 import { WALL_GLSL, weatherRoofs } from './weathering.js';
@@ -28,7 +28,7 @@ import { inClearing, clearingVersion } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { houseEra, exteriorLook, seedAt } from './decor.js';
-import { createProps } from './lotkit.js';
+import { createProps, rooftopUnit, rooftopUnitFar, nearCopies } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
@@ -40,6 +40,7 @@ import { qualityNow } from '../world/governor.js';
 import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 import { GFX_PHONE } from '../world/device.js';
+import { orderByReach, subEnds, shadowByReach } from '../world/shadowreach.js';      // the sun's shadows from what can reach them
 import { cityBlocks } from './city-blocks.js';
 import { cityGrounds, cityDecorate, cityApart } from './city-dressing.js';
 import { plantingBed, BED_LEN } from './lantana.js';
@@ -214,6 +215,48 @@ function lichenLeaves(m) {
 // into the one opposite: Josh 2026-10-21), easing in only at the edge of interiors/index.js's
 // build reach, so the glass is never seen to change as you walk
 const DOOR_CLEAR = GFX_PHONE ? '44.0, 56.0' : '70.0, 86.0';
+// the glass of a tower, an office or a shop front with no rooms built behind it: up close a room
+// seen through each pane (its floor, walls and lit ceiling, carried in perspective as you move:
+// interior mapping), flat painted glass only far off (Josh 2026-10-21: "that's what windows
+// should look like from far away")
+const ROOM_FAR = GFX_PHONE ? '70.0, 105.0' : '120.0, 170.0';
+const ROOM_GLSL = `
+float roomK = 0.0, roomL = 1.0;
+// the ray from the eye carried on through the pane at p (metres across the room and up from its
+// floor) into a box dim (wide, high, deep), lit where it lands; V the view ray, A along the wall,
+// N out of it
+vec3 roomBehind(vec3 V, vec3 A, vec3 N, vec2 p, vec3 dim, vec2 id) {
+	vec3 d = vec3(dot(V, A), V.y, max(0.05, -dot(V, N)));
+	float tx = d.x > 0.0 ? (dim.x - p.x) / max(d.x, 1e-4) : p.x / max(-d.x, 1e-4);
+	float ty = d.y > 0.0 ? (dim.y - p.y) / max(d.y, 1e-4) : p.y / max(-d.y, 1e-4);
+	float tz = dim.z / d.z, tm = min(tz, min(tx, ty));
+	vec3 h = vec3(p, 0.0) + d * tm;
+	float r = bh(id + 0.31), r2 = bh(id + 5.17);
+	vec3 wall = r < 0.5 ? vec3(0.84, 0.82, 0.78) : r < 0.8 ? vec3(0.7, 0.72, 0.74) : vec3(0.62, 0.55, 0.47);
+	vec3 c; float L = 1.0;
+	if (tz <= tx && tz <= ty) {
+		// the back wall: a dark run of desks or a counter along it, a door in some
+		c = wall * mix(1.0, 0.45, step(h.y, 0.78) * step(0.3, r2));
+		c = mix(c, vec3(0.3, 0.27, 0.24), step(abs(h.x - dim.x * (0.25 + 0.5 * r2)), 0.45) * step(h.y, 2.1) * step(0.55, r));
+	} else if (tx <= ty) {
+		c = wall * 0.74;
+	} else if (d.y < 0.0) {
+		// the floor: carpet or stone, a desk's shadow on it
+		c = (r2 < 0.6 ? vec3(0.3, 0.31, 0.33) : vec3(0.62, 0.6, 0.56)) * (0.85 + 0.15 * step(0.5, fract(h.x / 1.8 + h.z / 2.6)));
+	} else {
+		// the ceiling: tiles, a light panel every few of them
+		vec2 q = fract(vec2(h.x, h.z) / 2.4);
+		float pnl = step(0.3, q.x) * step(q.x, 0.7) * step(0.3, q.y) * step(q.y, 0.7);
+		c = mix(vec3(0.86, 0.86, 0.84), vec3(1.0, 0.98, 0.94) * 1.9, pnl);
+		L = 1.0 + 0.9 * pnl;
+	}
+	// darker the deeper in (the light comes from the glass), and darker than the street outside
+	// by day, all but the ceiling's lights
+	float k = 1.0 - 0.5 * h.z / dim.z;
+	roomL = L * k;
+	return c * k * 0.6;
+}
+`;
 export function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
@@ -236,7 +279,7 @@ export function buildingMaterial(shared, night, nearBand) {
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
+		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + ROOM_GLSL + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
 			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;${CUT_TEST}`)
@@ -248,6 +291,9 @@ export function buildingMaterial(shared, night, nearBand) {
 				float u = dot(vCW.xz, t), v = vCW.y;
 				float win = 0.0; vec2 cell = vec2(0.0);
 				vec3 glass = vec3(0.2, 0.24, 0.28);
+				// (the rooms seen through the glass: near, on the walls of towers, offices and shops)
+				vec3 rV = normalize(vCW - cameraPosition), rA = vec3(t.x, 0.0, t.y);
+				roomK = (1.0 - step(0.7, vCN.y)) * step(1.5, vKind) * step(vKind, 6.5) * (1.0 - smoothstep(${ROOM_FAR}, length(vCW.xz - cameraPosition.xz)));
 				// the street front (local +z), metres across it from the left edge and up from the ground
 				float front = step(0.5, vLN.z) * (1.0 - roof);
 				float fx = (vLP.x + 0.5) * vCS.x, gy = vLY - 1.2;
@@ -405,11 +451,14 @@ export function buildingMaterial(shared, night, nearBand) {
 					win = step(0.07, f.x) * step(f.y, 0.78);
 					glass = mix(diffuseColor.rgb * 0.55, vec3(0.5, 0.6, 0.7), 0.35) * (0.85 + 0.25 * bh(floor(cell / 3.0)));
 					glassK = win;
+					// (up close, a room three bays wide behind the glass, floor to ceiling)
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 4.8) * 4.8, f.y * 3.9), vec3(4.8, 3.04, 7.0), floor(vec2(u / 4.8, v / 3.9)) + floor(vIP)), roomK);
 					// at the street: a tall glazed lobby in wide bays above a dark stone plinth
 					if (vLY < 6.2) {
 						cell = vec2(u / 3.2, 0.0);
 						win = step(0.06, fract(cell.x)) * step(2.1, vLY) * step(vLY, 5.6);
 						glass = vec3(0.14, 0.16, 0.18); glassK = win * 0.8;
+						if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 9.6) * 9.6, vLY - 1.2), vec3(9.6, 4.4, 12.0), vec2(floor(u / 9.6), 0.5) + floor(vIP)) * vec3(1.0, 0.97, 0.92), roomK);
 						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, step(5.6, vLY));
 					}
 					// on about half the tall ones, a penthouse: the top level's ceilings twice as high,
@@ -440,6 +489,7 @@ export function buildingMaterial(shared, night, nearBand) {
 					vec3 scol = sh > 0.66 ? vec3(0.75, 0.16, 0.12) : sh > 0.33 ? vec3(0.12, 0.3, 0.6) : vec3(0.92, 0.9, 0.86);
 					diffuseColor.rgb = mix(diffuseColor.rgb, scol, sign * 0.9);
 					cell = vec2(u / 4.0, 0.0); win = front; glass = vec3(0.3, 0.38, 0.44); glassK = front * 0.6;
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 8.0) * 8.0, vLY - 1.2), vec3(8.0, 3.8, 9.0), vec2(floor(u / 8.0), 1.5) + floor(vIP)), roomK);
 				} else if (vKind > 6.5) {
 					// plain: fields, plazas, yards
 					win = 0.0;
@@ -449,13 +499,17 @@ export function buildingMaterial(shared, night, nearBand) {
 					win = step(0.35, f.y) * step(f.y, 0.85) * step(0.04, fract(u / 1.5));
 					glass = vec3(0.28, 0.36, 0.42);
 					glassK = win * 0.7;
+					if (roomK > 0.0) glass = mix(glass, roomBehind(rV, rA, vCN, vec2(fract(u / 6.0) * 6.0, (f.y - 0.08) * 4.1), vec3(6.0, 3.2, 7.0), floor(vec2(u / 6.0, v / 4.1)) + floor(vIP)), roomK);
 					// a dark stone plinth at the ground
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.29, 0.28), step(vLY, 1.9) * (1.0 - roof));
 				}
 				// a building with its rooms built: its front windows (and a bay's) open onto them, the
 				// glass clearing as you come (all of it painted at the far edge of the band, all of it
 				// clear at the near), so the rooms are never seen to appear: they come through the glass
-				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) {
+				// (a tower: the one you are at, its curtain wall open all round onto the lobby and the
+				// floor over it that towers.js builds; the flat painted glass only for the far ones)
+				float towerK = step(1.5, K) * step(K, 2.5);
+				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5 || towerK > 0.5) && K < 10.5 && (front > 0.5 || K > 9.5 || towerK > 0.5)) {
 					float openK = vDoorK * (1.0 - smoothstep(${DOOR_CLEAR}, length(vCW.xz - cameraPosition.xz)));
 					if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < openK) discard;
 				}
@@ -529,8 +583,9 @@ export function buildingMaterial(shared, night, nearBand) {
 				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
 				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
+				winGlow *= mix(1.0, roomL, roomK);
 				// a tower's lobby is lit all night, warm, its tall glass bright at the street
-				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5);
+				if (vKind > 1.5 && vKind < 2.5 && vLY < 6.2 && roof < 0.5) winGlow = vec3(1.0, 0.8, 0.56) * win * uNightC * 1.25 * step(cond, 0.5) * mix(1.0, roomL * 0.45, roomK);
 				// a lit crown on some of the tall towers (one in five over 110 m): uplights at the foot of
 				// the top floors washing up the facade, each its own scallop, brightest low, all night
 				if (vKind > 1.5 && vKind < 2.5 && vCS.y > 110.0 && roof < 0.5 && bh(floor(vIP * 0.37) + 3.1) < 0.2) {
@@ -591,7 +646,7 @@ export function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding17';
+	m.customProgramCacheKey = () => 'baybuilding18';
 	return m;
 }
 
@@ -705,6 +760,13 @@ export function createCity(shared, scene, bay, real = null) {
 	const hipG = roofGeometry(true), gableG = roofGeometry(false);
 	for (const g of [hipG, gableG]) { g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4)); g.setAttribute('aWall', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3)); }
 	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
+	// (the buildings are written nearest first, in bands, and the sun's shadow pass draws only the
+	// bands its box can reach: the whole city went into it, kilometres of it clipped away each
+	// frame, world/shadowreach.js. reach: each mesh's bands, as last written)
+	const reach = { near: null, hips: null, gables: null, sky: null };
+	for (const k of ['near', 'hips', 'gables']) shadowByReach({ near, hips, gables }[k], () => reach[k]);
+	// (an instance's half-size: the corner of its lot, and a roof's overhang and gutter past it)
+	const lotHalf = (o) => Math.hypot(o.w || 0, o.d || 0) / 2 + 2;
 	// the props of the lived-in streets and on the roofs (lotkit.js)
 	const kit2 = createProps(group, (m) => withRise(m, rise, 'kitrise'), PHONE);
 	// the cars in the drives and carports and out front of the garages, as kit entries: the
@@ -715,26 +777,26 @@ export function createCity(shared, scene, bay, real = null) {
 	// what is on and about the buildings up close: the air conditioners on the flat roofs of
 	// the shops, offices and warehouses; a glass sunroom off the back of some houses, a
 	// clothesline in some back yards (see decorate)
+	// where the rooftop units' near version dissolves into the far one (m: a fan's shroud is under
+	// a pixel high past it)
+	const AC_LOD = PHONE ? [180, 230] : [260, 310];
 	const kit = (() => {
 		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
-		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles)
 		const C = (r, h, x, y, z, c, seg = PHONE ? 6 : 14) => colored(new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z), c);
-		const body = [0.8, 0.81, 0.8], dark = [0.16, 0.17, 0.18], grille = [0.42, 0.43, 0.44];
-		// a packaged rooftop unit on its curb: the cabinet, two fans in their shrouds on top,
-		// the louvred coil down one side
-		const ac = mergeGeometries([
-			B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), B(1.1, 1.0, 1.95, 0, 0.18, 0, body),
-			C(0.34, 0.12, 0, 1.18, -0.45, grille), C(0.3, 0.02, 0, 1.3, -0.45, dark), C(0.34, 0.12, 0, 1.18, 0.45, grille), C(0.3, 0.02, 0, 1.3, 0.45, dark),
-			B(0.03, 0.62, 1.5, 0.56, 0.4, 0, grille), B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body),
-		]);
+		// a packaged rooftop unit on its curb, its hidden faces left out (lotkit.js), and as it is
+		// seen far off, its fans flat discs: the far one holds every unit and dissolves in across
+		// AC_LOD, the near one a copy of those within reach of you, dissolving out across it
+		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles,
+		// and 3,800 round Noe Valley were 553k)
+		const ac = rooftopUnitFar(), acNear = rooftopUnit(PHONE ? 6 : 14);
 		// the sunroom: white frames, glass between (two meshes)
 		const fr = [0.95, 0.95, 0.93], bars = [];
 		for (const x of [-0.5, -0.25, 0, 0.25, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, -0.5, fr));
 		for (const z of [-0.25, 0, 0.25]) for (const x of [-0.5, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, z, fr));
 		for (const y of [0, 0.33, 1]) { bars.push(B(1.02, 0.03, 0.02, 0, y, -0.5, fr)); bars.push(B(0.02, 0.03, 1.0, -0.5, y, 0, fr)); bars.push(B(0.02, 0.03, 1.0, 0.5, y, 0, fr)); }
 		bars.push(B(1.06, 0.03, 1.06, 0, 1.0, 0, fr), B(1.04, 0.33, 0.01, 0, 0, -0.5, [0.85, 0.84, 0.8]));
-		const sunF = mergeGeometries(bars);
+		const sunF = mergeVertices(mergeGeometries(bars));          // (indexed: a corner lit once, not once a triangle)
 		const sunG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 		// a clothesline: two T-posts, three lines between, and the washing pegged out
 		const post = [0.55, 0.56, 0.57], line = [0.9, 0.9, 0.88], parts = [];
@@ -742,14 +804,21 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const z of [-0.4, 0, 0.4]) parts.push(B(4.8, 0.012, 0.012, 0, 1.87, z, line));
 		const wash = [[0.9, 0.9, 0.88], [0.3, 0.45, 0.7], [0.85, 0.35, 0.3], [0.95, 0.85, 0.45], [0.5, 0.65, 0.5], [0.95, 0.7, 0.75], [0.25, 0.25, 0.3]];
 		for (let k = 0; k < 9; k++) { const w = 0.35 + (k * 37 % 5) * 0.1, h = 0.35 + (k * 53 % 4) * 0.12; parts.push(B(w, h, 0.01, -2 + (k % 3) * 1.5 + (k * 29 % 7) * 0.08, 1.86 - h, [-0.4, 0, 0.4][Math.floor(k / 3)], wash[k % wash.length])); }
-		const lineG = mergeGeometries(parts);
+		const lineG = mergeVertices(mergeGeometries(parts));
 		const M = (o) => withRise(new THREE.MeshStandardMaterial({ vertexColors: true, ...o }), rise, 'kitrise');
 		// (on a phone the roof and yard kit throws no shadow: every unit was drawn again in the
 		// shadow pass, out to the edge of the city, for shadows a few pixels across)
 		const mkK = (geo, material, cap) => { const im = new THREE.InstancedMesh(geo, material, cap); im.count = 0; im.frustumCulled = false; im.castShadow = !PHONE; im.receiveShadow = true; group.add(im); return im; };
 		const glassM = withRise(new THREE.MeshStandardMaterial({ color: 0xa9c4cf, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false }), rise, 'kitrise');
+		const acM = M({ roughness: 0.55, metalness: 0.35 }), acNearM = M({ roughness: 0.55, metalness: 0.35 });
+		addLodFade(acM, 'uniform', [AC_LOD[0], AC_LOD[1], NONE_OUT[0], NONE_OUT[1]]); addLodFade(acNearM, 'uniform', [NONE_IN[0], NONE_IN[1], AC_LOD[0], AC_LOD[1]]);
+		const acFar = mkK(ac, acM, 12000), acNearI = mkK(acNear, acNearM, PHONE ? 1500 : 3000);
+		// (the far units throw no shadow: every one the sun's box can reach is in the near copy;
+		// and the near copy is the far one's, so what the far one shows, a unit taken down with
+		// its roof included, it shows: structures/damage.js edits only the far)
+		acFar.castShadow = false; acNearI.userData.copyOf = acFar;
 		return {
-			ac: mkK(ac, M({ roughness: 0.55, metalness: 0.35 }), 12000),
+			ac: acFar, acNear: acNearI,
 			sunF: mkK(sunF, M({ roughness: 0.5 }), 3000), sunG: mkK(sunG, glassM, 3000),
 			line: mkK(lineG, M({ roughness: 0.9, side: THREE.DoubleSide }), 3000),
 		};
@@ -965,6 +1034,17 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const [x, y, z, a, s] of lines) { if (n >= kit.line.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.line.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
 		kit.line.count = n;
 		for (const im of [kit.ac, kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+		placeAC(acX, acZ);
+	}
+	// the rooftop units near you, copied from the far set every 40 m you go and whenever the far
+	// set changes (a new one laid out, a unit taken down or put back)
+	let acX = 1e9, acZ = 1e9, acV = -1;
+	function placeAC(x, z) {
+		acX = x; acZ = z; acV = kit.ac.instanceMatrix.version;
+		const N = kit.acNear;
+		N.count = nearCopies(kit.ac.instanceMatrix.array, kit.ac.count, N.instanceMatrix.array, N.instanceMatrix.count, x, z, AC_LOD[1] + 45);
+		N.instanceMatrix.needsUpdate = true;
+		N.computeBoundingSphere();
 	}
 	// Neighbouring buildings from the map often overlap by a metre or so (their outlines
 	// are fitted as boxes). Where they do, their fronts run a few centimetres apart through
@@ -1118,7 +1198,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// the skylines, found once: every downtown's tall buildings, kept for far views
 	const skyline = [];
 	skyline.noGrounds = true;          // (far off: the towers alone)
-	const skyMesh = mk(boxGeo(), mat, 6000, true);
+	const skyMesh = shadowByReach(mk(boxGeo(), mat, 6000, true), () => reach.sky);
 	function findSkylines() {
 		const seen = new Set();
 		for (let z = -100000; z < 100000; z += 1000) for (let x = -20000; x < 120000; x += 1000) {
@@ -1140,7 +1220,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// A tower near enough to be built is drawn by the near buildings; its far copy in the
 	// skyline would stand in the same place a few centimetres off and flicker through it
 	// (and cover its doorway and its rooms), so the skyline leaves those out.
-	let lastList = [], skySig = 0, skyN = -1;
+	let lastList = [], skySig = 0, skyN = -1, lastAt = [0, 0];
 	function skylineBeside(list) {
 		lastList = list;
 		const G = new Map(), cell = 30, key = (x, z) => Math.floor(x / cell) + ',' + Math.floor(z / cell);
@@ -1159,7 +1239,10 @@ export function createCity(shared, scene, bay, real = null) {
 		if (sig === skySig && skyN === skyline.length) return;
 		skySig = sig; skyN = skyline.length;
 		keep.noGrounds = true;
-		upload(keep, skyMesh, null);
+		// (nearest first round where the city was last laid out; the skyline's own order kept)
+		const sky = keep === skyline ? skyline.slice() : keep;
+		reach.sky = orderByReach(sky, lastAt[0], lastAt[1], lotHalf);
+		upload(sky, skyMesh, null);
 	}
 
 	// ---------- landmarks ----------
@@ -1391,20 +1474,37 @@ export function createCity(shared, scene, bay, real = null) {
 		const put = (k, lx, lz, yaw, sc, c, lift = 0, tilt = 0) => { if (!kit2.has(k)) return; const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) > 2.5) return; const e = [x, gy + lift, z, b.a + yaw, ...(typeof sc === 'number' ? [sc, sc, sc] : sc), tilt]; if (c) e.push(...c); (P[k] || (P[k] = [])).push(e); };
 		const hr = (n) => hash(b.x * 0.71 + n * 5.3, b.z * 1.13 - n * 2.1);
 		const open = (lx, lz) => { const [x, z] = W(lx, lz), L = real.landAt?.(x, z); return !L || (L.roof < 0.1 && L.road < 0.1); };
-		// where the garage is: built in at one end, or a wing beside
-		const gw = b.grp?.find((q) => q.kind === 3);
-		let gx = b.kind === 1 ? -b.w / 2 + 3 : b.kind === 2 ? b.w / 2 - 3 : null, gz = b.d / 2;
-		if (gx === null && gw) { const dx = gw.x - b.x, dz = gw.z - b.z; gx = ca * dx + sa * dz; gz = -sa * dx + ca * dz + gw.d / 2; }
+		// where the garage is, as the house is built (houseplan.js: built in at one end of the
+		// front, or a wing), and which way its drive runs out to the street (realcity.js: the
+		// mapped one, or the one made for it); the cars stand on the drive before the doors
+		const gar = b.grp ? garageOf(b.grp) : null, D = gar?.doors || [];
+		let gx = null, gz = null, ux = -sa, uz = ca;
+		if (D.length) {
+			gx = (D[0].x0 + D[D.length - 1].x1) / 2; gz = gar.front;
+			const [dx, dz] = W(gx, gz);
+			let bd = 4.5;
+			for (const q of real.near('paths', dx, dz, 20)) {
+				if (q.w < 2.2) continue;
+				for (const [ax, az, bx, bz] of [[q.ax, q.az, q.bx, q.bz], [q.bx, q.bz, q.ax, q.az]]) {
+					const d = Math.hypot(ax - dx, az - dz), L = Math.hypot(bx - ax, bz - az) || 1, vx = (bx - ax) / L, vz = (bz - az) / L;
+					if (d < bd && vx * -sa + vz * ca > 0.3) { bd = d; ux = vx; uz = vz; }
+				}
+			}
+		}
+		const turn = Math.atan2(-ux, uz) - b.a;
+		// (a car's place: before door k, its middle s metres down the drive, in the house's frame)
+		const onDrive = (k, s) => { const [dx, dz] = W((D[k].x0 + D[k].x1) / 2, gz), px = dx + ux * s - b.x, pz = dz + uz * s - b.z; return [ca * px + sa * pz, -sa * px + ca * pz]; };
 		if (gx !== null && !cnd) {
-			if (hr(1) < 0.55 && open(gx - 1.3, gz + 3)) put('car', gx - 1.3, gz + 3, 0, 1, pick(CARS, hr(2)));
-			if (hr(1) < 0.2 && open(gx + 1.3, gz + 3.2)) put('car', gx + 1.3, gz + 3.2, 0.04, 1, pick(CARS, hr(3)));
+			const c0 = onDrive(0, 3.2), c1 = D.length > 1 && onDrive(1, 3.2);
+			if (hr(1) < 0.55 && open(...c0)) put('car', ...c0, turn, 1, pick(CARS, hr(2)));
+			if (c1 && hr(1) < 0.2 && open(...c1)) put('car', ...c1, turn, 1, pick(CARS, hr(3)));
 			if (hr(4) < 0.35) put('bins', gx + Math.sign(gx || 1) * 3.4, gz + 1.2, 0, 1);
 			if (hr(5) < 0.06) put('hoop', gx + 2.2, gz + 0.2, 0, 1);
 			if (hr(6) < 0.035 && open(gx + Math.sign(gx || 1) * 4.2, gz + 4.5)) put(hr(7) < 0.55 ? 'rv' : 'boat', gx + Math.sign(gx || 1) * 4.2, gz + 4.5, 0, 1);
 		}
 		if (hr(8) < 0.6) { const s = hr(9) < 0.5 ? -1 : 1; if (open(s * (b.w / 2 + 0.7), 0)) put('cond', s * (b.w / 2 + 0.7), -b.d * 0.1, 0, 1); }
 		if (hr(10) < 0.16) { const s = hr(11) < 0.5 ? -1 : 1, lx = s * (b.w / 2 - 2), lz = -b.d / 2 - 9; if (open(lx, lz) && open(lx + 2, lz - 2) && open(lx - 2, lz + 2)) { const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) < 1.5) list.push({ x, y: gy - 1.2, z, w: 2.8, d: 2.4, h: 3.5, a: b.a + Math.PI, col: hr(12) < 0.5 ? [0.6, 0.55, 0.45] : look.wall, kind: KIND.garage, roof: { hip: false, rot: true, h: 0.9, col: look.roof, t: hr(12) < 0.3 ? ROOF.metal : ROOF.shingle, ov: 0.2, trim: 3 }, age: 0.5 }); } }
-		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', gx, gz + 3, (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
+		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', ...onDrive(0, 3.4), turn + (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
 	}
 	// the generated blocks stop where a mapped region starts: what stands on its side of the
 	// seam is its own (a block half over the line keeps only its lots on this side)
@@ -1627,6 +1727,8 @@ export function createCity(shared, scene, bay, real = null) {
 			if (!on) { riseT0 = -1; rise.value.w = 0; }
 			near.castShadow = hips.castShadow = gables.castShadow = !on;
 		}
+		// (the near rooftop units kept up as you go, a rebuild under way or not: 45 m past their band)
+		if (Math.hypot(x - acX, z - acZ) > 40 || kit.ac.instanceMatrix.version !== acV) placeAC(x, z);
 		// the buildings round you again every 300 m, a few milliseconds a frame (the ones standing
 		// stay drawn till the new set is ready): done in one go it held a phone's frame for the
 		// best part of a second each time; the first set, and one far from where you are now (a
@@ -1701,13 +1803,18 @@ export function createCity(shared, scene, bay, real = null) {
 		// (a phone sorts out the nearer buildings only: the pass costs it a frame or two)
 		apart(list, x, z, PHONE ? 650 : 1e9);
 		yield;
-		// (then in place: the buildings, their kit a frame on, the trees a frame after)
+		// (then in place: the buildings, their kit a frame on, the trees a frame after; written
+		// nearest first by bands, for the shadow pass, the roofs counted in the same order)
+		lastAt = [x, z];
+		const R = orderByReach(list, x, z, lotHalf);
 		upload(list, near, [hips, gables]);
+		reach.near = R; reach.hips = subEnds(list, R, (o) => o.roof?.hip); reach.gables = subEnds(list, R, (o) => o.roof && !o.roof.hip);
 		skylineBeside(list);
 		indexLots(list);
 		// the tall ones, for going inside (bay/towers.js)
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
 		yield;
+		if (acX > 1e8) { acX = x; acZ = z; }          // (the first set: its near units round where it was laid out)
 		uploadKit(list.kit);
 		kit2.upload(list.props);
 		drives = { list: list.props?.car || [], v: drives.v + 1 };

@@ -221,7 +221,17 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		const mesh=new THREE.InstancedMesh(geo,M.stoneD,count), mat=new THREE.Matrix4(), pos=new THREE.Vector3(), q=new THREE.Quaternion(), scale=new THREE.Vector3();let i=0;
 		for(const L of T.levels)for(const [x0,z0,x1,z1]of slabRects(T,L))mesh.setMatrixAt(i++,mat.compose(pos.set((x0+x1)/2,L.y-T.floor0-.08,(z0+z1)/2),q,scale.set(x1-x0-.1,.12,z1-z0-.1)));      // (inside the floor built over it near you, never flush with its edges)
 		mesh.position.set(T.o.x,T.floor0,T.o.z);mesh.rotation.y=-T.o.a;mesh.receiveShadow=true;mesh.computeBoundingSphere();group.add(mesh);T.structure=mesh;T.cache=new Map();
-		city?.setDoor?.(T.o,[0,T.floor0-T.o.y,2.8]);
+		T.shellTop=-1;openShell();
+	}
+	// the block's own curtain wall opens onto the floors built here, from the lobby up as far
+	// as they go unbroken (from the street: the lobby and the floor over it), never onto one
+	// not built; its front door cut out too
+	function openShell(){
+		let n=0;while(T.cache?.has(n))n++;
+		const L=T.levels[n-1],top=L?Math.max(0,Math.floor(L.y+L.h-T.o.y-0.2)):0;
+		if(top===T.shellTop)return;
+		T.shellTop=top;T.door=[0,T.floor0-T.o.y,2.8+4*top];
+		city?.setDoor?.(T.o,T.door);
 	}
 	function loadAround(L){
 		if(!T||!L)return;
@@ -230,6 +240,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		if(at>0)desired.add(at-1);if(at<T.levels.length-1)desired.add(at+1);
 		for(const [i,B]of T.cache)if(!desired.has(i)){group.remove(B.g);B.dispose();T.cache.delete(i);}
 		for(const i of desired)if(!T.cache.has(i))T.cache.set(i,level(T,T.levels[i]));
+		openShell();
 	}
 
 	const local = (x, z) => { const o = T.o, dx = x - o.x, dz = z - o.z, ca = Math.cos(o.a), sa = Math.sin(o.a); return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
@@ -399,5 +410,5 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			points.forEach(([x,z,name],i)=>out.push({id:`workplace:${key}:${L.n}:${i}`,name:`${name}, floor ${L.n}`,x:T.o.x+ca*x-sa*z,y:L.y,z:T.o.z+sa*x+ca*z,radius:3,fact:`${L.program}. Walk to the marked station and report back to the person who asked.`}));
 		}return out;
 	}
-	return { group, update, floor, questTargets, push, venue, here, raise, diagnostics:()=>T&&({type:T.type,region:T.region,levels:T.levels.map(L=>({n:L.n,y:L.y,h:L.h,kind:L.kind,program:L.program})),loaded:[...T.cache.values()].map(B=>({n:B.L.n,details:B.details,colliders:B.col.length})),slabs:T.structure.count}), key: () => T?.key || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
+	return { group, update, floor, questTargets, push, venue, here, raise, diagnostics:()=>T&&({type:T.type,region:T.region,levels:T.levels.map(L=>({n:L.n,y:L.y,h:L.h,kind:L.kind,program:L.program})),loaded:[...T.cache.values()].map(B=>({n:B.L.n,details:B.details,colliders:B.col.length})),slabs:T.structure.count}), key: () => T?.key || null, door: () => T?.door || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
 }
