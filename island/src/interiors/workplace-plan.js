@@ -61,10 +61,14 @@ export function planWorkplace(o, floor0, location) {
 export function officeZones(T, L) {
  const { hw, hd, coreW, coreZ } = T, z0 = coreZ + 3.5, z1 = hd - .8, middle = (z0 + z1) / 2;
  const width = hw - 2.1, depth = (z1 - z0) / 2 - .8;
- if (width < 3 || depth < 2.5) return [{ type: 'work', x0: -hw + .8, x1: -1.4, z0, z1 }, { type: 'meeting', x0: 1.4, x1: hw - .8, z0, z1 }].filter(r => r.x1-r.x0>2 && r.z1-r.z0>2);
- const second = L.program === 'Conference centre' ? 'meeting' : L.program === 'Executive offices' || L.program === 'Client services' ? 'private' : T.profile.privacy && L.seed<.5 ? 'focus' : 'work';
- const commons = L.program === 'Sky commons';
- const types = commons ? ['lounge', 'pantry', 'meeting', 'lounge'] : ['work', second, L.seed < .5 ? 'meeting' : 'focus', L.program === 'Coworking' ? 'lounge' : 'meeting'];
+ if (width < 3 || depth < 2.5) return [{ type: 'work', x0: -hw + .8, x1: -1.4, z0, z1 }, { type: 'lounge', x0: 1.4, x1: hw - .8, z0, z1 }].filter(r => r.x1-r.x0>2 && r.z1-r.z0>2);
+ // One quarter of desks at most (in pods, by the windows: workplace-fitout.js); the rest is
+ // the floor's own trade (a lab, a studio, a market wall, a café), rooms, and a lounge.
+ const P = L.program, third = P === 'Executive offices' || P === 'Client services' ? 'private' : T.profile.privacy && L.seed < .5 ? 'focus' : 'meeting';
+ const types = P === 'Sky commons' ? ['lounge', 'gym', 'games', 'lounge']
+  : P === 'Conference centre' ? ['meeting', 'feature', 'meeting', 'lounge']
+  : P === 'Executive offices' ? ['private', 'feature', 'meeting', 'lounge']
+  : ['work', 'feature', third, 'lounge'];
  const zones = [];
  for (let row = 0; row < 2; row++) for (let side = 0; side < 2; side++) zones.push({ type: types[row * 2 + side], x0: side ? 1.4 : -hw + .8, x1: side ? hw - .8 : -1.4, z0: row ? middle + .8 : z0, z1: row ? z1 : middle - .8 });
  // Plumbing, printing and refreshments flank the same lift core on every floor.

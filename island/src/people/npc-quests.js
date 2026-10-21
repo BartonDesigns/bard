@@ -35,12 +35,15 @@ import { regionalNow } from '../region/here.js';
 import { createPlaces, restOn, standAt } from './bag-spots.js';
 import { createLeads, leadFrom, leadLine, leadNote, leadFact } from './npc-leads.js';
 import { citiesNear } from '../earth/atlas.js';
+import { wallKeeper } from './walls.js';
 
 const NOTICE = 7, OWNER_BACK = 45, VISIBLE = 95, REACH = 1.4, STEP_MAX = 45, MEMORY = 600;
 
 export function createNpcQuests({ pacing = null, scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null, others = () => [], livingManaged = false }) {
 	const FAR_EVERY = isPhone ? 40 : 25, SCENES = isPhone ? 1 : 2, BAG_EVERY = isPhone ? [150, 240] : [70, 140], FAVOUR_EVERY = isPhone ? [150, 260] : [80, 160];
 	const sources = createSources();
+	// (a found dog brought home, kept off the walls on the way: people/walls.js)
+	const keepWalls = wallKeeper(world);
 	// the benches, shelters, park seats, cafe tables and doorsteps about (people/bag-spots.js)
 	const spots = places || createPlaces({ world });
 	// thefts out of your sight, kept for you to follow up (people/npc-leads.js)
@@ -519,7 +522,7 @@ export function createNpcQuests({ pacing = null, scene, camera, world, people, c
 		for (const [id, D] of dogs) {
 			D.t += dt;
 			const you = D.you?.active ? pos(D.you) : cam(), owner = D.owner?.active ? pos(D.owner) : you;
-			try { D.dog.update(dt, { ground: groundY, home: D.home, mode: D.phase, you, owner, keep: 1.8 }); } catch { dropDog(id); continue; }
+			try { D.dog.update(dt, { ground: groundY, walls: keepWalls, home: D.home, mode: D.phase, you, owner, keep: 1.8 }); } catch { dropDog(id); continue; }
 			const p = D.dog.pos; D.proxy.M.S.pos.set(p.x, p.y, p.z);
 			if (D.phase === 'reunion' && D.t > 7) { D.phase = 'home'; D.t = 0; }
 			if ((D.phase === 'home' && D.t > 20) || flat(p, cam()) > VISIBLE + 20) dropDog(id);

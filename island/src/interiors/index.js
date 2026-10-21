@@ -415,12 +415,15 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		} else { const d = Math.sqrt(d2); q[0] = qx + dx / d * RAD; q[1] = qz + dz / d * RAD; }
 		return true;
 	}
+	// a lot whose rooms are built (or a bay building's own, built as its lot): not a block too
+	// (asked only of the lots a body is at, not made up afresh for every push)
+	const claimed = (key) => {
+		for (const B of live.values()) if (B.ready && (B.key === key || (B.P?.bayLot && city.lotKey(B.P.bayLot) === key))) return true;
+		return false;
+	};
 	function push(pos, footY) {
-		const claimed = new Set();
 		for (const B of live.values()) {
 			if (!B.ready) continue;
-			claimed.add(B.key);
-			if (B.P?.bayLot) claimed.add(city.lotKey(B.P.bayLot));
 			const P = B.P, F = frame(B.o), q = F.l(pos.x, pos.z);
 			if (Math.abs(q[0]) > P.W / 2 + 1 || Math.abs(q[1]) > P.D / 2 + 2) continue;
 			const y0 = footY - P.f0 + 0.25, y1 = footY - P.f0 + 1.7, fy = footY - P.f0;
@@ -447,7 +450,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			const top = o.y + o.h;
 			if (footY + 0.35 > top || footY + 1.7 < o.y) continue;
 			const key = city.lotKey(o);
-			if (claimed.has(key) || underSite(o)) continue;
+			if (claimed(key) || underSite(o)) continue;
 			const F = frame(o), q = F.l(pos.x, pos.z);
 			if (pushBox(q, [-o.w / 2, -o.d / 2, o.w / 2, o.d / 2])) { const [wx, wz] = F.w(q[0], q[1]); pos.x = wx; pos.z = wz; }
 		}

@@ -274,7 +274,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			// local -z points to: (-sin phi, -cos phi)
 			const mz = [-Math.sin(phi), -Math.cos(phi)], sideDir = w.axis === 'x' ? [0, swing] : [swing, 0];
 			const sign = mz[0] * sideDir[0] + mz[1] * sideDir[1] > 0 ? 1 : -1;
-			const b = new Builder();
+			// (a door between rooms stands inside: no shadow of the sun's)
+			const b = front ? new Builder() : new Builder().inside();
 			// the era's doors: its front door and colour, the household's inside
 			const dc = lin(front ? look.door || ext.door : dec.door.col);
 			b.box('door' + (front ? look.doorStyle ?? ext.doorStyle : dec.door.slot), 0, 0, -t / 2, width - 0.04, h, t / 2, dc);
@@ -498,8 +499,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 
 		yield;
-		// furniture: shaded at the foot, each a shade of its own, a soft shadow under it
+		// furniture: shaded at the foot, each a shade of its own, a soft shadow under it (inside:
+		// no shadow of the sun's, housekit.js)
 		g.ao = true;
+		g.inside();
 		for (const it of plan.items) {
 			if (++step % 12 === 0) yield;
 			if (it.type === 'closet') it.wallCol = paint[it.room];

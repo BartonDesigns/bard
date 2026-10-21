@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { shadowByTiles, shadowByNearest } from '../world/shadowreach.js';
 
 // the shores it spans: Foster City (west, s = 0) and Hayward (east)
 const WEST = [37.5832, -122.2583], EAST = [37.6180, -122.1470];
@@ -453,7 +454,8 @@ export function createSanMateoBridge(scene, bay, { isPhone = false } = {}) {
 		for (const g of list) g.dispose();
 		return m;
 	};
-	const concreteMesh = mk(concrete.concat(subs), concreteMat);
+	// (11 km of it: in the sun's shadow pass only its tiles in the box, world/shadowreach.js)
+	const concreteMesh = shadowByTiles(mk(concrete.concat(subs), concreteMat));
 	const deckMesh = mk(deck, deckMat, false);
 
 	// the lamps: along both outer edges, a lamp every 44 m, the arm over its deck
@@ -477,6 +479,8 @@ export function createSanMateoBridge(scene, bay, { isPhone = false } = {}) {
 	lamps.castShadow = true; lamps.receiveShadow = true;
 	lamps.computeBoundingSphere();
 	group.add(lamps);
+	// (in the shadow pass only those the box can reach, laid out nearest you first: update below)
+	const lampsNear = shadowByNearest(lamps);
 	// the towers, scaled to their heights, turned square to the line
 	const towerMesh = new THREE.InstancedMesh(T.geo, steelMat, towers.length);
 	towers.forEach((tw, i) => {
@@ -489,6 +493,7 @@ export function createSanMateoBridge(scene, bay, { isPhone = false } = {}) {
 	towerMesh.castShadow = true; towerMesh.receiveShadow = true;
 	towerMesh.computeBoundingSphere();
 	group.add(towerMesh);
+	const towersNear = shadowByNearest(towerMesh);
 	// the wires: from each tower's insulators and peaks to the next's, sagging between
 	const wp = [];
 	for (let i = 0; i + 1 < towers.length; i++) {
@@ -535,6 +540,7 @@ export function createSanMateoBridge(scene, bay, { isPhone = false } = {}) {
 		const far = Math.hypot(cam.position.x - O.x, cam.position.z - O.z) > 26000 || cam.position.y > 30000;
 		group.visible = !far;
 		if (far) return;
+		lampsNear.order(cam.position.x, cam.position.z); towersNear.order(cam.position.x, cam.position.z);
 		uNight.value = night;
 		glow.visible = night > 0.02;
 		glowMat.opacity = Math.min(1, night * 1.2);

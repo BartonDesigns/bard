@@ -102,14 +102,16 @@ export function createMelee(ctx) {
 	function knockDown(b, dir, power, down = 2200) {
 		const P = b.P;
 		if (!P || P.ragdoll || isMinor(P)) return;
-		const q = b.M.S.pos;
+		const q = b.M.S.pos, fell = q.clone();
 		setTimeout(() => sound.fall(b.M.S.pos), 320);
 		ctx.ragdolls.hit(P, { vel: new THREE.Vector3(dir.x, 0.15, dir.z).normalize().multiplyScalar(power), mass: 90, point: new THREE.Vector3(q.x, q.y + 1.25, q.z), lift: 0.02 }, (Pd) => {
 			setTimeout(() => {
 				if (!Pd.ragdoll || b.dead || b.h?.dead) return;
 				const at = Pd.bones[Pd.map.root].getWorldPosition(_a);
 				ctx.ragdolls.release(Pd);
-				b.M.place(at.x, ctx.ground(at.x, at.z, at.y + 1), at.z, b.M.S.heading);
+				// (up where the body lay, short of any wall it slid against: swept from where it fell)
+				const up = ctx.clearSpot ? ctx.clearSpot(fell, at, fell.y) : at;
+				b.M.place(up.x, ctx.ground(up.x, up.z, at.y + 1), up.z, b.M.S.heading);
 				if (!foes.has(Pd)) b.M.play('getup', 1.15, true);
 			}, down);
 		});
@@ -642,7 +644,7 @@ export function createMelee(ctx) {
 	const prompt = touch ? null : document.createElement('div');
 	if (prompt) {
 		prompt.dataset.hud = 'prompt 26';
-		prompt.style.cssText = 'display:none;padding:7px 12px;border-radius:12px;background:rgba(8,20,26,.6);border:1px solid rgba(190,255,230,.55);color:#eafaf6;font:600 13px system-ui;pointer-events:none;';
+		prompt.style.cssText = 'display:none;padding:7px 12px;border-radius:12px;background:rgba(8,20,26,.6);border:1px solid rgba(190,255,230,.55);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);pointer-events:none;';
 		prompt.innerHTML = '<b style="display:inline-block;min-width:18px;padding:1px 5px;margin-right:6px;border-radius:5px;background:rgba(255,255,255,.18);text-align:center">Q</b>Takedown';
 		mount.appendChild(prompt);
 	}
