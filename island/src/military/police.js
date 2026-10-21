@@ -28,7 +28,7 @@ import { policePlan } from './rules.js';
 import { sirenSound } from './sound.js';
 import { blockSlots, inCone, offscreenPace } from '../law/tactics.js';
 import { searchLoop } from '../law/ladder.js';
-import { noseInto } from '../vehicles/wall-guard.js';
+import { noseInto, inBuilding } from '../vehicles/wall-guard.js';
 
 const NAVY = new THREE.Color('#141a2c'), CHAR = new THREE.Color('#25282e');
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _y = new THREE.Vector3(0, 1, 0), _o = new THREE.Matrix4(), _t = new THREE.Matrix4();
@@ -146,7 +146,25 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 	}
 	function clearBlocks() { for (const c of cruisers) if (c.why === 'block' && c.state === 'blocking') leave(c); }
 
+	// a cruiser whose way ended inside a block (a route's last stretch across the ground, or one
+	// brought on out of sight) backs up along its route to where its whole length is clear
+	const carIn = (w, x, z, yaw, half) => {
+		const fx = Math.sin(yaw), fz = Math.cos(yaw);
+		return inBuilding(w, x, z) || inBuilding(w, x + fx * half, z + fz * half) || inBuilding(w, x - fx * half, z - fz * half);
+	};
+	function outOfBlocks(c) {
+		const w = W(), half = c.S.L / 2;
+		if (!c.route || !carIn(w, c.pos.x, c.pos.z, c.yaw, half)) return;
+		for (let s = Math.min(c.s, c.route.length) - 1; s > 0 && s > c.s - 120; s -= 1) {
+			const q = along(c.route, s), yaw = Math.atan2(q.dx, q.dz);
+			if (carIn(w, q.x, q.z, yaw, half)) continue;
+			c.s = s; c.yaw = yaw;
+			c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z);
+			return;
+		}
+	}
 	function arrive(c) {
+		outOfBlocks(c);
 		c.state = 'arrived'; c.t = 0;
 		const S = c.S, sx = c.pos.x + Math.cos(c.yaw) * (S.W / 2 + 1), sz = c.pos.z - Math.sin(c.yaw) * (S.W / 2 + 1);
 		const n = isPhone ? Math.min(c.fid === 'swat' ? 3 : 2, c.officers) : c.officers;

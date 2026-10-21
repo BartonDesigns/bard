@@ -60,7 +60,7 @@ test('standing, stepping a little, or set down far off: one push where it ends',
 	sweepOut(counting, { x: 1, z: 0 }, at, 0);
 	assert.equal(n, 1);
 	n = 0; sweepOut(counting, { x: 1, z: 0 }, { x: 1 + PIECE * 0.9, z: 0 }, 0); assert.equal(n, 1);
-	n = 0; const far = { x: 5.0, y: 0, z: 0 }; sweepOut(counting, { x: -20, z: 0 }, far, 0); assert.equal(n, 1, 'set down: one push');
+	n = 0; const far = { x: 5.0, y: 0, z: 0 }; sweepOut(counting, { x: -20, z: 0 }, far, 0); assert.equal(n, 2, 'set down: one push, and one more to see it has stopped');
 	assert.ok(Math.abs(far.x - 5) > 0.3, 'set down inside the wall: pushed out of it');
 	n = 0; sweepOut(counting, { x: 0, z: 0 }, { x: 3, z: 0 }, 0); assert.equal(n, Math.ceil(3 / PIECE));
 	// (above the wall's top it does not hold you)
@@ -68,6 +68,25 @@ test('standing, stepping a little, or set down far off: one push where it ends',
 	// (nothing to push with, or a body with no position yet: left as it is)
 	const nan = { x: NaN, y: 0, z: 0 }; assert.equal(sweepOut(push, { x: 0, z: 0 }, nan, 0), 0);
 	assert.equal(sweepOut(null, { x: 0, z: 0 }, at, 0), 0);
+});
+
+test('where two solids stand close, the body is pushed until it is clear of both', () => {
+	// two posts 0.2 m apart: the second one's push, taken alone, puts the body back inside the
+	// first one's clearance (0.1 m in), as a block seam in the city did
+	const posts = [[0, 0, 0.5], [1.2, 0, 0.5]];
+	const once = (p) => {
+		for (const [cx, cz, r] of posts) {
+			const dx = p.x - cx, dz = p.z - cz, d = Math.hypot(dx, dz);
+			if (d >= r + R) continue;
+			p.x = cx + dx / d * (r + R); p.z = cz + dz / d * (r + R);
+		}
+	};
+	const gap = (p) => Math.min(...posts.map(([cx, cz, r]) => Math.hypot(p.x - cx, p.z - cz) - r - R));
+	const one = { x: 0.6, z: 0.25 }; once(one);
+	assert.ok(gap(one) < -0.05, 'one pass leaves it inside: ' + gap(one));
+	const pos = { x: 0.6, y: 0, z: 0.25 };
+	sweepOut(once, { x: 0.6, z: 0.25 }, pos, 0);
+	assert.ok(gap(pos) > -0.01, `left ${(-gap(pos)).toFixed(3)} m inside a clearance`);
 });
 
 test('a companion catching you up is set down on your side of the wall', () => {

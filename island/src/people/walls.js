@@ -19,6 +19,15 @@ export const LEAP = 4;
 const MAX_PIECES = Math.ceil(LEAP / PIECE);
 
 const _q = new THREE.Vector3();
+// one push, and again while it still moves (at most 3 in all): where two blocks meet, the
+// second one's push can leave the point inside the first one's clearance
+function pushHard(push, q) {
+	for (let k = 0; k < 3; k++) {
+		const x = q.x, z = q.z;
+		push(q);
+		if (Math.abs(q.x - x) + Math.abs(q.z - z) < 1e-4) break;
+	}
+}
 // sweep (pos: where the body would be, moved in place; from: where it stood; footY: its feet;
 // push(p): moves an eye-height point p off walls). Returns how far the walls held it back.
 export function sweepOut(push, from, pos, footY, { piece = PIECE, leap = LEAP, most = MAX_PIECES } = {}) {
@@ -29,13 +38,13 @@ export function sweepOut(push, from, pos, footY, { piece = PIECE, leap = LEAP, m
 	let x = tx, z = tz;
 	if (!ok || L > leap || L < piece) {
 		// one push where it is (standing, a short step, or set down)
-		_q.set(tx, y, tz); push(_q);
+		_q.set(tx, y, tz); pushHard(push, _q);
 		x = _q.x; z = _q.z;
 	} else {
 		const n = Math.min(most, Math.ceil(L / piece)), sx = dx / n, sz = dz / n;
 		x = from.x; z = from.z;
 		for (let i = 0; i < n; i++) {
-			_q.set(x + sx, y, z + sz); push(_q);
+			_q.set(x + sx, y, z + sz); pushHard(push, _q);
 			x = _q.x; z = _q.z;
 		}
 	}

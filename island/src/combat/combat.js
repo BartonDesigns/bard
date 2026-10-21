@@ -615,6 +615,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	const melee = createMelee({
 		camera, mount, touch, scene, group, layer, people, ragdolls, civilians, fx, hint, eye, ground, hurtPlayer, call, isPhone,
 		deal: (T, blow, mine) => deal(T, blow, mine),
+		// (a body knocked down gets up short of any wall it slid against, people/walls.js)
+		clearSpot: (from, want, footY) => clearSpot(worldPush(W()), from, want, footY),
 		// (fists are quieter than gunfire: the nearest run, those further off stop and watch)
 		heard: (at) => civilians.alarm(at.x, at.z, 7),
 		focusTarget: () => focus.current(), blocked,

@@ -239,6 +239,35 @@ function install() {
 			console.log('home', JSON.stringify(sc).slice(0, 600));
 			save();
 		}
+		if (SCENES.includes('streets')) {
+			// the city's blocks standing on a driven street: which lots, which streets
+			await page.waitForFunction(() => Crysis.world().real?.loaded?.(), null, { timeout: 1200000, polling: 3000 });
+			await wait(20000);
+			R.scenes.streets = await page.evaluate(() => {
+				const W = Crysis.world(), p = W.player.state.pos, S = window.__walls, o = { pts: 0, inBlock: 0, byCls: {}, lots: [] }, seen = new Set();
+				for (const r of W.real.near('roads', p.x, p.z, 250)) {
+					if (r.drive === false) continue;
+					for (let i = 0; i + 3 < r.pts.length; i += 2) {
+						const ax = r.pts[i], az = r.pts[i + 1], L = Math.hypot(r.pts[i + 2] - ax, r.pts[i + 3] - az);
+						for (let s = 0; s < L; s += 2) {
+							const x = ax + (r.pts[i + 2] - ax) * s / L, z = az + (r.pts[i + 3] - az) * s / L;
+							if (Math.hypot(x - p.x, z - p.z) > 250) continue;
+							o.pts++;
+							const q = S.lotAt(x, z);
+							if (!q) continue;
+							o.inBlock++; o.byCls[r.cls] = (o.byCls[r.cls] || 0) + 1;
+							if (seen.has(q) || o.lots.length > 30) continue;
+							seen.add(q);
+							o.lots.push({ at: [+q.x.toFixed(1), +q.z.toFixed(1)], w: +q.w.toFixed(1), d: +q.d.toFixed(1), h: +q.h.toFixed(1), a: +(q.a || 0).toFixed(2), kind: q.kind, keys: Object.keys(q).join(','), src: q.src ? Object.keys(q.src).slice(0, 12).join(',') : null, real: !!q.real || !!q.src?.real || !!q.src?.id, road: { cls: r.cls, w: r.w, drive: r.drive, made: !!r.made, name: r.name || null, keys: Object.keys(r).join(',') }, pt: [+x.toFixed(1), +z.toFixed(1)] });
+						}
+					}
+				}
+				return o;
+			});
+			R.scenes.streets.settle = await page.evaluate(() => { try { const s = Crysis.structures?.(); return JSON.stringify(s?.lots || s?.overlaps || s || null).slice(0, 600); } catch (e) { return String(e); } });
+			console.log('streets', JSON.stringify(R.scenes.streets));
+			save();
+		}
 		if (SCENES.includes('cars')) {
 			const sc = R.scenes.cars = {};
 			// the parked cars' ways out and in, every 2 m, within 120 m

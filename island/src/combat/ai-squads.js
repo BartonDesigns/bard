@@ -678,7 +678,7 @@ export function createSquads(ctx) {
 		if (h.react) {
 			const R0 = h.react;
 			R0.age += dt; R0.t -= dt;
-			if (R0.push > 0 && R0.age < 0.3 && !h.W.crippled) { const k = R0.push * Math.min(dt, 0.05) / 0.3; S.pos.x += R0.ax * k; S.pos.z += R0.az * k; }
+			if (R0.push > 0 && R0.age < 0.3 && !h.W.crippled) { const k = R0.push * Math.min(dt, 0.05) / 0.3; S.pos.x += R0.ax * k; S.pos.z += R0.az * k; ctx.keepOut?.(S.pos, h.pos); }
 			if (R0.t <= 0) h.react = null;
 		}
 		// (the knee behind cover is held only while the fight below keeps asking for it)
