@@ -444,7 +444,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		wasBeam = !!bs;
 		if (third()) hands.root.visible = false; else hands.update(dt, beam);
 		stepRemote(dt);
-		aether.update(dt, camera.position);
+		// (gathered where you are, not where the camera is: Explore and the third person film you from a way off)
+		aether.update(dt, ps.pos);
 		fx.update(dt, caster.sighting());
 		feel(dt);
 		if (innerHeight !== lastH) { lastH = innerHeight; fx.resize(innerHeight, camera.fov); }
@@ -464,6 +465,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (Solar Flare channels the moon by night: the skills side grants this; here for the console)
 		moonlit: (id = 'solar-flare') => { const ok = grantMoonlit(state, id); if (ok) dirty = true; return ok; },
 		menuOpen: () => skills.isOpen(),
+		// the aether showing now, not yet gathered (Explore goes after it: explore.js)
+		motes: () => aether.shown(),
 		// (test mode: Crysis.magic.test(true / false), as the button in the places menu)
 		test: (on) => (on === undefined ? testOn : setTest(on)),
 		// (the tests: your casting hands, for their palm light; the screen edge's flash)

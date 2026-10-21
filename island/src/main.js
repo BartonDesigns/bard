@@ -702,7 +702,7 @@ export function createIslandWorld() {
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
 	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
-	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, motes: () => HOOKS.magic?.motes?.() || null, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	// some of them out with their dogs on a lead (people/dogwalkers.js)
