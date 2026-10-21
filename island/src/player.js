@@ -11,6 +11,7 @@ import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 import { DEFAULT_AIM_SENSITIVITY } from './aim-sensitivity.js';
 import { lookPrefs, lookGain, levelPitch, LEVEL, onGyro, resumeGyro } from './ui/touch-look.js';
 import { createParkour } from './parkour.js';
+import { keepSpace } from './people/personal-space.js';
 
 const EYE = 1.68;
 
@@ -244,6 +245,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	const park = createParkour({ s, camera, floorAt, pushOut, ceilingAt });
 
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
+	const spaceFrom = { x: 0, z: 0 };
 	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
 	function input() {
 		let mx = joy.x + s.pad.x, mz = joy.y + s.pad.y;
@@ -355,6 +357,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const px0 = s.pos.x, pz0 = s.pos.z;
 		pushOut(s.pos);
 		{ const ox = s.pos.x - px0, oz = s.pos.z - pz0, ol = Math.hypot(ox, oz); if (ol > 1e-4) met = { nx: ox / ol, nz: oz / ol, kind: 1 }; }
+		// people: never walked into, held at a natural distance (people/personal-space.js); the
+		// walls again after, should that have set you against one
+		spaceFrom.x = x0; spaceFrom.z = z0;
+		if (keepSpace(spaceFrom, s.pos, s.vel, s.pos.y - EYE, dt, wish.lengthSq() > 0.01, pushOut)) pushOut(s.pos);
 		const ground = seenFloorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
 		const contact = waterContact(island, s.pos, ground, t, shared.uWave?.value ?? 1, s.diving);
