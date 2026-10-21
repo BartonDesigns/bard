@@ -4,8 +4,8 @@
 // a key from the front left, a fill and a rim) and kept as an image, on this device too, until
 // what you wear or your hero changes. Drawn with the game's own renderer into a corner of the
 // frame just before the frame itself is drawn over it: no second WebGL context, no render target.
-// The studio's light is its own, so the body's materials need programs for it: built once, off
-// the frame (compileAsync), before the first picture. Never while the loading screen is up.
+// The studio's light is its own, so the body's materials need programs for it: built once, a
+// mesh a frame (compileAsync), before the first picture. Never while the loading screen is up.
 
 import * as THREE from 'three';
 import { gearKey } from '../people/armor-looks.js';
@@ -57,18 +57,20 @@ export function createHeroPortrait({ renderer, avatar, camera }) {
 		for (let i = 0; i < 24; i++) me.M.update(0.05, t + i * 0.05, camera.position);
 		return true;
 	}
-	// the studio's programs for this body, built off the frame; then the picture is taken
+	// the studio's programs for this body, built off the frame a mesh at a time with a frame
+	// between (a phone without parallel shader compiling links each one as it is asked for, so
+	// asking for them all at once would stall a frame); the picture is taken on a later frame
 	async function build(me) {
 		building = true;
 		setup(); aim(me);
-		const root = me.P.root, was = root.visible;
+		const meshes = [], frame = () => new Promise((r) => requestAnimationFrame(r));
+		me.P.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) meshes.push(o); });
 		try {
-			root.visible = true;
-			const job = renderer.compileAsync ? renderer.compileAsync(root, cam, studio) : null;
-			root.visible = was;
-			await job;
-			ready = true;
-		} catch (e) { console.warn('[hero portrait]', e); ready = true; } finally { root.visible = was; building = false; }
+			for (const m of meshes) {
+				if (renderer.compileAsync) await renderer.compileAsync(m, cam, studio);
+				await frame();
+			}
+		} catch (e) { console.warn('[hero portrait]', e); } finally { ready = true; building = false; }
 	}
 	function take(me) {
 		const el = renderer.domElement, pr = renderer.getPixelRatio();
