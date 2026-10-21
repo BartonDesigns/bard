@@ -142,7 +142,9 @@ export function castRay(G, ox, oy, oz, dx, dy, dz, tmax, any) {
 // cutting the geometry finer: attrs { name: { array, size } } non-indexed triangles. Two
 // triangles that make a flat four-sided face are cut as a grid, the rest as triangles; every
 // attribute is carried along (interpolated)
-export function tessellate(attrs, count, cell) {
+// mark: a vertex the list is split at (a shell's own vertices before it, housekit.js sunCast);
+// the result's mark is where that split falls in the finer list (no quad is made across it)
+export function tessellate(attrs, count, cell, mark = -1) {
 	const P = attrs.position.array, names = Object.keys(attrs), N = attrs.normal?.array;
 	const out = {};
 	for (const k of names) out[k] = { size: attrs[k].size, list: [] };
@@ -158,11 +160,12 @@ export function tessellate(attrs, count, cell) {
 	};
 	const copy = (v) => { for (const k of names) { const A = attrs[k].array, s = attrs[k].size, L = out[k].list; for (let c = 0; c < s; c++) L.push(A[v * s + c]); } };
 	const ntri = count / 3;
-	let t = 0;
+	let t = 0, markAt = -1;
 	while (t < ntri) {
 		const a = t * 3, T0 = [a, a + 1, a + 2];
+		if (a === mark) markAt = out.position.list.length / 3;
 		// a quad: the next triangle shares two corners with this one and lies flat with it
-		if (t + 1 < ntri) {
+		if (t + 1 < ntri && a + 3 !== mark) {
 			const T1 = [a + 3, a + 4, a + 5], shared = [];
 			for (const p of T0) for (const q of T1) if (sameP(p, q) && sameN(p, q)) shared.push([p, q]);
 			if (shared.length === 2) {
@@ -196,7 +199,8 @@ export function tessellate(attrs, count, cell) {
 	}
 	const res = {};
 	for (const k of names) res[k] = { size: out[k].size, array: new Float32Array(out[k].list) };
-	return { attrs: res, count: res.position.array.length / 3 };
+	const n = res.position.array.length / 3;
+	return { attrs: res, count: n, mark: mark < 0 ? null : markAt >= 0 ? markAt : n };
 }
 // how many vertices tessellate would make, to pick a cell that keeps within a budget
 export function tessellatedCount(P, count, cell) {

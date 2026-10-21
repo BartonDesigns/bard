@@ -272,7 +272,8 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	if (P.garage && fw) { const G = P.garage; g.box('garage', G[0], 0, fw.pos - fw.t / 2 - 0.015, G[1], 2.25, fw.pos - fw.t / 2 - 0.005, lin([0.9, 0.9, 0.88])); }
 
 	yield;
-	// ---- the furniture
+	// ---- the furniture (inside: no shadow of the sun's, housekit.js)
+	g.inside();
 	const cars = [];
 	for (const it of P.items) {
 		if (levelOf(P, it.y) !== k) continue;
