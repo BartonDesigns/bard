@@ -52,6 +52,10 @@ const CSS = `
 .g99-up{color:#6ff09a}.g99-down{color:#ff7a6a}
 .g99-bar{height:6px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.7)}.g99-bar>i{display:block;height:100%;background:linear-gradient(90deg,#b48a3c,#f3d27a)}
 .g99-ghost{position:fixed;z-index:50;pointer-events:none;opacity:.9;transform:translate(-50%,-50%) scale(1.1)}
+.g99-hero{display:block;flex:none;width:84px;aspect-ratio:3/4;object-fit:cover;border-radius:10px;border:1px solid #4f4128;background:radial-gradient(circle at 50% 40%,#1b262c,#0c1215);box-shadow:inset 0 0 20px rgba(0,0,0,.7),0 4px 14px rgba(0,0,0,.45)}
+.g99-hero.big{width:min(180px,52%);margin:2px auto 0;border-color:#7a6136}
+.g99-hero.wait{animation:g99wait 1.4s ease-in-out infinite}
+@keyframes g99wait{0%,100%{opacity:.45}50%{opacity:.8}}
 .g99-count{font:700 13px var(--bard-body,system-ui,sans-serif);color:#e9cf93}
 `;
 let styled = false;

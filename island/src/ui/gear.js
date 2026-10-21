@@ -56,7 +56,7 @@ export function describeSide(side) {
 }
 
 // magic(): your magic (magic/index.js), for the Character view and infusing gear; it comes later
-export function createGear({ arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false, magic = () => null }) {
+export function createGear({ portrait = null, arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false, magic = () => null }) {
 	useStyle();
 	const hand = createHand(scene, { lod: 'high' });
 	const vm = createViewmodel({ camera, avatar, mount, canvas: renderer?.domElement || null, isPhone });
@@ -78,6 +78,17 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	const thirdAimBtn = (isPhone || globalThis.matchMedia?.('(pointer: coarse)')?.matches) ? button('Aim', 'Aim held item', 'display:none;', 'thumb mode 20') : null;
 	if (thirdAimBtn) { stopAll(thirdAimBtn); bindLookDrag(thirdAimBtn, mount, { start: () => { if (mount.inert || busy() || shown()) return false; setAim(!thirdAimTap); } }); mount.appendChild(thirdAimBtn); }
 
+
+	// your hero, pictured (ui/hero-portrait.js): drawn when the sheet first shows it, again only
+	// after what you wear changes; every picture on the sheet takes the new one when it comes
+	function hero(cls = '') {
+		const im = el('img', 'g99-hero' + (cls ? ' ' + cls : ''));
+		im.alt = ''; im.decoding = 'async';
+		const url = portrait?.want?.();
+		if (url) { im.src = url; im.alt = 'Your hero, in what you wear'; } else im.classList.add('wait');
+		return im;
+	}
+	portrait?.on?.((url) => { for (const im of sheet.querySelectorAll('img.g99-hero')) { im.src = url; im.alt = 'Your hero, in what you wear'; im.classList.remove('wait'); } });
 
 	// ---------- the sheet ----------
 	const sheet = stopAll(el('div', 'g99-frame'));
@@ -168,6 +179,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		const st = magic()?.stats?.();
 		if (st) {
 			const cr = el('div'); cr.style.cssText = 'display:flex;align-items:center;gap:10px;';
+			if (portrait) cr.append(hero());
 			const tx = el('div', '', `Level ${st.level} · ${st.life} life · ${Math.round(st.mana)} mana · ${st.harmTaken}% harm taken`); tx.style.cssText = 'flex:1;min-width:0;font-size:12px;opacity:.85;';
 			cr.append(tx, btn('Character ›', () => open('char'), '', 'Character (Shift+I)'));
 			sheet.append(cr);
@@ -355,6 +367,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (!st) { sheet.append(note('Your statistics show once you are out in a world.')); return; }
 		const pts = magic()?.info?.()?.points || 0;
 		const lv = el('div', '', `Level ${st.level}${pts ? ` · ${pts} skill point${pts > 1 ? 's' : ''} waiting (Tab)` : ''}`); lv.style.cssText = 'font:600 13px var(--bard-display,system-ui,sans-serif);color:#e9cf93;';
+		if (portrait) sheet.append(hero('big'));
 		sheet.append(lv);
 		const tiles = el('div'); tiles.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
 		for (const [k, v, sub, c] of [['Life', st.life, st.lifeRegen ? `+${st.lifeRegen}/s resting` : 'resting: the usual', '#ff8a8a'], ['Mana', Math.round(st.mana), `+${st.manaRegen}/s · ${st.manaRegenFighting}/s fighting`, '#8fb0ff'], ['Harm taken', `${st.harmTaken}%`, st.harmTaken < 100 ? `${100 - st.harmTaken}% turned aside` : 'nothing turned aside', '#d8c49a'], ['Load', `${st.load} kg`, st.loadPace ? `${st.loadPace}% slower` : 'light enough to run free', '#c9c2a2']]) {

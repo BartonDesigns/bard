@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { SWASH_GLSL, WATERMAP_GLSL, h21, vn, swashUp, swashTrain, swashState, swashLevel, swashRunMax, swashSheet, waterBody, edgeAlpha, breakOn, shoreQuality, waterMapTexture } from '../src/world/shore.js';
+import { SWASH_GLSL, WATERMAP_GLSL, h21, vn, swashUp, swashTrain, swashState, swashStateK, swashBay, swashBayOn, swashLevel, swashRunMax, swashSheet, waterBody, edgeAlpha, breakOn, shoreQuality, waterMapTexture } from '../src/world/shore.js';
 import { generateIsland } from '../src/world/islandgen.js';
 import { planetProfile } from '../src/planet/profile.js';
 import { planWaters } from '../src/planet/waters.js';
@@ -129,7 +129,10 @@ test('the sea and the wet sand share the one swash', () => {
 	const terrain = fs.readFileSync(new URL('../src/world/terrain.js', import.meta.url), 'utf8');
 	const ocean = fs.readFileSync(new URL('../src/world/ocean.js', import.meta.url), 'utf8');
 	assert.ok(/import \{ SWASH_GLSL[^}]*\} from '\.\/shore\.js'/.test(terrain) && terrain.includes('swashState(vW.xz, uTime, uWave)'), 'the ground reads the shore');
-	assert.ok(/SWASH_GLSL[^\n]*from '\.\/shore\.js'/.test(ocean) && ocean.includes('swashState(vW.xz, uTime, uWave)'), 'the sea reads the same, per pixel');
+	assert.ok(/SWASH_GLSL[^\n]*from '\.\/shore\.js'/.test(ocean) && ocean.includes('swashStateK(vW.xz, uTime, uWave, vSwK)'), 'the sea reads the same, per pixel');
+	const bay = fs.readFileSync(new URL('../src/bay/terrain.js', import.meta.url), 'utf8');
+	assert.ok(/import \{ SWASH_GLSL \} from '\.\.\/world\/shore\.js'/.test(bay) && bay.includes('swashStateK(vBW, uTime, uWave, swK)') && bay.includes('swashBayOn(sl, '), 'the Bay\'s sand reads it too, by the same slope');
+	assert.ok(ocean.includes('swashBayOn(sl, ') && ocean.includes('swashBay(p)'), 'and the sea runs it up the Bay\'s beaches');
 	assert.ok(!/float swashLevel\(/.test(terrain), 'no second copy left in the ground');
 	assert.equal(swashLevel(810, 3, 50), swashState(810, 3, 50).level);
 });
@@ -169,4 +172,22 @@ test('a planet\'s lakes and streams are mapped: the water, then banks that fade 
 	assert.ok(WATERMAP_GLSL.includes('waterMapAt('));
 	const grass = fs.readFileSync(new URL('../src/world/grass.js', import.meta.url), 'utf8');
 	assert.ok(grass.includes('uWaterMap'), 'the grass keeps out of the water');
+});
+
+test('the Bay Area\'s beaches: the swash runs up sand, laps short and quick inside the Golden Gate', () => {
+	// the island's swash is the open coast's, unchanged
+	for (let t = 0; t < 30; t += 0.7) assert.deepEqual(swashStateK(812, -40, t, 1, 1, 1), swashState(812, -40, t, 1));
+	const [ko, po] = swashBay(-2000), [ki, pi] = swashBay(13000);
+	assert.equal(ko, 1); assert.equal(po, 1);
+	assert.ok(ki < 0.5 && pi < 0.5, 'sheltered: a lower reach, a shorter period');
+	// inside, the chop runs a little way up and drains only a little way below the line
+	let top = -9, low = 9;
+	for (let t = 0; t < 60; t += 0.05) { const S = swashStateK(13000, -5200, t, 1, ki, pi); top = Math.max(top, S.level); low = Math.min(low, S.level); }
+	assert.ok(top > 0.08 && top < 0.35, 'reach ' + top);
+	assert.ok(low >= -0.3 * ki - 1e-9, 'backwash ' + low);
+	// sand beaches only: not the flat mud, not a seawall, and only near you
+	assert.equal(swashBayOn(0.005, 10), 0);
+	assert.equal(swashBayOn(0.08, 10), 1);
+	assert.equal(swashBayOn(0.3, 10), 0);
+	assert.equal(swashBayOn(0.08, 150), 0);
 });

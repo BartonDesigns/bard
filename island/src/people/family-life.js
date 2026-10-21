@@ -64,14 +64,11 @@ function carried(kind) {
 	} else if (kind === 'phone') g.add(box(0.07, 0.14, 0.01, mat('phone', 0x15161a, { roughness: 0.3 }), 0, -0.02, 0.04));
 	else if (kind === 'skateboard') { g.add(box(0.2, 0.02, 0.78, mat('deck', 0x2c2c30), 0, -0.12, 0)); for (const z of [-0.26, 0.26]) g.add(box(0.2, 0.05, 0.05, mat('wheel', 0xe8e0c0), 0, -0.15, z)); g.rotation.z = 1.4; }
 	else if (kind === 'ball') { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), mat('ball', 0xd2662a)); b.castShadow = true; g.add(b); }
-	else if (kind === 'guitar') { g.add(box(0.36, 0.95, 0.12, mat('case', 0x1b1b1d), 0, 0, 0)); }
 	else if (kind === 'violin') { g.add(box(0.24, 0.62, 0.11, mat('vcase', 0x3a2a4a), 0, -0.1, 0)); }
 	else if (kind === 'books') { g.add(box(0.22, 0.05, 0.3, mat('book1', 0x2354c7), 0, -0.03, 0.05)); g.add(box(0.21, 0.04, 0.29, mat('book2', 0xb3162b), 0, 0.01, 0.05)); }
 	else if (kind === 'stop') { g.add(box(0.03, 1.1, 0.03, mat('pole', 0xcfcfcf), 0, 0.3, 0)); const s = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.02, 8).rotateX(Math.PI / 2).rotateZ(Math.PI / 8), mat('stopred', 0xc8102e)); s.position.y = 0.92; g.add(s); const t = textPlane('STOP', 0.3, 0.12, '#c8102e'); t.position.set(0, 0.92, 0.012); g.add(t); }
 	return g;
 }
-// on the back: a guitar case, slung
-const ON_BACK = new Set(['guitar']);
 
 // a yellow school bus (a plain one: a long box with its windows and wheels)
 function schoolBus() {
@@ -293,6 +290,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		for (let k = 1; spec.male !== undefined && d.male !== spec.male && k < 64; k++) d = personDNA((spec.seed + Math.imul(k, 0x9e3779b9)) >>> 0, { age: teen ? 18 : spec.age, ancestry: spec.ancestry, ctx });
 		if (teen) makeTeen(d, spec.age, { cold: 0.35, uniform: spec.uniform, sport: spec.sport, school: spec.school });
 		if (spec.style) { const keep = d.style; d.style = { ...spec.style, hair: keep.hair, printKind: keep.printKind, acc: [...(spec.style.acc || [])] }; d.styleSig = JSON.stringify(d.outfit); }
+		// (a guitar's gig bag goes on the back in place of any bag there: people/bags.js)
+		if (spec.acc?.some((q) => q.kind === 'guitar')) d.style.acc = (d.style.acc || []).filter((q) => q.kind !== 'backpack' && q.kind !== 'crossbody');
 		if (spec.acc) d.style.acc = [...(d.style.acc || []), ...spec.acc];
 		if (spec.dinner) d.style.acc = (d.style.acc || []).filter(q => q.kind !== 'backpack');
 		// at home: no coat, no bag, no hat or sunglasses
@@ -312,20 +311,57 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	function attach(a, kind, side = 'R') {
 		const g = carried(kind);
 		root.add(g);
-		a.props.push({ g, side, kind, back: ON_BACK.has(kind) });
-		if (!ON_BACK.has(kind) && kind !== 'stop') a.M.grip(side, 1);
+		a.props.push({ g, side, kind });
+		if (kind !== 'stop') a.M.grip(side, 1);
 		return g;
 	}
-	const wv = new THREE.Vector3();
-	function placeProps(a, t) {
-		const S = a.M.S, h = S.heading, fx = Math.sin(h), fz = Math.cos(h);
+	const wv = new THREE.Vector3(), ev = new THREE.Vector3();
+	function placeProps(a) {
+		const S = a.M.S, h = S.heading;
 		for (const q of a.props) {
-			if (q.back) { q.g.position.set(S.pos.x - fx * 0.2, S.pos.y + a.P.height * 0.6, S.pos.z - fz * 0.2); q.g.rotation.set(0, h, 0.35); continue; }
+			// a ball tucked under the forearm against the hip (the 'tuck' pose, people/motion.js):
+			// under the middle of the forearm, and never into the hip
+			if (q.kind === 'ball' && S.pose === 'tuck') {
+				const sd = S.hand, B = a.P.bones, m = a.P.map;
+				B[m['lowerarm01.' + sd]].getWorldPosition(ev); B[m['wrist.' + sd]].getWorldPosition(wv);
+				wv.lerp(ev, 0.45);
+				const sx = Math.cos(h), sz = -Math.sin(h), fx = Math.sin(h), fz = Math.cos(h), dx = wv.x - S.pos.x, dz = wv.z - S.pos.z;
+				let side = dx * sx + dz * sz; const fwd = dx * fx + dz * fz, k = a.P.height / 1.7, sg = Math.sign(side || (sd === 'R' ? -1 : 1));
+				side = sg * Math.max(Math.abs(side) - 0.06 * k, 0.29 * k);
+				q.g.position.set(S.pos.x + sx * side + fx * fwd, wv.y - 0.08 * k, S.pos.z + sz * side + fz * fwd);
+				q.g.rotation.set(0, h, 0);
+				continue;
+			}
 			const i = a.P.map['wrist.' + q.side];
 			a.P.bones[i].getWorldPosition(wv);
 			q.g.position.copy(wv);
-			if (q.kind === 'ball' && a.bounce) q.g.position.y = S.pos.y + 0.12 + Math.abs(Math.sin(t * 3.2 + a.P.dna.seed)) * (wv.y - S.pos.y - 0.12);
 			q.g.rotation.set(0, h, q.kind === 'skateboard' ? 1.4 : 0);
+		}
+	}
+	// a knot of friends: one talks at a time and the others look at them, at each other or at
+	// their phones; now and then one glances at you, and looks away again
+	const TALK = ['explain', 'open', 'emphatic', 'laugh', 'shrug'];
+	function hangout(V, dt, cam) {
+		const A = V.actors.filter((a) => a.active && a.hang && !a.P.ragdoll);
+		if (A.length < 2) return;
+		const C = (V.chat ||= { who: null, t: 0 });
+		if ((C.t -= dt) <= 0) {
+			C.who = Math.random() < 0.8 ? A[Math.floor(Math.random() * A.length)] : null;
+			C.t = 2.5 + Math.random() * 4;
+			if (C.who && Math.random() < 0.5) C.who.M.gesture(TALK[Math.floor(Math.random() * TALK.length)]);
+		}
+		for (const a of A) {
+			const S = a.M.S, G = (a.gaze ||= { t: Math.random() * 2, at: null, v: new THREE.Vector3() });
+			S.talk = a === C.who ? 1 : 0;
+			if ((G.t -= dt) <= 0) {
+				const roll = Math.random(), others = A.filter((b) => b !== a);
+				if (Math.hypot(cam.x - S.pos.x, cam.z - S.pos.z) < 9 && roll < 0.15) { G.at = 'you'; G.t = 0.7 + Math.random(); }
+				else if (S.pose === 'phone' && roll < 0.6) { G.at = 'down'; G.t = 2 + Math.random() * 3; }
+				else { G.at = C.who && C.who !== a && roll < 0.75 ? C.who : others[Math.floor(Math.random() * others.length)]; G.t = 1.5 + Math.random() * 3.5; }
+			}
+			if (G.at === 'you') S.look.target = cam;
+			else if (G.at?.P) { G.at.P.bones[G.at.P.map.head].getWorldPosition(G.v); S.look.target = G.v; }
+			else { G.v.set(S.pos.x + Math.sin(S.heading) * 1.5, S.pos.y, S.pos.z + Math.cos(S.heading) * 1.5); S.look.target = G.v; }
 		}
 	}
 
@@ -350,7 +386,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		if (o.y !== undefined) a.M.setGround(() => o.y);
 		if (o.pose) a.M.setPose(o.pose);
 		if (o.sit) { a.M.sit(o.sit, true); a.M.setPose(o.pose || 'table'); }
-		if (o.carry) for (const c of [].concat(o.carry)) attach(a, ...[].concat(c));
+		// (a phone or a tucked ball is in the hand the pose leads with)
+		if (o.carry) for (const c of [].concat(o.carry)) { const [kind, side] = [].concat(c); attach(a, kind, o.pose === 'phone' || o.pose === 'tuck' ? a.M.S.hand : side); }
 		fadePerson(a.P, 0.02);
 		V.actors.push(a);
 		return a;
@@ -420,10 +457,15 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			// a low wall to sit on, and friends round it
 			put(box(4.2, 0.48, 0.45, mat('wall', 0xb7b0a2)), 0, 1.2, Math.PI / 2, y0 + 0.24);
 			const acts = [['wall', 'phone'], ['wall', null], ['stand', 'skateboard'], ['stand', 'ball'], ['stand', 'guitar']];
+			// each stands their own way, turned in to the others (not one idle for all)
+			const STAND = ['crossed', 'pockets', 'hip', 'listen', 'behind'], [cx, cz] = F(-0.9, 0.2);
 			acts.forEach(([how, c], k) => {
-				const sp = { seed: V.seed + k * 7919, age: 13 + r() * 4.9, place };
-				if (how === 'wall') actor(V, sp, F(-0.8 + k * 1.1, 0.95), h - Math.PI / 2, { role: 'teen', sit: 0.48, pose: c === 'phone' ? 'phone' : 'lap', carry: c ? [[c, 'R']] : [] });
-				else actor(V, sp, F(-1.4 + (k - 2) * 1.3, -0.4 - (k % 2) * 0.5), h + Math.PI / 2 + (k - 3) * 0.4, { role: 'teen', pose: c === 'skateboard' ? 'rest' : 'pockets', carry: [[c, 'R']], bounce: c === 'ball' });
+				const sp = { seed: V.seed + k * 7919, age: 13 + r() * 4.9, place, ...(c === 'guitar' ? { acc: [{ kind: 'guitar', col: '#33363b', acc: '#45484e' }] } : {}) };
+				if (how === 'wall') actor(V, sp, F(-0.8 + k * 1.1, 0.95), h - Math.PI / 2 + (r() - 0.5) * 0.5, { role: 'teen', hang: true, sit: 0.48, pose: c === 'phone' ? 'phone' : 'lap', carry: c ? [[c, 'R']] : [] });
+				else {
+					const at = F(-1.4 + (k - 2) * 1.3, -0.4 - (k % 2) * 0.5);
+					actor(V, sp, at, Math.atan2(cx - at[0], cz - at[1]) + (r() - 0.5) * 0.6, { role: 'teen', hang: true, pose: c === 'skateboard' ? 'rest' : c === 'ball' ? 'tuck' : STAND[(V.seed + k) % STAND.length], carry: c === 'guitar' ? [] : [[c, 'R']] });
+				}
 			});
 		} else if (kind === 'groceries') {
 			const hh = family(a, (q) => q.members.some((m) => m.age >= 18) && !q.unhoused, r) || a.households[0];
@@ -476,7 +518,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			const face = Math.atan2(cam.x - x, cam.z - z), sx = Math.cos(face), sz = -Math.sin(face);
 			[8, 13.5, 16.5, 38].forEach((age, k) => { const off = (k - 1.5) * 0.85; actor(V, { seed: V.seed + k * 104729, age, place, male: o.male ?? k % 2 === 0 }, [x + sx * off, z + sz * off], face, { role: 'lineup', pose: 'rest' }); });
 		} else { root.remove(V.group); return 'unknown: lineup, school-run, dismissal, teens, groceries, dinner, foodbank, market'; }
-		for (const a of V.actors) { a.M.update(1 / 60, 0, cam); placeProps(a, 0); }
+		for (const a of V.actors) { a.M.update(1 / 60, 0, cam); placeProps(a); }
 		live.push(V);
 		return { kind, x: +x.toFixed(1), z: +z.toFixed(1), h: +h.toFixed(3), actors: V.actors.length, area: a.key, place, household: V.household ? describe(V.household) : null };
 	}
@@ -621,6 +663,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		aid.update(near || null, purse.credits());
 		for (const V of live) {
 			V.t += dt;
+			if (V.kind === 'teens') hangout(V, dt, cam);
 			for (const a of V.actors) {
 				if (!a.active) continue;
 				if (a.leaving) { a.fade = Math.max(0, a.fade - dt / 6); fadePerson(a.P, a.fade); if (a.fade <= 0) { a.active = false; a.P.root.visible = false; for (const q of a.props) q.g.visible = false; } }
@@ -630,7 +673,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 				a.M.update(dt, t, cam);
 				if (!a.leaving) { a.fade = Math.min(1, a.fade + dt * 1.5); fadePerson(a.P, a.fade); }
 				a.P.lod?.(Math.hypot(a.M.S.pos.x - cam.x, a.M.S.pos.z - cam.z));
-				placeProps(a, t);
+				placeProps(a);
 			}
 		}
 	}

@@ -25,22 +25,34 @@ float swashUp(float s){
 	return 0.97 * (1.0 - d * sqrt(d));
 }
 // one train at w and time t (period T): x the reach (a ground height), y this wave's top,
-// z seconds since it stalled (below zero while it rushes up), w its phase
-vec4 swashTrainS(vec2 w, float t, float T, float off, float runMax){
+// z seconds since it stalled (below zero while it rushes up), w its phase; lo the level its
+// backwash drains down to
+vec4 swashTrainS(vec2 w, float t, float T, float off, float runMax, float lo){
 	float ph = vn(w * 0.014 + off) * 2.4 + vn(w * 0.06 - off) * 0.35;
 	float c = t / T + ph, s = fract(c), n = floor(c);
 	float k = 0.55 + 0.45 * vn(vec2(n * 3.7, off));
 	vec2 q = w + vec2(n * 7.31, n * -3.17);
 	float top = runMax * k + (vn(q * 0.23 + off) - 0.5) * 0.07 + (vn(q * 0.9 - off) - 0.5) * 0.028;
-	return vec4(mix(-0.3, top, swashUp(s)), top, (s - 0.2) * T, s);
+	return vec4(mix(lo, top, swashUp(s)), top, (s - 0.2) * T, s);
 }
-// the swash at w: whichever train reaches further just there
-vec4 swashState(vec2 w, float t, float wave){
-	float rm = swashRunMax(w, wave);
-	vec4 a = swashTrainS(w, t, 8.3, 1.7, rm), b = swashTrainS(w, t, 11.9, 6.1, rm * 0.85);
+// the swash at w: whichever train reaches further just there; k its reach (x) and its period
+// (y) against the open coast's (1, 1)
+vec4 swashStateK(vec2 w, float t, float wave, vec2 k){
+	float rm = swashRunMax(w, wave) * k.x;
+	vec4 a = swashTrainS(w, t, 8.3 * k.y, 1.7, rm, -0.3 * k.x), b = swashTrainS(w, t, 11.9 * k.y, 6.1, rm * 0.85, -0.3 * k.x);
 	return a.x >= b.x ? a : b;
 }
+vec4 swashState(vec2 w, float t, float wave){ return swashStateK(w, t, wave, vec2(1.0)); }
 float swashLevel(vec2 w, float t, float wave){ return swashState(w, t, wave).x; }
+// The Bay Area's beaches (the sea, world/ocean.js, and the sand, bay/terrain.js, alike): the
+// swash's reach and period against the open coast's. Inside the Golden Gate the bay is sheltered
+// from the swell, and its short wind chop laps a little way up the sand and back every few seconds.
+vec2 swashBay(vec2 w){ float s = smoothstep(9000.0, 12500.0, w.x); return vec2(mix(1.0, 0.4, s), mix(1.0, 0.45, s)); }
+// where the swash runs there, by the bed's slope sl (rise over run) and how far from you: on a
+// sand beach, not over the bay's broad flat mud (its fronts would sweep hundreds of metres in
+// rings) nor up rock or a seawall (where the swell bursts instead); only near you, where the
+// sea's vertices are close enough to carry its sheet
+float swashBayOn(float sl, float far){ return smoothstep(0.012, 0.025, sl) * (1.0 - smoothstep(0.14, 0.22, sl)) * (1.0 - smoothstep(70.0, 120.0, far)); }
 // the beach's sheet of water over ground g, the swash at reach s and the open sea's level y:
 // thin where it runs out over the sand (a third of the height it climbs)
 float swashSheet(float y, float s, float g){ return s > g ? max(min(y, s), g + (s - g) * 0.35) : s; }
@@ -80,19 +92,22 @@ export function swashUp(s) {
 	return 0.97 * (1 - d * Math.sqrt(d));
 }
 // one train: { level, top, since, phase } (as swashTrainS)
-export function swashTrain(x, z, t, T, off, runMax) {
+export function swashTrain(x, z, t, T, off, runMax, lo = -0.3) {
 	const ph = vn(x * 0.014 + off, z * 0.014 + off) * 2.4 + vn(x * 0.06 - off, z * 0.06 - off) * 0.35;
 	const c = t / T + ph, s = fract(c), n = Math.floor(c);
 	const k = 0.55 + 0.45 * vn(n * 3.7, off);
 	const qx = x + n * 7.31, qz = z - n * 3.17;
 	const top = runMax * k + (vn(qx * 0.23 + off, qz * 0.23 + off) - 0.5) * 0.07 + (vn(qx * 0.9 - off, qz * 0.9 - off) - 0.5) * 0.028;
-	return { level: -0.3 + (top + 0.3) * swashUp(s), top, since: (s - 0.2) * T, phase: s };
+	return { level: lo + (top - lo) * swashUp(s), top, since: (s - 0.2) * T, phase: s };
 }
-export function swashState(x, z, t, wave = 1) {
-	const rm = swashRunMax(x, z, wave);
-	const a = swashTrain(x, z, t, 8.3, 1.7, rm), b = swashTrain(x, z, t, 11.9, 6.1, rm * 0.85);
+export function swashStateK(x, z, t, wave = 1, kx = 1, ky = 1) {
+	const rm = swashRunMax(x, z, wave) * kx;
+	const a = swashTrain(x, z, t, 8.3 * ky, 1.7, rm, -0.3 * kx), b = swashTrain(x, z, t, 11.9 * ky, 6.1, rm * 0.85, -0.3 * kx);
 	return a.level >= b.level ? a : b;
 }
+export const swashState = (x, z, t, wave = 1) => swashStateK(x, z, t, wave);
+export function swashBay(x) { const s = smooth(9000, 12500, x); return [1 + (0.4 - 1) * s, 1 + (0.45 - 1) * s]; }
+export const swashBayOn = (sl, far) => smooth(0.012, 0.025, sl) * (1 - smooth(0.14, 0.22, sl)) * (1 - smooth(70, 120, far));
 export const swashLevel = (x, z, t, wave = 1) => swashState(x, z, t, wave).level;
 export const swashSheet = (y, s, g) => (s > g ? Math.max(Math.min(y, s), g + (s - g) * 0.35) : s);
 export const waterBody = (d, sr = 0.34, murk = 0) => 1 - Math.exp(-Math.max(d, 0) * Math.max(sr, 0.22, 0.2 + (1.2 - 0.2) * murk));
