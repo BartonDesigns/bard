@@ -26,6 +26,7 @@ import { createHealth, applyDamage, tickHealth, revive } from './health.js';
 import { createLayer, canHit, warded, strike, rayBox, personShapes } from './targets.js';
 import { createWanted, offend, tickWanted, clearWanted, sighted, defend, tickDefence } from './heat.js';
 import { pushOut, hiddenSpot } from '../law/tactics.js';
+import { sweepOut, worldPush, clearSpot } from '../people/walls.js';
 import { createDamageLog, smashed } from '../law/ladder.js';
 import { createFx } from './fx.js';
 import { createHud } from './hud.js';
@@ -545,7 +546,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		holdFire: (h) => !!hooks.holdFire?.(h),
 		cloaked: () => !!hooks.cloak?.(),
 		ignore: (h, o) => !!hooks.ignore?.(h, o),
-		keepOut: (pos) => keepOut(pos),
+		keepOut: (pos, from) => keepOut(pos, from),
+		clearSpot: (from, want, footY) => clearSpot(worldPush(W()), from, want, footY),
 		coverK: () => (P()?.crouch ? 0.7 : 1),
 		fireAt: (id) => fireField.fires.get(id) || null, douse: (id, dt) => fireField.douse(id, dt * 3),
 		heat: (id, x, z, fuel, amount) => { if (fuel) { const h = (heatMap.get(id) || 0) + amount; heatMap.set(id, h); if (h > 60) ignite(id, x, z, fuel, true); } },
@@ -575,10 +577,13 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hud.feed(killer, plainName(h.T?.name), how, { mine, head: blow?.part === 'head' });
 	}
 	function buildingCover(x, z, r) { const b = boxesNear(x, z, r).find((q) => q.w > 2); return b ? { x: b.x, z: b.z, r: Math.max(b.w, b.d) / 2 } : null; }
-	// the fighters kept out of buildings: the boxes round each cell of the street, looked up a
-	// few times a second rather than every step of every body
+	// the fighters kept out of walls and buildings: each step swept against the same pushes that
+	// keep you out (people/walls.js: house walls, closed doors, the city's blocks, fences, cars);
+	// then the mapped buildings' boxes round each cell of the street, looked up a few times a
+	// second rather than every step of every body
 	const boxCells = new Map();
-	function keepOut(pos) {
+	function keepOut(pos, from = null) {
+		sweepOut(worldPush(W()), from, pos, from ? from.y : pos.y);
 		if (!isEarth() || W()?.deep?.active?.()) return;
 		const k = (Math.floor(pos.x / 24) * 73856093) ^ Math.floor(pos.z / 24);
 		let c = boxCells.get(k);
@@ -610,6 +615,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	const melee = createMelee({
 		camera, mount, touch, scene, group, layer, people, ragdolls, civilians, fx, hint, eye, ground, hurtPlayer, call, isPhone,
 		deal: (T, blow, mine) => deal(T, blow, mine),
+		// (a body knocked down gets up short of any wall it slid against, people/walls.js)
+		clearSpot: (from, want, footY) => clearSpot(worldPush(W()), from, want, footY),
 		// (fists are quieter than gunfire: the nearest run, those further off stop and watch)
 		heard: (at) => civilians.alarm(at.x, at.z, 7),
 		focusTarget: () => focus.current(), blocked,
@@ -740,7 +747,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 	if (menu) {
 		// a way to meet each one, in the places menu (with Skills and magic, and Test mode)
-		const css = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		const css = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		const stop = (el) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) el.addEventListener(ev, (x) => x.stopPropagation()); };
 		const btn = document.createElement('button');
 		btn.type = 'button'; btn.textContent = '☠ Creatures'; btn.title = 'Meet one of the creatures, just ahead of you'; btn.style.cssText = css;

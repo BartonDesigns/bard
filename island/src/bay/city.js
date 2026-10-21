@@ -1409,20 +1409,40 @@ export function createCity(shared, scene, bay, real = null) {
 	}
 	const procNear = (x, z, r, biz) => { const out = []; for (const g of procGrp.values()) if (g.stamp === procStamp && !!g.biz === biz && Math.hypot(g[0].x - x, g[0].z - z) < r) out.push(g); return out; };
 	// every building round a point, from the last list (for walls to walk into)
+	// (40 m cells, a row of them to each z: every wall push asks, once a body, every frame, so the
+	// cells go by number, not by a string made each time; and a cell keeps the half of its widest,
+	// so one too far for any of its own to reach is passed by whole)
 	let lotGrid = new Map();
 	function indexLots(list) {
 		const G = new Map();
 		for (const o of list) {
 			if (o.h < 0.9 || o.kind === KIND.pool || !o.w) continue;
-			const k = Math.floor(o.x / 40) + ',' + Math.floor(o.z / 40);
-			(G.get(k) || G.set(k, []).get(k)).push(o);
+			const i = Math.floor(o.x / 40), j = Math.floor(o.z / 40), row = G.get(j) || G.set(j, new Map()).get(j);
+			const cell = row.get(i) || row.set(i, { lots: [], half: 0 }).get(i), h = Math.max(o.w, o.d) / 2;
+			cell.lots.push(o);
+			if (h > cell.half) cell.half = h;
 		}
 		lotGrid = G;
 	}
 	function lotsNear(x, z, r) {
-		const out = [];
-		for (let j = Math.floor((z - r - 60) / 40); j <= Math.floor((z + r + 60) / 40); j++) for (let i = Math.floor((x - r - 60) / 40); i <= Math.floor((x + r + 60) / 40); i++) {
-			for (const o of lotGrid.get(i + ',' + j) || []) if (Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2) out.push(o);
+		const out = [], i0 = Math.floor((x - r - 60) / 40), i1 = Math.floor((x + r + 60) / 40);
+		for (let j = Math.floor((z - r - 60) / 40); j <= Math.floor((z + r + 60) / 40); j++) {
+			const row = lotGrid.get(j);
+			if (!row) continue;
+			const gz = Math.max(0, j * 40 - z, z - (j + 1) * 40);
+			for (let i = i0; i <= i1; i++) {
+				const cell = row.get(i);
+				if (!cell) continue;
+				// (how near the cell's square comes, a millimetre kept for the rounding at its edges)
+				const gx = Math.max(0, i * 40 - x, x - (i + 1) * 40), reach = r + cell.half + 1e-3;
+				if (gx * gx + gz * gz > reach * reach) continue;
+				for (const o of cell.lots) {
+					// (off by more than its reach along either axis: out, without the square root)
+					const lim = r + Math.max(o.w, o.d) / 2, dx = o.x - x, dz = o.z - z;
+					if (dx > lim + 1e-6 || -dx > lim + 1e-6 || dz > lim + 1e-6 || -dz > lim + 1e-6) continue;
+					if (Math.hypot(dx, dz) < lim) out.push(o);
+				}
+			}
 		}
 		return out;
 	}

@@ -95,10 +95,10 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 	// the place's name, low on the left, as a new area comes into view
 	const third = document.createElement('div');
 	third.className = 'l99-x';
-	third.style.cssText = 'position:absolute;left:calc(28px + env(safe-area-inset-left));bottom:calc(22% + env(safe-area-inset-bottom));pointer-events:none;color:#fff;opacity:0;transition:opacity 1.6s, transform 1.6s;transform:translateX(-8px);text-shadow:0 1px 8px rgba(0,0,0,.55);font-family:system-ui;max-width:70vw;';
+	third.style.cssText = 'position:absolute;left:calc(28px + env(safe-area-inset-left));bottom:calc(22% + env(safe-area-inset-bottom));pointer-events:none;color:#fff;opacity:0;transition:opacity 1.6s, transform 1.6s;transform:translateX(-8px);text-shadow:0 1px 8px rgba(0,0,0,.55);font-family:var(--bard-body,system-ui,sans-serif);max-width:70vw;';
 	const tName = document.createElement('div'), tSub = document.createElement('div');
-	tName.style.cssText = 'font:300 24px/1.15 system-ui;letter-spacing:.06em;';
-	tSub.style.cssText = 'font:12px system-ui;letter-spacing:.14em;text-transform:uppercase;opacity:.75;margin-top:4px;border-top:1px solid rgba(255,255,255,.5);padding-top:5px;display:inline-block;';
+	tName.style.cssText = 'font:300 24px/1.15 var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;';
+	tSub.style.cssText = 'font:12px var(--bard-display,system-ui,sans-serif);letter-spacing:.14em;text-transform:uppercase;opacity:.75;margin-top:4px;border-top:1px solid rgba(255,255,255,.5);padding-top:5px;display:inline-block;';
 	third.append(tName, tSub);
 	mount.appendChild(third);
 	let thirdT = 0;

@@ -75,7 +75,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 		const btn = (label, css, on, role) => {
 			const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-label', label); b.title = label;
 			b.className = 'l99-mil'; b.dataset.mil = role;
-			b.style.cssText = 'position:absolute;min-width:56px;min-height:56px;border-radius:14px;border:1px solid rgba(255,255,255,.3);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px system-ui;touch-action:none;' + css;
+			b.style.cssText = 'position:absolute;min-width:56px;min-height:56px;border-radius:14px;border:1px solid rgba(255,255,255,.3);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);touch-action:none;' + css;
 			b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); on(true); b.style.background = '#01a982'; });
 			for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { on(false); b.style.background = 'rgba(8,20,26,.55)'; });
 			b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });

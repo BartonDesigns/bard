@@ -31,8 +31,8 @@ const ICON = {
 const svg = (k, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
 const css = (el, s) => { el.style.cssText = s; return el; };
 const GOLD = '#e2bf6a';
-const PANEL = 'background:rgba(8,20,26,.84);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);';
-const BTN = 'min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.62);color:#eafaf6;font:600 13px system-ui;touch-action:manipulation;cursor:pointer;display:inline-flex;align-items:center;gap:8px;';
+const PANEL = 'background:rgba(8,20,26,.84);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);';
+const BTN = 'min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.62);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);touch-action:manipulation;cursor:pointer;display:inline-flex;align-items:center;gap:8px;';
 const guard = (el) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) el.addEventListener(ev, (e) => e.stopPropagation(), { passive: true }); return el; };
 
 export function createQuests(R) {
@@ -94,7 +94,7 @@ export function createQuests(R) {
 	const hud = guard(css(document.createElement('div'), 'position:absolute;display:flex;align-items:center;gap:8px;z-index:4;'));
 	const logBtn = css(document.createElement('button'), BTN + 'width:44px;padding:0;justify-content:center;');
 	logBtn.type = 'button'; logBtn.title = 'Quest log'; logBtn.setAttribute('aria-label', 'Quest log'); logBtn.innerHTML = svg('scroll', 22);
-	const purse = css(document.createElement('div'), 'display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:12px;' + PANEL + `color:${GOLD};font:600 13px system-ui;`);
+	const purse = css(document.createElement('div'), 'display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:12px;' + PANEL + `color:${GOLD};font:600 13px var(--bard-display,system-ui,sans-serif);`);
 	const health = css(document.createElement('div'), 'display:none;align-items:center;gap:6px;padding:6px 10px;border-radius:12px;' + PANEL);
 	const hbar = css(document.createElement('div'), 'width:64px;height:7px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;');
 	const hfill = css(document.createElement('div'), 'height:100%;width:100%;background:linear-gradient(90deg,#b84a3a,#e0735e);transition:width .25s;');

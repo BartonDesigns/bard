@@ -183,6 +183,16 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 		await page.screenshot({ path: path.join(out, 'menu-playstation.png') });
 		await press(1);
 
+		// a Backbone on a phone: its own names, and the touch controls out of the way while it plays
+		await page.evaluate(() => { pad.id = 'Backbone One'; const m = document.querySelector('#l99-island-mount'); m.classList.add('l99-touch'); const t = document.createElement('div'); t.className = 'l99-thumb'; t.id = 'thumb'; t.innerHTML = '<button>Jump</button>'; m.appendChild(t); });
+		await press(0); await frames(3);
+		assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('thumb')).display), 'none', 'the thumb buttons hide while the pad plays');
+		await press(9); await frames(3);
+		assert.match(await page.evaluate(() => document.querySelector('.gp-menu').textContent), /Backbone One/);
+		assert.ok(await page.evaluate(() => document.querySelector('.gp-menu').innerHTML.includes('>R2<')), 'R2 on the Backbone layout');
+		await page.screenshot({ path: path.join(out, 'menu-backbone.png') });
+		await press(1); await take();
+
 		// unplugged: everything let go
 		await page.evaluate(() => { set(0, true); }); await frames(3);
 		await page.evaluate(() => { navigator.getGamepads = () => [null]; dispatchEvent(new Event('gamepaddisconnected')); });

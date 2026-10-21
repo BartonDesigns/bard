@@ -31,7 +31,7 @@ export function workplaceActivity(meta,t,hasPartner=true) {
  return {activity:'taking a break',pose:meta.sit?'lap':'rest',talk:false};
 }
 export function disposeWorkplaceProps(p) {
- releaseWorkplaceRoutine(p);p.workBudget=null;p.workPurchases=0;
+ releaseWorkplaceRoutine(p);p.workBudget=null;p.workPurchases=0;p.P.bagsDown=false;
  for(const key of ['workBubble','shoppingBag']){const o=p[key];if(o){o.removeFromParent();if(!o.geometry?.userData.shared)o.geometry?.dispose();if(!o.material?.userData.shared){o.material?.map?.dispose();o.material?.dispose();}p[key]=null;}}
 }
 function bubble(p,text) {
@@ -40,9 +40,9 @@ function bubble(p,text) {
  const o=p.workBubble,cv=o.material.map.image,g=cv.getContext('2d');g.clearRect(0,0,768,160);g.fillStyle='rgba(12,23,29,.88)';g.fillRect(4,4,760,152);g.font='28px sans-serif';g.fillStyle='#f5f0e3';g.textAlign='center';const words=text.split(' ');let rows=[],line='';for(const w of words){if(g.measureText(line+w).width>710){rows.push(line);line='';}line+=w+' ';}rows.push(line);rows.slice(0,3).forEach((r,i)=>g.fillText(r,384,45+i*38));o.material.map.needsUpdate=true;o.userData.text=text;
 }
 export function workActor(p,t,dt,cam,actors=[]) {
- if(!p.engaged && !p.P.ragdoll && stepWorkplaceRoutine(p,dt,actors,cam))return true;
+ if(!p.engaged && !p.P.ragdoll && stepWorkplaceRoutine(p,dt,actors,cam)){p.P.bagsDown=false;return true;}
  const st=p.workSpot, meta=st?.work;
- if(!meta || p.engaged || p.P.ragdoll) {if(p.workBubble)p.workBubble.visible=false;return false;}
+ if(!meta || p.engaged || p.P.ragdoll) {if(p.workBubble)p.workBubble.visible=false;p.P.bagsDown=false;return false;}
  const partner=actors.find(a=>a!==p && a.active && !a.engaged && !a.override && !a.workWalking && !a.P.ragdoll && a.workSpot?.work?.group===meta.group && (!['vendor','shopper'].includes(meta.role)||a.workSpot.work.role===(meta.role==='vendor'?'shopper':'vendor')) && Math.abs(a.M.S.pos.y-p.M.S.pos.y)<2 && Math.hypot(a.M.S.pos.x-p.M.S.pos.x,a.M.S.pos.z-p.M.S.pos.z)<4 && Math.hypot(a.M.S.pos.x-a.workSpot.x,a.M.S.pos.z-a.workSpot.z)<.3);
  let clock=meta.role==='meeting colleague'?t:p.workRoutine?.elapsed??t;
  const retail=meta.role==='vendor'||meta.role==='shopper',customer=meta.role==='shopper'?p:partner?.workSpot?.work?.role==='shopper'?partner:null;
@@ -68,6 +68,8 @@ export function workActor(p,t,dt,cam,actors=[]) {
  if(meta.role!=='shopper'&&meta.role!=='browse'){const id=npcIdOf(p);payroll.clockIn(id,st,meta.role);if(p.lastWorkAct==='typing at a workstation'&&a.activity!==p.lastWorkAct)payroll.taskDone(id,'station',st);p.lastWorkAct=a.activity;}
  M.want.speed=0;M.want.heading=st.heading;M.S.look.target=null;M.setPose(a.pose);M.S.talk=a.talk?1:0;
  if(st.sit)M.sit(st.h);else M.stand();
+ // (a bag in hand set down beside the chair while they sit: bags.js)
+ p.P.bagsDown=!!st.sit;
  p.workGestureT=(p.workGestureT||0)-dt;if(p.workGestureT<=0){p.workGestureT=3.2+(p.P.dna.seed%9)*.1;if(a.gesture)M.gesture(a.gesture);M.feel('anger',a.anger||0);}
  if((a.bag && p.workPurchases>0) && !p.shoppingBag)p.shoppingBag=attachBag(p.P,{q:{kind:'shopper',paper:true,col:'#b08a5e'},bag:{kind:'paper',v:(p.P.dna.seed>>>0)%3},hand:'R',k:1,straps:[]}).mesh; // a paper bag of what they bought, in the other hand (bags.js)
  if(p.shoppingBag)p.shoppingBag.visible=p.workPurchases>0;

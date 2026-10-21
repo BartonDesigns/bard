@@ -28,7 +28,7 @@ export function wearOwnInk(P, pieces = loadInk()) {
 
 const css = (el, s) => { el.style.cssText = s; return el; };
 const el = (tag, s = '', text = '') => { const e = css(document.createElement(tag), s); if (text) e.textContent = text; return e; };
-const BTN = 'min-height:36px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.22);background:transparent;color:#fff;font:600 13px system-ui;cursor:pointer;';
+const BTN = 'min-height:36px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.22);background:transparent;color:#fff;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;';
 const ON = 'background:#01a982;border-color:#01a982;';
 
 export function createTattooStudio({ mount, avatar, player, setCine, hint = () => {}, isPhone = false }) {
@@ -79,7 +79,7 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 	}
 
 	// ---------- the controls ----------
-	function row(parent, label) { const r = el('div', 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;'); if (label) r.appendChild(el('span', 'font:12px system-ui;opacity:.7;min-width:52px;', label)); parent.appendChild(r); return r; }
+	function row(parent, label) { const r = el('div', 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;'); if (label) r.appendChild(el('span', 'font:12px var(--bard-body,system-ui,sans-serif);opacity:.7;min-width:52px;', label)); parent.appendChild(r); return r; }
 	function choice(parent, items, get, set, name = (v) => v) {
 		const bs = items.map((v) => { const b = el('button', BTN, name(v)); b.onclick = () => { set(v); paint(); }; parent.appendChild(b); return [v, b]; });
 		const paint = () => { for (const [v, b] of bs) b.style.cssText = BTN + (get() === v ? ON : ''); };
@@ -87,7 +87,7 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 		return paint;
 	}
 	function slider(parent, label, min, max, step, get, set, fmt) {
-		const r = row(parent, label), s = el('input', 'flex:1;min-width:120px;accent-color:#01a982;'), v = el('span', 'font:12px system-ui;opacity:.8;min-width:48px;text-align:right;');
+		const r = row(parent, label), s = el('input', 'flex:1;min-width:120px;accent-color:#01a982;'), v = el('span', 'font:12px var(--bard-body,system-ui,sans-serif);opacity:.8;min-width:48px;text-align:right;');
 		s.type = 'range'; s.min = min; s.max = max; s.step = step; s.setAttribute('aria-label', label);
 		const show = () => { s.value = get(); v.textContent = fmt(get()); };
 		s.oninput = () => { set(+s.value); v.textContent = fmt(+s.value); wear(); };
@@ -97,7 +97,7 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 
 	let refresh = () => {};
 	function build() {
-		root = el('div', `position:absolute;z-index:40;${isPhone ? 'left:0;right:0;bottom:0;max-height:62vh;border-radius:16px 16px 0 0;' : 'right:12px;top:12px;bottom:12px;width:min(420px,92vw);border-radius:16px;'}overflow:auto;background:rgba(18,18,18,.94);border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.6);backdrop-filter:blur(8px);color:#fff;padding:14px;font:14px system-ui;`);
+		root = el('div', `position:absolute;z-index:40;${isPhone ? 'left:0;right:0;bottom:0;max-height:62vh;border-radius:16px 16px 0 0;' : 'right:12px;top:12px;bottom:12px;width:min(420px,92vw);border-radius:16px;'}overflow:auto;background:rgba(18,18,18,.94);border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.6);backdrop-filter:blur(8px);color:#fff;padding:14px;font:14px var(--bard-body,system-ui,sans-serif);`);
 		root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'Tattoo studio');
 		for (const ev of ['pointerdown', 'touchstart', 'wheel', 'keydown']) root.addEventListener(ev, (e) => e.stopPropagation());
 		const head = el('div', 'display:flex;align-items:center;justify-content:space-between;');
@@ -154,7 +154,7 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 		const cancel = el('button', BTN, 'Cancel'); cancel.onclick = () => finish(false);
 		const save = el('button', BTN + ON, 'Save tattoos'); save.onclick = () => finish(true);
 		foot.append(cancel, save);
-		foot.appendChild(el('div', 'font:11px system-ui;opacity:.55;width:100%;margin-top:4px;', 'Draw on the pad, then place it: drag the view to walk round yourself.'));
+		foot.appendChild(el('div', 'font:11px var(--bard-body,system-ui,sans-serif);opacity:.55;width:100%;margin-top:4px;', 'Draw on the pad, then place it: drag the view to walk round yourself.'));
 
 		refresh = () => { drawPieces(); drawPad(); if (piece()) sel.value = piece().slot; sA(); sL(); sS(); sR(); showW(); };
 		mount.appendChild(root);

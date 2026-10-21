@@ -164,7 +164,7 @@ export function createCrew(X, C, o) {
 			if (c.hair) { d.style.hair.cut = c.hair; d.style.hair.buzz = false; d.style.hair.thin = 0; d.style.hair.scarf = false; }
 			const P = buildPerson(A, d);
 			const M = createMotion(P, (x, z) => floor(x, z, P.root.position.y), {
-				constrain: (p, dt) => constrainCrew(p, f, folk, o.push, dt),
+				constrain: (p, _from, dt) => constrainCrew(p, f, folk, o.push, dt),
 			});
 			M.place(f.pos.x, f.pos.y, f.pos.z, f.pos.yaw ?? 0);
 			M.setPose('rest');

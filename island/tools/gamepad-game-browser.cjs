@@ -26,11 +26,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	const browser = await chromium.launch({ args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] });
 	const ctx = await browser.newContext(PROFILES[profile]);
 	// the pad, there from the first moment, as one already awake when the page opens
-	await ctx.addInitScript(() => {
-		window.__pad = { id: 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', index: 0, connected: true, mapping: 'standard', buttons: [...Array(18)].map(() => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0], timestamp: 0 };
+	// (PAD_ID: another pad's name, such as 'Backbone One')
+	await ctx.addInitScript((id) => {
+		window.__pad = { id, index: 0, connected: true, mapping: 'standard', buttons: [...Array(18)].map(() => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0], timestamp: 0 };
 		navigator.getGamepads = () => [window.__pad];
 		window.__set = (i, on) => { window.__pad.buttons[i].pressed = on; window.__pad.buttons[i].value = on ? 1 : 0; };
-	});
+	}, process.env.PAD_ID || 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)');
 	const page = await ctx.newPage();
 	const problems = [];
 	let loads = 0;
@@ -59,6 +60,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	await frames(4);
 	const R = { profile };
 	R.mode = (await info()).mode;
+	// on a touch screen the thumb's buttons are out of the way while the pad plays
+	R.thumbHidden = await page.evaluate(() => { const t = document.querySelector('#l99-island-mount .l99-thumb'); return !t || getComputedStyle(t).display === 'none'; });
+	R.family = (await info()).family;
 	// the left stick, forward: you walk
 	const p0 = await page.evaluate(() => { const p = Crysis.world().player.state.pos; return { x: p.x, z: p.z, yaw: Crysis.world().player.state.yaw }; });
 	await page.evaluate(() => { __pad.axes = [0, -1, 0.9, 0]; });

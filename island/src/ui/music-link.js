@@ -9,7 +9,7 @@ export function createMusicLinkEntry({ menu, autoMusic, hint }) {
 	if (menu) {
 		btn = document.createElement('button');
 		btn.type = 'button';
-		btn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		btn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) btn.addEventListener(ev, (x) => x.stopPropagation());
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();

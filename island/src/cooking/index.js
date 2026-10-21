@@ -32,6 +32,7 @@ import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/bo
 import { createMotion } from '../people/motion.js';
 import { fadePerson } from '../people/fade.js';
 import { safeSocialStep } from '../people/social-actors.js';
+import { wallKeeper } from '../people/walls.js';
 import { payroll } from '../economy/payroll.js';
 
 const store = {
@@ -48,6 +49,8 @@ const REACH = 2.4;
 // addTalkers / talkTo: people.js's talkers and the guide's talk; doorNear(): a door's prompt
 // has E; morality(): the compass; hours(): the sky's
 export function createCooking({ scene, camera, mount, button, hint = () => {}, isPhone = false, world, arms, magic = () => null, families = null, fishing = null, combat = null, addTalkers = null, talkTo = null, doorNear = () => false, morality = () => null, hours = () => 12 }) {
+	// (the homeowner walking in kept off the walls: people/walls.js)
+	const keepWalls = wallKeeper(world);
 	const L = createLarder(store.get(LARDER_KEY));
 	const K = createKitchenLog(store.get(KITCHENS_KEY));
 	const pending = [];
@@ -99,7 +102,10 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 			const key = `h:${Math.round(h.cx)},${Math.round(h.cz)}`, hh = householdAt(h.cx, h.cz);
 			return { kind: 'kitchen', key, hh, place: hh?.food?.place || 'suburb', at: best, house: h, floorY: h.floorY + best.y, name: hh ? 'A family kitchen' : 'Kitchen', line: hh ? `Home of ${describeHousehold(hh)}.` : 'Somebody lives here.' };
 		}
-		// a row house, a flat, a shop (interiors/index.js)
+		// an office tower's floor: its pantry's fridge (bay/towers.js amenities)
+		const T = W.towers?.amenities?.(pos, REACH)?.find((q) => q.kind === 'fridge');
+		if (T) return { kind: 'kitchen', key: `t:${T.key}`, hh: null, place: 'suburb', at: { x: T.x, z: T.z }, name: 'Office kitchen', line: 'The staff fridge. Help yourself; someone restocks it on Mondays.' };
+		// a row house, a flat, a shop, an office (interiors/index.js)
 		const I = W.interiors?.inside?.(pos);
 		if (I) {
 			const B = I.B, P = B.P;
@@ -116,6 +122,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 				if (d < REACH && (!best || d < best.d)) best = { d, x, z };
 			}
 			if (!best) return null;
+			if (I.use === 'office') return { kind: 'kitchen', key: `b:${B.key}`, hh: null, place: 'suburb', at: best, name: 'Office kitchen', line: 'The staff fridge. Help yourself; someone restocks it on Mondays.' };
 			return { kind: 'kitchen', key: `b:${B.key}`, hh: null, place: 'suburb', at: best, name: I.use === 'apt' ? 'A flat\'s kitchen' : 'Kitchen', line: 'Somebody lives here.' };
 		}
 		return null;
@@ -386,7 +393,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		for (let i = 1; o.m.male !== undefined && d.male !== o.m.male && i < 48; i++) d = personDNA((o.m.seed + Math.imul(i, 0x9e3779b9)) >>> 0, { age: Math.min(80, Math.max(18, o.m.age)), ancestry: o.m.ancestry, ctx });
 		const P = buildPerson(A, d);
 		const fy = k.floorY;
-		const M = createMotion(P, () => fy, { constrain(to, fromV) { const s = safeSocialStep(world()?.island, fromV, to, world()?.player); if (s) to.set(s.x, s.y, s.z); else to.copy(fromV); } });
+		const M = createMotion(P, () => fy, { constrain(to, fromV) { keepWalls(to, fromV, fromV.y); const s = safeSocialStep(world()?.island, fromV, to, world()?.player); if (s) to.set(s.x, s.y, s.z); else to.copy(fromV); } });
 		M.setGround?.(() => fy);
 		scene.add(P.root);
 		if (isPhone) P.root.traverse((q) => { q.castShadow = false; });
@@ -479,7 +486,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		if (!menu || menuBtn) return;
 		menuBtn = document.createElement('button');
 		menuBtn.type = 'button';
-		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) menuBtn.addEventListener(ev, (x) => x.stopPropagation());
 		menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; panel.open(here?.kind === 'kitchen' ? 'kitchen' : 'larder'); });
 		menu.insertBefore(menuBtn, menu.children[1] || null);
@@ -515,7 +522,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	addEventListener('pagehide', () => { if (dirty) save(); });
 
 	return {
-		update, addMenu, open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
+		update, addMenu, near: () => !!here, open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
 		// (for a look: Crysis.cooking.give('venison', 900), .info(), .eat('chili'))
 		give: (id, n) => { const put = stow(L, id, n); touch(); return put; },
 		eat: (id) => { plate(L, id, 1, 1); return eatPlate(id); },

@@ -294,7 +294,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		menuBtn.type = 'button';
 		menuBtn.textContent = '✦ Skills and magic';
 		menuBtn.title = 'Skills and magic (Tab or N)';
-		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) menuBtn.addEventListener(ev, (x) => x.stopPropagation());
 		menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; openSkills(); });
 		menu.insertBefore(menuBtn, menu.firstChild);
@@ -341,7 +341,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		testBtn.type = 'button';
 		testBtn.textContent = '∞ Test mode: off';
 		testBtn.title = 'Every spell and skill unlocked, endless mana and aether (nothing is saved while on)';
-		testBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		testBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) testBtn.addEventListener(ev, (x) => x.stopPropagation());
 		testBtn.addEventListener('click', (e) => { e.stopPropagation(); setTest(!testOn); });
 		menu.insertBefore(testBtn, menuBtn.nextSibling);
