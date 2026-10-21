@@ -152,6 +152,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	const live = new Map(), pending = new Map(), failed = new Set();
 	let self = null;          // (this city as returned, for the streets' eras: streetera.js)
 	let disposed = false, cancelled = 0;
+	let roadV = 0;            // (the regions' and the hand-laid roads changed, near or far: roadVersion())
 	let camX = 1e9, camZ = 1e9, late = 0;
 
 	// Buildings clear of the street: none standing in a carriageway or on its sidewalk (the
@@ -390,6 +391,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	// only when it is near (the rest find it as they are built)
 	let version = 0, genVersion = 0, quiet = 0;
 	function changed(i, x, z) {
+		roadV++;
 		if (i < 0 || gap(i, x, z) < NEWS) version++; else quiet++;
 		compose(); slots(x, z);
 		for (const M2 of MAPS) M2.x = 1e9;          // repaint the road maps
@@ -480,6 +482,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	// San Francisco approach): drivable like the mapped ones
 	const hand = { name: 'hand', bounds: [0, 0, 0, 0], reach: [1e9, 1e9, -1e9, -1e9], grid: new Map() };
 	function addRoads(list) {
+		roadV++;
 		for (const r of list) {
 			r.drive = true; r.walked = false; r.hand = true;
 			r.box = roadBox(r);
@@ -501,9 +504,19 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 	}
 	function near(kind, x, z, rad) {
+		const out = nearOwn(kind, x, z, rad);
+		for (const S of sources) S.near(kind, x, z, rad, out);
+		return out;
+	}
+	// near() in its two parts: the regions' own and the hand-laid roads (which change only with
+	// roadVersion), and what the other sources add (which can change without a word)
+	function nearOwn(kind, x, z, rad) {
 		const out = [];
 		for (const G of R.regions) nearIn(G, kind, x, z, rad, out);
 		if (kind === 'roads') nearIn(hand, kind, x, z, rad, out);
+		return out;
+	}
+	function nearSources(kind, x, z, rad, out = []) {
 		for (const S of sources) S.near(kind, x, z, rad, out);
 		return out;
 	}
@@ -879,11 +892,11 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		for (const G of gens) G.tex.dispose();
 		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
 		layerMat.dispose();
-		live.clear(); gens.length = 0; sources.length = 0; hand.grid.clear(); failed.clear();
+		live.clear(); gens.length = 0; sources.length = 0; hand.grid.clear(); failed.clear(); roadV++;
 		R.regions.length = 0; R.loaded = false;
 	}
 
 	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
-	// town came or went)
-	return (self = { R, inside, regionAt, near, update, dispose, sidewalk, landAt, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
+	// town came or went; roadVersion: the regions' or the hand-laid roads changed, anywhere)
+	return (self = { R, inside, regionAt, near, nearOwn, nearSources, roadVersion: () => roadV, update, dispose, sidewalk, landAt, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
 }
