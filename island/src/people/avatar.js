@@ -19,7 +19,7 @@ export function createAvatar({ scene, world }) {
 		if (d.style) d.style = dressInGear(d.style, worn);
 		const P = buildPerson(A, d);
 		wearOwnInk(P);                  // (your tattoos, if you have any: tattoo/studio.js)
-		const M = createMotion(P, (x, z) => world().island.heightAt(x, z));
+		const M = createMotion(P, (x, z) => world().island.heightAt(x, z), { space: false });
 		P.root.visible = false;
 		scene.add(P.root);
 		version++;
@@ -64,7 +64,7 @@ export function createAvatar({ scene, world }) {
 			} else d.outfit = { ...d.outfit, sleeves: 'none', legs: 'shorts', jacket: null };
 			const P = buildPerson(A, d);
 			wearOwnInk(P);
-			const M = createMotion(P, (x, z) => world().island.heightAt(x, z));
+			const M = createMotion(P, (x, z) => world().island.heightAt(x, z), { space: false });
 			P.root.visible = false;
 			scene.add(P.root);
 			chairMe = { P, M };

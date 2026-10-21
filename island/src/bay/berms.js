@@ -12,6 +12,8 @@ import * as THREE from 'three';
 
 const N = 256, CELL = 2, SIZE = N * CELL, STEP = 5, MAXG = 0.25, BERM = 7, MAXCUT = 60;
 const SKIP = new Set(['path', 'track', 'footway', 'steps', 'pedestrian', 'cycleway']);
+// a freeway's shoulders are graded with its lanes (fwyplan.js: 3 m right, 3 m or more left)
+const FWY_SHOULDERS = 3.5;
 
 // The footpaths near you get their own finer grid (half a metre): the tread is cut level
 // from side to side into the slope and sunk a little, a short cut bank above it and a
@@ -199,7 +201,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		// so two roads meeting never leave a step between them
 		let ri = 0;
 		for (const r of roads) {
-			const P = profile(r), p = r.pts, hw = r.w / 2, reach = hw + BERM, touched = [];
+			const P = profile(r), p = r.pts, hw = r.w / 2 + (r.cls === 'motorway' && !r.link ? FWY_SHOULDERS : 0), reach = hw + BERM, touched = [];
 			ri++;
 			for (let i = 0; i + 3 < p.length; i += 2) {
 				const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l2 = dx * dx + dz * dz;

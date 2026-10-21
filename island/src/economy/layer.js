@@ -15,6 +15,7 @@ import { createStorefronts } from './storefront.js';
 import { setRequestSource } from './requests.js';
 import { payroll } from './payroll.js';
 import { drawTradeBoard, artRevision } from '../signage/art.js';
+import { createRoadsAt, roadsAtOnce, DRIVE_CLS, BUSY_CLS } from './roadsat.js';
 
 const CW = 256, CH = 64;                 // a board in the atlas, pixels
 const FONTS = {
@@ -24,8 +25,6 @@ const FONTS = {
 	slab: 'Rockwell, "Roboto Slab", "Courier New", serif',
 	narrow: '"Arial Narrow", "Roboto Condensed", Arial, sans-serif',
 };
-const DRIVE_CLS = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
-const BUSY_CLS = { trunk: 2, primary: 2, secondary: 2, tertiary: 1 };
 
 // a '#rrggbb' colour to linear rgb (the shopfront frames and fascias take the board's)
 function hexLin(h) {
@@ -149,24 +148,11 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		return C;
 	}
 	// the mapped streets near a point: the busiest it faces, whether two meet by it, a freeway near
+	// (roadsat.js: sorted once per cell round a point, the same answer as walking every street)
+	const cellRoads = real?.nearOwn && real?.roadVersion ? createRoadsAt(real) : null;
 	function roadsAt(x, z) {
 		if (!real?.near) return { busy: 0, corner: false, highway: false };
-		let busy = 0, highway = false;
-		const close = new Set();
-		for (const r of real.near('roads', x, z, 230)) {
-			const pts = r.pts;
-			if (!pts) continue;
-			let best = 1e9;
-			for (let i = 0; i + 3 < pts.length; i += 2) {
-				const ax = pts[i], az = pts[i + 1], dx = pts[i + 2] - ax, dz = pts[i + 3] - az, l2 = dx * dx + dz * dz || 1;
-				const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-				best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
-			}
-			if (r.cls === 'motorway' && best < 230) highway = true;
-			if (best < 40 && BUSY_CLS[r.cls]) busy = Math.max(busy, BUSY_CLS[r.cls]);
-			if (best < 26 && DRIVE_CLS.has(r.cls)) close.add(r.name || r);
-		}
-		return { busy, corner: close.size >= 2, highway };
+		return cellRoads ? cellRoads(x, z) : roadsAtOnce(real, x, z);
 	}
 	// the side of a mapped shop or office that faces the street (0 +z, 1 -z, 2 +x, 3 -x)
 	function frontOf(o) {

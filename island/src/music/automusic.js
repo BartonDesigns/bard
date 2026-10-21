@@ -382,7 +382,7 @@ export function createAutoMusic(opts) {
 		box.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.14);';
 		const b = document.createElement('button');
 		b.type = 'button';
-		b.style.cssText = 'width:100%;min-height:38px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);color:#fff;font:12px system-ui;cursor:pointer;';
+		b.style.cssText = 'width:100%;min-height:38px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);color:#fff;font:12px var(--bard-body,system-ui,sans-serif);cursor:pointer;';
 		b.onclick = () => auto();
 		const lv = document.createElement('label');
 		lv.style.cssText = 'display:block;margin:8px 0 2px;';
@@ -396,7 +396,7 @@ export function createAutoMusic(opts) {
 		input.addEventListener('input', () => { S.level = +input.value; val.textContent = Math.round(S.level * 100) + '%'; save({ on: S.on, level: S.level }); });
 		top.append(nm, val); lv.append(top, input);
 		const info = document.createElement('div');
-		info.style.cssText = 'font:11px system-ui;opacity:.7;line-height:1.35;margin-top:2px;';
+		info.style.cssText = 'font:11px var(--bard-body,system-ui,sans-serif);opacity:.7;line-height:1.35;margin-top:2px;';
 		box.append(b, lv, info);
 		p.appendChild(box);
 		row = box;

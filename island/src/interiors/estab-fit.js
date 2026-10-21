@@ -235,7 +235,12 @@ export function fitFront(fit, K) {
 				const w = ag('waitingChairs', Math.min(2.2, long - 2), 0.5, 0.9, { side: (s) => s.axis === 'z' || s === front, clear: 0.7 }); if (w) K.sitOn(w, 3, 0.46, 0.05);
 				if (fit === 'dental') { const c = st('dentalChair', K.cx, K.cz, 0.6, 1.3, 1.0, 0, 0.6); if (c) { K.stand(c.x + 0.7, c.z, -1, 0, true); lamp('task', c.x, c.z, 0.9); } }
 				else if (fit === 'clinic') { const c = ag('examTable', 0.7, 1.9, 0.8, { side: notFront, clear: 0.9 }); if (c) lamp('task', c.x, c.z, 0.9); }
-				else for (let x = K.rm.x0 + 1.2; x < K.rm.x1 - 1.2; x += 1.9) { const d = st('officeDesk', x, K.cz - 0.3, 1.5, 0.75, 0.76, 0, 0.45); if (d) { K.seat(x, K.cz - 1.0, 0, 1, 0.47); lamp('pendant', x, K.cz - 0.3, 0.6); } }
+				else {
+					// a few desks, not a hall of them; a coffee point on a wall
+					let n = 0;
+					for (let x = K.rm.x0 + 1.2; x < K.rm.x1 - 1.2 && n < 3; x += 1.9) { const d = st('officeDesk', x, K.cz - 0.3, 1.5, 0.75, 0.76, 0, 0.45); if (d) { n++; K.seat(x, K.cz - 0.92, 0, 1, 0.47); lamp('pendant', x, K.cz - 0.3, 0.6); } }
+					ag('coffeeBar', 1.8, 0.62, 2.15, { side: notFront, clear: 0.9 });
+				}
 				ag('plant', 0.5, 0.5, 1.3, { corner: true, clear: 0 });
 			}
 			break;
@@ -320,7 +325,7 @@ export function fitBack(kind, K) {
 			return true;
 		}
 		case 'office': {
-			const d = ag('desk', 1.4, 0.65, 0.75, { clear: 0.9 }); if (d) K.sitOn(d, 1, 0.47, 0.55);
+			const d = ag('desk', 1.4, 0.65, 0.75, { clear: 0.9 }); if (d) K.deskSeat(d);
 			ag('bookcase', 0.9, 0.34, 1.9, { clear: 0.6 });
 			ag('boxes', 0.5, 0.45, 0.6, { corner: true, clear: 0 });
 			K.light('flush');

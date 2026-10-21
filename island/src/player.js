@@ -11,6 +11,7 @@ import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 import { DEFAULT_AIM_SENSITIVITY } from './aim-sensitivity.js';
 import { lookPrefs, lookGain, levelPitch, LEVEL, onGyro, resumeGyro } from './ui/touch-look.js';
 import { createParkour } from './parkour.js';
+import { keepSpace } from './people/personal-space.js';
 
 const EYE = 1.68;
 
@@ -157,6 +158,13 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 
 	// ---------- ground and walls ----------
 	const foot = village.footprints.filter((f) => !f.fence);
+	// how far from its middle each one can reach you, by any of the tests below (squared, and a
+	// little over): far from the village (out in the Bay) a footprint is passed by on that alone
+	const reach = foot.map((f) => {
+		const d = f.d || 0, body = Math.abs(d - 2.2) / 2, r = Math.max(Math.hypot(f.w / 2 + 1, d / 2 + 1), Math.hypot(f.w / 2 + 0.2, Math.max(2, f.len || 0)), Math.hypot(f.w / 2 + 0.2, body + 2.8));
+		return (r + 0.01) * (r + 0.01);
+	});
+	const far = (k, x, z) => (x - foot[k].x) * (x - foot[k].x) + (z - foot[k].z) * (z - foot[k].z) > reach[k];
 	// footprints are placed with rotationY(face): world = (lx cos + lz sin, -lx sin + lz cos)
 	const toLocal = (f, x, z) => {
 		const c = Math.cos(f.face), sn = Math.sin(f.face), dx = x - f.x, dz = z - f.z;
@@ -175,8 +183,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (island.extraFloor) g = Math.max(g, island.extraFloor(x, z, y));
 		// (the houses' roofs, for you once you have climbed up: parkour.js)
 		if (island.roofFloor) g = Math.max(g, island.roofFloor(x, z, y));
-		for (const f of foot) {
-			const [lx, lz] = toLocal(f, x, z);
+		for (let k = 0; k < foot.length; k++) {
+			if (far(k, x, z)) continue;
+			const f = foot[k], [lx, lz] = toLocal(f, x, z);
 			if (f.pier) {
 				if (Math.abs(lx) < f.w / 2 + 0.2 && lz > -2 && lz < f.len && y > f.y - 1.2) g = Math.max(g, f.y);
 			} else {
@@ -195,8 +204,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function pushOut(p) {
 		// in a cave: only its walls (the village, trees and rocks overhead are not here)
 		if (island.underFloor?.(p.x, p.z, p.y - EYE) != null) { island.underPush?.(p, p.y - EYE); return; }
-		for (const f of foot) {
-			if (f.pier) continue;
+		for (let k = 0; k < foot.length; k++) {
+			const f = foot[k];
+			if (f.pier || far(k, p.x, p.z)) continue;
 			let [lx, lz] = toLocal(f, p.x, p.z);
 			// a cottage you can walk into: its walls (and its furniture) one by one
 			if (f.walls) {
@@ -235,6 +245,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	const park = createParkour({ s, camera, floorAt, pushOut, ceilingAt });
 
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
+	const spaceFrom = { x: 0, z: 0 };
 	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
 	function input() {
 		let mx = joy.x + s.pad.x, mz = joy.y + s.pad.y;
@@ -346,6 +357,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const px0 = s.pos.x, pz0 = s.pos.z;
 		pushOut(s.pos);
 		{ const ox = s.pos.x - px0, oz = s.pos.z - pz0, ol = Math.hypot(ox, oz); if (ol > 1e-4) met = { nx: ox / ol, nz: oz / ol, kind: 1 }; }
+		// people: never walked into, held at a natural distance (people/personal-space.js); the
+		// walls again after, should that have set you against one
+		spaceFrom.x = x0; spaceFrom.z = z0;
+		if (keepSpace(spaceFrom, s.pos, s.vel, s.pos.y - EYE, dt, wish.lengthSq() > 0.01, pushOut)) pushOut(s.pos);
 		const ground = seenFloorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
 		const contact = waterContact(island, s.pos, ground, t, shared.uWave?.value ?? 1, s.diving);

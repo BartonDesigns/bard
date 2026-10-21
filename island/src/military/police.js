@@ -28,6 +28,7 @@ import { policePlan } from './rules.js';
 import { sirenSound } from './sound.js';
 import { blockSlots, inCone, offscreenPace } from '../law/tactics.js';
 import { searchLoop } from '../law/ladder.js';
+import { noseInto, inBuilding } from '../vehicles/wall-guard.js';
 
 const NAVY = new THREE.Color('#141a2c'), CHAR = new THREE.Color('#25282e');
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _y = new THREE.Vector3(0, 1, 0), _o = new THREE.Matrix4(), _t = new THREE.Matrix4();
@@ -145,7 +146,25 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 	}
 	function clearBlocks() { for (const c of cruisers) if (c.why === 'block' && c.state === 'blocking') leave(c); }
 
+	// a cruiser whose way ended inside a block (a route's last stretch across the ground, or one
+	// brought on out of sight) backs up along its route to where its whole length is clear
+	const carIn = (w, x, z, yaw, half) => {
+		const fx = Math.sin(yaw), fz = Math.cos(yaw);
+		return inBuilding(w, x, z) || inBuilding(w, x + fx * half, z + fz * half) || inBuilding(w, x - fx * half, z - fz * half);
+	};
+	function outOfBlocks(c) {
+		const w = W(), half = c.S.L / 2;
+		if (!c.route || !carIn(w, c.pos.x, c.pos.z, c.yaw, half)) return;
+		for (let s = Math.min(c.s, c.route.length) - 1; s > 0 && s > c.s - 120; s -= 1) {
+			const q = along(c.route, s), yaw = Math.atan2(q.dx, q.dz);
+			if (carIn(w, q.x, q.z, yaw, half)) continue;
+			c.s = s; c.yaw = yaw;
+			c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z);
+			return;
+		}
+	}
 	function arrive(c) {
+		outOfBlocks(c);
 		c.state = 'arrived'; c.t = 0;
 		const S = c.S, sx = c.pos.x + Math.cos(c.yaw) * (S.W / 2 + 1), sz = c.pos.z - Math.sin(c.yaw) * (S.W / 2 + 1);
 		const n = isPhone ? Math.min(c.fid === 'swat' ? 3 : 2, c.officers) : c.officers;
@@ -211,6 +230,13 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 				}
 				const left = c.route.length - c.s;
 				const v = left < 40 ? Math.max(3, left * 0.25) : offscreenPace(dEye, 18);
+				// (never into a building while you can see it: pulled up at its wall instead, and the
+				// officers out from there; looked ahead every metre and a half, vehicles/wall-guard.js)
+				if (Math.abs(c.s - (c.wallS ?? -9)) > 1.5 && dEye < 260 && visible(c.pos.x, c.pos.z, 260)) {
+					const a = along(c.route, c.s + v * dt);
+					if (noseInto(w, a.x, a.z, Math.atan2(a.dx, a.dz), c.S.L / 2)) { arrive(c); continue; }
+					c.wallS = c.s;
+				}
 				c.s += v * dt;
 				const q = along(c.route, c.s);
 				c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z);
@@ -230,8 +256,17 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 				if ((all && c.t > 1.5) || c.t > 25 || (c.t > 6 && !visible(c.pos.x, c.pos.z))) depart(c);
 			} else {
 				const v = offscreenPace(dEye, 14);
-				c.s -= v * dt; const q = along(c.route, Math.max(0, c.s));
-				c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z); c.yaw = Math.atan2(-q.dx, -q.dz); c.spin += v * dt / c.S.wr;
+				// (driving off: the same, held at a wall in sight until you look away)
+				let go = true;
+				if (Math.abs(c.s - (c.wallS ?? -9)) > 1.5 && dEye < 260 && visible(c.pos.x, c.pos.z, 260)) {
+					const a = along(c.route, Math.max(0, c.s - v * dt));
+					if (noseInto(w, a.x, a.z, Math.atan2(-a.dx, -a.dz), c.S.L / 2)) go = false;
+					else c.wallS = c.s;
+				}
+				if (go) {
+					c.s -= v * dt; const q = along(c.route, Math.max(0, c.s));
+					c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z); c.yaw = Math.atan2(-q.dx, -q.dz); c.spin += v * dt / c.S.wr;
+				}
 				const hidden = !visible(c.pos.x, c.pos.z, 260);
 				if (((c.s <= 0 || c.t > 60) && hidden) || dEye > 420) drop(c);
 			}

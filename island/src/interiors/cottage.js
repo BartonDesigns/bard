@@ -35,7 +35,8 @@ export function createCottageInteriors(scene, footprints, { isPhone = false, mat
 		it('plant', x0 + 0.3, z1 - 0.35, 0, 0.4, 0.4, 1.0);
 		it('art', x1 - 0.72, z0 + 0.02, 0, 0.7, 0.03, 0.01);
 		it('ceilingLight', 0, 0, 0, 0.35, 0.35, 0, { kind: 'pendant', level: 0 });
-		const g = new Builder(), col = [];
+		// (all of it inside: no shadow of the sun's, housekit.js)
+		const g = new Builder().inside(), col = [];
 		for (const q of items) { drawAny(g, q, rnd); if (!SOFT.has(q.type)) col.push([...q.box, Math.max(0.3, q.h)]); }
 		const root = new THREE.Group();
 		for (const m of g.meshes(M, !isPhone)) root.add(m);
