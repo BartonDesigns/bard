@@ -199,7 +199,7 @@ ${S}>[aria-label^="Back to the Bard"]{${SLOT}left:calc(12px + var(--sl))!importa
 ${S}>[aria-label^="Sky and world settings"]{${SLOT}right:calc(12px + var(--sr))!important;top:calc(12px + var(--st))!important;bottom:auto!important;}
 ${S}>[aria-label^="Auto music"]{${SLOT}right:calc(64px + var(--sr))!important;top:calc(12px + var(--st))!important;bottom:auto!important;}
 ${S} .l99-quick{top:max(calc(68px + var(--st)), var(--qb))!important;right:calc(12px + var(--sr))!important;flex-direction:column!important;gap:8px!important;}
-${S} .l99-rail{top:max(calc(68px + var(--st)), var(--qb))!important;right:calc(68px + var(--sr))!important;width:min(460px,calc(100% - 80px - var(--sl) - var(--sr)))!important;}
+${S} .l99-rail{top:max(calc(68px + var(--st)), var(--qb))!important;right:calc(68px + var(--sr))!important;width:min(300px,calc(100% - 80px - var(--sl) - var(--sr)))!important;}
 ${S}>[aria-label^="Warp"]{${SLOT}left:calc(12px + var(--sl))!important;right:auto!important;top:max(calc(68px + var(--st)), var(--qb))!important;bottom:auto!important;}
 ${S} [data-hud-text="room"]{left:calc(64px + var(--sl))!important;top:max(calc(68px + var(--st)), var(--qb))!important;}
 ${S} [data-hud-text="quest"]{top:calc(64px + var(--st))!important;max-width:calc(100% - 24px - var(--sl) - var(--sr))!important;}
@@ -215,7 +215,7 @@ ${S} .cb-hp{width:min(144px,calc(100% - 204px - var(--sl) - var(--sr)))!importan
 ${S} .l99-prompts>[data-hud="prompt 99"]{background:rgba(12,16,20,.5)!important;color:rgba(255,255,255,.92)!important;}
 @media (orientation:landscape) and (max-height:540px){
 ${S} .l99-quick{top:calc(12px + var(--st))!important;right:calc(116px + var(--sr))!important;flex-direction:row!important;}
-${S} .l99-rail{top:calc(68px + var(--st))!important;right:calc(12px + var(--sr))!important;width:min(460px,60%)!important;}
+${S} .l99-rail{top:calc(68px + var(--st))!important;right:calc(12px + var(--sr))!important;width:min(300px,60%)!important;}
 ${S} .cb-star{right:calc(16px + var(--sr))!important;}
 ${S} .cb-ammo{left:calc(120px + var(--sl))!important;top:calc(12px + var(--st))!important;bottom:auto!important;}
 ${S} .cb-hp{left:calc(292px + var(--sl))!important;top:calc(28px + var(--st))!important;bottom:auto!important;width:120px!important;}
