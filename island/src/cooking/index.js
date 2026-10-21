@@ -99,7 +99,10 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 			const key = `h:${Math.round(h.cx)},${Math.round(h.cz)}`, hh = householdAt(h.cx, h.cz);
 			return { kind: 'kitchen', key, hh, place: hh?.food?.place || 'suburb', at: best, house: h, floorY: h.floorY + best.y, name: hh ? 'A family kitchen' : 'Kitchen', line: hh ? `Home of ${describeHousehold(hh)}.` : 'Somebody lives here.' };
 		}
-		// a row house, a flat, a shop (interiors/index.js)
+		// an office tower's floor: its pantry's fridge (bay/towers.js amenities)
+		const T = W.towers?.amenities?.(pos, REACH)?.find((q) => q.kind === 'fridge');
+		if (T) return { kind: 'kitchen', key: `t:${T.key}`, hh: null, place: 'suburb', at: { x: T.x, z: T.z }, name: 'Office kitchen', line: 'The staff fridge. Help yourself; someone restocks it on Mondays.' };
+		// a row house, a flat, a shop, an office (interiors/index.js)
 		const I = W.interiors?.inside?.(pos);
 		if (I) {
 			const B = I.B, P = B.P;
@@ -116,6 +119,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 				if (d < REACH && (!best || d < best.d)) best = { d, x, z };
 			}
 			if (!best) return null;
+			if (I.use === 'office') return { kind: 'kitchen', key: `b:${B.key}`, hh: null, place: 'suburb', at: best, name: 'Office kitchen', line: 'The staff fridge. Help yourself; someone restocks it on Mondays.' };
 			return { kind: 'kitchen', key: `b:${B.key}`, hh: null, place: 'suburb', at: best, name: I.use === 'apt' ? 'A flat\'s kitchen' : 'Kitchen', line: 'Somebody lives here.' };
 		}
 		return null;
@@ -515,7 +519,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	addEventListener('pagehide', () => { if (dirty) save(); });
 
 	return {
-		update, addMenu, open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
+		update, addMenu, near: () => !!here, open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
 		// (for a look: Crysis.cooking.give('venison', 900), .info(), .eat('chili'))
 		give: (id, n) => { const put = stow(L, id, n); touch(); return put; },
 		eat: (id) => { plate(L, id, 1, 1); return eatPlate(id); },
