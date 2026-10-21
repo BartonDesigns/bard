@@ -101,6 +101,60 @@ vec3 wildflowers(vec3 c, vec2 w, float slope){
 	vec3 flower = kind < 0.45 ? vec3(0.9, 0.3, 0.02) : kind < 0.58 ? vec3(0.2, 0.16, 0.55) : vec3(0.85, 0.66, 0.05);
 	return mix(c, flower, drift * (0.12 + 0.5 * speck * speck));
 }
+// the dry sand of a beach: never one colour. Pale wind-sorted drifts and warmer, coarser
+// patches; dark streaks of heavy mineral sand drawn out along the shore (the contours, h),
+// where the swash and the wind sort it; the wrack of the last high tide in a broken line just
+// above the wet band (bay shore: world/shore.js); and the grain. h: height above the sea (m)
+vec3 sandCol(vec2 w, float h){
+	float big = fbm3(w * 0.018 + 2.3), mid = vn(w * 0.11 + 5.1), fine = vn(w * 1.9);
+	vec3 c = mix(vec3(0.58, 0.43, 0.25), vec3(0.72, 0.59, 0.39), smoothstep(0.3, 0.72, big));
+	c = mix(c, vec3(0.6, 0.44, 0.25), smoothstep(0.55, 0.78, mid) * 0.45);
+	float along = dot(w, vec2(0.6, 0.8)) * 0.03 + vn(w * 0.05) * 0.8;
+	float streak = smoothstep(0.64, 0.82, vn(vec2(h * 4.5 + vn(w * 0.04) * 0.9, along))) * (1.0 - smoothstep(2.6, 4.0, h));
+	c = mix(c, vec3(0.3, 0.26, 0.21), streak * 0.4);
+	float wrack = (1.0 - smoothstep(0.0, 0.07, abs(h - 1.05 - (vn(w * 0.03) - 0.5) * 0.35))) * smoothstep(0.35, 0.65, vn(w * 0.7 + 1.3));
+	c = mix(c, vec3(0.24, 0.2, 0.14), wrack * 0.55);
+	return c * (0.92 + 0.16 * fine);
+}
+// the dry sand's relief (a height, m): wind ripples a hand apart, their crests bent by the
+// wind, a long gentle back and a short steep lee; a wider set of low swells; and the footprints
+// of the people who walk the beach, in tracks of left and right prints a stride apart, each
+// pressed in with a rim pushed up round it. Every direction here is fixed: the coordinates are
+// kilometres from the origin, and turning them by an angle that varies from place to place
+// (the shore's, the wind's) would spin the pattern round in rings. The wind and the walkers
+// change direction from patch to patch instead. px: metres a pixel (each scale fades as it
+// nears one). y: how much of a print, to darken the scuffed sand
+vec2 sandRelief(vec2 w, float px){
+	float rH = 0.0;
+	vec2 q = w + vec2(vn(w * 0.35), vn(w * 0.35 + 9.7)) * 1.6 + vec2(vn(w * 1.3 + 2.0), vn(w * 1.3 + 5.0)) * 0.12;
+	float wind = step(0.5, vn(w * 0.015 + 6.2));
+	vec2 d = wind > 0.5 ? vec2(0.8, 0.6) : vec2(0.28, -0.96);
+	float k1 = (1.0 - smoothstep(0.01, 0.028, px)) * smoothstep(0.3, 0.6, vn(w * 0.07 + 3.3));
+	if (k1 > 0.0) { float f = fract(dot(q, d) / 0.13); rH += smoothstep(0.0, 1.0, f < 0.78 ? f / 0.78 : (1.0 - f) / 0.22) * 0.006 * k1; }
+	float k2 = (1.0 - smoothstep(0.03, 0.08, px)) * smoothstep(0.45, 0.75, vn(w * 0.03 + 8.1));
+	if (k2 > 0.0) { float f = fract(dot(q, d) / 0.62); rH += smoothstep(0.0, 1.0, f < 0.7 ? f / 0.7 : (1.0 - f) / 0.3) * 0.007 * k2; }
+	float pr = 0.0;
+	float k3 = 1.0 - smoothstep(0.022, 0.05, px);
+	if (k3 > 0.0) {
+		// (the walkers' heading, one of two, patch by patch)
+		vec2 along = step(0.5, vn(w * 0.009 + 1.3)) > 0.5 ? vec2(0.6, 0.8) : vec2(0.96, -0.28);
+		vec2 s = vec2(dot(w, along), dot(w, vec2(-along.y, along.x)));
+		float lane = floor(s.y / 1.2), walker = h21(vec2(lane, lane * 0.618 + 17.0));
+		// (two lanes in five walked; more where the beach is busy)
+		if (walker < 0.4 + 0.3 * smoothstep(0.45, 0.75, vn(w * 0.012 + 4.1))) {
+			float cy = lane * 1.2 + 0.6 + (vn(vec2(s.x * 0.11, lane * 7.3)) - 0.5) * 0.6, stp = floor(s.x / 0.36);
+			float side = mod(stp, 2.0) * 2.0 - 1.0, dir = walker < 0.2 ? 1.0 : -1.0;
+			vec2 p = vec2(s.x - (stp + 0.5) * 0.36, s.y - cy - side * 0.09) * vec2(dir, 1.0);
+			float wid = 0.04 + 0.016 * smoothstep(-0.12, 0.08, p.x);
+			float e = length(vec2(p.x / 0.13, p.y / wid));
+			float keep = step(h21(vec2(stp, lane)), 0.86) * (0.5 + 0.5 * h21(vec2(lane, 3.0)));
+			pr = (1.0 - smoothstep(0.75, 1.0, e)) * keep;
+			rH += (-0.02 * pr + 0.003 * smoothstep(0.9, 1.05, e) * (1.0 - smoothstep(1.05, 1.45, e)) * keep) * k3;
+			pr *= k3;
+		}
+	}
+	return vec2(rH, pr);
+}
 vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	vec3 lawn = mix(vec3(0.2, 0.34, 0.1), vec3(0.3, 0.41, 0.15), gn);
 	vec3 dry = mix(lawn, mix(vec3(0.32, 0.22, 0.09), vec3(0.46, 0.33, 0.14), gn), uSeason);
@@ -118,7 +172,7 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	// commercial and retail: parking with landscaped islands and borders
 	if (lu < 7.5) return mix(mix(vec3(0.25, 0.25, 0.26), vec3(0.31, 0.31, 0.32), gn), lawn * 0.9, smoothstep(0.58, 0.64, vn(w * 0.05) * 0.7 + gf * 0.3));
 	if (lu < 8.5) return mix(vec3(0.45, 0.44, 0.42), vec3(0.55, 0.54, 0.5), gn);
-	if (lu < 9.5) return vec3(0.84, 0.79, 0.64);
+	if (lu < 9.5) return sandCol(w, 2.0);
 	if (lu < 10.5) return vec3(0.1, 0.2, 0.22);
 	// a downtown plaza: pale pavers in a running bond, a darker band now and then
 	vec2 pj = fract(vec2(w.x / 1.2, w.y / 0.6 + 0.5 * step(0.5, fract(w.x / 2.4))));
@@ -532,7 +586,8 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 c = mix(vec3(0.24, 0.30, 0.13), vec3(0.50, 0.42, 0.24), clamp(uSeason * 0.8 + n1 * 0.4 - 0.1, 0.0, 1.0));
 					c = mix(c, vec3(0.20, 0.27, 0.15), smoothstep(0.5, 0.7, n1) * 0.6);
 					c = mix(c, vec3(0.46, 0.43, 0.39), smoothstep(0.35, 0.7, slope));
-					c = mix(vec3(0.70, 0.65, 0.50), c, smoothstep(0.5, 4.0, h));
+					float sandL = 1.0 - smoothstep(0.5, 4.0, h);
+					if (sandL > 0.01) c = mix(c, sandCol(vBW, h), sandL);
 					// The phone-safe shader used to stop here, leaving the first few metres as a
 					// single beige colour. Keep the expensive height loops out of this path, but
 					// retain the close-up treatment: a broad leaf/soil mottle, a small mineral
@@ -777,7 +832,10 @@ export function createBayArea(shared, scene, island, BU) {
 					// sand at the water's edge, mud and sand under water
 					float freshBank = clamp(wcAt(vBW).y, 0.0, 1.0);
 					float beach = (1.0 - freshBank) * (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
-					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
+					// (sandK: how much of the ground is still sand once the city's land use is laid
+					// over it, below; the dry sand's ripples and prints go in the bump with it)
+					float sandK = beach, sandPx = length(fwidth(vBW));      // (its derivatives taken here, outside any branch)
+					if (beach > 0.01) c = mix(c, sandCol(vBW, h), beach);
 					c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h));
 					// the coast's cliffs, coves, lip, links and farms
 					if (uCsRow.w > 0.5 && csD < 5000.0) c = coastSide(c, vBW, h, slope, csD, smoothstep(0.03, 0.08, T.r), dist, n2, n3);
@@ -807,14 +865,18 @@ export function createBayArea(shared, scene, island, BU) {
 						float flatten = 1.0 - smoothstep(0.25, 0.45, slope);
 						// land use, blended across the four nearest 8 m cells so its edges are soft
 						vec2 mf = mu - 0.5, mi = floor(mf), mw = mf - mi;
-						vec3 luC = vec3(0.0); float luW = 0.0;
+						vec3 luC = vec3(0.0); float luW = 0.0, luS = 0.0;
 						for (int k = 0; k < 4; k++) {
 							vec2 o = vec2(float(k & 1), float(k >> 1));
 							float lu = floor(texelFetch(uRealMap, ivec2(clamp(mi + o, vec2(0.0), MS - 1.0)), 0).g * 255.0 / 16.0 + 0.5);
 							float wk = smoothstep(0.0, 1.0, (o.x > 0.5 ? mw.x : 1.0 - mw.x) * (o.y > 0.5 ? mw.y : 1.0 - mw.y));
-							luC += realLand(lu, c, gn, gf, vBW) * wk; luW += wk;
+							// (a park's map runs down over its beach, as Aquatic Park's does: there the sand stays)
+							bool park = lu > 1.5 && lu < 2.5;
+							luC += (park ? mix(realLand(lu, c, gn, gf, vBW), c, beach) : realLand(lu, c, gn, gf, vBW)) * wk; luW += wk;
+							// (the sand left: a mapped beach's, or the natural one where the map leaves the ground be)
+							luS += (lu > 8.5 && lu < 9.5 ? 1.0 : park || lu < 0.5 || (lu > 10.5 && lu < 12.5) || lu > 13.5 ? beach : 0.0) * wk;
 						}
-						if (mainR) c = mix(c, luC / max(luW, 1e-4), flatten);
+						if (mainR) { c = mix(c, luC / max(luW, 1e-4), flatten); sandK = mix(sandK, luS / max(luW, 1e-4), flatten); }
 						// far away: roofs and streets from the 8 m map (up close the buildings stand here)
 						float farK = smoothstep(1500.0, 2200.0, dist);
 						c = mix(c, mix(vec3(0.5, 0.42, 0.38), vec3(0.42, 0.42, 0.44), gn), M.b * farK * 0.9);
@@ -1084,7 +1146,7 @@ export function createBayArea(shared, scene, island, BU) {
 						float kF = 1.0 - smoothstep(0.025, 0.07, pxG), kC = 1.0 - smoothstep(0.12, 0.3, pxG);
 						gk *= kC;
 						if (gk > 0.01) {
-							float wS = clamp(beach + smoothstep(0.3, -1.5, h), 0.0, 1.0);
+							float wS = clamp(sandK + smoothstep(0.3, -1.5, h), 0.0, 1.0);
 							float wR = clamp(max(max(smoothstep(0.45, 0.8, slope), outcrop), max(clamp(cv.g, 0.0, 1.0), clamp(wv.y, 0.0, 1.0) * 0.7)), 0.0, 1.0) * (1.0 - wS);
 							float wM = clamp((1.0 - season) * (1.0 - duffK) * 0.85 + forest * fogbelt * 0.6, 0.0, 1.0) * (1.0 - wS) * (1.0 - wR);
 							float wL = max(0.0, 1.0 - wS - wR - wM);
@@ -1107,6 +1169,14 @@ export function createBayArea(shared, scene, island, BU) {
 							c *= mix(vec3(1.0), r, gk * mix(0.7, 0.9, max(wS, wR)));
 							wxBump += (pd.a - 0.5) * mix(0.012, 0.035, wR) * gk * mix(0.5, 1.0, kF);
 						}
+					}
+					// the dry sand close by: its ripples and the prints in it (the wet band's is the shore's)
+					if (sandK * (1.0 - flatK) > 0.01 && dist < 60.0 && h > 0.8) {
+						vec2 sR = sandRelief(vBW, sandPx) * sandK * (1.0 - flatK) * smoothstep(0.8, 1.3, h) * (1.0 - smoothstep(40.0, 60.0, dist));
+						wxBump += sR.x;
+						// (the light alone barely shows relief this fine: the crests a shade paler, where
+						// the coarse grains lie, and the prints' scuffed sand a shade darker)
+						c *= (1.0 + clamp(sR.x * 8.0, -0.1, 0.06)) * (1.0 - sR.y * 0.08);
 					}
 					// The sand the sea wets, over whatever the land is drawn as (the real city's beaches
 					// too): damp up to where the waves have been reaching, soaked under the sheet, dark
