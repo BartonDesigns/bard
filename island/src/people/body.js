@@ -26,6 +26,7 @@ import { tierNow } from '../world/governor.js';
 import { shapeBuild } from './build.js';
 import { loadKitModels } from './kit-models.js';
 import { GFX_PHONE } from '../world/device.js';
+import { boundBody, cullPosed } from './body-bounds.js';
 import { mulberry32 as rng } from '../noise.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
@@ -307,6 +308,8 @@ export function buildPerson(A, d) {
 		headBone.add(eye); eyes.push(eye); eyeAt.push(c);
 	}
 	const P = { root, body, bones, skeleton, map, rest, meshes: [], skin: null, cloth: null, acc: null, eyes, eyeAt, hair: null, detail: null, dna: d, height: d.height, legLength: heads[map['upperleg01.L']].y - heads[map['foot.L']].y, cut, lobes };
+	// (culled by a sphere round its bones as posed, not its rest shape: body-bounds.js)
+	boundBody(P);
 	// skin: the painted maps tinted to the person (or a far world's skin)
 	const skinKey = (d.ancestry[0] > 0.5 ? 'young_african' : d.age > 58 ? 'old_caucasian' : 'young_caucasian') + '_' + (d.male ? 'male' : 'female');
 	const melanin = d.ancestry[0] * 0.55 + d.ancestry[1] * 0.12;
@@ -331,7 +334,7 @@ export function buildPerson(A, d) {
 		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
 		// (how full the tone under the brow's hairs, each their own; or as set, d.brows.fill)
 		dm.material.userData.U.uFill.value = d.brows?.fill ?? 1.6 + ((d.seed * 0.618034) % 1) * 0.4;
-		dm.frustumCulled = false; dm.renderOrder = 1;
+		cullPosed(P, dm); dm.renderOrder = 1;
 		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
 		P.detail = dm;
@@ -364,7 +367,7 @@ function dress(A, P, o) {
 	// (the skin hidden under the cloth is left out, a little in from the garment's edge, so
 	// nothing pokes through)
 	const covered = (c, tri) => { const k = kinds(tri); return R.top(c, tri, k, 0.035) || R.outer(c, tri, k, 0.035) || R.bottom(c, tri, k, 0.035) || R.shoes(c, tri, k, 0.02); };
-	const add = (geo, mat, shadow = true) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); return m; };
+	const add = (geo, mat, shadow = true) => { const m = cullPosed(P, new THREE.SkinnedMesh(geo, mat)); m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); return m; };
 	const bodyGeo = geometry(A, p, A.body, (c, tri) => !covered(c, tri));
 	faceMorphs(A, bodyGeo, P._S);
 	bodyGeo.setAttribute('skinx', skinAttribute(A.faces, bodyGeo.userData.src));
@@ -466,7 +469,7 @@ function hairUp(A, P) {
 		if (P.fadeK !== undefined) { const k = P.fadeK; P.fadeK = -1; fadePerson(P, k); }
 	}).catch(() => {});
 	const capY = covers ? P.skull.eyeY + (hat.kind === 'beanie' ? 0.042 : 0.05) : 99;
-	const skinned = (g, m) => { const s = new THREE.SkinnedMesh(g, m); s.frustumCulled = false; s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
+	const skinned = (g, m) => { const s = cullPosed(P, new THREE.SkinnedMesh(g, m)); s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
 	const tune = (m) => {
 		const U = m.userData.U;
 		U.uRoot.value.copy(cols.root); U.uTip.value.copy(cols.tip); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);

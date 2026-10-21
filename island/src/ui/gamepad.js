@@ -32,14 +32,21 @@ const YAW_RATE = 3.3, PITCH_RATE = 2.3, BOOST_AFTER = 0.3, BOOST = 1.55;
 // ---------- glyphs: the face buttons as each pad prints them ----------
 export const GLYPHS = {
 	xbox: { A: ['A', '#3fb950'], B: ['B', '#f85149'], X: ['X', '#3b82f6'], Y: ['Y', '#f5b70b'], LB: ['LB'], RB: ['RB'], LT: ['LT'], RT: ['RT'], L3: ['LS'], R3: ['RS'], LS: ['L'], RS: ['R'], VIEW: ['⧉'], START: ['☰'], PAD: ['⧉'], UP: ['↑'], DOWN: ['↓'], LEFT: ['←'], RIGHT: ['→'], DPAD: ['✛'] },
+	// Backbone One (the phone's clip-on pad): A B X Y in the Xbox places and colours, the
+	// shoulders and stick clicks named as on its shell, the two small buttons either side
+	backbone: { A: ['A', '#3fb950'], B: ['B', '#f85149'], X: ['X', '#3b82f6'], Y: ['Y', '#f5b70b'], LB: ['L1'], RB: ['R1'], LT: ['L2'], RT: ['R2'], L3: ['L3'], R3: ['R3'], LS: ['L'], RS: ['R'], VIEW: ['⧉'], START: ['☰'], PAD: ['⧉'], UP: ['↑'], DOWN: ['↓'], LEFT: ['←'], RIGHT: ['→'], DPAD: ['✛'] },
 	ps: { A: ['✕', '#7ea8ff'], B: ['○', '#ff6b6b'], X: ['□', '#e88ad0'], Y: ['△', '#3ddc97'], LB: ['L1'], RB: ['R1'], LT: ['L2'], RT: ['R2'], L3: ['L3'], R3: ['R3'], LS: ['L'], RS: ['R'], VIEW: ['Create'], START: ['Options'], PAD: ['Touchpad'], UP: ['↑'], DOWN: ['↓'], LEFT: ['←'], RIGHT: ['→'], DPAD: ['✛'] },
 };
-// Sony's vendor id 054c and its pads' names; everything else reads as an Xbox layout
+// Sony's vendor id 054c and its pads' names, Backbone's (358a, and its PlayStation Edition with
+// Sony's marks); everything else reads as an Xbox layout
+const BACKBONE = /backbone|358a/i;
 export function padFamily(id = '') {
+	if (BACKBONE.test(id)) return /playstation/i.test(id) ? 'ps' : 'backbone';
 	if (/045e|xbox|xinput/i.test(id)) return 'xbox';
 	return /054c|playstation|dualsense|dualshock|wireless controller|ps[345]/i.test(id) ? 'ps' : 'xbox';
 }
 export function padName(id = '') {
+	if (BACKBONE.test(id)) return /playstation/i.test(id) ? 'Backbone One PlayStation Edition' : 'Backbone One';
 	if (padFamily(id) === 'ps') return /dualsense|0ce6|0df2/i.test(id) ? 'DualSense controller' : 'PlayStation controller';
 	return /045e|xbox|xinput/i.test(id) ? 'Xbox controller' : 'Controller';
 }
@@ -122,6 +129,7 @@ const CSS = `
 .gp-wheel .c{position:absolute;left:50%;top:50%;width:120px;transform:translate(-50%,-50%);text-align:center;font:600 12px/1.3 var(--bard-display,system-ui,sans-serif);color:#eafaf6}
 .gp-wheel .lb{position:absolute;left:0;right:0;text-align:center;font:700 9px var(--bard-display,system-ui,sans-serif);letter-spacing:.14em;color:rgba(255,255,255,.5)}
 .gp-wheel .c small{display:block;color:rgba(255,255,255,.55);font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px;font-family:var(--bard-display,Georgia,serif)}
+#l99-island-mount.l99-touch.gp-on :is(.l99-joy,.l99-thumb,.mg-hub,.mc-btn,.cb-btn,.combat-focus-controls,button[aria-label="Aim"],button[aria-label="Aim held item"]){display:none !important}
 .mg-s.gp-sel{box-shadow:0 0 0 2px #01a982,0 0 12px rgba(1,169,130,.7)}
 #l99-island-mount.gp-on [data-gp]{position:relative}
 #l99-island-mount.gp-on [data-gp]::after{content:attr(data-gp);position:absolute;left:-9px;top:-9px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--gp-c,#3b82f6) 25%,#0a0a0a);border:1px solid var(--gp-c,#3b82f6);color:var(--gp-c,#3b82f6);font:700 11px/1 var(--bard-display,system-ui,sans-serif);pointer-events:none}
@@ -140,7 +148,9 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 	const P = () => world()?.player?.state || null;
 
 	// ---------- the pad ----------
-	let pad = null, family = 'xbox', raf = 0, lastT = 0, usedAt = 0, mode = 'idle', hudMode = false;
+	let pad = null, family = 'xbox', raf = 0, lastT = 0, usedAt = 0, touchAt = 0, mode = 'idle', hudMode = false;
+	const coarse = !!globalThis.matchMedia?.('(pointer: coarse)')?.matches;
+	const touchy = () => coarse || !!mount?.classList.contains('l99-touch');
 	// (eaten: down when the way of reading changed, so it counts only once let go: the A that
 	// picks a menu's tile is not also a jump)
 	const down = new Array(18).fill(false), at = new Array(18).fill(0), held = new Array(18).fill(false), eaten = new Array(18).fill(false);
@@ -515,7 +525,9 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 		}
 		const [lx, ly] = stick(pad.axes[0] || 0, pad.axes[1] || 0), [rx, ry, rm] = stick(pad.axes[2] || 0, pad.axes[3] || 0);
 		if (lx || ly || rx || ry) usedAt = now;
-		const active = now - usedAt < 20000;
+		// (in use: on a touch screen until a finger is back on the glass, so the touch
+		// controls stay out of the way; elsewhere for a while after the last press)
+		const active = touchy() ? usedAt > touchAt : now - usedAt < 20000;
 		mount?.classList.toggle('gp-on', active);
 		// holds: a press past HOLD fires its hold once
 		const holdNow = (i) => { if (down[i] && !held[i] && now - at[i] > HOLD) { held[i] = true; return true; } return false; };
@@ -666,6 +678,7 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 	document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 	// (the keyboard or the mouse in hand: the pad's marks go)
 	for (const ev of ['keydown', 'mousedown']) addEventListener(ev, (e) => { if (e.isTrusted) usedAt = 0; }, true);
+	addEventListener('pointerdown', (e) => { if (e.isTrusted && e.pointerType === 'touch') touchAt = performance.now(); }, true);
 	// (a pad already awake when the page opened)
 	if ([...(navigator.getGamepads?.() || [])].some(Boolean)) start();
 
