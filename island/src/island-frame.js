@@ -377,6 +377,8 @@ export function islandFrame(iw, now) {
 	// (while the skills menu covers the frame nothing is drawn, so neither are they; left as they
 	// are rather than reset, so closing the menu does not warm their shaders again)
 	HOOKS.lightPad?.update(now, camera);
+	// (last, once everyone has moved this frame: the shade under their feet)
+	W.footShade?.update(camera);
 	const covered = magic.covering(), seaOn = !iw.arrival?.blind && !(isPhone && now - shownAt < MIRROR_EASE) && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && iw.indoorK < 0.5;
 	if (covered) { /* the menu over it all */ } else if (seaOn) {
 		seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.sanMateo?.group, W.city?.group], under || shared.uUnder.value);

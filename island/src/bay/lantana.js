@@ -11,7 +11,8 @@
 // so a planter is two or three instances rather than dozens. Three detail levels from one
 // plan (so they dissolve into each other without anything moving): every floret and leaf
 // tooth close by; at street distance each head a little dome and each leaf a blade; far off
-// yellow points on the green. Each level is two parts: the plants, coloured in their
+// yellow points on the green; farther still (a bed a few pixels across) fewer, larger points and
+// cards over plainer mounds. Each level is two parts: the plants, coloured in their
 // vertices (one plain swaying material), and the foliage's mass as leaf-cluster cards,
 // drawn exactly as the city's shrubs' leaves are, so it costs no shader of its own.
 
@@ -231,7 +232,7 @@ function headDraw(b, h, lvl) {
 	else if (!old) buds(5, 0.35, BUD, CREAM, 0.006);
 }
 function stemDraw(b, s, lvl) {
-	if (lvl === 2) return;
+	if (lvl >= 2) return;
 	const pts = lvl === 0 ? s.pts : [s.pts[0], s.pts[3]];
 	tube(b, pts, pts.map((_, k) => 0.005 - k * 0.003 / pts.length), 3, STEM, (t) => 0.15 + t * 0.3);
 	// (the second head's stalk)
@@ -239,7 +240,7 @@ function stemDraw(b, s, lvl) {
 }
 function moundDraw(b, M, lvl, rnd) {
 	// the leafy mass: a lumpy dome in the leaves' dark greens, deeper toward its foot
-	const rows = [4, 4, 2][lvl], cols = [11, 10, 7][lvl], ids = [];
+	const rows = [4, 4, 2, 2][lvl], cols = [11, 10, 7, 4][lvl], ids = [];
 	for (let j = 0; j <= rows; j++) {
 		const th = j / rows * 1.62, row = [];
 		for (let i = 0; i < cols; i++) {
@@ -255,12 +256,17 @@ function moundDraw(b, M, lvl, rnd) {
 function lantanaDraw(b, cb, P, lvl, rnd) {
 	moundDraw(b, P.mound, lvl, rnd);
 	const out = V(P.mound.at.x, -0.12, P.mound.at.z);
-	for (const c of lvl === 2 ? P.cards.filter((_, k) => k % 2 === 0) : P.cards) {
+	// (the farthest: a card in six, each larger, the same leafy cover)
+	const every = [1, 1, 2, 6][lvl], grow = [1, 1, 1.35, 2.3][lvl];
+	for (const c of every > 1 ? P.cards.filter((_, k) => k % every === 0) : P.cards) {
 		const col = lift(mul(LEAF_CARD, c.tone), c.c.y, 0.5);
-		card(cb, c.c, c.size * (lvl === 2 ? 1.35 : 1), mulberry32(c.seed), col, 0.45, out);
+		card(cb, c.c, c.size * grow, mulberry32(c.seed), col, 0.45, out);
 	}
-	for (const s of P.shoots) {
+	for (let i = 0; i < P.shoots.length; i++) {
+		const s = P.shoots[i];
 		stemDraw(b, s, lvl);
+		// (the farthest: the heads of one shoot in four, as far off, each larger)
+		if (lvl === 3) { if (i % 4 === 0) headDraw(b, { ...s.heads[0], R: s.heads[0].R * 1.8 }, 2); continue; }
 		for (const h of lvl === 2 ? s.heads.slice(0, 1) : s.heads) headDraw(b, lvl === 1 ? { ...h, R: h.R * 1.3 } : h, lvl);
 		const ls = lvl === 2 ? [] : lvl === 1 ? s.leaves.filter((_, k) => k < 4) : s.leaves;
 		for (const L of ls) leafDraw(b, L, lvl, rnd);
@@ -268,21 +274,21 @@ function lantanaDraw(b, cb, P, lvl, rnd) {
 	if (lvl < 2) for (const L of lvl === 1 ? P.crown.filter((_, k) => k % 2 === 0) : P.crown) leafDraw(b, L, lvl, rnd);
 }
 function flaxDraw(b, leaves, lvl) {
-	const segs = [7, 4, 2][lvl], across = lvl === 0 ? [-1, -0.72, 0.72, 1] : lvl === 1 ? [-1, 0, 1] : [-1, 1];
-	const ls = lvl === 2 ? leaves.filter((_, k) => k % 2 === 0) : lvl === 1 ? leaves.filter((_, k) => k % 4 !== 3) : leaves;
+	const segs = [7, 4, 2, 1][lvl], across = lvl === 0 ? [-1, -0.72, 0.72, 1] : lvl === 1 ? [-1, 0, 1] : [-1, 1];
+	const ls = lvl === 3 ? leaves.filter((_, k) => k % 4 === 0) : lvl === 2 ? leaves.filter((_, k) => k % 2 === 0) : lvl === 1 ? leaves.filter((_, k) => k % 4 !== 3) : leaves;
 	for (const L of ls) {
 		const dir = V(Math.cos(L.a), 0, Math.sin(L.a)), side = V(-dir.z, 0, dir.x), rows = [];
 		for (let k = 0; k <= segs; k++) {
 			const t = k / segs, d = L.len * t;
 			// up and out, the tip arching over and down
 			const p = L.base.clone().addScaledVector(dir, Math.cos(L.elev) * d + d * d * 0.35).add(V(0, Math.sin(L.elev) * d - 0.6 * d * d / L.len, 0));
-			const w = L.wid * (lvl === 2 ? 2.5 : 1) * (t > 0.85 ? (1 - t) / 0.15 * 0.8 + 0.2 : 1), tw = L.twist * t;
+			const w = L.wid * (lvl === 3 ? 5 : lvl === 2 ? 2.5 : 1) * (t > 0.85 ? (1 - t) / 0.15 * 0.8 + 0.2 : 1), tw = L.twist * t;
 			const sd = side.clone().multiplyScalar(Math.cos(tw)).add(V(0, Math.sin(tw), 0));
 			const n = V(0, 1, 0).addScaledVector(dir, -0.3).normalize();
 			rows.push(across.map((a) => {
 				// cream margins, sage green down the middle, a little V along the midrib
 				const edge = Math.abs(a) > 0.9, q = p.clone().addScaledVector(sd, a * w / 2).add(V(0, (1 - Math.abs(a)) * w * 0.15, 0));
-				const c0 = lvl === 2 ? mix(FLAX, FLAX_EDGE, 0.3) : edge ? FLAX_EDGE : lvl === 1 ? mix(FLAX, FLAX_EDGE, 0.15) : FLAX;
+				const c0 = lvl >= 2 ? mix(FLAX, FLAX_EDGE, 0.3) : edge ? FLAX_EDGE : lvl === 1 ? mix(FLAX, FLAX_EDGE, 0.15) : FLAX;
 				return b.vert(q, n, [t, (a + 1) / 2], lift(mul(c0, L.tone * (0.8 + 0.3 * t)), q.y, 0.6), 0.15 + 0.6 * t);
 			}));
 		}
@@ -305,12 +311,12 @@ function litterDraw(b, rnd, n, w, d) {
 }
 
 // a bed's plants (a big lantana and two smaller, two clumps of flax lily, a few dropped
-// florets on the mulch) at each level, and a patch of fallen florets for the pavement
+// florets on the mulch) at each of four levels, and a patch of fallen florets for the pavement
 export function plantingBed(seed) {
 	const r = mulberry32(seed), bounds = { x: BED_LEN / 2, z: BED_DEPTH / 2 };
 	const lans = [lantanaPlan(r, V(-0.18, 0, 0.08), 0.62, 0.44, bounds), lantanaPlan(r, V(0.42, 0, -0.22), 0.42, 0.34, bounds), lantanaPlan(r, V(0.52, 0, 0.34), 0.3, 0.27, bounds)];
 	const flaxA = flaxPlan(r, V(0.12, 0, 0.36), 18, 0.7), flaxB = flaxPlan(r, V(-0.5, 0, -0.3), 15, 0.62);
-	const tiers = [0, 1, 2].map((lvl) => {
+	const tiers = [0, 1, 2, 3].map((lvl) => {
 		const b = new Builder(), cb = new Builder(), rnd = mulberry32(seed + 17 + lvl);
 		if (lvl < 2) {
 			// the mulch, a hair above the planter's top
@@ -325,7 +331,7 @@ export function plantingBed(seed) {
 	});
 	const lb = new Builder();
 	litterDraw(lb, mulberry32(seed + 99), 14, BED_LEN, 0.7);
-	return { detail: tiers[0], mid: tiers[1], far: tiers[2], litter: lb.geometry() };
+	return { detail: tiers[0], mid: tiers[1], far: tiers[2], distant: tiers[3], litter: lb.geometry() };
 }
 // one builder's triangles added to another's, raised by dy
 function merge(a, b, dy) {
