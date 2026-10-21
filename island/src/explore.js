@@ -22,7 +22,7 @@ const WALK_D = [4, 9, 16, 26];
 const TRAIL = new Set(['track', 'path', 'footway', 'cycleway', 'pedestrian', 'bridleway']);
 // the aether gone after: how far it is looked for, how strongly it draws the course, how close the
 // last approach is steered straight at it, and how long one that cannot be reached is let be
-const HUNT_R = { walk: 60, fly: 110 }, HUNT_PULL = 2.6, HUNT_NEAR = 14, HUNT_SKIP = 180000;
+const HUNT_R = { walk: 60, fly: 110 }, HUNT_PULL = 2.6, HUNT_NEAR = 18, HUNT_SKIP = 180000;
 // the shots, round the subject: a (angle from behind), d (distance), h (height over the feet),
 // lh (height looked at), ahead (how far ahead of the subject is looked at), spin (rad/s round it)
 const WALK = [
@@ -257,13 +257,15 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		const m = H.prey, dm = m ? Math.hypot(m.x - P.pos.x, m.z - P.pos.z) : Infinity;
 		// (the time given to reach it, counted in game time: a slow frame is not a failure)
 		if (m) m.left -= dt;
-		const close = fly ? dm < 210 : dm < HUNT_NEAR * 1.5;
+		// (on foot, one off to the side or behind is turned round to at once, as anyone would)
+		const round = !fly && m && Math.abs(wrap(H.target - H.heading)) > 1;
+		const close = fly ? dm < 210 : dm < HUNT_NEAR * 1.5 || round;
 		const turn = fly ? (close ? 0.4 : 0.22) : close ? 1.4 : 0.55;
 		const want = clamp(wrap(H.target - H.heading) * (close ? 1.6 : 0.7), -turn, turn);
 		H.rate += (want - H.rate) * Math.min(1, dt * (close ? 3 : 1.4));
 		H.heading = wrap(H.heading + H.rate * dt);
 		P.yaw = H.heading;
-		AUTO.z = fly ? (close ? -0.7 : -1) : dm < 8 ? -0.55 : -1; AUTO.x = 0; AUTO.run = !fly && H.run && dm > HUNT_NEAR;
+		AUTO.z = fly ? (close ? -0.7 : -1) : dm < 8 || round ? -0.55 : -1; AUTO.x = 0; AUTO.run = !fly && H.run && dm > HUNT_NEAR;
 		P.auto = AUTO;
 		if (fly) {
 			// keep a pleasant height over what is ahead, climbing and sinking gently, banked in the turns
@@ -327,11 +329,14 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		const trees = !fly ? W.vegetation.obstacles(x - Math.sin(H.heading) * 6, z - Math.cos(H.heading) * 6, 6, P.pos.y - EYE) : null;
 		const v = fly ? Math.max(16, Math.hypot(P.vel.x, P.vel.z)) : 0;
 		let best = -1e9, bestA = H.heading, top = -1e9;
+		// (after the aether the headings weighed are round the way to it, wherever it lies, and the
+		// wandering course and a trail only lean on the choice: the ground still decides it)
+		const centre = m ? bm : H.heading, lean = m ? 0.3 : 1;
 		for (const off of OFFS) {
-			const a = H.heading + off, dx = -Math.sin(a), dz = -Math.cos(a);
-			let s = Math.cos(wrap(a - wander)) + 0.55 * Math.cos(off);
-			if (m) s += HUNT_PULL * Math.cos(wrap(a - bm));
-			if (rw) s += rw * (dx * rdx + dz * rdz) / (Math.hypot(rdx, rdz) || 1);
+			const a = centre + off, dx = -Math.sin(a), dz = -Math.cos(a);
+			let s = lean * Math.cos(wrap(a - wander)) + 0.55 * Math.cos(wrap(a - H.heading));
+			if (m) s += HUNT_PULL * Math.cos(off);
+			if (rw) s += lean * rw * (dx * rdx + dz * rdz) / (Math.hypot(rdx, rdz) || 1);
 			if (!fly) {
 				let gp = I.heightAt(x, z), dp = 0;
 				for (let i = 0; i < WALK_D.length; i++) {
@@ -362,7 +367,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 			if (off === 0) top = s;
 		}
 		// (a small gain is not worth a turn: keep on unless something is clearly better)
-		if (best > top + 0.15) H.target = bestA;
+		if (m || best > top + 0.15) H.target = bestA;
 		else H.target = H.heading + wrap(H.target - H.heading) * 0.5;
 		// (the last of the way to the aether, or flying to it: straight at it)
 		if (m && (fly || dm < HUNT_NEAR)) H.target = bm;

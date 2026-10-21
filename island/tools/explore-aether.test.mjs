@@ -25,10 +25,10 @@ function harness(fn) {
 
 // a world flat at 5 m (sea where wet(x, z)), the player moved by s.auto as player.js moves it, and
 // the aether gathered as magic/aether.js gathers it: within reach of where you are
-function run({ clock, node, flying = false, boost = 1, motes, wet = () => false, boxes = [], seconds = 120 }) {
+function run({ clock, node, flying = false, boost = 1, motes, wet = () => false, boxes = [], roads = [], seconds = 120 }) {
 	const S = { pos: new THREE.Vector3(0, G + (flying ? 30 : 1.68), 0), vel: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0, boost, flying };
 	const island = { heightAt: (x, z) => (wet(x, z) ? -3 : G), half: 50000 };
-	const real = { loaded: () => true, near: (kind) => (kind === 'boxes' ? boxes : []) };
+	const real = { loaded: () => true, near: (kind) => (kind === 'boxes' ? boxes : kind === 'roads' ? roads : []) };
 	const W = { island, real, player: { state: S, input: () => ({ mz: 0 }) }, vegetation: { obstacles: () => [] } };
 	const music = { on: () => true, auto() {}, bias() {}, shift() { return 0; }, queue() {},
 		pulse: () => ({ playing: true, stepMs: 150, energy: .5, bars: Math.floor(clock.now / 2400), at: Math.floor(clock.now / 2400) * 2400 }) };
@@ -75,6 +75,17 @@ test('on foot, Explore turns aside to the motes near by and gathers them', () =>
 	assert.deepEqual([...got].sort(), ['a', 'b', 'w']);
 	assert.equal(info.aether.gathered, 3);
 	assert.equal(info.aether.seeking, null);
+}));
+
+test('on foot, a mote passed by or off a trail still turns you round to it', () => harness((clock, node) => {
+	// (a footpath straight on north; one mote behind you, and past it one well off the path)
+	const roads = [{ cls: 'footway', pts: [0, 60, 0, -600] }];
+	const motes = [
+		{ key: 'behind', x: 6, y: G + 1.1, z: 25, strand: 'light', well: false },
+		{ key: 'aside', x: -30, y: G + 1.1, z: 55, strand: 'light', well: false },
+	];
+	const { got } = run({ clock, node, motes, roads, seconds: 90 });
+	assert.deepEqual([...got].sort(), ['aside', 'behind']);
 }));
 
 test('on foot, a mote across water is left alone', () => harness((clock, node) => {
