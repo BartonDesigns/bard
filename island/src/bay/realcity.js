@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
-import { groupBoxes, isHome } from './houseplan.js';
+import { groupBoxes, isHome, garageOf } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
@@ -102,6 +102,8 @@ export const realCovered = (x, z, m = 60) => inMapped(x, z) && inMapped(x - m, z
 export { REAL_TALL };
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
+// how far (x, z) is from the segment a-b
+const segDist = (ax, az, bx, bz, x, z) => { const ex = bx - ax, ez = bz - az, l2 = ex * ex + ez * ez || 1, t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2)); return Math.hypot(ax + ex * t - x, az + ez * t - z); };
 // a region is fetched when you come this near its edge and dropped when you are this far
 // (the buildings stand to 2 km, the trees a little further); a change this near you is
 // news to everything built round you (version()); a phone keeps less of the map in memory
@@ -208,6 +210,51 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		return moves;
 	}
+	// A drive for every garage the map gives none: from the garage's doors straight out to the
+	// street it faces, concrete as the mapped ones (drawn into the ground's map, drawRoadMap;
+	// the kerb cars and the trees keep off it), so no house stands in a lot of lawn with no way
+	// to it. Where the street is not ahead of the doors (a corner lot, a garage to the side)
+	// the drive bends to the nearest kerb ahead within 50 degrees, or there is none. Across
+	// frames, a few milliseconds at a time
+	async function addDrives(G, signal) {
+		const seen = new Set(), near = [], mapped = [];
+		let t = performance.now();
+		for (const b of G.boxes) {
+			if (!b.grp || seen.has(b.grp) || !isHome(b)) continue;
+			seen.add(b.grp);
+			if (performance.now() - t > 5) { await new Promise((ok) => setTimeout(ok, 0)); if (signal?.aborted) return; t = performance.now(); }
+			const gar = garageOf(b.grp);
+			if (!gar || !gar.doors.length) continue;
+			const { M, ca, sa } = gar, d0 = gar.doors[0], d1 = gar.doors[gar.doors.length - 1];
+			const lx = (d0.x0 + d1.x1) / 2, lz = gar.front;
+			const dx = M.x + ca * lx - sa * lz, dz = M.z + sa * lx + ca * lz, nx = -sa, nz = ca;
+			// (a drive the map already has, at these doors)
+			mapped.length = 0; nearIn(G, 'paths', dx, dz, 30, mapped);
+			if (mapped.some((q) => q.w >= 2.2 && segDist(q.ax, q.az, q.bx, q.bz, dx + nx * 2, dz + nz * 2) < 3.5)) continue;
+			near.length = 0; nearIn(G, 'roads', dx, dz, 50, near);
+			let best = 1e9, bend = null;
+			for (const r of near) {
+				if (!r.drive || r.bridge || r.link || r.cls === 'motorway' || r.cls === 'trunk') continue;
+				const p = r.pts, hw = r.w / 2;
+				for (let i = 0; i + 3 < p.length; i += 2) {
+					// the doors' line straight out, where it crosses this piece of street
+					const ex = p[i + 2] - p[i], ez = p[i + 3] - p[i + 1], den = nx * ez - nz * ex;
+					if (Math.abs(den) > 1e-6) {
+						const qx = p[i] - dx, qz = p[i + 1] - dz, tt = (qx * ez - qz * ex) / den, u = (qx * nz - qz * nx) / den;
+						if (u >= 0 && u <= 1 && tt > 1.5 && tt - hw < best) { best = tt - hw; bend = null; }
+					}
+					// or the nearest kerb ahead, for the bend
+					const l2 = ex * ex + ez * ez || 1, k = Math.max(0, Math.min(1, ((dx - p[i]) * ex + (dz - p[i + 1]) * ez) / l2));
+					const cx = p[i] + ex * k - dx, cz = p[i + 1] + ez * k - dz, cd = Math.hypot(cx, cz);
+					if (cd - hw > 1 && cd - hw < 30 && (cx * nx + cz * nz) / cd > 0.64 && cd - hw + 4 < best) { best = cd - hw + 4; bend = [p[i] + ex * k - cx / cd * hw, p[i + 1] + ez * k - cz / cd * hw]; }
+				}
+			}
+			if (best > 32 || best < 0.8) continue;
+			const w = Math.min(6.4, Math.max(3.0, d1.x1 - d0.x0 + 0.5));
+			const q = bend ? { ax: dx, az: dz, bx: bend[0], bz: bend[1], w, made: true } : { ax: dx, az: dz, bx: dx + nx * (best + 0.4), bz: dz + nz * (best + 0.4), w, made: true };
+			cellIn(G.grid, q.ax, q.az).paths.push(q);
+		}
+	}
 	async function load(i, signal) {
 		const name = NAMES[i], base = new URL(`../assets/bayarea/real/${name}`, import.meta.url).href;
 		const [H, bin, px] = await Promise.all([
@@ -265,6 +312,8 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			for (const e of ['a', 'b']) for (const m of moved.get(Math.floor(p[e + 'x'] / 50) * 65536 + Math.floor(p[e + 'z'] / 50)) || []) if (Math.hypot(p[e + 'x'] - m.x, p[e + 'z'] - m.z) < m.r) { p[e + 'x'] += m.px; p[e + 'z'] += m.pz; break; }
 			if (inIb(p.ax, p.az)) cellIn(G.grid, p.ax, p.az).paths.push(p);
 		}
+		await addDrives(G, signal);
+		if (signal?.aborted) throw new DOMException('Tile cancelled', 'AbortError');
 		o = S.pools[0];
 		for (let n = 0; n < S.pools[1]; n++, o += 10) {
 			const p = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000 };

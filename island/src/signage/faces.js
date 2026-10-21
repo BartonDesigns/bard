@@ -432,7 +432,8 @@ const CAR = {
 		const r = rng(f.seed * 131 + 7), kind = f.seed % 6;
 		if (kind === 0) { g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(x + w / 2, y + h / 2, w / 2 - 2, h / 2 - 2, 0, 0, Math.PI * 2); g.fill(); g.lineWidth = 3; g.strokeStyle = '#111'; g.stroke(); text(g, pick(r, ['26.2', '13.1', 'BAY', 'FOG', 'DLT', 'PNW']), x + w / 2, y + h * 0.54, h * 0.55, { col: '#111' }); return; }
 		const pal = pick(r, [['#1c2f6b', '#ffffff'], ['#ffffff', '#1c2f6b'], ['#d8232a', '#ffffff'], ['#1c7a3c', '#ffffff'], ['#f4c430', '#111111'], ['#111111', '#f4f4f0']]);
-		g.fillStyle = pal[0]; g.fillRect(x + 1, y + 1, w - 2, h - 2);
+		// (die-cut, its corners rounded)
+		g.fillStyle = pal[0]; rrect(g, x + 1, y + 1, w - 2, h - 2, h * 0.2); g.fill();
 		const line = pick(r, ['I BRAKE FOR TIDE POOLS', 'KEEP IT SALTY', 'MY OTHER CAR IS A BICYCLE', 'ARE WE THERE YET?', 'FOG CITY NATIVE', 'TRAIL MIX ENTHUSIAST', 'RADIO TIDE 101.9', 'PROUD PARENT · HARBOR HIGH', 'HONK IF YOU LOVE HILLS', 'SAVE THE TIDEPOOLS', 'STUDENT DRIVER · BE PATIENT', 'LIFE IS BETTER AT THE COAST']);
 		text(g, line, x + w / 2, y + h * 0.54, h * 0.46, { col: pal[1], maxW: w * 0.92, track: 0.04 });
 	},
@@ -464,7 +465,7 @@ const CAR = {
 		const st = f.style || 'us';
 		if (st === 'jp') { g.fillStyle = '#2a6fd6'; g.fillRect(x, y, w, h); text(g, String(f.year % 100 || 7), x + w / 2, y + h * 0.42, h * 0.5, { col: '#fff' }); text(g, '検査', x + w / 2, y + h * 0.82, h * 0.18, { col: '#fff', font: JPF }); return; }
 		if (st === 'de') { g.beginPath(); g.arc(x + w / 2, y + h / 2, w / 2 - 1, 0, Math.PI * 2); g.fillStyle = '#2f9e44'; g.fill(); text(g, '4', x + w / 2, y + h * 0.56, h * 0.5, { col: '#111' }); return; }
-		g.fillStyle = pick(rng(f.seed + 1), ['#f4c430', '#58c4f0', '#ff8ab4', '#9ef05a']); g.fillRect(x, y, w, h);
+		g.fillStyle = pick(rng(f.seed + 1), ['#f4c430', '#58c4f0', '#ff8ab4', '#9ef05a']); rrect(g, x + 1, y + 1, w - 2, h - 2, h * 0.1); g.fill();
 		text(g, 'ZONE', x + w / 2, y + h * 0.18, h * 0.13, { col: '#111', track: 0.2 });
 		text(g, String.fromCharCode(65 + (f.seed % 8)), x + w / 2, y + h * 0.5, h * 0.42, { col: '#111' });
 		text(g, `RESIDENT ${f.year}`, x + w / 2, y + h * 0.86, h * 0.1, { col: '#111' });
