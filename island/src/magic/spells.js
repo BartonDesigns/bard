@@ -110,6 +110,19 @@ export const SPELLS = Object.freeze([
 ]);
 
 export const SPELL = Object.freeze(Object.fromEntries(SPELLS.map((q) => [q.id, q])));
+// Gargantua's size t seconds in (m): a dot that swells fast in its first moment to stand on the
+// horizon, feeds there for the middle of its time, creeping larger, then in its last quarter
+// rushes out to fill the whole sky, full by 85% of its time and holding there. Its heart stands
+// GARGANTUA_LIFT of its radius over the eye, so the whole shadow sits above the horizon.
+export const GARGANTUA_LIFT = 1.15;
+export function gargantuaSize(spell, t) {
+	const T = spell.t || 10, R0 = spell.size0 || 1.5, R1 = spell.size || 330, Ra = R1 * 0.14, Rb = R1 * 0.33, t1 = 1.2, t2 = T * 0.65, t3 = T * 0.85;
+	if (t <= 0) return R0;
+	if (t < t1) { const u = t / t1, e = 1 - (1 - u) * (1 - u); return R0 * Math.pow(Ra / R0, e); }
+	if (t < t2) return Ra * Math.pow(Rb / Ra, (t - t1) / (t2 - t1));
+	if (t < t3) return Rb * Math.pow(R1 / Rb, Math.pow((t - t2) / (t3 - t2), 1.4));
+	return R1;
+}
 export const strandOf = (spell) => SCHOOLS[spell?.school]?.strand || null;
 
 // what weaving a spell costs: { light, dark } (twilight: both)

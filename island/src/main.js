@@ -926,7 +926,7 @@ export function createIslandWorld() {
 	// magic; with an account, players join it and guilds ally with it (guild/)
 	HOOKS.guild = guideApi.guild = createGuild({ combat, guide, social, nearby: () => [...people.pool, ...social.actors.all()], cloud: cloudSave, url: roomsURL(), mount: dom.mount, menu: tpMenu, onFoot: () => !!world?.player && !drive.active() && !world.orbit?.active?.() && !world.boat?.boarded?.(), yaw: () => world?.player?.yaw ?? 0, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX });
 	// (the fog's colour under Gargantua's black sky)
-	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
+	const _voidFog = new THREE.Color(0.03, 0.012, 0.006);
 	guideApi.combat=combat;
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });

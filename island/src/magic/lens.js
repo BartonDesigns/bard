@@ -1,9 +1,11 @@
 // Gravitational lensing and Gargantua's ending, drawn over the finished frame. The frame is copied,
-// then drawn again: round the rim of each black hole, above the horizon, the light is bent along its
-// edge, what lies just beyond the rim drawn out and wrapped round it, with a thin bright photon ring
-// on the edge itself; the hole's own sphere stays in the scene, so what stands in front of it still
-// hides it. Then the grade: as Gargantua nears its end the colours invert, drain to grey and go to
-// black, and after two seconds of black the world bursts back. Drawn only while either is up.
+// then drawn again: round each black hole, above the horizon, the light is bent in along its edge:
+// what lies beyond the rim is drawn out and wrapped round it, the sky and its clouds stretched
+// round the shadow, strongest at the rim and easing off with distance (after Interstellar); the
+// hole's own sphere and face stay in the scene, so what stands in front of it still hides it. Then
+// the grade: as Gargantua nears its end the colours invert (a wave out from the hole), drain to
+// grey and go to black, and after two seconds of black the world bursts back. Drawn only while
+// either is up.
 import * as THREE from 'three';
 
 const MAX = 4;
@@ -11,28 +13,30 @@ const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(positi
 const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[${MAX}]; uniform int uN; uniform float uAspect; uniform float uT; uniform vec4 uGrade; varying vec2 vUv;
 	void main(){
 		vec2 asp = vec2(uAspect, 1.0), q = (vUv * 2.0 - 1.0) * asp, s = q;
-		float ring = 0.0, hole = 0.0, px = 2.0 / 900.0;
+		float hole = 0.0, px = 2.0 / 900.0;
 		for (int i = 0; i < ${MAX}; i++) {
 			if (i >= uN) break;
-			// (x, y: its heart on screen, z: its radius there, w: how wide the bent band round it is;
-			// uK.x: its strength 0..1, uK.y: where the horizon crosses it on screen)
+			// (x, y: its heart on screen, z: its shadow's radius there, w: how far out the bending
+			// reaches, in radii; uK.x: its strength 0..1, uK.y: where the horizon crosses it on screen)
 			vec2 d = s - uL[i].xy;
-			// (the hole itself, its halo and the flat of its disc, kept out of the grade)
-			float rr = uL[i].z, e = length(vec2(d.x / (rr * 3.3), d.y / (rr * 0.4)));
-			hole = max(hole, uK[i].x * smoothstep(uK[i].y - px, uK[i].y + px * 2.0, s.y) * max(1.0 - smoothstep(rr * 1.9, rr * 2.0, length(d)), 1.0 - smoothstep(0.9, 1.0, e)));
-			float th = max(length(d), 1e-4), rs = uL[i].z, w = rs * uL[i].w, k = uK[i].x;
+			float rs = uL[i].z, th = max(length(d), 1e-4), k = uK[i].x;
 			// (only above the horizon: below it the hole is hidden, and so is its light)
 			float sky = smoothstep(uK[i].y - px, uK[i].y + px * 2.0, s.y);
-			// (in the band round the rim each pixel looks out to just past the rim: what lies beyond is
-			// drawn out along the edge, easing back to the frame as it is at the band's outer edge)
-			float x = clamp((th - rs) / w, 0.0, 1.0), f = x * x * (2.0 - x);
-			float src = rs * 1.01 + (w - rs * 0.01) * f;
-			float bent = th > rs && th < rs + w ? mix(th, src, k * sky) : th;
+			// (the shadow itself, its ring and the flat of its disc are kept out of the grade, until
+			// it has grown past the whole view, when all of it goes with the world)
+			float e = length(vec2(d.x / (rs * 3.6), d.y / (rs * 0.32)));
+			float keep = max(1.0 - smoothstep(rs * 1.35, rs * 1.5, th), 1.0 - smoothstep(0.85, 1.0, e)) * (1.0 - smoothstep(1.3, 2.6, rs));
+			hole = max(hole, k * sky * keep);
+			// (every pixel outside the rim looks in toward it: at the rim, to just past the edge; farther
+			// out, less and less, so the sky is squeezed round the shadow and eases back to itself)
+			float beyond = th - rs;
+			if (beyond <= 0.0) continue;
+			float pull = (beyond - rs * 0.012) * exp(-beyond / (rs * uL[i].w));
+			float bent = th - max(0.0, pull) * k * sky;
 			s = uL[i].xy + d / th * bent;
-			ring += k * sky * exp(-pow((th - rs * 1.012) / (rs * 0.012 + px), 2.0)) * (0.85 + 0.15 * sin(atan(d.y, d.x) * 5.0 + uT * 3.0));
 		}
 		vec2 uv = s / asp * 0.5 + 0.5;
-		vec3 c = texture2D(uSrc, clamp(uv, 0.0, 1.0)).rgb + ring * vec3(1.0, 0.86, 0.66);
+		vec3 c = texture2D(uSrc, clamp(uv, 0.0, 1.0)).rgb;
 		// (the grade on all but the hole: x invert, y grey, z black, w the burst back to life)
 		vec3 c0 = c;
 		// (the inversion spreads out from the hole across the view, a hard-edged wave rather than a fade
@@ -80,7 +84,7 @@ export function createLens() {
 			if (Math.abs(v.x) > 1 + rs * 4 || Math.abs(v.y) > 1 + rs * 4) continue;
 			const hx = v.x * camera.aspect, hy = v.y;
 			v.set(l.p.x, l.cut ?? -1e9, l.p.z).project(camera);
-			L[n].set(hx, hy, rs, 0.45);
+			L[n].set(hx, hy, rs, 0.7);
 			K[n].set(Math.min(1, l.k), Math.max(-10, v.y));
 			n++;
 		}

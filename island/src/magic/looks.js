@@ -27,7 +27,9 @@ import { SHAPE, GLOW } from './fx.js';
 const O = (shape, extra = {}) => Object.freeze({ shape: SHAPE[shape], ...extra });
 const ORB = null, STAR = O('star', { spin: 2 }), RING = O('ring'), SHARD = O('shard', { spin: 1.5 }), FLAME = O('flame'), STREAK = O('streak'),
 	RUNE = O('rune', { spin: 0.8 }), RUNE_STILL = O('rune'), SMOKE = O('smoke', { ink: true, spin: 0.4 }), EYES = O('eyes'), CROSS = O('cross'),
-	HEX = O('hex', { spin: 0.3 }), LEAF = O('leaf', { spin: 2.5 }), GLOWSMOKE = O('smoke', { spin: 0.4 }), DARK_ORB = O('orb', { ink: true }), DRIP = O('flame', { rot: Math.PI });
+	HEX = O('hex', { spin: 0.3 }), LEAF = O('leaf', { spin: 2.5 }), GLOWSMOKE = O('smoke', { spin: 0.4 }), DARK_ORB = O('orb', { ink: true }), DRIP = O('flame', { rot: Math.PI }),
+	// (Gargantua's debris: dark shards and puffs of the ground torn up, and lit grit)
+	DEBRIS = O('shard', { ink: true, spin: 3 }), DEBRIS_PUFF = O('smoke', { ink: true, spin: 0.6 }), GRIT = O('shard', { spin: 4 });
 const rnd = (a = 1) => (Math.random() - 0.5) * 2 * a;
 const ang = (dx, dz) => Math.atan2(dx, dz);
 
@@ -116,7 +118,7 @@ const C = {
 	leafG: [0.3, 1, 0.45], mint: [0.65, 1, 0.75], petal: [1, 0.62, 0.8], phoenix: [1, 0.45, 0.12],
 	ice: [0.78, 0.95, 1], sky: [0.4, 0.68, 1], ward: [0.55, 0.8, 1],
 	rose: [1, 0.6, 0.6], peach: [1, 0.78, 0.55], wind: [0.75, 1, 0.95], water: [0.35, 0.65, 1],
-	violet: [0.62, 0.35, 1], lilac: [0.82, 0.62, 1], blood: [1, 0.08, 0.1], redEye: [1, 0.12, 0.05], corona: [1, 0.6, 0.25], accrete: [1, 0.66, 0.32],
+	violet: [0.62, 0.35, 1], lilac: [0.82, 0.62, 1], blood: [1, 0.08, 0.1], redEye: [1, 0.12, 0.05], corona: [1, 0.6, 0.25], accrete: [1, 0.66, 0.32], ember: [1, 0.38, 0.08], debris: [0.07, 0.05, 0.04], grit: [0.8, 0.62, 0.5],
 	indigo: [0.32, 0.25, 1], azure: [0.4, 0.8, 1],
 	poison: [0.55, 0.95, 0.15], acid: [0.85, 1, 0.2], ash: [0.85, 0.62, 0.35], soul: [0.75, 1, 0.9],
 	ghost: [0.55, 0.95, 0.8], ghostEdge: [0.25, 0.7, 0.55],
@@ -306,21 +308,66 @@ export const LOOK = {
 		mark: (fx, T) => { if (Math.random() < 0.25) fx.line(T.bound, { x: T.bound.x, y: T.bound.y + 1.2, z: T.bound.z }, C.violet, 0.3, 0.12, 0.14); },
 	},
 	gargantua: {
-		// (a black hole on the horizon, after Interstellar: it rises with u, a stream of light winds into
-		// its disc while it feeds, each foe it takes streaks into it, and it closes in a white flash)
-		tell: (fx, at, r, u, eye) => { fx.hole(at, r, u, eye); for (let k = 0; k < 6; k++) { const a = Math.random() * 6.283, rr = r * (3 + Math.random() * 2); fx.emit(at.x + Math.cos(a) * rr, at.y + rnd(r * 0.3), at.z + Math.sin(a) * rr, -Math.cos(a) * rr * 0.5, 0, -Math.sin(a) * rr * 0.5, 1.6, r * 0.12, r * 0.02, C.accrete, 0.9 * u, 0, 0, STREAK); } },
-		tick: (fx, at, r, t, eye) => {
+		// (a black hole on the horizon, after Interstellar (fx.js blackHole paints it; lens.js bends
+		// the sky round it): it rises with u, then feeds: light winds into its disc, the ground round
+		// you is torn up, debris lifting in long curves and dust threads racing up into it, each foe it
+		// holds frays toward it and is drawn out into a thread when taken; it closes in a white flash,
+		// and when the world comes back, embers rain)
+		tell: (fx, at, r, u, eye) => { fx.hole(at, r, u, eye); for (let k = 0; k < 6; k++) { const a = Math.random() * 6.283, rr = r * (1.4 + Math.random() * 1.6); fx.spark(at.x + Math.cos(a) * rr, at.y + rnd(r * 0.05), at.z + Math.sin(a) * rr, -Math.sin(a) * rr * 0.8 - Math.cos(a) * rr * 0.5, 0, Math.cos(a) * rr * 0.8 - Math.sin(a) * rr * 0.5, 0.9, 0.5, r * 0.03, k % 2 ? C.accrete : C.ember, 0.9 * u, 0, 0); } },
+		tick: (fx, at, r, t, eye, u = 0.5) => {
 			fx.hole(at, r, 1, eye);
-			for (let k = 0; k < 8; k++) { const a = t * 0.8 + k / 8 * 6.283 + rnd(0.2), rr = r * (2.6 + Math.random() * 1.4), sp = rr * 0.9; fx.emit(at.x + Math.cos(a) * rr, at.y + rnd(r * 0.12), at.z + Math.sin(a) * rr, -Math.sin(a) * sp - Math.cos(a) * sp * 0.5, 0, Math.cos(a) * sp - Math.sin(a) * sp * 0.5, 1.4, r * 0.1, r * 0.02, k % 3 ? C.accrete : C.white, 0.9, 0, 0, STREAK); }
+			// (the disc fed: hard sparks swept round it in the flat of its plane, tipped toward you so its
+			// near side passes under the shadow, spiralling in)
+			// (the plane of the disc holds the eye, so it is seen edge-on, dipping a little more in front)
+			const ex0 = eye ? eye.x - at.x : 0, ez0 = eye ? eye.z - at.z : 1, el = Math.hypot(ex0, ez0) || 1, ex = ex0 / el, ez = ez0 / el, tilt = eye ? (eye.y - at.y) / el : 0;
+			for (let k = 0; k < 5; k++) {
+				const a = t * 0.8 + k / 5 * 6.283 + rnd(0.3), rr = r * (1.3 + Math.random() * 1.6), sp = rr * 1.1, cx = Math.cos(a), cz = Math.sin(a), near = cx * ex + cz * ez;
+				fx.spark(at.x + cx * rr, at.y + near * (rr * tilt - r * 0.25) + rnd(r * 0.03), at.z + cz * rr, -cz * sp - cx * sp * 0.6, 0, cx * sp - cz * sp * 0.6, 1.0, 0.45, r * 0.02, k % 5 ? (k % 2 ? C.accrete : C.ember) : C.white, 0.85, 0, 0);
+			}
+			if (!eye) return;
+			// (the pull on the ground round you: dark debris and lit grit torn up and lifting in long
+			// curves toward it, faster as it feeds; dust threads of light racing up into it)
+			const dx = at.x - eye.x, dz = at.z - eye.z, L = Math.hypot(dx, dz) || 1, fx0 = dx / L, fz0 = dz / L, gy = eye.y - 1.5, pull = 0.6 + u;
+			for (let k = 0; k < 8; k++) {
+				const a = Math.random() * 6.283, rr = 6 + Math.random() * 44, px = eye.x + Math.cos(a) * rr + fx0 * 14, pz = eye.z + Math.sin(a) * rr + fz0 * 14;
+				const dark = k % 2 === 0, s = dark ? 0.5 + Math.random() * 0.6 : 0.25 + Math.random() * 0.3;
+				fx.emit(px, gy + Math.random() * 0.8, pz, fx0 * (2 + Math.random() * 4) * pull + rnd(1.2), 1.5 + Math.random() * 3, fz0 * (2 + Math.random() * 4) * pull + rnd(1.2), 3.4 + Math.random() * 1.4, s, s * 0.5, dark ? C.debris : C.grit, dark ? 0.95 : 0.55, -(4 + Math.random() * 5) * pull, 0.15, dark ? (k % 4 ? DEBRIS : DEBRIS_PUFF) : GRIT);
+			}
+			for (let k = 0; k < 2; k++) {
+				const a = Math.random() * 6.283, rr = 16 + Math.random() * 44, px = eye.x + Math.cos(a) * rr + fx0 * 16, pz = eye.z + Math.sin(a) * rr + fz0 * 16;
+				const tx = at.x - px, ty = at.y - gy, tz = at.z - pz, l = Math.hypot(tx, ty, tz) || 1, v = (22 + Math.random() * 22) * pull;
+				fx.spark(px, gy + 0.3, pz, tx / l * v, ty / l * v * 0.6 + 4, tz / l * v, 1.3, 0.35, 0.03 + Math.random() * 0.02, k ? C.ember : C.accrete, 0.6, -4, 0);
+			}
 		},
-		arc: (fx, from, to) => {
-			// (a foe torn away: its dust pulled out toward the hole in a long thread)
+		// (a foe held in its pull: dust and threads of its own torn off and streaming up toward it)
+		held: (fx, from, to) => {
+			const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z, l = Math.hypot(dx, dy, dz) || 1;
+			fx.emit(from.x + rnd(0.4), from.y + rnd(0.7), from.z + rnd(0.4), dx / l * 7, dy / l * 7 + 2, dz / l * 7, 0.9, 0.16, 0.05, C.debris, 0.9, -3, 0.2, DEBRIS);
+			fx.spark(from.x + rnd(0.3), from.y + rnd(0.6), from.z + rnd(0.3), dx / l * 16, dy / l * 16 + 2, dz / l * 16, 0.5, 0.3, 0.05, C.accrete, 0.8, 0, 0);
+		},
+		arc: (fx, from, to, r = 10) => {
+			// (a foe torn away: drawn out into one long thread of light up into the hole, thin toward it,
+			// its dust pulled along the thread, its heart flaring where it stood)
 			const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
-			for (let k = 0; k < 26; k++) { const f = 0.25 + Math.random() * 0.5; fx.emit(from.x + rnd(0.4), from.y + rnd(0.6), from.z + rnd(0.4), dx * f, dy * f, dz * f, 1.8, 0.5, 0.15, k % 2 ? C.accrete : C.white, 1, 0, 0, STREAK); }
+			fx.seg(to, from, C.accrete, Math.max(0.45, r * 0.02), 0.8, 1, 1);
+			fx.seg({ x: from.x + dx * 0.85, y: from.y + dy * 0.85, z: from.z + dz * 0.85 }, from, C.white, Math.max(0.2, r * 0.008), 0.6, 1, 1);
+			for (let k = 0; k < 30; k++) { const f = 0.3 + Math.random() * 0.55; fx.emit(from.x + rnd(0.4), from.y + rnd(0.6), from.z + rnd(0.4), dx * f, dy * f, dz * f, 1.6, 0.5, 0.12, k % 2 ? C.accrete : C.white, 1, 0, 0, STREAK); }
+			for (let k = 0; k < 10; k++) { const f = 0.15 + Math.random() * 0.35; fx.emit(from.x + rnd(0.5), from.y + rnd(0.8), from.z + rnd(0.5), dx * f, dy * f, dz * f, 1.4, 0.3, 0.08, C.debris, 0.9, 0, 0, DEBRIS); }
 			inkPuff(fx, from, C.inkVoid, 6, 0.5, 1.1, 0.9, 0.7, C.accrete);
-			fx.emit(from.x, from.y, from.z, 0, 0, 0, 0.35, 0.4, 2.4, C.accrete, 1, 0, 0, RING);
+			fx.emit(from.x, from.y, from.z, 0, 0, 0, 0.12, 0.6, 2.0, C.white, 1, 0, 0, ORB);
+			fx.emit(from.x, from.y, from.z, 0, 0, 0, 0.35, 0.4, 2.6, C.accrete, 1, 0, 0, RING);
 		},
 		blast: (fx, at, r) => { fx.hole(at, r, 0); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.9, r * 1.2, r * 7, C.white, 1, 0, 0, RING); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.6, r * 4, r * 0.5, C.accrete, 1, 0, 0, STAR); for (let k = 0; k < 40; k++) { const a = Math.random() * 6.283, v = r * (2 + Math.random() * 3); fx.emit(at.x, at.y, at.z, Math.cos(a) * v, rnd(r * 0.4), Math.sin(a) * v, 1.4, r * 0.2, r * 0.05, k % 2 ? C.accrete : C.white, 1, 0, 0.3, STREAK); } },
+		// (the world bursting back after the black: a white flare ahead, and embers raining down
+		// through the view, slow and bright, each a little spark of the disc's fire)
+		back: (fx, eye, d) => {
+			fx.emit(eye.x + d.x * 12, eye.y + d.y * 12 + 2, eye.z + d.z * 12, 0, 0, 0, 0.5, 6, 22, C.white, 0.9, 0, 0, ORB);
+			for (let k = 0; k < 70; k++) {
+				const f = 4 + Math.random() * 30, a = rnd(1.2), px = eye.x + d.x * f + rnd(f * 0.7) + a, py = eye.y + 3 + Math.random() * 18, pz = eye.z + d.z * f + rnd(f * 0.7);
+				fx.spark(px, py, pz, rnd(1.5), -(0.5 + Math.random() * 2), rnd(1.5), 2.5 + Math.random() * 2, 0.25, 0.04 + Math.random() * 0.05, k % 3 ? C.ember : C.accrete, 0.9, 1.2, 0.3);
+				if (k % 2 === 0) fx.emit(px, py, pz, rnd(1), -(0.3 + Math.random()), rnd(1), 3 + Math.random() * 2, 0.08, 0.02, C.accrete, 0.8, 0.6, 0.2, ORB);
+			}
+		},
 	},
 	// ===== Blight: poison and its fog, ash, souls, spores =====
 	'hex-of-decay': {

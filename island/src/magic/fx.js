@@ -198,58 +198,88 @@ function pool(scene, n, ink, order) {
 }
 
 // (onEmit: told of every point made, for the tests)
-// Gargantua: a sphere of black, its accretion disc tipped a little toward you, and the light of the
-// far side of the disc bent round the sphere into a halo that always faces the eye. One group, made
-// once and shown only while the spell lasts; a(1) is its strength, 0 gone.
+// Gargantua: a sphere of black, and over it, turned to the eye, one face of light painted after
+// Interstellar's: a hair of white fire on the shadow's edge (the photon ring), the accretion disc
+// seen edge-on as a blazing band through its heart that flares and dims outward, brighter on the
+// side coming toward you, its near rim dipping across the shadow's lower half; the far side of the
+// disc bent up over the top of the shadow into a broad halo, and a thinner one bent under; two
+// white-hot points where the disc meets the ring; a warm ember haze and faint rays round it all.
+// One group, made once and shown only while the spell lasts; a(1) is its strength, 0 gone.
 // (all of it stops at the horizon: nothing of it below uCut, the eye's height, is drawn, so it
 // stands behind the horizon and rises over it)
+// The face is set a little in front of the sphere, toward the eye, and scaled to the sphere's
+// silhouette there (wider than its radius once it is near: the rim is where the eye's sight
+// grazes the sphere), so the painted ring hugs the black edge at every size, and the near rim of
+// the disc crosses in front of the shadow.
 const DISC_VERT = 'varying vec2 vP; varying float vY; void main(){ vP = position.xy; vY = (modelMatrix * vec4(position, 1.0)).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
 const CUT = 'uniform float uCut; varying float vY;';
 const CORE_FRAG = `${CUT} void main(){ if (vY < uCut) discard; gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); }`;
-const DISC_FRAG = `${CUT} uniform float uT; uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
+const FACE_W = 10, FACE_H = 5.6;
+const FACE_FRAG = `${CUT} uniform float uT; uniform float uA; varying vec2 vP;
 	void main(){
 		if (vY < uCut) discard;
-		float r = length(vP), a = atan(vP.y, vP.x), u = (r - uIn) / (uOut - uIn);
-		float streak = 0.6 + 0.4 * sin(a * 7.0 + r * 3.0 - uT * 2.2) * sin(a * 3.0 - r * 1.7 + uT * 1.3);
-		float hot = exp(-u * 4.0), edge = smoothstep(0.0, 0.04, u) * (1.0 - smoothstep(0.75, 1.0, u));
-		vec3 c = mix(vec3(1.0, 0.52, 0.18), vec3(1.0, 0.95, 0.85), hot);
-		gl_FragColor = vec4(c * (0.5 + 1.8 * hot) * streak * edge * uA, 1.0);
-	}`;
-const HALO_FRAG = `${CUT} uniform float uA; uniform float uIn; uniform float uOut; varying vec2 vP;
-	void main(){
-		if (vY < uCut) discard;
-		float u = (length(vP) - uIn) / (uOut - uIn);
-		float ring = exp(-u * 9.0) + 0.35 * exp(-u * 2.5);
-		vec3 c = mix(vec3(1.0, 0.6, 0.25), vec3(1.0, 0.97, 0.9), exp(-u * 6.0));
-		gl_FragColor = vec4(c * ring * smoothstep(0.0, 0.02, u) * uA, 1.0);
+		vec2 p = vP; float r = length(p), x = p.x, y = p.y, ax = abs(x);
+		// (the face's own edges, never seen: all of it fades out before them)
+		float edge = (1.0 - smoothstep(4.0, 5.0, ax)) * (1.0 - smoothstep(2.0, 2.8, abs(y)));
+		// the photon ring: a hair of white fire on the shadow's edge, a little orange heat outside it
+		float ring = exp(-pow((r - 1.012) / 0.012, 2.0)) * 1.5, heat = exp(-pow((r - 1.035) / 0.05, 2.0)) * 0.35;
+		// the disc, edge-on: a thin blazing band through the heart, its near rim dipping across the
+		// shadow's lower half, flaring and dimming as it goes out, white-hot only along its core; the
+		// side turning toward you (left) is the brighter (Doppler); it churns
+		float yb = -0.3 * sqrt(max(0.0, 1.0 - x * x / 1.5));
+		float thick = 0.07 + 0.1 * max(0.0, ax - 1.0), dy = y - yb;
+		float band = exp(-pow(dy / thick, 2.0)), core = exp(-pow(dy / (thick * 0.3), 2.0));
+		float reach = (1.0 - smoothstep(3.4, 4.6, ax)) / (1.0 + pow(max(0.0, ax - 1.0) * 0.5, 2.2));
+		float dopp = 0.6 + 0.6 * smoothstep(1.6, -1.6, x);
+		float churn = 0.78 + 0.22 * sin(x * 5.0 - uT * 3.2) * sin(x * 11.0 + y * 40.0 + uT * 1.7);
+		float disc = band * reach * dopp * churn * 1.3, discHot = core * reach * dopp * 0.9;
+		// the far side of the disc, bent up over the top into a broad halo hugging the shadow, and a
+		// thinner arc bent under
+		float up = smoothstep(-0.25, 0.45, y / max(r, 1e-4));
+		float halo = exp(-pow((r - 1.1) / 0.25, 2.0)) * up * (0.92 + 0.08 * sin(atan(y, x) * 6.0 - uT * 0.8)) * 0.7;
+		float under = exp(-pow((r - 1.05) / 0.1, 2.0)) * smoothstep(0.15, -0.6, y / max(r, 1e-4)) * 0.45;
+		// the white-hot points where the disc meets the ring
+		vec2 dl = p - vec2(-1.06, -0.06), dr = p - vec2(1.06, -0.06);
+		float spots = exp(-dot(dl, dl) / 0.008) * 1.2 + exp(-dot(dr, dr) / 0.005) * 0.6;
+		// the warm haze round it all, and faint rays thrown out across the sky
+		float glow = 0.18 / pow(1.0 + (r - 1.0) * 2.4, 2.0) + 0.04 / (1.0 + r * 0.6);
+		float an = atan(y, x);
+		float rays = 0.09 * pow(0.5 + 0.5 * sin(an * 13.0 + sin(an * 3.0 + uT * 0.3) * 2.0), 8.0) * exp(-(r - 1.0) * 0.5) * smoothstep(1.0, 1.25, r);
+		vec3 ember = vec3(1.0, 0.32, 0.06), orange = vec3(1.0, 0.56, 0.18), hot = vec3(1.0, 0.94, 0.82);
+		float hin = exp(-max(0.0, r - 1.0) * 9.0);
+		vec3 lit = hot * (ring + spots) + orange * heat + mix(orange, hot, hin) * halo + mix(ember, orange, 0.5) * under + ember * (glow + rays);
+		vec3 discC = orange * disc + hot * discHot;
+		// (over the shadow itself only the disc's near rim is drawn: the rest is the sphere's black)
+		float inside = 1.0 - smoothstep(0.975, 1.0, r);
+		vec3 c = mix(lit + discC, discC, inside);
+		gl_FragColor = vec4(c * uA * edge, 1.0);
 	}`;
 function blackHole(scene) {
 	const group = new THREE.Group();
 	group.name = 'magic-gargantua'; group.visible = false;
 	const cut = { value: -1e9 };
-	const ringMat = (frag, rIn, rOut) => new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uA: { value: 0 }, uIn: { value: rIn }, uOut: { value: rOut }, uCut: cut }, vertexShader: DISC_VERT, fragmentShader: frag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
 	const core = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), new THREE.ShaderMaterial({ uniforms: { uCut: cut }, vertexShader: DISC_VERT, fragmentShader: CORE_FRAG }));
-	const disc = new THREE.Mesh(new THREE.RingGeometry(1.2, 3.2, 128, 1), ringMat(DISC_FRAG, 1.2, 3.2));
-	disc.rotation.x = -Math.PI / 2 + 0.16;
-	const halo = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.9, 128, 1), ringMat(HALO_FRAG, 1.0, 1.9));
-	core.renderOrder = 2; disc.renderOrder = halo.renderOrder = 3;
-	group.add(core, disc, halo);
+	const face = new THREE.Mesh(new THREE.PlaneGeometry(FACE_W, FACE_H), new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 }, uA: { value: 0 }, uCut: cut }, vertexShader: DISC_VERT, fragmentShader: FACE_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+	core.renderOrder = 2; face.renderOrder = 3;
+	group.add(core, face);
 	scene.add(group);
 	// (the sky going out: a dark dome round the eye, deepening as the hole fills more of the view, so
 	// at its greatest the whole sky is gone, behind you too; what is near still stands in front of it)
-	const veil = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), new THREE.MeshBasicMaterial({ color: 0x030108, side: THREE.BackSide, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+	const veil = new THREE.Mesh(new THREE.SphereGeometry(3000, 32, 16), new THREE.MeshBasicMaterial({ color: 0x0a0302, side: THREE.BackSide, transparent: true, opacity: 0, depthWrite: false, fog: false }));
 	veil.name = 'magic-gargantua-veil'; veil.renderOrder = 1; veil.visible = false; veil.frustumCulled = false;
 	scene.add(veil);
-	const H = { a: 0, want: 0, seen: 0, t: 0, cover: 0 }, eye = new THREE.Vector3(), lens = { p: group.position, r: 1, k: 0, cut: 0 };
+	const H = { a: 0, want: 0, seen: 0, t: 0, cover: 0 }, eye = new THREE.Vector3(), to = new THREE.Vector3(), lens = { p: group.position, r: 1, k: 0, cut: 0 };
 	return {
 		group,
-		// shown at p, radius r (m), strength a, the halo turned to face e (the eye)
+		// shown at p, radius r (m), strength a, the face turned to e (the eye)
 		set(p, r, a, e) {
 			group.position.set(p.x, p.y, p.z); group.scale.setScalar(Math.max(0.01, r)); H.want = a; H.seen = 0;
 			if (e) { eye.set(e.x, e.y, e.z); cut.value = e.y; }
-			// (how much of the sky it takes: from when it spans ~35° across to when it would span 130°)
+			// (how much of the sky it takes, and so how far the day goes out: from when it spans ~6°
+			// across (the sky dusks round it, so its light shows) to when it would span 70°, by when
+			// the sky is all but gone)
 			const ang = Math.asin(Math.min(1, r / Math.max(r, group.position.distanceTo(eye))));
-			H.cover = Math.max(0, Math.min(1, (ang - 0.3) / 0.85));
+			H.cover = Math.max(0, Math.min(1, (ang - 0.05) / 0.55));
 		},
 		step(dt) {
 			H.t += dt; H.seen += dt;
@@ -258,19 +288,26 @@ function blackHole(scene) {
 			if (H.want === 0 && H.a < 0.01) H.a = 0;
 			group.visible = H.a > 0;
 			veil.visible = group.visible && H.cover > 0;
-			if (veil.visible) { veil.position.copy(eye); veil.material.opacity = 0.94 * H.a * H.cover * H.cover * (3 - 2 * H.cover); }
+			if (veil.visible) { veil.position.copy(eye); veil.material.opacity = 0.94 * H.a * Math.pow(H.cover, 0.7); }
 			if (!group.visible) return;
-			halo.lookAt(eye);
+			const R = group.scale.x;
 			core.scale.setScalar(Math.max(0.01, H.a));
+			// (the face a little in front of the sphere, scaled to the sphere's silhouette on that plane)
+			to.copy(eye).sub(group.position);
+			const d = Math.max(to.length(), R * 1.12), ahead = Math.min(R * 1.02, d * 0.5), sil = (d - ahead) * R / Math.sqrt(d * d - R * R);
+			face.position.copy(to).normalize().multiplyScalar(ahead / R);
+			face.scale.setScalar(sil / R * Math.max(0.01, H.a));
+			group.updateMatrixWorld(true);
+			face.lookAt(eye);
 			// (the light round its rim bent, above the horizon: magic/lens.js)
-			lens.r = group.scale.x * Math.max(0.01, H.a); lens.k = H.a; lens.cut = cut.value;
-			for (const m of [disc.material, halo.material]) { m.uniforms.uA.value = H.a; m.uniforms.uT.value = H.t; }
+			lens.r = R * Math.max(0.01, H.a); lens.k = H.a; lens.cut = cut.value;
+			face.material.uniforms.uA.value = H.a; face.material.uniforms.uT.value = H.t;
 		},
 		// (how dark it has made the world: 0 to 1, for the sun and the sky's light on the ground)
 		darkness: () => (group.visible ? H.a * H.cover : 0),
 		lens: () => (group.visible ? lens : null),
 		clear() { H.a = H.want = 0; group.visible = veil.visible = false; },
-		dispose() { scene.remove(group); scene.remove(veil); for (const m of [core, disc, halo, veil]) { m.geometry.dispose(); m.material.dispose(); } },
+		dispose() { scene.remove(group); scene.remove(veil); for (const m of [core, face, veil]) { m.geometry.dispose(); m.material.dispose(); } },
 	};
 }
 
@@ -489,6 +526,36 @@ function noiseOf(C) {
 	if (!b) { b = C.createBuffer(1, C.sampleRate, C.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; noises.set(C, b); }
 	return b;
 }
+// Gargantua's voice: a rumble under everything, a low drone with the air roaring over it, rising
+// as it grows over T seconds, and swallowed with a drop as it closes. returns { stop() }, or null
+export function holeVoice(T = 10) {
+	try {
+		const bus = soundBus(); if (!bus) return null;
+		const C = bus.ctx, t = C.currentTime, full = t + T * 0.85;
+		const hum = C.createOscillator(), hum2 = C.createOscillator(), lp = C.createBiquadFilter(), n = C.createBufferSource(), bp = C.createBiquadFilter(), out = C.createGain();
+		hum.type = 'sawtooth'; hum.frequency.setValueAtTime(44, t); hum.frequency.exponentialRampToValueAtTime(30, full);
+		hum2.type = 'sine'; hum2.frequency.setValueAtTime(33, t); hum2.frequency.exponentialRampToValueAtTime(22, full);
+		lp.type = 'lowpass'; lp.frequency.setValueAtTime(90, t); lp.frequency.exponentialRampToValueAtTime(420, full); lp.Q.value = 2;
+		n.buffer = noiseOf(C); n.loop = true;
+		bp.type = 'bandpass'; bp.frequency.setValueAtTime(70, t); bp.frequency.exponentialRampToValueAtTime(240, full); bp.Q.value = 0.5;
+		hum.connect(lp); hum2.connect(lp); lp.connect(out); n.connect(bp); bp.connect(out); out.connect(bus.out);
+		out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.05, t + 0.6); out.gain.exponentialRampToValueAtTime(0.26, full);
+		hum.start(t); hum2.start(t); n.start(t);
+		let done = false;
+		return {
+			stop() {
+				if (done) return;
+				done = true;
+				const s = C.currentTime;
+				out.gain.cancelScheduledValues(s); out.gain.setValueAtTime(Math.max(0.0001, out.gain.value), s); out.gain.exponentialRampToValueAtTime(0.0001, s + 0.5);
+				lp.frequency.cancelScheduledValues(s); lp.frequency.setValueAtTime(Math.max(30, lp.frequency.value), s); lp.frequency.exponentialRampToValueAtTime(30, s + 0.4);
+				hum.stop(s + 0.55); hum2.stop(s + 0.55); n.stop(s + 0.55);
+				hum.onended = () => { hum.disconnect(); hum2.disconnect(); lp.disconnect(); n.disconnect(); bp.disconnect(); out.disconnect(); };
+			},
+		};
+	} catch { return null; }
+}
+
 export function beamVoice(kind) {
 	try {
 		const bus = soundBus(); if (!bus) return null;

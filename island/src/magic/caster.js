@@ -35,8 +35,8 @@
 // hits reach in here (hexOn, arc, ward, fleet, strike) and loose spells of their own (a free cast).
 
 import * as THREE from 'three';
-import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf, moonlit } from './spells.js';
-import { GLOW, magicSound, beamVoice } from './fx.js';
+import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf, moonlit, gargantuaSize, GARGANTUA_LIFT } from './spells.js';
+import { GLOW, magicSound, beamVoice, holeVoice } from './fx.js';
 import { CHARGE, MIN_BLAST } from './beam.js';
 import { blastPart } from '../combat/health.js';
 import { lookOf, LOOK } from './looks.js';
@@ -243,11 +243,12 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(spell.school, 0.16); } });
 		},
 		singularity(spell, k) {
-			// Gargantua: a dot on the horizon the way you face that swells, faster and faster, until it fills
-			// the whole sky (spell.size0 to spell.size m); over spell.t it draws every foe within
-			// spell.r of you into it, holding them as they slide toward it and unmaking each at its moment.
-			// Anything vast loses spell.bossCut of its life, a little at each step. Foes who come into
-			// reach while it feeds are taken too.
+			// Gargantua: a dot on the horizon the way you face that swells to stand over it, feeds there
+			// (the ground round you torn up and streaming into it), then rushes out to fill the whole
+			// sky (spells.js gargantuaSize); over spell.t it draws every foe within spell.r of you into
+			// it, holding them as they slide toward it and unmaking each at its moment. Anything vast
+			// loses spell.bossCut of its life, a little at each step. Foes who come into reach while
+			// it feeds are taken too.
 			const L = lookOf(spell), me = camera.position.clone();
 			aim(_o, _d);
 			const fw = _d.clone().setY(0);
@@ -255,10 +256,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			fw.normalize();
 			const hx = me.x + fw.x * spell.far, hz = me.z + fw.z * spell.far, base = Math.max(me.y - EYE, combat.ground(hx, hz, me.y) ?? -1e9);
 			const hole = new THREE.Vector3(hx, base + spell.rise, hz), drawn = hole.clone(), RISE = 1.2;
-			// (its radius at time t: a dot, then growing by the same factor every moment, a little faster
-			// as it goes, filling the sky by 85% of its time and holding there; its heart climbs with it so its lower rim stays down on the horizon)
-			const R0 = spell.size0 || 1.5, R1 = spell.size, size = (tt) => R0 * Math.pow(R1 / R0, Math.pow(Math.min(1, tt / (spell.t * 0.85)), 1.2));
-			let R = R0;
+			let R = spell.size0 || 1.5;
 			const doomed = new Map(), vast = new Map();
 			let t = 0, n = 0;
 			const gather = () => {
@@ -269,7 +267,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					else if (!doomed.has(T)) doomed.set(T, { at: Math.max(t + 0.8, RISE + 0.3 + Math.random() * (spell.t - RISE - 1.3)) });
 				}
 			};
-			const unmake = (T) => { const b = T.bound; L.arc?.(fx, b, drawn); harm(T, 1e6, spell, drawn, { x: drawn.x - b.x, y: drawn.y - b.y, z: drawn.z - b.z }); };
+			const unmake = (T) => { const b = T.bound; L.arc?.(fx, b, drawn, R); harm(T, 1e6, spell, drawn, { x: drawn.x - b.x, y: drawn.y - b.y, z: drawn.z - b.z }); };
 			const bleed = (T, B, share) => {
 				const M = T.life?.(), owed = M ? M.max * spell.bossCut * share - B.dealt : 0;
 				if (owed > 0) B.dealt += harm(T, owed, spell, drawn)?.dealt || 0;
@@ -277,26 +275,32 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			gather();
 			combat.shake?.(0.3);
 			magicSound('void', 0.25);
+			// (its voice: a rumble under everything, rising as it grows; fx.js holeVoice)
+			const voice = holeVoice(spell.t);
 			// (the world's colours invert, grey and go black at its end; after two seconds of black they
-			// burst back, with a kick: fx.js gradeFrom)
+			// burst back, with a kick and a rain of embers: fx.js gradeFrom)
 			fx.gradeFrom?.(spell.t);
-			effects.push({ t: spell.t * 0.95 + 2.3, run: () => { combat.shake?.(0.35); magicSound('radiance', 0.25); } });
+			effects.push({ t: spell.t * 0.95 + 2.3, run: () => { combat.shake?.(0.35); magicSound('radiance', 0.25); aim(_o, _d); L.back?.(fx, camera.position, _d); } });
 			effects.push({ t: 0, life: spell.t, every: 0.1,
 				step() {
 					t += 0.1; n++;
 					const u = Math.min(1, t / RISE), e = 1 - (1 - u) * (1 - u);
-					R = size(t);
-					// (it stands over the horizon: its heart a little above your eye's level, so the horizon cuts
-					// off its lower part (fx.js), climbing up out from behind it as it comes)
-					drawn.set(hole.x, me.y + R * 0.35 - (1 - e) * R * 1.4, hole.z);
-					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position);
+					R = gargantuaSize(spell, t);
+					// (it stands over the horizon: its heart above your eye's level by more than its radius, so
+					// the whole shadow clears the horizon, climbing up out from behind it as it comes (fx.js))
+					drawn.set(hole.x, me.y + R * GARGANTUA_LIFT - (1 - e) * R * 2.4, hole.z);
+					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position, t / spell.t);
 					else fx.burst(drawn, GLOW.void, 6, -R, 0.5, R * 0.1, 0);
 					if (n % 10 === 0) { gather(); combat.shake?.(0.05); }
+					// (its last rush out: the ground shudders under you)
+					if (t > spell.t * 0.65 && n % 3 === 0) combat.shake?.(0.04 + 0.08 * (t / spell.t - 0.65));
 					for (const [T, D] of doomed) {
 						if (T.removed || T.dead || !T.bound) { doomed.delete(T); continue; }
 						const h = T.ref, S = h?.body?.M?.S, pos = S ? S.pos : h?.pos;
 						if (pos) { const dx = drawn.x - pos.x, dz = drawn.z - pos.z, l = Math.hypot(dx, dz) || 1, v = (1.5 + 12 * t / spell.t) * 0.1; pos.x += dx / l * v; pos.z += dz / l * v; }
 						hex(T, { hold: 0.3 }, k, spell.id);
+						// (held in its pull: their dust and clothing torn off and streaming toward it)
+						if (n % 2 === 0) L.held?.(fx, T.bound, drawn);
 						if (t >= D.at) { unmake(T); doomed.delete(T); }
 					}
 					for (const [T, B] of vast) if (!T.removed) bleed(T, B, Math.min(1, t / spell.t));
@@ -306,6 +310,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					for (const T of doomed.keys()) if (!T.removed && T.bound) unmake(T);
 					for (const [T, B] of vast) if (!T.removed) bleed(T, B, 1);
 					if (L.blast) L.blast(fx, drawn, R); else fx.burst(drawn, GLOW.void, 90, R * 3, 0.9, R * 0.2, 0);
+					voice?.stop();
 					combat.shake?.(0.4); magicSound('void', 0.3);
 				} });
 		},
