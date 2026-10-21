@@ -167,7 +167,7 @@ function fakeK(x0, z0, x1, z1, extra = {}) {
 	};
 	const standing = (type, x, z, w, d, h, rot = 0, pad = 0) => { const hw = rot % 2 ? d / 2 : w / 2, hd = rot % 2 ? w / 2 : d / 2, box = [x - hw - pad, z - hd - pad, x + hw + pad, z + hd + pad]; if (!inside(box) || hit(box)) return null; placed.push(box); const it = { type, x, z, w, d, h, rot, box: [x - hw, z - hd, x + hw, z + hd], y: 0, v: rnd() }; items.push(it); return it; };
 	const inFront = (base, type, w, d, h, gap) => { const sd = base.side, out = sd.pos + sd.n * (base.d + gap + d / 2); return standing(type, sd.axis === 'x' ? base.c : out, sd.axis === 'x' ? out : base.c, w, d, h, base.rot); };
-	return { K: { rm: { x0, z0, x1, z1 }, y0: 0, ceil: 3, bw: x1 - x0, bd: z1 - z0, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, sides, rnd, items, against, standing, inFront, stand: (x, z) => seats.push({ x, z, sit: false }), seat: (x, z) => seats.push({ x, z, sit: true }), sitOn: () => {}, chairs: () => {}, light: () => {}, anchor: (kind, x, y, z) => anchors.push({ kind, x, y, z }), passSide: null, ...extra }, items, seats, anchors };
+	return { K: { rm: { x0, z0, x1, z1 }, y0: 0, ceil: 3, bw: x1 - x0, bd: z1 - z0, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, sides, rnd, items, against, standing, inFront, stand: (x, z) => seats.push({ x, z, sit: false }), seat: (x, z) => seats.push({ x, z, sit: true }), sitOn: () => {}, deskSeat: () => {}, chairs: () => {}, light: () => {}, anchor: (kind, x, y, z) => anchors.push({ kind, x, y, z }), passSide: null, ...extra }, items, seats, anchors };
 }
 
 test('every fit-out furnishes its room inside its walls, with someone to work it and lamps to hang', () => {

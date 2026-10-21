@@ -49,6 +49,7 @@ import { createCataclysm } from './cataclysm/index.js';
 import { createMagic } from './magic/index.js';
 import { createFishing } from './fishing.js';
 import { createCooking } from './cooking/index.js';
+import { createOfficePerks } from './interiors/office-perks.js';
 import { createArcade } from './arcade.js';
 import { worldAir } from './world/soundbus.js';
 import { REAL_U } from './bay/realcity.js';
@@ -921,6 +922,8 @@ export function createIslandWorld() {
 	// cooking: your larder, the kitchens and shops, real recipes and the day's meals (cooking/index.js)
 	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
 	cooking.addMenu(tpMenu);
+	// the office's coffee, water, vending machine and first-aid box (interiors/office-perks.js)
+	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() });
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
@@ -1055,6 +1058,7 @@ export function createIslandWorld() {
 	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && doorHere && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); useDoor(); } });
 	function watchDoor(dt) {
 		cooking.update(dt);
+		officePerks.update(dt);
 		doorT += dt;
 		if (doorT < 0.15) return;
 		doorT = 0;

@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { createDog } from './dog.js';
+import { wallKeeper } from './walls.js';
 
 const NEAR = 55, DROP = 90;
 
@@ -12,6 +13,8 @@ export function createDogWalkers({ scene, people, world, isPhone = false }) {
 	const MAX = isPhone ? 1 : 3, walks = new Map();
 	const leadMat = new THREE.LineBasicMaterial({ color: 0x2a2320 });
 	const ground = (x, z) => world()?.island?.heightAt?.(x, z) ?? 0;
+	// (at heel, never through a fence or a wall to get there: people/walls.js)
+	const keepWalls = wallKeeper(world);
 	// who walks a dog: about one in six of the grown-ups out walking the streets, round a
 	// block or about a park, decided once each
 	const owns = new WeakMap(), ROUTES = new Set(['street', 'loop', 'wander']);
@@ -44,7 +47,7 @@ export function createDogWalkers({ scene, people, world, isPhone = false }) {
 		for (const [p, w] of walks) {
 			const q = p.M.S.pos, h = p.M.S.heading || 0, foot = q.y;
 			const hand = { x: q.x + Math.cos(h) * 0.28, y: foot + 0.85, z: q.z - Math.sin(h) * 0.28 };
-			w.dog.update(dt, { mode: 'home', owner: hand, ground });
+			w.dog.update(dt, { mode: 'home', owner: hand, ground, walls: keepWalls });
 			const d = w.dog.pos, collar = { x: d.x, y: d.y + w.dog.size * 0.95, z: d.z };
 			const a = w.lead.geometry.attributes.position, sag = Math.max(0, 0.35 - Math.hypot(hand.x - collar.x, hand.z - collar.z) * 0.12);
 			for (let k = 0; k < 9; k++) { const t = k / 8; a.setXYZ(k, hand.x + (collar.x - hand.x) * t, hand.y + (collar.y - hand.y) * t - Math.sin(t * Math.PI) * sag, hand.z + (collar.z - hand.z) * t); }

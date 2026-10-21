@@ -1151,7 +1151,7 @@ function furnish(plan) {
 			const K = {
 				rm: { x0: bb[0], z0: bb[1], x1: bb[2], z1: bb[3] }, y0, ceil: room.level ? HT.ceil1 - HT.floor1 : HT.ceil0, bw, bd, cx: room.cx, cz: room.cz, sides, rnd, items, garage: !!room.biz.garage,
 				passSide: room.biz.role !== 'back' ? sides.find((sd) => !sd.ext && rooms[sd.wall.ra === room.id ? sd.wall.rb : sd.wall.ra]?.biz?.role === 'back') || null : null,
-				against, standing, inFront, stand: () => {}, seat: () => {}, sitOn: () => {}, chairs: () => {},
+				against, standing, inFront, stand: () => {}, seat: () => {}, sitOn: () => {}, deskSeat: () => {}, chairs: () => {},
 				light, anchor: (kind, x, y, z) => (plan.lightAnchors || (plan.lightAnchors = [])).push({ kind, x, y, z, room: room.id, level: room.level }),
 			};
 			if (room.biz.role === 'back' ? fitBack(room.biz.fit, K) : fitFront(room.biz.fit, K)) continue;
