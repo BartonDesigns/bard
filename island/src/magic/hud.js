@@ -15,13 +15,13 @@ import { pointsOf } from './skills.js';
 import { firstTime } from '../ui/touch-skin.js';
 
 const CSS = `
-.mg-bar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:flex-end;pointer-events:none;z-index:6;font:600 11px/1 system-ui,-apple-system,Segoe UI,sans-serif;color:#eef6f4;transition:opacity .4s}
+.mg-bar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:flex-end;pointer-events:none;z-index:6;font:600 11px/1 var(--bard-display,system-ui,sans-serif);color:#eef6f4;transition:opacity .4s}
 .mg-bar .grp{display:flex;gap:4px}
 .mg-bar .sep{width:1px;height:30px;background:rgba(255,255,255,.18);margin:0 4px;align-self:center}
 .mg-s{position:relative;width:40px;height:40px;border-radius:9px;background:rgba(10,16,20,.55);box-shadow:0 0 0 1px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
 .mg-s .k{position:absolute;left:4px;top:3px;font-size:9px;opacity:.7}
 .mg-s .g{font-size:19px;line-height:1;text-shadow:0 0 8px currentColor}
-.mg-s .w{font-size:10px;letter-spacing:.4px;text-transform:uppercase;opacity:.9}
+.mg-s .w{font-size:10px;letter-spacing:.4px;text-transform:uppercase;opacity:.9;font-family:var(--bard-display,Georgia,serif)}
 .mg-s .w svg{display:block;width:26px;height:26px;opacity:.95;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .mg-s .cd{position:absolute;inset:0;border-radius:9px;pointer-events:none}
 .mg-s.held{box-shadow:0 0 0 2px #7fe0c0}
@@ -29,14 +29,14 @@ const CSS = `
 .mg-s.empty{opacity:.45}
 .mg-mana{position:absolute;left:50%;bottom:calc(60px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);height:4px;border-radius:2px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.1);pointer-events:none;z-index:6}
 .mg-mana>div{height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,#5a7cff,#a8c4ff);transition:transform .15s}
-.mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 system-ui,sans-serif;color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
+.mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
 @media (max-width:660px){#l99-island-mount:not(.l99-touch) .mg-bar{left:calc(50% - 34px)}}
 .mg-fab b{font-weight:700}.mg-fab .l{color:#ffd27a}.mg-fab .d{color:#b39aff}
-.mg-mode{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 system-ui,sans-serif;padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
+.mg-mode{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 var(--bard-display,system-ui,sans-serif);padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
 .mg-fab .pt{display:inline-block;margin-left:5px;padding:0 5px;border-radius:8px;background:#01a982;color:#fff;font-size:10px;line-height:15px;box-shadow:0 0 10px rgba(1,169,130,.8);animation:mgPt 2s ease-in-out infinite}
 @keyframes mgPt{50%{box-shadow:0 0 18px rgba(1,169,130,1)}}
-.mg-lvl{position:absolute;left:50%;top:calc(18% + env(safe-area-inset-top));transform:translate(-50%,0);pointer-events:none;z-index:8;text-align:center;color:#fff;opacity:0;font:600 13px/1.3 system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.8);white-space:nowrap}
-.mg-lvl b{display:block;font:200 44px/1 system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:.3em;margin-bottom:6px;background:linear-gradient(180deg,#fff 30%,#5eead4);-webkit-background-clip:text;background-clip:text;color:transparent}
+.mg-lvl{position:absolute;left:50%;top:calc(18% + env(safe-area-inset-top));transform:translate(-50%,0);pointer-events:none;z-index:8;text-align:center;color:#fff;opacity:0;font:600 13px/1.3 var(--bard-display,system-ui,sans-serif);letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.8);white-space:nowrap}
+.mg-lvl b{display:block;font:200 44px/1 var(--bard-display,system-ui,sans-serif);letter-spacing:.3em;margin-bottom:6px;background:linear-gradient(180deg,#fff 30%,#5eead4);-webkit-background-clip:text;background-clip:text;color:transparent}
 .mg-lvl i{display:block;height:1px;margin:8px auto;width:0;background:linear-gradient(90deg,transparent,#5eead4,transparent)}
 .mg-lvl.go{animation:mgLvl 4.2s ease forwards}.mg-lvl.go i{animation:mgLine 1.2s .2s ease-out forwards}
 @keyframes mgLvl{0%{opacity:0;transform:translate(-50%,10px)}10%,78%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
@@ -44,11 +44,11 @@ const CSS = `
 /* (a touch screen: the spell button, and the arcs it opens over everything) */
 .mg-hub{position:absolute;right:calc(24px + env(safe-area-inset-right));bottom:calc(226px + env(safe-area-inset-bottom));width:52px;height:52px;box-sizing:border-box;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(12,16,20,.32);box-shadow:0 1px 8px rgba(0,0,0,.16);display:flex;align-items:center;justify-content:center;z-index:6;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer;transition:opacity .4s,scale .08s ease}
 .mg-hub.on{scale:.94;background:rgba(255,255,255,.2)}
-.mg-hub .g{font:600 22px/1 system-ui,sans-serif;color:#eef6f4;text-shadow:0 0 8px currentColor;pointer-events:none}
+.mg-hub .g{font:600 22px/1 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 0 8px currentColor;pointer-events:none}
 .mg-hub .ring{position:absolute;inset:-1px;border-radius:50%;background:conic-gradient(#9db8ff calc(var(--m,1) * 1turn),rgba(255,255,255,.12) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px));pointer-events:none}
 .mg-hub .cd{position:absolute;inset:3px;border-radius:50%;pointer-events:none}
 .mg-hub.dim .g{opacity:.35}
-.mg-hub .pt{position:absolute;right:-3px;top:-3px;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#01a982;color:#fff;font:700 10px/16px system-ui,sans-serif;text-align:center;box-shadow:0 0 10px rgba(1,169,130,.8);pointer-events:none}
+.mg-hub .pt{position:absolute;right:-3px;top:-3px;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#01a982;color:#fff;font:700 10px/16px var(--bard-body,system-ui,sans-serif);text-align:center;box-shadow:0 0 10px rgba(1,169,130,.8);pointer-events:none}
 .l99-tools-open .mg-hub{visibility:hidden}
 .mg-bar.mg-wheel.open~.mg-hub{z-index:17}
 .mg-bar.mg-wheel{left:0;top:0;right:0;bottom:0;transform:none;display:none;pointer-events:auto;z-index:16;touch-action:none}

@@ -29,9 +29,9 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	const isTouch = dom.mount.classList.contains('l99-touch');
 	const hud = document.createElement('div');
 	hud.dataset.orbitHud = '';
-	hud.style.cssText = 'position:absolute;top:max(18px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);pointer-events:none;text-align:center;color:#eafaf6;font:12px system-ui;letter-spacing:.08em;text-shadow:0 1px 5px #000;display:none;white-space:pre-line;';
+	hud.style.cssText = 'position:absolute;top:max(18px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);pointer-events:none;text-align:center;color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);letter-spacing:.08em;text-shadow:0 1px 5px #000;display:none;white-space:pre-line;';
 	const bearing = document.createElement('div');
-	bearing.style.cssText = 'position:absolute;pointer-events:none;display:none;color:#a5f6e2;font:12px system-ui;text-align:center;text-shadow:0 1px 5px #000;transform:translate(-50%,-50%);';
+	bearing.style.cssText = 'position:absolute;pointer-events:none;display:none;color:#a5f6e2;font:12px var(--bard-body,system-ui,sans-serif);text-align:center;text-shadow:0 1px 5px #000;transform:translate(-50%,-50%);';
 	bearing.textContent = '◇\nDeparture';
 	dom.mount.append(hud, bearing);
 	const homeName = earth ? 'Earth' : type === 'MOON' ? 'The Moon' : title(profile?.name || 'this world');
@@ -39,19 +39,19 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	let wasSpace = false, text = '', disposed = false, gear = 1, warp = null, bounce = null, landing = false, heat = 0, warned = '';
 	let passage = null, passageToken = 0, passageCooldown = 0, solarDepth = 0;
 	const leaveStar = document.createElement('button'); leaveStar.dataset.stellarExit = '';
-	leaveStar.textContent = 'Return to orbit'; leaveStar.style.cssText = 'display:none;position:absolute;top:110px;left:50%;transform:translateX(-50%);padding:10px 14px;background:#23180de8;color:#fff;border:1px solid #ddaf75;border-radius:18px;font:14px system-ui;pointer-events:auto;z-index:25';
+	leaveStar.textContent = 'Return to orbit'; leaveStar.style.cssText = 'display:none;position:absolute;top:110px;left:50%;transform:translateX(-50%);padding:10px 14px;background:#23180de8;color:#fff;border:1px solid #ddaf75;border-radius:18px;font:14px var(--bard-body,system-ui,sans-serif);pointer-events:auto;z-index:25';
 	for (const ev of ['pointerdown', 'touchstart', 'click']) leaveStar.addEventListener(ev,e=>e.stopPropagation());
 	leaveStar.addEventListener('click', exitStellar); dom.mount.append(leaveStar);
 	// Earth: the place under the ship, and the way down: land there, or go back to where you left
 	const card = document.createElement('div'); card.dataset.landingCard = '';
-	card.style.cssText = 'position:absolute;left:50%;' + 'bottom:calc(' + (isTouch ? 'var(--l99-low, 88px) + 76px' : '92px') + ' + env(safe-area-inset-bottom));' + 'transform:translateX(-50%);width:min(88vw,400px);box-sizing:border-box;display:none;padding:10px 12px 12px;border-radius:12px;background:rgba(6,16,22,.84);border:1px solid rgba(165,246,226,.32);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#eafaf6;font:13px system-ui;text-align:left;pointer-events:auto;z-index:6;box-shadow:0 8px 24px rgba(0,0,0,.45);';
-	const cardHead = document.createElement('div'); cardHead.style.cssText = 'font:600 11px system-ui;letter-spacing:.12em;color:#a5f6e2;';
-	const cardTitle = document.createElement('div'); cardTitle.style.cssText = 'font:600 16px system-ui;margin:2px 0 3px;';
-	const cardSub = document.createElement('div'); cardSub.style.cssText = 'font:12px/1.4 system-ui;color:rgba(234,250,246,.76);';
+	card.style.cssText = 'position:absolute;left:50%;' + 'bottom:calc(' + (isTouch ? 'var(--l99-low, 88px) + 76px' : '92px') + ' + env(safe-area-inset-bottom));' + 'transform:translateX(-50%);width:min(88vw,400px);box-sizing:border-box;display:none;padding:10px 12px 12px;border-radius:12px;background:rgba(6,16,22,.84);border:1px solid rgba(165,246,226,.32);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);text-align:left;pointer-events:auto;z-index:6;box-shadow:0 8px 24px rgba(0,0,0,.45);';
+	const cardHead = document.createElement('div'); cardHead.style.cssText = 'font:600 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.12em;color:#a5f6e2;';
+	const cardTitle = document.createElement('div'); cardTitle.style.cssText = 'font:600 16px var(--bard-display,system-ui,sans-serif);margin:2px 0 3px;';
+	const cardSub = document.createElement('div'); cardSub.style.cssText = 'font:12px/1.4 var(--bard-body,system-ui,sans-serif);color:rgba(234,250,246,.76);';
 	// the cities round the place below: tap one to be over it and on the way down
 	const cardCities = document.createElement('div'); cardCities.dataset.landingCities = ''; cardCities.style.cssText = 'display:none;flex-wrap:wrap;gap:6px;margin-top:8px;';
 	const cardRow = document.createElement('div'); cardRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;';
-	const BTN = 'flex:1;min-height:44px;padding:8px 10px;border-radius:9px;font:600 13px system-ui;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+	const BTN = 'flex:1;min-height:44px;padding:8px 10px;border-radius:9px;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
 	const hereBtn = document.createElement('button'); hereBtn.dataset.landHere = '';
 	hereBtn.style.cssText = BTN + 'border:none;color:#fff;background:linear-gradient(135deg,#01a982,#10b981);box-shadow:0 4px 12px rgba(1,169,130,.3);';
 	const homeBtn = document.createElement('button'); homeBtn.dataset.landHome = '';
@@ -401,7 +401,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 			cardRow.style.display = here || back ? 'flex' : 'none';
 			cardCities.replaceChildren(...cities.map((c) => {
 				const b = document.createElement('button'); b.dataset.landCity = c.id;
-				b.style.cssText = 'min-height:36px;padding:6px 10px;border-radius:18px;border:1px solid rgba(165,246,226,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:600 12px system-ui;cursor:pointer;white-space:nowrap;';
+				b.style.cssText = 'min-height:36px;padding:6px 10px;border-radius:18px;border:1px solid rgba(165,246,226,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:600 12px var(--bard-display,system-ui,sans-serif);cursor:pointer;white-space:nowrap;';
 				b.textContent = `⌖ ${c.name} · ${kmLabel(c.km)}`;
 				b.title = `Down on ${c.name} (${c.size})`;
 				for (const ev of ['pointerdown', 'touchstart']) b.addEventListener(ev, (e) => e.stopPropagation());

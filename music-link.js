@@ -67,7 +67,7 @@
 	style.id = 'l99-music-link-style';
 	style.textContent = [
 		'#l99-ml{position:fixed;z-index:1000;width:min(380px,calc(100vw - 16px));box-sizing:border-box;background:rgba(20,22,24,.94);border:1px solid rgba(255,255,255,.12);border-radius:12px;',
-		'box-shadow:0 12px 36px rgba(0,0,0,.55);color:#eafaf6;font:13px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;}',
+		'box-shadow:0 12px 36px rgba(0,0,0,.55);color:#eafaf6;font:13px/1.35 var(--bard-body,system-ui,sans-serif);touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;}',
 		'#l99-ml[hidden],#l99-ml [hidden]{display:none!important}',
 		'#l99-ml *{box-sizing:border-box}',
 		'#l99-ml .ml-head{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;cursor:grab;min-height:44px}',
@@ -79,7 +79,7 @@
 		'#l99-ml .ml-x:hover{border-color:rgba(255,255,255,.2);color:#fff}',
 		'#l99-ml .ml-body{padding:0 10px 10px;display:flex;flex-direction:column;gap:8px}',
 		'#l99-ml form{display:flex;gap:6px}',
-		'#l99-ml input{flex:1;min-width:0;min-height:40px;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:16px system-ui,sans-serif;user-select:text;-webkit-user-select:text}',
+		'#l99-ml input{flex:1;min-width:0;min-height:40px;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:16px var(--bard-body,system-ui,sans-serif);user-select:text;-webkit-user-select:text}',
 		'#l99-ml input:focus{outline:none;border-color:#01a982;box-shadow:0 0 0 3px rgba(1,169,130,.25)}',
 		'#l99-ml .ml-go{padding:0 14px;border:none;background:linear-gradient(135deg,#01a982,#10b981);color:#fff;font-weight:600}',
 		'#l99-ml .ml-frame{position:relative;border-radius:8px;overflow:hidden;background:#000}',

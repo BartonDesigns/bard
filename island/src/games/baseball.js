@@ -59,7 +59,7 @@ export const GAME = {
 			zone.position.set(0, zy + 0.8, 0); K.root.add(zone);
 			marker = K.ball(0.04, K.mat('#ff6b6b', { basic: true, opacity: 0.8 }), 0, -5, 0);
 			// the scoreboard: the count, the outs, the bases
-			board = K.el('position:absolute;left:calc(12px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));padding:8px 12px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:600 13px system-ui;display:flex;gap:12px;align-items:center;');
+			board = K.el('position:absolute;left:calc(12px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));padding:8px 12px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);display:flex;gap:12px;align-items:center;');
 		}
 		function reset() {
 			S = { n: 0, runs: 0, outs: 0, balls: 0, strikes: 0, hits: 0, hr: 0, walks: 0, longest: 0, bases: [false, false, false], state: 'wait', t: 0, log: [], p: new THREE.Vector3(), v: new THREE.Vector3(), swingT: -1, pitch: null };
