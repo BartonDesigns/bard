@@ -902,11 +902,14 @@ export function createCity(shared, scene, bay, real = null) {
 		return { sizeK, near: tierMesh(nearT.parts, g.palm ? 900 : 2600, true, LOD.near, k, !!g.palm), mid: tierMesh(midT.parts, g.palm ? 3000 : 12000, false, LOD.mid, k, !!g.palm), H: nearT.height, Hm: midT.height };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
-	// the planters' lantana and flax lily (lantana.js): each bed in three levels, the plants in
+	// the planters' lantana and flax lily (lantana.js): each bed in four levels, the plants in
 	// their vertex colours and the foliage's mass in the shrubs' own leaf cards (the same shader)
 	const BED = plantingBed(7311);
-	const BED_LOD = PHONE ? { detail: [NONE_IN[0], NONE_IN[1], 5, 7], mid: [5, 7, 40, 48], far: [40, 48, 260, 300] }
-		: { detail: [NONE_IN[0], NONE_IN[1], 7, 10], mid: [7, 10, 60, 70], far: [60, 70, 360, 410] };
+	// (past about 120 m a bed is a few pixels across: its plainest level, a third of the far one's
+	// triangles, takes over there, dissolving in as the rooftop units' far set does; hundreds of far
+	// beds were drawn all round you out to 300 m)
+	const BED_LOD = PHONE ? { detail: [NONE_IN[0], NONE_IN[1], 5, 7], mid: [5, 7, 40, 48], far: [40, 48, 110, 130], distant: [110, 130, 260, 300] }
+		: { detail: [NONE_IN[0], NONE_IN[1], 7, 10], mid: [7, 10, 60, 70], far: [60, 70, 150, 175], distant: [150, 175, 360, 410] };
 	const bedTier = (T, band, cap, shadow) => {
 		const body = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7), leaves = swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8);
 		for (const S of [body, leaves]) addLodFade(S.material, 'uniform', band);
@@ -919,9 +922,13 @@ export function createCity(shared, scene, bay, real = null) {
 			return im;
 		});
 	};
-	const beds = { detail: bedTier(BED.detail, BED_LOD.detail, 64, !PHONE), mid: bedTier(BED.mid, BED_LOD.mid, PHONE ? 400 : 700, !PHONE), far: bedTier(BED.far, BED_LOD.far, PHONE ? 2000 : 3500, false), litter: [] };
+	const beds = { detail: bedTier(BED.detail, BED_LOD.detail, 64, !PHONE), mid: bedTier(BED.mid, BED_LOD.mid, PHONE ? 400 : 700, !PHONE), far: bedTier(BED.far, BED_LOD.far, chunkStore(PHONE ? 800 : 1400, 128), false), distant: bedTier(BED.distant, BED_LOD.distant, chunkStore(PHONE ? 2000 : 3500, 128), false), litter: [] };
+	// (the far and farthest beds, out to 300 m all round you, drawn in chunks by the sector their
+	// planter stands in, as the buildings are: world/instancechunks.js)
+	beds.far.forEach((im, k) => chunk(im, 128, 'city-beds-far' + k)); beds.distant.forEach((im, k) => chunk(im, 128, 'city-beds-distant' + k));
+	const bedChunks = [...beds.far, ...beds.distant].map((im) => chunked.get(im));
 	beds.litter = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7); addLodFade(S.material, 'uniform', BED_LOD.detail); const im = new THREE.InstancedMesh(BED.litter, S.material, 32); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; group.add(im); return im; })()];
-	const bedMeshes = [...beds.detail, ...beds.mid, ...beds.far, ...beds.litter];
+	const bedMeshes = [...beds.detail, ...beds.mid, ...beds.litter];
 	// sword ferns on the shady forest floor (under the redwoods, on the north slopes, in the draws)
 	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.2 } }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
 	// the far tier: one point per tree, drawn as its species' impostor
@@ -1145,11 +1152,13 @@ export function createCity(shared, scene, bay, real = null) {
 		const out = [];
 		for (const o of list) {
 			if (!o.planted) continue;
+			// (the list is in order a sector at a time round where it was laid out: the beds follow it)
+			const sec = sectorOf(o.x, o.z, lastAt[0], lastAt[1], lotHalf(o));
 			const n = Math.max(1, Math.round((o.w - 0.16) / BED_LEN)), L = (o.w - 0.16) / n, ca = Math.cos(o.a), sa = Math.sin(o.a);
 			for (let k = 0; k < n; k++) {
 				const u = (k - (n - 1) / 2) * L, x = o.x + ca * u, z = o.z + sa * u;
 				// (each one of four ways round: turned or not, mirrored or not)
-				out.push({ x, y: o.y + o.h, z, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x * 1.7, z * 2.3) * 4) });
+				out.push({ x, y: o.y + o.h, z, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x * 1.7, z * 2.3) * 4), sec });
 				const f = o.d / 2 + 0.36;
 				out.push({ x: x - sa * f, y: o.planted.kerb, z: z + ca * f, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x, z) * 4), litter: true });
 			}
@@ -1165,18 +1174,23 @@ export function createCity(shared, scene, bay, real = null) {
 		if (far) { bedFarX = x; bedFarZ = z; }
 		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
 		const put = (T) => { const k = next(T[0]); if (k < 0) return; next(T[1]); T[0].setMatrixAt(k, m4); T[1].setMatrixAt(k, m4); };
+		// (a chunked level: the plants and their cards in the same slot, the bed's sector its planter's)
+		const putC = (T, t) => { const a = [t.sec, 0, t.x, t.z, 1.6, t.y - 1, t.y + 1.3], k = chunked.get(T[0]).put(...a); if (k < 0) return; chunked.get(T[1]).put(...a); T[0].setMatrixAt(k, m4); T[1].setMatrixAt(k, m4); };
+		if (far) for (const c of bedChunks) c.begin(x, z);
 		for (const t of bedList) {
 			const d = Math.hypot(t.x - x, t.z - z);
-			if (d > BED_LOD.far[3] + 25) continue;
+			if (d > BED_LOD.distant[3] + 25) continue;
 			const turn = t.bed & 1, mirror = t.bed & 2 ? -1 : 1;
 			q.setFromAxisAngle(Y, -t.a + (turn ? Math.PI : 0));
 			m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.sx * mirror, 1, 1));          // (on its planter, as built: not on the road's grading)
 			if (t.litter) { if (d < BED_LOD.detail[3] + 3) { const k = next(beds.litter[0]); if (k >= 0) beds.litter[0].setMatrixAt(k, m4); } continue; }
 			if (d < BED_LOD.detail[3] + 3) put(beds.detail);
 			if (d > BED_LOD.mid[0] - 3 && d < BED_LOD.mid[3] + 3) put(beds.mid);
-			if (far && d > BED_LOD.far[0] - 25) put(beds.far);
+			if (far && d > BED_LOD.far[0] - 25 && d < BED_LOD.far[3] + 25) putC(beds.far, t);
+			if (far && d > BED_LOD.distant[0] - 25) putC(beds.distant, t);
 		}
-		for (const im of far ? bedMeshes : [...beds.detail, ...beds.mid, ...beds.litter]) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; }
+		for (const im of bedMeshes) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; }
+		if (far) { for (const im of [...beds.far, ...beds.distant]) im.instanceMatrix.needsUpdate = true; for (const c of bedChunks) c.end(); }
 	}
 
 	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
@@ -1736,6 +1750,7 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const im of [near, hips, gables]) chunked.get(im).root.visible = !high;
 		farPts.visible = !high;
 		for (const im of [...shrubs, ...ferns, ...bedMeshes, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
+		for (const c of bedChunks) c.root.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (clearingVersion() !== clearV) { clearV = clearingVersion(); lastX = 1e9; }          // a ball field laid out nearby: its trees go
 		if (coastVersion() !== coastV) { coastV = coastVersion(); lastX = 1e9; }                // the coast's farms and links laid out: theirs go
