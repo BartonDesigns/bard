@@ -12,6 +12,7 @@ import { qualityNow } from './world/governor.js';
 import { kitDaylight } from './people/kit-light.js';
 import { worldAir } from './world/soundbus.js';
 import { today } from './calendar.js';
+import { scopeView } from './crysis/scope-view.js';
 import { toLL as globeLL } from './earth/globeframe.js';
 import { waterContact } from './world/water-contact.js';
 import { AIR } from './world/airfog.js';
@@ -237,7 +238,8 @@ export function islandFrame(iw, now) {
 	if (W.commercial) {
 		W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
 		W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
-		W.interiors?.update(camera, dt, W.sky.state.hours, sk.night);
+		// (down a scope, the room behind the window under the reticle is built, however far: interiors/index.js)
+		W.interiors?.update(camera, dt, W.sky.state.hours, sk.night, scopeView.active && scopeView.aiming > 0.5 ? scopeView : null);
 		W.structures?.update(dt, sk.night, W.sky.state.hours);
 		W.services?.update(dt, W.sky.state.hours, sk.night);
 		// stepping into a place: what it is, and how busy at this hour

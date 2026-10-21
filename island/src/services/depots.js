@@ -8,7 +8,7 @@ import { mintUid } from '../gameplay/gear-levels.js';
 
 // what each kind of cache holds when full: [item id, how many]
 export const STOCK = {
-	weapons: [['warden-spark-carbine', 3], ['spark-cell-pack', 8], ['trail-rifle-box', 5], ['scout-rifle-box', 5], ['reed-arrow-quiver', 3], ['station-signal-flare', 6]],
+	weapons: [['warden-spark-carbine', 3], ['longwatch-sniper-rifle', 1], ['spark-cell-pack', 8], ['trail-rifle-box', 5], ['scout-rifle-box', 5], ['longwatch-round-box', 3], ['reed-arrow-quiver', 3], ['station-signal-flare', 6]],
 	supply: [['field-medkit', 6], ['repair-roll', 10], ['camp-lantern', 4], ['door-brace', 3], ['hunting-net', 2], ['station-signal-flare', 4]],
 	medical: [['field-medkit', 14]],
 	police: [['warden-spark-carbine', 1], ['spark-cell-pack', 4], ['field-medkit', 4], ['station-signal-flare', 4]],

@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { spreadDir, spreadNow, isBow, bowPower, damageAt } from './weapons.js';
 import { revive, blastPart } from './health.js';
-import { rayCapsule } from './targets.js';
+import { rayCapsule, nearestOn } from './targets.js';
 import { officerHurt, clearWanted } from './heat.js';
 import { FACTIONS, PLAYER } from './factions.js';
 
@@ -98,7 +98,18 @@ export function combatFireShot(cb, w, charge = 1) {
 		projectile({ from, to, direction: isBow(w) ? dir : null, speed: S.projectile.speed * power.speed, drop: S.projectile.drop, dmg: S.dmg * power.damage, type: S.type, owner: ME, style: S.tracer, splash: S.projectile.splash, life: S.projectile.life, arrow: isBow(w) });
 		net.fx(from, to, S.tracer, 0);
 	} else {
-		const hit = firstHit(o, dir, S.range);
+		let hit = firstHit(o, dir, S.range);
+		// a forgiving weapon: a near miss of someone (nothing met, or a wall or the ground past
+		// them) is drawn onto them: the shot goes to the nearest point of the shape it passed, and
+		// must still reach it (a wall in the way keeps it)
+		if (S.assist && (!hit || hit.wall)) {
+			const near = firstHit(o, dir, hit ? hit.t : S.range, ME, S.assist);
+			if (near?.T && !near.wall && !near.ward) {
+				const at = nearestOn(near.shape, o, dir), to = new THREE.Vector3(at.x - o.x, at.y - o.y, at.z - o.z).normalize();
+				const sure = firstHit(o, to, S.range);
+				if (sure?.T === near.T) { dir.copy(to); hit = sure; }
+			}
+		}
 		// game in the open before anything else (a deer, a turkey: cooking/hunting.js)
 		const game = cb.hooks?.quarry?.(o, dir, hit ? hit.t : S.range) ?? -1;
 		if (hit && game < 0) landShot(hit, o, dir, ME, damageAt(S, hit.t), S.type);

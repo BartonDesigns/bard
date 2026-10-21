@@ -442,7 +442,7 @@ export async function islandBuild(iw, params) {
 		// inside the towers: the lobby, the elevators, every floor, the roof
 		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state });
 		// ...and every other building: solid, and built inside as you come to it (interiors/)
-		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers });
+		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers, warm: (o) => (renderer.compileAsync ? renderer.compileAsync(o, camera, scene) : null) });
 		{ const cv = iw.world.commercial.venue, I = iw.world.interiors; iw.world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
 		// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
 		iw.world.interiors.addDoors(iw.world.commercial);
