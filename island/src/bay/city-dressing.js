@@ -7,18 +7,30 @@
 import { ROOF } from './roofs.js';
 
 export function cityGrounds(cc, list, trees, x, z, w, d, a, g, y0, kind, seed) {
-	const { hash, jit, KIND, PAL, pick } = cc;
+	const { bay, hash, jit, KIND, PAL, pick } = cc;
 	const big = kind === KIND.tower, pad = big ? 5 : kind === KIND.office ? 3.2 : 2;
 	const ca = Math.cos(a), sa = Math.sin(a);
 	const P = (lx, lz) => [x + ca * lx - sa * lz, z + sa * lx + ca * lz];
 	const h1 = hash(seed, 3.7), h2 = hash(seed + 1.3, 9.1);
+	// The apron is a flat slab level with the ground at the building's middle, so it is laid only
+	// where the ground under it is near level. Where the ground falls away across it (a building
+	// at the top of a beach or a bank) its low side stood up out of the slope as a bare grey box
+	// a metre or two high, its kerb and planters with it (behind the sand at Aquatic Park: Josh
+	// 2026-10-21). There the building stands on its own ground, with no apron or planters.
+	const ex = w / 2 + pad, ez = d / 2 + pad;
+	let low = g;
+	for (const [lx, lz] of [[-ex, -ez], [0, -ez], [ex, -ez], [ex, 0], [ex, ez], [0, ez], [-ex, ez], [-ex, 0]]) low = Math.min(low, bay.heightAt(...P(lx, lz)));
+	const level = g - low < 0.5;
 	// the apron, a hand's breadth above the ground, and its kerb
-	list.push({ x, y: y0, z, w: w + 2 * pad, d: d + 2 * pad, h: g + 0.13 + h1 * 0.05 - y0, a, col: jit([0.66, 0.64, 0.6], h1), kind: KIND.plain, roof: null });
-	list.push({ x, y: y0, z, w: w + 2 * pad + 0.5, d: d + 2 * pad + 0.5, h: g + 0.1 - y0, a, col: [0.5, 0.49, 0.47], kind: KIND.plain, roof: null });
+	if (level) {
+		list.push({ x, y: y0, z, w: w + 2 * pad, d: d + 2 * pad, h: g + 0.13 + h1 * 0.05 - y0, a, col: jit([0.66, 0.64, 0.6], h1), kind: KIND.plain, roof: null });
+		list.push({ x, y: y0, z, w: w + 2 * pad + 0.5, d: d + 2 * pad + 0.5, h: g + 0.1 - y0, a, col: [0.5, 0.49, 0.47], kind: KIND.plain, roof: null });
+	}
 	if (kind === KIND.industry) return;
 	// planters either side of the entrance (the +d face): most planted with yellow lantana and
 	// flax lily (bay/lantana.js), the rest with shrubs
 	for (const s of [-1, 1]) {
+		if (!level) break;
 		const cx = s * Math.min(w / 2 - 1.5, 4 + w * 0.15), cz = d / 2 + pad * 0.55, pw = big ? 4.2 : 2.8;
 		const [px, pz] = P(cx, cz);
 		list.push({ x: px, y: g - 0.2, z: pz, w: pw, d: 1.3, h: 0.75, a, col: jit([0.55, 0.52, 0.48], h2), kind: KIND.plain, roof: null });
@@ -34,7 +46,8 @@ export function cityGrounds(cc, list, trees, x, z, w, d, a, g, y0, kind, seed) {
 		// (out where its crown clears the wall; one that lands on the street is taken out later)
 		const off = dep / 2 + Math.max(pad + 0.6, 4), [tx, tz] = Math.abs(sd) === 1 ? P(t, Math.sign(sd) * off) : P(Math.sign(sd) * off, t);
 		const r = hash(tx * 0.7, tz * 1.3);
-		trees.push({ x: tx, y: g - 0.3, z: tz, h: 7 + r * 4, cone: false, col: jit(pick(PAL.crown, r), r) });
+		// (on a slope each stands on its own ground, not the building's)
+		trees.push({ x: tx, y: (level ? g : bay.heightAt(tx, tz)) - 0.3, z: tz, h: 7 + r * 4, cone: false, col: jit(pick(PAL.crown, r), r) });
 	}
 }
 

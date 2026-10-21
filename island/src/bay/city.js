@@ -1585,6 +1585,20 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.trees) list.trees = list.trees.filter(out);
 		for (const k in list.props || {}) list.props[k] = list.props[k].filter((e) => !real.inside(e[0], e[2]));
 	}
+	// whether a spot is in town: at least three of sixteen points round it (eight 40 m out, eight
+	// 90 m out) on the mapped buildings' roofs or in built-up land (homes, schools, shops and
+	// offices, parking, industry). Muir Woods' visitor centre is a building or two among the
+	// redwoods; Fort Mason and Aquatic Park are in town
+	const TOWN_LU = new Set([1, 6, 7, 8, 13]);
+	function inTown(x, z) {
+		let n = 0;
+		for (let k = 0; k < 16; k++) {
+			const a = k * Math.PI / 4 + (k < 8 ? 0 : Math.PI / 8), d = k < 8 ? 40 : 90;
+			const L = real.landAt(x + Math.cos(a) * d, z + Math.sin(a) * d);
+			if (L && (L.roof > 0.15 || TOWN_LU.has(L.lu)) && ++n >= 3) return true;
+		}
+		return false;
+	}
 	function* realBuildings(cx, cz, R, list, wild = true) {
 		if (!real?.loaded()) return;
 		let n = 0;
@@ -1663,9 +1677,20 @@ export function createCity(shared, scene, bay, real = null) {
 			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
 			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2 || (t.x < 12000 && bay.heightAt(t.x, t.z + 1500) < -2))) { const L = real.landAt(t.x, t.z); if (L && L.lu !== 1 && L.lu !== 7 && L.lu !== 13) { const gl = (bay.heightAt(t.x + 60, t.z) + bay.heightAt(t.x - 60, t.z) + bay.heightAt(t.x, t.z + 60) + bay.heightAt(t.x, t.z - 60) - 4 * g) / 4; if (gl < 7 || r > 0.35) continue; } }       // (only a few, in a deep draw well below its sides)
 			// in the fog belt the wild and park woods are redwood forest (Muir Woods, the canyons of
-			// Mt Tam and the Santa Cruz Mountains): the mapped trees there stand as redwoods
+			// Mt Tam and the Santa Cruz Mountains): the mapped trees there stand as redwoods. In
+			// town (a park or a patch of open ground with houses and shops round it) they are the
+			// planted Monterey cypress and pine instead, half a redwood's height: as 28-58 m
+			// redwoods on Fort Mason's slope and Aquatic Park's lawn they dwarfed the two- and
+			// three-storey buildings behind them into a toy town (Josh 2026-10-21)
 			const fq2 = Math.min(1, Math.max(0, (t.x - 22000) / 36000));
-			if (g > 0.5 && g < 320 && 1 - fq2 * fq2 * (3 - 2 * fq2) > 0.6 && r < 0.75) { const L = real.landAt(t.x, t.z); if (L && (L.lu === 0 || L.lu === 2 || L.lu === 12)) { trees.push({ x: t.x, y: g - 0.3, z: t.z, h: 28 + r * 30, cone: true, sp: 2, col: jit([0.12, 0.19, 0.09], r) }); continue; } }
+			if (g > 0.5 && g < 320 && 1 - fq2 * fq2 * (3 - 2 * fq2) > 0.6 && r < 0.75) {
+				const L = real.landAt(t.x, t.z);
+				if (L && (L.lu === 0 || L.lu === 2 || L.lu === 12)) {
+					if (inTown(t.x, t.z)) trees.push({ x: t.x, y: g - 0.3, z: t.z, h: 14 + r * 18, cone: true, sp: 2, col: jit([0.1, 0.17, 0.08], r) });
+					else trees.push({ x: t.x, y: g - 0.3, z: t.z, h: 28 + r * 30, cone: true, sp: 2, col: jit([0.12, 0.19, 0.09], r) });
+					continue;
+				}
+			}
 			if (g > 0.5) trees.push({ src: 'real', x: t.x, y: g - 0.3, z: t.z, h: t.h, cone: !!t.cone, col: t.cone ? jit([0.13, 0.21, 0.11], r) : t.flower ? jit([0.62, 0.2, 0.34], r) : jit(pick(PAL.crown, r), r) });   // (crape myrtles in bloom)
 		}
 	}
@@ -1734,6 +1759,9 @@ export function createCity(shared, scene, bay, real = null) {
 		// grass, with trees only down in the sheltered draws (the Marin Headlands, Devil's Slide)
 		// (a watered city park is planted: Golden Gate Park's groves of cypress, pine and eucalyptus)
 		const planted = GREENS.some((G) => Math.abs(x - G.x) < G.rx && Math.abs(z - G.z) < G.rz);
+		// (open ground in a fog-belt town, a slope between the streets like Fort Mason's, is planted
+		// too: a few Monterey cypress and pine on the grass, not redwood groves 30-70 m tall)
+		if (!planted && fog > 0.6 && inR && inTown(x, z)) { if (r2 < 0.3) trees.push({ x, y: g, z, h: 14 + r2 * 34, cone: true, sp: 2, col: tint([0.1, 0.17, 0.08]) }); return; }
 		if (planted && r2 < 0.42) { trees.push(r2 < 0.24 ? { x, y: g, z, h: 16 + r2 * 40, cone: true, sp: 2, col: tint([0.1, 0.17, 0.08]) } : { x, y: g, z, h: 12 + r2 * 14, sp: 0, col: tint([0.2, 0.28, 0.12]) }); return; }      // (Monterey cypress and pine; eucalyptus)
 		const windswept = !planted && fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
 		const draw = windswept ? (H(x + 60, z) + H(x - 60, z) + H(x, z + 60) + H(x, z - 60) - 4 * h) / 4 : 0;
