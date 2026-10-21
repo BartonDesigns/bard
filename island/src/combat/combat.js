@@ -389,8 +389,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- shots ----------
 	// the first thing a ray meets: a target in the layer or a wall: { T?, t, n, surface, part, ward }
-	function firstHit(o, d, max, shooterT = ME) {
-		const a = layer.cast(o, d, max, shooterT, rules), b = worldHit(o, d, a ? a.t : max);
+	// (assist: a forgiving weapon's, layer.cast)
+	function firstHit(o, d, max, shooterT = ME, assist = null) {
+		const a = layer.cast(o, d, max, shooterT, rules, assist), b = worldHit(o, d, a ? a.t : max);
 		// (a wall built near you keeps its own record under wall: structures/walls/ needs it)
 		if (b && (!a || b.t < a.t)) return { ...b, wall: b.wall || true };
 		return a;
