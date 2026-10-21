@@ -21,6 +21,7 @@ import { SYSTEMS } from './systems.js';
 import { CARD_MARKS } from './placement.js';
 import { rng, pick } from './rand.js';
 import { drawEmblem, drawTradeBoard, drawBanner, drawProduct, drawCampaign } from './art.js';
+import { brandName } from './brand-catalog.js';
 
 export const SANS = '"Inter", "Liberation Sans", "Helvetica Neue", Arial, sans-serif';
 export const SERIF = '"Liberation Serif", Georgia, "Times New Roman", serif';
@@ -28,7 +29,7 @@ export const JPF = '"IPAGothic", "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic
 const sysOf = (f) => SYSTEMS[f.sys] || SYSTEMS.us;
 
 // px per metre by kind: the faces read close get more
-const DENS = { blade: 330, hours: 520, pushpull: 760, payment: 760, access: 700, nosmoking: 700, alarm: 900, address: 520, suite: 900, nosolicit: 900, open: 600, window: 420, sale: 420, staff: 640, deliveries: 640, plate: 900, bumper: 900, wsticker: 900, cpermit: 1100, livery: 200, aisle: 260, dept: 200, price: 1200, talker: 1000, flyer: 640, sticker: 1100, permit: 420, site: 300 };
+const DENS = { blade: 330, hours: 520, pushpull: 760, payment: 760, access: 700, nosmoking: 700, alarm: 900, address: 520, suite: 900, nosolicit: 900, open: 600, window: 420, sale: 420, staff: 640, deliveries: 640, plate: 900, bumper: 900, bbrand: 700, wsticker: 900, cpermit: 1100, livery: 200, aisle: 260, dept: 200, price: 1200, talker: 1000, flyer: 640, sticker: 1100, permit: 420, site: 300 };
 export function faceDims(face, w, h) {
 	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 40 : face.k === 'wheatpaste' ? 300 : 230);
 	// (three quarters of the nominal density: enough for the distance each is read at, and the
@@ -435,9 +436,26 @@ const CAR = {
 		const line = pick(r, ['I BRAKE FOR TIDE POOLS', 'KEEP IT SALTY', 'MY OTHER CAR IS A BICYCLE', 'ARE WE THERE YET?', 'FOG CITY NATIVE', 'TRAIL MIX ENTHUSIAST', 'RADIO TIDE 101.9', 'PROUD PARENT · HARBOR HIGH', 'HONK IF YOU LOVE HILLS', 'SAVE THE TIDEPOOLS', 'STUDENT DRIVER · BE PATIENT', 'LIFE IS BETTER AT THE COAST']);
 		text(g, line, x + w / 2, y + h * 0.54, h * 0.46, { col: pal[1], maxW: w * 0.92, track: 0.04 });
 	},
-	// a rear-window sticker: a family of stick figures, a college-ish name, a mountain
+	// a brand's bumper sticker: one of the illustrated marks (signage/art.js, the brand sheets)
+	// on a die-cut white, cream or pale grey, or clear vinyl (the mark alone on the paint); its
+	// name in type until the sheet is in
+	bbrand(g, x, y, w, h, f) {
+		if (f.field) { g.fillStyle = f.field; rrect(g, x + 1, y + 1, w - 2, h - 2, h * 0.22); g.fill(); }
+		const s = Math.min(w * 0.98, h * 1.3);
+		if (!drawEmblem(g, x + (w - s) / 2, y + (h - s) / 2, s, f.family, f.trade, !!f.phone)) text(g, brandName(f.family, f.trade), x + w / 2, y + h * 0.54, h * 0.5, { col: f.field ? '#1d2a33' : '#f4f4f0', maxW: w * 0.86 });
+	},
+	// a rear-window sticker: a family of stick figures, a college-ish name, a mountain, a
+	// BABY ON BOARD in yellow
 	wsticker(g, x, y, w, h, f) {
-		const r = rng(f.seed * 211 + 3), kind = f.seed % 3, col = '#f4f4f0';
+		const r = rng(f.seed * 211 + 3), kind = f.seed % 4, col = '#f4f4f0';
+		if (kind === 3) {
+			g.fillStyle = '#f4c430'; rrect(g, x + 1, y + 1, w - 2, h - 2, h * 0.14); g.fill();
+			g.lineWidth = Math.max(1, h * 0.06); g.strokeStyle = '#141414'; g.stroke();
+			const cx = x + h * 0.55, cy = y + h / 2, d = h * 0.36;
+			g.beginPath(); g.moveTo(cx, cy - d); g.lineTo(cx + d, cy); g.lineTo(cx, cy + d); g.lineTo(cx - d, cy); g.closePath(); g.stroke();
+			text(g, 'BABY ON BOARD', x + h * 1.05 + (w - h * 1.15) / 2, y + h * 0.54, h * 0.4, { col: '#141414', maxW: w - h * 1.25 });
+			return;
+		}
 		if (kind === 0) { const n = 2 + Math.floor(r() * 3); for (let i = 0; i < n; i++) { const s = h * (i < 2 ? 0.9 : 0.6); picto(g, 'walk', x + w * (0.15 + i * 0.7 / n), y + h - s * 0.55, s, col); } if (r() < 0.5) picto(g, 'dog', x + w * 0.88, y + h * 0.75, h * 0.4, col); }
 		else if (kind === 1) { text(g, pick(r, ['BAYSIDE STATE', 'HILLCREST COLLEGE', 'COASTAL TECH', 'NORTHRIDGE U']), x + w / 2, y + h * 0.5, h * 0.42, { col, font: SERIF, maxW: w * 0.95, track: 0.06 }); }
 		else { g.strokeStyle = col; g.lineWidth = h * 0.08; g.lineJoin = 'round'; g.beginPath(); g.moveTo(x + w * 0.05, y + h * 0.9); g.lineTo(x + w * 0.35, y + h * 0.2); g.lineTo(x + w * 0.5, y + h * 0.55); g.lineTo(x + w * 0.65, y + h * 0.3); g.lineTo(x + w * 0.95, y + h * 0.9); g.stroke(); }
