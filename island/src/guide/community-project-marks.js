@@ -24,21 +24,26 @@ export function communityProjectAnchor(W, project) {
 }
 
 function segmentDistance(x, z, points) {
+	// (points as pairs, [x, z] or { x, z }: a flat list of numbers, as the mapped streets keep
+	// theirs, has no pairs to read, and was always Infinity: said at once, not found point by point)
+	if (ArrayBuffer.isView(points)) return Infinity;
 	let d = Infinity;
 	for (let i = 0; i + 1 < (points?.length || 0); i++) {
 		const a = points[i], b = points[i + 1], ax = a[0] ?? a.x, az = a[1] ?? a.z, bx = b[0] ?? b.x, bz = b[1] ?? b.z;
-		if (![ax, az, bx, bz].every(finite)) continue;
+		if (!finite(ax) || !finite(az) || !finite(bx) || !finite(bz)) continue;
 		const dx = bx - ax, dz = bz - az, len = dx * dx + dz * dz;
 		const t = len ? clamp(((x - ax) * dx + (z - az) * dz) / len, 0, 1) : 0;
-		d = Math.min(d, Math.hypot(x - ax - dx * t, z - az - dz * t));
+		const ex = x - ax - dx * t, ez = z - az - dz * t;
+		d = Math.min(d, Math.sqrt(ex * ex + ez * ez));   // (Math.hypot allocates in V8)
 	}
 	return d;
 }
 
+// boxes: { x, z, r } each, r the reach it keeps clear (half its diagonal and .65 m), finite only
 function blockedAt(W, x, z, y, boxes, roads, probe) {
 	if (W.globe?.regional?.settlements?.blocked?.(x, z, .5, true) || W.globe?.roads?.onRoad?.(x, z, .5) || W.globe?.lanes?.onRoad?.(x, z, .5)) return true;
-	if (boxes.some(b => finite(b.x) && finite(b.z) && Math.hypot(x - b.x, z - b.z) < Math.hypot(b.w || 0, b.d || 0) * .5 + .65)) return true;
-	if (roads.some(r => segmentDistance(x, z, r.pts) < (r.w || 4) * .5 + .65)) return true;
+	for (let k = 0; k < boxes.length; k++) { const b = boxes[k]; const ex = x - b.x, ez = z - b.z; if (ex * ex + ez * ez < b.r * b.r) return true; }
+	for (let k = 0; k < roads.length; k++) { const r = roads[k]; if (segmentDistance(x, z, r.pts) < (r.w || 4) * .5 + .65) return true; }
 	if ((W.real?.landAt?.(x, z)?.road || 0) > .25) return true;
 	const U = W.bayArea?.urbanAt?.(x, z);
 	if (U?.u > .3 && !W.real?.inside?.(x, z)) {
@@ -54,10 +59,49 @@ function blockedAt(W, x, z, y, boxes, roads, probe) {
 	return false;
 }
 
+// What a spot keeps clear of, gathered once for a whole pass (the sites offered, the marks
+// refreshed: sixteen sites, four kinds, thirteen candidates each) and not once per call: the
+// city's list of buildings runs to thousands, and it was copied and measured whole each time.
+// It holds for one pass only, inside one frame, while nothing in the world moves under it.
+// The city's and the village's buildings go in 32 m cells (the few wider than a cell in a list
+// of their own); what is near an anchor is then the same set the whole list gave, by the same
+// test, and kept per anchor, each box's reach worked out once.
+const CELL = 32;
+export function communityProjectContext(W) {
+	let grid = null, wide = null;
+	const anchors = new Map();
+	function index() {
+		grid = new Map(); wide = [];
+		for (const list of [W.village?.footprints || [], W.city?.nearList?.() || []]) for (const b of list) {
+			if (!finite(b.x) || !finite(b.z)) continue;
+			if (Math.hypot(b.w || 0, b.d || 0) * .5 > CELL) { wide.push(b); continue; }
+			const k = Math.floor(b.x / CELL) * 65536 + Math.floor(b.z / CELL);
+			let c = grid.get(k); if (!c) grid.set(k, c = []); c.push(b);
+		}
+	}
+	function near(ax, az) {
+		const key = ax + ',' + az;
+		let got = anchors.get(key);
+		if (got) return got;
+		if (!grid) index();
+		const boxes = [], keep = b => { if (finite(b.x) && finite(b.z) && Math.hypot(b.x - ax, b.z - az) < 40 + Math.hypot(b.w || 0, b.d || 0) * .5) boxes.push({ x: b.x, z: b.z, r: Math.hypot(b.w || 0, b.d || 0) * .5 + .65 }); };
+		for (const b of W.real?.near?.('boxes', ax, az, 40) || []) keep(b);
+		for (const b of wide) keep(b);
+		const R = 40 + CELL;
+		for (let i = Math.floor((ax - R) / CELL); i <= Math.floor((ax + R) / CELL); i++) for (let j = Math.floor((az - R) / CELL); j <= Math.floor((az + R) / CELL); j++) for (const b of grid.get(i * 65536 + j) || []) keep(b);
+		// (a street kept as a flat list of numbers never blocks: segmentDistance)
+		const roads = (W.real?.near?.('roads', ax, az, 40) || []).filter(r => !ArrayBuffer.isView(r.pts));
+		anchors.set(key, got = { boxes, roads });
+		return got;
+	}
+	return { W, near };
+}
+
 // Stable, conservative placement relative to the saved site, independent of camera.
 // Every lifecycle stage reserves the completed footprint. No ocean-level assumption
 // is made for dry moons, whose ground can legitimately be below zero.
-export function communityProjectSpot(W, project, { exact = null } = {}) {
+//   context  communityProjectContext(W), shared by the calls of one pass (made here if none)
+export function communityProjectSpot(W, project, { exact = null, context = null } = {}) {
 	const anchor = communityProjectAnchor(W, project), extent = COMMUNITY_PROJECT_FOOTPRINTS[project?.kind];
 	if (!anchor || !extent || !STAGES.has(stage(project))) return null;
 	const I = W.island, ground = I?.drawnAt || I?.heightAt;
@@ -65,11 +109,15 @@ export function communityProjectSpot(W, project, { exact = null } = {}) {
 	const angle = hash(project.siteId || project.id) / 4294967296 * Math.PI * 2;
 	const yaw = angle;
 	const c = Math.cos(yaw), s = Math.sin(yaw), [width, depth] = extent, nx = Math.ceil(width), nz = Math.ceil(depth), probe = new THREE.Vector3();
-	const boxes = [...(W.real?.near?.('boxes', anchor.x, anchor.z, 40) || []), ...(W.village?.footprints || []), ...(W.city?.nearList?.() || [])].filter(b => finite(b.x) && finite(b.z) && Math.hypot(b.x - anchor.x, b.z - anchor.z) < 40 + Math.hypot(b.w || 0, b.d || 0) * .5);
-	const roads = W.real?.near?.('roads', anchor.x, anchor.z, 40) || [];
+	const { boxes: all, roads } = (context?.W === W ? context : communityProjectContext(W)).near(anchor.x, anchor.z);
 	const candidates = exact ? [exact] : [{ x: anchor.x, z: anchor.z }, ...[7, 13, 19].flatMap(r => [0, 1, 2, 3].map(i => ({ x: anchor.x + Math.cos(angle + i * Math.PI / 2) * r, z: anchor.z + Math.sin(angle + i * Math.PI / 2) * r })))];
+	// (no sample of a footprint lies further than half its diagonal from its centre: a box out of
+	// reach of all of them by a centimetre more is left out of its tests, which it could never fail)
+	const foot = Math.hypot(width, depth) * .5 + .01, boxes = [];
 	for (const candidate of candidates) {
 		let lo = Infinity, hi = -Infinity, clear = true;
+		boxes.length = 0;
+		for (const b of all) if (Math.hypot(candidate.x - b.x, candidate.z - b.z) < b.r + foot) boxes.push(b);
 		for (let i = 0; i <= nx && clear; i++) for (let j = 0; j <= nz; j++) {
 			const u = (i / nx - .5) * width, v = (j / nz - .5) * depth, x = candidate.x + c * u + s * v, z = candidate.z - s * u + c * v;
 			const y = ground.call(I, x, z), floor = W.player?.floorAt?.(x, z, y), water = I.waterAt?.(x, z) ?? W.water?.waterAt?.(x, z) ?? W.globe?.waterAt?.(x, z);
@@ -163,6 +211,7 @@ export function createCommunityProjectMarks({ scene, world, camera, projects, si
 		}
 		candidates.sort((a, b) => a.distance - b.distance || a.p.id.localeCompare(b.p.id));
 		const keep = new Set(), occupied = [];
+		let context = null;          // (what the spots keep clear of, gathered once for this refresh)
 		for (const { p } of candidates.slice(0, limit * 2)) {
 			if (keep.size >= limit) break;
 			let mark = marks.get(p.id); const signature = JSON.stringify([p.kind, stage(p), p.anchor, p.siteId]);
@@ -172,7 +221,7 @@ export function createCommunityProjectMarks({ scene, world, camera, projects, si
 			if (!mark || time - mark.checked > 4) {
 				// The shared anchor is the finished place, never an invitation to move
 				// the structure when a streamed building or hazard obstructs it.
-				spot = communityProjectSpot(W, p, { exact: communityProjectAnchor(W, p) });
+				spot = communityProjectSpot(W, p, { exact: communityProjectAnchor(W, p), context: context ||= communityProjectContext(W) });
 				if (mark) mark.checked = time;
 			}
 			if (!spot) { if (mark) { remove(mark); marks.delete(p.id); } failed.set(p.id, { until: time + 8, signature }); continue; }

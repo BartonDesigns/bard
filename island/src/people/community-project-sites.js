@@ -1,5 +1,5 @@
 import { positionFor, worldPosition } from './social-actors.js';
-import { communityProjectSpot } from '../guide/community-project-marks.js';
+import { communityProjectSpot, communityProjectContext } from '../guide/community-project-marks.js';
 
 const hash = value => { let h = 2166136261; for (const c of String(value)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0).toString(36); };
 const siteId = raw => { const s = String(raw || ''); return s.length <= 96 ? s : 'site:' + hash(s); };
@@ -18,7 +18,8 @@ export function createCommunityProjectSites({ world, position, targets, activiti
 		for (const q of activities() || []) if (q.siteId && q.siteAnchor) raw.push({ id: q.siteId, name: q.place, ...q.siteAnchor, source: 'living-request', requestId: q.id, npcId: q.beneficiaryId, npcName: q.requesterName });
 		for (const t of targets() || []) if (!t.under && !t.caveEntrance && !String(t.id).startsWith('home:')) raw.push({ ...t, source: 'place' });
 		for (const t of W.worldSites?.() || []) if (!t.virtual) raw.push({ ...t, source: 'business' });
-		const seen = new Set(), result = [];
+		// (the buildings and streets each spot keeps clear of, gathered once for this whole list)
+		const seen = new Set(), result = [], context = communityProjectContext(W);
 		const fertile = W.body?.key === 'earth' || ['TERRAN','TROPICAL','FOREST','LUSH'].includes(W.body?.type);
 		for (const t of raw.filter(t=>t.id && t.name && Number.isFinite(t.x) && Number.isFinite(t.z) && Math.hypot(t.x-at.x,t.z-at.z)<180)
 			.sort((a,b)=>Math.hypot(a.x-at.x,a.z-at.z)-Math.hypot(b.x-at.x,b.z-at.z)).slice(0,16)) {
@@ -31,13 +32,13 @@ export function createCommunityProjectSites({ world, position, targets, activiti
 			const available = priorProject ? allowed.filter(kind=>kind===priorProject.kind) : allowed;
 			let spot = null;
 			for (const kind of available) {
-				spot = priorProject ? communityProjectSpot(W,{...record,kind,anchor:priorProject.anchor},{exact:worldPosition(W,priorProject.anchor)}) : communityProjectSpot(W,{...record,kind});
+				spot = priorProject ? communityProjectSpot(W,{...record,kind,anchor:priorProject.anchor},{exact:worldPosition(W,priorProject.anchor),context}) : communityProjectSpot(W,{...record,kind},{context});
 				if(spot)break;
 			}
 			if (!spot) continue;
 			if(existing.some(p=>p.siteId!==id && (()=>{const a=worldPosition(W,p.anchor);return a&&Math.hypot(a.x-spot.x,a.z-spot.z)<12;})()))continue;
 			const anchor = priorProject ? {...priorProject.anchor,x:spot.x,y:spot.y,z:spot.z} : {x:spot.x,y:spot.y,z:spot.z,...positionFor(W,spot)};
-			const fits = available.filter(kind=>communityProjectSpot(W,{...record,kind,anchor},{exact:spot}));
+			const fits = available.filter(kind=>communityProjectSpot(W,{...record,kind,anchor},{exact:spot,context}));
 			if (!fits.length) continue;
 			result.push({id,siteId:id,name:record.name,anchor,kinds:fits,source:t.source,
 				...(t.requestId?{requestId:t.requestId}:{}),...(t.npcId?{npcId:t.npcId,npcName:t.npcName||'A resident'}:{})});
