@@ -163,6 +163,10 @@ export const ACTIONS = {
 	// a cross from the back one, a hook round the side; a two-handed shove; a grab; a bat or
 	// bottle swung from the back shoulder; a reel from a blow taken
 	guard: { loop: false, keys: [[0, { L: GUARD_L, R: GUARD_R, sp: [0.25, 0.06, 0], hp: [0.2, 0, 0, 0.05], fL: [0.13, 0, 0.16], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }]] },
+	// the hero squared up for a picture (ui/hero-portrait.js): a wide stance, the weight a little
+	// low and leaning in, the arms flared off the sides, elbows bent and the fists clenched, the
+	// chin down and the eyes on you
+	squared: { loop: false, keys: [[0, { L: arm({ abd: 0.46, flex: 0.2, roll: 0.3, bend: 0.85, pro: 1.0, wflex: 0, curl: 1 }), R: arm({ abd: 0.44, flex: 0.12, roll: 0.3, bend: 0.75, pro: 1.0, wflex: 0, curl: 1 }), sp: [0.12, 0.07, 0], hp: [0.08, 0, 0, 0.06], fL: [0.22, 0, 0.12], fR: [-0.22, 0, -0.08], hd: [-0.12, 0.16, 0] }]] },
 	jab: { loop: false, keys: [
 		[0, { L: GUARD_L, R: GUARD_R, sp: [0.25, 0.06, 0], hp: [0.2, 0, 0, 0.05], fL: [0.13, 0, 0.16], fR: [-0.13, 0, -0.14], hd: [-0.2, 0.08, 0] }],
 		[0.35, { L: arm({ abd: 0.12, flex: 1.5, roll: 0.25, bend: 0.12, pro: 0.15, curl: 1 }), R: GUARD_R, sp: [0.45, 0.1, 0], hp: [0.3, 0, 0, 0.06], fL: [0.13, 0, 0.26], fR: [-0.13, 0, -0.14], hd: [-0.35, 0.08, 0] }],

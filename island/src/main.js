@@ -1888,7 +1888,7 @@ if (typeof window !== 'undefined') {
 		heroView: () => HOOKS.heroView,
 		// your hero's picture for the gear sheet (ui/hero-portrait.js): Crysis.portrait() its state,
 		// .portrait('gear' | 'char') with the sheet open on that view
-		portrait: (view) => { if (view) HOOKS.gear?.open(view); return HOOKS.portrait?.info(); },
+		portrait: (view, look) => { if (look) HOOKS.portrait?.look(look); if (view) HOOKS.gear?.open(view); return HOOKS.portrait?.info(); },
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
