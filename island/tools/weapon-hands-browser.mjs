@@ -16,8 +16,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 await fs.mkdir(out, { recursive: true });
 const server = http.createServer(async (req, res) => { try { const name = new URL(req.url, 'http://local').pathname; res.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name === '/' ? 'text/html' : 'application/octet-stream'); res.end(name === '/' ? '<html></html>' : await fs.readFile(root + name)); } catch { res.statusCode = 404; res.end(); } });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const WEAPONS = (process.env.ONLY || 'aurora-trail-rifle,mossback-scout-rifle,warden-spark-carbine,reedline-hunting-bow').split(',');
-const STAGES = (process.env.STAGES || 'carry,aim,fire,reload,charge').split(',');
+const WEAPONS = (process.env.ONLY || 'aurora-trail-rifle,mossback-scout-rifle,longwatch-sniper-rifle,warden-spark-carbine,reedline-hunting-bow').split(',');
+const STAGES = (process.env.STAGES || 'carry,aim,fire,bolt,reload,charge').split(',');
 const settle = +(process.env.SETTLE || 2500);
 const report = [], errors = [];
 let browser;
@@ -42,6 +42,8 @@ try {
 					w.select(id, 'first');
 					if (stage === 'aim') { w.aim(true); if (bow) w.bow({ draw: 1, loaded: true, nock: 1 }); for (let i = 0; i < 90; i++) w.frame(1 / 60, false); }
 					if (stage === 'fire') { w.aim(true); if (bow) w.bow({ draw: 1, loaded: true, nock: 1 }); for (let i = 0; i < 90; i++) w.frame(1 / 60, false); accepted = w.fire(); for (let i = 0; i < 3; i++) w.frame(1 / 60, false); }
+					// a bolt rifle's stroke after a shot, the knob drawn back (only a rifle with a bolt)
+					if (stage === 'bolt') { if (!w.weapon(id)?.bolt) return null; w.aim(true); for (let i = 0; i < 90; i++) w.frame(1 / 60, false); accepted = w.fire(); for (let i = 0; i < 40; i++) w.frame(1 / 60, false); }
 					// mid-reload: the support hand on the cell as it comes out (a third of the way); the
 					// charge: the fresh cell seated and the charging stroke (nine tenths)
 					if (stage === 'reload' || stage === 'charge') {
@@ -54,6 +56,7 @@ try {
 					w.frame();
 					return { id, stage, accepted, reloading: w.reloading(), ...w.info(), fingers: weaponHands.fingerContact(), failed: w.failed() };
 				}, [id, stage]);
+				if (!row) continue;
 				await page.waitForTimeout(settle);
 				const png = await page.evaluate(() => weaponReview.png());
 				await fs.writeFile(`${out}/${tag}-${id}-${stage}.png`, Buffer.from(png.split(',')[1], 'base64'));

@@ -77,6 +77,7 @@ const KEYS = ['6', '7', '8', '9', '0'];
 const WEAPON_ICON = {
 	'aurora-trail-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M1 11h15l1-1h6v2h-6l-1 1H10l-1.6 4.5H5.8l1.4-4.5H3.6L1 14.5z"/><path d="M7.5 7.5h7v2h-7z"/><path d="M9 9.5h1v1.5H9zm3 0h1v1.5h-1z"/></g>',
 	'mossback-scout-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M1 11.6l3-1.1h13.5v-.8H23v1.6h-5.5l-1 1.4h-6l-2.2 3.8H5.6l1.8-3.8H4.2L1 14z"/><circle cx="13" cy="14.2" r="1.1"/></g>',
+	'longwatch-sniper-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M.6 11.4l2.6-.9h11.4v-.6h8.8v1.2h-8.8l-.8 1.3H9.6l-2 3.4H5.2l1.6-3.4H3.6L.6 13.8z"/><path d="M6.4 7.6h8.2v1.5H6.4zM14.2 7.3h2.2v2.1h-2.2z"/><path d="M8 9.1h.9v1.4H8zm4 0h.9v1.4H12z"/><circle cx="12" cy="13.4" r="1"/></g>',
 	'warden-spark-carbine': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M2 9.5h13V8.6h6.5v2.1H15V13h-3.4l-.5 4.5H8.6l.5-4.5H6.8L5.6 16H3l1-3H2z"/><path d="M12.4 13h2.2l.4 3.6h-2.2z"/></g>',
 	'reedline-hunting-bow': '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"><path d="M8 2.5c7 4.6 7 14.4 0 19"/><path d="M8 2.5v19" stroke-width="1"/><path d="M3 12h16.5"/></g><path d="M21.5 12l-3.4-2.2v4.4z"/><path d="M3 12l-1.4-1.6M3 12l-1.4 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
 	bat: '<g transform="rotate(-45 12 12)"><path d="M1.6 11.1H11l9.6-1.5a2.4 2.4 0 0 1 0 4.8L11 12.9H1.6z"/><rect x=".2" y="10.4" width="2" height="3.2" rx=".7"/></g>',
@@ -85,7 +86,7 @@ const WEAPON_ICON = {
 	knife: '<path d="M2.4 20.2l4.4-4.4 1.6 1.6-4.4 4.4a1.1 1.1 0 0 1-1.6-1.6z"/><path d="M7.8 14.8L20.6 2.4c.9 2.6-.1 5.6-2.4 7.9l-8.2 8.1z"/>',
 	machete: '<path d="M1.8 20.6l3.8-3.8 1.8 1.8-3.8 3.8a1.3 1.3 0 0 1-1.8-1.8z"/><path d="M6.6 15.8L17.4 5c2.4-2.4 5.6-1.6 4.8 1.2-.3 1-1 1.9-1.8 2.7L8.6 17.8z"/>',
 };
-const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Scout', 'warden-spark-carbine': 'Carb', 'reedline-hunting-bow': 'Bow', bat: 'Bat', pipe: 'Pipe', bottle: 'Bottle', knife: 'Knife', machete: 'Blade' };
+const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Scout', 'longwatch-sniper-rifle': 'Sniper', 'warden-spark-carbine': 'Carb', 'reedline-hunting-bow': 'Bow', bat: 'Bat', pipe: 'Pipe', bottle: 'Bottle', knife: 'Knife', machete: 'Blade' };
 
 // the arcs round the spell button: radius, then each slot's angle from straight left (up is +)
 const RING = { s: [100, [64, 32, 0, -32, -64]], w: [162, [40, 20, 0, -20, -40]] };

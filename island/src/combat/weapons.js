@@ -17,6 +17,11 @@ export const bowPower = (q) => { q = Math.max(0, Math.min(1, q)); return { damag
 export const WEAPONS = Object.freeze({
 	'aurora-trail-rifle': { name: 'Aurora Trail Rifle', modes: ['semi'], rpm: 96, burst: 1, mag: 8, box: 'trail-rifle-box', perBox: 24, dmg: 58, type: 'ballistic', spread: 0.004, ads: 0.2, move: 0.022, bloom: 0.006, kick: [0.024, 0.006], range: 320, falloff: 160, reload: 2.3, tracer: 0 },
 	'mossback-scout-rifle': { name: 'Mossback Scout Rifle', modes: ['semi'], rpm: 66, burst: 1, mag: 5, box: 'scout-rifle-box', perBox: 20, dmg: 82, type: 'ballistic', spread: 0.003, ads: 0.15, move: 0.025, bloom: 0.008, kick: [0.026, 0.008], range: 360, falloff: 200, reload: 2.0, tracer: 1 },
+	// the Longwatch: a heavy long-range rifle that forgives. One round downs most people anywhere
+	// but a hand or a foot, and a near miss is drawn onto whoever it passed (assist: the shapes
+	// swollen by pad metres plus ang radians of the distance, a head by head of that; the
+	// shot then goes to the nearest point of the shape it would have met)
+	'longwatch-sniper-rifle': { name: 'Longwatch Sniper Rifle', modes: ['semi'], rpm: 42, burst: 1, mag: 5, box: 'longwatch-round-box', perBox: 15, dmg: 150, type: 'ballistic', spread: 0.0025, ads: 0.03, move: 0.03, bloom: 0.004, kick: [0.05, 0.012], range: 650, falloff: 480, reload: 3.0, tracer: 1, assist: { pad: 0.12, ang: 0.0035, head: 0.35 } },
 	'warden-spark-carbine': { name: 'Warden Spark Carbine', modes: ['auto', 'burst', 'semi'], rpm: 360, burst: 3, mag: 24, box: 'spark-cell-pack', perBox: 48, dmg: 17, type: 'energy', spread: 0.009, ads: 0.4, move: 0.018, bloom: 0.003, kick: [0.008, 0.004], range: 200, falloff: 110, reload: 1.7, tracer: 2, projectile: { speed: 150, drop: 0, splash: 1.2, life: 1.6 } },
 	'reedline-hunting-bow': { name: 'Reedline Hunting Bow', modes: ['semi'], rpm: 48, burst: 1, mag: 1, box: 'reed-arrow-quiver', perBox: 12, dmg: 90, type: 'pierce', spread: 0.003, ads: 0.4, move: 0.012, bloom: 0, kick: [0.006, 0.002], range: 150, falloff: 120, reload: 0.9, tracer: 3, projectile: { speed: 75, drop: 9.8, splash: 0, life: 4 } },
 });
