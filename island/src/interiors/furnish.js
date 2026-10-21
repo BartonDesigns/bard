@@ -104,6 +104,8 @@ export function furnish(P, only = -1) {
 			for (let i = 0; i < n; i++) { const u = (n === 1 ? 0 : (i / (n - 1) - 0.5) * it.w * 0.62); seats.push({ x: it.x + ax[0] * u + fx * depth, z: it.z + ax[1] * u + fz * depth, y: y0, fx, fz, sit: true, h, room: rm.id }); }
 		};
 		const stand = (x, z, fx, fz) => seats.push({ x, z, y: y0, fx, fz, sit: false, h: 0, room: rm.id });
+		// the one who works at a desk: on its chair out front, facing back into it (its screen)
+		const deskSeat = (it, h = 0.47) => { const [fx, fz] = faceOf(it.rot), dd = it.d / 2 + 0.33; seats.push({ x: it.x + fx * dd, z: it.z + fz * dd, y: y0, fx: -fx, fz: -fz, sit: true, h, room: rm.id, table: true }); };
 		const art = (n) => { for (let k = 0; k < n; k++) against('art', 0.5 + rnd() * 0.6, 0.03, 0.01, { clear: 0, side: (s) => !s.ext || rnd() < 0.4 }); };
 		const clutter = (n) => { for (let k = 0; k < n; k++) against(rnd() < 0.5 ? 'boxes' : 'plant', 0.45, 0.4, 0.5 + rnd() * 0.4, { corner: true, clear: 0 }); };
 		// the seats round a table, where its drawing puts its chairs (housekit.js, kit.js)
@@ -121,7 +123,7 @@ export function furnish(P, only = -1) {
 			against, inFront, standing: (type, x, z, w, d, h, rot = 0, pad = 0) => standing(type, x, z, w, d, h, rot, pad),
 			stand: (x, z, fx, fz, staff) => seats.push({ x, z, y: y0, fx, fz, sit: false, h: 0, room: rm.id, staff: !!staff }),
 			seat: (x, z, fx, fz, h) => seats.push({ x, z, y: y0, fx, fz, sit: true, h, room: rm.id }),
-			sitOn, chairs, light, anchor: (kind, x, y, z) => (P.lightAnchors || (P.lightAnchors = [])).push({ kind, x, y, z, room: rm.id, level: rm.k }),
+			sitOn, deskSeat, chairs, light, anchor: (kind, x, y, z) => (P.lightAnchors || (P.lightAnchors = [])).push({ kind, x, y, z, room: rm.id, level: rm.k }),
 			// (a sign's place for the environmental graphics: an aisle marker, interiors/index.js signAnchors)
 			sign: (kind, x, y, z, o = {}) => (P.signAnchors || (P.signAnchors = [])).push({ kind, x, y, z, room: rm.id, level: rm.k, ...o }),
 		});
@@ -171,6 +173,57 @@ export function furnish(P, only = -1) {
 			lights.push([cx, y0 + L.h - 0.5, cz, rm.id]);
 		}
 		// the big halls: a region near the door fitted out, the rest left open
+		// an office hall (the door at +z): a reception by the door, a few pods of four desks down
+		// one side, the break room and its lounge down the other, a meeting table and the firm's
+		// own corner at the back (a tech firm's servers and ping-pong, a design studio's long
+		// table, a finance house's library); the coffee, the vending machine, the water and the
+		// first-aid box yours to use too (interiors/office-perks.js)
+		function officeFit(r, x0, x1, z0, z1) {
+			// (the back wall, when the hall is shallow enough to reach it)
+			const zb = z0 <= r.z0 + 1.01 ? r.z0 + 0.02 : z0, wall = zb < z0;
+			const W = x1 - x0, D = z1 - z0, trade = ['tech', 'design', 'finance', 'agency'][Math.floor(rnd() * 4)], mid = x0 + W * 0.55;
+			const rc = standing('shopCounter', Math.min(x1 - 1.4, P.door.x + 2.8), z1 - 0.2, 2.0, 0.7, 1.05, 0, 0.4, { kind: 'info' });
+			if (rc) stand(rc.x, rc.z - 0.85, 0, 1);
+			// the pods: at most four, toward the left wall, nearest the door first
+			let pods = 0;
+			for (let z = z1 - 2.6; z > z0 + 1.6 && pods < 4; z -= 3.7) for (let x = x0 + 1.9; x < mid - 1.6 && pods < 4; x += 4.3) {
+				const it = standing('officePod', x, z, 2.9, 1.5, 1.22, 0, 0.9);
+				if (!it) continue;
+				pods++;
+				for (const sx of [-1, 1]) { seats.push({ x: x + sx * 0.725, z: z - 0.97, y: y0, fx: 0, fz: 1, sit: true, h: 0.47, room: rm.id, table: true }); seats.push({ x: x - sx * 0.725, z: z + 0.97, y: y0, fx: 0, fz: -1, sit: true, h: 0.47, room: rm.id, table: true }); }
+			}
+			// the break room down the right: the coffee point on its own wall, the fridge, the
+			// vending machine and the water beside it, a table to eat at, sofas facing over a rug
+			const kx = Math.max(mid + 1.6, x1 - 4.6), kz = zb + 0.42;
+			const cb = standing('coffeeBar', kx, kz, 2.4, 0.62, 2.15, 0, 0.3);
+			if (cb) { stand(cb.x - 0.6, cb.z + 1.05, 0, -1); stand(cb.x + 0.5, cb.z + 1.05, 0, -1); }
+			standing('fridge', kx + 1.75, zb + 0.38, 0.8, 0.72, 1.85, 0, 0.1);
+			standing('vending', kx + 2.75, zb + 0.42, 0.9, 0.8, 1.85, 0, 0.1);
+			standing('waterCooler', kx - 1.65, zb + 0.2, 0.35, 0.35, 1.4, 0, 0.1);
+			const tb = standing('diningTable', kx + 0.3, kz + 2.9, 1.8, 0.9, 0.76, 0, 0.7, { chairs: 6 });
+			if (tb) chairs(tb);
+			const lz = Math.min(z1 - 4.2, kz + 6.2);
+			if (lz > kz + 4.6) {
+				items.push({ type: 'rug', x: kx + 0.3, z: lz + 1.3, y: y0, rot: 0, w: 3.2, d: 3.4, h: 0.01, v: rnd() });
+				const a = standing('sofa', kx + 0.3, lz, 2.1, 0.92, 0.85, 0, 0.1); if (a) sitOn(a, 3);
+				const b = standing('sofa', kx + 0.3, lz + 2.6, 2.1, 0.92, 0.85, 2, 0.1); if (b) sitOn(b, 3);
+				standing('coffeeTable', kx + 0.3, lz + 1.3, 1.1, 0.55, 0.42, 0, 0.1);
+			}
+			// the meeting table at the back, a whiteboard beside it
+			const mx = Math.max(x0 + 2.6, mid - 3.2), mt = standing('diningTable', mx, zb + 2.0, 2.6, 1.1, 0.76, 0, 0.75, { chairs: 8 });
+			if (mt) { chairs(mt); standing(wall ? 'whiteboard' : 'mobileBoard', mx + 2.3, zb + (wall ? 0.05 : 0.4), 1.8, wall ? 0.1 : 0.6, 2.1, 0, 0); }
+			// the firm's own corner, between the meeting table and the break room
+			const fx = (mx + 1.6 + kx - 1.9) / 2, fz = zb + 4.8;
+			if (trade === 'tech' || trade === 'agency') {
+				const pp = standing('pingPong', fx, fz, 2.74, 1.525, 0.92, 0, 1.0);
+				if (pp) { stand(fx - 1.9, fz, 1, 0); stand(fx + 1.9, fz, -1, 0); }
+			}
+			if (trade === 'tech') for (let k = 0; k < 3; k++) standing('serverRack', x0 + 0.6 + k * 0.7, zb + 0.52, 0.6, 1.0, 2.0, 0, 0.05);
+			if (trade === 'design') { const wt = standing('diningTable', fx, fz, 3.0, 1.2, 0.9, 0, 0.8, { chairs: 6 }); if (wt) chairs(wt); standing('mobileBoard', fx, fz - 1.75, 2.2, 0.6, 2.1, 0, 0); }
+			if (trade === 'finance' || trade === 'agency') for (let k = 0; k < 3; k++) standing('bookcase', fx - 1.05 + k * 1.05, zb + 0.2, 1.0, 0.36, 2.0, 0, 0.05);
+			if (trade === 'finance') for (const sx of [-1, 1]) { const ac = standing('armchair', fx + sx * 0.9, fz + 0.4, 0.85, 0.85, 0.85, 2, 0.1); if (ac) sitOn(ac, 1); }
+			for (const [px, pz] of [[x0 + 0.4, z1 - 0.4], [x1 - 0.4, z1 - 0.4], [mid, zb + 0.3], [x1 - 0.4, zb + 3.4]]) standing('plant', px, pz, 0.5, 0.5, 1.3, 0, 0);
+		}
 		function bigFit(r) {
 			const u = r.type, x0 = Math.max(r.x0 + 1, P.door.x - 18), x1 = Math.min(r.x1 - 1, P.door.x + 18), z1 = r.z1 - 3, z0 = Math.max(r.z0 + 1, z1 - 30);
 			// a store that is a known business: fitted out as one round the door (the rest left open)
@@ -188,8 +241,9 @@ export function furnish(P, only = -1) {
 				for (let x = x0 + 1.4; x < x1 - 1.2; x += 2.7) for (const z of [z0 + 3, z1 - 3]) if (rnd() < 0.7) { const it = standing('car', x, z, 1.85, 4.6, 1.45, 0, 0.3); if (it) it.box = [x - 0.95, z - 2.3, x + 0.95, z + 2.3]; }
 			} else if (u === 'shed') {
 				against('workbench', 1.4, 0.6, 0.92, { clear: 0.6 }); against('shelves', 1.6, 0.5, 1.9, { clear: 0.5 }); against('bikes', 1.6, 0.5, 1.0, { clear: 0.4 }); clutter(3);
-			} else {
-				for (let x = x0 + 1; x < x1 - 1.6; x += 1.8) for (let z = z1 - 2; z > z0 + 1; z -= 2.6) { const it = standing('officeDesk', x, z, 1.5, 0.75, 0.76, 0, 0.45); if (it) seats.push({ x: x, z: z - 0.7, y: y0, fx: 0, fz: 1, sit: true, h: 0.47, room: rm.id, table: true }); }
+			} else if (u === 'office') officeFit(r, x0, x1, z0, z1);
+			else {
+				for (let x = x0 + 1; x < x1 - 1.6; x += 1.8) for (let z = z1 - 2; z > z0 + 1; z -= 2.6) { const it = standing('officeDesk', x, z, 1.5, 0.75, 0.76, 0, 0.45); if (it) seats.push({ x: x, z: z - 0.62, y: y0, fx: 0, fz: 1, sit: true, h: 0.47, room: rm.id, table: true }); }
 			}
 			for (let x = r.x0 + 3; x < r.x1 - 2; x += 6) for (let z = r.z0 + 3; z < r.z1 - 2; z += 6) items.push({ type: 'ceilingLight', kind: 'tube', level: 0, y: y0, x, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h });
 			lights.push([cx, y0 + L.h - 0.5, cz, rm.id]);
@@ -284,7 +338,7 @@ export function furnish(P, only = -1) {
 			clutter(2); light('tube');
 		} else if (t === 'den' || (t === 'office' && P.use !== 'office') || t === 'family') {
 			if (t === 'family') { const so = against('sofa', 2.0, 0.92, 0.85, { long: true, clear: 1.2 }); if (so) { sitOn(so, 3); inFront(so, 'coffeeTable', 1.0, 0.55, 0.42, 0.45); } against('tvConsole', 1.5, 0.45, 0.55, { clear: 1.5 }); }
-			else { const dk = against('desk', 1.3, 0.6, 0.75, { clear: 0.9, score: (s) => (s.ext ? 1 : 0) }); if (dk) sitOn(dk, 1, 0.47, 0.55); }
+			else { const dk = against('desk', 1.3, 0.6, 0.75, { clear: 0.9, score: (s) => (s.ext ? 1 : 0) }); if (dk) deskSeat(dk); }
 			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.6 }); against('armchair', 0.8, 0.8, 0.85, { corner: true, clear: 0.6 });
 			against('plant', 0.4, 0.4, 1.0, { corner: true, clear: 0 }); against('rug', Math.min(2.2, bw - 1), Math.min(1.6, bd - 1.5), 0.01, { clear: 0, centre: true });
 			art(1); light(t === 'family' ? 'fan' : 'flush');

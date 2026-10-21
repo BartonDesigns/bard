@@ -62,7 +62,7 @@ export const GAME = {
 				d.style.cssText = 'position:absolute;left:0;top:14px;width:36px;height:36px;margin-left:-18px;border-radius:50%;background:#ffcc33;box-shadow:0 0 8px #ffcc33;display:none';
 				track.appendChild(d); dots.push(d);
 			}
-			judge = K.el('position:absolute;left:18%;bottom:calc(196px + env(safe-area-inset-bottom));transform:translateX(-50%);font:800 22px system-ui;color:#ffcc33;text-shadow:0 2px 6px #000;pointer-events:none;opacity:0;transition:opacity .3s');
+			judge = K.el('position:absolute;left:18%;bottom:calc(196px + env(safe-area-inset-bottom));transform:translateX(-50%);font:800 22px var(--bard-display,system-ui,sans-serif);color:#ffcc33;text-shadow:0 2px 6px #000;pointer-events:none;opacity:0;transition:opacity .3s');
 		}
 		function reset() {
 			S = { t: 0, next: 0, hit: new Array(notes.length).fill(0), score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0, beat: -1, swing: 0, state: 'play' };

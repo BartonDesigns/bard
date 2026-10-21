@@ -127,7 +127,7 @@ export function createTradeWindow({ mount, studio, onEdit, onAccept, onCancel, o
 			if (zone === 'offer' && live) {
 				const f = el('input'); f.name = 'trade-credits'; f.type = 'number'; f.min = '0'; f.max = String(me.credits); f.step = '10'; f.value = String(side.credits); f.inputMode = 'numeric';
 				f.setAttribute('aria-label', 'Credits you give');
-				f.style.cssText = 'width:84px;min-height:40px;padding:6px 8px;border-radius:8px;border:1px solid #7a6136;background:rgba(0,0,0,.45);color:#f3d27a;font:700 14px system-ui;';
+				f.style.cssText = 'width:84px;min-height:40px;padding:6px 8px;border-radius:8px;border:1px solid #7a6136;background:rgba(0,0,0,.45);color:#f3d27a;font:700 14px var(--bard-display,system-ui,sans-serif);';
 				f.addEventListener('change', () => setCredits(+f.value || 0));
 				f.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') f.blur(); });
 				const spacer = el('span'); spacer.style.flex = '1';
@@ -158,7 +158,7 @@ export function createTradeWindow({ mount, studio, onEdit, onAccept, onCancel, o
 		// the status, the hold, and the buttons
 		const left = v.holdLeft;
 		const status = el('div');
-		status.style.cssText = 'text-align:center;min-height:20px;font:600 13px system-ui;color:#e9cf93;';
+		status.style.cssText = 'text-align:center;min-height:20px;font:600 13px var(--bard-display,system-ui,sans-serif);color:#e9cf93;';
 		status.textContent = left > 0 ? `Both accepted: trading in ${(left / 1000).toFixed(1)} s…` : {
 			asking: `Asking ${peerName}…`, invited: 'Add what you give, then accept.', open: meOk && themOk ? 'Both accepted: completing…' : meOk && !themOk ? `Waiting for ${peerName} to accept…` : !meOk && themOk ? `${peerName} accepted: your turn.` : 'Drag or tap items into your offer, then accept.',
 			committing: 'Done on your side; waiting for their game…', done: '✓ Trade complete.', cancelled: v.why || 'Cancelled.', failed: v.why || 'The trade did not go through.',

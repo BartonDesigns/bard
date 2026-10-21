@@ -30,6 +30,7 @@ import { placeAt } from './wardrobe.js';
 import { soundBus } from '../world/soundbus.js';
 import { today } from '../calendar.js';
 import { freeBody, safeSocialStep } from './social-actors.js';
+import { wallKeeper } from './walls.js';
 import { F as globeFrame } from '../earth/globeframe.js';
 import { createFamilyAid } from './family-aid.js';
 import { diningSeats } from './family-layout.js';
@@ -143,6 +144,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	const root = new THREE.Group(); root.name = 'family-life';
 	scene.add(root);
 	const W = () => world();
+	const keepWalls = wallKeeper(W);
 	// (as many as the quality tier's people share allows, set as each scene is staged: world/governor.js)
 	const CAP0 = isPhone ? 5 : 12;
 	let CAP = CAP0;
@@ -299,6 +301,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		const Mo = createMotion(P, (x, z) => ground(x, z), { constrain(to, from) {
 			// (someone at home keeps to their room: home-life.js)
 			if (P.stay) { P.stay(to); return; }
+			// (out and about: slid along any wall in the way, then the step checked for its floor)
+			keepWalls(to, from, from.y);
 			const safe = safeSocialStep(W().island, from, to, W()?.player);
 			if (safe) to.set(safe.x, safe.y, safe.z); else to.copy(from);
 		} });

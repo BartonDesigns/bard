@@ -66,7 +66,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 	const chest = (T) => aimPoint?.(T) || T.aim?.() || { x: T.bound.x, y: T.bound.y + 0.45, z: T.bound.z };
 	const direction = vector(), point = vector();
 	const marker = document.createElement('div'); marker.className = 'combat-focus-marker'; marker.setAttribute('aria-hidden', 'true');
-	marker.style.cssText = 'display:none;position:absolute;pointer-events:none;z-index:6;color:#ffe4a0;font:600 12px system-ui;text-shadow:0 1px 3px #000;transform:translate(-50%,-50%);text-align:center;white-space:nowrap';
+	marker.style.cssText = 'display:none;position:absolute;pointer-events:none;z-index:6;color:#ffe4a0;font:600 12px var(--bard-display,system-ui,sans-serif);text-shadow:0 1px 3px #000;transform:translate(-50%,-50%);text-align:center;white-space:nowrap';
 	const reticle = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H3v6M19 3h6v6M3 19v6h6M25 19v6h-6"/><circle cx="14" cy="14" r="3"/></svg>';
 	const arrow = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 5 9 9-9 9"/></svg>';
 	marker.innerHTML = '<span style="display:block;width:28px;height:28px"></span><span style="position:absolute;top:32px;left:50%;width:max-content;max-width:160px;overflow:hidden;text-overflow:ellipsis"></span>';
@@ -75,7 +75,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 	dock.style.cssText = 'display:none;position:absolute;right:calc(12px + env(safe-area-inset-right));top:clamp(110px,32%,220px);gap:6px;flex-direction:column;z-index:7';
 	function button(name, text, fn) {
 		const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = name; b.setAttribute('aria-label', name);
-		b.style.cssText = 'width:48px;min-height:48px;border:1px solid #b7cbd080;border-radius:12px;color:#fff;background:#102129ce;padding:0;font:600 10px system-ui;touch-action:none';
+		b.style.cssText = 'width:48px;min-height:48px;border:1px solid #b7cbd080;border-radius:12px;color:#fff;background:#102129ce;padding:0;font:600 10px var(--bard-display,system-ui,sans-serif);touch-action:none';
 		b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fn(); });
 		b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true }); dock.append(b); return b;
 	}
