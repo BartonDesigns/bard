@@ -25,7 +25,7 @@ function bake(A, k, kind, CELL) {
 	d.style = { gen: 'crowd', top: { kind: 'tee', col: '#888888', pat: 'plain', fit: 'regular', sleeves: k % 2 ? 'long' : 'short' }, outer: k === 1 || k === 3 ? { kind: 'jacket', col: '#666666', pat: 'plain', fit: 'regular', sleeves: 'long', open: true } : null, bottom: { kind: 'jeans', col: '#555555', pat: 'plain', legs: k === 4 ? 'skirt' : 'long', len: 'mini', fit: k === 0 ? 'wide' : 'straight' }, shoes: { kind: 'sneaker', col: '#eeeeee', sole: '#eeeeee' }, acc: [], hair: { buzz: true } };
 	d.styleSig = JSON.stringify(d.outfit);
 	d.hair = d.hair || 'short02';
-	const P = buildPerson(A, d), M = createMotion(P, () => 0);
+	const P = buildPerson(A, d), M = createMotion(P, () => 0, { space: false });
 	M.place(0, 0, 0, 0);
 	const pose = (which) => {
 		if (kind === 'seat') { M.sit(0.45, true); if (which) M.act('cheer', 0.5); else { M.act(null); M.setPose('lap'); } }

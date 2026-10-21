@@ -339,6 +339,7 @@ export function createMelee(ctx) {
 		k.t += dt;
 		const b = k.b, S = b.M.S, a = P.yaw, fx = -Math.sin(a), fz = -Math.cos(a);
 		P.pos.x = k.x; P.pos.z = k.z; P.vel.set(0, 0, 0);
+		b.P.spaceHeld = performance.now();
 		if (!k.done) {
 			// held in front of you, back to you, struggling
 			if (b.P.ragdoll || (b.h && (b.h.dead || b.h.gone))) { endTakedown(); return; }
@@ -407,9 +408,10 @@ export function createMelee(ctx) {
 		if (!b) return;
 		me.holdT -= dt;
 		if (b.P.ragdoll || me.holdT <= 0 || !ctx.active()) { me.held = null; return; }
-		// held in front of you, struggling
+		// held in front of you, struggling (in your hands: inside your personal space, people/personal-space.js)
 		const e = ctx.eye(); camera.getWorldDirection(_f); _f.y = 0; _f.normalize();
 		const S = b.M.S;
+		b.P.spaceHeld = performance.now();
 		S.pos.x += (e.x + _f.x * 0.75 - S.pos.x) * Math.min(1, dt * 10); S.pos.z += (e.z + _f.z * 0.75 - S.pos.z) * Math.min(1, dt * 10);
 		b.M.want.speed = 0; b.M.want.heading = Math.atan2(e.x - S.pos.x, e.z - S.pos.z);
 	}

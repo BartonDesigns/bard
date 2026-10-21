@@ -72,7 +72,7 @@ export function createAether({ fx, ground, heightAt, light, seed, state, onGathe
 	let scanAt = { x: 1e9, z: 1e9, seed: null, t: 0 }, t = 0, sparkle = 0;
 	const LIGHT = [1.0, 0.82, 0.42], DARK = [0.58, 0.34, 1.0];
 	function scan(x, z, sd) {
-		aetherNear(x, z, isPhone ? 70 : 110, sd, heightAt, near);
+		aetherNear(x, z, isPhone ? 100 : 110, sd, heightAt, near);
 		scanAt = { x, z, seed: sd, t };
 	}
 	function update(dt, eye, now = Date.now()) {

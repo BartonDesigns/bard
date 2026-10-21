@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
 import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
-import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
+import { loadFaces, faceDNA, shapeFace, skinAttribute, tidyEyes, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
 import { FLUFFY, buildFluff, fluffMaterial } from './hair-fluff.js';
@@ -80,6 +80,7 @@ export function loadPeopleAssets() {
 		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
 		A.faces = await faces;
+		tidyEyes(A, A.faces);
 		A.kit = await kit;
 		loaded = A;
 		return A;
@@ -419,7 +420,7 @@ function dress(A, P, o) {
 	else { const cloth=P.cloth,caps=clothCapsules(P); calibrateCloth(clothGeo,caps); cloth.userData.capsules=caps; cloth.onBeforeRender=()=>poseCloth(P,caps,P.clothMat.userData.U,cloth); }
 	// the bags they carry: where each goes on this body, the straps laid over the clothes (bags.js)
 	const carried = (o.acc || []).filter((q) => BAG_KINDS.has(q.kind));
-	const surf = carried.some((q) => q.kind === 'backpack' || q.kind === 'crossbody') ? torsoSurface(A, p, clothGeo, bones, part, cut) : null;
+	const surf = carried.some((q) => q.kind === 'backpack' || q.kind === 'crossbody' || q.kind === 'guitar') ? torsoSurface(A, p, clothGeo, bones, part, cut) : null;
 	const fits = carried.length ? fitBags({ acc: carried }, cut, surf, P.heldTorso) : [];
 	// caps, glasses, headphones, straps: one more mesh
 	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p, bags: fits, cloth: clothGeo, part, lo: PHONE }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
