@@ -6678,6 +6678,22 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 			${kG}
 			${rlt}
 			${slt}
+			// the light of a sun a little under the horizon (or just up) on whatever hangs in the
+			// sky: through so much air it comes red and orange, gold right over where the sun is,
+			// and it lights the undersides of the clouds. Strongest toward the sun and low down,
+			// reaching higher up the sky on the sun's side; redder the deeper the sun. dawnK: how
+			// much of it there is now (0 by day and by night)
+			float dawnK(){ return smoothstep(-0.17, -0.04, uSunDir.y) * (1.0 - smoothstep(0.03, 0.22, uSunDir.y)) * (1.0 - uDusk.x); }
+			vec3 dawnLight(vec3 d, float k){
+				if (k <= 0.0) return vec3(0.0);
+				float a = dot(normalize(uSunDir.xz + 1e-5), normalize(d.xz + 1e-5)) * 0.5 + 0.5;
+				float t = pow(a, 5.0), core = pow(a, 30.0) * exp(-max(d.y, 0.0) * 9.0), red = smoothstep(0.02, -0.12, uSunDir.y);
+				// (saturated beyond what it looks: the tone mapping takes the colour out of bright light)
+				vec3 c = mix(vec3(0.9, 0.1, 0.14), vec3(1.0, 0.22, 0.02), t);
+				c = mix(c, vec3(1.0, 0.6, 0.08), core * (1.0 - red) * 0.75);
+				c = mix(c, vec3(0.75, 0.05, 0.18), red * (1.0 - core) * 0.5);
+				return c * k * (0.15 + 1.35 * t + 1.2 * core) * exp(-max(d.y, 0.0) / (0.06 + 0.3 * t));
+			}
 			// the rainbow table (rainbow.js): angle from the antisolar point, 25 to 60 degrees
 			vec3 bowAt(float ang){
 				vec3 b = texture2D(uBow, vec2(clamp((ang - 25.0) / 35.0, 0.0, 1.0), uBowDrop)).rgb;
@@ -6700,6 +6716,11 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 				// (golden hour is yellow-gold toward the sun under a sky still blue overhead)
 				vec3 gold = mix(uSunColor, vec3(1.0, 0.8, 0.42), 0.6);
 				col += gold * (pow(sd, 6.0) * 0.8 + pow(sd, 40.0) * 0.8 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.9) * lowK * (1.0 - uCloud * 0.35);
+				// (and before sunrise, after sunset, the band of glow along the horizon under the sun)
+				float dk = dawnK();
+				vec3 dawnL = dawnLight(d, dk);
+				float dawnW = clamp(max(dawnL.r, max(dawnL.g, dawnL.b)), 0.0, 1.0);
+				col = col * (1.0 - dawnW * 0.35 * (1.0 - smoothstep(0.0, 0.3, d.y))) + dawnL * 0.35 * (1.0 - smoothstep(0.0, 0.3, d.y));
 				{
 					vec3 axis = abs(uSunDir.y) > 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
 					vec3 t1 = normalize(cross(uSunDir, axis)), t2 = cross(t1, uSunDir);
@@ -6828,7 +6849,7 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 					vec2 q = vec2(dot(cc, wd) * 0.16, dot(cc, vec2(-wd.y, wd.x)));
 					float f = fbm5(q * 3.0) * 0.7 + fbm5(q * vec2(2.0, 11.0) + 3.0) * 0.35;
 					float ci = smoothstep(0.55, 0.85, f) * uCirrus * smoothstep(0.0, 0.18, d.y) * (1.0 - uGloom * 0.7);
-					vec3 cirCol = mix(vec3(1.02), uSunColor * 1.35, 0.35 + 0.4 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93);
+					vec3 cirCol = mix(vec3(1.02), uSunColor * 1.35, 0.35 + 0.4 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93) + dawnL * 0.8;
 					col = mix(col, cirCol + uSkyHor * 0.15, ci * 0.55);
 				}
 				// mare's tails: hooked tufts of ice up near the cirrus, each trailing a fall streak that
@@ -6843,7 +6864,7 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 					if (rows > 0.0) ta = max(ta, tails(u * 1.7 + vec2(13.0, 5.0), uTime) * 0.7);
 					#endif
 					ta *= rows * uHighCl.x * smoothstep(0.0, 0.2, d.y) * (1.0 - uGloom * 0.7);
-					vec3 tCol = mix(vec3(1.04), uSunColor * 1.4, 0.3 + 0.45 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93);
+					vec3 tCol = mix(vec3(1.04), uSunColor * 1.4, 0.3 + 0.45 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93) + dawnL * 0.8;
 					col = mix(col, tCol + uSkyHor * 0.12, clamp(ta, 0.0, 1.0) * 0.62);
 				}
 				// the high veil (CLOUD_GLSL veilAt): milk-white where it is thin and lit, grey where it
@@ -6869,8 +6890,10 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 						vcol += gold * toward * lowK * 0.8 * (1.0 - smoothstep(0.0, 0.5, d.y));
 						// (seen edge-on far off it melts into the glow along the horizon)
 						vcol = mix(vcol, uSkyHor * 1.05 + gold * toward * lowK * 0.6, (1.0 - smoothstep(0.0, 0.07, d.y)) * 0.6);
-						float rose = smoothstep(-0.14, -0.02, uSunDir.y) * (1.0 - smoothstep(-0.02, 0.04, uSunDir.y));
-						vcol += vec3(1.0, 0.42, 0.34) * rose * (0.25 + 0.75 * toward) * (1.0 - smoothstep(0.0, 0.7, d.y)) * 0.55;
+						// (at dawn and dusk: grey-violet, its underside lit red and orange toward the sun)
+						// (the glow takes the place of the sheet's own grey rather than going on top: added
+						// to it, the colour came out a pale peach)
+						vcol = mix(vcol, vcol * vec3(0.36, 0.37, 0.5), dk * 0.75) * (1.0 - dawnW * 0.85) + dawnL * (0.55 + 0.9 * vtex) * (1.0 - thick * 0.3);
 						if (sd > 0.85){
 							float ang = acos(min(sd, 1.0));
 							vcol += vec3(1.0, 0.95, 0.88) * exp(-pow((ang - 0.384) / 0.011, 2.0)) * 0.16 * (1.0 - thick) * smoothstep(0.03, 0.2, uSunDir.y);
@@ -6914,6 +6937,10 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 					shade *= mix(1.0, heavy, clamp(sh * 1.4, 0.0, 1.0)) * (1.0 - uGloom * 0.45);
 					// at night the clouds are dark shapes against the stars, rimmed faintly by moonlight
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
+					// at dawn and dusk the heaps go grey-violet, their bellies lit red and orange from
+					// under the horizon (most where they are shaded from above, least in a shower's deck)
+					float dw = dawnW * (1.0 - sh * 0.7) * (1.0 - uGloom * 0.5);
+					cloud = mix(cloud, cloud * vec3(0.36, 0.37, 0.5), dk * 0.75) * (1.0 - dw * 0.85) + dawnL * (1.3 - smoothstep(0.6, 1.2, lit) * 0.4) * (0.6 + 0.6 * smoothstep(cover, cover + 0.4, base)) * (1.0 - sh * 0.7) * (1.0 - uGloom * 0.5);
 					// over the towns at night their glow on the clouds' undersides: a low overcast
 					// over a city reads orange-grey, lit from below, brightest toward it
 					if (uGlow > 0.01){
@@ -7042,6 +7069,9 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 				}
 				gl_FragColor = vec4(col, 1.0);
 				#include <tonemapping_fragment>
+				// (the tone mapping greys out bright colour; the glow of a dawn or a dusk gets its fire back)
+				float dawnG = dawnW * smoothstep(0.0, 0.03, d.y) * (1.0 - uEarthSky);
+				if (dawnG > 0.0) gl_FragColor.rgb = max(mix(vec3(dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722))), gl_FragColor.rgb, 1.0 + dawnG * 1.2), 0.0);
 				#include <colorspace_fragment>
 			}`}));l.frustumCulled=!1,l.renderOrder=1e3,t.add(l);let c=(()=>{let q=Uint8Array.from(atob(bG),V=>V.charCodeAt(0)),$=new Float32Array(q.buffer),Z=new Float32Array(6317*3),W=new Float32Array(6317),_=new Float32Array(6317*3),Y=V=>{let J=kn.clamp((V+.3)/2,0,1);return[1-Math.max(0,.25-J)*1.2+0,.82+.18*(1-Math.abs(J-.3)*1.6),1-J*.75]};for(let V=0;V<6317;V++){let J=$[V*4]/12*Math.PI,ae=$[V*4+1]*Math.PI/180;Z.set([Math.cos(ae)*Math.cos(J),Math.cos(ae)*Math.sin(J),Math.sin(ae)],V*3),W[V]=$[V*4+2],_.set(Y($[V*4+3]),V*3)}let te=new Dt;te.setAttribute("position",new jt(Z,3)),te.setAttribute("aMag",new jt(W,1)),te.setAttribute("aCol",new jt(_,3));let Q=new rn({uniforms:{uNight:i.uNight,uTime:e.uTime,uPx:{value:o.getPixelRatio()},uGlow:i.uGlow,uCloud:i.uCloud,uCloudOff:i.uCloudOff,uShowers:i.uShowers,uHighCl:i.uHighCl,uVeil:i.uVeil},vertexShader:`attribute float aMag; attribute vec3 aCol; uniform float uNight, uTime, uPx, uGlow, uCloud; varying vec3 vCol; varying float vA;
 				${ic}
