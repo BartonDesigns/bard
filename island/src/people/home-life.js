@@ -129,6 +129,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	}
 	function drop(a) {
 		a.active = false;
+		a.P.stay = null;
 		if (a.member) a.member.atHome = false;
 		unlie(a, false);
 		releaseBody(a.P);
@@ -295,6 +296,8 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		const a = spawn({ seed: m.seed, age: m.age, male: m.male, ancestry: m.ancestry, member: m, place: 'suburb', home: true, school: false });
 		if (!a) return null;
 		a.homeLife = true; a.H = H; a.fade = 0; a.member = m;
+		// (kept to the room they are in, whatever moves them: a run from a fight, the fight's own panic)
+		a.P.stay = (pos) => stay(a, pos);
 		a.P.home = { household: H.hh, member: m, area: null };
 		m.atHome = true;
 		H.actors.set(m.id, a);
@@ -306,7 +309,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	function settle(a, q, now = false) {
 		const H = a.H, s = q.spot, y = floorOf(H, s);
 		unlie(a, false);
-		a.q = q; a.walk = null; a.swap = null; a.next = null;
+		a.q = q; a.walk = null; a.swap = null; a.next = null; a.room = null; a.stayAt = null;
 		a.asleep = q.act === 'sleep';
 		a.M.setGround(() => y);
 		const [x, z] = toWorld(H, s.x, s.z), heading = s.heading + yawOf(H);
@@ -387,6 +390,47 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		return frustum.containsPoint(_v.set(p.x, p.y + 1, p.z));
 	}
 
+	// ---------- the room they are in ----------
+	// a body's width clear of the room's walls at a place in the house's frame: the cells of a
+	// planned house (bay/houseplan.js), the rectangle of a city one's (interiors/plan.js)
+	const BODY = 0.28;
+	function within(H, rid, lx, lz) {
+		const plan = H.h.plan, r = plan.rooms[rid];
+		if (!r) return false;
+		if (r.cells && plan.cellAt) {
+			const lab = plan.labels?.[r.level || 0], at = (x, z) => { const c = plan.cellAt(x, z); return c >= 0 && lab?.[c] === rid; };
+			return at(lx, lz) && at(lx + BODY, lz) && at(lx - BODY, lz) && at(lx, lz + BODY) && at(lx, lz - BODY);
+		}
+		return lx > r.x0 + BODY && lx < r.x1 - BODY && lz > r.z0 + BODY && lz < r.z1 - BODY;
+	}
+	function toHouse(H, x, z) { const y = yawOf(H), c = Math.cos(y), s = Math.sin(y), dx = x - (H.h.ox ?? H.h.cx), dz = z - (H.h.oz ?? H.h.cz); return [dx * c - dz * s, dx * s + dz * c]; }
+	// each step they take: kept in their room, sliding along a wall they run into, never through it
+	function stay(a, pos) {
+		const H = a.H, rid = a.room ?? a.q?.spot?.room;
+		const last = a.stayAt || (a.stayAt = { x: pos.x, z: pos.z });
+		if (rid == null || !H || homes.get(H.h) !== H) { last.x = pos.x; last.z = pos.z; return; }
+		const ok = (x, z) => within(H, rid, ...toHouse(H, x, z));
+		// (somewhere it can't be already, a seat by the wall: out of it, but no further in)
+		if (ok(pos.x, pos.z) || !ok(last.x, last.z)) { last.x = pos.x; last.z = pos.z; return; }
+		if (ok(pos.x, last.z)) pos.z = last.z;
+		else if (ok(last.x, pos.z)) pos.x = last.x;
+		else { pos.x = last.x; pos.z = last.z; }
+		last.x = pos.x; last.z = pos.z;
+	}
+	// the far side of their room from what came in: of its spots, the furthest away (the k-th
+	// of them, so a family is not all on one spot)
+	function refuge(a, from, k = 0) {
+		const H = a.H, rid = a.q?.spot?.room, L = [];
+		for (const s of H.spots) {
+			if (s.room !== rid) continue;
+			const [x, z] = toWorld(H, s.x, s.z), d = Math.hypot(x - from.x, z - from.z);
+			if (!L.some((q) => Math.hypot(q.x - x, q.z - z) < 0.6)) L.push({ x, z, d });
+		}
+		L.sort((p, q) => q.d - p.d);
+		const far = L.filter((q) => q.d > L[0]?.d - 2.5);
+		return far.length ? far[k % far.length] : null;
+	}
+
 	// ---------- a fight coming in ----------
 	// what broke the house: its windows (structures/glass.js keeps them on the house) and its
 	// walls (structures/walls/ tells everyone who listens)
@@ -411,10 +455,12 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	}
 	function startle(a, why, from, k = 0, theirs = false) {
 		const H = a.H, act = a.q?.act;
+		a.room = a.q?.spot?.room ?? a.room;
 		unlie(a, true);
+		a.stayAt = { x: a.M.S.pos.x, z: a.M.S.pos.z };
 		a.walk = null; a.swap = null;
 		a.M.stand();
-		a.scared = { t: 0, run: 3.5 + hash(a.P.dna.seed, 7) * 3, cower: 2 + hash(a.P.dna.seed, 9) * 3, from, why, theirs, act, wait: k * 0.55 + hash(a.P.dna.seed, 3) * 0.3 };
+		a.scared = { t: 0, run: 3.5 + hash(a.P.dna.seed, 7) * 3, cower: 2 + hash(a.P.dna.seed, 9) * 3, from, why, theirs, act, wait: k * 0.55 + hash(a.P.dna.seed, 3) * 0.3, to: refuge(a, from, k) };
 		if (!theirs) { a.engaged = false; a.override = flee; }
 		a.M.feel('surprise', 1);
 	}
@@ -424,6 +470,15 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		if (!S) { a.override = null; return false; }
 		const M = a.M, at = M.S.pos;
 		if (S.t < S.run) {
+			// to the far side of the room, and down there once at it
+			if (S.to) {
+				const dx = S.to.x - at.x, dz = S.to.z - at.z, d = Math.hypot(dx, dz);
+				if (d < 0.5) { S.t = S.run; return true; }
+				M.want.heading = Math.atan2(dx, dz);
+				M.want.speed = Math.min(a.P.dna.child ? 2.2 : 3.2, 0.6 + d * 2); M.want.run = d > 1.5 ? 1 : 0;
+				M.S.look.target = null;
+				return true;
+			}
 			let ax = at.x - S.from.x, az = at.z - S.from.z;
 			const l = Math.hypot(ax, az) || 1; ax /= l; az /= l;
 			const side = (hash(a.P.dna.seed, 11) - 0.5) * 0.9;
