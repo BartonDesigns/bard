@@ -23,6 +23,7 @@ import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
 import { SEASON_U } from './seasons.js';             // streets by era: the lawns browning off in late summer
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
+import { SWASH_GLSL } from '../world/shore.js';
 import { trackUpload } from './levelrows.js';
 import { GFX_COARSE } from '../world/device.js';
 import { smoothstep as sstep } from '../noise.js';
@@ -468,7 +469,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uGroundP: GPHOTO[0], uTrailK: GPHOTO[1], uGroundK: GPHOTO[1] });
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uWave: shared.uWave || { value: 1 }, uSkyZenS: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorS: shared.uSkyHor || { value: new THREE.Color() }, uGroundP: GPHOTO[0], uTrailK: GPHOTO[1], uGroundK: GPHOTO[1] });
 			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\n' + (hole ? 'attribute float aGsp;\n' : '') + 'varying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + SAFE_GLSL + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return safeH(b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0), -60.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -516,7 +517,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);
 					#endif`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + GROUND_PHOTO_GLSL + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0; float shWet = 0.0, shSoak = 0.0, shSheen = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + GROUND_PHOTO_GLSL + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here
@@ -566,6 +567,8 @@ export function createBayArea(shared, scene, island, BU) {
 						c = mix(c, vec3(0.82), RM.a * e1 * RM.r);
 						c = mix(c, vec3(0.78, 0.62, 0.16), smoothstep(0.5 - fy, 0.5 + fy, Y1) * e1 * RM.r);
 					}
+					// the sand the sea wets, darker up to where the waves reach (the full ground follows each wave)
+					c *= 1.0 - 0.42 * (1.0 - smoothstep(0.05, 0.35, h + (n2 - 0.5) * 0.1));
 					diffuseColor.rgb = c * (0.85 + 0.3 * n2) * (1.0 - uWet * 0.3);
 				}
 				#else
@@ -776,9 +779,6 @@ export function createBayArea(shared, scene, island, BU) {
 					float beach = (1.0 - freshBank) * (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
 					c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h));
-					// the sand the waves wet: darker, and glossy with the film they leave
-					float wetS = (1.0 - freshBank) * (1.0 - smoothstep(0.1, 0.8, h + (vn(vBW * 0.05) - 0.5) * 0.3)) * step(-0.5, h) * (1.0 - smoothstep(0.08, 0.25, slope));
-					c *= 1.0 - wetS * 0.22;
 					// the coast's cliffs, coves, lip, links and farms
 					if (uCsRow.w > 0.5 && csD < 5000.0) c = coastSide(c, vBW, h, slope, csD, smoothstep(0.03, 0.08, T.r), dist, n2, n3);
 					// the river's banks (carve.js): wet gravel and sand at the water, the green of the
@@ -1108,8 +1108,51 @@ export function createBayArea(shared, scene, island, BU) {
 							wxBump += (pd.a - 0.5) * mix(0.012, 0.035, wR) * gk * mix(0.5, 1.0, kF);
 						}
 					}
+					// The sand the sea wets, over whatever the land is drawn as (the real city's beaches
+					// too): damp up to where the waves have been reaching, soaked under the sheet, dark
+					// and glassy where the last wave has just drained, drying lighter toward the top of
+					// the band. Where the sea runs up the sand (world/shore.js: the same swash, by the
+					// same slope, that the sea draws, world/ocean.js) the wet follows each wave.
+					float shoreG = (1.0 - freshBank) * (1.0 - smoothstep(1.2, 2.0, h)) * (1.0 - flatK);
+					if (shoreG > 0.0) {
+						vec2 swK = swashBay(vBW);
+						float px = length(fwidth(vBW)), nf = mix(0.5, vn(vBW * 1.7), 1.0 - smoothstep(0.15, 0.4, px));
+						float runM = swashRunMax(vBW, uWave) * swK.x;
+						// (its top edge wanders along the beach, never a ruled line)
+						float hw = h + (vn(vBW * 0.11) - 0.5) * 0.1 * swK.x;
+						float band = 1.0 - smoothstep(runM - 0.06 * swK.x, runM + (0.08 + 0.05 * nf) * swK.x, hw);
+						float sl = sqrt(max(1.0 - n.y * n.y, 0.0)) / max(n.y, 0.2);
+						float swOn = swashBayOn(sl, length(vBW - cameraPosition.xz));
+						// (a shore shelves into the water: dead-flat land at the sea's level, the marshes and
+						// the fill behind the levees, is not a beach the waves wet)
+						float shelf = max(smoothstep(0.004, 0.012, sl), smoothstep(0.0, -0.3, h));
+						band *= shelf;
+						float covered = 0.0, reached = 0.0, ranW = 0.0, swL = 0.0;
+						if (swOn > 0.0) {
+							vec4 swS = swashStateK(vBW, uTime, uWave, swK);
+							swL = swS.x;
+							covered = 1.0 - smoothstep(swS.x - 0.02, swS.x + 0.06, h);
+							float ran = (1.0 - smoothstep(swS.y - 0.03 - 0.025 * nf, swS.y + 0.02, h)) * step(0.0, swS.z);
+							reached = ran * exp(-swS.z * 0.3) * (1.0 - smoothstep(swS.y - 0.06 * swK.x, swS.y, h) * 0.75);
+							ranW = ran * exp(-swS.z * 0.06);
+						}
+						shSoak = max(covered, reached * 0.9) * swOn * shoreG;
+						// (the sky's sheen only on the sand the water has left: over the water's bed and
+						// under the sheet the sea draws its own)
+						shSheen = (reached * 0.9 * swOn * 0.35 + 0.05) * smoothstep(-0.02, 0.04, h - swL * swOn) * shoreG;
+						// and above it the damp the falling tide has left, paling as it dries up the beach
+						float damp = (1.0 - smoothstep(0.1, 0.6 + 0.2 * vn(vBW * 0.05 + 3.0), hw)) * shelf;
+						shWet = max(max(band * 0.9, damp * 0.6), max(covered, ranW) * swOn) * shoreG;
+						// (under the water the bed is the sea's mud and wet sand, here as on the open shore)
+						c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h) * shoreG);
+						// wet sand: darker, a little richer, its grain smoothed by the wash
+						vec3 cw = c * vec3(0.5, 0.48, 0.45);
+						cw = mix(vec3(dot(cw, vec3(0.3, 0.59, 0.11))), cw, 1.12);
+						c = mix(c, cw, shWet * smoothstep(-1.0, -0.2, h));
+						wxBump *= 1.0 - shWet * 0.7;
+					}
 					// standing water: dark, and glossy as glass (below)
-					wxPud = max(wxPud * (1.0 - flatK), max(wxPudA, wetS * 0.3));
+					wxPud = max(wxPud * (1.0 - flatK), max(wxPudA, shSoak * 0.5));
 					c *= 1.0 - wxPud * 0.45;
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);
 				}
@@ -1125,7 +1168,9 @@ export function createBayArea(shared, scene, island, BU) {
 					if (dist2 < 6000.0) {
 						float px = length(fwidth(vBW));
 						bh = fbm3(vBW * 0.045) * 2.2 * (1.0 - smoothstep(4.0, 9.0, px)) + fbm3(vBW * 0.22) * 0.5 * (1.0 - smoothstep(0.9, 2.2, px)) + vn(vBW * 1.3) * 0.08 * (1.0 - smoothstep(0.15, 0.4, px));
-						bh *= (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
+						// (eased out at the water's edge: cut off there, its slope spiked into a dashed dark line
+						// along the sea's level, read in the 2x2 pixel blocks the derivatives are taken over)
+						bh *= (1.0 - smoothstep(1500.0, 6000.0, dist2)) * smoothstep(-0.4, 0.1, vBH);
 					}
 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
@@ -1136,8 +1181,17 @@ export function createBayArea(shared, scene, island, BU) {
 					normal = normalize(abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2));
 				}
 				#endif`)
-				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += cityGlow;')
-				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);\nroughnessFactor = mix(mix(roughnessFactor, 0.6, max(wxGloss, wxDamp * 0.5)), 0.04, wxPud);');
+				.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+				totalEmissiveRadiance += cityGlow;
+				// the wet sand's sheen: the sky in the film the sea leaves on it, a mirror for a moment
+				// where the last wave has just drained, a soft shine over the damp band at a low look
+				if (shSheen > 0.0) {
+					vec3 Vv = normalize(cameraPosition - vec3(vBW.x, vBH, vBW.y)), nS = normalize(vBN);
+					vec3 Rr = reflect(-Vv, nS);
+					float Fs = 0.02 + 0.98 * pow(1.0 - max(dot(nS, Vv), 0.0), 5.0);
+					totalEmissiveRadiance += mix(uSkyHorS, uSkyZenS, clamp(Rr.y * 2.0, 0.0, 1.0)) * Fs * shSheen * shWet;
+				}`)
+				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);\nroughnessFactor = mix(mix(roughnessFactor, 0.6, max(wxGloss, wxDamp * 0.5)), 0.04, wxPud);\nroughnessFactor = mix(roughnessFactor, min(roughnessFactor, 0.42), shWet);');
 		};
 		m.customProgramCacheKey = () => 'bayground3' + (hole ? 'far' : 'near') + (LITE_V ? '-lv' : '') + (LITE_F ? '-lf' : '');
 		m.userData.U2 = U2;
