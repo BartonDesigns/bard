@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { linkLoadingTabs } from './ui/loading-tabs.js';
 import { createMusicLinkEntry } from './ui/music-link.js';
 import { createChat } from './ui/chat.js';
 import { createGuild } from './guild/index.js';
@@ -902,6 +903,8 @@ export function createIslandWorld() {
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) cloudBtn.addEventListener(ev, (e) => e.stopPropagation());
 	dom.mount.appendChild(cloudBtn);
 	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// your character, what you carry and signing in, on the loading screen while the world builds
+	HOOKS.loadingTabs = linkLoadingTabs({ arms, magic: () => HOOKS.magic, account: HOOKS.account, name: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
 	// music from a YouTube or Spotify link: its way in from the map pin, and the auto music making way (ui/music-link.js)
 	HOOKS.musicLink = createMusicLinkEntry({ menu: tpMenu, autoMusic, hint: (t, ms) => hint(t, ms, 1) });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
