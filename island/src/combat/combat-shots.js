@@ -6,7 +6,7 @@
 
 import * as THREE from 'three';
 import { spreadDir, spreadNow, isBow, bowPower, damageAt } from './weapons.js';
-import { revive } from './health.js';
+import { revive, blastPart } from './health.js';
 import { rayCapsule, nearestOn } from './targets.js';
 import { officerHurt, clearWanted } from './heat.js';
 import { FACTIONS, PLAYER } from './factions.js';
@@ -198,7 +198,7 @@ export function combatBlast(cb, at, r, dmg, by, source = null, type = 'blast') {
 	for (const x of layer.within(c, r, mine ? ME : by, rules, wards)) {
 		if (x.T === source) continue;
 		const k = 1 - x.d / r;
-		const blow = { amount: dmg * (0.3 + 0.7 * k), type, part: 'body', src: c, dir: { x: x.T.bound.x - c.x, y: 0.3, z: x.T.bound.z - c.z }, by: mine ? ME : by };
+		const blow = { amount: dmg * (0.3 + 0.7 * k), type, part: blastPart(x), src: c, dir: { x: x.T.bound.x - c.x, y: 0.3, z: x.T.bound.z - c.z }, by: mine ? ME : by };
 		const before = x.T.moral?.();
 		const res = deal(x.T, blow, mine);
 		if (mine && res?.dealt && x.T.faction === 'civ' && squads.alive().some((h) => h.alert)) morality.record({ kind: 'collateral', place: placeName(), world: cb.worldKey, ctx: before || {} });

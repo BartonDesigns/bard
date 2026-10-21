@@ -362,6 +362,7 @@ ok(cleanFx({ s: [[0, 0, 0, 1, 1, 'x']] }) === null, 'streaks are numbers');
 ok(cleanHit({ id: 'boss:walker', d: 9999 }) === null, 'damage is bounded');
 ok(cleanHit({ id: '<script>', d: 1 }) === null, 'ids are plain');
 ok(cleanHit({ id: 'x1', d: 5, p: 'spleen' }).p === 'body', 'unknown parts are the body');
+ok(['head', 'neck', 'chest', 'gut', 'shoulder', 'arm', 'leg'].every((p) => cleanHit({ id: 'x1', d: 5, p }).p === p), 'a person\'s own zones carry over the wire');
 ok(cleanCombatState({ e: [['boss:x', 5, 99, 0]] }).e[0][2] === 0, 'phases are bounded');
 ok(cleanCombatState({ b: { id: 'boss:x', kind: 'dragon', x: 0, y: 0, z: 0 } }) === null, 'only the known bosses');
 ok(cleanRules({ pvp: 1 }).pvp === false && cleanRules({ pvp: true }).pvp === true, 'rules: PvP only when exactly true');
@@ -379,6 +380,7 @@ section('combat authority');
  ok(!guard.accept('p', hit, source, { ...target, p: [1000, 0, 0] }, true), 'weapon range is enforced');
  ok(!guard.accept('p', { ...hit, k: 'fire' }, source, target, true), 'damage type must match the equipped item');
  ok(!guard.accept('p', { ...hit, p: 'weak' }, source, target, true), 'a player has no boss weak-point multiplier');
+ { const g = createCombatGuard(() => now); ok(g.accept('q', { ...hit, p: 'chest' }, source, target, true) && g.accept('r', { ...hit, p: 'leg' }, source, target, true), 'a chest or leg hit on a player counts'); }
  ok(guard.accept('p', hit, source, target, true), 'valid report consumes a weapon damage budget');
  guard.accept('p', hit, source, target, true); guard.accept('p', hit, source, target, true); guard.accept('p', hit, source, target, true);
  ok(!guard.accept('p', hit, source, target, true), 'repeated reports cannot exceed the firing-rate budget');

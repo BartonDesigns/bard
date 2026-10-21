@@ -1,6 +1,7 @@
 // Server-side bounds for combat reports. Inventories remain local saves; this validates
 // the equipped game item, world, reach, target and damage rate, not item ownership.
 import { weaponStats } from '../../../island/src/combat/weapons.js';
+import { PERSON_PARTS } from '../../../island/src/net/protocol.js';
 
 export function createCombatGuard(now = () => Date.now()) {
 	const budgets = new Map();
@@ -12,7 +13,7 @@ export function createCombatGuard(now = () => Date.now()) {
 			if (!S || hit.d <= 0 || (hit.k && hit.k !== S.type)) return false;
 			const distance = Math.hypot(...source.p.map((v, i) => v - target.p[i]));
 			if (distance > S.range + 15 + (target.radius || 0)) return false;
-			if (pvp && !['head', 'body', 'torso', 'limb'].includes(hit.p)) return false;
+			if (pvp && !PERSON_PARTS.includes(hit.p)) return false;
 			const t = now(), cap = S.dmg * Math.max(3, Math.ceil(S.rpm / 30));
 			let B = budgets.get(id);
 			// Switching held weapons must not refill the damage allowance.
