@@ -255,6 +255,8 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		// ease the turn: a rate that itself eases, so the course never jerks
 		// (closing on the aether: a tighter turn and an easier pace, so it is met and not circled)
 		const m = H.prey, dm = m ? Math.hypot(m.x - P.pos.x, m.z - P.pos.z) : Infinity;
+		// (the time given to reach it, counted in game time: a slow frame is not a failure)
+		if (m) m.left -= dt;
 		const close = fly ? dm < 210 : dm < HUNT_NEAR * 1.5;
 		const turn = fly ? (close ? 0.4 : 0.22) : close ? 1.4 : 0.55;
 		const want = clamp(wrap(H.target - H.heading) * (close ? 1.6 : 0.7), -turn, turn);
@@ -390,7 +392,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 				// gathered (or the light took it): on the way you were going before the detour
 				if (d < 10) { S.gathered++; H.base = H.heading; }
 				H.prey = null; H.preyAt = now;
-			} else if (now > q.until) { S.missed++; H.skip.set(q.key, now + HUNT_SKIP); H.prey = null; }
+			} else if (q.left <= 0) { S.missed++; H.skip.set(q.key, now + HUNT_SKIP); H.prey = null; }
 			else return q;
 		}
 		if (now < H.preyAt) return null;
@@ -410,7 +412,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		for (const [k, t] of H.skip) if (t < now) H.skip.delete(k);
 		if (!best) return null;
 		const d = Math.hypot(best.x - x, best.z - z);
-		H.prey = { key: best.key, x: best.x, y: best.y, z: best.z, well: best.well, until: now + (fly ? d / 8 + 30 : d / 3.5 + 12) * 1000 };
+		H.prey = { key: best.key, x: best.x, y: best.y, z: best.z, well: best.well, left: fly ? d / 8 + 30 : d / 3.5 + 12 };
 		S.sought++;
 		if (best.well) lowerThird('An aether well', 'Drawn toward');
 		return H.prey;
