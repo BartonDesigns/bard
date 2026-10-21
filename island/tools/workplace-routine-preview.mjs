@@ -6,7 +6,8 @@ import {pauseWorkplaceRoutine} from '../src/people/workplace-routine.js';
 const r=window.workplaceReview,people=[];let t=0,seen=new Set(),violations=0,moved=0;
 async function populate(kind='office'){
  for(const p of people.splice(0)){disposeWorkplaceProps(p);p.P.root.removeFromParent();p.P.root.traverse(o=>o.geometry?.dispose());}
- if(kind==='mall')r.mall();else r.show(33);
+ // (an office floor with desks on it: not every floor has them, workplace-plan.js)
+ if(kind==='mall')r.mall();else for(let i=33;i<66;i++){r.show(i);if(r.T.venue(r.camera.position,13)?.areas.some(a=>a.seats.some(s=>s.work?.role==='office worker')))break;}
  t=0;seen=new Set();violations=0;moved=0;
  const A=await loadPeopleAssets(),v=r.T.venue(r.camera.position,13),seats=v.areas.flatMap(a=>a.seats),primary=seats.find(s=>s.work?.role===(kind==='mall'?'shopper':'office worker'));
  const chosen=kind==='mall'?seats.filter(s=>s.work?.group===primary.work.group&&!s.work?.routineOnly):[primary,...seats.filter(s=>s.work?.role==='meeting colleague').slice(0,2)];

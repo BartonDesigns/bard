@@ -22,6 +22,32 @@ export function drawAny(g, it, rnd) {
 	EXTRA[it.type](g, it, rnd);
 }
 const bx = (g, k, x0, y0, z0, x1, y1, z1, c) => g.box(k, x0, y0, z0, x1, y1, z1, c);
+// what is on an office screen (its face toward -z at z, x the middle; v picks): code in its
+// editor, a spreadsheet, a chart, a dashboard, a design canvas, mail, a video call, a
+// screensaver; the pictures as glowing cards and lines on its face (interiors/screen-atlas.js
+// is the towers' version)
+const SCR = (c) => lin(c);
+function screenPic(g, x, y0, z, w, h, v) {
+	const k = Math.floor(v * 8) % 8, q = (n) => (v * 977 + n * 0.618) % 1, f = (dx0, dy0, dx1, dy1, c, dz = 0.002) => bx(g, 'bulb', x - w / 2 + dx0 * w, y0 + dy0 * h, z - dz - 0.001, x - w / 2 + dx1 * w, y0 + dy1 * h, z - dz, SCR(c));
+	const bg = [[0.12, 0.12, 0.12], [0.96, 0.96, 0.95], [0.97, 0.97, 0.96], [0.07, 0.09, 0.15], [0.17, 0.17, 0.17], [0.97, 0.97, 0.97], [0.1, 0.1, 0.12], [0.06, 0.2, 0.42]][k];
+	bx(g, 'bulb', x - w / 2, y0, z - 0.001, x + w / 2, y0 + h, z, SCR(bg));
+	if (k === 0) { f(0, 0, 0.16, 1, [0.15, 0.15, 0.16]); for (let i = 0; i < 6; i++) f(0.2 + (i % 3) * 0.05, 0.85 - i * 0.13, 0.2 + (i % 3) * 0.05 + 0.2 + q(i) * 0.45, 0.88 - i * 0.13, [[0.34, 0.61, 0.84], [0.81, 0.57, 0.47], [0.86, 0.86, 0.67], [0.42, 0.6, 0.33]][i % 4]); }
+	else if (k === 1) { f(0, 0.86, 1, 1, [0.13, 0.45, 0.27]); for (let i = 0; i < 6; i++) f(0.03, 0.74 - i * 0.13, 0.97, 0.75 - i * 0.13, [0.75, 0.75, 0.75]); f(0.35, 0.3, 0.6, 0.58, [0.8, 0.9, 0.84]); }
+	else if (k === 2) { for (let i = 0; i < 6; i++) { const hh = 0.2 + q(i) * 0.6; f(0.1 + i * 0.14, 0.1, 0.19 + i * 0.14, 0.1 + hh, i % 3 === 2 ? [0.88, 0.48, 0.22] : [0.18, 0.43, 0.71]); } f(0.05, 0.08, 0.95, 0.095, [0.5, 0.5, 0.5]); }
+	else if (k === 3) { for (let i = 0; i < 3; i++) { f(0.04 + i * 0.32, 0.68, 0.32 + i * 0.32, 0.94, [0.12, 0.16, 0.22]); f(0.08 + i * 0.32, 0.76, 0.2 + i * 0.32, 0.84, [[0.2, 0.83, 0.6], [0.38, 0.65, 0.98], [0.98, 0.75, 0.14]][i]); } f(0.04, 0.06, 0.96, 0.6, [0.12, 0.16, 0.22]); for (let i = 0; i < 7; i++) f(0.08 + i * 0.12, 0.15 + q(i) * 0.35, 0.18 + i * 0.12, 0.18 + q(i) * 0.35, [0.2, 0.83, 0.6]); }
+	else if (k === 4) { f(0.18, 0.08, 0.78, 0.92, [0.97, 0.97, 0.97]); f(0.24, 0.55, 0.5, 0.82, [1, 0.45, 0.38]); f(0.55, 0.5, 0.72, 0.8, [0.1, 0.74, 1]); f(0.24, 0.3, 0.72, 0.38, [0.04, 0.81, 0.51]); }
+	else if (k === 5) { f(0, 0, 0.22, 1, [0.06, 0.42, 0.74]); for (let i = 0; i < 6; i++) { f(0.26, 0.82 - i * 0.14, 0.26 + 0.18 + q(i) * 0.1, 0.85 - i * 0.14, i < 2 ? [0.15, 0.15, 0.15] : [0.5, 0.5, 0.5]); f(0.5, 0.82 - i * 0.14, 0.6 + q(i + 3) * 0.3, 0.85 - i * 0.14, [0.65, 0.65, 0.65]); } }
+	else if (k === 6) { for (let i = 0; i < 4; i++) { const cx = (i % 2) * 0.5, cy = Math.floor(i / 2) * 0.5; f(cx + 0.02, cy + 0.03, cx + 0.48, cy + 0.47, [[0.23, 0.29, 0.35], [0.35, 0.29, 0.23], [0.18, 0.31, 0.31], [0.29, 0.23, 0.35]][i]); f(cx + 0.19, cy + 0.2, cx + 0.31, cy + 0.38, [[0.88, 0.7, 0.6], [0.55, 0.35, 0.23], [0.78, 0.55, 0.42], [0.95, 0.79, 0.65]][i]); f(cx + 0.14, cy + 0.03, cx + 0.36, cy + 0.17, [[0.17, 0.32, 0.51], [0.61, 0.17, 0.17], [0.18, 0.52, 0.35], [0.27, 0.27, 0.27]][i]); } }
+	else { f(0, 0, 1, 0.45, [0.23, 0.55, 0.87]); f(0.38, 0.52, 0.62, 0.62, [0.95, 0.95, 0.95]); }
+}
+// a monitor on its stand at the back of a desk (its face toward -z) and the keyboard before it
+function workstation(g, x, zFront, zBack, v) {
+	bx(g, 'gloss', x - 0.3, 0.8, zBack - 0.2, x + 0.3, 1.15, zBack - 0.17, BLACK);
+	screenPic(g, x, 0.82, zBack - 0.2, 0.56, 0.31, v);
+	bx(g, 'metal', x - 0.03, 0.75, zBack - 0.17, x + 0.03, 0.8, zBack - 0.12, STEEL);
+	bx(g, 'matte', x - 0.22, 0.75, zFront + 0.12, x + 0.22, 0.77, zFront + 0.27, BLACK);
+	bx(g, 'matte', x + 0.3, 0.75, zFront + 0.14, x + 0.38, 0.765, zFront + 0.25, BLACK);
+}
 const EXTRA = {
 	fireplace(g, it) {
 		const W2 = it.w / 2, D2 = it.d / 2, wd = lin(pick(WOOD, it.v)), br = lin([0.45, 0.2, 0.15]);
@@ -224,12 +250,75 @@ const EXTRA = {
 		for (const sx of [-1, 1]) bx(g, 'metal', sx * 0.3 - 0.06, 0.08, 0.62, sx * 0.3 + 0.06, 0.12, 1.2, STEEL);
 		for (const sx of [-1, 1]) for (const z of [-0.8, 0.25]) g.cyl('matte', sx * 0.55, 0.25, z, 0.25, 0.18 * sx, BLACK, 12, 'x');
 	},
+	// a workstation: the screen at the back (+z) showing its own work, the keyboard, the chair
+	// in front (-z), where its sitter sits (furnish.js: 0.6 m in front of the middle)
 	officeDesk(g, it) {
 		const W2 = it.w / 2, D2 = it.d / 2;
 		bx(g, 'grain', -W2, 0.72, -D2, W2, 0.75, D2, lin([0.9, 0.89, 0.86]));
 		for (const sx of [-1, 1]) bx(g, 'metal', sx * (W2 - 0.05) - 0.02, 0, -D2 + 0.05, sx * (W2 - 0.05) + 0.02, 0.72, D2 - 0.05, STEEL);
-		bx(g, 'gloss', -0.3, 0.8, D2 - 0.2, 0.3, 1.15, D2 - 0.17, BLACK); bx(g, 'lamp', -0.28, 0.82, D2 - 0.225, 0.28, 1.13, D2 - 0.2, lin([0.5, 0.65, 0.9]));
+		workstation(g, 0, -D2, D2, it.v);
 		bx(g, 'matte', -0.25, 0.42, -D2 - 0.45, 0.25, 0.47, -D2 - 0.0, BLACK); bx(g, 'matte', -0.25, 0.47, -D2 - 0.5, 0.25, 1.0, -D2 - 0.44, BLACK);
+	},
+	// four desks back to back (w 2.9 by d 1.5), their screens on the line between them with a
+	// screen of the company's colour; the chairs out front and back (furnish.js puts the four
+	// sitters there)
+	officePod(g, it) {
+		const W2 = it.w / 2, D2 = it.d / 2, acc = lin(pick(BRIGHT, it.v));
+		for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
+			const x = sx * W2 / 2, v = (it.v * 7 + sx * 0.31 + sz * 0.17) % 1;
+			bx(g, 'grain', x - W2 / 2 + 0.02, 0.72, sz > 0 ? 0 : -D2, x + W2 / 2 - 0.02, 0.75, sz > 0 ? D2 : 0, lin([0.9, 0.89, 0.86]));
+			bx(g, 'metal', sx * (W2 - 0.05) - 0.02, 0, sz > 0 ? 0.05 : -D2 + 0.05, sx * (W2 - 0.05) + 0.02, 0.72, sz > 0 ? D2 - 0.05 : -0.05, STEEL);
+			g.at(it.x, it.y, it.z, ((it.rot || 0) + (sz > 0 ? 2 : 0)) % 4);
+			workstation(g, sz > 0 ? -x : x, -D2, 0, v);
+			bx(g, 'matte', (sz > 0 ? -x : x) - 0.25, 0.42, -D2 - 0.45, (sz > 0 ? -x : x) + 0.25, 0.47, -D2, BLACK); bx(g, 'matte', (sz > 0 ? -x : x) - 0.25, 0.47, -D2 - 0.5, (sz > 0 ? -x : x) + 0.25, 1.0, -D2 - 0.44, BLACK);
+			g.at(it.x, it.y, it.z, it.rot || 0);
+		}
+		bx(g, 'fabric', -W2 + 0.05, 0.75, -0.02, W2 - 0.05, 1.22, 0.02, acc);
+	},
+	// a coffee point: the cupboard and its stone top, the espresso machine, cups, the kettle
+	coffeeBar(g, it) {
+		const W2 = it.w / 2, D2 = it.d / 2, wd = lin(pick(WOOD, it.v));
+		bx(g, 'grain', -W2, 0, -D2, W2, 0.88, D2, wd);
+		bx(g, 'stone', -W2 - 0.02, 0.88, -D2, W2 + 0.02, 0.92, D2 + 0.03, MARBLE);
+		bx(g, 'metal', -W2 + 0.15, 0.92, -D2 + 0.08, -W2 + 0.6, 1.38, D2 - 0.12, STEEL);
+		bx(g, 'gloss', -W2 + 0.18, 1.14, D2 - 0.12, -W2 + 0.57, 1.34, D2 - 0.1, BLACK);
+		g.cyl('metal', -W2 + 0.38, 0.92, D2 - 0.2, 0.05, 0.06, BLACK, 8);
+		for (let i = 0; i < 4; i++) g.cyl('gloss', -W2 + 0.8 + i * 0.12, 0.92, -D2 + 0.18, 0.04, 0.09, i % 2 ? WHITE : lin(pick(BRIGHT, it.v + i * 0.2)), 8);
+		g.cyl('metal', W2 - 0.3, 0.92, -0.05, 0.09, 0.24, STEEL, 10);
+		bx(g, 'matte', -W2 - 0.1, 0, -D2 - 0.08, W2 + 0.1, 2.15, -D2, lin([0.86, 0.85, 0.82]));
+		bx(g, 'grain', -W2, 1.45, -D2, W2 * 0.2, 2.05, -D2 + 0.35, wd);
+		bx(g, 'gloss', W2 - 0.7, 1.2, -D2, W2 - 0.2, 1.65, -D2 + 0.14, WHITE);
+		bx(g, 'matte', W2 - 0.485, 1.31, -D2 + 0.14, W2 - 0.415, 1.54, -D2 + 0.15, lin([0.8, 0.1, 0.08]));
+		bx(g, 'matte', W2 - 0.56, 1.39, -D2 + 0.14, W2 - 0.34, 1.46, -D2 + 0.15, lin([0.8, 0.1, 0.08]));
+	},
+	// a whiteboard on its own feet, notes on its face (+z)
+	mobileBoard(g, it) {
+		const W2 = it.w / 2;
+		for (const sx of [-1, 1]) { bx(g, 'metal', sx * W2 - 0.02, 0, -0.02, sx * W2 + 0.02, 2.0, 0.02, STEEL); bx(g, 'metal', sx * W2 - 0.03, 0, -0.28, sx * W2 + 0.03, 0.03, 0.28, STEEL); }
+		bx(g, 'gloss', -W2 + 0.03, 0.85, -0.015, W2 - 0.03, 1.95, 0.015, WHITE);
+		for (let i = 0; i < 7; i++) bx(g, 'matte', -W2 + 0.2 + (i % 3) * W2 * 0.6, 1.7 - Math.floor(i / 3) * 0.28, 0.016, -W2 + 0.25 + (i % 3) * W2 * 0.6 + 0.25 + ((i * 0.37) % 0.3), 1.71 - Math.floor(i / 3) * 0.28, 0.02, i % 2 ? lin([0.15, 0.25, 0.7]) : lin([0.7, 0.15, 0.12]));
+		for (let i = 0; i < 4; i++) bx(g, 'matte', W2 - 0.55 + (i % 2) * 0.2, 1.2 + Math.floor(i / 2) * 0.2, 0.016, W2 - 0.4 + (i % 2) * 0.2, 1.35 + Math.floor(i / 2) * 0.2, 0.02, lin(pick(BRIGHT, it.v + i * 0.2)));
+	},
+	// a first-aid box on the wall (its back at -z): white, a red cross
+	firstAid(g) {
+		bx(g, 'gloss', -0.25, 1.2, -0.07, 0.25, 1.65, 0.07, WHITE);
+		bx(g, 'matte', -0.035, 1.31, 0.07, 0.035, 1.54, 0.08, lin([0.8, 0.1, 0.08]));
+		bx(g, 'matte', -0.11, 1.39, 0.07, 0.11, 1.46, 0.08, lin([0.8, 0.1, 0.08]));
+	},
+	// a tech office's rack of servers, its lights blinking down the front (+z)
+	serverRack(g, it) {
+		const W2 = it.w / 2, D2 = it.d / 2, h = it.h || 2;
+		bx(g, 'gloss', -W2, 0, -D2, W2, h, D2, lin([0.06, 0.06, 0.07]));
+		for (let y = 0.2, i = 0; y < h - 0.15; y += 0.13, i++) { bx(g, 'matte', -W2 + 0.04, y, D2, W2 - 0.04, y + 0.1, D2 + 0.01, lin([0.14, 0.14, 0.16])); bx(g, 'bulb', -W2 + 0.07, y + 0.04, D2 + 0.01, -W2 + 0.07 + 0.03 + ((i * 7 + it.v * 13) % 5) * 0.03, y + 0.06, D2 + 0.015, (i + Math.floor(it.v * 5)) % 3 ? lin([0.2, 0.9, 0.4]) : lin([1, 0.65, 0.15])); }
+	},
+	// a ping-pong table, its net across the middle (x)
+	pingPong(g, it) {
+		const W2 = it.w / 2, D2 = it.d / 2;
+		bx(g, 'gloss', -W2, 0.72, -D2, W2, 0.76, D2, lin([0.1, 0.32, 0.45]));
+		bx(g, 'matte', -W2, 0.761, -0.01, W2, 0.763, 0.01, WHITE);
+		bx(g, 'matte', -0.01, 0.76, -D2 - 0.06, 0.01, 0.92, D2 + 0.06, WHITE);
+		for (const sx of [-1, 1]) for (const sz of [-1, 1]) bx(g, 'metal', sx * (W2 - 0.25) - 0.03, 0, sz * (D2 - 0.2) - 0.03, sx * (W2 - 0.25) + 0.03, 0.72, sz * (D2 - 0.2) + 0.03, BLACK);
+		for (const sx of [-1, 1]) bx(g, 'matte', sx * (W2 - 0.3) - 0.08, 0.76, -0.25, sx * (W2 - 0.3) + 0.08, 0.775, -0.1, lin([0.7, 0.12, 0.1]));
 	},
 	boxes(g, it, rnd) {
 		const W2 = it.w / 2, D2 = it.d / 2;
