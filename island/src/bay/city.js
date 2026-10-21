@@ -40,6 +40,7 @@ import { qualityNow } from '../world/governor.js';
 import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 import { GFX_PHONE } from '../world/device.js';
+import { orderByReach, subEnds, shadowByReach } from '../world/shadowreach.js';      // the sun's shadows from what can reach them
 import { cityBlocks } from './city-blocks.js';
 import { cityGrounds, cityDecorate, cityApart } from './city-dressing.js';
 import { plantingBed, BED_LEN } from './lantana.js';
@@ -705,6 +706,13 @@ export function createCity(shared, scene, bay, real = null) {
 	const hipG = roofGeometry(true), gableG = roofGeometry(false);
 	for (const g of [hipG, gableG]) { g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4)); g.setAttribute('aWall', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3)); }
 	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
+	// (the buildings are written nearest first, in bands, and the sun's shadow pass draws only the
+	// bands its box can reach: the whole city went into it, kilometres of it clipped away each
+	// frame, world/shadowreach.js. reach: each mesh's bands, as last written)
+	const reach = { near: null, hips: null, gables: null, sky: null };
+	for (const k of ['near', 'hips', 'gables']) shadowByReach({ near, hips, gables }[k], () => reach[k]);
+	// (an instance's half-size: the corner of its lot, and a roof's overhang and gutter past it)
+	const lotHalf = (o) => Math.hypot(o.w || 0, o.d || 0) / 2 + 2;
 	// the props of the lived-in streets and on the roofs (lotkit.js)
 	const kit2 = createProps(group, (m) => withRise(m, rise, 'kitrise'), PHONE);
 	// the cars in the drives and carports and out front of the garages, as kit entries: the
@@ -1118,7 +1126,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// the skylines, found once: every downtown's tall buildings, kept for far views
 	const skyline = [];
 	skyline.noGrounds = true;          // (far off: the towers alone)
-	const skyMesh = mk(boxGeo(), mat, 6000, true);
+	const skyMesh = shadowByReach(mk(boxGeo(), mat, 6000, true), () => reach.sky);
 	function findSkylines() {
 		const seen = new Set();
 		for (let z = -100000; z < 100000; z += 1000) for (let x = -20000; x < 120000; x += 1000) {
@@ -1140,7 +1148,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// A tower near enough to be built is drawn by the near buildings; its far copy in the
 	// skyline would stand in the same place a few centimetres off and flicker through it
 	// (and cover its doorway and its rooms), so the skyline leaves those out.
-	let lastList = [], skySig = 0, skyN = -1;
+	let lastList = [], skySig = 0, skyN = -1, lastAt = [0, 0];
 	function skylineBeside(list) {
 		lastList = list;
 		const G = new Map(), cell = 30, key = (x, z) => Math.floor(x / cell) + ',' + Math.floor(z / cell);
@@ -1159,7 +1167,10 @@ export function createCity(shared, scene, bay, real = null) {
 		if (sig === skySig && skyN === skyline.length) return;
 		skySig = sig; skyN = skyline.length;
 		keep.noGrounds = true;
-		upload(keep, skyMesh, null);
+		// (nearest first round where the city was last laid out; the skyline's own order kept)
+		const sky = keep === skyline ? skyline.slice() : keep;
+		reach.sky = orderByReach(sky, lastAt[0], lastAt[1], lotHalf);
+		upload(sky, skyMesh, null);
 	}
 
 	// ---------- landmarks ----------
@@ -1681,8 +1692,12 @@ export function createCity(shared, scene, bay, real = null) {
 		// (a phone sorts out the nearer buildings only: the pass costs it a frame or two)
 		apart(list, x, z, PHONE ? 650 : 1e9);
 		yield;
-		// (then in place: the buildings, their kit a frame on, the trees a frame after)
+		// (then in place: the buildings, their kit a frame on, the trees a frame after; written
+		// nearest first by bands, for the shadow pass, the roofs counted in the same order)
+		lastAt = [x, z];
+		const R = orderByReach(list, x, z, lotHalf);
 		upload(list, near, [hips, gables]);
+		reach.near = R; reach.hips = subEnds(list, R, (o) => o.roof?.hip); reach.gables = subEnds(list, R, (o) => o.roof && !o.roof.hip);
 		skylineBeside(list);
 		indexLots(list);
 		// the tall ones, for going inside (bay/towers.js)
