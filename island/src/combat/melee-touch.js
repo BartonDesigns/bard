@@ -1,7 +1,7 @@
 // The fight under your right thumb on a touch screen, when your hands are empty. One big
-// Strike button (a quick punch on press, the string follows on), a separate Heavy button
-// beside it (hold to charge, release to throw), and, once a fight is on, Block (hold it; raised just as a blow comes in it
-// parries), Dodge (the way the stick points, or back) and Grab (a tap grabs, a second tap
+// Strike button (a quick punch on press, the string follows on) and, once a fight is on, a
+// separate Heavy button beside it (hold to charge, release to throw), Block (hold it; raised
+// just as a blow comes in it parries), Dodge (the way the stick points, or back) and Grab (a tap grabs, a second tap
 // throws; it becomes Takedown, lit, when someone close has their back to you). They take the
 // weapon's places round the primary button (Fire, Aim, Reload, Mode), which are hidden while
 // you are unarmed; ui/touch-skin.js sets the places and the look, icons only. Hidden while the
@@ -15,7 +15,7 @@ const ICON = {
 	strike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V8.5a1.5 1.5 0 0 1 3 0V11m0-2.5V7a1.5 1.5 0 0 1 3 0v4m0-3a1.5 1.5 0 0 1 3 0v3.5m0-2a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5A5.5 5.5 0 0 1 5 14.5V13a2 2 0 0 1 2-2h3"/></svg>',
 	block: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/></svg>',
 	dodge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h11M11 7l5 5-5 5M19 5v14"/></svg>',
-	heavy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(4.2 1.6) scale(.84)" stroke-width="2.1"><path d="M7 11V8.5a1.5 1.5 0 0 1 3 0V11m0-2.5V7a1.5 1.5 0 0 1 3 0v4m0-3a1.5 1.5 0 0 1 3 0v3.5m0-2a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1.5A5.5 5.5 0 0 1 5 14.5V13a2 2 0 0 1 2-2h3"/></g><path d="M1.5 9.5h3M1 13h3.5M1.5 16.5h3"/></svg>',
+	heavy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.2L13.8 7.8L17.8 6.2L16.2 10.2L21.8 12L16.2 13.8L17.8 17.8L13.8 16.2L12 21.8L10.2 16.2L6.2 17.8L7.8 13.8L2.2 12L7.8 10.2L6.2 6.2L10.2 7.8z"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg>',
 	grab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V12m0-5a1.5 1.5 0 0 1 3 0v6a7 7 0 0 1-7 7H9a5 5 0 0 1-4.6-3l-1.2-2.8a1.4 1.4 0 0 1 2.4-1.4L8 15"/></svg>',
 };
 
@@ -56,7 +56,7 @@ export function createMeleeTouch({ mount, on }) {
 		update(show, fight, take, holding, item) {
 			if (show === state.show && fight === state.fight && take === state.take && holding === state.holding && item === state.item) return;
 			Object.assign(state, { show, fight, take, holding, item });
-			vis(strike, show); vis(heavy, show); vis(block, show && fight); vis(dodge, show && fight); vis(grab, show && (fight || take || holding));
+			vis(strike, show); vis(heavy, show && fight); vis(block, show && fight); vis(dodge, show && fight); vis(grab, show && (fight || take || holding));
 			named(grab, take ? 'Takedown' : holding ? 'Throw' : 'Grab');
 			grab.classList.toggle('lit', take);
 			// (a blade slashes; a bat, a pipe or a bottle swings)
