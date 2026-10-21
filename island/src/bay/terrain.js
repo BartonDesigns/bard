@@ -515,7 +515,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);
 					#endif`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0; float shWet = 0.0, shSoak = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + GROUND_PHOTO_GLSL + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0; float shWet = 0.0, shSoak = 0.0, shSheen = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + GROUND_PHOTO_GLSL + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here
@@ -1123,21 +1123,28 @@ export function createBayArea(shared, scene, island, BU) {
 						float swOn = swashBayOn(sl, length(vBW - cameraPosition.xz));
 						// (a shore shelves into the water: dead-flat land at the sea's level, the marshes and
 						// the fill behind the levees, is not a beach the waves wet)
-						band *= max(smoothstep(0.004, 0.012, sl), smoothstep(0.0, -0.3, h));
-						float covered = 0.0, reached = 0.0, ranW = 0.0;
+						float shelf = max(smoothstep(0.004, 0.012, sl), smoothstep(0.0, -0.3, h));
+						band *= shelf;
+						float covered = 0.0, reached = 0.0, ranW = 0.0, swL = 0.0;
 						if (swOn > 0.0) {
 							vec4 swS = swashStateK(vBW, uTime, uWave, swK);
+							swL = swS.x;
 							covered = 1.0 - smoothstep(swS.x - 0.02, swS.x + 0.06, h);
 							float ran = (1.0 - smoothstep(swS.y - 0.03 - 0.025 * nf, swS.y + 0.02, h)) * step(0.0, swS.z);
 							reached = ran * exp(-swS.z * 0.3) * (1.0 - smoothstep(swS.y - 0.06 * swK.x, swS.y, h) * 0.75);
 							ranW = ran * exp(-swS.z * 0.06);
 						}
 						shSoak = max(covered, reached * 0.9) * swOn * shoreG;
-						shWet = max(band * 0.85, max(covered, ranW) * swOn) * shoreG;
+						// (the sky's sheen only on the sand the water has left: over the water's bed and
+						// under the sheet the sea draws its own)
+						shSheen = (reached * 0.9 * swOn * 0.35 + 0.05) * smoothstep(-0.02, 0.04, h - swL * swOn) * shoreG;
+						// and above it the damp the falling tide has left, paling as it dries up the beach
+						float damp = (1.0 - smoothstep(0.1, 0.6 + 0.2 * vn(vBW * 0.05 + 3.0), hw)) * shelf;
+						shWet = max(max(band * 0.9, damp * 0.6), max(covered, ranW) * swOn) * shoreG;
 						// (under the water the bed is the sea's mud and wet sand, here as on the open shore)
 						c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h) * shoreG);
 						// wet sand: darker, a little richer, its grain smoothed by the wash
-						vec3 cw = c * vec3(0.55, 0.53, 0.5);
+						vec3 cw = c * vec3(0.5, 0.48, 0.45);
 						cw = mix(vec3(dot(cw, vec3(0.3, 0.59, 0.11))), cw, 1.12);
 						c = mix(c, cw, shWet * smoothstep(-1.0, -0.2, h));
 						wxBump *= 1.0 - shWet * 0.7;
@@ -1159,7 +1166,9 @@ export function createBayArea(shared, scene, island, BU) {
 					if (dist2 < 6000.0) {
 						float px = length(fwidth(vBW));
 						bh = fbm3(vBW * 0.045) * 2.2 * (1.0 - smoothstep(4.0, 9.0, px)) + fbm3(vBW * 0.22) * 0.5 * (1.0 - smoothstep(0.9, 2.2, px)) + vn(vBW * 1.3) * 0.08 * (1.0 - smoothstep(0.15, 0.4, px));
-						bh *= (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
+						// (eased out at the water's edge: cut off there, its slope spiked into a dashed dark line
+						// along the sea's level, read in the 2x2 pixel blocks the derivatives are taken over)
+						bh *= (1.0 - smoothstep(1500.0, 6000.0, dist2)) * smoothstep(-0.4, 0.1, vBH);
 					}
 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
@@ -1174,11 +1183,11 @@ export function createBayArea(shared, scene, island, BU) {
 				totalEmissiveRadiance += cityGlow;
 				// the wet sand's sheen: the sky in the film the sea leaves on it, a mirror for a moment
 				// where the last wave has just drained, a soft shine over the damp band at a low look
-				if (shWet > 0.0) {
+				if (shSheen > 0.0) {
 					vec3 Vv = normalize(cameraPosition - vec3(vBW.x, vBH, vBW.y)), nS = normalize(vBN);
 					vec3 Rr = reflect(-Vv, nS);
 					float Fs = 0.02 + 0.98 * pow(1.0 - max(dot(nS, Vv), 0.0), 5.0);
-					totalEmissiveRadiance += mix(uSkyHorS, uSkyZenS, clamp(Rr.y * 2.0, 0.0, 1.0)) * Fs * (shSoak * 0.4 + shWet * 0.1);
+					totalEmissiveRadiance += mix(uSkyHorS, uSkyZenS, clamp(Rr.y * 2.0, 0.0, 1.0)) * Fs * shSheen * shWet;
 				}`)
 				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);\nroughnessFactor = mix(mix(roughnessFactor, 0.6, max(wxGloss, wxDamp * 0.5)), 0.04, wxPud);\nroughnessFactor = mix(roughnessFactor, min(roughnessFactor, 0.42), shWet);');
 		};
