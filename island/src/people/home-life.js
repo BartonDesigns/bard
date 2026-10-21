@@ -169,6 +169,10 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		}
 		L.sort((p, q) => p[0] - q[0]);
 		const want = new Set(L.slice(0, HOUSES).map((q) => q[1]));
+		// (and the home seen down a scope, however far: its household in the room looked into,
+		// one home more while the scope is on it: interiors/index.js scopeRoom)
+		const S = I?.scopeRoom?.();
+		if (S && LIVED.has(S.B.use)) for (const u of dwellingsOf(S.B)) if (u.levels.has(S.k) && (u.whole || !S.room || u.rooms.includes(S.room)) && u.ready()) { want.add(u); break; }
 		for (const x of [...homes.values()]) if (!want.has(x.h) || !alive(x.h)) vacate(x);
 		for (const h of want) if (!homes.has(h)) occupy(h);
 		for (const x of homes.values()) { x.inside = isIn.has(x.h); if (x.h.B) x.h.B.lived = true; }

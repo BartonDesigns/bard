@@ -1,9 +1,12 @@
 // A bounded two-camera optic. The small rear target reflects the actual scene behind the
 // player; the forward target supplies the aiming image. No cube cameras or static backdrop.
 import * as THREE from 'three';
+import { scopeView, scopeCapture, scopeGone } from './scope-view.js';
 
 const glassState = new WeakMap();
-const SUPPORTED = new Set(['aurora-trail-rifle', 'mossback-scout-rifle', 'warden-spark-carbine']);
+const SUPPORTED = new Set(['aurora-trail-rifle', 'mossback-scout-rifle', 'warden-spark-carbine', 'longwatch-sniper-rifle']);
+// the scope's own magnification, over the world's zoom at the sights (HOLDS' scopeMag)
+const MAG = 2.4;
 
 export function attachScopeGlass(material, { dot = false, rear = true } = {}) {
 	const uniforms = {
@@ -64,7 +67,7 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 	let forwardAt = -Infinity, rearAt = -Infinity;
 	const links = [], stats = { forwardFrames: 0, rearFrames: 0, active: false, aiming: false, item: null };
 	const frontCam = new THREE.PerspectiveCamera(), rearCam = new THREE.PerspectiveCamera();
-	const pos = new THREE.Vector3(), q = new THREE.Quaternion();
+	const pos = new THREE.Vector3(), q = new THREE.Quaternion(), look = new THREE.Vector3();
 	const flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
 	const lastRearPos = new THREE.Vector3(Infinity, 0, 0), lastRearQ = new THREE.Quaternion();
 	const viewport = new THREE.Vector4(), scissor = new THREE.Vector4();
@@ -93,6 +96,7 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 		forward?.dispose(); rear?.dispose(); forward = rear = null;
 		forwardAt = rearAt = -Infinity;
 		stats.active = stats.aiming = false; stats.item = null;
+		scopeGone();
 	}
 	function bind(item) {
 		clearBinding(); bound = item;
@@ -105,6 +109,7 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 		});
 		forwardAt = rearAt = -Infinity;
 	}
+	const magOf = () => bound?.userData?.hold?.scopeMag || MAG;
 	function cameraAt(out, backwards) {
 		out.position.copy(pos); out.quaternion.copy(q);
 		if (backwards) out.quaternion.multiply(flip);
@@ -112,7 +117,7 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 		// The main world's ADS zoom already supplies part of the magnification. Read the
 		// effective FOV so a scope remains centred with any gameplay zoom / phone aspect.
 		const fov = camera.getEffectiveFOV ? camera.getEffectiveFOV() : camera.fov || 60;
-		out.fov = backwards ? 88 : THREE.MathUtils.clamp(fov / 2.4, 10, 32);
+		out.fov = backwards ? 88 : THREE.MathUtils.clamp(fov / magOf(), 3, 32);
 		out.aspect = 1; out.zoom = 1; out.layers.mask = camera.layers.mask;
 		out.updateProjectionMatrix(); out.updateMatrixWorld(true);
 	}
@@ -152,6 +157,12 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 		const aim = Math.max(0, Math.min(1, Number(aiming))); stats.aiming = aim > 0.5;
 		camera.updateWorldMatrix(true, false); camera.getWorldPosition(pos); camera.getWorldQuaternion(q);
 		const hasScope = links.some(link => link.config.rear && !link.config.dot);
+		// (for the world: where the scope looks)
+		const V = scopeView, fwd = camera.getWorldDirection(look);
+		V.active = hasScope; V.aiming = hasScope ? aim : 0; V.item = item.userData.id; V.mag = magOf(); V.zoom = camera.zoom || 1;
+		V.fov = THREE.MathUtils.clamp((camera.getEffectiveFOV ? camera.getEffectiveFOV() : camera.fov || 60) / V.mag, 3, 32);
+		V.position.x = pos.x; V.position.y = pos.y; V.position.z = pos.z;
+		V.direction.x = fwd.x; V.direction.y = fwd.y; V.direction.z = fwd.z;
 		busy = true;
 		try {
 			if (!rear) rear = target(size.rear);
@@ -165,7 +176,10 @@ export function createScopeOptics({ renderer, scene, camera, phone = false }) {
 			if (aim > 0.05 && hasScope) {
 				if (!forward) forward = target(size.forward);
 				if (time - forwardAt >= (phone ? 1 / 8 : 1 / 15)) {
-					cameraAt(frontCam, false); capture(forward, frontCam); forwardAt = time;
+					cameraAt(frontCam, false);
+					scopeCapture('before', frontCam);
+					try { capture(forward, frontCam); } finally { scopeCapture('after', frontCam); }
+					forwardAt = time;
 					stats.forwardFrames++;
 				}
 			}

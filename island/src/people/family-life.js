@@ -35,6 +35,7 @@ import { F as globeFrame } from '../earth/globeframe.js';
 import { createFamilyAid } from './family-aid.js';
 import { diningSeats } from './family-layout.js';
 import { createHomeLife } from './home-life.js';
+import { createScopeWorkers } from './scope-workers.js';
 
 const CELL = 300, NEAR = 160, STAGE_R = 140;
 const hash = (a, b) => { let h = Math.imul(Math.floor(a) | 0, 374761393) ^ Math.imul(Math.floor(b) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -369,6 +370,9 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	const homes = createHomeLife({ world: W, camera, parent: root, isPhone, areaAt, day: () => day, hours,
 		ready: () => { if (!A) assets(); return !!A && !dead; }, spawn: (spec) => (A ? body(spec) : null),
 		cap: () => peopleCap(isPhone ? 6 : 12, 4), releaseBody, say: (p, line) => say(p, line), foodFor: (h, place) => foodFor(h, place) });
+	// ...and the office seen down a scope, however far: its people at their desks (scope-workers.js)
+	const scoped = createScopeWorkers({ world: W, camera, isPhone, hours,
+		ready: () => { if (!A) assets(); return !!A && !dead; }, spawn: (spec) => (A ? body(spec) : null), releaseBody });
 
 	// ---------- the moments ----------
 	// each: { kind, x, z, h, group, actors: [{ P, M, path, follow, sit, ... }], t }
@@ -636,13 +640,14 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		if (dead) return;
 		if (W() !== lastWorld || globeFrame.epoch !== epoch) {
 			for (const a of areas.values()) persist(a);
-			clear(); homes.clear(); areas.clear(); banks.clear(); gardens.clear();
+			clear(); homes.clear(); scoped.clear(); areas.clear(); banks.clear(); gardens.clear();
 			for (const p of people?.pool || []) if (p.P.home) { p.P.home.member.embodied = false; delete p.P.home; }
 			lastWorld = W(); epoch = globeFrame.epoch; lastH = null; scanT = 0;
 		}
 		enabled = enabled && !!W()?.island && !W()?.underworld?.inside?.() && !W()?.deep?.active?.() && !W()?.player?.state?.flying;
 		root.visible = enabled;
 		homes.update(dt, t, enabled);
+		if (enabled) scoped.update(dt, t); else scoped.clear();
 		if (!enabled) { clear(); return; }
 		const h = hours();
 		if (lastH !== null && h < lastH - 12) newDay();
@@ -710,6 +715,6 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		const plan = plansOf(a).get(hh.id);
 		return { id: hh.id, kind: hh.kind, describe: describe(hh), members: hh.members.map((m) => ({ id: m.id, role: m.role, age: m.age, job: m.job?.kind || null, school: m.school, now: whereAt(plan, m.id, hours()) })), notes: plan.notes, food: { budget: hh.food.budget, need: hh.food.need, security: hh.food.security, quality: +hh.food.quality.toFixed(2), plan: hh.food.plan }, well: +wellOf(hh).toFixed(2), story: storyOf(hh) };
 	}
-	function dispose() { if (dead) return; for (const a of areas.values()) persist(a); clear(); homes.dispose(); dead = true; aid.dispose(); root.removeFromParent(); }
-	return { update, stage, clear: (kind = null) => { clear(kind); if (!kind) homes.clear(); }, dispose, actors: () => root.visible ? [...live.flatMap(V => V.actors), ...homes.actors()] : [], info, homes, household, help, quests: () => questsFor(here().households, here().place === 'island' ? 'the village' : 'the community centre'), pending: () => pending.slice(), areaAt, group: root, bell };
+	function dispose() { if (dead) return; for (const a of areas.values()) persist(a); clear(); homes.dispose(); scoped.clear(); dead = true; aid.dispose(); root.removeFromParent(); }
+	return { update, stage, clear: (kind = null) => { clear(kind); if (!kind) homes.clear(); }, dispose, actors: () => root.visible ? [...live.flatMap(V => V.actors), ...homes.actors(), ...scoped.actors()] : [], info, homes, scoped, household, help, quests: () => questsFor(here().households, here().place === 'island' ? 'the village' : 'the community centre'), pending: () => pending.slice(), areaAt, group: root, bell };
 }

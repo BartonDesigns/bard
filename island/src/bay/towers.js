@@ -115,7 +115,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			for (const [x0, z0, x1, z1] of [[-hw - e, -hd - e, hw + e, -hd], [-hw - e, hd, hw + e, hd + e], [-hw - e, -hd, -hw, hd], [hw, -hd, hw + e, hd]]) box(M.stoneD, x0, 0, z0, x1, 1.1, z1, true);
 			box(M.stone, -coreW / 2, 0, T.coreZ - coreD, coreW / 2, 3.2, T.coreZ, true);
 			for (const dx of [-coreW / 3, 0, coreW / 3]) box(M.steel, dx - 0.55, 0, T.coreZ - 0.02, dx + 0.55, 2.2, T.coreZ + 0.04);
-			return finish(parts, col, seats, L, labels, details, perks);
+			return finish(T, parts, col, seats, L, labels, details, perks);
 		}
 		// the floor, the ceiling, the glass all round
 		const floorM=L.kind==='lobby'||L.kind==='mall'?M.stone:L.kind==='office'?M.carpet:M.oak;
@@ -204,9 +204,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			plant(ix0 + 0.4, hd - 1); plant(ix1 - 0.4, hd - 1);
 		}
 		if(L.kind==='lobby') { sign(T.region+' / WORKPLACE',0,3.8,T.coreZ+.07,5,.5); sign('LIFTS  /  '+(T.levels.length-1)+' FLOORS',0,2.85,T.coreZ+.08,3.6,.3); }
-		return finish(parts, col, seats, L, labels, details, perks);
+		return finish(T, parts, col, seats, L, labels, details, perks);
 	}
-	function finish(parts, col, seats, L, labels=[], details=null, perks=[]) {
+	function finish(T, parts, col, seats, L, labels=[], details=null, perks=[]) {
 		const g = new THREE.Group();
 		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); for(const geo of list)geo.dispose(); mesh.receiveShadow = true; mesh.castShadow = !isPhone && m !== M.glass; g.add(mesh); }
 		let labelMat=null;
@@ -346,6 +346,39 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		group.remove(T.structure);T.structure.geometry.dispose();city?.setDoor?.(T.o,null);
 		T=null;panel.style.display='none';panelFor=null;
 	}
+	// ---------- the floor seen through a scope ----------
+	// another tower's one floor, built for the scope (interiors/index.js asks, with the tower's
+	// lot and the height looked at): that level and nothing else of it, its slab, ceiling, glass
+	// and fit-out, one at a time, let go when the scope is done with it (scoped(null)).
+	// { L, built } or null (no tower, the roof, or the tower you are at: its own floors are built)
+	let SC = null;
+	function dropScoped() { if (!SC) return; if (SC.B) { group.remove(SC.B.g); SC.B.dispose(); } SC = null; }
+	function scoped(o, y) {
+		if (!o) { dropScoped(); return null; }
+		const key = Math.round(o.x) + ':' + Math.round(o.z);
+		if (T && T.key === key) return null;
+		if (!SC || SC.key !== key) { dropScoped(); SC = { key, T: plan(o), B: null }; }
+		const L = levelBelow(SC.T, y, 0.3);
+		if (!L || L.kind === 'roof') return null;
+		if (SC.B?.L !== L) {
+			if (SC.B) { group.remove(SC.B.g); SC.B.dispose(); SC.B = null; }
+			const t0 = performance.now();
+			SC.B = level(SC.T, L);
+			SC.ms = performance.now() - t0;
+			// (hidden till interiors/index.js has its shaders built)
+			SC.B.g.visible = false;
+		}
+		return { L, built: true, ms: SC.ms, root: SC.B.g, seats: () => seatsOf(SC.T, SC.B) };
+	}
+	// a floor's seats and places to stand, in the world (as venue() gives them to people.js)
+	function seatsOf(T, B) {
+		if (B.wspots) return B.wspots;
+		const ca = Math.cos(T.o.a), sa = Math.sin(T.o.a);
+		return (B.wspots = B.seats.map(([x, z, yaw, sit, h = 0.46, work]) => {
+			const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+			return { x: T.o.x + ca * x - sa * z, z: T.o.z + sa * x + ca * z, y: B.L.y, h: sit ? h : 0, sit, heading: Math.atan2(fx * ca - fz * sa, fx * sa + fz * ca), work, table: sit && B.L.kind === 'office' };
+		}));
+	}
 	function floor(x,z,y){if(!T)return -1e9;const [lx,lz]=local(x,z);return floorAt(T,lx,lz,y);}
 
 	function push(pos, footY) {
@@ -433,5 +466,5 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			points.forEach(([x,z,name],i)=>out.push({id:`workplace:${key}:${L.n}:${i}`,name:`${name}, floor ${L.n}`,x:T.o.x+ca*x-sa*z,y:L.y,z:T.o.z+sa*x+ca*z,radius:3,fact:`${L.program}. Walk to the marked station and report back to the person who asked.`}));
 		}return out;
 	}
-	return { group, update, floor, questTargets, push, venue, here, raise, amenities, diagnostics:()=>T&&({type:T.type,region:T.region,levels:T.levels.map(L=>({n:L.n,y:L.y,h:L.h,kind:L.kind,program:L.program})),loaded:[...T.cache.values()].map(B=>({n:B.L.n,details:B.details,colliders:B.col.length})),slabs:T.structure.count}), key: () => T?.key || null, door: () => T?.door || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
+	return { group, update, floor, questTargets, scoped, push, venue, here, raise, amenities, diagnostics:()=>T&&({type:T.type,region:T.region,levels:T.levels.map(L=>({n:L.n,y:L.y,h:L.h,kind:L.kind,program:L.program})),loaded:[...T.cache.values()].map(B=>({n:B.L.n,details:B.details,colliders:B.col.length})),slabs:T.structure.count}), key: () => T?.key || null, door: () => T?.door || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
 }
