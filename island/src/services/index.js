@@ -404,7 +404,7 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		closePanel();
 		if (!mount) return;
 		panel = document.createElement('div');
-		panel.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100% - 32px));max-height:70%;overflow:auto;padding:14px;border-radius:14px;background:rgba(8,20,26,.92);color:#eafaf6;font:13px system-ui;z-index:40;border:1px solid rgba(255,255,255,.2)';
+		panel.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100% - 32px));max-height:70%;overflow:auto;padding:14px;border-radius:14px;background:rgba(8,20,26,.92);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);z-index:40;border:1px solid rgba(255,255,255,.2)';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown']) panel.addEventListener(ev, (e) => e.stopPropagation());
 		const render = () => {
 			const Dn = F.depots.get(D.id), own = {};

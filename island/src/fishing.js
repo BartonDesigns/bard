@@ -242,7 +242,7 @@ function makeTackle() {
 // in, coloured by the line's tension), and under it what to do, the key for it, and the
 // tension along its scale
 const MARK_CSS = `
-.fz{position:absolute;left:0;top:0;z-index:7;display:none;pointer-events:none;will-change:transform;font:600 13px/1.2 system-ui,-apple-system,Segoe UI,sans-serif;color:#eafaf6;--c:#01a982;--p:0}
+.fz{position:absolute;left:0;top:0;z-index:7;display:none;pointer-events:none;will-change:transform;font:600 13px/1.2 var(--bard-display,system-ui,sans-serif);color:#eafaf6;--c:#01a982;--p:0}
 .fz-ring{position:absolute;left:-28px;top:-28px;width:56px;height:56px;border-radius:50%;pointer-events:auto;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;transition:opacity .3s,scale .3s}
 .fz-ring::before{content:'';position:absolute;inset:0;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p) * 1turn),rgba(255,255,255,.24) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));filter:drop-shadow(0 0 5px var(--c))}
 .fz-ring::after{content:'';position:absolute;inset:11px;border-radius:50%;border:1.5px solid var(--c);opacity:.6}
@@ -256,7 +256,7 @@ const MARK_CSS = `
 .fz.wait .fz-tag,.fz.bite .fz-bar{display:none}
 .fz.bite{--c:#f59e0b}
 .fz.bite .fz-ring{animation:fzBite .45s ease-in-out infinite alternate}
-.fz.bite .fz-say{font-size:17px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ffd27a}
+.fz.bite .fz-say{font-size:17px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ffd27a;font-family:var(--bard-display,Georgia,serif)}
 .fz.run .fz-ring{animation:fzRun .14s linear infinite}
 @keyframes fzBite{to{scale:1.22}}
 @keyframes fzRun{25%{translate:2px -1px}75%{translate:-2px 1px}}
@@ -306,12 +306,12 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	rodBtn.dataset.hud = 'side 20';
 	rodBtn.style.cssText = 'position:absolute;width:44px;height:44px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:4;cursor:pointer;touch-action:manipulation;';
 	// (a line icon: the rod, its reel, the line down to a float; and the key beside it)
-	rodBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21 19 4"/><circle cx="7.2" cy="15.2" r="2"/><path d="M19 4v9.5"/><path d="M17.6 15.2a1.4 1.4 0 1 0 2.8 0 1.4 1.4 0 1 0-2.8 0"/><path d="M19 16.6v1.6"/></svg><span style="position:absolute;right:3px;bottom:1px;font:600 9px system-ui;opacity:.7">H</span>';
+	rodBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21 19 4"/><circle cx="7.2" cy="15.2" r="2"/><path d="M19 4v9.5"/><path d="M17.6 15.2a1.4 1.4 0 1 0 2.8 0 1.4 1.4 0 1 0-2.8 0"/><path d="M19 16.6v1.6"/></svg><span style="position:absolute;right:3px;bottom:1px;font:600 9px var(--bard-display,system-ui,sans-serif);opacity:.7">H</span>';
 	// the one button for the rest: cast, strike, hold to reel (R)
 	const btn = document.createElement('button');
 	btn.type = 'button';
 	btn.dataset.hud = 'prompt 20';
-	btn.style.cssText = 'position:absolute;padding:12px 22px;border-radius:24px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.78);color:#eafaf6;font:600 15px system-ui;display:none;z-index:4;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;';
+	btn.style.cssText = 'position:absolute;padding:12px 22px;border-radius:24px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.78);color:#eafaf6;font:600 15px var(--bard-display,system-ui,sans-serif);display:none;z-index:4;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;';
 	// the marker on the water (MARK_CSS), placed each frame under the float
 	if (!document.getElementById('l99-fish-mark')) { const st = document.createElement('style'); st.id = 'l99-fish-mark'; st.textContent = MARK_CSS; document.head.appendChild(st); }
 	const mark = document.createElement('div');
@@ -319,7 +319,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	mark.innerHTML = '<div class="fz-ring" role="button" aria-label="Reel"></div><div class="fz-tag" role="button"><span class="fz-say"></span><span class="fz-key"></span><div class="fz-bar"><i></i></div></div>';
 	const ringEl = mark.firstChild, tagEl = mark.lastChild, sayEl = tagEl.querySelector('.fz-say'), keyEl = tagEl.querySelector('.fz-key'), tickEl = tagEl.querySelector('i');
 	const card = document.createElement('div');
-	card.style.cssText = 'position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(320px,84vw);padding:14px 16px;border-radius:16px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:13px system-ui;text-align:center;display:none;z-index:6;';
+	card.style.cssText = 'position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(320px,84vw);padding:14px 16px;border-radius:16px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);text-align:center;display:none;z-index:6;';
 	for (const el of [rodBtn, btn, mark, card]) { for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation()); mount?.appendChild(el); }
 	card.addEventListener('click', () => { card.style.display = 'none'; });
 
@@ -377,7 +377,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		const { sp, lb } = F.fish;
 		log.push({ fish: sp[0], lb, water: F.water, t: Date.now() }); save();
 		const mine = log.filter((c) => c.fish === sp[0]), best = Math.max(...mine.map((c) => c.lb));
-		card.innerHTML = `<img src="${fishPicture(sp[0], sp[4], sp[5])}" style="width:100%;max-width:260px;display:block;margin:0 auto 6px"><div style="font:700 17px system-ui">${sp[0][0].toUpperCase() + sp[0].slice(1)}</div><div style="margin:4px 0 8px;opacity:.85">${lb} lb${lb >= best && mine.length > 1 ? ' · your biggest yet!' : mine.length === 1 ? ' · your first!' : ` · best ${best} lb`}</div>${F.where ? `<div style="opacity:.75;font-size:12px;margin-bottom:4px">${F.where.name}${LIMITS[sp[0]] ? ' · posted limit: ' + LIMITS[sp[0]] : ''}</div>` : ''}${/pier/i.test(F.where?.name || '') ? '<div style="opacity:.75;font-size:12px;margin-bottom:4px">No fishing licence needed on a public pier</div>' : ''}<div style="opacity:.6;font-size:12px">${log.length} fish caught in all · tap to close</div>`;
+		card.innerHTML = `<img src="${fishPicture(sp[0], sp[4], sp[5])}" style="width:100%;max-width:260px;display:block;margin:0 auto 6px"><div style="font:700 17px var(--bard-display,system-ui,sans-serif)">${sp[0][0].toUpperCase() + sp[0].slice(1)}</div><div style="margin:4px 0 8px;opacity:.85">${lb} lb${lb >= best && mine.length > 1 ? ' · your biggest yet!' : mine.length === 1 ? ' · your first!' : ` · best ${best} lb`}</div>${F.where ? `<div style="opacity:.75;font-size:12px;margin-bottom:4px">${F.where.name}${LIMITS[sp[0]] ? ' · posted limit: ' + LIMITS[sp[0]] : ''}</div>` : ''}${/pier/i.test(F.where?.name || '') ? '<div style="opacity:.75;font-size:12px;margin-bottom:4px">No fishing licence needed on a public pier</div>' : ''}<div style="opacity:.6;font-size:12px">${log.length} fish caught in all · tap to close</div>`;
 		card.style.display = 'block';
 		setTimeout(() => { card.style.display = 'none'; }, 7000);
 		hold(sp, lb);

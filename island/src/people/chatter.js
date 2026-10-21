@@ -18,7 +18,7 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 
 	// the words over the speaker's head, for anyone playing with the sound off
 	const cap = document.createElement('div');
-	cap.style.cssText = 'position:absolute;left:0;top:0;will-change:transform;max-width:220px;padding:5px 10px;border-radius:10px;background:rgba(10,10,10,.68);border:1px solid rgba(255,255,255,.12);color:#fff;font:13px/1.35 -apple-system,system-ui,sans-serif;text-align:center;pointer-events:none;opacity:0;transition:opacity .35s;z-index:4;';
+	cap.style.cssText = 'position:absolute;left:0;top:0;will-change:transform;max-width:220px;padding:5px 10px;border-radius:10px;background:rgba(10,10,10,.68);border:1px solid rgba(255,255,255,.12);color:#fff;font:13px/1.35 var(--bard-body,system-ui,sans-serif);text-align:center;pointer-events:none;opacity:0;transition:opacity .35s;z-index:4;';
 	cap.setAttribute('aria-live', 'polite');
 	mount.appendChild(cap);
 	let capFor = null, capUntil = 0, capW = 1, capH = 1, sizeT = 0;

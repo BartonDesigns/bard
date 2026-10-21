@@ -30,7 +30,7 @@ export const GAME = {
 			lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x9fc4ff, fog: false, transparent: true, opacity: 0.85 }));
 			K.root.add(lines);
 			rubber = K.el('position:absolute;inset:0;pointer-events:none', '<svg width="100%" height="100%" style="position:absolute;inset:0"><line data-r x1="0" y1="0" x2="0" y2="0" stroke="#9fc4ff" stroke-width="2" stroke-dasharray="6 5" opacity="0"/></svg>');
-			band = K.el('position:absolute;left:50%;top:32%;transform:translateX(-50%);font:italic 600 26px Georgia,serif;color:#dfe9ff;text-shadow:0 0 12px #6a8aff;pointer-events:none;opacity:0;transition:opacity .6s;white-space:nowrap');
+			band = K.el('position:absolute;left:50%;top:32%;transform:translateX(-50%);font:italic 600 26px var(--bard-display,Georgia,serif);color:#dfe9ff;text-shadow:0 0 12px #6a8aff;pointer-events:none;opacity:0;transition:opacity .6s;white-space:nowrap');
 		}
 		// a direction on the sky tonight, in the game's own frame (turned with you)
 		function local(ra, de, out) {
