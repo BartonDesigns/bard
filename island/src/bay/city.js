@@ -42,6 +42,7 @@ import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 import { GFX_PHONE } from '../world/device.js';
 import { cityBlocks } from './city-blocks.js';
 import { cityGrounds, cityDecorate, cityApart } from './city-dressing.js';
+import { plantingBed, BED_LEN } from './lantana.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -818,6 +819,26 @@ export function createCity(shared, scene, bay, real = null) {
 		return { sizeK, near: tierMesh(nearT.parts, g.palm ? 900 : 2600, true, LOD.near, k, !!g.palm), mid: tierMesh(midT.parts, g.palm ? 3000 : 12000, false, LOD.mid, k, !!g.palm), H: nearT.height, Hm: midT.height };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
+	// the planters' lantana and flax lily (lantana.js): each bed in three levels, the plants in
+	// their vertex colours and the foliage's mass in the shrubs' own leaf cards (the same shader)
+	const BED = plantingBed(7311);
+	const BED_LOD = PHONE ? { detail: [NONE_IN[0], NONE_IN[1], 5, 7], mid: [5, 7, 40, 48], far: [40, 48, 260, 300] }
+		: { detail: [NONE_IN[0], NONE_IN[1], 7, 10], mid: [7, 10, 60, 70], far: [60, 70, 360, 410] };
+	const bedTier = (T, band, cap, shadow) => {
+		const body = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7), leaves = swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8);
+		for (const S of [body, leaves]) addLodFade(S.material, 'uniform', band);
+		return [[T.body, body], [T.cards, leaves]].map(([geo, S], n) => {
+			const im = new THREE.InstancedMesh(geo, S.material, cap);
+			im.count = 0; im.frustumCulled = false; im.castShadow = shadow; im.receiveShadow = true;
+			if (S.depth) im.customDepthMaterial = S.depth;
+			if (n === 1) { im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3); }
+			group.add(im);
+			return im;
+		});
+	};
+	const beds = { detail: bedTier(BED.detail, BED_LOD.detail, 64, !PHONE), mid: bedTier(BED.mid, BED_LOD.mid, PHONE ? 400 : 700, !PHONE), far: bedTier(BED.far, BED_LOD.far, PHONE ? 2000 : 3500, false), litter: [] };
+	beds.litter = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7); addLodFade(S.material, 'uniform', BED_LOD.detail); const im = new THREE.InstancedMesh(BED.litter, S.material, 32); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; group.add(im); return im; })()];
+	const bedMeshes = [...beds.detail, ...beds.mid, ...beds.far, ...beds.litter];
 	// sword ferns on the shady forest floor (under the redwoods, on the north slopes, in the draws)
 	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.2 } }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
 	// the far tier: one point per tree, drawn as its species' impostor
@@ -994,7 +1015,46 @@ export function createCity(shared, scene, bay, real = null) {
 		births.needsUpdate=true;body.count = n; kinds.needsUpdate = true; nearA.needsUpdate = true; ages.needsUpdate = true;
 		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); for (const im of roofs) { im.geometry.attributes.aRoof.needsUpdate = true; im.geometry.attributes.aWall.needsUpdate = true; } }
-		if (roofs) treeList = list.trees || [];
+		if (roofs) { treeList = list.trees || []; bedList = plantedBeds(list); bedX = bedFarX = 1e9; }
+	}
+	// the planted planters' beds (city-dressing.js marks them), laid out from the planters as they
+	// finally stand: a bed per 1.4 m or so along each, and spent florets on the pavement in front
+	function plantedBeds(list) {
+		const out = [];
+		for (const o of list) {
+			if (!o.planted) continue;
+			const n = Math.max(1, Math.round((o.w - 0.16) / BED_LEN)), L = (o.w - 0.16) / n, ca = Math.cos(o.a), sa = Math.sin(o.a);
+			for (let k = 0; k < n; k++) {
+				const u = (k - (n - 1) / 2) * L, x = o.x + ca * u, z = o.z + sa * u;
+				// (each one of four ways round: turned or not, mirrored or not)
+				out.push({ x, y: o.y + o.h, z, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x * 1.7, z * 2.3) * 4) });
+				const f = o.d / 2 + 0.36;
+				out.push({ x: x - sa * f, y: o.planted.kerb, z: z + ca * f, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x, z) * 4), litter: true });
+			}
+		}
+		return out;
+	}
+	// the planters' beds, by distance: their close level reaches only a few metres, so they are
+	// re-placed every couple of metres you move (a few hundred beds, quickly done)
+	let bedList = [], bedX = 1e9, bedZ = 1e9, bedFarX = 1e9, bedFarZ = 1e9;
+	function placeBeds(x, z) {
+		const far = Math.hypot(x - bedFarX, z - bedFarZ) > 20;
+		bedX = x; bedZ = z;
+		if (far) { bedFarX = x; bedFarZ = z; }
+		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
+		const put = (T) => { const k = next(T[0]); if (k < 0) return; next(T[1]); T[0].setMatrixAt(k, m4); T[1].setMatrixAt(k, m4); };
+		for (const t of bedList) {
+			const d = Math.hypot(t.x - x, t.z - z);
+			if (d > BED_LOD.far[3] + 25) continue;
+			const turn = t.bed & 1, mirror = t.bed & 2 ? -1 : 1;
+			q.setFromAxisAngle(Y, -t.a + (turn ? Math.PI : 0));
+			m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.sx * mirror, 1, 1));          // (on its planter, as built: not on the road's grading)
+			if (t.litter) { if (d < BED_LOD.detail[3] + 3) { const k = next(beds.litter[0]); if (k >= 0) beds.litter[0].setMatrixAt(k, m4); } continue; }
+			if (d < BED_LOD.detail[3] + 3) put(beds.detail);
+			if (d > BED_LOD.mid[0] - 3 && d < BED_LOD.mid[3] + 3) put(beds.mid);
+			if (far && d > BED_LOD.far[0] - 25) put(beds.far);
+		}
+		for (const im of far ? bedMeshes : [...beds.detail, ...beds.mid, ...beds.litter]) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; }
 	}
 
 	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
@@ -1530,7 +1590,7 @@ export function createCity(shared, scene, bay, real = null) {
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
 		near.visible = hips.visible = gables.visible = farPts.visible = !high;
-		for (const im of [...shrubs, ...ferns, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
+		for (const im of [...shrubs, ...ferns, ...bedMeshes, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (clearingVersion() !== clearV) { clearV = clearingVersion(); lastX = 1e9; }          // a ball field laid out nearby: its trees go
 		if (coastVersion() !== coastV) { coastV = coastVersion(); lastX = 1e9; }                // the coast's farms and links laid out: theirs go
@@ -1557,7 +1617,8 @@ export function createCity(shared, scene, bay, real = null) {
 			while (rebuild && performance.now() - t0 < budget) if (rebuild.gen.next().done) { rebuild = null; builtOnce = true; }
 			return;
 		}
-		if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) placeTrees(x, z);                 // (MARGIN covers these 40 m)
+		if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) { placeTrees(x, z); bedFarX = 1e9; }                 // (MARGIN covers these 40 m)
+		if (!high && Math.hypot(x - bedX, z - bedZ) > 2) placeBeds(x, z);
 	}
 	// one rebuild of the buildings, trees and kit round (x, z), in steps
 	const SLICE = PHONE ? 4 : 6;
@@ -1633,5 +1694,5 @@ export function createCity(shared, scene, bay, real = null) {
 		yield;
 		placeTrees(x, z);
 	}
-	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), bedsNear: (x, z, r) => bedList.filter((t) => !t.litter && Math.hypot(t.x - x, t.z - z) < r), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }

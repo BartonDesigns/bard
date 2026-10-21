@@ -16,11 +16,16 @@ export function cityGrounds(cc, list, trees, x, z, w, d, a, g, y0, kind, seed) {
 	list.push({ x, y: y0, z, w: w + 2 * pad, d: d + 2 * pad, h: g + 0.13 + h1 * 0.05 - y0, a, col: jit([0.66, 0.64, 0.6], h1), kind: KIND.plain, roof: null });
 	list.push({ x, y: y0, z, w: w + 2 * pad + 0.5, d: d + 2 * pad + 0.5, h: g + 0.1 - y0, a, col: [0.5, 0.49, 0.47], kind: KIND.plain, roof: null });
 	if (kind === KIND.industry) return;
-	// planters either side of the entrance (the +d face), shrubs in them
+	// planters either side of the entrance (the +d face): most planted with yellow lantana and
+	// flax lily (bay/lantana.js), the rest with shrubs
 	for (const s of [-1, 1]) {
-		const [px, pz] = P(s * Math.min(w / 2 - 1.5, 4 + w * 0.15), d / 2 + pad * 0.55);
-		list.push({ x: px, y: g - 0.2, z: pz, w: big ? 4.2 : 2.8, d: 1.3, h: 0.75, a, col: jit([0.55, 0.52, 0.48], h2), kind: KIND.plain, roof: null });
-		for (const o of [-0.8, 0, 0.8]) { const [sx, sz] = P(s * Math.min(w / 2 - 1.5, 4 + w * 0.15) + o * (big ? 1.4 : 0.9), d / 2 + pad * 0.55); trees.push({ x: sx, y: g + 0.5, z: sz, h: 0.9 + hash(sx, sz) * 0.5, shrub: true, col: jit(pick(PAL.crown, hash(sz, sx)), h1) }); }
+		const cx = s * Math.min(w / 2 - 1.5, 4 + w * 0.15), cz = d / 2 + pad * 0.55, pw = big ? 4.2 : 2.8;
+		const [px, pz] = P(cx, cz);
+		list.push({ x: px, y: g - 0.2, z: pz, w: pw, d: 1.3, h: 0.75, a, col: jit([0.55, 0.52, 0.48], h2), kind: KIND.plain, roof: null });
+		// (its beds are laid out from the planter itself once the buildings are settled: city.js
+		// plantedBeds, so a planter moved or taken out takes its planting with it)
+		if (hash(px * 0.9 + 1.7, pz * 1.3 - 4.1) < 0.75) list[list.length - 1].planted = { kerb: g + 0.13 + h1 * 0.05 };
+		else for (const o of [-0.8, 0, 0.8]) { const [sx, sz] = P(cx + o * (big ? 1.4 : 0.9), cz); trees.push({ x: sx, y: g + 0.5, z: sz, h: 0.9 + hash(sx, sz) * 0.5, shrub: true, col: jit(pick(PAL.crown, hash(sz, sx)), h1) }); }
 	}
 	// trees along the sides, at the apron's edge
 	const every = big ? 9 : 12, sides = big ? [[w, d, 1], [w, d, -1], [d, w, 2], [d, w, -2]] : kind === KIND.office ? [[w, d, 1], [w, d, -1]] : [[w, d, 1]];
