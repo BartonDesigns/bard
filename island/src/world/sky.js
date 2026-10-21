@@ -328,7 +328,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 				if (uDusk.x > 0.0) col = mix(col, mix(mix(vec3(1.0, 0.12, 0.42), vec3(0.3, 0.04, 0.46), smoothstep(0.0, 0.16, h)), vec3(0.008, 0.01, 0.06), smoothstep(0.1, 0.5, h)) * uDusk.y, uDusk.x);
 				float sd = max(dot(d, uSunDir), 0.0);
 				col += uSunColor * (pow(sd, 12.0) * 0.18 + pow(sd, 3.0) * 0.06) * (1.0 - uNight);
-				col += uSunColor * smoothstep(0.9993, 0.9997, sd) * 18.0 * (1.0 - uNight);
+				// (the disc itself goes on after the clouds, as much of it as they let through)
+				float sunDisc = smoothstep(0.9993, 0.9997, sd) * 18.0 * (1.0 - uNight);
+				float sunT = 1.0;
 				// a low sun: the air toward it fills with warm, bright haze (forward scattering),
 				// strongest along the horizon under it, and the eye sees a starburst round it
 				float lowK = (1.0 - smoothstep(0.04, 0.4, uSunDir.y)) * step(-0.02, uSunDir.y) * (1.0 - uNight);
@@ -472,6 +474,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 					float ci = smoothstep(0.55, 0.85, f) * uCirrus * smoothstep(0.0, 0.18, d.y) * (1.0 - uGloom * 0.7);
 					vec3 cirCol = mix(vec3(1.02), uSunColor * 1.35, 0.35 + 0.4 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93) + dawnL * 0.8;
 					col = mix(col, cirCol + uSkyHor * 0.15, ci * 0.55);
+					sunT *= 1.0 - ci * 0.55;
 				}
 				// mare's tails: hooked tufts of ice up near the cirrus, each trailing a fall streak that
 				// the wind combs out and bends behind it; they come in rows, here and there over the sky
@@ -487,6 +490,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 					ta *= rows * uHighCl.x * smoothstep(0.0, 0.2, d.y) * (1.0 - uGloom * 0.7);
 					vec3 tCol = mix(vec3(1.04), uSunColor * 1.4, 0.3 + 0.45 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93) + dawnL * 0.8;
 					col = mix(col, tCol + uSkyHor * 0.12, clamp(ta, 0.0, 1.0) * 0.62);
+					sunT *= 1.0 - clamp(ta, 0.0, 1.0) * 0.62;
 				}
 				// the high veil (CLOUD_GLSL veilAt): milk-white where it is thin and lit, grey where it
 				// is thick; the sun through it a pale disc in a bright glow, ringed by a faint halo
@@ -527,6 +531,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 						// dims the sky all but puts it out, leaving the pale disc seen through cloud)
 						if (sd > 0.9990) { vk = 1.0 - pow(1.0 - vk, 3.0); vcol += uSunColor * smoothstep(0.9993, 0.9997, sd) * 1.6 * (1.0 - thick * 0.7) * (1.0 - uNight); }
 						col = mix(col, vcol, vk * 0.97);
+						sunT *= 1.0 - vk * 0.97;
 					}
 				}
 				// cumulus on a plane above you, lit from the sun's side; dark and heaped over showers
@@ -577,6 +582,11 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 					// (at a world's dusk the thin cloud thins away: heaps in a clear sky)
 					col = mix(col, cloud, dens * 0.95 * (1.0 - uDusk.x * 0.6 * (1.0 - smoothstep(0.35, 0.85, dens))));
 				}
+				// the sun: a hard disc in a clear sky, a pale one through thin cloud; through a deck too
+				// thick to see it by, no disc at all, only a soft bright patch of cloud where it is
+				sunT *= exp(-dens * 7.0) * (1.0 - smoothstep(0.65, 0.95, uCloud)) * (1.0 - uGloom * 0.8);
+				col += uSunColor * sunDisc * sunT;
+				if (sd > 0.9) col += uSunColor * (pow(sd, 300.0) * 0.45 + pow(sd, 40.0) * 0.16) * (1.0 - sunT) * (1.0 - uNight) * (1.0 - uGloom * 0.6) * smoothstep(-0.02, 0.06, uSunDir.y);
 				// showers far off: curtains of rain hanging under their clouds; the rain the
 				// rainbow needs (how much of it lies along this line of sight)
 				float rainLine = uRainHere * 2.0;
@@ -614,20 +624,25 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 						// thickening and thinning within, fraying at its sides; its top the ragged
 						// underside of the cloud, which it melts into
 						float core = smoothstep(0.25, 0.85, vn(vec2(azS * 9.0 + S.x * 0.0007, 1.3)));
-						float shafts = 0.35 + 0.65 * vn(vec2(azS * 55.0 + S.x * 0.001, 3.0)) * (0.65 + 0.35 * vn(vec2(azS * 190.0, 7.0)));
+						// (broad, soft shafts: finer ones, a few pixels apart on a phone, read as scratches
+						// on the sky; and up under the cloud they melt into its base)
+						float shafts = 0.4 + 0.6 * vn(vec2(azS * 36.0 + S.x * 0.001, 3.0)) * (0.75 + 0.25 * vn(vec2(azS * 90.0, 7.0)));
 						float side = 1.0 - smoothstep(0.7, 1.0, pd / sr);
-						float ragged = top * (0.85 + 0.25 * vn(vec2(azS * 90.0, 11.0)));
+						// (its top ragged in broad lobes: cut finer, the cut ran up the sky as stripes)
+						float ragged = top * (0.85 + 0.2 * vn(vec2(azS * 14.0, 11.0)) + 0.05 * vn(vec2(azS * 40.0, 13.0)));
 						// down to the ground, its foot frayed where the last drops dry out
-						float fall = smoothstep(ragged * 1.08, ragged * 0.7, tanE) * smoothstep(-0.02, 0.012 * (0.6 + 0.8 * vn(vec2(azS * 120.0, 5.0))), tanE);
-						// fine streaks, long and upright, drifting slowly down
-						float streak = 0.72 + 0.28 * vn(vec2(azS * 1400.0, tanE * 6.0 + uTime * 0.6)) * vn(vec2(azS * 520.0, tanE * 2.0 - uTime * 0.25));
+						float fall = smoothstep(ragged * 1.1, ragged * 0.6, tanE) * smoothstep(-0.02, 0.012 * (0.6 + 0.8 * vn(vec2(azS * 120.0, 5.0))), tanE);
+						shafts = mix(shafts, 0.7, smoothstep(0.45, 0.95, h01));
+						// faint streaks, long and upright, drifting slowly down: only in a shower close by,
+						// and gone up near the cloud (the old ones, finer than a pixel, flickered into lines)
+						float streak = 1.0 - 0.16 * smoothstep(9000.0, 3000.0, tin) * (1.0 - smoothstep(0.3, 0.8, h01)) * vn(vec2(azS * 240.0, tanE * 2.0 - uTime * 0.25));
 						float dens = thick * fall * side * (0.6 + 0.4 * mix(shafts, 1.0, core * 0.6)) * (0.7 + 0.3 * core);
 						float veil = dens * streak * smoothstep(42000.0, 7000.0, tin);
 						// blue-grey, the sky behind showing through where it is thin; low down it melts
 						// into the haze the far land stands in
-						vec3 veilC = mix(vec3(0.18, 0.2, 0.25), uSkyHor * 0.7, 0.18 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.85 + 0.3 * streak);
+						vec3 veilC = mix(vec3(0.18, 0.2, 0.25), uSkyHor * 0.7, 0.18 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.92 + 0.15 * streak);
 						veilC = mix(veilC, uFogCol, (1.0 - smoothstep(0.0, 0.05, tanE)) * 0.55);
-						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 2.1, 0.0, 0.9));
+						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.75, 0.0, 0.9));
 					}
 					rainLine += thick * below * 2.2;
 				}
