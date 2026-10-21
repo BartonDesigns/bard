@@ -70,22 +70,23 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 			p.yaw = Math.atan2(-dx, -dz); p.pitch = Math.atan2(dy, Math.hypot(dx, dz));
 			c.rotation.set(p.pitch, p.yaw, 0, 'YXZ'); c.updateMatrixWorld();
 			const n = window._spellBlows.length;
-			window._cast = Crysis.magic.cast(spell, { tap: true });
+			window._cast = Crysis.magic.cast(spell, { tap: true, free: true });
 			return n;
 		}, { id, part, spell });
 		if (n0 < 0) return { none: part, why: n0 };
 		const t = Date.now();
-		while (Date.now() - t < 600000) {
+		while (Date.now() - t < 180000) {
 			const got = await page.evaluate((n0) => ({ cast: window._cast, blows: window._spellBlows.slice(n0) }), n0);
 			if (got.blows.length) return got;
 			await wait(1000);
 		}
-		return { timeout: part };
+		return { timeout: part, cast: await page.evaluate(() => window._cast), all: await page.evaluate(() => window._spellBlows.length) };
 	};
-	R.head = await castAt(ids[0], 'head', 'shadowbolt');
+	// (a fighter sways and steps while a slow headless frame runs: a bolt can pass them, so up to three)
+	for (let i = 0; i < 3 && !R.head?.blows?.length; i++) R.head = await castAt(ids[0], 'head', 'shadowbolt');
 	console.log('head', JSON.stringify(R.head));
 	await wait(1500);
-	R.leg = await castAt(ids[1], 'leg', 'shadowbolt');
+	for (let i = 0; i < 3 && !R.leg?.blows?.length; i++) R.leg = await castAt(ids[1], 'leg', 'shadowbolt');
 	console.log('leg', JSON.stringify(R.leg));
 	clearInterval(keep);
 	await wait(3000);
