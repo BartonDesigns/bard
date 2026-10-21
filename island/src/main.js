@@ -119,6 +119,7 @@ import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
 import { createLaw } from './law/index.js';
 import { installAirFog } from './world/airfog.js';
+import { GRADE, installGrade } from './world/grade.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 import { islandBuild } from './island-build.js';
@@ -135,6 +136,8 @@ const GLOW_AT = [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0
 // The air: haze thickest low down and lit toward the sun, whole by the far plane; under water
 // (a negative density) light absorbed red first, then green (world/airfog.js)
 installAirFog();
+// the look on the tone mapping: contrast, colour and a little split toning (world/grade.js)
+installGrade();
 
 // Muffle the whole Bard under water: a low-pass between the faceplate's master output
 // and the speakers, eased in as you go under and out as you surface.
@@ -1691,6 +1694,16 @@ if (typeof window !== 'undefined') {
 			else if (o) for (const k of ['tails', 'veil', 'reach']) if (o[k] !== undefined) wx.pin(k, o[k]);
 			const S = wx.state;
 			return { mode: S.mode, cover: +S.cover.toFixed(2), cirrus: +S.cirrus.toFixed(2), tails: +S.tails.toFixed(2), veil: +S.veil.toFixed(2), reach: +S.reach.toFixed(2), sunVis: +S.sunVis.toFixed(2) };
+		},
+		// the look on the tone mapping (world/grade.js): Crysis.grade() reads it; .grade({ contrast: 1.3 })
+		// tries other numbers. That rebuilds every shader: for tuning on a computer, never on a phone in play
+		grade: (o) => {
+			if (o) {
+				Object.assign(GRADE, o);
+				installGrade();
+				window.L99Island?.scene?.()?.traverse((m) => { for (const x of [].concat(m.material || [])) x.dispose(); });
+			}
+			return { ...GRADE };
 		},
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),

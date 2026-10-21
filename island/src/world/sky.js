@@ -6,6 +6,7 @@ import { NOISE_GLSL } from './terrain.js';
 import { STARS_B64, STAR_COUNT } from './starcat.js';
 import { today } from '../calendar.js';
 import { AIR } from './airfog.js';
+import { GRADE, bardLook } from './grade.js';
 import { qualityNow } from './governor.js';
 import { constellations } from './constellations.js';
 import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock, lunarPosition, moonlightShare } from './solar.js';
@@ -222,7 +223,7 @@ export function cloudReflectU(shared) {
 	return { uCloudR: shared.uCloudR, uCloudR2: shared.uCloudR2, uCloudR3: shared.uCloudR3, uCloudR4: shared.uCloudR4, uAirR: shared.uAirR };
 }
 
-// three.js's AgX tone mapping (tonemapping_pars_fragment) on the CPU, for one colour:
+// three.js's AgX tone mapping (tonemapping_pars_fragment, with Bard's look) on the CPU, for one colour:
 // linear in, linear out. (The matrices are GLSL's, column by column.)
 const AGX_M = [
 	[0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956],
@@ -233,13 +234,19 @@ const AGX_M = [
 const mat3x = (m, v) => [0, 1, 2].map((r) => m[r] * v[0] + m[3 + r] * v[1] + m[6 + r] * v[2]);
 // a low sun's gold (as the dome's shader mixes it)
 const GOLD = new THREE.Color(1.0, 0.8, 0.42);
+// how much a low light is opened up against the look's darker shade (world/grade.js), and how
+// much of that the full night gives back (dusk wants the most; the night was tuned darker)
+const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
 function agx(c, exposure, out) {
+	exposure *= GRADE.exposure;
 	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
 	v = v.map((x) => {
 		x = Math.min(1, Math.max(0, (Math.log2(Math.max(x, 1e-10)) + 12.47393) / (4.026069 + 12.47393)));
 		const x2 = x * x, x4 = x2 * x2;
 		return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
 	});
+	// (and the look laid on it, world/grade.js)
+	v = bardLook(v);
 	v = mat3x(AGX_M[3], mat3x(AGX_M[2], v).map((x) => Math.pow(Math.max(0, x), 2.2)));
 	return out.setRGB(...v.map((x) => Math.min(1, Math.max(0, x))));
 }
@@ -1017,8 +1024,11 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		if (dk.x > 0) haze.lerp(tmpC.setRGB(0.24, 0.07, 0.26).multiplyScalar(dk.y), dk.x * 0.85);
 		const air = uniforms.uAir.value;
 		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w * (1 - dk.x));
-		// (the same exposure by night: the night is dark, lit where real lights are)
-		renderer.toneMappingExposure = 1.15;
+		// (the same exposure by night: the night is dark, lit where real lights are. The look
+		// takes the day a touch under and deepens the shade (world/grade.js); as the light goes
+		// that is opened back up, as an eye adapts, so a dusk street is not crushed to black and
+		// the town's light and the moon's stay as they were tuned)
+		renderer.toneMappingExposure = 1.15 * (1 + LOW_OPEN * (1 - dayK) - NIGHT_TRIM * night);
 		// The sky is tone mapped, but three.js mixes the fog in after the tone mapping, so a
 		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the
 		// sky's own horizon just above it, which drew a bright band where the far land and
