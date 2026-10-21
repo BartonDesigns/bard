@@ -15,6 +15,9 @@ export const PARTS = Object.freeze({ head: 4, neck: 2.6, chest: 1.35, gut: 1.05,
 // how much of a hit there the armour takes: a vest covers the chest and gut, not the face and throat
 export const ARMOUR_COVER = { head: 0.3, neck: 0, shoulder: 0.6, arm: 0.4, leg: 0.4 };
 export const MELEE_PARTS = Object.freeze({ ...PARTS, head: 1.8, neck: 1.5, chest: 1, gut: 1.1 });
+// an area's blow (a grenade, a burst, a storm) on one caught in it ({ part, d }: targets.js
+// within): the zone it goes off against when it bursts on them, else the whole body
+export const blastPart = (x, touch = 0.35) => (x && x.d <= touch && x.part ? x.part : 'body');
 
 const fin = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 
