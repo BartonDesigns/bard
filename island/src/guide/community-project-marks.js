@@ -33,7 +33,8 @@ function segmentDistance(x, z, points) {
 		if (!finite(ax) || !finite(az) || !finite(bx) || !finite(bz)) continue;
 		const dx = bx - ax, dz = bz - az, len = dx * dx + dz * dz;
 		const t = len ? clamp(((x - ax) * dx + (z - az) * dz) / len, 0, 1) : 0;
-		d = Math.min(d, Math.hypot(x - ax - dx * t, z - az - dz * t));
+		const ex = x - ax - dx * t, ez = z - az - dz * t;
+		d = Math.min(d, Math.sqrt(ex * ex + ez * ez));   // (Math.hypot allocates in V8)
 	}
 	return d;
 }
@@ -41,7 +42,7 @@ function segmentDistance(x, z, points) {
 // boxes: { x, z, r } each, r the reach it keeps clear (half its diagonal and .65 m), finite only
 function blockedAt(W, x, z, y, boxes, roads, probe) {
 	if (W.globe?.regional?.settlements?.blocked?.(x, z, .5, true) || W.globe?.roads?.onRoad?.(x, z, .5) || W.globe?.lanes?.onRoad?.(x, z, .5)) return true;
-	for (let k = 0; k < boxes.length; k++) { const b = boxes[k]; if (Math.hypot(x - b.x, z - b.z) < b.r) return true; }
+	for (let k = 0; k < boxes.length; k++) { const b = boxes[k]; const ex = x - b.x, ez = z - b.z; if (ex * ex + ez * ez < b.r * b.r) return true; }
 	for (let k = 0; k < roads.length; k++) { const r = roads[k]; if (segmentDistance(x, z, r.pts) < (r.w || 4) * .5 + .65) return true; }
 	if ((W.real?.landAt?.(x, z)?.road || 0) > .25) return true;
 	const U = W.bayArea?.urbanAt?.(x, z);
