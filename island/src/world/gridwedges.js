@@ -83,9 +83,16 @@ function meet(p1, p2, p3, out) {
 	out.divideScalar(det);
 	return true;
 }
-export function footprint(planes, yLo, yHi) {
-	const P = planes, pts = [];
+// the frustum's eight corners (shared vectors, overwritten by the next call), or null when its
+// planes do not meet in a box
+export function frustumCorners(planes) {
+	const P = planes;
 	for (let i = 0; i < 8; i++) if (!meet(P[i & 1], P[2 + ((i >> 1) & 1)], P[4 + ((i >> 2) & 1)], _corner[i])) return null;
+	return _corner;
+}
+export function footprint(planes, yLo, yHi) {
+	const pts = [];
+	if (!frustumCorners(planes)) return null;
 	for (const c of _corner) if (c.y >= yLo && c.y <= yHi) pts.push(c.x, c.z);
 	for (const [i, j] of EDGES) {
 		const a = _corner[i], b = _corner[j];
@@ -94,33 +101,40 @@ export function footprint(planes, yLo, yHi) {
 	return pts.length ? hull2(pts) : new Float64Array(0);
 }
 
-// whether two convex polygons (flat [x, z, ...] arrays) are apart: some edge of either separates them
-export function polysApart(A, ax, az, B) {
+// whether two convex polygons (flat [x, z, ...] arrays) are apart: some edge of either separates them.
+// pad: A grown by a square pad either side (a vertex the shader moves sideways by up to pad),
+// tested along the square's own edges too
+export function polysApart(A, ax, az, B, pad = 0) {
 	const span = (Q, ox, oz, nx, nz) => { let lo = Infinity, hi = -Infinity; for (let k = 0; k < Q.length; k += 2) { const d = (Q[k] + ox) * nx + (Q[k + 1] + oz) * nz; if (d < lo) lo = d; if (d > hi) hi = d; } return [lo, hi]; };
+	const apart = (nx, nz) => {
+		const [a0, a1] = span(A, ax, az, nx, nz), [b0, b1] = span(B, 0, 0, nx, nz), g = pad * (Math.abs(nx) + Math.abs(nz));
+		return a1 + g < b0 || b1 < a0 - g;
+	};
 	for (const [Q, qx, qz] of [[A, ax, az], [B, 0, 0]]) {
 		const n = Q.length / 2;
 		if (n < 2) continue;
 		for (let i = 0; i < n; i++) {
-			const j = (i + 1) % n, nx = Q[j * 2 + 1] - Q[i * 2 + 1], nz = Q[i * 2] - Q[j * 2];
-			const [a0, a1] = span(A, ax, az, nx, nz), [b0, b1] = span(B, 0, 0, nx, nz);
-			if (a1 < b0 || b1 < a0) return true;
+			const j = (i + 1) % n;
+			if (apart(Q[j * 2 + 1] - Q[i * 2 + 1], Q[i * 2] - Q[j * 2])) return true;
 		}
 	}
-	return false;
+	return pad > 0 && (apart(1, 0) || apart(0, 1));
 }
 
-// true when the hull (in the mesh's own x, z, moved by ox, oz), stood from yLo to yHi, has no
-// point inside the frustum
-export function hullOut(hull, ox, oz, yLo, yHi, planes) {
+// true when the hull (in the mesh's own x, z, moved by ox, oz, and grown by pad), stood from yLo
+// to yHi, has no point inside the frustum
+export function hullOut(hull, ox, oz, yLo, yHi, planes, pad = 0) {
 	const F = footprint(planes, yLo, yHi);
 	if (!F) return false;
 	if (!F.length) return true;
-	return polysApart(hull, ox, oz, F);
+	return polysApart(hull, ox, oz, F, pad);
 }
 
 // The grid as meshes under one group: the middle always drawn, the wedges each culled by the
-// view. y: [lowest, highest] the vertex shader can lift the ground to.
-export function wedgeMeshes(geo, material, { wedges = 8, mid, y }) {
+// view. y: [lowest, highest] the vertex shader can lift the ground to (or a function giving it
+// now); pad: how far it can move a vertex sideways (m, or a function); at: where the shader
+// itself centres the grid (a Vector2 it adds to x, z, read as the view is drawn: the sea's)
+export function wedgeMeshes(geo, material, { wedges = 8, mid, y, pad = 0, at = null }) {
 	const root = new THREE.Group(), meshes = [];
 	for (const S of splitGrid(geo, wedges, mid)) {
 		const g = new THREE.BufferGeometry();
@@ -134,7 +148,8 @@ export function wedgeMeshes(geo, material, { wedges = 8, mid, y }) {
 			m.intersectsFrustum = (f) => {
 				const e = m.matrixWorld.elements;
 				if (e[0] !== 1 || e[5] !== 1 || e[10] !== 1 || e[1] || e[2] || e[4] || e[6] || e[8] || e[9]) return true;
-				return !hullOut(S.hull, e[12], e[14], y[0] + e[13], y[1] + e[13], f.planes);
+				const Y = typeof y === 'function' ? y() : y, p = typeof pad === 'function' ? pad() : pad;
+				return !hullOut(S.hull, e[12] + (at ? at.x : 0), e[14] + (at ? at.y : 0), Y[0] + e[13], Y[1] + e[13], f.planes, p);
 			};
 		}
 		root.add(m); meshes.push(m);
