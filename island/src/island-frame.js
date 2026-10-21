@@ -277,7 +277,7 @@ export function islandFrame(iw, now) {
 	W.vehicles?.update(dt, iw.time);
 	ragdolls.update(dt);
 	W.berms?.update(camera);
-	W.freeways?.update(camera);
+	W.freeways?.update(camera, sk.night);
 	W.signage?.update(dt, camera, sk.night, iw.drive.active());
 	bridgeSound.update(dt);
 	W.streets?.update(dt, sk.night, W.sky.state.hours);
