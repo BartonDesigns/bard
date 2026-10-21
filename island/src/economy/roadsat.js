@@ -4,7 +4,7 @@
 // each asking walked every street within 230 m point by point: downtown that was the best part
 // of the economy's whole rebuild.
 //
-// So the streets are sorted once per 64 m cell, round its centre: those that are surely
+// So the streets are sorted once per 128 m cell, round its centre: those that are surely
 // within reach of every point in the cell, those that surely are not, and between them only the
 // pieces of street that might be, kept for the points to measure as before. The answer for a
 // point is exactly what walking every street gave: each test is a distance under a limit, and
