@@ -13,7 +13,7 @@ import { commercialStack } from '../interiors/workplace-plan.js';
 import { toWorld } from './geo.js';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/vegetation.js';
-import { addLodFade, NONE_IN, detailClock, updateDetailClock } from '../world/lodfade.js';
+import { addLodFade, NONE_IN, NONE_OUT, detailClock, updateDetailClock } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, fromGrid, eraFor } from './styles.js';
 import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
@@ -28,7 +28,7 @@ import { inClearing, clearingVersion } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { houseEra, exteriorLook, seedAt } from './decor.js';
-import { createProps, rooftopUnit } from './lotkit.js';
+import { createProps, rooftopUnit, rooftopUnitFar, nearCopies } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
@@ -723,13 +723,19 @@ export function createCity(shared, scene, bay, real = null) {
 	// what is on and about the buildings up close: the air conditioners on the flat roofs of
 	// the shops, offices and warehouses; a glass sunroom off the back of some houses, a
 	// clothesline in some back yards (see decorate)
+	// where the rooftop units' near version dissolves into the far one (m: a fan's shroud is under
+	// a pixel high past it)
+	const AC_LOD = PHONE ? [180, 230] : [260, 310];
 	const kit = (() => {
 		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
 		const C = (r, h, x, y, z, c, seg = PHONE ? 6 : 14) => colored(new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z), c);
-		// a packaged rooftop unit on its curb, its hidden faces left out (lotkit.js)
-		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles)
-		const ac = rooftopUnit(PHONE ? 6 : 14);
+		// a packaged rooftop unit on its curb, its hidden faces left out (lotkit.js), and as it is
+		// seen far off, its fans flat discs: the far one holds every unit and dissolves in across
+		// AC_LOD, the near one a copy of those within reach of you, dissolving out across it
+		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles,
+		// and 3,800 round Noe Valley were 553k)
+		const ac = rooftopUnitFar(), acNear = rooftopUnit(PHONE ? 6 : 14);
 		// the sunroom: white frames, glass between (two meshes)
 		const fr = [0.95, 0.95, 0.93], bars = [];
 		for (const x of [-0.5, -0.25, 0, 0.25, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, -0.5, fr));
@@ -750,8 +756,15 @@ export function createCity(shared, scene, bay, real = null) {
 		// shadow pass, out to the edge of the city, for shadows a few pixels across)
 		const mkK = (geo, material, cap) => { const im = new THREE.InstancedMesh(geo, material, cap); im.count = 0; im.frustumCulled = false; im.castShadow = !PHONE; im.receiveShadow = true; group.add(im); return im; };
 		const glassM = withRise(new THREE.MeshStandardMaterial({ color: 0xa9c4cf, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false }), rise, 'kitrise');
+		const acM = M({ roughness: 0.55, metalness: 0.35 }), acNearM = M({ roughness: 0.55, metalness: 0.35 });
+		addLodFade(acM, 'uniform', [AC_LOD[0], AC_LOD[1], NONE_OUT[0], NONE_OUT[1]]); addLodFade(acNearM, 'uniform', [NONE_IN[0], NONE_IN[1], AC_LOD[0], AC_LOD[1]]);
+		const acFar = mkK(ac, acM, 12000), acNearI = mkK(acNear, acNearM, PHONE ? 1500 : 3000);
+		// (the far units throw no shadow: every one the sun's box can reach is in the near copy;
+		// and the near copy is the far one's, so what the far one shows, a unit taken down with
+		// its roof included, it shows: structures/damage.js edits only the far)
+		acFar.castShadow = false; acNearI.userData.copyOf = acFar;
 		return {
-			ac: mkK(ac, M({ roughness: 0.55, metalness: 0.35 }), 12000),
+			ac: acFar, acNear: acNearI,
 			sunF: mkK(sunF, M({ roughness: 0.5 }), 3000), sunG: mkK(sunG, glassM, 3000),
 			line: mkK(lineG, M({ roughness: 0.9, side: THREE.DoubleSide }), 3000),
 		};
@@ -967,6 +980,17 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const [x, y, z, a, s] of lines) { if (n >= kit.line.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.line.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
 		kit.line.count = n;
 		for (const im of [kit.ac, kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+		placeAC(acX, acZ);
+	}
+	// the rooftop units near you, copied from the far set every 40 m you go and whenever the far
+	// set changes (a new one laid out, a unit taken down or put back)
+	let acX = 1e9, acZ = 1e9, acV = -1;
+	function placeAC(x, z) {
+		acX = x; acZ = z; acV = kit.ac.instanceMatrix.version;
+		const N = kit.acNear;
+		N.count = nearCopies(kit.ac.instanceMatrix.array, kit.ac.count, N.instanceMatrix.array, N.instanceMatrix.count, x, z, AC_LOD[1] + 45);
+		N.instanceMatrix.needsUpdate = true;
+		N.computeBoundingSphere();
 	}
 	// Neighbouring buildings from the map often overlap by a metre or so (their outlines
 	// are fitted as boxes). Where they do, their fronts run a few centimetres apart through
@@ -1612,6 +1636,8 @@ export function createCity(shared, scene, bay, real = null) {
 			if (!on) { riseT0 = -1; rise.value.w = 0; }
 			near.castShadow = hips.castShadow = gables.castShadow = !on;
 		}
+		// (the near rooftop units kept up as you go, a rebuild under way or not: 45 m past their band)
+		if (Math.hypot(x - acX, z - acZ) > 40 || kit.ac.instanceMatrix.version !== acV) placeAC(x, z);
 		// the buildings round you again every 300 m, a few milliseconds a frame (the ones standing
 		// stay drawn till the new set is ready): done in one go it held a phone's frame for the
 		// best part of a second each time; the first set, and one far from where you are now (a
@@ -1697,6 +1723,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// the tall ones, for going inside (bay/towers.js)
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
 		yield;
+		if (acX > 1e8) { acX = x; acZ = z; }          // (the first set: its near units round where it was laid out)
 		uploadKit(list.kit);
 		kit2.upload(list.props);
 		drives = { list: list.props?.car || [], v: drives.v + 1 };

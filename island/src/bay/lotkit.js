@@ -54,6 +54,31 @@ export function rooftopUnit(seg = 14) {
 		hide(B(0.03, 0.62, 1.5, 0.56, 0.4, 0, grille), (c, n) => n.x < -0.99), hide(B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body), (c, n) => n.z < -0.99),
 	]));
 }
+// The same unit as it is seen far off (city.js dissolves one into the other across a band, past
+// which a fan is a few pixels and its shroud's sides under one): the curb, the cabinet, the end
+// box, the coil's face, and each fan a flat dark disc in the shroud's own size, its colour the
+// mean of the shroud's rim and the fan (44 triangles, against 112 on a phone).
+export function rooftopUnitFar() {
+	const body = [0.8, 0.81, 0.8], grille = [0.42, 0.43, 0.44];
+	const disc = (z) => colored(new THREE.CircleGeometry(0.34, 6).rotateX(-Math.PI / 2).translate(0, 1.31, z), [0.22, 0.23, 0.24]);
+	const coil = colored(new THREE.PlaneGeometry(1.5, 0.62).rotateY(Math.PI / 2).translate(0.575, 0.71, 0), grille);
+	return mergeVertices(M([
+		hide(B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), under), hide(B(1.1, 1.0, 1.95, 0, 0.18, 0, body), under),
+		disc(-0.45), disc(0.45), coil, hide(B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body), (c, n) => n.z < -0.99),
+	]));
+}
+// The copies of an instanced mesh's instances within R of (x, z), for its near version: src and
+// dst are instance matrix arrays (16 numbers each), n of src in use, cap of dst. Returns the count.
+export function nearCopies(src, n, dst, cap, x, z, R) {
+	let k = 0;
+	for (let i = 0; i < n && k < cap; i++) {
+		const e = i * 16, dx = src[e + 12] - x, dz = src[e + 14] - z;
+		if (dx * dx + dz * dz > R * R) continue;
+		for (let j = 0; j < 16; j++) dst[k * 16 + j] = src[e + j];
+		k++;
+	}
+	return k;
+}
 // the shapes, each in its own metres, length along z, standing on y 0
 function shapes() {
 	const S = {};
