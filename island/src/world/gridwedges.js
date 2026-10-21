@@ -83,9 +83,16 @@ function meet(p1, p2, p3, out) {
 	out.divideScalar(det);
 	return true;
 }
-export function footprint(planes, yLo, yHi) {
-	const P = planes, pts = [];
+// the frustum's eight corners (shared vectors, overwritten by the next call), or null when its
+// planes do not meet in a box
+export function frustumCorners(planes) {
+	const P = planes;
 	for (let i = 0; i < 8; i++) if (!meet(P[i & 1], P[2 + ((i >> 1) & 1)], P[4 + ((i >> 2) & 1)], _corner[i])) return null;
+	return _corner;
+}
+export function footprint(planes, yLo, yHi) {
+	const pts = [];
+	if (!frustumCorners(planes)) return null;
 	for (const c of _corner) if (c.y >= yLo && c.y <= yHi) pts.push(c.x, c.z);
 	for (const [i, j] of EDGES) {
 		const a = _corner[i], b = _corner[j];

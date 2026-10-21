@@ -18,6 +18,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { addNightField } from '../world/nightfield.js';
 import { ferryBuilding, sfCityHall, oaklandCityHall, palaceHall, cellhouse, fortPoint, towerLobby, library, cityHall, shopRow, oneRoom, visitorCentre } from '../interiors/landmarks.js';
 import { smoothstep as smooth } from '../noise.js';
+import { shadowByTiles } from '../world/shadowreach.js';
 
 // piers you can walk out on (floor())
 const PIERS = [];
@@ -1081,9 +1082,12 @@ export function createLandmarks(scene, bay) {
 	bridge([38.0540, -122.2280], [38.0680, -122.2250], 45, 80, null, mats.concrete, mats.craneWhite, Object.assign([[0.22, 125], [0.78, 125]], { mat: mats.craneWhite }));   // Carquinez (Al Zampa)
 	bridge([38.0330, -122.1260], [38.0520, -122.1230], 40, 100);                                                                      // Benicia-Martinez
 
+	// (each merged across the whole Bay: in the sun's shadow pass only its tiles in the box,
+	// world/shadowreach.js)
 	for (const [mat, list] of parts) {
 		const m = new THREE.Mesh(mergeGeometries(list), mat);
 		m.castShadow = true; m.receiveShadow = true;
+		shadowByTiles(m);
 		group.add(m);
 	}
 	// ---------- you among them ----------
