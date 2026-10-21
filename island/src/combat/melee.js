@@ -642,7 +642,7 @@ export function createMelee(ctx) {
 	const prompt = touch ? null : document.createElement('div');
 	if (prompt) {
 		prompt.dataset.hud = 'prompt 26';
-		prompt.style.cssText = 'display:none;padding:7px 12px;border-radius:12px;background:rgba(8,20,26,.6);border:1px solid rgba(190,255,230,.55);color:#eafaf6;font:600 13px system-ui;pointer-events:none;';
+		prompt.style.cssText = 'display:none;padding:7px 12px;border-radius:12px;background:rgba(8,20,26,.6);border:1px solid rgba(190,255,230,.55);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);pointer-events:none;';
 		prompt.innerHTML = '<b style="display:inline-block;min-width:18px;padding:1px 5px;margin-right:6px;border-radius:5px;background:rgba(255,255,255,.18);text-align:center">Q</b>Takedown';
 		mount.appendChild(prompt);
 	}

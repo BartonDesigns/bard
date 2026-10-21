@@ -479,7 +479,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		if (!menu || menuBtn) return;
 		menuBtn = document.createElement('button');
 		menuBtn.type = 'button';
-		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) menuBtn.addEventListener(ev, (x) => x.stopPropagation());
 		menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; panel.open(here?.kind === 'kitchen' ? 'kitchen' : 'larder'); });
 		menu.insertBefore(menuBtn, menu.children[1] || null);

@@ -8,22 +8,22 @@ import { scrollable } from './scroll.js';
 
 const NUDGE_KEY = 'l99-account-nudge';
 const CSS = `
-.acct{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:20;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:16px;font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#fff}
+.acct{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:20;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:16px;font:14px/1.45 var(--bard-body,system-ui,sans-serif);color:#fff}
 .acct.on{display:flex}
 .acct-card{width:min(380px,100%);max-height:100%;overflow-y:auto;background:#1a1a1a;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.8);padding:20px;display:flex;flex-direction:column;gap:12px}
 .acct-head{display:flex;align-items:center;gap:10px}
-.acct-head b{flex:1;font-size:18px;font-weight:600}
+.acct-head b{flex:1;font-size:18px;font-weight:600;font-family:var(--bard-display,Georgia,serif)}
 .acct-x{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);font-size:15px;cursor:pointer}
 .acct-tabs{display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,.1)}
-.acct-tab{flex:1;padding:10px 4px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 13px system-ui;cursor:pointer}
+.acct-tab{flex:1;padding:10px 4px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer}
 .acct-tab.cur{color:#fff;border-bottom-color:#01a982}
 .acct label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(255,255,255,.7)}
-.acct input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:12px 14px;color:#fff;font:16px system-ui;outline:none}
+.acct input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:12px 14px;color:#fff;font:16px var(--bard-body,system-ui,sans-serif);outline:none}
 .acct input:focus{border-color:#01a982;background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(1,169,130,.2)}
-.acct-go{background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;border:0;border-radius:8px;padding:12px 20px;font:600 15px system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);min-height:44px}
+.acct-go{background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;border:0;border-radius:8px;padding:12px 20px;font:600 15px var(--bard-display,system-ui,sans-serif);cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);min-height:44px}
 .acct-go:disabled{opacity:.5;cursor:default}
-.acct-alt{background:transparent;color:#01a982;border:2px solid #01a982;border-radius:8px;padding:10px 18px;font:600 14px system-ui;cursor:pointer;min-height:44px}
-.acct-ghost{background:transparent;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 14px;font:13px system-ui;cursor:pointer;min-height:40px}
+.acct-alt{background:transparent;color:#01a982;border:2px solid #01a982;border-radius:8px;padding:10px 18px;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;min-height:44px}
+.acct-ghost{background:transparent;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 14px;font:13px var(--bard-body,system-ui,sans-serif);cursor:pointer;min-height:40px}
 .acct-note{font-size:13px;color:rgba(255,255,255,.7)}
 .acct-err{font-size:13px;color:#ef4444;min-height:0}
 .acct-err:empty{display:none}
@@ -62,7 +62,7 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, l
 	if (menu) {
 		btn = el('button');
 		btn.type = 'button';
-		btn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		btn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) btn.addEventListener(ev, (x) => x.stopPropagation());
 		btn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; open(); });
 		menu.insertBefore(btn, menu.firstChild);

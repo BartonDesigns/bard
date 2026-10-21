@@ -249,7 +249,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	// ---------- the elevator ----------
 	const panel = document.createElement('div');
 	panel.dataset.hud = 'prompt 80';
-	panel.style.cssText = 'position:absolute;max-height:48dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;display:none;flex-direction:column;gap:4px;padding:10px;width:min(240px,70vw);border-radius:14px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.2);z-index:6;color:#eafaf6;font:13px system-ui;';
+	panel.style.cssText = 'position:absolute;max-height:48dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;display:none;flex-direction:column;gap:4px;padding:10px;width:min(240px,70vw);border-radius:14px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.2);z-index:6;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);';
 	for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) panel.addEventListener(ev, (e) => e.stopPropagation());
 	mount?.appendChild(panel);
 	const veil = document.createElement('div');
@@ -264,7 +264,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		for (const L of [...T.levels].reverse()) {
 			const b = document.createElement('button');
 			b.textContent = label(L);
-			b.style.cssText = `flex:none;text-align:left;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:${L === cur ? 'rgba(1,169,130,.35)' : 'transparent'};color:#eafaf6;font:13px system-ui;min-height:40px;cursor:pointer;`;
+			b.style.cssText = `flex:none;text-align:left;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:${L === cur ? 'rgba(1,169,130,.35)' : 'transparent'};color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:40px;cursor:pointer;`;
 			b.onclick = (e) => { e.stopPropagation(); go(L); };
 			panel.appendChild(b);
 		}

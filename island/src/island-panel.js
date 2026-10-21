@@ -23,19 +23,19 @@ const TABS = [['player', 'Player'], ['world', 'World'], ['sound', 'Sound'], ['gr
 const CSS = `
 .l99-set{display:flex;flex-direction:column;height:100%;max-width:760px;margin:0 auto;gap:12px;}
 .l99-set-head{display:flex;align-items:center;gap:12px;flex:none;}
-.l99-set-head b{flex:1;font:700 20px/1.25 system-ui;letter-spacing:.02em;color:#fff;}
-.l99-set-x{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.8);font:16px system-ui;cursor:pointer;flex:none;}
+.l99-set-head b{flex:1;font:700 20px/1.25 var(--bard-display,system-ui,sans-serif);letter-spacing:.02em;color:#fff;}
+.l99-set-x{width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.8);font:16px var(--bard-body,system-ui,sans-serif);cursor:pointer;flex:none;}
 .l99-set-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:4px;flex:none;border-bottom:1px solid rgba(255,255,255,.1);}
-.l99-set-tab{min-height:44px;padding:8px 6px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 13px system-ui;cursor:pointer;touch-action:manipulation;}
+.l99-set-tab{min-height:44px;padding:8px 6px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;touch-action:manipulation;}
 .l99-set-tab[aria-selected="true"]{color:#fff;border-bottom-color:#01a982;}
 .l99-set-tab:focus-visible,.l99-set-x:focus-visible{outline:2px solid #01a982;outline-offset:2px;}
 .l99-set-body{flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px;align-content:start;align-items:start;padding-bottom:12px;}
 .l99-set-card{background:#1a1a1a;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;min-width:0;}
-.l99-set-card>h3{margin:0 0 10px;font:600 11px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#a5f6e2;}
-.l99-set-note{font:12px/1.5 system-ui;color:rgba(255,255,255,.7);margin:0 0 10px;}
+.l99-set-card>h3{margin:0 0 10px;font:600 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.12em;text-transform:uppercase;color:#a5f6e2;}
+.l99-set-note{font:12px/1.5 var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.7);margin:0 0 10px;}
 /* (the panel's selects stay the system's own picker, not the faceplate's retro one: data-no-custom) */
-.l99-set select{background:#2a2a2a!important;color:#fff!important;border:1px solid rgba(255,255,255,.25)!important;border-radius:9px!important;font:14px system-ui!important;min-height:44px!important;padding:0 12px!important;}
-.l99-set-go{width:100%;min-height:44px;border:0;border-radius:8px;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;font:600 14px system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);}
+.l99-set select{background:#2a2a2a!important;color:#fff!important;border:1px solid rgba(255,255,255,.25)!important;border-radius:9px!important;font:14px var(--bard-body,system-ui,sans-serif)!important;min-height:44px!important;padding:0 12px!important;}
+.l99-set-go{width:100%;min-height:44px;border:0;border-radius:8px;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);}
 `;
 
 let tab = (() => { try { const t = localStorage.getItem(TAB_KEY); return TABS.some(([k]) => k === t) ? t : 'player'; } catch { return 'player'; } })();
@@ -84,7 +84,7 @@ export function islandPanel(iw) {
 		return c;
 	};
 	const note = (host, text) => { const n = document.createElement('p'); n.className = 'l99-set-note'; n.textContent = text; host.appendChild(n); return n; };
-	const ghost = (extra = '') => css(document.createElement('button'), 'width:100%;min-height:44px;margin-bottom:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;' + extra);
+	const ghost = (extra = '') => css(document.createElement('button'), 'width:100%;min-height:44px;margin-bottom:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);cursor:pointer;' + extra);
 	({ player, world, sound, graphics, account, storage })[tab]();
 	body.scrollTop = keep;
 
@@ -95,7 +95,7 @@ export function islandPanel(iw) {
 		heroRow.setAttribute('role', 'group'); heroRow.setAttribute('aria-label', 'Your hero');
 		for (const [sex, label] of [['male', 'Male'], ['female', 'Female']]) {
 			const on = avatar.hero === sex;
-			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid ' + (on ? '#01a982' : 'rgba(255,255,255,.25)') + ';background:' + (on ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;cursor:pointer;');
+			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid ' + (on ? '#01a982' : 'rgba(255,255,255,.25)') + ';background:' + (on ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;');
 			b.textContent = label; b.setAttribute('aria-pressed', String(on));
 			b.onclick = () => { if (avatar.hero === sex) return; avatar.setHero(sex).catch(() => {}); hint(`Your hero: ${label.toLowerCase()}. Friends see the change the next time you join a room.`, 2600, 1); buildPanel(); };
 			heroRow.appendChild(b);
@@ -149,7 +149,7 @@ export function islandPanel(iw) {
 		const wx = card('Weather');
 		const wrow = css(document.createElement('div'), 'display:flex;gap:4px;margin:0 0 8px;');
 		for (const mode of ['auto', 'clear', 'fair', 'showers', 'storm']) {
-			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (WX.state.mode === mode ? '#01a982' : 'transparent') + ';color:#fff;font:11px system-ui;padding:0 2px;');
+			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (WX.state.mode === mode ? '#01a982' : 'transparent') + ';color:#fff;font:11px var(--bard-body,system-ui,sans-serif);padding:0 2px;');
 			b.textContent = mode[0].toUpperCase() + mode.slice(1);
 			b.setAttribute('aria-pressed', String(WX.state.mode === mode));
 			b.onclick = () => { WX.set(mode); buildPanel(); };
@@ -162,7 +162,7 @@ export function islandPanel(iw) {
 		slider(wx, 'Wind', 0, 1.5, 0.05, () => shared.uWind.value, (v) => { WX.pin('wind', v); shared.uWind.value = v; }, (v) => v.toFixed(2));
 		// the constellations' lines drawn faintly among the stars (the real sky has none; off by default)
 		const sky = card('Night sky');
-		const conB = css(document.createElement('button'), 'width:100%;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (iw.world.sky.lines() ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;cursor:pointer;');
+		const conB = css(document.createElement('button'), 'width:100%;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (iw.world.sky.lines() ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;');
 		conB.textContent = iw.world.sky.lines() ? 'CONSTELLATION LINES: ON' : 'CONSTELLATION LINES: OFF';
 		conB.setAttribute('aria-pressed', String(iw.world.sky.lines()));
 		conB.onclick = () => { const on = !iw.world.sky.lines(); iw.world.sky.lines(on); try { localStorage.setItem('l99-conlines', on ? '1' : ''); } catch { /* private mode */ } buildPanel(); };
@@ -181,7 +181,7 @@ export function islandPanel(iw) {
 		mix.appendChild(musicMode);
 		const TM = window.L99TouchMusic175;
 		if (TM) {
-			const b = css(document.createElement('button'), 'width:100%;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (TM.enabled ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
+			const b = css(document.createElement('button'), 'width:100%;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (TM.enabled ? '#01a982' : 'transparent') + ';color:#fff;font:12px var(--bard-body,system-ui,sans-serif);');
 			b.textContent = TM.enabled ? 'PLAY SURFACES: ON' : 'PLAY SURFACES: OFF';
 			b.setAttribute('aria-pressed', String(!!TM.enabled));
 			b.onclick = () => { TM.set(!TM.enabled); buildPanel(); };
@@ -202,7 +202,7 @@ export function islandPanel(iw) {
 		k.appendChild(choice);
 		const rigRow = css(document.createElement('div'), 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;');
 		for (const [label, action] of [['Place instrument', () => placeKinetic(choice.value)], ...(rig.kind ? [['Replay', replayKinetic], ['Stop', () => iw.world.kinetic.silence()], ['Clear', () => iw.world.kinetic.clear()]] : [])]) {
-			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px system-ui;cursor:pointer;padding:5px;');
+			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);cursor:pointer;padding:5px;');
 			b.textContent = label; b.onclick = () => { action(); buildPanel(); }; rigRow.appendChild(b);
 		}
 		k.appendChild(rigRow);
@@ -238,7 +238,7 @@ export function islandPanel(iw) {
 		// High or Ultra (phones only: the desktop's full graphics, which a computer has on High). Which
 		// meshes and shaders are built is settled at load, so going into or out of Ultra reloads the page.
 		for (const mode of ['high', 'ultra']) {
-			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (iw.quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;');
+			const b = css(document.createElement('button'), 'flex:1;min-height:44px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (iw.quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px var(--bard-display,system-ui,sans-serif);');
 			b.textContent = mode.toUpperCase();
 			b.setAttribute('aria-pressed', String(iw.quality === mode));
 			b.onclick = () => {

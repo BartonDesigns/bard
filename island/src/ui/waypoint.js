@@ -46,7 +46,7 @@ export function createWaypoint({ scene, camera, mount, onTap = () => {}, top = 8
 	edgeArrow.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" style="position:absolute;left:-7px;top:-27px" aria-hidden="true"><path d="M12 3 21 19H3z" fill="#5ff0c6"/></svg>';
 	gemIcon.append(edgeArrow);
 	const markLabel = document.createElement('div');
-	markLabel.style.cssText = 'padding:1px 7px;border-radius:9px;background:rgba(10,14,18,.62);color:#eafaf6;font:600 11.5px/1.35 system-ui;white-space:nowrap;letter-spacing:.02em;text-shadow:0 1px 2px rgba(0,0,0,.6);';
+	markLabel.style.cssText = 'padding:1px 7px;border-radius:9px;background:rgba(10,14,18,.62);color:#eafaf6;font:600 11.5px/1.35 var(--bard-display,system-ui,sans-serif);white-space:nowrap;letter-spacing:.02em;text-shadow:0 1px 2px rgba(0,0,0,.6);';
 	marker.append(gemIcon, markLabel); mount.append(marker);
 
 	// ---------- the chip ----------
@@ -54,7 +54,7 @@ export function createWaypoint({ scene, camera, mount, onTap = () => {}, top = 8
 	chip.type = 'button';
 	// (text to read, not a control: the touch skin leaves it as it is and keeps controls off it)
 	chip.dataset.hudText = 'quest';
-	chip.style.cssText = 'position:absolute;left:50%;top:calc(86px + env(safe-area-inset-top));transform:translateX(-50%);display:none;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));min-height:44px;padding:6px 14px 6px 8px;border-radius:22px;border:1px solid rgba(1,169,130,.55);background:rgba(10,14,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f2f5f4;font:600 13px/1.25 system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);text-align:left;';
+	chip.style.cssText = 'position:absolute;left:50%;top:calc(86px + env(safe-area-inset-top));transform:translateX(-50%);display:none;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));min-height:44px;padding:6px 14px 6px 8px;border-radius:22px;border:1px solid rgba(1,169,130,.55);background:rgba(10,14,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f2f5f4;font:600 13px/1.25 var(--bard-display,system-ui,sans-serif);cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);text-align:left;';
 	chip.style.top = `calc(${top}px + env(safe-area-inset-top))`;
 	const arrow = document.createElement('span');
 	arrow.style.cssText = 'flex-shrink:0;width:30px;height:30px;border-radius:50%;background:rgba(1,169,130,.22);display:flex;align-items:center;justify-content:center;transition:transform .15s linear;';
@@ -63,7 +63,7 @@ export function createWaypoint({ scene, camera, mount, onTap = () => {}, top = 8
 	text.style.cssText = 'min-width:0;display:flex;flex-direction:column;overflow:hidden;';
 	const line1 = document.createElement('span'), line2 = document.createElement('span');
 	line1.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-	line2.style.cssText = 'font:500 11.5px/1.25 system-ui;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+	line2.style.cssText = 'font:500 11.5px/1.25 var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
 	text.append(line1, line2); chip.append(arrow, text);
 	// (the chip stays the mount's last child: a room's own pin finds its chip that way, net/multiplayer.js)
 	mount.append(chip);
