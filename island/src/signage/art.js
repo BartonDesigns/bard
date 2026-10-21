@@ -43,6 +43,8 @@ export function loadSignArt(family, phone = false) {
 	img.src = new URL(`../assets/signage/${family}-v1${phone ? '-mobile' : ''}.webp`, import.meta.url).href;
 	return entry.promise;
 }
+// whether a family's sheet is in (to draw again what was drawn in type before it came)
+export const artReady = (family, phone = false) => !!sheets.get(family + (phone ? '-mobile' : ''))?.ready;
 export function drawEmblem(g, x, y, size, family, trade, phone = false) {
 	if (!Number.isInteger(trade) || trade < 0 || trade > 7) return false;
 	loadSignArt(family, phone);
