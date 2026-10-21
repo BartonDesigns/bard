@@ -25,7 +25,7 @@ const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[$
 			// (the shadow itself, its ring and the flat of its disc are kept out of the grade, until
 			// it has grown past the whole view, when all of it goes with the world)
 			float e = length(vec2(d.x / (rs * 3.6), d.y / (rs * 0.32)));
-			float keep = max(1.0 - smoothstep(rs * 1.35, rs * 1.5, th), 1.0 - smoothstep(0.85, 1.0, e)) * (1.0 - smoothstep(1.3, 2.6, rs));
+			float keep = max(1.0 - smoothstep(rs * 1.35, rs * 1.5, th), 1.0 - smoothstep(0.85, 1.0, e)) * (1.0 - smoothstep(1.0, 2.0, rs));
 			hole = max(hole, k * sky * keep);
 			// (every pixel outside the rim looks in toward it: at the rim, to just past the edge; farther
 			// out, less and less, so the sky is squeezed round the shadow and eases back to itself)

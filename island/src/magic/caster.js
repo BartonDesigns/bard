@@ -293,7 +293,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					else fx.burst(drawn, GLOW.void, 6, -R, 0.5, R * 0.1, 0);
 					if (n % 10 === 0) { gather(); combat.shake?.(0.05); }
 					// (its last rush out: the ground shudders under you)
-					if (t > spell.t * 0.65 && n % 3 === 0) combat.shake?.(0.04 + 0.08 * (t / spell.t - 0.65));
+					if (t > spell.t * 0.75 && n % 3 === 0) combat.shake?.(0.04 + 0.1 * (t / spell.t - 0.75));
 					for (const [T, D] of doomed) {
 						if (T.removed || T.dead || !T.bound) { doomed.delete(T); continue; }
 						const h = T.ref, S = h?.body?.M?.S, pos = S ? S.pos : h?.pos;
