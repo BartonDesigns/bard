@@ -26,6 +26,10 @@ const SHOTS = [
 	['split-dinner', 'inside(3, ["dining", "kitchen"], 18.9)'],
 	['split-dinner-scatter', 'scatter("window", 1.2)'],
 	['split-dinner-after', 'scatter("window", 8)'],
+	['tract-tv-scatter', 'inside(0, ["family", "living"], 20.6)'],
+	['tract-tv-scatter-after', 'scatter("window", 7)'],
+	['ranch-tv-scatter', 'inside(1, ["family", "living"], 20.2)'],
+	['ranch-tv-scatter-after', 'scatter("wall", 7)'],
 ];
 (async () => {
 	const esbuild = require(path.join(ROOT, 'island/node_modules/esbuild'));
@@ -52,7 +56,7 @@ const SHOTS = [
 			const meta = await page.evaluate('homeReview.' + expr);
 			const file = path.join(OUT, `${PREFIX}-${name}.png`);
 			await page.screenshot({ path: file });
-			const actors = await page.evaluate(() => homeReview.actors());
+			const actors = await page.evaluate(() => homeReview.placed());
 			report.push({ name, file, ...meta, actors });
 			console.log(JSON.stringify({ name, ...meta, actors }));
 		}

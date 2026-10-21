@@ -297,6 +297,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		if (spec.home) { d.style.outer = null; d.style.acc = (d.style.acc || []).filter(q => !OUTDOORS.has(q.kind)); }
 		const P = buildPerson(A, d);
 		const Mo = createMotion(P, (x, z) => ground(x, z), { constrain(to, from) {
+			// (someone at home keeps to their room: home-life.js)
+			if (P.stay) { P.stay(to); return; }
 			const safe = safeSocialStep(W().island, from, to, W()?.player);
 			if (safe) to.set(safe.x, safe.y, safe.z); else to.copy(from);
 		} });
