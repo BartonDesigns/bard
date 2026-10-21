@@ -9,6 +9,7 @@ import { GARMENT_SLOTS } from '../gameplay/arms.js';
 import { groupInstances } from '../gameplay/gear-levels.js';
 import { ATTRS, ATTR_IDS } from '../magic/stats.js';
 import { coins, el, slot, tierColor, tipContent, useStyle } from './gear-look.js';
+import { keptPortrait } from './hero-portrait.js';
 
 const SLOT_NAMES = { head: 'Head', body: 'Top', legs: 'Legs', hands: 'Hands', feet: 'Feet' };
 const SLOT_MARKS = { head: '⛑️', body: '🧥', legs: '👖', hands: '🧤', feet: '🥾' };
@@ -22,6 +23,7 @@ const CSS = `
 .lt-side{display:flex;flex-direction:column;gap:10px}
 .lt-cell{display:flex;flex-direction:column;align-items:center;gap:3px}
 .lt-cell .g99-label{font-size:9px}
+.lt-pic{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid rgba(232,209,158,.3);box-shadow:0 10px 26px rgba(0,0,0,.55)}
 .lt-fig{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6))}
 .lt-fig .p{fill:rgba(232,209,158,.08);stroke:rgba(232,209,158,.45);stroke-width:1.2;stroke-linejoin:round;transition:fill .3s,stroke .3s}
 .lt-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
@@ -91,7 +93,9 @@ export function linkLoadingTabs({ arms, magic = () => null, account = null, name
 		// the doll: head, top and legs to the left, hands, feet and what you hold to the right
 		const worn = safe(() => arms.worn?.(), {}), held = safe(() => arms.held?.());
 		const doll = el('div', 'lt-doll'), left = el('div', 'lt-side'), right = el('div', 'lt-side'), fig = el('div');
-		fig.innerHTML = FIGURE;
+		// (your hero as last pictured on this device, ui/hero-portrait.js; the drawn figure until then)
+		const pic = keptPortrait();
+		if (pic) { const im = el('img', 'lt-pic'); im.src = pic; im.alt = 'Your hero, in what you wear'; fig.append(im); } else fig.innerHTML = FIGURE;
 		for (const k of GARMENT_SLOTS) {
 			const x = worn[k];
 			if (!x) continue;

@@ -114,6 +114,7 @@ import { worldBody, sameBody } from './space/body.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
+import { createHeroPortrait } from './ui/hero-portrait.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
 import { createLaw } from './law/index.js';
@@ -892,7 +893,9 @@ export function createIslandWorld() {
 	guideApi.multiplayer=multiplayer;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	// your gear, shops and trading with friends (ui/gear.js)
-	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
+	// your hero as a picture for the gear sheet, drawn once per outfit (ui/hero-portrait.js)
+	const portrait = HOOKS.portrait = createHeroPortrait({ renderer, avatar, camera });
+	const gear = HOOKS.gear = createGear({ portrait, arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
@@ -1864,6 +1867,9 @@ if (typeof window !== 'undefined') {
 		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
 		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
 		heroView: () => HOOKS.heroView,
+		// your hero's picture for the gear sheet (ui/hero-portrait.js): Crysis.portrait() its state,
+		// .portrait('gear' | 'char') with the sheet open on that view
+		portrait: (view) => { if (view) HOOKS.gear?.open(view); return HOOKS.portrait?.info(); },
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
