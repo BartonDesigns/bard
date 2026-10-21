@@ -289,7 +289,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// a while after the scope comes down or moves to another. (A tower's floors are towers.js's.)
 	const SCOPE_R = isPhone ? 300 : 420, SCOPE_KEEP = 8, SCOPE_SETTLE = 0.2;
 	const sdir = new THREE.Vector3();
-	let focus = null, aimed = null, scopeAt = 0, scopeOff = 99, openNow = null, bandWide = false, scopeTower = null;
+	let focus = null, aimed = null, scopeAt = 0, scopeOff = 99, openNow = null, bandWide = false, scopeTower = null, scopeFloor = null;
 	const scopeStats = { built: 0, ms: 0, aimed: null, open: null };
 	// view: where the scope looks ({ position, direction }: crysis/scope-view.js), or null
 	function scopeStep(camera, dt, view) {
@@ -311,6 +311,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			towerFloor = towers.scoped(aimed.o, aimed.ly + aimed.o.y);
 			if (towerFloor) { scopeTower = aimed.key; scopeStats.towerMs = +(towerFloor.ms || 0).toFixed(1); }
 		}
+		if (towerFloor || !scopeTower) scopeFloor = towerFloor;
 		// (the scope down a while, or on another building a while: the one built for it let go)
 		if (focus && (scopeOff > SCOPE_KEEP || (aimed && aimed.key !== focus.key && performance.now() / 1000 - aimed.since > SCOPE_SETTLE * 3))) { if (job?.key === focus.key) job = null; drop(focus.key); }
 		if (focus && live.get(focus.key) !== focus) focus = null;
@@ -413,6 +414,37 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// the room seen down the scope now, where it is one of these buildings' (for home-life.js: its
 	// household shown at home there): { B, k, room } or null
 	const scopeRoom = () => { if (!openNow || SCOPE_ROOM.k.value <= 0) return null; const B = live.get(openNow.key); return B?.ready && B.P ? { B, k: openNow.k, room: B.P.rooms[openNow.room] || null } : null; };
+	// the seats of the office room seen down the scope, in the world, and how busy it is at this
+	// hour (for people/scope-workers.js: its people at their desks, however far):
+	// { key, seats, k } or null. An office of these buildings' or a tower's office floor
+	function scopeSeats(hours) {
+		if (!openNow || SCOPE_ROOM.k.value <= 0.5) return null;
+		const o = openNow.o, b = drawnBox(o), ca = Math.cos(o.a), sa = Math.sin(o.a), f = openNow.face, half = f < 2 ? b.d / 2 : b.w / 2;
+		// (behind the stretch of glass open, within a bay's depth of it)
+		const behind = (q) => {
+			const dx = q.x - b.x, dz = q.z - b.z, lx = ca * dx + sa * dz, lz = -sa * dx + ca * dz;
+			const u = f < 2 ? lx : lz, deep = half - (f === 0 ? lz : f === 1 ? -lz : f === 2 ? lx : -lx);
+			return u > openNow.u0 && u < openNow.u1 && deep < 12;
+		};
+		let seats = null;
+		const B = live.get(openNow.key);
+		if (B?.ready && B.P && !B.site) {
+			if (B.use !== 'office') return null;
+			const L = B.P.levels[openNow.k], F = frame(B.o);
+			if (!L) return null;
+			const all = B.P.seats.filter((q) => Math.abs(q.y - L.y) < 0.5).map((q) => {
+				const [x, z] = F.w(q.x, q.z), fx = F.ca * q.fx - F.sa * q.fz, fz = F.sa * q.fx + F.ca * q.fz;
+				return { x, z, y: B.P.f0 + q.y, h: q.h, sit: q.sit, heading: Math.atan2(fx, fz), table: !!q.table, work: q.work, room: q.room };
+			});
+			// (the room's own seats; a corridor or a hall's: the desks in sight beyond it)
+			seats = all.filter((q) => q.room === openNow.room);
+			if (!seats.length) seats = all.filter(behind);
+		} else if (scopeFloor?.seats && scopeTower === openNow.key) {
+			if (scopeFloor.L.kind !== 'office') return null;
+			seats = scopeFloor.seats().filter(behind);
+		}
+		return seats?.length ? { key: openNow.key + ':' + openNow.k + ':' + openNow.room, seats, k: crowd(ZONE.office, hours).k } : null;
+	}
 
 	// ---------- streaming ----------
 	let scanX = 1e9, scanZ = 1e9, scanT = 0, cands = [], job = null, towerKey = null, towerLot = null;
@@ -739,5 +771,5 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// where the signs inside the businesses hang (estab-fit.js K.sign: the grocers' aisle markers),
 	// in the world, the way each faces, and the business
 	const signAnchors = () => { const out = []; for (const B of live.values()) { if (!B.ready || !B.P.signAnchors) continue; const F = frame(B.o); for (const a of B.P.signAnchors) { const [x, z] = F.w(a.x, a.z), [x2, z2] = F.w(a.x + (a.nx || 0), a.z + (a.nz || 0)); out.push({ ...a, x, z, y: B.P.f0 + a.y, nx: x2 - x, nz: z2 - z, building: B.key, estab: B.P.estab?.id || null, type: B.P.estab?.type || a.fit || '' }); } } return out; };
-	return { group, update, floor, push, ceiling, inside, seeInto, scopeRoom, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
+	return { group, update, floor, push, ceiling, inside, seeInto, scopeRoom, scopeSeats, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }
