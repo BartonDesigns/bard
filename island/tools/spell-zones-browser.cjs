@@ -59,6 +59,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 		window._spellBlows = [];
 		C.deal = (T, blow, mine) => { const r = d0(T, blow, mine); if (blow.spell) window._spellBlows.push({ id: T.id, part: blow.part, amount: +blow.amount.toFixed(1), dealt: +(r?.dealt || 0).toFixed(1) }); return r; };
 		Crysis.magic.test(true);
+		// (the fighters held still, as a hold spell leaves them: a headless frame can take seconds,
+		// and a bolt is about where it lands, not whether they stepped aside)
+		for (const T of Crysis.combat.layer.map.values()) if (T.kind === 'hostile' && T.ref?.body) T.hex = { hold: 1e9, fear: 0, slowK: 1, slowT: 0, dot: 0, dotT: 0, dotAcc: 0, spread: 0, fx: 0, fz: 0, by: null };
 	});
 	const castAt = async (id, part, spell) => {
 		const n0 = await page.evaluate(({ id, part, spell }) => {
