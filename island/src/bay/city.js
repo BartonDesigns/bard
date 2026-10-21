@@ -28,7 +28,7 @@ import { inClearing, clearingVersion } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { houseEra, exteriorLook, seedAt } from './decor.js';
-import { createProps } from './lotkit.js';
+import { createProps, rooftopUnit } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
@@ -726,16 +726,10 @@ export function createCity(shared, scene, bay, real = null) {
 	const kit = (() => {
 		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
-		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles)
 		const C = (r, h, x, y, z, c, seg = PHONE ? 6 : 14) => colored(new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z), c);
-		const body = [0.8, 0.81, 0.8], dark = [0.16, 0.17, 0.18], grille = [0.42, 0.43, 0.44];
-		// a packaged rooftop unit on its curb: the cabinet, two fans in their shrouds on top,
-		// the louvred coil down one side
-		const ac = mergeGeometries([
-			B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), B(1.1, 1.0, 1.95, 0, 0.18, 0, body),
-			C(0.34, 0.12, 0, 1.18, -0.45, grille), C(0.3, 0.02, 0, 1.3, -0.45, dark), C(0.34, 0.12, 0, 1.18, 0.45, grille), C(0.3, 0.02, 0, 1.3, 0.45, dark),
-			B(0.03, 0.62, 1.5, 0.56, 0.4, 0, grille), B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body),
-		]);
+		// a packaged rooftop unit on its curb, its hidden faces left out (lotkit.js)
+		// (a phone's fans are six-sided: 583 units on the roofs near the Wharf were 159k triangles)
+		const ac = rooftopUnit(PHONE ? 6 : 14);
 		// the sunroom: white frames, glass between (two meshes)
 		const fr = [0.95, 0.95, 0.93], bars = [];
 		for (const x of [-0.5, -0.25, 0, 0.25, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, -0.5, fr));
