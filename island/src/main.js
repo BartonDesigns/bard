@@ -1197,7 +1197,8 @@ export function createIslandWorld() {
 				// hills or mountains in the way?
 				let seen = 1;
 				for (const t of [80, 200, 500, 1200, 3000, 7000]) { const x = camera.position.x + sd.x * t, z = camera.position.z + sd.z * t; if (W.island.heightAt(x, z) > camera.position.y + sd.y * t + 3) { seen = 0; break; } }
-				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (1 - (W.weather?.state?.cover ?? 0) * 0.5);
+				// (as much of it as the cloud over the sun lets through: none under an overcast)
+				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (W.weather?.state?.sunVis ?? 1);
 			}
 		}
 		glareK += (want - glareK) * Math.min(1, dt * 3);
