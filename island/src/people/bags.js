@@ -360,7 +360,8 @@ export function attachBag(P, fit, isPhone = false) {
 	const mesh = new THREE.Mesh(near, mat);
 	mesh.matrixAutoUpdate = false; mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'bag:' + fit.bag.kind;
 	const nearD = isPhone ? BAG_NEAR * 0.7 : BAG_NEAR;
-	const lod = (d) => { const want = d < nearD ? near : far; if (mesh.geometry !== want) mesh.geometry = want; const v = d < BAG_FAR; if (mesh.visible !== v) mesh.visible = v; mesh.castShadow = d < nearD; };
+	// (one held in a hand is set down while they sit at work: P.bagsDown, people/workplace-life.js)
+	const lod = (d) => { const want = d < nearD ? near : far; if (mesh.geometry !== want) mesh.geometry = want; const v = d < BAG_FAR && !(P.bagsDown && !fit.bone); if (mesh.visible !== v) mesh.visible = v; mesh.castShadow = d < nearD; };
 	// (a body without its skeleton, a stand-in: the bag simply at its side)
 	if (!P.map || !P.bones) { mesh.matrixAutoUpdate = true; mesh.position.set(fit.hand === 'R' ? -0.3 : 0.3, 0.8, 0.05); P.root?.add?.(mesh); return { mesh, fit, lod, remove() { mesh.removeFromParent(); } }; }
 	let place;
