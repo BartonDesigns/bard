@@ -75,6 +75,34 @@ export function skinAttribute(F, src) {
 	return new THREE.BufferAttribute(a, 4, true);
 }
 
+// the eyes' surrounds, put right once the assets are in (A: the people assets, F: the faces).
+// The base mesh's sockets (the lids' inner faces, curling in behind the eye) are painted from
+// the skin maps' raw-flesh ovals, and the rims of them that show beside the eye read as sore red
+// lids: they take the colour of the lid they turn in from instead. And the lids measured as thin
+// flesh to the bake (the eye is not solid to it), so with the sun behind someone their lids
+// glowed orange: a lid over an eye lets no light through.
+export function tidyEyes(A, F) {
+	const u = A.unit, B = A.base, uv = A.uv, faces = A.body, E = A.D.eyes;
+	if (!E) return;
+	const C = ['L', 'R'].map((s) => { const c = [0, 0, 0]; for (const i of E[s]) for (let a = 0; a < 3; a++) c[a] += B[i * 3 + a] * u / E[s].length; return c; });
+	const near = (v) => Math.min(...C.map((c) => Math.hypot(B[v * 3] * u - c[0], B[v * 3 + 1] * u - c[1], B[v * 3 + 2] * u - c[2])));
+	const sock = new Map(), donors = new Map();
+	for (let i = 0; i < faces.length; i += 2) {
+		const v = faces[i], t = faces[i + 1];
+		if (near(v) > 0.03) continue;
+		const U = uv[t * 2] / 65535, W = 1 - uv[t * 2 + 1] / 65535;
+		// (the ovals sit at the maps' left edge; the face is on the right)
+		if (U < 0.22 && W > 0.3 && W < 0.52) sock.set(t, v);
+		else if (U > 0.6) donors.set(t, v);
+	}
+	for (const [t, v] of sock) {
+		let best = Infinity, bt = -1;
+		for (const [t2, w] of donors) { const d = (B[v * 3] - B[w * 3]) ** 2 + (B[v * 3 + 1] - B[w * 3 + 1]) ** 2 + (B[v * 3 + 2] - B[w * 3 + 2]) ** 2; if (d < best) { best = d; bt = t2; } }
+		if (bt >= 0) { uv[t * 2] = uv[bt * 2]; uv[t * 2 + 1] = uv[bt * 2 + 1]; }
+	}
+	if (F) for (let v = 0; v < B.length / 3; v++) { const d = near(v); if (d < 0.026) F.skin[v * 4 + 1] = Math.round(F.skin[v * 4 + 1] * sm(0.02, 0.026, d)); }
+}
+
 // ---------- lashes, brows and the lower lid's wet line: one small skinned mesh ----------
 const MORPHS = [['eye-left-closure', 'eye-right-closure'], ['mouth-open'], ['mouth-corner-puller'], ['eyebrows-left-up', 'eyebrows-right-up']];
 // (_normalOf: once the skin's normals at the brow, now read off the skin itself; kept in its
@@ -310,20 +338,22 @@ float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 		// thick on skin is (a shine on so fine a thing only greys it)
 		// (each a little see-through: many together make the brow, softly)
 		float w = 0.5 * (1.0 - vSt.y * 0.8);
+		// (lit nearly as the skin is, with a little sheen along them, so a brow reads as hairs
+		// and never as a flat painted shape)
 		a = (1.0 - smoothstep(w * 0.45, w, abs(vSt.x - 0.5))) * 0.8;
 		c = k == 4 ? uGrey : uHair;
-		gRgh = 0.85; gSpec = 0.15; gLit = 0.82;
+		gRgh = 0.75; gSpec = 0.3; gLit = 0.92;
 	} else if (k == 5) {
 		// the brow's own tone under its hairs: soft across, fullest at the inner end, fading to
 		// the tail
 		float across = 1.0 - smoothstep(0.05, 0.5, abs(vSt.x - 0.5));
-		a = min(0.65, across * (0.3 + 0.14 * (1.0 - vSt.y)) * uFill) * smoothstep(0.0, 0.06, vSt.y) * (1.0 - smoothstep(0.8, 1.0, vSt.y));
+		a = min(0.5, across * (0.24 + 0.12 * (1.0 - vSt.y)) * uFill) * smoothstep(0.0, 0.06, vSt.y) * (1.0 - smoothstep(0.8, 1.0, vSt.y));
 		c = uHair * 1.08;
 		gRgh = 0.9; gSpec = 0.1; gLit = 0.75;
 	} else {
-		// the wet line: clear, glossy, a little pink where it meets the lid
-		a = sin(vSt.y * 3.14159) * 0.45;
-		c = vec3(0.75, 0.55, 0.52);
+		// the wet line: clear, glossy, the faintest pink where it meets the lid
+		a = sin(vSt.y * 3.14159) * 0.35;
+		c = vec3(0.8, 0.68, 0.64);
 		gRgh = 0.06;
 	}
 	diffuseColor.rgb = c;
@@ -333,7 +363,7 @@ float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRgh;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.directSpecular *= gSpec; reflectedLight.indirectSpecular *= gSpec; reflectedLight.directDiffuse *= gLit; reflectedLight.indirectDiffuse *= gLit;');
 	};
-	m.customProgramCacheKey = () => 'crysis-face-detail-8';
+	m.customProgramCacheKey = () => 'crysis-face-detail-9';
 	return m;
 }
 
@@ -391,11 +421,12 @@ float gWet = 0.0;`)
 	vec2 ip = P.xy;
 	if (P.z > IZ) { vec3 R = refract(-V, normalize(vEyeN), 1.0 / 1.376); ip = P.xy + R.xy * (IZ - P.z) / min(R.z, -0.2); }
 	float r = length(ip) / IR, an = atan(ip.y, ip.x);
-	vec3 sclera = vec3(0.86, 0.82, 0.78) * (0.9 + 0.1 * en(P.xy * 9.0));
-	// fine vessels and a pinker white towards the corners
-	float corner = smoothstep(0.35, 0.95, abs(P.x));
+	// (a young, healthy white: clean, a touch warm; the lids' shade below greys it enough)
+	vec3 sclera = vec3(0.93, 0.91, 0.88) * (0.94 + 0.06 * en(P.xy * 9.0));
+	// fine vessels and a faintly pinker white towards the corners
+	float corner = smoothstep(0.45, 0.95, abs(P.x));
 	float vein = smoothstep(0.72, 0.9, en(vec2(an * 6.0, length(P.xy) * 14.0)) * en(P.xy * 30.0 + 3.0) * 1.6) * smoothstep(0.55, 0.9, length(P.xy));
-	sclera = mix(sclera, vec3(0.8, 0.5, 0.47), corner * 0.3 + vein * 0.35);
+	sclera = mix(sclera, vec3(0.86, 0.62, 0.58), corner * 0.12 + vein * 0.18);
 	// the iris: fibres out from the pupil, a lighter collarette, crypts, the dark limbal ring
 	float fib = en(vec2(an * 38.0, r * 3.0)) * 0.6 + en(vec2(an * 90.0, r * 7.0)) * 0.4;
 	vec3 iris = mix(uIris * 0.7, uIris * 1.25, fib);
@@ -409,9 +440,27 @@ float gWet = 0.0;`)
 	col *= 1.0 - 0.5 * smoothstep(0.0, 0.55, vUpN);
 	diffuseColor.rgb = col;
 	gWet = 1.0 - smoothstep(0.95, 1.05, r);
-}`);
+}`)
+			.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+#if ! defined( USE_ENVMAP ) && NUM_HEMI_LIGHTS > 0
+{
+	// the wet eye: the sky mirrored in it (there is no reflection map in the world, so without
+	// this an eye only shines toward the sun, and dulls with the sun behind), strongest at the
+	// edges, and the bright sky over the onlooker caught as a small soft window on the cornea,
+	// the glint that makes an eye read as alive
+	vec3 R = reflect( - geometryViewDir, geometryNormal ), sky = vec3( 0.0 );
+	for ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) {
+		sky += mix( hemisphereLights[ i ].groundColor, hemisphereLights[ i ].skyColor, smoothstep( -0.3, 0.4, dot( R, hemisphereLights[ i ].direction ) ) );
+		vec3 S = normalize( hemisphereLights[ i ].direction * 0.55 + geometryViewDir );
+		float win = smoothstep( 0.955, 0.985, dot( R, S ) );
+		reflectedLight.indirectSpecular += hemisphereLights[ i ].skyColor * win * ( 0.35 + 0.65 * gWet ) * 0.9;
+	}
+	float nv = saturate( dot( geometryNormal, geometryViewDir ) );
+	reflectedLight.indirectSpecular += sky * ( 0.03 + 0.5 * pow( 1.0 - nv, 4.0 ) );
+}
+#endif`);
 	};
-	m.customProgramCacheKey = () => 'crysis-eye-2';
+	m.customProgramCacheKey = () => 'crysis-eye-3';
 	m.userData.shared = true;
 	// (a copy keeps the iris: some places light their people's eyes their own way)
 	const own = m.onBeforeCompile, key = m.customProgramCacheKey;

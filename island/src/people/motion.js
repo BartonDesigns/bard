@@ -472,7 +472,19 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		L.idleT -= dt;
 		if (L.idleT <= 0) { L.idleT = 1.5 + Math.random() * 4; L.idleYaw = (Math.random() - 0.5) * (speed > 0.3 ? 0.5 : 1.2); L.idlePitch = (Math.random() - 0.4) * 0.3; }
 		let ty = L.idleYaw, tp = L.idlePitch;
-		const tgt = L.target || (cam && cam.distanceTo(S.pos) < 7 ? cam : null);
+		let tgt = L.target || (cam && cam.distanceTo(S.pos) < 7 ? cam : null);
+		// you, close by, are looked at but not stared at: a few seconds of meeting your eyes, then a
+		// glance away and back, often with a blink as the eyes move (a held gaze reads as a stare)
+		if (tgt && !L.target) {
+			L.meetT = (L.meetT ?? 1 + Math.random() * 2) - dt;
+			if (L.meetT <= 0) {
+				L.away = !L.away;
+				L.meetT = L.away ? 0.7 + Math.random() * 1.6 : 1.6 + Math.random() * 3;
+				if (L.away) { L.idleT = L.meetT + 0.5; L.idleYaw = (Math.random() < 0.5 ? -1 : 1) * (0.2 + Math.random() * 0.45); L.idlePitch = (Math.random() - 0.25) * 0.25; ty = L.idleYaw; tp = L.idlePitch; }
+				if (Math.random() < 0.5 && S.nextBlink > 0.3) S.nextBlink = 0.05;
+			}
+			if (L.away) tgt = null;
+		} else L.away = false;
 		if (tgt) {
 			const eyeHeight = P.height * 0.93 - (floorPose ? hipStand - hipY : 0);
 			const dx = tgt.x - S.pos.x, dz = tgt.z - S.pos.z, dy = tgt.y - (S.pos.y + eyeHeight);

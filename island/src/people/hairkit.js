@@ -593,7 +593,19 @@ const FRAG = /* glsl */`
 		a = 1.0 - pow(1.0 - clamp(a, 0.0, 1.0), 1.0 + 3.0 * smoothstep(0.1, 0.4, dot(col, vec3(0.3, 0.59, 0.11))));
 	}
 	diffuseColor.rgb = col * (kind < 0.5 ? mix(0.62, 1.35, g) : g * 2.0);
+	// (the roots in the shade of the hair over them: deep in, the layers read as depth, not
+	// as flat cards one over another)
+	if (kind < 0.5) diffuseColor.rgb *= mix(1.0, 0.62, smoothstep(0.45, 1.0, vHK.x));
 	diffuseColor.a *= a;
+#if defined( USE_ALPHATEST ) && ! defined( ALPHA_TO_COVERAGE )
+	// with no multisampling to cover them, the strands' edges are cut at the threshold: dither
+	// it across the pixel or so where the alpha crosses it (a fixed screen pattern, so nothing
+	// crawls), so an edge comes out soft instead of a ragged staircase
+	{
+		float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+		diffuseColor.a += (ign - 0.5) * clamp(fwidth(diffuseColor.a) * 1.5, 0.0, 0.4);
+	}
+#endif
 	// (the shine: less on curly and coily hair, and between the strands)
 	hairSpec = (kind < 0.5 ? uSpec.x : uSpec.y) * (0.4 + 0.6 * g);
 }`;
@@ -633,6 +645,6 @@ export function kitMaterial(tex, beard = false) {
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal *= faceDirection;\nnonPerturbedNormal = normal;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-11' + (beard ? '-b' : msaa ? '' : '-c');
+	m.customProgramCacheKey = () => 'crysis-hairkit-12' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

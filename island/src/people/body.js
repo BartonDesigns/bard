@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
 import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
-import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
+import { loadFaces, faceDNA, shapeFace, skinAttribute, tidyEyes, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
 import { FLUFFY, buildFluff, fluffMaterial } from './hair-fluff.js';
@@ -80,6 +80,7 @@ export function loadPeopleAssets() {
 		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
 		A.faces = await faces;
+		tidyEyes(A, A.faces);
 		A.kit = await kit;
 		loaded = A;
 		return A;
