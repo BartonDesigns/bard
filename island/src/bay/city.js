@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { commercialStack } from '../interiors/workplace-plan.js';
+import { SCOPE_ROOM } from '../interiors/scope-room.js';
 import { toWorld } from './geo.js';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/vegetation.js';
@@ -221,6 +222,7 @@ const DOOR_CLEAR = GFX_PHONE ? '44.0, 56.0' : '70.0, 86.0';
 // interior mapping), flat painted glass only far off (Josh 2026-10-21: "that's what windows
 // should look like from far away")
 const ROOM_FAR = GFX_PHONE ? '70.0, 105.0' : '120.0, 170.0';
+
 const ROOM_GLSL = `
 float roomK = 0.0, roomL = 1.0;
 // the ray from the eye carried on through the pane at p (metres across the room and up from its
@@ -264,6 +266,7 @@ export function buildingMaterial(shared, night, nearBand) {
 		sh.uniforms.uNightC = night;
 		sh.uniforms.uNL = NIGHT_U.uNL;
 		sh.uniforms.uNearBand = nearBand;sh.uniforms.uDetailNow=detailClock;
+		sh.uniforms.uScopeA = SCOPE_ROOM.a; sh.uniforms.uScopeB = SCOPE_ROOM.b; sh.uniforms.uScopeK = SCOPE_ROOM.k;
 		sh.uniforms.uCutN = WALL_CUTS.n; sh.uniforms.uCutA = WALL_CUTS.a; sh.uniforms.uCutB = WALL_CUTS.b;          // structures/walls: the face cut round a broken wall
 		sh.vertexShader = 'attribute float aKind; attribute float aAge; varying float vAge; attribute vec4 aNL; varying vec4 vNL; attribute vec3 aNear; attribute float aDetailBirth; uniform float uDetailNow; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
 			vNearK = (aNear.z < 0.0 || (aNear.z > 0.5 && aNear.z < 1.5)) ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, max(0.0,length(aNear.xy - cameraPosition.xz) - (aNear.z < 0.0 ? -aNear.z-1.0 : 0.0))) : 0.0;
@@ -280,7 +283,7 @@ export function buildingMaterial(shared, night, nearBand) {
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + ROOM_GLSL + sh.fragmentShader
+		sh.fragmentShader = 'varying float vAge;\n' + CUT_PARS + WALL_GLSL + 'uniform float uNightC; uniform vec2 uNL; uniform vec4 uScopeA; uniform vec4 uScopeB; uniform float uScopeK; varying vec4 vNL; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop; varying float vDoorK;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + ROOM_GLSL + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
 			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;${CUT_TEST}`)
@@ -513,6 +516,13 @@ export function buildingMaterial(shared, night, nearBand) {
 				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5 || towerK > 0.5) && K < 10.5 && (front > 0.5 || K > 9.5 || towerK > 0.5)) {
 					float openK = vDoorK * (1.0 - smoothstep(${DOOR_CLEAR}, length(vCW.xz - cameraPosition.xz)));
 					if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < openK) discard;
+				}
+				// the room seen through a scope, however far: only its own windows, on the face looked at
+				if (uScopeA.z > 0.5 && win > 0.5 && roof < 0.5 && distance(vIP, uScopeA.xy) < 0.6) {
+					float sf = uScopeA.w;
+					vec2 fn = sf < 1.5 ? vec2(0.0, 1.0 - 2.0 * sf) : vec2(5.0 - 2.0 * sf, 0.0);
+					float su = sf < 1.5 ? vLP.x * vCS.x : vLP.z * vCS.z;
+					if (dot(vLN.xz, fn) > 0.5 && su > uScopeB.x && su < uScopeB.y && vLY > uScopeB.z && vLY < uScopeB.w && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < uScopeK) discard;
 				}
 				// the condition of the place: boarded up (plywood over the openings), burnt out
 				// (the openings black, soot up the wall above them), run down (grimy glass, a
