@@ -320,16 +320,19 @@ function buildDom(canvas = document.createElement('canvas')) {
 	};
 	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
 	const dock = (el) => {
+		// (a phone keeps only Fly and Places beside More: gear, the cloud save and the auto music
+		// wait in the More menu with the rest)
+		if (mount.classList.contains('l99-touch') && !el.dataset?.hud && /^Auto music/.test(el.getAttribute?.('aria-label') || '')) el.dataset.hud = 'rail 66';
 		const [g, n] = (el.dataset?.hud || '').split(' ');
-		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && ['55', '60', '65'].includes(n)));
+		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && n === '60'));
 		const to = fast ? quick : groups[g] && home(g);
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
-		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : n === '55' ? 'Gear' : n === '65' ? 'Save' : 'Places';
+		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : 'Places';
 		else if (to === rail) {
 			const title = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
-			el.dataset.controlLabel = /^Explore/.test(title) ? 'Explore' : /^Cycle flight/.test(title) ? 'Flight speed' : /^Camera:/.test(title) ? 'Camera view' : title;
+			el.dataset.controlLabel = /^Explore/.test(title) ? 'Explore' : /^Cycle flight/.test(title) ? 'Flight speed' : /^Camera:/.test(title) ? 'Camera view' : /^Your account/.test(title) ? 'Account and saves' : /^Auto music/.test(title) ? 'Auto music' : title;
 		}
 		tidy();
 	};
@@ -1138,7 +1141,8 @@ export function createIslandWorld() {
 	function applyQuality() {
 		governor.apply();
 		const Q = qualityNow();
-		renderer.shadowMap.enabled = !SAFE && Q.shadows;
+		// (set once, never switched by the tier: switching it rebuilds every lit material's shader)
+		renderer.shadowMap.enabled = !SAFE;
 		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = Q.reflect;
@@ -1153,7 +1157,7 @@ export function createIslandWorld() {
 	function fitShadow() {
 		const sun = world?.sky?.sun, size = (GFX ? 1024 : 2048) * qualityNow().shadowSize;
 		if (sun?.shadow && !renderer.shadowMap.enabled) { sun.shadow.dispose(); sun.shadow.map = sun.shadow.mapPass = null; return; }
-		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; renderer.shadowMap.needsUpdate = true; }
 	}
 
 	function resize() {

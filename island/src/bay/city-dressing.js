@@ -53,7 +53,9 @@ export function cityDecorate(cc, list, cx, cz, R) {
 			const ph = 0.7 + r * 0.5, pc = o.col.map((v) => v * 0.97);
 			for (const [lx, lz, w2, d2] of [[0, o.d / 2 - 0.13, o.w, 0.26], [0, -o.d / 2 + 0.13, o.w, 0.26], [o.w / 2 - 0.13, 0, 0.26, o.d - 0.5], [-o.w / 2 + 0.13, 0, 0.26, o.d - 0.5]]) { const [x, z] = W(lx, lz); list.push({ x, y: top - 0.05, z, w: w2, d: d2, h: ph + 0.05, a: o.a, col: pc, kind: KIND.parapet, roof: null, age: o.age }); }
 		}
-		if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7) {
+		// (rooftop units on the shops, offices, warehouses and flats, not on the row houses: San
+		// Francisco's homes rarely have one, and they were most of a phone's units: Josh 2026-10-21)
+		if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7 && o.kind >= 0.5) {
 			const n = Math.max(1, Math.min(area > 4000 ? 18 : o.kind === KIND.retail || o.kind === KIND.shop ? 10 : 6, Math.round(area / (o.kind === KIND.industry ? 700 : 280) * (0.6 + r * 0.8))));
 			const along = o.w > o.d, L = along ? o.w : o.d, S = along ? o.d : o.w, big = area > 1500 ? 1.6 : area > 600 ? 1.25 : 1;
 			for (let k = 0; k < n; k++) {
