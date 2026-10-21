@@ -14,6 +14,7 @@ import { loadPeopleAssets, buildPerson, personDNA, rng, freeBody } from './body.
 import { qualityNow } from '../world/governor.js';
 import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
+import { wallKeeper } from './walls.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
 import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE, isWeekend } from './flow.js';
 import { fadePerson } from './fade.js';
@@ -68,7 +69,10 @@ export function createPeople(scene, world, camera = null) {
 		return frustum.intersectsSphere(sphere);
 	};
 	const hiddenSpot = (x, z, cam) => { const d = Math.hypot(x - cam.x, z - cam.z); return d > 75 || !seen(x, ground(x, z), z, d); };
-	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined), {constrain:pos=>P.workConstrain?.(pos)}); return M; };
+	// (each step kept off walls while they are about, swept so a runner cannot pass through one:
+	// people/walls.js; solid below reads how far the walls held them)
+	const keepWalls = wallKeeper(world);
+	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined), { constrain: (pos, from) => { if (P.solidOn) P.wallHeld += keepWalls(pos, from, from.y); P.workConstrain?.(pos); } }); return M; };
 
 	async function ensure() {
 		if (A || failed) return;
@@ -653,14 +657,14 @@ export function createPeople(scene, world, camera = null) {
 	}
 	// solid: people keep out of walls, parked cars and the rocks (the same pushes you get)
 	// and out of your own space; walked into a wall for a while, they turn back
-	const PP = new THREE.Vector3(), walkers = [];
+	const walkers = [];
 	function solid(p, dt, cam) {
-		const S = p.M.S, W = world(), I = W.island;
+		const S = p.M.S;
 		const x0 = S.pos.x, z0 = S.pos.z;
-		if (I.extraPush) { PP.set(S.pos.x, S.pos.y + 1.6, S.pos.z); I.extraPush(PP, S.pos.y); S.pos.x = PP.x; S.pos.z = PP.z; }
 		const Y = you(cam), dx = S.pos.x - Y.x, dz = S.pos.z - Y.z, d = Math.hypot(dx, dz), R = 0.62;
 		if (d < R && Math.abs(S.pos.y - (Y.y - 1.68)) < 1.4) { const k = d > 1e-3 ? R / d : 0; S.pos.x = Y.x + (d > 1e-3 ? dx * k : R); S.pos.z = Y.z + (d > 1e-3 ? dz * k : 0); }
-		const pushed = Math.hypot(S.pos.x - x0, S.pos.z - z0);
+		// (the walls' hold this frame came from the step itself: motionFor's constrain)
+		const pushed = Math.hypot(S.pos.x - x0, S.pos.z - z0) + (p.P.wallHeld || 0);
 		p.stuckT = pushed > 0.004 && p.M.want.speed > 0.3 && d > 1.2 ? (p.stuckT || 0) + dt : Math.max(0, (p.stuckT || 0) - dt);
 		if (p.stuckT > 2) {
 			p.stuckT = 0;
@@ -836,8 +840,12 @@ export function createPeople(scene, world, camera = null) {
 				if (!p.leaving && (p.fade ?? 1) < 1) p.fade = Math.min(1, (p.fade ?? 0) + dt * 1.25);
 				fadePerson(p.P, p.fade ?? 1);
 				steer(p, dt, cam);
+				// solid: kept off walls, parked cars and the rocks (the same pushes you get) and out of
+				// your own space; a seat's sitter stays where the seat is
+				p.P.solidOn = d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override));
+				p.P.wallHeld = 0;
 				p.M.update(dt, t, cam);
-				if (d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override))) solid(p, dt, cam);
+				if (p.P.solidOn) solid(p, dt, cam);
 			}
 		}
 		trim(dt, Q);

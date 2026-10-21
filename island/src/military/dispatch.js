@@ -19,7 +19,8 @@
 
 import * as THREE from 'three';
 import { planDispatch, invasionPlan, nextInvasion, SPEED, toWorld, FORCES } from './rules.js';
-import { roadRoute, along, joinRoute, trimToRoad } from './route.js';
+import { roadRoute, along, joinRoute, trimToRoad, cutRoute } from './route.js';
+import { noseInto } from '../vehicles/wall-guard.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
 import { routeTrouble } from '../law/ladder.js';
@@ -181,7 +182,15 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		const e = eye();
 		// where the leader is: along the road at convoy speed, or the air units straight in
 		if (p.state === 'enroute') {
-			p.s += SPEED.road * dt;
+			// (never on into a building where you can see the column: it pulls up short at the wall,
+			// the road beyond it let go, and the troops get out there; vehicles/wall-guard.js)
+			const lead = p.route && p.shown && p.units.find((u) => !u.air && !u.dead);
+			if (lead && p.s - (p.wallS ?? -9) > 1.5 && p.s < p.route.length - 20) {
+				const a = along(p.route, p.s + SPEED.road * dt);
+				if (noseInto(W(), a.x, a.z, Math.atan2(a.dx, a.dz), DIMS[lead.kind].L / 2)) { p.route = cutRoute(p.route, Math.max(1, p.s)); p.s = p.route.length; }
+				else p.wallS = p.s;
+			}
+			p.s = Math.min(p.s + SPEED.road * dt, p.route ? Math.max(p.s, p.route.length) : Infinity);
 			const roadDone = !p.route || p.s >= p.route.length - 20;
 			const airAll = p.units.filter((u) => u.air && !u.dead);
 			for (const u of airAll) u.flyS += (u.kind === 'jet' ? SPEED.jet * 0.6 : SPEED.heli) * dt;
