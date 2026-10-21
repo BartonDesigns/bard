@@ -236,6 +236,9 @@ function pickOutfit(r, male, age, opts) {
 // bodies built and not yet let go, across every system that makes them (the governor's report)
 let live = 0;
 export const bodyCount = () => live;
+// and each of them, held weakly (one dropped without freeBody is let go with it), for whatever
+// draws something under every body: the soft shade at their feet (world/footshade.js)
+export const liveBodies = new Set();
 export function buildPerson(A, d) {
 	const t0 = performance.now();
 	live++;
@@ -351,6 +354,7 @@ export function buildPerson(A, d) {
 		if (U) { const far = PHONE || tierNow() >= 2 ? 10 : 22; U.uPoseK.value.x = clamp((far - dist) / 6); }
 	};
 	P.buildMs = performance.now() - t0;
+	liveBodies.add(new WeakRef(P));
 	return P;
 }
 

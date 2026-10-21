@@ -368,7 +368,16 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			// (hidden till interiors/index.js has its shaders built)
 			SC.B.g.visible = false;
 		}
-		return { L, built: true, ms: SC.ms, root: SC.B.g };
+		return { L, built: true, ms: SC.ms, root: SC.B.g, seats: () => seatsOf(SC.T, SC.B) };
+	}
+	// a floor's seats and places to stand, in the world (as venue() gives them to people.js)
+	function seatsOf(T, B) {
+		if (B.wspots) return B.wspots;
+		const ca = Math.cos(T.o.a), sa = Math.sin(T.o.a);
+		return (B.wspots = B.seats.map(([x, z, yaw, sit, h = 0.46, work]) => {
+			const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+			return { x: T.o.x + ca * x - sa * z, z: T.o.z + sa * x + ca * z, y: B.L.y, h: sit ? h : 0, sit, heading: Math.atan2(fx * ca - fz * sa, fx * sa + fz * ca), work, table: sit && B.L.kind === 'office' };
+		}));
 	}
 	function floor(x,z,y){if(!T)return -1e9;const [lx,lz]=local(x,z);return floorAt(T,lx,lz,y);}
 

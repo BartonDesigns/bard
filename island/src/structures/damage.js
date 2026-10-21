@@ -135,8 +135,8 @@ export function createDamage(ctx) {
 	function roofOf(list, M) {
 		if (roofIdx?.list === list) return roofIdx.map;
 		const map = new Map();
-		let nh = 0, ng = 0;
-		for (const o of list) { if (o.slot === undefined) continue; if (o.roof) map.set(o, o.roof.hip ? [M.hips, nh++] : [M.gables, ng++]); }
+		// (each roof's own slot, as the city wrote it: bay/city.js upload, a sector at a time)
+		for (const o of list) { if (o.slot === undefined || o.roofSlot === undefined || !o.roof) continue; map.set(o, o.roof.hip ? [M.hips, o.roofSlot] : [M.gables, o.roofSlot]); }
 		roofIdx = { list, map };
 		return map;
 	}
