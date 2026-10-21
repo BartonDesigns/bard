@@ -64,6 +64,9 @@ const COMMON_V = /* glsl */`
 uniform float uSgTime;
 attribute vec4 aCell;
 attribute vec4 aFx;
+#ifdef SG_BEND
+attribute vec4 aBend;
+#endif
 varying vec2 vSgUv; varying vec4 vSgCell; varying vec4 vSgFx; varying vec3 vSgW; varying vec3 vSgN;
 `;
 const COMMON_F = /* glsl */`
@@ -151,6 +154,17 @@ function emissiveBody(kind) {
 	return '';
 }
 
+// a bent decal (batch.js putMatrix): pushed out along its face to lie on the curve under it,
+// its normal turned with the curve
+const BEND_V = /* glsl */`
+#ifdef SG_BEND
+transformed.z += aBend.x + aBend.y * position.x + aBend.z * position.x * position.x + aBend.w * position.y;
+#endif`;
+const BEND_N = /* glsl */`
+#ifdef SG_BEND
+objectNormal = normalize(vec3(-(aBend.y + 2.0 * aBend.z * position.x), -aBend.w, 1.0));
+#endif`;
+
 const cache = new Map();
 // The recovery path has no PBR, environment maps, shadow loops or civic samplers.
 // It retains atlas/back-face rules, daylight, headlights, fog, wear and cloth motion.
@@ -161,9 +175,10 @@ function compactMaterial(kind, map, far) {
 		vertexShader: COMMON_V + `
 		#include <fog_pars_vertex>
 		void main() {
-			vec3 transformed = position;
+			vec3 transformed = position; vec3 objectNormal = normal;
+			${BEND_V}${BEND_N}
 			${kind === 'cloth' ? 'transformed.z += .085 * uv.x * sin(uv.x*7.0 + uv.y*2.0 - uSgTime*2.4 + aFx.y*6.28);' : ''}
-			vec4 sgw = vec4(transformed, 1.0); vec3 sgn = normal;
+			vec4 sgw = vec4(transformed, 1.0); vec3 sgn = objectNormal;
 			#ifdef USE_INSTANCING
 			sgw = instanceMatrix * sgw; sgn = mat3(instanceMatrix) * sgn;
 			#endif
@@ -194,8 +209,9 @@ function compactMaterial(kind, map, far) {
 }
 
 // a material for kind (retro, vinyl, glass, paper, foil, paint, grime) at layer, its map the atlas
-export function signMaterial(kind, layer, map, { phone = false } = {}) {
-	const compact = useCompact(), key = kind + layer + (phone ? 'p' : '') + (map?.uuid || '') + (compact ? ':lite' : ':full');
+// (bend: the cars' stickers, which follow the body: batch.js)
+export function signMaterial(kind, layer, map, { phone = false, bend = false } = {}) {
+	const compact = useCompact(), key = kind + layer + (phone ? 'p' : '') + (bend ? 'b' : '') + (map?.uuid || '') + (compact ? ':lite' : ':full');
 	if (cache.has(key)) return cache.get(key);
 	const S = SPEC[kind] || SPEC.vinyl, B = layerBias(layer, { phone });
 	const far = { value: S.far * (phone ? 0.65 : 1) };
@@ -209,12 +225,14 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 	m.forceSinglePass = true;
 	m.name = `signage-${kind}-${layer}${compact ? '-lite' : ''}`;
 	m.userData.far = far;
-	m.userData.signage = { kind, layer, phone, compact };
+	m.userData.signage = { kind, layer, phone, compact, bend };
+	if (bend) m.defines = { ...m.defines, SG_BEND: '' };
 	if (!compact) m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, SIGN_U, { uSgFar: far });
 		if(kind==='retro'){sh.uniforms.uCivicMetal={value:civicTexture('galvanized',phone)};sh.uniforms.uCivicEnamel={value:civicTexture('enamel',phone)};}
 		sh.vertexShader = COMMON_V + sh.vertexShader
-			.replace('#include <begin_vertex>', '#include <begin_vertex>' + (kind === 'cloth' ? '\ntransformed.z += 0.085 * uv.x * sin(uv.x * 7.0 + uv.y * 2.0 - uSgTime * 2.4 + aFx.y * 6.28);' : ''))
+			.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>' + BEND_N)
+			.replace('#include <begin_vertex>', '#include <begin_vertex>' + BEND_V + (kind === 'cloth' ? '\ntransformed.z += 0.085 * uv.x * sin(uv.x * 7.0 + uv.y * 2.0 - uSgTime * 2.4 + aFx.y * 6.28);' : ''))
 			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSgUv = uv; vSgCell = aCell; vSgFx = aFx;')
 			.replace('#include <project_vertex>', `#include <project_vertex>
 			{
@@ -231,9 +249,9 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)metalnessFactor=.82;':kind==='paint'?'\nif(vSgFx.w>.5)metalnessFactor=.45*(1.0-sgWear);':''))
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + emissiveBody(kind));
 	};
-	m.customProgramCacheKey = () => (compact ? 'signage-lite-1' : 'signage-civic-3') + kind;
+	m.customProgramCacheKey = () => (compact ? 'signage-lite-1' : 'signage-civic-3') + kind + (bend ? '-bend' : '');
 	// (grime has no map, but its uv must still reach the shader)
-	if (kind === 'grime') m.defines = { USE_UV: '' };
+	if (kind === 'grime') m.defines = { ...m.defines, USE_UV: '' };
 	m.userData.renderOrder = B.renderOrder;
 	m.userData.lift = B.lift;
 	cache.set(key, m);
@@ -242,7 +260,7 @@ export function signMaterial(kind, layer, map, { phone = false } = {}) {
 }
 export function currentSignMaterial(material) {
 	const d = material?.userData.signage;
-	return d ? signMaterial(d.kind, d.layer, material.map, { phone: d.phone }) : material;
+	return d ? signMaterial(d.kind, d.layer, material.map, { phone: d.phone, bend: d.bend }) : material;
 }
 export function syncSignageMaterials(scene) {
 	const compact = useCompact(), retired = new Set(); let changed = 0;

@@ -16,7 +16,7 @@ import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/veg
 import { addLodFade, NONE_IN, detailClock, updateDetailClock } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, fromGrid, eraFor } from './styles.js';
-import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
+import { houseFloor, wallTop, mainOf, isHome, garageOf } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
 import { GREENS, REAL_TALL } from './realcity.js';
 import { WALL_GLSL, weatherRoofs } from './weathering.js';
@@ -1371,20 +1371,37 @@ export function createCity(shared, scene, bay, real = null) {
 		const put = (k, lx, lz, yaw, sc, c, lift = 0, tilt = 0) => { if (!kit2.has(k)) return; const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) > 2.5) return; const e = [x, gy + lift, z, b.a + yaw, ...(typeof sc === 'number' ? [sc, sc, sc] : sc), tilt]; if (c) e.push(...c); (P[k] || (P[k] = [])).push(e); };
 		const hr = (n) => hash(b.x * 0.71 + n * 5.3, b.z * 1.13 - n * 2.1);
 		const open = (lx, lz) => { const [x, z] = W(lx, lz), L = real.landAt?.(x, z); return !L || (L.roof < 0.1 && L.road < 0.1); };
-		// where the garage is: built in at one end, or a wing beside
-		const gw = b.grp?.find((q) => q.kind === 3);
-		let gx = b.kind === 1 ? -b.w / 2 + 3 : b.kind === 2 ? b.w / 2 - 3 : null, gz = b.d / 2;
-		if (gx === null && gw) { const dx = gw.x - b.x, dz = gw.z - b.z; gx = ca * dx + sa * dz; gz = -sa * dx + ca * dz + gw.d / 2; }
+		// where the garage is, as the house is built (houseplan.js: built in at one end of the
+		// front, or a wing), and which way its drive runs out to the street (realcity.js: the
+		// mapped one, or the one made for it); the cars stand on the drive before the doors
+		const gar = b.grp ? garageOf(b.grp) : null, D = gar?.doors || [];
+		let gx = null, gz = null, ux = -sa, uz = ca;
+		if (D.length) {
+			gx = (D[0].x0 + D[D.length - 1].x1) / 2; gz = gar.front;
+			const [dx, dz] = W(gx, gz);
+			let bd = 4.5;
+			for (const q of real.near('paths', dx, dz, 20)) {
+				if (q.w < 2.2) continue;
+				for (const [ax, az, bx, bz] of [[q.ax, q.az, q.bx, q.bz], [q.bx, q.bz, q.ax, q.az]]) {
+					const d = Math.hypot(ax - dx, az - dz), L = Math.hypot(bx - ax, bz - az) || 1, vx = (bx - ax) / L, vz = (bz - az) / L;
+					if (d < bd && vx * -sa + vz * ca > 0.3) { bd = d; ux = vx; uz = vz; }
+				}
+			}
+		}
+		const turn = Math.atan2(-ux, uz) - b.a;
+		// (a car's place: before door k, its middle s metres down the drive, in the house's frame)
+		const onDrive = (k, s) => { const [dx, dz] = W((D[k].x0 + D[k].x1) / 2, gz), px = dx + ux * s - b.x, pz = dz + uz * s - b.z; return [ca * px + sa * pz, -sa * px + ca * pz]; };
 		if (gx !== null && !cnd) {
-			if (hr(1) < 0.55 && open(gx - 1.3, gz + 3)) put('car', gx - 1.3, gz + 3, 0, 1, pick(CARS, hr(2)));
-			if (hr(1) < 0.2 && open(gx + 1.3, gz + 3.2)) put('car', gx + 1.3, gz + 3.2, 0.04, 1, pick(CARS, hr(3)));
+			const c0 = onDrive(0, 3.2), c1 = D.length > 1 && onDrive(1, 3.2);
+			if (hr(1) < 0.55 && open(...c0)) put('car', ...c0, turn, 1, pick(CARS, hr(2)));
+			if (c1 && hr(1) < 0.2 && open(...c1)) put('car', ...c1, turn, 1, pick(CARS, hr(3)));
 			if (hr(4) < 0.35) put('bins', gx + Math.sign(gx || 1) * 3.4, gz + 1.2, 0, 1);
 			if (hr(5) < 0.06) put('hoop', gx + 2.2, gz + 0.2, 0, 1);
 			if (hr(6) < 0.035 && open(gx + Math.sign(gx || 1) * 4.2, gz + 4.5)) put(hr(7) < 0.55 ? 'rv' : 'boat', gx + Math.sign(gx || 1) * 4.2, gz + 4.5, 0, 1);
 		}
 		if (hr(8) < 0.6) { const s = hr(9) < 0.5 ? -1 : 1; if (open(s * (b.w / 2 + 0.7), 0)) put('cond', s * (b.w / 2 + 0.7), -b.d * 0.1, 0, 1); }
 		if (hr(10) < 0.16) { const s = hr(11) < 0.5 ? -1 : 1, lx = s * (b.w / 2 - 2), lz = -b.d / 2 - 9; if (open(lx, lz) && open(lx + 2, lz - 2) && open(lx - 2, lz + 2)) { const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) < 1.5) list.push({ x, y: gy - 1.2, z, w: 2.8, d: 2.4, h: 3.5, a: b.a + Math.PI, col: hr(12) < 0.5 ? [0.6, 0.55, 0.45] : look.wall, kind: KIND.garage, roof: { hip: false, rot: true, h: 0.9, col: look.roof, t: hr(12) < 0.3 ? ROOF.metal : ROOF.shingle, ov: 0.2, trim: 3 }, age: 0.5 }); } }
-		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', gx, gz + 3, (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
+		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', ...onDrive(0, 3.4), turn + (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
 	}
 	// the generated blocks stop where a mapped region starts: what stands on its side of the
 	// seam is its own (a block half over the line keeps only its lots on this side)

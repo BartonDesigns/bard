@@ -380,6 +380,30 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 	// one left to sit (squashed a little, sy < 1) keeps its faded colour and sits on flat tyres
 	const DRIVE = ['sedan', 'sedan', 'sedan', 'suv', 'suv', 'crossover', 'crossover', 'pickup', 'pickup', 'hatch', 'van', 'sports'];
 	let driveV = -1;
+	// where a car of kind at (x, z), facing yaw, stands clear of the buildings (bay/city.js
+	// lotsNear): there, or moved out along its length (away from the doors it faces) by up to
+	// 3 m; null if it cannot be
+	const SLIDE = [0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0];
+	function clearOf(kind, x, z, yaw) {
+		const S = SPEC[kind] || SPEC.sedan, hl = S.L / 2 + 0.2, hw = S.W / 2 + 0.15, fx = Math.sin(yaw), fz = Math.cos(yaw);
+		const L = city?.lotsNear?.(x, z, 12) || [];
+		const hits = (px, pz) => {
+			for (const o of L) {
+				// (two boxes in plan: apart if any of the four axes parts them)
+				const oa = o.a || 0, ox = Math.cos(oa), oz = Math.sin(oa), dx = o.x - px, dz = o.z - pz;
+				const axes = [[fx, fz], [fz, -fx], [ox, oz], [-oz, ox]];
+				let apart = false;
+				for (const [ax, az] of axes) {
+					const ra = hl * Math.abs(fx * ax + fz * az) + hw * Math.abs(fz * ax - fx * az), rb = o.w / 2 * Math.abs(ox * ax + oz * az) + o.d / 2 * Math.abs(-oz * ax + ox * az);
+					if (Math.abs(dx * ax + dz * az) > ra + rb) { apart = true; break; }
+				}
+				if (!apart) return true;
+			}
+			return false;
+		};
+		for (const s of SLIDE) if (!hits(x + fx * s, z + fz * s)) return [x + fx * s, z + fz * s];
+		return null;
+	}
 	function driveCars(cx, cz, R, n) {
 		const D = city?.driveCars?.();
 		driveV = D ? D.v : -1;
@@ -388,9 +412,14 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 			const x = e[0], z = e[2];
 			if (Math.abs(x - cx) > R || Math.abs(z - cz) > R || Math.hypot(x - cx, z - cz) > R) continue;
 			const h = hash(x * 2.3 + 11, z * 1.9 - 7), left = e[5] < 1;
-			const kind = DRIVE[Math.floor(hash(h * 997, x) * DRIVE.length)], S = parked[kind], c = n(S);
+			const kind = DRIVE[Math.floor(hash(h * 997, x) * DRIVE.length)], S = parked[kind];
+			// (never into a wall: eased out along the drive until the body clears every building,
+			// or left out)
+			const yaw = -e[3] + (hash(z, h * 313) < 0.7 ? Math.PI : 0), at = clearOf(kind, x, z, -e[3]);
+			if (!at) continue;
+			const c = n(S);
 			if (c < 0) continue;
-			carMatrix(pm, kind, x, z, -e[3] + (hash(z, h * 313) < 0.7 ? Math.PI : 0));
+			carMatrix(pm, kind, at[0], at[1], yaw);
 			if (left) pm.elements[13] -= 0.09;
 			S.setMatrixAt(c, pm);
 			const pc = left && e.length > 10 ? [e[8], e[9], e[10]] : PAINT[Math.floor(hash(h * 577, z) * PAINT.length)];
