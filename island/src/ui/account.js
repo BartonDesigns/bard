@@ -17,9 +17,9 @@ const CSS = `
 .acct-tabs{display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,.1)}
 .acct-tab{flex:1;padding:10px 4px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer}
 .acct-tab.cur{color:#fff;border-bottom-color:#01a982}
-.acct label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(255,255,255,.7)}
-.acct input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:12px 14px;color:#fff;font:16px var(--bard-body,system-ui,sans-serif);outline:none}
-.acct input:focus{border-color:#01a982;background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(1,169,130,.2)}
+.acct label,.acct-embed label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(255,255,255,.7)}
+.acct input,.acct-embed input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:12px 14px;color:#fff;font:16px var(--bard-body,system-ui,sans-serif);outline:none}
+.acct input:focus,.acct-embed input:focus{border-color:#01a982;background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(1,169,130,.2)}
 .acct-go{background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;border:0;border-radius:8px;padding:12px 20px;font:600 15px var(--bard-display,system-ui,sans-serif);cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);min-height:44px}
 .acct-go:disabled{opacity:.5;cursor:default}
 .acct-alt{background:transparent;color:#01a982;border:2px solid #01a982;border-radius:8px;padding:10px 18px;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;min-height:44px}
@@ -32,6 +32,15 @@ const CSS = `
 .acct-row>*{flex:1}
 .acct-save{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:12px;background:#2a2a2a;border:1px solid rgba(255,255,255,.1)}
 .acct-save b{font-size:15px}
+.acct-card.acct-embed{font:14px/1.45 var(--bard-body,system-ui,sans-serif);width:100%;height:100%;max-height:none;background:none;border:0;border-radius:0;box-shadow:none;padding:16px 18px 22px;color:#f5f1e7}
+.acct-embed .acct-head b{font-weight:500;letter-spacing:.02em}
+.acct-embed .acct-tab.cur{border-bottom-color:#e8d19e}
+.acct-embed .acct-go{background:#e8d19e;color:#121c20;box-shadow:none;border-radius:3px;font-weight:700;letter-spacing:.04em}
+.acct-embed .acct-alt{color:#e8d19e;border-color:#e8d19e;border-width:1px;border-radius:3px}
+.acct-embed .acct-ghost{border-radius:3px}
+.acct-embed input:focus{border-color:#e8d19e;box-shadow:0 0 0 3px rgba(232,209,158,.2)}
+.acct-embed .acct-save{background:rgba(0,0,0,.28);border-color:rgba(232,209,158,.22)}
+.acct-embed .acct-code{background:rgba(232,209,158,.1);border-color:rgba(232,209,158,.5)}
 `;
 
 // menu: the places menu; hud: the ☁ button on screen; cloud: createCloudSave's; hint(text, ms);
@@ -49,6 +58,8 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, l
 	root.append(card);
 	mount.appendChild(root);
 	let view = 'signup', note = null, busy = false;
+	// shown inside another screen instead (embed: the world's loading screen), told of each change
+	let embedded = null;
 
 	const ago = (t) => {
 		if (!t) return 'not yet';
@@ -70,6 +81,7 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, l
 	if (hud) hud.addEventListener('click', (e) => { e.stopPropagation(); menu && (menu.style.display = 'none'); open(); });
 	function drawBtn() {
 		const I = cloud.info();
+		embedded?.changed?.(I);
 		if (hud) {
 			const t = I.user ? `Your account: ${I.user}, ${I.conflict ? 'saved progress waiting' : `saved ${ago(I.savedAt)}`}` : 'Save your progress: make an account';
 			if (hud.title !== t) hud.title = t;
@@ -86,7 +98,8 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, l
 	function head(title) {
 		const h = el('div', 'acct-head'), x = el('button', 'acct-x', '✕');
 		x.type = 'button'; x.setAttribute('aria-label', 'Close'); x.onclick = () => close();
-		h.append(el('b', '', title), x);
+		h.append(el('b', '', title));
+		if (!embedded) h.append(x);
 		return h;
 	}
 	function field(label, name, type, auto, extra = {}) {
@@ -225,6 +238,21 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, l
 
 	function open() { note = null; view = cloud.info().user ? view : view || 'signup'; draw(); root.classList.add('on'); setTimeout(() => card.querySelector('input')?.focus(), 50); }
 	function close() { root.classList.remove('on'); note = null; drawBtn(); }
+	// the panel's card shown in `host` (it scrolls itself) until the returned function puts it back;
+	// changed(info) after anything that changes what the account is (signed in, out, saved)
+	function embed(host, { changed } = {}) {
+		close();
+		embedded = { changed };
+		note = null; card.classList.add('acct-embed'); card.scrollTop = 0;
+		host.append(card); draw();
+		return () => {
+			if (!embedded) return;
+			// (a recovery code not yet put away stays up, over the world: it is shown only once)
+			const code = note?.recovery ? note : null;
+			embedded = null; note = null; card.classList.remove('acct-embed'); root.append(card); drawBtn();
+			if (code) { note = code; draw(); root.classList.add('on'); }
+		};
+	}
 	cloud.start();
 	drawBtn();
 	const tick = setInterval(drawBtn, 30000);
@@ -236,7 +264,7 @@ export function createAccountPanel({ mount, menu, hud, cloud, hint = () => {}, l
 		hint('Make an account so you never lose your progress: tap ☁ on screen (or Settings › Account).', 6000);
 	}, 8 * 60 * 1000);
 	return {
-		open, close, isOpen: () => root.classList.contains('on'), refresh: drawBtn, info: () => cloud.info(), ago,
+		open, close, embed, isOpen: () => root.classList.contains('on'), refresh: drawBtn, info: () => cloud.info(), ago,
 		dispose() { clearInterval(tick); clearTimeout(nudge); cloud.stop(); root.remove(); btn?.remove(); },
 	};
 }

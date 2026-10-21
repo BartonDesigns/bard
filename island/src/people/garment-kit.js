@@ -131,7 +131,9 @@ function spline(ctrl, m) {
 // upper back, a little loft between; and the two drawstrings with their tips. lo: fewer
 // segments (a phone or a crowd).
 export function hoodGeometry(cut, field, ring, { lo = false } = {}) {
-	const nu = lo ? 12 : 20, nv = lo ? 5 : 9, aMax = 2.45, zc = (cut.frontZ + cut.backZ) / 2;
+	// (enough segments round the neck and down the fold that up close it reads as soft cloth,
+	// not flat panels)
+	const nu = lo ? 18 : 32, nv = lo ? 7 : 12, aMax = 2.45, zc = (cut.frontZ + cut.backZ) / 2;
 	const rows = [];
 	const cols = [];
 	for (let i = 0; i <= nu; i++) {
@@ -142,21 +144,23 @@ export function hoodGeometry(cut, field, ring, { lo = false } = {}) {
 		const ex = Math.sin(a) * (0.1 + 0.05 * (1 - Math.abs(a) / aMax)), ey = S.y + 0.015 - depth;
 		const E = V(ex, ey, Math.min(field.back(ex, ey), S.z) - 0.013);
 		const mid = R.clone().lerp(E, 0.42).addScaledVector(V(0, 0.25, -1).normalize(), 0.042 * depth / 0.21);
-		// (where the hood has no depth, at its front ends, it is only the roll)
-		const ctrl = depth < 0.01 ? [S, R, R.clone().add(V(0, -0.005, 0)), R.clone().add(V(0, -0.01, 0))] : [S, R, mid, E];
+		// (toward its front ends the hood thins away to only the roll: eased there column by
+		// column, never switched, which crumpled the last of it into a hard flat flap)
+		const k = smooth(depth / 0.07);
+		const ctrl = [S, R, R.clone().add(V(0, -0.005, 0)).lerp(mid, k), R.clone().add(V(0, -0.01, 0)).lerp(E, k)];
 		cols.push(spline(ctrl, nv));
 	}
 	for (let j = 0; j <= nv; j++) rows.push(cols.map((c) => c[j]));
 	const hood = loft(rows, true);
 	// the opening's edge, turned and doubled: a soft roll round the neck
-	const roll = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cols.map((c) => c[Math.round(nv * 0.25)])), lo ? 10 : 18, 0.011, lo ? 4 : 6, false);
+	const roll = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cols.map((c) => c[Math.round(nv * 0.25)])), lo ? 16 : 32, 0.011, lo ? 6 : 10, false);
 	// the drawstrings: from the front ends of the hood, hanging down the chest
 	const strings = [];
 	for (const s of [-1, 1]) {
 		const S = ringAt(ring, s * (aMax + 0.12)), front = Math.max(S.z, field.front(S.x * 0.6, S.y - 0.05)) + 0.012;
 		const pts = [V(S.x * 0.75, S.y + 0.01, S.z + 0.01), V(S.x * 0.6, S.y - 0.06, front + 0.004), V(S.x * 0.55 + s * 0.004, S.y - 0.17, field.front(S.x * 0.55, S.y - 0.17) + 0.009)];
-		strings.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), lo ? 4 : 8, 0.0032, lo ? 3 : 5, false));
-		const tip = new THREE.CylinderGeometry(0.0038, 0.0034, 0.02, lo ? 4 : 6); tip.translate(pts[2].x, pts[2].y - 0.008, pts[2].z); strings.push(tip);
+		strings.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), lo ? 6 : 10, 0.0032, lo ? 4 : 6, false));
+		const tip = new THREE.CylinderGeometry(0.0038, 0.0034, 0.02, lo ? 5 : 8); tip.translate(pts[2].x, pts[2].y - 0.008, pts[2].z); strings.push(tip);
 	}
 	return { hood, roll, strings };
 }

@@ -159,10 +159,11 @@ vec2 weave(int fab, vec3 P, vec3 N, float px) {
 		h = sin((q.x + q.y) * 2513.0); f = 0.0025;
 		fine = h * 0.07; coarse = (vn(vec2(q.x * 70.0, q.y * 900.0)) - 0.5) * 0.22 + (vn(q * 9.0) - 0.5) * 0.12;
 	} else if (fab == 0 || fab == 7) {
-		// jersey: columns of V-shaped loops about 3 mm
-		vec2 k = q * vec2(330.0, 380.0); float v = abs(fract(k.x) - 0.5) * 2.0;
-		h = sin((k.y + v * 0.8) * 6.2832) * (1.0 - v * 0.6); f = 0.003;
-		fine = h * 0.06; coarse = (vn(q * 40.0) - 0.5) * 0.08;
+		// jersey: columns of V-shaped loops a little over a millimetre (a sweatshirt's knit: up
+		// close a soft grain, never a pattern; the knit normal map carries it further off)
+		vec2 k = q * vec2(760.0, 860.0); float v = abs(fract(k.x) - 0.5) * 2.0;
+		h = sin((k.y + v * 0.8) * 6.2832) * (1.0 - v * 0.6); f = 0.0013;
+		fine = h * 0.035; coarse = (vn(q * 40.0) - 0.5) * 0.08;
 		// a cooling undergarment's tubing, a channel every 2.5 cm
 		if (fab == 7) { float tube = line(fract(q.x * 40.0) - 0.5, 0.09); h += tube * 2.5; coarse += tube * 0.14 - 0.03; }
 	} else if (fab == 2 || fab == 8) {
@@ -179,7 +180,9 @@ vec2 weave(int fab, vec3 P, vec3 N, float px) {
 		// leather: a pebbled grain and long creases
 		h = vn(q * 700.0) * 2.0 - 1.0 + (vn(q * vec2(40.0, 8.0)) - 0.5) * 1.5; f = 0.0015; fine = h * 0.05; coarse = (vn(q * 60.0) - 0.5) * 0.2;
 	} else return vec2(0.0);
-	float near = 1.0 - smoothstep(f * 0.3, f * 1.1, px), far = 1.0 - smoothstep(0.01, 0.05, px);
+	// (gone before a pixel spans half a thread: past that the threads only beat against the
+	// pixels as a moiré)
+	float near = 1.0 - smoothstep(f * 0.2, f * 0.5, px), far = 1.0 - smoothstep(0.01, 0.05, px);
 	return vec2(h * near, (fine * 0.65 * near + coarse * 0.6 * far));
 }
 // the colour of garment slot s at this point of the body (bind pose, metres)
@@ -213,10 +216,15 @@ vec3 garment(int s, vec3 P, vec3 N) {
 		else c = mix(base, a, (sx + sy) * 0.33);
 	}
 	else if (k == 5) {
-		// colour blocks: the sleeves in one, a yoke across the chest in another
-		if (step(uEdge.y + 0.01, abs(P.x)) > 0.5) c = a;
-		else if (P.y > chest + 0.03) c = b;
-		if (s == 2) c = P.x > 0.0 ? base : a;
+		// colour blocks: the sleeves in one, a yoke across the chest in another. The sleeves from
+		// their own seam round the armhole (where the sleeve's place along the arm, smooth across
+		// the seam, crosses from the body's to the arm's: a clean line round under the arm, never
+		// a cut straight down the body's side that notched the armpit), each edge softened over
+		// a pixel or so, as a sewn seam reads, never stepped
+		float ys = chest + 0.03, yk = smoothstep(ys - max(0.0015, fwidth(P.y)), ys + max(0.0015, fwidth(P.y)), P.y);
+		float sw = max(0.03, fwidth(vSleeveT)), sl = smoothstep(-0.5 - sw, -0.5 + sw, vSleeveT);
+		c = mix(mix(base, b, yk), a, sl);
+		if (s == 2) c = mix(a, base, smoothstep(-max(0.0015, fwidth(P.x)), max(0.0015, fwidth(P.x)), P.x));
 	}
 	else if (k == 6 || k == 7) {
 		if (front > 0.5 && arm < 0.5) {
