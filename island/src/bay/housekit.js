@@ -9,6 +9,7 @@ import { weatherStucco } from './weathering.js';
 import { usePhoto } from '../world/photomats.js';
 import { addNightField } from '../world/nightfield.js';
 import { srgbToLinear as lin } from '../world/srgb.js';
+import { GFX_PHONE } from '../world/device.js';
 
 export { lin };
 // the door and garage door styles are stacked in their textures, a row each (metres)
@@ -26,6 +27,9 @@ export class Builder {
 	// count] (structures/walls/ takes a broken wall's own triangles out of the merged meshes)
 	mark() { const m = new Map(); for (const [k, b] of this.bufs) m.set(k, b.p.length / 3); return m; }
 	since(m) { const out = []; for (const [k, b] of this.bufs) { const s = m.get(k) || 0, e = b.p.length / 3; if (e > s) out.push([k, s, e - s]); } return out; }
+	// from here on what is built stands inside (the furniture, an inner door): it throws no shadow
+	// of the sun's, the shell round it already does (a lamp's shadow it still throws)
+	inside() { this.insideAt = this.mark(); return this; }
 	buf(k) { let b = this.bufs.get(k); if (!b) this.bufs.set(k, b = { p: [], n: [], u: [], c: [], a: [] }); return b; }
 	tp(x, y, z) {
 		const [ox, oy, oz] = this.o;
@@ -171,10 +175,34 @@ export class Builder {
 			const m = new THREE.Mesh(g, mats[k]);
 			m.castShadow = shadows && !mats[k].transparent; m.receiveShadow = true;
 			m.name = k;
+			// (the shell's vertices first, then what stands inside: the sun's shadow pass draws only
+			// the shell's; all inside, on a phone, none at all, as no lamp throws shadows there)
+			const shell = this.insideAt ? this.insideAt.get(k) || 0 : b.p.length / 3;
+			if (m.castShadow && shell < b.p.length / 3) {
+				g.userData.sunCast = shell;
+				if (!shell && GFX_PHONE) m.castShadow = false;
+				else sunShell(m);
+			}
 			out.push(m);
 		}
 		return out;
 	}
+}
+
+// A mesh drawn whole by every view and every lamp's shadow, but in the sun's shadow pass (an
+// orthographic shadow camera: a directional light's) only its first geometry.userData.sunCast
+// vertices (none: not drawn). A geometry put in its place without the count is drawn whole.
+export function sunShell(m) {
+	let kept = null;
+	m.onBeforeShadow = (renderer, object, camera, shadowCamera, geometry) => {
+		const n = geometry.userData.sunCast;
+		if (!shadowCamera.isOrthographicCamera || n == null) return;
+		const R = geometry.drawRange;
+		kept = [geometry, R.start, R.count];
+		R.count = Math.max(0, Math.min(R.start + R.count, n) - R.start);
+	};
+	m.onAfterShadow = () => { if (kept) { kept[0].drawRange.start = kept[1]; kept[0].drawRange.count = kept[2]; kept = null; } };
+	return m;
 }
 
 // the things that lie flat, hang or stand about loose, with no shadow of their own under them
