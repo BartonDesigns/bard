@@ -19,6 +19,7 @@ import * as THREE from 'three';
 import { actionAt, ACTIONS } from './actions.js';
 import { gaitSignature, gaitDrift } from './gait.js';
 import { clamp } from '../noise.js';
+import { noteBody } from './personal-space.js';
 
 const TAU = Math.PI * 2;
 const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -111,7 +112,10 @@ const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
 const _from = new THREE.Vector3();
 const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
-export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}) {
+// (space: whether you are kept clear of this body as it walks (people/personal-space.js): true,
+// 'fixed' (solid but never shuffled aside), false (you, a ghost, a baked crowd), or a function
+// answering one of those)
+export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space = true } = {}) {
 	const { bones, map, rest, dna } = P;
 	const H = (n) => rest.heads[map[n]];
 	const g = dna.gait, signature = gaitSignature(dna.seed);
@@ -250,6 +254,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		P.motionTime = t;
 		// (gone limp: the ragdoll moves the bones now, people/ragdoll.js)
 		if (P.ragdoll) return;
+		const solid = typeof space === 'function' ? space() : space;
+		if (solid) noteBody(P, S, solid);
 		dt = Math.min(dt, 0.05);
 		// (the beat a blow holds still: hit-stop)
 		if (S.freeze > 0) { S.freeze -= dt; dt *= 0.06; }
