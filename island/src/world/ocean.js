@@ -161,8 +161,9 @@ export function createOcean(island, shared) {
 	const VARY = /* glsl */`
 	varying vec3 vW; varying float vCrest; varying float vRoll; varying vec2 vInward; varying vec2 vAmp; varying vec2 vP0;
 	// the open sea's level here (before the beach's sheet), the bed under the vertex, how much the
-	// waves break here, the bed's slope, and 1 where the island's swash runs
-	varying float vWave; varying float vGround; varying float vBreak; varying float vSlope; varying float vShore;`;
+	// waves break here, the bed's slope, and where the swash runs (1 on the island's beaches), at
+	// what reach and pace (world/shore.js swashBay)
+	varying float vWave; varying float vGround; varying float vBreak; varying float vSlope; varying float vShore; varying vec2 vSwK;`;
 
 	const mat = new THREE.ShaderMaterial({
 		uniforms, fog: true, transparent: true, side: THREE.DoubleSide,
@@ -227,20 +228,23 @@ export function createOcean(island, shared) {
 				vec3 w = vec3(p.x, 0.0, p.y) + disp;
 				vWave = w.y;
 				// on the beach the sea is the swash: a sheet that thins to nothing as it runs up
-				// (the island's steep beaches only: on the Bay Area's broad flat shelves its fronts
-				// would sweep hundreds of metres of shallows in rings)
+				// (the island's beaches; and the Bay Area's sand beaches near you, at the bay's own
+				// reach and pace, but not its broad flat shelves of mud, where its fronts would sweep
+				// hundreds of metres of shallows in rings: world/shore.js)
 				float shore = r < 3000.0 && max(abs(p.x), abs(p.y)) < uHalf - 30.0 ? 1.0 : 0.0;
-				float swl = swashLevel(p, uTime, uWave);
-				if (ground > -0.5 && shore > 0.5) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground));
+				vec2 swK = vec2(1.0);
+				if (shore < 0.5 && uBayOn > 0.5) { shore = swashBayOn(sl, length(p - cameraPosition.xz)); swK = swashBay(p); }
+				float swl = swashStateK(p, uTime, uWave, swK).x;
+				if (ground > -0.5 && shore > 0.0) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground) * shore);
 				// near by, over the beach up to the top of the run, the surface is laid just clear of
 				// the sand (its highest point round the vertex), so the sheet and the foam (worked out
 				// for every pixel) always have a surface to be drawn on; the pixels drop the rest
-				if (shore > 0.5 && hv < 12.0 && sl < 0.15 && ground > -0.9 && ground < swashRunMax(p, uWave) + 0.35) {
+				if (shore > 0.0 && (r > 3000.0 ? hv < 24.0 && sl < 0.22 : hv < 12.0 && sl < 0.15) && ground > -0.9 && ground < swashRunMax(p, uWave) * swK.x + 0.35) {
 					float e = max(0.5, hv * 0.55);
 					float gm = max(max(max(groundAt(p + vec2(e, 0.0)), groundAt(p - vec2(e, 0.0))), max(groundAt(p + vec2(0.0, e)), groundAt(p - vec2(0.0, e)))), ground);
 					w.y = max(w.y, gm + 0.04);
 				}
-				vW = w; vGround = ground; vSlope = sl; vBreak = brk; vShore = shore;
+				vW = w; vGround = ground; vSlope = sl; vBreak = brk; vShore = shore; vSwK = swK;
 				vCrest = disp.y / max(0.05, amp + swellA * 0.45 + 0.15);
 				vRoll = fR;
 				vec4 mvPosition = viewMatrix * vec4(w, 1.0);
@@ -325,11 +329,11 @@ export function createOcean(island, shared) {
 				float pk = (1.0 - smoothstep(uShoreQ.x * 0.7, uShoreQ.x, dist)) * step(-14.0, vGround);
 				float g = vGround;
 				if (pk > 0.0 && (max(abs(vW.x), abs(vW.z)) < uHalf - 1500.0 || !pastSurvey(vW.xz))) g = mix(vGround, groundAt(vW.xz), pk);
-				// the water's level over it: the open sea's, or on the island's beaches the swash's sheet
+				// the water's level over it: the open sea's, or on a beach the swash's sheet
 				vec4 S = vec4(-9.0, -9.0, -99.0, 0.0);
 				float shoreK = 0.0, lvl = vWave;
 				if (vShore > 0.001 && g > -0.6) {
-					S = swashState(vW.xz, uTime, uWave);
+					S = swashStateK(vW.xz, uTime, uWave, vSwK);
 					shoreK = smoothstep(-0.5, -0.1, g) * vShore;
 					lvl = mix(vWave, swashSheet(vWave, S.x, g), shoreK);
 				}

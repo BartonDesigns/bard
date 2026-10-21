@@ -114,10 +114,12 @@ import { worldBody, sameBody } from './space/body.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
+import { createHeroPortrait } from './ui/hero-portrait.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
 import { createLaw } from './law/index.js';
 import { installAirFog } from './world/airfog.js';
+import { GRADE, installGrade } from './world/grade.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 import { islandBuild } from './island-build.js';
@@ -134,6 +136,8 @@ const GLOW_AT = [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0
 // The air: haze thickest low down and lit toward the sun, whole by the far plane; under water
 // (a negative density) light absorbed red first, then green (world/airfog.js)
 installAirFog();
+// the look on the tone mapping: contrast, colour and a little split toning (world/grade.js)
+installGrade();
 
 // Muffle the whole Bard under water: a low-pass between the faceplate's master output
 // and the speakers, eased in as you go under and out as you surface.
@@ -892,7 +896,9 @@ export function createIslandWorld() {
 	guideApi.multiplayer=multiplayer;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	// your gear, shops and trading with friends (ui/gear.js)
-	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
+	// your hero as a picture for the gear sheet, drawn once per outfit (ui/hero-portrait.js)
+	const portrait = HOOKS.portrait = createHeroPortrait({ renderer, avatar, camera });
+	const gear = HOOKS.gear = createGear({ portrait, arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
@@ -1689,6 +1695,16 @@ if (typeof window !== 'undefined') {
 			const S = wx.state;
 			return { mode: S.mode, cover: +S.cover.toFixed(2), cirrus: +S.cirrus.toFixed(2), tails: +S.tails.toFixed(2), veil: +S.veil.toFixed(2), reach: +S.reach.toFixed(2), sunVis: +S.sunVis.toFixed(2) };
 		},
+		// the look on the tone mapping (world/grade.js): Crysis.grade() reads it; .grade({ contrast: 1.3 })
+		// tries other numbers. That rebuilds every shader: for tuning on a computer, never on a phone in play
+		grade: (o) => {
+			if (o) {
+				Object.assign(GRADE, o);
+				installGrade();
+				window.L99Island?.scene?.()?.traverse((m) => { for (const x of [].concat(m.material || [])) x.dispose(); });
+			}
+			return { ...GRADE };
+		},
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()
@@ -1864,6 +1880,9 @@ if (typeof window !== 'undefined') {
 		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
 		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
 		heroView: () => HOOKS.heroView,
+		// your hero's picture for the gear sheet (ui/hero-portrait.js): Crysis.portrait() its state,
+		// .portrait('gear' | 'char') with the sheet open on that view
+		portrait: (view) => { if (view) HOOKS.gear?.open(view); return HOOKS.portrait?.info(); },
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
