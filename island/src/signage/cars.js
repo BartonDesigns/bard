@@ -1,6 +1,8 @@
 // Decals on the cars: plates in the region's manner (a dealer's frame on some), bumper
 // stickers, a parking permit or the region's windscreen sticker, the odd rear-window sticker,
-// and the services' liveries, the police cruisers' doors and roof numbers. Nothing is
+// the brands' stickers (the illustrated marks of the shops and labels, signage/art.js) on the
+// boot or tailgate, the street's sticker slaps (graffiti.js) on the back glass, and the
+// services' liveries, the police cruisers' doors and roof numbers. Nothing is
 // remodelled: each mark is a flat piece laid on the body where the body actually is, found
 // once per kind by sampling the lofted body (bay/cars.js) so a plate sits on the curved tail
 // and a word on the swell of the door. Plates are retroreflective, like the real ones, and
@@ -19,6 +21,7 @@ import { LAYER } from './layers.js';
 import { hash32, rng, pick } from './rand.js';
 import { carDecalSet, POOLS, BACK } from './placement.js';
 import { systemFor } from './systems.js';
+import { artReady } from './art.js';
 import { denied } from '../economy/establishments.js';
 import { GFX_PHONE } from '../world/device.js';
 
@@ -60,6 +63,11 @@ const STENCILS = {
 	nostep: { k: 'livery', svc: 'stencil', word: 'NO STEP', small: true }, unit: { k: 'livery', svc: 'stencil', word: '4 MG' }, unitIron: { k: 'livery', svc: 'stencil', word: '9 IVL' },
 	...Object.fromEntries(MIL_CODES.map((c, i) => ['code' + i, { k: 'livery', svc: 'stencil', word: c }])),
 };
+// the brands whose marks go on bumper stickers (a phone loads four of their sheets, a computer
+// eight): what people put on a car, a record shop, an outfitter, a roaster, a bike shop
+const STICKER_BRANDS = PHONE ? ['brands-music', 'brands-outdoor', 'brands-coffee', 'brands-transport'] : ['brands-music', 'brands-outdoor', 'brands-coffee', 'brands-transport', 'brands-retro', 'brands-apparel', 'brands-beverages', 'brands-books'];
+const STICKER_FIELDS = ['#fbfaf6', '#fbfaf6', '#f3ead2', '#e6eaee', null];
+const logoFace = (i) => ({ k: 'bbrand', family: STICKER_BRANDS[i % STICKER_BRANDS.length], trade: (Math.floor(i / STICKER_BRANDS.length) * 3 + i) % 8, field: STICKER_FIELDS[(i * 7 + 3) % STICKER_FIELDS.length] });
 let ATLAS = null, ATLAS_LOCALE = null;
 const CELLS = new Map();
 // the sheet's size: the pools pack into a little over half a phone's 1024 square (54%), so a
@@ -80,6 +88,7 @@ export function setCarLocale(locale = 'us-ca') {
 	A.sync(want);
 	CELLS.clear();
 	for (const k of want.keys()) CELLS.set(k, A.get(k));
+	marksN = marksReady();
 }
 // the faces a locale's pools want in the sheet: key -> { face, w, h }
 export function carFaces(locale = 'us-ca') {
@@ -88,12 +97,26 @@ export function carFaces(locale = 'us-ca') {
 	for (let i = 0; i < POOLS.plate; i++) want.set('plate' + i, { face: plateFace(locale, i), w: pw * 0.6, h: ph * 0.6 });
 	for (let i = 0; i < POOLS.bumper; i++) want.set('bumper' + i, { face: { k: 'bumper', seed: i + 1 }, w: 0.28, h: 0.075 });
 	for (let i = 0; i < POOLS.window; i++) want.set('window' + i, { face: { k: 'wsticker', seed: i + 1 }, w: 0.24, h: 0.08 });
+	for (let i = 0; i < POOLS.logo; i++) want.set('logo' + i, { face: logoFace(i), w: 0.17, h: 0.13 });
+	for (let i = 0; i < POOLS.slap; i++) want.set('slap' + i, { face: { k: 'sticker', seed: 401 + i * 37 }, w: 0.1, h: 0.1 });
 	for (let i = 0; i < POOLS.permit; i++) want.set('permit' + i, { face: { k: 'cpermit', seed: i + 1, year: 2026, style: locale === 'de' ? 'de' : sys.id === 'jp' ? 'jp' : 'us' }, w: 0.08, h: 0.08 });
 	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'vanRoof' ? 0.6 : 0.5 });
 	for (const [k, f] of Object.entries(STENCILS)) want.set('mil:' + k, { face: f, w: f.mark ? 0.5 : f.word?.length > 8 ? 2.4 : 0.8, h: f.mark ? 0.5 : f.word?.length > 8 ? 0.32 : 0.18 });
 	return want;
 }
 const cellOf = (k) => CELLS.get(k) || null;
+// the brands' marks are drawn in type until their sheets are in: as each comes (looked for
+// once a second), the sheet is drawn again with them
+// (the cells come out where they were: the same faces packed in the same order)
+let marksN = 0, marksT = 0;
+const marksReady = () => STICKER_BRANDS.reduce((a, f) => a + (artReady(f, PHONE) ? 1 : 0), artReady('modern', PHONE) ? 1 : 0);
+function marksIn() {
+	const now = typeof performance !== 'undefined' ? performance.now() : 0;
+	if (!ATLAS_LOCALE || marksN > STICKER_BRANDS.length || now - marksT < 1000) return;
+	marksT = now;
+	if (marksReady() === marksN) return;
+	const l = ATLAS_LOCALE; ATLAS_LOCALE = null; setCarLocale(l);
+}
 
 // ---------- where on the body: sampled from the loft ----------
 const PROF = new Map();
@@ -152,6 +175,10 @@ function slotsOf(kind, sysPlate) {
 		frontPlate: local(0, yF, zf, 0, 0, 1, 1, 0, 0, pw, ph, 0.002),
 		bumper: [-0.42, 0.42, 0].map((x, i) => { const y = Math.max(0.22, yR - ph / 2 - 0.08 - (i === 2 ? 0.0 : 0)), xx = i === 2 ? 0.44 : x, yy = i === 2 ? yR + ph / 2 + 0.07 : y; return local(xx, yy, Math.min(P.rearZ(xx, yy), P.rearZ(xx - 0.14, yy), P.rearZ(xx + 0.14, yy)) - 0.006, 0, 0, -1, -1, 0, 0, 0.28, 0.075, 0.003); }),
 		window: (() => { const y = Math.min(S.H - 0.12, S.belt + 0.1), x = -0.32, [ny, nz] = rearN(x, y); return local(x, y, P.rearZ(x, y) - 0.008, 0, ny, nz, -1, 0, 0, 0.24, 0.08, 0.003); })(),
+		// the brand's sticker across from the third strip, over the plate; the slap up in a top
+		// corner of the back glass, where people put the round ones
+		logo: (() => { const x = -0.44, y = yR + ph / 2 + 0.1; return local(x, y, Math.min(P.rearZ(x, y), P.rearZ(x - 0.09, y), P.rearZ(x + 0.09, y)) - 0.006, 0, 0, -1, -1, 0, 0, 0.17, 0.13, 0.003); })(),
+		slap: (() => { const y = Math.max(S.belt + 0.16, S.H - 0.2), x = Math.min(0.5, S.W * 0.26), [ny, nz] = rearN(x, y); return local(x, y, P.rearZ(x, y) - 0.008, 0, ny, nz, -1, 0, 0, 0.1, 0.1, 0.003); })(),
 		permit: (() => { const jp = sysPlate === 'jp', y = jp ? S.H - 0.1 : S.belt + 0.07, x = jp ? 0 : -0.48, [ny, nz] = frontN(x, y); return local(x, y, P.frontZ(x, y) + 0.008, 0, ny, nz, 1, 0, 0, 0.08, 0.08, 0.003); })(),
 	};
 	// the police cruiser's doors (white panels standing proud: military/police.js), its roof
@@ -188,7 +215,7 @@ export function createFleetDecals(group, { isPhone = PHONE } = {}) {
 	const glass = createBatch(group, 'glass', LAYER.sticker, A.tex, Math.floor(cap / 3), { phone: isPhone, name: 'car-glass' });
 	const _o = new THREE.Matrix4();
 	const sysNow = () => systemFor(ATLAS_LOCALE || 'us-ca');
-	function begin() { plates.clear(); vinyl.clear(); glass.clear(); }
+	function begin() { plates.clear(); vinyl.clear(); glass.clear(); marksIn(); }
 	function emit(B, M, L, cell, back, seed) { if (!cell) return; _o.multiplyMatrices(M, L); B.putMatrix(_o.elements, cell, back, seed, 0, 0); }
 	// one car: its kind, its world matrix, distance squared from the eye; o.seed (anything
 	// stable: an id), o.livery ('police'), o.parked (seed from where it stands)
@@ -216,6 +243,8 @@ export function createFleetDecals(group, { isPhone = PHONE } = {}) {
 		if (o.livery) return;
 		D.bumper.forEach((b, i) => emit(vinyl, M, sl.bumper[i], cellOf('bumper' + b), BACK.none, i * 0.3));
 		if (D.window >= 0) emit(glass, M, sl.window, cellOf('window' + D.window), BACK.mirrored, 0.5);
+		if (D.logo >= 0) emit(vinyl, M, sl.logo, cellOf('logo' + D.logo), BACK.none, 0.9);
+		if (D.slap >= 0) emit(glass, M, sl.slap, cellOf('slap' + D.slap), BACK.mirrored, 0.6);
 		if (D.permit >= 0) emit(glass, M, sl.permit, cellOf('permit' + D.permit), BACK.mirrored, 0.7);
 	}
 	function end() { plates.commit(); vinyl.commit(); glass.commit(); }

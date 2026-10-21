@@ -1,9 +1,11 @@
 // What makes a street feel lived in, placed on the same grids as the buildings and the
 // painted streets: cars parked along the kerbs (sedans, hatchbacks, SUVs, pickups, vans,
-// in the colours people actually buy), traffic driving the lanes, stopping and turning
+// in every colour people buy), traffic driving the lanes, stopping and turning
 // at the corners, headlights and tail lights at night; street lights, traffic signals at
 // the busier crossings, fire hydrants, benches and bus shelters downtown, bins, and
-// parking meters in the city. Built around you as you move, a few hundred metres out.
+// parking meters in the city. Built around you as you move, a few hundred metres out. The
+// cars in the drives, the carports and out front of the garages and the auto shops are the
+// city's to place (bay/city.js, driveCars) and these same real cars to draw.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -17,10 +19,23 @@ import { GFX_PHONE } from '../world/device.js';
 
 const LAMPS = 1200;
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-// car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
-const PAINT = [[0.92, 0.92, 0.91], [0.92, 0.92, 0.91], [0.05, 0.05, 0.06], [0.05, 0.05, 0.06], [0.35, 0.36, 0.38], [0.35, 0.36, 0.38], [0.66, 0.67, 0.69], [0.66, 0.67, 0.69], [0.1, 0.2, 0.45], [0.55, 0.06, 0.06], [0.2, 0.3, 0.26], [0.45, 0.38, 0.3], [0.8, 0.8, 0.82], [0.25, 0.08, 0.1]];
+// car paint, cars and trucks alike, as on a Bay Area freeway: mostly white, black, the greys
+// and silvers (about half), then every colour people do buy (the blues, the reds and
+// wines, greens from racing to sage, the yellows and oranges, browns and bronzes, a purple, a
+// pink now and then), as sRGB, weighted by how many repeats
+const PAINT_HEX = [
+	0xf2f2ef, 0xf2f2ef, 0xf2f2ef, 0xf2f2ef, 0xe9e6dc, 0xe9e6dc, 0x121315, 0x121315, 0x121315, 0x121315, 0x23262b, 0x23262b,
+	0x4a4d52, 0x4a4d52, 0x5d6066, 0x5d6066, 0x6b6e72, 0x8d9095, 0x8d9095, 0xa9acb0, 0xa9acb0, 0xa9acb0, 0xb9b3a3, 0x7d8288, 0xc4c6c8,
+	0x1b2f5e, 0x2c55a8, 0x4b86c9, 0x0f6a7a, 0x8fb3d4, 0x2a3b4f,
+	0xa51b1b, 0xc8262e, 0x6a1622, 0x8a2433, 0xe0614f,
+	0x1f4a33, 0x3c6b3a, 0x7a8a5a, 0x9bb59a, 0x6fbf3a, 0x5e6340,
+	0xe3b81f, 0xf2d15c, 0xe06a1c, 0xb34d1c,
+	0x6b4a32, 0x8c6a3f, 0xa47c56, 0xc9b28a, 0x9b5a34,
+	0x4a2a5e, 0x7a5aa0, 0xd8608e,
+];
+const PAINT = PAINT_HEX.map((h) => new THREE.Color(h).toArray());
 
-export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+export function createStreetLife(shared, scene, bay, groundAt, real = null, city = null) {
 	const group = new THREE.Group();
 	group.name = 'street-life';
 	scene.add(group);
@@ -49,7 +64,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// The parked cars are placed into a plain store, then shared out between the levels as
 	// you move. Each has an id (kind and place) that the owners (vehicles/life.js) use, and a
 	// car whose owner has driven it off is hidden from its space until they are back.
-	const store = (cap) => ({ m: new Float32Array(cap * 16), c: new Float32Array(cap * 3), n: 0, instanceMatrix: { count: cap }, setMatrixAt(i, m) { m.toArray(this.m, i * 16); }, setColorAt(i, c) { c.toArray(this.c, i * 3); } });
+	// (d: 1 where the car is in a drive, not at the kerb: its owner does not pull out of it into
+	// the lane, vehicles/life.js)
+	const store = (cap) => ({ m: new Float32Array(cap * 16), c: new Float32Array(cap * 3), d: new Uint8Array(cap), n: 0, instanceMatrix: { count: cap }, setMatrixAt(i, m) { m.toArray(this.m, i * 16); }, setColorAt(i, c) { c.toArray(this.c, i * 3); } });
 	const parked = Object.fromEntries(kinds.map((k) => [k, store(1600)]));
 	const hidden = new Set(), taken = new Set();
 	const spot = (x, z) => Math.round(x) + ':' + Math.round(z);
@@ -79,7 +96,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			for (let i = 0; i < S.n; i++) {
 				const x = S.m[i * 16 + 12], z = S.m[i * 16 + 14], key = Math.floor(x / GRID) + ',' + Math.floor(z / GRID);
 				let L = grid.get(key); if (!L) grid.set(key, L = []);
-				L.push({ kind: k, i, x, y: S.m[i * 16 + 13], z, yaw: Math.atan2(S.m[i * 16 + 8], S.m[i * 16 + 10]), id: k + i, col: [S.c[i * 3], S.c[i * 3 + 1], S.c[i * 3 + 2]] });
+				L.push({ kind: k, i, x, y: S.m[i * 16 + 13], z, yaw: Math.atan2(S.m[i * 16 + 8], S.m[i * 16 + 10]), id: k + i, col: [S.c[i * 3], S.c[i * 3 + 1], S.c[i * 3 + 2]], drive: S.d[i] === 1 });
 			}
 		}
 	}
@@ -258,6 +275,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		const lampPos = lampLightGeo.attributes.position.array; let nl = 0;
 		const E = eraMap(real);
 		signalList.length = 0; lanes.length = 0; stopsAt.length = 0;
+		for (const S of Object.values(parked)) S.d.fill(0);
 		const grids = new Map();
 		for (let dz = -R; dz <= R; dz += R / 4) for (let dx = -R; dx <= R; dx += R / 4) { const u = bay.urbanAt(cx + dx, cz + dz); if (u.u > 0.15) grids.set(Math.round(u.a * 1000) + ':' + u.s, [u.a, u.s]); }
 		for (const [a, style] of grids.values()) {
@@ -325,6 +343,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			}
 		}
 		if (real?.loaded()) realStreets(cx, cz, R, n, lampPos, (v) => { nl = v; }, () => nl);
+		driveCars(cx, cz, R, n);
 		for (const im of [lamps, acorns, leds, signals, hydrants, benches, shelters, bins, meters]) {
 			im.count = Math.min(counts.get(im) || 0, im.instanceMatrix.count);
 			mark(im);
@@ -356,6 +375,29 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			}
 		}
 	}
+	// the cars in the drives (bay/city.js: lotkit entries [x, y, z, yaw, sx, sy, sz, tilt, r, g, b]):
+	// a kind by what people keep at home, mostly nosed in to the garage, in the street's paint;
+	// one left to sit (squashed a little, sy < 1) keeps its faded colour and sits on flat tyres
+	const DRIVE = ['sedan', 'sedan', 'sedan', 'suv', 'suv', 'crossover', 'crossover', 'pickup', 'pickup', 'hatch', 'van', 'sports'];
+	let driveV = -1;
+	function driveCars(cx, cz, R, n) {
+		const D = city?.driveCars?.();
+		driveV = D ? D.v : -1;
+		if (!D) return;
+		for (const e of D.list) {
+			const x = e[0], z = e[2];
+			if (Math.abs(x - cx) > R || Math.abs(z - cz) > R || Math.hypot(x - cx, z - cz) > R) continue;
+			const h = hash(x * 2.3 + 11, z * 1.9 - 7), left = e[5] < 1;
+			const kind = DRIVE[Math.floor(hash(h * 997, x) * DRIVE.length)], S = parked[kind], c = n(S);
+			if (c < 0) continue;
+			carMatrix(pm, kind, x, z, -e[3] + (hash(z, h * 313) < 0.7 ? Math.PI : 0));
+			if (left) pm.elements[13] -= 0.09;
+			S.setMatrixAt(c, pm);
+			const pc = left && e.length > 10 ? [e[8], e[9], e[10]] : PAINT[Math.floor(hash(h * 577, z) * PAINT.length)];
+			S.setColorAt(c, col.setRGB(pc[0], pc[1], pc[2]));
+			S.d[c] = 1;
+		}
+	}
 	const cars = [];
 	let trafficN = 0;
 	// the bus stops (each shelter): a bus coming by pulls up and waits a while
@@ -369,6 +411,8 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		if (high) return;
 		const x = cam.position.x, z = cam.position.z;
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
+		// (and when the city has placed a new set of cars in the drives)
+		if (city?.driveCars && city.driveCars().v !== driveV) lastX = 1e9;
 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
 		if (Math.hypot(x - splitX, cam.position.y - splitY, z - splitZ) > SPLIT_M || t - splitT > SPLIT_S || t < splitT) split(x, cam.position.y, z, t);
 		// (on at dusk by their photocells, a little before the porch lights)

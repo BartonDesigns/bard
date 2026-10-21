@@ -55,6 +55,7 @@ export function createSensing() {
 		if (dungeon(W) > 0.3) return ['stone', 'dungeon'];
 		if (foot > g + 0.12) {
 			if (on(W.bridge?.deckFloor, x, z, foot)) return ['concrete', 'bridge deck'];
+			if (on(W.sanMateo?.floor, x, z, foot)) return ['concrete', 'bridge deck'];
 			if (on(W.freeways?.floor, x, z, foot)) return ['road', 'freeway deck'];
 			if (on(W.beaches?.floor, x, z, foot)) return ['wood', 'boardwalk'];
 			if (on(W.discovery?.floor, x, z, foot)) return ['wood', 'museum'];

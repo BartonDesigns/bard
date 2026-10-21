@@ -1,14 +1,17 @@
 // The small things that make a street lived in, each drawn as one instanced mesh of simple
 // vertex-coloured parts: on the roofs, chimneys (brick or stucco), metal flues, plumbing
 // vents, box vents, skylights, dormers, solar arrays and satellite dishes, and downspouts
-// down the corners; in the drives and yards, cars (and the odd one abandoned), RVs and
-// boats on trailers, bins at the kerb, a basketball hoop, an AC condenser, raised beds, a
+// down the corners; in the drives and yards, RVs and boats on trailers, bins at the kerb, a basketball hoop, an AC condenser, raised beds, a
 // for-sale sign; round a complex's pool, loungers, umbrellas, a cabana, a built-in grill,
 // tables, the carports, the mailbox kiosk, wrought-iron fencing and the gate; a picket
 // fence; tennis nets and park benches; and out front of the businesses, chalkboards, canoes,
 // nets, antlers, gear racks, menu boards, monument signs, sign posts, crates, surfboards and
 // kegs. An entry is [x, y, z, yaw, sx, sy, sz, tilt, r, g, b]
 // (tilt about the thing's own x; the colour tints it, where it has one).
+//
+// The cars in the drives, under the carports and out front of the garages ('car' entries,
+// the odd one abandoned) are collected with the rest but drawn by the street (streetlife.js):
+// the same real cars, paint and decals as those parked at the kerbs.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -25,12 +28,6 @@ function wheels(parts, xs, zs, r, y = 0) {
 // the shapes, each in its own metres, length along z, standing on y 0
 function shapes() {
 	const S = {};
-	// a car: body tinted by the entry's colour, glass and tyres dark
-	{
-		const p = [B(1.8, 0.62, 4.5, 0, 0.3, 0, [1, 1, 1]), B(1.62, 0.55, 2.3, 0, 0.92, -0.2, [1, 1, 1]), B(1.64, 0.42, 2.1, 0, 0.98, -0.2, GLASS), B(1.84, 0.12, 0.25, 0, 0.45, 2.2, [0.25, 0.25, 0.26]), B(1.84, 0.12, 0.25, 0, 0.45, -2.2, [0.25, 0.25, 0.26])];
-		wheels(p, [-0.82, 0.82], [-1.4, 1.4], 0.33);
-		S.car = M(p);
-	}
 	// a motorhome: a white box on a cab, a stripe down it, a band of windows
 	{
 		const p = [B(2.45, 2.55, 7.4, 0, 0.45, -0.6, WHITE), B(2.3, 1.2, 1.6, 0, 0.45, 3.8, WHITE), B(2.2, 0.5, 0.2, 0, 1.2, 4.55, GLASS), B(2.47, 0.18, 7.3, 0, 1.1, -0.6, [0.45, 0.2, 0.12]), B(2.47, 0.1, 7.3, 0, 1.32, -0.6, [0.2, 0.22, 0.28]), B(2.47, 0.45, 4.5, 0, 1.95, -0.4, GLASS), B(2.2, 0.4, 2.2, 0, 3.0, 0.9, WHITE), B(1.1, 0.3, 1.2, 0, 3.0, -2.5, [0.8, 0.8, 0.78])];
@@ -156,7 +153,7 @@ function shapes() {
 
 // [shape, cap, cast shadows, phone keeps it, material]
 const SPEC = {
-	car: [5000, true, true], rv: [600, true, true], boat: [600, true, true],
+	rv: [600, true, true], boat: [600, true, true],
 	chimney: [9000, true, true], flue: [5000, false, true], pipe: [12000, false, false], boxvent: [12000, false, false], skylight: [3000, false, true], dish: [2500, false, false],
 	dormer: [2500, true, true], dormerRoof: [2500, true, true], spout: [16000, false, false], solar: [5000, false, true, 'solar'],
 	bins: [5000, false, false], hoop: [1200, false, false], cond: [5000, false, false], bed: [2500, false, false], sign: [500, false, true],
@@ -220,5 +217,6 @@ export function createProps(group, wrap, isPhone) {
 		}
 	}
 	const counts = () => Object.fromEntries(Object.entries(meshes).map(([k, im]) => [k, im.count]));
-	return { upload, counts, has: (k) => !!meshes[k] };
+	// ('car': taken, for the street to draw: see above)
+	return { upload, counts, has: (k) => k === 'car' || !!meshes[k] };
 }

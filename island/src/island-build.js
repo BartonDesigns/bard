@@ -81,6 +81,7 @@ import { createDiablo } from './bay/diablo.js';
 import { createEdgelands } from './bay/edgelands.js';
 import { createVehicles } from './vehicles/index.js';
 import { createLandmarks } from './bay/landmarks.js';
+import { createSanMateoBridge } from './bay/sanmateo.js';
 import { createRoads, ROUTES } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
 import { createGlobe, BAY_WILD_KM } from './earth/globe.js';
@@ -462,7 +463,7 @@ export async function islandBuild(iw, params) {
 		iw.world.services.hooks.charge = (who, credits) => { const M = HOOKS.npcMoney; if (!M || !(M.balance(who) >= credits)) return false; M.spend(who, credits, 'hospital', 'hospital'); return true; };
 		HOOKS.military?.setInteriors(iw.world.services.militaryInteriors());
 		HOOKS.military?.setStations((x, z) => iw.world?.services?.stationAt(x, z));
-		iw.world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), iw.world.real);
+		iw.world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), iw.world.real, iw.world.city);
 		// the streets by era and season: potholes and their crews, the trees' stakes and leaves, holiday lights, sprinklers (bay/streets.js)
 		iw.world.streets = createStreets({ scene, camera, world: () => iw.world, drive: iw.drive, isPhone: GFX, hint: (t, ms) => hint(t, ms, 1) });
 		// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
@@ -526,6 +527,9 @@ export async function islandBuild(iw, params) {
 				]);
 			}
 			iw.world.landmarks = createLandmarks(scene, bayArea);
+			// the San Mateo Bridge: its trestles and high-rise, to walk and drive across (bay/sanmateo.js)
+			iw.world.sanMateo = createSanMateoBridge(scene, bayArea, { isPhone });
+			seaDepth.mark(iw.world.sanMateo.substructure);
 			iw.world.roads = createRoads(shared, scene, bayArea);
 			iw.world.diablo = createDiablo(scene, bayArea);
 			// the Summit Building's rooms, built inside its stone as you come near
@@ -540,7 +544,7 @@ export async function islandBuild(iw, params) {
 			// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 			// ...and in and out of the houses, up their stairs
 			const diablo = iw.world.diablo, houses = iw.world.houses, fwy = iw.world.freeways, pools = iw.world.tidepools;
-			island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), iw.world.landmarks.floor(x, z, y), iw.world.beaches.floor(x, z, y), iw.world.commercial.floor(x, z, y), iw.world.discovery.floor(x, z, y), iw.world.towers.floor(x, z, y), iw.world.boardwalk.floor(x, z, y), iw.world.lake?.floor?.(x, z, y) ?? -1e9, iw.world.parks?.floor?.(x, z, y) ?? -1e9);
+			island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), iw.world.sanMateo.floor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), iw.world.landmarks.floor(x, z, y), iw.world.beaches.floor(x, z, y), iw.world.commercial.floor(x, z, y), iw.world.discovery.floor(x, z, y), iw.world.towers.floor(x, z, y), iw.world.boardwalk.floor(x, z, y), iw.world.lake?.floor?.(x, z, y) ?? -1e9, iw.world.parks?.floor?.(x, z, y) ?? -1e9);
 			island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); iw.world.commercial.push(p, footY); iw.world.discovery.push(p, footY); iw.world.towers.push(p, footY); iw.world.boardwalk.push(p, footY); iw.world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); iw.world.lake?.push(p, footY, iw.world.player.state.flying); iw.world.fields.push(p, footY); iw.world.beaches.push?.(p, footY); iw.world.parks?.push?.(p, footY); picnic.push(p, footY); };
 			{ const of = island.extraFloor, P = iw.world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
 			{ const of = island.extraFloor, op = island.extraPush, E = iw.world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
