@@ -322,7 +322,7 @@ export const LOOK = {
 			const ex0 = eye ? eye.x - at.x : 0, ez0 = eye ? eye.z - at.z : 1, el = Math.hypot(ex0, ez0) || 1, ex = ex0 / el, ez = ez0 / el, tilt = eye ? (eye.y - at.y) / el : 0;
 			for (let k = 0; k < 5; k++) {
 				const a = t * 0.8 + k / 5 * 6.283 + rnd(0.3), rr = r * (1.3 + Math.random() * 1.6), sp = rr * 1.1, cx = Math.cos(a), cz = Math.sin(a), near = cx * ex + cz * ez;
-				fx.spark(at.x + cx * rr, at.y + near * (rr * tilt - r * 0.25) + rnd(r * 0.03), at.z + cz * rr, -cz * sp - cx * sp * 0.6, 0, cx * sp - cz * sp * 0.6, 1.0, 0.45, r * 0.02, k % 5 ? (k % 2 ? C.accrete : C.ember) : C.white, 0.85, 0, 0);
+				fx.spark(at.x + cx * rr, at.y + near * (rr * tilt - r * 0.25) + rnd(r * 0.03), at.z + cz * rr, -cz * sp - cx * sp * 0.6, 0, cx * sp - cz * sp * 0.6, 1.0, 0.3, r * 0.008, k % 2 ? C.accrete : C.ember, 0.55, 0, 0);
 			}
 			if (!eye) return;
 			// (the pull on the ground round you: dark debris and lit grit torn up and lifting in long
