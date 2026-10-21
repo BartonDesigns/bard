@@ -49,6 +49,7 @@ const SITE_ITEM_TO_CORE = Object.freeze({
 
 const ITEM_ALIASES = Object.freeze({
 	rifle: 'aurora-trail-rifle', carbine: 'warden-spark-carbine',
+	sniper: 'longwatch-sniper-rifle', 'sniper rifle': 'longwatch-sniper-rifle', longwatch: 'longwatch-sniper-rifle',
 	'home defense': 'warden-spark-carbine', 'home-defense': 'warden-spark-carbine',
 	bow: 'reedline-hunting-bow', 'hunting bow': 'reedline-hunting-bow',
 	net: 'hunting-net', 'scent kit': 'trail-scent-kit', medkit: 'field-medkit',

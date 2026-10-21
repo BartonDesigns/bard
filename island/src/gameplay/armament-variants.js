@@ -3,6 +3,7 @@
 const names = {
  'aurora-trail-rifle': ['Field', 'Ranger', 'Pathfinder', 'Vanguard', 'Sunward'],
  'mossback-scout-rifle': ['Trail', 'Tracker', 'Outrider', 'Wayfinder', 'Elderwood'],
+ 'longwatch-sniper-rifle': ['Watch', 'Farsight', 'Overwatch', 'Skyline', 'Eventide'],
  'warden-spark-carbine': ['Patrol', 'Watchkeeper', 'Sentinel', 'Bastion', 'Citadel'],
  'reedline-hunting-bow': ['Reed', 'Grove', 'Windrunner', 'Moonstring', 'Dawnbound'],
 };

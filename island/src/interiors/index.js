@@ -26,6 +26,7 @@ import { lightInterior, releaseInterior, configureLighting, lightingClock, light
 import { profileOf } from '../economy/frontage.js';
 import './estab-kit.js';
 import { buildSlice, viewDistance } from '../world/buildslice.js';
+import { aimedLot, roomBehind, seeInto as seeIntoRoom, drawnBox, SCOPE_ROOM } from './scope-room.js';
 
 const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'restaurant'], mission: ['cafe', 'restaurant', 'laundromat', 'grocer', 'bar', 'florist'], northbeach: ['cafe', 'restaurant', 'bar', 'books'], sunset: ['restaurant', 'cafe', 'laundromat', 'grocer'], any: ['cafe', 'grocer', 'books', 'restaurant', 'laundromat', 'bar', 'florist', 'boutique'] };
 // the buildings anyone may walk into (the rest are homes, or shut)
@@ -36,7 +37,7 @@ const DUSTY = new Set(['garage', 'garage2', 'warehouse', 'parking', 'shed', 'sto
 const OPEN = { store: [7, 22], office: [7, 20], school: [7, 18] };
 const STYLE_OF = { victorian: 'victorian', pacheights: 'edwardian', nobhill: 'edwardian', northbeach: 'edwardian', chinatown: 'edwardian', marina: 'sunset', sunset: 'sunset', mission: 'mission' };
 
-export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 } } = {}) {
+export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 }, warm = null } = {}) {
 	const BUILD_R = isPhone ? 55 : 85, DROP_R = BUILD_R + 30, MAX = isPhone ? 3 : 6;
 	let BUDGET = isPhone ? 3 : 4;
 	const fwd = new THREE.Vector3();
@@ -186,6 +187,9 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		B.root = new THREE.Group();
 		B.root.position.set(B.o.x, P.f0, B.o.z);
 		B.root.rotation.y = -B.o.a;
+		// (the scope's: hidden till its shaders are built, scopeStep; the scope's own picture is
+		// drawn ungated and would build them in one frame)
+		if (B.focus) B.root.visible = false;
 		B.levels = P.levels.map(() => null);
 		// the stoop outside
 		if (P.stoop.length) {
@@ -196,16 +200,21 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			B.root.add(m);
 		}
 		group.add(B.root);
-		yield* levelsFor(B, 0);
+		yield* levelsFor(B, B.focus ? levelLooked(B, B.focus.y) : 0);
 		return B;
 	}
 	// which levels are full: all of a low building's; the one you're on and those either
 	// side of it (and the ground floor) of a tall one
 	const wantFull = (B, cur) => (k) => B.P.levels.length <= 5 || k === 0 || Math.abs(k - cur) <= (isPhone ? 0 : 1);
 	function* levelsFor(B, cur) {
-		const want = wantFull(B, cur);
-		for (let k = 0; k < B.P.levels.length; k++) {
+		const want = wantFull(B, cur), one = !!B.focus && B.P.levels.length > 3;
+		// (a building built for the scope: the one level looked into, nothing else of it, the one
+		// looked at before let go once it stands; a house of a few storeys whole, so its household
+		// can be home: people/home-life.js)
+		const order = one ? [cur, ...B.P.levels.map((L, k) => k).filter((k) => k !== cur)] : B.P.levels.map((L, k) => k);
+		for (const k of order) {
 			const full = want(k), have = B.levels[k];
+			if (one && k !== cur) { if (have) { releaseInterior(have.root); B.root.remove(have.root); disposeTree(have.root); B.levels[k] = null; } continue; }
 			if (have && have.full === full) continue;
 			if (full && !B.P.rooms.every((r) => r.k !== k || r.furnished)) { furnish(B.P, k); B.spots = null; B.nav = null; yield; }
 			const Lb = yield* buildLevel(B.P, B.M || M, B.C, k, full, night);
@@ -258,20 +267,195 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		live.delete(key);
 		if (B.root) { for (const Lb of B.levels || []) if (Lb) releaseInterior(Lb.root); group.remove(B.root); disposeTree(B.root); }
 		if (B.site) { B.site.live = false; return; }
+		if (B === focus) focus = null;
 		city.setDoor(B.o, null);
 		if (B.P?.bayLot) city.setDoor(B.P.bayLot, null);
 		stats.dropped++;
 	}
 
+	// its rooms built: the block's front door cut out, its windows open onto them (city.js setDoor)
+	function opened(B) {
+		const top = Math.max(0, Math.floor(B.P.f0 - B.o.y + B.P.levels.length * ST.storey - 0.2));
+		city.setDoor(B.o, [B.P.door.x, B.P.f0 - B.o.y + B.P.door.y, B.P.door.w + 4 * top]);
+		if (B.P.bayLot) city.setDoor(B.P.bayLot, [0, 0, 0.001 + 4 * Math.max(0, Math.floor(B.P.f0 + B.P.levels.length * ST.storey - B.P.bayLot.y - 0.2))]);
+	}
+
+	// ---------- the room seen through a scope ----------
+	// Looking down a scope at a building's window, however far off (to SCOPE_R), the room behind
+	// that window is there for real: the level it is on built (and only that level, for a
+	// building past the ordinary reach above), and only that room's windows cleared onto it
+	// (city.js SCOPE_ROOM), so whoever ran in there can be seen and shot through the glass. One
+	// building at a time, built a slice a frame like any other; kept while you stay on it, let go
+	// a while after the scope comes down or moves to another. (A tower's floors are towers.js's.)
+	const SCOPE_R = isPhone ? 300 : 420, SCOPE_KEEP = 8, SCOPE_SETTLE = 0.2;
+	const sdir = new THREE.Vector3();
+	let focus = null, aimed = null, scopeAt = 0, scopeOff = 99, openNow = null, bandWide = false, scopeTower = null, scopeFloor = null;
+	const scopeStats = { built: 0, ms: 0, aimed: null, open: null };
+	// view: where the scope looks ({ position, direction }: crysis/scope-view.js), or null
+	function scopeStep(camera, dt, view) {
+		const on = !!view;
+		scopeOff = on ? 0 : scopeOff + dt;
+		if (!on) aimed = null;
+		else if ((scopeAt -= dt) < 0) {
+			scopeAt = 0.12;
+			if (view.direction) sdir.set(view.direction.x, view.direction.y, view.direction.z); else camera.getWorldDirection(sdir);
+			const h = aimedLot(city.lotsNear, view.position || camera.position, sdir, SCOPE_R, bay.heightAt);
+			const key = h ? city.lotKey(h.o) : null;
+			const tower = !!h && (aimed?.key === key ? aimed.tower : (city.towersNear?.(h.o.x, h.o.z, 2) || []).includes(h.o));
+			aimed = h ? { ...h, key, tower, since: aimed?.key === key ? aimed.since : performance.now() / 1000 } : null;
+		}
+		// (a tower's floor: towers.js builds it, once the reticle has rested on it)
+		if (scopeTower && (scopeOff > SCOPE_KEEP || (aimed && aimed.key !== scopeTower && performance.now() / 1000 - aimed.since > SCOPE_SETTLE * 3))) { towers?.scoped?.(null); scopeTower = null; }
+		let towerFloor = null;
+		if (aimed?.tower && towers?.scoped && performance.now() / 1000 - aimed.since >= SCOPE_SETTLE) {
+			towerFloor = towers.scoped(aimed.o, aimed.ly + aimed.o.y);
+			if (towerFloor) { scopeTower = aimed.key; scopeStats.towerMs = +(towerFloor.ms || 0).toFixed(1); }
+		}
+		if (towerFloor || !scopeTower) scopeFloor = towerFloor;
+		// (the scope down a while, or on another building a while: the one built for it let go)
+		if (focus && (scopeOff > SCOPE_KEEP || (aimed && aimed.key !== focus.key && performance.now() / 1000 - aimed.since > SCOPE_SETTLE * 3))) { if (job?.key === focus.key) job = null; drop(focus.key); }
+		if (focus && live.get(focus.key) !== focus) focus = null;
+		// (its rooms' materials seen to any distance while it stands: houseMaterials' own dissolve
+		// ends them at 160 m; either set may be made after it is begun)
+		if (focus || bandWide) { bandWide = !!focus; widen(M, bandWide); widen(MW, bandWide); }
+		// the room under the reticle: its windows open once its level stands
+		let want = null;
+		const B = aimed && live.get(aimed.key);
+		if (B?.ready && B.root && !B.root.visible && !B.focus) B.root.visible = true;
+		if (B?.ready && B.root && !B.root.visible) { if (!B.warming) warmUp(B.root, () => B.warming = 'done', (v) => B.warming = v); }
+		else if (B?.ready && B.P && !B.site) {
+			const k = levelLooked(B, aimed.ly + B.o.y);
+			if (B.levels[k]) want = spanOf(B, aimed, k);
+		} else if (towerFloor?.root && !towerFloor.root.visible) {
+			if (!towerFloor.root.userData.warming) warmUp(towerFloor.root, null, (v) => towerFloor.root.userData.warming = v);
+		} else if (towerFloor) {
+			// (a tower's floor is open plan: the stretch of glass round the point looked at)
+			const o = aimed.o, b = drawnBox(o), half = (aimed.face < 2 ? b.w : b.d) / 2, u = aimed.face < 2 ? aimed.lx : aimed.lz, L = towerFloor.L;
+			// (in bays of 9 m, each opening with the ones either side of it)
+			const cell = Math.floor((u + half) / 9), u0 = Math.max(-half, -half + cell * 9 - 4.5), u1 = Math.min(half, -half + cell * 9 + 13.5), y0 = L.y - o.y;
+			want = { key: aimed.key, o, face: aimed.face, room: L.n + ':' + cell, type: L.program, k: L.n, u0, u1, y0: y0 + 0.05, y1: y0 + Math.min(L.h, 6) - 0.05 };
+		}
+		const same = want && openNow && want.key === openNow.key && want.face === openNow.face && want.room === openNow.room;
+		if (want && !same) { openNow = want; SCOPE_ROOM.k.value = 0; }
+		const target = want ? 1 : 0;
+		SCOPE_ROOM.k.value += Math.sign(target - SCOPE_ROOM.k.value) * Math.min(Math.abs(target - SCOPE_ROOM.k.value), dt / 0.35);
+		if (!want && SCOPE_ROOM.k.value <= 0) openNow = null;
+		const A = SCOPE_ROOM.a.value, Bv = SCOPE_ROOM.b.value;
+		if (openNow) { const b = drawnBox(openNow.o); A.set(b.x, b.z, 1, openNow.face); Bv.set(openNow.u0, openNow.u1, openNow.y0, openNow.y1); } else A.z = 0;
+		scopeStats.aimed = aimed ? { key: aimed.key, face: aimed.face, t: +aimed.t.toFixed(1), built: !!B?.ready, focus: !!B?.focus } : null;
+		scopeStats.open = openNow && SCOPE_ROOM.k.value > 0 ? { key: openNow.key, room: openNow.type, level: openNow.k, k: +SCOPE_ROOM.k.value.toFixed(2) } : null;
+	}
+	// the level looked at (y in the world): kept while the reticle wavers within a metre of it
+	function levelLooked(B, y) {
+		const k = levelAt(B, y), c = B.lookK, Ls = B.P.levels;
+		if (c !== undefined && c !== k && Ls[c]) {
+			const fy = y - B.P.f0, lo = Ls[c].y - 1.2, hi = Ls[c + 1] ? Ls[c + 1].y - 1.2 : Infinity;
+			if (fy > lo - 1 && fy < hi + 1) return c;
+		}
+		B.lookK = k;
+		return k;
+	}
+	// the job the scope wants done now: its building begun, or the level now looked at built
+	function scopeJob() {
+		if (!aimed || performance.now() / 1000 - aimed.since < SCOPE_SETTLE) return null;
+		const B = live.get(aimed.key);
+		if (B) {
+			if (!B.ready || !B.focus || B.convert) return null;
+			const k = levelLooked(B, aimed.ly + B.o.y);
+			if (B.levels[k]) return null;
+			B.focus.y = aimed.ly + B.o.y;
+			return { key: B.key, B, gen: levelsFor(B, k), scope: true };
+		}
+		if (aimed.tower) return null;
+		const o = aimed.o, tall = new Set(city.towersNear?.(o.x, o.z, 2) || []), use = useOf(o, tall);
+		if (!use) return null;
+		if (focus) drop(focus.key);
+		const N = { key: aimed.key, o, use, ms: 0, focus: { y: aimed.ly + o.y } };
+		live.set(N.key, N);
+		focus = N;
+		scopeStats.built++;
+		return { key: N.key, B: N, gen: make(N) };
+	}
+	// the span of the room behind the point looked at, on its face, in the drawn box's frame (as
+	// city.js measures it), and the height of its level over the block's foot
+	function spanOf(B, h, k) {
+		const P = B.P, L = P.levels[k], b = drawnBox(B.o), ca = Math.cos(B.o.a), sa = Math.sin(B.o.a);
+		// (the drawn box's centre in the lot's frame: plan metres = drawn metres + this)
+		const dx = b.x - B.o.x, dz = b.z - B.o.z, ox = ca * dx + sa * dz, oz = -sa * dx + ca * dz;
+		const front = h.face < 2, off = front ? ox : oz;
+		const R = roomBehind(P.rooms, k, h.face, (front ? h.lx : h.lz) + off);
+		if (!R) return null;
+		const y0 = P.f0 + L.y - B.o.y;
+		return { key: B.key, o: B.o, face: h.face, room: R.room.id ?? P.rooms.indexOf(R.room), type: R.room.type, k, u0: R.u0 - off, u1: R.u1 - off, y0: y0 + 0.05, y1: y0 + Math.min(L.h ?? ST.ceil, ST.storey) - 0.05 };
+	}
+	// an object's shaders built in the background (renderer.compileAsync), then shown
+	function warmUp(root, done, mark) {
+		mark(true);
+		root.visible = true;
+		let job = null;
+		try { job = warm?.(root); } catch (e) { job = null; }
+		if (!job?.then) { done?.(); return; }
+		root.visible = false;
+		job.catch(() => {}).then(() => { root.visible = true; done?.(); });
+	}
+	const bands = new WeakMap();
+	function widen(MS, on) {
+		if (!MS) return;
+		for (const m of Object.values(MS)) {
+			const u = m?.userData?.lodBand?.value;
+			if (!u) continue;
+			if (on) { if (!bands.has(m)) bands.set(m, u.clone()); u.z = 1e8; u.w = 1e8 + 1; } else if (bands.has(m)) { u.copy(bands.get(m)); bands.delete(m); }
+		}
+	}
+	// a shot along d from e that meets the box of o (a lot, or the surveyed building it stands
+	// for): into the scoped room through its open window? Then the far side of the box (combat
+	// stops it there if nothing in the room does first), else -1
+	const seeInto = (o, e, d) => (openNow && SCOPE_ROOM.k.value > 0.5 ? seeIntoRoom(openNow, o, e, d) : -1);
+	// the room seen down the scope now, where it is one of these buildings' (for home-life.js: its
+	// household shown at home there): { B, k, room } or null
+	const scopeRoom = () => { if (!openNow || SCOPE_ROOM.k.value <= 0) return null; const B = live.get(openNow.key); return B?.ready && B.P ? { B, k: openNow.k, room: B.P.rooms[openNow.room] || null } : null; };
+	// the seats of the office room seen down the scope, in the world, and how busy it is at this
+	// hour (for people/scope-workers.js: its people at their desks, however far):
+	// { key, seats, k } or null. An office of these buildings' or a tower's office floor
+	function scopeSeats(hours) {
+		if (!openNow || SCOPE_ROOM.k.value <= 0.5) return null;
+		const o = openNow.o, b = drawnBox(o), ca = Math.cos(o.a), sa = Math.sin(o.a), f = openNow.face, half = f < 2 ? b.d / 2 : b.w / 2;
+		// (behind the stretch of glass open, within a bay's depth of it)
+		const behind = (q) => {
+			const dx = q.x - b.x, dz = q.z - b.z, lx = ca * dx + sa * dz, lz = -sa * dx + ca * dz;
+			const u = f < 2 ? lx : lz, deep = half - (f === 0 ? lz : f === 1 ? -lz : f === 2 ? lx : -lx);
+			return u > openNow.u0 && u < openNow.u1 && deep < 12;
+		};
+		let seats = null;
+		const B = live.get(openNow.key);
+		if (B?.ready && B.P && !B.site) {
+			if (B.use !== 'office') return null;
+			const L = B.P.levels[openNow.k], F = frame(B.o);
+			if (!L) return null;
+			const all = B.P.seats.filter((q) => Math.abs(q.y - L.y) < 0.5).map((q) => {
+				const [x, z] = F.w(q.x, q.z), fx = F.ca * q.fx - F.sa * q.fz, fz = F.sa * q.fx + F.ca * q.fz;
+				return { x, z, y: B.P.f0 + q.y, h: q.h, sit: q.sit, heading: Math.atan2(fx, fz), table: !!q.table, work: q.work, room: q.room };
+			});
+			// (the room's own seats; a corridor or a hall's: the desks in sight beyond it)
+			seats = all.filter((q) => q.room === openNow.room);
+			if (!seats.length) seats = all.filter(behind);
+		} else if (scopeFloor?.seats && scopeTower === openNow.key) {
+			if (scopeFloor.L.kind !== 'office') return null;
+			seats = scopeFloor.seats().filter(behind);
+		}
+		return seats?.length ? { key: openNow.key + ':' + openNow.k + ':' + openNow.room, seats, k: crowd(ZONE.office, hours).k } : null;
+	}
+
 	// ---------- streaming ----------
 	let scanX = 1e9, scanZ = 1e9, scanT = 0, cands = [], job = null, towerKey = null, towerLot = null;
-	function update(camera, dt, hours, nightK) {
+	function update(camera, dt, hours, nightK, scoped = null) {
 		night.value = nightK;
 		lightingClock(nightK, hours);
 		const p = camera.position, x = p.x, z = p.z;
 		const high = p.y - (bay.heightAt(x, z) || 0) > 150;
 		group.visible = !high;
 		if (!bay.loaded() || high) return;
+		scopeStep(camera, dt, scoped === true ? camera : scoped || null);
 		scanT -= dt;
 		if (scanT < 0 || Math.hypot(x - scanX, z - scanZ) > 8) {
 			scanT = 0.5; scanX = x; scanZ = z;
@@ -280,6 +464,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			for (const o of city.lotsNear(x, z, BUILD_R)) {
 				const key = city.lotKey(o), B = live.get(key);
 				if (B) { B.o = o; B.seen = true; }
+				// (built for the scope, and now near: built whole, as any other)
+				if (B?.focus && B.ready && useOf(o, tall) && !B.convert) B.convert = true;
 				// (built as a home before the town made it a business: built again as one, once you are not in it)
 				if (B?.ready && B.use === 'row' && useOf(o, tall) === 'shop' && inside(p)?.B !== B) { drop(key); continue; }
 				const use = B ? B.use : useOf(o, tall);
@@ -300,6 +486,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			cands.length = Math.min(cands.length, MAX);
 			for (const [key, B] of live) {
 				const d = Math.max(0, Math.hypot(B.o.x - x, B.o.z - z) - Math.max(B.o.w, B.o.d) / 2);
+				if (B.focus && !B.convert) continue;          // (the scope's own: let go by scopeStep)
 				if (d > DROP_R || (live.size > MAX && !cands.some((c) => c.key === key))) drop(key);
 			}
 			// the tower you're at: its front door cut out too (towers.js builds the lobby behind it)
@@ -315,11 +502,15 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		}
 		// one building at a time, a few milliseconds a frame
 		if (job && !live.has(job.key)) job = null;
+		if (!job) job = scopeJob();
+		if (!job) {
+			for (const B of live.values()) if (B.convert && B.ready) { B.focus = null; if (focus === B) focus = null; job = { key: B.key, B, gen: levelsFor(B, B.P.levels.length <= 5 ? 0 : levelAt(B, p.y - 1.7)), convert: true }; break; }
+		}
 		if (!job) {
 			for (const c of cands) if (!live.has(c.key)) { const B = { key: c.key, o: c.o, use: c.use, site: c.site, ms: 0 }; live.set(c.key, B); job = { key: c.key, B, gen: make(B) }; break; }
 			// ...or a tall one's floors, as you climb it
 			if (!job) for (const B of live.values()) {
-				if (!B.ready || B.P.levels.length <= 5) continue;
+				if (!B.ready || B.focus || B.P.levels.length <= 5) continue;
 				const cur = levelAt(B, p.y - 1.7);
 				if (cur !== B.cur) { job = { key: B.key, B, gen: levelsFor(B, cur), climb: true }; break; }
 			}
@@ -332,10 +523,12 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			const ms = performance.now() - t1;
 			job.B.ms += ms; stats.maxSlice = Math.max(stats.maxSlice, ms);
 			if (!r.done) continue;
-			if (!job.climb) {
+			if (job.convert) { job.B.convert = false; opened(job.B); }
+			else if (job.scope) { /* (the scope's building, another of its levels) */ }
+			else if (!job.climb) {
 				if (!r.value) { live.delete(job.key); live.set(job.key, { key: job.key, o: job.B.o, use: null, dead: true }); }
 				else if (r.value.site) { const B = r.value; B.ready = true; B.site.live = true; stats.built++; stats.lastMs = B.ms; }
-				else { const B = r.value; B.ready = true; const top = Math.max(0, Math.floor(B.P.f0 - B.o.y + B.P.levels.length * ST.storey - 0.2)); city.setDoor(B.o, [B.P.door.x, B.P.f0 - B.o.y + B.P.door.y, B.P.door.w + 4 * top]); if (B.P.bayLot) city.setDoor(B.P.bayLot, [0, 0, 0.001 + 4 * Math.max(0, Math.floor(B.P.f0 + B.P.levels.length * ST.storey - B.P.bayLot.y - 0.2))]); stats.built++; stats.lastMs = B.ms; }
+				else { const B = r.value; B.ready = true; if (!B.focus) opened(B); stats.built++; stats.lastMs = B.ms; }
 			}
 			job = null;
 		}
@@ -418,7 +611,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// a lot whose rooms are built (or a bay building's own, built as its lot): not a block too
 	// (asked only of the lots a body is at, not made up afresh for every push)
 	const claimed = (key) => {
-		for (const B of live.values()) if (B.ready && (B.key === key || (B.P?.bayLot && city.lotKey(B.P.bayLot) === key))) return true;
+		for (const B of live.values()) if (B.ready && !B.focus && (B.key === key || (B.P?.bayLot && city.lotKey(B.P.bayLot) === key))) return true;
 		return false;
 	};
 	function push(pos, footY) {
@@ -522,7 +715,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		let verts = 0, bytes = 0, meshes = 0, levels = 0;
 		for (const B of live.values()) B.root?.traverse((q) => { if (q.isMesh) { meshes++; const a = q.geometry.attributes; verts += a.position.count; for (const k in a) bytes += a[k].array.byteLength; } });
 		for (const B of live.values()) levels += (B.levels || []).filter(Boolean).length;
-		return { live: [...live.values()].filter((B) => B.ready).length, building: !!job, cands: cands.length, levels, meshes, verts, geoMB: +(bytes / 1048576).toFixed(2), ...stats, list: [...live.values()].filter((B) => B.P).map((B) => ({ use: B.use, x: +B.o.x.toFixed(1), z: +B.o.z.toFixed(1), a: +B.o.a.toFixed(3), w: B.o.w, d: B.o.d, levels: B.P.levels.length, f0: +B.P.f0.toFixed(2), style: B.P.style, ms: +B.ms.toFixed(1), rooms: B.P.rooms.map((r) => r.type).join(',') })) };
+		return { live: [...live.values()].filter((B) => B.ready).length, building: !!job, scope: { ...scopeStats, focus: focus ? { key: focus.key, use: focus.use, ready: !!focus.ready, levels: (focus.levels || []).map((L, k) => L ? k : -1).filter((k) => k >= 0), ms: +(focus.ms || 0).toFixed(1) } : null }, cands: cands.length, levels, meshes, verts, geoMB: +(bytes / 1048576).toFixed(2), ...stats, list: [...live.values()].filter((B) => B.P).map((B) => ({ use: B.use, x: +B.o.x.toFixed(1), z: +B.o.z.toFixed(1), a: +B.o.a.toFixed(3), w: B.o.w, d: B.o.d, levels: B.P.levels.length, f0: +B.P.f0.toFixed(2), style: B.P.style, ms: +B.ms.toFixed(1), rooms: B.P.rooms.map((r) => r.type).join(',') })) };
 	}
 	// in front of the nearest building of a kind, facing its door (for looking round and tests)
 	function goTo(P, use, idx = 0, roomType = null) {
@@ -578,5 +771,5 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// where the signs inside the businesses hang (estab-fit.js K.sign: the grocers' aisle markers),
 	// in the world, the way each faces, and the business
 	const signAnchors = () => { const out = []; for (const B of live.values()) { if (!B.ready || !B.P.signAnchors) continue; const F = frame(B.o); for (const a of B.P.signAnchors) { const [x, z] = F.w(a.x, a.z), [x2, z2] = F.w(a.x + (a.nx || 0), a.z + (a.nz || 0)); out.push({ ...a, x, z, y: B.P.f0 + a.y, nx: x2 - x, nz: z2 - z, building: B.key, estab: B.P.estab?.id || null, type: B.P.estab?.type || a.fit || '' }); } } return out; };
-	return { group, update, floor, push, ceiling, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
+	return { group, update, floor, push, ceiling, inside, seeInto, scopeRoom, scopeSeats, doorNear, venue, info, goTo, live, frame, release, lightAnchors, signAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }
