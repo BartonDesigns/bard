@@ -221,7 +221,7 @@ export function createErrands(o) {
 	let doing = null;
 	if (doBtn) {
 		doBtn.type = 'button';
-		doBtn.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom));display:none;min-height:44px;padding:9px 14px;border-radius:20px;border:1px solid rgba(226,191,106,.7);background:rgba(8,20,26,.82);color:#eafaf6;font:600 13px system-ui;cursor:pointer;z-index:4;';
+		doBtn.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom));display:none;min-height:44px;padding:9px 14px;border-radius:20px;border:1px solid rgba(226,191,106,.7);background:rgba(8,20,26,.82);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;z-index:4;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown']) doBtn.addEventListener(ev, (e) => e.stopPropagation());
 		doBtn.addEventListener('click', (e) => { e.stopPropagation(); doBtn.blur(); doing?.(); });
 		mount.append(doBtn);

@@ -10,7 +10,7 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 	const visuals = new Map(), forward = new THREE.Vector3(), viewer = new THREE.Vector3();
 	const panel = document.createElement('div');
 	panel.dataset.fieldRecovery = '';
-	panel.style.cssText = 'display:none;position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);width:min(360px,calc(100% - 32px));box-sizing:border-box;padding:12px 14px;background:rgba(12,20,25,.96);border:1px solid #617680;border-radius:12px;color:#edf5f6;font:13px/1.45 system-ui;z-index:6;box-shadow:0 8px 28px #0008;pointer-events:auto;';
+	panel.style.cssText = 'display:none;position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);width:min(360px,calc(100% - 32px));box-sizing:border-box;padding:12px 14px;background:rgba(12,20,25,.96);border:1px solid #617680;border-radius:12px;color:#edf5f6;font:13px/1.45 var(--bard-body,system-ui,sans-serif);z-index:6;box-shadow:0 8px 28px #0008;pointer-events:auto;';
 	panel.setAttribute('role', 'region'); panel.setAttribute('aria-label', 'Recover equipment');
 	const source = document.createElement('div'), title = document.createElement('strong'), stats = document.createElement('div'), buttons = document.createElement('div');
 	source.style.cssText = 'font-size:11px;color:#a8b9c2';
@@ -19,7 +19,7 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 	buttons.style.cssText = 'display:flex;gap:8px';
 	const button = (label, equip) => {
 		const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
-		b.style.cssText = 'flex:1;min-height:44px;border:1px solid #76929a;border-radius:7px;background:#263c44;color:#fff;font:600 13px system-ui;cursor:pointer;touch-action:manipulation;';
+		b.style.cssText = 'flex:1;min-height:44px;border:1px solid #76929a;border-radius:7px;background:#263c44;color:#fff;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;touch-action:manipulation;';
 		b.onclick = () => collect(equip); buttons.append(b); return b;
 	};
 	button(touch ? 'Take' : '[E] Take', false); button(touch ? 'Take & equip' : '[Shift+E] Equip', true);

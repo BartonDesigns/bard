@@ -42,9 +42,9 @@ export async function pruneModels(keepId) {
 
 export function storagePanel(host, { activeModel, onModelRemoved } = {}) {
 	const box = document.createElement('div');
-	box.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.15);font:12px system-ui;line-height:1.4;';
+	box.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.15);font:12px var(--bard-body,system-ui,sans-serif);line-height:1.4;';
 	host.appendChild(box);
-	const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'margin-left:auto;min-height:30px;padding:0 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font:11px system-ui;cursor:pointer;flex:none;'; b.onclick = async (e) => { e.stopPropagation(); b.disabled = true; await fn(); draw(); }; return b; };
+	const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'margin-left:auto;min-height:30px;padding:0 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font:11px var(--bard-body,system-ui,sans-serif);cursor:pointer;flex:none;'; b.onclick = async (e) => { e.stopPropagation(); b.disabled = true; await fn(); draw(); }; return b; };
 	const row = (text, sub, action) => { const r = document.createElement('div'); r.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;'; const t = document.createElement('div'); t.innerHTML = `<div>${text}</div>${sub ? `<div style="opacity:.55">${sub}</div>` : ''}`; r.append(t); if (action) r.append(action); box.append(r); };
 	async function draw() {
 		box.innerHTML = '<div style="font-weight:700;letter-spacing:.06em;margin-bottom:4px;">STORAGE ON THIS DEVICE</div><div style="opacity:.6">Measuring…</div>';

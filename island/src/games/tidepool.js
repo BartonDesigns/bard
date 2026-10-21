@@ -53,7 +53,7 @@ export const GAME = {
 			const gl = K.canvas(256, 256, (g) => { const r = g.createRadialGradient(128, 128, 5, 128, 128, 128); r.addColorStop(0, 'rgba(255,255,255,.85)'); r.addColorStop(0.4, 'rgba(255,255,255,.25)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 256, 256); });
 			glare = K.mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: gl, transparent: true, depthWrite: false }), 0, -0.015, 0);
 			glare.rotation.x = -Math.PI / 2;
-			list = K.el('position:absolute;left:calc(10px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));padding:8px 12px;border-radius:14px;background:rgba(8,20,26,.8);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:12px/1.5 system-ui;pointer-events:none;max-width:60vw');
+			list = K.el('position:absolute;left:calc(10px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));padding:8px 12px;border-radius:14px;background:rgba(8,20,26,.8);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:12px/1.5 var(--bard-body,system-ui,sans-serif);pointer-events:none;max-width:60vw');
 		}
 		function reset() {
 			for (const f of found) K.drop(f.g);

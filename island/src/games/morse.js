@@ -44,7 +44,7 @@ export const GAME = {
 			K.box(2.2, 1.2, 1.4, '#e8e4dc', -0.8, 1.2, 0, ship);
 			K.cyl(0.25, 0.25, 1.2, '#b83a2a', -0.4, 2.3, 0, ship);
 			shipLamp = K.ball(0.25, K.mat('#ffd060', { glow: 0.3 }), 1.6, 1.3, 0.9, ship);
-			card = K.el('position:absolute;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 16px;border-radius:16px;background:rgba(8,20,26,.85);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:13px system-ui;text-align:center;pointer-events:none;min-width:220px');
+			card = K.el('position:absolute;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 16px;border-radius:16px;background:rgba(8,20,26,.85);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);text-align:center;pointer-events:none;min-width:220px');
 		}
 		function reset() {
 			S = { time: TIME, score: 0, sent: 0, state: 'play', word: '', li: 0, keyed: '', down: false, downT: 0, upT: 0, dist: 0, errors: 0, flash: 0, log: [] };
@@ -58,7 +58,7 @@ export const GAME = {
 		}
 		function draw() {
 			const letters = [...S.word].map((c, i) => `<span style="display:inline-block;margin:0 5px;${i < S.li ? 'color:#6bd66b' : i === S.li ? 'color:#ffe27a' : 'opacity:.6'}"><b style="font-size:22px">${c}</b><br><span style="font-size:13px">${pretty(CODE[c])}</span></span>`).join('');
-			card.innerHTML = `<div style="opacity:.75;margin-bottom:4px">Signal the ship:</div>${letters}<div style="margin-top:6px;min-height:18px;font:600 16px system-ui;letter-spacing:3px">${pretty(S.keyed) || '<span style="opacity:.5;font-size:12px;letter-spacing:0">tap • · hold —</span>'}</div>`;
+			card.innerHTML = `<div style="opacity:.75;margin-bottom:4px">Signal the ship:</div>${letters}<div style="margin-top:6px;min-height:18px;font:600 16px var(--bard-display,system-ui,sans-serif);letter-spacing:3px">${pretty(S.keyed) || '<span style="opacity:.5;font-size:12px;letter-spacing:0">tap • · hold —</span>'}</div>`;
 		}
 		function press(down) {
 			if (S.state !== 'play') return;
