@@ -10,16 +10,19 @@ import * as THREE from 'three';
 
 const MAX = 4;
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
-const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[${MAX}]; uniform int uN; uniform float uAspect; uniform float uT; uniform vec4 uGrade; varying vec2 vUv;
+const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[${MAX}]; uniform vec4 uE[${MAX}]; uniform int uN; uniform float uAspect; uniform float uT; uniform vec4 uGrade; varying vec2 vUv;
 	void main(){
 		vec2 asp = vec2(uAspect, 1.0), q = (vUv * 2.0 - 1.0) * asp, s = q;
 		float hole = 0.0, px = 2.0 / 900.0;
 		for (int i = 0; i < ${MAX}; i++) {
 			if (i >= uN) break;
-			// (x, y: its heart on screen, z: its shadow's radius there, w: how far out the bending
-			// reaches, in radii; uK.x: its strength 0..1, uK.y: where the horizon crosses it on screen)
-			vec2 d = s - uL[i].xy;
-			float rs = uL[i].z, th = max(length(d), 1e-4), k = uK[i].x;
+			// (x, y: its shadow's heart on screen, z: the shadow's half-width there, w: how far out the
+			// bending reaches, in radii; uK.x: its strength 0..1, uK.y: where the horizon crosses it on
+			// screen; uE.xy: the way out from the view's centre, along which a sphere seen off the axis
+			// is drawn out on screen, by uE.z: squeezed back, its shadow is a circle again)
+			vec2 d = s - uL[i].xy, ax = uE[i].xy, tg = vec2(-ax.y, ax.x);
+			vec2 dc = vec2(dot(d, ax) / uE[i].z, dot(d, tg));
+			float rs = uL[i].z, th = max(length(dc), 1e-4), k = uK[i].x;
 			// (only above the horizon: below it the hole is hidden, and so is its light)
 			float sky = smoothstep(uK[i].y - px, uK[i].y + px * 2.0, s.y);
 			// (the shadow itself, its ring and the flat of its disc are kept out of the grade, until
@@ -33,7 +36,8 @@ const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[$
 			if (beyond <= 0.0) continue;
 			float pull = (beyond - rs * 0.012) * exp(-beyond / (rs * uL[i].w));
 			float bent = th - max(0.0, pull) * k * sky;
-			s = uL[i].xy + d / th * bent;
+			vec2 dn = dc / th * bent;
+			s = uL[i].xy + ax * (dn.x * uE[i].z) + tg * dn.y;
 		}
 		vec2 uv = s / asp * 0.5 + 0.5;
 		vec3 c = texture2D(uSrc, clamp(uv, 0.0, 1.0)).rgb;
@@ -53,10 +57,10 @@ const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[$
 	}`;
 
 export function createLens() {
-	const L = [], K = [];
-	for (let i = 0; i < MAX; i++) { L.push(new THREE.Vector4()); K.push(new THREE.Vector2()); }
+	const L = [], K = [], E = [];
+	for (let i = 0; i < MAX; i++) { L.push(new THREE.Vector4()); K.push(new THREE.Vector2()); E.push(new THREE.Vector4(1, 0, 1, 0)); }
 	const mat = new THREE.ShaderMaterial({
-		uniforms: { uSrc: { value: null }, uL: { value: L }, uK: { value: K }, uN: { value: 0 }, uAspect: { value: 1 }, uT: { value: 0 }, uGrade: { value: new THREE.Vector4() } },
+		uniforms: { uSrc: { value: null }, uL: { value: L }, uK: { value: K }, uE: { value: E }, uN: { value: 0 }, uAspect: { value: 1 }, uT: { value: 0 }, uGrade: { value: new THREE.Vector4() } },
 		vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false,
 	});
 	const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
@@ -64,7 +68,7 @@ export function createLens() {
 	const scene = new THREE.Scene(), cam = new THREE.Camera();
 	scene.add(quad);
 	let fb = null;
-	const size = new THREE.Vector2(), v = new THREE.Vector3(), fwd = new THREE.Vector3();
+	const size = new THREE.Vector2(), v = new THREE.Vector3(), fwd = new THREE.Vector3(), q = new THREE.Quaternion();
 	// lenses: [{ p, r (m), k (0..1), cut (the horizon's height, m) }] in the world, the frame bent
 	// round those in front; grade: { inv, grey, black, burst } 0..1 (or null)
 	function post(renderer, camera, lenses, t = 0, grade = null) {
@@ -72,20 +76,28 @@ export function createLens() {
 		if (!lenses.length && !graded) return false;
 		const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov || 60) / 2);
 		camera.getWorldDirection(fwd);
+		camera.getWorldQuaternion(q).invert();
 		let n = 0;
 		for (const l of lenses) {
 			if (n >= MAX || l.k <= 0.01) continue;
 			v.set(l.p.x, l.p.y, l.p.z).sub(camera.position);
 			const dist = v.length(), ahead = v.dot(fwd);
 			if (ahead <= l.r * 0.2 || dist <= l.r * 1.02) continue;
-			// (its shadow's size on screen from the angle it spans, in the same units as the height of the view)
-			const rs = Math.tan(Math.asin(Math.min(0.999, l.r / dist))) / tanH;
-			v.set(l.p.x, l.p.y, l.p.z).project(camera);
-			if (Math.abs(v.x) > 1 + rs * 4 || Math.abs(v.y) > 1 + rs * 4) continue;
-			const hx = v.x * camera.aspect, hy = v.y;
+			// (its shadow on screen, in the units of the view's half height: a sphere off the view's
+			// axis is not a circle there but an ellipse drawn out along the line from the centre of the
+			// view, its own centre pushed out a little past where its heart lands; from the angle it
+			// stands off the axis and the angle it spans: the view is a plane the cone of its edge is
+			// cut by)
+			v.applyQuaternion(q);
+			const rho = Math.hypot(v.x, v.y), sinA = Math.min(0.999, l.r / dist), cosA = Math.sqrt(1 - sinA * sinA), sinT = rho / dist, cosT = ahead / dist;
+			const A = Math.max(0.02, cosA * cosA - sinT * sinT), ux = rho > 1e-6 ? v.x / rho : 1, uy = rho > 1e-6 ? v.y / rho : 0;
+			const c0 = sinT * cosT / A / tanH, a = sinA * cosA / A / tanH, b = sinA / Math.sqrt(A) / tanH;
+			const hx = ux * c0, hy = uy * c0;
+			if (Math.abs(hx) > camera.aspect + a * 4 || Math.abs(hy) > 1 + a * 4) continue;
 			v.set(l.p.x, l.cut ?? -1e9, l.p.z).project(camera);
-			L[n].set(hx, hy, rs, 0.7);
+			L[n].set(hx, hy, b, 0.7);
 			K[n].set(Math.min(1, l.k), Math.max(-10, v.y));
+			E[n].set(ux, uy, a / b, 0);
 			n++;
 		}
 		if (!n && !graded) return false;

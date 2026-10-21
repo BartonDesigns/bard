@@ -283,7 +283,8 @@ function blackHole(scene) {
 		},
 		step(dt) {
 			H.t += dt; H.seen += dt;
-			if (H.seen > 0.35) H.want = 0;
+			// (left unset for a second it goes out: a long frame must not blink it away)
+			if (H.seen > 1.0) H.want = 0;
 			H.a += (H.want - H.a) * Math.min(1, dt * 6);
 			if (H.want === 0 && H.a < 0.01) H.a = 0;
 			group.visible = H.a > 0;
