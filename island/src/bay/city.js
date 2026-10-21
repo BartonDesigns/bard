@@ -29,7 +29,7 @@ import { inClearing, clearingVersion } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { houseEra, exteriorLook, seedAt } from './decor.js';
-import { createProps, rooftopUnit, rooftopUnitFar, nearCopies } from './lotkit.js';
+import { createProps, rooftopUnit, rooftopUnitFar } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
@@ -41,7 +41,8 @@ import { qualityNow } from '../world/governor.js';
 import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 import { GFX_PHONE } from '../world/device.js';
-import { orderByReach, subEnds, shadowByReach } from '../world/shadowreach.js';      // the sun's shadows from what can reach them
+import { orderByReach } from '../world/shadowreach.js';      // the sun's shadows from what can reach them
+import { orderBySector, sectorOf, chunkStore, chunkedMesh } from '../world/instancechunks.js';      // drawn a sector at a time, what is out of view left out
 import { cityBlocks } from './city-blocks.js';
 import { cityGrounds, cityDecorate, cityApart } from './city-dressing.js';
 import { plantingBed, BED_LEN } from './lantana.js';
@@ -757,6 +758,10 @@ export function createCity(shared, scene, bay, real = null) {
 	const mat = addNightField(withRise(buildingMaterial(shared, night, nearBand), rise, 'rise1'), { field: 'SF' });
 	const roofMat = withRise(roofDetail(weatherRoofs(new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide }))), rise, 'roofrise1');
 	const CAP = 32000;
+	// (the buildings, their roofs and the skylines are drawn in chunks of CH, a sector at a time
+	// round where they were laid out, each left out when it is out of the view or the sun's box:
+	// world/instancechunks.js. The meshes written to hold the slots, and are never drawn)
+	const CH = 2048, STORE = chunkStore(CAP, CH);
 	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
 	const mk = (geo, material, cap, kinds) => {
 		if (kinds) { geo.setAttribute('aKind', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1)); geo.setAttribute('aAge', new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(0.4), 1)); geo.setAttribute('aNear', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3));geo.setAttribute('aDetailBirth',new THREE.InstancedBufferAttribute(new Float32Array(cap),1)); geo.setAttribute('aNL', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4)); }
@@ -766,15 +771,17 @@ export function createCity(shared, scene, bay, real = null) {
 		group.add(im);
 		return im;
 	};
-	const near = mk(boxGeo(), mat, CAP, true);
+	const near = mk(boxGeo(), mat, STORE, true);
 	const hipG = roofGeometry(true), gableG = roofGeometry(false);
-	for (const g of [hipG, gableG]) { g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4)); g.setAttribute('aWall', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3)); }
-	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
-	// (the buildings are written nearest first, in bands, and the sun's shadow pass draws only the
-	// bands its box can reach: the whole city went into it, kilometres of it clipped away each
-	// frame, world/shadowreach.js. reach: each mesh's bands, as last written)
-	const reach = { near: null, hips: null, gables: null, sky: null };
-	for (const k of ['near', 'hips', 'gables']) shadowByReach({ near, hips, gables }[k], () => reach[k]);
+	for (const g of [hipG, gableG]) { g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(new Float32Array(STORE * 4), 4)); g.setAttribute('aWall', new THREE.InstancedBufferAttribute(new Float32Array(STORE * 3), 3)); }
+	const hips = mk(hipG, roofMat, STORE, false), gables = mk(gableG, roofMat, STORE, false);
+	// (each chunk also draws in the sun's shadow pass only the bands of distance its box can reach:
+	// the whole city went into it, kilometres of it clipped away each frame, world/shadowreach.js)
+	const chunked = new Map();
+	const chunk = (im, ch, name, gaps = false) => { im.visible = false; im.name = name + '-store'; chunked.set(im, chunkedMesh(im, ch, { parent: group, name, gaps })); };
+	chunk(near, CH, 'city-near'); chunk(hips, CH, 'city-hips'); chunk(gables, CH, 'city-gables');
+	// (how far a town rising out of the ground has its buildings sunk: RISE_GLSL)
+	const SUNK = 36;
 	// (an instance's half-size: the corner of its lot, and a roof's overhang and gutter past it)
 	const lotHalf = (o) => Math.hypot(o.w || 0, o.d || 0) / 2 + 2;
 	// the props of the lived-in streets and on the roofs (lotkit.js)
@@ -789,7 +796,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// clothesline in some back yards (see decorate)
 	// where the rooftop units' near version dissolves into the far one (m: a fan's shroud is under
 	// a pixel high past it)
-	const AC_LOD = PHONE ? [180, 230] : [260, 310];
+	const AC_LOD = PHONE ? [180, 230] : [260, 310], AC_CAP = 12000, AC_NEAR = PHONE ? 1500 : 3000;
 	const kit = (() => {
 		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
@@ -822,13 +829,20 @@ export function createCity(shared, scene, bay, real = null) {
 		const glassM = withRise(new THREE.MeshStandardMaterial({ color: 0xa9c4cf, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false }), rise, 'kitrise');
 		const acM = M({ roughness: 0.55, metalness: 0.35 }), acNearM = M({ roughness: 0.55, metalness: 0.35 });
 		addLodFade(acM, 'uniform', [AC_LOD[0], AC_LOD[1], NONE_OUT[0], NONE_OUT[1]]); addLodFade(acNearM, 'uniform', [NONE_IN[0], NONE_IN[1], AC_LOD[0], AC_LOD[1]]);
-		const acFar = mkK(ac, acM, 12000), acNearI = mkK(acNear, acNearM, PHONE ? 1500 : 3000);
+		const acFar = mkK(ac, acM, chunkStore(AC_CAP, 512)), acNearI = mkK(acNear, acNearM, chunkStore(AC_NEAR, 256));
 		// (the far units throw no shadow: every one the sun's box can reach is in the near copy;
 		// and the near copy is the far one's, so what the far one shows, a unit taken down with
 		// its roof included, it shows: structures/damage.js edits only the far)
 		acFar.castShadow = false; acNearI.userData.copyOf = acFar;
+		// (both drawn in chunks a sector at a time, as the buildings are, out of view left out: the far
+		// set holds every unit out to 700 m all round you, world/instancechunks.js. Its store stays
+		// under the 20000 instances damage.js takes for the buildings' own)
+		chunk(acFar, 512, 'city-ac', true); chunk(acNearI, 256, 'city-ac-near', true);
+		// (how far a unit reaches from its foot, at its own size: its chunk's bounds)
+		let acR = 0;
+		for (const g of [ac, acNear]) { const P = g.attributes.position.array; for (let i = 0; i < P.length; i += 3) acR = Math.max(acR, Math.hypot(P[i], P[i + 2]), P[i + 1]); }
 		return {
-			ac: acFar, acNear: acNearI,
+			ac: acFar, acNear: acNearI, acR,
 			sunF: mkK(sunF, M({ roughness: 0.5 }), 3000), sunG: mkK(sunG, glassM, 3000),
 			line: mkK(lineG, M({ roughness: 0.9, side: THREE.DoubleSide }), 3000),
 		};
@@ -898,11 +912,14 @@ export function createCity(shared, scene, bay, real = null) {
 		return { sizeK, near: tierMesh(nearT.parts, g.palm ? 900 : 2600, true, LOD.near, k, !!g.palm), mid: tierMesh(midT.parts, g.palm ? 3000 : 12000, false, LOD.mid, k, !!g.palm), H: nearT.height, Hm: midT.height };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
-	// the planters' lantana and flax lily (lantana.js): each bed in three levels, the plants in
+	// the planters' lantana and flax lily (lantana.js): each bed in four levels, the plants in
 	// their vertex colours and the foliage's mass in the shrubs' own leaf cards (the same shader)
 	const BED = plantingBed(7311);
-	const BED_LOD = PHONE ? { detail: [NONE_IN[0], NONE_IN[1], 5, 7], mid: [5, 7, 40, 48], far: [40, 48, 260, 300] }
-		: { detail: [NONE_IN[0], NONE_IN[1], 7, 10], mid: [7, 10, 60, 70], far: [60, 70, 360, 410] };
+	// (past about 120 m a bed is a few pixels across: its plainest level, a third of the far one's
+	// triangles, takes over there, dissolving in as the rooftop units' far set does; hundreds of far
+	// beds were drawn all round you out to 300 m)
+	const BED_LOD = PHONE ? { detail: [NONE_IN[0], NONE_IN[1], 5, 7], mid: [5, 7, 40, 48], far: [40, 48, 110, 130], distant: [110, 130, 260, 300] }
+		: { detail: [NONE_IN[0], NONE_IN[1], 7, 10], mid: [7, 10, 60, 70], far: [60, 70, 150, 175], distant: [150, 175, 360, 410] };
 	const bedTier = (T, band, cap, shadow) => {
 		const body = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7), leaves = swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8);
 		for (const S of [body, leaves]) addLodFade(S.material, 'uniform', band);
@@ -915,9 +932,13 @@ export function createCity(shared, scene, bay, real = null) {
 			return im;
 		});
 	};
-	const beds = { detail: bedTier(BED.detail, BED_LOD.detail, 64, !PHONE), mid: bedTier(BED.mid, BED_LOD.mid, PHONE ? 400 : 700, !PHONE), far: bedTier(BED.far, BED_LOD.far, PHONE ? 2000 : 3500, false), litter: [] };
+	const beds = { detail: bedTier(BED.detail, BED_LOD.detail, 64, !PHONE), mid: bedTier(BED.mid, BED_LOD.mid, PHONE ? 400 : 700, !PHONE), far: bedTier(BED.far, BED_LOD.far, chunkStore(PHONE ? 800 : 1400, 128), false), distant: bedTier(BED.distant, BED_LOD.distant, chunkStore(PHONE ? 2000 : 3500, 128), false), litter: [] };
+	// (the far and farthest beds, out to 300 m all round you, drawn in chunks by the sector their
+	// planter stands in, as the buildings are: world/instancechunks.js)
+	beds.far.forEach((im, k) => chunk(im, 128, 'city-beds-far' + k)); beds.distant.forEach((im, k) => chunk(im, 128, 'city-beds-distant' + k));
+	const bedChunks = [...beds.far, ...beds.distant].map((im) => chunked.get(im));
 	beds.litter = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.75 }, shared, 0.7); addLodFade(S.material, 'uniform', BED_LOD.detail); const im = new THREE.InstancedMesh(BED.litter, S.material, 32); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; group.add(im); return im; })()];
-	const bedMeshes = [...beds.detail, ...beds.mid, ...beds.far, ...beds.litter];
+	const bedMeshes = [...beds.detail, ...beds.mid, ...beds.litter];
 	// sword ferns on the shady forest floor (under the redwoods, on the north slopes, in the draws)
 	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.2 } }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
 	// the far tier: one point per tree, drawn as its species' impostor
@@ -1036,25 +1057,43 @@ export function createCity(shared, scene, bay, real = null) {
 	function kitPut(put, k, e) { if (kit2.has(k)) (put.props[k] || (put.props[k] = [])).push(e); }
 	function uploadKit(put) {
 		const [acs, suns, lines] = put || [[], [], []];
+		// (the units a sector at a time round where the city was laid out, the first AC_CAP of them)
+		acAt = lastAt;
+		const U = acs.slice(0, AC_CAP).map(([x, y, z, a, s]) => ({ x, y, z, a, s })), O = orderBySector(U, acAt[0], acAt[1], (u) => u.s * kit.acR), C = chunked.get(kit.ac);
+		C.begin(acAt[0], acAt[1]);
+		for (let i = 0; i < U.length; i++) {
+			const { x, y, z, a, s } = U[i], k = C.put(O.sec[i], O.band[i], x, z, s * kit.acR + 0.5, y - SUNK, y + s * kit.acR + 0.5);
+			if (k >= 0) { q.setFromAxisAngle(Y, -a); kit.ac.setMatrixAt(k, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
+		}
+		kit.ac.instanceMatrix.needsUpdate = true;
+		C.end();
 		let n = 0;
-		for (const [x, y, z, a, s] of acs) { if (n >= kit.ac.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.ac.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
-		kit.ac.count = n; n = 0;
 		for (const [x, y, z, a, w, h, d] of suns) { if (n >= kit.sunF.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); m4.compose(p.set(x, y, z), q, sc.set(w, h, d)); kit.sunF.setMatrixAt(n, m4); m4.compose(p.set(x, y + 0.33 * h, z), q, sc.set(w - 0.16, h * 0.67 - 0.14, d - 0.16)); kit.sunG.setMatrixAt(n++, m4); }      // (the glass well inside its bars, or the two flicker from afar)
 		kit.sunF.count = kit.sunG.count = n; n = 0;
 		for (const [x, y, z, a, s] of lines) { if (n >= kit.line.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.line.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
 		kit.line.count = n;
-		for (const im of [kit.ac, kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+		for (const im of [kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
 		placeAC(acX, acZ);
 	}
 	// the rooftop units near you, copied from the far set every 40 m you go and whenever the far
 	// set changes (a new one laid out, a unit taken down or put back)
-	let acX = 1e9, acZ = 1e9, acV = -1;
+	let acX = 1e9, acZ = 1e9, acV = -1, acAt = [0, 0];
+	// (written into the near copy's chunks by the sector each stands in round where the far set was laid
+	// out, acAt, in the far set's own order)
 	function placeAC(x, z) {
 		acX = x; acZ = z; acV = kit.ac.instanceMatrix.version;
-		const N = kit.acNear;
-		N.count = nearCopies(kit.ac.instanceMatrix.array, kit.ac.count, N.instanceMatrix.array, N.instanceMatrix.count, x, z, AC_LOD[1] + 45);
-		N.instanceMatrix.needsUpdate = true;
-		N.computeBoundingSphere();
+		const A = kit.ac.instanceMatrix.array, n = kit.ac.count, R2 = (AC_LOD[1] + 45) ** 2, C = chunked.get(kit.acNear), B = kit.acNear.instanceMatrix.array;
+		C.begin(acAt[0], acAt[1]);
+		for (let i = 0; i < n; i++) {
+			const e = i * 16, ux = A[e + 12], uz = A[e + 14];
+			// (not one taken down with its roof, nor a gap between the far set's chunks: nothing to draw)
+			if ((ux - x) ** 2 + (uz - z) ** 2 > R2 || (!A[e] && !A[e + 1] && !A[e + 2])) continue;
+			const s = Math.hypot(A[e], A[e + 1], A[e + 2]), k = C.put(sectorOf(ux, uz, acAt[0], acAt[1], s * kit.acR), 0, ux, uz, s * kit.acR + 0.5, A[e + 13] - SUNK, A[e + 13] + s * kit.acR + 0.5);
+			if (k < 0) break;
+			for (let j = 0; j < 16; j++) B[k * 16 + j] = A[e + j];
+		}
+		kit.acNear.instanceMatrix.needsUpdate = true;
+		C.end();
 	}
 	// Neighbouring buildings from the map often overlap by a metre or so (their outlines
 	// are fitted as boxes). Where they do, their fronts run a few centimetres apart through
@@ -1064,15 +1103,22 @@ export function createCity(shared, scene, bay, real = null) {
 	// Only the drawn box changes (o.fit); the lot keeps its own place and size.
 	function apart(...args) { return cityApart(cc, ...args); }
 	const NL0 = [0, 0, 0, 0];
-	function upload(list, body, roofs) {
-		let n = 0, nh = 0, ng = 0;
+	// (O: each item's sector and band, as orderBySector put the list in order round cx, cz; each
+	// building and roof goes to the slot its chunk gives it, o.slot and o.roofSlot)
+	function upload(list, body, roofs, O, cx, cz) {
+		let placed = 0;
+		const C = chunked.get(body), CR = roofs ? roofs.map((im) => chunked.get(im)) : [];
+		for (const c of [C, ...CR]) c.begin(cx, cz);
 		const births=body.geometry.attributes.aDetailBirth;
 		const kinds = body.geometry.attributes.aKind, nearA = body.geometry.attributes.aNear, ages = body.geometry.attributes.aAge, nlA = body.geometry.attributes.aNL;
 		if (roofs) slotOf = new Map();
-		for (const o of list) {
-			if (n >= body.instanceMatrix.count) break;
+		for (let i = 0; i < list.length; i++) {
+			const o = list[i];
 			// (drawn at its fitted size where it overlapped a neighbour: apart() below)
 			const F = o.fit, ox = F ? F[0] : o.x, oz = F ? F[1] : o.z, ow = F ? F[2] : o.w, od = F ? F[3] : o.d;
+			const n = C.put(O.sec[i], O.band[i], ox, oz, Math.hypot(ow, od) / 2 + 0.5, o.y - SUNK, o.y + o.h + 0.5);
+			if (n < 0) { if (roofs) o.slot = o.roofSlot = undefined; continue; }
+			placed++;
 			q.setFromAxisAngle(Y, -o.a); sc.set(ow, o.h, od); p.set(ox, o.y, oz);
 			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2], THREE.SRGBColorSpace)); kinds.array[n] = o.kind; ages.array[n] = (o.age ?? 0.4) + 2 * (o.cond || 0);
 			// its household's lights after dark (nightplan.js): the porch light, the garage's
@@ -1081,13 +1127,14 @@ export function createCity(shared, scene, bay, real = null) {
 			births.array[n] = nc ? o.src.grp.nearBorn || 0 : dr ? dr.born ?? 0 : 0;
 			nearA.array[n * 3] = nc ? nc[0] : dr ? dr[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : dr ? dr[1] : 0; nearA.array[n * 3 + 2] = nc ? (o.src.grp.detailRadius ? -1-o.src.grp.detailRadius : 1) : dr ? 2 + dr[2] : 0;
 			if (roofs && o.src?.grp) { let l = slotOf.get(o.src.grp); if (!l) slotOf.set(o.src.grp, l = []); l.push(n); }
-			if (roofs) o.slot = n;
-			n++;
+			if (roofs) { o.slot = n; o.roofSlot = undefined; }
 			if (o.roof && roofs) {
-				const im = o.roof.hip ? roofs[0] : roofs[1], k = o.roof.hip ? nh++ : ng++;
-				if (k >= im.instanceMatrix.count) continue;
+				const im = o.roof.hip ? roofs[0] : roofs[1], ov = o.ovFit ?? o.roof.ov ?? 0.4, R = o.roof;
+				// (its disc: the overhang each side, and the gutters and trim the shader sets out past it)
+				const k = (o.roof.hip ? CR[0] : CR[1]).put(O.sec[i], O.band[i], ox, oz, Math.hypot(ow + 2 * ov, od + 2 * ov) / 2 + 2 * ov + 1, o.y + o.h - SUNK - 1, o.y + o.h + R.h + 2);
+				if (k < 0) continue;
+				o.roofSlot = k;
 				p.set(ox, o.y + o.h, oz);
-				const ov = o.ovFit ?? o.roof.ov ?? 0.4, R = o.roof;
 				if (R.rot) { q.setFromAxisAngle(Y, -o.a + Math.PI / 2); sc.set(od + 2 * ov, R.h, ow + 2 * ov); } else sc.set(ow + 2 * ov, R.h, od + 2 * ov);
 				im.setMatrixAt(k, m4.compose(p, q, sc)); im.setColorAt(k, col.setRGB(R.col[0], R.col[1], R.col[2], THREE.SRGBColorSpace));
 				// its covering (by colour where the lot didn't say: the reds are clay tile), trim,
@@ -1102,9 +1149,11 @@ export function createCity(shared, scene, bay, real = null) {
 			}
 		}
 		if (nlA) nlA.needsUpdate = true;
-		births.needsUpdate=true;body.count = n; kinds.needsUpdate = true; nearA.needsUpdate = true; ages.needsUpdate = true;
-		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
-		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); for (const im of roofs) { im.geometry.attributes.aRoof.needsUpdate = true; im.geometry.attributes.aWall.needsUpdate = true; } }
+		births.needsUpdate=true;body.count = placed; kinds.needsUpdate = true; nearA.needsUpdate = true; ages.needsUpdate = true;
+		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+		if (roofs) for (const im of roofs) { im.geometry.attributes.aRoof.needsUpdate = true; im.geometry.attributes.aWall.needsUpdate = true; }
+		// (the chunks' bounds and counts, and their views of the store sent up again)
+		for (const c of [C, ...CR]) c.end();
 		if (roofs) { treeList = list.trees || []; bedList = plantedBeds(list); bedX = bedFarX = 1e9; }
 	}
 	// the planted planters' beds (city-dressing.js marks them), laid out from the planters as they
@@ -1113,11 +1162,13 @@ export function createCity(shared, scene, bay, real = null) {
 		const out = [];
 		for (const o of list) {
 			if (!o.planted) continue;
+			// (the list is in order a sector at a time round where it was laid out: the beds follow it)
+			const sec = sectorOf(o.x, o.z, lastAt[0], lastAt[1], lotHalf(o));
 			const n = Math.max(1, Math.round((o.w - 0.16) / BED_LEN)), L = (o.w - 0.16) / n, ca = Math.cos(o.a), sa = Math.sin(o.a);
 			for (let k = 0; k < n; k++) {
 				const u = (k - (n - 1) / 2) * L, x = o.x + ca * u, z = o.z + sa * u;
 				// (each one of four ways round: turned or not, mirrored or not)
-				out.push({ x, y: o.y + o.h, z, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x * 1.7, z * 2.3) * 4) });
+				out.push({ x, y: o.y + o.h, z, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x * 1.7, z * 2.3) * 4), sec });
 				const f = o.d / 2 + 0.36;
 				out.push({ x: x - sa * f, y: o.planted.kerb, z: z + ca * f, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x, z) * 4), litter: true });
 			}
@@ -1133,18 +1184,23 @@ export function createCity(shared, scene, bay, real = null) {
 		if (far) { bedFarX = x; bedFarZ = z; }
 		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
 		const put = (T) => { const k = next(T[0]); if (k < 0) return; next(T[1]); T[0].setMatrixAt(k, m4); T[1].setMatrixAt(k, m4); };
+		// (a chunked level: the plants and their cards in the same slot, the bed's sector its planter's)
+		const putC = (T, t) => { const a = [t.sec, 0, t.x, t.z, 1.6, t.y - 1, t.y + 1.3], k = chunked.get(T[0]).put(...a); if (k < 0) return; chunked.get(T[1]).put(...a); T[0].setMatrixAt(k, m4); T[1].setMatrixAt(k, m4); };
+		if (far) for (const c of bedChunks) c.begin(x, z);
 		for (const t of bedList) {
 			const d = Math.hypot(t.x - x, t.z - z);
-			if (d > BED_LOD.far[3] + 25) continue;
+			if (d > BED_LOD.distant[3] + 25) continue;
 			const turn = t.bed & 1, mirror = t.bed & 2 ? -1 : 1;
 			q.setFromAxisAngle(Y, -t.a + (turn ? Math.PI : 0));
 			m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.sx * mirror, 1, 1));          // (on its planter, as built: not on the road's grading)
 			if (t.litter) { if (d < BED_LOD.detail[3] + 3) { const k = next(beds.litter[0]); if (k >= 0) beds.litter[0].setMatrixAt(k, m4); } continue; }
 			if (d < BED_LOD.detail[3] + 3) put(beds.detail);
 			if (d > BED_LOD.mid[0] - 3 && d < BED_LOD.mid[3] + 3) put(beds.mid);
-			if (far && d > BED_LOD.far[0] - 25) put(beds.far);
+			if (far && d > BED_LOD.far[0] - 25 && d < BED_LOD.far[3] + 25) putC(beds.far, t);
+			if (far && d > BED_LOD.distant[0] - 25) putC(beds.distant, t);
 		}
-		for (const im of far ? bedMeshes : [...beds.detail, ...beds.mid, ...beds.litter]) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; }
+		for (const im of bedMeshes) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; }
+		if (far) { for (const im of [...beds.far, ...beds.distant]) im.instanceMatrix.needsUpdate = true; for (const c of bedChunks) c.end(); }
 	}
 
 	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
@@ -1208,7 +1264,8 @@ export function createCity(shared, scene, bay, real = null) {
 	// the skylines, found once: every downtown's tall buildings, kept for far views
 	const skyline = [];
 	skyline.noGrounds = true;          // (far off: the towers alone)
-	const skyMesh = shadowByReach(mk(boxGeo(), mat, 6000, true), () => reach.sky);
+	const SKY = 6000, SKY_CH = 1024, skyMesh = mk(boxGeo(), mat, chunkStore(SKY, SKY_CH), true);
+	chunk(skyMesh, SKY_CH, 'city-skyline', true);
 	function findSkylines() {
 		const seen = new Set();
 		for (let z = -100000; z < 100000; z += 1000) for (let x = -20000; x < 120000; x += 1000) {
@@ -1249,10 +1306,11 @@ export function createCity(shared, scene, bay, real = null) {
 		if (sig === skySig && skyN === skyline.length) return;
 		skySig = sig; skyN = skyline.length;
 		keep.noGrounds = true;
-		// (nearest first round where the city was last laid out; the skyline's own order kept)
+		// (more than it holds: the nearest round where the city was last laid out; then a sector at
+		// a time round there, nearest first in each, the skyline's own order kept)
 		const sky = keep === skyline ? skyline.slice() : keep;
-		reach.sky = orderByReach(sky, lastAt[0], lastAt[1], lotHalf);
-		upload(sky, skyMesh, null);
+		if (sky.length > SKY) { orderByReach(sky, lastAt[0], lastAt[1], lotHalf); sky.length = SKY; }
+		upload(sky, skyMesh, null, orderBySector(sky, lastAt[0], lastAt[1], lotHalf), lastAt[0], lastAt[1]);
 	}
 
 	// ---------- landmarks ----------
@@ -1719,8 +1777,10 @@ export function createCity(shared, scene, bay, real = null) {
 		if (!started && !globe) { started = true; findSkylines(); landmarks(); bayBridge(); }
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
-		near.visible = hips.visible = gables.visible = farPts.visible = !high;
+		for (const im of [near, hips, gables]) chunked.get(im).root.visible = !high;
+		farPts.visible = !high;
 		for (const im of [...shrubs, ...ferns, ...bedMeshes, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
+		for (const c of bedChunks) c.root.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (clearingVersion() !== clearV) { clearV = clearingVersion(); lastX = 1e9; }          // a ball field laid out nearby: its trees go
 		if (coastVersion() !== coastV) { coastV = coastVersion(); lastX = 1e9; }                // the coast's farms and links laid out: theirs go
@@ -1735,7 +1795,7 @@ export function createCity(shared, scene, bay, real = null) {
 			rise.value.z = front;
 			const on = front < 2600;
 			if (!on) { riseT0 = -1; rise.value.w = 0; }
-			near.castShadow = hips.castShadow = gables.castShadow = !on;
+			for (const im of [near, hips, gables]) chunked.get(im).setShadow(!on);
 		}
 		// (the near rooftop units kept up as you go, a rebuild under way or not: 45 m past their band)
 		if (Math.hypot(x - acX, z - acZ) > 40 || kit.ac.instanceMatrix.version !== acV) placeAC(x, z);
@@ -1813,12 +1873,11 @@ export function createCity(shared, scene, bay, real = null) {
 		// (a phone sorts out the nearer buildings only: the pass costs it a frame or two)
 		apart(list, x, z, PHONE ? 650 : 1e9);
 		yield;
-		// (then in place: the buildings, their kit a frame on, the trees a frame after; written
-		// nearest first by bands, for the shadow pass, the roofs counted in the same order)
+		// (then in place: the buildings, their kit a frame on, the trees a frame after; written a
+		// sector at a time round here, nearest first by bands in each, for the chunks and the
+		// shadow pass)
 		lastAt = [x, z];
-		const R = orderByReach(list, x, z, lotHalf);
-		upload(list, near, [hips, gables]);
-		reach.near = R; reach.hips = subEnds(list, R, (o) => o.roof?.hip); reach.gables = subEnds(list, R, (o) => o.roof && !o.roof.hip);
+		upload(list, near, [hips, gables], orderBySector(list, x, z, lotHalf), x, z);
 		skylineBeside(list);
 		indexLots(list);
 		// the tall ones, for going inside (bay/towers.js)
