@@ -13,11 +13,33 @@ const bump = (x, c, w) => Math.exp(-Math.pow((x - c) / w, 2));
 // where each sleeve length ends, along the arm: 0 the shoulder joint, 1 the elbow, 2 the wrist
 export const SLEEVE_END = { none: 0, cap: 0.25, short: 0.6, elbow: 1, rolled: 1.3, long: 1.9 };
 // knits whose cuffs and waistband are ribbed and gathered
-const RIBBED = /^(hoodie|sweat|halfzip|track|fleece|knit|puffer|bomber)$/;
+const RIBBED = /^(hoodie|sweat|halfzip|track|fleece|knit|puffer|bomber|sweatervest)$/;
+// how far a top's neckline drops at the front below the base neck: a tank's scoop, a crop's,
+// or (negative) the depth of a V (g.neck 'v': a sweater vest's, a V-neck tee's)
+export const neckDrop = (g) => !g ? 0 : g.neck === 'v' ? -(g.vdepth ?? 0.075) : g.kind === 'tank' ? 0.045 : g.kind === 'crop' ? 0.025 : 0;
+// the neckline's height at x across the body, fr (0 back .. 1 front), for a drop (neckDrop):
+// a round neck rising to the shoulders, scooped at the front; or a V, its point at the middle
+// and its arms rising straight to the collarbones (the same line in garment.js's cut, the
+// finished edge and the shader)
+export const necklineY = (base, x, fr, drop) => base + 0.035 * smooth(Math.abs(x) / 0.09) - 0.004 * fr - (drop >= 0 ? drop * fr : -drop * fr * Math.max(0, 1 - Math.abs(x) / 0.085));
 // woven tops with a buttoned shirt cuff
 const SHIRTED = /^(shirt|flannel|oxford|blouse|utility|denim|chambray)$/;
 export const isRibbed = (g) => !!g && (RIBBED.test(g.kind || '') || g.fab === 'fleece' || g.rib === true);
 export const isShirted = (g) => !!g && (SHIRTED.test(g.kind || '') || g.pat === 'oxford' || g.pat === 'chambray');
+// how much a top hangs straight down from the chest and the shoulders rather than following
+// the body under it (0 clings, 1 falls as a tube): a fitted or slim cut and a knit worn on its
+// own follow the body; an oversized one hangs
+export const drapeOf = (g) => g?.drape ?? (!g || g.fit === 'tight' ? 0 : g.fit === 'fitted' || g.fit === 'slim' ? 0.3 : g.fit === 'oversized' || g.fit === 'baggy' ? 1 : g.fit === 'straight' || g.fit === 'wide' ? 0.9 : isRibbed(g) || g.kind === 'polo' || g.kind === 'tee' && g.fab !== 'nylon' ? 0.62 : 0.8);
+// the half-width a top's body hangs at (metres from the spine), from the body's measures: cut
+// in from the shoulders to the chest with its ease, never narrower than the waist it covers
+export const hangWidth = (g, cut) => {
+	const chest = cut.chestX || cut.shoulderX * 0.78, waist = cut.waistX || chest;
+	const fit = g?.fit || 'regular';
+	if (fit === 'fitted' || fit === 'slim') return Math.max(waist + 0.002, chest + 0.004);
+	if (fit === 'oversized' || fit === 'baggy') return Math.max(waist + 0.02, chest + 0.03, cut.shoulderX * 0.9);
+	if (fit === 'straight' || fit === 'wide') return Math.max(waist + 0.012, chest + 0.022, cut.shoulderX * 0.84);
+	return Math.max(waist + 0.008, chest + 0.013);
+};
 // how loose a fit is, as a share of a regular fit's room
 export const looseness = (g) => !g ? 1 : g.fit === 'tight' ? 0 : g.fit === 'fitted' || g.fit === 'slim' ? 0.55 : g.fit === 'oversized' ? 1.9 : g.fit === 'baggy' ? 1.7 : g.fit === 'straight' ? 1.1 : 1;
 
