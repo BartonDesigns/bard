@@ -8,6 +8,8 @@
 // world. It sets frameAvg, indoorK, last, projectRefresh, projectSnapshot, time.
 
 import * as THREE from 'three';
+import { beatNow } from './music/beat.js';
+import { crowdBeat } from './people/crowd.js';
 import { qualityNow } from './world/governor.js';
 import { kitDaylight } from './people/kit-light.js';
 import { worldAir } from './world/soundbus.js';
@@ -329,6 +331,8 @@ export function islandFrame(iw, now) {
 	guide.update(dt);
 	watchTalk(dt);
 	people.update(dt, iw.time, camera.position, sk.night, camera.position.y > -0.5);
+	// the baked crowds move to the same beat (people/crowd.js)
+	{ const B = beatNow(); crowdBeat(B.beat, B.on); }
 	dogWalkers.update(dt, camera);
 	chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 	encounterPacing.tick(dt);

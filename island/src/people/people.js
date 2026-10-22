@@ -1,4 +1,6 @@
 import {pauseWorkplaceRoutine} from './workplace-routine.js';
+import { beatNow } from '../music/beat.js';
+import { moveToMusic } from './dance.js';
 // Crysis people in the world. A pool of real bodies (MakeHuman, see body.js) lives
 // round the player and is handed out to whoever is near: people walking the city's
 // sidewalks round their blocks and crossing at the corners, joggers, pairs stopped to
@@ -812,6 +814,8 @@ export function createPeople(scene, world, camera = null) {
 		let active = 0, kids = 0;
 		const drop = (p) => {
 			if (p.rod) p.rod.visible = false;
+			if (p.dance) { p.dance = null; p.M.act(null); }
+			p.M.groove(0);
 			disposeWorkplaceProps(p);p.workSpot=null;p.workContext=null;
 			p.active = false; p.P.root.visible = false; p.leaving = false; p.fade = 0;
 			// out of the family: the grown-up lets go of the hand
@@ -820,6 +824,7 @@ export function createPeople(scene, world, camera = null) {
 			if (p.route?.kind === 'seat') { p.route.seat.taken = false; p.M.stand(); p.M.S.sitK.v = 0; p.route = null; }
 			if (p.partner) { p.partner.partner = null; p.partner = null; }
 		};
+		const B = beatNow();
 		for (const p of pool) {
 			const S = p.M.S;
 			if (p.active && p.demo === undefined) {
@@ -840,6 +845,9 @@ export function createPeople(scene, world, camera = null) {
 				if (!p.leaving && (p.fade ?? 1) < 1) p.fade = Math.min(1, (p.fade ?? 0) + dt * 1.25);
 				fadePerson(p.P, p.fade ?? 1);
 				steer(p, dt, cam);
+				// the music (people/dance.js): everyone in earshot moves to it, and someone standing
+				// about free gets up and dances a while, staying put for it
+				if (moveToMusic(p, d, B, dt) && p.role === 'wait') p.timer = Math.max(p.timer, 3);
 				// solid: kept off walls, parked cars and the rocks (the same pushes you get) and out of
 				// your own space; a seat's sitter stays where the seat is
 				p.P.solidOn = d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override));
