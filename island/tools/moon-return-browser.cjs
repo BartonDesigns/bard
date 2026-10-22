@@ -74,6 +74,11 @@ const profile = process.argv[2] || 'desktop';
 		assert.ok(Math.abs(arrived.home.lat - departure.lat) < .3 && Math.abs(arrived.home.lon - departure.lon) < .3, `${JSON.stringify(arrived.home)} vs the departure ${departure.lat}, ${departure.lon}`);
 		await page.waitForFunction(() => document.querySelector('[data-travel-veil]').style.opacity === '0', null, { polling: 250 });
 		log('veil lifted over Earth');
+		// (what the phone holds at the veil lift and at touchdown, for the phone-perf thread; the
+		// descent below is stepped, so frame gaps are only read over the 30 s hold after touchdown)
+		const sample = () => page.evaluate(() => { const r = L99Island.renderer(); return { mem: { ...r.info.memory }, programs: r.info.programs.length, heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, gpuMB: typeof L99GpuMB === 'function' ? L99GpuMB() : null }; });
+		const samples = { profile, veilLift: await sample() };
+		log('at the veil lift:', JSON.stringify(samples.veilLift));
 
 		// 3. Down to the ground, stepped as the player would fly it, nothing pressed.
 		for (let k = 0; k < 400; k++) {
@@ -92,9 +97,15 @@ const profile = process.argv[2] || 'desktop';
 		log('touchdown:', JSON.stringify(down));
 		assert.equal(down.orbit, false); assert.equal(down.down, false);
 		assert.ok(down.agl < 60, 'near the ground');
+		samples.touchdown = await sample();
+		log('at touchdown:', JSON.stringify(samples.touchdown));
 
 		// and the world keeps running for a while with nothing wrong
+		await page.evaluate(() => { window.__gaps = { longest: 0, frames: 0 }; let last = performance.now(); const tick = (now) => { window.__gaps.longest = Math.max(window.__gaps.longest, now - last); window.__gaps.frames++; last = now; requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
 		await page.waitForTimeout(30000);
+		samples.after30s = { ...await sample(), ...await page.evaluate(() => ({ longestFrameMs: Math.round(window.__gaps.longest), frames: window.__gaps.frames })) };
+		log('30 s on:', JSON.stringify(samples.after30s));
+		if (process.env.SAMPLE_OUT) { require('node:fs').mkdirSync(require('node:path').dirname(process.env.SAMPLE_OUT), { recursive: true }); require('node:fs').writeFileSync(process.env.SAMPLE_OUT, JSON.stringify(samples, null, '\t')); }
 		const gpu = await page.evaluate(() => ({ failed: L99Island.renderer().info.programs.filter(p => p.diagnostics?.runnable === false).length, lost: L99Island.renderer().getContext().isContextLost() }));
 		assert.equal(gpu.failed, 0); assert.equal(gpu.lost, false);
 		assert.equal(navigations, 1, 'the page navigated again');
