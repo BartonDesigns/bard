@@ -317,7 +317,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		// ---- the groove: moving to the music's beat, by how much of it reaches here. The body
 		// drops into each beat (the knees) and nods with it, a shoulder lifts on each count, the
 		// chest turns a little each way, the weight goes from foot to foot over two beats, and
-		// the head turns to look about once a bar; walking, only the nod and the shoulders stay
+		// the head turns to look about over a bar; walking, only the nod and the shoulders stay
 		const Gr = S.groove, gk = Gr.k.to(Gr.want, dt);
 		let gBounce = 0, gNod = 0, gLean = 0, gTwist = 0, gRoll = 0, gSway = 0, gShrugL = 0, gShrugR = 0, gArm = 0, gLook = 0;
 		if (gk > 0.002) {
@@ -333,7 +333,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 			gSway = -ea * 0.028 * Math.cos(b * Math.PI * 0.5) * still;
 			gShrugL = ea * 0.3 * hit * (even ? 1 : 0.25); gShrugR = ea * 0.3 * hit * (even ? 0.25 : 1);
 			gArm = ea * 0.12 * hit * still;
-			gLook = ea * 0.18 * Math.sin(b * Math.PI * 0.25) * still;
+			gLook = ea * 0.18 * Math.sin(b * Math.PI * 0.5 + 1.2) * still;
 		}
 		// how far the foot rolls: toes up at the heel strike, the heel peeling up before toe-off
 		const heelP = -0.24 * amp, toeP = (1.1 - 0.3 * run) * amp;
