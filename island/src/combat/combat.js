@@ -29,6 +29,7 @@ import { pushOut, hiddenSpot } from '../law/tactics.js';
 import { sweepOut, worldPush, clearSpot } from '../people/walls.js';
 import { createDamageLog, smashed } from '../law/ladder.js';
 import { createFx } from './fx.js';
+import { listen } from '../audio/spatial.js';
 import { createHud } from './hud.js';
 import { createWeaponView } from './weapon-view.js';
 import { createCivilians } from './civilians.js';
@@ -998,6 +999,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (p.aimAssist !== assist) p.aimAssist = assist;
 		focus.update(dt);
 		melee.update(dt);
+		// (the world's sounds come from where they are: the listener is the camera, audio/spatial.js)
+		listen(camera);
 		squads.update(dt);
 		recovery.update(dt);
 		contracts.update(dt);

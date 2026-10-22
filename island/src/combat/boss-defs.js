@@ -58,15 +58,17 @@ export const BOSSES = Object.freeze({
 	fogmother: {
 		name: 'The Fog Mother', where: 'the Golden Gate', hp: 9000, gap: 2.6, transition: 3.5,
 		phases: [
-			{ at: 1, name: 'The Fog Rolls In', attacks: ['slam', 'wail'] },
-			{ at: 0.6, name: 'Drowned Lullaby', attacks: ['slam', 'breath', 'wights'] },
-			{ at: 0.25, name: 'Her Heart Laid Bare', attacks: ['slam', 'breath', 'wail'], speed: 1.3 },
+			{ at: 1, name: 'The Fog Rolls In', attacks: ['slam', 'wail', 'souls'] },
+			{ at: 0.6, name: 'Drowned Lullaby', attacks: ['slam', 'breath', 'wights', 'souls'] },
+			{ at: 0.25, name: 'Her Heart Laid Bare', attacks: ['slam', 'breath', 'wail', 'souls'], speed: 1.3 },
 		],
 		attacks: {
 			slam: { warn: 2.2, active: 1.0, recover: 2.0, weight: 1.4 },
 			wail: { warn: 1.6, active: 1.2, recover: 1.6, weight: 0.8 },
 			breath: { warn: 1.8, active: 2.5, recover: 1.5, weight: 0.9 },
 			wights: { warn: 1.4, active: 0.5, recover: 1.6, weight: 0.6 },
+			// (her special: the drowned called up screaming, then let go across the whole deck)
+			souls: { warn: 4.6, active: 1.6, recover: 2.4, weight: 0.55 },
 		},
 		weak: { heart: { mult: 3, open: null } },
 		reward: { credits: 9000, item: 'aurora-trail-rifle', level: 8 },

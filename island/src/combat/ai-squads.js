@@ -243,6 +243,8 @@ export function createSquads(ctx) {
 					return null;
 				}
 				h.cr = c; h.beast = beast; h.turn = beast ? -1 : 1;
+				// (its sounds made now, a frame at a time, not in the middle of the fight)
+				voice.warm([...Object.values(Sp.voice || {}), Sp.voice?.loop?.name, ...Object.values(DEFAULT_CRY[c.meta.rig] || {}), 'sniff', 'scrape', 'chitter', 'click'].filter((x) => typeof x === 'string'));
 				// no two alike: each its own size, build and colour (creatures/models.js); a person's
 				// skin barely turns (opts.look: the Moon's bleached hounds, creatures/catalog.js moon)
 				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1, ...(opts.look || {}) });
@@ -318,6 +320,7 @@ export function createSquads(ctx) {
 		}
 		if (!h.alert) alertSquad(h, blow.src);
 		h.hurtT = 0.25;
+		if (h.cr && r.dealt > 0 && !r.killed && !(h.cryT > 0)) { h.cryT = 0.7; cry(h, 'hurt', h.pos, 0.8); }
 		// a round that lands knocks them: the chest and head snap back or round with it, a beat
 		// held as it lands, the aim thrown off; one behind cover ducks back down
 		if (!r.killed && !blow.melee && h.body && !h.body.P.ragdoll && r.dealt > 0) {
@@ -363,6 +366,7 @@ export function createSquads(ctx) {
 	function die(h, blow) {
 		h.dead = true; h.deadT = 0;
 		layer.remove(h.id);
+		if (h.cr) { h.hum?.stop(2.5); h.hum = null; cry(h, 'die'); }
 		const rest = (h.squad?.members || []).filter((m) => !m.dead && !m.surrendered);
 		if (rest.length) say(rest[0], 'down');
 		const d = blow?.dir || { x: 0, z: 0 };
@@ -382,12 +386,35 @@ export function createSquads(ctx) {
 		if (i >= 0) list.splice(i, 1);
 		layer.remove(h.id);
 		h.gone = true;
+		if (h.hum) { h.hum.stop(0.5); h.hum = null; }
 		if (h.body) { if (h.body.P.ragdoll) ctx.ragdolls.release(h.body.P); h.body.P.root.visible = false; h.body.hand?.hide(); h.body.M.act(null); h.body.used = false; h.body.M.want.speed = 0; }
 		if (h.mesh) { h.mesh.visible = false; h.mesh.userData.used = false; }
 		for (const q of [h.cr, h.beast]) if (q) { q.root.visible = false; q.used = false; q.root.position.y = -1e4; }
 		if (h.squad) { const k = h.squad.members.indexOf(h); if (k >= 0) h.squad.members.splice(k, 1); if (!h.squad.members.length) squads.delete(h.squad.id); }
 	}
 
+	// a creature's cry of a kind (catalog voice: spot, strike, swing, hit, throw, lob, turn,
+	// hurt, die, idle), from its own set or the rig's (a hound's snarl and growl), pitched for
+	// its size
+	const DEFAULT_CRY = { quad: { strike: 'snarl', idle: 'growl' } };
+	function cry(h, kind, at = h.pos, gain = 1) {
+		const S = h.Sp, name = S?.voice?.[kind] ?? DEFAULT_CRY[h.cr?.meta.rig]?.[kind];
+		if (!name) return;
+		const size = h.cr?.size || 1, rate = (S.voice?.pitch ?? 1 / (S.height ** 0.3)) / size ** 0.3;
+		const ref = S.voice?.ref ?? 2 + S.height * size * 0.6;
+		voice.play(name, at, gain, rate, { ref, far: Math.min(400, ref * 25) });
+	}
+	// a sound kept on a body (the Burnt Giant's embers, catalog voice.loop): moved with it as it
+	// goes, low while it stands as a tree, full once it is up; let go when you are far off
+	const _hum = new THREE.Vector3();
+	function loopStep(h, d) {
+		const L = h.Sp.voice.loop;
+		if (d > (L.far || 90) || h.dead || !h.cr) { if (h.hum) { h.hum.stop(1); h.hum = null; } return; }
+		const at = h.cr.motion.at(L.bone || 'chest', _hum) || _hum.copy(h.pos).setY(h.pos.y + h.Sp.height * (h.cr.size || 1) * 0.5);
+		if (h.hum && !h.hum.move(at)) h.hum = null;
+		if (!h.hum) { h.hum = voice.loop(L.name, at, L.gain || 1, L.rate || 1, { ref: L.ref || h.Sp.voice.ref || 8 }); if (!h.hum) return; }
+		h.hum.level(h.dormant ? (L.still ?? 0.3) : 1, d);
+	}
 	function say(h, what, force = false) {
 		// (a creature growls instead: creatures/voice.js)
 		if (h.cr) return;
@@ -586,6 +613,7 @@ export function createSquads(ctx) {
 			if (h.crew) { crewStep(h, dt, d); bounds(h); continue; }
 			if (h.surrendered) { yieldStep(h, dt, d); bounds(h); continue; }
 			// held still or put to flight by a spell (magic/caster.js lays h.T.hex on and wears it off)
+			if (h.Sp?.voice?.loop) loopStep(h, d);
 			const hx = h.T.hex;
 			if (hx && (hx.hold > 0 || hx.fear > 0)) { hexStep(h, dt, hx, eye); bounds(h); continue; }
 			if (h.dormant) { dormantStep(h, dt, d); bounds(h); continue; }
@@ -961,6 +989,7 @@ export function createSquads(ctx) {
 			// shuddering where it stands, and comes on as the beast
 			if (h.turn < 0 && h.alert && at && Math.hypot(at.x - h.pos.x, at.z - h.pos.z) < 16) h.turn = 0;
 			if (h.turn >= 0) {
+				if (h.turn === 0 && !h.turned) { h.turned = true; cry(h, 'turn', h.pos, 1.1); }
 				h.turn += dt / 1.8;
 				h.turnK = (h.turnK || 0) + dt;
 				if (h.turnK > 0.45) { h.turnK = 0; c.motion.hit(); }
@@ -980,6 +1009,7 @@ export function createSquads(ctx) {
 			// growls, or rakes the ground; anything else twitches round to look), then it comes
 			if (!h.spotted) {
 				h.spotted = true;
+				cry(h, 'spot');
 				if (dd > S.reach * 2.5 && !S.fly) {
 					h.standT = c.meta.rig === 'quad' ? rnd(1.4, 2.4) : rnd(0.7, 1.2);
 					c.motion.beat(c.meta.rig === 'quad' ? (Math.random() < 0.65 ? 'growl' : 'scrape') : 'twitch');
@@ -995,12 +1025,16 @@ export function createSquads(ctx) {
 					// a fire pot, a curse: lobbed from the hand at where you stand
 					h.struck = true;
 					const Th = S.throw, from = new THREE.Vector3(h.pos.x + Math.sin(h.yaw) * 0.4, h.pos.y + S.height * 0.85, h.pos.z + Math.cos(h.yaw) * 0.4);
+					cry(h, 'lob', from, 0.9);
 					ctx.projectile({ from, to: at.clone().add(_v.set(0, -0.3, 0)), speed: 16, drop: 9, dmg: Th.dmg, type: Th.type, owner: h.T, style: 4, splash: Th.splash, hostile: true });
 				} else if (!h.struck && h.strikeT >= 0.45) {
 					h.struck = true;
 					const ahead = (Math.sin(h.yaw) * tx + Math.cos(h.yaw) * tz) / (dd || 1);
+					// (the limb or the blade through the air, from the shoulder; then the blow where it lands)
+					cry(h, 'swing', _w.set(h.pos.x + Math.sin(h.yaw) * 0.5, h.pos.y + S.height * 0.65, h.pos.z + Math.cos(h.yaw) * 0.5), 0.9);
 					if (dd < S.reach + 0.5 && ahead > 0.5) {
 						const src = _w.set(h.pos.x, h.pos.y + S.height * 0.6, h.pos.z).clone();
+						cry(h, 'hit', at, 1);
 						if (T.id === 'me') ctx.hurtPlayer({ amount: S.dmg * rnd(0.9, 1.1), type: 'impact', part: 'torso', src, by: h.T });
 						else ctx.strikeNpc(T, { amount: S.dmg * 2, type: 'impact', part: 'torso', src, dir: { x: tx / dd, y: 0, z: tz / dd }, by: h.T });
 						fx.dust({ x: at.x, y: at.y - 0.4, z: at.z }, 3, 0.5, 0.45, 0.4, 0.25, 0.25);
@@ -1009,10 +1043,11 @@ export function createSquads(ctx) {
 				if (h.strikeT >= 1) { h.strikeT = -1; h.fireT = h.throwing ? rnd(...S.throw.every) : rnd(0.5, 1.3); h.throwing = false; }
 			} else if (dd < S.reach && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.6) {
 				h.strikeT = 0; h.struck = false; h.throwing = false; c.motion.strike();
-				if (c.meta.rig === 'quad') voice.play('snarl', h.pos, 0.8, 1 / (S.height * (c.size || 1)) ** 0.3);
+				cry(h, 'strike', h.pos, 0.8);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
 			} else if (S.throw && h.los && dd > S.reach * 1.6 && dd < S.throw.range && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.5) {
 				h.strikeT = 0; h.struck = false; h.throwing = true; c.motion.strike();
+				cry(h, 'throw', h.pos, 0.8);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
 			} else if (S.throw && dd < S.throw.keep && dd > S.reach) speed = -S.walk;
 			else if (S.throw && dd < S.throw.range * 0.8 && dd > S.reach) speed = 0;
@@ -1049,10 +1084,12 @@ export function createSquads(ctx) {
 		if (h.animT >= every) { c.motion.update(h.animT, { speed: S.drift ? 0 : Math.abs(speed), look: 0, menace }); h.animT = 0; }
 		c.facets?.update(dt, { strike: c.motion.state.strike, alert: !!h.alert });
 		// a growl now and then as it closes on you
-		if (menace > 0.5 && c.meta.rig === 'quad' && d < 40) {
+		const idle = S.voice?.idle ?? (c.meta.rig === 'quad' ? 'growl' : null);
+		if (idle && menace > 0.5 && d < 60) {
 			h.growlT = (h.growlT ?? rnd(1, 3)) - dt;
-			if (h.growlT <= 0) { h.growlT = rnd(3, 6); voice.play('growl', h.pos, 0.7, 1 / (S.height * (c.size || 1)) ** 0.3); }
+			if (h.growlT <= 0) { h.growlT = rnd(3, 6); cry(h, 'idle', h.pos, 0.7); }
 		}
+		if (h.cryT > 0) h.cryT -= dt;
 		creatureEvents(h, c, d);
 		c.root.visible = d < 220;
 	}
@@ -1061,15 +1098,19 @@ export function createSquads(ctx) {
 	function creatureEvents(h, c, d) {
 		const ev = c.motion.drain();
 		if (!ev.length || d > 60) return;
-		const big = 1 / (h.Sp.height * (c.size || 1)) ** 0.3;
+		const big = 1 / (h.Sp.height * (c.size || 1)) ** 0.3, V = h.Sp.voice || {};
+		// (a species' own sound for a beat, where its table names one; null for none)
+		const own = (e, def) => (e in V ? V[e] : def);
 		for (const e of ev) {
-			if (e === 'growl') voice.play('growl', h.pos, 0.8, big);
-			else if (e === 'sniff') voice.play('sniff', h.pos, 0.5, big * 1.2);
-			else if (e === 'twitch' && (c.meta.rig === 'flyer' || c.meta.rig === 'spider')) voice.play('chitter', h.pos, 0.5, c.meta.rig === 'spider' ? 1.3 : 1);
-			else if (e === 'click') voice.play('click', h.pos, 0.45);
+			const name = own(e, e === 'growl' ? 'growl' : e === 'sniff' ? 'sniff' : e === 'twitch' && (c.meta.rig === 'flyer' || c.meta.rig === 'spider') ? 'chitter' : e === 'click' ? 'click' : e === 'scuff' ? 'scrape' : null);
+			if (!name) continue;
+			if (e === 'growl') voice.play(name, h.pos, 0.8, big);
+			else if (e === 'sniff') voice.play(name, h.pos, 0.5, big * 1.2);
+			else if (e === 'twitch') voice.play(name, h.pos, 0.5, c.meta.rig === 'spider' ? 1.3 : 1);
+			else if (e === 'click') voice.play(name, h.pos, 0.45);
 			else if (e === 'scuff') {
 				const b = c.motion.state.beat, p = c.motion.at(b?.side < 0 ? 'hand_R' : 'hand_L', _paw) || _paw.copy(h.pos);
-				voice.play('scrape', p, 0.6);
+				voice.play(name, p, 0.6);
 				fx.dust({ x: p.x, y: h.pos.y + 0.1, z: p.z }, 4, 0.45, 0.42, 0.36, 0.28, 0.35);
 			}
 		}
@@ -1082,7 +1123,7 @@ export function createSquads(ctx) {
 		if (h.waking < 0 && d < (L.wake || 8)) h.waking = 0;
 		if (h.waking >= 0) {
 			if (h.waking === 0) {
-				voice.play('creak', h.pos, 1, 0.8);
+				voice.play('creak', h.pos, 1, 0.8, { ref: 12, far: 220 });
 				ctx.shake?.(0.25);
 			}
 			h.waking += dt / (L.rise || 2.8);
