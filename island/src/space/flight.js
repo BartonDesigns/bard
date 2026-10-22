@@ -38,6 +38,9 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	const nav = createNav({ mount: dom.mount, isTouch, onWarp: (what, d) => what === 'list' ? destinations() : warpTo(d), onTarget: (id) => { const d = destinations().find((q) => q.id === id); if (d) hint(`${d.name} targeted. ${isTouch ? 'Tap ⤳ Warp' : 'Press J'} to warp there.`, 3000); } });
 	let wasSpace = false, text = '', disposed = false, gear = 1, warp = null, bounce = null, landing = false, heat = 0, warned = '';
 	let passage = null, passageToken = 0, passageCooldown = 0, solarDepth = 0;
+	// put in orbit by an approach from the sky next door (main.js voyage): the next frame anchors
+	// the ship over where you left and starts it down; the descent then carries on to the ground
+	let arriving = false, arrivalDown = false;
 	const leaveStar = document.createElement('button'); leaveStar.dataset.stellarExit = '';
 	leaveStar.textContent = 'Return to orbit'; leaveStar.style.cssText = 'display:none;position:absolute;top:110px;left:50%;transform:translateX(-50%);padding:10px 14px;background:#23180de8;color:#fff;border:1px solid #ddaf75;border-radius:18px;font:14px var(--bard-body,system-ui,sans-serif);pointer-events:auto;z-index:25';
 	for (const ev of ['pointerdown', 'touchstart', 'click']) leaveStar.addEventListener(ev,e=>e.stopPropagation());
@@ -209,7 +212,9 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		if (companion.land && ma < 25000 && !landing) {
 			landing = true; const token = ++passageToken;
 			hint(`Touching down on ${companion.name}…`, 4000);
-			Promise.resolve(voyage?.(companion.land === 'EARTH' ? { earth: true, name: 'Earth' } : { type: 'MOON', seed: earth ? 1969 : (seed ^ 0x6d6f6f6e) >>> 0, name: companion.name })).then(ok => { if (!disposed && token === passageToken && ok === false) landing = false; }).catch((err) => { if (disposed || token !== passageToken) return; console.warn('[landing]', err); landing = false; });
+			// (an approach, not a warp: the world is built behind the veil, and Earth is reached in
+			// orbit over where you left, its ground streaming in on the way down)
+			Promise.resolve(voyage?.(companion.land === 'EARTH' ? { earth: true, name: 'Earth', approach: true } : { type: 'MOON', seed: earth ? 1969 : (seed ^ 0x6d6f6f6e) >>> 0, name: companion.name, approach: true })).then(ok => { if (!disposed && token === passageToken && ok === false) landing = false; }).catch((err) => { if (disposed || token !== passageToken) return; console.warn('[landing]', err); landing = false; });
 		}
 	}
 	// ---------- Earth: coming down where you are, or back where you left ----------
@@ -324,7 +329,13 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 			departed?.(frame.anchor);
 			fresh = false; charting = glide = choice = null; homeNote = anchorNote = null; lastOk = false;
 			if (earth) loadAtlas().catch(() => {});
-			hint(earth ? 'Leaving the atmosphere. Keep climbing to orbit Earth; descend here to return.' : 'Leaving the atmosphere. Keep flying; descend to return here.', 4000);
+			if (arriving) {
+				// come from the Moon: straight down to where you left, the ground filling in as it nears
+				arriving = false; arrivalDown = true; choice = 'home';
+				P.climbAssist = P.flyUp = P.flyDown = false; P.descendAssist = true; P.vel.set(0, 0, 0);
+				homeNote = earth && Number.isFinite(at.lat) ? regionNote(at.lat, at.lon) : null;
+				hint(`${homeName}. Coming down ${homeNote && homeNote.kind !== 'unknown' ? `over ${homeNote.title}` : 'where you left'}. ${isTouch ? 'Steer' : 'Steer or press a key'} to take control.`, 5000);
+			} else hint(earth ? 'Leaving the atmosphere. Keep climbing to orbit Earth; descend here to return.' : 'Leaving the atmosphere. Keep flying; descend to return here.', 4000);
 		}
 		if (controls.high()) P.flying = true;
 	}
@@ -360,12 +371,14 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		if (frame.anchor && frame.altitude(P.pos) < ORBIT.start * .65) {
 			const there = fresh ? anchorNote?.title : '', at = fresh && frame.anchor ? { ...frame.anchor } : null;
 			frame.reset(); wasSpace = false; view.sleep?.();
-			fresh = false; charting = glide = choice = null; P.descendAssist = false;
+			// (an arrival from the Moon keeps coming down until near the ground, or until you steer)
+			fresh = false; charting = glide = choice = null; P.descendAssist = arrivalDown && P.descendAssist;
 			// out in the country: the nearest city, and the way there (the map pin's Cities)
 			const c = at && Number.isFinite(at.lat) ? citiesAround(at.lat, at.lon, 1)[0] : null;
 			const city = c && c.km > 4 ? ` The nearest city is ${c.name}, ${kmLabel(c.km)} away: the map pin's Cities take you there.` : '';
-			hint(there ? `${there}. You have control.${city}` : 'Back above your departure area.', city ? 6000 : 3000);
+			hint(there ? `${there}. You have control.${city}` : P.descendAssist ? 'Coming down. Steer to take control.' : 'Back above your departure area.', city ? 6000 : 3000);
 		}
+		if (arrivalDown && !frame.anchor && (!P.descendAssist || P.pos.y - Math.max(0, world.island.heightAt(P.pos.x, P.pos.z)) < 40)) { arrivalDown = false; P.descendAssist = false; }
 		lastPos.copy(P.pos); lastOk = !!frame.anchor && !warp && !glide && !bounce;
 		camera.position.copy(P.pos);
 		camera.rotation.set(P.pitch, P.yaw, P.roll || 0, 'YXZ');
@@ -383,10 +396,10 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 			name = anchorNote?.title || ''; sub = anchorNote?.sub || '';
 			back = `↩ Back to ${home}`;
 		} else {
-			const atHome = kmBetween(below, frame.home) < SAME_KM;
-			head = atHome ? 'BELOW · WHERE YOU LEFT' : choice === 'here' && P.descendAssist ? 'DESCENDING TO' : 'BELOW';
+			const atHome = kmBetween(below, frame.home) < SAME_KM, down = atHome && P.descendAssist;
+			head = down ? 'COMING DOWN · WHERE YOU LEFT' : atHome ? 'BELOW · WHERE YOU LEFT' : choice === 'here' && P.descendAssist ? 'DESCENDING TO' : 'BELOW';
 			name = note.title; sub = note.sub;
-			here = atHome ? '⤓ Descend here' : '⤓ Land here';
+			here = down ? '' : atHome ? '⤓ Descend here' : '⤓ Land here';
 			back = atHome ? '' : `↩ Back to ${home}`;
 			// (a city under you already is the card's own title)
 			cities = atHome ? [] : near.filter((c) => c.km > 4 || c.name !== note.title.replace(/^Near /, ''));
@@ -470,6 +483,9 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		// the bodies round the ship, where they are now (explore.js steers by them)
 		bodies,
 		landHere, returnHome,
+		// an approach from the Moon (main.js voyage) has put the ship in orbit over where you left:
+		// the next frame anchors it there and starts it down
+		arrive: () => { arriving = true; },
 		// above a place in orbit, looking down at it (tests, and the console: Crysis.orbitOver)
 		over: overAt,
 		// down on one of the cities the card offers (tests: Crysis.landing().cities)
@@ -478,10 +494,10 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		streams: () => earth && fresh && !!frame.anchor && !frame.returning && frame.altitude(P.pos) < ORBIT.entry,
 		// the real imagery: base loaded, tiles held, the patch round the point below
 		imagery: () => view.imagery?.info() ?? null,
-		landing: () => ({ below: below && { ...below }, sun: frame.anchor && earth ? frame.below(frame.sunCenter(new THREE.Vector3())) : null, note: note && { ...note }, home: frame.home, homeName: homeNote?.title || null, choice, fresh, gliding: !!glide, charting: charting && { ...charting }, place: fresh ? anchorNote : null, card: card.style.display === 'block' ? cardText : null, cities: near.map((c) => ({ ...c })) }),
+		landing: () => ({ arriving: arriving || arrivalDown, below: below && { ...below }, sun: frame.anchor && earth ? frame.below(frame.sunCenter(new THREE.Vector3())) : null, note: note && { ...note }, home: frame.home, homeName: homeNote?.title || null, choice, fresh, gliding: !!glide, charting: charting && { ...charting }, place: fresh ? anchorNote : null, card: card.style.display === 'block' ? cardText : null, cities: near.map((c) => ({ ...c })) }),
 		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), gear, boost: P.boost, radius, type, companion: companion.name, solarDepth, horizon: passage ? { time: passage.t, sent: passage.sent } : null, warping: !!warp, warpTime: warp?.t ?? 0, bouncing: !!bounce, landing, heat, target: nav.target, gargantuaVisible: !!view.gargantua?.visible, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
 		pause: () => { stopPassage(true); warp = bounce = glide = null; P.vel.set(0, 0, 0); P.flyUp = P.flyDown = P.climbAssist = false; leaveStar.style.display = 'none'; },
-		cancel: () => { stopPassage(); solarDepth = heat = 0; leaveStar.style.display = 'none'; frame.reset(); view.sleep?.(); warp = bounce = glide = charting = choice = null; fresh = false; lastOk = false; card.style.display = 'none'; P.descendAssist = false; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
+		cancel: () => { stopPassage(); solarDepth = heat = 0; leaveStar.style.display = 'none'; frame.reset(); view.sleep?.(); warp = bounce = glide = charting = choice = null; fresh = false; lastOk = false; arriving = arrivalDown = false; card.style.display = 'none'; P.descendAssist = false; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
 		exitStellar,
 		dispose() { stopPassage(); disposed = true; leaveStar.remove(); card.remove(); removeEventListener('keydown', onKey, true); delete P.orbit; hud.remove(); bearing.remove(); nav.dispose(); view.dispose(); },
 	};

@@ -160,7 +160,7 @@
 #bard-loading .bl-footer{border-top:1px solid #ffffff30;padding-top:18px;align-items:end}
 #bard-loading .bl-state{flex:1;max-width:480px}#bard-loading .bl-status{font-size:12px}
 #bard-loading .bl-track{height:2px;background:#ffffff26;margin:12px 0 0;overflow:hidden}#bard-loading .bl-fill{height:100%;width:24%;background:#e1c58e;animation:bl-search 2.8s ease-in-out infinite}
-#bard-loading .bl-sub{font-size:11px;color:#b9c6c6;line-height:1.4;margin:9px 0 0}#bard-loading .bl-sub:empty{display:none}
+#bard-loading .bl-sub{font-size:11px;color:#b9c6c6;line-height:1.4;margin:9px 0 0}#bard-loading .bl-sub.bl-first{font-size:13px;line-height:1.45;color:#d6dfde;max-width:560px}#bard-loading .bl-first b{font:600 12px var(--bard-display,Georgia,serif);letter-spacing:.06em;color:#e8d19e;margin-right:4px}#bard-loading .bl-sub:empty{display:none}
 #bard-loading .bl-enter{min-height:48px;padding:12px 22px;border:1px solid #e8d19e;background:#e8d19e;color:#121c20;border-radius:3px;font:700 13px var(--bard-display,Georgia,serif);letter-spacing:.06em;flex-shrink:0}
 #bard-loading button:focus-visible,#bard-loading:focus-visible{outline:2px solid #f5dfac;outline-offset:4px}
 #bard-loading[data-state=ready] .bl-fill{width:100%;animation:none}#bard-loading[data-state=error] .bl-fill{width:100%;animation:none;background:#deae96}
@@ -223,7 +223,7 @@
 			if (!current?.settled) return;
 			const session = current;
 			if (session.error) { current = null; run(session.task, session.options); return; }
-			current = null; finish('entered'); hide(); session.options.enter?.();
+			current = null; finish('entered'); keep.put(ENTERED_KEY, true); hide(); session.options.enter?.();
 		};
 		document.body.appendChild(root);
 		for (const type of inputEvents) root.addEventListener(type, event => { if (active()) event.stopPropagation(); });
@@ -253,11 +253,11 @@
 		backgroundObserver = new MutationObserver(records => { for (const record of records) for (const sibling of record.addedNodes) lock(sibling); });
 		backgroundObserver.observe(document.body, { childList: true });
 		view.root.hidden = false; view.root.dataset.state = 'loading'; view.enter.hidden = true;
-		view.sub.textContent = ''; closeTab(); drawChips(); homeTip();
+		view.sub.textContent = ''; view.sub.classList.remove('bl-first'); closeTab(); drawChips(); homeTip(); firstNote(false);
 		view.root.focus({ preventScroll: true }); window.dispatchEvent(new Event('blur'));
 		showStory(pickStory());
 		paused = false; view.pause.textContent = 'Pause'; view.pause.setAttribute('aria-label', 'Pause slideshow'); rotation();
-		clearTimeout(slowTimer); slowTimer = setTimeout(() => { if (active() && !current.settled) view.sub.textContent = 'First visits can take longer. Your world is still preparing.'; }, 25000);
+		clearTimeout(slowTimer); if (!firstTime()) slowTimer = setTimeout(() => { if (active() && !current.settled) view.sub.textContent = 'First visits can take longer. Your world is still preparing.'; }, 25000);
 	}
 	function hide() {
 		clearInterval(slideTimer); clearTimeout(slowTimer); imageSerial++; backgroundObserver?.disconnect(); closeTab();
@@ -343,6 +343,19 @@
 			console.warn('[world loading] the last load went without a goodbye at "' + (last.stages?.at(-1)?.[1] || '?') + '"', JSON.stringify(last));
 		}
 	}
+	// A first visit on this device: the city is made once and kept, so this load is the long one,
+	// and the first moments in the world can stutter while it settles. Said up front, under the
+	// progress, until a world has been entered here (a device that entered one before this note
+	// existed has that as its last load's ending)
+	const ENTERED_KEY = 'l99-entered';
+	const enteredBefore = !!keep.get(ENTERED_KEY) || keep.get(TRAIL_KEY)?.end === 'entered';
+	const firstTime = () => !enteredBefore && !keep.get(ENTERED_KEY);
+	function firstNote(ready) {
+		if (!firstTime()) return;
+		view.sub.replaceChildren(); view.sub.classList.add('bl-first');
+		element('b', '', ready ? 'Ready.' : 'Your first time in.', view.sub);
+		view.sub.append(ready ? 'The first moments in the world can stutter while it settles. It smooths out quickly.' : 'Bard builds the city once and keeps it on this device, so give this first load a minute. Later visits are quicker.');
+	}
 	// what the graphics (island gpumeter.js, once the engine is up) and the script heap hold, MB
 	const heldMB = () => { const heap = performance.memory?.usedJSHeapSize; let gpu = null; try { gpu = window.L99GpuMB?.() ?? null; } catch { /* not yet */ } return [gpu, heap ? Math.round(heap / 1048576) : null]; };
 	const secs = () => +((performance.now() - trail.t0) / 1000).toFixed(1);
@@ -364,7 +377,7 @@
 	document.addEventListener('visibilitychange', () => { if (trail && !trail.end && document.hidden) { trail.hidden = true; saveTrail(); } });
 	const trailInfo = () => ({ now: trail ? (({ t0, ...t }) => t)(trail) : null, lost: lostLoads });
 	function errorView(error) {
-		clearTimeout(slowTimer); view.root.dataset.state = 'error'; finish('failed: ' + String(error?.message || error).slice(0, 120));
+		clearTimeout(slowTimer); view.sub.classList.remove('bl-first'); view.root.dataset.state = 'error'; finish('failed: ' + String(error?.message || error).slice(0, 120));
 		const graphics = error?.code === 'GRAPHICS_RELOAD_REQUIRED';
 		view.status.textContent = graphics ? 'Graphics need a fresh start' : 'The world could not finish loading';
 		view.sub.textContent = graphics ? error.message : /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then retry. You can also return to Bard.';
@@ -399,7 +412,7 @@
 			session.settled = true;
 			if (session.cancelled) return result;
 			clearTimeout(slowTimer); view.root.dataset.state = 'ready'; view.status.textContent = 'Your world is ready'; mark('ready');
-			view.sub.textContent = ''; view.enter.hidden = false; view.enter.textContent = 'Enter world';
+			view.sub.textContent = ''; view.sub.classList.remove('bl-first'); firstNote(true); view.enter.hidden = false; view.enter.textContent = 'Enter world';
 			return result;
 		} catch (error) {
 			error = session.failure || error;
