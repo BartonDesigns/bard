@@ -17,6 +17,9 @@
 //   drums      soft and not always there: some sections have none; when they come it is
 //              a kick on one and three, a rim on two and four, hats whispering between;
 //              the faceplate's beat only lends its kick when the music is up
+//   DNB        the DNB faceplate is the one face that is not the caves' music: jump-up drum
+//              and bass (see dnbBar), where the drums lead, the bass is the hook and the form
+//              is the club's (intro, build, drop, roller, switch, breakdown)
 
 import { clamp } from '../noise.js';
 
@@ -73,6 +76,8 @@ const PROGS = {
 	dark: [[0, 5, 3, 4], [5, 3, 0, 4], [0, 6, 5, 6], [0, 2, 5, 4], [5, 5, 3, 4], [0, 3, 6, 4], [0, 5, 1, 4]],
 	bridge: [[3, 4, 5, 5], [5, 3, 4, 4], [1, 4, 0, 5], [3, 1, 4, 4], [5, 4, 3, 4]],
 	drone: [[0, 0, 0, 0], [0, 0, 6, 0], [0, 1, 0, 0], [0, 0, 5, 0]],
+	// jump-up sits on the one chord and moves by the bass: i i VI VII, or i all the way
+	dnb: [[0, 0, 5, 4], [0, 0, 0, 0], [0, 5, 0, 4], [0, 0, 3, 4], [0, 0, 0, 5]],
 };
 
 // the form: where each section tends to go, what it asks of each part
@@ -85,6 +90,46 @@ export const SECTIONS = {
 	build: { energy: 0.62, bars: [2, 4], next: { chorus: 4 }, parts: { mel: 0.6, counter: 0.4, arp: 1, pad: 1, bass: 1, drums: 0.6 } },
 };
 const ARC = { intro: 0.4, verse: 0.6, chorus: 0.92, bridge: 0.66, breakdown: 0.34, build: 0.7 };
+
+// jump-up drum and bass (the DNB faceplate): the same section names, so the game's asks (a
+// climax wants a chorus, a cave a breakdown) still land, but the club's form behind them:
+//   intro      sub, a filtered pad, a siren, hats and the odd kick: the tune coming in
+//   build      the snare roll climbing over four or eight bars, a riser, the kick dropping out,
+//              a horn, then the gap before the drop
+//   chorus     THE DROP: sixteen bars of chopped Amen over the reese hook, MC stabs on top
+//   verse      the roller: the two-step rolling on with the hook, lighter, the melody riffing
+//   bridge     the switch: half-time, the bass gated into a wobble, then back into the drop
+//   breakdown  the drums thin to the kick and a snare, the pad and the sub carry it, a siren
+export const DNB_SECTIONS = {
+	intro: { energy: 0.35, bars: [8, 8], next: { build: 3, verse: 0.5 }, parts: { mel: 0, counter: 0.4, arp: 0, pad: 1, bass: 0.7, drums: 0.7 } },
+	build: { energy: 0.7, bars: [4, 8], next: { chorus: 5 }, parts: { mel: 0, counter: 0.3, arp: 0, pad: 0.7, bass: 0.6, drums: 1 } },
+	chorus: { energy: 1, bars: [16, 16], next: { verse: 2, bridge: 1.4, breakdown: 1.6 }, parts: { mel: 1, counter: 0.8, arp: 0, pad: 0, bass: 1, drums: 1 } },
+	verse: { energy: 0.85, bars: [8, 16], next: { breakdown: 2, bridge: 1.2, chorus: 0.8 }, parts: { mel: 0.8, counter: 0.5, arp: 0.3, pad: 0, bass: 1, drums: 1 } },
+	bridge: { energy: 0.8, bars: [8, 8], next: { chorus: 3, breakdown: 1 }, parts: { mel: 0.4, counter: 0.6, arp: 0, pad: 0, bass: 1, drums: 1 } },
+	breakdown: { energy: 0.3, bars: [8, 8], next: { build: 4, intro: 0.3 }, parts: { mel: 0.5, counter: 0.4, arp: 0.5, pad: 1, bass: 0.7, drums: 0.5 } },
+};
+const DNB_ARC = { intro: 0.5, verse: 0.9, chorus: 1, bridge: 0.9, breakdown: 0.45, build: 0.8 };
+const DNB_LABEL = { chorus: 'drop', verse: 'roller', bridge: 'switch' };
+// the breaks, one bar of sixteenths: the kick and the snare with their weights, the ghost notes
+// (the chopped break's quiet snares between the hits) apart so a bar can leave them out
+const BREAKS = {
+	twostep: { kick: { 0: 1, 10: 0.95 }, snare: { 4: 1, 12: 1 }, ghost: { 7: 0.4, 15: 0.3 } },
+	amenA: { kick: { 0: 1, 2: 0.6, 10: 0.95 }, snare: { 4: 1, 12: 1 }, ghost: { 7: 0.45, 9: 0.3, 15: 0.35 } },
+	amenB: { kick: { 0: 1, 10: 0.9, 11: 0.55 }, snare: { 4: 1, 12: 0.95 }, ghost: { 6: 0.35, 9: 0.5, 14: 0.4 } },
+	chop: { kick: { 0: 1, 6: 0.7, 10: 0.95 }, snare: { 4: 1, 12: 1, 14: 0.55 }, ghost: { 7: 0.4, 11: 0.3 } },
+	stomp: { kick: { 0: 1, 10: 1 }, snare: { 4: 1, 12: 1 }, ghost: {} },
+	half: { kick: { 0: 1, 8: 0.55 }, snare: { 8: 1 }, ghost: { 11: 0.4, 14: 0.35 } },
+};
+// the bass hooks: [step, semitones off the chord's bass note, length in steps]; two of these make
+// the two-bar hook of a drop (the second answers the first)
+const RIFFS = [
+	[[0, 0, 3], [6, 0, 1], [10, 0, 2], [13, 3, 1], [14, 5, 1]],
+	[[0, 0, 2], [3, 0, 1], [6, 0, 1], [10, 0, 2], [13, -2, 1.5]],
+	[[0, 0, 4], [8, 7, 1], [10, 0, 2], [14, 3, 1]],
+	[[0, 0, 1.5], [2, 0, 1], [6, 3, 1], [10, 0, 2], [12, 0, 1], [14, -2, 1.5]],
+	[[0, 0, 3], [4, 0, 1], [6, -5, 1.5], [10, 0, 2], [13, 0, 1], [15, 3, 1]],
+	[[0, 0, 2], [3, 3, 1], [6, 0, 1], [8, 0, 1], [10, 0, 2], [14, 7, 1]],
+];
 
 // how each faceplate likes its bass and pads (the flight composer's profiles, extended)
 export const STYLES = {
@@ -108,17 +153,17 @@ export function createComposer(seed = 1) {
 	const chance = (p) => R() < p;
 	const S = {
 		section: null, secBars: 0, barIn: 0, abs: 0, arc: 0.35, themes: {}, progs: {}, prog: null,
-		lastMel: null, pad: null, history: [], queued: null, lastChordRoot: 0, phraseType: 'aaba', userRiff: [], rhythm: false, rest: false,
+		lastMel: null, pad: null, history: [], queued: null, lastChordRoot: 0, phraseType: 'aaba', userRiff: [], rhythm: false, rest: false, genre: '',
 	};
 
-	function weightedNext(from, M) {
-		const opts = SECTIONS[from]?.next || { verse: 1 };
+	function weightedNext(from, M, SEC = SECTIONS) {
+		const opts = SEC[from]?.next || { verse: 1 };
 		const want = M.energy;
 		let total = 0;
 		const w = {};
 		for (const [k, v] of Object.entries(opts)) {
 			// sections near the game's energy are preferred; moments push harder
-			let x = v * (1.25 - Math.min(1, Math.abs(SECTIONS[k].energy - want) * 1.6));
+			let x = v * (1.25 - Math.min(1, Math.abs(SEC[k].energy - want) * 1.6));
 			if (M.tension > 0.4 && k === 'build') x *= 1 + M.tension * 3;
 			if (M.climax && (k === 'chorus' || k === 'build')) x *= 4;
 			if (M.sparse > 0.5 && (k === 'breakdown' || k === 'intro')) x *= 1 + M.sparse * 2;
@@ -131,22 +176,25 @@ export function createComposer(seed = 1) {
 		return 'verse';
 	}
 
-	function enter(name, M) {
+	function enter(name, M, SEC = SECTIONS) {
+		const dnb = SEC === DNB_SECTIONS;
 		S.section = name;
-		const [a, b] = SECTIONS[name].bars;
+		const [a, b] = SEC[name].bars;
 		let bars = a === b ? a : pick([a, b, a]);
 		if (M.sparse > 0.6 && name !== 'build') bars = Math.max(bars, 8);
 		S.secBars = bars; S.barIn = 0;
 		// progressions are remembered: a chorus returns as itself, now and then altered
-		const kind = M.drone > 0.5 ? 'drone' : name === 'bridge' ? 'bridge' : M.dark > 0.5 ? 'dark' : 'bright';
+		const kind = dnb ? 'dnb' : M.drone > 0.5 ? 'drone' : name === 'bridge' ? 'bridge' : M.dark > 0.5 ? 'dark' : 'bright';
 		const key = name + ':' + kind;
 		if (!S.progs[key] || (name !== 'chorus' && chance(0.3))) S.progs[key] = pick(PROGS[kind]).slice();
 		else if (chance(0.25)) { const p = S.progs[key].slice(); p[2] = pick([1, 2, 3, 5, 6]); S.progs[key] = p; }
 		S.prog = S.progs[key];
 		S.phraseType = pick(name === 'chorus' ? ['aaba', 'seq', 'abac'] : name === 'bridge' ? ['call', 'seq'] : ['aaba', 'call', 'abac', 'call']);
-		// like the caves: not every section has a beat, and the first never does
-		const beatK = SECTIONS[name].parts.drums;
-		S.rhythm = S.history.length > 0 && beatK > 0 && chance(clamp(beatK * (0.6 + M.energy * 0.6), 0, 0.95));
+		// like the caves: not every section has a beat, and the first never does (in drum and
+		// bass the drums are the point: every section that asks for them gets them)
+		const beatK = SEC[name].parts.drums;
+		S.rhythm = dnb ? beatK >= 0.9 || chance(beatK) : S.history.length > 0 && beatK > 0 && chance(clamp(beatK * (0.6 + M.energy * 0.6), 0, 0.95));
+		if (dnb) dnbEnter(name);
 		S.history.push({ name, bars, at: S.abs });
 		if (S.history.length > 40) S.history.shift();
 		S.fresh = true;
@@ -334,17 +382,151 @@ export function createComposer(seed = 1) {
 		return out;
 	}
 
+	// ---- jump-up drum and bass
+	// a section's own break and hook, chosen as it begins (a drop's hook is remembered, so the
+	// second drop is the same tune)
+	function dnbEnter(name) {
+		const D = S.dnb || (S.dnb = { hooks: {}, breaks: {}, roll: 0 });
+		D.break = D.breaks[name] && chance(0.6) ? D.breaks[name] : pick(name === 'bridge' ? ['half'] : name === 'verse' ? ['twostep', 'twostep', 'chop'] : name === 'chorus' ? ['amenA', 'amenB', 'chop', 'twostep'] : ['twostep']);
+		D.breaks[name] = D.break;
+		if (!D.hooks[name] || chance(0.25)) { const a = pick(RIFFS); let b = pick(RIFFS); if (b === a) b = RIFFS[(RIFFS.indexOf(a) + 1) % RIFFS.length]; D.hooks[name] = [a, b]; }
+		D.hook = D.hooks[name];
+		// the MC stab: two or three short notes on the off-beats, kept for the section
+		const slots = [3, 7, 11, 14].filter(() => chance(0.65));
+		if (slots.length < 2) slots.push(slots[0] === 3 ? 11 : 3);
+		D.stab = slots.sort((a, b) => a - b).slice(0, 3).map((s, i) => ({ s, c: i === 0 ? 0 : pick([0, 2, 3, -1]) }));
+	}
+	function dnbBar(M, pcs, beat) {
+		const D = S.dnb, sec = S.section, SP = DNB_SECTIONS[sec], P = SP.parts;
+		const barIn = S.barIn, secBars = S.secBars, inPhrase = barIn % 4, lastOfPhrase = inPhrase === 3, lastOfSection = barIn === secBars - 1;
+		const prog = S.prog, hr = 2, ci = Math.floor(barIn / hr) % prog.length, root = prog[ci];
+		const chord = chordDegs(pcs, root, false);
+		// dynamics: the arc, quick to rise into a drop
+		const target = sec === 'build' ? 0.6 + 0.4 * (barIn + 1) / secBars : DNB_ARC[sec];
+		S.arc += clamp(target * (0.8 + 0.3 * M.energy) - S.arc, -0.15, 0.12);
+		const dyn = clamp(S.arc, 0.2, 1);
+		const ev = [], drums = [];
+		const hit = (s, name, vel) => drums.push({ s, name, vel });
+		const fold = (s) => { while (s > M.bassHi) s -= 12; while (s < M.bassHi - 12) s += 12; return s; };
+		const r = fold(semiOf(pcs, root));
+		const up = sec === 'chorus' || sec === 'verse' || sec === 'bridge', drop = sec === 'chorus';
+		// ---- drums: the break
+		if (S.rhythm && M.drums > 0.02) {
+			const B = BREAKS[D.break];
+			const k = sec === 'build' ? (barIn + 1) / secBars : 1;
+			if (sec === 'intro' || sec === 'breakdown') {
+				// the kick and a snare on the three every other bar, hats and shaker; the siren
+				hit(0, 'kick', 0.85);
+				if (barIn % 2 === 1) hit(8, 'snare', 0.6);
+				if (sec === 'breakdown' && barIn % 2 === 0) hit(10, 'kick', 0.6);
+				for (let s = 2; s < 16; s += 4) hit(s, sec === 'intro' ? 'hihat' : 'shaker', 0.4);
+				if (barIn % 4 === 0 && (barIn === 0 || chance(0.6))) hit(0, 'perc', 0.7);
+				if (lastOfSection) { for (let s = 8; s < 16; s++) hit(s, 'snare', 0.35 + 0.5 * (s - 8) / 8); }
+			} else if (sec === 'build') {
+				// the roll: eighths, then sixteenths, climbing, the kick leaving, the gap at the end
+				if (barIn === 0) { hit(0, 'jump', 0.8); hit(0, 'cymbal', 0.5); }
+				const every = k < 0.4 ? 2 : 1, end = lastOfSection ? 14 : 16;
+				for (let s = 0; s < end; s += every) hit(s, 'snare', clamp(0.3 + 0.65 * (k * 0.75 + s / 16 * 0.35), 0.3, 1) * (s % 4 === 0 ? 1 : 0.8));
+				if (k < 0.75) { hit(0, 'kick', 1); hit(10, 'kick', 0.9); }
+				for (let s = 0; s < end; s += 2) hit(s, 'hihat', 0.45);
+				if (lastOfSection) { hit(8, 'cowbell', 0.9); hit(12, 'perc', 0.6); }
+			} else {
+				// the drop, the roller, the switch: the break, chopped
+				const first = drop && barIn < 2 ? BREAKS.stomp : B;
+				for (const [s, v] of Object.entries(first.kick)) hit(+s, 'kick', v);
+				for (const [s, v] of Object.entries(first.snare)) hit(+s, 'snare', v);
+				const ghosts = sec === 'bridge' ? 1 : lastOfPhrase ? 0.5 : 0.8;
+				for (const [s, v] of Object.entries(first.ghost)) if (chance(ghosts)) hit(+s, 'snare', v * (0.85 + R() * 0.3));
+				// hats: eighths with the beats stronger, the off sixteenths behind them in a drop
+				for (let s = 0; s < 16; s += 2) hit(s, 'hihat', s % 4 === 0 ? 0.6 : 0.45);
+				if (drop || sec === 'bridge') for (let s = 1; s < 16; s += 2) if (chance(drop ? 0.55 : 0.3)) hit(s, 'hihat', 0.26);
+				if (sec === 'verse') for (const s of [6, 14]) if (chance(0.5)) hit(s, 'openhat', 0.45);
+				if (sec === 'verse' && barIn % 2 === 1) hit(14, 'rim', 0.4);
+				// the fill at the end of a phrase: a snare run, or toms
+				if (lastOfPhrase && !lastOfSection && chance(0.65)) {
+					for (let i = drums.length - 1; i >= 0; i--) if (drums[i].s >= 12 && drums[i].name !== 'kick') drums.splice(i, 1);
+					if (chance(0.6)) for (let s = 12; s < 16; s++) hit(s, 'snare', 0.5 + 0.12 * (s - 12));
+					else { hit(12, 'hitom', 0.7); hit(13, 'lotom', 0.6); hit(14, 'lotom', 0.65); hit(15, 'snare', 0.7); }
+				}
+				// the end of the section: the last two beats open for what comes next
+				if (lastOfSection) for (let i = drums.length - 1; i >= 0; i--) if (drums[i].s >= 12) drums.splice(i, 1);
+				if (drop && barIn === 0) { hit(0, 'cymbal', 0.8); hit(0, 'cowbell', 0.85); }
+				if (drop && barIn === 8) hit(0, 'cowbell', 0.7);
+				if (drop && barIn === 12) hit(0, 'perc', 0.6);
+				if (sec === 'bridge' && barIn === 0) hit(0, 'perc', 0.7);
+			}
+		}
+		// ---- bass: the hook
+		if (P.bass > 0 && (P.bass >= 0.6 || chance(P.bass))) {
+			if (up) {
+				const riff = D.hook[barIn % 2];
+				if (sec === 'bridge') {
+					// the switch gates the bass into a wobble: sixteenths on the one and the three
+					for (const s of [0, 1, 2, 3]) ev.push({ role: 'bass', s, semi: r, dur: 0.9, vel: [1, 0.6, 0.75, 0.6][s] * 0.95 });
+					for (const s of [8, 9, 10, 11]) ev.push({ role: 'bass', s, semi: r + (barIn % 4 === 3 ? 5 : 3), dur: 0.9, vel: [1, 0.6, 0.75, 0.6][s - 8] * 0.9 });
+				} else {
+					const last = lastOfSection ? riff.filter((n) => n[0] < 12) : riff;
+					for (const [s, off, dur] of last) ev.push({ role: 'bass', s, semi: r + off, dur, vel: (s % 4 === 0 ? 1 : 0.86) * (sec === 'verse' ? 0.9 : 1) });
+				}
+			} else if (sec === 'build') {
+				if (barIn % 2 === 0) ev.push({ role: 'bass', s: 0, semi: r, dur: lastOfSection ? 8 : 14, vel: 0.8 });
+				if (lastOfSection) for (const [s, off] of [[8, 0], [10, 3], [12, 5]]) ev.push({ role: 'bass', s, semi: r + off, dur: 1.5, vel: 0.85 });
+			} else if (barIn % 2 === 0) ev.push({ role: 'bass', s: 0, semi: r, dur: 30, vel: 0.75 });
+		}
+		// ---- the MC stab on top of a drop (the melody), the riff of the roller
+		if (P.mel > 0 && S.rhythm && chance(P.mel)) {
+			if (drop) {
+				if (inPhrase !== 3 && barIn >= 2) {
+					const base = nearestChordDeg(chord, M.melLo + 3, pcs.length);
+					for (const n of D.stab) { let d = base + n.c + (inPhrase === 2 ? 1 : 0); while (d > M.melHi) d -= pcs.length; while (d < M.melLo) d += pcs.length; ev.push({ role: 'mel', s: n.s, semi: semiOf(pcs, d), dur: 1, vel: 0.95 * dyn }); }
+				}
+			} else if (sec === 'verse') {
+				if (!S.themes.dnbRiff || (barIn === 0 && chance(0.4))) S.themes.dnbRiff = makeMotif(0.6, 0.8);
+				const op = ['same', 'same', 'displace', 'fragment'][inPhrase];
+				for (const n of melodyBar(M, pcs, chord, S.themes.dnbRiff, op, 0, lastOfPhrase)) ev.push({ role: 'mel', s: n.s, semi: semiOf(pcs, n.d), dur: Math.min(n.dur, 2), vel: n.vel * 0.7 * dyn });
+			} else if (sec === 'breakdown' || sec === 'bridge') {
+				// a long call across the bar, the tune's hook slowed
+				if (barIn % 2 === 0) { const d = nearestChordDeg(chord, M.melLo + 5, pcs.length); ev.push({ role: 'mel', s: 0, semi: semiOf(pcs, d), dur: 10, vel: 0.5 * dyn }); if (chance(0.6)) ev.push({ role: 'mel', s: 12, semi: semiOf(pcs, d + 2), dur: 4, vel: 0.45 * dyn }); }
+			}
+		}
+		// ---- the answer: a two-note call at the end of every other bar (the chop)
+		if (P.counter > 0 && chance(P.counter) && barIn % 2 === 1 && !lastOfSection) {
+			let d = nearestChordDeg(chord, M.cLo + 4, pcs.length); while (d < M.cLo) d += pcs.length;
+			ev.push({ role: 'counter', s: 14, semi: semiOf(pcs, d + 2), dur: 1, vel: 0.7 * dyn });
+			ev.push({ role: 'counter', s: 15, semi: semiOf(pcs, d), dur: 1, vel: 0.6 * dyn });
+		}
+		// ---- the pad: root and fifth held, intro and breakdown only (Lead 2 is the bass's)
+		if (P.pad > 0 && chance(P.pad) && barIn % hr === 0) {
+			const voices = voicePad(pcs, [chord[0], chord[2]], M.padCenter);
+			voices.forEach((semi, i) => ev.push({ role: 'pad', s: 0, semi, dur: 16 * hr - 0.5, vel: (i === 0 ? 0.36 : 0.3) * dyn }));
+		}
+		// ---- the arpeggio of a breakdown: the chord broken in eighths, behind
+		if (P.arp > 0 && chance(P.arp)) for (const n of arpBar({ ...M, sparse: 0.6 }, pcs, chord, STYLES.DNB)) ev.push({ role: 'arp', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.3 * dyn });
+		// the drums in front: the world's thinning (night, rain) only goes so far in a drop
+		const dk = (up || sec === 'build' ? Math.max(0.7, M.drums) : M.drums) * (0.75 + 0.25 * dyn);
+		const info = { section: sec, label: DNB_LABEL[sec] || sec, genre: 'dnb', bar: barIn, of: secBars, abs: S.abs, chord: root, chordDegs: chord, arc: +S.arc.toFixed(3), phrase: 'dnb', fresh: S.fresh, break: D.break };
+		S.fresh = false;
+		S.barIn++; S.abs++;
+		S.lastChordRoot = root;
+		return { events: ev, drums: drums.map((d) => ({ ...d, vel: d.vel * dk })), info };
+	}
+
 	// one bar: M is the mood (see context.js), pcs the scale's pitch set, face the style,
 	// beat the faceplate's selected drum pattern (or null)
 	function bar(mood, pcs, face, beat) {
 		const style = STYLES[face] || STYLES.BARD;
+		const dnb = face === 'DNB', SEC = dnb ? DNB_SECTIONS : SECTIONS;
 		// registers arrive in semitones; the parts think in degrees of this scale
 		const M = { ...mood, melLo: degNear(pcs, mood.melLoS), melHi: degNear(pcs, mood.melHiS), cLo: degNear(pcs, mood.cLoS), arpLo: degNear(pcs, mood.arpLoS) };
 		// a queued change lands on a phrase boundary (at once if urgent)
 		const phraseEnd = S.barIn > 0 && S.barIn % 4 === 0;
-		if (!S.section) enter(M.climax ? 'build' : 'intro', M);
-		else if (S.queued && (S.queued.urgent || phraseEnd)) { const q = S.queued.to; S.queued = null; enter(q, M); }
-		else if (S.barIn >= S.secBars) enter(weightedNext(S.section, M), M);
+		// (the faceplate switched to or from DNB: the form changes at the next phrase)
+		const switched = S.section && S.genre !== (dnb ? 'dnb' : '') && phraseEnd;
+		if (!S.section) enter(M.climax ? 'build' : 'intro', M, SEC);
+		else if (S.queued && (S.queued.urgent || phraseEnd)) { const q = S.queued.to; S.queued = null; enter(q, M, SEC); }
+		else if (S.barIn >= S.secBars || switched) enter(weightedNext(S.section, M, SEC), M, SEC);
+		S.genre = dnb ? 'dnb' : '';
+		if (dnb) return dnbBar(M, pcs, beat);
 		const sec = S.section, SP = SECTIONS[sec];
 		const barIn = S.barIn, inPhrase = barIn % 4, lastOfPhrase = inPhrase === 3, lastOfSection = barIn === S.secBars - 1;
 		// harmony: a chord held two bars (four when the air is wide), as the caves hold theirs

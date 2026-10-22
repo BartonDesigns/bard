@@ -6085,7 +6085,7 @@ root.L99Stereo223={correct,snapshot:()=>({repairs:applied.slice(),count:applied.
 const profiles=Object.freeze({
  BARD:      {low:.5,mud:-.7,air:.7,width:1.08,room:.30,threshold:-16,ratio:1.35,attack:.032,release:.20,makeup:.7},
  SYNTHWAVE: {low:.8,mud:-.8,air:.8,width:1.20,room:.27,threshold:-16,ratio:1.50,attack:.030,release:.19,makeup:1.0},
- DNB:       {low:.5,mud:-.8,air:.5,width:1.12,room:.10,threshold:-15,ratio:1.50,attack:.032,release:.16,makeup:.8},
+ DNB:       {low:.7,mud:-.8,air:.6,width:1.12,room:.08,threshold:-15,ratio:1.50,attack:.032,release:.16,makeup:.85},
  SPARKLE:   {low:.9,mud:-.4,air:.2,width:1.16,room:.38,threshold:-16,ratio:1.35,attack:.032,release:.23,makeup:.7},
  SOUL:      {low:.8,mud:-.5,air:.6,width:1.12,room:.38,threshold:-17,ratio:1.40,attack:.034,release:.24,makeup:.8},
  GAS:       {low:.4,mud:-.8,air:.7,width:1.09,room:.09,threshold:-15,ratio:1.55,attack:.028,release:.18,makeup:.7},
@@ -6904,7 +6904,7 @@ function generate(f,seed=186,options={},source){const p=phraseProfiles[f]||phras
   Object.assign(s,{on:index>=0,degree:clamp(degree,-14,21),gate:clamp(gate*(local%4===0?1.1:.85),.1,1.8),velocity:clamp((local%4===0?.87:.71)+(rng()-.5)*.08,.05,1),ratchet:1,color:clamp(.38+(rng()-.5)*.14+(second&&local>=10?.08:0),0,1)});
  }return base;
 }
-function pattern(f,variant=0){const selectedBeat=api?.face?.()===f?api?.productionContext?.().beatPattern:null,jungle=f==='DNB',gas=f==='GAS',soft=['SOUL','BREW','KAWAII'].includes(f),base=generate(f,186+variant*101,{scaleSize:scaleSize()});return base.map((s,i)=>({...s,kick:jungle?([0,10,16,23].includes(i)?1:0):gas?(i%4===0?1:0):([0,7,16,22].includes(i)?1:0),snare:i%16===4||i%16===12?.95:(jungle&&[7,19,27,31].includes(i)?.24:0),hat:i%2===0?.58:(soft?0:.26),...(selectedBeat?Object.fromEntries(['kick','snare','hat'].map(k=>[k,unit187(selectedBeat[k]?.[i%(selectedBeat[k]?.length||16)])])):{})}));}
+function pattern(f,variant=0){const selectedBeat=api?.face?.()===f?api?.productionContext?.().beatPattern:null,jungle=f==='DNB',gas=f==='GAS',soft=['SOUL','BREW','KAWAII'].includes(f),base=generate(f,186+variant*101,{scaleSize:scaleSize()});return base.map((s,i)=>({...s,kick:jungle?([0,10,16,26,27].includes(i)?(i===27?.6:1):0):gas?(i%4===0?1:0):([0,7,16,22].includes(i)?1:0),snare:i%16===4||i%16===12?.95:(jungle&&[7,15,23,25,31].includes(i)?.3:0),hat:i%2===0?.58:(soft?0:.26),...(selectedBeat?Object.fromEntries(['kick','snare','hat'].map(k=>[k,unit187(selectedBeat[k]?.[i%(selectedBeat[k]?.length||16)])])):{})}));}
 function fresh(f){const p=profile[f]||profile.BARD,b=bassProfiles187[f]||bassProfiles187.BARD;return{version:181,productionVersion:188,face:f,sound:p[0],color:p[1],motion:p[2],width:p[3],drive:p[4],sub:p[5],duck:p[6],punch:f==='HYPHY'?.62:.65,glide:f==='HYPHY'?.16:['GAS','DNB'].includes(f)?.25:0,rate:2,mix:f==='HYPHY'?.66:.65,automation:true,bassAuto:true,bassLevel:b.level,bassDensity:b.density,bassVariation:1,transpose:0,octave:0,seed:186,density:.5,contour:'call',preview:true,pattern:pattern(f)};}
 function valid(raw,f,stepsOnly=false){const d=fresh(f);if(!raw||typeof raw!=='object')return stepsOnly?d:extended215(d);if(Sound.handles(raw.sound))d.sound=raw.sound;for(const k of ['color','motion','width','drive','sub','duck','punch','glide','mix','density','bassLevel','bassDensity'])if(Number.isFinite(raw[k]))d[k]=clamp(raw[k],0,1);if([.5,1,2,4,8].includes(raw.rate))d.rate=raw.rate;d.automation=raw.automation!==false;d.bassAuto=raw.bassAuto!==false;d.bassVariation=(Number(raw.bassVariation)>>>0)||1;d.preview=raw.preview!==false;d.transpose=clamp(Math.round(Number(raw.transpose)||0),-14,14);d.octave=clamp(Math.round(Number(raw.octave)||0),-2,2);d.seed=(Number(raw.seed)>>>0)||186;if(['call','rise','fall','root'].includes(raw.contour))d.contour=raw.contour;if(Array.isArray(raw.pattern)&&raw.pattern.length===32)d.pattern=raw.pattern.map((entry,i)=>{const s=entry&&typeof entry==='object'?entry:{};return({...d.pattern[i],on:!!s.on,degree:clamp(Math.round(Number(s.degree)||0),-14,21),gate:clamp(Number(s.gate)||.5,.1,1.8),velocity:clamp(Number(s.velocity)||.7,.05,1),ratchet:[1,2,4].includes(s.ratchet)?s.ratchet:1,color:clamp(Number.isFinite(s.color)?s.color:.5,0,1),...Object.fromEntries(['kick','snare','hat'].map(k=>[k,clamp(Number(s[k])||0,0,1)]))});});if(untouchedLegacyMix(raw,f)||untouched186Mix(raw,f)||untouched187Mix(raw,f)){const defaults=fresh(f);for(const k of ['sound','color','motion','width','drive','sub','duck','punch','glide','rate','mix','automation'])d[k]=defaults[k];}return stepsOnly?d:extended215(d,raw);}
 function pitchFrequency(degree,config,frequency){return frequency(degree+(config.transpose||0))*Math.pow(2,config.octave||0);}
@@ -8071,7 +8071,11 @@ const BEAT_PATTERNS = {
     { name:'JUMP UP',         kick:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], snare:[0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,1], hihat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
     { name:'ROLLER',          kick:[1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] },
     { name:'RAGGA JUNGLE',    kick:[1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0] },
-    { name:'MINIMAL DNB',     kick:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], hihat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] }
+    { name:'MINIMAL DNB',     kick:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], hihat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+    // music235: jump-up (the Baddadan two-step with chopped hats, the Amen with its ghosts, the half-time switch)
+    { name:'BADDADAN',        kick:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,0] },
+    { name:'AMEN GHOSTS',     kick:[1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0], snare:[0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,1], hihat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+    { name:'DROP SWITCH',     kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare:[0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0], hihat:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] }
   ],
   SPARKLE: [
     { name:'TWINKLE', kick:[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
@@ -8222,17 +8226,17 @@ const DRUM_INJECT_PATTERNS = {
     kick:    [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],     // syncopated break kick
     snare:   [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0],     // amen-style ghost
     hihat:   [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1],     // chopped 16ths
-    cowbell: [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0],     // ride bell accents
+    cowbell: [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],     // music235: the horn on the one
     clap:    [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1],     // syncopated
-    cymbal:  [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],     // open hat splash
+    cymbal:  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],     // the crash on the one
     hitom:   [0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1],     // jungle tom roll
     lotom:   [0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0],     // jungle tom roll
     shaker:  [0,0,1,0,1,0,0,1,0,1,0,1,0,0,1,0],     // jungle texture
     rim:     [0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0],     // jungle rim
-    jump:    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],      // drop
+    jump:    [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],     // music235: the sweep from the three into the next bar
     openhat: [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],     // fix701: offbeat open hat
     ride:    [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1],     // fix701: ride pulse
-    perc:    [0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0]      // fix701: perc tick
+    perc:    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]      // music235: the siren once a bar
   },
   SPARKLE: {
     kick:    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],     // bouncy 4-on-floor
@@ -12948,6 +12952,65 @@ function _dpZap(p) {
   g.gain.exponentialRampToValueAtTime(0.001, now + (p.dur || 0.16));
   o.connect(g); _dpOut(g, p.drive, p.crush); o.start(now); o.stop(now + (p.dur || 0.16) + 0.04);
 }
+// music235: the DNB face's own voices
+function _dpAmen(p) {
+  // the Amen snare: the skins and the wires of _dpSnare, driven, under a crack (a short bright
+  // burst at the front) and a ring (the shell's low tone hanging a moment behind the hit)
+  _dpSnare(p);
+  const now = ctx.currentTime;
+  const nb = _dpNoise(0.012);
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3800;
+  const cg = ctx.createGain(); cg.gain.setValueAtTime(_dpH(p.crack || 0.7, 0.1), now);
+  cg.gain.exponentialRampToValueAtTime(0.001, now + 0.012);
+  nb.connect(hp); hp.connect(cg); _dpOut(cg, p.drive); nb.start(now); nb.stop(now + 0.02);
+  const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(_dpH((p.ring || 182), 0.02), now);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(p.ringAmp || 0.3, now + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.001, now + (p.ringDur || 0.22));
+  o.connect(g); _dpOut(g, p.drive); o.start(now); o.stop(now + (p.ringDur || 0.22) + 0.05);
+}
+function _dpHorn(p) {
+  // the horn: two saws a third apart and a sine an octave down, falling a touch, saturated
+  const now = ctx.currentTime, dur = p.dur || 0.42, f0 = _dpH(p.f0 || 165, 0.01);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(_dpH(p.amp || 0.5, 0.08), now + 0.012);
+  g.gain.setValueAtTime(p.amp || 0.5, now + dur * 0.55);
+  g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(2400, now); lp.frequency.exponentialRampToValueAtTime(1100, now + dur); lp.Q.value = 0.9;
+  lp.connect(g); _dpOut(g, p.drive || 2.4);
+  [[f0, 'sawtooth', 0.5], [f0 * 1.26, 'sawtooth', 0.4], [f0 * 0.5, 'sine', 0.6]].forEach(([f, w, a]) => {
+    const o = ctx.createOscillator(); o.type = w;
+    o.frequency.setValueAtTime(f * 1.02, now); o.frequency.exponentialRampToValueAtTime(f * 0.97, now + dur);
+    const og = ctx.createGain(); og.gain.value = a; o.connect(og); og.connect(lp); o.start(now); o.stop(now + dur + 0.05);
+  });
+}
+function _dpSiren(p) {
+  // the dub siren: a square swept by a fast triangle LFO, the whole thing sinking as it fades
+  const now = ctx.currentTime, dur = p.dur || 0.9, f0 = p.f0 || 640;
+  const o = ctx.createOscillator(); o.type = 'square';
+  o.frequency.setValueAtTime(f0, now); o.frequency.exponentialRampToValueAtTime(f0 * 0.8, now + dur);
+  const lfo = ctx.createOscillator(); lfo.type = 'triangle'; lfo.frequency.value = p.lfo || 7;
+  const depth = ctx.createGain(); depth.gain.value = f0 * (p.depth || 0.28);
+  lfo.connect(depth); depth.connect(o.frequency);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f0 * 1.9; bp.Q.value = 0.7;
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(_dpH(p.amp || 0.32, 0.08), now + 0.01);
+  g.gain.setValueAtTime(p.amp || 0.32, now + dur * 0.5);
+  g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  o.connect(bp); bp.connect(g); _dpOut(g, 1.6);
+  o.start(now); lfo.start(now); o.stop(now + dur + 0.05); lfo.stop(now + dur + 0.05);
+}
+function _dpSweep(p) {
+  // the riser: noise through a bandpass climbing from f0 to f1, swelling, cut at the top
+  const now = ctx.currentTime, dur = p.dur || 2.2;
+  const nb = _dpNoise(dur + 0.1);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.6;
+  bp.frequency.setValueAtTime(p.f0 || 400, now); bp.frequency.exponentialRampToValueAtTime(p.f1 || 6000, now + dur);
+  const amp = p.amp || 1.5, g = ctx.createGain(); g.gain.setValueAtTime(amp * 0.12, now);
+  g.gain.linearRampToValueAtTime(amp, now + dur * 0.92);
+  g.gain.linearRampToValueAtTime(0.0001, now + dur);
+  nb.connect(bp); bp.connect(g); g.connect(drumBus); nb.start(now); nb.stop(now + dur + 0.05);
+}
 // THE KIT TABLE: face -> name -> [helper, params]. Genre knowledge lives HERE.
 const _DP_KITS = {
   SYNTHWAVE: { // LinnDrum lineage: gated snare, swept discs for toms, tight metal
@@ -12959,15 +13022,16 @@ const _DP_KITS = {
     clap:[_dpClap,{hz:1400,q:1.4,tail:0.22,amp:0.6}], rim:[_dpRim,{hz:1900,body:480}],
     shaker:[_dpShakerV,{hz:6200,dur:0.08}], cowbell:[_dpCow,{f0:560,f1:845,dur:0.18}],
     perc:[_dpTom,{f0:430,dur:0.14,fall:0.6,wave:'triangle'}], jump:[_dpZap,{f0:160,f1:1400,dur:0.22,wave:'square'}] },
-  DNB: {   // breaks: everything tight, crack forward, air on top
-    kick:[_dpKick,{f0:185,f1:50,pt:0.035,dur:0.18,drive:2.2,clickHz:2400,clickAmp:0.6}],
-    snare:[_dpSnare,{bf:225,bDur:0.08,nHz:3300,nHz2:6800,nDur:0.11,nAmp:0.62,bAmp:0.42}],
-    hihat:[_dpMetal,{f0:46,dur:0.035,bp:11500,hp:8200,amp:0.24}], openhat:[_dpMetal,{f0:46,dur:0.18,bp:11000,hp:7800,amp:0.2}],
-    cymbal:[_dpMetal,{f0:36,dur:1.1,bp:9000,hp:5600,amp:0.26,shimmer:0.12,det:0.02}], ride:[_dpMetal,{f0:56,dur:0.22,bp:10200,hp:7200,amp:0.16}],
-    lotom:[_dpTom,{f0:150,dur:0.2,skin:0.2,drive:1.6}], hitom:[_dpTom,{f0:260,dur:0.16,skin:0.2,drive:1.6}],
-    clap:[_dpClap,{hz:1700,offs:[0,0.008,0.016],tail:0.1,amp:0.5}], rim:[_dpRim,{hz:2100,body:440}],
-    shaker:[_dpShakerV,{hz:5600,dur:0.06,atk:0.008}], cowbell:[_dpCow,{f0:540,f1:800,dur:0.12}],
-    perc:[_dpZap,{f0:700,f1:240,dur:0.09,wave:'triangle',amp:0.3}], jump:[_dpZap,{f0:200,f1:1800,dur:0.16}] },
+  DNB: {   // jump-up (music235): a saturated Amen snare with its ring, a kick with a sub tail, tight hats;
+           // the horn, the dub siren and the sweep ride the cowbell, perc and jump pads (see L99DrumLabel222)
+    kick:[_dpKick,{f0:172,f1:48,pt:0.03,dur:0.26,drive:2.8,clickHz:2600,clickAmp:0.7,sub:46,subAmp:0.5}],
+    snare:[_dpAmen,{bf:196,bDur:0.14,nHz:2800,nHz2:5400,nQ:0.8,nDur:0.17,nAmp:0.95,bAmp:0.5,drive:2.4,crack:1,ringAmp:0.18}],
+    hihat:[_dpMetal,{f0:46,dur:0.03,bp:12000,hp:8600,amp:0.5}], openhat:[_dpMetal,{f0:46,dur:0.16,bp:11200,hp:8000,amp:0.45}],
+    cymbal:[_dpMetal,{f0:36,dur:1.3,bp:9000,hp:5600,amp:0.34,shimmer:0.16,det:0.02}], ride:[_dpMetal,{f0:56,dur:0.22,bp:10200,hp:7200,amp:0.3}],
+    lotom:[_dpTom,{f0:150,dur:0.2,skin:0.2,drive:1.8}], hitom:[_dpTom,{f0:260,dur:0.16,skin:0.2,drive:1.8}],
+    clap:[_dpClap,{hz:1900,offs:[0,0.007,0.015],tail:0.12,amp:0.55}], rim:[_dpRim,{hz:2300,body:440}],
+    shaker:[_dpShakerV,{hz:5600,dur:0.06,atk:0.008}], cowbell:[_dpHorn,{f0:165,dur:0.42,drive:2.6,amp:0.38}],
+    perc:[_dpSiren,{f0:640,lfo:7,depth:0.28,dur:0.9,amp:0.22}], jump:[_dpSweep,{f0:400,f1:6000,dur:2.2,amp:1.0}] },
   SPARKLE: { // glass and air: pitched high, long light tails
     kick:[_dpKick,{f0:140,f1:52,dur:0.26,drive:1.2,clickHz:3200,clickAmp:0.3}],
     snare:[_dpSnare,{bf:240,bDur:0.09,nHz:3800,nHz2:8200,nDur:0.16,nAmp:0.42}],
@@ -16836,8 +16900,8 @@ function buildUI() {
   const _BEAT_COMMON_RANK = {
     BARD:      ['QUEST MARCH', 'FIELD THEME', 'TOWN THEME', 'DUNGEON CRAWL', 'BOSS BATTLE', 'FINAL BATTLE'],
     SYNTHWAVE: ['NIGHT DRIVE', 'CRUISE CONTROL', 'OUTRUN', 'NEON PULSE', 'SLOW BURN', 'NEON RUSH'],
-    DNB:       ['CLASSIC BREAK', 'TWO STEP', 'JUNGLE ROLL', 'ROLLER', 'LIQUID STEP', 'ROLLING OUT',
-                'HALF TIME', 'AMEN CHOP', 'JUMP UP', 'NEUROFUNK', 'MINIMAL DNB', 'RAGGA JUNGLE'],
+    DNB:       ['BADDADAN', 'CLASSIC BREAK', 'TWO STEP', 'JUNGLE ROLL', 'AMEN GHOSTS', 'ROLLER', 'LIQUID STEP', 'ROLLING OUT',
+                'HALF TIME', 'AMEN CHOP', 'JUMP UP', 'DROP SWITCH', 'NEUROFUNK', 'MINIMAL DNB', 'RAGGA JUNGLE'],
     SPARKLE:   ['TWINKLE', 'PIXIE DUST', 'CRYSTAL PULSE', 'WISHING STAR', 'MOONBEAM', 'LULLABY'],
     SOUL:      ['BOOTS N CATS', 'SOUL PUMP', 'VOCAL HOUSE', 'DEEP LIFT', 'FRENCH TOUCH', 'DEEP GARAGE',
                 'AFRO HOUSE', 'SOULFUL STRUT', 'TRAP LIFT', 'LATE NIGHT', 'ROLLER RINK', 'SUNDAY MORNING'],
@@ -27824,7 +27888,7 @@ root.L99Dive227={start,climb,landed,finish,get active(){return !!dive;}};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=109720ed5b'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=112e53e616'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -27832,7 +27896,7 @@ root.L99Dive227={start,climb,landed,finish,get active(){return !!dive;}};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=109720ed5b'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=112e53e616'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }
@@ -30225,7 +30289,7 @@ root.L99Synth222={version:222,handles,voice,silence,patches:()=>Object.fromEntri
 (function(){
 function stop(){const before=window._latchSkip;try{window._latchSkip=true;window.L99Keyboard149?.release();for(const id of Object.keys(activeVoices))stopLead(id,true);}finally{window._latchSkip=before;}window.L99FaceAudio222?.silence();window.L99Synth222?.silence();}
 window.L99Route222=function(c,face,target){if(!window.L99Faust222?.route)return target;const input=L99Faust222.route(c,face,target),h=input.faust222;if(h&&!h.observed222){h.observed222=true;L99FaceAudio222.setEngineStatus(face,'loading');h.ready.then(()=>L99FaceAudio222.setEngineStatus(face,h.status==='ready'?'ready':'error',h.error));}return input;};
-window.L99DrumLabel222=function(face,name,fallback){return L99FaceAudio222.enabled()&&face==='DANCEHALL'?({perc:'GUIRO',rim:'CLAVES',lotom:'CONGA',hitom:'BONGO'}[name]||fallback):fallback;};
+window.L99DrumLabel222=function(face,name,fallback){if(face==='DNB')return {cowbell:'HORN',perc:'SIREN',jump:'SWEEP'}[name]||fallback;return L99FaceAudio222.enabled()&&face==='DANCEHALL'?({perc:'GUIRO',rim:'CLAVES',lotom:'CONGA',hitom:'BONGO'}[name]||fallback):fallback;};
 function labels(){if(currentFace==='MAESTRO')return;document.querySelectorAll('.drum-pad').forEach(p=>{const name=p.dataset.drum||p.dataset.sound,i=DRUM_NAMES.indexOf(name),label=p.querySelector('.pad-label');if(i>=0&&label)label.textContent=L99DrumLabel222(currentFace,name,DRUM_LABELS[i]);});}
 window.addEventListener('l99-sound-mode222',()=>{stop();labels();});
 window.addEventListener('l99-sound-ready222',labels);
