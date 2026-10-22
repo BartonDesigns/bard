@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { soundBus } from '../world/soundbus.js';
 import { CHARGE } from './beam.js';
+import { spellSound } from './sound.js';
 
 // colours (linear-ish, for the additive glow) by school, and the two strands
 export const GLOW = {
@@ -509,28 +510,12 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 }
 
 // ---------- the voices ----------
-// a short sound for a school's casting, a hit, gathering fabric, a fizzle; quiet, synthesised
-const VOICE = {
-	radiance: { f: 880, f2: 1320, type: 'triangle' }, restoration: { f: 660, f2: 990, type: 'sine' }, warding: { f: 520, f2: 780, type: 'sine' }, dawn: { f: 990, f2: 1480, type: 'sine' },
-	shadow: { f: 220, f2: 140, type: 'sawtooth' }, void: { f: 160, f2: 60, type: 'sawtooth' }, blight: { f: 190, f2: 240, type: 'square' }, umbral: { f: 260, f2: 130, type: 'triangle' },
-	storm: { f: 120, f2: 2400, type: 'sawtooth' }, chrono: { f: 740, f2: 370, type: 'sine' }, primal: { f: 300, f2: 180, type: 'square' },
-	// (the skills of the body, and a level gained: magic/skills-ui.js)
-	marksman: { f: 440, f2: 660, type: 'triangle' }, athletics: { f: 587, f2: 880, type: 'sine' }, resilience: { f: 330, f2: 495, type: 'triangle' }, level: { f: 523, f2: 1047, type: 'sine' },
-};
-export function magicSound(kind, gain = 0.12) {
-	try {
-		const bus = soundBus(); if (!bus) return;
-		const C = bus.ctx, t = C.currentTime, o = C.createOscillator(), o2 = C.createOscillator(), g = C.createGain(), f = C.createBiquadFilter();
-		const V = VOICE[kind] || (kind === 'gather' ? { f: 1175, f2: 1568, type: 'sine' } : kind === 'fizzle' ? { f: 300, f2: 200, type: 'triangle' } : VOICE.radiance);
-		o.type = V.type; o2.type = 'sine';
-		o.frequency.setValueAtTime(V.f, t); o.frequency.exponentialRampToValueAtTime(V.f2, t + 0.25);
-		o2.frequency.setValueAtTime(V.f * 1.5, t); o2.frequency.exponentialRampToValueAtTime(V.f2 * 1.5, t + 0.3);
-		f.type = 'lowpass'; f.frequency.value = kind === 'storm' ? 5000 : 2600;
-		g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'gather' ? 0.7 : kind === 'level' ? 1.4 : 0.45));
-		o.connect(f); o2.connect(f); f.connect(g); g.connect(bus.out);
-		o.start(t); o2.start(t); o.stop(t + 1.5); o2.stop(t + 1.5);
-		o.onended = () => { o.disconnect(); o2.disconnect(); f.disconnect(); g.disconnect(); };
-	} catch { /* no sound here */ }
+// a spell's sound (magic/sound.js: rendered pieces, deep and full, placed in the world): kind is
+// a school ('void'), a school's hit or blast ('void-hit', 'void-blast'), 'gather', 'level',
+// 'fizzle' or a body skill; at: where it happened (null: at your hands); gain as the old voices
+// took it (0.12 a cast), scaled to the pieces
+export function magicSound(kind, gain = 0.12, at = null) {
+	spellSound().play(kind, at, Math.min(1.2, gain * 3.2));
 }
 
 // a beam's voice: a whine rising as it gathers (CHARGE), then a roar, rushing air and a low hum,
@@ -581,16 +566,18 @@ export function beamVoice(kind) {
 		wg.gain.setValueAtTime(0.0001, t); wg.gain.exponentialRampToValueAtTime(0.06, go - 0.03); wg.gain.exponentialRampToValueAtTime(0.0001, go + 0.08);
 		w.connect(wg); wg.connect(bus.out); w.start(t); w.stop(go + 0.1);
 		w.onended = () => { w.disconnect(); wg.disconnect(); };
-		const n = C.createBufferSource(), bp = C.createBiquadFilter(), hum = C.createOscillator(), lp = C.createBiquadFilter(), out = C.createGain();
+		const n = C.createBufferSource(), bp = C.createBiquadFilter(), hum = C.createOscillator(), lp = C.createBiquadFilter(), out = C.createGain(), low = C.createOscillator(), lg = C.createGain();
 		n.buffer = noiseOf(C); n.loop = true;
-		bp.type = 'bandpass'; bp.frequency.value = Math.max(300, Math.min(1400, V.f)); bp.Q.value = 0.7;
-		hum.type = 'sawtooth'; hum.frequency.value = Math.max(40, Math.min(110, V.f / 4));
-		lp.type = 'lowpass'; lp.frequency.value = 650;
-		n.connect(bp); bp.connect(out); hum.connect(lp); lp.connect(out); out.connect(bus.out);
+		// (the air's band sits low and wide, a sub under the hum: a roar with weight, not a hiss)
+		bp.type = 'bandpass'; bp.frequency.value = Math.max(180, Math.min(700, V.f * 0.5)); bp.Q.value = 0.5;
+		hum.type = 'sawtooth'; hum.frequency.value = Math.max(36, Math.min(90, V.f / 5));
+		lp.type = 'lowpass'; lp.frequency.value = 520;
+		low.type = 'sine'; low.frequency.value = hum.frequency.value * 0.5; lg.gain.value = 0.9;
+		n.connect(bp); bp.connect(out); hum.connect(lp); lp.connect(out); low.connect(lg); lg.connect(out); out.connect(bus.out);
 		// (silent while it gathers; a crack as it lets go, settling to a roar)
 		out.gain.setValueAtTime(0.0001, t); out.gain.setValueAtTime(0.0001, go);
 		out.gain.exponentialRampToValueAtTime(0.22, go + 0.03); out.gain.exponentialRampToValueAtTime(0.11, go + 0.45);
-		n.start(t); hum.start(t);
+		n.start(t); hum.start(t); low.start(t);
 		let done = false;
 		return {
 			stop() {
@@ -598,8 +585,8 @@ export function beamVoice(kind) {
 				done = true;
 				const s = C.currentTime;
 				out.gain.cancelScheduledValues(s); out.gain.setValueAtTime(Math.max(0.0001, out.gain.value), s); out.gain.exponentialRampToValueAtTime(0.0001, s + 0.25);
-				n.stop(s + 0.3); hum.stop(s + 0.3);
-				hum.onended = () => { n.disconnect(); bp.disconnect(); hum.disconnect(); lp.disconnect(); out.disconnect(); };
+				n.stop(s + 0.3); hum.stop(s + 0.3); low.stop(s + 0.3);
+				hum.onended = () => { n.disconnect(); bp.disconnect(); hum.disconnect(); lp.disconnect(); low.disconnect(); lg.disconnect(); out.disconnect(); };
 			},
 		};
 	} catch { return null; }
