@@ -24,6 +24,7 @@ import { SPELL, SCHOOLS } from '../magic/spells.js';
 // the standard mapping's buttons (w3c.github.io/gamepad/#remapping)
 const B = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, VIEW: 8, START: 9, L3: 10, R3: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15, HOME: 16, PAD: 17 };
 const HOLD = 420;          // ms: a press held this long is a hold, not a tap
+const CAST_HOLD = 240;     // ms: locked on, RB held this long casts; let go sooner, it turns to the next target
 const DEAD = 0.18;         // the sticks' rest (a radial dead zone)
 const TRIG_ON = 0.35, TRIG_OFF = 0.22;
 // the view's turn at full tilt, radians a second (a held full tilt speeds up after a moment)
@@ -73,6 +74,7 @@ export const LAYOUT = [
 		[['LT'], 'Aim down the sights (a tap leaves them up) · block with fists or a blade'],
 		[['RB'], 'Cast your spell (hold for beams)'],
 		[['LB'], 'Next spell · hold: the spell and weapon wheel, pick with RS'],
+		[['RB', 'LB'], 'Locked on: the next and previous target (hold RB to cast)'],
 		[['Y'], 'Heavy strike (hold to charge) · fire mode with a gun'],
 		[['LEFT', 'RIGHT'], 'Previous and next weapon, or empty hands'],
 		[['UP'], 'Grab or take down · in flight: flight speed · hold: warp in space'],
@@ -185,6 +187,8 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 	const tap = (k, o) => { const r = key('keydown', k, o); key('keyup', k, o); return r; };
 	// everything let go: on a change of mode, a lost pad, a hidden page
 	let firing = null, aimHeld = false, aimLatched = false, aimDownT = 0, blocking = false, casting = null;
+	// RB while locked on: a tap turns to the next target, so the cast waits for CAST_HOLD
+	let rbAt = 0, rbCast = false;
 	function releaseAll() {
 		for (const [id, o] of [...sent]) { sent.delete(id); key('keyup', id.replace(/^S\+/, ''), o); }
 		if (firing === 'gun') hooks.combat?.trigger?.(false);
@@ -192,7 +196,7 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 		firing = null;
 		if (aimHeld || aimLatched) { hooks.gear?.weapon?.aim?.(false); aimHeld = aimLatched = false; }
 		if (blocking) { hooks.combat?.melee?.block?.(false); blocking = false; }
-		casting = null;
+		casting = null; rbCast = false;
 		const s = P();
 		if (s?.pad) { s.pad.x = s.pad.y = 0; s.pad.run = false; }
 		wheel.close(false);
@@ -475,6 +479,9 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 		if (to < 0) hands(); else hooks.magic.hotbar.press(to);
 	}
 	const armed = () => { try { return !!hooks.combat?.armed?.(); } catch { return false; } };
+	// locked on to someone (combat/target-focus.js): RB and LB turn to the next and previous target
+	const locked = () => { try { return !!hooks.combat?.focus?.locked?.(); } catch { return false; } };
+	function cycleTarget(d) { if (hooks.combat?.focus?.cycle?.(d)) rumble(0.12, 0.08, 30); }
 	const rodOut = () => { try { return !!hooks.fishing?.rodOut?.(); } catch { return false; } };
 	function reel(on) { const F = hooks.fishing; if (F?.reel) F.reel(on); else if (on) F?.press?.(); }
 	// X: the prompt nearest the thumb, else the E key's things, else a reload
@@ -635,12 +642,14 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 			if (aimHeld) { if (now - aimDownT < 280) aimLatched = true; else hooks.gear?.weapon?.aim?.(false); aimHeld = false; }
 		}
 		if (aimLatched && !armed()) aimLatched = false;
-		// RB: the chosen spell, held for as long as a beam pours
-		if (edge[B.RB] === 'down') castStart();
-		else if (edge[B.RB] === 'up') castEnd();
-		// LB: a tap, the next spell; held, the wheel
+		// RB: the chosen spell, held for as long as a beam pours. Locked on, a tap turns to the
+		// next target and the cast starts once the button has been held a moment.
+		if (edge[B.RB] === 'down') { rbAt = now; rbCast = !locked(); if (rbCast) castStart(); }
+		else if (edge[B.RB] === 'up') { if (rbCast) castEnd(); else cycleTarget(1); rbCast = false; }
+		else if (down[B.RB] && !rbCast && now - rbAt > CAST_HOLD) { rbCast = true; castStart(); }
+		// LB: a tap, the next spell (locked on: the previous target); held, the wheel
 		if (holdNow(B.LB)) { wheel.show(); rumble(0.08, 0.04, 20); }
-		if (edge[B.LB] === 'up') { if (wheel.open) wheel.close(true); else nextSpell(1); }
+		if (edge[B.LB] === 'up') { if (wheel.open) wheel.close(true); else if (locked()) cycleTarget(-1); else nextSpell(1); }
 		// Y: the heavy blow (Shift+Q) without a gun, the fire mode (Z) with one
 		if (edge[B.Y] === 'down') { if (armed()) tap('z'); else hold('q', true, { shift: true }); }
 		else if (edge[B.Y] === 'up') hold('q', false, { shift: true });
@@ -649,7 +658,7 @@ export function createGamepad({ mount, canvas, world = () => null, hooks = {}, h
 		if (tapped(B.X)) interact();
 		// R3: lock on; held, the next one
 		if (holdNow(B.R3)) tap('`', { shift: true });
-		if (tapped(B.R3)) tap('`');
+		if (tapped(B.R3)) { tap('`'); if (locked()) hint(`Locked on. ${GLYPHS[family].RB[0]} / ${GLYPHS[family].LB[0]}: the next and previous target · hold ${GLYPHS[family].RB[0]} to cast.`, 2600); }
 		// the d-pad
 		if (edge[B.LEFT] === 'down') nextWeapon(-1);
 		if (edge[B.RIGHT] === 'down') nextWeapon(1);

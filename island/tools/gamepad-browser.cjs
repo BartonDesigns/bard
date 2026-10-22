@@ -26,11 +26,11 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 			window.looked = [0, 0];
 			window.S = { active: true, pad: { x: 0, y: 0, run: false }, flying: false, padLook: (y, p) => { looked[0] += y; looked[1] += p; } };
 			window.calls = [];
-			window.armedNow = false; window.driving = false;
+			window.armedNow = false; window.driving = false; window.lockedNow = false;
 			const binds = ['sunspark', 'shadowbolt', 'mend', 'lumen', null];
 			const ws = [{ name: 'Aurora trail rifle', held: false }, null, { name: 'Machete', held: false }, null, null];
 			window.hooks = {
-				combat: { armed: () => armedNow, trigger: (d) => calls.push('trigger:' + d), melee: { block: (d) => calls.push('block:' + d) } },
+				combat: { armed: () => armedNow, trigger: (d) => calls.push('trigger:' + d), melee: { block: (d) => calls.push('block:' + d) }, focus: { locked: () => lockedNow, cycle: (d) => { calls.push('cycle:' + d); return true; } } },
 				gear: { weapon: { aim: (d) => calls.push('aim:' + d) } },
 				magic: { state: { binds }, hotbar: { slots: () => ws, press: (i) => { calls.push('slot:' + i); ws.forEach((w, j) => { if (w) w.held = j === i ? !w.held : false; }); } } },
 				fishing: { rodOut: () => false, reel: (d) => calls.push('reel:' + d) },
@@ -76,6 +76,12 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 		// RB casts the chosen spell (6, held), LB picks the next one
 		await press(5); assert.deepEqual((await take()).log, ['+Digit6', '-Digit6']);
 		await press(4); await press(5); assert.deepEqual((await take()).log, ['+Digit7', '-Digit7']);
+		// locked on: a tap of RB or LB turns to the next or previous target; RB held still casts
+		await page.evaluate(() => { lockedNow = true; });
+		await press(5); await press(4);
+		assert.deepEqual(await take(), { log: [], calls: ['cycle:1', 'cycle:-1'] });
+		await press(5, 400); assert.deepEqual(await take(), { log: ['+Digit7', '-Digit7'], calls: [] });
+		await page.evaluate(() => { lockedNow = false; });
 		// X: the prompt on screen when there is one, else E (and R with a gun)
 		await page.evaluate(() => { const d = document.getElementById('door'); d.style.display = ''; d.onclick = () => calls.push('door'); });
 		await frames();
