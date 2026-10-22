@@ -51,7 +51,7 @@ export function createRide({ camera, mount, hint, player, scene, mesh, kind = 'm
 	// the strip and the skip
 	const bar = mount ? document.createElement('div') : null, skip = mount ? document.createElement('button') : null;
 	if (bar) {
-		bar.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));display:none;align-items:center;gap:12px;padding:8px 14px;border-radius:14px;background:rgba(8,20,26,.84);border:1px solid rgba(165,246,226,.45);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);z-index:6;white-space:nowrap;';
+		bar.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + var(--l99-top, env(safe-area-inset-top)));display:none;align-items:center;gap:12px;padding:8px 14px;border-radius:14px;background:rgba(8,20,26,.84);border:1px solid rgba(165,246,226,.45);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);z-index:6;white-space:nowrap;';
 		skip.type = 'button'; skip.textContent = 'Skip ⏭';
 		skip.style.cssText = 'min-height:36px;padding:4px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;';
 		const txt = document.createElement('span');

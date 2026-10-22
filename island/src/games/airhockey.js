@@ -43,7 +43,7 @@ export const GAME = {
 			mine = mallet('#2a6fd1');
 			theirs = mallet('#f2b33d');
 			// the scoreboard over the far end
-			S.board = K.el('position:absolute;left:50%;top:calc(66px + env(safe-area-inset-top));transform:translateX(-50%);font:800 28px var(--bard-display,system-ui,sans-serif);color:#eafaf6;text-shadow:0 2px 6px #000;pointer-events:none');
+			S.board = K.el('position:absolute;left:50%;top:calc(66px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);font:800 28px var(--bard-display,system-ui,sans-serif);color:#eafaf6;text-shadow:0 2px 6px #000;pointer-events:none');
 		}
 		function reset() {
 			S = { ...S, me: 0, them: 0, px: 0, pz: -0.5, vx: 0, vz: 0, mx: 0, mz: -0.15, mvx: 0, mvz: 0, ax: 0, az: -TL + 0.15, speed: 1.6, state: 'play', t: 0 };

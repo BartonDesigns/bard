@@ -15,7 +15,7 @@ export function createColonyLife(X, o) {
 	const panel = mount ? document.createElement('div') : null;
 	if (mount) {
 		btn.style.cssText = CSS + 'bottom:calc(96px + env(safe-area-inset-bottom));display:none;padding:9px 14px;border-radius:20px;border:1px solid rgba(165,246,226,.55);background:rgba(8,20,26,.82);font-weight:600;';
-		panel.style.cssText = CSS + 'top:calc(70px + env(safe-area-inset-top));display:none;width:min(420px,calc(100% - 32px));max-height:calc(100% - 150px);overflow:auto;background:rgba(6,16,22,.92);border:1px solid rgba(165,246,226,.4);border-radius:12px;padding:12px;';
+		panel.style.cssText = CSS + 'top:calc(70px + var(--l99-top, env(safe-area-inset-top)));display:none;width:min(420px,calc(100% - 32px));max-height:calc(100% - 150px);overflow:auto;background:rgba(6,16,22,.92);border:1px solid rgba(165,246,226,.4);border-radius:12px;padding:12px;';
 		panel.dataset.colonyPanel = '';
 		mount.append(btn, panel);
 		for (const el of [btn, panel]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());

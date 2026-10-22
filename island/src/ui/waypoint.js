@@ -54,8 +54,8 @@ export function createWaypoint({ scene, camera, mount, onTap = () => {}, top = 8
 	chip.type = 'button';
 	// (text to read, not a control: the touch skin leaves it as it is and keeps controls off it)
 	chip.dataset.hudText = 'quest';
-	chip.style.cssText = 'position:absolute;left:50%;top:calc(86px + env(safe-area-inset-top));transform:translateX(-50%);display:none;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));min-height:44px;padding:6px 14px 6px 8px;border-radius:22px;border:1px solid rgba(1,169,130,.55);background:rgba(10,14,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f2f5f4;font:600 13px/1.25 var(--bard-display,system-ui,sans-serif);cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);text-align:left;';
-	chip.style.top = `calc(${top}px + env(safe-area-inset-top))`;
+	chip.style.cssText = 'position:absolute;left:50%;top:calc(86px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);display:none;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));min-height:44px;padding:6px 14px 6px 8px;border-radius:22px;border:1px solid rgba(1,169,130,.55);background:rgba(10,14,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f2f5f4;font:600 13px/1.25 var(--bard-display,system-ui,sans-serif);cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);text-align:left;';
+	chip.style.top = `calc(${top}px + var(--l99-top, env(safe-area-inset-top)))`;
 	const arrow = document.createElement('span');
 	arrow.style.cssText = 'flex-shrink:0;width:30px;height:30px;border-radius:50%;background:rgba(1,169,130,.22);display:flex;align-items:center;justify-content:center;transition:transform .15s linear;';
 	arrow.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#5ff0c6" aria-hidden="true"><path d="M12 2 20 21l-8-4.5L4 21z"/></svg>';

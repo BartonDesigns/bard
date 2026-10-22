@@ -16,13 +16,13 @@ export function speedReadout(v) {
 }
 
 const MARK = 'position:absolute;display:none;transform:translate(-50%,-50%);color:#a5f6e2;font:12px var(--bard-body,system-ui,sans-serif);text-align:center;white-space:pre;text-shadow:0 1px 5px #000;cursor:pointer;pointer-events:auto;padding:4px 6px;';
-const PANEL = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(112px + env(safe-area-inset-top));max-height:calc(100% - 140px);overflow:auto;display:none;min-width:220px;background:rgba(6,16,22,.86);border:1px solid rgba(165,246,226,.35);border-radius:10px;padding:8px;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:auto;';
+const PANEL = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(112px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 140px);overflow:auto;display:none;min-width:220px;background:rgba(6,16,22,.86);border:1px solid rgba(165,246,226,.35);border-radius:10px;padding:8px;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:auto;';
 
 export function createNav({ mount, isTouch, onWarp, onTarget }) {
 	const marks = new Map(), local = new THREE.Vector3(), projected = new THREE.Vector3();
 	let target = null, open = false, list = [], pick = 0;
 	const button = document.createElement('button');
-	button.style.cssText = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));display:none;padding:9px 13px;border-radius:22px;border:1px solid rgba(165,246,226,.5);background:rgba(8,20,26,.7);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);pointer-events:auto;';
+	button.style.cssText = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));display:none;padding:9px 13px;border-radius:22px;border:1px solid rgba(165,246,226,.5);background:rgba(8,20,26,.7);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);pointer-events:auto;';
 	button.textContent = isTouch ? '⤳ Warp' : '⤳ Warp (J)';
 	button.title = 'Warp to a planet, moon, the Sun or the black hole (J)';
 	const panel = document.createElement('div');

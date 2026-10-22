@@ -103,7 +103,7 @@ export function createQuests(R) {
 	health.appendChild(hbar);
 	hud.append(logBtn, purse, health);
 	// the tracker: where the quest you follow is, from here
-	const tracker = guard(css(document.createElement('div'), 'position:absolute;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:6px 12px;border-radius:14px;max-width:min(calc(100vw - 236px),420px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:3;' + PANEL));
+	const tracker = guard(css(document.createElement('div'), 'position:absolute;left:50%;top:calc(12px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:6px 12px;border-radius:14px;max-width:min(calc(100vw - 236px),420px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:3;' + PANEL));
 	const tArrow = css(document.createElement('span'), `display:flex;color:${GOLD};transition:transform .15s;`);
 	tArrow.innerHTML = svg('arrow', 16);
 	const tText = css(document.createElement('span'), 'overflow:hidden;text-overflow:ellipsis;');
@@ -117,7 +117,7 @@ export function createQuests(R) {
 	// the dialogue card
 	const card = guard(css(document.createElement('div'), 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));width:min(440px,calc(100vw - 24px));box-sizing:border-box;padding:14px 16px 12px;border-radius:16px;display:none;z-index:6;box-shadow:0 8px 30px rgba(0,0,0,.35);' + PANEL));
 	// the log
-	const log = guard(scrollable(css(document.createElement('div'), 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(116px + env(safe-area-inset-top));width:min(320px,calc(100vw - 24px));box-sizing:border-box;max-height:calc(100dvh - 200px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:12px 14px;border-radius:14px;display:none;z-index:5;' + PANEL)));
+	const log = guard(scrollable(css(document.createElement('div'), 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(116px + var(--l99-top, env(safe-area-inset-top)));width:min(320px,calc(100vw - 24px));box-sizing:border-box;max-height:calc(100dvh - 200px - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:12px 14px;border-radius:14px;display:none;z-index:5;' + PANEL)));
 	// a dark pulse at the edges when struck, and the black of fainting
 	const hurt = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .35s;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 55%,rgba(60,10,6,.55));z-index:2;');
 	const faint = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity 1.1s;background:#000;z-index:7;');

@@ -82,7 +82,7 @@ export function createPerfMeter({ mount, renderer, governor, scene = null, camer
 			el = document.createElement('div');
 			el.className = 'l99-perf';
 			el.setAttribute('aria-hidden', 'true');
-			el.style.cssText = 'position:absolute;left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));z-index:40;pointer-events:none;padding:6px 8px;border-radius:8px;background:rgba(10,10,10,.72);border:1px solid rgba(255,255,255,.12);color:#fff;font:600 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;letter-spacing:.01em';
+			el.style.cssText = 'position:absolute;left:max(8px,env(safe-area-inset-left));top:max(8px,var(--l99-top, env(safe-area-inset-top)));z-index:40;pointer-events:none;padding:6px 8px;border-radius:8px;background:rgba(10,10,10,.72);border:1px solid rgba(255,255,255,.12);color:#fff;font:600 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;letter-spacing:.01em';
 			mount.appendChild(el);
 		}
 		if (el) el.hidden = !on;

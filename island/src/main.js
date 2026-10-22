@@ -206,12 +206,14 @@ function button(label, title, style, hud) {
 // 64 px ones).
 const HUD_LAND = '(orientation: landscape) and (max-height: 540px)';
 const HUD_CSS = `
-#l99-island-mount .l99-rail{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + env(safe-area-inset-bottom));height:min(calc(var(--l99-rail-n, 1) * 52px - 8px),calc(100% - 64px - env(safe-area-inset-top) - var(--l99-low, 88px) - env(safe-area-inset-bottom)));display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,44px);grid-auto-columns:max-content;gap:8px;direction:rtl;justify-items:start;align-content:end;pointer-events:none;}
+#l99-island-mount{--l99-top:env(safe-area-inset-top);}
+#l99-island-mount.l99-full{--l99-top:calc(var(--l99-fs, 28px) + env(safe-area-inset-top));}
+#l99-island-mount .l99-rail{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + env(safe-area-inset-bottom));height:min(calc(var(--l99-rail-n, 1) * 52px - 8px),calc(100% - 64px - var(--l99-top, env(safe-area-inset-top)) - var(--l99-low, 88px) - env(safe-area-inset-bottom)));display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,44px);grid-auto-columns:max-content;gap:8px;direction:rtl;justify-items:start;align-content:end;pointer-events:none;}
 #l99-island-mount .l99-thumb{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;pointer-events:none;}
 #l99-island-mount .l99-thumb>div{display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;}
 #l99-island-mount .l99-big{align-self:flex-end;}
 #l99-island-mount .l99-prompts{position:absolute;left:calc(var(--l99-left, 88px) + env(safe-area-inset-left));right:calc(var(--l99-side, 88px) + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;align-items:center;gap:8px;pointer-events:none;}
-#l99-island-mount .l99-left{position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-start;gap:8px;pointer-events:none;}
+#l99-island-mount .l99-left{position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));display:flex;flex-direction:column;align-items:flex-start;gap:8px;pointer-events:none;}
 #l99-island-mount .l99-pair{display:flex;gap:8px;}
 #l99-island-mount :is(.l99-rail,.l99-thumb>div,.l99-prompts,.l99-left,.l99-pair)>*{position:relative !important;inset:auto !important;transform:none !important;margin:0;flex:none;pointer-events:auto;}
 #l99-island-mount :is(.l99-rail,.l99-mode)>*{direction:ltr;display:flex;align-items:center;justify-content:center;width:44px;padding:0;}
@@ -226,11 +228,11 @@ const HUD_CSS = `
 #l99-island-mount.l99-still .l99-joy:not(.held){display:none;}
 @media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}#l99-island-mount.l99-touch .l99-big:not([hidden])~:is(.l99-side,.l99-pill){margin-bottom:10px;}}
 #l99-island-mount .l99-quick{display:none;}
-#l99-island-mount.l99-touch .l99-quick{position:absolute;top:calc(64px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));display:flex;gap:6px;z-index:14;}
+#l99-island-mount.l99-touch .l99-quick{position:absolute;top:calc(64px + var(--l99-top, env(safe-area-inset-top)));right:calc(12px + env(safe-area-inset-right));display:flex;gap:6px;z-index:14;}
 #l99-island-mount.l99-touch .l99-quick>button{position:relative!important;inset:auto!important;width:54px!important;min-height:48px;box-sizing:border-box;padding:5px!important;flex-direction:column;gap:2px;font-size:16px!important;}
 #l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 var(--bard-display,system-ui,sans-serif);}
-#l99-island-mount.l99-touch .l99-left{top:calc(120px + env(safe-area-inset-top));max-width:calc(100% - 24px);}
-#l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + env(safe-area-inset-top));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;width:min(300px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:0;box-sizing:border-box;background:none;border:0;border-radius:0;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;}
+#l99-island-mount.l99-touch .l99-left{top:calc(120px + var(--l99-top, env(safe-area-inset-top)));max-width:calc(100% - 24px);}
+#l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + var(--l99-top, env(safe-area-inset-top)));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow:auto;width:min(300px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:0;box-sizing:border-box;background:none;border:0;border-radius:0;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;}
 #l99-island-mount.l99-touch.l99-tools-open .l99-rail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-flow:row;grid-auto-columns:auto;gap:8px;align-content:start;}
 #l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:52px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
 #l99-island-mount.l99-touch .l99-rail>button>svg{width:22px;min-width:22px;flex:none;}
@@ -248,9 +250,9 @@ const HUD_CSS = `
 #l99-island-mount.l99-touch .cb-ammo .rl:empty{display:none;}
 #l99-island-mount.l99-touch .l99-prompts{left:calc(112px + env(safe-area-inset-left));right:calc(88px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));}
 @media (orientation:landscape) and (max-height:540px){
-#l99-island-mount.l99-touch .l99-quick{top:calc(12px + env(safe-area-inset-top));right:calc(116px + env(safe-area-inset-right));}
-#l99-island-mount.l99-touch .l99-left{top:calc(64px + env(safe-area-inset-top));max-width:40%;}
-#l99-island-mount.l99-touch .l99-rail{top:calc(68px + env(safe-area-inset-top));max-height:calc(100% - 84px - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:min(460px,60%);}
+#l99-island-mount.l99-touch .l99-quick{top:calc(12px + var(--l99-top, env(safe-area-inset-top)));right:calc(116px + env(safe-area-inset-right));}
+#l99-island-mount.l99-touch .l99-left{top:calc(64px + var(--l99-top, env(safe-area-inset-top)));max-width:40%;}
+#l99-island-mount.l99-touch .l99-rail{top:calc(68px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 84px - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));width:min(460px,60%);}
 #l99-island-mount.l99-touch .cb-ammo{bottom:calc(12px + env(safe-area-inset-bottom));left:calc(116px + env(safe-area-inset-left));}
 #l99-island-mount.l99-touch .cb-hp{bottom:calc(74px + env(safe-area-inset-bottom));left:calc(124px + env(safe-area-inset-left));}
 #l99-island-mount.l99-touch .l99-prompts{left:calc(290px + env(safe-area-inset-left));right:calc(100px + env(safe-area-inset-right));}
@@ -264,6 +266,21 @@ function buildDom(canvas = document.createElement('canvas')) {
 	// (the jump and descend buttons, and the resting joystick, only on touch screens: the
 	// keyboard has Space and C)
 	mount.classList.toggle('l99-touch', isPhone || matchMedia('(pointer: coarse)').matches);
+	// full screen (the browser's own, by F11 or the Mac green button, the Fullscreen API, or a
+	// home-screen app): the top row and what hangs under it drop --l99-fs (28 px), clear of
+	// the edge that brings the browser's bars back over the buttons (see --l99-top above)
+	const fullMode = matchMedia('(display-mode: fullscreen)');
+	const full = () => {
+		const w = innerWidth, h = innerHeight, sw = screen.width || 0, sh = screen.height || 0;
+		const edge = (w >= sw - 1 && h >= sh - 1) || (w >= sh - 1 && h >= sw - 1);
+		const on = !!(document.fullscreenElement || document.webkitFullscreenElement) || fullMode.matches || edge;
+		if (mount.classList.contains('l99-full') !== on) mount.classList.toggle('l99-full', on);
+	};
+	full();
+	addEventListener('resize', full);
+	document.addEventListener('fullscreenchange', full);
+	document.addEventListener('webkitfullscreenchange', full);
+	fullMode.addEventListener?.('change', full);
 	const style = document.createElement('style');
 	style.textContent = HUD_CSS;
 	css(canvas, 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;');
@@ -280,7 +297,7 @@ function buildDom(canvas = document.createElement('canvas')) {
 	// (the modes join the rail on a short landscape screen)
 	const home = (g) => (g === 'mode' && (land.matches || mount.classList.contains('l99-touch')) ? rail : groups[g]);
 	// (More: every other control, in a menu; its glyph is the three dots)
-	const tools = button('•••', 'All controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));z-index:13;');
+	const tools = button('•••', 'All controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));z-index:13;');
 	tools.dataset.controlLabel = 'More'; tools.style.order = '999';
 	quick.appendChild(tools);
 	tools.hidden = !mount.classList.contains('l99-touch');
@@ -290,9 +307,9 @@ function buildDom(canvas = document.createElement('canvas')) {
 	rail.addEventListener('click', (e) => { if (e.target.closest('button')) closeTools(); }, true);
 	mount.addEventListener('pointerdown', (e) => { if (!rail.contains(e.target) && !tools.contains(e.target)) closeTools(); });
 	addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTools(); });
-	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));');
+	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));');
 	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
-	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
+	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));');
 	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
 	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9×, and in space up to 100,000× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
 	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
@@ -313,7 +330,7 @@ function buildDom(canvas = document.createElement('canvas')) {
 	loading.hidden = true; // Kept for integrations; the shared loading screen owns presentation.
 	// the settings (island-panel.js): the whole screen, over every button, in tabs; its body
 	// scrolls (no backdrop blur: a full-screen one over the world crashed SwiftShader)
-	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
+	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + var(--l99-top, env(safe-area-inset-top))) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Settings');
 	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
 	// a group with nothing showing is hidden, so it leaves no gap either; and the rail is as
@@ -774,7 +791,7 @@ export function createIslandWorld() {
 	const tpBtn = button('', 'Teleport to a place', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 60');
 	tpBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
 	dom.mount.appendChild(tpBtn);
-	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:7;');
+	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 64px - var(--l99-low, 88px) - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:7;');
 	dom.mount.appendChild(scrollable(tpMenu));
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and

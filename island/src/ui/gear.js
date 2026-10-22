@@ -32,7 +32,7 @@ import { bar, btn, coins, el, fmt, hideTip, nameOf, showTip, slot, sound, tierCo
 const KEEP_KEY = 'l99-trades';
 // how near a shop must be to buy, sell or upgrade there (metres)
 export const SHOP_REACH = 60;
-const SHEET = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(380px,calc(100vw - var(--l99-menu-r, 64px) - 16px));padding:12px;display:none;flex-direction:column;gap:10px;max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;z-index:7;';
+const SHEET = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));width:min(380px,calc(100vw - var(--l99-menu-r, 64px) - 16px));padding:12px;display:none;flex-direction:column;gap:10px;max-height:calc(100% - 64px - var(--l99-low, 88px) - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;z-index:7;';
 const MENU = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 const BAG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8.5a6 6 0 0 1 12 0V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20z"/><path d="M9.5 5.2V4a2.5 2.5 0 0 1 5 0v1.2"/><path d="M9 13h6v4H9z"/></svg>';
 const stopAll = (e) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) e.addEventListener(ev, (x) => x.stopPropagation()); return e; };
@@ -519,7 +519,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 	function showInvite(T) {
 		invite?.remove();
 		invite = stopAll(el('div', 'g99-frame'));
-		invite.style.cssText = 'position:absolute;left:50%;top:calc(80px + env(safe-area-inset-top));transform:translateX(-50%);width:min(340px,90vw);padding:12px;z-index:15;display:flex;flex-direction:column;gap:8px;';
+		invite.style.cssText = 'position:absolute;left:50%;top:calc(80px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);width:min(340px,90vw);padding:12px;z-index:15;display:flex;flex-direction:column;gap:8px;';
 		const t = el('div', 'g99-title', `${T.peerName || 'A friend'} wants to trade`);
 		const row = el('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
 		row.append(btn('No thanks', () => { step(cancel(trades.get(T.id), 'cancelled', Date.now())); invite?.remove(); invite = null; }, 'quiet'), btn('Open', () => { activeId = T.id; invite?.remove(); invite = null; openTrade(); }, 'go'));
