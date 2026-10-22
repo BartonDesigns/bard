@@ -38,6 +38,7 @@ import { createBridgeSound } from './bay/bridgesound.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
 import { createShaderWarm } from './world/shaderwarm.js';
+import { createIdleOverlays } from './ui/idle-overlays.js';
 import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
 import { resetKitEnvironment } from './people/kit-light.js';
@@ -1318,7 +1319,7 @@ export function createIslandWorld() {
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
-		try { tick(now); } catch (err) {
+		try { tick(now); idleOverlays.sweep(now); } catch (err) {
 			if (lost || recovery.blocked()) return;
 			const key = String(err?.message || err);
 			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
@@ -1408,8 +1409,14 @@ export function createIslandWorld() {
 	const EARTH_ORIGIN = { id: 'earth', seed: 1337, type: 'TERRAN', name: 'Earth', earth: true, colorA: [0.2, 0.45, 0.85], colorB: [0.25, 0.65, 0.4] };
 
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
+	// (ui/idle-overlays.js: the screen-sized overlays hidden while they sit at opacity 0)
+	const idleOverlays = createIdleOverlays(dom.mount);
+	HOOKS.idleOverlays = idleOverlays;
 	function show() {
 		visible = true;
+		// the music page under the world is neither painted nor composited while the world is up
+		// (index.html: html.l99-world-up); it is still laid out, so nothing of it breaks
+		document.documentElement.classList.add('l99-world-up');
 		// the music is worked out further ahead while the world draws (its frames can hold the
 		// page up longer than the faceplate's): index.html's L99Clock reads this
 		window._worldAudioLead = isPhone ? 0.2 : 0.15;
@@ -1435,6 +1442,7 @@ export function createIslandWorld() {
 		worldAir(0);
 		if (muffle.lp) { muffle.k = 0; muffle.lp.frequency.value = 20000; muffle.lp.Q.value = 0.9; }
 		dom.mount.style.display = 'none';
+		document.documentElement.classList.remove('l99-world-up');
 		world?.player.clearInput();
 		window.L99TouchMusic175?.cancel?.();
 		window.L99Keyboard149?.sync?.();
@@ -1928,6 +1936,8 @@ if (typeof window !== 'undefined') {
 		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
 		// the shader warm and its gate (world/shaderwarm.js): what is held back and built in the background
 		// (with a function: it is told of every draw the gate holds back, (object, material, why, frame))
+		// (the screen-sized overlays hidden while idle: ui/idle-overlays.js)
+		overlays: () => HOOKS.idleOverlays?.info() ?? null,
 		shaders: (trace) => { if (trace) HOOKS.shaderWarm?.trace(trace); return HOOKS.shaderWarm?.info() ?? null; },
 		// the frame's own failures kept on this device (main.js keepFrameError), newest last
 		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
