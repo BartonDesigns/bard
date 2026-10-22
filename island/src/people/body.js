@@ -12,6 +12,8 @@ import * as THREE from 'three';
 import { shedImage } from '../world/cpucopy.js';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
+import { hatRim } from './garment-hats.js';
+import { neckDrop } from './garment-shape.js';
 import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
 import { loadFaces, faceDNA, shapeFace, skinAttribute, tidyEyes, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
@@ -167,7 +169,7 @@ export function personDNA(seed, opts = {}) {
 	let age = opts.age ?? (18 + Math.pow(r(), 1.3) * 64);
 	const height = (male ? 1.755 : 1.625) + (r() + r() + r() - 1.5) * 0.085 - (age > 65 ? 0.03 : 0) - anc[1] * 0.04;
 	const d = {
-		seed, sex, male, ancestry: anc, age, height, muscle: r() * 0.5 * (male ? 1 : 0.6), weight: Math.pow(r(), 1.6) * 0.7,
+		seed, sex, male, ancestry: anc, age, height, muscle: r() * 0.6 * (male ? 1 : 0.65), weight: Math.pow(r(), 2.2) * 0.5,
 		tone: 0.9 + r() * 0.14, warmth: r(),
 		hair: age > 70 && male && r() < 0.35 ? null : male ? (r() < 0.6 ? 'short02' : 'short01') : (r() < 0.55 ? 'ponytail01' : r() < 0.6 ? 'short01' : 'short02'),
 		// (the colour they were born with; the grey comes with the years, greyOf)
@@ -180,12 +182,21 @@ export function personDNA(seed, opts = {}) {
 	};
 	// when their hair goes grey: some a few years early, some late
 	d.greyShift = (rng(seed ^ 0x9e7)() - 0.5) * 8;
+	// the years put a little on most people (a stream of its own, so nothing else about them changes)
+	const rb = rng(seed ^ 0xb01d);
+	if (age > 40) d.weight = Math.min(0.7, d.weight + Math.min(1, (age - 40) / 50) * 0.14 * rb());
+	// a build of their own (people/build.js): the frame under the base mesh's targets, a
+	// slightly smaller head, shoulders carried wider and a waist drawn in on the fit and the
+	// young, longer legs on some; it softens with the years and the weight
+	const fitK = Math.max(0, 1 - Math.max(0, age - 45) / 40) * (1 - d.weight);
+	d.build = male ? { shoulders: 0.004 + rb() * 0.009 * fitK, waist: (0.02 + rb() * 0.05) * fitK, head: -0.015 - rb() * 0.02, legs: rb() * 0.02, arms: [rb() * 0.06 * fitK, rb() * 0.04 * fitK] }
+		: { shoulders: rb() * 0.004, waist: (0.04 + rb() * 0.05) * (0.5 + 0.5 * fitK), head: -0.015 - rb() * 0.02, legs: 0.01 + rb() * 0.02 };
 	// children: the base mesh's child shape, at a child's height (about 0.95 m at three,
 	// 1.4 m at eleven), slight, quick on their feet, in bright play clothes
 	if (age < 16) {
 		d.child = true;
 		d.height = 0.78 + age * 0.056 + (r() - 0.5) * 0.06;
-		d.muscle = 0; d.weight *= 0.35;
+		d.muscle = 0; d.weight *= 0.35; d.build = null;
 		d.hair = male ? (r() < 0.5 ? 'short01' : 'short02') : (r() < 0.7 ? 'ponytail01' : 'short01');
 		d.hairColour = anc[0] + anc[1] > 0.6 ? HAIR_COLOURS[0] : HAIR_COLOURS[1 + Math.floor(r() * 5)];
 		const o = d.outfit;
@@ -390,7 +401,7 @@ function dress(A, P, o) {
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
 	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
 	// locs, braids and cornrows, and stands in while a style is on its way)
-	const hat = (o.acc || []).find((q) => /^(cap|trucker|peaked|beret|beanie|bucket|sunhat|helmet|hardhat|hood|hazhood|visor)$/.test(q.kind));
+	const hat = (o.acc || []).find((q) => /^(cap|trucker|peaked|beret|beanie|bucket|sunhat|fedora|trilby|helmet|hardhat|hood|hazhood|visor)$/.test(q.kind));
 	const cols = hairColours(d, H);
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hardhat|hood|hazhood)$/.test(hat.kind));
@@ -420,8 +431,7 @@ function dress(A, P, o) {
 	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, rolled: cut.elbow - 0.07, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
 	P.clothMat.userData.U.uHem.value.set(R.topHem, sleeveEnd, cut.waist + 0.02, R.legEnd);
 	// the necklines, cut smooth (the cage's triangles would leave them ragged)
-	const T0 = o.top, scoop = T0 && T0.kind === 'tank' ? 0.045 : T0?.kind === 'crop' ? .025 : 0;
-	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.005, cut.neck - 0.005, scoop, 0);
+	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.005, cut.neck - 0.005, neckDrop(o.top), neckDrop(o.outer));
 	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, o.outer ? 1 : 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
@@ -477,7 +487,7 @@ function hairUp(A, P) {
 		if (P.hair) P.hair.visible = vis;
 		if (P.fadeK !== undefined) { const k = P.fadeK; P.fadeK = -1; fadePerson(P, k); }
 	}).catch(() => {});
-	const capY = covers ? P.skull.eyeY + (hat.kind === 'beanie' ? 0.042 : 0.05) : 99;
+	const capY = covers ? P.skull.eyeY + hatRim(hat.kind).clip : 99;
 	const skinned = (g, m) => { const s = cullPosed(P, new THREE.SkinnedMesh(g, m)); s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
 	const tune = (m) => {
 		const U = m.userData.U;
@@ -508,7 +518,7 @@ function hairUp(A, P) {
 		// fluffy hair (hair-fluff.js): tufts in locks, brushed the cut's way, skinned to the head
 		// and, as long hair falls, the neck and the back
 		coverScalp(P, null);
-		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume ?? H.vol, brush: H.brush, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
+		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? hatRim(hat.kind).clip : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume ?? H.vol, brush: H.brush, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
 		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
 		const hair = skinned(g, fluffMaterial(root, tip));
 		P.hair = hair;
@@ -520,7 +530,7 @@ function hairUp(A, P) {
 	}
 	else if (W.cut) {
 		coverScalp(P, null);
-		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
+		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? hatRim(hat.kind).clip : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
 		// (grey coming in evenly, root to tip)
 		// (greying all over, as there are no single hairs to grey)
 		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
