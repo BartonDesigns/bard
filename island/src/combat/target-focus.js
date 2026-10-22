@@ -114,10 +114,12 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 		scan(); if (candidates[0]) { select(candidates[0].T); return true; }
 		hint('Face a nearby target with a clear line of sight.', 1800, 1); return false;
 	}
-	function cycle() {
+	// the next target round the view (d = -1: the previous one); a lock-on stays a lock-on
+	function cycle(d = 1) {
 		if (!active()) return false;
 		scan(); if (!candidates.length) { clear(); return false; }
-		const i = candidates.findIndex(({ T }) => T === selected); select(candidates[(i + 1) % candidates.length].T, !!track); return true;
+		const n = candidates.length, i = candidates.findIndex(({ T }) => T === selected);
+		select(candidates[((i < 0 ? (d < 0 ? 0 : -1) : i) + Math.sign(d) + n) % n].T, !!track); return true;
 	}
 	function key(e) {
 		if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !active()) return;
@@ -157,6 +159,8 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 	addEventListener('pointerdown', tapDown, true); addEventListener('pointermove', tapMove, true); addEventListener('pointerup', tapUp, true); addEventListener('pointercancel', (e) => taps.delete(e.pointerId), true);
 	return {
 		toggle, cycle, clear, lockOn,
+		// locked on (the view held on them), not just marked
+		locked: () => !!(selected && track),
 		// recoil you fired with while locked on (it settles back by itself)
 		kick(dp, dy) { if (track) { kickP += dp; kickY += dy; } },
 		// player.js, each frame before the view is set: the view held on a locked target
