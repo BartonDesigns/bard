@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { linkLoadingTabs } from './ui/loading-tabs.js';
 import { createMusicLinkEntry } from './ui/music-link.js';
 import { createChat } from './ui/chat.js';
 import { createGuild } from './guild/index.js';
@@ -113,10 +114,12 @@ import { worldBody, sameBody } from './space/body.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
+import { createHeroPortrait } from './ui/hero-portrait.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
 import { createLaw } from './law/index.js';
 import { installAirFog } from './world/airfog.js';
+import { GRADE, installGrade } from './world/grade.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 import { islandBuild } from './island-build.js';
@@ -133,6 +136,8 @@ const GLOW_AT = [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0
 // The air: haze thickest low down and lit toward the sun, whole by the far plane; under water
 // (a negative density) light absorbed red first, then green (world/airfog.js)
 installAirFog();
+// the look on the tone mapping: contrast, colour and a little split toning (world/grade.js)
+installGrade();
 
 // Muffle the whole Bard under water: a low-pass between the faceplate's master output
 // and the speakers, eased in as you go under and out as you surface.
@@ -541,6 +546,10 @@ export function createIslandWorld() {
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = HOOKS.scene = new THREE.Scene();
 	const shaderWarm = createShaderWarm(renderer, scene, camera);
+	// (a frame builds only so many new shaders: the rest of what came into view a frame or two
+	// later, built in the background meanwhile; world/shaderwarm.js gate)
+	shaderWarm.gate({ budget: GFX ? 20 : 40 });
+	HOOKS.shaderWarm = shaderWarm;
 
 	const shared = {
 		aimSensitivity: loadAimSensitivity(),
@@ -706,7 +715,7 @@ export function createIslandWorld() {
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
 	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
-	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, motes: () => HOOKS.magic?.motes?.() || null, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	// some of them out with their dogs on a lead (people/dogwalkers.js)
@@ -891,7 +900,9 @@ export function createIslandWorld() {
 	guideApi.multiplayer=multiplayer;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	// your gear, shops and trading with friends (ui/gear.js)
-	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
+	// your hero as a picture for the gear sheet, drawn once per outfit (ui/hero-portrait.js)
+	const portrait = HOOKS.portrait = createHeroPortrait({ renderer, avatar, camera });
+	const gear = HOOKS.gear = createGear({ portrait, arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
@@ -905,6 +916,8 @@ export function createIslandWorld() {
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) cloudBtn.addEventListener(ev, (e) => e.stopPropagation());
 	dom.mount.appendChild(cloudBtn);
 	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// your character, what you carry and signing in, on the loading screen while the world builds
+	HOOKS.loadingTabs = linkLoadingTabs({ arms, avatar, magic: () => HOOKS.magic, account: HOOKS.account, name: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
 	// music from a YouTube or Spotify link: its way in from the map pin, and the auto music making way (ui/music-link.js)
 	HOOKS.musicLink = createMusicLinkEntry({ menu: tpMenu, autoMusic, hint: (t, ms) => hint(t, ms, 1) });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
@@ -1686,6 +1699,16 @@ if (typeof window !== 'undefined') {
 			const S = wx.state;
 			return { mode: S.mode, cover: +S.cover.toFixed(2), cirrus: +S.cirrus.toFixed(2), tails: +S.tails.toFixed(2), veil: +S.veil.toFixed(2), reach: +S.reach.toFixed(2), sunVis: +S.sunVis.toFixed(2) };
 		},
+		// the look on the tone mapping (world/grade.js): Crysis.grade() reads it; .grade({ contrast: 1.3 })
+		// tries other numbers. That rebuilds every shader: for tuning on a computer, never on a phone in play
+		grade: (o) => {
+			if (o) {
+				Object.assign(GRADE, o);
+				installGrade();
+				window.L99Island?.scene?.()?.traverse((m) => { for (const x of [].concat(m.material || [])) x.dispose(); });
+			}
+			return { ...GRADE };
+		},
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()
@@ -1823,6 +1846,8 @@ if (typeof window !== 'undefined') {
 		governorTier: (t) => { const G = HOOKS.governor; if (!G) return null; G.state.tier = Math.max(0, Math.min(3, Math.round(+t || 0))); G.state.since = G.state.sinceDown = 0; return G.info(); },
 		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
 		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
+		// the shader warm and its gate (world/shaderwarm.js): what is held back and built in the background
+		shaders: () => HOOKS.shaderWarm?.info() ?? null,
 		// the frame's own failures kept on this device (main.js keepFrameError), newest last
 		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
 		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },
@@ -1861,6 +1886,9 @@ if (typeof window !== 'undefined') {
 		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
 		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
 		heroView: () => HOOKS.heroView,
+		// your hero's picture for the gear sheet (ui/hero-portrait.js): Crysis.portrait() its state,
+		// .portrait('gear' | 'char') with the sheet open on that view
+		portrait: (view, look) => { if (look) HOOKS.portrait?.look(look); if (view) HOOKS.gear?.open(view); return HOOKS.portrait?.info(); },
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
@@ -1904,8 +1932,8 @@ if (typeof window !== 'undefined') {
 		ride: (name = 'dipper') => window.L99Island?.world?.()?.boardwalk?.rideNow(name) ?? 'No Boardwalk on this world.',
 		// the minigames: Crysis.arcade.start('bowling'), .stop(), .games()
 		get arcade() { return HOOKS.arcade; },
-		// explore: Crysis.explore() how it stands, .start(), .stop()
-		explore: Object.assign(() => HOOKS.explore?.info(), { start: () => HOOKS.explore?.start(), stop: () => HOOKS.explore?.stop() }),
+		// explore: Crysis.explore() how it stands, .start(), .stop(); .steer(dt) a step by hand (the tests)
+		explore: Object.assign(() => HOOKS.explore?.info(), { start: () => HOOKS.explore?.start(), stop: () => HOOKS.explore?.stop(), steer: (dt) => HOOKS.explore?.steer(dt) }),
 		// auto music: Crysis.music.auto(true), .state(), .log(true), .level(0.5), .queue('chorus')
 		music: { auto: (on) => HOOKS.autoMusic?.auto(on), state: () => HOOKS.autoMusic?.state(), log: (on) => HOOKS.autoMusic?.log(on), level: (v) => HOOKS.autoMusic?.level(v), queue: (to, now) => HOOKS.autoMusic?.queue(to, now) },
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },

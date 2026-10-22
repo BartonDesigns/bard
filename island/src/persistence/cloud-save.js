@@ -39,7 +39,7 @@ export function cleanRecovery(c) {
 // keys that belong to this device, not to you
 const DEVICE = [
 	ACCOUNT_KEY, RESTORE_KEY, 'l99-mp-id',
-	/^l99-(quality|gpu|gl-lost|governor|frame-errors|hq-only|floor-gpu|floor-wide|signage-lite|touch|tools-open|still|big|island-mount)/,
+	/^l99-(quality|gpu|gl-lost|governor|frame-errors|hq-only|floor-gpu|floor-wide|signage-lite|touch|tools-open|still|big|island-mount|home-tip|hero-portrait)/,
 	/^island-(terrain|grass)/, /^crysis-(guide-model|guide-loaded|llm-working|voice-loading|voice-unable|local-voice-slow|ledger-url)/,
 ];
 export const isProgressKey = (k) => typeof k === 'string' && !!k && !DEVICE.some((d) => (typeof d === 'string' ? d === k : d.test(k)));

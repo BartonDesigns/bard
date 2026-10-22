@@ -717,9 +717,17 @@ export function swayMaterial(params, shared, stiff) {
 	}`);
 		// (a leaf's back face keeps the outward normal for its light, so it faces away from you:
 		// its sheen then read the view as grazing and lit every leaf seen from below a frosted
-		// white, palms most of all. A leaf seen from behind shows light through it, no shine)
+		// white, palms most of all. A leaf seen from behind shows light through it, no shine.
+		// The same goes for a card turned toward you whose outward normal still faces away, as
+		// a conifer's sprays do, their normals turned up to the sky, seen from the ground: every
+		// such spray caught the sky's white sheen, and a stand of pines looked dusted with snow.
+		// So the shine fades as the normal turns away from you, whichever face shows)
 		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);')
-			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n\tif (!gl_FrontFacing) { material.specularColor = vec3(0.0); material.specularColorBlended = vec3(0.0); material.specularF90 = 0.0; }');
+			.replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+	{
+		float shineK = gl_FrontFacing ? smoothstep(0.02, 0.3, dot(normal, normalize(-vViewPosition))) : 0.0;
+		material.specularColor *= shineK; material.specularColorBlended *= shineK; material.specularF90 *= shineK;
+	}`);
 	};
 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '') + (near ? 'n' + near.r + ',' + near.cap : '');
 	let depth = null;

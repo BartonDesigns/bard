@@ -147,3 +147,22 @@ test('the probe draws with the lights the frame has, and leaves a shadow redraw 
 	assert.deepEqual(tally(scene), want);
 	P.dispose();
 });
+
+test('a player standing still on ground found right is not looked at again until they move', () => {
+	const F = fakeWorld(), asked = [];
+	const P = F.W.player.state;
+	const probe = (x, z) => { asked.push([x, z]); return F.W.player.floorAt(x, z); };
+	const guard = createFloorGuard({ world: () => F.W, camera: F.camera, probe, every: 0, gpuEvery: 1, log: () => {} });
+	for (let k = 0; k < 20; k++) guard.check(1, { open: true });
+	assert.equal(asked.length, 1);
+	assert.equal(guard.info().gpu.last, 'ok');
+	// (a step or two is still the same ground)
+	P.pos.x += 1.5;
+	for (let k = 0; k < 5; k++) guard.check(1, { open: true });
+	assert.equal(asked.length, 1);
+	// off it: looked at again
+	P.pos.x += 5; F.camera.position.x = P.pos.x; P.pos.y = F.camera.position.y = I.heightAt(P.pos.x, P.pos.z) + 1.68;
+	F.W.terrain.userData.update(F.camera);
+	for (let k = 0; k < 3; k++) guard.check(1, { open: true });
+	assert.equal(asked.length, 2);
+});

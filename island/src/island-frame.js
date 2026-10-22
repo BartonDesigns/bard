@@ -12,6 +12,7 @@ import { qualityNow } from './world/governor.js';
 import { kitDaylight } from './people/kit-light.js';
 import { worldAir } from './world/soundbus.js';
 import { today } from './calendar.js';
+import { scopeView } from './crysis/scope-view.js';
 import { toLL as globeLL } from './earth/globeframe.js';
 import { waterContact } from './world/water-contact.js';
 import { AIR } from './world/airfog.js';
@@ -237,7 +238,8 @@ export function islandFrame(iw, now) {
 	if (W.commercial) {
 		W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
 		W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
-		W.interiors?.update(camera, dt, W.sky.state.hours, sk.night);
+		// (down a scope, the room behind the window under the reticle is built, however far: interiors/index.js)
+		W.interiors?.update(camera, dt, W.sky.state.hours, sk.night, scopeView.active && scopeView.aiming > 0.5 ? scopeView : null);
 		W.structures?.update(dt, sk.night, W.sky.state.hours);
 		W.services?.update(dt, W.sky.state.hours, sk.night);
 		// stepping into a place: what it is, and how busy at this hour
@@ -277,7 +279,7 @@ export function islandFrame(iw, now) {
 	W.vehicles?.update(dt, iw.time);
 	ragdolls.update(dt);
 	W.berms?.update(camera);
-	W.freeways?.update(camera);
+	W.freeways?.update(camera, sk.night);
 	W.signage?.update(dt, camera, sk.night, iw.drive.active());
 	bridgeSound.update(dt);
 	W.streets?.update(dt, sk.night, W.sky.state.hours);
@@ -323,6 +325,7 @@ export function islandFrame(iw, now) {
 	fishing.update(dt, iw.time, !arcade.active() && !W.player.state.flying && !iw.drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 	W.roads?.update(iw.time, sk.night);
 	shaderWarm.tick(dt, { frameMs: iw.frameAvg });
+	shaderWarm.buildHeld();
 	guide.update(dt);
 	watchTalk(dt);
 	people.update(dt, iw.time, camera.position, sk.night, camera.position.y > -0.5);
@@ -375,12 +378,14 @@ export function islandFrame(iw, now) {
 	// (while the skills menu covers the frame nothing is drawn, so neither are they; left as they
 	// are rather than reset, so closing the menu does not warm their shaders again)
 	HOOKS.lightPad?.update(now, camera);
+	// (last, once everyone has moved this frame: the shade under their feet)
+	W.footShade?.update(camera);
 	const covered = magic.covering(), seaOn = !iw.arrival?.blind && !(isPhone && now - shownAt < MIRROR_EASE) && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && iw.indoorK < 0.5;
 	if (covered) { /* the menu over it all */ } else if (seaOn) {
 		seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.sanMateo?.group, W.city?.group], under || shared.uUnder.value);
 		seaDepth.render(scene, camera, under || shared.uUnder.value);
 	} else { seaMirror.reset(); seaDepth.reset(); }
-	if (iw.arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
+	if (iw.arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { HOOKS.portrait?.tick(); renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 	W.orbit?.render(iw.time);
 	// the governor: a tier down when the frames or the memory say so, back up after a long easy
 	// run (world/governor.js)

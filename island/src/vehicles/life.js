@@ -59,7 +59,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		// the ground under them: the car's floor while in it, the street's when out
 		const W = () => world();
 		// (on foot, kept off the walls and fences between their door and the car: people/walls.js)
-		b.M = createMotion(P, (x, z) => b.mode === 'car' ? b.floor : groundAt(W(), x, z, b.M ? b.M.S.pos.y : undefined), { constrain: (pos, from) => { if (b.mode !== 'car') keepWalls(pos, from, from.y); } });
+		b.M = createMotion(P, (x, z) => b.mode === 'car' ? b.floor : groundAt(W(), x, z, b.M ? b.M.S.pos.y : undefined), { constrain: (pos, from) => { if (b.mode !== 'car') keepWalls(pos, from, from.y); }, space: () => b.mode !== 'car' });
 		P.root.visible = false;
 		bodies.set(seed, b);
 		return b;

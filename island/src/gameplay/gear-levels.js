@@ -27,6 +27,7 @@ export const UID_RE = /^[a-z0-9~-]{4,24}$/;
 const STATS = {
 	'aurora-trail-rifle': [['Accuracy', 70, '%', 99], ['Range', 60, 'u'], ['Steadiness', 50, ''], ['Precision', 3, 'pt']],
 	'mossback-scout-rifle': [['Accuracy', 66, '%', 99], ['Range', 45, 'u'], ['Quiet', 70, '%', 99], ['Precision', 2, 'pt'], ['Focus', 1, 'pt']],
+	'longwatch-sniper-rifle': [['Accuracy', 82, '%', 99], ['Range', 90, 'u'], ['Stopping power', 90, '', 200], ['Precision', 4, 'pt'], ['Focus', 1, 'pt']],
 	'warden-spark-carbine': [['Deterrence', 60, '', 200], ['Reach', 25, 'u'], ['Recharge', 50, ''], ['Precision', 2, 'pt'], ['Resolve', 1, 'pt']],
 	'reedline-hunting-bow': [['Accuracy', 62, '%', 99], ['Range', 30, 'u'], ['Quiet', 80, '%', 99], ['Precision', 2, 'pt'], ['Swiftness', 1, 'pt']],
 	// garments (gameplay/arms.js GARMENTS): attributes only

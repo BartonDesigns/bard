@@ -168,7 +168,11 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 				const boxes = lot.wrecked ? damage.carBoxes(lot) : [lot];
 				for (const b of boxes) {
 					const h = rayBox(o, d, { x: b.x, y: b.y + b.h / 2, z: b.z }, [b.w / 2, b.h / 2, b.d / 2], -b.a);
-					if (h && h.t > 0.05 && h.t < (best?.t ?? L)) best = { t: h.t, n: new THREE.Vector3(h.n.x, h.n.y, h.n.z), surface: 'stone', lot };
+					// (through the window of the room seen down a scope: on across it to the far wall, its
+					// own walls, panes and whoever is in it met first: interiors/index.js seeInto)
+					const into = h && h.t > 0.05 && !lot.wrecked ? ctx.interiors()?.seeInto?.(lot, o, d) ?? -1 : -1;
+					if (into > 0) { if (into < (best?.t ?? L)) best = { t: into, n: new THREE.Vector3(-d.x, 0, -d.z), surface: 'stone', lot, inside: true }; }
+					else if (h && h.t > 0.05 && h.t < (best?.t ?? L)) best = { t: h.t, n: new THREE.Vector3(h.n.x, h.n.y, h.n.z), surface: 'stone', lot };
 					// (begun inside it, through a pane: across the rooms to its far wall)
 					else if (h && h.t <= 0.05) { const t = exitOf(o, d, b); if (t > 0.05 && t < (best?.t ?? L)) best = { t, n: new THREE.Vector3(-d.x, 0, -d.z), surface: 'stone', lot, inside: true }; }
 				}
