@@ -20,6 +20,7 @@ import { actionAt, ACTIONS } from './actions.js';
 import { gaitSignature, gaitDrift } from './gait.js';
 import { clamp } from '../noise.js';
 import { noteBody } from './personal-space.js';
+import { beatNow, dip } from '../music/beat.js';
 
 const TAU = Math.PI * 2;
 const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -157,6 +158,9 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		// off it, sink as it takes the weight and lean forward; and a hand held to a wound
 		// (crysis/held-items.js applyClutch)
 		limp: { side: 0, k: 0 }, clutch: null,
+		// the groove (music/beat.js): how much of the music reaches this body (0..1, eased), how big
+		// they move to it, and their own feel, a touch ahead of or behind the beat
+		groove: { k: new Spring(0, 1.2), want: 0, size: 1, off: (((dna.seed || 0) % 97) / 97 - 0.5) * 0.08 },
 	};
 	const hipRest = H('upperleg01.L').y;
 	const ankleH = H('foot.L').y;
@@ -310,6 +314,27 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		S.phase = (S.phase + rate * dt) % 1;
 		P.clothMat?.userData.U?.uClothMove?.value.set(t, speed, S.phase, turnRate);
 		const amp = smooth(speed / 0.9);
+		// ---- the groove: moving to the music's beat, by how much of it reaches here. The body
+		// drops into each beat (the knees) and nods with it, a shoulder lifts on each count, the
+		// chest turns a little each way, the weight goes from foot to foot over two beats, and
+		// the head turns to look about once a bar; walking, only the nod and the shoulders stay
+		const Gr = S.groove, gk = Gr.k.to(Gr.want, dt);
+		let gBounce = 0, gNod = 0, gLean = 0, gTwist = 0, gRoll = 0, gSway = 0, gShrugL = 0, gShrugR = 0, gArm = 0, gLook = 0;
+		if (gk > 0.002) {
+			const B = beatNow();
+			const b = B.beat + Gr.off, ph = b - Math.floor(b), ea = gk * B.on * (0.7 + 0.6 * B.energy) * Gr.size;
+			const hit = dip(ph), hitL = dip(ph + 0.06 - Math.floor(ph + 0.06)), even = ((Math.floor(b) % 2) + 2) % 2 === 0;
+			const still = 1 - amp;
+			gBounce = ea * h * 0.022 * hit * (1 - 0.8 * amp);
+			gNod = ea * (0.05 + 0.06 * still) * hitL;
+			gLean = ea * 0.03 * hit * still;
+			gTwist = ea * 0.05 * Math.sin(b * Math.PI) * still;
+			gRoll = ea * 0.015 * Math.sin(b * Math.PI) * still;
+			gSway = -ea * 0.028 * Math.cos(b * Math.PI * 0.5) * still;
+			gShrugL = ea * 0.3 * hit * (even ? 1 : 0.25); gShrugR = ea * 0.3 * hit * (even ? 0.25 : 1);
+			gArm = ea * 0.12 * hit * still;
+			gLook = ea * 0.18 * Math.sin(b * Math.PI * 0.25) * still;
+		}
 		// how far the foot rolls: toes up at the heel strike, the heel peeling up before toe-off
 		const heelP = -0.24 * amp, toeP = (1.1 - 0.3 * run) * amp;
 
@@ -395,18 +420,20 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		S.shiftNext -= dt;
 		if (S.shiftNext <= 0) { S.shiftSide = -S.shiftSide; S.shiftNext = 3 + Math.random() * 9 * (1 - (dna.temper?.fidget ?? 0.5) * 0.6); }
 		const idleSway = (1 - amp) * (S.shiftSide * (0.016 + S.mood * 0.012) + Math.sin(S.shiftT * 0.35 + S.mood * 5) * 0.006);
-		const sway = S.sway.to((Math.sin(S.phase * TAU) + drift * 2) * 0.02 * signature.sway * amp * (1 - run * 0.6) + idleSway, dt);
+		const sway = S.sway.to((Math.sin(S.phase * TAU) + drift * 2) * 0.02 * signature.sway * amp * (1 - run * 0.6) + idleSway, dt) + gSway * (1 - sitK);
 		const lean = S.lean.to(low * 0.95 + lk * 0.1 + (-0.06 + (floorPose?.lean || 0)) * sitK + g.posture + 0.03 * amp + 0.14 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
 		const turnLean = S.turnLean.to(clamp(-turnRate * speed * 0.05, -0.12, 0.12), dt);
 		// the pelvis turns the leading hip forward (most at each heel strike) and drops a little
 		// on the side of the swinging leg
 		const pelvisYaw = -Math.cos(S.phase * TAU + signature.armLag) * 0.07 * signature.twist * amp * (1 + run * 0.4);
-		const pelvisRoll = Math.cos(S.phase * TAU) * 0.035 * signature.roll * amp + idleSway * 1.2 + turnLean;
+		const pelvisRoll = Math.cos(S.phase * TAU) * 0.035 * signature.roll * amp + idleSway * 1.2 + turnLean + gRoll;
 		// the hips: standing tall, a touch lower running; then no higher than the planted legs
 		// reach with the knee just soft, which makes the walk rise over each stance foot and
 		// dip as the weight passes from one to the other; running adds the flight
 		const hc = Math.cos(heading), hs = Math.sin(heading), yc = Math.cos(pelvisYaw), ys = Math.sin(pelvisYaw);
 		let hipH = hipStand - h * (0.002 + run * 0.035) - (dna.age > 70 ? 0.02 : 0) + run * (Math.abs(Math.sin(S.phase * TAU)) - 0.5) * 0.05;
+		// (the beat: the knees give on each one, standing)
+		hipH -= gBounce * (1 - sitK);
 		for (const f of feet) {
 			if (!f.stance || sitK > 0.5) continue;
 			const bx = f.leg.side * hipHalf * yc + sway, bz = -f.leg.side * hipHalf * ys;
@@ -471,6 +498,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		const counter = -pelvisYaw * 1.6;
 		const sp = X.has.sp ? X.v.sp.map((v) => v * aw) : [0, 0, 0];
 		sp[2] += (floorPose?.roll || 0) * sitK;
+		sp[0] += gTwist; sp[1] += gLean;
 		setLocal(map.spine04, _q.setFromEuler(_e.set(lean * 0.25 + sp[1] * 0.3 + jp * 0.25, counter * 0.3 + sp[0] * 0.3 + jy * 0.3, -pelvisRoll * 0.5 + sp[2] * 0.3 + jr * 0.25)), worldQ[rootI]);
 		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.014 * brA + sp[1] * 0.35 + jp * 0.35, counter * 0.35 + sp[0] * 0.35 + jy * 0.35, -pelvisRoll * 0.3 + sp[2] * 0.35 + jr * 0.35)), worldQ[map.spine04]);
 		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.015 * brA + sp[1] * 0.35 + jp * 0.4, counter * 0.35 + sp[0] * 0.35 + jy * 0.35, -pelvisRoll * 0.2 + sp[2] * 0.35 + jr * 0.4)), worldQ[map.spine02]);
@@ -507,8 +535,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		const chestYaw = counter, chestPitch = lean * 0.6;
 		const nod = S.nod.to(S.talk > 0 ? Math.max(0, Math.sin(t * 3.1)) * 0.08 : 0, dt);
 		const HO = S.headOv, droop = (0.5 - (dna.temper?.confident ?? 0.5)) * 0.1 + (POSES[S.pose]?.look || 0) + (X.has.hd ? X.v.hd[1] * aw : 0);
-		const hdy = (X.has.hd ? X.v.hd[0] * aw - sp[0] : 0) + jy * 1.4, hdr = (X.has.hd ? X.v.hd[2] * aw : 0) + jr * 1.2;
-		const jh = jp * 1.6;
+		const hdy = (X.has.hd ? X.v.hd[0] * aw - sp[0] : 0) + jy * 1.4 + gLook, hdr = (X.has.hd ? X.v.hd[2] * aw : 0) + jr * 1.2;
+		const jh = jp * 1.6 + gNod;
 		setLocal(map.neck01, _q.setFromEuler(_e.set(hp * 0.4 - chestPitch * 0.5 + nod * 0.4 + (HO.pitch + droop + jh) * 0.4, (hy - chestYaw) * 0.4 + (HO.yaw + hdy) * 0.4, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.4, 'YXZ')), worldQ[map.spine01]);
 		setLocal(map.head, _q.setFromEuler(_e.set(hp * 0.6 - chestPitch * 0.4 + nod * 0.6 - bob * 0.8 + (HO.pitch + droop + jh) * 0.6, (hy - chestYaw) * 0.6 + (HO.yaw + hdy) * 0.6, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.6, 'YXZ')), worldQ[map.neck01]);
 		// the eyes lead the head, then settle
@@ -559,6 +587,9 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 			for (const k of ARM_KEYS) A[k].w = actArm ? 7 * TAU : 2.4 * TAU;
 			for (const k of ARM_KEYS) P2[k] = A[k].to(tgt[k] + (k === 'flex' && gp ? (ov.beat || 0) * (lead ? 0.12 : 0.05) : 0), dt);
 			// (the swing itself goes on after the springs, which would only lag and damp it)
+			// (the beat: a shoulder up on each count, the elbows pulsing with it when the hands are free)
+			P2.shrug += side === 'L' ? gShrugL : gShrugR;
+			if (!actArm && gArm > 0) { const free = POSES[S.pose]?.swing ?? 1; P2.bend += gArm * free; P2.flex += gArm * 0.4 * free; }
 			if(S.pose==='type' && !actArm){const tap=Math.sin(t*17+sx*1.7+dna.seed);P2.wflex+=tap*.07;P2.curl+=Math.max(0,tap)*.15;P2.flex+=Math.sin(t*2.1+sx)*.025;}
 			P2.flex += sw - 0.05 * amp * (POSES[S.pose]?.swing ?? 1); P2.bend += Math.max(0, sw) * 0.6 + 0.08 * amp;
 			const iC = map['clavicle.' + side], iSh = map['shoulder01.' + side], iU = map['upperarm01.' + side], iU2 = map['upperarm02.' + side], iL = map['lowerarm01.' + side], iL2 = map['lowerarm02.' + side], iW = map['wrist.' + side];
@@ -654,5 +685,8 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		J.x.dv += s * k * 0.9; J.z.dv += f * k * 0.9;
 		if (hold > 0) S.freeze = Math.max(S.freeze, hold);
 	};
-	return { S, update, gesture, ungesture, setPose, feel, sit, stand, hold, act, play, jolt, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, trigger: (side, k) => { if (side === 'R') S.trigger = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.travel = heading; S.strafe.v = S.strafe.dv = 0; S.want.travel = null; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
+	// groove(k, size): how much of the music reaches this body (0 none .. 1 right by it), and how
+	// big they move to it (about 1; a child or a dancer more, an elder less)
+	const groove = (k, size) => { S.groove.want = clamp(+k || 0, 0, 1); if (size !== undefined) S.groove.size = clamp(+size || 0, 0, 2); };
+	return { S, update, gesture, ungesture, setPose, feel, sit, stand, hold, act, play, jolt, groove, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, trigger: (side, k) => { if (side === 'R') S.trigger = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.travel = heading; S.strafe.v = S.strafe.dv = 0; S.want.travel = null; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
 }
