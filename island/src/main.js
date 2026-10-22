@@ -742,7 +742,17 @@ export function createIslandWorld() {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
 		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
 	});
-	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && carjack.candidate()) { carjack.begin(); e.preventDefault(); } });
+	addEventListener('keydown', (e) => {
+		if ((e.key !== 'e' && e.key !== 'E') || e.repeat || e.metaKey || e.ctrlKey || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+		if (carjack.candidate()) { carjack.begin(); e.preventDefault(); return; }
+		if (window._KEYS_PLAY_ON) return;
+		// (a car with nobody at the wheel, a police cruiser whose officers are out of it: E gets
+		// you in, as V does; a door within reach has E first)
+		const P = world?.player?.state;
+		if (!P || P.flying || P.locked || drive.active() || !world.vehicles || (world.houses?.doorNear?.(camera) || world.interiors?.doorNear?.(camera))) return;
+		const car = world.vehicles.carToEnter(P.pos.x, P.pos.z);
+		if (car && car.id !== 'mine' && !car.id?.startsWith?.('tr')) { drive.start(); e.preventDefault(); }
+	});
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;

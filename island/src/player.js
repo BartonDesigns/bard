@@ -67,10 +67,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = s.descendAssist = false; keys.add(k); e.preventDefault(); }
 	}
 	// Aim and camera (desktop). Alt / Option lets go of the mouse for the camera: the cursor is
-	// free, a click-drag turns the view and clicks fire nothing. A double tap of Alt / Option
-	// captures it again to aim. (The first tap of a double tap from aiming passes through the
-	// camera and straight back.)
-	let altAt = 0;
+	// free (a hand), a click-drag turns the view and clicks fire nothing. Alt / Option again, or
+	// a plain click on the world, captures it to aim.
 	function setLookMode(m) {
 		if (s.lookMode === m) return;
 		s.lookMode = m;
@@ -84,9 +82,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		// (Alt alone would focus a browser's menu bar on Windows)
 		e.preventDefault();
 		if (e.type !== 'keydown' || e.repeat) return;
-		const now = performance.now();
-		if (now - altAt < 350) { altAt = 0; setLookMode('aim'); }
-		else { altAt = now; setLookMode('camera'); }
+		// (a tap each way: aiming, it lets the mouse go; with the mouse free, it takes it back;
+		// a double tap from aiming lands back at aiming, as it always did)
+		setLookMode(s.lookMode === 'camera' ? 'aim' : 'camera');
 	}
 	addEventListener('keydown', altKey, true); addEventListener('keyup', altKey, true);
 	function cycleBoost() { if (!s.flying) return 1; s.boost = nextFlightSpeed(s.boost, !!s.orbit?.deep?.()); s.onBoost?.(s.boost); return s.boost; }
@@ -98,7 +96,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const r = dom.canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
 		if (e.pointerType === 'mouse') {
    // (the camera: a click-drag turns the view, the mouse stays free)
-   if (s.lookMode === 'camera') { if (e.button === 0) { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY }; dom.canvas.style.cursor = 'grabbing'; dom.canvas.setPointerCapture?.(e.pointerId); } return; }
+   if (s.lookMode === 'camera') { if (e.button === 0) { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: e.timeStamp }; dom.canvas.style.cursor = 'grabbing'; dom.canvas.setPointerCapture?.(e.pointerId); } return; }
    if (document.pointerLockElement !== dom.canvas && e.button === 0 && dom.canvas.requestPointerLock) {
     e.preventDefault();
     try { dom.canvas.requestPointerLock()?.catch?.(() => {}); } catch {}
@@ -135,7 +133,14 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch));
 	}
 	function pUp(e) {
-		if (mouse && e.pointerId === mouse.id) { mouse = null; if (s.lookMode === 'camera') dom.canvas.style.cursor = 'grab'; }
+		if (mouse && e.pointerId === mouse.id) {
+			// (a plain click on the world, not a drag, takes the mouse back to aim: the way a game
+			// is clicked into after Esc let the cursor go)
+			const tap = s.lookMode === 'camera' && mouse.t0 !== undefined && e.timeStamp - mouse.t0 < 260 && Math.hypot(e.clientX - mouse.x0, e.clientY - mouse.y0) < 4;
+			mouse = null;
+			if (tap) setLookMode('aim');
+			else if (s.lookMode === 'camera') dom.canvas.style.cursor = 'grab';
+		}
 		if (touch.move && e.pointerId === touch.move.id) {
 			touch.move = null; joy.x = joy.y = 0; s.run = false;
 			dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = '';

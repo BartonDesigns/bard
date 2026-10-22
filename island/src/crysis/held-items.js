@@ -928,11 +928,11 @@ const HANDLE = (y = 0, r = 0.012) => ({ c: v3(0, y, 0), r, a: v3(0, -1, 0), t: v
 const SCOUT_GRIP = { c: v3(-0.05, 0.012, 0), r: 0.03, a: v3(Math.cos(0.2), -Math.sin(0.2), 0), t: v3(Math.sin(0.2), Math.cos(0.2), 0), twist: 0 };
 export const HOLDS = {
 	'aurora-trail-rifle': { kind: 'long', R: PISTOL, L: fore(0.42, 0.112, 0.036), sight: [-0.069, 0.198, 0.08], zoom: 1.9 },
-	'mossback-scout-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 1.5 },
+	'mossback-scout-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 2.0 },
 	'warden-spark-carbine': { kind: 'long', R: PISTOL, L: fore(0.22, 0.1, 0.036), sight: [0.04, 0.205, 0.22], zoom: 1.25 },
 	// (the Longwatch: the world's lens at 2.2 at the sights, and its scope 5 times that again;
 	// bolt: it is worked after every shot)
-	'longwatch-sniper-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.4, 0.074, 0.03), sight: [-0.079, 0.205, 0.08], zoom: 2.2, scopeMag: 5, bolt: true },
+	'longwatch-sniper-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.4, 0.074, 0.03), sight: [-0.079, 0.205, 0.08], zoom: 3.0, scopeMag: 5, bolt: true },
 	'reedline-hunting-bow': { kind: 'bow', side: 'L', L: { c: v3(0, 0, 0), r: .026, a: v3(.3, 0, -1), t: v3(0, 1, 0) }, R: { c: v3(-.14, .056, -.025), r: .026, a: v3(.12, 0, -1), t: v3(0, 1, 0) } },
 	'hunting-net': { kind: 'one', R: SHAFT(0, 0.018) },
 	'door-brace': { kind: 'one', R: SHAFT(0, 0.04) },
@@ -1272,7 +1272,11 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			// (the support hand off it, on a wound: it hangs from the strong hand, the muzzle down)
 			const C = Mo?.S?.clutch, droop = C?.side === 'L' && H.kind === 'long' ? Math.max(0, Math.min(1, C.t / 0.25) * Math.min(1, (C.dur - C.t) / 0.4)) : 0;
 			const bow = H.kind === 'bow', a = aimBlend * (1 - droop), angle = -0.29 + (pitch + 0.29) * a - droop * 0.55;
-			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? .12 - .32 * a : -.15) * k).addScaledVector(UP, (1.02 + (bow ? .56 : .34) * a) * k).addScaledVector(f, (.24 + (bow ? .31 : .05) * a) * k);
+			// (kneeling behind cover, moving low under fire: the gun comes down with the shoulders,
+			// not held up where a standing body's would be, which put it over the head)
+			const shR = P.bones[P.map['upperarm01.R']], shL = P.bones[P.map['upperarm01.L']];
+			const sink = shR && shL ? Math.max(0, 0.8 * P.height - ((shR.matrixWorld.elements[13] + shL.matrixWorld.elements[13]) / 2 - P.root.position.y)) : 0;
+			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? .12 - .32 * a : -.15) * k).addScaledVector(UP, (1.02 + (bow ? .56 : .34) * a) * k - sink).addScaledVector(f, (.24 + (bow ? .31 : .05) * a) * k);
 			const v = _z.copy(f).multiplyScalar(Math.cos(angle)).addScaledVector(l, 0.1 * (1 - a)).addScaledVector(UP, Math.sin(angle)).normalize(), u = UP.clone().addScaledVector(v, -v.y).normalize();
 			model.matrix.makeBasis(v, u, new THREE.Vector3().crossVectors(v, u)).setPosition(org);
 		} else if (H.level) {

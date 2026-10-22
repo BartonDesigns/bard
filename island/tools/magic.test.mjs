@@ -171,7 +171,10 @@ test('weapons fill the keys 1 to 5, stay put, and a second press puts one away',
 test('the look modes and the keys are wired', () => {
 	const player = fs.readFileSync(new URL('../src/player.js', import.meta.url), 'utf8');
 	assert.match(player, /e\.key !== 'Alt'/);
-	assert.match(player, /now - altAt < 350/, 'a double tap returns to aiming');
+	// (a tap of Alt / Option each way: aiming lets the mouse go, and with it free takes it back; a
+	// plain click on the world takes it back too, so nobody is stuck with the hand cursor)
+	assert.match(player, /setLookMode\(s\.lookMode === 'camera' \? 'aim' : 'camera'\)/, 'Alt toggles between the camera and aiming');
+	assert.match(player, /if \(tap\) setLookMode\('aim'\)/, 'a plain click takes the mouse back to aim');
 	assert.match(player, /lookMode === 'camera'/);
 	const idx = fs.readFileSync(new URL('../src/magic/index.js', import.meta.url), 'utf8');
 	for (const k of ['Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'KeyN']) assert.ok(idx.includes(k), k);
