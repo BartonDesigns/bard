@@ -23,6 +23,7 @@ import { regionalDress } from '../region/dress.js';
 import { ancestryFor } from '../region/cultures.js';
 import { coldOf } from '../region/climate.js';
 import { makeTeen, teensAbout, teenStyle, UNIFORM_CULTURES } from './teens.js';
+import { comeUp } from './personal-space.js';
 import { walkNow } from '../bay/crosswalks.js';
 import { GFX_PHONE } from '../world/device.js';
 
@@ -468,10 +469,9 @@ export function createPeople(scene, world, camera = null) {
 		if (p.override && p.override(p, dt, cam)) { pauseWorkplaceRoutine(p); return; }
 		if (p.engaged) {
 			pauseWorkplaceRoutine(p);
-			// talking with you: stop, turn to face you, listen; speak while there is speech
-			const dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
-			M.want.heading = Math.atan2(dx, dz);
-			M.want.speed = !p.workSpot && d > 2.4 ? 0.8 : 0;
+			// talking with you: come up once, to a comfortable distance, turn to face you, listen;
+			// speak while there is speech (never a step after you as you back away)
+			comeUp(p, cam, p.workSpot ? 0 : 0.8);
 			S.look.target = cam;
 			const speaking = performance.now() < (p.speakUntil || 0);
 			S.talk = speaking ? 1 : 0;
@@ -943,7 +943,7 @@ export function createPeople(scene, world, camera = null) {
 		}
 		return best;
 	}
-	function engage(p) { p.engaged = true; p.role = 'wait'; if (p.partner) { p.partner.partner = null; p.partner = null; } p.M.S.gestures.length = 0; }
-	function release(p) { if (!p) return; p.engaged = false; p.speakUntil = 0; p.M.S.talk = 0; p.M.S.look.target = null; p.timer = 1 + Math.random() * 2; }
+	function engage(p) { p.engaged = true; p.cameUp = false; p.role = 'wait'; if (p.partner) { p.partner.partner = null; p.partner = null; } p.M.S.gestures.length = 0; }
+	function release(p) { if (!p) return; p.engaged = false; p.cameUp = false; p.speakUntil = 0; p.M.S.talk = 0; p.M.S.look.target = null; p.timer = 1 + Math.random() * 2; }
 	return { update, lineup, showcase, demo, pool, group, sidewalk, steps, facing, engage, release, ready: () => !!A };
 }
