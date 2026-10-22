@@ -6,12 +6,25 @@
 // head and shoulders where the driver sits.
 //
 //   const F = createFleet(group, { cap, isPhone, night });
-//   F.begin(); F.add(kind, matrix, colour, dist2, { spin, steer, riders }); F.end();
+//   F.begin(); F.add(kind, matrix, colour, dist2, { spin, steer, riders, finish }); F.end();
 
 import * as THREE from 'three';
 import { carGeometry, carMaterial, carGlassMaterial, wheelGeometry, wheelHubs, seatsOf, SPEC } from '../bay/cars.js';
 import { MODEL_KINDS, modelKit, wantModel, modelNight } from './models.js';
 import { qualityNow } from '../world/governor.js';
+import { hash32 } from '../signage/rand.js';
+
+// which finish a car has (bay/cars.js FINISH): by its seed, most of them ordinary, a few
+// showroom-bright, some old and chalked or dusty, now and then a matte wrap; o.finish says
+// outright (a bus, a liveried car)
+const FINISH_W = [0.16, 0.44, 0.24, 0.1, 0.06];
+export function finishOf(o, e) {
+	if (o.finish !== undefined) return o.finish;
+	const seed = o.seed !== undefined ? hash32(String(o.seed)) : o.seedAt ? hash32(Math.round(o.seedAt[0] * 2), Math.round(o.seedAt[1] * 2)) : hash32(Math.round(e[12] * 2), Math.round(e[14] * 2));
+	let r = ((seed >>> 8) & 1023) / 1024;
+	for (let i = 0; i < FINISH_W.length; i++) { r -= FINISH_W[i]; if (r < 0) return i; }
+	return 1;
+}
 
 // the reach of each level (metres): the real model or finest loft, the middle, the far lofts
 export const REACH = [40, 120, 320];
@@ -66,10 +79,11 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		return S;
 	}
 	const w4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), mir = new THREE.Vector3(-1, 1, 1);
-	function put(S, M, c) {
+	// (the finish rides in the colour's red, in steps of 2 above it: bay/cars.js FINISH_GLSL)
+	function put(S, M, c, fin = 0) {
 		if (S.n >= S.cap) return;
 		M.toArray(S.matrix.array, S.n * 16);
-		if (S.color && c) c.toArray(S.color.array, S.n * 3);
+		if (S.color && c) { c.toArray(S.color.array, S.n * 3); S.color.array[S.n * 3] += 2 * fin; }
 		S.n++;
 	}
 	function begin() {
@@ -115,11 +129,12 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		if (far < 1) d2 /= far * far;
 		const t = d2 < near2 ? 0 : d2 < mid2 ? 1 : d2 < far2 ? 2 : 3;
 		const K = t <= 1 && MODEL_KINDS[kind] ? (t === 0 ? wantModel(kind, 'near') && modelKit(kind, 'near') : (wantModel(kind, 'mid'), modelKit(kind, 'mid'))) || null : null;
+		const fin = o.livery || kind === 'bus' ? 1 : finishOf(o, M.elements);
 		// (the decals laid on the body it is drawn with)
 		if (decals && t < 2) decals.add(kind, M, d2, o, K);
 		const cast = t < 2;
 		if (K) {
-			put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c);
+			put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c, fin);
 			if (t === 0 && K.hubs.length === 4) wheels(kind, M, o.spin || 0, o.steer || 0, K, cast);
 			if (t === 0 && o.first) {
 				const G = cabGeo(kind);
@@ -131,7 +146,7 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		}
 		const near = t === 0 && loftGeo(kind, 0, false, o.first);
 		if (near) {
-			put(set(kind + 'l0', [[near, [carMat, glassMat], true]], true, cap / 2, cast), M, c);
+			put(set(kind + 'l0', [[near, [carMat, glassMat], true]], true, cap / 2, cast), M, c, fin);
 			wheels(kind, M, o.spin || 0, o.steer || 0, null, cast);
 			if (o.riders) riders(kind, M, o.riders);
 			return t;
@@ -139,7 +154,7 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		for (let u = Math.max(1, t); u < LOFT.length; u++) {
 			const geo = loftGeo(kind, u, true);
 			if (!geo) continue;
-			put(set(kind + 'l' + u, [[geo, carMat, true]], true, cap, cast), M, c);
+			put(set(kind + 'l' + u, [[geo, carMat, true]], true, cap, cast), M, c, fin);
 			if (o.riders && u === 1) riders(kind, M, o.riders);
 			return u;
 		}
