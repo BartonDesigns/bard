@@ -520,6 +520,8 @@ export function createIslandWorld() {
 	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
 	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
+	// the skills menu covering the world (coverWorld below): resize() holds off while it does
+	let worldCovered = false;
 	function failGraphicsRecovery() {
 		recoverSignage(storage);
 		governor.lost(3);
@@ -1239,7 +1241,6 @@ export function createIslandWorld() {
 	// of the menu over it a layer of its own) and its drawing buffer handed back, until the menu
 	// goes; both are back before the first frame drawn after it. (On an iPhone with the world
 	// loaded, the menu's layers were the straw: the page died as it opened.)
-	let worldCovered = false;
 	function coverWorld(on) {
 		if (!!on === worldCovered) return;
 		worldCovered = !!on;
