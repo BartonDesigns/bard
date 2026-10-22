@@ -126,11 +126,12 @@ export function createHud({ mount, touch = false }) {
 			while (feedList.length > 5) feedList.shift().d.remove();
 		},
 		// once a frame: S = { show, spread (px), health: { hp, max, armour, armourMax }, weapon: {
-		// name, mag, reserve, mode, reloading }, boss: { name, phase, frac, notches }, stars, blue, ko }
+		// name, mag, reserve, mode, reloading }, boss: { name, phase, frac, notches }, stars, blue, ko,
+		// spellAim: 0..1, the crosshair's strength with no weapon but a spell to hand }
 		update(dt, S) {
 			root.style.display = S.show ? '' : 'none';
 			const vis = S.show && !S.ko;
-			cross.style.opacity = vis && S.weapon && !S.aiming ? '1' : vis && S.weapon ? '0.35' : '0';
+			cross.style.opacity = vis && S.weapon && !S.aiming ? '1' : vis && S.weapon ? '0.35' : vis && S.spellAim > 0 ? String(S.spellAim) : '0';
 			const g = Math.max(3, Math.min(60, S.spread || 4));
 			arms[0].style.left = `${-g - 9}px`; arms[1].style.left = `${g}px`; arms[2].style.top = `${-g - 9}px`; arms[3].style.top = `${g}px`;
 			hitT = Math.max(0, hitT - dt);
