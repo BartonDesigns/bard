@@ -520,6 +520,8 @@ export function createIslandWorld() {
 	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
 	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
+	// the skills menu covering the world (coverWorld below): resize() holds off while it does
+	let worldCovered = false;
 	function failGraphicsRecovery() {
 		recoverSignage(storage);
 		governor.lost(3);
@@ -960,7 +962,7 @@ export function createIslandWorld() {
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
-	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
+	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third, cover: coverWorld });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
 	// its own button, always on screen (beside the places on a touch screen, in the rail on a computer)
@@ -1234,8 +1236,19 @@ export function createIslandWorld() {
 		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; renderer.shadowMap.needsUpdate = true; }
 	}
 
-	function resize() {
+	// The skills and magic menu over the world (magic/skills-ui.js cover): nothing is drawn under it,
+	// so the canvas is taken out of the picture (with it the compositing layer that made every part
+	// of the menu over it a layer of its own) and its drawing buffer handed back, until the menu
+	// goes; both are back before the first frame drawn after it. (On an iPhone with the world
+	// loaded, the menu's layers were the straw: the page died as it opened.)
+	function coverWorld(on) {
+		if (!!on === worldCovered) return;
+		worldCovered = !!on;
 		if (lost || recovery.blocked()) return;
+		if (on) { dom.canvas.style.display = 'none'; renderer.setDrawingBufferSize(2, 2, 1); } else { dom.canvas.style.display = 'block'; resize(); }
+	}
+	function resize() {
+		if (lost || recovery.blocked() || worldCovered) return;
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
 		// (the resolution holds whatever the tier: the governor's relief is shadows, crowds and reach,
 		// never a blocky picture)
