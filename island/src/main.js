@@ -587,7 +587,7 @@ export function createIslandWorld() {
 		aimSensitivity: loadAimSensitivity(),
 		uTime: { value: 0 }, uWet: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
 		uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.4) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
-		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
+		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uSkySun: { value: new THREE.Color() }, uSkySunK: { value: 0 }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
 	// the land, the village and the boats drawn upside down for the sea to reflect (world/seamirror.js)

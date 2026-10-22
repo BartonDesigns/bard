@@ -96,7 +96,10 @@ export function islandFrame(iw, now) {
 	W.boardwalk?.update(dt, iw.time, camera, sk.night, W.sky.state.hours);
 	// the weather: frames running slow shed rain streaks; indoors the rain stays out
 	W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
-	const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: iw.frameAvg > 26 });
+	// (in a car's seat the rain is on the glass, not in the cabin: the streaks start past it)
+	const seated = iw.drive.active() && !iw.drive.state.chase && !iw.drive.state.onTrail && !iw.drive.military() && !carjack.active();
+	const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: iw.frameAvg > 26, cab: seated });
+	W.windshield?.update(dt, camera, { seated, rain: W.weather.state.sheltered ? 0 : wx.rainHere, fog: scene.fog.color });
 	W.ocean.userData.tick?.(dt, W, camera, wx?.rainHere || 0);   // what touches the sea, the rain on it (world/ocean.js)
 	surprises.update(dt, sk, wx);
 	W.whale.update(dt, iw.time, shared.uBass.value, camera.position);
@@ -282,7 +285,7 @@ export function islandFrame(iw, now) {
 	W.freeways?.update(camera, sk.night);
 	W.signage?.update(dt, camera, sk.night, iw.drive.active());
 	bridgeSound.update(dt);
-	W.streets?.update(dt, sk.night, W.sky.state.hours);
+	W.streets?.update(dt, sk.night, W.sky.state.hours, wx.rainHere || 0, shared.uWet.value);
 	crosswalks.update(dt);
 	W.lake?.update(dt, iw.time, camera, sk.night);
 	W.water?.update(dt, iw.time, camera, sk.night);

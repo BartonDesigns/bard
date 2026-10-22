@@ -41,12 +41,12 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
 	const sprinklers = createSprinklers(scene, city, real, { isPhone, ground });
 	applySeason(today());
 	const unMonth = onMonth((d) => { applySeason(d); lights.rebuild(); });
-	function update(dt, night, hours) {
+	function update(dt, night, hours, rain = 0, wet = 0) {
 		potholes.update(dt);
 		crew.update(dt, night);
 		decor.update(camera);
 		lights.update(dt, camera, night);
-		carLights.update(dt, camera, night);
+		carLights.update(dt, camera, night, rain, wet);
 		evening.update(dt, camera, night, hours);
 		flood.update(dt, camera, night);
 		sprinklers.update(dt, camera, hours);

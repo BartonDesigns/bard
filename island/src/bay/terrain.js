@@ -20,6 +20,7 @@ import { CARVE_U, CARVE_GLSL, carveDelta } from './carve.js';
 import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
 import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from './coastside.js';
 import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
+import { WET_SHEEN_PARS, wetSheenUniforms } from './wetsheen.js';
 import { SEASON_U } from './seasons.js';             // streets by era: the lawns browning off in late summer
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
@@ -523,7 +524,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uWave: shared.uWave || { value: 1 }, uSkyZenS: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorS: shared.uSkyHor || { value: new THREE.Color() }, uGroundP: GPHOTO[0], uTrailK: GPHOTO[1], uGroundK: GPHOTO[1] });
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uWave: shared.uWave || { value: 1 }, uSkyZenS: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorS: shared.uSkyHor || { value: new THREE.Color() }, uGroundP: GPHOTO[0], uTrailK: GPHOTO[1], uGroundK: GPHOTO[1] }, wetSheenUniforms(shared));
 			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\n' + (hole ? 'attribute float aGsp;\n' : '') + 'varying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + SAFE_GLSL + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return safeH(b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0), -60.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -571,7 +572,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);
 					#endif`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0; float shWet = 0.0, shSoak = 0.0, shSheen = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + GROUND_PHOTO_GLSL + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0, pavedAsph = 0.0; float shWet = 0.0, shSoak = 0.0, shSheen = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + WET_SHEEN_PARS + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + GROUND_PHOTO_GLSL + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here
@@ -967,6 +968,7 @@ export function createBayArea(shared, scene, island, BU) {
 						c = mix(c, vec3(0.88, 0.88, 0.84), white * 0.92 * paintK);
 						c = mix(c, vec3(0.86, 0.68, 0.16), yellow * 0.92 * paintK);
 						flatK = max(max(asph, conc), dirt * 0.6);
+						pavedAsph = asph;
 						// night: windows and lamps as sparks far off
 						float spark = sparks(vBW, dist, 0.8, 0.0) * max(M.b, M.r);
 						cityGlow = vec3(1.0, 0.72, 0.4) * spark * smoothstep(600.0, 3000.0, dist) * uNightB * 2.4;
@@ -1260,6 +1262,14 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 Rr = reflect(-Vv, nS);
 					float Fs = 0.02 + 0.98 * pow(1.0 - max(dot(nS, Vv), 0.0), 5.0);
 					totalEmissiveRadiance += mix(uSkyHorS, uSkyZenS, clamp(Rr.y * 2.0, 0.0, 1.0)) * Fs * shSheen * shWet;
+				}
+				// wet paving: the sky lies on the road at a low look, most where water stands in the
+				// ruts and dips, a little on the damp asphalt between; the glow toward a low sun with
+				// it (bay/wetsheen.js). Not on the shore's sand (its own sheen above)
+				if (uWet > 0.01 && flatK > 0.001 && shWet < 0.5) {
+					// (asphalt glosses more than concrete and dirt; standing water is the mirror)
+					float film = uWet * (flatK * 0.2 + pavedAsph * 0.26 + wxPud * 0.4) * (0.85 + 0.15 * wxGloss) * (1.0 - shWet * 2.0);
+					totalEmissiveRadiance += wetSheen(vBN, vec3(vBW.x, vBH, vBW.y), film * 0.9);
 				}`)
 				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);\nroughnessFactor = mix(mix(roughnessFactor, 0.6, max(wxGloss, wxDamp * 0.5)), 0.04, wxPud);\nroughnessFactor = mix(roughnessFactor, min(roughnessFactor, 0.42), shWet);');
 		};

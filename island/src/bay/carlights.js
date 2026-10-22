@@ -8,6 +8,12 @@
 //
 // Two draws (the lamps as points that know which way their car faces, the beams as quads),
 // refilled each frame from the traffic's own list, no allocation: the cars move.
+//
+// In rain the cars drive with their lights on by day too, every lamp blooms wider in the wet
+// air, and each lamp lays its light down the wet road toward you: a soft upright smear under
+// the mirror point, red for the tail lights, white for the headlights (Josh's photos of a
+// rainy sunrise on the freeway). The smears are more points of the same draw (kind 3, 4),
+// shaped tall in the fragment: no new program.
 
 import * as THREE from 'three';
 import { SPEC } from './cars.js';
@@ -31,30 +37,48 @@ export function beamAt(x, y) {
 
 const POINT_VS = /* glsl */`
 	attribute vec3 aCol; attribute vec3 aDir;
-	uniform float uScale, uK;
-	varying vec3 vCol;
+	uniform float uScale, uK, uBloom, uViewH;
+	varying vec3 vCol; varying float vKind;
 	void main() {
 		vec4 mv = modelViewMatrix * vec4(position, 1.0);
 		float d = -mv.z;
 		// a headlight (aDir.z 1) to whoever is in front of the car, a tail light (0) behind,
-		// a dome light (2) all round
+		// a dome light (2) all round; a lamp's smear on the wet road (3 head, 4 tail) as the lamp
+		float kind = aDir.z;
+		bool smear = kind > 2.5;
+		if (smear) kind -= 3.0;
+		vKind = aDir.z;
 		vec3 to = normalize(cameraPosition - position);
 		float f = dot(to.xz, aDir.xy);
-		float face = aDir.z > 1.5 ? 1.0 : aDir.z > 0.5 ? smoothstep(-0.1, 0.6, f) : smoothstep(0.1, -0.5, f);
-		float px = (aDir.z > 0.5 && aDir.z < 1.5 ? 0.45 : 0.28) * uScale / max(d, 0.1);
+		float face = kind > 1.5 ? 1.0 : kind > 0.5 ? smoothstep(-0.1, 0.6, f) : smoothstep(0.1, -0.5, f);
+		float px = (kind > 0.5 && kind < 1.5 ? 0.45 : 0.28) * uScale / max(d, 0.1) * uBloom;
 		float a = uK * face * (1.0 - smoothstep(260.0, 380.0, d));
 		vCol = aCol * a * clamp(px / 1.5, 0.35, 1.0);
 		gl_PointSize = max(1.5, px * (1.0 + 0.6 * face));
 		gl_Position = a > 0.002 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0);
+		if (smear) {
+			// a tall sprite, hung from the mirror point down the road toward you
+			gl_PointSize = min(gl_PointSize * 3.6, 180.0);
+			gl_Position.y -= gl_PointSize / uViewH * gl_Position.w;
+			vCol *= 0.5;
+		}
 	}`;
 const POINT_FS = /* glsl */`
 	uniform float uExpo;
-	varying vec3 vCol;
+	varying vec3 vCol; varying float vKind;
 	void main() {
 		vec2 q = gl_PointCoord - 0.5;
-		float r2 = dot(q, q) * 4.0;
-		if (r2 > 1.0) discard;
-		float a = exp(-r2 * 10.0) * 1.4 + exp(-r2 * 2.2) * 0.16;
+		float a;
+		if (vKind > 2.5) {
+			// the smear: narrow, brightest just under the mirror point, fading down the sprite
+			float t = gl_PointCoord.y;
+			a = exp(-q.x * q.x * 70.0) * (1.0 - t) * (1.0 - t) * smoothstep(0.0, 0.12, t) * 1.1;
+			if (a < 0.004) discard;
+		} else {
+			float r2 = dot(q, q) * 4.0;
+			if (r2 > 1.0) discard;
+			a = exp(-r2 * 10.0) * 1.4 + exp(-r2 * 2.2) * 0.16;
+		}
 		gl_FragColor = vec4(vCol * a * uExpo, 1.0);
 		#include <colorspace_fragment>
 	}`;
@@ -85,7 +109,7 @@ export function createCarLights(scene, { isPhone = false, ground = () => 0, worl
 	pGeo.setAttribute('aCol', new THREE.BufferAttribute(pCol, 3).setUsage(THREE.DynamicDrawUsage));
 	pGeo.setAttribute('aDir', new THREE.BufferAttribute(pDir, 3).setUsage(THREE.DynamicDrawUsage));
 	pGeo.setDrawRange(0, 0);
-	const U = { uScale: { value: 400 }, uK: { value: 0 }, uExpo: { value: 1 } };
+	const U = { uScale: { value: 400 }, uK: { value: 0 }, uExpo: { value: 1 }, uBloom: { value: 1 }, uViewH: { value: 1000 } };
 	const pMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: POINT_VS, fragmentShader: POINT_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
 	const points = new THREE.Points(pGeo, pMat);
 	points.frustumCulled = false; points.visible = false; points.name = 'car-lights'; points.renderOrder = 6;
@@ -102,7 +126,7 @@ export function createCarLights(scene, { isPhone = false, ground = () => 0, worl
 	beams.frustumCulled = false; beams.visible = false; beams.name = 'car-beams'; beams.renderOrder = 3;
 	scene.add(beams, points);
 	const tmpV = new THREE.Vector2();
-	points.onBeforeRender = (r, sc, cam) => { U.uScale.value = r.getSize(tmpV).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360)); U.uExpo.value = r.toneMappingExposure * 0.85; };
+	points.onBeforeRender = (r, sc, cam) => { U.uViewH.value = r.getSize(tmpV).y * r.getPixelRatio(); U.uScale.value = U.uViewH.value / (2 * Math.tan(cam.fov * Math.PI / 360)); U.uExpo.value = r.toneMappingExposure * 0.85; };
 
 	let np = 0, nq = 0;
 	// (your car: where its lamps are, for the evening's list: x, y, z, dx, dz, on)
@@ -116,13 +140,19 @@ export function createCarLights(scene, { isPhone = false, ground = () => 0, worl
 		pDir[np * 3] = dx; pDir[np * 3 + 1] = dz; pDir[np * 3 + 2] = kind;
 		np++;
 	}
-	// a car's four lamps: at (x, y, z), heading (sx, cz), its kind, how hard it brakes
-	function car(x, y, z, sx, cz, kind, brake, warm) {
+	// a car's four lamps: at (x, y, z), heading (sx, cz), its kind, how hard it brakes; and on a
+	// wet road (wet > 0) each lamp's smear in it, mirrored under the road's surface
+	let wetK = 0;
+	function car(x, y, z, sx, cz, kind, brake, warm, smear = wetK) {
 		const S = SPEC[kind] || SPEC.sedan, hw = S.W / 2 - 0.25, fl = S.L / 2 - 0.08, hy = y + Math.min(0.75, 0.45 + S.H * 0.18);
 		const c = warm ? HALOGEN : XENON;
 		for (let s = -1; s <= 1; s += 2) {
 			lamp(x + sx * fl + cz * hw * s, hy, z + cz * fl - sx * hw * s, c, 3.2, sx, cz, 1);
 			lamp(x - sx * fl + cz * (hw + 0.05) * s, hy + 0.12, z - cz * fl - sx * (hw + 0.05) * s, TAIL, 1.4 + 3 * brake, sx, cz, 0);
+			if (smear > 0.01) {
+				lamp(x + sx * fl + cz * hw * s, 2 * y - hy, z + cz * fl - sx * hw * s, c, 3.2 * smear, sx, cz, 4);
+				lamp(x - sx * fl + cz * (hw + 0.05) * s, 2 * y - hy - 0.12, z - cz * fl - sx * (hw + 0.05) * s, TAIL, (1.4 + 3 * brake) * smear, sx, cz, 3);
+			}
 		}
 	}
 	// a low beam on the road ahead of a car at (x, y, z) facing (sx, cz)
@@ -152,9 +182,14 @@ export function createCarLights(scene, { isPhone = false, ground = () => 0, worl
 		nq++;
 	}
 	const warmOf = (id) => { let h = 0; const s = String(id || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h & 7) < 5; };
-	function update(dt, cam, night) {
-		const k = Math.max(0, Math.min(1, (night - 0.1) / 0.25));
+	// night: how dark it is; rain: the rain where you are (lights on by day in it, and the wet
+	// road under them); wet: how wet the ground is
+	function update(dt, cam, night, rain = 0, wet = 0) {
+		const rainOn = Math.max(0, Math.min(1, (rain - 0.1) / 0.5));
+		const k = Math.max(Math.max(0, Math.min(1, (night - 0.1) / 0.25)), rainOn * 0.85);
 		U.uK.value = k;
+		U.uBloom.value = 1 + rainOn * 0.6;
+		wetK = Math.max(0, Math.min(1, (wet - 0.15) / 0.5)) * (0.55 + 0.45 * rainOn);
 		const show = k > 0.01 && cam.position.y < 2000;
 		points.visible = beams.visible = show;
 		head.on = 0;
@@ -171,7 +206,8 @@ export function createCarLights(scene, { isPhone = false, ground = () => 0, worl
 			c.brk = brakeLevel(c.lv ?? c.v, c.v, dt, c.brk ?? 0); c.lv = c.v;
 			if (c.warm === undefined) c.warm = warmOf(c.id);
 			const sx = Math.sin(c.yaw), sz = Math.cos(c.yaw);
-			car(c.px, c.py ?? ground(c.px, c.pz), c.pz, sx, sz, c.kind, c.brk, c.warm);
+			// (the smears on the wet road only for the nearer half: they are twice the points)
+			car(c.px, c.py ?? ground(c.px, c.pz), c.pz, sx, sz, c.kind, c.brk, c.warm, d < R * 0.55 ? wetK : 0);
 			// (the nearest few that are ahead of you or crossing: their beams)
 			let w = -1;
 			for (let j = 0; j < NEAR; j++) if (d < nearD[j] && (w < 0 || nearD[j] > nearD[w])) w = j;
