@@ -108,7 +108,7 @@ const CSS = `
 .gp-tip{position:fixed;z-index:2147483001;pointer-events:none;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);display:none;gap:14px;align-items:center;padding:7px 14px;border-radius:999px;background:rgba(8,20,26,.86);border:1px solid rgba(255,255,255,.16);color:rgba(234,250,246,.86);font:600 12px var(--bard-display,system-ui,sans-serif);white-space:nowrap}
 .gp-tip span.i{display:inline-flex;gap:6px;align-items:center}
 .gp-menu{position:absolute;inset:0;padding-bottom:48px;box-sizing:border-box;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);font:14px var(--bard-body,system-ui,sans-serif);color:#eafaf6}
-.gp-menu .pn{width:min(760px,calc(100vw - 32px));max-height:calc(100% - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:18px;border-radius:16px;background:#1a1a1a;border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.8)}
+.gp-menu .pn{width:min(760px,calc(100vw - 32px));max-height:calc(100% - 32px - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:18px;border-radius:16px;background:#1a1a1a;border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.8)}
 .gp-menu h2{margin:0 0 2px;font:700 20px var(--bard-display,system-ui,sans-serif)}
 .gp-menu .sub{color:rgba(255,255,255,.6);font-size:12px;margin-bottom:14px}
 .gp-menu .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}

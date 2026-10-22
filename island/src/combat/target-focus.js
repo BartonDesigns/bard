@@ -81,7 +81,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 	}
 	const lock = button('Lock on (the ` key, or tap a person); press again to release', 'Lock', () => lockOn());
 	const next = button('Next target (Shift+L)', 'Next', () => cycle());
-	const style = document.createElement('style'); style.textContent = '@media (orientation:landscape) and (max-height:540px){.combat-focus-controls{top:calc(110px + env(safe-area-inset-top))!important;flex-direction:row!important}}';
+	const style = document.createElement('style'); style.textContent = '@media (orientation:landscape) and (max-height:540px){.combat-focus-controls{top:calc(110px + var(--l99-top, env(safe-area-inset-top)))!important;flex-direction:row!important}}';
 	mount.append(marker, dock, style);
 	const clear = () => { selected = null; track = null; seen = false; hiddenFor = 0; available = false; candidates = []; dock.style.display = 'none'; marker.style.display = 'none'; lock.textContent = 'Lock'; lock.setAttribute('aria-pressed', 'false'); };
 	function scan() {

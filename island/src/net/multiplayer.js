@@ -64,7 +64,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (pin) return pin;
 		pin = createWaypoint({ scene, camera, mount, onTap: () => openPanel() });
 		const chip = mount.lastElementChild;
-		if (chip) chip.style.top = 'calc(136px + env(safe-area-inset-top))';
+		if (chip) chip.style.top = 'calc(136px + var(--l99-top, env(safe-area-inset-top)))';
 		return pin;
 	}
 	let stopped = '', pendingState = null, hostClock = null, following = null, manualT = 0, travelling = null, tracked = null;
@@ -335,7 +335,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 
 	const chip = stop(document.createElement('button'));
 	chip.type = 'button'; chip.dataset.hudText = 'room';
-	chip.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:none;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.6);color:#eafaf6;font:600 12px var(--bard-display,system-ui,sans-serif);z-index:6;cursor:pointer;';
+	chip.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));display:none;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.6);color:#eafaf6;font:600 12px var(--bard-display,system-ui,sans-serif);z-index:6;cursor:pointer;';
 	chip.onclick = (e) => { e.stopPropagation(); openPanel(); };
 	mount.appendChild(chip);
 	function chipDraw() {
@@ -350,7 +350,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	}
 
 	const panel = stop(document.createElement('div'));
-	panel.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(100px + env(safe-area-inset-top));width:min(300px,82vw);max-height:60%;overflow-y:auto;padding:12px;border-radius:14px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;flex-direction:column;gap:8px;z-index:7;';
+	panel.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(100px + var(--l99-top, env(safe-area-inset-top)));width:min(300px,82vw);max-height:60%;overflow-y:auto;padding:12px;border-radius:14px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;flex-direction:column;gap:8px;z-index:7;';
 	mount.appendChild(panel);
 	function openPanel() { panel.style.display = 'flex'; drawPanel(); }
 	function drawPanel() {

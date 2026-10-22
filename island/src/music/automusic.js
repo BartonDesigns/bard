@@ -367,7 +367,7 @@ export function createAutoMusic(opts) {
 	btn.title = 'Auto music: a generative score on the faceplate\'s instruments';
 	btn.setAttribute('aria-label', btn.title);
 	btn.innerHTML = ICON;
-	btn.style.cssText = 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));width:44px;min-height:44px;padding:6px 10px;display:flex;align-items:center;justify-content:center;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;';
+	btn.style.cssText = 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));width:44px;min-height:44px;padding:6px 10px;display:flex;align-items:center;justify-content:center;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;';
 	btn.addEventListener('click', (e) => { e.stopPropagation(); auto(); btn.blur(); });
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) btn.addEventListener(ev, (e) => e.stopPropagation());
 	opts.mount?.appendChild(btn);

@@ -212,11 +212,11 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	}
 	const hud = document.createElement('div');
 	hud.className = 'l99-drive-hud';
-	hud.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top));padding:6px 12px;border-radius:10px;background:rgba(8,20,26,.55);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:none;display:none;white-space:nowrap;';
+	hud.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + var(--l99-top, env(safe-area-inset-top)));padding:6px 12px;border-radius:10px;background:rgba(8,20,26,.55);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:none;display:none;white-space:nowrap;';
 	mount.appendChild(hud);
 	// the keys a keyboard has for it, small under the line above (not on a phone: it has the buttons)
 	const keys = document.createElement('div');
-	keys.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(100px + env(safe-area-inset-top));padding:4px 10px;border-radius:8px;background:rgba(8,20,26,.45);color:rgba(234,250,246,.8);font:11px var(--bard-body,system-ui,sans-serif);letter-spacing:.02em;pointer-events:none;display:none;white-space:nowrap;';
+	keys.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(100px + var(--l99-top, env(safe-area-inset-top)));padding:4px 10px;border-radius:8px;background:rgba(8,20,26,.45);color:rgba(234,250,246,.8);font:11px var(--bard-body,system-ui,sans-serif);letter-spacing:.02em;pointer-events:none;display:none;white-space:nowrap;';
 	keys.textContent = 'C · camera';
 	mount.appendChild(keys);
 

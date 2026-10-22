@@ -26,8 +26,8 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch { re
 const CSS = `
 .chat{position:absolute;z-index:19;display:none;flex-direction:column;background:rgba(14,16,18,.94);border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.6);color:#fff;font:14px/1.45 var(--bard-body,system-ui,sans-serif);overflow:hidden;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .chat.on{display:flex}
-.chat.desk{left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));bottom:calc(16px + env(safe-area-inset-bottom));width:min(400px,calc(100% - 24px));border-radius:16px}
-.chat.full{inset:0;border-radius:0;border:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.chat.desk{left:calc(12px + env(safe-area-inset-left));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));bottom:calc(16px + env(safe-area-inset-bottom));width:min(400px,calc(100% - 24px));border-radius:16px}
+.chat.full{inset:0;border-radius:0;border:0;padding:var(--l99-top, env(safe-area-inset-top)) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .chat button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .chat-head{display:flex;align-items:center;gap:10px;padding:12px 14px 8px}
 .chat-head b{font-size:18px;font-weight:600;font-family:var(--bard-display,Georgia,serif)}
@@ -85,7 +85,7 @@ const CSS = `
 .chat-feed.touch{bottom:calc(214px + env(safe-area-inset-bottom));width:min(300px,calc(100% - 112px - env(safe-area-inset-left) - env(safe-area-inset-right)))}
 .chat-feed>div{align-self:flex-start;max-width:100%;padding:4px 10px;border-radius:10px;background:rgba(10,12,14,.55);color:#fff;font:13px/1.35 var(--bard-body,system-ui,sans-serif);text-shadow:0 1px 2px rgba(0,0,0,.6);transition:opacity .8s;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .chat-feed .chat-ch{font-size:10px;font-weight:700;letter-spacing:.06em;margin-right:4px;color:rgba(255,255,255,.5)}
-.chat-toast{position:absolute;left:50%;top:calc(76px + env(safe-area-inset-top));transform:translateX(-50%);z-index:21;width:min(360px,calc(100% - 24px));box-sizing:border-box;padding:12px 14px;border-radius:14px;background:rgba(20,22,24,.96);border:1px solid rgba(94,234,212,.4);box-shadow:0 12px 32px rgba(0,0,0,.6);color:#fff;font:14px var(--bard-body,system-ui,sans-serif);display:flex;flex-direction:column;gap:10px}
+.chat-toast{position:absolute;left:50%;top:calc(76px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);z-index:21;width:min(360px,calc(100% - 24px));box-sizing:border-box;padding:12px 14px;border-radius:14px;background:rgba(20,22,24,.96);border:1px solid rgba(94,234,212,.4);box-shadow:0 12px 32px rgba(0,0,0,.6);color:#fff;font:14px var(--bard-body,system-ui,sans-serif);display:flex;flex-direction:column;gap:10px}
 .chat-toast .chat-row{min-height:0;justify-content:flex-end}
 [data-chat-badge]{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font:700 11px/18px var(--bard-body,system-ui,sans-serif);box-sizing:border-box;pointer-events:none;display:none!important}
 [data-chat-badge].on{display:block!important}

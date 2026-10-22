@@ -176,7 +176,7 @@ const D2 = 'right:calc(144px + var(--sr))!important;bottom:calc(144px + var(--sb
 const L2 = 'right:calc(164px + var(--sr))!important;bottom:calc(24px + var(--sb))!important;';
 const SLOT = 'position:absolute!important;left:auto!important;top:auto!important;margin:0!important;';
 const CSS = `
-${S}{--sl:env(safe-area-inset-left);--sr:env(safe-area-inset-right);--st:calc(env(safe-area-inset-top) + var(--vvt, 0px) + var(--l99-fs, 0px));--sb:calc(env(safe-area-inset-bottom) + var(--vvb, 0px));--qb:0px;--gs:23px;}
+${S}{--sl:env(safe-area-inset-left);--sr:env(safe-area-inset-right);--st:calc(var(--l99-top, env(safe-area-inset-top)) + var(--vvt, 0px));--sb:calc(env(safe-area-inset-bottom) + var(--vvb, 0px));--qb:0px;--gs:23px;}
 ${S} [data-skin]{box-sizing:border-box!important;width:52px!important;height:52px!important;min-width:0!important;min-height:0!important;max-width:none!important;padding:0!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.24)!important;background:rgba(12,16,20,.32)!important;color:rgba(255,255,255,.88)!important;box-shadow:0 1px 8px rgba(0,0,0,.16)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;text-shadow:none!important;opacity:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;transition:scale .08s ease,background-color .12s ease,border-color .12s ease!important;cursor:pointer;}
 ${S} [data-skin][data-glyph]{font-size:0!important;line-height:0!important;color:transparent!important;overflow:hidden!important;}
 ${S} [data-skin][data-glyph]>*{display:none!important;}
@@ -356,7 +356,7 @@ export function skinTouch(mount) {
 	const fishBtn = () => mount.querySelector('[data-hud="prompt 20"]');
 	// the room the quest's chip takes (its bottom, measured), for what sits under the top row;
 	// and the browser's bars over the page (Safari's address and tool bars), from the visual
-	// viewport, added to the safe areas (with main.js's full-screen tad, --l99-fs)
+	// viewport, added to the safe areas
 	const px = (k, v) => { const t = `${Math.round(v)}px`; if (mount.style.getPropertyValue(k) !== t) mount.style.setProperty(k, t); };
 	const room = () => {
 		const m = mount.getBoundingClientRect(), chip = mount.querySelector('[data-hud-text="quest"]');

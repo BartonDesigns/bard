@@ -1295,7 +1295,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	if (choice.kind === 'ollama' || (choice.kind === 'cloud' && DISCOVERY_URL)) connect(false);
 	else if (choice.kind === 'webllm') setTimeout(() => connect(false), store.get('crysis-guide-loaded', false) ? 1500 : 9000);   // after the world is up
 	// a quiet progress pill while the model downloads the first time
-	const pill = el('div', 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(72px + env(safe-area-inset-top));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px var(--bard-body,system-ui,sans-serif);pointer-events:none;display:none;');
+	const pill = el('div', 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(72px + var(--l99-top, env(safe-area-inset-top)));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px var(--bard-body,system-ui,sans-serif);pointer-events:none;display:none;');
 	mount.append(pill);
 	llm.onStatus((st) => {
 		if (llm.kind() !== 'webllm') { pill.style.display = 'none'; return; }

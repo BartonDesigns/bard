@@ -7,7 +7,7 @@ import { AXES, AXIS_NAMES } from './morality.js';
 import { FACTIONS } from './factions.js';
 
 const CSS = `
-.cb-cmp{position:absolute;left:50%;top:calc(56px + env(safe-area-inset-top));transform:translateX(-50%);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 72px - var(--l99-low,88px));overflow-y:auto;background:rgba(10,16,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px 16px;color:#eef6f4;font:13px/1.35 var(--bard-body,system-ui,sans-serif);z-index:8;display:none;touch-action:pan-y;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.cb-cmp{position:absolute;left:50%;top:calc(56px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 72px - var(--l99-low,88px));overflow-y:auto;background:rgba(10,16,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px 16px;color:#eef6f4;font:13px/1.35 var(--bard-body,system-ui,sans-serif);z-index:8;display:none;touch-action:pan-y;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .cb-cmp h3{margin:0 0 2px;font:700 16px var(--bard-display,system-ui,sans-serif);letter-spacing:.5px}.cb-cmp .ti{opacity:.85;margin-bottom:10px;color:#ffd07a}
 .cb-cmp .ax{display:grid;grid-template-columns:76px 1fr 76px;gap:6px;align-items:center;margin:5px 0;font-size:11px}
 .cb-cmp .ax span:last-child{text-align:right}.cb-cmp .tr{height:8px;border-radius:4px;background:linear-gradient(90deg,#ff7a5a33,#ffffff14 50%,#5fe0b033);position:relative}

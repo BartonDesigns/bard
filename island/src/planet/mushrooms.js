@@ -744,7 +744,7 @@ export function createMushrooms(island, shared, scene, camera, profile, opts = {
 	prompt.dataset.hud = 'prompt 70';
 	prompt.style.cssText = btnStyle + 'padding:10px 20px;border-radius:24px;display:none;text-align:center;max-width:86vw;';
 	const chip = document.createElement('div');
-	chip.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));display:none;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:16px;background:rgba(8,20,26,.55);border:1px solid rgba(255,255,255,.14);color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);z-index:5;transition:opacity 1.2s;pointer-events:auto;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+	chip.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + var(--l99-top, env(safe-area-inset-top)));display:none;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:16px;background:rgba(8,20,26,.55);border:1px solid rgba(255,255,255,.14);color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);z-index:5;transition:opacity 1.2s;pointer-events:auto;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
 	const chipText = document.createElement('span');
 	const chipX = document.createElement('button');
 	chipX.type = 'button'; chipX.textContent = '×'; chipX.title = 'Let it pass'; chipX.setAttribute('aria-label', 'End the experience');

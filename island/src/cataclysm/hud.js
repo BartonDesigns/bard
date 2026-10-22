@@ -7,7 +7,7 @@
 
 export function createAlertHud(mount, { isPhone = false } = {}) {
 	const css = (el, s) => { el.style.cssText = s; return el; };
-	const root = css(document.createElement('div'), `position:absolute;left:50%;top:calc(${isPhone ? 136 : 140}px + env(safe-area-inset-top));transform:translateX(-50%);width:min(${isPhone ? 340 : 480}px,calc(100vw - 32px));box-sizing:border-box;pointer-events:none;display:none;z-index:6;font-family:var(--bard-body,system-ui,sans-serif);transition:opacity .4s;`);
+	const root = css(document.createElement('div'), `position:absolute;left:50%;top:calc(${isPhone ? 136 : 140}px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);width:min(${isPhone ? 340 : 480}px,calc(100vw - 32px));box-sizing:border-box;pointer-events:none;display:none;z-index:6;font-family:var(--bard-body,system-ui,sans-serif);transition:opacity .4s;`);
 	root.setAttribute('role', 'alert');
 	root.setAttribute('aria-live', 'assertive');
 	const card = css(document.createElement('div'), 'border-radius:12px;overflow:hidden;background:rgba(14,10,10,.84);border:1px solid rgba(255,90,70,.45);box-shadow:0 6px 24px rgba(0,0,0,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);');

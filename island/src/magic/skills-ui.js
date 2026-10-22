@@ -38,7 +38,7 @@ const CSS = `
 .sk-flash.go{animation:skFlash .9s ease-out}
 @keyframes skFlash{0%{opacity:.9}100%{opacity:0}}
 /* header */
-.sk-head{position:absolute;left:0;right:0;top:0;height:var(--hh);display:flex;align-items:center;gap:14px;padding:0 calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));padding-top:env(safe-area-inset-top);z-index:3;background:linear-gradient(180deg,rgba(4,6,11,.92),rgba(4,6,11,0))}
+.sk-head{position:absolute;left:0;right:0;top:0;height:var(--hh);display:flex;align-items:center;gap:14px;padding:0 calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));padding-top:var(--l99-top, env(safe-area-inset-top));z-index:3;background:linear-gradient(180deg,rgba(4,6,11,.92),rgba(4,6,11,0))}
 .sk-lv{display:flex;align-items:center;gap:10px;min-width:0}
 .sk-ring{position:relative;width:42px;height:42px;flex:none}
 .sk-ring svg{position:absolute;inset:0;transform:rotate(-90deg)}

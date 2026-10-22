@@ -29,7 +29,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	const isTouch = dom.mount.classList.contains('l99-touch');
 	const hud = document.createElement('div');
 	hud.dataset.orbitHud = '';
-	hud.style.cssText = 'position:absolute;top:max(18px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);pointer-events:none;text-align:center;color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);letter-spacing:.08em;text-shadow:0 1px 5px #000;display:none;white-space:pre-line;';
+	hud.style.cssText = 'position:absolute;top:max(18px,var(--l99-top, env(safe-area-inset-top)));left:50%;transform:translateX(-50%);pointer-events:none;text-align:center;color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);letter-spacing:.08em;text-shadow:0 1px 5px #000;display:none;white-space:pre-line;';
 	const bearing = document.createElement('div');
 	bearing.style.cssText = 'position:absolute;pointer-events:none;display:none;color:#a5f6e2;font:12px var(--bard-body,system-ui,sans-serif);text-align:center;text-shadow:0 1px 5px #000;transform:translate(-50%,-50%);';
 	bearing.textContent = '◇\nDeparture';
