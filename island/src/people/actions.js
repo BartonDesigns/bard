@@ -363,6 +363,76 @@ for (const [name, keys] of Object.entries(VAULT)) {
 	ACTIONS[`vault-${name}+`] = { loop: false, keys: keys.map(([u, q]) => [u, { sp: q.sp.map((x, i) => x + CARRY_SP[i]), hp: q.hp, hd: q.hd, rt: q.rt, fL: q.fL, fR: q.fR }]) };
 }
 
+// ---------- dancing (people/dance.js drives u from the music's beat: music/beat.js) ----------
+// Each loops over `beats` beats, with a key on every beat (and one between where a foot is in
+// the air), so the pose lands on the beat; the beat's own dip, nod and shoulders ride over it
+// in motion.js (the groove). After a street party seen on video: the two-step, feet stepping
+// out and drawn in on the counts; the bounce, feet planted, loose fists pumping at the chest,
+// the chest turning a little each beat; hands up and swaying over the head, as the crowd
+// behind him; and a sway, for whoever moves least, weight from foot to foot with soft arms.
+const LOOSE_F = arm({ abd: 0.16, flex: 0.42, roll: 0.45, bend: 1.35, pro: 0.9, curl: 0.5 });
+const LOOSE_B = arm({ abd: 0.16, flex: -0.12, roll: 0.3, bend: 0.85, pro: 0.9, curl: 0.5 });
+const LOOSE_M = arm({ abd: 0.16, flex: 0.15, roll: 0.35, bend: 1.1, pro: 0.9, curl: 0.5 });
+const PUMP_UP = arm({ abd: 0.22, flex: 0.6, roll: 0.55, bend: 1.95, pro: 0.55, curl: 0.75 });
+const PUMP_DN = arm({ abd: 0.2, flex: 0.35, roll: 0.5, bend: 1.55, pro: 0.55, curl: 0.75 });
+const PUMP_M = arm({ abd: 0.21, flex: 0.48, roll: 0.52, bend: 1.75, pro: 0.55, curl: 0.75 });
+const UP_OUT = arm({ abd: 0.95, flex: 2.3, roll: 0, bend: 0.4, pro: 1.9, curl: 0.2 });
+const UP_IN = arm({ abd: 0.2, flex: 2.75, roll: 0.3, bend: 0.55, pro: 1.9, curl: 0.2 });
+const UP_HIGH = arm({ abd: 0.45, flex: 2.85, roll: 0.1, bend: 0.25, pro: 1.9, curl: 0.3 });
+const SOFT = arm({ abd: 0.14, flex: 0.12, roll: 0.3, bend: 0.6, pro: 0.7, curl: 0.35 });
+const SOFT2 = arm({ abd: 0.18, flex: 0.22, roll: 0.35, bend: 0.8, pro: 0.7, curl: 0.4 });
+const d = (u, L, R, sp, hp, hd, fL, fR) => [u, { L, R, sp, hp, hd, ...(fL ? { fL, fR } : {}) }];
+const DANCES = {
+	// the two-step (four beats): the right foot out on the one, the left drawn in beside it on
+	// the two, out to the left on the three, the right drawn in on the four; the hips turn a
+	// little toward each step, the arms swing against the feet
+	twostep: { beats: 4, keys: [
+		d(0, LOOSE_F, LOOSE_B, [-0.1, 0.03, 0.02], [-0.1, 0.04, 0, 0.03], [0.06, 0.03, 0], [0.3, 0, 0.03], [-0.3, 0, 0.03]),
+		d(0.125, LOOSE_M, LOOSE_M, [-0.05, 0.03, 0], [-0.05, 0.04, 0, 0.02], [0.03, 0.03, 0], [0.08, 0.06, 0.02], [-0.3, 0, 0.03]),
+		d(0.25, LOOSE_B, LOOSE_F, [0, 0.03, 0], [0, 0.04, 0, 0.03], [0, 0.03, 0], [-0.08, 0, 0.02], [-0.3, 0, 0.03]),
+		d(0.375, LOOSE_M, LOOSE_M, [0.05, 0.03, 0], [0.05, 0.04, 0, 0.02], [-0.03, 0.03, 0], [0.12, 0.07, 0.03], [-0.3, 0, 0.03]),
+		d(0.5, LOOSE_B, LOOSE_F, [0.1, 0.03, -0.02], [0.1, 0.04, 0, 0.03], [-0.06, 0.03, 0], [0.3, 0, 0.03], [-0.3, 0, 0.03]),
+		d(0.625, LOOSE_M, LOOSE_M, [0.05, 0.03, 0], [0.05, 0.04, 0, 0.02], [-0.03, 0.03, 0], [0.3, 0, 0.03], [-0.08, 0.06, 0.02]),
+		d(0.75, LOOSE_F, LOOSE_B, [0, 0.03, 0], [0, 0.04, 0, 0.03], [0, 0.03, 0], [0.3, 0, 0.03], [0.08, 0, 0.02]),
+		d(0.875, LOOSE_M, LOOSE_M, [-0.05, 0.03, 0], [-0.05, 0.04, 0, 0.02], [0.03, 0.03, 0], [0.3, 0, 0.03], [-0.12, 0.07, 0.03]),
+		d(1, LOOSE_F, LOOSE_B, [-0.1, 0.03, 0.02], [-0.1, 0.04, 0, 0.03], [0.06, 0.03, 0], [0.3, 0, 0.03], [-0.3, 0, 0.03]),
+	] },
+	// the bounce (two beats): feet planted, knees soft, loose fists pumping at the chest, the
+	// chest and head turning a little to each side on the beats
+	bounce: { beats: 2, keys: [
+		d(0, PUMP_DN, PUMP_UP, [0.1, 0.06, 0], [0.05, 0.02, 0, 0.03], [-0.08, 0.06, 0], [0.17, 0, 0.02], [-0.17, 0, 0]),
+		d(0.25, PUMP_M, PUMP_M, [0, 0.04, 0], [0, 0.02, 0, 0.02], [0, 0.02, 0], [0.17, 0, 0.02], [-0.17, 0, 0]),
+		d(0.5, PUMP_UP, PUMP_DN, [-0.1, 0.06, 0], [-0.05, 0.02, 0, 0.03], [0.08, 0.06, 0], [0.17, 0, 0.02], [-0.17, 0, 0]),
+		d(0.75, PUMP_M, PUMP_M, [0, 0.04, 0], [0, 0.02, 0, 0.02], [0, 0.02, 0], [0.17, 0, 0.02], [-0.17, 0, 0]),
+		d(1, PUMP_DN, PUMP_UP, [0.1, 0.06, 0], [0.05, 0.02, 0, 0.03], [-0.08, 0.06, 0], [0.17, 0, 0.02], [-0.17, 0, 0]),
+	] },
+	// hands up (four beats): both arms over the head, swaying out to one side and the other on
+	// the odd beats, straight up and pumped on the even ones, the face lifted
+	handsup: { beats: 4, keys: [
+		d(0, UP_OUT, UP_IN, [0, -0.06, 0.12], [0, 0, 0.03, 0.02], [0, -0.12, 0.08], [0.2, 0, 0.02], [-0.2, 0, 0]),
+		d(0.25, UP_HIGH, UP_HIGH, [0, -0.1, 0], [0, 0, 0, 0.02], [0, -0.18, 0], [0.2, 0, 0.02], [-0.2, 0, 0]),
+		d(0.5, UP_IN, UP_OUT, [0, -0.06, -0.12], [0, 0, -0.03, 0.02], [0, -0.12, -0.08], [0.2, 0, 0.02], [-0.2, 0, 0]),
+		d(0.75, UP_HIGH, UP_HIGH, [0, -0.1, 0], [0, 0, 0, 0.02], [0, -0.18, 0], [0.2, 0, 0.02], [-0.2, 0, 0]),
+		d(1, UP_OUT, UP_IN, [0, -0.06, 0.12], [0, 0, 0.03, 0.02], [0, -0.12, 0.08], [0.2, 0, 0.02], [-0.2, 0, 0]),
+	] },
+	// the sway (four beats): the weight from one foot to the other over two beats, the chest and
+	// head tipping with it, the arms soft at the sides (the feet are the walk's own)
+	sway: { beats: 4, keys: [
+		d(0, SOFT2, SOFT, [0.06, 0.02, 0.07], [0.03, 0.02, 0.02, 0.02], [0.04, 0.02, 0.05]),
+		d(0.25, SOFT, SOFT, [0, 0.02, 0], [0, 0.02, 0, 0.02], [0, 0.02, 0]),
+		d(0.5, SOFT, SOFT2, [-0.06, 0.02, -0.07], [-0.03, 0.02, -0.02, 0.02], [-0.04, 0.02, -0.05]),
+		d(0.75, SOFT, SOFT, [0, 0.02, 0], [0, 0.02, 0, 0.02], [0, 0.02, 0]),
+		d(1, SOFT2, SOFT, [0.06, 0.02, 0.07], [0.03, 0.02, 0.02, 0.02], [0.04, 0.02, 0.05]),
+	] },
+};
+export const DANCE_NAMES = [];
+for (const [name, D] of Object.entries(DANCES)) {
+	ACTIONS['dance-' + name] = { loop: true, beats: D.beats, keys: D.keys };
+	// (and led with the other foot, for the other half of the room)
+	ACTIONS['dance-' + name + 'M'] = { loop: true, beats: D.beats, keys: D.keys.map(mirrorKey) };
+	DANCE_NAMES.push('dance-' + name, 'dance-' + name + 'M');
+}
+
 // an action at progress u: the pose, eased between its keys (null for anything a key leaves out)
 const out = { L: arm({}), R: arm({}), sp: [0, 0, 0], hp: [0, 0, 0, 0], fL: [0, 0, 0], fR: [0, 0, 0], rt: [0, 0], hd: [0, 0, 0], has: {} };
 export function actionAt(name, u) {

@@ -38,6 +38,7 @@ import { createBridgeSound } from './bay/bridgesound.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
 import { createShaderWarm } from './world/shaderwarm.js';
+import { createIdleOverlays } from './ui/idle-overlays.js';
 import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
 import { resetKitEnvironment } from './people/kit-light.js';
@@ -58,6 +59,7 @@ import { worldAir } from './world/soundbus.js';
 import { REAL_U } from './bay/realcity.js';
 import { createDrive } from './drive.js';
 import { createAutoMusic } from './music/automusic.js';
+import { wireBeat, beatNow } from './music/beat.js';
 import { createExplore } from './explore.js';
 import { today, onMonth, monthPicked, pickMonth } from './calendar.js';
 import { createTattooStudio } from './tattoo/studio.js';
@@ -520,6 +522,8 @@ export function createIslandWorld() {
 	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
 	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
+	// the skills menu covering the world (coverWorld below): resize() holds off while it does
+	let worldCovered = false;
 	function failGraphicsRecovery() {
 		recoverSignage(storage);
 		governor.lost(3);
@@ -740,7 +744,7 @@ export function createIslandWorld() {
 	if (/[?&]heroview\b/.test(location.search)) { const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); heroView.open(); } }, 1000); }
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
-		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
+		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); } else if (e.key === 'z' || e.key === 'Z') { you.dance(); e.preventDefault(); }
 	});
 	addEventListener('keydown', (e) => {
 		if ((e.key !== 'e' && e.key !== 'E') || e.repeat || e.metaKey || e.ctrlKey || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
@@ -756,6 +760,13 @@ export function createIslandWorld() {
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
+	// the one beat everyone moves to (music/beat.js): the auto music's bar clock, as heard
+	wireBeat(() => autoMusic.clock(), () => autoMusic.pulse());
+	// a dance on the beat (people/self.js): Z, or this button in the phone's More menu
+	const danceBtn = button('💃', 'Dance to the music (Z)', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;', 'rail 62');
+	danceBtn.dataset.controlLabel = 'Dance';
+	danceBtn.addEventListener('click', () => { you.dance(); });
+	dom.mount.appendChild(danceBtn);
 	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
 	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, motes: () => HOOKS.magic?.motes?.() || null, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
@@ -960,7 +971,7 @@ export function createIslandWorld() {
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
-	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
+	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third, cover: coverWorld });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
 	// its own button, always on screen (beside the places on a touch screen, in the rail on a computer)
@@ -1234,8 +1245,19 @@ export function createIslandWorld() {
 		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; renderer.shadowMap.needsUpdate = true; }
 	}
 
-	function resize() {
+	// The skills and magic menu over the world (magic/skills-ui.js cover): nothing is drawn under it,
+	// so the canvas is taken out of the picture (with it the compositing layer that made every part
+	// of the menu over it a layer of its own) and its drawing buffer handed back, until the menu
+	// goes; both are back before the first frame drawn after it. (On an iPhone with the world
+	// loaded, the menu's layers were the straw: the page died as it opened.)
+	function coverWorld(on) {
+		if (!!on === worldCovered) return;
+		worldCovered = !!on;
 		if (lost || recovery.blocked()) return;
+		if (on) { dom.canvas.style.display = 'none'; renderer.setDrawingBufferSize(2, 2, 1); } else { dom.canvas.style.display = 'block'; resize(); }
+	}
+	function resize() {
+		if (lost || recovery.blocked() || worldCovered) return;
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
 		// (the resolution holds whatever the tier: the governor's relief is shadows, crowds and reach,
 		// never a blocky picture)
@@ -1318,7 +1340,7 @@ export function createIslandWorld() {
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
-		try { tick(now); } catch (err) {
+		try { tick(now); idleOverlays.sweep(now); } catch (err) {
 			if (lost || recovery.blocked()) return;
 			const key = String(err?.message || err);
 			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
@@ -1408,8 +1430,14 @@ export function createIslandWorld() {
 	const EARTH_ORIGIN = { id: 'earth', seed: 1337, type: 'TERRAN', name: 'Earth', earth: true, colorA: [0.2, 0.45, 0.85], colorB: [0.25, 0.65, 0.4] };
 
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
+	// (ui/idle-overlays.js: the screen-sized overlays hidden while they sit at opacity 0)
+	const idleOverlays = createIdleOverlays(dom.mount);
+	HOOKS.idleOverlays = idleOverlays;
 	function show() {
 		visible = true;
+		// the music page under the world is neither painted nor composited while the world is up
+		// (index.html: html.l99-world-up); it is still laid out, so nothing of it breaks
+		document.documentElement.classList.add('l99-world-up');
 		// the music is worked out further ahead while the world draws (its frames can hold the
 		// page up longer than the faceplate's): index.html's L99Clock reads this
 		window._worldAudioLead = isPhone ? 0.2 : 0.15;
@@ -1435,6 +1463,7 @@ export function createIslandWorld() {
 		worldAir(0);
 		if (muffle.lp) { muffle.k = 0; muffle.lp.frequency.value = 20000; muffle.lp.Q.value = 0.9; }
 		dom.mount.style.display = 'none';
+		document.documentElement.classList.remove('l99-world-up');
 		world?.player.clearInput();
 		window.L99TouchMusic175?.cancel?.();
 		window.L99Keyboard149?.sync?.();
@@ -1928,6 +1957,8 @@ if (typeof window !== 'undefined') {
 		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
 		// the shader warm and its gate (world/shaderwarm.js): what is held back and built in the background
 		// (with a function: it is told of every draw the gate holds back, (object, material, why, frame))
+		// (the screen-sized overlays hidden while idle: ui/idle-overlays.js)
+		overlays: () => HOOKS.idleOverlays?.info() ?? null,
 		shaders: (trace) => { if (trace) HOOKS.shaderWarm?.trace(trace); return HOOKS.shaderWarm?.info() ?? null; },
 		// the frame's own failures kept on this device (main.js keepFrameError), newest last
 		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
@@ -1964,6 +1995,9 @@ if (typeof window !== 'undefined') {
 		jackable: () => !!HOOKS.carjack?.candidate(),
 		// see yourself (as P does), shove (as X does)
 		thirdPerson: () => HOOKS.self?.toggle(),
+		// a dance on the beat (Z): Crysis.dance('twostep' | 'bounce' | 'handsup' | 'sway'), or the next one
+		dance: (name) => HOOKS.self?.dance(name ? 'dance-' + name : undefined),
+		beat: () => ({ ...beatNow() }),
 		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
 		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
 		heroView: () => HOOKS.heroView,
