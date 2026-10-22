@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { isRibbed, isShirted } from './garment-shape.js';
+import { isRibbed, isShirted, drapeOf, hangWidth, neckDrop, necklineY } from './garment-shape.js';
 
 const clamp = (x) => Math.max(0, Math.min(1, x));
 const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
@@ -78,24 +78,30 @@ export function refineGarmentSurface(g) {
 // All movement is outward, and stretch garments keep their original body fit.
 export function drapePanels(g, o, cut, R) {
  const p = g.attributes.position, slot = g.attributes.slot;
- const rx = Math.max(cut.waistX, cut.shoulderX * .94, .08);
- const front = cut.drapeFront, back = cut.drapeBack, zc = (front + back) / 2;
- if (![front, back, rx].every(Number.isFinite)) return;
+ // (the front panel hangs from the chest, not from the fullest point below it)
+ const front = Number.isFinite(cut.frontZ) ? cut.frontZ : cut.drapeFront, back = cut.drapeBack, zc = (front + back) / 2;
+ if (![front, back].every(Number.isFinite)) return;
  for (let i = 0; i < p.count; i++) {
   const s = Math.round(slot.getX(i)) % 10, limb = Math.floor(slot.getX(i) / 10);
   const item = s === 0 ? o.top : s === 1 ? o.outer : null;
   if (!item || limb !== 0 || item.fit === 'tight' || /bikini|swim/.test(item.kind || '')) continue;
   const x = p.getX(i), y = p.getY(i), z = p.getZ(i), hem = s === 0 ? R.topHem : R.outHem;
+  // (the panels hang from the chest at the width the cut hangs at, and as far as its drape
+  // lets them: a fitted top follows the body under it)
+  const rx = Math.max(hangWidth(item, cut), .08), drape = drapeOf(item);
+  if (drape <= 0) continue;
   const upper = smooth((cut.shoulder - .025 - y) / .12);
   const side = 1 - smooth((Math.abs(x) / rx - .72) / .32);
-  const ease = /slim|fitted/.test(item.fit || '') ? .6 : 1;
+  const ease = drape;
   const lower = item.tuck ? smooth((y - hem) / .1) : 1;
   const blend = upper * side * ease * lower;
   if (blend === 0 || y < hem - .02) continue;
   // Superellipse with a broad front, plus a few shallow hanging folds.
   const curve = Math.sqrt(Math.max(0, 1 - Math.pow(Math.min(1, Math.abs(x) / rx), 4)));
-  const fold = (.5 + .5 * Math.cos(x * 48 + Math.sin(y * 7) * .65)) * .0035 * smooth((cut.chest - y) / .18);
-  const allowance = s === 1 ? .026 : .012;
+  // (the folds set off the middle, so no crease runs down the centre front; a fitted knit hangs
+  // smooth)
+  const fold = (.5 + .5 * Math.cos(x * 48 + 1.9 + Math.sin(y * 7) * .65)) * .0035 * smooth((cut.chest - y) / .18) * drape;
+  const allowance = (s === 1 ? .026 : .012) * (.4 + .6 * drape);
   const target = z >= zc ? zc + (front - zc) * curve + allowance + fold : zc - (zc - back) * curve - allowance - fold;
   p.setZ(i, z + (z >= zc ? Math.max(0, target - z) : Math.min(0, target - z)) * blend);
  }
@@ -149,8 +155,8 @@ export function finishGarmentEdges(g, o, cut, R) {
     const tail=v=>s===1&&isShirted(item)?.035*smooth((Math.abs(v[0])-.08)/.08):0;
     cuts.push(edge(v=>v[1]-(s===0?R.topHem:R.outHem+tail(v))-.012,ribbed?.0034:.0018));
     if (!item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>{
-     const fr=smooth((v[2]+.04)/.035), scoop=s===0?(item.kind==='tank'?.045:item.kind==='crop'?.025:0):0;
-     return cut.neck-.005-scoop*fr+.035*smooth(Math.abs(v[0])/.09)-.004*fr-v[1];
+     const fr=smooth((v[2]+.04)/.035);
+     return necklineY(cut.neck-.005,v[0],fr,neckDrop(item))-v[1];
     },ribbed?.003:.0016));
     // a sleeveless armhole cut clean in a curve (not left to whole triangles)
     if (item.sleeves==='none' && limb===0 && !item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>armhole(v,cut),.0022));
