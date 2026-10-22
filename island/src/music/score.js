@@ -101,12 +101,12 @@ const ARC = { intro: 0.4, verse: 0.6, chorus: 0.92, bridge: 0.66, breakdown: 0.3
 //   bridge     the switch: half-time, the bass gated into a wobble, then back into the drop
 //   breakdown  the drums thin to the kick and a snare, the pad and the sub carry it, a siren
 export const DNB_SECTIONS = {
-	intro: { energy: 0.35, bars: [8, 8], next: { build: 3, verse: 0.5 }, parts: { mel: 0, counter: 0.4, arp: 0, pad: 1, bass: 0.7, drums: 0.7 } },
-	build: { energy: 0.7, bars: [4, 8], next: { chorus: 5 }, parts: { mel: 0, counter: 0.3, arp: 0, pad: 0.7, bass: 0.6, drums: 1 } },
-	chorus: { energy: 1, bars: [16, 16], next: { verse: 2, bridge: 1.4, breakdown: 1.6 }, parts: { mel: 1, counter: 0.8, arp: 0, pad: 0, bass: 1, drums: 1 } },
-	verse: { energy: 0.85, bars: [8, 16], next: { breakdown: 2, bridge: 1.2, chorus: 0.8 }, parts: { mel: 0.8, counter: 0.5, arp: 0.3, pad: 0, bass: 1, drums: 1 } },
-	bridge: { energy: 0.8, bars: [8, 8], next: { chorus: 3, breakdown: 1 }, parts: { mel: 0.4, counter: 0.6, arp: 0, pad: 0, bass: 1, drums: 1 } },
-	breakdown: { energy: 0.3, bars: [8, 8], next: { build: 4, intro: 0.3 }, parts: { mel: 0.5, counter: 0.4, arp: 0.5, pad: 1, bass: 0.7, drums: 0.5 } },
+	intro: { energy: 0.35, bars: [8, 8], next: { build: 3, verse: 0.5 }, parts: { mel: 0.3, counter: 0.2, arp: 1, pad: 1, bass: 0.7, drums: 0.7 } },
+	build: { energy: 0.7, bars: [4, 8], next: { chorus: 5 }, parts: { mel: 0.6, counter: 0.4, arp: 1, pad: 1, bass: 0.6, drums: 1 } },
+	chorus: { energy: 1, bars: [16, 16], next: { verse: 2, bridge: 1.4, breakdown: 1.6 }, parts: { mel: 1, counter: 0.8, arp: 0.8, pad: 0.6, bass: 1, drums: 1 } },
+	verse: { energy: 0.85, bars: [8, 16], next: { breakdown: 2, bridge: 1.2, chorus: 0.8 }, parts: { mel: 1, counter: 0.5, arp: 0.75, pad: 0.8, bass: 1, drums: 1 } },
+	bridge: { energy: 0.8, bars: [8, 8], next: { chorus: 3, breakdown: 1 }, parts: { mel: 0.8, counter: 1, arp: 0.7, pad: 0.5, bass: 1, drums: 1 } },
+	breakdown: { energy: 0.3, bars: [8, 8], next: { build: 4, intro: 0.3 }, parts: { mel: 0.35, counter: 0.5, arp: 1, pad: 1, bass: 0.7, drums: 0.5 } },
 };
 const DNB_ARC = { intro: 0.5, verse: 0.9, chorus: 1, bridge: 0.9, breakdown: 0.45, build: 0.8 };
 const DNB_LABEL = { chorus: 'drop', verse: 'roller', bridge: 'switch' };
@@ -382,6 +382,75 @@ export function createComposer(seed = 1) {
 		return out;
 	}
 
+	// the leads of one bar, the caves' way: the melody developed through the phrase, the
+	// answer in its rests (or the player quoted), the arpeggio, the pads. Shared with the DNB
+	// form: its drums and bass are the club's, but the tune on top is written like this
+	function leadsBar({ M, pcs, chord, sec, P, dyn, inPhrase, lastOfPhrase, barIn, hr, style, ev }) {
+		// the melody, developed through the phrase
+		if (!S.themes[sec] || S.fresh) {
+			const old = S.themes[sec];
+			S.themes[sec] = old && chance(0.7) ? develop(old, pick(['same', 'ornament', 'displace', 'same'])) : makeMotif(M.density, M.energy);
+		}
+		const motif = S.themes[sec];
+		// a breath: now and then the melody sits a whole phrase out and the arp carries it
+		if (inPhrase === 0) S.rest = sec !== 'build' && chance(clamp((sec === 'chorus' ? 0.15 : 0.35) + M.sparse * 0.3, 0, 0.8));
+		let melOn = !S.rest && (chance(P.mel * (M.sparse > 0.6 ? 0.6 : 1)) || (P.mel >= 1 && inPhrase === 0));
+		let op = 'same', shift = 0, answer = false;
+		const T = S.phraseType;
+		if (T === 'aaba') { op = ['same', 'ornament', pick(['invert', 'retro', 'displace']), 'same'][inPhrase]; }
+		else if (T === 'seq') { op = inPhrase === 2 ? 'fragment' : 'same'; shift = [0, 1, 2, 0][inPhrase]; }
+		else if (T === 'abac') { op = ['same', pick(['invert', 'augment']), 'same', pick(['retro', 'fragment'])][inPhrase]; }
+		else if (T === 'call') { answer = inPhrase % 2 === 1; op = inPhrase === 2 ? pick(['same', 'displace']) : 'same'; shift = inPhrase === 2 ? 1 : 0; }
+		if (answer) melOn = false;
+		if (melOn) for (const n of melodyBar(M, pcs, chord, motif, op, shift, lastOfPhrase)) ev.push({ role: 'mel', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.62 * dyn });
+		// the answer: the counter voice in the melody's rest, the motif turned about, or the
+		// player's own last notes quoted back
+		const counterOn = chance(P.counter);
+		if (answer && counterOn) {
+			const riff = S.userRiff.length >= 3 && chance(0.6) ? S.userRiff.slice(-5) : null;
+			if (riff) {
+				const base = riff[0].d;
+				riff.forEach((n, i) => {
+					const d = clamp(M.cLo + 2 + (n.d - base), M.cLo, M.cLo + pcs.length * 2);
+					ev.push({ role: 'counter', s: i * 2 + 2, semi: semiOf(pcs, d), dur: 2, vel: 0.5 * dyn, quote: true });
+				});
+				S.userRiff = [];
+			} else {
+				const resp = develop(motif, pick(['invert', 'retro', 'fragment']));
+				const d0 = nearestChordDeg(chord, M.cLo + 3, pcs.length);
+				for (const n of resp) {
+					let d = d0 + n.c;
+					while (d < M.cLo) d += pcs.length;
+					while (d > M.cLo + pcs.length * 2) d -= pcs.length;
+					ev.push({ role: 'counter', s: n.s, semi: semiOf(pcs, d), dur: n.dur, vel: 0.5 * dyn });
+				}
+			}
+		} else if (counterOn && !answer) {
+			// otherwise a guide tone: the chord's third, held; in a chorus a line in thirds
+			if (sec === 'chorus' && melOn && chance(0.5)) {
+				for (const n of ev.filter((x) => x.role === 'mel' && x.s % 4 === 0)) {
+					const d = degNear(pcs, n.semi) - 2;
+					ev.push({ role: 'counter', s: n.s, semi: semiOf(pcs, d), dur: n.dur, vel: n.vel * 0.55 });
+				}
+			} else if (inPhrase % 2 === 0) {
+				let d = chord[1]; while (d < M.cLo) d += pcs.length;
+				ev.push({ role: 'counter', s: 0, semi: semiOf(pcs, d), dur: 30, vel: 0.36 * dyn });
+			}
+		}
+		// the arpeggio
+		if (S.rest || chance(P.arp * (0.5 + M.arp))) for (const n of arpBar(M, pcs, chord, style)) ev.push({ role: 'arp', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.38 * dyn });
+		// pads
+		if (chance(P.pad)) {
+			const voices = voicePad(pcs, chord, M.padCenter);
+			// a toxic world rubs a semitone against the chord
+			if (M.dissonance > 0.4 && chance(M.dissonance)) voices.push(voices[0] + 1);
+			const kind = M.energy < 0.3 || M.sparse > 0.5 ? 'hold' : style.pad;
+			const onsets = kind === 'stab' ? [2, 6, 10, 14].filter(() => chance(0.8)) : kind === 'skank' ? [4, 12] : (barIn % hr === 0 ? [0] : []);
+			const dur = kind === 'hold' ? 16 * hr - 0.5 : 1.4;
+			for (const s of onsets) voices.forEach((semi, i) => ev.push({ role: 'pad', s, semi, dur, vel: (i === 0 ? 0.42 : 0.34) * dyn * (kind === 'hold' ? 1 : 0.9) }));
+		}
+	}
+
 	// ---- jump-up drum and bass
 	// a section's own break and hook, chosen as it begins (a drop's hook is remembered, so the
 	// second drop is the same tune)
@@ -391,16 +460,12 @@ export function createComposer(seed = 1) {
 		D.breaks[name] = D.break;
 		if (!D.hooks[name] || chance(0.25)) { const a = pick(RIFFS); let b = pick(RIFFS); if (b === a) b = RIFFS[(RIFFS.indexOf(a) + 1) % RIFFS.length]; D.hooks[name] = [a, b]; }
 		D.hook = D.hooks[name];
-		// the MC stab: two or three short notes on the off-beats, kept for the section
-		const slots = [3, 7, 11, 14].filter(() => chance(0.65));
-		if (slots.length < 2) slots.push(slots[0] === 3 ? 11 : 3);
-		D.stab = slots.sort((a, b) => a - b).slice(0, 3).map((s, i) => ({ s, c: i === 0 ? 0 : pick([0, 2, 3, -1]) }));
 	}
 	function dnbBar(M, pcs, beat) {
 		const D = S.dnb, sec = S.section, SP = DNB_SECTIONS[sec], P = SP.parts;
 		const barIn = S.barIn, secBars = S.secBars, inPhrase = barIn % 4, lastOfPhrase = inPhrase === 3, lastOfSection = barIn === secBars - 1;
 		const prog = S.prog, hr = 2, ci = Math.floor(barIn / hr) % prog.length, root = prog[ci];
-		const chord = chordDegs(pcs, root, false);
+		const chord = chordDegs(pcs, root, M.energy > 0.3);
 		// dynamics: the arc, quick to rise into a drop
 		const target = sec === 'build' ? 0.6 + 0.4 * (barIn + 1) / secBars : DNB_ARC[sec];
 		S.arc += clamp(target * (0.8 + 0.3 * M.energy) - S.arc, -0.15, 0.12);
@@ -473,35 +538,8 @@ export function createComposer(seed = 1) {
 				if (lastOfSection) for (const [s, off] of [[8, 0], [10, 3], [12, 5]]) ev.push({ role: 'bass', s, semi: r + off, dur: 1.5, vel: 0.85 });
 			} else if (barIn % 2 === 0) ev.push({ role: 'bass', s: 0, semi: r, dur: 30, vel: 0.75 });
 		}
-		// ---- the MC stab on top of a drop (the melody), the riff of the roller
-		if (P.mel > 0 && S.rhythm && chance(P.mel)) {
-			if (drop) {
-				if (inPhrase !== 3 && barIn >= 2) {
-					const base = nearestChordDeg(chord, M.melLo + 3, pcs.length);
-					for (const n of D.stab) { let d = base + n.c + (inPhrase === 2 ? 1 : 0); while (d > M.melHi) d -= pcs.length; while (d < M.melLo) d += pcs.length; ev.push({ role: 'mel', s: n.s, semi: semiOf(pcs, d), dur: 1, vel: 0.95 * dyn }); }
-				}
-			} else if (sec === 'verse') {
-				if (!S.themes.dnbRiff || (barIn === 0 && chance(0.4))) S.themes.dnbRiff = makeMotif(0.6, 0.8);
-				const op = ['same', 'same', 'displace', 'fragment'][inPhrase];
-				for (const n of melodyBar(M, pcs, chord, S.themes.dnbRiff, op, 0, lastOfPhrase)) ev.push({ role: 'mel', s: n.s, semi: semiOf(pcs, n.d), dur: Math.min(n.dur, 2), vel: n.vel * 0.7 * dyn });
-			} else if (sec === 'breakdown' || sec === 'bridge') {
-				// a long call across the bar, the tune's hook slowed
-				if (barIn % 2 === 0) { const d = nearestChordDeg(chord, M.melLo + 5, pcs.length); ev.push({ role: 'mel', s: 0, semi: semiOf(pcs, d), dur: 10, vel: 0.5 * dyn }); if (chance(0.6)) ev.push({ role: 'mel', s: 12, semi: semiOf(pcs, d + 2), dur: 4, vel: 0.45 * dyn }); }
-			}
-		}
-		// ---- the answer: a two-note call at the end of every other bar (the chop)
-		if (P.counter > 0 && chance(P.counter) && barIn % 2 === 1 && !lastOfSection) {
-			let d = nearestChordDeg(chord, M.cLo + 4, pcs.length); while (d < M.cLo) d += pcs.length;
-			ev.push({ role: 'counter', s: 14, semi: semiOf(pcs, d + 2), dur: 1, vel: 0.7 * dyn });
-			ev.push({ role: 'counter', s: 15, semi: semiOf(pcs, d), dur: 1, vel: 0.6 * dyn });
-		}
-		// ---- the pad: root and fifth held, intro and breakdown only (Lead 2 is the bass's)
-		if (P.pad > 0 && chance(P.pad) && barIn % hr === 0) {
-			const voices = voicePad(pcs, [chord[0], chord[2]], M.padCenter);
-			voices.forEach((semi, i) => ev.push({ role: 'pad', s: 0, semi, dur: 16 * hr - 0.5, vel: (i === 0 ? 0.36 : 0.3) * dyn }));
-		}
-		// ---- the arpeggio of a breakdown: the chord broken in eighths, behind
-		if (P.arp > 0 && chance(P.arp)) for (const n of arpBar({ ...M, sparse: 0.6 }, pcs, chord, STYLES.DNB)) ev.push({ role: 'arp', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.3 * dyn });
+		// ---- the leads: the tune on top, written the caves' way (Josh: the before's leads)
+		leadsBar({ M, pcs, chord, sec, P, dyn, inPhrase, lastOfPhrase, barIn, hr, style: STYLES.DNB, ev });
 		// the drums in front: the world's thinning (night, rain) only goes so far in a drop
 		const dk = (up || sec === 'build' ? Math.max(0.7, M.drums) : M.drums) * (0.75 + 0.25 * dyn);
 		const info = { section: sec, label: DNB_LABEL[sec] || sec, genre: 'dnb', bar: barIn, of: secBars, abs: S.abs, chord: root, chordDegs: chord, arc: +S.arc.toFixed(3), phrase: 'dnb', fresh: S.fresh, break: D.break };
@@ -546,75 +584,13 @@ export function createComposer(seed = 1) {
 		const e = clamp(SP.energy * 0.55 + M.energy * 0.55, 0, 1) * M.drums;
 		const ev = [];
 		const P = SP.parts;
-		// the melody, developed through the phrase
-		if (!S.themes[sec] || S.fresh) {
-			const old = S.themes[sec];
-			S.themes[sec] = old && chance(0.7) ? develop(old, pick(['same', 'ornament', 'displace', 'same'])) : makeMotif(M.density, M.energy);
-		}
-		const motif = S.themes[sec];
-		// a breath: now and then the melody sits a whole phrase out and the arp carries it
-		if (inPhrase === 0) S.rest = sec !== 'build' && chance(clamp((sec === 'chorus' ? 0.15 : 0.35) + M.sparse * 0.3, 0, 0.8));
-		let melOn = !S.rest && (chance(P.mel * (M.sparse > 0.6 ? 0.6 : 1)) || (P.mel >= 1 && inPhrase === 0));
-		let op = 'same', shift = 0, answer = false;
-		const T = S.phraseType;
-		if (T === 'aaba') { op = ['same', 'ornament', pick(['invert', 'retro', 'displace']), 'same'][inPhrase]; }
-		else if (T === 'seq') { op = inPhrase === 2 ? 'fragment' : 'same'; shift = [0, 1, 2, 0][inPhrase]; }
-		else if (T === 'abac') { op = ['same', pick(['invert', 'augment']), 'same', pick(['retro', 'fragment'])][inPhrase]; }
-		else if (T === 'call') { answer = inPhrase % 2 === 1; op = inPhrase === 2 ? pick(['same', 'displace']) : 'same'; shift = inPhrase === 2 ? 1 : 0; }
-		if (answer) melOn = false;
-		if (melOn) for (const n of melodyBar(M, pcs, chord, motif, op, shift, lastOfPhrase)) ev.push({ role: 'mel', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.62 * dyn });
-		// the answer: the counter voice in the melody's rest, the motif turned about, or the
-		// player's own last notes quoted back
-		const counterOn = chance(P.counter);
-		if (answer && counterOn) {
-			const riff = S.userRiff.length >= 3 && chance(0.6) ? S.userRiff.slice(-5) : null;
-			if (riff) {
-				const base = riff[0].d;
-				riff.forEach((n, i) => {
-					const d = clamp(M.cLo + 2 + (n.d - base), M.cLo, M.cLo + pcs.length * 2);
-					ev.push({ role: 'counter', s: i * 2 + 2, semi: semiOf(pcs, d), dur: 2, vel: 0.5 * dyn, quote: true });
-				});
-				S.userRiff = [];
-			} else {
-				const resp = develop(motif, pick(['invert', 'retro', 'fragment']));
-				const d0 = nearestChordDeg(chord, M.cLo + 3, pcs.length);
-				for (const n of resp) {
-					let d = d0 + n.c;
-					while (d < M.cLo) d += pcs.length;
-					while (d > M.cLo + pcs.length * 2) d -= pcs.length;
-					ev.push({ role: 'counter', s: n.s, semi: semiOf(pcs, d), dur: n.dur, vel: 0.5 * dyn });
-				}
-			}
-		} else if (counterOn && !answer) {
-			// otherwise a guide tone: the chord's third, held; in a chorus a line in thirds
-			if (sec === 'chorus' && melOn && chance(0.5)) {
-				for (const n of ev.filter((x) => x.role === 'mel' && x.s % 4 === 0)) {
-					const d = degNear(pcs, n.semi) - 2;
-					ev.push({ role: 'counter', s: n.s, semi: semiOf(pcs, d), dur: n.dur, vel: n.vel * 0.55 });
-				}
-			} else if (inPhrase % 2 === 0) {
-				let d = chord[1]; while (d < M.cLo) d += pcs.length;
-				ev.push({ role: 'counter', s: 0, semi: semiOf(pcs, d), dur: 30, vel: 0.36 * dyn });
-			}
-		}
-		// the arpeggio
-		if (S.rest || chance(P.arp * (0.5 + M.arp))) for (const n of arpBar(M, pcs, chord, style)) ev.push({ role: 'arp', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.38 * dyn });
-		// pads
-		if (chance(P.pad)) {
-			const voices = voicePad(pcs, chord, M.padCenter);
-			// a toxic world rubs a semitone against the chord
-			if (M.dissonance > 0.4 && chance(M.dissonance)) voices.push(voices[0] + 1);
-			const kind = M.energy < 0.3 || M.sparse > 0.5 ? 'hold' : style.pad;
-			const onsets = kind === 'stab' ? [2, 6, 10, 14].filter(() => chance(0.8)) : kind === 'skank' ? [4, 12] : (barIn % hr === 0 ? [0] : []);
-			const dur = kind === 'hold' ? 16 * hr - 0.5 : 1.4;
-			for (const s of onsets) voices.forEach((semi, i) => ev.push({ role: 'pad', s, semi, dur, vel: (i === 0 ? 0.42 : 0.34) * dyn * (kind === 'hold' ? 1 : 0.9) }));
-		}
+		leadsBar({ M, pcs, chord, sec, P, dyn, inPhrase, lastOfPhrase, barIn, hr, style, ev });
 		// bass
 		if (chance(P.bass) || (P.bass >= 0.5 && barIn % 2 === 0)) for (const n of bassBar(M, pcs, root, nextRoot, style, lastOfPhrase, sec)) ev.push({ role: 'bass', s: n.s, semi: n.semi, dur: n.dur, vel: n.vel * 0.6 * dyn });
 		// tension: a low pedal pulse under everything (a rumbling volcano, a storm)
 		if (M.tension > 0.35) for (let s = 0; s < 16; s += M.tension > 0.7 ? 2 : 4) ev.push({ role: 'bass', s, semi: M.bassHi - 12 + semiOf(pcs, 0) % 12, dur: 1.2, vel: (0.3 + 0.4 * M.tension) * (0.6 + s / 40) });
 		const drums = drumBar(M, beat, sec, e * (P.drums >= 1 ? 1 : 0.5 + P.drums * 0.5), lastOfPhrase, lastOfSection).map((d) => ({ ...d, vel: d.vel * (0.45 + 0.5 * dyn) * M.drums }));
-		const info = { section: sec, bar: barIn, of: S.secBars, abs: S.abs, chord: root, chordDegs: chord, arc: +S.arc.toFixed(3), phrase: T, fresh: S.fresh };
+		const info = { section: sec, bar: barIn, of: S.secBars, abs: S.abs, chord: root, chordDegs: chord, arc: +S.arc.toFixed(3), phrase: S.phraseType, fresh: S.fresh };
 		S.fresh = false;
 		S.barIn++; S.abs++;
 		S.lastChordRoot = root;

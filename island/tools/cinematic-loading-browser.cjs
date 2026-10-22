@@ -37,6 +37,11 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 			await page.evaluate(() => document.getElementById('game').click()); assert.equal(await page.evaluate(() => events), 0);
 			assert.equal(await page.locator('#bard-loading nav').count(), 0);
 			assert.equal(await page.locator('#bard-loading .bl-caption').count(), 0);
+			await page.getByRole('button', { name: 'Chronicle', exact: true }).first().click();
+			await page.getByRole('heading', { name: 'The Bard Chronicle', exact: true }).waitFor({ state: 'visible' });
+			assert.equal(await page.locator('#bard-loading .bl-news').count(), 7);
+			assert.ok((await page.locator('#bard-loading .bl-news').first().innerText()).includes('The world finds the beat'));
+			await page.getByRole('button', { name: 'Close', exact: true }).click();
 			await page.keyboard.press('Tab'); assert.equal(await page.evaluate(() => document.getElementById('bard-loading').contains(document.activeElement)), true);
 			await page.evaluate(() => finish(true)); await ready.waitFor({ state: 'visible' });
 			const bounds = await page.evaluate(() => {
@@ -135,6 +140,12 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 			await page.unroute('**/island/dist/island.js*'); await page.setViewportSize({width:640,height:400});
 			await page.goto(base + '/engine-fixture?safe'); await page.locator('#boot').click();
 			await page.getByRole('button', {name:'Enter world',exact:true}).waitFor({state:'visible',timeout:240000});
+			const chronicle = page.getByRole('button',{name:'Chronicle',exact:true}).first();
+			await chronicle.click();
+			await page.getByRole('heading',{name:'The Bard Chronicle',exact:true}).waitFor({state:'visible'});
+			assert.ok(await page.locator('#bard-loading .bl-news').count() >= 6);
+			assert.ok((await page.locator('#bard-loading .bl-news').first().innerText()).includes('The world finds the beat'));
+			await page.getByRole('button',{name:'Close',exact:true}).click();
 			const before = await page.evaluate(() => ({pos:game.world().player.state.pos.toArray(),flying:game.world().player.state.flying}));
 			await page.keyboard.press('f'); await page.keyboard.press('w');
 			assert.deepEqual(await page.evaluate(()=>({pos:game.world().player.state.pos.toArray(),flying:game.world().player.state.flying})), before);
@@ -146,7 +157,7 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 			assert.equal(await page.evaluate(()=>game.world().player.state.flying),!before.flying);
 			await page.screenshot({path:path.join(out,'engine-entry.png'),timeout:120000});
 			const problems = await page.evaluate(()=>game.renderer().info.programs.filter(p=>p.diagnostics?.runnable===false).length);
-			assert.equal(problems,0); pass('real bundled Moon world renders before readiness; input waits for entry and resumes afterwards');
+			assert.equal(problems,0); pass('real bundled Moon world renders before readiness; Chronicle reads clearly; input waits for entry and resumes afterwards');
 			await page.evaluate(()=>game.close());
 		}
 		assert.deepEqual(errors, []);
