@@ -37,6 +37,9 @@ function leviathan(ctx, B) {
 	const pts = segs.map((s) => s.p), eye = new THREE.Vector3(), heart = L.heart;
 	const C = B.center;
 	let a = 0, charge = null, jaw = 0, roar = 0;
+	// its voice: a throat of crystal (creatures/voice.js), the sounds made before they are needed
+	const voice = createCreatureVoice({ eye: ctx.eye, isPhone: GFX_PHONE });
+	voice.warm(['crystalroar', 'spit', 'lunge', 'chord', 'pulse', 'cracking', 'burst', 'slither']);
 	// It crawls like a snake: down on the gallery floor, its neck reared like a cobra's, its body
 	// laid in S-bends that follow the path the head took. It moves in sharp bursts: a lunge, the
 	// bends whipping through the body, then dead still but for small quick flicks of the head.
@@ -61,19 +64,21 @@ function leviathan(ctx, B) {
 	B.attack = (name, step, k) => {
 		const me = ctx.eye();
 		if (name === 'volley') {
+			if (step === 'telegraph-start') voice.play('crystalroar', head, 1, 1.1, { ref: 14, far: 400 });
 			if (step === 'telegraph') { L.eyeMat.emissiveIntensity = 2 + k * 4; roar = 0.6; }
-			if (step === 'attack') for (let i = 0; i < 6; i++) setTimeout(() => !B.dead && ctx.projectile({ from: head.clone(), to: me.clone().add(_v.set(rnd(-2, 2), rnd(-0.5, 1), rnd(-2, 2))), speed: 34, drop: 0, dmg: 10, type: 'pierce', owner: B.T, style: 5, splash: 0.8, hostile: true }), i * 160);
+			if (step === 'attack') for (let i = 0; i < 6; i++) setTimeout(() => { if (B.dead) return; voice.play('spit', head, 0.7, 0.7, { ref: 10, far: 200 }); ctx.projectile({ from: head.clone(), to: me.clone().add(_v.set(rnd(-2, 2), rnd(-0.5, 1), rnd(-2, 2))), speed: 34, drop: 0, dmg: 10, type: 'pierce', owner: B.T, style: 5, splash: 0.8, hostile: true }); }, i * 160);
 		} else if (name === 'charge') {
-			if (step === 'telegraph-start') { roar = 1; const to = me.clone(); to.y -= 1.2; charge = { from: head.clone(), to: to.clone().add(to.clone().sub(head).setLength(8)), t: 0 }; ctx.fx.beam(charge.from, charge.to, 1.8, 0xb070ff, 0.5); ctx.fx.ring(to.x, ctx.ground(to.x, to.z, to.y + 1), to.z, 3, 1.8, 0xb070ff); }
-			if (step === 'attack' && charge) charge.go = true;
+			if (step === 'telegraph-start') { voice.play('crystalroar', head, 1.3, 0.9, { ref: 16, far: 400 }); roar = 1; const to = me.clone(); to.y -= 1.2; charge = { from: head.clone(), to: to.clone().add(to.clone().sub(head).setLength(8)), t: 0 }; ctx.fx.beam(charge.from, charge.to, 1.8, 0xb070ff, 0.5); ctx.fx.ring(to.x, ctx.ground(to.x, to.z, to.y + 1), to.z, 3, 1.8, 0xb070ff); }
+			if (step === 'attack' && charge) { charge.go = true; voice.play('lunge', head, 1.2, 1, { ref: 12, far: 300 }); }
 		} else if (name === 'pulse') {
-			if (step === 'telegraph-start') ctx.fx.ring(C.x, ctx.ground(C.x, C.z, C.y + 2), C.z, 15, 2, 0xc080ff, true);
-			if (step === 'attack') { ctx.fx.sparks(head, 30, null, 0.8, 0.6, 1, 14); if (Math.hypot(me.x - C.x, me.z - C.z) < 15 && ctx.me().grounded) ctx.hurtPlayer({ amount: 22, type: 'energy', src: C, part: 'torso', by: B.T }); ctx.shake?.(0.5, C); }
+			if (step === 'telegraph-start') { voice.play('chord', heart.position, 1.1, 0.6, { ref: 20, far: 400 }); ctx.fx.ring(C.x, ctx.ground(C.x, C.z, C.y + 2), C.z, 15, 2, 0xc080ff, true); }
+			if (step === 'attack') { voice.play('pulse', heart.position, 1.3, 1, { ref: 25, far: 500 }); ctx.fx.sparks(head, 30, null, 0.8, 0.6, 1, 14); if (Math.hypot(me.x - C.x, me.z - C.z) < 15 && ctx.me().grounded) ctx.hurtPlayer({ amount: 22, type: 'energy', src: C, part: 'torso', by: B.T }); ctx.shake?.(0.5, C); }
 		} else if (name === 'mites') {
 			// (Shard Mites, broken out of crystal where they land: creatures/catalog.js)
 			if (step === 'attack') {
 				const x = C.x + rnd(-6, 6), z = C.z + rnd(-6, 6), p = _v.set(x, ctx.ground(x, z, C.y + 2) + 0.3, z);
 				ctx.fx.glass(p, 16, 3, 0.16); ctx.fx.sparks(p, 16, null, 0.75, 0.55, 1, 6);
+				voice.play('cracking', p, 1, 1, { ref: 8, far: 200 });
 				ctx.spawnSquad('deepborn', x, z, 4, { alert: true, species: 'shard-mite', spread: 2 });
 			}
 		}
@@ -98,7 +103,7 @@ function leviathan(ctx, B) {
 			} else {
 				speed = 0;
 				hold -= dt;
-				if (hold <= 0) { burst = 0.65; flickTo.set(0, 0, 0); }
+				if (hold <= 0) { burst = 0.65; flickTo.set(0, 0, 0); voice.play('slither', head, 0.8, 1, { ref: 8, far: 120 }); }
 			}
 			const ds = speed * dt;
 			pathAt(a, wave, _v);
@@ -144,9 +149,9 @@ function leviathan(ctx, B) {
 		L.brow.getWorldPosition(eye);
 		L.eyeMat.emissiveIntensity += (2.2 - L.eyeMat.emissiveIntensity) * Math.min(1, dt * 3);
 		// (its breastplate bursts as the last of the fight begins)
-		if (r.plateBurst) { B.lastBurst = r.plateBurst.toArray().map(Math.round); ctx.fx.glass(r.plateBurst, 30, 6, 0.6); ctx.fx.sparks(r.plateBurst, 30, null, 0.75, 0.6, 1, 12); ctx.shake?.(0.6, r.plateBurst); }
+		if (r.plateBurst) { B.lastBurst = r.plateBurst.toArray().map(Math.round); voice.play('burst', r.plateBurst, 1.4, 1, { ref: 20, far: 500 }); ctx.fx.glass(r.plateBurst, 30, 6, 0.6); ctx.fx.sparks(r.plateBurst, 30, null, 0.75, 0.6, 1, 12); ctx.shake?.(0.6, r.plateBurst); }
 	};
-	B.die = () => { for (const s of segs) { ctx.fx.glass(s.p, 6, 5, 0.5); ctx.fx.sparks(s.p, 10, null, 0.8, 0.6, 1, 8); } };
+	B.die = () => { voice.play('crystalroar', head, 1.3, 0.6, { ref: 20, far: 500 }); voice.play('burst', heart.position, 1.4, 0.8, { ref: 25, far: 500 }); for (const s of segs) { ctx.fx.glass(s.p, 6, 5, 0.5); ctx.fx.sparks(s.p, 10, null, 0.8, 0.6, 1, 8); } };
 	B.focus = () => head;
 	return g;
 }
@@ -323,11 +328,14 @@ function gunship(ctx, B) {
 // down the deck, and calls Fog Wights up out of it. Her body is her sheet's (creatures/models.js,
 // creatures/fog.js makes it fog); it comes when it has loaded.
 const FOG_H = 220;
+// how far her drowned sweep out from her when she lets them go
+const SOULS_R = 300;
 function fogMother(ctx, B) {
 	const g = new THREE.Group();
 	const C = B.center, heart = new THREE.Vector3(C.x, C.y + FOG_H * 0.66, C.z), focus = heart;
 	const voice = createCreatureVoice({ eye: ctx.eye, yaw: () => ctx.yaw?.() ?? 0, isPhone: GFX_PHONE });
-	let c = null, look = null, k = 1, yaw = 0, arm = null, breath = null, fade = 1, stretched = null;
+	voice.warm(['growl', 'wail', 'slam', 'scrape', 'souls', 'soulburst']);
+	let c = null, look = null, k = 1, yaw = 0, arm = null, breath = null, fade = 1, stretched = null, souls = null;
 	// where she stands and which way she faces: toward the deck, across it
 	const bridge = ctx.world?.()?.bridge;
 	if (bridge) { const t = (C.x - bridge.centre.x) * -bridge.axis.y + (C.z - bridge.centre.z) * bridge.axis.x; yaw = Math.atan2(bridge.axis.y * Math.sign(t), -bridge.axis.x * Math.sign(t)); }
@@ -371,24 +379,42 @@ function fogMother(ctx, B) {
 				const at = new THREE.Vector3(me.x, deckY(me.x, me.z), me.z);
 				arm = { side: side > 0 ? 'L' : 'R', at, up: 0, down: 0, hit: false };
 				ctx.fx.ring(at.x, at.y + 0.3, at.z, 18, B.def.attacks.slam.warn + 0.4, 0x8ac8ff, true);
-				voice.play('growl', heart, 1, 0.35);
+				voice.play('growl', heart, 1, 0.35, { ref: 45, far: 1500 });
 			}
 			if (step === 'telegraph' && arm) arm.up = kk;
 			if (step === 'attack' && arm) arm.down = 0.001;
 			if (step === 'recover') arm = null;
 		} else if (name === 'wail') {
-			if (step === 'telegraph-start') { voice.play('wail', heart, 1.2, 0.8); B.wail = 0.001; }
+			if (step === 'telegraph-start') { voice.play('wail', heart, 1.2, 0.8, { ref: 70, far: 2000 }); B.wail = 0.001; }
 			if (step === 'attack') {
 				ctx.shake?.(0.5);
 				ctx.fx.ring(me.x, deckY(me.x, me.z) + 0.5, me.z, 30, 1.2, 0xbfd8ff, false);
 				if (Math.hypot(me.x - C.x, me.z - C.z) < FOG_H * 0.9) ctx.hurtPlayer({ amount: 16, type: 'energy', src: heart.clone(), part: 'body', by: B.T });
 			}
 		} else if (name === 'breath') {
-			if (step === 'telegraph-start') voice.play('wail', heart, 0.6, 0.5);
+			if (step === 'telegraph-start') voice.play('wail', heart, 0.6, 0.5, { ref: 60, far: 2000 });
 			if (step === 'attack') {
 				// a bank of fog rolled down the deck toward you, from the side she stands
 				const from = new THREE.Vector3(C.x, deckY(C.x, C.z), C.z), to = new THREE.Vector3(me.x, deckY(me.x, me.z), me.z);
 				breath = { from, to, t: 0, hurt: 0 };
+			}
+		} else if (name === 'souls') {
+			// her special. She calls the drowned up out of the strait: the screaming of a thousand
+			// souls far off behind her, rising as they come in to her heart; then she lets them
+			// go, and they sweep out from her across the whole deck (and the water) in a wave
+			// that hurts everyone on it: get far down the bridge, off it, or up into the air
+			if (step === 'telegraph-start') {
+				const far = _d.set(Math.sin(yaw + Math.PI), 0, Math.cos(yaw + Math.PI)).multiplyScalar(420).add(heart).setY(heart.y + 60);
+				voice.play('souls', far, 1.6, 1, { ref: 170, far: 3000 });
+				ctx.fx.ring(C.x, deckY(C.x, C.z) + 0.5, C.z, SOULS_R, B.def.attacks.souls.warn + 0.3, 0xbfd8ff, true);
+				ctx.call?.('The Fog Mother is calling the drowned up. Get clear of the deck, or into the air', 'boss');
+				souls = { k: 0 };
+			}
+			if (step === 'telegraph' && souls) souls.k = kk;
+			if (step === 'attack') {
+				voice.play('soulburst', heart, 1.5, 1, { ref: 90, far: 3000 });
+				ctx.shake?.(0.8);
+				souls = { t: 0, r: 0, hit: false };
 			}
 		} else if (name === 'wights') {
 			if (step === 'attack') {
@@ -403,7 +429,7 @@ function fogMother(ctx, B) {
 	B.step = (dt) => {
 		const M = B.mc.M;
 		if (!c) return;
-		const glow = (M.phase === 2 ? 1.8 : 1) + (M.state === 'transition' ? 0.8 : 0);
+		const glow = (M.phase === 2 ? 1.8 : 1) + (M.state === 'transition' ? 0.8 : 0) + (souls?.k || 0) * 1.6;
 		c.motion.update(dt, { speed: 0, look: 0 });
 		c.motion.drain();
 		// a hand: raised high over her as it winds up, then down on the deck. Her shoulders stand
@@ -450,7 +476,8 @@ function fogMother(ctx, B) {
 					ctx.shake?.(1);
 					ctx.fx.dust({ x: p.x, y: p.y + 1, z: p.z }, 40, 0.78, 0.8, 0.84, 9, 3);
 					ctx.fx.sparks(p, 20, null, 0.6, 0.8, 1, 10);
-					voice.play('scrape', p, 1, 0.4);
+					voice.play('slam', p, 1.4, 1, { ref: 45, far: 1500 });
+					voice.play('scrape', p, 0.8, 0.4, { ref: 20, far: 600 });
 					const e = ctx.eye();
 					if (Math.hypot(e.x - p.x, e.z - p.z) < 18 && Math.abs(e.y - p.y) < 14) ctx.hurtPlayer({ amount: 34, type: 'impact', src: p.clone(), part: 'torso', by: B.T });
 				}
@@ -466,10 +493,39 @@ function fogMother(ctx, B) {
 			if (breath.hurt <= 0 && Math.hypot(e.x - front.x, e.z - front.z) < 16) { breath.hurt = 0.5; ctx.hurtPlayer({ amount: 5, type: 'energy', src: front.clone(), part: 'torso', by: B.T }); }
 			if (breath.t >= 1) breath = null;
 		}
+		// the drowned: wisps streaming in to her heart from all round as she gathers them, then
+		// the wave of them going out from her foot
+		if (souls) {
+			if (souls.r === undefined) {
+				const nW = Math.ceil(souls.k * (GFX_PHONE ? 2 : 4));
+				for (let i = 0; i < nW; i++) {
+					const a = Math.random() * Math.PI * 2, rr = FOG_H * (0.3 + Math.random() * 0.9);
+					ctx.fx.sparks(_a.set(heart.x + Math.cos(a) * rr, heart.y + (Math.random() - 0.6) * FOG_H * 0.5, heart.z + Math.sin(a) * rr), 2, null, 0.7, 0.85, 1, 3);
+				}
+			} else {
+				souls.t += dt / 2.2;
+				const u = Math.min(1, souls.t), R = SOULS_R * (1 - (1 - u) * (1 - u)), y0 = deckY(C.x, C.z);
+				ctx.fx.ring(C.x, y0 + 0.5, C.z, R, 0.25, 0xbfd8ff, false);
+				for (let i = 0; i < (GFX_PHONE ? 5 : 12); i++) {
+					const a = Math.random() * Math.PI * 2;
+					_a.set(C.x + Math.cos(a) * R, 0, C.z + Math.sin(a) * R);
+					_a.y = deckY(_a.x, _a.z) + 1 + Math.random() * 6;
+					ctx.fx.sparks(_a, 3, null, 0.75, 0.9, 1, 6);
+					ctx.fx.dust(_a, 1, 0.8, 0.86, 0.95, 5, 2);
+				}
+				const e = ctx.eye(), de = Math.hypot(e.x - C.x, e.z - C.z);
+				if (!souls.hit && de <= R && de > R - 45 && Math.abs(e.y - deckY(e.x, e.z)) < 30) {
+					souls.hit = true;
+					ctx.shake?.(0.9);
+					ctx.hurtPlayer({ amount: 30, type: 'energy', src: C.clone(), part: 'body', by: B.T });
+				}
+				if (souls.t >= 1) souls = null;
+			}
+		}
 		look.heart(heart);
 		look.update(dt, { glow, fade, wind: _d.set(Math.sin(yaw + Math.PI), 0, Math.cos(yaw + Math.PI)) });
 	};
-	B.die = () => { voice.play('wail', heart, 1.4, 0.6); ctx.fx.sparks(heart, 40, null, 0.5, 0.8, 1, 20); };
+	B.die = () => { voice.play('wail', heart, 1.4, 0.6, { ref: 90, far: 3000 }); ctx.fx.sparks(heart, 40, null, 0.5, 0.8, 1, 20); };
 	B.dying = (dt) => { fade = Math.max(0, 1 - B.deadT / 5); if (c) { c.motion.update(dt, { speed: 0 }); look.update(dt, { glow: fade * 2, fade }); } };
 	B.focus = () => focus;
 	return g;
