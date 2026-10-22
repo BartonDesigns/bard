@@ -30,6 +30,7 @@ import { attunement, infuseStrands, isWeaponId, XP_PER_FABRIC } from '../gamepla
 import { MAX_LEVEL, xpToMax } from '../gameplay/gear-levels.js';
 import { createSkillsMenu } from './skills-ui.js';
 import { createMagicFx, magicSound } from './fx.js';
+import { startSpellSound } from './sound.js';
 import { createAether, seedOf } from './aether.js';
 import { createCaster } from './caster.js';
 import { createMagicHud } from './hud.js';
@@ -138,6 +139,10 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		if (e) combat.sendFx?.(e.a, e.b, SPELL_STYLE, pulse ? 1 : 0);
 	}
 	const caster = createCaster({ camera, combat, player: () => W()?.player, state, fx, light, hint, sky: { get state() { return W()?.sky?.state; } }, worldKey, seed, isPhone, track, onCast, beams, third, heavens });
+	// the spells' sound (magic/sound.js), heard from your eye, left or right of where you look
+	// (the way you look, from the camera's own axes: its -z column is forward)
+	const spellSound = startSpellSound({ eye: () => camera.position, yaw: () => { const m = camera.matrixWorld.elements; return Math.atan2(m[8], m[10]); }, isPhone });
+	const warmSound = () => spellSound.warm([...new Set(state.binds.filter(Boolean).map((id) => SPELL[id]?.school).filter(Boolean))].flatMap((s) => [s, `${s}-hit`, `${s}-blast`]));
 	combat.hooks.casting = () => hands.busy();
 	// (the crosshair to aim a spell by, as with a gun: up whenever a spell is bound and you are free to cast it,
 	// full while your hands are casting; Ryan found spells far easier to aim with a reticle up)
@@ -269,7 +274,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 			restat(true);
 			return true;
 		},
-		onBind: (i, id) => { bind(state, i, id); dirty = true; },
+		onBind: (i, id) => { bind(state, i, id); dirty = true; warmSound(); },
 		// aether poured into a spell you know: n points of its mastery
 		onFeed: (id, n) => {
 			const r = feedSpell(state, id, n);
@@ -417,7 +422,9 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		}
 		if (pulseA > 0) { pulseA = Math.max(0, pulseA - dt * 1.8); pulse.style.opacity = pulseA.toFixed(3); }
 	}
+	let warmed = false;
 	function update(dt) {
+		if (!warmed && W()?.player) { warmed = true; warmSound(); }
 		const Wd = W();
 		if (!Wd?.player) return;
 		// (a new world's player: told of the mouse's mode)
