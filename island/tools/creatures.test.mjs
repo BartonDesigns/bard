@@ -73,7 +73,20 @@ test('a flyer keeps above you and drops into reach to strike', () => {
 });
 
 test('their voices are made, heard and never clip', () => {
-	for (const v of ['growl', 'snarl', 'sniff', 'scrape', 'creak', 'chitter', 'click', 'shatter']) assert.ok(VOICES.includes(v), v);
+	for (const v of ['growl', 'snarl', 'sniff', 'scrape', 'creak', 'chitter', 'click', 'shatter', 'slam', 'souls', 'soulburst', 'ember', 'thud', 'collapse', 'crystalroar', 'lunge', 'pulse', 'burst', 'cracking', 'slither', 'spit', 'chord']) assert.ok(VOICES.includes(v), v);
+	// (every kind has a voice of its own, every sound it names is one that is made, and the
+	// sets stay apart: no two kinds share a whole set)
+	const sets = new Map();
+	for (const [id, S] of Object.entries(SPECIES)) {
+		assert.ok(S.voice, `${id} has no voice`);
+		for (const [k, v] of Object.entries(S.voice)) {
+			if (k === 'loop') assert.ok(VOICES.includes(v.name), `${id} loop ${v.name}`);
+			else if (typeof v === 'string') assert.ok(VOICES.includes(v), `${id} ${k} ${v}`);
+		}
+		const key = ['spot', 'strike', 'swing', 'hit', 'idle', 'die', 'turn', 'lob'].map((k) => S.voice[k] || '').join('|');
+		assert.ok(!sets.has(key), `${id} sounds just like ${sets.get(key)}`);
+		sets.set(key, id);
+	}
 	for (const v of VOICES) {
 		const d = renderVoice(v, 22050);
 		let peak = 0, e = 0;
