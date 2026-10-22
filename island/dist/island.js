@@ -8251,11 +8251,14 @@ void main() {
 		float rho = length(dp), phi = atan(dp.y, dp.x);
 		float pulse = 1.0 + 0.2 * sin(uT * 4.7) + 0.12 * sin(uT * 11.3 + rho * 2.0) + 0.08 * sin(uT * 2.3 + phi * 2.0) + 0.5 * pow(0.5 + 0.5 * sin(uT * 3.1), 6.0);
 		float rin = 1.08 + 0.03 * sin(uT * 6.1), rout = 4.5;
-		float spin = uT * 4.0 * pow(max(rho, 0.6), -1.5);
-		float th = phi + rho * 0.9 - spin;
-		float n1 = sin(th * 5.0), n2 = sin(th * 13.0 + rho * 2.0 - uT * 0.9), n3 = sin(th * 7.0 - rho * 5.0 + uT * 3.0);
-		float knots = pow(0.5 + 0.5 * n1, 2.0) * (0.6 + 0.4 * n2) + 0.3 * pow(0.5 + 0.5 * n3, 3.0);
-		float churn = 0.4 + 0.8 * knots;
+		float spin = uT * 3.5 * pow(max(rho, 0.6), -0.8);
+		float th = phi + rho * 0.5 - spin;
+		// (streaks along the flow, torn and knotted, not neat rings: the arms wind only a little and
+		// a slow turbulence breaks them up)
+		float n1 = sin(th * 4.0 + 0.8 * sin(rho * 3.0 + uT)), n2 = sin(th * 9.0 + rho * 1.5 - uT * 0.9), n3 = sin(th * 6.0 - rho * 4.0 + uT * 3.0 + 2.0 * sin(th * 2.0));
+		float turb = 0.7 + 0.3 * sin(phi * 3.0 + rho * 2.5 - uT * 1.5) * sin(rho * 7.0 - uT * 2.0);
+		float knots = (pow(0.5 + 0.5 * n1, 2.5) * (0.5 + 0.5 * n2) + 0.35 * pow(0.5 + 0.5 * n3, 3.0)) * turb;
+		float churn = 0.35 + 1.0 * knots;
 		float inr = smoothstep(rin - 0.03, rin + 0.05, rho), outr = 1.0 - smoothstep(rout - 1.2, rout, rho);
 		float fall = 1.0 / (1.0 + pow(max(0.0, rho - rin) / 0.9, 2.0));
 		float dopp = 0.5 + 0.35 * (1.0 - x / max(rho, 1e-4));
