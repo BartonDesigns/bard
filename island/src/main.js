@@ -1864,7 +1864,8 @@ if (typeof window !== 'undefined') {
 		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
 		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
 		// the shader warm and its gate (world/shaderwarm.js): what is held back and built in the background
-		shaders: () => HOOKS.shaderWarm?.info() ?? null,
+		// (with a function: it is told of every draw the gate holds back, (object, material, why, frame))
+		shaders: (trace) => { if (trace) HOOKS.shaderWarm?.trace(trace); return HOOKS.shaderWarm?.info() ?? null; },
 		// the frame's own failures kept on this device (main.js keepFrameError), newest last
 		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
 		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },
