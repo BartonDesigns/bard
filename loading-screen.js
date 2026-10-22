@@ -393,7 +393,7 @@
 		clearTimeout(slowTimer); view.sub.classList.remove('bl-first'); view.root.dataset.state = 'error'; finish('failed: ' + String(error?.message || error).slice(0, 120));
 		const graphics = error?.code === 'GRAPHICS_RELOAD_REQUIRED';
 		view.status.textContent = graphics ? 'Graphics need a fresh start' : 'The world could not finish loading';
-		view.sub.textContent = graphics ? error.message : /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then retry. You can also return to Bard.';
+		view.sub.textContent = graphics ? error.message : /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then try again: each try asks for lighter graphics. You can also return to Bard.';
 		view.enter.hidden = false; view.enter.textContent = graphics ? 'Reload game' : 'Try again';
 		view.detail.textContent = stoppedLine(); view.copy.hidden = false; view.copy.textContent = 'Copy load details';
 	}
