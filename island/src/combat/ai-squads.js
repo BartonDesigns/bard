@@ -432,14 +432,28 @@ export function createSquads(ctx) {
 		if (hateMe && !ctx.playerDown() && !ctx.cloaked?.() && dMe < bd) { best = ME; bd = dMe; }
 		// (the police on your side after you were fired on: whoever opened fire on you is theirs)
 		const backMe = F.lawful && F.kind !== 'military' && ctx.defending?.();
+		// the law before a monster: an officer, a guard or a ranger who can see one of the
+		// night's creatures (or the Deep's) goes for it over anyone else in sight, you included
+		// (a suspect waits; a monster loose in town does not), and a big one is seen from
+		// further off, by its height
+		const reach = h.B.sight * (h.alert ? (h.Sp?.hunt ?? 1.8) : 1);
+		let beast = null, bm = reach;
 		for (const o of list) {
 			if (o === h || o.dead || o.surrendered || o.crew || o.recall || o.fid === h.fid || ctx.ignore?.(h, o)) continue;
 			// (your guild's people: fought by whoever fights you, and the law only once they fire on it)
 			if (o.ally) { if (!(F.lawful ? o.hitLaw > 0 : hateMe || h.lastHitBy === o)) continue; }
 			else if (!relations.hostile(h.fid, o.fid) && !(backMe && o.struckFirst && !o.F?.lawful)) continue;
 			const d = Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z);
+			if (F.lawful && o.cr && o.F?.kind === 'creatures') {
+				// (one still a villager to look at, or lying dormant, is no monster to them yet)
+				if ((o.beast && o.turn < 0) || o.dormant) continue;
+				const seen = d / Math.max(1, (o.Sp?.height || 1.8) / 2);
+				if (seen < bm) { bm = seen; beast = o.T; }
+				continue;
+			}
 			if (d < bd) { bd = d; best = o.T; }
 		}
+		if (beast) return beast;
 		if (!best && (F.kind === 'raiders' || F.kind === 'creatures' || F.kind === 'machines') && h.squad?.raid) {
 			for (const T of ctx.civilians()) {
 				if (T.child || !relations.hostile(h.fid, T.faction)) continue;
