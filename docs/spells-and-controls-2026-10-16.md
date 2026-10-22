@@ -222,6 +222,21 @@ And the wards: Bulwark's dome slams down with its ribs struck in hard lines and 
 under it; Sunwell Gate's rim traced in gold with rays struck out of it; Radiant Aura flame tongues
 stabbing up round its ring; Stasis crystal facets locking round the one it holds.
 
+## The spells' sound, 2026-10-22 (`magic/sound.js`)
+
+Josh wanted magic with deep, full, lush sound, spatial, not tinny. The old voice was two
+oscillators. Now every piece is rendered once into a buffer (at 24 kHz, in idle time for the
+schools you have bound) the way the creatures' voices are: a sub-bass weight under it, a body
+that is the school's own (the sun's harmonic swell and gold bells, life's breath and low choir,
+the ward's struck metal, dawn's rising light, shadow's whisper, the void's dropping sub and
+tearing air, blight's gurgle, umbral's cold breath, storm's crackle and thunder, chrono's ticks and
+glass, fire's roar and embers), the air round it, and a soft saturation. Three pieces a school:
+the cast at your hands, a bolt's hit and an area blast, the last two played where they land,
+panned to their side of where you look and dulled with distance (`magicSound(kind, gain, at)`).
+The beam's roar has a sub under it and its band sits lower. `tools/magic-sound.test.mjs` holds
+every piece to a weight under 120 Hz and no two schools alike. Clips, before and after:
+https://claude.ai/artifact/RHzqLevwG38G4Lbi3ytYRy
+
 ## Test mode
 
 **∞ Test mode** in the places menu (under Skills and magic; `Crysis.magic.test(true)` from the
