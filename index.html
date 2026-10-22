@@ -5994,6 +5994,10 @@ state.load=()=>{if(state.ready)return Promise.resolve();if(state.pending)return 
 </script><style id="mobile-world-css176">
 /* Responsive world controls use CSS pixels; rendering resolution never changes this layout. */
 html.mobile-world176,body.mobile-world176{overflow:hidden!important;overscroll-behavior:none!important;width:100%;height:100%;}
+/* while the world is up (island/src/main.js sets html.l99-world-up) the faceplate and the collab
+   panel under it are neither painted nor composited: on an iPhone each was a screen-sized layer
+   held in graphics memory the whole time. Still laid out, so every script finds its sizes. */
+html.l99-world-up #synth,html.l99-world-up #collab-panel,html.l99-world-up #rollPanel,html.l99-world-up #hapticNote{visibility:hidden!important;}
 @media(pointer:coarse){
  #cockpit-overlay.open:not(.inline):not(.docked),#l99-caves-mount{inset:0!important;width:var(--world-w176,100dvw)!important;height:var(--world-h176,100dvh)!important;max-width:none!important;max-height:none!important;transform:none!important;overflow:hidden!important;}
  #cockpit-canvas-host{inset:0!important;width:100%!important;height:100%!important;overflow:hidden!important;}
