@@ -7,6 +7,9 @@
 import * as THREE from 'three';
 import { specOf } from '../bay/cars.js';
 import { isMinor } from '../combat/targets.js';
+import { beatNow } from '../music/beat.js';
+import { driveDance } from './dance.js';
+import { DANCE_NAMES } from './actions.js';
 
 const EYE = 1.68;
 const IDLE = ['pockets', 'crossed', 'phone', 'hip', 'behind'];
@@ -17,7 +20,7 @@ const HERO_IDLE = ['hip', 'crossed', 'behind'];
 // eye; busy() also covers the car scenes (vehicles/carjack.js), which show and hide your body
 // themselves
 export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint, ward = null, driving = () => false }) {
-	const S = { third: false, idle: 0, pose: 'rest', down: null, posePin: null, air: 0, leap: false };
+	const S = { third: false, idle: 0, pose: 'rest', down: null, posePin: null, air: 0, leap: false, dance: null, danceN: -1, wasThird: false };
 	const cam = new THREE.Vector3(), look = new THREE.Vector3(), v = new THREE.Vector3();
 	let shown = false;
 
@@ -47,9 +50,36 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 		S.air = P.grounded || P.swimming || P.flying ? 0 : S.air + dt;
 		const leap = hero && S.air > 0.15;
 		if (leap !== S.leap) { S.leap = leap; me.M.act(leap ? 'leap' : null, leap ? 0 : undefined); }
+		// dancing (Z): on the music's beat, until you move; your body grooves with it anyway
+		const B = beatNow();
+		if (S.dance) {
+			if (sp > 0.15 || leap || !B.playing) stopDance(); else driveDance(me.M, S.dance, B);
+		}
+		me.M.groove?.(B.playing ? (S.dance ? 1 : 0.5) : 0, S.dance ? 1.1 : 0.8);
 		me.M.update(dt, t, null);
 		me.M.S.pos.set(P.pos.x, feet, P.pos.z);
 		me.P.root.position.copy(me.M.S.pos);
+		return true;
+	}
+
+	// Z: a dance on the music's beat, seen from behind (third person while it lasts); Z again
+	// for the next one; a step, or the music ending, stops it
+	const DANCE_ORDER = DANCE_NAMES.filter((n) => !n.endsWith('M'));
+	function stopDance() {
+		if (!S.dance) return;
+		S.dance = null;
+		avatar.me?.M.act(null);
+		if (!S.wasThird) S.third = false;
+	}
+	function dance(name) {
+		const W = world(), P = W?.player?.state;
+		if (!P || P.locked || busy() || P.flying || P.swimming || S.down) return false;
+		if (!beatNow().playing) { hint('Nothing to dance to: turn the auto music on (the notes by the sun), or play the Bard.', 2400); return false; }
+		if (!S.dance) S.wasThird = S.third;
+		S.danceN = name && DANCE_ORDER.includes(name) ? DANCE_ORDER.indexOf(name) : (S.danceN + 1) % DANCE_ORDER.length;
+		S.dance = DANCE_ORDER[S.danceN];
+		S.third = true; avatar.ready();
+		hint(S.dance.replace('dance-', '').replace('twostep', 'Two-step').replace('bounce', 'The bounce').replace('handsup', 'Hands up').replace('sway', 'The sway') + ': Z for another, a step to stop.', 2000);
 		return true;
 	}
 
@@ -128,7 +158,7 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 			return;
 		}
 		const on = S.third && !P.flying && !P.swimming && !P.diving;
-		if (!on) { if (shown) { avatar.hide(); shown = false; } return; }
+		if (!on) { stopDance(); if (shown) { avatar.hide(); shown = false; } return; }
 		if (!follow(dt, t, P)) return;
 		// behind you and a little above, looking past you
 		const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), feet = P.pos.y - EYE;
@@ -138,5 +168,5 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 		camera.position.copy(cam);
 		camera.lookAt(look.set(P.pos.x + fx * 2, feet + 1.45 + P.pitch * 2, P.pos.z + fz * 2));
 	}
-	return { update, toggle, shove, state: S };
+	return { update, toggle, shove, dance, stopDance, dancing: () => S.dance, state: S };
 }

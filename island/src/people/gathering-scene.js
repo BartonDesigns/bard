@@ -5,6 +5,7 @@
 // of draw calls. Everything follows from the saved gathering and the game clock.
 import * as THREE from 'three';
 import { createCrowd } from './crowd.js';
+import { beatNow } from '../music/beat.js';
 import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
 import { createMotion } from './motion.js';
 import { peopleCap } from '../world/governor.js';
@@ -132,10 +133,12 @@ export function createGatheringScene({ scene, world, camera, book, bodyKey }) {
 		if (!enabled) return;
 		const t = book.clock(), cam = camera.position, stageNow = gatheringStage(S.a, t);
 		// the music: the Bard's beat and loudness when the player plays, else the drummer's own
-		const perf = W()?.music?.performance;
-		const e = perf ? Math.max(perf.bass || 0, (perf.mid || 0) * 0.8, (perf.high || 0) * 0.6) : 0;
+		// (the one beat clock first, music/beat.js: the auto music or the faceplate's sequencer,
+		// counted as heard; else the loudness-and-tempo guess from what the faceplate plays)
+		const perf = W()?.music?.performance, Bt = beatNow();
+		const e = Bt.playing ? Math.max(0.3, Bt.energy) : perf ? Math.max(perf.bass || 0, (perf.mid || 0) * 0.8, (perf.high || 0) * 0.6) : 0;
 		S.energy += (e - S.energy) * Math.min(1, dt * 4);
-		const playing = S.energy > 0.04, beat = playing ? perf.beat : time * 100 / 60;
+		const playing = S.energy > 0.04, beat = Bt.playing ? Bt.beat : playing ? perf.beat : time * 100 / 60;
 		const lively = S.kind === 'concert' || S.kind === 'party';
 		const amp = playing ? 0.03 + S.energy * 0.14 : lively ? 0.02 : 0.006;
 		const cheer = playing && lively ? Math.round(Math.min(1, S.energy * 1.8) * 10) / 10 : 0;
@@ -159,7 +162,7 @@ export function createGatheringScene({ scene, world, camera, book, bodyKey }) {
 			if (mode !== S.mode[i] || mode === HERE) {
 				if (mode === HERE) {
 					// standing: a nod to the beat and a gentle sway
-					const bob = amp * Math.abs(Math.sin(Math.PI * (beat + S.off[i]))), sway = Math.sin(time * 0.8 + i * 1.7) * (playing ? 0.12 : 0.06);
+					const bob = Bt.playing ? 0 : amp * Math.abs(Math.sin(Math.PI * (beat + S.off[i]))), sway = Math.sin(time * 0.8 + i * 1.7) * (playing ? 0.12 : 0.06);
 					S.stand.place(i, S.sx[i], S.sy[i] + bob, S.sz[i], S.syaw[i] + sway, 1);
 				} else S.stand.place(i, 0, 0, 0, 0, 0);
 				if (mode !== COMING && mode !== GOING) S.walk.place(i, 0, 0, 0, 0, 0);
