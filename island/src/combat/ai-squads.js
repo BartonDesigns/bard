@@ -55,11 +55,11 @@ const BODY = {
 	person: { speed: 3.9, sight: 60, range: 70, dmg: 7, burst: [2, 5], gap: [1.0, 2.2], rate: 0.15, surface: 'person' },
 };
 const CALL = {
-	default: { contact: ['Contact!', 'There!', 'We have company!'], flank: ['Flanking left!', 'Going round!', 'Moving up!'], reload: ['Reloading!', 'Changing cells!'], down: ['Man down!', 'We lost one!'], hit: ['I\'m hit!', 'Agh! I\'m hit!', 'Hit! I\'m hit!'], pin: ['Keep them pinned!', 'Covering fire!'], give: ['Enough! I yield!', 'Don\'t shoot! I\'m done!'] },
-	law: { contact: ['Patrol! Drop your weapon!', 'Suspect sighted!', 'Hold it right there!'], flank: ['Moving to flank!', 'Cutting them off!'], reload: ['Reloading!'], down: ['Officer down!'], pin: ['Suppressing!', 'Stay in cover!'], give: ['I\'m down, I\'m down!'] },
-	villagers: { contact: ['Raiders! Protect the houses!', 'To the walls!'], flank: ['Round the back of the barn!'], reload: ['Arrows!'], down: ['They got Tam!'], pin: ['Keep their heads down!'], give: ['Mercy!'] },
-	police: { contact: ['Police! Drop it!', 'Show me your hands!', 'Suspect in sight!'], flank: ['Cover the back!', 'Cutting across!'], reload: ['Reloading!'], down: ['Officer down! Officer down!'], pin: ['Stay behind the car!', 'Hold them there!'], give: ['Okay! Okay! I\'m down!'] },
-	military: { contact: ['Contact front!', 'Hostiles, on me!', 'Halt! Halt!'], flank: ['Bounding left!', 'Second team, flank!'], reload: ['Changing mag!'], down: ['Man down! Medic!'], pin: ['Suppress, suppress!', 'Keep fire on them!'], give: ['Cease fire, I yield!'] },
+	default: { contact: ['Contact!', 'There!', 'We have company!'], monster: ['What is that thing?!', 'Something\'s out there!', 'Shoot it! Shoot it!'], flank: ['Flanking left!', 'Going round!', 'Moving up!'], reload: ['Reloading!', 'Changing cells!'], down: ['Man down!', 'We lost one!'], hit: ['I\'m hit!', 'Agh! I\'m hit!', 'Hit! I\'m hit!'], pin: ['Keep them pinned!', 'Covering fire!'], give: ['Enough! I yield!', 'Don\'t shoot! I\'m done!'] },
+	law: { contact: ['Patrol! Drop your weapon!', 'Suspect sighted!', 'Hold it right there!'], monster: ['What the hell is that? Light it up!', 'Dispatch, we have... something. Opening fire!'], flank: ['Moving to flank!', 'Cutting them off!'], reload: ['Reloading!'], down: ['Officer down!'], pin: ['Suppressing!', 'Stay in cover!'], give: ['I\'m down, I\'m down!'] },
+	villagers: { contact: ['Raiders! Protect the houses!', 'To the walls!'], monster: ['A beast! Get inside!', 'Monster in the village!'], flank: ['Round the back of the barn!'], reload: ['Arrows!'], down: ['They got Tam!'], pin: ['Keep their heads down!'], give: ['Mercy!'] },
+	police: { contact: ['Police! Drop it!', 'Show me your hands!', 'Suspect in sight!'], monster: ['Dispatch, there\'s some kind of creature here. Shots fired!', 'What IS that?! Open fire!', 'Don\'t let it near the houses!'], flank: ['Cover the back!', 'Cutting across!'], reload: ['Reloading!'], down: ['Officer down! Officer down!'], pin: ['Stay behind the car!', 'Hold them there!'], give: ['Okay! Okay! I\'m down!'] },
+	military: { contact: ['Contact front!', 'Hostiles, on me!', 'Halt! Halt!'], monster: ['Contact, unknown creature! Weapons free!', 'Hostile creature front! Engage!'], flank: ['Bounding left!', 'Second team, flank!'], reload: ['Changing mag!'], down: ['Man down! Medic!'], pin: ['Suppress, suppress!', 'Keep fire on them!'], give: ['Cease fire, I yield!'] },
 	invaders: { contact: ['Forward! Take the town!', 'Defenders ahead!'], flank: ['Round their side!'], reload: ['Reloading!'], down: ['We lost one!'], pin: ['Pin them down!'], give: ['Enough! We yield!'] },
 	// your own guild's people (guild/companions.js)
 	guild: { contact: ['With you! I see them!', 'Contact, on your side!', 'Here they come!', 'I\'ve got your back!'], flank: ['Going round them!', 'Taking the flank!'], reload: ['Reloading, cover me!', 'Changing mags!'], down: ['They got one of ours!', 'We lost one! Keep going!'], hit: ['I\'m hit!', 'Ah! Still standing!', 'Hit, I\'m okay!'], pin: ['Keep their heads down!', 'Covering you!'], give: ['Falling back!'] },
@@ -388,6 +388,8 @@ export function createSquads(ctx) {
 	}
 
 	function say(h, what, force = false) {
+		// (a creature growls instead: creatures/voice.js)
+		if (h.cr) return;
 		const lines = (CALL[h.F.kind] || CALL.default)[what] || CALL.default[what];
 		if (!lines || (h.saidT > 0 && !force)) return;
 		const d = Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z);
@@ -395,7 +397,8 @@ export function createSquads(ctx) {
 		h.saidT = 4;
 		ctx.call?.(pick(lines), h.ally?.first || h.F.name || 'someone');
 	}
-	function alertSquad(h, src) {
+	// (what: the call that goes up, 'contact' for a fighter, 'monster' for a creature in sight)
+	function alertSquad(h, src, what = 'contact') {
 		const mem = h.squad ? h.squad.members : [h];
 		let k = 0;
 		for (const m of mem) {
@@ -407,7 +410,7 @@ export function createSquads(ctx) {
 		}
 		if (src && h.squad) h.squad.last = { x: src.x, z: src.z };
 		const first = mem.find((m) => !m.dead && !m.crew);
-		if (first) say(first, 'contact');
+		if (first) say(first, what);
 	}
 	// gunfire heard at (x, z): squads within earshot wake
 	function hear(x, z, r = 60) {
@@ -595,7 +598,7 @@ export function createSquads(ctx) {
 				const T = h.target;
 				const from = _v.set(h.pos.x, h.pos.y + (h.kind === 'drone' ? 0 : h.kind === 'crawler' ? 0.7 : h.cr ? h.Sp.height * 0.85 : 1.5), h.pos.z);
 				h.los = !!T && !ctx.blocked(from, posOf(T));
-				if (h.los && !h.alert) alertSquad(h, posOf(T));
+				if (h.los && !h.alert) alertSquad(h, posOf(T), T.ref?.cr && T.ref.F?.kind === 'creatures' ? 'monster' : 'contact');
 				if (h.los && h.squad) h.squad.last = { x: posOf(T).x, z: posOf(T).z };
 			}
 			if (h.kind === 'drone') droneStep(h, dt);
