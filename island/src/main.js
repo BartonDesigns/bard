@@ -58,6 +58,7 @@ import { worldAir } from './world/soundbus.js';
 import { REAL_U } from './bay/realcity.js';
 import { createDrive } from './drive.js';
 import { createAutoMusic } from './music/automusic.js';
+import { wireBeat, beatNow } from './music/beat.js';
 import { createExplore } from './explore.js';
 import { today, onMonth, monthPicked, pickMonth } from './calendar.js';
 import { createTattooStudio } from './tattoo/studio.js';
@@ -742,7 +743,7 @@ export function createIslandWorld() {
 	if (/[?&]heroview\b/.test(location.search)) { const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); heroView.open(); } }, 1000); }
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
-		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
+		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); } else if (e.key === 'z' || e.key === 'Z') { you.dance(); e.preventDefault(); }
 	});
 	addEventListener('keydown', (e) => {
 		if ((e.key !== 'e' && e.key !== 'E') || e.repeat || e.metaKey || e.ctrlKey || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
@@ -758,6 +759,13 @@ export function createIslandWorld() {
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
+	// the one beat everyone moves to (music/beat.js): the auto music's bar clock, as heard
+	wireBeat(() => autoMusic.clock(), () => autoMusic.pulse());
+	// a dance on the beat (people/self.js): Z, or this button in the phone's More menu
+	const danceBtn = button('💃', 'Dance to the music (Z)', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;', 'rail 62');
+	danceBtn.dataset.controlLabel = 'Dance';
+	danceBtn.addEventListener('click', () => { you.dance(); });
+	dom.mount.appendChild(danceBtn);
 	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
 	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, motes: () => HOOKS.magic?.motes?.() || null, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
@@ -1977,6 +1985,9 @@ if (typeof window !== 'undefined') {
 		jackable: () => !!HOOKS.carjack?.candidate(),
 		// see yourself (as P does), shove (as X does)
 		thirdPerson: () => HOOKS.self?.toggle(),
+		// a dance on the beat (Z): Crysis.dance('twostep' | 'bounce' | 'handsup' | 'sway'), or the next one
+		dance: (name) => HOOKS.self?.dance(name ? 'dance-' + name : undefined),
+		beat: () => ({ ...beatNow() }),
 		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
 		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
 		heroView: () => HOOKS.heroView,

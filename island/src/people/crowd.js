@@ -81,29 +81,39 @@ function bake(A, k, kind, CELL) {
 }
 
 let mat = null;
-const U = { uTime: { value: 0 } };
+// (uBeat: the music's beat count and uGroove its hold on the crowd, music/beat.js: the same
+// for every crowd, set each frame by crowdBeat())
+const U = { uTime: { value: 0 }, uBeat: { value: 0 }, uGroove: { value: 0 } };
+export function crowdBeat(beat, groove) { U.uBeat.value = beat; U.uGroove.value = groove; }
 function material() {
 	if (mat) return mat;
 	mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide });
 	mat.onBeforeCompile = (sh) => {
-		sh.uniforms.uTime = U.uTime;
+		sh.uniforms.uTime = U.uTime; sh.uniforms.uBeat = U.uBeat; sh.uniforms.uGroove = U.uGroove;
 		sh.vertexShader = sh.vertexShader
 			.replace('#include <common>', `#include <common>
 attribute vec4 position2; attribute vec3 normal2;
 attribute vec3 iSkin; attribute vec3 iTop; attribute vec3 iOuter; attribute vec3 iBottom; attribute vec3 iShoes; attribute vec3 iHair; attribute vec3 iAnim;
-uniform float uTime; varying vec3 vCrowd; float cw;`)
+uniform float uTime; uniform float uBeat; uniform float uGroove; varying vec3 vCrowd; float cw; float gdip;`)
 			.replace('#include <beginnormal_vertex>', `// the pose between the two: a cheer that rises and falls, or the walk's stride
 cw = iAnim.z > 0.5 ? 0.5 + 0.5 * sin(uTime * iAnim.y + iAnim.x) : iAnim.y * smoothstep(0.2, 1.0, 0.5 + 0.5 * sin(uTime * 3.0 + iAnim.x));
+// the music (music/beat.js): standing, they drop into each beat and their hands go up and
+// down over two, each with their own feel a touch off the count
+float gb = uBeat + (fract(iAnim.x * 0.159) - 0.5) * 0.1;
+float gc = 0.5 + 0.5 * cos(fract(gb) * 6.2831853);
+gdip = iAnim.z > 0.5 ? 0.0 : uGroove * gc * gc * (1.5 - 0.5 * gc);
+if (iAnim.z < 0.5) cw = max(cw, uGroove * (0.3 + 0.7 * (0.5 + 0.5 * cos(3.1415927 * gb))));
 vec3 objectNormal = normalize(mix(normal, normal2, cw));
 #ifdef USE_TANGENT
 vec3 objectTangent = vec3( tangent.xyz );
 #endif`)
 			.replace('#include <begin_vertex>', `vec3 transformed = mix(position, position2.xyz, cw);
+transformed.y -= 0.035 * gdip;
 int rg = int(position2.w + 0.5);
 vCrowd = rg == 0 ? iSkin : rg == 1 ? iTop : rg == 2 ? iOuter : rg == 3 ? iBottom : rg == 4 ? iShoes : iHair;`);
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vCrowd;').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vCrowd;');
 	};
-	mat.customProgramCacheKey = () => 'crysis-crowd-2';
+	mat.customProgramCacheKey = () => 'crysis-crowd-3';
 	return mat;
 }
 
