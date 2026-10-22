@@ -369,7 +369,8 @@ export function createSquads(ctx) {
 		if (h.body) {
 			const p = h.pos;
 			h.body.M.act(null);
-			ctx.ragdolls.hit(h.body.P, { vel: new THREE.Vector3(d.x, 0.1, d.z).normalize().multiplyScalar(blow?.type === 'blast' ? 7 : 3.5), mass: 400, point: new THREE.Vector3(p.x, p.y + 1.2, p.z), lift: 0.06 });
+			// (a blast throws them, a blow shoves them, a bullet barely moves them: they drop)
+			ctx.ragdolls.hit(h.body.P, { vel: new THREE.Vector3(d.x, 0.1, d.z).normalize().multiplyScalar(blow?.type === 'blast' ? 7 : 3.5), mass: blow?.type === 'blast' ? 400 : blow?.melee ? 90 : 30, point: new THREE.Vector3(p.x, p.y + 1.2, p.z), lift: 0.06, limp: 1 });
 			h.body.hand?.hide();
 		} else if (h.kind === 'drone') { fx.explosion(h.pos, 1.2, false); h.vy = 0; }
 		else if (h.cr) h.cr.motion.die();

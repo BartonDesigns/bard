@@ -303,7 +303,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// ---------- your weapon ----------
 	const ammo = load('l99-combat-ammo', { mags: {}, loose: {}, starter: {} });
 	const saveAmmo = () => { if (Wp) ammo.mags[Wp.uid] = Wp.mag; store.set('l99-combat-ammo', JSON.stringify(ammo)); };
-	let Wp = null;
+	let Wp = null, physicsWarm = false;
 	function held() { const H = arms?.held?.(); return H && WEAPONS[H.i] ? H : null; }
 	function weaponNow() {
 		const H = held();
@@ -957,6 +957,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		}
 		if (group.parent !== scene) scene.add(group);
 		worldT += dt; wardMarkT -= dt; sparkLineT -= dt;
+		// a weapon out: the physics the fallen need is loaded now, not on the first body to
+		// drop (which would stand frozen mid-step while it came)
+		if (!physicsWarm && Wp) { physicsWarm = true; ragdolls.ready?.().catch?.(() => {}); }
 		fx.resize(innerHeight, camera.fov / (camera.zoom || 1));
 		// you: speed, and a trail of safe spots to wake at
 		const pos = p.pos;

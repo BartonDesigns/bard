@@ -125,9 +125,12 @@ export function createCivilians(ctx) {
 			s.dead = 0.001; s.panic = 0;
 			p.override = override; p.engaged = false;
 			const d = blow.dir || { x: 0, y: 0, z: 0 };
-			ragdolls.hit(p.P, { vel: _v.set(d.x, 0.1, d.z).normalize().multiplyScalar(blow.type === 'blast' ? 7 : 3.5).clone(), mass: 400, point: new THREE.Vector3(q.x, q.y + (blow.part === 'limb' ? 0.5 : 1.2), q.z), lift: blow.type === 'blast' ? 0.25 : 0.05 });
+			// (a blast throws them, a blow shoves them, a bullet barely moves them: they drop)
+			ragdolls.hit(p.P, { vel: _v.set(d.x, 0.1, d.z).normalize().multiplyScalar(blow.type === 'blast' ? 7 : 3.5).clone(), mass: blow.type === 'blast' ? 400 : blow.melee ? 90 : 30, point: new THREE.Vector3(q.x, q.y + (blow.part === 'limb' ? 0.5 : 1.2), q.z), lift: blow.type === 'blast' ? 0.25 : 0.05, limp: 1 });
 			layer.remove(s.T.id);
 		} else {
+			// (the physics the fallen need, readied while they are still on their feet)
+			ragdolls.ready?.().catch?.(() => {});
 			// a flinch and a run
 			s.from.x = blow.src?.x ?? q.x; s.from.z = blow.src?.z ?? q.z;
 			s.panic = 12; s.cower = 0; s.calm = false;
