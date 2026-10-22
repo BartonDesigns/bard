@@ -10,6 +10,7 @@
 // key let go), and draws its sky on one small canvas. All movement is transforms and opacity.
 
 import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
+import { PHONE_DEVICE } from '../world/device.js';
 import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, MASTERY_GIFT, NUMERAL, masteryLevel, masteryToNext, feedable, feedCost } from './skills.js';
 import { composeMods, powerSources, alteredBy } from './stats.js';
 
@@ -29,14 +30,12 @@ const sec = (v) => `${r1(v)} s`;
 const CSS = `
 .sk{position:absolute;inset:0;z-index:40;display:none;opacity:0;background:#04060b;color:#eef3f7;font:500 13px/1.4 var(--bard-body,system-ui,sans-serif);overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;transition:opacity .32s ease}
 .sk.on{display:block}.sk.vis{opacity:1}
+/* (a phone opens and closes it at once: the fade is a screen-sized layer for its length) */
+.sk.phone{transition:none}
 .sk *{box-sizing:border-box}
 .sk button{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
 .sk button:focus-visible{outline:2px solid #01a982;outline-offset:2px}
 .sk-sky{position:absolute;inset:0;width:100%;height:100%}
-.sk-vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 70% at 50% 45%,transparent 40%,rgba(0,0,0,.55) 100%)}
-.sk-flash{position:absolute;inset:0;pointer-events:none;opacity:0}
-.sk-flash.go{animation:skFlash .9s ease-out}
-@keyframes skFlash{0%{opacity:.9}100%{opacity:0}}
 /* header */
 .sk-head{position:absolute;left:0;right:0;top:0;height:var(--hh);display:flex;align-items:center;gap:14px;padding:0 calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));padding-top:var(--l99-top, env(safe-area-inset-top));z-index:3;background:linear-gradient(180deg,rgba(4,6,11,.92),rgba(4,6,11,0))}
 .sk-lv{display:flex;align-items:center;gap:10px;min-width:0}
@@ -70,11 +69,11 @@ const CSS = `
 .sk-chip.can .dot{display:block}
 /* the stage and its pages */
 .sk-stage{position:absolute;left:0;right:0;top:calc(var(--hh) + var(--nh));bottom:0;touch-action:none;overflow:hidden}
-.sk-track{position:absolute;left:0;top:0;bottom:0;width:100%;will-change:transform}
-.sk-track.glide{transition:transform .55s cubic-bezier(.22,.9,.24,1)}
+.sk-track{position:absolute;left:0;top:0;bottom:0;width:100%}
 /* (each page seated along the track by its left; only the page in view, and the one sliding in
-   beside it, are shown at all: the rest are display:none, so the compositor backs one or two
-   screens, never fourteen) */
+   beside it, are shown at all: the rest are display:none. The track slides by a 2D transform
+   set a frame at a time from script, never a transition or will-change: those would have the
+   compositor back the pages as layers of their own) */
 .sk-page{position:absolute;top:0;left:0;height:100%}
 .sk-page[hidden]{display:none}
 .sk-neb{position:absolute;inset:-10%;pointer-events:none;opacity:.9}
@@ -271,9 +270,14 @@ const CSS = `
 `;
 const STYLE_ID = 'sk-style';
 
-export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, onFeed = () => ({ fed: 0, levels: 0 }), elements = {}, sound = () => {}, isTouch = false, isPhone = false }) {
+export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, onFeed = () => ({ fed: 0, levels: 0 }), elements = {}, sound = () => {}, isTouch = false, isPhone = false, cover = () => {} }) {
 	let root = null, built = false, open = false, vis = false, page = 0, sel = null, mode = 'wide', W = 0, H = 0;
+	// (the memory-saving ways below are the device's, not the graphics tier's: a phone set to Ultra
+	// draws the world as a computer does, but its page still has a phone's memory)
+	const lite = isPhone || PHONE_DEVICE;
 	const P = { stage: null, track: null, pages: [], chips: [], info: null, head: {}, flash: null, toast: null, arr: [], sky: null, pv: null };
+	// (the flash of a weave or an unlock, and the vignette, are drawn into the sky's canvas: a
+	// screen-sized element of their own would be a layer of its own over the sky)
 	const nodesOf = new Map(PAGES.map((k) => [k, pageNodes(k)]));
 	const lastSel = {};
 
@@ -288,15 +292,13 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	function build() {
 		built = true;
 		if (!document.getElementById(STYLE_ID)) { const s = document.createElement('style'); s.id = STYLE_ID; s.textContent = CSS; document.head.appendChild(s); }
-		root = mk('div', 'sk' + (isTouch ? ' touch' : '') + (isPhone ? ' phone' : ''), mount);
+		root = mk('div', 'sk' + (isTouch ? ' touch' : '') + (lite ? ' phone' : ''), mount);
 		root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Skills and magic');
 		// (a game controller sends it the arrow keys, Enter and Escape: ui/gamepad.js)
 		root.dataset.pad = 'keys';
 		// (nothing in here reaches the game underneath)
 		for (const ev of ['pointerdown', 'pointerup', 'pointermove', 'touchstart', 'touchmove', 'touchend', 'wheel', 'click', 'contextmenu', 'dblclick']) root.addEventListener(ev, (e) => e.stopPropagation());
 		P.sky = mk('canvas', 'sk-sky', root);
-		mk('div', 'sk-vig', root);
-		P.flash = mk('div', 'sk-flash', root);
 		// the header: level, points, fabric, mana, close
 		const head = mk('div', 'sk-head', root);
 		const lv = mk('div', 'sk-lv', head);
@@ -426,7 +428,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			for (const L of p.links) L.l.style.setProperty('--len', `${Math.hypot(L.dx * cw / 100, L.dy * ch / 100).toFixed(1)}px`);
 		}
 		P.arr[1].style.left = `${(tall ? W : W - iw - 32) - 52}px`;
-		place(false);
+		settle();
 		sizeSky();
 	}
 
@@ -437,22 +439,41 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	// track used to be fourteen screens wide, and a slide across it had the compositor back the
 	// whole sweep at once: an iPhone, its graphics memory already spoken for by the world, died
 	// on the second turn.)
-	let dx = 0, dragging = false, dragged = false, settleT = 0, turns = 0;
+	let dx = 0, dragging = false, dragged = false, turns = 0, trackX = 0, glideRaf = 0, glideT = 0;
 	const seats = PAGES.map((_, j) => j);
 	function seat(j) { P.pages[j].el.style.left = `${seats[j] * P.pageW}px`; }
 	function shown(...js) { for (const [j, p] of P.pages.entries()) p.el.hidden = !js.includes(j); }
-	function place(glide) {
-		P.track.classList.toggle('glide', !!glide);
+	const stillMotion = () => !!matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+	function setX(x) { trackX = x; P.track.style.transform = `translate(${x}px,0)`; }
+	// where the track belongs: on the page in view, pulled along by a drag (a third as far past the first or last page)
+	function target() {
 		const edge = (page === 0 && dx > 0) || (page === PAGES.length - 1 && dx < 0);
-		P.track.style.transform = `translate3d(${-seats[page] * P.pageW + (edge ? dx * 0.35 : dx)}px,0,0)`;
+		return -seats[page] * P.pageW + (edge ? dx * 0.35 : dx);
 	}
-	// the slide over: every page back in its own seat, the track on the page in view with no
-	// transition (the page and the track move by the same amount, so nothing shifts on screen)
+	// the slide to where the track belongs, a frame at a time (a CSS transition would run on the
+	// compositor and have WebKit back both pages as layers of their own for its length, memory an
+	// iPhone has not got with the world loaded; drawn into the page's own tiles it costs none)
+	function place(glide) {
+		cancelAnimationFrame(glideRaf); glideRaf = 0; clearTimeout(glideT); glideT = 0;
+		const to = target();
+		if (!glide || stillMotion() || Math.abs(to - trackX) < 1) { setX(to); if (glide) settle(); return; }
+		const x0 = trackX, t0 = performance.now(), ms = 520;
+		const step = (now) => {
+			const u = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - u, 3);
+			setX(x0 + (to - x0) * e);
+			if (u < 1) glideRaf = requestAnimationFrame(step); else { glideRaf = 0; settle(); }
+		};
+		glideRaf = requestAnimationFrame(step);
+		// (frames can stop coming for a while on a struggling device: the slide ends on the clock then)
+		glideT = setTimeout(settle, ms + 120);
+	}
+	// the slide over: every page back in its own seat, the track on the page in view (the page and
+	// the track move by the same amount, so nothing shifts on screen)
 	function settle() {
-		clearTimeout(settleT); settleT = 0;
+		cancelAnimationFrame(glideRaf); glideRaf = 0; clearTimeout(glideT); glideT = 0;
 		for (const j of PAGES.keys()) if (seats[j] !== j) { seats[j] = j; seat(j); }
 		shown(page);
-		place(false);
+		setX(target());
 	}
 	// the neighbour a drag is uncovering, shown beside the page
 	function uncover() {
@@ -465,7 +486,6 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		page = i; dx = 0;
 		if (changed && from >= 0) turns += Math.sign(i - from);
 		if (o.glide !== false && (changed || wasDx)) {
-			clearTimeout(settleT);
 			if (changed && from >= 0) {
 				const d = i - seats[from];
 				if (Math.abs(d) !== 1) { seats[i] = seats[from] + Math.sign(d || i - from); seat(i); } else if (seats[i] !== i) { seats[i] = i; seat(i); }
@@ -473,7 +493,6 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			} else if (changed) shown(i);
 			// (a drag let go short of the next page glides back, its neighbour still in view)
 			place(true);
-			settleT = setTimeout(settle, 620);
 		} else settle();
 		if (changed || o.force) {
 			for (const [j, p] of P.pages.entries()) p.el.classList.toggle('cur', j === page);
@@ -509,7 +528,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 				if (Math.abs(ddx) > Math.abs(ddy)) {
 					dragging = dragged = true;
 					// (a drag that catches a slide still settling ends it, so the pages sit where the drag expects them)
-					if (settleT) settle();
+					if (glideRaf) settle();
 					try { P.stage.setPointerCapture(id); } catch { /* gone */ }
 				}
 			}
@@ -521,7 +540,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			// (the page the drag uncovers is shown as the drag begins, and again if it turns about)
 			const s = dx < 0 ? 1 : -1;
 			if (s !== side) { side = s; uncover(); }
-			place(false);
+			setX(target());
 		});
 		const end = (e) => {
 			if (e.pointerId !== id) return;
@@ -869,8 +888,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const ok = n.kind === 'spell' ? onWeave(n.id) : onPerk(n.id);
 		if (!ok) { sound('fizzle', 0.05); return; }
 		const S = SKILL[PAGES[page]];
-		P.flash.style.background = `radial-gradient(circle at 50% 50%,${rgba(S.color, 0.32)},transparent 60%)`;
-		P.flash.classList.remove('go'); void P.flash.offsetWidth; P.flash.classList.add('go');
+		P.flash = { at: performance.now(), rgb: hexRgb(S.color) };
 		toast(`${n.kind === 'spell' ? 'Woven' : 'Unlocked'}: ${n.item.name}`, S.color);
 		refresh([n.id]);
 	}
@@ -917,10 +935,18 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	}
 
 	// ---------- the sky ----------
-	let stars = [], sprite = null, raf = 0, dpr = 1, skyX = 0;
+	let stars = [], sprite = null, raf = 0, dpr = 1, skyX = 0, vig = null;
 	function sizeSky() {
-		dpr = Math.min(isPhone ? 1.25 : 2, devicePixelRatio || 1);
-		P.sky.width = Math.round(W * dpr); P.sky.height = Math.round(H * dpr);
+		// (a phone's sky is drawn under 60 000 pixels and scaled up: WebKit keeps a canvas that small
+		// on the CPU and paints it into the page's own tiles, where a bigger one is a layer of its
+		// own, and every sibling over it then has to be too)
+		dpr = lite ? Math.min(1, Math.sqrt(60000 / Math.max(1, W * H))) : Math.min(2, devicePixelRatio || 1);
+		P.sky.width = Math.max(1, Math.round(W * dpr)); P.sky.height = Math.max(1, Math.round(H * dpr));
+		// the vignette: an ellipse 80% by 70% of the sky at 50%, 45%, clear to 40% of its radius
+		// (drawn through a scale, since a canvas gradient is a circle)
+		const g = P.sky.getContext('2d');
+		vig = g?.createRadialGradient(0, 0, 0, 0, 0, 1) || null;
+		if (vig) { vig.addColorStop(0.4, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,.55)'); }
 		const n = Math.round(Math.min(isPhone ? 140 : 260, W * H / 5200));
 		let seed = 7;
 		const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -937,6 +963,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		if (!open) { raf = 0; return; }
 		raf = requestAnimationFrame(frame);
 		const t = now / 1000, g = P.sky.getContext('2d');
+		if (!g) return;
 		const w = P.sky.width, h = P.sky.height;
 		g.clearRect(0, 0, w, h);
 		// (the stars drift with the page, the nearer ones more: one notch a turn, eased, however
@@ -952,6 +979,15 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			if (r < 2.4) { const c = TINT[s.c]; g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; g.fillRect(x, y, Math.max(1, r * 0.4), Math.max(1, r * 0.4)); } else g.drawImage(sprite, x - r, y - r, r * 2, r * 2);
 		}
 		g.globalAlpha = 1;
+		if (vig) { g.save(); g.translate(w * 0.5, h * 0.45); g.scale(w * 0.8, h * 0.7); g.fillStyle = vig; g.fillRect(-2, -2, 4, 4); g.restore(); }
+		// (the flash of a weave or an unlock: the school's colour from the centre, gone in .9 s)
+		const F = P.flash, fu = F ? (now - F.at) / 900 : 1;
+		if (fu < 1) {
+			const a = 0.32 * (1 - fu) * (1 - fu), r = Math.hypot(w, h) * 0.3;
+			const fg = g.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, r);
+			fg.addColorStop(0, `rgba(${F.rgb[0]},${F.rgb[1]},${F.rgb[2]},${a})`); fg.addColorStop(1, `rgba(${F.rgb[0]},${F.rgb[1]},${F.rgb[2]},0)`);
+			g.fillStyle = fg; g.fillRect(0, 0, w, h);
+		} else if (F) P.flash = null;
 		if (P.pv && P.pv.isConnected) preview(P.pv, t);
 		// (anything changed while open: fabric gathered, mana, a rank)
 		if (((t * 4) | 0) !== frame.q) {
@@ -965,7 +1001,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	function preview(cv, t) {
 		const sp = cv.spell, cw = cv.clientWidth, ch = cv.clientHeight;
 		if (!cw) return;
-		const d = Math.min(isPhone ? 1.5 : 2, devicePixelRatio || 1);
+		const d = Math.min(lite ? 1.5 : 2, devicePixelRatio || 1);
 		if (cv.width !== Math.round(cw * d) || cv.height !== Math.round(ch * d)) { cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); }
 		// (a browser out of canvas memory gives no context: the sky goes on without the preview)
 		const g = cv.getContext('2d');
@@ -985,10 +1021,13 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const i = k ? PAGES.indexOf(k) : page;
 		page = -1; go(i >= 0 ? i : 0, { glide: false, force: true });
 		refresh();
-		// (faded in by a transition, not a frame: a slow frame does not hold it back)
+		// (faded in by a transition, not a frame: a slow frame does not hold it back; a phone shows it
+		// at once). Once it is over everything the world under it is told so (cover: main.js takes the
+		// canvas out of the picture and hands its drawing buffer back, until the menu goes)
 		void root.offsetWidth;
 		root.classList.add('vis');
-		setTimeout(() => { if (open) vis = true; }, 340);
+		const over = () => { if (!open || vis) return; vis = true; cover(true); };
+		if (lite) over(); else setTimeout(over, 340);
 		addEventListener('keydown', onKey, true);
 		addEventListener('resize', layout);
 		if (document.pointerLockElement) document.exitPointerLock?.();
@@ -997,11 +1036,15 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	}
 	function close() {
 		if (!open) return;
+		const was = vis;
 		open = false; vis = false;
-		root.classList.remove('vis');
+		if (was) cover(false);
 		removeEventListener('keydown', onKey, true);
 		removeEventListener('resize', layout);
-		setTimeout(() => { if (!open) root.classList.remove('on'); }, 340);
+		// (the world is drawn again on the next frame, so a phone keeps the menu up for one more and
+		// drops it then; elsewhere the fade covers the gap)
+		const gone = () => { if (!open) root.classList.remove('on', 'vis'); };
+		if (lite) requestAnimationFrame(() => requestAnimationFrame(gone)); else { root.classList.remove('vis'); setTimeout(gone, 340); }
 	}
 	return {
 		open: openAt, close,
@@ -1011,7 +1054,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		covering: () => open && vis,
 		refresh: () => { if (open) refresh(); },
 		page: () => PAGES[page],
-		dispose() { close(); cancelAnimationFrame(raf); clearTimeout(settleT); root?.remove(); },
+		dispose() { close(); cancelAnimationFrame(raf); cancelAnimationFrame(glideRaf); clearTimeout(glideT); root?.remove(); },
 	};
 }
 

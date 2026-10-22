@@ -152,6 +152,7 @@ export function dressFor(r, d, ctx = {}) {
 	// their look: the palette it is all drawn from
 	const look = lookOf(d);
 	if (look && !o.night && chance(r, 0.85)) applyLook(r, o, office && (look === 'colour' || look === 'gorp') ? 'minimal' : look);
+	statement(d, o, { place, act, cold, office, night: !!ctx.night });
 	smallThings(r, d, o, { office });
 	carried(d, o, { place, act });
 	// the weather: over it all, a warm layer when it is cold, a shell in the rain
@@ -188,6 +189,38 @@ function nightOut(r, d, o, { cold }) {
 	o.shoes = chance(r, 0.45) ? { kind: 'boot', col: col('black'), sole: col('black') } : chance(r, 0.5) ? { kind: 'loafer', col: col(pick(r, ['black', 'espresso'])), sole: col('black') } : { kind: 'chunky', col: col(pick(r, ['black', 'white'])), acc: col('black'), sole: col(pick(r, ['black', 'white'])) };
 	if (f && chance(r, 0.5)) o.acc.push({ kind: 'crossbody', small: true, col: col(pick(r, ['black', 'burgundy', 'cream'])) });
 	if (chance(r, 0.4)) o.acc.push({ kind: 'chain', col: chance(r, 0.6) ? SILVER : GOLD });
+}
+
+// the pieces that make an outfit: a sweater vest over a collared shirt (a pinstripe, an oxford)
+// or a tee, its V tipped in a second colour; a fitted tank on a young man on a warm day, a chain
+// with it; a fedora or a trilby on some, more at night; and a cut that flatters where the
+// generation's default would hang loose on a fit body. From a stream of the person's own seed,
+// so nothing else about them changes (the look's palette is already on them, applyLook)
+const TIP = ['white', 'cream', 'navy', 'burgundy', 'butter', 'black'];
+function statement(d, o, { place, act, cold, office, night }) {
+	if (d.child || o.night && !night) return;
+	let a = ((d.seed ?? 0) ^ 0x5741e) >>> 0;
+	const r = () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+	const gen = o.gen, L = LOOKS[o.look] || LOOKS.minimal, hasHat = () => o.acc.some((q) => /^(cap|beanie|bucket|sunhat|visor|fedora|trilby|helmet|hardhat)$/.test(q.kind));
+	const walking = act === 'walk' || act === 'sit' || act === 'work' || act === 'ride';
+	const T = o.top, fit = Math.max(0, 1 - (d.weight || 0) * 2) * Math.max(0, 1 - Math.max(0, d.age - 45) / 30);
+	// a sweater vest, over a shirt or a tee, on a mild day with nothing else over it
+	if (T && !o.outer && walking && cold > 0.2 && cold < 0.75 && d.age > 15 && d.age < 70 && /^(tee|shirt|longsleeve|polo|henley|flannel)$/.test(T.kind) && chance(r, ({ preppy: 0.4, minimal: 0.14, mono: 0.1, soft: 0.1, colour: 0.08 })[o.look] ?? (gen === 'z' ? 0.12 : gen === 'millennial' ? 0.08 : 0.06))) {
+		if (T.kind === 'tee' && chance(r, 0.6)) o.top = { kind: 'shirt', col: col(pick(r, ['white', 'white', 'babyblue', 'cream', 'oat'])), acc: col(pick(r, ['navy', 'slate', 'cobalt', 'burgundy'])), pat: pick(r, ['pinstripe', 'pinstripe', 'oxford', 'plain', 'stripe']), fit: 'regular', sleeves: cold < 0.4 ? pick(r, ['rolled', 'short', 'long']) : 'long', collar: true, pocket: false };
+		else if (T.kind === 'tee') { T.fit = 'fitted'; T.pat = 'plain'; }
+		const vest = col(pick(r, [...L.mid, ...L.dark, 'heather', 'oat']));
+		o.outer = { kind: 'sweatervest', col: vest, acc: col(pick(r, TIP.filter((k) => col(k) !== vest))), pat: 'plain', fit: 'fitted', sleeves: 'none', open: false, fab: 'knit', neck: 'v', tip: true };
+		if (o.bottom && o.bottom.fit === 'baggy') o.bottom.fit = 'wide';
+	} else if (T && d.male && !o.outer && walking && !office && cold < 0.3 && d.age > 16 && d.age < 46 && /^(tee|longsleeve|henley)$/.test(T.kind) && chance(r, (gen === 'z' ? 0.2 : 0.1) * (0.5 + fit))) {
+		// a fitted tank, in the top's own colour, and a chain with it as often as not
+		o.top = { kind: 'tank', col: T.col, acc: T.acc, pat: T.pat === 'graphic' ? 'graphic' : pick(r, ['plain', 'plain', 'rib']), fit: 'fitted', sleeves: 'none' };
+		if (!o.acc.some((q) => q.kind === 'chain') && chance(r, 0.5)) o.acc.push({ kind: 'chain', col: chance(r, 0.6) ? SILVER : GOLD });
+	} else if (T && T.kind === 'tee' && T.fit === 'oversized' && d.male && fit > 0.6 && chance(r, 0.35)) T.fit = 'regular';
+	// a hat with a brim: a fedora, a trilby on the younger
+	if (!hasHat() && walking && !office && place !== 'beach' && place !== 'trail' && d.age > 20 && d.age < 72 && !o.acc.some((q) => q.kind === 'headphones') && chance(r, night ? 0.12 : ({ workwear: 0.06, earthy: 0.05, mono: 0.05, minimal: 0.03 })[o.look] ?? 0.02)) {
+		const dark = chance(r, night ? 0.7 : 0.4);
+		o.acc.push({ kind: d.age < 40 && chance(r, 0.5) ? 'trilby' : 'fedora', col: col(dark ? pick(r, ['black', 'charcoal', 'espresso']) : pick(r, ['tan', 'camel', 'chocolate', 'stone', 'khaki'])), acc: col(dark ? pick(r, ['black', 'burgundy', 'charcoal']) : pick(r, ['black', 'chocolate', 'cream', 'burgundy'])) });
+	}
 }
 
 // the small things people wear every day: a watch, earrings, a chain (none on children)

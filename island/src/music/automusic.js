@@ -20,6 +20,9 @@ const CAP = { mel: 2, pad: 5, bass: 2, counter: 2, arp: 3 };
 // the kits hit far harder than a lead note at the same velocity: a balance per drum
 // (kept well under the leads: the drums sit behind the music, as in the caves)
 const KIT = { kick: 0.32, snare: 0.3, clap: 0.3, hitom: 0.35, lotom: 0.35, cymbal: 0.22, openhat: 0.4, ride: 0.45, hihat: 0.6, shaker: 0.65, rim: 0.55, cowbell: 0.35, perc: 0.45 };
+// drum and bass is the other way round: the break is the music and the leads sit on it (the
+// DNB kit's cowbell is the horn, its perc the siren, its jump the sweep: see index.html)
+const DNB_KIT = { kick: 0.95, snare: 0.9, clap: 0.6, hitom: 0.6, lotom: 0.6, cymbal: 0.5, openhat: 0.5, ride: 0.5, hihat: 0.55, shaker: 0.5, rim: 0.5, cowbell: 0.8, perc: 0.7, jump: 0.7 };
 const ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/><path d="M3 9.5c1.2-1 2.2-1 3.4 0M2 6.5c2-1.7 3.8-1.7 5.6 0" opacity=".7"/></svg>';
 
 function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; } }
@@ -178,7 +181,8 @@ export function createAutoMusic(opts) {
 	}
 	function drum(name, vel) {
 		if (performance.now() < S.manualDrumUntil) vel *= 0.4;
-		const v = vel * (KIT[name] ?? 0.7) * S.level * S.safety;
+		const kit = S.info?.genre === 'dnb' ? DNB_KIT : KIT;
+		const v = vel * (kit[name] ?? 0.7) * S.level * S.safety;
 		if (v < 0.03) return;
 		count('drums');
 		if (name === 'kick' && opts.shared) opts.shared.uPulse.value = Math.min(1.5, opts.shared.uPulse.value + 0.12 * v);
@@ -404,7 +408,7 @@ export function createAutoMusic(opts) {
 			b.innerHTML = ICON + '<span>' + (S.on ? 'AUTO MUSIC: ON' : 'AUTO MUSIC: OFF') + '</span>';
 			b.style.background = S.on ? '#01a982' : 'transparent';
 			val.textContent = Math.round(S.level * 100) + '%';
-			info.textContent = S.on && S.info ? `${S.info.section} · ${describe()} · ${S.game?.place || ''} ${S.game?.move || ''}` : 'Improvises on the faceplate\'s sounds, key and beat, and follows where you are and what you do.';
+			info.textContent = S.on && S.info ? `${S.info.label || S.info.section} · ${describe()} · ${S.game?.place || ''} ${S.game?.move || ''}` : 'Improvises on the faceplate\'s sounds, key and beat, and follows where you are and what you do.';
 		};
 		box.refresh();
 	}

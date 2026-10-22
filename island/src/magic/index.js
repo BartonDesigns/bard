@@ -53,7 +53,7 @@ const WEAK = new Set(['head', 'neck', 'weak', 'eye', 'heart']);
 // that has the controls (driving, a menu); menu: the places menu, which gets a way in; me(): your
 // body (people/avatar.js me: { P, M }); third(): whether you are seen in third person (people/self.js);
 // heavens(): { sun, moon }, the directions toward each
-export function createMagic({ scene, camera, mount, combat, arms, world, light, heavens = () => null, hint = () => {}, busy = () => false, menu = null, isPhone = false, isTouch = false, me = () => null, third = () => false }) {
+export function createMagic({ scene, camera, mount, combat, arms, world, light, heavens = () => null, hint = () => {}, busy = () => false, menu = null, isPhone = false, isTouch = false, me = () => null, third = () => false, cover = () => {} }) {
 	let saved = null;
 	try { saved = JSON.parse(store.get(KEY) || 'null'); } catch { saved = null; }
 	const state = sanitizeSkills(createMagicState(saved));
@@ -254,7 +254,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	}
 	// the skills and magic menu: weave a spell, take a perk, slot a spell to a key
 	skills = createSkillsMenu({
-		mount, state, light, isTouch, isPhone, elements: ELEMENTS,
+		mount, state, light, isTouch, isPhone, elements: ELEMENTS, cover,
 		sound: (k, v) => magicSound(k, v),
 		onWeave: (id) => {
 			const c = weaveCost(SPELL[id]);
