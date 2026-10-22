@@ -41,7 +41,7 @@ const CELL = 300, NEAR = 160, STAGE_R = 140;
 const hash = (a, b) => { let h = Math.imul(Math.floor(a) | 0, 374761393) ^ Math.imul(Math.floor(b) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const HIVIS = '#d8f03a';
 // what comes off at the door
-const OUTDOORS = new Set(['backpack', 'cap', 'beanie', 'sunglasses', 'helmet', 'visor', 'trucker', 'peaked', 'beret', 'bucket', 'sunhat', 'hardhat', 'hood', 'gloves', 'mitt', 'hazhood', 'tote', 'shopper', 'handbag', 'crossbody', 'headphones']);
+const OUTDOORS = new Set(['backpack', 'cap', 'beanie', 'fedora', 'trilby', 'sunglasses', 'helmet', 'visor', 'trucker', 'peaked', 'beret', 'bucket', 'sunhat', 'hardhat', 'hood', 'gloves', 'mitt', 'hazhood', 'tote', 'shopper', 'handbag', 'crossbody', 'headphones']);
 
 // ---------- the small things they carry and the things that stand about ----------
 const M = {};
