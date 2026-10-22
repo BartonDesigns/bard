@@ -111,10 +111,13 @@ export function createShaderWarm(renderer, scene, camera) {
 	// built in the background (renderer.compileAsync, a few things a frame), to be drawn a frame
 	// or two later. Nothing is drawn differently once in, and nothing that has its shaders waits.
 	// The sun's shadow pass inside that render goes through the same gate (its depth materials).
-	const props = renderer.properties, held = new Set();
+	// (the renderer's properties are read each time, never kept: three makes a new set when the
+	// graphics come back from a loss, and the old one would say every material still had its
+	// shaders, or that none of the new ones ever got them)
+	const props = () => renderer.properties, held = new Set();
 	let building = new WeakSet(), firstDraw = new WeakSet();
 	let gateOn = false, inMain = false, spent = 0, passed = 0, frameN = 0, budgetMs = 24, built = 0, skipped = 0, compiling = 0;
-	const isNew = (m) => !props.get(m).programs || building.has(m) || firstDraw.has(m);
+	const isNew = (m) => !props().get(m).programs || building.has(m) || firstDraw.has(m);
 	function gate({ budget = 24 } = {}) {
 		budgetMs = budget;
 		if (gateOn) return;
@@ -151,7 +154,7 @@ export function createShaderWarm(renderer, scene, camera) {
 		for (const o of held) {
 			held.delete(o);
 			if (!o.material || !o.parent) continue;
-			const ms = mats(o).filter((m) => m && !props.get(m).programs);
+			const ms = mats(o).filter((m) => m && !props().get(m).programs);
 			if (!ms.length) continue;
 			take.push(o); mats2.push(...ms);
 			if (take.length >= n) break;

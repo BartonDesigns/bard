@@ -69,8 +69,13 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 	marker.style.cssText = 'display:none;position:absolute;pointer-events:none;z-index:6;color:#ffe4a0;font:600 12px var(--bard-display,system-ui,sans-serif);text-shadow:0 1px 3px #000;transform:translate(-50%,-50%);text-align:center;white-space:nowrap';
 	const reticle = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H3v6M19 3h6v6M3 19v6h6M25 19v6h-6"/><circle cx="14" cy="14" r="3"/></svg>';
 	const arrow = '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 5 9 9-9 9"/></svg>';
-	marker.innerHTML = '<span style="display:block;width:28px;height:28px"></span><span style="position:absolute;top:32px;left:50%;width:max-content;max-width:160px;overflow:hidden;text-overflow:ellipsis"></span>';
-	const label = marker.lastElementChild, glyph = marker.firstElementChild;
+	// (under the name: their life, a thin bar, for anyone who has one: Ryan 2026-10-22 could not
+	// see the Burnt Giant's health)
+	marker.innerHTML = '<span style="display:block;width:28px;height:28px"></span><span style="position:absolute;top:32px;left:50%;width:max-content;max-width:160px"><span style="display:block;overflow:hidden;text-overflow:ellipsis"></span><span class="combat-focus-life" style="display:none;height:3px;margin:3px auto 0;width:56px;border-radius:2px;background:rgba(0,0,0,.5);overflow:hidden"><span style="display:block;height:100%;width:100%;transform-origin:left;background:#4fe0a8"></span></span></span>';
+	const glyph = marker.firstElementChild, label = marker.lastElementChild.firstElementChild, life = marker.querySelector('.combat-focus-life'), lifeFill = life.firstElementChild;
+	// what they have left, 0..1, or null for one with no life to show (T.health: a person's;
+	// T.ref.H: a squad fighter's or a creature's, combat/ai-squads.js)
+	const lifeOf = (T) => { const H = T.health || T.ref?.H; return H && H.max > 0 && Number.isFinite(H.hp) ? Math.max(0, Math.min(1, H.hp / H.max)) : null; };
 	const dock = document.createElement('div'); dock.className = 'combat-focus-controls';
 	dock.style.cssText = 'display:none;position:absolute;right:calc(12px + env(safe-area-inset-right));top:clamp(110px,32%,220px);gap:6px;flex-direction:column;z-index:7';
 	function button(name, text, fn) {
@@ -206,13 +211,20 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 			const mode = edge ? 'edge' : 'reticle';
 			if (glyph.dataset.mode !== mode) { glyph.dataset.mode = mode; glyph.innerHTML = edge ? arrow : reticle; }
 			glyph.style.transform = edge ? `rotate(${Math.atan2(-y, x) * 180 / Math.PI}deg)` : '';
-			label.style.transform = `translateX(${x > 0.6 ? '-100%' : x < -0.6 ? '0' : '-50%'})`;
+			label.parentElement.style.transform = `translateX(${x > 0.6 ? '-100%' : x < -0.6 ? '0' : '-50%'})`;
 			const distance = Math.round(camera.position.distanceTo(selected.bound));
 			const text = `${track ? 'Locked · ' : ''}${selected.name || 'Target'} · ${distance} m`;
 			marker.style.color = track ? '#ff9a7a' : '#ffe4a0';
 			if (label.textContent !== text) label.textContent = text;
+			const lk = lifeOf(selected), ld = lk == null ? 'none' : 'block';
+			if (life.style.display !== ld) life.style.display = ld;
+			if (lk != null) {
+				const sx = `scaleX(${lk.toFixed(3)})`, lc = lk < 0.3 ? '#ff6a4a' : '#4fe0a8';
+				if (lifeFill.style.transform !== sx) lifeFill.style.transform = sx;
+				if (lifeFill.style.background !== lc) lifeFill.style.background = lc;
+			}
 		},
-		info: () => ({ id: selected?.id || null, visible: seen, candidates: candidates.length, cameraAssist: !!track, tap: tapWhy, offset: track ? { yaw: +track.offY.toFixed(4), pitch: +track.offP.toFixed(4) } : null }),
+		info: () => ({ id: selected?.id || null, visible: seen, candidates: candidates.length, cameraAssist: !!track, tap: tapWhy, offset: track ? { yaw: +track.offY.toFixed(4), pitch: +track.offP.toFixed(4) } : null, life: selected ? lifeOf(selected) : null }),
 		dispose() { clear(); marker.remove(); dock.remove(); style.remove(); removeEventListener('keydown', key); removeEventListener('pointerdown', pointer); removeEventListener('blur', clear); removeEventListener('pointerdown', tapDown, true); removeEventListener('pointermove', tapMove, true); removeEventListener('pointerup', tapUp, true); },
 	};
 }

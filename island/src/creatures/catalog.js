@@ -10,6 +10,8 @@
 //   dmg, reach   a blow's harm to you (more to another fighter) and how far it reaches, in m
 //   strike       a blow's whole time, in s (the wind-up is the first third: read it and step back)
 //   sight        how far it notices you
+//   hunt         how much further it keeps after you once roused, as a factor of sight (1.8
+//                when not given): past that it loses you and gives up the chase
 //   resist       harm taken by kind (combat/health.js DAMAGE_TYPES)
 //   model, human its model when not its own id; human, the person it is until it turns (the
 //                Moonturned: a villager who changes when you come near or hurt them)
@@ -20,12 +22,19 @@
 //   shatter      it bursts into shards when it dies, nothing left to lie there
 //   fly          a flyer: the height it keeps over the ground (hover) and drops to (strike), in m
 //   lurk         one that waits still among the trees (the Burnt Giant): it wakes when you come
-//                within wake m, strike it or fire near it, rising over rise s
+//                within wake m, strike it or fire near it, rising over rise s; for its first
+//                stalk s awake it only walks after you, and having lost you it goes back to
+//                standing as a tree after settle s
 //   throw        a thrower (fire pots, a curse): from past arm's reach to range it lobs one every
 //                so often (every, s) for dmg, splashing splash m; it keeps back to keep m
 //   where        when and where it comes on its own (combat/combat.js creatures()):
 //                night (after dark only), zones (combat.js zone()), pack (how many together),
-//                odds (how often, against the others there: 1 when not given)
+//                odds (how often, against the others there: 1 when not given). The Moon is its
+//                own zone ('moon', every airless world): the sky there is black by day too, so
+//                a night creature let onto it comes at any hour, and nothing of the Earth's
+//                woods or towns does (Ryan 2026-10-22 met the Burnt Giant at the moon base)
+//   moon         its look on the Moon, as creatures/models.js vary() takes it: hue (how far
+//                its colour may turn), sat and val (its colour's strength and lightness, times)
 //
 // Pure data: no three, no DOM.
 
@@ -101,8 +110,10 @@ export const SPECIES = Object.freeze({
 	'burnt-giant': {
 		name: 'Burnt Giant', faction: 'nightborn', height: 12,
 		hp: 2400, armour: 80, walk: 1.4, run: 3.6, dmg: 55, reach: 7, strike: 2.4, sight: 70,
-		resist: { fire: 2.0, ballistic: 0.5, pierce: 0.6 }, surface: 'wood',
-		lurk: { wake: 9, rise: 3 },
+		// (it hunts no further than it sees: get 70 m from it and it loses you; a fresh-woken
+		// one walks after you a while before it runs, so there is time to get away)
+		hunt: 1, resist: { fire: 2.0, ballistic: 0.5, pierce: 0.6 }, surface: 'wood',
+		lurk: { wake: 9, rise: 3, stalk: 8, settle: 20 },
 		// (by day too: a tree among trees is no less a tree in daylight)
 		where: { night: false, zones: ['wild', 'earth-rural'], pack: [1, 1], odds: 0.12 },
 	},
@@ -110,7 +121,9 @@ export const SPECIES = Object.freeze({
 		name: 'Ridge Hound', faction: 'nightborn', height: 1.15,
 		hp: 110, armour: 0, walk: 1.6, run: 8.5, dmg: 13, reach: 1.7, strike: 0.7, sight: 70,
 		resist: { fire: 1.3 }, surface: 'creature',
-		where: { night: true, zones: ['earth-rural', 'wild'], pack: [3, 5], odds: 0.8 },
+		where: { night: true, zones: ['earth-rural', 'wild', 'moon'], pack: [3, 5], odds: 0.8 },
+		// (on the Moon, bleached: the gnarly white hounds of the moon base, Josh 2026-10-22)
+		moon: { hue: 0.15, sat: 0.2, val: 1.45 },
 	},
 	'hound-rider': {
 		name: 'Hound Rider', faction: 'goblins', height: 2.1,
@@ -172,9 +185,10 @@ export function pickSpecies(ids, rnd = Math.random()) {
 }
 
 // which of them may come here now: zone (combat.js zone()), night (0..1, world/sky.js uNight)
+// (the Moon's sky is black at every hour: its creatures keep no hours)
 export function speciesFor(zone, night) {
 	return SPECIES_IDS.filter((id) => {
 		const w = SPECIES[id].where;
-		return w.zones.includes(zone) && (!w.night || night > 0.6);
+		return w.zones.includes(zone) && (!w.night || night > 0.6 || zone === 'moon');
 	});
 }
