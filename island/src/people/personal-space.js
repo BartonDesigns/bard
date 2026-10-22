@@ -18,6 +18,21 @@ export const EASE = 0.4, REACH = 1.4;
 export const SHUFFLE_AFTER = 0.45, SHUFFLE = 0.9;
 // (a body that has not stepped for this long is gone: pooled, unloaded, or left behind)
 const STALE = 600;
+// someone coming up to you (to talk, to hand something over) stops here: a step further out than
+// you stop walking up to them (FRONT), so neither of you is in the other's face
+export const COME = 2.2;
+
+// walk p (a pool person: M, S) up to you, once, and no further than COME, then stand facing you.
+// Once there they never take a step after you: someone who follows as you back away reads as a
+// threat, not a friend. pace 0 only turns them. Returns whether they are there (or not coming).
+export function comeUp(p, cam, pace = 0.8) {
+	const S = p.M.S, dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
+	if (d < COME + 0.15) p.cameUp = true;
+	const walk = pace > 0 && !p.cameUp && d > COME;
+	p.M.want.heading = Math.atan2(dx, dz);
+	p.M.want.speed = walk ? pace : 0;
+	return !walk;
+}
 
 const live = [], _from = { x: 0, z: 0 }, _to = { x: 0, y: 0, z: 0 };
 

@@ -6,7 +6,7 @@
 // Run with node --test.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { keepSpace, noteBody, bodiesNoted, FRONT, SIDE, TOUCH } from '../src/people/personal-space.js';
+import { keepSpace, noteBody, bodiesNoted, comeUp, COME, FRONT, SIDE, TOUCH } from '../src/people/personal-space.js';
 
 let clock = 0;
 const DT = 1 / 15;
@@ -129,4 +129,27 @@ test('hidden, faded or limp bodies are passed through', () => {
 		const { near } = walk([P], 0, 2, 0, -1, { t: 1 });
 		assert.ok(near[0] < 0.2);
 	}
+});
+
+test('someone coming up to you stops a comfortable step off and never follows you back', () => {
+	// a pool person: M (want, S) and where they stand
+	const p = { M: { S: { pos: { x: 0, y: 0, z: 0 } }, want: { speed: 0, heading: 0 } } };
+	const cam = { x: 0, y: 1.68, z: 6 };
+	// far off: walks toward you, facing you
+	assert.equal(comeUp(p, cam, 0.8), false);
+	assert.equal(p.M.want.speed, 0.8);
+	assert.ok(Math.abs(p.M.want.heading) < 1e-6, 'faces +z, toward you');
+	// arrived within COME: stands
+	p.M.S.pos.z = 6 - COME + 0.05;
+	assert.equal(comeUp(p, cam, 0.8), true);
+	assert.equal(p.M.want.speed, 0);
+	// you back away: they turn after you but take no step
+	cam.z = 12;
+	assert.equal(comeUp(p, cam, 0.8), true);
+	assert.equal(p.M.want.speed, 0);
+	// told not to come (at a work spot): turns only, from any distance
+	const q = { M: { S: { pos: { x: 0, y: 0, z: 0 } }, want: { speed: 0, heading: 0 } } };
+	assert.equal(comeUp(q, cam, 0), true);
+	assert.equal(q.M.want.speed, 0);
+	assert.ok(COME > FRONT, 'stops further out than you stop walking up to them');
 });
