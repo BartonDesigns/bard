@@ -45,9 +45,12 @@ export function createErrands({ pacing = null, scene, camera, world, people, cha
 			if (mode === 'follow') { const S = q.M.S, dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz); if (d > 1.8) { q.M.want.heading = Math.atan2(dx, dz); q.M.want.speed = Math.min(1.8, d); } else q.M.want.speed = 0; return true; }
 			const S = q.M.S, dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
 			if (q.route?.kind === 'seat') return false;   // sitting: stays sat
+			// (turned to you once you are near, and looked at as anyone near is looked at, meeting
+			// your eyes and glancing away (motion.js): never squared up to and stared at from
+			// across the street, which reads as a threat)
 			q.M.want.speed = 0;
-			if (d < 16) { q.M.want.heading = Math.atan2(dx, dz); if (!S.remark) S.look.target = cam; }
-			else if (!S.remark) S.look.target = null;
+			if (d < 8) q.M.want.heading = Math.atan2(dx, dz);
+			if (!S.remark) S.look.target = null;
 			q.M.setPose(q.idlePose || 'rest');
 			return true;
 		};
@@ -218,7 +221,8 @@ export function createErrands({ pacing = null, scene, camera, world, people, cha
 		const credits = rewardFor(E.kind, metres);
 		if (to?.active) {
 			chatter.say(to, { text: lineFor(say, { kind: E.kind, item: E.item, friend: E.giverName, n }), gesture: say === 'caught' || say === 'reunited' ? 'laugh' : 'wave', feel: { joy: 1, surprise: say === 'caught' || say === 'reunited' ? 0.6 : 0.2 } }, null);
-			to.M.S.feel.joy = 1;
+			// (a warm smile: a full grin held up close reads as a smirk)
+			to.M.S.feel.joy = 0.55;
 		}
 		const paid = credits ? arms()?.apply?.({ id: `favour:${E.giverName}:${Date.now()}`, kind: 'trade', peer: 'favour', give: { credits: 0, items: [] }, get: { credits, items: [] } }) : { ok: false };
 		// (out of their own pocket, through the bank's adapter)
