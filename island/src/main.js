@@ -45,6 +45,7 @@ import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graph
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
+import { refillShed } from './world/cpucopy.js';
 import { bodyCount } from './people/body.js';
 import { createCataclysm } from './cataclysm/index.js';
 import { createMagic } from './magic/index.js';
@@ -523,6 +524,9 @@ export function createIslandWorld() {
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
 		lost = true;
+		// the pictures a phone let go of once the card held them, asked back for the restored
+		// context to upload again (world/cpucopy.js)
+		refillShed();
 		const blocked = recovery.lost();
 		if (blocked || /signage-|uSgFar/.test(linking.what)) recoverSignage(storage);
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console

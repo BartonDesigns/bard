@@ -12,6 +12,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { skyEnv, withCarSky, carGlassMaterial } from '../bay/cars.js';
 import { unfight, layerOffset } from './layers.js';
 import { GFX_PHONE } from '../world/device.js';
+import { shedImage } from '../world/cpucopy.js';
 
 // which kinds have a model, and its files (near, and for the middle distance)
 export const MODEL_KINDS = { sports: ['sports.glb', 'sports-mid.glb'], crossover: ['crossover.glb', 'crossover-mid.glb'], delivery: ['delivery.glb', 'delivery-mid.glb'], bus: ['bus.glb', 'bus.glb'] };
@@ -21,14 +22,30 @@ const LAYERED = { crossover: true, bus: true };
 const url = (f) => new URL(`../assets/vehicles/${f}`, import.meta.url).href;
 // a phone keeps the models' textures at half size (a quarter of the memory)
 const PHONE = GFX_PHONE;
-function halve(t) {
-	const im = t?.image;
-	if (!PHONE || !im || im.width <= 512) return;
+function shrink(im) {
+	if (!PHONE || !im || im.width <= 512) return im;
 	const cv = document.createElement('canvas');
 	cv.width = im.width >> 1; cv.height = im.height >> 1;
 	cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
 	im.close?.();
-	t.image = cv; t.needsUpdate = true;
+	return cv;
+}
+function halve(t) {
+	const cv = shrink(t?.image);
+	if (cv && cv !== t.image) { t.image = cv; t.needsUpdate = true; }
+}
+// ...and once a picture is on the graphics card, lets the page's copy go (world/cpucopy.js):
+// a model's pictures are only ever drawn by the card. Lost graphics ask for it again, from
+// the file in the browser's cache, taken apart only as far as that one texture.
+const again = new Map();
+function pictureAgain(file, matName, slot) {
+	let p = again.get(file);
+	if (!p) { p = gltf().loadAsync(url(file)).finally(() => again.delete(file)); again.set(file, p); }
+	return p.then((g) => {
+		let im = null;
+		g.scene.traverse((o) => { if (im || !o.isMesh) return; for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m?.name === matName && m[slot]?.image) { im = m[slot].image; break; } });
+		return shrink(im);
+	});
 }
 
 let loader = null;
@@ -78,14 +95,15 @@ export function wantModel(kind, lod = 'near') {
 	const K = kits[kind] || (kits[kind] = {});
 	if (!K[lod]) {
 		K[lod] = { ready: false };
-		gltf().loadAsync(url(files[lod === 'near' ? 0 : 1])).then((g) => { Object.assign(K[lod], takeApart(g.scene, lod, LAYERED[kind]), { ready: true }); }).catch((e) => { K[lod].failed = true; console.warn('[vehicles] model', kind, e); });
+		const file = files[lod === 'near' ? 0 : 1];
+		gltf().loadAsync(url(file)).then((g) => { Object.assign(K[lod], takeApart(g.scene, lod, LAYERED[kind], file), { ready: true }); }).catch((e) => { K[lod].failed = true; console.warn('[vehicles] model', kind, e); });
 	}
 	return K[lod].ready ? K[lod] : null;
 }
 export function modelsReady() { return Object.entries(kits).map(([k, K]) => k + ':' + Object.keys(K).filter((l) => K[l].ready).join('/')).join(' '); }
 
 // one geometry per material for the body; the wheels on their own
-function takeApart(scene, lod, layered) {
+function takeApart(scene, lod, layered, file) {
 	scene.updateMatrixWorld(true);
 	const body = new Map(), wheels = { L: new Map(), R: new Map(), RL: new Map(), RR: new Map() }, hubs = [];
 	let tris = 0;
@@ -122,21 +140,21 @@ function takeApart(scene, lod, layered) {
 			add(body, mat, g);
 		}
 	});
-	const parts = [...body.entries()].map(([m, gs]) => part(m, gs, layered));
+	const parts = [...body.entries()].map(([m, gs]) => part(m, gs, layered, file));
 	const wparts = {};
-	for (const [k, w] of Object.entries(wheels)) wparts[k] = [...w.entries()].map(([m, gs]) => part(m, gs));
+	for (const [k, w] of Object.entries(wheels)) wparts[k] = [...w.entries()].map(([m, gs]) => part(m, gs, false, file));
 	const box = new THREE.Box3();
 	for (const p of parts) { p.geo.computeBoundingBox(); box.union(p.geo.boundingBox); }
 	hubs.sort((a, b) => ['wheelFL', 'wheelFR', 'wheelRL', 'wheelRR'].indexOf(a.name) - ['wheelFL', 'wheelFR', 'wheelRL', 'wheelRR'].indexOf(b.name));
 	return { parts, wheels: wparts, hubs: hubs.map((h) => h.p.toArray()), box, tris: Math.round(tris) };
 }
 const add = (map, mat, g) => { const k = mat.name + '|' + (g.attributes.color ? 'c' : '') + (g.attributes.uv ? 'u' : ''); let e = map.get(k); if (!e) map.set(k, e = { mat, gs: [] }); e.gs.push(g); };
-function part(key, e, layered = false) {
+function part(key, e, layered = false, file = null) {
 	const gs = e.gs;
 	const geo = gs.length > 1 ? mergeGeometries(gs) || gs[0] : gs[0];
 	if (layered) unfight(geo);
 	const n = e.mat.name;
-	for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) halve(e.mat[k]);
+	for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) { const t = e.mat[k]; if (!t) continue; halve(t); if (file) shedImage(t, () => pictureAgain(file, n, k), { on: PHONE }); }
 	const role = n === 'paint' ? 'paint' : n === 'glass' ? 'glass' : n === 'lamp' ? 'lamp' : 'solid';
 	let mat;
 	if (role === 'paint') mat = paintMaterial(e.mat.map);
