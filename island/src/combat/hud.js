@@ -3,9 +3,13 @@
 // round it pointing to where a blow came from, a boss's bar across the top with its phase, the
 // wanted stars, short call-outs, a feed of who fell to whom nearby (yours marked), and on a touch screen Fire, Reload and Mode buttons by the
 // thumb. Shown only when it matters (a weapon in hand, a fight on, a recent hit).
+// (The root is display:contents: its parts are placed from the mount's edges themselves. A
+// screen-sized container over the world's canvas would cost a phone a screen-sized compositor
+// backing store, there the whole time; small parts cost their own size.)
 
 const CSS = `
-.cb-hud{position:absolute;inset:0;pointer-events:none;z-index:5;font:600 13px/1.2 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.cb-hud{display:contents;pointer-events:none;font:600 13px/1.2 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.cb-hud>*{z-index:5}
 .cb-x{position:absolute;left:50%;top:50%;width:0;height:0;transition:opacity .15s}
 .cb-x i{position:absolute;background:rgba(240,250,248,.92);box-shadow:0 0 2px rgba(0,0,0,.7)}
 .cb-x i.h{width:9px;height:2px;top:-1px}.cb-x i.v{width:2px;height:9px;left:-1px}
