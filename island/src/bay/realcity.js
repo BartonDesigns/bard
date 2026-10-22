@@ -113,6 +113,22 @@ const LOAD = PHONE ? 2000 : 3000, DROP = PHONE ? 2800 : 4500, NEWS = 2600;
 // the coarse maps round you are drawn into one, at most this many texels a side
 const COMP = PHONE ? 1024 : 2048;
 
+// a tile's parse a few milliseconds at a time: its roads, buildings, paths and trees run to tens
+// and hundreds of thousands of entries, and read in one piece they held a phone's frame for the
+// tens of milliseconds and more each, right as you landed. breather(signal) gives a function
+// that, once this much has been spent, gives the frame back (as addDrives does) and checks the
+// tile is still wanted; what is parsed is the same, only spread over frames
+const PARSE_MS = PHONE ? 4 : 8;
+function breather(signal, ms = PARSE_MS) {
+	let t = performance.now();
+	return async () => {
+		if (performance.now() - t < ms) return;
+		await new Promise((ok) => setTimeout(ok, 0));
+		if (signal?.aborted) throw new DOMException('Tile cancelled', 'AbortError');
+		t = performance.now();
+	};
+}
+
 async function gunzip(res) {
 	if (!res.ok) throw new Error(res.status + ' ' + res.url);
 	const ds = new DecompressionStream('gzip');
@@ -163,8 +179,9 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	// it, straight away from the street (from two streets on a corner), by 3.5 m at most;
 	// returns the moves (in 50 m cells) so the drives and walks to them can follow.
 	const SET_MAX = 3.5;
-	function setBack(G) {
+	async function setBack(G, breathe) {
 		const seen = new Set(), moves = new Map(), near = [];
+		let n = 0;
 		// (how far (x, z) is from a road's centre line, and the way out from it)
 		const away = (r, x, z) => {
 			const p = r.pts;
@@ -180,6 +197,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			const grp = b.grp || [b];
 			if (seen.has(grp)) continue;
 			seen.add(grp);
+			if ((++n & 127) === 0) await breathe();
 			const home = isHome(b);
 			let cx = 0, cz = 0, R = 0;
 			for (const q of grp) { cx += q.x / grp.length; cz += q.z / grp.length; }
@@ -267,6 +285,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		]);
 		if (signal.aborted) throw new DOMException('Tile cancelled', 'AbortError');
 		const t0 = performance.now(), dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
+		const breathe = breather(signal);
 		// a region baked round another origin: shift it (the mapping is a pure translation in x)
 		const shiftX = ((H.geo ? H.geo[1] : LON0_LEGACY) - LON0) * KX;
 		const [OX, OZ] = [H.origin[0] + shiftX, H.origin[1]], U = H.unit, S = H.sections;
@@ -278,6 +297,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		// roads: class, flags, name, points
 		let o = S.roads[0];
 		for (let n = 0; n < S.roads[1]; n++) {
+			if ((n & 127) === 127) await breathe();
 			const c = dv.getUint8(o), f = dv.getUint8(o + 1), nm = dv.getUint16(o + 2, true), k = dv.getUint16(o + 4, true); o += 6;
 			// (a point repeated on the next is dropped: a zero-length piece has no direction)
 			let pts = new Float32Array(k * 2), m = 0;
@@ -298,6 +318,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		// a second, ordinary building in the middle of it
 		const sm = toWorld(SUMMIT.lat, SUMMIT.lon);
 		for (let n = 0; n < S.boxes[1]; n++, o += 18) {
+			if ((n & 1023) === 1023) await breathe();
 			const kh = dv.getInt16(o + 14, true);
 			const b = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000, wallH: dv.getInt16(o + 10, true) / 20, roofH: dv.getInt16(o + 12, true) / 20, kind: kh & 255, hip: kh >> 8, door: dv.getInt16(o + 16, true) / 1000 };
 			if (!inIb(b.x, b.z) || Math.hypot(b.x - sm.x, b.z - sm.z) < 90 || LF.skip(b.x, b.z) || onLandmark(b.x, b.z, Math.max(b.w, b.d) / 2)) continue;
@@ -305,11 +326,12 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		// a building's blocks, gathered into the house they make (houses.js builds them)
 		groupBoxes(G.boxes);
-		const moved = setBack(G);
+		const moved = await setBack(G, breathe);
 		await settleRegionSoon(G, onLandmark, signal);          // structures: no building through another, a street or a landmark
 		for (const b of G.boxes) cellIn(G.grid, b.x, b.z).boxes.push(b);
 		o = S.paths[0];
 		for (let n = 0; n < S.paths[1]; n++, o += 10) {
+			if ((n & 1023) === 1023) await breathe();
 			const p = { ax: dv.getInt16(o, true) * U + OX, az: dv.getInt16(o + 2, true) * U + OZ, bx: dv.getInt16(o + 4, true) * U + OX, bz: dv.getInt16(o + 6, true) * U + OZ, w: dv.getInt16(o + 8, true) / 20 };
 			// (a drive or walk to a house set back goes on to its new front)
 			for (const e of ['a', 'b']) for (const m of moved.get(Math.floor(p[e + 'x'] / 50) * 65536 + Math.floor(p[e + 'z'] / 50)) || []) if (Math.hypot(p[e + 'x'] - m.x, p[e + 'z'] - m.z) < m.r) { p[e + 'x'] += m.px; p[e + 'z'] += m.pz; break; }
@@ -319,12 +341,14 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		if (signal?.aborted) throw new DOMException('Tile cancelled', 'AbortError');
 		o = S.pools[0];
 		for (let n = 0; n < S.pools[1]; n++, o += 10) {
+			if ((n & 1023) === 1023) await breathe();
 			const p = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000 };
 			// (nothing domestic on Mt Diablo's summit: its buildings are dropped above, and their pools)
 			if (inIb(p.x, p.z) && Math.hypot(p.x - sm.x, p.z - sm.z) > 400) cellIn(G.grid, p.x, p.z).pools.push(p);
 		}
 		o = S.trees[0];
 		for (let n = 0; n < S.trees[1]; n++, o += 8) {
+			if ((n & 2047) === 2047) await breathe();
 			const t = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, h: dv.getInt16(o + 4, true) / 20, cone: dv.getInt16(o + 6, true) };
 			if (!inIb(t.x, t.z) || LF.skip(t.x, t.z) || onLandmark(t.x, t.z, 2)) continue;
 			cellIn(G.grid, t.x, t.z).trees.push(t);

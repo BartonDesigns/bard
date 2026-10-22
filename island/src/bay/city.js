@@ -41,6 +41,7 @@ import { qualityNow } from '../world/governor.js';
 import { roadDelta, gradeVersion } from './berms.js';         // the roads' grading: trees beside a road stand on its banks and cuts
 import { WALL_CUTS, CUT_PARS, CUT_TEST } from '../structures/walls/cuts.js';
 import { GFX_PHONE } from '../world/device.js';
+import { runSteps } from '../world/buildslice.js';      // a build in steps, a frame's share at a time
 import { orderByReach } from '../world/shadowreach.js';      // the sun's shadows from what can reach them
 import { orderBySector, sectorOf, chunkStore, chunkedMesh } from '../world/instancechunks.js';      // drawn a sector at a time, what is out of view left out
 import { cityBlocks } from './city-blocks.js';
@@ -1829,20 +1830,27 @@ export function createCity(shared, scene, bay, real = null) {
 		if (Math.hypot(x - acX, z - acZ) > 40 || kit.ac.instanceMatrix.version !== acV) placeAC(x, z);
 		// the buildings round you again every 300 m, a few milliseconds a frame (the ones standing
 		// stay drawn till the new set is ready): done in one go it held a phone's frame for the
-		// best part of a second each time; the first set, and one far from where you are now (a
-		// teleport, a fast flight), is done at once
+		// best part of a second each time. The first set, and one far from where you are now (a
+		// landing, a teleport, a fast flight), used to be done at once: at a landing in the Bay that
+		// one frame built the whole city while the tiles, the streets and the rest came in beside
+		// it, and a phone's page died there. Now it goes in larger slices instead; the arrival
+		// card and the travel veil stay up while it builds (busy(): share.js, main.js), and with
+		// no veil the old set stays drawn till the new one is in
 		if (!rebuild && Math.hypot(x - lastX, z - lastZ) >= 300) { lastX = x; lastZ = z; rebuild = rebuildAt(x, z, globe); }
 		if (rebuild) {
-			const t0 = performance.now(), budget = !builtOnce || Math.hypot(x - rebuild.x, z - rebuild.z) > 900 ? Infinity : SLICE;
-			while (rebuild && performance.now() - t0 < budget) if (rebuild.gen.next().done) { rebuild = null; builtOnce = true; }
+			const budget = !builtOnce || Math.hypot(x - rebuild.x, z - rebuild.z) > 900 ? JUMP : SLICE;
+			if (runSteps(rebuild.gen, budget)) { rebuild = null; builtOnce = true; builds++; }
 			return;
 		}
 		if (!high && (Math.hypot(x - treeX, z - treeZ) > 40 || gradeVersion() !== treeGV)) { placeTrees(x, z); bedFarX = 1e9; }                 // (MARGIN covers these 40 m)
 		if (!high && Math.hypot(x - bedX, z - bedZ) > 2) placeBeds(x, z);
 	}
 	// one rebuild of the buildings, trees and kit round (x, z), in steps
-	const SLICE = PHONE ? 4 : 6;
-	let rebuild = null, builtOnce = false;
+	const SLICE = PHONE ? 4 : 6, JUMP = PHONE ? 10 : 16;
+	let rebuild = null, builtOnce = false, builds = 0;
+	// a set being laid out (the first, or one after a jump): the arrival card and the travel veil
+	// wait for it, so the city is never seen to come in piecewise
+	const busy = () => !!rebuild;
 	const rebuildAt = (x, z, globe) => ({ x, z, gen: rebuildSteps(x, z, globe) });
 	// a list's filter a slice at a time
 	function* keepSteps(arr, ok) {
@@ -1918,5 +1926,5 @@ export function createCity(shared, scene, bay, real = null) {
 		yield;
 		placeTrees(x, z);
 	}
-	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), bedsNear: (x, z, r) => bedList.filter((t) => !t.litter && Math.hypot(t.x - x, t.z - z) < r), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, busy, info: () => ({ busy: !!rebuild, builds, first: builtOnce }), economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), bedsNear: (x, z, r) => bedList.filter((t) => !t.litter && Math.hypot(t.x - x, t.z - z) < r), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }
