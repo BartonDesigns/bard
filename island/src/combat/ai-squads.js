@@ -244,9 +244,9 @@ export function createSquads(ctx) {
 				}
 				h.cr = c; h.beast = beast; h.turn = beast ? -1 : 1;
 				// no two alike: each its own size, build and colour (creatures/models.js); a person's
-				// skin barely turns
-				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1 });
-				if (beast) { beast.size = beast.vary(); beast.root.visible = false; }
+				// skin barely turns (opts.look: the Moon's bleached hounds, creatures/catalog.js moon)
+				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1, ...(opts.look || {}) });
+				if (beast) { beast.size = beast.vary(Math.random, opts.look || {}); beast.root.visible = false; }
 				// one that waits, still among the trees, for you to come too close (the Burnt Giant)
 				h.dormant = Sp.lurk && !opts.alert ? 1 : 0; h.waking = -1;
 				if (h.dormant) h.yaw = Math.random() * 6.283;
