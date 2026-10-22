@@ -35,7 +35,7 @@
 // hits reach in here (hexOn, arc, ward, fleet, strike) and loose spells of their own (a free cast).
 
 import * as THREE from 'three';
-import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf, moonlit, gargantuaSize, GARGANTUA_LIFT } from './spells.js';
+import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf, moonlit, gargantuaSize, gargantuaRange, GARGANTUA_LIFT } from './spells.js';
 import { GLOW, magicSound, beamVoice, holeVoice } from './fx.js';
 import { CHARGE, MIN_BLAST } from './beam.js';
 import { blastPart } from '../combat/health.js';
@@ -243,9 +243,10 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(spell.school, 0.16); } });
 		},
 		singularity(spell, k) {
-			// Gargantua: a dot on the horizon the way you face that swells to stand over it, feeds there
-			// (the ground round you torn up and streaming into it), then rushes out to fill the whole
-			// sky (spells.js gargantuaSize); over spell.t it draws every foe within spell.r of you into
+			// Gargantua: a dot far off on the horizon the way you face that swells to stand there, its
+			// lower half under the horizon, feeds (the ground round you torn up and streaming into it),
+			// creeping nearer, then rushes at you to fill the whole sky (spells.js gargantuaSize and
+			// gargantuaRange); over spell.t it draws every foe within spell.r of you into
 			// it, holding them as they slide toward it and unmaking each at its moment. Anything vast
 			// loses spell.bossCut of its life, a little at each step. Foes who come into reach while
 			// it feeds are taken too.
@@ -286,8 +287,11 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					t += 0.1; n++;
 					const u = Math.min(1, t / RISE), e = 1 - (1 - u) * (1 - u);
 					R = gargantuaSize(spell, t);
-					// (it stands over the horizon: its heart above your eye's level by more than its radius, so
-					// the whole shadow clears the horizon, climbing up out from behind it as it comes (fx.js))
+					// (it comes: nearer as it feeds and rushing in at the end; its heart stands a little over
+					// your eye's level, so the lower part of the shadow is always under the horizon, and it
+					// climbs up out from behind it as it comes (fx.js))
+					const D = gargantuaRange(spell, t);
+					hole.x = me.x + fw.x * D; hole.z = me.z + fw.z * D;
 					drawn.set(hole.x, me.y + R * GARGANTUA_LIFT - (1 - e) * R * 2.4, hole.z);
 					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position, t / spell.t);
 					else fx.burst(drawn, GLOW.void, 6, -R, 0.5, R * 0.1, 0);

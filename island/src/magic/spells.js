@@ -81,7 +81,7 @@ export const SPELLS = Object.freeze([
 	S('event-horizon', 'Event Horizon', 'void', 4, 'well', 65, 60, '⊚', 'A sphere of void that holds all within it still and drinks their life.', { dmg: 60, dps: 28, r: 11, range: 70, t: 5, pull: 1.5, type: 'void', status: { hold: 5 } }),
 	// (the ultimate: a fifth rung, above Event Horizon. r is how far it reaches from you, far and rise
 	// where it hangs on the horizon, size its radius, bossCut the share of anything vast's life it takes)
-	S('gargantua', 'Gargantua', 'void', 5, 'singularity', 100, 300, '●', 'Gargantua appears as a dot on the horizon and swells until it fills the sky. Over ten seconds it draws in and unmakes every foe in sight, and tears a quarter of the life from anything vast.', { r: 600, t: 10, far: 340, rise: 40, size0: 1.5, size: 330, bossCut: 0.25, type: 'void' }),
+	S('gargantua', 'Gargantua', 'void', 5, 'singularity', 100, 300, '●', 'Gargantua appears as a dot on the horizon and swells until it fills the sky. Over ten seconds it draws in and unmakes every foe in sight, and tears a quarter of the life from anything vast.', { r: 600, t: 10, far: 2600, near: 1200, rise: 40, size0: 1.5, size: 1150, bossCut: 0.25, type: 'void' }),
 	// ---------- Blight ----------
 	S('hex-of-decay', 'Hex of Decay', 'blight', 1, 'bolt', 11, 3, '✣', 'A curse that rots the one it strikes for a while.', { dmg: 8, speed: 55, type: 'blight', status: { dot: 9, t: 8 } }),
 	S('withering', 'Withering', 'blight', 2, 'bolt', 16, 6, '≀', 'Drains the strength from the one it strikes: they slow and weaken.', { dmg: 18, speed: 55, type: 'blight', status: { slow: 0.4, t: 8, dot: 4 } }),
@@ -110,19 +110,31 @@ export const SPELLS = Object.freeze([
 ]);
 
 export const SPELL = Object.freeze(Object.fromEntries(SPELLS.map((q) => [q.id, q])));
-// Gargantua's size t seconds in (m): a dot that swells fast in its first moment to stand on the
-// horizon, feeds there for most of its time, creeping larger, then from three quarters in (as the
-// world's colours invert round it) rushes out to fill the whole sky, full by 90% of its time and
-// holding there. Its heart stands GARGANTUA_LIFT of its radius over the eye, so the whole shadow
-// sits above the horizon.
-export const GARGANTUA_LIFT = 1.15;
+// Gargantua's growth and its coming: a dot that rises from behind the horizon far beyond the bay
+// (spell.far) and swells to stand there by 1.2 s, then feeds, creeping bigger and nearer, and at
+// three quarters of its time (as the world's colours invert round it) rushes at you, full and at
+// spell.near by 90% of its time, holding there. Its heart stands only GARGANTUA_LIFT of its radius
+// over the eye's level, so the bottom of the shadow is always under the horizon: a planet's
+// worth of black coming up over the edge of the world (Josh: megalophobia, something massive
+// coming at you), the land and the water in front of it.
+export const GARGANTUA_LIFT = 0.7;
+const GARG_T = (spell) => { const T = spell.t || 10; return { t1: 1.2, t2: T * 0.75, t3: T * 0.9 }; };
+const rush = (u) => Math.pow(u, 1.4);
 export function gargantuaSize(spell, t) {
-	const T = spell.t || 10, R0 = spell.size0 || 1.5, R1 = spell.size || 330, Ra = R1 * 0.14, Rb = R1 * 0.33, t1 = 1.2, t2 = T * 0.75, t3 = T * 0.9;
+	const R0 = spell.size0 || 1.5, R1 = spell.size || 1150, Ra = R1 * 0.3, Rb = R1 * 0.5, { t1, t2, t3 } = GARG_T(spell);
 	if (t <= 0) return R0;
 	if (t < t1) { const u = t / t1, e = 1 - (1 - u) * (1 - u); return R0 * Math.pow(Ra / R0, e); }
 	if (t < t2) return Ra * Math.pow(Rb / Ra, (t - t1) / (t2 - t1));
-	if (t < t3) return Rb * Math.pow(R1 / Rb, Math.pow((t - t2) / (t3 - t2), 1.4));
+	if (t < t3) return Rb * Math.pow(R1 / Rb, rush((t - t2) / (t3 - t2)));
 	return R1;
+}
+// how far off it stands (m) t seconds in
+export function gargantuaRange(spell, t) {
+	const D0 = spell.far || 2600, D1 = spell.near || 1200, Db = D0 * 0.7, { t1, t2, t3 } = GARG_T(spell);
+	if (t < t1) return D0;
+	if (t < t2) return D0 + (Db - D0) * (t - t1) / (t2 - t1);
+	if (t < t3) return Db + (D1 - Db) * rush((t - t2) / (t3 - t2));
+	return D1;
 }
 export const strandOf = (spell) => SCHOOLS[spell?.school]?.strand || null;
 

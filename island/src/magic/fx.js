@@ -223,24 +223,35 @@ const FACE_FRAG = `${CUT} uniform float uT; uniform float uA; varying vec2 vP;
 		float edge = (1.0 - smoothstep(4.0, 5.0, ax)) * (1.0 - smoothstep(2.0, 2.8, abs(y)));
 		// the photon ring: a hair of white fire on the shadow's edge, a little orange heat outside it
 		float ring = exp(-pow((r - 1.012) / 0.012, 2.0)) * 1.5, heat = exp(-pow((r - 1.035) / 0.05, 2.0)) * 0.35;
-		// the disc, edge-on: a thin blazing band through the heart, its near rim dipping across the
-		// shadow's lower half, flaring and dimming as it goes out, white-hot only along its core; the
-		// side turning toward you (left) is the brighter (Doppler); it churns
-		float yb = -0.3 * sqrt(max(0.0, 1.0 - x * x / 1.5));
-		float thick = 0.07 + 0.1 * max(0.0, ax - 1.0), dy = y - yb;
-		float band = exp(-pow(dy / thick, 2.0)), core = exp(-pow(dy / (thick * 0.3), 2.0));
-		float reach = (1.0 - smoothstep(3.4, 4.6, ax)) / (1.0 + pow(max(0.0, ax - 1.0) * 0.5, 2.2));
-		float dopp = 0.6 + 0.6 * smoothstep(1.6, -1.6, x);
-		float churn = 0.78 + 0.22 * sin(x * 5.0 - uT * 3.2) * sin(x * 11.0 + y * 40.0 + uT * 1.7);
-		float disc = band * reach * dopp * churn * 1.3, discHot = core * reach * dopp * 0.9;
-		// the far side of the disc, bent up over the top into a broad halo hugging the shadow, and a
-		// thinner arc bent under
+		// the accretion disc: a tilted ring of fire round the shadow, seen a little from above, so its
+		// near half sweeps down in front of the lower shadow and out toward you (and on under the
+		// horizon), its far half behind; it spins, fastest inside, its fire drawn into trailing
+		// spirals and knots, the side coming toward you (left) the brighter (Doppler), and it pulses
+		float sq = y < 0.0 ? 0.36 : 0.26;
+		vec2 dp = vec2(x, y / sq);
+		float rho = length(dp), phi = atan(dp.y, dp.x);
+		float pulse = 1.0 + 0.2 * sin(uT * 4.7) + 0.12 * sin(uT * 11.3 + rho * 2.0) + 0.08 * sin(uT * 2.3 + phi * 2.0) + 0.5 * pow(0.5 + 0.5 * sin(uT * 3.1), 6.0);
+		float rin = 1.08 + 0.03 * sin(uT * 6.1), rout = 4.5;
+		float spin = uT * 4.0 * pow(max(rho, 0.6), -1.5);
+		float th = phi + rho * 0.9 - spin;
+		float n1 = sin(th * 5.0), n2 = sin(th * 13.0 + rho * 2.0 - uT * 0.9), n3 = sin(th * 7.0 - rho * 5.0 + uT * 3.0);
+		float knots = pow(0.5 + 0.5 * n1, 2.0) * (0.6 + 0.4 * n2) + 0.3 * pow(0.5 + 0.5 * n3, 3.0);
+		float churn = 0.4 + 0.8 * knots;
+		float inr = smoothstep(rin - 0.03, rin + 0.05, rho), outr = 1.0 - smoothstep(rout - 1.2, rout, rho);
+		float fall = 1.0 / (1.0 + pow(max(0.0, rho - rin) / 0.9, 2.0));
+		float dopp = 0.5 + 0.35 * (1.0 - x / max(rho, 1e-4));
+		// (the far half shows only past the shadow's edge; the near half is in front of it)
+		float vis = y < 0.0 ? 1.0 : smoothstep(0.98, 1.03, r);
+		float disc = inr * outr * fall * dopp * churn * pulse * vis * 1.4;
+		float discHot = exp(-pow((rho - rin) / 0.1, 2.0)) * dopp * pulse * vis * (0.8 + 0.5 * knots);
+		// the far side of the disc, bent up over the top into a broad halo hugging the shadow, turning
+		// and pulsing with it
 		float up = smoothstep(-0.25, 0.45, y / max(r, 1e-4));
-		float halo = exp(-pow((r - 1.1) / 0.25, 2.0)) * up * (0.92 + 0.08 * sin(atan(y, x) * 6.0 - uT * 0.8)) * 0.7;
-		float under = exp(-pow((r - 1.05) / 0.1, 2.0)) * smoothstep(0.15, -0.6, y / max(r, 1e-4)) * 0.45;
-		// the white-hot points where the disc meets the ring
-		vec2 dl = p - vec2(-1.06, -0.06), dr = p - vec2(1.06, -0.06);
-		float spots = exp(-dot(dl, dl) / 0.008) * 1.2 + exp(-dot(dr, dr) / 0.005) * 0.6;
+		float halo = exp(-pow((r - 1.1) / 0.25, 2.0)) * up * (0.82 + 0.18 * sin(atan(y, x) * 6.0 - uT * 2.4)) * pulse * 0.7;
+		float under = 0.0;
+		// the white-hot points where the disc's inner edge meets the ring
+		vec2 dl = p - vec2(-0.99, -0.13), dr = p - vec2(0.99, -0.13);
+		float spots = (exp(-dot(dl, dl) / 0.008) * 1.2 + exp(-dot(dr, dr) / 0.005) * 0.6) * pulse;
 		// the warm haze round it all, and faint rays thrown out across the sky
 		float glow = 0.18 / pow(1.0 + (r - 1.0) * 2.4, 2.0) + 0.04 / (1.0 + r * 0.6);
 		float an = atan(y, x);

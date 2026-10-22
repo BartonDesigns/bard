@@ -9,7 +9,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 const root = path.resolve(__dirname, '..'), out = process.env.OUT || '/tmp/spell-looks';
 const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
-const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { createLens } from './src/magic/lens.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS, gargantuaSize, GARGANTUA_LIFT } from './src/magic/spells.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
+const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { createLens } from './src/magic/lens.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS, gargantuaSize, gargantuaRange, GARGANTUA_LIFT } from './src/magic/spells.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
 
 (async () => {
 	fs.mkdirSync(out, { recursive: true });
@@ -95,9 +95,9 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 				if (window.__grow != null) {
 					const s = spell, R = Game.gargantuaSize(s, window.__grow), e = camera.position;
 					camera.far = 6000; camera.updateProjectionMatrix();
-					// (as in the game: its heart over the eye's level by more than its radius, the whole
-					// shadow clear of the horizon)
-					const h = v(-30, e.y + R * Game.GARGANTUA_LIFT, -s.far);
+					// (as in the game: its heart a little over the eye's level, the lower part of the shadow
+					// under the horizon, at its range then)
+					const h = v(-30, e.y + R * Game.GARGANTUA_LIFT, -Game.gargantuaRange(s, window.__grow));
 					// (and the ending's grade as it stands then)
 					fx.gradeFrom(s.t); fx.update(Math.max(0, window.__grow - 0.6));
 					run(0.6, (tt) => L.tick?.(fx, h, R, tt, e, window.__grow / s.t));

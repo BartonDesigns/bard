@@ -23,8 +23,10 @@ const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[$
 			vec2 d = s - uL[i].xy, ax = uE[i].xy, tg = vec2(-ax.y, ax.x);
 			vec2 dc = vec2(dot(d, ax) / uE[i].z, dot(d, tg));
 			float rs = uL[i].z, th = max(length(dc), 1e-4), k = uK[i].x;
-			// (only above the horizon: below it the hole is hidden, and so is its light)
-			float sky = smoothstep(uK[i].y - px, uK[i].y + px * 2.0, s.y);
+			// (only above the horizon: below it the hole is hidden, and so is its light; the bend eases in
+			// over the lowest bit of the shadow, so the sky is not smeared sideways along the horizon
+			// and the shadow's edge goes cleanly down under it)
+			float sky = smoothstep(uK[i].y - px, uK[i].y + min(0.08, uL[i].z * 0.12), s.y);
 			// (the shadow itself, its ring and the flat of its disc are kept out of the grade, until
 			// it has grown past the whole view, when all of it goes with the world)
 			float e = length(vec2(d.x / (rs * 3.6), d.y / (rs * 0.32)));
