@@ -112,6 +112,11 @@ export const qualityNow = () => TIERS[current];
 // how many of n people a system may build on this tier (its people share), never fewer than least
 export const peopleCap = (n, least = 1) => Math.max(Math.min(n, least), Math.round(n * TIERS[current].people));
 export const tierNow = () => current;
+// the share of the memory budget in use, as the running governor last measured it (null where
+// nothing can be measured): what else may be loaded on a phone reads it (the local speech
+// model, people/chatter.js) so a 100 MB model never lands on a page already near its limit
+let memShare = null;
+export const memoryNow = () => memShare;
 export function onQuality(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function setTier(t) {
 	const n = clampTier(t);
@@ -160,7 +165,7 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 		update(dt, frameMs) {
 			state.avg = frameMs; // diagnostics also report frames in explicit High/Low
 			const m = mode();
-			if ((memT -= dt) <= 0) { memT = 1; memK = memory(); }
+			if ((memT -= dt) <= 0) { memT = 1; memK = memory(); memShare = memK; }
 			if (m === 'auto') {
 				if (lastMode !== 'auto') { state.since = 0; state.slow = state.fast = 0; }
 				govern(state, { dt, frameMs, mem: memK });
