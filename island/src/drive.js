@@ -54,7 +54,9 @@ function nearestOn(p, x, z) {
 }
 
 export function createDrive({ world, camera, mount, isPhone, hint, strike = null }) {
-	const D = { police: false, active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined, mode: 'free', kind: 'crossover', color: new THREE.Color(0.1, 0.2, 0.45), car: null, chase: false, pedals: {} };
+	// (carQ: the car body's turn in the world, speed its pace (m/s) and steer its front wheels'
+	// angle, for the rain on its glass: world/windshield.js)
+	const D = { police: false, active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined, mode: 'free', kind: 'crossover', color: new THREE.Color(0.1, 0.2, 0.45), car: null, chase: false, pedals: {}, carQ: new THREE.Quaternion(), speed: 0, steer: 0 };
 	const KINDS = ['sedan', 'hatch', 'crossover', 'suv', 'pickup', 'van', 'sports', 'delivery', 'truck', 'bus'];
 	const CREDITS = 'Vehicle models (CC BY 4.0): "Car Concept" by Eric Chadwick / Darmstadt Graphics Group; "Red Car" by Camay; "European Delivery Van" by Evan Hiltz; "Generic Town Bus" by own.guest. Physics: Rapier. Details: assets/vehicles/CREDITS.md';
 
@@ -487,7 +489,12 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		// face along the road, turning smoothly, and tilt with its grade
 		const want = Math.atan2(-hx, -hz);
 		let dyaw = want - D.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
-		D.yaw += dyaw * Math.min(1, dt * 4);
+		const turned = dyaw * Math.min(1, dt * 4);
+		D.yaw += turned;
+		// (the front wheels, and the wheel in your hands, turned as much as the bend asks of
+		// them at this pace: a yaw rate from the wheelbase and the speed)
+		D.steer += (Math.max(-0.6, Math.min(0.6, Math.atan2(2 * specOf(D.kind).wz * turned / Math.max(dt, 1e-3), Math.max(Math.abs(D.v), 2)))) - D.steer) * Math.min(1, dt * 6);
+		D.speed = Math.abs(D.v);
 		const sa = Math.max(0, Math.min(E.L, D.s + D.dir * 8)), [ax, az] = onBridge(...at(E.pts, sa));
 		const grade = Math.max(-0.25, Math.min(0.25, (Math.max(W.island.heightAt(ax, az), deckAt(E, sa)) - road) / 8));
 		// free look: turn your head while the road carries you on (drag or mouse as ever);
@@ -504,7 +511,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 			const ox = x - fx * eye[2] - Math.cos(cy) * eye[0], oz = z - fz * eye[2] + Math.sin(cy) * eye[0];
 			D.spin = ((D.spin || 0) + D.v * dt / S.wr) % (Math.PI * 2);
 			M4.compose(V3.set(ox, floorY, oz), Q.setFromEuler(E.set(-Math.atan(grade), cy, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
-			W.vehicles.setMine(D.kind, D.color, M4, { driving: true, spin: D.spin, steer: 0, police: D.police });
+			D.carQ.copy(Q);
+			W.vehicles.setMine(D.kind, D.color, M4, { driving: true, spin: D.spin, steer: D.steer, police: D.police });
 			// (the eye sits at the driver's seat)
 			D.y += (floorY + eye[1] - D.y) * Math.min(1, dt * 4);
 		}
@@ -536,6 +544,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		M4.compose(V3.set(o.p[0], o.p[1], o.p[2]), Q, new THREE.Vector3(1, 1, 1));
 		M4.multiply(new THREE.Matrix4().makeTranslation(0, o.down, 0));
 		const w = o.wheels;
+		D.carQ.copy(Q); D.speed = Math.abs(o.speed); D.steer = w[0].steer;
 		W.vehicles?.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer, police: D.police });
 		// anyone in the way is struck (vehicles/impact.js); the car gives up what it hands them
 		if (strike) {

@@ -28,6 +28,7 @@ export function islandTeardown(iw) {
 	social.reset();
 	iw.world.labels?.dispose();
 	iw.world.plumes?.dispose();
+	iw.world.windshield?.dispose();
 	iw.world.powerlines?.dispose();
 	iw.world.contrails?.dispose();
 	iw.world.flush?.dispose();
