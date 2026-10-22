@@ -33,7 +33,7 @@ import { createProps, rooftopUnit, rooftopUnitFar } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
-import { settleLots } from '../structures/lots.js';        // structures: settled lots
+import { settleLotsSteps } from '../structures/lots.js';        // structures: settled lots
 import { streetTrees, treeColour, autumnNow } from './streettrees.js';       // streets by era: their trees
 import { NIGHT_U, NIGHT_I, nightSeed, housePlan, packHouse } from './nightplan.js';      // the households' own lights after dark
 import { addNightField } from '../world/nightfield.js';
@@ -1855,13 +1855,15 @@ export function createCity(shared, scene, bay, real = null) {
 	const rebuildAt = (x, z, globe) => ({ x, z, gen: timed(rebuildSteps(x, z, globe)) });
 	// the costliest step of the last set laid out (which, and its ms), for ?perf and the harnesses:
 	// a step runs whole, so the longest frame a rebuild costs is its longest step
-	const steps = { worst: -1, worstMs: 0, n: 0, totalMs: 0 };
+	const steps = { worst: -1, worstMs: 0, n: 0, totalMs: 0, top: [] };
+	let phase = '';          // the phase of the set being laid out (rebuildSteps names each)
 	function* timed(gen) {
-		steps.worst = -1; steps.worstMs = 0; steps.n = 0; steps.totalMs = 0;
+		steps.worst = -1; steps.worstMs = 0; steps.n = 0; steps.totalMs = 0; steps.top = [];
 		for (let i = 0; ; i++) {
 			const t = performance.now(), r = gen.next(), d = performance.now() - t;
 			steps.totalMs += d; steps.n = i + 1;
 			if (d > steps.worstMs) { steps.worstMs = d; steps.worst = i; }
+			if (d > 8) { steps.top.push([phase, Math.round(d)]); steps.top.sort((a, b) => b[1] - a[1]); steps.top.length = Math.min(steps.top.length, 4); }
 			if (r.done) return r.value;
 			yield;
 		}
@@ -1874,15 +1876,20 @@ export function createCity(shared, scene, bay, real = null) {
 	}
 	function* rebuildSteps(x, z, globe) {
 		const list = [];
+		phase = 'blocks';
 		if (!globe) fillBlocks(x, z, 1200, list);
 		clipMapped(list);
 		yield;
+		phase = 'real';
 		yield* realBuildings(x, z, 2000, list, !globe);
 		yield;
-		settleLots(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
+		phase = 'settle';
+		yield* settleLotsSteps(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
 		yield;
+		phase = 'decorate';
 		decorate(list, x, z, 700);
 		yield;
+		phase = 'streettrees';
 		// the streets' own trees by their era, in place of the map's plain rows (streettrees.js);
 		// nearer and fewer on a lower quality tier (world/governor.js)
 		if (list.trees && real?.loaded()) { const far = qualityNow().far; list.trees = streetTrees(real, list.trees, x, z, (PHONE ? 650 : 1000) * far, (tx, tz) => bay.heightAt(tx, tz), Math.round((PHONE ? 3500 : 9000) * far)); }
@@ -1890,10 +1897,12 @@ export function createCity(shared, scene, bay, real = null) {
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || ((t.well || L.road < 0.6) && L.roof < 0.7); });
 		yield;
+		phase = 'clearance';
 		// ...nor on a carriageway, a sidewalk, a trail or a drive, nor in a junction's sight
 		// triangle, within reach (bay/clearance.js): the land map is too coarse for a trunk
 		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); yield; list.trees = yield* keepSteps(list.trees, (t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5, !!t.well)); }
 		yield;
+		phase = 'fields+inside';
 		// ...nor on a ball field (sportsfields.js)
 		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !onLandmark(t.x, t.z, 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
 		// ...nor inside a building (every one can be walked into now): a coarse grid of them
@@ -1912,13 +1921,16 @@ export function createCity(shared, scene, bay, real = null) {
 			if (list.trees && G.size) list.trees = yield* keepSteps(list.trees, (t) => !inside(t));
 		}
 		yield;
+		phase = 'economy';
 		// which buildings are businesses, and their signs and things out front (economy/layer.js)
 		yield* economy.applySteps(list, x, z);
+		phase = 'cap';
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees, k = list.kit, pr = list.props; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; list.props = pr; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
 		yield;
+		phase = 'proc+apart';
 		procGroups(list, x, z);
 		// (a phone sorts out the nearer buildings only: the pass costs it a frame or two)
 		apart(list, x, z, PHONE ? 650 : 1e9);
@@ -1926,6 +1938,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// (then in place: the buildings, their kit a frame on, the trees a frame after; written a
 		// sector at a time round here, nearest first by bands in each, for the chunks and the
 		// shadow pass)
+		phase = 'upload';
 		lastAt = [x, z];
 		upload(list, near, [hips, gables], orderBySector(list, x, z, lotHalf), x, z);
 		skylineBeside(list);
@@ -1933,11 +1946,13 @@ export function createCity(shared, scene, bay, real = null) {
 		// the tall ones, for going inside (bay/towers.js)
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
 		yield;
+		phase = 'kit';
 		if (acX > 1e8) { acX = x; acZ = z; }          // (the first set: its near units round where it was laid out)
 		uploadKit(list.kit);
 		kit2.upload(list.props);
 		drives = { list: list.props?.car || [], v: drives.v + 1 };
 		yield;
+		phase = 'trees';
 		placeTrees(x, z);
 	}
 	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, busy, info: () => ({ busy: !!rebuild, builds, first: builtOnce, steps: { ...steps, worstMs: Math.round(steps.worstMs), totalMs: Math.round(steps.totalMs) } }), economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), bedsNear: (x, z, r) => bedList.filter((t) => !t.litter && Math.hypot(t.x - x, t.z - z) < r), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
