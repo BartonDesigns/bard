@@ -49,6 +49,7 @@ import { qualityNow } from '../world/governor.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 import { createScopeOptics } from './scope-optics.js';
+import { scopeView, scopeGone } from './scope-view.js';
 import { refineHandSurface, closeHandMaterial, handRefine } from '../people/hand-surface.js';
 import { dressArms } from '../people/sleeve.js';
 import { clamp, wrapAngle as wrap } from '../noise.js';
@@ -81,12 +82,16 @@ const GUN_VIEW = {
 	'aurora-trail-rifle': toSide({ ...LONG, p: [.18, -.245, -.45], r: [.20, .035, -.055] }),
 	'mossback-scout-rifle': toSide({ ...LONG, p: [.17, -.235, -.46], r: [.18, .025, -.045] }),
 	'warden-spark-carbine': toSide({ ...LONG, p: [.18, -.23, -.43], r: [.23, .03, -.07] }),
+	'longwatch-sniper-rifle': toSide({ ...LONG, p: [.17, -.24, -.46], r: [.17, .025, -.045] }),
 };
 const viewOf = (id, H) => H.kind === 'long' ? (GUN_VIEW[id] || VIEW.long) : H.kind === 'bow' ? VIEW.bow : /lantern/.test(id) ? VIEW.lantern : H.R?.t?.y > 0.9 ? VIEW.shaft : VIEW.one;
 // the item's x (forward) to the view's -z, its y up, its z to the right
 const BASE = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)));
 // the charging stroke after a fresh cell (reload progress): reach the knob, draw it back, let go
 const CHARGE = { reach: 0.8, grab: 0.86, back: 0.905, release: 0.925, travel: 0.034 };
+// a bolt worked after a shot (HOLDS' bolt; WEAPONS' bolt: its seconds): the same stroke, run
+// on its own from the reach (BOLT_WAIT after the shot, while the kick settles)
+const BOLT_WAIT = 0.12;
 const chargeTravel = (u) => u < CHARGE.grab ? 0 : u < CHARGE.back ? CHARGE.travel * ease((u - CHARGE.grab) / (CHARGE.back - CHARGE.grab)) : u < CHARGE.release ? CHARGE.travel : CHARGE.travel * Math.max(0, 1 - (u - CHARGE.release) / 0.012);
 
 export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone = false, fingers = 'later', shaders = 'later' }) {
@@ -111,7 +116,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (S.model) { S.model.userData.bow?.dispose(); rig.remove(S.model); }
 		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: 'high', optics: true, view: true }) : null;
 		const was = S.id;
-		S.id = item?.i || null; S.key = S.want; S.item = item; S.reload = null; S.trig = 0;
+		S.id = item?.i || null; S.key = S.want; S.item = item; S.reload = null; S.bolt = null; S.trig = 0;
 		if (S.model) { S.model.matrixAutoUpdate = false; S.model.userData.bow?.set(bowState); rig.add(S.model); }
 		const W = weaponOf(S.id) || weaponOf(was);
 		if (W && S.id !== was) playCue(S.id ? W.sounds.equip : W.sounds.holster);
@@ -294,6 +299,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	}
 	// the support hand's fingers through a reload: [progress, pose ...] (made once per item)
 	const reloadSeq = (L) => L.seq ||= [0.06, L.fore.params, 0.14, L.open.params, 0.2, L.cell.params, 0.77, L.cell.params, 0.81, blendPose(new Float32Array(20), L.cell.params, L.open.params, 0.55), CHARGE.grab, (L.charge || L.fore).params, 0.93, (L.charge || L.fore).params, 0.965, L.open.params, 1, L.fore.params];
+	// (and through the bolt's stroke after a shot: from the fore-end to the knob and back)
+	const boltSeq = (L) => L.boltSeq ||= [CHARGE.reach, L.fore.params, CHARGE.grab, (L.charge || L.fore).params, 0.93, (L.charge || L.fore).params, 0.965, L.open.params, 1, L.fore.params];
 	function fingersNow(dt, time, H, u, gather, sp) {
 		const R = poses.R, L = poses.L, since = time - S.shotT;
 		if (H.kind === 'long') {
@@ -307,8 +314,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			// the kick tightens the hand, then a beat later it eases and closes again on the grip
 			squeeze(want.R, 0.045 * Math.exp(-Math.max(0, since) * 14), 2, 4);
 			if (since > 0.12 && since < 0.46) { const k = Math.sin(Math.PI * (since - 0.12) / 0.34); squeeze(want.R, -0.07 * k, 2, 4); want.R[1] -= 0.05 * k; want.R[2] -= 0.06 * k; }
-			if (S.reload && L.cell) {
-				phase(want.L, reloadSeq(L), u);
+			if ((S.reload && L.cell) || (S.bolt && u > CHARGE.reach)) {
+				phase(want.L, S.reload ? reloadSeq(L) : boltSeq(L), u);
 				// the pull: the pinch tightens as it draws the knob back
 				if (u > CHARGE.grab && u < CHARGE.release) squeeze(want.L, 0.06, 1, 2);
 			} else want.L.set(L.fore.params);
@@ -362,7 +369,9 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const speed = Math.hypot(P.vel.x, P.vel.z), G = P.gait || { phase: 0, count: 0 };
 		const sprint = P.run && speed > 4.2 && P.grounded;
 		S.sprint += ((sprint ? 1 : 0) - S.sprint) * Math.min(1, dt * 7);
-		const aim = (S.aimHeld || S.aimTap) && ['long', 'bow'].includes(H.kind) && !S.reload && !S.pickup && S.sprint < 0.3 && S.equip > 0.9;
+		// (a bolt worked brings it down from the eye a moment; held, it comes back up after)
+		const bu = S.bolt ? CHARGE.reach + (1 - CHARGE.reach) * clamp((S.bolt.t - BOLT_WAIT) / S.bolt.T, 0, 1) : 0;
+		const aim = (S.aimHeld || S.aimTap) && ['long', 'bow'].includes(H.kind) && !S.reload && !S.pickup && S.sprint < 0.3 && S.equip > 0.9 && !(S.bolt && S.bolt.t > BOLT_WAIT && bu < 0.97);
 		S.ads += ((aim ? 1 : 0) - S.ads) * Math.min(1, dt * 9);
 		const a = ease(clamp(S.ads, 0, 1)), still = 1 - a * 0.88;
 		if (!lastSeen.set) { lastSeen.yaw = P.yaw; lastSeen.pitch = P.pitch; lastSeen.grounded = P.grounded; lastSeen.vy = 0; lastSeen.set = true; }
@@ -409,7 +418,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		// used: the recoil's kick back, rise and drift, each settling on its spring
 		const kz = kick.z.to(0, dt), kp = kick.p.to(0, dt), ky = kick.y.to(0, dt), kr = kick.r.to(0, dt);
 		// reloading: tipped toward the support hand while the cell comes out and goes back in
-		const ru = S.reload ? Math.min(1, S.reload.t / S.reload.T) : 0, tilt = S.reload ? ease(clamp(reloadTilt(ru), 0, 1)) : 0;
+		const ru = S.reload ? Math.min(1, S.reload.t / S.reload.T) : 0, tilt = S.reload ? ease(clamp(reloadTilt(ru), 0, 1)) : S.bolt ? 0.35 * Math.sin(Math.PI * clamp((bu - CHARGE.reach) / (1 - CHARGE.reach), 0, 1)) : 0;
 		pos.z += kz; pos.y += -0.02 * tilt + kp * 0.08; pos.x += -0.03 * tilt;
 		// its weight: a slow wander of the muzzle, a long rifle's most, held far tighter at the sights
 		const heavy = (H.kind === 'long' ? 1 : 0.7) * (1 - a * 0.7) * (1 - sp * 0.5);
@@ -418,7 +427,13 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		rot = Q2.multiply(rot);
 		S.model.matrix.compose(pos, rot, ONE);
 		const cell = S.model.getObjectByName('cell'), knob = S.model.getObjectByName('charger');
-		if (knob) { const home = knob.userData.home; knob.position.set(home[0] - chargeTravel(ru) * (S.reload ? 1 : 0), home[1], home[2]); }
+		if (S.bolt) {
+			const B = S.bolt, Wb = weaponOf(id);
+			B.t += dt;
+			if (!B.out && bu > CHARGE.grab) { B.out = true; playCue(Wb?.sounds.bolt || 'bolt'); }
+			if (B.t >= BOLT_WAIT + B.T) S.bolt = null;
+		}
+		if (knob) { const home = knob.userData.home; knob.position.set(home[0] - (S.reload ? chargeTravel(ru) : S.bolt ? chargeTravel(bu) : 0), home[1], home[2]); }
 		if (S.reload) {
 			const R2 = S.reload;
 			R2.t += dt;
@@ -457,6 +472,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				handAt.multiplyMatrices(S.model.matrix, side === 'R' && H.kind === 'bow' ? S.model.userData.bow.right : poses?.[side]?.frame || G2.m);
 				if (side === 'L' && gather > 0) { handAt.elements[12] += .04 * gather; handAt.elements[13] += .18 * gather; handAt.elements[14] -= .22 * gather; }
 				if (side === 'L' && S.reload && H.kind === 'long') supportPath(ru, handAt, cell, knob);
+				else if (side === 'L' && S.bolt && bu > CHARGE.reach && H.kind === 'long') supportPath(bu, handAt, null, knob);
 				(targets[side] ||= new THREE.Matrix4()).copy(handAt);
 				(X[side] ||= new THREE.Matrix4()).multiplyMatrices(handAt, tmp.copy(hf).invert());
 				// the forearm swung about the wrist to run back toward where the elbow would be
@@ -479,7 +495,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				const sd = arms.side[i], x = arms.fore[i] ? F[sd] : X[sd];
 				arms.bones[i].matrixWorld.copy(X[sd] ? tmp.multiplyMatrices(x, me.P.bones[i].matrixWorld) : ZERO);
 			}
-			if (poses) fingersNow(dt, time, H, ru, gather, sp);
+			if (poses) fingersNow(dt, time, H, S.reload ? ru : bu, gather, sp);
 			// the folds follow the arms (down: the world's, in the view's frame)
 			arms.garment?.pose(dt, a, null, V.set(0, -1, 0).applyQuaternion(Q.copy(camera.quaternion).invert()));
 			arms.group.visible = true;
@@ -507,7 +523,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	}
 	// drawn over the frame: the depth cleared, the item and hands in their own lens
 	function render(renderer, worldScene = null) {
-		if (!S.shown || !S.model) return;
+		// (nothing in hand: the world is told the scope is down)
+		if (!S.shown || !S.model) { if (scopeView.active) scopeGone(); return; }
 		if (!env && !envTried) {
 			envTried = true;
 			try { const pm = new THREE.PMREMGenerator(renderer); env = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); } catch { env = null; }
@@ -588,12 +605,13 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		}
 		if (W.vent) sparks.emit(V.set(...W.vent).applyMatrix4(m), V2.set(0.6, 0.5, 0.25), W.flash === 'pulse' ? 5 : 8, W.flash === 'pulse' ? W.tint : 0xffc070);
 		playCue(W.sounds.fire);
+		if (W.bolt) S.bolt = { t: 0, T: W.bolt, out: false };
 		return true;
 	}
 	function reload(done = null) {
 		const W = weaponOf(S.id);
 		if (!S.shown || !W || S.reload || S.pickup > 0 || S.equip < 0.95) return false;
-		S.reload = { t: 0, T: W.reload, done };
+		S.reload = { t: 0, T: W.reload, done }; S.bolt = null;
 		S.aimTap = false;
 		return true;
 	}
@@ -611,12 +629,15 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	}
 	function bow(next) { bowState = { ...bowState, ...next }; S.model?.userData.bow?.set(bowState); }
 	function cancel() {
-		S.reload = null; bowState.draw = 0; S.model?.userData.bow?.cancel();
+		S.reload = null; S.bolt = null; bowState.draw = 0; S.model?.userData.bow?.cancel();
 		const cell = S.model?.getObjectByName('cell');
 		if (cell) { cell.visible = true; if (cell.userData.home) cell.position.fromArray(cell.userData.home); }
 	}
 	const aimOverride = (on) => { if (!!on !== S.aimTap && weaponOf(S.id)) playCue(weaponOf(S.id).sounds.aim); S.aimTap = !!on; };
 	// (for tuning tools: solve the fingers again after a grip changes)
 	const refingers = () => { solved.clear(); posesFor = null; };
-	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, get armsSkin() { return arms?.skin || null; }, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
+	// the graphics lost and restored: the item's reflection map, drawn into a target, came back
+	// empty (black metal): made again on the next frame drawn (main.js)
+	const relight = () => { env = null; envTried = false; };
+	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, relight, get armsSkin() { return arms?.skin || null; }, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
 }

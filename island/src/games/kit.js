@@ -27,7 +27,7 @@ function writeStore(s) {
 	try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* private mode */ }
 }
 
-const PANEL = 'background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px system-ui,sans-serif;';
+const PANEL = 'background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px var(--bard-body,system-ui,sans-serif);';
 const stopEv = (el) => { for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) el.addEventListener(ev, (e) => e.stopPropagation()); };
 
 export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], place = 'clear', flat = 1.2, room = null, backdrop = null, dome = 60, hole = 0, lift = 0, pose = null } = {}) {
@@ -84,12 +84,12 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		layer = document.createElement('div');
 		layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:8;user-select:none;-webkit-user-select:none;';
 		const top = document.createElement('div');
-		top.style.cssText = PANEL + `position:absolute;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);max-width:min(460px,calc(100vw - 90px));padding:8px 16px;text-align:center;border-color:${accent}55;`;
-		top.innerHTML = `<div style="font:700 14px system-ui;color:${accent}">${GAME.title}</div><div data-h style="margin-top:2px;white-space:pre-line"></div>`;
+		top.style.cssText = PANEL + `position:absolute;left:50%;top:calc(10px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);max-width:min(460px,calc(100vw - 90px));padding:8px 16px;text-align:center;border-color:${accent}55;`;
+		top.innerHTML = `<div style="font:700 14px var(--bard-display,system-ui,sans-serif);color:${accent}">${GAME.title}</div><div data-h style="margin-top:2px;white-space:pre-line"></div>`;
 		hudText = top.querySelector('[data-h]');
 		const x0 = document.createElement('button');
 		x0.textContent = '×'; x0.setAttribute('aria-label', 'Close ' + GAME.title);
-		x0.style.cssText = PANEL + 'position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));width:44px;height:44px;border-radius:22px;font:600 24px system-ui;line-height:1;pointer-events:auto;cursor:pointer;';
+		x0.style.cssText = PANEL + 'position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + var(--l99-top, env(safe-area-inset-top)));width:44px;height:44px;border-radius:22px;font:600 24px var(--bard-display,system-ui,sans-serif);line-height:1;pointer-events:auto;cursor:pointer;';
 		stopEv(x0);
 		x0.addEventListener('click', () => api?.stop());
 		layer.append(top, x0);
@@ -261,7 +261,7 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 	K.button = (label, fn, css = '') => {
 		const b = document.createElement('button');
 		b.innerHTML = label;
-		b.style.cssText = PANEL + `position:absolute;min-width:56px;min-height:48px;padding:10px 18px;border-radius:24px;font:600 15px system-ui;pointer-events:auto;cursor:pointer;touch-action:none;${css}`;
+		b.style.cssText = PANEL + `position:absolute;min-width:56px;min-height:48px;padding:10px 18px;border-radius:24px;font:600 15px var(--bard-display,system-ui,sans-serif);pointer-events:auto;cursor:pointer;touch-action:none;${css}`;
 		stopEv(b);
 		b.addEventListener('pointerdown', (e) => { e.preventDefault(); fn(true); });
 		for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => fn(false));
@@ -270,7 +270,7 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 	};
 	// a meter: a bar with a marker, for power and tension
 	K.meter = (label, grad = `linear-gradient(90deg,#2b5f8a,${accent} 60%,#d9a21c 85%,#c8321c)`) => {
-		const e = K.el('position:absolute;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(280px,70vw);display:none;font:12px system-ui;color:#eafaf6;text-align:center;',
+		const e = K.el('position:absolute;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(280px,70vw);display:none;font:12px var(--bard-body,system-ui,sans-serif);color:#eafaf6;text-align:center;',
 			`<div data-t style="margin-bottom:4px">${label}</div><div style="position:relative;height:12px;border-radius:6px;background:${grad}"><div data-k style="position:absolute;top:-3px;width:4px;height:18px;border-radius:2px;background:#fff;left:0"></div></div>`);
 		return {
 			set(v, text) { e.style.display = 'block'; e.querySelector('[data-k]').style.left = `calc(${Math.max(0, Math.min(1, v)) * 100}% - 2px)`; if (text !== undefined) e.querySelector('[data-t]').textContent = text; },
@@ -293,13 +293,13 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		if (!layer) return K.last;
 		card?.remove();
 		card = K.el(PANEL + `position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(320px,84vw);padding:16px;text-align:center;pointer-events:auto;background:rgba(8,20,26,.92);z-index:2;`,
-			`<div style="font:700 17px system-ui;color:${accent}">${GAME.title}</div>
-			<div style="font:800 40px system-ui;margin:6px 0 2px">${score}${unit ? `<span style="font-size:16px;font-weight:600"> ${unit}</span>` : ''}</div>
+			`<div style="font:700 17px var(--bard-display,system-ui,sans-serif);color:${accent}">${GAME.title}</div>
+			<div style="font:800 40px var(--bard-display,system-ui,sans-serif);margin:6px 0 2px">${score}${unit ? `<span style="font-size:16px;font-weight:600"> ${unit}</span>` : ''}</div>
 			<div style="opacity:.9;margin-bottom:8px">${isBest && rec.plays > 1 ? 'A new best!' : rec.plays === 1 ? 'Your first round' : `Best ${rec.best}${unit ? ' ' + unit : ''}`}</div>
 			${line ? `<div style="margin-bottom:8px">${line}</div>` : ''}
 			${rows.map(([a, b]) => `<div style="display:flex;justify-content:space-between;opacity:.8;font-size:12px;padding:2px 8px"><span>${a}</span><span>${b}</span></div>`).join('')}
 			<div style="opacity:.55;font-size:12px;margin:6px 0 10px">${rec.plays} round${rec.plays > 1 ? 's' : ''} played on this device</div>
-			<div style="display:flex;gap:10px;justify-content:center"><button data-a style="${PANEL}min-height:44px;padding:10px 18px;border-radius:22px;font:600 14px system-ui;background:${accent};color:#08141a;cursor:pointer">Play again</button><button data-d style="${PANEL}min-height:44px;padding:10px 18px;border-radius:22px;font:600 14px system-ui;cursor:pointer">Done</button></div>`);
+			<div style="display:flex;gap:10px;justify-content:center"><button data-a style="${PANEL}min-height:44px;padding:10px 18px;border-radius:22px;font:600 14px var(--bard-display,system-ui,sans-serif);background:${accent};color:#08141a;cursor:pointer">Play again</button><button data-d style="${PANEL}min-height:44px;padding:10px 18px;border-radius:22px;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer">Done</button></div>`);
 		stopEv(card);
 		card.querySelector('[data-a]').addEventListener('click', () => { card?.remove(); card = null; K.cardOpen = false; g?.reset(); });
 		card.querySelector('[data-d]').addEventListener('click', () => api?.stop());

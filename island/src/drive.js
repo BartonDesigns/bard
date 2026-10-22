@@ -54,7 +54,7 @@ function nearestOn(p, x, z) {
 }
 
 export function createDrive({ world, camera, mount, isPhone, hint, strike = null }) {
-	const D = { active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined, mode: 'free', kind: 'crossover', color: new THREE.Color(0.1, 0.2, 0.45), car: null, chase: false, pedals: {} };
+	const D = { police: false, active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined, mode: 'free', kind: 'crossover', color: new THREE.Color(0.1, 0.2, 0.45), car: null, chase: false, pedals: {} };
 	const KINDS = ['sedan', 'hatch', 'crossover', 'suv', 'pickup', 'van', 'sports', 'delivery', 'truck', 'bus'];
 	const CREDITS = 'Vehicle models (CC BY 4.0): "Car Concept" by Eric Chadwick / Darmstadt Graphics Group; "Red Car" by Camay; "European Delivery Van" by Evan Hiltz; "Generic Town Bus" by own.guest. Physics: Rapier. Details: assets/vehicles/CREDITS.md';
 
@@ -170,7 +170,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const b = document.createElement('button');
 		if (hud) b.dataset.hud = hud;
 		b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
-		b.style.cssText = 'position:absolute;min-width:44px;min-height:44px;padding:6px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 16px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style;
+		b.style.cssText = 'position:absolute;min-width:44px;min-height:44px;padding:6px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 16px var(--bard-display,system-ui,sans-serif);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style;
 		for (const ev of ['pointerdown', 'touchstart', 'keydown']) b.addEventListener(ev, (e) => e.stopPropagation());
 		b.addEventListener('click', () => b.blur());
 		mount.appendChild(b);
@@ -212,11 +212,11 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	}
 	const hud = document.createElement('div');
 	hud.className = 'l99-drive-hud';
-	hud.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top));padding:6px 12px;border-radius:10px;background:rgba(8,20,26,.55);color:#eafaf6;font:13px system-ui;pointer-events:none;display:none;white-space:nowrap;';
+	hud.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + var(--l99-top, env(safe-area-inset-top)));padding:6px 12px;border-radius:10px;background:rgba(8,20,26,.55);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:none;display:none;white-space:nowrap;';
 	mount.appendChild(hud);
 	// the keys a keyboard has for it, small under the line above (not on a phone: it has the buttons)
 	const keys = document.createElement('div');
-	keys.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(100px + env(safe-area-inset-top));padding:4px 10px;border-radius:8px;background:rgba(8,20,26,.45);color:rgba(234,250,246,.8);font:11px system-ui;letter-spacing:.02em;pointer-events:none;display:none;white-space:nowrap;';
+	keys.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(100px + var(--l99-top, env(safe-area-inset-top)));padding:4px 10px;border-radius:8px;background:rgba(8,20,26,.45);color:rgba(234,250,246,.8);font:11px var(--bard-body,system-ui,sans-serif);letter-spacing:.02em;pointer-events:none;display:none;white-space:nowrap;';
 	keys.textContent = 'C · camera';
 	mount.appendChild(keys);
 
@@ -244,8 +244,14 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const near = given || Vh?.carToEnter(P.pos.x, P.pos.z), mine = Vh?.mine.car;
 		D.from = null;
 		if (given) D.mode = 'free';
-		if (near) { D.kind = near.kind; D.color.setRGB(...(near.col || [0.5, 0.5, 0.5])); D.from = { x: near.x, z: near.z, yaw: near.yaw }; if (!given && near.id !== 'mine') W.street?.take(near.x, near.z); }
-		else if (mine && Math.hypot(mine.x - P.pos.x, mine.z - P.pos.z) < 40) { D.kind = mine.kind; D.color.copy(mine.color); D.from = { x: mine.x, z: mine.z, yaw: mine.yaw }; }
+		D.police = false;
+		if (near) {
+			D.kind = near.kind; D.color.setRGB(...(near.col || [0.5, 0.5, 0.5])); D.from = { x: near.x, z: near.z, yaw: near.yaw };
+			if (!given && near.id !== 'mine') W.street?.take(near.x, near.z);
+			// (a police cruiser, its officers out of it: yours now, light bar and all; they will not like it)
+			if (near.police) { D.police = true; if (near.id !== 'mine') W.military?.police?.take?.(near); }
+		}
+		else if (mine && Math.hypot(mine.x - P.pos.x, mine.z - P.pos.z) < 40) { D.kind = mine.kind; D.color.copy(mine.color); D.from = { x: mine.x, z: mine.z, yaw: mine.yaw }; D.police = !!mine.police; }
 		else { D.color.setRGB(...PAINTS[Math.floor(Math.random() * PAINTS.length)]); D.from = { x: P.pos.x - Math.cos(P.yaw) * 2.2, z: P.pos.z + Math.sin(P.yaw) * 2.2, yaw: P.yaw + Math.PI }; }
 		if (D.mode === 'assist' && !snap()) { hint('No road or trail here to follow: driving it yourself.', 2600); D.mode = 'free'; }
 		D.active = true; P.locked = true; P.flying = false; P.vel.set(0, 0, 0); D.look = 0; D.lastYaw = undefined; D.y = null;
@@ -315,7 +321,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const W = world(), mine = W?.vehicles?.mine.car;
 		if (D.car && Math.abs(D.car.pose().speed) > 1.5) { hint('Stop first to change cars.', 1500); return; }
 		D.kind = KINDS[(KINDS.indexOf(D.kind) + 1) % KINDS.length];
-		if (mine) { D.from = { x: mine.x, z: mine.z, yaw: mine.yaw }; W.vehicles.setMine(D.kind, D.color, mine.matrix, { driving: D.active }); }
+		D.police = false;
+		if (mine) { D.from = { x: mine.x, z: mine.z, yaw: mine.yaw }; W.vehicles.setMine(D.kind, D.color, mine.matrix, { driving: D.active, police: false }); }
 		if (D.active && D.mode === 'free') startPhysics();
 		labels();
 	}
@@ -497,7 +504,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 			const ox = x - fx * eye[2] - Math.cos(cy) * eye[0], oz = z - fz * eye[2] + Math.sin(cy) * eye[0];
 			D.spin = ((D.spin || 0) + D.v * dt / S.wr) % (Math.PI * 2);
 			M4.compose(V3.set(ox, floorY, oz), Q.setFromEuler(E.set(-Math.atan(grade), cy, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
-			W.vehicles.setMine(D.kind, D.color, M4, { driving: true, spin: D.spin, steer: 0 });
+			W.vehicles.setMine(D.kind, D.color, M4, { driving: true, spin: D.spin, steer: 0, police: D.police });
 			// (the eye sits at the driver's seat)
 			D.y += (floorY + eye[1] - D.y) * Math.min(1, dt * 4);
 		}
@@ -529,7 +536,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		M4.compose(V3.set(o.p[0], o.p[1], o.p[2]), Q, new THREE.Vector3(1, 1, 1));
 		M4.multiply(new THREE.Matrix4().makeTranslation(0, o.down, 0));
 		const w = o.wheels;
-		W.vehicles?.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer });
+		W.vehicles?.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer, police: D.police });
 		// anyone in the way is struck (vehicles/impact.js); the car gives up what it hands them
 		if (strike) {
 			const lv = C.body.linvel(), el = M4.elements;

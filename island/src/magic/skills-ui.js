@@ -10,6 +10,7 @@
 // key let go), and draws its sky on one small canvas. All movement is transforms and opacity.
 
 import { SPELL, SCHOOLS, TWILIGHT_NEEDS, SLOTS, weaveCost, manaCost, manaMax, spellPower, shaped, cooldownOf, strandOf } from './spells.js';
+import { PHONE_DEVICE } from '../world/device.js';
 import { PAGES, SKILL, LAYOUT, PERK, STRAND_NAME, pageNodes, pageLinks, rankOf, rankFrac, useFor, xpNeed, pointsOf, perkBlock, holds, fxLines, RANK_MAX, spellBlock, isUltimate, ULTIMATE_RANK, MASTERY, MASTERY_POWER, MASTERY_GIFT, NUMERAL, masteryLevel, masteryToNext, feedable, feedCost } from './skills.js';
 import { composeMods, powerSources, alteredBy } from './stats.js';
 
@@ -27,24 +28,22 @@ const r1 = (v) => (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10);
 const sec = (v) => `${r1(v)} s`;
 
 const CSS = `
-.sk{position:absolute;inset:0;z-index:40;display:none;opacity:0;background:#04060b;color:#eef3f7;font:500 13px/1.4 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;transition:opacity .32s ease}
+.sk{position:absolute;inset:0;z-index:40;display:none;opacity:0;background:#04060b;color:#eef3f7;font:500 13px/1.4 var(--bard-body,system-ui,sans-serif);overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;transition:opacity .32s ease}
 .sk.on{display:block}.sk.vis{opacity:1}
+/* (a phone opens and closes it at once: the fade is a screen-sized layer for its length) */
+.sk.phone{transition:none}
 .sk *{box-sizing:border-box}
 .sk button{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
 .sk button:focus-visible{outline:2px solid #01a982;outline-offset:2px}
 .sk-sky{position:absolute;inset:0;width:100%;height:100%}
-.sk-vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 70% at 50% 45%,transparent 40%,rgba(0,0,0,.55) 100%)}
-.sk-flash{position:absolute;inset:0;pointer-events:none;opacity:0}
-.sk-flash.go{animation:skFlash .9s ease-out}
-@keyframes skFlash{0%{opacity:.9}100%{opacity:0}}
 /* header */
-.sk-head{position:absolute;left:0;right:0;top:0;height:var(--hh);display:flex;align-items:center;gap:14px;padding:0 calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));padding-top:env(safe-area-inset-top);z-index:3;background:linear-gradient(180deg,rgba(4,6,11,.92),rgba(4,6,11,0))}
+.sk-head{position:absolute;left:0;right:0;top:0;height:var(--hh);display:flex;align-items:center;gap:14px;padding:0 calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));padding-top:var(--l99-top, env(safe-area-inset-top));z-index:3;background:linear-gradient(180deg,rgba(4,6,11,.92),rgba(4,6,11,0))}
 .sk-lv{display:flex;align-items:center;gap:10px;min-width:0}
 .sk-ring{position:relative;width:42px;height:42px;flex:none}
 .sk-ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
-.sk-ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 15px/1 system-ui,sans-serif}
+.sk-ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 15px/1 var(--bard-body,system-ui,sans-serif)}
 .sk-lv .t{display:flex;flex-direction:column;min-width:0}
-.sk-lv .t span{font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.6}
+.sk-lv .t span{font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.6;font-family:var(--bard-display,Georgia,serif)}
 .sk-lv .t em{font-style:normal;font-size:12px;opacity:.85;white-space:nowrap}
 .sk-sp{flex:1}
 .sk-pts{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;border-radius:20px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);white-space:nowrap}
@@ -70,17 +69,22 @@ const CSS = `
 .sk-chip.can .dot{display:block}
 /* the stage and its pages */
 .sk-stage{position:absolute;left:0;right:0;top:calc(var(--hh) + var(--nh));bottom:0;touch-action:none;overflow:hidden}
-.sk-track{position:absolute;left:0;top:0;bottom:0;display:flex;will-change:transform}
-.sk-track.glide{transition:transform .55s cubic-bezier(.22,.9,.24,1)}
-.sk-page{position:relative;flex:none;height:100%}
+.sk-track{position:absolute;left:0;top:0;bottom:0;width:100%}
+/* (each page seated along the track by its left; only the page in view, and the one sliding in
+   beside it, are shown at all: the rest are display:none. The track slides by a 2D transform
+   set a frame at a time from script, never a transition or will-change: those would have the
+   compositor back the pages as layers of their own) */
+.sk-page{position:absolute;top:0;left:0;height:100%}
+.sk-page[hidden]{display:none}
 .sk-neb{position:absolute;inset:-10%;pointer-events:none;opacity:.9}
-.sk-page.cur .sk-neb{animation:skDrift 26s ease-in-out infinite alternate}
+/* (the drift is a screen-sized layer of its own: not on a phone, whose graphics memory is spoken for) */
+.sk:not(.phone) .sk-page.cur .sk-neb{animation:skDrift 26s ease-in-out infinite alternate}
 @keyframes skDrift{to{transform:translate3d(-2%,1.5%,0) scale(1.04)}}
 .sk-title{position:absolute;left:var(--tl);top:var(--tt);width:var(--tw);pointer-events:none}
-.sk-title .s{font-size:10px;letter-spacing:.24em;text-transform:uppercase;opacity:.65}
-.sk-title h2{margin:2px 0 4px;font:200 var(--tf)/1.05 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:.2em;text-transform:uppercase;background:linear-gradient(180deg,#fff 30%,var(--c));-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
+.sk-title .s{font-size:10px;letter-spacing:.24em;text-transform:uppercase;opacity:.65;font-family:var(--bard-display,Georgia,serif)}
+.sk-title h2{margin:2px 0 4px;font:600 var(--tf)/1.05 var(--bard-display,Georgia,serif);letter-spacing:.2em;text-transform:uppercase;background:linear-gradient(180deg,#fff 30%,var(--c));-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
 .sk-title .rk{display:flex;align-items:center;gap:8px;font-size:12px}
-.sk-title .rk b{font:700 18px/1 system-ui,sans-serif;color:var(--c)}
+.sk-title .rk b{font:700 18px/1 var(--bard-display,system-ui,sans-serif);color:var(--c)}
 .sk-title .bar{flex:1;max-width:150px;height:3px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}
 .sk-title .bar i{display:block;height:100%;background:var(--c);transform-origin:left;box-shadow:0 0 8px var(--c)}
 .sk-title p{margin:6px 0 0;font-size:12px;opacity:.6;font-style:italic;max-width:260px}
@@ -134,7 +138,7 @@ const CSS = `
 .sk-n .bh{position:relative;width:46%;height:46%;border-radius:50%;background:#000;box-shadow:0 0 0 1.5px rgba(255,246,236,.9),0 0 10px 2px var(--c),0 0 24px var(--c2)}
 .sk-n .bh i{position:absolute;left:-62%;right:-62%;top:44%;height:12%;border-radius:50%;background:linear-gradient(90deg,transparent,var(--c) 22%,#fff 50%,var(--c) 78%,transparent);transform:rotate(-8deg);opacity:.9}
 .sk-n.ult.far .bh,.sk-n.ult.near .bh{opacity:.55}
-.sk-n.ult .lb{font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.sk-n.ult .lb{font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-family:var(--bard-display,Georgia,serif)}
 .sk-n.pop .o{animation:skPop .8s cubic-bezier(.2,.9,.3,1.4)}
 .sk-n .pr{position:absolute;inset:0;border-radius:50%;pointer-events:none;opacity:0}
 .sk-n.pop .pr{box-shadow:0 0 0 2px var(--c),0 0 18px var(--c);animation:skRing .9s ease-out forwards}
@@ -158,13 +162,13 @@ const CSS = `
 .sk-med{width:52px;height:52px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;background:radial-gradient(circle,var(--c2),rgba(0,0,0,0) 72%);box-shadow:inset 0 0 0 1px var(--c);color:var(--c)}
 .sk-med.perk{border-radius:14px}
 .sk-med.own{background:radial-gradient(circle,#fff 0,var(--c) 40%,var(--c3) 70%);color:#0a0d14}
-.sk-info h3{margin:0;font:650 19px/1.2 system-ui,sans-serif;letter-spacing:.02em}
-.sk-info .ty{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.6;margin-top:2px}
+.sk-info h3{margin:0;font:650 19px/1.2 var(--bard-display,system-ui,sans-serif);letter-spacing:.02em}
+.sk-info .ty{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.6;margin-top:2px;font-family:var(--bard-display,Georgia,serif)}
 .sk-info .desc{margin:12px 0 0;font-size:13.5px;line-height:1.5;opacity:.9}
 .sk-pv{display:block;width:100%;height:110px;margin-top:12px;border-radius:12px;background:radial-gradient(ellipse at 50% 120%,var(--c2),transparent 70%),rgba(255,255,255,.025);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 .sk-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
 .sk-st{padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.04)}
-.sk-st>span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.55}
+.sk-st>span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.55;font-family:var(--bard-display,Georgia,serif)}
 .sk-st b{font-size:14px;font-weight:650}
 .sk-st s{opacity:.45;font-size:11px;margin-right:5px;font-weight:500}
 .sk-st.w{grid-column:span 2}
@@ -178,7 +182,7 @@ const CSS = `
 .sk-src .steel b{color:#ff9a8a}.sk-src .steel{border-color:rgba(255,140,120,.25)}
 .sk-el{display:flex;gap:10px;align-items:flex-start;margin-top:9px;padding:9px 11px;border-radius:10px;background:var(--elb,rgba(255,255,255,.05));border:1px solid var(--elc,rgba(255,255,255,.12));font-size:12px;line-height:1.4}
 .sk-el>i{font-style:normal;font-size:18px;line-height:1;width:22px;text-align:center;color:var(--ell,#fff);filter:drop-shadow(0 0 6px var(--elc,transparent))}
-.sk-el b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ell,#fff);margin-bottom:2px}
+.sk-el b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ell,#fff);margin-bottom:2px;font-family:var(--bard-display,Georgia,serif)}
 .sk-el span{display:block;opacity:.85}
 .sk-el em{display:block;font-style:normal;margin-top:4px;font-weight:650;color:var(--ell,#fff)}
 .sk-el.el-radiant{--ell:#ffd27a;--elc:rgba(255,210,122,.3);--elb:rgba(255,210,122,.07)}
@@ -189,7 +193,7 @@ const CSS = `
 .sk-el.el-void{--ell:#8fc4ff;--elc:rgba(100,130,255,.32);--elb:rgba(80,70,255,.08)}
 .sk-el.el-blight{--ell:#b6f05a;--elc:rgba(150,240,60,.3);--elb:rgba(130,220,40,.07)}
 .sk-alt{margin-top:9px;padding:8px 10px;border-radius:9px;background:rgba(255,210,122,.07);border:1px solid rgba(255,210,122,.22);font-size:12px;line-height:1.4}
-.sk-alt b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#ffd27a;margin-bottom:2px}
+.sk-alt b{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#ffd27a;margin-bottom:2px;font-family:var(--bard-display,Georgia,serif)}
 .sk-fx{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
 .sk-fx li{padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.04);font-size:13px;display:flex;gap:8px;align-items:baseline}
 .sk-fx li::before{content:'✦';color:var(--c);font-size:11px}
@@ -202,8 +206,8 @@ const CSS = `
 .sk-req li.no{opacity:1}
 .sk-ms{margin-top:14px;padding:12px;border-radius:12px;background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.02));box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
 .sk-ms .top{display:flex;align-items:baseline;gap:8px}
-.sk-ms .top span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.6}
-.sk-ms .top b{font:700 18px/1 system-ui,sans-serif;color:var(--c);text-shadow:0 0 12px var(--c2);letter-spacing:.06em}
+.sk-ms .top span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.6;font-family:var(--bard-display,Georgia,serif)}
+.sk-ms .top b{font:700 18px/1 var(--bard-display,system-ui,sans-serif);color:var(--c);text-shadow:0 0 12px var(--c2);letter-spacing:.06em}
 .sk-ms .top em{margin-left:auto;font-style:normal;font-size:11.5px;opacity:.6}
 .sk-ms .seg{display:flex;gap:4px;margin-top:9px}
 .sk-ms .seg div{flex:1;position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
@@ -226,10 +230,10 @@ const CSS = `
 .sk-ms small{display:block;margin-top:6px;font-size:11px;opacity:.5;text-align:center}
 .sk-ms.up{animation:skMsUp .9s ease-out}
 @keyframes skMsUp{0%{box-shadow:inset 0 0 0 1px var(--c),0 0 0 0 var(--c)}100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),0 0 0 14px transparent}}
-.sk-n .mp{position:absolute;right:-4px;top:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#0a0d14;box-shadow:inset 0 0 0 1px var(--c);color:var(--c);font:700 9px/16px system-ui,sans-serif;letter-spacing:.04em;pointer-events:none;display:none}
+.sk-n .mp{position:absolute;right:-4px;top:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#0a0d14;box-shadow:inset 0 0 0 1px var(--c);color:var(--c);font:700 9px/16px var(--bard-body,system-ui,sans-serif);letter-spacing:.04em;pointer-events:none;display:none}
 .sk-n.own .mp.on{display:block}
 .sk-act{flex:none;padding:12px 16px 14px;border-top:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.2)}
-.sk-go{height:46px;border:0;border-radius:12px;cursor:pointer;font-weight:700;font-size:14.5px;letter-spacing:.03em;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;box-shadow:0 4px 18px rgba(1,169,130,.35);transition:transform .15s,box-shadow .2s,filter .2s;position:relative;overflow:hidden}
+.sk-go{height:46px;border:0;border-radius:12px;cursor:pointer;font-weight:700;font-size:14.5px;letter-spacing:.03em;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;box-shadow:0 4px 18px rgba(1,169,130,.35);transition:transform .15s,box-shadow .2s,filter .2s;position:relative;overflow:hidden;font-family:var(--bard-display,Georgia,serif)!important}
 .sk-go:hover{transform:translateY(-1px);box-shadow:0 8px 26px rgba(1,169,130,.45)}
 .sk-go:active{transform:scale(.98)}
 .sk-go::after{content:'';position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);animation:skShine 2.8s ease-in-out infinite}
@@ -238,7 +242,7 @@ const CSS = `
 .sk-go:disabled::after{display:none}
 .sk-go.done{background:rgba(16,185,129,.12);color:#5eead4;box-shadow:inset 0 0 0 1px rgba(16,185,129,.4)}
 .sk-slots{display:flex;align-items:center;gap:6px}
-.sk-slots span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-right:auto}
+.sk-slots span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-right:auto;font-family:var(--bard-display,Georgia,serif)}
 .sk-slots button{width:40px;height:40px;border-radius:10px;border:0;cursor:pointer;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:11px;font-weight:700;transition:background .2s,box-shadow .2s}
 .sk-slots button em{font-style:normal;font-size:13px;line-height:1;opacity:.85}
 .sk-slots button.on{background:rgba(1,169,130,.22);box-shadow:inset 0 0 0 1.5px #01a982}
@@ -266,9 +270,14 @@ const CSS = `
 `;
 const STYLE_ID = 'sk-style';
 
-export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, onFeed = () => ({ fed: 0, levels: 0 }), elements = {}, sound = () => {}, isTouch = false, isPhone = false }) {
+export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onPerk, onBind, onFeed = () => ({ fed: 0, levels: 0 }), elements = {}, sound = () => {}, isTouch = false, isPhone = false, cover = () => {} }) {
 	let root = null, built = false, open = false, vis = false, page = 0, sel = null, mode = 'wide', W = 0, H = 0;
+	// (the memory-saving ways below are the device's, not the graphics tier's: a phone set to Ultra
+	// draws the world as a computer does, but its page still has a phone's memory)
+	const lite = isPhone || PHONE_DEVICE;
 	const P = { stage: null, track: null, pages: [], chips: [], info: null, head: {}, flash: null, toast: null, arr: [], sky: null, pv: null };
+	// (the flash of a weave or an unlock, and the vignette, are drawn into the sky's canvas: a
+	// screen-sized element of their own would be a layer of its own over the sky)
 	const nodesOf = new Map(PAGES.map((k) => [k, pageNodes(k)]));
 	const lastSel = {};
 
@@ -283,15 +292,13 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	function build() {
 		built = true;
 		if (!document.getElementById(STYLE_ID)) { const s = document.createElement('style'); s.id = STYLE_ID; s.textContent = CSS; document.head.appendChild(s); }
-		root = mk('div', 'sk' + (isTouch ? ' touch' : ''), mount);
+		root = mk('div', 'sk' + (isTouch ? ' touch' : '') + (lite ? ' phone' : ''), mount);
 		root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Skills and magic');
 		// (a game controller sends it the arrow keys, Enter and Escape: ui/gamepad.js)
 		root.dataset.pad = 'keys';
 		// (nothing in here reaches the game underneath)
 		for (const ev of ['pointerdown', 'pointerup', 'pointermove', 'touchstart', 'touchmove', 'touchend', 'wheel', 'click', 'contextmenu', 'dblclick']) root.addEventListener(ev, (e) => e.stopPropagation());
 		P.sky = mk('canvas', 'sk-sky', root);
-		mk('div', 'sk-vig', root);
-		P.flash = mk('div', 'sk-flash', root);
 		// the header: level, points, fabric, mana, close
 		const head = mk('div', 'sk-head', root);
 		const lv = mk('div', 'sk-lv', head);
@@ -336,6 +343,10 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		P.info.setAttribute('aria-live', 'polite');
 		P.keys = mk('div', 'sk-keys', root, '<b>←</b><b>→</b> skills &nbsp; <b>↑</b><b>↓</b> stars &nbsp; <b>Enter</b> weave or unlock &nbsp; <b>6</b>–<b>0</b> slot &nbsp; <b>Tab</b> or <b>Esc</b> close');
 		P.toast = mk('div', 'sk-toast', root);
+		// (one preview canvas for the menu's life, seated in the sheet whenever a spell is shown: a
+		// new canvas at every star would hold its pixels until the next collection, and an
+		// iPhone's canvas memory is capped)
+		P.pv = mk('canvas', 'sk-pv');
 		swipe();
 		P.stage.addEventListener('wheel', onWheel, { passive: false });
 	}
@@ -409,29 +420,80 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		lf = cs < 320 ? '9.5px' : cs < 480 ? '10.5px' : '11.5px';
 		Object.assign(v, { '--cw': cw + 'px', '--ch': ch + 'px', '--cl': cl + 'px', '--ct': ct + 'px', '--tl': tl + 'px', '--tt': tt + 'px', '--tw': tw + 'px', '--tf': tf, '--ns': ns + 'px', '--ns0': ns + 'px', '--lf': lf, '--ih': ih + 'px', '--iw': iw + 'px' });
 		for (const k in v) root.style.setProperty(k, v[k]);
-		for (const p of P.pages) {
+		P.pageW = pw;
+		for (const [j, p] of P.pages.entries()) {
 			p.el.style.width = pw + 'px';
+			seat(j);
 			// (a line's length on screen, for drawing it in when it is first lit)
 			for (const L of p.links) L.l.style.setProperty('--len', `${Math.hypot(L.dx * cw / 100, L.dy * ch / 100).toFixed(1)}px`);
 		}
 		P.arr[1].style.left = `${(tall ? W : W - iw - 32) - 52}px`;
-		P.pageW = pw;
-		place(false);
+		settle();
 		sizeSky();
 	}
 
 	// ---------- the pages: where the track sits, and sliding ----------
-	let dx = 0, dragging = false, dragged = false;
-	function place(glide) {
-		P.track.classList.toggle('glide', !!glide);
+	// Where each page is seated along the track: its own place, or, for the length of a leap over
+	// several pages (a chip, Home, End), the seat next to the page it leaves. So every turn slides
+	// one screen's width, and only the page in view and the one coming in are shown at all. (The
+	// track used to be fourteen screens wide, and a slide across it had the compositor back the
+	// whole sweep at once: an iPhone, its graphics memory already spoken for by the world, died
+	// on the second turn.)
+	let dx = 0, dragging = false, dragged = false, turns = 0, trackX = 0, glideRaf = 0, glideT = 0;
+	const seats = PAGES.map((_, j) => j);
+	function seat(j) { P.pages[j].el.style.left = `${seats[j] * P.pageW}px`; }
+	function shown(...js) { for (const [j, p] of P.pages.entries()) p.el.hidden = !js.includes(j); }
+	const stillMotion = () => !!matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+	function setX(x) { trackX = x; P.track.style.transform = `translate(${x}px,0)`; }
+	// where the track belongs: on the page in view, pulled along by a drag (a third as far past the first or last page)
+	function target() {
 		const edge = (page === 0 && dx > 0) || (page === PAGES.length - 1 && dx < 0);
-		P.track.style.transform = `translate3d(${-page * P.pageW + (edge ? dx * 0.35 : dx)}px,0,0)`;
+		return -seats[page] * P.pageW + (edge ? dx * 0.35 : dx);
+	}
+	// the slide to where the track belongs, a frame at a time (a CSS transition would run on the
+	// compositor and have WebKit back both pages as layers of their own for its length, memory an
+	// iPhone has not got with the world loaded; drawn into the page's own tiles it costs none)
+	function place(glide) {
+		cancelAnimationFrame(glideRaf); glideRaf = 0; clearTimeout(glideT); glideT = 0;
+		const to = target();
+		if (!glide || stillMotion() || Math.abs(to - trackX) < 1) { setX(to); if (glide) settle(); return; }
+		const x0 = trackX, t0 = performance.now(), ms = 520;
+		const step = (now) => {
+			const u = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - u, 3);
+			setX(x0 + (to - x0) * e);
+			if (u < 1) glideRaf = requestAnimationFrame(step); else { glideRaf = 0; settle(); }
+		};
+		glideRaf = requestAnimationFrame(step);
+		// (frames can stop coming for a while on a struggling device: the slide ends on the clock then)
+		glideT = setTimeout(settle, ms + 120);
+	}
+	// the slide over: every page back in its own seat, the track on the page in view (the page and
+	// the track move by the same amount, so nothing shifts on screen)
+	function settle() {
+		cancelAnimationFrame(glideRaf); glideRaf = 0; clearTimeout(glideT); glideT = 0;
+		for (const j of PAGES.keys()) if (seats[j] !== j) { seats[j] = j; seat(j); }
+		shown(page);
+		setX(target());
+	}
+	// the neighbour a drag is uncovering, shown beside the page
+	function uncover() {
+		const j = page + (dx < 0 ? 1 : -1);
+		if (j >= 0 && j < PAGES.length) shown(page, j); else shown(page);
 	}
 	function go(i, o = {}) {
 		i = Math.max(0, Math.min(PAGES.length - 1, i));
-		const changed = i !== page;
+		const from = page, changed = i !== page, wasDx = dx;
 		page = i; dx = 0;
-		place(o.glide !== false);
+		if (changed && from >= 0) turns += Math.sign(i - from);
+		if (o.glide !== false && (changed || wasDx)) {
+			if (changed && from >= 0) {
+				const d = i - seats[from];
+				if (Math.abs(d) !== 1) { seats[i] = seats[from] + Math.sign(d || i - from); seat(i); } else if (seats[i] !== i) { seats[i] = i; seat(i); }
+				shown(from, i);
+			} else if (changed) shown(i);
+			// (a drag let go short of the next page glides back, its neighbour still in view)
+			place(true);
+		} else settle();
 		if (changed || o.force) {
 			for (const [j, p] of P.pages.entries()) p.el.classList.toggle('cur', j === page);
 			const p = P.pages[page];
@@ -452,25 +514,33 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		return (ns.find((n) => stateOf(n) === 'can') || [...ns].reverse().find((n) => holds(state, n.id)) || ns[0]).id;
 	}
 	function swipe() {
-		let x0 = 0, y0 = 0, id = null, lastX = 0, lastT = 0, v = 0, decided = false;
+		let x0 = 0, y0 = 0, id = null, lastX = 0, lastT = 0, v = 0, decided = false, side = 0;
 		P.stage.addEventListener('pointerdown', (e) => {
 			if (e.button > 0 || id !== null) return;
 			id = e.pointerId; x0 = lastX = e.clientX; y0 = e.clientY; lastT = performance.now(); v = 0;
-			dragging = false; dragged = false; decided = false;
+			dragging = false; dragged = false; decided = false; side = 0;
 		});
 		P.stage.addEventListener('pointermove', (e) => {
 			if (e.pointerId !== id) return;
 			const ddx = e.clientX - x0, ddy = e.clientY - y0;
 			if (!decided && Math.hypot(ddx, ddy) > 8) {
 				decided = true;
-				if (Math.abs(ddx) > Math.abs(ddy)) { dragging = dragged = true; try { P.stage.setPointerCapture(id); } catch { /* gone */ } }
+				if (Math.abs(ddx) > Math.abs(ddy)) {
+					dragging = dragged = true;
+					// (a drag that catches a slide still settling ends it, so the pages sit where the drag expects them)
+					if (glideRaf) settle();
+					try { P.stage.setPointerCapture(id); } catch { /* gone */ }
+				}
 			}
 			if (!dragging) return;
 			const now = performance.now();
 			v = (e.clientX - lastX) / Math.max(1, now - lastT) * 0.6 + v * 0.4;
 			lastX = e.clientX; lastT = now;
 			dx = ddx;
-			place(false);
+			// (the page the drag uncovers is shown as the drag begins, and again if it turns about)
+			const s = dx < 0 ? 1 : -1;
+			if (s !== side) { side = s; uncover(); }
+			setX(target());
 		});
 		const end = (e) => {
 			if (e.pointerId !== id) return;
@@ -481,7 +551,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			let to = page;
 			if (dx < -w * 0.18 || v < -0.45) to = page + 1;
 			else if (dx > w * 0.18 || v > 0.45) to = page - 1;
-			dx = 0;
+			// (go clears dx: a drag let go short of a page glides back from where it was)
 			go(to);
 			// (a drag is not a tap on the star it began on)
 			setTimeout(() => { dragged = false; }, 0);
@@ -594,7 +664,8 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		else perkInfo(sc, act, n.item, st);
 	}
 	function spellInfo(sc, act, sp, st) {
-		P.pv = mk('canvas', 'sk-pv', sc);
+		// (the one preview canvas, seated here; a perk's sheet leaves it out)
+		sc.appendChild(P.pv);
 		const k = spellPower(state, sp, { light: light() }), s2 = shaped(sp, state.mods);
 		// (the preview shows it as your gear has it: a fan of sparks, a shard through everyone)
 		P.pv.spell = s2;
@@ -762,7 +833,6 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		btn.addEventListener('click', (e) => { if (e.detail === 0 && !btn.disabled) { btn.classList.add('on'); n = 10; pour(); stop(); } });
 	}
 	function perkInfo(sc, act, p, st) {
-		P.pv = null;
 		const ul = mk('ul', 'sk-fx', sc);
 		for (const line of fxLines(p)) mk('li', '', ul, line);
 		// on your own spells: before and after
@@ -818,8 +888,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const ok = n.kind === 'spell' ? onWeave(n.id) : onPerk(n.id);
 		if (!ok) { sound('fizzle', 0.05); return; }
 		const S = SKILL[PAGES[page]];
-		P.flash.style.background = `radial-gradient(circle at 50% 50%,${rgba(S.color, 0.32)},transparent 60%)`;
-		P.flash.classList.remove('go'); void P.flash.offsetWidth; P.flash.classList.add('go');
+		P.flash = { at: performance.now(), rgb: hexRgb(S.color) };
 		toast(`${n.kind === 'spell' ? 'Woven' : 'Unlocked'}: ${n.item.name}`, S.color);
 		refresh([n.id]);
 	}
@@ -866,10 +935,18 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	}
 
 	// ---------- the sky ----------
-	let stars = [], sprite = null, raf = 0, dpr = 1;
+	let stars = [], sprite = null, raf = 0, dpr = 1, skyX = 0, vig = null;
 	function sizeSky() {
-		dpr = Math.min(isPhone ? 1.25 : 2, devicePixelRatio || 1);
-		P.sky.width = Math.round(W * dpr); P.sky.height = Math.round(H * dpr);
+		// (a phone's sky is drawn under 60 000 pixels and scaled up: WebKit keeps a canvas that small
+		// on the CPU and paints it into the page's own tiles, where a bigger one is a layer of its
+		// own, and every sibling over it then has to be too)
+		dpr = lite ? Math.min(1, Math.sqrt(60000 / Math.max(1, W * H))) : Math.min(2, devicePixelRatio || 1);
+		P.sky.width = Math.max(1, Math.round(W * dpr)); P.sky.height = Math.max(1, Math.round(H * dpr));
+		// the vignette: an ellipse 80% by 70% of the sky at 50%, 45%, clear to 40% of its radius
+		// (drawn through a scale, since a canvas gradient is a circle)
+		const g = P.sky.getContext('2d');
+		vig = g?.createRadialGradient(0, 0, 0, 0, 0, 1) || null;
+		if (vig) { vig.addColorStop(0.4, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,.55)'); }
 		const n = Math.round(Math.min(isPhone ? 140 : 260, W * H / 5200));
 		let seed = 7;
 		const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -886,10 +963,14 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		if (!open) { raf = 0; return; }
 		raf = requestAnimationFrame(frame);
 		const t = now / 1000, g = P.sky.getContext('2d');
+		if (!g) return;
 		const w = P.sky.width, h = P.sky.height;
 		g.clearRect(0, 0, w, h);
-		// (the stars drift with the page, the nearer ones more)
-		const off = (-(page * (P.pageW || W)) + dx) / Math.max(1, W);
+		// (the stars drift with the page, the nearer ones more: one notch a turn, eased, however
+		// far the turn leapt)
+		skyX += (turns - skyX) * Math.min(1, (now - (frame.last || now)) * 0.007);
+		frame.last = now;
+		const off = (-(skyX * (P.pageW || W)) + dx) / Math.max(1, W);
 		for (const s of stars) {
 			const x = (((s.x + off * 0.08 * s.z + t * 0.002 * s.z) % 1) + 1) % 1 * w, y = s.y * h;
 			const tw = 0.55 + 0.45 * Math.sin(t * s.w + s.p);
@@ -898,6 +979,15 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			if (r < 2.4) { const c = TINT[s.c]; g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; g.fillRect(x, y, Math.max(1, r * 0.4), Math.max(1, r * 0.4)); } else g.drawImage(sprite, x - r, y - r, r * 2, r * 2);
 		}
 		g.globalAlpha = 1;
+		if (vig) { g.save(); g.translate(w * 0.5, h * 0.45); g.scale(w * 0.8, h * 0.7); g.fillStyle = vig; g.fillRect(-2, -2, 4, 4); g.restore(); }
+		// (the flash of a weave or an unlock: the school's colour from the centre, gone in .9 s)
+		const F = P.flash, fu = F ? (now - F.at) / 900 : 1;
+		if (fu < 1) {
+			const a = 0.32 * (1 - fu) * (1 - fu), r = Math.hypot(w, h) * 0.3;
+			const fg = g.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, r);
+			fg.addColorStop(0, `rgba(${F.rgb[0]},${F.rgb[1]},${F.rgb[2]},${a})`); fg.addColorStop(1, `rgba(${F.rgb[0]},${F.rgb[1]},${F.rgb[2]},0)`);
+			g.fillStyle = fg; g.fillRect(0, 0, w, h);
+		} else if (F) P.flash = null;
 		if (P.pv && P.pv.isConnected) preview(P.pv, t);
 		// (anything changed while open: fabric gathered, mana, a rank)
 		if (((t * 4) | 0) !== frame.q) {
@@ -911,9 +1001,11 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	function preview(cv, t) {
 		const sp = cv.spell, cw = cv.clientWidth, ch = cv.clientHeight;
 		if (!cw) return;
-		const d = Math.min(2, devicePixelRatio || 1);
-		if (cv.width !== Math.round(cw * d)) { cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); }
+		const d = Math.min(lite ? 1.5 : 2, devicePixelRatio || 1);
+		if (cv.width !== Math.round(cw * d) || cv.height !== Math.round(ch * d)) { cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); }
+		// (a browser out of canvas memory gives no context: the sky goes on without the preview)
 		const g = cv.getContext('2d');
+		if (!g) return;
 		g.setTransform(d, 0, 0, d, 0, 0);
 		g.clearRect(0, 0, cw, ch);
 		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t, { night: light() < -0.02, moonlit: !!state.moonlit?.includes?.(sp.id), el: elements[sp.type] });
@@ -929,10 +1021,13 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const i = k ? PAGES.indexOf(k) : page;
 		page = -1; go(i >= 0 ? i : 0, { glide: false, force: true });
 		refresh();
-		// (faded in by a transition, not a frame: a slow frame does not hold it back)
+		// (faded in by a transition, not a frame: a slow frame does not hold it back; a phone shows it
+		// at once). Once it is over everything the world under it is told so (cover: main.js takes the
+		// canvas out of the picture and hands its drawing buffer back, until the menu goes)
 		void root.offsetWidth;
 		root.classList.add('vis');
-		setTimeout(() => { if (open) vis = true; }, 340);
+		const over = () => { if (!open || vis) return; vis = true; cover(true); };
+		if (lite) over(); else setTimeout(over, 340);
 		addEventListener('keydown', onKey, true);
 		addEventListener('resize', layout);
 		if (document.pointerLockElement) document.exitPointerLock?.();
@@ -941,11 +1036,15 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	}
 	function close() {
 		if (!open) return;
+		const was = vis;
 		open = false; vis = false;
-		root.classList.remove('vis');
+		if (was) cover(false);
 		removeEventListener('keydown', onKey, true);
 		removeEventListener('resize', layout);
-		setTimeout(() => { if (!open) root.classList.remove('on'); }, 340);
+		// (the world is drawn again on the next frame, so a phone keeps the menu up for one more and
+		// drops it then; elsewhere the fade covers the gap)
+		const gone = () => { if (!open) root.classList.remove('on', 'vis'); };
+		if (lite) requestAnimationFrame(() => requestAnimationFrame(gone)); else { root.classList.remove('vis'); setTimeout(gone, 340); }
 	}
 	return {
 		open: openAt, close,
@@ -955,7 +1054,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		covering: () => open && vis,
 		refresh: () => { if (open) refresh(); },
 		page: () => PAGES[page],
-		dispose() { close(); cancelAnimationFrame(raf); root?.remove(); },
+		dispose() { close(); cancelAnimationFrame(raf); cancelAnimationFrame(glideRaf); clearTimeout(glideT); root?.remove(); },
 	};
 }
 

@@ -12,6 +12,7 @@
 // one draw per person. Without them (a failed load) the kit is built as before, in code.
 
 import * as THREE from 'three';
+import { shedImage } from '../world/cpucopy.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
@@ -34,10 +35,11 @@ export function loadKitModels(phone = false) {
 	if (kit) return kit;
 	kit = (async () => {
 		const loader = new THREE.TextureLoader();
-		const map = (n, srgb) => loader.loadAsync(url(`kit-${n}${phone ? '-phone' : ''}.webp`)).then((t) => {
+		const map = (n, srgb) => { const file = url(`kit-${n}${phone ? '-phone' : ''}.webp`); return loader.loadAsync(file).then((t) => {
 			t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4;
-			return t;
-		});
+			// (the page's copy let go once the card has it; only the card ever reads it: world/cpucopy.js)
+			return shedImage(t, () => loader.loadAsync(file).then((t2) => t2.image), { on: phone });
+		}); };
 		const [gltf, info, albedo, normal, orm] = await Promise.all([new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url('soldier-kit.glb')), fetch(url('soldier-kit.json')).then((r) => r.json()), map('albedo', true), map('normal', false), map('orm', false)]);
 		const parts = {};
 		gltf.scene.updateMatrixWorld(true);

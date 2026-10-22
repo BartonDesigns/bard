@@ -163,7 +163,10 @@ export function cleanFx(m) {
 }
 // a hit on something shared (a boss, a squad fighter: `id`), reported to the host; or, with `to`,
 // on another player (passed on only when the room allows PvP). d: damage 0-500
-export const HIT_PARTS = ['body', 'head', 'torso', 'limb', 'weak', 'eye', 'heart', 'core', 'legL', 'legR', 'podL', 'podR', 'wheel', 'plate'];
+// (a person's own zones, combat/hitzones.js, so a chest or a leg hit on a friend or a shared
+// fighter counts as one: health.js PARTS)
+export const PERSON_PARTS = ['head', 'neck', 'chest', 'gut', 'shoulder', 'arm', 'leg', 'body', 'torso', 'limb'];
+export const HIT_PARTS = [...PERSON_PARTS, 'weak', 'eye', 'heart', 'core', 'legL', 'legR', 'podL', 'podR', 'wheel', 'plate'];
 const TARGET_RE = /^[A-Za-z0-9:_.-]{1,48}$/;
 export function cleanHit(m) {
 	if (!m || typeof m !== 'object' || !TARGET_RE.test(m.id || '') || !num(m.d, 500) || m.d < 0) return null;

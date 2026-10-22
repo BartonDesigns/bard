@@ -11,6 +11,11 @@ test('pads: Xbox and PlayStation told apart by what the browser names them', () 
 	assert.equal(padFamily('054c-09cc-Wireless Controller'), 'ps');
 	assert.equal(padFamily('Wireless Controller Extended Gamepad'), 'ps');
 	assert.equal(padFamily('8BitDo Pro 2'), 'xbox');
+	assert.equal(padFamily('Backbone One'), 'backbone');
+	assert.equal(padFamily('Backbone One (STANDARD GAMEPAD Vendor: 358a Product: 0104)'), 'backbone');
+	assert.equal(padFamily('Backbone One - PlayStation Edition'), 'ps');
+	assert.equal(padName('Backbone One'), 'Backbone One');
+	assert.equal(padName('Backbone One - PlayStation Edition'), 'Backbone One PlayStation Edition');
 	assert.equal(padName('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'), 'DualSense controller');
 	assert.equal(padName('Xbox 360 Controller (XInput STANDARD GAMEPAD)'), 'Xbox controller');
 });
@@ -18,7 +23,7 @@ test('pads: Xbox and PlayStation told apart by what the browser names them', () 
 test('glyphs: every button the layout names has one on both pads', () => {
 	for (const [, rows] of LAYOUT) for (const [bs, what] of rows) {
 		assert.ok(what.length > 3);
-		for (const b of bs) for (const f of ['xbox', 'ps']) assert.ok(GLYPHS[f][b], `${f} ${b}`);
+		for (const b of bs) for (const f of ['xbox', 'ps', 'backbone']) assert.ok(GLYPHS[f][b], `${f} ${b}`);
 	}
 	assert.match(glyphHTML('A', 'ps'), /✕/);
 	assert.match(glyphHTML('A', 'xbox'), />A</);

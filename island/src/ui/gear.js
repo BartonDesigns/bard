@@ -32,8 +32,8 @@ import { bar, btn, coins, el, fmt, hideTip, nameOf, showTip, slot, sound, tierCo
 const KEEP_KEY = 'l99-trades';
 // how near a shop must be to buy, sell or upgrade there (metres)
 export const SHOP_REACH = 60;
-const SHEET = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(380px,calc(100vw - var(--l99-menu-r, 64px) - 16px));padding:12px;display:none;flex-direction:column;gap:10px;max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;z-index:7;';
-const MENU = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+const SHEET = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));width:min(380px,calc(100vw - var(--l99-menu-r, 64px) - 16px));padding:12px;display:none;flex-direction:column;gap:10px;max-height:calc(100% - 64px - var(--l99-low, 88px) - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;z-index:7;';
+const MENU = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 const BAG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8.5a6 6 0 0 1 12 0V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20z"/><path d="M9.5 5.2V4a2.5 2.5 0 0 1 5 0v1.2"/><path d="M9 13h6v4H9z"/></svg>';
 const stopAll = (e) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) e.addEventListener(ev, (x) => x.stopPropagation()); return e; };
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
@@ -56,7 +56,7 @@ export function describeSide(side) {
 }
 
 // magic(): your magic (magic/index.js), for the Character view and infusing gear; it comes later
-export function createGear({ arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false, magic = () => null }) {
+export function createGear({ portrait = null, arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false, magic = () => null }) {
 	useStyle();
 	const hand = createHand(scene, { lod: 'high' });
 	const vm = createViewmodel({ camera, avatar, mount, canvas: renderer?.domElement || null, isPhone });
@@ -78,6 +78,17 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	const thirdAimBtn = (isPhone || globalThis.matchMedia?.('(pointer: coarse)')?.matches) ? button('Aim', 'Aim held item', 'display:none;', 'thumb mode 20') : null;
 	if (thirdAimBtn) { stopAll(thirdAimBtn); bindLookDrag(thirdAimBtn, mount, { start: () => { if (mount.inert || busy() || shown()) return false; setAim(!thirdAimTap); } }); mount.appendChild(thirdAimBtn); }
 
+
+	// your hero, pictured (ui/hero-portrait.js): drawn when the sheet first shows it, again only
+	// after what you wear changes; every picture on the sheet takes the new one when it comes
+	function hero(cls = '') {
+		const im = el('img', 'g99-hero' + (cls ? ' ' + cls : ''));
+		im.alt = ''; im.decoding = 'async';
+		const url = portrait?.want?.();
+		if (url) { im.src = url; im.alt = 'Your hero, in what you wear'; } else im.classList.add('wait');
+		return im;
+	}
+	portrait?.on?.((url) => { for (const im of sheet.querySelectorAll('img.g99-hero')) { im.src = url; im.alt = 'Your hero, in what you wear'; im.classList.remove('wait'); } });
 
 	// ---------- the sheet ----------
 	const sheet = stopAll(el('div', 'g99-frame'));
@@ -168,6 +179,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		const st = magic()?.stats?.();
 		if (st) {
 			const cr = el('div'); cr.style.cssText = 'display:flex;align-items:center;gap:10px;';
+			if (portrait) cr.append(hero());
 			const tx = el('div', '', `Level ${st.level} · ${st.life} life · ${Math.round(st.mana)} mana · ${st.harmTaken}% harm taken`); tx.style.cssText = 'flex:1;min-width:0;font-size:12px;opacity:.85;';
 			cr.append(tx, btn('Character ›', () => open('char'), '', 'Character (Shift+I)'));
 			sheet.append(cr);
@@ -219,12 +231,12 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (!x) { view = 'gear'; drawGear(); return; }
 		const item = ARMS_CATALOG[x.i], T = TIERS[x.t];
 		sheet.append(head(nameOf(x.i), () => open('gear')));
-		const sub = el('div', '', `${T.name} · Level ${x.l}${x.l >= MAX_LEVEL ? ' (max)' : ''}`); sub.style.cssText = `color:${T.color};font:600 13px system-ui;text-shadow:0 0 ${4 + T.glow * 10}px ${T.color}55;`;
+		const sub = el('div', '', `${T.name} · Level ${x.l}${x.l >= MAX_LEVEL ? ' (max)' : ''}`); sub.style.cssText = `color:${T.color};font:600 13px var(--bard-display,system-ui,sans-serif);text-shadow:0 0 ${4 + T.glow * 10}px ${T.color}55;`;
 		sheet.append(sub);
 		const variant = armamentVariant(x.i, x.t);
 		if (variant) sheet.append(el('div', '', `${variant.name} · Mark ${variant.mark}`));
 		const sch = attunement(x), S = SCHOOLS[sch];
-		if (S) { const a = el('div', '', `${schoolGlyph(sch)} Attuned to ${S.name} · ${S.strand === 'twilight' ? 'twilight' : S.strand + ' aether'}`); a.style.cssText = `color:${S.color};font:600 12px system-ui;text-shadow:0 0 8px ${S.color}66;`; sheet.append(a); }
+		if (S) { const a = el('div', '', `${schoolGlyph(sch)} Attuned to ${S.name} · ${S.strand === 'twilight' ? 'twilight' : S.strand + ' aether'}`); a.style.cssText = `color:${S.color};font:600 12px var(--bard-display,system-ui,sans-serif);text-shadow:0 0 8px ${S.color}66;`; sheet.append(a); }
 		sheet.append(el('div', 'g99-rule'));
 		const box = el('div'); box.style.cssText = `border-radius:12px;background:radial-gradient(circle at 50% 45%,${(S || T).color}22,rgba(0,0,0,.35) 70%);box-shadow:inset 0 0 30px rgba(0,0,0,.7);min-height:${isGarment(x.i) ? 150 : 200}px;display:flex;align-items:center;justify-content:center;`;
 		sheet.append(box);
@@ -257,9 +269,9 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 			const list = el('div'); list.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
 			for (const a of awakenings(x)) {
 				const r = el('div'); r.style.cssText = `display:flex;gap:9px;align-items:flex-start;${a.on ? '' : 'opacity:.45;'}`;
-				const b = el('div', '', String(a.level)); b.style.cssText = `flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 10px system-ui;border:1px solid ${a.on ? S.color : 'rgba(255,255,255,.25)'};color:${a.on ? '#0b0f12' : '#eee'};background:${a.on ? S.color : 'transparent'};box-shadow:${a.on ? `0 0 10px ${S.color}aa` : 'none'};`;
+				const b = el('div', '', String(a.level)); b.style.cssText = `flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 10px var(--bard-display,system-ui,sans-serif);border:1px solid ${a.on ? S.color : 'rgba(255,255,255,.25)'};color:${a.on ? '#0b0f12' : '#eee'};background:${a.on ? S.color : 'transparent'};box-shadow:${a.on ? `0 0 10px ${S.color}aa` : 'none'};`;
 				const t = el('div'); t.style.cssText = 'flex:1;min-width:0;line-height:1.35;font-size:12px;';
-				const n = el('b', '', `${a.name}${a.on ? '' : ` · at level ${a.level}`}`); n.style.cssText = `display:block;color:${a.on ? S.color : '#efe6d2'};font:600 12px system-ui;`;
+				const n = el('b', '', `${a.name}${a.on ? '' : ` · at level ${a.level}`}`); n.style.cssText = `display:block;color:${a.on ? S.color : '#efe6d2'};font:600 12px var(--bard-display,system-ui,sans-serif);`;
 				t.append(n, el('span', '', a.desc));
 				r.append(b, t); list.append(r);
 			}
@@ -354,13 +366,14 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		sheet.append(head('Character', () => open('gear')), el('div', 'g99-rule'));
 		if (!st) { sheet.append(note('Your statistics show once you are out in a world.')); return; }
 		const pts = magic()?.info?.()?.points || 0;
-		const lv = el('div', '', `Level ${st.level}${pts ? ` · ${pts} skill point${pts > 1 ? 's' : ''} waiting (Tab)` : ''}`); lv.style.cssText = 'font:600 13px system-ui;color:#e9cf93;';
+		const lv = el('div', '', `Level ${st.level}${pts ? ` · ${pts} skill point${pts > 1 ? 's' : ''} waiting (Tab)` : ''}`); lv.style.cssText = 'font:600 13px var(--bard-display,system-ui,sans-serif);color:#e9cf93;';
+		if (portrait) sheet.append(hero('big'));
 		sheet.append(lv);
 		const tiles = el('div'); tiles.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
 		for (const [k, v, sub, c] of [['Life', st.life, st.lifeRegen ? `+${st.lifeRegen}/s resting` : 'resting: the usual', '#ff8a8a'], ['Mana', Math.round(st.mana), `+${st.manaRegen}/s · ${st.manaRegenFighting}/s fighting`, '#8fb0ff'], ['Harm taken', `${st.harmTaken}%`, st.harmTaken < 100 ? `${100 - st.harmTaken}% turned aside` : 'nothing turned aside', '#d8c49a'], ['Load', `${st.load} kg`, st.loadPace ? `${st.loadPace}% slower` : 'light enough to run free', '#c9c2a2']]) {
 			const t = el('div', 'g99-panel'); t.style.cssText += 'padding:7px 8px;text-align:center;';
 			const a = el('div', 'g99-label', k), b = el('div', '', String(v)), d = el('div', '', sub);
-			b.style.cssText = `font:600 20px Georgia,serif;color:${c};text-shadow:0 0 10px ${c}55;`; d.style.cssText = 'font-size:10px;opacity:.7;line-height:1.3;';
+			b.style.cssText = `font:600 20px var(--bard-display,Georgia,serif);color:${c};text-shadow:0 0 10px ${c}55;`; d.style.cssText = 'font-size:10px;opacity:.7;line-height:1.3;';
 			t.append(a, b, d); tiles.append(t);
 		}
 		sheet.append(tiles);
@@ -369,7 +382,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (hn) {
 			sheet.append(label('Honor'));
 			const card = el('div', 'g99-panel'); card.style.cssText += 'display:flex;flex-direction:column;gap:6px;';
-			const t = el('div', '', `⚔ ${hn.title} · rank ${hn.rank} · ${hn.pts} honor`); t.style.cssText = 'font:600 14px Georgia,serif;color:#e9cf93;text-shadow:0 0 10px #e9cf9355;';
+			const t = el('div', '', `⚔ ${hn.title} · rank ${hn.rank} · ${hn.pts} honor`); t.style.cssText = 'font:600 14px var(--bard-display,Georgia,serif);color:#e9cf93;text-shadow:0 0 10px #e9cf9355;';
 			const b = el('div', 'g99-bar'), i = el('i'); i.style.cssText = `width:${Math.round(hn.frac * 100)}%;background:linear-gradient(90deg,#e9cf9366,#e9cf93);`; b.append(i);
 			b.setAttribute('role', 'progressbar'); b.setAttribute('aria-label', 'Honor to the next rank'); b.setAttribute('aria-valuenow', String(Math.round(hn.frac * 100))); b.setAttribute('aria-valuemin', '0'); b.setAttribute('aria-valuemax', '100');
 			const nx = el('div', '', hn.next ? `${hn.next.at - hn.pts} more to ${hn.next.title} · ${hn.pve} from fights in the world, ${hn.pvp} from PvP` : 'The top of the ladder.'); nx.style.cssText = 'font-size:10px;opacity:.65;';
@@ -388,8 +401,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		for (const k of ATTR_IDS) {
 			const A = ATTRS[k], at = st.attrs[k], r = el('div'); r.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
 			const h = el('div'); h.style.cssText = 'display:flex;align-items:baseline;gap:8px;';
-			const nm = el('span', '', `${A.glyph} ${A.name}`); nm.style.cssText = `color:${A.color};font:600 13px system-ui;width:96px;flex:none;`;
-			const n = el('b', '', String(at.total)); n.style.cssText = 'font:600 15px Georgia,serif;width:28px;flex:none;text-align:right;';
+			const nm = el('span', '', `${A.glyph} ${A.name}`); nm.style.cssText = `color:${A.color};font:600 13px var(--bard-display,system-ui,sans-serif);width:96px;flex:none;`;
+			const n = el('b', '', String(at.total)); n.style.cssText = 'font:600 15px var(--bard-display,Georgia,serif);width:28px;flex:none;text-align:right;';
 			const w = el('span', '', attributeWords(k, at.total)); w.style.cssText = 'font-size:11px;opacity:.85;flex:1;min-width:0;';
 			h.append(nm, n, w);
 			const b = el('div', 'g99-bar'), i = el('i'); i.style.cssText = `width:${Math.round(at.total / top * 100)}%;background:linear-gradient(90deg,${A.color}66,${A.color});`; b.append(i);
@@ -414,7 +427,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		for (const m of st.magic) { if (!byItem.has(m.uid)) byItem.set(m.uid, []); byItem.get(m.uid).push(m); }
 		for (const [uid, list] of byItem) {
 			const S = SCHOOLS[list[0].school], x = arms.instance?.(uid), card = el('div', 'g99-panel'); card.style.cssText += 'display:flex;flex-direction:column;gap:4px;cursor:pointer;';
-			const t = el('div', '', `${schoolGlyph(list[0].school)} ${list[0].item}${x ? ` · ${tierName(x.t)}, level ${x.l}` : ''}`); t.style.cssText = `font:600 12px system-ui;color:${S.color};`;
+			const t = el('div', '', `${schoolGlyph(list[0].school)} ${list[0].item}${x ? ` · ${tierName(x.t)}, level ${x.l}` : ''}`); t.style.cssText = `font:600 12px var(--bard-display,system-ui,sans-serif);color:${S.color};`;
 			card.append(t);
 			for (const m of list) { const d = el('div', '', `${m.level} · ${m.name}: ${m.desc}`); d.style.cssText = 'font-size:11px;opacity:.85;line-height:1.35;'; card.append(d); }
 			card.onclick = (e) => { e.stopPropagation(); open('item', uid); };
@@ -506,7 +519,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	function showInvite(T) {
 		invite?.remove();
 		invite = stopAll(el('div', 'g99-frame'));
-		invite.style.cssText = 'position:absolute;left:50%;top:calc(80px + env(safe-area-inset-top));transform:translateX(-50%);width:min(340px,90vw);padding:12px;z-index:15;display:flex;flex-direction:column;gap:8px;';
+		invite.style.cssText = 'position:absolute;left:50%;top:calc(80px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);width:min(340px,90vw);padding:12px;z-index:15;display:flex;flex-direction:column;gap:8px;';
 		const t = el('div', 'g99-title', `${T.peerName || 'A friend'} wants to trade`);
 		const row = el('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
 		row.append(btn('No thanks', () => { step(cancel(trades.get(T.id), 'cancelled', Date.now())); invite?.remove(); invite = null; }, 'quiet'), btn('Open', () => { activeId = T.id; invite?.remove(); invite = null; openTrade(); }, 'go'));
@@ -600,6 +613,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		actions: (r) => [['Trade', () => ask(r.id)]],
 		info: () => { const T = active(); return { open: shown(), view, item: itemUid, held: arms.held(), viewmodel: vm.info(), window: win.shown(), trade: T && { id: T.id, role: T.role, status: T.status, why: T.why, sides: T.sides, v: T.v, ok: T.ok, peer: T.peer, hold: holdLeft(T, Date.now()) }, kept: [...trades.values()].map((x) => ({ id: x.id, status: x.status })) }; },
 		trade: ask, sheet, window: win.el, studio,
+		// the graphics restored after a loss: the held item's reflections made again (main.js)
+		relight: () => vm.relight?.(),
 		// the held item in use, for the combat systems (crysis/viewmodel.js documents it)
 		weapon: {
 			fire: () => (thirdNow() ? hand.fire(3) : vm.fire()),

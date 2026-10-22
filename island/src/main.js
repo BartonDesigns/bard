@@ -1,6 +1,7 @@
 import { createSoul } from './reputation/soul.js';
 import { createCloudSave } from './persistence/cloud-save.js';
 import { createAccountPanel } from './ui/account.js';
+import { linkLoadingTabs } from './ui/loading-tabs.js';
 import { createMusicLinkEntry } from './ui/music-link.js';
 import { createChat } from './ui/chat.js';
 import { createGuild } from './guild/index.js';
@@ -37,23 +38,28 @@ import { createBridgeSound } from './bay/bridgesound.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
 import { createShaderWarm } from './world/shaderwarm.js';
+import { createIdleOverlays } from './ui/idle-overlays.js';
 import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
+import { resetKitEnvironment } from './people/kit-light.js';
 import { createGovernor, qualityNow } from './world/governor.js';
 import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
+import { refillShed } from './world/cpucopy.js';
 import { bodyCount } from './people/body.js';
 import { createCataclysm } from './cataclysm/index.js';
 import { createMagic } from './magic/index.js';
 import { createFishing } from './fishing.js';
 import { createCooking } from './cooking/index.js';
+import { createOfficePerks } from './interiors/office-perks.js';
 import { createArcade } from './arcade.js';
 import { worldAir } from './world/soundbus.js';
 import { REAL_U } from './bay/realcity.js';
 import { createDrive } from './drive.js';
 import { createAutoMusic } from './music/automusic.js';
+import { wireBeat, beatNow } from './music/beat.js';
 import { createExplore } from './explore.js';
 import { today, onMonth, monthPicked, pickMonth } from './calendar.js';
 import { createTattooStudio } from './tattoo/studio.js';
@@ -112,10 +118,12 @@ import { worldBody, sameBody } from './space/body.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
+import { createHeroPortrait } from './ui/hero-portrait.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
 import { createLaw } from './law/index.js';
 import { installAirFog } from './world/airfog.js';
+import { GRADE, installGrade } from './world/grade.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 import { islandBuild } from './island-build.js';
@@ -132,6 +140,8 @@ const GLOW_AT = [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0
 // The air: haze thickest low down and lit toward the sun, whole by the far plane; under water
 // (a negative density) light absorbed red first, then green (world/airfog.js)
 installAirFog();
+// the look on the tone mapping: contrast, colour and a little split toning (world/grade.js)
+installGrade();
 
 // Muffle the whole Bard under water: a low-pass between the faceplate's master output
 // and the speakers, eased in as you go under and out as you surface.
@@ -169,13 +179,15 @@ if (typeof document !== 'undefined' && !document.getElementById('no-page-zoom'))
 }
 
 function css(el, s) { el.style.cssText = s; return el; }
+// the More menu's one-word names, by what each button is called
+const RAIL_WORDS = [[/^Explore/, 'Explore'], [/^Cycle flight/, 'Speed'], [/^Camera/, 'Camera'], [/^Your account/, 'Account'], [/^Auto music/, 'Autoplay'], [/^Drive/, 'Drive'], [/^(Climb to space|Stop automatic climb)/, 'Space'], [/^Talk to the guide/, 'Guide'], [/^Gear/, 'Gear'], [/^Vehicle credits/, 'Credits'], [/^Games/, 'Games'], [/^Teleport/, 'Places'], [/^Fly/, 'Fly']];
 function button(label, title, style, hud) {
 	const b = document.createElement('button');
 	if (hud) b.dataset.hud = hud;
 	b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
 	// hand focus back after a click, so Space and the play keys keep driving the game
 	b.addEventListener('click', () => b.blur());
-	css(b, 'position:absolute;min-width:44px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style);
+	css(b, 'position:absolute;min-width:44px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style);
 	return b;
 }
 
@@ -198,12 +210,14 @@ function button(label, title, style, hud) {
 // 64 px ones).
 const HUD_LAND = '(orientation: landscape) and (max-height: 540px)';
 const HUD_CSS = `
-#l99-island-mount .l99-rail{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + env(safe-area-inset-bottom));height:min(calc(var(--l99-rail-n, 1) * 52px - 8px),calc(100% - 64px - env(safe-area-inset-top) - var(--l99-low, 88px) - env(safe-area-inset-bottom)));display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,44px);grid-auto-columns:max-content;gap:8px;direction:rtl;justify-items:start;align-content:end;pointer-events:none;}
+#l99-island-mount{--l99-top:env(safe-area-inset-top);}
+#l99-island-mount.l99-full{--l99-top:calc(var(--l99-fs, 28px) + env(safe-area-inset-top));}
+#l99-island-mount .l99-rail{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + env(safe-area-inset-bottom));height:min(calc(var(--l99-rail-n, 1) * 52px - 8px),calc(100% - 64px - var(--l99-top, env(safe-area-inset-top)) - var(--l99-low, 88px) - env(safe-area-inset-bottom)));display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,44px);grid-auto-columns:max-content;gap:8px;direction:rtl;justify-items:start;align-content:end;pointer-events:none;}
 #l99-island-mount .l99-thumb{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;pointer-events:none;}
 #l99-island-mount .l99-thumb>div{display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;}
 #l99-island-mount .l99-big{align-self:flex-end;}
 #l99-island-mount .l99-prompts{position:absolute;left:calc(var(--l99-left, 88px) + env(safe-area-inset-left));right:calc(var(--l99-side, 88px) + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;align-items:center;gap:8px;pointer-events:none;}
-#l99-island-mount .l99-left{position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-start;gap:8px;pointer-events:none;}
+#l99-island-mount .l99-left{position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));display:flex;flex-direction:column;align-items:flex-start;gap:8px;pointer-events:none;}
 #l99-island-mount .l99-pair{display:flex;gap:8px;}
 #l99-island-mount :is(.l99-rail,.l99-thumb>div,.l99-prompts,.l99-left,.l99-pair)>*{position:relative !important;inset:auto !important;transform:none !important;margin:0;flex:none;pointer-events:auto;}
 #l99-island-mount :is(.l99-rail,.l99-mode)>*{direction:ltr;display:flex;align-items:center;justify-content:center;width:44px;padding:0;}
@@ -218,15 +232,15 @@ const HUD_CSS = `
 #l99-island-mount.l99-still .l99-joy:not(.held){display:none;}
 @media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}#l99-island-mount.l99-touch .l99-big:not([hidden])~:is(.l99-side,.l99-pill){margin-bottom:10px;}}
 #l99-island-mount .l99-quick{display:none;}
-#l99-island-mount.l99-touch .l99-quick{position:absolute;top:calc(64px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));display:flex;gap:6px;z-index:14;}
+#l99-island-mount.l99-touch .l99-quick{position:absolute;top:calc(64px + var(--l99-top, env(safe-area-inset-top)));right:calc(12px + env(safe-area-inset-right));display:flex;gap:6px;z-index:14;}
 #l99-island-mount.l99-touch .l99-quick>button{position:relative!important;inset:auto!important;width:54px!important;min-height:48px;box-sizing:border-box;padding:5px!important;flex-direction:column;gap:2px;font-size:16px!important;}
-#l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 system-ui;}
-#l99-island-mount.l99-touch .l99-left{top:calc(120px + env(safe-area-inset-top));max-width:calc(100% - 24px);}
-#l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + env(safe-area-inset-top));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;width:min(460px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:10px;box-sizing:border-box;background:#102129fa;border:1px solid #66818a;border-radius:14px;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;box-shadow:0 8px 30px #0008;}
+#l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 var(--bard-display,system-ui,sans-serif);}
+#l99-island-mount.l99-touch .l99-left{top:calc(120px + var(--l99-top, env(safe-area-inset-top)));max-width:calc(100% - 24px);}
+#l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + var(--l99-top, env(safe-area-inset-top)));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow:auto;width:min(300px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:0;box-sizing:border-box;background:none;border:0;border-radius:0;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;}
 #l99-island-mount.l99-touch.l99-tools-open .l99-rail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-flow:row;grid-auto-columns:auto;gap:8px;align-content:start;}
-#l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:56px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
+#l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:52px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
 #l99-island-mount.l99-touch .l99-rail>button>svg{width:22px;min-width:22px;flex:none;}
-#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 13px/1.3 system-ui;text-align:left;overflow-wrap:normal;}
+#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 15px/1.2 var(--bard-display,system-ui,sans-serif);text-align:left;overflow-wrap:normal;}
 #l99-island-mount.l99-touch.l99-tools-open :is(.cb-btn,button:is([aria-label="Aim"],[aria-label="Aim held item"])){visibility:hidden;}
 #l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;width:80px!important;height:80px!important;}
 #l99-island-mount.l99-touch>button:is([aria-label="Aim"],[aria-label="Aim held item"]){right:calc(104px + env(safe-area-inset-right))!important;bottom:calc(88px + env(safe-area-inset-bottom))!important;width:64px!important;height:64px!important;touch-action:none!important;}
@@ -240,9 +254,9 @@ const HUD_CSS = `
 #l99-island-mount.l99-touch .cb-ammo .rl:empty{display:none;}
 #l99-island-mount.l99-touch .l99-prompts{left:calc(112px + env(safe-area-inset-left));right:calc(88px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));}
 @media (orientation:landscape) and (max-height:540px){
-#l99-island-mount.l99-touch .l99-quick{top:calc(12px + env(safe-area-inset-top));right:calc(116px + env(safe-area-inset-right));}
-#l99-island-mount.l99-touch .l99-left{top:calc(64px + env(safe-area-inset-top));max-width:40%;}
-#l99-island-mount.l99-touch .l99-rail{top:calc(68px + env(safe-area-inset-top));max-height:calc(100% - 84px - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:min(460px,60%);}
+#l99-island-mount.l99-touch .l99-quick{top:calc(12px + var(--l99-top, env(safe-area-inset-top)));right:calc(116px + env(safe-area-inset-right));}
+#l99-island-mount.l99-touch .l99-left{top:calc(64px + var(--l99-top, env(safe-area-inset-top)));max-width:40%;}
+#l99-island-mount.l99-touch .l99-rail{top:calc(68px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 84px - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));width:min(460px,60%);}
 #l99-island-mount.l99-touch .cb-ammo{bottom:calc(12px + env(safe-area-inset-bottom));left:calc(116px + env(safe-area-inset-left));}
 #l99-island-mount.l99-touch .cb-hp{bottom:calc(74px + env(safe-area-inset-bottom));left:calc(124px + env(safe-area-inset-left));}
 #l99-island-mount.l99-touch .l99-prompts{left:calc(290px + env(safe-area-inset-left));right:calc(100px + env(safe-area-inset-right));}
@@ -256,6 +270,21 @@ function buildDom(canvas = document.createElement('canvas')) {
 	// (the jump and descend buttons, and the resting joystick, only on touch screens: the
 	// keyboard has Space and C)
 	mount.classList.toggle('l99-touch', isPhone || matchMedia('(pointer: coarse)').matches);
+	// full screen (the browser's own, by F11 or the Mac green button, the Fullscreen API, or a
+	// home-screen app): the top row and what hangs under it drop --l99-fs (28 px), clear of
+	// the edge that brings the browser's bars back over the buttons (see --l99-top above)
+	const fullMode = matchMedia('(display-mode: fullscreen)');
+	const full = () => {
+		const w = innerWidth, h = innerHeight, sw = screen.width || 0, sh = screen.height || 0;
+		const edge = (w >= sw - 1 && h >= sh - 1) || (w >= sh - 1 && h >= sw - 1);
+		const on = !!(document.fullscreenElement || document.webkitFullscreenElement) || fullMode.matches || edge;
+		if (mount.classList.contains('l99-full') !== on) mount.classList.toggle('l99-full', on);
+	};
+	full();
+	addEventListener('resize', full);
+	document.addEventListener('fullscreenchange', full);
+	document.addEventListener('webkitfullscreenchange', full);
+	fullMode.addEventListener?.('change', full);
 	const style = document.createElement('style');
 	style.textContent = HUD_CSS;
 	css(canvas, 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;');
@@ -272,7 +301,7 @@ function buildDom(canvas = document.createElement('canvas')) {
 	// (the modes join the rail on a short landscape screen)
 	const home = (g) => (g === 'mode' && (land.matches || mount.classList.contains('l99-touch')) ? rail : groups[g]);
 	// (More: every other control, in a menu; its glyph is the three dots)
-	const tools = button('•••', 'All controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));z-index:13;');
+	const tools = button('•••', 'All controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));z-index:13;');
 	tools.dataset.controlLabel = 'More'; tools.style.order = '999';
 	quick.appendChild(tools);
 	tools.hidden = !mount.classList.contains('l99-touch');
@@ -282,11 +311,13 @@ function buildDom(canvas = document.createElement('canvas')) {
 	rail.addEventListener('click', (e) => { if (e.target.closest('button')) closeTools(); }, true);
 	mount.addEventListener('pointerdown', (e) => { if (!rail.contains(e.target) && !tools.contains(e.target)) closeTools(); });
 	addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTools(); });
-	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));');
+	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));');
 	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
-	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
+	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));');
 	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
 	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9×, and in space up to 100,000× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
+	// (its words are the point: the touch skin keeps them, no glyph; ui/touch-skin.js)
+	boost.setAttribute('data-words', '');
 	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
 	const shell = button('🐚', 'Pick up the shell (E)', 'display:none;', 'prompt 30');
 	const toss = button('Throw', 'Throw it (T)', 'display:none;');
@@ -299,13 +330,13 @@ function buildDom(canvas = document.createElement('canvas')) {
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
 	// (the hint rides on top of the prompts, so it never covers one)
-	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
+	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
 	hint.dataset.hud = 'prompt 99';
 	const loading = document.createElement('div');
 	loading.hidden = true; // Kept for integrations; the shared loading screen owns presentation.
 	// the settings (island-panel.js): the whole screen, over every button, in tabs; its body
 	// scrolls (no backdrop blur: a full-screen one over the world crashed SwiftShader)
-	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px system-ui;display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
+	const panel = css(document.createElement('div'), 'position:absolute;inset:0;box-sizing:border-box;padding:calc(12px + var(--l99-top, env(safe-area-inset-top))) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:#0a0a0a;color:#e6f6f2;font:13px var(--bard-body,system-ui,sans-serif);display:none;overflow:hidden;touch-action:pan-y;overscroll-behavior:contain;z-index:30;');
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Settings');
 	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
 	// a group with nothing showing is hidden, so it leaves no gap either; and the rail is as
@@ -320,16 +351,21 @@ function buildDom(canvas = document.createElement('canvas')) {
 	};
 	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
 	const dock = (el) => {
+		// (a phone keeps only Fly, its Speed while flying, and Places beside More: gear, the cloud
+		// save and the auto music wait in the More menu with the rest. Speed sat in the More menu
+		// too, where no one found it in the air: Josh 2026-10-22, "next to the button when flying")
+		if (mount.classList.contains('l99-touch') && !el.dataset?.hud && /^Auto music/.test(el.getAttribute?.('aria-label') || '')) el.dataset.hud = 'rail 66';
 		const [g, n] = (el.dataset?.hud || '').split(' ');
-		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && ['55', '60', '65'].includes(n)));
+		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && (n === '20' || n === '21')) || (g === 'rail' && n === '60'));
 		const to = fast ? quick : groups[g] && home(g);
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
-		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : n === '55' ? 'Gear' : n === '65' ? 'Save' : 'Places';
+		if (to === quick) el.dataset.controlLabel = g === 'mode' ? (n === '21' ? 'Speed' : 'Fly') : 'Places';
 		else if (to === rail) {
+			// (one word each in the More menu)
 			const title = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
-			el.dataset.controlLabel = /^Explore/.test(title) ? 'Explore' : /^Cycle flight/.test(title) ? 'Flight speed' : /^Camera:/.test(title) ? 'Camera view' : title;
+			el.dataset.controlLabel = RAIL_WORDS.find(([re]) => re.test(title))?.[1] || title.split(/[\s:]/)[0];
 		}
 		tidy();
 	};
@@ -486,6 +522,8 @@ export function createIslandWorld() {
 	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
 	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
+	// the skills menu covering the world (coverWorld below): resize() holds off while it does
+	let worldCovered = false;
 	function failGraphicsRecovery() {
 		recoverSignage(storage);
 		governor.lost(3);
@@ -494,6 +532,9 @@ export function createIslandWorld() {
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
 		lost = true;
+		// the pictures a phone let go of once the card held them, asked back for the restored
+		// context to upload again (world/cpucopy.js)
+		refillShed();
 		const blocked = recovery.lost();
 		if (blocked || /signage-|uSgFar/.test(linking.what)) recoverSignage(storage);
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
@@ -518,6 +559,13 @@ export function createIslandWorld() {
 		if (!recovery.restored()) return; // The recovery screen owns the next user action.
 		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
 		applyQuality();
+		// What was drawn once into a target of its own is gone with the old graphics, and three
+		// cannot draw it again by itself: the road maps round you (bay/realcity.js), the sky the
+		// kit and the held item reflect (people/kit-light.js, crysis/viewmodel.js). Each is made
+		// again on its next use. (Ryan 2026-10-22: after the restore the buildings stood black.)
+		world?.real?.R?.repaint?.();
+		resetKitEnvironment();
+		HOOKS.gear?.relight?.();
 		// (the frame clock starts again from now, not from before the loss)
 		last = performance.now(); frameAvg = 16;
 		hint('Graphics restored, at lighter settings.', 3000, 3);
@@ -534,6 +582,10 @@ export function createIslandWorld() {
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = HOOKS.scene = new THREE.Scene();
 	const shaderWarm = createShaderWarm(renderer, scene, camera);
+	// (a frame builds only so many new shaders: the rest of what came into view a frame or two
+	// later, built in the background meanwhile; world/shaderwarm.js gate)
+	shaderWarm.gate({ budget: GFX ? 20 : 40 });
+	HOOKS.shaderWarm = shaderWarm;
 
 	const shared = {
 		aimSensitivity: loadAimSensitivity(),
@@ -692,14 +744,31 @@ export function createIslandWorld() {
 	if (/[?&]heroview\b/.test(location.search)) { const t = setInterval(() => { if (world?.player && !window.L99Loading?.active()) { clearInterval(t); heroView.open(); } }, 1000); }
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
-		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
+		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); } else if (e.key === 'z' || e.key === 'Z') { you.dance(); e.preventDefault(); }
 	});
-	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && carjack.candidate()) { carjack.begin(); e.preventDefault(); } });
+	addEventListener('keydown', (e) => {
+		if ((e.key !== 'e' && e.key !== 'E') || e.repeat || e.metaKey || e.ctrlKey || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+		if (carjack.candidate()) { carjack.begin(); e.preventDefault(); return; }
+		if (window._KEYS_PLAY_ON) return;
+		// (a car with nobody at the wheel, a police cruiser whose officers are out of it: E gets
+		// you in, as V does; a door within reach has E first)
+		const P = world?.player?.state;
+		if (!P || P.flying || P.locked || drive.active() || !world.vehicles || (world.houses?.doorNear?.(camera) || world.interiors?.doorNear?.(camera))) return;
+		const car = world.vehicles.carToEnter(P.pos.x, P.pos.z);
+		if (car && car.id !== 'mine' && !car.id?.startsWith?.('tr')) { drive.start(); e.preventDefault(); }
+	});
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
+	// the one beat everyone moves to (music/beat.js): the auto music's bar clock, as heard
+	wireBeat(() => autoMusic.clock(), () => autoMusic.pulse());
+	// a dance on the beat (people/self.js): Z, or this button in the phone's More menu
+	const danceBtn = button('💃', 'Dance to the music (Z)', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;', 'rail 62');
+	danceBtn.dataset.controlLabel = 'Dance';
+	danceBtn.addEventListener('click', () => { you.dance(); });
+	dom.mount.appendChild(danceBtn);
 	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
-	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, motes: () => HOOKS.magic?.motes?.() || null, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	// some of them out with their dogs on a lead (people/dogwalkers.js)
@@ -758,37 +827,49 @@ export function createIslandWorld() {
 	const tpBtn = button('', 'Teleport to a place', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 60');
 	tpBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
 	dom.mount.appendChild(tpBtn);
-	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:7;');
+	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 64px - var(--l99-low, 88px) - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:7;');
 	dom.mount.appendChild(scrollable(tpMenu));
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and
 	// it only lifts once the new place is built and the frames are running smoothly again
-	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px system-ui;letter-spacing:.06em;text-align:center;padding:24px;');
+	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;text-align:center;padding:24px;');
+	travelVeil.dataset.travelVeil = '';
 	dom.mount.appendChild(travelVeil);
-	let travelling = false, nextTrip = null;
+	let travelling = false, nextTrip = null, settling = 0;
+	const veil = {
+		up(label) { settling++; travelVeil.textContent = label || ''; travelVeil.style.opacity = '1'; },
+		down() { settling++; travelVeil.style.opacity = '0'; },
+		// lifted after a dozen smooth frames in a row (or eight seconds, whatever happens); done
+		// runs first, and keeps the veil up by returning true. The city's set round the new place
+		// still being laid out in slices holds the veil too (bay/city.js busy()), so its buildings
+		// are never seen to come in piecewise, up to thirty seconds
+		settle(done) {
+			const token = ++settling, t0 = performance.now();
+			let last = t0, calm = 0;
+			const watch = (now) => {
+				if (token !== settling) return;
+				calm = now - last < 70 ? calm + 1 : 0;
+				last = now;
+				const building = !!world?.city?.busy?.();
+				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) { if (!done?.()) travelVeil.style.opacity = '0'; return; }
+				requestAnimationFrame(watch);
+			};
+			requestAnimationFrame(watch);
+		},
+	};
 	function travel(label, move) {
 		// (a trip asked for while the last one's veil is still up goes once it lifts, not never)
 		if (travelling) { nextTrip = [label, move]; return; }
 		travelling = true;
-		travelVeil.textContent = label || '';
-		travelVeil.style.opacity = '1';
+		veil.up(label);
 		setTimeout(() => {
 			try { move(); } catch (err) { console.error('[travel]', err); }
-			const t0 = performance.now();
-			let last = t0, calm = 0;
-			const watch = (now) => {
-				calm = now - last < 70 ? calm + 1 : 0;
-				last = now;
-				// a dozen smooth frames in a row (or eight seconds, whatever happens)
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) {
-					travelling = false;
-					if (nextTrip) { const [l, m] = nextTrip; nextTrip = null; travel(l, m); return; }
-					travelVeil.style.opacity = '0';
-					return;
-				}
-				requestAnimationFrame(watch);
-			};
-			requestAnimationFrame(watch);
+			veil.settle(() => {
+				travelling = false;
+				if (!nextTrip) return false;
+				const [l, m] = nextTrip; nextTrip = null; travel(l, m);
+				return true;
+			});
 		}, 240);
 	}
 	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
@@ -839,7 +920,7 @@ export function createIslandWorld() {
 	};
 	const tpPlaces = [];
 	for (const pl of PLACES_TP) {
-		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;');
+		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;');
 		b.textContent = pl[0];
 		b.onclick = (e) => { e.stopPropagation(); teleport(pl); };
 		tpMenu.appendChild(b);
@@ -847,7 +928,7 @@ export function createIslandWorld() {
 	}
 	// the cities round you on Earth (space/landing.js citiesAround): the nearest and the region's
 	// biggest, a tap away, stood in the middle of its streets (they grow round you there)
-	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px system-ui;letter-spacing:.12em;color:#a5f6e2;');
+	const cityHead = css(document.createElement('div'), 'flex:none;display:none;padding:8px 4px 2px;font:600 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.12em;color:#a5f6e2;');
 	cityHead.textContent = 'CITIES NEAR YOU';
 	const cityList = css(document.createElement('div'), 'flex:none;display:none;flex-direction:column;gap:4px;');
 	cityList.dataset.cities = '';
@@ -860,7 +941,7 @@ export function createIslandWorld() {
 		const W = world, ll = W?.globe && !W.orbit?.active?.() ? globeLL(camera.position.x, camera.position.z) : null;
 		const list = ll ? citiesAround(ll.lat, ll.lon, 8) : [];
 		cityList.replaceChildren(...list.map((c) => {
-			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px system-ui;min-height:44px;cursor:pointer;');
+			const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(165,246,226,.28);background:rgba(1,169,130,.10);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:44px;cursor:pointer;');
 			b.dataset.city = c.id;
 			const here = c.km < 3;
 			const name = document.createElement('div'); name.style.cssText = 'font-weight:600;'; name.textContent = `${here ? '◉' : '⌖'} ${c.name}`;
@@ -884,11 +965,13 @@ export function createIslandWorld() {
 	guideApi.multiplayer=multiplayer;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	// your gear, shops and trading with friends (ui/gear.js)
-	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
+	// your hero as a picture for the gear sheet, drawn once per outfit (ui/hero-portrait.js)
+	const portrait = HOOKS.portrait = createHeroPortrait({ renderer, avatar, camera });
+	const gear = HOOKS.gear = createGear({ portrait, arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
-	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third });
+	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third, cover: coverWorld });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
 	// its own button, always on screen (beside the places on a touch screen, in the rail on a computer)
@@ -898,6 +981,8 @@ export function createIslandWorld() {
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) cloudBtn.addEventListener(ev, (e) => e.stopPropagation());
 	dom.mount.appendChild(cloudBtn);
 	HOOKS.account = createAccountPanel({ mount: dom.mount, menu: tpMenu, hud: cloudBtn, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), localName: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
+	// your character, what you carry and signing in, on the loading screen while the world builds
+	HOOKS.loadingTabs = linkLoadingTabs({ arms, avatar, magic: () => HOOKS.magic, account: HOOKS.account, name: () => { try { return localStorage.getItem('crysis-name') || ''; } catch { return ''; } } });
 	// music from a YouTube or Spotify link: its way in from the map pin, and the auto music making way (ui/music-link.js)
 	HOOKS.musicLink = createMusicLinkEntry({ menu: tpMenu, autoMusic, hint: (t, ms) => hint(t, ms, 1) });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
@@ -906,7 +991,7 @@ export function createIslandWorld() {
 	// magic; with an account, players join it and guilds ally with it (guild/)
 	HOOKS.guild = guideApi.guild = createGuild({ combat, guide, social, nearby: () => [...people.pool, ...social.actors.all()], cloud: cloudSave, url: roomsURL(), mount: dom.mount, menu: tpMenu, onFoot: () => !!world?.player && !drive.active() && !world.orbit?.active?.() && !world.boat?.boarded?.(), yaw: () => world?.player?.yaw ?? 0, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX });
 	// (the fog's colour under Gargantua's black sky)
-	const _voidFog = new THREE.Color(0.012, 0.008, 0.02);
+	const _voidFog = new THREE.Color(0.03, 0.012, 0.006);
 	guideApi.combat=combat;
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
@@ -918,6 +1003,8 @@ export function createIslandWorld() {
 	// cooking: your larder, the kitchens and shops, real recipes and the day's meals (cooking/index.js)
 	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
 	cooking.addMenu(tpMenu);
+	// the office's coffee, water, vending machine and first-aid box (interiors/office-perks.js)
+	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() });
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
@@ -1052,6 +1139,7 @@ export function createIslandWorld() {
 	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && doorHere && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); useDoor(); } });
 	function watchDoor(dt) {
 		cooking.update(dt);
+		officePerks.update(dt);
 		doorT += dt;
 		if (doorT < 0.15) return;
 		doorT = 0;
@@ -1138,7 +1226,8 @@ export function createIslandWorld() {
 	function applyQuality() {
 		governor.apply();
 		const Q = qualityNow();
-		renderer.shadowMap.enabled = !SAFE && Q.shadows;
+		// (set once, never switched by the tier: switching it rebuilds every lit material's shader)
+		renderer.shadowMap.enabled = !SAFE;
 		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = Q.reflect;
@@ -1153,11 +1242,22 @@ export function createIslandWorld() {
 	function fitShadow() {
 		const sun = world?.sky?.sun, size = (GFX ? 1024 : 2048) * qualityNow().shadowSize;
 		if (sun?.shadow && !renderer.shadowMap.enabled) { sun.shadow.dispose(); sun.shadow.map = sun.shadow.mapPass = null; return; }
-		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; renderer.shadowMap.needsUpdate = true; }
 	}
 
-	function resize() {
+	// The skills and magic menu over the world (magic/skills-ui.js cover): nothing is drawn under it,
+	// so the canvas is taken out of the picture (with it the compositing layer that made every part
+	// of the menu over it a layer of its own) and its drawing buffer handed back, until the menu
+	// goes; both are back before the first frame drawn after it. (On an iPhone with the world
+	// loaded, the menu's layers were the straw: the page died as it opened.)
+	function coverWorld(on) {
+		if (!!on === worldCovered) return;
+		worldCovered = !!on;
 		if (lost || recovery.blocked()) return;
+		if (on) { dom.canvas.style.display = 'none'; renderer.setDrawingBufferSize(2, 2, 1); } else { dom.canvas.style.display = 'block'; resize(); }
+	}
+	function resize() {
+		if (lost || recovery.blocked() || worldCovered) return;
 		const w = dom.mount.clientWidth || innerWidth, h = dom.mount.clientHeight || innerHeight;
 		// (the resolution holds whatever the tier: the governor's relief is shadows, crowds and reach,
 		// never a blocky picture)
@@ -1186,7 +1286,8 @@ export function createIslandWorld() {
 				// hills or mountains in the way?
 				let seen = 1;
 				for (const t of [80, 200, 500, 1200, 3000, 7000]) { const x = camera.position.x + sd.x * t, z = camera.position.z + sd.z * t; if (W.island.heightAt(x, z) > camera.position.y + sd.y * t + 3) { seen = 0; break; } }
-				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (1 - (W.weather?.state?.cover ?? 0) * 0.5);
+				// (as much of it as the cloud over the sun lets through: none under an overcast)
+				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (W.weather?.state?.sunVis ?? 1);
 			}
 		}
 		glareK += (want - glareK) * Math.min(1, dt * 3);
@@ -1239,7 +1340,7 @@ export function createIslandWorld() {
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
-		try { tick(now); } catch (err) {
+		try { tick(now); idleOverlays.sweep(now); } catch (err) {
 			if (lost || recovery.blocked()) return;
 			const key = String(err?.message || err);
 			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); keepFrameError(key, err); }
@@ -1329,8 +1430,14 @@ export function createIslandWorld() {
 	const EARTH_ORIGIN = { id: 'earth', seed: 1337, type: 'TERRAN', name: 'Earth', earth: true, colorA: [0.2, 0.45, 0.85], colorB: [0.25, 0.65, 0.4] };
 
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
+	// (ui/idle-overlays.js: the screen-sized overlays hidden while they sit at opacity 0)
+	const idleOverlays = createIdleOverlays(dom.mount);
+	HOOKS.idleOverlays = idleOverlays;
 	function show() {
 		visible = true;
+		// the music page under the world is neither painted nor composited while the world is up
+		// (index.html: html.l99-world-up); it is still laid out, so nothing of it breaks
+		document.documentElement.classList.add('l99-world-up');
 		// the music is worked out further ahead while the world draws (its frames can hold the
 		// page up longer than the faceplate's): index.html's L99Clock reads this
 		window._worldAudioLead = isPhone ? 0.2 : 0.15;
@@ -1356,6 +1463,7 @@ export function createIslandWorld() {
 		worldAir(0);
 		if (muffle.lp) { muffle.k = 0; muffle.lp.frequency.value = 20000; muffle.lp.Q.value = 0.9; }
 		dom.mount.style.display = 'none';
+		document.documentElement.classList.remove('l99-world-up');
 		world?.player.clearInput();
 		window.L99TouchMusic175?.cancel?.();
 		window.L99Keyboard149?.sync?.();
@@ -1451,26 +1559,52 @@ export function createIslandWorld() {
 
 	// A warp or a touchdown to another world: the same world build a flight landing uses.
 	// With dest.orbit the ship drops out that high above the new world's island.
+	// An approach (dest.approach: flown at the Moon from Earth, or at Earth from the Moon) has no
+	// warp tunnel to hide the build, so it goes behind the travel veil, lifted once the frames run
+	// smoothly again. Earth is then reached in orbit over where you left and the ship comes down
+	// from there, the ground streaming in as it nears, as on any return from orbit: standing you
+	// on the ground the moment the world was built loaded all of it in the first frames, and a
+	// phone gave up at touchdown.
+	const ARRIVE = 160000;
 	async function voyage(dest) {
 		const params = dest.earth ? { seed: 1337, earth: true } : { seed: dest.seed, biome: dest.type, earth: false, origin: { seed: dest.seed, type: dest.type, id: `warp-${dest.type.toLowerCase()}`, earth: false } };
-		await api.open(params);
-		const P = world?.player.state;
-		if (!P || !visible || !sameBody(state.body, worldBody(params))) return false;
-		if (dest.colony && world.colony?.port) { world.colony.go(); return true; }
-		if (dest.beyond) { if (!world.beyond) return false; world.beyond.enter(true); return true; }
-		if (dest.orbit) {
-			P.flying = true; P.vel.set(0, 0, 0); P.pos.y = dest.orbit; P.pitch = -1.1; P.boost = 1;
-			camera.position.copy(P.pos);
-			hint(`${dest.name} below. Descend (C) to land, or warp on.`, 5000);
-		} else hint(world.island.gravity < 1 ? `${dest.name}: low gravity. Jump and see.` : `Landed on ${dest.name}.`, 5000);
-		return true;
+		const approach = !!dest.approach;
+		// leaving Earth: where you left the ground is where an approach brings you back
+		if (state.earth && !dest.earth && world?.orbit) { const a = world.orbit.info().anchor; launchedAt = a && Number.isFinite(a.lat) ? { lat: a.lat, lon: a.lon } : null; }
+		if (approach) { veil.up(dest.name); await new Promise((r) => setTimeout(r, 260)); }
+		try {
+			await api.open(params);
+			const P = world?.player.state;
+			if (!P || !visible || !sameBody(state.body, worldBody(params))) { if (approach) veil.down(); return false; }
+			if (dest.colony && world.colony?.port) { world.colony.go(); if (approach) veil.settle(); return true; }
+			if (dest.beyond) { if (!world.beyond) { if (approach) veil.down(); return false; } world.beyond.enter(true); if (approach) veil.settle(); return true; }
+			const orbit = dest.orbit || (approach && dest.earth ? ARRIVE : 0);
+			if (orbit) {
+				if (approach && dest.earth && launchedAt && world.globe) {
+					// over where you left: its ground is laid while the veil is still up
+					const W = world, at = launchedAt, p = W.globe.place(at.lat, at.lon);
+					await Promise.race([p.ready, new Promise((r) => setTimeout(r, 20000))]).catch(() => {});
+					if (world !== W || !visible) { veil.down(); return false; }
+					if (Number.isFinite(p.x) && Number.isFinite(p.z)) P.pos.set(p.x, P.pos.y, p.z);
+				}
+				launchedAt = null;
+				P.flying = true; P.vel.set(0, 0, 0); P.pos.y = orbit; P.pitch = -1.1; P.boost = 1;
+				camera.position.copy(P.pos);
+				if (approach) world.orbit?.arrive?.();
+				else hint(`${dest.name} below. Descend (C) to land, or warp on.`, 5000);
+			} else hint(world.island.gravity < 1 ? `${dest.name}: low gravity. Jump and see.` : `Landed on ${dest.name}.`, 5000);
+			if (approach) veil.settle();
+			return true;
+		} catch (err) { if (approach) veil.down(); throw err; }
 	}
 	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
+		// a load that never finished is tried again (the loading screen's Try again): a tier lighter for this visit
+		retryLighter: () => governor.retry(),
 		open(params = {}) {
 			const enter = () => api.enter(params);
-			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close() }) : enter();
+			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close(), retry: () => governor.retry() }) : enter();
 		},
 		async enter(params = {}) {
 			if (recovery.blocked()) throw graphicsReloadError();
@@ -1511,11 +1645,11 @@ export function createIslandWorld() {
 		autoWalk: () => visible && running && !!drive.auto?.(),
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
-		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close() }),
+		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close(), retry: () => governor.retry() }),
 		// ?room=CODE: join a friend's room and go to them (net/multiplayer.js)
 		joinRoom: (code) => multiplayer.join(code),
 		// back to the last place you were (after a crash or a reload); false if there is none
-		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close() }) : false; },
+		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close(), retry: () => governor.retry() }) : false; },
 		// flight's landing builds the world here first, out of sight, so Journey's own clock
 		// only covers the hand-over (a slow phone building the Bay Area outran it, and the
 		// failed passage left you on the old flight surface)
@@ -1674,6 +1808,16 @@ if (typeof window !== 'undefined') {
 			const S = wx.state;
 			return { mode: S.mode, cover: +S.cover.toFixed(2), cirrus: +S.cirrus.toFixed(2), tails: +S.tails.toFixed(2), veil: +S.veil.toFixed(2), reach: +S.reach.toFixed(2), sunVis: +S.sunVis.toFixed(2) };
 		},
+		// the look on the tone mapping (world/grade.js): Crysis.grade() reads it; .grade({ contrast: 1.3 })
+		// tries other numbers. That rebuilds every shader: for tuning on a computer, never on a phone in play
+		grade: (o) => {
+			if (o) {
+				Object.assign(GRADE, o);
+				installGrade();
+				window.L99Island?.scene?.()?.traverse((m) => { for (const x of [].concat(m.material || [])) x.dispose(); });
+			}
+			return { ...GRADE };
+		},
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()
@@ -1710,7 +1854,7 @@ if (typeof window !== 'undefined') {
 				const d = bank.daily(id, 90), v = d.map((q) => q.balance), lo = Math.min(...v, 0), hi = Math.max(...v, 1), W = 560, H = 160;
 				const pts = d.map((q, i) => `${(10 + i * (W - 20) / Math.max(1, d.length - 1)).toFixed(1)},${(H - 10 - (q.balance - lo) * (H - 20) / Math.max(1, hi - lo)).toFixed(1)}`).join(' ');
 				let el = document.getElementById('bank-panel');
-				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px system-ui;max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
+				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px var(--bard-body,system-ui,sans-serif);max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
 				const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 				el.innerHTML = `<b>${esc(bank.household(id))}</b> ${bank.balance(bank.household(id))} credits<br><svg width="${W}" height="${H}" style="max-width:100%"><polyline fill="none" stroke="#7fb4ff" stroke-width="2" points="${pts}"/></svg><br>` + bank.history(id).slice(0, 8).map((t) => `day ${t.day} ${esc(t.kind)} ${t.amount} ${esc(t.counterparty)}`).join('<br>');
 				return 'shown (click it to close)';
@@ -1811,6 +1955,11 @@ if (typeof window !== 'undefined') {
 		governorTier: (t) => { const G = HOOKS.governor; if (!G) return null; G.state.tier = Math.max(0, Math.min(3, Math.round(+t || 0))); G.state.since = G.state.sinceDown = 0; return G.info(); },
 		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
 		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
+		// the shader warm and its gate (world/shaderwarm.js): what is held back and built in the background
+		// (with a function: it is told of every draw the gate holds back, (object, material, why, frame))
+		// (the screen-sized overlays hidden while idle: ui/idle-overlays.js)
+		overlays: () => HOOKS.idleOverlays?.info() ?? null,
+		shaders: (trace) => { if (trace) HOOKS.shaderWarm?.trace(trace); return HOOKS.shaderWarm?.info() ?? null; },
 		// the frame's own failures kept on this device (main.js keepFrameError), newest last
 		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
 		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },
@@ -1846,9 +1995,15 @@ if (typeof window !== 'undefined') {
 		jackable: () => !!HOOKS.carjack?.candidate(),
 		// see yourself (as P does), shove (as X does)
 		thirdPerson: () => HOOKS.self?.toggle(),
+		// a dance on the beat (Z): Crysis.dance('twostep' | 'bounce' | 'handsup' | 'sway'), or the next one
+		dance: (name) => HOOKS.self?.dance(name ? 'dance-' + name : undefined),
+		beat: () => ({ ...beatNow() }),
 		// your hero (people/hero.js): Crysis.hero() which, Crysis.hero('female') the other
 		hero: (sex) => (sex ? HOOKS.avatar?.setHero(sex).then(() => HOOKS.avatar.hero) : HOOKS.avatar?.hero),
 		heroView: () => HOOKS.heroView,
+		// your hero's picture for the gear sheet (ui/hero-portrait.js): Crysis.portrait() its state,
+		// .portrait('gear' | 'char') with the sheet open on that view
+		portrait: (view, look) => { if (look) HOOKS.portrait?.look(look); if (view) HOOKS.gear?.open(view); return HOOKS.portrait?.info(); },
 		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
@@ -1892,8 +2047,8 @@ if (typeof window !== 'undefined') {
 		ride: (name = 'dipper') => window.L99Island?.world?.()?.boardwalk?.rideNow(name) ?? 'No Boardwalk on this world.',
 		// the minigames: Crysis.arcade.start('bowling'), .stop(), .games()
 		get arcade() { return HOOKS.arcade; },
-		// explore: Crysis.explore() how it stands, .start(), .stop()
-		explore: Object.assign(() => HOOKS.explore?.info(), { start: () => HOOKS.explore?.start(), stop: () => HOOKS.explore?.stop() }),
+		// explore: Crysis.explore() how it stands, .start(), .stop(); .steer(dt) a step by hand (the tests)
+		explore: Object.assign(() => HOOKS.explore?.info(), { start: () => HOOKS.explore?.start(), stop: () => HOOKS.explore?.stop(), steer: (dt) => HOOKS.explore?.steer(dt) }),
 		// auto music: Crysis.music.auto(true), .state(), .log(true), .level(0.5), .queue('chorus')
 		music: { auto: (on) => HOOKS.autoMusic?.auto(on), state: () => HOOKS.autoMusic?.state(), log: (on) => HOOKS.autoMusic?.log(on), level: (v) => HOOKS.autoMusic?.level(v), queue: (to, now) => HOOKS.autoMusic?.queue(to, now) },
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },

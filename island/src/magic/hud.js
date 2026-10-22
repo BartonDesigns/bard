@@ -15,13 +15,13 @@ import { pointsOf } from './skills.js';
 import { firstTime } from '../ui/touch-skin.js';
 
 const CSS = `
-.mg-bar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:flex-end;pointer-events:none;z-index:6;font:600 11px/1 system-ui,-apple-system,Segoe UI,sans-serif;color:#eef6f4;transition:opacity .4s}
+.mg-bar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:flex-end;pointer-events:none;z-index:6;font:600 11px/1 var(--bard-display,system-ui,sans-serif);color:#eef6f4;transition:opacity .4s}
 .mg-bar .grp{display:flex;gap:4px}
 .mg-bar .sep{width:1px;height:30px;background:rgba(255,255,255,.18);margin:0 4px;align-self:center}
 .mg-s{position:relative;width:40px;height:40px;border-radius:9px;background:rgba(10,16,20,.55);box-shadow:0 0 0 1px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
 .mg-s .k{position:absolute;left:4px;top:3px;font-size:9px;opacity:.7}
 .mg-s .g{font-size:19px;line-height:1;text-shadow:0 0 8px currentColor}
-.mg-s .w{font-size:10px;letter-spacing:.4px;text-transform:uppercase;opacity:.9}
+.mg-s .w{font-size:10px;letter-spacing:.4px;text-transform:uppercase;opacity:.9;font-family:var(--bard-display,Georgia,serif)}
 .mg-s .w svg{display:block;width:26px;height:26px;opacity:.95;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
 .mg-s .cd{position:absolute;inset:0;border-radius:9px;pointer-events:none}
 .mg-s.held{box-shadow:0 0 0 2px #7fe0c0}
@@ -29,14 +29,14 @@ const CSS = `
 .mg-s.empty{opacity:.45}
 .mg-mana{position:absolute;left:50%;bottom:calc(60px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);height:4px;border-radius:2px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.1);pointer-events:none;z-index:6}
 .mg-mana>div{height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,#5a7cff,#a8c4ff);transition:transform .15s}
-.mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 system-ui,sans-serif;color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
+.mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
 @media (max-width:660px){#l99-island-mount:not(.l99-touch) .mg-bar{left:calc(50% - 34px)}}
 .mg-fab b{font-weight:700}.mg-fab .l{color:#ffd27a}.mg-fab .d{color:#b39aff}
-.mg-mode{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 system-ui,sans-serif;padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
+.mg-mode{position:absolute;left:50%;top:calc(14px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 var(--bard-display,system-ui,sans-serif);padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
 .mg-fab .pt{display:inline-block;margin-left:5px;padding:0 5px;border-radius:8px;background:#01a982;color:#fff;font-size:10px;line-height:15px;box-shadow:0 0 10px rgba(1,169,130,.8);animation:mgPt 2s ease-in-out infinite}
 @keyframes mgPt{50%{box-shadow:0 0 18px rgba(1,169,130,1)}}
-.mg-lvl{position:absolute;left:50%;top:calc(18% + env(safe-area-inset-top));transform:translate(-50%,0);pointer-events:none;z-index:8;text-align:center;color:#fff;opacity:0;font:600 13px/1.3 system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.8);white-space:nowrap}
-.mg-lvl b{display:block;font:200 44px/1 system-ui,-apple-system,Segoe UI,sans-serif;letter-spacing:.3em;margin-bottom:6px;background:linear-gradient(180deg,#fff 30%,#5eead4);-webkit-background-clip:text;background-clip:text;color:transparent}
+.mg-lvl{position:absolute;left:50%;top:calc(18% + var(--l99-top, env(safe-area-inset-top)));transform:translate(-50%,0);pointer-events:none;z-index:8;text-align:center;color:#fff;opacity:0;font:600 13px/1.3 var(--bard-display,system-ui,sans-serif);letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.8);white-space:nowrap}
+.mg-lvl b{display:block;font:200 44px/1 var(--bard-display,system-ui,sans-serif);letter-spacing:.3em;margin-bottom:6px;background:linear-gradient(180deg,#fff 30%,#5eead4);-webkit-background-clip:text;background-clip:text;color:transparent}
 .mg-lvl i{display:block;height:1px;margin:8px auto;width:0;background:linear-gradient(90deg,transparent,#5eead4,transparent)}
 .mg-lvl.go{animation:mgLvl 4.2s ease forwards}.mg-lvl.go i{animation:mgLine 1.2s .2s ease-out forwards}
 @keyframes mgLvl{0%{opacity:0;transform:translate(-50%,10px)}10%,78%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
@@ -44,11 +44,11 @@ const CSS = `
 /* (a touch screen: the spell button, and the arcs it opens over everything) */
 .mg-hub{position:absolute;right:calc(24px + env(safe-area-inset-right));bottom:calc(226px + env(safe-area-inset-bottom));width:52px;height:52px;box-sizing:border-box;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(12,16,20,.32);box-shadow:0 1px 8px rgba(0,0,0,.16);display:flex;align-items:center;justify-content:center;z-index:6;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer;transition:opacity .4s,scale .08s ease}
 .mg-hub.on{scale:.94;background:rgba(255,255,255,.2)}
-.mg-hub .g{font:600 22px/1 system-ui,sans-serif;color:#eef6f4;text-shadow:0 0 8px currentColor;pointer-events:none}
+.mg-hub .g{font:600 22px/1 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 0 8px currentColor;pointer-events:none}
 .mg-hub .ring{position:absolute;inset:-1px;border-radius:50%;background:conic-gradient(#9db8ff calc(var(--m,1) * 1turn),rgba(255,255,255,.12) 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2.5px));pointer-events:none}
 .mg-hub .cd{position:absolute;inset:3px;border-radius:50%;pointer-events:none}
 .mg-hub.dim .g{opacity:.35}
-.mg-hub .pt{position:absolute;right:-3px;top:-3px;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#01a982;color:#fff;font:700 10px/16px system-ui,sans-serif;text-align:center;box-shadow:0 0 10px rgba(1,169,130,.8);pointer-events:none}
+.mg-hub .pt{position:absolute;right:-3px;top:-3px;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#01a982;color:#fff;font:700 10px/16px var(--bard-body,system-ui,sans-serif);text-align:center;box-shadow:0 0 10px rgba(1,169,130,.8);pointer-events:none}
 .l99-tools-open .mg-hub{visibility:hidden}
 .mg-bar.mg-wheel.open~.mg-hub{z-index:17}
 .mg-bar.mg-wheel{left:0;top:0;right:0;bottom:0;transform:none;display:none;pointer-events:auto;z-index:16;touch-action:none}
@@ -77,6 +77,7 @@ const KEYS = ['6', '7', '8', '9', '0'];
 const WEAPON_ICON = {
 	'aurora-trail-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M1 11h15l1-1h6v2h-6l-1 1H10l-1.6 4.5H5.8l1.4-4.5H3.6L1 14.5z"/><path d="M7.5 7.5h7v2h-7z"/><path d="M9 9.5h1v1.5H9zm3 0h1v1.5h-1z"/></g>',
 	'mossback-scout-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M1 11.6l3-1.1h13.5v-.8H23v1.6h-5.5l-1 1.4h-6l-2.2 3.8H5.6l1.8-3.8H4.2L1 14z"/><circle cx="13" cy="14.2" r="1.1"/></g>',
+	'longwatch-sniper-rifle': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M.6 11.4l2.6-.9h11.4v-.6h8.8v1.2h-8.8l-.8 1.3H9.6l-2 3.4H5.2l1.6-3.4H3.6L.6 13.8z"/><path d="M6.4 7.6h8.2v1.5H6.4zM14.2 7.3h2.2v2.1h-2.2z"/><path d="M8 9.1h.9v1.4H8zm4 0h.9v1.4H12z"/><circle cx="12" cy="13.4" r="1"/></g>',
 	'warden-spark-carbine': '<g transform="translate(0 -4.8) scale(1 1.4)"><path d="M2 9.5h13V8.6h6.5v2.1H15V13h-3.4l-.5 4.5H8.6l.5-4.5H6.8L5.6 16H3l1-3H2z"/><path d="M12.4 13h2.2l.4 3.6h-2.2z"/></g>',
 	'reedline-hunting-bow': '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"><path d="M8 2.5c7 4.6 7 14.4 0 19"/><path d="M8 2.5v19" stroke-width="1"/><path d="M3 12h16.5"/></g><path d="M21.5 12l-3.4-2.2v4.4z"/><path d="M3 12l-1.4-1.6M3 12l-1.4 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
 	bat: '<g transform="rotate(-45 12 12)"><path d="M1.6 11.1H11l9.6-1.5a2.4 2.4 0 0 1 0 4.8L11 12.9H1.6z"/><rect x=".2" y="10.4" width="2" height="3.2" rx=".7"/></g>',
@@ -85,7 +86,7 @@ const WEAPON_ICON = {
 	knife: '<path d="M2.4 20.2l4.4-4.4 1.6 1.6-4.4 4.4a1.1 1.1 0 0 1-1.6-1.6z"/><path d="M7.8 14.8L20.6 2.4c.9 2.6-.1 5.6-2.4 7.9l-8.2 8.1z"/>',
 	machete: '<path d="M1.8 20.6l3.8-3.8 1.8 1.8-3.8 3.8a1.3 1.3 0 0 1-1.8-1.8z"/><path d="M6.6 15.8L17.4 5c2.4-2.4 5.6-1.6 4.8 1.2-.3 1-1 1.9-1.8 2.7L8.6 17.8z"/>',
 };
-const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Scout', 'warden-spark-carbine': 'Carb', 'reedline-hunting-bow': 'Bow', bat: 'Bat', pipe: 'Pipe', bottle: 'Bottle', knife: 'Knife', machete: 'Blade' };
+const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Scout', 'longwatch-sniper-rifle': 'Sniper', 'warden-spark-carbine': 'Carb', 'reedline-hunting-bow': 'Bow', bat: 'Bat', pipe: 'Pipe', bottle: 'Bottle', knife: 'Knife', machete: 'Blade' };
 
 // the arcs round the spell button: radius, then each slot's angle from straight left (up is +)
 const RING = { s: [100, [64, 32, 0, -32, -64]], w: [162, [40, 20, 0, -20, -40]] };
@@ -127,7 +128,7 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 		const pt = mk('span', 'pt', hub);
 		// the safe areas in px (env() only reaches CSS)
 		const probe = mk('div', '', mount);
-		probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+		probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;padding:var(--l99-top, env(safe-area-inset-top)) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
 		const UP = RING.w[0] * Math.sin(RING.w[1][0] * Math.PI / 180) + 23;
 		let isOpen = false, hot = null;
 		function place() {
@@ -211,7 +212,7 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 		return { open, close, isOpen: () => isOpen, paint, rise, hub, dispose };
 	}
 	const lvl = mk('div', 'mg-lvl', mount);
-	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · double-tap Alt / ⌥ to aim');
+	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · click the world or tap Alt / ⌥ to aim again');
 	let lastSig = '', wT = 0;
 	// (only what changed is written, through put above: the bar is looked at every frame)
 	function update(now) {

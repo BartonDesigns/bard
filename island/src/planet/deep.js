@@ -664,10 +664,10 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 
 	// ---------- going down, coming up ----------
 	const veil = document.createElement('div');
-	veil.style.cssText = 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .3s ease;background:#020405;display:flex;align-items:center;justify-content:center;color:#d8f4ff;font:600 15px system-ui;letter-spacing:.08em;text-align:center;padding:24px;';
+	veil.style.cssText = 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .3s ease;background:#020405;display:flex;align-items:center;justify-content:center;color:#d8f4ff;font:600 15px var(--bard-display,system-ui,sans-serif);letter-spacing:.08em;text-align:center;padding:24px;';
 	mount?.appendChild(veil);
 	const meter = document.createElement('div');
-	meter.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));z-index:4;pointer-events:none;display:none;padding:6px 12px;border-radius:12px;background:rgba(4,12,16,.6);border:1px solid rgba(255,255,255,.18);color:#dff6ff;font:600 12px system-ui;letter-spacing:.04em;white-space:nowrap;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+	meter.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + var(--l99-top, env(safe-area-inset-top)));z-index:4;pointer-events:none;display:none;padding:6px 12px;border-radius:12px;background:rgba(4,12,16,.6);border:1px solid rgba(255,255,255,.18);color:#dff6ff;font:600 12px var(--bard-display,system-ui,sans-serif);letter-spacing:.04em;white-space:nowrap;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
 	mount?.appendChild(meter);
 	let busy = false;
 	function veilTo(label, move) {

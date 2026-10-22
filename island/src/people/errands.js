@@ -21,6 +21,7 @@ import { promoted } from '../gameplay/ranks.js';
 import { favourProp } from './favour-props.js';
 import { createDog, dogSpec } from './dog.js';
 import { createDogVoice } from './dog-voice.js';
+import { wallKeeper } from './walls.js';
 
 const OFFER_FOR = 15, OFFER_REACH = 12, PICK = 1.4, HAND = 2.3, AWAY = 220;
 const LIMIT = { search: 360, bring: 360, lead: 420, chase: 150, carry: 300, fix: 480, haul: 240, jump: 240, tell: 30, report: 300 };
@@ -44,9 +45,12 @@ export function createErrands({ pacing = null, scene, camera, world, people, cha
 			if (mode === 'follow') { const S = q.M.S, dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz); if (d > 1.8) { q.M.want.heading = Math.atan2(dx, dz); q.M.want.speed = Math.min(1.8, d); } else q.M.want.speed = 0; return true; }
 			const S = q.M.S, dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
 			if (q.route?.kind === 'seat') return false;   // sitting: stays sat
+			// (turned to you once you are near, and looked at as anyone near is looked at, meeting
+			// your eyes and glancing away (motion.js): never squared up to and stared at from
+			// across the street, which reads as a threat)
 			q.M.want.speed = 0;
-			if (d < 16) { q.M.want.heading = Math.atan2(dx, dz); if (!S.remark) S.look.target = cam; }
-			else if (!S.remark) S.look.target = null;
+			if (d < 8) q.M.want.heading = Math.atan2(dx, dz);
+			if (!S.remark) S.look.target = null;
 			q.M.setPose(q.idlePose || 'rest');
 			return true;
 		};
@@ -76,6 +80,8 @@ export function createErrands({ pacing = null, scene, camera, world, people, cha
 	const ownerAt = () => (E.giver ? pos(E.giver) : E.home);
 	const flat = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 	const you = () => { const P = world()?.player?.state; return P && !P.flying ? P.pos : camera.position; };
+	// (a lost pet kept off the walls as it runs: people/walls.js)
+	const keepWalls = wallKeeper(world);
 	const feet = () => { const q = you(); return { x: q.x, y: q.y - (q === camera.position ? 1.7 : 0), z: q.z }; };
 
 	// ---------- the ground, for a dropped thing ----------
@@ -215,7 +221,8 @@ export function createErrands({ pacing = null, scene, camera, world, people, cha
 		const credits = rewardFor(E.kind, metres);
 		if (to?.active) {
 			chatter.say(to, { text: lineFor(say, { kind: E.kind, item: E.item, friend: E.giverName, n }), gesture: say === 'caught' || say === 'reunited' ? 'laugh' : 'wave', feel: { joy: 1, surprise: say === 'caught' || say === 'reunited' ? 0.6 : 0.2 } }, null);
-			to.M.S.feel.joy = 1;
+			// (a warm smile: a full grin held up close reads as a smirk)
+			to.M.S.feel.joy = 0.55;
 		}
 		const paid = credits ? arms()?.apply?.({ id: `favour:${E.giverName}:${Date.now()}`, kind: 'trade', peer: 'favour', give: { credits: 0, items: [] }, get: { credits, items: [] } }) : { ok: false };
 		// (out of their own pocket, through the bank's adapter)
@@ -266,7 +273,7 @@ export function createErrands({ pacing = null, scene, camera, world, people, cha
 		// how fast you are coming (a run frightens it)
 		const sp = pet.last ? Math.hypot(me.x - pet.last.x, me.z - pet.last.z) / Math.max(dt, 1e-3) : 0;
 		pet.last = { x: me.x, z: me.z }; pet.speed += (Math.min(sp, 30) - pet.speed) * Math.min(1, dt * 4); pet.t += dt;
-		const ctx = { ground: groundAt, you: me, home: pet.home, mode: 'lost' };
+		const ctx = { ground: groundAt, walls: keepWalls, you: me, home: pet.home, mode: 'lost' };
 		if (pet.phase === 'lost') { ctx.mode = flat(me, at) < 12 ? 'wary' : 'lost'; ctx.rushing = pet.speed > RUSH || driving(); }
 		else if (pet.phase === 'follow') { ctx.mode = 'follow'; ctx.keep = 2.8; }
 		else if (pet.phase === 'reunion' || pet.phase === 'home') {

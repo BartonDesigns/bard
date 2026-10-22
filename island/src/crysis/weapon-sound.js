@@ -2,8 +2,8 @@
 // recordings. Each cue is a few short layers (a sharp transient, a body of filtered noise, a low
 // thump, a tail), and distance takes the top off and lets the tail lead.
 //
-// playCue(name, { distance, gain }): marksman, scout, pulse, bow, dry, cell-out, cell-in, ready,
-// charge, equip, holster, aim.
+// playCue(name, { distance, gain }): marksman, scout, longwatch, pulse, bow, dry, cell-out,
+// cell-in, ready, charge, bolt, equip, holster, aim.
 
 import { noise, soundBus } from '../world/soundbus.js';
 
@@ -41,6 +41,15 @@ const LAYERS = {
 		v.tone(t, 'sine', 110, 45, 0.7, 0.003, 0.16);
 		v.burst(t + 0.02, 'pink', 'lowpass', 1700, 0.5, 0.18 + far * 0.3, 0.03, 0.6, 340);
 	},
+	// the Longwatch: a heavy crack, a deep boom under it and a long roll after
+	longwatch: (v, t, far) => {
+		v.burst(t, 'white', 'highpass', 2200, 0.7, 1.0 * (1 - far * 0.8), 0.001, 0.016);
+		v.burst(t, 'white', 'bandpass', 700, 0.5, 1.0, 0.002, 0.2, 260);
+		v.tone(t, 'sine', 70, 28, 1.0, 0.003, 0.32);
+		v.burst(t + 0.025, 'pink', 'lowpass', 1100, 0.5, 0.3 + far * 0.3, 0.04, 1.2, 180);
+	},
+	// a bolt worked: up and back, forward and down
+	bolt: (v, t) => { v.click(t, 2100, 0.32); v.burst(t + 0.03, 'white', 'bandpass', 1600, 1.4, 0.1, 0.01, 0.1, 800); v.click(t + 0.24, 2600, 0.4); v.tone(t + 0.24, 'sine', 210, 140, 0.18, 0.002, 0.05); },
 	// the energy kit: a zap, a sub, a crackle, a shimmer
 	pulse: (v, t, far) => {
 		v.tone(t, 'sawtooth', 1600, 180, 0.28, 0.002, 0.09);

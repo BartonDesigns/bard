@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { isRibbed, isShirted } from './garment-shape.js';
+import { isRibbed, isShirted, drapeOf, hangWidth, neckDrop, necklineY } from './garment-shape.js';
 
 const clamp = (x) => Math.max(0, Math.min(1, x));
 const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
@@ -10,6 +10,17 @@ export const armhole = (v, cut) => cut.shoulderX - .03 + Math.max(0, cut.chest -
 export function sleeveDistance(v, sleeve, cut) {
  const plane=cut.sleevePlanes[v[0]>=0?'L':'R'][sleeve||'short'];
  return plane[3]-plane[0]*v[0]-plane[1]*v[1]-plane[2]*v[2];
+}
+
+// rows' values of one attribute laid end to end in a typed array, as rows.flatMap(v=>v[name])
+// gave them, without the list between (a garment's rows run to tens of thousands)
+function flatten(rows, name, Type) {
+ let n = 0;
+ for (const v of rows) { const a = v[name]; n += Array.isArray(a) ? a.length : 1; }
+ const out = new Type(n);
+ let k = 0;
+ for (const v of rows) { const a = v[name]; if (Array.isArray(a)) for (let j = 0; j < a.length; j++) out[k++] = a[j]; else out[k++] = a; }
+ return out;
 }
 
 // Blend bone identities, not their numeric indices. Shared by curved surface samples
@@ -58,7 +69,7 @@ export function refineGarmentSurface(g) {
   indices.push(A,ab,ca,ab,B,bc,ca,bc,C,ab,bc,ca);
  }
  const out=new THREE.BufferGeometry();
- for(const name of names){const Type=name==='skinIndex'?Uint16Array:Float32Array;out.setAttribute(name,new THREE.BufferAttribute(new Type(rows.flatMap(v=>v[name])),g.attributes[name].itemSize));}
+ for(const name of names){const Type=name==='skinIndex'?Uint16Array:Float32Array;out.setAttribute(name,new THREE.BufferAttribute(flatten(rows,name,Type),g.attributes[name].itemSize));}
  out.setIndex(indices);out.userData.refinement={addedVertices:added,maxOffset};g.dispose();return out;
 }
 
@@ -67,24 +78,30 @@ export function refineGarmentSurface(g) {
 // All movement is outward, and stretch garments keep their original body fit.
 export function drapePanels(g, o, cut, R) {
  const p = g.attributes.position, slot = g.attributes.slot;
- const rx = Math.max(cut.waistX, cut.shoulderX * .94, .08);
- const front = cut.drapeFront, back = cut.drapeBack, zc = (front + back) / 2;
- if (![front, back, rx].every(Number.isFinite)) return;
+ // (the front panel hangs from the chest, not from the fullest point below it)
+ const front = Number.isFinite(cut.frontZ) ? cut.frontZ : cut.drapeFront, back = cut.drapeBack, zc = (front + back) / 2;
+ if (![front, back].every(Number.isFinite)) return;
  for (let i = 0; i < p.count; i++) {
   const s = Math.round(slot.getX(i)) % 10, limb = Math.floor(slot.getX(i) / 10);
   const item = s === 0 ? o.top : s === 1 ? o.outer : null;
   if (!item || limb !== 0 || item.fit === 'tight' || /bikini|swim/.test(item.kind || '')) continue;
   const x = p.getX(i), y = p.getY(i), z = p.getZ(i), hem = s === 0 ? R.topHem : R.outHem;
+  // (the panels hang from the chest at the width the cut hangs at, and as far as its drape
+  // lets them: a fitted top follows the body under it)
+  const rx = Math.max(hangWidth(item, cut), .08), drape = drapeOf(item);
+  if (drape <= 0) continue;
   const upper = smooth((cut.shoulder - .025 - y) / .12);
   const side = 1 - smooth((Math.abs(x) / rx - .72) / .32);
-  const ease = /slim|fitted/.test(item.fit || '') ? .6 : 1;
+  const ease = drape;
   const lower = item.tuck ? smooth((y - hem) / .1) : 1;
   const blend = upper * side * ease * lower;
   if (blend === 0 || y < hem - .02) continue;
   // Superellipse with a broad front, plus a few shallow hanging folds.
   const curve = Math.sqrt(Math.max(0, 1 - Math.pow(Math.min(1, Math.abs(x) / rx), 4)));
-  const fold = (.5 + .5 * Math.cos(x * 48 + Math.sin(y * 7) * .65)) * .0035 * smooth((cut.chest - y) / .18);
-  const allowance = s === 1 ? .026 : .012;
+  // (the folds set off the middle, so no crease runs down the centre front; a fitted knit hangs
+  // smooth)
+  const fold = (.5 + .5 * Math.cos(x * 48 + 1.9 + Math.sin(y * 7) * .65)) * .0035 * smooth((cut.chest - y) / .18) * drape;
+  const allowance = (s === 1 ? .026 : .012) * (.4 + .6 * drape);
   const target = z >= zc ? zc + (front - zc) * curve + allowance + fold : zc - (zc - back) * curve - allowance - fold;
   p.setZ(i, z + (z >= zc ? Math.max(0, target - z) : Math.min(0, target - z)) * blend);
  }
@@ -95,7 +112,9 @@ export function drapePanels(g, o, cut, R) {
 // This avoids razor-thin shader-only edges while retaining the fitted sleeve topology.
 export function finishGarmentEdges(g, o, cut, R) {
  const names = Object.keys(g.attributes), rows = [], indices = [], cache = new Map(), rims = new Map();
- const read = (i) => Object.fromEntries(names.map(k => [k, Array.from({ length: g.attributes[k].itemSize }, (_, j) => g.attributes[k].array[i * g.attributes[k].itemSize + j])]));
+ // (a vertex's values, attribute by attribute, read straight from the arrays)
+ const attrs = names.map(k => g.attributes[k]);
+ const read = (i) => { const o = {}; for (let a = 0; a < names.length; a++) { const A = attrs[a], size = A.itemSize, arr = A.array, v = new Array(size); for (let j = 0; j < size; j++) v[j] = arr[i * size + j]; o[names[a]] = v; } return o; };
  const source = new Map();
  const at = (i) => { if (!source.has(i)) source.set(i, { ...read(i), key: 'v' + i, trim: [0] }); return source.get(i); };
  function mix(a, b, t) {
@@ -117,12 +136,15 @@ export function finishGarmentEdges(g, o, cut, R) {
   return out;
  }
  const ix = g.index.array;
+ // (a vertex in a region, made once and shared by the triangles round it: nothing changes it after)
+ const inRegion = new Map();
+ const regioned = (v, val) => { const key = `${v.key}s${val}`; let r = inRegion.get(key); if (!r) inRegion.set(key, r = { ...v, key, slot: [val] }); return r; };
  for (let i=0;i<ix.length;i+=3) {
   let poly = [at(ix[i]),at(ix[i+1]),at(ix[i+2])];
   const val=poly[2].slot[0], s=Math.round(val)%10, limb=Math.floor(val/10), item=[o.top,o.outer,o.bottom,o.shoes][s];
   // The shader uses a flat region ID. Intersections must not create fractional IDs
   // between an arm and torso and accidentally address a different garment palette.
-  poly=poly.map(v=>({...v,key:`${v.key}s${val}`,slot:[val]}));
+  poly=[regioned(poly[0],val),regioned(poly[1],val),regioned(poly[2],val)];
   const cuts=[];
   // each edge's turned-back return: a knit's rib and a rolled sleeve are thicker than a hem
   const edge=(f,r=.0016)=>{f.radius=r;return f;}, ribbed=isRibbed(item);
@@ -133,8 +155,8 @@ export function finishGarmentEdges(g, o, cut, R) {
     const tail=v=>s===1&&isShirted(item)?.035*smooth((Math.abs(v[0])-.08)/.08):0;
     cuts.push(edge(v=>v[1]-(s===0?R.topHem:R.outHem+tail(v))-.012,ribbed?.0034:.0018));
     if (!item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>{
-     const fr=smooth((v[2]+.04)/.035), scoop=s===0?(item.kind==='tank'?.045:item.kind==='crop'?.025:0):0;
-     return cut.neck-.005-scoop*fr+.035*smooth(Math.abs(v[0])/.09)-.004*fr-v[1];
+     const fr=smooth((v[2]+.04)/.035);
+     return necklineY(cut.neck-.005,v[0],fr,neckDrop(item))-v[1];
     },ribbed?.003:.0016));
     // a sleeveless armhole cut clean in a curve (not left to whole triangles)
     if (item.sleeves==='none' && limb===0 && !item.onepiece && item.kind!=='bikini') cuts.push(edge(v=>armhole(v,cut),.0022));
@@ -152,7 +174,7 @@ export function finishGarmentEdges(g, o, cut, R) {
   for (const f of cuts) for (let j=0;j<poly.length;j++) {
    const a=poly[j], b=poly[(j+1)%poly.length];
    if (Math.abs(f(a.position))>.0002 || Math.abs(f(b.position))>.0002) continue;
-   const key=[a.key,b.key].sort().join('|');
+   const key=a.key<b.key?a.key+'|'+b.key:b.key+'|'+a.key;
    rims.set(key,{a,b,f});
   }
  }
@@ -179,7 +201,7 @@ export function finishGarmentEdges(g, o, cut, R) {
  const out=new THREE.BufferGeometry();
  for(const name of [...names,'trim']) {
   const size=name==='trim'?1:g.attributes[name].itemSize, Type=name==='skinIndex'?Uint16Array:Float32Array;
-  out.setAttribute(name,new THREE.BufferAttribute(new Type(rows.flatMap(v=>v[name])),size));
+  out.setAttribute(name,new THREE.BufferAttribute(flatten(rows,name,Type),size));
  }
  out.setIndex(indices);out.computeBoundingSphere();out.userData.tailoring={edgeSegments:rims.size,vertices:rows.length,refinement:g.userData.refinement};
  g.dispose();return out;

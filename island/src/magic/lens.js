@@ -1,38 +1,48 @@
 // Gravitational lensing and Gargantua's ending, drawn over the finished frame. The frame is copied,
-// then drawn again: round the rim of each black hole, above the horizon, the light is bent along its
-// edge, what lies just beyond the rim drawn out and wrapped round it, with a thin bright photon ring
-// on the edge itself; the hole's own sphere stays in the scene, so what stands in front of it still
-// hides it. Then the grade: as Gargantua nears its end the colours invert, drain to grey and go to
-// black, and after two seconds of black the world bursts back. Drawn only while either is up.
+// then drawn again: round each black hole, above the horizon, the light is bent in along its edge:
+// what lies beyond the rim is drawn out and wrapped round it, the sky and its clouds stretched
+// round the shadow, strongest at the rim and easing off with distance (after Interstellar); the
+// hole's own sphere and face stay in the scene, so what stands in front of it still hides it. Then
+// the grade: as Gargantua nears its end the colours invert (a wave out from the hole), drain to
+// grey and go to black, and after two seconds of black the world bursts back. Drawn only while
+// either is up.
 import * as THREE from 'three';
 
 const MAX = 4;
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
-const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[${MAX}]; uniform int uN; uniform float uAspect; uniform float uT; uniform vec4 uGrade; varying vec2 vUv;
+const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[${MAX}]; uniform vec4 uE[${MAX}]; uniform int uN; uniform float uAspect; uniform float uT; uniform vec4 uGrade; varying vec2 vUv;
 	void main(){
 		vec2 asp = vec2(uAspect, 1.0), q = (vUv * 2.0 - 1.0) * asp, s = q;
-		float ring = 0.0, hole = 0.0, px = 2.0 / 900.0;
+		float hole = 0.0, px = 2.0 / 900.0;
 		for (int i = 0; i < ${MAX}; i++) {
 			if (i >= uN) break;
-			// (x, y: its heart on screen, z: its radius there, w: how wide the bent band round it is;
-			// uK.x: its strength 0..1, uK.y: where the horizon crosses it on screen)
-			vec2 d = s - uL[i].xy;
-			// (the hole itself, its halo and the flat of its disc, kept out of the grade)
-			float rr = uL[i].z, e = length(vec2(d.x / (rr * 3.3), d.y / (rr * 0.4)));
-			hole = max(hole, uK[i].x * smoothstep(uK[i].y - px, uK[i].y + px * 2.0, s.y) * max(1.0 - smoothstep(rr * 1.9, rr * 2.0, length(d)), 1.0 - smoothstep(0.9, 1.0, e)));
-			float th = max(length(d), 1e-4), rs = uL[i].z, w = rs * uL[i].w, k = uK[i].x;
-			// (only above the horizon: below it the hole is hidden, and so is its light)
-			float sky = smoothstep(uK[i].y - px, uK[i].y + px * 2.0, s.y);
-			// (in the band round the rim each pixel looks out to just past the rim: what lies beyond is
-			// drawn out along the edge, easing back to the frame as it is at the band's outer edge)
-			float x = clamp((th - rs) / w, 0.0, 1.0), f = x * x * (2.0 - x);
-			float src = rs * 1.01 + (w - rs * 0.01) * f;
-			float bent = th > rs && th < rs + w ? mix(th, src, k * sky) : th;
-			s = uL[i].xy + d / th * bent;
-			ring += k * sky * exp(-pow((th - rs * 1.012) / (rs * 0.012 + px), 2.0)) * (0.85 + 0.15 * sin(atan(d.y, d.x) * 5.0 + uT * 3.0));
+			// (x, y: its shadow's heart on screen, z: the shadow's half-width there, w: how far out the
+			// bending reaches, in radii; uK.x: its strength 0..1, uK.y: where the horizon crosses it on
+			// screen; uE.xy: the way out from the view's centre, along which a sphere seen off the axis
+			// is drawn out on screen, by uE.z: squeezed back, its shadow is a circle again)
+			vec2 d = s - uL[i].xy, ax = uE[i].xy, tg = vec2(-ax.y, ax.x);
+			vec2 dc = vec2(dot(d, ax) / uE[i].z, dot(d, tg));
+			float rs = uL[i].z, th = max(length(dc), 1e-4), k = uK[i].x;
+			// (only above the horizon: below it the hole is hidden, and so is its light; the bend eases in
+			// over the lowest bit of the shadow, so the sky is not smeared sideways along the horizon
+			// and the shadow's edge goes cleanly down under it)
+			float sky = smoothstep(uK[i].y - px, uK[i].y + min(0.08, uL[i].z * 0.12), s.y);
+			// (the shadow itself, its ring and the flat of its disc are kept out of the grade, until
+			// it has grown past the whole view, when all of it goes with the world)
+			float e = length(vec2(d.x / (rs * 3.6), d.y / (rs * 0.32)));
+			float keep = max(1.0 - smoothstep(rs * 1.35, rs * 1.5, th), 1.0 - smoothstep(0.85, 1.0, e)) * (1.0 - smoothstep(1.0, 2.0, rs));
+			hole = max(hole, k * sky * keep);
+			// (every pixel outside the rim looks in toward it: at the rim, to just past the edge; farther
+			// out, less and less, so the sky is squeezed round the shadow and eases back to itself)
+			float beyond = th - rs;
+			if (beyond <= 0.0) continue;
+			float pull = (beyond - rs * 0.012) * exp(-beyond / (rs * uL[i].w));
+			float bent = th - max(0.0, pull) * k * sky;
+			vec2 dn = dc / th * bent;
+			s = uL[i].xy + ax * (dn.x * uE[i].z) + tg * dn.y;
 		}
 		vec2 uv = s / asp * 0.5 + 0.5;
-		vec3 c = texture2D(uSrc, clamp(uv, 0.0, 1.0)).rgb + ring * vec3(1.0, 0.86, 0.66);
+		vec3 c = texture2D(uSrc, clamp(uv, 0.0, 1.0)).rgb;
 		// (the grade on all but the hole: x invert, y grey, z black, w the burst back to life)
 		vec3 c0 = c;
 		// (the inversion spreads out from the hole across the view, a hard-edged wave rather than a fade
@@ -49,10 +59,10 @@ const FRAG = `uniform sampler2D uSrc; uniform vec4 uL[${MAX}]; uniform vec2 uK[$
 	}`;
 
 export function createLens() {
-	const L = [], K = [];
-	for (let i = 0; i < MAX; i++) { L.push(new THREE.Vector4()); K.push(new THREE.Vector2()); }
+	const L = [], K = [], E = [];
+	for (let i = 0; i < MAX; i++) { L.push(new THREE.Vector4()); K.push(new THREE.Vector2()); E.push(new THREE.Vector4(1, 0, 1, 0)); }
 	const mat = new THREE.ShaderMaterial({
-		uniforms: { uSrc: { value: null }, uL: { value: L }, uK: { value: K }, uN: { value: 0 }, uAspect: { value: 1 }, uT: { value: 0 }, uGrade: { value: new THREE.Vector4() } },
+		uniforms: { uSrc: { value: null }, uL: { value: L }, uK: { value: K }, uE: { value: E }, uN: { value: 0 }, uAspect: { value: 1 }, uT: { value: 0 }, uGrade: { value: new THREE.Vector4() } },
 		vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false,
 	});
 	const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
@@ -60,7 +70,7 @@ export function createLens() {
 	const scene = new THREE.Scene(), cam = new THREE.Camera();
 	scene.add(quad);
 	let fb = null;
-	const size = new THREE.Vector2(), v = new THREE.Vector3(), fwd = new THREE.Vector3();
+	const size = new THREE.Vector2(), v = new THREE.Vector3(), fwd = new THREE.Vector3(), q = new THREE.Quaternion();
 	// lenses: [{ p, r (m), k (0..1), cut (the horizon's height, m) }] in the world, the frame bent
 	// round those in front; grade: { inv, grey, black, burst } 0..1 (or null)
 	function post(renderer, camera, lenses, t = 0, grade = null) {
@@ -68,20 +78,28 @@ export function createLens() {
 		if (!lenses.length && !graded) return false;
 		const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov || 60) / 2);
 		camera.getWorldDirection(fwd);
+		camera.getWorldQuaternion(q).invert();
 		let n = 0;
 		for (const l of lenses) {
 			if (n >= MAX || l.k <= 0.01) continue;
 			v.set(l.p.x, l.p.y, l.p.z).sub(camera.position);
 			const dist = v.length(), ahead = v.dot(fwd);
 			if (ahead <= l.r * 0.2 || dist <= l.r * 1.02) continue;
-			// (its shadow's size on screen from the angle it spans, in the same units as the height of the view)
-			const rs = Math.tan(Math.asin(Math.min(0.999, l.r / dist))) / tanH;
-			v.set(l.p.x, l.p.y, l.p.z).project(camera);
-			if (Math.abs(v.x) > 1 + rs * 4 || Math.abs(v.y) > 1 + rs * 4) continue;
-			const hx = v.x * camera.aspect, hy = v.y;
+			// (its shadow on screen, in the units of the view's half height: a sphere off the view's
+			// axis is not a circle there but an ellipse drawn out along the line from the centre of the
+			// view, its own centre pushed out a little past where its heart lands; from the angle it
+			// stands off the axis and the angle it spans: the view is a plane the cone of its edge is
+			// cut by)
+			v.applyQuaternion(q);
+			const rho = Math.hypot(v.x, v.y), sinA = Math.min(0.999, l.r / dist), cosA = Math.sqrt(1 - sinA * sinA), sinT = rho / dist, cosT = ahead / dist;
+			const A = Math.max(0.02, cosA * cosA - sinT * sinT), ux = rho > 1e-6 ? v.x / rho : 1, uy = rho > 1e-6 ? v.y / rho : 0;
+			const c0 = sinT * cosT / A / tanH, a = sinA * cosA / A / tanH, b = sinA / Math.sqrt(A) / tanH;
+			const hx = ux * c0, hy = uy * c0;
+			if (Math.abs(hx) > camera.aspect + a * 4 || Math.abs(hy) > 1 + a * 4) continue;
 			v.set(l.p.x, l.cut ?? -1e9, l.p.z).project(camera);
-			L[n].set(hx, hy, rs, 0.45);
+			L[n].set(hx, hy, b, 0.7);
 			K[n].set(Math.min(1, l.k), Math.max(-10, v.y));
+			E[n].set(ux, uy, a / b, 0);
 			n++;
 		}
 		if (!n && !graded) return false;

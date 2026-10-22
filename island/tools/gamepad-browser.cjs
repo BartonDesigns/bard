@@ -26,11 +26,11 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 			window.looked = [0, 0];
 			window.S = { active: true, pad: { x: 0, y: 0, run: false }, flying: false, padLook: (y, p) => { looked[0] += y; looked[1] += p; } };
 			window.calls = [];
-			window.armedNow = false; window.driving = false;
+			window.armedNow = false; window.driving = false; window.lockedNow = false;
 			const binds = ['sunspark', 'shadowbolt', 'mend', 'lumen', null];
 			const ws = [{ name: 'Aurora trail rifle', held: false }, null, { name: 'Machete', held: false }, null, null];
 			window.hooks = {
-				combat: { armed: () => armedNow, trigger: (d) => calls.push('trigger:' + d), melee: { block: (d) => calls.push('block:' + d) } },
+				combat: { armed: () => armedNow, trigger: (d) => calls.push('trigger:' + d), melee: { block: (d) => calls.push('block:' + d) }, focus: { locked: () => lockedNow, cycle: (d) => { calls.push('cycle:' + d); return true; } } },
 				gear: { weapon: { aim: (d) => calls.push('aim:' + d) } },
 				magic: { state: { binds }, hotbar: { slots: () => ws, press: (i) => { calls.push('slot:' + i); ws.forEach((w, j) => { if (w) w.held = j === i ? !w.held : false; }); } } },
 				fishing: { rodOut: () => false, reel: (d) => calls.push('reel:' + d) },
@@ -76,6 +76,12 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 		// RB casts the chosen spell (6, held), LB picks the next one
 		await press(5); assert.deepEqual((await take()).log, ['+Digit6', '-Digit6']);
 		await press(4); await press(5); assert.deepEqual((await take()).log, ['+Digit7', '-Digit7']);
+		// locked on: a tap of RB or LB turns to the next or previous target; RB held still casts
+		await page.evaluate(() => { lockedNow = true; });
+		await press(5); await press(4);
+		assert.deepEqual(await take(), { log: [], calls: ['cycle:1', 'cycle:-1'] });
+		await press(5, 400); assert.deepEqual(await take(), { log: ['+Digit7', '-Digit7'], calls: [] });
+		await page.evaluate(() => { lockedNow = false; });
 		// X: the prompt on screen when there is one, else E (and R with a gun)
 		await page.evaluate(() => { const d = document.getElementById('door'); d.style.display = ''; d.onclick = () => calls.push('door'); });
 		await frames();
@@ -182,6 +188,16 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 		assert.ok(await page.evaluate(() => document.querySelector('.gp-menu').innerHTML.includes('✕')), 'the cross on the layout');
 		await page.screenshot({ path: path.join(out, 'menu-playstation.png') });
 		await press(1);
+
+		// a Backbone on a phone: its own names, and the touch controls out of the way while it plays
+		await page.evaluate(() => { pad.id = 'Backbone One'; const m = document.querySelector('#l99-island-mount'); m.classList.add('l99-touch'); const t = document.createElement('div'); t.className = 'l99-thumb'; t.id = 'thumb'; t.innerHTML = '<button>Jump</button>'; m.appendChild(t); });
+		await press(0); await frames(3);
+		assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('thumb')).display), 'none', 'the thumb buttons hide while the pad plays');
+		await press(9); await frames(3);
+		assert.match(await page.evaluate(() => document.querySelector('.gp-menu').textContent), /Backbone One/);
+		assert.ok(await page.evaluate(() => document.querySelector('.gp-menu').innerHTML.includes('>R2<')), 'R2 on the Backbone layout');
+		await page.screenshot({ path: path.join(out, 'menu-backbone.png') });
+		await press(1); await take();
 
 		// unplugged: everything let go
 		await page.evaluate(() => { set(0, true); }); await frames(3);

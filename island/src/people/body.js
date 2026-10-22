@@ -9,10 +9,13 @@
 // painted by one shader (garment.js): a cloth mesh, an accessories mesh, skin, eyes, hair.
 
 import * as THREE from 'three';
+import { shedImage } from '../world/cpucopy.js';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
+import { hatRim } from './garment-hats.js';
+import { neckDrop } from './garment-shape.js';
 import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
-import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
+import { loadFaces, faceDNA, shapeFace, skinAttribute, tidyEyes, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
 import { FLUFFY, buildFluff, fluffMaterial } from './hair-fluff.js';
@@ -26,6 +29,7 @@ import { tierNow } from '../world/governor.js';
 import { shapeBuild } from './build.js';
 import { loadKitModels } from './kit-models.js';
 import { GFX_PHONE } from '../world/device.js';
+import { boundBody, cullPosed } from './body-bounds.js';
 import { mulberry32 as rng } from '../noise.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
@@ -75,10 +79,14 @@ export function loadPeopleAssets() {
 		};
 		for (const [n, s] of Object.entries(D.targets)) A.targets[n] = decode(s, Int16Array);
 		const loader = new THREE.TextureLoader();
-		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; if (PHONE) t.image = halve(t.image); ok(t); }, undefined, no));
+		// (a skin is only ever drawn by the graphics card, tattoos and all (tattoo/skinink.js is in the
+		// shader): a phone lets the page's copy go once the card has it, world/cpucopy.js)
+		const picture = (f) => new Promise((ok, no) => loader.load(TEX(f), (t) => ok(PHONE ? halve(t.image) : t.image), undefined, no));
+		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; if (PHONE) t.image = halve(t.image); ok(shedImage(t, () => picture(f), { on: PHONE })); }, undefined, no));
 		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
 		A.faces = await faces;
+		tidyEyes(A, A.faces);
 		A.kit = await kit;
 		loaded = A;
 		return A;
@@ -161,7 +169,7 @@ export function personDNA(seed, opts = {}) {
 	let age = opts.age ?? (18 + Math.pow(r(), 1.3) * 64);
 	const height = (male ? 1.755 : 1.625) + (r() + r() + r() - 1.5) * 0.085 - (age > 65 ? 0.03 : 0) - anc[1] * 0.04;
 	const d = {
-		seed, sex, male, ancestry: anc, age, height, muscle: r() * 0.5 * (male ? 1 : 0.6), weight: Math.pow(r(), 1.6) * 0.7,
+		seed, sex, male, ancestry: anc, age, height, muscle: r() * 0.6 * (male ? 1 : 0.65), weight: Math.pow(r(), 2.2) * 0.5,
 		tone: 0.9 + r() * 0.14, warmth: r(),
 		hair: age > 70 && male && r() < 0.35 ? null : male ? (r() < 0.6 ? 'short02' : 'short01') : (r() < 0.55 ? 'ponytail01' : r() < 0.6 ? 'short01' : 'short02'),
 		// (the colour they were born with; the grey comes with the years, greyOf)
@@ -174,12 +182,21 @@ export function personDNA(seed, opts = {}) {
 	};
 	// when their hair goes grey: some a few years early, some late
 	d.greyShift = (rng(seed ^ 0x9e7)() - 0.5) * 8;
+	// the years put a little on most people (a stream of its own, so nothing else about them changes)
+	const rb = rng(seed ^ 0xb01d);
+	if (age > 40) d.weight = Math.min(0.7, d.weight + Math.min(1, (age - 40) / 50) * 0.14 * rb());
+	// a build of their own (people/build.js): the frame under the base mesh's targets, a
+	// slightly smaller head, shoulders carried wider and a waist drawn in on the fit and the
+	// young, longer legs on some; it softens with the years and the weight
+	const fitK = Math.max(0, 1 - Math.max(0, age - 45) / 40) * (1 - d.weight);
+	d.build = male ? { shoulders: 0.004 + rb() * 0.009 * fitK, waist: (0.02 + rb() * 0.05) * fitK, head: -0.015 - rb() * 0.02, legs: rb() * 0.02, arms: [rb() * 0.06 * fitK, rb() * 0.04 * fitK] }
+		: { shoulders: rb() * 0.004, waist: (0.04 + rb() * 0.05) * (0.5 + 0.5 * fitK), head: -0.015 - rb() * 0.02, legs: 0.01 + rb() * 0.02 };
 	// children: the base mesh's child shape, at a child's height (about 0.95 m at three,
 	// 1.4 m at eleven), slight, quick on their feet, in bright play clothes
 	if (age < 16) {
 		d.child = true;
 		d.height = 0.78 + age * 0.056 + (r() - 0.5) * 0.06;
-		d.muscle = 0; d.weight *= 0.35;
+		d.muscle = 0; d.weight *= 0.35; d.build = null;
 		d.hair = male ? (r() < 0.5 ? 'short01' : 'short02') : (r() < 0.7 ? 'ponytail01' : 'short01');
 		d.hairColour = anc[0] + anc[1] > 0.6 ? HAIR_COLOURS[0] : HAIR_COLOURS[1 + Math.floor(r() * 5)];
 		const o = d.outfit;
@@ -234,6 +251,9 @@ function pickOutfit(r, male, age, opts) {
 // bodies built and not yet let go, across every system that makes them (the governor's report)
 let live = 0;
 export const bodyCount = () => live;
+// and each of them, held weakly (one dropped without freeBody is let go with it), for whatever
+// draws something under every body: the soft shade at their feet (world/footshade.js)
+export const liveBodies = new Set();
 export function buildPerson(A, d) {
 	const t0 = performance.now();
 	live++;
@@ -307,6 +327,8 @@ export function buildPerson(A, d) {
 		headBone.add(eye); eyes.push(eye); eyeAt.push(c);
 	}
 	const P = { root, body, bones, skeleton, map, rest, meshes: [], skin: null, cloth: null, acc: null, eyes, eyeAt, hair: null, detail: null, dna: d, height: d.height, legLength: heads[map['upperleg01.L']].y - heads[map['foot.L']].y, cut, lobes };
+	// (culled by a sphere round its bones as posed, not its rest shape: body-bounds.js)
+	boundBody(P);
 	// skin: the painted maps tinted to the person (or a far world's skin)
 	const skinKey = (d.ancestry[0] > 0.5 ? 'young_african' : d.age > 58 ? 'old_caucasian' : 'young_caucasian') + '_' + (d.male ? 'male' : 'female');
 	const melanin = d.ancestry[0] * 0.55 + d.ancestry[1] * 0.12;
@@ -331,7 +353,7 @@ export function buildPerson(A, d) {
 		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
 		// (how full the tone under the brow's hairs, each their own; or as set, d.brows.fill)
 		dm.material.userData.U.uFill.value = d.brows?.fill ?? 1.6 + ((d.seed * 0.618034) % 1) * 0.4;
-		dm.frustumCulled = false; dm.renderOrder = 1;
+		cullPosed(P, dm); dm.renderOrder = 1;
 		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
 		P.detail = dm;
@@ -347,6 +369,7 @@ export function buildPerson(A, d) {
 		if (U) { const far = PHONE || tierNow() >= 2 ? 10 : 22; U.uPoseK.value.x = clamp((far - dist) / 6); }
 	};
 	P.buildMs = performance.now() - t0;
+	liveBodies.add(new WeakRef(P));
 	return P;
 }
 
@@ -364,7 +387,7 @@ function dress(A, P, o) {
 	// (the skin hidden under the cloth is left out, a little in from the garment's edge, so
 	// nothing pokes through)
 	const covered = (c, tri) => { const k = kinds(tri); return R.top(c, tri, k, 0.035) || R.outer(c, tri, k, 0.035) || R.bottom(c, tri, k, 0.035) || R.shoes(c, tri, k, 0.02); };
-	const add = (geo, mat, shadow = true) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); return m; };
+	const add = (geo, mat, shadow = true) => { const m = cullPosed(P, new THREE.SkinnedMesh(geo, mat)); m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); return m; };
 	const bodyGeo = geometry(A, p, A.body, (c, tri) => !covered(c, tri));
 	faceMorphs(A, bodyGeo, P._S);
 	bodyGeo.setAttribute('skinx', skinAttribute(A.faces, bodyGeo.userData.src));
@@ -378,7 +401,7 @@ function dress(A, P, o) {
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
 	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
 	// locs, braids and cornrows, and stands in while a style is on its way)
-	const hat = (o.acc || []).find((q) => /^(cap|trucker|peaked|beret|beanie|bucket|sunhat|helmet|hardhat|hood|hazhood|visor)$/.test(q.kind));
+	const hat = (o.acc || []).find((q) => /^(cap|trucker|peaked|beret|beanie|bucket|sunhat|fedora|trilby|helmet|hardhat|hood|hazhood|visor)$/.test(q.kind));
 	const cols = hairColours(d, H);
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hardhat|hood|hazhood)$/.test(hat.kind));
@@ -408,15 +431,14 @@ function dress(A, P, o) {
 	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, rolled: cut.elbow - 0.07, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
 	P.clothMat.userData.U.uHem.value.set(R.topHem, sleeveEnd, cut.waist + 0.02, R.legEnd);
 	// the necklines, cut smooth (the cage's triangles would leave them ragged)
-	const T0 = o.top, scoop = T0 && T0.kind === 'tank' ? 0.045 : T0?.kind === 'crop' ? .025 : 0;
-	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.005, cut.neck - 0.005, scoop, 0);
+	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.005, cut.neck - 0.005, neckDrop(o.top), neckDrop(o.outer));
 	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, o.outer ? 1 : 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	else { const cloth=P.cloth,caps=clothCapsules(P); calibrateCloth(clothGeo,caps); cloth.userData.capsules=caps; cloth.onBeforeRender=()=>poseCloth(P,caps,P.clothMat.userData.U,cloth); }
 	// the bags they carry: where each goes on this body, the straps laid over the clothes (bags.js)
 	const carried = (o.acc || []).filter((q) => BAG_KINDS.has(q.kind));
-	const surf = carried.some((q) => q.kind === 'backpack' || q.kind === 'crossbody') ? torsoSurface(A, p, clothGeo, bones, part, cut) : null;
+	const surf = carried.some((q) => q.kind === 'backpack' || q.kind === 'crossbody' || q.kind === 'guitar') ? torsoSurface(A, p, clothGeo, bones, part, cut) : null;
 	const fits = carried.length ? fitBags({ acc: carried }, cut, surf, P.heldTorso) : [];
 	// caps, glasses, headphones, straps: one more mesh
 	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p, bags: fits, cloth: clothGeo, part, lo: PHONE }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
@@ -465,8 +487,8 @@ function hairUp(A, P) {
 		if (P.hair) P.hair.visible = vis;
 		if (P.fadeK !== undefined) { const k = P.fadeK; P.fadeK = -1; fadePerson(P, k); }
 	}).catch(() => {});
-	const capY = covers ? P.skull.eyeY + (hat.kind === 'beanie' ? 0.042 : 0.05) : 99;
-	const skinned = (g, m) => { const s = new THREE.SkinnedMesh(g, m); s.frustumCulled = false; s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
+	const capY = covers ? P.skull.eyeY + hatRim(hat.kind).clip : 99;
+	const skinned = (g, m) => { const s = cullPosed(P, new THREE.SkinnedMesh(g, m)); s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
 	const tune = (m) => {
 		const U = m.userData.U;
 		U.uRoot.value.copy(cols.root); U.uTip.value.copy(cols.tip); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);
@@ -496,7 +518,7 @@ function hairUp(A, P) {
 		// fluffy hair (hair-fluff.js): tufts in locks, brushed the cut's way, skinned to the head
 		// and, as long hair falls, the neck and the back
 		coverScalp(P, null);
-		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume ?? H.vol, brush: H.brush, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
+		const g = buildFluff(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? hatRim(hat.kind).clip : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part, volume: H.volume ?? H.vol, brush: H.brush, clothOff: Math.max(offsets(P.outfit || {}).top, offsets(P.outfit || {}).outer) });
 		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
 		const hair = skinned(g, fluffMaterial(root, tip));
 		P.hair = hair;
@@ -508,7 +530,7 @@ function hairUp(A, P) {
 	}
 	else if (W.cut) {
 		coverScalp(P, null);
-		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
+		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? hatRim(hat.kind).clip : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
 		// (grey coming in evenly, root to tip)
 		// (greying all over, as there are no single hairs to grey)
 		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);

@@ -5,6 +5,7 @@ globalThis.addEventListener ||= () => {};
 globalThis.window ||= globalThis;
 const { sample } = await import('../src/net/remotes.js');
 import { createRoomClient } from '../src/net/client.js';
+import { keptRoom, keepRoom, shouldRejoin, ROOM_KEY, REJOIN_MS } from '../src/net/rejoin.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('  FAIL', msg); } };
@@ -91,4 +92,24 @@ const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('  FAIL', msg
 }
 
 console.log(`${pass} passed, ${fail} failed`);
+// ---------- back into the room you were in (net/rejoin.js) ----------
+{
+	const mem = new Map(), store = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+	ok(keptRoom(store, 1000) === null, 'nothing kept: nothing to go back to');
+	keepRoom(store, 'qqjzf3', 1000);
+	ok(keptRoom(store, 1000 + 60000) === 'QQJZF3', 'a room joined is kept, cleaned to its code');
+	ok(keptRoom(store, 1000 + REJOIN_MS + 1) === null, 'an old one is let go');
+	ok(shouldRejoin(store, '?room=ABCDEF', 2000) === null, 'a room link in the address is the join instead');
+	ok(shouldRejoin(store, '?at=xyz', 2000) === 'QQJZF3', 'another link leaves the kept room to go back to');
+	keepRoom(store, null, 3000);
+	ok(keptRoom(store, 3000) === null && !mem.has(ROOM_KEY), 'leaving forgets it');
+	keepRoom(store, 'not a code', 3000);
+	ok(!mem.has(ROOM_KEY), 'a bad code keeps nothing');
+	mem.set(ROOM_KEY, '{bad json');
+	ok(keptRoom(store, 3000) === null, 'a spoilt entry is nothing');
+	const broken = { getItem: () => { throw new Error('off'); }, setItem: () => { throw new Error('off'); }, removeItem: () => {} };
+	keepRoom(broken, 'QQJZF3');
+	ok(keptRoom(broken) === null, 'storage off: quietly nothing');
+}
+
 process.exit(fail ? 1 : 0);

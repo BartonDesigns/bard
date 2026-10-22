@@ -53,7 +53,7 @@ const WEAK = new Set(['head', 'neck', 'weak', 'eye', 'heart']);
 // that has the controls (driving, a menu); menu: the places menu, which gets a way in; me(): your
 // body (people/avatar.js me: { P, M }); third(): whether you are seen in third person (people/self.js);
 // heavens(): { sun, moon }, the directions toward each
-export function createMagic({ scene, camera, mount, combat, arms, world, light, heavens = () => null, hint = () => {}, busy = () => false, menu = null, isPhone = false, isTouch = false, me = () => null, third = () => false }) {
+export function createMagic({ scene, camera, mount, combat, arms, world, light, heavens = () => null, hint = () => {}, busy = () => false, menu = null, isPhone = false, isTouch = false, me = () => null, third = () => false, cover = () => {} }) {
 	let saved = null;
 	try { saved = JSON.parse(store.get(KEY) || 'null'); } catch { saved = null; }
 	const state = sanitizeSkills(createMagicState(saved));
@@ -139,6 +139,9 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	}
 	const caster = createCaster({ camera, combat, player: () => W()?.player, state, fx, light, hint, sky: { get state() { return W()?.sky?.state; } }, worldKey, seed, isPhone, track, onCast, beams, third, heavens });
 	combat.hooks.casting = () => hands.busy();
+	// (the crosshair to aim a spell by, as with a gun: up whenever a spell is bound and you are free to cast it,
+	// full while your hands are casting; Ryan found spells far easier to aim with a reticle up)
+	combat.hooks.spellAim = () => !active() || !state.binds.some(Boolean) ? 0 : hands.busy() ? 1 : 0.7;
 	// a friend's spell, seen: its light along its way, or bursting where it went
 	const remote = [];
 	combat.hooks.remoteSpell = (a, b, pulse, who) => {
@@ -251,7 +254,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	}
 	// the skills and magic menu: weave a spell, take a perk, slot a spell to a key
 	skills = createSkillsMenu({
-		mount, state, light, isTouch, isPhone, elements: ELEMENTS,
+		mount, state, light, isTouch, isPhone, elements: ELEMENTS, cover,
 		sound: (k, v) => magicSound(k, v),
 		onWeave: (id) => {
 			const c = weaveCost(SPELL[id]);
@@ -294,7 +297,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		menuBtn.type = 'button';
 		menuBtn.textContent = '✦ Skills and magic';
 		menuBtn.title = 'Skills and magic (Tab or N)';
-		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		menuBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(94,234,212,.35);background:rgba(1,169,130,.12);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) menuBtn.addEventListener(ev, (x) => x.stopPropagation());
 		menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; openSkills(); });
 		menu.insertBefore(menuBtn, menu.firstChild);
@@ -341,7 +344,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		testBtn.type = 'button';
 		testBtn.textContent = '∞ Test mode: off';
 		testBtn.title = 'Every spell and skill unlocked, endless mana and aether (nothing is saved while on)';
-		testBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		testBtn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) testBtn.addEventListener(ev, (x) => x.stopPropagation());
 		testBtn.addEventListener('click', (e) => { e.stopPropagation(); setTest(!testOn); });
 		menu.insertBefore(testBtn, menuBtn.nextSibling);
@@ -444,7 +447,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		wasBeam = !!bs;
 		if (third()) hands.root.visible = false; else hands.update(dt, beam);
 		stepRemote(dt);
-		aether.update(dt, camera.position);
+		// (gathered where you are, not where the camera is: Explore and the third person film you from a way off)
+		aether.update(dt, ps.pos);
 		fx.update(dt, caster.sighting());
 		feel(dt);
 		if (innerHeight !== lastH) { lastH = innerHeight; fx.resize(innerHeight, camera.fov); }
@@ -454,7 +458,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 5; if (dirty && !testOn) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = null; }
+	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.spellAim = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, skills, exposure: () => caster.exposure(),
@@ -464,6 +468,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (Solar Flare channels the moon by night: the skills side grants this; here for the console)
 		moonlit: (id = 'solar-flare') => { const ok = grantMoonlit(state, id); if (ok) dirty = true; return ok; },
 		menuOpen: () => skills.isOpen(),
+		// the aether showing now, not yet gathered (Explore goes after it: explore.js)
+		motes: () => aether.shown(),
 		// (test mode: Crysis.magic.test(true / false), as the button in the places menu)
 		test: (on) => (on === undefined ? testOn : setTest(on)),
 		// (the tests: your casting hands, for their palm light; the screen edge's flash)

@@ -15,14 +15,14 @@ export function speedReadout(v) {
 	return `${Math.round(v / 1000).toLocaleString()} km/s${c >= .01 ? ` · ${c < 10 ? c.toFixed(2) : Math.round(c).toLocaleString()} c` : ''}`;
 }
 
-const MARK = 'position:absolute;display:none;transform:translate(-50%,-50%);color:#a5f6e2;font:12px system-ui;text-align:center;white-space:pre;text-shadow:0 1px 5px #000;cursor:pointer;pointer-events:auto;padding:4px 6px;';
-const PANEL = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(112px + env(safe-area-inset-top));max-height:calc(100% - 140px);overflow:auto;display:none;min-width:220px;background:rgba(6,16,22,.86);border:1px solid rgba(165,246,226,.35);border-radius:10px;padding:8px;color:#eafaf6;font:13px system-ui;pointer-events:auto;';
+const MARK = 'position:absolute;display:none;transform:translate(-50%,-50%);color:#a5f6e2;font:12px var(--bard-body,system-ui,sans-serif);text-align:center;white-space:pre;text-shadow:0 1px 5px #000;cursor:pointer;pointer-events:auto;padding:4px 6px;';
+const PANEL = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(112px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 140px);overflow:auto;display:none;min-width:220px;background:rgba(6,16,22,.86);border:1px solid rgba(165,246,226,.35);border-radius:10px;padding:8px;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);pointer-events:auto;';
 
 export function createNav({ mount, isTouch, onWarp, onTarget }) {
 	const marks = new Map(), local = new THREE.Vector3(), projected = new THREE.Vector3();
 	let target = null, open = false, list = [], pick = 0;
 	const button = document.createElement('button');
-	button.style.cssText = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));display:none;padding:9px 13px;border-radius:22px;border:1px solid rgba(165,246,226,.5);background:rgba(8,20,26,.7);color:#eafaf6;font:600 13px system-ui;pointer-events:auto;';
+	button.style.cssText = 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));display:none;padding:9px 13px;border-radius:22px;border:1px solid rgba(165,246,226,.5);background:rgba(8,20,26,.7);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);pointer-events:auto;';
 	button.textContent = isTouch ? '⤳ Warp' : '⤳ Warp (J)';
 	button.title = 'Warp to a planet, moon, the Sun or the black hole (J)';
 	const panel = document.createElement('div');
@@ -75,7 +75,7 @@ export function createNav({ mount, isTouch, onWarp, onTarget }) {
 		panel.append(head);
 		list.forEach((d, i) => {
 			const row = document.createElement('button');
-			row.style.cssText = `display:flex;justify-content:space-between;gap:12px;width:100%;padding:7px 8px;margin:1px 0;border:0;border-radius:6px;font:13px system-ui;text-align:left;cursor:pointer;color:#eafaf6;background:${i === pick ? 'rgba(1,169,130,.55)' : 'transparent'};`;
+			row.style.cssText = `display:flex;justify-content:space-between;gap:12px;width:100%;padding:7px 8px;margin:1px 0;border:0;border-radius:6px;font:13px var(--bard-body,system-ui,sans-serif);text-align:left;cursor:pointer;color:#eafaf6;background:${i === pick ? 'rgba(1,169,130,.55)' : 'transparent'};`;
 			const n = document.createElement('span'); n.textContent = `${i < 9 ? `${i + 1}. ` : i === 9 ? '0. ' : ''}${d.name}`;
 			const s = document.createElement('span'); s.style.opacity = '.7'; s.textContent = d.note;
 			row.append(n, s);

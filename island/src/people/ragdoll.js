@@ -142,6 +142,7 @@ export function createRagdolls({ world, isPhone }) {
 				const bent = p.dir.dot(c.dir) < 0.97;
 				const axisW = bent ? new THREE.Vector3().crossVectors(p.dir, c.dir).normalize() : new THREE.Vector3().crossVectors(p.dir, s.hinge === 'elbow' ? fwd : fwd.clone().negate()).normalize();
 				const now = Math.acos(THREE.MathUtils.clamp(p.dir.dot(c.dir), -1, 1));
+				c.axisW = axisW.clone();
 				const ax = axisW.applyQuaternion(Qhi);
 				jd = R.JointData.revolute({ x: la.x, y: la.y, z: la.z }, { x: lb.x, y: lb.y, z: lb.z }, { x: ax.x, y: ax.y, z: ax.z });
 				const j = W3.createImpulseJoint(jd, p.rb, c.rb, true);
@@ -192,7 +193,10 @@ export function createRagdolls({ world, isPhone }) {
 	// ---------- a blow ----------
 	// how: { point: Vector3 where it struck, vel: its velocity (m/s), mass: its weight (kg,
 	// Infinity for a wall or a train), lift: how much of it throws upward (a bonnet's edge),
-	// ignore: the id of a car to leave out for a moment }
+	// ignore: the id of a car to leave out for a moment, limp: 0..1 how far gone they are }
+	// limp 0 (knocked down, struck by a car) keeps the muscle tone for a moment, so they go
+	// over the way a stunned body does; limp 1 (killed) has none: the knees give, the hips
+	// fold and the trunk crumples down on the spot instead of toppling over like a plank
 	function hit(P, how, onRest) {
 		if (!P || P.ragdoll) return false;
 		if (live.length >= MAX) { const old = live.shift(); finish(old); }
@@ -207,7 +211,8 @@ export function createRagdolls({ world, isPhone }) {
 		if (how.ignore) ignore.set(how.ignore, 1.2);
 		const D = build(P);
 		for (const m of P.meshes || []) m.frustumCulled = false;
-		tone(D, 1);
+		const limp = Math.max(0, Math.min(1, how.limp ?? 0)), tone0 = 1 - 0.92 * limp;
+		tone(D, tone0);
 		// the momentum passed on: a heavy thing moving fast gives the struck part nearly its
 		// own speed, a light one less; the parts near the blow take it, the rest are dragged
 		const v = how.vel || new THREE.Vector3(), M = how.mass ?? 1500, share = M === Infinity ? 1 : M / (M + D.mass);
@@ -221,7 +226,23 @@ export function createRagdolls({ world, isPhone }) {
 			// (the struck part spins with the blow: a leg swept from under the hips)
 			if (w > 0.5 && sp > 2) { const ax = _v.set(v.z, 0, -v.x).normalize().multiplyScalar(sp * 0.9 * w); pc.rb.setAngvel({ x: ax.x, y: 0, z: ax.z }, true); }
 		}
-		live.push({ P, D, t: 0, still: 0, onRest });
+		// gone limp: the legs give way under them (each knee folds the way it bends, the thigh
+		// swinging out from under the hips), the trunk drops, and a slight lean to one side or
+		// the other so no two fall alike
+		if (limp > 0) {
+			const side = (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.8) * limp;
+			for (const n of ['shinL', 'shinR']) {
+				const shin = D.parts[n], thigh = D.parts[shin.s.up], ax = shin.axisW;
+				if (!ax) continue;
+				const k = (2.6 + Math.random() * 1.2) * limp;
+				_v.copy(ax).multiplyScalar(k); shin.rb.setAngvel({ x: _v.x, y: _v.y, z: _v.z }, true);
+				_v.copy(ax).multiplyScalar(-k * 0.45); thigh.rb.setAngvel({ x: _v.x, y: _v.y, z: _v.z }, true);
+			}
+			for (const n of ['pelvis', 'chest', 'head']) { const t = D.parts[n].rb.linvel(); D.parts[n].rb.setLinvel({ x: t.x, y: t.y - 1.4 * limp, z: t.z }, true); }
+			const fwd = _v2.set(0, 0, 1).applyQuaternion(_q.copy(D.Qhi).invert());
+			D.parts.chest.rb.setAngvel({ x: fwd.x * side, y: 0, z: fwd.z * side }, true);
+		}
+		live.push({ P, D, t: 0, still: 0, onRest, tone0 });
 	}
 	function finish(L) {
 		for (const J of L.D.joints) W3.removeImpulseJoint(J.j, false);
@@ -254,7 +275,7 @@ export function createRagdolls({ world, isPhone }) {
 			const L = live[i];
 			L.t += dt;
 			// (the tone goes out of them over the first second and a half)
-			if (L.t < 1.6) tone(L.D, Math.max(0.08, 1 - L.t / 1.6));
+			if (L.t < 1.6) tone(L.D, Math.max(0.08, (L.tone0 ?? 1) * (1 - L.t / 1.6)));
 			pose(L.D);
 			let fast = 0;
 			for (const pc of Object.values(L.D.parts)) { const v = pc.rb.linvel(); fast = Math.max(fast, Math.hypot(v.x, v.y, v.z)); }

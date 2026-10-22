@@ -896,7 +896,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	const busyAt = (h) => Math.max(0.08, Math.min(1, Math.exp(-(((h - 15) / 4.2) ** 2)) + Math.exp(-(((h - 19.5) / 2.2) ** 2)) * 0.8)) * (h < 10 || h > 23 ? 0.25 : 1);
 
 	// ---------- the ride button and the rider's seat ----------
-	const style = 'position:absolute;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.78);color:#eafaf6;font:600 14px system-ui;cursor:pointer;z-index:5;';
+	const style = 'position:absolute;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.78);color:#eafaf6;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;z-index:5;';
 	const btn = document.createElement('button');
 	btn.style.cssText = style + 'left:50%;transform:translateX(-50%);bottom:calc(128px + env(safe-area-inset-bottom));padding:10px 22px 10px 16px;border-radius:24px;display:none;align-items:center;gap:8px;white-space:nowrap;';
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) btn.addEventListener(ev, (e) => e.stopPropagation());
@@ -912,18 +912,18 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	addEventListener('keydown', onKey);
 	// the seat: a layer over everything, the title and status, the × to get off, an action
 	// button where the ride has one, a stick where you drive
-	const PANEL = 'background:rgba(8,20,26,.78);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px system-ui,sans-serif;';
+	const PANEL = 'background:rgba(8,20,26,.78);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px var(--bard-body,system-ui,sans-serif);';
 	const layer = document.createElement('div');
 	layer.style.cssText = 'position:absolute;inset:0;z-index:7;display:none;touch-action:none;user-select:none;-webkit-user-select:none;';
 	const vign = document.createElement('div');
 	vign.style.cssText = 'position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 62%,rgba(0,0,0,.28) 100%);';
 	const top = document.createElement('div');
-	top.style.cssText = PANEL + 'position:absolute;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);max-width:min(460px,calc(100vw - 110px));padding:8px 16px;text-align:center;pointer-events:none;';
+	top.style.cssText = PANEL + 'position:absolute;left:50%;top:calc(10px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);max-width:min(460px,calc(100vw - 110px));padding:8px 16px;text-align:center;pointer-events:none;';
 	const x0 = document.createElement('button');
 	x0.textContent = '×'; x0.setAttribute('aria-label', 'Get off the ride');
-	x0.style.cssText = PANEL + 'position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));width:44px;height:44px;border-radius:22px;font:600 24px system-ui;line-height:1;cursor:pointer;';
+	x0.style.cssText = PANEL + 'position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + var(--l99-top, env(safe-area-inset-top)));width:44px;height:44px;border-radius:22px;font:600 24px var(--bard-display,system-ui,sans-serif);line-height:1;cursor:pointer;';
 	const actB = document.createElement('button');
-	actB.style.cssText = style + 'left:50%;transform:translateX(-50%);bottom:calc(40px + env(safe-area-inset-bottom));padding:12px 26px;border-radius:26px;display:none;font:700 15px system-ui;';
+	actB.style.cssText = style + 'left:50%;transform:translateX(-50%);bottom:calc(40px + env(safe-area-inset-bottom));padding:12px 26px;border-radius:26px;display:none;font:700 15px var(--bard-display,system-ui,sans-serif);';
 	const joy = document.createElement('div');
 	joy.style.cssText = 'position:absolute;width:120px;height:120px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);left:calc(28px + env(safe-area-inset-left));bottom:calc(36px + env(safe-area-inset-bottom));display:none;pointer-events:none;';
 	const knob = document.createElement('div');
@@ -988,7 +988,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		layer.style.display = 'block'; btn.style.display = 'none';
 		joy.style.display = R.drive && isPhone ? 'block' : 'none';
 		actB.style.display = 'none';
-		top.innerHTML = `<div style="font:700 14px system-ui;color:#ffd166;display:flex;gap:8px;align-items:center;justify-content:center">${rideIcon(R.icon, 18)}<span>${R.name}</span></div><div data-s style="margin-top:2px;white-space:pre-line;opacity:.9"></div><div style="margin-top:3px;font-size:11px;opacity:.6">${R.drive ? (isPhone ? 'Left thumb drives · drag to look' : 'Arrow keys or WASD drive · drag to look') : 'Drag to look round'} · × to get off</div>`;
+		top.innerHTML = `<div style="font:700 14px var(--bard-display,system-ui,sans-serif);color:#ffd166;display:flex;gap:8px;align-items:center;justify-content:center">${rideIcon(R.icon, 18)}<span>${R.name}</span></div><div data-s style="margin-top:2px;white-space:pre-line;opacity:.9"></div><div style="margin-top:3px;font-size:11px;opacity:.6">${R.drive ? (isPhone ? 'Left thumb drives · drag to look' : 'Arrow keys or WASD drive · drag to look') : 'Drag to look round'} · × to get off</div>`;
 	}
 	function leave() {
 		const R = Ride.cur;

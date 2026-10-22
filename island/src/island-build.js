@@ -109,6 +109,8 @@ import { createPowerlines } from './world/powerlines.js';
 import { createContrails } from './world/contrails.js';
 import { createFlush } from './world/flush.js';
 import { createFarForest } from './world/farforest.js';
+import { createFootShade } from './world/footshade.js';
+import { liveBodies } from './people/body.js';
 
 export async function islandBuild(iw, params) {
 	const { actions, arms, arriving, buildPanel, button, camera, dom, earthDirector, fishing, fitShadow,
@@ -300,6 +302,14 @@ export async function islandBuild(iw, params) {
 	iw.world.rays = createSunRays(scene, shared, renderer, { isPhone: GFX, sun: sky.sun, air: sky.uniforms.uAir });
 	iw.world.rays.quality(qualityNow().fx);
 	fitShadow();
+	// the soft shade where people's shoes meet the ground (world/footshade.js), on whatever floor
+	// they stand: the one you would stand on there, as drawn (player.js seenFloorAt)
+	iw.world.footShade = createFootShade(scene, { bodies: liveBodies, floor: (x, z, y) => {
+		const I = iw.world.island, at = y + 0.3;
+		let g = iw.world.player?.floorAt ? iw.world.player.floorAt(x, z, at) : I.heightAt(x, z);
+		if (I.drawnAt && I.underFloor?.(x, z, at) == null) g = Math.max(g, I.drawnAt(x, z));
+		return g;
+	} });
 	// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
 	iw.world.spray = createSpray(scene, shared, { isPhone: GFX, world: () => iw.world });
 	iw.world.spray.quality(qualityNow().fx);
@@ -442,7 +452,7 @@ export async function islandBuild(iw, params) {
 		// inside the towers: the lobby, the elevators, every floor, the roof
 		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state });
 		// ...and every other building: solid, and built inside as you come to it (interiors/)
-		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers });
+		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers, warm: (o) => (renderer.compileAsync ? renderer.compileAsync(o, camera, scene) : null) });
 		{ const cv = iw.world.commercial.venue, I = iw.world.interiors; iw.world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
 		// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
 		iw.world.interiors.addDoors(iw.world.commercial);
@@ -571,6 +581,18 @@ export async function islandBuild(iw, params) {
 	// will draw, handed over now in small steps: Enter then only shows them (a phone given all of
 	// it in the first frame after Enter closed the page)
 	HOOKS.lightPad?.update(performance.now(), camera, true);
+	// the city's first set round you, laid out now in slices behind the card (bay/city.js update
+	// runs it a frame's share at a time; done in one go in the first frame after Enter, it held a
+	// phone for the best part of a second as the page's memory peaked): Enter finds it standing.
+	// What is still to come (the real city's tiles arrive later and rebuild the set) comes the
+	// same way once the world shows
+	if (iw.world.city) {
+		for (const t0 = performance.now(); performance.now() - t0 < 8000;) {
+			await yieldBuild('Raising the city');
+			iw.world.city.update(camera, 0);
+			if (!iw.world.city.busy()) break;
+		}
+	}
 	await shaderWarm.all({ budget: 2500 });
 	await shaderWarm.textures({ budget: 2500 });
 	buildPanel();

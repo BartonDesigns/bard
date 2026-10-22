@@ -23,7 +23,7 @@ const LANDMARKS = [
 ];
 const KIND = { house: 'House', tower: 'Tower', shop: 'Shop', hut: 'Village house', cave: 'Cave hut' };
 const SHOP = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', office: 'Office', arcade: 'Arcade', bowling: 'Bowling alley', cinema: 'Cinema' };
-const BTN = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+const BTN = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 const r2 = Math.round;
 
 // ---------- the link ----------
@@ -233,7 +233,7 @@ export function createShare(ctx) {
 	function showLink(url, d) {
 		box?.remove();
 		box = document.createElement('div');
-		box.style.cssText = 'position:absolute;left:50%;top:30%;transform:translateX(-50%);width:min(420px,86vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.92);border:1px solid rgba(255,255,255,.2);color:#eafaf6;font:13px system-ui;z-index:12;display:flex;flex-direction:column;gap:8px;';
+		box.style.cssText = 'position:absolute;left:50%;top:30%;transform:translateX(-50%);width:min(420px,86vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.92);border:1px solid rgba(255,255,255,.2);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);z-index:12;display:flex;flex-direction:column;gap:8px;';
 		const t = document.createElement('div'); t.textContent = `${d.text}\n${d.coords}`; t.style.whiteSpace = 'pre-line';
 		const inp = document.createElement('input'); inp.name = 'share-link'; inp.setAttribute('aria-label', 'Link to this place'); inp.readOnly = true; inp.value = url;
 		inp.style.cssText = 'width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#eafaf6;font:12px ui-monospace,monospace;';
@@ -330,7 +330,9 @@ export function createShare(ctx) {
 			return true;
 		} finally { busy = false; ctx.arrived?.(); }
 	}
-	// frames running smoothly again (a dozen under 70 ms), or eight seconds, whichever is first
+	// frames running smoothly again (a dozen under 70 ms), or eight seconds, whichever is first;
+	// the city's set round the spot still being laid out holds it (bay/city.js busy(): the set
+	// comes in slices behind the card now, not in one frame), up to thirty seconds
 	function settle(hold) {
 		return new Promise((done) => {
 			const t0 = performance.now();
@@ -339,7 +341,8 @@ export function createShare(ctx) {
 				hold();
 				calm = now - last < 70 ? calm + 1 : 0;
 				last = now;
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) done(); else requestAnimationFrame(watch);
+				const building = !!W()?.city?.busy?.();
+				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) done(); else requestAnimationFrame(watch);
 			};
 			requestAnimationFrame(watch);
 		});
@@ -451,7 +454,7 @@ export function createShare(ctx) {
 		if (L.length) {
 			const head = document.createElement('div');
 			head.textContent = 'HOMES';
-			head.style.cssText = 'font:700 11px system-ui;letter-spacing:.08em;opacity:.6;padding:6px 4px 0;';
+			head.style.cssText = 'font:700 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.08em;opacity:.6;padding:6px 4px 0;';
 			sec.appendChild(head);
 		}
 		for (const h of L) {
@@ -464,7 +467,7 @@ export function createShare(ctx) {
 				const inp = document.createElement('input');
 				inp.name = 'home-name'; inp.setAttribute('aria-label', `Rename ${h.name}`);
 				inp.value = h.name; inp.maxLength = 60;
-				inp.style.cssText = 'flex:1;min-width:0;padding:6px 8px;border-radius:9px;border:1px solid rgba(1,169,130,.7);background:rgba(0,0,0,.35);color:#eafaf6;font:13px system-ui;';
+				inp.style.cssText = 'flex:1;min-width:0;padding:6px 8px;border-radius:9px;border:1px solid rgba(1,169,130,.7);background:rgba(0,0,0,.35);color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);';
 				const done = () => { if (inp.isConnected) { if (!renameHome(h.id, inp.value)) refresh(); } };
 				inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') done(); if (e.key === 'Escape') refresh(); });
 				inp.addEventListener('blur', done);
@@ -488,7 +491,7 @@ export function createShare(ctx) {
 	const homeBtn = document.createElement('button');
 	homeBtn.type = 'button';
 	homeBtn.dataset.hud = 'left 10';
-	homeBtn.style.cssText = 'position:absolute;min-height:44px;padding:6px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(8,20,26,.5);color:#eafaf6;font:600 12px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;display:none;opacity:.9;';
+	homeBtn.style.cssText = 'position:absolute;min-height:44px;padding:6px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(8,20,26,.5);color:#eafaf6;font:600 12px var(--bard-display,system-ui,sans-serif);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;display:none;opacity:.9;';
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) homeBtn.addEventListener(ev, (e) => e.stopPropagation());
 	mount.appendChild(homeBtn);
 	let here = null, mine = null, watchT = 0, keep = null;
