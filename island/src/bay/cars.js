@@ -65,8 +65,21 @@ export function seatsOf(kind) {
 	const x = Math.min(0.38, S.W * 0.2), seats = [[x, S.hip, front], [-x, S.hip, front]];
 	if (d && d[2] !== null && kind !== 'pickup' && kind !== 'delivery') seats.push([x, S.hip + 0.03, front - S.rs], [-x, S.hip + 0.03, front - S.rs]);
 	if (kind === 'pickup') seats.push([x, S.hip, front - S.rs], [-x, S.hip, front - S.rs]);
-	// (the eye: over the hip, leaning back, well behind the top of the windshield)
-	return { seats, wheel: [x, S.hip + 0.36, front + 0.42], eye: [x, S.hip + 0.7, Math.min(front - 0.38, S.rf - 0.3)] };
+	// (the eye: leaning forward over the wheel, up under the roof and just behind the
+	// windshield's header, so the view is the road through the glass and not the headliner
+	// and the dash: Josh's photos through a wet windshield at dawn)
+	return { seats, wheel: [x, S.hip + 0.36, front + 0.42], eye: [x, Math.min(S.H - 0.17, S.hip + 0.76), Math.min(S.rf - 0.1, front + 0.1)] };
+}
+// the steering wheel's tilt back toward you, and where it hangs (seatsOf(kind).wheel)
+export const WHEEL_TILT = -0.45;
+// the glass round the driver, in the car's frame, for world/windshield.js (the rain on it):
+// the windshield's foot [y, z] and header [y, z], its half width at the foot and the head;
+// the side glass from belt to its top, how far out it is at the belt and at the top (it
+// leans in), and where it runs from and to along the car
+export function glassOf(kind) {
+	const S = def(SPEC[kind]), top = S.box !== undefined ? S.cabH : S.H, wb = S.W / 2;
+	const tum = S.box !== undefined ? 0.99 : S.tumble, wg = wb * (0.86 + (tum - 0.72) * 0.45), wr = wb * tum;
+	return { foot: [S.belt, S.ws], head: [top, S.rf], hwFoot: wb * 0.92, hwHead: wr * 0.96, belt: S.belt, roof: top - 0.05, sideOut: [wg, wr], sideZ: [S.rb, S.ws - 0.35], pillar: S.doors ? S.doors[1] : null };
 }
 
 // NS: sections along the body, WS: sides round each tyre (cars in the distance use fewer
@@ -75,7 +88,7 @@ export function seatsOf(kind) {
 // a second group, for a see-through material), only ('cabin': just the cabin; 'shell': just
 // the body without its glass; to fit inside a real model, vehicles/fleet.js)
 export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
-	const { wheels = true, cabin = false, glass = false, only = null } = opts;
+	const { wheels = true, cabin = false, glass = false, only = null, steering = true } = opts;
 	const S = def(SPEC[kind]), L2 = S.L / 2;
 	const bottom = (s) => S.clear + 0.1 * sm(L2 - 0.55, L2, Math.abs(s));
 	// the belt line: the hood falls to the nose, the deck is level, and both roll over at the ends
@@ -102,7 +115,12 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	// glass leaning in (tumblehome) to a crowned roof, or the hood's and deck's crown
 	const sect = (s) => {
 		const b0 = bottom(s), bl = belt(s), tp = top(s), wb = halfW(s), h = bl - b0, f = 1 + 0.028 * flare(s);
-		const g = Math.min(1, Math.max(0, (tp - bl - 0.02) / Math.max(0.3, (S.box !== undefined ? S.cabH : S.H) - S.belt)));
+		// (the glasshouse closes down to the deck only over the last 16 cm of its height, at the
+		// cowl and the deck: the glass itself rises on the roof line. It used to blend toward
+		// the deck all the way up, so the windshield sat 7-10 cm under the roof line and met it
+		// in a step: from the driver's seat that step was a dark wall across the view)
+		const gRaw = (tp - bl - 0.02) / Math.max(0.3, (S.box !== undefined ? S.cabH : S.H) - S.belt);
+		const g = Math.min(1, Math.max(0, (tp - bl - 0.02) / 0.16));
 		const inBox = S.box !== undefined && s < S.box;
 		const half = [[0, b0], [wb * 0.74, b0], [wb * 0.9, b0 + h * 0.03], [wb * 0.965 * f, b0 + h * 0.1], [wb * 0.99 * f, b0 + h * 0.24], [wb * f, b0 + h * 0.5],
 			[wb * 0.99 * f, b0 + h * 0.76], [wb * 0.972 * (1 + (f - 1) * 0.4), b0 + h * 0.92], [wb * 0.952, b0 + h * 0.975], [wb * 0.925, bl]];
@@ -111,7 +129,7 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 		const wg = wb * (0.86 + (tum - 0.72) * 0.45), wr = wb * tum;
 		const house = [[wg, bl + 0.025], [wg + (wr - wg) * 0.3 + wb * 0.012, bl + (tp - bl) * 0.4], [wg + (wr - wg) * 0.72 + wb * 0.006, bl + (tp - bl) * 0.78], [wr, tp - 0.075], [wr * 0.955, tp - 0.028], [wr * 0.75, tp - 0.006], [0, tp + 0.02]];
 		for (let n = 0; n < 7; n++) half.push([deck[n][0] + (house[n][0] - deck[n][0]) * g, deck[n][1] + (house[n][1] - deck[n][1]) * g]);
-		return { half, b0, bl, tp, wb, g, inBox };
+		return { half, b0, bl, tp, wb, g, gRaw, inBox };
 	};
 	// the room inside at s and height y: how far out from the centre the body's skin is (-1
 	// above the roof or under the floor), so that what goes inside can be kept inside
@@ -128,8 +146,8 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	const ring = [];
 	for (let k = 0; k <= NS; k++) {
 		const u = -1 + 2 * k / NS, s = L2 * Math.sin(u * Math.PI / 2);
-		const { half, b0, bl, wb, g, inBox } = sect(s);
-		const glassHere = g > 0.15 && s > S.panel && !inBox ? 1 : 0;
+		const { half, b0, bl, wb, gRaw, inBox } = sect(s);
+		const glassHere = gRaw > 0.15 && s > S.panel && !inBox ? 1 : 0;
 		const roofHere = S.box !== undefined ? top(s) > S.H - 0.05 || top(s) > S.cabH - 0.05 : s < S.rf + 0.01 && s > S.rr - 0.01;
 		const bed = S.bed !== undefined && s < S.bed ? 1 : 0;
 		// part per point: 0 paint, 1 the side glass (it ends at the C pillar), 1.3 the glass
@@ -158,7 +176,7 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	body.setIndex(idx);
 	body.computeVertexNormals();
 	const parts = only === 'cabin' ? [] : [body.toNonIndexed()];
-	if (only === 'cabin') parts.push(...cabinGeometry(kind, S, belt, top, halfW, room));
+	if (only === 'cabin') parts.push(...cabinGeometry(kind, S, belt, top, halfW, room, steering));
 	if (wheels && !only) for (const [x, y, z] of wheelHubs(kind)) parts.push(wheelGeometry(kind, WS).applyMatrix4(new THREE.Matrix4().makeScale(Math.sign(x), 1, 1).setPosition(x, y, z)));
 	if (cabin && !only) {
 		// the mirrors, on stalks at the foot of the A pillars
@@ -187,13 +205,21 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 			}
 			parts.push(tag(liner, 8), tag(cap, 8));
 		}
-		parts.push(...cabinGeometry(kind, S, belt, top, halfW, room));
+		parts.push(...cabinGeometry(kind, S, belt, top, halfW, room, steering));
 	}
 	const g = mergeGeometries(parts);
-	// per point, for the shader: the axle's distance from the centre, the tyre's radius, the
-	// windshield's foot and the rear glass's (aW); where the door seams run (aD); the half
-	// length and half width, the kind's style of lamps and grille, and whether its arches
-	// are clad in black (aS)
+	carAttrs(g, kind, S);
+	if (glass || only === 'shell') splitGlass(g);
+	if (only === 'shell') { g.setDrawRange(0, g.groups[0].count); g.clearGroups(); }
+	g.computeBoundingSphere();
+	return g;
+}
+// per point, for the shader: the axle's distance from the centre, the tyre's radius, the
+// windshield's foot and the rear glass's (aW); where the door seams run (aD); the half
+// length and half width, the kind's style of lamps and grille, and whether its arches
+// are clad in black (aS)
+function carAttrs(g, kind, S) {
+	const L2 = S.L / 2;
 	const n = g.attributes.position.count, aw = new Float32Array(n * 4), ad = new Float32Array(n * 3), as = new Float32Array(n * 4);
 	const D = S.doors || [9, 9, 9], st = STYLE[kind] ?? 0, cl = S.clad >= 0.2 ? 1 : 0;
 	for (let i = 0; i < n; i++) {
@@ -204,10 +230,26 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	g.setAttribute('aW', new THREE.BufferAttribute(aw, 4));
 	g.setAttribute('aD', new THREE.BufferAttribute(ad, 3));
 	g.setAttribute('aS', new THREE.BufferAttribute(as, 4));
-	if (glass || only === 'shell') splitGlass(g);
-	if (only === 'shell') { g.setDrawRange(0, g.groups[0].count); g.clearGroups(); }
+	return g;
+}
+// the steering wheel on its own, in its own plane with the hub at the origin (its rim,
+// three spokes, the hub), for vehicles/fleet.js to hang at seatsOf(kind).wheel, tilted
+// WHEEL_TILT and turned with your steering
+export function steeringWheelGeometry(kind) {
+	const S = def(SPEC[kind]), g = mergeGeometries(wheelParts(kind).map(([geo, pt]) => tag(geo, pt)));
+	carAttrs(g, kind, S);
 	g.computeBoundingSphere();
 	return g;
+}
+// the steering wheel's parts: its rim, three spokes to the hub, and the hub
+function wheelParts(kind) {
+	const R = kind === 'bus' || kind === 'truck' ? 0.24 : 0.185, W = [];
+	W.push([new THREE.TorusGeometry(R, 0.022, 8, 28), 7]);
+	W.push([new RoundedBoxGeometry(0.13, 0.1, 0.05, 1, 0.02).translate(0, -0.005, -0.02), 7]);
+	// (the spokes run into the hub: their ends lay flush on its sides and flickered)
+	for (const s of [-1, 1]) W.push([new THREE.BoxGeometry(R - 0.06, 0.036, 0.016).translate(s * (0.055 + (R - 0.06) / 2), -0.012, -0.008), 16]);
+	W.push([new THREE.BoxGeometry(0.038, R - 0.055, 0.016).translate(0, -(0.05 + (R - 0.055) / 2), -0.008), 7]);
+	return W;
 }
 
 // a part's aE (e: fills it from the positions), its uvs dropped so that the parts merge
@@ -289,7 +331,7 @@ function screen(w, h, type, M) {
 	g.setAttribute('aE', new THREE.BufferAttribute(a, 4));
 	return g.applyMatrix4(M);
 }
-function cabinGeometry(kind, S, belt, top, halfW, room) {
+function cabinGeometry(kind, S, belt, top, halfW, room, steering = true) {
 	const out = [], L2 = S.L / 2, C = seatsOf(kind), big = kind === 'bus' || kind === 'truck';
 	const fl = S.clear + 0.1;
 	// whether these parts sit wholly inside the body, m clear of its skin; and to move them
@@ -356,16 +398,11 @@ function cabinGeometry(kind, S, belt, top, halfW, room) {
 		// arm rests along the doors
 		for (const s of [-1, 1]) out.push(rbox(0.07, 0.05, 0.7, 0.02, 7, M4(s * (halfW(sz0) * 0.9 - 0.05), sy0 + 0.2, sz0 - 0.05)));
 	}
-	// the steering wheel, tilted toward you: its rim, three spokes to the hub, the column
-	const R = big ? 0.24 : 0.185, W = [];
-	W.push([new THREE.TorusGeometry(R, 0.022, 8, 28), 7]);
-	W.push([new RoundedBoxGeometry(0.13, 0.1, 0.05, 1, 0.02).translate(0, -0.005, -0.02), 7]);
-	// (the spokes run into the hub: their ends lay flush on its sides and flickered)
-	for (const s of [-1, 1]) W.push([new THREE.BoxGeometry(R - 0.06, 0.036, 0.016).translate(s * (0.055 + (R - 0.06) / 2), -0.012, -0.008), 16]);
-	W.push([new THREE.BoxGeometry(0.038, R - 0.055, 0.016).translate(0, -(0.05 + (R - 0.055) / 2), -0.008), 7]);
-	for (const [geo, pt] of W) out.push(tag(geo.rotateX(-0.45).translate(wx, wy, wz), pt));
+	// the steering wheel, tilted toward you (left out of your own car's cabin, where it is
+	// its own instance and turns with the steering: steeringWheelGeometry), and the column
+	if (steering) for (const [geo, pt] of wheelParts(kind)) out.push(tag(geo.rotateX(WHEEL_TILT).translate(wx, wy, wz), pt));
 	// (the column drawn back along itself where its far end came out through the cowl)
-	out.push(...tuck([tag(new THREE.CylinderGeometry(0.03, 0.045, 0.34, 8).rotateX(Math.PI / 2 - 0.45).translate(wx, wy - 0.07, wz + 0.16), 7)], [0, -0.0044, -0.009]));
+	out.push(...tuck([tag(new THREE.CylinderGeometry(0.03, 0.045, 0.34, 8).rotateX(Math.PI / 2 + WHEEL_TILT).translate(wx, wy - 0.07, wz + 0.16), 7)], [0, -0.0044, -0.009]));
 	// the mirror, hung from the glass just ahead of the roof
 	if (!big && S.box === undefined) {
 		// (kept under the raked glass, its glass 4 mm proud of its face, and its stalk up to the

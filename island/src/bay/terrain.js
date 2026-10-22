@@ -1268,7 +1268,7 @@ export function createBayArea(shared, scene, island, BU) {
 				// it (bay/wetsheen.js). Not on the shore's sand (its own sheen above)
 				if (uWet > 0.01 && flatK > 0.001 && shWet < 0.5) {
 					// (asphalt glosses more than concrete and dirt; standing water is the mirror)
-					float film = uWet * (flatK * 0.2 + pavedAsph * 0.26 + wxPud * 0.4) * (0.85 + 0.15 * wxGloss) * (1.0 - shWet * 2.0);
+					float film = uWet * (flatK * 0.3 + pavedAsph * 0.4 + wxPud * 0.4) * (0.85 + 0.15 * wxGloss) * (1.0 - shWet * 2.0);
 					totalEmissiveRadiance += wetSheen(vBN, vec3(vBW.x, vBH, vBW.y), film * 0.9);
 				}`)
 				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);\nroughnessFactor = mix(mix(roughnessFactor, 0.6, max(wxGloss, wxDamp * 0.5)), 0.04, wxPud);\nroughnessFactor = mix(roughnessFactor, min(roughnessFactor, 0.42), shWet);');

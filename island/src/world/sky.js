@@ -1016,7 +1016,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		const W = weather?.state, gl = W?.gloom || 0;
 		// (round sunrise and sunset the grey goes lavender overhead and warm at the horizon,
 		// as a rainy dawn does, the red light under the deck scattered through it)
-		const dawnC = THREE.MathUtils.smoothstep(elev, -0.17, -0.04) * (1 - THREE.MathUtils.smoothstep(elev, 0.03, 0.22));
+		const dawnC = THREE.MathUtils.smoothstep(elev, -0.2, -0.05) * (1 - THREE.MathUtils.smoothstep(elev, 0.03, 0.22));
 		if (gl > 0) {
 			const lz = (tmpA.r + tmpA.g + tmpA.b) / 3, lh = (tmpB.r + tmpB.g + tmpB.b) / 3;
 			tmpA.lerp(tmpC.setRGB(lz * (0.95 + 0.14 * dawnC), lz * (1 - 0.05 * dawnC), lz * (1.05 + 0.12 * dawnC)).multiplyScalar(0.8 + 0.4 * (1 - night)), gl * 0.75);

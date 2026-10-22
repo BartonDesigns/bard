@@ -188,7 +188,8 @@ export function createCarLights(scene, { isPhone = false, ground = () => 0, worl
 		const rainOn = Math.max(0, Math.min(1, (rain - 0.1) / 0.5));
 		const k = Math.max(Math.max(0, Math.min(1, (night - 0.1) / 0.25)), rainOn * 0.85);
 		U.uK.value = k;
-		U.uBloom.value = 1 + rainOn * 0.6;
+		// (wider still in the dark: the lamps bloom most in rain before the morning)
+		U.uBloom.value = 1 + rainOn * (0.6 + 0.6 * Math.max(0, Math.min(1, night)));
 		wetK = Math.max(0, Math.min(1, (wet - 0.15) / 0.5)) * (0.55 + 0.45 * rainOn);
 		const show = k > 0.01 && cam.position.y < 2000;
 		points.visible = beams.visible = show;

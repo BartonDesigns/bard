@@ -9,7 +9,7 @@
 //   F.begin(); F.add(kind, matrix, colour, dist2, { spin, steer, riders, finish }); F.end();
 
 import * as THREE from 'three';
-import { carGeometry, carMaterial, carGlassMaterial, wheelGeometry, wheelHubs, seatsOf, SPEC } from '../bay/cars.js';
+import { carGeometry, carMaterial, carGlassMaterial, wheelGeometry, wheelHubs, seatsOf, steeringWheelGeometry, WHEEL_TILT, SPEC } from '../bay/cars.js';
 import { MODEL_KINDS, modelKit, wantModel, modelNight } from './models.js';
 import { qualityNow } from '../world/governor.js';
 import { hash32 } from '../signage/rand.js';
@@ -33,18 +33,25 @@ const geos = {};
 // (a body is built the first time its kind comes into a level, one a frame per fleet, so
 // that a street full of new kinds does not stall a frame; until then it waits, drawn coarser)
 let budget = 1;
-function loftGeo(kind, t, wheels, force = false) {
-	const k = kind + t + (wheels ? 'w' : '');
+// (mine: your own car's finest loft, its steering wheel left out of the cabin: that is its
+// own instance, turned with your steering)
+function loftGeo(kind, t, wheels, force = false, mine = false) {
+	const k = kind + t + (wheels ? 'w' : '') + (mine ? 'f' : '');
 	if (!geos[k]) {
 		if (budget <= 0 && !force) return null;
 		budget--;
-		const [ns, ws, cabin] = LOFT[t]; geos[k] = carGeometry(kind, ns, ws, { wheels, cabin, glass: cabin });
+		const [ns, ws, cabin] = LOFT[t]; geos[k] = carGeometry(kind, ns, ws, { wheels, cabin, glass: cabin, steering: !mine });
 	}
 	return geos[k];
 }
 // your own car where it is a real model: the loft's cabin inside it, and the loft's body
 // seen from within (door cards, the headliner), as the model has no inside of its own
-const cabGeo = (kind) => geos[kind + 'cab'] || (geos[kind + 'cab'] = { cabin: carGeometry(kind, 32, 12, { wheels: false, only: 'cabin' }), shell: carGeometry(kind, 48, 12, { wheels: false, only: 'shell' }) });
+const cabGeo = (kind) => geos[kind + 'cab'] || (geos[kind + 'cab'] = { cabin: carGeometry(kind, 32, 12, { wheels: false, only: 'cabin', steering: false }), shell: carGeometry(kind, 48, 12, { wheels: false, only: 'shell' }) });
+// your own car's steering wheel, its own instance so it turns in your hands
+const swGeo = (kind) => geos[kind + 'sw'] || (geos[kind + 'sw'] = steeringWheelGeometry(kind));
+// a road wheel's lock turned into the steering wheel's turn: about a turn and a half each
+// way at full lock, as in a car
+const STEER_RATIO = 15;
 const wgeo = {};
 const wheelGeo = (kind) => wgeo[kind] || (wgeo[kind] = wheelGeometry(kind, 18));
 // someone in a far car: head and shoulders, dark against the glass
@@ -114,6 +121,16 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 			else put(set(kind + 'lw', [[wheelGeo(kind), carMat, false]], false, cap * 4, cast), w4);
 		});
 	}
+	// your own steering wheel, hung at the column's top, tilted back to you, turned with the
+	// steering (left is anticlockwise as you see it)
+	function steeringWheel(kind, M, steer) {
+		const [x, y, z] = seatsOf(kind).wheel;
+		e.set(WHEEL_TILT, 0, -steer * STEER_RATIO, 'XYZ');
+		q.setFromEuler(e);
+		w4.compose(v.set(x, y, z), q, one);
+		w4.premultiply(M);
+		put(set(kind + 'sw', [[swGeo(kind), carMat, false]], false, 2, false), w4);
+	}
 	function riders(kind, M, n) {
 		const C = seatsOf(kind), S = set('riders', [[riderGeo, riderMat, false]], false, cap * 2, false);
 		for (let i = 0; i < n && i < C.seats.length; i++) { const s = C.seats[i]; w4.makeTranslation(s[0], s[1] - 0.05, s[2] - 0.3).premultiply(M); put(S, w4); }
@@ -140,14 +157,16 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 				const G = cabGeo(kind);
 				insideMat ||= carMaterial(night, { cheap: isPhone, side: THREE.BackSide });
 				put(set(kind + 'cab', [[G.cabin, carMat, false], [G.shell, insideMat, false]], false, 2, false), M);
+				steeringWheel(kind, M, o.steer || 0);
 			}
 			if (o.riders) riders(kind, M, o.riders);
 			return t;
 		}
-		const near = t === 0 && loftGeo(kind, 0, false, o.first);
+		const near = t === 0 && loftGeo(kind, 0, false, o.first, !!o.first);
 		if (near) {
-			put(set(kind + 'l0', [[near, [carMat, glassMat], true]], true, cap / 2, cast), M, c, fin);
+			put(set(kind + (o.first ? 'l0f' : 'l0'), [[near, [carMat, glassMat], true]], true, o.first ? 2 : cap / 2, cast), M, c, fin);
 			wheels(kind, M, o.spin || 0, o.steer || 0, null, cast);
+			if (o.first) steeringWheel(kind, M, o.steer || 0);
 			if (o.riders) riders(kind, M, o.riders);
 			return t;
 		}
