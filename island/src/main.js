@@ -812,8 +812,11 @@ export function createIslandWorld() {
 			const watch = (now) => {
 				calm = now - last < 70 ? calm + 1 : 0;
 				last = now;
-				// a dozen smooth frames in a row (or eight seconds, whatever happens)
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) {
+				// a dozen smooth frames in a row (or eight seconds, whatever happens); the city's set
+				// round the new place still being laid out in slices holds the veil (bay/city.js
+				// busy()), so its buildings are never seen to come in piecewise, up to thirty seconds
+				const building = !!world?.city?.busy?.();
+				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) {
 					travelling = false;
 					if (nextTrip) { const [l, m] = nextTrip; nextTrip = null; travel(l, m); return; }
 					travelVeil.style.opacity = '0';

@@ -330,7 +330,9 @@ export function createShare(ctx) {
 			return true;
 		} finally { busy = false; ctx.arrived?.(); }
 	}
-	// frames running smoothly again (a dozen under 70 ms), or eight seconds, whichever is first
+	// frames running smoothly again (a dozen under 70 ms), or eight seconds, whichever is first;
+	// the city's set round the spot still being laid out holds it (bay/city.js busy(): the set
+	// comes in slices behind the card now, not in one frame), up to thirty seconds
 	function settle(hold) {
 		return new Promise((done) => {
 			const t0 = performance.now();
@@ -339,7 +341,8 @@ export function createShare(ctx) {
 				hold();
 				calm = now - last < 70 ? calm + 1 : 0;
 				last = now;
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) done(); else requestAnimationFrame(watch);
+				const building = !!W()?.city?.busy?.();
+				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) done(); else requestAnimationFrame(watch);
 			};
 			requestAnimationFrame(watch);
 		});
