@@ -39,7 +39,14 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.evaluate(() => window.L99IslandDoor.open());
 	await page.waitForSelector('#bard-loading .bl-enter:not([hidden])', { timeout: 600000 });
 	console.log('enter world shown after', ((Date.now() - t0) / 1000).toFixed(0), 's');
-	if (profile === 'desktop') await page.click('#bard-loading .bl-enter'); else await page.tap('#bard-loading .bl-enter');
+	// the page can be mid-frame for a while here (frames run long under SwiftShader), so a
+	// pointer tap that cannot settle falls back to clicking the button from inside the page
+	try {
+		if (profile === 'desktop') await page.click('#bard-loading .bl-enter', { timeout: 20000 }); else await page.tap('#bard-loading .bl-enter', { timeout: 20000 });
+	} catch (e) {
+		console.log('pointer enter timed out, clicking in page');
+		await page.evaluate(() => document.querySelector('#bard-loading .bl-enter')?.click());
+	}
 	await page.waitForFunction(() => window.Crysis?.combat && window.L99Island?.world?.()?.player, null, { timeout: 120000 });
 	await wait(4000);
 	console.log('in world');
