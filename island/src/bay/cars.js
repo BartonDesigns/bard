@@ -79,7 +79,9 @@ export const WHEEL_TILT = -0.45;
 export function glassOf(kind) {
 	const S = def(SPEC[kind]), top = S.box !== undefined ? S.cabH : S.H, wb = S.W / 2;
 	const tum = S.box !== undefined ? 0.99 : S.tumble, wg = wb * (0.86 + (tum - 0.72) * 0.45), wr = wb * tum;
-	return { foot: [S.belt, S.ws], head: [top, S.rf], hwFoot: wb * 0.92, hwHead: wr * 0.96, belt: S.belt, roof: top - 0.05, sideOut: [wg, wr], sideZ: [S.rb, S.ws - 0.35], pillar: S.doors ? S.doors[1] : null };
+	// (sideZ: where the side glass ends behind, at the C pillar; where the roof starts down
+	// the rear glass; the rear glass's foot; the B pillar between the doors, or none)
+	return { foot: [S.belt, S.ws], head: [top, S.rf], hwFoot: wb * 0.92, hwHead: wr * 0.96, belt: S.belt, roof: top - 0.075, sideOut: [wg, wr], sideZ: [S.rr - S.cp, S.rr, S.rb, S.doors && S.doors[1] !== null ? S.doors[1] : 1e3] };
 }
 
 // NS: sections along the body, WS: sides round each tyre (cars in the distance use fewer

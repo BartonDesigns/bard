@@ -20,7 +20,7 @@ const VS = /* glsl */`
 const FS = /* glsl */`
 	uniform float uRain, uTime, uSpeed, uDim; uniform vec3 uTint;
 	uniform vec2 uProj; uniform mat3 uRel; uniform vec3 uEye;
-	uniform vec2 uFoot, uHead, uHw, uSideZ; uniform vec4 uSide, uWipe;
+	uniform vec2 uFoot, uHead, uHw; uniform vec4 uSide, uSideZ, uWipe;
 	varying vec2 vUv;
 	const float TAU = 6.2831853;
 	float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -55,7 +55,7 @@ const FS = /* glsl */`
 		if (t * life > since) return vec3(0.0);
 		float born = smoothstep(0.0, 0.06, t), gone = 1.0 - smoothstep(0.85, 1.0, t);
 		float run = smoothstep(0.55, 1.0, t) * (0.3 + 0.7 * h1) * step(0.45, h1);
-		float r = 0.06 + 0.12 * h1 * h1;
+		float r = 0.05 + 0.09 * h1 * h1;
 		vec2 o = vec2(0.25 + 0.5 * h0, 0.72 - 0.5 * run);
 		vec2 q = f - o;
 		// the drop: round sitting, drawn out when it runs, pushed up the glass by the wind
@@ -87,7 +87,7 @@ const FS = /* glsl */`
 		float t = fract(uTime / life + h2);
 		float born = smoothstep(0.0, 0.08, t), gone = 1.0 - smoothstep(0.85, 1.0, t);
 		float run = smoothstep(0.55, 1.0, t) * (0.3 + 0.7 * h1) * (1.0 - uSpeed);
-		float r = 0.08 + 0.14 * h1 * h1;
+		float r = 0.06 + 0.1 * h1 * h1;
 		// the head of the drop, its tail drawn back (to -z, behind the car) at speed
 		float L = uSpeed * (1.2 + 2.0 * h1);
 		vec2 o = vec2(0.3 + 0.45 * h0, 0.72 - 0.5 * run);
@@ -122,7 +122,13 @@ const FS = /* glsl */`
 		if (which < 0.5 && abs(r.x) > 1e-4) {
 			float sx = sign(r.x), t = (sx * mix(uSide.z, uSide.w, 0.55) - uEye.x) / r.x;
 			vec3 H = uEye + r * t;
-			if (t > 0.0 && H.y > uSide.x && H.y < uSide.y && H.z > uSideZ.x && H.z < uSideZ.y) { which = 2.0; g = vec2(H.z, H.y - uSide.x); edge = min(min(H.y - uSide.x, uSide.y - H.y), min(H.z - uSideZ.x, uSideZ.y - H.z)); }
+			// the window's outline: the belt below; the roof line above, coming down the rear glass
+			// behind the C pillar's start; the A pillar ahead (the windshield's rake, less its
+			// width); the C pillar behind; and the B pillar's width between the doors
+			float roofY = mix(uSide.y, uSide.x, clamp((uSideZ.y - H.z) / max(uSideZ.y - uSideZ.z, 0.1), 0.0, 1.0));
+			float zA = uFoot.y + (uHead.y - uFoot.y) * clamp((H.y - uSide.x) / max(uHead.x - uSide.x, 0.1), 0.0, 1.0) - 0.06;
+			float pillar = abs(H.z - uSideZ.w) - 0.06;
+			if (t > 0.0 && H.y > uSide.x + 0.02 && H.y < roofY && H.z > uSideZ.x && H.z < zA && pillar > 0.0) { which = 2.0; g = vec2(H.z, H.y - uSide.x); edge = min(min(min(H.y - uSide.x - 0.02, roofY - H.y), min(H.z - uSideZ.x, zA - H.z)), pillar); }
 		}
 		if (which < 0.5) discard;
 		float cover = 0.0, blade = 0.0; vec3 a = vec3(0.0);
@@ -133,22 +139,23 @@ const FS = /* glsl */`
 			float s1 = wiper(g, vec2(hw0 * 0.3, -0.05), 0.12, 2.05, Lg * 0.72, blade);
 			float s2 = wiper(g, vec2(-hw0 * 0.42, -0.05), 0.12, 1.7, Lg * 0.62, blade);
 			float since = min(s1, s2);
-			a = splats(g, 0.065, 0.0, 9.0, since) + splats(g + vec2(0.023, 0.011), 0.034, 5.0, 6.0, since) * vec3(0.6, 0.6, 0.4);
+			// (drops of 2-5 mm on the glass, and a finer scatter of 1-3 mm)
+			a = splats(g, 0.036, 0.0, 9.0, since) + splats(g + vec2(0.013, 0.007), 0.021, 5.0, 6.0, since) * vec3(0.6, 0.6, 0.4);
 			// at speed the rain streaks up the glass in fast fine lines, and the wet film the
 			// blade leaves glints for a moment behind it
-			float col = floor(g.x * 90.0 + 0.5), hc = h21(vec2(col, 2.0));
+			float col = floor(g.x * 140.0 + 0.5), hc = h21(vec2(col, 2.0));
 			float sy = fract(g.y * 1.2 - uTime * (2.0 + 2.0 * hc) + hc * 7.0);
-			float streak = (1.0 - smoothstep(0.0, 0.45, abs(fract(g.x * 90.0 + 0.5) - 0.5) * 2.0)) * smoothstep(0.0, 0.25, sy) * (1.0 - smoothstep(0.25, 0.6, sy)) * step(0.6, h21(vec2(col, 9.0))) * uSpeed * uRain * step(2.0, since);
+			float streak = (1.0 - smoothstep(0.0, 0.45, abs(fract(g.x * 140.0 + 0.5) - 0.5) * 2.0)) * smoothstep(0.0, 0.25, sy) * (1.0 - smoothstep(0.25, 0.6, sy)) * step(0.6, h21(vec2(col, 9.0))) * uSpeed * uRain * step(2.0, since);
 			float mist = (0.03 + 0.03 * h21(floor(g * 60.0))) * uRain * smoothstep(0.0, 8.0, since) * (0.6 + 0.4 * smoothstep(0.7, 1.0, g.y / Lg));
 			float film = exp(-since * 14.0) * 0.12 * uRain;
 			cover = a.x * 0.17 + a.y * 0.35 + a.z * 0.22 + streak * 0.3 + mist + film;
 		} else {
 			// a side window: the drops streaked back along the glass by the wind, and at speed
 			// fine wet lines racing back
-			a = sideDrops(g, 0.06, 1.0, 10.0) + sideDrops(g + vec2(0.017, 0.029), 0.032, 6.0, 7.0) * vec3(0.6, 0.6, 0.4);
-			float row = floor(g.y * 70.0 + 0.5), hr = h21(vec2(row, 4.0));
+			a = sideDrops(g, 0.034, 1.0, 10.0) + sideDrops(g + vec2(0.011, 0.016), 0.02, 6.0, 7.0) * vec3(0.6, 0.6, 0.4);
+			float row = floor(g.y * 110.0 + 0.5), hr = h21(vec2(row, 4.0));
 			float sz = fract(g.x * (0.9 + 0.6 * hr) + uTime * (3.0 + 3.0 * hr) * uSpeed + hr * 7.0);
-			float streak = (1.0 - smoothstep(0.0, 0.45, abs(fract(g.y * 70.0 + 0.5) - 0.5) * 2.0)) * smoothstep(0.0, 0.3, sz) * (1.0 - smoothstep(0.3, 0.75, sz)) * step(0.55, h21(vec2(row, 8.0))) * uSpeed * uRain;
+			float streak = (1.0 - smoothstep(0.0, 0.45, abs(fract(g.y * 110.0 + 0.5) - 0.5) * 2.0)) * smoothstep(0.0, 0.3, sz) * (1.0 - smoothstep(0.3, 0.75, sz)) * step(0.55, h21(vec2(row, 8.0))) * uSpeed * uRain;
 			float mist = (0.04 + 0.03 * h21(floor(g * 60.0))) * uRain;
 			cover = a.x * 0.17 + a.y * 0.35 + a.z * 0.22 + streak * 0.35 + mist;
 		}
@@ -168,7 +175,7 @@ export function createWindshield(scene, shared) {
 		uRain: { value: 0 }, uTime: shared.uTime, uSpeed: { value: 0 }, uDim: { value: 0 }, uTint: { value: new THREE.Color(0.5, 0.53, 0.57) },
 		uProj: { value: new THREE.Vector2(1, 0.7) }, uRel: { value: new THREE.Matrix3() }, uEye: { value: new THREE.Vector3(0.38, 1.4, 0.1) },
 		uFoot: { value: new THREE.Vector2(1, 1) }, uHead: { value: new THREE.Vector2(1.6, 0.3) }, uHw: { value: new THREE.Vector2(0.85, 0.7) },
-		uSide: { value: new THREE.Vector4(1, 1.55, 0.8, 0.7) }, uSideZ: { value: new THREE.Vector2(-2, 0.6) },
+		uSide: { value: new THREE.Vector4(1, 1.55, 0.8, 0.7) }, uSideZ: { value: new THREE.Vector4(-1.3, -1.2, -2, 1e3) },
 		// the wipers: their sweep clock (a stroke out and back each unit), its period (s), how
 		// long they have stood parked (s), and whether they show
 		uWipe: { value: new THREE.Vector4(0, 1.5, 1e4, 0) },
@@ -184,7 +191,7 @@ export function createWindshield(scene, shared) {
 		const G = glassOf(k), eye = seatsOf(k).eye;
 		U.uEye.value.set(eye[0], eye[1], eye[2]);
 		U.uFoot.value.set(G.foot[0], G.foot[1]); U.uHead.value.set(G.head[0], G.head[1]); U.uHw.value.set(G.hwFoot, G.hwHead);
-		U.uSide.value.set(G.belt, G.roof, G.sideOut[0], G.sideOut[1]); U.uSideZ.value.set(G.sideZ[0], G.sideZ[1]);
+		U.uSide.value.set(G.belt, G.roof, G.sideOut[0], G.sideOut[1]); U.uSideZ.value.set(G.sideZ[0], G.sideZ[1], G.sideZ[2], G.sideZ[3]);
 	}
 	// seated: in the driver's seat of a car; rain: the rain where you are; fog: the haze's
 	// colour (what the sky and the road are through the glass), as the fog has it; car: the
