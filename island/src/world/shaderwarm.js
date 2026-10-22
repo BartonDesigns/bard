@@ -126,7 +126,7 @@ export function createShaderWarm(renderer, scene, camera) {
 	// which pictures it reads and its flags, plus what the object adds (instancing, skinning,
 	// morphs, vertex colours). A shape wrongly thought built is only built in the frame, as before.
 	const SRC = new Map(), shapes = new WeakMap();
-	let shapesBuilt = new Set();
+	let shapesBuilt = new Set(), lastProps = renderer.properties;
 	const srcId = (s) => { let id = SRC.get(s); if (id === undefined) { id = SRC.size; SRC.set(s, id); } return id; };
 	function shape(m, o) {
 		let s = shapes.get(m);
@@ -201,6 +201,9 @@ export function createShaderWarm(renderer, scene, camera) {
 				inMain = false;
 				try { return render.apply(this, arguments); } finally { inMain = was; }
 			}
+			// (new properties: the graphics came back from a loss with an empty program cache, so no
+			// shape counts as built any more)
+			if (renderer.properties !== lastProps) { lastProps = renderer.properties; shapesBuilt = new Set(); }
 			inMain = true; spent = 0; passed = 0; frameN++;
 			try { return render.apply(this, arguments); } finally { inMain = was; }
 		};

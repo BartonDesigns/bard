@@ -34,6 +34,9 @@ function skyScene() {
 	scene.add(sun);
 	return scene;
 }
+// (the graphics lost and restored: the map, drawn into a target, came back empty, and every
+// polished edge went black with it: made again on its next use, main.js)
+export function resetKitEnvironment() { env = null; tried = false; }
 export function kitEnvironment(renderer) {
 	if (env || tried) return env;
 	tried = true;

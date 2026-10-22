@@ -685,6 +685,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	function zone() {
 		const w = W(), e = eye();
 		if (w?.deep?.active?.()) return 'deep';
+		// (the Moon, and any airless world: its own creatures, none of the Earth's or the wilds')
+		if (shared.planet?.airless) return 'moon';
 		if (isEarth()) {
 			if (boxesNear(e.x, e.z, 70).length > 6) return 'earth-urban';
 			return w.island.heightAt(e.x, e.z) < 6 ? 'earth-coast' : 'earth-rural';
