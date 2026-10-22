@@ -458,9 +458,10 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		const code = st && shouldRejoin(st, search);
 		if (!code) return;
 		rejoin.code = code;
-		// (no word back in half a minute, the server out of reach: let it be for now, and try again
-		// next visit; the room is still kept)
-		join(code, { travel: false }).then((ok) => { if (!ok && rejoin.code === code && room.status !== 'on') { rejoin.code = null; room.leave(); } });
+		// (no welcome in 45 s, the server out of reach: let it be for now, and try again next
+		// visit; the room is still kept)
+		join(code, { travel: false });
+		setTimeout(() => { if (rejoin.code === code && room.status !== 'on') { rejoin.code = null; room.leave(); chipDraw(); } }, 45000);
 	}
 	// ---------- each frame ----------
 	let slowAt = 0;
