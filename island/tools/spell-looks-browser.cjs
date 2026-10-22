@@ -9,7 +9,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 const root = path.resolve(__dirname, '..'), out = process.env.OUT || '/tmp/spell-looks';
 const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
-const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { createLens } from './src/magic/lens.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS } from './src/magic/spells.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
+const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { createLens } from './src/magic/lens.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS, gargantuaSize, gargantuaRange, GARGANTUA_LIFT } from './src/magic/spells.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
 
 (async () => {
 	fs.mkdirSync(out, { recursive: true });
@@ -93,18 +93,19 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 				// (Gargantua far off on the horizon, fed for a while; the nearest foe streaking into it.
 				// GROW=<s>: instead, as it stands s seconds in, at its true distance and size)
 				if (window.__grow != null) {
-					const s = spell, R = s.size0 * Math.pow(s.size / s.size0, Math.pow(Math.min(1, window.__grow / (s.t * 0.85)), 1.2)), e = camera.position;
+					const s = spell, R = Game.gargantuaSize(s, window.__grow), e = camera.position;
 					camera.far = 6000; camera.updateProjectionMatrix();
-					// (as in the game: its heart a little over the eye's level, the horizon cutting it)
-					const h = v(-30, e.y + R * 0.35, -s.far);
+					// (as in the game: its heart a little over the eye's level, the lower part of the shadow
+					// under the horizon, at its range then)
+					const h = v(-30, e.y + R * Game.GARGANTUA_LIFT, -Game.gargantuaRange(s, window.__grow));
 					// (and the ending's grade as it stands then)
 					fx.gradeFrom(s.t); fx.update(Math.max(0, window.__grow - 0.6));
-					run(0.6, (tt) => L.tick?.(fx, h, R, tt, e));
+					run(0.6, (tt) => L.tick?.(fx, h, R, tt, e, window.__grow / s.t));
 					draw();
 					camera.far = 200; camera.updateProjectionMatrix();
 					return;
 				}
-				const e = camera.position, h = v(-14, e.y + 10 * 0.35, -120);
+				const e = camera.position, h = v(-14, e.y + 10 * Game.GARGANTUA_LIFT, -120);
 				run(1.2, (tt) => L.tell?.(fx, v(h.x, h.y - (1 - tt / 1.2) * 25, h.z), 10, tt / 1.2, e));
 				run(1.4, (tt, n) => { L.tick?.(fx, h, 10, tt, e); if (n === 36) L.arc?.(fx, foes[0], h); });
 			}
