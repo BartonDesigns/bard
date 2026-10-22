@@ -84,12 +84,12 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		layer = document.createElement('div');
 		layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:8;user-select:none;-webkit-user-select:none;';
 		const top = document.createElement('div');
-		top.style.cssText = PANEL + `position:absolute;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);max-width:min(460px,calc(100vw - 90px));padding:8px 16px;text-align:center;border-color:${accent}55;`;
+		top.style.cssText = PANEL + `position:absolute;left:50%;top:calc(10px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);max-width:min(460px,calc(100vw - 90px));padding:8px 16px;text-align:center;border-color:${accent}55;`;
 		top.innerHTML = `<div style="font:700 14px var(--bard-display,system-ui,sans-serif);color:${accent}">${GAME.title}</div><div data-h style="margin-top:2px;white-space:pre-line"></div>`;
 		hudText = top.querySelector('[data-h]');
 		const x0 = document.createElement('button');
 		x0.textContent = '×'; x0.setAttribute('aria-label', 'Close ' + GAME.title);
-		x0.style.cssText = PANEL + 'position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));width:44px;height:44px;border-radius:22px;font:600 24px var(--bard-display,system-ui,sans-serif);line-height:1;pointer-events:auto;cursor:pointer;';
+		x0.style.cssText = PANEL + 'position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + var(--l99-top, env(safe-area-inset-top)));width:44px;height:44px;border-radius:22px;font:600 24px var(--bard-display,system-ui,sans-serif);line-height:1;pointer-events:auto;cursor:pointer;';
 		stopEv(x0);
 		x0.addEventListener('click', () => api?.stop());
 		layer.append(top, x0);

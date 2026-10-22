@@ -23,7 +23,7 @@ export function createTradeWindow({ mount, studio, onEdit, onAccept, onCancel, o
 	const phone = () => (mount.clientWidth || innerWidth) < 700;
 	function place() {
 		win.style.cssText = BASE + 'display:flex;' + (phone()
-			? 'left:calc(6px + env(safe-area-inset-left));right:calc(6px + env(safe-area-inset-right));top:calc(6px + env(safe-area-inset-top));bottom:calc(6px + env(safe-area-inset-bottom));'
+			? 'left:calc(6px + env(safe-area-inset-left));right:calc(6px + env(safe-area-inset-right));top:calc(6px + var(--l99-top, env(safe-area-inset-top)));bottom:calc(6px + env(safe-area-inset-bottom));'
 			: 'left:50%;top:50%;transform:translate(-50%,-50%);width:min(780px,96vw);max-height:92%;');
 	}
 	let view = null, prevKey = '', prevOk = { a: '', b: '', status: '' }, bagOpen = true, countdown = null, holdBar = null, flashing = 0;

@@ -8,7 +8,7 @@ import { toWorld } from './geo.js';
 export function createLabels(mount, bay, bridge, { clock = () => performance.now(), schedule = setTimeout, cancel = clearTimeout } = {}) {
 	const box = document.createElement('div');
 	box.dataset.locationLabel = '';
-	box.style.cssText = 'position:absolute;left:50%;top:calc(18px + env(safe-area-inset-top));transform:translateX(-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.4s ease;color:#f4f1ea;text-shadow:0 1px 12px rgba(0,0,0,.55);max-width:86vw;';
+	box.style.cssText = 'position:absolute;left:50%;top:calc(18px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.4s ease;color:#f4f1ea;text-shadow:0 1px 12px rgba(0,0,0,.55);max-width:86vw;';
 	const title = document.createElement('div');
 	title.style.cssText = 'font:300 26px/1.15 var(--bard-display,Georgia,serif);letter-spacing:.04em;';
 	const sub = document.createElement('div');

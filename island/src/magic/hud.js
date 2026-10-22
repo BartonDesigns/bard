@@ -32,10 +32,10 @@ const CSS = `
 .mg-fab{align-self:center;margin-left:6px;font:600 11px/1.35 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:auto;cursor:pointer;white-space:nowrap}
 @media (max-width:660px){#l99-island-mount:not(.l99-touch) .mg-bar{left:calc(50% - 34px)}}
 .mg-fab b{font-weight:700}.mg-fab .l{color:#ffd27a}.mg-fab .d{color:#b39aff}
-.mg-mode{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 var(--bard-display,system-ui,sans-serif);padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
+.mg-mode{position:absolute;left:50%;top:calc(14px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);background:rgba(10,16,20,.6);color:#eef6f4;font:600 12px/1 var(--bard-display,system-ui,sans-serif);padding:7px 12px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.14);pointer-events:none;z-index:7;opacity:0;transition:opacity .25s}
 .mg-fab .pt{display:inline-block;margin-left:5px;padding:0 5px;border-radius:8px;background:#01a982;color:#fff;font-size:10px;line-height:15px;box-shadow:0 0 10px rgba(1,169,130,.8);animation:mgPt 2s ease-in-out infinite}
 @keyframes mgPt{50%{box-shadow:0 0 18px rgba(1,169,130,1)}}
-.mg-lvl{position:absolute;left:50%;top:calc(18% + env(safe-area-inset-top));transform:translate(-50%,0);pointer-events:none;z-index:8;text-align:center;color:#fff;opacity:0;font:600 13px/1.3 var(--bard-display,system-ui,sans-serif);letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.8);white-space:nowrap}
+.mg-lvl{position:absolute;left:50%;top:calc(18% + var(--l99-top, env(safe-area-inset-top)));transform:translate(-50%,0);pointer-events:none;z-index:8;text-align:center;color:#fff;opacity:0;font:600 13px/1.3 var(--bard-display,system-ui,sans-serif);letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.8);white-space:nowrap}
 .mg-lvl b{display:block;font:200 44px/1 var(--bard-display,system-ui,sans-serif);letter-spacing:.3em;margin-bottom:6px;background:linear-gradient(180deg,#fff 30%,#5eead4);-webkit-background-clip:text;background-clip:text;color:transparent}
 .mg-lvl i{display:block;height:1px;margin:8px auto;width:0;background:linear-gradient(90deg,transparent,#5eead4,transparent)}
 .mg-lvl.go{animation:mgLvl 4.2s ease forwards}.mg-lvl.go i{animation:mgLine 1.2s .2s ease-out forwards}
@@ -128,7 +128,7 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 		const pt = mk('span', 'pt', hub);
 		// the safe areas in px (env() only reaches CSS)
 		const probe = mk('div', '', mount);
-		probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+		probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;padding:var(--l99-top, env(safe-area-inset-top)) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
 		const UP = RING.w[0] * Math.sin(RING.w[1][0] * Math.PI / 180) + 23;
 		let isOpen = false, hot = null;
 		function place() {

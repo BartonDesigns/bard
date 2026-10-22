@@ -58,7 +58,7 @@ const CSS = `
 .gld-li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#2a2a2a;border:1px solid rgba(255,255,255,.08);flex-wrap:wrap}
 .gld-li>span{flex:1;min-width:140px}
 .gld-li small{color:rgba(255,255,255,.6);font-size:12px;margin-left:6px}
-@media (max-width:640px){.gld{padding:0}.gld-card{width:100%;height:100%;border-radius:0;border:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.gld-top{padding:12px 16px 8px}.gld-body{padding:14px 16px 24px}.gld-grid{grid-template-columns:1fr}.gld-tabs{padding:0 4px;gap:0}.gld-tab{min-width:0;padding:12px 2px;font-size:13px}.gld-tab i{margin-left:4px;padding:1px 5px}}
+@media (max-width:640px){.gld{padding:0}.gld-card{width:100%;height:100%;border-radius:0;border:0;padding-top:var(--l99-top, env(safe-area-inset-top));padding-bottom:env(safe-area-inset-bottom)}.gld-top{padding:12px 16px 8px}.gld-body{padding:14px 16px 24px}.gld-grid{grid-template-columns:1fr}.gld-tabs{padding:0 4px;gap:0}.gld-tab{min-width:0;padding:12px 2px;font-size:13px}.gld-tab i{margin-left:4px;padding:1px 5px}}
 `;
 
 const TABS = [['guild', 'Guild'], ['folk', 'Townsfolk'], ['players', 'Players'], ['allies', 'Alliances']];

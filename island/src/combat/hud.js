@@ -26,17 +26,17 @@ const CSS = `
 .cb-ammo .n{font:700 30px/1 var(--bard-body,system-ui,sans-serif);letter-spacing:.5px}.cb-ammo .r{font-size:15px;opacity:.75;margin-left:4px}
 .cb-ammo .w{font-size:11px;opacity:.75;letter-spacing:.6px;text-transform:uppercase;margin-top:3px;font-family:var(--bard-display,Georgia,serif)}
 .cb-ammo.low .n{color:#ffb08a}.cb-ammo .rl{font-size:12px;color:#ffd27a;height:14px}
-.cb-boss{position:absolute;left:50%;top:calc(58px + env(safe-area-inset-top));transform:translateX(-50%);width:min(560px,78vw);opacity:0;transition:opacity .5s;text-align:center}
+.cb-boss{position:absolute;left:50%;top:calc(58px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);width:min(560px,78vw);opacity:0;transition:opacity .5s;text-align:center}
 .cb-boss .t{font:700 15px/1.3 var(--bard-display,system-ui,sans-serif);letter-spacing:1.5px;text-transform:uppercase}
 .cb-boss .p{font-size:11px;opacity:.8;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase;font-family:var(--bard-display,Georgia,serif)}
 .cb-boss .cb-bar{height:8px;position:relative}.cb-boss .cb-bar>div{background:linear-gradient(90deg,#ff7a4a,#ffd07a)}
 .cb-boss .cb-bar>s{position:absolute;top:0;bottom:0;width:2px;background:rgba(0,0,0,.6)}
 .cb-boss .ph{font:700 22px/1.3 var(--bard-display,system-ui,sans-serif);letter-spacing:2px;color:#ffd07a;opacity:0;transition:opacity .4s;margin-top:10px;text-transform:uppercase}
-.cb-star{position:absolute;right:calc(70px + env(safe-area-inset-right));top:calc(16px + env(safe-area-inset-top));font-size:18px;letter-spacing:2px;opacity:0;transition:opacity .4s}
+.cb-star{position:absolute;right:calc(70px + env(safe-area-inset-right));top:calc(16px + var(--l99-top, env(safe-area-inset-top)));font-size:18px;letter-spacing:2px;opacity:0;transition:opacity .4s}
 .cb-star .on{color:#ffd24a;text-shadow:0 0 6px rgba(255,180,40,.8)}.cb-star .off{color:rgba(255,255,255,.25)}.cb-star .blue{color:#4aa8ff;text-shadow:0 0 6px rgba(60,140,255,.85)}
 .cb-calls{position:absolute;left:calc(14px + env(safe-area-inset-left));top:40%;display:flex;flex-direction:column;gap:4px;max-width:46vw}
 .cb-calls div{background:rgba(10,16,20,.5);padding:4px 8px;border-radius:6px;font-weight:500;transition:opacity .6s}
-.cb-feed{position:absolute;right:calc(14px + env(safe-area-inset-right));top:calc(48px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:56vw}
+.cb-feed{position:absolute;right:calc(14px + env(safe-area-inset-right));top:calc(48px + var(--l99-top, env(safe-area-inset-top)));display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:56vw}
 .cb-feed div{background:rgba(10,16,20,.55);padding:3px 8px;border-radius:4px;font:600 12px/1.3 var(--bard-display,system-ui,sans-serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:opacity .5s}
 .cb-feed div.me{box-shadow:inset 3px 0 0 #01a982}.cb-feed em{font-style:normal;opacity:.7;font-weight:500;margin:0 6px}.cb-feed .a{color:#9ff0d4}.cb-feed .v{color:#ffb08a}.cb-feed .h{color:#ffd27a;margin-left:6px}
 .cb-ko{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(6,10,14,.55);opacity:0;transition:opacity .5s;font:700 22px var(--bard-display,system-ui,sans-serif);letter-spacing:2px}

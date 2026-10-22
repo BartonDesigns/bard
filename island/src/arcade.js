@@ -73,7 +73,7 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 	btn.style.cssText = style + 'width:44px;height:44px;padding:0;display:none;align-items:center;justify-content:center;';
 	btn.dataset.hud = 'rail 50';
 	const menu = document.createElement('div');
-	menu.style.cssText = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;display:none;flex-direction:column;gap:4px;padding:8px;width:min(300px,78vw);border-radius:12px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);z-index:6;';
+	menu.style.cssText = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 64px - var(--l99-low, 88px) - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;display:none;flex-direction:column;gap:4px;padding:8px;width:min(300px,78vw);border-radius:12px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);z-index:6;';
 	const play = document.createElement('button');
 	play.style.cssText = style + 'padding:10px 22px 10px 16px;border-radius:24px;display:none;align-items:center;gap:8px;white-space:nowrap;';
 	play.dataset.hud = 'prompt 40';
