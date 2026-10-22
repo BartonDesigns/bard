@@ -10,6 +10,8 @@
 //   dmg, reach   a blow's harm to you (more to another fighter) and how far it reaches, in m
 //   strike       a blow's whole time, in s (the wind-up is the first third: read it and step back)
 //   sight        how far it notices you
+//   hunt         how much further it keeps after you once roused, as a factor of sight (1.8
+//                when not given): past that it loses you and gives up the chase
 //   resist       harm taken by kind (combat/health.js DAMAGE_TYPES)
 //   model, human its model when not its own id; human, the person it is until it turns (the
 //                Moonturned: a villager who changes when you come near or hurt them)
@@ -20,7 +22,9 @@
 //   shatter      it bursts into shards when it dies, nothing left to lie there
 //   fly          a flyer: the height it keeps over the ground (hover) and drops to (strike), in m
 //   lurk         one that waits still among the trees (the Burnt Giant): it wakes when you come
-//                within wake m, strike it or fire near it, rising over rise s
+//                within wake m, strike it or fire near it, rising over rise s; for its first
+//                stalk s awake it only walks after you, and having lost you it goes back to
+//                standing as a tree after settle s
 //   throw        a thrower (fire pots, a curse): from past arm's reach to range it lobs one every
 //                so often (every, s) for dmg, splashing splash m; it keeps back to keep m
 //   where        when and where it comes on its own (combat/combat.js creatures()):
@@ -101,8 +105,10 @@ export const SPECIES = Object.freeze({
 	'burnt-giant': {
 		name: 'Burnt Giant', faction: 'nightborn', height: 12,
 		hp: 2400, armour: 80, walk: 1.4, run: 3.6, dmg: 55, reach: 7, strike: 2.4, sight: 70,
-		resist: { fire: 2.0, ballistic: 0.5, pierce: 0.6 }, surface: 'wood',
-		lurk: { wake: 9, rise: 3 },
+		// (it hunts no further than it sees: get 70 m from it and it loses you; a fresh-woken
+		// one walks after you a while before it runs, so there is time to get away)
+		hunt: 1, resist: { fire: 2.0, ballistic: 0.5, pierce: 0.6 }, surface: 'wood',
+		lurk: { wake: 9, rise: 3, stalk: 8, settle: 20 },
 		// (by day too: a tree among trees is no less a tree in daylight)
 		where: { night: false, zones: ['wild', 'earth-rural'], pack: [1, 1], odds: 0.12 },
 	},
