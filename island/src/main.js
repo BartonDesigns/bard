@@ -46,6 +46,7 @@ import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graph
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
+import { refillShed } from './world/cpucopy.js';
 import { bodyCount } from './people/body.js';
 import { createCataclysm } from './cataclysm/index.js';
 import { createMagic } from './magic/index.js';
@@ -527,6 +528,9 @@ export function createIslandWorld() {
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
 		lost = true;
+		// the pictures a phone let go of once the card held them, asked back for the restored
+		// context to upload again (world/cpucopy.js)
+		refillShed();
 		const blocked = recovery.lost();
 		if (blocked || /signage-|uSgFar/.test(linking.what)) recoverSignage(storage);
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
@@ -815,7 +819,9 @@ export function createIslandWorld() {
 		up(label) { settling++; travelVeil.textContent = label || ''; travelVeil.style.opacity = '1'; },
 		down() { settling++; travelVeil.style.opacity = '0'; },
 		// lifted after a dozen smooth frames in a row (or eight seconds, whatever happens); done
-		// runs first, and keeps the veil up by returning true
+		// runs first, and keeps the veil up by returning true. The city's set round the new place
+		// still being laid out in slices holds the veil too (bay/city.js busy()), so its buildings
+		// are never seen to come in piecewise, up to thirty seconds
 		settle(done) {
 			const token = ++settling, t0 = performance.now();
 			let last = t0, calm = 0;
@@ -823,7 +829,8 @@ export function createIslandWorld() {
 				if (token !== settling) return;
 				calm = now - last < 70 ? calm + 1 : 0;
 				last = now;
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) { if (!done?.()) travelVeil.style.opacity = '0'; return; }
+				const building = !!world?.city?.busy?.();
+				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) { if (!done?.()) travelVeil.style.opacity = '0'; return; }
 				requestAnimationFrame(watch);
 			};
 			requestAnimationFrame(watch);
@@ -1554,9 +1561,11 @@ export function createIslandWorld() {
 	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
+		// a load that never finished is tried again (the loading screen's Try again): a tier lighter for this visit
+		retryLighter: () => governor.retry(),
 		open(params = {}) {
 			const enter = () => api.enter(params);
-			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close() }) : enter();
+			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close(), retry: () => governor.retry() }) : enter();
 		},
 		async enter(params = {}) {
 			if (recovery.blocked()) throw graphicsReloadError();
@@ -1597,11 +1606,11 @@ export function createIslandWorld() {
 		autoWalk: () => visible && running && !!drive.auto?.(),
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
-		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close() }),
+		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close(), retry: () => governor.retry() }),
 		// ?room=CODE: join a friend's room and go to them (net/multiplayer.js)
 		joinRoom: (code) => multiplayer.join(code),
 		// back to the last place you were (after a crash or a reload); false if there is none
-		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close() }) : false; },
+		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close(), retry: () => governor.retry() }) : false; },
 		// flight's landing builds the world here first, out of sight, so Journey's own clock
 		// only covers the hand-over (a slow phone building the Bay Area outran it, and the
 		// failed passage left you on the old flight surface)

@@ -581,6 +581,18 @@ export async function islandBuild(iw, params) {
 	// will draw, handed over now in small steps: Enter then only shows them (a phone given all of
 	// it in the first frame after Enter closed the page)
 	HOOKS.lightPad?.update(performance.now(), camera, true);
+	// the city's first set round you, laid out now in slices behind the card (bay/city.js update
+	// runs it a frame's share at a time; done in one go in the first frame after Enter, it held a
+	// phone for the best part of a second as the page's memory peaked): Enter finds it standing.
+	// What is still to come (the real city's tiles arrive later and rebuild the set) comes the
+	// same way once the world shows
+	if (iw.world.city) {
+		for (const t0 = performance.now(); performance.now() - t0 < 8000;) {
+			await yieldBuild('Raising the city');
+			iw.world.city.update(camera, 0);
+			if (!iw.world.city.busy()) break;
+		}
+	}
 	await shaderWarm.all({ budget: 2500 });
 	await shaderWarm.textures({ budget: 2500 });
 	buildPanel();

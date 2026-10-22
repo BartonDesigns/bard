@@ -3,7 +3,7 @@
 // leaves behind.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TIERS, LOWEST, RULES, governorState, govern, readRecord, ceilingNow, bootRecord, lossRecord, setTier, tierNow, qualityNow, onQuality, createGovernor } from '../src/world/governor.js';
+import { TIERS, LOWEST, RULES, governorState, govern, readRecord, ceilingNow, bootRecord, lossRecord, setTier, tierNow, qualityNow, onQuality, createGovernor, memoryNow } from '../src/world/governor.js';
 
 const run = (s, seconds, sample, dt = 0.1) => { const out = []; for (let t = 0; t < seconds; t += dt) { const c = govern(s, { dt, ...sample }); if (c) out.push(c); } return out; };
 
@@ -162,6 +162,24 @@ test('the governor at work: chosen modes hold, a loss caps them, slow frames ste
 	setTier(0);
 });
 
+test('the governor at work: each Try again on a load that never finished is a tier lower, for this visit only', () => {
+	const storage = memStore();
+	let mode = 'high';
+	const g = createGovernor({ phone: false, storage, mode: () => mode, now: () => Date.UTC(2026, 9, 22) });
+	assert.equal(g.info().tier, 'high');
+	g.retry();
+	assert.equal(g.info().tier, 'medium');
+	g.update(0.1, 10);
+	assert.equal(g.info().tier, 'medium', 'High holds the lighter tier for the visit');
+	g.retry(); g.retry(); g.retry();
+	assert.equal(g.info().tier, 'minimal', 'and never below the lowest');
+	assert.equal(g.info().crashes, 0, 'nothing is counted against the device');
+	// the next visit starts where it would have anyway
+	const g2 = createGovernor({ phone: false, storage, mode: () => 'high', now: () => Date.UTC(2026, 9, 22, 1) });
+	assert.equal(g2.info().tier, 'high');
+	setTier(0);
+});
+
 test('the governor at work: memory past its budget steps down even with quick frames', () => {
 	const bytes = { n: 0 };
 	const g = createGovernor({ phone: true, storage: memStore(), meter: { bytes: () => bytes.n }, budgetMB: 100 });
@@ -170,5 +188,6 @@ test('the governor at work: memory past its budget steps down even with quick fr
 	bytes.n = 45 * 1048576;     // 90% of the budget (graphics standing for the heap too)
 	for (let i = 0; i < 30; i++) g.update(0.1, 10);
 	assert.equal(g.info().tier, 'low');
+	assert.ok(memoryNow() > 0.8, 'the share in use is readable by what else would load');
 	setTier(0);
 });

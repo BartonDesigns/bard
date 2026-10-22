@@ -160,7 +160,7 @@
 #bard-loading .bl-footer{border-top:1px solid #ffffff30;padding-top:18px;align-items:end}
 #bard-loading .bl-state{flex:1;max-width:480px}#bard-loading .bl-status{font-size:12px}
 #bard-loading .bl-track{height:2px;background:#ffffff26;margin:12px 0 0;overflow:hidden}#bard-loading .bl-fill{height:100%;width:24%;background:#e1c58e;animation:bl-search 2.8s ease-in-out infinite}
-#bard-loading .bl-sub{font-size:11px;color:#b9c6c6;line-height:1.4;margin:9px 0 0}#bard-loading .bl-sub.bl-first{font-size:13px;line-height:1.45;color:#d6dfde;max-width:560px}#bard-loading .bl-first b{font:600 12px var(--bard-display,Georgia,serif);letter-spacing:.06em;color:#e8d19e;margin-right:4px}#bard-loading .bl-sub:empty{display:none}
+#bard-loading .bl-sub{font-size:11px;color:#b9c6c6;line-height:1.4;margin:9px 0 0}#bard-loading .bl-sub.bl-first{font-size:13px;line-height:1.45;color:#d6dfde;max-width:560px}#bard-loading .bl-first b{font:600 12px var(--bard-display,Georgia,serif);letter-spacing:.06em;color:#e8d19e;margin-right:4px}#bard-loading .bl-sub:empty{display:none}#bard-loading .bl-detail{font-size:11px;color:#8fa0a0;line-height:1.4;margin:6px 0 0;font-variant-numeric:tabular-nums}#bard-loading .bl-detail:empty{display:none}#bard-loading .bl-copy{margin:10px 0 0;min-height:36px;padding:8px 14px;border:1px solid rgba(232,209,158,.45);background:transparent;color:#e8d19e;border-radius:3px;font:600 12px var(--bard-display,Georgia,serif);letter-spacing:.04em;cursor:pointer}#bard-loading .bl-copy:hover{border-color:#e8d19e}
 #bard-loading .bl-enter{min-height:48px;padding:12px 22px;border:1px solid #e8d19e;background:#e8d19e;color:#121c20;border-radius:3px;font:700 13px var(--bard-display,Georgia,serif);letter-spacing:.06em;flex-shrink:0}
 #bard-loading button:focus-visible,#bard-loading:focus-visible{outline:2px solid #f5dfac;outline-offset:4px}
 #bard-loading[data-state=ready] .bl-fill{width:100%;animation:none}#bard-loading[data-state=error] .bl-fill{width:100%;animation:none;background:#deae96}
@@ -214,15 +214,27 @@
 		const status = element('span', 'bl-status', '', row); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
 		const track = element('div', 'bl-track', '', state); track.setAttribute('aria-hidden', 'true'); element('div', 'bl-fill', '', track);
 		const sub = element('p', 'bl-sub', '', state);
+		// a load that failed: where it stopped, and a button that copies the whole trail for us
+		const detail = element('p', 'bl-detail', '', state);
+		const copy = element('button', 'bl-copy', 'Copy load details', state); copy.type = 'button'; copy.hidden = true;
+		copy.onclick = event => { event.stopPropagation(); copyDetails(copy); };
 		const enter = element('button', 'bl-enter', 'Enter world', footer); enter.type = 'button'; enter.hidden = true;
-		view = { root, pause, images, title, tip, status, sub, enter, back, chips, panel, panelHead, panelBody, home };
+		view = { root, pause, images, title, tip, status, sub, detail, copy, enter, back, chips, panel, panelHead, panelBody, home };
 		back.onclick = event => { event.stopPropagation(); if (!current) return; const session = current; session.cancelled = true; finish('backed out'); hide(); session.options.exit?.(); if (session.settled) current = null; };
 		enter.onclick = event => {
 			event.stopPropagation();
 			if (current?.error?.code === 'GRAPHICS_RELOAD_REQUIRED') { location.reload(); return; }
 			if (!current?.settled) return;
 			const session = current;
-			if (session.error) { current = null; run(session.task, session.options); return; }
+			if (session.error) {
+				// the same build again never finished for Ryan: each Try again asks the engine for a
+				// tier lighter (options.retry, or the engine's own retryLighter when the door opened
+				// this session: main.js governor.retry), and says so on the card
+				current = null;
+				const attempt = (session.options.attempt || 0) + 1, options = { ...session.options, attempt, label: 'Trying again with lighter graphics' };
+				try { (options.retry || (() => window.L99Island?.retryLighter?.()))(attempt); } catch (e) { console.warn('[world loading] retry', e); }
+				run(session.task, options); return;
+			}
 			current = null; finish('entered'); keep.put(ENTERED_KEY, true); hide(); session.options.enter?.();
 		};
 		document.body.appendChild(root);
@@ -253,7 +265,7 @@
 		backgroundObserver = new MutationObserver(records => { for (const record of records) for (const sibling of record.addedNodes) lock(sibling); });
 		backgroundObserver.observe(document.body, { childList: true });
 		view.root.hidden = false; view.root.dataset.state = 'loading'; view.enter.hidden = true;
-		view.sub.textContent = ''; view.sub.classList.remove('bl-first'); closeTab(); drawChips(); homeTip(); firstNote(false);
+		view.sub.textContent = ''; view.sub.classList.remove('bl-first'); view.detail.textContent = ''; view.copy.hidden = true; closeTab(); drawChips(); homeTip(); firstNote(false);
 		view.root.focus({ preventScroll: true }); window.dispatchEvent(new Event('blur'));
 		showStory(pickStory());
 		paused = false; view.pause.textContent = 'Pause'; view.pause.setAttribute('aria-label', 'Pause slideshow'); rotation();
@@ -366,9 +378,10 @@
 		if (trail.stages.length > 40) trail.stages.splice(1, 1);
 		saveTrail();
 	}
-	function begin(label) {
+	function begin(label, attempt = 0) {
 		clearInterval(trailTimer);
 		trail = { at: new Date().toISOString(), page: location.pathname + location.search, phone: matchMedia?.('(pointer: coarse)').matches || false, dpr: devicePixelRatio, t0: performance.now(), stages: [], hidden: false };
+		if (attempt) trail.attempt = attempt;
 		mark(label);
 		trailTimer = setInterval(() => { if (!trail || trail.end) return clearInterval(trailTimer); trail.now = [secs(), ...heldMB()]; saveTrail(); }, 2000);
 	}
@@ -380,8 +393,43 @@
 		clearTimeout(slowTimer); view.sub.classList.remove('bl-first'); view.root.dataset.state = 'error'; finish('failed: ' + String(error?.message || error).slice(0, 120));
 		const graphics = error?.code === 'GRAPHICS_RELOAD_REQUIRED';
 		view.status.textContent = graphics ? 'Graphics need a fresh start' : 'The world could not finish loading';
-		view.sub.textContent = graphics ? error.message : /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then retry. You can also return to Bard.';
+		view.sub.textContent = graphics ? error.message : /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then try again: each try asks for lighter graphics. You can also return to Bard.';
 		view.enter.hidden = false; view.enter.textContent = graphics ? 'Reload game' : 'Try again';
+		view.detail.textContent = stoppedLine(); view.copy.hidden = false; view.copy.textContent = 'Copy load details';
+	}
+	// "Stopped at 'Preparing the surroundings' after 26 s (109 MB graphics, 312 MB script)": the
+	// stage the load was in when it failed (the last one marked before 'failed')
+	function stoppedLine() {
+		const stages = trail?.stages || [], last = stages.at(-1), at = last && /^failed/.test(last[1]) ? stages.at(-2) : last;
+		if (!at) return '';
+		const held = [at[2] != null ? at[2] + ' MB graphics' : '', at[3] != null ? at[3] + ' MB script' : ''].filter(Boolean).join(', ');
+		return 'Stopped at \u201c' + at[1] + '\u201d after ' + Math.round(last?.[0] ?? at[0]) + ' s' + (held ? ' (' + held + ')' : '') + (trail?.attempt ? ', try ' + (trail.attempt + 1) : '') + '.';
+	}
+	// everything we would ask for when a load fails somewhere we cannot see: the trail of this
+	// load and the lost ones before it, the error, and the device (L99Loading.details() too)
+	function details() {
+		const nav = navigator, con = nav.connection || {};
+		return {
+			build: ((document.querySelector('link[href*="island.js?v="]')?.href || document.querySelector('script[src*="island.js?v="]')?.src || '').match(/v=([\w.]+)/) || [])[1] || null, at: new Date().toISOString(),
+			error: current?.error ? String(current.error.message || current.error).slice(0, 300) : null,
+			attempt: current?.options?.attempt || 0,
+			device: { ua: nav.userAgent, cores: nav.hardwareConcurrency ?? null, deviceMemoryGB: nav.deviceMemory ?? null, screen: screen.width + 'x' + screen.height + '@' + devicePixelRatio, viewport: innerWidth + 'x' + innerHeight, touch: matchMedia?.('(pointer: coarse)').matches || false, connection: con.effectiveType || null, heapLimitMB: performance.memory ? Math.round(performance.memory.jsHeapSizeLimit / 1048576) : null },
+			graphics: (() => { try { return window.Crysis?.governor?.() || null; } catch { return null; } })(),
+			...trailInfo(),
+		};
+	}
+	async function copyDetails(button) {
+		const text = JSON.stringify(details(), null, '\t');
+		let ok = false;
+		try { await navigator.clipboard.writeText(text); ok = true; } catch { /* no clipboard here: the old way */ }
+		if (!ok) {
+			const area = document.createElement('textarea'); area.value = text; area.setAttribute('readonly', ''); area.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(area); area.select();
+			try { ok = document.execCommand('copy'); } catch { ok = false; }
+			area.remove();
+		}
+		if (button) { button.textContent = ok ? 'Copied: paste it to us' : 'Could not copy (see the console)'; setTimeout(() => { if (button.isConnected) button.textContent = 'Copy load details'; }, 4000); }
+		if (!ok) console.warn('[world loading] details', text);
+		return ok;
 	}
 	function fail(error, options = {}) {
 		if (active() && current) { current.failure = current.error = error; errorView(error); }
@@ -400,7 +448,7 @@
 		const session = current = { id: ++serial, task, options, settled: false, cancelled: false };
 		session.done = new Promise(resolve => { session.finish = resolve; });
 		show();
-		if (keepTab) openTab(keepTab); begin(options.label || 'Opening your world'); stage(options.label || 'Opening your world');
+		if (keepTab) openTab(keepTab); begin(options.label || 'Opening your world', options.attempt || 0); stage(options.label || 'Opening your world');
 		try {
 			if (previous) await previous;
 			// Let the image/text paint before synchronous terrain construction begins.
@@ -412,7 +460,7 @@
 			session.settled = true;
 			if (session.cancelled) return result;
 			clearTimeout(slowTimer); view.root.dataset.state = 'ready'; view.status.textContent = 'Your world is ready'; mark('ready');
-			view.sub.textContent = ''; view.sub.classList.remove('bl-first'); firstNote(true); view.enter.hidden = false; view.enter.textContent = 'Enter world';
+			view.sub.textContent = ''; view.sub.classList.remove('bl-first'); view.detail.textContent = ''; view.copy.hidden = true; firstNote(true); view.enter.hidden = false; view.enter.textContent = 'Enter world';
 			return result;
 		} catch (error) {
 			error = session.failure || error;
@@ -447,7 +495,7 @@
 				if (event.cancelable) event.preventDefault(); event.stopImmediatePropagation();
 			}, { capture: true, passive: false });
 	}
-	window.L99Loading = { run, stage, fail, active, trail: trailInfo, get pending() { return !!current && !current.settled; },
+	window.L99Loading = { run, stage, fail, active, trail: trailInfo, details, copyDetails: () => copyDetails(null), get pending() { return !!current && !current.settled; },
 		// the engine's tabs (island ui/loading-tabs.js); relabel() after a label changes (signed in)
 		tabs: setTabs, relabel: () => { if (view) drawChips(); }, openTab: id => openTab(id), closeTab: () => closeTab(), get tabOpen() { return tabOpen; } };
 })();

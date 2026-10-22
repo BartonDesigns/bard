@@ -19,3 +19,14 @@ export function viewDistance(d, x, z, cam, fwd) {
 	const ahead = (dx * fwd.x + dz * fwd.z) / (L * (Math.hypot(fwd.x, fwd.z) || 1));
 	return ahead > 0.2 ? d : d * 1.6 + 15;
 }
+
+// A build laid out in steps (a generator that yields between them) run for this frame's share:
+// steps until the budget is spent or the build is done. Every step runs whole, so a frame may
+// go over by one step; what the build makes is the same whatever the budget, only spread over
+// more frames. Returns true once the generator is done.
+//   runSteps(gen, ms, now)   now: the clock (performance.now by default), for tests
+export function runSteps(gen, ms, now = () => performance.now()) {
+	const t0 = now();
+	do { if (gen.next().done) return true; } while (now() - t0 < ms);
+	return false;
+}
