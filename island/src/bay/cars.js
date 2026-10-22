@@ -447,7 +447,7 @@ const SKY_MAPS = `#include <lights_fragment_maps>
 if (carEnv > 0.0) {
 	radiance += carSky((vec4(reflect(-geometryViewDir, geometryNormal), 0.0) * viewMatrix).xyz, material.roughness) * carEnv;
 	#ifdef USE_CLEARCOAT
-	if (material.clearcoat > 0.0) clearcoatRadiance += carSky((vec4(reflect(-geometryViewDir, geometryClearcoatNormal), 0.0) * viewMatrix).xyz, material.clearcoatRoughness) * carEnv * 1.6;
+	if (material.clearcoat > 0.0) clearcoatRadiance += carSky((vec4(reflect(-geometryViewDir, geometryClearcoatNormal), 0.0) * viewMatrix).xyz, material.clearcoatRoughness) * carEnv * 1.05;
 	#endif
 }
 #endif`;
@@ -456,6 +456,26 @@ export function withCarSky(sh) {
 	Object.assign(sh.uniforms, carSky);
 	sh.fragmentShader = SKY_GLSL + 'float carEnv = 1.0;\n' + sh.fragmentShader.replace('#include <lights_fragment_maps>', SKY_MAPS);
 }
+
+// Each car's own finish, not one shine for the whole street: the fleet (vehicles/fleet.js)
+// packs it into the instance colour's red, in steps of 2 above the paint's own red (the
+// colour's channels never pass 1), and the paint reads it back here:
+//   0 showroom gloss, a deep clear coat           1 an ordinary daily driver, a little duller
+//   2 old paint, oxidised and chalked              3 dusty, the colour gone grey-tan
+//   4 a matte or satin wrap, no clear coat at all
+// (the car's own paint colour, its roughness, how much clear coat and how blurred, in the
+// fragment shader before <color_fragment>)
+export const FINISH_GLSL = /* glsl */`
+float carFin = 0.0; vec3 carPaint = vec3(1.0);
+#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )
+carFin = floor(vColor.r * 0.5 + 0.001); carPaint = vec3(vColor.r - 2.0 * carFin, vColor.gb);
+#endif
+float finRough = carFin < 0.5 ? 0.2 : carFin < 1.5 ? 0.36 : carFin < 2.5 ? 0.5 : carFin < 3.5 ? 0.58 : 0.74;
+float finCoat = carFin < 0.5 ? 1.0 : carFin < 1.5 ? 0.6 : carFin < 2.5 ? 0.22 : carFin < 3.5 ? 0.1 : 0.0;
+float finCcRough = carFin < 0.5 ? 0.04 : carFin < 1.5 ? 0.14 : carFin < 2.5 ? 0.3 : 0.4;
+if (carFin > 1.5) carPaint = mix(carPaint, vec3(dot(carPaint, vec3(0.33, 0.5, 0.17))) * 0.9 + 0.06, carFin < 2.5 ? 0.2 : 0.12);
+if (carFin > 2.5 && carFin < 3.5) carPaint = mix(carPaint, vec3(0.52, 0.47, 0.4), 0.3);
+`;
 
 const VERT = (sh) => 'attribute vec4 aE; attribute vec4 aW; attribute vec3 aD; attribute vec4 aS; varying vec4 vE; varying vec3 vLP; varying vec4 vW; varying vec3 vD; varying vec4 vS;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvE = aE; vLP = position; vW = aW; vD = aD; vS = aS;');
 const HEAD = `uniform float uNightS; varying vec4 vE; varying vec3 vLP; varying vec4 vW; varying vec3 vD; varying vec4 vS;
@@ -530,7 +550,8 @@ const PAINT = /* glsl */`
 	}
 	else if (P > 0.5) { diffuseColor.rgb = vec3(0.012, 0.015, 0.018); carRough = 0.04; }         // glass (seen dark)
 	else {
-		carFlop = 1.0;
+		// the paint, in its own finish (the trim below sets its own)
+		carFlop = 1.0; carRough = finRough; carCoat = finCoat; carCcRough = finCcRough; carMetal = carFin > 3.5 ? 0.0 : -1.0;
 		float st = vS.z, clad = vS.w;
 		float aU = fwidth(xa) + 1e-4, aV = fwidth(yN) + 1e-4;
 		// the wheel arches: cut out of the body, so the tyre shows through with the dark well
@@ -607,16 +628,16 @@ export function carMaterial(night, o = {}) {
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, carSky, { uNightS: night });
 		sh.vertexShader = VERT(sh);
-		sh.fragmentShader = HEAD + 'vec3 carGlow = vec3(0.0); float carRough = -1.0, carMetal = -1.0, carCoat = 1.0, carEnv = 1.0, carFlop = 0.0;\n' + sh.fragmentShader
-			.replace('#include <color_fragment>', '#include <color_fragment>\n' + PAINT)
+		sh.fragmentShader = HEAD + 'vec3 carGlow = vec3(0.0); float carRough = -1.0, carMetal = -1.0, carCoat = 1.0, carCcRough = -1.0, carEnv = 1.0, carFlop = 0.0;\n' + sh.fragmentShader
+			.replace('#include <color_fragment>', FINISH_GLSL + 'diffuseColor.rgb *= carPaint;\n' + PAINT)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nif (carRough >= 0.0) roughnessFactor = carRough;')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nif (carMetal >= 0.0) metalnessFactor = carMetal;')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += carGlow;')
 			// (the paint darkens a little toward its edges, so the body's curves read)
-			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.clearcoat *= carCoat;\nmaterial.diffuseColor *= mix(1.0, 0.6 + 0.4 * pow(saturate(dot(normal, normalize(vViewPosition))), 0.5), carFlop);')
+			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.clearcoat *= carCoat;\nif (carCcRough >= 0.0) material.clearcoatRoughness = carCcRough;\nmaterial.diffuseColor *= mix(1.0, 0.6 + 0.4 * pow(saturate(dot(normal, normalize(vViewPosition))), 0.5), carFlop);')
 			.replace('#include <lights_fragment_maps>', SKY_MAPS);
 	};
-	m.customProgramCacheKey = () => 'baycar5' + (o.cheap ? 'c' : '');
+	m.customProgramCacheKey = () => 'baycar6' + (o.cheap ? 'c' : '');
 	return m;
 }
 
