@@ -128,7 +128,21 @@
     "zoom": 1.22
   }
 ];
-	let view, current = null, serial = 0, tabs = [], tabOpen = null, tabDone = null, storyIndex = -1, imageSerial = 0, slideTimer, paused = false, slowTimer, restore = [], previousFocus, backgroundObserver;
+	// The newest player-facing improvements already merged to main. This lives in the tiny
+	// pre-engine loader so the Chronicle can be read before the 3D world has downloaded.
+	const BARD_UPDATE_CHECKPOINT = 'd5307d6c5659a49df9f60115be5260d8dc5e6aae';
+	const BARD_UPDATES_UPDATED = '2026-10-22';
+	const BARD_UPDATES = /* bard-chronicle:start */ Object.freeze([
+		{"id":"2026-10-22-world-finds-the-beat","date":"2026-10-22","realm":"Music & people","mark":"♫","title":"The world finds the beat","text":"Play through the faceplate and the people around you answer with their own movement. Crowds, companions and your hero now dance with the pulse instead of beside it.","points":["Movement follows the heard beat","Different people keep different grooves"]},
+		{"id":"2026-10-22-cars-wear-their-years","date":"2026-10-22","realm":"Roads & vehicles","mark":"◇","title":"Every car wears its years","text":"The roads no longer share one perfect showroom shine. Daily drivers, sun-faded paint, dust, deep gloss and matte wraps give each passing car a life of its own.","points":["A finish chosen for each car","Softer, more believable reflections"]},
+		{"id":"2026-10-22-law-reads-the-danger","date":"2026-10-22","realm":"Living world","mark":"⚖","title":"The law reads the danger","text":"When a visible monster threatens a street, officers recognize the greater danger before turning on nearby citizens. Trouble now draws a more believable response.","points":["Visible monsters take priority","Local encounters remain free to unfold"]},
+		{"id":"2026-10-22-phones-breathe-easier","date":"2026-10-22","realm":"Phones & stability","mark":"✦","title":"Phones breathe easier","text":"Large menus and idle layers now give the world more room while they are open. Returning from the spell book or music page is lighter and less likely to lose the scene.","points":["Less full-screen memory pressure","World buffers return when panels open"]},
+		{"id":"2026-10-22-road-between-moon-and-earth","date":"2026-10-22","realm":"Flight & worlds","mark":"☾","title":"A truer road from Moon to Earth","text":"The journey home now begins above the planet and lets the ground gather beneath you during descent. It is another step toward one unbroken universe.","points":["Earth builds during the approach","The surface streams in beneath descent"]},
+		{"id":"2026-10-22-gargantua-over-the-horizon","date":"2026-10-22","realm":"Deep space","mark":"●","title":"Gargantua rises over the horizon","text":"The black hole now carries the scale of a world: a vast dark body and a turning disc sweeping out across the distance instead of a small ornament in the sky.","points":["A planet-scale silhouette","A broader, spinning accretion disc"]},
+		{"id":"2026-10-22-world-returns-after-a-fall","date":"2026-10-22","realm":"Recovery","mark":"↟","title":"The world remembers how to return","text":"If the browser sheds its graphics or a room reloads, Bard now has more ways to redraw the land, rejoin the last room and try again at a lighter setting.","points":["World redraw after a graphics reset","Last-room return and clearer recovery"]}
+	]); /* bard-chronicle:end */
+	const chronicleTab = { id: 'chronicle', label: () => 'Chronicle', render: renderChronicle };
+	let view, current = null, serial = 0, tabs = [chronicleTab], tabOpen = null, tabDone = null, storyIndex = -1, imageSerial = 0, slideTimer, paused = false, slowTimer, restore = [], previousFocus, backgroundObserver;
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 	function rotation() {
 		clearInterval(slideTimer);
@@ -174,6 +188,21 @@
 #bard-loading .bl-pclose{flex:none;width:44px;min-height:44px;margin:1px 0 3px;background:none;border:1px solid transparent;border-radius:50%;color:#d6dfde;font-size:16px}#bard-loading .bl-pclose:hover{border-color:#f5f1e745}
 #bard-loading .bl-pbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:16px 18px 20px;display:flex;flex-direction:column;gap:12px}
 #bard-loading .bl-pbody.bl-flush{padding:0;overflow:hidden}
+#bard-loading .bl-chronicle{display:flex;flex-direction:column;gap:12px}
+#bard-loading .bl-chronicle-head{position:relative;padding:4px 2px 13px;border-bottom:1px solid rgba(232,209,158,.3)}
+#bard-loading .bl-chronicle-kicker{font:700 10px var(--bard-display,system-ui,sans-serif);letter-spacing:.2em;text-transform:uppercase;color:#e8d19e}
+#bard-loading .bl-chronicle-title{margin:4px 0 2px;font:500 27px/1.1 var(--bard-display,Georgia,serif);color:#f5f1e7;letter-spacing:.015em}
+#bard-loading .bl-chronicle-deck{max-width:34em;font:13px/1.5 var(--bard-body,system-ui,sans-serif);color:#c8d1cf}
+#bard-loading .bl-chronicle-rule{display:flex;align-items:center;gap:8px;margin-top:11px;color:#b89a62;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+#bard-loading .bl-chronicle-rule:before,#bard-loading .bl-chronicle-rule:after{content:'';height:1px;flex:1;background:linear-gradient(90deg,transparent,rgba(232,209,158,.48))}#bard-loading .bl-chronicle-rule:after{transform:scaleX(-1)}
+#bard-loading .bl-news{position:relative;display:grid;grid-template-columns:38px 1fr;gap:0 11px;padding:13px 13px 12px;border:1px solid rgba(232,209,158,.18);border-radius:11px;background:linear-gradient(135deg,rgba(232,209,158,.075),rgba(0,0,0,.24));box-shadow:inset 0 1px rgba(255,255,255,.035)}
+#bard-loading .bl-news-mark{grid-row:1/5;display:grid;place-items:center;align-self:start;width:36px;height:36px;border:1px solid rgba(232,209,158,.4);border-radius:50%;background:#09151c;color:#e8d19e;font:500 17px var(--bard-display,Georgia,serif);box-shadow:0 0 18px rgba(232,209,158,.09)}
+#bard-loading .bl-news-meta{display:flex;flex-wrap:wrap;gap:5px 9px;align-items:center;font:700 9px var(--bard-display,system-ui,sans-serif);letter-spacing:.11em;text-transform:uppercase;color:#b89a62}
+#bard-loading .bl-news-meta time{color:#93a6a5}#bard-loading .bl-news h3{margin:3px 0 4px;font:500 18px/1.2 var(--bard-display,Georgia,serif);color:#f5f1e7}
+#bard-loading .bl-news p{margin:0;color:#d0d8d5;font:12px/1.52 var(--bard-body,system-ui,sans-serif)}
+#bard-loading .bl-news ul{grid-column:2;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:5px;list-style:none}
+#bard-loading .bl-news li{padding:4px 8px;border-radius:20px;background:rgba(232,209,158,.09);color:#d8cfb8;font:600 9px/1.25 var(--bard-display,system-ui,sans-serif);letter-spacing:.025em}
+#bard-loading .bl-chronicle-foot{text-align:center;padding:2px 14px 0;color:#93a6a5;font:italic 12px/1.45 var(--bard-display,Georgia,serif)}
 #bard-loading.bl-open .bl-shell{height:100%;height:100dvh;min-height:0}
 #bard-loading.bl-open .bl-content{flex:1;min-height:0;margin-top:0;padding-top:0;max-width:none;display:flex;align-items:flex-end;gap:5vw}
 #bard-loading.bl-open .bl-hero{flex:1;min-width:0;max-width:620px}#bard-loading.bl-open .bl-chips{display:none}
@@ -187,6 +216,7 @@
 @keyframes bl-search{0%{transform:translateX(-110%)}100%{transform:translateX(520%)}}
 #bard-loading .bl-art img[data-scene=horizon]{filter:saturate(.85) contrast(1.05) brightness(.9)}
 @media(max-width:650px){#bard-loading .bl-shell{padding:max(22px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(22px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left));gap:24px}#bard-loading .bl-brand{font-size:20px}#bard-loading .bl-content{padding-top:35vh}#bard-loading h1{font-size:clamp(34px,10vw,46px)}#bard-loading .bl-tip{font-size:13px;margin-top:12px}#bard-loading .bl-footer{flex-wrap:wrap;gap:14px}#bard-loading .bl-state{flex-basis:100%}#bard-loading .bl-enter{margin-left:auto}#bard-loading.bl-open .bl-hero{display:none}#bard-loading.bl-open .bl-panel{width:100%}#bard-loading .bl-chips{margin-top:18px}#bard-loading .bl-chip{padding:9px 14px}}
+@media(max-width:400px){#bard-loading .bl-news{grid-template-columns:32px 1fr;padding:11px 10px;gap:0 9px}#bard-loading .bl-news-mark{width:30px;height:30px;font-size:15px}#bard-loading .bl-news ul{grid-column:1/3}#bard-loading .bl-chronicle-title{font-size:24px}}
 @media(max-width:650px){#bard-loading .bl-art img:is([data-scene=horizon],[data-scene=earth],[data-scene=terran]){height:auto;top:12vh;mask-image:linear-gradient(#000 75%,transparent);-webkit-mask-image:linear-gradient(#000 75%,transparent)}}
 @media(max-height:600px){#bard-loading .bl-shell{gap:16px;padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom))}#bard-loading .bl-content{padding-top:10vh}#bard-loading h1{font-size:36px}#bard-loading .bl-tip{margin-top:8px}#bard-loading .bl-footer{padding-top:12px}#bard-loading .bl-chips{margin-top:12px}#bard-loading.bl-open .bl-tip{display:none}}
 @media(prefers-reduced-motion:reduce){#bard-loading *{animation:none!important;transition:none!important}#bard-loading .bl-fill{width:35%}}
@@ -203,11 +233,10 @@
 		const back = element('button', 'bl-back', 'Back to Bard', top); back.type = 'button';
 		const content = element('div', 'bl-content', '', shell), hero = element('div', 'bl-hero', '', content);
 		const title = element('h1', '', '', hero), tip = element('p', 'bl-tip', '', hero);
-		// a look at your character, what you carry and your account while the world builds:
-		// the tabs come from the world's engine (island ui/loading-tabs.js) once it is running
+		// The Chronicle is ready before the engine; character, inventory and account arrive with it.
 		const chips = element('div', 'bl-chips', '', hero);
 		const home = element('div', 'bl-home', '', hero); home.hidden = true;
-		const panel = element('section', 'bl-panel', '', content); panel.hidden = true; panel.setAttribute('aria-label', 'Your character');
+		const panel = element('section', 'bl-panel', '', content); panel.hidden = true; panel.setAttribute('aria-label', 'Bard loading details');
 		const panelHead = element('div', 'bl-panel-head', '', panel); panelHead.setAttribute('role', 'tablist');
 		const panelBody = element('div', 'bl-pbody', '', panel); panelBody.setAttribute('role', 'tabpanel');
 		const footer = element('footer', 'bl-footer', '', shell), state = element('div', 'bl-state', '', footer), row = element('div', 'bl-status-row', '', state);
@@ -276,11 +305,38 @@
 		view.root.hidden = true; restore.forEach(([el, inert]) => { el.inert = inert; }); restore = [];
 		window.dispatchEvent(new Event('blur')); previousFocus?.focus?.({ preventScroll: true });
 	}
-	// ---------- your character, inventory and account, while you wait ----------
-	// tabs: [{ id, label() (its name now), render(host) -> optional cleanup }], set by the engine.
+	// ---------- the Chronicle, your character, inventory and account, while you wait ----------
+	// Extra tabs: [{ id, label() (its name now), render(host) -> optional cleanup }], set by the engine.
 	// Plain page elements only: nothing here draws with the GPU, so a phone's load is untouched.
 	const tabLabel = tab => { try { return String(tab.label?.() || tab.id); } catch { return tab.id; } };
-	function setTabs(list) { tabs = Array.isArray(list) ? list.filter(t => t?.id && typeof t.render === 'function') : []; if (view) { drawChips(); if (tabOpen && !tabs.some(t => t.id === tabOpen)) closeTab(); } }
+	function setTabs(list) {
+		const extra = Array.isArray(list) ? list.filter(t => t?.id && t.id !== chronicleTab.id && typeof t.render === 'function') : [];
+		tabs = [chronicleTab, ...extra];
+		if (view) { drawChips(); if (tabOpen && !tabs.some(t => t.id === tabOpen)) closeTab(); }
+	}
+	function prettyDate(value) {
+		const [y, m, d] = String(value).split('-').map(Number);
+		if (!y || !m || !d) return String(value || '');
+		return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)));
+	}
+	function renderChronicle(host) {
+		const book = element('div', 'bl-chronicle'), head = element('header', 'bl-chronicle-head');
+		element('div', 'bl-chronicle-kicker', 'The living record', head);
+		element('h2', 'bl-chronicle-title', 'The Bard Chronicle', head);
+		element('div', 'bl-chronicle-deck', 'New paths, steadier worlds and the latest ways your music changes what lives around you.', head);
+		const rule = element('div', 'bl-chronicle-rule', 'The world does not stand still', head); rule.setAttribute('aria-hidden', 'true');
+		book.append(head);
+		for (const note of BARD_UPDATES.slice(0, 12)) {
+			const card = element('article', 'bl-news'), mark = element('div', 'bl-news-mark', note.mark || '✦'); mark.setAttribute('aria-hidden', 'true');
+			const meta = element('div', 'bl-news-meta'), time = element('time', '', prettyDate(note.date)); time.dateTime = note.date;
+			element('span', '', note.realm, meta); meta.append(time);
+			card.append(mark, meta, element('h3', '', note.title), element('p', '', note.text));
+			if (note.points?.length) { const list = element('ul', ''); for (const point of note.points) element('li', '', point, list); card.append(list); }
+			book.append(card);
+		}
+		element('div', 'bl-chronicle-foot', `Last woven ${prettyDate(BARD_UPDATES_UPDATED)}. Only changes already living in Bard enter this record.`, book);
+		host.append(book);
+	}
 	function drawChips() {
 		if (!view) return;
 		view.chips.replaceChildren();
@@ -497,5 +553,6 @@
 	}
 	window.L99Loading = { run, stage, fail, active, trail: trailInfo, details, copyDetails: () => copyDetails(null), get pending() { return !!current && !current.settled; },
 		// the engine's tabs (island ui/loading-tabs.js); relabel() after a label changes (signed in)
-		tabs: setTabs, relabel: () => { if (view) drawChips(); }, openTab: id => openTab(id), closeTab: () => closeTab(), get tabOpen() { return tabOpen; } };
+		tabs: setTabs, relabel: () => { if (view) drawChips(); }, openTab: id => openTab(id), closeTab: () => closeTab(), get tabOpen() { return tabOpen; },
+		chronicle: () => ({ checkpoint: BARD_UPDATE_CHECKPOINT, updated: BARD_UPDATES_UPDATED, entries: BARD_UPDATES.map(note => ({ ...note, points: [...note.points] })) }) };
 })();
