@@ -439,7 +439,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	// track used to be fourteen screens wide, and a slide across it had the compositor back the
 	// whole sweep at once: an iPhone, its graphics memory already spoken for by the world, died
 	// on the second turn.)
-	let dx = 0, dragging = false, dragged = false, turns = 0, trackX = 0, glideRaf = 0;
+	let dx = 0, dragging = false, dragged = false, turns = 0, trackX = 0, glideRaf = 0, glideT = 0;
 	const seats = PAGES.map((_, j) => j);
 	function seat(j) { P.pages[j].el.style.left = `${seats[j] * P.pageW}px`; }
 	function shown(...js) { for (const [j, p] of P.pages.entries()) p.el.hidden = !js.includes(j); }
@@ -454,7 +454,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	// compositor and have WebKit back both pages as layers of their own for its length, memory an
 	// iPhone has not got with the world loaded; drawn into the page's own tiles it costs none)
 	function place(glide) {
-		cancelAnimationFrame(glideRaf); glideRaf = 0;
+		cancelAnimationFrame(glideRaf); glideRaf = 0; clearTimeout(glideT); glideT = 0;
 		const to = target();
 		if (!glide || stillMotion() || Math.abs(to - trackX) < 1) { setX(to); if (glide) settle(); return; }
 		const x0 = trackX, t0 = performance.now(), ms = 520;
@@ -464,11 +464,13 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			if (u < 1) glideRaf = requestAnimationFrame(step); else { glideRaf = 0; settle(); }
 		};
 		glideRaf = requestAnimationFrame(step);
+		// (frames can stop coming for a while on a struggling device: the slide ends on the clock then)
+		glideT = setTimeout(settle, ms + 120);
 	}
 	// the slide over: every page back in its own seat, the track on the page in view (the page and
 	// the track move by the same amount, so nothing shifts on screen)
 	function settle() {
-		cancelAnimationFrame(glideRaf); glideRaf = 0;
+		cancelAnimationFrame(glideRaf); glideRaf = 0; clearTimeout(glideT); glideT = 0;
 		for (const j of PAGES.keys()) if (seats[j] !== j) { seats[j] = j; seat(j); }
 		shown(page);
 		setX(target());
@@ -1052,7 +1054,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		covering: () => open && vis,
 		refresh: () => { if (open) refresh(); },
 		page: () => PAGES[page],
-		dispose() { close(); cancelAnimationFrame(raf); cancelAnimationFrame(glideRaf); root?.remove(); },
+		dispose() { close(); cancelAnimationFrame(raf); cancelAnimationFrame(glideRaf); clearTimeout(glideT); root?.remove(); },
 	};
 }
 
