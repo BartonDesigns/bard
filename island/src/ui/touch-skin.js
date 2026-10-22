@@ -327,8 +327,9 @@ export function skinTouch(mount) {
 			if (n && b.getAttribute('aria-label') !== n) { b.setAttribute('aria-label', n); b.dataset.skinName = '1'; }
 		}
 		if (!b.title && name(b)) b.title = name(b);
-		// (nothing known: the general glyph, never words)
-		const g = glyphFor(name(b), t) || glyphFor(spoken(t), t) || glyphFor(b.title || '', t) || 'tap';
+		// (nothing known: the general glyph, never words; except a button whose words are the
+		// point, data-words: the flight Speed's ×3, ×9, ×1,000)
+		const g = b.hasAttribute('data-words') ? null : glyphFor(name(b), t) || glyphFor(spoken(t), t) || glyphFor(b.title || '', t) || 'tap';
 		if (!b.hasAttribute('data-skin')) { b.setAttribute('data-skin', ''); b.addEventListener('touchstart', () => {}, { passive: true }); }
 		const close = (g === 'menu' || g === 'more') && b.getAttribute('aria-expanded') === 'true' ? 'close' : g;
 		if (close) { if (b.dataset.glyph !== close) b.dataset.glyph = close; } else if (b.hasAttribute('data-glyph')) b.removeAttribute('data-glyph');

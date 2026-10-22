@@ -106,8 +106,9 @@ export async function makeCreature(id) {
 	// no two of a kind alike: a size up to a tenth either way, a little stockier or leaner,
 	// longer or shorter in the body, its head, ears and tail a touch different, and its hide's
 	// colour turned a little round the wheel, richer or paler, darker or lighter. hue: how far
-	// the colour may wander (0 keeps it: a person's skin)
-	function vary(rnd = Math.random, { hue = 1 } = {}) {
+	// the colour may wander (0 keeps it: a person's skin); sat and val: its colour's strength and
+	// lightness, times (the Moon's hounds bleached white: catalog.js moon)
+	function vary(rnd = Math.random, { hue = 1, sat = 1, val = 1 } = {}) {
 		const r2 = () => (rnd() + rnd()) - 1; // -1..1, most near the middle
 		const k = 1 + r2() * 0.1;
 		root.scale.set(k * (1 + r2() * 0.06), k * (1 + r2() * 0.035), k * (1 + r2() * 0.05));
@@ -115,7 +116,7 @@ export async function makeCreature(id) {
 		head?.scale.setScalar(1 + r2() * 0.08);
 		tail?.scale.setScalar(1 + r2() * 0.12);
 		for (const n of ['ear_L', 'ear_R']) bone(n)?.scale.setScalar(ek);
-		tint.value.set(r2() * 0.24 * hue, 1 + r2() * 0.2 * Math.max(0.4, hue), 1 + r2() * 0.12);
+		tint.value.set(r2() * 0.24 * hue, (1 + r2() * 0.2 * Math.max(0.4, hue)) * sat, (1 + r2() * 0.12) * val);
 		return k;
 	}
 	return { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2, vary };

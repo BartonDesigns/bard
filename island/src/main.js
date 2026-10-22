@@ -40,6 +40,7 @@ import { createDogWalkers } from './people/dogwalkers.js';
 import { createShaderWarm } from './world/shaderwarm.js';
 import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
+import { resetKitEnvironment } from './people/kit-light.js';
 import { createGovernor, qualityNow } from './world/governor.js';
 import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
@@ -312,6 +313,8 @@ function buildDom(canvas = document.createElement('canvas')) {
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));');
 	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
 	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9×, and in space up to 100,000× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
+	// (its words are the point: the touch skin keeps them, no glyph; ui/touch-skin.js)
+	boost.setAttribute('data-words', '');
 	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
 	const shell = button('🐚', 'Pick up the shell (E)', 'display:none;', 'prompt 30');
 	const toss = button('Throw', 'Throw it (T)', 'display:none;');
@@ -345,16 +348,17 @@ function buildDom(canvas = document.createElement('canvas')) {
 	};
 	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
 	const dock = (el) => {
-		// (a phone keeps only Fly and Places beside More: gear, the cloud save and the auto music
-		// wait in the More menu with the rest)
+		// (a phone keeps only Fly, its Speed while flying, and Places beside More: gear, the cloud
+		// save and the auto music wait in the More menu with the rest. Speed sat in the More menu
+		// too, where no one found it in the air: Josh 2026-10-22, "next to the button when flying")
 		if (mount.classList.contains('l99-touch') && !el.dataset?.hud && /^Auto music/.test(el.getAttribute?.('aria-label') || '')) el.dataset.hud = 'rail 66';
 		const [g, n] = (el.dataset?.hud || '').split(' ');
-		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && n === '60'));
+		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && (n === '20' || n === '21')) || (g === 'rail' && n === '60'));
 		const to = fast ? quick : groups[g] && home(g);
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
-		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : 'Places';
+		if (to === quick) el.dataset.controlLabel = g === 'mode' ? (n === '21' ? 'Speed' : 'Fly') : 'Places';
 		else if (to === rail) {
 			// (one word each in the More menu)
 			const title = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
@@ -547,6 +551,13 @@ export function createIslandWorld() {
 		if (!recovery.restored()) return; // The recovery screen owns the next user action.
 		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
 		applyQuality();
+		// What was drawn once into a target of its own is gone with the old graphics, and three
+		// cannot draw it again by itself: the road maps round you (bay/realcity.js), the sky the
+		// kit and the held item reflect (people/kit-light.js, crysis/viewmodel.js). Each is made
+		// again on its next use. (Ryan 2026-10-22: after the restore the buildings stood black.)
+		world?.real?.R?.repaint?.();
+		resetKitEnvironment();
+		HOOKS.gear?.relight?.();
 		// (the frame clock starts again from now, not from before the loss)
 		last = performance.now(); frameAvg = 16;
 		hint('Graphics restored, at lighter settings.', 3000, 3);

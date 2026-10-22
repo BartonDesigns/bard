@@ -29,7 +29,12 @@
 //                so often (every, s) for dmg, splashing splash m; it keeps back to keep m
 //   where        when and where it comes on its own (combat/combat.js creatures()):
 //                night (after dark only), zones (combat.js zone()), pack (how many together),
-//                odds (how often, against the others there: 1 when not given)
+//                odds (how often, against the others there: 1 when not given). The Moon is its
+//                own zone ('moon', every airless world): the sky there is black by day too, so
+//                a night creature let onto it comes at any hour, and nothing of the Earth's
+//                woods or towns does (Ryan 2026-10-22 met the Burnt Giant at the moon base)
+//   moon         its look on the Moon, as creatures/models.js vary() takes it: hue (how far
+//                its colour may turn), sat and val (its colour's strength and lightness, times)
 //
 // Pure data: no three, no DOM.
 
@@ -116,7 +121,9 @@ export const SPECIES = Object.freeze({
 		name: 'Ridge Hound', faction: 'nightborn', height: 1.15,
 		hp: 110, armour: 0, walk: 1.6, run: 8.5, dmg: 13, reach: 1.7, strike: 0.7, sight: 70,
 		resist: { fire: 1.3 }, surface: 'creature',
-		where: { night: true, zones: ['earth-rural', 'wild'], pack: [3, 5], odds: 0.8 },
+		where: { night: true, zones: ['earth-rural', 'wild', 'moon'], pack: [3, 5], odds: 0.8 },
+		// (on the Moon, bleached: the gnarly white hounds of the moon base, Josh 2026-10-22)
+		moon: { hue: 0.15, sat: 0.2, val: 1.45 },
 	},
 	'hound-rider': {
 		name: 'Hound Rider', faction: 'goblins', height: 2.1,
@@ -178,9 +185,10 @@ export function pickSpecies(ids, rnd = Math.random()) {
 }
 
 // which of them may come here now: zone (combat.js zone()), night (0..1, world/sky.js uNight)
+// (the Moon's sky is black at every hour: its creatures keep no hours)
 export function speciesFor(zone, night) {
 	return SPECIES_IDS.filter((id) => {
 		const w = SPECIES[id].where;
-		return w.zones.includes(zone) && (!w.night || night > 0.6);
+		return w.zones.includes(zone) && (!w.night || night > 0.6 || zone === 'moon');
 	});
 }
