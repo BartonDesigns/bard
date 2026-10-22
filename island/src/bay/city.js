@@ -1605,8 +1605,9 @@ export function createCity(shared, scene, bay, real = null) {
 		let n = 0;
 		const trees = list.trees || (list.trees = []);
 		const floors = new Map();
+		// (a frame's share: 512 a step cost a landing 75 ms a step on a computer, far more on a phone)
 		for (const b of real.near('boxes', cx, cz, R)) {
-			if ((++n & 511) === 0) yield;
+			if ((++n & 127) === 0) yield;
 			const dx = b.x - cx, dz = b.z - cz;
 			if (dx * dx + dz * dz > R * R) continue;
 			// the Discovery Museum's barracks are built by bay/discovery.js
@@ -1851,7 +1852,20 @@ export function createCity(shared, scene, bay, real = null) {
 	// a set being laid out (the first, or one after a jump): the arrival card and the travel veil
 	// wait for it, so the city is never seen to come in piecewise
 	const busy = () => !!rebuild;
-	const rebuildAt = (x, z, globe) => ({ x, z, gen: rebuildSteps(x, z, globe) });
+	const rebuildAt = (x, z, globe) => ({ x, z, gen: timed(rebuildSteps(x, z, globe)) });
+	// the costliest step of the last set laid out (which, and its ms), for ?perf and the harnesses:
+	// a step runs whole, so the longest frame a rebuild costs is its longest step
+	const steps = { worst: -1, worstMs: 0, n: 0, totalMs: 0 };
+	function* timed(gen) {
+		steps.worst = -1; steps.worstMs = 0; steps.n = 0; steps.totalMs = 0;
+		for (let i = 0; ; i++) {
+			const t = performance.now(), r = gen.next(), d = performance.now() - t;
+			steps.totalMs += d; steps.n = i + 1;
+			if (d > steps.worstMs) { steps.worstMs = d; steps.worst = i; }
+			if (r.done) return r.value;
+			yield;
+		}
+	}
 	// a list's filter a slice at a time
 	function* keepSteps(arr, ok) {
 		const out = [];
@@ -1926,5 +1940,5 @@ export function createCity(shared, scene, bay, real = null) {
 		yield;
 		placeTrees(x, z);
 	}
-	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, busy, info: () => ({ busy: !!rebuild, builds, first: builtOnce }), economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), bedsNear: (x, z, r) => bedList.filter((t) => !t.litter && Math.hypot(t.x - x, t.z - z) < r), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { roofFloor, ceiling, skyline: () => skyline, driveCars: () => drives, busy, info: () => ({ busy: !!rebuild, builds, first: builtOnce, steps: { ...steps, worstMs: Math.round(steps.worstMs), totalMs: Math.round(steps.totalMs) } }), economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), bedsNear: (x, z, r) => bedList.filter((t) => !t.litter && Math.hypot(t.x - x, t.z - z) < r), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }
