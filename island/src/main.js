@@ -797,34 +797,43 @@ export function createIslandWorld() {
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and
 	// it only lifts once the new place is built and the frames are running smoothly again
 	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;text-align:center;padding:24px;');
+	travelVeil.dataset.travelVeil = '';
 	dom.mount.appendChild(travelVeil);
-	let travelling = false, nextTrip = null;
+	let travelling = false, nextTrip = null, settling = 0;
+	const veil = {
+		up(label) { settling++; travelVeil.textContent = label || ''; travelVeil.style.opacity = '1'; },
+		down() { settling++; travelVeil.style.opacity = '0'; },
+		// lifted after a dozen smooth frames in a row (or eight seconds, whatever happens); done
+		// runs first, and keeps the veil up by returning true. The city's set round the new place
+		// still being laid out in slices holds the veil too (bay/city.js busy()), so its buildings
+		// are never seen to come in piecewise, up to thirty seconds
+		settle(done) {
+			const token = ++settling, t0 = performance.now();
+			let last = t0, calm = 0;
+			const watch = (now) => {
+				if (token !== settling) return;
+				calm = now - last < 70 ? calm + 1 : 0;
+				last = now;
+				const building = !!world?.city?.busy?.();
+				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) { if (!done?.()) travelVeil.style.opacity = '0'; return; }
+				requestAnimationFrame(watch);
+			};
+			requestAnimationFrame(watch);
+		},
+	};
 	function travel(label, move) {
 		// (a trip asked for while the last one's veil is still up goes once it lifts, not never)
 		if (travelling) { nextTrip = [label, move]; return; }
 		travelling = true;
-		travelVeil.textContent = label || '';
-		travelVeil.style.opacity = '1';
+		veil.up(label);
 		setTimeout(() => {
 			try { move(); } catch (err) { console.error('[travel]', err); }
-			const t0 = performance.now();
-			let last = t0, calm = 0;
-			const watch = (now) => {
-				calm = now - last < 70 ? calm + 1 : 0;
-				last = now;
-				// a dozen smooth frames in a row (or eight seconds, whatever happens); the city's set
-				// round the new place still being laid out in slices holds the veil (bay/city.js
-				// busy()), so its buildings are never seen to come in piecewise, up to thirty seconds
-				const building = !!world?.city?.busy?.();
-				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) {
-					travelling = false;
-					if (nextTrip) { const [l, m] = nextTrip; nextTrip = null; travel(l, m); return; }
-					travelVeil.style.opacity = '0';
-					return;
-				}
-				requestAnimationFrame(watch);
-			};
-			requestAnimationFrame(watch);
+			veil.settle(() => {
+				travelling = false;
+				if (!nextTrip) return false;
+				const [l, m] = nextTrip; nextTrip = null; travel(l, m);
+				return true;
+			});
 		}, 240);
 	}
 	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
@@ -1496,19 +1505,43 @@ export function createIslandWorld() {
 
 	// A warp or a touchdown to another world: the same world build a flight landing uses.
 	// With dest.orbit the ship drops out that high above the new world's island.
+	// An approach (dest.approach: flown at the Moon from Earth, or at Earth from the Moon) has no
+	// warp tunnel to hide the build, so it goes behind the travel veil, lifted once the frames run
+	// smoothly again. Earth is then reached in orbit over where you left and the ship comes down
+	// from there, the ground streaming in as it nears, as on any return from orbit: standing you
+	// on the ground the moment the world was built loaded all of it in the first frames, and a
+	// phone gave up at touchdown.
+	const ARRIVE = 160000;
 	async function voyage(dest) {
 		const params = dest.earth ? { seed: 1337, earth: true } : { seed: dest.seed, biome: dest.type, earth: false, origin: { seed: dest.seed, type: dest.type, id: `warp-${dest.type.toLowerCase()}`, earth: false } };
-		await api.open(params);
-		const P = world?.player.state;
-		if (!P || !visible || !sameBody(state.body, worldBody(params))) return false;
-		if (dest.colony && world.colony?.port) { world.colony.go(); return true; }
-		if (dest.beyond) { if (!world.beyond) return false; world.beyond.enter(true); return true; }
-		if (dest.orbit) {
-			P.flying = true; P.vel.set(0, 0, 0); P.pos.y = dest.orbit; P.pitch = -1.1; P.boost = 1;
-			camera.position.copy(P.pos);
-			hint(`${dest.name} below. Descend (C) to land, or warp on.`, 5000);
-		} else hint(world.island.gravity < 1 ? `${dest.name}: low gravity. Jump and see.` : `Landed on ${dest.name}.`, 5000);
-		return true;
+		const approach = !!dest.approach;
+		// leaving Earth: where you left the ground is where an approach brings you back
+		if (state.earth && !dest.earth && world?.orbit) { const a = world.orbit.info().anchor; launchedAt = a && Number.isFinite(a.lat) ? { lat: a.lat, lon: a.lon } : null; }
+		if (approach) { veil.up(dest.name); await new Promise((r) => setTimeout(r, 260)); }
+		try {
+			await api.open(params);
+			const P = world?.player.state;
+			if (!P || !visible || !sameBody(state.body, worldBody(params))) { if (approach) veil.down(); return false; }
+			if (dest.colony && world.colony?.port) { world.colony.go(); if (approach) veil.settle(); return true; }
+			if (dest.beyond) { if (!world.beyond) { if (approach) veil.down(); return false; } world.beyond.enter(true); if (approach) veil.settle(); return true; }
+			const orbit = dest.orbit || (approach && dest.earth ? ARRIVE : 0);
+			if (orbit) {
+				if (approach && dest.earth && launchedAt && world.globe) {
+					// over where you left: its ground is laid while the veil is still up
+					const W = world, at = launchedAt, p = W.globe.place(at.lat, at.lon);
+					await Promise.race([p.ready, new Promise((r) => setTimeout(r, 20000))]).catch(() => {});
+					if (world !== W || !visible) { veil.down(); return false; }
+					if (Number.isFinite(p.x) && Number.isFinite(p.z)) P.pos.set(p.x, P.pos.y, p.z);
+				}
+				launchedAt = null;
+				P.flying = true; P.vel.set(0, 0, 0); P.pos.y = orbit; P.pitch = -1.1; P.boost = 1;
+				camera.position.copy(P.pos);
+				if (approach) world.orbit?.arrive?.();
+				else hint(`${dest.name} below. Descend (C) to land, or warp on.`, 5000);
+			} else hint(world.island.gravity < 1 ? `${dest.name}: low gravity. Jump and see.` : `Landed on ${dest.name}.`, 5000);
+			if (approach) veil.settle();
+			return true;
+		} catch (err) { if (approach) veil.down(); throw err; }
 	}
 	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
