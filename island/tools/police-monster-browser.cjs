@@ -4,6 +4,8 @@
 // turns it, the officers go for the beast (combat/ai-squads.js chooseTarget) and it is hit by
 // them. Fails on any page error, crash or second page load.
 //   PROFILE=desktop|iphone|pixel OUT=dir node tools/police-monster-browser.cjs
+// (LOAD_ONLY=1: the world reached and the scene set, nothing more: a headless desktop frame takes
+// half a minute, so the fight itself is for the phone profiles)
 const fs = require('node:fs'), http = require('node:http'), path = require('node:path');
 const { chromium, devices } = require(process.env.PLAYWRIGHT_MODULE || '/opt/node22/lib/node_modules/playwright');
 const root = process.env.ROOT || path.resolve(__dirname, '../..'), out = process.env.OUT || '/tmp/combat-game', profile = process.env.PROFILE || 'desktop';
@@ -58,11 +60,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	const look = () => page.evaluate(() => {
 		const all = [...Crysis.combat.layer.map.values()];
 		const M = all.find((T) => T.faction === 'nightborn' && T.ref?.cr), cops = all.filter((T) => T.faction === 'police' && T.ref);
-		return { beast: M && { id: M.id, turn: +M.ref.turn.toFixed(2), human: !!M.ref.beast, hp: Math.round(M.ref.H.hp), dead: !!M.ref.dead }, cops: cops.map((T) => ({ id: T.id, alert: T.ref.alert, target: T.ref.target?.id || null, los: !!T.ref.los, d: +Math.hypot(T.ref.pos.x - (M?.ref.pos.x ?? 0), T.ref.pos.z - (M?.ref.pos.z ?? 0)).toFixed(1), dead: !!T.ref.dead })) };
+		return { beast: M && { id: M.id, turn: +M.ref.turn.toFixed(2), human: M.ref.turn < 0, turning: !!M.ref.beast, hp: Math.round(M.ref.H.hp), dead: !!M.ref.dead }, cops: cops.map((T) => ({ id: T.id, alert: T.ref.alert, target: T.ref.target?.id || null, los: !!T.ref.los, d: +Math.hypot(T.ref.pos.x - (M?.ref.pos.x ?? 0), T.ref.pos.z - (M?.ref.pos.z ?? 0)).toFixed(1), dead: !!T.ref.dead })) };
 	});
 	const frames = (n) => page.evaluate((n) => new Promise((r) => { let i = 0; const f = () => (++i >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 	// a villager, to look at: the officers leave them be
-	await frames(8);
+	await frames(3);
 	R.before = await look();
 	console.log('before', JSON.stringify(R.before));
 	// a round turns them (combat/ai-squads.js hit: a hurt Moonturned changes), and then the law goes for the beast
@@ -72,19 +74,20 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	console.log('shot', JSON.stringify(R.shot));
 	R.turned = null; R.engaged = null; R.timeline = [];
 	const tW = Date.now();
-	while (Date.now() - tW < 900000) {
+	while (!process.env.LOAD_ONLY && Date.now() - tW < 900000) {
 		await frames(3);
 		const q = await look();
 		R.timeline.push({ t: Math.round((Date.now() - tW) / 1000), turn: q.beast?.turn, hp: q.beast?.hp, targets: q.cops.map((c) => c.target), alert: q.cops.map((c) => c.alert) });
-		if (!R.turned && q.beast && !q.beast.human) { R.turned = q; console.log('turned', JSON.stringify(q)); }
+		if (!R.turned && q.beast && !q.beast.turning) { R.turned = q; console.log('turned', JSON.stringify(q)); }
 		if (R.turned && q.cops.some((c) => c.target === q.beast.id) && q.beast.hp < R.turned.beast.hp) { R.engaged = q; console.log('engaged', JSON.stringify(q)); break; }
 		if (q.beast?.dead || q.cops.every((c) => c.dead)) break;
 	}
 	clearInterval(keep);
 	await shot('police-monster');
 	R.loads = loads; R.notes = notes.slice(0, 8);
-	if (R.before.cops.some((c) => c.target === R.before.beast?.id)) problems.push('the officers went for a villager who had not turned');
-	if (!R.turned) problems.push('the Moonturned never turned');
+	if (R.before.beast?.human && R.before.cops.some((c) => c.target === R.before.beast?.id)) problems.push('the officers went for a villager who had not turned');
+	if (process.env.LOAD_ONLY) { /* (the world reached, the scene set: enough) */ }
+	else if (!R.turned) problems.push('the Moonturned never turned');
 	else if (!R.engaged) problems.push('the officers never shot the beast: ' + JSON.stringify(R.timeline.slice(-4)));
 	console.log('RESULT', JSON.stringify({ ...R, timeline: R.timeline.length }, null, 1));
 	await browser.close(); server.close();
