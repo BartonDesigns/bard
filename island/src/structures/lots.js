@@ -3,7 +3,7 @@
 // through the grid, or into a landmark, gives way (structures/overlap.js). The surveyed
 // buildings are settled when their region loads and never move here.
 
-import { resolveLots, routeRoads, countOverlaps, isBuilding, stats } from './overlap.js';
+import { resolveLotsSteps, routeRoads, countOverlaps, isBuilding, stats } from './overlap.js';
 import { planAlleys } from './alleys.js';
 import { ROUTES, TRAIL } from '../bay/roads.js';
 import { toWorld } from '../bay/geo.js';
@@ -23,11 +23,23 @@ const last = { list: null, x: 0, z: 0, res: null, n: 0, count: false, seen: null
 // (the first rebuild, and the next after countNext(), count before and after: a check, not for every rebuild)
 export const countNext = () => { last.count = true; };
 export function settleLots(list, x, z) {
+	const g = settleLotsSteps(list, x, z);
+	let r = g.next();
+	while (!r.done) r = g.next();
+	return r.value;
+}
+// the same in steps, as city.js lays its set out a frame's share at a time: settling the lots
+// in one go cost a landing's frame 80 ms on a computer (far more on a phone), the longest step
+// of the set
+export function* settleLotsSteps(list, x, z) {
 	for (const o of list) if (o.src) o.mapped = true;
-	const count = last.count || last.n++ === 0;
+	// (the first set's before-and-after count is a check for the console, two passes over every
+	// lot: a phone, which has no console open, skips it unless countNext() asks)
+	const first = last.n++ === 0, count = last.count || (first && !PHONE);
 	last.count = false;
-	const res = resolveLots(list, { roads: roadsOfGrid(), landmark: onLandmark, near: [x, z], R: REACH, count });
+	const res = yield* resolveLotsSteps(list, { roads: roadsOfGrid(), landmark: onLandmark, near: [x, z], R: REACH, count });
 	if (count) last.seen = { before: res.before, after: res.after, at: [Math.round(x), Math.round(z)] };
+	yield;
 	// the alleys behind the grid's shops and towers: each block's middle is its paved yard
 	// (city.js paves the downtown and main-street blocks), the backs face it
 	const yards = list.filter((o) => Math.floor(o.kind) === 4 && o.w * o.d > 1500 && o.h < 1.5);

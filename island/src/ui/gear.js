@@ -613,6 +613,8 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		actions: (r) => [['Trade', () => ask(r.id)]],
 		info: () => { const T = active(); return { open: shown(), view, item: itemUid, held: arms.held(), viewmodel: vm.info(), window: win.shown(), trade: T && { id: T.id, role: T.role, status: T.status, why: T.why, sides: T.sides, v: T.v, ok: T.ok, peer: T.peer, hold: holdLeft(T, Date.now()) }, kept: [...trades.values()].map((x) => ({ id: x.id, status: x.status })) }; },
 		trade: ask, sheet, window: win.el, studio,
+		// the graphics restored after a loss: the held item's reflections made again (main.js)
+		relight: () => vm.relight?.(),
 		// the held item in use, for the combat systems (crysis/viewmodel.js documents it)
 		weapon: {
 			fire: () => (thirdNow() ? hand.fire(3) : vm.fire()),

@@ -636,5 +636,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const aimOverride = (on) => { if (!!on !== S.aimTap && weaponOf(S.id)) playCue(weaponOf(S.id).sounds.aim); S.aimTap = !!on; };
 	// (for tuning tools: solve the fingers again after a grip changes)
 	const refingers = () => { solved.clear(); posesFor = null; };
-	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, get armsSkin() { return arms?.skin || null; }, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
+	// the graphics lost and restored: the item's reflection map, drawn into a target, came back
+	// empty (black metal): made again on the next frame drawn (main.js)
+	const relight = () => { env = null; envTried = false; };
+	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, relight, get armsSkin() { return arms?.skin || null; }, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
 }

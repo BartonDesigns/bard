@@ -212,7 +212,7 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 		return { open, close, isOpen: () => isOpen, paint, rise, hub, dispose };
 	}
 	const lvl = mk('div', 'mg-lvl', mount);
-	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · double-tap Alt / ⌥ to aim');
+	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · click the world or tap Alt / ⌥ to aim again');
 	let lastSig = '', wT = 0;
 	// (only what changed is written, through put above: the bar is looked at every frame)
 	function update(now) {

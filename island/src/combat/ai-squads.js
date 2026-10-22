@@ -244,9 +244,9 @@ export function createSquads(ctx) {
 				}
 				h.cr = c; h.beast = beast; h.turn = beast ? -1 : 1;
 				// no two alike: each its own size, build and colour (creatures/models.js); a person's
-				// skin barely turns
-				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1 });
-				if (beast) { beast.size = beast.vary(); beast.root.visible = false; }
+				// skin barely turns (opts.look: the Moon's bleached hounds, creatures/catalog.js moon)
+				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1, ...(opts.look || {}) });
+				if (beast) { beast.size = beast.vary(Math.random, opts.look || {}); beast.root.visible = false; }
 				// one that waits, still among the trees, for you to come too close (the Burnt Giant)
 				h.dormant = Sp.lurk && !opts.alert ? 1 : 0; h.waking = -1;
 				if (h.dormant) h.yaw = Math.random() * 6.283;
@@ -427,7 +427,7 @@ export function createSquads(ctx) {
 		if (h.recall) return null;
 		if (h.ally) return allyTarget(h, eye);
 		const F = h.F;
-		let best = null, bd = h.B.sight * (h.alert ? 1.8 : 1);
+		let best = null, bd = h.B.sight * (h.alert ? (h.Sp?.hunt ?? 1.8) : 1);
 		const dMe = Math.hypot(eye.x - h.pos.x, eye.z - h.pos.z);
 		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && F.kind !== 'military' && ctx.wanted() > 0) || (F.kind === 'military' && (ctx.wanted() >= 5 || !!ctx.trespass?.(h))) || (F.kind === 'mercs' && ctx.bounty() > 0);
 		if (hateMe && !ctx.playerDown() && !ctx.cloaked?.() && dMe < bd) { best = ME; bd = dMe; }
@@ -999,8 +999,16 @@ export function createSquads(ctx) {
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
 			} else if (S.throw && dd < S.throw.keep && dd > S.reach) speed = -S.walk;
 			else if (S.throw && dd < S.throw.range * 0.8 && dd > S.reach) speed = 0;
-			else if (dd > S.reach * 0.75) speed = dd > 7 ? S.run : Math.max(S.walk, S.run * 0.5);
+			// (fresh woken from standing as a tree, it only walks after you for a while)
+			else if (dd > S.reach * 0.75) speed = h.stalkT > 0 ? S.walk : dd > 7 ? S.run : Math.max(S.walk, S.run * 0.5);
+			if (h.stalkT > 0) h.stalkT -= dt;
 		} else {
+			// lost you: it forgets you by degrees, and one that stood as a tree (the Burnt Giant)
+			// goes back to standing as one, wherever it is, until something disturbs it again
+			if (h.alert && !at) {
+				h.alert = Math.max(0, h.alert - dt / (S.lurk?.settle || 20));
+				if (h.alert <= 0 && S.lurk) { h.dormant = 1; h.waking = -1; h.spotted = false; h.target = null; c.motion.update(dt, { speed: 0, dormant: 1 }); return; }
+			}
 			// wandering: a slow walk this way and that, with pauses
 			h.goalT -= dt;
 			if (h.goalT <= 0) { h.goalT = rnd(3, 7); h.wander = Math.random() < 0.35 ? 0 : 1; h.face = h.yaw + rnd(-1.4, 1.4); }
@@ -1070,7 +1078,7 @@ export function createSquads(ctx) {
 			}
 			h.dormant = 1 - Math.min(1, h.waking);
 			if (h.waking >= 1) {
-				h.dormant = 0; h.spotted = true;
+				h.dormant = 0; h.spotted = true; h.stalkT = L.stalk || 0;
 				alertSquad(h, ctx.eye());
 			}
 		}

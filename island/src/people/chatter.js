@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { remarkFor, exchangeFor } from './chatter-lines.js';
 import { awarenessContext } from './world-awareness.js';
-import { tierNow } from '../world/governor.js';
+import { tierNow, memoryNow, RULES } from '../world/governor.js';
 
 const NOTICE = 11, SAY = 4.6, EARSHOT = 14;
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _h = new THREE.Vector3();
@@ -177,7 +177,7 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		// a phone loads the local voices only after the world has been calm a few minutes: not
 		// loading, not flying or racing about, keeping up with its frames, and not stepped down to the
 		// lighter graphics by the governor (world/governor.js: it is short of time or memory already)
-		if (isPhone) voice.tick?.(dt, { settled: on, flying: !!world()?.player?.state?.flying, fast: speed > 9, dense: frameMs() > 28 || tierNow() >= 2 });
+		if (isPhone) voice.tick?.(dt, { settled: on, flying: !!world()?.player?.state?.flying, fast: speed > 9, dense: frameMs() > 28 || tierNow() >= 2 || (memoryNow() ?? 0) > RULES.memOk });
 		checkT -= dt;
 		if (!on || pending || checkT > 0) return;
 		checkT = isPhone ? 0.3 : 0.2;

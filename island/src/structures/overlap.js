@@ -225,8 +225,8 @@ export function resolve(boxes, opts = {}) {
 	while (!r.done) r = g.next();
 	return r.value;
 }
-// the same, a generator that yields every few thousand buildings (so a big region can be
-// settled across frames while it loads)
+// the same, a generator that yields every few hundred buildings (so a big region can be
+// settled across frames while it loads, and the city's set round you a few milliseconds a frame)
 export function* resolveSteps(boxes, opts = {}) {
 	const { roads = [], landmark = null, same = sameGroup, solid = () => true, keep = () => false, margin = 0.3, pen: minPen = TOL } = opts;
 	const t0 = Date.now();
@@ -252,7 +252,7 @@ export function* resolveSteps(boxes, opts = {}) {
 	const rn = roadIndex(roads);
 	let step = 0;
 	for (const b of list) {
-		if (++step % 4000 === 0) yield;
+		if (++step % 512 === 0) yield;
 		if (b.gone || keep(b)) continue;
 		for (let pass = 0; pass < 3; pass++) {
 			const bad = segsHit(b, rn(b), margin * 0.5);
@@ -273,7 +273,7 @@ export function* resolveSteps(boxes, opts = {}) {
 	const near = grid(order);
 	yield;
 	for (let a = 0; a < order.length; a++) {
-		if (a % 4000 === 3999) yield;
+		if (a % 512 === 511) yield;
 		const A = order[a];
 		if (A.gone) continue;
 		near(a, (k) => {
@@ -337,12 +337,19 @@ export function routeRoads(routes, toWorld, covered = () => false, width = 34, c
 // settled when their region loaded), to each other, to the freeways and the trail through the
 // grid, and to the landmarks. Lots dropped are taken out of the list (lawns, fences and the
 // rest of the yard stay: an empty lot). Returns what resolve() returns.
-export function resolveLots(list, { roads = [], landmark = null, near = null, R = 1e9, count = true } = {}) {
+export function resolveLots(list, opts = {}) {
+	const g = resolveLotsSteps(list, opts);
+	let r = g.next();
+	while (!r.done) r = g.next();
+	return r.value;
+}
+// the same in steps (bay/city.js lays its set out a frame's share at a time)
+export function* resolveLotsSteps(list, { roads = [], landmark = null, near = null, R = 1e9, count = true } = {}) {
 	const solid = (o) => isBuilding(o) && (!near || (Math.abs(o.x - near[0]) < R && Math.abs(o.z - near[1]) < R));
 	// (the surveyed were settled among themselves as their region loaded; the grid's lots carry no
 	// group; a crown standing taller inside its tower's box is part of it)
 	const same = (a, b) => !!(a.src && b.src);
-	const res = resolve(list, { roads, landmark, solid, same, keep: (o) => !!o.src, margin: 1, pen: 0.6, count });
+	const res = yield* resolveSteps(list, { roads, landmark, solid, same, keep: (o) => !!o.src, margin: 1, pen: 0.6, count });
 	let n = 0;
 	for (const o of list) if (!o.gone) list[n++] = o;
 	list.length = n;

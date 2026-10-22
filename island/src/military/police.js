@@ -133,7 +133,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		const made = [];
 		for (const q of cars) {
 			const c = { id: 'pc' + seq++, why: 'block', kind: 'sedan', S: SED, fid: 'police', col: NAVY, to: { x: spot.x, z: spot.z }, route: null, s: 0, pos: new THREE.Vector3(q.x, ground(q.x, q.z), q.z), yaw: q.yaw, state: 'blocking', officers: 0, alert, t: 0, siren: null, spin: 0, road: { tx: spot.tx, tz: spot.tz } };
-			c.car = { kind: 'sedan', x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: NAVY.toArray() };
+			c.car = { kind: 'sedan', x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: NAVY.toArray(), police: true };
 			STATIC_CARS.add(c.car);
 			cruisers.push(c); made.push(c);
 		}
@@ -175,7 +175,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		c.squad = combat.squads.squad(c.fid, sx, sz, n, { post, alert: c.alert, tag: c.id, y: c.pos.y + 0.6, spread: 2 });
 		c.squad.then((s) => { c.members = s?.members || []; });
 		// a parked cruiser is a car like the others: solid, and yours to take
-		c.car = { kind: c.kind, x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: c.col.toArray() };
+		c.car = { kind: c.kind, x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: c.col.toArray(), police: c.kind === 'sedan' };
 		STATIC_CARS.add(c.car);
 		if (c.why === 'brawl') combat.melee?.calm?.(c.to.x, c.to.z, 40);
 	}
@@ -201,6 +201,18 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 			c.route = roadRoute(null, { x: c.pos.x + tx * dir * 600, z: c.pos.z + tz * dir * 600 }, { x: c.pos.x, z: c.pos.z });
 			c.s = c.route.length;
 		}
+	}
+	// a cruiser taken by you (drive.js: E or V at its door while its officers are out of it): the
+	// car is yours; the officers are left at the scene, cross about it, and go off once you are
+	// out of sight; a wanted level comes as it does for any crime they see
+	function take(car) {
+		const c = cruisers.find((k) => k.car && (k.car === car || k.car.id === car?.id));
+		if (!c) return false;
+		STATIC_CARS.delete(c.car); c.car = null;
+		c.taken = true; c.state = 'leaving'; c.t = 0; c.route = null; c.s = 0;
+		c.siren?.stop(); c.siren = null;
+		for (const h of c.members || []) if (!h.dead) { h.provoked = true; h.alert = 1; h.recall = false; }
+		return true;
 	}
 	function drop(c) {
 		c.siren?.stop(); c.siren = null;
@@ -254,6 +266,10 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 				// in when they are all at the door, or after a while out of your sight
 				const all = (c.members || []).filter((h) => !h.dead).every((h) => Math.hypot(h.pos.x - c.pos.x, h.pos.z - c.pos.z) < 3.4);
 				if ((all && c.t > 1.5) || c.t > 25 || (c.t > 6 && !visible(c.pos.x, c.pos.z))) depart(c);
+			} else if (c.taken) {
+				// (its officers on foot: gone once you are well away or looking elsewhere for a while)
+				if (dEye > 420 || (c.t > 20 && !visible(c.pos.x, c.pos.z, 260)) || c.t > 240) { for (const h of [...(c.members || [])]) if (!h.dead) combat.squads.release(h); c.members = []; drop(c); }
+				continue;
 			} else {
 				const v = offscreenPace(dEye, 14);
 				// (driving off: the same, held at a wall in sight until you look away)
@@ -288,6 +304,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		const on = Math.floor(flash * 6) % 2;
 		red.color.setRGB(on ? 1.6 : 0.15, 0.02, 0.02); blue.color.setRGB(0.05, 0.15, on ? 0.2 : 1.8);
 		for (const c of cruisers) {
+			if (c.taken) continue;
 			const S = c.S;
 			_m.compose(_p.copy(c.pos), _q.setFromAxisAngle(_y, c.yaw), _s);
 			fleet.add(c.kind, _m, c.col, e ? c.pos.distanceToSquared(e) : 0, { spin: c.spin, steer: 0, riders: c.state === 'arrived' || c.state === 'blocking' || c.state === 'boarding' ? 0 : 2, livery: c.kind === 'sedan' ? 'police' : c.kind === 'van' ? (c.fid === 'swat' ? 'swat' : 'van') : null, seed: c.id });
@@ -298,6 +315,16 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 			n++;
 		}
 		fleet.end();
+		// (the cruiser you took, driven or left somewhere: still a cruiser to look at)
+		const mine = w.vehicles?.mine?.car;
+		if (mine?.police && mine.kind === 'sedan' && n < barBase.instanceMatrix.count && nd < doors.instanceMatrix.count) {
+			_m.copy(mine.matrix);
+			barBase.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(0, SED.H + 0.04, -0.15)));
+			lampR.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(0.32, SED.H + 0.13, -0.15)));
+			lampB.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(-0.32, SED.H + 0.13, -0.15)));
+			doors.setMatrixAt(nd++, _o.multiplyMatrices(_m, _t.makeTranslation(0, 0.78, -0.18)));
+			n++;
+		}
 		for (const im of [barBase, lampR, lampB]) { im.count = n; im.instanceMatrix.needsUpdate = true; }
 		doors.count = nd; doors.instanceMatrix.needsUpdate = true;
 	}
@@ -313,5 +340,5 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		return best;
 	}
 	const info = () => cruisers.map((c) => ({ id: c.id, why: c.why, kind: c.kind, state: c.state, km: eye() ? +(c.pos.distanceTo(eye()) / 1000).toFixed(2) : null, siren: !!c.siren, from: c.station }));
-	return { respond, need, event, block, clearBlocks, standDown, update, clear, info, cover, cruisers, law, visible, setStations(fn) { stationAt = typeof fn === 'function' ? fn : null; return !!stationAt; }, stationsPush: () => [] };
+	return { respond, need, event, block, clearBlocks, standDown, update, clear, info, cover, cruisers, law, visible, take, setStations(fn) { stationAt = typeof fn === 'function' ? fn : null; return !!stationAt; }, stationsPush: () => [] };
 }

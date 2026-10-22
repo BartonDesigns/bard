@@ -9,6 +9,7 @@
 // painted by one shader (garment.js): a cloth mesh, an accessories mesh, skin, eyes, hair.
 
 import * as THREE from 'three';
+import { shedImage } from '../world/cpucopy.js';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
 import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
@@ -76,7 +77,10 @@ export function loadPeopleAssets() {
 		};
 		for (const [n, s] of Object.entries(D.targets)) A.targets[n] = decode(s, Int16Array);
 		const loader = new THREE.TextureLoader();
-		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; if (PHONE) t.image = halve(t.image); ok(t); }, undefined, no));
+		// (a skin is only ever drawn by the graphics card, tattoos and all (tattoo/skinink.js is in the
+		// shader): a phone lets the page's copy go once the card has it, world/cpucopy.js)
+		const picture = (f) => new Promise((ok, no) => loader.load(TEX(f), (t) => ok(PHONE ? halve(t.image) : t.image), undefined, no));
+		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; if (PHONE) t.image = halve(t.image); ok(shedImage(t, () => picture(f), { on: PHONE })); }, undefined, no));
 		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
 		A.faces = await faces;

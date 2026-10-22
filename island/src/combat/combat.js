@@ -221,7 +221,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
 	// weapons deal, for your skills; honorRank() your honor's rank and pvpWin({ from, r, name })
 	// a friend beaten in a PvP fight, for your honor: combat/honor.js)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null, honorRank: null, pvpWin: null, guild: null, quarry: null };
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, spellAim: null, remoteSpell: null, honorRank: null, pvpWin: null, guild: null, quarry: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -685,6 +685,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	function zone() {
 		const w = W(), e = eye();
 		if (w?.deep?.active?.()) return 'deep';
+		// (the Moon, and any airless world: its own creatures, none of the Earth's or the wilds')
+		if (shared.planet?.airless) return 'moon';
 		if (isEarth()) {
 			if (boxesNear(e.x, e.z, 70).length > 6) return 'earth-urban';
 			return w.island.heightAt(e.x, e.z) < 6 ? 'earth-coast' : 'earth-rural';
@@ -1020,6 +1022,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hud.update(dt, {
 			show: true, ko: me.ko > 0, koText: me.ko > 0 ? `Coming to in ${Math.ceil(me.ko)}…` : '',
 			aiming: !!view.state()?.aiming,
+			// (bare-handed with a spell to hand: the crosshair stays up to aim it by, brighter while a cast plays)
+			spellAim: wpn ? 0 : hooks.spellAim?.() || 0,
 			spread: wpn ? Math.tan(spreadNow(wpn, view.state()?.aiming ? 1 : 0, Math.min(1, me.speed / 5))) * fovPx : 6,
 			health: me.H,
 			weapon: wpn && { name: wpn.S.name, mag: wpn.mag, max: wpn.S.mag, reserve: reserve(wpn), mode: modeOf(wpn), modes: wpn.S.modes.length, reloading: wpn.reloading > 0, bow: isBow(wpn), draw: wpn.draw, drawing: wpn.drawing },

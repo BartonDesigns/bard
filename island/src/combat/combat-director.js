@@ -105,7 +105,8 @@ export function combatCreatures(cb, dt) {
 	const s = S.lurk ? spotForest(40, 110) || spotHidden(45, 80) : spotHidden(z === 'deep' ? 25 : 45, z === 'deep' ? 40 : 80);
 	if (!s) return;
 	const [a, b] = S.where.pack, n = Math.min(isPhone ? 2 : 4, a + Math.floor(Math.random() * (b - a + 1)));
-	squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2.5 });
+	// (on the Moon, in its moon look where it has one: the hounds there are white)
+	squads.squad(S.faction, s.x, s.z, n, { species: id, spread: 2.5, look: z === 'moon' ? S.moon || null : null });
 	if (!cb.creatureSeen && S.where.night) { cb.creatureSeen = true; hint('Something is moving out there in the dark.', 3200, 1); }
 }
 

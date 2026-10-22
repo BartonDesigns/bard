@@ -40,11 +40,13 @@ import { createDogWalkers } from './people/dogwalkers.js';
 import { createShaderWarm } from './world/shaderwarm.js';
 import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
+import { resetKitEnvironment } from './people/kit-light.js';
 import { createGovernor, qualityNow } from './world/governor.js';
 import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
+import { refillShed } from './world/cpucopy.js';
 import { bodyCount } from './people/body.js';
 import { createCataclysm } from './cataclysm/index.js';
 import { createMagic } from './magic/index.js';
@@ -312,6 +314,8 @@ function buildDom(canvas = document.createElement('canvas')) {
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));');
 	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
 	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9×, and in space up to 100,000× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
+	// (its words are the point: the touch skin keeps them, no glyph; ui/touch-skin.js)
+	boost.setAttribute('data-words', '');
 	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
 	const shell = button('🐚', 'Pick up the shell (E)', 'display:none;', 'prompt 30');
 	const toss = button('Throw', 'Throw it (T)', 'display:none;');
@@ -345,16 +349,17 @@ function buildDom(canvas = document.createElement('canvas')) {
 	};
 	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
 	const dock = (el) => {
-		// (a phone keeps only Fly and Places beside More: gear, the cloud save and the auto music
-		// wait in the More menu with the rest)
+		// (a phone keeps only Fly, its Speed while flying, and Places beside More: gear, the cloud
+		// save and the auto music wait in the More menu with the rest. Speed sat in the More menu
+		// too, where no one found it in the air: Josh 2026-10-22, "next to the button when flying")
 		if (mount.classList.contains('l99-touch') && !el.dataset?.hud && /^Auto music/.test(el.getAttribute?.('aria-label') || '')) el.dataset.hud = 'rail 66';
 		const [g, n] = (el.dataset?.hud || '').split(' ');
-		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && n === '60'));
+		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && (n === '20' || n === '21')) || (g === 'rail' && n === '60'));
 		const to = fast ? quick : groups[g] && home(g);
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
-		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : 'Places';
+		if (to === quick) el.dataset.controlLabel = g === 'mode' ? (n === '21' ? 'Speed' : 'Fly') : 'Places';
 		else if (to === rail) {
 			// (one word each in the More menu)
 			const title = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
@@ -523,6 +528,9 @@ export function createIslandWorld() {
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
 		lost = true;
+		// the pictures a phone let go of once the card held them, asked back for the restored
+		// context to upload again (world/cpucopy.js)
+		refillShed();
 		const blocked = recovery.lost();
 		if (blocked || /signage-|uSgFar/.test(linking.what)) recoverSignage(storage);
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
@@ -547,6 +555,13 @@ export function createIslandWorld() {
 		if (!recovery.restored()) return; // The recovery screen owns the next user action.
 		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
 		applyQuality();
+		// What was drawn once into a target of its own is gone with the old graphics, and three
+		// cannot draw it again by itself: the road maps round you (bay/realcity.js), the sky the
+		// kit and the held item reflect (people/kit-light.js, crysis/viewmodel.js). Each is made
+		// again on its next use. (Ryan 2026-10-22: after the restore the buildings stood black.)
+		world?.real?.R?.repaint?.();
+		resetKitEnvironment();
+		HOOKS.gear?.relight?.();
 		// (the frame clock starts again from now, not from before the loss)
 		last = performance.now(); frameAvg = 16;
 		hint('Graphics restored, at lighter settings.', 3000, 3);
@@ -727,7 +742,17 @@ export function createIslandWorld() {
 		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
 		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
 	});
-	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && carjack.candidate()) { carjack.begin(); e.preventDefault(); } });
+	addEventListener('keydown', (e) => {
+		if ((e.key !== 'e' && e.key !== 'E') || e.repeat || e.metaKey || e.ctrlKey || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+		if (carjack.candidate()) { carjack.begin(); e.preventDefault(); return; }
+		if (window._KEYS_PLAY_ON) return;
+		// (a car with nobody at the wheel, a police cruiser whose officers are out of it: E gets
+		// you in, as V does; a door within reach has E first)
+		const P = world?.player?.state;
+		if (!P || P.flying || P.locked || drive.active() || !world.vehicles || (world.houses?.doorNear?.(camera) || world.interiors?.doorNear?.(camera))) return;
+		const car = world.vehicles.carToEnter(P.pos.x, P.pos.z);
+		if (car && car.id !== 'mine' && !car.id?.startsWith?.('tr')) { drive.start(); e.preventDefault(); }
+	});
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
@@ -797,31 +822,43 @@ export function createIslandWorld() {
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and
 	// it only lifts once the new place is built and the frames are running smoothly again
 	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;text-align:center;padding:24px;');
+	travelVeil.dataset.travelVeil = '';
 	dom.mount.appendChild(travelVeil);
-	let travelling = false, nextTrip = null;
+	let travelling = false, nextTrip = null, settling = 0;
+	const veil = {
+		up(label) { settling++; travelVeil.textContent = label || ''; travelVeil.style.opacity = '1'; },
+		down() { settling++; travelVeil.style.opacity = '0'; },
+		// lifted after a dozen smooth frames in a row (or eight seconds, whatever happens); done
+		// runs first, and keeps the veil up by returning true. The city's set round the new place
+		// still being laid out in slices holds the veil too (bay/city.js busy()), so its buildings
+		// are never seen to come in piecewise, up to thirty seconds
+		settle(done) {
+			const token = ++settling, t0 = performance.now();
+			let last = t0, calm = 0;
+			const watch = (now) => {
+				if (token !== settling) return;
+				calm = now - last < 70 ? calm + 1 : 0;
+				last = now;
+				const building = !!world?.city?.busy?.();
+				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) { if (!done?.()) travelVeil.style.opacity = '0'; return; }
+				requestAnimationFrame(watch);
+			};
+			requestAnimationFrame(watch);
+		},
+	};
 	function travel(label, move) {
 		// (a trip asked for while the last one's veil is still up goes once it lifts, not never)
 		if (travelling) { nextTrip = [label, move]; return; }
 		travelling = true;
-		travelVeil.textContent = label || '';
-		travelVeil.style.opacity = '1';
+		veil.up(label);
 		setTimeout(() => {
 			try { move(); } catch (err) { console.error('[travel]', err); }
-			const t0 = performance.now();
-			let last = t0, calm = 0;
-			const watch = (now) => {
-				calm = now - last < 70 ? calm + 1 : 0;
-				last = now;
-				// a dozen smooth frames in a row (or eight seconds, whatever happens)
-				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) {
-					travelling = false;
-					if (nextTrip) { const [l, m] = nextTrip; nextTrip = null; travel(l, m); return; }
-					travelVeil.style.opacity = '0';
-					return;
-				}
-				requestAnimationFrame(watch);
-			};
-			requestAnimationFrame(watch);
+			veil.settle(() => {
+				travelling = false;
+				if (!nextTrip) return false;
+				const [l, m] = nextTrip; nextTrip = null; travel(l, m);
+				return true;
+			});
 		}, 240);
 	}
 	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
@@ -1493,26 +1530,52 @@ export function createIslandWorld() {
 
 	// A warp or a touchdown to another world: the same world build a flight landing uses.
 	// With dest.orbit the ship drops out that high above the new world's island.
+	// An approach (dest.approach: flown at the Moon from Earth, or at Earth from the Moon) has no
+	// warp tunnel to hide the build, so it goes behind the travel veil, lifted once the frames run
+	// smoothly again. Earth is then reached in orbit over where you left and the ship comes down
+	// from there, the ground streaming in as it nears, as on any return from orbit: standing you
+	// on the ground the moment the world was built loaded all of it in the first frames, and a
+	// phone gave up at touchdown.
+	const ARRIVE = 160000;
 	async function voyage(dest) {
 		const params = dest.earth ? { seed: 1337, earth: true } : { seed: dest.seed, biome: dest.type, earth: false, origin: { seed: dest.seed, type: dest.type, id: `warp-${dest.type.toLowerCase()}`, earth: false } };
-		await api.open(params);
-		const P = world?.player.state;
-		if (!P || !visible || !sameBody(state.body, worldBody(params))) return false;
-		if (dest.colony && world.colony?.port) { world.colony.go(); return true; }
-		if (dest.beyond) { if (!world.beyond) return false; world.beyond.enter(true); return true; }
-		if (dest.orbit) {
-			P.flying = true; P.vel.set(0, 0, 0); P.pos.y = dest.orbit; P.pitch = -1.1; P.boost = 1;
-			camera.position.copy(P.pos);
-			hint(`${dest.name} below. Descend (C) to land, or warp on.`, 5000);
-		} else hint(world.island.gravity < 1 ? `${dest.name}: low gravity. Jump and see.` : `Landed on ${dest.name}.`, 5000);
-		return true;
+		const approach = !!dest.approach;
+		// leaving Earth: where you left the ground is where an approach brings you back
+		if (state.earth && !dest.earth && world?.orbit) { const a = world.orbit.info().anchor; launchedAt = a && Number.isFinite(a.lat) ? { lat: a.lat, lon: a.lon } : null; }
+		if (approach) { veil.up(dest.name); await new Promise((r) => setTimeout(r, 260)); }
+		try {
+			await api.open(params);
+			const P = world?.player.state;
+			if (!P || !visible || !sameBody(state.body, worldBody(params))) { if (approach) veil.down(); return false; }
+			if (dest.colony && world.colony?.port) { world.colony.go(); if (approach) veil.settle(); return true; }
+			if (dest.beyond) { if (!world.beyond) { if (approach) veil.down(); return false; } world.beyond.enter(true); if (approach) veil.settle(); return true; }
+			const orbit = dest.orbit || (approach && dest.earth ? ARRIVE : 0);
+			if (orbit) {
+				if (approach && dest.earth && launchedAt && world.globe) {
+					// over where you left: its ground is laid while the veil is still up
+					const W = world, at = launchedAt, p = W.globe.place(at.lat, at.lon);
+					await Promise.race([p.ready, new Promise((r) => setTimeout(r, 20000))]).catch(() => {});
+					if (world !== W || !visible) { veil.down(); return false; }
+					if (Number.isFinite(p.x) && Number.isFinite(p.z)) P.pos.set(p.x, P.pos.y, p.z);
+				}
+				launchedAt = null;
+				P.flying = true; P.vel.set(0, 0, 0); P.pos.y = orbit; P.pitch = -1.1; P.boost = 1;
+				camera.position.copy(P.pos);
+				if (approach) world.orbit?.arrive?.();
+				else hint(`${dest.name} below. Descend (C) to land, or warp on.`, 5000);
+			} else hint(world.island.gravity < 1 ? `${dest.name}: low gravity. Jump and see.` : `Landed on ${dest.name}.`, 5000);
+			if (approach) veil.settle();
+			return true;
+		} catch (err) { if (approach) veil.down(); throw err; }
 	}
 	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
+		// a load that never finished is tried again (the loading screen's Try again): a tier lighter for this visit
+		retryLighter: () => governor.retry(),
 		open(params = {}) {
 			const enter = () => api.enter(params);
-			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close() }) : enter();
+			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close(), retry: () => governor.retry() }) : enter();
 		},
 		async enter(params = {}) {
 			if (recovery.blocked()) throw graphicsReloadError();
@@ -1553,11 +1616,11 @@ export function createIslandWorld() {
 		autoWalk: () => visible && running && !!drive.auto?.(),
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
-		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close() }),
+		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close(), retry: () => governor.retry() }),
 		// ?room=CODE: join a friend's room and go to them (net/multiplayer.js)
 		joinRoom: (code) => multiplayer.join(code),
 		// back to the last place you were (after a crash or a reload); false if there is none
-		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close() }) : false; },
+		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close(), retry: () => governor.retry() }) : false; },
 		// flight's landing builds the world here first, out of sight, so Journey's own clock
 		// only covers the hand-over (a slow phone building the Bay Area outran it, and the
 		// failed passage left you on the old flight surface)
@@ -1864,7 +1927,8 @@ if (typeof window !== 'undefined') {
 		// the floor guard (world/floorguard.js): how many looks, incidents and repairs, the last bad one
 		floorGuard: () => HOOKS.floorGuard?.info() ?? null,
 		// the shader warm and its gate (world/shaderwarm.js): what is held back and built in the background
-		shaders: () => HOOKS.shaderWarm?.info() ?? null,
+		// (with a function: it is told of every draw the gate holds back, (object, material, why, frame))
+		shaders: (trace) => { if (trace) HOOKS.shaderWarm?.trace(trace); return HOOKS.shaderWarm?.info() ?? null; },
 		// the frame's own failures kept on this device (main.js keepFrameError), newest last
 		frameErrors: () => { try { return JSON.parse(localStorage.getItem('l99-frame-errors') || '[]'); } catch { return []; } },
 		groundProbe: (x, z, opts) => { const I = window.L99Island, W = I?.world?.(), p = W?.player?.state?.pos; if (!W) return null; groundProbe.at ||= createGroundProbe(I.renderer()); return groundProbe.at.probe(I.scene(), x ?? p.x, z ?? p.z, opts); },

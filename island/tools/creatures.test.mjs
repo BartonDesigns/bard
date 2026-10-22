@@ -48,6 +48,15 @@ test('the night ones come only after dark; the Deep keeps its own', () => {
 	assert.ok(!speciesFor('deep', 1).includes('fog-wight'));
 });
 
+test('the Moon has its white hounds at any hour, and none of the woods\' or the towns\' creatures', () => {
+	// (Ryan 2026-10-22: the Burnt Giant stood at the moon base; the sky there is black by day)
+	assert.deepEqual(speciesFor('moon', 0), ['ridge-hound']);
+	assert.deepEqual(speciesFor('moon', 1), ['ridge-hound']);
+	const M = SPECIES['ridge-hound'].moon;
+	assert.ok(M && M.sat < 0.5 && M.val > 1.2, 'bleached on the Moon');
+	for (const id of SPECIES_IDS) if (id !== 'ridge-hound') assert.ok(!SPECIES[id].where.zones.includes('moon'), id);
+});
+
 test('a rare one comes rarely', () => {
 	const n = { 'sporeborn-miner': 0, 'old-drain-king': 0 };
 	for (let i = 0; i < 1000; i++) n[pickSpecies(['sporeborn-miner', 'old-drain-king'], (i + 0.5) / 1000)]++;

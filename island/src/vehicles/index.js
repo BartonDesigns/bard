@@ -27,7 +27,7 @@ export function createVehicles({ scene, world, camera, isPhone, people = () => n
 		for (const c of S.cars) if (c.px !== undefined && Math.abs(c.px - x) < r && Math.abs(c.pz - z) < r) out.push({ kind: c.kind, x: c.px, y: c.py ?? 0, z: c.pz, yaw: c.yaw, id: c.id });
 		for (const c of life.moving()) if (Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
 		const m = mine.car;
-		if (m && !mine.driving && Math.abs(m.x - x) < r && Math.abs(m.z - z) < r) out.push({ kind: m.kind, x: m.x, y: m.y, z: m.z, yaw: m.yaw, id: 'mine' });
+		if (m && !mine.driving && Math.abs(m.x - x) < r && Math.abs(m.z - z) < r) out.push({ kind: m.kind, x: m.x, y: m.y, z: m.z, yaw: m.yaw, id: 'mine', police: !!m.police });
 		for (const c of STATIC_CARS) if (Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
 		return out;
 	}
@@ -108,6 +108,8 @@ export function createVehicles({ scene, world, camera, isPhone, people = () => n
 		const e = M.elements;
 		c.x = e[12]; c.y = e[13]; c.z = e[14]; c.yaw = Math.atan2(e[8], e[10]);
 		c.spin = o.spin || 0; c.steer = o.steer || 0;
+		// (a cruiser taken off the police: its light bar and white doors stay on it, military/police.js)
+		if (o.police !== undefined) c.police = !!o.police;
 		mine.driving = !!o.driving;
 	}
 	const info = () => ({ ...life.info(), models: modelsReady(), mine: mine.car ? mine.car.kind + (mine.driving ? ' driving' : ' parked') : null });
