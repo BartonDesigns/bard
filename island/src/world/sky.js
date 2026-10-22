@@ -568,6 +568,23 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 					// rain clouds: slate grey and heavy, darker and lighter masses through the deck
 					float heavy = mix(0.38, 0.14, smoothstep(0.5, 1.1, base - sh * 0.4));
 					shade *= mix(1.0, heavy, clamp(sh * 1.4, 0.0, 1.0)) * (1.0 - uGloom * 0.45);
+					// a solid overcast is a stratocumulus deck, not heaped cumulus: flat blue-grey and low
+					// in contrast, in soft rolls drawn out along the wind, paler where it is thin, and
+					// toward a low sun it pales to cream (Josh's photos over the Bay hills)
+					float deckK = smoothstep(0.6, 0.92, uCloud) * (1.0 - clamp(sh * 1.4, 0.0, 1.0));
+					if (deckK > 0.0){
+						vec2 cpd = d.xz / (d.y + 0.08) * 1.6 + uCloudOff, wdk = normalize(uWindDir + vec2(1e-4));
+						vec2 rq = vec2(dot(cpd, wdk) * 0.14, dot(cpd, vec2(-wdk.y, wdk.x)) * 0.55);
+						float roll = vn(rq + 3.0) * 0.65 + vn(rq * 2.7 + 9.0) * 0.35;
+						// (its lobes: the thick parts of the field hang lower and darker, the thin parts pale)
+						float lobe = smoothstep(cover + 0.05, cover + 0.45, base);
+						float thin = 1.0 - smoothstep(cover, cover + 0.2, base);
+						float sunSide = pow(max(dot(normalize(d.xz + 1e-5), normalize(uSunDir.xz + 1e-5)), 0.0), 2.0) * (1.0 - smoothstep(0.0, 0.45, d.y)) * smoothstep(-0.02, 0.1, uSunDir.y);
+						float mottle = vn(cpd * 2.3 + 17.0);
+						vec3 deck = mix(vec3(0.22, 0.26, 0.33), vec3(0.56, 0.59, 0.63), clamp(roll * 1.3 - lobe * 0.5 + thin * 0.55 + mottle * 0.2 - 0.15, 0.0, 1.0));
+						deck = mix(deck, vec3(0.90, 0.85, 0.68), sunSide * (0.35 + 0.55 * thin) * (1.0 - lobe * 0.5));
+						shade = mix(shade, deck * (1.0 - uGloom * 0.2), deckK);
+					}
 					// at night the clouds are dark shapes against the stars, rimmed faintly by moonlight
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
 					// at dawn and dusk the heaps go grey-violet, their bellies lit red and orange from
@@ -581,13 +598,35 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 						float side = mix(1.0, 0.6 + 0.4 * dot(normalize(d.xz + 1e-5), gdir), uGlowDir.y);
 						cloud += vec3(1.0, 0.62, 0.38) * uGlow * uNight * side * (0.012 + 0.05 * uCloud * uCloud) * (1.0 - 0.5 * smoothstep(0.0, 0.6, d.y));
 					}
-					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh);
+					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh) * (1.0 - deckK * 0.6);
 					// at a world's dusk the heaps are lit pink from below, violet in their tops
 					cloud = mix(cloud, mix(vec3(1.0, 0.4, 0.62), vec3(0.2, 0.13, 0.34), smoothstep(0.2, 1.0, lit)) * uDusk.y, uDusk.x * 0.9);
 					// lightning lights the cloud from inside
 					cloud += vec3(0.75, 0.8, 1.0) * uFlash * (0.5 + sh * 1.5);
 					// (at a world's dusk the thin cloud thins away: heaps in a clear sky)
 					col = mix(col, cloud, dens * 0.95 * (1.0 - uDusk.x * 0.6 * (1.0 - smoothstep(0.35, 0.85, dens))));
+				}
+				// crepuscular rays: under a broken overcast the air below the deck is lit in slanting
+				// fans where the sun comes through its gaps, converging on the sun behind it. Along the
+				// line over the deck from here to the sun, how much of it is gap (a coarse read of the
+				// same field) is how much lit air lies along this line of sight
+				float rayK = smoothstep(0.5, 0.75, uCloud) * smoothstep(0.02, 0.1, uSunDir.y) * (1.0 - uNight) * (1.0 - uGloom * 0.5) * (1.0 - uDusk.x);
+				if (rayK > 0.0 && sd > 0.1 && d.y > -0.02){
+					vec2 cp0 = d.xz / (max(d.y, 0.0) + 0.08) * 1.6 + uCloudOff, cs = uSunDir.xz / (uSunDir.y + 0.08) * 1.6 + uCloudOff;
+					float rcover = mix(0.8, 0.3, uCloud), gap = 0.0;
+					#ifdef SKY_LITE
+					const int RN = 4;
+					#else
+					const int RN = 7;
+					#endif
+					for (int i = 0; i < RN; i++){
+						vec2 p = mix(cp0, cs, (float(i) + 0.5) / float(RN));
+						float g = (vn(p * 0.9) * 0.5 + vn(p * 1.818 + 3.1) * 0.25) * 0.78 + (vn(p * 0.32 + 11.0) * 0.5 + vn(p * 0.646 + 14.1) * 0.25) * 0.71;
+						gap += 1.0 - smoothstep(rcover - 0.08, rcover + 0.08, g);
+					}
+					gap /= float(RN);
+					float fan = (0.25 + 0.75 * pow(sd, 2.0)) * smoothstep(0.1, 0.35, sd) * (1.0 - smoothstep(0.08, 0.55, d.y)) * smoothstep(-0.02, 0.03, d.y);
+					col += uSunColor * vec3(1.0, 0.96, 0.84) * gap * fan * rayK * 2.4;
 				}
 				// the sun: a hard disc in a clear sky, a pale one through thin cloud; through a deck too
 				// thick to see it by, no disc at all, only a soft bright patch of cloud where it is
