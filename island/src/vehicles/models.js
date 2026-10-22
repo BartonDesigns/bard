@@ -2,14 +2,15 @@
 // that kind first comes close, decoded off the main thread (meshopt in workers, the WebP
 // textures by the browser), and taken apart into what the game can draw many of at once:
 // the body, one merged geometry per material, and a left and a right wheel on their hubs.
-// The paint takes each car's own colour (a painted texture keeps its trim and lamps: the
-// paint is marked in its alpha); the glass is see-through; the lamps light at night.
+// The paint takes each car's own colour and finish (bay/cars.js FINISH; a painted texture
+// keeps its trim and lamps: the paint is marked in its alpha); the glass is see-through; the
+// lamps light at night.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { skyEnv, withCarSky, carGlassMaterial } from '../bay/cars.js';
+import { skyEnv, withCarSky, carGlassMaterial, FINISH_GLSL } from '../bay/cars.js';
 import { unfight, layerOffset } from './layers.js';
 import { GFX_PHONE } from '../world/device.js';
 
@@ -48,10 +49,13 @@ function paintMaterial(map) {
 	// is: only there does the car's colour go
 	m.onBeforeCompile = (sh) => {
 		withCarSky(sh);
-		if (map) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'float paintK = 1.0;\n#ifdef USE_MAP\nvec4 txc = texture2D(map, vMapUv); diffuseColor.rgb *= txc.rgb; paintK = txc.a;\n#endif')
-			.replace('#include <color_fragment>', '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )\ndiffuseColor.rgb *= mix(vec3(1.0), vColor.rgb, paintK);\n#endif');
+		sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'float paintK = 1.0;\n#ifdef USE_MAP\nvec4 txc = texture2D(map, vMapUv); diffuseColor.rgb *= txc.rgb; paintK = txc.a;\n#endif')
+			.replace('#include <color_fragment>', FINISH_GLSL + 'diffuseColor.rgb *= mix(vec3(1.0), carPaint, paintK);')
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, finRough, paintK);')
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nif (carFin > 3.5) metalnessFactor *= 1.0 - paintK;')
+			.replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.clearcoat *= mix(1.0, finCoat, paintK);\nmaterial.clearcoatRoughness = mix(material.clearcoatRoughness, finCcRough, paintK);');
 	};
-	m.customProgramCacheKey = () => map ? 'vpaintmask2' : 'vpaint2';
+	m.customProgramCacheKey = () => map ? 'vpaintmask3' : 'vpaint3';
 	return m;
 }
 const glassMat = () => carGlassMaterial();
