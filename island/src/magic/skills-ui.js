@@ -70,11 +70,16 @@ const CSS = `
 .sk-chip.can .dot{display:block}
 /* the stage and its pages */
 .sk-stage{position:absolute;left:0;right:0;top:calc(var(--hh) + var(--nh));bottom:0;touch-action:none;overflow:hidden}
-.sk-track{position:absolute;left:0;top:0;bottom:0;display:flex;will-change:transform}
+.sk-track{position:absolute;left:0;top:0;bottom:0;width:100%;will-change:transform}
 .sk-track.glide{transition:transform .55s cubic-bezier(.22,.9,.24,1)}
-.sk-page{position:relative;flex:none;height:100%}
+/* (each page seated along the track by its left; only the page in view, and the one sliding in
+   beside it, are shown at all: the rest are display:none, so the compositor backs one or two
+   screens, never fourteen) */
+.sk-page{position:absolute;top:0;left:0;height:100%}
+.sk-page[hidden]{display:none}
 .sk-neb{position:absolute;inset:-10%;pointer-events:none;opacity:.9}
-.sk-page.cur .sk-neb{animation:skDrift 26s ease-in-out infinite alternate}
+/* (the drift is a screen-sized layer of its own: not on a phone, whose graphics memory is spoken for) */
+.sk:not(.phone) .sk-page.cur .sk-neb{animation:skDrift 26s ease-in-out infinite alternate}
 @keyframes skDrift{to{transform:translate3d(-2%,1.5%,0) scale(1.04)}}
 .sk-title{position:absolute;left:var(--tl);top:var(--tt);width:var(--tw);pointer-events:none}
 .sk-title .s{font-size:10px;letter-spacing:.24em;text-transform:uppercase;opacity:.65;font-family:var(--bard-display,Georgia,serif)}
@@ -283,7 +288,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	function build() {
 		built = true;
 		if (!document.getElementById(STYLE_ID)) { const s = document.createElement('style'); s.id = STYLE_ID; s.textContent = CSS; document.head.appendChild(s); }
-		root = mk('div', 'sk' + (isTouch ? ' touch' : ''), mount);
+		root = mk('div', 'sk' + (isTouch ? ' touch' : '') + (isPhone ? ' phone' : ''), mount);
 		root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Skills and magic');
 		// (a game controller sends it the arrow keys, Enter and Escape: ui/gamepad.js)
 		root.dataset.pad = 'keys';
@@ -336,6 +341,10 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		P.info.setAttribute('aria-live', 'polite');
 		P.keys = mk('div', 'sk-keys', root, '<b>←</b><b>→</b> skills &nbsp; <b>↑</b><b>↓</b> stars &nbsp; <b>Enter</b> weave or unlock &nbsp; <b>6</b>–<b>0</b> slot &nbsp; <b>Tab</b> or <b>Esc</b> close');
 		P.toast = mk('div', 'sk-toast', root);
+		// (one preview canvas for the menu's life, seated in the sheet whenever a spell is shown: a
+		// new canvas at every star would hold its pixels until the next collection, and an
+		// iPhone's canvas memory is capped)
+		P.pv = mk('canvas', 'sk-pv');
 		swipe();
 		P.stage.addEventListener('wheel', onWheel, { passive: false });
 	}
@@ -409,29 +418,63 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		lf = cs < 320 ? '9.5px' : cs < 480 ? '10.5px' : '11.5px';
 		Object.assign(v, { '--cw': cw + 'px', '--ch': ch + 'px', '--cl': cl + 'px', '--ct': ct + 'px', '--tl': tl + 'px', '--tt': tt + 'px', '--tw': tw + 'px', '--tf': tf, '--ns': ns + 'px', '--ns0': ns + 'px', '--lf': lf, '--ih': ih + 'px', '--iw': iw + 'px' });
 		for (const k in v) root.style.setProperty(k, v[k]);
-		for (const p of P.pages) {
+		P.pageW = pw;
+		for (const [j, p] of P.pages.entries()) {
 			p.el.style.width = pw + 'px';
+			seat(j);
 			// (a line's length on screen, for drawing it in when it is first lit)
 			for (const L of p.links) L.l.style.setProperty('--len', `${Math.hypot(L.dx * cw / 100, L.dy * ch / 100).toFixed(1)}px`);
 		}
 		P.arr[1].style.left = `${(tall ? W : W - iw - 32) - 52}px`;
-		P.pageW = pw;
 		place(false);
 		sizeSky();
 	}
 
 	// ---------- the pages: where the track sits, and sliding ----------
-	let dx = 0, dragging = false, dragged = false;
+	// Where each page is seated along the track: its own place, or, for the length of a leap over
+	// several pages (a chip, Home, End), the seat next to the page it leaves. So every turn slides
+	// one screen's width, and only the page in view and the one coming in are shown at all. (The
+	// track used to be fourteen screens wide, and a slide across it had the compositor back the
+	// whole sweep at once: an iPhone, its graphics memory already spoken for by the world, died
+	// on the second turn.)
+	let dx = 0, dragging = false, dragged = false, settleT = 0, turns = 0;
+	const seats = PAGES.map((_, j) => j);
+	function seat(j) { P.pages[j].el.style.left = `${seats[j] * P.pageW}px`; }
+	function shown(...js) { for (const [j, p] of P.pages.entries()) p.el.hidden = !js.includes(j); }
 	function place(glide) {
 		P.track.classList.toggle('glide', !!glide);
 		const edge = (page === 0 && dx > 0) || (page === PAGES.length - 1 && dx < 0);
-		P.track.style.transform = `translate3d(${-page * P.pageW + (edge ? dx * 0.35 : dx)}px,0,0)`;
+		P.track.style.transform = `translate3d(${-seats[page] * P.pageW + (edge ? dx * 0.35 : dx)}px,0,0)`;
+	}
+	// the slide over: every page back in its own seat, the track on the page in view with no
+	// transition (the page and the track move by the same amount, so nothing shifts on screen)
+	function settle() {
+		clearTimeout(settleT); settleT = 0;
+		for (const j of PAGES.keys()) if (seats[j] !== j) { seats[j] = j; seat(j); }
+		shown(page);
+		place(false);
+	}
+	// the neighbour a drag is uncovering, shown beside the page
+	function uncover() {
+		const j = page + (dx < 0 ? 1 : -1);
+		if (j >= 0 && j < PAGES.length) shown(page, j); else shown(page);
 	}
 	function go(i, o = {}) {
 		i = Math.max(0, Math.min(PAGES.length - 1, i));
-		const changed = i !== page;
+		const from = page, changed = i !== page, wasDx = dx;
 		page = i; dx = 0;
-		place(o.glide !== false);
+		if (changed && from >= 0) turns += Math.sign(i - from);
+		if (o.glide !== false && (changed || wasDx)) {
+			clearTimeout(settleT);
+			if (changed && from >= 0) {
+				const d = i - seats[from];
+				if (Math.abs(d) !== 1) { seats[i] = seats[from] + Math.sign(d || i - from); seat(i); } else if (seats[i] !== i) { seats[i] = i; seat(i); }
+				shown(from, i);
+			} else if (changed) shown(i);
+			// (a drag let go short of the next page glides back, its neighbour still in view)
+			place(true);
+			settleT = setTimeout(settle, 620);
+		} else settle();
 		if (changed || o.force) {
 			for (const [j, p] of P.pages.entries()) p.el.classList.toggle('cur', j === page);
 			const p = P.pages[page];
@@ -452,24 +495,32 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		return (ns.find((n) => stateOf(n) === 'can') || [...ns].reverse().find((n) => holds(state, n.id)) || ns[0]).id;
 	}
 	function swipe() {
-		let x0 = 0, y0 = 0, id = null, lastX = 0, lastT = 0, v = 0, decided = false;
+		let x0 = 0, y0 = 0, id = null, lastX = 0, lastT = 0, v = 0, decided = false, side = 0;
 		P.stage.addEventListener('pointerdown', (e) => {
 			if (e.button > 0 || id !== null) return;
 			id = e.pointerId; x0 = lastX = e.clientX; y0 = e.clientY; lastT = performance.now(); v = 0;
-			dragging = false; dragged = false; decided = false;
+			dragging = false; dragged = false; decided = false; side = 0;
 		});
 		P.stage.addEventListener('pointermove', (e) => {
 			if (e.pointerId !== id) return;
 			const ddx = e.clientX - x0, ddy = e.clientY - y0;
 			if (!decided && Math.hypot(ddx, ddy) > 8) {
 				decided = true;
-				if (Math.abs(ddx) > Math.abs(ddy)) { dragging = dragged = true; try { P.stage.setPointerCapture(id); } catch { /* gone */ } }
+				if (Math.abs(ddx) > Math.abs(ddy)) {
+					dragging = dragged = true;
+					// (a drag that catches a slide still settling ends it, so the pages sit where the drag expects them)
+					if (settleT) settle();
+					try { P.stage.setPointerCapture(id); } catch { /* gone */ }
+				}
 			}
 			if (!dragging) return;
 			const now = performance.now();
 			v = (e.clientX - lastX) / Math.max(1, now - lastT) * 0.6 + v * 0.4;
 			lastX = e.clientX; lastT = now;
 			dx = ddx;
+			// (the page the drag uncovers is shown as the drag begins, and again if it turns about)
+			const s = dx < 0 ? 1 : -1;
+			if (s !== side) { side = s; uncover(); }
 			place(false);
 		});
 		const end = (e) => {
@@ -481,7 +532,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 			let to = page;
 			if (dx < -w * 0.18 || v < -0.45) to = page + 1;
 			else if (dx > w * 0.18 || v > 0.45) to = page - 1;
-			dx = 0;
+			// (go clears dx: a drag let go short of a page glides back from where it was)
 			go(to);
 			// (a drag is not a tap on the star it began on)
 			setTimeout(() => { dragged = false; }, 0);
@@ -594,7 +645,8 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		else perkInfo(sc, act, n.item, st);
 	}
 	function spellInfo(sc, act, sp, st) {
-		P.pv = mk('canvas', 'sk-pv', sc);
+		// (the one preview canvas, seated here; a perk's sheet leaves it out)
+		sc.appendChild(P.pv);
 		const k = spellPower(state, sp, { light: light() }), s2 = shaped(sp, state.mods);
 		// (the preview shows it as your gear has it: a fan of sparks, a shard through everyone)
 		P.pv.spell = s2;
@@ -762,7 +814,6 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		btn.addEventListener('click', (e) => { if (e.detail === 0 && !btn.disabled) { btn.classList.add('on'); n = 10; pour(); stop(); } });
 	}
 	function perkInfo(sc, act, p, st) {
-		P.pv = null;
 		const ul = mk('ul', 'sk-fx', sc);
 		for (const line of fxLines(p)) mk('li', '', ul, line);
 		// on your own spells: before and after
@@ -866,7 +917,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	}
 
 	// ---------- the sky ----------
-	let stars = [], sprite = null, raf = 0, dpr = 1;
+	let stars = [], sprite = null, raf = 0, dpr = 1, skyX = 0;
 	function sizeSky() {
 		dpr = Math.min(isPhone ? 1.25 : 2, devicePixelRatio || 1);
 		P.sky.width = Math.round(W * dpr); P.sky.height = Math.round(H * dpr);
@@ -888,8 +939,11 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const t = now / 1000, g = P.sky.getContext('2d');
 		const w = P.sky.width, h = P.sky.height;
 		g.clearRect(0, 0, w, h);
-		// (the stars drift with the page, the nearer ones more)
-		const off = (-(page * (P.pageW || W)) + dx) / Math.max(1, W);
+		// (the stars drift with the page, the nearer ones more: one notch a turn, eased, however
+		// far the turn leapt)
+		skyX += (turns - skyX) * Math.min(1, (now - (frame.last || now)) * 0.007);
+		frame.last = now;
+		const off = (-(skyX * (P.pageW || W)) + dx) / Math.max(1, W);
 		for (const s of stars) {
 			const x = (((s.x + off * 0.08 * s.z + t * 0.002 * s.z) % 1) + 1) % 1 * w, y = s.y * h;
 			const tw = 0.55 + 0.45 * Math.sin(t * s.w + s.p);
@@ -911,9 +965,11 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 	function preview(cv, t) {
 		const sp = cv.spell, cw = cv.clientWidth, ch = cv.clientHeight;
 		if (!cw) return;
-		const d = Math.min(2, devicePixelRatio || 1);
-		if (cv.width !== Math.round(cw * d)) { cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); }
+		const d = Math.min(isPhone ? 1.5 : 2, devicePixelRatio || 1);
+		if (cv.width !== Math.round(cw * d) || cv.height !== Math.round(ch * d)) { cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); }
+		// (a browser out of canvas memory gives no context: the sky goes on without the preview)
 		const g = cv.getContext('2d');
+		if (!g) return;
 		g.setTransform(d, 0, 0, d, 0, 0);
 		g.clearRect(0, 0, cw, ch);
 		drawSpell(g, cw, ch, sp, (t % 2.2) / 2.2, SCHOOLS[sp.school].color, t, { night: light() < -0.02, moonlit: !!state.moonlit?.includes?.(sp.id), el: elements[sp.type] });
@@ -955,7 +1011,7 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		covering: () => open && vis,
 		refresh: () => { if (open) refresh(); },
 		page: () => PAGES[page],
-		dispose() { close(); cancelAnimationFrame(raf); root?.remove(); },
+		dispose() { close(); cancelAnimationFrame(raf); clearTimeout(settleT); root?.remove(); },
 	};
 }
 
