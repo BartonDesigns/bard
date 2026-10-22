@@ -181,6 +181,10 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 		apply() { state.tier = mode() !== 'auto' ? fixed(mode()) : Math.max(state.tier, state.ceiling); return setTier(state.tier); },
 		// the graphics were lost: a tier lower at once (on High and Ultra for this visit only)
 		lost(minimum = 0) { lossCeiling = clampTier(Math.max(lossCeiling, state.tier + 1, minimum)); rec = lossRecord(rec, now(), state.tier); rec.ceiling = Math.max(rec.ceiling, clampTier(minimum)); put(rec); state.ceiling = Math.max(rec.ceiling, memoryCeiling, lossCeiling); state.tier = Math.max(state.tier, state.ceiling); return setTier(state.tier); },
+		// a load that never finished is being tried again: a tier lower than the try before, for
+		// this visit only (Ryan's new computer went round the same build on every Try again;
+		// nothing is written down, since the load may have failed for a reason not the device's)
+		retry() { lossCeiling = clampTier(Math.max(lossCeiling, state.tier + 1)); state.ceiling = Math.max(rec.ceiling, memoryCeiling, lossCeiling); state.tier = Math.max(state.tier, state.ceiling); state.since = state.sinceDown = 0; return setTier(state.tier); },
 		// a world on screen (or not): a page that goes while this is set went without a goodbye
 		live(on) { const v = on ? now() : 0; if (!!rec.live === !!v) return; rec = { ...rec, live: v }; put(rec); },
 		info: () => ({ tier: TIERS[state.tier].name, ceiling: TIERS[state.ceiling].name, mode: mode(), frameMs: Math.round(state.avg * 10) / 10, memory: memK == null ? null : Math.round(memK * 100) + '% of ' + budgetMB + ' MB', gpuMB: meter ? Math.round(meter.bytes() / 1048576) : null, crashedLastTime: booted.crashed, crashes: rec.crashes.length }),

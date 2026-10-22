@@ -1510,9 +1510,11 @@ export function createIslandWorld() {
 	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
+		// a load that never finished is tried again (the loading screen's Try again): a tier lighter for this visit
+		retryLighter: () => governor.retry(),
 		open(params = {}) {
 			const enter = () => api.enter(params);
-			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close() }) : enter();
+			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close(), retry: () => governor.retry() }) : enter();
 		},
 		async enter(params = {}) {
 			if (recovery.blocked()) throw graphicsReloadError();
@@ -1553,11 +1555,11 @@ export function createIslandWorld() {
 		autoWalk: () => visible && running && !!drive.auto?.(),
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
-		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close() }),
+		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close(), retry: () => governor.retry() }),
 		// ?room=CODE: join a friend's room and go to them (net/multiplayer.js)
 		joinRoom: (code) => multiplayer.join(code),
 		// back to the last place you were (after a crash or a reload); false if there is none
-		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close() }) : false; },
+		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close(), retry: () => governor.retry() }) : false; },
 		// flight's landing builds the world here first, out of sight, so Journey's own clock
 		// only covers the hand-over (a slow phone building the Bay Area outran it, and the
 		// failed passage left you on the old flight surface)
