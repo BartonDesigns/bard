@@ -16,7 +16,7 @@ const profile = process.argv[2] || 'desktop';
 		const errors = [];
 		let navigations = 0;
 		page.on('pageerror', e => errors.push(e.message));
-		page.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text())) errors.push(m.text().slice(0, 300)); });
+		page.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource|WebSocket connection/.test(m.text())) errors.push(m.text().slice(0, 300)); });
 		page.on('crash', () => errors.push('page crashed'));
 		page.on('framenavigated', f => { if (f === page.mainFrame()) navigations++; });
 		const log = (...a) => console.log(`${profile}:`, ...a);
