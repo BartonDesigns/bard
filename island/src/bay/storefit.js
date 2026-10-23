@@ -972,7 +972,8 @@ export function* fitShop(K, type) {
 				g.box('gloss', x + 0.02, y, -0.75, x + 0.7, y + 0.92, 0, C.white);
 				g.cyl('glass', x + 0.36, y + 0.45, -0.02, 0.22, 0.04, lin([0.3, 0.35, 0.4]), 14, 'z');
 				g.cyl('metal', x + 0.36, y + 0.45, -0.01, 0.25, 0.02, C.steel, 14, 'z');
-				K.box(K.mats.screen, ...(() => { const [p, q] = F.W(x + 0.1, 0.005), [p2, q2] = F.W(x + 0.25, 0.01); return [Math.min(p, p2), y + 0.8, Math.min(q, q2), Math.max(p, p2), y + 0.86, Math.max(q, q2)]; })());
+				// (its little display: not a lamp, there are dozens)
+				g.box('gloss', x + 0.1, y + 0.8, 0.0, x + 0.25, y + 0.86, 0.008, lin([0.08, 0.22, 0.16]));
 			}
 			solid(K, F, a, -0.75, b, 0, stack ? 1.9 : 0.92);
 		};
