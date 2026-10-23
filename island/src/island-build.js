@@ -61,6 +61,7 @@ import { createTidepools } from './bay/tidepools.js';
 import { createSaltPonds } from './bay/saltponds.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
+import { createForecourts } from './bay/forecourts.js';
 import { createDiscovery } from './bay/discovery.js';
 import { qualityNow } from './world/governor.js';
 import { createBoardwalk } from './bay/boardwalk.js';
@@ -505,6 +506,8 @@ export async function islandBuild(iw, params) {
 		iw.world.beaches = createBeaches(scene, bayArea, iw.world.real, shared, { isPhone: GFX });
 		// the parks furnished as their agencies furnish them: signs, kiosks, tables, playgrounds, courts
 		iw.world.parks = createParkKit(scene, bayArea, iw.world.real, { isPhone: GFX, lake: iw.world.lake });
+		// the suburbs' gas stations and corner stores: canopies and pumps, price signs, ice boxes (bay/forecourts.js)
+		iw.world.forecourts = createForecourts(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX });
 		// the Bay Area Discovery Museum at Fort Baker: the barracks, the exhibits, Lookout Cove
 		iw.world.discovery = createDiscovery(scene, bayArea, iw.world.real, { isPhone: GFX });
 		// the Santa Cruz Beach Boardwalk: the Casino, the midway and its rides, the Giant Dipper
@@ -561,8 +564,8 @@ export async function islandBuild(iw, params) {
 			// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 			// ...and in and out of the houses, up their stairs
 			const diablo = iw.world.diablo, houses = iw.world.houses, fwy = iw.world.freeways, pools = iw.world.tidepools;
-			island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), iw.world.sanMateo.floor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), iw.world.landmarks.floor(x, z, y), iw.world.beaches.floor(x, z, y), iw.world.commercial.floor(x, z, y), iw.world.discovery.floor(x, z, y), iw.world.towers.floor(x, z, y), iw.world.boardwalk.floor(x, z, y), iw.world.lake?.floor?.(x, z, y) ?? -1e9, iw.world.parks?.floor?.(x, z, y) ?? -1e9);
-			island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); iw.world.commercial.push(p, footY); iw.world.discovery.push(p, footY); iw.world.towers.push(p, footY); iw.world.boardwalk.push(p, footY); iw.world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); iw.world.lake?.push(p, footY, iw.world.player.state.flying); iw.world.fields.push(p, footY); iw.world.beaches.push?.(p, footY); iw.world.parks?.push?.(p, footY); picnic.push(p, footY); };
+			island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), iw.world.sanMateo.floor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), iw.world.landmarks.floor(x, z, y), iw.world.beaches.floor(x, z, y), iw.world.commercial.floor(x, z, y), iw.world.discovery.floor(x, z, y), iw.world.towers.floor(x, z, y), iw.world.boardwalk.floor(x, z, y), iw.world.lake?.floor?.(x, z, y) ?? -1e9, iw.world.parks?.floor?.(x, z, y) ?? -1e9, iw.world.forecourts?.floor?.(x, z, y) ?? -1e9);
+			island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); iw.world.commercial.push(p, footY); iw.world.discovery.push(p, footY); iw.world.towers.push(p, footY); iw.world.boardwalk.push(p, footY); iw.world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); iw.world.lake?.push(p, footY, iw.world.player.state.flying); iw.world.fields.push(p, footY); iw.world.beaches.push?.(p, footY); iw.world.parks?.push?.(p, footY); iw.world.forecourts?.push?.(p, footY); picnic.push(p, footY); };
 			{ const of = island.extraFloor, P = iw.world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
 			{ const of = island.extraFloor, op = island.extraPush, E = iw.world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 			{ const of = island.extraFloor, op = island.extraPush, I = iw.world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }

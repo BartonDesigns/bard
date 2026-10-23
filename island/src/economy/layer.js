@@ -216,7 +216,9 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		let front = o.front ?? 1, face = front < 0 ? 1 : 0;
 		// (a mapped shop's front is the side toward its street; a grown town's already face theirs)
 		if (b && !b.gen && use !== 'house') { if (b.econFace === undefined) b.econFace = frontOf(o); face = b.econFace; }
-		return { x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, h: o.h, use, ...c, sign: b?.sign || null, face, o };
+		// (grown: a grown town's building, its centre built of houses; store: a corner store or gas
+		// station's own building, bay/siteplan.js, a shop inside)
+		return { x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, h: o.h, use, ...c, sign: b?.sign || null, face, o, grown: !!b?.gen, core: b?.core ?? 1, store: b?.store || null, ...(b?.store ? { venue: 'shop' } : {}) };
 	}
 
 	// ---------- the plan, made visible ----------

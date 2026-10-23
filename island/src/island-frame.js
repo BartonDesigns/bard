@@ -304,6 +304,7 @@ export function islandFrame(iw, now) {
 		if (tp) W.tpSeen = tp;
 	}
 	W.wildlife?.update(dt, iw.time, camera, W.sky.state.hours);
+	W.forecourts?.update(dt, camera, sk.night);
 	if (W.parks) {
 		W.parks.update(dt, camera);
 		const pk = camera.position.y - W.island.heightAt(camera.position.x, camera.position.z) < 80 ? W.parks.parkAt(camera.position.x, camera.position.z) : null;

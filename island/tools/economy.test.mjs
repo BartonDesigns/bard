@@ -1,6 +1,8 @@
-// The economy (src/economy/): every kind of town has a third or so of its buildings as
-// businesses, the same building is always the same business with the same name, no two in a
-// town share a name, no name is a real brand, and the requests and payroll behave.
+// The economy (src/economy/): a town centre, a harbour front, a business park and the open
+// country are a third or more businesses, a neighbourhood's houses are homes (Josh 2026-10-23:
+// no signs on the suburbs' lots but the corner store and the gas station, bay/siteplan.js), the
+// same building is always the same business with the same name, no two in a town share a name,
+// no name is a real brand, and the requests and payroll behave.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateTown } from '../src/crysis/civgen.js';
@@ -38,7 +40,8 @@ function cityCentre() {
 }
 function harbourTown() {
 	const out = [];
-	for (let k = 0; k < 140; k++) out.push({ x: k * 22, z: (k % 3) * 40, w: 11, d: 10, a: 0, h: 5, use: 'house', coast: k % 5 !== 4, street: k % 6 === 0 ? 1 : 0 });
+	// (the front row on the waterfront street, the rest up the hill from it)
+	for (let k = 0; k < 140; k++) out.push({ x: k * 22, z: (k % 3) * 40, w: 11, d: 10, a: 0, h: 5, use: 'house', coast: k % 5 !== 4, shore: k % 3 === 0 ? 3 : 2, street: k % 3 === 0 ? 1 : 0 });
 	for (let k = 0; k < 12; k++) out.push({ x: k * 30, z: -40, w: 14, d: 18, a: 0, h: 5, use: 'shop', coast: true, street: 2 });
 	for (let k = 0; k < 6; k++) out.push({ x: k * 50, z: -80, w: 30, d: 24, a: 0, h: 9, use: 'industry', coast: true });
 	return out;
@@ -69,18 +72,50 @@ const TOWNS = [
 	['business park', businessPark, 'us-ca'],
 ];
 
-test('at least 30% of the buildings in every kind of town are businesses', () => {
+// the share of a town's buildings that are businesses, by the kind of town: a city centre, a
+// business park and the open country a third or more; a harbour town its waterfront; a grown town
+// its high street (a sixth or so of all it holds); a mapped or gridded suburb only its shops
+const SHARE = { 'city centre': [0.3, 1], 'business park': [0.3, 1], countryside: [0.3, 0.97], 'forest edge': [0.3, 0.97], 'harbour town': [0.12, 0.5], 'grid suburb (Bay)': [0.01, 0.06] };
+test('a town centre, a harbour front, a business park and the country are businesses; a suburb is homes', () => {
 	for (const [name, make, loc] of TOWNS) {
 		const list = make(), plan = planTown(list, { locale: loc }), share = shareOf(list, plan);
-		assert.ok(share >= 0.3, `${name}: ${(share * 100).toFixed(1)}% of ${list.length}`);
-		// and not everything: homes stay homes
-		assert.ok(share < 0.97 || name === 'business park' || name === 'city centre', `${name}: ${(share * 100).toFixed(1)}%`);
+		const [lo, hi] = SHARE[name] || [0.08, 0.4];
+		assert.ok(share >= lo && share <= hi, `${name}: ${(share * 100).toFixed(1)}% of ${list.length}`);
+	}
+	// a grown town's centre is its high street: most of the houses there are shops
+	for (const [name, make, loc] of TOWNS.filter((t) => t[0].startsWith('grown'))) {
+		const list = make(), isBiz = new Set(planTown(list, { locale: loc }).map((E) => E.i));
+		const centre = list.map((b, i) => [b, i]).filter(([b]) => b.use === 'house' && b.core < 0.4);
+		assert.ok(centre.filter(([, i]) => isBiz.has(i)).length >= centre.length * 0.6, `${name}: centre`);
 	}
 });
 
-test('quiet residential streets stay mostly homes', () => {
-	const list = gridSuburb().filter((b) => b.use === 'house' && b.street === 0), plan = planTown(list);
-	assert.ok(plan.length / list.length < 0.15, `${plan.length} of ${list.length}`);
+test("a neighbourhood's houses are homes: no signs on its lots", () => {
+	// the gridded suburb's houses, on every kind of street (quiet, corner, collector, arterial)
+	const list = gridSuburb().filter((b) => b.use === 'house'), plan = planTown(list);
+	assert.equal(plan.length, 0, plan.slice(0, 5).map((E) => `${E.name} (${E.street})`).join(', '));
+	// a mapped suburb's houses: by a freeway exit, up the hill from the bay, on a corner
+	for (const b of [{ street: 2, highway: true }, { street: 1, coast: true, shore: 2 }, { street: 1, coast: true, shore: 1 }, { street: 1 }, { street: 2 }]) {
+		let n = 0;
+		for (let k = 0; k < 300; k++) if (establish({ x: k * 19.5, z: k * 7.5, w: 14, d: 11, a: 0, h: 5, use: 'house', ...b })) n++;
+		assert.equal(n, 0, JSON.stringify(b));
+	}
+	// ...and a terrace on a quiet street
+	let rows = 0;
+	for (let k = 0; k < 300; k++) if (establish({ x: k * 8.5, z: 3, w: 7.6, d: 19, a: 0, h: 10, use: 'row', street: 0 })) rows++;
+	assert.equal(rows, 0);
+});
+
+test('a corner store or gas station on its own lot is one, and nothing else is', () => {
+	for (const store of ['corner', 'fuel']) for (let k = 0; k < 60; k++) {
+		const E = establish({ x: k * 41.5, z: -k * 13.5, w: 14, d: 10, a: 0.4, h: 4.6, use: 'retail', street: 2, store, venue: 'shop' }, 'us-ca');
+		assert.equal(E?.type, store);
+		assert.equal(E.venue, 'shop');
+		assert.ok(!denied(E.name), E.name);
+	}
+	// (never rolled for an ordinary building)
+	for (const [name, make, loc] of TOWNS) for (const E of planTown(make(), { locale: loc })) assert.ok(E.type !== 'corner' && E.type !== 'fuel', `${name}: ${E.name}`);
+	assert.ok(denied('Circle K') && denied('am/pm') && denied('Mobil 1') && denied('Union 76'));
 });
 
 test('the same building is always the same business, with the same name', () => {
@@ -132,7 +167,7 @@ test('the place decides the food: tapas in Spain, ramen in Japan, barbecue in Te
 
 test('the right business in the right place', () => {
 	const at = (b, loc = 'us') => { const c = {}; for (let k = 0; k < 400; k++) { const E = establish({ ...b, x: k * 17.5, z: k * 5.5 }, loc); if (E) c[E.type] = (c[E.type] || 0) + 1; } return c; };
-	const harbour = at({ w: 12, d: 10, a: 0, h: 5, use: 'house', coast: true, street: 1 });
+	const harbour = at({ w: 12, d: 10, a: 0, h: 5, use: 'house', coast: true, shore: 3, street: 1 });
 	assert.ok((harbour.outfitter || 0) + (harbour.bait || 0) + (harbour.seafood || 0) > 30, JSON.stringify(harbour));
 	const woods = at({ w: 12, d: 10, a: 0, h: 4, use: 'house', rural: true, wild: true, street: 1 });
 	assert.ok((woods.huntpost || 0) > 20 && (woods.cabins || 0) > 10, JSON.stringify(woods));

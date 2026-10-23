@@ -87,11 +87,12 @@ test('the coast on the globe: read through its own sea test and land mask', () =
 	assert.equal(coastClass(S, 2.5), 2, 'by the harbour, read generously');
 	assert.equal(coastClass(S), 1);
 	const KIND = { row: 3, house: 1, houseGarageL: 12, houseGarageR: 13, shop: 4, retail: 6, office: 5, tower: 11, industry: 9, apt: 8 };
+	// (the town's high street, its centre's houses: a grown town's homes off it carry no trade)
 	const build = (sea) => {
 		const E = createEconomyLayer({ group: new THREE.Group(), bay: { heightAt: (x) => H(x), loaded: () => false, urbanAt: () => ({ u: 0.5, d: 0 }) }, KIND });
 		if (sea) E.setSea(sea);
 		const list = [];
-		for (let i = 0; i < 30; i++) for (let j = 0; j < 12; j++) { const x = 450 + i * 40, z = j * 40 - 240; list.push({ x, z, w: 10, d: 12, a: 0, h: 6, src: { kind: 0, gen: true, core: 0.7, street: 'residential', x, z, w: 10, d: 12, wallH: 6 } }); }
+		for (let i = 0; i < 30; i++) for (let j = 0; j < 12; j++) { const x = 450 + i * 40, z = j * 40 - 240; list.push({ x, z, w: 10, d: 12, a: 0, h: 6, src: { kind: 0, gen: true, core: 0.3, street: 'residential', x, z, w: 10, d: 12, wallH: 6 } }); }
 		E.apply(list, 900, 0);
 		return E.info(900, 0, 2000, list);
 	};
