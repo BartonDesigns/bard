@@ -27,6 +27,7 @@ import { heliAirState, heliTacticStep } from './flight.js';
 import { engineSound, oneShot } from './sound.js';
 import { routeTrouble } from '../law/ladder.js';
 import { stencilVehicle } from '../signage/cars.js';
+import { localForce } from '../law/force.js';
 
 const SHOW_R = 1800, HIDE_R = 2300, STAY = 150;
 const HP = { tank: 900, apc: 420, jeep: 180, truck: 260, heli: 380, jet: 300 };
@@ -379,7 +380,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		if (!e || !W()?.bayArea || patrols.some((p) => p.side === 'police' && p.state !== 'done')) return null;
 		const a = Math.random() * Math.PI * 2, from = { x: at.x + Math.cos(a) * 1400, z: at.z + Math.sin(a) * 1400 };
 		const p = launch({ side: 'police', why: 'wanted', from, to: { x: at.x, z: at.z }, units: ['heli'], troops: 0, mode: 'air' });
-		combat.call?.('Air One is up. We will have eyes on the suspect shortly.', 'Harbour Police');
+		combat.call?.('Air One is up. We will have eyes on the suspect shortly.', localForce().name);
 		return p;
 	}
 
