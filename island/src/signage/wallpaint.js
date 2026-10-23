@@ -175,10 +175,10 @@ vec4 paintOnWall(vec4 tex, vec4 halo, vec2 uv, vec3 w, vec3 n, float style, floa
 		float mott = sgN(p * 0.8 + seed * 3.0) * 0.6 + sgOct(p + seed, 3.3, px) * 0.4;
 		// chalked and sun-bleached, unevenly: the colour gone out of it, paler; the reds and
 		// purples first, to pinks and greys; the blacks to charcoal
-		float fade = clamp(age * (0.75 + 0.5 * south) * (0.5 + 0.9 * mott) * (style > 1.5 ? 0.5 : 1.0), 0.0, 1.0);
+		float fade = clamp(age * (0.9 + 0.4 * south) * (0.55 + 0.8 * mott) * (style > 1.5 ? 0.5 : 1.0), 0.0, 1.0);
 		float l = dot(c, vec3(0.3, 0.55, 0.15));
 		float red = clamp((c.r - max(c.g, c.b)) * 2.5 + (c.b - c.g) * 1.5, 0.0, 1.0);
-		c = mix(c, vec3(l) * 0.72 + 0.09 + c * 0.2, fade * (0.75 + 0.25 * red));
+		c = mix(c, vec3(l) * 0.6 + 0.15 + c * 0.2, fade * (0.85 + 0.15 * red));
 		c = max(c, vec3(0.035 + 0.1 * fade));
 		// dust and soot dulling it, darker toward the foot
 		c *= mix(1.0, (0.8 + 0.12 * mott) * (1.0 - 0.2 * low), age * 0.9);
