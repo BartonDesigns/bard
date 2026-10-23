@@ -459,11 +459,59 @@ const SIDINGS = [
 	(g, S) => { g.fillStyle = grey(238); g.fillRect(0, 0, S, S); for (let i = 0; i < 3; i++) { const x = i * S / 3; g.fillStyle = grey(140); g.fillRect(x + 12, 0, 2, S); g.fillStyle = grey(255); g.fillRect(x, 0, 12, S); g.fillStyle = grey(175); g.fillRect(x - 3, 0, 3, S); } },
 	(g, S, r) => { const n = 7, h = S / n; for (let j = 0; j < n; j++) { let x = -r() * 20; while (x < S) { const w = 10 + r() * 22, l = 170 + r() * 75; g.fillStyle = grey(l); g.fillRect(x, j * h, w, h); g.fillStyle = grey(110); g.fillRect(x, j * h, 1.5, h); x += w; } g.fillStyle = grey(95); g.fillRect(0, (j + 1) * h - 3, S, 3); } },
 	(g, S, r) => { g.fillStyle = grey(236); g.fillRect(0, 0, S, S); const n = 16, h = S / n, w = S / 6; for (let j = 0; j < n; j++) for (let i = -1; i < 7; i++) { g.fillStyle = grey(150 + r() * 70); g.fillRect(i * w + (j % 2) * w / 2 + 1.5, j * h + 1.5, w - 3, h - 3); } },
+	// ...and the country's (the regional homes, region/homes.js): fieldstone laid in rough
+	// courses, round logs with their chinking, a lime render, an earth plaster with its straw
+	(g, S, r) => {
+		g.fillStyle = grey(92); g.fillRect(0, 0, S, S);
+		const n = 6, h = S / n;
+		for (let j = 0; j < n; j++) {
+			let x = -r() * 30;
+			while (x < S) {
+				const w = 24 + r() * 42, l = 138 + r() * 100, y0 = j * h + 2 + r() * 3, y1 = (j + 1) * h - 2 - r() * 4;
+				for (const o of [0, -S]) {
+					const x0 = x + o + 2, x1 = x + o + w - 2, k = Math.min(6, (x1 - x0) * 0.2);
+					g.fillStyle = grey(l);
+					g.beginPath(); g.moveTo(x0 + k, y0); g.lineTo(x1 - k * r(), y0 + r() * 2); g.lineTo(x1, y0 + k); g.lineTo(x1 - r() * 2, y1 - k); g.lineTo(x1 - k, y1); g.lineTo(x0 + k * r(), y1 - r() * 2); g.lineTo(x0, y1 - k); g.lineTo(x0 + r() * 2, y0 + k); g.fill();
+					g.fillStyle = grey(l * 0.72, 0.6); g.fillRect(x0 + k, y1 - 3, x1 - x0 - 2 * k, 3);
+					for (let q = 0; q < 14; q++) { g.fillStyle = grey(l - 30 + r() * 50, 0.4); g.fillRect(x0 + r() * (x1 - x0), y0 + r() * (y1 - y0), 2, 2); }
+				}
+				x += w;
+			}
+		}
+	},
+	(g, S, r) => {
+		const n = 5, h = S / n;
+		for (let j = 0; j < n; j++) {
+			const gr = g.createLinearGradient(0, j * h, 0, (j + 1) * h);
+			gr.addColorStop(0, grey(150)); gr.addColorStop(0.18, grey(235)); gr.addColorStop(0.45, grey(255)); gr.addColorStop(0.8, grey(196)); gr.addColorStop(1, grey(118));
+			g.fillStyle = gr; g.fillRect(0, j * h, S, h);
+			for (let q = 0; q < 26; q++) { const y = j * h + 6 + r() * (h - 12), x = r() * S, L = 20 + r() * 70; g.fillStyle = grey(150 + r() * 60, 0.35); g.fillRect(x, y, L, 1); g.fillRect(x - S, y, L, 1); }
+			g.fillStyle = grey(225); g.fillRect(0, (j + 1) * h - 2, S, 2);
+		}
+	},
+	(g, S, r) => {
+		g.fillStyle = grey(240); g.fillRect(0, 0, S, S);
+		for (let q = 0; q < 70; q++) { const x = r() * S, y = r() * S, R = 6 + r() * 26, l = 214 + r() * 40; for (const ox of [0, -S, S]) for (const oy of [0, -S, S]) { g.fillStyle = grey(l, 0.35); g.beginPath(); g.ellipse(x + ox, y + oy, R, R * (0.5 + r() * 0.4), r() * 3, 0, Math.PI * 2); g.fill(); } }
+		for (let q = 0; q < 900; q++) { g.fillStyle = grey(196 + r() * 59, 0.5); g.fillRect(r() * S, r() * S, 2, 2); }
+	},
+	(g, S, r) => {
+		g.fillStyle = grey(228); g.fillRect(0, 0, S, S);
+		for (let q = 0; q < 46; q++) { const x = r() * S, y = r() * S, R = 14 + r() * 40, l = 190 + r() * 60; for (const ox of [0, -S, S]) for (const oy of [0, -S, S]) { g.fillStyle = grey(l, 0.4); g.beginPath(); g.ellipse(x + ox, y + oy, R * 1.6, R, r() * 0.6 - 0.3, 0, Math.PI * 2); g.fill(); } }
+		for (let q = 0; q < 260; q++) { const x = r() * S, y = r() * S, a = r() * Math.PI, L = 3 + r() * 7; g.strokeStyle = grey(r() < 0.5 ? 255 : 150, 0.55); g.lineWidth = 1; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke(); }
+	},
+];
+// the country's roofs (region/homes.js), a metre a repeat, laid with v up the slope: slate or
+// shingle in staggered courses, clay tiles in their rows of channels, corrugated iron, thatch
+const ROOFS = [
+	(g, S, r) => { g.fillStyle = grey(232); g.fillRect(0, 0, S, S); const n = 6, h = S / n; for (let j = 0; j < n; j++) { let x = -r() * 30; while (x < S) { const w = 26 + r() * 30, l = 150 + r() * 80; for (const o of [0, -S]) { g.fillStyle = grey(l); g.fillRect(x + o + 1.5, j * h, w - 3, h - 2); g.fillStyle = grey(l * 0.62); g.fillRect(x + o + 1.5, (j + 1) * h - 6, w - 3, 4); } x += w; } g.fillStyle = grey(70); g.fillRect(0, (j + 1) * h - 2, S, 2); } },
+	(g, S) => { const n = 8, w = S / n, h = S / 4; for (let i = 0; i < n; i++) { const gr = g.createLinearGradient(i * w, 0, (i + 1) * w, 0); gr.addColorStop(0, grey(105)); gr.addColorStop(0.3, grey(235)); gr.addColorStop(0.55, grey(255)); gr.addColorStop(1, grey(120)); g.fillStyle = gr; g.fillRect(i * w, 0, w, S); } for (let j = 0; j < 4; j++) { g.fillStyle = grey(80, 0.75); g.fillRect(0, (j + 1) * h - 5, S, 3); g.fillStyle = grey(255, 0.35); g.fillRect(0, (j + 1) * h - 2, S, 2); } },
+	(g, S, r) => { const n = 14, w = S / n; for (let i = 0; i < n; i++) { const gr = g.createLinearGradient(i * w, 0, (i + 1) * w, 0); gr.addColorStop(0, grey(150)); gr.addColorStop(0.5, grey(250)); gr.addColorStop(1, grey(150)); g.fillStyle = gr; g.fillRect(i * w, 0, w, S); } g.fillStyle = grey(110, 0.6); g.fillRect(0, S - 3, S, 3); for (let q = 0; q < 40; q++) { g.fillStyle = `rgba(150,95,60,${0.08 + r() * 0.12})`; g.fillRect(r() * S, r() * S, 4 + r() * 20, 2 + r() * 30); } },
+	(g, S, r) => { g.fillStyle = grey(200); g.fillRect(0, 0, S, S); for (let q = 0; q < 1600; q++) { const x = r() * S, y = r() * S, L = 10 + r() * 30; g.fillStyle = grey(110 + r() * 145, 0.7); g.fillRect(x, y, 1.5, L); g.fillRect(x, y - S, 1.5, L); } for (let j = 0; j < 3; j++) { g.fillStyle = grey(100, 0.5); g.fillRect(0, (j + 1) * S / 3 - 5, S, 5); } },
 ];
 // the pattern sets, made once for every house
 let PATS = null;
 function patterns() {
-	if (!PATS) PATS = { paper: [packed(PAPERS.slice(0, 4)), packed(PAPERS.slice(4))], floor: [packed(FLOOR_PATS.slice(0, 4)), packed(FLOOR_PATS.slice(4))], siding: [packed(SIDINGS), null] };
+	if (!PATS) PATS = { paper: [packed(PAPERS.slice(0, 4)), packed(PAPERS.slice(4))], floor: [packed(FLOOR_PATS.slice(0, 4)), packed(FLOOR_PATS.slice(4))], siding: [packed(SIDINGS.slice(0, 4)), packed(SIDINGS.slice(4))], roof: [packed(ROOFS), null] };
 	return PATS;
 }
 // a material's colour times its slot's pattern (its glow too, a little)
@@ -494,7 +542,9 @@ function patterned(m, set, metres, scales = [1, 1, 1, 1, 1, 1, 1, 1]) {
 const SLOT_V = 256, SLOT_LOW = 96;
 const SLOT = new Map();
 for (let k = 0; k < 8; k++) { SLOT.set('paper' + k, ['paper', k * SLOT_V]); SLOT.set('paperLit' + k, ['paperLit', k * SLOT_V]); SLOT.set('floor' + k, ['floorPat', k * SLOT_V]); SLOT.set('door' + k, ['door6', k * DOOR_ROW]); }
-for (let k = 0; k < 4; k++) { SLOT.set('siding' + k, ['siding', k * SLOT_V]); SLOT.set('garage' + k, ['garage', (k + 1) * GARAGE_ROW]); }
+for (let k = 0; k < 4; k++) SLOT.set('garage' + k, ['garage', (k + 1) * GARAGE_ROW]);
+for (let k = 0; k < 8; k++) SLOT.set('siding' + k, ['siding', k * SLOT_V]);
+for (let k = 0; k < 4; k++) SLOT.set('roof' + k, ['roof', k * SLOT_V]);
 // a patterned key's material and its v lift, as Builder.quad applies it (or null for a plain key)
 export const slotOf = (k) => SLOT.get(k) || null;
 
@@ -576,6 +626,7 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	M.paperLit = patterned(room({ roughness: 0.85, emissive: 0xffc890 }), P.paper, 0.6);
 	M.floorPat = patterned(std({ roughness: 0.38, envMap: env, envMapIntensity: 0.25 }), P.floor, 1.2, [1, 1, 4, 1, 1, 1, 1, 1]);
 	M.siding = patterned(std({ roughness: 0.85 }), P.siding, 1.2);
+	M.roof = patterned(std({ roughness: 0.8 }), P.roof, 1.0);
 	M.lamp.userData.night = true;
 	// the outside walls take the porch lights, the garage lights and the uplights close by
 	for (const m of [M.stucco, M.siding, M.garage]) addNightField(m);

@@ -6,6 +6,9 @@
 // stairs, doors and furniture. The far block dissolves into the near house over a band
 // of distance (the same screen-noise hand-over the trees use), so nothing pops. The
 // walls, doors, railings, stairs and furniture are solid; the floors and stairs carry you.
+// Out in the world the country's homes come the same way (region/settle.js homesNear): a
+// farmhouse, a cottage, a log cabin, an adobe built for real with its rooms, its roof, porch
+// and chimney from its own description (region/homes.js).
 
 import * as THREE from 'three';
 import { planHouse, houseFloor, mainOf, houseSeed, HT, TW } from './houseplan.js';
@@ -23,6 +26,7 @@ import { carGeometry, carMaterial } from './cars.js';
 import { addLodFade, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
 import { buildSlice, viewDistance } from '../world/buildslice.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
+import { ruralLook, ruralShell, lowerSkin } from '../region/homes.js';
 
 // the rooms that sometimes have a raised (tray) ceiling
 const RAISE = new Set(['living', 'family', 'dining', 'master']);
@@ -30,7 +34,7 @@ import { inCampus } from './discovery.js';
 
 const CAR_PAINT = [[0.92, 0.92, 0.9], [0.08, 0.08, 0.09], [0.45, 0.46, 0.48], [0.7, 0.71, 0.72], [0.2, 0.28, 0.45], [0.55, 0.1, 0.1]];
 
-export function createHouses(scene, bay, real, city, { isPhone = false, night = { value: 0 } } = {}) {
+export function createHouses(scene, bay, real, city, { isPhone = false, night = { value: 0 }, regional = null } = {}) {
 	// the hand-over band: the near house fills in as the far block thins out
 	// (a narrow band: anything parked inside it stays half dissolved, so keep it to a couple of metres)
 	const band = buildingBand(isPhone);
@@ -41,6 +45,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	group.name = 'houses';
 	scene.add(group);
 	const houses = new Map();       // a house's block list (grp) -> the built house, or null if it has no plan
+	// (whose far block hands over to it: the city's, or a country home's settlement, grp.owner)
+	const own = (grp) => grp.owner || city;
 	// (the rooms' light is the shared interior lighting's: interiors/lighting.js)
 	configureLighting({ isPhone });
 	const carMats = new Map();
@@ -55,12 +61,15 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		yield;
 		const H = bay.heightAt;
 		const Mb = plan.M, ca = plan.ca, sa = plan.sa;
-		const floorY = houseFloor(grp, H);
+		const floorY = grp.floorY ?? houseFloor(grp, H);
+		const RH = grp.rural || null;
 		const toW = (lx, lz) => [Mb.x + ca * lx - sa * lz, Mb.z + sa * lx + ca * lz];
 		const gl = (lx, lz) => { const [x, z] = toW(lx, lz); return H(x, z) - floorY; };
 		let base = 0;
 		for (const r of plan.rects) for (const [x, z] of [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]]) base = Math.min(base, gl(x, z));
 		base -= 0.3;
+		// (a floor up on posts or stilts is open below: its walls stop at the floor)
+		if (RH?.posts) base = -0.22;
 		const rnd = plan.rnd;
 		const g = new Builder();
 		const col = [];                 // colliders: [x0, z0, x1, z1, y0, y1] in the house frame
@@ -68,13 +77,15 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		// when it was built and who lives there (decor.js): the outside its era's (the city's
 		// colours for it where the city gave them, so the far block hands over to the same
 		// house), the inside the household's
-		const seed = houseSeed(Mb), given = Mb.look || city?.houseLook?.(Mb);
+		const seed = houseSeed(Mb), given = RH ? ruralLook(RH, seed) : Mb.look || city?.houseLook?.(Mb);
 		const era = houseEra(Mb.x, Mb.z, { era: given?.era }), ext = exteriorLook(era, seed), dec = householdDecor(era, seed);
 		const look = { ...ext, ...(given || {}) };
 		if (!look.garage) look.garage = ext.garage;
 		const WALL = lin(look.wall), WHITE = lin([0.94, 0.93, 0.9]), TRIM = lin(dec.trim), TK = dec.trimKey;
 		const XT = lin(look.trim || ext.trim), FRAME = lin(look.frame || look.trim || ext.trim), EXT = look.siding != null ? 'siding' + look.siding : 'stucco';
 		const FOAM = lin(look.wall.map((c) => Math.min(1, c * 1.08 + 0.03)));
+		// (a country home's ground floor may be in a finish of its own: a chalet's stone under its boards)
+		const LOW = RH ? lowerSkin(RH) : null;
 		// the surrounds of the windows and doors outside: foam on stucco, boards on wood, none
 		const SK = look.surround === 'stucco' ? 'stucco' : look.surround === 'none' ? null : 'trim', SC = SK === 'stucco' ? FOAM : XT;
 		const lv = (L) => (L ? HT.floor1 : 0);
@@ -112,9 +123,9 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			else { a0 = w.pos - TW.part / 2; a1 = w.pos + TW.part / 2; }
 			// which face shows what: the + side and the - side across the wall
 			const plusRoom = w.kind === 'ext' ? (w.inSide > 0 ? w.room : -1) : w.rb, minusRoom = w.kind === 'ext' ? (w.inSide < 0 ? w.room : -1) : w.ra;
-			const across = w.axis === 'x' ? [4, 5] : [0, 1];
-			const keyF = (f) => (f === across[0] ? (plusRoom >= 0 ? wallKey(plusRoom, w) : EXT) : f === across[1] ? (minusRoom >= 0 ? wallKey(minusRoom, w) : EXT) : f === 3 ? null : 'paint');
-			const colF = (f) => (f === across[0] ? (plusRoom >= 0 ? finOf(plusRoom, w).col : WALL) : f === across[1] ? (minusRoom >= 0 ? finOf(minusRoom, w).col : WALL) : WHITE);
+			const across = w.axis === 'x' ? [4, 5] : [0, 1], [EXw, WLw] = LOW && L === 0 ? LOW : [EXT, WALL];
+			const keyF = (f) => (f === across[0] ? (plusRoom >= 0 ? wallKey(plusRoom, w) : EXw) : f === across[1] ? (minusRoom >= 0 ? wallKey(minusRoom, w) : EXw) : f === 3 ? null : 'paint');
+			const colF = (f) => (f === across[0] ? (plusRoom >= 0 ? finOf(plusRoom, w).col : WLw) : f === across[1] ? (minusRoom >= 0 ? finOf(minusRoom, w).col : WLw) : WHITE);
 			const cuts = [w.s, w.e];
 			for (const o of w.open) cuts.push(Math.max(w.s, Math.min(w.e, o.s0)), Math.max(w.s, Math.min(w.e, o.s1)));
 			cuts.sort((p, q) => p - q);
@@ -445,18 +456,23 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 
 		yield;
-		// the stoop and its steps at the front door, an apron at the garage
+		// a country home's roof, chimney, porch or verandah, balcony, timbers, shutters, posts
+		const RS = RH ? ruralShell(g, plan, RH, { base, gl, ext: EXT, wall: WALL }) : null;
+		if (RS) for (const c of RS.col) col.push(c);
+		// the stoop and its steps at the front door (from a porch's edge, where it has one), an
+		// apron at the garage
 		const D0 = plan.door;
-		const stoop = [];
+		const stoop = RS ? RS.stoop.slice() : [];
 		{
-			const gz = gl(D0.x, D0.z + 1.4), drop = -gz;
-			const x0 = D0.x - 0.95, x1 = D0.x + 0.95;
-			g.box('concrete', x0, base, D0.z, x1, 0, D0.z + 1.3, lin([0.7, 0.69, 0.66]));
-			stoop.push([x0, D0.z, x1, D0.z + 1.3, 0]);
+			const z0s = RS?.deck ?? D0.z, sd = RS?.deck != null ? 0 : 1.3, gz = gl(D0.x, z0s + sd + 0.1), drop = -gz;
+			const x0 = D0.x - 0.95, x1 = D0.x + 0.95, sk = RS?.stepKey || 'concrete', sc = RS ? RS.stepCol : lin([0.7, 0.69, 0.66]), sc2 = RS ? RS.stepCol.map((c) => c * 0.94) : lin([0.68, 0.67, 0.64]);
+			// (the foot of a step on posts is the ground under it)
+			const foot = (z) => (RH?.posts ? Math.min(gl(D0.x, z) - 0.3, -0.25) : base);
+			if (sd) { g.box(sk, x0, foot(z0s + sd), z0s, x1, 0, z0s + sd, sc); stoop.push([x0, z0s, x1, z0s + sd, 0]); }
 			const ns = Math.min(14, Math.max(0, Math.ceil(drop / 0.18 - 0.4)));
 			for (let k = 1; k <= ns; k++) {
-				const y = -drop * k / (ns + 1), z0 = D0.z + 1.3 + (k - 1) * 0.3;
-				g.box('concrete', x0 + 0.1, base, z0, x1 - 0.1, y, z0 + 0.3, lin([0.68, 0.67, 0.64]));
+				const y = -drop * k / (ns + 1), z0 = z0s + sd + (k - 1) * 0.3;
+				g.box(sk, x0 + 0.1, Math.min(foot(z0 + 0.3), y - 0.05), z0, x1 - 0.1, y, z0 + 0.3, sc2);
 				stoop.push([x0 + 0.1, z0, x1 - 0.1, z0 + 0.3, y]);
 			}
 		}
@@ -483,7 +499,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const lightsK = houseLights(seed, today());
 		const eaveLights = lightsK === 1 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : lightsK === 2 ? [[1, 0.78, 0.45]] : lightsK === 3 ? [[0.75, 0.85, 1]] : null;
 		// gutters and fascia along the eaves that face the outside, a downspout at a corner
-		for (const r of plan.rects) {
+		// (a country home's eaves are its own roof's: region/homes.js)
+		for (const r of RH ? [] : plan.rects) {
 			const y = r.top;
 			const sides = [['z', r.z1, r.x0, r.x1, 1], ['z', r.z0, r.x0, r.x1, -1]];
 			if (r.b.hip) sides.push(['x', r.x1, r.z0, r.z1, 1], ['x', r.x0, r.z0, r.z1, -1]);
@@ -563,13 +580,13 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const light = lightInterior(root, {
 			id: 'house:' + Math.round(Mb.x) + ':' + Math.round(Mb.z), occluders: col, levels, bounds: [bx0, bz0, bx1, bz1], home: true,
 			rooms: plan.rooms.length, roomOf: (x, y, z) => { const c = plan.cellAt(x, z); return c < 0 ? -1 : plan.labels?.[y > HT.floor1 - 0.2 ? 1 : 0]?.[c] ?? -1; },
-			litOf: (id) => !!lit[id], dust: (x, y, z, id) => plan.rooms[id]?.type === 'garage', exclude: ['stucco', 'siding'],
+			litOf: (id) => !!lit[id], dust: (x, y, z, id) => plan.rooms[id]?.type === 'garage', exclude: ['stucco', 'siding', 'roof'],
 			// (to bed between half past ten and one, by the house: then one lamp stays on)
 			bed: 22.5 + (((Math.imul(Math.round(Mb.x * 2) | 0, 73856093) ^ Math.imul(Math.round(Mb.z * 2) | 0, 19349663)) >>> 0) % 1000) / 1000 * 2.5,
 		});
 		// the footprint at each level, for the floors that carry you
 		const lights = plan.rooms.filter((r) => r.cells.length && lit[r.id] && r.type !== 'closet').map((r) => [r.cx, (r.level ? HT.ceil1 : HT.ceil0) - 0.45, r.cz]);
-		return { grp, plan, root, floorY, base, col, doors, stoop, lights, goodsMat, light, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, walls: { list: wallInfo, era, siding: look.siding == null ? 'stucco' : ['lap', 'batten', 'shingle', 'brick'][look.siding] || 'lap', mats: M }, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
+		return { grp, plan, root, floorY, base, col, doors, stoop, lights, goodsMat, light, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, walls: { list: wallInfo, era, siding: look.siding == null ? 'stucco' : ['lap', 'batten', 'shingle', 'brick', 'stone', 'log', 'render', 'mud'][look.siding] || 'lap', mats: M }, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
 	}
 
 	// how likely each kind of room is to have its light on (by day the lamps are half on: lighting.js)
@@ -584,7 +601,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	// ---------------------------------------------------------------------------
 	// streaming: build the nearest, one a frame; let the far ones go
 
-	let scanX = 1e9, scanZ = 1e9, cands = [], buildMs = 0, job = null;
+	let scanX = 1e9, scanZ = 1e9, cands = [], buildMs = 0, job = null, bandOf = null, homesV = -1;
 	const BUDGET = isPhone ? 3 : 4, fwd = new THREE.Vector3();
 	function update(cam, dt, nightK = 0) {
 		updateDetailClock();night.value = nightK;
@@ -592,12 +609,19 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
-		if (high) { for (const [grp,h] of houses) if(h && grp.near) city?.setNear?.(grp,null); return; }
-		for (const [grp,h] of houses) if(h && !grp.near) city?.setNear?.(grp,[h.cx,h.cz]);
+		if (high) { for (const [grp,h] of houses) if(h && grp.near) own(grp)?.setNear?.(grp,null); return; }
+		for (const [grp,h] of houses) if(h && !grp.near && !grp.dead) own(grp)?.setNear?.(grp,[h.cx,h.cz]);
+		// (the country's homes: their far faces hand over in the same band as the city's blocks)
+		const S = regional?.();
+		if (S && S !== bandOf) { S.setNearBand?.(band[2], band[3]); bandOf = S; }
 		// a shop's goods as lit as the shop: full while it is lit, the night lights' share once dark
 		for (const h of houses.values()) { const U = h?.goodsMat && h.light?.U; if (U) h.goodsMat.color.setScalar(0.92 * (U.ibakeK.value * (1 - 0.72 * U.ibakeNight.value) + 0.18 * (1 - nightK) * U.ibakeNight.value)); }
-		if (!real?.loaded() && !city?.procHomes) return;
-		// what is near, every few metres
+		if (!real?.loaded() && !city?.procHomes && !S) return;
+		// what is near, every few metres (and at once when a country home went with its frame, or
+		// the homes round you came or went while you stood still: a landing, a saved home)
+		for (const grp of houses.keys()) if (grp.dead) scanX = 1e9;
+		const hv = S?.homesVersion?.() ?? -1;
+		if (hv !== homesV) { homesV = hv; scanX = 1e9; }
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
 			scanX = x; scanZ = z;
 			const seen = new Set();
@@ -612,6 +636,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			}
 			// ...and the gridded towns' houses (city.js gives them the same shape)
 			for (const grp of city?.procHomes?.(x, z, BUILD_R) || []) if (!grp.wrecked) cands.push([Math.hypot(grp[0].x - x, grp[0].z - z), grp]);
+			// ...and the country's homes out in the world (region/settle.js)
+			for (const grp of S?.homesNear?.(x, z, BUILD_R) || []) { const d = Math.hypot(grp[0].x - x, grp[0].z - z); if (d < BUILD_R) cands.push([d, grp]); }
 			// (the nearest first; of those near alike, the ones you are looking at)
 			cam.getWorldDirection(fwd);
 			for (const c of cands) { const Mb = mainOf(c[1]) || c[1][0]; c[2] = viewDistance(c[0], Mb.x, Mb.z, cam.position, fwd); }
@@ -620,14 +646,14 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 		for (const [grp, h] of houses) {
 			const Mb = mainOf(grp), d = Math.hypot(Mb.x - x, Mb.z - z);
-			if (d > DROP_R || grp.wrecked || (!cands.some((c) => c[1] === grp) && houses.size > MAX)) {          // (wrecked: structures/ draws its shell)
-				if (h) { dispose(h); city?.setNear?.(grp, null); }
+			if (d > DROP_R || grp.wrecked || grp.dead || (!cands.some((c) => c[1] === grp) && houses.size > MAX)) {          // (wrecked: structures/ draws its shell; dead: a country home's cell or frame gone)
+				if (h) { dispose(h); own(grp)?.setNear?.(grp, null); }
 				houses.delete(grp);
 			}
 		}
 		// one house at a time, a few milliseconds a frame
-		if (job && !cands.some((c) => c[1] === job.grp)) job = null;
-		if (!job) for (const [, grp] of cands) if (!houses.has(grp)) { job = { grp, gen: build(grp), ms: 0 }; break; }
+		if (job && (job.grp.dead || !cands.some((c) => c[1] === job.grp))) job = null;
+		if (!job) for (const [, grp] of cands) if (!houses.has(grp) && !grp.dead) { job = { grp, gen: build(grp), ms: 0 }; break; }
 		const t0 = performance.now(), slice = buildSlice(dt, BUDGET);
 		while (job && performance.now() - t0 < slice) {
 			let r;
@@ -637,7 +663,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (!r.done) continue;
 			const h = r.value;
 			houses.set(job.grp, h);
-			if (h) city?.setNear?.(job.grp, [h.cx, h.cz]);
+			if (h) own(job.grp)?.setNear?.(job.grp, [h.cx, h.cz]);
 			buildMs = job.ms;
 			job = null;
 		}
@@ -664,7 +690,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			const y = footY - h.floorY, p = h.plan;
 			for (const s of h.stoop) if (lx > s[0] && lx < s[2] && lz > s[1] && lz < s[3] && y > s[4] - 0.7) best = Math.max(best, h.floorY + s[4]);
 			const c = p.cellAt(lx, lz);
-			if (c < 0 || p.occ[c] < 0) continue;
+			// (well below its floor, as under a house up on stilts, the floor is not yours)
+			if (c < 0 || p.occ[c] < 0 || y < -0.75) continue;
 			let f = 0;
 			const st = p.stairs;
 			if (st && lx > st.x0 && lx < st.x1 && lz < st.zb && lz > st.zt) {
@@ -750,7 +777,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		for (const h of houses.values()) {
 			if (!h) continue;
 			const [lx, lz] = local(h, pos.x, pos.z), c = h.plan.cellAt(lx, lz);
-			if (c >= 0 && h.plan.occ[c] >= 0 && pos.y - h.floorY < HT.ceil1 + 1) return { h, level: pos.y - h.floorY > HT.floor1 + 0.5 ? 1 : 0 };
+			if (c >= 0 && h.plan.occ[c] >= 0 && pos.y - h.floorY < HT.ceil1 + 1 && pos.y - h.floorY > 0.6) return { h, level: pos.y - h.floorY > HT.floor1 + 0.5 ? 1 : 0 };
 		}
 		return null;
 	}
