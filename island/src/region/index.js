@@ -38,7 +38,7 @@ const CLAIM_ALL = new Set(['bazaar', 'eastcity', 'southcity']);
 // ...and the biggest size class each other kit builds itself (the farm country's towns are the generator's)
 const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, mojave: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2 };
 // how far round a real landmark the generated places keep clear (m), by its builder
-const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 160, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 50, vegassign: 15, canopy: 230, venetian: 170, sphere: 80 };
+const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 190, bellagio: 270, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 50, vegassign: 15, canopy: 230, venetian: 200, sphere: 80 };
 
 export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null, water = () => null }) {
 	const height = globe.height;

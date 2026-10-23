@@ -8,7 +8,7 @@
 // Moving on to the next town, the one you leave stands until the next is grown, and the one
 // you are well inside is kept even when a neighbour (a big city's next district) is nearer.
 
-import { generateTownSteps, hashStr } from './civgen.js';
+import { generateTownSteps, arterialSpacing, hashStr } from './civgen.js';
 import { STYLE } from '../bay/styles.js';
 import { industrialEdge } from './civedge.js';
 
@@ -20,7 +20,8 @@ const KEEP = 0.85;          // the town standing is kept within this share of it
 
 // brief(town): the town's city brief from the director (earth/director.js): its street names and
 // shop signs; null while one is on its way (the town waits), undefined for none. keep(x, z, r): the
-// ground kept for landmarks round a town ([{ x, z, r }]); palms(town): its street trees are palms
+// ground kept for landmarks round a town ([{ x, z, r }]); palms(town): its street trees are palms.
+// A town with a spine ({ x, name }, its grid square to north) has a real boulevard down it
 export function createCivilization({ real, bay, water = () => null, brief = null, keep = () => [], palms = () => false }) {
 	let active = null, job = null, pending = false;
 	const cache = [];        // the last few towns grown, newest last
@@ -37,7 +38,11 @@ export function createCivilization({ real, bay, water = () => null, brief = null
 		const near = (x, z) => { let d = W ? W.near(x, z) : Infinity; for (const k of K) d = Math.min(d, Math.max(0, Math.hypot(x - k.x, z - k.z) - k.r)); return d; };
 		const kept = (x, z, m = 0) => K.some((k) => Math.hypot(x - k.x, z - k.z) < k.r + m);
 		const lake = (x, z) => !!W?.inLake(x, z) || kept(x, z);
-		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null });
+		// (a town on a real boulevard, t.spine { x, name }: its grid moved, by up to half its arterial
+		// spacing, to put one of its north-south arterials on it)
+		const style = t.style === STYLE.older ? 'older' : 'suburb', SP = arterialSpacing(t.r, style);
+		const k = t.spine ? Math.round((t.spine.x - t.x) / SP) : 0, cx = t.spine ? t.spine.x - k * SP : t.x;
+		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style, name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null, spine: t.spine ? { k, name: t.spine.name } : null });
 		return { town: t, it, t0: performance.now(), work: 0, near: W || K.length ? near : null };
 	}
 	function finish(J, region) {

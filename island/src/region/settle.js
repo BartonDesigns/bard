@@ -182,7 +182,7 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 			if (L.role === 'house' && !foundation) continue;
 			const y = foundation?.y ?? ground(terrainLot.x, terrainLot.z);
 
-			const B = { G, glow, night: nightG, smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense, home: null };
+			const B = { G, glow, night: nightG, later: [], smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense, home: null };
 			const rot = L.rot + Math.PI;
 			G.frame(L.x, y, L.z, rot); glow.frame(L.x, y, L.z, rot); nightG.frame(L.x, y, L.z, rot);
 			const pal = basePalette(s.palette, kit, r, opts);
@@ -190,6 +190,8 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 			const v0 = G.count(), g0 = glow.count();
 			if (foundation && foundation.hi - foundation.lo > 0.12) G.box(0, foundation.lo - y - 0.25, 0, L.w, y - foundation.lo + 0.3, L.d, pal.stone);
 			try { fn(B, { w: L.w, d: L.d }, pal, r); } catch (e) { console.warn('[regional] ' + L.type, e); }
+			// (a landmark's heavier pieces, its hotel towers, one at a time between frames)
+			for (const f of B.later) { tWork += performance.now() - tLast; yield; tLast = performance.now(); try { f(); } catch (e) { console.warn('[regional] ' + L.type, e); } }
 			const cs = Math.cos(rot), sn = Math.sin(rot), toS = (a, b) => [L.x + a * cs + b * sn, L.z - a * sn + b * cs];
 			const H = L.role === 'house' && !B.lite ? B.home : null;
 			const rec = H ? { L, y, H, v0, v1: H.v, g0, g1: H.gv, c: toS(H.x || 0, 0), cell: null, grp: null, nearGrp: null, n: homes.length } : null;

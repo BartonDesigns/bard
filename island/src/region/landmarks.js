@@ -340,13 +340,21 @@ export const REAL = [
 	['New York-New York', 36.1022, -115.1745, 'nyny', 1, 90, 'A whole Manhattan skyline, a roller coaster round it, and the Statue of Liberty out front.'],
 	['the MGM Grand', 36.1024, -115.1696, 'casino', 1, 270, 'Emerald green glass. It was the biggest hotel in the world when it opened.', { form: 'tri', h: 90, w: 200, c: [0.3, 0.58, 0.42], g: [0.12, 0.3, 0.22], neon: 'green', neon2: 'gold' }],
 	['Aria', 36.1073, -115.1766, 'casino', 1, 90, 'Silver glass curves in the middle of CityCenter.', { form: 'curve', h: 180, c: [0.62, 0.66, 0.7], g: [0.2, 0.24, 0.28], neon: 'white', neon2: 'blue' }],
-	['the Bellagio', 36.1129, -115.1765, 'casino', 1, 90, 'After dark the fountains dance to music every fifteen minutes. Get a spot on the rail.', { form: 'curve', h: 150, c: [0.9, 0.84, 0.72], g: [0.4, 0.38, 0.34], neon: 'gold', neon2: 'white', lake: true }],
+	['the Bellagio', 36.1129, -115.1765, 'bellagio', 1, 90, 'After dark the fountains dance to music every fifteen minutes. Get a spot on the rail.', { form: 'curve', h: 150, c: [0.9, 0.84, 0.72], g: [0.4, 0.38, 0.34], neon: 'gold', neon2: 'white', lake: true }],
 	['Paris Las Vegas', 36.1125, -115.1707, 'parislv', 1, 270, 'A half-size Eiffel Tower, with a full-size view of the Bellagio fountains from the top.'],
+	['the Cosmopolitan', 36.1097, -115.1748, 'casino', 1, 90, 'Two dark glass towers, and a bar inside a three-storey chandelier.', { form: 'twin', h: 184, w: 160, c: [0.24, 0.26, 0.3], g: [0.1, 0.11, 0.14], neon: 'purple', neon2: 'pink' }],
+	['Planet Hollywood', 36.11, -115.1696, 'casino', 1, 270, 'Its whole front is a wall of screens, and the Miracle Mile shops wrap round behind it.', { form: 'slab', h: 120, w: 190, c: [0.3, 0.3, 0.36], g: [0.14, 0.14, 0.2], neon: 'blue', neon2: 'white' }],
+	['the Flamingo', 36.1162, -115.1697, 'casino', 1, 270, 'Pink neon feathers all down its front, and real flamingos in the garden out the back.', { form: 'slab', h: 90, w: 190, c: [0.95, 0.86, 0.86], g: [0.45, 0.32, 0.36], neon: 'pink', neon2: 'pink' }],
 	['Caesars Palace', 36.1162, -115.1745, 'casino', 1, 90, 'Marble, columns and fountains. Everyone gets lost in the Forum Shops.', { form: 'slab', h: 120, w: 200, c: [0.94, 0.92, 0.88], g: [0.4, 0.44, 0.5], neon: 'white', neon2: 'blue' }],
 	['the High Roller', 36.1176, -115.1681, 'wheel', 1, 270, 'Half an hour to go round. At night the whole rim lights up.'],
 	['the Venetian', 36.1212, -115.1697, 'venetian', 1, 270, 'Canals indoors, gondoliers singing, and a painted sky that never gets dark.'],
 	['the Sphere', 36.1208, -115.1622, 'sphere', 1, 270, 'The whole outside is a screen. Some nights it\'s a giant eyeball looking back at you.'],
 	['the Wynn', 36.1265, -115.1657, 'casino', 1, 270, 'A bronze curve of a tower, quieter inside than the rest of the Strip.', { form: 'curve', h: 185, c: [0.55, 0.4, 0.26], g: [0.32, 0.22, 0.14], neon: 'gold', neon2: 'gold' }],
+	['Treasure Island', 36.1247, -115.1747, 'casino', 1, 90, 'Gold glass in a Y, and the cove out front where the pirate ships used to fight.', { form: 'y', h: 110, c: [0.86, 0.7, 0.46], g: [0.42, 0.32, 0.2], neon: 'red', neon2: 'gold' }],
+	['Encore', 36.1291, -115.165, 'casino', 1, 250, 'The Wynn\'s bronze twin, a little taller and a little quieter.', { form: 'curve', h: 190, c: [0.55, 0.4, 0.26], g: [0.32, 0.22, 0.14], neon: 'gold', neon2: 'gold' }],
+	['Resorts World', 36.1333, -115.166, 'casino', 1, 60, 'Red towers, and a screen down the side bigger than any billboard on the Strip.', { form: 'twin', h: 200, w: 180, c: [0.55, 0.16, 0.14], g: [0.25, 0.08, 0.08], neon: 'red', neon2: 'white' }],
+	['the Fontainebleau', 36.1366, -115.1612, 'casino', 1, 240, 'The tallest building in Nevada: a blue glass curve that stood half-finished for fifteen years.', { form: 'curve', h: 225, c: [0.4, 0.55, 0.7], g: [0.15, 0.25, 0.35], neon: 'blue', neon2: 'white' }],
+	['the Sahara', 36.1424, -115.1574, 'casino', 1, 240, 'At the north end of the Strip since 1952, when all of this was sand.', { form: 'slab', h: 85, w: 160, c: [0.92, 0.88, 0.8], g: [0.3, 0.32, 0.36], neon: 'blue', neon2: 'white' }],
 	['the Strat', 36.1475, -115.1566, 'strat', 1, 0, 'Three hundred and fifty metres up, and people pay to jump off the top on a wire.'],
 	['Fremont Street', 36.1706, -115.1441, 'canopy', 1, 151.5, 'The whole ceiling of the canopy is a screen. Some of these casinos have been here since the forties.'],
 ];
@@ -378,8 +386,13 @@ function part(B, x, z, r, fn) {
 	G.frame(...f); L?.frame(...f); N?.frame(...f);
 }
 // a hotel tower w x d from y0 up h: banded with glass a storey apart, and by night its rooms lit, a
-// stretch of window here and there on every floor
+// stretch of window here and there on every floor (built a tower a frame where settle.js lets it: B.later)
 function tower(B, x, z, w, d, y0, h, c, g, r = 0, lit = 0.34) {
+	B.solid.push([x, z, w, d, r]);
+	if (B.later) B.later.push(() => towerNow(B, x, z, w, d, y0, h, c, g, r, lit));
+	else towerNow(B, x, z, w, d, y0, h, c, g, r, lit);
+}
+function towerNow(B, x, z, w, d, y0, h, c, g, r, lit) {
 	const { G } = B, L = B.night || B.glow, n = Math.floor(h / 3.3);
 	G.box(x, y0, z, w, h, d, c, { r });
 	const cs = Math.cos(r), sn = Math.sin(r), q = (a, b) => [x + a * cs + b * sn, z - a * sn + b * cs];
@@ -398,7 +411,6 @@ function tower(B, x, z, w, d, y0, h, c, g, r = 0, lit = 0.34) {
 			}
 		}
 	}
-	B.solid.push([x, z, w, d, r]);
 }
 // a resort's grounds: paved from the boulevard's kerb (local z0, to the front) back to z1, following
 // the ground, the drive to its door darker, and a row of palms down the kerb (flora.js grows them)
@@ -430,6 +442,7 @@ R.casino = (B, s = 1, a = {}, r, ground) => {
 	const ty = P - 1, tz = D * 0.55, form = a.form || 'slab';
 	let crown = [];
 	if (form === 'slab') { tower(B, 0, tz, W * 0.62, 24 * s, ty, H, c, g); crown = [[0, tz - 12 * s - 0.4, W * 0.4, 0]]; }
+	else if (form === 'twin') for (const sx of [-1, 1]) { const h = H * (sx > 0 ? 1 : 0.93); tower(B, sx * W * 0.22, tz, W * 0.3, 26 * s, ty, h, c, g); crown.push([sx * W * 0.22, tz - 13 * s - 0.4, W * 0.24, 0, h]); }
 	else if (form === 'curve') {
 		// a crescent, its hollow to the front (its ends come forward round the middle)
 		const R2 = 150 * s, n = 9, span = 1.25, wseg = 2 * R2 * Math.sin(span / (n - 1) / 2) + 1;
@@ -459,6 +472,8 @@ R.casino = (B, s = 1, a = {}, r, ground) => {
 	}
 	B.solid.push([0, D / 2, W, D, 0]);
 };
+// the Bellagio: a casino behind its lake, the fountains out on the water to the boulevard
+R.bellagio = (B, s, a, r, ground) => R.casino(B, s, { ...a, lake: true }, r, ground);
 // the Luxor: a dark glass pyramid, its edges lit, and the beam from its point up into the night
 R.luxor = (B, s = 1, a, r, ground) => {
 	const { G } = B, L = B.glow, h = 107 * s, w = 180 * s;

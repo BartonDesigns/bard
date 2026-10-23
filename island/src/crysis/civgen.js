@@ -209,7 +209,12 @@ export function generateTown(opts) {
 
 // the same, one piece at a time: yields between the pieces (a superblock, a pass), so a
 // caller can spread the work over frames. The generator's return value is the region.
-export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null, brief = null }) {
+// the spacing of a town's arterial grid (m): its main roads' lattice (crysis/civ.js lines a town up on it)
+export const arterialSpacing = (radius, style = 'suburb', S = STATS) => (style === 'older' ? clamp(radius * 0.7, 600, 1200) : clamp(radius * 0.8, 700, S.arterialSpacing));
+
+// spine: { k, name }: the k-th north-south arterial is a real boulevard (Las Vegas Boulevard down
+// the Strip): straight, a through road, and called by its name
+export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null, brief = null, spine = null }) {
 	const S = stats, r = rng(seed), T0 = Date.now();
 	const older = style === 'older';
 	const W = S.widths;
@@ -260,14 +265,14 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const inSite = (x, z, pad = 0) => { for (const s of sites) { const dx = x - s.x, dz = z - s.z, a = dx * s.ux + dz * s.uz, b = -dx * s.uz + dz * s.ux; if (Math.abs(a) < s.hw + pad && Math.abs(b) < s.hd + pad) return s; } return null; };
 
 	// ---------- 1. the arterials ----------
-	const SP = older ? clamp(radius * 0.7, 600, 1200) : clamp(radius * 0.8, 700, S.arterialSpacing);
+	const SP = arterialSpacing(radius, style, S);
 	const nL = Math.floor(Rdev / SP);
 	const artName = new Map();
 	const DTR = W.primary / 2 + 5 + 2 * clamp(radius * 0.055, 110, 200) + 20;     // the downtown's reach from the crossing (below)
 	// a line of the grid, meandering between crossings (it passes the lattice points exactly,
 	// so the crossings stay where the superblocks expect them) and easing round steep ground
 	function traceLine(axis, k, v0, v1, cls) {
-		const pts = [], step = 30, amp = SP * (older ? 0.03 : 0.07);
+		const real = !!spine && !axis && k === spine.k, pts = [], step = 30, amp = real ? 0 : SP * (older ? 0.03 : 0.07);
 		const ph = r() * 6.28, fr = 1 + Math.floor(r() * 2);
 		let drift = 0;
 		for (let v = v0; v <= v1 + 0.01; v += step) {
@@ -295,14 +300,14 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			else { if (cur.length >= 16) pieces.push(cur); cur = []; }
 		}
 		if (cur.length >= 16) pieces.push(cur);
-		const nm = artName.get(axis + ':' + k) || nameOf(cls === 'tertiary' ? 'col' : 'art');
+		const nm = artName.get(axis + ':' + k) || (real ? spine.name : nameOf(cls === 'tertiary' ? 'col' : 'art'));
 		artName.set(axis + ':' + k, nm);
 		for (const q of pieces) G.addNoded(q, { cls, name: nm });
 	}
 	for (const axis of [0, 1]) for (let k = -nL; k <= nL; k++) {
 		const u = k * SP, half = Math.sqrt(Math.max(0, Rdev * Rdev - u * u));
 		let e = Math.round(half / SP) * SP;
-		const main = k === 0;
+		const main = k === 0 || (!!spine && !axis && k === spine.k);
 		if (main) e = Math.floor(Rbox / SP) * SP + (Rbox % SP > 60 ? Rbox % SP - 40 : 0);   // the through roads run on out of town
 		if (e < SP * 0.99 && !main) continue;
 		traceLine(axis, k, -e, e, main ? 'primary' : 'secondary');

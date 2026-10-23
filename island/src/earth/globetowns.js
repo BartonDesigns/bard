@@ -32,6 +32,10 @@ const SCAN_KM = 260, RESCAN = 1500;
 const DISTRICT = [0, 1100, 1500, 1800, 2000, 2200];
 const D_STEP = 1.3, D_LIT = 0.3, D_KM = 9;
 const urbOf = (size, d) => Math.exp(-((d / SPREAD[size]) ** 3) * 1.2) * GLOW[size];
+// the real boulevards a city's grid is lined up on (crysis/civ.js spine), by the atlas's city id: the
+// line of longitude it runs north and south on, between two latitudes (the districts whose middle is
+// between them have it)
+const SPINES = { 'las-vegas': { lon: -115.1722, lat: [36.07, 36.126], name: 'Las Vegas Boulevard' } };
 
 export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false, keep = () => [] }) {
 	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city }
@@ -84,7 +88,7 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 			const southwest = /^na\b/.test(id) && aridAt(c.lat, c.lon), palms = aridAt(c.lat, c.lon) && (R.profile?.climate?.temp?.[0] ?? 0) >= 5;
 			const older = (!/^(na|oc)\b/.test(id) || size >= 3) && !southwest;
 			const h = hash(c.id), ang = southwest ? 0 : (h % 1000) / 1000 * Math.PI / 2, style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
-			towns.push({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, palms });
+			towns.push(spined({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, palms }));
 			districts(rec, ang, style, pop, id, palms);
 		}
 	}
@@ -107,9 +111,19 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 				if (d < REACH[size] * 0.9 || urbOf(size, d) < D_LIT) continue;
 				const x = rec.x + u * ca - v * sa, z = rec.z + u * sa + v * ca;
 				if (Math.hypot(x - here.x, z - here.z) > D_KM * 1000 || skip(x, z, r)) continue;
-				towns.push({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j] });
+				towns.push(spined({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j] }));
 			}
 		}
+	}
+	// a town on its city's boulevard (its grid square to north): where the boulevard runs past it
+	function spined(t) {
+		const S = SPINES[t.city.id];
+		if (!S || t.ang) return t;
+		const ll = toLL(t.x, t.z);
+		if (ll.lat < S.lat[0] || ll.lat > S.lat[1]) return t;
+		const x = toXZ(ll.lat, S.lon).x;
+		if (Math.abs(x - t.x) < t.r * 1.3) t.spine = { x, name: S.name };
+		return t;
 	}
 	function update(camera, arriving = false) {
 		if (!atlasReady()) { loadAtlas().catch(() => {}); return; }

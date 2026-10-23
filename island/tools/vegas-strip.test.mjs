@@ -47,8 +47,15 @@ test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street,
 	// (south to north up the Strip, the Strat and Fremont Street past its north end)
 	const at = (n) => VEGAS.find((e) => e[0].includes(n));
 	assert.ok(at('Welcome')[1] < at('Luxor')[1] && at('Luxor')[1] < at('Bellagio')[1] && at('Bellagio')[1] < at('Wynn')[1] && at('Wynn')[1] < at('Strat')[1] && at('Strat')[1] < at('Fremont')[1]);
-	// (on the boulevard: none more than a kilometre off it, the Sphere and Fremont aside)
-	for (const e of VEGAS) if (!/Sphere|Fremont|Strat/.test(e[0])) assert.ok(Math.abs(e[2] + 115.172) < 0.01, e[0]);
+	// (on the boulevard where it runs north and south, up to Spring Mountain Road: each close by, its
+	// ground clear of the road itself; the Sphere set back behind)
+	const idx2 = fs.readFileSync(new URL('../src/region/index.js', import.meta.url), 'utf8');
+	for (const e of VEGAS) {
+		if (e[1] > 36.126 || /Sphere|Welcome/.test(e[0])) continue;
+		const off = Math.abs(e[2] + 115.1722) * 89900, clear = +idx2.match(new RegExp('\\b' + e[3] + ': (\\d+)'))[1] * e[4];
+		assert.ok(off < 650, `${e[0]} on the Strip (${Math.round(off)} m off)`);
+		assert.ok(off > clear, `${e[0]} keeps off the boulevard (${Math.round(off)} m, clear ${clear})`);
+	}
 });
 
 test('the night layer is dark by day and lit after it, on the glow\'s own shader', () => {
@@ -181,4 +188,34 @@ test('the American desert grows its own plants: creosote and Joshua trees round 
 	// (the kit's own name everywhere the kits are listed)
 	assert.match(fs.readFileSync(new URL('../src/region/talk.js', import.meta.url), 'utf8'), /case 'mojave':/);
 	assert.match(fs.readFileSync(new URL('../src/region/index.js', import.meta.url), 'utf8'), /mojave: 0,/);
+});
+
+test('Las Vegas Boulevard runs straight down the Strip, the district\'s grid lined up on it', async () => {
+	const town = { x: 0, z: 0, r: 1500, ang: 0, style: STYLE.suburb, name: 'Las Vegas', spine: { x: 437, name: 'Las Vegas Boulevard' } };
+	const civ = createCivilization({ real: { addRegion: (r) => ({ r }), removeRegion: () => {} }, bay: { towns: [town], heightAt: () => 610, loaded: () => true } });
+	const cam = { position: { x: 0, y: 1.7, z: 0 } };
+	for (let n = 0; n < 20000 && !civ.active(); n++) civ.update(cam);
+	const R = civ.active().region;
+	const blvd = R.roads.filter((q) => q.name === 'Las Vegas Boulevard');
+	assert.ok(blvd.length, 'the boulevard is there by name');
+	let len = 0;
+	for (const q of blvd) {
+		assert.equal(q.cls, 'primary');
+		for (let i = 0; i < q.pts.length; i += 2) assert.ok(Math.abs(q.pts[i] - 437) < 2, `straight on its line (${q.pts[i].toFixed(1)})`);
+		len += Math.abs(q.pts[q.pts.length - 1] - q.pts[1]);
+	}
+	assert.ok(len > 2 * 1500, `${Math.round(len)} m of it, through the town and on out`);
+	assert.ok(Math.abs(R.centre[0]) <= R.info.arterialSpacing / 2 + 1, 'the grid moved less than half its spacing');
+	// (the districts over the Strip have it; downtown, up past the Strat, does not)
+	await loadAtlas();
+	setFrame(36.1135, -115.1722);
+	try {
+		const T = createGlobeTowns({ real: { addRegion: () => ({}), removeRegion: () => {} }, heightAt: () => 610, water: () => null, director: null, skip: () => false, claim: () => false });
+		const c = toXZ(36.1135, -115.1722);
+		T.update({ position: { x: c.x, y: 1.7, z: c.z } });
+		const lv = T.towns.filter((t) => t.city.name === 'Las Vegas');
+		assert.ok(lv.some((t) => t.spine && Math.hypot(t.x - c.x, t.z - c.z) < t.r), 'the district you stand in on the Strip');
+		assert.ok(!lv.find((t) => !t.district).spine, 'not downtown');
+		for (const t of lv.filter((q) => q.spine)) assert.ok(Math.abs(t.spine.x - c.x) < 30);
+	} finally { bayFrame(); }
 });
