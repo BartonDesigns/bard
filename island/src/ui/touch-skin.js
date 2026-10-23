@@ -19,8 +19,8 @@
 // and from the bottom left: the resting stick on foot, or steer left and right in a vehicle
 // (with climb and descend above them in an aircraft). Things you can act on nearby (talk,
 // use, doors, pick up) sit in a row between the thumbs. Along the top: back on the left (the
-// homes and the contract below it), the rest on the right in one row. Tips sit under the
-// top row, clear of every button.
+// homes below it), the rest on the right in one row. Tips sit under the top row, clear of
+// every button.
 
 const SVG = (paths) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>${paths}</svg>`)}")`;
 
@@ -88,7 +88,6 @@ export const GLYPHS = {
 	putdown: "<path d='M12 3v11M7.5 9.5 12 14l4.5-4.5M5 19.5h14'/>",
 	pen: "<path d='M15.5 4.5l4 4L9 19l-5 1 1-5z'/><path d='M13.5 6.5l4 4'/>",
 	home: "<path d='M4 11.5 12 4.5l8 7'/><path d='M6.5 10v10h11V10'/><path d='M10 20v-5h4v5'/>",
-	contract: "<rect x='5.5' y='4.5' width='13' height='16.5' rx='2'/><path d='M9 4.5V3h6v1.5M9 10h6M9 14h6M9 18h3.5'/>",
 	bell: "<path d='M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z'/><path d='M10 20.5a2 2 0 0 0 4 0'/>",
 	play: "<path d='M8.5 5.5v13l10-6.5z'/>",
 	tap: "<path d='M9 11V5.5a1.5 1.5 0 0 1 3 0V10m0-1a1.5 1.5 0 0 1 3 0v1.5m0-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.5a5 5 0 0 1-4.3-2.5L5 15.8a1.4 1.4 0 0 1 2.3-1.6L9 16'/>",
@@ -159,7 +158,6 @@ const RULES = [
 	[(a) => /treated|Pharmacy/.test(a), 'medic'],
 	[(a) => /Supply cache/.test(a), 'crate'],
 	[(a) => /home/i.test(a) && !/faceplate/.test(a), 'home'],
-	[(a) => /^Field contracts/.test(a), 'contract'],
 	[(a) => /^Strike the stone|stone/i.test(a), 'bell'],
 	[(a) => /^Play\b/.test(a), 'play'],
 	[(a) => a === 'Quest log', 'scroll'],
@@ -268,8 +266,6 @@ ${S} .l99-pad>[data-pedal="left"]{left:calc(16px + var(--sl))!important;right:au
 ${S} .l99-pad>[data-pedal="right"]{left:calc(96px + var(--sl))!important;right:auto!important;bottom:calc(16px + var(--sb))!important;width:64px!important;height:64px!important;--gs:26px;}
 ${S} .l99-pad>[data-pedal="straight"]{${P}--gs:30px;}
 ${S} .l99-pad>[data-pedal="back"]{${L1}}
-${S} [data-field-contract].cv-idle{padding:0!important;border:0!important;background:none!important;box-shadow:none!important;width:auto!important;overflow:visible!important;}
-${S} [data-field-contract].cv-idle [data-skin]{flex:none!important;}
 
 ${S}.l99-c-fish :is(.mc-btn,.cb-btn,[aria-label="Aim"],[aria-label="Aim held item"]),${S}.l99-c-drive :is(.mc-btn,.cb-btn,[aria-label="Jump"]){display:none!important;}
 ${S}.l99-tools-open :is([data-skin],.l99-pad){visibility:hidden;}
@@ -307,8 +303,6 @@ export function skinTouch(mount) {
 	const inScope = (b) => {
 		// (a chip of text that can be tapped, such as the quest's: text, not a control)
 		if (b.hasAttribute('data-hud-text')) return false;
-		const cv = b.closest('[data-field-contract]');
-		if (cv) return cv.classList.contains('cv-idle') && b.hasAttribute('data-cv-open');
 		const p = b.parentElement;
 		return !!p && (p === mount || GROUPS.some((g) => p.classList.contains(g)));
 	};
@@ -334,7 +328,7 @@ export function skinTouch(mount) {
 		const close = (g === 'menu' || g === 'more') && b.getAttribute('aria-expanded') === 'true' ? 'close' : g;
 		if (close) { if (b.dataset.glyph !== close) b.dataset.glyph = close; } else if (b.hasAttribute('data-glyph')) b.removeAttribute('data-glyph');
 		const size = b.matches('.cb-btn:is([aria-label="Fire"],[aria-label="Draw"],[aria-label="Release"],[aria-label="Nocking"]),.mc-strike,[data-hud="prompt 20"]') ? 'p'
-			: b.matches('.cb-btn[aria-label="Mode"],.l99-quick>*,[data-cv-open]') || /^(back|sun|music|warp|home|chat)$/.test(g) ? 's' : '';
+			: b.matches('.cb-btn[aria-label="Mode"],.l99-quick>*') || /^(back|sun|music|warp|home|chat)$/.test(g) ? 's' : '';
 		if ((b.dataset.size || '') !== size) { if (size) b.dataset.size = size; else delete b.dataset.size; }
 	}
 	const all = () => { for (const b of mount.querySelectorAll('button')) dress(b); };
@@ -344,8 +338,6 @@ export function skinTouch(mount) {
 			const t = m.target.nodeType === 1 ? m.target : m.target.parentElement;
 			const b = t?.closest?.('button');
 			if (b && mount.contains(b)) todo.add(b);
-			// (a panel folding to its button, or back)
-			else if (m.attributeName === 'class' && t?.matches?.('[data-field-contract]')) for (const q of t.querySelectorAll('button')) todo.add(q);
 			for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.tagName === 'BUTTON') todo.add(n); else for (const q of n.querySelectorAll?.('button') || []) todo.add(q); }
 		}
 		for (const b of todo) dress(b);

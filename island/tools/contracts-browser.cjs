@@ -22,10 +22,16 @@ const root = path.resolve(__dirname, '../..'), out = process.env.CONTRACTS_OUT |
 			const p = await context.newPage(); p.on('pageerror', (e) => report.errors.push(e.message)); p.on('console', (m) => { if (m.type() === 'error') report.errors.push(m.text()); });
 			await p.goto(`http://127.0.0.1:${server.address().port}/`); await p.waitForFunction(() => window.review); await p.keyboard.press('Shift');
 			await p.evaluate(() => review.setupContracts());
-			const panel = p.locator('[data-field-contract]'), loot = p.locator('[data-field-recovery]');
+			const loot = p.locator('[data-field-recovery]');
+			// (no window of its own: offered, tracked and abandoned through Quests, guide/guide-screens.js)
+			assert.equal(await p.locator('[data-field-contract]').count(), 0);
+			const accept = async () => { const r = await p.evaluate(() => review.combat.contracts.accept()); assert.equal(r.ok, true, r.error); return r; };
 			for (let n = 0; n < 3; n++) {
-				await panel.getByRole('button', { name: /Field contracts/ }).click(); await panel.getByRole('button', { name: 'Accept contract', exact: true }).click();
+				const offer = await p.evaluate(() => review.combat.contracts.journal()); assert.equal(offer.active, false); assert.equal(offer.completed, n);
+				await accept();
 				let s = await p.evaluate(() => review.contractState()); assert.equal(s.mission.stage, 'travel'); assert.equal(s.completed, n);
+				const mark = await p.evaluate(() => review.combat.contracts.mark()); assert.equal(mark.key, 'contract:' + s.mission.id); assert.equal(mark.title, 'Reach the supply cache'); assert.equal(mark.x, s.mission.site.x);
+				const tracked = await p.evaluate(() => review.combat.contracts.journal()); assert.equal(tracked.active, true); assert.equal(tracked.steps[0].state, 'now'); assert.equal(tracked.name, offer.name);
 				const credits = s.inventory.credits, expected = s.mission.def.credits;
 				await p.evaluate(() => { review.contractMove(); review.step(260); });
 				for (let wave = 0; wave < (n === 0 ? 0 : n === 1 ? 1 : 2); wave++) {
@@ -48,11 +54,10 @@ const root = path.resolve(__dirname, '../..'), out = process.env.CONTRACTS_OUT |
 				await p.evaluate(() => review.step(12)); await p.screenshot({ path: path.join(out, `${phone ? 'phone' : 'desktop'}-pickup-${n}.png`) });
 				if (n === 0) {
 					const owned = Object.keys(s.inventory.instances).length;
-					await panel.locator(':scope > button').click();
-					await panel.getByRole('button', { name: 'Abandon', exact: true }).click();
+					assert.equal(await p.evaluate(() => review.combat.contracts.abandon()), true); assert.equal(await p.evaluate(() => review.combat.contracts.mark()), null);
 					assert.equal((await p.evaluate(() => review.contractState())).inventory.credits, credits);
 					await p.reload(); await p.waitForFunction(() => window.review); await p.keyboard.press('Shift'); await p.evaluate(() => review.setupContracts());
-					await panel.getByRole('button', { name: /Field contracts/ }).click(); await panel.getByRole('button', { name: 'Accept contract', exact: true }).click();
+					await accept();
 					await p.evaluate(() => { review.contractMove(); review.step(2); });
 					const retry = await p.evaluate(() => review.contractState()); assert.equal(retry.mission.stage, 'return'); assert.equal(Object.keys(retry.inventory.instances).length, owned); assert.equal(retry.loot.count, 0);
 				}
