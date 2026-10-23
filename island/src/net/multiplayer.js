@@ -126,8 +126,9 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (Number.isFinite(s.clock)) hostClock = s.clock;
 		if (!w?.sky) { pendingState = s; return; }
 		pendingState = null;
-		const S = w.sky.state, d = Math.abs(((s.hours - S.hours + 36) % 24) - 12);
-		if (12 - d > 0.02) S.hours = s.hours;
+		// (the host's hour is the Bay's, sky.js: here it is the hour where you are)
+		const S = w.sky.state, here = w.sky.hereFromBay ? w.sky.hereFromBay(s.hours) : s.hours, d = Math.abs(((here - S.hours + 36) % 24) - 12);
+		if (12 - d > 0.02) { if (w.sky.setBayHours) w.sky.setBayHours(s.hours); else S.hours = s.hours; }
 		S.speed = s.speed; S.real = s.real;
 		if (w.weather) {
 			if (w.weather.state.mode !== s.weather.mode) w.weather.set(s.weather.mode);
@@ -211,7 +212,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (room.isHost() && now >= sent.stateT) {
 			sent.stateT = now + 3000;
 			const w = W(), soc = social?.();
-			if (w?.sky) room.send({ t: 'state', s: { hours: w.sky.state.hours, speed: w.sky.state.speed, real: !!w.sky.state.real, clock: soc?.appointments?.clock?.() ?? null, weather: { mode: w.weather?.state.mode || 'auto', day: w.weather?.state.day || 0 } } });
+			if (w?.sky) room.send({ t: 'state', s: { hours: w.sky.bayHours ? w.sky.bayHours() : w.sky.state.hours, speed: w.sky.state.speed, real: !!w.sky.state.real, clock: soc?.appointments?.clock?.() ?? null, weather: { mode: w.weather?.state.mode || 'auto', day: w.weather?.state.day || 0 } } });
 			hostPlans(soc);
 		}
 	}
