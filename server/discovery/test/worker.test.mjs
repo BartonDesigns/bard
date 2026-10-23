@@ -452,8 +452,10 @@ section('realtime people: /npc/talk');
 	ok(createClaude({}) === null, 'no key, no Claude');
 	const cs = claudeSettings({ CLAUDE_MODEL: 'claude-haiku-5-5', CLAUDE_EFFORT: 'turbo', CLAUDE_MAX_TOKENS: '9999' });
 	ok(cs.model === 'claude-haiku-5-5' && cs.effort === 'low' && cs.maxTokens === 600 && cs.usd.in === 0.1, 'settings are bounded and priced by model');
-	ok(claudeSettings({ CLAUDE_MODEL: 'gpt; drop' }).model === 'claude-opus-5-5', 'a bad model id keeps the default');
-	ok(Math.abs(usdFor(claudeSettings({}), { in: 1e6, out: 0, cached: 0, written: 0 }) - 4) < 1e-9, 'the estimate uses the list price');
+	ok(claudeSettings({ CLAUDE_MODEL: 'gpt; drop' }).model === 'claude-haiku-5-5', 'a bad model id keeps the default');
+	ok(Math.abs(usdFor(claudeSettings({}), { in: 1e6, out: 0, cached: 0, written: 0 }) - 0.1) < 1e-9, 'the estimate uses the list price');
+	ok(Math.abs(usdFor(claudeSettings({ CLAUDE_MODEL: 'claude-opus-5-5' }), { in: 1e6, out: 0, cached: 0, written: 0 }) - 4) < 1e-9, 'and each model its own');
+	ok(claudeSettings({}).fallbacks === false && claudeSettings({ CLAUDE_MODEL: 'claude-opus-5-5' }).fallbacks === true && claudeSettings({ CLAUDE_MODEL: 'claude-opus-5-5', CLAUDE_FALLBACKS: 'false' }).fallbacks === false, 'Haiku is never asked for a fallback it has not got');
 	ok(noteOf({ act: 'none', note: 'x'.repeat(400) }).length === 160 && noteOf({ act: 'none' }) === null && noteOf('note') === null, 'notes are short strings or nothing');
 	ok(npcSystem(S)[1].includes('taquera') && !npcSystem(S)[1].includes('al pastor'), 'who they are and this moment stay in separate blocks');
 }
