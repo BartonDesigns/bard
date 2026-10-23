@@ -305,15 +305,20 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			// and out through a bedroom wall, the camera inside the walls on the way)
 			const low = !s.orbit?.high() && agl < 120;
 			const stride = Math.sqrt(s.vel.x * s.vel.x + s.vel.y * s.vel.y + s.vel.z * s.vel.z) * dt;
-			const n = low ? Math.min(12, Math.max(1, Math.ceil(stride / 0.3))) : 1;
+			const n = low ? Math.min(40, Math.max(1, Math.ceil(stride / 0.25))) : 1;
 			for (let i = 0; i < n; i++) {
+				const bx = s.pos.x, by = s.pos.y, bz = s.pos.z, wasIn = low && ceilingAt(bx, bz, by - EYE) < Infinity;
 				s.pos.addScaledVector(s.vel, dt / n);
 				if (!low) continue;
 				const px = s.pos.x, pz = s.pos.z;
 				pushOut(s.pos, agl < 16);
 				const ox = s.pos.x - px, oz = s.pos.z - pz, ol = Math.sqrt(ox * ox + oz * oz);
-				// met a wall: the speed into it is gone, the rest slides along it
-				if (ol > 1e-6) { const into = (s.vel.x * ox + s.vel.z * oz) / ol; if (into < 0) { s.vel.x -= into * ox / ol; s.vel.z -= into * oz / ol; } }
+				if (ol <= 1e-6) continue;
+				// met a wall: the speed into it is gone, the rest slides along it. Fast enough to
+				// land inside the wall itself and be put out on the room's side, the step is undone
+				// and the flight stopped there (an open door pushes nothing, so it is still flown through)
+				if (!wasIn && ceilingAt(s.pos.x, s.pos.z, s.pos.y - EYE) < Infinity) { s.pos.set(bx, by, bz); s.vel.x = s.vel.z = 0; break; }
+				const into = (s.vel.x * ox + s.vel.z * oz) / ol; if (into < 0) { s.vel.x -= into * ox / ol; s.vel.z -= into * oz / ol; }
 			}
 			// Orbital bodies (currently the authored Moon) own a curved surface
 			// collider. It clamps a descent to the ground and removes only inward
