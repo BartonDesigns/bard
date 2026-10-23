@@ -25,7 +25,7 @@ const bay = { heightAt: () => 2 };
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x55585a, roughness: 0.9 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = 1.98; scene.add(ground);
 
-// [name, store or economy type, w, d, sign bg, sign fg]
+// [name, store or economy type, w, d, sign bg, sign fg, venue (a shop where not given), wall height, x]
 const CASES = [
 	['fuel', 'fuel', 15, 10, '#c8102e', '#ffffff'], ['corner', 'corner', 16, 12, '#1d6f42', '#ffd60a'],
 	['grocer', 'grocer', 22, 18, '#2a9d3f', '#ffffff'], ['hardware', 'hardware', 20, 16, '#e05a00', '#ffffff'], ['pharmacy', 'pharmacy', 16, 14, '#c8102e', '#ffffff'],
@@ -33,11 +33,18 @@ const CASES = [
 	['pet', 'pet', 14, 13, '#1d6fd1', '#ffffff'], ['tech', 'phonefix', 10, 10, '#06a77d', '#ffffff'], ['florist', 'florist', 10, 10, '#7b2cbf', '#ffffff'],
 	['salon', 'salon', 10, 12, '#ef476f', '#ffffff'], ['laundry', 'laundromat', 12, 14, '#118ab2', '#ffffff'], ['gym', 'gym', 18, 16, '#111111', '#ffd60a'],
 	['clinic', 'vet', 12, 12, '#2a9d8f', '#ffffff'], ['variety', 'gift', 14, 12, '#f77f00', '#ffffff'],
+	['cafe', 'cafe', 12, 14, '#3d2b1f', '#f4f1de', 'cafe'], ['bakery', 'bakery', 10, 12, '#f4f1de', '#7a2e1f', 'cafe'], ['donut', 'donut', 10, 11, '#ef476f', '#ffffff', 'cafe'],
+	['boba', 'boba', 9, 10, '#2f8f7f', '#ffffff', 'cafe'], ['icecream', 'icecream', 10, 12, '#ffafcc', '#5a3420', 'cafe'],
+	['bistro', 'bistro', 13, 18, '#1d3557', '#f1faee', 'restaurant'], ['curry', 'curry', 12, 16, '#9d0208', '#ffd60a', 'restaurant'], ['pub', 'pub', 14, 18, '#1b4332', '#e9c46a', 'restaurant'],
+	['diner', 'diner', 14, 16, '#c1121f', '#ffffff', 'restaurant'], ['ramen', 'ramen', 11, 15, '#2a1f1a', '#f2e3c4', 'restaurant'], ['sushi', 'sushi', 12, 15, '#14213d', '#ffffff', 'restaurant'],
+	['pizza', 'pizza', 12, 16, '#c62f22', '#ffffff', 'restaurant'], ['burger', 'burger', 14, 16, '#ffbe0b', '#c1121f', 'restaurant'], ['taco', 'taco', 10, 14, '#2a9d8f', '#ffffff', 'restaurant'],
+	// (a tall one open to the roof)
+	['loft', 'bistro', 14, 18, '#1d3557', '#f1faee', 'restaurant', 7, 61],
 ];
-const SHOPS = CASES.map(([name, t, w, d, bg, fg], i) => {
-	const b = { x: 1000 + i * 200, z: 0, w, d, a: 0, wallH: 4.8, roofH: 0, kind: 6, door: 0.5, look: { wall: [0.86, 0.84, 0.8] }, name };
-	// (somewhere the economy would put a shop: economy/venue.js)
-	while (venueOf(b) !== 'shop') b.x += 7;
+const SHOPS = CASES.map(([name, t, w, d, bg, fg, venue = 'shop', wallH = 4.8, x = null], i) => {
+	const b = { x: x ?? 1000 + i * 200, z: 0, w, d, a: 0, wallH, roofH: 0, kind: 6, door: 0.5, look: { wall: [0.86, 0.84, 0.8] }, name };
+	// (somewhere the economy would put one: economy/venue.js)
+	while (venueOf(b) !== venue) b.x += 7;
 	if (t === 'fuel' || t === 'corner') b.store = t;
 	b.biz = { type: t, name: name + ' review', sign: { bg, fg } };
 	b.grp = [b]; b.grp.biz = true;

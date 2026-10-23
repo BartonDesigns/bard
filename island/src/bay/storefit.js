@@ -1150,3 +1150,6 @@ export function* fitShop(K, type) {
 		frontCounter(K, true, 2.0);
 	}
 }
+
+// (the pieces the cafés', restaurants' and offices' fit-outs share: bay/dinefit.js)
+export { C as COL, hsl, use, fbox, solid, spot, item, piece, shelfRun, coolers, counter, strips, stripe, HUNG };

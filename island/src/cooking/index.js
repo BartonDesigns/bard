@@ -23,7 +23,7 @@ import { INGREDIENTS, filletGrams, fishMeat, gameMeat, CARRY_G, amountText, STOR
 import { RECIPE, cook as cookRecipe, check } from './recipes.js';
 import { active, eat, MAX_MEALS } from './meals.js';
 import { createLarder, saveLarder, stow, take, settle, plate, freshPlates, takePlate, note, LARDER_KEY } from './larder.js';
-import { kitchenStock, createKitchenLog, rollDay, tookFrom, owed, pantryLoss, shelves, shopKind, worth, hashKey, KITCHENS_KEY, SHOPS } from './kitchens.js';
+import { kitchenStock, createKitchenLog, rollDay, tookFrom, owed, pantryLoss, shelves, shopKind, worth, hashKey, menuOf, KITCHENS_KEY, SHOPS } from './kitchens.js';
 import { hungerAt, hungerWord, hungerLine } from './hunger.js';
 import { createCookingPanel } from './ui.js';
 import { assess, recordDeed } from '../people/food.js';
@@ -148,6 +148,15 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		if (S.stock?.length) return null;
 		return { kind: 'shop', shop: 'grocer', key: `s:${S.id}`, at: { x: S.x, z: S.z }, name: S.name || 'Supermarket', place: 'suburb' };
 	}
+	// a café or a restaurant (bay/commercial.js, bay/dinefit.js), open: its menu
+	function dineHere() {
+		const C = world()?.commercial?.inside?.(camera.position);
+		if (!C || (C.type !== 'cafe' && C.type !== 'restaurant')) return null;
+		const t = C.b.biz?.type || (C.type === 'cafe' ? 'cafe' : 'bistro'), h = hours(), [a, b] = C.hours || [0, 24];
+		if (!menuOf(t).length) return null;
+		const pos = camera.position;
+		return { kind: 'dine', type: t, key: `d:${Math.round(C.b.x)}:${Math.round(C.b.z)}`, at: { x: pos.x, z: pos.z }, name: C.b.biz?.name || (C.type === 'cafe' ? 'Café' : 'Restaurant'), place: 'suburb', closed: !(h >= a && h < b), hrs: [a, b] };
+	}
 	function carcassHere() {
 		const pos = camera.position;
 		for (const Q of world()?.wildlife?.quarry?.() || []) if (Q.A.dead && !Q.A.gone && Math.hypot(Q.x - pos.x, Q.z - pos.z) < 2.6) return { kind: 'dress', Q };
@@ -157,7 +166,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		if (fishing?.holding?.()) return { kind: 'fish', c: fishing.holding() };
 		const P = world()?.player?.state;
 		if (!P || P.flying) return null;
-		return carcassHere() || kitchenHere() || shopHere();
+		return carcassHere() || kitchenHere() || shopHere() || dineHere();
 	}
 
 	// ---------- the kitchen's stock ----------
@@ -271,6 +280,22 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		payroll.sale?.({ x: here.at.x, z: here.at.z }, it.price, null);
 		touch();
 	}
+	// a café's or a restaurant's menu today; order: a plate brought to you (here: eaten now; to
+	// go: kept with your plates)
+	function menuNow() {
+		if (here?.kind !== 'dine') return null;
+		return { name: here.name, closed: here.closed, hrs: here.hrs, dishes: menuOf(here.type, { seed: hashKey(here.key), place: here.place }) };
+	}
+	function order(id, toGo = false) {
+		const M = menuNow(), d = M?.dishes.find((q) => q.id === id);
+		if (!d || d.out || M.closed) return false;
+		if (!spend(d.price, 'meal')) { hint('Not enough credits.', 1800); return false; }
+		payroll.sale?.({ x: here.at.x, z: here.at.z }, d.price, null);
+		plate(L, id, 1, 1);
+		note(L, `Ordered ${d.name} at ${here.name}`);
+		if (toGo) { hint(`${d.name}, wrapped to go: it's with your plates.`, 2600); touch(); return true; }
+		return eatPlate(id);
+	}
 	function sell(id) {
 		const S = shopNow(), n = L.wild[id] || 0, c = S?.offer(id, n) || 0;
 		if (!c) return;
@@ -329,6 +354,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		else if (here.kind === 'dress') dress(here.Q);
 		else if (here.kind === 'kitchen') panel.open('kitchen');
 		else if (here.kind === 'shop') panel.open('shop');
+		else if (here.kind === 'dine') panel.open('dine');
 		hereT = 0;
 	}
 	act.addEventListener('click', (e) => { e.stopPropagation(); useHere(); });
@@ -343,6 +369,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		if (h.kind === 'fish') return `🐟 Keep the ${h.c.fish}${key}`;
 		if (h.kind === 'dress') return `🔪 Dress the ${h.Q.kind}${key}`;
 		if (h.kind === 'kitchen') return job ? `🍳 Cooking ${RECIPE[job.id].name}${key}` : `🍳 Kitchen${key}`;
+		if (h.kind === 'dine') return `🍽 ${h.name}${key}`;
 		return `🛒 ${h.name}${key}`;
 	}
 
@@ -353,11 +380,11 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 			const stock = k ? stockOf(k) : null;
 			return {
 				job, credits: credits(), larder: L, meals: active(L.meals), plates: freshPlates(L),
-				stores: stores(), shop: shopNow(), canGive: !!owner?.near,
+				stores: stores(), shop: shopNow(), menu: menuNow(), canGive: !!owner?.near,
 				kitchen: k && { name: k.name, line: k.line, stock, owed: owed(K, k.key, k.place), owner: owner?.first || null },
 			};
 		},
-		take: takeFrom, putBack, pay, buy, sell, eatPlate, cancel, clearJob: () => { if (job?.done) job = null; },
+		take: takeFrom, putBack, pay, buy, sell, order, eatPlate, cancel, clearJob: () => { if (job?.done) job = null; },
 		cook: (id) => startCook(id),
 		givePlate: () => { if (takePlate(L)) feedOwner(); touch(); },
 		closed: () => { drawMenu(); },

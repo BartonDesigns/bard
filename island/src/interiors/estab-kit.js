@@ -11,7 +11,7 @@
 import { addKit } from './kit.js';
 import { lin } from '../bay/housekit.js';
 
-const pick = (l, v) => l[Math.floor(v * 9973) % l.length];
+const pick = (l, v) => l[((Math.floor(v * 9973) % l.length) + l.length) % l.length];       // (v may be negative: a place left of an item's middle)
 const BRIGHT = [[0.8, 0.25, 0.2], [0.9, 0.7, 0.2], [0.25, 0.5, 0.7], [0.35, 0.6, 0.3], [0.85, 0.5, 0.6], [0.95, 0.9, 0.8], [0.55, 0.35, 0.6]];
 const WOODS = [[0.36, 0.22, 0.14], [0.22, 0.14, 0.1], [0.5, 0.34, 0.2], [0.3, 0.2, 0.15]];
 const STEEL = lin([0.72, 0.73, 0.75]), DARK = lin([0.06, 0.06, 0.065]), WHITE = lin([0.92, 0.91, 0.88]), BRASS = lin([0.78, 0.62, 0.3]);
@@ -152,9 +152,16 @@ const KIT = {
 		const W2 = it.w / 2, D2 = it.d / 2, wd = lin(pick(WOODS, it.v));
 		bx(g, 'grain', -W2, 0, -D2, W2, 0.95, D2, wd);
 		bx(g, 'mirror', -W2 + 0.1, 1.05, -D2, W2 - 0.1, 2.2, -D2 + 0.02, WHITE);
+		// the bottles on their glass shelves: a body and a neck each, in the glass they come in
+		// (amber, green, clear, smoke), a label on the odd one; set in loose groups, gaps between
 		for (const y of [1.15, 1.6]) {
 			bx(g, 'glass', -W2 + 0.05, y, -D2 + 0.02, W2 - 0.05, y + 0.02, -D2 + 0.25, WHITE);
-			for (let x = -W2 + 0.12; x < W2 - 0.1; x += 0.09 + rnd() * 0.05) g.cyl('gloss', x, y + 0.02, -D2 + 0.12, 0.035, 0.24 + rnd() * 0.1, lin(pick([[0.35, 0.2, 0.08], [0.15, 0.3, 0.15], [0.85, 0.85, 0.8], [0.6, 0.3, 0.1], [0.2, 0.25, 0.5]], rnd())), 6);
+			for (let x = -W2 + 0.14; x < W2 - 0.1; x += 0.085 + rnd() * 0.04 + (rnd() < 0.15 ? 0.12 : 0)) {
+				const h = 0.17 + rnd() * 0.08, r = 0.03 + rnd() * 0.008, col = lin(pick([[0.42, 0.22, 0.06], [0.12, 0.26, 0.12], [0.86, 0.86, 0.82], [0.55, 0.3, 0.08], [0.25, 0.22, 0.2], [0.7, 0.45, 0.12]], rnd())), z = -D2 + 0.1 + rnd() * 0.06;
+				g.cyl('gloss', x, y + 0.02, z, r, h, col, 6);
+				g.cyl('gloss', x, y + 0.02 + h, z, r * 0.4, 0.07 + rnd() * 0.04, col, 4, 'y', true, r * 0.32);
+				if (rnd() < 0.5) g.cyl('matte', x, y + 0.02 + h * 0.3, z, r + 0.002, h * 0.35, lin(pick([[0.92, 0.88, 0.78], [0.1, 0.1, 0.1], [0.75, 0.12, 0.1], [0.85, 0.7, 0.3]], rnd())), 6, 'y', false);
+			}
 		}
 	},
 	barStool(g, it) { g.cyl('metal', 0, 0, 0, 0.2, 0.03, DARK, 10); g.cyl('metal', 0, 0.03, 0, 0.03, 0.72, DARK, 6); g.cyl('fabric', 0, 0.72, 0, 0.18, 0.06, lin(pick(LEATHER, it.v)), 12); g.cyl('metal', 0, 0.28, 0, 0.17, 0.02, BRASS, 10); },
