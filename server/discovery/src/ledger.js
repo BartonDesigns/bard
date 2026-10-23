@@ -25,6 +25,9 @@ export class Ledger {
 	// ceiling) and its own, looser, hourly limit
 	get talkCap() { const v = +this.env.TALK_NEURONS; return Math.min(this.cap, Number.isFinite(v) && v >= 0 ? v : 3000); }
 	get talkPerHour() { const v = +this.env.TALK_PER_HOUR; return Number.isFinite(v) && v > 0 ? v : 60; }
+	// Claude's turns (POST /npc/talk) are counted, not priced: a day's ceiling on turns, the same
+	// hourly limit per player as the townsfolk's, and the tokens for the running estimate
+	get claudeCap() { const v = +this.env.CLAUDE_TURNS_PER_DAY; return Number.isFinite(v) && v >= 0 ? Math.round(v) : 3000; }
 
 	async load() {
 		if (!this.S) {
@@ -34,6 +37,7 @@ export class Ledger {
 		const k = today(this.clock());
 		if (this.S.day?.key !== k) this.S.day = { key: k, used: 0, reserved: 0, gens: 0, exhausted: false, talkUsed: 0, talkReserved: 0, talks: 0 };
 		this.S.day.talkUsed ??= 0; this.S.day.talkReserved ??= 0; this.S.day.talks ??= 0;
+		this.S.day.claude ??= { turns: 0, open: 0, fails: 0, tokens: { in: 0, out: 0, cached: 0, written: 0 } };
 		return this.S;
 	}
 	save(...keys) { return Promise.all(keys.map((k) => this.ctx.storage.put(k, this.S[k]))); }
@@ -42,10 +46,10 @@ export class Ledger {
 		const path = new URL(request.url).pathname;
 		const S = await this.load(), D = S.day;
 		const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
-		if (path === '/state') return json({ day: D.key, used: D.used, reserved: D.reserved, cap: this.cap, left: Math.max(0, this.cap - D.used - D.reserved), gens: D.gens, exhausted: D.exhausted, done: S.done.length, talk: { used: D.talkUsed, cap: this.talkCap, left: Math.max(0, this.talkCap - D.talkUsed - D.talkReserved), talks: D.talks } });
+		if (path === '/state') return json({ day: D.key, used: D.used, reserved: D.reserved, cap: this.cap, left: Math.max(0, this.cap - D.used - D.reserved), gens: D.gens, exhausted: D.exhausted, done: S.done.length, talk: { used: D.talkUsed, cap: this.talkCap, left: Math.max(0, this.talkCap - D.talkUsed - D.talkReserved), talks: D.talks }, claude: { ...D.claude, cap: this.claudeCap, left: Math.max(0, this.claudeCap - D.claude.turns - D.claude.open) } });
 		if (path === '/reserve') {
 			// a player's call: their hourly limit first, then the spot's names
-			const talk = body.kind === 'talk';
+			const talk = body.kind === 'talk' || body.kind === 'claude';
 			if (body.who) {
 				const key = (talk ? 'talk:' : '') + body.who, lim = talk ? this.talkPerHour : this.perHour;
 				const t = this.clock(), r = this.rate.get(key);
@@ -57,6 +61,12 @@ export class Ledger {
 				const L = S.cells[body.cell] || [];
 				if (!L.includes(body.slug) && L.length >= 2) return json({ ok: false, reason: 'spot' });
 			}
+			if (body.kind === 'claude') {
+				if (D.claude.turns + D.claude.open >= this.claudeCap) return json({ ok: false, reason: 'allowance', day: D.key });
+				D.claude.open++;
+				await this.save('day');
+				return json({ ok: true, day: D.key });
+			}
 			const n = Math.max(0, Math.ceil(+body.neurons || 0));
 			if (D.exhausted || D.used + D.reserved + n > this.cap) return json({ ok: false, reason: 'allowance', day: D.key });
 			if (talk && D.talkUsed + D.talkReserved + n > this.talkCap) return json({ ok: false, reason: 'allowance', day: D.key });
@@ -65,6 +75,15 @@ export class Ledger {
 			if (body.cell && !(S.cells[body.cell] || []).includes(body.slug)) { (S.cells[body.cell] ||= []).push(body.slug); await this.save('cells'); }
 			await this.save('day');
 			return json({ ok: true, day: D.key, reserved: n });
+		}
+		if (path === '/settle' && body.kind === 'claude') {
+			const c = D.claude, u = body.usage || {};
+			if (body.day === D.key) c.open = Math.max(0, c.open - 1);
+			c.turns++;
+			if (!body.ok) c.fails++;
+			for (const k of ['in', 'out', 'cached', 'written']) c.tokens[k] += Math.max(0, Math.round(+u[k] || 0));
+			await this.save('day');
+			return json({ ok: true });
 		}
 		if (path === '/settle') {
 			// a reservation made on an earlier day was already forgotten at midnight; what the call

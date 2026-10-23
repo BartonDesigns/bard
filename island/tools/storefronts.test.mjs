@@ -134,7 +134,9 @@ test('the coast from rings of samples: waterfront, harbour, near, inland; dry la
 });
 
 test('the waterfront gets its fishing trades; inland streets do not', () => {
-	const row = (shore) => { const out = []; for (let i = 0; i < 400; i++) out.push({ x: i * 13.3, z: shore * 1000 + (i % 7) * 31, w: 9, d: 8, a: 0, h: 3, use: 'house', street: 1, coast: shore >= 2, shore, rural: false, wild: false, down: 0 }); return out; };
+	// (a terrace's shopfronts on a corner or collector: a neighbourhood's houses are homes, by the
+	// water or not, economy.test.mjs)
+	const row = (shore) => { const out = []; for (let i = 0; i < 400; i++) out.push({ x: i * 13.3, z: shore * 1000 + (i % 7) * 31, w: 9, d: 8, a: 0, h: 3, use: 'row', street: 1, coast: shore >= 2, shore, rural: false, wild: false, down: 0 }); return out; };
 	const count = (shore) => planTown(row(shore)).filter((E) => ['outfitter', 'bait', 'fishmarket', 'boatyard', 'seafood', 'surf'].includes(E.type)).length;
 	const front = count(3), inland = count(0), near = count(1);
 	assert.ok(front > 40, 'waterfront fishing trades: ' + front);

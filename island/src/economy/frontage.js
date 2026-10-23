@@ -62,6 +62,9 @@ export const PROFILES = {
 	hardware: P('glass', 'shelves', [8, 19], 'shutter', 'hardware', { post: 'clerk' }),
 	grocer: P('glass', 'grocer', [7, 22], 'shutter', 'grocer', { post: 'stocker' }),
 	pharmacy: P('glass', 'shelves', [8, 21], 'night', 'pharmacy'),
+	// (the corner store till midnight, its sign left on; the gas station's mart round the clock)
+	corner: P('glass', 'grocer', [6, 24], 'lit', 'general', { post: 'clerk' }),
+	fuel: P('glass', 'shelves', [0, 24], 'lit', 'general', { post: 'clerk' }),
 	outfitter: P('glass', 'gear', [6, 18], 'shutter', 'gear', { post: 'fisher' }),
 	bait: P('glass', 'gear', [5, 17], 'shutter', 'bait', { post: 'fisher' }),
 	surf: P('glass', 'gear', [9, 18], 'shutter', 'gear', { post: 'clerk' }),

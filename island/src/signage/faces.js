@@ -474,19 +474,22 @@ const CAR = {
 	livery(g, x, y, w, h, f) {
 		const L = f.svc;
 		if (L === 'police') {
-			text(g, f.word || 'POLICE', x + w * 0.56, y + h * 0.42, h * 0.42, { col: '#141a2c', maxW: w * 0.7, track: 0.06 });
+			// (the force's word and its city or county under it: law/force.js)
+			const sub = f.sub ?? '';
+			text(g, f.word || 'POLICE', x + w * 0.56, y + h * (sub ? 0.42 : 0.48), h * 0.42, { col: '#141a2c', maxW: w * 0.7, track: 0.06 });
 			// an invented badge: a seven-pointed star in a ring
 			const cx = x + h * 0.48, cy = y + h * 0.45, r = h * 0.36;
 			g.beginPath(); for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i * Math.PI / 7, rr = i % 2 ? r * 0.55 : r; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } g.closePath(); g.fillStyle = '#c9a23a'; g.fill();
 			g.beginPath(); g.arc(cx, cy, r * 0.38, 0, Math.PI * 2); g.fillStyle = '#141a2c'; g.fill();
-			text(g, f.sub || 'HARBOUR', x + w * 0.56, y + h * 0.8, h * 0.16, { col: '#141a2c', track: 0.35, maxW: w * 0.7 });
+			if (sub) text(g, sub, x + w * 0.56, y + h * 0.8, h * 0.16, { col: '#141a2c', track: 0.35, maxW: w * 0.7 });
 		} else if (L === 'swat' || L === 'van') {
 			// a dark van's sides: the word in reflective white, a rule under it, the unit's name, an
 			// outlined badge at the front end (a tactical van's is all white, a patrol van's gold)
 			const ink = '#f2f2ee', gold = L === 'van' ? '#c9a23a' : ink;
 			text(g, f.word || 'POLICE', x + w * 0.57, y + h * 0.38, h * 0.46, { col: ink, maxW: w * 0.72, track: 0.08 });
 			g.fillStyle = gold; g.fillRect(x + w * 0.22, y + h * 0.66, w * 0.7, h * 0.035);
-			text(g, f.sub || (L === 'van' ? 'HARBOUR' : 'TACTICAL UNIT'), x + w * 0.57, y + h * 0.83, h * 0.16, { col: ink, track: 0.3, maxW: w * 0.7 });
+			const sub = f.sub ?? (L === 'van' ? '' : 'TACTICAL UNIT');
+			if (sub) text(g, sub, x + w * 0.57, y + h * 0.83, h * 0.16, { col: ink, track: 0.3, maxW: w * 0.7 });
 			const cx = x + h * 0.48, cy = y + h * 0.48, r = h * 0.36;
 			g.beginPath(); for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i * Math.PI / 7, rr = i % 2 ? r * 0.55 : r; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } g.closePath();
 			g.lineWidth = Math.max(1.5, h * 0.035); g.strokeStyle = gold; g.stroke();

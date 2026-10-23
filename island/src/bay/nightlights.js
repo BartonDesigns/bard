@@ -19,6 +19,8 @@ import { NIGHT_U, NIGHT_I, COLOURS, K, nightSeed, roll, housePlan, buildingPlan,
 import { NF, NF_N, FIELDS, SF_N } from '../world/nightfield.js';
 import { qualityNow, onQuality } from '../world/governor.js';
 import { LAMP, LAMP_KINDS } from './streetlamps.js';
+import { LOTS } from './siteplan.js';
+import { CANOPY, CANOPY_LIGHTS } from './forecourts.js';
 
 const HOUSE = new Set([K.row, K.house, K.bay, K.houseGarageL, K.houseGarageR]);
 const MOTION = 8;
@@ -343,6 +345,35 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			stats.lobbies++;
 		}
 	}
+	// a gas station's canopy lights over its pumps, and the lamps over a food mart's or a corner
+	// store's front (bay/siteplan.js, forecourts.js): on from early dusk, all night
+	function site(S) {
+		const ca = Math.cos(S.a), sa = Math.sin(S.a), Wp = (lx, lz) => [S.x + ca * lx - sa * lz, S.z + sa * lx + ca * lz];
+		if (S.kind === 'fuel') {
+			let top = -1e9;
+			for (const [lx, lz] of [[CANOPY.x0, CANOPY.z0], [CANOPY.x1, CANOPY.z0], [CANOPY.x0, CANOPY.z1], [CANOPY.x1, CANOPY.z1], [0, 9]]) { const [x, z] = Wp(lx, lz); top = Math.max(top, ground(x, z)); }
+			const y = top + CANOPY.under - 0.05;
+			for (const lx of CANOPY_LIGHTS.x) for (const lz of CANOPY_LIGHTS.z) {
+				const [x, z] = Wp(lx, lz);
+				groundPool(x, z, 5.6, CANOPY.under, 46, COOL, 0, 0.12, ALL_NIGHT, 0);
+				point(x, y, z, COOL, 1.6, 0.5, 0, 0.12, ALL_NIGHT, 0);
+			}
+			for (const lx of [-8, 8]) { const [x, z] = Wp(lx, 9); field(x, y, z, 16, COOL, 40, Math.cos(1.25), 0, -1, 0, Math.cos(0.7), 0, 0.12, ALL_NIGHT, 0); }
+			// (the mart's windows on its walk, the price sign on its planter)
+			const st = LOTS.fuel.store, [mx, mz] = Wp(st.x * S.side, st.z + st.d / 2 + 2);
+			groundPool(mx, mz, 7, 3, 7, COOL, 0, 0.12, ALL_NIGHT, 0);
+			const [px, pz] = Wp(19.3 * S.side, 16.6);
+			groundPool(px, pz, 3.2, 3.5, 6, [1, 0.55, 0.4], 0, 0.12, ALL_NIGHT, 0);
+		} else {
+			const st = LOTS.corner.store, front = st.z + st.d / 2;
+			for (const dx of [-5, 5]) {
+				const [x, z] = Wp((st.x + dx) * S.side, front + 0.4), [gx, gz] = Wp((st.x + dx) * S.side, front + 3), y = ground(x, z) + 3.5;
+				groundPool(gx, gz, 6, 3.5, 9, WARM, 0, 0.12, ALL_NIGHT, 0);
+				point(x, y, z, WARM, 1.4, 0.3, 0, 0.12, ALL_NIGHT, 0);
+				field(x, y, z, 12, WARM, 10, Math.cos(1.2), -sa * 0.8, -0.6, ca * 0.8, Math.cos(0.6), 0, 0.12, ALL_NIGHT, 0);
+			}
+		}
+	}
 	// the streets round you, by 20 m cells: no path light or solar stake out in the road
 	let roadCells = new Map();
 	function onRoad(x, z) {
@@ -403,6 +434,8 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			building({ x: S.x, z: S.z, a: S.a, W: S.W, D: S.D, h: (S.blockTop && S.f0 ? S.blockTop - S.f0 : 9) }, P, true);
 			stats.civic++;
 		}
+		// the gas stations and the corner stores
+		for (const S of world()?.real?.sites?.(cx, cz, R) || []) site(S);
 		// a few of the downtown street trees and the parks' trees lit from below too
 		for (const l of trees.values()) for (const t of l) {
 			if (t.used || Math.hypot(t.x - cx, t.z - cz) > R * 0.5) continue;

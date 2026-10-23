@@ -2,7 +2,12 @@
 // emblem, how they fight, and how they stand with each other and with you. Standings move:
 // an attack sours a faction on its attacker, a common enemy warms two sides to each other, and
 // with time everything drifts back toward the old feelings. Membership is mixed, as anywhere;
-// no faction stands for any real people, place, belief or group. Pure data and rules.
+// no faction stands for any real people, place, belief or group. The one exception is the
+// police: they are the force of the place you are in (San Francisco Police, the Alameda County
+// Sheriff, the Garda), named by law/force.js, so their name (and their officers' and tactical
+// team's) is read from there each time. Pure data and rules.
+
+import { localForce } from '../law/force.js';
 
 // zones: earth-urban, earth-rural, earth-coast, earth-desert, arid (ARID worlds), wild (other
 // worlds' open ground), village (round a settlement), deep (the Deep)
@@ -21,9 +26,9 @@ export const FACTIONS = Object.freeze({
 	// the soldiers of the bases (military/): stationed at their posts, sent out by the dispatch
 	guard: { name: 'Meridian Guard', kind: 'military', zones: [], stationed: true, colors: ['#4a5236', '#c9c2a2'], emblem: 'a compass rose over a wall', gun: 'warden-spark-carbine', hp: 120, armour: 55, acc: 0.52, aggression: 0, lawful: true },
 	// the police: cruisers and officers, answering crime and the wanted level
-	police: { name: 'Harbour Police', kind: 'police', zones: [], colors: ['#1c2540', '#d9c46a'], emblem: 'a gull over a shield', gun: 'mossback-scout-rifle', hp: 100, armour: 35, acc: 0.46, aggression: 0, lawful: true },
+	police: { get name() { return localForce().name; }, get officer() { return localForce().officer; }, kind: 'police', zones: [], colors: ['#1c2540', '#d9c46a'], emblem: 'a gull over a shield', gun: 'mossback-scout-rifle', hp: 100, armour: 35, acc: 0.46, aggression: 0, lawful: true },
 	// the police's tactical team, out of the police quarters in its van at the fourth level (law/)
-	swat: { name: 'Harbour Police Tactical', kind: 'police', zones: [], colors: ['#20242b', '#d9c46a'], emblem: 'a gull over a shield', gun: 'warden-spark-carbine', hp: 125, armour: 70, acc: 0.55, aggression: 0, lawful: true },
+	swat: { get name() { return localForce().tac; }, get officer() { return localForce().tacOfficer; }, kind: 'police', zones: [], colors: ['#20242b', '#d9c46a'], emblem: 'a gull over a shield', gun: 'warden-spark-carbine', hp: 125, armour: 70, acc: 0.55, aggression: 0, lawful: true },
 	// an armed force from another region, come over the border or the sea
 	ironvale: { name: 'Ironvale Legion', kind: 'invaders', zones: [], colors: ['#6a6c5c', '#a33a2a'], emblem: 'a tower in a ring', gun: 'warden-spark-carbine', hp: 115, armour: 45, acc: 0.48, aggression: 0.9 },
 	rogue: { name: 'Rogue drones', kind: 'machines', zones: ['wild', 'arid'], colors: ['#3a3f46', '#ff4a2a'], emblem: 'none', hp: 60, armour: 0, acc: 0.5, aggression: 1 },

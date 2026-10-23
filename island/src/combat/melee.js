@@ -459,6 +459,13 @@ export function createMelee(ctx) {
 		q.heat = 0.8;
 		ctx.call?.(pick(LINES.fists), 'bystander');
 	}
+	// someone pushed too far in conversation squares up to you (guide.js liveLeave: their own
+	// choice, made by what you said), whatever their temper; never a child
+	function provoke(p) {
+		if (!p?.P || !p.M || p.P.ragdoll || isMinor(p.P)) return false;
+		if (!brawlOf(p.P)) answer({ kind: 'person', p, P: p.P, M: p.M }, true);
+		return !!brawlOf(p.P);
+	}
 	// a blow between townsfolk fighting each other
 	function land(q, from, to, kind) {
 		const at = posOf(to), src = posOf(from);
@@ -778,5 +785,5 @@ export function createMelee(ctx) {
 	const carried = () => [...(me.item ? [{ id: me.itemId || (me.itemId = 'm' + (++beltSeq)), kind: me.item, held: true }] : []), ...me.belt.map((q) => ({ id: q.id, kind: q.kind, held: false }))];
 	// you, seen in third person (people/avatar.js, people/self.js): main.js hands these over
 	function bind(o = {}) { bound = { avatar: o.avatar || bound.avatar, self: o.self || bound.self }; return true; }
-	return { stow, draw, carried, update, clear, info, swing, grapple, quarrel, spar, startBrawl, fighter, drop, calm, bind, foes, block: (on) => (on ? blockOn() : blockOff()), dodge, takedown: () => { const T = me.takeT || takedownTarget(); if (T) takedown(T); return !!T; }, press: pressStart, release: pressEnd, state: me, sound, feel };
+	return { stow, draw, carried, update, clear, info, swing, grapple, quarrel, spar, provoke, startBrawl, fighter, drop, calm, bind, foes, block: (on) => (on ? blockOn() : blockOff()), dodge, takedown: () => { const T = me.takeT || takedownTarget(); if (T) takedown(T); return !!T; }, press: pressStart, release: pressEnd, state: me, sound, feel };
 }

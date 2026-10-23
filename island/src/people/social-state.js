@@ -102,6 +102,12 @@ export function createSocialState(options = {}) {
 		const p = get(id); if (!p || !MODES.has(mode)) return false;
 		p.mode = mode; p.task = task ? copy(task) : null; changed(); return true;
 	}
+	// how they feel, carried from one conversation to the next (a live reply's mood tag)
+	function setMood(id, mood) {
+		const p = get(id); if (!p || typeof mood !== 'string' || !/^[a-z]{2,16}$/.test(mood)) return false;
+		if (p.mood === mood) return true;
+		p.mood = mood; changed(); return true;
+	}
 	function tick() {
 		const t = now(), n = state.events.length;
 		state.events = state.events.filter(e => e.expires > t);
@@ -139,5 +145,5 @@ export function createSocialState(options = {}) {
 		}
 		return result;
 	}
-	return { meet, get, list, remember, setPosition, setMode, save, flush: save, warn, calm, alarmFor, tick, status: () => ({ dirty, error, savedAt, recovered, residents: list().length, revision: state.revision }) };
+	return { meet, get, list, remember, setPosition, setMode, setMood, save, flush: save, warn, calm, alarmFor, tick, status: () => ({ dirty, error, savedAt, recovered, residents: list().length, revision: state.revision }) };
 }

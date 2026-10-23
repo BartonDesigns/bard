@@ -137,8 +137,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			for (let x = a0; x <= a1 + 0.01; x += Math.max(1.2, (a1 - a0) / Math.max(1, Math.round((a1 - a0) / 2.4)))) box(mats.trim, x - 0.05, 0.35, hd - WALL, x + 0.05, STORE, hd);
 		}
 		box(mats.trim, doorX - dw / 2 - 0.08, 0, hd - WALL, doorX - dw / 2, STORE, hd); box(mats.trim, doorX + dw / 2, 0, hd - WALL, doorX + dw / 2 + 0.08, STORE, hd);
-		// an awning over the door, the name board above it
-		box(type === 'restaurant' ? mats.red : type === 'arcade' || type === 'tattoo' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
+		// an awning over the door, the name board above it (a corner store or gas station's mart has
+		// its big board down over the windows and its lamps over the front: bay/forecourts.js)
+		if (!b.store) box(type === 'restaurant' ? mats.red : type === 'arcade' || type === 'tattoo' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
 		// the ceiling: a dropped grid of light panels, or (the creative offices, the big stores,
 		// some cafés and restaurants) open to the roof: the deck painted dark, bowstring trusses
 		// arching across, spiral ducts, the sprinkler main, a cable tray, pendant lights
@@ -252,6 +253,65 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 				seats.push([x, z - 0.4, Math.PI, true], [x - 0.9, z - 0.2, Math.PI / 2, true]);
 			}
 			box(mats.neon, doorX - 1.1, 2.3, hd - WALL - 0.06, doorX + 1.1, 2.55, hd - WALL - 0.02);
+		} else if (type === 'shop' && b.store) {
+			// a gas station's food mart or a corner store (bay/siteplan.js): the coolers glowing down
+			// the back wall, two short aisles, the counter by the door (the register, the lottery
+			// screen, the hot dog roller and the slush machine on it, the cigarettes on the wall
+			// behind), the coffee and the fountain drinks down the other wall, an ice cream chest,
+			// the ATM by the door
+			const cz = inside.z0 - 0.35, cx1 = inside.x1 - 2.6;
+			box(mats.white, inside.x0, 0, cz - 0.05, cx1, 2.3, cz + 0.75, true);
+			for (let x = inside.x0 + 0.1; x + 0.9 < cx1; x += 1.0) {
+				box(mats.trim, x, 0.08, cz + 0.72, x + 0.04, 2.15, cz + 0.8); box(mats.trim, x + 0.92, 0.08, cz + 0.72, x + 0.96, 2.15, cz + 0.8);
+				box(mats.panel, x + 0.42, 0.3, cz + 0.7, x + 0.54, 2.05, cz + 0.72);
+				add(mats.glass, new THREE.BoxGeometry(0.88, 2.0, 0.02).translate(x + 0.48, 1.12, cz + 0.79));
+				for (const y of [0.3, 0.75, 1.2, 1.65]) for (let k = 0; k < 5; k++) { const bx = x + 0.08 + k * 0.17; cyl(mats.goods[Math.floor(rnd() * 7)], bx + 0.05, y, cz + 0.45, 0.035, 0.22, 6); }
+			}
+			box(mats.walld, inside.x0, 2.3, cz - 0.05, cx1, 2.6, cz + 0.8);
+			// the aisles: low gondolas of snacks
+			const ax0 = inside.x0 + 1.4, ax1 = Math.min(inside.x1 - 4.2, inside.x0 + iw * 0.62);
+			for (let z = inside.z0 + 1.9, n = 0; z < inside.z1 - 0.6 && n < 2; z += 2.1, n++) {
+				aisles.push([ax0, ax1, z]);
+				box(mats.white, ax0, 0, z - 0.4, ax1, 1.35, z + 0.4, true);
+				for (let x = ax0 + 0.1; x < ax1 - 0.3; x += 0.3) for (const y of [0.22, 0.66, 1.08]) for (const sd of [-1, 1]) {
+					box(mats.goods[Math.floor(rnd() * 7)], x, y, z + sd * 0.42 - 0.05, x + 0.22, y + 0.26, z + sd * 0.42 + 0.05);
+					products.push({ x: x + 0.11, y: y + 0.13, z: z + sd * 0.48, side: sd, row: aisles.length - 1 });
+				}
+				seats.push([ax0 + rnd() * (ax1 - ax0), z + 1.05, rnd() * 6, false]);
+			}
+			// the counter, the clerk's side toward the wall, and what stands on it
+			const kx = inside.x1 - 1.9, kz0 = inside.z1 - 2.8, kz1 = inside.z1 + 1.1;
+			box(mats.wood, kx - 0.35, 0, kz0, kx + 0.35, 1.0, kz1, true);
+			box(mats.dark, kx - 0.4, 1.0, kz0 - 0.05, kx + 0.4, 1.04, kz1 + 0.05);
+			box(mats.dark, kx - 0.2, 1.04, kz1 - 0.9, kx + 0.15, 1.16, kz1 - 0.5); box(mats.screen, kx - 0.05, 1.16, kz1 - 0.85, kx - 0.02, 1.42, kz1 - 0.55);
+			box(mats.screen, kx - 0.3, 1.04, kz0 + 0.3, kx - 0.26, 1.5, kz0 + 0.9);
+			box(mats.steel, kx - 0.28, 1.04, kz0 + 1.2, kx + 0.2, 1.22, kz0 + 1.8);
+			for (let k = 0; k < 5; k++) cyl(mats.food, kx - 0.04, 1.2, kz0 + 1.26 + k * 0.11, 0.02, 0.36, 6);
+			box(mats.panel, kx - 0.25, 1.36, kz0 + 1.22, kx + 0.18, 1.38, kz0 + 1.78);
+			box(mats.dark, kx - 0.25, 1.04, kz0 + 2.0, kx + 0.25, 1.3, kz0 + 2.6);
+			for (const [k, m] of [[0, mats.red], [1, mats.goods[1]]]) {
+				add(mats.glass, new THREE.CylinderGeometry(0.13, 0.15, 0.42, 10).translate(kx, 1.51, kz0 + 2.15 + k * 0.32));
+				cyl(m, kx, 1.31, kz0 + 2.15 + k * 0.32, 0.12, 0.3, 8);
+			}
+			seats.push([inside.x1 - 0.9, (kz0 + kz1) / 2, -Math.PI / 2, false]);
+			seats.push([kx - 1.0, kz0 + 0.6, Math.PI / 2, false]);
+			// the cigarettes, the lottery tickets on the wall behind
+			box(mats.dark, inside.x1 - 0.12, 1.3, kz0, inside.x1 + 0.25, 2.5, kz1);
+			for (let z = kz0 + 0.08; z < kz1 - 0.1; z += 0.16) for (let y = 1.38; y < 2.4; y += 0.14) box(mats.goods[Math.floor(rnd() * 7)], inside.x1 - 0.16, y, z, inside.x1 - 0.1, y + 0.1, z + 0.12);
+			// the coffee and the fountain drinks down the other wall
+			const fx = inside.x0 - 0.35;
+			box(mats.wood, fx, 0, inside.z1 - 3.4, fx + 0.75, 0.95, inside.z1 - 0.2, true);
+			box(mats.dark, fx, 0.95, inside.z1 - 3.4, fx + 0.8, 0.99, inside.z1 - 0.2);
+			for (let k = 0; k < 3; k++) { const z = inside.z1 - 3.1 + k * 0.5; box(mats.dark, fx + 0.05, 0.99, z, fx + 0.45, 1.6, z + 0.38); box(mats.steel, fx + 0.42, 1.2, z + 0.12, fx + 0.47, 1.35, z + 0.26); }
+			for (let k = 0; k < 4; k++) cyl(mats.cup, fx + 0.6, 0.99, inside.z1 - 1.5 + k * 0.12, 0.045, 0.3, 8);
+			box(mats.dark, fx + 0.05, 0.99, inside.z1 - 1.2, fx + 0.6, 1.9, inside.z1 - 0.25);
+			box(mats.panel, fx + 0.58, 1.45, inside.z1 - 1.15, fx + 0.61, 1.85, inside.z1 - 0.3);
+			seats.push([fx + 1.3, inside.z1 - 2, -Math.PI / 2, false]);
+			// the ice cream chest, the ATM by the door
+			box(mats.white, doorX - 3.2, 0, inside.z1 + 0.2, doorX - 1.8, 0.85, inside.z1 + 0.95, true);
+			add(mats.glass, new THREE.BoxGeometry(1.36, 0.02, 0.7).translate(doorX - 2.5, 0.86, inside.z1 + 0.575));
+			box(mats.dark, doorX + 1.6, 0, inside.z1 + 1.35, doorX + 2.3, 1.55, inside.z1 + 2.0, true);
+			box(mats.screen, doorX + 1.75, 1.1, inside.z1 + 1.33, doorX + 2.15, 1.38, inside.z1 + 1.35);
 		} else if (type === 'shop') {
 			for (let z = inside.z0 + 1; z < inside.z1 - 2.5; z += 2.6) {
 				aisles.push([inside.x0 + 1.2, inside.x1 - 1.2, z]);

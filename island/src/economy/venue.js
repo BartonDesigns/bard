@@ -6,6 +6,8 @@ import { sineHash as hh } from '../noise.js';
 
 // b: { x, z, w, d, kind } with kind 5 office, 6 retail (the real boxes' codes)
 export function venueOf(b) {
+	// (a gas station's food mart and a corner store are shops: bay/siteplan.js built them as such)
+	if (b.store) return 'shop';
 	const r = hh(Math.round(b.x * 0.37), Math.round(b.z * 0.29)), area = b.w * b.d, deep = Math.min(b.w, b.d);
 	if (b.kind === 5) return area > 1400 && r < 0.18 && deep > 24 ? 'cinema' : r < 0.2 ? 'restaurant' : r < 0.3 ? 'cafe' : 'office';
 	if (area > 900 && deep > 24 && r < 0.12) return 'bowling';
