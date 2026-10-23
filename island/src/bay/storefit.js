@@ -24,6 +24,7 @@ import { drawAny } from '../interiors/kit.js';
 import { RANGES, CUTS, hang, folded } from '../interiors/estab-kit.js';
 import { stripUV, GARMENTS, garmentAt, GARMENT_W, GARMENT_H } from '../interiors/goods.js';
 import { srgbToLinear as lin } from '../world/srgb.js';
+import { makeDoor, COLD } from './cooler-doors.js';
 
 const C = {
 	steel: lin([0.78, 0.79, 0.8]), shelf: lin([0.86, 0.87, 0.88]), kick: lin([0.2, 0.2, 0.21]), black: lin([0.04, 0.04, 0.045]),
@@ -298,14 +299,23 @@ function coolers(K, dir, line, a0, a1, o) {
 			if (o.face) s.face(kk, x + 0.05, x + dw - 0.05, y, Math.min(0.45, t - y), -0.3, (o.seed || 0) + k * 7 + i, 1.2);
 			else s.run(kk, x + 0.05, x + dw - 0.05, y, t - y, -0.13, D - 0.25, (o.seed || 0) + k * 7 + i, 1.25);
 		}
-		// the door's handle (by its free edge) and its frame
-		const hx = k % 2 ? x + 0.07 : x + dw - 0.07;
-		g.box('metal', hx - 0.015, 0.85, 0.03, hx + 0.015, 1.75, 0.06, C.steel);
+		// the door, hung on one edge (bay/cooler-doors.js swings it): its frame round the glass, its
+		// handle by its free edge; drawn on its own, its run of the kit's vertices noted
+		const hinge = k % 2 ? x + dw - 0.02 : x + 0.02, free = k % 2 ? x + 0.02 : x + dw - 0.02, hx = k % 2 ? x + 0.07 : x + dw - 0.07;
+		const m0 = g.mark();
 		g.box('gloss', x + 0.02, 0.3, 0.0, x + 0.045, top - 0.06, 0.025, C.black);
 		g.box('gloss', x + dw - 0.045, 0.3, 0.0, x + dw - 0.02, top - 0.06, 0.025, C.black);
+		g.box('gloss', x + 0.045, 0.3, 0.0, x + dw - 0.045, 0.36, 0.025, C.black);
+		g.box('gloss', x + 0.045, top - 0.12, 0.0, x + dw - 0.045, top - 0.06, 0.025, C.black);
+		g.box((f) => (f > 3 ? 'glass' : null), x + 0.045, 0.36, 0.008, x + dw - 0.045, top - 0.12, 0.016, C.white);
+		g.box('metal', hx - 0.015, 0.85, 0.025, hx + 0.015, 1.75, 0.055, C.steel);
+		const [px, pz] = F.W(hinge, 0.0125), [qx, qz] = F.W(free, 0.0125), [ox, oz] = F.W(hinge, 1.0125), [fx, fz] = F.W(x + dw / 2, 0.55);
+		K.door?.(makeDoor(g.since(m0), px, pz, qx - px, qz - pz, ox - px, oz - pz, fx, fz));
+		// (what it keeps cold is yours to take, paid for at the till: office-perks.js)
+		const pk = typeof kind === 'string' && o.perk !== false && COLD[kind];
+		if (pk) K.perk?.(pk, fx, fz, { door: true, n: (o.seed || 0) + k });
 	}
 	g.box('gloss', L1 - 0.025, 0.24, -0.06, L1 + 0.025, top, 0.02, C.black);
-	fbox(K, F, K.mats.glass, L0, 0.3, 0.008, L1, top - 0.06, 0.016);
 	// the lit header and its sign
 	if (o.signs) {
 		const per = Math.max(1, Math.round((L1 - L0) / 3.2)), sw = (L1 - L0) / per;
@@ -736,6 +746,25 @@ const TRADE = {
 	florist: 'florist', salon: 'salon', barber: 'salon', laundromat: 'laundry', gym: 'gym', yoga: 'gym', vet: 'clinic',
 };
 export const tradeOf = (type) => TRADE[type] || 'variety';
+// what of the gear catalog (gameplay/arms.js) a shop sells over its counter, by its trade and
+// its business: the gear screen's shop sheet (ui/gear.js), the site island-build.js lists for it.
+// outfitter: a trader's prices and its upgrades (the clothes); the rest a store's. The food
+// shops sell their food (cooking/), the rest nothing to carry away
+const GEAR = {
+	hardware: ['door-brace', 'lantern-alarm', 'camp-lantern', 'repair-roll', 'station-signal-flare', 'hunting-net'],
+	pharmacy: ['field-medkit'],
+	pet: ['trail-scent-kit', 'hunting-net'],
+	clothes: ['wayfarers-hood', 'rangers-jacket', 'fieldcraft-gloves', 'rangers-trousers', 'riding-boots', 'duskwalker-boots', 'ops-cap'],
+	tailor: ['aetherweave-coat', 'aetherweave-trousers', 'spellbinder-gloves', 'stargazer-circlet', 'riding-boots'],
+	surf: ['wayfarers-hood', 'rangers-jacket', 'trailstrider-boots', 'fieldcraft-gloves', 'rangers-trousers'],
+	bait: ['hunting-net', 'trail-scent-kit', 'camp-lantern'],
+	bike: ['repair-roll', 'camp-lantern', 'station-signal-flare'],
+	variety: ['camp-lantern', 'lantern-alarm', 'repair-roll'],
+};
+export function gearOf(trade, type) {
+	const stock = GEAR[type] || (trade === 'variety' && (type === 'outfitter' || type === 'huntpost') ? null : GEAR[trade]);
+	return stock ? { kind: trade === 'clothes' ? 'outfitter' : 'supermarket', stock } : null;
+}
 
 // the checkout by the door (and a second for a big shop): its customer side toward the room
 function frontCounter(K, impulse = true, len = 2.4) {
