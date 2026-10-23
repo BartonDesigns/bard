@@ -445,6 +445,12 @@
 	addEventListener('pagehide', () => finish('left'));
 	document.addEventListener('visibilitychange', () => { if (trail && !trail.end && document.hidden) { trail.hidden = true; saveTrail(); } });
 	const trailInfo = () => ({ now: trail ? (({ t0, ...t }) => t)(trail) : null, lost: lostLoads });
+	// something went wrong after the load (the graphics lost in the world, main.js): kept with
+	// the lost loads, so the next failed card's Copy load details carries it too
+	function note(entry) {
+		lostLoads = [...lostLoads, { at: new Date().toISOString(), page: location.pathname + location.search, ...entry }].slice(-5);
+		keep.put(LOST_KEY, lostLoads);
+	}
 	function errorView(error) {
 		clearTimeout(slowTimer); view.sub.classList.remove('bl-first'); view.root.dataset.state = 'error'; finish('failed: ' + String(error?.message || error).slice(0, 120));
 		const graphics = error?.code === 'GRAPHICS_RELOAD_REQUIRED';
@@ -468,6 +474,8 @@
 		return {
 			build: ((document.querySelector('link[href*="island.js?v="]')?.href || document.querySelector('script[src*="island.js?v="]')?.src || '').match(/v=([\w.]+)/) || [])[1] || null, at: new Date().toISOString(),
 			error: current?.error ? String(current.error.message || current.error).slice(0, 300) : null,
+			errorDetail: current?.error?.detail ?? null,
+			gpu: (() => { try { return window.L99GpuName?.() ?? null; } catch { return null; } })(),
 			attempt: current?.options?.attempt || 0,
 			device: { ua: nav.userAgent, cores: nav.hardwareConcurrency ?? null, deviceMemoryGB: nav.deviceMemory ?? null, screen: screen.width + 'x' + screen.height + '@' + devicePixelRatio, viewport: innerWidth + 'x' + innerHeight, touch: matchMedia?.('(pointer: coarse)').matches || false, connection: con.effectiveType || null, heapLimitMB: performance.memory ? Math.round(performance.memory.jsHeapSizeLimit / 1048576) : null },
 			graphics: (() => { try { return window.Crysis?.governor?.() || null; } catch { return null; } })(),
@@ -551,7 +559,7 @@
 				if (event.cancelable) event.preventDefault(); event.stopImmediatePropagation();
 			}, { capture: true, passive: false });
 	}
-	window.L99Loading = { run, stage, fail, active, trail: trailInfo, details, copyDetails: () => copyDetails(null), get pending() { return !!current && !current.settled; },
+	window.L99Loading = { run, stage, fail, active, trail: trailInfo, note, details, copyDetails: () => copyDetails(null), get pending() { return !!current && !current.settled; },
 		// the engine's tabs (island ui/loading-tabs.js); relabel() after a label changes (signed in)
 		tabs: setTabs, relabel: () => { if (view) drawChips(); }, openTab: id => openTab(id), closeTab: () => closeTab(), get tabOpen() { return tabOpen; },
 		chronicle: () => ({ checkpoint: BARD_UPDATE_CHECKPOINT, updated: BARD_UPDATES_UPDATED, entries: BARD_UPDATES.map(note => ({ ...note, points: [...note.points] })) }) };

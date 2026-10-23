@@ -233,7 +233,7 @@ const AGX_M = [
 ];
 const mat3x = (m, v) => [0, 1, 2].map((r) => m[r] * v[0] + m[3 + r] * v[1] + m[6 + r] * v[2]);
 // a low sun's gold (as the dome's shader mixes it)
-const GOLD = new THREE.Color(1.0, 0.8, 0.42);
+const GOLD = new THREE.Color(1.0, 0.8, 0.42), PEACH = new THREE.Color(1.0, 0.56, 0.34);
 // how much a low light is opened up against the look's darker shade (world/grade.js), and how
 // much of that the full night gives back (dusk wants the most; the night was tuned darker)
 const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
@@ -276,6 +276,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uFogCol: { value: new THREE.Color() },
+		// the haze looking into the sun (raw, as uFogCol is) and how much of it there is
+		uFogSunCol: { value: new THREE.Color() }, uFogSunK: { value: 0 },
 		// the clouds with depth (VOL_GLSL): on, and where the eye is
 		uVolK: { value: 0 }, uCamP: { value: new THREE.Vector3() },
 		// another world's air: its sky and haze take this colour (rgb), this much (a)
@@ -300,7 +302,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon, uMoon; uniform vec3 uGlowDir; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol, uFogSunCol; uniform vec4 uAir, uGiant; uniform float uFogSunK; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon, uMoon; uniform vec3 uGlowDir; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -343,6 +345,10 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 				float lowK = (1.0 - smoothstep(0.04, 0.4, uSunDir.y)) * step(-0.02, uSunDir.y) * (1.0 - uNight);
 				vec2 sh2d = normalize(uSunDir.xz + 1e-5), dh2d = normalize(d.xz + 1e-5);
 				float toward = pow(max(dot(sh2d, dh2d), 0.0), 5.0);
+				// the haze the land stands in, as it is this way: lit looking toward the sun (the
+				// same glow world/airfog.js gives the fog), plain away from it
+				float fogMu = max(dot(sh2d, dh2d), 0.0);
+				vec3 fogC = mix(uFogCol, uFogSunCol, clamp((fogMu * fogMu * fogMu * 0.4 + pow(fogMu, 12.0) * 0.6) * uFogSunK, 0.0, 1.0));
 				// (golden hour is yellow-gold toward the sun under a sky still blue overhead)
 				vec3 gold = mix(uSunColor, vec3(1.0, 0.8, 0.42), 0.6);
 				col += gold * (pow(sd, 6.0) * 0.8 + pow(sd, 40.0) * 0.8 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.9) * lowK * (1.0 - uCloud * 0.35);
@@ -687,7 +693,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 						// blue-grey, the sky behind showing through where it is thin; low down it melts
 						// into the haze the far land stands in
 						vec3 veilC = mix(vec3(0.18, 0.2, 0.25), uSkyHor * 0.7, 0.18 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.92 + 0.15 * streak);
-						veilC = mix(veilC, uFogCol, (1.0 - smoothstep(0.0, 0.05, tanE)) * 0.55);
+						veilC = mix(veilC, fogC, (1.0 - smoothstep(0.0, 0.05, tanE)) * 0.55);
 						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.75, 0.0, 0.9));
 					}
 					rainLine += thick * below * 2.2;
@@ -721,14 +727,26 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 				}
 				// the whole sky a shade lighter in a flash; greyer in rain close by
 				col += vec3(0.5, 0.55, 0.7) * uFlash * 0.25;
-				col = mix(col, mix(uSkyHor, vec3(0.5, 0.53, 0.57), 0.5) * (1.0 - uNight * 0.9), uRainHere * 0.45 * smoothstep(-0.1, 0.4, d.y));
+				// (at dawn and dusk the rain's grey goes lavender: the red light under the deck
+				// scattered through it, Josh's photos of a rainy sunrise over the freeway)
+				vec3 rainGrey = mix(uSkyHor, vec3(0.5, 0.53, 0.57), 0.5);
+				rainGrey = mix(rainGrey, rainGrey * vec3(1.1, 0.96, 1.2), dk);
+				col = mix(col, rainGrey * (1.0 - uNight * 0.9), uRainHere * (0.45 + 0.2 * dk * smoothstep(0.15, 0.5, d.y)) * smoothstep(-0.1, 0.4, d.y));
+				// and through the rain and the overcast the sunrise still shows: not the clear sky's
+				// crimson, a soft peach glow spread low along the horizon toward the sun, the
+				// tree line standing against it, dimming up the sky and off to the sides
+				float wetDawn = dk * clamp(uRainHere * 1.2 + uGloom * 0.6, 0.0, 1.0);
+				if (wetDawn > 0.001){
+					float ta = pow(fogMu * 0.5 + 0.5, 4.0);
+					col += vec3(1.0, 0.58, 0.36) * wetDawn * (0.1 + 0.9 * ta) * exp(-max(d.y, 0.0) / (0.05 + 0.17 * ta)) * (1.0 - uNight * 0.5);
+				}
 				// in weather the sky meets the land in the same haze the land is fogged with, so
 				// there is no line where the one ends and the other begins
-				col = mix(col, uFogCol, (1.0 - smoothstep(0.0, 0.14, d.y)) * clamp(uGloom * 1.5 + uRainHere, 0.0, 1.0) * 0.85);
+				col = mix(col, fogC, (1.0 - smoothstep(0.0, 0.14, d.y)) * clamp(uGloom * 1.5 + uRainHere, 0.0, 1.0) * 0.85);
 				// below the horizon (seen past the land's far edge from high up) the sky is the same
 				// haze the land fades into, so no bright line runs along where the land ends
-				col = mix(col, mix(uSkyHor, uFogCol, 0.7), smoothstep(0.02, -0.12, d.y));
-				col = mix(col, uFogCol, smoothstep(0.012, -0.03, d.y) * 0.9);
+				col = mix(col, mix(uSkyHor, fogC, 0.7), smoothstep(0.02, -0.12, d.y));
+				col = mix(col, fogC, smoothstep(0.012, -0.03, d.y) * 0.9);
 				// (not under a world's own dusk, whose colours are its own)
 				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uAir.rgb, uAir.a * (1.0 - uDusk.x));
 				// no air: a black sky, the sun a hard white disc
@@ -996,10 +1014,13 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, skySet * 0.85).lerp(PAL.nightHor, night);
 		// overcast and rain: a greyer, lower-contrast sky
 		const W = weather?.state, gl = W?.gloom || 0;
+		// (round sunrise and sunset the grey goes lavender overhead and warm at the horizon,
+		// as a rainy dawn does, the red light under the deck scattered through it)
+		const dawnC = THREE.MathUtils.smoothstep(elev, -0.2, -0.05) * (1 - THREE.MathUtils.smoothstep(elev, 0.03, 0.22));
 		if (gl > 0) {
 			const lz = (tmpA.r + tmpA.g + tmpA.b) / 3, lh = (tmpB.r + tmpB.g + tmpB.b) / 3;
-			tmpA.lerp(tmpC.setRGB(lz * 0.95, lz, lz * 1.05).multiplyScalar(0.8 + 0.4 * (1 - night)), gl * 0.75);
-			tmpB.lerp(tmpC.setRGB(lh * 0.97, lh, lh * 1.02).multiplyScalar(0.85), gl * 0.65);
+			tmpA.lerp(tmpC.setRGB(lz * (0.95 + 0.14 * dawnC), lz * (1 - 0.05 * dawnC), lz * (1.05 + 0.12 * dawnC)).multiplyScalar(0.8 + 0.4 * (1 - night)), gl * 0.75);
+			tmpB.lerp(tmpC.setRGB(lh * (0.97 + 0.12 * dawnC), lh * (1 - 0.02 * dawnC), lh * (1.02 + 0.04 * dawnC)).multiplyScalar(0.85), gl * 0.65);
 		}
 		shared.uSkyZen.value.copy(tmpA);
 		shared.uSkyHor.value.copy(tmpB);
@@ -1042,7 +1063,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		hemi.color.copy(tmpB).lerp(tmpA, 0.5).multiplyScalar(1.0);
 		// light bounced off warm sand and sunlit leaves fills the shade with gold, not grey
 		hemi.groundColor.setRGB(0.46, 0.36, 0.18).multiplyScalar(0.3 + 0.7 * dayK);
-		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) + (W?.flash || 0) * 2.5;
+		// (a rainy or overcast dawn is lit by the whole grey sky, not by a sun still under the
+		// hills: the shade is open enough to read the trees and the road by, as a camera has it)
+		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) * (1 + dawnC * 1.0 * Math.max(gl, overcast)) + (W?.flash || 0) * 2.5;
 		// (in vacuum only the grey ground's bounce fills the shade)
 		if (vacuum) { hemi.groundColor.setRGB(0.4, 0.4, 0.4); hemi.intensity *= 0.3; }
 		// a town by night is never as dark as open country: its lamps light the streets and the
@@ -1058,7 +1081,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
-		if (W) haze.lerp(tmpC.setRGB(0.5, 0.53, 0.57).multiplyScalar(1 - night * 0.9), Math.min(1, W.rainHere * 0.6 + gl * 0.3));
+		const rainK = W ? Math.min(1, W.rainHere * 0.6 + gl * 0.3) : 0;
+		if (W) haze.lerp(tmpC.setRGB(0.5 + 0.08 * dawnC, 0.53 - 0.01 * dawnC, 0.57 + 0.06 * dawnC).multiplyScalar(1 - night * 0.9), rainK);
 		const dk = uniforms.uDusk.value;
 		if (dk.x > 0) haze.lerp(tmpC.setRGB(0.24, 0.07, 0.26).multiplyScalar(dk.y), dk.x * 0.85);
 		const air = uniforms.uAir.value;
@@ -1079,12 +1103,20 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		{
 			const lowK = (1 - THREE.MathUtils.smoothstep(elev, 0.04, 0.4)) * (elev > -0.02 ? 1 : 0) * (1 - night);
 			const into = tmpD.copy(sunCol).multiplyScalar(0.32 * (1 - overcast * 0.7)).add(tmpE.copy(sunCol).lerp(GOLD, 0.6).multiplyScalar(1.5 * lowK * (1 - uniforms.uCloud.value * 0.35))).add(haze);
+			// (before sunrise and after sunset the haze toward the sun glows peach, most in the
+			// thick haze of rain and overcast, where the far land is all haze and the glow is the sky)
+			into.add(tmpE.copy(PEACH).multiplyScalar(0.7 * dawnC * (0.35 + 0.65 * Math.min(1, rainK * 1.6 + overcast * 0.5))));
 			if (dk.x > 0) into.lerp(haze, dk.x);
+			// (the dome's low sky and the wet roads take the same colour, raw as uFogCol is)
+			uniforms.uFogSunCol.value.copy(into);
+			shared.uSkySun?.value.copy(into);
 			if (air.w > 0) into.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(into.r * 0.299 + into.g * 0.587 + into.b * 0.114), air.w * (1 - dk.x));
 			if (renderer.toneMapping === THREE.AgXToneMapping) agx(into, renderer.toneMappingExposure, tmpE); else tmpE.copy(into);
 			AIR.sunCol.x = tmpE.r; AIR.sunCol.y = tmpE.g; AIR.sunCol.z = tmpE.b;
 			AIR.sun.x = sd.x; AIR.sun.y = sd.y; AIR.sun.z = sd.z;
-			AIR.sun.w = vacuum ? 0 : (1 - night) * (0.3 + 0.7 * sunVis);
+			AIR.sun.w = vacuum ? 0 : Math.max((1 - night) * (0.3 + 0.7 * sunVis), dawnC * 0.75 * (1 - night * 0.3));
+			uniforms.uFogSunK.value = AIR.sun.w;
+			if (shared.uSkySunK) shared.uSkySunK.value = AIR.sun.w;
 		}
 		// (the water's reflections: shared.cloudReflect false keeps them to the plain sky)
 		shared.uCloudR.value.set(uniforms.uCloudOff.value.x, uniforms.uCloudOff.value.y, uniforms.uCloud.value, shared.cloudReflect === false ? 0 : 1);

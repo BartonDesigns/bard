@@ -98,7 +98,10 @@ export function islandFrame(iw, now) {
 	W.boardwalk?.update(dt, iw.time, camera, sk.night, W.sky.state.hours);
 	// the weather: frames running slow shed rain streaks; indoors the rain stays out
 	W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
-	const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: iw.frameAvg > 26 });
+	// (in a car's seat the rain is on the glass, not in the cabin: the streaks start past it)
+	const seated = iw.drive.active() && !iw.drive.state.chase && !iw.drive.state.onTrail && !iw.drive.military() && !carjack.active();
+	const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: iw.frameAvg > 26, cab: seated });
+	W.windshield?.update(dt, camera, { seated, rain: W.weather.state.sheltered ? 0 : wx.rainHere, fog: scene.fog.color, car: iw.drive.state });
 	W.ocean.userData.tick?.(dt, W, camera, wx?.rainHere || 0);   // what touches the sea, the rain on it (world/ocean.js)
 	surprises.update(dt, sk, wx);
 	W.whale.update(dt, iw.time, shared.uBass.value, camera.position);
@@ -157,7 +160,9 @@ export function islandFrame(iw, now) {
 		scene.fog.density *= W.island.profileHaze || 1;
 		// (the Moon's ground runs to its horizon in clear vacuum)
 		if (W.island.far) scene.fog.density = 0.000006;
-		const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+		const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = iw.drive.active() && !iw.drive.state.chase && !iw.drive.state.onTrail ? 0.05 : openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+		// (at the wheel the headliner and the pillars are within a quarter metre: the near plane
+		// comes in to them, as drive.js asks; it used to be put back to 0.25 here every frame)
 		if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 	}
 	// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
@@ -284,7 +289,7 @@ export function islandFrame(iw, now) {
 	W.freeways?.update(camera, sk.night);
 	W.signage?.update(dt, camera, sk.night, iw.drive.active());
 	bridgeSound.update(dt);
-	W.streets?.update(dt, sk.night, W.sky.state.hours);
+	W.streets?.update(dt, sk.night, W.sky.state.hours, wx.rainHere || 0, shared.uWet.value);
 	crosswalks.update(dt);
 	W.lake?.update(dt, iw.time, camera, sk.night);
 	W.water?.update(dt, iw.time, camera, sk.night);

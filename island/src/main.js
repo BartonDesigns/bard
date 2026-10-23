@@ -43,7 +43,7 @@ import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
 import { resetKitEnvironment } from './people/kit-light.js';
 import { createGovernor, qualityNow } from './world/governor.js';
-import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
+import { createGraphicsRenderer, graphicsMode, renderRatio, gpuName } from './world/graphics-startup.js';
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
@@ -473,6 +473,8 @@ export function createIslandWorld() {
 	const graphics = createGraphicsRenderer({ canvas: document.createElement('canvas'), Renderer: THREE.WebGLRenderer,
 		replaceCanvas: () => document.createElement('canvas'), storage, phone: GFX, safe: SAFE, mode: initialMode });
 	const renderer = graphics.renderer;
+	// the graphics card's name, for the loading card's Copy load details (loading-screen.js)
+	window.L99GpuName = () => graphics.gpu || gpuName(renderer.getContext());
 	const recovery = createGraphicsRecovery({ onTimeout: failGraphicsRecovery }), draw = renderer.render.bind(renderer);
 	renderer.render = (...args) => {
 		if (recovery.blocked()) throw graphicsReloadError();
@@ -547,6 +549,8 @@ export function createIslandWorld() {
 		// same large attachments must not be recreated on the first restored frame.
 		seaMirror.reset(); seaDepth.reset();
 		if (!building && world) { share.keep(true, true); social.flush(); world.player.clearInput(); }
+		// (and in the black box, so a failed load's Copy load details afterwards carries it)
+		try { window.L99Loading?.note?.({ kind: 'graphics lost in the world', secs: Math.round(time), at: camera.position.toArray().map(Math.round), building: String(linking.what || '').slice(0, 120), shaders: shaderWarm.recent(), governor: governor.info(), blocked, gpu: window.L99GpuName?.() }); } catch { /* the box is a convenience */ }
 		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
 		shaderWarm.reset();
 		if (blocked) {
@@ -591,7 +595,7 @@ export function createIslandWorld() {
 		aimSensitivity: loadAimSensitivity(),
 		uTime: { value: 0 }, uWet: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
 		uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.4) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
-		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
+		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uSkySun: { value: new THREE.Color() }, uSkySunK: { value: 0 }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
 	// the land, the village and the boats drawn upside down for the sea to reflect (world/seamirror.js)

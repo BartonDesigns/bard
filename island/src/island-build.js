@@ -16,6 +16,7 @@ import { makeHeightTexture, makeMaskTexture, createTerrain } from './world/terra
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
+import { createWindshield } from './world/windshield.js';
 import { createSunRays } from './world/sunrays.js';
 import { createSpray } from './world/spray.js';
 import { createVegetation } from './world/vegetation.js';
@@ -161,6 +162,8 @@ export async function islandBuild(iw, params) {
 	// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 	const weather = createWeather(scene, shared, { isPhone: GFX, airless: !!profile.airless });
 	sky.attach(weather);
+	// the rain on the glass when you drive in it (world/windshield.js)
+	const windshield = createWindshield(scene, shared);
 	const terrain = createTerrain(island, shared);
 	// the real Bay Area round the island: its heights are shared with the sea
 	shared.bayU = bayUniforms();
@@ -256,7 +259,7 @@ export async function islandBuild(iw, params) {
 	for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 	const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(iw.world?.underworld?.pickables || []), () => iw.running && iw.visible);
 	music.register();
-	iw.world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, flush, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+	iw.world = { island, sky, weather, windshield, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, flush, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
 	// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
 	seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
 	seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
@@ -421,6 +424,8 @@ export async function islandBuild(iw, params) {
 	window.L99Loading.stage('Lighting the world');
 	HOOKS.lightPad?.update(performance.now(), camera, true);
 	await shaderWarm.all({ budget: 2500, progress: (k) => { if (iw.arrival) arriving(k * 0.3); } });
+	// (the windshield's rain is hidden until you drive in rain: built now, not then)
+	if (renderer.compileAsync) await renderer.compileAsync(windshield.quad, camera, scene).catch(() => {});
 	window.L99Loading.stage('Preparing the surroundings');
 	// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 	// for everything: the island's own map on the island, the real land beyond it
@@ -482,7 +487,7 @@ export async function islandBuild(iw, params) {
 		iw.world.vehicles = createVehicles({ scene, world: () => iw.world, camera, isPhone: GFX, people: () => people });
 		iw.world.military = HOOKS.military;
 		// the freeways' barriers, sound walls and overpasses (their decks are floors)
-		iw.world.freeways = createFreeways(scene, bayArea, iw.world.real, { isPhone: GFX, roadAt: (r, x, z) => iw.world.berms?.along(r, x, z) });
+		iw.world.freeways = createFreeways(scene, bayArea, iw.world.real, { isPhone: GFX, shared, roadAt: (r, x, z) => iw.world.berms?.along(r, x, z) });
 		// the signs, decals, stickers, posters, tags and grime of the streets, shops and cars (signage/)
 		iw.world.signage = HOOKS.signage = createSignage({ scene, world: () => iw.world, isPhone: GFX, locate: (x, z) => globeLL(x, z), morality: () => HOOKS.npcQuests?.where?.() });
 		// Lake Annabel at Bishop Ranch: water, wildlife, and fishing

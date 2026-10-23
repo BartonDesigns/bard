@@ -13,6 +13,7 @@ import { toWorld } from './geo.js';
 import { FOOT, distTo, footLifted, lanesUnder, sidewalkOf } from './overpass.js';
 import { carriageways, gapLeft, isCarriageway, medianFor, SHOULDER_R } from './fwyplan.js';
 import { lampPools, lampLook } from './streetlamps.js';
+import { WET_SHEEN_PARS, wetSheenUniforms } from './wetsheen.js';
 
 // where the freeways go, for the signs (by route number and direction of travel)
 export const DEST = {
@@ -165,11 +166,32 @@ function resample(pts, step) {
 // the lanes under it are cleared from, the same wherever you stand
 const LIT = 450, LAMP_GAP = 58;                                  // lit for 450 m round a ramp's ends, a pole every 58 m
 const STEEL = [0.56, 0.57, 0.58], POST = [0.46, 0.46, 0.45], HEAD = [0.3, 0.31, 0.32];
-export function createFreeways(scene, bay, real, { isPhone = false, roadAt = null } = {}) {
+export function createFreeways(scene, bay, real, { isPhone = false, roadAt = null, shared = null } = {}) {
 	const group = new THREE.Group();
 	group.name = 'freeways';
 	scene.add(group);
 	const concrete = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, side: THREE.DoubleSide });
+	// in rain the decks and barriers darken and gloss, and the sky lies along the wet deck at a
+	// low look, the low sun's glow with it (bay/wetsheen.js, as the ground's paving has it)
+	if (shared) {
+		const WU = wetSheenUniforms(shared);
+		concrete.onBeforeCompile = (sh) => {
+			Object.assign(sh.uniforms, WU);
+			sh.vertexShader = 'varying vec3 vFwyW; varying vec3 vFwyN;\n' + sh.vertexShader
+				.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvFwyW = (modelMatrix * vec4(transformed, 1.0)).xyz; vFwyN = normalize(mat3(modelMatrix) * objectNormal);');
+			sh.fragmentShader = 'uniform float uWet; uniform vec3 uSkyZenS, uSkyHorS; varying vec3 vFwyW; varying vec3 vFwyN;\n' + WET_SHEEN_PARS + sh.fragmentShader
+				.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - uWet * 0.3;')
+				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.4, uWet * 0.85);')
+				.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+				if (uWet > 0.01) {
+					vec3 fN = gl_FrontFacing ? vFwyN : -vFwyN;
+					// (the deck's top takes it; a barrier's face and the underside, little)
+					float up = smoothstep(0.5, 0.9, fN.y);
+					totalEmissiveRadiance += wetSheen(fN, vFwyW, uWet * up * 0.6);
+				}`);
+		};
+		concrete.customProgramCacheKey = () => 'freeway-concrete-wet';
+	}
 	const fenceTex = chainLink();
 	const fenceMat = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: false, alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.4 });
 	// the lamps after dark: no lights (a phone rebuilds its shaders when the count changes),
