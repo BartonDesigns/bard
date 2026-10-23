@@ -1544,7 +1544,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// on the drive in front of the garage, the bins, the AC unit down the side, now and then
 	// a hoop, an RV or a boat, a shed out back where the land map shows open yard
 	const YARD_R = PHONE ? 220 : 420;
-	function realYard(list, b, look, g, cnd) {
+	function realYard(list, b, look, g, cnd, fenced) {
 		const P = list.props || (list.props = {}), ca = Math.cos(b.a), sa = Math.sin(b.a), W = (lx, lz) => [b.x + ca * lx - sa * lz, b.z + sa * lx + ca * lz];
 		const put = (k, lx, lz, yaw, sc, c, lift = 0, tilt = 0) => { if (!kit2.has(k)) return; const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) > 2.5) return; const e = [x, gy + lift, z, b.a + yaw, ...(typeof sc === 'number' ? [sc, sc, sc] : sc), tilt]; if (c) e.push(...c); (P[k] || (P[k] = [])).push(e); };
 		const hr = (n) => hash(b.x * 0.71 + n * 5.3, b.z * 1.13 - n * 2.1);
@@ -1554,7 +1554,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// mapped one, or the one made for it); the cars stand on the drive before the doors
 		const F = b.grp ? frontOf(b.grp) : null, gar = F?.garage, D = gar?.doors || [];
 		let gx = null, gz = null, ux = -sa, uz = ca;
-		if (F && (b.x - cx) ** 2 + (b.z - cz) ** 2 < FENCE_R * FENCE_R) lotFences(list, b, F, g, hr);
+		if (F && fenced) lotFences(list, b, F, g, hr);
 		if (D.length) {
 			gx = (D[0].x0 + D[D.length - 1].x1) / 2; gz = gar.front;
 			const [dx, dz] = W(gx, gz);
@@ -1616,7 +1616,8 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const r of F.rects) { x0 = Math.min(x0, r.x0); x1 = Math.max(x1, r.x1); z0 = Math.min(z0, r.z0); z1 = Math.max(z1, r.z1); }
 		const zf = F.R0.z1 - 0.9;
 		// the neighbours' homes in that frame, as their centre and half extents
-		const boxes = real.near('boxes', b.x, b.z, 48), nb = [];
+		// (near() gives whole cells: only what can reach 40 m of the house matters)
+		const boxes = real.near('boxes', b.x, b.z, 48).filter((q) => Math.hypot(q.x - b.x, q.z - b.z) < 40 + Math.hypot(q.w, q.d) / 2), nb = [];
 		for (const q of boxes) {
 			if (q.grp === b.grp || !isHome(q)) continue;
 			const dx = q.x - b.x, dz = q.z - b.z, lx = ca * dx + sa * dz, lz = -sa * dx + ca * dz;
@@ -1769,7 +1770,7 @@ export function createCity(shared, scene, bay, real = null) {
 			if (b.gen && kind !== KIND.garage) setCond(ro, condFor(ro, isHome(b) ? 0.05 : 0.02));
 			if (b.grp && (ro.cond === COND.boarded || ro.cond === COND.burnt)) b.grp.shut = true;
 			// (the radio huts and ranger posts high on the wild ridges are nobody's home: no yard)
-			if (home === b && (b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R && !(g > 600 && !HOME_LAND.has(real.landAt?.(b.x, b.z)?.lu))) realYard(list, b, look, g, ro.cond);
+			if (home === b && (b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R && !(g > 600 && !HOME_LAND.has(real.landAt?.(b.x, b.z)?.lu))) realYard(list, b, look, g, ro.cond, (b.x - cx) ** 2 + (b.z - cz) ** 2 < FENCE_R * FENCE_R);
 			if (b.kind >= 5 && b.kind !== 10) grounds(list, trees, b.x, b.z, b.w, b.d, b.a, g, y, kind, b.x * 0.37 + b.z * 0.11);
 		}
 		for (const p of real.near('pools', cx, cz, Math.min(R, 900))) {
