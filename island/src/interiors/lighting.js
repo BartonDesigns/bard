@@ -377,7 +377,7 @@ function* job(H) {
 			const attrs = {};
 			for (const k of Object.keys(g0.attributes)) { const A = g0.attributes[k]; if (A.isInterleavedBufferAttribute) continue; attrs[k] = { array: A.array instanceof Float32Array ? A.array : Float32Array.from(A.array), size: A.itemSize, normalized: A.normalized, type: A.array.constructor }; }
 			// (the shell's share kept apart: housekit.js sunCast, what the sun's shadow pass draws)
-			const T = tessellate(attrs, g0.attributes.position.count, cell, q.o.geometry.userData.sunCast ?? -1);
+			const T = tessellate(attrs, g0.attributes.position.count, cell, q.o.geometry.userData.sunCast ?? -1, q.o.geometry.userData.marks || null);
 			for (const k of Object.keys(T.attrs)) { T.attrs[k].type = attrs[k].type; T.attrs[k].normalized = attrs[k].normalized; }
 			if (g0 !== q.o.geometry) g0.dispose();
 			geos.push(T);
@@ -424,6 +424,7 @@ function* job(H) {
 			g.setAttribute(k, new THREE.BufferAttribute(A.type && A.type !== Float32Array ? A.type.from(A.array) : A.array, A.size, !!A.normalized));
 		}
 		if (T.mark != null) g.userData.sunCast = T.mark;
+		if (T.marks) g.userData.marks = T.marks;
 		g.setAttribute('ilight', R.light);
 		g.setAttribute('idir', R.dir);
 		g.setAttribute('inight', R.night);

@@ -6,11 +6,15 @@
 // (interiors/furnish.js officeFit: the coffee bar with its first-aid box, the vending machine,
 // the water); the walk-in offices on the streets keep the same, and a cinema's concession
 // stand and the lanes' snack bar sell you something too (bay/commercial.js amenities, placed
-// by bay/venuefit.js). Their kitchens' fridges are the cooking's (cooking/index.js).
+// by bay/venuefit.js). Their kitchens' fridges are the cooking's (cooking/index.js). And in a
+// shop with reach-in coolers what each door keeps cold, paid for at the till: you pull the door
+// open, take a drink, a beer, milk or an ice cream of a maker on its shelves, and it swings shut
+// (bay/storefit.js coolers, bay/cooler-doors.js).
 //
 // One prompt (E, or its button), like the kitchen's.
 
 import { mintUid } from '../gameplay/gear-levels.js';
+import { brandName } from '../signage/brand-catalog.js';
 
 const STORE = 'bard:office-perks';
 // how near you need to be, metres; how long before the same one does you good again, seconds
@@ -23,7 +27,15 @@ const PERK = {
 	firstaid: { label: '🩹 First aid', hp: 40, wait: 600, line: 'You patch yourself up from the office first-aid box.' },
 	popcorn: { label: '🍿 Popcorn', hp: 14, wait: 90, price: 6, line: 'A tub of popcorn and a cold soda from the concession stand' },
 	snackbar: { label: '🌭 Snack bar', hp: 16, wait: 90, price: 5, line: 'A hot dog and a soda from the snack bar' },
+	// (a cooler's door: door, whose makers are on its shelves, the brand catalog's family)
+	colddrink: { label: '🥤 Cold drink', hp: 8, wait: 40, price: 2, door: 'beverages', line: (b) => `You pull the cooler open and take a cold ${b}` },
+	coldbeer: { label: '🍺 Cold beer', hp: 6, wait: 60, price: 4, door: 'guild', line: (b) => `A cold bottle of ${b} ale from the cooler` },
+	milk: { label: '🥛 Milk', hp: 8, wait: 60, price: 2, door: 'dairy', line: (b) => `A cold carton of ${/milk|dairy/i.test(b) ? b : `${b} milk`} from the cooler` },
+	icecream: { label: '🍦 Ice cream', hp: 10, wait: 60, price: 3, door: 'produce', line: (b) => `${/^[aeiou]/i.test(b) ? 'An' : 'A'} ${b} ice lolly from the freezer` },
 };
+// a maker's name as said (the catalog's shouted ones in plain capitals)
+const said = (s) => (s && s === s.toUpperCase() ? s.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()) : s);
+const lineOf = (P, q) => (typeof P.line === 'function' ? P.line(said(brandName(P.door, ((q.n || 0) % 8 + 8) % 8)) || 'drink') : P.line);
 // the city offices' furniture that is one of them (its place on the item, in the item's frame:
 // across, out in front)
 const ITEMS = {
@@ -84,7 +96,8 @@ export function createOfficePerks({ mount, button, hint = () => {}, isPhone = fa
 	}
 	function use(q = here) {
 		if (!q) return;
-		const P = PERK[q.kind], now = performance.now() / 1000, last = used.get(q.key) ?? -1e9;
+		// (one cold drink a while from a shop's coolers, whichever door: its key without the door's place)
+		const P = PERK[q.kind], now = performance.now() / 1000, wk = P.door ? q.key.replace(/(:-?\d+){2}$/, '') : q.key, last = used.get(wk) ?? -1e9;
 		if (q.kind === 'firstaid') {
 			const hurt = combat?.hurt0?.() || 0;
 			if (hurt > 1 && now - last > P.wait) { used.set(q.key, now); const got = mend(P.hp); hint(`${P.line} (+${Math.round(got)} health)`, 3200); return; }
@@ -93,13 +106,15 @@ export function createOfficePerks({ mount, button, hint = () => {}, isPhone = fa
 			else hint('The first-aid box is locked.', 2200);
 			return;
 		}
-		if (now - last < P.wait) { hint(P.price ? 'You just had a snack. Give it a minute.' : q.kind === 'water' ? 'You just had a cup.' : 'You just had one. Give it a minute.', 2000); return; }
+		if (now - last < P.wait) { hint(P.door ? 'You just had one. Give it a minute.' : P.price ? 'You just had a snack. Give it a minute.' : q.kind === 'water' ? 'You just had a cup.' : 'You just had one. Give it a minute.', 2000); return; }
 		if (P.price) {
-			if (!arms?.spendCredits?.(P.price, { id: `office-vend-${Date.now().toString(36)}-${(txN++).toString(36)}`, kind: 'vending' })) { hint(`The machine wants ${P.price} credits.`, 2200); return; }
+			if (!arms?.spendCredits?.(P.price, { id: `office-vend-${Date.now().toString(36)}-${(txN++).toString(36)}`, kind: 'vending' })) { hint(P.door ? `That's ${P.price} credits at the till.` : `The machine wants ${P.price} credits.`, 2200); return; }
 		}
-		used.set(q.key, now);
-		const got = mend(P.hp);
-		hint(P.price ? `${P.line} (${P.price} credits)${got > 0 ? ` · +${Math.round(got)} health` : ''}.` : `${P.line}${got > 0 ? ` (+${Math.round(got)} health)` : ''}`, 2800);
+		used.set(wk, now);
+		// (the cooler's door swings open as you take it, and shut behind you)
+		if (P.door) world()?.commercial?.swing?.(q.x, q.z, 2.4);
+		const got = mend(P.hp), line = lineOf(P, q);
+		hint(P.price ? `${line} (${P.price} credits)${got > 0 ? ` · +${Math.round(got)} health` : ''}.` : `${line}${got > 0 ? ` (+${Math.round(got)} health)` : ''}`, 2800);
 	}
 	act.addEventListener('click', (e) => { e.stopPropagation(); use(); });
 	addEventListener('keydown', (e) => {
