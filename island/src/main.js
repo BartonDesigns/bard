@@ -1637,7 +1637,8 @@ export function createIslandWorld() {
 			show();
 			await build(params);
 			await recovery.wait();
-			if (Number.isFinite(hours) && world?.sky) world.sky.state.hours = hours;
+			// (the spot's hour is the hour there: sky.js keeps the Bay's, and the place's comes with the move)
+			if (Number.isFinite(hours) && world?.sky) { if (params.earth !== false && params.at && world.sky.setLocalHours) world.sky.setLocalHours(hours, params.at.lon); else world.sky.state.hours = hours; }
 			if (params.earth !== false && params.at) HOOKS.goTo(params.at.lat, params.at.lon);      // globe: straight to a place
 			api.link();
 			if (!arrival) {

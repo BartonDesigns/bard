@@ -161,7 +161,7 @@ export async function islandBuild(iw, params) {
 	shared.heightTex = makeHeightTexture(island);
 	shared.maskTex = makeMaskTexture(island);
 	await yieldBuild('Preparing the surroundings');
-	const sky = createSky(scene, shared, renderer, { isPhone: GFX, earth, latitude: () => earth && iw.world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
+	const sky = createSky(scene, shared, renderer, { isPhone: GFX, earth, latitude: () => earth && iw.world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8, longitude: () => earth && iw.world?.globe ? globeLL(camera.position.x, camera.position.z).lon : NaN });
 	try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 	// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 	const weather = createWeather(scene, shared, { isPhone: GFX, airless: !!profile.airless });
