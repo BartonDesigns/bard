@@ -148,6 +148,8 @@ POST /npc/talk  { sheet, history: [{ role, content }], open }
 
 - **The sheet** is the person's character sheet: name, age, job, place, temper, facts, the places they can send you, their mood, what they remember of you and how much they trust you, their quests with you, and `can`: what this person is allowed to do (follow, wait, home, shop, join, warn, calm, fight, waypoint, the places they can scout, the places and people a quest of theirs may use). The server cuts it to size and keeps only known fields.
 - **The rules** are the server's own and the same for everyone, so they sit in Claude's prompt cache. The sheet and the player's words are data, never instructions.
+- **The world** (`src/npc-world.js`, `WORLD`) rides with the rules: what people know of the aether, the Spark, the Nightborn, the goblins, the Deep, the crews and powers, and the mysteries nobody has answered, which they argue about and never solve. It is written from the game's own lore (spells, factions, creatures, cave folk).
+- **Each person's angle** (`flavourOf`) is the server's, picked from their name, job and place so it never changes between meetings: a mouth (clean, salty, rude or raunchy; children and players who chose clean talk always get clean), a hustle that their jobs grow out of, a secret they only tell someone they trust, and their theory about one mystery.
 - **Words stream** as they arrive: the game shows subtitles and starts speaking the first sentence while the rest is still coming. A `[[mood: x]]` or `[[gesture: y]]` tag is held until it is whole.
 - **One action** ends each reply, `[[do: {...}]]`, never shown. The server checks it against the sheet (an act this person can't do, a place that wasn't offered, a quest step with an invented id: dropped), and the game checks it again before doing anything.
 - **Claude when the key is set**, Workers AI otherwise. If Claude fails before its first word (busy, a bad key, the day's turns used up), Workers AI answers in the same stream.
@@ -166,22 +168,22 @@ curl -H 'origin: https://level99bard.com' https://l99-discovery.<subdomain>.work
 
 | var | default | |
 |---|---|---|
-| `CLAUDE_MODEL` | `claude-opus-5-5` | The voice. `claude-sonnet-5-5` is half the price, `claude-haiku-5-5` about a fortieth, and quicker. |
+| `CLAUDE_MODEL` | `claude-haiku-5-5` | The voice. Haiku is the quickest and cheapest; `claude-sonnet-5-5` is richer at ten times the price, `claude-opus-5-5` the best at twenty-five times. |
 | `CLAUDE_EFFORT` | `low` | How long it thinks before speaking. `low` is the fastest; `medium` is richer and slower. |
-| `CLAUDE_MAX_TOKENS` | 260 | The longest reply (about five spoken sentences plus the action). Capped at 600. |
+| `CLAUDE_MAX_TOKENS` | 360 | The longest reply (about five spoken sentences plus the action, with room for a quest). Capped at 600. |
 | `CLAUDE_TURNS_PER_DAY` | 3000 | The day's ceiling on Claude turns, for every player together. Past it, Workers AI answers. |
-| `CLAUDE_FALLBACKS` | `true` | If the model's safety check declines a turn, Anthropic retries it on its recommended fallback model. |
+| `CLAUDE_FALLBACKS` | `true` | If the model's safety check declines a turn, Anthropic retries it on its recommended fallback model. Haiku 5.5 has none: its declines go to Workers AI. |
 | `TALK_PER_HOUR` | 60 | Turns one player may take an hour (shared with `/talk`). |
 
 ### What it costs, and what the free tiers carry
 
-Claude has no free tier: each turn is billed to the key's account. A turn is about 2,000 tokens of rules (read from the cache after the first turn in five minutes), 500 tokens of sheet and conversation, and 60 to 120 tokens of reply.
+Claude has no free tier: each turn is billed to the key's account. A turn is about 3,500 tokens of rules and world (read from the cache after the first turn in five minutes), 500 tokens of sheet and conversation, and 60 to 120 tokens of reply.
 
 | model | about per turn | 1,000 turns | the 3,000-turn daily cap |
 |---|---|---|---|
 | `claude-opus-5-5` | $0.005 | $5 | $15 a day |
 | `claude-sonnet-5-5` | $0.002 | $2 | $6 a day |
-| `claude-haiku-5-5` | $0.0002 | $0.20 | $0.60 a day |
+| `claude-haiku-5-5` (the default) | $0.0002 | $0.20 | $0.60 a day |
 
 Set a monthly spend limit on the key's account in the Claude Console as a backstop.
 
@@ -190,6 +192,6 @@ Everything else stays on the Workers Free plan:
 - **Requests**: 100,000 a day across the Worker. A turn is one request.
 - **Durable Object requests**: 100,000 a day. A turn makes two (reserve and settle), so about 50,000 turns a day before this limit.
 - **CPU**: streaming waits on the network, which doesn't count against the 10 ms CPU limit per request.
-- **Workers AI** (no key, or past the cap): about 3,000 Neurons a day for talk, a few hundred short replies.
+- **Workers AI** (no key, or past the cap): about 3,000 Neurons a day for talk, about 150 replies with the world notes in.
 
 So the free plan carries thousands of players' conversations a day; what grows with players is the Claude bill, which `CLAUDE_TURNS_PER_DAY` and the model choice keep in hand.

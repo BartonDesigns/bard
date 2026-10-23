@@ -11,12 +11,15 @@
 // marked for prompt caching, so a day of conversation reads it from the cache at a twentieth of
 // the price. Thinking stays on at low effort (the model's fastest setting); no temperature or
 // prefill (not accepted by these models). A safety-classifier decline is retried server-side
-// on Anthropic's recommended fallback when the model allows it; a model that refuses the
-// fallbacks field is asked again without it, once, and remembered.
+// on Anthropic's recommended fallback when the model allows it (Haiku 5.5 has none, so it is
+// never asked; its declines go to Workers AI); a model that refuses the fallbacks field is
+// asked again without it, once, and remembered.
 
 import Anthropic from '@anthropic-ai/sdk';
 
-export const CLAUDE_DEFAULTS = Object.freeze({ model: 'claude-opus-5-5', effort: 'low', maxTokens: 260, turnsPerDay: 3000, fallbacks: true, timeout: 25000 });
+export const CLAUDE_DEFAULTS = Object.freeze({ model: 'claude-haiku-5-5', effort: 'low', maxTokens: 360, turnsPerDay: 3000, fallbacks: true, timeout: 25000 });
+// models with no server-side fallback (the field would only cost a refused first request)
+const NO_FALLBACK = /haiku-5/;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 // list price in dollars per million tokens (input, output, cache read, cache write), by family;
 // only used for the running estimate on /status, CLAUDE_USD_* vars override it
@@ -33,7 +36,7 @@ export function claudeSettings(env = {}) {
 		model, effort: EFFORTS.has(env.CLAUDE_EFFORT) ? env.CLAUDE_EFFORT : CLAUDE_DEFAULTS.effort,
 		maxTokens: Math.min(600, n(env.CLAUDE_MAX_TOKENS, CLAUDE_DEFAULTS.maxTokens)),
 		turnsPerDay: Math.round(n(env.CLAUDE_TURNS_PER_DAY, CLAUDE_DEFAULTS.turnsPerDay)),
-		fallbacks: env.CLAUDE_FALLBACKS !== 'false', timeout: Math.min(60000, n(env.CLAUDE_TIMEOUT_MS, CLAUDE_DEFAULTS.timeout)),
+		fallbacks: env.CLAUDE_FALLBACKS !== 'false' && !NO_FALLBACK.test(model), timeout: Math.min(60000, n(env.CLAUDE_TIMEOUT_MS, CLAUDE_DEFAULTS.timeout)),
 		usd: { in: n(env.CLAUDE_USD_IN_PER_M, price[0]), out: n(env.CLAUDE_USD_OUT_PER_M, price[1]), cached: n(env.CLAUDE_USD_CACHED_PER_M, price[2]), written: n(env.CLAUDE_USD_WRITE_PER_M, price[3]) },
 	};
 }

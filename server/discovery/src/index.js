@@ -114,7 +114,7 @@ export async function handle(request, env) {
 	if (request.method === 'GET' && url.pathname === '/status') {
 		const st = await (await ledger(env).fetch('https://ledger/state')).json();
 		const C = createClaude(env), CS = claudeSettings(env);
-		const claude = { on: !!C, model: C ? C.model || CS.model : null, effort: CS.effort, ...st.claude, usd: Math.round(usdFor(CS, st.claude?.tokens || {}) * 1000) / 1000 };
+		const claude = { on: !!C, model: C ? C.model || CS.model : null, effort: CS.effort, ...st.claude, usd: Math.round(usdFor(CS, st.claude?.tokens || {}) * 1e6) / 1e6 };
 		return reply({ ...st, claude, planning: PLANNING_KINDS, features: [...PLANNING_FEATURES, NPC_FEATURE] }, 200, H, { 'cache-control': 'no-store' });
 	}
 	return reply({ error: 'not found' }, 404, H);
