@@ -205,7 +205,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		camera.updateMatrixWorld();
 		data.anchor(); anchorUniforms(data.U, data.win);
 		trees.shift(dx, dz);
-		towns.reset();
+		towns.reset(); world()?.water?.reframe?.();
 		roads.reframe(); lanes.reframe();
 		stats.rebases++; stats.lastRebase = performance.now();
 		return { dx, dz };
@@ -236,7 +236,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 
 	// ---------- each frame ----------
-	let regionT = 0, regionId = null, veg = null, seasonT = 0;
+	let regionT = 0, regionId = null, veg = null, seasonT = 0, arriveT = -1e9;
 	const look = new THREE.Vector3(), lead = { x: 0, z: 0 }, treeAt = { position: new THREE.Vector3() };
 	const offMonth = onMonth(() => { seasonT = 0; });
 	// a guard: the camera and you are never left at a NaN (the frame moves, the jumps and the
@@ -254,7 +254,8 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		cam.position.copy(good.c); cam.quaternion.copy(good.q); cam.updateMatrixWorld();
 		if (P) { P.pos.copy(good.p); P.vel.set(0, 0, 0); if (!Number.isFinite(P.yaw)) P.yaw = 0; if (!Number.isFinite(P.pitch)) P.pitch = 0; }
 	}
-	function update(dt, cam, night) {
+	// arriving: coming down from orbit onto a new place (its towns start growing on the way down)
+	function update(dt, cam, night, { arriving = false } = {}) {
 		const t0 = performance.now();
 		sane(cam);
 		frameCheck();
@@ -268,7 +269,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const flat = Math.hypot(look.x, look.z), gy = bay.heightAt(x, z);
 		const ahead = flat > 0.2 ? Math.max(40, Math.min(450, (cam.position.y - (Number.isFinite(gy) ? gy : 0)) * 0.6)) : 0;
 		lead.x = ahead ? look.x / flat * ahead : 0; lead.z = ahead ? look.z / flat * ahead : 0;
-		terrain.update(cam, F, { bay: F.bay, bayOut: out, night, cities: towns.lit(12), on: !F.bay || bay.loaded(), lead });
+		terrain.update(cam, F, { bay: F.bay, bayOut: out, night, cities: towns.lit(12), on: !F.bay || bay.loaded(), lead, agl: cam.position.y - (Number.isFinite(gy) ? gy : 0) });
 		// the place: its name as you come into it, its plants for the woods (every 2 s)
 		// the season here, once the window is in (and at once when another month is picked)
 		seasonT -= dt;
@@ -292,7 +293,9 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const tk = Math.min(1, 150 / (Math.hypot(lead.x, lead.z) || 1));
 		treeAt.position.set(x + lead.x * tk, 0, z + lead.z * tk);
 		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version() + ':' + clearingVersion() + ':' + (world()?.water?.lakesVersion?.() ?? ''));
-		if (steady) towns.update(cam);
+		// (kept on for a while after the orbit lets go at 7.8 km, down through the last few km)
+		if (arriving) arriveT = t0;
+		if (steady) towns.update(cam, arriving || t0 - arriveT < 45000);
 		if (data.win.ready) regional.update(dt, cam, { night, out: !F.bay || out > SEAM_A - 3000, wind: shared.uWindDir ? { x: shared.uWindDir.value.x * (0.3 + (shared.uWind?.value || 0.5)), y: shared.uWindDir.value.y * (0.3 + (shared.uWind?.value || 0.5)) } : null });
 		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
 		const real = world()?.real;

@@ -266,9 +266,11 @@ export function* resolveSteps(boxes, opts = {}) {
 		}
 	}
 	// then each other, the bigger building first: the smaller gives way
+	yield;
 	const ga = new Map();
 	for (const b of list) if (!b.gone) ga.set(b, groupArea(b));
 	const order = list.filter((b) => !b.gone).sort((p, q) => ga.get(q) - ga.get(p) || area(q) - area(p) || p.x - q.x || p.z - q.z);
+	yield;
 	const at = new Map(order.map((b, k) => [b, k]));
 	const near = grid(order);
 	yield;
@@ -360,6 +362,10 @@ export function* resolveLotsSteps(list, { roads = [], landmark = null, near = nu
 // a grown town's boxes settled against each other and its roads (town.js)
 export function settleBoxes(boxes, roads, landmark = null, count = true) {
 	return finish(boxes, resolve(boxes, { roads, landmark, count }));
+}
+// the same in steps (a town grown a few milliseconds a frame, crysis/civgen.js)
+export function* settleBoxesSteps(boxes, roads, landmark = null, count = true) {
+	return finish(boxes, yield* resolveSteps(boxes, { roads, landmark, count }));
 }
 // a region as realcity.js loads it (G.boxes, its roads in G.grid's cells): its buildings
 // settled against each other, its streets and the landmarks, in place; the boxes left out are
