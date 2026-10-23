@@ -1,7 +1,12 @@
 // Crysis hydrology: where the rain goes on a heightfield. Given heights on a grid it works
 // out, the way a landscape drains:
 //   1. the ground with its hollows filled to where they spill (priority flood, seeded from
-//      the sea and the grid's edges), so every cell has somewhere lower to go;
+//      the sea and the grid's edges), so every cell has somewhere lower to go; or, where the
+//      caller allows it, a low sill cut through instead (a breach: the creek's channel dug a
+//      few metres down through it, so the hollow behind drains rather than fills), and a
+//      closed basin far deeper or wider than a lake there could be left holding only a pond
+//      at its bottom, the ground round it draining down into it (the water seeping away,
+//      as it does in karst, or never enough of it to fill the basin);
 //   2. where each cell drains (the steepest fall on the filled ground) and how much ground
 //      drains through it (flow accumulation);
 //   3. the lakes: the filled hollows deep and wide enough to hold water, each lying at its
@@ -13,6 +18,7 @@
 // every few milliseconds of work, so a caller can spread it over frames.
 
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+const DI = N8.map((d) => d[0]), DJ = N8.map((d) => d[1]);
 
 // a binary heap of cell indices keyed by a Float32Array
 function heap(key) {
@@ -34,81 +40,206 @@ function heap(key) {
 
 // G: { W, H, x0, z0, cell, h: Float32Array (W*H, row-major, z rows) }
 // opts: sea (cells at or under it are the sea), minCells (catchment for a stream),
-// lakeCells, lakeDepth (the smallest lake kept), inset (water under the filled ground)
-export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDepth = 1.2, inset = 0.3 } = {}) {
+// lakeCells, lakeDepth (the smallest lake kept), inset (water under the filled ground),
+// breach (how deep a sill may be cut through, m; 0 fills every hollow), breachLen (how
+// long a cut may run, cells), basin { deep, cells, share, pond, pondDeep }: a hollow
+// deeper than deep m or of more than cells cells is a closed basin, holding a pond of
+// about share of its cells (at least 12, at most pond, never deeper than pondDeep)
+export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDepth = 1.2, inset = 0.3, breach = 0, breachLen = 48, basin = null } = {}) {
 	const { W, H, h } = G, n = W * H, cell = G.cell;
 	// (time to let a frame through: checked every 256 cells)
 	let t0 = performance.now(), c = 0;
 	const due = () => { if ((++c & 255) || performance.now() - t0 < 3) return false; t0 = performance.now(); return true; };
-	// ---- 1. fill the hollows ----
-	const f = new Float32Array(n), done = new Uint8Array(n), Q = heap(f);
-	for (let k = 0; k < n; k++) {
-		const i = k % W, j = (k - i) / W;
-		f[k] = h[k];
-		if (i === 0 || j === 0 || i === W - 1 || j === H - 1 || h[k] <= sea) { done[k] = 1; Q.push(k); }
-		if (due()) yield;
-	}
+	const f = new Float32Array(n), done = new Uint8Array(n), from = new Int32Array(n), lakeId = new Int32Array(n);
 	// (the cells as they come off the heap, lowest first: the order the water drains in, backwards)
 	const order = new Uint32Array(n);
-	let o = 0;
-	while (Q.size) {
-		const k = Q.pop(), i = k % W, j = (k - i) / W;
-		order[n - 1 - o++] = k;
-		for (const [di, dj] of N8) {
-			const a = i + di, b = j + dj;
-			if (a < 0 || b < 0 || a >= W || b >= H) continue;
-			const q = b * W + a;
-			if (done[q]) continue;
-			done[q] = 1;
-			// (a hair above what it spills into, so even a filled flat drains)
-			f[q] = Math.max(h[q], f[k] + 1e-3);
-			Q.push(q);
+	// the closed basins' ponds: each cell's pond level, NaN for none (worked out after a pass, kept for the next)
+	const pond = new Float32Array(n).fill(NaN);
+	const EPS = 1e-3;
+	// a cut from k back the way the flood came to the outlet, under lv: made if it need go no
+	// deeper into the ground than breach and no longer than breachLen
+	function cut(k, lv0) {
+		let q = k, lv = lv0 - EPS, deep = 0, len = 0;
+		while (f[q] > lv) {
+			if (from[q] < 0) return false;          // (an outlet: the sea, the edge, a pond)
+			deep = Math.max(deep, h[q] - lv);
+			if (deep > breach || ++len > breachLen) return false;
+			q = from[q]; lv -= EPS;
 		}
-		if (due()) yield;
+		for (q = k, lv = lv0 - EPS; f[q] > lv; q = from[q], lv -= EPS) f[q] = lv;
+		return true;
 	}
+	// ---- 1. fill the hollows (or cut through their sills) ----
+	// (all of it; or again only over the cells of region, the ground round it kept as it was
+	// and taken for its outlets)
+	const inR = new Uint8Array(n);
+	function* flood(region) {
+		const Q = heap(f);
+		if (!region) {
+			done.fill(0); from.fill(-1);
+			for (let k = 0; k < n; k++) {
+				const i = k % W, j = (k - i) / W, p = pond[k];
+				f[k] = p === p ? p : h[k];
+				if (p === p || i === 0 || j === 0 || i === W - 1 || j === H - 1 || h[k] <= sea) { done[k] = 1; Q.push(k); }
+				if (due()) yield;
+			}
+		} else {
+			for (const k of region) { inR[k] = 1; done[k] = 0; from[k] = -1; const p = pond[k]; f[k] = p === p ? p : h[k]; }
+			for (const k of region) {
+				if (pond[k] === pond[k]) { done[k] = 1; Q.push(k); continue; }
+				const i = k % W, j = (k - i) / W;
+				for (let e = 0; e < 8; e++) {
+					const a = i + DI[e], b = j + DJ[e];
+					if (a < 0 || b < 0 || a >= W || b >= H) continue;
+					const q = b * W + a;
+					if (inR[q] || from[q] === -2) continue;
+					from[q] = -2; Q.push(q);
+				}
+			}
+			for (const k of region) inR[k] = 0;
+		}
+		let o = 0;
+		while (Q.size) {
+			const k = Q.pop(), i = k % W, j = (k - i) / W;
+			if (from[k] === -2) from[k] = -1;
+			order[n - 1 - o++] = k;
+			for (let e = 0; e < 8; e++) {
+				const a = i + DI[e], b = j + DJ[e];
+				if (a < 0 || b < 0 || a >= W || b >= H) continue;
+				const q = b * W + a;
+				if (done[q]) continue;
+				done[q] = 1; from[q] = k;
+				// (a hair above what it spills into, so even a filled flat drains)
+				if (h[q] >= f[k] + EPS) f[q] = h[q];
+				else if (breach > 0 && h[q] < f[k] && cut(k, h[q])) f[q] = h[q];
+				else f[q] = f[k] + EPS;
+				Q.push(q);
+			}
+			if (due()) yield;
+		}
+	}
+	// ---- 3. the lakes ----
+	// (a hollow's filled ground, and all of a pond, out to its shore)
+	const wet = (k) => (f[k] - h[k] >= 0.25 || pond[k] > h[k]) && h[k] > sea;
+	function* findLakes() {
+		lakeId.fill(-1);
+		const lakes = [];
+		for (let k = 0; k < n; k++) {
+			if (lakeId[k] !== -1 || !wet(k)) continue;
+			// the hollow's cells (4-connected), its deepest point and spill level
+			const cells = [k], seen = [k];
+			lakeId[k] = -2;
+			let deep = 0, lvl = Infinity, pit = k, ponded = false;
+			for (let s = 0; s < cells.length; s++) {
+				const q = cells[s], i = q % W, j = (q - i) / W;
+				deep = Math.max(deep, f[q] - h[q]); lvl = Math.min(lvl, f[q]);
+				if (h[q] < h[pit]) pit = q;
+				if (pond[q] === pond[q]) ponded = true;
+				for (const [di, dj] of N8.slice(0, 4)) {
+					const a = i + di, b = j + dj;
+					if (a < 0 || b < 0 || a >= W || b >= H) continue;
+					const p = b * W + a;
+					if (lakeId[p] !== -1 || !wet(p)) continue;
+					lakeId[p] = -2; cells.push(p); seen.push(p);
+				}
+				if (due()) yield;
+			}
+			const keep = cells.length >= lakeCells && deep >= lakeDepth;
+			const id = keep ? lakes.length : -3;
+			for (const q of seen) lakeId[q] = id;
+			if (keep) lakes.push({ cells, level: lvl, deep, pit, pond: ponded });
+			else if (!ponded && basin && deep > basin.deep) lakes.push({ cells, level: lvl, deep, pit, pond: false, dropped: true });
+			if (due()) yield;
+		}
+		return lakes;
+	}
+	// a closed basin's pond: the ground from its lowest point up, the lowest first, until it
+	// holds its share of the basin or is as deep as a pond is let be; a basin too flat for
+	// one drains to its lowest point and the water sinks away there
+	const mark = new Int32Array(n).fill(-1);
+	function makePond(L, id) {
+		const want = Math.max(12, Math.min(basin.pond, Math.round(L.cells.length * basin.share))), top = h[L.pit] + basin.pondDeep;
+		const B = heap(h), got = [];
+		B.push(L.pit); mark[L.pit] = id;
+		let lvl = top;
+		while (B.size) {
+			const q = B.pop();
+			if (got.length >= want || h[q] > top) { lvl = Math.min(h[q], top); break; }
+			got.push(q);
+			const i = q % W, j = (q - i) / W;
+			for (const [di, dj] of N8) {
+				const a = i + di, b = j + dj;
+				if (a < 0 || b < 0 || a >= W || b >= H) continue;
+				const p = b * W + a;
+				if (mark[p] === id || f[p] - h[p] < 0.25) continue;
+				mark[p] = id; B.push(p);
+			}
+		}
+		if (!B.size) lvl = Math.min(lvl, L.level);
+		if (got.length >= lakeCells && lvl - h[L.pit] >= lakeDepth + 0.1) { for (const q of got) if (h[q] < lvl) pond[q] = lvl; }
+		else pond[L.pit] = h[L.pit];
+	}
+	// (the ground a basin's water had raised or cut, all of it, to be worked again round its pond)
+	const reg = new Uint8Array(n);
+	function* regionOf(L, out) {
+		const st = [];
+		for (const k of L.cells) if (!reg[k]) { reg[k] = 1; out.push(k); st.push(k); }
+		while (st.length) {
+			const k = st.pop(), i = k % W, j = (k - i) / W;
+			for (let e = 0; e < 8; e++) {
+				const a = i + DI[e], b = j + DJ[e];
+				if (a < 0 || b < 0 || a >= W || b >= H) continue;
+				const q = b * W + a;
+				if (reg[q] || Math.abs(f[q] - h[q]) < 1e-4 || h[q] <= sea) continue;
+				reg[q] = 1; out.push(q); st.push(q);
+			}
+			if (due()) yield;
+		}
+	}
+	let lakes, region = null;
+	for (let pass = 0; ; pass++) {
+		yield* flood(region);
+		lakes = yield* findLakes();
+		if (!basin || pass >= 6) break;
+		region = [];
+		for (let q = 0; q < lakes.length; q++) {
+			const L = lakes[q];
+			if (L.pond || L.deep <= basin.deep && L.cells.length <= basin.cells) continue;
+			makePond(L, pass * 100000 + q);
+			yield* regionOf(L, region);
+			if (due()) yield;
+		}
+		for (const k of region) reg[k] = 0;
+		if (!region.length) break;
+	}
+	lakes = lakes.filter((L) => !L.dropped);
+	lakes.forEach((L, q) => { for (const k of L.cells) lakeId[k] = q; });
+	yield;
 	// ---- 2. where each cell drains, and how much drains through it ----
 	const rec = new Int32Array(n).fill(-1);
 	for (let k = 0; k < n; k++) {
 		const i = k % W, j = (k - i) / W;
 		if (h[k] <= sea) continue;
 		let best = 0;
-		for (const [di, dj] of N8) {
-			const a = i + di, b = j + dj;
+		for (let e = 0; e < 8; e++) {
+			const a = i + DI[e], b = j + DJ[e];
 			if (a < 0 || b < 0 || a >= W || b >= H) continue;
-			const q = b * W + a, s = (f[k] - f[q]) / (di && dj ? 1.4142 : 1);
+			const q = b * W + a, s = (f[k] - f[q]) / (e > 3 ? 1.4142 : 1);
 			if (s > best) { best = s; rec[k] = q; }
 		}
 		if (due()) yield;
 	}
+	// (a cut lowers ground the flood had already passed, and a basin worked again comes off the
+	// heap on its own, so the order no longer runs from the hills down: put the cells in one that does)
+	if (breach > 0 || basin) {
+		const ins = new Int32Array(n), st = new Int32Array(n);
+		for (let k = 0; k < n; k++) if (rec[k] >= 0) ins[rec[k]]++;
+		let top = 0, o = 0;
+		for (let k = 0; k < n; k++) if (!ins[k]) st[top++] = k;
+		while (top) { const k = st[--top]; order[o++] = k; const r = rec[k]; if (r >= 0 && --ins[r] === 0) st[top++] = r; }
+	}
 	const acc = new Float32Array(n).fill(1);
 	for (let t = 0; t < n; t++) { const k = order[t]; if (rec[k] >= 0) acc[rec[k]] += acc[k]; }
-	yield;
-	// ---- 3. the lakes ----
-	const lakeId = new Int32Array(n).fill(-1), lakes = [];
-	for (let k = 0; k < n; k++) {
-		if (lakeId[k] !== -1 || f[k] - h[k] < 0.25 || h[k] <= sea) continue;
-		// the hollow's cells (4-connected), its deepest point and spill level
-		const cells = [k], seen = [k];
-		lakeId[k] = -2;
-		let deep = 0, lvl = Infinity;
-		for (let s = 0; s < cells.length; s++) {
-			const q = cells[s], i = q % W, j = (q - i) / W;
-			deep = Math.max(deep, f[q] - h[q]); lvl = Math.min(lvl, f[q]);
-			for (const [di, dj] of N8.slice(0, 4)) {
-				const a = i + di, b = j + dj;
-				if (a < 0 || b < 0 || a >= W || b >= H) continue;
-				const p = b * W + a;
-				if (lakeId[p] !== -1 || f[p] - h[p] < 0.25 || h[p] <= sea) continue;
-				lakeId[p] = -2; cells.push(p); seen.push(p);
-			}
-			if (due()) yield;
-		}
-		const keep = cells.length >= lakeCells && deep >= lakeDepth;
-		const id = keep ? lakes.length : -3;
-		for (const q of seen) lakeId[q] = id;
-		if (keep) lakes.push({ cells, level: lvl, deep });
-		if (due()) yield;
-	}
 	yield;
 	for (let q = 0; q < lakes.length; q++) { lakes[q].rings = outline(G, lakes[q], lakeId, q); if (q % 4 === 3) yield; }
 	yield;
@@ -149,7 +280,7 @@ export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDept
 
 // a lake's shore: where the ground meets its level, traced round its cells (marching squares
 // on level - ground, only over the lake's cells and their neighbours); rings of world x, z
-function outline(G, L, lakeId, id) {
+export function outline(G, L, lakeId, id) {
 	const { W, H, h, cell } = G;
 	let i0 = W, j0 = H, i1 = 0, j1 = 0;
 	for (const q of L.cells) { const i = q % W, j = (q - i) / W; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); }
