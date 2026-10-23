@@ -171,6 +171,25 @@ function garageIn(rects, R0, M) {
 	}
 	return garage;
 }
+// the front door in the main block's frame, where the facade shows it (M.door, along the
+// front); if another block stands in front of it, the nearest open stretch of the front
+function doorIn(rects, R0, M, garage) {
+	const at = (x, z) => under(rects, x, z);
+	const inGarage = (x, z) => !!garage && x > garage.x0 && x < garage.x1 && z > garage.z0 && z < garage.z1;
+	const MW = R0.x1 - R0.x0;
+	let door = { x: R0.x0 + 1.25 + M.door * (MW - 2.5), z: R0.z1, w: 0.95 };
+	const doorOK = (x, z) => [-0.6, 0, 0.6].every((o) => !at(x + o, z + 0.15) && at(x + o, z - 0.15) && !inGarage(x + o, z - 0.15));
+	if (!doorOK(door.x, door.z)) {
+		let best = null;
+		for (const r of rects) for (let x = r.x0 + 0.8; x <= r.x1 - 0.8; x += 0.25) {
+			if (!doorOK(x, r.z1)) continue;
+			const c = Math.abs(x - door.x) + Math.abs(r.z1 - door.z);
+			if (!best || c < best.c) best = { x, z: r.z1, c };
+		}
+		if (best) door = { x: best.x, z: best.z, w: 0.95 };
+	}
+	return door;
+}
 // a house's garage, for its yard and drive (bay/city.js, realcity.js): its doors in the main
 // block's frame, which turns by ca, sa about M; null where it has none
 export function garageOf(grp) {
@@ -179,6 +198,17 @@ export function garageOf(grp) {
 	const { ca, sa, rects } = frameOf(grp, M), R0 = rects.find((r) => r.main) || rects[0];
 	const g = R0 ? garageIn(rects, R0, M) : null;
 	return g && { ...g, M, ca, sa };
+}
+// a house's front, for its drive, walk and yard (realcity.js, bay/city.js): the main block
+// M and its frame (ca, sa), its blocks as rectangles in that frame (the front is z1, facing
+// the street), the front door on it where the facade paints it, and the garage (garageOf)
+export function frontOf(grp) {
+	const M = mainOf(grp);
+	if (!M) return null;
+	const { ca, sa, rects } = frameOf(grp, M), R0 = rects.find((r) => r.main) || rects[0];
+	if (!R0) return null;
+	const g = garageIn(rects, R0, M);
+	return { M, ca, sa, rects, R0, door: doorIn(rects, R0, M, g), garage: g && { ...g, M, ca, sa } };
 }
 
 // ---------------------------------------------------------------------------------
@@ -204,18 +234,7 @@ export function planHouse(grp, opt = {}) {
 
 	// the front door, where the facade shows it; if another block stands in front of it,
 	// the nearest open stretch of the front
-	const MW = R0.x1 - R0.x0;
-	let door = { x: R0.x0 + 1.25 + M.door * (MW - 2.5), z: R0.z1, w: 0.95 };
-	const doorOK = (x, z) => [-0.6, 0, 0.6].every((o) => !at(x + o, z + 0.15) && at(x + o, z - 0.15) && !inGarage(x + o, z - 0.15));
-	if (!doorOK(door.x, door.z)) {
-		let best = null;
-		for (const r of rects) for (let x = r.x0 + 0.8; x <= r.x1 - 0.8; x += 0.25) {
-			if (!doorOK(x, r.z1)) continue;
-			const c = Math.abs(x - door.x) + Math.abs(r.z1 - door.z);
-			if (!best || c < best.c) best = { x, z: r.z1, c };
-		}
-		if (best) door = { x: best.x, z: best.z, w: 0.95 };
-	}
+	const door = doorIn(rects, R0, M, garage);
 
 	// the stairs: a straight run up toward the back, with a landing at the top, all under
 	// the second storey; beside the entry if it fits, against a wall or well clear of one
