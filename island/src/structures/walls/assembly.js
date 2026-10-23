@@ -89,7 +89,8 @@ export const ageOf = (era) => AGE[era] || 'late';
 
 // the assembly of one wall. use: what the building is (house, row, apt, shop, office, store,
 // warehouse, school, garage2, parking, shed, site); era: as above; ext: an outside wall;
-// siding: the house's outside ('stucco', 'lap', 'batten', 'shingle', 'brick'); region: 'us',
+// siding: the house's outside ('stucco', 'lap', 'batten', 'shingle', 'brick', and out in the
+// country 'stone', 'log', 'render', 'mud': region/homes.js); region: 'us',
 // 'eu' (the European villages: masonry rendered), 'jp' (the Japanese towns: light timber)
 export function assemblyFor({ use = 'house', era = 'tract', ext = false, siding = 'stucco', region = 'us' } = {}) {
 	const age = ageOf(era);
@@ -99,6 +100,8 @@ export function assemblyFor({ use = 'house', era = 'tract', ext = false, siding 
 	if (homes) {
 		if (!ext) return age === 'old' ? 'partitionPlaster' : 'partition';
 		if (siding === 'brick') return age === 'old' ? 'brick' : 'veneer';
+		// (a country house's stone, lime render or earth: solid masonry, rendered)
+		if (siding === 'stone' || siding === 'render' || siding === 'mud') return 'brickRender';
 		// (a city row house is clapboard over boards, but for the Sunset's stucco fronts)
 		const sided = use === 'row' ? era !== 'sunset' : siding && siding !== 'stucco';
 		if (age === 'old') return sided ? 'sidingPrewar' : 'stuccoPrewar';
