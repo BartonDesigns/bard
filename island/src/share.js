@@ -270,8 +270,8 @@ export function createShare(ctx) {
 			}
 			w = W();
 			if (!w) return false;
-			// (the hour before anything else, so it is never seen late)
-			if (time && Number.isFinite(s.hours) && w.sky?.state) w.sky.state.hours = s.hours;
+			// (the hour before anything else, so it is never seen late: the hour there, sky.js)
+			if (time && Number.isFinite(s.hours) && w.sky?.state) { if (w.sky.setLocalHours) w.sky.setLocalHours(s.hours, s.earth ? (Number.isFinite(s.lon) ? s.lon : toLatLon(s.x, s.z).lon) : NaN); else w.sky.state.hours = s.hours; }
 			const covered = !!ctx.covered?.();
 			const stage = (k) => { if (covered) ctx.arriving(k); };
 			stage(0.3);

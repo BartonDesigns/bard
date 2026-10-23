@@ -1020,7 +1020,7 @@ export function createIslandWorld() {
 	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
 	cooking.addMenu(tpMenu);
 	// the office's coffee, water, vending machine and first-aid box (interiors/office-perks.js)
-	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() });
+	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near(), openShop: (id) => gear.open('shop', id) });
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
@@ -1637,7 +1637,8 @@ export function createIslandWorld() {
 			show();
 			await build(params);
 			await recovery.wait();
-			if (Number.isFinite(hours) && world?.sky) world.sky.state.hours = hours;
+			// (the spot's hour is the hour there: sky.js keeps the Bay's, and the place's comes with the move)
+			if (Number.isFinite(hours) && world?.sky) { if (params.earth !== false && params.at && world.sky.setLocalHours) world.sky.setLocalHours(hours, params.at.lon); else world.sky.state.hours = hours; }
 			if (params.earth !== false && params.at) HOOKS.goTo(params.at.lat, params.at.lon);      // globe: straight to a place
 			api.link();
 			if (!arrival) {

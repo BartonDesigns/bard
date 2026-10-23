@@ -93,6 +93,12 @@ async function show(name, h = 13, view = null) {
 		if (!I.queued && I.list.every((q) => q.state !== 'queued' && q.state !== 'baking')) break;
 		if (i % 10 === 9) await new Promise((r) => setTimeout(r, 0));
 	}
+	// (a fourth number in the view: every so many of its coolers' doors swung open)
+	if (view?.[3]) {
+		const doors = commercial.amenities({ x: b.x, y: L.y + 1.6, z: b.z }, 40).filter((q) => q.door).sort((p, q) => p.x - q.x || p.z - q.z);
+		doors.forEach((q, i) => { if (i % view[3] === 0) commercial.swing(q.x, q.z, 600); });
+		for (let i = 0; i < 20; i++) commercial.update(camera, 0.1, hours, night);
+	}
 	for (let i = 0; i < 3; i++) { commercial.update(camera, 0.05, hours, night); renderer.setRenderTarget(tiny); renderer.render(scene, camera); renderer.setRenderTarget(null); }
 	tiny.dispose();
 	renderer.render(scene, camera);

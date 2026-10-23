@@ -36,9 +36,10 @@ import { venueOf } from '../economy/venue.js';
 import { sineHash as hh } from '../noise.js';
 import { Builder, houseMaterials, lin } from './housekit.js';
 import { GoodsBuilder, goodsSteps, goodsMaterial } from '../interiors/goods.js';
-import { fitMart, fitShop, tradeOf } from './storefit.js';
+import { fitMart, fitShop, tradeOf, gearOf } from './storefit.js';
 import { fitDining, styleOf } from './dinefit.js';
 import { fitVenue, officeKind } from './venuefit.js';
+import { hangDoors, stepDoors, openDoor, shutDoors } from './cooler-doors.js';
 import { screenAtlasTexture, tileUV } from '../interiors/screen-atlas.js';
 import { buildSlice } from '../world/buildslice.js';
 
@@ -269,6 +270,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		// ---------- the fit-out ----------
 		const seats = [];                // where people sit or stand: [x, z, yaw, sitting]
 		const perks = [], games = [];    // what is yours to use, the machines and lanes to play (local)
+		const doors = [];                // the coolers' doors that swing open (bay/cooler-doors.js)
 		let board = null;
 		const boardMat = () => {
 			if (board) return board.mat;
@@ -297,7 +299,8 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 				add(F.mat, g);
 			},
 			// something here that is yours to use (interiors/office-perks.js), a game to play (arcade.js)
-			perk: (kind, x, z) => perks.push({ kind, x, z }),
+			perk: (kind, x, z, o) => perks.push({ kind, x, z, ...o }),
+			door: (d) => doors.push(d),
 			game: (id, x, z, r, name) => games.push({ id, x, z, r, name }),
 			biz: b.biz || null,
 		});
@@ -339,7 +342,10 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			// (where there is no page to paint the kit's textures on, the tests: plain materials)
 			const hm = houseMats || (houseMats = typeof document !== 'undefined' ? houseMaterials(band, undefined, 'building') : new Proxy({}, { get: (t, k) => t[k] || (t[k] = new THREE.MeshStandardMaterial({ vertexColors: true })) }));
 			// (a material's mesh a step)
-			for (const m of kg.meshSteps(hm, !isPhone)) { root.add(m); yield; }
+			const kit = new Map();
+			for (const m of kg.meshSteps(hm, !isPhone)) { root.add(m); kit.set(m.name, m); yield; }
+			// (each cooler door's own vertices found again in the meshes, and kept through the bake)
+			if (doors.length) hangDoors(doors, kit);
 			if (!goods.empty()) {
 				goodsMat = goodsMaterial();
 				addLodFade(goodsMat, 'building', band);
@@ -361,7 +367,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			// (a gas station's mart keeps its lights on all night, a corner store till late)
 			hours: hrs, allNight: b.store === 'fuel', dust: type === 'restaurant' && open,
 		});
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, fitted, trade, hours: hrs, bizKey: bizKey(b), light, goodsMat, perks, games, dispose: () => { releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); board?.mat.dispose(); board?.tex?.dispose(); } };
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, fitted, trade, gear: stock && !b.store ? gearOf(trade, b.biz?.type) : null, hours: hrs, bizKey: bizKey(b), light, goodsMat, perks, games, doors: doors.length ? doors : null, dispose: () => { shutDoors({ doors }); releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); board?.mat.dispose(); board?.tex?.dispose(); } };
 		return B;
 	}
 
@@ -451,6 +457,8 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			const nk = U.ibakeNight.value;
 			B.goodsMat.color.setScalar(GOODS_K * (U.ibakeK.value * (1 - 0.72 * nk) + 0.18 * (1 - nightK) * nk));
 		}
+		// the coolers' doors: swinging open for you, for a shopper reaching in, and shut again
+		for (const B of built.values()) if (B.doors) stepDoors(B, dt, Math.hypot(B.b.x - x, B.b.z - z) < 30, local, doorAt);
 	}
 
 	const local = (B, x, z) => { const dx = x - B.b.x, dz = z - B.b.z, ca = Math.cos(B.b.a), sa = Math.sin(B.b.a); return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
@@ -511,10 +519,26 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			const ca = Math.cos(B.b.a), sa = Math.sin(B.b.a);
 			for (const q of B.perks) {
 				const d = Math.hypot(q.x - lx, q.z - lz);
-				if (d < r) out.push({ kind: q.kind, x: B.b.x + ca * q.x - sa * q.z, z: B.b.z + sa * q.x + ca * q.z, d, key: `biz:${Math.round(B.b.x)}:${Math.round(B.b.z)}:${q.kind}:${Math.round(q.x * 10)}:${Math.round(q.z * 10)}`, place: B.type });
+				if (d < r) out.push({ kind: q.kind, x: B.b.x + ca * q.x - sa * q.z, z: B.b.z + sa * q.x + ca * q.z, d, key: `biz:${Math.round(B.b.x)}:${Math.round(B.b.z)}:${q.kind}:${Math.round(q.x * 10)}:${Math.round(q.z * 10)}`, place: B.type, door: !!q.door, n: q.n || 0 });
 			}
 		}
 		return out.sort((a, b) => a.d - b.d);
+	}
+	// a cooler's door swung open, the one whose front is at (x, z) (office-perks.js: you took
+	// something from it), held open hold seconds; false: there is none
+	function swing(x, z, hold = 2.5) {
+		for (const B of built.values()) {
+			if (!B.doors) continue;
+			const [lx, lz] = local(B, x, z);
+			if (Math.abs(lx) < B.hw + 1 && Math.abs(lz) < B.hd + 1 && openDoor(B, lx, lz, hold)) return true;
+		}
+		return false;
+	}
+	const _at = { x: 0, y: 0, z: 0 };
+	function doorAt(B, d) {
+		const ca = Math.cos(B.b.a), sa = Math.sin(B.b.a);
+		_at.x = B.b.x + ca * d.fx - sa * d.fz; _at.z = B.b.z + sa * d.fx + ca * d.fz; _at.y = B.floorY + 1.1;
+		return _at;
 	}
 	// the machines and lanes to play in the places round you (arcade.js offers each where it stands)
 	function gameSpots(x, z, R = 2000) {
@@ -526,5 +550,5 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		}
 		return out;
 	}
-	return { group, update, floor, push, inside, venue, doorsNear, amenities, gameSpots, count: () => built.size, busy: () => !!job, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, products: B.products, ceil: B.ceil, name: B.b.biz?.name || '', stocked: !!B.stocked, trade: B.trade || null })) };
+	return { group, update, floor, push, inside, venue, doorsNear, amenities, gameSpots, swing, count: () => built.size, busy: () => !!job, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, products: B.products, ceil: B.ceil, name: B.b.biz?.name || '', stocked: !!B.stocked, trade: B.trade || null, gear: B.gear })) };
 }
