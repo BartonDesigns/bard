@@ -184,7 +184,7 @@ export function linkLoadingTabs({ arms, magic = () => null, account = null, name
 		const top = el('div'); top.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;';
 		top.append(coins(s.credits || 0), el('span', 'lt-quiet', list.length ? `${list.length} thing${list.length > 1 ? 's' : ''} carried` : 'Nothing carried'));
 		host.append(top);
-		if (!list.length) { host.append(el('div', 'lt-quiet', 'Start Field contracts on open Terran or arid ground for a first weapon cache. You can also buy at outfitters or recover fallen fighters’ equipment.')); return; }
+		if (!list.length) { host.append(el('div', 'lt-quiet', 'Take a field contract from Quests on open ground outside town for a first weapon cache. You can also buy at outfitters or recover fallen fighters’ equipment.')); return; }
 		const wornU = new Set(Object.values(s.worn || {}));
 		const where = (G) => (G.list.some((x) => x.u === s.hand) ? 'In hand' : G.list.some((x) => wornU.has(x.u)) ? 'Worn' : '');
 		// worn and held first, then the best
