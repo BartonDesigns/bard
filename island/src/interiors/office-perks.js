@@ -4,7 +4,9 @@
 // and a conference floor's buffet. The towers' floors list theirs (bay/towers.js amenities,
 // placed by interiors/workplace-fitout.js); the city's offices are read from their furniture
 // (interiors/furnish.js officeFit: the coffee bar with its first-aid box, the vending machine,
-// the water). Their kitchens' fridges are the cooking's (cooking/index.js).
+// the water); the walk-in offices on the streets keep the same, and a cinema's concession
+// stand and the lanes' snack bar sell you something too (bay/commercial.js amenities, placed
+// by bay/venuefit.js). Their kitchens' fridges are the cooking's (cooking/index.js).
 //
 // One prompt (E, or its button), like the kitchen's.
 
@@ -19,6 +21,8 @@ const PERK = {
 	vending: { label: '🥤 Vending machine', hp: 18, wait: 60, price: 3, line: 'Crisps and a fizzy drink from the machine' },
 	buffet: { label: '🥐 Buffet', hp: 15, wait: 120, line: 'A pastry and a coffee from the conference buffet. Nobody minds.' },
 	firstaid: { label: '🩹 First aid', hp: 40, wait: 600, line: 'You patch yourself up from the office first-aid box.' },
+	popcorn: { label: '🍿 Popcorn', hp: 14, wait: 90, price: 6, line: 'A tub of popcorn and a cold soda from the concession stand' },
+	snackbar: { label: '🌭 Snack bar', hp: 16, wait: 90, price: 5, line: 'A hot dog and a soda from the snack bar' },
 };
 // the city offices' furniture that is one of them (its place on the item, in the item's frame:
 // across, out in front)
@@ -63,7 +67,7 @@ export function createOfficePerks({ mount, button, hint = () => {}, isPhone = fa
 		const W = world(), P = W?.player?.state;
 		if (!P || P.flying) return null;
 		const eye = camera.position;
-		const near = [...(W.towers?.amenities?.(eye, REACH + 0.6) || []), ...cityPerks(eye)].filter((q) => PERK[q.kind]).sort((a, b) => a.d - b.d);
+		const near = [...(W.towers?.amenities?.(eye, REACH + 0.6) || []), ...cityPerks(eye), ...(W.commercial?.amenities?.(eye, REACH + 0.6) || [])].filter((q) => PERK[q.kind]).sort((a, b) => a.d - b.d);
 		return near[0] && near[0].d < REACH + 0.6 ? near[0] : null;
 	}
 
@@ -89,7 +93,7 @@ export function createOfficePerks({ mount, button, hint = () => {}, isPhone = fa
 			else hint('The first-aid box is locked.', 2200);
 			return;
 		}
-		if (now - last < P.wait) { hint(q.kind === 'vending' ? 'You just had a snack. Give it a minute.' : q.kind === 'water' ? 'You just had a cup.' : 'You just had one. Give it a minute.', 2000); return; }
+		if (now - last < P.wait) { hint(P.price ? 'You just had a snack. Give it a minute.' : q.kind === 'water' ? 'You just had a cup.' : 'You just had one. Give it a minute.', 2000); return; }
 		if (P.price) {
 			if (!arms?.spendCredits?.(P.price, { id: `office-vend-${Date.now().toString(36)}-${(txN++).toString(36)}`, kind: 'vending' })) { hint(`The machine wants ${P.price} credits.`, 2200); return; }
 		}

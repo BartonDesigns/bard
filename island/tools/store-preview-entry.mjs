@@ -40,13 +40,17 @@ const CASES = [
 	['pizza', 'pizza', 12, 16, '#c62f22', '#ffffff', 'restaurant'], ['burger', 'burger', 14, 16, '#ffbe0b', '#c1121f', 'restaurant'], ['taco', 'taco', 10, 14, '#2a9d8f', '#ffffff', 'restaurant'],
 	// (a tall one open to the roof)
 	['loft', 'bistro', 14, 18, '#1d3557', '#f1faee', 'restaurant', 7, 61],
+	// offices (an office block's ground floor: kind 5), the places to play, a tattoo parlour (bay/venuefit.js)
+	['office', 'tech', 16, 20, '#101820', '#5ce1e6', 'office', 4.8, null, 5, 'SOFTWARE'], ['law', 'law', 14, 18, '#1b263b', '#e0c48c', 'office', 4.8, null, 5, 'ATTORNEYS AT LAW'],
+	['dental', 'dental', 14, 18, '#1f6f7f', '#ffffff', 'office', 4.8, null, 5, 'DENTAL'], ['arcade', 'arcade', 14, 20, '#7209b7', '#ffd60a', 'arcade'],
+	['bowling', 'bowling', 30, 34, '#d00000', '#ffffff', 'bowling'], ['cinema', 'cinema', 32, 30, '#14213d', '#fca311', 'cinema'], ['tattoo', 'tattoo', 9, 14, '#111111', '#e63946', 'tattoo'],
 ];
-const SHOPS = CASES.map(([name, t, w, d, bg, fg, venue = 'shop', wallH = 4.8, x = null], i) => {
-	const b = { x: x ?? 1000 + i * 200, z: 0, w, d, a: 0, wallH, roofH: 0, kind: 6, door: 0.5, look: { wall: [0.86, 0.84, 0.8] }, name };
+const SHOPS = CASES.map(([name, t, w, d, bg, fg, venue = 'shop', wallH = 4.8, x = null, kind = 6, tag = ''], i) => {
+	const b = { x: x ?? 1000 + i * 200, z: 0, w, d, a: 0, wallH, roofH: 0, kind, door: 0.5, look: { wall: [0.86, 0.84, 0.8] }, name };
 	// (somewhere the economy would put one: economy/venue.js)
 	while (venueOf(b) !== venue) b.x += 7;
 	if (t === 'fuel' || t === 'corner') b.store = t;
-	b.biz = { type: t, name: name + ' review', sign: { bg, fg } };
+	b.biz = { type: t, name: name + ' review', tag, sign: { bg, fg } };
 	b.grp = [b]; b.grp.biz = true;
 	return b;
 });

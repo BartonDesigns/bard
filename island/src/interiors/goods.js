@@ -21,10 +21,10 @@ import { brandName } from '../signage/brand-catalog.js';
 import { brandMark } from '../signage/brand-marks.js';
 
 // ---------------------------------------------------------------------------------
-// the sheet: 8 strips across, 15 down, 256 x 96 each (at the full size: half on a phone), then
+// the sheet: 8 strips across, 16 down, 256 x 96 each (at the full size: half on a phone), then
 // the price rail on its own, the shops' hanging signs (white letters, cut out) and a plain patch
 export const STRIP_W = 1.2, STRIP_H = 0.45;
-const TW = 256, TH = 96, ROWS = 15, RAIL_Y = ROWS * TH, SIGN_Y = RAIL_Y + 10, SW = 256, SH = 32, W = 2048, H = 1664, PX = TW / STRIP_W, RAIL = 8;
+const TW = 256, TH = 96, ROWS = 16, RAIL_Y = ROWS * TH, SIGN_Y = RAIL_Y + 10, SW = 256, SH = 32, W = 2048, H = 1792, PX = TW / STRIP_W, RAIL = 8;
 // the kinds and how many strips of each (a strip's goods differ, so a long run never repeats
 // itself side by side); cool: in a cooler, lit from behind
 export const KINDS = {
@@ -42,6 +42,10 @@ export const KINDS = {
 	// bags of beans, the mugs, the tubs of ice cream seen from above, the glasses behind a bar, the
 	// binders on an office's shelves, the menus on the wall (chalk, and lit with their pictures)
 	pastry: 2, donuts: 2, cakes: 2, beans: 2, mugs: 2, tubs: 2, glasses: 2, binders: 3, menu: 7, menulit: 3,
+	// the places to play and the offices': film posters, four to a strip; the arcade machines'
+	// marquees, six (two across, three down); a bowling alley's shoe cubbies; a popcorn machine's
+	// glass and its buckets; a tattoo artist's inks; framed certificates, four
+	films: 2, marquee: 2, shoes: 1, popcorn: 1, inks: 1, certs: 1,
 };
 export const COOL = new Set(['soda', 'cancool', 'water', 'energy', 'beer', 'dairy', 'frozen']);
 const TILES = {};
@@ -59,7 +63,8 @@ export function stripUV(kind, n = 0) {
 const WHITE_UV = [(W - 6) / W, 2 / H, (W - 2) / W, 6 / H];
 const RAIL_UV = [0, 1 - (RAIL_Y + RAIL) / H, TW / W, 1 - RAIL_Y / H];
 export const SIGNS = ['COLD DRINKS', 'BEER & WINE', 'DAIRY', 'FROZEN FOODS', 'ICE CREAM', 'COFFEE', 'HOT FOOD', 'SNACKS', 'GROCERY', 'PHARMACY', 'HEALTH & BEAUTY', 'HOUSEHOLD', 'PAINT', 'TOOLS', 'HARDWARE', 'PLUMBING', 'ELECTRICAL', 'GARDEN', 'PET SUPPLIES', 'BOOKS', 'NEW ARRIVALS', 'SALE', 'CHECKOUT', 'RESTROOMS', 'EMPLOYEES ONLY', 'WINE', 'SPIRITS', 'PRODUCE', 'BAKERY', 'FRESH FLOWERS', 'PHONES & TECH', 'LOTTERY',
-	'MENU', 'ORDER HERE', 'PICK UP', 'KITCHEN', 'BAR', 'ESPRESSO', 'PASTRIES', 'DONUTS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI', 'RAMEN', 'RECEPTION', 'SPECIALS', 'GELATO'];
+	'MENU', 'ORDER HERE', 'PICK UP', 'KITCHEN', 'BAR', 'ESPRESSO', 'PASTRIES', 'DONUTS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI', 'RAMEN', 'RECEPTION', 'SPECIALS', 'GELATO',
+	'TICKETS', 'BOX OFFICE', 'CONCESSIONS', 'SHOES', 'SNACK BAR', 'PRIZES', 'LANES', 'EXIT'];
 // a sign's letters on the sheet (cut out: the material keeps only what is painted)
 export function signUV(name) {
 	const i = Math.max(0, SIGNS.indexOf(name)), cx = i % 8, cy = Math.floor(i / 8), y = SIGN_Y + cy * SH;
@@ -78,6 +83,7 @@ const MAKERS = {
 	dairy: 'dairy', frozen: 'produce', laundry: 'cleaning', paper: 'cleaning', clean: 'cleaning', care: 'care', meds: 'care', vanity: 'care', clothes: 'apparel',
 	auto: 'transport', pet: 'home', paint: 'hardware', tools: 'hardware', peg: 'hardware', tech: 'mobile', toys: 'retro',
 	posters: ['coffee', 'beverages', 'bakery', 'tea'], covers: 'books', crates: 'produce', beans: 'coffee', mugs: 'coffee', trays: 'snacks', fountain: 'beverages', notices: 'network',
+	films: 'network', marquee: 'orbital', popcorn: 'snacks', inks: 'fae',
 };
 // the families' sheets while the goods are painted (the small sheets: a packet's mark is a few
 // dozen pixels across), a few on their way at once, each let go once its kinds are painted
@@ -569,6 +575,29 @@ function scene(g, x, y, w, h, k, r) {
 	}
 	g.restore();
 }
+// the films showing: the title (two lines), the line over it, the sky's two colours, the title's
+const FILMS = [
+	['FOG', 'CITY', 'THE BAY KEEPS ITS SECRETS', '#1b263b', '#e07a5f', '#ffffff'], ['LAST', 'FERRY', 'ONE NIGHT. ONE WAY HOME.', '#0b132b', '#3a506b', '#ffd166'],
+	['STAR', 'HARBOR', 'BEYOND THE GOLDEN GATE', '#10002b', '#5a189a', '#e0aaff'], ['THE', 'QUIET HILL', 'SOME DOORS STAY SHUT', '#2b2d42', '#8d99ae', '#edf2f4'],
+	['REDLINE', '', 'NO BRAKES. NO RULES.', '#370617', '#dc2f02', '#ffba08'], ['ORBIT', '', 'HOME IS 400 KM DOWN', '#03071e', '#023e8a', '#90e0ef'],
+	['SUMMER', 'OF 99', 'THE BEST YEAR EVER', '#ff9f1c', '#ffbf69', '#2b2d42'], ['DRAGON', 'GATE', 'THE LEGEND AWAKENS', '#1a1a1a', '#9d0208', '#f48c06'],
+];
+// the arcade's machines: the game on each marquee, its two colours and its title's (the first
+// eight video games, then the pinball's, the skee-ball's, the claw's, the hoops')
+export const MARQUEES = [
+	['THE JOUST', '#ffbe0b', '#fb5607', '#ffffff'], ['STAR RAIDER', '#3a0ca3', '#7209b7', '#4cc9f0'], ['MAGMA BALL', '#d00000', '#370617', '#ffba08'], ['ROBO RUMBLE', '#2b9348', '#004b23', '#eeef20'],
+	['NEON DRIFT', '#ff006e', '#3a0ca3', '#ffffff'], ['GALAXIA', '#03045e', '#0077b6', '#ffd60a'], ['TURBO 99', '#111111', '#e63946', '#f1faee'], ['DRAGON GATE', '#6a040f', '#1a1a1a', '#f48c06'],
+	['SILVER BALL', '#ffd60a', '#d00000', '#111111'], ['SKEE-BALL', '#06a77d', '#073b4c', '#ffffff'], ['CLAW KING', '#ef476f', '#7b2cbf', '#ffffff'], ['HOOP FEVER', '#f77f00', '#1d3557', '#ffffff'],
+];
+// big letters with a dark edge round them, fitted to w
+function title(g, s, x, y, w, size, col, edge = '#111111') {
+	g.save(); g.font = `900 ${size}px "Arial Black", Arial, Helvetica, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+	const m = g.measureText(s).width;
+	g.translate(x, y); if (m > w) g.scale(w / m, 1);
+	g.lineJoin = 'round'; g.lineWidth = Math.max(1.5, size * 0.18); g.strokeStyle = edge; g.strokeText(s, 0, 0);
+	g.fillStyle = col; g.fillText(s, 0, 0);
+	g.restore();
+}
 const WHOLE = {
 	// four new books' covers: the picture, the title, the author, the publisher's mark at the foot
 	covers(g, x0, y0, n) {
@@ -716,6 +745,129 @@ const WHOLE = {
 			g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(x + 3, y + 3, 53, 4);
 		}
 	},
+	// four film posters: the picture (a skyline under the moon, a figure on a ridge against the sun,
+	// a ringed planet in the stars, a road running into the dusk), the line over it, the title big,
+	// the billing block and the studio's mark at the foot
+	films(g, x0, y0, n, r) {
+		const CW = TW / 4;
+		for (let i = 0; i < 4; i++) {
+			const k = n * 4 + i, x = x0 + i * CW, y = y0, [t1, t2, line, a, b, c] = FILMS[k % FILMS.length];
+			g.save(); g.beginPath(); g.rect(x, y, CW, TH); g.clip();
+			const sky = g.createLinearGradient(0, y, 0, y + TH); sky.addColorStop(0, a); sky.addColorStop(0.55, b); sky.addColorStop(1, '#050505');
+			g.fillStyle = sky; g.fillRect(x, y, CW, TH);
+			const hz = y + TH * 0.5;
+			switch (k % 4) {
+				case 0:
+					g.fillStyle = 'rgba(255,255,240,0.9)'; g.beginPath(); g.arc(x + CW * 0.7, y + TH * 0.2, 7, 0, Math.PI * 2); g.fill();
+					g.fillStyle = '#0a0a0f';
+					for (let bx = x; bx < x + CW; bx += 5 + r() * 6) { const bh = 6 + r() * 22; g.fillRect(bx, hz - bh, 4 + r() * 5, bh + TH * 0.5); }
+					g.fillStyle = 'rgba(255,214,102,0.8)'; for (let j = 0; j < 14; j++) g.fillRect(x + r() * CW, hz - r() * 20, 1, 1.4);
+					break;
+				case 1:
+					g.fillStyle = 'rgba(255,200,120,0.95)'; g.beginPath(); g.arc(x + CW / 2, hz - 4, 15, 0, Math.PI * 2); g.fill();
+					g.fillStyle = '#0a0a0f'; g.beginPath(); g.moveTo(x, hz + 6); g.quadraticCurveTo(x + CW / 2, hz - 8, x + CW, hz + 4); g.lineTo(x + CW, y + TH); g.lineTo(x, y + TH); g.fill();
+					g.fillRect(x + CW / 2 - 1.5, hz - 14, 3, 10); g.beginPath(); g.arc(x + CW / 2, hz - 16, 2.2, 0, Math.PI * 2); g.fill();
+					break;
+				case 2:
+					g.fillStyle = '#ffffff'; for (let j = 0; j < 30; j++) g.fillRect(x + r() * CW, y + r() * TH * 0.6, 0.8, 0.8);
+					g.fillStyle = c; g.beginPath(); g.arc(x + CW * 0.45, y + TH * 0.32, 11, 0, Math.PI * 2); g.fill();
+					g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 1.2; g.beginPath(); g.ellipse(x + CW * 0.45, y + TH * 0.32, 19, 4, -0.3, 0, Math.PI * 2); g.stroke();
+					break;
+				default:
+					g.fillStyle = '#16161c'; g.beginPath(); g.moveTo(x + CW / 2 - 2, hz); g.lineTo(x + CW / 2 + 2, hz); g.lineTo(x + CW * 0.9, y + TH); g.lineTo(x + CW * 0.1, y + TH); g.fill();
+					g.strokeStyle = '#ffd166'; g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x + CW / 2, hz); g.lineTo(x + CW / 2, y + TH); g.stroke(); g.setLineDash([]);
+					g.fillStyle = '#ff4d4d'; g.fillRect(x + CW / 2 - 6, hz + 18, 3, 1.6); g.fillRect(x + CW / 2 + 3, hz + 18, 3, 1.6);
+			}
+			word(g, line, x + CW / 2, y + 5, CW - 6, 4.5, 'rgba(255,255,255,0.85)', false);
+			title(g, t1, x + CW / 2, y + TH * (t2 ? 0.63 : 0.68), CW - 6, 12, c, '#050505');
+			if (t2) title(g, t2, x + CW / 2, y + TH * 0.74, CW - 8, 9, c, '#050505');
+			g.fillStyle = 'rgba(255,255,255,0.5)'; for (let j = 0; j < 3; j++) g.fillRect(x + 6, y + TH * 0.83 + j * 2.6, CW - 12, 0.9);
+			mark(g, maker('network', k % 8), x + CW / 2, y + TH * 0.93, CW * 0.36, 5, '#000000');
+			g.restore();
+		}
+	},
+	// six arcade marquees, two across and three down: the colours, the rays, the game's name, its maker
+	marquee(g, x0, y0, n) {
+		for (let i = 0; i < 6; i++) {
+			const k = n * 6 + i, x = x0 + (i % 2) * TW / 2, y = y0 + Math.floor(i / 2) * TH / 3, w = TW / 2, h = TH / 3, [t, a, b, c] = MARQUEES[k % MARQUEES.length];
+			g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+			const L = g.createLinearGradient(0, y, 0, y + h); L.addColorStop(0, a); L.addColorStop(1, b);
+			g.fillStyle = L; g.fillRect(x, y, w, h);
+			g.fillStyle = 'rgba(255,255,255,0.16)';
+			for (let j = 0; j < 9; j++) { g.beginPath(); g.moveTo(x + w / 2, y + h * 1.4); g.lineTo(x + j * w / 8 - 3, y); g.lineTo(x + j * w / 8 + 4, y); g.fill(); }
+			title(g, t, x + w / 2, y + h * 0.5, w - 22, 17, c);
+			mark(g, maker('orbital', k % 8), x + w - 11, y + h - 5, 18, 5, b);
+			g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(x, y, w, 1); g.fillRect(x, y + h - 1, w, 1);
+			g.restore();
+		}
+	},
+	// a bowling alley's shoe cubbies: six across, three up, a pair in each (two-tone, its size on a tag)
+	shoes(g, x0, y0, n) {
+		g.fillStyle = '#4a3322'; g.fillRect(x0, y0, TW, TH);
+		const cw = TW / 6, ch = TH / 3, tones = [['#c1121f', '#1d3557'], ['#2b2d42', '#e9c46a'], ['#6a994e', '#f1faee'], ['#1d6fd1', '#d62828'], ['#8d5524', '#f4f1de'], ['#111111', '#ef476f'], ['#f1faee', '#457b9d']];
+		for (let row = 0; row < 3; row++) for (let col = 0; col < 6; col++) {
+			const x = x0 + col * cw, y = y0 + row * ch, [a, b] = tones[(n * 5 + row * 6 + col) % tones.length];
+			g.fillStyle = '#140d08'; g.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+			for (const s of [0, 1]) {
+				const sx = x + 5 + s * (cw / 2 - 2), sw = cw / 2 - 7, sy = y + ch - 13;
+				g.fillStyle = a; rr(g, sx, sy, sw, 9, 3); g.fill();
+				g.fillStyle = b; g.fillRect(sx + sw * 0.32, sy + 0.5, sw * 0.36, 8);
+				g.fillStyle = '#f2efe8'; g.fillRect(sx, sy + 8, sw, 2.4);
+				g.fillStyle = 'rgba(255,255,255,0.75)'; for (let l = 0; l < 3; l++) g.fillRect(sx + sw * 0.42, sy + 1.5 + l * 2, sw * 0.16, 0.8);
+			}
+			g.fillStyle = '#fbf8f0'; g.fillRect(x + cw / 2 - 6, y + 4, 12, 7);
+			word(g, String(5 + ((row * 6 + col + n * 3) % 9)), x + cw / 2, y + 7.8, 10, 6, '#111111');
+			g.fillStyle = 'rgba(255,255,255,0.1)'; g.fillRect(x + 2, y + 2, cw - 4, 1.5);
+		}
+	},
+	// a popcorn machine's glass (the kettle hanging under its lamp, the corn heaped), then three
+	// buckets of it on the counter, its maker's mark on each
+	popcorn(g, x0, y0, n, r) {
+		const w = TW / 2;
+		const L = g.createLinearGradient(0, y0, 0, y0 + TH); L.addColorStop(0, '#ffe8b0'); L.addColorStop(0.35, '#a33a1e'); L.addColorStop(1, '#6b1f12');
+		g.fillStyle = L; g.fillRect(x0, y0, w, TH);
+		g.fillStyle = '#d4d7db'; g.beginPath(); g.ellipse(x0 + w / 2, y0 + 22, 24, 12, 0, 0, Math.PI * 2); g.fill();
+		g.fillStyle = '#8d9196'; g.fillRect(x0 + w / 2 - 2, y0, 4, 12); g.fillRect(x0 + w / 2 - 26, y0 + 20, 52, 3);
+		const corn = ['#fff4d6', '#ffe8a3', '#fffaf0', '#f6d27a', '#ffffff'];
+		for (let i = 0; i < 420; i++) {
+			const px = x0 + 3 + r() * (w - 6), top = y0 + TH * 0.46 + Math.abs(px - x0 - w / 2) * 0.22, py = top + r() * (y0 + TH - top);
+			g.fillStyle = pick(r, corn); g.beginPath(); g.arc(px, py, 1.6 + r() * 1.6, 0, Math.PI * 2); g.fill();
+		}
+		g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x0 + 6, y0, 5, TH); g.fillRect(x0 + w - 16, y0, 3, TH);
+		const B = g.createLinearGradient(0, y0, 0, y0 + TH); B.addColorStop(0, '#2b1712'); B.addColorStop(1, '#4a2a1e');
+		g.fillStyle = B; g.fillRect(x0 + w, y0, w, TH);
+		for (let i = 0; i < 3; i++) {
+			const cx = x0 + w + 22 + i * 42, bw = i === 1 ? 36 : 30, bt = y0 + TH - (i === 1 ? 62 : 52), bb = y0 + TH - 4;
+			for (let j = 0; j < 160; j++) { const a = r() * Math.PI, rad = r() * bw * 0.55; g.fillStyle = pick(r, corn); g.beginPath(); g.arc(cx + Math.cos(a) * rad, bt - Math.sin(a) * rad * 0.55, 1.5 + r() * 1.3, 0, Math.PI * 2); g.fill(); }
+			g.save(); g.beginPath(); g.moveTo(cx - bw / 2, bt); g.lineTo(cx + bw / 2, bt); g.lineTo(cx + bw * 0.38, bb); g.lineTo(cx - bw * 0.38, bb); g.closePath(); g.clip();
+			g.fillStyle = '#f7f3ea'; g.fillRect(cx - bw / 2, bt, bw, bb - bt);
+			g.fillStyle = '#d62828'; for (let s = 0; s < 5; s++) g.fillRect(cx - bw / 2 + s * bw / 5 + bw / 20, bt, bw / 10, bb - bt);
+			roundShade(g, cx - bw / 2, bw, bt, bb - bt, 0.35);
+			g.restore();
+			g.fillStyle = '#ffffff'; rr(g, cx - bw * 0.36, bt + (bb - bt) * 0.36, bw * 0.72, (bb - bt) * 0.3, 3); g.fill();
+			mark(g, maker('snacks', 2), cx, bt + (bb - bt) * 0.51, bw * 0.62, (bb - bt) * 0.24, '#ffffff');
+		}
+	},
+	// four framed certificates: the frame, the mat, the paper with its heading, its lines, its seal
+	// and the signature
+	certs(g, x0, y0, n, r) {
+		const CW = TW / 4;
+		for (let i = 0; i < 4; i++) {
+			const x = x0 + i * CW, y = y0, k = n * 4 + i, ink = ['#8a6d1f', '#1d3557', '#6a040f', '#2d6a4f'][k % 4];
+			g.fillStyle = ['#2b1d14', '#111111', '#3d2b1f', '#5c4033'][k % 4]; g.fillRect(x, y, CW, TH);
+			g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(x, y, CW, 1.5); g.fillRect(x, y, 1.5, TH);
+			g.fillStyle = '#efe7d4'; g.fillRect(x + 5, y + 5, CW - 10, TH - 10);
+			g.fillStyle = '#fffaf0'; g.fillRect(x + 9, y + 10, CW - 18, TH - 20);
+			g.strokeStyle = ink; g.lineWidth = 1; g.strokeRect(x + 11, y + 12, CW - 22, TH - 24);
+			word(g, ['CERTIFICATE', 'DIPLOMA', 'LICENSE', 'AWARD'][k % 4], x + CW / 2, y + 20, CW - 28, 6, ink);
+			g.fillStyle = 'rgba(40,40,40,0.55)'; for (let j = 0; j < 5; j++) { const lw = (CW - 34) * (j === 1 ? 0.9 : 0.5 + r() * 0.4); g.fillRect(x + CW / 2 - lw / 2, y + 29 + j * 7, lw, j === 1 ? 1.6 : 0.9); }
+			g.fillStyle = '#c9a227'; g.beginPath(); g.arc(x + 20, y + TH - 22, 5, 0, Math.PI * 2); g.fill();
+			g.fillStyle = '#b5161f'; g.beginPath(); g.moveTo(x + 17, y + TH - 18); g.lineTo(x + 15, y + TH - 12); g.lineTo(x + 19, y + TH - 14); g.fill(); g.beginPath(); g.moveTo(x + 23, y + TH - 18); g.lineTo(x + 25, y + TH - 12); g.lineTo(x + 21, y + TH - 14); g.fill();
+			g.strokeStyle = '#1d3557'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x + CW - 34, y + TH - 20);
+			for (let s = 0; s < 6; s++) g.quadraticCurveTo(x + CW - 32 + s * 3, y + TH - 25 + (s % 2) * 7, x + CW - 30 + s * 3, y + TH - 20);
+			g.stroke();
+		}
+	},
 };
 const STOCK = {
 	chips: { p: 'bag', w: [0.17, 0.24], h: [0.26, 0.36], f: [2, 4], food: ['#f6bd60', '#e9a03b', '#d4a373', '#f28482'] },
@@ -764,6 +916,9 @@ const STOCK = {
 	binders: { p: 'binder', w: [0.05, 0.08], h: [0.28, 0.32], f: [2, 5], ink: ['#1d3557', '#2b2d42', '#e63946', '#f1faee', '#457b9d', '#111111', '#2a9d8f', '#e9c46a'] },
 	menu: { whole: 'menu' }, menulit: { whole: 'menulit' }, tubs: { whole: 'tubs' },
 	covers: { whole: 'covers' }, crates: { whole: 'crates' }, trays: { whole: 'trays' }, fountain: { whole: 'fountain' }, notices: { whole: 'notices' }, posters: { whole: 'posters' },
+	films: { whole: 'films' }, marquee: { whole: 'marquee' }, shoes: { whole: 'shoes' }, popcorn: { whole: 'popcorn' }, certs: { whole: 'certs' },
+	// (the little dropper bottles on an artist's cart, nothing behind them)
+	inks: { p: 'bottle', w: [0.03, 0.04], h: [0.07, 0.09], f: [1, 2], open: true, foot: 1, liq: ['#111111', '#d62828', '#1d6fd1', '#ffd60a', '#06a77d', '#7b2cbf', '#f77f00', '#ef476f', '#00b4d8'], ink: ['#111111', '#ffffff', '#2b2d42', '#f4f1de'] },
 };
 
 function paintStrip(g, kind, x0, y0, seed) {
@@ -981,6 +1136,12 @@ export class GoodsBuilder {
 	card(kind, n, j, parts, x0, x1, y, h, z, k = 1) {
 		const [u0, v0, u1, v1] = stripUV(kind, n), du = (u1 - u0) / parts;
 		this.quad([x0, y, z], [x1, y, z], [x1, y + h, z], [x0, y + h, z], [u0 + du * j, v0, u0 + du * (j + 1), v1], k);
+	}
+	// a part of a strip's picture standing up (an arcade marquee, six to a strip): fx0 to fx1 across
+	// it, fy0 to fy1 down it, as fractions; from x0 to x1 at z, y to y + h
+	sub(kind, n, fx0, fy0, fx1, fy1, x0, x1, y, h, z, k = 1) {
+		const [u0, v0, u1, v1] = stripUV(kind, n), du = u1 - u0, dv = v1 - v0;
+		this.quad([x0, y, z], [x1, y, z], [x1, y + h, z], [x0, y + h, z], [u0 + du * fx0, v1 - dv * fy1, u0 + du * fx1, v1 - dv * fy0], k);
 	}
 	// a stack of them (a pile of one new book): its sides plain in side (linear rgb), the picture on top
 	stack(kind, n, j, parts, x0, z0, x1, z1, y0, y1, side, k = 1) {
