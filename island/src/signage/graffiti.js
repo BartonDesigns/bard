@@ -149,19 +149,32 @@ export function drawPiece(g, x0, y0, W, H, seed) {
 	g.save(); g.fillStyle = '#f2f2f2'; g.font = `italic bold ${Math.round(H * 0.07)}px "Liberation Sans", Arial, sans-serif`; g.textAlign = 'right';
 	g.fillText(`${name} ${crewName(seed)} '26`, x0 + W * 0.94, y0 + H * 0.93); g.restore();
 }
-// the buff: a roller's block of grey, a shade off the wall, its edges ragged
-export function drawBuff(g, x0, y0, W, H, tone) {
-	const col = ['#8e8a84', '#a7a29a', '#9a9ea2', '#b9b0a2'][tone % 4];
+// the buff: a crew's roller block, its edges ragged, its passes lighter and darker; drawn in a
+// neutral grey (about 0.6 in linear light) for the paint's shader to turn into the wall's own
+// colour a shade off (signage/wallpaint.js). ghost(g, x, y, w, h): the piece it was rolled over,
+// drawn faintly through it as an old tag bleeds through thin paint
+export function drawBuff(g, x0, y0, W, H, tone, ghost = null) {
 	const r = rng(tone * 31 + 9);
-	g.save(); g.fillStyle = col;
+	g.save(); g.fillStyle = '#cbcbcb';
 	g.beginPath(); g.moveTo(x0 + W * 0.03, y0 + H * 0.05);
 	for (let i = 1; i <= 10; i++) g.lineTo(x0 + W * (0.03 + i * 0.094), y0 + H * (0.03 + r() * 0.05));
 	for (let i = 1; i <= 6; i++) g.lineTo(x0 + W * (0.96 + r() * 0.03), y0 + H * (i / 6) * 0.94);
 	for (let i = 10; i >= 0; i--) g.lineTo(x0 + W * (0.03 + i * 0.094), y0 + H * (0.93 + r() * 0.05));
 	g.closePath(); g.fill();
+	g.clip();
+	// what it covers, faintly: drawn apart and laid in at a low alpha (its own drawing sets alphas)
+	if (ghost && typeof document !== 'undefined') {
+		const cv = document.createElement('canvas'), w = Math.max(8, Math.round(W)), h = Math.max(8, Math.round(H));
+		cv.width = w; cv.height = h;
+		const c = cv.getContext('2d');
+		try { ghost(c, w * 0.08, h * 0.1, w * 0.84, h * 0.8); } catch { /* the ghost is a nicety */ }
+		g.globalAlpha = 0.12; g.globalCompositeOperation = 'multiply';
+		g.drawImage(cv, x0, y0, W, H);
+		g.globalCompositeOperation = 'source-over';
+	}
 	// the roller's passes, lighter and darker
-	g.globalAlpha = 0.08;
-	for (let x = x0 + W * 0.05; x < x0 + W * 0.95; x += W * 0.09) { g.fillStyle = r() < 0.5 ? '#ffffff' : '#000000'; g.fillRect(x, y0 + H * 0.06, W * 0.085, H * 0.86); }
+	g.globalAlpha = 0.035;
+	for (let x = x0 + W * 0.05; x < x0 + W * 0.95; x += W * (0.07 + r() * 0.04)) { g.fillStyle = r() < 0.5 ? '#ffffff' : '#000000'; g.fillRect(x, y0 + H * (0.04 + r() * 0.05), W * (0.06 + r() * 0.05), H * (0.82 + r() * 0.1)); }
 	g.restore();
 }
 // a wheatpaste poster: a show that never happened, a face of blocks, a slogan; torn and layered

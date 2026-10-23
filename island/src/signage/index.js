@@ -42,6 +42,7 @@ import { productBrand } from './brand-catalog.js';
 import { buildingArtSurfaces, wreckedHost } from '../civic/placement.js';
 import { graffitiGraphic } from '../civic/graffiti-catalog.js';
 import { artRevision } from './art.js';
+import { STYLE, SURFACE, FREEWAY_CONCRETE, paintExtra, lotHost, freewayHost, binHost, host as wallHost } from './wallpaint.js';
 
 const CAPS = { retro: 900, vinyl: 1400, cloth: 80, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
 const ITEMS = {
@@ -50,6 +51,8 @@ const ITEMS = {
 	hardware: [['Fasteners', 'Nails', 'Screws'], ['Paint', 'Brushes'], ['Plumbing', 'Pipe'], ['Electrical', 'Lighting'], ['Garden', 'Hoses'], ['Tools', 'Hand Tools']],
 	any: [['New Arrivals'], ['Gifts', 'Cards'], ['Home', 'Kitchen'], ['Books', 'Stationery'], ['Seasonal'], ['Sale', 'Clearance']],
 };
+// how each paint face went on (signage/wallpaint.js): a spray can unless named here
+const PAINT_STYLE = { campaign: STYLE.mural, buff: STYLE.buff, damage: STYLE.scar };
 const DEPT = { grocer: ['PRODUCE · DELI', 'cart', '#7a2a1c'], pharmacy: ['PHARMACY', 'hospital', '#1d4f9c'], hardware: ['TOOLS & PAINT', 'worker', '#a8501c'], any: ['WELCOME', 'info', '#2a3a4a'] };
 
 export function createSignage({ scene, world, isPhone = false, locate = null, morality = () => ({}), day = () => Math.floor(Date.now() / 86400000) } = {}) {
@@ -114,6 +117,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		// (the mapped streets, and the procedural grid towns' own: named here, gridstreets.js)
 		const roads = real.near('roads', cx, cz, R).concat(w.bayArea?.urbanAt ? gridStreets(cx, cz, Math.min(R, 360), { urbanAt: (x, z) => w.bayArea.urbanAt(x, z), inside: (x, z) => real.inside?.(x, z), BLOCKS, toGrid, fromGrid }) : []);
 		const lots = (w.city?.nearList?.() || []).filter((o) => o && near(o.x, o.z, R + 80));
+		// (a mapped building's box to the lot the city drew it as: the wall the alley's paint is on)
+		const lotOf = new Map();
+		for (const o of lots) if (o.src) lotOf.set(o.src, o);
 		const schools = lots.filter((o) => o.src?.kind === 7).map((o) => ({ x: o.x, z: o.z }));
 		// the streets
 		const ST = streetSigns(roads, sys, { landAt, schools, seed, phone: isPhone });
@@ -175,12 +181,13 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				out.push(...backDoorDecals(d, sys, { seed, name: b?.biz?.name || '' }));
 				const nx = Math.sin(yaw), nz = Math.cos(yaw), food = /cafe|restaurant|diner|pizza|bakery|bar|pub|taco|ramen|grill|burger|curry|noodle|sushi/.test(b?.biz?.type || '');
 				const tx = nz, tz = -nx, off = 2.6 + hash01(x, z, 'off') * 1.5;
-				surfaces.push({ kind: 'alley', x: x + tx * off + nx * 0.03, z: z + tz * off + nz * 0.03, y: ground(x, z), nx, nz, w: 4, h: Math.min(6, (b?.h || 6) - 0.4), kitchen: food, lu: landAt(x, z)?.lu });
+				const y = ground(x, z), h = Math.min(6, (b?.h || 6) - 0.4);
+				surfaces.push({ kind: 'alley', x: x + tx * off + nx * 0.03, z: z + tz * off + nz * 0.03, y, nx, nz, w: 4, h, kitchen: food, lu: landAt(x, z)?.lu, paintHost: lotHost(Number.isFinite(b?.y) ? b : lotOf.get(b)) ?? wallHost(y, h + 0.4, SURFACE.retail, 0.5) });
 			}
-			for (const [bx, bz, yaw] of r.alley.bins) {
+			for (const [bx, bz, yaw, v] of r.alley.bins) {
 				if (!near(bx, bz, R * 0.7)) continue;
 				const tx = Math.cos(yaw), tz = -Math.sin(yaw), g = ground(bx, bz);
-				for (const s of [1, -1]) surfaces.push({ kind: 'dumpster', x: bx + tx * s * 0.556, z: bz + tz * s * 0.556, y: g + 0.16, nx: tx * s, nz: tz * s, w: 1.8, h: 0.95, lu: landAt(bx, bz)?.lu });
+				for (const s of [1, -1]) surfaces.push({ kind: 'dumpster', x: bx + tx * s * 0.556, z: bz + tz * s * 0.556, y: g + 0.16, nx: tx * s, nz: tz * s, w: 1.8, h: 0.95, lu: landAt(bx, bz)?.lu, paintHost: binHost(g, v) });
 				surfaces.push({ kind: 'ground', x: bx + Math.sin(yaw) * 1.4, z: bz + Math.cos(yaw) * 1.4, nx: 0, nz: 1, w: 1, gum: 0, oil: true });
 			}
 		}
@@ -242,15 +249,18 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			for (const s of [1, -1]) out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'totem', title: 'DOWNTOWN', items: s > 0 ? items : items.map((q) => ({ ...q, a: q.a + Math.PI })) }, x: x + nx * s * 0.085, z: z + nz * s * 0.085, hy: 1.2, nx: nx * s, nz: nz * s, w: 0.74, h: 2.1, back: BACK.none, wear: 0.05 });
 		}
 		// the writers' and the weather's surfaces
-		for (const q of mk.walls || []) if (near(q.x, q.z, R)) surfaces.push({ kind: 'soundwall', ...q, lu: landAt(q.x - q.nx * 25, q.z - q.nz * 25)?.lu ?? 1 });
-		for (const q of mk.abutments || []) if (near(q.x, q.z, R)) surfaces.push({ kind: 'abutment', ...q, lu: landAt(q.x, q.z)?.lu ?? 7 });
+		// (each with its host: the freeway's block wall and poured concrete, the lot's wall)
+		for (const q of mk.walls || []) if (near(q.x, q.z, R)) surfaces.push({ kind: 'soundwall', ...q, lu: landAt(q.x - q.nx * 25, q.z - q.nz * 25)?.lu ?? 1, paintHost: freewayHost(q.y, q.h, q.x, q.z) });
+		for (const q of mk.abutments || []) if (near(q.x, q.z, R)) surfaces.push({ kind: 'abutment', ...q, lu: landAt(q.x, q.z)?.lu ?? 7, paintHost: freewayHost(q.y, q.h, q.x, q.z, FREEWAY_CONCRETE) });
 		for (const q of mk.piers || []) {
 			if (!near(q.x, q.z, R)) continue;
 			const tx = q.nz, tz = -q.nx;
-			for (const [nx, nz] of [[q.nx, q.nz], [-q.nx, -q.nz], [tx, tz], [-tx, -tz]]) surfaces.push({ kind: 'pier', x: q.x + nx * 0.66, z: q.z + nz * 0.66, y: q.y, nx, nz, w: 1.3, h: Math.max(2, q.h), lu: landAt(q.x, q.z)?.lu ?? 7 });
+			const paintHost = freewayHost(q.y, Math.max(2, q.h), q.x, q.z, FREEWAY_CONCRETE);
+			for (const [nx, nz] of [[q.nx, q.nz], [-q.nx, -q.nz], [tx, tz], [-tx, -tz]]) surfaces.push({ kind: 'pier', x: q.x + nx * 0.66, z: q.z + nz * 0.66, y: q.y, nx, nz, w: 1.3, h: Math.max(2, q.h), lu: landAt(q.x, q.z)?.lu ?? 7, paintHost });
 		}
 		const fronted = (x, z, nx, nz) => storefronts.some((F) => Math.abs((x - F.x) * F.nx + (z - F.z) * F.nz) < 1.5 && Math.abs((x - F.x) * F.nz - (z - F.z) * F.nx) < F.run / 2 + 0.5 && nx * F.nx + nz * F.nz > 0.8);
 		const walls=buildingArtSurfaces(lots,{x:cx,z:cz,radius:R,ground,landAt,fronted,cap:lite?64:128});
+		for(const S of walls)S.paintHost=lotHost(S.host);
 		surfaces.push(...walls);
 		surfaceHosts=lots.filter(o=>o&&(o.kind===5||o.src?.kind===9)).slice(0,lite?64:128);
 		// stickers on the backs of the signs and up the posts
@@ -261,7 +271,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		// Large campaign art uses a separate cap; street and safety signs stay untouched.
 		for(const S of surfaces){if(murals>=(lite?2:5))break;const ad=S.campaignEligible===true?wallCampaign(S,seed):null;if(ad){out.push(ad);murals++;}}
 		// Small material scars live on existing industrial/alley surfaces, never sign lettering.
-		let scars=0;for(const S of surfaces){if(scars>=(lite?6:16))break;if(!['industrial','alley','dumpster','abutment'].includes(S.kind)||S.civic||S.storefront||hash01(S.x,S.z,'scar')>.35)continue;const size=Math.min(S.w*.6,1.8);out.push({mat:MAT.paint,layer:LAYER.grime,face:{k:'damage',tile:hash32(S.x,S.z,'damage')%4},x:S.x,z:S.z,hy:Math.min((S.h||2)*.4,1.25),nx:S.nx,nz:S.nz,w:size,h:Math.min(size*.8,(S.h||2)*.7),base:S.y??null,back:BACK.none,wear:.12});scars++;}
+		let scars=0;for(const S of surfaces){if(scars>=(lite?6:16))break;if(!['industrial','alley','dumpster','abutment'].includes(S.kind)||S.civic||S.storefront||hash01(S.x,S.z,'scar')>.35)continue;const size=Math.min(S.w*.6,1.8);out.push({mat:MAT.paint,layer:LAYER.grime,face:{k:'damage',tile:hash32(S.x,S.z,'damage')%4},x:S.x,z:S.z,hy:Math.min((S.h||2)*.4,1.25),nx:S.nx,nz:S.nz,w:size,h:Math.min(size*.8,(S.h||2)*.7),base:S.y??null,back:BACK.none,wear:.12,host:S.paintHost??null});scars++;}
 		const M = moralNow();
 		out.push(...grimeFor(surfaces, { seed, phone: lite }));
 		out.push(...graffitiFor(surfaces, { morality: M, seed, day: day(), phone: lite }));
@@ -330,8 +340,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				tx = nz; tz = -nx;
 				y = r.abs ?? (r.base ?? ground(r.x, r.z)) + r.hy;
 			}
-			const extraF = r.mat === MAT.grime ? ({ rust: 0, soot: 1, streak: 2, gum: 3, oil: 4 }[r.face.type] ?? 0) : r.mat === MAT.glass && r.face.frost ? 1 : r.mat===MAT.paint&&graffitiGraphic(r.face.k,r.face.seed)?.gloss?1:0;
-			if (B.put(r.x, y, r.z, nx, ny, nz, tx, ty, tz, r.w, r.h, c, r.back ?? BACK.blank, r.seed ?? hash01(r.x, r.z, r.hy || 0), r.wear || 0, extraF)) n++;
+			const extraF = r.mat === MAT.grime ? ({ rust: 0, soot: 1, streak: 2, gum: 3, oil: 4 }[r.face.type] ?? 0) : r.mat === MAT.glass && r.face.frost ? 1 : r.mat === MAT.paint ? paintExtra(PAINT_STYLE[r.face.k] ?? STYLE.spray, !!graffitiGraphic(r.face.k, r.face.seed)?.gloss) : 0;
+			if (B.put(r.x, y, r.z, nx, ny, nz, tx, ty, tz, r.w, r.h, c, r.back ?? BACK.blank, r.seed ?? hash01(r.x, r.z, r.hy || 0), r.wear || 0, extraF, r.mat === MAT.paint ? r.host ?? null : null)) n++;
 		}
 		for (const B of batches.values()) B.commit();
 		// posts, slabs, gantries
