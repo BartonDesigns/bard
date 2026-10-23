@@ -21,7 +21,8 @@ const KEEP = 0.85;          // the town standing is kept within this share of it
 // brief(town): the town's city brief from the director (earth/director.js): its street names and
 // shop signs; null while one is on its way (the town waits), undefined for none. keep(x, z, r): the
 // ground kept for landmarks round a town ([{ x, z, r }]); palms(town): its street trees are palms.
-// A town with a spine ({ x, name }, its grid square to north) has a real boulevard down it
+// A town with a spine ({ x, name, z0, z1, hw }, its grid square to north) has a real boulevard down
+// it, a Strip of resorts hw either side of it from z0 to z1
 export function createCivilization({ real, bay, water = () => null, brief = null, keep = () => [], palms = () => false }) {
 	let active = null, job = null, pending = false;
 	const cache = [];        // the last few towns grown, newest last
@@ -42,7 +43,7 @@ export function createCivilization({ real, bay, water = () => null, brief = null
 		// spacing, to put one of its north-south arterials on it)
 		const style = t.style === STYLE.older ? 'older' : 'suburb', SP = arterialSpacing(t.r, style);
 		const k = t.spine ? Math.round((t.spine.x - t.x) / SP) : 0, cx = t.spine ? t.spine.x - k * SP : t.x;
-		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style, name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null, spine: t.spine ? { k, name: t.spine.name } : null });
+		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style, name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null, spine: t.spine ? { k, name: t.spine.name, v0: t.spine.z0 - t.z, v1: t.spine.z1 - t.z, hw: t.spine.hw } : null });
 		return { town: t, it, t0: performance.now(), work: 0, near: W || K.length ? near : null };
 	}
 	function finish(J, region) {
@@ -54,7 +55,7 @@ export function createCivilization({ real, bay, water = () => null, brief = null
 		// (a warm desert town's street trees are palms, and the odd mesquite: civgen.js plants for greener places)
 		// (the pines it plants stay pines: the Aleppo pine is the desert's other street tree)
 		if (!cached && palms(J.town)) for (const tr of region.trees || []) {
-			if (tr.cone) continue;
+			if (tr.cone || tr.sp) continue;
 			const k = hashStr(Math.round(tr.x) + ':' + Math.round(tr.z)) % 20;
 			tr.sp = k < 14 ? 3 : 1;
 			if (k < 14) tr.h = Math.max(tr.h || 0, 9 + k * 0.6);

@@ -33,9 +33,10 @@ const DISTRICT = [0, 1100, 1500, 1800, 2000, 2200];
 const D_STEP = 1.3, D_LIT = 0.3, D_KM = 9;
 const urbOf = (size, d) => Math.exp(-((d / SPREAD[size]) ** 3) * 1.2) * GLOW[size];
 // the real boulevards a city's grid is lined up on (crysis/civ.js spine), by the atlas's city id: the
-// line of longitude it runs north and south on, between two latitudes (the districts whose middle is
-// between them have it)
-const SPINES = { 'las-vegas': { lon: -115.1722, lat: [36.07, 36.126], name: 'Las Vegas Boulevard' } };
+// line of longitude it runs north and south on, between two latitudes (the districts that reach
+// between them have it, and the district nearest it is centred on it). strip: the latitudes between
+// which it is the Strip, hw metres either side of it all resort (crysis/civgen.js), no house
+const SPINES = { 'las-vegas': { lon: -115.1722, lat: [36.07, 36.126], name: 'Las Vegas Boulevard', strip: [36.0835, 36.1235], hw: 380 } };
 
 export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false, keep = () => [] }) {
 	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city }
@@ -86,6 +87,7 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 			// (the American desert's towns, Las Vegas and Phoenix as much as the small ones, are stucco
 			// subdivisions on the survey's mile grid, north and south; a warm desert's street trees are palms)
 			const southwest = /^na\b/.test(id) && aridAt(c.lat, c.lon), palms = aridAt(c.lat, c.lon) && (R.profile?.climate?.temp?.[0] ?? 0) >= 5;
+			rec.grid = southwest;
 			const older = (!/^(na|oc)\b/.test(id) || size >= 3) && !southwest;
 			const h = hash(c.id), ang = southwest ? 0 : (h % 1000) / 1000 * Math.PI / 2, style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
 			towns.push(spined({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, palms }));
@@ -109,20 +111,26 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 				if (!i && !j) continue;
 				const u = i * D + off, v = j * row, d = Math.hypot(u, v);
 				if (d < REACH[size] * 0.9 || urbOf(size, d) < D_LIT) continue;
-				const x = rec.x + u * ca - v * sa, z = rec.z + u * sa + v * ca;
+				let x = rec.x + u * ca - v * sa;
+				const z = rec.z + u * sa + v * ca;
+				// (each row's district nearest the city's boulevard moved onto it, so the boulevard
+				// runs down a district's middle, where it is built up, not along an edge)
+				const S = SPINES[rec.city.id];
+				if (S && !ang) { const ll = toLL(x, z), sx = toXZ(ll.lat, S.lon).x; if (ll.lat > S.lat[0] - 0.02 && ll.lat < S.lat[1] + 0.02 && Math.abs(sx - x) < D / 2) x = sx; }
 				if (Math.hypot(x - here.x, z - here.z) > D_KM * 1000 || skip(x, z, r)) continue;
 				towns.push(spined({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j] }));
 			}
 		}
 	}
-	// a town on its city's boulevard (its grid square to north): where the boulevard runs past it
+	// a town on its city's boulevard (its grid square to north): where the boulevard runs past it,
+	// and the stretch of it that is the Strip (z0 to z1, north to south)
 	function spined(t) {
 		const S = SPINES[t.city.id];
 		if (!S || t.ang) return t;
-		const ll = toLL(t.x, t.z);
-		if (ll.lat < S.lat[0] || ll.lat > S.lat[1]) return t;
+		const ll = toLL(t.x, t.z), dl = t.r * 1.3 / 111320;
+		if (ll.lat + dl < S.lat[0] || ll.lat - dl > S.lat[1]) return t;
 		const x = toXZ(ll.lat, S.lon).x;
-		if (Math.abs(x - t.x) < t.r * 1.3) t.spine = { x, name: S.name };
+		if (Math.abs(x - t.x) < t.r * 1.3) t.spine = { x, name: S.name, z0: toXZ(S.strip[1], S.lon).z, z1: toXZ(S.strip[0], S.lon).z, hw: S.hw };
 		return t;
 	}
 	function update(camera, arriving = false) {
@@ -143,8 +151,9 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 		scanAt = null;
 	}
 	// the cities round a point for the terrain's built-up ground (engine metres; nearest first)
+	// (2 added for a city on the mile grid: its lights are drawn on it)
 	function lit(n) {
-		return list.slice(0, n).map((c) => ({ x: c.x, z: c.z, r: c.spread, k: GLOW[c.size] * (c.bay ? 0 : 1) }));
+		return list.slice(0, n).map((c) => ({ x: c.x, z: c.z, r: c.spread, k: GLOW[c.size] * (c.bay ? 0 : 1) + (c.grid ? 2 : 0) }));
 	}
 	const busy = () => civ.busy() || !!civ.active();
 	// how built up the ground is at a point, for the town's own light by night (island-frame.js):

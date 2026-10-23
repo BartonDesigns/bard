@@ -47,7 +47,8 @@ export function proceduralWater({ heightAt, inSurvey, arid = () => false }) {
 			for (let i = 0; i < n; i++) h[j * n + i] = heightAt(X0 + i * CELL, Z0 + j * CELL);
 			if (due()) yield;
 		}
-		// (in a desert only the big washes run, and a closed basin is a dry pan, not a lake or a pond)
+		// (in a desert a closed basin is a dry pan, not a lake or a pond, and the washes run dry: no
+		// creek or river in them)
 		const dry = arid(cx, cz);
 		const R = yield* hydrology({ W: n, H: n, x0: X0, z0: Z0, cell: CELL, h }, { sea: 0, minCells: dry ? 1700 : 140, lakeCells: 5, lakeDepth: 1.5, inset: 0.35, breach: 4, breachLen: 48, basin: { deep: 8, cells: 300, share: 0.04, pond: 120, pondDeep: 6 } });
 		const inCore = (x, z) => x >= D.di * CORE && x < D.di * CORE + CORE && z >= D.dj * CORE && z < D.dj * CORE + CORE;
@@ -129,7 +130,7 @@ export function proceduralWater({ heightAt, inSurvey, arid = () => false }) {
 		}
 		yield;
 		// the streams, smoothed, their widths by what drains into them, cut to the 2 km tiles
-		for (const S of R.streams) {
+		for (const S of dry ? [] : R.streams) {
 			if (due()) yield;
 			const P = smoothLine(S.pts.map((p) => [p[0], p[1], p[2], 1.9 + 3.8 * Math.sqrt(p[3] * CELL * CELL / 1e6)]));
 			// (the water in its bed, never over the ground it runs on: the ground between the

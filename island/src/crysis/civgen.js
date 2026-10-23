@@ -132,7 +132,7 @@ function createGraph() {
 		if (Math.hypot(p2[0] - x, p2[1] - z) < 0.5) p2.splice(0, 2);
 		p1.push(x, z); p2.unshift(x, z);
 		e.alive = false;
-		const props = { cls: e.cls, name: e.name, run: e.run, hw: e.hw };
+		const props = { cls: e.cls, name: e.name, run: e.run, hw: e.hw, wide: e.wide };
 		edge(e.a, n, p1, props); edge(n, e.b, p2, props);
 		return n;
 	}
@@ -212,8 +212,10 @@ export function generateTown(opts) {
 // the spacing of a town's arterial grid (m): its main roads' lattice (crysis/civ.js lines a town up on it)
 export const arterialSpacing = (radius, style = 'suburb', S = STATS) => (style === 'older' ? clamp(radius * 0.7, 600, 1200) : clamp(radius * 0.8, 700, S.arterialSpacing));
 
-// spine: { k, name }: the k-th north-south arterial is a real boulevard (Las Vegas Boulevard down
-// the Strip): straight, a through road, and called by its name
+// spine: { k, name, v0, v1, hw }: the k-th north-south arterial is a real boulevard (Las Vegas
+// Boulevard): straight, a through road, broad, and called by its name; from v0 to v1 along it, hw
+// either side, it is the Strip: resorts on its frontage, no house nor street of houses (the real
+// resorts' own ground is kept as the water is, region/landmarks.js; these stand between them)
 export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null, brief = null, spine = null }) {
 	const S = stats, r = rng(seed), T0 = Date.now();
 	const older = style === 'older';
@@ -266,6 +268,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 
 	// ---------- 1. the arterials ----------
 	const SP = arterialSpacing(radius, style, S);
+	const STRIP_W = 26;            // the Strip's boulevard: three lanes each way and turning lanes (m)
 	const nL = Math.floor(Rdev / SP);
 	const artName = new Map();
 	const DTR = W.primary / 2 + 5 + 2 * clamp(radius * 0.055, 110, 200) + 20;     // the downtown's reach from the crossing (below)
@@ -302,7 +305,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (cur.length >= 16) pieces.push(cur);
 		const nm = artName.get(axis + ':' + k) || (real ? spine.name : nameOf(cls === 'tertiary' ? 'col' : 'art'));
 		artName.set(axis + ':' + k, nm);
-		for (const q of pieces) G.addNoded(q, { cls, name: nm });
+		for (const q of pieces) G.addNoded(q, { cls, name: nm, wide: real ? STRIP_W : 0 });
 	}
 	for (const axis of [0, 1]) for (let k = -nL; k <= nL; k++) {
 		const u = k * SP, half = Math.sqrt(Math.max(0, Rdev * Rdev - u * u));
@@ -325,9 +328,12 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	// it: the crossings are grade-separated.
 	const FWY = { on: false, ramps: [], cross: [] };
 	if (radius > 1600) {
-		const vF = (r() < 0.5 ? 0.5 : -0.5) * SP, tilt = (r() - 0.5) * 0.14;
+		// (a town on the Strip has its freeway behind the resorts on the west, north and south
+		// beside the boulevard, as the 15 runs behind the Strip)
+		const strip = spine?.hw ? spine : null;
+		const vF = (r() < 0.5 ? 0.5 : -0.5) * SP, t0 = (r() - 0.5) * 0.14, tilt = strip ? Math.PI / 2 : t0;
 		const dx = Math.cos(ang + tilt), dz = Math.sin(ang + tilt), nx = dz, nz = -dx;         // (n: the left of +d)
-		const [c0x, c0z] = toW(0, vF), L = Rbox * 1.25;
+		const [c0x, c0z] = strip ? toW(strip.k * SP - strip.hw - 350, 0) : toW(0, vF), L = Rbox * 1.25;
 		const CW = W.motorway || 14, MED = 3;                                               // a carriageway; half the median
 		// only where the ground takes it: dry, and not up a mountainside (nor over a landmark's ground: civ.js keep)
 		let ok = 0, tot = 0, kept = false;
@@ -386,6 +392,11 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (!dry(x, z) || slope(x, z) > 0.1 || inSite(x, z, Math.max(w, d) / 2)) return;
 		sites.push({ kind: 'shop', x, z, ux: ca, uz: sa, hw: w / 2, hd: d / 2, qu, qv, big });
 	}
+	// the Strip: the boulevard's frontage between v0 and v1 (in town), claimed first, all resort
+	if (spine?.hw) {
+		const v0 = Math.max(spine.v0, -Rbox + 100), v1 = Math.min(spine.v1, Rbox - 100);
+		if (v1 - v0 > 300) { const [x, z] = toW(spine.k * SP, (v0 + v1) / 2); sites.push({ kind: 'strip', x, z, ux: ca, uz: sa, hw: spine.hw, hd: (v1 - v0) / 2 }); }
+	}
 	// a big town's downtown: the four corners of its main crossing laid out in short blocks
 	// on a street grid of their own, towers on plazas, trees along the pavements (claimed
 	// before the shops and the houses, which grow round it)
@@ -395,7 +406,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		const hw = clamp(radius * 0.055, 110, 200), off = W.primary / 2 + 5, nIn = hw > 150 ? 2 : 1;
 		for (const [qu, qv] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
 			const uc = qu * (off + hw), vc = qv * (off + hw), [x, z] = toW(uc, vc);
-			if (!dry(x, z) || slope(x, z) > 0.12 || dens(x, z) < 0.5) continue;
+			if (!dry(x, z) || slope(x, z) > 0.12 || dens(x, z) < 0.5 || inSite(x, z, hw)) continue;
 			// the inner streets, across the corner from arterial to its far side
 			const cuts = [];
 			for (let k = 1; k <= nIn; k++) cuts.push(-hw + 2 * hw * k / (nIn + 1));
@@ -465,7 +476,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	// the sites' entrances: a service drive from the nearest arterial or collector
 	for (const s of sites) {
-		if (s.kind === 'park' || s.kind === 'downtown' || s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
+		if (s.kind === 'park' || s.kind === 'downtown' || s.kind === 'strip' || s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
 		const hit = G.nearest(s.x, s.z, Math.max(s.hw, s.hd) + 40, (id, e) => e.cls === 'service');
 		if (!hit) continue;
 		const dx = s.x - hit.x, dz = s.z - hit.z, L = Math.hypot(dx, dz) || 1, len = Math.min(L, s.kind === 'shop' ? 70 : 45);
@@ -609,7 +620,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const bOf = (x, z) => (x - FWY.x) * FWY.nx + (z - FWY.z) * FWY.nz, aOf = (x, z) => (x - FWY.x) * FWY.dx + (z - FWY.z) * FWY.dz;
 	for (const e of live) {
 		const res = e.cls === 'residential';
-		const base = { cls: e.cls, w: W[e.cls] || 6, name: e.name || '', end0: res && deg[e.a] === 1, end1: res && deg[e.b] === 1, bridge: false, link: false, divided: false };
+		const base = { cls: e.cls, w: e.wide || W[e.cls] || 6, name: e.name || '', end0: res && deg[e.a] === 1, end1: res && deg[e.b] === 1, bridge: false, link: false, divided: false };
 		// (only a road that crosses the freeway goes over it)
 		let crosses = false;
 		if (FWY.on) for (let i = 0; i + 3 < e.p.length && !crosses; i += 2) crosses = (bOf(e.p[i], e.p[i + 1]) > 0) !== (bOf(e.p[i + 2], e.p[i + 3]) > 0) && Math.abs(aOf(e.p[i], e.p[i + 1])) < FWY.L;
@@ -681,7 +692,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const free = (x, z, ux, uz, hw, hd) => rectCells(x, z, ux, uz, hw, hd, (k) => k >= 0 && occ[k] === 0);
 	const claim = (x, z, ux, uz, hw, hd) => rectCells(x, z, ux, uz, hw, hd, (k) => { if (k >= 0) occ[k] = 1; });
 	// clear of every street: the corners and the back of the yard
-	const roadClear = (x, z, w) => { const h = G.nearest(x, z, w + 7); return !h || h.d > (W[G.E[h.id].cls] || 6) / 2 + w; };
+	const roadClear = (x, z, w) => { const h = G.nearest(x, z, w + 7 + (STRIP_W - W.primary) / 2); return !h || h.d > (G.E[h.id].wide || W[G.E[h.id].cls] || 6) / 2 + w; };
 	const HS = S.buildings.house, GA = S.garage;
 	const treeH = () => fromPct(S.treeHeight, r());
 	// (the street the lots are being laid down, for the house to know what it faces)
@@ -871,6 +882,39 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				for (let t = a0 + 6; t < a1 - 4; t += 11) for (const bb of [b0 + 1.5, b1 - 1.5]) { const [qx, qz] = at(t, bb); trees.push({ x: qx, z: qz, h: treeH() * 0.75, cone: 0, flower: (t | 0) % 3 === 0 ? 1 : 0 }); }
 				for (let t = b0 + 12; t < b1 - 10; t += 11) for (const aa of [a0 + 1.5, a1 - 1.5]) { const [qx, qz] = at(aa, t); trees.push({ x: qx, z: qz, h: treeH() * 0.75, cone: 0 }); }
 			}
+		} else if (s.kind === 'strip') {
+			// the Strip between its named resorts: on each side of the boulevard, block after block,
+			// a resort: its casino along the pavement, its hotel tower behind, the garage at the back;
+			// palms down the pavements. (One on a landmark's own ground goes, as from the water, below.)
+			const kerb = STRIP_W / 2 + 6;
+			const otherSite = (qx, qz, pad) => sites.some((o) => { if (o === s) return false; const dx = qx - o.x, dz = qz - o.z, a = dx * o.ux + dz * o.uz, b = -dx * o.uz + dz * o.ux; return Math.abs(a) < o.hw + pad && Math.abs(b) < o.hd + pad; });
+			for (const side of [-1, 1]) {
+				const face = Math.atan2(side * ux, -side * uz), fc = Math.cos(face), fs = Math.sin(face);     // (its front to the boulevard: w along it)
+				// (clear of the water and the landmarks, the other sites and every street, all over it)
+				const fits = (bx, bz, w, d) => {
+					if (wet(bx, bz, Math.max(w, d) / 2 + 6) || otherSite(bx, bz, Math.max(w, d) / 2) || !dry(bx, bz) || slope(bx, bz) > 0.12) return false;
+					for (let i = 0; i <= 4; i++) for (let j = 0; j <= 2; j++) {
+						const lx = (i / 4 - 0.5) * w, lz = (j / 2 - 0.5) * d, qx = bx + fc * lx - fs * lz, qz = bz + fs * lx + fc * lz, h = G.nearest(qx, qz, 20);
+						if (h && h.d < (G.E[h.id].wide || W[G.E[h.id].cls] || 6) / 2 + 3) return false;
+					}
+					return true;
+				};
+				for (let b = -hd + 30; b < hd - 120;) {
+					const len = 130 + r() * 150, mid = b + len / 2;
+					if (mid + len / 2 > hd - 20) break;
+					const cd = 60 + r() * 50, [px, pz] = at(side * (kerb + 18 + cd / 2), mid);
+					if (fits(px, pz, len - 16, cd)) {
+						boxes.push({ x: px, z: pz, w: len - 16, d: cd, a: face, wallH: 13 + r() * 9, roofH: 0, kind: K.retail, hip: 0, door: 0.5 });
+						const tw = clamp(len * (0.35 + r() * 0.3), 40, 110), td = 24 + r() * 16, th = 55 + Math.pow(r(), 1.4) * 120;
+						const [tx, tz] = at(side * (kerb + 26 + cd + td / 2), mid + (r() - 0.5) * (len - tw) * 0.6);
+						if (fits(tx, tz, tw, td)) boxes.push({ x: tx, z: tz, w: tw, d: td, a: face, wallH: th, roofH: 0, kind: K.tower, hip: 0, door: 0.5 });
+						const gw = 50 + r() * 30, gd = 40 + r() * 20, [gx, gz] = at(side * (kerb + 66 + cd + td + gd / 2), mid + (r() - 0.5) * 40);
+						if (fits(gx, gz, gw, gd)) boxes.push({ x: gx, z: gz, w: gw, d: gd, a: face, wallH: 12 + Math.floor(r() * 4) * 3, roofH: 0, kind: K.parking, hip: 0, door: 0.5 });
+					}
+					b += len + 18 + r() * 30;
+				}
+				for (let b = -hd + 8; b < hd - 8; b += 12) { const [qx, qz] = at(side * (kerb - 2), b); trees.push({ x: qx, z: qz, h: 12 + r() * 5, cone: 0, sp: 3 }); }
+			}
 		} else if (s.kind === 'shop') {
 			// the anchor store in the far corner facing the crossing, a strip of shops along the
 			// back beside it, pads out by the arterials; the rest is parking
@@ -971,7 +1015,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const s of sites) {
 		const sub = (a, b, hw, hd) => ({ x: s.x + s.ux * a - s.uz * b, z: s.z + s.uz * a + s.ux * b, ux: s.ux, uz: s.uz, hw, hd });
 		if (s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
-		if (s.kind === 'shop') rect(s, 1, LU.commercial * 16, 4);
+		if (s.kind === 'shop' || s.kind === 'strip') rect(s, 1, LU.commercial * 16, 4);
 		else if (s.kind === 'downtown') { rect(s, 1, LU.plaza * 16, 4); for (const L of s.lots || []) rect(L, 1, LU.commercial * 16, -2); }
 		else if (s.kind === 'school') {
 			const f = (s.fx * -s.uz + s.fz * s.ux) > 0 ? 1 : -1;

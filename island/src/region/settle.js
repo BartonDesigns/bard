@@ -412,6 +412,9 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 	// is a point in (or within m of) a building of a place round you?
 	function blocked(x, z, m = 2, includeRoads = false) {
 		for (const s of sites.values()) {
+			// (a landmark on paved ground, its whole clearing: a resort's drives, pools and gardens, a
+			// pedestrian mall; no wild plant comes up in it)
+			if (includeRoads && s.paved && s.planned && Math.hypot(x - s.x, z - s.z) < s.clear + m) return true;
 			const P = s.planned;
 			if (!P || Math.hypot(x - s.x, z - s.z) > P.reach + m + 40) continue;
 			const lx = x - s.x, lz = z - s.z;

@@ -37,10 +37,13 @@ const RATE = { polar: 0.06, station: 0.004, snow: 0.3, alpine: 0.55, himalaya: 0
 const CLAIM_ALL = new Set(['bazaar', 'eastcity', 'southcity']);
 // ...and the biggest size class each other kit builds itself (the farm country's towns are the generator's)
 const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, mojave: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2 };
+// the landmarks whose clearing is all paved and planted by hand (the Strip's resorts, Fremont Street):
+// no wild plant in it (settle.js blocked)
+const PAVED = new Set(['casino', 'bellagio', 'luxor', 'excalibur', 'nyny', 'parislv', 'wheel', 'strat', 'canopy', 'venetian', 'sphere']);
 // how far round a real landmark the generated places keep clear (m), by its builder
 const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 190, bellagio: 270, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 50, vegassign: 15, canopy: 230, venetian: 200, sphere: 80 };
 
-export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null, water = () => null }) {
+export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null, water = () => null, built = null }) {
 	const height = globe.height;
 	const ground = (x, z) => island.heightAt(x, z);
 	// (the sea, the big lakes, and the generated land's own lakes and ponds, crysis/rivers.js)
@@ -56,7 +59,8 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	};
 	const S = createSettlements({ scene, ground, wet, waterReady, isPhone, toXZ, toLL, F, lanes });
 	const ice = createIce(scene, { height, toXZ, toLL, isPhone });
-	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m), isPhone, toLL, shared, extra: () => S.trees(), woods });
+	// (and none of the wild plants in a town grown round you: its yards, streets and parks are its own)
+	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m) || !!built?.at(x, z), isPhone, toLL, shared, extra: () => S.trees(), woods });
 	const air = createAir(scene, { isPhone });
 	// (the people stand on the ground as drawn, or on the ice)
 	const folk = createFolk(scene, { settlements: S, ground: (x, z) => Math.max((island.drawnAt || island.heightAt)(x, z), ice.floor(x, z)), wet, onIce: (x, z) => ice.floor(x, z) > -1e8, isPhone });
@@ -134,7 +138,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			// (the ground in the landmark's own frame: turned as settle.js turns the lot)
 			const fr = (rot || 0) * Math.PI / 180 + Math.PI, fc = Math.cos(fr), fs = Math.sin(fr);
 			const build = (B, L, P, r) => fn(B, sc, args, r, (x, z) => ground(site.x + x * fc + z * fs, site.z - x * fs + z * fc) - ground(site.x, site.z));
-			site = S.add({ key: 'real:' + n, kind: 'real', clear: (CLEAR[type] ?? 45) * sc, lat: la, lon: lo, kit: kitAt(at, { pop: 3 }).id, pop: -1, name, tale: about, regionId: at.id, culture: kitAt(at, {}).culture, palette: palette(at.id), opts: {}, env: { snow: 0 }, lots: [{ type, build, x: 0, z: 0, rot: (rot || 0) * Math.PI / 180, w: 30, d: 30, role: 'centre' }] });
+			site = S.add({ key: 'real:' + n, kind: 'real', clear: (CLEAR[type] ?? 45) * sc, paved: PAVED.has(type), lat: la, lon: lo, kit: kitAt(at, { pop: 3 }).id, pop: -1, name, tale: about, regionId: at.id, culture: kitAt(at, {}).culture, palette: palette(at.id), opts: {}, env: { snow: 0 }, lots: [{ type, build, x: 0, z: 0, rot: (rot || 0) * Math.PI / 180, w: 30, d: 30, role: 'centre' }] });
 		}
 		// the claimed towns: the atlas's own, within 8 km (a big city's dense quarter, within 8 km
 		// of where its blocks reach)
@@ -300,7 +304,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 		S.update(dt, cam, { night, wind });
 		folk.update(dt, time, cam);
 		ice.update(dt, cam, { month: env.month, night, cover: here.wx?.cover ?? 0.4, lat: ll.lat, on: true, epoch: F.epoch });
-		flora.update(cam, { kit: here.on ? here.kit : null, climate: here.climate, culture: here.culture?.key, veg: here.region?.veg, on: here.on, epoch: here.regionId + ':' + F.epoch + ':' + S.version() + ':' + S.treesVersion() + ':' + (roads?.version() || 0) });
+		flora.update(cam, { kit: here.on ? here.kit : null, climate: here.climate, culture: here.culture?.key, veg: here.region?.veg, on: here.on, epoch: here.regionId + ':' + F.epoch + ':' + S.version() + ':' + S.treesVersion() + ':' + (roads?.version() || 0) + ':' + (built?.version() || 0) });
 		air.update(dt, cam, { kit: here.kit, climate: here.climate, wx: here.wx, night, on: here.on, fog: scene.fog, wind });
 		const W = globe.world?.(), hours = W?.sky?.state?.hours ?? 12;
 		const churchy = /church|orthodox/.test(here.culture?.faith || '') && /village|alpine|mediterranean|snow|andes|island|farm/.test(here.kit?.id || '');
