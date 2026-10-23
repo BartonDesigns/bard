@@ -44,6 +44,7 @@ import { SPECIES } from '../creatures/catalog.js';
 import { makeCreature } from '../creatures/models.js';
 import { createCreatureVoice } from '../creatures/voice.js';
 import { facetLook } from '../creatures/facets.js';
+import { weakSpot } from '../creatures/weakspot.js';
 import { crystalLegs } from '../creatures/crystal-legs.js';
 import { hollowKing } from '../creatures/hollow-king.js';
 
@@ -308,6 +309,7 @@ export function createSquads(ctx) {
 		// (the Facet Wraith's shell turns most of a blow until it opens)
 		if (h.cr?.facets) blow = { ...blow, amount: blow.amount * h.cr.facets.exposure() };
 		const r = applyDamage(h.H, blow);
+		if (blow.part === 'vital' && r.dealt > 0) h.cr?.weak?.flash();
 		if (h.dormant && h.waking < 0) h.waking = 0;
 		h.standT = 0;
 		const by = blow.by;
@@ -659,7 +661,7 @@ export function createSquads(ctx) {
 			// the death plays out (the knees go, it folds), it lies a while, then sinks away
 			const c = h.cr;
 			if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
-			if (h.deadT < 4) c.facets?.update(dt, { dead: true });
+			if (h.deadT < 4) { c.facets?.update(dt, { dead: true }); c.weak?.update(dt, { dead: true }); }
 			// (a crystal thing bursts as its legs fold, and is gone)
 			if (h.Sp.shatter && h.deadT > 0.3 && c.root.visible) { c.legs?.shatter(fx); c.root.visible = false; voice.play('shatter', h.pos, 0.9); }
 			// (a flyer drops out of the air)
@@ -1083,6 +1085,7 @@ export function createSquads(ctx) {
 		// (one that drifts, the Facet Wraith, glides without a step)
 		if (h.animT >= every) { c.motion.update(h.animT, { speed: S.drift ? 0 : Math.abs(speed), look: 0, menace }); h.animT = 0; }
 		c.facets?.update(dt, { strike: c.motion.state.strike, alert: !!h.alert });
+		c.weak?.update(dt, { still: !!h.dormant });
 		// a growl now and then as it closes on you
 		const idle = S.voice?.idle ?? (c.meta.rig === 'quad' ? 'growl' : null);
 		if (idle && menace > 0.5 && d < 60) {
@@ -1160,12 +1163,16 @@ export function createSquads(ctx) {
 	// or grown on, the Shard Mite's crystal legs: creatures/crystal-legs.js)
 	async function creatureBody(id, species = id, look = null) {
 		const pool = pools.creature;
-		const free = pool.find((c) => !c.used && c.id === id && c.look === look);
-		if (free) { free.used = true; free.meta.strikeTime = SPECIES[species].strike; return free; }
+		const Sp = SPECIES[species], weak = Sp.human && id === Sp.human ? null : Sp.weak || null;
+		const free = pool.find((c) => !c.used && c.id === id && c.look === look && c.weakOf === (weak ? species : null));
+		if (free) { free.used = true; free.meta.strikeTime = Sp.strike; return free; }
 		try {
-			const c = await makeCreature(id);
-			c.meta.strikeTime = SPECIES[species].strike;
+			const c = await makeCreature(id, { weak });
+			c.meta.strikeTime = Sp.strike;
 			c.look = look;
+			// (a big one's weak point, lit: creatures/weakspot.js)
+			c.weakOf = weak ? species : null;
+			if (weak) c.weak = weakSpot(c, weak);
 			if (look === 'facets') c.facets = facetLook(c);
 			if (look === 'legs') c.legs = crystalLegs(c);
 			if (look === 'sword') c.sword = hollowKing(c);
