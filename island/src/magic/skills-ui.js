@@ -896,7 +896,9 @@ export function createSkillsMenu({ mount, state, light = () => 0.5, onWeave, onP
 		const n = node(sel);
 		if (!n || n.kind !== 'spell' || !holds(state, n.id)) return;
 		onBind(i, state.binds[i] === n.id ? null : n.id);
-		toast(state.binds[i] === n.id ? `${n.item.name} on ${KEYS[i]}` : `${KEYS[i]} cleared`, SKILL[PAGES[page]].color);
+		// (a cleared key takes another spell while fewer than four are bound: spells.js fillBinds)
+		const now = SPELL[state.binds[i]];
+		toast(state.binds[i] === n.id ? `${n.item.name} on ${KEYS[i]}` : now ? `${now.name} on ${KEYS[i]}` : `${KEYS[i]} cleared`, SKILL[PAGES[page]].color);
 		info();
 	}
 	let toastT = 0;

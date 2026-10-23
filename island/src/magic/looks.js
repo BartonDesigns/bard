@@ -137,28 +137,101 @@ export const LOOK = {
 		hit: (fx, at, d) => { slam(fx, at, d, C.sun, C.gold, 0.9); fx.burst(at, C.sun, 12, 5, 0.4, 0.4, 0.6, STAR); fx.emit(at.x, at.y, at.z, 0, 0, 0, 0.22, 0.8, 3.4, C.white, 1, 0, 0, STAR); },
 	},
 	'lance-of-dawn': {
-		// (three spears out of the sun, point first; by night out of the moon, in silver)
-		cast: (fx, h) => fx.emit(h.x, h.y, h.z, 0, 0, 0, 0.25, 0.2, 0.9, C.white, 1, 0, 0, STAR),
-		tell: (fx, at, r, u, night) => fx.decal(at, r * 0.3, r * 0.75, 0.5, night ? C.moon : C.gold, 0.8, RING),
-		fall: (fx, p, d, night) => {
-			const edge = night ? C.moon : C.gold, len = 7;
-			// the point, then the shaft trailing back up toward the sky it came from
-			fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.06, 0.9, 0.9, C.white, 1, 0, 0, O('shard', { rot: Math.atan2(d.x, d.y) }));
-			spear(fx, p, { x: -d.x, y: -d.y, z: -d.z }, len, 0.32, C.white, edge, 0.06);
-			fx.seg(p, { x: p.x + d.x * len * 2.2, y: p.y + d.y * len * 2.2, z: p.z + d.z * len * 2.2 }, edge, 0.12, 0.12, 0.5);
-			for (let k = 1; k <= 4; k++) { const u = k / 4; fx.emit(p.x + d.x * len * u, p.y + d.y * len * u, p.z + d.z * len * u, 0, 0, 0, 0.07 + u * 0.12, 0.5 - u * 0.3, 0.08, edge, 0.5 - u * 0.3, 0, 0, ORB); }
-			if (Math.random() < 0.7) fx.emit(p.x + d.x * len * Math.random(), p.y + d.y * len * Math.random(), p.z + d.z * len * Math.random(), rnd(0.5), rnd(0.5), rnd(0.5), 0.5, 0.16, 0.03, edge, 1, 0, 0.5, STAR);
+		// (spears of light called down out of the sun, point first, on a slant; by night out of the
+		// moon, in silver. The volley, its timing and what mastery makes of it: magic/lances.js. S:
+		// the volley's shape (level, heat, reach, burst, heart); L: the one lance (len, thick, wing,
+		// r, heart); both may be missing, as in the tests)
+		cast: (fx, h) => {
+			fx.emit(h.x, h.y, h.z, 0, 0, 0, 0.25, 0.2, 0.9, C.white, 1, 0, 0, STAR);
+			// (a flick of light thrown up to the sky that answers)
+			fx.spark(h.x, h.y, h.z, rnd(1.5), 22, rnd(1.5), 0.3, 0.05, 0.05, C.sun, 1, 0, 0.5);
 		},
-		blast: (fx, at, r, night) => {
-			const edge = night ? C.moon : C.gold;
-			// (the spear stands where it struck, for a moment)
-			const top = { x: at.x + rnd(0.3), y: at.y + 3.2, z: at.z + rnd(0.3) };
-			fx.seg(at, top, edge, 0.3, 1.1, 0.9); fx.seg(at, top, C.white, 0.12, 1.1);
-			fx.emit(at.x, at.y + 0.5, at.z, 0, 0, 0, 0.25, 0.8, 3, C.white, 1, 0, 0, STAR);
-			slam(fx, { x: at.x, y: at.y + 0.4, z: at.z }, { x: 0, y: -1, z: 0 }, C.white, edge, 1.3);
-			wave(fx, at, r * 1.2, edge, 0.5);
-			fx.decal(at, r * 0.5, r * 0.6, 1.2, edge, 0.7, O('star', { spin: 0.5 }));
-			fx.burst(at, edge, 18, r * 1.8, 0.45, 0.28, 2, STAR);
+		// where one will strike, shown as the volley is thrown: a ring closing on the mark for as long
+		// as it falls (T s), and from III a star at its heart
+		tell: (fx, at, r, u, night, S = null, T = 0.5) => {
+			const e = night ? C.moon : C.gold;
+			fx.decal(at, r * 1.3, r * 0.35, Math.max(0.3, T), e, 0.7, RING);
+			if ((S?.level || 1) >= 3) fx.decal(at, r * 0.55, r * 0.2, Math.max(0.3, T), C.white, 0.45, O('star', { spin: 1.4 }));
+		},
+		// called up: a glint far out in the sky where it gathers; with more reach than its own (the
+		// range perks), a lens of light round it, focusing down
+		sky: (fx, p, night, S = null, L = null) => {
+			const e = night ? C.moon : C.sun, s = (L?.len || 6) * 0.45;
+			fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.45, s * 0.5, s * 1.8, C.white, 1, 0, 0, STAR);
+			fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.5, s, s * 2.4, e, 0.6, 0, 0, ORB);
+			if ((S?.reach || 1) > 1.05) { fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.55, s * 3.2 * S.reach, s * 1.1, e, 0.9, 0, 0, RING); fx.emit(p.x, p.y, p.z, 0, 0, 0, 0.45, s * 2.2 * S.reach, s * 0.8, C.white, 0.6, 0, 0, RING); }
+		},
+		// each frame of its dive: the spear itself (h: fx.lance()), its point at tip, d up toward
+		// where it came from; and the light about its head, the greater the hotter
+		fly: (fx, h, tip, d, L, S, night, a = 1) => {
+			const edge = night ? C.moon : C.gold, len = L?.len || 6, heat = S?.heat || 0;
+			h?.set(tip, { x: -d.x, y: -d.y, z: -d.z }, len, L?.thick || 1, L?.wing || 0, edge, a, heat, L?.phase || 0);
+			const head = { x: tip.x + d.x * len * 0.2, y: tip.y + d.y * len * 0.2, z: tip.z + d.z * len * 0.2 };
+			fx.emit(head.x, head.y, head.z, 0, 0, 0, 0.05, len * (0.16 + 0.08 * heat), len * 0.12, edge, 0.45 * a, 0, 0, ORB);
+			// (a soft glow of its colour down the shaft)
+			for (let k = 1; k <= 3; k++) { const u = 0.2 + k * 0.2; fx.emit(tip.x + d.x * len * u, tip.y + d.y * len * u, tip.z + d.z * len * u, 0, 0, 0, 0.05, len * 0.09, len * 0.08, edge, 0.28 * a, 0, 0, ORB); }
+			fx.emit(tip.x, tip.y, tip.z, 0, 0, 0, 0.05, len * 0.07, len * 0.05, C.white, 0.9 * a, 0, 0, STAR);
+			// (the heart: a crown of light round its collar)
+			if (L?.heart) fx.emit(tip.x + d.x * len * 0.33, tip.y + d.y * len * 0.33, tip.z + d.z * len * 0.33, 0, 0, 0, 0.05, len * 0.22, len * 0.2, C.sun, 0.7 * a, 0, 0, RING);
+		},
+		// after it strikes, a few times a second while it stands in the ground: motes of light
+		// rising off it as it burns out (u: 0 just struck .. 1 gone)
+		stand: (fx, tip, d, L, night, u) => {
+			const edge = night ? C.moon : C.gold, len = L?.len || 6, a = 1 - u;
+			for (let k = fx.lite ? 1 : 2; k > 0; k--) { const s = 0.15 + Math.random() * 0.7; fx.emit(tip.x + d.x * len * s + rnd(0.15), tip.y + d.y * len * s, tip.z + d.z * len * s + rnd(0.15), rnd(0.3), 0.8 + Math.random() * 1.2, rnd(0.3), 0.8, 0.12 * len / 6, 0.03, Math.random() < 0.3 ? C.white : edge, a, -0.5, 0.5, STAR); }
+			fx.emit(tip.x + d.x * len * 0.5, tip.y + d.y * len * 0.5, tip.z + d.z * len * 0.5, 0, 0, 0, 0.12, len * 0.35, len * 0.3, edge, 0.22 * a, 0, 0, ORB);
+		},
+		// along its way, a few times a second: the trail it leaves behind its butt (trail m long: its
+		// speed's worth, longer with reach): a hard contrail of light, motes left hanging, sparks shed
+		fall: (fx, p, d, night, S = null, L = null, trail = 0) => {
+			const edge = night ? C.moon : C.gold, len = L?.len || 6, k = len / 6, lite = fx.lite;
+			const tl = Math.max(len * 1.5, trail) * (S?.reach || 1), tail = { x: p.x + d.x * len, y: p.y + d.y * len, z: p.z + d.z * len };
+			const end = { x: tail.x + d.x * tl, y: tail.y + d.y * tl, z: tail.z + d.z * tl };
+			fx.seg(tail, end, edge, 0.2 * k * (L?.thick || 1), 0.24 + 0.1 * (S?.reach || 1), 0.75, 1);
+			fx.seg(tail, { x: tail.x + d.x * tl * 0.45, y: tail.y + d.y * tl * 0.45, z: tail.z + d.z * tl * 0.45 }, C.white, 0.08 * k, 0.12, 1, 1);
+			for (let n = lite ? 1 : 2; n > 0; n--) { const u = Math.random(); fx.emit(tail.x + d.x * tl * u, tail.y + d.y * tl * u, tail.z + d.z * tl * u, rnd(0.6), rnd(0.6) + 0.2, rnd(0.6), 0.6 + Math.random() * 0.5, 0.35 * k, 0.9 * k, edge, 0.35, 0, 0.6, ORB); }
+			if (Math.random() < 0.6) { const c = { x: p.x + d.x * len * 0.33, y: p.y + d.y * len * 0.33, z: p.z + d.z * len * 0.33 }; fx.spark(c.x, c.y, c.z, rnd(4) + d.x * 8, rnd(4) + d.y * 8, rnd(4) + d.z * 8, 0.3, 0.05, 0.05 * k, Math.random() < 0.5 ? C.white : edge, 1, 4, 1); }
+			if (Math.random() < 0.5) { const u = Math.random() * 0.6; fx.emit(tail.x + d.x * tl * u, tail.y + d.y * tl * u, tail.z + d.z * tl * u, 0, 0, 0, 0.5, 0.25 * k, 0.05, C.white, 1, 0, 0, STAR); }
+		},
+		// where it strikes: a boom (a white flash and a hard ring), a crown of liquid light thrown
+		// up and falling back (the splash), a shockwave out to its reach, earth thrown, a sun burned
+		// into the ground; more of all of it with each level of mastery, wider with its reach (area
+		// perks), hotter with its power. From IV a sunburst of rays along the ground; the heart (V)
+		// the greatest of all, with a pillar of dawn standing up out of it.
+		blast: (fx, at, r, night, S = null, L = null) => {
+			const lv = S?.level || 1, heart = !!L?.heart, q = fx.lite ? 0.55 : 1, heat = S?.heat || 0;
+			const edge = night ? C.moon : C.gold, hot = night ? C.ice : C.sun, K = (0.75 + 0.25 * lv) * (heart ? 1.5 : 1) * (1 + 0.3 * heat), w = Math.sqrt(r / 2.6);
+			const up = { x: at.x, y: at.y + 0.5, z: at.z };
+			// the boom
+			fx.flash?.(up, edge, Math.min(1, 0.45 + 0.1 * lv + (heart ? 0.3 : 0)));
+			slam(fx, up, { x: 0, y: -1, z: 0 }, hot, edge, Math.min(2.2, K), false);
+			// the splash: a crown of liquid light round the point, thrown up and out, falling back
+			const N = Math.round((14 + 7 * lv) * (heart ? 1.6 : 1) * q);
+			for (let n = 0; n < N; n++) {
+				const a = n / N * 6.283 + rnd(0.15), out = (3.2 + Math.random() * 3) * w * (heart ? 1.3 : 1), rise = 5 + Math.random() * 5 + lv * 0.8;
+				fx.spark(at.x + Math.cos(a) * 0.35, at.y + 0.25, at.z + Math.sin(a) * 0.35, Math.cos(a) * out, rise, Math.sin(a) * out, 0.75 + Math.random() * 0.45, 0.05, 0.06 + 0.015 * lv, n % 3 ? edge : C.white, 1, 20, 0.4);
+				if (n % 2 === 0) fx.emit(at.x, at.y + 0.3, at.z, Math.cos(a) * out * 0.8, rise * 0.9, Math.sin(a) * out * 0.8, 0.9 + Math.random() * 0.4, 0.18 + 0.03 * lv, 0.06, hot, 1, 18, 0.4, ORB);
+			}
+			// the shockwave out to where it reaches, and the earth thrown up
+			wave(fx, at, r * 1.05, edge, 0.4 + 0.04 * lv, 0.95);
+			fx.decal(at, r * 0.1, r * 0.9, 0.6, C.white, 0.6, RING);
+			if (lv >= 3) fx.ring(at, r * 1.15, hot, Math.round(26 * q), 0.55, 0.28, STAR);
+			for (let n = Math.round((5 + 2 * lv) * q * (heart ? 1.5 : 1)); n > 0; n--) fx.emit(at.x + rnd(0.4), at.y + 0.2, at.z + rnd(0.4), rnd(5 * w), 4 + Math.random() * 6, rnd(5 * w), 0.8 + Math.random() * 0.5, 0.16, 0.12, C.debris, 1, 16, 0.3, DEBRIS);
+			inkPuff(fx, at, C.inkSmoke, Math.round(4 * q) + lv, r * 0.45, 0.9 * w, 1.1, 0.35);
+			// a sun burned into the ground, lasting a little longer with mastery
+			fx.decal(at, r * 0.35, r * 0.6, 1.2 + 0.25 * lv, edge, 0.75, O('star', { spin: 0.5 }));
+			// from IV: a sunburst of rays thrown along the ground
+			if (S?.burst) for (let k = 0, m = heart ? 14 : 9; k < m; k++) {
+				const a = k / m * 6.283 + rnd(0.1), l = r * (1.1 + Math.random() * 0.5);
+				fx.seg({ x: at.x, y: at.y + 0.12, z: at.z }, { x: at.x + Math.cos(a) * l, y: at.y + 0.12, z: at.z + Math.sin(a) * l }, k % 3 ? edge : C.white, 0.12 + 0.025 * lv, 0.32, 0.85, 1);
+			}
+			// the heart (V): a pillar of dawn, and a second, greater wave
+			if (heart) {
+				fx.pillar(at, 24, hot, Math.round(46 * q), 0.75, 0.75, true, STAR);
+				fx.decal(at, r * 0.3, r * 1.7, 0.9, C.white, 0.55, RING);
+				wave(fx, at, r * 1.6, hot, 0.7, 0.7);
+			}
+			embers(fx, at, edge, Math.round((8 + 3 * lv) * q), 2.2, 1.3, 0.12, 2);
 		},
 	},
 	'solar-flare': {

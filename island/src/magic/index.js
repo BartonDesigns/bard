@@ -157,6 +157,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		// (a friend's beam: gathering when cast, then pouring while its pulses keep coming)
 		if (sp.kind === 'beam') { beams.show(`net:${who}`, a, b, c, pulse ? { ttl: 0.45 } : { charging: true, ttl: CHARGE + 0.1 }); return; }
 		if (sp.kind === 'chain') { fx.line(a, b, c, 0.6, 0.25, 0.25, 1.4); return; }
+		if (sp.kind === 'lances') { caster.seeLances(b); return; }
 		if (sp.kind === 'bolt' || sp.kind === 'orb') { remote.push({ a, b, c, t: 0, T: Math.max(0.05, d / (sp.speed || 40)), big: sp.kind === 'orb' }); return; }
 		if (d > 1 && ['blink', 'recall', 'gate', 'rewind'].includes(sp.kind)) { fx.burst(a, c, 30, 2.5, 0.6, 0.3, 0); fx.burst(b, c, 30, 2.5, 0.6, 0.3, 0); return; }
 		if (d > 1) { fx.burst(b, c, 50, 4, 0.7, 0.4, 1); fx.ring(b, sp.r || 4, c, 36, 0.5, 0.35); if (sp.kind === 'strike' || sp.kind === 'storm') fx.line({ x: b.x, y: b.y + 40, z: b.z }, b, c, 0.9, 0.3, 0.45, sp.kind === 'storm' ? 3 : 0.3); return; }
