@@ -703,7 +703,7 @@ export function swayMaterial(params, shared, stiff) {
 				vBioA = gBioA;
 				vSnowK = plSnow(wp.y + max(0.0, position.y) * 0.3, 0.5);
 			}`);
-		sh.uniforms.uSkyZen = shared.uSkyZen; sh.uniforms.uSkyHor = shared.uSkyHor; sh.uniforms.uLeafSheen = (shared.uLeafSheen ||= { value: 0.05 });
+		sh.uniforms.uSkyZen = shared.uSkyZen; sh.uniforms.uSkyHor = shared.uSkyHor; sh.uniforms.uLeafSheen = (shared.uLeafSheen ||= { value: 0.011 });
 		sh.fragmentShader = 'varying float vGroundAO, vSnowK, vBioA; uniform vec4 uLeafT, uLeafT2; uniform vec3 uSkyZen, uSkyHor; uniform float uLeafSheen;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 	diffuseColor.rgb *= vGroundAO;
 	vec4 lt = mix(uLeafT, uLeafT2, vBioA);
