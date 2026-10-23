@@ -386,6 +386,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	}
 	const HONOR_WHY = { 'boss-slain': 'a great foe brought down', 'defend-village': 'the village held', spare: 'mercy shown', 'kill-surrendered': 'they had surrendered' };
 	combat.hooks.honorRank = () => honorRank(state.honor.pts);
+	// (your mana, for a friend's target frame in PvP: combat.js vitals)
+	combat.hooks.mana = () => ({ mana: state.mana, max: manaMax(state) });
 	combat.hooks.pvpWin = (v) => honored(pvpWin(state.honor, v.from, v.r), `you beat ${v.name}`);
 	// mercy and its opposite, in the fabric (combat/morality.js's events), and the honor in them
 	// (a great foe falls once, though its fall is told twice: by the blow and by the fight's end)
@@ -466,7 +468,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 5; if (dirty && !testOn) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.spellAim = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = null; }
+	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.spellAim = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = combat.hooks.mana = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, skills, exposure: () => caster.exposure(),
