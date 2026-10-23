@@ -143,18 +143,19 @@ const EXTRA = {
 		bx(g, 'metal', -0.05, 0, -D2, 0.05, h, D2, lin([0.85, 0.85, 0.83]));
 		for (const y of [0.12, 0.55, 0.98, 1.4].filter((q) => q < h - 0.2)) for (const s of [-1, 1]) {
 			bx(g, 'metal', s > 0 ? 0.05 : -W2, y, -D2, s > 0 ? W2 : -0.05, y + 0.03, D2, lin([0.8, 0.8, 0.78]));
-			for (let z = -D2 + 0.06; z < D2 - 0.3; z += 0.34 + rnd() * 0.1) { const c = lin(pick(BRIGHT, rnd())), x0 = s > 0 ? 0.1 : -W2 + 0.06, x1 = s > 0 ? W2 - 0.06 : -0.1, hh = 0.14 + rnd() * 0.2; bx(g, 'matte', x0, y + 0.03, z, x1, y + 0.03 + hh, z + 0.28, c); }
+			// (its stock: blocks, unless the goods are stocked on it from the goods' sheet: build.js)
+			if (!it.bare) for (let z = -D2 + 0.06; z < D2 - 0.3; z += 0.34 + rnd() * 0.1) { const c = lin(pick(BRIGHT, rnd())), x0 = s > 0 ? 0.1 : -W2 + 0.06, x1 = s > 0 ? W2 - 0.06 : -0.1, hh = 0.14 + rnd() * 0.2; bx(g, 'matte', x0, y + 0.03, z, x1, y + 0.03 + hh, z + 0.28, c); }
 		}
 	},
 	produce(g, it, rnd) {
 		const W2 = it.w / 2, D2 = it.d / 2;
 		bx(g, 'grain', -W2, 0, -D2, W2, 0.75, D2, lin([0.45, 0.32, 0.2]));
-		for (let z = -D2 + 0.2; z < D2 - 0.1; z += 0.45) { const c = lin(pick([[0.8, 0.1, 0.1], [0.95, 0.6, 0.1], [0.9, 0.85, 0.2], [0.35, 0.6, 0.2], [0.5, 0.15, 0.4]], rnd())); for (let x = -W2 + 0.1; x < W2 - 0.05; x += 0.12) g.sphere('gloss', x, 0.8, z + (rnd() - 0.5) * 0.1, 0.055, 0.05, 0.055, c, 6); }
+		if (!it.bare) for (let z = -D2 + 0.2; z < D2 - 0.1; z += 0.45) { const c = lin(pick([[0.8, 0.1, 0.1], [0.95, 0.6, 0.1], [0.9, 0.85, 0.2], [0.35, 0.6, 0.2], [0.5, 0.15, 0.4]], rnd())); for (let x = -W2 + 0.1; x < W2 - 0.05; x += 0.12) g.sphere('gloss', x, 0.8, z + (rnd() - 0.5) * 0.1, 0.055, 0.05, 0.055, c, 6); }
 	},
 	bookTable(g, it, rnd) {
 		const W2 = it.w / 2, D2 = it.d / 2;
 		bx(g, 'grain', -W2, 0, -D2, W2, 0.8, D2, lin(pick(WOOD, it.v)));
-		for (let z = -D2 + 0.1; z < D2 - 0.2; z += 0.3) for (let x = -W2 + 0.08; x < W2 - 0.2; x += 0.24) bx(g, 'matte', x, 0.8, z, x + 0.18, 0.82 + rnd() * 0.12, z + 0.24, lin(pick(BRIGHT, rnd())));
+		if (!it.bare) for (let z = -D2 + 0.1; z < D2 - 0.2; z += 0.3) for (let x = -W2 + 0.08; x < W2 - 0.2; x += 0.24) bx(g, 'matte', x, 0.8, z, x + 0.18, 0.82 + rnd() * 0.12, z + 0.24, lin(pick(BRIGHT, rnd())));
 	},
 	flowers(g, it, rnd) {
 		const W2 = it.w / 2;

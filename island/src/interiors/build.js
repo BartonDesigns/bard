@@ -12,6 +12,8 @@ import { Builder, lin, FLAT } from '../bay/housekit.js';
 import { carGeometry, carMaterial } from '../bay/cars.js';
 import { minusHoles } from './plan.js';
 import { drawAny, SOFT } from './kit.js';
+import { STOCKED, stockShop } from './estab-kit.js';
+import { GoodsBuilder, goodsSteps, goodsMaterial } from './goods.js';
 import { householdDecor } from '../bay/decor.js';
 
 const FLOOR = { living: 'wood', dining: 'wood', family: 'wood', office: 'wood', den: 'wood', hall: 'wood', bed: 'wood', master: 'wood', corridor: 'wood', well: 'wood', lobby: 'stone', kitchen: 'tile', bath: 'tile', powder: 'tile', laundry: 'tile', garage: 'concrete', storage: 'concrete', warehouse: 'concrete', parking: 'concrete', shed: 'concrete', garage2: 'concrete', store: 'tile', shop: 'wood', classroom: 'tile', school: 'tile', market: 'stone', rotunda: 'stone', mezzanine: 'stone', exhibition: 'stone', towerLobby: 'stone', cellhouse: 'concrete', messhall: 'concrete', casemate: 'stone', courtyard: 'stone', arcade: 'tile', barn: 'concrete', reading: 'wood', library: 'wood', ballroom: 'wood', chamber: 'wood' };
@@ -275,6 +277,9 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	// ---- the furniture (inside: no shadow of the sun's, housekit.js)
 	g.inside();
 	const cars = [];
+	// (a shop's goods: the sheet painted first, once for every shop)
+	const gs = P.items.some((it) => STOCKED.has(it.type) && it.stock && levelOf(P, it.y) === k) ? new GoodsBuilder() : null;
+	if (gs) yield* goodsSteps();
 	for (const it of P.items) {
 		if (levelOf(P, it.y) !== k) continue;
 		if (++step % 14 === 0 || slow()) { yield; tY = performance.now(); }
@@ -282,6 +287,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		// each piece a shade of its own, so things side by side or stacked stay apart, and a
 		// soft shadow where it stands (on the floor, or the counter or table it sits on)
 		g.mul = 0.94 + ((it.v * 7.31) % 1) * 0.12;
+		if (gs && STOCKED.has(it.type) && it.stock) { it.bare = true; stockShop(gs, it); }
 		drawAny(g, it, rnd);
 		g.mul = 1;
 		if (!FLAT.has(it.type)) g.under(it);
@@ -289,11 +295,19 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	}
 	yield;
 	for (const m of g.meshes(M)) root.add(m);
+	// (the goods unlit, their light their shop's: interiors/index.js sets it each frame)
+	let goodsMat = null;
+	if (gs && !gs.empty()) {
+		goodsMat = goodsMaterial(); goodsMat.userData.own = true;
+		const m = new THREE.Mesh(gs.geometry(), goodsMat);
+		m.name = 'goods'; m.userData.noBake = true; m.castShadow = false;
+		root.add(m);
+	}
 	for (const it of cars) {
 		const car = new THREE.Mesh(carGeo(it.kind || (it.v < 0.5 ? 'suv' : 'sedan')), carMat(it.paint || CAR_PAINT[Math.floor(it.v * CAR_PAINT.length)], night));
 		car.position.set(it.x, it.y, it.z); car.rotation.y = it.rot * Math.PI / 2; car.castShadow = true;
 		root.add(car);
 		col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + 1.4]);
 	}
-	return { root, col, doors, full, walls, occ: occ() };
+	return { root, col, doors, full, walls, occ: occ(), goodsMat };
 }

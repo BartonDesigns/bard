@@ -79,9 +79,12 @@ function place(K, x, z, fx, fz, y, kind) {
 	} else if (kind === 'cafe') {
 		g.cyl('gloss', x, y, z, 0.07, 0.008, WHITE, 9); g.cyl('gloss', x, y + 0.008, z, 0.042, 0.07, WHITE, 8);
 	} else if (kind === 'quick') {
-		g.box('gloss', x - 0.17, y, z - 0.13, x + 0.17, y + 0.014, z + 0.13, RED);
-		g.cyl('matte', x - 0.05, y + 0.014, z, 0.06, 0.05, lin([0.8, 0.55, 0.28]), 8);
-		g.cyl('gloss', x + 0.09, y + 0.014, z + 0.04, 0.035, 0.14, WHITE, 7);
+		// (the tray, painted on the goods' sheet: its liner, the burger, the fries, the cup's lid)
+		const n = Math.abs(Math.round(x * 3 + z * 7)) % 4, rot = fz < 0 ? 0 : fz > 0 ? 2 : fx < 0 ? 1 : 3;
+		K.s.at(x, 0, z, rot);
+		K.s.solid(-0.2, y, -0.15, 0.2, y + 0.012, 0.15, RED, 0.8, 'fbls');
+		K.s.decal('trays', n >> 1, n & 1, 2, -0.2, -0.15, 0.2, 0.15, y + 0.013, 0.95);
+		K.s.at(0, 0, 0, 0);
 	}
 }
 // a table for n (2 or 4) at (x, z), along x; o: { top, cloth, round, chair, place, h (a high top) }
@@ -169,13 +172,13 @@ function downlights(K, x0, x1, z0, z1, every = 2.6) {
 	}
 }
 // a framed picture on a side or back wall: dir the way the wall faces, at (a along it, y), w x h
-function art(K, dir, line, a, y, w, h, col, frameCol = C.black) {
+// (on the goods' sheet: across, a maker's poster or a painted print; up, the same) n picks which
+function art(K, dir, line, a, y, w, h, n, frameCol = C.black, ad = false) {
 	const F = frame(dir, line), [L0, L1] = F.L(a - w / 2, a + w / 2);
 	use(K, F);
 	K.g.box('grain', L0, y, 0.0, L1, y + h, 0.03, frameCol);
-	K.g.box('matte', L0 + 0.05, y + 0.05, 0.03, L1 - 0.05, y + h - 0.05, 0.035, col);
-	// (a few shapes in it: hills, a sun, a bowl of fruit, as it may be)
-	K.g.box('matte', L0 + 0.08, y + 0.08, 0.035, L1 - 0.08, y + h * 0.4, 0.038, lin(hsl((col[0] * 7) % 1, 0.35, 0.35)));
+	if (w > h) K.s.card('posters', ad ? 0 : 1, n % 2, 2, L0 + 0.05, L1 - 0.05, y + 0.05, h - 0.1, 0.032, 1.0);
+	else K.s.card('posters', 2, (ad ? 0 : 2) + n % 2, 4, L0 + 0.05, L1 - 0.05, y + 0.05, h - 0.1, 0.032, 1.0);
 }
 // a potted plant: the pot, the leaves in a few loose balls
 function plant(K, x, z, h = 1.2, potCol = lin([0.82, 0.8, 0.76])) {
@@ -388,7 +391,7 @@ function* fitRestaurant(K, st, type) {
 	if (st === 'sitdown' && bSide !== 0 && !(st === 'pub')) {
 		shelfRun(K, sDir, sideWall + (bSide > 0 ? 0.3 : -0.3), z0 + 0.5, Math.min(z1 - 0.6, z0 + 3.0), { h: 2.0, depth: 0.3, levels: [0.12, 0.5, 0.88, 1.26, 1.64], kinds: () => 'wine', back: WD.walnut, seed: 31 });
 	}
-	for (let k = 0; k < Math.min(3, bn); k++) art(K, bSide < 0 ? '+x' : '-x', bSide < 0 ? w.x0 : w.x1, z0 + 1.0 + k * 1.95, 1.45, 0.8, 0.6, lin(hsl(r(), 0.35, 0.55)), warm ? WD.walnut : C.black);
+	for (let k = 0; k < Math.min(3, bn); k++) art(K, bSide < 0 ? '+x' : '-x', bSide < 0 ? w.x0 : w.x1, z0 + 1.0 + k * 1.95, 1.45, 0.8, 0.6, k, warm ? WD.walnut : C.black, st === 'diner' || st === 'counter' || st === 'pizza');
 	board(K, frame('+z', kz + 0.07), 'menu', MENU[st] ?? 1, w.x0 + 0.5, w.x0 + 1.7, 2.1, 0.45);
 	plant(K, left ? K.doorX + 2.2 : K.doorX - 2.2, w.z1 - 0.5, 1.1);
 	// the light: low over the tables (above), a few let into the ceiling between
@@ -427,7 +430,8 @@ function* fitCounterService(K, st, type) {
 			g.box('gloss', x - 0.6, 0, z - 0.35, x + 0.6, 0.9, z + 0.35, BLACK);
 			g.box('stone', x - 0.62, 0.9, z - 0.37, x + 0.62, 0.94, z + 0.37, lin([0.3, 0.3, 0.32]));
 			g.box('gloss', x - 0.5, 0.94, z - 0.35, x + 0.5, 1.75, z - 0.05, K.brand.bg);
-			for (let k = 0; k < 6; k++) { g.box('metal', x - 0.42 + k * 0.17, 1.1, z - 0.05, x - 0.32 + k * 0.17, 1.2, z + 0.05, STEEL); g.box('gloss', x - 0.43 + k * 0.17, 1.25, z - 0.05, x - 0.31 + k * 0.17, 1.4, z - 0.04, lin(hsl(k / 6, 0.6, 0.5))); }
+			// (its front: the drinks makers' badges over the nozzles, painted on the goods' sheet)
+			K.s.at(0, 0, 0, 0); K.s.face('fountain', x - 0.48, x + 0.48, 1.0, 0.45, z - 0.045, 0, 1.15);
 			g.box('metal', x - 0.5, 0.94, z - 0.05, x + 0.5, 0.97, z + 0.3, STEEL);
 			K.col.push([x - 0.62, z - 0.37, x + 0.62, z + 0.37, 0, 1.75]);
 		}
@@ -552,7 +556,7 @@ function* fitCafe(K, st, _type) {
 	yield;
 	// the walls: prints, a plant; the light let into the ceiling
 	const sideWall = left ? w.x0 : w.x1, sDir = left ? '+x' : '-x';
-	for (let z = z0 + 0.6, k = 0; z < z1 - 0.4 && k < 3; z += 1.9, k++) art(K, sDir, sideWall, z, 1.4, 0.6, 0.75, lin(hsl(r(), 0.4, 0.6)), WD.oak);
+	for (let z = z0 + 0.6, k = 0; z < z1 - 0.4 && k < 3; z += 1.9, k++) art(K, sDir, sideWall, z, 1.4, 0.6, 0.75, k, WD.oak, k !== 1);
 	plant(K, left ? w.x0 + 0.5 : w.x1 - 0.5, w.z1 - 0.6, 1.3);
 	downlights(K, w.x0 + 0.5, w.x1 - 0.5, bz + 0.8, w.z1 - 0.4, 2.6);
 }

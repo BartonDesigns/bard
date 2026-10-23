@@ -83,7 +83,8 @@ export function fitFront(fit, K) {
 		if (c) lamp('counter', c.x, c.z);
 		return c;
 	};
-	const shelvesRound = (type, n, hgt = 1.8, w = 1.2) => { for (let k = 0; k < n; k++) { const s = ag(type, w, 0.45, hgt, { side: notFront, clear: 0.9 }); if (s && k % 2 === 0) lamp('track', s.x, s.z, 0.3); } };
+	// (what is on them: the goods' sheet's, by the shop: build.js stocks them)
+	const shelvesRound = (type, n, hgt = 1.8, w = 1.2) => { for (let k = 0; k < n; k++) { const s = ag(type, w, 0.45, hgt, { side: notFront, clear: 0.9 }, { stock: fit }); if (s && k % 2 === 0) lamp('track', s.x, s.z, 0.3); } };
 	const browsers = (n) => { for (let k = 0; k < n; k++) K.stand(K.rm.x0 + 1 + r() * (K.bw - 2), K.rm.z0 + 1.2 + r() * (K.bd - 2.4), r() - 0.5, r() - 0.5, false); };
 	switch (fit) {
 		case 'cafe': case 'counter': {
@@ -131,7 +132,7 @@ export function fitFront(fit, K) {
 		}
 		case 'books': case 'records': {
 			shelvesRound('bookcase', 8, 2.0, 1.0);
-			for (let x = K.rm.x0 + 1.8; x < K.rm.x1 - 1.4; x += 2.2) st('bookTable', x, K.cz + 0.3, 0.9, Math.min(1.8, K.bd - 4), 0.85, 0, 0.7);
+			for (let x = K.rm.x0 + 1.8; x < K.rm.x1 - 1.4; x += 2.2) st('bookTable', x, K.cz + 0.3, 0.9, Math.min(1.8, K.bd - 4), 0.85, 0, 0.7, { stock: fit });
 			counterAt('books', 1.8);
 			const ac = ag('armchair', 0.8, 0.8, 0.85, { corner: true, clear: 0.6 }); if (ac) K.sitOn(ac, 1);
 			browsers(3);
@@ -147,7 +148,7 @@ export function fitFront(fit, K) {
 		case 'grocer': case 'general': {
 			shelvesRound('shopShelf', 6);
 			const runs = [];
-			for (let x = K.rm.x0 + 1.9; x < K.rm.x1 - 1.5; x += 2.2) { const g = st(fit === 'grocer' ? 'produce' : 'shopShelf', x, K.cz + 0.4, 0.9, Math.min(3.6, K.bd - 4), 1.2, 0, 0.7); if (g) { h.lamp('track', g.x, g.z, 0.3); runs.push(g); } }
+			for (let x = K.rm.x0 + 1.9; x < K.rm.x1 - 1.5; x += 2.2) { const g = st(fit === 'grocer' ? 'produce' : 'shopShelf', x, K.cz + 0.4, 0.9, Math.min(3.6, K.bd - 4), 1.2, 0, 0.7, { stock: fit }); if (g) { h.lamp('track', g.x, g.z, 0.3); runs.push(g); } }
 			// the aisle markers hung over the aisles between the gondolas, read from the door
 			// (signage/ draws them: K.sign leaves the place)
 			for (let k = 0; k + 1 < runs.length; k++) K.sign?.('aisle', (runs[k].x + runs[k + 1].x) / 2, K.y0 + Math.min(K.ceil - 0.55, 2.6), runs[k].z - runs[k].d * 0.3, { n: k + 1, fit, nx: 0, nz: -1 });
@@ -158,7 +159,7 @@ export function fitFront(fit, K) {
 		}
 		case 'hardware': case 'pharmacy': case 'pet': case 'liquor': case 'gift': case 'antiques': {
 			shelvesRound('shopShelf', 7, fit === 'antiques' ? 1.6 : 1.9);
-			for (let x = K.rm.x0 + 1.9; x < K.rm.x1 - 1.5; x += 2.3) st(fit === 'gift' || fit === 'antiques' ? 'bookTable' : 'shopShelf', x, K.cz + 0.4, 0.9, Math.min(3.6, K.bd - 4), fit === 'gift' ? 0.9 : 1.6, 0, 0.75);
+			for (let x = K.rm.x0 + 1.9; x < K.rm.x1 - 1.5; x += 2.3) st(fit === 'gift' || fit === 'antiques' ? 'bookTable' : 'shopShelf', x, K.cz + 0.4, 0.9, Math.min(3.6, K.bd - 4), fit === 'gift' ? 0.9 : 1.6, 0, 0.75, { stock: fit });
 			counterAt(fit === 'pharmacy' ? 'info' : 'grocer', 1.8);
 			if (fit === 'gift') ag('postcards', 0.5, 0.5, 1.6, { corner: true, clear: 0.6 });
 			if (fit === 'antiques') { const ac = ag('armchair', 0.85, 0.85, 0.85, { corner: true, clear: 0.6 }); if (ac) K.sitOn(ac, 1); }
