@@ -1,7 +1,9 @@
 import { canHit } from './targets.js';
 
 // A deliberate target selection. L marks a target (no camera steering, bullet magnetism or
-// extra reach). The ` key (or the Lock button, or a tap on a person on a touch screen) locks on:
+// extra reach). People, creatures and vehicles alike: a helicopter overhead, a convoy's tank or
+// a car can be locked as a person can (further off, since they are big and high), and a bolt
+// cast at a locked vehicle seeks it (magic/caster.js). The ` key (or the Lock button, or a tap on a person on a touch screen) locks on:
 // the view then tracks them, aimed at the chest, while your own mouse or drag still moves the aim
 // about on their body (up for the head, down for the legs) within a window round them. Pushing
 // well past that window lets go. combat.js hands assist() to player.js, which calls it before the
@@ -43,7 +45,9 @@ export function pickAt(list, tx, ty, px, minPx = 30) {
 	let best = null, bd = Infinity;
 	for (const T of list) {
 		const B = T.bound; if (!B) continue;
-		const a = px({ x: B.x, y: B.y - 0.9, z: B.z }), b = px({ x: B.x, y: B.y + 0.85, z: B.z });
+		// (a person from their feet to their head; a vehicle the height of its bound)
+		const lo = isVehicle(T) ? Math.max(0.9, B.r || 0) : 0.9, hi = isVehicle(T) ? Math.max(0.85, B.r || 0) : 0.85;
+		const a = px({ x: B.x, y: B.y - lo, z: B.z }), b = px({ x: B.x, y: B.y + hi, z: B.z });
 		if (a.z > 1 || b.z > 1) continue;
 		const vx = b.x - a.x, vy = b.y - a.y, l2 = vx * vx + vy * vy || 1;
 		const u = Math.max(0, Math.min(1, ((tx - a.x) * vx + (ty - a.y) * vy) / l2));
@@ -52,11 +56,15 @@ export function pickAt(list, tx, ty, px, minPx = 30) {
 	}
 	return best;
 }
+// what can be locked, and how far off: a vehicle (the military's, a helicopter) from far
+// further than a person, a car from a little further
+export const isVehicle = (T) => T?.kind === 'vehicle' || T?.kind === 'car';
+export const focusReach = (T, base = 55) => base * (T?.kind === 'vehicle' ? 4.5 : T?.kind === 'car' ? 1.6 : 1);
 export function focusScore(T, eye, forward, { hostile = false, max = 55, shooter, rules, dotMin = null } = {}) {
-	if (!T?.bound || !['person', 'hostile', 'remote'].includes(T.kind) || !canHit(T, shooter, rules) || T.P?.ragdoll || T.ref?.dead || T.ref?.gone || T.health?.hp <= 0) return Infinity;
+	if (!T?.bound || !['person', 'hostile', 'remote', 'vehicle', 'car'].includes(T.kind) || !canHit(T, shooter, rules) || T.P?.ragdoll || T.ref?.dead || T.ref?.gone || T.health?.hp <= 0) return Infinity;
 	const dx = T.bound.x - eye.x, dy = T.bound.y - eye.y, dz = T.bound.z - eye.z;
 	const d = Math.hypot(dx, dy, dz), dot = (dx * forward.x + dy * forward.y + dz * forward.z) / (d || 1);
-	if (d > max || dot < (dotMin ?? (hostile ? 0.3 : 0.965))) return Infinity;
+	if (d > focusReach(T, max) || dot < (dotMin ?? (hostile ? 0.3 : 0.965))) return Infinity;
 	return (1 - dot) * 30 + d * 0.12 + (hostile ? 0 : 25);
 }
 export function createTargetFocus({ layer, camera, mount, active, blocked, hostile, shooter, rules, vector, hint = () => {}, aimPoint = null }) {
@@ -79,7 +87,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 		b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fn(); });
 		b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true }); dock.append(b); return b;
 	}
-	const lock = button('Lock on (the ` key, or tap a person); press again to release', 'Lock', () => lockOn());
+	const lock = button('Lock on (the ` key, or tap a person or a vehicle); press again to release', 'Lock', () => lockOn());
 	const next = button('Next target (Shift+L)', 'Next', () => cycle());
 	const style = document.createElement('style'); style.textContent = '@media (orientation:landscape) and (max-height:540px){.combat-focus-controls{top:calc(110px + env(safe-area-inset-top))!important;flex-direction:row!important}}';
 	mount.append(marker, dock, style);
@@ -106,7 +114,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 		if (selected && track) { clear(); return true; }
 		if (selected) { select(selected, true); return true; }
 		scan(); if (candidates[0]) { select(candidates[0].T, true); return true; }
-		hint('Face someone nearby with a clear line of sight to lock on.', 1800, 1); return false;
+		hint('Face someone nearby, or a vehicle, with a clear line of sight to lock on.', 1800, 1); return false;
 	}
 	function toggle() {
 		if (!active()) return false;
@@ -184,7 +192,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 				timer = 0.15; scan();
 				if (selected) {
 					const T = selected, d = Math.hypot(T.bound.x - camera.position.x, T.bound.y - camera.position.y, T.bound.z - camera.position.z);
-					if (layer.get(T.id) !== T || !canHit(T, shooter, rules) || T.P?.ragdoll || T.ref?.dead || T.ref?.gone || T.health?.hp <= 0 || d > 65) clear();
+					if (layer.get(T.id) !== T || !canHit(T, shooter, rules) || T.P?.ragdoll || T.ref?.dead || T.ref?.gone || T.health?.hp <= 0 || d > focusReach(T, 65)) clear();
 					else seen = !blocked(camera.position, T.bound);
 				}
 			}
@@ -192,7 +200,7 @@ export function createTargetFocus({ layer, camera, mount, active, blocked, hosti
 			if (!selected) return;
 			hiddenFor = seen ? 0 : hiddenFor + dt;
 			if (!seen) { marker.style.display = 'none'; if (hiddenFor > 0.6) clear(); return; }
-			camera.updateMatrixWorld(); point.set(selected.bound.x, selected.bound.y + 0.5, selected.bound.z).project(camera);
+			camera.updateMatrixWorld(); point.set(selected.bound.x, selected.bound.y + (isVehicle(selected) ? 0 : 0.5), selected.bound.z).project(camera);
 			const behind = point.z > 1;
 			let x = point.x, y = point.y;
 			if (behind) { x = -x; y = -y; }

@@ -177,11 +177,25 @@ function flame(colA, colB, strength) {
 		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
 	});
 }
-// a rotor's blur: a faint disc, darker at the tips, streaked by the blades
-function blurDisc() {
+// a rotor's blur: a faint disc, darker at the tips, the blades smeared round it. Each blade
+// trails a ghost that fades behind it (the disc turns with the rotor, models.js), and a second,
+// fainter set of ghosts runs round against them on the kit's clock, so the disc shimmers as a
+// whirring rotor does instead of sitting still
+function blurDisc(time) {
 	return new THREE.ShaderMaterial({
+		uniforms: { uTime: time },
 		vertexShader: 'varying vec2 vU; void main(){ vU = uv - 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-		fragmentShader: 'varying vec2 vU; void main(){ float r = length(vU) * 2.0; if (r > 1.0) discard; float a = smoothstep(0.06, 0.12, r) * (1.0 - smoothstep(0.94, 1.0, r)); float streak = 0.75 + 0.25 * sin(atan(vU.y, vU.x) * 4.0); float tip = 0.6 + 0.4 * smoothstep(0.85, 0.95, r); gl_FragColor = vec4(vec3(0.1, 0.105, 0.11), a * 0.2 * streak * tip); }',
+		fragmentShader: `uniform float uTime; varying vec2 vU;
+			float ghost(float ang, float ph) { float u = fract((ang + ph) * 0.63662); return pow(1.0 - u, 2.4); }
+			void main(){
+				float r = length(vU) * 2.0; if (r > 1.0) discard;
+				float a = smoothstep(0.05, 0.1, r) * (1.0 - smoothstep(0.93, 1.0, r));
+				float ang = atan(vU.y, vU.x);
+				float g1 = ghost(ang, 0.0), g2 = ghost(-ang, uTime * 9.0);
+				float tip = 0.55 + 0.45 * smoothstep(0.8, 0.95, r);
+				float body = (0.07 + 0.3 * g1 + 0.13 * g2) * tip;
+				gl_FragColor = vec4(vec3(0.09, 0.095, 0.1), a * body);
+			}`,
 		transparent: true, depthWrite: false, side: THREE.DoubleSide,
 	});
 }
@@ -369,7 +383,7 @@ export function militaryKit() {
 		flame: flame('#9fc4ff', '#ff9a4a', 0.55), flameAB: flame('#ffb26a', '#ff5a2a', 1.2),
 		flameGeo: new THREE.CylinderGeometry(0.16, 0.4, 2.4, 14, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -1.2),
 		glow: glowMat(night), halo: haloMat(night, time), flag: flagMat(time),
-		disc: blurDisc(), discGeo: (r) => { if (!discs.has(r)) discs.set(r, new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2)); return discs.get(r); },
+		disc: blurDisc(time), discGeo: (r) => { if (!discs.has(r)) discs.set(r, new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2)); return discs.get(r); },
 		camo: armour(true, night), air: armour(false, night),
 		dark: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.35, vertexColors: true }),
 		rubber: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0, vertexColors: true }),

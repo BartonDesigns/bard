@@ -36,6 +36,9 @@ export const DIMS = Object.freeze({
 export const SCHEMES = Object.freeze({ woodland: '#5b6346', desert: '#b6a47c', invader: '#6f7064', grey: '#8c939b', police: '#141a2c' });
 // where the coarse model takes over
 export const LOD_FAR = 150, LOD_FAR_PHONE = 95;
+// how fast the rotors are drawn turning at full spin (rad/s): well under a blade's spacing per
+// frame at 30 fps (the real rate would alias into a still); the blur disc carries the rest
+export const ROTOR_SHOW = 11, TAIL_SHOW = 23;
 
 // the surfaces the vehicle shader knows (kit.js reads the same numbers)
 export const M = Object.freeze({ camo: 0, paint: 1, dark: 2, rubber: 3, glass: 4, lamp: 5, canvas: 6, track: 7, hot: 8, beacon: 9, steel: 10 });
@@ -702,10 +705,12 @@ export function vehicleGeometry(kind) {
 	const near = make(false), far = make(true);
 	const out = { kind, parts: near, wheels: WHEELS[kind] || null, pivots: PIVOTS[kind] || (kind === 'jet' ? JET_PIVOTS : {}) };
 	// the whole: every part in its rest pose, the wheels on their hubs
-	const rest = (parts) => {
+	const rest = (parts, coarse = false) => {
 		const gs = [];
 		for (const [name, g] of Object.entries(parts)) {
 			if (name === 'wheel' || (kind === 'jet' && name === 'doorN')) continue;
+			// (the helicopter's coarse body carries no rotors: the live ones turn at any distance)
+			if (coarse && kind === 'heli' && (name === 'rotor' || name === 'tail')) continue;
 			const q = g.clone();
 			if (kind === 'jet') {
 				// (parked, the gear is down and its doors hang open; the nose doors are folded away)
@@ -722,7 +727,7 @@ export function vehicleGeometry(kind) {
 		return g;
 	};
 	out.whole = rest(near);
-	out.far = rest(far);
+	out.far = rest(far, true);
 	for (const g of Object.values(far)) g.dispose();
 	cache.set(kind, out);
 	return out;
@@ -772,16 +777,23 @@ export function vehicleMesh(kind, kit, colour = SCHEMES.woodland, { phone = fals
 		};
 	} else if (kind === 'heli') {
 		add(G.parts.body, near);
-		const rot = pivot('rotor', near), tail = pivot('tail', near);
-		const blades = add(G.parts.rotor, rot), tblades = add(G.parts.tail, tail);
-		const disc = new THREE.Mesh(kit.discGeo(7.5), kit.disc); disc.position.y = 0.0; disc.visible = false; rot.add(disc);
-		const tdisc = new THREE.Mesh(kit.discGeo(1.08), kit.disc); tdisc.rotation.z = H; tdisc.position.x = 0.05; tdisc.visible = false; tail.add(tdisc);
+		// the rotors hang off the root itself, not the near level, so they turn at any distance
+		// (the coarse body past LOD_FAR is built without them)
+		const rot = pivot('rotor', root), tail = pivot('tail', root);
+		add(G.parts.rotor, rot); add(G.parts.tail, tail);
+		const disc = new THREE.Mesh(kit.discGeo(7.5), kit.disc); disc.position.y = 0.0; disc.visible = false; disc.renderOrder = 2; rot.add(disc);
+		const tdisc = new THREE.Mesh(kit.discGeo(1.08), kit.disc); tdisc.rotation.z = H; tdisc.position.x = 0.05; tdisc.visible = false; tdisc.renderOrder = 2; tail.add(tdisc);
 		Object.assign(U, { rotor: rot, tail });
+		// The blades are always drawn, turning at a rate the eye can follow at any frame rate
+		// (ROTOR_SHOW rad/s at full spin: a quarter turn takes several frames even at 30 fps, so
+		// it reads as spinning, never as a still or a wagon wheel), and over them the blur: a
+		// disc of smeared blade ghosts (kit.js blurDisc) that turns with them and shimmers
+		// against a second set the kit's clock drives. It fades in as the rotor spools up.
 		U.pose = ({ spin = 1, dt = 0 } = {}) => {
-			rot.rotation.y += spin * dt * 28; tail.rotation.x += spin * dt * 60;
-			// fast enough, the blades are a blur
-			disc.visible = tdisc.visible = spin > 0.55;
-			blades.visible = spin < 0.9; tblades.visible = spin < 0.8;
+			rot.rotation.y += spin * dt * ROTOR_SHOW; tail.rotation.x += spin * dt * TAIL_SHOW;
+			const k = Math.max(0, Math.min(1, (spin - 0.35) / 0.4));
+			disc.visible = tdisc.visible = k > 0;
+			disc.scale.setScalar(0.55 + 0.45 * k); tdisc.scale.setScalar(0.55 + 0.45 * k);
 		};
 	} else if (kind === 'jet') {
 		add(G.parts.body, near);

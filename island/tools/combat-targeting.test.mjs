@@ -2,7 +2,7 @@
 // (combat/wounds.js): run with node --test.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { trackStep, aimAngles, pickAt, LOCK_WINDOW } from '../src/combat/target-focus.js';
+import { trackStep, aimAngles, pickAt, LOCK_WINDOW, focusScore, focusReach } from '../src/combat/target-focus.js';
 import { createHealth, applyDamage, PARTS } from '../src/combat/health.js';
 import { createWounds, react, pace, CRIPPLE_AT } from '../src/combat/wounds.js';
 import { ACTIONS } from '../src/people/actions.js';
@@ -91,4 +91,20 @@ test('each place hit reacts its own way, on its side, and varies', () => {
 	for (const [part, set] of seen) if (part !== 'arm') assert.ok(set.size >= 2, `${part} has more than one reaction`);
 	assert.ok(react(createWounds(), motion(), null, { part: 'chest' }, { dealt: 40 }, { max: 100, rand }).stagger > 0.5, 'centre mass knocks them back');
 	assert.equal(react(createWounds(), motion(), null, { part: 'chest' }, { dealt: 40, killed: true }, { max: 100 }), null, 'the dead do not react');
+});
+
+test('lock-on: a helicopter or a car can be locked, from far further off than a person', () => {
+	const eye = { x: 0, y: 1.7, z: 0 }, fwd = { x: 0, y: 0, z: -1 };
+	const heli = { id: 'mv1', kind: 'vehicle', faction: 'guard', bound: { x: 0, y: 60, z: -150, r: 9.9 }, moral: () => ({ hostileTarget: false }) };
+	const person = { id: 'p1', kind: 'person', bound: { x: 0, y: 1, z: -150, r: 1.4 } };
+	const car = { id: 'car:1', kind: 'car', faction: 'world', bound: { x: 0, y: 0.8, z: -70, r: 3 } };
+	assert.ok(Number.isFinite(focusScore(heli, eye, { x: 0, y: 0.37, z: -0.93 })), 'the helicopter overhead, faced, locks at 160 m');
+	assert.equal(focusScore(person, eye, fwd), Infinity, 'a person is out of reach at 150 m');
+	assert.ok(Number.isFinite(focusScore(car, eye, fwd)), 'a car at 70 m');
+	assert.equal(focusScore(car, eye, fwd, { max: 40 }), Infinity, 'but not past its reach');
+	assert.ok(focusReach(heli) > 240 && focusReach(car) > 80 && focusReach(person) === 55);
+	// a tap on the helicopter's body on screen, by its bound's height, not a person's
+	const px = (q) => ({ x: 100 + q.x * 20, y: 2000 - q.y * 20, z: 0 });
+	assert.equal(pickAt([heli], 100, 2000 - 68 * 20, px, 10), heli, 'near the top of the body');
+	assert.equal(pickAt([person], 100, 2000 - 4 * 20, px, 10), null, 'well above a person\'s head: nobody');
 });
