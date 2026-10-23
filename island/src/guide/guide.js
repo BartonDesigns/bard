@@ -34,6 +34,8 @@ import { toWorld } from '../bay/geo.js';
 import { personaFor, bodyFor, TAG_RE } from '../people/persona.js';
 import { guideArchive, guideTrackButton, guideTrackingCard, guideQuestCard, guideQuests, guideCommunityProjects, guideLivingActivity, guideStory, guideCaves, guideSettings } from './guide-screens.js';
 import { guideTalkTo, guideAskPerson, guideAsk } from './guide-ask.js';
+import { buildSheet, SOCIAL_ACTS, LEAVING_ACTS, MOODS } from './npc-live.js';
+import { createTalkLive } from './talk-live.js';
 
 // facts the Guide can rely on (a small model should not have to remember them)
 const LANDMARKS = [
@@ -161,6 +163,8 @@ export function createGuide(mount, api) {
 		get view() { return view; }, get viewEpoch() { return viewEpoch; }, get voiceOut() { return voiceOut; },
 		get waypointMark() { return waypointMark; }, get wayPrefs() { return wayPrefs; },
 		get whereKind() { return whereKind; },
+		get sheetFor() { return sheetFor; }, get liveAct() { return liveAct; }, get liveLeave() { return liveLeave; },
+		get talkLive() { return talkLive; }, get liveOn() { return liveOn; },
 	};
 	const llm = createLLM();
 	// The atlas is intentionally lazy, but starting its small data module here means a
@@ -661,6 +665,8 @@ export function createGuide(mount, api) {
 	// ---------- the journal: noticed as you play ----------
 	let tick = 0, lastPlace = '', projectProgressTick = 0;
 	function watch(dt) {
+		// (a conversation's voice is placed at the speaker: the ear follows the camera)
+		if (partner || talkLive.isOpen()) localSpeech.place(api.camera);
 		projectProgressTick+=Math.max(0,Number(dt)||0);
 		if(projectProgressTick>=.2 || dt===0){projectProgressTick=0;updateProjectProgress();updateQuestLive();}
 		if (!wayPrefsSent && api.waypoint?.setOptions) { wayPrefsSent = true; api.waypoint.setOptions(wayPrefs); }
@@ -829,7 +835,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return c;
 	}
 
-	function talkTo(p) { return guideTalkTo(gd, p); }
+	function talkTo(p, opts) { return guideTalkTo(gd, p, opts); }
 	// a world's own people can have more to say and to offer (planet/colony/errands.js):
 	// a line, a note, and choices that answer with the next of the same
 	function offer(o) {
@@ -846,14 +852,16 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		}
 		log.append(row); scroll();
 	}
-	function endTalk() {
-		localSpeech.cancel();
-		if ('speechSynthesis' in window) speechSynthesis.cancel();
+	// keepVoice: their last words carry on as they walk off (or square up); keepLive: the
+	// subtitle stays until those words are done (liveLeave)
+	function endTalk(opts = {}) {
+		if (!opts.keepVoice) { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+		if (!opts.keepLive) talkLive.close();
 		if (!partner) return;
 		busy?.abort();
 		api.people?.release(partner.p);
 		partner = null;
-		if ('speechSynthesis' in window) speechSynthesis.cancel();
+		if (!opts.keepVoice && 'speechSynthesis' in window) speechSynthesis.cancel();
 		renderGuide();
 		title.textContent = 'THE GUIDE';
 		input.placeholder = 'Ask anything, or "take me to Alcatraz"';
@@ -874,12 +882,13 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		p.speakUntil = Math.max(p.speakUntil || 0, performance.now() + 400 + (text.length - from) * 55);
 		return Math.min(used, text.length);
 	}
-	function perform(reply, speakIt) {
+	function perform(reply, speakIt, opts = {}) {
 		const p = partner.p, clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		say(clean, 'guide');
+		talkLive.line(partner.persona.first, clean);
 		archiveTurn(threadMeta(partner),'assistant',clean);
 		bodySync(p, reply + (/[.!?]$/.test(reply) ? '' : '.'), 0);
-		if (speakIt && voiceOut) speak(clean);
+		if (speakIt && voiceOut) speak(clean, undefined, opts);
 	}
 	// a person as the shared voice needs them (server/discovery talk.js): who they are and a few
 	// short facts, never a prompt of our own
@@ -897,6 +906,146 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		].filter(Boolean);
 		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts:facts.slice(0,10), places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
 	}
+	// ---------- talking live (npc-live.js, talk-live.js): the person's character sheet, and what
+	// they do at the end of a reply ----------
+	const liveOn = () => !!llm.canStream?.();
+	// trust as the chronicle keeps it (-5 to 9 and up), as the sheet carries it (-3 to 3)
+	const trustBand = (t) => (t <= -4 ? -3 : t < 0 ? -1 : t < 3 ? 0 : t < 6 ? 1 : t < 9 ? 2 : 3);
+	function sheetFor(P2, resident, awareness, world) {
+		const p = P2.p, pp = P2.persona, key = resident ? residentKey(resident.id) : '';
+		const qs = resident ? stories.list(resident.bodyKey) : [];
+		const offered = resident ? qs.filter(q => q.status === 'offered' && q.offeredBy === key).at(-1) : null;
+		const ready = resident ? readyReports(resident) : [];
+		const active = resident ? qs.find(q => q.status === 'active' && q.offeredBy === key) || ready[0] : null;
+		const rel = resident ? chronicle.relationship(resident.bodyKey, key) : null;
+		const age = resident?.dna?.age ?? pp.age ?? 30, adult = age >= 18, afraid = !!awareness?.afraid;
+		const memories = (resident?.memories || []).slice(-8).map(m => m.content);
+		const ctx = resident ? storyContext(resident) : null;
+		let quest = null;
+		if (resident && !afraid && !offered && !active && !chronicle.pending(resident.bodyKey, key).length && ctx?.targets?.length) {
+			const targets = [...ctx.targets.filter(t => !t.id.startsWith('home:')).slice(0, 6), ...ctx.targets.filter(t => t.id === 'home:' + key)];
+			quest = { bodyKey: ctx.bodyKey, targets, npcs: [...ctx.npcs.filter(n => n.id === key), ...ctx.npcs.filter(n => n.id !== key).slice(0, 3)], arc: ctx.arc };
+		}
+		const scout = resident && adult && !afraid ? [...(api.social.scoutNearby(p, targets()) ? [{ id: 'nearby', name: 'around here' }] : []), ...(ctx?.targets || []).filter(t => t.scoutable).slice(0, 8)] : [];
+		const party = resident ? api.social.state.list(resident.bodyKey).filter(r => r.id !== resident.id && ['follow', 'quest'].includes(r.mode)).length < (api.social.isPhone ? 3 : 6) : false;
+		const market = api.negotiation?.contextFor?.(p);
+		const base = npcFor(pp, world);
+		const mood = afraid ? 'afraid' : MOODS.includes(resident?.mood) ? resident.mood : MOODS.includes(pp.mood) ? pp.mood : 'calm';
+		const step = active?.steps?.[active.cursor];
+		return buildSheet({
+			...base, facts: base.facts.filter(f => !memories.includes(f)), dialogueStyle: normalizeDialogueStyle(dialogueStyle, age), mood,
+			relationship: rel && (rel.last || rel.trust) ? { label: rel.label, trust: trustBand(rel.trust), last: rel.last } : null,
+			memories,
+			now: world ? { time: world.time, weather: api.world()?.weather?.state?.kind || '', scene: world.place } : null,
+			task: resident?.task ? { type: resident.task.type, status: resident.task.status, label: resident.task.label || resident.task.title } : null,
+			quests: { offered: offered ? { title: offered.title } : null, active: active ? { title: active.title, step: step ? `${step.type} ${(ctx?.targets.find(t => t.id === step.targetId) || ctx?.npcs.find(n => n.id === step.npcId))?.name || ''}`.trim() : '', reportReady: ready.some(q => q.id === active.id) } : null, done: qs.filter(q => q.status === 'complete' && q.offeredBy === key).slice(-3).map(q => ({ title: q.title, outcome: q.outcome || '' })) },
+			can: {
+				follow: !!resident && adult && !afraid && (rel?.trust ?? 0) > -4 && party, wait: !!resident, home: !!resident && resident.mode !== 'idle', warn: !!resident, calm: !!resident,
+				shop: !!market?.sellerId && !!market.stock?.length, join: !afraid && !!api.guild?.talkOffer?.(p), fight: adult && !!api.combat?.melee?.provoke,
+				waypoint: base.places.length > 0, scout, quest,
+			},
+		});
+	}
+	// a story quest offered in conversation: its landmarks kept for the route markers (as offerStory)
+	function registerStory(q, context, resident) {
+		const landmarks=q.steps.filter(s=>s.targetId&&!s.targetId.startsWith('home:')&&!s.targetId.startsWith('workplace:')).map(s=>context.targets.find(t=>t.id===s.targetId)).filter(t=>t&&!t.under&&t.y>.3).map(t=>{const pos=routeMarkSpot(api.world(),t);return {id:t.id,name:t.name,pos:api.social.positionFor(api.world(),pos || t),markerEligible:!!pos};});
+		chronicle.register(q,resident.persona.name,landmarks);
+	}
+	function quoteFor(P2, itemId) {
+		if (partner !== P2) return;
+		const r = api.negotiation?.propose?.(P2.p, { kind: 'quote', itemId, amount: null, confidence: 1 });
+		const message = r?.message || r?.error || 'I can’t price that right now.';
+		perform(message, true, { append: true });
+		if (P2.id) api.social.state.remember(P2.id, 'assistant', message);
+		if (r?.offer) showAgreement(r.offer, P2);
+	}
+	// What the person does as they finish speaking: the act the server checked against their
+	// sheet, carried out by the game's own rules (which can still say no: then they say why).
+	// -> { say, note, leave, fight, panel }
+	function liveAct(res, { P2, resident, text, awareness }) {
+		const out = { say: null, note: null, leave: false, fight: false, panel: false };
+		if (res?.note && resident) api.social.state.remember(resident.id, 'event', 'About the traveller: ' + String(res.note).slice(0, 160));
+		const act = res?.act, a = act?.act, p = P2.p, first = P2.persona.first;
+		if (!a || partner !== P2) return out;
+		if (SOCIAL_ACTS[a]) {
+			if (!resident) return out;
+			const sig = r => JSON.stringify([r?.mode, r?.task, r?.lastWarning]), before = sig(resident);
+			const r = api.social.command(resident, SOCIAL_ACTS[a], { relationship: awareness?.relationship, quest: stories.list(resident.bodyKey).find(q => q.status === 'active') || quests.find(q => !q.done) });
+			const now = api.social.state.get(resident.id), ok = a === 'status' || sig(now) !== before || (a === 'wait' && now?.mode === 'wait');
+			if (!ok) { if (r) out.say = r; return out; }
+			out.leave = LEAVING_ACTS.has(a);
+			out.note = { follow: `${first} is following you.`, wait: `${first} waits here for you.`, home: `${first} heads home.`, warn: 'The neighbours are warned.', calm: 'The alarm settles.', cancel: `${first} drops the task.` }[a] || null;
+			return out;
+		}
+		if (a === 'scout' && resident) {
+			const t = act.targetId === 'nearby' ? api.social.scoutNearby(p, targets()) : storyContext(resident).targets.find(x => x.id === act.targetId);
+			const r = t ? api.social.command(resident, 'scout nearby', { relationship: awareness?.relationship, target: t }) : null;
+			const now = api.social.state.get(resident.id);
+			if (t && now?.mode === 'scout' && now.task) {
+				if (act.targetId !== 'nearby' && t.id) api.social.state.setMode(resident.id, 'scout', { ...now.task, targetId: t.id });
+				out.leave = true; out.note = `${first} sets off to scout ${t.name || 'nearby'}. Ask for a report when they're back.`;
+			} else out.say = r || 'Actually, I can’t see a way there from here.';
+			return out;
+		}
+		if (a === 'waypoint') { const q = giveQuest(act.place, first); out.note = q ? `In your journal: ${q.title}` : null; return out; }
+		if (a === 'shop') {
+			const m = api.negotiation?.contextFor?.(p);
+			if (!m?.sellerId || !m.stock?.length) return out;
+			if (m.stock.length === 1) quoteFor(P2, m.stock[0].id);
+			else {
+				say('For sale: ' + m.stock.slice(0, 8).map(i => `${i.name}${Number.isFinite(i.price) ? ` (${i.price} credits)` : ''}`).join(', '), 'note');
+				const row = el('div', 'display:flex;gap:8px;flex-wrap:wrap;');
+				for (const i of m.stock.slice(0, 6)) { const b = el('button', btnCss, 'Price of ' + i.name); b.onclick = () => { row.remove(); quoteFor(P2, i.id); }; row.append(b); }
+				log.append(row); scroll();
+			}
+			out.panel = true; out.note = `${first} shows you what they have.`;
+			return out;
+		}
+		if (a === 'join') {
+			const j = api.guild?.talkOffer?.(p);
+			if (j) { const r = j.run(); out.note = r.text; out.leave = !!r.ok; }
+			return out;
+		}
+		if (a === 'quest' && resident && act.quest) {
+			const context = storyContext(resident), proposed = stories.propose(act.quest, context);
+			if (!proposed?.ok) return out;
+			const q = proposed.quest;
+			registerStory(q, context, resident);
+			say(`${storySummary(q)}\nSay “I’m in”, or open Quests to accept or decline.${questNotice(proposed) ? '\n' + questNotice(proposed) : ''}`, 'note');
+			out.note = `Quest offered: ${q.title}. Say “I’m in” to take it on.`;
+			return out;
+		}
+		if ((a === 'quest_accept' || a === 'quest_decline') && resident) {
+			const offered = stories.list(resident.bodyKey).filter(q => q.status === 'offered' && q.offeredBy === residentKey(resident.id)).at(-1);
+			if (!offered) return out;
+			const r = a === 'quest_accept' ? stories.accept(offered.id, offered.bodyKey) : stories.cancel(offered.id, offered.bodyKey);
+			if (r.ok) questChanged(r.quest, false);
+			out.note = questNotice(r) || (a === 'quest_accept' ? `Quest accepted: ${offered.title}. It's in your journal.` : 'Quest declined.');
+			return out;
+		}
+		if (a === 'advance' && resident) {
+			const before = readyReports(resident).length, line = reportStory(text);
+			if (readyReports(resident).length >= before) out.note = line;
+			return out;
+		}
+		if (a === 'fight') { out.fight = true; out.leave = true; return out; }
+		if (a === 'goodbye') out.leave = true;
+		return out;
+	}
+	// they have somewhere to be (follow, home, scout), want you gone, or square up: the
+	// conversation lets them go now, while their last words finish where they stand
+	function liveLeave(P2, fight = false) {
+		if (partner !== P2) return;
+		const p = P2.p;
+		endTalk({ keepVoice: true, keepLive: true });
+		if (fight && api.combat?.melee?.provoke?.(p)) api.hint(`${P2.persona.first} squares up to you!`, 3000);
+		const t0 = performance.now();
+		const iv = setInterval(() => {
+			if (partner || !talkLive.isOpen()) { clearInterval(iv); return; }
+			if (performance.now() - t0 > 20000 || !speakingNow()) { clearInterval(iv); talkLive.close(); }
+		}, 400);
+	}
+	const speakingNow = () => localSpeech.busy() || ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending));
 	function showAgreement(offer, P2 = partner) {
 		const terms = agreementTerms(offer);
 		if (!terms || partner !== P2) return;
@@ -922,7 +1071,9 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		}
 		agree.onclick=()=>run(terms.action); cancel.onclick=()=>run('cancel'); row.append(agree,cancel);log.append(row);
 	}
-	async function negotiate(text, P2, signal) {
+	// quick: a live conversation (one round trip a turn) asks no planner; the seller's own words
+	// and the shop act cover the rest
+	async function negotiate(text, P2, signal, quick = false) {
 		const context = api.negotiation?.contextFor?.(P2.p);
 		if (!context) return null;
 		let local=offlineNegotiationIntent(text,context);
@@ -935,7 +1086,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		let intent = local;
 		// Unusual language is classified against actual seller stock, not a list of
 		// magic phrases. This is a proposal only, never authority to buy or pay.
-		if (intent.kind === 'none' && intent.reason === 'unrecognized' || intent.kind === 'clarify') {
+		if (!quick && (intent.kind === 'none' && intent.reason === 'unrecognized' || intent.kind === 'clarify')) {
 			const raw = await planChat(buildNegotiationMessages(options), signal, {kind:'negotiation_intent',context:buildNegotiationContext(options)});
 			if (raw) intent = decodeNegotiationIntent(raw, options);
 		}
@@ -1015,20 +1166,24 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	mount.addEventListener('pointerdown', () => { if (voiceOut && speechMode !== 'device') localSpeech.unlock(); }, { capture: true });
 	// keyboard players never tap: the first key unlocks the voices too
 	addEventListener('keydown', () => { if (voiceOut && speechMode !== 'device') localSpeech.unlock(); }, { capture: true, once: true });
-	function speak(t, who) {
+	// opts.append: after the line being said (a live reply, sentence by sentence). A person's
+	// line comes from where they stand (local-speech.js through audio/spatial.js)
+	function speak(t, who, opts = {}) {
 		if (!t) return;
-		if ('speechSynthesis' in window) speechSynthesis.cancel();
-		const dna = partner?.p?.P?.dna;
-		if (speechMode === 'device') deviceSpeak(t, who);
+		if (!opts.append && 'speechSynthesis' in window) speechSynthesis.cancel();
+		const P = partner?.p, dna = P?.P?.dna;
+		const at = P ? () => ({ x: P.M.S.pos.x, y: P.M.S.pos.y + (P.P.height || 1.7) - 0.12, z: P.M.S.pos.z }) : null;
+		if (speechMode === 'device') deviceSpeak(t, who, opts);
 		else {
 			// the same voice, pitch and pace the person has when they speak in passing
 			const shape = dna ? voiceShape(dna) : { pitch: 1, rate: 1 };
-			localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || shape.rate, pitch: shape.pitch });
+			localSpeech.place(api.camera);
+			localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || shape.rate, pitch: shape.pitch }, { at, append: !!opts.append });
 		}
 	}
-	function deviceSpeak(t, who) {
+	function deviceSpeak(t, who, opts = {}) {
 		if (!('speechSynthesis' in window) || !t) return;
-		speechSynthesis.cancel();
+		if (!opts.append) speechSynthesis.cancel();
 		const u = new SpeechSynthesisUtterance(t);
 		u.rate = 1.02; u.pitch = 1;
 		const all = speechSynthesis.getVoices().filter((x) => /^en/.test(x.lang));
@@ -1110,6 +1265,21 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return b;
 	}
 	const scroll = () => { log.scrollTop = log.scrollHeight; };
+	// talking out loud, face to face (talk-live.js): the subtitles, the microphone, and the way to
+	// the panel for typing and for choices that need a button
+	const touchUI = mount.classList?.contains('l99-touch') || /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+	const talkLive = createTalkLive({ mount, touch: touchUI,
+		onHeard: (t) => { if (partner) ask(t); },
+		onType: () => { talkLive.choices(false); show(true); },
+		onChoices: () => { talkLive.choices(false); show(true); },
+		onBye: () => { endTalk(); show(false); },
+		speaking: () => voiceOut && speakingNow() });
+	// a choice offered while the panel is closed (report back, a route, an agreement): the
+	// subtitle shows a way to it
+	new MutationObserver((ms) => {
+		if (!talkLive.isOpen() || panel.style.display !== 'none') return;
+		for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && (n.tagName === 'BUTTON' || n.querySelector?.('button'))) { talkLive.choices(true); return; }
+	}).observe(log, { childList: true });
 	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { if (view !== 'quests') setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else { input.blur(); localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } };
 	function greet() {
 		const s = snapshot();
@@ -1271,6 +1441,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { send.onclick(); } if (e.key === 'Escape') { endTalk(); show(false); } });
 	mic.onclick = listen;
 	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; spk.setAttribute('aria-pressed', String(voiceOut)); if (!voiceOut) { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } else if (speechMode !== 'device') localSpeech.unlock(); };
+	// talking live with the panel closed: Enter to type, Esc to say goodbye
+	addEventListener('keydown', (e) => {
+		if (!talkLive.isOpen() || panel.style.display !== 'none' || document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA' || mount.style.display === 'none') return;
+		if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); talkLive.choices(false); show(true); }
+		else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); endTalk(); }
+	}, { capture: true });
 	addEventListener('keydown', (e) => { if ((e.key === 'g' || e.key === 'G') && !window._KEYS_PLAY_ON && !e.metaKey && !e.ctrlKey && document.activeElement?.tagName !== 'INPUT' && mount.style.display !== 'none') { e.preventDefault(); show(panel.style.display === 'none'); } });
 
 	// settings: which model
@@ -1323,7 +1499,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			if (ok) voice.remarking = true;
 			return ok;
 		},
-		place: (p, f) => localSpeech.place(p, f),
+		place: (camera) => localSpeech.place(camera),
 		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
 		// a phone loads the local voices only once the world has been calm a while
 		tick: (dt, state) => localSpeech.tick(dt, state),
@@ -1338,5 +1514,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!rec || rec.seed !== p.P.dna.seed) { rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed }; people.set(p, rec); }
 		return rec.persona;
 	}
-	return { voice, personaOf, chronicle, routeMarks, relationshipFor:p=>p?.residentId?chronicle.relationship(api.social.bodyKey(),residentKey(p.residentId)):null, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
+	return { live: () => talkLive.isOpen() && !!partner, toggleMic: () => talkLive.toggleMic(), liveReady: liveOn, voice, personaOf, chronicle, routeMarks, relationshipFor:p=>p?.residentId?chronicle.relationship(api.social.bodyKey(),residentKey(p.residentId)):null, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }
