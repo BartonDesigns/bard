@@ -51,11 +51,11 @@ export function combatYours(cb, T, r, blow, ctx0) {
 		const k = r.killed ? 'turn' : officerHurt(wanted, performance.now() / 1000);
 		if (k === 'warn' || k === 'same') {
 			forgive(T.ref);
-			if (k === 'warn') call(wanted.strikes === 1 ? 'Watch your fire! That is an officer!' : 'Last warning! Hit one of us again and you go down with them!', 'Harbour Police');
+			if (k === 'warn') call(wanted.strikes === 1 ? 'Watch your fire! That is an officer!' : 'Last warning! Hit one of us again and you go down with them!', FACTIONS.police.name);
 			return;
 		}
 		wanted.blue = 0; wanted.strikes = 0;
-		call('That is it. Take the shooter down!', 'Harbour Police');
+		call('That is it. Take the shooter down!', FACTIONS.police.name);
 	}
 	if (fac && fac !== 'world' && FACTIONS[fac]) relations.attacked(PLAYER, fac, r.killed ? 1 : 0.25);
 	const lawful = !!F?.lawful;
