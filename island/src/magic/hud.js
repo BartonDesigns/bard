@@ -8,7 +8,9 @@
 // it, the mana round its rim). A tap casts that spell again; held, or slid off, it fans the
 // weapons and spells out in two arcs round it (spells on the inner one), and letting go on one
 // casts it or takes it up. Let go on the button and the arcs stay open for a tap. Beside the
-// arcs: your fabric (a tap opens skills and magic) and test mode.
+// arcs: your fabric (a tap opens skills and magic) and test mode. The first four spells bound
+// are always out beside it too, a tap on one casting it: in an arc round the button's left in
+// portrait, in a row left of it in landscape (Josh 2026-10-23: at least four to pick from).
 
 import { SPELL, SCHOOLS, SLOTS, manaCost, cooldownLeft, manaMax } from './spells.js';
 import { pointsOf } from './skills.js';
@@ -69,6 +71,14 @@ const CSS = `
 .mg-wheel .mg-fab{margin:-6px;padding:6px;display:flex;align-items:center;gap:8px;line-height:16px}
 .mg-wheel .mg-fab br{display:none}
 .mg-wheel .mg-fab .pt{margin-left:auto;order:3}
+.mg-q{position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;box-sizing:border-box;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(12,16,20,.32);box-shadow:0 1px 8px rgba(0,0,0,.16);display:flex;align-items:center;justify-content:center;z-index:6;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer;transition:opacity .4s,scale .08s ease}
+.mg-q[hidden]{display:none}
+.mg-q.on{scale:.9;background:rgba(255,255,255,.2)}
+.mg-q .g{font:600 19px/1 var(--bard-display,system-ui,sans-serif);text-shadow:0 0 8px currentColor;pointer-events:none}
+.mg-q .cd{position:absolute;inset:2px;border-radius:50%;pointer-events:none}
+.mg-q.dim .g{opacity:.35}
+.mg-q.last{box-shadow:0 0 0 1.5px rgba(255,255,255,.55),0 1px 8px rgba(0,0,0,.16)}
+.l99-tools-open .mg-q,.mg-bar.mg-wheel.open~.mg-q{visibility:hidden}
 `;
 const STYLE_ID = 'mg-hud-style';
 const KEYS = ['6', '7', '8', '9', '0'];
@@ -90,6 +100,17 @@ const WEAPON_TAG = { 'aurora-trail-rifle': 'Rifle', 'mossback-scout-rifle': 'Sco
 
 // the arcs round the spell button: radius, then each slot's angle from straight left (up is +)
 const RING = { s: [100, [64, 32, 0, -32, -64]], w: [162, [40, 20, 0, -20, -40]] };
+// the four spells always out, each as an offset from the spell button's centre: in portrait an
+// arc round its left (radius 74, at 84, 42, 0 and -42 degrees), in landscape a row left of it
+// between the top row and the Lock dock; where those would cover another button (the button
+// risen over Descend while flying, with the Lock dock out), a cluster lower down
+const QUICK = {
+	n: 4,
+	tall: [[[-8, -74], [-55, -50], [-74, 0], [-55, 50]], [[-74, 0], [-55, 50], [-130, 0], [-119, 53]]],
+	wide: [[[-60, -5], [-116, -5], [-172, -5], [-228, -5]], [[-74, 0], [-55, 50], [-130, 0], [-119, 53]]],
+};
+// (what they keep clear of: the top row and right column, and the Lock dock)
+const QUICK_CLEAR = '.l99-quick>*,.combat-focus-controls,#l99-island-mount>[aria-label^="Sky and world"],#l99-island-mount>[aria-label^="Auto music"]';
 
 // onBook(): open the skills and magic menu; bookOpen(): whether it is open
 export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook = () => {}, bookOpen = () => false, hint = () => {}, isTouch = false }) {
@@ -187,6 +208,18 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 		// (a tap off the arcs shuts them)
 		bar.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); close(); });
 		if (firstTime('l99-spell-wheel')) setTimeout(() => hint('Hold the spell button for all your spells and weapons', 4200), 6000);
+		// the four spells always out (q.i: the slot each shows, the first four bound in order)
+		const quick = [...Array(QUICK.n)].map(() => {
+			const e = mk('div', 'mg-q', mount, '<div class="cd"></div><span class="g"></span>');
+			e.setAttribute('role', 'button');
+			const q = { e, g: e.querySelector('.g'), cd: e.firstChild, i: -1 };
+			e.addEventListener('pointerdown', (x) => { x.stopPropagation(); x.preventDefault(); if (q.i < 0) return; e.classList.add('on'); cast(q.i); });
+			const up = () => e.classList.remove('on');
+			e.addEventListener('pointerup', up);
+			e.addEventListener('pointercancel', up);
+			e.addEventListener('pointerleave', up);
+			return q;
+		});
 		const sig = { g: '', pt: -1 };
 		// the button's spell, cooldown, mana and point, and test mode's word
 		function paint(now, pts) {
@@ -198,18 +231,56 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 			put(hub, 'dim', !!sp && state.mana < manaCost(state, sp), (v) => hub.classList.toggle('dim', v));
 			put(hub, 'm', Math.round(state.mana / manaMax(state) * 100), (v) => hubRing.style.setProperty('--m', String(Math.max(0, Math.min(1, v / 100)))));
 			if (pts !== sig.pt) { sig.pt = pts; pt.textContent = pts ? `+${pts}` : ''; pt.style.display = pts ? '' : 'none'; }
+			let k = 0;
+			for (let i = 0; i < SLOTS && k < QUICK.n; i++) if (SPELL[state.binds[i]]) quick[k++].i = i;
+			for (; k < QUICK.n; k++) quick[k].i = -1;
+			for (const q of quick) {
+				const qid = state.binds[q.i], qs = q.i >= 0 ? SPELL[qid] : null;
+				put(q.e, 'id', qs ? `${q.i}|${qid}` : '', (v) => {
+					q.e.hidden = !v;
+					if (!qs) return;
+					q.g.textContent = qs.glyph; q.g.style.color = SCHOOLS[qs.school].color;
+					q.e.setAttribute('aria-label', `${qs.name}: tap to cast`);
+				});
+				const qc = qs ? Math.round(cooldownLeft(state, qid, now) * 60) / 60 : 0;
+				put(q.e, 'cd', qc, (v) => { q.cd.style.background = v > 0 ? `conic-gradient(rgba(0,0,0,.6) ${v * 360}deg, transparent 0)` : ''; });
+				put(q.e, 'dim', !!qs && state.mana < manaCost(state, qs), (v) => q.e.classList.toggle('dim', v));
+				put(q.e, 'last', !!qs && q.i === last, (v) => q.e.classList.toggle('last', v));
+			}
 			if (isOpen && bookOpen()) close();
 		}
 		// (it tops the right thumb's column, however tall that grows)
 		const thumb = mount.querySelector('.l99-thumb');
 		function rise() {
-			if (!thumb) return;
-			const m = mount.getBoundingClientRect(), t = thumb.getBoundingClientRect(), sb = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
-			const b = t.height ? Math.max(226, Math.round(m.bottom - t.top - sb + 12)) : 226;
-			put(hub, 'b', b, (v) => { hub.style.bottom = `calc(${v}px + env(safe-area-inset-bottom))`; });
+			if (thumb) {
+				const m = mount.getBoundingClientRect(), t = thumb.getBoundingClientRect(), sb = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
+				const b = t.height ? Math.max(226, Math.round(m.bottom - t.top - sb + 12)) : 226;
+				put(hub, 'b', b, (v) => { hub.style.bottom = `calc(${v}px + env(safe-area-inset-bottom))`; });
+			}
+			spread();
 		}
-		function dispose() { hub.remove(); probe.remove(); }
-		return { open, close, isOpen: () => isOpen, paint, rise, hub, dispose };
+		// the four round the button (from its centre, as it stands after rise): the first layout
+		// that covers nothing and stays on screen, or the one that covers least
+		function spread() {
+			const m = mount.getBoundingClientRect(), h = hub.getBoundingClientRect();
+			if (!h.width) return;
+			const cx = h.left + h.width / 2 - m.left, cy = h.top + h.height / 2 - m.top, st = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+			const keep = [];
+			for (const e of mount.querySelectorAll(QUICK_CLEAR)) { const r = e.getBoundingClientRect(); if (r.width && r.height) keep.push(r); }
+			const cost = (at) => at.reduce((n, [dx, dy]) => {
+				const x = cx + dx + m.left, y = cy + dy + m.top;
+				if (y - 22 < m.top + st + 4 || x - 22 < m.left + 4) return n + 1;
+				return n + keep.filter((r) => x + 25 > r.left && x - 25 < r.right && y + 25 > r.top && y - 25 < r.bottom).length;
+			}, 0);
+			let best = null, least = Infinity;
+			for (const at of QUICK[m.width > m.height && m.height <= 540 ? 'wide' : 'tall']) { const c = cost(at); if (c < least) { least = c; best = at; } if (!c) break; }
+			quick.forEach((q, j) => {
+				const x = Math.round(cx + best[j][0]), y = Math.round(cy + best[j][1]);
+				put(q.e, 'at', `${x},${y}`, () => { q.e.style.left = `${x}px`; q.e.style.top = `${y}px`; });
+			});
+		}
+		function dispose() { hub.remove(); probe.remove(); for (const q of quick) q.e.remove(); }
+		return { open, close, isOpen: () => isOpen, paint, rise, hub, quick: quick.map((q) => q.e), dispose };
 	}
 	const lvl = mk('div', 'mg-lvl', mount);
 	const mode = mk('div', 'mg-mode', mount, 'Camera · drag to look · click the world or tap Alt / ⌥ to aim again');
@@ -262,8 +333,8 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 	}
 	function setMode(m) { mode.style.opacity = m === 'camera' ? '1' : '0'; }
 	function show(on) {
-		for (const e of [bar, mana, wheel?.hub]) if (e) e.style.opacity = on ? '1' : '0';
-		if (wheel) { wheel.hub.style.pointerEvents = on ? '' : 'none'; if (!on) wheel.close(); }
+		for (const e of [bar, mana, wheel?.hub, ...(wheel?.quick || [])]) if (e) e.style.opacity = on ? '1' : '0';
+		if (wheel) { for (const e of [wheel.hub, ...wheel.quick]) e.style.pointerEvents = on ? '' : 'none'; if (!on) wheel.close(); }
 	}
 
 	function dispose() { for (const e of [bar, mana, mode, lvl]) e.remove(); wheel?.dispose(); }

@@ -31,7 +31,7 @@ const sysOf = (f) => SYSTEMS[f.sys] || SYSTEMS.us;
 // px per metre by kind: the faces read close get more
 const DENS = { blade: 330, hours: 520, pushpull: 760, payment: 760, access: 700, nosmoking: 700, alarm: 900, address: 520, suite: 900, nosolicit: 900, open: 600, window: 420, sale: 420, staff: 640, deliveries: 640, plate: 900, bumper: 900, bbrand: 700, wsticker: 900, cpermit: 1100, livery: 200, aisle: 260, dept: 200, price: 1200, talker: 1000, flyer: 640, sticker: 1100, permit: 420, site: 300 };
 export function faceDims(face, w, h) {
-	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 40 : face.k === 'wheatpaste' ? 300 : 230);
+	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 50 : face.k === 'wheatpaste' ? 300 : 230);
 	// (three quarters of the nominal density: enough for the distance each is read at, and the
 	// region's faces fit one sheet without repacking)
 	let pw = Math.round(w * d * 0.75), ph = Math.round(h * d * 0.75);
@@ -474,19 +474,22 @@ const CAR = {
 	livery(g, x, y, w, h, f) {
 		const L = f.svc;
 		if (L === 'police') {
-			text(g, f.word || 'POLICE', x + w * 0.56, y + h * 0.42, h * 0.42, { col: '#141a2c', maxW: w * 0.7, track: 0.06 });
+			// (the force's word and its city or county under it: law/force.js)
+			const sub = f.sub ?? '';
+			text(g, f.word || 'POLICE', x + w * 0.56, y + h * (sub ? 0.42 : 0.48), h * 0.42, { col: '#141a2c', maxW: w * 0.7, track: 0.06 });
 			// an invented badge: a seven-pointed star in a ring
 			const cx = x + h * 0.48, cy = y + h * 0.45, r = h * 0.36;
 			g.beginPath(); for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i * Math.PI / 7, rr = i % 2 ? r * 0.55 : r; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } g.closePath(); g.fillStyle = '#c9a23a'; g.fill();
 			g.beginPath(); g.arc(cx, cy, r * 0.38, 0, Math.PI * 2); g.fillStyle = '#141a2c'; g.fill();
-			text(g, f.sub || 'HARBOUR', x + w * 0.56, y + h * 0.8, h * 0.16, { col: '#141a2c', track: 0.35, maxW: w * 0.7 });
+			if (sub) text(g, sub, x + w * 0.56, y + h * 0.8, h * 0.16, { col: '#141a2c', track: 0.35, maxW: w * 0.7 });
 		} else if (L === 'swat' || L === 'van') {
 			// a dark van's sides: the word in reflective white, a rule under it, the unit's name, an
 			// outlined badge at the front end (a tactical van's is all white, a patrol van's gold)
 			const ink = '#f2f2ee', gold = L === 'van' ? '#c9a23a' : ink;
 			text(g, f.word || 'POLICE', x + w * 0.57, y + h * 0.38, h * 0.46, { col: ink, maxW: w * 0.72, track: 0.08 });
 			g.fillStyle = gold; g.fillRect(x + w * 0.22, y + h * 0.66, w * 0.7, h * 0.035);
-			text(g, f.sub || (L === 'van' ? 'HARBOUR' : 'TACTICAL UNIT'), x + w * 0.57, y + h * 0.83, h * 0.16, { col: ink, track: 0.3, maxW: w * 0.7 });
+			const sub = f.sub ?? (L === 'van' ? '' : 'TACTICAL UNIT');
+			if (sub) text(g, sub, x + w * 0.57, y + h * 0.83, h * 0.16, { col: ink, track: 0.3, maxW: w * 0.7 });
 			const cx = x + h * 0.48, cy = y + h * 0.48, r = h * 0.36;
 			g.beginPath(); for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i * Math.PI / 7, rr = i % 2 ? r * 0.55 : r; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } g.closePath();
 			g.lineWidth = Math.max(1.5, h * 0.035); g.strokeStyle = gold; g.stroke();
@@ -523,7 +526,7 @@ const STREET = {
 	damage: (g,x,y,w,h,f) => drawCivicDecal(g,x,y,w,h,{id:'damage',tile:f.tile,phone:!!f.phone,opacity:.7}),
 	throwup: (g, x, y, w, h, f) => drawThrowup(g, x, y, w, h, f.seed),
 	piece: (g,x,y,w,h,f) => {const a=graffitiGraphic('piece',f.seed);if(!a||!drawCivicDecal(g,x,y,w,h,{...a,phone:!!f.phone}))drawPiece(g,x,y,w,h,f.seed);},
-	buff: (g, x, y, w, h, f) => drawBuff(g, x, y, w, h, f.tone || 0),
+	buff: (g, x, y, w, h, f) => drawBuff(g, x, y, w, h, f.tone || 0, f.ghost >= 0 ? (c, X, Y, W2, H2) => STREET[f.gk === 'throwup' ? 'throwup' : 'tag'](c, X, Y, W2, H2, { seed: f.ghost, phone: !!f.phone }) : null),
 	wheatpaste: (g, x, y, w, h, f) => drawWheatpaste(g, x, y, w, h, f.seed),
 	sticker: (g, x, y, w, h, f) => { if (f.seed % 3 !== 0 || !drawEmblem(g, x + (w - Math.min(w, h)) / 2, y + (h - Math.min(w, h)) / 2, Math.min(w, h), 'modern', Math.abs(f.seed) % 8, !!f.phone)) drawSticker(g, x, y, w, h, f.seed); },
 	banner: (g, x, y, w, h, f) => drawBanner(g, x, y, w, h, f, { phone: !!f.phone }),

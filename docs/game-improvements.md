@@ -4,8 +4,74 @@
 
 This is the plain-language record of improvements players can already meet in Bard. It feeds the **Chronicle** tab on the loading screen. Entries describe merged work, not plans, experiments or promises. Newest entries stay first.
 
-Last woven: **October 22, 2026**
-Source checkpoint: `d5307d6c5659a49df9f60115be5260d8dc5e6aae`
+Last woven: **October 23, 2026**
+Source checkpoint: `90dda13e66c51d5fa1be13e55265fbf1b24001f6`
+
+## October 23, 2026
+
+<!-- 2026-10-23-streets-have-front-doors -->
+### The streets have front doors
+
+Suburbs read as neighborhoods again: homes keep their yards, walks and fences, while proper corner stores and filling stations claim the crossings where they belong.
+
+- Drives and paths meet each home.
+- Shops gather on believable corners.
+
+<!-- 2026-10-23-lances-find-the-earth -->
+### The lances find the earth
+
+Lance of Dawn now calls bright spears down from the far sky. Each rank arrives larger and wider, and four ready spells remain within reach on phones.
+
+- Mastery changes the whole strike.
+- Four quick spells remain on every screen.
+
+<!-- 2026-10-23-quests-share-one-road -->
+### Every quest shares one road
+
+Field contracts now live beside your other quests. Accept one, track each step and follow the same waypoint and ground trail without a second window crowding the world.
+
+- Contracts live in the Quest journal.
+- One trail follows every step.
+
+<!-- 2026-10-23-law-speaks-the-local-name -->
+### The law speaks the local name
+
+Police now belong to the place around them, from city departments and county sheriffs to highway patrols and regional forces across the wider world.
+
+- Local names appear on signs and vehicles.
+- The right force follows the region.
+
+<!-- 2026-10-23-phones-hold-their-pace -->
+### Phones hold their pace
+
+People, cars and city blocks now arrive in smaller pieces, keeping movement tied to real time when a busy neighborhood asks more of a phone.
+
+- Heavy arrivals spread across frames.
+- Walking, driving and flight stay responsive.
+
+<!-- 2026-10-23-creatures-carry-weight -->
+### Creatures carry their weight
+
+Creatures now cry from where they stand, reveal lit weak points and fall through their own bodies when a heavy blow knocks them down.
+
+- Distinct voices are placed in the world.
+- Weak points, knockdowns and ragdolls make blows readable.
+
+<!-- 2026-10-23-helicopters-break-the-circle -->
+### Helicopters break the circle
+
+Helicopters now whirl, flank, dive and break away instead of circling like ornaments. Lock-on spells can lead moving aircraft and other vehicles.
+
+- Airborne enemies choose aggressive maneuvers.
+- Seeking magic can hold a vehicle target.
+
+<!-- 2026-10-23-rain-remembers-the-sky -->
+### Rain remembers the sky
+
+Rainy dawns carry lavender cloud and peach horizon light into wet roads, windows and trees. From the driver's seat, wipers and smaller drops keep the road legible.
+
+- Wet streets mirror the changing sky.
+- Rain stays on the glass that holds it.
 
 ## October 22, 2026
 

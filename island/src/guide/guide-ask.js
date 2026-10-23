@@ -13,8 +13,10 @@ import { parseSocialIntent } from '../people/social-state.js';
 import { MEET_TAG_RE } from '../people/appointments.js';
 import { dialogueTokenLimit } from '../people/dialogue-style.js';
 import { personaFor, TAG_RE, personaPrompt, personaOffline } from '../people/persona.js';
+import { createSentenceStream, plainLine, moodOf, SOCIAL_ACTS } from './npc-live.js';
 
-export function guideTalkTo(gd, p) {
+// opts.mic: start listening at once (M, or the microphone button, pressed facing someone)
+export function guideTalkTo(gd, p, opts = {}) {
 	const { api, archive, archiveTurn, btnCss, el, endTalk, gatheringRecap, input, llm, log, offer,
 		people, perform, personContext, readyReports, reportStory, resetView, residentKey, say, show,
 		showRouteChoice, stories, threadMeta, title, whereKind } = gd;
@@ -33,15 +35,23 @@ export function guideTalkTo(gd, p) {
 	api.people?.engage(p);
 	title.textContent = gd.partner.persona.name.toUpperCase();
 	input.placeholder = `Say something to ${gd.partner.persona.first}`;
-	show(true);
+	// a live voice (the discovery server streams people's replies): face to face, with
+	// subtitles and the microphone, the panel only for typing and choices (an open one steps
+	// aside so the person is in view)
+	const live = gd.liveOn();
+	if (live) { if (input.offsetParent) show(false); gd.talkLive.open(gd.partner.persona.first, { listen: !!opts.mic }); }
+	else show(true);
 	for (const turn of archive.thread(threadMeta(gd.partner).id)?.turns.slice(-30) || []) if (turn.role === 'user' || turn.role === 'assistant') say(turn.content, turn.role === 'user' ? 'me' : 'guide');
 	if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 	if (resident) say((api.social.state.status().error ? 'Memory is available this session, but your browser could not save it. ' : 'Remembered in this browser. ') + 'Tell me what you need in your own words, or ask me for an adventure.', 'note');
-	if (resident && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
+	if (resident && !live && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
 	if(resident)for(const q of stories.list(resident.bodyKey).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident.id)))api.multiplayer?.reportQuest?.(q,resident);
 	const awareness=personContext(p,resident), opening=contextualOpening(awareness);
-	rec.met=true; perform(opening,true);
-	if(resident) api.social.state.remember(resident.id,'assistant',opening);
+	rec.met=true;
+	// live, they speak first in their own words (who they are, their mood, what they remember
+	// of you); frightened, the game's own line comes at once
+	if (live && !awareness.afraid) liveOpening(gd, gd.partner, resident, awareness, opening);
+	else { perform(opening,true); if(resident) api.social.state.remember(resident.id,'assistant',opening); }
 	if(awareness.afraid) {p.M.feel('surprise',.85);p.M.gesture('shake');}
 	else if(awareness.relationship?.trust>=3) {p.M.feel('joy',.45);p.M.gesture('nod');}
 	else if(awareness.relationship?.trust<0) {p.M.feel('sad',.25);p.M.gesture('shake');}
@@ -73,16 +83,67 @@ export function guideTalkTo(gd, p) {
 	}
 }
 
+async function liveOpening(gd, P2, resident, awareness, fallback) {
+	const { api, archiveTurn, bodySync, llm, perform, say, scroll, snapshot, speak, talkLive, threadMeta } = gd;
+	gd.busy?.abort();
+	const ctrl = new AbortController(); gd.busy = ctrl;
+	const p = P2.p, first = P2.persona.first, speakOut = gd.voiceOut;
+	const bubble = say('…', 'guide');
+	talkLive.line(first, '…'); talkLive.thinking(true);
+	let from = 0, res = null;
+	const sentences = createSentenceStream((s) => { if (speakOut) speak(s, P2.persona, { append: true }); });
+	try {
+		res = await llm.npcTalk(gd.sheetFor(P2, resident, awareness, snapshot()), resident ? api.social.state.get(P2.id)?.history : P2.history, { open: true, signal: ctrl.signal, onText: (t) => {
+			if (ctrl.signal.aborted || gd.partner !== P2) return;
+			const shown = plainLine(t);
+			bubble.textContent = shown || '…'; talkLive.line(first, shown || '…'); scroll();
+			from = bodySync(p, t, from);
+			sentences.push(shown);
+		} });
+	} catch { res = null; }
+	if (gd.busy === ctrl) gd.busy = null;
+	talkLive.thinking(false);
+	if (ctrl.signal.aborted || gd.partner !== P2) return;
+	if (!res) { bubble.remove(); perform(fallback, true); if (resident) api.social.state.remember(resident.id, 'assistant', fallback); return; }
+	const clean = plainLine(res.reply);
+	sentences.push(clean); sentences.flush();
+	bubble.textContent = clean || '…'; talkLive.line(first, clean);
+	bodySync(p, res.reply + (/[.!?]$/.test(res.reply.trim()) ? '' : '.'), from);
+	archiveTurn(threadMeta(P2), 'assistant', clean);
+	if (resident) api.social.state.remember(resident.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
+	const mood = moodOf(res.reply);
+	if (mood && resident) api.social.state.setMood?.(resident.id, mood);
+	liveDone(gd, res, { P2, resident, text: '', awareness });
+}
+// what a live reply leaves to do: their act carried out, a word from the game if it said no,
+// and the conversation let go when they are off somewhere -> true when they are leaving
+function liveDone(gd, res, ctx) {
+	const { api, perform, say, show, talkLive } = gd;
+	const done = gd.liveAct(res, ctx);
+	if (done.say) { perform(done.say, true, { append: true }); if (ctx.P2.id) api.social.state.remember(ctx.P2.id, 'assistant', done.say); }
+	if (done.note) { say(done.note, 'note'); talkLive.note(done.note); }
+	if (done.panel) show(true);
+	if (done.leave) gd.liveLeave(ctx.P2, done.fight);
+	return done.leave;
+}
+
 export async function guideAskPerson(gd, text) {
+	gd.talkLive?.thinking(true);
+	try { return await askPersonNow(gd, text); } finally { gd.talkLive?.thinking(false); }
+}
+async function askPersonNow(gd, text) {
 	const { ACTION_RE, api, archive, archiveTurn, bodySync, btnCss, el, endTalk, find, gatheringReply,
 		giveQuest, llm, log, meetingFromReply, meetingReply, negotiate, norm, npcFor, offer, offerStory,
 		personContext, planChat, projectConversation, QUEST_RE, quests, readyReports, reportStory,
 		residentKey, say, scroll, show, showAgreement, showProjectReview, showScheduleReview, showStory,
-		snapshot, speak, stories, storyContext, storyReply, targets, threadMeta } = gd;
+		snapshot, speak, stories, storyContext, storyReply, targets, threadMeta, talkLive, sheetFor, liveLeave } = gd;
 	const P2 = gd.partner, p = P2.p;
+	// a live voice: one streamed reply a turn, carrying its own action (no planner round trips)
+	const liveOn = gd.liveOn();
 	archiveTurn(threadMeta(P2),'user',text);
 	gd.busy?.abort();
 	say(text, 'me');
+	talkLive.you(text, true);
 	if (P2.id) api.social.state.remember(P2.id, 'user', text);
 	else { P2.history.push({ role: 'user', content: text }); while (P2.history.length > 10) P2.history.shift(); }
 	const bubble = say('…', 'guide');
@@ -102,7 +163,7 @@ export async function guideAskPerson(gd, text) {
 	const community=reply ? null : await projectConversation(text,P2,ctrl.signal);
 	if(ctrl.signal.aborted || gd.partner!==P2){if(gd.busy===ctrl)gd.busy=null;return;}
 	if(community)reply=community.message;
-	const negotiation = reply ? null : await negotiate(text,P2,ctrl.signal);
+	const negotiation = reply ? null : await negotiate(text,P2,ctrl.signal,liveOn);
 	if (ctrl.signal.aborted || gd.partner !== P2) { if(gd.busy===ctrl)gd.busy=null;return; }
 	if (negotiation) reply=negotiation.message || negotiation.error || 'No exchange was made.';
 	const own = reply ? null : p.talk?.reply?.(text);
@@ -127,7 +188,7 @@ export async function guideAskPerson(gd, text) {
 		// A gear action has already been validated by the arms adapter. Keep that
 		// response instead of letting the social intent layer reinterpret it as a
 		// generic order for the resident.
-		if (!reply) reply = api.social.command(resident, text, { relationship:awareness.relationship, target, quest: quests.find(q => !q.done) });
+		if (!reply && !liveOn) reply = api.social.command(resident, text, { relationship:awareness.relationship, target, quest: quests.find(q => !q.done) });
 		if (reply && parseSocialIntent(text)==='scout' && resident.mode==='scout' && resident.task && target?.name) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:'place-'+norm(target.name).replace(/ /g,'-')});
 	}
 	let meetNoteText = null, meetHandled = false;
@@ -135,9 +196,11 @@ export async function guideAskPerson(gd, text) {
 		const meet = gatheringReply(text, resident, p) || meetingReply(text, resident, p);
 		if (meet) { reply = meet.reply; meetNoteText = meet.note || null; meetHandled = true; }
 	}
+	// (a plain order, said in so many words: done by the game if the live voice doesn't)
+	const direct = liveOn && resident && !reply ? parseSocialIntent(text) : null;
 	if (resident && !reply) {
 		reply = storyReply(text);
-		if (!reply) {
+		if (!reply && !liveOn) {
 			const context=storyContext(resident), destinations=context.targets.slice(0,8).map(t=>({...t,distance:Math.hypot(t.x-p.M.S.pos.x,t.z-p.M.S.pos.z)}));
 			const currentOffer=stories.list(context.bodyKey).filter(q=>q.status==='offered' && q.offeredBy===residentKey(resident.id)).at(-1);
 			const ready=readyReports(resident);
@@ -160,6 +223,25 @@ export async function guideAskPerson(gd, text) {
 		}
 	}
 
+	let live = null, spoke = false;
+	if (!reply && liveOn) {
+		const speakOut = gd.voiceOut;
+		const sentences = createSentenceStream((s) => { if (speakOut) { spoke = true; speak(s, P2.persona, { append: true }); } });
+		try {
+			live = await llm.npcTalk(sheetFor(P2, resident, awareness, world), resident ? api.social.state.get(P2.id).history : P2.history, { signal: ctrl.signal, onText: (t) => {
+				if (ctrl.signal.aborted || gd.partner !== P2) return;
+				const shown = plainLine(t);
+				bubble.textContent = shown || '…'; talkLive.line(P2.persona.first, shown || '…'); scroll();
+				from = bodySync(p, t, from);
+				sentences.push(shown);
+			} });
+		} catch { live = null; }
+		if (ctrl.signal.aborted || gd.partner !== P2) { if (gd.busy === ctrl) gd.busy = null; return; }
+		if (live) {
+			reply = live.reply; sentences.push(plainLine(reply)); sentences.flush();
+			if (!live.act && direct && SOCIAL_ACTS[direct]) live.act = { act: direct };
+		} else if (direct && resident) reply = api.social.command(resident, text, { relationship: awareness.relationship, quest: quests.find(q => !q.done) });
+	}
 	try {
 		if (!reply && llm.kind() !== 'none' && llm.status.ready) {
 			reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle: gd.dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: [...awareness.facts,...(resident?.memories?.slice(-3).map(m => m.content)||[])] }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status. Price negotiations, task discounts, ownership and agreements are governed by the game ledger; never invent stock or an offer, or treat ordinary conversation as purchase consent.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
@@ -176,6 +258,9 @@ export async function guideAskPerson(gd, text) {
 	if (resident && !meetHandled) meetNoteText = meetingFromReply(reply, text, resident, p);
 	const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').trim();
 	bubble.textContent = clean || '…';
+	talkLive.line(P2.persona.first, clean || '…');
+	const mood = moodOf(reply);
+	if (mood && resident) api.social.state.setMood?.(resident.id, mood);
 	if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
 	if (own && (own.note || own.choices)) offer({ ...own, say: null });
 	if (favour) offer({ ...favour, say: null });
@@ -189,10 +274,14 @@ export async function guideAskPerson(gd, text) {
 	// A joined check-in can observe a real exchange here. Sending a prompt,
 	// previewing a task or receiving an unvalidated model proposal cannot finish it.
 	try{const observed=api.livingWorld?.conversationObserved?.(p);observed?.catch?.(()=>{});}catch{/* the activity journal reports its own save errors */}
-	if (gd.voiceOut) speak(clean, P2.persona);
+	if (gd.voiceOut && !spoke) speak(clean, P2.persona);
 	if (gd.busy === ctrl) gd.busy = null;
 	scroll();
-	if (/\b(bye|goodbye|take care|see you)\b/i.test(text)) setTimeout(() => { if (gd.partner === P2) { endTalk(); show(false); } }, meetNoteText ? 4000 : 1800);
+	const leaving = live ? liveDone(gd, live, { P2, resident, text, awareness }) : false;
+	if (!leaving && /\b(bye|goodbye|take care|see you)\b/i.test(text)) {
+		if (liveOn && gd.talkLive.isOpen()) liveLeave(P2);
+		else setTimeout(() => { if (gd.partner === P2) { endTalk(); show(false); } }, meetNoteText ? 4000 : 1800);
+	}
 }
 
 export async function guideAsk(gd, text) {

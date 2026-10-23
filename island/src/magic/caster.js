@@ -41,6 +41,8 @@ import { CHARGE, MIN_BLAST } from './beam.js';
 import { blastPart } from '../combat/health.js';
 import { lookOf, LOOK } from './looks.js';
 import { createAfflictions } from './elements.js';
+import { masteryLevel } from './perks.js';
+import { lanceShape, lanceSky, lanceVolley, lanceFlight, lanceShare, lanceStrikes } from './lances.js';
 
 const EYE = 1.68;
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
@@ -203,6 +205,58 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		if (st) for (const x of peopleNear(c, r, bystanders)) hex(x.T, st, k);
 	}
 
+	// ---------- Lance of Dawn's volley (magic/lances.js) ----------
+	// spears called up out of the sun (the moon by night) far along the line to it, diving on the
+	// ground round at at a slant, each striking all near where it lands. Its mastery level makes
+	// the volley (more, bigger, wider, at V a fifth at the heart); a further lance on one already
+	// struck strikes less. harmful false: a friend's, seen and not felt (shown at mastery I).
+	function volley(spell, k, at, harmful, level = null) {
+		const L = lookOf(spell), H = heavens() || {};
+		const lv = level ?? masteryLevel(state.mastery?.[spell.id] || 0);
+		const S = lanceShape(spell, lv, k, SPELL[spell.id]?.range);
+		aim(_o, _d);
+		const sky = lanceSky(H.sun, H.moon, { x: -_d.x, z: -_d.z });
+		const plan = lanceVolley(at, S, sky), hits = new Map();
+		S.night = sky.night;
+		for (const P of plan) {
+			const to = new THREE.Vector3(P.x, combat.ground(P.x, P.z, at.y + 20), P.z), d = P.dir;
+			const strikes = lanceStrikes(P);
+			P.phase = Math.random();
+			L.tell?.(fx, to, P.r, 0, sky.night, S, strikes);
+			let h = null, t = 0, f = null, called = false;
+			const tip = new THREE.Vector3();
+			effects.push({ t: 0, life: strikes, every: 0.035,
+				move(dt) {
+					t += dt;
+					f = lanceFlight(P, t);
+					if (f.stage === 'wait') return;
+					tip.set(to.x + d.x * f.d, to.y + d.y * f.d, to.z + d.z * f.d);
+					if (!called) { called = true; h = fx.lance?.() || null; L.sky?.(fx, tip, sky.night, S, P); }
+					L.fly?.(fx, h, tip, d, P, S, sky.night, f.a);
+				},
+				step() { if (f && f.stage === 'dive') L.fall?.(fx, tip, d, sky.night, S, P, Math.min(40, f.v * 0.12)); },
+				end() {
+					// (it stands in the ground where it struck, its point buried, burning out)
+					const bury = P.len * 0.1, out = 0.8 + 0.12 * S.level + (P.heart ? 0.4 : 0);
+					if (!h) h = fx.lance?.() || null;
+					L.fly?.(fx, h, tip.set(to.x - d.x * bury, to.y - d.y * bury, to.z - d.z * bury), d, P, S, sky.night, 1);
+					h?.fade(out);
+					if (L.stand) { const at = tip.clone(); effects.push({ t: 0, life: out, every: 0.06, step() { L.stand(fx, at, d, P, sky.night, 1 - Math.max(0, this.life) / out); } }); }
+					L.blast?.(fx, to, P.r, sky.night, S, P);
+					combat.shake?.(0.06 + 0.025 * S.level + (P.heart ? 0.14 : 0));
+					magicSound(`${spell.school}-blast`, 0.15 + 0.025 * S.level + (P.heart ? 0.08 : 0), to);
+					if (!harmful) return;
+					for (const x of hostilesNear(to, P.r, struck)) {
+						const before = hits.get(x.T) || 0, share = lanceShare(S, P, x.d, before);
+						if (share <= 0) continue;
+						hits.set(x.T, before + 1);
+						harm(x.T, spell.dmg * k * share, spell, to, null, false, blastPart(x));
+					}
+				} });
+		}
+		return S;
+	}
+
 	// ---------- the kinds ----------
 	const DO = {
 		bolt(spell, k) {
@@ -326,24 +380,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					combat.shake?.(0.4); magicSound('void-blast', 0.3, drawn);
 				} });
 		},
-		lances(spell, k) {
-			const { at } = aimPoint(spell.range), L = lookOf(spell);
-			// (out of the sun while it is up, else the moon, else straight down; never too low to see)
-			const H = heavens() || {}, up = (q) => q && q.y > 0.05;
-			const night = !up(H.sun) && up(H.moon), src = up(H.sun) ? H.sun : night ? H.moon : { x: 0, y: 1, z: 0 };
-			const dir = new THREE.Vector3(src.x, Math.max(0.55, src.y), src.z).normalize();
-			const n = spell.n || 3;
-			for (let i = 0; i < n; i++) {
-				const a = i / n * 6.283 + 0.5, to = new THREE.Vector3(at.x + Math.cos(a) * spell.spread, 0, at.z + Math.sin(a) * spell.spread);
-				to.y = combat.ground(to.x, to.z, at.y + 20);
-				L.tell?.(fx, to, spell.r, 0, night);
-				const fall = 26, from = to.clone().addScaledVector(dir, fall), T = 0.32;
-				effects.push({ t: 0, life: 0.18 * i + T, every: 0.04, pos: from.clone(), wait: 0.18 * i,
-					move(dt) { if ((this.wait -= dt) > 0) { L.tell?.(fx, to, spell.r, 0, night); return; } this.pos.addScaledVector(dir, -fall / T * dt); if (this.pos.distanceTo(to) < 0.5 || (this.pos.y < to.y)) this.pos.copy(to); },
-					step() { if (this.wait <= 0) L.fall?.(fx, this.pos, dir, night); },
-					end() { L.blast?.(fx, to, spell.r, night); areaHarm(to, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.08); magicSound(`${spell.school}-blast`, 0.16, to); } });
-			}
-		},
+		lances(spell, k) { volley(spell, k, aimPoint(spell.range).at, true); },
 		nova(spell, k) {
 			const c = { x: camera.position.x, y: camera.position.y - EYE + 0.4, z: camera.position.z };
 			const L = lookOf(spell);
@@ -870,6 +907,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 	return {
 		cast, release, update, clear, shieldBlow, exposure, hexOn, arc, ward, fleet, strike,
 		cloaked: () => buff.cloakUntil > now(),
+		// a friend's Lance of Dawn, seen where it went: the volley at mastery I, felt by no one
+		seeLances: (at) => volley(SPELL['lance-of-dawn'], 1, new THREE.Vector3(at.x, at.y, at.z), false, 1),
 		// the school of a held spell (a beam) pouring from the hand now, or null
 		beaming: () => { for (const H of held.values()) return H.spell.school; return null; },
 		sighting: () => buff.sightUntil > now(),

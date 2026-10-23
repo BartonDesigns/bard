@@ -121,6 +121,13 @@ export const MASTERY_POWER = 0.08;
 export const NUMERAL = Object.freeze(['I', 'II', 'III', 'IV', 'V']);
 export const MASTERY_GIFT = Object.freeze({
 	'solar-flare': { 3: { moonlit: true, name: 'Moonfall', text: 'It works at night, drawing its blast down from the moon.' } },
+	// (what each level makes of the volley: magic/lances.js LANCE_MASTERY)
+	'lance-of-dawn': {
+		2: { name: 'Winged', text: 'Greater lances, grown wings, each striking wider.' },
+		3: { name: 'Fourfold', text: 'Four lances fall, closer round your mark.' },
+		4: { name: 'Sunburst', text: 'Greater still; each throws a sunburst of rays along the ground.' },
+		5: { name: 'Heart of Dawn', text: 'A great fifth lance strikes the heart of the ring, and every strike reaches wider and forgives a poor aim.' },
+	},
 });
 export const masteryLevel = (pts) => MASTERY.filter((p) => pts >= p).length;
 

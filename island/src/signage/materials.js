@@ -10,7 +10,9 @@
 //   paper   matte posters and flyers: no sheen, the corner peeling where the paste let go,
 //           yellowed and holed with age
 //   foil    gold leaf and metallic labels: metal that catches the light
-//   paint   spray paint, its overspray soft, the wall's own grain showing through
+//   paint   spray paint, a roller's advert, a crew's buff: in its wall's own light and dirt,
+//           with the years of its own (signage/wallpaint.js), lit by the street lamps as
+//           the wall is at night
 //   grime   no texture: rust, soot, water and gum worked out in the shader (bay/weathering.js)
 // Every one reads its graphic from the atlas through the instance's cell (aCell), and its
 // back, seed, wear and extra flag from aFx; writes no depth and is biased toward the eye by
@@ -22,6 +24,8 @@ import { civicTexture } from '../civic/materials.js';
 import { layerBias } from './layers.js';
 import { WALL_GLSL, GRIME_GLSL } from '../bay/weathering.js';
 import { qualityNow } from '../world/governor.js';
+import { addNightField } from '../world/nightfield.js';
+import { PAINT_V_PARS, PAINT_V, PAINT_F } from './wallpaint.js';
 
 export const SIGNAGE_RECOVERY_KEY = 'l99-signage-lite';
 const browserStorage = () => { try { return globalThis.localStorage; } catch { return null; } };
@@ -36,7 +40,8 @@ export function recoverSignage(storage = browserStorage()) {
 const useCompact = () => recovery || qualityNow().fx === 'low';
 
 // shared by every signage material: the headlights (xyz where, w how strong), which way
-// they point, how dark it is, the daylight for the foil
+// they point, how dark it is, the daylight for the foil, how wet the world is (the paint on
+// the freeway's concrete darkens with it)
 export const SIGN_U = {
 	uSgHead: { value: new THREE.Vector4(0, -1e5, 0, 0) },
 	uSgHeadDir: { value: new THREE.Vector3(0, 0, -1) },
@@ -46,9 +51,10 @@ export const SIGN_U = {
 	uSgSunDir: { value: new THREE.Vector3(.3, .8, .4).normalize() },
 	uSgSunColor: { value: new THREE.Color(1, .95, .86) },
 	uSgAmbient: { value: new THREE.Color(.3, .35, .4) },
+	uSgWet: { value: 0 },
 };
 export function bindSignLighting(shared) {
-	for (const [sign, world] of [['uSgSunDir', 'uSunDir'], ['uSgSunColor', 'uSunColor'], ['uSgAmbient', 'uAmbient']]) if (shared[world]) SIGN_U[sign] = shared[world];
+	for (const [sign, world] of [['uSgSunDir', 'uSunDir'], ['uSgSunColor', 'uSunColor'], ['uSgAmbient', 'uAmbient'], ['uSgWet', 'uWet']]) if (shared[world]) SIGN_U[sign] = shared[world];
 }
 const SPEC = {
 	retro: { roughness: 0.42, metalness: 0.0, far: 420 },
@@ -68,7 +74,7 @@ attribute vec4 aFx;
 attribute vec4 aBend;
 #endif
 varying vec2 vSgUv; varying vec4 vSgCell; varying vec4 vSgFx; varying vec3 vSgW; varying vec3 vSgN;
-`;
+${PAINT_V_PARS}`;
 const COMMON_F = /* glsl */`
 uniform sampler2D uCivicMetal; uniform sampler2D uCivicEnamel;
 uniform vec4 uSgHead; uniform vec3 uSgHeadDir; uniform float uSgNight; uniform float uSgDay; uniform float uSgFar;
@@ -88,6 +94,13 @@ function fragBody(kind, compact = false) {
 	${kind === 'grime' ? `
 	vec4 sgTex = ${compact ? 'vec4(mix(vec3(.11,.09,.07),vec3(.25,.13,.06),step(.5,sgExtra)), smoothstep(.0,.18,sgUv.x)*smoothstep(.0,.18,1.0-sgUv.x)*smoothstep(.0,.12,sgUv.y)*smoothstep(.0,.12,1.0-sgUv.y)*sgN(sgUv*8.0+sgSeed*37.0))' : 'grimeDecal(sgUv, sgExtra, sgSeed * 37.0)'};
 	diffuseColor = vec4(sgTex.rgb, sgTex.a * (0.55 + 0.45 * sgWear));
+	` : kind === 'paint' ? `
+	// the paint in its wall's light and dirt, and its own years (wallpaint.js); the art a few
+	// mips down beside it for the spray's overspray. (The flag is whole numbers, gloss + 2 x
+	// style: rounded first, as a varying comes through a hair off them.)
+	vec2 sgCuv = vSgCell.xy + clamp(sgUv, 0.0, 1.0) * vSgCell.zw;
+	vec4 sgP = paintOnWall(texture2D(map, sgCuv), texture2D(map, sgCuv, 2.5), sgUv, vSgW, normalize(vSgN), floor(floor(sgExtra + 0.5) * 0.5), sgWear, sgSeed);
+	diffuseColor.rgb *= sgP.rgb; diffuseColor.a *= sgP.a;
 	` : `
 	vec4 sgTex = texture2D(map, vSgCell.xy + clamp(sgUv, 0.0, 1.0) * vSgCell.zw);
 	diffuseColor.rgb *= sgTex.rgb; diffuseColor.a *= sgTex.a;
@@ -127,10 +140,6 @@ function fragBody(kind, compact = false) {
 		diffuseColor.rgb *= mix(vec3(1.0), vec3(0.96, 0.9, 0.76), sgWear);
 		diffuseColor.rgb *= 1.0 - 0.18 * sgWear * smoothstep(0.55, 0.8, sgN(sgUv * 5.0 + sgSeed * 7.0));
 	}
-	` : ''}
-	${kind === 'paint' ? `
-	// the wall's grain through the paint, the overspray thinning at its edges
-	diffuseColor.a *= 0.86 + 0.14 * sgN(vSgW.xz * 9.0 + vSgW.y * 7.0);
 	` : ''}
 	// fade out in the distance
 	diffuseColor.a *= 1.0 - smoothstep(uSgFar * 0.72, uSgFar, distance(cameraPosition, vSgW));
@@ -184,10 +193,11 @@ function compactMaterial(kind, map, far) {
 			#endif
 			sgw = modelMatrix * sgw; vSgW = sgw.xyz; vSgN = normalize(mat3(modelMatrix) * sgn);
 			vSgUv = uv; vSgCell = aCell; vSgFx = aFx;
+			${PAINT_V}
 			vec4 mvPosition = viewMatrix * sgw; gl_Position = projectionMatrix * mvPosition;
 			#include <fog_vertex>
 		}`,
-		fragmentShader: COMMON_F.replace('uniform sampler2D uCivicMetal; uniform sampler2D uCivicEnamel;', '') + `
+		fragmentShader: COMMON_F.replace('uniform sampler2D uCivicMetal; uniform sampler2D uCivicEnamel;', '') + (kind === 'paint' ? PAINT_F : '') + `
 		uniform sampler2D map;
 		uniform vec3 uSgSunDir, uSgSunColor, uSgAmbient;
 		#include <fog_pars_fragment>
@@ -205,6 +215,7 @@ function compactMaterial(kind, map, far) {
 		}`,
 	});
 	m.map = map; // atlas ownership and disposal, also used by material replacement
+	if (kind === 'paint') m.defines = { SG_HOST: '', SG_LITE: '' };
 	return m;
 }
 
@@ -233,7 +244,7 @@ export function signMaterial(kind, layer, map, { phone = false, bend = false } =
 		sh.vertexShader = COMMON_V + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>' + BEND_N)
 			.replace('#include <begin_vertex>', '#include <begin_vertex>' + BEND_V + (kind === 'cloth' ? '\ntransformed.z += 0.085 * uv.x * sin(uv.x * 7.0 + uv.y * 2.0 - uSgTime * 2.4 + aFx.y * 6.28);' : ''))
-			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSgUv = uv; vSgCell = aCell; vSgFx = aFx;')
+			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSgUv = uv; vSgCell = aCell; vSgFx = aFx;\n' + PAINT_V)
 			.replace('#include <project_vertex>', `#include <project_vertex>
 			{
 				vec4 sgw = vec4(transformed, 1.0);
@@ -243,15 +254,20 @@ export function signMaterial(kind, layer, map, { phone = false, bend = false } =
 				#endif
 				vSgW = (modelMatrix * sgw).xyz; vSgN = normalize(mat3(modelMatrix) * sgn);
 			}`);
-		sh.fragmentShader = COMMON_F + (kind === 'grime' ? WALL_GLSL + GRIME_GLSL : '') + sh.fragmentShader
+		sh.fragmentShader = COMMON_F + (kind === 'grime' ? WALL_GLSL + GRIME_GLSL : kind === 'paint' ? WALL_GLSL + PAINT_F : '') + sh.fragmentShader
 			.replace('#include <map_fragment>', fragBody(kind))
-			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)roughnessFactor=.64;':kind==='paint'?'\nif(vSgFx.w>.5)roughnessFactor=mix(.24,.65,sgWear);':''))
-			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)metalnessFactor=.82;':kind==='paint'?'\nif(vSgFx.w>.5)metalnessFactor=.45*(1.0-sgWear);':''))
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)roughnessFactor=.64;':kind==='paint'?'\nif(mod(floor(vSgFx.w+.5),2.0)>.5)roughnessFactor=mix(.24,.65,sgWear);\nroughnessFactor=mix(roughnessFactor,roughnessFactor*.4,sgWetK*.85);':''))
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>' + (kind==='retro'?'\nif(!gl_FrontFacing && vSgFx.x<.5)metalnessFactor=.82;':kind==='paint'?'\nif(mod(floor(vSgFx.w+.5),2.0)>.5)metalnessFactor=.45*(1.0-sgWear);':''))
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + emissiveBody(kind));
 	};
-	m.customProgramCacheKey = () => (compact ? 'signage-lite-1' : 'signage-civic-3') + kind + (bend ? '-bend' : '');
+	m.customProgramCacheKey = () => (compact ? 'signage-lite-1' : 'signage-civic-3') + kind + (kind === 'paint' ? '-wall1' : '') + (bend ? '-bend' : '');
 	// (grime has no map, but its uv must still reach the shader)
 	if (kind === 'grime') m.defines = { ...m.defines, USE_UV: '' };
+	// (paint knows its wall: wallpaint.js)
+	if (kind === 'paint' && !compact) m.defines = { ...m.defines, SG_HOST: '' };
+	// the street lamps' pools on the paint and the posters as on the wall they are on (the city's
+	// buildings take the same list: bay/city.js), built with the material, never added later
+	if (!compact && (kind === 'paint' || kind === 'paper')) addNightField(m, { field: 'SF' });
 	m.userData.renderOrder = B.renderOrder;
 	m.userData.lift = B.lift;
 	cache.set(key, m);

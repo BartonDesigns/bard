@@ -179,6 +179,141 @@ function decals(scene, n) {
 	};
 }
 
+// (the lances of Lance of Dawn, magic/lances.js: real spears of light, not strokes. One mesh, a
+// spear from its butt (y 0) to its point (y 1): a round shaft with a bead at the butt and a
+// collar, a broad leaf of a blade, and two swept wings at the collar that grow in with mastery
+// (iShape.x: 0 none). Drawn solid, a white-hot heart in a skin of its colour going darker at the
+// very rim, so it stands out against a bright sky as well as a dark one; light runs up the shaft
+// toward the point. One instanced mesh, a few held at once: nothing is made while you cast.)
+function lanceGeometry() {
+	// rings along the spear: [y, half-width across the blade, half-depth]
+	const R = [[0, 0, 0], [0.025, 0.02, 0.02], [0.045, 0.018, 0.018], [0.64, 0.018, 0.018], [0.652, 0.028, 0.028], [0.672, 0.028, 0.028],
+		[0.688, 0.016, 0.016], [0.7, 0.032, 0.013], [0.77, 0.064, 0.017], [0.86, 0.05, 0.013], [0.94, 0.024, 0.007], [1, 0, 0]];
+	const SIDES = 8, pos = [], part = [], idx = [];
+	for (const [y, rx, rz] of R) for (let k = 0; k < SIDES; k++) { const a = k / SIDES * Math.PI * 2; pos.push(Math.cos(a) * rx, y, Math.sin(a) * rz); part.push(y >= 0.645 ? 1 : 0); }
+	for (let j = 0; j < R.length - 1; j++) for (let k = 0; k < SIDES; k++) { const a = j * SIDES + k, b = j * SIDES + (k + 1) % SIDES; idx.push(a, a + SIDES, b, b, a + SIDES, b + SIDES); }
+	const loft = new THREE.BufferGeometry();
+	loft.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	loft.setAttribute('part', new THREE.Float32BufferAttribute(part, 1));
+	loft.setIndex(idx);
+	loft.computeVertexNormals();
+	const flat = loft.toNonIndexed();
+	loft.dispose();
+	// the wings: a swept prong each side of the collar, flat in the blade's plane, both faces
+	const P = [...flat.attributes.position.array], N = [...flat.attributes.normal.array], K = [...flat.attributes.part.array];
+	const W = [[0.02, 0.69], [0.02, 0.646], [0.078, 0.64], [0.13, 0.572]];
+	const tri = (a, b, c, sx, sz) => {
+		for (const q of sz > 0 ? [a, b, c] : [a, c, b]) { P.push(W[q][0] * sx, W[q][1], 0.004 * sz); N.push(0, 0, sz); K.push(2); }
+	};
+	for (const sx of [1, -1]) for (const sz of [1, -1]) {
+		// (wound so each face looks out its own side, whichever wing it is)
+		const f = sx * sz;
+		tri(0, 1, 2, sx, f); tri(2, 1, 3, sx, f);
+	}
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+	g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+	g.setAttribute('part', new THREE.Float32BufferAttribute(K, 1));
+	flat.dispose();
+	return g;
+}
+const LANCE_VERT = `attribute float part; attribute vec4 iColor; attribute vec4 iShape;
+varying vec3 vN; varying vec3 vV; varying vec4 vC; varying float vPart; varying float vY; varying vec2 vS;
+void main() {
+	vec3 p = position;
+	// (the wings grow out of the collar with mastery)
+	if (part > 1.5) { p.x *= iShape.x; p.y = 0.665 + (p.y - 0.665) * iShape.x; }
+	vec4 mv = modelViewMatrix * instanceMatrix * vec4(p, 1.0);
+	vN = normalize(normalMatrix * (mat3(instanceMatrix) * normal));
+	vV = -mv.xyz; vC = iColor; vPart = part; vY = position.y; vS = iShape.yz;
+	gl_Position = iColor.a > 0.0 ? projectionMatrix * mv : vec4(2.0, 2.0, 2.0, 1.0);
+}`;
+const LANCE_FRAG = `uniform float uT;
+varying vec3 vN; varying vec3 vV; varying vec4 vC; varying float vPart; varying float vY; varying vec2 vS;
+void main() {
+	vec3 n = normalize(vN), v = normalize(vV);
+	float f = 1.0 - abs(dot(n, v)), heat = vS.x;
+	vec3 white = vec3(1.0, 0.97, 0.88);
+	// a white-hot heart in a skin of its colour, deeper and more saturate at the very rim (its edge
+	// against a bright sky), never dull
+	vec3 c = mix(white * (1.15 + 0.35 * heat), vC.rgb * 1.35, smoothstep(0.3 - 0.1 * heat, 0.92, f));
+	c = mix(c, vC.rgb * vec3(1.0, 0.72, 0.4), smoothstep(0.88, 1.0, f) * (0.45 - 0.25 * heat));
+	// (light pouring up the shaft toward the point, brighter toward the blade; the blade and wings
+	// burn steady)
+	float run = (0.82 + 0.18 * sin(vY * 16.0 - uT * 24.0 + vS.y * 6.283)) * (0.8 + 0.3 * vY);
+	c *= vPart < 0.5 ? run : vPart > 1.5 ? 1.05 : 1.15;
+	gl_FragColor = vec4(c, vC.a);
+}`;
+function lancePool(scene, n) {
+	const geo = lanceGeometry();
+	const iColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage), iShape = new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage);
+	geo.setAttribute('iColor', iColor); geo.setAttribute('iShape', iShape);
+	const mat = new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 } }, vertexShader: LANCE_VERT, fragmentShader: LANCE_FRAG, transparent: true, depthWrite: false });
+	const mesh = new THREE.InstancedMesh(geo, mat, n);
+	mesh.frustumCulled = false; mesh.renderOrder = 4; mesh.name = 'magic-lances';
+	const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), dv = new THREE.Vector3(), at = new THREE.Vector3(), sc = new THREE.Vector3();
+	m.makeScale(0, 0, 0);
+	for (let i = 0; i < n; i++) mesh.setMatrixAt(i, m);
+	scene.add(mesh);
+	// (shown from the start, so its shader is built with the rest as the world loads; hidden
+	// after the first frame while no lance is up)
+	const H = [];
+	let next = 0, live = 0, was = true;
+	function free(h) { if (!h.on) return; h.on = false; iColor.setW(h.i, 0); m.makeScale(0, 0, 0); mesh.setMatrixAt(h.i, m); live = Math.max(0, live - 1); }
+	for (let i = 0; i < n; i++) {
+		const h = {
+			i, on: false, a: 1, fadeT: 0, fadeMax: 0, seen: 0,
+			// the spear's point at tip, pointing along d (unit), len long, its girth x thick, wings
+			// (0 none), its colour c, alpha a, heat (0..1: whiter), phase (its own run of light)
+			set(tip, d, len, thick, wing, c, a = 1, heat = 0, phase = 0) {
+				if (!h.on) return h;
+				h.seen = 0; h.a = a;
+				dv.set(d.x, d.y, d.z).normalize();
+				q.setFromUnitVectors(Y, dv);
+				m.compose(at.set(tip.x - dv.x * len, tip.y - dv.y * len, tip.z - dv.z * len), q, sc.set(len * thick, len, len * thick));
+				mesh.setMatrixAt(i, m);
+				iColor.setXYZW(i, c[0], c[1], c[2], a * (h.fadeMax ? Math.max(0, h.fadeT / h.fadeMax) : 1));
+				iShape.setXYZW(i, wing, heat, phase, 0);
+				return h;
+			},
+			// let it go out over t s (then it is free again)
+			fade(t) { if (h.on && !h.fadeMax) { h.fadeMax = h.fadeT = Math.max(0.01, t); } return h; },
+			free: () => free(h),
+		};
+		H.push(h);
+	}
+	return {
+		mesh,
+		// a lance to hold (the oldest is taken back if all are up)
+		take() {
+			let h = null;
+			for (let k = 0; k < n && !h; k++) { const c = H[(next + k) % n]; if (!c.on) h = c; }
+			if (!h) { h = H[next]; free(h); }
+			next = (h.i + 1) % n;
+			h.on = true; h.a = 1; h.fadeT = h.fadeMax = 0; h.seen = 0; live++;
+			mesh.visible = true;
+			return h;
+		},
+		step(dt, t) {
+			mat.uniforms.uT.value = t;
+			let dirty = false;
+			for (const h of H) {
+				if (!h.on) continue;
+				dirty = true;
+				// (one left unset for a second has been forgotten: it goes)
+				if (!h.fadeMax && (h.seen += dt) > 1) { free(h); continue; }
+				if (h.fadeMax) { h.fadeT -= dt; if (h.fadeT <= 0) { free(h); continue; } iColor.setW(h.i, h.a * h.fadeT / h.fadeMax); }
+			}
+			// (nothing up, nothing to send, after the frame that put the last one away)
+			if (dirty || was) { mesh.instanceMatrix.needsUpdate = iColor.needsUpdate = iShape.needsUpdate = true; }
+			was = dirty;
+			mesh.visible = live > 0 || t < 0.5;
+		},
+		clear() { for (const h of H) free(h); live = 0; },
+		dispose() { scene.remove(mesh); geo.dispose(); mat.dispose(); },
+	};
+}
+
 function pool(scene, n, ink, order) {
 	const g = new THREE.BufferGeometry();
 	const pos = new Float32Array(n * 3), col = new Float32Array(n * 4), size = new Float32Array(n), kind = new Float32Array(n * 2);
@@ -331,6 +466,8 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 	const glow = pool(scene, isPhone ? 1400 : 3200, false, 4), ink = pool(scene, isPhone ? 300 : 700, true, 3), flat = decals(scene, isPhone ? 24 : 48);
 	const gargantua = blackHole(scene);
 	const streak = streaks(scene, isPhone ? 500 : 1600);
+	const spears = lancePool(scene, isPhone ? 12 : 24);
+	let clock = 0;
 	// what is seen through walls (the sight spells): the glow, drawn over everything
 	const xray = new THREE.Points(glow.g, glow.mat.clone());
 	xray.material.depthTest = false; xray.frustumCulled = false; xray.renderOrder = 5; xray.visible = false;
@@ -479,13 +616,14 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 	}
 	const grade = () => (G.t >= 0 ? G : null);
 	function update(dt, xrayOn = false) {
-		step(glow, dt); step(ink, dt); streak.step(dt); flat.step(dt); gargantua.step(dt); stepGrade(dt);
+		clock += dt;
+		step(glow, dt); step(ink, dt); streak.step(dt); flat.step(dt); spears.step(dt, clock); gargantua.step(dt); stepGrade(dt);
 		if (xrayOn && !xray.parent) scene.add(xray);
 		xray.visible = xrayOn;
 	}
 	function resize(h, fov) { glow.mat.uniforms.scale.value = ink.mat.uniforms.scale.value = xray.material.uniforms.scale.value = h / 2 / Math.tan((fov * Math.PI) / 360); }
-	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; streak.clear(); flat.clear(); gargantua.clear(); G.t = -1; G.inv = G.grey = G.black = G.burst = 0; }
-	function dispose() { for (const L of [glow, ink]) { scene.remove(L.pts); L.g.dispose(); L.mat.dispose(); } scene.remove(xray); xray.material.dispose(); scene.remove(flat.mesh); flat.geo.dispose(); flat.mat.dispose(); streak.dispose(); gargantua.dispose(); }
+	function clear() { for (const p of glow.P) p.life = 0; for (const p of ink.P) p.life = 0; streak.clear(); flat.clear(); spears.clear(); gargantua.clear(); G.t = -1; G.inv = G.grey = G.black = G.burst = 0; }
+	function dispose() { for (const L of [glow, ink]) { scene.remove(L.pts); L.g.dispose(); L.mat.dispose(); } scene.remove(xray); xray.material.dispose(); scene.remove(flat.mesh); flat.geo.dispose(); flat.mat.dispose(); streak.dispose(); spears.dispose(); gargantua.dispose(); }
 	// (the black hole, kept alive by calling this each step: where, radius, strength, the eye)
 	const hole = (p, r, a = 1, e = null) => gargantua.set(p, r, a, e);
 	// (a hit's weight: a white-hot core and its colour flaring out where it lands, k 0 to 1 by how
@@ -506,7 +644,10 @@ export function createMagicFx(scene, { isPhone = false, onEmit = null } = {}) {
 	}
 	const takeFlash = () => { const f = felt; felt = null; return f; };
 	const darkness = () => gargantua.darkness();
-	return { emit, spark, seg, burst, darkness, ring, line, bolt, pillar, circle, spiral, decal, hole, lenses, grade, gradeFrom, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts };
+	// a lance of light to hold and move each frame (null: none to be had): .set(tip, dir, len, thick,
+	// wing, colour, alpha, heat, phase), .fade(s), .free()
+	const lance = () => spears.take();
+	return { emit, spark, seg, burst, darkness, ring, line, bolt, pillar, circle, spiral, decal, hole, lance, lenses, grade, gradeFrom, flash, takeFlash, update, resize, clear, dispose, points: glow.pts, ink: ink.pts, lite: isPhone };
 }
 
 // ---------- the voices ----------

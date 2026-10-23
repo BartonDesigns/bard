@@ -131,7 +131,7 @@ const CSS = `
 .gp-wheel .c{position:absolute;left:50%;top:50%;width:120px;transform:translate(-50%,-50%);text-align:center;font:600 12px/1.3 var(--bard-display,system-ui,sans-serif);color:#eafaf6}
 .gp-wheel .lb{position:absolute;left:0;right:0;text-align:center;font:700 9px var(--bard-display,system-ui,sans-serif);letter-spacing:.14em;color:rgba(255,255,255,.5)}
 .gp-wheel .c small{display:block;color:rgba(255,255,255,.55);font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px;font-family:var(--bard-display,Georgia,serif)}
-#l99-island-mount.l99-touch.gp-on :is(.l99-joy,.l99-thumb,.mg-hub,.mc-btn,.cb-btn,.combat-focus-controls,button[aria-label="Aim"],button[aria-label="Aim held item"]){display:none !important}
+#l99-island-mount.l99-touch.gp-on :is(.l99-joy,.l99-thumb,.mg-hub,.mg-q,.mc-btn,.cb-btn,.combat-focus-controls,button[aria-label="Aim"],button[aria-label="Aim held item"]){display:none !important}
 .mg-s.gp-sel{box-shadow:0 0 0 2px #01a982,0 0 12px rgba(1,169,130,.7)}
 #l99-island-mount.gp-on [data-gp]{position:relative}
 #l99-island-mount.gp-on [data-gp]::after{content:attr(data-gp);position:absolute;left:-9px;top:-9px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--gp-c,#3b82f6) 25%,#0a0a0a);border:1px solid var(--gp-c,#3b82f6);color:var(--gp-c,#3b82f6);font:700 11px/1 var(--bard-display,system-ui,sans-serif);pointer-events:none}

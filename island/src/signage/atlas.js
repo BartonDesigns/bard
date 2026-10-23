@@ -77,10 +77,21 @@ export function createAtlas({ size = 2048, height = size, name = 'signage', scal
 		tex.needsUpdate = true;
 		return fresh.length;
 	}
+	// a face drawn again over its own cell (same key, same size): its words changed, nothing moves
+	function redraw(key, face) {
+		const e = entries.get(key);
+		if (!e || !g) return false;
+		g.clearRect(e.x - PAD, e.y - PAD, e.w + PAD * 2, e.h + PAD * 2);
+		drawFace(g, e.x, e.y, e.w, e.h, { ...face, phone: scale < 1 });
+		drawn++;
+		tex.needsUpdate = true;
+		return true;
+	}
 	return {
-		tex, canvas: cv, sync, reset,
+		tex, canvas: cv, sync, reset, redraw,
 		get: (key) => entries.get(key)?.cell || null,
 		has: (key) => entries.has(key),
+		cellRect: (key) => { const e = entries.get(key); return e ? { x: e.x, y: e.y, w: e.w, h: e.h } : null; },
 		info: () => ({ size: `${size}x${height}`, faces: entries.size, shelves: shelves.length, full: Math.round(nextY / height * 100) + '%', repacks, drawn }),
 		dispose() { tex.dispose(); entries.clear(); },
 	};
