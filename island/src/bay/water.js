@@ -1244,6 +1244,22 @@ export function createWater(scene, shared, opts = {}) {
 		group: root, update, waterAt, inWater, nameAt, kindAt, floor, info, falls, ready: () => S.ready,
 		// (which lakes are known: it changes as a source lists more, e.g. the land's own as you come near)
 		lakesVersion: () => (S.ready ? 'r' : 'w') + S.srcV,
+		// the globe's frame jumped (earth/globe.js place: a landing from orbit, a saved place far
+		// off): the streams, the lakes' meshes and the carving round you were worked out for
+		// where the old frame lay, at the same engine metres, so they are let go and worked out
+		// again for the ground here (the sources' lakes go as each source lets go of its own)
+		reframe() {
+			if (disposed) return;
+			cur = null; S.jobs.length = 0; carveQ.clear(); S.noCarve.clear();
+			for (const T of S.tiles.values()) { if (T.mesh) gone.push(T.mesh); if (T.halo) gone.push(T.halo); if (T.bed) gone.push(...T.bed); }
+			S.tiles.clear();
+			if (atlas) for (const t of [...atlas.tiles()]) atlas.drop(t.i, t.j);
+			for (const L of S.lakes) { dropLake(L); dropFlock(L); }
+			for (const [k, D] of decks) if (!D.walk) decks.delete(k);
+			decksDirty = true; S.plannedAt = -1e9;
+			for (const src of sources) src.reframe?.();
+			grewTrees();
+		},
 		dispose() {
 			if (disposed) return;
 			disposed = true; S.ready = false; job = cur = null;

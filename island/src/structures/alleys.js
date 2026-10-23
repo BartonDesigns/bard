@@ -52,7 +52,14 @@ function frontOf(b, near, block) {
 
 // boxes: buildings ({ x, z, w, d, a } plus kind/src); roads: the streets (or null on the grid,
 // where every lot faces its street with its local +z); returns the alleys as roads
-export function planAlleys(boxes, roads = null, { minRow = 3, minLen = 45, step = 17, seed = 1, why = null, block = null, only = null } = {}) {
+export function planAlleys(boxes, roads = null, opts = {}) {
+	const g = planAlleysSteps(boxes, roads, opts);
+	let r = g.next();
+	while (!r.done) r = g.next();
+	return r.value;
+}
+// the same in steps, yielding every few hundred shops (a grown city's, crysis/civgen.js)
+export function* planAlleysSteps(boxes, roads = null, { minRow = 3, minLen = 45, step = 17, seed = 1, why = null, block = null, only = null } = {}) {
 	const W = why || {};
 	const tally = (k) => { W[k] = (W[k] || 0) + 1; };
 	const near = roads ? roadIndex(roads) : null;
@@ -60,7 +67,9 @@ export function planAlleys(boxes, roads = null, { minRow = 3, minLen = 45, step 
 	const all = boxes.filter((b) => !b.gone && b.w > 1.5 && b.d > 1.5 && (b.h === undefined || b.h > 2.6));
 	// (each shop with its front: the way out to its street, and its back line)
 	const F = [];
+	let k = 0;
 	for (const b of shops) {
+		if (++k % 300 === 0) yield;
 		const f = frontOf(b, near, block);
 		if (!f) { tally('nofront'); continue; }
 		const [nx, nz, half] = f;
@@ -76,7 +85,7 @@ export function planAlleys(boxes, roads = null, { minRow = 3, minLen = 45, step 
 	const halfAlong = (g, f) => (Math.abs(Math.cos(g.b.a) * f.tx + Math.sin(g.b.a) * f.tz) * g.b.w + Math.abs(-Math.sin(g.b.a) * f.tx + Math.cos(g.b.a) * f.tz) * g.b.d) / 2;
 	const segsNear = (x, z, r) => (near ? near({ x, z, w: r * 2, d: r * 2, a: 0 }) : []);
 	const boxGrid = new Map();
-	for (const b of all) { const r = Math.hypot(b.w, b.d) / 2; for (let j = Math.floor((b.z - r) / cell); j <= Math.floor((b.z + r) / cell); j++) for (let i = Math.floor((b.x - r) / cell); i <= Math.floor((b.x + r) / cell); i++) { const k = i * 92821 + j; let l = boxGrid.get(k); if (!l) boxGrid.set(k, l = []); l.push(b); } }
+	for (const b of all) { if (++k % 3000 === 0) yield; const r = Math.hypot(b.w, b.d) / 2; for (let j = Math.floor((b.z - r) / cell); j <= Math.floor((b.z + r) / cell); j++) for (let i = Math.floor((b.x - r) / cell); i <= Math.floor((b.x + r) / cell); i++) { const k = i * 92821 + j; let l = boxGrid.get(k); if (!l) boxGrid.set(k, l = []); l.push(b); } }
 	const blocked = (q, skip) => {
 		const r = Math.hypot(q.w, q.d) / 2, seen = new Set();
 		for (let j = Math.floor((q.z - r) / cell); j <= Math.floor((q.z + r) / cell); j++) for (let i = Math.floor((q.x - r) / cell); i <= Math.floor((q.x + r) / cell); i++) for (const b of boxGrid.get(i * 92821 + j) || []) {
@@ -101,6 +110,7 @@ export function planAlleys(boxes, roads = null, { minRow = 3, minLen = 45, step 
 	};
 	const hash = (x, z) => { let h = Math.imul(Math.round(x * 3) | 0, 374761393) ^ Math.imul(Math.round(z * 3) | 0, 668265263) ^ seed; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 	for (const f of F) {
+		if (++k % 200 === 0) yield;
 		if (used.has(f)) continue;
 		// grow the row both ways from f
 		const row = [f];

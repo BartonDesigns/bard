@@ -279,7 +279,9 @@ export function planHouse(grp, opt = {}) {
 	}
 
 	// the entry: a hall behind the front door, taking in the stairs when they stand beside it
-	let entry = { x0: door.x - 1.1, x1: door.x + 1.1, z0: door.z - 2.4, z1: door.z };
+	// (a cottage's or a cabin's is a step inside the door, not a room)
+	const small = !hasUp && rects.reduce((s, r) => s + (r.x1 - r.x0) * (r.z1 - r.z0), 0) < 48;
+	let entry = small ? { x0: door.x - 0.8, x1: door.x + 0.8, z0: door.z - 1.4, z1: door.z } : { x0: door.x - 1.1, x1: door.x + 1.1, z0: door.z - 2.4, z1: door.z };
 	let stairHall = null;
 	if (stairs) {
 		const near = stairs.x1 > entry.x0 - 1.2 && stairs.x0 < entry.x1 + 1.2 && stairs.zb > door.z - 2.2;
@@ -353,7 +355,9 @@ export function planHouse(grp, opt = {}) {
 
 	// ground floor
 	if (garage) carve(addRoom('garage', 0), garage);
-	const E0 = carve(addRoom('entry', 0), entry);
+	// (a cottage, a cabin: in at the door to its one main room, no hall)
+	const cottage = small && !garage && !opt.estab;
+	const E0 = cottage ? null : carve(addRoom('entry', 0), entry);
 	const SH = stairHall ? carve(addRoom('hall', 0), stairHall) : null;
 	const H0 = hall0 ? carve(addRoom('hall', 0), hall0) : null;
 	const freeArea = (L) => { let s = 0; for (let c = 0; c < N; c++) if (onLevel(c, L) && labels[L][c] < 0) s += area(c); return s; };
@@ -387,6 +391,22 @@ export function planHouse(grp, opt = {}) {
 			{ mask: freeMask(0, (x) => priv(x)), hubs: ids(H0, E0), hall: H0 && { room: H0, box: hall0 }, takes: (t) => PRIV.has(t), extra: 'bed' },
 			{ mask: freeMask(0, (x) => !priv(x)), hubs: ids(H0, E0), takes: (t) => !PRIV.has(t), extra: 'office', extra2: 'family' },
 		]);
+	} else if (cottage) {
+		// the main room at the front, its kitchen along a wall, and off it the bedroom and the
+		// bath at the back (or, where the house is too shallow for rooms behind, at one end:
+		// the bedroom at the front, the bath behind it), away from the door's side
+		const E = extent(0), W = E.x1 - E.x0, D = E.z1 - E.z0, away = door.x > (E.x0 + E.x1) / 2 ? -1 : 1;
+		if (D >= 5.2) {
+			const zb = E.z0 + Math.max(2.5, Math.min(3.4, D * 0.45)), bw = Math.min(2.3, Math.max(1.8, W * 0.3));
+			const bx0 = away < 0 ? E.x1 - bw : E.x0, bx1 = away < 0 ? E.x1 : E.x0 + bw;
+			carve(addRoom('bath', 0), { x0: bx0, x1: bx1, z0: E.z0, z1: zb });
+			carve(addRoom('bed', 0), { x0: away < 0 ? E.x0 : bx1, x1: away < 0 ? bx0 : E.x1, z0: E.z0, z1: zb });
+		} else {
+			const sw = Math.min(W - 2.8, Math.max(2.5, W * 0.42)), x0 = away < 0 ? E.x0 : E.x1 - sw, x1 = away < 0 ? E.x0 + sw : E.x1, zb = E.z0 + Math.max(1.6, Math.min(2.0, D * 0.4));
+			carve(addRoom('bath', 0), { x0, x1, z0: E.z0, z1: zb });
+			carve(addRoom('bed', 0), { x0, x1, z0: zb, z1: E.z1 });
+		}
+		carve(addRoom('living', 0, { kitchenette: true }), { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 });
 	} else {
 		let prog0 = [['living', 0.45, 0.12, 0.2], ['kitchen', 0.3, 0.75, 0.16], ['family', 0.5, 0.9, 0.16], ['master', 0.95, 0.9, 0.2], ['bath', 0.8, 0.45, -5]];
 		if (garage) prog0.push(['laundry', 0.05, 0.3, -4.2]);
@@ -792,6 +812,17 @@ export function planHouse(grp, opt = {}) {
 		for (const c of r.cells) { const a = area(c); sx += cx(c % nx) * a; sz += cz(Math.floor(c / nx)) * a; }
 		r.cx = sx / r.area; r.cz = sz / r.area;
 	}
+	// ---- the rooms every home keeps, however small: somewhere to sleep (a study made a bedroom,
+	// or the bed in the living room) and a kitchen (along a wall of the living room, in a cabin
+	// or a cottage with no room for one of its own)
+	if (!opt.estab) {
+		const has = (f) => rooms.some((r) => r.cells.length && f(r));
+		if (!has((r) => r.type === 'bed' || r.type === 'master')) { const o = rooms.filter((r) => r.cells.length && (r.type === 'office' || r.type === 'loft' || r.type === 'closet') && r.area >= 3.8).sort((a, b) => b.area - a.area)[0]; if (o) o.type = 'bed'; }
+		if (!has((r) => r.type === 'kitchen' || r.kitchenette)) {
+			const host = rooms.filter((r) => r.level === 0 && r.cells.length && (r.type === 'living' || r.type === 'family' || r.type === 'dining')).sort((a, b) => b.area - a.area)[0];
+			if (host) { host.type = 'living'; host.kitchenette = true; }
+		}
+	}
 
 	// ---- doors: open plan among the public rooms, a door into each of the others
 	const conns = [];   // {a, b, kind: 'open'|'wide'|'door', run, c, w}
@@ -846,7 +877,7 @@ export function planHouse(grp, opt = {}) {
 					if (!reached.has(o.id)) continue;
 					const runs = runsOf(r.id, o.id).filter((q) => q.e - q.s >= 1.05);
 					if (!runs.length || bad.has(r.id + '|' + o.id)) continue;
-					const sc = doorScore(r.type, o.type);
+					const sc = cottage && o.type === 'living' ? 9 : doorScore(r.type, o.type);
 					if (!best || sc > best.sc) best = { r, o, runs, sc };
 				}
 			}
@@ -1176,6 +1207,21 @@ function furnish(plan) {
 			if (room.biz.role === 'back' ? fitBack(room.biz.fit, K) : fitFront(room.biz.fit, K)) continue;
 		}
 		if (t === 'living') {
+			// a small house's kitchen along one wall of its living room (first: it is the house's
+			// kitchen), and a studio's bed, where the house has no bedroom of its own
+			if (room.kitchenette) {
+				// (the longest run of counter a wall has room for, the sink under a window if need be:
+				// never under 1.6 m, the sink and the range side by side)
+				let ct = null;
+				for (const win of [false, true]) for (const len of [Math.min(2.6, Math.max(bw, bd) - 1.6), 2.0, 1.6]) if (!ct && len >= 1.6) ct = against('counter', len, 0.63, 0.92, { long: true, clear: 0.8, noWindow: !win });
+				if (ct) {
+					const w2 = ct.w / 2, win = ct.side.wall.open.find((o) => o.type === 'window' && o.s1 > ct.c - w2 && o.s0 < ct.c + w2);
+					ct.sink = ct.w < 2.2 ? ct.c - w2 + 0.42 : ct.c - ct.w * 0.2; ct.range = ct.w < 2.2 ? ct.c + w2 - 0.42 : ct.c + ct.w * 0.25;
+					ct.win = win ? [win.s0, win.s1] : null; ct.uppers = 0.6;
+				}
+				if (!rooms.some((r) => r.cells.length && (r.type === 'bed' || r.type === 'master'))) against('bed', 1.4, 2.05, 0.6, { clear: 0.5, score: (s) => (s.ext ? 0 : 0.5) }) || against('bed', 0.95, 2.0, 0.55, { clear: 0.45, score: (s) => (s.ext ? 0 : 0.5) });
+				against('fridge', 0.85, 0.72, 1.8, { corner: true, clear: 0.8 });
+			}
 			const sofa = against('sofa', Math.min(2.2, bw - 0.8, bd - 0.8) > 1.6 ? 2.1 : 1.6, 0.92, 0.85, { long: true, clear: 1.3, noWindow: false });
 			if (sofa) {
 				inFront(sofa, 'rug', Math.min(2.4, sofa.w + 0.4), 1.7, 0.01, -0.35);
@@ -1189,10 +1235,6 @@ function furnish(plan) {
 			against('sideTable', 0.5, 0.5, 0.55, { corner: true, clear: 0 });
 			against('floorLamp', 0.35, 0.35, 1.6, { corner: true, clear: 0 });
 			against('plant', 0.45, 0.45, 1.2, { corner: true, clear: 0 });
-			// a small house's kitchen along one wall of its living room
-			// (and a studio's bed, where the house has no bedroom of its own)
-			if (room.kitchenette && !rooms.some((r) => r.cells.length && (r.type === 'bed' || r.type === 'master'))) against('bed', 1.4, 2.05, 0.6, { clear: 0.5, score: (s) => (s.ext ? 0 : 0.5) });
-			if (room.kitchenette) { against('fridge', 0.85, 0.72, 1.8, { corner: true, clear: 0.9 }); const ct = against('counter', Math.min(2.6, Math.max(bw, bd) - 1.6), 0.63, 0.92, { long: true, clear: 0.9, noWindow: true }); if (ct) { ct.sink = ct.c - ct.w * 0.2; ct.range = ct.c + ct.w * 0.25; ct.uppers = 0.6; } }
 			art(2); light();
 		} else if (t === 'family') {
 			const tv = against('tvConsole', 1.7, 0.45, 0.55, { long: true, clear: 2.0, score: (s) => (s.ext ? -1 : 1) });
@@ -1266,7 +1308,8 @@ function furnish(plan) {
 		} else if (t === 'master' || t === 'bed') {
 			const kid = t === 'bed' && rnd() < 0.55;
 			const bwid = t === 'master' ? (bw > 4 && bd > 4 ? 1.95 : 1.6) : kid ? 1.0 : 1.4, blen = t === 'master' ? 2.1 : kid ? 1.95 : 2.05;
-			const bed = against('bed', bwid, blen, 0.6, { clear: 0.55, centre: true, score: (s) => (s.ext ? 0 : 0.6) + (s.e - s.s) * 0.1 });
+			// (a small room's bed: a single, against whatever wall it fits, rather than none)
+			const bed = against('bed', bwid, blen, 0.6, { clear: 0.55, centre: true, score: (s) => (s.ext ? 0 : 0.6) + (s.e - s.s) * 0.1 }) || against('bed', 0.95, 1.95, 0.55, { clear: 0.45, score: (s) => (s.ext ? 0 : 0.6) });
 			if (bed) {
 				for (const sgn of [-1, 1]) {
 					const c = bed.c + sgn * (bwid / 2 + 0.3), sd = bed.side;

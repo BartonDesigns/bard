@@ -56,7 +56,7 @@ export function houseEra(x, z, ctx = {}) {
 // outside
 
 // pattern slots: siding (housekit.js SIDING) and door and garage door styles
-export const SIDING = { lap: 0, batten: 1, shingle: 2, brick: 3 };
+export const SIDING = { lap: 0, batten: 1, shingle: 2, brick: 3, stone: 4, log: 5, render: 6, mud: 7 };
 export const DOOR = { six: 0, five: 1, slab: 2, lites: 3, craftsman: 4, shaker: 5, glass: 6, carved: 7 };
 export const GARAGE = { raised: 0, ribbed: 1, carriage: 2, glass: 3 };
 
