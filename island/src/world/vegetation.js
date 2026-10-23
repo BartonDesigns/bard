@@ -703,7 +703,8 @@ export function swayMaterial(params, shared, stiff) {
 				vBioA = gBioA;
 				vSnowK = plSnow(wp.y + max(0.0, position.y) * 0.3, 0.5);
 			}`);
-		sh.fragmentShader = 'varying float vGroundAO, vSnowK, vBioA; uniform vec4 uLeafT, uLeafT2;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+		sh.uniforms.uSkyZen = shared.uSkyZen; sh.uniforms.uSkyHor = shared.uSkyHor; sh.uniforms.uLeafSheen = (shared.uLeafSheen ||= { value: 0.05 });
+		sh.fragmentShader = 'varying float vGroundAO, vSnowK, vBioA; uniform vec4 uLeafT, uLeafT2; uniform vec3 uSkyZen, uSkyHor; uniform float uLeafSheen;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 	diffuseColor.rgb *= vGroundAO;
 	vec4 lt = mix(uLeafT, uLeafT2, vBioA);
 	if (lt.a > 0.0) {
@@ -727,6 +728,19 @@ export function swayMaterial(params, shared, stiff) {
 	{
 		float shineK = gl_FrontFacing ? smoothstep(0.02, 0.3, dot(normal, normalize(-vViewPosition))) : 0.0;
 		material.specularColor *= shineK; material.specularColorBlended *= shineK; material.specularF90 *= shineK;
+	}`);
+		// A leaf's waxy face gives back a little of the whole sky whatever way it turns: the
+		// sheen that makes real foliage greyer and paler than its pigment, most of all at dusk,
+		// when the sky is the only light and the leaves' own dark green would otherwise go to
+		// a saturated near-black against it (Josh's Dublin recording, 2026-10-22). Flat over the
+		// hemisphere, not a grazing Fresnel: that lit every card seen edge-on frosted white
+		// (above). Tops see more of the sky than undersides. Cutout foliage only (leaves, fronds,
+		// blooms): bark and stems keep their plain diffuse. The sky colour is the dome's own
+		// (sky.js), so the sheen goes grey under overcast and out at night and in vacuum
+		if (params.alphaTest && params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+	{
+		float upF = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
+		reflectedLight.indirectSpecular += mix(uSkyHor, uSkyZen, 0.35) * uLeafSheen * (0.6 + 0.4 * upF) * vGroundAO;
 	}`);
 	};
 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '') + (near ? 'n' + near.r + ',' + near.cap : '');
