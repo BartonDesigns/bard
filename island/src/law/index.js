@@ -24,6 +24,12 @@
 //               out of town (combat.hooks.campOk).
 //   tactics     a squad that is losing and outnumbered falls back; the fallen wait for an
 //               ambulance from the nearest hospital (services.injury), which takes them away.
+//   the force   whose police they are: the force of the ground you stand on (law/force.js: San
+//               Francisco Police, the county sheriff, the Garda), looked at every two seconds. A
+//               chase keeps the force that started it: the change waits until none of its
+//               cruisers, officers or its helicopter is about and nobody is after you (or you
+//               have come far, as by air), then the radio, the name tags and the cruisers'
+//               doors all take the new one.
 //
 // Phones: one corner crew, fewer cars and a smaller tactical team. Nothing here allocates per
 // frame but for the crimes and calls themselves.
@@ -32,8 +38,10 @@ import { createLadder, witness, dueReports, pending, responsePlan, routeTrouble,
 import { territoryAt, cornerSize, recruits, junctions, pickCorners, gangStance, warChance, militiaAllowed, GANGS } from './gangs.js';
 import { roadblockSpot, inCone, squadMorale } from './tactics.js';
 import { FACTIONS } from '../combat/factions.js';
+import { localForce, setLocalForce, forceAtXZ } from './force.js';
 
-const ARREST = ['Police! Stop right there!', 'Get on the ground! Hands where I can see them!', 'Do not move! Stay where you are!', 'Hands behind your head!'];
+// (the first is called out in the force's own word: 'Police!', 'Sheriff's Office!', 'Garda!')
+const ARREST = ['{shout}! Stop right there!', 'Get on the ground! Hands where I can see them!', 'Do not move! Stay where you are!', 'Hands behind your head!'];
 const DROP = ['Drop the weapon! Drop it now!', 'Put it down! Put the gun down!', 'Weapon on the ground, now!'];
 const STAY = ['Stay down! Keep your hands up!', 'Don\'t move. We\'re coming to you.', 'Keep those hands where I can see them.'];
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -51,7 +59,8 @@ export function createLaw({ world, combat, military, people = () => null, servic
 	const eye = () => P()?.pos || null;
 	const earth = () => !!W()?.bayArea && !W()?.deep?.active?.();
 	const lawful = (h) => { const F = FACTIONS[h.fid]; return !!F?.lawful && F.kind !== 'military'; };
-	function say(line, who = 'Harbour Police', gap = 4) { if (t < sayT) return; sayT = t + gap; combat.call?.(line, who); }
+	const force = () => localForce().name;
+	function say(line, who = force(), gap = 4) { if (t < sayT) return; sayT = t + gap; combat.call?.(line.replace('{shout}', localForce().shout), who); }
 	// the eye and the way it looks: what you can see is where nothing may appear or vanish
 	const viewDir = { x: 0, z: -1 };
 	function view() { const p = P(); if (!p) return null; viewDir.x = -Math.sin(p.yaw); viewDir.z = -Math.cos(p.yaw); return { eye: p.pos, dir: viewDir }; }
@@ -107,7 +116,7 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		const r = witness(L, { kind, at, t, police: byOfficer, witnesses: n, heard: kind === 'shots' && flag !== null && combat.populated?.(at) !== false });
 		if (r === 'now') {
 			combat.report(kind === 'shots' && combat.wantedLevel() < 2 ? 'gunfire' : kind, at);
-			say(kind === 'shots' ? 'Shots fired! Shots fired!' : kind === 'hitPolice' || kind === 'downPolice' ? 'Officer down! All units!' : pick(ARREST), 'Harbour Police', 2);
+			say(kind === 'shots' ? 'Shots fired! Shots fired!' : kind === 'hitPolice' || kind === 'downPolice' ? 'Officer down! All units!' : pick(ARREST), force(), 2);
 		}
 		return combat.wantedLevel();
 	}
@@ -138,7 +147,7 @@ export function createLaw({ world, combat, military, people = () => null, servic
 				const kind = q.call === 'shots' ? 'gunfire' : q.kind;
 				combat.report(kind, q.at);
 				if (q.call === 'shots' && q.weight >= 3) combat.report(kind, q.at);
-				say(`Dispatch: ${({ assault: 'an assault', robbery: 'an armed robbery', arson: 'a fire set', damage: 'damage to property', shots: 'shots fired' })[q.call] || 'a disturbance'} reported, suspect described. Units respond.`, 'Harbour Police', 1);
+				say(`Dispatch: ${({ assault: 'an assault', robbery: 'an armed robbery', arson: 'a fire set', damage: 'damage to property', shots: 'shots fired' })[q.call] || 'a disturbance'} reported, suspect described. Units respond.`, force(), 1);
 			} else if (q.call === 'shots') {
 				police?.event?.({ kind: 'shots', x: q.at.x, z: q.at.z });
 			}
@@ -160,7 +169,7 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		if (!pl.level) return true;
 		if (!pl.lethal) { if (Math.hypot(h.pos.x - (eye()?.x ?? 0), h.pos.z - (eye()?.z ?? 0)) < 35) say(pick(ARREST)); return true; }
 		if (t - firedT > 30 && pl.level < 4) {
-			if (!h.warnAt) { h.warnAt = t; say(pick(DROP), 'Harbour Police', 2); }
+			if (!h.warnAt) { h.warnAt = t; say(pick(DROP), force(), 2); }
 			return t - h.warnAt < 2.5;
 		}
 		return false;
@@ -179,7 +188,7 @@ export function createLaw({ world, combat, military, people = () => null, servic
 				if (spot && police.block(spot, e, pl.lethal)) { blockT = t; S.blocks++; }
 			}
 			// the military only at the very top
-			if (pl.military && t - milT > 240) { milT = t; S.military++; dispatch?.event?.({ kind: 'wanted', x: at.x, z: at.z, severity: 3 }); say('Dispatch: requesting military support.', 'Harbour Police', 1); }
+			if (pl.military && t - milT > 240) { milT = t; S.military++; dispatch?.event?.({ kind: 'wanted', x: at.x, z: at.z, severity: 3 }); say('Dispatch: requesting military support.', force(), 1); }
 			// ...and the police helicopter up over you
 			if (pl.military && dispatch?.policeAir?.(at)) S.air = (S.air || 0) + 1;
 		}
@@ -200,7 +209,7 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		if (!downed) {
 			const p = P();
 			if (p) p.locked = true;
-			say('You are under arrest. Anything you say can be used against you.', 'Harbour Police', 0);
+			say('You are under arrest. Anything you say can be used against you.', force(), 0);
 			hint('Arrested. You are cuffed and put in the back of a cruiser.', 4000, 2);
 		} else hint('You are down. Officers move in and cuff you.', 4000, 2);
 	}
@@ -235,12 +244,12 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		me.stillT = me.speed < 0.5 ? me.stillT + dt : 0;
 		if (me.handsUp && me.speed > 1.2) me.handsUp = false;
 		const gives = complying({ armed, speed: me.speed, stillT: me.stillT, officerD: off.d, handsUp: me.handsUp });
-		if (gives && off.d < 30) say(pick(STAY), 'Harbour Police', 5);
+		if (gives && off.d < 30) say(pick(STAY), force(), 5);
 		if (gives && off.d < 2.8) { arrest(false); return; }
 		// an officer at arm's length while they hold fire and you are unarmed: taken down and cuffed
 		if (!armed && off.h && off.d < 1.9 && holdFire(off.h)) { me.grabT += dt; if (me.grabT > 1.4) { arrest(false, me.speed > 1); return; } } else me.grabT = 0;
 		// running from officers who have you in sight: evading, an offence of its own (once)
-		if (!me.evaded && off.d < 25 && me.speed > 3.2 && off.h?.los) { me.fleeT += dt; if (me.fleeT > 5) { me.evaded = true; combat.report('evade', eye()); say('Suspect is fleeing on foot!', 'Harbour Police', 1); } } else me.fleeT = Math.max(0, me.fleeT - dt * 0.5);
+		if (!me.evaded && off.d < 25 && me.speed > 3.2 && off.h?.los) { me.fleeT += dt; if (me.fleeT > 5) { me.evaded = true; combat.report('evade', eye()); say('Suspect is fleeing on foot!', force(), 1); } } else me.fleeT = Math.max(0, me.fleeT - dt * 0.5);
 	}
 	// surrender: H on a keyboard, a button on a touch screen, while the police are after you
 	function surrender() {
@@ -427,12 +436,31 @@ export function createLaw({ world, combat, military, people = () => null, servic
 
 	// ---------- each frame ----------
 	let lastW = null;
+	// ---------- whose police ----------
+	// (the force here; taken on once the last one's people are gone, or at once after a long move)
+	let forceT = 0, forceFrom = null;
+	function policeAbout(e) {
+		if (combat.wantedLevel() > 0 || custody) return true;
+		for (const c of police?.cruisers || []) if (c.pos && Math.hypot(c.pos.x - e.x, c.pos.z - e.z) < 260) return true;
+		for (const h of combat.squads.alive()) if (FACTIONS[h.fid]?.kind === 'police' && Math.hypot(h.pos.x - e.x, h.pos.z - e.z) < 200) return true;
+		return (dispatch?.patrols || []).some((q) => q.side === 'police' && q.state !== 'done');
+	}
+	function stepForce() {
+		const e = eye();
+		if (!e) return;
+		const F = forceAtXZ(e.x, e.z);
+		if (!F || F.id === localForce().id) { if (F) forceFrom = { x: e.x, z: e.z }; return; }
+		const far = !forceFrom || Math.hypot(e.x - forceFrom.x, e.z - forceFrom.z) > 15000;
+		if (far || !policeAbout(e)) { setLocalForce(F); forceFrom = { x: e.x, z: e.z }; }
+	}
+
 	function update(dt) {
 		const w = W(), p = P();
 		if (!w || !p) return;
-		if (w !== lastW) { reset(); lastW = w; }
+		if (w !== lastW) { reset(); lastW = w; forceFrom = null; forceT = 0; }
 		if (!earth()) { if (btn) btn.style.display = 'none'; return; }
 		t += dt;
+		if ((forceT -= dt) <= 0) { forceT = 2; stepForce(); }
 		// how you move (for compliance, fleeing and where a roadblock goes)
 		if (me.px !== null) { const k = Math.min(1, dt * 4), vx = (p.pos.x - me.px) / Math.max(dt, 1e-3), vz = (p.pos.z - me.pz) / Math.max(dt, 1e-3); me.vx += (vx - me.vx) * k; me.vz += (vz - me.vz) * k; me.speed = Math.hypot(me.vx, me.vz); }
 		me.px = p.pos.x; me.pz = p.pos.z;
@@ -472,6 +500,7 @@ export function createLaw({ world, combat, military, people = () => null, servic
 			level: ws.stars, stage: LEVELS[ws.stars], points: Math.round(ws.points), seen: ws.seen, searching: !ws.seen && ws.stars > 0 ? Math.round(ws.quiet) : 0, last: ws.last && [Math.round(ws.last.x), Math.round(ws.last.z)],
 			plan: planNow(), reports: L.reports.filter((q) => !q.done).map((q) => ({ call: q.call, in: Math.max(0, Math.round(q.due - t)), seen: q.seen, weight: q.weight })), pending: pending(L),
 			custody: custody && { t: +custody.t.toFixed(1), fine: custody.fine, downed: custody.downed }, handsUp: me.handsUp,
+			force: (() => { const F = localForce(), H = e ? forceAtXZ(e.x, e.z) : null; return { name: F.name, word: F.word, sub: F.sub, officer: F.officer, station: F.station, here: H && H.id !== F.id ? H.name : null }; })(),
 			region: here && { id: here.id, trouble: here.situation?.trouble ?? null }, territory: T,
 			corners: corners.map((c) => ({ id: c.id, gang: c.gang, state: c.state, n: (c.members || []).filter((h) => !h.dead && !h.gone).length, km: e ? +(Math.hypot(c.x - e.x, c.z - e.z) / 1000).toFixed(2) : null })),
 			roadblocks: (police?.cruisers || []).filter((c) => c.why === 'block' && c.state === 'blocking').length / 2,

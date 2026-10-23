@@ -401,6 +401,11 @@ export function registerSiting(kind, fn) {
 	return () => SITING.delete(id);
 }
 
+// a police station's name and door word where no service claimed the building: the local
+// force's (law/force.js sets it: 'San Francisco Police Department', 'Dublin Garda Station')
+let policeNamer = null;
+export function setPoliceNamer(fn) { policeNamer = typeof fn === 'function' ? fn : null; }
+
 // one building -> its establishment (or null: a home, a school, a car park)
 export function establish(b, loc = 'us-ca') {
 	const setting = settingOf(b);
@@ -416,10 +421,12 @@ export function establish(b, loc = 'us-ca') {
 		for (const [k, w] of C.list) { u -= w; if (u <= 0) { id = k; break; } }
 	}
 	const T = TYPES[id], r = (n) => hashAt(b.x, b.z, 300 + n);
+	let force = null;
+	if (id === 'police' && !given && policeNamer) { try { force = policeNamer(b.x, b.z); } catch { force = null; } }
 	const pal = pickOf(T.pal, r(1));
 	const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0), f = b.front ?? 1, out = (b.d / 2 + 1.2) * f;
 	return {
-		type: id, label: T.label, name: given || nameFor(id, b.x, b.z, loc), tag: b.sign && !denied(b.sign) ? String(b.sign).slice(0, 28) : T.tags ? pickOf(T.tags, r(4)) : T.tag,
+		type: id, label: T.label, name: given || force?.name || nameFor(id, b.x, b.z, loc), tag: b.sign && !denied(b.sign) ? String(b.sign).slice(0, 28) : force?.tag || (T.tags ? pickOf(T.tags, r(4)) : T.tag),
 		setting, use: b.use, venue: T.service ? null : venueFor(b) || T.v || null, service: T.service || null, locale: loc,
 		x: b.x, z: b.z, a: b.a || 0, w: b.w, d: b.d, h: b.h || 0, front: f,
 		door: [b.x - sa * out, b.z + ca * out],
