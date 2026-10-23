@@ -101,3 +101,24 @@ test('town streets are drawn as asphalt over sidewalks, skipped where the ground
 	assert.equal(s2.info().verts, 0);
 	streets.dispose(); s2.dispose();
 });
+
+test('a town far off is drawn as its asphalt only, and in full as you come near', () => {
+	const scene = new THREE.Scene();
+	const roads = [];
+	for (let k = 0; k < 20; k++) roads.push({ cls: 'residential', w: 10, pts: new Float32Array([k * 60, 0, k * 60, 400]), end1: k % 4 === 0 });
+	const far = { key: 'far', x: 6000, z: 0, roads: roads.map((r) => ({ ...r, pts: r.pts.map((v, i) => (i % 2 ? v : v + 6000)) })), paths: [{ ax: 6005, az: 10, bx: 6015, bz: 10, w: 3 }] };
+	const streets = createTownStreets({ scene, groundAt: () => 20 });
+	const run = (c) => { for (let i = 0; i < 200; i++) streets.update(c, true, [far]); };
+	run(cam(0, 0));
+	const coarse = streets.info().verts;
+	assert.ok(coarse > 0);
+	run(cam(6000, 0));
+	const full = streets.info().verts;
+	assert.ok(full > coarse * 3, `full ${full}, coarse ${coarse}`);
+	// (and coarse again only well past the edge)
+	run(cam(6000 - 2500, 0));
+	assert.equal(streets.info().verts, full);
+	run(cam(0, 0));
+	assert.equal(streets.info().verts, coarse);
+	streets.dispose();
+});

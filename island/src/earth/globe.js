@@ -166,17 +166,27 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	const streets = createTownStreets({ scene, groundAt: (x, z) => bay.heightAt(x, z), isPhone, painted });
 	const gridStreets = createGridStreets({ bay, real: () => world()?.real, painted, isPhone });
 	// a grown town's streets, its drives and walks (as the real city keeps them: the ones a gas
-	// station's forecourt took are gone), and its forecourts
-	const genSets = new WeakMap();
-	function genSet(G) {
-		let S = genSets.get(G);
-		if (!S) {
-			const b = G.bounds, paths = [];
-			for (const c of G.grid.values()) for (const q of c.paths) paths.push(q);
-			S = { key: G, x: (b[0] + b[2]) / 2, z: (b[1] + b[3]) / 2, roads: G.data.roads, paths, ground: (G.sites || []).flatMap((q) => q.ground || []) };
-			genSets.set(G, S);
+	// station's forecourt took are gone), and its forecourts; in pieces of a square 1.2 km, so the
+	// streets round you come first and the rest are left out of view
+	const genSets = new WeakMap(), PIECE_M = 1200;
+	function genSetsOf(G) {
+		let L = genSets.get(G);
+		if (!L) {
+			const cells = new Map();
+			const at = (x, z) => {
+				const i = Math.floor(x / PIECE_M), j = Math.floor(z / PIECE_M), k = i + ',' + j;
+				let S = cells.get(k);
+				if (!S) cells.set(k, S = { key: null, x: (i + 0.5) * PIECE_M, z: (j + 0.5) * PIECE_M, roads: [], paths: [], ground: [] });
+				return S;
+			};
+			for (const r of G.data.roads) { const p = r.pts; if (p?.length >= 4) { const m = (p.length >> 1) & ~1; at(p[m], p[m + 1]).roads.push(r); } }
+			for (const c of G.grid.values()) for (const q of c.paths) at(q.ax, q.az).paths.push(q);
+			for (const S of G.sites || []) for (const g of S.ground || []) at(g[0], g[1]).ground.push(g);
+			L = [...cells.values()];
+			for (const S of L) S.key = S;
+			genSets.set(G, L);
 		}
-		return S;
+		return L;
 	}
 	// the Bay's gridded towns out past its ground (bay.towns, terrain.js), as the highways and the
 	// survey's roads see them: a highway stops at the edge and goes on into the town's streets,
@@ -334,7 +344,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const A = towns.civ().active(), B = world()?.civ?.active();
 		const activeTownRoads = [];
 		if (A?.region) activeTownRoads.push({ id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] });
-		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, roads: B.region.roads || [] });
+		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, around: true, roads: B.region.roads || [] });
 		// the gridded towns' streets round you, worked out tile by tile (inside the Bay's ground
 		// it paints them, and none are needed)
 		gridStreets.update(cam, steady && F.bay && bay.loaded() && out > SEAM_A - 2600);
@@ -344,7 +354,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		lanes.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads, ...gridT].filter((t) => Number.isFinite(t.r)));
 		// ...and every town's streets on the ground: the grown towns', the gridded towns'
 		const sets = [];
-		for (const G of real?.R?.regions || []) if (G.gen) sets.push(genSet(G));
+		for (const G of real?.R?.regions || []) if (G.gen) for (const S of genSetsOf(G)) sets.push(S);
 		for (const S of gridStreets.sets()) sets.push(S);
 		streets.update(cam, data.win.ready && (!F.bay || out > SEAM_A - 3000), sets);
 		const ms = performance.now() - t0;
@@ -381,8 +391,8 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		trees.settle(); towns.civ().flush();
 		if (F.bay && bay.loaded()) gridStreets.settle(camera);
 		roads.settle(camera); lanes.settle(camera);
-		const sets = [...(world()?.real?.R?.regions || []).filter((G) => G.gen).map(genSet), ...gridStreets.sets()];
-		streets.settle(sets);
+		const sets = [...(world()?.real?.R?.regions || []).filter((G) => G.gen).flatMap(genSetsOf), ...gridStreets.sets()];
+		streets.settle(sets, camera);
 	}
 	return { update, place, info, dispose, settle, roads, lanes, streets, gridStreets, toLL, toXZ, height, waterAt, seaAt, coastMask, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
 }

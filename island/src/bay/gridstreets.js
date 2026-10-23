@@ -23,7 +23,7 @@ const quant = (a) => Math.round(a / (Math.PI / 2) * 255) / 255 * Math.PI / 2;
 
 export function createGridStreets({ bay, real = () => null, painted = () => false, inWater = wet, isPhone = false }) {
 	const R = isPhone ? 1700 : 2500;
-	const tiles = new Map();          // 'i,j' -> { key, i, j, x, z, roads, v }
+	const tiles = new Map();          // 'i,j' -> { key, i, j, x, z, roads, v (its streets' serial, 0 till laid out), stale }
 	let job = null, scanAt = null, genV = -1, serial = 0, version = 0;
 	const stats = { tiles: 0, roads: 0, ms: 0 };
 
@@ -89,16 +89,17 @@ export function createGridStreets({ bay, real = () => null, painted = () => fals
 			}
 		}
 		stats.ms += performance.now() - s0;
-		T.roads = roads; T.v = ++serial; version++;
+		T.roads = roads; T.v = ++serial; T.stale = false; version++;
 	}
 
 	// ---------- each frame ----------
 	function update(cam, on) {
 		if (!on) { if (tiles.size) { tiles.clear(); job = null; scanAt = null; version++; } return; }
 		const x = cam.position.x, z = cam.position.z, R2 = real();
-		// a town grown or let go: its blocks are the grown town's now (or the grid's again)
+		// a town grown or let go: its blocks are the grown town's now (or the grid's again); each
+		// tile's streets stay drawn till they are laid out again
 		const gv = R2?.genVersion?.() ?? 0;
-		if (gv !== genV) { genV = gv; for (const T of tiles.values()) T.v = 0; job = null; scanAt = null; }
+		if (gv !== genV) { genV = gv; for (const T of tiles.values()) T.stale = true; job = null; scanAt = null; }
 		if (!scanAt || Math.hypot(x - scanAt[0], z - scanAt[1]) > 200) {
 			scanAt = [x, z];
 			const keep = new Set();
@@ -107,13 +108,13 @@ export function createGridStreets({ bay, real = () => null, painted = () => fals
 				if (Math.hypot(cx - x, cz - z) > R + TILE * 0.71) continue;
 				const k = i + ',' + j;
 				keep.add(k);
-				if (!tiles.has(k)) tiles.set(k, { key: k, i, j, x: cx, z: cz, roads: [], v: 0 });
+				if (!tiles.has(k)) tiles.set(k, { key: k, i, j, x: cx, z: cz, roads: [], v: 0, stale: false });
 			}
 			for (const k of [...tiles.keys()]) if (!keep.has(k) && Math.hypot(tiles.get(k).x - x, tiles.get(k).z - z) > R + TILE * 1.2) { tiles.delete(k); version++; if (job?.T.key === k) job = null; }
 		}
 		if (!job) {
 			let best = null, bd = Infinity;
-			for (const T of tiles.values()) if (!T.v) { const d = Math.hypot(T.x - x, T.z - z); if (d < bd) { bd = d; best = T; } }
+			for (const T of tiles.values()) if (!T.v || T.stale) { const d = Math.hypot(T.x - x, T.z - z); if (d < bd) { bd = d; best = T; } }
 			if (best) job = { T: best, it: buildTile(best) };
 		}
 		if (job) {
@@ -129,7 +130,7 @@ export function createGridStreets({ bay, real = () => null, painted = () => fals
 		for (let k = 0; k < 400; k++) {
 			update(cam, true);
 			if (job) { while (!job.it.next().done); job = null; }
-			if (![...tiles.values()].some((T) => !T.v)) break;
+			if (![...tiles.values()].some((T) => !T.v || T.stale)) break;
 		}
 	}
 	// what townstreets.js draws: a set for each tile with streets in it
@@ -155,7 +156,7 @@ export function createGridStreets({ bay, real = () => null, painted = () => fals
 		let key = '', ready = true;
 		for (const T of tiles.values()) {
 			if (Math.abs(T.x - t.x) > rad + TILE / 2 || Math.abs(T.z - t.z) > rad + TILE / 2) continue;
-			if (!T.v) { ready = false; break; }
+			if (!T.v || T.stale) { ready = false; break; }
 			key += T.key + ':' + T.v + '|';
 		}
 		const was = towns.get(t);

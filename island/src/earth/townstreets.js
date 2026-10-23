@@ -25,7 +25,8 @@
 import * as THREE from 'three';
 import { BERM_U, BERM_GLSL } from '../bay/berms.js';
 
-const STEP = 8;                 // m between a street's stations
+const STEP = 10;                // m between a street's stations (near: the ground's bumps followed)
+const STEP_FAR = 24;            // (far off, its asphalt only)
 const SW = 1.7;                 // a sidewalk's width (realcity.js paints hw + 1.7)
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
 const SKIP = /^(path|track|steps|pedestrian|cycleway|bridleway)$/;
@@ -35,7 +36,7 @@ const LINES = { secondary: 1, tertiary: 1, unclassified: 1, primary: 2, trunk: 2
 const K = { street: 0, sidewalk: 1, concrete: 2, disc: 3, slab: 4, freeway: 5 };
 
 const VERT = /* glsl */`
-	attribute vec3 aRoad; attribute vec4 aSt; attribute vec2 aSide;
+	attribute vec3 aRoad; attribute vec2 aSt; attribute vec2 aSide;
 	uniform float uTSPx;
 	varying vec3 vRoad; varying vec4 vSt; varying float vFar; varying vec2 vW;
 	${BERM_GLSL}
@@ -59,16 +60,19 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 		const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -offset, polygonOffsetUnits: -offset * 2 });
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BERM_U, U);
-			sh.vertexShader = VERT + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-				vRoad = aRoad; vSt = aSt; vW = position.xz;
+			sh.vertexShader = VERT + sh.vertexShader.replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);').replace('#include <begin_vertex>', `#include <begin_vertex>
+				vRoad = aRoad; vW = position.xz;
+				// (what the band is: its half width; its kind, its lines and whether it is walked, in one)
+				vSt = vec4(aSt.x, mod(aSt.y, 8.0), mod(floor(aSt.y / 8.0), 4.0), floor(aSt.y / 32.0));
 				float dist = distance(cameraPosition, position);
 				// (far off a street is held to about a pixel and a half wide rather than thinning to
 				// nothing and shimmering: uTSPx is a pixel's size per metre away; its sidewalks, drives
 				// and walks hardly at all, so from the air a street is its asphalt, not a pale band)
 				float hw = max(length(aSide), 0.5), g0 = 0.9 * dist * uTSPx / hw;
-				bool paving = abs(aSt.y - 1.0) < 0.5 || abs(aSt.y - 2.0) < 0.5 || abs(aSt.y - 4.0) < 0.5;
+				bool paving = abs(vSt.y - 1.0) < 0.5 || abs(vSt.y - 2.0) < 0.5 || abs(vSt.y - 4.0) < 0.5;
 				float grow = clamp(g0, 1.0, paving ? 1.4 : 4.0);
-				vFar = smoothstep(1.0, 2.5, g0);
+				// (paving fades by its own width: a sidewalk under a pixel or two goes the street's grey)
+				vFar = smoothstep(1.0, 2.5, paving ? 0.9 * dist * uTSPx / max(aSt.x, 0.5) : g0);
 				transformed.xz += aSide * (grow - 1.0);
 				transformed.y += bermDelta(position.xz) + dist * 4e-4;`);
 			sh.fragmentShader = FRAG + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -127,7 +131,7 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 					diffuseColor.rgb = c;
 				}`);
 		};
-		m.customProgramCacheKey = () => 'townstreets3';
+		m.customProgramCacheKey = () => 'townstreets4';
 		return m;
 	}
 	// the concrete under, the asphalt over (and both just over the ground)
@@ -135,13 +139,13 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 
 	// ---------- one town's streets, as geometry ----------
 	const builder = () => ({ pos: [], road: [], st: [], side: [], idx: [] });
-	// the stations along a polyline, no more than STEP apart, with how far along each is
-	function stations(pts) {
+	// the stations along a polyline, no more than step apart, with how far along each is
+	function stations(pts, step = STEP) {
 		const S = [pts[0], pts[1]], A = [0];
 		for (let k = 2; k < pts.length; k += 2) {
 			const ax = pts[k - 2], az = pts[k - 1], bx = pts[k], bz = pts[k + 1], L = Math.hypot(bx - ax, bz - az);
 			if (L < 0.01) continue;
-			const m = Math.max(1, Math.ceil(L / STEP));
+			const m = Math.max(1, Math.ceil(L / step));
 			for (let q = 1; q <= m; q++) { S.push(ax + (bx - ax) * q / m, az + (bz - az) * q / m); A.push(A[A.length - 1] + L / m); }
 		}
 		return { S, A, total: A[A.length - 1] };
@@ -159,7 +163,7 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 				B.pos.push(x, groundAt(x, z) + lift, z);
 				B.side.push(-dz * o, dx * o);
 				B.road.push(us[k], A[i], total - A[i]);
-				B.st.push(w, kind, lines, walked);
+				B.st.push(w, kind + lines * 8 + walked * 32);
 			}
 			if (i) for (let c = 0; c + 1 < na; c++) { const p = v0 + (i - 1) * na + c, q = p + na; B.idx.push(p, p + 1, q, p + 1, q + 1, q); }
 		}
@@ -167,14 +171,16 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 	// a disc on the ground (a junction's corner, a turning circle)
 	function disc(B, x, z, R, kind, walked, lift, n = 12) {
 		const v0 = B.pos.length / 3;
-		B.pos.push(x, groundAt(x, z) + lift, z); B.side.push(0, 0); B.road.push(0, 999, 999); B.st.push(R, kind, 0, walked);
+		B.pos.push(x, groundAt(x, z) + lift, z); B.side.push(0, 0); B.road.push(0, 999, 999); B.st.push(R, kind + walked * 32);
 		for (let k = 0; k <= n; k++) {
 			const t = k / n * Math.PI * 2, px = x + Math.cos(t) * R, pz = z + Math.sin(t) * R;
-			B.pos.push(px, groundAt(px, pz) + lift, pz); B.side.push(Math.cos(t) * R, Math.sin(t) * R); B.road.push(1, 999, 999); B.st.push(R, kind, 0, walked);
+			B.pos.push(px, groundAt(px, pz) + lift, pz); B.side.push(Math.cos(t) * R, Math.sin(t) * R); B.road.push(1, 999, 999); B.st.push(R, kind + walked * 32);
 			if (k) B.idx.push(v0, v0 + k + 1, v0 + k);
 		}
 	}
-	function* buildSet(set) {
+	// (coarse: a town's streets far off, their asphalt only: no sidewalks, corners, drives or
+	// forecourts, a vertex every 24 m; a tenth of the vertices, and nothing lost at a pixel a lane)
+	function* buildSet(set, coarse = false) {
 		const t0 = performance.now();
 		let s0 = t0, work = 0;
 		const under = builder(), over = builder();
@@ -184,29 +190,30 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 			if (!r?.pts || r.pts.length < 4 || r.bridge || SKIP.test(r.cls || '') || r.hand) continue;
 			const p = r.pts, mx = p[p.length >> 1 & ~1], mz = p[(p.length >> 1 & ~1) + 1];
 			if (painted(mx, mz) && painted(p[0], p[1])) continue;
-			const st = stations(p), hw = (r.w || 6) / 2;
+			if (coarse && r.cls === 'footway') continue;
+			const st = stations(p, coarse ? STEP_FAR : STEP), hw = (r.w || 6) / 2;
 			count++;
 			if (r.cls === 'footway') { band(under, st, [-hw, hw], [-1, 1], K.concrete, hw, 0, 0, 0.04); yield* tick(); continue; }
 			if (r.cls === 'motorway' && !r.link) {
-				band(over, st, [-hw - 0.5, 0, hw + 0.5], [-(hw + 0.5) / hw, 0, (hw + 0.5) / hw], K.freeway, hw, 0, 0, 0.08);
+				band(over, st, [-hw - 0.5, hw + 0.5], [-(hw + 0.5) / hw, (hw + 0.5) / hw], K.freeway, hw, 0, 0, 0.08);
 				yield* tick(); continue;
 			}
 			const walked = (r.walked ?? WALKED.has(r.cls)) && r.cls !== 'service' ? 1 : 0, lines = r.link ? 0 : LINES[r.cls] ?? 0;
 			const sw = r.sw || SW;
-			if (walked) {
+			if (walked && !coarse) {
 				// the sidewalks, each side, from just under the asphalt's edge out
 				band(under, st, [-hw - sw, -hw + 0.3], [(sw) / sw, -0.3 / sw], K.sidewalk, sw, 0, 1, 0.05);
 				band(under, st, [hw - 0.3, hw + sw], [-0.3 / sw, 1], K.sidewalk, sw, 0, 1, 0.05);
 			}
-			const wide = hw >= 4.5;
-			band(over, st, wide ? [-hw, 0, hw] : [-hw, hw], wide ? [-1, 0, 1] : [-1, 1], K.street, hw, lines, walked, 0.08);
+			band(over, st, [-hw, hw], [-1, 1], K.street, hw, lines, walked, 0.08);
 			// the ends: a turning circle at a cul-de-sac, a disc to round a junction's corners
 			for (const [end, k] of [[r.end0, 0], [r.end1, p.length - 2]]) {
-				if (end) { disc(under, p[k], p[k + 1], 12.5 + sw, K.slab, 0, 0.05, 18); disc(over, p[k], p[k + 1], 12.5, K.disc, walked, 0.08, 18); }
-				else if (!r.grid) { if (walked) disc(under, p[k], p[k + 1], hw + sw, K.slab, 0, 0.05, 10); disc(over, p[k], p[k + 1], hw, K.disc, 0, 0.08, 10); }
+				if (end) { if (!coarse) disc(under, p[k], p[k + 1], 12.5 + sw, K.slab, 0, 0.05, 14); disc(over, p[k], p[k + 1], 12.5, K.disc, coarse ? 0 : walked, 0.08, coarse ? 8 : 14); }
+				else if (!r.grid && !coarse) { if (walked) disc(under, p[k], p[k + 1], hw + sw, K.slab, 0, 0.05, 8); disc(over, p[k], p[k + 1], hw, K.disc, 0, 0.08, 8); }
 			}
 			yield* tick();
 		}
+		if (coarse) return finish(under, over, count, work + performance.now() - s0, true);
 		// the drives and walks to the doors, and the forecourts
 		for (const q of set.paths || []) {
 			if (!Number.isFinite(q.ax) || painted(q.ax, q.az)) continue;
@@ -222,19 +229,20 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 			else band(over, st, [-hw, hw], [-1, 1], K.disc, hw, 0, 0, 0.07);
 			yield* tick();
 		}
-		work += performance.now() - s0;
+		return finish(under, over, count, work + performance.now() - s0, false);
+	}
+	function finish(under, over, roads, work, coarse) {
 		stats.buildMs = Math.max(stats.buildMs, Math.round(work));
-		return { under: meshOf(under, matUnder, 0), over: meshOf(over, matOver, 1), roads: count };
+		return { under: meshOf(under, matUnder, 0), over: meshOf(over, matOver, 1), roads, coarse };
 	}
 	function meshOf(B, mat, order) {
 		if (!B.idx.length) return null;
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.Float32BufferAttribute(B.pos, 3));
 		g.setAttribute('aRoad', new THREE.Float32BufferAttribute(B.road, 3));
-		g.setAttribute('aSt', new THREE.Float32BufferAttribute(B.st, 4));
+		g.setAttribute('aSt', new THREE.Float32BufferAttribute(B.st, 2));
 		g.setAttribute('aSide', new THREE.Float32BufferAttribute(B.side, 2));
 		g.setIndex(B.pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(B.idx, 1) : new THREE.Uint16BufferAttribute(B.idx, 1));
-		g.computeVertexNormals();
 		g.computeBoundingSphere();
 		g.boundingSphere.radius += 40;
 		const M = new THREE.Mesh(g, mat);
@@ -248,49 +256,65 @@ export function createTownStreets({ scene, groundAt, isPhone = false, painted = 
 	function freeMesh(M) { if (!M) return; stats.verts -= M.geometry.attributes.position.count; M.geometry.dispose(); group.remove(M); }
 
 	// ---------- the towns standing ----------
-	const built = new Map();         // set key -> { under, over, roads }
+	// Each set in full near you and coarse further off (NEAR, and 300 m more before a near one is
+	// made coarse again, so one at the edge is not made over and over); the old one stays drawn
+	// till the new one is in.
+	const NEAR = isPhone ? 1600 : 2400;
+	const built = new Map();         // set key -> { under, over, roads, coarse }
+	const jobs = new Map();          // set key -> { coarse, it }: its build under way (left where it was when a nearer one came)
 	let job = null;
-	// sets: [{ key, roads, paths, ground }] — what should be drawn now
+	function freeBuilt(k) { const E = built.get(k); if (E) { freeMesh(E.under); freeMesh(E.over); built.delete(k); } }
+	const away = (s, cam, up) => Math.hypot((s.x ?? cam.position.x) - cam.position.x, (s.z ?? cam.position.z) - cam.position.z, up);
+	function coarseFor(s, d) { const E = built.get(s.key); return E ? (E.coarse ? d >= NEAR : d > NEAR + 300) : d > NEAR; }
+	// sets: [{ key, x, z, roads, paths, ground }] — what should be drawn now; the nearest with
+	// nothing drawn yet goes first, then the nearest to be made finer or coarser, a few
+	// milliseconds a frame
 	function update(cam, on, sets) {
 		group.visible = on;
 		if (cam?.fov) U.uTSPx.value = 2 * Math.tan(cam.fov * Math.PI / 360) / Math.max(300, typeof innerHeight === 'number' ? innerHeight : 800);
 		const want = new Map();
 		for (const s of sets) if (s?.key != null) want.set(s.key, s);
-		for (const [k, E] of built) if (!want.has(k)) { freeMesh(E.under); freeMesh(E.over); built.delete(k); }
-		if (job && !want.has(job.key)) job = null;
-		if (!on) return;
-		if (!job) {
-			// the nearest town not yet drawn
-			let best = null, bd = Infinity;
-			for (const s of want.values()) {
-				if (built.has(s.key)) continue;
-				const d = cam ? Math.hypot((s.x ?? cam.position.x) - cam.position.x, (s.z ?? cam.position.z) - cam.position.z) : 0;
-				if (d < bd) { bd = d; best = s; }
-			}
-			if (best) job = { key: best.key, it: buildSet(best) };
+		for (const k of [...built.keys()]) if (!want.has(k)) freeBuilt(k);
+		for (const k of jobs.keys()) if (!want.has(k)) jobs.delete(k);
+		job = null;
+		if (!on || !cam) return;
+		const gy = groundAt(cam.position.x, cam.position.z), up = Math.max(0, cam.position.y - (Number.isFinite(gy) ? gy : 0));
+		let best = null, bd = Infinity, bc = false;
+		for (const s of want.values()) {
+			const d = away(s, cam, up), coarse = coarseFor(s, d), E = built.get(s.key);
+			if (E && E.coarse === coarse) continue;
+			const rank = d + (E ? 1e6 : 0);
+			if (rank < bd) { bd = rank; best = s; bc = coarse; }
 		}
-		if (job) {
+		if (best) {
+			let J = jobs.get(best.key);
+			if (!J || J.coarse !== bc) jobs.set(best.key, J = { coarse: bc, it: buildSet(best, bc) });
+			job = { key: best.key };
 			const t0 = performance.now();
 			while (performance.now() - t0 < (isPhone ? 2.5 : 4)) {
-				const r = job.it.next();
-				if (r.done) { built.set(job.key, r.value); job = null; break; }
+				const r = J.it.next();
+				if (r.done) { freeBuilt(best.key); built.set(best.key, r.value); jobs.delete(best.key); job = null; break; }
 			}
 		}
 		stats.sets = built.size;
 		stats.roads = [...built.values()].reduce((a, E) => a + E.roads, 0);
 	}
 	// everything wanted, at once (tests, and a jump)
-	function settle(sets) {
+	function settle(sets, cam = null) {
+		const gy = cam ? groundAt(cam.position.x, cam.position.z) : 0, up = cam ? Math.max(0, cam.position.y - (Number.isFinite(gy) ? gy : 0)) : 0;
 		for (const s of sets) {
-			if (built.has(s.key)) continue;
-			const it = buildSet(s);
+			const coarse = cam ? coarseFor(s, away(s, cam, up)) : false, E = built.get(s.key);
+			if (E && E.coarse === coarse) continue;
+			const it = buildSet(s, coarse);
 			let r = it.next();
 			while (!r.done) r = it.next();
+			freeBuilt(s.key);
 			built.set(s.key, r.value);
+			jobs.delete(s.key);
 		}
-		if (job && built.has(job.key)) job = null;
+		if (job && !jobs.has(job.key)) job = null;
 	}
-	function clear() { for (const E of built.values()) { freeMesh(E.under); freeMesh(E.over); } built.clear(); job = null; }
+	function clear() { for (const E of built.values()) { freeMesh(E.under); freeMesh(E.over); } built.clear(); jobs.clear(); job = null; }
 	function dispose() { clear(); scene.remove(group); matUnder.dispose(); matOver.dispose(); }
 	const info = () => ({ ...stats, building: job ? String(job.key).slice(0, 40) : null });
 	return { update, settle, clear, dispose, info, group };
