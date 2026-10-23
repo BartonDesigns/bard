@@ -6,6 +6,7 @@
 // materials the draw order does it (layerOffset, below).
 
 import * as THREE from 'three';
+import { runAll } from '../world/buildslice.js';
 
 // what lies on what, lowest first: the paint, the trim, the chrome, the lamps, the glass
 const RANK = { paint: 0, solid: 1, chrome: 2, lamp: 3, glass: 4 };
@@ -24,12 +25,16 @@ export function layerOffset(mat, role, name) {
 // small array per face or per comparison, which on a phone came to hundreds of MB of garbage
 // for a walk downtown.)
 const NONE = [];
-export function unfight(geo, lift = 0.002, near = 0.0025) {
+export function unfight(geo, lift = 0.002, near = 0.0025) { return runAll(unfightSteps(geo, lift, near)); }
+// the same in steps (a yield every few thousand faces in each pass): a model is taken apart a
+// frame's share at a time as it comes in (vehicles/models.js), not in one long frame
+export function* unfightSteps(geo, lift = 0.002, near = 0.0025) {
 	const P = geo.attributes.position, I = geo.index;
 	if (!I) return { lifted: 0, dropped: 0 };
 	const n = I.count / 3, tri = new Float32Array(n * 13);
 	// per face: its corners, unit normal, plane offset
 	for (let t = 0; t < n; t++) {
+		if (t && (t & 8191) === 0) yield;
 		const ia = I.getX(t * 3), ib = I.getX(t * 3 + 1), ic = I.getX(t * 3 + 2);
 		const ax = P.getX(ia), ay = P.getY(ia), az = P.getZ(ia), bx = P.getX(ib), by = P.getY(ib), bz = P.getZ(ib), cx = P.getX(ic), cy = P.getY(ic), cz = P.getZ(ic);
 		const ux = bx - ax, uy = by - ay, uz = bz - az, wx = cx - ax, wy = cy - ay, wz = cz - az;
@@ -49,7 +54,9 @@ export function unfight(geo, lift = 0.002, near = 0.0025) {
 	const cellKey = (i, j, k, d) => (((i + 9) * 19 + (j + 9)) * 19 + (k + 9)) * 80000 + d + 40000;
 	// (each axis: its cell, and the neighbour toward it when the direction is near the edge)
 	const cell = new Int32Array(6), cells = new Uint8Array(3);
+	yield;
 	for (let t = 0; t < n; t++) {
+		if (t && (t & 8191) === 0) yield;
 		if (tri[t * 13 + 12] <= 0) continue;
 		const o = t * 13, d = dOf(t);
 		for (let m = 0; m < 3; m++) { const x = tri[o + 9 + m] * 8, r = Math.round(x); cell[m * 2] = r; cell[m * 2 + 1] = x > r ? r + 1 : r - 1; cells[m] = Math.abs(x - r) > 0.18 ? 2 : 1; }
@@ -83,7 +90,9 @@ export function unfight(geo, lift = 0.002, near = 0.0025) {
 		return false;
 	};
 	const up = new Uint8Array(n), drop = new Uint8Array(n), pairs = [];
+	yield;
 	for (let t = 0; t < n; t++) {
+		if (t && (t & 2047) === 0) yield;
 		if (tri[t * 13 + 12] <= 0 || drop[t]) continue;
 		const o = t * 13, ctx = midX(t), cty = midY(t), ctz = midZ(t), dt = tri[o + 9] * ctx + tri[o + 10] * cty + tri[o + 11] * ctz;
 		const ci = Math.round(tri[o + 9] * 8), cj = Math.round(tri[o + 10] * 8), ck = Math.round(tri[o + 11] * 8), d = dOf(t);
@@ -104,6 +113,7 @@ export function unfight(geo, lift = 0.002, near = 0.0025) {
 	}
 	// a layer on a layer goes up a step further (up to three)
 	for (let r = 0; r < 3; r++) for (let i = 0; i < pairs.length; i += 2) up[pairs[i + 1]] = Math.max(up[pairs[i + 1]], Math.min(3, up[pairs[i]] + 1));
+	yield;
 	// the lifted faces get vertices of their own (the panel under them keeps its own)
 	let lifted = 0, dropped = 0;
 	const names = Object.keys(geo.attributes), extra = names.map(() => []), idx = [];

@@ -8,11 +8,15 @@ import { toWorld } from './geo.js';
 import { ROUTES } from './roads.js';
 import { realCovered } from './realcity.js';
 import { FOOT } from './overpass.js';
+import { runAll } from '../world/buildslice.js';
 
 const C = 16, REACH = 6;                 // cell size; the widest crown a check may ask for
 
 let routes = null;
-export function makeClearance(real, cx, cz, R) {
+export function makeClearance(real, cx, cz, R) { return runAll(makeClearanceSteps(real, cx, cz, R)); }
+// the same in steps (a yield every so many roads, and between the roads, the junctions, the paths
+// and the routes), for the city's rebuild to run a frame's share at a time (city.js)
+export function* makeClearanceSteps(real, cx, cz, R) {
 	const cells = new Map(), key = (i, j) => i * 65536 + j;
 	// a piece: a segment and how far either side of its line is kept clear (and for a street
 	// tree in a well at the kerb, how far: the carriageway alone, streettrees.js)
@@ -26,7 +30,9 @@ export function makeClearance(real, cx, cz, R) {
 		}
 	};
 	const nodes = new Map(), nk = (x, z) => Math.round(x / 1.5) * 65536 + Math.round(z / 1.5);
+	let n = 0;
 	for (const r of real.near('roads', cx, cz, R)) {
+		if ((++n & 63) === 0) yield;
 		const p = r.pts, hw = r.w / 2;
 		// (a town street's sidewalk is part of it; the 0.5 m beyond is the setback)
 		const pad = r.drive ? hw + (r.walked ? 1.7 : 0.3) + 0.5 : FOOT.has(r.cls) ? hw + 0.5 : hw + 0.3;
@@ -43,10 +49,13 @@ export function makeClearance(real, cx, cz, R) {
 			n.hw = Math.max(n.hw, hw); n.big = n.big || ['motorway', 'trunk', 'primary', 'secondary'].includes(r.cls);
 		}
 	}
+	yield;
 	// the sight triangles: where three or more legs of road meet, nothing tall within the
 	// corner and 9 m along each kerb (15 m where an arterial is one of them)
 	for (const n of nodes.values()) if (n.legs >= 3) put(n.x, n.z, n.x, n.z, n.hw + (n.big ? 15 : 9));
+	yield;
 	for (const q of real.near('paths', cx, cz, R)) put(q.ax, q.az, q.bx, q.bz, q.w / 2 + 0.3);
+	yield;
 	// the freeways and the Iron Horse Trail where the map doesn't draw them (roads.js)
 	if (!routes) routes = Object.values(ROUTES).map((ll) => ll.map(([a, b]) => toWorld(a, b)));
 	for (const pts of routes) for (let i = 0; i + 1 < pts.length; i++) {

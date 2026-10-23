@@ -12,7 +12,7 @@ import { moveToMusic } from './dance.js';
 
 import * as THREE from 'three';
 import {workActor,disposeWorkplaceProps} from './workplace-life.js';
-import { loadPeopleAssets, buildPerson, personDNA, rng, freeBody } from './body.js';
+import { loadPeopleAssets, buildPerson, buildPersonSteps, bodySlicer, personDNA, rng, freeBody } from './body.js';
 import { qualityNow } from '../world/governor.js';
 import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
@@ -739,12 +739,17 @@ export function createPeople(scene, world, camera = null) {
 		o.hair = keep?.hair; o.printKind = keep?.printKind;
 		if (o.hair) o.hair = { ...o.hair, scarf: o.headScarf || (c.H ? null : o.hair.scarf) };
 		d.style = o; d.styleSig = JSON.stringify(d.outfit);
-		p.P.redress(o);
+		// (queued after any change of clothes still under way for them)
+		p.dressJob = (p.dressJob || Promise.resolve()).then(() => sliced(p.P.redressSteps(o))).catch(() => {});
 		p.dressKey = c.key;
 	}
 
 	// ---------- the loop ----------
 	let building = false;
+	// a body is built, and a pooled body re-dressed, a few steps a frame, one at a time
+	// (body.js buildPersonSteps, dressSteps): built whole, a person's clothes alone took a frame
+	// and a half on a phone, which was the freeze every few seconds as the crowd turned over
+	const slicer = bodySlicer(GFX_PHONE ? 4 : 8), sliced = slicer.queue, buildSome = slicer.pump;
 	async function grow(kid = false, teen = false) {
 		if (building || !A) return;
 		building = true;
@@ -757,7 +762,8 @@ export function createPeople(scene, world, camera = null) {
 			// a teenager: the grown-up body taken back to thirteen to seventeen (teens.js)
 			if (teen) { d = makeTeen(d, undefined, { cold: c.cold, wet: c.wet }); }
 			if (c.H && !kid && !teen) { const o = outfitFor(rng(seed ^ 0x57a1e), d, c); o.hair = d.style.hair; o.printKind = d.style.printKind; if (o.headScarf) o.hair = { ...o.hair, scarf: o.headScarf }; d.style = o; d.styleSig = JSON.stringify(d.outfit); }
-			const P = buildPerson(A, d);
+			const P = await sliced(buildPersonSteps(A, d));
+			if (!A) return;
 			const M = motionFor(P);
 			const p = { P, M, active: false, role: 'walk', dressKey: c.key };
 			p.detachForSocial = () => {
@@ -797,6 +803,7 @@ export function createPeople(scene, world, camera = null) {
 	function update(dt, t, cam, night, enabled = true) {
 		group.visible = enabled;
 		if (!enabled) return;
+		buildSome();
 		const need = demand(cam, night), Q = qualityNow();
 		if (Q.people < 1 && need.n) need.n = Math.round(need.n * Q.people);
 		lastNeed = need; lastCam.copy(cam);

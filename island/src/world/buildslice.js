@@ -25,6 +25,10 @@ export function viewDistance(d, x, z, cam, fwd) {
 // go over by one step; what the build makes is the same whatever the budget, only spread over
 // more frames. Returns true once the generator is done.
 //   runSteps(gen, ms, now)   now: the clock (performance.now by default), for tests
+// the same steps run whole, at once (the synchronous callers, and the tests)
+export function runAll(gen) {
+	for (;;) { const r = gen.next(); if (r.done) return r.value; }
+}
 export function runSteps(gen, ms, now = () => performance.now()) {
 	const t0 = now();
 	do { if (gen.next().done) return true; } while (now() - t0 < ms);

@@ -18,6 +18,7 @@ import { scopeView } from './crysis/scope-view.js';
 import { toLL as globeLL } from './earth/globeframe.js';
 import { waterContact } from './world/water-contact.js';
 import { AIR } from './world/airfog.js';
+import { moveSteps } from './world/substep.js';
 
 // on a phone the sea's mirror (a second drawing of the world, with its own shaders) waits this
 // long after the loading card clears, so its first frame is not the same as everything else's
@@ -65,7 +66,7 @@ export function islandFrame(iw, now) {
 	else if (arcade.active()) iw.drive.stop();
 	else if (W.boardwalk?.ride(dt, iw.time)) iw.drive.stop();
 	else if (studio.active()) { /* in the chair: the studio holds the camera */ }
-	else if (!carjack.update(dt, iw.time) && !iw.drive.update(dt)) W.player.update(dt, iw.time);
+	else for (const h of moveSteps(elapsed)) { if (!carjack.update(h, iw.time) && !iw.drive.update(h)) W.player.update(h, iw.time); }   // in real time, pieces of dt at most (world/substep.js)
 	W.orbit?.after(dt);
 	W.orbit?.updateHud();
 	worldAir(1 - (W.orbit?.blend() || 0));
