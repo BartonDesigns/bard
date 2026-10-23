@@ -292,7 +292,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			yield* goodsSteps();
 			const K = {
 				g: kg, s: goods, box, mats, col, seats, aisles, rnd, isPhone, doorX,
-				wall: { x0: -hw + WALL, x1: hw - WALL, z0: -hd + WALL, z1: hd - WALL }, ceil: open ? null : CEIL, brand: brandOf(b),
+				wall: { x0: -hw + WALL, x1: hw - WALL, z0: -hd + WALL, z1: hd - WALL }, ceil: open ? null : CEIL, roof: open ? H - 0.14 : CEIL, brand: brandOf(b),
 				band: (x0, z0, x1, z1, rgb, y0, y1) => lining(x0, z0, x1, z1, rgb, y1, y0),
 			};
 			yield* (b.store ? fitMart(K, b.store) : fitShop(K, b.biz?.type));

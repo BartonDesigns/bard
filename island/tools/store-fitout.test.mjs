@@ -21,18 +21,23 @@ function built(b) {
 
 test('every trade and both marts build in a few frames, stocked, inside their walls', () => {
 	const cases = [shop({ store: 'fuel' }), shop({ store: 'corner', w: 16, d: 12 }), ...TYPES.map((t, i) => shop({ biz: { type: t, name: t, sign: { bg: '#c8102e', fg: '#ffffff' } }, w: 10 + (i % 4) * 5, d: 10 + (i % 3) * 5 }))];
+	// (a big one open to its roof: its light strips hang at the same height, on wires)
+	cases.push(shop({ biz: { type: 'grocer', name: 'big', sign: { bg: '#2a9d3f', fg: '#ffffff' } }, w: 28, d: 22, wallH: 7, h: 7 }));
 	for (const b of cases) {
 		const { C, frames, L } = built(b);
 		const what = b.store || b.biz.type;
 		assert.equal(C.count(), 1, what + ' built');
-		assert.ok(frames > 1 && frames < 60, `${what}: built over a few frames (${frames})`);
+		// (a few ms a frame: a small shop on a quick machine may be done in its first)
+		assert.ok(frames >= 1 && frames < 60, `${what}: built over a few frames (${frames})`);
 		assert.ok(L.stocked && L.trade === (b.store ? 'mart' : tradeOf(b.biz.type)), what);
 		let goods = 0;
 		C.group.traverse((o) => { if (o.name === 'goods') goods += o.geometry.attributes.position.count; });
-		// (a vet is mostly its exam rooms: a short run of food and meds by the desk)
-		const sells = !['gym', 'laundromat'].includes(what), least = what === 'vet' ? 150 : 300;
+		// (a vet or a salon is mostly its rooms and its chairs: a short run of stock by the desk)
+		const sells = !['gym', 'laundromat'].includes(what), least = what === 'vet' || what === 'salon' ? 150 : 300;
 		if (sells) assert.ok(goods > least, `${what}: stock on its shelves (${goods})`);
 		assert.ok(L.seats > 0, what + ': places to stand');
+		// nothing of the fit-out lies on the floor that should hang from the ceiling
+		C.group.traverse((o) => { if (o.material?.emissive?.getHex?.() === 0xfff4e0 && o.geometry?.attributes.position) { o.geometry.computeBoundingBox(); assert.ok(o.geometry.boundingBox.min.y > 0.2, what + ': a light strip on the floor'); } });
 	}
 });
 
