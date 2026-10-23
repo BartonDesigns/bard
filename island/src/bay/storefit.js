@@ -24,6 +24,7 @@ import { drawAny } from '../interiors/kit.js';
 import { RANGES, CUTS, hang, folded } from '../interiors/estab-kit.js';
 import { stripUV, GARMENTS, garmentAt, GARMENT_W, GARMENT_H } from '../interiors/goods.js';
 import { srgbToLinear as lin } from '../world/srgb.js';
+import { makeDoor, COLD } from './cooler-doors.js';
 
 const C = {
 	steel: lin([0.78, 0.79, 0.8]), shelf: lin([0.86, 0.87, 0.88]), kick: lin([0.2, 0.2, 0.21]), black: lin([0.04, 0.04, 0.045]),
@@ -298,14 +299,23 @@ function coolers(K, dir, line, a0, a1, o) {
 			if (o.face) s.face(kk, x + 0.05, x + dw - 0.05, y, Math.min(0.45, t - y), -0.3, (o.seed || 0) + k * 7 + i, 1.2);
 			else s.run(kk, x + 0.05, x + dw - 0.05, y, t - y, -0.13, D - 0.25, (o.seed || 0) + k * 7 + i, 1.25);
 		}
-		// the door's handle (by its free edge) and its frame
-		const hx = k % 2 ? x + 0.07 : x + dw - 0.07;
-		g.box('metal', hx - 0.015, 0.85, 0.03, hx + 0.015, 1.75, 0.06, C.steel);
+		// the door, hung on one edge (bay/cooler-doors.js swings it): its frame round the glass, its
+		// handle by its free edge; drawn on its own, its run of the kit's vertices noted
+		const hinge = k % 2 ? x + dw - 0.02 : x + 0.02, free = k % 2 ? x + 0.02 : x + dw - 0.02, hx = k % 2 ? x + 0.07 : x + dw - 0.07;
+		const m0 = g.mark();
 		g.box('gloss', x + 0.02, 0.3, 0.0, x + 0.045, top - 0.06, 0.025, C.black);
 		g.box('gloss', x + dw - 0.045, 0.3, 0.0, x + dw - 0.02, top - 0.06, 0.025, C.black);
+		g.box('gloss', x + 0.045, 0.3, 0.0, x + dw - 0.045, 0.36, 0.025, C.black);
+		g.box('gloss', x + 0.045, top - 0.12, 0.0, x + dw - 0.045, top - 0.06, 0.025, C.black);
+		g.box((f) => (f > 3 ? 'glass' : null), x + 0.045, 0.36, 0.008, x + dw - 0.045, top - 0.12, 0.016, C.white);
+		g.box('metal', hx - 0.015, 0.85, 0.025, hx + 0.015, 1.75, 0.055, C.steel);
+		const [px, pz] = F.W(hinge, 0.0125), [qx, qz] = F.W(free, 0.0125), [ox, oz] = F.W(hinge, 1.0125), [fx, fz] = F.W(x + dw / 2, 0.55);
+		K.door?.(makeDoor(g.since(m0), px, pz, qx - px, qz - pz, ox - px, oz - pz, fx, fz));
+		// (what it keeps cold is yours to take, paid for at the till: office-perks.js)
+		const pk = typeof kind === 'string' && o.perk !== false && COLD[kind];
+		if (pk) K.perk?.(pk, fx, fz, { door: true, n: (o.seed || 0) + k });
 	}
 	g.box('gloss', L1 - 0.025, 0.24, -0.06, L1 + 0.025, top, 0.02, C.black);
-	fbox(K, F, K.mats.glass, L0, 0.3, 0.008, L1, top - 0.06, 0.016);
 	// the lit header and its sign
 	if (o.signs) {
 		const per = Math.max(1, Math.round((L1 - L0) / 3.2)), sw = (L1 - L0) / per;
