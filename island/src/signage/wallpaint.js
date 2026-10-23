@@ -172,16 +172,16 @@ vec4 paintOnWall(vec4 tex, vec4 halo, vec2 uv, vec3 w, vec3 n, float style, floa
 		float mott = sgN(p * 0.8 + seed * 3.0) * 0.6 + sgOct(p + seed, 3.3, px) * 0.4;
 		// chalked and sun-bleached, unevenly: the colour gone out of it, paler; the reds and
 		// purples first, to pinks and greys; the blacks to charcoal
-		float fade = clamp(age * (0.6 + 0.4 * south) * (0.45 + 0.9 * mott) * (style > 1.5 ? 0.5 : 1.0), 0.0, 1.0);
+		float fade = clamp(age * (0.75 + 0.5 * south) * (0.5 + 0.9 * mott) * (style > 1.5 ? 0.5 : 1.0), 0.0, 1.0);
 		float l = dot(c, vec3(0.3, 0.55, 0.15));
 		float red = clamp((c.r - max(c.g, c.b)) * 2.5 + (c.b - c.g) * 1.5, 0.0, 1.0);
-		c = mix(c, vec3(l) * 0.72 + 0.09 + c * 0.2, fade * (0.6 + 0.3 * red));
-		c = max(c, vec3(0.03 + 0.08 * fade));
+		c = mix(c, vec3(l) * 0.72 + 0.09 + c * 0.2, fade * (0.75 + 0.25 * red));
+		c = max(c, vec3(0.035 + 0.1 * fade));
 		// dust and soot dulling it, darker toward the foot
-		c *= mix(1.0, (0.84 + 0.12 * mott) * (1.0 - 0.18 * low), age * 0.75);
+		c *= mix(1.0, (0.8 + 0.12 * mott) * (1.0 - 0.2 * low), age * 0.9);
 		// flakes let go: low down where it is kicked and splashed, along the metal's folds, where
 		// the sun has had it
-		float th = 1.0 - age * (0.3 + 0.28 * low + 0.18 * ribEdge + 0.08 * south) * (style > 1.5 ? 0.6 : 1.0);
+		float th = 1.0 - age * (0.4 + 0.3 * low + 0.18 * ribEdge + 0.08 * south) * (style > 1.5 ? 0.6 : 1.0);
 		a *= 1.0 - smoothstep(th - fw, th + fw + 0.006, fl);
 	}
 	// and the wall's: what its own shader draws on it round the paint, drawn on the paint the same
