@@ -1,7 +1,8 @@
 // The generated land's streams and lakes (crysis/hydro.js, crysis/rivers.js): a low sill is cut
 // through rather than flooded, a deep closed basin keeps only a pond at its bottom, and on the
 // real ground near Gort (where a 12 km lake once lay 85 m up over a village) no lake stands
-// over the land or hangs off its shore, and no creek runs above the ground.
+// over the land or hangs off its shore, and no creek runs above the ground. The country's
+// villages wait for that water before they are laid out, and build no house in it.
 //   node island/tools/generated-water.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,6 +12,8 @@ import { hydrology } from '../src/crysis/hydro.js';
 import { proceduralWater } from '../src/crysis/rivers.js';
 import { createGlobeHeight } from '../src/earth/globeheight.js';
 import { setFrame } from '../src/earth/globeframe.js';
+import * as THREE from 'three';
+import { createSettlements } from '../src/region/settle.js';
 import { globeRoot } from './globe-assets-manifest.mjs';
 
 const RIVERS = { sea: 0, minCells: 20, lakeCells: 5, lakeDepth: 1.5, inset: 0.35 };
@@ -92,4 +95,23 @@ test('near Gort: the village is dry, every lake small and held by the ground, ev
 		const it = W.tile(i, j); let r; while (!(r = it.next()).done);
 		for (const line of r.value) for (const p of line.P) if (!W.inLake(p[0], p[1])) assert.ok(p[2] <= heightAt(p[0], p[1]) - 0.3, `${line.name} at ${p[2].toFixed(1)} m over ground at ${heightAt(p[0], p[1]).toFixed(1)}`);
 	}
+});
+
+test('a village is laid out only once the water round it is known, and builds no house in a pond', () => {
+	const scene = new THREE.Scene(), F = { epoch: 1 };
+	let known = false;
+	// (a pond 150 m across where the village's middle would be)
+	const S = createSettlements({ scene, ground: () => 20, wet: (x, z) => Math.hypot(x - 40, z) < 75, waterReady: () => known, F, toXZ: () => ({ x: 0, z: 0 }), toLL: (x, z) => ({ lat: z, lon: x }), isPhone: true });
+	const site = S.add({ key: 'vil:test', kind: 'village', kit: 'village', pop: -1, lat: 0, lon: 0 });
+	const cam = { position: { x: 0, y: 30, z: 0 } };
+	for (let i = 0; i < 20; i++) S.update(0.3, cam, { budget: 4 });
+	assert.equal(site.planned, null, 'not laid out while its water is unknown');
+	known = true;
+	for (let i = 0; i < 200 && !(site.planned && [...site.cells.values()].some((c) => c.mesh)); i++) S.update(0.3, cam, { budget: 4 });
+	assert.ok(site.planned, 'laid out once it is known');
+	const houses = site.planned.lots.filter((L) => L.role === 'house');
+	assert.ok(houses.length > 0, 'it has houses');
+	for (const C of site.cells.values()) for (const r of C.homes) assert.ok(Math.hypot(r.L.x - 40, r.L.z) >= 75, 'no home built in the pond');
+	for (const L of houses) assert.ok(Math.hypot(L.x - 40, L.z) >= 75, `no house planned in the pond (${L.x.toFixed(0)}, ${L.z.toFixed(0)})`);
+	S.dispose();
 });

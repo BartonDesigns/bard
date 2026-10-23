@@ -66,7 +66,7 @@ function nearDissolve(m, band) {
 	return m;
 }
 
-export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, toLL = null, F, lanes = null }) {
+export function createSettlements({ scene, ground, wet, waterReady = () => true, isPhone = false, toXZ, toLL = null, F, lanes = null }) {
 	const group = new THREE.Group();
 	group.name = 'regional settlements';
 	scene.add(group);
@@ -104,6 +104,8 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, t
 	}
 	// the plan: lots, lanes, square, fields (a dense quarter only its streets; its blocks come later)
 	function planSite(s) {
+		// (not before the creeks and ponds round it are known: asked again on the next look round)
+		if (s.kind !== 'real' && !waterReady(s.x, s.z, 600)) return;
 		const kit = kitOf(s), r = rng(s.seed);
 		const y0 = ground(s.x, s.z);
 		const H = (x, z) => ground(s.x + x, s.z + z) - y0, W = (x, z) => wet(s.x + x, s.z + z);

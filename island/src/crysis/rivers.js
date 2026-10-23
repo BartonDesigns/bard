@@ -121,6 +121,8 @@ export function proceduralWater({ heightAt, inSurvey }) {
 			const Lk = { kind: L.cells.length > 60 ? 0 : 3, int: false, name: L.cells.length > 12 ? 'Lake ' + nameOf(Math.round(sx / 97), Math.round(sz / 89)) : '', level: L.level, rings: L.rings.map(ring), dams: [], cx: sx, cz: sz, gen: true };
 			Lk.bx0 = Lk.bz0 = Infinity; Lk.bx1 = Lk.bz1 = -Infinity;
 			for (let i = 0; i < r.length; i += 2) { Lk.bx0 = Math.min(Lk.bx0, r[i]); Lk.bx1 = Math.max(Lk.bx1, r[i]); Lk.bz0 = Math.min(Lk.bz0, r[i + 1]); Lk.bz1 = Math.max(Lk.bz1, r[i + 1]); }
+			// (a square let go meanwhile, or worked from the ground of a frame since jumped from, lists none)
+			if (D.dead) return;
 			D.lakes.push(Lk); lakes.push(Lk);
 		}
 		yield;
@@ -214,12 +216,12 @@ export function proceduralWater({ heightAt, inSurvey }) {
 		// work the squares round a place for up to ms milliseconds
 		pump(x, z, r, ms) { const t0 = performance.now(); for (const D of squares(x, z, r)) while (!D.done && performance.now() - t0 < ms) if (D.it.next().done) { D.done = true; version++; } },
 		// the globe's frame jumped: every square was worked from the ground of the old one
-		reframe() { doms.clear(); lakes.length = 0; version++; },
+		reframe() { for (const D of doms.values()) D.dead = true; doms.clear(); lakes.length = 0; version++; },
 		// let go of squares far off (their lakes go with them)
 		trim(x, z, R) {
 			for (const [k, D] of doms) {
 				if (Math.hypot((D.di + 0.5) * CORE - x, (D.dj + 0.5) * CORE - z) < R) continue;
-				doms.delete(k);
+				doms.delete(k); D.dead = true;
 				for (const L of D.lakes) { const q = lakes.indexOf(L); if (q >= 0) lakes.splice(q, 1); }
 				if (D.lakes.length) version++;
 			}
