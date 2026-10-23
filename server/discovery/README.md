@@ -166,11 +166,11 @@ curl -H 'origin: https://level99bard.com' https://l99-discovery.<subdomain>.work
 
 | var | default | |
 |---|---|---|
-| `CLAUDE_MODEL` | `claude-opus-5-5` | The voice. `claude-sonnet-5-5` is half the price, `claude-haiku-5-5` about a fortieth, and quicker. |
+| `CLAUDE_MODEL` | `claude-haiku-5-5` | The voice. Haiku is the quickest and cheapest; `claude-sonnet-5-5` is richer at ten times the price, `claude-opus-5-5` the best at twenty-five times. |
 | `CLAUDE_EFFORT` | `low` | How long it thinks before speaking. `low` is the fastest; `medium` is richer and slower. |
-| `CLAUDE_MAX_TOKENS` | 260 | The longest reply (about five spoken sentences plus the action). Capped at 600. |
+| `CLAUDE_MAX_TOKENS` | 360 | The longest reply (about five spoken sentences plus the action, with room for a quest). Capped at 600. |
 | `CLAUDE_TURNS_PER_DAY` | 3000 | The day's ceiling on Claude turns, for every player together. Past it, Workers AI answers. |
-| `CLAUDE_FALLBACKS` | `true` | If the model's safety check declines a turn, Anthropic retries it on its recommended fallback model. |
+| `CLAUDE_FALLBACKS` | `true` | If the model's safety check declines a turn, Anthropic retries it on its recommended fallback model. Haiku 5.5 has none: its declines go to Workers AI. |
 | `TALK_PER_HOUR` | 60 | Turns one player may take an hour (shared with `/talk`). |
 
 ### What it costs, and what the free tiers carry
@@ -181,7 +181,7 @@ Claude has no free tier: each turn is billed to the key's account. A turn is abo
 |---|---|---|---|
 | `claude-opus-5-5` | $0.005 | $5 | $15 a day |
 | `claude-sonnet-5-5` | $0.002 | $2 | $6 a day |
-| `claude-haiku-5-5` | $0.0002 | $0.20 | $0.60 a day |
+| `claude-haiku-5-5` (the default) | $0.0002 | $0.20 | $0.60 a day |
 
 Set a monthly spend limit on the key's account in the Claude Console as a backstop.
 
