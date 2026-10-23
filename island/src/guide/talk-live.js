@@ -16,7 +16,8 @@ const STYLE = `
 .l99-live{position:absolute;left:50%;transform:translateX(-50%);width:min(640px,calc(100vw - 24px));display:none;flex-direction:column;align-items:center;gap:6px;pointer-events:none;z-index:6;font:15px/1.45 var(--bard-body,system-ui,sans-serif);color:#fff;text-align:center;}
 .l99-live.on{display:flex;}
 .l99-live.desk{bottom:calc(92px + env(safe-area-inset-bottom));}
-.l99-live.touch{top:calc(var(--l99-top, env(safe-area-inset-top)) + 64px);}
+.l99-live.touch{top:calc(var(--l99-top, env(safe-area-inset-top)) + 64px);width:min(560px,calc(100vw - 136px - env(safe-area-inset-left) - env(safe-area-inset-right)));font-size:14px;}
+.l99-live.touch .lv-line{padding:7px 11px;}
 .l99-live .lv-you{max-width:100%;padding:6px 12px;border-radius:10px;background:rgba(6,10,14,.72);border:1px solid rgba(95,240,198,.22);display:none;}
 .l99-live .lv-you b{color:#5ff0c6;font-weight:600;margin-right:6px;}
 .l99-live .lv-you.interim span{color:rgba(255,255,255,.72);font-style:italic;}

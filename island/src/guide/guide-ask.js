@@ -36,9 +36,10 @@ export function guideTalkTo(gd, p, opts = {}) {
 	title.textContent = gd.partner.persona.name.toUpperCase();
 	input.placeholder = `Say something to ${gd.partner.persona.first}`;
 	// a live voice (the discovery server streams people's replies): face to face, with
-	// subtitles and the microphone, the panel only for typing and choices
+	// subtitles and the microphone, the panel only for typing and choices (an open one steps
+	// aside so the person is in view)
 	const live = gd.liveOn();
-	if (live) gd.talkLive.open(gd.partner.persona.first, { listen: !!opts.mic });
+	if (live) { if (input.offsetParent) show(false); gd.talkLive.open(gd.partner.persona.first, { listen: !!opts.mic }); }
 	else show(true);
 	for (const turn of archive.thread(threadMeta(gd.partner).id)?.turns.slice(-30) || []) if (turn.role === 'user' || turn.role === 'assistant') say(turn.content, turn.role === 'user' ? 'me' : 'guide');
 	if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
