@@ -51,10 +51,13 @@ import { playCue } from './weapon-sound.js';
 import { createScopeOptics } from './scope-optics.js';
 import { scopeView, scopeGone } from './scope-view.js';
 import { refineHandSurface, closeHandMaterial, handRefine } from '../people/hand-surface.js';
-import { dressArms } from '../people/sleeve.js';
+import { SHOULDER, dressArms } from '../people/sleeve.js';
 import { clamp, wrapAngle as wrap } from '../noise.js';
 
 const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
+// (the upper arm's bones: the sleeve above the elbow rides on them, people/sleeve.js, so they
+// are turned from the elbow back toward the shoulder, where your shoulder is in the view)
+const UPPER_BONES = /^upperarm0[12]\.(L|R)$/;
 const ease = (x) => x * x * (3 - 2 * x);
 // a critically damped spring
 // (z below 1 lets it overshoot a little: the weight of a held thing catching up with a turn)
@@ -154,8 +157,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		group.add(skin);
 		if (garment) group.add(garment.mesh);
 		scene.add(group);
-		const side = names.map((n) => (n.endsWith('.L') ? 'L' : 'R')), fore = names.map((n) => !/^(wrist|finger|metacarpal)/.test(n));
-		return { me, group, skin, garment, bones, side, fore, tris: g.index.count / 3 + (garment?.tris || 0) };
+		const side = names.map((n) => (n.endsWith('.L') ? 'L' : 'R')), fore = names.map((n) => !/^(wrist|finger|metacarpal)/.test(n)), upper = names.map((n) => UPPER_BONES.test(n));
+		return { me, group, skin, garment, bones, side, fore, upper, tris: g.index.count / 3 + (garment?.tris || 0), scale: (P.height || 1.75) / 1.75 };
 	}
 
 	// ---------- input: aim ----------
@@ -197,7 +200,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	// a frame part way from A to B
 	function blend(out, A, B, k) { A.decompose(bp, bq, bs); B.decompose(bp2, bq2, bs); return out.compose(bp.lerp(bp2, k), bq.slerp(bq2, k), ONE); }
 	const targets = { L: null, R: null };
-	const handAt = new THREE.Matrix4(), tmp = new THREE.Matrix4(), tmp2 = new THREE.Matrix4(), F = { L: null, R: null };
+	const handAt = new THREE.Matrix4(), tmp = new THREE.Matrix4(), tmp2 = new THREE.Matrix4(), F = { L: null, R: null }, U = { L: null, R: null };
 	const hipQ = new THREE.Quaternion(), rotQ = new THREE.Quaternion(), pos = new THREE.Vector3(), wantV = new THREE.Vector3(), V3 = new THREE.Vector3(), V4 = new THREE.Vector3(), lastSeen = { yaw: 0, pitch: 0, grounded: true, vy: 0, set: false };
 
 	// ---------- your fingers on it (crysis/finger-pose.js, held-items.js GRIPS) ----------
@@ -491,8 +494,24 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				Q.setFromUnitVectors(now, want);
 				(F[side] ||= new THREE.Matrix4()).makeTranslation(wr.x, wr.y, wr.z).multiply(tmp.makeRotationFromQuaternion(Q)).multiply(tmp2.makeTranslation(-wr.x, -wr.y, -wr.z)).multiply(X[side]);
 			}
+			// the upper arms: swung about the elbow to run back to the shoulders
+			for (const side of ['L', 'R']) {
+				const iE = me.P.map['lowerarm01.' + side], iS = me.P.map['upperarm01.' + side];
+				if (!X[side] || iE == null || iS == null) { U[side] = X[side] ? F[side] : null; continue; }
+				const el = V.setFromMatrixPosition(me.P.bones[iE].matrixWorld).applyMatrix4(F[side]);
+				const sh = V2.setFromMatrixPosition(me.P.bones[iS].matrixWorld).applyMatrix4(F[side]);
+				// (and stretched or shortened along its length to reach them: the elbows sit where
+				// the view wants them, further out than an arm reaches, and the upper arm is only
+				// ever seen near the elbow, so it runs to the shoulder, behind the view, however far)
+				const Lu = sh.sub(el).length(), now = sh.divideScalar(Lu || 1), want = wantV.copy(SHOULDER[side]).multiplyScalar(arms.scale).sub(el), reach = want.length();
+				want.divideScalar(reach || 1);
+				Q.setFromUnitVectors(now, want);
+				const k = Math.max(0.5, Math.min(4, reach / (Lu || 0.3))) - 1;
+				tmp.set(1 + k * want.x * want.x, k * want.x * want.y, k * want.x * want.z, 0, k * want.y * want.x, 1 + k * want.y * want.y, k * want.y * want.z, 0, k * want.z * want.x, k * want.z * want.y, 1 + k * want.z * want.z, 0, 0, 0, 0, 1);
+				(U[side] ||= new THREE.Matrix4()).makeTranslation(el.x, el.y, el.z).multiply(tmp).multiply(tmp2.makeRotationFromQuaternion(Q)).multiply(tmp.makeTranslation(-el.x, -el.y, -el.z)).multiply(F[side]);
+			}
 			for (let i = 0; i < arms.bones.length; i++) {
-				const sd = arms.side[i], x = arms.fore[i] ? F[sd] : X[sd];
+				const sd = arms.side[i], x = arms.upper[i] ? U[sd] : arms.fore[i] ? F[sd] : X[sd];
 				arms.bones[i].matrixWorld.copy(X[sd] ? tmp.multiplyMatrices(x, me.P.bones[i].matrixWorld) : ZERO);
 			}
 			if (poses) fingersNow(dt, time, H, S.reload ? ru : bu, gather, sp);
