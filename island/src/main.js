@@ -858,7 +858,8 @@ export function createIslandWorld() {
 		// lifted after a dozen smooth frames in a row (or eight seconds, whatever happens); done
 		// runs first, and keeps the veil up by returning true. The city's set round the new place
 		// still being laid out in slices holds the veil too (bay/city.js busy()), so its buildings
-		// are never seen to come in piecewise, up to thirty seconds
+		// are never seen to come in piecewise, up to thirty seconds; and so does a town out on the
+		// globe still growing round where you stand (earth/globetowns.js pending())
 		settle(done) {
 			const token = ++settling, t0 = performance.now();
 			let last = t0, calm = 0;
@@ -866,7 +867,7 @@ export function createIslandWorld() {
 				if (token !== settling) return;
 				calm = now - last < 70 ? calm + 1 : 0;
 				last = now;
-				const building = !!world?.city?.busy?.();
+				const building = !!world?.city?.busy?.() || !!world?.globe?.towns?.pending?.();
 				if ((calm >= 12 && now - t0 > 600 && !building) || now - t0 > (building ? 30000 : 8000)) { if (!done?.()) travelVeil.style.opacity = '0'; return; }
 				requestAnimationFrame(watch);
 			};
@@ -1386,7 +1387,7 @@ export function createIslandWorld() {
 		farT = last; farNight = night;
 		W.bayArea?.update(camera, night);
 		// orbital departure retains the ground frame; a new place chosen on the way down streams its own
-		if (!W.orbit?.active() || W.orbit.streams?.()) W.globe?.update(dt, camera, night);
+		if (!W.orbit?.active() || W.orbit.streams?.()) W.globe?.update(dt, camera, night, { arriving: !!W.orbit?.active() });
 	}
 	function surfaceOpen(W) {
 		const caveK = W.underworld?.inside?.() || 0;
