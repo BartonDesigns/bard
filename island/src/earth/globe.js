@@ -267,14 +267,19 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	// go to a place anywhere on Earth: the frame moves there first; returns its engine metres
 	function place(lat, lon) {
+		const was = F.epoch;
 		if (bayKm(lat, lon) < BAY_BACK_KM) { if (!F.bay) { bayFrame(); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); } }
 		else { setFrame(lat, lon); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); }
 		roads.reframe(); lanes.reframe(); streets.clear(); gridStreets.clear();
+		// (the water worked out round you was for the old frame's ground, at the same metres; and
+		// again once the new ground is in, as any worked out meanwhile was from ground not yet there)
+		const moved = F.epoch !== was, ep = F.epoch;
+		if (moved) world()?.water?.reframe?.();
 		const p = toXZ(lat, lon);
 		// (a jump out of the window: nothing is drawn or placed from the old one meanwhile)
 		const gi = Math.floor((lon + 180) * 10), gj = Math.floor((90 - lat) * 10), W = data.win;
 		if (Math.abs(((gi - W.gi0 - 128) % 3600 + 5400) % 3600 - 1800) > 110 || Math.abs(gj - W.gj0 - 128) > 110) W.ready = false;
-		return { x: p.x, z: p.z, ready: data.cover(lat, lon).then(() => { data.anchor(); anchorUniforms(data.U, data.win); }) };
+		return { x: p.x, z: p.z, ready: data.cover(lat, lon).then(() => { data.anchor(); anchorUniforms(data.U, data.win); if (moved && F.epoch === ep) world()?.water?.reframe?.(); }) };
 	}
 
 	// ---------- each frame ----------

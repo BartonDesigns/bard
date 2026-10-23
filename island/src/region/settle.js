@@ -15,12 +15,19 @@
 // its buildings per cell (vertex colours, no textures), one of the lit things (windows,
 // lanterns, signs: brighter at night), the painted ground (its lanes, square, yards and
 // fields), the chimneys' smoke as points. Cells far behind you are let go.
+//
+// A home up close is a house you can walk into: each house lot keeps a record of its own
+// faces in the cell's meshes and of its shape (structures.js home()), and bay/houses.js builds
+// it for real with its rooms when you come within a few dozen metres (homesNear). Its faces
+// here dissolve into the house built (the same screen-noise hand-over the Bay's houses use,
+// aNear), and its walls stop holding you out.
 
 import * as THREE from 'three';
 import { Geo } from './geo.js';
 import { STRUCTURES, basePalette } from './structures.js';
 import { plan, blockLots, BLOCK, SIZES, denseStreetDistance, lotGround } from './layout.js';
 import { KITS } from './kits.js';
+import { detailClock } from '../world/lodfade.js';
 
 const CELL = 120, VCELL = 240;
 const kitOf = (s) => s.kitObj || KITS[s.kit];
@@ -43,13 +50,29 @@ const SMOKE_VS = /* glsl */`
 const SMOKE_FS = /* glsl */`
 	uniform vec3 uCol; varying float vA;
 	void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.1, length(d)) * vA * 0.32; if (a < 0.01) discard; gl_FragColor = vec4(uCol, a); }`;
+// a home's faces give up their pixels to the house built for real (bay/houses.js) as it takes
+// them: aNear = its centre in the place's frame, 1 while it is built, and when it was
+// (world/lodfade.js: the same noise, the same band, the same half second from its birth)
+function nearDissolve(m, band) {
+	const prev = m.onBeforeCompile;
+	m.onBeforeCompile = (sh, r) => {
+		prev?.call(m, sh, r);
+		sh.uniforms.uNearBand = band; sh.uniforms.uDetailNow = detailClock;
+		sh.vertexShader = 'attribute vec4 aNear; uniform vec2 uNearBand; uniform float uDetailNow; varying float vNearK;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+			vNearK = aNear.z > 0.5 ? (1.0 - smoothstep(uNearBand.x, uNearBand.y, length((modelMatrix * vec4(aNear.x, 0.0, aNear.y, 1.0)).xz - cameraPosition.xz))) * smoothstep(0.0, 0.5, max(0.0, uDetailNow - aNear.w)) : 0.0;`);
+		sh.fragmentShader = 'varying float vNearK;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;');
+	};
+	m.customProgramCacheKey = () => 'settle-near';
+	return m;
+}
 
-export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F, lanes = null }) {
+export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, toLL = null, F, lanes = null }) {
 	const group = new THREE.Group();
 	group.name = 'regional settlements';
 	scene.add(group);
-	const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
-	const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, fog: true });
+	const nearBand = { value: new THREE.Vector2(36, 46) };
+	const mat = nearDissolve(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: THREE.DoubleSide }), nearBand);
+	const glowMat = nearDissolve(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, fog: true }), nearBand);
 	const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: 0.96, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 	const smokeU = { uTime: { value: 0 }, uWind: { value: new THREE.Vector2(0.4, 0.2) }, uCol: { value: new THREE.Color(0.7, 0.7, 0.72) }, uSize: { value: isPhone ? 260 : 380 } };
 	const smokeMat = new THREE.ShaderMaterial({ uniforms: smokeU, vertexShader: SMOKE_VS, fragmentShader: SMOKE_FS, transparent: true, depthWrite: false });
@@ -59,7 +82,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	const sites = new Map();            // key -> site
 	const queue = [];                   // [site, i, j]
 	const stats = { built: 0, ms: 0, cells: 0, lots: 0, tris: 0 };
-	let epoch = -1, job = null, occupancyVersion = 0, treesVersion = 0;
+	let epoch = -1, job = null, occupancyVersion = 0, treesVersion = 0, homesVersion = 0;
 
 	// ---------- a site ----------
 	// desc: { key, kind, lat, lon, kit (kit id), pop, name, regionId, culture, palette, opts, lots? }
@@ -136,7 +159,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	function* buildCell(s, i, j) {
 		let tWork = 0, tLast = performance.now();
 		const kit = kitOf(s), lots = cellLots(s, i, j);
-		const G = new Geo(), glow = new Geo(), smoke = [], solids = [], spots = [], lights = [], trees = [];
+		const G = new Geo(), glow = new Geo(), smoke = [], solids = [], spots = [], lights = [], trees = [], homes = [];
 		G.seed = glow.seed = (s.seed ^ (i * 92821 + j * 68917)) >>> 0 || 1;
 		const opts = { ...(s.opts || {}), snow: snowOf(s) };
 		for (const L of lots) {
@@ -148,15 +171,21 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			if (L.role === 'house' && !foundation) continue;
 			const y = foundation?.y ?? ground(terrainLot.x, terrainLot.z);
 
-			const B = { G, glow, smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense };
+			const B = { G, glow, smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense, home: null };
 			const rot = L.rot + Math.PI;
 			G.frame(L.x, y, L.z, rot); glow.frame(L.x, y, L.z, rot);
 			const pal = basePalette(s.palette, kit, r, opts);
+			// (a home's own faces, from its foundation on: structures.js home() marks where they stop)
+			const v0 = G.count(), g0 = glow.count();
 			if (foundation && foundation.hi - foundation.lo > 0.12) G.box(0, foundation.lo - y - 0.25, 0, L.w, y - foundation.lo + 0.3, L.d, pal.stone);
 			try { fn(B, { w: L.w, d: L.d }, pal, r); } catch (e) { console.warn('[regional] ' + L.type, e); }
 			const cs = Math.cos(rot), sn = Math.sin(rot), toS = (a, b) => [L.x + a * cs + b * sn, L.z - a * sn + b * cs];
+			const H = L.role === 'house' && !B.lite ? B.home : null;
+			const rec = H ? { L, y, H, v0, v1: H.v, g0, g1: H.gv, c: toS(H.x || 0, 0), cell: null, grp: null, nearGrp: null, n: homes.length } : null;
+			if (rec) homes.push(rec);
 			const h = (SIZES[L.type]?.[0] || 4) > 12 ? 14 : 8;
-			for (const [a, b, w, d, rr] of B.solid) { const [x, z] = toS(a, b); solids.push({ x, z, w, d, rot: rot + (rr || 0), y0: y - 1, h: h + 2 }); }
+			// (the walls of a home hold you out until it is built for real round you)
+			for (const [a, b, w, d, rr] of B.solid) { const [x, z] = toS(a, b); solids.push({ x, z, w, d, rot: rot + (rr || 0), y0: y - 1, h: h + 2, home: rec && Math.abs(a - (H.x || 0)) < H.w / 2 + 0.6 && Math.abs(b) < H.d / 2 + 0.6 ? rec : null }); }
 			for (const [a, yy, b] of B.smoke) { const [x, z] = toS(a, b); if (((Math.abs(x * 7.1 + z * 3.3) | 0) % 100) / 100 < kit.smoke + 0.15) smoke.push(x, y + yy, z); }
 			for (const [a, yy, b] of B.lights) { const [x, z] = toS(a, b); lights.push([x, y + yy, z]); }
 			// (a great tree the lot keeps is grown with the region's plants, flora.js)
@@ -182,10 +211,13 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 				G.frame(x, y - 0.35, z, f.rot); G.box(0, 0, 0, 6.2, 0.75, 0.45, wall, { r: 0 });
 			}
 		}
-		const C = { i, j, mesh: null, glow: null, ground: null, smoke: null, solids, spots, lights, trees };
+		const C = { i, j, mesh: null, glow: null, ground: null, smoke: null, solids, spots, lights, trees, homes };
 		if (trees.length) treesVersion++;
-		if (G.count()) { C.mesh = new THREE.Mesh(G.geometry(), mat); C.mesh.castShadow = !isPhone; C.mesh.receiveShadow = true; s.group.add(C.mesh); stats.tris += G.count() / 3; }
-		if (glow.count()) { C.glow = new THREE.Mesh(glow.geometry(), glowMat); s.group.add(C.glow); }
+		const nearOf = (g) => { g.setAttribute('aNear', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 4), 4)); return g; };
+		if (G.count()) { C.mesh = new THREE.Mesh(nearOf(G.geometry()), mat); C.mesh.castShadow = !isPhone; C.mesh.receiveShadow = true; s.group.add(C.mesh); stats.tris += G.count() / 3; }
+		if (glow.count()) { C.glow = new THREE.Mesh(nearOf(glow.geometry()), glowMat); s.group.add(C.glow); }
+		for (const rec of homes) rec.cell = C;
+		if (homes.length) homesVersion++;
 		C.ground = paintCell(s, i, j, kit);
 		if (smoke.length) {
 			const n = smoke.length / 3, K = 7, pos = new Float32Array(n * K * 3), ph = new Float32Array(n * K);
@@ -203,6 +235,9 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		return C;
 	}
 	function freeCell(C) {
+		// (its homes built for real go with it: bay/houses.js lets a dead one go)
+		for (const rec of C.homes) { if (rec.grp) rec.grp.dead = true; rec.grp = null; rec.nearGrp = null; }
+		if (C.homes.length) homesVersion++;
 		for (const m of [C.mesh, C.glow, C.ground, C.smoke]) if (m) { m.geometry.dispose(); m.parent?.remove(m); }
 		if (C.trees.length) treesVersion++;
 		stats.cells--;
@@ -290,7 +325,11 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	// ---------- each frame ----------
 	let scanT = 0;
 	function update(dt, cam, { night = 0, wind = null, budget = isPhone ? 3 : 5 } = {}) {
-		if (epoch !== F.epoch) { epoch = F.epoch; for (const s of sites.values()) place(s); }
+		if (epoch !== F.epoch) {
+			epoch = F.epoch;
+			for (const s of sites.values()) { place(s); for (const C of s.cells.values()) for (const rec of C.homes) if (rec.grp) { rec.grp.dead = true; rec.grp = null; } }
+			homesVersion++;
+		}
 		smokeU.uTime.value += dt;
 		if (wind) smokeU.uWind.value.set(wind.x, wind.y);
 		glowMat.color.setScalar(0.25 + 0.95 * night);
@@ -338,7 +377,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			const lx = p.x - s.x, lz = p.z - s.z, C = s.cells.get(Math.floor(lx / s.cell) + ',' + Math.floor(lz / s.cell));
 			const list = C?.solids || [];
 			for (const b of edgeSolids(s, lx, lz, list)) {
-				if (footY > b.y0 + b.h || footY < b.y0 - 2) continue;
+				if (footY > b.y0 + b.h || footY < b.y0 - 2 || b.home?.nearGrp) continue;
 				const cx = Math.cos(b.rot), cz = Math.sin(b.rot), dx = p.x - s.x - b.x, dz = p.z - s.z - b.z;
 				// (the box's frame: x along its width)
 				const u = dx * cx - dz * cz, v = dx * cz + dz * cx, r = 0.3;
@@ -444,8 +483,54 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		for (const s of sites.values()) { if (kinds && !kinds.includes(s.kind)) continue; const d = Math.hypot(s.x - x, s.z - z) - (s.planned?.reach || 60); if (d < bd) { bd = d; best = s; } }
 		return best ? { site: best, d: Math.max(0, bd) } : null;
 	}
+	// ---------- the homes, built for real near you (bay/houses.js) ----------
+	// the homes within r of a point, each as a house's block list (the shape houseplan.js plans
+	// from, in the engine's metres now): the same list for the same home while its cell stands
+	// and the frame holds (a new one after, the old one dead)
+	function homesNear(x, z, r) {
+		const out = [];
+		for (const s of sites.values()) {
+			if (!s.cells.size || Math.abs(x - s.x) > (s.planned?.reach || 0) + r + s.cell || Math.abs(z - s.z) > (s.planned?.reach || 0) + r + s.cell) continue;
+			for (const C of s.cells.values()) for (const rec of C.homes) {
+				if (Math.abs(s.x + rec.c[0] - x) > r || Math.abs(s.z + rec.c[1] - z) > r) continue;
+				out.push(rec.grp || (rec.grp = homeGrp(s, rec)));
+			}
+		}
+		return out;
+	}
+	// what a home is called when it is yours (share.js: "Farmhouse near Ames")
+	const HOME_NAMES = { log: 'Log cabin', arctic: 'Arctic house', chalet: 'Chalet', farmhouse: 'Farmhouse', cottage: 'Cottage', halftimber: 'Half-timbered house', stonehouse: 'Stone house', stonetile: 'Stone house', cube: 'Whitewashed house', adobe: 'Adobe house', adobethatch: 'Adobe house', homestead: 'Homestead', tinroof: 'Tin-roofed house', tincottage: 'Island cottage', stilt: 'Stilt house', easthouse: 'Village house', flatbrick: 'Brick house', mudtile: 'Mud-brick house' };
+	function homeGrp(s, rec) {
+		const { L, H } = rec, x = s.x + rec.c[0], z = s.z + rec.c[1];
+		// (the door along the front: houseplan.js puts it at door x (0..1) across, the front in the
+		// house's frame is the lot's -z, and its x runs the other way)
+		const lx = -((H.door || 0) - (H.x || 0)), span = H.w - 2.5;
+		const b = { x, z, w: H.w, d: H.d, a: -L.rot, wallH: H.H, roofH: H.roof?.rise || 0, kind: 0, door: span > 0.2 ? Math.max(0, Math.min(1, (lx + H.w / 2 - 1.25) / span)) : 0.5, hip: H.roof?.kind === 'hip' ? 1 : 0 };
+		const grp = [b];
+		grp.owner = api; grp.rec = rec; grp.rural = H; grp.floorY = rec.y + H.y0; grp.epoch = F.epoch;
+		// (who it is, wherever the frame lies: its place and its lot)
+		grp.homeId = 'r' + s.key + '#' + L.type + ':' + Math.round(L.x * 10) + ':' + Math.round(L.z * 10);
+		grp.ll = toLL ? toLL(x, z) : null;
+		grp.region = s.regionId; grp.kit = s.kitId || s.kit; grp.label = HOME_NAMES[L.type] || 'House';
+		return grp;
+	}
+	// a home built for real (at c, its centre) or given back (null): its faces here hand over
+	function setNear(grp, c) {
+		const rec = grp.rec;
+		grp.near = c;
+		if (!rec || (!c && rec.nearGrp !== grp)) return;
+		rec.nearGrp = c ? grp : null;
+		const C = rec.cell;
+		for (const [m, a, b] of [[C?.mesh, rec.v0, rec.v1], [C?.glow, rec.g0, rec.g1]]) {
+			const A = m?.geometry.attributes.aNear;
+			if (!A || b <= a) continue;
+			for (let k = a; k < b; k++) { A.array[k * 4] = c ? rec.c[0] : 0; A.array[k * 4 + 1] = c ? rec.c[1] : 0; A.array[k * 4 + 2] = c ? 1 : 0; A.array[k * 4 + 3] = c ? grp.nearBorn || 0 : 0; }
+			A.addUpdateRange(a * 4, (b - a) * 4); A.needsUpdate = true;
+		}
+	}
 	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); groundMat.dispose(); smokeMat.dispose(); }
 	// the great trees of the built cells, where they stand now
 	function trees() { const out = []; for (const s of sites.values()) for (const C of s.cells.values()) for (const T of C.trees) out.push({ ...T, x: s.x + T.x, z: s.z + T.z }); return out; }
-	return { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
+	const api = { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, homesNear, homesVersion: () => homesVersion, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
+	return api;
 }
