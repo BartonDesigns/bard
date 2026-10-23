@@ -18,6 +18,55 @@ const STEEL = lin([0.72, 0.73, 0.75]), DARK = lin([0.06, 0.06, 0.065]), WHITE = 
 const LEATHER = [[0.45, 0.12, 0.1], [0.12, 0.25, 0.2], [0.2, 0.15, 0.12], [0.55, 0.45, 0.2]];
 const bx = (g, k, x0, y0, z0, x1, y1, z1, c) => g.box(k, x0, y0, z0, x1, y1, z1, c);
 
+// ---------- clothes, the way a shop hangs them ----------
+// a rail's worth goes together: one of these ranges (srgb), its colours in runs along it
+export const RANGES = [
+	[[0.93, 0.91, 0.86], [0.78, 0.74, 0.66], [0.55, 0.5, 0.44], [0.25, 0.24, 0.23], [0.1, 0.1, 0.11]],          // neutrals
+	[[0.16, 0.24, 0.38], [0.22, 0.32, 0.48], [0.32, 0.43, 0.58], [0.12, 0.15, 0.24], [0.5, 0.6, 0.72]],          // denim and navy
+	[[0.45, 0.32, 0.2], [0.62, 0.5, 0.32], [0.36, 0.38, 0.22], [0.72, 0.62, 0.46], [0.55, 0.26, 0.16]],          // earth
+	[[0.92, 0.76, 0.78], [0.76, 0.85, 0.92], [0.85, 0.9, 0.78], [0.96, 0.9, 0.76], [0.84, 0.8, 0.93]],           // pastels
+	[[0.72, 0.12, 0.15], [0.1, 0.2, 0.45], [0.95, 0.76, 0.18], [0.1, 0.45, 0.36], [0.08, 0.08, 0.1]],            // bold
+	[[0.08, 0.08, 0.09], [0.96, 0.96, 0.95], [0.46, 0.46, 0.48], [0.2, 0.2, 0.22], [0.62, 0.1, 0.12]],           // black and white
+];
+// the cuts: [length under the hanger, half the width, thickness]
+export const CUTS = { tee: [0.66, 0.24, 0.012], shirt: [0.76, 0.25, 0.016], knit: [0.64, 0.25, 0.034], dress: [1.06, 0.2, 0.016], coat: [0.96, 0.27, 0.05], jeans: [0.56, 0.2, 0.03] };
+const CUT_KEYS = Object.keys(CUTS);
+// what the mannequins wear (srgb): top, low (the trousers or the skirt), long sleeves, a coat
+const OUTFITS = [
+	{ top: [0.95, 0.95, 0.93], low: [0.2, 0.3, 0.48], cut: 'pants' },
+	{ top: [0.12, 0.16, 0.28], low: [0.78, 0.7, 0.55], cut: 'pants', long: true, shoe: [0.35, 0.2, 0.12] },
+	{ top: [0.72, 0.12, 0.15], cut: 'dress', shoe: [0.1, 0.08, 0.08] },
+	{ top: [0.08, 0.08, 0.09], low: [0.1, 0.1, 0.11], cut: 'skirt', long: true },
+	{ top: [0.36, 0.38, 0.22], low: [0.14, 0.17, 0.26], cut: 'pants', long: true, coat: true },
+	{ top: [0.92, 0.78, 0.8], low: [0.95, 0.94, 0.9], cut: 'pants', shoe: [0.9, 0.88, 0.84] },
+	{ top: [0.72, 0.6, 0.42], low: [0.1, 0.1, 0.11], cut: 'pants', long: true, coat: true },
+	{ top: [0.76, 0.85, 0.92], cut: 'dress', long: true, shoe: [0.85, 0.8, 0.72] },
+	{ top: [0.55, 0.26, 0.16], low: [0.25, 0.24, 0.23], cut: 'skirt', long: true },
+];
+// a garment on its hanger, side on to a rail along x at height R: at x, its middle at z (the
+// hook over the rail, the hanger, the shoulders, the body; a dress's skirt wider than its top)
+// (the faces nobody sees left out: a garment's top under its shoulders, its hem, the hanger's
+// underside; a rack holds a few dozen of them)
+const SIDES = (k) => (f) => (f === 2 || f === 3 ? null : k), TOPPED = (k) => (f) => (f === 3 ? null : k);
+export function hang(g, x, z, R, cut, c, wood = false) {
+	const [L, hw, t] = CUTS[cut], s = R - 0.05, x0 = x - t / 2, x1 = x + t / 2;
+	bx(g, SIDES('metal'), x - 0.003, s, z - 0.004, x + 0.003, R + 0.025, z + 0.004, STEEL);
+	bx(g, TOPPED(wood ? 'grain' : 'gloss'), x - 0.006, s - 0.012, z - hw + 0.02, x + 0.006, s, z + hw - 0.02, wood ? lin([0.55, 0.4, 0.25]) : DARK);
+	if (cut === 'jeans') { bx(g, TOPPED('fabric'), x0, s - L, z - hw, x1, s - 0.012, z + hw, c); return; }
+	bx(g, TOPPED('fabric'), x0, s - 0.09, z - hw * 0.8, x1, s - 0.008, z + hw * 0.8, c);
+	if (cut === 'dress') { bx(g, SIDES('fabric'), x0, s - 0.42, z - hw, x1, s - 0.09, z + hw, c); bx(g, TOPPED('fabric'), x0, s - L, z - hw * 1.3, x1, s - 0.42, z + hw * 1.3, c); }
+	else bx(g, SIDES('fabric'), x0, s - L, z - hw, x1, s - 0.09, z + hw, c);
+}
+// a stack of n folded garments on a table or a shelf at y, w x d, each a little askew
+export function folded(g, x, z, y, w, d, c, n, rnd) {
+	for (let i = 0; i < n; i++) {
+		const h = 0.028 + rnd() * 0.01, ox = (rnd() - 0.5) * 0.014, oz = (rnd() - 0.5) * 0.012, f = i % 2 ? 0.94 : 1.0;
+		bx(g, i === n - 1 ? TOPPED('fabric') : SIDES('fabric'), x - w / 2 + ox, y, z - d / 2 + oz, x + w / 2 + ox, y + h, z + d / 2 + oz, c.map((v) => v * f));
+		y += h;
+	}
+	return y;
+}
+
 // ---------- the drawings ----------
 const KIT = {
 	// a booth: two high-backed benches facing across a table (the table along x)
@@ -93,18 +142,74 @@ const KIT = {
 		for (let z = -D2 + 0.05; z < D2; z += 0.12) bx(g, 'fabric', -W2, 0.46, z, W2, 0.48, z + 0.05, lin([0.3, 0.2, 0.15]));
 		bx(g, 'fabric', -W2 + 0.05, 0.48, -D2 + 0.05, W2 - 0.05, 0.75, D2 - 0.05, lin(pick(BRIGHT, it.v)));
 	},
-	// a rail of clothes on two posts, the garments in colours
+	// a rail of clothes on two posts: each on its hanger, a kind or two along it, the colours of
+	// one range in runs (a size run each)
 	clothesRack(g, it, rnd) {
-		const W2 = it.w / 2;
-		for (const x of [-W2, W2]) { g.cyl('metal', x, 0, 0, 0.02, 1.55, STEEL, 6); bx(g, 'metal', x - 0.25, 0, -0.02, x + 0.25, 0.03, 0.02, STEEL); }
-		bx(g, 'metal', -W2, 1.52, -0.015, W2, 1.55, 0.015, STEEL);
-		for (let x = -W2 + 0.08; x < W2 - 0.05; x += 0.07 + rnd() * 0.05) bx(g, 'fabric', x, 0.6 + rnd() * 0.35, -0.22, x + 0.035, 1.5, 0.22, lin(pick(BRIGHT, rnd())));
+		const W2 = it.w / 2, R = it.h - 0.02, range = RANGES[Math.floor(rnd() * RANGES.length)];
+		for (const x of [-W2, W2]) {
+			g.cyl('metal', x, 0.03, 0, 0.014, R - 0.03, STEEL, 8);
+			bx(g, 'metal', x - 0.018, 0, -0.27, x + 0.018, 0.03, 0.27, STEEL);
+			for (const z of [-0.25, 0.25]) g.cyl('gloss', x, 0, z, 0.018, 0.012, DARK, 6);
+		}
+		g.cyl('metal', -W2 - 0.02, R, 0, 0.011, it.w + 0.04, STEEL, 8, 'x');
+		const a = CUT_KEYS[Math.floor(rnd() * CUT_KEYS.length)], b = rnd() < 0.5 ? a : CUT_KEYS[Math.floor(rnd() * CUT_KEYS.length)], wood = rnd() < 0.4;
+		let x = -W2 + 0.06, k = Math.floor(rnd() * 5);
+		while (x < W2 - 0.05) {
+			const cut = x < 0 ? a : b, c0 = range[k++ % range.length], n = 3 + Math.floor(rnd() * 4);
+			for (let i = 0; i < n && x < W2 - 0.05; i++) {
+				const f = 0.93 + rnd() * 0.1;
+				hang(g, x, 0, R, cut, lin(c0.map((v) => Math.min(1, v * f))), wood);
+				x += CUTS[cut][2] + 0.024 + rnd() * 0.018;
+			}
+		}
 	},
+	// a round rack: the ring on its post, the clothes hung round it
+	roundRack(g, it, rnd) {
+		const r = Math.min(it.w, it.d) / 2 - 0.26, R = it.h - 0.02, range = RANGES[Math.floor(rnd() * RANGES.length)], cut = CUT_KEYS[Math.floor(rnd() * 4)];
+		g.cyl('metal', 0, 0, 0, 0.28, 0.025, STEEL, 16); g.cyl('metal', 0, 0.025, 0, 0.022, R - 0.025, STEEL, 8);
+		const N = 18;
+		for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2, a1 = (i + 1) / N * Math.PI * 2; g.beam('metal', [Math.cos(a0) * r, R, Math.sin(a0) * r], [Math.cos(a1) * r, R, Math.sin(a1) * r], 0.02, 0.02, STEEL); }
+		for (const a of [0, Math.PI / 2]) g.beam('metal', [-Math.cos(a) * r, R, -Math.sin(a) * r], [Math.cos(a) * r, R, Math.sin(a) * r], 0.016, 0.016, STEEL);
+		const [L, hw, t] = CUTS[cut], step = (t + 0.045) / r, s0 = R - 0.05;
+		let k = Math.floor(rnd() * 5);
+		for (let a = rnd() * step; a < Math.PI * 2 - step * 0.6;) {
+			const c0 = range[k++ % range.length], n = 3 + Math.floor(rnd() * 4);
+			for (let i = 0; i < n && a < Math.PI * 2 - step * 0.6; i++, a += step * (0.9 + rnd() * 0.3)) {
+				const dx = Math.cos(a), dz = Math.sin(a), f = 0.93 + rnd() * 0.1, c = lin(c0.map((v) => Math.min(1, v * f)));
+				const P = (d, y) => [dx * (r + d), y, dz * (r + d)];
+				g.beam('metal', P(-hw * 0.85, s0 - 0.004), P(hw * 0.85, s0 - 0.004), 0.006, 0.008, STEEL);
+				g.beam('fabric', P(-hw * 0.8, s0 - 0.05), P(hw * 0.8, s0 - 0.05), t, 0.08, c);
+				g.beam('fabric', P(-hw, s0 - 0.09 - (L - 0.09) / 2), P(hw, s0 - 0.09 - (L - 0.09) / 2), t, L - 0.09, c);
+			}
+		}
+	},
+	// a mannequin in one of the shop's outfits, on its stand (white or black, an egg for a head)
 	mannequin(g, it) {
-		const c = lin([0.88, 0.86, 0.82]), cl = lin(pick(BRIGHT, it.v));
-		bx(g, 'metal', -0.2, 0, -0.2, 0.2, 0.03, 0.2, DARK); g.cyl('metal', 0, 0.03, 0, 0.02, 0.95, STEEL, 6);
-		g.sphere('fabric', 0, 1.25, 0, 0.19, 0.3, 0.12, cl, 10); g.sphere('fabric', 0, 0.98, 0, 0.17, 0.08, 0.11, cl, 10);
-		g.cyl('gloss', 0, 1.52, 0, 0.05, 0.1, c, 6); g.sphere('gloss', 0, 1.72, 0, 0.1, 0.12, 0.1, c, 10);
+		const O = OUTFITS[(it.outfit ?? Math.floor(Math.abs(it.v) * 9973)) % OUTFITS.length], skin = Math.floor(Math.abs(it.v) * 31) % 3 ? lin([0.9, 0.89, 0.86]) : lin([0.08, 0.08, 0.085]);
+		const top = lin(O.top), low = lin(O.low || O.top), shoe = lin(O.shoe || [0.08, 0.07, 0.07]), bare = O.cut !== 'pants';
+		g.cyl('metal', 0, 0, -0.02, 0.2, 0.02, STEEL, 12); g.cyl('metal', 0.085, 0.02, -0.02, 0.012, 0.42, STEEL, 6);
+		for (const sx of [-1, 1]) {
+			const x = sx * 0.085;
+			if (bare) g.cyl('gloss', x, 0.09, 0, 0.042, 0.5, skin, 8, 'y', true, 0.062);
+			else g.cyl('fabric', x, 0.09, 0, 0.056, 0.86, low, 8, 'y', true, 0.088);
+			g.sphere('gloss', x, 0.05, 0.035, 0.048, 0.045, 0.11, shoe, 6);
+			// (the arms: the sleeve, the forearm bare or sleeved, the hand)
+			const sh = [sx * 0.19, 1.37, 0], el = [sx * 0.235, 1.11, 0.02], wr = [sx * 0.255, 0.86, 0.06];
+			g.sphere('fabric', sh[0] - sx * 0.01, sh[1] - 0.01, sh[2], 0.055, 0.05, 0.06, top, 6);
+			g.beam('fabric', sh, el, 0.08, 0.08, top);
+			g.sphere(O.long ? 'fabric' : 'gloss', el[0], el[1], el[2], 0.038, 0.038, 0.038, O.long ? top : skin, 6);
+			g.beam(O.long ? 'fabric' : 'gloss', el, wr, O.long ? 0.07 : 0.055, O.long ? 0.07 : 0.055, O.long ? top : skin);
+			g.sphere('gloss', wr[0], wr[1] - 0.04, wr[2], 0.032, 0.06, 0.028, skin, 6);
+		}
+		// (the hips, the waist, the chest; a skirt or a dress flared from the waist; a coat to the knee)
+		g.sphere('fabric', 0, 0.96, 0, 0.17, 0.12, 0.115, O.cut === 'dress' ? top : low, 10);
+		if (bare) g.cyl('fabric', 0, 0.52, 0, O.cut === 'dress' ? 0.27 : 0.23, 0.46, O.cut === 'dress' ? top : low, 16, 'y', true, 0.165);
+		g.sphere('fabric', 0, 1.07, 0, 0.145, 0.15, 0.105, top, 10);
+		g.sphere('fabric', 0, 1.25, 0, O.coat ? 0.19 : 0.175, 0.17, O.coat ? 0.125 : 0.11, top, 10);
+		if (O.coat) g.cyl('fabric', 0, 0.6, 0, 0.21, 0.5, top, 14, 'y', false, 0.18);
+		g.cyl('fabric', -0.18, 1.35, 0, 0.055, 0.36, top, 10, 'x');
+		g.cyl('gloss', 0, 1.41, 0, 0.045, 0.11, skin, 8);
+		g.sphere('gloss', 0, 1.62, 0.005, 0.095, 0.12, 0.105, skin, 12);
 	},
 	// a salon's chair on its pedestal, and the mirror and shelf on the wall in front of it
 	salonChair(g, it) {
