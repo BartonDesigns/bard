@@ -126,8 +126,10 @@ export function createPeople(scene, world, camera = null) {
 		// (the museum, a shop, restaurant or office you are in or at, a tower's floor)
 		let V = null, vz = null;
 		for (const [src, z] of [[W.towers, 'office'], [W.commercial, null], [W.discovery, null], [W.boardwalk, 'boardwalk']]) { V = src?.venue?.(cam, hours); if (V) { vz = z; break; } }
-		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 }, zone: V.zone || vz || zoneOf(W.bayArea?.urbanAt(cam.x, cam.z)), sit: true };
-		const U = W.bayArea?.urbanAt(cam.x, cam.z);
+		// (how built up it is here: the Bay's town map, or the town grown here past its edge)
+		const townAt = W.townAt || W.bayArea?.urbanAt;
+		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 }, zone: V.zone || vz || zoneOf(townAt?.(cam.x, cam.z)), sit: true };
+		const U = townAt?.(cam.x, cam.z);
 		// out on the trails: a few hikers by day
 		const real = W.real;
 		if (real?.loaded() && real.inside(cam.x, cam.z) && (!U || U.u < 0.2) && cam.y - ground(cam.x, cam.z) < 90) {

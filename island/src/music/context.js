@@ -26,7 +26,7 @@ export function sense(W, x) {
 	try { ground = W.island.heightAt(cam.x, cam.z); } catch { ground = 0; }
 	out.alt = cam.y - ground;
 	const caveK = W.underworld?.inside?.() || 0;
-	const urban = W.bayArea?.loaded?.() ? (W.bayArea.urbanAt(cam.x, cam.z)?.u || 0) : 0;
+	const urban = W.bayArea?.loaded?.() ? ((W.townAt || W.bayArea.urbanAt)(cam.x, cam.z)?.u || 0) : 0;
 	const vil = W.island?.village;
 	if (x.shared.uUnder.value > 0.5) out.place = 'underwater';
 	else if (caveK > 0.4 || (cam.y < ground - 3 && ground > 0)) out.place = 'cave';
