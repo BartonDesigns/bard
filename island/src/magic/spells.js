@@ -48,7 +48,7 @@ const S = (id, name, school, tier, kind, mana, cd, glyph, desc, o = {}) => ({ id
 export const SPELLS = Object.freeze([
 	// ---------- Radiance ----------
 	S('sunspark', 'Sunspark', 'radiance', 1, 'bolt', 8, 0.45, '✦', 'A spark of daylight thrown from the hand. Burns hotter under the sun.', { dmg: 22, speed: 70, type: 'radiant' }),
-	S('lance-of-dawn', 'Lance of Dawn', 'radiance', 2, 'lances', 14, 4, '⟋', 'Three lances fall point first where you aim, out of the sun by day or the moon by night, searing all near where they land.', { dmg: 38, r: 2.6, n: 3, spread: 3.2, range: 80, type: 'radiant' }),
+	S('lance-of-dawn', 'Lance of Dawn', 'radiance', 2, 'lances', 14, 4, '⟋', 'Spears of light dive point first on a slant round where you aim, out of the sun by day or the moon by night, and burst where they strike. Mastery calls more and greater ones.', { dmg: 38, r: 2.6, n: 3, spread: 3.2, range: 80, type: 'radiant' }),
 	S('solar-flare', 'Solar Flare', 'radiance', 3, 'flare', 30, 10, '☀', 'A column of the sun\'s own light strikes where you aim, out of wherever the sun stands, burning and blinding everyone near it. Mastered, it channels the moon by night.', { dmg: 70, r: 5, range: 80, delay: 0.55, night: 'moon', type: 'radiant', status: { hold: 1.6 } }),
 	S('judgement', 'Judgement', 'radiance', 4, 'strike', 55, 30, '⇣', 'Call a pillar of light down from the sky. It lands a breath later and spares nothing within it.', { dmg: 170, r: 6, range: 120, delay: 1.2, type: 'radiant' }),
 	// ---------- Restoration ----------
@@ -148,6 +148,22 @@ export function weaveCost(spell) {
 // ---------- your magic ----------
 export const STARTER = Object.freeze({ known: ['sunspark', 'shadowbolt', 'mend', 'lumen'], binds: ['sunspark', 'shadowbolt', 'mend', 'lumen', null], fabric: { light: 12, dark: 12 } });
 export const SLOTS = 5;
+// how many spells are always bound while you know that many (Josh 2026-10-23: at least four to
+// pick from on every screen)
+export const MIN_BOUND = 4;
+// fill empty slots, in order, with known spells not yet bound, until MIN_BOUND are (skip: one
+// just taken off, which stays off)
+export function fillBinds(s, skip = null) {
+	let n = s.binds.filter(Boolean).length;
+	for (const id of s.known) {
+		if (n >= MIN_BOUND) break;
+		const free = s.binds.indexOf(null);
+		if (free < 0) break;
+		if (id === skip || !SPELL[id] || s.binds.includes(id)) continue;
+		s.binds[free] = id; n++;
+	}
+	return s;
+}
 
 export function createMagicState(from = null) {
 	// (xp, level, perks, use and mastery: your skills, magic/skills.js; mods: what the perks and
@@ -170,7 +186,7 @@ export function createMagicState(from = null) {
 		if (Array.isArray(from.moonlit)) s.moonlit = from.moonlit.filter((id) => SPELL[id]?.night === 'moon');
 		if (from.honor && typeof from.honor === 'object') s.honor = from.honor;
 	}
-	return s;
+	return fillBinds(s);
 }
 // what is kept (no cooldowns: they are of the moment)
 export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {}, mastery: s.mastery || {}, moonlit: s.moonlit || [], honor: s.honor || null }; }
@@ -250,11 +266,14 @@ export function weave(s, id) {
 	if (free >= 0) s.binds[free] = id;
 	return true;
 }
-// bind a known spell to slot i (0..4: the keys 6 to 0); it leaves any other slot
+// bind a known spell to slot i (0..4: the keys 6 to 0); moved from another slot, it swaps with
+// what was on i. Cleared, the slot takes another known spell while fewer than MIN_BOUND are bound.
 export function bind(s, i, id) {
 	if (i < 0 || i >= SLOTS || (id && !s.known.includes(id))) return false;
-	if (id) for (let k = 0; k < SLOTS; k++) if (s.binds[k] === id) s.binds[k] = null;
+	const was = s.binds[i];
+	if (id) for (let k = 0; k < SLOTS; k++) if (s.binds[k] === id && k !== i) s.binds[k] = was || null;
 	s.binds[i] = id || null;
+	if (!id) fillBinds(s, was);
 	return true;
 }
 

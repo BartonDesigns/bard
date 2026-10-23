@@ -2,21 +2,24 @@
 // (a caster, three foes, ground and sky) in headless Chromium, one capture per spell, so the 47 can
 // be set side by side and told apart. Nothing of the game is loaded: only three, fx.js and looks.js.
 //
-// OUT=<dir> [ONLY=sunspark,eclipse] [FLIGHT=1: bolts mid-flight] [GROW=<s>: Gargantua s seconds in] [SELF=1: spells on yourself, just cast] node island/tools/spell-looks-browser.cjs
+// OUT=<dir> [ONLY=sunspark,eclipse] [FLIGHT=1: bolts mid-flight] [GROW=<s>: Gargantua s seconds in] [SELF=1: spells on yourself, just cast]
+//   [LEVEL=1..5: Lance of Dawn at that mastery] [DIVE=1: its lances caught diving in] [SIZE=960x600] node island/tools/spell-looks-browser.cjs
 /* global Game, document */
 const fs = require('node:fs'), path = require('node:path');
 let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 const root = path.resolve(__dirname, '..'), out = process.env.OUT || '/tmp/spell-looks';
 const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
-const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { createLens } from './src/magic/lens.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS, gargantuaSize, gargantuaRange, GARGANTUA_LIFT } from './src/magic/spells.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
+const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents: "export * as THREE from 'three'; export { createMagicFx } from './src/magic/fx.js'; export { createLens } from './src/magic/lens.js'; export { LOOK } from './src/magic/looks.js'; export { SPELLS, gargantuaSize, gargantuaRange, GARGANTUA_LIFT } from './src/magic/spells.js'; export { lanceShape, lanceSky, lanceVolley, lanceFlight, lanceStrikes } from './src/magic/lances.js';", resolveDir: root }, bundle: true, format: 'iife', globalName: 'Game', write: false }).outputFiles[0].text;
 
 (async () => {
 	fs.mkdirSync(out, { recursive: true });
 	const browser = await chromium.launch({ args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-	const page = await browser.newPage({ viewport: { width: 480, height: 300 } });
+	const [VW, VH] = (process.env.SIZE || '480x300').split('x').map(Number);
+	const page = await browser.newPage({ viewport: { width: VW, height: VH } });
 	const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-	await page.setContent('<body style="margin:0;background:#000"><canvas id="c" width="480" height="300"></canvas></body>');
+	await page.setContent(`<body style="margin:0;background:#000"><canvas id="c" width="${VW}" height="${VH}"></canvas></body>`);
+	await page.evaluate(([w, h, lv, dive]) => { window.__vw = w; window.__vh = h; window.__level = lv; window.__dive = dive; }, [VW, VH, +process.env.LEVEL || 0, !!process.env.DIVE]);
 	await page.addScriptTag({ content: bundle });
 	if (process.env.FLIGHT) await page.evaluate(() => { window.__flight = true; });
 	if (process.env.GROW) await page.evaluate((g) => { window.__grow = g; }, +process.env.GROW);
@@ -25,7 +28,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 	const ids = await page.evaluate(() => {
 		const { THREE, createMagicFx, createLens, SPELLS } = Game;
 		const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, preserveDrawingBuffer: true });
-		renderer.setSize(480, 300, false);
+		renderer.setSize(window.__vw, window.__vh, false);
 		const scene = new THREE.Scene();
 		scene.background = new THREE.Color(0x4a5866);
 		scene.fog = new THREE.Fog(0x4a5866, 25, 70);
@@ -34,10 +37,10 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 		ground.rotation.x = -Math.PI / 2; scene.add(ground);
 		const body = (x, z, c) => { const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.1, 4, 8), new THREE.MeshLambertMaterial({ color: c })); m.position.set(x, 0.85, z); scene.add(m); };
 		body(0, 0, 0x6c8fb3); body(0, -8, 0xa0483a); body(-2.2, -9.5, 0xa0483a); body(2.4, -9, 0xa0483a);
-		const camera = new THREE.PerspectiveCamera(55, 480 / 300, 0.1, 200);
+		const camera = new THREE.PerspectiveCamera(55, window.__vw / window.__vh, 0.1, 400);
 		camera.position.set(5.5, 4.2, 6); camera.lookAt(0, 1.2, -4);
 		const fx = createMagicFx(scene, {});
-		fx.resize(300, 55);
+		fx.resize(window.__vh, 55);
 		// (the black holes bend the frame round them (magic/lens.js); a banded backdrop behind them
 		// shows the bending, which a flat grey sky would hide)
 		const lens = createLens(), cv = document.createElement('canvas');
@@ -76,12 +79,25 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 			} else if (k === 'beam') run(0.6, (tt) => L.beam?.(fx, hand, foes[0], tt));
 			else if (k === 'burst' || k === 'strike') { const D = spell.delay || 0.5; run(D, (tt, n) => { if (n % 2 === 0) L.tell?.(fx, at, spell.r, tt / D); }); L.blast?.(fx, at, spell.r); run(k === 'strike' ? 0.18 : 0.12); if (L.mark) run(0.4, () => L.mark(fx, T, {})); }
 			else if (k === 'lances') {
-				// (three spears out of a low afternoon sun, one after another)
-				const d = v(0.45, 0.8, 0.4), l = Math.hypot(d.x, d.y, d.z); d.x /= l; d.y /= l; d.z /= l;
-				const pts = [0, 1, 2].map((i) => { const a = i / 3 * 6.283 + 0.5; return v(at.x + Math.cos(a) * spell.spread, 0.02, at.z + Math.sin(a) * spell.spread); });
-				pts.forEach((p) => L.tell?.(fx, p, spell.r, 0, false));
-				const T0 = 0.32, landed = [false, false, false];
-				run(0.18 * 2 + T0 * 0.8, (tt) => pts.forEach((p, i) => { const u = (tt - 0.18 * i) / T0; if (u < 0) return; if (u >= 1) { if (!landed[i]) { landed[i] = true; L.blast?.(fx, p, spell.r, false); } return; } const h = 26 * (1 - u); L.fall?.(fx, v(p.x + d.x * h, p.y + d.y * h, p.z + d.z * h), d, false); }));
+				// (the volley at mastery LEVEL (1..5; none: I) out of a low sun off to the left and
+				// beyond, so each spear is seen side on as it dives; caught just after the last strikes,
+				// or (DIVE=1) as the last is still coming in)
+				const lv = window.__level || 1, S = Game.lanceShape(spell, lv, 1 + 0.12 * (lv - 1)), sky = Game.lanceSky(v(-0.75, 0.55, -0.35), null);
+				S.night = false;
+				const V = Game.lanceVolley(v(0, 0, -8), S, sky), last = V[V.length - 1];
+				const T = window.__dive ? Game.lanceStrikes(last) - 0.1 : Game.lanceStrikes(last) + 0.14;
+				const H = V.map(() => null), state = V.map(() => 0);
+				V.forEach((P) => { P.phase = Math.random(); L.tell?.(fx, v(P.x, 0.02, P.z), P.r, 0, false, S, Game.lanceStrikes(P)); });
+				run(T, (tt) => V.forEach((P, i) => {
+					if (state[i] === 2) return;
+					const f = Game.lanceFlight(P, tt), d = P.dir;
+					if (f.stage === 'wait') return;
+					const tip = v(P.x + d.x * f.d, 0.02 + d.y * f.d, P.z + d.z * f.d);
+					if (!state[i]) { state[i] = 1; H[i] = fx.lance(); L.sky?.(fx, tip, false, S, P); }
+					if (f.stage === 'struck') { state[i] = 2; const b = P.len * 0.1; L.fly?.(fx, H[i], v(P.x - d.x * b, 0.02 - d.y * b, P.z - d.z * b), d, P, S, false, 1); H[i]?.fade(1); L.blast?.(fx, v(P.x, 0.02, P.z), P.r, false, S, P); L.stand?.(fx, v(P.x - d.x * b, 0.02 - d.y * b, P.z - d.z * b), d, P, false, 0); return; }
+					L.fly?.(fx, H[i], tip, d, P, S, false, f.a);
+					if (f.stage === 'dive') L.fall?.(fx, tip, d, false, S, P, Math.min(40, f.v * 0.12));
+				}));
 			}
 			else if (k === 'flare') {
 				// (out of a high afternoon sun, charging, then the blast)
@@ -125,7 +141,7 @@ const bundle = require('../node_modules/esbuild').buildSync({ stdin: { contents:
 			else { L.self?.(fx, eye); run(L.on ? 1.2 : 0.35, (tt) => L.on?.(fx, eye, tt, dir, true)); }
 			draw();
 		}, id);
-		await page.locator('#c').screenshot({ path: path.join(out, id + '.png') });
+		await page.locator('#c').screenshot({ path: path.join(out, id + (process.env.LEVEL ? `-${process.env.LEVEL}` : '') + (process.env.DIVE ? '-dive' : '') + '.png') });
 		process.stdout.write(id + ' ');
 	}
 	console.log('\nerrors:', JSON.stringify(errors));

@@ -112,6 +112,32 @@ test('what you know, bind and carry is kept between visits', () => {
 	assert.equal(strandOf(SPELL.tempest), 'twilight');
 });
 
+test('at least four spells are always bound, on every screen', async () => {
+	const { fillBinds, MIN_BOUND } = await import('../src/magic/spells.js');
+	assert.equal(MIN_BOUND, 4);
+	// (an old save with one spell on the keys comes back with four)
+	const old = createMagicState({ v: 1, known: ['sunspark', 'shadowbolt', 'mend', 'lumen', 'lance-of-dawn'], binds: [null, 'mend', null, null, null], fabric: { light: 0, dark: 0 } });
+	assert.deepEqual(old.binds, ['sunspark', 'mend', 'shadowbolt', 'lumen', null], 'the empty keys take known spells, in order');
+	// (moved to another key, a spell swaps with what was there)
+	bind(old, 3, 'sunspark');
+	assert.deepEqual(old.binds, ['lumen', 'mend', 'shadowbolt', 'sunspark', null]);
+	// (a key cleared takes another known spell; the one taken off stays off)
+	bind(old, 1, null);
+	assert.equal(old.binds.filter(Boolean).length, 4);
+	assert.ok(!old.binds.includes('mend') && old.binds.includes('lance-of-dawn'));
+	// (with only four known, a cleared key stays clear: the player's choice)
+	const s = createMagicState();
+	bind(s, 2, null);
+	assert.equal(s.binds[2], null);
+	assert.equal(fillBinds(createMagicState({ v: 1, known: ['mend'], binds: [], fabric: {} })).binds.filter(Boolean).length, 1, 'never more than you know');
+	// (a touch screen shows the first four bound beside the spell button, a tap casting one)
+	const hud = fs.readFileSync(new URL('../src/magic/hud.js', import.meta.url), 'utf8');
+	assert.match(hud, /const QUICK = \{\n\tn: 4,/);
+	assert.match(hud, /\[-8, -74\], \[-55, -50\], \[-74, 0\], \[-55, 50\]/, 'an arc round the button in portrait');
+	assert.match(hud, /if \(SPELL\[state\.binds\[i\]\]\) quick\[k\+\+\]\.i = i;/, 'the first four bound');
+	assert.match(hud, /if \(q\.i < 0\) return; e\.classList\.add\('on'\); cast\(q\.i\);/, 'a tap casts it');
+});
+
 test('the aether lies where the world puts it: the same every time, none in the sea', () => {
 	const seed = seedOf('earth'), flat = () => 5, sea = () => -10;
 	const a = aetherNear(0, 0, 400, seed, flat), b = aetherNear(0, 0, 400, seed, flat);
