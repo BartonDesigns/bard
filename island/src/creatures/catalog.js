@@ -30,6 +30,9 @@
 //                rate; else by its size) and ref (the distance its voice is at full level, else
 //                by its size); loop: a sound kept on it { name, bone, gain, ref, far, still (its
 //                level while it lurks) }
+//   weak         a big one's weak point (creatures/weakspot.js): { bones (its hit zones are part
+//                'vital', 1.5x: health.js PARTS), name, glow (the light shown there), r (its size
+//                in m), along (0..1 down the bone, 0.5) }
 //   lurk         one that waits still among the trees (the Burnt Giant): it wakes when you come
 //                within wake m, strike it or fire near it, rising over rise s; for its first
 //                stalk s awake it only walks after you, and having lost you it goes back to
@@ -53,6 +56,7 @@ export const SPECIES = Object.freeze({
 		hp: 260, armour: 10, walk: 1.5, run: 4.6, dmg: 22, reach: 2.6, strike: 1.1, sight: 55,
 		resist: { fire: 1.5, ballistic: 0.9 }, surface: 'creature',
 		// (cold air with a voice in it: a hollow moan, a gust as it reaches, the draught it carries)
+		weak: { bones: ['chest'], name: 'the cold light in it', glow: 0x9fd8ff, r: 0.42 },
 		voice: { spot: 'moan', idle: 'moan', swing: 'gust', hurt: 'moan', die: 'fade', pitch: 1, ref: 5, loop: { name: 'fogdrift', gain: 0.6, ref: 4, far: 50, still: 1 } },
 		where: { night: true, zones: ['earth-rural', 'earth-coast', 'wild', 'village'], pack: [1, 1] },
 	},
@@ -82,6 +86,7 @@ export const SPECIES = Object.freeze({
 		hp: 340, armour: 45, walk: 1.0, run: 2.8, dmg: 26, reach: 2.5, strike: 1.2, sight: 45,
 		resist: { fire: 0.15, ballistic: 0.75, impact: 0.8, energy: 1.3 }, surface: 'stone',
 		// (the magma under its skin never stops churning: close to, that is what gives it away)
+		weak: { bones: ['chest'], name: 'the magma vent', glow: 0xff4a10, r: 0.36 },
 		voice: { spot: 'rumble', idle: 'rumble', swing: 'grind', hit: 'stonecrush', hurt: 'crack', die: 'rockfall', pitch: 1, ref: 6, loop: { name: 'magma', gain: 0.8, ref: 4, far: 60, still: 1 } },
 		where: { night: false, zones: ['deep', 'arid'], pack: [1, 1] },
 	},
@@ -89,6 +94,7 @@ export const SPECIES = Object.freeze({
 		name: 'Signplate Brute', faction: 'goblins', height: 1.9,
 		hp: 320, armour: 60, walk: 1.1, run: 3.4, dmg: 28, reach: 2.4, strike: 1.3, sight: 45,
 		resist: { ballistic: 0.7, pierce: 0.8, fire: 1.1 }, surface: 'metal',
+		weak: { bones: ['neck'], name: 'the gap under the helm', glow: 0xffd257, r: 0.2 },
 		voice: { spot: 'bellow', idle: 'plates', swing: 'plateswing', hit: 'plateslam', hurt: 'clang', die: 'heap', pitch: 1, ref: 5 },
 		where: { night: true, zones: ['earth-urban', 'earth-coast', 'village'], pack: [1, 1], odds: 0.6 },
 	},
@@ -112,6 +118,7 @@ export const SPECIES = Object.freeze({
 		name: 'The Old Drain King', faction: 'goblins', height: 2.4,
 		hp: 900, armour: 40, walk: 0.8, run: 2.0, dmg: 40, reach: 2.8, strike: 1.6, sight: 40,
 		resist: { ballistic: 0.85 }, surface: 'creature',
+		weak: { bones: ['spine', 'hips'], name: 'the swollen gut', glow: 0x9aff3a, r: 0.42, along: 0.6 },
 		voice: { spot: 'roar', idle: 'grunt', swing: 'heavyswing', hit: 'kingblow', hurt: 'grunt', die: 'kingfall', pitch: 1, ref: 7 },
 		where: { night: false, zones: ['deep'], pack: [1, 1], odds: 0.12 },
 	},
@@ -119,6 +126,7 @@ export const SPECIES = Object.freeze({
 		name: 'Saltmarsh Mother', faction: 'nightborn', height: 2.5,
 		hp: 420, armour: 10, walk: 1.0, run: 4.0, dmg: 30, reach: 3.0, strike: 1.2, sight: 50,
 		resist: { fire: 1.4, ballistic: 0.8 }, surface: 'creature',
+		weak: { bones: ['neck'], name: 'the bloated throat', glow: 0x3ae8c8, r: 0.3 },
 		voice: { spot: 'keen', idle: 'gurgle', swing: 'wetswipe', hit: 'slap', hurt: 'gurgle', die: 'drown', pitch: 1, ref: 6 },
 		where: { night: true, zones: ['earth-coast', 'wild'], pack: [1, 1], odds: 0.5 },
 	},
@@ -127,6 +135,7 @@ export const SPECIES = Object.freeze({
 		hp: 220, armour: 5, walk: 1.3, run: 6.0, dmg: 20, reach: 2.0, strike: 0.8, sight: 50,
 		resist: { fire: 1.2 }, surface: 'creature',
 		// (the scream of the change, then a beast's howl: snarl and growl are the hound's)
+		weak: { bones: ['chest'], name: 'the heart', glow: 0xff3a5a, r: 0.3 },
 		voice: { turn: 'turnscream', spot: 'howl', strike: 'snarl', idle: 'growl', hurt: 'yelp', die: 'whine', pitch: 0.85, ref: 5 },
 		where: { night: true, zones: ['village', 'earth-rural'], pack: [1, 2], odds: 0.7 },
 	},
@@ -138,6 +147,7 @@ export const SPECIES = Object.freeze({
 		hunt: 1, resist: { fire: 2.0, ballistic: 0.5, pierce: 0.6 }, surface: 'wood',
 		lurk: { wake: 9, rise: 3, stalk: 8, settle: 20 },
 		// (the crackle of its embers never stops: close to, that is what gives the tree away)
+		weak: { bones: ['chest'], name: 'the ember heart', glow: 0xff6a1a, r: 1.1 },
 		voice: { strike: 'thud', die: 'collapse', pitch: 1, ref: 12, loop: { name: 'ember', ref: 10, far: 120, still: 0.25 } },
 		// (by day too: a tree among trees is no less a tree in daylight)
 		where: { night: false, zones: ['wild', 'earth-rural'], pack: [1, 1], odds: 0.12 },
@@ -172,6 +182,7 @@ export const SPECIES = Object.freeze({
 		name: 'Undertow', faction: 'deepborn', height: 1.05,
 		hp: 500, armour: 10, walk: 1.0, run: 4.5, dmg: 30, reach: 3.0, strike: 1.1, sight: 30,
 		resist: { fire: 1.3, ballistic: 0.9 }, surface: 'creature',
+		weak: { bones: ['gill_L', 'gill2_L', 'gill_R', 'gill2_R'], name: 'the gills', glow: 0x40d0ff, r: 0.16 },
 		voice: { spot: 'surge', idle: 'drip', growl: 'drip', sniff: null, scuff: null, swing: 'wavecrash', hurt: 'surge', die: 'sink', pitch: 1, ref: 6 },
 		where: { night: false, zones: ['deep'], pack: [1, 1], odds: 0.3 },
 	},
@@ -205,6 +216,7 @@ export const SPECIES = Object.freeze({
 		name: 'The Hollow King', faction: 'nightborn', height: 4, look: 'sword',
 		hp: 1800, armour: 120, walk: 1.2, run: 3.2, dmg: 45, reach: 3.4, strike: 1.5, sight: 50,
 		resist: { ballistic: 0.6, pierce: 0.7, energy: 1.2 }, surface: 'metal',
+		weak: { bones: ['chest'], name: 'the hollow under the crown', glow: 0x6ad8ff, r: 0.45 },
 		voice: { spot: 'hollow', idle: 'armour', swing: 'bladeswing', hit: 'bladeclang', hurt: 'clang', die: 'knell', pitch: 1, ref: 9 },
 		// (the barrow's end, not the open world's: met from the places menu for now)
 		where: { night: false, zones: [], pack: [1, 1] },

@@ -7,7 +7,8 @@ import fs from 'node:fs';
 import { SPECIES, SPECIES_IDS, speciesFor, pickSpecies } from '../src/creatures/catalog.js';
 import { FACTIONS, PLAYER, createRelations } from '../src/combat/factions.js';
 import { pveHonor } from '../src/combat/honor.js';
-import { DAMAGE_TYPES } from '../src/combat/health.js';
+import { DAMAGE_TYPES, PARTS } from '../src/combat/health.js';
+import { HIT_PARTS } from '../src/net/protocol.js';
 import { VOICES, renderVoice } from '../src/creatures/voice.js';
 
 test('every kind has its packed model', () => {
@@ -70,6 +71,23 @@ test('a flyer keeps above you and drops into reach to strike', () => {
 		assert.ok(F.hover > F.strike && F.strike > 0 && F.strike < 2, id);
 	}
 	assert.ok(SPECIES.lampeater.fly);
+});
+
+test('the big ones have a weak point on bones they have, worth 1.5x', () => {
+	assert.equal(PARTS.vital, 1.5);
+	assert.ok(HIT_PARTS.includes('vital'));
+	let n = 0;
+	for (const [id, S] of Object.entries(SPECIES)) {
+		if (!S.weak) continue;
+		n++;
+		const spec = JSON.parse(fs.readFileSync(new URL(`./monsters/specs/${S.model ?? id}.json`, import.meta.url)));
+		const bones = spec.bones.map((b) => b.name);
+		for (const b of S.weak.bones) assert.ok(bones.includes(b), `${id} weak bone ${b}`);
+		assert.ok(S.weak.name && S.weak.glow && S.weak.r > 0, `${id} weak point incomplete`);
+		assert.ok(S.height >= 1.9 || S.hp >= 400, `${id} is not a big one`);
+	}
+	assert.ok(n >= 8, `${n} weak points`);
+	for (const big of ['burnt-giant', 'hollow-king', 'old-drain-king', 'saltmarsh-mother']) assert.ok(SPECIES[big].weak, big);
 });
 
 test('their voices are made, heard and never clip', () => {
