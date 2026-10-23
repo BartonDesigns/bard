@@ -57,6 +57,21 @@ const wheelGeo = (kind) => wgeo[kind] || (wgeo[kind] = wheelGeometry(kind, 18));
 // someone in a far car: head and shoulders, dark against the glass
 const riderGeo = (() => { const h = new THREE.SphereGeometry(0.11, 8, 6).translate(0, 0.62, -0.02), b = new THREE.SphereGeometry(1, 8, 6).scale(0.2, 0.28, 0.13).translate(0, 0.3, 0); const g = new THREE.BufferGeometry(); const m = [h, b].map((q) => q.toNonIndexed()); const pos = new Float32Array(m.reduce((a, q) => a + q.attributes.position.array.length, 0)); let o = 0; for (const q of m) { pos.set(q.attributes.position.array, o); o += q.attributes.position.array.length; } g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })();
 
+// the far lofts of every kind (the ones a street full of traffic asks for first), built ahead
+// behind the loading card a few at a time (island-build.js): built on a kind's first sighting
+// each took a frame out in the street. true once they are all in.
+export function prepareLofts(ms = 6) {
+	const t0 = performance.now();
+	for (const kind of Object.keys(SPEC)) {
+		if (!wgeo[kind]) { wheelGeo(kind); if (performance.now() - t0 > ms) return false; }
+		for (let t = MODEL_KINDS[kind] ? 1 : 0; t < LOFT.length; t++) {
+			if (geos[kind + t + (t ? 'w' : '')]) continue;
+			loftGeo(kind, t, t > 0, true);
+			if (performance.now() - t0 > ms) return false;
+		}
+	}
+	return true;
+}
 // decals on the cars (signage/cars.js): each fleet asks for its own set once one is registered
 let decalFactory = null;
 export function setFleetDecals(f) { decalFactory = typeof f === 'function' ? f : null; }

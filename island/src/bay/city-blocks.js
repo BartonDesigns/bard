@@ -5,12 +5,16 @@
 // createCity's cc.
 
 import { BLOCKS, toGrid, fromGrid, STYLE, ERA, sfDistrict, eraFor } from './styles.js';
+import { runAll } from '../world/buildslice.js';
 import { realCovered } from './realcity.js';
 import { inWater } from './watercarve.js';
 import { ROOF } from './roofs.js';
 import { cityEra } from './decor.js';
 
-export function cityBlocks(cc, cx, cz, R, list, minH = 0) {
+export function cityBlocks(cc, cx, cz, R, list, minH = 0) { return runAll(cityBlocksSteps(cc, cx, cz, R, list, minH)); }
+// the same a block at a time (a yield before each: the city's rebuild runs it a frame's share at a
+// time, city.js rebuildSteps; filling 1200 m of suburb whole was a tenth of a second on a phone)
+export function* cityBlocksSteps(cc, cx, cz, R, list, minH = 0) {
 	const { bay, CANVAS, CARS, condFor, doorKind, FACE_A, FADED, FENCES, fract, hash, jit, KIND, kit2,
 		lot, LX, NZ, OCEAN_X, PAL, pick, real, REMODEL, setCond } = cc;
 	// the (angle, style) grids present round here
@@ -24,6 +28,7 @@ export function cityBlocks(cc, cx, cz, R, list, minH = 0) {
 		const [gcx, gcz] = toGrid(cx, cz, a, style);
 		const i0 = Math.floor((gcx - R) / BX), i1 = Math.floor((gcx + R) / BX), j0 = Math.floor((gcz - R) / BZ), j1 = Math.floor((gcz + R) / BZ);
 		for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+			yield;
 			const [wx, wz] = fromGrid((i + 0.5) * BX, (j + 0.5) * BZ, a, style);
 			if (Math.hypot(wx - cx, wz - cz) > R) continue;
 			const U = bay.urbanAt(wx, wz);

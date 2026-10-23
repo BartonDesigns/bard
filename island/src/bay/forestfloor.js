@@ -295,7 +295,7 @@ export function createForestFloor(scene, bay, city, real, opts = {}) {
 		// set afresh each frame before this: here it only thickens)
 		if (now - lastProbe > 0.25) {
 			lastProbe = now;
-			const tall = agl < 60 && city?.treesNear ? city.treesNear(x, z, 40).filter((t) => t.cone && t.h > 20).length : 0;
+			const tall = agl < 60 && city?.treeTally ? city.treeTally(x, z, 40).cones : 0;          // (a count, not a list: no garbage four times a second)
 			hazeT = Math.min(1, tall / 10);
 		}
 		haze += (hazeT - haze) * Math.min(1, dt * 1.5);

@@ -15,7 +15,8 @@
 // their door and goes in. Only what is near is simulated; everything else is worked out.
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/body.js';
+import { loadPeopleAssets, buildPersonSteps, bodySlicer, personDNA, freeBody } from '../people/body.js';
+import { GFX_PHONE } from '../world/device.js';
 import { peopleCap } from '../world/governor.js';
 import { createMotion } from '../people/motion.js';
 import { wallKeeper } from '../people/walls.js';
@@ -41,28 +42,35 @@ export function createLife({ scene, world, camera, isPhone }) {
 	// ---------- bodies ----------
 	// a small cache of people, by who they are (so a driver seen again is the same person)
 	const bodies = new Map();                  // seed -> body
-	let buildT = 0;
+	let buildT = 0, pending = null;
+	const slicer = bodySlicer(GFX_PHONE ? 4 : 8);
 	function body(seed) {
 		const now = performance.now() / 1000;
 		let b = bodies.get(seed);
 		if (b) { b.used = now; return b; }
-		if (!A || now - buildT < 0.35) return null;
+		if (!A || pending !== null || now - buildT < 0.35) return null;
 		buildT = now;
-		// (one at a time, and old ones let go)
+		// (one at a time, and old ones let go; built a few steps a frame, body.js bodySlicer: whole,
+		// a driver's body was a frame and a half on a phone)
 		if (bodies.size >= keepN()) letGo();
-		const P = buildPerson(A, personDNA(seed, { age: 19 + frac(seed) * 58 }));
-		const wrap = new THREE.Group();
-		wrap.matrixAutoUpdate = false;
-		wrap.add(P.root);
-		group.add(wrap);
-		b = { seed, P, wrap, used: now, busy: false, floor: 0, mode: 'car' };
-		// the ground under them: the car's floor while in it, the street's when out
-		const W = () => world();
-		// (on foot, kept off the walls and fences between their door and the car: people/walls.js)
-		b.M = createMotion(P, (x, z) => b.mode === 'car' ? b.floor : groundAt(W(), x, z, b.M ? b.M.S.pos.y : undefined), { constrain: (pos, from) => { if (b.mode !== 'car') keepWalls(pos, from, from.y); }, space: () => b.mode !== 'car' });
-		P.root.visible = false;
-		bodies.set(seed, b);
-		return b;
+		pending = seed;
+		slicer.queue(buildPersonSteps(A, personDNA(seed, { age: 19 + frac(seed) * 58 }))).then((P) => {
+			pending = null;
+			if (!A) return;
+			const now = performance.now() / 1000;
+			const wrap = new THREE.Group();
+			wrap.matrixAutoUpdate = false;
+			wrap.add(P.root);
+			group.add(wrap);
+			b = { seed, P, wrap, used: now, busy: false, floor: 0, mode: 'car' };
+			// the ground under them: the car's floor while in it, the street's when out
+			const W = () => world();
+			// (on foot, kept off the walls and fences between their door and the car: people/walls.js)
+			b.M = createMotion(P, (x, z) => b.mode === 'car' ? b.floor : groundAt(W(), x, z, b.M ? b.M.S.pos.y : undefined), { constrain: (pos, from) => { if (b.mode !== 'car') keepWalls(pos, from, from.y); }, space: () => b.mode !== 'car' });
+			P.root.visible = false;
+			bodies.set(seed, b);
+		}).catch((e) => { pending = null; console.warn('[vehicles] a body', e); });
+		return null;
 	}
 	// the longest unused body let go for good (its materials and skeleton too: body.js freeBody)
 	function letGo() {
@@ -411,6 +419,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	let hooked = null, lastErr = null;
 	function update(dt, t) {
 		const W = world();
+		slicer.pump();
 		// (a street built anew is sorted at once, before its cars are drawn)
 		if (W?.street && hooked !== W.street) { hooked = W.street; W.street.onBuild = () => scan(camera.position); W.street.extra.push(draw); }
 		if (!W?.street || !W.bayArea) return;
