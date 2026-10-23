@@ -679,6 +679,13 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 						// (broad, soft shafts: finer ones, a few pixels apart on a phone, read as scratches
 						// on the sky; and up under the cloud they melt into its base)
 						float shafts = 0.4 + 0.6 * vn(vec2(azS * 36.0 + S.x * 0.001, 3.0)) * (0.75 + 0.25 * vn(vec2(azS * 90.0, 7.0)));
+						// close by (its edge a kilometre or two off and nearer) a shower is no curtain seen
+						// from outside but the grey you are about to stand in: its cores and shafts are
+						// bands of azimuth, and from there they striped the whole sky, top to horizon
+						// (Josh's fifth recording: dark stripes down a 6:30 pm sky). So they even out as
+						// it nears, into the one soft wash the rain's own grey makes from inside
+						float nearK = smoothstep(150.0, 2600.0, tin);
+						core = mix(0.45, core, 0.35 + 0.65 * nearK); shafts = mix(0.75, shafts, nearK);
 						float side = 1.0 - smoothstep(0.7, 1.0, pd / sr);
 						// (its top ragged in broad lobes: cut finer, the cut ran up the sky as stripes)
 						float ragged = top * (0.85 + 0.2 * vn(vec2(azS * 14.0, 11.0)) + 0.05 * vn(vec2(azS * 40.0, 13.0)));
@@ -694,7 +701,10 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 						// into the haze the far land stands in
 						vec3 veilC = mix(vec3(0.18, 0.2, 0.25), uSkyHor * 0.7, 0.18 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.92 + 0.15 * streak);
 						veilC = mix(veilC, fogC, (1.0 - smoothstep(0.0, 0.05, tanE)) * 0.55);
-						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.75, 0.0, 0.9));
+						// (close by, the rain's grey, as it is from inside: lighter than the far veil's
+						// blue-grey, and thinner right at the edge, where the rain is yet to come)
+						veilC = mix(mix(uSkyHor, vec3(0.5, 0.53, 0.57), 0.5) * (1.0 - uNight * 0.9), veilC, nearK);
+						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.75, 0.0, 0.9) * mix(0.3 + 0.4 * smoothstep(30.0, 600.0, tin), 1.0, nearK));
 					}
 					rainLine += thick * below * 2.2;
 				}

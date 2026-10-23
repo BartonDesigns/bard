@@ -163,6 +163,16 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	if (lu < 1.5) {
 		// yards: lawns (a few browned off; in late summer the ones nobody waters), planting beds, shade
 		vec3 y = mix(lawn, dry, max(smoothstep(0.55, 0.8, gf) * 0.6, smoothstep(0.82 - uLawnDry * 0.5, 0.95 - uLawnDry * 0.5, gf + vn(w * 0.021) * 0.3) * uLawnDry));
+		// close to, a lawn is blades and mower stripes, not one flat wash (Josh's fifth
+		// recording, 'houses on bare ground'): a fine mottle, and bands a stride wide along
+		// the street grid, both gone by a few dozen metres out, where a pixel spans more than
+		// the blades do, so nothing shimmers in the distance
+		float near = 1.0 - smoothstep(0.03, 0.1, length(fwidth(w)));
+		if (near > 0.001) {
+			float fine = vn(w * 2.6) * 0.6 + vn(w * 7.5 + 3.0) * 0.4;
+			float mow = step(0.5, fract(dot(w, vec2(0.6, 0.8)) / 1.1));
+			y *= 1.0 + near * (0.22 * (fine - 0.5) + 0.05 * (mow - 0.5));
+		}
 		return mix(y, vec3(0.3, 0.24, 0.16), smoothstep(0.62, 0.72, vn(w * 0.35)) * 0.5);
 	}
 	if (lu < 2.5) return wildflowers(mix(lawn, dry, smoothstep(0.6, 0.85, gf) * 0.4), w, 0.15);
