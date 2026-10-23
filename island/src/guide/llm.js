@@ -7,10 +7,14 @@
 //   cloud   - the townsfolk's shared voice on the discovery server (server/discovery POST /talk,
 //             Workers AI inside the free daily allowance). Only people talk this way: the
 //             server writes their instructions, and when the day's share is spent (or the
-//             server is not deployed) they answer with their own built-in lines.
+//             server is not deployed) they answer with their own built-in lines. A server that
+//             advertises npc-stream-v1 also streams a person's reply word by word with one
+//             action at the end (POST /npc/talk, Claude when its key is set: npcTalk below).
 //   none    - no model: the built-in guide answers from the world itself.
 //
 // All three share one call: chat(messages, onToken) -> full reply text.
+
+import { readLines, historyFor } from './npc-live.js';
 
 const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.85';
 export const WEBLLM_MODELS = [
@@ -40,7 +44,7 @@ export function planningFitsContext(messages, maxTokens, contextSize = 2048) {
 export function hasWebGPU() { return typeof navigator !== 'undefined' && !!navigator.gpu; }
 
 export function createLLM() {
-	let busy = false, kind = 'none', engine = null, loading = null, model = '', ollama = { url: 'http://localhost:11434', model: 'llama3.2' }, cloud = '', cloudPlanning = [];
+	let busy = false, kind = 'none', engine = null, loading = null, model = '', ollama = { url: 'http://localhost:11434', model: 'llama3.2' }, cloud = '', cloudPlanning = [], cloudFeatures = [], cloudClaude = false;
 	const status = { text: 'Guide only (no model)', ready: true, progress: 1 };
 	const listeners = new Set();
 	const emit = () => { for (const f of listeners) f(status); };
@@ -77,18 +81,45 @@ export function createLLM() {
 		}
 	}
 	async function useCloud(url) {
-		kind = 'cloud'; cloud = String(url || '').replace(/\/$/, ''); cloudPlanning = [];
+		kind = 'cloud'; cloud = String(url || '').replace(/\/$/, ''); cloudPlanning = []; cloudFeatures = []; cloudClaude = false;
 		status.ready = false; status.text = 'Reaching the shared voice…'; emit();
 		try {
 			const r = await fetch(cloud + '/status');
 			if (!r.ok) throw Error('status ' + r.status);
 			const j = await r.json();
 			cloudPlanning = Array.isArray(j.planning) ? j.planning.filter((k) => ['social_intent', 'story_quest', 'negotiation_intent'].includes(k)) : [];
-			status.ready = true; status.progress = 1; status.text = j.talk && j.talk.left <= 0 ? 'Shared voice: resting until tomorrow (people use their own lines)' : 'Shared voice (free, in the cloud)'; emit();
+			cloudFeatures = Array.isArray(j.features) ? j.features.filter((f) => typeof f === 'string') : [];
+			cloudClaude = !!j.claude?.on;
+			status.ready = true; status.progress = 1;
+			status.text = cloudClaude && j.claude.left > 0 ? 'People talk live (Claude, in the cloud)' : j.talk && j.talk.left <= 0 ? 'Shared voice: resting until tomorrow (people use their own lines)' : 'Shared voice (free, in the cloud)'; emit();
 		} catch (e) {
 			status.text = 'The shared voice is not reachable; people use their own lines.'; emit();
 			throw e;
 		}
+	}
+	// One person's reply, streamed (server/discovery POST /npc/talk): onText(the words so far)
+	// as they arrive, then { reply, act, note, provider }. null when this server has no live
+	// voice or can't answer now (the game answers with its own lines). The sheet is who they
+	// are (npc-live.js buildSheet); open asks them to speak first.
+	async function npcTalk(sheet, lines, { open = false, signal, onText } = {}) {
+		if (kind !== 'cloud' || !cloudFeatures.includes('npc-stream-v1')) return null;
+		const history = historyFor(lines);
+		// (met before: they speak first all the same, as you walk up again)
+		if (open && history.length) history.push({ role: 'user', content: '(The traveller walks up to you again and stops, looking at you. Say something first, in your own way, in one or two sentences.)' });
+		if (!open && history.at(-1)?.role !== 'user') return null;
+		const body = JSON.stringify({ sheet, history, open: open && !history.length });
+		if (body.length > 16000) return null;
+		const r = await fetch(cloud + '/npc/talk', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body });
+		if (!r.ok || !r.body) return null;
+		let text = '', end = null;
+		await readLines(r.body, (o) => {
+			if (typeof o?.t === 'string') { text += o.t; onText?.(text); }
+			else if (o?.end) end = o;
+		}, signal);
+		if (signal?.aborted) throw new DOMException('Conversation cancelled', 'AbortError');
+		// (cut off part way: what was said stands, with nothing done)
+		if (!end) return text.trim() ? { reply: text, act: null, note: null, provider: 'partial' } : null;
+		return { reply: String(end.reply || text), act: end.act && typeof end.act === 'object' ? end.act : null, note: typeof end.note === 'string' ? end.note : null, provider: end.provider || 'cloud', ms: end.ms };
 	}
 	function useNone() { kind = 'none'; status.ready = true; status.progress = 1; status.text = 'Guide only (no model)'; emit(); }
 
@@ -151,5 +182,5 @@ export function createLLM() {
 		}
 		return null;
 	}
-	return { useWebLLM, useOllama, useCloud, useNone, chat, status, busy: () => busy, kind: () => kind, supportsPlanning: (mode = 'social_intent') => kind === 'webllm' || kind === 'ollama' || (kind === 'cloud' && cloudPlanning.includes(mode)), model: () => model, ollama: () => ({ ...ollama }), onStatus: (f) => { listeners.add(f); f(status); return () => listeners.delete(f); } };
+	return { useWebLLM, useOllama, useCloud, useNone, chat, npcTalk, canStream: () => kind === 'cloud' && status.ready && cloudFeatures.includes('npc-stream-v1'), claude: () => kind === 'cloud' && cloudClaude, status, busy: () => busy, kind: () => kind, supportsPlanning: (mode = 'social_intent') => kind === 'webllm' || kind === 'ollama' || (kind === 'cloud' && cloudPlanning.includes(mode)), model: () => model, ollama: () => ({ ...ollama }), onStatus: (f) => { listeners.add(f); f(status); return () => listeners.delete(f); } };
 }

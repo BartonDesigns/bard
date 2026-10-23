@@ -6,12 +6,14 @@
 // Each line is said from the best source there is at that moment (local-speech-plan.js): a
 // clip made ahead of time, the local model once it is loaded, or the device's own voice.
 import { voiceBus } from '../world/soundbus.js';
+import { listen, placed } from '../audio/spatial.js';
 import { speechChunks, localVoice, chooseSource, phoneLike, deviceVoiceFor, createLoadGuard } from './local-speech-plan.js';
 import { createClipStore } from './local-speech-clips.js';
 export { speechChunks, localVoice };
 const speedOf = (who) => Math.max(.85, Math.min(1.2, (who.rate || 1) / (who.pitch || 1)));
-// a touch screen gets the cheap stereo pan instead of the head-related one (it costs a phone
-// a convolution per voice)
+// Whoever speaks is placed where they stand (audio/spatial.js): the listener is the camera, in
+// world coordinates, the same one the creatures and the magic are heard from. A conversation's
+// lines can come one sentence at a time (speak with append): each waits for the one before.
 const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 const PHONE = phoneLike({ coarse: COARSE, userAgent: globalThis.navigator?.userAgent || '', deviceMemory: globalThis.navigator?.deviceMemory || 8 });
 // lines made once are kept: passers-by repeat a small set of lines, and replaying one costs
@@ -19,6 +21,8 @@ const PHONE = phoneLike({ coarse: COARSE, userAgent: globalThis.navigator?.userA
 const CACHE_MAX = PHONE ? 16 : 48;
 export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mode = () => 'best', clips = createClipStore() } = {}) {
  let worker, context, source, panner, request = 0, timer, active, unavailable = false, ready = false, warming = false, slowRuns = 0;
+ // the sentences of a conversation's reply still to say, after the one being said
+ let queue = [];
  const made = new Map();
  let storage = null;
  try { storage = globalThis.localStorage || null; } catch {}
@@ -54,7 +58,7 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
  function clearTimer() { clearTimeout(timer); }
  function stopSource() {
   if (source) { source.onended = null; try { source.stop(); } catch {} source.disconnect(); source = null; }
-  panner?.disconnect(); panner = null;
+  panner?.stop(); panner = null;
  }
  // the model is let go: the device's voice and the clips carry on
  function unload() {
@@ -69,12 +73,14 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
   stopSource();
   const remaining = active?.chunks.slice(active.completed).join(' ');
   const who = active?.who, remark = active?.remark; active = null;
+  const later = queue.map((q) => q.text).join(' '); queue = [];
   onStatus(reason);
   if (remark) remark.done?.(false);
-  else if (remaining) fallback(remaining, who);
+  else if (remaining || later) fallback([remaining, later].filter(Boolean).join(' '), who);
  }
  function arm() { clearTimer(); timer = setTimeout(fail, 240000); }
  function cancel() {
+  queue = [];
   clearTimer(); request++; if (active) status('');
   const remark = active?.remark, device = active?.device; active = null;
   stopSource(); remark?.done?.(false);
@@ -83,14 +89,33 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
  }
  const deviceOk = () => 'speechSynthesis' in globalThis;
  const sourceFor = (chunks, who, talk) => chooseSource({ chunks, hasClip: (c) => clips.has(localVoice(who), c) }, { mode: mode(), phone: PHONE, modelReady: ready, modelAllowed: modelAllowed(), talk, deviceOk: deviceOk() });
- function speak(text, who = {}) {
-  cancel(); const chunks = speechChunks(text); if (!chunks.length) return;
+ // a conversation's line: { at() -> {x,y,z} } places it at the speaker; append waits for the
+ // line being said (a reply arriving sentence by sentence) instead of cutting it off
+ function speak(text, who = {}, opts = {}) {
+  if (opts.append && active && !active.remark) { queue.push({ text, who, opts }); return; }
+  if (!opts.append || active?.remark) cancel();
+  say(text, who, opts);
+ }
+ function say(text, who, opts) {
+  const chunks = speechChunks(text); if (!chunks.length) { next(); return; }
   clips.load();
   const from = sourceFor(chunks, who, true);
-  if (from === 'clip' && unlock()) { request++; fromClips(request, chunks, who, null, () => fallback(text, who)); return; }
-  if (from === 'model' && unlock() && globalThis.Worker) { request++; start(request, chunks, who, null); return; }
+  if (from === 'clip' && unlock()) { request++; fromClips(request, chunks, who, null, () => fallback(text, who, opts), opts.at); return; }
+  if (from === 'model' && unlock() && globalThis.Worker) { request++; start(request, chunks, who, null, opts.at); return; }
   status('Using device voice');
-  fallback(text, who);
+  fallback(text, who, opts);
+  // (the device's voice queues the rest itself)
+  for (const q of queue.splice(0)) fallback(q.text, q.who, { ...q.opts, append: true });
+ }
+ // the line said; the next of a reply, if one is waiting
+ function next() {
+  const q = queue.shift();
+  if (q) say(q.text, q.who, q.opts);
+ }
+ // a line finished: a remark tells whoever made it; a conversation's line goes on to the next
+ function finished() {
+  const R = active?.remark; active = null;
+  if (R) R.done?.(true); else next();
  }
  // a line said in passing, from where the speaker stands: { at() -> {x,y,z}, audible() -> bool,
  // started(seconds), done(played) }. It never cuts into a conversation or another remark.
@@ -117,29 +142,22 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
   if (V) return { ctx: V.ctx, dest: V.out };
   return context ? { ctx: context, dest: context.destination } : null;
  }
- // where you are listening from (kept), and the speaker placed relative to it: the shared
- // context's listener is left alone, at the origin looking down -z
+ // where you are listening from: the camera, told to the context's listener each frame while
+ // anyone is speaking (combat.js does the same every frame; this keeps it right before then)
  let ear = null;
- function relative(q) {
-  if (!ear) return q;
-  const { p, f } = ear, h = Math.hypot(f.x, f.z) || 1, fx = f.x / h, fz = f.z / h;
-  const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z;
-  return { x: dx * -fz + dz * fx, y: dy, z: -(dx * fx + dz * fz) };
+ function aim() {
+  const q = (active?.remark?.at || active?.at)?.();
+  if (panner && q) panner.move(q);
  }
- function aim(q, t) {
-  if (!panner || !q) return;
-  const r = relative(q);
-  if (panner.positionX) { panner.positionX.setTargetAtTime(r.x, t, .05); panner.positionY.setTargetAtTime(r.y, t, .05); panner.positionZ.setTargetAtTime(r.z, t, .05); }
-  else panner.setPosition(r.x, r.y, r.z);
+ function place(camera) {
+  if (!camera?.getWorldPosition) return;
+  ear = camera;
+  const O = out();
+  if (O && active) listen(camera, O.ctx);
+  aim();
  }
- // where you are listening from, and where the remark is coming from, once a frame
- function place(p, f) {
-  if (!p || !f) return;
-  ear = { p: { x: p.x, y: p.y, z: p.z }, f: { x: f.x, y: f.y, z: f.z } };
-  if (panner) aim(active?.remark?.at?.(), panner.context.currentTime);
- }
- function start(id, chunks, who, remarkPlace) {
-  active = { chunks, who, completed: 0, remark: remarkPlace, model: true };
+ function start(id, chunks, who, remarkPlace, at = null) {
+  active = { chunks, who, completed: 0, remark: remarkPlace, model: true, at };
   try {
    // (a phone told to use the local voices still leaves the mark while they load)
    if (PHONE && !ready && !worker) guard.begin();
@@ -153,7 +171,7 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
   active = { chunks, who, completed: 0, remark: R };
   const next = (i) => {
    if (id !== request || !active) return;
-   if (i >= chunks.length) { const D = active.remark; active = null; D?.done?.(true); return; }
+   if (i >= chunks.length) { finished(); return; }
    if (R?.audible && !R.audible()) { cancel(); return; }
    const m = made.get(keyOf(who, chunks[i]));
    if (!m) { cancel(); return; }
@@ -163,15 +181,15 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
  }
  // a line from the clips: every piece fetched first, then played straight through. If one
  // cannot be had, nothing of it has been heard yet, so the device's voice can say it instead.
- function fromClips(id, chunks, who, R, instead) {
-  active = { chunks, who, completed: 0, remark: R };
+ function fromClips(id, chunks, who, R, instead, at = null) {
+  active = { chunks, who, completed: 0, remark: R, at };
   const O = out();
   if (!O) { active = null; if (R) R.done?.(false); else instead?.(); return; }
   clips.line(localVoice(who), chunks, O.ctx).then((buffers) => {
    if (id !== request || !active) return;
    const next = (i) => {
     if (id !== request || !active) return;
-    if (i >= buffers.length) { const D = active.remark; active = null; D?.done?.(true); return; }
+    if (i >= buffers.length) { finished(); return; }
     if (R?.audible && !R.audible()) { cancel(); return; }
     play(buffers[i], 0, R, () => { if (active) active.completed = i + 1; next(i + 1); });
    };
@@ -192,7 +210,7 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
    const u = new SpeechSynthesisUtterance(text), d = deviceVoiceFor(who, S.getVoices());
    if (d.voice) u.voice = d.voice;
    u.pitch = d.pitch; u.rate = d.rate;
-   const q = R?.at?.(), dist = q && ear ? Math.hypot(q.x - ear.p.x, q.y - ear.p.y, q.z - ear.p.z) : 3;
+   const q = R?.at?.(), e = ear?.position, dist = q && e ? Math.hypot(q.x - e.x, q.y - e.y, q.z - e.z) : 3;
    u.volume = Math.max(0.15, Math.min(1, 2.4 / Math.max(dist, 1)));
    const id = ++request;
    active = { chunks: [text], who, completed: 0, remark: R, device: true };
@@ -217,14 +235,16 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
   source = C.createBufferSource(); source.buffer = buffer;
   // the person's own pitch; the rate given to the model already keeps the pace natural
   source.playbackRate.value = active.who.pitch || 1;
-  if (R) {
-   panner = C.createPanner();
-   Object.assign(panner, { panningModel: COARSE ? 'equalpower' : 'HRTF', distanceModel: 'inverse', refDistance: 2.2, rolloffFactor: 1.15, maxDistance: 40 });
-   source.connect(panner).connect(O.dest);
-   const q = R.at?.(); if (q) { const r = relative(q); if (panner.positionX) { panner.positionX.value = r.x; panner.positionY.value = r.y; panner.positionZ.value = r.z; } else panner.setPosition(r.x, r.y, r.z); }
-   R.started?.(buffer.duration / source.playbackRate.value);
+  // a remark from a passer-by falls away within a street; a conversation partner is close, so
+  // their voice stays full and only turns with your head
+  const at = (R?.at || active.at)?.();
+  if (at) {
+   if (ear) listen(ear, C);
+   panner = R ? placed(C, O.dest, at, { ref: 2.2, roll: 1.15, max: 40 }) : placed(C, O.dest, at, { ref: 3.5, roll: 0.6, max: 60 });
+   source.connect(panner.node);
   } else source.connect(O.dest);
-  source.onended = () => { source?.disconnect(); source = null; panner?.disconnect(); panner = null; ended(); };
+  if (R) R.started?.(buffer.duration / source.playbackRate.value);
+  source.onended = () => { source?.disconnect(); source = null; panner?.stop(); panner = null; ended(); };
   source.start();
  }
  // load the voices in the background so the first remark in passing is not a long wait (a
@@ -270,7 +290,7 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
      const messageId = data.id;
      if (data.type === 'status') { status(data.text); return; }
      if (data.type === 'error') { fail(); return; }
-     if (data.type === 'done') { clearTimer(); const R = active.remark; active = null; R?.done?.(true); return; }
+     if (data.type === 'done') { clearTimer(); finished(); return; }
      if (data.type !== 'audio') return;
      clearTimer();
      const R = active.remark;
@@ -296,5 +316,5 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {}, mo
    }
  }
  function dispose() { cancel(); worker?.terminate(); worker = null; context?.close().catch(() => {}); context = null; }
- return { speak, remark, place, warm, tick, retry, cancel, unlock, unload, dispose, busy: () => !!active, ready: () => ready, cached: () => made.size, phone: PHONE, clips };
+ return { speak, remark, place, warm, tick, retry, cancel, unlock, unload, dispose, busy: () => !!active || queue.length > 0, ready: () => ready, cached: () => made.size, phone: PHONE, clips };
 }
