@@ -121,7 +121,7 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 		const W = world();
 		if (night < 0.7 || !W?.bayArea?.loaded() || !W.city?.treesNear) return false;
 		if (cam.y - ground(cam.x, cam.z) > 6 || W.player?.state?.flying) return false;
-		const U = W.bayArea.urbanAt(cam.x, cam.z);
+		const U = (W.townAt || W.bayArea.urbanAt)(cam.x, cam.z);
 		if (U && U.u > 0.15) return false;
 		return W.city.treesNear(cam.x, cam.z, 35).filter((t) => !t.shrub && !t.fern).length >= 8;
 	}

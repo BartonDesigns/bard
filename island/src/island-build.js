@@ -81,6 +81,7 @@ import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createNatureSound } from './bay/naturesound.js';
 import { createRealCity } from './bay/realcity.js';
+import { townAtOf } from './crysis/townmap.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
 import { createEdgelands } from './bay/edgelands.js';
@@ -445,6 +446,10 @@ export async function islandBuild(iw, params) {
 		const bayNear = Object.create(bayArea, { loaded: { value: () => bayArea.loaded() && globeF.bay && (() => { const ll = globeLL(camera.position.x, camera.position.z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM; })() } });
 		iw.world.labels = createLabels(dom.mount, bayArea, null);
 		iw.world.real = createRealCity(renderer, { isPhone: GFX });
+		// how built up a point is: the Bay's town map, and past its edge the town grown there
+		// (crysis/townmap.js), for what asks "is this a town?" (the people on the sidewalks, the
+		// street sound, the music); the Bay's grids and blocks keep asking the Bay's map alone
+		iw.world.townAt = townAtOf(bayArea, iw.world.real);
 		// Crysis: the towns beyond the survey, grown street by street as you near them
 		iw.world.civ = createCivilization({ real: iw.world.real, bay: bayArea, water: () => iw.world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
 		iw.world.city = createCity(shared, scene, bayNear, iw.world.real);
@@ -518,7 +523,7 @@ export async function islandBuild(iw, params) {
 		iw.world.boardwalk = createBoardwalk(scene, bayArea, shared, { isPhone, mount: dom.mount, hint: (t, ms, pri = 1) => hint(t, ms, pri), camera, player: () => iw.world?.player.state });
 		// the Bay Area's wild animals by habitat, month and hour, and the field journal
 		iw.world.wildlife = createWildlife(scene, bayNear, { isPhone: GFX, real: iw.world.real, globe: () => iw.world?.globe, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
-		iw.world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
+		iw.world.citySound = createCitySound(Object.create(bayArea, { urbanAt: { value: (x, z) => iw.world.townAt(x, z) } }), (x, z) => island.heightAt(x, z));
 		iw.world.natureSound = createNatureSound(bayNear, (x, z) => bayArea.heightAt(x, z));
 		// the in-between places: dirt tracks, the industrial fringe, town's ragged edge, the odd camp
 		iw.world.edge = createEdgelands(scene, { bay: bayNear, real: iw.world.real, city: iw.world.city, world: () => iw.world, shared, isPhone: GFX });

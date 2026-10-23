@@ -22,7 +22,7 @@ export function createPicnicJam({scene,world,camera,profile,mount,isPhone=false,
   return !!s && eligiblePicnic({type:profile()?.type,hours:W.sky?.state.hours??12,flying:s.flying,submerged:camera.position.y<0 || s.diving,underground:(W.underworld?.inside?.()||0)>.1 || W.deep?.active?.(),busy:busy()||!!W.weather?.state.sheltered||(W.weather?.state.rainHere||0)>.45});
  }
  function blocked(W,x,z,y) {
-  if((W.bayArea?.urbanAt?.(x,z)?.u||0)>.15)return true;
+  if(((W.townAt||W.bayArea?.urbanAt)?.(x,z)?.u||0)>.15)return true;
   const water=W.lake?.waterAt?.(x,z)??W.water?.waterAt?.(x,z);
   if(water!=null && water>y-.2)return true;
   if(W.city?.treesNear?.(x,z,.7).some(t=>!t.fern))return true;
