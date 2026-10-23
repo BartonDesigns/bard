@@ -164,3 +164,21 @@ test('a café or a restaurant serves dishes of its cuisine, priced, from the rec
 	// the same menu all day, a different dish off another day
 	assert.deepEqual(menuOf('bistro', { seed: 3, day: 100 }), menuOf('bistro', { seed: 3, day: 100 }));
 });
+
+test('a shop that sells things to carry away lists them from the gear catalog, at its own prices', async () => {
+	const { ARMS_CATALOG, listOffers, ACQUISITION_SOURCES } = await import('../src/gameplay/arms.js');
+	const { gearOf } = await import('../src/bay/storefit.js');
+	const SRC = { supermarket: ACQUISITION_SOURCES.SUPERMARKET, outfitter: ACQUISITION_SOURCES.NPC_TRADER };
+	for (const type of ['hardware', 'feed', 'pharmacy', 'pet', 'boutique', 'thrift', 'surf', 'tailor', 'gift', 'antiques', 'bait', 'bike']) {
+		const G = gearOf(tradeOf(type), type);
+		assert.ok(G?.stock.length, `${type} sells something`);
+		const offered = new Set(listOffers(SRC[G.kind]).filter((o) => o.mode === 'purchase').map((o) => o.itemId));
+		for (const id of G.stock) { assert.ok(ARMS_CATALOG[id], `${type}: ${id} in the catalog`); assert.ok(offered.has(id), `${type}: ${id} sold at a ${G.kind}`); }
+	}
+	// (the food shops sell their food; the outfitters and hunting posts are the economy's own sites)
+	for (const type of ['grocer', 'liquor', 'bookshop', 'florist', 'salon', 'outfitter', 'huntpost']) assert.equal(gearOf(tradeOf(type), type), null, type);
+	// a hardware store built: its list says what it sells
+	const b = shop({ biz: { type: 'hardware', name: 'h', sign: { bg: '#e05a00', fg: '#ffffff' } }, w: 20, d: 16 });
+	const { L } = built(b);
+	assert.deepEqual(L.gear, gearOf('hardware', 'hardware'));
+});

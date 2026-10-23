@@ -36,7 +36,7 @@ import { venueOf } from '../economy/venue.js';
 import { sineHash as hh } from '../noise.js';
 import { Builder, houseMaterials, lin } from './housekit.js';
 import { GoodsBuilder, goodsSteps, goodsMaterial } from '../interiors/goods.js';
-import { fitMart, fitShop, tradeOf } from './storefit.js';
+import { fitMart, fitShop, tradeOf, gearOf } from './storefit.js';
 import { fitDining, styleOf } from './dinefit.js';
 import { fitVenue, officeKind } from './venuefit.js';
 import { hangDoors, stepDoors, openDoor, shutDoors } from './cooler-doors.js';
@@ -367,7 +367,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			// (a gas station's mart keeps its lights on all night, a corner store till late)
 			hours: hrs, allNight: b.store === 'fuel', dust: type === 'restaurant' && open,
 		});
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, fitted, trade, hours: hrs, bizKey: bizKey(b), light, goodsMat, perks, games, doors: doors.length ? doors : null, dispose: () => { shutDoors({ doors }); releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); board?.mat.dispose(); board?.tex?.dispose(); } };
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, fitted, trade, gear: stock && !b.store ? gearOf(trade, b.biz?.type) : null, hours: hrs, bizKey: bizKey(b), light, goodsMat, perks, games, doors: doors.length ? doors : null, dispose: () => { shutDoors({ doors }); releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); board?.mat.dispose(); board?.tex?.dispose(); } };
 		return B;
 	}
 
@@ -550,5 +550,5 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		}
 		return out;
 	}
-	return { group, update, floor, push, inside, venue, doorsNear, amenities, gameSpots, swing, count: () => built.size, busy: () => !!job, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, products: B.products, ceil: B.ceil, name: B.b.biz?.name || '', stocked: !!B.stocked, trade: B.trade || null })) };
+	return { group, update, floor, push, inside, venue, doorsNear, amenities, gameSpots, swing, count: () => built.size, busy: () => !!job, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, products: B.products, ceil: B.ceil, name: B.b.biz?.name || '', stocked: !!B.stocked, trade: B.trade || null, gear: B.gear })) };
 }

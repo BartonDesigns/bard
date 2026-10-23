@@ -746,6 +746,25 @@ const TRADE = {
 	florist: 'florist', salon: 'salon', barber: 'salon', laundromat: 'laundry', gym: 'gym', yoga: 'gym', vet: 'clinic',
 };
 export const tradeOf = (type) => TRADE[type] || 'variety';
+// what of the gear catalog (gameplay/arms.js) a shop sells over its counter, by its trade and
+// its business: the gear screen's shop sheet (ui/gear.js), the site island-build.js lists for it.
+// outfitter: a trader's prices and its upgrades (the clothes); the rest a store's. The food
+// shops sell their food (cooking/), the rest nothing to carry away
+const GEAR = {
+	hardware: ['door-brace', 'lantern-alarm', 'camp-lantern', 'repair-roll', 'station-signal-flare', 'hunting-net'],
+	pharmacy: ['field-medkit'],
+	pet: ['trail-scent-kit', 'hunting-net'],
+	clothes: ['wayfarers-hood', 'rangers-jacket', 'fieldcraft-gloves', 'rangers-trousers', 'riding-boots', 'duskwalker-boots', 'ops-cap'],
+	tailor: ['aetherweave-coat', 'aetherweave-trousers', 'spellbinder-gloves', 'stargazer-circlet', 'riding-boots'],
+	surf: ['wayfarers-hood', 'rangers-jacket', 'trailstrider-boots', 'fieldcraft-gloves', 'rangers-trousers'],
+	bait: ['hunting-net', 'trail-scent-kit', 'camp-lantern'],
+	bike: ['repair-roll', 'camp-lantern', 'station-signal-flare'],
+	variety: ['camp-lantern', 'lantern-alarm', 'repair-roll'],
+};
+export function gearOf(trade, type) {
+	const stock = GEAR[type] || (trade === 'variety' && (type === 'outfitter' || type === 'huntpost') ? null : GEAR[trade]);
+	return stock ? { kind: trade === 'clothes' ? 'outfitter' : 'supermarket', stock } : null;
+}
 
 // the checkout by the door (and a second for a big shop): its customer side toward the room
 function frontCounter(K, impulse = true, len = 2.4) {

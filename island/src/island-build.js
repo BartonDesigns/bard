@@ -68,6 +68,7 @@ import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
+import { gearOf } from './bay/storefit.js';
 import { createInteriors } from './interiors/index.js';
 import { createStructures } from './structures/index.js';
 import { createServices } from './services/index.js';
@@ -288,16 +289,18 @@ export async function islandBuild(iw, params) {
 			const x = E.door?.[0] ?? E.x, z = E.door?.[1] ?? E.z;
 			out.push({ id: E.id, economyId: E.id, name: E.name, kind: ['outfitter', 'huntpost'].includes(E.type) ? 'outfitter' : 'supermarket', x, z,
 				y: iw.world.island.heightAt(x, z), actions: ['purchase'], source: 'economy',
-				...(E.type === 'hardware' ? { stock: ['repair-roll', 'camp-lantern', 'home-supply-kit'] } : {}) });
+				...(E.type === 'hardware' ? { stock: gearOf('hardware', 'hardware').stock } : {}) });
 		}
 		for (const B of iw.world.commercial?.list?.() || []) {
 			if (B.type !== 'shop') continue;
 			// A named business owns its own counter; do not add a second generic store
 			// over it with a separate stock lot or let its neighbours sell its goods.
+			// (but a walk-in shop fitted out for its trade sells what it stocks over its own
+			// counter, the hardware, the medkits, the clothes: bay/storefit.js gearOf)
 			const E = businesses.find(e => Math.hypot(e.x - B.x, e.z - B.z) < 5);
-			if (E) continue;
-			const id = `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
-			out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, w: B.w, d: B.d, actions: ['purchase'], source: 'generated-commercial' });
+			if (E && (equipment.has(E.type) || !B.gear)) continue;
+			const id = E ? `shop-${E.id}` : `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
+			out.push({ id, ...(E ? { economyId: E.id } : {}), name: B.gear ? B.name || E?.name || 'Shop' : 'Neighbourhood supermarket', kind: B.gear?.kind || 'supermarket', x: B.x, z: B.z, y: B.y, w: B.w, d: B.d, actions: ['purchase'], source: 'generated-commercial', ...(B.gear ? { stock: B.gear.stock } : {}) });
 		}
 		return out;
 	};
