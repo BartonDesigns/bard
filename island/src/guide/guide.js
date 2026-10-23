@@ -814,7 +814,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function whereKind() {
 		const W = api.world(), cam = api.camera.position;
 		if (Math.max(Math.abs(cam.x), Math.abs(cam.z)) < W.island.half) return { kind: 'island', name: 'the village' };
-		const w = W.labels?.where(cam.x, cam.z, cam.y, false), U = W.bayArea?.urbanAt(cam.x, cam.z), L = W.real?.landAt?.(cam.x, cam.z);
+		const w = W.labels?.where(cam.x, cam.z, cam.y, false), U = (W.townAt || W.bayArea?.urbanAt)?.(cam.x, cam.z), L = W.real?.landAt?.(cam.x, cam.z);
 		const kind = L && (L.lu === 0 || L.lu >= 11) && (!U || U.u < 0.3) ? 'nature' : U && (U.s === 0 || U.d > 0.2) ? 'city' : 'suburb';
 		return { kind, name: w?.name || 'the Bay Area' };
 	}

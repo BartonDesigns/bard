@@ -26,6 +26,7 @@ import { paintStreet } from './potholes.js';                 // ...its sidewalk,
 import { qualityNow, onQuality } from '../world/governor.js';
 import { GFX_PHONE } from '../world/device.js';
 import { buildSlice } from '../world/buildslice.js';
+import { townMapAt } from '../crysis/townmap.js';            // how built up a grown town is, as the Bay's town map says it
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -766,6 +767,13 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		genVersion++;
 		changed(-1, camX, camZ);
 	}
+	// how built up the grown town standing at a point is, in the shape of the Bay's town map
+	// ({ u, a, d, s }: crysis/townmap.js), for a town out past that map's edge; null where none stands
+	function townAt(x, z) {
+		let best = null;
+		for (const G of gens) { const U = townMapAt(G.data, x, z); if (U && (!best || U.u > best.u)) best = U; }
+		return best;
+	}
 
 	// ---------- the road maps round you: a fine one close by, a coarser one further out ----------
 	// Each layer is drawn as distance, not coverage: 1 well inside, 0.5 exactly on the edge,
@@ -1221,5 +1229,5 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 
 	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
 	// town came or went; roadVersion: the regions' or the hand-laid roads changed, anywhere)
-	return (self = { R, inside, regionAt, near, nearOwn, nearSources, roadVersion: () => roadV, update, dispose, sidewalk, landAt, sites, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
+	return (self = { R, inside, regionAt, near, nearOwn, nearSources, roadVersion: () => roadV, update, dispose, sidewalk, landAt, townAt, sites, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
 }
