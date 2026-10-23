@@ -9,10 +9,11 @@ import { AIR } from './airfog.js';
 import { GRADE, bardLook } from './grade.js';
 import { qualityNow } from './governor.js';
 import { constellations } from './constellations.js';
-import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock, lunarPosition, moonlightShare } from './solar.js';
+import { BAY_LATITUDE, BAY_LONGITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock, lunarPosition, moonlightShare, clockZone, wrapHours } from './solar.js';
 
 // The real catalogue follows the observer's latitude and the chosen date. The island
-// keeps its Bay Area latitude; the globe supplies the camera's current latitude.
+// keeps its Bay Area latitude; the globe supplies the camera's current latitude, and its
+// longitude sets the clock to the hour there (solar.js clockZone).
 // equatorial (J2000) to galactic
 const EQ2GAL = [-0.0548755604, -0.8734370902, -0.4838350155, 0.4941094279, -0.4448296300, 0.7469822445, -0.8676661490, -0.1980763734, 0.4559837762];
 
@@ -267,7 +268,7 @@ function airOf(P) {
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
 }
-export function createSky(scene, shared, renderer, { isPhone = false, earth = true, latitude = () => BAY_LATITUDE } = {}) {
+export function createSky(scene, shared, renderer, { isPhone = false, earth = true, latitude = () => BAY_LATITUDE, longitude = () => BAY_LONGITUDE } = {}) {
 	// The air uniform is made once per page; an airless world darkens it, and the next world
 	// with air gets the neutral value back.
 	const airR = cloudReflectU(shared).uAirR;
@@ -990,7 +991,27 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	scene.add(hemi);
 	scene.fog = new THREE.FogExp2(0xa9c4dc, 0.00026);
 
-	const state = { hours: shared.startHours ?? 10.5, speed: 1, real: false };
+	// hours: the hour where you are; zone: how far the clock here runs ahead of the Bay's
+	const state = { hours: shared.startHours ?? 10.5, speed: 1, real: false, zone: 0 };
+	// the Bay's hour, that travel carries with it (an hour set from outside, by the panel, a spell or
+	// a guide, is the hour where you are: wrote is the hour as the sky last left it)
+	let bayH = state.hours, wrote = state.hours;
+	const fromOutside = () => { if (state.hours !== wrote) bayH = wrapHours(state.hours - state.zone); };
+	const setHere = (h) => { state.hours = wrapHours(h); wrote = state.hours; };
+	// the hour at a longitude (a place you are about to go to: a link, a saved spot), or the Bay's
+	function setLocalHours(h, lon) {
+		if (!Number.isFinite(h)) return;
+		bayH = wrapHours(h - (earth && Number.isFinite(lon) ? clockZone(lon) : state.zone));
+		setHere(bayH + state.zone);
+	}
+	function setBayHours(h) {
+		if (!Number.isFinite(h)) return;
+		bayH = wrapHours(h);
+		setHere(bayH + state.zone);
+	}
+	const bayHours = () => { fromOutside(); return bayH; };
+	// a Bay hour as the hour here
+	const hereFromBay = (h) => wrapHours(h + state.zone);
 	const tmpA = new THREE.Color(), tmpB = new THREE.Color(), tmpC = new THREE.Color(), tmpD = new THREE.Color(), tmpE = new THREE.Color();
 	// the weather drives the clouds, rain, bows and lightning in the sky (weather.js)
 	let weather = null;
@@ -1014,9 +1035,15 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		const d = today(), lat = solarLatitude(latitude());
 		if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month || d.getFullYear() !== SUN.year) { SUN = solarDate(d); state.sun = SUN; }
 		if (lat !== SUN.lat) Object.assign(SUN, solarTimes(lat, SUN.dec, SUN.noon));
+		// the hour where you are: the Bay's, carried round the globe an hour on for each 15° east, so
+		// the sun here is where the globe from orbit had it (on another world, one clock everywhere)
+		fromOutside();
+		if (earth) { const lon = longitude(); if (Number.isFinite(lon)) state.zone = clockZone(lon); }
+		setHere(bayH + state.zone);
 		// daylight hours pass slowly (~9 real minutes), night quickly (~2.5)
 		// (real time: one game hour to the real hour, day or night)
-		state.hours = state.real ? (state.hours + dt / 3600) % 24 : advanceSolarClock(state.hours, dt, state.speed, SUN);
+		setHere(state.real ? (state.hours + dt / 3600) % 24 : advanceSolarClock(state.hours, dt, state.speed, SUN));
+		bayH = wrapHours(state.hours - state.zone);
 		// where the sun is: east is +x, north -z, up +y
 		const sd = solarDirection(SUN.lat, SUN.dec, state.hours, SUN.noon, shared.uSunDir.value);
 		const elev = sd.y;
@@ -1049,7 +1076,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		const overcast = W ? THREE.MathUtils.smoothstep(W.cover ?? 0, 0.6, 0.95) : 0;
 		const sunVis = Math.min(W ? W.sunVis : 1, 1 - overcast * 0.85);
 		orientSky();
-		if (earth) { lunarPosition(d, state.hours, SUN.noon, MOON); celestial(MOON.ra, MOON.dec * 180 / Math.PI, moonDir); }
+		if (earth) { lunarPosition(d, bayH, SUN.noon, MOON); celestial(MOON.ra, MOON.dec * 180 / Math.PI, moonDir); }
 		else { moonDir.copy(sd).negate(); MOON.lit = 1; }
 		uniforms.uMoon.value.set(moonDir.x, moonDir.y, moonDir.z, MOON.lit);
 		sun.shadow.intensity = vacuum ? 0.96 : 0.78 * (0.12 + 0.88 * sunVis);
@@ -1165,5 +1192,5 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	};
 	// the Moon now: where (a direction) and its phase
 	const moon = () => ({ dir: moonDir.toArray().map((v) => +v.toFixed(3)), lit: +MOON.lit.toFixed(3), waxing: MOON.waxing, age: +MOON.age.toFixed(1), alt: +(Math.asin(moonDir.y) * 180 / Math.PI).toFixed(1) });
-	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines, glowToward, moon };
+	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines, glowToward, moon, setLocalHours, setBayHours, bayHours, hereFromBay };
 }
