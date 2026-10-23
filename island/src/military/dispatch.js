@@ -4,8 +4,9 @@
 // (military/route.js), helicopters and a jet by air when it is far or big. A patrol is a little
 // state while far from you (where along its way it is, when it will be there); within sight it
 // is drawn and moves, and on the scene its troops get out (combat's squads, posted where they
-// stand), its guns engage the side it came for, the helicopters circle and fire, the jet makes
-// a pass. After a while, or when the trouble is over, it goes home and the base has its vehicles
+// stand), its guns engage the side it came for, the helicopters fly the fight (military/flight.js
+// heliTacticStep: orbits, fast low flanks across to the far side, attack runs and hovers), the
+// jet makes a pass. After a while, or when the trouble is over, it goes home and the base has its vehicles
 // back. An invasion is the same from the other side: an Ironvale Legion column out of another
 // region, with the Meridian Guard sent to meet it.
 //
@@ -22,6 +23,7 @@ import { planDispatch, invasionPlan, nextInvasion, SPEED, toWorld, FORCES } from
 import { roadRoute, along, joinRoute, trimToRoad, cutRoute } from './route.js';
 import { noseInto } from '../vehicles/wall-guard.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
+import { heliAirState, heliTacticStep } from './flight.js';
 import { engineSound, oneShot } from './sound.js';
 import { routeTrouble } from '../law/ladder.js';
 import { stencilVehicle } from '../signage/cars.js';
@@ -78,7 +80,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		return p;
 	}
 	function unit(kind, side, i, air) {
-		return { kind, side, i, air, hp: HP[kind], mesh: null, T: null, pos: new THREE.Vector3(), yaw: 0, s: -i * 26, fireT: 1 + Math.random() * 2, dead: 0, orbit: Math.random() * 6.28, engine: null, flyS: -i * 120 };
+		return { kind, side, i, air, hp: HP[kind], mesh: null, T: null, pos: new THREE.Vector3(), yaw: 0, s: -i * 26, fireT: 1 + Math.random() * 2, dead: 0, engine: null, flyS: -i * 120, fly: null, at: null, pitch: 0, roll: 0 };
 	}
 
 	// ---------- drawn and in the fight ----------
@@ -91,8 +93,10 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			id: 'mv' + seq++, kind: 'vehicle', faction: u.side, surface: 'metal', name: u.side === 'police' ? 'the police helicopter' : u.side === 'guard' ? `a Meridian Guard ${u.kind === 'apc' ? 'armoured truck' : u.kind === 'heli' ? 'helicopter' : u.kind}` : `an Ironvale ${u.kind}`,
 			bound: { x: 0, y: 0, z: 0, r: Math.max(D.L, D.W) * 0.6 },
 			shapes: () => [{ type: 'box', c: { x: u.pos.x, y: u.pos.y + D.H / 2, z: u.pos.z }, h: [D.W / 2, D.H / 2, D.L / 2], yaw: -u.yaw, part: 'body' }],
+			// (where a lock-on and a seeking spell aim: the middle of the body; combat/target-focus.js)
+			aim: () => ({ x: u.pos.x, y: u.pos.y + D.H * 0.5, z: u.pos.z }),
 			onHit: (blow) => hurt(u, blow),
-			moral: () => ({ hostileTarget: u.side === 'ironvale', lawTarget: u.side !== 'ironvale' }),
+			moral: () => ({ hostileTarget: u.side === 'ironvale' || (u.side === 'guard' && combat.wantedLevel() >= 5), lawTarget: u.side !== 'ironvale' }),
 		};
 		combat.layer.add(u.T);
 		// the police helicopter's searchlight: a beam down to where it is looking, after dark
@@ -142,11 +146,14 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 	}
 	const by = (u) => ({ id: u.T?.id || 'mv', kind: 'hostile', faction: u.side });
 	function engage(u, dt) {
+		const p = u.p;
 		if (u.side === 'police') return;
 		u.fireT -= dt;
 		if (u.fireT > 0 || u.dead) return;
 		const tank = u.kind === 'tank', range = tank ? 320 : u.air ? 260 : 170;
 		const tg = targetFor(u, range);
+		// (the helicopter remembers whom it fights, for its runs and hovers: place())
+		if (u.air) u.at = tg ? { x: tg.pos.x, z: tg.pos.z, t: p.t } : null;
 		if (!tg) { u.fireT = 0.8; return; }
 		const from = u.pos.clone().add(_v.set(0, DIMS[u.kind].H + (u.air ? -1.5 : 0.2), 0)), dir = tg.pos.clone().sub(from).normalize();
 		if (tank) {
@@ -172,7 +179,8 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		}
 		combat.fx.muzzle(from, dir, 0);
 		oneShot('gun', distK(u) * 0.8);
-		u.fireT = (u.air ? 0.5 : 0.7) + Math.random() * 0.6;
+		// (on an attack run the guns hardly pause)
+		u.fireT = (u.air ? (u.fly?.mode === 'run' ? 0.22 : 0.5) : 0.7) + Math.random() * 0.6;
 	}
 	const distK = (u) => { const e = eye(); return e ? Math.max(0, 1 - Math.hypot(e.x - u.pos.x, e.z - u.pos.z) / 600) : 0; };
 
@@ -233,12 +241,29 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			}
 		}
 		for (const u of p.units) {
-			if (u.dead) { u.dead += dt; if (u.mesh) { if (!u.burnt) { u.burnt = true; u.mesh.userData.burn?.(); } if (Math.random() < dt * 4) combat.fx.smokePuff(u.pos.clone().add(_v.set(0, 2, 0)), 0.1, 3, 6); } if (u.dead > 40) hide(u); continue; }
+			if (u.dead) {
+				u.dead += dt;
+				if (u.mesh) {
+					if (!u.burnt) { u.burnt = true; u.mesh.userData.burn?.(); }
+					if (Math.random() < dt * 4) combat.fx.smokePuff(u.pos.clone().add(_v.set(0, 2, 0)), 0.1, 3, 6);
+					// a downed aircraft falls: the helicopter spinning on its way down, and bursts where it hits
+					if (u.air && !u.down) {
+						const g = ground(u.pos.x, u.pos.z);
+						u.fallV = (u.fallV || 0) + 7 * dt;
+						u.pos.y -= u.fallV * dt; u.pos.x += Math.sin(u.yaw) * 9 * dt; u.pos.z += Math.cos(u.yaw) * 9 * dt;
+						if (u.kind === 'heli') { u.yaw += dt * 2.4; u.roll = Math.min(0.6, (u.roll || 0) + dt * 0.25); u.pitch = Math.min(0.5, (u.pitch || 0) + dt * 0.2); u.mesh.userData.pose?.({ spin: 0.5, dt }); }
+						if (u.pos.y <= g + 0.5) { u.pos.y = g + 0.5; u.down = true; combat.fx.explosion(u.pos.clone().add(_v.set(0, 1.5, 0)), u.kind === 'heli' ? 4.5 : 5); oneShot('crash', 1); combat.blast?.(u.pos.clone(), 8, 120, by(u)); }
+						u.mesh.position.copy(u.pos); u.mesh.rotation.set(u.pitch || 0, u.yaw, u.roll || 0, 'YXZ');
+					}
+				}
+				if (u.dead > 40) hide(u);
+				continue;
+			}
 			place(p, u, dt);
 			if (shownNow && !u.mesh) show(u);
 			else if (!shownNow && u.mesh) hide(u);
 			if (u.mesh) {
-				u.mesh.position.copy(u.pos); u.mesh.rotation.set(u.bank || 0, u.yaw, 0, 'YXZ');
+				u.mesh.position.copy(u.pos); u.mesh.rotation.set(u.pitch || u.bank || 0, u.yaw, u.roll || 0, 'YXZ');
 				const U = u.mesh.userData;
 				// its moving parts: the rotors turning, the jet clean, tracks and wheels running with the ground covered
 				const run = u.last ? Math.hypot(u.pos.x - u.last.x, u.pos.z - u.last.z) : 0;
@@ -272,16 +297,19 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 				u.pos.set(x, ground(x, z) + 160, z); u.yaw = Math.atan2(dx, dz); u.bank = 0;
 				return;
 			}
-			if (p.state === 'onscene' || p.state === 'boarding') {
-				// circling the scene (the police tighter and lower, its nose in toward it)
+			if (p.state === 'onscene' || p.state === 'boarding' || p.state === 'leaving') {
+				// flying the fight (flight.js heliTacticStep): round the scene, or whom it fights
+				// when it has someone in its sights; the police tight, low and nose-in. Leaving, it
+				// turns for home and goes.
 				const cop = p.side === 'police';
-				u.orbit += dt * (cop ? 0.22 : 0.18);
-				const r = cop ? 65 : 90 + u.i * 30, x = p.to.x + Math.cos(u.orbit) * r, z = p.to.z + Math.sin(u.orbit) * r;
-				u.pos.set(x, ground(x, z) + (cop ? 55 : 70 + u.i * 12), z); u.yaw = u.orbit + Math.PI + (cop ? -0.6 : 0); u.bank = -0.25;
+				if (!u.fly) u.fly = heliAirState(u.pos.x, u.pos.y, u.pos.z, u.yaw);
+				const at = u.at && p.t - u.at.t < 4 && !cop ? u.at : p.to;
+				heliTacticStep(u.fly, at, Math.min(dt, 0.1), ground, { tight: cop, i: u.i, depart: p.state === 'leaving' ? p.from : null });
+				u.pos.copy(u.fly.pos); u.yaw = u.fly.yaw; u.pitch = u.fly.pitch; u.roll = u.fly.roll; u.bank = 0;
 				return;
 			}
 			const s = Math.max(0, Math.min(L, u.flyS)), x = p.from.x + dx / L * s, z = p.from.z + dz / L * s;
-			u.pos.set(x, ground(x, z) + Math.min(80, 10 + s * 0.4), z); u.yaw = Math.atan2(dx, dz) + (p.state === 'leaving' ? Math.PI : 0); u.bank = 0;
+			u.pos.set(x, ground(x, z) + Math.min(80, 10 + s * 0.4), z); u.yaw = Math.atan2(dx, dz); u.bank = 0; u.pitch = 0.14; u.roll = 0;
 			return;
 		}
 		if (!p.route) return;
