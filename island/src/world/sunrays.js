@@ -287,9 +287,8 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 	function probe(W, x, z) {
 		let canopy = 0, tall = 0;
 		const city = W.city;
-		if (city?.treesNear && W.bayArea?.loaded?.()) {
-			let n = 0, r = 0;
-			for (const t of city.treesNear(x, z, 32)) if (!t.shrub && !t.fern && t.h > 7) { n++; if (t.cone && t.h > 20) r++; }
+		if (city?.treeTally && W.bayArea?.loaded?.()) {
+			const { tall: n, cones: r } = city.treeTally(x, z, 32);          // (counted, not listed: city.js)
 			canopy = ss(n, 1, 8);
 			tall = Math.min(1, r / 5);
 		}

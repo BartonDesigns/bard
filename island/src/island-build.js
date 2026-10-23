@@ -47,6 +47,8 @@ import { bayUniforms, createBayArea } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
+import { prepareLofts } from './vehicles/fleet.js';
+import { prepareDecalSlots } from './signage/cars.js';
 import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
@@ -596,6 +598,12 @@ export async function islandBuild(iw, params) {
 			await yieldBuild('Raising the city');
 			iw.world.city.update(camera, 0);
 			if (!iw.world.city.busy()) break;
+		}
+		// the cars' far lofts and their decal slots too: built on a kind's first sighting, each
+		// took a frame out in the street (vehicles/fleet.js, signage/cars.js)
+		for (const t0 = performance.now(); performance.now() - t0 < 4000;) {
+			await yieldBuild('Building the cars');
+			if (prepareLofts(8) && prepareDecalSlots(8)) break;
 		}
 	}
 	await shaderWarm.all({ budget: 2500 });

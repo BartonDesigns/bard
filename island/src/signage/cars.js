@@ -26,6 +26,7 @@ import { systemFor } from './systems.js';
 import { artReady } from './art.js';
 import { denied } from '../economy/establishments.js';
 import { GFX_PHONE } from '../world/device.js';
+import { runAll, runSteps } from '../world/buildslice.js';
 
 const PHONE = GFX_PHONE;
 
@@ -124,7 +125,9 @@ function marksIn() {
 const PROF = new Map();
 // kit: a real model's (vehicles/models.js modelKit: its parts' geometry and box), sampled in its
 // place; one profile a kind (the near and middle models are the same shape)
-export function bodyProfile(kind, kit = null) {
+export function bodyProfile(kind, kit = null) { return runAll(bodyProfileSteps(kind, kit)); }
+// (the same in steps: a real model's is sampled a frame's share at a time as it comes in, pumpSlots)
+export function* bodyProfileSteps(kind, kit = null) {
 	const pk = kit ? kind + ':model' : kind;
 	if (PROF.has(pk)) return PROF.get(pk);
 	const spec = specOf(kind), b = kit?.box;
@@ -141,6 +144,7 @@ export function bodyProfile(kind, kit = null) {
 		const n = idx ? idx.count : p.count, v = (k) => (idx ? idx.getX(k) : k);
 		const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), Q = new THREE.Vector3();
 		for (let t = 0; t + 2 < n; t += 3) {
+			if (t && (t % 3072) === 0) yield;
 			A.fromBufferAttribute(p, v(t)); B.fromBufferAttribute(p, v(t + 1)); C.fromBufferAttribute(p, v(t + 2));
 			const big = Math.max(A.distanceTo(B), B.distanceTo(C), C.distanceTo(A)), m = Math.min(12, Math.max(1, Math.ceil(big / 0.04)));
 			for (let i = 0; i <= m; i++) for (let j = 0; j <= m - i; j++) {
@@ -194,11 +198,34 @@ function bendOf(P, L, front = false) {
 	const l = or(t(-0.5, 0)), r = or(t(0.5, 0)), lo = or(t(0, -0.5)), hi = or(t(0, 0.5));
 	return [c, r - l, 2 * (l + r - 2 * c), hi - lo];
 }
+// the slots of every kind's loft, worked out ahead behind the loading card a kind or two at a
+// time (island-build.js): on a kind's first sighting the loft was sampled whole, a frame gone
+// (a real model's are sampled from the model as it comes in). true once they are all in.
+export function prepareDecalSlots(ms = 6) {
+	const t0 = performance.now(), plate = systemFor(ATLAS_LOCALE || 'us-ca').plate;
+	for (const kind of Object.keys(SPEC)) {
+		if (SLOTS.has(kind + plate)) continue;
+		slotsOf(kind, plate, null);
+		if (performance.now() - t0 > ms) return false;
+	}
+	return true;
+}
 // the slots of a kind as it is drawn: by its loft, or (kit) its model
 const SLOTS_MODEL = new Map();
+// a real model's profile under way (bodyProfileSteps), by kind: worked out a frame's share at a
+// time from begin(); its cars wear the loft's slots meanwhile (sampling a model whole was a
+// fifth of a second on a phone the first time one of its kind came close)
+const slotJobs = new Map();
+function pumpSlots(ms) {
+	for (const [k, gen] of slotJobs) { if (runSteps(gen, ms)) slotJobs.delete(k); return; }
+}
 function slotsOf(kind, sysPlate, kit = null) {
 	const key = kind + sysPlate, SL = kit ? SLOTS_MODEL : SLOTS;
 	if (SL.has(key)) return SL.get(key);
+	if (kit && !PROF.has(kind + ':model')) {
+		if (!slotJobs.has(kind)) slotJobs.set(kind, bodyProfileSteps(kind, kit));
+		return slotsOf(kind, sysPlate, null);
+	}
 	const P = bodyProfile(kind, kit), S = P.S, st = { sedan: 0, hatch: 0, sports: 0, crossover: 1, suv: 1, pickup: 1 }[kind] ?? 2;
 	const wide = sysPlate === 'eu' || sysPlate === 'uk', pw = wide ? 0.52 : 0.31, ph = wide ? 0.115 : 0.155;
 	const yR = S.belt * (st < 1.5 ? 0.5 : 0.38), yF = S.belt * 0.27;
@@ -262,7 +289,7 @@ export function createFleetDecals(group, { isPhone = PHONE } = {}) {
 	const glass = createBatch(group, 'glass', LAYER.sticker, A.tex, Math.floor(cap / 3), { phone: isPhone, name: 'car-glass', bend: true });
 	const _o = new THREE.Matrix4();
 	const sysNow = () => systemFor(ATLAS_LOCALE || 'us-ca');
-	function begin() { plates.clear(); vinyl.clear(); glass.clear(); marksIn(); }
+	function begin() { pumpSlots(isPhone ? 2 : 3); plates.clear(); vinyl.clear(); glass.clear(); marksIn(); }
 	function emit(B, M, L, cell, back, seed, bend = null) { if (!cell) return; _o.multiplyMatrices(M, L); B.putMatrix(_o.elements, cell, back, seed, 0, 0, bend); }
 	// one car: its kind, its world matrix, distance squared from the eye; o.seed (anything
 	// stable: an id), o.livery ('police'), o.parked (seed from where it stands); kit, the real

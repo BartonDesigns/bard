@@ -105,9 +105,10 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		for (const b of w.real?.loaded?.() ? w.real.near('boxes', A.x, A.z, R) : []) out.push({ x: b.x, z: b.z, w: b.w, d: b.d, a: b.a || 0, h: (b.wallH || 0) + (b.roofH || 0) * 0.5, kind: b.kind, grid: false, ref: b });
 		const U = w.bayArea?.urbanAt?.(A.x, A.z);
 		if (w.city?.fill && U && [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([u, v]) => (w.bayArea.urbanAt(A.x + u * R * 0.5, A.z + v * R * 0.5)?.u || 0) > 0.1)) {
-			const list = [];
-			// (a gridded town is laid out lot by lot: no further than 700 m, to keep a decision to a frame)
-			try { w.city.fill(A.x, A.z, Math.min(R, 700), list); } catch { /* a town not there */ }
+			// the lots as the city has them laid out round you; only past its set is a gridded town laid
+			// out again lot by lot (no further than 700 m: that alone was a sixth of a second a decision)
+			let list = w.city.lotsNear?.(A.x, A.z, Math.min(R, 700)) || [];
+			if (!list.length) { list = []; try { w.city.fill(A.x, A.z, Math.min(R, 700), list); } catch { /* a town not there */ } }
 			for (const o of list) if (o.w && o.d && o.h > 0.5) out.push({ x: o.x, z: o.z, w: o.w, d: o.d, a: o.a || 0, h: o.h, kind: o.kind, grid: true, ref: o });
 		}
 		return out;
