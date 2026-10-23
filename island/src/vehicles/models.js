@@ -11,7 +11,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { skyEnv, withCarSky, carGlassMaterial, FINISH_GLSL } from '../bay/cars.js';
-import { unfight, layerOffset } from './layers.js';
+import { unfightSteps, layerOffset } from './layers.js';
 import { GFX_PHONE } from '../world/device.js';
 import { shedImage } from '../world/cpucopy.js';
 
@@ -100,19 +100,33 @@ export function wantModel(kind, lod = 'near') {
 	if (!K[lod]) {
 		K[lod] = { ready: false };
 		const file = files[lod === 'near' ? 0 : 1];
-		gltf().loadAsync(url(file)).then((g) => { Object.assign(K[lod], takeApart(g.scene, lod, LAYERED[kind], file), { ready: true }); }).catch((e) => { K[lod].failed = true; console.warn('[vehicles] model', kind, e); });
+		gltf().loadAsync(url(file)).then(async (g) => { Object.assign(K[lod], await takeApart(g.scene, lod, LAYERED[kind], file), { ready: true }); }).catch((e) => { K[lod].failed = true; console.warn('[vehicles] model', kind, e); });
 	}
 	return K[lod].ready ? K[lod] : null;
 }
 export function modelsReady() { return Object.entries(kits).map(([k, K]) => k + ':' + Object.keys(K).filter((l) => K[l].ready).join('/')).join(' '); }
 
-// one geometry per material for the body; the wheels on their own
-function takeApart(scene, lod, layered, file) {
+// one geometry per material for the body; the wheels on their own. Over frames: a model's
+// meshes are read, merged and unfought a frame's share at a time (taken apart whole, a car model
+// coming in was a third of a second's freeze on a phone)
+const STEP_MS = 4;
+const later = () => new Promise((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(r) : setTimeout(r, 0)));
+async function sliced(gen) {
+	let t0 = performance.now();
+	for (;;) {
+		const r = gen.next();
+		if (r.done) return r.value;
+		if (performance.now() - t0 > STEP_MS) { await later(); t0 = performance.now(); }
+	}
+}
+async function takeApart(scene, lod, layered, file) {
 	scene.updateMatrixWorld(true);
 	const body = new Map(), wheels = { L: new Map(), R: new Map(), RL: new Map(), RR: new Map() }, hubs = [];
 	let tris = 0;
-	scene.traverse((o) => {
-		if (!o.isMesh) return;
+	const meshes = [];
+	scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
+	let t0 = performance.now();
+	for (const o of meshes) {
 		let wheel = null;
 		for (let p = o; p; p = p.parent) if (/^wheel(FL|FR|RL|RR)$/.test(p.name)) { wheel = p; break; }
 		const g = o.geometry.clone();
@@ -143,20 +157,24 @@ function takeApart(scene, lod, layered, file) {
 			g.applyMatrix4(o.matrixWorld);
 			add(body, mat, g);
 		}
-	});
-	const parts = [...body.entries()].map(([m, gs]) => part(m, gs, layered, file));
+		if (performance.now() - t0 > STEP_MS) { await later(); t0 = performance.now(); }
+	}
+	const parts = [];
+	for (const [m, gs] of body.entries()) parts.push(await sliced(partSteps(m, gs, layered, file)));
 	const wparts = {};
-	for (const [k, w] of Object.entries(wheels)) wparts[k] = [...w.entries()].map(([m, gs]) => part(m, gs, false, file));
+	for (const [k, w] of Object.entries(wheels)) { wparts[k] = []; for (const [m, gs] of w.entries()) wparts[k].push(await sliced(partSteps(m, gs, false, file))); }
 	const box = new THREE.Box3();
 	for (const p of parts) { p.geo.computeBoundingBox(); box.union(p.geo.boundingBox); }
 	hubs.sort((a, b) => ['wheelFL', 'wheelFR', 'wheelRL', 'wheelRR'].indexOf(a.name) - ['wheelFL', 'wheelFR', 'wheelRL', 'wheelRR'].indexOf(b.name));
 	return { parts, wheels: wparts, hubs: hubs.map((h) => h.p.toArray()), box, tris: Math.round(tris) };
 }
 const add = (map, mat, g) => { const k = mat.name + '|' + (g.attributes.color ? 'c' : '') + (g.attributes.uv ? 'u' : ''); let e = map.get(k); if (!e) map.set(k, e = { mat, gs: [] }); e.gs.push(g); };
-function part(key, e, layered = false, file = null) {
+function* partSteps(key, e, layered = false, file = null) {
 	const gs = e.gs;
 	const geo = gs.length > 1 ? mergeGeometries(gs) || gs[0] : gs[0];
-	if (layered) unfight(geo);
+	yield;
+	if (layered) yield* unfightSteps(geo);
+	yield;
 	const n = e.mat.name;
 	for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) { const t = e.mat[k]; if (!t) continue; halve(t); if (file) shedImage(t, () => pictureAgain(file, n, k), { on: PHONE }); }
 	const role = n === 'paint' ? 'paint' : n === 'glass' ? 'glass' : n === 'lamp' ? 'lamp' : 'solid';

@@ -11,7 +11,8 @@
 
 import * as THREE from 'three';
 import { CLOTH_CAPS, clothUniforms, CLOTH_CONTACT_GLSL } from './cloth-collide.js';
-import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance, armhole } from './garment-tailoring.js';
+import { drapePanels, refineGarmentSurface, finishGarmentEdgesSteps, sleeveDistance, armhole } from './garment-tailoring.js';
+import { runAll } from '../world/buildslice.js';
 import { sleeveEase, waistbandEase, armT, isRibbed, isShirted, drapeOf, hangWidth, neckDrop, necklineY, SLEEVE_POSE_GLSL } from './garment-shape.js';
 import { torsoField, clothPoints, necklineRing, hoodGeometry, collarGeometry, carrierGeometry, bootGeometry, beltGeometry, cargoPocketGeometry } from './garment-kit.js';
 import { patchKit, kitAtlas } from './propkit.js';
@@ -798,7 +799,10 @@ function legCentres(A, p, part, cut) {
 	return (side, y) => { const q = box[side]?.[Math.round(y / DY)]; return q && q[1] - q[0] > 0.03 && q[3] - q[2] > 0.03 ? [(q[0] + q[1]) / 2, (q[2] + q[3]) / 2] : null; };
 }
 
-export function clothGeometry(A, p, o, cut, R) {
+export function clothGeometry(A, p, o, cut, R) { return runAll(clothGeometrySteps(A, p, o, cut, R)); }
+// (the same in steps, a yield every few thousand triangles and between its passes: a body dressed
+// out in the world is spread over frames, people.js)
+export function* clothGeometrySteps(A, p, o, cut, R) {
 	const part = partOf(A), faces = A.cage;
  // Keep shoulder/arm influences across the armhole. Only the legs must stop pulling
  // an untucked torso panel; stripping arm weights left a rigid shoulder above it.
@@ -809,6 +813,7 @@ export function clothGeometry(A, p, o, cut, R) {
 	const hideTop = !!o.outer && !o.outer.open;
 	const c = [0, 0, 0];
 	for (let i = 0; i < faces.length; i += 6) {
+		if (i && (i % 24576) === 0) yield;
 		const tri = [faces[i], faces[i + 2], faces[i + 4]];
 		for (let ax = 0; ax < 3; ax++) c[ax] = (p[tri[0] * 3 + ax] + p[tri[1] * 3 + ax] + p[tri[2] * 3 + ax]) / 3;
 		const k = kinds(tri);
@@ -864,6 +869,7 @@ export function clothGeometry(A, p, o, cut, R) {
 	const n = g.attributes.normal, acc = new Map();
 	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]) || [0, 0, 0]; a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); acc.set(src[i], a); }
 	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]), l = Math.hypot(...a) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); }
+	yield;
 	// then each garment stood off the skin: fitted or loose; wide and baggy legs flare
 	// evenly from the hip to the hem
 	const off = offsets(o), P = g.attributes.position, B = o.bottom;
@@ -936,6 +942,7 @@ export function clothGeometry(A, p, o, cut, R) {
   }
 		K[i] = k;
 	}
+	yield;
 	// the offsets smoothed over the neighbours (a few passes): no steps where one allowance
 	// meets another
 	const nb = new Map(), I2 = g.index.array;
@@ -961,6 +968,7 @@ export function clothGeometry(A, p, o, cut, R) {
 	for (let i = 0; i < P.count; i++) if (src[i] >= 0) { const s = Math.floor(src[i] / 32768); if (s < 3) K[i] = Math.max(K[i], layer.get(src[i] % 32768)[s]); }
 	// (a sleeve stands off all round its arm; the body's cloth less up and down, so hems keep their line)
 	for (let i = 0; i < P.count; i++) if (src[i] >= 0) P.setXYZ(i, P.getX(i) + n.getX(i) * K[i], P.getY(i) + n.getY(i) * K[i] * (SL[i] % 10 < 2 && SL[i] >= 10 && SL[i] < 20 ? 1 : 0.3), P.getZ(i) + n.getZ(i) * K[i]);
+ yield;
  drapePanels(g, o, cut, R);
 	g.computeVertexNormals();
 	// smooth normals across the seams again, after the move
@@ -983,7 +991,9 @@ export function clothGeometry(A, p, o, cut, R) {
  }
  g.setAttribute('cuff',new THREE.BufferAttribute(cuff,1));
  g.setAttribute('sleeve',new THREE.BufferAttribute(sleeve,2));
- const out = finishGarmentEdges(refineCloth() ? refineGarmentSurface(g) : g, o, cut, R);
+ const refined = refineCloth() ? refineGarmentSurface(g) : g;
+ yield;
+ const out = yield* finishGarmentEdgesSteps(refined, o, cut, R);
  // (the sleeve's place and slack kept in two bytes a vertex: t from -1 to 2.2, slack to 35 mm)
  const sa = out.attributes.sleeve, packed = new Uint8Array(sa.count * 2);
  for (let i = 0; i < sa.count; i++) { packed[i * 2] = Math.round(Math.max(0, Math.min(1, (sa.getX(i) + 1) / 3.2)) * 255); packed[i * 2 + 1] = Math.round(Math.max(0, Math.min(1, sa.getY(i) / 0.035)) * 255); }

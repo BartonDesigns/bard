@@ -234,6 +234,13 @@ const AGX_M = [
 const mat3x = (m, v) => [0, 1, 2].map((r) => m[r] * v[0] + m[3 + r] * v[1] + m[6 + r] * v[2]);
 // a low sun's gold (as the dome's shader mixes it)
 const GOLD = new THREE.Color(1.0, 0.8, 0.42), PEACH = new THREE.Color(1.0, 0.56, 0.34);
+// how much of the sky a leaf's waxy face gives back whatever way it turns (world/vegetation.js
+// swayMaterial, and the far crowns' impostors in bay/city.js). A dielectric gives back about
+// 0.05 over the hemisphere, but the sky light on things here runs well under the drawn dome
+// (hemi 0.25 at dusk), so that much turns a tree grey: a fifth of it by day, when the sky is
+// bright and the shade side would go blue, and twice that once the sun is down, when the
+// crowns go a saturated near-black against the sky without it (Josh's 5th recording)
+const LEAF_SHEEN_DAY = 0.011, LEAF_SHEEN_DUSK = 0.022;
 // how much a low light is opened up against the look's darker shade (world/grade.js), and how
 // much of that the full night gives back (dusk wants the most; the night was tuned darker)
 const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
@@ -1089,6 +1096,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 			hemi.groundColor.r += CITY_GROUND.r * cityK; hemi.groundColor.g += CITY_GROUND.g * cityK; hemi.groundColor.b += CITY_GROUND.b * cityK;
 		}
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
+		// (the sky off the leaves' waxy faces, world/vegetation.js swayMaterial: none without a sky)
+		(shared.uLeafSheen ||= { value: 0 }).value = vacuum ? 0 : LEAF_SHEEN_DAY + (LEAF_SHEEN_DUSK - LEAF_SHEEN_DAY) * (1 - dayK);
 		// haze: blue by day so far land stacks up in layers
 		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
 		const rainK = W ? Math.min(1, W.rainHere * 0.6 + gl * 0.3) : 0;
