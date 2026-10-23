@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { contractFor, createFieldContract, advanceContract, contractReward, contractPoint, FIELD_ROLES } from './field-contracts.js';
+import { contractFor, createFieldContract, advanceContract, contractReward, contractPoint, contractSteps, contractCursor, FIELD_ROLES } from './field-contracts.js';
 
 function cacheModel(tier) {
 	const root = new T.Group(), lid = new T.Group();
@@ -35,40 +35,38 @@ function cacheModel(tier) {
 	for (let i = 0; i <= tier; i++) box(root, .035, .09, .025, (i - tier / 2) * .075, .32, .485, trim);
 	return { root, lid, light };
 }
-export function createContracts({ group, mount, arms, squads, recovery, eye, camera, ground, site, eligible, active, down, hint, audio, store }) {
-	let completed = 0, recoveredBefore = false;
-	try { const saved = JSON.parse(store.get('l99-field-contracts') || '{}'); completed = Math.max(0, Math.min(1000, saved.completed | 0)); recoveredBefore = !!saved.recovered; } catch {}
-	const save = () => store.set('l99-field-contracts', JSON.stringify({ completed, recovered: recoveredBefore }));
-	let mission = null, cache = null, rally = null, members = [], pending = false, waveDelay = 0, epoch = 0, unlocked = false, dropId = null, expanded = false, elapsed = 0, message = '';
-	const panel = document.createElement('section'); panel.dataset.fieldContract = ''; panel.dataset.hud = 'left 50';
-	panel.setAttribute('aria-label', 'Field contract');
-	panel.style.cssText = 'display:none;position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));width:min(260px,calc(100vw - 24px));max-width:100%;max-height:calc(100% - 180px);overflow:auto;touch-action:pan-y;padding:10px;box-sizing:border-box;border:1px solid #6b878b;border-radius:10px;background:#102129ed;color:#e8f1f0;font:12px/1.45 var(--bard-body,system-ui,sans-serif);z-index:5;';
-	const title = document.createElement('button'), text = document.createElement('div'), buttons = document.createElement('div');
-	title.type = 'button'; title.style.cssText = 'border:0;background:none;color:inherit;font:600 12px var(--bard-display,system-ui,sans-serif);text-align:left;padding:0;min-height:32px;width:100%;cursor:pointer'; title.onclick = () => { expanded = !expanded; render(); };
-	text.style.cssText = 'margin:5px 0;white-space:pre-line'; buttons.style.cssText = 'display:flex;gap:6px';
-	const make = (label, action) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'min-height:40px;flex:1;border:1px solid #638a93;border-radius:6px;background:#23424b;color:#fff;cursor:pointer;font:600 12px var(--bard-display,system-ui,sans-serif);touch-action:manipulation'; b.onclick = action; buttons.append(b); return b; };
-	const accept = make('Field contracts', () => { if (!active()) return; if (!expanded) { expanded = true; render(); } else start(); });
-	// (folded, on a touch screen it is one round button that opens the brief: ui/touch-skin.js)
-	accept.dataset.cvOpen = '';
-	const cancel = make('Close', () => { if (mission) abort('Contract abandoned. Collected gear stays in your bag.'); else expanded = false; render(); });
-	panel.append(title, text, buttons); mount.append(panel);
-	for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'keydown']) panel.addEventListener(ev, (e) => e.stopPropagation());
+// Field contracts are ordinary quests: the guide's Quests list offers the next one and tracks the
+// one under way (guide/guide-screens.js), and the waypoint, marker and trail show where its
+// current step happens (mark(), read by guide/guide.js). Nothing here stays on screen.
+// how close counts as there, per stage (the same distances update() checks)
+const REACH = { travel: 10, survey: 3, secure: 14, hold: 12, recover: 3, return: 5 };
+export function createContracts({ group, arms, squads, recovery, eye, ground, site, eligible, blocked = () => null, where = () => 'open ground away from towns', active, down, hint, audio, store }) {
+	let completed = 0, recoveredBefore = false, told = false;
+	try { const saved = JSON.parse(store.get('l99-field-contracts') || '{}'); completed = Math.max(0, Math.min(1000, saved.completed | 0)); recoveredBefore = !!saved.recovered; told = !!saved.told || completed > 0; } catch {}
+	const save = () => store.set('l99-field-contracts', JSON.stringify({ completed, recovered: recoveredBefore, told }));
+	let mission = null, cache = null, members = [], pending = false, waveDelay = 0, epoch = 0, unlocked = false, dropId = null;
 	function dispose(o) { if (!o) return; o.removeFromParent(); const gs = new Set(), ms = new Set(); o.traverse((n) => { if (n.geometry) gs.add(n.geometry); for (const m of [n.material].flat().filter(Boolean)) ms.add(m); }); gs.forEach((g) => g.dispose()); ms.forEach((m) => { m.map?.dispose(); m.dispose(); }); }
 	function cleanup() {
 		epoch++; for (const h of members) if (!h.gone) squads.release(h);
-		members = []; pending = false; waveDelay = 0; dispose(cache?.root); dispose(rally); cache = rally = null;
+		members = []; pending = false; waveDelay = 0; dispose(cache?.root); cache = null;
 		if (dropId) recovery.remove(dropId); dropId = null; unlocked = false;
 	}
-	function abort(reason) { if (mission) advanceContract(mission, 'abandon'); cleanup(); mission = null; expanded = false; message = reason || ''; if (reason) hint(reason, 4000, 1); }
-	function start() {
-		if (mission || !active() || !eligible()) return false;
-		const at = site(); if (!at) { message = 'Find open, fairly level ground outside town, then try again.'; render(); return false; }
+	function abort(reason) { if (mission) advanceContract(mission, 'abandon'); cleanup(); mission = null; if (reason) hint(reason, 4000, 1); }
+	// accepting from Quests: { ok, id } or { ok: false, error } saying what to do first
+	function accept() {
+		if (mission) return { ok: false, error: `${mission.def.name} is already under way.` };
+		if (!eligible()) return { ok: false, error: `Field contracts are offered on ${where()}. Head there, then accept.` };
+		const why = blocked(); if (why) return { ok: false, error: `${why} Then accept the contract.` };
+		if (!active()) return { ok: false, error: 'Not right now. Try again in a moment.' };
+		const at = site(); if (!at) return { ok: false, error: 'Find open, fairly level ground outside town, face across it, then try again.' };
 		const p = eye(), id = `mc${completed.toString(36).padStart(5, '0')}`;
 		mission = createFieldContract({ id, completed, site: at, rally: { x: p.x, y: ground(p.x, p.z, p.y), z: p.z } });
 		cache = cacheModel(mission.def.tier); cache.root.position.set(at.x, at.y, at.z); group.add(cache.root);
-		rally = new T.Mesh(new T.RingGeometry(1.2, 1.35, 64), new T.MeshBasicMaterial({ color: 0x78dbb2, side: T.DoubleSide, transparent: true, opacity: .8 })); rally.rotation.x = -Math.PI / 2; rally.position.set(p.x, mission.rally.y + .06, p.z); group.add(rally); rally.visible = false;
-		message = ''; expanded = false; audio.play('accept'); hint(`${mission.def.name}: follow the contract bearing to the supply cache.`, 4000, 1); render(); return true;
+		audio.play('accept'); hint(`${mission.def.name}: follow the marker to the supply cache.`, 4000, 1);
+		return { ok: true, id };
 	}
+	const start = () => accept().ok;
+	function abandon() { if (!mission) return false; abort('Contract abandoned. Collected gear stays in your bag.'); return true; }
 	function spawnWave() {
 		if (!mission || pending || waveDelay > 0) return;
 		const m = mission, token = epoch, roles = m.def.waves[m.wave]; if (!roles) return;
@@ -83,68 +81,72 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	function unlock() {
 		if (unlocked || !mission) return;
 		const m = mission;
-		if (recoveredBefore) { advanceContract(m, 'collected'); hint('You already recovered this contract’s kit. Return to the rally marker for payment.', 4000, 1); return; }
+		if (recoveredBefore) { advanceContract(m, 'collected'); hint('You already recovered this contract’s kit. Follow the marker back to the rally point for payment.', 4000, 1); return; }
 		dropId = recovery.addCache({ id: `${m.id}c`, source: m.id, name: m.def.name, pos: m.site, weapon: { i: m.def.weapon, l: m.def.level, t: m.def.tier } });
 		if (!dropId) { abort('The cache could not open. Please try again.'); return; }
-		unlocked = true; cache.light.color.setHex(0x7ce5be); cache.light.emissive.setHex(0x39bf8b); audio.play('cache'); hint('Cache unlocked. Approach and press E, or tap Take. Return to the rally point for your contract payment.', 5000, 1);
+		unlocked = true; cache.light.color.setHex(0x7ce5be); cache.light.emissive.setHex(0x39bf8b); audio.play('cache'); hint('Cache unlocked. Approach and press E, or tap Take. Then return to the rally point for your payment.', 5000, 1);
 	}
-	function recovered(source) { if (mission && source === mission.id && advanceContract(mission, 'collected')) { recoveredBefore = true; save(); audio.play('accept'); hint('Supplies recovered. Return to the green rally marker.', 3500, 1); } }
+	function recovered(source) { if (mission && source === mission.id && advanceContract(mission, 'collected')) { recoveredBefore = true; save(); audio.play('accept'); hint('Supplies recovered. Follow the marker back to the rally point.', 3500, 1); } }
 	const distance = (a) => Math.hypot(eye().x - a.x, eye().z - a.z);
-	function bearing(a) { const f = camera.getWorldDirection(new T.Vector3()), dx = a.x - eye().x, dz = a.z - eye().z; const angle = Math.atan2(f.x * dz - f.z * dx, f.x * dx + f.z * dz); return Math.abs(angle) < .5 ? 'Ahead' : Math.abs(angle) > 2.5 ? 'Behind' : angle > 0 ? 'Right' : 'Left'; }
-	function render() {
-		panel.style.display = active() && (mission || eligible()) ? 'block' : 'none';
-		title.setAttribute('aria-expanded', String(expanded));
-		panel.classList.toggle('cv-idle', !mission && !expanded);
-		if (!mission) {
-			title.style.display = expanded ? '' : 'none'; text.style.display = expanded ? '' : 'none';
-			const d = contractFor(completed); title.textContent = expanded ? d.name : 'Frontier fieldwork';
-			text.textContent = expanded ? `${d.brief}\nReward: ${d.credits} credits + repair supplies.\n${message}` : message;
-			accept.textContent = expanded ? 'Accept contract' : `Field contracts · ${completed} completed`; accept.style.display = ''; cancel.style.display = expanded ? '' : 'none'; cancel.textContent = 'Close'; return;
-		}
-		const m = mission, target = contractPoint(m);
-		title.style.display = text.style.display = ''; title.textContent = `${m.def.name} ${expanded ? '▴' : '▾'}`;
-		const remaining = members.filter((h) => !h.dead && !h.surrendered && !h.fleeing && !h.restrained).length;
-		const objective = { survey: `Inspect perimeter point ${m.checkpoint + 1}/${m.def.checkpoints}`, hold: `Hold within 12 m · ${Math.ceil(Math.max(0, m.def.holdSeconds - m.hold))}s remaining`, travel: 'Locate the supply cache', secure: `Secure the cache · wave ${m.wave + 1}/${m.def.waves.length}${pending ? ' · incoming' : waveDelay > 0 ? ` · ${Math.ceil(waveDelay)}s` : ` · ${remaining} guards`}`, recover: 'Open cache: approach and take its weapon', return: 'Return to the rally marker' }[m.stage];
-		text.textContent = `${objective}\n${bearing(target)} · ${Math.round(distance(target))} m${expanded ? `\nPayment: ${m.def.credits} credits + repair supplies` : ''}`;
-		accept.style.display = 'none'; cancel.style.display = expanded ? '' : 'none'; cancel.textContent = 'Abandon';
+	const standing = () => members.filter((h) => !h.dead && !h.surrendered && !h.fleeing && !h.restrained).length;
+	// the step under way, in a few words, with what changes as you play it
+	function objective(m) {
+		if (m.stage === 'survey') return `Inspect perimeter point ${m.checkpoint + 1} of ${m.def.checkpoints}`;
+		if (m.stage === 'hold') return `Hold the clearing · ${Math.ceil(Math.max(0, m.def.holdSeconds - m.hold))} s`;
+		if (m.stage === 'secure') return members.length && !pending ? `Drive off the guards · ${standing()} left` : pending || !waveDelay ? 'Secure the cache · squad incoming' : `Secure the cache · squad in ${Math.ceil(waveDelay)} s`;
+		return { travel: 'Reach the supply cache', recover: 'Take the cache’s weapon', return: 'Return to the rally point' }[m.stage] || m.def.name;
+	}
+	// where the current step happens, as the waypoint draws it (ui/waypoint.js)
+	function mark() {
+		const m = mission; if (!m || !REACH[m.stage]) return null;
+		const at = contractPoint(m), steps = contractSteps(m.def), i = Math.min(steps.length - 1, contractCursor(m));
+		return { key: 'contract:' + m.id, x: at.x, y: ground(at.x, at.z, at.y + 2), z: at.z, radius: REACH[m.stage], title: objective(m), detail: `${m.def.name} · step ${i + 1} of ${steps.length}` };
+	}
+	// for the Quests list: the contract under way, else the next one on offer
+	function journal() {
+		const d = mission?.def || contractFor(completed), cursor = mission ? contractCursor(mission) : -1;
+		return {
+			completed, active: !!mission, id: mission?.id || null, offered: !mission && eligible(), where: where(),
+			name: d.name, brief: d.brief, credits: d.credits, cursor: Math.max(0, cursor),
+			steps: contractSteps(d).map((s, i) => ({ text: s.text, state: i < cursor ? 'done' : i === cursor ? 'now' : 'next' })),
+			mark: mark(),
+		};
 	}
 	function update(dt) {
-		elapsed += dt;
-		if (mission) {
-			const m = mission;
-			if (down() || distance(m.site) > 220) { abort(down() ? 'Contract interrupted. Recover and accept another when ready.' : 'You left the contract area. Collected gear remains yours.'); render(); return; }
-			if (active()) {
-				if (m.stage === 'travel' && distance(m.site) < 11) { advanceContract(m, 'arrive'); if (m.stage === 'secure') { waveDelay = 4; audio.play('wave'); } }
-				if (m.stage === 'survey') {
-					const at = contractPoint(m);
-					if (distance(at) < 3 && Math.abs(eye().y - ground(at.x, at.z, at.y + 2) - 1.68) < 3) {
-						advanceContract(m, 'inspected'); audio.play('accept');
-						if (m.stage === 'secure') waveDelay = 3;
-					}
-				}
-				if (m.stage === 'hold') {
-					if (distance(m.site) < 12 && Math.abs(eye().y - m.site.y - 1.68) < 3) m.hold += dt;
-					else m.hold = 0;
-					advanceContract(m, 'held');
-				}
-				if (m.stage === 'secure') {
-					waveDelay = Math.max(0, waveDelay - dt);
-					if (!pending && !members.length && !waveDelay) spawnWave();
-					else if (!pending && members.length && members.every((h) => h.dead || h.surrendered || h.fleeing || h.restrained)) {
-						// Fallen bodies and recovery loot remain; their normal pools own cleanup.
-						members = []; advanceContract(m, 'cleared'); if (m.stage === 'secure') waveDelay = 5;
-					} else if (!pending && members.some((h) => h.gone)) { abort('The guards left the encounter area. Contract cancelled.'); render(); return; }
-				}
-				if (m.stage === 'recover') unlock();
-				if (m.stage === 'return' && distance(m.rally) < 5 && Math.abs(eye().y - m.rally.y - 1.68) < 3) {
-					const result = arms.apply(contractReward(m));
-					if (result.ok) { advanceContract(m, 'paid'); completed++; recoveredBefore = false; save(); audio.play('complete'); cleanup(); mission = null; expanded = false; message = `${m.def.name} complete · +${m.def.credits} credits. Next contract unlocked.`; hint(message, 5000, 2); }
+		// (said once: where to find them, the first time you stand where they are offered)
+		if (!mission && !told && active() && eligible()) { told = true; save(); hint('Field contracts are offered out here. Open the Guide, then Quests, to take one.', 6000, 1); }
+		if (!mission) return;
+		const m = mission;
+		if (down() || distance(m.site) > 220) { abort(down() ? 'Contract interrupted. Recover and accept another from Quests when ready.' : 'You left the contract area. Collected gear remains yours.'); return; }
+		if (active()) {
+			if (m.stage === 'travel' && distance(m.site) < 11) { advanceContract(m, 'arrive'); if (m.stage === 'secure') { waveDelay = 4; audio.play('wave'); } }
+			if (m.stage === 'survey') {
+				const at = contractPoint(m);
+				if (distance(at) < 3 && Math.abs(eye().y - ground(at.x, at.z, at.y + 2) - 1.68) < 3) {
+					advanceContract(m, 'inspected'); audio.play('accept');
+					if (m.stage === 'secure') waveDelay = 3;
 				}
 			}
-			if (cache) cache.lid.rotation.x += ((unlocked ? -1.85 : 0) - cache.lid.rotation.x) * Math.min(1, dt * 4);
-			if (rally) { const at = mission && contractPoint(mission); if (at) rally.position.set(at.x, ground(at.x, at.z, at.y + 2) + .06, at.z); rally.visible = ['return', 'survey', 'hold'].includes(mission?.stage); rally.material.opacity = .65 + Math.sin(elapsed * 2) * .15; }
+			if (m.stage === 'hold') {
+				if (distance(m.site) < 12 && Math.abs(eye().y - m.site.y - 1.68) < 3) m.hold += dt;
+				else m.hold = 0;
+				advanceContract(m, 'held');
+			}
+			if (m.stage === 'secure') {
+				waveDelay = Math.max(0, waveDelay - dt);
+				if (!pending && !members.length && !waveDelay) spawnWave();
+				else if (!pending && members.length && members.every((h) => h.dead || h.surrendered || h.fleeing || h.restrained)) {
+					// Fallen bodies and recovery loot remain; their normal pools own cleanup.
+					members = []; advanceContract(m, 'cleared'); if (m.stage === 'secure') waveDelay = 5;
+				} else if (!pending && members.some((h) => h.gone)) { abort('The guards left the encounter area. Contract cancelled.'); return; }
+			}
+			if (m.stage === 'recover') unlock();
+			if (m.stage === 'return' && distance(m.rally) < 5 && Math.abs(eye().y - m.rally.y - 1.68) < 3) {
+				const result = arms.apply(contractReward(m));
+				if (result.ok) { advanceContract(m, 'paid'); completed++; recoveredBefore = false; save(); audio.play('complete'); cleanup(); mission = null; hint(`${m.def.name} complete · +${m.def.credits} credits. The next contract is in Quests.`, 5000, 2); }
+			}
 		}
-		render();
+		if (cache) cache.lid.rotation.x += ((unlocked ? -1.85 : 0) - cache.lid.rotation.x) * Math.min(1, dt * 4);
 	}
-	return { update, start, recovered, clear: () => { abort(); message = ''; panel.style.display = 'none'; }, info: () => ({ completed, mission, pending, waveDelay, enemies: members.map((h) => ({ id: h.id, role: h.specialty?.name, dead: !!h.dead, surrendered: !!h.surrendered })), unlocked }) };
+	return { update, accept, start, abandon, recovered, mark, journal, clear: () => abort(), info: () => ({ completed, mission, pending, waveDelay, enemies: members.map((h) => ({ id: h.id, role: h.specialty?.name, dead: !!h.dead, surrendered: !!h.surrendered })), unlocked }) };
 }

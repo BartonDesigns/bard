@@ -54,3 +54,25 @@ export function contractPoint(m) {
 	const angle = m.checkpoint * Math.PI * 2 / m.def.checkpoints;
 	return { x: m.site.x + Math.cos(angle) * 8, y: m.site.y, z: m.site.z + Math.sin(angle) * 8 };
 }
+
+// What the Quests list shows of a contract (combat/contracts-view.js journal()).
+const ROLE_PLURAL = { marksman: 'marksmen' };
+function roleWords(roles) {
+	const n = {};
+	for (const r of roles) n[r] = (n[r] || 0) + 1;
+	return Object.entries(n).map(([r, k]) => { const w = FIELD_ROLES[r].name.toLowerCase(); return k === 1 ? `a ${w}` : `${k === 2 ? 'two' : k} ${ROLE_PLURAL[r] || w + 's'}`; }).join(' and ');
+}
+// every step of a contract, in order (advanceContract above walks the same way)
+export function contractSteps(d) {
+	const list = [{ stage: 'travel', text: 'Reach the supply cache' }];
+	for (let i = 0; i < (d.checkpoints || 0); i++) list.push({ stage: 'survey', text: `Inspect perimeter point ${i + 1} of ${d.checkpoints}` });
+	d.waves.forEach((roles) => list.push({ stage: 'secure', text: `Drive off ${roleWords(roles)}` }));
+	if (d.holdSeconds) list.push({ stage: 'hold', text: `Hold the clearing for ${d.holdSeconds} seconds` });
+	list.push({ stage: 'recover', text: 'Take the cache’s weapon' }, { stage: 'return', text: 'Return to the rally point for payment' });
+	return list;
+}
+// which of those steps a contract is on (the length of the list once it is complete)
+export function contractCursor(m) {
+	const c = m.def.checkpoints || 0, w = m.def.waves.length, h = m.def.holdSeconds ? 1 : 0;
+	return { travel: 0, survey: 1 + m.checkpoint, secure: 1 + c + m.wave, hold: 1 + c + w, recover: 1 + c + w + h, return: 2 + c + w + h }[m.stage] ?? 3 + c + w + h;
+}

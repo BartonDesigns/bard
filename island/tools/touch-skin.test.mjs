@@ -20,7 +20,7 @@ const CONTROLS = [
 	['Cast', 'Cast (R)', 'cast'], ['Strike!', 'Strike! (R)', 'hook'], ['Reel in', 'Reel in (R)', 'reel'], ['Hold to reel', '', 'reel'],
 	['Talk (Enter)', '💬 Talk', 'talk'], ['Talk (Enter)', '🤝 Help', 'help'], ['Use what you hold (U)', '🩹 Use', 'use'], ['Open the door (E)', '🚪 Open door', 'door'],
 	['Pick up the shell (E)', '🐚', 'pickup'], ['Throw it (T)', 'Throw', 'throw'], ['Put it down (E)', 'Put down', 'putdown'], ['Tattoo studio (T)', '', 'pen'],
-	['Field contracts · 0 completed', '', 'contract'], ['Warp to a planet, moon, the Sun or the black hole (J)', '⤳ Warp', 'warp'],
+	['Warp to a planet, moon, the Sun or the black hole (J)', '⤳ Warp', 'warp'],
 ];
 
 test('every touch control has a glyph, and every glyph a drawing', () => {

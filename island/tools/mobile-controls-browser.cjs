@@ -29,7 +29,7 @@ const hud = fs.readFileSync(path.join(root, 'island/src/combat/hud.js'), 'utf8')
    const chip=await p.evaluate(()=>{const r=document.querySelector('[data-hud-text="quest"]').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};});
    for(const a of rects){if(touch)assert.ok(a.x+a.w<=chip.x||chip.x+chip.w<=a.x||a.y+a.h<=chip.y||chip.y+chip.h<=a.y,`${a.n} covers the quest text at ${width}x${height}`);assert.ok(a.x>=0&&a.y>=0&&a.x+a.w<=width&&a.y+a.h<=height,JSON.stringify(a));for(const b of rects){if(a===b)continue;assert.ok(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y,`${a.n} overlaps ${b.n} at ${width}x${height}`);}}
    // no words on the HUD's buttons: each shows a glyph, keeps its name, and is 44 px or more
-   const words=await p.evaluate(()=>[...document.querySelectorAll('#l99-island-mount button')].filter(b=>b.offsetParent&&!b.closest('.l99-rail')&&!b.closest('[data-field-contract]')&&!b.hasAttribute('data-hud-text')).map(b=>({n:b.getAttribute('aria-label'),g:b.dataset.glyph,f:getComputedStyle(b).fontSize,w:b.getBoundingClientRect().width,after:getComputedStyle(b,'::after').content,kids:[...b.children].filter(c=>getComputedStyle(c).display!=='none').length})));
+   const words=await p.evaluate(()=>[...document.querySelectorAll('#l99-island-mount button')].filter(b=>b.offsetParent&&!b.closest('.l99-rail')&&!b.hasAttribute('data-hud-text')).map(b=>({n:b.getAttribute('aria-label'),g:b.dataset.glyph,f:getComputedStyle(b).fontSize,w:b.getBoundingClientRect().width,after:getComputedStyle(b,'::after').content,kids:[...b.children].filter(c=>getComputedStyle(c).display!=='none').length})));
    for(const b of words){assert.ok(b.n,'a button without a name');assert.ok(b.g&&b.f==='0px',`words showing on ${b.n}`);assert.ok((b.after==='none'||b.after==='normal')&&!b.kids,`a caption or label element showing on ${b.n}`);assert.ok(b.w>=44,`${b.n} under 44 px`);}
    await p.screenshot({path:path.join(out,`${width}x${height}.png`)});
    await more.click(); await p.screenshot({path:path.join(out,`${width}x${height}-controls.png`)}); assert.equal(await more.getAttribute('aria-expanded'),'true');
@@ -41,14 +41,13 @@ const hud = fs.readFileSync(path.join(root, 'island/src/combat/hud.js'), 'utf8')
   }else{assert.equal(await more.isVisible(),false);assert.equal(await p.getByRole('button',{name:'Gear and trade (I)',exact:true}).isVisible(),true);results.push({width,height,touch,desktopRail:true});}
   await p.addScriptTag({content:contractCode});
   await p.evaluate(()=>{window.contracts=ContractModule.createContracts({mount:ui.mount,group:{add(){}},arms:{},squads:{release(){}},recovery:{},eye:()=>({x:0,y:1.68,z:0}),camera:{getWorldDirection:v=>v.set(0,0,-1)},ground:()=>0,site:()=>({x:30,y:0,z:0}),eligible:()=>true,active:()=>true,down:()=>false,hint(){},audio:{play(){}},store:{get:()=>null,set(){}}});contracts.update(0);});
-  const panel=p.locator('[data-field-contract]');
-  assert.ok((await panel.boundingBox()).height<=66,JSON.stringify(await panel.boundingBox()));
-  await panel.getByRole('button',{name:/Field contracts/}).click();await panel.getByRole('button',{name:'Accept contract',exact:true}).click();
-  assert.equal(await panel.getByRole('button',{name:'Abandon',exact:true}).isVisible(),false);
-  assert.ok((await panel.boundingBox()).height<=120);
-  await panel.locator(':scope > button').click();await panel.getByRole('button',{name:'Abandon',exact:true}).click();
+  // (field contracts keep no window on screen: they are quests, offered and tracked in Quests)
+  assert.equal(await p.locator('[data-field-contract]').count(),0);
+  assert.equal((await p.evaluate(()=>contracts.accept())).ok,true);
+  assert.equal(await p.evaluate(()=>{contracts.update(0);return contracts.mark().title;}),'Reach the supply cache');
+  assert.equal(await p.locator('[data-field-contract]').count(),0);
+  assert.equal(await p.evaluate(()=>contracts.abandon()),true);
   assert.equal(await p.evaluate(()=>contracts.info().mission),null);
-  assert.ok((await panel.boundingBox()).height<=66,JSON.stringify(await panel.boundingBox()));
   await p.screenshot({path:path.join(out,`${width}x${height}.png`)});
   assert.deepEqual(errors,[]);await context.close();
  }

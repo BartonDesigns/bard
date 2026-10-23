@@ -125,6 +125,48 @@ export function guideQuestCard(gd, q, bodyKey, context) {
 	return card;
 }
 
+// a field contract (combat/contracts-view.js): the one under way, with its steps and the way to
+// the current one, or the next on offer with the plan and its pay
+function guideContractCard(gd, field) {
+	const { api, progressBar, QC, qcss, qel, questPill, setPinned, setWayPrefs, show, showQuests,
+		stepRow, trackButton, waypointMark, wayPrefs } = gd;
+	const C = api.combat?.contracts, color = field.active ? QC.teal : field.offered ? QC.amber : QC.grey;
+	const card = qel('div', qcss.card + `border-left:3px solid ${color};`);
+	const top = qel('div', qcss.row);
+	top.append(questPill(field.active ? 'active' : field.offered ? 'offered' : 'out of town', color), qel('span', qcss.meta + 'margin-left:auto;', `${field.credits} credits + repair kit`));
+	card.append(top, qel('div', qcss.title, field.name), qel('div', qcss.body, field.active || field.offered ? field.brief : `${field.brief} Offered on ${field.where}.`));
+	if (field.active) card.append(progressBar(field.cursor, field.steps.length, color));
+	const steps = qel('div', 'display:flex;flex-direction:column;gap:4px;');
+	for (const step of field.steps) steps.append(stepRow(step.state, step.text, step.state === 'now' ? field.mark : null));
+	card.append(steps);
+	const row = qel('div', qcss.row + 'margin-top:2px;');
+	if (field.active) {
+		if (field.mark) row.append(trackButton(null, 'contract', field.id));
+		const quit = qel('button', qcss.ghost + 'margin-left:auto;', 'Abandon contract');
+		quit.onclick = () => { C?.abandon(); api.waypoint?.set(waypointMark()); showQuests(); };
+		row.append(quit);
+	} else {
+		const accept = qel('button', qcss.primary, 'Accept contract');
+		// (accepting tracks it: the panel closes and the marker and trail show the way to the cache)
+		accept.onclick = () => {
+			const typed = document.activeElement;
+			if (/INPUT|TEXTAREA/.test(typed?.tagName || '')) typed.blur();
+			const result = C?.accept() || { ok: false, error: 'Field contracts are not ready yet.' };
+			if (!result.ok) { why.textContent = result.error; why.style.display = ''; return; }
+			setPinned({ kind: 'contract', id: result.id });
+			if (!wayPrefs.waypoint && !wayPrefs.wayfinder) setWayPrefs({ waypoint: true });
+			api.waypoint?.set(waypointMark());
+			show(false);
+		};
+		row.append(accept);
+	}
+	// (what to do first, when it cannot start here: said under the button, where you tapped)
+	const why = qel('div', qcss.meta + `color:${QC.amber};display:none;`);
+	why.setAttribute('role', 'status');
+	card.append(row, why);
+	return card;
+}
+
 export function guideQuests(gd) {
 	const { api, bearing, book, btnCss, endTalk, explorePlace, find, folded, gatherTitle, journal, log,
 		meetWhen, progressBar, QC, qcss, qel, questCard, questPill, QUESTS, resetView, say, section, show,
@@ -144,6 +186,13 @@ export function guideQuests(gd) {
 	for (const q of [...live, ...offers]) log.append(questCard(q, bodyKey, context));
 	if (done.length) { const inner = folded('Completed', done.length); for (const q of done) inner.append(questCard(q, bodyKey, context)); }
 	if (stories.status().error) say(stories.status().error, 'note');
+
+	// ----- field contracts: the one under way, else the next on offer out of town
+	const field = api.combat?.contracts?.journal?.();
+	if (field) {
+		section('Field contracts', field.active ? `1 active · ${field.completed} completed` : `${field.completed} completed`);
+		log.append(guideContractCard(gd, field));
+	}
 
 	// ----- meetings you agreed or were offered
 	const meetings = (book()?.list(bodyKey) || []).filter(a => a.status !== 'cancelled').sort((a, b) => b.due - a.due).slice(0, 8);
