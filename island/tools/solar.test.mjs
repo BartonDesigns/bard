@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createSky } from '../src/world/sky.js';
 import { climateNow } from '../src/region/climate.js';
-import { BAY_LATITUDE, solarDeclination, solarDaylight, solarDate, solarTimes, solarDirection, advanceSolarClock } from '../src/world/solar.js';
+import { BAY_LATITUDE, BAY_LONGITUDE, solarDeclination, solarDaylight, solarDate, solarTimes, solarDirection, advanceSolarClock, clockZone, wrapHours } from '../src/world/solar.js';
 
 const RAD = Math.PI / 180;
 const near = (actual, expected, tolerance = 1e-10) => assert.ok(Math.abs(actual - expected) < tolerance, `${actual} != ${expected}`);
@@ -139,4 +139,67 @@ test('a native island without a globe retains Bay latitude and finite light unif
 		assert.ok(Number.isFinite(sky.sun.intensity));
 		assert.ok(Number.isFinite(sky.hemi.intensity));
 	}
+});
+
+test('the clock is the hour where you are: an hour on for each 15° east of the Bay', () => {
+	near(clockZone(BAY_LONGITUDE), 0);
+	near(clockZone(-74.0), (122.4 - 74.0) / 15);           // New York, about three hours on
+	near(clockZone(139.65), (139.65 + 122.4) / 15 - 24);   // Tokyo: 17.5 hours on is 6.5 back
+	near(clockZone(180), clockZone(-180));
+	for (let lon = -180; lon <= 180; lon += 7.5) { const z = clockZone(lon); assert.ok(z > -12 - 1e-9 && z <= 12 + 1e-9, `${lon}`); }
+	near(wrapHours(-1), 23); near(wrapHours(25), 1);
+});
+
+test('travel carries the Bay\'s hour: Tokyo is in the night the globe shows from orbit, and back home the hour is the Bay\'s', () => {
+	const previousLocation = globalThis.location;
+	try {
+		globalThis.location = { search: '?date=2026-10-23' };
+		let lat = BAY_LATITUDE, lon = BAY_LONGITUDE;
+		const scene = new THREE.Scene(), shared = {
+			uSunDir: { value: new THREE.Vector3() }, uSunColor: { value: new THREE.Color() },
+			uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() },
+			uTime: { value: 0 }, uHigh: { value: 0 }, uAmbient: { value: new THREE.Color() },
+			uWindDir: { value: new THREE.Vector2(1, 0) },
+		};
+		const sky = createSky(scene, shared, { getPixelRatio: () => 1, toneMapping: THREE.AgXToneMapping }, { latitude: () => lat, longitude: () => lon });
+		const focus = new THREE.Vector3();
+		sky.state.hours = 13.5;
+		sky.update(0, focus);
+		near(sky.state.hours, 13.5, 1e-9);
+		assert.ok(shared.uSunDir.value.y > 0.3, 'an afternoon on the Bay');
+		const bayMoon = sky.moon().lit;
+		// to Tokyo, at the same instant: before dawn there
+		lat = 35.68; lon = 139.65;
+		sky.update(0, focus);
+		near(sky.state.hours, wrapHours(13.5 + clockZone(139.65)), 1e-9);
+		assert.ok(sky.state.hours > 6 && sky.state.hours < 8);
+		assert.ok(shared.uSunDir.value.y < 0.05, `the sun is down or just rising in Tokyo: ${shared.uSunDir.value.y}`);
+		near(sky.bayHours(), 13.5, 1e-9);
+		near(sky.moon().lit, bayMoon, 1e-6);
+		// the sun there is where the Bay's hour puts it at that longitude: the hour angle runs on by the longitude
+		const S = sky.state.sun, here = solarDirection(35.68, S.dec, 13.5 + (139.65 + 122.4) / 15, S.noon);
+		near(shared.uSunDir.value.x, here.x, 1e-9); near(shared.uSunDir.value.y, here.y, 1e-9); near(shared.uSunDir.value.z, here.z, 1e-9);
+		// an hour set while there (the panel, a spell) is the hour there, and it is kept
+		sky.state.hours = 20;
+		sky.update(0, focus);
+		near(sky.state.hours, 20, 1e-9);
+		near(sky.bayHours(), wrapHours(20 - clockZone(139.65)), 1e-9);
+		// home again: the Bay's hour
+		lat = BAY_LATITUDE; lon = BAY_LONGITUDE;
+		sky.update(0, focus);
+		near(sky.state.hours, wrapHours(20 - clockZone(139.65)), 1e-9);
+		// a link's hour for a place you are about to go to is that place's hour once you are there
+		sky.setLocalHours(9, 2.35);
+		lat = 48.86; lon = 2.35;
+		sky.update(0, focus);
+		near(sky.state.hours, 9, 1e-9);
+		// a host's Bay hour, as the hour here
+		sky.setBayHours(12);
+		near(sky.state.hours, wrapHours(12 + clockZone(2.35)), 1e-9);
+		near(sky.hereFromBay(12), sky.state.hours, 1e-9);
+		// the clock still runs forward wherever you are
+		const h0 = sky.state.hours;
+		sky.update(1, focus);
+		assert.ok(((sky.state.hours - h0 + 24) % 24) > 0);
+	} finally { globalThis.location = previousLocation; }
 });

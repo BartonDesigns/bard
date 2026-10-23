@@ -114,7 +114,9 @@ test('a jump far off works the water again from the ground under the new place',
 	assert.ok(gen.version() > v, 'the water drawn from it hears of it');
 	// (earth/globe.js moves the frame on a jump and on a far rebase; bay/water.js lets go of its ribbons and carving)
 	const g = fs.readFileSync(new URL('../src/earth/globe.js', import.meta.url), 'utf8');
-	assert.equal(g.match(/towns\.reset\(\); world\(\)\?\.water\?\.reframe\?\.\(\);/g)?.length, 3);
+	// (a jump, and a far place rebased as you travel on: its ground moves under the same metres too)
+	assert.match(g, /function reframe\(bayBack\) \{[\s\S]{0,800}towns\.reset\(\); world\(\)\?\.water\?\.reframe\?\.\(\);/);
+	assert.match(g, /if \(moved\) world\(\)\?\.water\?\.reframe\?\.\(\);/);
 	const w = fs.readFileSync(new URL('../src/bay/water.js', import.meta.url), 'utf8');
-	assert.match(w, /reframe\(\) \{\n\t\t\tfor \(const src of sources\) src\.reframe\?\.\(\);[\s\S]{0,400}S\.tiles\.clear\(\);[\s\S]{0,200}atlas\.drop\(q\.i, q\.j\)/);
+	assert.match(w, /reframe\(\) \{[\s\S]{0,400}S\.tiles\.clear\(\);[\s\S]{0,200}atlas\.drop\(/);
 });

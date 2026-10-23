@@ -44,7 +44,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	const height = globe.height;
 	const ground = (x, z) => island.heightAt(x, z);
 	const wet = (x, z) => { const h = height.at(x, z); return h < 0.4 || height.out.land <= 0; };
-	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, F, lanes });
+	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, toLL, F, lanes });
 	const ice = createIce(scene, { height, toXZ, toLL, isPhone });
 	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m), isPhone, toLL, shared, extra: () => S.trees(), woods });
 	const air = createAir(scene, { isPhone });
@@ -55,8 +55,10 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	let time = 0;
 	const env = { month: 0, night: 0 };
 	const told = new Set();
-	let scanAt = null, scanEpoch = -1, hereT = 0, lastKit = null;
+	let scanAt = null, scanEpoch = -1, scanT = 0, hereT = 0, lastKit = null;
 
+	// (a grid row's cosine, for how wide its squares are in longitude)
+	const rowCos = (i, g) => Math.max(0.05, Math.cos((i + 0.5) * g * Math.PI / 180));
 	// the atlas's view of a point, with its kit
 	function kitHere(lat, lon, pop = -1, elev = 0) { const at = regionAt(lat, lon); return at ? { at, K: kitAt(at, { pop, elev }) } : null; }
 	// the options a place's buildings take from its region and culture
@@ -99,7 +101,6 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 
 	// ---------- finding the places round you ----------
 	function scan(lat, lon) {
-		const cosL = Math.max(0.05, Math.cos(lat * Math.PI / 180));
 		// the real landmarks within 10 km
 		for (let n = 0; n < REAL.length; n++) {
 			const [name, la, lo, type, sc, rot, about, args] = REAL[n];
@@ -120,11 +121,12 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			if (c.km > 8 + (K?.kit?.build?.dense ? (DENSE_FOOT[c.pop] || 0) / 1000 : 0)) continue;
 			addSettlement('town:' + c.id, 'town', c.lat, c.lon, K, at, { pop: c.pop, name: c.name, char: c.char });
 		}
-		// the villages of the open country
-		const G = 0.05, gi = Math.floor(lat / G), gj = Math.floor(lon / (G / cosL));
+		// the villages of the open country (a row's squares as wide as its own latitude makes them,
+		// not yours: the same place in the same spot, wherever you come to it from)
+		const G = 0.05, gi = Math.floor(lat / G);
 		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
-			const i = gi + a, j = gj + b, r = rng(hash2(i, j, 1));
-			const vl = (i + r()) * G, vn = (j + r()) * (G / cosL);
+			const i = gi + a, cw = G / rowCos(i, G), j = Math.floor(lon / cw) + b, r = rng(hash2(i, j, 1));
+			const vl = (i + r()) * G, vn = (j + r()) * cw;
 			if (km(lat, lon, vl, vn) > 6) continue;
 			const p = toXZ(vl, vn);
 			if (F.bay && bayKm(vl, vn) < bayWildKm) continue;
@@ -141,29 +143,32 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			addSettlement('vil:' + i + ':' + j, 'village', vl, vn, { ...KH.K, id: kit.id, kit }, KH.at, { pop: -1, name: '' });
 		}
 		// the farmsteads of the open valleys
-		const FG = 0.02, fi = Math.floor(lat / FG), fj = Math.floor(lon / (FG / cosL));
+		const FG = 0.02, fi = Math.floor(lat / FG);
 		for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
-			const i = fi + a, j = fj + b, r = rng(hash2(i, j, 2));
+			const i = fi + a, cw = FG / rowCos(i, FG), j = Math.floor(lon / cw) + b, r = rng(hash2(i, j, 2));
 			if (r() > 0.4) continue;
-			const vl = (i + r()) * FG, vn = (j + r()) * (FG / cosL);
+			const vl = (i + r()) * FG, vn = (j + r()) * cw;
 			if (km(lat, lon, vl, vn) > 3.5 || (F.bay && bayKm(vl, vn) < bayWildKm)) continue;
 			const p = toXZ(vl, vn), h = ground(p.x, p.z);
 			if (h < 2 || wet(p.x, p.z)) continue;
 			const e = 50, s = Math.max(Math.abs(ground(p.x + e, p.z) - ground(p.x - e, p.z)), Math.abs(ground(p.x, p.z + e) - ground(p.x, p.z - e))) / (2 * e);
-			if (s > 0.06) continue;
+			if (s > 0.12) continue;
 			const KH = kitHere(vl, vn, -1, h);
 			if (!KH?.at.land || !/^(farm|village|mediterranean|southasia|eastvillage|alpine|savanna|sahel)$/.test(KH.K.id) || (KH.at.mix.rain || 0) < 300) continue;
+			// (the prairie's farms on the flat; elsewhere a farm keeps to its hillside too, as in
+			// Ireland, Wales, the Alps)
+			if (KH.K.id === 'farm' && s > 0.06) continue;
 			const farmKit = KH.K.id === 'farm' ? KITS.farm : { ...KH.K.kit, build: { ...KH.K.kit.build, count: [1, 3], spread: 50, fields: KH.K.kit.build.fields || 'strip' } };
 			// where the land was surveyed in squares, the farms string out along the section roads
 			const g = KH.K.id === 'farm' ? gridSnap(vl, vn) : null;
 			addSettlement('farm:' + i + ':' + j, 'farm', g ? g.lat : vl, g ? g.lon : vn, { ...KH.K, kit: farmKit, id: KH.K.id }, KH.at, { pop: -1, align: g ? { axis: g.axis } : null });
 		}
 		// the landmarks of the place's stories
-		const LG = 0.1, li = Math.floor(lat / LG), lj = Math.floor(lon / (LG / cosL));
+		const LG = 0.1, li = Math.floor(lat / LG);
 		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
-			const i = li + a, j = lj + b, r = rng(hash2(i, j, 3));
+			const i = li + a, cw = LG / rowCos(i, LG), j = Math.floor(lon / cw) + b, r = rng(hash2(i, j, 3));
 			if (r() > 0.45) continue;
-			const cl = (i + 0.5) * LG, cn = (j + 0.5) * (LG / cosL);
+			const cl = (i + 0.5) * LG, cn = (j + 0.5) * cw;
 			if (km(lat, lon, cl, cn) > 9 || (F.bay && bayKm(cl, cn) < bayWildKm)) continue;
 			const KH = kitHere(cl, cn, -1, 0);
 			if (!KH) continue;
@@ -175,7 +180,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			const high = /watchtower|passshrine|ruin|hermitage|inuksuk|ovoo|stonecross|chapelrock|incaruin/.test(kind), shore = /shipwreck|reefwreck|lighthouse|whalers/.test(kind);
 			let best = null, bs = -1e9;
 			for (let k = 0; k < 14; k++) {
-				const ql = (i + 0.1 + r() * 0.8) * LG, qn = (j + 0.1 + r() * 0.8) * (LG / cosL), p = toXZ(ql, qn), h = ground(p.x, p.z);
+				const ql = (i + 0.1 + r() * 0.8) * LG, qn = (j + 0.1 + r() * 0.8) * cw, p = toXZ(ql, qn), h = ground(p.x, p.z);
 				const w = wet(p.x, p.z);
 				let sc;
 				if (shore) sc = kind === 'shipwreck' && Math.abs(cl) > 60 ? (h < 0 && h > -40 ? 10 - Math.abs(h + 3) * 0.2 : -1e9) : h > 1 && h < 25 && wet(p.x + 60, p.z) + wet(p.x - 60, p.z) + wet(p.x, p.z + 60) + wet(p.x, p.z - 60) ? 20 - h : -1e9;
@@ -260,9 +265,12 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			return;
 		}
 		wrapSolid();
-		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2) {
+		// (and again every few seconds where you are: landed or arrived, the ground round you comes in
+		// after the first look, and a village on it was missed while it read as sea level)
+		scanT -= dt;
+		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2 || scanT <= 0) {
 			if (scanEpoch !== F.epoch) { coastAt.x = Infinity; coastAt.z = Infinity; }
-			scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; hereT = 0;
+			scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; scanT = 8; hereT = 0;
 		}
 		hereT -= dt;
 		if (hereT <= 0) { hereT = 0.5; updateHere(ll.lat, ll.lon, cam); tell(cam); }

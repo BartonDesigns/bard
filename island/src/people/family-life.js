@@ -180,7 +180,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		let a = areas.get(key);
 		if (a) return a;
 		const cx = (i + 0.5) * CELL, cz = (j + 0.5) * CELL;
-		const w = W(), U = w?.bayArea?.urbanAt?.(cx, cz);
+		const w = W(), U = (w?.townAt || w?.bayArea?.urbanAt)?.(cx, cz);
 		const onIsland = w?.island && Math.max(Math.abs(cx), Math.abs(cz)) < w.island.half;
 		let place = onIsland ? 'island' : placeAt(cx, cz, U && U.u > 0.2 ? (U.d > 0.35 ? 'downtown' : 'neighbourhood') : 'trail');
 		if (!onIsland && (!U || U.u < 0.2)) place = 'rural';

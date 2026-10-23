@@ -1,11 +1,18 @@
 // The sky and regional seasons share one geometric solar cycle. The clock keeps the
-// island's Pacific-time convention; travelling changes the latitude, never the slider.
+// island's Pacific-time convention as the hour of the sun: away from the Bay it is the local
+// hour, an hour on for each 15° east (clockZone), so the sun stands at a place's hour where it
+// stands on the Bay at the same hour, and a city seen in the night from orbit is in the night
+// when you land there.
 
 import { clamp } from '../noise.js';
 
 const RAD = Math.PI / 180;
 export const BAY_LATITUDE = 37.8;
+export const BAY_LONGITUDE = -122.4;
 export const solarLatitude = (lat) => Number.isFinite(lat) ? clamp(lat, -90, 90) : BAY_LATITUDE;
+export const wrapHours = (h) => ((h % 24) + 24) % 24;
+// how many hours the clock at a longitude runs ahead of the Bay's (wrapped to within half a day)
+export const clockZone = (lon) => Number.isFinite(lon) ? wrapHours((lon - BAY_LONGITUDE) / 15 + 12) - 12 : 0;
 export const fractionalMonth = (date) => date.getMonth() + (date.getDate() - 1) / 30;
 export const solarDeclination = (month) => 23.44 * RAD * Math.cos(2 * Math.PI * (month - 5.67) / 12);
 

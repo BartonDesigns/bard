@@ -1244,6 +1244,22 @@ export function createWater(scene, shared, opts = {}) {
 		group: root, update, waterAt, inWater, nameAt, kindAt, floor, info, falls, ready: () => S.ready,
 		// (which lakes are known: it changes as a source lists more, e.g. the land's own as you come near)
 		lakesVersion: () => (S.ready ? 'r' : 'w') + S.srcV,
+		// the globe's frame jumped (earth/globe.js place: a landing from orbit, a saved place far
+		// off): the streams, the lakes' meshes and the carving round you were worked out for
+		// where the old frame lay, at the same engine metres, so they are let go and worked out
+		// again for the ground here (the sources' lakes go as each source lets go of its own)
+		reframe() {
+			if (disposed) return;
+			cur = null; S.jobs.length = 0; carveQ.clear(); S.noCarve.clear();
+			for (const T of S.tiles.values()) { if (T.mesh) gone.push(T.mesh); if (T.halo) gone.push(T.halo); if (T.bed) gone.push(...T.bed); }
+			S.tiles.clear();
+			if (atlas) for (const t of [...atlas.tiles()]) atlas.drop(t.i, t.j);
+			for (const L of S.lakes) { dropLake(L); dropFlock(L); }
+			for (const [k, D] of decks) if (!D.walk) decks.delete(k);
+			decksDirty = true; S.plannedAt = -1e9;
+			for (const src of sources) src.reframe?.();
+			grewTrees();
+		},
 		dispose() {
 			if (disposed) return;
 			disposed = true; S.ready = false; job = cur = null;
@@ -1287,17 +1303,6 @@ export function createWater(scene, shared, opts = {}) {
 		lakeAt: (x, z) => { const L = lakeAt(x, z); return L ? { name: L.name, level: L.level, kind: KIND_NAME[L.kind] } : null; },
 		// (for a look at why a square is or isn't carved)
 		carveDebug(x, z) { const i = Math.floor(x / WT), j = Math.floor(z / WT), k = i * 100003 + j, ln = linesNear(i * WT, j * WT, (i + 1) * WT, (j + 1) * WT); return { has: atlas?.has(i, j), no: S.noCarve.has(k), q: carveQ.has(k), lines: ln ? ln.length : null, lakes: lakesNear(i * WT, j * WT, (i + 1) * WT, (j + 1) * WT).size, full: atlas?.full(), delta: waterDelta(x, z), jobs: S.jobs.length, tiles: [...S.tiles.values()].filter((T) => !T.built).length }; },
-		// the frame moved (earth/globe.js): the ground under the engine's metres is another place's,
-		// so the generated water, its ribbons, its carving and its bridges go and are worked again
-		// (the sources' lakes go as their versions change)
-		reframe() {
-			for (const src of sources) src.reframe?.();
-			for (const T of S.tiles.values()) { if (T.mesh) gone.push(T.mesh); if (T.halo) gone.push(T.halo); if (T.bed) gone.push(...T.bed); }
-			S.tiles.clear(); S.jobs.length = 0; cur = null; carveQ.clear(); S.noCarve.clear();
-			if (atlas) for (const q of [...atlas.tiles()]) atlas.drop(q.i, q.j);
-			for (const [k, D] of decks) if (!D.walk) decks.delete(k);
-			decksDirty = true; S.plannedAt = -1e9;
-		},
 		budget: (ms) => { RANGE.budget = ms; }, resetStats: () => { S.stats.longest = 0; S.stats.slowest = 0; S.stats.spikes = {}; },
 		attribution: () => sources.map((q) => q.attribution?.()).filter(Boolean).join(' · '),
 	};

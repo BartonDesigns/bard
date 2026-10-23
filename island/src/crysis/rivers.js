@@ -136,8 +136,7 @@ export function proceduralWater({ heightAt, inSurvey }) {
 		readyAt: (x, z, r) => squares(x, z, r).every((D) => D.done),
 		// work the squares round a place for up to ms milliseconds
 		pump(x, z, r, ms) { const t0 = performance.now(); for (const D of squares(x, z, r)) while (!D.done && performance.now() - t0 < ms) if (D.it.next().done) { D.done = true; version++; } },
-		// the frame moved (earth/globe.js: a jump, or a far place rebased), so the same engine metres
-		// are other ground now: every square goes, to be worked again from the ground under it
+		// the globe's frame jumped: every square was worked from the ground of the old one
 		reframe() { doms.clear(); lakes.length = 0; version++; },
 		// let go of squares far off (their lakes go with them)
 		trim(x, z, R) {

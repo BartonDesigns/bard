@@ -65,7 +65,7 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 			height: (x, z) => I.heightAt(x, z),
 			water: (x, z) => I.waterAt?.(x, z) != null,
 			urban: (x, z) => {
-				const u = bay?.urbanAt?.(x, z)?.u || 0;
+				const u = (w.townAt || bay?.urbanAt)?.(x, z)?.u || 0;
 				for (const t of towns) if (Math.hypot(t.x - x, t.z - z) < t.r * 1.3 + 300) return 1;
 				if (w.globe?.regional?.settlements?.blocked?.(x, z, 40)) return 1;
 				return u;
