@@ -309,14 +309,20 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			}
 			// (the middle of a built-in garage's two doors, at the left or right end: houseplan.js garageIn)
 			const gmid = (left) => (left ? R0.x0 + 3.05 : R0.x1 - 3.05);
+			// (a garage end with another block standing in front of it: its doors would open into that)
+			const blocked = (left) => F.rects.some((r) => !r.main && r.z0 < R0.z1 + 0.3 && r.z1 > R0.z1 + 0.3 && r.x0 < gmid(left) + 2.6 && r.x1 > gmid(left) - 2.6);
 			if (M.kind === 1 || M.kind === 2) {
-				if (drive) M.kind = Math.abs(drive.lx - gmid(true)) < Math.abs(drive.lx - gmid(false)) ? 1 : 2;
+				let left = M.kind === 1;
+				if (drive) left = Math.abs(drive.lx - gmid(true)) < Math.abs(drive.lx - gmid(false));
+				if (blocked(left)) left = blocked(!left) ? null : !left;
+				M.kind = left === null ? 0 : left ? 1 : 2;
 			} else if (M.kind === 0 && !grp.some((q) => q.kind === 3) && MW >= GAR_W && MD >= GAR_D) {
 				let left = null;
-				if (drive) { if (drive.lx < R0.x0 + 6.5) left = true; else if (drive.lx > R0.x1 - 6.5) left = false; }
+				if (drive) { if (drive.lx < R0.x0 + 6.5 && !blocked(true)) left = true; else if (drive.lx > R0.x1 - 6.5 && !blocked(false)) left = false; }
 				else if (((houseSeed(M) >>> 9) & 1023) / 1024 < 0.85) {
 					const doorL = M.door < 0.5;
 					for (const l of [!doorL, doorL]) {
+						if (blocked(l)) continue;
 						const [dx, dz] = W(gmid(l), R0.z1), [best] = toStreet(dx, dz, nx, nz, true);
 						if (best <= 32 && best >= 0.8 && clear(grp, dx + nx * 2.5, dz + nz * 2.5, 1.4)) { left = l; break; }
 					}
@@ -331,12 +337,17 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			let holder = null;
 			if (Math.abs(D.z - R0.z1) < 0.02 && D.x > R0.x0 && D.x < R0.x1) { holder = M; M.door = toF(D.x); delete M.doorF; }
 			else {
-				const [X, Z] = W(D.x, D.z - 0.2);
+				// (the block whose front the door is in: the map's edges were pulled together, frameOf,
+				// so the nearest front within half a metre or so)
+				const [X, Z] = W(D.x, D.z);
+				let bd = 0.8;
 				for (const q of grp) {
 					if (q === M) continue;
 					const qc = Math.cos(q.a), qs = Math.sin(q.a), lx = qc * (X - q.x) + qs * (Z - q.z), lz = -qs * (X - q.x) + qc * (Z - q.z);
-					if (Math.abs(lx) < q.w / 2 && Math.abs(lz) < q.d / 2) { holder = q; q.doorF = Math.max(0, Math.min(1, (lx + q.w / 2 - 1.25) / Math.max(0.1, q.w - 2.5))); break; }
+					const off = Math.abs(lz - q.d / 2);
+					if (Math.abs(lx) < q.w / 2 + 0.3 && off < bd) { bd = off; holder = q; q.doorF = Math.max(0, Math.min(1, (lx + q.w / 2 - 1.25) / Math.max(0.1, q.w - 2.5))); }
 				}
+				for (const q of grp) if (q !== holder) delete q.doorF;
 			}
 			for (const q of grp) q.noDoor = !!holder && q !== holder;
 		};
@@ -372,7 +383,18 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 						if (!clear(b.grp, px, pz, 1.7) || !clear(b.grp, fx, fz, 1.7)) continue;
 						const [best] = toStreet(fx, fz, nx, nz, false);
 						if (best > 32 || best < 0.8) continue;
-						cellIn(G.grid, px, pz).paths.push({ ax: px, az: pz, bx: fx + nx * (best + 0.4), bz: fz + nz * (best + 0.4), w: 3.0, made: true, pad: true });
+						// a garage of its own at the back of the drive (an older house's, beside the
+						// back of the house), where it is clear of the neighbours and of the house's
+						// own blocks; the drive runs on to its doors (city.js realYard builds it)
+						let gar = null;
+						const gf = R0.z0 + 2.2, gd = 6.0, gw2 = 1.65, gcz = gf - gd / 2;
+						if (((houseSeed(M) >>> 13) & 1023) / 1024 < 0.7 && !F.rects.some((r) => r.x0 < lx + gw2 + 0.3 && r.x1 > lx - gw2 - 0.3 && r.z0 < gf + 0.3 && r.z1 > gf - gd - 0.3)) {
+							let room = true;
+							for (const u of [-1, 0, 1]) for (const v of [0, -0.5, -1]) { const [x, z] = W(lx + u * gw2, gf + v * gd); if (!clear(b.grp, x, z, 0.6)) room = false; }
+							if (room) { const [x, z] = W(lx, gcz); gar = { x, z, w: gw2 * 2, d: gd }; }
+						}
+						const [ax, az] = gar ? W(lx, gf + 0.2) : [px, pz];
+						cellIn(G.grid, ax, az).paths.push({ ax, az, bx: fx + nx * (best + 0.4), bz: fz + nz * (best + 0.4), w: 3.0, made: true, pad: true, home: M, gar });
 						break;
 					}
 				}
