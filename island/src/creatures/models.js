@@ -62,8 +62,9 @@ export function loadCreature(id) {
 const PART = (n) => { const name = n.replace(/^rider_/, ''); return /^(head|neck|ear)/.test(name) ? 'head' : /^abdomen/.test(name) ? 'weak' : /^(hips|spine|chest|robe|cloak|wing|mane|seat)/.test(name) ? 'torso' : 'limb'; };
 const _a = new THREE.Vector3(), _b = new THREE.Vector3();
 
-// one body of a kind: { root, motion, meta, shapes(out), height, vary(), rig() }
-export async function makeCreature(id) {
+// one body of a kind: { root, motion, meta, shapes(out), height, vary(), rig() }; weak: the
+// bones of its weak point (catalog.js weak), hit zones of part 'vital'
+export async function makeCreature(id, { weak = null } = {}) {
 	const { scene, meta: meta0 } = await loadCreature(id);
 	// (its own copy: one model can serve two kinds, each with its own timing)
 	const meta = { ...meta0 };
@@ -83,7 +84,7 @@ export async function makeCreature(id) {
 		const j = meta.joints?.[name];
 		if (!b || !j) continue;
 		const tail = b.worldToLocal(new THREE.Vector3(...j[1]).applyMatrix4(root.matrixWorld));
-		zones.push({ b, tail, r: Math.max(0.04, (meta.radii?.[name] || 0.08) * 0.9), part: PART(name), name });
+		zones.push({ b, tail, r: Math.max(0.04, (meta.radii?.[name] || 0.08) * 0.9), part: weak?.bones?.includes(name) ? 'vital' : PART(name), name });
 	}
 	// the hit zones where the bones are now: capsules in world space, reused
 	const shapes = zones.map((z) => ({ type: 'capsule', a: { x: 0, y: 0, z: 0 }, b: { x: 0, y: 0, z: 0 }, r: z.r, part: z.part, bone: z.name }));

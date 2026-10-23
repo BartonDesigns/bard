@@ -38,7 +38,7 @@ export function combatLandShot(cb, hit, from, dir, by, dmg, type = 'ballistic', 
 export function combatYours(cb, T, r, blow, ctx0) {
 	const { arms, broke, call, cars, crime, defendNow, eye, forgive, held, hud, hurtOnce, isEarth,
 		morality, notice, placeName, relations, squads, wanted, witnesses } = cb;
-	if (r.dealt > 0) { hud.hit(!!r.killed, blow.part === 'head' || blow.part === 'neck'); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
+	if (r.dealt > 0) { hud.hit(!!r.killed, blow.part === 'head' || blow.part === 'neck', blow.part === 'vital'); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
 	const ctx = { ...(ctx0 || {}), ...(blow.moral || {}), witnessed: witnesses(T.bound) > 0 };
 	ctx.unseen = !ctx.witnessed;
 	const fac = T.faction, F = FACTIONS[fac];
