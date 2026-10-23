@@ -50,6 +50,19 @@ const chimney = (B, x, y, z, c, h = 1.2) => { B.G.box(x, y, z, 0.6, h, 0.6, c); 
 const snowK = (P) => P.snow || 0;
 // lift the frame (the geometry's and the lit things') by dy: a floor up on posts
 const raise = (B, dy) => { B.G.oy += dy; if (B.glow) B.glow.oy += dy; };
+// The house a home is up close: bay/houses.js builds it with its rooms (region/homes.js turns
+// this into its shape), and the faces drawn so far, the house's own, hand over to it as you come
+// near (what is drawn after, a tank or a woodpile beside it, stays). In the lot's frame (the door
+// on -z; x: the house's middle, if not the lot's): w x d the walls; y0 the floor over the lot's
+// ground, H the walls' height over the floor (two storeys from 3.8 m); skin lap / board /
+// shingle / brick / stone / log / render / mud and the wall colour (lower: another skin for the
+// ground floor; timber: its beams' colour); roof { kind gable / hip / flat, ridge along x (the
+// front) or z, rise, overhang o, skin shingle / tile / tin / thatch, col, snow; a flat one's
+// parapet, deck, vigas, tank }; door: its x along the front, doorCol, trim, shutter; chimney [x,
+// z, top over the ground, col]; porch, verandah, balcony; posts (a floor up on stilts or piers,
+// open below: their colour; round, deck), steps (their colour); roofBox (a room on a flat roof).
+// What is drawn after it stays when the house is built (a tank, a woodpile, a ladder).
+const home = (B, o) => { B.home = { ...o, v: B.G.count(), gv: B.glow ? B.glow.count() : 0 }; };
 
 // ---------- the north ----------
 const S = {};
@@ -73,6 +86,7 @@ S.log = (B, L, P, r) => {
 	windowOn(B, 1, -w * 0.2, 1.35, 0.8, 0.95, P, L, { frame: P.trim, lit: 0.4 });
 	chimney(B, w * 0.25, 0.35 + H + rh * 0.4, d * 0.15, P.stone, rh * 0.75 + 0.5);
 	solid(B, 0, 0, w + 0.5, d + 0.5);
+	if (!L.sauna) home(B, { w, d, y0: 0.35, H, skin: 'log', wall: P.wood, roof: { kind: 'gable', rise: rh, o: 0.55, skin: 'shingle', col: P.roof, snow: snowK(P) * 0.85 }, door: -w * 0.18, doorCol: shade(P.wood, 0.6), trim: P.trim, chimney: [w * 0.25, d * 0.15, 0.35 + H + rh * 1.15 + 0.5, P.stone] });
 };
 // an Arctic house: painted boards on steel posts above the permafrost, a low roof, steps
 S.arctic = (B, L, P, r) => {
@@ -92,6 +106,7 @@ S.arctic = (B, L, P, r) => {
 	// the steps and a little porch
 	for (let k = 0; k < 3; k++) G.box(w * 0.25, k * lift / 3, -d / 2 - 0.9 + k * 0.25, 1.2, lift / 3, 0.3, [0.42, 0.4, 0.38]);
 	G.box(w * 0.25, lift - 0.05, -d / 2 - 0.4, 1.6, 0.08, 0.9, [0.42, 0.4, 0.38]);
+	home(B, { w, d, y0: lift, H, skin: 'lap', wall: P.wall, roof: { kind: 'gable', rise: d * 0.22, o: 0.35, skin: 'tin', col: P.roof, snow: snowK(P) * 0.7 }, door: w * 0.25, doorCol: P.trim, trim: P.trim, posts: [0.3, 0.3, 0.32], steps: [0.42, 0.4, 0.38] });
 	// the heating oil tank at the side
 	if (r() < 0.7) G.cyl(w / 2 + 0.8, 0.3, d * 0.2, 0.45, 0.45, 1.6, [0.62, 0.62, 0.6], { n: 8 });
 	B.smoke.push([w * 0.3, lift + H + d * 0.2, 0]);
@@ -123,7 +138,7 @@ S.shed = (B, L, P, r) => {
 	if (r() < 0.5) S.woodpile(B, { w: 2, d: 0.6 }, P, r, w / 2 + 0.6, 0);
 };
 // a sauna by the water: a small log hut with a stove's chimney
-S.sauna = (B, L, P, r) => { S.log(B, { w: 3.6, d: 3.2 }, P, r); };
+S.sauna = (B, L, P, r) => { S.log(B, { w: 3.6, d: 3.2, sauna: true }, P, r); };
 // a barn: tall boards, a big door, a gambrel in the farm country, a plain gable elsewhere
 S.barn = (B, L, P, r) => {
 	const { G } = B, w = Math.max(L.w, 10), d = Math.max(L.d, 8), H = 4 + r() * 1.5, red = P.barn || P.wall;
@@ -316,6 +331,7 @@ S.chalet = (B, L, P, r) => {
 	doorOn(B, 0, 1, 2.1, P, L, { c: shade(P.wood, 0.7) });
 	chimney(B, w * 0.2, 0.2 + H1 + H2 + w * 0.12, d * 0.25, P.stone, 1.4);
 	solid(B, 0, 0, w + 0.4, d + 0.4);
+	home(B, { w, d, y0: 0.2, H: H1 + H2, skin: 'board', wall: P.wood, lower: { skin: P.plaster ? 'render' : 'stone', col: P.plaster || P.stone, h: H1 }, roof: { kind: 'gable', ridge: 'z', rise: w * 0.22, o: 1.1, skin: 'shingle', col: P.roof, snow: snowK(P) }, door: 0, doorCol: shade(P.wood, 0.7), trim: [0.9, 0.9, 0.86], shutter: P.shutter, balcony: { y: H1, d: 1.2, col: shade(P.wood, 0.85), flowers: true }, chimney: [w * 0.2, d * 0.25, 0.2 + H1 + H2 + w * 0.12 + 1.4, P.stone] });
 };
 // a hay barn on stone piers
 S.haybarn = (B, L, P) => {
@@ -359,6 +375,7 @@ S.stonehouse = (B, L, P, r) => {
 	G.box(0, 0.55 + H, d / 2 - 0.6, w - 0.8, 0.8, 0.7, [0.5, 0.4, 0.3]);
 	for (const x of [-w * 0.25, w * 0.25]) for (const y of [1.2, H - 1.8]) windowOn(B, 0, x, y, 0.9, 1, P, L, { frame: [0.08, 0.08, 0.08], lit: y > 2 ? 0.5 : 0.3 });
 	doorOn(B, 0, 1, 1.9, P, L, { c: [0.45, 0.2, 0.12], frame: [0.08, 0.08, 0.08] });
+	home(B, { w, d, y0: 0.3, H, skin: c === P.stone ? 'stone' : 'render', wall: c, band: [0.42, 0.14, 0.1], roof: { kind: 'flat', parapet: 0.6, col: c, deck: [0.55, 0.45, 0.35] }, door: 0, doorCol: [0.45, 0.2, 0.12], trim: [0.08, 0.08, 0.08] });
 	S.flagpole(B, L, P, r, w / 2 - 0.3, -d / 2 + 0.3, 0.85 + H);
 	B.smoke.push([w * 0.2, H + 1.2, 0]);
 	solid(B, 0, 0, w + 0.3, d + 0.3);
@@ -400,13 +417,14 @@ S.gompa = (B, L, P) => {
 };
 // an adobe house with a steep thatch roof (the Andes)
 S.adobethatch = (B, L, P, r) => {
-	const { G } = B, w = L.w, d = L.d, H = 2.6;
+	const { G } = B, w = L.w, d = L.d, H = 2.6, th = r() < 0.6;
 	footing(B, w, d, P.stone, 0.5);
 	G.box(0, 0.5, 0, w, H, d, P.mud);
-	if (r() < 0.6) G.hip(0, 0.5 + H, 0, w, d, Math.min(w, d) * 0.55, P.thatch, { o: 0.5, k: 0.4 });
+	if (th) G.hip(0, 0.5 + H, 0, w, d, Math.min(w, d) * 0.55, P.thatch, { o: 0.5, k: 0.4 });
 	else G.gable(0, 0.5 + H, 0, w, d, d * 0.3, P.tin, { o: 0.4, gc: P.mud });
 	doorOn(B, -w * 0.15, 0.9, 1.8, P, L, { c: [0.25, 0.4, 0.55], frame: P.mud });
 	windowOn(B, 0, w * 0.25, 1.4, 0.6, 0.6, P, L, { frame: [0.25, 0.4, 0.55], lit: 0.3 });
+	home(B, { w, d, y0: 0.5, H, skin: 'mud', wall: P.mud, roof: th ? { kind: 'hip', rise: Math.min(w, d) * 0.55, o: 0.5, skin: 'thatch', col: P.thatch } : { kind: 'gable', rise: d * 0.3, o: 0.4, skin: 'tin', col: P.tin }, door: -w * 0.15, doorCol: [0.25, 0.4, 0.55], trim: [0.25, 0.4, 0.55] });
 	B.smoke.push([w * 0.2, 0.5 + H + 1, 0]);
 	solid(B, 0, 0, w + 0.3, d + 0.3);
 };
@@ -430,6 +448,7 @@ S.farmhouse = (B, L, P) => {
 	doorOn(B, 0, 1, 2.1, P, { w, d }, { c: P.door });
 	chimney(B, w * 0.3, 0.6 + H + 1, d * 0.1, [0.5, 0.25, 0.2], 1.6);
 	solid(B, 0, 0, w, d);
+	home(B, { w, d, y0: 0.6, H, skin: 'lap', wall: P.wall, roof: { kind: 'gable', rise: d * 0.42, o: 0.4, skin: 'shingle', col: P.roof, snow: snowK(P) * 0.8 }, door: 0, doorCol: P.door, trim: [0.95, 0.95, 0.93], shutter: P.shutter, porch: { d: 2.4, posts: 5, y: 3.25, col: [0.92, 0.92, 0.9], deck: [0.55, 0.52, 0.48], roof: P.roof }, chimney: [w * 0.3, d * 0.1, 0.6 + H + 2.6, [0.5, 0.25, 0.2]] });
 };
 S.silo = (B) => { B.G.cyl(0, 0, 0, 2.6, 2.6, 14, [0.72, 0.72, 0.7], { n: 14, top: false }).dome(0, 14, 0, 2.6, [0.78, 0.78, 0.76], { k: 0.6, n: 14, rings: 3 }); solid(B, 0, 0, 5, 5); };
 // a water-pumping windmill: a lattice tower, a rotor of blades and a tail vane
@@ -447,15 +466,16 @@ S.bales = (B, L, P, r) => { for (let i = 0; i < 4; i++) B.G.cyl(-3 + i * 2 + r()
 S.truck = (B, L, P, r) => { const c = pick(r, [[0.6, 0.12, 0.1], [0.85, 0.85, 0.82], [0.2, 0.3, 0.45], [0.3, 0.32, 0.3]]); B.G.box(0, 0.4, 0, 5, 0.9, 1.9, c).box(0.6, 1.3, 0, 1.8, 0.8, 1.8, c).box(-1.3, 1.3, 0, 2.2, 0.2, 1.8, shade(c, 0.8)); for (const x of [-1.6, 1.6]) for (const z of [-0.95, 0.95]) B.G.cyl(x, 0, z, 0.35, 0.35, 0.01, DARK, { n: 8 }); solid(B, 0, 0, 5, 2); };
 // a cottage: stone or plaster under a steep tile or slate roof, a chimney at the gable
 S.cottage = (B, L, P, r) => {
-	const { G } = B, w = L.w, d = L.d, H = r() < 0.5 ? 2.8 : 5.2;
+	const { G } = B, w = L.w, d = L.d, H = r() < 0.5 ? 2.8 : 5.2, stone = r() < 0.5, wc = stone ? P.stone : P.wall;
 	footing(B, w, d, P.stone, 0.2);
-	G.box(0, 0.2, 0, w, H, d, r() < 0.5 ? P.stone : P.wall);
-	G.gable(0, 0.2 + H, 0, w, d, d * 0.55, P.roof, { o: 0.25, gc: r() < 0.5 ? P.stone : P.wall, snow: snowK(P) * 0.85 });
+	G.box(0, 0.2, 0, w, H, d, wc);
+	G.gable(0, 0.2 + H, 0, w, d, d * 0.55, P.roof, { o: 0.25, gc: r() < 0.5 ? P.stone : wc, snow: snowK(P) * 0.85 });
 	for (const x of [-w * 0.28, w * 0.28]) windowOn(B, 0, x, 1.2, 0.8, 1.1, P, L, { frame: P.trim, shutter: P.shutter });
 	if (H > 4) for (const x of [-w * 0.28, w * 0.28]) windowOn(B, 0, x, 3.7, 0.8, 1, P, L, { frame: P.trim, lit: 0.5 });
 	doorOn(B, 0, 0.95, 2, P, L);
 	chimney(B, w / 2 - 0.4, 0.2 + H + d * 0.3, 0, P.stone, 1.4);
 	solid(B, 0, 0, w, d);
+	home(B, { w, d, y0: 0.2, H, skin: stone ? 'stone' : 'render', wall: wc, roof: { kind: 'gable', rise: d * 0.55, o: 0.25, skin: 'shingle', col: P.roof, snow: snowK(P) * 0.85 }, door: 0, doorCol: P.door, trim: P.trim, shutter: P.shutter, chimney: [w / 2 - 0.4, 0, 0.2 + H + d * 0.3 + 1.4, P.stone] });
 };
 // a half-timbered house: plaster panels between dark beams, a steep roof
 S.halftimber = (B, L, P) => {
@@ -469,6 +489,7 @@ S.halftimber = (B, L, P) => {
 	for (const x of [-w * 0.25, w * 0.25]) { windowOn(B, 0, x, 1.0, 0.8, 1, P, L); windowOn(B, 0, x, 3.6, 0.8, 1, { ...P, trim: beam }, { w: w + 0.3, d: d + 0.3 }, { lit: 0.5 }); }
 	doorOn(B, 0, 1, 2.1, P, L, { c: [0.32, 0.2, 0.12] });
 	solid(B, 0, 0, w + 0.3, d + 0.3);
+	home(B, { w, d, y0: 0.3, H: 5.6, skin: 'render', wall, lower: { skin: 'stone', col: P.stone, h: 2.6 }, timber: beam, roof: { kind: 'gable', rise: d * 0.7, o: 0.45, skin: 'shingle', col: P.roof, snow: snowK(P) * 0.85 }, door: 0, doorCol: [0.32, 0.2, 0.12], trim: beam });
 };
 // a cart by a wall
 S.cart = (B, L, P) => { const { G } = B, c = shade(P.wood, 0.85); G.box(0, 0.6, 0, 2.2, 0.5, 1.3, c); for (const z of [-0.7, 0.7]) G.cyl(0, 0.55, z, 0.55, 0.55, 0.06, [0.35, 0.28, 0.2], { n: 10 }); G.beam(1.1, 0.8, -0.3, 2.6, 0.3, -0.3, 0.07, c).beam(1.1, 0.8, 0.3, 2.6, 0.3, 0.3, 0.07, c); };
@@ -487,11 +508,13 @@ S.cube = (B, L, P, r) => {
 	footing(B, w, d, c, 0.2);
 	G.box(0, 0.2, 0, w, H, d, c);
 	G.box(0, 0.2 + H, 0, w, 0.35, d, c, { top: false });
-	if (r() < 0.5) { const w2 = w * 0.55, d2 = d * 0.6; G.box(w * 0.2, 0.2 + H, d * 0.18, w2, 2.6, d2, c); windowOn(B, 0, w * 0.2, H + 1.2, 0.7, 0.9, P, { w: w2, d: -d2 + d * 0.36 * 2 }, { frame: c, shutter: blue, lit: 0.5 }); }
+	const up = r() < 0.5, w2 = w * 0.55, d2 = d * 0.6;
+	if (up) { G.box(w * 0.2, 0.2 + H, d * 0.18, w2, 2.6, d2, c); windowOn(B, 0, w * 0.2, H + 1.2, 0.7, 0.9, P, { w: w2, d: -d2 + d * 0.36 * 2 }, { frame: c, shutter: blue, lit: 0.5 }); }
 	doorOn(B, -w * 0.2, 0.95, 2, P, L, { c: blue, frame: c });
 	windowOn(B, 0, w * 0.22, 1.2, 0.7, 0.9, P, L, { frame: c, shutter: blue });
 	windowOn(B, 2, 0, 1.2, 0.7, 0.9, P, L, { frame: c, shutter: blue });
 	solid(B, 0, 0, w, d);
+	home(B, { w, d, y0: 0.2, H, skin: 'render', wall: c, roof: { kind: 'flat', parapet: 0.35, col: c }, roofBox: up ? { x: w * 0.2, z: d * 0.18, w: w2, d: d2, h: 2.6, col: c, door: blue } : null, door: -w * 0.2, doorCol: blue, trim: c, shutter: blue });
 };
 // a stone house with a low terracotta roof and green shutters
 S.stonetile = (B, L, P, r) => {
@@ -502,6 +525,7 @@ S.stonetile = (B, L, P, r) => {
 	for (const x of [-w * 0.25, w * 0.25]) { windowOn(B, 0, x, 1.1, 0.8, 1.1, P, L, { frame: shade(c, 0.9), shutter: P.shutter }); if (H > 4) windowOn(B, 0, x, 3.7, 0.8, 1.1, P, L, { frame: shade(c, 0.9), shutter: P.shutter, lit: 0.5 }); }
 	doorOn(B, 0, 1, 2.1, P, L, { c: [0.35, 0.22, 0.14], frame: shade(c, 0.85) });
 	solid(B, 0, 0, w, d);
+	home(B, { w, d, y0: 0.2, H, skin: c === P.stone ? 'stone' : 'render', wall: c, roof: { kind: 'hip', rise: Math.min(w, d) * 0.22, o: 0.35, skin: 'tile', col: P.roof }, door: 0, doorCol: [0.35, 0.22, 0.14], trim: shade(c, 0.9), shutter: P.shutter });
 };
 // a bell tower with its church: a white church with a blue dome (the Greek islands) or a
 // stone campanile (Italy, Spain)
@@ -535,10 +559,12 @@ S.adobe = (B, L, P, r) => {
 	G.box(0, 0.1 + H, 0, w, 0.5, d, c, { top: false });
 	for (let i = 0; i < Math.floor(w / 0.9); i++) G.cyl(-w / 2 + 0.5 + i * 0.9, H - 0.4, -d / 2 - 0.15, 0.08, 0.08, 0.01, [0.4, 0.3, 0.2], { n: 5 });
 	for (let i = 0; i < Math.floor(w / 0.9); i++) G.box(-w / 2 + 0.5 + i * 0.9, H - 0.45, -d / 2 - 0.25, 0.16, 0.16, 0.5, [0.42, 0.32, 0.22]);
-	if (r() < 0.4) G.box(w * 0.2, 0.1 + H, d * 0.15, w * 0.45, 2.4, d * 0.5, c);
+	const up = r() < 0.4;
+	if (up) G.box(w * 0.2, 0.1 + H, d * 0.15, w * 0.45, 2.4, d * 0.5, c);
 	doorOn(B, -w * 0.18, 1, 2, P, L, { c: P.door || [0.42, 0.3, 0.2], frame: shade(c, 0.85) });
 	windowOn(B, 0, w * 0.25, 1.5, 0.5, 0.6, P, L, { frame: shade(c, 0.85), lit: 0.4, deep: 0.15 });
 	windowOn(B, 2, 0, 1.5, 0.5, 0.6, P, L, { frame: shade(c, 0.85), lit: 0.3, deep: 0.15 });
+	home(B, { w, d, y0: 0.1, H, skin: 'mud', wall: c, roof: { kind: 'flat', parapet: 0.5, col: c, vigas: true }, roofBox: up ? { x: w * 0.2, z: d * 0.15, w: w * 0.45, d: d * 0.5, h: 2.4, col: c } : null, door: -w * 0.18, doorCol: P.door || [0.42, 0.3, 0.2], trim: shade(c, 0.85) });
 	if (P.pueblo && r() < 0.6) S.ladder(B, L, P, r, w / 2 + 0.3, 0, H);
 	solid(B, 0, 0, w, d);
 };
@@ -601,6 +627,7 @@ S.homestead = (B, L, P) => {
 	for (let i = 0; i < 5; i++) for (const s of [-1, 1]) { G.box(-w / 2 - 1.8 + i * (w + 3.6) / 4, 0.6, s * (d / 2 + 1.8), 0.12, 3, 0.12, [0.9, 0.9, 0.88]); }
 	for (const x of [-w * 0.3, 0, w * 0.3]) windowOn(B, 0, x, 1.6, 1, 1.2, P, { w, d }, { frame: [0.9, 0.9, 0.88] });
 	doorOn(B, w * 0.15, 0.95, 2.1, P, { w, d });
+	home(B, { w, d, y0: 0.6, H: 3, skin: 'lap', wall: P.wall, roof: { kind: 'hip', rise: 2.6, o: 2.1, skin: 'tin', col: [0.62, 0.64, 0.66] }, verandah: { o: 2, posts: [0.9, 0.9, 0.88], deck: [0.55, 0.5, 0.45] }, door: w * 0.15, doorCol: P.door, trim: [0.9, 0.9, 0.88] });
 	S.tank(B, L, P, null, w / 2 + 3.5, 0);
 	solid(B, 0, 0, w, d);
 };
@@ -778,9 +805,11 @@ S.tinroof = (B, L, P, r) => {
 	footing(B, w, d, shade(c, 0.85), 0.25);
 	G.box(0, 0.25, 0, w, H, d, c);
 	G.gable(0, 0.25 + H, 0, w, d, d * 0.2, P.tin, { o: 0.4, gc: c });
-	doorOn(B, 0, 0.9, 2, P, L, { c: pick(r, [[0.2, 0.45, 0.65], [0.65, 0.2, 0.15], [0.2, 0.5, 0.3]]), frame: shade(c, 0.85) });
+	const dc = pick(r, [[0.2, 0.45, 0.65], [0.65, 0.2, 0.15], [0.2, 0.5, 0.3]]);
+	doorOn(B, 0, 0.9, 2, P, L, { c: dc, frame: shade(c, 0.85) });
 	for (const x of [-w * 0.3, w * 0.3]) windowOn(B, 0, x, 1.2, 0.8, 0.9, P, L, { frame: [0.25, 0.3, 0.35], lit: 0.4 });
 	solid(B, 0, 0, w, d);
+	home(B, { w, d, y0: 0.25, H, skin: c === P.mud ? 'mud' : 'render', wall: c, roof: { kind: 'gable', rise: d * 0.2, o: 0.4, skin: 'tin', col: P.tin }, door: 0, doorCol: dc, trim: [0.25, 0.3, 0.35] });
 };
 // a granary: a round store of mud on a stone base under a thatch hat
 S.granary = (B, L, P, r) => {
@@ -837,6 +866,7 @@ S.stilt = (B, L, P, r) => {
 	raise(B, -(lift + 0.15));
 	for (const s of [-0.25, 0.25]) G.beam(-w * 0.15 + s, 0, -d / 2 - 1.3, -w * 0.15 + s, lift + 0.1, -d / 2 - 0.2, 0.07, [0.45, 0.36, 0.26]);
 	for (let k = 0; k < 6; k++) G.box(-w * 0.15, 0.25 + k * lift / 6, -d / 2 - 1.3 + k * 1.1 / 6, 0.55, 0.05, 0.06, [0.45, 0.36, 0.26]);
+	home(B, { w: w - 0.6, d, x: 0.3, y0: lift + 0.15, H, skin: 'board', wall, roof: { kind: 'gable', rise: d * 0.62, o: 0.8, skin: roofc === P.thatch ? 'thatch' : 'tin', col: roofc }, door: -w * 0.15, doorCol: shade(P.wood, 0.6), trim: shade(P.wood, 0.7), posts: [0.38, 0.3, 0.22], round: true, deck: { w: w + 1.2, d: d + 0.4, col: shade(P.wood, 0.8) }, steps: [0.45, 0.36, 0.26] });
 	solid(B, 0, 0, w, d);
 };
 // a hut on the ground: walls of planks or palm, a thatched gable
@@ -907,6 +937,7 @@ S.tincottage = (B, L, P, r) => {
 	for (const x of [-w * 0.3, w * 0.3]) windowOn(B, 0, x, 1, 0.9, 0.9, P, L, { frame: [0.95, 0.95, 0.92], lit: 0.4 });
 	raise(B, -(lift));
 	for (let k = 0; k < 3; k++) G.box(0, k * lift / 3, -d / 2 - 0.8 + k * 0.25, 1.2, lift / 3, 0.3, [0.5, 0.48, 0.45]);
+	home(B, { w, d, y0: lift, H, skin: 'lap', wall: c, roof: { kind: 'hip', rise: Math.min(w, d) * 0.3, o: 0.5, skin: 'tin', col: P.tin }, door: 0, doorCol: [0.95, 0.95, 0.92], trim: [0.95, 0.95, 0.92], posts: [0.5, 0.48, 0.45], steps: [0.5, 0.48, 0.45] });
 	solid(B, 0, 0, w, d);
 };
 // an outrigger canoe on the sand
@@ -927,6 +958,7 @@ S.easthouse = (B, L, P, r) => {
 	// sliding paper screens or lattice windows, lit warm at night
 	for (const x of [-w * 0.25, w * 0.25]) windowOn(B, 0, x, 0.9, 1.4, 1.3, P, L, { frame: post, lit: 0.7 });
 	doorOn(B, 0, 1.2, 2.1, P, L, { c: shade(post, 1.3), frame: post });
+	home(B, { w, d, y0: 0.45, H, skin: 'render', wall, timber: post, roof: { kind: 'hip', rise: Math.min(w, d) * 0.38, o: 1, skin: 'tile', col: P.roof, snow: snowK(P) * 0.8 }, door: 0, doorCol: shade(post, 1.3), trim: post });
 	if (P.lanterns && r() < 0.6) for (const s of [-1, 1]) S.lantern(B, s * 0.9, 2.5, -d / 2 - 0.6);
 	solid(B, 0, 0, w, d);
 };
@@ -1045,7 +1077,9 @@ S.flatbrick = (B, L, P, r) => {
 	G.slab(0, 0.3 + H, 0, w, d, 0.12, [0.55, 0.52, 0.48]);
 	G.cyl(w * 0.25, 0.42 + H, d * 0.2, 0.6, 0.6, 1.1, [0.1, 0.1, 0.11], { n: 10 });
 	for (let k = 0; k < n; k++) for (const x of [-w * 0.28, w * 0.28]) windowOn(B, 0, x, 1 + k * 3, 0.9, 1.2, P, L, { frame: shade(c, 0.8), lit: 0.5, shutter: r() < 0.4 ? [0.2, 0.45, 0.5] : null });
-	doorOn(B, 0, 1, 2.1, P, L, { c: pick(r, [[0.2, 0.4, 0.55], [0.55, 0.2, 0.15], [0.25, 0.45, 0.3]]), frame: shade(c, 0.8) });
+	const dc = pick(r, [[0.2, 0.4, 0.55], [0.55, 0.2, 0.15], [0.25, 0.45, 0.3]]);
+	doorOn(B, 0, 1, 2.1, P, L, { c: dc, frame: shade(c, 0.8) });
+	home(B, { w, d, y0: 0.3, H, skin: 'render', wall: c, roof: { kind: 'flat', parapet: 0.9, col: c, deck: [0.55, 0.52, 0.48], tank: [w * 0.25, d * 0.2] }, door: 0, doorCol: dc, trim: shade(c, 0.8) });
 	for (let k = 0; k < 10; k++) G.box(w / 2 + 0.45, 0.3 + k * H / 10, -d / 2 + 0.5 + k * (d - 1) / 10, 0.9, H / 10, 0.3, shade(c, 0.9));
 	solid(B, 0, 0, w + 1, d);
 };
@@ -1058,6 +1092,7 @@ S.mudtile = (B, L, P, r) => {
 	G.gable(0, 0.35 + H, 0, w, d, d * 0.3, [0.68, 0.36, 0.25], { o: 0.5, gc: P.mud });
 	doorOn(B, 0, 0.9, 1.9, P, L, { c: [0.35, 0.25, 0.18], frame: shade(P.mud, 0.8) });
 	windowOn(B, 0, w * 0.3, 1.3, 0.6, 0.6, P, L, { frame: shade(P.mud, 0.8), lit: 0.3 });
+	home(B, { w, d, y0: 0.35, H, skin: 'mud', wall: P.mud, roof: { kind: 'gable', rise: d * 0.3, o: 0.5, skin: 'tile', col: [0.68, 0.36, 0.25] }, door: 0, doorCol: [0.35, 0.25, 0.18], trim: shade(P.mud, 0.8) });
 	B.smoke.push([-w * 0.3, 0.35 + H + d * 0.2, 0]);
 	solid(B, 0, 0, w, d);
 	void r;

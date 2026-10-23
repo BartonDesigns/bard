@@ -453,8 +453,8 @@ export async function islandBuild(iw, params) {
 		{ const daily = createDailyLife(iw.world.city.economy, { isPhone: GFX }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
 		// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 		iw.world.forestFloor = createForestFloor(scene, bayNear, iw.world.city, iw.world.real, { shared, isPhone: GFX, ground: (x, z) => island.heightAt(x, z), globe: () => iw.world?.globe });
-		// the real houses close by, built whole with their rooms
-		iw.world.houses = createHouses(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX });
+		// the real houses close by, built whole with their rooms (and the country's homes out in the world)
+		iw.world.houses = createHouses(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX, regional: () => iw.world?.globe?.regional?.settlements });
 		// ...and the shops, cafés, restaurants, offices and places to play, walked into
 		// (a shop's fittings in the houses' own materials: no more of them, no new shaders)
 		iw.world.commercial = createCommercial(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX, houseMats: iw.world.houses.M });

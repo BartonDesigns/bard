@@ -44,7 +44,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	const height = globe.height;
 	const ground = (x, z) => island.heightAt(x, z);
 	const wet = (x, z) => { const h = height.at(x, z); return h < 0.4 || height.out.land <= 0; };
-	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, F, lanes });
+	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, toLL, F, lanes });
 	const ice = createIce(scene, { height, toXZ, toLL, isPhone });
 	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m), isPhone, toLL, shared, extra: () => S.trees(), woods });
 	const air = createAir(scene, { isPhone });
@@ -55,7 +55,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	let time = 0;
 	const env = { month: 0, night: 0 };
 	const told = new Set();
-	let scanAt = null, scanEpoch = -1, hereT = 0, lastKit = null;
+	let scanAt = null, scanEpoch = -1, scanT = 0, hereT = 0, lastKit = null;
 
 	// the atlas's view of a point, with its kit
 	function kitHere(lat, lon, pop = -1, elev = 0) { const at = regionAt(lat, lon); return at ? { at, K: kitAt(at, { pop, elev }) } : null; }
@@ -148,9 +148,12 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			const p = toXZ(vl, vn), h = ground(p.x, p.z);
 			if (h < 2 || wet(p.x, p.z)) continue;
 			const e = 50, s = Math.max(Math.abs(ground(p.x + e, p.z) - ground(p.x - e, p.z)), Math.abs(ground(p.x, p.z + e) - ground(p.x, p.z - e))) / (2 * e);
-			if (s > 0.06) continue;
+			if (s > 0.12) continue;
 			const KH = kitHere(vl, vn, -1, h);
 			if (!KH?.at.land || !/^(farm|village|mediterranean|southasia|eastvillage|alpine|savanna|sahel)$/.test(KH.K.id) || (KH.at.mix.rain || 0) < 300) continue;
+			// (the prairie's farms on the flat; elsewhere a farm keeps to its hillside too, as in
+			// Ireland, Wales, the Alps)
+			if (KH.K.id === 'farm' && s > 0.06) continue;
 			const farmKit = KH.K.id === 'farm' ? KITS.farm : { ...KH.K.kit, build: { ...KH.K.kit.build, count: [1, 3], spread: 50, fields: KH.K.kit.build.fields || 'strip' } };
 			// where the land was surveyed in squares, the farms string out along the section roads
 			const g = KH.K.id === 'farm' ? gridSnap(vl, vn) : null;
@@ -258,9 +261,12 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			return;
 		}
 		wrapSolid();
-		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2) {
+		// (and again every few seconds where you are: landed or arrived, the ground round you comes in
+		// after the first look, and a village on it was missed while it read as sea level)
+		scanT -= dt;
+		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2 || scanT <= 0) {
 			if (scanEpoch !== F.epoch) { coastAt.x = Infinity; coastAt.z = Infinity; }
-			scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; hereT = 0;
+			scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; scanT = 8; hereT = 0;
 		}
 		hereT -= dt;
 		if (hereT <= 0) { hereT = 0.5; updateHere(ll.lat, ll.lon, cam); tell(cam); }

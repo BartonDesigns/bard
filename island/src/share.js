@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { worldBody, sameBody } from './space/body.js';
 import { toWorld, toLatLon, LEVELS } from './bay/geo.js';
-import { toLL, bayKm } from './earth/globeframe.js';
+import { toLL, toXZ, bayKm } from './earth/globeframe.js';
 import { BAY_WILD_KM } from './earth/globe.js';
 import { atlasReady, citiesNear, regionAt } from './earth/atlas.js';
 import { PLACES, ZONES } from './bay/places.js';
@@ -118,6 +118,12 @@ export function createShare(ctx) {
 	let busy = false;
 
 	// ---------- the building you are in, or at the door of ----------
+	// (a house out in the country is known by its own name, wherever the globe's frame lies, and
+	// by its place: region/settle.js homeGrp)
+	const houseOf = (h, at) => {
+		const g = h.grp;
+		return g?.homeId ? { k: 'house', id: g.homeId, cx: h.cx, cz: h.cz, at, label: g.label, ll: g.ll } : { k: 'house', id: 'h' + r2(h.cx) + ':' + r2(h.cz), cx: h.cx, cz: h.cz, at };
+	};
 	function building(pos, named = false) {
 		const w = W();
 		if (!w) return null;
@@ -127,7 +133,7 @@ export function createShare(ctx) {
 		if (t) b = { k: 'tower', id: 't' + t.key, key: t.key, i: t.i, cx: t.x, cz: t.z, label: t.label, lvl: t.kind };
 		if (!b) {
 			const h = w.houses?.inside(pos)?.h;
-			if (h) b = { k: 'house', id: 'h' + r2(h.cx) + ':' + r2(h.cz), cx: h.cx, cz: h.cz, at: 'in' };
+			if (h) b = houseOf(h, 'in');
 		}
 		if (!b) {
 			const B = w.commercial?.inside(pos);
@@ -135,7 +141,7 @@ export function createShare(ctx) {
 		}
 		// at the door: close by, on the same level
 		if (!b && w.houses?.houses) for (const h of w.houses.houses.values()) {
-			if (h && Math.hypot(pos.x - h.cx, pos.z - h.cz) < h.r && Math.abs(eye - h.floorY) < 2) { b = { k: 'house', id: 'h' + r2(h.cx) + ':' + r2(h.cz), cx: h.cx, cz: h.cz, at: 'door' }; break; }
+			if (h && Math.hypot(pos.x - h.cx, pos.z - h.cz) < h.r && Math.abs(eye - h.floorY) < 2) { b = houseOf(h, 'door'); break; }
 		}
 		if (!b && w.commercial?.list) for (const B of w.commercial.list()) {
 			if (Math.hypot(pos.x - B.x, pos.z - B.z) < Math.max(B.hw, B.hd) + 2.5 && Math.abs(eye - B.y) < 2) { b = { k: 'shop', id: 's' + r2(B.x) + ':' + r2(B.z), cx: B.x, cz: B.z, type: B.type, at: 'door' }; break; }
@@ -151,7 +157,7 @@ export function createShare(ctx) {
 		if (b && named) {
 			const st = w.bayArea ? streetAt(w, b.cx, b.cz) : '';
 			const on = st ? ` on ${st}` : '';
-			b.n = b.k === 'tower' ? `${b.label.replace(/^(\d+) · /, 'Floor $1 · ')} · tower${on}` : b.k === 'house' ? `House${on}` : b.k === 'shop' ? `${SHOP[b.type] || 'Shop'}${on}` : b.k === 'cave' ? 'Hut in the cave village' : 'House in the village';
+			b.n = b.k === 'tower' ? `${b.label.replace(/^(\d+) · /, 'Floor $1 · ')} · tower${on}` : b.k === 'house' && b.ll ? `${b.label} ${((p) => (/^near /.test(p) ? p : /^-?\d/.test(p) ? 'at ' + p : 'in ' + p))(farPlace(b.ll).name)}` : b.k === 'house' ? `House${on}` : b.k === 'shop' ? `${SHOP[b.type] || 'Shop'}${on}` : b.k === 'cave' ? 'Hut in the cave village' : 'House in the village';
 		}
 		return b;
 	}
@@ -169,7 +175,7 @@ export function createShare(ctx) {
 			if (o) { s.origin = { id: o.id, seed: o.seed, type: o.type, name: o.name, colorA: o.colorA, colorB: o.colorB }; s.id = o.id; }
 		}
 		const b = building(P.pos, true);
-		if (b) s.bld = { k: b.k, id: b.id, n: b.n, cx: b.cx, cz: b.cz, ...(b.key ? { key: b.key, i: b.i } : {}) };
+		if (b) s.bld = { k: b.k, id: b.id, n: b.n, cx: b.cx, cz: b.cz, ...(b.key ? { key: b.key, i: b.i } : {}), ...(b.ll ? { lat: b.ll.lat, lon: b.ll.lon } : {}) };
 		return s;
 	}
 	const shared = () => ctx.shared.planet || {};
@@ -296,7 +302,7 @@ export function createShare(ctx) {
 				} else {
 					put(yOf(), true);
 					const at = new THREE.Vector3(s.x, yOf(), s.z);
-					if (b?.k === 'house') await until(() => w.houses?.inside(at) || [...(w.houses?.houses?.values() || [])].some((h) => h && Math.hypot(h.cx - b.cx, h.cz - b.cz) < 2), 60000);
+					if (b?.k === 'house') await until(() => w.houses?.inside(at) || [...(w.houses?.houses?.values() || [])].some((h) => h && (b.lat != null ? h.grp?.homeId === b.id : Math.hypot(h.cx - b.cx, h.cz - b.cz) < 2)), 60000);
 					else if (b?.k === 'shop') await until(() => w.commercial?.inside(at), 60000);
 				}
 				await sleep(250);
@@ -534,7 +540,7 @@ export function createShare(ctx) {
 			const sp = tag(h.name);
 			sp.visible = false;
 			ctx.scene.add(sp);
-			markers.list.push({ sp, h, x: h.s.bld.cx, z: h.s.bld.cz, y: h.s.y - 1.7 + (h.s.bld.k === 'house' ? 8.5 : h.s.bld.k === 'shop' ? 7 : 4.5) });
+			markers.list.push({ sp, h, ll: h.s.bld.lat != null ? h.s.bld : null, x: h.s.bld.cx, z: h.s.bld.cz, y: h.s.y - 1.7 + (h.s.bld.k === 'house' ? 8.5 : h.s.bld.k === 'shop' ? 7 : 4.5) });
 		}
 	}
 
@@ -548,6 +554,8 @@ export function createShare(ctx) {
 		} else keep = null;
 		syncMarkers();
 		for (const m of markers.list) {
+			// (a home out in the country stands where its place is in the frame of now)
+			if (m.ll && ctx.state.earth) { const p = toXZ(m.ll.lat, m.ll.lon); m.x = p.x; m.z = p.z; }
 			const d = Math.hypot(camera.position.x - m.x, camera.position.z - m.z);
 			m.sp.visible = d > 6 && d < 350 && camera.position.y - m.y < 300;
 			if (m.sp.visible) { m.sp.position.set(m.x, m.y, m.z); m.sp.material.opacity = Math.min(1, (350 - d) / 120); }
