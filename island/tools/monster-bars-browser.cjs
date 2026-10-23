@@ -69,12 +69,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	});
 	R.ids = ids; console.log('monsters', JSON.stringify(ids));
 	// (stood in a spread before you, in view on a phone's narrow screen too: the Hexer ahead, the
-	// Skulkers either side behind it, the Brute further off to the right)
+	// Skulkers either side behind it, the Brute further off just left of it: on the island's
+	// start a palm stands to the right, and one hidden behind it cannot be locked)
 	await page.evaluate((ids) => {
 		const C = Crysis.combat, e = C.eye(), yaw = L99Island.world().player.state.yaw;
 		const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
 		const put = (id, d, s) => { const h = C.layer.get(id)?.ref; if (!h) return; const x = e.x + fx * d + rx * s, z = e.z + fz * d + rz * s; h.pos.set(x, C.ground(x, z, e.y), z); h.yaw = Math.atan2(-fx, -fz); h.cr.root.position.copy(h.pos); h.cr.root.rotation.set(0, h.yaw, 0); };
-		put(ids.hexer, 11, 0); put(ids.skulkers[0], 16, -3.5); put(ids.skulkers[1], 16, 3.5); put(ids.brute, 21, 5);
+		put(ids.hexer, 11, 0); put(ids.skulkers[0], 16, -3.5); put(ids.skulkers[1], 16, 3.5); put(ids.brute, 20, -1.6);
 	}, ids);
 	await frames(3);
 	const read = () => page.evaluate(() => ({ frame: Crysis.combat.frame.info(), plates: Crysis.combat.plates.info(), focus: Crysis.combat.focus.info() }));
