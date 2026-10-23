@@ -107,6 +107,9 @@ export function createForecourts(scene, bay, real, city, { isPhone = false } = {
 		// the canopy's lights and the store front's lamps, and the dispensers' screens
 		glow: S('#ffffff', 0.4, { emissive: new THREE.Color('#eef4ff'), emissiveIntensity: 0.6 }),
 		screen: S('#0b1622', 0.25, { emissive: new THREE.Color('#3d86e8'), emissiveIntensity: 0.9 }),
+		// the canopy's underside: white panels, lit from below by the slab and by its own lights
+		// (left to the sky alone, a face looking down goes the ground's brown)
+		soffit: S('#f2f3f4', 0.7, { emissive: new THREE.Color('#e2e7ec'), emissiveIntensity: 0.35 }),
 	};
 	const built = new Map();
 	let job = null;
@@ -184,7 +187,7 @@ export function createForecourts(scene, bay, real, city, { isPhone = false } = {
 			let top = -1e9;
 			for (let x = CANOPY.x0; x <= CANOPY.x1; x += 7) for (let z = CANOPY.z0; z <= CANOPY.z1; z += 5.5) top = Math.max(top, gy(x, z));
 			const Hc = top + CANOPY.under, cw = CANOPY.x1 - CANOPY.x0, cd = CANOPY.z1 - CANOPY.z0, cz = (CANOPY.z0 + CANOPY.z1) / 2, F = CANOPY.fascia;
-			box('#f4f4f2', cw, 0.22, cd, 0, Hc, cz);
+			box(mat.soffit, cw, 0.22, cd, 0, Hc, cz);
 			// the fascia round it in the brand's colour, the band of its second colour along its foot
 			for (const [w, d, x, z] of [[cw + 0.24, 0.12, 0, CANOPY.z1 + 0.06], [cw + 0.24, 0.12, 0, CANOPY.z0 - 0.06], [0.12, cd, CANOPY.x0 - 0.06, cz], [0.12, cd, CANOPY.x1 + 0.06, cz]]) {
 				box(B.brand.bg, w, F, d, x, Hc - 0.05, z);
@@ -355,6 +358,7 @@ export function createForecourts(scene, bay, real, city, { isPhone = false } = {
 	function update(dt, camera, night = 0) {
 		const x = camera.position.x, z = camera.position.z;
 		mat.glow.emissiveIntensity = 0.5 + 2.6 * night;
+		mat.soffit.emissiveIntensity = 0.35 + 0.55 * night;
 		look -= dt;
 		if (look <= 0) {
 			look = 1;

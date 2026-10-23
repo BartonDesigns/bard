@@ -137,8 +137,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			for (let x = a0; x <= a1 + 0.01; x += Math.max(1.2, (a1 - a0) / Math.max(1, Math.round((a1 - a0) / 2.4)))) box(mats.trim, x - 0.05, 0.35, hd - WALL, x + 0.05, STORE, hd);
 		}
 		box(mats.trim, doorX - dw / 2 - 0.08, 0, hd - WALL, doorX - dw / 2, STORE, hd); box(mats.trim, doorX + dw / 2, 0, hd - WALL, doorX + dw / 2 + 0.08, STORE, hd);
-		// an awning over the door, the name board above it
-		box(type === 'restaurant' ? mats.red : type === 'arcade' || type === 'tattoo' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
+		// an awning over the door, the name board above it (a corner store or gas station's mart has
+		// its big board down over the windows and its lamps over the front: bay/forecourts.js)
+		if (!b.store) box(type === 'restaurant' ? mats.red : type === 'arcade' || type === 'tattoo' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
 		// the ceiling: a dropped grid of light panels, or (the creative offices, the big stores,
 		// some cafés and restaurants) open to the roof: the deck painted dark, bowstring trusses
 		// arching across, spiral ducts, the sprinkler main, a cable tray, pendant lights
