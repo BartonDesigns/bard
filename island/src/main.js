@@ -1026,10 +1026,12 @@ export function createIslandWorld() {
 	// the office's coffee, water, vending machine and first-aid box (interiors/office-perks.js)
 	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() || !!HOOKS.rest?.seated?.(), openShop: (id) => gear.open('shop', id) });
 	// sitting down and sleeping (gameplay/rest.js): chairs, sofas, benches, a seat at the cinema; your
-	// own bed until the morning. (A menu or a shop's counter is the whole room's prompt: a seat in
-	// reach has E over it, and the menu is still there to tap from your table.)
+	// own bed until the morning. (A menu or a shop's counter is the whole room's prompt, and a
+	// kitchen's counter has E only when it is nearer than the seat: a seat in reach has E over
+	// them, and the menu is still there to tap from your table.)
 	const WIDE = new Set(['dine', 'shop']);
-	const rest = HOOKS.rest = createRest({ world: () => world, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, homes: () => families.homes, share, combat, multiplayer, others: () => !!doorHere || (cooking.near() && !WIDE.has(cooking.kind())) || officePerks.near(), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.orbit?.active?.() });
+	const cookingHasE = () => cooking.near() && !WIDE.has(cooking.kind()) && cooking.dist() <= (HOOKS.rest?.near()?.d ?? Infinity);
+	const rest = HOOKS.rest = createRest({ world: () => world, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, homes: () => families.homes, share, combat, multiplayer, others: () => !!doorHere || cookingHasE() || officePerks.near(), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.orbit?.active?.() });
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)

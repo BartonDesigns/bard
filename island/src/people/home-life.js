@@ -656,9 +656,10 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		if (!Number.isFinite(pos?.x)) return null;
 		const ins = W()?.houses?.inside?.(pos);
 		if (!ins) {
-			// a home in the city's (interiors/): the row house, the flat
+			// a home in the city's (interiors/): the row house, the flat (once its rooms are
+			// furnished and it has somewhere to sleep)
 			const I = W()?.interiors?.inside?.(pos), u = I ? dwellingAt(I.B, I.level, pos) : null;
-			return u ? { house: u, level: I.level, household: householdOf(u), home: homes.has(u) ? whoIsHome(u) : null, building: I.B } : null;
+			return u?.ready() ? { house: u, level: I.level, household: householdOf(u), home: homes.has(u) ? whoIsHome(u) : null, building: I.B } : null;
 		}
 		// (upstairs over a business: the flat's household)
 		const u = ins.h.plan?.estab && ins.level > 0 ? over(ins.h) : null, h = u || ins.h;

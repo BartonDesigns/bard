@@ -142,7 +142,8 @@ export function createShare(ctx) {
 		// a home in the city's own buildings (interiors/): a row house, or a flat in its block (which
 		// one, as people/home-life.js has them: ctx.homeAt)
 		if (!b && w.interiors?.inside?.(pos)) {
-			const u = ctx.homeAt?.(pos);
+			let u = null;
+			try { u = ctx.homeAt?.(pos); } catch { /* its rooms not made yet */ }
 			if (u?.building && u.house?.key) b = { k: 'flat', id: 'i' + u.house.key, cx: u.house.cx, cz: u.house.cz, at: 'in', row: u.house.kind === 'row' };
 		}
 		// at the door: close by, on the same level

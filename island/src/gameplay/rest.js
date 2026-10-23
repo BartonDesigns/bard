@@ -180,7 +180,10 @@ export function createRest({ world, camera, mount, button, hint = () => {}, isPh
 	}
 	function find(p) {
 		if (!p || p.flying || p.swimming || p.locked || p.seat || !p.grounded || Math.hypot(p.vel.x, p.vel.z) > 2.2) return null;
-		return pickSeat(seatsNear(p), { x: p.pos.x, z: p.pos.z, feet: p.pos.y - EYE, fx: -Math.sin(p.yaw), fz: -Math.cos(p.yaw) });
+		const s = pickSeat(seatsNear(p), { x: p.pos.x, z: p.pos.z, feet: p.pos.y - EYE, fx: -Math.sin(p.yaw), fz: -Math.cos(p.yaw) });
+		// (how far it is: a kitchen counter nearer than the seat keeps E, main.js)
+		if (s) s.d = Math.hypot((s.lie ? s.lie.mx : s.x) - p.pos.x, (s.lie ? s.lie.mz : s.z) - p.pos.z);
+		return s;
 	}
 
 	// ---------- in and out of a seat ----------
@@ -321,7 +324,7 @@ export function createRest({ world, camera, mount, button, hint = () => {}, isPh
 		const S = P()?.seat;
 		return {
 			seated: S ? { kind: S.kind, lie: S.lie, h: S.h, up: S.up ?? null, hold: !!S.hold, eye: +(camera.position.y - S.y).toFixed(2) } : null,
-			near: here ? { kind: here.kind, d: +Math.hypot(here.x - (P()?.pos.x ?? 0), here.z - (P()?.pos.z ?? 0)).toFixed(2) } : null,
+			near: here ? { kind: here.kind, d: +here.d.toFixed(2) } : null,
 			asleep: Z ? { phase: Z.phase, passed: +Z.passed.toFixed(2), plan: Z.plan } : null,
 		};
 	}

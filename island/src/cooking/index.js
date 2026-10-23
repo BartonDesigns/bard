@@ -559,7 +559,10 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	addEventListener('pagehide', () => { if (dirty) save(); });
 
 	return {
-		update, addMenu, near: () => !!here, kind: () => here?.kind || null, open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
+		update, addMenu, near: () => !!here, kind: () => here?.kind || null,
+		// (how far the kitchen's fridge or counter is: a seat nearer than it has E, main.js)
+		dist: () => (here?.kind === 'kitchen' && here.at ? here.at.d ?? Math.hypot(here.at.x - camera.position.x, here.at.z - camera.position.z) : 0),
+		open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
 		// (for a look: Crysis.cooking.give('venison', 900), .info(), .eat('chili'))
 		give: (id, n) => { const put = stow(L, id, n); touch(); return put; },
 		eat: (id) => { plate(L, id, 1, 1); return eatPlate(id); },
