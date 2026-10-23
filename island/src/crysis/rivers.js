@@ -18,7 +18,7 @@ const SYL = [['Wil', 'Al', 'Cor', 'Ash', 'Bran', 'Mil', 'Sil', 'Ced', 'Ro', 'Lin
 const hash = (a, b) => { let x = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
 const nameOf = (a, b) => SYL[0][Math.floor(hash(a, b) * 20)] + SYL[1][Math.floor(hash(b + 7, a - 3) * 20)];
 
-export function proceduralWater({ heightAt, inSurvey }) {
+export function proceduralWater({ heightAt, inSurvey, arid = () => false }) {
 	const doms = new Map(), lakes = [];
 	let version = 0;
 	const dkey = (i, j) => i + ',' + j;
@@ -42,10 +42,12 @@ export function proceduralWater({ heightAt, inSurvey }) {
 			for (let i = 0; i < n; i++) h[j * n + i] = heightAt(X0 + i * CELL, Z0 + j * CELL);
 			if (due()) yield;
 		}
-		const R = yield* hydrology({ W: n, H: n, x0: X0, z0: Z0, cell: CELL, h }, { sea: 0, minCells: 140, lakeCells: 5, lakeDepth: 1.5, inset: 0.35 });
+		// (in a desert only the big washes run, and a closed basin is a dry pan, not a lake)
+		const dry = arid(cx, cz);
+		const R = yield* hydrology({ W: n, H: n, x0: X0, z0: Z0, cell: CELL, h }, { sea: 0, minCells: dry ? 1700 : 140, lakeCells: 5, lakeDepth: 1.5, inset: 0.35 });
 		const inCore = (x, z) => x >= D.di * CORE && x < D.di * CORE + CORE && z >= D.dj * CORE && z < D.dj * CORE + CORE;
 		// the lakes whose middle lies in this square
-		for (const L of R.lakes) {
+		for (const L of dry ? [] : R.lakes) {
 			const r = L.rings[0];
 			if (!r) continue;
 			let sx = 0, sz = 0;

@@ -154,7 +154,8 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 			}
 		},
 	};
-	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c) });
+	// (the real landmarks' ground is kept clear of the towns grown round them: region/landmarks.js)
+	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c), keep: (x, z, r) => regional.landmarksNear(x, z, r) });
 
 
 	// the place's name for the Bay's labels (bay/labels.js), out where the Bay's own names don't

@@ -32,13 +32,13 @@ const hash2 = (a, b, k) => (Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 193496
 const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 export const bearingWord = (dx, dz) => DIRS[Math.round(((Math.atan2(dx, -dz) / (Math.PI * 2)) * 8 + 8)) % 8];
 // how often the open country has a village, by kit (per cell of about 5.5 km)
-const RATE = { polar: 0.06, station: 0.004, snow: 0.3, alpine: 0.55, himalaya: 0.35, andes: 0.35, village: 0.6, farm: 0, outback: 0.06, mediterranean: 0.5, desert: 0.14, pueblo: 0.15, bazaar: 0.15, steppe: 0.4, savanna: 0.45, sahel: 0.4, jungle: 0.32, island: 0.5, eastvillage: 0.6, eastcity: 0.6, southasia: 0.75, southcity: 0.75 };
+const RATE = { polar: 0.06, station: 0.004, snow: 0.3, alpine: 0.55, himalaya: 0.35, andes: 0.35, village: 0.6, farm: 0, outback: 0.06, mojave: 0.04, mediterranean: 0.5, desert: 0.14, pueblo: 0.15, bazaar: 0.15, steppe: 0.4, savanna: 0.45, sahel: 0.4, jungle: 0.32, island: 0.5, eastvillage: 0.6, eastcity: 0.6, southasia: 0.75, southcity: 0.75 };
 // the places the regional kit builds whole (the town generator keeps the rest)
 const CLAIM_ALL = new Set(['bazaar', 'eastcity', 'southcity']);
 // ...and the biggest size class each other kit builds itself (the farm country's towns are the generator's)
-const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2 };
+const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, mojave: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2 };
 // how far round a real landmark the generated places keep clear (m), by its builder
-const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30 };
+const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 160, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 50, vegassign: 15, canopy: 230, venetian: 170, sphere: 80 };
 
 export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null }) {
 	const height = globe.height;
@@ -70,7 +70,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	// the centre building by the place's faith (the kit's own unless the faith says otherwise)
 	function centreFor(kit, C, pop, id = '') {
 		const f = C.faith, k = kit.id;
-		if (k === 'bazaar' || k === 'eastcity' || k === 'southcity' || k === 'steppe' || k === 'farm' || k === 'outback') return null;
+		if (k === 'bazaar' || k === 'eastcity' || k === 'southcity' || k === 'steppe' || k === 'farm' || k === 'outback' || k === 'mojave') return null;
 		if (f === 'mosque') return k === 'sahel' ? 'mudmosque' : pop >= 1 ? 'mosque' : 'mosque-small';
 		if (f === 'mandir') return 'mandir';
 		if (f === 'wat') return 'wat';
@@ -97,6 +97,19 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 		if (CLAIM_ALL.has(K.id)) return true;
 		const max = CLAIM_MAX[K.id] ?? 1;
 		return city.pop <= (K.id === 'snow' && Math.abs(city.lat) > 60 ? max + 1 : max);
+	}
+
+	// the real landmarks' ground round a point (engine metres): the towns grown round them keep off it
+	// (earth/globetowns.js). From the list itself, so it is known before the sites round you are scanned
+	function landmarksNear(x, z, r) {
+		const out = [], ll = toLL(x, z);
+		for (const [, la, lo, type, sc] of REAL) {
+			const c = (CLEAR[type] ?? 45) * sc;
+			if (!(c > 0) || km(ll.lat, ll.lon, la, lo) > (r + c) / 1000 + 2) continue;
+			const p = toXZ(la, lo);
+			if (Math.hypot(p.x - x, p.z - z) < r + c) out.push({ x: p.x, z: p.z, r: c });
+		}
+		return out;
 	}
 
 	// ---------- finding the places round you ----------
@@ -303,7 +316,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	const info = () => ({ sound: sound.debug(), folk: folk.info(), ice: ice.info(), flora: flora.info(), kit: here.kit?.id, region: here.regionId, culture: here.culture?.key, climate: here.climate, town: here.town, landmark: here.landmark?.name, onward: here.onward, ...S.info() });
 	function pause() { sound.pause(); }
 	function dispose() { sound.dispose(); folk.dispose(); ice.dispose(); flora.dispose(); air.dispose(); S.dispose(); here.on = false; }
-	return { update, claims, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
+	return { update, claims, landmarksNear, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
 }
 
 const firstSentence = (t = '') => (t.match(/^.*?[.!?](\s|$)/)?.[0] || t).trim();

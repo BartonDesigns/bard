@@ -324,10 +324,10 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		const dx = Math.cos(ang + tilt), dz = Math.sin(ang + tilt), nx = dz, nz = -dx;         // (n: the left of +d)
 		const [c0x, c0z] = toW(0, vF), L = Rbox * 1.25;
 		const CW = W.motorway || 14, MED = 3;                                               // a carriageway; half the median
-		// only where the ground takes it: dry, and not up a mountainside
-		let ok = 0, tot = 0;
-		for (let t = -L; t <= L; t += 60) { tot++; const x = c0x + dx * t, z = c0z + dz * t; if (dry(x, z) && slope(x, z) < 0.12) ok++; }
-		if (ok > tot * 0.65) {
+		// only where the ground takes it: dry, and not up a mountainside (nor over a landmark's ground: civ.js keep)
+		let ok = 0, tot = 0, kept = false;
+		for (let t = -L; t <= L; t += 60) { tot++; const x = c0x + dx * t, z = c0z + dz * t; if (dry(x, z) && slope(x, z) < 0.12) ok++; kept ||= !!water?.kept?.(x, z, 40); }
+		if (ok > tot * 0.65 && !kept) {
 			Object.assign(FWY, { on: true, x: c0x, z: c0z, dx, dz, nx, nz, L, off: MED + CW / 2, cw: CW });
 			const num = [205, 238, 305, 505, 605, 705, 780, 905][Math.floor(r() * 8)];
 			FWY.name = 'Interstate ' + num;
