@@ -54,6 +54,6 @@ export function addLodFade(material, mode, band = null) {
 
 // Every part, including hinged doors, uses its building's origin, not its mesh pivot.
 export function anchorBuilding(root, x, z, radius = 0, born = 0) {
- root.traverse(o => { if (!o.isMesh || !o.geometry) return; const n=o.geometry.attributes.position.count, a=new Float32Array(n*4); for(let i=0;i<n;i++) a.set([x,z,radius,born],i*4); o.geometry.setAttribute('aLodAnchor',new THREE.BufferAttribute(a,4)); });
+ root.traverse(o => { if (!o.isMesh || !o.geometry) return; const n=o.geometry.attributes.position.count, a=new Float32Array(n*4); for(let i=0;i<n*4;i+=4){a[i]=x;a[i+1]=z;a[i+2]=radius;a[i+3]=born;} o.geometry.setAttribute('aLodAnchor',new THREE.BufferAttribute(a,4)); });
 }
 export const buildingBand = phone => phone ? [-2,-1,27,29.5] : [-2,-1,40,42.5];

@@ -5,12 +5,15 @@
 // to their screensaver. All glow (a fixture of interiors/lighting.js, as the plain screens were).
 import * as THREE from 'three';
 
-export const COLS = 4, ROWS = 7;
+export const COLS = 4, ROWS = 8;
 export const TILE = {
 	code: 0, terminal: 1, sheet: 2, dashboard: 3, bars: 4, inbox: 5, call: 6, design: 7,
 	slides: 8, ticker: 9, cad: 10, map: 11, chat: 12, doc: 13, calendar: 14, photo: 15,
 	wallBlue: 16, wallSunset: 17, codeLight: 18, pie: 19, kanban: 20, crm: 21, htop: 22, model: 23,
 	arcade: 24, sports: 25, news: 26, game: 27,
+	// (the places to play: the lanes' scores, a film on a cinema's screen, the concession's menu,
+	// another arcade game)
+	scores: 28, movie: 29, concession: 30, shooter: 31,
 };
 // what each kind of floor has up (workplace-plan.js programs), and the screensavers
 const BY_PROGRAM = {
@@ -44,7 +47,7 @@ let tex = null;
 export function screenAtlasTexture() {
 	if (tex) return tex;
 	const W = 128, H = 73, cv = document.createElement('canvas');
-	cv.width = W * COLS; cv.height = 512;
+	cv.width = W * COLS; cv.height = H * ROWS;
 	const g = cv.getContext('2d');
 	let seed = 11;
 	const rn = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
@@ -79,6 +82,49 @@ export function screenAtlasTexture() {
 		sports(x, y) { bar(x, y, W, H, '#2f8f3a'); g.fillStyle = '#38a046'; for (let i = 0; i < W; i += 16) g.fillRect(x + i, y, 8, H); g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1; g.strokeRect(x + 6.5, y + 8.5, W - 13, H - 17); g.beginPath(); g.moveTo(x + W / 2, y + 8); g.lineTo(x + W / 2, y + H - 8); g.stroke(); g.beginPath(); g.arc(x + W / 2, y + H / 2, 10, 0, Math.PI * 2); g.stroke(); for (let i = 0; i < 8; i++) rect(i < 4 ? '#e63946' : '#f1faee', x + 20 + rn() * (W - 40), y + 14 + rn() * (H - 28), 3, 4); rect('#111111', x + 4, y + 1, 52, 7); rect('#ffffff', x + 6, y + 3, 20, 3); rect('#ffd60a', x + 34, y + 3, 18, 3); },
 		news(x, y) { bar(x, y, W, H, '#1d3557'); const gr = g.createLinearGradient(0, y, 0, y + H); gr.addColorStop(0, '#457b9d'); gr.addColorStop(1, '#1d3557'); g.fillStyle = gr; g.fillRect(x, y, W, H - 16); g.fillStyle = '#e0b49a'; g.beginPath(); g.arc(x + 44, y + 26, 9, 0, Math.PI * 2); g.fill(); rect('#2b2d42', x + 30, y + 35, 28, 22); rect('#c1121f', x, y + H - 16, W, 10); rect('#ffffff', x + 4, y + H - 13, 70, 3); rect('#111111', x, y + H - 6, W, 6); lines(x + 4, y + H - 5, W - 8, 1, 4, ['#dddddd']); rect('#f1faee', x + 80, y + 10, 40, 26); },
 		game(x, y) { const gr = g.createLinearGradient(0, y, 0, y + H); gr.addColorStop(0, '#87ceeb'); gr.addColorStop(1, '#e0f4ff'); g.fillStyle = gr; g.fillRect(x, y, W, H); g.fillStyle = '#5a8f3d'; g.beginPath(); g.moveTo(x, y + H); g.lineTo(x, y + 48); g.quadraticCurveTo(x + 40, y + 34, x + 70, y + 50); g.quadraticCurveTo(x + 100, y + 60, x + W, y + 44); g.lineTo(x + W, y + H); g.fill(); rect('#7a5230', x + 24, y + 30, 4, 20); g.fillStyle = '#2d6a2d'; g.beginPath(); g.arc(x + 26, y + 28, 9, 0, Math.PI * 2); g.fill(); rect('#d62828', x + 60, y + 42, 6, 9); rect('#f4d35e', x + 61, y + 38, 4, 4); rect('rgba(0,0,0,.35)', x + 4, y + 4, 40, 5); rect('#e63946', x + 5, y + 5, 28, 3); },
+		// the scores over a pair of lanes: two players' frames, the marks and running totals, the
+		// lane's number, the pins standing
+		scores(x, y) {
+			bar(x, y, W, H, '#0b1d3a'); bar(x, y, W, 9, '#ff7b00'); rect('#ffffff', x + 4, y + 2, 18, 5); rect('#0b1d3a', x + W - 22, y + 2, 18, 5);
+			for (let p = 0; p < 2; p++) {
+				const py = y + 13 + p * 22;
+				rect(p ? '#2a9d8f' : '#e63946', x + 2, py, 18, 18); rect('#ffffff', x + 5, py + 7, 12, 3);
+				for (let f = 0; f < 10; f++) {
+					const fx = x + 22 + f * 10.4;
+					rect('#f1faee', fx, py, 9.6, 18); rect('#d8e2ec', fx + 5, py, 4.6, 7);
+					const mark = rn();
+					if (f < 6 + p) { if (mark < 0.3) rect('#e63946', fx + 5.6, py + 1.5, 3.4, 4); else rect('#1d3557', fx + 1, py + 2, 2.6, 3); rect('#1d3557', fx + 2, py + 11, 5.6, 3); }
+				}
+			}
+			for (let r = 0; r < 4; r++) for (let c = 0; c <= r; c++) { g.fillStyle = rn() < 0.7 ? '#ffffff' : '#334155'; g.beginPath(); g.arc(x + W / 2 - r * 4 + c * 8, y + H - 4 - (3 - r) * 4.5, 1.8, 0, Math.PI * 2); g.fill(); }
+		},
+		// a film on the big screen: a wide shot at dusk, letterboxed
+		movie(x, y) {
+			bar(x, y, W, H, '#000000');
+			const gr = g.createLinearGradient(0, y + 10, 0, y + H - 10); gr.addColorStop(0, '#20314f'); gr.addColorStop(0.55, '#e07a5f'); gr.addColorStop(1, '#f2cc8f'); g.fillStyle = gr; g.fillRect(x, y + 10, W, H - 20);
+			g.fillStyle = '#fff3d6'; g.beginPath(); g.arc(x + W * 0.66, y + H * 0.55, 8, 0, Math.PI * 2); g.fill();
+			g.fillStyle = '#1b1b24'; g.beginPath(); g.moveTo(x, y + H - 10); for (let u = 0; u <= W; u += 8) g.lineTo(x + u, y + H - 22 - Math.sin(u * 0.07) * 6 - (u > 30 && u < 50 ? 10 : 0)); g.lineTo(x + W, y + H - 10); g.fill();
+			rect('#1b1b24', x + 36, y + H - 40, 2, 10); g.fillStyle = '#1b1b24'; g.beginPath(); g.arc(x + 37, y + H - 42, 2, 0, Math.PI * 2); g.fill();
+		},
+		// a concession stand's menu: popcorn, the drinks, the candy, their prices
+		concession(x, y) {
+			bar(x, y, W, H, '#14080a'); bar(x, y, W, 11, '#c1121f'); rect('#ffd60a', x + 40, y + 3, 48, 5);
+			for (let i = 0; i < 3; i++) {
+				const cx = x + 8 + i * 40;
+				g.fillStyle = ['#f7f3ea', '#e63946', '#3a86ff'][i]; g.fillRect(cx + 6, y + 18, 20, 26);
+				if (i === 0) { g.fillStyle = '#d62828'; for (let s = 0; s < 4; s++) g.fillRect(cx + 7 + s * 5, y + 18, 2.4, 26); g.fillStyle = '#ffe8a3'; g.beginPath(); g.arc(cx + 16, y + 18, 10, Math.PI, 0); g.fill(); }
+				rect('#ffffff', cx + 4, y + 50, 26, 3); rect('#ffd60a', cx + 8, y + 57, 18, 5);
+			}
+			for (let r = 0; r < 2; r++) { rect('#9aa5b1', x + 8, y + 66 + r * 3.4, 70, 1.6); rect('#ffd60a', x + 100, y + 66 + r * 3.4, 18, 1.6); }
+		},
+		// another cabinet's game: a ship at the foot of the screen, the waves of invaders over it
+		shooter(x, y) {
+			bar(x, y, W, H, '#02010a');
+			for (let i = 0; i < 24; i++) rect('#9ad1ff', x + rn() * W, y + rn() * H, 1, 1);
+			for (let r = 0; r < 4; r++) for (let c = 0; c < 9; c++) { const cx = x + 14 + c * 12, cy = y + 10 + r * 9; rect(['#ff006e', '#ffbe0b', '#8338ec', '#3a86ff'][r], cx, cy, 7, 5); rect('#02010a', cx + 2, cy + 1.5, 1.4, 1.4); rect('#02010a', cx + 3.8, cy + 1.5, 1.4, 1.4); }
+			rect('#06d6a0', x + 56, y + H - 10, 14, 5); rect('#06d6a0', x + 62, y + H - 13, 2, 3); rect('#ffffff', x + 62.5, y + H - 30, 1, 6);
+			rect('#ffffff', x + 4, y + 2, 26, 3); rect('#ffbe0b', x + W - 30, y + 2, 26, 3);
+		},
 		crm(x, y) { bar(x, y, W, H, '#f3f2f2'); bar(x, y, W, 9, '#032d60'); bar(x + 4, y + 13, W - 8, 14, '#ffffff'); rect('#0176d3', x + 8, y + 16, 8, 8); rect('#181818', x + 20, y + 17, 40, 3); bar(x + 4, y + 30, W - 8, H - 34, '#ffffff'); for (let i = 0; i < 7; i++) { rect('#e5e5e5', x + 4, y + 36 + i * 7, W - 8, 1); rect('#0176d3', x + 8, y + 32 + i * 7, 22, 2); rect('#444444', x + 40, y + 32 + i * 7, 26, 2); rect(['#2e844a', '#dd7a01', '#ba0517'][i % 3], x + 90, y + 32 + i * 7, 18, 2); } },
 	};
 	const names = Object.keys(TILE);

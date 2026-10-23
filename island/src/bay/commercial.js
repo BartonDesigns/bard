@@ -10,10 +10,14 @@
 //                 bar, a diner's counter, a sushi bar, a pizzeria's or a burger place's order
 //                 counter and lit menus (bay/dinefit.js)
 //   shop        - fitted out for its trade (bay/storefit.js)
-//   office      - a reception desk and lobby sofa, rows of desks with screens, a glass meeting room
-//   arcade      - cabinets glowing down both sides, a prize counter
-//   bowling     - lanes of polished wood, pins at the far end, a ball return
+//   office      - reception and the company's board, desks in pods at their work, the meeting
+//                 room behind glass, the kitchenette; a clinic's waiting room and treatment rooms
+//   arcade      - cabinets under their marquees, pinball, skee-ball, claw machines, air hockey,
+//                 the prize counter
+//   bowling     - the lanes, their pins and masking, the ball returns and scores, the shoe
+//                 counter and the snack bar
 //   cinema      - a lobby with its concession stand, then a dark hall of raked seats and the screen
+//   tattoo      - the counter, the flash framed on the wall, the stations (all: bay/venuefit.js)
 // and the people in them by the hour (people/flow.js): cafés full over breakfast, offices
 // through the working day, restaurants from dusk, the arcade and lanes in the evening.
 // Everything in a building is merged per material, so each is a handful of draws.
@@ -34,6 +38,8 @@ import { Builder, houseMaterials, lin } from './housekit.js';
 import { GoodsBuilder, goodsSteps, goodsMaterial } from '../interiors/goods.js';
 import { fitMart, fitShop, tradeOf } from './storefit.js';
 import { fitDining, styleOf } from './dinefit.js';
+import { fitVenue, officeKind } from './venuefit.js';
+import { screenAtlasTexture, tileUV } from '../interiors/screen-atlas.js';
 import { buildSlice } from '../world/buildslice.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
@@ -47,6 +53,22 @@ function flashSheet() {
 	const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
 	SHEET = { tiles: F.tiles, mat: new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }) };
 	return SHEET;
+}
+// a place's own board, for the wall behind its reception: its name in its colours and its small
+// line (economy/establishments.js), on a canvas of its own
+const FONTS = { serif: 'Georgia, "Times New Roman", serif', sans: '"Helvetica Neue", Arial, sans-serif', script: '"Brush Script MT", "Segoe Script", cursive', slab: 'Rockwell, "Roboto Slab", "Courier New", serif', narrow: '"Arial Narrow", "Roboto Condensed", Arial, sans-serif' };
+function drawBoard(cv, E) {
+	const g = cv.getContext('2d'), w = cv.width, h = cv.height, sg = E?.sign || {}, bg = sg.bg || '#2a3a4a', fg = sg.fg || '#ffffff';
+	g.fillStyle = bg; g.fillRect(0, 0, w, h);
+	g.strokeStyle = fg; g.globalAlpha = 0.5; g.lineWidth = 3; g.strokeRect(10, 10, w - 20, h - 20); g.globalAlpha = 1;
+	const tag = String(E?.tag || '').toUpperCase(), font = FONTS[sg.font] || FONTS.sans, weight = sg.font === 'serif' || sg.font === 'script' ? '' : 'bold ';
+	let px = tag ? 58 : 66;
+	g.font = `${weight}${px}px ${font}`;
+	const tw = g.measureText(E?.name || '').width;
+	if (tw > w - 60) px = Math.max(20, Math.floor(px * (w - 60) / tw));
+	g.font = `${weight}${px}px ${font}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = fg;
+	g.fillText(E?.name || '', w / 2, h / 2 - (tag ? 14 : 0));
+	if (tag) { g.font = `bold 20px ${FONTS.sans}`; g.globalAlpha = 0.85; g.fillText(tag, w / 2, h / 2 + 36); g.globalAlpha = 1; }
 }
 const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
 // the hours each keeps its lights on (interiors/lighting.js dims them the rest of the night)
@@ -75,6 +97,9 @@ const FLOORS = {
 	cafe: ['wood', [0.82, 0.7, 0.55]], sitdown: ['wood', [0.58, 0.42, 0.3]], pub: ['wood', [0.46, 0.33, 0.23]], diner: ['floor0', [0.95, 0.95, 0.95]],
 	pizza: ['floor6', [0.92, 0.8, 0.7]], quick: ['floor4', [0.88, 0.87, 0.84]], counter: ['wood', [0.88, 0.78, 0.62]], bakery: ['floor6', [0.97, 0.9, 0.82]],
 	donut: ['floor0', [0.97, 0.93, 0.95]], boba: ['floor4', [0.95, 0.95, 0.94]], icecream: ['floor0', [0.98, 0.94, 0.95]],
+	// (the offices', by what they do; the places to play; a tattoo parlour's: bay/venuefit.js)
+	studio: ['carpet', [0.5, 0.52, 0.56]], firm: ['carpet', [0.42, 0.4, 0.42]], care: ['floor4', [0.94, 0.94, 0.93]],
+	arcade: ['carpet', [0.2, 0.12, 0.3]], bowling: ['carpet', [0.32, 0.14, 0.36]], cinema: ['carpet', [0.42, 0.1, 0.12]], tattoo: ['concrete', [0.5, 0.5, 0.52]],
 };
 // the colours a shop wears (its sign's: economy/establishments.js), linear and as written
 function brandOf(b) {
@@ -111,6 +136,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 	mats.lining = S(0xffffff, 0.9, { vertexColors: true });
 	mats.lining.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vColor.rgb;'); };
 	mats.lining.customProgramCacheKey = () => 'lining';
+	// the screens' pictures (interiors/screen-atlas.js: a desk's work, a cabinet's game, the lanes'
+	// scores), glowing of themselves
+	mats.screens = new THREE.MeshBasicMaterial({ map: typeof document !== 'undefined' ? screenAtlasTexture() : null, color: 0xe6e6e6 });
 	for (const m of Object.values(mats).flat()) addLodFade(m, 'building', band);
 	const FILL = [mats.wall, mats.walld, mats.ceil, mats.floorW, mats.floorT, mats.carpet, mats.lane, mats.wood, mats.white, mats.leather, mats.red, mats.seat, mats.steel, mats.food, mats.cup, mats.green, mats.lining, ...mats.goods, ...mats.skin, ...mats.cloth];
 	for (const m of FILL) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.1; }
@@ -131,8 +159,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		// a shop is fitted out for what it sells (bay/storefit.js), a café or a restaurant for how
 		// it serves (bay/dinefit.js): its fittings in the house kit, its stock and its menus on the
 		// goods' sheet; its floor, its lights and its stripe its own
-		const stock = type === 'shop', dine = type === 'cafe' || type === 'restaurant', fitted = stock || dine;
-		const trade = stock ? (b.store ? 'mart' : tradeOf(b.biz?.type)) : dine ? styleOf(type, b.biz?.type) : null;
+		// (an office, a place to play or a tattoo parlour for what it is: bay/venuefit.js)
+		const stock = type === 'shop', dine = type === 'cafe' || type === 'restaurant', fitted = true;
+		const trade = stock ? (b.store ? 'mart' : tradeOf(b.biz?.type)) : dine ? styleOf(type, b.biz?.type) : type === 'office' ? officeKind(b.biz?.type) : type;
 		const kg = fitted ? new Builder() : null, goods = fitted ? new GoodsBuilder() : null;
 		if (kg) { kg.ao = true; kg.inside(); }
 		const ca = Math.cos(b.a), sa = Math.sin(b.a);
@@ -163,7 +192,6 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			g.setAttribute('color', new THREE.BufferAttribute(a, 3));
 			add(mats.lining, g);
 		};
-		const desk = type === 'office' ? tinted(mats.white, sc.desk) : mats.white, sofa = type === 'office' ? tinted(mats.leather, sc.seat) : mats.leather;
 		box(outside, -hw, 0, -hd, hw, H, -hd + WALL, true);
 		box(outside, -hw, 0, -hd, -hw + WALL, H, hd, true);
 		box(outside, hw - WALL, 0, -hd, hw, H, hd, true);
@@ -181,22 +209,26 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		// an awning over the door, the name board above it (a corner store or gas station's mart has
 		// its big board down over the windows and its lamps over the front: bay/forecourts.js)
 		if (!b.store) box(type === 'restaurant' ? mats.red : type === 'arcade' || type === 'tattoo' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
+		yield;
 		// the ceiling: a dropped grid of light panels, or (the creative offices, the big stores,
 		// some cafés and restaurants) open to the roof: the deck painted dark, bowstring trusses
 		// arching across, spiral ducts, the sprinkler main, a cable tray, pendant lights
 		const open = H > CEIL + 1.4 && ((type === 'office' && rnd() < 0.5) || (type === 'shop' && W * D > 500) || ((type === 'cafe' || type === 'restaurant') && rnd() < 0.4));
 		if (!open) {
-			box(mats.ceil, -hw, CEIL, -hd, hw, CEIL + 0.12, hd);
+			box(type === 'arcade' || type === 'bowling' || type === 'cinema' ? mats.deck : mats.ceil, -hw, CEIL, -hd, hw, CEIL + 0.12, hd);
 			// (a fitted shop has its rows of light strips instead, a café or a restaurant its pendants
-			// and downlights: bay/storefit.js, dinefit.js)
-			if (!fitted) for (let x = -hw + 2; x < hw - 1; x += 3) for (let z = -hd + 2; z < hd - 1; z += 3) box(type === 'cinema' && z < hd - 9 ? mats.ceil : mats.panel, x - 0.55, CEIL - 0.02, z - 0.55, x + 0.55, CEIL, z + 0.55);
+			// and downlights: bay/storefit.js, dinefit.js; an arcade, the lanes and a cinema their own
+			// lights under a dark ceiling: bay/venuefit.js)
+			if (type === 'office' || type === 'tattoo') for (let x = -hw + 2; x < hw - 1; x += 3) for (let z = -hd + 2; z < hd - 1; z += 3) box(mats.panel, x - 0.55, CEIL - 0.02, z - 0.55, x + 0.55, CEIL, z + 0.55);
 		} else openCeiling();
 		// (up to the ceiling, or the roof deck where it is open)
 		const lh = open ? H - 0.14 : CEIL + 0.1;
-		if (type !== 'bowling' && type !== 'cinema') {
-			lining(-hw + WALL, -hd + WALL, hw - WALL, -hd + WALL + 0.015, sc.accent || sc.wall, lh);
-			lining(-hw + WALL, -hd + WALL, -hw + WALL + 0.015, hd - WALL, sc.wall, lh);
-			lining(hw - WALL - 0.015, -hd + WALL, hw - WALL, hd - WALL, sc.wall, lh);
+		{
+			// (the places to play darker: their own lights are the point)
+			const dk = type === 'arcade' || type === 'bowling' || type === 'cinema' ? 0.3 : 1, wc = sc.wall.map((c) => c * dk);
+			lining(-hw + WALL, -hd + WALL, hw - WALL, -hd + WALL + 0.015, dk < 1 ? wc : sc.accent || sc.wall, lh);
+			lining(-hw + WALL, -hd + WALL, -hw + WALL + 0.015, hd - WALL, wc, lh);
+			lining(hw - WALL - 0.015, -hd + WALL, hw - WALL, hd - WALL, wc, lh);
 		}
 		function openCeiling() {
 			const beam = (mat, x0, y0, x1, y1, z, t) => { const L = Math.hypot(x1 - x0, y1 - y0); add(mat, new THREE.BoxGeometry(L, t, t).rotateZ(Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2, z)); };
@@ -236,42 +268,44 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 
 		// ---------- the fit-out ----------
 		const seats = [];                // where people sit or stand: [x, z, yaw, sitting]
-		const inside = { x0: -hw + WALL + 0.4, x1: hw - WALL - 0.4, z0: -hd + WALL + 0.4, z1: hd - WALL - 2.2 };
-		const iw = inside.x1 - inside.x0, id = inside.z1 - inside.z0;
-		// what a fit-out (bay/storefit.js, dinefit.js) draws with and into
+		const perks = [], games = [];    // what is yours to use, the machines and lanes to play (local)
+		let board = null;
+		const boardMat = () => {
+			if (board) return board.mat;
+			const cv = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+			if (cv) { cv.width = 512; cv.height = 128; drawBoard(cv, b.biz); }
+			const tex = cv ? new THREE.CanvasTexture(cv) : null;
+			if (tex) { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; }
+			board = { mat: new THREE.MeshBasicMaterial({ map: tex, color: 0xe6e6e6 }), tex };
+			addLodFade(board.mat, 'building', band);
+			return board.mat;
+		};
+		// what a fit-out (bay/storefit.js, dinefit.js, venuefit.js) draws with and into
 		const fit = () => ({
 			g: kg, s: goods, box, mats, col, seats, aisles, rnd, isPhone, doorX,
 			wall: { x0: -hw + WALL, x1: hw - WALL, z0: -hd + WALL, z1: hd - WALL }, ceil: open ? null : CEIL, roof: open ? H - 0.14 : CEIL, brand: brandOf(b),
 			band: (x0, z0, x1, z1, rgb, y0, y1) => lining(x0, z0, x1, z1, rgb, y1, y0),
+			// a picture on a screen (the atlas's tile), facing +z turned by yaw, its middle at (x, y, z)
+			screen: (x, y, z, w, h, tile, yaw = 0) => add(mats.screens, tileUV(new THREE.PlaneGeometry(w, h), tile).rotateY(yaw).translate(x, y, z)),
+			// the place's own board (its name and line in its colours), the same way
+			board: (x, y, z, w, h, yaw = 0) => add(boardMat(), new THREE.PlaneGeometry(w, h).rotateY(yaw).translate(x, y, z)),
+			// a sheet of the street's tattoo flash (its i-th design) on a wall
+			flash: (x, y, z, w, h, yaw, i) => {
+				if (typeof document === 'undefined') return;
+				const F = flashSheet(), n = F.tiles.length, t = F.tiles[((i % n) + n) % n], g = new THREE.PlaneGeometry(w, h).rotateY(yaw).translate(x, y, z), uv = g.attributes.uv;
+				for (let k = 0; k < uv.count; k++) uv.setXY(k, t[0] + uv.getX(k) * t[2], t[1] + uv.getY(k) * t[3]);
+				add(F.mat, g);
+			},
+			// something here that is yours to use (interiors/office-perks.js), a game to play (arcade.js)
+			perk: (kind, x, z) => perks.push({ kind, x, z }),
+			game: (id, x, z, r, name) => games.push({ id, x, z, r, name }),
+			biz: b.biz || null,
 		});
 		if (dine) {
 			// a café or a restaurant, laid out for how it serves (bay/dinefit.js): an espresso bar,
 			// a pizzeria's counter and oven, a pub's bar, a sit-down place's kitchen and its pass...
 			yield* goodsSteps();
 			yield* fitDining(fit(), type, b.biz?.type);
-		} else if (type === 'tattoo') {
-			// a tattoo parlour: the counter by the door, the flash sheets framed down one wall,
-			// and down the other the stations: a reclined chair, the artist's stool, a lamp over it
-			box(mats.dark, doorX - 1.4, 0, inside.z1 - 1.6, doorX + 1.4, 1.05, inside.z1 - 1, true);
-			seats.push([doorX, inside.z1 - 2.1, 0, false]);
-			const F = flashSheet();
-			for (let z = inside.z0 + 0.9, k = 0; z < inside.z1 - 2.6; z += 1.15, k++) for (const y of [1.25, 2.25]) {
-				const t = F.tiles[(k * 2 + (y > 2 ? 1 : 0)) % F.tiles.length], g = new THREE.PlaneGeometry(0.9, 0.9).rotateY(Math.PI / 2).translate(inside.x0 - 0.36, y, z);
-				const uv = g.attributes.uv;
-				for (let i = 0; i < uv.count; i++) uv.setXY(i, t[0] + uv.getX(i) * t[2], t[1] + uv.getY(i) * t[3]);
-				add(F.mat, g);
-				box(mats.dark, inside.x0 - 0.39, y - 0.48, z - 0.48, inside.x0 - 0.35, y + 0.48, z + 0.48);
-			}
-			for (let z = inside.z0 + 1.3; z < inside.z1 - 3; z += 2.6) {
-				const x = inside.x1 - 1.3;
-				box(mats.leather, x - 0.35, 0.5, z - 0.9, x + 0.35, 0.7, z + 0.3, true);
-				add(mats.leather, new THREE.BoxGeometry(0.7, 0.12, 0.8).rotateX(-0.6).translate(x, 0.9, z - 1.1));
-				cyl(mats.steel, x, 0, z - 0.3, 0.06, 0.5, 8);
-				cyl(mats.steel, x - 0.9, 0, z - 0.2, 0.03, 0.5, 6); cyl(mats.leather, x - 0.9, 0.5, z - 0.2, 0.2, 0.06, 10);
-				cyl(mats.steel, x + 0.6, 0, z + 0.5, 0.02, 1.9, 6); add(mats.panel, new THREE.SphereGeometry(0.14, 10, 6).translate(x + 0.3, 1.85, z + 0.2));
-				seats.push([x, z - 0.4, Math.PI, true], [x - 0.9, z - 0.2, Math.PI / 2, true]);
-			}
-			box(mats.neon, doorX - 1.1, 2.3, hd - WALL - 0.06, doorX + 1.1, 2.55, hd - WALL - 0.02);
 		} else if (stock) {
 			// a shop, fitted out for its trade (bay/storefit.js): a gas station's food mart or a corner
 			// store (bay/siteplan.js b.store), a grocer, a hardware store, a pharmacy, a bottle shop...
@@ -279,53 +313,11 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			yield* goodsSteps();
 			const K = fit();
 			yield* (b.store ? fitMart(K, b.store) : fitShop(K, b.biz?.type));
-		} else if (type === 'office') {
-			// reception by the door, a sofa, then the desks
-			box(desk, doorX - 1.5, 0, inside.z1 - 3, doorX + 1.5, 1.1, inside.z1 - 2.3, true);
-			box(sofa, inside.x1 - 3, 0, inside.z1 - 1.4, inside.x1 - 0.8, 0.45, inside.z1 - 0.6); box(sofa, inside.x1 - 3, 0.45, inside.z1 - 0.6, inside.x1 - 0.8, 0.9, inside.z1 - 0.45);
-			seats.push([doorX, inside.z1 - 3.5, 0, false]);
-			for (let z = inside.z0 + 1.2; z < inside.z1 - 5; z += 3) for (let x = inside.x0 + 1; x < inside.x1 - 1.6; x += 1.7) {
-				box(desk, x, 0.72, z, x + 1.5, 0.76, z + 0.75); box(mats.trim, x + 0.05, 0, z + 0.05, x + 0.1, 0.72, z + 0.7); box(mats.trim, x + 1.4, 0, z + 0.05, x + 1.45, 0.72, z + 0.7);
-				box(mats.screen, x + 0.45, 0.8, z + 0.12, x + 1.05, 1.18, z + 0.15);
-				box(mats.dark, x + 0.5, 0.42, z + 0.95, x + 1, 0.47, z + 1.4);
-				seats.push([x + 0.75, z + 1.2, Math.PI, true]);
-			}
-			if (iw > 8 && id > 10) { add(mats.glass, new THREE.BoxGeometry(4, CEIL - 0.1, 0.04).translate(inside.x1 - 2, (CEIL - 0.1) / 2, inside.z0 + 4)); box(mats.wood, inside.x1 - 3.4, 0.72, inside.z0 + 1, inside.x1 - 0.6, 0.76, inside.z0 + 3); }
-			for (const [x, z] of [[inside.x0 + 0.4, inside.z1 - 0.8], [inside.x1 - 0.4, inside.z0 + 0.5]]) { cyl(mats.walld, x, 0, z, 0.25, 0.5, 10); add(mats.green, new THREE.IcosahedronGeometry(0.45, 0).translate(x, 1, z)); }
-		} else if (type === 'arcade') {
-			for (const side of [-1, 1]) for (let z = inside.z0 + 0.8; z < inside.z1 - 1; z += 1.1) {
-				const x = side < 0 ? inside.x0 + 0.4 : inside.x1 - 0.4;
-				box(mats.dark, x - 0.35, 0, z - 0.4, x + 0.35, 1.85, z + 0.4, true);
-				box(rnd() < 0.5 ? mats.screen : mats.neon, x - side * 0.36, 1.05, z - 0.3, x - side * 0.34, 1.55, z + 0.3);
-				seats.push([x - side * 0.9, z, side > 0 ? Math.PI / 2 : -Math.PI / 2, false]);
-			}
-			box(mats.neon, inside.x0 + 2, 0, inside.z0 + 0.4, inside.x1 - 2, 1.05, inside.z0 + 1.1, true);
-			box(mats.neon, inside.x0, CEIL - 0.3, inside.z0, inside.x1, CEIL - 0.25, inside.z0 + 0.1);
-		} else if (type === 'bowling') {
-			const lanes = Math.max(2, Math.min(10, Math.floor(iw / 3.2)));
-			for (let k = 0; k < lanes; k++) {
-				const x = inside.x0 + 1.6 + k * (iw - 3.2) / Math.max(1, lanes - 1);
-				box(mats.lane, x - 0.53, 0.02, inside.z0 + 0.5, x + 0.53, 0.06, inside.z1 - 5);
-				box(mats.dark, x - 0.8, 0, inside.z0 + 0.5, x - 0.53, 0.04, inside.z1 - 5);
-				for (let r = 0; r < 4; r++) for (let c = 0; c <= r; c++) cyl(mats.white, x + (c - r / 2) * 0.3, 0.06, inside.z0 + 1 + r * 0.26, 0.06, 0.38, 8);
-				add(mats.screen, new THREE.BoxGeometry(1.2, 0.7, 0.05).translate(x, 2.6, inside.z1 - 4.8));
-				seats.push([x + 0.2, inside.z1 - 3.5, Math.PI, false]);
-			}
-			box(mats.walld, inside.x0, 0, inside.z0 - 0.1, inside.x1, 1.2, inside.z0 + 0.5, true);
-			box(mats.leather, inside.x0 + 1, 0, inside.z1 - 2.6, inside.x1 - 1, 0.45, inside.z1 - 1.8);
-		} else {                        // cinema: the lobby, the concession stand, the hall
-			const hall = inside.z1 - 8;
-			box(mats.wall, inside.x0, 0, hall - 0.15, inside.x1 - 2.4, CEIL, hall + 0.15, true);
-			box(mats.red, inside.x0 + 1, 0, hall + 2, inside.x0 + 6, 1.05, hall + 2.8, true);
-			box(mats.food, inside.x0 + 1.2, 1.05, hall + 2.1, inside.x0 + 2, 1.7, hall + 2.7);
-			box(mats.screen, inside.x0 + 1, 2.2, hall + 0.2, inside.x0 + 6, 3, hall + 0.25);
-			const hx0 = Math.max(inside.x0, -13), hx1 = Math.min(inside.x1, 13);          // (one screen's hall, not the whole block)
-			box(mats.bigscreen, hx0 + 1, 0.9, inside.z0 + 0.05, hx1 - 1, Math.min(CEIL - 0.3, 3.3), inside.z0 + 0.12);
-			for (let r = 0, z = inside.z0 + 3.5; z < hall - 1 && r < 16; z += 1.1, r++) {
-				const y = Math.min(1.2, r * 0.18);
-				box(mats.walld, hx0, 0, z - 0.5, hx1, y, z + 0.6);
-				for (let x = hx0 + 1; x < hx1 - 1; x += 0.62) { box(mats.seat, x - 0.26, y, z - 0.25, x + 0.26, y + 0.45, z + 0.2); box(mats.seat, x - 0.26, y + 0.45, z + 0.15, x + 0.26, y + 1.0, z + 0.25); seats.push([x, z - 0.02, 0, true, y]); }
-			}
+		} else {
+			// an office for what it does, an arcade, the lanes, a cinema, a tattoo parlour
+			// (bay/venuefit.js): their machines to play, their coffee and their popcorn yours too
+			yield* goodsSteps();
+			yield* fitVenue(fit(), type, b.biz);
 		}
 
 		// ---------- the building's people, by the hour ----------
@@ -335,15 +327,19 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		let merged = 0;
 		for (const [mat, list] of parts) {
 			const m = new THREE.Mesh(mergeGeometries(list), mat); m.receiveShadow = true; m.castShadow = !isPhone && mat !== mats.glass; root.add(m);
+			// (a screen or a board lights itself: nothing for the bake to do there)
+			if (mat === mats.screens || mat === board?.mat) { m.userData.noBake = true; m.castShadow = m.receiveShadow = false; }
 			if ((merged += list.length) > 300) { merged = 0; yield; }
 		}
 		// a fitted shop's fittings (the house kit's materials, shared with the houses) and its stock:
 		// one unlit draw, its light set by the building's own each frame (in update)
 		let goodsMat = null;
 		if (kg) {
+			yield;
 			// (where there is no page to paint the kit's textures on, the tests: plain materials)
 			const hm = houseMats || (houseMats = typeof document !== 'undefined' ? houseMaterials(band, undefined, 'building') : new Proxy({}, { get: (t, k) => t[k] || (t[k] = new THREE.MeshStandardMaterial({ vertexColors: true })) }));
-			for (const m of kg.meshes(hm, !isPhone)) root.add(m);
+			// (a material's mesh a step)
+			for (const m of kg.meshSteps(hm, !isPhone)) { root.add(m); yield; }
 			if (!goods.empty()) {
 				goodsMat = goodsMaterial();
 				addLodFade(goodsMat, 'building', band);
@@ -365,7 +361,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			// (a gas station's mart keeps its lights on all night, a corner store till late)
 			hours: hrs, allNight: b.store === 'fuel', dust: type === 'restaurant' && open,
 		});
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, fitted, trade, hours: hrs, bizKey: bizKey(b), light, goodsMat, dispose: () => { releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); } };
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, fitted, trade, hours: hrs, bizKey: bizKey(b), light, goodsMat, perks, games, dispose: () => { releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); board?.mat.dispose(); board?.tex?.dispose(); } };
 		return B;
 	}
 
@@ -504,5 +500,31 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		}
 		return out;
 	}
-	return { group, update, floor, push, inside, venue, doorsNear, count: () => built.size, busy: () => !!job, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, products: B.products, ceil: B.ceil, name: B.b.biz?.name || '', stocked: !!B.stocked, trade: B.trade || null })) };
+	// what is yours to use in the places round you (the office's coffee, water, vending machine
+	// and first-aid box, a cinema's concession stand, the lanes' snack bar: interiors/office-perks.js)
+	function amenities(eye, r = 2.2) {
+		const out = [];
+		for (const B of built.values()) {
+			if (!B.perks?.length || Math.abs(eye.y - B.floorY - 1.6) > 2.5) continue;
+			const [lx, lz] = local(B, eye.x, eye.z);
+			if (Math.abs(lx) > B.hw + r || Math.abs(lz) > B.hd + r) continue;
+			const ca = Math.cos(B.b.a), sa = Math.sin(B.b.a);
+			for (const q of B.perks) {
+				const d = Math.hypot(q.x - lx, q.z - lz);
+				if (d < r) out.push({ kind: q.kind, x: B.b.x + ca * q.x - sa * q.z, z: B.b.z + sa * q.x + ca * q.z, d, key: `biz:${Math.round(B.b.x)}:${Math.round(B.b.z)}:${q.kind}:${Math.round(q.x * 10)}:${Math.round(q.z * 10)}`, place: B.type });
+			}
+		}
+		return out.sort((a, b) => a.d - b.d);
+	}
+	// the machines and lanes to play in the places round you (arcade.js offers each where it stands)
+	function gameSpots(x, z, R = 2000) {
+		const out = [];
+		for (const B of built.values()) {
+			if (!B.games?.length || Math.hypot(B.b.x - x, B.b.z - z) > R + Math.max(B.hw, B.hd)) continue;
+			const ca = Math.cos(B.b.a), sa = Math.sin(B.b.a), name = B.b.biz?.name || '';
+			for (const q of B.games) out.push({ game: q.id, name: name ? `${q.name}, ${name}` : q.name, x: B.b.x + ca * q.x - sa * q.z, z: B.b.z + sa * q.x + ca * q.z, r: q.r });
+		}
+		return out;
+	}
+	return { group, update, floor, push, inside, venue, doorsNear, amenities, gameSpots, count: () => built.size, busy: () => !!job, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length, doorX: B.doorX, glassZ: B.hd - WALL / 2, aisles: B.aisles, products: B.products, ceil: B.ceil, name: B.b.biz?.name || '', stocked: !!B.stocked, trade: B.trade || null })) };
 }

@@ -8,7 +8,9 @@
 // gives the camera over to it until it is closed.
 // A game's `where` is a list of real places (kind 'site'), any water ('water'), anywhere,
 // or 'dynamic': a function that finds its venues round a point as the world is built
-// (the ball fields: see sportsfields.js).
+// (the ball fields: see sportsfields.js). The walk-in arcades and bowling alleys on the
+// streets are venues too, each machine and lane where it stands (bay/commercial.js gameSpots,
+// placed by bay/venuefit.js).
 
 import * as THREE from 'three';
 import { GAMES } from './games/index.js';
@@ -28,6 +30,7 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 	const DYN = GAMES.filter((G) => G.where?.kind === 'dynamic' && typeof G.where.sites === 'function');
 	const WET = GAMES.filter((G) => G.where?.kind === 'water');
 	const ANY = GAMES.filter((G) => !G.where || G.where.kind === 'anywhere' || !G.where.kind);
+	const BY_ID = new Map(GAMES.map((G) => [G.id, G]));
 	let cur = null, curG = null, nearSite = null, scanT = 0, bus = null, near = [], water = null, waterT = 0;
 	// an indoor game (a closed room) sees only itself: the camera draws one layer, the game's
 	// objects and the lights are put on it, and the world outside is simply not drawn
@@ -129,6 +132,10 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 			let list = [];
 			try { list = G.where.sites(W, x, z, NEAR) || []; } catch (err) { console.warn('[arcade]', G.id, err); }
 			for (const s of list) { const d = s.dist ? s.dist(x, z) : Math.max(0, Math.hypot(s.x - x, s.z - z) - s.r); if (d < NEAR) out.push({ G, site: s, d }); }
+		}
+		for (const s of W?.commercial?.gameSpots?.(x, z, NEAR) || []) {
+			const G = BY_ID.get(s.game);
+			if (G) out.push({ G, site: s, d: Math.max(0, Math.hypot(s.x - x, s.z - z) - s.r) });
 		}
 		const now = performance.now();
 		if (now > waterT) { waterT = now + 2000; water = findWater(P); }

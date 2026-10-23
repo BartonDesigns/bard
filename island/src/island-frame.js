@@ -253,9 +253,9 @@ export function islandFrame(iw, now) {
 		// stepping into a place: what it is, and how busy at this hour
 		const inB = W.commercial.inside(camera.position);
 		if (inB && inB !== W.bizSeen) {
-			const NAME = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', tattoo: 'Tattoo parlor · T to design your own', office: 'Office lobby', arcade: 'Arcade', bowling: 'Bowling alley', cinema: 'Cinema' };
+			const NAME = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', tattoo: 'Tattoo parlor · T to design your own', office: inB.trade === 'care' ? 'Clinic' : 'Office lobby', arcade: 'Arcade · walk up to a machine to play', bowling: 'Bowling alley · step up to a lane to bowl', cinema: 'Cinema · popcorn at the concession stand' };
 			const n = (inB.spots || []).filter((q) => q.taken).length;
-			hint(`${NAME[inB.type]}${n < 1 ? ' · quiet at this hour' : n > inB.seats.length * 0.35 ? ' · busy' : ''}`, 3000);
+			hint(`${inB.b?.biz?.name && /office|arcade|bowling|cinema|tattoo/.test(inB.type) ? inB.b.biz.name + ' · ' : ''}${NAME[inB.type]}${n < 1 ? ' · quiet at this hour' : n > inB.seats.length * 0.35 ? ' · busy' : ''}`, 3000);
 		}
 		W.bizSeen = inB;
 		inkBtn.style.display = inB?.type === 'tattoo' && !studio.active() ? '' : 'none';

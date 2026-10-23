@@ -17,6 +17,7 @@ const DOOR_ROW = 2.1, GARAGE_ROW = 2.25;
 
 // ---------------------------------------------------------------------------------
 // the builder: boxes, cylinders and spheres, placed by a quarter-turn transform
+const WOUND = [0, 1, 2, 0, 2, 3], FLIPPED = [0, 2, 1, 0, 3, 2];
 
 export class Builder {
 	// ao: shade each box's foot and underside and lift its top a little (the rooms' kit);
@@ -56,16 +57,16 @@ export class Builder {
 		let vo = 0;
 		const sl = SLOT.get(k);
 		if (sl) { k = sl[0]; vo = sl[1]; }
-		const B = this.buf(k), P = [a, b, c, d].map((p) => this.tp(...p)), N = this.tn(...n);
+		const B = this.buf(k), P = [this.tp(a[0], a[1], a[2]), this.tp(b[0], b[1], b[2]), this.tp(c[0], c[1], c[2]), this.tp(d[0], d[1], d[2])], N = this.tn(n[0], n[1], n[2]);
 		// wind them to face along n
-		const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], e2 = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
-		const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-		const flip = cr[0] * N[0] + cr[1] * N[1] + cr[2] * N[2] < 0;
-		const order = flip ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
-		const m = this.mul;
-		for (const i of order) {
-			const f = (sh ? sh[i] : 1) * m;
-			B.p.push(...P[i]); B.n.push(...N); B.u.push(uv[i][0], uv[i][1] + vo); B.c.push(col[0] * f, col[1] * f, col[2] * f); B.a.push(sh ? sh[i] : 1);
+		const p0 = P[0], p1 = P[1], p2 = P[2];
+		const e10 = p1[0] - p0[0], e11 = p1[1] - p0[1], e12 = p1[2] - p0[2], e20 = p2[0] - p0[0], e21 = p2[1] - p0[1], e22 = p2[2] - p0[2];
+		const flip = (e11 * e22 - e12 * e21) * N[0] + (e12 * e20 - e10 * e22) * N[1] + (e10 * e21 - e11 * e20) * N[2] < 0;
+		const order = flip ? FLIPPED : WOUND, m = this.mul, bp = B.p, bn = B.n, bu = B.u, bc = B.c, ba = B.a;
+		// (pushed a number at a time: this runs for every face of every house and room)
+		for (let j = 0; j < 6; j++) {
+			const i = order[j], q = P[i], t = uv[i], s = sh ? sh[i] : 1, f = s * m;
+			bp.push(q[0], q[1], q[2]); bn.push(N[0], N[1], N[2]); bu.push(t[0], t[1] + vo); bc.push(col[0] * f, col[1] * f, col[2] * f); ba.push(s);
 		}
 	}
 	// a face as a grid with its edges shaded: P(s, t) the point at s, t in 0..1; e the shading
@@ -160,8 +161,9 @@ export class Builder {
 		this.shadow(0, 0, 0, it.w, it.d, 0.4, Math.min(0.3, 0.08 + Math.max(it.w, it.d) * 0.08));
 	}
 	// the finished meshes, one per material
-	meshes(mats, shadows = true) {
-		const out = [];
+	meshes(mats, shadows = true) { return [...this.meshSteps(mats, shadows)]; }
+	// the same, a mesh at a time (a builder that spreads its work over frames: bay/commercial.js)
+	*meshSteps(mats, shadows = true) {
 		for (const [k, b] of this.bufs) {
 			if (!b.p.length || !mats[k]) continue;
 			const g = new THREE.BufferGeometry();
@@ -169,7 +171,7 @@ export class Builder {
 			g.setAttribute('normal', new THREE.Float32BufferAttribute(b.n, 3));
 			g.setAttribute('uv', new THREE.Float32BufferAttribute(b.u, 2));
 			// (the lit walls keep their shading apart, in the alpha, to dim their glow by it too)
-			if (mats[k].userData.vertexAlphas) { const c4 = new Float32Array(b.a.length * 4); for (let i = 0; i < b.a.length; i++) c4.set([b.c[i * 3], b.c[i * 3 + 1], b.c[i * 3 + 2], b.a[i]], i * 4); g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
+			if (mats[k].userData.vertexAlphas) { const c4 = new Float32Array(b.a.length * 4); for (let i = 0; i < b.a.length; i++) { c4[i * 4] = b.c[i * 3]; c4[i * 4 + 1] = b.c[i * 3 + 1]; c4[i * 4 + 2] = b.c[i * 3 + 2]; c4[i * 4 + 3] = b.a[i]; } g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
 			else g.setAttribute('color', new THREE.Float32BufferAttribute(b.c, 3));
 			g.computeBoundingSphere();
 			const m = new THREE.Mesh(g, mats[k]);
@@ -183,9 +185,8 @@ export class Builder {
 				if (!shell && GFX_PHONE) m.castShadow = false;
 				else sunShell(m);
 			}
-			out.push(m);
+			yield m;
 		}
-		return out;
 	}
 }
 

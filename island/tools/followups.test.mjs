@@ -15,13 +15,15 @@ test('commercial builder skips and drops wrecked shops', () => {
 	grp.push(b); b.grp = grp; grp.biz = true;
 	const C = createCommercial({ add() {} }, { heightAt: () => 0 }, null, { procBiz: () => [b], setNear() {} }, {});
 	const cam = { position: { x: 0, y: 2, z: 0 } };
-	for (let i = 0; i < 3; i++) C.update(cam, 1, 12, 0);
+	// (an office is fitted out a few steps a frame: bay/venuefit.js)
+	const settle = () => { for (let i = 0; i < 60 && !C.group.children.length; i++) C.update(cam, 1, 12, 0); };
+	settle();
 	assert.equal(C.group.children.length, 1, 'built whole near you');
 	grp.wrecked = true;
 	for (let i = 0; i < 3; i++) C.update(cam, 1, 12, 0);
 	assert.equal(C.group.children.length, 0, 'let go once wrecked, and not built again');
 	grp.wrecked = false;
-	for (let i = 0; i < 3; i++) C.update(cam, 1, 12, 0);
+	settle();
 	assert.equal(C.group.children.length, 1, 'built again once put right');
 });
 
