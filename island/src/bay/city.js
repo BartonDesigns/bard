@@ -1177,6 +1177,7 @@ export function createCity(shared, scene, bay, real = null) {
 				const u = (k - (n - 1) / 2) * L, x = o.x + ca * u, z = o.z + sa * u;
 				// (each one of four ways round: turned or not, mirrored or not)
 				out.push({ x, y: o.y + o.h, z, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x * 1.7, z * 2.3) * 4), sec });
+				if (o.planted.yard) continue;
 				const f = o.d / 2 + 0.36;
 				out.push({ x: x - sa * f, y: o.planted.kerb, z: z + ca * f, a: o.a, sx: L / BED_LEN, bed: Math.floor(hash(x, z) * 4), litter: true });
 			}
@@ -1562,7 +1563,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// mapped one, or the one made for it); the cars stand on the drive before the doors
 		const F = b.grp ? frontOf(b.grp) : null, gar = F?.garage, D = gar?.doors || [];
 		let gx = null, gz = null, ux = -sa, uz = ca;
-		if (F && fenced) lotFences(list, b, F, g, hr);
+		if (F && fenced) { const L = lotOf(b, F, g); if (L.back) lotFences(list, b, L, hr); yardPlants(list, put, b, F, L, g, hr, cnd); }
 		if (D.length) {
 			gx = (D[0].x0 + D[D.length - 1].x1) / 2; gz = gar.front;
 			const [dx, dz] = W(gx, gz);
@@ -1592,10 +1593,14 @@ export function createCity(shared, scene, bay, real = null) {
 		// no garage the map shows: the car on the pad made down the side of the house
 		// (realcity.js addDrives), 2.6 m from its back end, and the bins beside it
 		if (!D.length && F) {
-			const [fx, fz] = W((F.R0.x0 + F.R0.x1) / 2, F.R0.z1);
-			let pad = null, bd = 1e9;
-			for (const q of real.near('paths', fx, fz, 16)) { if (!q.pad) continue; const d = Math.hypot(q.ax - fx, q.az - fz); if (d < bd) { bd = d; pad = q; } }
-			if (pad && bd < 14) {
+			let pad = null;
+			for (const q of real.near('paths', b.x, b.z, 30)) if (q.pad && q.home === b) { pad = q; break; }
+			if (pad?.gar) {
+				// (its own garage at the back of the drive, its doors to the street: KIND.garage paints them)
+				const G2 = pad.gar, gy = bay.heightAt(G2.x, G2.z);
+				if (Math.abs(gy - g) < 1.5) list.push({ x: G2.x, y: gy - 1.2, z: G2.z, w: G2.w, d: G2.d, h: 3.0 + 1.2, a: b.a, col: hr(16) < 0.3 ? [0.6, 0.55, 0.45] : look.wall, kind: KIND.garage, roof: { hip: false, rot: true, h: 1.1, col: look.roof, t: ROOF.shingle, ov: 0.25, trim: 3 }, age: 0.5 });
+			}
+			if (pad) {
 				const L = Math.hypot(pad.bx - pad.ax, pad.bz - pad.az) || 1, vx = (pad.bx - pad.ax) / L, vz = (pad.bz - pad.az) / L;
 				const px = pad.ax + vx * 2.6 - b.x, pz = pad.az + vz * 2.6 - b.z, lx = ca * px + sa * pz, lz = -sa * px + ca * pz;
 				const yaw = Math.atan2(-vx, vz) - b.a;
@@ -1605,24 +1610,19 @@ export function createCity(shared, scene, bay, real = null) {
 			}
 		}
 	}
-	// The fences that make the lots round the mapped (or grown) houses, which the map draws
-	// as footprints in one continuous lawn: down each side line, halfway to the next house
-	// along the street (4.5 m out where there is none), from the house's front corners back to
-	// the back line, halfway to the house behind (12 m back where there is none, short of a
-	// street behind), and across the back; with the return runs from the house's front corners
-	// out to the side lines. Each shared line is built once: the side line by the house on its
-	// right (its own left), the back line by the lower-keyed of the pair. Thin walls like the
-	// gridded blocks' (city-blocks.js, FENCES), in pieces that follow the ground, broken at a
-	// building, a drive, a street or water
+	// A mapped (or grown) house's lot, which the map draws as a footprint in one continuous
+	// lawn, in the main block's frame: its side lines halfway to the next house along the
+	// street (4.5 m out where there is none), its back line halfway to the house behind (12 m
+	// back where there is none, short of a street behind), its front yard out to the sidewalk;
+	// and whether a fence or a plant can stand at a spot (not in a building, on a drive or a
+	// street, in water, or well above or below the house)
 	const FENCE_R = PHONE ? 150 : 300;
 	const FKEY = (q) => q.x * 0.37 + q.z * 1.13;
-	function lotFences(list, b, F, g, hr) {
+	function lotOf(b, F, g) {
 		const ca = Math.cos(b.a), sa = Math.sin(b.a), W = (lx, lz) => [b.x + ca * lx - sa * lz, b.z + sa * lx + ca * lz];
-		const FN = FENCES[Math.floor(hr(20) * FENCES.length)], fc = jit(FN, hr(21)), th = FN[4], fh = FN[3];
 		// the house's own blocks' extent in the main block's frame
 		let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
 		for (const r of F.rects) { x0 = Math.min(x0, r.x0); x1 = Math.max(x1, r.x1); z0 = Math.min(z0, r.z0); z1 = Math.max(z1, r.z1); }
-		const zf = F.R0.z1 - 0.9;
 		// the neighbours' homes in that frame, as their centre and half extents
 		// (near() gives whole cells: only what can reach 40 m of the house matters)
 		const boxes = real.near('boxes', b.x, b.z, 48).filter((q) => Math.hypot(q.x - b.x, q.z - b.z) < 40 + Math.hypot(q.w, q.d) / 2), nb = [];
@@ -1640,8 +1640,8 @@ export function createCity(shared, scene, bay, real = null) {
 			if (dl > 0.6 && dl < gl) { gl = dl; xl = x0 - dl / 2; }
 			if (dr > 0.6 && dr < gr) { gr = dr; xr = x1 + dr / 2; }
 		}
-		// the back line: halfway to the house behind, or 12 m back, short of any street there
-		let zb = z0 - 12, behind = null, gb = 1e9;
+		// the back line
+		let zb = z0 - 12, behind = null, gb = 1e9, back = true;
 		for (const n of nb) {
 			if (Math.abs(n.lx) > n.hw + (x1 - x0) / 2 + 3) continue;
 			const d = z0 - (n.lz + n.hd);
@@ -1653,28 +1653,45 @@ export function createCity(shared, scene, bay, real = null) {
 			// (a street behind the lot: the back line a step short of its sidewalk, or no back yard)
 			let d = 1e9;
 			for (let s = 2; s <= 13; s += 1) { if (roadDist(...W((x0 + x1) / 2, z0 - s)) < 0) { d = s; break; } }
-			if (d < 4) return;
-			if (d < 1e9) zb = z0 - d + 1.5;
+			if (d < 4) back = false;
+			else if (d < 1e9) zb = z0 - d + 1.5;
 		}
+		// the front yard, from the front wall out to the sidewalk (7 m where no street is near)
+		const zf = F.R0.z1 - 0.9;
+		let fd = 7;
+		for (let s = 1; s <= 14; s += 0.5) if (roadDist(...W((F.R0.x0 + F.R0.x1) / 2, F.R0.z1 + s)) < 0) { fd = s - 0.6; break; }
 		const paths = real.near('paths', b.x, b.z, 40).filter((q) => q.w >= 2.2);
-		// whether a fence can stand at a spot: not in a building, on a drive or a street, in
-		// water or well above or below the house
 		const ok = (x, z) => {
 			const gy = bay.heightAt(x, z);
 			if (gy < 0.6 || Math.abs(gy - g) > 3) return false;
-			for (const q of paths) if (segDist(q.ax, q.az, q.bx, q.bz, x, z) < q.w / 2 + 0.4) return false;
+			for (const q of paths) {
+				if (segDist(q.ax, q.az, q.bx, q.bz, x, z) < q.w / 2 + 0.4) return false;
+				// (a drive's own garage at its back end, realcity.js addDrives)
+				if (q.gar) { const dx = x - q.gar.x, dz = z - q.gar.z; if (Math.abs(ca * dx + sa * dz) < q.gar.w / 2 + 0.3 && Math.abs(-sa * dx + ca * dz) < q.gar.d / 2 + 0.3) return false; }
+			}
 			if (roadDist(x, z) < 0) return false;
 			for (const q of boxes) { const dx = x - q.x, dz = z - q.z, qc = Math.cos(q.a), qs = Math.sin(q.a); if (Math.abs(qc * dx + qs * dz) < q.w / 2 + 0.25 && Math.abs(-qs * dx + qc * dz) < q.d / 2 + 0.25) return false; }
 			return true;
 		};
+		return { W, x0, x1, z0, z1, xl, xr, gr, zb, zf, fd, behind, back: back && zf - zb >= 3, roadDist, ok };
+	}
+	// The fences that make the lot: down each side line from the house's front corners back
+	// to the back line, and across the back; with the return runs from the house's front
+	// corners out to the side lines. Each shared line is built once: the side line by the house
+	// on its right (its own left), the back line by the lower-keyed of the pair. Thin walls like
+	// the gridded blocks' (city-blocks.js, FENCES), in pieces that follow the ground, broken at
+	// a building, a drive, a street or water
+	function lotFences(list, b, L, hr) {
+		const FN = FENCES[Math.floor(hr(20) * FENCES.length)], fc = jit(FN, hr(21)), th = FN[4], fh = FN[3];
+		const { W, x0, x1, xl, xr, gr, zb, zf, behind } = L;
 		// a run of fence from one local point to another, in pieces of up to 7 m where it can stand
 		const run = (ax, az, bx, bz) => {
-			const L = Math.hypot(bx - ax, bz - az);
-			if (L < 1.2) return;
-			const n = Math.ceil(L), along = Math.abs(bx - ax) > Math.abs(bz - az);
+			const len0 = Math.hypot(bx - ax, bz - az);
+			if (len0 < 1.2) return;
+			const n = Math.ceil(len0), along = Math.abs(bx - ax) > Math.abs(bz - az);
 			let s0 = -1;
 			const piece = (i0, i1) => {
-				const t0 = Math.max(0, (i0 - 0.5) / n), t1 = Math.min(1, (i1 + 0.5) / n), len = (t1 - t0) * L;
+				const t0 = Math.max(0, (i0 - 0.5) / n), t1 = Math.min(1, (i1 + 0.5) / n), len = (t1 - t0) * len0;
 				if (len < 1) return;
 				const parts = Math.ceil(len / 7);
 				for (let k = 0; k < parts; k++) {
@@ -1684,13 +1701,12 @@ export function createCity(shared, scene, bay, real = null) {
 				}
 			};
 			for (let i = 0; i <= n; i++) {
-				const t = i / n, good = ok(...W(ax + (bx - ax) * t, az + (bz - az) * t));
+				const t = i / n, good = L.ok(...W(ax + (bx - ax) * t, az + (bz - az) * t));
 				if (good && s0 < 0) s0 = i;
 				if (!good && s0 >= 0) { piece(s0, i - 1); s0 = -1; }
 			}
 			if (s0 >= 0) piece(s0, n);
 		};
-		if (zf - zb < 3) return;
 		// the left line is this house's; the right only where no neighbour's left meets it
 		run(xl, zf, xl, zb);
 		if (gr === 1e9) run(xr, zf, xr, zb);
@@ -1698,6 +1714,156 @@ export function createCity(shared, scene, bay, real = null) {
 		// the returns, from the front corners out to the side lines (the gates)
 		if (xl < x0 - 0.8) run(x0, zf, xl, zf);
 		if (xr > x1 + 0.8) run(x1, zf, xr, zf);
+	}
+	// Each yard planted its own way, by the lot's own roll: foundation shrubs across the front
+	// of the house, clear of the door and the garage doors; and one of a few gardens out front:
+	// a lawn under a shade tree; a cottage bed of flowering shrubs either side of the walk, a
+	// small tree in bloom and now and then a picket fence along the front; a clipped hedge along
+	// the front line with a pair either side of the door; a dry garden of gravel, grey-green
+	// clumps and a palm or an olive; or, let go, a few rough shrubs. Out back, a tree or two
+	// and shrubs along the back fence. All of it off the drives, the walks, the pools and the
+	// street, and trees well clear of the walls
+	const YARD_GREEN = [[0.2, 0.3, 0.14], [0.26, 0.36, 0.18], [0.16, 0.26, 0.13], [0.3, 0.38, 0.2], [0.22, 0.27, 0.16]];
+	const BLOOM = [[0.78, 0.24, 0.42], [0.86, 0.82, 0.78], [0.6, 0.3, 0.62], [0.88, 0.7, 0.2], [0.82, 0.32, 0.22], [0.92, 0.55, 0.62]];
+	const XERIC = [[0.42, 0.48, 0.38], [0.5, 0.52, 0.42], [0.36, 0.42, 0.3], [0.46, 0.44, 0.3]];
+	const GRAVEL = [[0.62, 0.56, 0.46], [0.5, 0.47, 0.42], [0.7, 0.62, 0.5], [0.42, 0.36, 0.3]];
+	function yardPlants(list, put, b, F, L, g, hr, cnd) {
+		const T = list.trees || (list.trees = []), R0 = F.R0, door = F.door, gar = F.garage, W = L.W;
+		const ways = real.near('paths', b.x, b.z, 40), pools = real.near('pools', b.x, b.z, 40);
+		const inRect = (x, z, q, m) => { const dx = x - q.x, dz = z - q.z, qc = Math.cos(q.a), qs = Math.sin(q.a); return Math.abs(qc * dx + qs * dz) < q.w / 2 + m && Math.abs(-qs * dx + qc * dz) < q.d / 2 + m; };
+		const can = (lx, lz, r) => {
+			const [x, z] = W(lx, lz);
+			// (as far off the streets, drives and walks as the clearance keeps everything green, clearance.js)
+			if (!L.ok(x, z) || L.roadDist(x, z) < r + 0.9) return false;
+			for (const q of ways) if (segDist(q.ax, q.az, q.bx, q.bz, x, z) < q.w / 2 + 0.35 + r) return false;
+			for (const p of pools) if (inRect(x, z, p, r + 0.6)) return false;
+			return true;
+		};
+		const plant = (lx, lz, o) => { const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); T.push({ x, y: gy - (o.shrub ? 0.1 : 0.3), z, yard: true, ...o }); };
+		const shrub = (lx, lz, h, col) => { if (can(lx, lz, h * 0.4)) plant(lx, lz, { h, shrub: true, col }); };
+		// (a tree: 2.4 m off the house's walls, and its trunk clear of everything else)
+		const tree = (lx, lz, h, sp, col) => {
+			if (lx > L.x0 - 2.4 && lx < L.x1 + 2.4 && lz > L.z0 - 2.4 && lz < L.z1 + 2.4) return false;
+			if (!can(lx, lz, 1.2) || !can(lx + 1.2, lz, 0) || !can(lx - 1.2, lz, 0) || !can(lx, lz + 1.2, 0) || !can(lx, lz - 1.2, 0)) return false;
+			plant(lx, lz, { h, sp, cone: sp === 2, col });
+			return true;
+		};
+		const fz = R0.z1, fd = L.fd, cx = (R0.x0 + R0.x1) / 2;
+		const garX0 = gar && gar.front > fz - 0.6 ? gar.x0 - 0.4 : 1e9, garX1 = gar && gar.front > fz - 0.6 ? gar.x1 + 0.4 : -1e9;
+		const doorOn = Math.abs(door.z - fz) < 0.05;
+		const style = cnd ? 5 : hr(30) < 0.3 ? 0 : hr(30) < 0.5 ? 1 : hr(30) < 0.66 ? 2 : hr(30) < 0.84 ? 3 : hr(30) < 0.95 ? 4 : 5;
+		const green = jit(pick(YARD_GREEN, hr(31)), hr(32)), green2 = jit(pick(YARD_GREEN, hr(33)), hr(34));
+		const bloom = (k) => jit(pick(BLOOM, hr(35 + k)), hr(40 + k));
+		// the front of the house in runs clear of the garage doors and the door
+		const runs = (inset) => {
+			const out = [], cuts = [[garX0, garX1], doorOn ? [door.x - 1.05, door.x + 1.05] : [1e9, -1e9]].sort((p, q) => p[0] - q[0]);
+			let x = R0.x0 + inset;
+			for (const [c0, c1] of [...cuts, [R0.x1 - inset, 1e9]]) { const e = Math.min(c0, R0.x1 - inset); if (e - x > 1.2) out.push([x, e]); x = Math.max(x, c1); }
+			return out;
+		};
+		// a bed dug along the front, level with the lawn: bark mulch, or yellow lantana and flax
+		// lily set in it where it is planted (plantedBeds: the street planters' planting)
+		const BARK = jit([0.3, 0.19, 0.11], hr(36)), D_BED = 1.3;
+		const bed = (x0, x1, z0, d, planted) => {
+			const hs = [], pts = [[x0, z0], [x1, z0], [x0, z0 + d], [x1, z0 + d], [(x0 + x1) / 2, z0], [(x0 + x1) / 2, z0 + d]];
+			for (const [a, c] of pts) { if (!can(a, c, 0)) return false; hs.push(bay.heightAt(...W(a, c))); }
+			if (Math.max(...hs) - Math.min(...hs) > 0.35) return false;
+			const gy = Math.max(...hs), [wx, wz] = W((x0 + x1) / 2, z0 + d / 2);
+			const o = { x: wx, y: gy - 0.9, z: wz, w: x1 - x0, d, h: 0.96, a: b.a, col: BARK, kind: KIND.plain, roof: null, age: 0.5 };
+			if (planted) o.planted = { kerb: gy, yard: true };
+			list.push(o);
+			return true;
+		};
+		// foundation shrubs across the front, a pace off the wall, in their bark bed (mulched on
+		// most lots); with lantana in the runs either side of the door where it is planted
+		const foundation = (h0, every, cols, lantana = 0) => {
+			let n = 0;
+			const mulched = hr(37) < 0.8;
+			for (const [x0, x1] of runs(0.3)) {
+				// (lantana beds a whole number of beds long, from the door's side of the run)
+				const nearDoor = doorOn && Math.min(Math.abs(x0 - door.x), Math.abs(x1 - door.x)) < 1.3;
+				const nl = nearDoor ? Math.min(lantana, Math.floor((x1 - x0) / BED_LEN)) : 0;
+				let s0 = x0, s1 = x1;
+				if (nl > 0) {
+					const L0 = nl * BED_LEN + 0.16, atR = Math.abs(x1 - door.x) < Math.abs(x0 - door.x);
+					const l0 = atR ? x1 - L0 : x0, l1 = atR ? x1 : x0 + L0;
+					if (bed(l0, l1, fz + 0.3, D_BED, true)) { if (atR) s1 = l0 - 0.05; else s0 = l1 + 0.05; }
+				}
+				if (s1 - s0 < 0.9) continue;
+				if (mulched && !bed(s0, s1, fz + 0.3, D_BED + 0.4, false)) bed(s0, s1, fz + 0.3, D_BED, false);
+				for (let x = s0 + 0.45; x <= s1 - 0.35; x += every) { shrub(x, fz + 0.95, h0 * (0.85 + hr(50 + n) * 0.3), cols[n % cols.length]); n++; }
+			}
+		};
+		// a shrub cluster at each front corner of the house: one tall, two low
+		const corners = (h, cols) => {
+			for (const sx of [-1, 1]) {
+				const x = sx < 0 ? R0.x0 - 0.2 : R0.x1 + 0.2;
+				if (x > garX0 - 0.6 && x < garX1 + 0.6) continue;
+				shrub(x, fz + 0.9, h * (1 + hr(44 + sx) * 0.35), cols[0]);
+				shrub(x - sx * 1.1, fz + 1.3, h * 0.55, cols[1 % cols.length]);
+				shrub(x + sx * 0.5, fz + 1.9, h * 0.45, cols[2 % cols.length]);
+			}
+		};
+		// the front yard's open corner (away from the drive): where its tree goes
+		const corner = (inset) => { const sides = [R0.x0 + inset, R0.x1 - inset]; if (hr(51) < 0.5) sides.reverse(); return sides; };
+		const frontTree = (h, sp, col) => { if (fd < 4.5) return; for (const x of corner(2.2)) for (const z of [fz + fd * 0.55, fz + fd * 0.75]) if (tree(x, z, h, sp, col)) return; };
+		if (style === 0) {
+			// a lawn under a shade tree, round shrubs at the corners
+			foundation(1.25, 1.2 + hr(52) * 0.4, [green, green2], hr(38) < 0.45 ? 2 : 0);
+			corners(1.5, [green2, green, green2]);
+			frontTree(7 + hr(53) * 3, hr(54) < 0.6 ? 0 : 1, jit(pick(PAL.crown, hr(55)), hr(56)));
+		} else if (style === 1) {
+			// a cottage garden: flowering shrubs in beds either side of the walk and along the front
+			foundation(0.95, 1.0, [bloom(0), green, bloom(1)], 2);
+			corners(1.2, [green, bloom(4), bloom(0)]);
+			if (doorOn) for (let z = fz + 1.6, k = 0; z < fz + fd - 0.8; z += 0.95, k++) for (const sx of [-1, 1]) shrub(door.x + sx * 1.35, z, 0.55 + hr(60 + k) * 0.3, k % 2 ? bloom(sx > 0 ? 2 : 3) : green2);
+			frontTree(4.2 + hr(57) * 1.6, 0, jit([0.62, 0.2, 0.34], hr(58)));
+			// (a picket fence along the front, with its gaps at the drive and the walk)
+			if (hr(59) < 0.35 && fd > 3) for (let x = L.xl + 1.2; x <= L.xr - 1.2; x += 2.4) { const z = fz + fd - 0.3; if (can(x, z, 0.5) && can(x - 1.1, z, 0.3) && can(x + 1.1, z, 0.3)) put('picket', x, z, 0, 1); }
+		} else if (style === 2) {
+			// a clipped hedge along the front line, a pair either side of the door
+			foundation(1.1, 1.1, [green]);
+			if (doorOn) for (const sx of [-1, 1]) shrub(door.x + sx * 1.15, fz + 0.9, 1.6, green2);
+			if (fd > 2.5) for (let x = L.xl + 0.5; x <= L.xr - 0.5; x += 0.55) shrub(x, fz + fd - 0.6, 1.2 + hr(61) * 0.3, green);
+			// (and now and then an Italian cypress either side of the walk, at the hedge)
+			if (doorOn && fd > 4 && hr(39) < 0.5) for (const sx of [-1, 1]) { const x = door.x + sx * 1.7, z = fz + fd - 1.5; if (can(x, z, 0.6)) plant(x, z, { h: 4.5 + hr(45) * 2, sp: 2, cone: true, col: jit([0.12, 0.2, 0.1], hr(46)) }); }
+		} else if (style === 3) {
+			// a dry garden: gravel beds along the front (where the ground is level), grey-green
+			// clumps on them, and a palm or an olive
+			const gc = jit(pick(GRAVEL, hr(62)), hr(63)), d0 = Math.min(2.6, Math.max(1.2, fd - 1.5));
+			let x = R0.x0 + 0.2;
+			const cuts = [[garX0, garX1], doorOn ? [door.x - 0.7, door.x + 0.7] : [1e9, -1e9]].sort((p, q) => p[0] - q[0]);
+			for (const [c0, c1] of [...cuts, [R0.x1 - 0.2, 1e9]]) {
+				const e = Math.min(c0, R0.x1 - 0.2);
+				if (e - x > 1.2) {
+					const mx = (x + e) / 2, mz = fz + 0.15 + d0 / 2, [wx, wz] = W(mx, mz);
+					const hs = [[x, fz + 0.15], [e, fz + 0.15], [x, fz + 0.15 + d0], [e, fz + 0.15 + d0]].map(([a, c]) => bay.heightAt(...W(a, c)));
+					if (Math.max(...hs) - Math.min(...hs) < 0.3 && can(mx, mz, 0)) {
+						const gy = Math.max(...hs);
+						list.push({ x: wx, y: gy - 0.9, z: wz, w: e - x, d: d0, h: 0.97, a: b.a, col: gc, kind: KIND.plain, roof: null, age: 0.5 });
+						for (let k = 0, n = Math.max(1, Math.floor((e - x) / 1.6)); k < n; k++) shrub(x + (k + 0.5) * (e - x) / n + (hr(64 + k) - 0.5) * 0.5, fz + 0.4 + hr(70 + k) * (d0 - 0.6), 0.45 + hr(76 + k) * 0.4, jit(pick(XERIC, hr(80 + k)), hr(84 + k)));
+					}
+				}
+				x = Math.max(x, c1);
+			}
+			if (hr(65) < 0.5) frontTree(6 + hr(66) * 4, 3, [0.36, 0.45, 0.26]);
+			else frontTree(4.5 + hr(66) * 1.5, 1, [0.4, 0.44, 0.32]);
+		} else if (style === 4) {
+			// a bare lawn: a shrub or two by the door
+			if (doorOn) shrub(door.x + (hr(67) < 0.5 ? -1.2 : 1.2), fz + 0.9, 1.1, green);
+		} else {
+			// let go: rough shrubs and weeds where they came up
+			for (let k = 0, n = 3 + Math.floor(hr(68) * 4); k < n; k++) shrub(R0.x0 + hr(90 + k) * (R0.x1 - R0.x0), fz + 0.6 + hr(96 + k) * Math.max(0.5, fd - 1), 0.9 + hr(102 + k) * 1.1, jit([0.3, 0.32, 0.18], hr(108 + k)));
+		}
+		// out back: a tree or two, shrubs along the back fence
+		if (L.back && L.z0 - L.zb > 5) {
+			const bx0 = L.xl + 2, bx1 = L.xr - 2, bz0 = L.zb + 2, bz1 = L.z0 - 2.6;
+			if (bx1 > bx0) {
+				const nT = hr(110) < 0.75 ? hr(111) < 0.35 ? 2 : 1 : 0;
+				for (let k = 0; k < nT; k++) { const r = hr(112 + k), sp = r < 0.12 ? 2 : r < 0.2 ? 3 : r < 0.5 ? 1 : 0; tree(bx0 + hr(115 + k) * (bx1 - bx0), bz0 + hr(118 + k) * (bz1 - bz0), sp === 2 ? 10 + r * 30 : 6 + hr(121 + k) * 5, sp, sp === 2 ? jit([0.12, 0.2, 0.1], r) : sp === 3 ? [0.36, 0.45, 0.26] : jit(pick(PAL.crown, r), r)); }
+				if (!cnd && hr(124) < 0.5) for (let x = L.xl + 1, k = 0; x < L.xr - 1; x += 1.8 + hr(125 + k) * 1.2, k++) shrub(x, L.zb + 0.8, 1.2 + hr(130 + k) * 0.6, k % 3 ? green : green2);
+			}
+		}
 	}
 	// the generated blocks stop where a mapped region starts: what stands on its side of the
 	// seam is its own (a block half over the line keeps only its lots on this side)
@@ -1755,12 +1921,15 @@ export function createCity(shared, scene, bay, real = null) {
 			let col = look.wall;
 			let kind, roof = null;
 			const rc = look.roof, r = look.r, r2 = look.r2;
-			if (b.kind === 0) kind = doorKind(KIND.house, b.door);
+			// (the front door painted where the house is built with it, realcity.js addDrives: on
+			// the block that has it, at b.doorF along its front, and on no other)
+			const dk = (base) => (b.noDoor ? base : doorKind(base, b.doorF ?? b.door));
+			if (b.kind === 0) kind = dk(KIND.house);
 			else if (b.kind === 8) kind = KIND.apt;
-			else if (b.kind === 1) kind = doorKind(KIND.houseGarageL, b.door);
-			else if (b.kind === 2) kind = doorKind(KIND.houseGarageR, b.door);
+			else if (b.kind === 1) kind = dk(KIND.houseGarageL);
+			else if (b.kind === 2) kind = dk(KIND.houseGarageR);
 			else if (b.kind === 3) kind = KIND.garage;
-			else if (b.kind === 4 || b.kind === 10) kind = KIND.house;
+			else if (b.kind === 4 || b.kind === 10) kind = b.doorF !== undefined && !b.noDoor ? doorKind(KIND.house, b.doorF) : KIND.house;
 			else if (b.kind === 5) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
 			else if (b.kind === 6) { kind = KIND.retail; col = jit(pick(PAL.retail, r2), r); }
 			else if (b.kind === 7) { kind = KIND.office; col = jit([0.86, 0.8, 0.68], r); }
@@ -2038,11 +2207,12 @@ export function createCity(shared, scene, bay, real = null) {
 		{
 			const G = new Map(), cellOf = (x, z) => Math.floor(x / 60) + ',' + Math.floor(z / 60);
 			for (const o of list) if (o.h > 3 && o.w && o.d) { const k = cellOf(o.x, o.z); (G.get(k) || G.set(k, []).get(k)).push(o); }
+			// (a yard's own shrubs are planted a pace off its walls, city.js yardPlants)
 			const inside = (t) => {
-				const cx = Math.floor(t.x / 60), cz = Math.floor(t.z / 60);
+				const cx = Math.floor(t.x / 60), cz = Math.floor(t.z / 60), m = t.yard && t.shrub ? 0.35 : 1;
 				for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of G.get((cx + i) + ',' + (cz + j)) || []) {
 					const ca = Math.cos(o.a || 0), sa = Math.sin(o.a || 0), dx = t.x - o.x, dz = t.z - o.z;
-					if (Math.abs(ca * dx + sa * dz) < o.w / 2 + 1 && Math.abs(-sa * dx + ca * dz) < o.d / 2 + 1) return true;
+					if (Math.abs(ca * dx + sa * dz) < o.w / 2 + m && Math.abs(-sa * dx + ca * dz) < o.d / 2 + m) return true;
 				}
 				return false;
 			};
