@@ -255,7 +255,9 @@ export function createSquads(ctx) {
 				if (h.dormant) h.yaw = Math.random() * 6.283;
 				c.root.visible = true; c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
 				c.motion.state.death = -1; c.motion.state.strike = -1; c.motion.state.hit = -1;
-				c.motion.state.beat = null; c.motion.state.menace = 0; c.motion.drain();
+				c.motion.state.beat = null; c.motion.state.menace = 0; c.motion.state.blend = null; c.motion.drain();
+				Object.assign(c.motion.state.sway, { x: 0, z: 0, vx: 0, vz: 0 });
+				h.down = null; h.downT = 0; h.shove = null;
 				c.facets?.reset();
 				c.motion.update(0, { speed: 0, dormant: h.dormant });
 			} else {
@@ -340,14 +342,26 @@ export function createSquads(ctx) {
 				else if (R.part === 'head' || R.part === 'neck' || R.part === 'chest') { if (Math.random() < 0.5) say(h, 'hit'); }
 			}
 		}
-		// a creature reels the way the blow went (and a heavy one breaks off its strike)
+		// a creature reels the way the blow went, shoved along it (the lighter, the further), and a
+		// heavy one breaks off its strike; a blast, or a blow that takes a good part of its life
+		// at once, knocks it off its feet: it goes limp (people/ragdoll.js, from its own rig), lies
+		// a moment and gets up again. One already down just takes the round where it lies
 		if (!r.killed && h.cr && r.dealt > 0) {
 			if (h.beast && h.turn < 0) h.turn = 0;
 			const d = blow.dir || { x: h.pos.x - (blow.src?.x ?? h.pos.x), z: h.pos.z - (blow.src?.z ?? h.pos.z) }, l = Math.hypot(d.x, d.z) || 1;
-			// (the blow's way in the creature's own frame: x to its left, z ahead)
-			const c = Math.cos(h.yaw), s = Math.sin(h.yaw), wx = d.x / l, wz = d.z / l;
-			h.cr.motion.hit(_v.set(wx * c - wz * s, 0, wx * s + wz * c));
-			if (r.dealt > h.H.max * 0.12 && h.strikeT >= 0 && h.strikeT < 0.4) { h.strikeT = -1; h.cr.motion.state.strike = -1; h.fireT = rnd(0.5, 0.9); }
+			const wx = d.x / l, wz = d.z / l;
+			if (h.down) ctx.ragdolls?.nudge?.(h.cr.rag, blow.at || h.pos, _v.set(wx, 0.15, wz).multiplyScalar(blow.type === 'blast' ? 6 : 3), blow.type === 'blast' ? 300 : 40);
+			else {
+				// (the blow's way in the creature's own frame: x to its left, z ahead)
+				const c = Math.cos(h.yaw), s = Math.sin(h.yaw);
+				const share = r.dealt / Math.max(1, h.H.max), size = h.Sp.height * (h.cr.size || 1);
+				const k = Math.min(2.4, (0.6 + share * 4) * (blow.type === 'blast' ? 1.8 : blow.melee ? 1.3 : 1) * (blow.part === 'head' ? 1.3 : 1));
+				h.cr.motion.hit(_v.set(wx * c - wz * s, 0, wx * s + wz * c), k);
+				h.shove = { ax: wx, az: wz, k: Math.min(1.4, k * 0.3 / Math.max(0.5, size / 1.8) ** 1.5), t: 0.25 };
+				if (r.dealt > h.H.max * 0.12 && h.strikeT >= 0 && h.strikeT < 0.4) { h.strikeT = -1; h.cr.motion.state.strike = -1; h.fireT = rnd(0.5, 0.9); }
+				const heavy = blow.type === 'blast' || share > 0.3 || (blow.melee && share > 0.18);
+				if (heavy && knockDown(h, blow, wx, wz)) { h.strikeT = -1; h.cr.motion.state.strike = -1; h.fireT = rnd(1, 1.6); }
+			}
 		}
 		if (r.killed) die(h, blow);
 		else if (!h.surrendered && h.kind === 'person' && !h.crew && !h.ally) {
@@ -379,9 +393,67 @@ export function createSquads(ctx) {
 			ctx.ragdolls.hit(h.body.P, { vel: new THREE.Vector3(d.x, 0.1, d.z).normalize().multiplyScalar(blow?.type === 'blast' ? 7 : 3.5), mass: blow?.type === 'blast' ? 400 : blow?.melee ? 90 : 30, point: new THREE.Vector3(p.x, p.y + 1.2, p.z), lift: 0.06, limp: 1 });
 			h.body.hand?.hide();
 		} else if (h.kind === 'drone') { fx.explosion(h.pos, 1.2, false); h.vy = 0; }
-		else if (h.cr) h.cr.motion.die();
+		else if (h.cr) {
+			// it goes limp where it stands, the killing blow's momentum in it (a blast throws it, a
+			// blow shoves it, a round barely moves it): its own rig as solid pieces (people/ragdoll.js);
+			// its motion's own death is behind that, should the physics not come. One that bursts
+			// (the Shard Mite) keeps its burst
+			const c = h.cr;
+			c.motion.die();
+			h.rootY0 = c.root.position.y;
+			if (!h.Sp.shatter && ctx.ragdolls?.hit) {
+				const G = c.rag?.ragdoll ? c.rag : c.rig();
+				const size = h.Sp.height * (c.size || 1);
+				const v = new THREE.Vector3(d.x, 0.12, d.z).normalize().multiplyScalar(blow?.type === 'blast' ? 8 : blow?.melee ? 4.5 : 3.5);
+				const how = { vel: v, mass: (blow?.type === 'blast' ? 500 : blow?.melee ? 130 : 45) * Math.max(1, size / 1.8), point: hitPoint(h, blow), lift: 0.08, limp: 1, floor: (x, z) => ctx.ground(x, z, h.pos.y + 1) };
+				if (h.down) { ctx.ragdolls.slacken?.(G); ctx.ragdolls.nudge?.(G, how.point, v, how.mass); }
+				else ctx.ragdolls.hit(G, how);
+			}
+			h.down = null;
+		}
 		else fx.dust(h.pos, 6, 0.5, 0.55, 0.5, 0.8, 0.5);
 		ctx.onDeath?.(h, blow);
+	}
+	// where a blow struck a creature: where the round or the blade met it, else its chest
+	function hitPoint(h, blow) {
+		const a = blow?.at;
+		if (a && Number.isFinite(a.x)) return new THREE.Vector3(a.x, a.y, a.z);
+		return new THREE.Vector3(h.pos.x, h.pos.y + h.Sp.height * (h.cr?.size || 1) * 0.6, h.pos.z);
+	}
+	// knocked off its feet, alive: limp for a moment (a little tone left in it: it goes over the
+	// way a stunned body does), then up again where it lies (downStep). Not a flyer, nor one
+	// that bursts, nor a villager not yet turned, nor one too big to be thrown (the Burnt Giant
+	// only staggers), and not again for a while after it got up
+	function knockDown(h, blow, wx, wz) {
+		const c = h.cr, S = h.Sp;
+		if (h.down || (h.downT || 0) > 0 || S.fly || S.shatter || h.beast || h.dormant || !ctx.ragdolls?.hit) return false;
+		const size = S.height * (c.size || 1);
+		if (size > 5) return false;
+		const G = c.rig();
+		const blast = blow.type === 'blast';
+		const ok = ctx.ragdolls.hit(G, { vel: new THREE.Vector3(wx, 0.3, wz).normalize().multiplyScalar(blast ? 7 : 4.5), mass: (blast ? 400 : blow.melee ? 140 : 70) * Math.max(1, size / 1.8), point: hitPoint(h, blow), lift: 0.1, limp: 0.35, floor: (x, z) => ctx.ground(x, z, h.pos.y + 1) });
+		if (!ok) return false;
+		h.down = { t: 0, dur: rnd(1.4, 2.4), yaw: h.yaw };
+		h.shove = null;
+		return true;
+	}
+	// down and limp: the body is the ragdoll's; it is followed (the lock stays on it, its hit
+	// zones ride its bones), and when it has lain its moment, or come to rest, it gets up from
+	// where and how it lies: its motion takes the bones back, easing out of the fallen pose
+	function downStep(h, dt, d) {
+		const c = h.cr, G = c.rag, D = h.down;
+		D.t += dt;
+		if (G.at) { h.pos.x = G.at.x; h.pos.z = G.at.z; h.pos.y = ctx.ground(h.pos.x, h.pos.z, G.at.y + 1); D.yaw = G.at.yaw; }
+		c.facets?.update(dt, { alert: !!h.alert });
+		if (D.t < D.dur && G.ragdoll && !G.rested) return;
+		h.yaw = D.yaw;
+		c.motion.blendFrom(0.8);
+		ctx.ragdolls.release(G);
+		c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
+		c.motion.update(0, { speed: 0 });
+		h.down = null; h.downT = 7; h.standT = 0.5; h.fireT = Math.max(h.fireT, 0.9); h.animT = 0;
+		if (c.meta.rig === 'quad') c.motion.beat('shake');
+		if (d < 60 && !(h.cryT > 0)) { h.cryT = 0.7; cry(h, 'hurt', h.pos, 0.8); }
 	}
 	function release(h) {
 		const i = list.indexOf(h);
@@ -391,7 +463,7 @@ export function createSquads(ctx) {
 		if (h.hum) { h.hum.stop(0.5); h.hum = null; }
 		if (h.body) { if (h.body.P.ragdoll) ctx.ragdolls.release(h.body.P); h.body.P.root.visible = false; h.body.hand?.hide(); h.body.M.act(null); h.body.used = false; h.body.M.want.speed = 0; }
 		if (h.mesh) { h.mesh.visible = false; h.mesh.userData.used = false; }
-		for (const q of [h.cr, h.beast]) if (q) { q.root.visible = false; q.used = false; q.root.position.y = -1e4; }
+		for (const q of [h.cr, h.beast]) if (q) { if (q.rag?.ragdoll) ctx.ragdolls?.release?.(q.rag); q.root.visible = false; q.used = false; q.root.position.y = -1e4; }
 		if (h.squad) { const k = h.squad.members.indexOf(h); if (k >= 0) h.squad.members.splice(k, 1); if (!h.squad.members.length) squads.delete(h.squad.id); }
 	}
 
@@ -614,6 +686,8 @@ export function createSquads(ctx) {
 			tickHealth(h.H, dt);
 			if (h.crew) { crewStep(h, dt, d); bounds(h); continue; }
 			if (h.surrendered) { yieldStep(h, dt, d); bounds(h); continue; }
+			if (h.downT > 0) h.downT -= dt;
+			if (h.down) { downStep(h, dt, d); bounds(h); continue; }
 			// held still or put to flight by a spell (magic/caster.js lays h.T.hex on and wears it off)
 			if (h.Sp?.voice?.loop) loopStep(h, d);
 			const hx = h.T.hex;
@@ -659,18 +733,24 @@ export function createSquads(ctx) {
 			if (h.deadT > 4) { h.mesh.scale.setScalar(Math.max(0.01, 1 - (h.deadT - 4))); if (h.deadT > 5) release(h); }
 		} else if (h.cr) {
 			// the death plays out (the knees go, it folds), it lies a while, then sinks away
-			const c = h.cr;
-			if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
+			const c = h.cr, rag = !!c.rag?.ragdoll;
 			if (h.deadT < 4) { c.facets?.update(dt, { dead: true }); c.weak?.update(dt, { dead: true }); }
 			// (a crystal thing bursts as its legs fold, and is gone)
 			if (h.Sp.shatter && h.deadT > 0.3 && c.root.visible) { c.legs?.shatter(fx); c.root.visible = false; voice.play('shatter', h.pos, 0.9); }
-			// (a flyer drops out of the air)
-			if (h.alt > 0) { h.vy = (h.vy || 0) + 9.8 * dt; h.alt = Math.max(0, h.alt - h.vy * dt); }
-			c.root.position.set(h.pos.x, h.pos.y + (h.alt || 0) - Math.max(0, h.deadT - 8) * 0.25 * c.height, h.pos.z);
-			// (a biped falls forward as it folds: the whole body tips over its knees; four legs
-			// and wings go over in their own death)
-			const tip = !c.meta.rig || c.meta.rig === 'biped' ? 1.2 : 0;
-			c.root.rotation.set(Math.min(1, h.deadT / 1.3) ** 2 * tip, h.yaw, 0);
+			if (rag) {
+				// limp (people/ragdoll.js moves its bones, in the world, about a root left where it
+				// died): it lies where it came to rest, and sinks away after a while
+				c.root.position.y = h.rootY0 - Math.max(0, h.deadT - 8) * 0.25 * c.height;
+			} else {
+				if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
+				// (a flyer drops out of the air)
+				if (h.alt > 0) { h.vy = (h.vy || 0) + 9.8 * dt; h.alt = Math.max(0, h.alt - h.vy * dt); }
+				c.root.position.set(h.pos.x, h.pos.y + (h.alt || 0) - Math.max(0, h.deadT - 8) * 0.25 * c.height, h.pos.z);
+				// (a biped falls forward as it folds: the whole body tips over its knees; four legs
+				// and wings go over in their own death)
+				const tip = !c.meta.rig || c.meta.rig === 'biped' ? 1.2 : 0;
+				c.root.rotation.set(Math.min(1, h.deadT / 1.3) ** 2 * tip, h.yaw, 0);
+			}
 			if (h.deadT > 12) release(h);
 		} else {
 			h.mesh.rotation.z = Math.min(Math.PI * 0.9, h.deadT * 3);
@@ -1075,6 +1155,9 @@ export function createSquads(ctx) {
 		h.yaw += Math.max(-turn * dt, Math.min(turn * dt, wrapA(want - h.yaw)));
 		_was.copy(h.pos);
 		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
+		// (a blow's shove: knocked back along it over a quarter second, feet dragging)
+		const sh = h.shove;
+		if (sh) { const k = sh.k * Math.min(dt, sh.t) / 0.25; h.pos.x += sh.ax * k; h.pos.z += sh.az * k; sh.t -= dt; if (sh.t <= 0) h.shove = null; }
 		ctx.keepOut?.(h.pos, _was);
 		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
 		c.root.position.copy(h.pos); c.root.position.y += flyAlt(h, dt, at);
