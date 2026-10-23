@@ -2088,7 +2088,13 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 	}
 
-	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, genV = 0, clearV = -1, coastV = 0, carveV = -1, waterV = -1;
+	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, genV = 0, clearV = -1, coastV = 0, carveV = -1, waterV = -1, srcV = '', wayKey = '';
+	// the globe's highways and section roads round a set's middle (earth/globeroads.js,
+	// globelanes.js: they reach the gridded towns out past the Bay's survey), which its lots keep
+	// off; and a short key for them, so a set is laid out again only when they really moved
+	const GLOBE_WAY = /path|track|footway|steps|cycleway|bridleway/;
+	const globeWays = (x, z) => (real?.nearSources ? real.nearSources('roads', x, z, 1500).filter((r) => r.globe && !GLOBE_WAY.test(r.cls || '')) : []);
+	const waysKey = (ways) => { let k = ways.length; for (const r of ways) { const p = r.pts, n = p.length; k = (k * 31 + Math.round(p[0] + p[1] * 7 + p[n - 2] * 13 + p[n - 1] * 17 + r.w)) | 0; } return String(k); };
 	// a town grown by civgen.js near a point (anywhere on Earth)
 	const grownNear = (x, z) => !!real?.R?.regions?.some((G) => G.gen && x > G.bounds[0] - 2000 && z > G.bounds[1] - 2000 && x < G.bounds[2] + 2000 && z < G.bounds[3] + 2000);
 	function update(cam, nightK) {
@@ -2115,6 +2121,8 @@ export function createCity(shared, scene, bay, real = null) {
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }          // a mapped region came or went near you
 		// a grown town arrived or went: it rises, and its towers join the skylines
 		if (real?.genVersion && real.genVersion() !== genV) { genV = real.genVersion(); lastX = 1e9; if (!globe) { skyline.length = 0; findSkylines(); } if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }
+		// a highway or a section road came through the grid's lots near you: they make way
+		if (!globe && real?.sourceVersion && real.sourceVersion() !== srcV) { srcV = real.sourceVersion(); if (lastX < 1e8 && waysKey(globeWays(lastX, lastZ)) !== wayKey) lastX = 1e9; }
 		if (riseT0 >= 0) {
 			// the ring runs out at 700 m a second; no shadows from the buildings still underground
 			const front = (performance.now() - riseT0) / 1000 * 700;
@@ -2182,7 +2190,9 @@ export function createCity(shared, scene, bay, real = null) {
 		yield* realBuildings(x, z, 2000, list, !globe);
 		yield;
 		phase = 'settle';
-		yield* settleLotsSteps(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
+		const ways = globe ? [] : globeWays(x, z);
+		wayKey = waysKey(ways);
+		yield* settleLotsSteps(list, x, z, ways);          // structures: no lot through another, a freeway, a highway or a landmark; alleys planned
 		yield;
 		phase = 'decorate';
 		decorate(list, x, z, 700);
