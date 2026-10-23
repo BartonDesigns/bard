@@ -97,6 +97,10 @@ export const TYPES = {
 	gift: { label: 'gift shop', u: 'HRSA', v: 'shop', w: { harbour: 1, main: 0.6 }, s: ['oval', 'script'], pal: LIGHT_PAL, awn: [[0.2, 0.55, 0.62]], props: ['bench'], n: ['{W} Gifts', 'The {A} Shell', "{F}'s Gift Shop"], tag: 'GIFTS · POSTCARDS' },
 	butcher: { label: 'butcher', u: 'RSA', v: 'shop', w: { main: 0.4 }, s: ['rect', 'serif'], pal: [['#7d1f1a', '#ffffff'], ['#ffffff', '#7d1f1a']], awn: [[0.62, 0.14, 0.12], [0.9, 0.9, 0.88]], props: [], n: ["{F}'s Butcher", '{W} Meats', 'The {A} Cleaver'], tag: 'BUTCHER · DELI' },
 	winery: { label: 'tasting room', u: 'HS', v: 'shop', w: { rural: 1, main: 0.2 }, s: ['oval', 'serif'], pal: [['#4a1f2a', '#f1e2c4'], ['#f1e2c4', '#4a1f2a']], awn: [[0.45, 0.15, 0.2]], props: ['table', 'kegs'], n: ['{W} Cellars', 'The {A} Vineyard', "{F}'s Tasting Room"], tag: 'WINE TASTING' },
+	// the corner store and the gas station's food mart: each on its own lot, where bay/siteplan.js
+	// puts one (b.store), never rolled for a building (no u, no w)
+	corner: { label: 'corner store', u: '', v: 'shop', store: true, w: {}, s: ['block', 'sans'], pal: [['#c62f22', '#ffffff'], ['#1f3f7a', '#ffd34e'], ['#ffd34e', '#1d1d1d'], ['#1e6b3a', '#ffffff'], ['#ffffff', '#c62f22']], awn: null, props: [], n: ["{F}'s Corner Market", '{W} Market & Deli', '{W} Liquor & Deli', 'Corner {W} Market', '{W} Food Mart', 'The {A} Stop Market', '{W} Mini Mart', "{F}'s Liquors & Market"], tags: ['BEER · WINE · DELI · ATM', 'GROCERY · LOTTO · ICE', 'DELI · SNACKS · COLD DRINKS', 'LIQUOR · GROCERY · ATM'] },
+	fuel: { label: 'gas station', u: '', v: 'shop', store: true, w: {}, s: ['block', 'sans'], pal: [['#c8102e', '#ffffff'], ['#0b3d91', '#ffd200'], ['#00843d', '#ffffff'], ['#f47920', '#ffffff'], ['#1a1a1a', '#ffcc00'], ['#ffffff', '#d0021b'], ['#5b2d90', '#ffffff']], awn: null, props: [], n: ['{W} Fuel', '{W} Petroleum', '{A} Gas', '{W} Gas & Go', '{W} Fuel Stop', "{F}'s Service", '{W} Gas & Mart', '{A} {W} Fuel'], tags: ['GAS · FOOD MART · ICE', 'FUEL · SNACKS · COFFEE', 'GAS · DIESEL · CAR WASH', 'FUEL · ATM · ICE'] },
 	// services
 	salon: { label: 'salon', u: 'HRSTA', v: 'shop', w: { main: 1, strip: 1.6, residential: 0.8, downtown: 0.5 }, s: ['oval', 'script'], pal: [['#f7e1e6', '#6b2f4a'], ['#1e1e1e', '#f3c6d3']], awn: [[0.9, 0.7, 0.75], [0.15, 0.15, 0.15]], props: ['aboard'], n: ["{F}'s Salon", 'Studio {W}', 'The {A} Mane', '{W} Hair & Nails'], tag: 'HAIR · NAILS' },
 	barber: { label: 'barbershop', u: 'HRSA', v: 'shop', w: { main: 0.9, strip: 0.8, residential: 0.5 }, s: ['rect', 'slab'], pal: [['#1d2a44', '#f2f2f2'], ['#f2f2f2', '#a21f1f']], awn: [[0.15, 0.2, 0.4], [0.7, 0.15, 0.15]], props: ['bench'], n: ["{F}'s Barbershop", 'The {A} Razor', '{W} Barbers'], tag: 'CUTS · SHAVES' },
@@ -279,7 +283,7 @@ export function localeAt(lat, lon) {
 
 // ---------- no real brands ----------
 // (names that would read as a real chain or company; checked letters only, any case)
-export const DENY = ['mcdonald', 'starbucks', 'peets', 'philz', 'bluebottle', 'dutchbros', 'timhortons', 'costacoffee', 'caffenero', 'panera', 'krispykreme', 'dunkin', 'wafflehouse', 'ihop', 'dennys', 'blackbear', 'redrobin', 'olivegarden', 'goldencorral', 'crackerbarrel', 'pizzahut', 'dominos', 'papajohn', 'littlecaesar', 'roundtable', 'sbarro', 'subway', 'jerseymike', 'jimmyjohn', 'burgerking', 'wendys', 'carlsjr', 'jackinthebox', 'innout', 'fiveguys', 'shakeshack', 'smashburger', 'sonicdrive', 'arbys', 'hardees', 'culvers', 'whataburger', 'whitecastle', 'fatburger', 'kfc', 'kentuckyfried', 'popeyes', 'chickfila', 'bojangles', 'raisingcane', 'tacobell', 'deltaco', 'chipotle', 'qdoba', 'elpolloloco', 'pandaexpress', 'pfchang', 'benihana', 'nandos', 'wagamama', 'pretamanger', 'greggs', 'yosushi', 'ichiran', 'ippudo', 'yoshinoya', 'sukiya', 'matsuya', 'mosburger', 'lotteria', 'cocoichibanya', 'saizeriya', 'lawson', 'familymart', 'seveneleven', '7eleven', 'uniqlo', 'muji', 'donquijote', 'telepizza', 'mercadona', 'carrefour', 'lidl', 'aldi', 'tesco', 'sainsbury', 'walmart', 'target', 'costco', 'safeway', 'wholefoods', 'traderjoe', 'kroger', 'albertsons', 'walgreens', 'riteaid', 'homedepot', 'lowes', 'acehardware', 'truevalue', 'basspro', 'cabelas', 'patagonia', 'northface', 'orvis', 'westmarine', 'apple', 'google', 'amazon', 'microsoft', 'tesla', 'nvidia', 'intel', 'oracle', 'salesforce', 'adobe', 'cisco', 'netflix', 'uber', 'lyft', 'airbnb', 'facebook', 'hilton', 'marriott', 'hyatt', 'sheraton', 'holidayinn', 'bestwestern', 'motel6', 'super8', 'daysinn', 'comfortinn', 'ritzcarlton', 'fourseasons', 'wellsfargo', 'bankofamerica', 'citibank', 'nike', 'adidas', 'zara', 'ikea', 'sephora', 'supercuts', 'greatclips', 'jiffylube', 'midas', 'pepboys', 'firestone', 'goodyear', 'chevron', 'exxon', 'texaco', 'valero', 'planetfitness', 'goldsgym', 'equinox', 'anytimefitness', 'baskinrobbins', 'dairyqueen', 'coldstone', 'benjerry', 'haagendazs', 'parisbaguette', 'tousles', 'gongcha', 'kungfutea', 'chatime', 'dintaifung', 'haidilao', 'luckin', 'mixue', 'heytea', 'hooters', 'applebee', 'chilis', 'tgifriday', 'outback', 'texasroadhouse', 'longhorn steak', 'buffalowild', 'cheesecakefactory', 'hardrock', 'rainforestcafe', 'bubbagump', 'crabshack', 'redlobster', 'longjohnsilver', 'bonefish', 'ghirardelli', 'boudin', 'wetherspoon', 'harvester', 'tobycarvery', 'beefeater', 'premierinn', 'travelodge', 'boots', 'waitrose', 'vapiano', 'tchibo', 'nordsee', 'oxxo', 'sanborns', 'haldiram', 'bikanervala', 'chaayos', 'saravana', 'kyochon', 'ediya', 'paiks', 'cafecoffeeday', 'briochedoree', 'boulangeriepaul', 'laduree', 'hippopotamus', 'buffalogrill', 'flunch', 'autogrill', 'eataly', 'lavazza', 'segafredo', 'illycaffe', 'redcross', 'goldengate', 'blueapron', 'sweetgreen', 'cava', 'jollibee', 'mrdonut', 'misterdonut', 'tullys', 'doutor', 'komeda', 'pronto', 'ootoya', 'genkisushi', 'kurasushi', 'sushiro', 'hamazushi', 'tenya', 'marugame', 'hanamaru'].map((s) => s.replace(/[^a-z0-9]/g, ''));
+export const DENY = ['mcdonald', 'starbucks', 'peets', 'philz', 'bluebottle', 'dutchbros', 'timhortons', 'costacoffee', 'caffenero', 'panera', 'krispykreme', 'dunkin', 'wafflehouse', 'ihop', 'dennys', 'blackbear', 'redrobin', 'olivegarden', 'goldencorral', 'crackerbarrel', 'pizzahut', 'dominos', 'papajohn', 'littlecaesar', 'roundtable', 'sbarro', 'subway', 'jerseymike', 'jimmyjohn', 'burgerking', 'wendys', 'carlsjr', 'jackinthebox', 'innout', 'fiveguys', 'shakeshack', 'smashburger', 'sonicdrive', 'arbys', 'hardees', 'culvers', 'whataburger', 'whitecastle', 'fatburger', 'kfc', 'kentuckyfried', 'popeyes', 'chickfila', 'bojangles', 'raisingcane', 'tacobell', 'deltaco', 'chipotle', 'qdoba', 'elpolloloco', 'pandaexpress', 'pfchang', 'benihana', 'nandos', 'wagamama', 'pretamanger', 'greggs', 'yosushi', 'ichiran', 'ippudo', 'yoshinoya', 'sukiya', 'matsuya', 'mosburger', 'lotteria', 'cocoichibanya', 'saizeriya', 'lawson', 'familymart', 'seveneleven', '7eleven', 'uniqlo', 'muji', 'donquijote', 'telepizza', 'mercadona', 'carrefour', 'lidl', 'aldi', 'tesco', 'sainsbury', 'walmart', 'target', 'costco', 'safeway', 'wholefoods', 'traderjoe', 'kroger', 'albertsons', 'walgreens', 'riteaid', 'homedepot', 'lowes', 'acehardware', 'truevalue', 'basspro', 'cabelas', 'patagonia', 'northface', 'orvis', 'westmarine', 'apple', 'google', 'amazon', 'microsoft', 'tesla', 'nvidia', 'intel', 'oracle', 'salesforce', 'adobe', 'cisco', 'netflix', 'uber', 'lyft', 'airbnb', 'facebook', 'hilton', 'marriott', 'hyatt', 'sheraton', 'holidayinn', 'bestwestern', 'motel6', 'super8', 'daysinn', 'comfortinn', 'ritzcarlton', 'fourseasons', 'wellsfargo', 'bankofamerica', 'citibank', 'nike', 'adidas', 'zara', 'ikea', 'sephora', 'supercuts', 'greatclips', 'jiffylube', 'midas', 'pepboys', 'firestone', 'goodyear', 'chevron', 'exxon', 'texaco', 'valero', 'arcoampm', 'ampm', 'mobil', 'sunoco', 'circlek', 'speedway', 'quiktrip', 'wawa', 'sheetz', 'conoco', 'phillips66', 'citgo', 'sinclairoil', 'racetrac', 'flyingj', 'kwiktrip', 'union76', 'shelloil', 'shellgas', 'gulfoil', 'marathonpetroleum', 'bucees', 'caseys', 'murphyusa', 'loves travel', 'pilottravel', 'stewarts', 'cumberlandfarms', 'royalfarms', 'thorntons', 'getgo', 'holiday station', 'planetfitness', 'goldsgym', 'equinox', 'anytimefitness', 'baskinrobbins', 'dairyqueen', 'coldstone', 'benjerry', 'haagendazs', 'parisbaguette', 'tousles', 'gongcha', 'kungfutea', 'chatime', 'dintaifung', 'haidilao', 'luckin', 'mixue', 'heytea', 'hooters', 'applebee', 'chilis', 'tgifriday', 'outback', 'texasroadhouse', 'longhorn steak', 'buffalowild', 'cheesecakefactory', 'hardrock', 'rainforestcafe', 'bubbagump', 'crabshack', 'redlobster', 'longjohnsilver', 'bonefish', 'ghirardelli', 'boudin', 'wetherspoon', 'harvester', 'tobycarvery', 'beefeater', 'premierinn', 'travelodge', 'boots', 'waitrose', 'vapiano', 'tchibo', 'nordsee', 'oxxo', 'sanborns', 'haldiram', 'bikanervala', 'chaayos', 'saravana', 'kyochon', 'ediya', 'paiks', 'cafecoffeeday', 'briochedoree', 'boulangeriepaul', 'laduree', 'hippopotamus', 'buffalogrill', 'flunch', 'autogrill', 'eataly', 'lavazza', 'segafredo', 'illycaffe', 'redcross', 'goldengate', 'blueapron', 'sweetgreen', 'cava', 'jollibee', 'mrdonut', 'misterdonut', 'tullys', 'doutor', 'komeda', 'pronto', 'ootoya', 'genkisushi', 'kurasushi', 'sushiro', 'hamazushi', 'tenya', 'marugame', 'hanamaru'].map((s) => s.replace(/[^a-z0-9]/g, ''));
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 export function denied(name) {
 	const n = norm(name);
@@ -311,14 +315,26 @@ export function chanceOf(b, setting) {
 		case 'retail': return 0.97;
 		case 'shop': return 0.97;
 		case 'industry': return 0.72;
-		case 'apt': return st >= 2 ? 0.55 : st === 1 ? 0.3 : 0.14;
-		case 'row': return st >= 2 ? 0.7 : st === 1 ? 0.35 : 0.12;
+		// (a terrace or a block of flats on a quiet street is homes: its shops are on the corners
+		// and the busier streets)
+		case 'apt': return st >= 2 ? 0.55 : st === 1 ? 0.3 : 0;
+		case 'row': return st >= 2 ? 0.7 : st === 1 ? 0.35 : 0;
+		// A house among other houses is a home: a suburb's streets, the ones by a freeway exit and
+		// the ones up the hill from the water carry no signs (Josh 2026-10-23: businesses mixed
+		// into the neighbourhoods' lots). Its corner store and gas station are their own buildings
+		// on their own lots (bay/siteplan.js), not houses with a board out front. A house in open
+		// country (a farm stand, a B&B, cabins, a hunting post at the woods' edge) or on the
+		// waterfront street of a harbour (the bait shop, the outfitter) can still be one.
 		case 'house':
-			if (setting === 'harbour') return st >= 1 ? 0.75 : 0.42;
 			if (setting === 'forest') return st >= 1 ? 0.7 : 0.45;
 			if (setting === 'rural') return st >= 1 ? 0.7 : 0.42;
-			if (setting === 'highway') return 0.75;
-			return st >= 2 ? 0.8 : st === 1 ? 0.5 : 0.1;
+			if (setting === 'harbour' && b.rural) return st >= 1 ? 0.75 : 0.42;
+			if (setting === 'harbour' && (b.shore || 0) >= 3) return st >= 1 ? 0.35 : 0;
+			// (a grown town's centre is built of its houses: the high street's are shops with flats
+			// over them, and the odd corner one a street out; the surveyed suburbs' shops are their
+			// own mapped buildings)
+			if (b.grown) return (b.core ?? 1) < 0.4 ? 0.8 : st >= 2 ? 0.3 : st === 1 ? 0.05 : 0;
+			return 0;
 		default: return 0;
 	}
 }
@@ -405,7 +421,9 @@ export function registerSiting(kind, fn) {
 export function establish(b, loc = 'us-ca') {
 	const setting = settingOf(b);
 	let id = null, given = null;
-	for (const [k, fn] of SITING) { try { const got = fn(b, setting); if (got) { id = k; given = typeof got === 'string' ? got : null; break; } } catch (e) { console.warn('siting', k, e); } }
+	// (a corner store or gas station's own building: bay/siteplan.js put it there for that)
+	if (b.store && TYPES[b.store]?.store) id = b.store;
+	if (!id) for (const [k, fn] of SITING) { try { const got = fn(b, setting); if (got) { id = k; given = typeof got === 'string' ? got : null; break; } } catch (e) { console.warn('siting', k, e); } }
 	if (!id) {
 		const p = chanceOf(b, setting);
 		if (p <= 0 || hashAt(b.x, b.z, 11) >= p) return null;
@@ -483,7 +501,7 @@ export function describeBoxes(boxes, env = {}) {
 		const st = env.street ? env.street(b) : Math.max(cls === 'primary' || cls === 'secondary' || cls === 'trunk' ? 2 : cls === 'tertiary' ? 1 : 0, core < 0.4 ? 2 : core < 0.6 || b.artery ? 1 : 0);
 		const n = crowd(b.x, b.z);
 		out.push({
-			x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH || 0, use, street: st, src: b, sign: b.sign || null,
+			x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH || 0, use, street: st, src: b, sign: b.sign || null, grown: !!b.gen, core, store: b.store || null, ...(b.store ? { venue: 'shop' } : {}),
 			coast: !!env.coast?.(b.x, b.z), shore: env.shore ? env.shore(b.x, b.z) : env.coast?.(b.x, b.z) ? 2 : 0, wild: !!env.wild?.(b.x, b.z) && n < 8, rural: use === 'house' && n < 5, highway: !!env.highway?.(b.x, b.z), down: env.down?.(b.x, b.z) || (b.site === 'downtown' ? 0.4 : 0),
 		});
 	}

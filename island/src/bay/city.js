@@ -1547,6 +1547,11 @@ export function createCity(shared, scene, bay, real = null) {
 	// on the drive in front of the garage, the bins, the AC unit down the side, now and then
 	// a hoop, an RV or a boat, a shed out back where the land map shows open yard
 	const YARD_R = PHONE ? 220 : 420;
+	function siteCars(list, site, g) {
+		if (!site || !kit2.has('car')) return;
+		const P = list.props || (list.props = {}), out = P.car || (P.car = []);
+		for (const [x, z, yaw] of site.cars) { const gy = bay.heightAt(x, z); if (Math.abs(gy - g) < 2.5) out.push([x, gy, z, yaw, 1, 1, 1, 0, ...pick(CARS, hash(x * 0.7, z * 1.3))]); }
+	}
 	function realYard(list, b, look, g, cnd, fenced) {
 		const P = list.props || (list.props = {}), ca = Math.cos(b.a), sa = Math.sin(b.a), W = (lx, lz) => [b.x + ca * lx - sa * lz, b.z + sa * lx + ca * lz];
 		const put = (k, lx, lz, yaw, sc, c, lift = 0, tilt = 0) => { if (!kit2.has(k)) return; const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) > 2.5) return; const e = [x, gy + lift, z, b.a + yaw, ...(typeof sc === 'number' ? [sc, sc, sc] : sc), tilt]; if (c) e.push(...c); (P[k] || (P[k] = [])).push(e); };
@@ -1774,7 +1779,10 @@ export function createCity(shared, scene, bay, real = null) {
 			if (b.grp && (ro.cond === COND.boarded || ro.cond === COND.burnt)) b.grp.shut = true;
 			// (the radio huts and ranger posts high on the wild ridges are nobody's home: no yard)
 			if (home === b && (b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R && !(g > 600 && !HOME_LAND.has(real.landAt?.(b.x, b.z)?.lu))) realYard(list, b, look, g, ro.cond, (b.x - cx) ** 2 + (b.z - cz) ** 2 < FENCE_R * FENCE_R);
-			if (b.kind >= 5 && b.kind !== 10) grounds(list, trees, b.x, b.z, b.w, b.d, b.a, g, y, kind, b.x * 0.37 + b.z * 0.11);
+			// (a gas station's mart and a corner store stand on their own lots, paved and planted
+			// as such, with their cars at the pumps and in the spaces: bay/siteplan.js, forecourts.js)
+			if (b.store) { if ((b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R) siteCars(list, b.site, g); }
+			else if (b.kind >= 5 && b.kind !== 10) grounds(list, trees, b.x, b.z, b.w, b.d, b.a, g, y, kind, b.x * 0.37 + b.z * 0.11);
 		}
 		for (const p of real.near('pools', cx, cz, Math.min(R, 900))) {
 			const g = bay.heightAt(p.x, p.z);
