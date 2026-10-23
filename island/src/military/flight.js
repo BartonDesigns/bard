@@ -136,3 +136,88 @@ export function heliStep(S, I, dt, groundAt) {
 	S.alt = S.pos.y - g1;
 	return ev;
 }
+
+// ---------- a helicopter on the scene: how it flies the fight ----------
+// Not a hover on a string: a pilot's manoeuvres, picked one after another. It orbits the scene,
+// then every so often does something: flanks (a fast, low dash across to the far side, and the
+// orbit runs the other way from there), makes an attack run (a dive straight at the target,
+// guns going, then a hard break away and climb out), or holds a hover with its nose on the
+// target. The police helicopter keeps it tight and never runs in. The state is pure, stepped
+// with a goal point and a speed, and the body leans the way a helicopter does: nose down to go,
+// nose up to stop, rolled into every turn.
+//   const A = heliAirState(x, y, z, yaw); heliTacticStep(A, at, dt, groundAt, opts) -> A.mode
+//   at: { x, z } the scene (or what it fights); opts: { tight (the police), i (its place in the
+//   flight), rnd, depart: { x, z } (going home: straight off toward it) }
+// A.pos, A.yaw, A.pitch (nose down positive), A.roll are for the model; A.log the modes flown.
+export const HELI_AIR = Object.freeze({ orbitV: 21, flankV: 34, runV: 31, hoverV: 6, departV: 50, floor: 24, climb: 14, turn: 1.3 });
+export function heliAirState(x, y, z, yaw) {
+	return { pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), yaw, pitch: 0, roll: 0, mode: 'orbit', modeT: 0, dir: 1, ang: 0, goal: new THREE.Vector3(x, y, z), goalAlt: 60, want: 0, log: [], nextIn: 0 };
+}
+const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+export function heliTacticStep(A, at, dt, groundAt, { tight = false, i = 0, rnd = Math.random, depart = null } = {}) {
+	const R = tight ? 65 : 90 + i * 30, ALT = tight ? 55 : 70 + i * 12, V = HELI_AIR;
+	const dx = A.pos.x - at.x, dz = A.pos.z - at.z, d = Math.hypot(dx, dz) || 1;
+	A.ang = Math.atan2(dz, dx);
+	A.modeT += dt;
+	let speed = V.orbitV, noseAt = null;
+	const enter = (m) => { A.mode = m; A.modeT = 0; A.fix = null; A.log.push(m); };
+	if (depart) {
+		if (A.mode !== 'depart') enter('depart');
+		A.goal.set(depart.x, 0, depart.z); A.goalAlt = Math.min(90, 30 + A.modeT * 3); speed = V.departV;
+	} else if (A.mode === 'depart') enter('orbit');
+	if (A.mode === 'orbit') {
+		// round the scene: the goal a little way ahead on the circle
+		const a = A.ang + A.dir * 0.42;
+		A.goal.set(at.x + Math.cos(a) * R, 0, at.z + Math.sin(a) * R); A.goalAlt = ALT;
+		if (tight) noseAt = at;
+		if (A.nextIn <= 0) A.nextIn = 7 + rnd() * 9;
+		A.nextIn -= dt;
+		if (A.nextIn <= 0 && A.modeT > 4) {
+			const r = rnd();
+			if (tight) enter(r < 0.6 ? 'flank' : 'hover');
+			else enter(r < 0.45 ? 'flank' : r < 0.78 ? 'run' : 'hover');
+		}
+	} else if (A.mode === 'flank') {
+		// across to the far side, passing wide of the scene, low and fast; the orbit then runs the
+		// other way (the point it makes for is fixed as it sets out: the scene slides by under it)
+		if (!A.fix) { const a = A.ang + Math.PI + A.dir * 0.9; A.fix = { x: at.x + Math.cos(a) * R * 1.05, z: at.z + Math.sin(a) * R * 1.05 }; }
+		A.goal.set(A.fix.x, 0, A.fix.z); A.goalAlt = ALT - (tight ? 8 : 16); speed = V.flankV;
+		if (Math.hypot(A.goal.x - A.pos.x, A.goal.z - A.pos.z) < 28 || A.modeT > 16) { A.dir = -A.dir; enter('orbit'); }
+	} else if (A.mode === 'run') {
+		// the dive: straight at the target, down to the deck
+		A.goal.set(at.x, 0, at.z); A.goalAlt = 32; speed = V.runV; noseAt = at;
+		if (d < 42 || A.modeT > 14) enter('break');
+	} else if (A.mode === 'break') {
+		// through and away: a hard turn out to the side and the climb back to height
+		if (!A.fix) { const a = A.ang + A.dir * 1.25; A.fix = { x: at.x + Math.cos(a) * R * 1.3, z: at.z + Math.sin(a) * R * 1.3 }; }
+		A.goal.set(A.fix.x, 0, A.fix.z); A.goalAlt = ALT + 12; speed = V.flankV;
+		if (Math.hypot(A.goal.x - A.pos.x, A.goal.z - A.pos.z) < 30 || A.modeT > 12) enter('orbit');
+	} else if (A.mode === 'hover') {
+		// held where it is, nose on the target, a slow drift sideways
+		const a = A.ang + A.dir * 0.08;
+		A.goal.set(at.x + Math.cos(a) * d, 0, at.z + Math.sin(a) * d); A.goalAlt = tight ? ALT - 6 : ALT; speed = V.hoverV; noseAt = at;
+		if (A.modeT > (tight ? 7 : 5) + rnd() * 2) { A.hold = null; enter('orbit'); }
+	}
+	// the flight: the velocity eased toward the goal at the mode's speed, the height held off the ground
+	const gx = A.goal.x - A.pos.x, gz = A.goal.z - A.pos.z, gl = Math.hypot(gx, gz) || 1;
+	const k = Math.min(1, dt * (A.mode === 'hover' ? 1.6 : 0.85)), near = Math.min(1, gl / 30);
+	const wx = gx / gl * speed * near, wz = gz / gl * speed * near;
+	const ax = (wx - A.vel.x) * k, az = (wz - A.vel.z) * k;
+	A.vel.x += ax; A.vel.z += az;
+	const g = groundAt(A.pos.x, A.pos.z, A.pos.y + 2);
+	const floorY = g + V.floor, wantY = Math.max(floorY, g + A.goalAlt);
+	A.vel.y += (clamp((wantY - A.pos.y) * 0.9, -V.climb, V.climb) - A.vel.y) * Math.min(1, dt * 1.4);
+	A.pos.addScaledVector(A.vel, dt);
+	if (A.pos.y < floorY) { A.pos.y = floorY; A.vel.y = Math.max(0, A.vel.y); }
+	// the body: the nose along the way (or on the target), down into speed, rolled into the turn
+	const spd = Math.hypot(A.vel.x, A.vel.z);
+	const headTo = noseAt ? Math.atan2(noseAt.x - A.pos.x, noseAt.z - A.pos.z) : spd > 2 ? Math.atan2(A.vel.x, A.vel.z) : A.yaw;
+	const turn = clamp(wrapA(headTo - A.yaw) * 2.2, -V.turn, V.turn);
+	A.yaw = wrapA(A.yaw + turn * dt);
+	const fwdA = (ax * Math.sin(A.yaw) + az * Math.cos(A.yaw)) / Math.max(dt, 1e-3);
+	const pitchT = clamp(0.012 * (A.vel.x * Math.sin(A.yaw) + A.vel.z * Math.cos(A.yaw)) + 0.02 * fwdA, -0.3, 0.42);
+	const rollT = clamp(-turn * 0.42 - (A.vel.x * Math.cos(A.yaw) - A.vel.z * Math.sin(A.yaw)) * 0.012, -0.55, 0.55);
+	A.pitch += (pitchT - A.pitch) * Math.min(1, dt * 2.5);
+	A.roll += (rollT - A.roll) * Math.min(1, dt * 2.2);
+	return A.mode;
+}
