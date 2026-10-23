@@ -6,7 +6,9 @@
 //   POST /discover       { id, lat, lon, name, pop } -> the brief (made now if need be), or 202
 //                        while it is still being made; 429 / 403 say use the atlas brief for now
 //   POST /talk           a townsperson's reply (talk.js), inside its own share of the day
-//   GET  /status         the day's Neurons (no secrets, nothing about players)
+//   POST /npc/talk       a person's reply streamed word by word, ending in one validated action
+//                        (npc-talk.js): Claude when ANTHROPIC_API_KEY is set, else Workers AI
+//   GET  /status         the day's Neurons and Claude turns (no secrets, nothing about players)
 //
 // ids are an atlas city's ('lisbon') or a generated town's ('gen:<slug>:<lat>,<lon>'). Only the
 // id and the size class ever shape what is made; the prompt is built from the server's own
@@ -19,10 +21,12 @@ import { placeOf, citiesByPop, requestFor } from './place.js';
 import { settings, worstCase, talkSettings, ask } from './ai.js';
 import { npcOf, talkSystem } from './talk.js';
 import { planningOf, planningSystem, planningReply, PLANNING_KINDS, PLANNING_FEATURES } from './planning.js';
+import { createClaude, claudeSettings, usdFor } from './claude.js';
+import { sheetOf, npcSystem, splitReply, actionOf, createGate, NPC_FEATURE } from './npc-talk.js';
 
 export { BriefStore, Ledger };
 
-const MAX_BODY = 2048, MAX_TALK = 6144;
+const MAX_BODY = 2048, MAX_TALK = 6144, MAX_NPC = 16384;
 
 function origins(env) {
 	const L = String(env.ALLOWED_ORIGINS || 'https://level99bard.com,https://www.level99bard.com').split(',').map((s) => s.trim()).filter(Boolean);
@@ -95,9 +99,23 @@ export async function handle(request, env) {
 		return talk(env, T, await who(request, env), H);
 	}
 
+	if (request.method === 'POST' && url.pathname === '/npc/talk') {
+		if (!ok) return reply({ error: 'origin required' }, 403, H);
+		if (!/^application\/json\b/i.test(request.headers.get('content-type') || '')) return reply({ error: 'json only' }, 415, H);
+		const text = await request.text();
+		if (text.length > MAX_NPC) return reply({ error: 'too big' }, 413, H);
+		let body;
+		try { body = JSON.parse(text); } catch { return reply({ error: 'bad json' }, 400, H); }
+		const T = sheetOf(body);
+		if (T.error) return reply({ error: T.error }, 400, H);
+		return npcTalk(env, T, await who(request, env), H);
+	}
+
 	if (request.method === 'GET' && url.pathname === '/status') {
-		const r = await ledger(env).fetch('https://ledger/state');
-		return reply({ ...await r.json(), planning: PLANNING_KINDS, features: PLANNING_FEATURES }, 200, H, { 'cache-control': 'no-store' });
+		const st = await (await ledger(env).fetch('https://ledger/state')).json();
+		const C = createClaude(env), CS = claudeSettings(env);
+		const claude = { on: !!C, model: C ? C.model || CS.model : null, effort: CS.effort, ...st.claude, usd: Math.round(usdFor(CS, st.claude?.tokens || {}) * 1000) / 1000 };
+		return reply({ ...st, claude, planning: PLANNING_KINDS, features: [...PLANNING_FEATURES, NPC_FEATURE] }, 200, H, { 'cache-control': 'no-store' });
 	}
 	return reply({ error: 'not found' }, 404, H);
 }
@@ -117,6 +135,60 @@ async function talk(env, T, player, H) {
 	const said = T.planning ? planningReply(out.value, T.planning) : typeof out.value === 'string' ? out.value.trim().slice(0, 600) : '';
 	if (!said) return reply({ error: out.error || 'no reply', fallback: 'offline' }, 503, H, { 'cache-control': 'no-store' });
 	return reply({ reply: said, neurons: out.neurons }, 200, H, { 'cache-control': 'no-store' });
+}
+
+// one person's reply, streamed: a line of JSON per few words, then the whole reply and its one
+// action. Claude when the key is set (its own daily count of turns and the shared hourly limit
+// per player); Workers AI otherwise, in the townsfolk's share of the day. When Claude fails
+// before saying a word (busy, a bad key, the day's turns gone) Workers AI answers instead.
+async function npcTalk(env, T, player, H) {
+	const t0 = Date.now(), system = npcSystem(T.sheet), L = ledger(env);
+	const headers = { ...H, 'content-type': 'application/x-ndjson; charset=utf-8', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' };
+	const enc = new TextEncoder(), lineOf = (o) => enc.encode(JSON.stringify(o) + '\n');
+	const C = createClaude(env);
+	let res = C ? await (await L.fetch('https://ledger/reserve', { method: 'POST', body: JSON.stringify({ kind: 'claude', who: player }) })).json() : null;
+	if (res && !res.ok && res.reason === 'rate') return reply({ error: 'rate', fallback: 'offline' }, 429, H, { 'cache-control': 'no-store' });
+	if (!res?.ok) {
+		// no key, or the day's Claude turns are gone: one Workers AI reply, the same shape
+		const A = await aiTurn(env, T, system, res ? null : player);
+		if (A.error) return reply({ error: A.error, fallback: 'offline' }, A.status, H, { 'cache-control': 'no-store' });
+		return new Response(new Uint8Array([...lineOf({ t: A.text }), ...lineOf({ end: true, reply: A.text, act: A.act, provider: 'ai', neurons: A.neurons, ms: Date.now() - t0 })]), { status: 200, headers });
+	}
+	const { readable, writable } = new TransformStream();
+	const w = writable.getWriter();
+	const line = (o) => w.write(lineOf(o)).catch(() => {});
+	(async () => {
+		let said = false;
+		const gate = createGate((t) => { said = true; line({ t }); });
+		const out = await C.stream({ system, messages: T.history, maxTokens: claudeSettings(env).maxTokens }, (d) => gate.push(d));
+		gate.flush();
+		await L.fetch('https://ledger/settle', { method: 'POST', body: JSON.stringify({ kind: 'claude', day: res.day, usage: out.usage, ok: !!out.text }) });
+		if (out.text) {
+			const { text, act } = splitReply(out.text);
+			return line({ end: true, reply: text, act: actionOf(act, T.sheet), provider: 'claude', model: out.model, usage: out.usage, ms: Date.now() - t0 });
+		}
+		if (!said && env.AI) {
+			const A = await aiTurn(env, T, system, null);
+			if (!A.error) { await line({ t: A.text }); return line({ end: true, reply: A.text, act: A.act, provider: 'ai', neurons: A.neurons, ms: Date.now() - t0 }); }
+		}
+		return line({ error: out.error || 'no reply', fallback: 'offline' });
+	})().catch((err) => { console.error('npc/talk', err?.message || err); return line({ error: 'server error', fallback: 'offline' }); }).finally(() => w.close().catch(() => {}));
+	return new Response(readable, { status: 200, headers });
+}
+// one Workers AI reply for a person, inside the townsfolk's share of the day (who: the player
+// for their hourly limit, or null when this turn was already counted against it)
+async function aiTurn(env, T, system, player) {
+	if (!env.AI) return { error: 'no model', status: 503 };
+	const S = talkSettings(env), L = ledger(env);
+	S.maxTokens = Math.max(S.maxTokens, 220);
+	const req = { system: system.join('\n'), user: T.history.map((m) => m.content).join('\n') };
+	const res = await (await L.fetch('https://ledger/reserve', { method: 'POST', body: JSON.stringify({ kind: 'talk', who: player, neurons: worstCase(req, S) }) })).json();
+	if (!res.ok) return { error: res.reason, status: res.reason === 'rate' ? 429 : 503 };
+	const out = await ask(env.AI, req, S, { json: false, messages: T.history, temperature: 0.75 });
+	await L.fetch('https://ledger/settle', { method: 'POST', body: JSON.stringify({ kind: 'talk', day: res.day, reserved: res.reserved, used: out.neurons, exhausted: out.exhausted }) });
+	const { text, act } = splitReply(typeof out.value === 'string' ? out.value : '');
+	if (!text) return { error: 'no reply', status: 503 };
+	return { text, act: actionOf(act, T.sheet), neurons: out.neurons };
 }
 
 // the nightly round: the biggest atlas cities not yet discovered, while the allowance lasts
