@@ -94,6 +94,24 @@ test('a place standing inside a gridded town is reached through that town\'s str
  assert.ok(!out.some(r=>/Westend/.test(r.name)&&/West –|– West$/.test(r.name)));
 });
 
+test('a highway goes on into a big gridded town to the first of its streets worked out round you',()=> {
+ const {roads,cam}=fixture(['West|35|134.98|2','East|35|135.02|2']);
+ roads.settle(cam);
+ const p=toXZ(35,134.98), q=toXZ(35,135.02), ux=(q.x-p.x)/Math.hypot(q.x-p.x,q.z-p.z), uz=(q.z-p.z)/Math.hypot(q.x-p.x,q.z-p.z);
+ // streets only near its middle (round you), none near its edge where the highway comes in
+ const sx=p.x+ux*200, sz=p.z+uz*200;
+ const grid={id:'bay-town:big',x:p.x,z:p.z,r:900,join:100,around:true,roads:[{pts:new Float32Array([sx-uz*40,sz+ux*40,sx+uz*40,sz-ux*40]),cls:'residential'}]};
+ roads.update(.1,cam,true,[grid]); roads.settle(cam);
+ const out=[]; roads.near('roads',p.x,p.z,3000,out);
+ const link=out.find(r=>r.link);
+ assert.ok(link,'joined to the first street in');
+ const n=link.pts.length, ends=[[link.pts[0],link.pts[1]],[link.pts[n-2],link.pts[n-1]]];
+ assert.ok(ends.some(([x,z])=>Math.hypot(x-sx-uz*40,z-sz+ux*40)<1||Math.hypot(x-sx+uz*40,z-sz-ux*40)<1),'the link ends at a street end');
+ // the highway itself reaches in past the town's edge to there
+ const inner=Math.min(...out.filter(r=>!r.link&&/West/.test(r.name)).flatMap(r=>{const d=[];for(let k=0;k<r.pts.length;k+=2)d.push(Math.hypot(r.pts[k]-p.x,r.pts[k+1]-p.z));return d;}));
+ assert.ok(inner<900*0.9-50&&inner>150,`highway reaches ${inner|0} m from the middle`);
+});
+
 test('open sea is not replaced by a continent-spanning road',()=> {
  const {roads,cam}=fixture(['West|35|134.85|3','East|35|135.15|3'],(_lat,lon)=>lon>134.94&&lon<135.06);
  roads.settle(cam);

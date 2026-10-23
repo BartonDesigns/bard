@@ -267,6 +267,26 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		}
 		return pts;
 	}
+	// a town's street ends (the ways in), found by where: the nearest within 60 m of a point
+	const ENDS = new WeakMap();
+	function endsOf(T) {
+		let f = ENDS.get(T);
+		if (f) return f;
+		const cells = new Map(), C = 100;
+		for (const r of T.roads) {
+			if (!r.pts || r.pts.length < 4 || r.cls === 'service' || /path|track|footway|steps/.test(r.cls || '')) continue;
+			for (const k of [0, r.pts.length - 2]) { const key = Math.floor(r.pts[k] / C) + ',' + Math.floor(r.pts[k + 1] / C); let c = cells.get(key); if (!c) cells.set(key, c = []); c.push([r.pts[k], r.pts[k + 1]]); }
+		}
+		f = (x, z) => {
+			let best = null, bd = 60;
+			for (let i = Math.floor((x - 60) / C); i <= Math.floor((x + 60) / C); i++) for (let j = Math.floor((z - 60) / C); j <= Math.floor((z + 60) / C); j++) {
+				for (const e of cells.get(i + ',' + j) || []) { const d = Math.hypot(e[0] - x, e[1] - z); if (d < bd) { bd = d; best = e; } }
+			}
+			return best;
+		};
+		ENDS.set(T, f);
+		return f;
+	}
 	function* make(cx, cz) {
 		const t0 = performance.now();
 		let s0 = t0, work = 0;
@@ -301,6 +321,15 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 				for (const r of T.roads) {
 					if (!r.pts || r.pts.length < 4 || r.cls === 'service' || /path|track|footway|steps/.test(r.cls || '')) continue;
 					for (const k of [0, r.pts.length - 2]) { const d = Math.hypot(r.pts[k] - px, r.pts[k + 1] - pz); if (d < bd) { const to = [r.pts[k], r.pts[k + 1]], pts = connector([px, pz], to); if (pts) { bd = d; best = pts; } } }
+				}
+				// (none near its edge, where the streets worked out round you stop short of it: the road
+				// goes on in to the first of them and joins it there, rather than across them)
+				if (!best && T.around) {
+					const E = endsOf(T), dir = end === 0 ? -1 : 1, stop = end === 0 ? previous0 : previous1;
+					for (let q2 = q + dir; dir < 0 ? q2 >= stop : q2 <= stop; q2 += dir) {
+						const to = E(P[q2 * 2], P[q2 * 2 + 1]), pts = to && connector([P[q2 * 2], P[q2 * 2 + 1]], to);
+						if (pts) { best = pts; if (end === 0) q0 = q2; else q1 = q2; break; }
+					}
 				}
 				if (best) joins.push(best);
 				else { q0 = previous0; q1 = previous1; }
