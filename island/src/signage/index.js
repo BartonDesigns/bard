@@ -288,6 +288,9 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			const [, x1, z0] = rows[k], zc = (z0 + rows[k + 1][2]) / 2, [x, z] = L(x1 - 0.2, zc), [nx, nz] = N(1, 0);
 			out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'aisle', n: k + 1, items: items[k % items.length], col }, x, z, hy: hang, base: B.y, nx, nz, w: 1.25, h: 0.42, back: BACK.readable, wear: 0 });
 		}
+		// (a shop fitted out with its own stock, signs and price rails (bay/storefit.js): only the
+		// aisles' numbers over them)
+		if (B.stocked) return out;
 		if (/grocer|market|general/.test(t) && B.products?.length) {
 			const count = Math.min(lite ? 24 : 72, B.products.length);
 			for (let i = 0; i < count; i++) {

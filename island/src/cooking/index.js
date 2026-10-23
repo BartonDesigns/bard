@@ -129,6 +129,13 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	}
 	function shopHere() {
 		const W = world(), pos = camera.position;
+		// a walk-in shop fitted out with food on its shelves (bay/commercial.js, bay/storefit.js):
+		// a food mart, a corner store, a grocer, a bottle shop
+		const C = W?.commercial?.inside?.(pos);
+		if (C?.stocked) {
+			const t = C.b.biz?.type, sk = C.trade === 'mart' ? 'mart' : C.trade === 'liquor' ? 'liquor' : C.trade === 'grocer' ? shopKind(t) || 'grocer' : null;
+			if (sk) return { kind: 'shop', shop: sk, key: `s:biz:${Math.round(C.b.x)}:${Math.round(C.b.z)}`, at: { x: pos.x, z: pos.z }, name: C.b.biz?.name || SHOPS[sk].name, place: 'suburb' };
+		}
 		if (sitesT <= 0) { sitesT = 3; try { sites = (W?.worldSites?.() || []).filter((S) => S.kind === 'supermarket'); } catch { sites = []; } }
 		let best = null;
 		for (const S of sites) {
