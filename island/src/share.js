@@ -312,6 +312,8 @@ export function createShare(ctx) {
 					const at = new THREE.Vector3(s.x, yOf(), s.z);
 					if (b?.k === 'house') await until(() => w.houses?.inside(at) || [...(w.houses?.houses?.values() || [])].some((h) => h && (b.lat != null ? h.grp?.homeId === b.id : Math.hypot(h.cx - b.cx, h.cz - b.cz) < 2)), 60000);
 					else if (b?.k === 'shop') await until(() => w.commercial?.inside(at), 60000);
+					// (a flat upstairs: its floor built before you are let down onto it, interiors/)
+					else if (b?.k === 'flat') await until(() => { const I = w.interiors?.inside(at); return !!I?.B.levels?.[I.level]; }, 60000);
 				}
 				await sleep(250);
 			} else if (s.bld?.k === 'cave' && w.underworld) {
