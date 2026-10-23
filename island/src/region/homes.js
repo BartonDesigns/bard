@@ -54,6 +54,8 @@ export function ruralShell(g, plan, H, { base, gl, ext, wall }) {
 	const rcol = col(rf.col || [0.4, 0.3, 0.25]), rc = mixc(rcol, SNOW, Math.min(0.9, rf.snow || 0)), rk = ROOF[rf.skin] || 'roof0';
 	const trim = col(H.trim || shade(col(H.wall), 0.8)), soffit = rf.skin === 'thatch' ? shade(rcol, 0.5) : rf.skin === 'tin' ? shade(rcol, 0.6) : shade(trim, 0.8);
 	const o = rf.o ?? 0.4, t = rf.skin === 'thatch' ? 0.32 : 0.16;
+	// (a post along the front stands clear of the door and its steps)
+	const dx = plan.door?.x ?? 1e9, clear = (x, lo, hi) => (Math.abs(x - dx) < 1.2 ? Math.max(lo, Math.min(hi, dx + (x < dx ? -1.2 : 1.2))) : x);
 
 	// a sloped slab: its top (k, c) over the four points (p0, p1 the low edge), its underside and
 	// edges (the soffit's colour), the pattern's rows along the low edge
@@ -198,7 +200,7 @@ export function ruralShell(g, plan, H, { base, gl, ext, wall }) {
 		g.box('trim', x0, base, ze - 0.08, x1, -0.14, ze, shade(dc, 0.7));
 		for (const x of [x0, x1 - 0.08]) g.box('trim', x, base, z1, x + 0.08, -0.14, ze, shade(dc, 0.7));
 		for (let i = 0; i < n; i++) {
-			const x = x0 + 0.2 + i * (W - 0.4) / (n - 1);
+			const x = clear(x0 + 0.2 + i * (W - 0.4) / (n - 1), x0 + 0.2, x1 - 0.2);
 			g.box('trim', x - 0.08, 0, ze - 0.26, x + 0.08, py, ze - 0.1, pc);
 			out.col.push([x - 0.1, ze - 0.28, x + 0.1, ze - 0.08, 0, py]);
 		}
@@ -217,7 +219,7 @@ export function ruralShell(g, plan, H, { base, gl, ext, wall }) {
 		for (const [a, b, c, d] of [[X0, Z1 - 0.08, X1, Z1], [X0, Z0, X1, Z0 + 0.08], [X0, Z0, X0 + 0.08, Z1], [X1 - 0.08, Z0, X1, Z1]]) g.box('trim', a, base - 0.4, b, c, -0.14, d, shade(dc, 0.7));
 		const ring = [];
 		const nx = Math.max(2, Math.round((X1 - X0) / 3)), nz = Math.max(2, Math.round((Z1 - Z0) / 3));
-		for (let i = 0; i <= nx; i++) { const x = X0 + 0.15 + i * (X1 - X0 - 0.3) / nx; ring.push([x, Z1 - 0.15], [x, Z0 + 0.15]); }
+		for (let i = 0; i <= nx; i++) { const x = X0 + 0.15 + i * (X1 - X0 - 0.3) / nx; ring.push([clear(x, X0 + 0.15, X1 - 0.15), Z1 - 0.15], [x, Z0 + 0.15]); }
 		for (let j = 1; j < nz; j++) { const z = Z0 + 0.15 + j * (Z1 - Z0 - 0.3) / nz; ring.push([X0 + 0.15, z], [X1 - 0.15, z]); }
 		for (const [x, z] of ring) { g.box('trim', x - 0.06, 0, z - 0.06, x + 0.06, py, z + 0.06, pc); out.col.push([x - 0.09, z - 0.09, x + 0.09, z + 0.09, 0, py]); }
 		out.deck = Z1;

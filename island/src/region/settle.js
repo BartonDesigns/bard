@@ -82,7 +82,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, t
 	const sites = new Map();            // key -> site
 	const queue = [];                   // [site, i, j]
 	const stats = { built: 0, ms: 0, cells: 0, lots: 0, tris: 0 };
-	let epoch = -1, job = null, occupancyVersion = 0, treesVersion = 0;
+	let epoch = -1, job = null, occupancyVersion = 0, treesVersion = 0, homesVersion = 0;
 
 	// ---------- a site ----------
 	// desc: { key, kind, lat, lon, kit (kit id), pop, name, regionId, culture, palette, opts, lots? }
@@ -217,6 +217,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, t
 		if (G.count()) { C.mesh = new THREE.Mesh(nearOf(G.geometry()), mat); C.mesh.castShadow = !isPhone; C.mesh.receiveShadow = true; s.group.add(C.mesh); stats.tris += G.count() / 3; }
 		if (glow.count()) { C.glow = new THREE.Mesh(nearOf(glow.geometry()), glowMat); s.group.add(C.glow); }
 		for (const rec of homes) rec.cell = C;
+		if (homes.length) homesVersion++;
 		C.ground = paintCell(s, i, j, kit);
 		if (smoke.length) {
 			const n = smoke.length / 3, K = 7, pos = new Float32Array(n * K * 3), ph = new Float32Array(n * K);
@@ -236,6 +237,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, t
 	function freeCell(C) {
 		// (its homes built for real go with it: bay/houses.js lets a dead one go)
 		for (const rec of C.homes) { if (rec.grp) rec.grp.dead = true; rec.grp = null; rec.nearGrp = null; }
+		if (C.homes.length) homesVersion++;
 		for (const m of [C.mesh, C.glow, C.ground, C.smoke]) if (m) { m.geometry.dispose(); m.parent?.remove(m); }
 		if (C.trees.length) treesVersion++;
 		stats.cells--;
@@ -326,6 +328,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, t
 		if (epoch !== F.epoch) {
 			epoch = F.epoch;
 			for (const s of sites.values()) { place(s); for (const C of s.cells.values()) for (const rec of C.homes) if (rec.grp) { rec.grp.dead = true; rec.grp = null; } }
+			homesVersion++;
 		}
 		smokeU.uTime.value += dt;
 		if (wind) smokeU.uWind.value.set(wind.x, wind.y);
@@ -528,6 +531,6 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, t
 	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); groundMat.dispose(); smokeMat.dispose(); }
 	// the great trees of the built cells, where they stand now
 	function trees() { const out = []; for (const s of sites.values()) for (const C of s.cells.values()) for (const T of C.trees) out.push({ ...T, x: s.x + T.x, z: s.z + T.z }); return out; }
-	const api = { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, homesNear, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
+	const api = { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, homesNear, homesVersion: () => homesVersion, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
 	return api;
 }

@@ -601,7 +601,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	// ---------------------------------------------------------------------------
 	// streaming: build the nearest, one a frame; let the far ones go
 
-	let scanX = 1e9, scanZ = 1e9, cands = [], buildMs = 0, job = null, bandOf = null;
+	let scanX = 1e9, scanZ = 1e9, cands = [], buildMs = 0, job = null, bandOf = null, homesV = -1;
 	const BUDGET = isPhone ? 3 : 4, fwd = new THREE.Vector3();
 	function update(cam, dt, nightK = 0) {
 		updateDetailClock();night.value = nightK;
@@ -617,8 +617,11 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		// a shop's goods as lit as the shop: full while it is lit, the night lights' share once dark
 		for (const h of houses.values()) { const U = h?.goodsMat && h.light?.U; if (U) h.goodsMat.color.setScalar(0.92 * (U.ibakeK.value * (1 - 0.72 * U.ibakeNight.value) + 0.18 * (1 - nightK) * U.ibakeNight.value)); }
 		if (!real?.loaded() && !city?.procHomes && !S) return;
-		// what is near, every few metres (and at once when a country home went with its frame)
+		// what is near, every few metres (and at once when a country home went with its frame, or
+		// the homes round you came or went while you stood still: a landing, a saved home)
 		for (const grp of houses.keys()) if (grp.dead) scanX = 1e9;
+		const hv = S?.homesVersion?.() ?? -1;
+		if (hv !== homesV) { homesV = hv; scanX = 1e9; }
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
 			scanX = x; scanZ = z;
 			const seen = new Set();

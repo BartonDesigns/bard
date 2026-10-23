@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createSettlements } from '../src/region/settle.js';
 import { planHouse } from '../src/bay/houseplan.js';
+import { Builder } from '../src/bay/housekit.js';
+import { ruralShell } from '../src/region/homes.js';
 
 const HOMES = ['log', 'arctic', 'chalet', 'farmhouse', 'cottage', 'halftimber', 'stonehouse', 'stonetile', 'cube', 'adobe', 'adobethatch', 'homestead', 'tinroof', 'tincottage', 'stilt', 'easthouse', 'flatbrick', 'mudtile'];
 const KIT = { log: 'snow', arctic: 'polar', chalet: 'alpine', farmhouse: 'farm', cottage: 'village', halftimber: 'village', stonehouse: 'himalaya', stonetile: 'mediterranean', cube: 'mediterranean', adobe: 'desert', adobethatch: 'andes', homestead: 'outback', tinroof: 'savanna', tincottage: 'island', stilt: 'jungle', easthouse: 'eastvillage', flatbrick: 'southasia', mudtile: 'sahel' };
@@ -76,12 +78,27 @@ test('built for real, a home hands over its faces and stops holding you out', ()
 
 test('a home keeps its name when the frame moves, and the house built in the old frame goes', () => {
 	const { S, move } = one('cottage');
-	const [a] = S.homesNear(10, 10, 40);
+	const [a] = S.homesNear(10, 10, 40), v0 = S.homesVersion();
+	assert.ok(v0 > 0, 'a cell of homes built says so (bay/houses.js looks again)');
 	move(1000);
+	assert.ok(S.homesVersion() > v0, 'and a frame move');
 	assert.ok(a.dead, 'the old one is let go');
 	const [b] = S.homesNear(1010, 10, 40);
 	assert.ok(b && b !== a && !b.dead);
 	assert.equal(b.homeId, a.homeId);
 	assert.ok(Math.abs(b[0].x - a[0].x - 1000) < 1e-6);
 	S.dispose();
+});
+
+test('a country home stands whole, and nothing it puts up blocks its door', () => {
+	for (const type of HOMES) {
+		const { S } = one(type);
+		const [grp] = S.homesNear(10, 10, 40), plan = planHouse(grp), g = new Builder(), H = grp.rural;
+		const R = ruralShell(g, plan, H, { base: -0.5, gl: () => -0.4 - H.y0, ext: 'stucco', wall: [0.8, 0.8, 0.8] });
+		for (const [k, b] of g.bufs) assert.ok(b.p.every(Number.isFinite) && b.c.every(Number.isFinite), type + ' ' + k + ' is finite');
+		const R0 = plan.rects.find((r) => r.main), D = plan.door;
+		// (in front of the door, out to the porch's or verandah's edge: the way in and down the steps)
+		for (const c of R.col) if (c[3] > R0.z1 - 0.05 && c[1] < (R.deck ?? R0.z1) + 0.05 && c[5] > 0.5) assert.ok(c[2] < D.x - 0.9 || c[0] > D.x + 0.9, type + ' a post in the doorway at x ' + ((c[0] + c[2]) / 2).toFixed(2) + ', door ' + D.x.toFixed(2));
+		S.dispose();
+	}
 });
