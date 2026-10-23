@@ -713,7 +713,7 @@ const IMPOSTOR_VERT = /* glsl */`
 		#include <fog_vertex>
 	}`;
 const IMPOSTOR_FRAG = /* glsl */`
-	uniform sampler2D uAtlas; uniform vec3 uSunC, uAmb, uSunD; uniform vec4 uBand;
+	uniform sampler2D uAtlas; uniform vec3 uSunC, uAmb, uSunD, uSkyH; uniform vec4 uBand; uniform float uSheen;
 	varying float vSp; varying vec3 vTint; varying float vD; varying float vFill;
 	#include <fog_pars_fragment>
 	void main(){
@@ -725,7 +725,9 @@ const IMPOSTOR_FRAG = /* glsl */`
 		if (t.a < 0.45 || fade < h) discard;
 		// lit from above: the sun on the upper crown, the sky everywhere
 		vec3 light = uAmb * 1.6 + uSunC * smoothstep(-0.05, 0.3, uSunD.y) * (0.45 + 0.55 * (1.0 - gl_PointCoord.y)) * 0.95;
-		gl_FragColor = vec4(t.rgb * vTint * light * vec3(0.8, 0.78, 0.8), 1.0);      // (matched to the leafy tier beside it)
+		// (and the sky off the leaves, as the leafy tier's sheen: world/vegetation.js swayMaterial)
+		vec3 sheen = uSkyH * uSheen * (0.6 + 0.4 * (1.0 - gl_PointCoord.y));
+		gl_FragColor = vec4((t.rgb * vTint * light + sheen) * vec3(0.8, 0.78, 0.8), 1.0);      // (matched to the leafy tier beside it)
 		#include <tonemapping_fragment>
 		#include <colorspace_fragment>
 		#include <fog_fragment>
@@ -957,7 +959,7 @@ export function createCity(shared, scene, bay, real = null) {
 	farGeo.setAttribute('aTint', new THREE.BufferAttribute(fp.tint, 3));
 	farGeo.setDrawRange(0, 0);
 	const farMat = new THREE.ShaderMaterial({
-		uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: atlas }, uScale: { value: 400 }, uSunC: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() }, uSunD: { value: new THREE.Vector3() }, uBand: { value: new THREE.Vector4(...LOD.far) } }]),
+		uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: atlas }, uScale: { value: 400 }, uSunC: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() }, uSunD: { value: new THREE.Vector3() }, uSkyH: { value: new THREE.Color() }, uSheen: { value: 0 }, uBand: { value: new THREE.Vector4(...LOD.far) } }]),
 		vertexShader: IMPOSTOR_VERT, fragmentShader: IMPOSTOR_FRAG, fog: true,
 	});
 	farMat.uniforms.uAtlas.value = atlas;
@@ -967,6 +969,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// point size in pixels for a tree a metre tall at a metre away
 		farMat.uniforms.uScale.value = r.getSize(tmpV2).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360));
 		farMat.uniforms.uSunC.value.copy(shared.uSunColor.value); farMat.uniforms.uAmb.value.copy(shared.uAmbient.value); farMat.uniforms.uSunD.value.copy(shared.uSunDir.value);
+		farMat.uniforms.uSkyH.value.copy(shared.uSkyHor.value).lerp(shared.uSkyZen.value, 0.35); farMat.uniforms.uSheen.value = shared.uLeafSheen?.value || 0;
 	};
 	const tmpV2 = new THREE.Vector2();
 	group.add(farPts);
