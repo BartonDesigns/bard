@@ -12,7 +12,8 @@ const src = (p) => fs.readFileSync(new URL('../src/' + p, import.meta.url), 'utf
 test('the town light fills the shade by night, from how built up it is round you', () => {
 	const frame = src('island-frame.js'), sky = src('world/sky.js');
 	assert.match(frame, /shared\.uCityLight \|\| \(shared\.uCityLight = \{ value: 0 \}\)/);
-	assert.match(frame, /for \(const \[dx, dz\] of CITY_AT\) u \+= W\.bayArea\.urbanAt/);
+	// (the Bay's town map, and out on the globe the town grown round you: earth/globetowns.js)
+	assert.match(frame, /for \(const \[dx, dz\] of CITY_AT\) \{[^\n]*u \+= Math\.max\(W\.bayArea\.urbanAt\(x, z\)\.u, low > 0 \? GT\.urbanAt\(x, z\) \* low : 0\)/);
 	// (by night only, and none in vacuum)
 	assert.match(sky, /const cityK = night \* \(shared\.uCityLight\?\.value \|\| 0\) \* \(vacuum \? 0 : 1\);/);
 	// from above and below: the hemisphere light every building's material already takes, so near

@@ -194,7 +194,9 @@ export function islandFrame(iw, now) {
 	if (W.bayArea?.loaded()) {
 		let glow = 0;
 		let gx = 0, gz = 0;
-		for (const [dx, dz] of GLOW_AT) { const u = W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u; glow += u; gx += dx * u; gz += dz * u; }
+		// (out on the globe, the cities' lit footprints: earth/globetowns.js)
+		const GT = W.globe?.towns;
+		for (const [dx, dz] of GLOW_AT) { const x = camera.position.x + dx, z = camera.position.z + dz, u = Math.max(W.bayArea.urbanAt(x, z).u, GT ? GT.glowAt(x, z) : 0); glow += u; gx += dx * u; gz += dz * u; }
 		shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
 		// (and which way the glow lies: the sky over the cities brightest toward them)
 		W.sky.glowToward(gx, gz, dt);
@@ -203,7 +205,10 @@ export function islandFrame(iw, now) {
 	{
 		const U = shared.uCityLight || (shared.uCityLight = { value: 0 });
 		let u = 0;
-		if (W.bayArea?.loaded() && !W.island.far) for (const [dx, dz] of CITY_AT) u += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+		// (out on the globe, the town grown round you, earth/globetowns.js, while you are down in it:
+		// from the air its ground is dark between its lights, globeterrain.js)
+		const GT = W.globe?.towns, low = GT ? 1 - THREE.MathUtils.smoothstep(camera.position.y - W.island.heightAt(camera.position.x, camera.position.z), 150, 700) : 0;
+		if (W.bayArea?.loaded() && !W.island.far) for (const [dx, dz] of CITY_AT) { const x = camera.position.x + dx, z = camera.position.z + dz; u += Math.max(W.bayArea.urbanAt(x, z).u, low > 0 ? GT.urbanAt(x, z) * low : 0); }
 		U.value += (THREE.MathUtils.smoothstep(u / CITY_AT.length, 0.04, 0.3) - U.value) * Math.min(1, dt * 0.5);
 	}
 	if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
