@@ -108,7 +108,14 @@ export const SHOPS = Object.freeze({
 	butcher: { name: 'Butcher', sells: (I) => I.aisle === 'Butcher' },
 	fishmarket: { name: 'Fish market', sells: (I) => I.aisle === 'Seafood counter' },
 	farmstand: { name: 'Farm stand', sells: (I) => I.aisle === 'Produce' || I.id === 'eggs' || I.id === 'honey' },
+	// a gas station's food mart, a corner store (bay/storefit.js): the milk and eggs in the
+	// coolers, the bread, the tins and the dry goods on the gondolas, the frozen peas, the wine;
+	// a few onions and lemons by the counter, no fresh meat
+	mart: { name: 'Food mart', sells: (I) => MART.has(I.aisle) || MART_EXTRA.has(I.id) },
+	liquor: { name: 'Bottle shop', sells: (I) => I.aisle === 'Wine' || I.id === 'lemon' || I.id === 'lime' },
 });
+const MART = new Set(['Dairy and eggs', 'Bakery', 'Tins', 'Soups and stock', 'Pasta', 'Rice and grains', 'Condiments', 'Breakfast', 'Frozen', 'Wine']);
+const MART_EXTRA = new Set(['onion', 'lemon', 'cheddar', 'sugar', 'flour', 'salt', 'pepper', 'olive-oil', 'honey']);
 // A shop's shelves today: [{ id, name, aisle, pack, unit, price, out (sold out today) }].
 // short: the share of houses round about going short (0..1): the shelves they empty first.
 export function shelves(kind = 'grocer', { seed = 1, day = dayNo(), place = 'suburb', short = 0 } = {}) {

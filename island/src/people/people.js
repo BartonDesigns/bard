@@ -213,7 +213,9 @@ export function createPeople(scene, world, camera = null) {
 				if (!free.length) return false;
 				// Fill the other half of a scene before opening another desk or shop.
 				const paired=free.filter(st=>st.work && pool.some(a=>a.active && a.workSpot?.work?.group===st.work.group));
-				const choices=paired.length?paired:free; const st=choices[Math.floor(r()*choices.length)];
+				// (a shop's clerk first: someone is behind its counter before anyone shops: bay/storefit.js)
+				const staff=free.filter(st=>st.staff);
+				const choices=staff.length?staff:paired.length?paired:free; const st=choices[Math.floor(r()*choices.length)];
 				st.taken = true; p.workSpot=st;p.workContext=st.work ? {...st.work,activity:st.work.role} : null;
 				p.route = { kind: 'seat', seat: st, seats: seated.flatMap((q) => q.seats) };
 				p.role = 'wait'; p.timer = 1e9;

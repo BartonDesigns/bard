@@ -456,7 +456,8 @@ export async function islandBuild(iw, params) {
 		// the real houses close by, built whole with their rooms
 		iw.world.houses = createHouses(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX });
 		// ...and the shops, cafés, restaurants, offices and places to play, walked into
-		iw.world.commercial = createCommercial(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX });
+		// (a shop's fittings in the houses' own materials: no more of them, no new shaders)
+		iw.world.commercial = createCommercial(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX, houseMats: iw.world.houses.M });
 		// inside the towers: the lobby, the elevators, every floor, the roof
 		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state });
 		// ...and every other building: solid, and built inside as you come to it (interiors/)
