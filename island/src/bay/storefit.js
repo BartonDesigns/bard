@@ -21,9 +21,10 @@
 // band(x0, z0, x1, z1, rgb, y0, y1), isPhone }
 
 import { drawAny } from '../interiors/kit.js';
-import '../interiors/estab-kit.js';
-import { stripUV } from '../interiors/goods.js';
+import { RANGES, CUTS, hang, folded } from '../interiors/estab-kit.js';
+import { stripUV, GARMENTS, garmentAt, GARMENT_W, GARMENT_H } from '../interiors/goods.js';
 import { srgbToLinear as lin } from '../world/srgb.js';
+import { makeDoor, COLD } from './cooler-doors.js';
 
 const C = {
 	steel: lin([0.78, 0.79, 0.8]), shelf: lin([0.86, 0.87, 0.88]), kick: lin([0.2, 0.2, 0.21]), black: lin([0.04, 0.04, 0.045]),
@@ -94,15 +95,79 @@ function bookTable(K, x, z, w, d, seed) {
 	}
 	K.col.push([x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0, T + 0.15]);
 }
-// a table of folded clothes at (x, z), w x d: the stacks along both its long sides, each with its
-// maker's label
+// a table of folded clothes at (x, z), w x d: stacks of them in one range's colours, a run of
+// sizes each, a little askew
 function foldTable(K, x, z, w, d, seed) {
-	const g = K.g, s = K.s, T = 0.78;
+	const g = K.g, T = 0.78, range = RANGES[seed % RANGES.length];
 	g.at(0, 0, 0, 0);
 	g.box('grain', x - w / 2, T - 0.04, z - d / 2, x + w / 2, T, z + d / 2, C.oak);
 	g.box('grain', x - w / 2 + 0.05, 0, z - d / 2 + 0.05, x + w / 2 - 0.05, T - 0.04, z + d / 2 - 0.05, C.wood);
-	for (const rot of [0, 2]) { s.at(x, 0, z, rot); s.run('clothes', -w / 2 + 0.04, w / 2 - 0.04, T, 0.24, d / 2 - 0.03, d / 2 - 0.06, seed + rot, 0.95); }
+	const cols = Math.max(2, Math.floor((w - 0.06) / 0.34)), rows = Math.max(1, Math.floor((d - 0.04) / 0.34));
+	for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+		const sx = x - w / 2 + 0.03 + (i + 0.5) * (w - 0.06) / cols, sz = z - d / 2 + 0.02 + (j + 0.5) * (d - 0.04) / rows;
+		folded(g, sx, sz, T, 0.29, 0.27, lin(range[(i + j * 2 + seed) % range.length]), 3 + ((seed + i * 3 + j * 5) % 5), K.rnd);
+	}
 	K.col.push([x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0, T + 0.15]);
+}
+// a garment facing out (GARMENTS' n-th, printed: interiors/goods.js) hung at x in the goods'
+// frame, its hook at y, its front toward +z at z; the ones hung behind it (back toward z - deep)
+// side on in its colour
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+function faceOut(K, n, x, y, z, deep = 0) {
+	const G = GARMENTS[((n % GARMENTS.length) + GARMENTS.length) % GARMENTS.length], [t, f0, f1] = garmentAt(n), th = CUTS[G.cut][2];
+	const c = lin(hexRgb(G.c)), px = GARMENT_H / 96, top = y + 0.03 - 15 * px, hem = top - G.len * px;
+	for (let j = 1; j * 0.07 < deep; j++) {
+		const zb = z - j * 0.07;
+		K.g.box('fabric', x - 0.16, hem + 0.01, zb - th / 2, x + 0.16, top, zb + th / 2, c.map((v) => v * (j % 2 ? 0.92 : 1)));
+	}
+	K.s.sub('garments', t, f0, 0, f1, 1, x - GARMENT_W / 2, x + GARMENT_W / 2, y + 0.03 - GARMENT_H, GARMENT_H, z, 0.95);
+}
+// a clothes shop's wall from a0 to a1 (frame F): folded clothes on a shelf along the top; under it
+// bays of clothes hung side on along a bar (folded ones on a low shelf under them) and bays of
+// them facing out on their arms
+function* hangWall(K, F, a0, a1, seed) {
+	const g = K.g, [b0, b1] = F.L(a0, a1), n = Math.max(1, Math.round((b1 - b0) / 1.25)), bw = (b1 - b0) / n;
+	use(K, F);
+	g.box('paint', b0, 0, 0, b1, 2.3, 0.03, C.white);
+	g.box('grain', b0, 1.86, 0.03, b1, 1.9, 0.42, C.oak);
+	for (let x = b0 + 0.05; x < b1; x += bw) g.box('metal', x, 1.82, 0.03, x + 0.015, 1.86, 0.38, C.steel);
+	for (let x = b0 + 0.2, k = 0, top = RANGES[seed % RANGES.length]; x < b1 - 0.18; x += 0.34, k++) folded(g, x, 0.22, 1.9, 0.29, 0.28, lin(top[(k >> 1) % top.length]), 4 + Math.floor(K.rnd() * 3), K.rnd);
+	for (let i = 0; i < n; i++) {
+		const x0 = b0 + i * bw, x1 = x0 + bw, xm = (x0 + x1) / 2;
+		if ((i + seed) % 2) {
+			// (two arms out from the wall, a garment facing out on each and more behind it)
+			for (const ax of [xm - bw * 0.24, xm + bw * 0.24]) {
+				g.beam('metal', [ax, 1.6, 0.03], [ax, 1.62, 0.46], 0.016, 0.016, C.steel);
+				faceOut(K, seed * 5 + i * 2 + (ax > xm ? 1 : 0), ax, 1.6, 0.44, 0.3);
+			}
+		} else {
+			// (a bar along the wall, the clothes on it side on; a low shelf of folded ones under them)
+			g.cyl('metal', x0 + 0.05, 1.5, 0.3, 0.012, bw - 0.1, C.steel, 8, 'x');
+			for (const x of [x0 + 0.06, x1 - 0.06]) g.box('metal', x - 0.01, 1.48, 0.03, x + 0.01, 1.52, 0.31, C.steel);
+			const range = RANGES[(seed + i) % RANGES.length], cut = Object.keys(CUTS)[(seed + i * 3) % 4];
+			let k = i;
+			for (let x = x0 + 0.1; x < x1 - 0.08;) {
+				const c0 = range[k++ % range.length];
+				for (let m = 0, nn = 3 + Math.floor(K.rnd() * 3); m < nn && x < x1 - 0.08; m++, x += CUTS[cut][2] + 0.026) hang(g, x, 0.3, 1.5, cut, lin(c0.map((v) => v * (0.94 + K.rnd() * 0.08))));
+			}
+			g.box('grain', x0 + 0.04, 0.3, 0.03, x1 - 0.04, 0.33, 0.4, C.oak);
+			for (let x = x0 + 0.2, j = i; x < x1 - 0.15; x += 0.34, j++) folded(g, x, 0.22, 0.33, 0.29, 0.27, lin(range[j % range.length]), 3 + Math.floor(K.rnd() * 3), K.rnd);
+		}
+		yield;
+		use(K, F);
+	}
+	solid(K, F, b0, 0, b1, 0.58, 2.3);
+}
+// a straight rack with a garment facing out off each end (on its own hook), in the frame of a
+// rack along x at (x, z)
+function rackEnds(K, x, z, w, n) {
+	K.g.at(x, 0, z, 0); K.s.at(x, 0, z, 1);
+	for (const sx of [-1, 1]) K.g.beam('metal', [sx * w / 2, 1.5, 0], [sx * (w / 2 + 0.1), 1.52, 0], 0.012, 0.012, C.steel);
+	// (the end toward +x: the goods' frame turned so its +z looks along +x)
+	faceOut(K, n, 0, 1.52, w / 2 + 0.1, 0);
+	K.s.at(x, 0, z, 3);
+	faceOut(K, n + 7, 0, 1.52, w / 2 + 0.1, 0);
+	K.g.at(0, 0, 0, 0); K.s.at(0, 0, 0, 0);
 }
 // a grocer's produce bin at (x, z), w x d, facing +z: a wooden stand, the crates laid on its slope
 // rising to the back, each with its grower's card and its price
@@ -234,14 +299,23 @@ function coolers(K, dir, line, a0, a1, o) {
 			if (o.face) s.face(kk, x + 0.05, x + dw - 0.05, y, Math.min(0.45, t - y), -0.3, (o.seed || 0) + k * 7 + i, 1.2);
 			else s.run(kk, x + 0.05, x + dw - 0.05, y, t - y, -0.13, D - 0.25, (o.seed || 0) + k * 7 + i, 1.25);
 		}
-		// the door's handle (by its free edge) and its frame
-		const hx = k % 2 ? x + 0.07 : x + dw - 0.07;
-		g.box('metal', hx - 0.015, 0.85, 0.03, hx + 0.015, 1.75, 0.06, C.steel);
+		// the door, hung on one edge (bay/cooler-doors.js swings it): its frame round the glass, its
+		// handle by its free edge; drawn on its own, its run of the kit's vertices noted
+		const hinge = k % 2 ? x + dw - 0.02 : x + 0.02, free = k % 2 ? x + 0.02 : x + dw - 0.02, hx = k % 2 ? x + 0.07 : x + dw - 0.07;
+		const m0 = g.mark();
 		g.box('gloss', x + 0.02, 0.3, 0.0, x + 0.045, top - 0.06, 0.025, C.black);
 		g.box('gloss', x + dw - 0.045, 0.3, 0.0, x + dw - 0.02, top - 0.06, 0.025, C.black);
+		g.box('gloss', x + 0.045, 0.3, 0.0, x + dw - 0.045, 0.36, 0.025, C.black);
+		g.box('gloss', x + 0.045, top - 0.12, 0.0, x + dw - 0.045, top - 0.06, 0.025, C.black);
+		g.box((f) => (f > 3 ? 'glass' : null), x + 0.045, 0.36, 0.008, x + dw - 0.045, top - 0.12, 0.016, C.white);
+		g.box('metal', hx - 0.015, 0.85, 0.025, hx + 0.015, 1.75, 0.055, C.steel);
+		const [px, pz] = F.W(hinge, 0.0125), [qx, qz] = F.W(free, 0.0125), [ox, oz] = F.W(hinge, 1.0125), [fx, fz] = F.W(x + dw / 2, 0.55);
+		K.door?.(makeDoor(g.since(m0), px, pz, qx - px, qz - pz, ox - px, oz - pz, fx, fz));
+		// (what it keeps cold is yours to take, paid for at the till: office-perks.js)
+		const pk = typeof kind === 'string' && o.perk !== false && COLD[kind];
+		if (pk) K.perk?.(pk, fx, fz, { door: true, n: (o.seed || 0) + k });
 	}
 	g.box('gloss', L1 - 0.025, 0.24, -0.06, L1 + 0.025, top, 0.02, C.black);
-	fbox(K, F, K.mats.glass, L0, 0.3, 0.008, L1, top - 0.06, 0.016);
 	// the lit header and its sign
 	if (o.signs) {
 		const per = Math.max(1, Math.round((L1 - L0) / 3.2)), sw = (L1 - L0) / per;
@@ -672,6 +746,25 @@ const TRADE = {
 	florist: 'florist', salon: 'salon', barber: 'salon', laundromat: 'laundry', gym: 'gym', yoga: 'gym', vet: 'clinic',
 };
 export const tradeOf = (type) => TRADE[type] || 'variety';
+// what of the gear catalog (gameplay/arms.js) a shop sells over its counter, by its trade and
+// its business: the gear screen's shop sheet (ui/gear.js), the site island-build.js lists for it.
+// outfitter: a trader's prices and its upgrades (the clothes); the rest a store's. The food
+// shops sell their food (cooking/), the rest nothing to carry away
+const GEAR = {
+	hardware: ['door-brace', 'lantern-alarm', 'camp-lantern', 'repair-roll', 'station-signal-flare', 'hunting-net'],
+	pharmacy: ['field-medkit'],
+	pet: ['trail-scent-kit', 'hunting-net'],
+	clothes: ['wayfarers-hood', 'rangers-jacket', 'fieldcraft-gloves', 'rangers-trousers', 'riding-boots', 'duskwalker-boots', 'ops-cap'],
+	tailor: ['aetherweave-coat', 'aetherweave-trousers', 'spellbinder-gloves', 'stargazer-circlet', 'riding-boots'],
+	surf: ['wayfarers-hood', 'rangers-jacket', 'trailstrider-boots', 'fieldcraft-gloves', 'rangers-trousers'],
+	bait: ['hunting-net', 'trail-scent-kit', 'camp-lantern'],
+	bike: ['repair-roll', 'camp-lantern', 'station-signal-flare'],
+	variety: ['camp-lantern', 'lantern-alarm', 'repair-roll'],
+};
+export function gearOf(trade, type) {
+	const stock = GEAR[type] || (trade === 'variety' && (type === 'outfitter' || type === 'huntpost') ? null : GEAR[trade]);
+	return stock ? { kind: trade === 'clothes' ? 'outfitter' : 'supermarket', stock } : null;
+}
 
 // the checkout by the door (and a second for a big shop): its customer side toward the room
 function frontCounter(K, impulse = true, len = 2.4) {
@@ -799,31 +892,59 @@ export function* fitShop(K, type) {
 		item(K, frame('+z', 0), 'armchair', w.x1 - 1.2, w.z1 - 2.2, 0.85, 0.85, 0.9, 3);
 		frontCounter(K, false, 1.8);
 	} else if (t === 'clothes') {
-		// shelves of folded clothes round the walls, rails and mannequins on the floor, tables of
-		// folded stacks, the fitting rooms at the back
-		shelfRun(K, '+x', w.x0 + 0.42, w.z0 + 2.2, w.z1 - 2.6, { h: 2.1, depth: 0.4, levels: [0.12, 0.6, 1.08, 1.56], kinds: () => 'clothes', back: C.white, seed: 21 });
+		// one wall hung (side on along bars, facing out on arms, folded on the shelf over them), the
+		// other shelves of folded clothes; the fitting rooms at the back; on the floor racks and
+		// round racks of clothes, tables of folded ones, the mannequins dressed by the door
+		const seed = Math.floor(r() * 997);
+		yield* hangWall(K, frame('+x', w.x0), w.z0 + 1.7, w.z1 - 2.6, seed);
 		shelfRun(K, '-x', w.x1 - 0.42, w.z0 + 0.6, w.z1 - 2.6, { h: 2.1, depth: 0.4, levels: [0.12, 0.6, 1.08, 1.56], kinds: () => 'clothes', back: C.white, seed: 22 });
-		// the fitting rooms: booths with curtains
+		yield;
+		// the fitting rooms: booths along the back, their curtains hung in folds from a rail
 		{
 			g.at(0, 0, 0, 0);
-			const n = Math.max(2, Math.min(4, Math.floor(iw / 3.2)));
+			const n = Math.max(2, Math.min(4, Math.floor(iw / 3.2))), curtain = lin([[0.35, 0.3, 0.4], [0.62, 0.55, 0.45], [0.2, 0.22, 0.25]][seed % 3]);
 			for (let k = 0; k < n; k++) {
-				const x = w.x0 + 0.2 + k * 1.3;
+				const x = w.x0 + 0.2 + k * 1.3, zc = w.z0 + 1.38;
 				g.box('matte', x, 0, w.z0, x + 0.05, 2.2, w.z0 + 1.4, C.white);
-				g.box('fabric', x + 0.05, 0.15, w.z0 + 1.36, x + 1.25, 2.1, w.z0 + 1.4, lin([0.35, 0.3, 0.4]));
+				g.box('metal', x + 0.05, 2.08, zc - 0.012, x + 1.25, 2.1, zc + 0.012, C.steel);
+				for (let f = 0; f < 8; f++) { const fx = x + 0.06 + f * 0.148; g.box('fabric', fx, 0.12, zc - 0.02 + (f % 2) * 0.03, fx + 0.15, 2.06, zc + (f % 2) * 0.03, curtain.map((v) => v * (f % 2 ? 0.85 : 1))); }
 				g.box('mirror', x + 0.3, 0.4, w.z0 + 0.02, x + 0.95, 2.0, w.z0 + 0.04, C.white);
+				g.cyl('metal', x + 1.1, 1.5, w.z0 + 0.02, 0.008, 0.08, C.steel, 6, 'z');
 				K.col.push([x, w.z0, x + 0.05, w.z0 + 1.4, 0, 2.2]);
 			}
 			K.col.push([w.x0, w.z0 + 1.35, w.x0 + 0.2 + n * 1.3, w.z0 + 1.42, 0, 2.2]);
 		}
 		yield;
-		for (let z = w.z0 + 2.6; z < w.z1 - 3.0; z += 2.0) for (let x = w.x0 + 1.9; x < w.x1 - 1.8; x += 2.4) {
-			const kind = (Math.round(x * 3 + z) % 3 + 3) % 3;
-			if (kind === 0) item(K, frame('+z', 0), 'clothesRack', x, z, 1.4, 0.5, 1.6, 0);
-			else if (kind === 1) foldTable(K, x, z, 1.2, 0.8, Math.round(x * 7 + z));
-			else item(K, frame('+z', 0), 'mannequin', x, z, 0.4, 0.4, 1.8, r() < 0.5 ? 0 : 1);
-			K.col.push([x - 0.7, z - 0.4, x + 0.7, z + 0.4, 0, 1.6]);
-			spot(K, frame('+z', z + 0.6), x, 0.0, 0, -1);
+		// the floor: the front row the mannequins (two on a low stage) and tables of folded clothes,
+		// the rows behind racks and round racks with a table here and there
+		const front = w.z1 - 3.4;
+		// (a metre or so between them to walk through)
+		const rows = Math.max(1, Math.floor((front - (w.z0 + 2.8)) / 2.3) + 1), dz = rows > 1 ? (front - (w.z0 + 2.8)) / (rows - 1) : 0;
+		const cols = Math.max(1, Math.floor((w.x1 - 1.9 - (w.x0 + 2.2)) / 2.7) + 1), dx = cols > 1 ? (w.x1 - 1.9 - (w.x0 + 2.2)) / (cols - 1) : 0;
+		for (let row = 0; row < rows; row++) {
+			const z = rows > 1 ? w.z0 + 2.8 + row * dz : front, last = row === rows - 1;
+			for (let col = 0; col < cols; col++) {
+				const x = cols > 1 ? w.x0 + 2.2 + col * dx : (w.x0 + w.x1) / 2;
+				const kind = last ? (col % 2 ? 'table' : 'stage') : ['rack', 'round', 'rack', 'table', 'round'][(row * 2 + col + seed) % 5];
+				if (kind === 'rack') {
+					item(K, frame('+z', 0), 'clothesRack', x, z, 1.4, 0.55, 1.55, 0);
+					rackEnds(K, x, z, 1.44, seed + row * 3 + col);
+					K.col.push([x - 0.85, z - 0.32, x + 0.85, z + 0.32, 0, 1.6]);
+				} else if (kind === 'round') {
+					item(K, frame('+z', 0), 'roundRack', x, z, 1.3, 1.3, 1.4, 0);
+					K.col.push([x - 0.62, z - 0.62, x + 0.62, z + 0.62, 0, 1.45]);
+				} else if (kind === 'table') foldTable(K, x, z, 1.2, 0.8, seed + row * 7 + col);
+				else {
+					g.at(0, 0, 0, 0);
+					g.box('grain', x - 0.8, 0, z - 0.35, x + 0.8, 0.2, z + 0.35, lin([0.15, 0.15, 0.16]));
+					for (const mx of [-0.4, 0.4]) item(K, frame('+z', 0), 'mannequin', x + mx, z, 0.45, 0.45, 1.8, 0, { y: 0.2, outfit: seed + row * 4 + col * 2 + (mx > 0 ? 1 : 0) });
+					K.col.push([x - 0.8, z - 0.35, x + 0.8, z + 0.35, 0, 1.9]);
+				}
+				// (browsers stand on the aisle side; the front row's from behind, the till being by the door)
+				if (last) spot(K, frame('+z', z - 0.7), x, 0.0, 0, 1);
+				else spot(K, frame('+z', z + (kind === 'round' ? 0.95 : 0.7)), x, 0.0, 0, -1);
+				yield;
+			}
 		}
 		frontCounter(K, false, 2.0);
 	} else if (t === 'pet') {

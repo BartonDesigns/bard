@@ -21,10 +21,10 @@ import { brandName } from '../signage/brand-catalog.js';
 import { brandMark } from '../signage/brand-marks.js';
 
 // ---------------------------------------------------------------------------------
-// the sheet: 8 strips across, 16 down, 256 x 96 each (at the full size: half on a phone), then
+// the sheet: 8 strips across, 17 down, 256 x 96 each (at the full size: half on a phone), then
 // the price rail on its own, the shops' hanging signs (white letters, cut out) and a plain patch
 export const STRIP_W = 1.2, STRIP_H = 0.45;
-const TW = 256, TH = 96, ROWS = 16, RAIL_Y = ROWS * TH, SIGN_Y = RAIL_Y + 10, SW = 256, SH = 32, W = 2048, H = 1792, PX = TW / STRIP_W, RAIL = 8;
+const TW = 256, TH = 96, ROWS = 17, RAIL_Y = ROWS * TH, SIGN_Y = RAIL_Y + 10, SW = 256, SH = 32, W = 2048, H = 1888, PX = TW / STRIP_W, RAIL = 8;
 // the kinds and how many strips of each (a strip's goods differ, so a long run never repeats
 // itself side by side); cool: in a cooler, lit from behind
 export const KINDS = {
@@ -46,6 +46,8 @@ export const KINDS = {
 	// marquees, six (two across, three down); a bowling alley's shoe cubbies; a popcorn machine's
 	// glass and its buckets; a tattoo artist's inks; framed certificates, four
 	films: 2, marquee: 2, shoes: 1, popcorn: 1, inks: 1, certs: 1,
+	// a clothes shop's: the garments it hangs facing out, four to a strip (GARMENTS)
+	garments: 4,
 };
 export const COOL = new Set(['soda', 'cancool', 'water', 'energy', 'beer', 'dairy', 'frozen']);
 const TILES = {};
@@ -71,6 +73,20 @@ export function signUV(name) {
 	return [cx * SW / W, 1 - (y + SH) / H, (cx + 1) * SW / W, 1 - y / H];
 }
 
+// the garments on their strips (garments: four to a strip, cut out round them, each on its
+// hanger): its cut (estab-kit.js CUTS: what the clothes hung behind it are) and its colour (srgb)
+// and how far it hangs, in pixels of its 96 (from its shoulders, 15 down, to its hem)
+export const GARMENTS = [
+	['tee', 'tee', '#f2f0ea', 52], ['graphic', 'tee', '#1b1b1d', 52], ['stripes', 'tee', '#f4f1e8', 52], ['polo', 'tee', '#1f5f4a', 52],
+	['oxford', 'shirt', '#bcd3ea', 60], ['flannel', 'shirt', '#9e2a2b', 60], ['blouse', 'shirt', '#e8c4c4', 60], ['sweater', 'knit', '#d9cdb4', 54],
+	['cardigan', 'knit', '#b08a5a', 54], ['hoodie', 'knit', '#8d9096', 54], ['denim', 'coat', '#4f6f99', 58], ['bomber', 'coat', '#4d5434', 58],
+	['trench', 'coat', '#b59a6d', 76], ['dress', 'dress', '#24365c', 74], ['jeans', 'jeans', '#2e4468', 78], ['skirt', 'jeans', '#6b3a5a', 46],
+].map(([name, cut, c, len]) => ({ name, cut, c, len }));
+// a garment's front on the sheet (the n-th of GARMENTS): its strip and its quarter of it
+export const garmentAt = (n) => { const i = ((n % GARMENTS.length) + GARMENTS.length) % GARMENTS.length; return [i >> 2, (i & 3) / 4, ((i & 3) + 1) / 4]; };
+// (a face-out's size: the quarter strip, 0.3 x 0.45 m of sheet, drawn 0.62 x 0.93 m)
+export const GARMENT_W = 0.62, GARMENT_H = 0.93;
+
 // ---------------------------------------------------------------------------------
 // the painting
 const prng = (seed) => { let a = seed >>> 0 || 1; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; };
@@ -83,7 +99,7 @@ const MAKERS = {
 	dairy: 'dairy', frozen: 'produce', laundry: 'cleaning', paper: 'cleaning', clean: 'cleaning', care: 'care', meds: 'care', vanity: 'care', clothes: 'apparel',
 	auto: 'transport', pet: 'home', paint: 'hardware', tools: 'hardware', peg: 'hardware', tech: 'mobile', toys: 'retro',
 	posters: ['coffee', 'beverages', 'bakery', 'tea'], covers: 'books', crates: 'produce', beans: 'coffee', mugs: 'coffee', trays: 'snacks', fountain: 'beverages', notices: 'network',
-	films: 'network', marquee: 'orbital', popcorn: 'snacks', inks: 'fae',
+	films: 'network', marquee: 'orbital', popcorn: 'snacks', inks: 'fae', garments: 'apparel',
 };
 // the families' sheets while the goods are painted (the small sheets: a packet's mark is a few
 // dozen pixels across), a few on their way at once, each let go once its kinds are painted
@@ -850,6 +866,108 @@ const WHOLE = {
 	},
 	// four framed certificates: the frame, the mat, the paper with its heading, its lines, its seal
 	// and the signature
+	// four garments facing out, each on its hanger, the sheet left clear round them (cut out):
+	// the tee, the shirts, the knits, the jackets and the coat, the dress, the jeans, the skirt
+	garments(g, x0, y0, n) {
+		const CW = TW / 4;
+		for (let i = 0; i < 4; i++) {
+			const k = n * 4 + i, G = GARMENTS[k], x = x0 + i * CW, cx = x + CW / 2, sy = y0 + 15, c = G.c;
+			g.save(); g.beginPath(); g.rect(x, y0, CW, TH); g.clip();
+			// the hanger: its hook and its bar (a clip hanger for the jeans and the skirt)
+			g.strokeStyle = '#9a9ca0'; g.lineWidth = 1.2; g.beginPath(); g.arc(cx + 2, y0 + 5, 3, Math.PI, Math.PI * 2.4); g.stroke();
+			g.beginPath(); g.moveTo(cx, y0 + 8); g.lineTo(cx, y0 + 11); g.stroke();
+			const clip = G.cut === 'jeans';
+			g.fillStyle = k % 3 ? '#1c1c1e' : '#8a6a48';
+			if (clip) { g.fillRect(cx - 17, y0 + 11, 34, 2.5); g.fillStyle = '#b8babd'; g.fillRect(cx - 16, y0 + 12, 4, 5); g.fillRect(cx + 12, y0 + 12, 4, 5); }
+			else { g.beginPath(); g.moveTo(cx, y0 + 10); g.lineTo(cx - 22, y0 + 17); g.lineTo(cx - 22, y0 + 19); g.lineTo(cx + 22, y0 + 19); g.lineTo(cx + 22, y0 + 17); g.closePath(); g.fill(); }
+			const fill = (bw) => { const L = g.createLinearGradient(cx - bw, 0, cx + bw, 0); L.addColorStop(0, shade(c, 1.08)); L.addColorStop(0.5, c); L.addColorStop(1, shade(c, 0.8)); return L; };
+			const dark = shade(c, 0.62), light = shade(c, 1.25);
+			if (G.name === 'jeans' || G.name === 'skirt') {
+				const top = sy + 2;
+				g.fillStyle = fill(16); g.beginPath();
+				if (G.name === 'jeans') { g.moveTo(cx - 14, top); g.lineTo(cx + 14, top); g.lineTo(cx + 16, top + 74); g.lineTo(cx + 2, top + 74); g.lineTo(cx, top + 26); g.lineTo(cx - 2, top + 74); g.lineTo(cx - 16, top + 74); }
+				else { g.moveTo(cx - 13, top); g.lineTo(cx + 13, top); g.lineTo(cx + 22, top + 44); g.lineTo(cx - 22, top + 44); }
+				g.closePath(); g.fill();
+				g.fillStyle = dark; g.fillRect(cx - 14, top, 28, 4);
+				g.strokeStyle = light; g.lineWidth = 0.6;
+				if (G.name === 'jeans') {
+					g.beginPath(); g.moveTo(cx, top + 4); g.lineTo(cx, top + 22); g.stroke();
+					g.beginPath(); g.arc(cx - 10, top + 4, 6, 0, Math.PI / 2); g.stroke(); g.beginPath(); g.arc(cx + 10, top + 4, 6, Math.PI / 2, Math.PI); g.stroke();
+					g.fillStyle = '#c9a227'; g.fillRect(cx - 1, top + 1, 2, 2);
+				} else for (let j = -2; j <= 2; j++) { g.strokeStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.moveTo(cx + j * 5, top + 6); g.lineTo(cx + j * 8, top + 43); g.stroke(); }
+				g.restore();
+				continue;
+			}
+			// the cut: how wide, how long, the sleeves
+			const coat = G.cut === 'coat', len = G.len;
+			const bw = coat ? 18 : 16, long = !['tee', 'graphic', 'stripes', 'polo', 'dress'].includes(G.name);
+			const body = () => {
+				g.beginPath(); g.moveTo(cx - 6, sy); g.lineTo(cx - bw, sy + 3);
+				if (G.name === 'dress') { g.lineTo(cx - 11, sy + 26); g.lineTo(cx - 22, sy + len); g.lineTo(cx + 22, sy + len); g.lineTo(cx + 11, sy + 26); }
+				else { g.lineTo(cx - bw, sy + len); g.lineTo(cx + bw, sy + len); }
+				g.lineTo(cx + bw, sy + 3); g.lineTo(cx + 6, sy); g.closePath();
+			};
+			const sleeves = () => {
+				g.beginPath();
+				for (const sx of [-1, 1]) {
+					const ex = cx + sx * bw;
+					if (long) { g.moveTo(ex, sy + 3); g.lineTo(ex + sx * 8, sy + 8); g.lineTo(ex + sx * 8, sy + len - 6); g.lineTo(ex + sx * 1, sy + len - 6); g.lineTo(ex - sx * 1, sy + 14); }
+					else if (G.name !== 'dress') { g.moveTo(ex, sy + 3); g.lineTo(ex + sx * 10, sy + 9); g.lineTo(ex + sx * 6, sy + 19); g.lineTo(ex, sy + 16); }
+					g.closePath();
+				}
+			};
+			if (G.name === 'hoodie') { g.fillStyle = dark; g.beginPath(); g.ellipse(cx, sy + 1, 11, 8, 0, Math.PI, Math.PI * 2); g.fill(); }
+			g.fillStyle = fill(bw + 8); sleeves(); g.fill();
+			g.fillStyle = 'rgba(0,0,0,0.18)'; sleeves(); g.fill();
+			g.fillStyle = fill(bw); body(); g.fill();
+			// the pattern, inside the cut
+			g.save(); body(); g.clip();
+			if (G.name === 'stripes') { g.fillStyle = '#1d2a4a'; for (let y = sy + 6; y < sy + len; y += 6) g.fillRect(cx - bw, y, bw * 2, 2.4); }
+			if (G.name === 'flannel') { g.fillStyle = 'rgba(10,10,10,0.38)'; for (let xx = cx - bw; xx < cx + bw; xx += 8) g.fillRect(xx, sy, 3, len); for (let y = sy; y < sy + len; y += 8) g.fillRect(cx - bw, y, bw * 2, 3); g.fillStyle = 'rgba(255,255,255,0.18)'; for (let xx = cx - bw + 5; xx < cx + bw; xx += 8) g.fillRect(xx, sy, 0.6, len); }
+			if (G.name === 'dress') { g.fillStyle = 'rgba(255,240,245,0.75)'; for (let y = sy + 6; y < sy + len; y += 7) for (let xx = cx - 22 + ((y / 7) % 2) * 3.5; xx < cx + 22; xx += 7) { g.beginPath(); g.arc(xx, y, 1, 0, Math.PI * 2); g.fill(); } }
+			if (G.cut === 'knit') { g.fillStyle = 'rgba(0,0,0,0.1)'; for (let xx = cx - bw + 1; xx < cx + bw; xx += 2.5) g.fillRect(xx, sy, 0.7, len); }
+			g.restore();
+			// a hem band and cuffs (the knits and the bomber ribbed), a fold or two in the cloth
+			if (G.cut === 'knit' || G.name === 'bomber') { g.fillStyle = dark; g.fillRect(cx - bw, sy + len - 5, bw * 2, 5); for (const sx of [-1, 1]) g.fillRect(cx + sx * bw + (sx < 0 ? -8 : 1), sy + len - 10, 7, 4); }
+			g.strokeStyle = 'rgba(0,0,0,0.16)'; g.lineWidth = 0.8;
+			g.beginPath(); g.moveTo(cx - bw + 5, sy + 12); g.quadraticCurveTo(cx - bw + 7, sy + len * 0.6, cx - bw + 4, sy + len - 2); g.stroke();
+			g.beginPath(); g.moveTo(cx + bw - 6, sy + 16); g.quadraticCurveTo(cx + bw - 9, sy + len * 0.6, cx + bw - 5, sy + len - 2); g.stroke();
+			// the neck: a crew, a v, a collar and its placket, a hood's strings, an open front
+			g.fillStyle = dark; g.strokeStyle = dark; g.lineWidth = 1.2;
+			switch (G.name) {
+				case 'tee': case 'graphic': case 'stripes': case 'sweater':
+					g.beginPath(); g.moveTo(cx - 6, sy); g.quadraticCurveTo(cx, sy + 6, cx + 6, sy); g.stroke(); break;
+				case 'blouse':
+					g.beginPath(); g.moveTo(cx - 6, sy); g.lineTo(cx, sy + 10); g.lineTo(cx + 6, sy); g.stroke(); break;
+				case 'polo': case 'oxford': case 'flannel': case 'denim':
+					g.fillStyle = shade(c, 0.85);
+					for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(cx, sy + 3); g.lineTo(cx + sx * 7, sy - 1); g.lineTo(cx + sx * 5, sy + 7); g.closePath(); g.fill(); }
+					g.fillStyle = shade(c, 0.7); g.fillRect(cx - 0.6, sy + 4, 1.2, G.name === 'polo' ? 10 : len - 4);
+					g.fillStyle = G.name === 'denim' ? '#c9a227' : '#f4f1e8';
+					for (let y = sy + 7; y < sy + (G.name === 'polo' ? 14 : len - 2); y += G.name === 'polo' ? 4 : 7) { g.beginPath(); g.arc(cx + 1.6, y, 0.9, 0, Math.PI * 2); g.fill(); }
+					if (G.name !== 'polo') { g.strokeStyle = shade(c, 0.7); g.lineWidth = 0.7; g.strokeRect(cx - bw + 4, sy + 9, 7, 7); if (G.name === 'denim') g.strokeRect(cx + bw - 11, sy + 9, 7, 7); }
+					break;
+				case 'cardigan': case 'trench': case 'bomber':
+					g.fillStyle = shade(c, 0.7); g.fillRect(cx - 0.8, sy + 2, 1.6, len - 2);
+					g.beginPath(); g.moveTo(cx - 6, sy); g.lineTo(cx, sy + (G.name === 'trench' ? 16 : 10)); g.lineTo(cx + 6, sy); g.stroke();
+					if (G.name === 'trench') { g.fillRect(cx - bw, sy + 28, bw * 2, 3); g.fillStyle = '#2b2118'; for (const sx of [-5, 5]) for (let y = sy + 12; y < sy + 26; y += 6) { g.beginPath(); g.arc(cx + sx, y, 1, 0, Math.PI * 2); g.fill(); } }
+					else if (G.name === 'cardigan') { g.fillStyle = '#efe6d2'; for (let y = sy + 12; y < sy + len - 6; y += 7) { g.beginPath(); g.arc(cx + 2, y, 0.9, 0, Math.PI * 2); g.fill(); } }
+					else { g.fillStyle = '#b8babd'; g.fillRect(cx - 0.4, sy + 6, 0.8, len - 10); g.fillStyle = dark; g.fillRect(cx - 7, sy - 1, 14, 3); }
+					break;
+				case 'hoodie':
+					g.beginPath(); g.moveTo(cx - 6, sy); g.quadraticCurveTo(cx, sy + 6, cx + 6, sy); g.stroke();
+					g.strokeStyle = '#e8e6e0'; g.lineWidth = 0.8; for (const sx of [-2.5, 2.5]) { g.beginPath(); g.moveTo(cx + sx, sy + 3); g.lineTo(cx + sx, sy + 15); g.stroke(); }
+					g.fillStyle = shade(c, 0.86); g.beginPath(); g.moveTo(cx - 10, sy + 32); g.lineTo(cx + 10, sy + 32); g.lineTo(cx + 13, sy + 46); g.lineTo(cx - 13, sy + 46); g.closePath(); g.fill();
+					break;
+				case 'dress':
+					g.beginPath(); g.moveTo(cx - 6, sy); g.quadraticCurveTo(cx, sy + 7, cx + 6, sy); g.stroke(); g.fillRect(cx - 11, sy + 24, 22, 2.5); break;
+			}
+			// the maker's mark: big on the graphic tee, small on the chest of the rest
+			if (G.name === 'graphic') mark(g, maker('apparel', k % 8), cx, sy + 22, bw * 1.4, 14, c);
+			else if (['tee', 'polo', 'sweater', 'hoodie', 'bomber'].includes(G.name)) mark(g, maker('apparel', (k * 3) % 8), cx + bw * 0.45, sy + 11, 8, 4, c);
+			g.restore();
+		}
+	},
 	certs(g, x0, y0, n, r) {
 		const CW = TW / 4;
 		for (let i = 0; i < 4; i++) {
@@ -916,7 +1034,7 @@ const STOCK = {
 	binders: { p: 'binder', w: [0.05, 0.08], h: [0.28, 0.32], f: [2, 5], ink: ['#1d3557', '#2b2d42', '#e63946', '#f1faee', '#457b9d', '#111111', '#2a9d8f', '#e9c46a'] },
 	menu: { whole: 'menu' }, menulit: { whole: 'menulit' }, tubs: { whole: 'tubs' },
 	covers: { whole: 'covers' }, crates: { whole: 'crates' }, trays: { whole: 'trays' }, fountain: { whole: 'fountain' }, notices: { whole: 'notices' }, posters: { whole: 'posters' },
-	films: { whole: 'films' }, marquee: { whole: 'marquee' }, shoes: { whole: 'shoes' }, popcorn: { whole: 'popcorn' }, certs: { whole: 'certs' },
+	films: { whole: 'films' }, marquee: { whole: 'marquee' }, shoes: { whole: 'shoes' }, popcorn: { whole: 'popcorn' }, certs: { whole: 'certs' }, garments: { whole: 'garments' },
 	// (the little dropper bottles on an artist's cart, nothing behind them)
 	inks: { p: 'bottle', w: [0.03, 0.04], h: [0.07, 0.09], f: [1, 2], open: true, foot: 1, liq: ['#111111', '#d62828', '#1d6fd1', '#ffd60a', '#06a77d', '#7b2cbf', '#f77f00', '#ef476f', '#00b4d8'], ink: ['#111111', '#ffffff', '#2b2d42', '#f4f1de'] },
 };
