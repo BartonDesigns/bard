@@ -19,10 +19,10 @@ import * as THREE from 'three';
 import { GFX_PHONE } from '../world/device.js';
 
 // ---------------------------------------------------------------------------------
-// the sheet: 8 strips across, 10 down, 256 x 96 each (at the full size: half on a phone), then
+// the sheet: 8 strips across, 14 down, 256 x 96 each (at the full size: half on a phone), then
 // the price rail on its own, the shops' hanging signs (white letters, cut out) and a plain patch
 export const STRIP_W = 1.2, STRIP_H = 0.45;
-const W = 2048, H = 1152, TW = 256, TH = 96, PX = TW / STRIP_W, RAIL = 8, SIGN_Y = 970, SW = 256, SH = 32;
+const TW = 256, TH = 96, ROWS = 14, RAIL_Y = ROWS * TH, SIGN_Y = RAIL_Y + 10, SW = 256, SH = 32, W = 2048, H = 1568, PX = TW / STRIP_W, RAIL = 8;
 // the kinds and how many strips of each (a strip's goods differ, so a long run never repeats
 // itself side by side); cool: in a cooler, lit from behind
 export const KINDS = {
@@ -31,6 +31,10 @@ export const KINDS = {
 	laundry: 2, paper: 2, clean: 1, care: 3, meds: 3, auto: 2, pet: 2,
 	paint: 2, tools: 2, peg: 3, bins: 2, books: 3, clothes: 2, tech: 2, toys: 2, smokes: 2,
 	flowers: 2,
+	// the cafés', restaurants' and offices': the pastries and donuts and cakes in their cases, the
+	// bags of beans, the mugs, the tubs of ice cream seen from above, the glasses behind a bar, the
+	// binders on an office's shelves, the menus on the wall (chalk, and lit with their pictures)
+	pastry: 2, donuts: 2, cakes: 2, beans: 2, mugs: 2, tubs: 2, glasses: 2, binders: 3, menu: 7, menulit: 3,
 };
 export const COOL = new Set(['soda', 'cancool', 'water', 'energy', 'beer', 'dairy', 'frozen']);
 const TILES = {};
@@ -46,8 +50,9 @@ export function stripUV(kind, n = 0) {
 }
 // a plain white patch (the vertex colour is the colour) and the price rail
 const WHITE_UV = [(W - 6) / W, 2 / H, (W - 2) / W, 6 / H];
-const RAIL_UV = [0, 1 - (960 + RAIL) / H, TW / W, 1 - 960 / H];
-export const SIGNS = ['COLD DRINKS', 'BEER & WINE', 'DAIRY', 'FROZEN FOODS', 'ICE CREAM', 'COFFEE', 'HOT FOOD', 'SNACKS', 'GROCERY', 'PHARMACY', 'HEALTH & BEAUTY', 'HOUSEHOLD', 'PAINT', 'TOOLS', 'HARDWARE', 'PLUMBING', 'ELECTRICAL', 'GARDEN', 'PET SUPPLIES', 'BOOKS', 'NEW ARRIVALS', 'SALE', 'CHECKOUT', 'RESTROOMS', 'EMPLOYEES ONLY', 'WINE', 'SPIRITS', 'PRODUCE', 'BAKERY', 'FRESH FLOWERS', 'PHONES & TECH', 'LOTTERY'];
+const RAIL_UV = [0, 1 - (RAIL_Y + RAIL) / H, TW / W, 1 - RAIL_Y / H];
+export const SIGNS = ['COLD DRINKS', 'BEER & WINE', 'DAIRY', 'FROZEN FOODS', 'ICE CREAM', 'COFFEE', 'HOT FOOD', 'SNACKS', 'GROCERY', 'PHARMACY', 'HEALTH & BEAUTY', 'HOUSEHOLD', 'PAINT', 'TOOLS', 'HARDWARE', 'PLUMBING', 'ELECTRICAL', 'GARDEN', 'PET SUPPLIES', 'BOOKS', 'NEW ARRIVALS', 'SALE', 'CHECKOUT', 'RESTROOMS', 'EMPLOYEES ONLY', 'WINE', 'SPIRITS', 'PRODUCE', 'BAKERY', 'FRESH FLOWERS', 'PHONES & TECH', 'LOTTERY',
+	'MENU', 'ORDER HERE', 'PICK UP', 'KITCHEN', 'BAR', 'ESPRESSO', 'PASTRIES', 'DONUTS', 'PIZZA', 'BURGERS', 'TACOS', 'SUSHI', 'RAMEN', 'RECEPTION', 'SPECIALS', 'GELATO'];
 // a sign's letters on the sheet (cut out: the material keeps only what is painted)
 export function signUV(name) {
 	const i = Math.max(0, SIGNS.indexOf(name)), cx = i % 8, cy = Math.floor(i / 8), y = SIGN_Y + cy * SH;
@@ -98,6 +103,79 @@ function word(g, s, x, y, w, size, col, bold = true) {
 
 // one product, standing on base at x, w wide and h tall; S its look
 const PAINT = {
+	// a pastry on its tray: a croissant, a muffin in its paper, a scone, a cinnamon roll
+	pastry(g, x, b, w, h, S, r) {
+		const k = Math.floor(r() * 4), cx = x + w / 2, gold = shade('#c98a3c', 0.85 + r() * 0.3);
+		g.fillStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.ellipse(cx, b - 1, w * 0.45, 2, 0, 0, Math.PI * 2); g.fill();
+		if (k === 0) {
+			g.fillStyle = gold; g.beginPath(); g.ellipse(cx, b - h * 0.32, w * 0.48, h * 0.32, 0, Math.PI, 0); g.fill();
+			g.strokeStyle = shade('#7a4a1c', 1); g.lineWidth = 1;
+			for (let i = 1; i < 5; i++) { g.beginPath(); g.moveTo(x + w * i / 5, b - 1); g.lineTo(x + w * (i / 5 + 0.04), b - h * 0.6); g.stroke(); }
+		} else if (k === 1) {
+			g.fillStyle = S.c; g.beginPath(); g.moveTo(x + w * 0.15, b - h * 0.45); g.lineTo(x + w * 0.85, b - h * 0.45); g.lineTo(x + w * 0.75, b); g.lineTo(x + w * 0.25, b); g.fill();
+			g.fillStyle = shade(S.f, 0.9); g.beginPath(); g.ellipse(cx, b - h * 0.48, w * 0.42, h * 0.3, 0, Math.PI, 0); g.fill();
+			g.fillStyle = '#3b2412'; for (let i = 0; i < 5; i++) g.fillRect(x + w * (0.25 + 0.5 * r()), b - h * (0.5 + 0.2 * r()), 2, 2);
+		} else if (k === 2) {
+			g.fillStyle = shade('#d9b27c', 0.9 + r() * 0.2); g.beginPath(); g.moveTo(x + w * 0.1, b); g.lineTo(cx, b - h * 0.7); g.lineTo(x + w * 0.9, b); g.fill();
+			g.fillStyle = '#7a2e1f'; for (let i = 0; i < 4; i++) g.fillRect(x + w * (0.3 + 0.4 * r()), b - h * (0.15 + 0.3 * r()), 2, 2);
+		} else {
+			g.fillStyle = gold; g.beginPath(); g.ellipse(cx, b - h * 0.3, w * 0.45, h * 0.3, 0, 0, Math.PI * 2); g.fill();
+			g.strokeStyle = '#6b3d16'; g.lineWidth = 1.3; g.beginPath();
+			for (let t = 0; t < 12; t += 0.3) g.lineTo(cx + Math.cos(t) * t * w * 0.035, b - h * 0.3 + Math.sin(t) * t * h * 0.022);
+			g.stroke();
+			g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillRect(x + w * 0.3, b - h * 0.55, w * 0.4, 1.5);
+		}
+	},
+	// a ring donut, a little from above: the dough, its glaze, the hole, the sprinkles
+	donut(g, x, b, w, h, S, r) {
+		const cx = x + w / 2, cy = b - h * 0.45, rx = w * 0.46, ry = h * 0.42;
+		g.fillStyle = '#c98b4a'; g.beginPath(); g.ellipse(cx, cy + ry * 0.2, rx, ry, 0, 0, Math.PI * 2); g.fill();
+		g.fillStyle = S.f; g.beginPath(); g.ellipse(cx, cy, rx * 0.92, ry * 0.85, 0, 0, Math.PI * 2); g.fill();
+		g.fillStyle = '#4a3020'; g.beginPath(); g.ellipse(cx, cy, rx * 0.28, ry * 0.25, 0, 0, Math.PI * 2); g.fill();
+		if (r() < 0.6) for (let i = 0; i < 9; i++) { const a = r() * Math.PI * 2, d = 0.45 + r() * 0.4; g.fillStyle = pick(r, ['#ffffff', '#ffd60a', '#ef476f', '#118ab2', '#8ac926']); g.fillRect(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, 2.2, 1.2); }
+		g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(cx - rx * 0.35, cy - ry * 0.4, rx * 0.25, ry * 0.12, -0.3, 0, Math.PI * 2); g.fill();
+	},
+	// a cake on its stand: the layers and their frosting, or a slice on its plate
+	cake(g, x, b, w, h, S, r) {
+		const cx = x + w / 2;
+		g.fillStyle = '#e8e8e8'; g.fillRect(x + w * 0.05, b - 3, w * 0.9, 3);
+		if (r() < 0.6) {
+			const top = b - 3 - h * 0.75;
+			g.fillStyle = shade(S.c, 1.1); g.fillRect(x + w * 0.12, top, w * 0.76, h * 0.75);
+			g.fillStyle = S.f; for (let i = 1; i < 3; i++) g.fillRect(x + w * 0.12, top + h * 0.25 * i, w * 0.76, 2);
+			g.fillStyle = shade(S.f, 1.2); g.beginPath(); g.ellipse(cx, top, w * 0.38, h * 0.09, 0, 0, Math.PI * 2); g.fill();
+			g.fillStyle = '#c1121f'; for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(x + w * (0.25 + 0.17 * i), top - 1, 2, 0, Math.PI * 2); g.fill(); }
+			flatShade(g, x + w * 0.12, w * 0.76, top, h * 0.75);
+		} else {
+			g.fillStyle = shade(S.c, 1.1); g.beginPath(); g.moveTo(x + w * 0.15, b - 3); g.lineTo(x + w * 0.85, b - 3); g.lineTo(x + w * 0.85, b - 3 - h * 0.5); g.lineTo(x + w * 0.15, b - 3 - h * 0.35); g.fill();
+			g.fillStyle = S.f; g.fillRect(x + w * 0.15, b - 3 - h * 0.25, w * 0.7, 2);
+		}
+	},
+	// a mug, its handle to the side
+	mug(g, x, b, w, h, S) {
+		const bw = w * 0.72;
+		g.strokeStyle = S.c; g.lineWidth = Math.max(1.5, w * 0.08); g.beginPath(); g.arc(x + bw, b - h * 0.5, h * 0.22, -Math.PI / 2, Math.PI / 2); g.stroke();
+		g.fillStyle = S.c; rr(g, x, b - h, bw, h, 2); g.fill();
+		g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x, b - h, bw, 2);
+		roundShade(g, x, bw, b - h, h, 0.3);
+	},
+	// a glass: a wine glass's bowl on its stem, or a pint
+	glass(g, x, b, w, h, S, r) {
+		const cx = x + w / 2;
+		g.fillStyle = 'rgba(220,232,238,0.55)'; g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1;
+		if (r() < 0.5) {
+			g.beginPath(); g.ellipse(cx, b - h * 0.72, w * 0.36, h * 0.24, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+			g.fillRect(cx - 0.8, b - h * 0.5, 1.6, h * 0.46); g.fillRect(cx - w * 0.25, b - 2, w * 0.5, 2);
+		} else { g.beginPath(); g.moveTo(x + w * 0.15, b - h * 0.85); g.lineTo(x + w * 0.85, b - h * 0.85); g.lineTo(x + w * 0.75, b); g.lineTo(x + w * 0.25, b); g.closePath(); g.fill(); g.stroke(); }
+	},
+	// a ring binder on an office shelf: its spine, the label, the finger hole
+	binder(g, x, b, w, h, S) {
+		g.fillStyle = S.c; g.fillRect(x, b - h, w - 1, h);
+		g.fillStyle = '#f8f9fa'; g.fillRect(x + w * 0.15, b - h * 0.85, w * 0.7 - 1, h * 0.32);
+		g.fillStyle = '#333'; for (let i = 0; i < 3; i++) g.fillRect(x + w * 0.25, b - h * (0.78 - i * 0.08), w * 0.45, 1);
+		g.fillStyle = 'rgba(0,0,0,0.45)'; g.beginPath(); g.arc(x + w / 2, b - h * 0.25, w * 0.18, 0, Math.PI * 2); g.fill();
+		flatShade(g, x, w - 1, b - h, h);
+	},
 	// a florist's bucket of one kind of flower: the galvanised bucket, the stems, the heads in a dome
 	bunch(g, x, b, w, h, S, r) {
 		const bw = w * 0.62, bx = x + (w - bw) / 2, bh = h * 0.34;
@@ -298,6 +376,80 @@ const PALETTES = {
 	smokes: [['#ffffff', '#c1121f', '#111'], ['#ffffff', '#1d3557', '#888'], ['#ffffff', '#f4a261', '#333'], ['#111111', '#e9c46a', '#e9c46a'], ['#f1faee', '#2a9d8f', '#2a9d8f'], ['#ffffff', '#6d6875', '#b5838d'], ['#d62828', '#ffffff', '#ffd60a'], ['#003049', '#ffffff', '#fcbf49'], ['#ffffff', '#457b9d', '#1d3557'], ['#e5e5e5', '#9d0208', '#370617']],
 };
 // each kind: how its strip is stocked. sizes in metres: [w, h]; ink: the colours of its packets
+// the strips painted whole: what a menu board says (by its strip: the coffee bar's, a kitchen's,
+// a bar's; the lit boards of a burger, a pizza and a taco counter, with their pictures), the tubs
+// of ice cream seen from above in a dipping cabinet
+const MENUS = [
+	['COFFEE', [['Espresso', '3.25'], ['Cappuccino', '4.75'], ['Latte', '5.25'], ['Mocha', '5.50'], ['Cold brew', '4.95'], ['Chai latte', '5.25']]],
+	['KITCHEN', [['Soup of the day', '7.50'], ['House salad', '9.00'], ['Club sandwich', '13.50'], ['Fish & chips', '17.00'], ['Steak frites', '24.00'], ['Pasta special', '16.50']]],
+	['DRINKS', [['Draft beer', '7.00'], ['House red', '9.00'], ['House white', '9.00'], ['Margarita', '12.00'], ['Old fashioned', '13.00'], ['Lemonade', '4.00']]],
+	['TEA', [['Milk tea', '5.75'], ['Taro', '6.25'], ['Matcha latte', '6.50'], ['Mango slush', '6.75'], ['Brown sugar', '6.95'], ['+ Boba', '0.75']]],
+	['GELATO', [['One scoop', '4.50'], ['Two scoops', '6.50'], ['Waffle cone', '1.00'], ['Sundae', '8.25'], ['Milkshake', '7.50'], ['Affogato', '6.00']]],
+	['SPECIALS', [['Tonkotsu ramen', '16.00'], ['Miso ramen', '15.00'], ['Gyoza', '8.00'], ['Salmon nigiri', '7.50'], ['Chef\'s omakase', '65.00'], ['Sake', '12.00']]],
+	['BAKERY', [['Croissant', '4.25'], ['Pain au chocolat', '4.75'], ['Sourdough loaf', '9.00'], ['Morning bun', '4.50'], ['Cake slice', '6.50'], ['Baguette', '4.00']]],
+];
+const LIT = [
+	['BURGERS', 'burger', [['Classic burger', '8.99'], ['Double cheese', '11.49'], ['Fries', '3.99']]],
+	['PIZZA', 'pizza', [['Pepperoni slice', '4.25'], ['Margherita', '16.00'], ['Garlic knots', '5.50']]],
+	['TACOS', 'taco', [['Carne asada', '3.75'], ['Al pastor', '3.50'], ['Burrito', '11.95']]],
+];
+function food(g, kind, cx, cy, s) {
+	if (kind === 'burger') {
+		g.fillStyle = '#d9973d'; g.beginPath(); g.ellipse(cx, cy - s * 0.2, s * 0.5, s * 0.32, 0, Math.PI, 0); g.fill();
+		g.fillStyle = '#5aa02c'; g.fillRect(cx - s * 0.52, cy - s * 0.2, s * 1.04, s * 0.1);
+		g.fillStyle = '#ffc93c'; g.fillRect(cx - s * 0.48, cy - s * 0.1, s * 0.96, s * 0.08);
+		g.fillStyle = '#5a2d14'; rr(g, cx - s * 0.5, cy - s * 0.04, s, s * 0.18, 4); g.fill();
+		g.fillStyle = '#c98232'; rr(g, cx - s * 0.48, cy + s * 0.14, s * 0.96, s * 0.16, 5); g.fill();
+		g.fillStyle = '#f7e1b5'; for (let i = 0; i < 6; i++) g.fillRect(cx - s * 0.3 + i * s * 0.11, cy - s * 0.4 + (i % 2) * 3, 2, 1.2);
+	} else if (kind === 'pizza') {
+		g.fillStyle = '#d9a35c'; g.beginPath(); g.moveTo(cx - s * 0.5, cy - s * 0.3); g.lineTo(cx + s * 0.5, cy - s * 0.3); g.lineTo(cx, cy + s * 0.4); g.fill();
+		g.fillStyle = '#f2c14e'; g.beginPath(); g.moveTo(cx - s * 0.42, cy - s * 0.22); g.lineTo(cx + s * 0.42, cy - s * 0.22); g.lineTo(cx, cy + s * 0.32); g.fill();
+		g.fillStyle = '#b3261e'; for (const [u, v] of [[-0.18, -0.1], [0.15, -0.08], [0, 0.1]]) { g.beginPath(); g.arc(cx + u * s, cy + v * s, s * 0.08, 0, Math.PI * 2); g.fill(); }
+	} else {
+		g.fillStyle = '#e8b64c'; g.beginPath(); g.ellipse(cx, cy + s * 0.1, s * 0.5, s * 0.35, 0, Math.PI, 0); g.fill();
+		for (let i = 0; i < 12; i++) { g.fillStyle = ['#5aa02c', '#c1121f', '#6b3a1e', '#f4f1de'][i % 4]; g.fillRect(cx - s * 0.35 + (i % 6) * s * 0.12, cy - s * 0.22 + Math.floor(i / 6) * s * 0.08, s * 0.1, s * 0.06); }
+	}
+}
+const WHOLE = {
+	menu(g, x0, y0, n) {
+		const [title, rows] = MENUS[n % MENUS.length];
+		g.fillStyle = '#5a3b22'; g.fillRect(x0, y0, TW, TH);
+		g.fillStyle = '#1f2420'; g.fillRect(x0 + 4, y0 + 4, TW - 8, TH - 8);
+		word(g, title, x0 + TW / 2, y0 + 14, TW * 0.5, 14, '#f4f1de');
+		g.fillStyle = 'rgba(244,241,222,0.35)'; g.fillRect(x0 + 40, y0 + 23, TW - 80, 1);
+		rows.forEach(([name, price], i) => {
+			const col = i % 2, row = Math.floor(i / 2), xx = x0 + 10 + col * (TW / 2 - 4), yy = y0 + 36 + row * 18;
+			g.fillStyle = '#ece6d2'; g.font = '600 10px Arial, Helvetica, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(name, xx, yy, TW / 2 - 44);
+			g.textAlign = 'right'; g.fillStyle = '#ffd166'; g.fillText(price, xx + TW / 2 - 18, yy);
+		});
+	},
+	menulit(g, x0, y0, n) {
+		const [title, kind, rows] = LIT[n % LIT.length];
+		const bg = g.createLinearGradient(0, y0, 0, y0 + TH); bg.addColorStop(0, '#fffaf0'); bg.addColorStop(1, '#f3e6c8');
+		g.fillStyle = bg; g.fillRect(x0, y0, TW, TH);
+		g.fillStyle = '#c1121f'; g.fillRect(x0, y0, TW, 18);
+		word(g, title, x0 + TW / 2, y0 + 9, TW * 0.5, 13, '#ffffff');
+		rows.forEach(([name, price], i) => {
+			const cx = x0 + 43 + i * 85;
+			food(g, kind, cx, y0 + 46, 44);
+			word(g, name, cx, y0 + 74, 80, 9, '#2b2b2b', false);
+			word(g, price, cx, y0 + 87, 60, 11, '#c1121f');
+		});
+		g.fillStyle = '#111'; g.fillRect(x0, y0 + TH - 2, TW, 2);
+	},
+	tubs(g, x0, y0, n, r) {
+		g.fillStyle = '#9aa1a8'; g.fillRect(x0, y0, TW, TH);
+		const cols = ['#fff3d6', '#f7a6c1', '#6b3a1e', '#a8e6a1', '#ffe066', '#c9a0dc', '#ff8fa3', '#d9b38c', '#e8f4f8', '#ffb347'];
+		for (let row = 0; row < 2; row++) for (let i = 0; i < 4; i++) {
+			const x = x0 + 4 + i * 63, y = y0 + 4 + row * 46, c = cols[(n * 3 + row * 4 + i) % cols.length];
+			g.fillStyle = '#d7dce0'; g.fillRect(x, y, 59, 42);
+			g.fillStyle = c; g.fillRect(x + 3, y + 3, 53, 36);
+			g.strokeStyle = shade(c, 0.8); g.lineWidth = 1.5;
+			for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(x + 10 + r() * 38, y + 10 + r() * 20, 6 + r() * 6, Math.PI * 0.1, Math.PI * 1.1); g.stroke(); }
+			g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(x + 3, y + 3, 53, 4);
+		}
+	},
+};
 const STOCK = {
 	chips: { p: 'bag', w: [0.17, 0.24], h: [0.26, 0.36], f: [2, 4], food: ['#f6bd60', '#e9a03b', '#d4a373', '#f28482'] },
 	candy: { p: 'box', w: [0.1, 0.16], h: [0.1, 0.16], f: [3, 6], food: ['#6f4518', '#9c6644', '#e5383b'] },
@@ -334,19 +486,30 @@ const STOCK = {
 	smokes: { p: 'packs', w: [1.2, 1.2], h: [0.4, 0.4], f: [1, 1] },
 	// (cut out: no shelf behind, no rail; the buckets stand on a florist's stands and in its cooler)
 	flowers: { p: 'bunch', w: [0.24, 0.3], h: [0.4, 0.44], f: [1, 1], open: true, food: ['#d62828', '#ef476f', '#ffd60a', '#f8f9fa', '#9d4edd', '#f77f00', '#ffafcc', '#e63946'] },
+	// (in a lit case: a pale back)
+	pastry: { p: 'pastry', w: [0.1, 0.14], h: [0.06, 0.09], f: [3, 5], stack: 2, back: '#efe6d6', ink: ['#f4f1de', '#e9c46a', '#cdb4db', '#a8dadc'], food: ['#7f5539', '#c98a3c', '#6d2e46', '#3d405b'] },
+	donuts: { p: 'donut', w: [0.1, 0.11], h: [0.06, 0.07], f: [4, 6], stack: 3, back: '#f3ece0', food: ['#f7a6c1', '#5a3420', '#fefae0', '#ffd166', '#b5838d', '#e9edc9'] },
+	cakes: { p: 'cake', w: [0.22, 0.28], h: [0.16, 0.22], f: [1, 2], back: '#efe6d6', ink: ['#f4f1de', '#5a3420', '#ffc8dd', '#fefae0'], food: ['#ffffff', '#ef476f', '#7f5539', '#ffd166'] },
+	beans: { p: 'bag', w: [0.14, 0.18], h: [0.22, 0.28], f: [2, 3], ink: ['#3d2b1f', '#111111', '#c9a66b', '#7a2e1f', '#f4f1de'], food: ['#3d2b1f', '#5b3a29'] },
+	mugs: { p: 'mug', w: [0.1, 0.12], h: [0.09, 0.1], f: [3, 6], stack: 3, ink: ['#ffffff', '#f4f1de', '#2b2d42', '#e9c46a', '#a8dadc', '#e76f51'] },
+	glasses: { p: 'glass', w: [0.07, 0.09], h: [0.14, 0.2], f: [4, 8] },
+	binders: { p: 'binder', w: [0.05, 0.08], h: [0.28, 0.32], f: [2, 5], ink: ['#1d3557', '#2b2d42', '#e63946', '#f1faee', '#457b9d', '#111111', '#2a9d8f', '#e9c46a'] },
+	menu: { whole: 'menu' }, menulit: { whole: 'menulit' }, tubs: { whole: 'tubs' },
 };
 
 function paintStrip(g, kind, x0, y0, seed) {
 	const S0 = STOCK[kind] || STOCK.dry, r = prng(seed * 7919 + 17), cool = COOL.has(kind);
 	g.save();
 	g.beginPath(); g.rect(x0, y0, TW, TH); g.clip();
+	if (S0.whole) { WHOLE[S0.whole](g, x0, y0, TILES[kind].indexOf(Math.round(y0 / TH) * 8 + Math.round(x0 / TW)), r); g.restore(); return; }
 	// the back of the shelf: a cooler's lit white, a gondola's steel grey, the pegboard's holes;
 	// darker under the shelf above
 	const back = g.createLinearGradient(0, y0, 0, y0 + TH);
 	if (cool) { back.addColorStop(0, '#9aa4ab'); back.addColorStop(0.35, '#e6eef2'); back.addColorStop(1, '#f4f8fa'); }
 	else if (S0.peg) { back.addColorStop(0, '#6b6458'); back.addColorStop(0.2, '#bcb3a2'); back.addColorStop(1, '#a9a090'); }
 	else { back.addColorStop(0, '#1d1e20'); back.addColorStop(0.3, '#4a4d52'); back.addColorStop(1, '#5d6066'); }
-	if (!S0.open) { g.fillStyle = back; g.fillRect(x0, y0, TW, TH); }
+	if (S0.back) { const B = g.createLinearGradient(0, y0, 0, y0 + TH); B.addColorStop(0, shade(S0.back, 0.7)); B.addColorStop(0.3, S0.back); B.addColorStop(1, S0.back); g.fillStyle = B; g.fillRect(x0, y0, TW, TH); }
+	else if (!S0.open) { g.fillStyle = back; g.fillRect(x0, y0, TW, TH); }
 	if (S0.peg) { g.fillStyle = 'rgba(40,30,20,0.55)'; for (let y = y0 + 4; y < y0 + TH; y += 6) for (let x = x0 + 3; x < x0 + TW; x += 6) g.fillRect(x, y, 1.4, 1.4); }
 	const base = y0 + TH - RAIL;
 	const sku = () => {
@@ -415,9 +578,9 @@ export function* goodsSteps() {
 		g.setTransform(S.k, 0, 0, S.k, 0, 0);
 		g.fillStyle = '#ffffff'; g.fillRect(W - 8, H - 8, 8, 8);
 		// the price rail on its own (a cooler's door rail, a shelf with nothing painted on it)
-		g.fillStyle = '#cfd2d4'; g.fillRect(0, 960, TW, RAIL);
-		g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 960, TW, 1);
-		for (let x = 6; x < TW - 14; x += 34) { g.fillStyle = x % 3 ? '#ffffff' : '#ffd60a'; g.fillRect(x, 961.5, 12, RAIL - 2.5); }
+		g.fillStyle = '#cfd2d4'; g.fillRect(0, RAIL_Y, TW, RAIL);
+		g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, RAIL_Y, TW, 1);
+		for (let x = 6; x < TW - 14; x += 34) { g.fillStyle = x % 3 ? '#ffffff' : '#ffd60a'; g.fillRect(x, RAIL_Y + 1.5, 12, RAIL - 2.5); }
 		// the signs: their letters alone (the sign's panel is drawn under them in its own colour)
 		SIGNS.forEach((t, i) => word(g, t, (i % 8) * SW + SW / 2, SIGN_Y + Math.floor(i / 8) * SH + SH / 2 + 1, SW - 24, 22, '#ffffff'));
 	}
@@ -503,6 +666,15 @@ export class GoodsBuilder {
 		for (let x = x0; x < x1 - 0.02; x += STRIP_W, n++) {
 			const xe = Math.min(x1, x + STRIP_W), [u0, v0, u1, v1] = stripUV(kind, n), uw = (xe - x) / STRIP_W;
 			this.quad([x, y, z], [xe, y, z], [xe, y + h, z], [x, y + h, z], [u0, v0, u0 + (u1 - u0) * uw, v0 + (v1 - v0) * vt], [k * 0.88, k]);
+		}
+	}
+	// a strip lying flat (the tubs in a dipping cabinet, seen through its glass): from x0 to x1,
+	// z0 (its foot) to z1, at y
+	flat(kind, x0, x1, z0, z1, y, seed = 0, k = 1) {
+		let n = Math.floor(Math.abs(seed * 13.7)) % 97;
+		for (let x = x0; x < x1 - 0.02; x += STRIP_W, n++) {
+			const xe = Math.min(x1, x + STRIP_W), [u0, v0, u1, v1] = stripUV(kind, n), uw = (xe - x) / STRIP_W;
+			this.quad([x, y, z1], [xe, y, z1], [xe, y, z0], [x, y, z0], [u0, v0, u0 + (u1 - u0) * uw, v1], k);
 		}
 	}
 	// a lit sign: its panel in its colour, the letters on it (from x0 to x1 at z, y to y + h)

@@ -3,9 +3,13 @@
 // block's ground floor) stop being painted blocks and are built for real, the way the
 // houses are (houses.js): walls with thickness, a glass storefront with its door open, a
 // ceiling of light panels, and inside, a fit-out for what the place is:
-//   café        - the counter and espresso machine, a pastry case, little round tables
-//   restaurant  - tables laid for two and four, booths down one wall, a bar with stools
-//   shop        - aisles of shelving, a checkout by the door
+//   café        - the espresso bar and its menu boards, the pastry case, round tables, the
+//                 bar along the window; a bakery's, a donut shop's, a gelato counter's own
+//                 (bay/dinefit.js)
+//   restaurant  - the kitchen behind its pass, tables laid for two and four, booths; a pub's
+//                 bar, a diner's counter, a sushi bar, a pizzeria's or a burger place's order
+//                 counter and lit menus (bay/dinefit.js)
+//   shop        - fitted out for its trade (bay/storefit.js)
 //   office      - a reception desk and lobby sofa, rows of desks with screens, a glass meeting room
 //   arcade      - cabinets glowing down both sides, a prize counter
 //   bowling     - lanes of polished wood, pins at the far end, a ball return
@@ -29,6 +33,7 @@ import { sineHash as hh } from '../noise.js';
 import { Builder, houseMaterials, lin } from './housekit.js';
 import { GoodsBuilder, goodsSteps, goodsMaterial } from '../interiors/goods.js';
 import { fitMart, fitShop, tradeOf } from './storefit.js';
+import { fitDining, styleOf } from './dinefit.js';
 import { buildSlice } from '../world/buildslice.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
@@ -66,6 +71,10 @@ const FLOORS = {
 	liquor: ['tile', [0.8, 0.74, 0.66]], books: ['wood', [0.78, 0.66, 0.52]], clothes: ['wood', [0.88, 0.84, 0.78]], pet: ['tile', [0.9, 0.9, 0.86]],
 	tech: ['floor4', [0.9, 0.9, 0.92]], florist: ['floor6', [0.95, 0.85, 0.75]], salon: ['floor0', [0.95, 0.95, 0.95]], laundry: ['floor0', [0.95, 0.95, 0.93]],
 	gym: ['concrete', [0.6, 0.6, 0.62]], clinic: ['floor4', [0.95, 0.95, 0.95]], variety: ['tile', [0.92, 0.92, 0.9]],
+	// (the cafés' and restaurants', by how they're laid out: bay/dinefit.js)
+	cafe: ['wood', [0.82, 0.7, 0.55]], sitdown: ['wood', [0.58, 0.42, 0.3]], pub: ['wood', [0.46, 0.33, 0.23]], diner: ['floor0', [0.95, 0.95, 0.95]],
+	pizza: ['floor6', [0.92, 0.8, 0.7]], quick: ['floor4', [0.88, 0.87, 0.84]], counter: ['wood', [0.88, 0.78, 0.62]], bakery: ['floor6', [0.97, 0.9, 0.82]],
+	donut: ['floor0', [0.97, 0.93, 0.95]], boba: ['floor4', [0.95, 0.95, 0.94]], icecream: ['floor0', [0.98, 0.94, 0.95]],
 };
 // the colours a shop wears (its sign's: economy/establishments.js), linear and as written
 function brandOf(b) {
@@ -119,10 +128,12 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 	// ---------- building one (a few steps a frame: update() runs them) ----------
 	function* build(b) {
 		const type = typeOf(b), rnd = (() => { let s = 1; return () => hh(b.x * 0.013 + s++ * 0.71, b.z * 0.017 - s * 0.37); })();
-		// a shop is fitted out for what it sells (bay/storefit.js): its fittings in the house kit,
-		// its stock on the goods' sheet; its floor, its light strips and its stripe its own
-		const stock = type === 'shop', trade = !stock ? null : b.store ? 'mart' : tradeOf(b.biz?.type);
-		const kg = stock ? new Builder() : null, goods = stock ? new GoodsBuilder() : null;
+		// a shop is fitted out for what it sells (bay/storefit.js), a café or a restaurant for how
+		// it serves (bay/dinefit.js): its fittings in the house kit, its stock and its menus on the
+		// goods' sheet; its floor, its lights and its stripe its own
+		const stock = type === 'shop', dine = type === 'cafe' || type === 'restaurant', fitted = stock || dine;
+		const trade = stock ? (b.store ? 'mart' : tradeOf(b.biz?.type)) : dine ? styleOf(type, b.biz?.type) : null;
+		const kg = fitted ? new Builder() : null, goods = fitted ? new GoodsBuilder() : null;
 		if (kg) { kg.ao = true; kg.inside(); }
 		const ca = Math.cos(b.a), sa = Math.sin(b.a);
 		let floorY = -1e9;
@@ -176,8 +187,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		const open = H > CEIL + 1.4 && ((type === 'office' && rnd() < 0.5) || (type === 'shop' && W * D > 500) || ((type === 'cafe' || type === 'restaurant') && rnd() < 0.4));
 		if (!open) {
 			box(mats.ceil, -hw, CEIL, -hd, hw, CEIL + 0.12, hd);
-			// (a fitted shop has its rows of light strips instead: bay/storefit.js)
-			if (!stock) for (let x = -hw + 2; x < hw - 1; x += 3) for (let z = -hd + 2; z < hd - 1; z += 3) box(type === 'cinema' && z < hd - 9 ? mats.ceil : mats.panel, x - 0.55, CEIL - 0.02, z - 0.55, x + 0.55, CEIL, z + 0.55);
+			// (a fitted shop has its rows of light strips instead, a café or a restaurant its pendants
+			// and downlights: bay/storefit.js, dinefit.js)
+			if (!fitted) for (let x = -hw + 2; x < hw - 1; x += 3) for (let z = -hd + 2; z < hd - 1; z += 3) box(type === 'cinema' && z < hd - 9 ? mats.ceil : mats.panel, x - 0.55, CEIL - 0.02, z - 0.55, x + 0.55, CEIL, z + 0.55);
 		} else openCeiling();
 		// (up to the ceiling, or the roof deck where it is open)
 		const lh = open ? H - 0.14 : CEIL + 0.1;
@@ -224,44 +236,19 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 
 		// ---------- the fit-out ----------
 		const seats = [];                // where people sit or stand: [x, z, yaw, sitting]
-		const table = (x, z, n, round) => {
-			if (round) cyl(mats.wood, x, 0.72, z, 0.38, 0.04, 14); else box(mats.wood, x - 0.45, 0.72, z - 0.45 * (n > 2 ? 1.6 : 1), x + 0.45, 0.76, z + 0.45 * (n > 2 ? 1.6 : 1));
-			cyl(mats.dark, x, 0, z, 0.05, 0.72, 6);
-			const spots = n > 2 ? [[0.85, -0.45], [0.85, 0.45], [-0.85, -0.45], [-0.85, 0.45]] : [[0.75, 0], [-0.75, 0]];
-			for (const [u, v] of spots) {
-				box(mats.dark, x + u - 0.22, 0.44, z + v - 0.22, x + u + 0.22, 0.48, z + v + 0.22);
-				box(mats.dark, x + u + Math.sign(u) * 0.2, 0.48, z + v - 0.22, x + u + Math.sign(u) * 0.24, 0.95, z + v + 0.22);
-				seats.push([x + u, z + v, u > 0 ? Math.PI / 2 : -Math.PI / 2, true]);
-			}
-			// what is on the table
-			if (type === 'restaurant') { cyl(mats.white, x + 0.2, 0.76, z, 0.12, 0.02, 12); cyl(mats.food, x + 0.2, 0.78, z, 0.07, 0.03, 8); cyl(mats.glass, x - 0.2, 0.76, z + 0.15, 0.04, 0.16, 8); }
-			else { cyl(mats.cup, x + 0.1, 0.76, z, 0.045, 0.1, 8); }
-		};
 		const inside = { x0: -hw + WALL + 0.4, x1: hw - WALL - 0.4, z0: -hd + WALL + 0.4, z1: hd - WALL - 2.2 };
 		const iw = inside.x1 - inside.x0, id = inside.z1 - inside.z0;
-		if (type === 'cafe' || type === 'restaurant') {
-			// the counter or bar across the back, stools along it, shelves behind
-			const bz = inside.z0 + 1.6;
-			box(mats.wood, inside.x0 + 0.5, 0, bz - 0.35, inside.x1 - 0.5, 1.05, bz + 0.35, true);
-			box(mats.dark, inside.x0 + 0.4, 1.05, bz - 0.4, inside.x1 - 0.4, 1.1, bz + 0.4);
-			box(mats.walld, inside.x0, 1.4, inside.z0 - 0.3, inside.x1, 1.44, inside.z0 + 0.1);
-			for (let x = inside.x0 + 0.8; x < inside.x1 - 0.6; x += 0.5) box(mats.goods[Math.floor(rnd() * 7)], x, 1.44, inside.z0 - 0.25, x + 0.12, 1.72, inside.z0 - 0.05);
-			if (type === 'cafe') {
-				box(mats.steel, inside.x0 + 1, 1.1, bz - 0.2, inside.x0 + 1.7, 1.6, bz + 0.2);
-				add(mats.glass, new THREE.BoxGeometry(1.6, 0.5, 0.6).translate(inside.x1 - 1.6, 1.35, bz));
-				for (let k = 0; k < 6; k++) cyl(mats.food, inside.x1 - 2.2 + k * 0.22, 1.12, bz, 0.07, 0.05, 8);
-				box(mats.dark, inside.x0 + 1.5, 2.1, inside.z0 - 0.02, inside.x0 + 3.5, 3, inside.z0 + 0.05);
-			} else for (let x = inside.x0 + 1; x < inside.x1 - 0.6; x += 0.9) { cyl(mats.steel, x, 0, bz + 0.8, 0.03, 0.75, 6); cyl(mats.leather, x, 0.75, bz + 0.8, 0.2, 0.06, 10); seats.push([x, bz + 0.8, Math.PI, true, 0, 0.8]); }
-			// booths down one wall (restaurants), tables through the room
-			if (type === 'restaurant') for (let z = bz + 2.4; z < inside.z1 - 1; z += 2) {
-				box(mats.leather, inside.x0, 0, z - 0.95, inside.x0 + 0.6, 1.15, z - 0.75, true); box(mats.leather, inside.x0, 0, z + 0.75, inside.x0 + 0.6, 1.15, z + 0.95, true);
-				box(mats.wood, inside.x0 + 0.6, 0.72, z - 0.4, inside.x0 + 1.4, 0.76, z + 0.4);
-				seats.push([inside.x0 + 1.05, z - 0.55, 0, true], [inside.x0 + 1.05, z + 0.55, Math.PI, true]);
-			}
-			const step = type === 'cafe' ? 2.1 : 2.8;
-			for (let z = bz + 2.6; z < inside.z1 - 0.6; z += step) for (let x = inside.x0 + (type === 'restaurant' ? 3 : 1.4); x < inside.x1 - 1; x += step) table(x, z, type === 'restaurant' && rnd() < 0.5 ? 4 : 2, type === 'cafe');
-			// pendant lights over the bar
-			for (let x = inside.x0 + 1.5; x < inside.x1 - 1; x += 2.2) { cyl(mats.dark, x, 2.4, bz, 0.01, CEIL - 2.4, 4); add(mats.panel, new THREE.SphereGeometry(0.16, 10, 6).translate(x, 2.35, bz)); }
+		// what a fit-out (bay/storefit.js, dinefit.js) draws with and into
+		const fit = () => ({
+			g: kg, s: goods, box, mats, col, seats, aisles, rnd, isPhone, doorX,
+			wall: { x0: -hw + WALL, x1: hw - WALL, z0: -hd + WALL, z1: hd - WALL }, ceil: open ? null : CEIL, roof: open ? H - 0.14 : CEIL, brand: brandOf(b),
+			band: (x0, z0, x1, z1, rgb, y0, y1) => lining(x0, z0, x1, z1, rgb, y1, y0),
+		});
+		if (dine) {
+			// a café or a restaurant, laid out for how it serves (bay/dinefit.js): an espresso bar,
+			// a pizzeria's counter and oven, a pub's bar, a sit-down place's kitchen and its pass...
+			yield* goodsSteps();
+			yield* fitDining(fit(), type, b.biz?.type);
 		} else if (type === 'tattoo') {
 			// a tattoo parlour: the counter by the door, the flash sheets framed down one wall,
 			// and down the other the stations: a reclined chair, the artist's stool, a lamp over it
@@ -290,11 +277,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			// store (bay/siteplan.js b.store), a grocer, a hardware store, a pharmacy, a bottle shop...
 			// (the goods' sheet painted first, a few strips a step, once for every shop)
 			yield* goodsSteps();
-			const K = {
-				g: kg, s: goods, box, mats, col, seats, aisles, rnd, isPhone, doorX,
-				wall: { x0: -hw + WALL, x1: hw - WALL, z0: -hd + WALL, z1: hd - WALL }, ceil: open ? null : CEIL, roof: open ? H - 0.14 : CEIL, brand: brandOf(b),
-				band: (x0, z0, x1, z1, rgb, y0, y1) => lining(x0, z0, x1, z1, rgb, y1, y0),
-			};
+			const K = fit();
 			yield* (b.store ? fitMart(K, b.store) : fitShop(K, b.biz?.type));
 		} else if (type === 'office') {
 			// reception by the door, a sofa, then the desks
@@ -373,14 +356,16 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 		// Exactly the coarse footprint: complementary coverage prevents coplanar overlap.
 		root.position.set(b.x, floorY, b.z); root.rotation.y = -b.a; b.grp.nearBorn=updateDetailClock();anchorBuilding(root,b.x,b.z,Math.max(W,D)/2,b.grp.nearBorn);
 		group.add(root);
-		// lit by its own light panels, pendants, screens and signs (interiors/lighting.js)
+		// lit by its own light panels, pendants, screens and signs (interiors/lighting.js), open
+		// these hours (a café's or a restaurant's kitchen too: cooking/index.js)
+		const hrs = b.store === 'fuel' ? [0, 24] : b.store ? [6, 23.5] : HOURS[type];
 		const light = lightInterior(root, {
 			id: 'biz:' + Math.round(b.x) + ':' + Math.round(b.z), occluders: col.filter((q) => !glassCol.has(q)), lamps: [mats.panel, mats.screen, mats.neon, mats.bigscreen],
 			exclude: [outside], levels: [[0, open ? H - 0.14 : CEIL]], bounds: [-hw, -hd, hw, hd], rooms: 1, roomOf: () => 0,
 			// (a gas station's mart keeps its lights on all night, a corner store till late)
-			hours: b.store === 'fuel' ? [0, 24] : b.store ? [6, 23.5] : HOURS[type], allNight: b.store === 'fuel', dust: type === 'restaurant' && open,
+			hours: hrs, allNight: b.store === 'fuel', dust: type === 'restaurant' && open,
 		});
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, trade, bizKey: bizKey(b), light, goodsMat, dispose: () => { releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); } };
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, aisles, products, ceil: open ? null : CEIL, lastH: -99, stocked: stock, fitted, trade, hours: hrs, bizKey: bizKey(b), light, goodsMat, dispose: () => { releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); goodsMat?.dispose(); } };
 		return B;
 	}
 
@@ -447,7 +432,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false, hous
 			const d = Math.hypot(B.b.x - x, B.b.z - z) - Math.max(B.b.w, B.b.d) / 2;
 			// (a wrecked shop is let go: structures/ draws its shell, and it is built whole again once put right)
 			// (and a shop whose business has changed since it was fitted out: built again for the new one)
-			if (d > DROP_R || grp.wrecked || (!cands.some((c) => c[1].grp === grp) && built.size > MAX) || (B.stocked && B.bizKey !== bizKey(B.b))) { group.remove(B.root); B.dispose(); city?.setNear?.(grp, null); built.delete(grp); }
+			if (d > DROP_R || grp.wrecked || (!cands.some((c) => c[1].grp === grp) && built.size > MAX) || (B.fitted && B.bizKey !== bizKey(B.b))) { group.remove(B.root); B.dispose(); city?.setNear?.(grp, null); built.delete(grp); }
 		}
 		// one at a time, a few milliseconds a frame (as the houses are)
 		if (job && (job.b.grp.wrecked || !cands.some((c) => c[1] === job.b))) job = null;

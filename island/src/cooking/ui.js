@@ -1,8 +1,8 @@
 // The kitchen, the shop and your meals, as one panel (cooking/index.js drives it): at a stove, the
 // recipes you could make with what is in your larder and this kitchen, the fridge and the
 // cupboards to take from, and the cooking itself, step by step; at a shop, its aisles to buy from
-// and a counter that buys your catch; anywhere, your larder, your plates and the meals on you
-// today. Real buttons throughout, so a pad or a keyboard can walk them (Tab, Enter).
+// and a counter that buys your catch; at a café or a restaurant, its menu; anywhere, your
+// larder, your plates and the meals on you today. Real buttons throughout, so a pad or a keyboard can walk them (Tab, Enter).
 
 import { INGREDIENTS, KEEPS, amountText } from './ingredients.js';
 import { RECIPE, rank, buffText, optionsOf } from './recipes.js';
@@ -69,6 +69,7 @@ export function createCookingPanel({ mount, isPhone = false, api }) {
 	const TABS = {
 		kitchen: [['cook', 'Cook'], ['fridge', 'Fridge'], ['cupboard', 'Cupboards'], ['larder', 'Your larder']],
 		shop: [['shop', 'Shelves'], ['sell', 'Sell your catch'], ['larder', 'Your larder']],
+		dine: [['menu', 'Menu'], ['meals', 'Meals today'], ['larder', 'Your larder']],
 		larder: [['larder', 'Your larder'], ['meals', 'Meals today'], ['book', 'Recipes']],
 	};
 	function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
@@ -77,8 +78,8 @@ export function createCookingPanel({ mount, isPhone = false, api }) {
 	function draw() {
 		if (!open_) return;
 		const K = api.context();
-		const head = where === 'kitchen' ? `${K.kitchen?.name || 'Kitchen'}` : where === 'shop' ? `${K.shop?.name || 'Shop'}` : 'Your larder and meals';
-		const sub = where === 'kitchen' ? (K.kitchen?.line || '') : where === 'shop' ? `${K.credits} credits to spend` : `${K.meals.length} of ${MAX_MEALS} meals on you today`;
+		const head = where === 'kitchen' ? `${K.kitchen?.name || 'Kitchen'}` : where === 'shop' ? `${K.shop?.name || 'Shop'}` : where === 'dine' ? `${K.menu?.name || 'Menu'}` : 'Your larder and meals';
+		const sub = where === 'kitchen' ? (K.kitchen?.line || '') : where === 'shop' || where === 'dine' ? `${K.credits} credits to spend` : `${K.meals.length} of ${MAX_MEALS} meals on you today`;
 		title.innerHTML = `${esc(head)}<div class="ck-sub">${esc(sub)}</div>`;
 		tabs.innerHTML = '';
 		for (const [id, label] of TABS[where]) {
@@ -88,7 +89,7 @@ export function createCookingPanel({ mount, isPhone = false, api }) {
 		}
 		body.innerHTML = ''; foot.innerHTML = '';
 		if (K.job && where === 'kitchen') return drawJob(K, K.job);
-		({ cook: drawCook, fridge: () => drawStore(K, 'fridge'), cupboard: () => drawStore(K, 'cupboard'), larder: drawLarder, meals: drawMeals, book: drawBook, shop: drawShop, sell: drawSell })[tab]?.(K);
+		({ cook: drawCook, fridge: () => drawStore(K, 'fridge'), cupboard: () => drawStore(K, 'cupboard'), larder: drawLarder, meals: drawMeals, book: drawBook, shop: drawShop, sell: drawSell, menu: drawDine })[tab]?.(K);
 		drawFoot(K);
 	}
 	function drawFoot(K) {
@@ -171,6 +172,24 @@ export function createCookingPanel({ mount, isPhone = false, api }) {
 			const row = el('div', 'ck-row', `<div class="n">${esc(it.name)}${it.out ? '<span class="ck-pill w">sold out today</span>' : ''}<div class="a">${esc(amountText(it.id, it.pack))}</div></div>`);
 			row.appendChild(btn(`Buy · ${it.price}`, () => { api.buy(it.id); draw(); }, 'ck-btn', it.out || K.credits < it.price));
 			body.appendChild(row);
+		}
+	}
+	// a café's or a restaurant's menu: each dish, what it gives you, its price; eaten here or to go
+	function drawDine(K) {
+		const M = K.menu;
+		if (!M) return;
+		const hh = (h) => { const H = Math.floor(h) % 24, m = Math.round((h % 1) * 60); return `${(H % 12) || 12}${m ? ':' + String(m).padStart(2, '0') : ''} ${H < 12 ? 'am' : 'pm'}`; };
+		body.appendChild(el('div', 'ck-note', M.closed ? `The kitchen's closed. Open ${hh(M.hrs[0])} to ${hh(M.hrs[1])}.` : 'Eat here and it does you good at once; to go, it keeps with your plates for the rest of the day.'));
+		for (const d of M.dishes) {
+			const r = RECIPE[d.id], card = el('div', 'ck-rec' + (d.out || M.closed ? '' : ' ok'));
+			card.innerHTML = `<h4>${esc(d.name)}${d.out ? '<span class="ck-pill w">off today</span>' : ''}</h4><div class="ck-meta">${esc(d.from)} · ${d.price} credits</div><div class="ck-note">${esc(d.line)}</div><div class="ck-buff">✦ ${esc(r.buff.name)}: ${esc(buffText(r.buff.mods))}</div>`;
+			const row = el('div', 'ck-row');
+			row.style.background = 'none'; row.style.padding = '0';
+			const no = d.out || M.closed || K.credits < d.price;
+			row.appendChild(btn(`Eat here · ${d.price}`, () => { api.order(d.id); draw(); }, 'ck-btn', no));
+			row.appendChild(btn('To go', () => { api.order(d.id, true); draw(); }, 'ck-btn g', no));
+			card.appendChild(row);
+			body.appendChild(card);
 		}
 	}
 	function drawSell(K) {

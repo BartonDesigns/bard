@@ -7,6 +7,7 @@
 // the houses round about are going short (they are buying it all up). Pure: no three, no DOM.
 
 import { INGREDIENTS, INGREDIENT_IDS, STORE_OF } from './ingredients.js';
+import { RECIPE } from './recipes.js';
 import { priceIndex, DAY_COST } from '../people/food.js';
 
 export const KITCHENS_KEY = 'l99-kitchens-v1';
@@ -141,4 +142,30 @@ export function shopKind(type) {
 	if (/farmstand/.test(t)) return 'farmstand';
 	if (/general/.test(t)) return 'general';
 	return null;
+}
+
+// ---------- the cafés' and restaurants' menus ----------
+// what each kind of place serves of the dishes a cook can make (cooking/recipes.js), by the
+// economy's type (economy/establishments.js); a bubble tea counter and an ice cream parlour
+// serve nothing that's a meal
+const DISHES = {
+	cafe: ['shakshuka', 'pancakes', 'grilled-cheese'], waffle: ['pancakes'], bakery: ['grilled-cheese'], donut: ['pancakes'],
+	pasta: ['aglio-olio', 'roast-bird', 'cioppino'], pizza: ['aglio-olio'], diner: ['pancakes', 'grilled-cheese', 'chili'],
+	burger: ['grilled-cheese', 'chili'], grill: ['venison-poivre', 'roast-bird', 'chili'], bbq: ['carnitas', 'chili'], taco: ['fish-tacos', 'carnitas'],
+	bistro: ['meuniere', 'duck-orange', 'lapin-moutarde', 'venison-poivre'], seafood: ['cioppino', 'meuniere', 'fish-chowder', 'fish-tacos'],
+	pub: ['fish-chowder', 'venison-stew', 'grilled-cheese'], tapas: ['arroz-con-pollo', 'shakshuka'], curry: ['dal-tadka'],
+	sushi: ['teriyaki-salmon'], ramen: ['fried-rice', 'teriyaki-salmon'], noodles: ['fried-rice'], izakaya: ['teriyaki-salmon', 'fried-rice'],
+};
+// A place's menu today: [{ id, name, line, from, price, out }]. A plate costs what goes into it
+// about three times over (the kitchen, the room, the staff), at the place's prices; now and then
+// a dish is off for the day.
+export function menuOf(type, { seed = 1, day = dayNo(), place = 'suburb' } = {}) {
+	const r = rnd((seed ^ Math.imul(day, 2246822519)) >>> 0), out = [];
+	for (const id of DISHES[type] || []) {
+		const R = RECIPE[id];
+		if (!R) continue;
+		const cost = R.ing.reduce((a, l) => a + (l[2] ? 0 : worth([].concat(l[0])[0], l[1], place)), 0) / R.serves;
+		out.push({ id, name: R.name, line: R.line, from: R.from, price: Math.max(5, Math.round(cost * 3 * (0.9 + r() * 0.2) + 3)), out: out.length > 0 && r() < 0.08 });
+	}
+	return out;
 }
