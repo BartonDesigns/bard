@@ -22,7 +22,7 @@ export const STALE_MS = 30000;
 // an empty room is kept this long for a reconnect, then forgotten
 export const EMPTY_MS = 30 * 60 * 1000;
 export const EVENTS_MAX = 30;
-export const ANIMS = ['idle', 'walk', 'run', 'fly', 'drive', 'swim'];
+export const ANIMS = ['idle', 'walk', 'run', 'fly', 'drive', 'swim', 'sit'];
 export const VEHICLES = ['', 'car', 'boat'];
 // room codes: six letters and digits, none that read alike (no 0/O, 1/I/L)
 const ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';

@@ -261,7 +261,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	function replan(H, hour, budget) {
 		const d = day();
 		if (H.planDay !== d) { H.plans = planDay(H.hh, d); H.planDay = d; }
-		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget });
+		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget, taken: claimed?.h === H.h ? [claimed.id] : null });
 		H.prev = new Map(A.map((q) => [q.member.id, { act: q.act, spot: q.spot.id }]));
 		const keep = new Set();
 		for (const q of A) {
@@ -660,6 +660,15 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		const u = ins.h.plan?.estab && ins.level > 0 ? over(ins.h) : null, h = u || ins.h;
 		return { house: h, level: ins.level, household: householdOf(h), home: homes.has(h) ? whoIsHome(h) : null };
 	}
+	// the spots of a home its household has (sat or lying in, or on the way there), and the one
+	// kept for you while you are in it (gameplay/rest.js): they keep clear of it
+	let claimed = null;
+	function inUse(h) {
+		const H = homes.get(h), out = new Set();
+		if (H) for (const a of H.actors.values()) if (a.active) for (const q of [a.q, a.walk?.q, a.swap?.q, a.next]) if (q?.spot) out.add(q.spot.id);
+		return out;
+	}
+	function claim(h, id) { claimed = h && id != null ? { h, id } : null; planT = 0; }
 	function whoIsHome(h) {
 		const H = homes.get(h);
 		if (!H) return [];
@@ -680,7 +689,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		};
 	}
 	return {
-		update, clear, dispose, actors, info, homeAt, whoIsHome, homeNow, householdOf, group: root,
+		update, clear, dispose, actors, info, homeAt, whoIsHome, homeNow, householdOf, inUse, claim, group: root,
 		occupants: () => [...homes.values()].flatMap((H) => whoIsHome(H.h).map((q) => ({ ...q, house: H.h }))),
 		on: (f) => { listeners.add(f); return () => listeners.delete(f); },
 		// (for a look: a fight crashes into the house you are at)

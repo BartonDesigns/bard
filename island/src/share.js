@@ -133,6 +133,12 @@ export function createShare(ctx) {
 			const B = w.commercial?.inside(pos);
 			if (B) b = { k: 'shop', id: 's' + r2(B.b.x) + ':' + r2(B.b.z), cx: B.b.x, cz: B.b.z, type: B.type, at: 'in' };
 		}
+		// a home in the city's own buildings (interiors/): a row house, or a flat in its block (which
+		// one, as people/home-life.js has them: ctx.homeAt)
+		if (!b && w.interiors?.inside?.(pos)) {
+			const u = ctx.homeAt?.(pos);
+			if (u?.building && u.house?.key) b = { k: 'flat', id: 'i' + u.house.key, cx: u.house.cx, cz: u.house.cz, at: 'in', row: u.house.kind === 'row' };
+		}
 		// at the door: close by, on the same level
 		if (!b && w.houses?.houses) for (const h of w.houses.houses.values()) {
 			if (h && Math.hypot(pos.x - h.cx, pos.z - h.cz) < h.r && Math.abs(eye - h.floorY) < 2) { b = { k: 'house', id: 'h' + r2(h.cx) + ':' + r2(h.cz), cx: h.cx, cz: h.cz, at: 'door' }; break; }
@@ -153,6 +159,8 @@ export function createShare(ctx) {
 			const on = st ? ` on ${st}` : '';
 			b.n = b.k === 'tower' ? `${b.label.replace(/^(\d+) · /, 'Floor $1 · ')} · tower${on}` : b.k === 'house' ? `House${on}` : b.k === 'shop' ? `${SHOP[b.type] || 'Shop'}${on}` : b.k === 'cave' ? 'Hut in the cave village' : 'House in the village';
 		}
+		// (the city's homes by what they are)
+		if (b?.k === 'flat' && named) b.n = `${b.row ? 'Row house' : 'Flat'}${((st) => (st ? ` on ${st}` : ''))(w.bayArea ? streetAt(w, b.cx, b.cz) : '')}`;
 		return b;
 	}
 
@@ -565,6 +573,8 @@ export function createShare(ctx) {
 	return {
 		update, refresh, share, openAt, go, capture, keep: keepPlace, resumeCode, describe, link, pack, unpack, building,
 		homes, addHome, renameHome, removeHome, goHome,
+		// (the home saved for the building you are in, if it is one: gameplay/rest.js's beds)
+		mine: () => mine,
 		busy: () => busy,
 		setName: (n) => { try { localStorage.setItem(NAME_KEY, String(n || '').slice(0, 40)); } catch { /* storage off */ } return n; },
 	};

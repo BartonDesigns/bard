@@ -54,6 +54,7 @@ import { createMagic } from './magic/index.js';
 import { createFishing } from './fishing.js';
 import { createCooking } from './cooking/index.js';
 import { createOfficePerks } from './interiors/office-perks.js';
+import { createRest } from './gameplay/rest.js';
 import { createArcade } from './arcade.js';
 import { worldAir } from './world/soundbus.js';
 import { REAL_U } from './bay/realcity.js';
@@ -757,6 +758,8 @@ export function createIslandWorld() {
 	});
 	addEventListener('keydown', (e) => {
 		if ((e.key !== 'e' && e.key !== 'E') || e.repeat || e.metaKey || e.ctrlKey || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+		// (a seat you are in or right in front of you has E: gameplay/rest.js)
+		if (HOOKS.rest?.ownsE?.()) return;
 		if (carjack.candidate()) { carjack.begin(); e.preventDefault(); return; }
 		if (window._KEYS_PLAY_ON) return;
 		// (a car with nobody at the wheel, a police cruiser whose officers are out of it: E gets
@@ -974,7 +977,7 @@ export function createIslandWorld() {
 	HOOKS.cities = { list: () => { refreshCities(); return [...cityList.children].map((b) => b.dataset.city); }, go: (i = 0) => { const W = world, ll = W?.globe ? globeLL(camera.position.x, camera.position.z) : null, c = ll && citiesAround(ll.lat, ll.lon, 8)[i]; if (!c) return 'No cities known here yet.'; goCity(c); return `To ${c.name}.`; } };
 	// share where you are, and homes to come back to (share.js): at the top of the menu
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; refreshCities(); tpMenu.style.display = 'flex'; };
-	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => { if (arrival) arrival.blind = false; return shaderWarm.all({ budget: 4000, progress }); } });
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, homeAt: (pos) => families.homes.homeAt(pos), menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => { if (arrival) arrival.blind = false; return shaderWarm.all({ budget: 4000, progress }); } });
 	HOOKS.share = share;
 	// friends in a room (net/): nothing at all until a rooms server is set in net/config.js
 	const multiplayer = HOOKS.multiplayer = createMultiplayer({ scene, camera, world: () => world, state, share, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, menu: tpMenu, canvas: dom.canvas, isPhone, drive, social: () => social, enter: (p) => api.open(p) });
@@ -985,9 +988,9 @@ export function createIslandWorld() {
 	const portrait = HOOKS.portrait = createHeroPortrait({ renderer, avatar, camera });
 	const gear = HOOKS.gear = createGear({ portrait, arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone, magic: () => HOOKS.magic });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
-	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone: GFX, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() || !!HOOKS.rest?.asleep?.() });
 	// magic (magic/): spells on the keys 6 to 0, the spellbook on N, the aether in the world; weapons on 1 to 5
-	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third, cover: coverWorld });
+	const magic = HOOKS.magic = createMagic({ scene, camera, mount: dom.mount, combat, arms, world: () => world, light: () => shared.uSunDir.value.y, heavens: () => ({ sun: shared.uSunDir.value, moon: shared.uMoonDir?.value }), hint: (t, ms) => hint(t, ms, 1), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.orbit?.active?.() || !!world?.boat?.boarded?.() || !!HOOKS.rest?.asleep?.(), menu: tpMenu, isPhone: GFX, isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, me: () => avatar.me, third: () => !!you.state.third, cover: coverWorld });
 	// your account: progress saved to the cloud, and back on any device (persistence/cloud-save.js)
 	const cloudSave = createCloudSave({ url: roomsURL() });
 	// its own button, always on screen (beside the places on a touch screen, in the rail on a computer)
@@ -1017,10 +1020,15 @@ export function createIslandWorld() {
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
 	// cooking: your larder, the kitchens and shops, real recipes and the day's meals (cooking/index.js)
-	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
+	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, yields: () => !!HOOKS.rest?.ownsE?.(), morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
 	cooking.addMenu(tpMenu);
 	// the office's coffee, water, vending machine and first-aid box (interiors/office-perks.js)
-	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near(), openShop: (id) => gear.open('shop', id) });
+	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() || !!HOOKS.rest?.seated?.(), openShop: (id) => gear.open('shop', id) });
+	// sitting down and sleeping (gameplay/rest.js): chairs, sofas, benches, a seat at the cinema; your
+	// own bed until the morning. (A menu or a shop's counter is the whole room's prompt: a seat in
+	// reach has E over it, and the menu is still there to tap from your table.)
+	const WIDE = new Set(['dine', 'shop']);
+	const rest = HOOKS.rest = createRest({ world: () => world, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, homes: () => families.homes, share, combat, multiplayer, others: () => !!doorHere || (cooking.near() && !WIDE.has(cooking.kind())) || officePerks.near(), busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.orbit?.active?.() });
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
@@ -1156,11 +1164,12 @@ export function createIslandWorld() {
 	function watchDoor(dt) {
 		cooking.update(dt);
 		officePerks.update(dt);
+		rest.update();
 		doorT += dt;
 		if (doorT < 0.15) return;
 		doorT = 0;
 		const P = world?.player.state;
-		doorHere = P && !P.flying && world.houses ? world.houses.doorNear(camera) || world.interiors?.doorNear(camera) : null;
+		doorHere = P && !P.flying && !P.seat && world.houses ? world.houses.doorNear(camera) || world.interiors?.doorNear(camera) : null;
 		doorBtn.style.display = doorHere ? '' : 'none';
 		if (doorHere) {
 			const what = doorHere.kind === 'garage' ? 'garage door' : doorHere.kind === 'slider' ? 'slider' : 'door';
@@ -1789,6 +1798,8 @@ if (typeof window !== 'undefined') {
 	// handle for the generated world (Crysis.ecology() prints this place's food web)
 	window.Crysis = {
 		get cooking() { return HOOKS.cooking; },
+		// sitting and sleeping: Crysis.rest.info(), .seats(), .sitHere(), .stand()
+		get rest() { return HOOKS.rest; },
 		version: 1,
 		world: () => window.L99Island?.world?.(),
 		performance: () => window.L99Island?.world?.()?.music?.performance,

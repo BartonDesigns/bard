@@ -148,5 +148,5 @@ export function createOfficePerks({ mount, button, hint = () => {}, isPhone = fa
 		act.style.display = here ? '' : 'none';
 		if (here) { const s = label(here); if (act.textContent !== s) act.textContent = s; }
 	}
-	return { update, use: (kind) => use(kind ? { ...(here || {}), kind, key: here?.key || 'test' } : here), info: () => ({ here: here && { kind: here.kind, d: +here.d.toFixed(2), place: here.place } }) };
+	return { update, near: () => !!here, use: (kind) => use(kind ? { ...(here || {}), kind, key: here?.key || 'test' } : here), info: () => ({ here: here && { kind: here.kind, d: +here.d.toFixed(2), place: here.place } }) };
 }

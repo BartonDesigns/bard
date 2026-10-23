@@ -47,8 +47,9 @@ const REACH = 2.4;
 // world(): the world; arms: the arms runtime (credits); magic(): createMagic's (setMeals);
 // families: people/family-life.js (areaAt); fishing: fishing.js; combat: its hooks take quarry;
 // addTalkers / talkTo: people.js's talkers and the guide's talk; doorNear(): a door's prompt
-// has E; morality(): the compass; hours(): the sky's
-export function createCooking({ scene, camera, mount, button, hint = () => {}, isPhone = false, world, arms, magic = () => null, families = null, fishing = null, combat = null, addTalkers = null, talkTo = null, doorNear = () => false, morality = () => null, hours = () => 12 }) {
+// has E; yields(): a seat has it (gameplay/rest.js: the one you are in, or a menu's or a shop's
+// seat in reach); morality(): the compass; hours(): the sky's
+export function createCooking({ scene, camera, mount, button, hint = () => {}, isPhone = false, world, arms, magic = () => null, families = null, fishing = null, combat = null, addTalkers = null, talkTo = null, doorNear = () => false, yields = () => false, morality = () => null, hours = () => 12 }) {
 	// (the homeowner walking in kept off the walls: people/walls.js)
 	const keepWalls = wallKeeper(world);
 	const L = createLarder(store.get(LARDER_KEY));
@@ -362,12 +363,12 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	act.addEventListener('click', (e) => { e.stopPropagation(); useHere(); });
 	addEventListener('keydown', (e) => {
 		if ((e.key !== 'e' && e.key !== 'E') || !here || e.repeat || e.metaKey || e.ctrlKey || panel.isOpen()) return;
-		if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || window._KEYS_PLAY_ON) return;
+		if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || window._KEYS_PLAY_ON || yields()) return;
 		if (doorNear() && here.kind !== 'fish' && here.kind !== 'dress') return;
 		e.preventDefault(); useHere();
 	});
 	function label(h) {
-		const key = isPhone ? '' : ' (E)';
+		const key = isPhone || yields() ? '' : ' (E)';
 		if (h.kind === 'fish') return `🐟 Keep the ${h.c.fish}${key}`;
 		if (h.kind === 'dress') return `🔪 Dress the ${h.Q.kind}${key}`;
 		if (h.kind === 'kitchen') return job ? `🍳 Cooking ${RECIPE[job.id].name}${key}` : `🍳 Kitchen${key}`;
@@ -558,7 +559,7 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 	addEventListener('pagehide', () => { if (dirty) save(); });
 
 	return {
-		update, addMenu, near: () => !!here, open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
+		update, addMenu, near: () => !!here, kind: () => here?.kind || null, open: (v) => panel.open(v || 'larder'), close: () => panel.close(), isOpen: () => panel.isOpen(),
 		// (for a look: Crysis.cooking.give('venison', 900), .info(), .eat('chili'))
 		give: (id, n) => { const put = stow(L, id, n); touch(); return put; },
 		eat: (id) => { plate(L, id, 1, 1); return eatPlate(id); },

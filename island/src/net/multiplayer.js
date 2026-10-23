@@ -187,11 +187,11 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		const car = !!drive?.active?.(), boat = !!w.boat?.boarded?.();
 		const at = car ? camera.position : P.pos;
 		const sp = Math.hypot(P.vel.x, P.vel.z);
-		const a = car ? 'drive' : P.flying ? 'fly' : P.swimming ? 'swim' : sp > 6 ? 'run' : sp > 0.3 ? 'walk' : 'idle';
+		const a = car ? 'drive' : P.flying ? 'fly' : P.swimming ? 'swim' : P.seat ? 'sit' : sp > 6 ? 'run' : sp > 0.3 ? 'walk' : 'idle';
 		if (car) camera.getWorldDirection(look);
 		// (the item in hand, its level and tier)
 		const H = gear?.held?.();
-		return { t: 'pose', ...reputationPoint(at), y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', h: H?.i, hl: H?.l, ht: H?.t, wr: wearCode(gear?.worn?.() || {}), ...(combat?.flag?.() ? { pk: 1 } : {}) };
+		return { t: 'pose', ...reputationPoint(at), y: car ? Math.atan2(-look.x, -look.z) : P.seat ? P.seat.yaw : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', h: H?.i, hl: H?.l, ht: H?.t, wr: wearCode(gear?.worn?.() || {}), ...(combat?.flag?.() ? { pk: 1 } : {}) };
 	}
 	// (timed by the clock, not by frames: a slow phone still keeps to the pace)
 	function sendAll() {
