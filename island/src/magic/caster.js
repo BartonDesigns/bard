@@ -45,7 +45,11 @@ import { createAfflictions } from './elements.js';
 const EYE = 1.68;
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
 const typeOf = (t) => (t === 'fire' ? 'fire' : 'energy');
-const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 'boss') && !T.surrendered;
+const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 'boss' || (T.kind === 'vehicle' && !!T.moral?.()?.hostileTarget)) && !T.surrendered;
+// a vehicle (the military's, a helicopter, a car): a bolt cast at one, or while locked on to one,
+// seeks it (combat/target-focus.js takes them; stepBolts turns the bolt after it)
+const vehicle = (T) => !!T && !T.removed && (T.kind === 'vehicle' || T.kind === 'car');
+const SEEK_TURN = 5.5;          // rad/s a seeking bolt can turn
 
 // what is cast along the aim (the rest are cast on yourself or about you)
 const AIMED = new Set(['bolt', 'beam', 'burst', 'flare', 'strike', 'lances', 'chain', 'orb', 'well', 'cloud', 'storm', 'stasis', 'cone']);
@@ -207,11 +211,15 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// (aim the bolt from the hand at where the view's ray lands, so it meets the crosshair)
 			const tgt = combat.firstHit(_o, _d, 300, combat.me), end = _o.clone().addScaledVector(_d, tgt ? tgt.t : 300);
 			const dir = end.sub(from).normalize();
+			// (locked on to a vehicle, or the aim on one: the bolt seeks it, so a helicopter on the
+			// move or a car at speed is hit where it will be)
+			const locked = combat.focus?.current?.();
+			const seek = vehicle(locked) ? locked : vehicle(tgt?.T) ? tgt.T : null;
 			// (split: several in a fan about the aim, each the weaker for it)
 			const n = Math.max(1, spell.split | 0), dmg = spell.dmg * (spell.dmgK || 1);
 			for (let j = 0; j < n; j++) {
 				const v = n > 1 ? dir.clone().applyAxisAngle(_u.set(0, 1, 0), (j / (n - 1) - 0.5) * 0.16) : dir;
-				bolts.push({ spell, k, pos: j === n - 1 ? from : from.clone(), vel: v.multiplyScalar(spell.speed), life: 4, pierced: false, owner: 'me', dmg: n > 1 ? dmg : undefined, look: lookOf(spell) });
+				bolts.push({ spell, k, pos: j === n - 1 ? from : from.clone(), vel: v.multiplyScalar(spell.speed), life: seek ? 6 : 4, pierced: false, owner: 'me', dmg: n > 1 ? dmg : undefined, look: lookOf(spell), seek });
 			}
 		},
 		// (it gathers for CHARGE first, then lets go: magic/beam.js)
@@ -634,6 +642,18 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const B = bolts[i], spell = B.spell;
 			B.life -= dt;
 			if (B.life <= 0) { bolts.splice(i, 1); continue; }
+			// (seeking: the bolt turns after the vehicle it was cast at while that still stands)
+			if (B.seek) {
+				const S = B.seek, at = combat.layer.get(S.id) === S && !S.removed ? (S.aim?.() || S.bound) : null;
+				if (!at) B.seek = null;
+				else {
+					const sp = B.vel.length();
+					_q.set(at.x - B.pos.x, at.y - B.pos.y, at.z - B.pos.z).normalize();
+					_d.copy(B.vel).normalize();
+					const turn = Math.min(1, SEEK_TURN * dt / Math.max(0.05, _d.angleTo(_q)));
+					B.vel.copy(_d.lerp(_q, turn).normalize().multiplyScalar(sp));
+				}
+			}
 			const step = B.vel.length() * dt;
 			_d.copy(B.vel).normalize();
 			const h = combat.firstHit(B.pos, _d, step, combat.me);
