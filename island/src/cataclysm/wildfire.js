@@ -26,7 +26,7 @@ export function createWildfire(ctx) {
 		if (h < 0.8) return 0;
 		if (w.real?.landAt?.(x, z)?.roof > 0.15) return 0;
 		let u = 0;
-		try { u = w.bayArea?.urbanAt?.(x, z)?.u ?? 0; } catch { u = 0; }
+		try { u = (w.townAt || w.bayArea?.urbanAt)?.(x, z)?.u ?? 0; } catch { u = 0; }
 		if ((w.city?.lotsNear?.(x, z, CELL * 0.5) || []).some(isBuilding)) return 0;
 		let k = Math.max(0, 1 - u * 2.4) * (0.55 + 0.45 * (ctx.dry?.() ?? 1));
 		try { if (w.vegetation?.obstacles?.(x, z, CELL * 0.6)?.length) k += 0.25; } catch { /* no trees here */ }

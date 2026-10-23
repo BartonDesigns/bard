@@ -137,7 +137,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		const W = world(), key = Math.round(car.x) + ':' + Math.round(car.z);
 		let home = null;
 		if (W.real?.loaded?.()) { let bd = 1e9; for (const bx of W.real.near('boxes', car.x, car.z, 40)) { const d = Math.hypot(bx.x - car.x, bx.z - car.z); if (d < bd) { bd = d; home = bx; } } }
-		const U = W.bayArea?.urbanAt?.(car.x, car.z);
+		const U = (W.townAt || W.bayArea?.urbanAt)?.(car.x, car.z);
 		const zone = zoneOf(U);
 		const house = home ? hashS(Math.round(home.x) + ',' + Math.round(home.z)) : hashS('b' + Math.round(car.x / 40) + ',' + Math.round(car.z / 40));
 		return { key, id: house * 4 + (hashS(key) & 3), house, home, zone };
