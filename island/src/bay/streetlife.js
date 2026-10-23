@@ -230,7 +230,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 	const RANK = { motorway: 6, trunk: 5, primary: 4, secondary: 3, tertiary: 2, residential: 1, unclassified: 1, living_street: 1 };
 	function realStreets(cx, cz, R, n, lampPos, setNl, getNl) {
 		const roads = real.near('roads', cx, cz, R).filter((r) => r.drive && r.cls !== 'service');
-		const drives = real.near('paths', cx, cz, R + 40);
+		const drives = real.near('paths', cx, cz, R + 40).filter((q) => q.w >= 2.2);   // (not the front walks)
 		const clearOfDrive = (x, z) => { for (const d of drives) if (Math.abs(d.bx - x) < 9 && Math.abs(d.bz - z) < 9 && Math.hypot(d.bx - x, d.bz - z) < 6.5 + d.w / 2) return false; return true; };
 		const ends = new Map();
 		const E = eraMap(real);

@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
-import { groupBoxes, isHome, garageOf } from './houseplan.js';
+import { groupBoxes, isHome, frontOf } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
@@ -231,49 +231,112 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		return moves;
 	}
-	// A drive for every garage the map gives none: from the garage's doors straight out to the
-	// street it faces, concrete as the mapped ones (drawn into the ground's map, drawRoadMap;
-	// the kerb cars and the trees keep off it), so no house stands in a lot of lawn with no way
-	// to it. Where the street is not ahead of the doors (a corner lot, a garage to the side)
-	// the drive bends to the nearest kerb ahead within 50 degrees, or there is none. Across
-	// frames, a few milliseconds at a time
+	// A drive for every home, and a walk to every front door, where the map gives none, so no
+	// house stands in a lot of lawn with no way to it. The drive runs from the garage's doors
+	// straight out to the street it faces, concrete as the mapped ones (drawn into the ground's
+	// map, drawRoadMap; the kerb cars and the trees keep off it); where the street is not ahead
+	// of the doors (a corner lot, a garage to the side) it bends to the nearest kerb ahead
+	// within 50 degrees, or there is none. A house whose garage the map does not show gets a
+	// parking pad down the side of the house instead (the end away from the front door, where
+	// nothing else stands) and out to the street, and a car is left on it (city.js realYard).
+	// The walk, 1.2 m wide, goes from the front door 2 m out and across to the drive beside
+	// it, or straight out to the kerb. Across frames, a few milliseconds at a time
 	async function addDrives(G, signal) {
-		const seen = new Set(), near = [], mapped = [];
+		const seen = new Set(), near = [], mapped = [], boxes = [];
 		let t = performance.now();
-		for (const b of G.boxes) {
-			if (!b.grp || seen.has(b.grp) || !isHome(b)) continue;
-			seen.add(b.grp);
-			if (performance.now() - t > 5) { await new Promise((ok) => setTimeout(ok, 0)); if (signal?.aborted) return; t = performance.now(); }
-			const gar = garageOf(b.grp);
-			if (!gar || !gar.doors.length) continue;
-			const { M, ca, sa } = gar, d0 = gar.doors[0], d1 = gar.doors[gar.doors.length - 1];
-			const lx = (d0.x0 + d1.x1) / 2, lz = gar.front;
-			const dx = M.x + ca * lx - sa * lz, dz = M.z + sa * lx + ca * lz, nx = -sa, nz = ca;
-			// (a drive the map already has, at these doors)
-			mapped.length = 0; nearIn(G, 'paths', dx, dz, 30, mapped);
-			if (mapped.some((q) => q.w >= 2.2 && segDist(q.ax, q.az, q.bx, q.bz, dx + nx * 2, dz + nz * 2) < 3.5)) continue;
-			near.length = 0; nearIn(G, 'roads', dx, dz, 50, near);
+		// how far out along (nx, nz) from (x, z) the kerb of the street is, as [distance, the
+		// bend to it when it is off to one side]
+		const toStreet = (x, z, nx, nz, bends) => {
+			near.length = 0; nearIn(G, 'roads', x, z, 50, near);
 			let best = 1e9, bend = null;
 			for (const r of near) {
 				if (!r.drive || r.bridge || r.link || r.cls === 'motorway' || r.cls === 'trunk') continue;
 				const p = r.pts, hw = r.w / 2;
 				for (let i = 0; i + 3 < p.length; i += 2) {
-					// the doors' line straight out, where it crosses this piece of street
+					// the line straight out, where it crosses this piece of street
 					const ex = p[i + 2] - p[i], ez = p[i + 3] - p[i + 1], den = nx * ez - nz * ex;
 					if (Math.abs(den) > 1e-6) {
-						const qx = p[i] - dx, qz = p[i + 1] - dz, tt = (qx * ez - qz * ex) / den, u = (qx * nz - qz * nx) / den;
+						const qx = p[i] - x, qz = p[i + 1] - z, tt = (qx * ez - qz * ex) / den, u = (qx * nz - qz * nx) / den;
 						if (u >= 0 && u <= 1 && tt > 1.5 && tt - hw < best) { best = tt - hw; bend = null; }
 					}
+					if (!bends) continue;
 					// or the nearest kerb ahead, for the bend
-					const l2 = ex * ex + ez * ez || 1, k = Math.max(0, Math.min(1, ((dx - p[i]) * ex + (dz - p[i + 1]) * ez) / l2));
-					const cx = p[i] + ex * k - dx, cz = p[i + 1] + ez * k - dz, cd = Math.hypot(cx, cz);
+					const l2 = ex * ex + ez * ez || 1, k = Math.max(0, Math.min(1, ((x - p[i]) * ex + (z - p[i + 1]) * ez) / l2));
+					const cx = p[i] + ex * k - x, cz = p[i + 1] + ez * k - z, cd = Math.hypot(cx, cz);
 					if (cd - hw > 1 && cd - hw < 30 && (cx * nx + cz * nz) / cd > 0.64 && cd - hw + 4 < best) { best = cd - hw + 4; bend = [p[i] + ex * k - cx / cd * hw, p[i + 1] + ez * k - cz / cd * hw]; }
 				}
 			}
-			if (best > 32 || best < 0.8) continue;
-			const w = Math.min(6.4, Math.max(3.0, d1.x1 - d0.x0 + 0.5));
-			const q = bend ? { ax: dx, az: dz, bx: bend[0], bz: bend[1], w, made: true } : { ax: dx, az: dz, bx: dx + nx * (best + 0.4), bz: dz + nz * (best + 0.4), w, made: true };
-			cellIn(G.grid, q.ax, q.az).paths.push(q);
+			return [best, bend];
+		};
+		// whether a spot is at least m from every building but this house's own blocks
+		const clear = (grp, x, z, m) => {
+			boxes.length = 0; nearIn(G, 'boxes', x, z, 20, boxes);
+			for (const b of boxes) {
+				if (b.grp === grp) continue;
+				const ca = Math.cos(b.a), sa = Math.sin(b.a), dx = x - b.x, dz = z - b.z;
+				if (Math.abs(ca * dx + sa * dz) < b.w / 2 + m && Math.abs(-sa * dx + ca * dz) < b.d / 2 + m) return false;
+			}
+			return true;
+		};
+		// a drive the map already has, within r of (x, z)
+		const driveAt = (x, z, r) => { mapped.length = 0; nearIn(G, 'paths', x, z, 30, mapped); return mapped.find((q) => q.w >= 2.2 && segDist(q.ax, q.az, q.bx, q.bz, x, z) < r); };
+		for (const b of G.boxes) {
+			if (!b.grp || seen.has(b.grp) || !isHome(b)) continue;
+			seen.add(b.grp);
+			if (performance.now() - t > 5) { await new Promise((ok) => setTimeout(ok, 0)); if (signal?.aborted) return; t = performance.now(); }
+			const F = frontOf(b.grp);
+			if (!F) continue;
+			const { M, ca, sa, R0, door, garage: gar } = F, nx = -sa, nz = ca;
+			const W = (lx, lz) => [M.x + ca * lx - sa * lz, M.z + sa * lx + ca * lz];
+			const Lc = (x, z) => [ca * (x - M.x) + sa * (z - M.z), -sa * (x - M.x) + ca * (z - M.z)];
+			// ---- the drive
+			if (gar && gar.doors.length) {
+				const d0 = gar.doors[0], d1 = gar.doors[gar.doors.length - 1];
+				const [dx, dz] = W((d0.x0 + d1.x1) / 2, gar.front);
+				if (!driveAt(dx + nx * 2, dz + nz * 2, 3.5)) {
+					const [best, bend] = toStreet(dx, dz, nx, nz, true);
+					if (best <= 32 && best >= 0.8) {
+						const w = Math.min(6.4, Math.max(3.0, d1.x1 - d0.x0 + 0.5));
+						const q = bend ? { ax: dx, az: dz, bx: bend[0], bz: bend[1], w, made: true } : { ax: dx, az: dz, bx: dx + nx * (best + 0.4), bz: dz + nz * (best + 0.4), w, made: true };
+						cellIn(G.grid, q.ax, q.az).paths.push(q);
+					}
+				}
+			} else {
+				// (none across the front already: a mapped one, or this one made for a neighbour)
+				const [cx, cz] = W((R0.x0 + R0.x1) / 2, R0.z1 + 2.5);
+				if (!driveAt(cx, cz, (R0.x1 - R0.x0) / 2 + 2.5)) {
+					for (const s of door.x < (R0.x0 + R0.x1) / 2 ? [1, -1] : [-1, 1]) {
+						const lx = s > 0 ? R0.x1 + 1.9 : R0.x0 - 1.9;
+						const [px, pz] = W(lx, R0.z1 - 4), [fx, fz] = W(lx, R0.z1 + 1);
+						if (!clear(b.grp, px, pz, 1.7) || !clear(b.grp, fx, fz, 1.7)) continue;
+						const [best] = toStreet(fx, fz, nx, nz, false);
+						if (best > 32 || best < 0.8) continue;
+						cellIn(G.grid, px, pz).paths.push({ ax: px, az: pz, bx: fx + nx * (best + 0.4), bz: fz + nz * (best + 0.4), w: 3.0, made: true, pad: true });
+						break;
+					}
+				}
+			}
+			// ---- the walk
+			const [wx, wz] = W(door.x, door.z + 0.05);
+			mapped.length = 0; nearIn(G, 'paths', wx, wz, 30, mapped);
+			if (mapped.some((q) => q.w < 2.2 && q.w > 0.6 && segDist(q.ax, q.az, q.bx, q.bz, wx + nx * 1.5, wz + nz * 1.5) < 2.5)) continue;   // (the map has one)
+			const zl = door.z + 2.0, [ex, ez] = W(door.x, zl);
+			let join = null;
+			for (const q of mapped) {
+				if (q.w < 2.2) continue;
+				// where this drive crosses the line 2 m out from the front, in the house's frame
+				const a = Lc(q.ax, q.az), c = Lc(q.bx, q.bz);
+				if ((a[1] - zl) * (c[1] - zl) > 0) continue;
+				const xl = a[0] + (c[0] - a[0]) * (zl - a[1]) / ((c[1] - a[1]) || 1e-9), d = Math.abs(xl - door.x);
+				if (d < 10 && (!join || d < join.d)) join = { d, x: xl + Math.sign(door.x - xl) * (q.w / 2 - 0.3) };
+			}
+			if (join) {
+				cellIn(G.grid, wx, wz).paths.push({ ax: wx, az: wz, bx: ex, bz: ez, w: 1.2, made: true, walk: true });
+				if (Math.abs(join.x - door.x) > 0.8) { const [jx, jz] = W(join.x, zl); cellIn(G.grid, ex, ez).paths.push({ ax: ex, az: ez, bx: jx, bz: jz, w: 1.2, made: true, walk: true }); }
+			} else {
+				const [best] = toStreet(wx, wz, nx, nz, false);
+				if (best <= 28 && best >= 1) cellIn(G.grid, wx, wz).paths.push({ ax: wx, az: wz, bx: wx + nx * (best + 0.4), bz: wz + nz * (best + 0.4), w: 1.2, made: true, walk: true });
+			}
 		}
 	}
 	async function load(i, signal) {

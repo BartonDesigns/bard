@@ -17,7 +17,7 @@ import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/veg
 import { addLodFade, NONE_IN, NONE_OUT, detailClock, updateDetailClock } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, fromGrid, eraFor } from './styles.js';
-import { houseFloor, wallTop, mainOf, isHome, garageOf } from './houseplan.js';
+import { houseFloor, wallTop, mainOf, isHome, frontOf } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
 import { GREENS, REAL_TALL } from './realcity.js';
 import { WALL_GLSL, weatherRoofs } from './weathering.js';
@@ -95,6 +95,7 @@ const vnoise = (x, z) => {
 };
 const jit = (c, r) => [c[0] * (0.95 + r * 0.1), c[1] * (0.95 + ((r * 7.3) % 1) * 0.1), c[2] * (0.95 + ((r * 3.1) % 1) * 0.1)];
 const fract = (v) => v - Math.floor(v);
+const segDist = (ax, az, bx, bz, x, z) => { const ex = bx - ax, ez = bz - az, l2 = ex * ex + ez * ez || 1, t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2)); return Math.hypot(ax + ex * t - x, az + ez * t - z); };
 // a house repainted since: any decade's colours
 const REMODEL = [...PAL.suburb, ...PAL.ranch, ...PAL.seventies];
 // the cars in the drives; the faded ones left to sit; umbrella and cabana canvas
@@ -1546,7 +1547,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// on the drive in front of the garage, the bins, the AC unit down the side, now and then
 	// a hoop, an RV or a boat, a shed out back where the land map shows open yard
 	const YARD_R = PHONE ? 220 : 420;
-	function realYard(list, b, look, g, cnd) {
+	function realYard(list, b, look, g, cnd, fenced) {
 		const P = list.props || (list.props = {}), ca = Math.cos(b.a), sa = Math.sin(b.a), W = (lx, lz) => [b.x + ca * lx - sa * lz, b.z + sa * lx + ca * lz];
 		const put = (k, lx, lz, yaw, sc, c, lift = 0, tilt = 0) => { if (!kit2.has(k)) return; const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) > 2.5) return; const e = [x, gy + lift, z, b.a + yaw, ...(typeof sc === 'number' ? [sc, sc, sc] : sc), tilt]; if (c) e.push(...c); (P[k] || (P[k] = [])).push(e); };
 		const hr = (n) => hash(b.x * 0.71 + n * 5.3, b.z * 1.13 - n * 2.1);
@@ -1554,8 +1555,9 @@ export function createCity(shared, scene, bay, real = null) {
 		// where the garage is, as the house is built (houseplan.js: built in at one end of the
 		// front, or a wing), and which way its drive runs out to the street (realcity.js: the
 		// mapped one, or the one made for it); the cars stand on the drive before the doors
-		const gar = b.grp ? garageOf(b.grp) : null, D = gar?.doors || [];
+		const F = b.grp ? frontOf(b.grp) : null, gar = F?.garage, D = gar?.doors || [];
 		let gx = null, gz = null, ux = -sa, uz = ca;
+		if (F && fenced) lotFences(list, b, F, g, hr);
 		if (D.length) {
 			gx = (D[0].x0 + D[D.length - 1].x1) / 2; gz = gar.front;
 			const [dx, dz] = W(gx, gz);
@@ -1582,6 +1584,115 @@ export function createCity(shared, scene, bay, real = null) {
 		if (hr(8) < 0.6) { const s = hr(9) < 0.5 ? -1 : 1; if (open(s * (b.w / 2 + 0.7), 0)) put('cond', s * (b.w / 2 + 0.7), -b.d * 0.1, 0, 1); }
 		if (hr(10) < 0.16) { const s = hr(11) < 0.5 ? -1 : 1, lx = s * (b.w / 2 - 2), lz = -b.d / 2 - 9; if (open(lx, lz) && open(lx + 2, lz - 2) && open(lx - 2, lz + 2)) { const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) < 1.5) list.push({ x, y: gy - 1.2, z, w: 2.8, d: 2.4, h: 3.5, a: b.a + Math.PI, col: hr(12) < 0.5 ? [0.6, 0.55, 0.45] : look.wall, kind: KIND.garage, roof: { hip: false, rot: true, h: 0.9, col: look.roof, t: hr(12) < 0.3 ? ROOF.metal : ROOF.shingle, ov: 0.2, trim: 3 }, age: 0.5 }); } }
 		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', ...onDrive(0, 3.4), turn + (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
+		// no garage the map shows: the car on the pad made down the side of the house
+		// (realcity.js addDrives), 2.6 m from its back end, and the bins beside it
+		if (!D.length && F) {
+			const [fx, fz] = W((F.R0.x0 + F.R0.x1) / 2, F.R0.z1);
+			let pad = null, bd = 1e9;
+			for (const q of real.near('paths', fx, fz, 16)) { if (!q.pad) continue; const d = Math.hypot(q.ax - fx, q.az - fz); if (d < bd) { bd = d; pad = q; } }
+			if (pad && bd < 14) {
+				const L = Math.hypot(pad.bx - pad.ax, pad.bz - pad.az) || 1, vx = (pad.bx - pad.ax) / L, vz = (pad.bz - pad.az) / L;
+				const px = pad.ax + vx * 2.6 - b.x, pz = pad.az + vz * 2.6 - b.z, lx = ca * px + sa * pz, lz = -sa * px + ca * pz;
+				const yaw = Math.atan2(-vx, vz) - b.a;
+				if (cnd) { if (hr(13) < 0.45) put('car', lx, lz, yaw + (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
+				else if (hr(1) < 0.6) put('car', lx, lz, yaw, 1, pick(CARS, hr(2)));
+				if (!cnd && hr(4) < 0.35) put('bins', lx + Math.sign(lx) * 2.2, lz + 1, 0, 1);
+			}
+		}
+	}
+	// The fences that make the lots round the mapped (or grown) houses, which the map draws
+	// as footprints in one continuous lawn: down each side line, halfway to the next house
+	// along the street (4.5 m out where there is none), from the house's front corners back to
+	// the back line, halfway to the house behind (12 m back where there is none, short of a
+	// street behind), and across the back; with the return runs from the house's front corners
+	// out to the side lines. Each shared line is built once: the side line by the house on its
+	// right (its own left), the back line by the lower-keyed of the pair. Thin walls like the
+	// gridded blocks' (city-blocks.js, FENCES), in pieces that follow the ground, broken at a
+	// building, a drive, a street or water
+	const FENCE_R = PHONE ? 150 : 300;
+	const FKEY = (q) => q.x * 0.37 + q.z * 1.13;
+	function lotFences(list, b, F, g, hr) {
+		const ca = Math.cos(b.a), sa = Math.sin(b.a), W = (lx, lz) => [b.x + ca * lx - sa * lz, b.z + sa * lx + ca * lz];
+		const FN = FENCES[Math.floor(hr(20) * FENCES.length)], fc = jit(FN, hr(21)), th = FN[4], fh = FN[3];
+		// the house's own blocks' extent in the main block's frame
+		let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+		for (const r of F.rects) { x0 = Math.min(x0, r.x0); x1 = Math.max(x1, r.x1); z0 = Math.min(z0, r.z0); z1 = Math.max(z1, r.z1); }
+		const zf = F.R0.z1 - 0.9;
+		// the neighbours' homes in that frame, as their centre and half extents
+		// (near() gives whole cells: only what can reach 40 m of the house matters)
+		const boxes = real.near('boxes', b.x, b.z, 48).filter((q) => Math.hypot(q.x - b.x, q.z - b.z) < 40 + Math.hypot(q.w, q.d) / 2), nb = [];
+		for (const q of boxes) {
+			if (q.grp === b.grp || !isHome(q)) continue;
+			const dx = q.x - b.x, dz = q.z - b.z, lx = ca * dx + sa * dz, lz = -sa * dx + ca * dz;
+			const da = q.a - b.a, c = Math.abs(Math.cos(da)), s = Math.abs(Math.sin(da));
+			nb.push({ q, lx, lz, hw: (c * q.w + s * q.d) / 2, hd: (s * q.w + c * q.d) / 2, square: Math.min(c, s) < 0.3 });
+		}
+		// the side lines: halfway to the nearest house beside, in a row with this one
+		let xl = x0 - 4.5, xr = x1 + 4.5, gl = 1e9, gr = 1e9;
+		for (const n of nb) {
+			if (!n.square || Math.abs(n.lz) > n.hd + (z1 - z0) / 2 + 4) continue;
+			const dl = x0 - (n.lx + n.hw), dr = (n.lx - n.hw) - x1;
+			if (dl > 0.6 && dl < gl) { gl = dl; xl = x0 - dl / 2; }
+			if (dr > 0.6 && dr < gr) { gr = dr; xr = x1 + dr / 2; }
+		}
+		// the back line: halfway to the house behind, or 12 m back, short of any street there
+		let zb = z0 - 12, behind = null, gb = 1e9;
+		for (const n of nb) {
+			if (Math.abs(n.lx) > n.hw + (x1 - x0) / 2 + 3) continue;
+			const d = z0 - (n.lz + n.hd);
+			if (d > 1 && d < gb) { gb = d; zb = z0 - d / 2; behind = n.q; }
+		}
+		const roads = real.near('roads', b.x, b.z, 48).filter((r) => r.drive && !r.bridge);
+		const roadDist = (x, z) => { let bd = 1e9; for (const r of roads) { const p = r.pts; for (let i = 0; i + 3 < p.length; i += 2) { const ex = p[i + 2] - p[i], ez = p[i + 3] - p[i + 1], l2 = ex * ex + ez * ez || 1, k = Math.max(0, Math.min(1, ((x - p[i]) * ex + (z - p[i + 1]) * ez) / l2)); bd = Math.min(bd, Math.hypot(p[i] + ex * k - x, p[i + 1] + ez * k - z) - r.w / 2 - 1.6); } } return bd; };
+		if (!behind) {
+			// (a street behind the lot: the back line a step short of its sidewalk, or no back yard)
+			let d = 1e9;
+			for (let s = 2; s <= 13; s += 1) { if (roadDist(...W((x0 + x1) / 2, z0 - s)) < 0) { d = s; break; } }
+			if (d < 4) return;
+			if (d < 1e9) zb = z0 - d + 1.5;
+		}
+		const paths = real.near('paths', b.x, b.z, 40).filter((q) => q.w >= 2.2);
+		// whether a fence can stand at a spot: not in a building, on a drive or a street, in
+		// water or well above or below the house
+		const ok = (x, z) => {
+			const gy = bay.heightAt(x, z);
+			if (gy < 0.6 || Math.abs(gy - g) > 3) return false;
+			for (const q of paths) if (segDist(q.ax, q.az, q.bx, q.bz, x, z) < q.w / 2 + 0.4) return false;
+			if (roadDist(x, z) < 0) return false;
+			for (const q of boxes) { const dx = x - q.x, dz = z - q.z, qc = Math.cos(q.a), qs = Math.sin(q.a); if (Math.abs(qc * dx + qs * dz) < q.w / 2 + 0.25 && Math.abs(-qs * dx + qc * dz) < q.d / 2 + 0.25) return false; }
+			return true;
+		};
+		// a run of fence from one local point to another, in pieces of up to 7 m where it can stand
+		const run = (ax, az, bx, bz) => {
+			const L = Math.hypot(bx - ax, bz - az);
+			if (L < 1.2) return;
+			const n = Math.ceil(L), along = Math.abs(bx - ax) > Math.abs(bz - az);
+			let s0 = -1;
+			const piece = (i0, i1) => {
+				const t0 = Math.max(0, (i0 - 0.5) / n), t1 = Math.min(1, (i1 + 0.5) / n), len = (t1 - t0) * L;
+				if (len < 1) return;
+				const parts = Math.ceil(len / 7);
+				for (let k = 0; k < parts; k++) {
+					const u0 = t0 + (t1 - t0) * k / parts, u1 = t0 + (t1 - t0) * (k + 1) / parts, um = (u0 + u1) / 2;
+					const [x, z] = W(ax + (bx - ax) * um, az + (bz - az) * um), gy = bay.heightAt(x, z);
+					list.push({ x, y: gy - 0.5, z, w: len / parts + 0.05, d: th, h: fh + 0.5, a: b.a + (along ? 0 : Math.PI / 2), col: fc, kind: KIND.plain, roof: null, age: 0.5 });
+				}
+			};
+			for (let i = 0; i <= n; i++) {
+				const t = i / n, good = ok(...W(ax + (bx - ax) * t, az + (bz - az) * t));
+				if (good && s0 < 0) s0 = i;
+				if (!good && s0 >= 0) { piece(s0, i - 1); s0 = -1; }
+			}
+			if (s0 >= 0) piece(s0, n);
+		};
+		if (zf - zb < 3) return;
+		// the left line is this house's; the right only where no neighbour's left meets it
+		run(xl, zf, xl, zb);
+		if (gr === 1e9) run(xr, zf, xr, zb);
+		if (!behind || FKEY(b) < FKEY(behind)) run(xl, zb, xr, zb);
+		// the returns, from the front corners out to the side lines (the gates)
+		if (xl < x0 - 0.8) run(x0, zf, xl, zf);
+		if (xr > x1 + 0.8) run(x1, zf, xr, zf);
 	}
 	// the generated blocks stop where a mapped region starts: what stands on its side of the
 	// seam is its own (a block half over the line keeps only its lots on this side)
@@ -1662,7 +1773,7 @@ export function createCity(shared, scene, bay, real = null) {
 			if (b.gen && kind !== KIND.garage) setCond(ro, condFor(ro, isHome(b) ? 0.05 : 0.02));
 			if (b.grp && (ro.cond === COND.boarded || ro.cond === COND.burnt)) b.grp.shut = true;
 			// (the radio huts and ranger posts high on the wild ridges are nobody's home: no yard)
-			if (home === b && (b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R && !(g > 600 && !HOME_LAND.has(real.landAt?.(b.x, b.z)?.lu))) realYard(list, b, look, g, ro.cond);
+			if (home === b && (b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R && !(g > 600 && !HOME_LAND.has(real.landAt?.(b.x, b.z)?.lu))) realYard(list, b, look, g, ro.cond, (b.x - cx) ** 2 + (b.z - cz) ** 2 < FENCE_R * FENCE_R);
 			if (b.kind >= 5 && b.kind !== 10) grounds(list, trees, b.x, b.z, b.w, b.d, b.a, g, y, kind, b.x * 0.37 + b.z * 0.11);
 		}
 		for (const p of real.near('pools', cx, cz, Math.min(R, 900))) {
