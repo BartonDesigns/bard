@@ -51,11 +51,12 @@ TALK_PER_HOUR = "60"
 # the people's realtime conversation (POST /npc/talk), on Claude when the key is set:
 #   npx wrangler secret put ANTHROPIC_API_KEY
 # (never in this file). Without the key the same route runs on TALK_MODEL above. CLAUDE_MODEL is
-# any current Claude model id (claude-opus-5-5 the best voice; claude-sonnet-5-5 half the price;
-# claude-haiku-5-5 a fortieth); CLAUDE_EFFORT low is the fastest. CLAUDE_TURNS_PER_DAY caps the
-# day's spend (a turn is about 2,500 input tokens, most read from the cache, and 80 out).
-CLAUDE_MODEL = "claude-opus-5-5"
+# any current Claude model id (claude-haiku-5-5 the quickest and a fortieth of Opus's price;
+# claude-sonnet-5-5 richer; claude-opus-5-5 the best voice); CLAUDE_EFFORT low is the fastest.
+# CLAUDE_TURNS_PER_DAY caps the day's spend (a turn is about 2,500 input tokens, most read from
+# the cache, and 80 out).
+CLAUDE_MODEL = "claude-haiku-5-5"
 CLAUDE_EFFORT = "low"
-CLAUDE_MAX_TOKENS = "260"
+CLAUDE_MAX_TOKENS = "360"
 CLAUDE_TURNS_PER_DAY = "3000"
 CLAUDE_FALLBACKS = "true"
