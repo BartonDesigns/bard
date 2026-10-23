@@ -79,6 +79,21 @@ test('native regional streets are joined after arriving asynchronously',()=> {
  assert.ok(out.some(r=>r.link),'highway connector present once regional streets exist');
 });
 
+test('a place standing inside a gridded town is reached through that town\'s streets',()=> {
+ const {roads,cam}=fixture(['West|35|134.98|2','East|35|135.02|2','Westend|35.002|134.982|1']);
+ roads.settle(cam);
+ const p=toXZ(35,134.98);
+ // the gridded town round West (and Westend): its own id, its streets near its edge
+ const grid={id:'bay-town:grid',x:p.x,z:p.z,r:600,join:500,around:true,roads:[{pts:new Float32Array([p.x+560,p.z-60,p.x+560,p.z+60]),cls:'residential'}]};
+ roads.update(.1,cam,true,[grid]); roads.settle(cam);
+ const out=[]; roads.near('roads',p.x,p.z,3000,out);
+ assert.ok(out.some(r=>r.link),'the highway goes on into the gridded town\'s streets');
+ // nothing of the highway runs on inside the town
+ for(const r of out) if(!r.link) for(let k=0;k<r.pts.length;k+=2) assert.ok(Math.hypot(r.pts[k]-p.x,r.pts[k+1]-p.z)>600*0.9-40);
+ // (West and Westend, both inside it, are joined by its own streets, not a highway across it)
+ assert.ok(!out.some(r=>/Westend/.test(r.name)&&/West –|– West$/.test(r.name)));
+});
+
 test('open sea is not replaced by a continent-spanning road',()=> {
  const {roads,cam}=fixture(['West|35|134.85|3','East|35|135.15|3'],(_lat,lon)=>lon>134.94&&lon<135.06);
  roads.settle(cam);

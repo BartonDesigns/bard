@@ -28,6 +28,8 @@ import { inClearing, clearingVersion } from '../sportsfields.js';
 import { createGlobeTowns } from './globetowns.js';
 import { createGlobeRoads, localRoadTownId } from './globeroads.js';
 import { createGlobeLanes } from './globelanes.js';
+import { createTownStreets } from './townstreets.js';
+import { createGridStreets } from '../bay/gridstreets.js';
 import { BAY_DETAIL_U, BAY_DETAIL_AMP } from './baydetail.js';
 import { loadAtlas, atlasReady, regionAt, palette, citiesNear } from './atlas.js';
 import { setFarGround } from '../bay/terrain.js';
@@ -156,6 +158,41 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	};
 	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c) });
 
+	// ---------- the towns' own streets, out where the Bay's ground no longer paints them ----------
+	// (townstreets.js) the grown towns' (bay/realcity.js's generated regions, anywhere on Earth) and
+	// the Bay's gridded towns' (bay/gridstreets.js, out to 50 km past its survey). The Bay's ground
+	// paints both itself as far as it reaches, SEAM_A past the survey.
+	const painted = (x, z) => F.bay && bayOut(x, z) < SEAM_A;
+	const streets = createTownStreets({ scene, groundAt: (x, z) => bay.heightAt(x, z), isPhone, painted });
+	const gridStreets = createGridStreets({ bay, real: () => world()?.real, painted, isPhone });
+	// a grown town's streets, its drives and walks (as the real city keeps them: the ones a gas
+	// station's forecourt took are gone), and its forecourts
+	const genSets = new WeakMap();
+	function genSet(G) {
+		let S = genSets.get(G);
+		if (!S) {
+			const b = G.bounds, paths = [];
+			for (const c of G.grid.values()) for (const q of c.paths) paths.push(q);
+			S = { key: G, x: (b[0] + b[2]) / 2, z: (b[1] + b[3]) / 2, roads: G.data.roads, paths, ground: (G.sites || []).flatMap((q) => q.ground || []) };
+			genSets.set(G, S);
+		}
+		return S;
+	}
+	// the Bay's gridded towns out past its ground (bay.towns, terrain.js), as the highways and the
+	// survey's roads see them: a highway stops at the edge and goes on into the town's streets,
+	// the section roads keep out. (A town's houses reach to about 1.2 of its radius: buildUrban.)
+	function gridTowns(x, z, grown) {
+		const out = [];
+		if (!F.bay) return out;
+		for (const t of bay.towns || []) {
+			if (t === grown || Math.hypot(t.x - x, t.z - z) > 40000 || bayOut(t.x, t.z) < SEAM_A) continue;
+			const r = t.r * 1.2;
+			out.push({ id: localRoadTownId(t), x: t.x, z: t.z, r, join: 500, around: true, roads: gridStreets.townRoads(t, r) || NONE });
+		}
+		return out;
+	}
+	const NONE = [];
+
 
 	// the place's name for the Bay's labels (bay/labels.js), out where the Bay's own names don't
 	// reach: the town you are in, else the region; the sea by the atlas's name for it
@@ -206,7 +243,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		data.anchor(); anchorUniforms(data.U, data.win);
 		trees.shift(dx, dz);
 		towns.reset();
-		roads.reframe(); lanes.reframe();
+		roads.reframe(); lanes.reframe(); streets.clear(); gridStreets.clear();
 		stats.rebases++; stats.lastRebase = performance.now();
 		return { dx, dz };
 	}
@@ -222,7 +259,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	function place(lat, lon) {
 		if (bayKm(lat, lon) < BAY_BACK_KM) { if (!F.bay) { bayFrame(); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); } }
 		else { setFrame(lat, lon); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); }
-		roads.reframe(); lanes.reframe();
+		roads.reframe(); lanes.reframe(); streets.clear(); gridStreets.clear();
 		const p = toXZ(lat, lon);
 		// (a jump out of the window: nothing is drawn or placed from the old one meanwhile)
 		const gi = Math.floor((lon + 180) * 10), gj = Math.floor((90 - lat) * 10), W = data.win;
@@ -298,9 +335,18 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const activeTownRoads = [];
 		if (A?.region) activeTownRoads.push({ id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] });
 		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, roads: B.region.roads || [] });
-		roads.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads]);
+		// the gridded towns' streets round you, worked out tile by tile (inside the Bay's ground
+		// it paints them, and none are needed)
+		gridStreets.update(cam, steady && F.bay && bay.loaded() && out > SEAM_A - 2600);
+		const gridT = gridTowns(x, z, B?.town);
+		roads.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads, ...gridT.filter((t) => t.roads.length)]);
 		// the local roads; the streets of a town grown here take over inside it
-		lanes.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads].filter((t) => Number.isFinite(t.r)));
+		lanes.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads, ...gridT].filter((t) => Number.isFinite(t.r)));
+		// ...and every town's streets on the ground: the grown towns', the gridded towns'
+		const sets = [];
+		for (const G of real?.R?.regions || []) if (G.gen) sets.push(genSet(G));
+		for (const S of gridStreets.sets()) sets.push(S);
+		streets.update(cam, data.win.ready && (!F.bay || out > SEAM_A - 3000), sets);
 		const ms = performance.now() - t0;
 		stats.updateMs += (ms - stats.updateMs) * 0.05; stats.maxMs = Math.max(stats.maxMs * 0.995, ms);
 	}
@@ -310,7 +356,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const ll = toLL(camera.position.x, camera.position.z);
 		return {
 			at: `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)}`, frame: F.bay ? 'the Bay\'s' : `floating at ${F.lat.toFixed(3)}, ${F.lon.toFixed(3)}`, rebases: stats.rebases,
-			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(), lanes: lanes.info(), regional: regional.info(),
+			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(), lanes: lanes.info(), streets: { ...streets.info(), grid: gridStreets.info() }, regional: regional.info(),
 			window: { cell0: [data.win.gi0, data.win.gj0], tiles: data.stats.tiles, composeMs: data.stats.composeMs, decodeMs: Math.round(data.stats.decodeMs), mb: Math.round(data.bytes() / 1e5) / 10 },
 			ms: { mean: Math.round(stats.updateMs * 100) / 100, peak: Math.round(stats.maxMs * 10) / 10 },
 		};
@@ -326,11 +372,17 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		delete island.flyCeiling;
 		if (!F.bay) bayFrame();
 		towns.reset();
-		roads.dispose(); lanes.dispose();
+		roads.dispose(); lanes.dispose(); streets.dispose(); gridStreets.clear();
 		for (const g of [terrain.group, trees.group]) { scene.remove(g); g.traverse((o) => { o.geometry?.dispose?.(); }); }
 		for (const t of data.tex) t.dispose();
 	}
 	// finish what is being laid out now, in one go (tests, and after a jump)
-	function settle() { trees.settle(); towns.civ().flush(); roads.settle(camera); lanes.settle(camera); }
-	return { update, place, info, dispose, settle, roads, lanes, toLL, toXZ, height, waterAt, seaAt, coastMask, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
+	function settle() {
+		trees.settle(); towns.civ().flush();
+		if (F.bay && bay.loaded()) gridStreets.settle(camera);
+		roads.settle(camera); lanes.settle(camera);
+		const sets = [...(world()?.real?.R?.regions || []).filter((G) => G.gen).map(genSet), ...gridStreets.sets()];
+		streets.settle(sets);
+	}
+	return { update, place, info, dispose, settle, roads, lanes, streets, gridStreets, toLL, toXZ, height, waterAt, seaAt, coastMask, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
 }
