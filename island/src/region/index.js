@@ -40,11 +40,21 @@ const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes
 // how far round a real landmark the generated places keep clear (m), by its builder
 const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30 };
 
-export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null }) {
+export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null, water = () => null }) {
 	const height = globe.height;
 	const ground = (x, z) => island.heightAt(x, z);
-	const wet = (x, z) => { const h = height.at(x, z); return h < 0.4 || height.out.land <= 0; };
-	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, toLL, F, lanes });
+	// (the sea, the big lakes, and the generated land's own lakes and ponds, crysis/rivers.js)
+	const wet = (x, z) => { const h = height.at(x, z); return h < 0.4 || height.out.land <= 0 || !!water()?.inLake(x, z); };
+	// (a place is laid out once the water round it is known, so no house stands in a pond: worked
+	// a few milliseconds at a time meanwhile, once a look round however many places wait)
+	let pumped = 0;
+	const waterReady = (x, z, r) => {
+		const G = water();
+		if (!G || G.readyAt(x, z, r)) return true;
+		if (performance.now() - pumped > 200) { G.pump(x, z, r, isPhone ? 3 : 5); pumped = performance.now(); }
+		return false;
+	};
+	const S = createSettlements({ scene, ground, wet, waterReady, isPhone, toXZ, toLL, F, lanes });
 	const ice = createIce(scene, { height, toXZ, toLL, isPhone });
 	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m), isPhone, toLL, shared, extra: () => S.trees(), woods });
 	const air = createAir(scene, { isPhone });
