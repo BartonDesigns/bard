@@ -114,7 +114,10 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	const inBayWild = (x, z) => { if (!F.bay) return false; const ll = toLL(x, z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM + 10; };
 	// (the local roads come after the places they join: until then nothing is on them)
 	let lanes = null;
-	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), waterLevel: (x, z) => world()?.water?.waterAt(x, z) ?? lakeLevel(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !lanes?.onRoad(x, z, 5) && !regional.settlements.vegetationBlocked(x, z, 8) && !inClearing(x, z, 6) });
+	// the ground of the town grown round you that is its yards, streets, lots or parks (bay/realcity.js):
+	// the wild trees and plants keep out of it, its own are planted
+	const built = { at: (x, z) => { const L = world()?.real?.landAt?.(x, z); return !!L && (L.lu > 0 || L.road > 0.05); }, version: () => world()?.real?.genVersion?.() || 0 };
+	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), waterLevel: (x, z) => world()?.water?.waterAt(x, z) ?? lakeLevel(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !lanes?.onRoad(x, z, 5) && !regional.settlements.vegetationBlocked(x, z, 8) && !inClearing(x, z, 6) && !built.at(x, z) });
 	// a city the Bay already has: its towns' map, a mapped region, or one of its generated towns
 	// (a generated town where the atlas has a real one gives way to it)
 	function bayHas(x, z, r) {
@@ -142,8 +145,6 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	const heightRef = { height, world };
 	const allRoads = { onRoad: (x, z, m) => roads.onRoad(x, z, m) || !!lanes?.onRoad(x, z, m), version: () => roads.version() * 1000 + (lanes?.version() || 0) };
 	const laneRef = { keepOff: (x, z, m) => !!lanes?.keepOff(x, z, m), gridAt: (x, z) => lanes?.gridAt(x, z) || null, onRoad: (x, z, m) => !!lanes?.onRoad(x, z, m) };
-	// (built: the ground of the town grown round you that is yards, streets, lots or parks, bay/realcity.js)
-	const built = { at: (x, z) => { const L = world()?.real?.landAt?.(x, z); return !!L && (L.lu > 0 || L.road > 0.05); }, version: () => world()?.real?.genVersion?.() || 0 };
 	const regional = createRegional({ scene, shared, island, globe: heightRef, hint, isPhone, F, toLL, toXZ, bayKm, bayWildKm: BAY_WILD_KM, roads: allRoads, lanes: laneRef, woods: (x, z) => trees.woodsAt(x, z), water: () => world()?.water?.gen, built });
 	lanes = createGlobeLanes({ scene, height, groundAt: (x, z) => bay.heightAt(x, z), isPhone, highways: roads, settlements: regional.settlements });
 	// Regional settlements paint their own streets; publish those same streets to driving,
@@ -342,7 +343,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const steady = data.win.ready && !data.win.moving;
 		const tk = Math.min(1, 150 / (Math.hypot(lead.x, lead.z) || 1));
 		treeAt.position.set(x + lead.x * tk, 0, z + lead.z * tk);
-		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version() + ':' + clearingVersion() + ':' + (world()?.water?.lakesVersion?.() ?? ''));
+		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version() + ':' + clearingVersion() + ':' + (world()?.water?.lakesVersion?.() ?? '') + ':' + built.version());
 		// (kept on for a while after the orbit lets go at 7.8 km, down through the last few km)
 		if (arriving) arriveT = t0;
 		if (steady) towns.update(cam, arriving || t0 - arriveT < 45000);

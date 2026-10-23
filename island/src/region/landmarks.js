@@ -338,6 +338,7 @@ export const REAL = [
 	['the Luxor', 36.0955, -115.1761, 'luxor', 1, 90, 'The beam off the top of the pyramid is the brightest light in Las Vegas. The moths love it.'],
 	['the Excalibur', 36.0987, -115.1754, 'excalibur', 1, 90, 'The castle with the coloured turrets. Families come for the jousting dinner.'],
 	['New York-New York', 36.1022, -115.1745, 'nyny', 1, 90, 'A whole Manhattan skyline, a roller coaster round it, and the Statue of Liberty out front.'],
+	['Park MGM', 36.1046, -115.1747, 'casino', 0.7, 90, 'The old Monte Carlo made over, its casino smoke-free, a street of restaurants down the side to the arena.', { form: 'slab', h: 150, w: 180, c: [0.78, 0.7, 0.6], g: [0.3, 0.26, 0.22], neon: 'gold', neon2: 'white' }],
 	['the MGM Grand', 36.1024, -115.1696, 'casino', 1, 270, 'Emerald green glass. It was the biggest hotel in the world when it opened.', { form: 'tri', h: 90, w: 200, c: [0.3, 0.58, 0.42], g: [0.12, 0.3, 0.22], neon: 'green', neon2: 'gold' }],
 	['Aria', 36.1073, -115.1766, 'casino', 1, 90, 'Silver glass curves in the middle of CityCenter.', { form: 'curve', h: 180, c: [0.62, 0.66, 0.7], g: [0.2, 0.24, 0.28], neon: 'white', neon2: 'blue' }],
 	['the Bellagio', 36.1129, -115.1765, 'bellagio', 1, 90, 'After dark the fountains dance to music every fifteen minutes. Get a spot on the rail.', { form: 'curve', h: 150, c: [0.9, 0.84, 0.72], g: [0.4, 0.38, 0.34], neon: 'gold', neon2: 'white', lake: true }],
@@ -348,6 +349,8 @@ export const REAL = [
 	['Caesars Palace', 36.1162, -115.1745, 'casino', 1, 90, 'Marble, columns and fountains. Everyone gets lost in the Forum Shops.', { form: 'slab', h: 120, w: 200, c: [0.94, 0.92, 0.88], g: [0.4, 0.44, 0.5], neon: 'white', neon2: 'blue' }],
 	['the High Roller', 36.1176, -115.1681, 'wheel', 1, 270, 'Half an hour to go round. At night the whole rim lights up.'],
 	['the Venetian', 36.1212, -115.1697, 'venetian', 1, 270, 'Canals indoors, gondoliers singing, and a painted sky that never gets dark.'],
+	['the Hard Rock', 36.1212, -115.1748, 'casino', 0.9, 90, 'The Mirage that was: its three-winged tower shut in 2024 to be made over as the Hard Rock, with a guitar of a tower to rise beside it.', { form: 'y', h: 100, c: [0.9, 0.82, 0.62], g: [0.5, 0.38, 0.2], neon: 'purple', neon2: 'gold' }],
+	['the Palazzo', 36.1245, -115.1685, 'casino', 0.75, 270, 'The Venetian\'s taller sister: a gold-brown tower over Italian shops and a waterfall.', { form: 'curve', h: 260, c: [0.82, 0.68, 0.48], g: [0.36, 0.28, 0.18], neon: 'gold', neon2: 'red' }],
 	['the Sphere', 36.1208, -115.1622, 'sphere', 1, 270, 'The whole outside is a screen. Some nights it\'s a giant eyeball looking back at you.'],
 	['the Wynn', 36.1265, -115.1657, 'casino', 1, 270, 'A bronze curve of a tower, quieter inside than the rest of the Strip.', { form: 'curve', h: 185, c: [0.55, 0.4, 0.26], g: [0.32, 0.22, 0.14], neon: 'gold', neon2: 'gold' }],
 	['Treasure Island', 36.1247, -115.1747, 'casino', 1, 90, 'Gold glass in a Y, and the cove out front where the pirate ships used to fight.', { form: 'y', h: 110, c: [0.86, 0.7, 0.46], g: [0.42, 0.32, 0.2], neon: 'red', neon2: 'gold' }],
@@ -415,7 +418,7 @@ function towerNow(B, x, z, w, d, y0, h, c, g, r, lit) {
 // a resort's grounds: paved from the boulevard's kerb (local z0, to the front) back to z1, following
 // the ground, the drive to its door darker, and a row of palms down the kerb (flora.js grows them)
 function grounds(B, ground, w, z0, z1, { palms = z0 + 4, skip = () => false, drive = 0 } = {}) {
-	const { G } = B, gr = ground || (() => 0), step = 16, pave = [0.64, 0.61, 0.56], up = (x, z) => gr(x, z) + 0.12;
+	const { G } = B, gr = ground || (() => 0), step = 16, pave = [0.5, 0.48, 0.45], up = (x, z) => gr(x, z) + 0.12;
 	for (let x = -w / 2; x < w / 2 - 0.01; x += step) for (let z = z0; z < z1 - 0.01; z += step) {
 		const x1 = Math.min(x + step, w / 2), z2 = Math.min(z + step, z1);
 		G.face([[x, up(x, z), z], [x, up(x, z2), z2], [x1, up(x1, z2), z2], [x1, up(x1, z), z]], pave);

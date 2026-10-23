@@ -751,7 +751,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (kind !== K.garage && r() < 0.8) { const o = (door - 0.5) * (w - 2.5), wx = fx + ux * o, wz = fz + uz * o; paths.push({ ax: wx, az: wz, bx: wx - nx * (set + hw * 0.5), bz: wz - nz * (set + hw * 0.5), w: 1.2 }); }
 		// out back: a pool now and then, and the yard trees
 		const bx = x + nx * (d / 2 + 9.5), bz = z + nz * (d / 2 + 9.5);
-		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8) && slope(bx, bz) < 0.1) {
+		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8) && slope(bx, bz) < 0.1 && !inSite(bx, bz, 4)) {
 			pools.push({ x: bx, z: bz, w: (4 + r() * 1.5) * (big ? 1.3 : 1), d: (8 + r() * 3) * (big ? 1.3 : 1), a: yaw + Math.PI / 2 + (r() - 0.5) * 0.2 });
 			claim(bx, bz, ux, uz, 3, 5);
 		}
@@ -760,7 +760,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (sr < (big ? 0.7 : 0.22)) {
 			const cot = sr < (big ? 0.4 : 0.05), sw = cot ? 6 : 2.8, sd = cot ? 6.5 : 2.4;
 			const qx = x + ux * sa2 * (w / 2 - sw / 2) + nx * (d / 2 + 12 + sd / 2), qz = z + uz * sa2 * (w / 2 - sw / 2) + nz * (d / 2 + 12 + sd / 2);
-			if (roadClear(qx, qz, 3) && free(qx, qz, ux, uz, sw / 2, sd / 2) && !wet(qx, qz, 4) && dry(qx, qz)) {
+			if (roadClear(qx, qz, 3) && free(qx, qz, ux, uz, sw / 2, sd / 2) && !wet(qx, qz, 4) && dry(qx, qz) && !inSite(qx, qz, 2)) {
 				claim(qx, qz, ux, uz, sw / 2 + 0.5, sd / 2 + 0.5);
 				boxes.push({ x: qx, z: qz, w: sw, d: sd, a: yaw + Math.PI, wallH: cot ? 3.0 : 2.3, roofH: cot ? 1.5 : 0.8, kind: K.shed, hip: 0, door: 0.5 });
 			}
@@ -884,8 +884,9 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			}
 		} else if (s.kind === 'strip') {
 			// the Strip between its named resorts: on each side of the boulevard, block after block,
-			// a resort: its casino along the pavement, its hotel tower behind, the garage at the back;
-			// palms down the pavements. (One on a landmark's own ground goes, as from the water, below.)
+			// a resort: its casino along the pavement, its hotel tower behind, the garage at the back,
+			// all on its paved lot; palms down the broad pavements. (One on a landmark's own ground goes,
+			// as from the water, below; the landmark paves its own.)
 			const kerb = STRIP_W / 2 + 6;
 			const otherSite = (qx, qz, pad) => sites.some((o) => { if (o === s) return false; const dx = qx - o.x, dz = qz - o.z, a = dx * o.ux + dz * o.uz, b = -dx * o.uz + dz * o.ux; return Math.abs(a) < o.hw + pad && Math.abs(b) < o.hd + pad; });
 			for (const side of [-1, 1]) {
@@ -905,6 +906,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 					const cd = 60 + r() * 50, [px, pz] = at(side * (kerb + 18 + cd / 2), mid);
 					if (fits(px, pz, len - 16, cd)) {
 						boxes.push({ x: px, z: pz, w: len - 16, d: cd, a: face, wallH: 13 + r() * 9, roofH: 0, kind: K.retail, hip: 0, door: 0.5 });
+						const deep = cd + 150, [l0x, l0z] = at(side * (kerb + 18 + deep / 2), mid - len / 2 + 4), [l1x, l1z] = at(side * (kerb + 18 + deep / 2), mid + len / 2 - 4);
+						paths.push({ ax: l0x, az: l0z, bx: l1x, bz: l1z, w: deep });
 						const tw = clamp(len * (0.35 + r() * 0.3), 40, 110), td = 24 + r() * 16, th = 55 + Math.pow(r(), 1.4) * 120;
 						const [tx, tz] = at(side * (kerb + 26 + cd + td / 2), mid + (r() - 0.5) * (len - tw) * 0.6);
 						if (fits(tx, tz, tw, td)) boxes.push({ x: tx, z: tz, w: tw, d: td, a: face, wallH: th, roofH: 0, kind: K.tower, hip: 0, door: 0.5 });
@@ -914,6 +917,10 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 					b += len + 18 + r() * 30;
 				}
 				for (let b = -hd + 8; b < hd - 8; b += 12) { const [qx, qz] = at(side * (kerb - 2), b); trees.push({ x: qx, z: qz, h: 12 + r() * 5, cone: 0, sp: 3 }); }
+				for (let b = -hd; b < hd - 1; b += 24) {
+					const [ax2, az2] = at(side * (kerb + 3), b), [bx2, bz2] = at(side * (kerb + 3), Math.min(hd, b + 24));
+					if (!wet((ax2 + bx2) / 2, (az2 + bz2) / 2, 1)) paths.push({ ax: ax2, az: az2, bx: bx2, bz: bz2, w: 24 });
+				}
 			}
 		} else if (s.kind === 'shop') {
 			// the anchor store in the far corner facing the crossing, a strip of shops along the

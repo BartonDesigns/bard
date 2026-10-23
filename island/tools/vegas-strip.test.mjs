@@ -98,6 +98,25 @@ test('the towns grown round the resorts keep off their ground, and their trees a
 	assert.ok(leafy.filter((t) => t.sp === 3).every((t) => t.h >= 9), 'palms stand tall');
 });
 
+test('no wild plant comes up on a resort\'s ground, nor in the yards and streets of a town grown round you', () => {
+	const scene = new THREE.Scene(), F = { epoch: 1 };
+	const S = createSettlements({ scene, ground: () => 600, wet: () => false, F, toXZ: (la, lo) => ({ x: lo, z: la }), toLL: (x, z) => ({ lat: z, lon: x }), isPhone: true });
+	const site = (key, lon, paved) => S.add({ key, kind: 'real', clear: 190, paved, lat: 0, lon, kit: 'desert', pop: -1, name: key, opts: {}, env: { snow: 0 }, lots: [] });
+	const a = site('real:paved', 0, true), b = site('real:wild', 5000, false);
+	a.planned = b.planned = { reach: 0, paths: [], lots: [], fields: [] };
+	assert.equal(S.vegetationBlocked(120, 0, 1), true, 'a resort\'s gardens are its own');
+	assert.equal(S.vegetationBlocked(300, 0, 1), false, 'the desert past them');
+	assert.equal(S.vegetationBlocked(5120, 0, 1), false, 'a landmark out in the wild keeps the wild round it');
+	S.dispose();
+	const idx = fs.readFileSync(new URL('../src/region/index.js', import.meta.url), 'utf8');
+	assert.match(idx, /\|\| !!built\?\.at\(x, z\)/, 'the flora keeps out of the town grown round you');
+	assert.match(idx, /\(built\?\.version\(\) \|\| 0\)/, 'and is laid again when it grows');
+	assert.match(idx, /PAVED = new Set\(\['casino'[^\n]*'canopy'/);
+	const g = fs.readFileSync(new URL('../src/earth/globe.js', import.meta.url), 'utf8');
+	assert.match(g, /L\.lu > 0 \|\| L\.road > 0\.05/);
+	assert.match(g, /&& !built\.at\(x, z\) \}\);/, 'nor the wild trees');
+});
+
 test('the desert\'s towns: Las Vegas grows stucco subdivisions on a north-south grid, palms in its streets', async () => {
 	await loadAtlas();
 	assert.equal(aridAt(36.12, -115.17), true, 'Las Vegas');
@@ -133,18 +152,23 @@ test('the landmarks\' ground is known before the sites round you are scanned', (
 	assert.match(g, /keep: \(x, z, r\) => regional\.landmarksNear\(x, z, r\)/);
 });
 
-test('in the desert a closed basin is a dry pan, not a lake', async () => {
+test('in the desert a closed basin is a dry pan, not a lake, and its washes run dry', async () => {
 	const { proceduralWater } = await import('../src/crysis/rivers.js');
 	// (a bowl of a valley, its floor well below its rim all round)
 	const heightAt = (x, z) => 600 + Math.hypot(x + 400000, z) ** 2 / 20000 + 8 * Math.sin(x / 300) * Math.cos(z / 260);
-	const lakes = (arid) => {
+	const water = (arid) => {
 		const gen = proceduralWater({ heightAt, inSurvey: () => false, arid: () => arid });
 		for (let n = 0; n < 4000 && !gen.readyAt(-400000, 0, 10); n++) gen.pump(-400000, 0, 10, 50);
 		assert.ok(gen.readyAt(-400000, 0, 10));
-		return gen.lakes.length;
+		let near = Infinity;
+		for (let x = -3800; x <= 3800; x += 200) for (let z = -3800; z <= 3800; z += 200) near = Math.min(near, gen.near(-400000 + x, z));
+		return { lakes: gen.lakes.length, near };
 	};
-	assert.ok(lakes(false) > 0, 'a lake where it rains');
-	assert.equal(lakes(true), 0, 'none in the desert');
+	const wet = water(false), dry = water(true);
+	assert.ok(wet.lakes > 0, 'a lake where it rains');
+	assert.ok(wet.near < 150, 'and creeks running into it');
+	assert.equal(dry.lakes, 0, 'none in the desert');
+	assert.ok(dry.near > 1e6, `no creek either (${dry.near})`);
 	const w = fs.readFileSync(new URL('../src/bay/earthwater.js', import.meta.url), 'utf8');
 	assert.match(w, /arid: \(x, z\) => !F\.bay && aridAt\(/);
 });
@@ -191,8 +215,9 @@ test('the American desert grows its own plants: creosote and Joshua trees round 
 });
 
 test('Las Vegas Boulevard runs straight down the Strip, the district\'s grid lined up on it', async () => {
-	const town = { x: 0, z: 0, r: 1500, ang: 0, style: STYLE.suburb, name: 'Las Vegas', spine: { x: 437, name: 'Las Vegas Boulevard' } };
-	const civ = createCivilization({ real: { addRegion: (r) => ({ r }), removeRegion: () => {} }, bay: { towns: [town], heightAt: () => 610, loaded: () => true } });
+	const town = { x: 0, z: 0, r: 2000, ang: 0, style: STYLE.suburb, name: 'Las Vegas', spine: { x: 437, name: 'Las Vegas Boulevard', z0: -1500, z1: 1800, hw: 380 } };
+	const keepAt = [{ x: 437 - 330, z: 200, r: 190 }];
+	const civ = createCivilization({ real: { addRegion: (r) => ({ r }), removeRegion: () => {} }, bay: { towns: [town], heightAt: () => 610, loaded: () => true }, keep: (x, z, r) => keepAt.filter((k) => Math.hypot(k.x - x, k.z - z) < r + k.r), palms: () => true });
 	const cam = { position: { x: 0, y: 1.7, z: 0 } };
 	for (let n = 0; n < 20000 && !civ.active(); n++) civ.update(cam);
 	const R = civ.active().region;
@@ -201,11 +226,31 @@ test('Las Vegas Boulevard runs straight down the Strip, the district\'s grid lin
 	let len = 0;
 	for (const q of blvd) {
 		assert.equal(q.cls, 'primary');
+		assert.ok(q.w >= 24, `a broad boulevard (${q.w} m)`);
 		for (let i = 0; i < q.pts.length; i += 2) assert.ok(Math.abs(q.pts[i] - 437) < 2, `straight on its line (${q.pts[i].toFixed(1)})`);
 		len += Math.abs(q.pts[q.pts.length - 1] - q.pts[1]);
 	}
-	assert.ok(len > 2 * 1500, `${Math.round(len)} m of it, through the town and on out`);
+	assert.ok(len > 2 * 2000, `${Math.round(len)} m of it, through the town and on out`);
 	assert.ok(Math.abs(R.centre[0]) <= R.info.arterialSpacing / 2 + 1, 'the grid moved less than half its spacing');
+	// the Strip: resorts down both sides of it, no house nor street of houses
+	const strip = (x, z) => Math.abs(x - 437) < 380 && z > -1500 && z < 1800;
+	const on = R.boxes.filter((b) => strip(b.x, b.z));
+	assert.ok(!on.some((b) => b.kind <= 4 || b.kind === 10), 'no house on the Strip');
+	assert.ok(!R.roads.some((q) => q.cls === 'residential' && [...Array(q.pts.length >> 1).keys()].some((i) => strip(q.pts[2 * i], q.pts[2 * i + 1]))), 'no street of houses');
+	const casinos = on.filter((b) => b.kind === 6 && b.wallH > 12), towers = on.filter((b) => b.kind === 11 && b.wallH > 50);
+	for (const side of [-1, 1]) {
+		assert.ok(casinos.filter((b) => Math.sign(b.x - 437) === side).length >= 5, 'casinos along the pavement, each side');
+		assert.ok(towers.filter((b) => Math.sign(b.x - 437) === side).length >= 4, 'their hotel towers behind');
+	}
+	// (a casino fronts the boulevard: its front, the box's +z, faces it)
+	for (const b of casinos) assert.ok(-Math.sin(b.a) * Math.sign(437 - b.x) > 0.99, 'facing the boulevard');
+	assert.ok(!on.some((b) => Math.hypot(b.x - keepAt[0].x, b.z - keepAt[0].z) < keepAt[0].r), 'none on a named resort\'s ground');
+	const palms = R.trees.filter((t) => strip(t.x, t.z));
+	assert.ok(palms.length > 200 && palms.filter((t) => t.sp === 3).length > palms.length * 0.95, 'palms down its pavements');
+	// (the freeway behind the resorts on the west, north and south beside it, as the 15 runs)
+	const fwy = R.roads.filter((q) => q.cls === 'motorway' && !q.link);
+	assert.ok(fwy.length);
+	for (const q of fwy) for (let i = 0; i < q.pts.length; i += 2) assert.ok(q.pts[i] < 437 - 380 - 200 && q.pts[i] > 437 - 1200, `the freeway west of the Strip (${Math.round(q.pts[i] - 437)})`);
 	// (the districts over the Strip have it; downtown, up past the Strat, does not)
 	await loadAtlas();
 	setFrame(36.1135, -115.1722);
@@ -215,7 +260,17 @@ test('Las Vegas Boulevard runs straight down the Strip, the district\'s grid lin
 		T.update({ position: { x: c.x, y: 1.7, z: c.z } });
 		const lv = T.towns.filter((t) => t.city.name === 'Las Vegas');
 		assert.ok(lv.some((t) => t.spine && Math.hypot(t.x - c.x, t.z - c.z) < t.r), 'the district you stand in on the Strip');
+		assert.ok(lv.some((t) => t.spine && Math.abs(t.x - c.x) < 5 && Math.abs(t.z - c.z) < t.r * 0.7), 'centred on the boulevard');
 		assert.ok(!lv.find((t) => !t.district).spine, 'not downtown');
-		for (const t of lv.filter((q) => q.spine)) assert.ok(Math.abs(t.spine.x - c.x) < 30);
+		for (const t of lv.filter((q) => q.spine)) {
+			assert.ok(Math.abs(t.spine.x - c.x) < 30);
+			// (the Strip from just past the welcome sign up to Sands Avenue)
+			assert.ok(t.spine.z0 < c.z - 1000 && t.spine.z1 > c.z + 3000 && t.spine.hw >= 300, 'the Strip\'s length');
+		}
+		// (the grid's lights by night: the desert cities on the mile grid say so)
+		assert.ok(T.lit(12).some((q) => q.k >= 2), 'Las Vegas lit on its grid');
+		const sh = fs.readFileSync(new URL('../src/earth/globeterrain.js', import.meta.url), 'utf8');
+		assert.match(sh, /gw = step\(2\.0, C\.w\)/);
+		assert.match(sh, /gQI & 63/, 'the section lines every mile');
 	} finally { bayFrame(); }
 });
