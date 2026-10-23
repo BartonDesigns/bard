@@ -55,11 +55,11 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 	for (let i = 0; i < N; i++) { seeds[i * 4] = Math.random(); seeds[i * 4 + 1] = Math.random(); seeds[i * 4 + 2] = Math.random(); seeds[i * 4 + 3] = i / N; }
 	g.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 4));
 	g.instanceCount = N;
-	const rainU = { uRain: { value: 0 }, uWindV: { value: new THREE.Vector3() }, uTime: shared.uTime, uSkyCol: { value: new THREE.Color() }, uFlashR: U.uFlash, uCap: { value: 1 }, uWindOff: { value: new THREE.Vector3() } };
+	const rainU = { uRain: { value: 0 }, uWindV: { value: new THREE.Vector3() }, uTime: shared.uTime, uSkyCol: { value: new THREE.Color() }, uFlashR: U.uFlash, uCap: { value: 1 }, uWindOff: { value: new THREE.Vector3() }, uNear: { value: 0.4 } };
 	const rainMat = new THREE.ShaderMaterial({
 		uniforms: rainU, transparent: true, depthWrite: false, side: THREE.DoubleSide,
 		vertexShader: /* glsl */`
-			attribute vec4 aSeed; uniform float uRain, uTime, uCap; uniform vec3 uWindV, uWindOff; varying float vA; varying float vV;
+			attribute vec4 aSeed; uniform float uRain, uTime, uCap, uNear; uniform vec3 uWindV, uWindOff; varying float vA; varying float vV;
 			void main(){
 				vV = position.y;
 				// the rain falls only as heavily as it rains: the rest of the drops are parked
@@ -78,7 +78,7 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 				float len = length(v) * 0.028;
 				vec3 w = p - dir * len * position.y + side * position.x;
 				float dist = length(p - cameraPosition);
-				vA = smoothstep(0.4, 1.5, dist) * (1.0 - smoothstep(10.0, 18.0, dist)) * (0.45 + big * 0.45) / (1.0 + dist * 0.08);
+				vA = smoothstep(uNear, uNear + 1.1, dist) * (1.0 - smoothstep(10.0, 18.0, dist)) * (0.45 + big * 0.45) / (1.0 + dist * 0.08);
 				gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
 			}`,
 		fragmentShader: /* glsl */`
@@ -394,6 +394,8 @@ export function createWeather(scene, shared, { isPhone = false, airless = false 
 		rainU.uRain.value = S.sheltered ? 0 : S.rainHere;
 		rainU.uSkyCol.value.copy(shared.uSkyHor.value);
 		rain.visible = S.rainHere > 0.01 && !S.sheltered;
+		// (in a car's seat the streaks start past the glass, not in the cabin)
+		rainU.uNear.value = ease(rainU.uNear.value, opts.cab ? 1.7 : 0.4, dt * 4);
 		// shed drops if frames get slow
 		if (opts.slow) rainU.uCap.value = Math.max(0.35, rainU.uCap.value - dt * 0.2); else rainU.uCap.value = Math.min(1, rainU.uCap.value + dt * 0.05);
 		voice(dt, cam, groundAt, W);

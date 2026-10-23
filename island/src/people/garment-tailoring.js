@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { runAll } from '../world/buildslice.js';
 import { isRibbed, isShirted, drapeOf, hangWidth, neckDrop, necklineY } from './garment-shape.js';
 
 const clamp = (x) => Math.max(0, Math.min(1, x));
@@ -110,7 +111,10 @@ export function drapePanels(g, o, cut, R) {
 // Cut actual geometry at the neckline, cuffs and hems. Each new edge receives a small
 // rolled return with interpolated skin weights, in the same mesh/material/draw call.
 // This avoids razor-thin shader-only edges while retaining the fitted sleeve topology.
-export function finishGarmentEdges(g, o, cut, R) {
+export function finishGarmentEdges(g, o, cut, R) { return runAll(finishGarmentEdgesSteps(g, o, cut, R)); }
+// (in steps: a yield every so many triangles, and between the cuts and the rims, so a body
+// dressed out in the world takes a few frames rather than one long one; people.js)
+export function* finishGarmentEdgesSteps(g, o, cut, R) {
  const names = Object.keys(g.attributes), rows = [], indices = [], cache = new Map(), rims = new Map();
  // (a vertex's values, attribute by attribute, read straight from the arrays)
  const attrs = names.map(k => g.attributes[k]);
@@ -140,6 +144,7 @@ export function finishGarmentEdges(g, o, cut, R) {
  const inRegion = new Map();
  const regioned = (v, val) => { const key = `${v.key}s${val}`; let r = inRegion.get(key); if (!r) inRegion.set(key, r = { ...v, key, slot: [val] }); return r; };
  for (let i=0;i<ix.length;i+=3) {
+  if (i && (i % 6144) === 0) yield;
   let poly = [at(ix[i]),at(ix[i+1]),at(ix[i+2])];
   const val=poly[2].slot[0], s=Math.round(val)%10, limb=Math.floor(val/10), item=[o.top,o.outer,o.bottom,o.shoes][s];
   // The shader uses a flat region ID. Intersections must not create fractional IDs
@@ -178,8 +183,10 @@ export function finishGarmentEdges(g, o, cut, R) {
    rims.set(key,{a,b,f});
   }
  }
+ yield;
  let rimId=0;
  for (const {a,b,f} of rims.values()) {
+  if (rimId && (rimId & 255) === 0) yield;
   const ring=[];
   for (let j=0;j<=4;j++) {
    const theta=j/4*Math.PI, band=[];

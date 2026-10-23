@@ -24,7 +24,7 @@ test('null shader precision is rejected before Three; one fresh low-power canvas
 });
 test('permanent startup failure is bounded and reports an actionable error', () => {
 	let attempts=0, constructed=0;const first=canvas(true),second=canvas(true);
-	assert.throws(()=>createGraphicsRenderer({canvas:first,Renderer:class{constructor(){constructed++;}},replaceCanvas:()=>{attempts++;return second;},storage:store()}),{message:GRAPHICS_UNAVAILABLE});
+	assert.throws(()=>createGraphicsRenderer({canvas:first,Renderer:class{constructor(){constructed++;}},replaceCanvas:()=>{attempts++;return second;},storage:store()}),(e)=>{assert.equal(e.message,GRAPHICS_UNAVAILABLE);assert.equal(e.detail.tries.length,2,'both tries told in the error');assert.match(e.detail.tries[0].error,/context/);return true;});
 	assert.equal(attempts,1);assert.equal(constructed,0);assert.equal(first.gl.dead,true);assert.equal(second.gl.dead,true);
 });
 test('a renderer constructor failure also releases its context before retry', () => {

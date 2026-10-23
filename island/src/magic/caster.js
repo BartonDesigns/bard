@@ -45,7 +45,11 @@ import { createAfflictions } from './elements.js';
 const EYE = 1.68;
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _p = new THREE.Vector3(), _q = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
 const typeOf = (t) => (t === 'fire' ? 'fire' : 'energy');
-const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 'boss') && !T.surrendered;
+const hostile = (T) => !!T && !T.removed && (T.kind === 'hostile' || T.kind === 'boss' || (T.kind === 'vehicle' && !!T.moral?.()?.hostileTarget)) && !T.surrendered;
+// a vehicle (the military's, a helicopter, a car): a bolt cast at one, or while locked on to one,
+// seeks it (combat/target-focus.js takes them; stepBolts turns the bolt after it)
+const vehicle = (T) => !!T && !T.removed && (T.kind === 'vehicle' || T.kind === 'car');
+const SEEK_TURN = 5.5;          // rad/s a seeking bolt can turn
 
 // what is cast along the aim (the rest are cast on yourself or about you)
 const AIMED = new Set(['bolt', 'beam', 'burst', 'flare', 'strike', 'lances', 'chain', 'orb', 'well', 'cloud', 'storm', 'stasis', 'cone']);
@@ -207,11 +211,15 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// (aim the bolt from the hand at where the view's ray lands, so it meets the crosshair)
 			const tgt = combat.firstHit(_o, _d, 300, combat.me), end = _o.clone().addScaledVector(_d, tgt ? tgt.t : 300);
 			const dir = end.sub(from).normalize();
+			// (locked on to a vehicle, or the aim on one: the bolt seeks it, so a helicopter on the
+			// move or a car at speed is hit where it will be)
+			const locked = combat.focus?.current?.();
+			const seek = vehicle(locked) ? locked : vehicle(tgt?.T) ? tgt.T : null;
 			// (split: several in a fan about the aim, each the weaker for it)
 			const n = Math.max(1, spell.split | 0), dmg = spell.dmg * (spell.dmgK || 1);
 			for (let j = 0; j < n; j++) {
 				const v = n > 1 ? dir.clone().applyAxisAngle(_u.set(0, 1, 0), (j / (n - 1) - 0.5) * 0.16) : dir;
-				bolts.push({ spell, k, pos: j === n - 1 ? from : from.clone(), vel: v.multiplyScalar(spell.speed), life: 4, pierced: false, owner: 'me', dmg: n > 1 ? dmg : undefined, look: lookOf(spell) });
+				bolts.push({ spell, k, pos: j === n - 1 ? from : from.clone(), vel: v.multiplyScalar(spell.speed), life: seek ? 6 : 4, pierced: false, owner: 'me', dmg: n > 1 ? dmg : undefined, look: lookOf(spell), seek });
 			}
 		},
 		// (it gathers for CHARGE first, then lets go: magic/beam.js)
@@ -221,13 +229,13 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const c = GLOW[spell.school], L = lookOf(spell), D = spell.delay || 0;
 			if (L.tell) effects.push({ t: 0, every: 0.08, life: Math.max(0.16, D), step() { L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / Math.max(0.16, D)); } });
 			else fx.ring(at, spell.r, c, 30, D || 0.5, 0.25);
-			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, c, 60, spell.r * 1.6, 0.8, 0.45, 1); fx.ring(at, spell.r, c, 50, 0.5, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, spell.status); magicSound(spell.school, 0.16); } });
+			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, c, 60, spell.r * 1.6, 0.8, 0.45, 1); fx.ring(at, spell.r, c, 50, 0.5, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, spell.status); magicSound(`${spell.school}-blast`, 0.2, at); } });
 		},
 		strike(spell, k) {
 			const { at } = aimPoint(spell.range);
 			const c = GLOW[spell.school], L = lookOf(spell);
 			effects.push({ t: 0, every: 0.08, life: spell.delay, step() { if (L.tell) L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / spell.delay); else fx.ring(at, spell.r, c, 18, 0.3, 0.2); } });
-			effects.push({ t: spell.delay, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); } areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm', 0.2); } });
+			effects.push({ t: spell.delay, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); } areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm-blast', 0.24, at); } });
 		},
 		flare(spell, k) {
 			// Solar Flare: directed light out of wherever the sun stands, a column down onto where you aim
@@ -240,7 +248,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const { at } = aimPoint(spell.range), L = lookOf(spell), D = spell.delay || 0.5, kk = night ? k * 0.8 : k;
 			const top = { x: at.x + dir.x * 70, y: at.y + dir.y * 70, z: at.z + dir.z * 70 };
 			effects.push({ t: 0, every: 0.05, life: D, step() { const u = 1 - Math.max(0, this.life) / D; L.tell?.(fx, at, spell.r, u, night); L.beam?.(fx, top, at, u, night); } });
-			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(spell.school, 0.16); } });
+			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(`${spell.school}-blast`, 0.2, at); } });
 		},
 		singularity(spell, k) {
 			// Gargantua: a dot far off on the horizon the way you face that swells to stand there, its
@@ -281,7 +289,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			// (the world's colours invert, grey and go black at its end; after two seconds of black they
 			// burst back, with a kick and a rain of embers: fx.js gradeFrom)
 			fx.gradeFrom?.(spell.t);
-			effects.push({ t: spell.t * 0.95 + 2.3, run: () => { combat.shake?.(0.35); magicSound('radiance', 0.25); aim(_o, _d); L.back?.(fx, camera.position, _d); } });
+			effects.push({ t: spell.t * 0.95 + 2.3, run: () => { combat.shake?.(0.35); magicSound('radiance-blast', 0.3); aim(_o, _d); L.back?.(fx, camera.position, _d); } });
 			effects.push({ t: 0, life: spell.t, every: 0.1,
 				step() {
 					t += 0.1; n++;
@@ -315,7 +323,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					for (const [T, B] of vast) if (!T.removed) bleed(T, B, 1);
 					if (L.blast) L.blast(fx, drawn, R); else fx.burst(drawn, GLOW.void, 90, R * 3, 0.9, R * 0.2, 0);
 					voice?.stop();
-					combat.shake?.(0.4); magicSound('void', 0.3);
+					combat.shake?.(0.4); magicSound('void-blast', 0.3, drawn);
 				} });
 		},
 		lances(spell, k) {
@@ -333,7 +341,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 				effects.push({ t: 0, life: 0.18 * i + T, every: 0.04, pos: from.clone(), wait: 0.18 * i,
 					move(dt) { if ((this.wait -= dt) > 0) { L.tell?.(fx, to, spell.r, 0, night); return; } this.pos.addScaledVector(dir, -fall / T * dt); if (this.pos.distanceTo(to) < 0.5 || (this.pos.y < to.y)) this.pos.copy(to); },
 					step() { if (this.wait <= 0) L.fall?.(fx, this.pos, dir, night); },
-					end() { L.blast?.(fx, to, spell.r, night); areaHarm(to, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.08); magicSound(spell.school, 0.12); } });
+					end() { L.blast?.(fx, to, spell.r, night); areaHarm(to, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.08); magicSound(`${spell.school}-blast`, 0.16, to); } });
 			}
 		},
 		nova(spell, k) {
@@ -409,7 +417,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 						hex(x.T, spell.status ? { hold: 0.3 } : { slow: 0.3, t: 0.3 }, k, spell.id);
 					}
 				},
-				end() { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, GLOW.void, 90, spell.r * 1.5, 0.7, 0.5, 0); fx.ring(at, spell.r, GLOW.void, 50, 0.4, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, null); magicSound('void', 0.2); } });
+				end() { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, GLOW.void, 90, spell.r * 1.5, 0.7, 0.5, 0); fx.ring(at, spell.r, GLOW.void, 50, 0.4, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, null); magicSound('void-blast', 0.24, at); } });
 		},
 		cloud(spell, k) {
 			const { at } = aimPoint(spell.range);
@@ -448,7 +456,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					if (L.strike) L.strike(fx, top, p);
 					else { fx.line(top, p, GLOW.storm, 0.9, 0.22, 0.4, 3.5); fx.burst(p, GLOW.storm, 20, 6, 0.4, 0.3, 1); }
 					for (const x of hostilesNear(p, 3, struck)) harm(x.T, spell.dmg * k, spell, p, null, false, blastPart(x));
-					combat.shake?.(0.08); magicSound('storm', 0.1);
+					combat.shake?.(0.08); magicSound('storm-hit', 0.12, p);
 				} });
 			// (the rain under it)
 			// (and the thunderhead over it)
@@ -634,6 +642,18 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const B = bolts[i], spell = B.spell;
 			B.life -= dt;
 			if (B.life <= 0) { bolts.splice(i, 1); continue; }
+			// (seeking: the bolt turns after the vehicle it was cast at while that still stands)
+			if (B.seek) {
+				const S = B.seek, at = combat.layer.get(S.id) === S && !S.removed ? (S.aim?.() || S.bound) : null;
+				if (!at) B.seek = null;
+				else {
+					const sp = B.vel.length();
+					_q.set(at.x - B.pos.x, at.y - B.pos.y, at.z - B.pos.z).normalize();
+					_d.copy(B.vel).normalize();
+					const turn = Math.min(1, SEEK_TURN * dt / Math.max(0.05, _d.angleTo(_q)));
+					B.vel.copy(_d.lerp(_q, turn).normalize().multiplyScalar(sp));
+				}
+			}
 			const step = B.vel.length() * dt;
 			_d.copy(B.vel).normalize();
 			const h = combat.firstHit(B.pos, _d, step, combat.me);
@@ -647,6 +667,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 				const at = B.pos.clone().addScaledVector(_d, h.t);
 				if (h.T && !h.ward) { harm(h.T, (B.dmg ?? spell.dmg) * B.k, spell, at, _d, false, h.part); hex(h.T, spell.status, B.k, spell.id); }
 				if (L.hit) L.hit(fx, at, _d); else fx.burst(at, c, 16, 3, 0.4, 0.22, 0.6);
+				magicSound(`${spell.school}-hit`, spell.kind === 'orb' ? 0.2 : 0.14, at);
 				if (spell.splash) { fx.ring(at, spell.splash, c, 24, 0.35, 0.3); areaHarm(at, spell.splash, spell, B.k, spell.dmg * 0.6, null); }
 				if (spell.ignite) combat.igniteAt(at.x, at.z, 5);
 				if (spell.burn) burnAt(at, spell, B.k);

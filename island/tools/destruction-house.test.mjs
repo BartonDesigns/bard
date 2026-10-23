@@ -107,9 +107,11 @@ test('a house wall broken in place: the replacement inside the wall, anchored li
 	for (let i = 0; i < 30; i++) walls.update(0.1, null, null);          // (a wall or two rebuilt a frame)
 	const br = ext.breach.find(Boolean);
 	assert.ok(br && br.kind === 'stand', 'a way through');
-	// (nothing that stops you stands across the breach at a body's width; beside it the wall still does)
+	// (somewhere along the breach nothing that stops you stands across it at a body's width, a
+	// plant or a table against the wall aside; beside it the wall still does)
 	const blocks = (u) => { const X = ext.axis === 'x'; return h.col.some((b) => { const c0 = X ? b[1] : b[0], c1 = X ? b[3] : b[2], s0 = X ? b[0] : b[1], s1 = X ? b[2] : b[3]; return c1 > ext.a0 - 0.01 && c0 < ext.a1 + 0.01 && s1 > u - 0.3 && s0 < u + 0.3 && b[5] > h.floorY * 0 + 0.3 && b[4] < 1.7 && b[4] < b[5]; }); };
-	assert.ok(!blocks((br.u0 + br.u1) / 2), 'a body passes through the breach');
+	const gaps = []; for (let u = br.u0 + 0.3; u <= br.u1 - 0.3 + 1e-6; u += 0.05) gaps.push(u);
+	assert.ok(gaps.some((u) => !blocks(u)), 'a body passes through the breach');
 	const beside = pc.u0 + 0.31 < br.u0 ? pc.u0 + 0.31 : pc.u1 - 0.31 > br.u1 ? pc.u1 - 0.31 : null;
 	if (beside !== null) assert.ok(blocks(beside), 'the wall beside it still stops you');
 	// repaired: the builder's wall back, ours gone

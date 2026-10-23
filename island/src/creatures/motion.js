@@ -16,7 +16,7 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const sanitize = (n) => n.replace(/[\s.\[\]:/]/g, '');
 
-const _ax = new THREE.Vector3();
+const _ax = new THREE.Vector3(), _v = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _qi = new THREE.Quaternion(), _e = new THREE.Euler();
 
 export function createCreatureMotion(root, meta) {
@@ -52,7 +52,13 @@ export function createCreatureMotion(root, meta) {
 		// the ground, a growl), how much it means you harm (menace 0..1: low and trembling), and how
 		// still it stands (dormant 0..1: the Burnt Giant a tree among the trees); events for the
 		// world to hear and see (a growl, a scuff of dirt), taken by drain()
-		beat: null, beatT: 1 + Math.random() * 3, menace: 0, dormant: 0, seed: Math.random() * 100, events: [] };
+		beat: null, beatT: 1 + Math.random() * 3, menace: 0, dormant: 0, seed: Math.random() * 100, events: [],
+		// a blow's weight (hitK: 1 a round, more a heavy one) and the shove it gives the body: the
+		// hips knocked along it and swinging back on a spring, the head and tail lagging behind
+		hitK: 1, sway: { x: 0, z: 0, vx: 0, vz: 0 },
+		// the pose it is handed back in (from lying as a ragdoll, people/ragdoll.js): each bone's
+		// turn in the world then, blended out over dur s
+		blend: null };
 
 	function clear() { for (const x of bones) x.rot.set(0, 0, 0); }
 	const R = (n) => B[n]?.rot;
@@ -138,7 +144,7 @@ export function createCreatureMotion(root, meta) {
 		}
 		// a hit: the body thrown the way the blow went
 		if (s.hit >= 0) {
-			const k = Math.sin(clamp(s.hit / 0.45, 0, 1) * Math.PI) * (1 - s.hit);
+			const k = Math.sin(clamp(s.hit / 0.45, 0, 1) * Math.PI) * (1 - s.hit) * s.hitK;
 			const d = s.hitDir;
 			add('chest', d.z * 0.45 * k, 0, -d.x * 0.4 * k);
 			add('spine', d.z * 0.25 * k, 0, -d.x * 0.2 * k);
@@ -230,7 +236,7 @@ export function createCreatureMotion(root, meta) {
 		}
 		// a hit: the body thrown the way the blow went, the head snapped round
 		if (s.hit >= 0) {
-			const k = Math.sin(clamp(s.hit / 0.45, 0, 1) * Math.PI) * (1 - s.hit);
+			const k = Math.sin(clamp(s.hit / 0.45, 0, 1) * Math.PI) * (1 - s.hit) * s.hitK;
 			const d = s.hitDir;
 			add('chest', d.z * 0.25 * k, 0, -d.x * 0.3 * k);
 			add('spine', -d.z * 0.15 * k, 0, -d.x * 0.2 * k);
@@ -291,7 +297,7 @@ export function createCreatureMotion(root, meta) {
 		}
 		// a hit: thrown over in the air
 		if (s.hit >= 0) {
-			const k = Math.sin(clamp(s.hit / 0.45, 0, 1) * Math.PI) * (1 - s.hit);
+			const k = Math.sin(clamp(s.hit / 0.45, 0, 1) * Math.PI) * (1 - s.hit) * s.hitK;
 			const d = s.hitDir;
 			add('hips', d.z * 0.3 * k, 0, -d.x * 0.5 * k);
 		}
@@ -345,7 +351,7 @@ export function createCreatureMotion(root, meta) {
 			}
 		}
 		if (s.hit >= 0) {
-			const k = Math.sin(clamp(s.hit / 0.35, 0, 1) * Math.PI) * (1 - s.hit);
+			const k = Math.sin(clamp(s.hit / 0.35, 0, 1) * Math.PI) * (1 - s.hit) * s.hitK;
 			add('hips', s.hitDir.z * 0.25 * k, 0, -s.hitDir.x * 0.35 * k);
 		}
 		// death: the legs snap up and in under it (and then it shatters: combat/ai-squads.js)
@@ -500,6 +506,31 @@ export function createCreatureMotion(root, meta) {
 	const plan = PLANS[meta.rig] || biped;
 	const beats = BEAT_PLANS[meta.rig] || bipedBeats;
 
+	// the shove of a blow: the hips knocked the way it went, on a stiff spring that overshoots
+	// once and settles; the body tips into the motion and the head and tail lag it (whiplash)
+	function swayStep(dt) {
+		const w = state.sway;
+		if (Math.abs(w.x) + Math.abs(w.z) + Math.abs(w.vx) + Math.abs(w.vz) < 1e-4) { w.x = w.z = w.vx = w.vz = 0; return; }
+		const om = 15, ze = 0.42;
+		for (let left = dt; left > 0; left -= 1 / 90) {
+			const h = Math.min(left, 1 / 90);
+			w.vx += (-om * om * w.x - 2 * ze * om * w.vx) * h; w.vz += (-om * om * w.z - 2 * ze * om * w.vz) * h;
+			w.x += w.vx * h; w.z += w.vz * h;
+		}
+	}
+	function swayPose() {
+		const w = state.sway;
+		if (w.x === 0 && w.z === 0 && w.vx === 0 && w.vz === 0) return;
+		const k = 1 / Math.max(0.3, hipH);
+		add('hips', -w.vz * 0.05 * k, 0, w.vx * 0.05 * k);
+		add('spine', w.vz * 0.04 * k, 0, -w.vx * 0.03 * k);
+		add('chest', w.vz * 0.06 * k, 0, -w.vx * 0.05 * k);
+		add('neck', w.vz * 0.1 * k, -w.vx * 0.06 * k, 0);
+		add('head', w.vz * 0.12 * k, -w.vx * 0.08 * k, 0);
+		add('tail1', -w.vz * 0.1 * k, w.vx * 0.2 * k, 0);
+		add('tail2', -w.vz * 0.1 * k, w.vx * 0.2 * k, 0);
+	}
+
 	// apply: each bone's rotation is in model axes; turn it into the parent's frame, top-down
 	const modelQ = new THREE.Quaternion();
 	function apply() {
@@ -541,9 +572,27 @@ export function createCreatureMotion(root, meta) {
 			const sink = s.death >= 0 ? smooth(s.death / 1.1) * hipH * 0.62 : 0;
 			const crouch = (meta.stalk ?? 0.35) * 0.04 * hipH * s.gait;
 			_q.copy(hips.b.parent ? hips.b.parent.getWorldQuaternion(_qp).premultiply(_qi) : _qp.identity()).invert();
-			const v = new THREE.Vector3(0, bob - sink - crouch, 0).applyQuaternion(_q);
+			const v = new THREE.Vector3(s.sway.x, bob - sink - crouch, s.sway.z).applyQuaternion(_q);
 			hips.b.position.add(v);
 			hips.b.updateMatrixWorld(true);
+		}
+		// handed back from lying limp: the pose it lay in held, in the world, and eased into
+		// this one, from the hips out (people/ragdoll.js leaves the bones as they fell)
+		const bl = state.blend;
+		if (bl) {
+			const w = 1 - smooth(bl.t / bl.dur);
+			if (w <= 0) state.blend = null;
+			else {
+				if (hips && bl.hipsW) { _v.copy(bl.hipsW); hips.b.parent.worldToLocal(_v); hips.b.position.lerp(_v, w); hips.b.updateMatrixWorld(true); }
+				for (const x of bones) {
+					const q0 = bl.q.get(x);
+					if (!q0) continue;
+					x.b.parent.getWorldQuaternion(_qp);
+					_q.copy(_qp).invert().multiply(q0);
+					x.b.quaternion.slerp(_q, w);
+					x.b.updateMatrixWorld(true);
+				}
+			}
 		}
 	}
 
@@ -576,9 +625,12 @@ export function createCreatureMotion(root, meta) {
 			if (s.strike >= 0) { s.strike += dt / (meta.strikeTime || 0.9); if (s.strike >= 1) s.strike = -1; }
 			if (s.hit >= 0) { s.hit += dt / 0.5; if (s.hit >= 1) s.hit = -1; }
 			if (s.death >= 0) s.death += dt;
+			if (s.blend) s.blend.t += dt;
+			swayStep(dt);
 			clear();
 			plan(dt);
 			if (s.death < 0) beats();
+			swayPose();
 			apply();
 		},
 		// a beat by name, now (a growl as it sees you)
@@ -588,13 +640,32 @@ export function createCreatureMotion(root, meta) {
 		// where a bone is in the world, into out
 		at(name, out) { const x = B[name]; return x ? x.b.getWorldPosition(out) : null; },
 		strike(side = meta.strikeSide ?? 1) { state.strike = 0; state.strikeSide = side; },
-		hit(dir) { state.hit = 0; if (dir) state.hitDir.copy(dir).setY(0).normalize(); },
+		// a blow from dir (the way it travelled, in the model's axes), weighing k (1 a round; a
+		// heavy one more): the reel of it, and the shove along it
+		hit(dir, k = 1) {
+			state.hit = 0; state.hitK = clamp(k, 0.4, 2.4);
+			if (dir) {
+				state.hitDir.copy(dir).setY(0).normalize();
+				const v = 0.9 * state.hitK * hipH;
+				state.sway.vx += state.hitDir.x * v; state.sway.vz += state.hitDir.z * v;
+			}
+		},
+		// from now, the bones' pose in the world as it stands (lying as it fell) is held and eased
+		// into the motion's over dur s: for one knocked down and up again, wherever root is put
+		blendFrom(dur = 0.7) {
+			root.updateMatrixWorld(true);
+			const q = new Map();
+			for (const x of bones) q.set(x, x.b.getWorldQuaternion(new THREE.Quaternion()));
+			state.blend = { t: 0, dur, q, hipsW: B.hips ? B.hips.b.getWorldPosition(new THREE.Vector3()) : null };
+			state.sway.x = state.sway.z = state.sway.vx = state.sway.vz = 0;
+		},
 		die() { if (state.death < 0) state.death = 0; },
 		dead: () => state.death >= 0,
 		// a fixed pose for previews: name in rest | walk | run | strike | hit | death, t its time
 		pose(name, t = 0) {
 			const s = state;
-			Object.assign(s, { strike: -1, hit: -1, death: -1, gait: 0, phase: 0, t: 1.3 });
+			Object.assign(s, { strike: -1, hit: -1, death: -1, gait: 0, phase: 0, t: 1.3, hitK: 1, blend: null });
+			s.sway.x = s.sway.z = s.sway.vx = s.sway.vz = 0;
 			if (name === 'walk' || name === 'run') { s.gait = 1; s.phase = t * TAU; }
 			if (name === 'strike') { s.strike = t; s.strikeSide = meta.strikeSide ?? 1; }
 			if (name === 'hit') { s.hit = t; s.hitDir.set(0, 0, -1); }

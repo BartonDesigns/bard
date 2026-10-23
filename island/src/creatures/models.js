@@ -13,6 +13,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { GFX_PHONE } from '../world/device.js';
 import { createCreatureMotion } from './motion.js';
+import { ragdollPieces } from './rig.js';
 
 const url = (id) => new URL(`../assets/creatures/${id}.glb`, import.meta.url).href;
 
@@ -61,8 +62,9 @@ export function loadCreature(id) {
 const PART = (n) => { const name = n.replace(/^rider_/, ''); return /^(head|neck|ear)/.test(name) ? 'head' : /^abdomen/.test(name) ? 'weak' : /^(hips|spine|chest|robe|cloak|wing|mane|seat)/.test(name) ? 'torso' : 'limb'; };
 const _a = new THREE.Vector3(), _b = new THREE.Vector3();
 
-// one body of a kind: { root, motion, meta, shapes(out), height }
-export async function makeCreature(id) {
+// one body of a kind: { root, motion, meta, shapes(out), height, vary(), rig() }; weak: the
+// bones of its weak point (catalog.js weak), hit zones of part 'vital'
+export async function makeCreature(id, { weak = null } = {}) {
 	const { scene, meta: meta0 } = await loadCreature(id);
 	// (its own copy: one model can serve two kinds, each with its own timing)
 	const meta = { ...meta0 };
@@ -82,7 +84,7 @@ export async function makeCreature(id) {
 		const j = meta.joints?.[name];
 		if (!b || !j) continue;
 		const tail = b.worldToLocal(new THREE.Vector3(...j[1]).applyMatrix4(root.matrixWorld));
-		zones.push({ b, tail, r: Math.max(0.04, (meta.radii?.[name] || 0.08) * 0.9), part: PART(name), name });
+		zones.push({ b, tail, r: Math.max(0.04, (meta.radii?.[name] || 0.08) * 0.9), part: weak?.bones?.includes(name) ? 'vital' : PART(name), name });
 	}
 	// the hit zones where the bones are now: capsules in world space, reused
 	const shapes = zones.map((z) => ({ type: 'capsule', a: { x: 0, y: 0, z: 0 }, b: { x: 0, y: 0, z: 0 }, r: z.r, part: z.part, bone: z.name }));
@@ -119,7 +121,22 @@ export async function makeCreature(id) {
 		tint.value.set(r2() * 0.24 * hue, (1 + r2() * 0.2 * Math.max(0.4, hue)) * sat, (1 + r2() * 0.12) * val);
 		return k;
 	}
-	return { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2, vary };
+	// its body as solid pieces for going limp (creatures/rig.js picks them; people/ragdoll.js
+	// drops them): the same one object each time, refreshed to the body's size now, so the
+	// ragdoll it is in can be found again by it (rag.ragdoll while it lies there)
+	const metaName = new Map(zones.map((z) => [z.b.name, z.name]));
+	const parentOf = (n) => { const b = bone(n); return b?.parent?.isBone ? metaName.get(b.parent.name) || null : null; };
+	const rag = { rig: true, root, pieces: [], mass: 0, height: meta.height || 2, ragdoll: false, rested: false, at: null };
+	function rig() {
+		const sc = root.scale.x || 1;
+		const R2 = ragdollPieces(meta, parentOf, { scale: sc, max: GFX_PHONE ? 14 : 22 });
+		const zone = new Map(zones.map((z) => [z.name, z]));
+		rag.pieces = R2.pieces.map((p) => { const z = zone.get(p.n); return z ? { ...p, b: z.b, tail: z.tail } : null; }).filter(Boolean);
+		rag.mass = R2.mass; rag.height = (meta.height || 2) * sc;
+		return rag;
+	}
+	const c = { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2, vary, rig, rag };
+	return c;
 }
 
 // a creature's paint with a colour turn of its own: the hide's colour (only the painted map, not

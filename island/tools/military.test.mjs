@@ -259,3 +259,39 @@ test('a base: dressed, lit, its pad graded into the ground, a handful of draws',
 		assert.ok(out.banks >= 7 && out.banks <= 70, `banks ${out.banks}`);
 	}
 });
+
+test('a helicopter on the scene flies the fight: orbits, flanks across, runs in and breaks away, hovers; never below its floor', async () => {
+	const { heliAirState, heliTacticStep, HELI_AIR } = await import('../src/military/flight.js');
+	let seed = 7;
+	const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+	const ground = (x, z) => 10 + Math.sin(x * 0.01) * 6;
+	const at = { x: 0, z: 0 }, A = heliAirState(90, 80, 0, Math.PI / 2);
+	const sides = new Set(), seen = { minAlt: 1e9, maxSpd: 0, maxRoll: 0, maxPitch: 0, minPitch: 0 };
+	for (let t = 0; t < 180; t += 1 / 60) {
+		heliTacticStep(A, at, 1 / 60, ground, { rnd, i: 0 });
+		const alt = A.pos.y - ground(A.pos.x, A.pos.z), spd = Math.hypot(A.vel.x, A.vel.z);
+		for (const v of [A.pos.x, A.pos.y, A.pos.z, A.yaw, A.pitch, A.roll]) assert.ok(Number.isFinite(v), 'finite');
+		seen.minAlt = Math.min(seen.minAlt, alt); seen.maxSpd = Math.max(seen.maxSpd, spd); seen.maxRoll = Math.max(seen.maxRoll, Math.abs(A.roll));
+		seen.maxPitch = Math.max(seen.maxPitch, A.pitch); seen.minPitch = Math.min(seen.minPitch, A.pitch);
+		sides.add(Math.round(Math.atan2(A.pos.z, A.pos.x) / (Math.PI / 2)));
+		if (A.mode === 'run') assert.ok(Math.abs(wrapA(Math.atan2(-A.pos.x, -A.pos.z) - A.yaw)) < 1.2 || A.modeT < 2.5, 'the nose comes round onto the target on a run');
+	}
+	const modes = new Set(A.log);
+	for (const m of ['flank', 'run', 'break', 'hover', 'orbit']) assert.ok(modes.has(m), `it flew a ${m} (${A.log.join(' ')})`);
+	assert.ok(sides.size >= 4, 'it has been all the way round and across the scene');
+	assert.ok(seen.minAlt >= HELI_AIR.floor - 0.5, `never under its floor: ${seen.minAlt.toFixed(1)} m`);
+	assert.ok(seen.maxSpd <= HELI_AIR.flankV + 1 && seen.maxSpd > HELI_AIR.orbitV + 5, `fast on a dash (${seen.maxSpd.toFixed(1)} m/s)`);
+	assert.ok(seen.maxRoll > 0.15 && seen.maxRoll <= 0.55, `rolled into its turns: ${seen.maxRoll.toFixed(2)}`);
+	assert.ok(seen.maxPitch > 0.15 && seen.minPitch < -0.05, `nose down to go, up to stop: ${seen.minPitch.toFixed(2)}..${seen.maxPitch.toFixed(2)}`);
+	// the police: tight, nose on the suspect, never a run
+	const P = heliAirState(60, 70, 0, 0), ran = [];
+	for (let t = 0; t < 120; t += 1 / 60) { ran.push(heliTacticStep(P, at, 1 / 60, ground, { rnd, tight: true })); }
+	assert.ok(!ran.includes('run') && ran.includes('flank'), 'the police flank but never run in');
+	const dP = Math.hypot(P.pos.x, P.pos.z);
+	assert.ok(dP < 110, `kept close: ${dP.toFixed(0)} m`);
+	// going home: straight off toward the base
+	const H = heliAirState(0, 70, 0, 0);
+	for (let t = 0; t < 20; t += 1 / 60) heliTacticStep(H, at, 1 / 60, ground, { depart: { x: 3000, z: 0 } });
+	assert.ok(H.pos.x > 500 && H.mode === 'depart', `off home: ${H.pos.x.toFixed(0)} m`);
+});
+const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));

@@ -107,10 +107,11 @@ export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = (
 		const air = c.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * cell.E) / 1000;       // (as the terrain's, globeterrain.js)
 		// thinner where the land is farmed (its slope as the terrain has it, 1 - the normal's up)
 		const s1 = 1 - 1 / Math.hypot(1, slope);
-		const farmable = Math.max(sst(380, 560, c.RAIN) * sst(3, 9, c.TEMP) * (1 - (1 - sst(650, 850, c.RAIN)) * Math.max(sst(0.3, 0.45, c.TREES), sst(12, 15, c.TEMP) * sst(250, 450, h))), sst(150, 260, c.RAIN) * (1 - sst(300, 600, h)) * sst(12, 16, c.TEMP) * 0.75) * (1 - sst(0.004, 0.012, s1)) * (1 - sst(1200, 2200, h));
-		// (meadow country, as the terrain has it: the woods in hard-edged blocks, on the slopes more than the flat)
+		// (meadow country, as the terrain has it: the woods in hard-edged blocks, on the slopes more
+		// than the flat, and the pastures climbing the hillsides)
 		const meadow = sst(550, 750, c.RAIN) * sst(3, 7, c.TEMP) * (1 - sst(15, 19, c.TEMP));
-		return { k: sst(0.44 + 0.045 * meadow, 0.56 - 0.045 * meadow, c.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * (0.12 + 0.1 * meadow) + sst(0.01, 0.06, s1) * 0.12 * meadow) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, s1)), air, meadow };
+		const farmable = Math.max(sst(380, 560, c.RAIN) * sst(3, 9, c.TEMP) * (1 - (1 - sst(650, 850, c.RAIN)) * Math.max(sst(0.3, 0.45, c.TREES), sst(12, 15, c.TEMP) * sst(250, 450, h))), sst(150, 260, c.RAIN) * (1 - sst(300, 600, h)) * sst(12, 16, c.TEMP) * 0.75) * (1 - sst(0.004 + 0.02 * meadow, 0.012 + 0.05 * meadow, s1)) * (1 - sst(1200, 2200, h));
+		return { k: sst(0.44 + 0.045 * meadow, 0.56 - 0.045 * meadow, c.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * (0.12 + 0.1 * meadow) + sst(0.01, 0.06, s1) * 0.2 * meadow) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, s1)), air, meadow };
 	}
 	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide.
 	// The far tier's grid is three of the near's to a side and shares its middles: in the near

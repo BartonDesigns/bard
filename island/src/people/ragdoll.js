@@ -9,6 +9,12 @@
 // bonnet. Rapier (vehicles/physics.js loads it), in a world of its own: the ground under
 // the fallen as a height field, the buildings as boxes, the cars as moving blocks.
 // Few at once (two on a phone); when a body comes to rest it is left lying as it fell.
+//
+// A creature goes limp the same way (creatures/rig.js reads its pieces off its own rig: the
+// hound's legs hinge at the knees, its neck and tail flop; the goblin's arms swing), through
+// the same hit(): a rig descriptor { rig: true, root, pieces, mass } stands where a person's
+// P does, and its bones follow the pieces until it rests. Knocked down and not killed, it is
+// handed back to its own motion (release) from where it lies.
 
 import * as THREE from 'three';
 import { specOf } from '../bay/cars.js';
@@ -41,7 +47,8 @@ export function massOf(P) {
 }
 
 export function createRagdolls({ world, isPhone }) {
-	const MAX = isPhone ? 2 : 4;
+	// (the pieces are the cost: two people's worth on a phone, a creature a dozen of its own)
+	const MAX = isPhone ? 4 : 8, PIECES = isPhone ? 42 : 120;
 	let R = null, W3 = null, loading = null;
 	const live = [];                                  // { P, parts, joints, t, still, onRest }
 	const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _m = new THREE.Matrix4();
@@ -63,9 +70,11 @@ export function createRagdolls({ world, isPhone }) {
 	let ground = null, gx = 1e9, gz = 1e9;
 	// (a car someone is pulled out of is left out for a moment: they start inside it)
 	const solids = [], cars = new Map(), ignore = new Map();
+	// (the floor a creature fell on, where its own world knows it better: the Deep, the Moon)
+	let gridFloor = null;
 	function regrid(cx, cz) {
 		const Wd = world(), I = Wd.island;
-		const floorAt = (x, z) => Math.max(I.heightAt(x, z), I.extraFloor ? I.extraFloor(x, z, 1e4) : -1e9);
+		const floorAt = gridFloor || ((x, z) => Math.max(I.heightAt(x, z), I.extraFloor ? I.extraFloor(x, z, 1e4) : -1e9));
 		gx = Math.round(cx / CELL) * CELL; gz = Math.round(cz / CELL) * CELL;
 		const H = new Float32Array((N + 1) * (N + 1)), half = N * CELL / 2;
 		for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) H[i + j * (N + 1)] = floorAt(gx - half + j * CELL, gz - half + i * CELL);
@@ -156,7 +165,44 @@ export function createRagdolls({ world, isPhone }) {
 		// (the root's offset from the pelvis piece, in its frame)
 		const rootB = bones[map.root], rw = rootB.getWorldPosition(new THREE.Vector3());
 		const rootOff = rw.sub(parts.pelvis.pos0).applyQuaternion(Qhi);
-		return { parts, joints, Qhi, rootOff, mass };
+		return { parts, joints, Qhi, rootOff, mass, order: SEG.map((s) => s.n), rootName: 'pelvis', n: SEG.length };
+	}
+	// ---------- a creature going limp: its pieces from its own rig (creatures/rig.js) ----------
+	// every piece starts turned as the body's root is, its capsule turned inside it, so a hinge's
+	// axis is the model's own (x across the body, z along it) in every piece
+	function buildRig(G) {
+		G.root.updateMatrixWorld(true);
+		const Qh = G.root.getWorldQuaternion(new THREE.Quaternion()), Qhi = Qh.clone().invert();
+		const parts = {}, order = [];
+		for (const s of G.pieces) {
+			const a = s.b.getWorldPosition(new THREE.Vector3());
+			const b = s.tail.clone().applyMatrix4(s.b.matrixWorld);
+			const dir = b.clone().sub(a), len = Math.max(0.03, dir.length());
+			dir.divideScalar(len);
+			const mid = a.clone().add(b).multiplyScalar(0.5);
+			const rb = W3.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(mid.x, mid.y, mid.z).setRotation({ x: Qh.x, y: Qh.y, z: Qh.z, w: Qh.w }).setLinearDamping(0.12).setAngularDamping(1.6).setCcdEnabled(true).setCanSleep(true));
+			const cq = Qhi.clone().multiply(_q.setFromUnitVectors(UP, dir));
+			W3.createCollider(R.ColliderDesc.capsule(Math.max(0.01, len / 2 - s.r * 0.5), s.r).setRotation({ x: cq.x, y: cq.y, z: cq.z, w: cq.w }).setMass(G.mass * s.m).setFriction(0.9).setRestitution(0).setCollisionGroups(GROUPS), rb);
+			parts[s.n] = { s, rb, a, b, dir, bone: s.b, Bw0: s.b.getWorldQuaternion(new THREE.Quaternion()), pos0: mid, axisW: s.hinge ? (s.hinge === 'z' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0)).applyQuaternion(Qh) : null };
+			order.push(s.n);
+		}
+		const joints = [];
+		for (const s of G.pieces) {
+			if (!s.up || !parts[s.up]) continue;
+			const c = parts[s.n], p = parts[s.up];
+			const la = c.a.clone().sub(p.pos0).applyQuaternion(Qhi), lb = c.a.clone().sub(c.pos0).applyQuaternion(Qhi);
+			if (s.hinge) {
+				// a knee, an elbow, a wrist: it bends in the body's own plane, so far either way of how it was held
+				const ax = s.hinge === 'z' ? { x: 0, y: 0, z: 1 } : { x: 1, y: 0, z: 0 };
+				const j = W3.createImpulseJoint(R.JointData.revolute({ x: la.x, y: la.y, z: la.z }, { x: lb.x, y: lb.y, z: lb.z }, ax), p.rb, c.rb, true);
+				j.setLimits(-1.3, 1.3);
+				joints.push({ j, tone: 0 });
+			} else joints.push({ j: W3.createImpulseJoint(R.JointData.spherical({ x: la.x, y: la.y, z: la.z }, { x: lb.x, y: lb.y, z: lb.z }), p.rb, c.rb, true), tone: s.tone || 0.3, m: G.mass * s.m, rb: c.rb });
+		}
+		const rootName = order[0];
+		const rootB = parts[rootName].bone, rw = rootB.getWorldPosition(new THREE.Vector3());
+		const rootOff = rw.sub(parts[rootName].pos0).applyQuaternion(Qhi);
+		return { parts, joints, Qhi, rootOff, mass: G.mass, order, rootName, n: order.length, rig: true };
 	}
 	// the muscle tone: each free joint pulled gently back toward how it was held, fading
 	// (where the joints have no motors, the limbs' own turning is damped instead, as stiffly)
@@ -171,18 +217,20 @@ export function createRagdolls({ world, isPhone }) {
 	}
 
 	// ---------- the bones following the pieces ----------
-	function pose(D) {
+	function pose(D, P = null) {
 		const Qhi = D.Qhi;
-		for (const s of SEG) {
-			const pc = D.parts[s.n], r = pc.rb.rotation();
+		for (const n of D.order) {
+			const pc = D.parts[n], r = pc.rb.rotation();
 			// its turn since it went limp, laid on the bone as it was then
 			_q.set(r.x, r.y, r.z, r.w).multiply(Qhi).multiply(pc.Bw0);
 			const parent = pc.bone.parent;
 			parent.getWorldQuaternion(_q2);
 			pc.bone.quaternion.copy(_q2.invert().multiply(_q));
-			if (s.n === 'pelvis') {
+			if (n === D.rootName) {
 				const t = pc.rb.translation();
 				_v.copy(D.rootOff).applyQuaternion(_q2.set(r.x, r.y, r.z, r.w)).add(_v2.set(t.x, t.y, t.z));
+				// (where the body is now and which way it faces: for the one that gets up again)
+				if (P?.rig) { _v2.set(0, 0, 1).applyQuaternion(_q2); P.at = { x: _v.x, y: _v.y, z: _v.z, yaw: Math.atan2(_v2.x, _v2.z) }; }
 				parent.worldToLocal(_v);
 				pc.bone.position.copy(_v);
 			}
@@ -199,17 +247,21 @@ export function createRagdolls({ world, isPhone }) {
 	// fold and the trunk crumples down on the spot instead of toppling over like a plank
 	function hit(P, how, onRest) {
 		if (!P || P.ragdoll) return false;
-		if (live.length >= MAX) { const old = live.shift(); finish(old); }
-		P.ragdoll = true;
+		if (P.rig && !P.pieces?.length) return false;
+		// (room made for it: the oldest left lying where they are)
+		const want = P.rig ? P.pieces.length : SEG.length;
+		while (live.length && (live.length >= MAX || live.reduce((a, L) => a + L.n, 0) + want > PIECES)) finish(live.shift());
+		P.ragdoll = true; P.rested = false;
 		ready().then(() => start(P, how, onRest)).catch((e) => { lastErr = String(e && e.stack || e).slice(0, 400); P.ragdoll = false; });
 		return true;
 	}
 	function start(P, how, onRest) {
 		if (!P.ragdoll) return;
 		const c = P.root.getWorldPosition(new THREE.Vector3());
-		if (!live.length || Math.hypot(c.x - gx, c.z - gz) > 6) regrid(c.x, c.z);
+		if (how.floor) gridFloor = how.floor; else if (!live.length) gridFloor = null;
+		if (!live.length || Math.hypot(c.x - gx, c.z - gz) > 6 || how.floor) regrid(c.x, c.z);
 		if (how.ignore) ignore.set(how.ignore, 1.2);
-		const D = build(P);
+		const D = P.rig ? buildRig(P) : build(P);
 		for (const m of P.meshes || []) m.frustumCulled = false;
 		const limp = Math.max(0, Math.min(1, how.limp ?? 0)), tone0 = 1 - 0.92 * limp;
 		tone(D, tone0);
@@ -229,7 +281,8 @@ export function createRagdolls({ world, isPhone }) {
 		// gone limp: the legs give way under them (each knee folds the way it bends, the thigh
 		// swinging out from under the hips), the trunk drops, and a slight lean to one side or
 		// the other so no two fall alike
-		if (limp > 0) {
+		if (limp > 0 && D.rig) limpRig(D, limp);
+		else if (limp > 0) {
 			const side = (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.8) * limp;
 			for (const n of ['shinL', 'shinR']) {
 				const shin = D.parts[n], thigh = D.parts[shin.s.up], ax = shin.axisW;
@@ -242,20 +295,61 @@ export function createRagdolls({ world, isPhone }) {
 			const fwd = _v2.set(0, 0, 1).applyQuaternion(_q.copy(D.Qhi).invert());
 			D.parts.chest.rb.setAngvel({ x: fwd.x * side, y: 0, z: fwd.z * side }, true);
 		}
-		live.push({ P, D, t: 0, still: 0, onRest, tone0 });
+		live.push({ P, D, t: 0, still: 0, onRest, tone0, n: D.n });
+	}
+	// a creature's legs going from under it: each hinged piece (a shin, a forearm, a foot) folds
+	// about its hinge, the piece above swinging the other way, the trunk dropping, and the body
+	// rolling a little to one side, so no two fall alike
+	function limpRig(D, limp) {
+		const side = (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.9) * limp;
+		for (const n of D.order) {
+			const pc = D.parts[n];
+			if (pc.axisW) {
+				const k = (2.4 + Math.random() * 1.6) * limp * (Math.random() < 0.5 ? -1 : 1);
+				_v.copy(pc.axisW).multiplyScalar(k); pc.rb.setAngvel({ x: _v.x, y: _v.y, z: _v.z }, true);
+				const up = pc.s.up && D.parts[pc.s.up];
+				if (up) { _v.copy(pc.axisW).multiplyScalar(-k * 0.4); up.rb.setAngvel({ x: _v.x, y: _v.y, z: _v.z }, true); }
+			} else if (pc.s.tone >= 0.7) { const t = pc.rb.linvel(); pc.rb.setLinvel({ x: t.x, y: t.y - 1.6 * limp, z: t.z }, true); }
+		}
+		const root = D.parts[D.rootName], fwd = _v2.set(0, 0, 1).applyQuaternion(_q.copy(D.Qhi).invert());
+		root.rb.setAngvel({ x: fwd.x * side, y: 0, z: fwd.z * side }, true);
 	}
 	function finish(L) {
 		for (const J of L.D.joints) W3.removeImpulseJoint(J.j, false);
 		for (const pc of Object.values(L.D.parts)) W3.removeRigidBody(pc.rb);
 		L.done = true;
+		L.P.rested = true;
 	}
-	// back on their feet (or taken away): the bones handed back to the walk
+	// back on their feet (or taken away): the bones handed back to the walk (a creature's to its
+	// own motion, which lays its pose over them again: creatures/motion.js)
 	function release(P) {
 		const i = live.findIndex((L) => L.P === P);
 		if (i >= 0) { finish(live[i]); live.splice(i, 1); }
-		P.ragdoll = false;
+		P.ragdoll = false; P.rested = false;
+		if (P.rig) return;
 		for (const b of P.bones) b.quaternion.identity();
 		P.bones[P.map.root].position.copy(P.rest.heads[P.map.root]);
+	}
+	// a blow to one already limp (a round into a fallen beast): the piece nearest it takes the
+	// momentum, by weight
+	function nudge(P, point, vel, mass = 30) {
+		const L = live.find((q) => q.P === P);
+		if (!L || !point || !vel) return false;
+		let best = null, bd = 1e9;
+		for (const n of L.D.order) { const t = L.D.parts[n].rb.translation(); const d = Math.hypot(t.x - point.x, t.y - point.y, t.z - point.z); if (d < bd) { bd = d; best = L.D.parts[n]; } }
+		if (!best) return false;
+		const share = mass / (mass + L.D.mass), m = best.rb.mass();
+		best.rb.applyImpulse({ x: vel.x * share * m * 1.5, y: vel.y * share * m * 1.5, z: vel.z * share * m * 1.5 }, true);
+		L.still = 0;
+		return true;
+	}
+	// killed while down: what tone it had goes out of it
+	function slacken(P) {
+		const L = live.find((q) => q.P === P);
+		if (!L) return;
+		L.tone0 = 0.08; L.t = Math.max(L.t, 1.6); tone(L.D, 0.08);
+		for (const n of L.D.order) { const pc = L.D.parts[n]; if (pc.s.tone >= 0.7 || pc.s.m > 0.15) { const t = pc.rb.linvel(); pc.rb.setLinvel({ x: t.x, y: t.y - 1.2, z: t.z }, true); } }
+		L.still = 0;
 	}
 
 	let acc = 0, lastErr = null;
@@ -263,7 +357,7 @@ export function createRagdolls({ world, isPhone }) {
 		if (down.length) tidy();
 		if (!live.length || !W3) return;
 		let cx = 0, cz = 0;
-		for (const L of live) { const t = L.D.parts.pelvis.rb.translation(); cx += t.x / live.length; cz += t.z / live.length; }
+		for (const L of live) { const t = L.D.parts[L.D.rootName].rb.translation(); cx += t.x / live.length; cz += t.z / live.length; }
 		for (const [k, v] of ignore) if (v - dt <= 0) ignore.delete(k); else ignore.set(k, v - dt);
 		if (Math.hypot(cx - gx, cz - gz) > 8) regrid(cx, cz);
 		syncCars(cx, cz);
@@ -276,12 +370,12 @@ export function createRagdolls({ world, isPhone }) {
 			L.t += dt;
 			// (the tone goes out of them over the first second and a half)
 			if (L.t < 1.6) tone(L.D, Math.max(0.08, (L.tone0 ?? 1) * (1 - L.t / 1.6)));
-			pose(L.D);
+			pose(L.D, L.P);
 			let fast = 0;
 			for (const pc of Object.values(L.D.parts)) { const v = pc.rb.linvel(); fast = Math.max(fast, Math.hypot(v.x, v.y, v.z)); }
 			L.still = fast < 0.12 ? L.still + dt : 0;
 			// at rest (or long enough): left lying as they fell
-			if (L.still > 1.2 || L.t > 12) { finish(L); live.splice(i, 1); down.push(L.P); L.onRest?.(L.P); }
+			if (L.still > 1.2 || L.t > 12) { finish(L); live.splice(i, 1); if (!L.P.rig) down.push(L.P); L.onRest?.(L.P); }
 		}
 	}
 	// the fallen, left where they lie until you are well away: then theirs to walk again
@@ -296,8 +390,8 @@ export function createRagdolls({ world, isPhone }) {
 		}
 	}
 	const info = () => {
-		const L = live[0], t = L?.D.parts.pelvis.rb.translation(), h = L?.D.parts.head.rb.translation(), q = L?.D.parts.thighL.bone.quaternion;
-		return { ready: !!R, live: live.length, max: MAX, err: lastErr, pelvis: t && [t.x, t.y, t.z].map((v) => +v.toFixed(2)), head: h && [h.x, h.y, h.z].map((v) => +v.toFixed(2)), thigh: q && [q.x, q.y, q.z, q.w].map((v) => +v.toFixed(2)) };
+		const L = live[0], t = L?.D.parts[L.D.rootName].rb.translation(), h = L?.D.parts.head?.rb.translation(), q = L?.D.parts.thighL?.bone.quaternion;
+		return { ready: !!R, live: live.length, pieces: live.reduce((a, q2) => a + q2.n, 0), max: MAX, err: lastErr, rigs: live.filter((q2) => q2.P.rig).length, pelvis: t && [t.x, t.y, t.z].map((v) => +v.toFixed(2)), head: h && [h.x, h.y, h.z].map((v) => +v.toFixed(2)), thigh: q && [q.x, q.y, q.z, q.w].map((v) => +v.toFixed(2)) };
 	};
-	return { hit, update, release, ready, info, massOf };
+	return { hit, update, release, ready, info, massOf, nudge, slacken };
 }

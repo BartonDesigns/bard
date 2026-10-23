@@ -14,7 +14,7 @@ import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
 import { hatRim } from './garment-hats.js';
 import { neckDrop } from './garment-shape.js';
-import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
+import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometrySteps, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
 import { loadFaces, faceDNA, shapeFace, skinAttribute, tidyEyes, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
@@ -30,6 +30,7 @@ import { shapeBuild } from './build.js';
 import { loadKitModels } from './kit-models.js';
 import { GFX_PHONE } from '../world/device.js';
 import { boundBody, cullPosed } from './body-bounds.js';
+import { runAll } from '../world/buildslice.js';
 import { mulberry32 as rng } from '../noise.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
@@ -254,7 +255,27 @@ export const bodyCount = () => live;
 // and each of them, held weakly (one dropped without freeBody is let go with it), for whatever
 // draws something under every body: the soft shade at their feet (world/footshade.js)
 export const liveBodies = new Set();
-export function buildPerson(A, d) {
+export function buildPerson(A, d) { return runAll(buildPersonSteps(A, d)); }
+// bodies built a few steps a frame, one at a time: queue(buildPersonSteps(...)) answers with the
+// body when its last step has run; pump() runs the steps, ms a frame, from the owner's update
+export function bodySlicer(ms = 6) {
+	const jobs = [];
+	return {
+		queue: (gen) => new Promise((res, rej) => jobs.push({ gen, res, rej })),
+		pump() {
+			const b = jobs[0];
+			if (!b) return;
+			const t0 = performance.now();
+			try { do { const r = b.gen.next(); if (r.done) { jobs.shift(); b.res(r.value); return; } } while (performance.now() - t0 < ms); }
+			catch (e) { jobs.shift(); b.rej(e); }
+		},
+		busy: () => jobs.length > 0,
+	};
+}
+// the same in steps (a generator: its yields are where a frame may end), so the crowd's bodies
+// can be built a few steps a frame instead of one person in one long frame (people.js). A body
+// built this way is not in the scene until it returns.
+export function* buildPersonSteps(A, d) {
 	const t0 = performance.now();
 	live++;
 	const { D, targets, unit } = A;
@@ -296,6 +317,7 @@ export function buildPerson(A, d) {
 	const map = Object.fromEntries(bones.map((b, i) => [b.name, i]));
 	const rest = { heads, tails, dirs: heads.map((h, i) => tails[i] ? tails[i].clone().sub(h).normalize() : new THREE.Vector3(0, 1, 0)) };
 	const cut = landmarks(A, p, heads, map, d.height);
+	yield;
 	// the ear lobes, for earrings: the lowest point of each ear
 	const lobes = [null, null];
 	{
@@ -346,7 +368,8 @@ export function buildPerson(A, d) {
 	if (!d.skinOverride) { const ink = inkFor(d); if (ink.length) applyInk(skinMat, P, ink, flashAtlas().tex); }
 	P._S = S;
 	P.redress = (o) => dress(A, P, o);
-	dress(A, P, outfitOf(d));
+	P.redressSteps = (o) => dressSteps(A, P, o);
+	yield* dressSteps(A, P, outfitOf(d));
 	// lashes, brows, the wet line: one small mesh, closing and lifting with the face
 	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), null, brow.grey);
 	if (dg) {
@@ -375,10 +398,16 @@ export function buildPerson(A, d) {
 
 // dress (or re-dress) a body: its skin where the clothes leave it bare, the cloth, the
 // small things, the hair
-function dress(A, P, o) {
+function dress(A, P, o) { return runAll(dressSteps(A, P, o)); }
+// the same in steps (people.js runs them a few a frame). Re-dressing a body already dressed, what
+// it wears stays on, and the new clothes and hair are kept hidden, until the last step has them
+// all ready: no one stands bare for the frames in between.
+function* dressSteps(A, P, o) {
 	const d = P.dna, p = P._p, cut = P.cut, { bones, map, skeleton, rest, body } = P;
-	for (const m of [P.skin, P.cloth, P.acc]) if (m) { m.geometry.dispose(); m.removeFromParent(); }
-	for (const b of P.bags || []) b.remove();
+	// (P.skin and the rest point at the old pieces until each new one is made, in the same step,
+	// so the motion and the fade never find a body without a skin between frames)
+	const swap = !!P.skin, old = swap ? [P.skin, P.cloth, P.acc, P.hair, P.beard].filter(Boolean) : [], oldHair = swap ? [P.hair, P.beard] : [], oldBags = swap ? P.bags || [] : [];
+	if (!swap) { for (const m of [P.skin, P.cloth, P.acc]) if (m) { m.geometry.dispose(); m.removeFromParent(); } for (const b of P.bags || []) b.remove(); }
 	P.bags = [];
 	P.outfit = o;
 	const R = regions(o, cut);
@@ -387,8 +416,8 @@ function dress(A, P, o) {
 	// (the skin hidden under the cloth is left out, a little in from the garment's edge, so
 	// nothing pokes through)
 	const covered = (c, tri) => { const k = kinds(tri); return R.top(c, tri, k, 0.035) || R.outer(c, tri, k, 0.035) || R.bottom(c, tri, k, 0.035) || R.shoes(c, tri, k, 0.02); };
-	const add = (geo, mat, shadow = true) => { const m = cullPosed(P, new THREE.SkinnedMesh(geo, mat)); m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); return m; };
-	const bodyGeo = geometry(A, p, A.body, (c, tri) => !covered(c, tri));
+	const add = (geo, mat, shadow = true) => { const m = cullPosed(P, new THREE.SkinnedMesh(geo, mat)); m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); if (swap) m.visible = false; return m; };
+	const bodyGeo = yield* geometrySteps(A, p, A.body, (c, tri) => !covered(c, tri));
 	faceMorphs(A, bodyGeo, P._S);
 	bodyGeo.setAttribute('skinx', skinAttribute(A.faces, bodyGeo.userData.src));
 	// the scalp: where close-cropped hair is painted (hair.js), to the cut's own hairline
@@ -399,6 +428,7 @@ function dress(A, P, o) {
 	bodyGeo.userData.scalp0 = sc.slice();
 	P.skin = add(bodyGeo, P.skinMat);
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
+	yield;
 	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
 	// locs, braids and cornrows, and stands in while a style is on its way)
 	const hat = (o.acc || []).find((q) => /^(cap|trucker|peaked|beret|beanie|bucket|sunhat|fedora|trilby|helmet|hardhat|hood|hazhood|visor)$/.test(q.kind));
@@ -415,9 +445,12 @@ function dress(A, P, o) {
 	P.skinMat.userData.beard.value.set(cols.stubble.r, cols.stubble.g, cols.stubble.b, beard ? beard.stubble : 0);
 	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));
 	P.hairWant = { style: showHair && (H.style || !FLUFFY.has(cutName)) ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
+	if (swap) P.hair = P.beard = null;          // (the old hair stays on, in old, till the end; hairUp would take it off)
 	hairUp(A, P);
+	if (swap) for (const m of [P.hair, P.beard]) if (m) m.visible = false;
+	yield;
 	// the clothes: one mesh, painted by garment
-	const clothGeo = clothGeometry(A, p, o, cut, R);
+	const clothGeo = yield* clothGeometrySteps(A, p, o, cut, R);
 	// Held items use the dressed torso's actual rest bounds, not bare-skin allowances.
 	const cp = clothGeo.attributes.position, cs = clothGeo.attributes.slot;
 	const envelope = { front: cut.frontZ, back: cut.backZ, width: Math.max(cut.waistX, cut.shoulderX * .92) };
@@ -436,6 +469,7 @@ function dress(A, P, o) {
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	else { const cloth=P.cloth,caps=clothCapsules(P); calibrateCloth(clothGeo,caps); cloth.userData.capsules=caps; cloth.onBeforeRender=()=>poseCloth(P,caps,P.clothMat.userData.U,cloth); }
+	yield;
 	// the bags they carry: where each goes on this body, the straps laid over the clothes (bags.js)
 	const carried = (o.acc || []).filter((q) => BAG_KINDS.has(q.kind));
 	const surf = carried.some((q) => q.kind === 'backpack' || q.kind === 'crossbody' || q.kind === 'guitar') ? torsoSurface(A, p, clothGeo, bones, part, cut) : null;
@@ -448,6 +482,14 @@ function dress(A, P, o) {
 	// and the bags themselves, shared by everyone who carries one
 	P.bags = fits.map((f) => attachBag(P, f, PHONE));
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
+	if (swap) {
+		// the old clothes off, the new on, in the same frame
+		for (const m of old) { m.removeFromParent(); m.geometry.dispose(); }
+		for (const m of oldHair) if (m?.material?.userData?.U) m.material.dispose();
+		for (const b of oldBags) b.remove();
+		for (const m of [P.skin, P.cloth, P.acc, P.hair, P.beard]) if (m) m.visible = true;
+		if (P.fadeK !== undefined) { const k = P.fadeK; P.fadeK = -1; fadePerson(P, k); }
+	}
 	return P;
 }
 
@@ -552,10 +594,11 @@ function hairUp(A, P) {
 }
 
 // a skinned piece of the body from a face list: [vertex, uv] pairs, three per triangle
-function geometry(A, p, faces, select) {
+function* geometrySteps(A, p, faces, select) {
 	const V = [], T = [], SI = [], SW = [], I = [], key = new Map(), src = [];
 	const c = [0, 0, 0];
 	for (let i = 0; i < faces.length; i += 6) {
+		if (i && (i % 24576) === 0) yield;
 		const tri = [faces[i], faces[i + 2], faces[i + 4]];
 		for (let ax = 0; ax < 3; ax++) c[ax] = (p[tri[0] * 3 + ax] + p[tri[1] * 3 + ax] + p[tri[2] * 3 + ax]) / 3;
 		if (select && !select(c, tri)) continue;
@@ -572,6 +615,7 @@ function geometry(A, p, faces, select) {
 			I.push(k);
 		}
 	}
+	yield;
 	const g = new THREE.BufferGeometry();
 	g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3));
 	g.setAttribute('uv', new THREE.Float32BufferAttribute(T, 2));

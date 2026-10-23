@@ -77,3 +77,9 @@ The build and all 15 browser check groups pass, including all 14 captures at des
 The owner requested automatic slides again after the static-image release. The 14-image loader now starts randomly and chooses another image every ten seconds without immediate repeats. No slide numbers, screenshot subtitles or extra descriptive copy return. A compact Pause/Play button controls rotation; reduced-motion preferences keep artwork static. Hiding the loader clears its timer. Entry, retry and cancellation guards are unchanged. This supersedes the static-selection behavior below. No Worker change is required.
 
 Validation: build, syntax and diff checks pass. All 14 UI browser check groups pass, including responsive previews for every image, timed rotation, pause, reduced-motion stability, retry and cancellation/reentry. The real Moon engine check from the prior release was not repeated for this presentation-only change.
+
+## The Bard Chronicle (22 October 2026)
+
+The loading screen now carries a lightweight **Chronicle** tab from its first frame, before the engine adds Character, Inventory and Account. It presents the latest merged improvements as short player-facing cards in Bard's gold, ink and display typography. The compact live data block is in `loading-screen.js`; the durable readable history is `docs/game-improvements.md`.
+
+The Chronicle uses ordinary page elements and no images, thumbnails or WebGL work. Opening it does not ask the renderer for another scene while the world is building. The manifest is capped at twelve cards, newest first, and `node tools/bard-updates-check.mjs` verifies its checkpoint, order, unique IDs, reading length and matching documentation.

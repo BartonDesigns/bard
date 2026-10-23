@@ -171,8 +171,11 @@ export function armFrame(P, side) {
 	const inner = perp(up.clone().negate().addScaledVector(fore, up.dot(fore)).lengthSq() > 1e-6 ? up.clone().negate().addScaledVector(fore, up.dot(fore)) : new THREE.Vector3(0, 0, 1));
 	const ulnar = perp(f5.clone().sub(f2));
 	const fingers = [2, 3, 4, 5].map((k) => m[`finger${k}-1.${side}`]).filter((i) => i != null).map((i) => bindAt(P, i));
+	// (the upper arm: its axis from the elbow to the shoulder, and the bone the sleeve above the
+	// elbow rides on, the lower of the two upper-arm bones)
+	const Au = S.clone().sub(E).normalize(), iU = m['upperarm02.' + side] ?? iS ?? iE;
 	return {
-		side, sign: side === 'L' ? 0 : 1, W, E, S, A, U, V, Lf, Lu, iE, iT: iT ?? iE, iW, iS,
+		side, sign: side === 'L' ? 0 : 1, W, E, S, A, U, V, Au, Lf, Lu, iE, iT: iT ?? iE, iW, iS, iU,
 		inner: angle(inner), seam: angle(inner.clone().add(ulnar).normalize()), placket: angle(ulnar.clone().addScaledVector(U, -0.9).normalize()),
 		fingers, palm: U.clone(),
 	};
@@ -247,22 +250,36 @@ const HEM_DEPTH = { rib: 0.066, button: 0.052, tab: 0.046, storm: 0.014, hem: 0.
 function hemAt(L) { return L.cuff === 'rib' ? 0.003 : L.cuff === 'storm' ? -0.004 : L.cuff === 'hem' ? 0.008 : 0.009; }
 export function layerStations(L, F, { far, lite = false, under = null, glove = false } = {}) {
 	const st = [], k = lite ? 1.7 : 1;
-	const push = (s, off, face, part, fold, sh) => st.push({ s, off, face, part, fold, sh });
+	// (shrink: the radius scaled, 0 at the point that closes the sleeve's far end)
+	const push = (s, off, face, part, fold, sh, shrink = 1) => st.push({ s, off, face, part, fold, sh, shrink });
+	// the sleeve's far end, up at the shoulder, closed: drawn in and shut so the view is never
+	// shown the inside of an open tube (buildGarment bends the sleeve past the elbow up the arm)
+	const cap = (off) => { push(far + 0.03, off, 1, PART.tube, 0, 1, 0); push(far + 0.027, off, 1, PART.tube, 0, 1, 0.42); push(far + 0.018, off, 1, PART.tube, 0, 1, 0.8); push(far + 0.008, off, 1, PART.tube, 0, 1, 0.96); };
 	if (L.length === 'rolled') {
-		// sleeves rolled: the sleeve up the arm, a thick band of three folds just over the elbow,
-		// curled under at its lower edge, and the bare forearm below
-		const lo = F.Lf - 0.014, hi = F.Lf + 0.062, ease = L.ease * 0.8;
-		for (let s = far; s > hi + 0.02; s -= (s > hi + 0.12 ? 0.12 : 0.03 * k)) push(s, ease, 1, PART.tube, 0.6, s - lo);
-		push(hi + 0.012, ease * 0.9, 1, PART.tube, 0.3, hi + 0.012 - lo);
-		const n = lite ? 12 : 21;
+		// sleeves pushed up: the sleeve up the arm, a thick soft roll just over the elbow (the
+		// cloth bunched: one fat fold at its lower edge, two smaller gathers above it fading into
+		// the sleeve), curled under at its lower edge, and the bare forearm below
+		// (the roll sits just below the elbow, its lower edge a thumb's length down the forearm: the
+		// hands' mesh ends raggedly a little short of the elbow, and that end must lie well inside it)
+		const lo = F.Lf - 0.03, hi = F.Lf + 0.05, ease = L.ease * 0.8;
+		cap(ease);
+		// (rings closer through the bend above the elbow, buildGarment: a hand's width above the roll)
+		for (let s = far; s > hi + 0.02; s -= (s > F.Lf + 0.2 ? 0.12 : s > hi + 0.12 ? 0.04 : 0.03 * k)) push(s, ease, 1, PART.tube, 0.6, s - lo);
+		push(hi + 0.012, ease * 0.92, 1, PART.tube, 0.3, hi + 0.012 - lo);
+		push(hi + 0.004, ease * 0.75 + 0.0016, 1, PART.tube, 0.2, hi + 0.004 - lo);
+		const g = (u, c, w) => Math.exp(-Math.pow((u - c) / w, 2));
+		const rollOff = (u) => 0.0065 + 0.0125 * g(u, 0.17, 0.19) + 0.0075 * g(u, 0.5, 0.14) + 0.0045 * g(u, 0.83, 0.11);
+		const n = lite ? 14 : 24;
 		for (let i = 0; i <= n; i++) {
-			const u = 1 - i / n, s = lo + (hi - lo) * u, f = (u * 3) % 1, ki = Math.min(2, Math.floor(u * 3));
-			const bump = 0.0058 * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, f))), 0.55) + (ki === 0 ? 0.0018 : 0);
-			push(s, 0.0045 + bump + 0.0028 * (1 - u), 1, PART.roll, 0.25, 1 + u);
+			const u = 1 - i / n, s = lo + (hi - lo) * u;
+			push(s, rollOff(u), 1, PART.roll, 0.25, 1 + u);
 		}
-		const R = 0.0042;
-		for (let i = 1; i <= (lite ? 3 : 5); i++) { const a = i / (lite ? 3 : 5) * Math.PI; push(lo - Math.sin(a) * R, 0.0045 + 0.0018 + 0.0028 + R * (Math.cos(a) - 1), Math.cos(a), PART.rim, 0, 1); }
-		push(lo + 0.008, 0.0016, -1, PART.rim, 0, 1); push(lo + 0.018, 0.0013, -1, PART.rim, 0, 1);
+		// the roll's lower edge: a full round rim, half the fat fold's thickness, turned under
+		const R = rollOff(0) * 0.5;
+		for (let i = 1; i <= (lite ? 3 : 6); i++) { const a = i / (lite ? 3 : 6) * Math.PI; push(lo - Math.sin(a) * R, rollOff(0) + R * (Math.cos(a) - 1), Math.cos(a), PART.rim, 0, 1); }
+		// (the inside face turned back up under the roll, run a hair into the skin so nothing shows
+		// between the roll and the forearm's end)
+		push(lo + 0.008, -0.001, -1, PART.rim, 0, 1); push(lo + 0.024, -0.002, -1, PART.rim, 0, 1);
 		return { stations: st, hem: lo, offAt: () => 0.012 };
 	}
 	if (L.length !== 'long') return null;
@@ -282,9 +299,11 @@ export function layerStations(L, F, { far, lite = false, under = null, glove = f
 	};
 	// up the arm, densest where it shows: the cuff and the forearm
 	const sTop = L.under ? hem + 0.075 : far;
+	if (!L.under) cap(offAt(far));
 	const steps = [];
-	// (past the elbow the sleeve only has to run on out of view)
-	for (let s = sTop; s > F.Lf + 0.15; s -= 0.12) steps.push(s);
+	// (past the elbow the sleeve only has to run on out of view, bending up the upper arm a
+	// hand's width above the elbow, buildGarment: rings closer through the bend)
+	for (let s = sTop; s > F.Lf + 0.15; s -= (s > F.Lf + 0.2 ? 0.12 : 0.04)) steps.push(s);
 	for (let s = Math.min(sTop, F.Lf + 0.15); s > hem + len + 0.11; s -= (s > F.Lf ? 0.035 : 0.016) * k) steps.push(s);
 	for (let s = Math.min(sTop, hem + len + 0.11); s > hem + len + 0.02; s -= 0.008 * k) steps.push(s);
 	for (let s = Math.min(sTop, hem + len + 0.02); s > hem + len; s -= 0.004 * k) steps.push(s);
@@ -310,10 +329,12 @@ export function layerStations(L, F, { far, lite = false, under = null, glove = f
 const _v = new THREE.Vector3(), _d = new THREE.Vector3();
 // the skin's weights near the wrist, carried over to cloth lying on it; up the forearm,
 // the forearm's own two bones by how far along it is
-function weightsFor(F, s, th, pos, near) {
+function weightsFor(F, s, th, pos, near, up = 0) {
 	const W = new Map();
 	const add = (b, w) => { if (w > 1e-4) W.set(b, (W.get(b) || 0) + w); };
 	const x = Math.max(0, s / F.Lf), w02 = 0.52 * (1 - smooth(0.09, 0.8, x));
+	// (up: the share carried by the upper arm's bone, past the elbow)
+	if (up > 0) { add(F.iU, up); if (up >= 1) return [[F.iU, 1], [0, 0], [0, 0], [0, 0]]; }
 	const t = near.length ? smooth(0.03, 0.052, s) : 1;
 	if (t < 1) {
 		// the nearest skin, weighted by nearness
@@ -324,9 +345,9 @@ function weightsFor(F, s, th, pos, near) {
 			if (best.length < 6) { best.push([d2, q]); best.sort((a, b) => a[0] - b[0]); } else if (d2 < best[5][0]) { best[5] = [d2, q]; best.sort((a, b) => a[0] - b[0]); }
 		}
 		let sum = 0; for (const [d2] of best) sum += 1 / (d2 + 1e-6);
-		for (const [d2, q] of best) for (let k = 0; k < 4; k++) add(q.si[k], q.sw[k] * (1 - t) / (d2 + 1e-6) / sum);
+		for (const [d2, q] of best) for (let k = 0; k < 4; k++) add(q.si[k], q.sw[k] * (1 - t) * (1 - up) / (d2 + 1e-6) / sum);
 	}
-	add(F.iE, (1 - w02) * t); add(F.iT, w02 * t);
+	add(F.iE, (1 - w02) * t * (1 - up)); add(F.iT, w02 * t * (1 - up));
 	const top = [...W].sort((a, b) => b[1] - a[1]).slice(0, 4), tot = top.reduce((a, b) => a + b[1], 0) || 1;
 	return [0, 1, 2, 3].map((k) => top[k] ? [top[k][0], top[k][1] / tot] : [0, 0]);
 }
@@ -334,11 +355,22 @@ function weightsFor(F, s, th, pos, near) {
 // The garment over one body's forearms: one geometry for all its layers and gloves, skinned to
 // the body's own bones (the same indices as the hands' skin), and which of the hands' skin
 // triangles it hides. skinGeo: the hands' own (refined) skin geometry, in the body's bind space.
-export function buildGarment(P, spec, skinGeo, { sides = ['L', 'R'], lite = false, far = null } = {}) {
+export function buildGarment(P, spec, skinGeo, { sides = ['L', 'R'], lite = false, far = null, upper = true } = {}) {
 	const pos = [], nor = [], si = [], sw = [], ga = [], gb = [], idx = [];
 	const frames = {}, hide = new Set();
 	const sp = skinGeo.attributes.position, sn = skinGeo.attributes.normal, ssi = skinGeo.attributes.skinIndex, ssw = skinGeo.attributes.skinWeight, six = skinGeo.index.array;
 	const sideOf = P.bones.map((b) => b.name.endsWith('.L') ? 'L' : b.name.endsWith('.R') ? 'R' : '');
+	// (the bones the hands' mesh is posed on: a vertex up near the elbow with some weight on the
+	// upper arm's bones would be dragged wherever those are, out from under the sleeve, so that
+	// weight is given to the forearm's own bone and the skin's edge stays rigid with the forearm)
+	const foreBone = P.bones.map((b) => /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\./.test(b.name));
+	const settle = (v, iE) => {
+		let moved = 0;
+		for (let k = 0; k < 4; k++) { const w = ssw.getComponent(v, k); if (w > 0 && !foreBone[ssi.getComponent(v, k)]) { moved += w; ssw.setComponent(v, k, 0); } }
+		if (!moved) return;
+		for (let k = 0; k < 4; k++) if (ssi.getComponent(v, k) === iE) { ssw.setComponent(v, k, ssw.getComponent(v, k) + moved); ssw.needsUpdate = true; return; }
+		for (let k = 0; k < 4; k++) if (ssw.getComponent(v, k) === 0) { ssi.setComponent(v, k, iE); ssw.setComponent(v, k, moved); ssi.needsUpdate = ssw.needsUpdate = true; return; }
+	};
 	const topBone = (v) => { let b = 0, w = -1; for (let k = 0; k < 4; k++) if (ssw.getComponent(v, k) > w) { w = ssw.getComponent(v, k); b = ssi.getComponent(v, k); } return b; };
 	for (const side of sides) {
 		const F = armFrame(P, side);
@@ -349,16 +381,41 @@ export function buildGarment(P, spec, skinGeo, { sides = ['L', 'R'], lite = fals
 		const sOf = new Float32Array(sp.count), mine = new Uint8Array(sp.count), near = [];
 		for (let v = 0; v < sp.count; v++) {
 			if (sideOf[topBone(v)] !== side) continue;
-			mine[v] = 1;
+			mine[v] = 1; settle(v, F.iE);
 			_d.fromBufferAttribute(sp, v).sub(F.W); const s = _d.dot(F.A); sOf[v] = s;
 			if (s > -0.012 && s < 0.065) { _v.copy(_d).addScaledVector(F.A, -s); near.push({ s, th: Math.atan2(_v.dot(F.V), _v.dot(F.U)), si: [0, 1, 2, 3].map((k) => ssi.getComponent(v, k)), sw: [0, 1, 2, 3].map((k) => ssw.getComponent(v, k)) }); }
 		}
-		const N = lite ? 10 : 16, farS = far ?? F.Lf + 0.9;
+		// (the sleeve runs to the shoulder and no further, unless the view asks for a length of its
+		// own: s is metres along the arm from the wrist)
+		const N = lite ? 10 : 16, farS = far ?? F.Lf + F.Lu - 0.03;
+		// Past the elbow the sleeve bends up the upper arm, as the arm does: over a hand's width
+		// above the roll or the elbow its axis turns from the forearm's to the upper arm's and the
+		// cloth passes from the forearm's bones to the upper arm's, so a bent arm takes the sleeve
+		// back toward the shoulder, out of the view, never straight on through the camera
+		// (upper: false keeps it straight along the forearm, for a view that poses no upper arm)
+		const S0 = upper ? F.Lf + 0.075 : 1e6, S1 = S0 + 0.1, Q = new THREE.Quaternion();
+		const axisAt = (s, out) => {
+			// the axis point and its frame (the direction, and U and V turned with it) at s
+			if (s <= S0) { out.p.copy(F.W).addScaledVector(F.A, s); out.u.copy(F.U); out.v.copy(F.V); return out; }
+			out.p.copy(F.W).addScaledVector(F.A, S0);
+			const n = 12, ds = (s - S0) / n;
+			for (let i = 0; i < n; i++) {
+				const kk = smooth(S0, S1, S0 + ds * (i + 0.5));
+				_d.copy(F.A).multiplyScalar(1 - kk).addScaledVector(F.Au, kk).normalize();
+				out.p.addScaledVector(_d, ds);
+			}
+			Q.setFromUnitVectors(F.A, _d);
+			out.u.copy(F.U).applyQuaternion(Q); out.v.copy(F.V).applyQuaternion(Q);
+			return out;
+		};
+		const AX = { p: new THREE.Vector3(), u: new THREE.Vector3(), v: new THREE.Vector3() };
 		// a surface of revolution round the forearm, from stations, onto the cloth's arrays
 		const lathe = (stations, slot, ease, fold0) => {
 			const base = pos.length / 3, rows = stations.length, cols = N + 1, P3 = [];
 			for (let i = 0; i < rows; i++) {
 				const S = stations[i];
+				axisAt(S.s, AX);
+				const up = smooth(S0, S1, S.s);
 				for (let j = 0; j < cols; j++) {
 					const th = F.seam + j / N * Math.PI * 2;
 					// bands are stiff: rounder than the arm under them
@@ -367,11 +424,11 @@ export function buildGarment(P, spec, skinGeo, { sides = ['L', 'R'], lite = fals
 					if (circ) { let mean = 0; for (let q = 0; q < 8; q++) mean += env(Math.max(-0.006, S.s), q / 8 * Math.PI * 2); mean /= 8; r = Math.max(r, r + (mean * 1.02 - r) * circ); }
 					// more room at the back of the arm than the front
 					const back = S.part === PART.tube ? 1 + 0.22 * Math.cos(th - F.inner - Math.PI) * S.fold : 1;
-					const R = r + S.off * back;
-					_d.copy(F.U).multiplyScalar(Math.cos(th)).addScaledVector(F.V, Math.sin(th));
-					const p = F.W.clone().addScaledVector(F.A, S.s).addScaledVector(_d, R);
+					const R = (r + S.off * back) * (S.shrink ?? 1);
+					_d.copy(AX.u).multiplyScalar(Math.cos(th)).addScaledVector(AX.v, Math.sin(th));
+					const p = AX.p.clone().addScaledVector(_d, R);
 					P3.push(p); pos.push(p.x, p.y, p.z);
-					const W4 = weightsFor(F, S.s, th, p, near);
+					const W4 = weightsFor(F, S.s, th, p, near, up);
 					for (const [b, w] of W4) { si.push(b); sw.push(w); }
 					ga.push(S.s, th, S.sh, R);
 					gb.push(F.sign + 2 * slot, S.part, S.fold * fold0, ease);
@@ -385,7 +442,10 @@ export function buildGarment(P, spec, skinGeo, { sides = ['L', 'R'], lite = fals
 				if (n.lengthSq() < 1e-14) n.copy(F.A);
 				n.normalize();
 				const th = F.seam + j / N * Math.PI * 2, face = stations[i].face;
-				_d.copy(F.U).multiplyScalar(Math.cos(th)).addScaledVector(F.V, Math.sin(th)).multiplyScalar(face).addScaledVector(F.A, -Math.sqrt(Math.max(0, 1 - face * face)));
+				axisAt(stations[i].s, AX);
+				_d.copy(AX.u).multiplyScalar(Math.cos(th)).addScaledVector(AX.v, Math.sin(th)).multiplyScalar(face).addScaledVector(F.A, -Math.sqrt(Math.max(0, 1 - face * face)));
+				// (the closed end faces up the arm)
+				if ((stations[i].shrink ?? 1) < 1) _d.addScaledVector(F.Au, 1 - (stations[i].shrink ?? 1));
 				if (n.dot(_d) < 0) n.negate();
 				nor.push(n.x, n.y, n.z);
 			}
@@ -401,12 +461,12 @@ export function buildGarment(P, spec, skinGeo, { sides = ['L', 'R'], lite = fals
 			return rows;
 		};
 		// the sleeves, innermost first
-		let under = null, lowest = Infinity, rolled = false;
+		let under = null, lowest = Infinity, rolled = null;
 		for (const L of spec.layers) {
 			const cut = layerStations(L, F, { far: farS, lite, under: L.under ? null : under, glove: !!spec.glove });
 			if (!cut) continue;
 			lathe(cut.stations, L.slot, L.ease, 1);
-			if (L.length === 'rolled') rolled = true;
+			if (L.length === 'rolled') rolled = cut.hem;
 			else lowest = Math.min(lowest, cut.hem);
 			if (L.under || !under) under = { ...cut, wall: L.wall };
 		}
@@ -444,9 +504,17 @@ export function buildGarment(P, spec, skinGeo, { sides = ['L', 'R'], lite = fals
 		// the skin a long sleeve or a glove's cuff hides, left out of the hands' mesh
 		const ride = Math.max(0.012, ...spec.layers.map((L) => L.ride));
 		const cullFrom = lowest + ride + 0.012;
-		if (isFinite(cullFrom) && !rolled) for (let t = 0; t < six.length; t += 3) {
+		if (isFinite(cullFrom) && rolled == null) for (let t = 0; t < six.length; t += 3) {
 			const a = six[t], b = six[t + 1], c = six[t + 2];
 			if (mine[a] && mine[b] && mine[c] && sOf[a] > cullFrom && sOf[b] > cullFrom && sOf[c] > cullFrom) hide.add(t / 3);
+		}
+		// (under a pushed-up sleeve's roll and above it: the hands' mesh ends at the elbow in a
+		// ragged edge, and its last triangles, pulled by the upper arm, would poke out of the roll)
+		if (rolled != null) for (let t = 0; t < six.length; t += 3) {
+			const a = six[t], b = six[t + 1], c = six[t + 2];
+			if (!mine[a] || !mine[b] || !mine[c]) continue;
+			const lo3 = Math.min(sOf[a], sOf[b], sOf[c]), hi3 = Math.max(sOf[a], sOf[b], sOf[c]);
+			if (lo3 > rolled + 0.003 || hi3 > rolled + 0.016) hide.add(t / 3);
 		}
 		// (and under a glove's cuff)
 		if (spec.glove) for (let t = 0; t < six.length; t += 3) {
@@ -946,13 +1014,13 @@ export function armPose(F, elbow, wrist, shoulder, palm, forward, down, out = { 
 // leaves the skin it hides out of skin's index. Returns null when nothing covers the forearms
 // (a tee, bare arms), else { mesh, tris, spec, pose(dt, aim, toBones, downCam), dispose() }.
 // SHOULDER: where your shoulders are in the view's frame (metres; scaled to the body).
-const SHOULDER = { L: new THREE.Vector3(-0.19, -0.23, 0.05), R: new THREE.Vector3(0.19, -0.23, 0.05) };
-export function dressArms(P, skin, { sides = ['L', 'R'], isPhone = false, far = null, outfit = null } = {}) {
+export const SHOULDER = { L: new THREE.Vector3(-0.19, -0.23, 0.05), R: new THREE.Vector3(0.19, -0.23, 0.05) };
+export function dressArms(P, skin, { sides = ['L', 'R'], isPhone = false, far = null, outfit = null, upper = true } = {}) {
 	const spec = sleeveSpec(outfit || P.outfit || P.dna?.style || {});
 	if (spec.bare && !spec.glove) return null;
 	const tier = qualityNow();
 	const lite = isPhone || tier.name === 'low' || tier.name === 'minimal';
-	const built = buildGarment(P, spec, skin.geometry, { sides, lite, far });
+	const built = buildGarment(P, spec, skin.geometry, { sides, lite, far, upper });
 	if (!built.geometry) return null;
 	// the skin under the cloth, left out of the hands' mesh
 	if (built.hide.size) {
