@@ -196,7 +196,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		if (held) hr.append(btn('Put away', () => { arms.hold(null); draw(); }));
 		sheet.append(hr, label('Carrying'));
 		const list = Object.values(s.instances || {});
-		if (!list.length) sheet.append(note('Start Field contracts on open Terran or arid ground for a first weapon cache. You can also buy at outfitters or recover fallen fighters’ equipment with E or Take.'));
+		if (!list.length) sheet.append(note('Take a field contract from Quests on open ground outside town for a first weapon cache. You can also buy at outfitters or recover fallen fighters’ equipment with E or Take.'));
 		else {
 			const g = el('div', 'g99-grid'); g.style.setProperty('--cols', '5'); g.style.setProperty('--slot', '56px');
 			const wornU = new Set(Object.values(s.worn || {}));

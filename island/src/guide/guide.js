@@ -234,14 +234,14 @@ export function createGuide(mount, api) {
 		const where = W.labels?.where(cam.x, cam.z, cam.y, onIsland);
 		const P = W.player.state, hours = W.sky.state.hours;
 		const near = targets().filter((t) => t.kind !== 'neighbourhood').map((t) => ({ ...t, d: Math.hypot(t.x - cam.x, t.z - cam.z) })).sort((a, b) => a.d - b.d).slice(0, 6);
-		const arms = api.arms?.snapshot?.(cam);
+		const arms = api.arms?.snapshot?.(cam), field = api.combat?.contracts?.journal?.();
 		return {
 			place: (W.underworld?.inside() || 0) > .35 ? 'the connected caves beneath '+(api.shared.planet?.name || 'this world') : onIsland ? (W.bayArea || W.globe ? 'the island (in the Gulf of the Farallones, 25 km west of the Golden Gate)' : api.shared.planet?.name || 'the island') : where ? `${where.name} (${where.sub})` : 'the open world',
 			onIsland, underwater: cam.y < 0 && g < 0, depth: Math.max(0, -cam.y), height: Math.round(cam.y - Math.max(g, 0)), flying: !!P.flying, diving: !!P.diving, boat: !!W.boat?.boarded?.(),
 			time: `${Math.floor(hours)}:${String(Math.floor((hours % 1) * 60)).padStart(2, '0')}`, night: hours < 6 || hours > 19.5, wind: +(api.shared.uWind.value).toFixed(2),
 			facing: dirTo(-Math.sin(P.yaw), -Math.cos(P.yaw)),
 			near: near.map((t) => ({ name: t.name, dist: fmtDist(t.d), dir: dirTo(t.x - cam.x, t.z - cam.z), fact: t.fact })),
-			done: QUESTS.filter((q) => journal[q[0]]).map((q) => q[1]), todo: [...quests.filter((q) => !q.done).map((q) => q.title), ...QUESTS.filter((q) => !journal[q[0]] && (q[0] !== 'home' || store.get('crysis-home', null))).map((q) => q[1])],
+			done: QUESTS.filter((q) => journal[q[0]]).map((q) => q[1]), todo: [...(field?.active ? [`Field contract: ${field.name}, ${field.steps[field.cursor]?.text}`] : field?.offered ? [`Field contract on offer in Quests: ${field.name}`] : []), ...quests.filter((q) => !q.done).map((q) => q.title), ...QUESTS.filter((q) => !journal[q[0]] && (q[0] !== 'home' || store.get('crysis-home', null))).map((q) => q[1])],
 			land: W.land?.profile?.thesis, sea: W.eco?.profile?.thesis,
 			arms: arms ? { inventory: arms.inventory, nearby: arms.nearby } : null,
 			community:communityProjectFacts(api.communityProjects?.snapshot?.()),
@@ -519,7 +519,7 @@ export function createGuide(mount, api) {
 	// The journal's marker: what you chose to track (Quests ▸ Track), else the meeting you are
 	// tracking, else the soonest, else a quest's next place.
 	let livingContact = null;
-	// what you chose to follow: { kind: 'story'|'explore'|'meeting'|'crew', id }; null follows
+	// what you chose to follow: { kind: 'story'|'explore'|'meeting'|'crew'|'contract', id }; null follows
 	// the nearest thing due. Kept across visits, like the pin and trail settings.
 	let pinned = store.get('bard-tracked', null);
 	const wayPrefs = { waypoint: true, wayfinder: true, ...store.get('bard-waypoint-prefs', {}) };
@@ -592,6 +592,12 @@ export function createGuide(mount, api) {
 			return meetingMark(a);
 		}
 		if (pinned.kind === 'crew') { const m = W.colony?.crew?.mark?.(); return m && { ...m, key: 'crew:' + (m.key || m.title) }; }
+		if (pinned.kind === 'contract') {
+			const C = api.combat?.contracts;
+			if (!C) return null;
+			if (C.info().mission?.id !== pinned.id) { setPinned(null); return null; }
+			return C.mark();
+		}
 		return null;
 	}
 	function waypointMark() {
@@ -602,6 +608,9 @@ export function createGuide(mount, api) {
 		if (!W || !S || !key) return null;
 		const chosen = pinnedMark(W, key);
 		if (chosen) return chosen;
+		// a field contract under way: out in the open, and over if you wander off (combat/contracts-view.js)
+		const contract = api.combat?.contracts?.mark?.();
+		if (contract) return contract;
 		if(livingContact){
 			if(livingContact.bodyKey!==key || Math.hypot(livingContact.x-api.camera.position.x,livingContact.z-api.camera.position.z)<4)livingContact=null;
 			else return livingContact;

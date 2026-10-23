@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createFieldContract, contractFor, advanceContract, contractReward, FIELD_ROLES } from '../src/combat/field-contracts.js';
+import { createFieldContract, contractFor, advanceContract, contractReward, contractSteps, contractCursor, FIELD_ROLES } from '../src/combat/field-contracts.js';
 import { createLoot } from '../src/combat/loot.js';
 import { createInventoryState, applyInventoryTransaction } from '../src/gameplay/arms.js';
 const make = (completed = 0) => createFieldContract({ id: 'mc00000', completed, site: { x: 30, y: 1, z: 0 }, rally: { x: 0, y: 1, z: 0 } });
@@ -41,4 +41,19 @@ test('ordinary drop pressure cannot evict an active contract cache', () => {
 	loot.addCache({ id: 'cache001', name: 'Supply', pos: { x: 0, y: 1, z: 0 }, weapon: { i: 'aurora-trail-rifle', l: 1, t: 0 } });
 	for (let i = 0; i < 5; i++) loot.add({ kind: 'person', dead: true, F: { gun: 'aurora-trail-rifle' }, loadout: { i: 'aurora-trail-rifle', l: 1, t: 0 }, pos: { x: 1, y: 1, z: 0 } });
 	assert.equal(loot.drops.size, 2); assert.ok(loot.drops.has('cache001')); loot.update(1000, { x: 100, y: 0, z: 100 }); assert.ok(loot.drops.has('cache001'));
+});
+test('a contract reads as a quest: one listed step per stage it walks, the cursor moving one at a time', () => {
+	const EVENT = { travel: 'arrive', survey: 'inspected', secure: 'cleared', recover: 'collected', return: 'paid' };
+	for (let n = 0; n < 9; n++) {
+		const m = make(n), steps = contractSteps(m.def), seen = [];
+		assert.equal(steps[0].text, 'Reach the supply cache'); assert.match(steps.at(-1).text, /^Return to the rally point/);
+		while (m.stage !== 'complete') {
+			const i = contractCursor(m); seen.push(i);
+			assert.equal(steps[i].stage, m.stage, `${m.def.name}: step ${i} is ${steps[i].stage}, not ${m.stage}`);
+			if (m.stage === 'hold') { m.hold = m.def.holdSeconds; advanceContract(m, 'held'); } else advanceContract(m, EVENT[m.stage]);
+		}
+		assert.deepEqual(seen, steps.map((_, i) => i)); assert.equal(contractCursor(m), steps.length);
+	}
+	assert.equal(contractSteps(contractFor(5)).find((s) => s.stage === 'secure').text, 'Drive off two marksmen');
+	assert.equal(contractSteps(contractFor(1)).find((s) => s.stage === 'secure').text, 'Drive off a flanker and a marksman');
 });
