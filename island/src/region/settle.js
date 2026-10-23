@@ -44,6 +44,11 @@ const SMOKE_FS = /* glsl */`
 	uniform vec3 uCol; varying float vA;
 	void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.1, length(d)) * vA * 0.32; if (a < 0.01) discard; gl_FragColor = vec4(uCol, a); }`;
 
+// a big city the kit builds whole (a dense quarter: Tokyo, Mumbai, Cairo) is its blocks out as far
+// as its lights reach (earth/globeterrain.js draws its built-up ground that far), by the atlas's
+// size class; its blocks are still laid out only round you (DENSE_R)
+export const DENSE_FOOT = [0, 0, 2500, 5000, 9000, 13000];
+
 export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F, lanes = null }) {
 	const group = new THREE.Group();
 	group.name = 'regional settlements';
@@ -56,6 +61,8 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	const BUILD_R = isPhone ? 900 : 1600, DENSE_R = isPhone ? 300 : 420, DROP_R = BUILD_R + 350, SITE_R = 3200;
 	// (a landmark is seen from further off: one lot, cheap to have)
 	const reachOf = (s) => (s.kind === 'real' ? (isPhone ? 5000 : 9000) : s.kind === 'lore' ? (isPhone ? 2000 : 3500) : 0);
+	// (a big city's dense quarter is planned once you are within its footprint, not only near its middle)
+	const footOf = (s) => (s.kind === 'town' && !s.planned && kitOf(s)?.build?.dense ? DENSE_FOOT[s.pop] || 0 : 0);
 	const sites = new Map();            // key -> site
 	const queue = [];                   // [site, i, j]
 	const stats = { built: 0, ms: 0, cells: 0, lots: 0, tris: 0 };
@@ -97,7 +104,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		P.holes = [];
 		if (s.kind !== 'real') for (const o of sites.values()) if (o.kind === 'real' && o.clear > 0) { const dx = o.x - s.x, dz = o.z - s.z; if (Math.hypot(dx, dz) < (P.R || 400) + o.clear + 800) P.holes.push([dx, dz, o.clear]); }
 		if (P.holes.length) { const keep = (L) => !P.holes.some(([hx, hz, hr]) => Math.hypot(L.x - hx, L.z - hz) < hr + Math.hypot(L.w, L.d) / 2); P.lots = P.lots.filter(keep); P.keep = keep; }
-		if (P.dense) { P.R = kit.build.spread * (0.8 + Math.max(0, s.pop) * 0.25); P.block = BLOCK(kit); }
+		if (P.dense) { P.R = Math.max(kit.build.spread * (0.8 + Math.max(0, s.pop) * 0.25), DENSE_FOOT[s.pop] || 0); P.block = BLOCK(kit); }
 		// the lots by cell
 		s.cell = P.dense ? CELL : VCELL;
 		P.byCell = new Map();
@@ -301,9 +308,9 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			scanT = 0.5;
 			for (const s of sites.values()) {
 				const d = Math.hypot(s.x - cx, s.z - cz);
-				if (d > SITE_R + reachOf(s) + (s.planned?.reach || 0)) { if (performance.now() - s.last > 4000) drop(s); continue; }
+				if (d > SITE_R + reachOf(s) + footOf(s) + (s.planned?.reach || 0)) { if (performance.now() - s.last > 4000) drop(s); continue; }
 				s.last = performance.now();
-				if (!s.planned) { if (d < SITE_R + reachOf(s)) planSite(s); continue; }
+				if (!s.planned) { if (d < SITE_R + reachOf(s) + footOf(s)) planSite(s); continue; }
 				const reach = s.planned.reach, lx = cx - s.x, lz = cz - s.z;
 				const R = s.planned.dense ? DENSE_R : Math.max(BUILD_R, reachOf(s));
 				if (d > reach + R + 400) { for (const [k, C] of s.cells) { freeCell(C); s.cells.delete(k); } continue; }

@@ -12,7 +12,7 @@
 // claims(city) before growing a town; the walls are solid through island.extraPush.
 
 import { loadAtlas, atlasReady, regionAt, citiesNear, palette, km } from '../earth/atlas.js';
-import { createSettlements } from './settle.js';
+import { createSettlements, DENSE_FOOT } from './settle.js';
 import { createFolk } from './folk.js';
 import { createIce } from './ice.js';
 import { createFlora } from './flora.js';
@@ -112,10 +112,12 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			const build = (B, L, P, r) => fn(B, sc, args, r, (x, z) => ground(site.x + x * fc + z * fs, site.z - x * fs + z * fc) - ground(site.x, site.z));
 			site = S.add({ key: 'real:' + n, kind: 'real', clear: (CLEAR[type] ?? 45) * sc, lat: la, lon: lo, kit: kitAt(at, { pop: 3 }).id, pop: -1, name, tale: about, regionId: at.id, culture: kitAt(at, {}).culture, palette: palette(at.id), opts: {}, env: { snow: 0 }, lots: [{ type, build, x: 0, z: 0, rot: (rot || 0) * Math.PI / 180, w: 30, d: 30, role: 'centre' }] });
 		}
-		// the claimed towns: the atlas's own, within 6 km
-		for (const c of citiesNear(lat, lon, 8, 12)) {
+		// the claimed towns: the atlas's own, within 8 km (a big city's dense quarter, within 8 km
+		// of where its blocks reach)
+		for (const c of citiesNear(lat, lon, 8 + DENSE_FOOT[5] / 1000, 24)) {
 			if (!claims(c)) continue;
 			const at = regionAt(c.lat, c.lon), K = kitAt(at, { pop: c.pop });
+			if (c.km > 8 + (K?.kit?.build?.dense ? (DENSE_FOOT[c.pop] || 0) / 1000 : 0)) continue;
 			addSettlement('town:' + c.id, 'town', c.lat, c.lon, K, at, { pop: c.pop, name: c.name, char: c.char });
 		}
 		// the villages of the open country

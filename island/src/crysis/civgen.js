@@ -23,7 +23,7 @@
 // Everything is drawn from one seeded random stream, so a town is the same every visit.
 
 import STATS from './civstats.json' with { type: 'json' };
-import { finishTown } from '../structures/town.js';         // structures: settled lots and alleys
+import { finishTownSteps } from '../structures/town.js';    // structures: settled lots and alleys
 import { clamp } from '../noise.js';
 
 // ---------- small tools ----------
@@ -941,7 +941,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	yield 'sites';
 	for (const b of boxes) b.gen = 1;          // (grown, not surveyed: city.js lets these weather into neglect)
-	finishTown(boxes, roads, seed);           // structures: no building through another or a street; alleys behind the shops
+	yield* finishTownSteps(boxes, roads, seed);   // structures: no building through another or a street; alleys behind the shops
 
 	// ---------- 5. the land-use map: R roads, G land use x16, B roofs ----------
 	const step = Rbox > 3500 ? 10 : 8, x0 = cx - Rbox, z0 = cz - Rbox, MW = Math.ceil(2 * Rbox / step), MH = MW;
@@ -957,10 +957,12 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const disc = (x, z, rad, ch, val) => cellsIn(x, z, rad, (dx, dz) => dx * dx + dz * dz <= rad * rad, (k) => { px[k + ch] = val; });
 	const rect = (s, ch, val, pad = 0) => cellsIn(s.x, s.z, Math.hypot(s.hw, s.hd) + pad, (dx, dz) => Math.abs(dx * s.ux + dz * s.uz) <= s.hw + pad && Math.abs(-dx * s.uz + dz * s.ux) <= s.hd + pad, (k) => { px[k + ch] = val; });
 	// the neighbourhoods: yards round every house, verges along the streets
+	// (a big city's tens of thousands of buildings and streets are painted a few thousand a step)
 	yield 'map';
-	for (const b of boxes) if (b.kind <= K.wing) disc(b.x, b.z, Math.max(b.w, b.d) / 2 + 16, 1, LU.residential * 16);
+	let painted = 0;
+	for (const b of boxes) { if (b.kind <= K.wing) disc(b.x, b.z, Math.max(b.w, b.d) / 2 + 16, 1, LU.residential * 16); if (++painted % 3000 === 0) yield 'map'; }
 	yield 'map';
-	for (const q of roads) if (q.cls === 'residential') for (let i = 0; i < q.pts.length; i += 2) disc(q.pts[i], q.pts[i + 1], q.w / 2 + 12, 1, LU.residential * 16);
+	for (const q of roads) { if (q.cls === 'residential') for (let i = 0; i < q.pts.length; i += 2) disc(q.pts[i], q.pts[i + 1], q.w / 2 + 12, 1, LU.residential * 16); if (++painted % 1500 === 0) yield 'map'; }
 	for (const s of sites) {
 		const sub = (a, b, hw, hd) => ({ x: s.x + s.ux * a - s.uz * b, z: s.z + s.uz * a + s.ux * b, ux: s.ux, uz: s.uz, hw, hd });
 		if (s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
@@ -979,6 +981,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	// the streets (for the far view) and the roofs
 	yield 'map';
 	for (const q of roads) {
+		if (++painted % 1500 === 0) yield 'map';
 		if (q.cls === 'footway') continue;
 		const p = q.pts, rad = Math.max(step * 0.5, q.w / 2);
 		for (let i = 0; i + 3 < p.length; i += 2) {
@@ -989,17 +992,21 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (q.end1) disc(p[p.length - 2], p[p.length - 1], 12.5, 0, 255);
 	}
 	yield 'map';
-	for (const b of boxes) rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255);
+	for (const b of boxes) { rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255); if (++painted % 3000 === 0) yield 'map'; }
+	yield 'finish';
 	// (anything else that came to stand in the water taken out of it)
 	if (water) for (const L of [boxes, pools, trees]) { const keep = L.filter((b) => !wet(b.x, b.z, (b.w && b.d ? Math.max(b.w, b.d) / 2 : 0) + 2)); L.length = 0; L.push(...keep); }
+	yield 'finish';
 	// (and no tree with its trunk in a street, whatever planted it)
-	{ const keep = trees.filter((t) => roadClear(t.x, t.z, 0.6)); trees.length = 0; trees.push(...keep); }
+	{ let n = 0, k = 0; for (const t of trees) { if (roadClear(t.x, t.z, 0.6)) trees[n++] = t; if (++k % 4000 === 0) yield 'finish'; } trees.length = n; }
+	yield 'finish';
 	// how near the middle of town each building stands (0 at the centre, 1 at the edge), for the
 	// economy (economy/establishments.js): the old centre's houses are mostly shops and offices now
 	for (const b of boxes) b.core = Math.round(Math.hypot(b.x - cx, b.z - cz) / radius * 100) / 100;
 	// ...and the houses that back onto or face an arterial (busy enough for a shop or a surgery)
 	const notArt = (id, e) => e.cls !== 'primary' && e.cls !== 'secondary';
-	for (const b of boxes) if (b.kind <= 2 && G.nearest(b.x, b.z, 55, notArt)) b.artery = 1;
+	let looked = 0;
+	for (const b of boxes) { if (b.kind <= 2 && G.nearest(b.x, b.z, 55, notArt)) b.artery = 1; if (++looked % 3000 === 0) yield 'finish'; }
 	// the shop and office fronts get the brief's sign texts, in turn (b.sign; for whatever paints them)
 	const signs = Array.isArray(brief?.signs) ? brief.signs.filter((s) => typeof s === 'string' && s) : [];
 	if (signs.length) { let k = 0; for (const b of boxes) if (b.kind === K.retail || b.kind === K.office) b.sign = signs[k++ % signs.length]; }
