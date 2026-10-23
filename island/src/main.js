@@ -122,6 +122,8 @@ import { createHeroPortrait } from './ui/hero-portrait.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
 import { createLaw } from './law/index.js';
+import { setForceLocator, localForce, setLocalForce, forceAt } from './law/force.js';
+import { policeLiveryInfo } from './signage/cars.js';
 import { installAirFog } from './world/airfog.js';
 import { GRADE, installGrade } from './world/grade.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
@@ -663,6 +665,9 @@ export function createIslandWorld() {
 	}
 
 	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = initialMode;
+	// where on Earth a world position is, for the police of the place (law/force.js): Earth only
+	// (while the first world is still being built there is none yet: that one is Earth)
+	setForceLocator((x, z) => (!world || (world.bayArea && (!world.body || world.body.key === 'earth')) ? globeLL(x, z) : null));
 	// Desktop also adapts to slow frames; an explicit saved High/Low choice is retained.
 	// (a phone on Ultra holds the desktop's graphics: a larger share of its memory before stepping down)
 	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage, ...(isPhone && ULTRA ? { budgetMB: 1400 } : {}) });
@@ -1994,6 +1999,10 @@ if (typeof window !== 'undefined') {
 		// .surrender(), .arrest(), .territory(); Crysis.lawStep(dt) runs it on (tests)
 		law: Object.assign(() => HOOKS.law?.info(), { surrender: () => HOOKS.law?.surrender(), arrest: () => HOOKS.law?.arrest(), reset: () => HOOKS.law?.reset(), incident: (e) => HOOKS.law?.incident(e), territory: (x, z) => HOOKS.law?.territory(x, z), corner: () => HOOKS.law?.corner() }),
 		lawStep: (dt = 1 / 30) => HOOKS.law?.update(dt),
+		// whose police (law/force.js): Crysis.force() the force acting here; Crysis.force(lat, lon) puts
+		// that place's force on (until the law looks again); Crysis.policeLivery(true) what the cruisers carry
+		force: (lat, lon) => { if (lat != null) setLocalForce(forceAt(+lat, +lon)); return { ...localForce() }; },
+		policeLivery: (picture = false) => policeLiveryInfo(picture),
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),

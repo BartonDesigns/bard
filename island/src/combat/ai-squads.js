@@ -269,7 +269,7 @@ export function createSquads(ctx) {
 				if (kind === 'drone') h.pos.y += h.hover;
 			}
 			h.T = {
-				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: Sp ? Math.max(1, Sp.height * 0.55) : 1.4 }, name: Sp ? (/^the /i.test(Sp.name) ? Sp.name : `${/^[aeiou]/i.test(Sp.name) ? 'an' : 'a'} ${Sp.name}`) : F.name ? `${/^[aeiou]/i.test(F.name) ? 'an' : 'a'} ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
+				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: Sp ? Math.max(1, Sp.height * 0.55) : 1.4 }, name: Sp ? (/^the /i.test(Sp.name) ? Sp.name : `${/^[aeiou]/i.test(Sp.name) ? 'an' : 'a'} ${Sp.name}`) : F.officer ? F.officer : F.name ? `${/^[aeiou]/i.test(F.name) ? 'an' : 'a'} ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
 				get surrendered() { return h.surrendered > 0 || h.fleeing; },
 				surface: B.surface, shapes: () => shapesOf(h), ref: h,
 				aim: () => (h.body ? aimPoint(h.body.P) : null),

@@ -1,4 +1,4 @@
-// The police: the Harbour Police in their cruisers, answering crime (a fight in the street, a
+// The police: the local force (law/force.js) in their cruisers, answering crime (a fight in the street, a
 // gang's gunfire, shots fired) and the wanted level (combat/heat.js; how many come and how
 // they work is the escalation ladder, law/ladder.js, run by law/index.js).
 // A cruiser drives in by road (military/route.js) from the nearest police station when there is
@@ -29,6 +29,7 @@ import { sirenSound } from './sound.js';
 import { blockSlots, inCone, offscreenPace } from '../law/tactics.js';
 import { searchLoop } from '../law/ladder.js';
 import { noseInto, inBuilding } from '../vehicles/wall-guard.js';
+import { localForce } from '../law/force.js';
 
 const NAVY = new THREE.Color('#141a2c'), CHAR = new THREE.Color('#25282e');
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _y = new THREE.Vector3(0, 1, 0), _o = new THREE.Matrix4(), _t = new THREE.Matrix4();
@@ -98,7 +99,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		if (!e || !W()?.bayArea) return false;
 		const plan = policePlan(stars, R.officers, have + live().length * 2);
 		for (let i = 0; i < Math.min(2, plan.cruisers); i++) send({ x: e.x, z: e.z }, 'wanted', 2, true);
-		if (plan.cruisers && Math.random() < 0.6) combat.call?.(stars >= 3 ? 'Dispatch: all units, suspect is armed and dangerous.' : 'Dispatch: units responding.', 'Harbour Police');
+		if (plan.cruisers && Math.random() < 0.6) combat.call?.(stars >= 3 ? 'Dispatch: all units, suspect is armed and dangerous.' : 'Dispatch: units responding.', localForce().name);
 		if (plan.backup) backup?.({ kind: 'wanted', x: e.x, z: e.z, severity: plan.backup === 'air' ? 3 : 2 });
 		return true;
 	}
@@ -111,7 +112,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		if (mine.length < plan.cars && send({ x: at.x, z: at.z }, 'wanted', plan.officers || 2, true)) sent++;
 		if (plan.swat && !cruisers.some((c) => c.why === 'swat' && c.state !== 'leaving') && send({ x: at.x, z: at.z }, 'swat', plan.swatSize || 4, true, { kind: 'van', fid: 'swat' })) {
 			sent++;
-			combat.call?.('Dispatch: tactical team rolling from the quarters.', 'Harbour Police');
+			combat.call?.('Dispatch: tactical team rolling from the quarters.', localForce().name);
 		}
 		return sent;
 	}
@@ -120,7 +121,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		if (cruisers.some((c) => c.state !== 'leaving' && c.why !== 'block' && Math.hypot(c.to.x - e.x, c.to.z - e.z) < 120 && (!o.swat || c.why === 'swat'))) return null;
 		const swat = !!o.swat;
 		const c = send({ x: e.x, z: e.z }, swat ? 'swat' : e.kind, swat ? (isPhone ? 3 : 4) : e.kind === 'gang' ? 3 : 2, e.kind === 'gang' || e.kind === 'defence', swat ? { kind: 'van', fid: 'swat' } : {});
-		if (c) combat.call?.(swat ? 'Dispatch: shots fired, tactical team responding.' : e.kind === 'defence' ? 'Dispatch: a citizen under fire, units responding to back them up.' : e.kind === 'gang' || e.kind === 'shots' ? 'Dispatch: shots fired, units responding.' : e.kind === 'disaster' ? 'Dispatch: all units, disaster response. Keep the roads clear.' : 'Dispatch: a fight reported, a unit is on the way.', 'Harbour Police');
+		if (c) combat.call?.(swat ? 'Dispatch: shots fired, tactical team responding.' : e.kind === 'defence' ? 'Dispatch: a citizen under fire, units responding to back them up.' : e.kind === 'gang' || e.kind === 'shots' ? 'Dispatch: shots fired, units responding.' : e.kind === 'disaster' ? 'Dispatch: all units, disaster response. Keep the roads clear.' : 'Dispatch: a fight reported, a unit is on the way.', localForce().name);
 		return c;
 	}
 
@@ -141,7 +142,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		const sq = combat.squads.squad('police', post.x, post.z, isPhone ? 1 : 2, { post: { kind: 'roadblock', x: post.x, z: post.z, yaw: face, r: 70 }, alert, tag: made[0].id, y: ground(post.x, post.z) + 0.6, spread: 2 });
 		made[0].squad = sq; made[0].members = [];
 		sq.then((s) => { made[0].members = s?.members || []; });
-		combat.call?.('Dispatch: roadblock is up ahead of the suspect.', 'Harbour Police');
+		combat.call?.('Dispatch: roadblock is up ahead of the suspect.', localForce().name);
 		return made;
 	}
 	function clearBlocks() { for (const c of cruisers) if (c.why === 'block' && c.state === 'blocking') leave(c); }

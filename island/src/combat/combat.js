@@ -600,8 +600,11 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 	const civilians = createCivilians(ctx);
 	const squads = createSquads(ctx);
-	const contracts = createContracts({ group, mount, arms, squads, recovery, eye, camera, ground, hint, audio: fieldAudio, store, active: fieldActive, down: () => me.ko > 0,
+	// (offered and tracked in the guide's Quests, like any other quest: guide/guide-screens.js)
+	const contracts = createContracts({ group, arms, squads, recovery, eye, ground, hint, audio: fieldAudio, store, active: fieldActive, down: () => me.ko > 0,
 		eligible: () => !W()?.deep?.active?.() && (isEarth() ? zone() === 'earth-rural' : ['TERRAN', 'ARID'].includes(shared.planet?.type || 'TERRAN')),
+		where: () => isEarth() ? 'open countryside away from towns' : 'open Terran or arid ground',
+		blocked: () => me.ko > 0 ? 'Recover first.' : P()?.flying ? 'Land first.' : drive?.active?.() ? 'Step out of the vehicle first.' : P()?.swimming ? 'Get out of the water first.' : W()?.orbit?.active?.() ? 'Come down from orbit first.' : null,
 		site: () => {
 			for (let k = 0; k < 8; k++) {
 				const s = spotAhead(35, 60); if (!s || boxesNear(s.x, s.z, 16).length) continue;
