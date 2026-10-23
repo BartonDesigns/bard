@@ -164,7 +164,7 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		speed += (Math.min(Math.hypot(vel.x, vel.z), 60) - speed) * Math.min(1, dt * 4);
 		lastPos.copy(cam);
 		// (the ear only moves while a remark is playing: nothing to do the rest of the time)
-		if (voice.remarking) voice.place(cam, camera.getWorldDirection(_f));
+		if (voice.remarking) voice.place(camera);
 		// the caption follows the speaker (the page size read once a second, not every frame)
 		if (now > sizeT) { sizeT = now + 1000; capW = mount.clientWidth; capH = mount.clientHeight; }
 		if (capFor) {

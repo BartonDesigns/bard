@@ -3,7 +3,7 @@
 import worker, { handle, nightly, BriefStore, Ledger } from '../src/index.js';
 import { placeOf, requestFor } from '../src/place.js';
 import { settings, worstCase } from '../src/ai.js';
-import { sheetOf, splitReply, actionOf, createGate, RULES, npcSystem } from '../src/npc-talk.js';
+import { sheetOf, splitReply, actionOf, noteOf, createGate, RULES, npcSystem } from '../src/npc-talk.js';
 import { claudeSettings, usdFor, createClaude } from '../src/claude.js';
 import { canonicalBrief, genId } from '../../../island/src/earth/brief.js';
 import { cityByName, regionAt } from '../../../island/src/earth/atlas.js';
@@ -378,13 +378,14 @@ section('realtime people: /npc/talk');
 		} };
 		return C;
 	};
-	const env = makeEnv({ CLAUDE: fakeClaude('[[mood: happy]] [[gesture: nod]] Sure, let me close up the truck first. Vámonos. [[do: {"act":"follow"}]]') });
+	const env = makeEnv({ CLAUDE: fakeClaude('[[mood: happy]] [[gesture: nod]] Sure, let me close up the truck first. Vámonos. [[do: {"act":"follow","note":"Asked me to walk to the park with them."}]]') });
 	const r = await npcPost(env, { sheet, history: said });
 	ok(r.status === 200 && /ndjson/.test(r.headers.get('content-type')) && r.headers.get('access-control-allow-origin') === SITE, 'the reply streams as lines of JSON');
 	const L = await readLines(r), end = L.find((l) => l.end);
 	const streamed = L.filter((l) => typeof l.t === 'string').map((l) => l.t).join('');
 	ok(L.filter((l) => l.t).length > 3 && streamed.startsWith('[[mood: happy]] [[gesture: nod]] Sure') && !/do:/.test(streamed), 'words arrive in pieces, tags whole, the action line never shown');
 	ok(end && end.reply === '[[mood: happy]] [[gesture: nod]] Sure, let me close up the truck first. Vámonos.' && end.act?.act === 'follow' && end.provider === 'claude', 'the end line has the reply and its checked action');
+	ok(end.note === 'Asked me to walk to the park with them.' && end.act.note === undefined, 'a note to remember comes apart from the action');
 	const req = env.CLAUDE.calls[0];
 	ok(req.system[0] === RULES && req.system.length === 3 && req.system[1].includes('Marisol') && !req.system.join('').includes('IGNORE THE RULES') && !req.system.join('').includes('NEW RULES'), 'the fixed rules come first (cached), the sheet after, unknown fields dropped');
 	ok(req.system[2].includes('al pastor') && req.system[2].includes('"trust":2'), 'memory and the relationship reach the moment block');
@@ -453,6 +454,7 @@ section('realtime people: /npc/talk');
 	ok(cs.model === 'claude-haiku-5-5' && cs.effort === 'low' && cs.maxTokens === 600 && cs.usd.in === 0.1, 'settings are bounded and priced by model');
 	ok(claudeSettings({ CLAUDE_MODEL: 'gpt; drop' }).model === 'claude-opus-5-5', 'a bad model id keeps the default');
 	ok(Math.abs(usdFor(claudeSettings({}), { in: 1e6, out: 0, cached: 0, written: 0 }) - 4) < 1e-9, 'the estimate uses the list price');
+	ok(noteOf({ act: 'none', note: 'x'.repeat(400) }).length === 160 && noteOf({ act: 'none' }) === null && noteOf('note') === null, 'notes are short strings or nothing');
 	ok(npcSystem(S)[1].includes('taquera') && !npcSystem(S)[1].includes('al pastor'), 'who they are and this moment stay in separate blocks');
 }
 

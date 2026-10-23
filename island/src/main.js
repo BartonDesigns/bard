@@ -818,6 +818,13 @@ export function createIslandWorld() {
 	talkBtn.addEventListener('click', (e) => { e.stopPropagation(); talkNow(); });
 	for (const ev of ['pointerdown', 'touchstart']) talkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if (e.key === 'Enter' && talkTarget && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); talkNow(); } });
+	// M: talk out loud. Facing someone, the conversation starts listening; talking with someone,
+	// the microphone goes on or off (guide/talk-live.js). In a car M is the car's own key.
+	addEventListener('keydown', (e) => {
+		if ((e.key !== 'm' && e.key !== 'M') || e.repeat || e.metaKey || e.ctrlKey || e.altKey || drive.active() || dom.mount.style.display === 'none' || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+		if (guide.live()) { e.preventDefault(); const on = guide.toggleMic(); hint(on ? 'Microphone on: just talk' : 'Microphone off', 1500, 1); return; }
+		if (talkTarget && guide.liveReady() && !HOOKS.errands?.asking(talkTarget)) { e.preventDefault(); guide.talkTo(talkTarget, { mic: true }); }
+	});
 	// teleport while flying: a line pin button in the rail, and a list of places to land
 	const PLACES_TP = [
 		['Golden Gate Bridge, Vista Point', 37.8326, -122.4814, 2.6], ['Downtown San Francisco', 37.7936, -122.3965, 0.9], ['Twin Peaks', 37.7544, -122.4477, 0.2],
@@ -990,7 +997,7 @@ export function createIslandWorld() {
 	// music from a YouTube or Spotify link: its way in from the map pin, and the auto music making way (ui/music-link.js)
 	HOOKS.musicLink = createMusicLinkEntry({ menu: tpMenu, autoMusic, hint: (t, ms) => hint(t, ms, 1) });
 	// chat with everyone online, your region and your group, by text or voice; groups (ui/chat.js)
-	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget, openAccount: () => HOOKS.account?.open() });
+	HOOKS.chat = createChat({ url: roomsURL(), multiplayer, mount: dom.mount, cloud: cloudSave, hint: (t, ms) => hint(t, ms, 1), isTouch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, region: () => { try { const r = HOOKS.npcQuests?.regionNow?.(); return r && r.id !== 'here' ? r : null; } catch { return null; } }, rank: () => combat.hooks.honorRank?.() || 0, canKey: () => !talkTarget && !guide.live(), openAccount: () => HOOKS.account?.open() });
 	// your guild: the townsfolk you ask into it walk and fight beside you, level up and learn
 	// magic; with an account, players join it and guilds ally with it (guild/)
 	HOOKS.guild = guideApi.guild = createGuild({ combat, guide, social, nearby: () => [...people.pool, ...social.actors.all()], cloud: cloudSave, url: roomsURL(), mount: dom.mount, menu: tpMenu, onFoot: () => !!world?.player && !drive.active() && !world.orbit?.active?.() && !world.boat?.boarded?.(), yaw: () => world?.player?.yaw ?? 0, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX });
@@ -1168,7 +1175,7 @@ export function createIslandWorld() {
 		const U = HOOKS.itemUse?.usable(), showUse = !!U && !P?.flying && !drive.active();
 		useBtn.style.display = showUse ? '' : 'none';
 		if (showUse) useBtn.textContent = isPhone ? U.label : `${U.label} (U)`;
-		if (talkTarget) talkBtn.textContent = HOOKS.errands?.asking(talkTarget) ? (isPhone ? '🤝 Help' : '🤝 Help (Enter)') : isPhone ? '💬 Talk' : '💬 Talk (Enter)';
+		if (talkTarget) talkBtn.textContent = HOOKS.errands?.asking(talkTarget) ? (isPhone ? '🤝 Help' : '🤝 Help (Enter)') : isPhone ? '💬 Talk' : guide.liveReady() ? '💬 Talk (Enter) · 🎙 M' : '💬 Talk (Enter)';
 	}
 
 	// the loading card over a whole arrival (api.open with a spot, lifted by share.js)

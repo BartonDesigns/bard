@@ -427,7 +427,7 @@ export function guideSettings(gd) {
 	const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 	const opts = phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']];
 	// the shared voice, once the discovery server is deployed (earth/config.js): phones too
-	if (DISCOVERY_URL) opts.push(['cloud', 'Free cloud voice (people only)']);
+	if (DISCOVERY_URL) opts.push(['cloud', 'Cloud voice (people talk live)']);
 	for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; sel.append(o); }
 	sel.name = 'dialogue-source'; sel.value = choice.kind;
 	row('Dialogue', sel);
@@ -438,7 +438,9 @@ export function guideSettings(gd) {
 		row('Model', m);
 		settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', hasWebGPU() ? 'Downloads once, then runs offline. Nothing you say leaves this device.' : 'This browser has no WebGPU (try Chrome or Edge on desktop or Android), or use Ollama.'));
 	}
-	if (choice.kind === 'cloud') settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', 'People answer from a small model on the game\'s own server, inside a free daily allowance. What you say to them is sent there to answer and is not kept. When the day\'s share is used, they use their own lines.'));
+	if (choice.kind === 'cloud') settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', gd.llm.canStream?.()
+		? `People talk live: walk up to someone and press M (or tap 🎙) to speak out loud, or Enter to type. They answer in their own voice, remember you, and act on what you say. Replies come from ${gd.llm.claude?.() ? 'Claude' : 'a small model'} on the game's own server; what you say is sent there to answer and is not kept there. When the day's share is used, they use their own lines.`
+		: 'People answer from a small model on the game\'s own server, inside a free daily allowance. What you say to them is sent there to answer and is not kept. When the day\'s share is used, they use their own lines.'));
 	if (choice.kind === 'ollama') {
 		const u = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); u.name = 'ollama-address'; u.value = choice.url; u.onchange = () => { choice.url = u.value; };
 		const n = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); n.name = 'ollama-model'; n.value = choice.name; n.onchange = () => { choice.name = n.value; };

@@ -22,7 +22,7 @@ import { settings, worstCase, talkSettings, ask } from './ai.js';
 import { npcOf, talkSystem } from './talk.js';
 import { planningOf, planningSystem, planningReply, PLANNING_KINDS, PLANNING_FEATURES } from './planning.js';
 import { createClaude, claudeSettings, usdFor } from './claude.js';
-import { sheetOf, npcSystem, splitReply, actionOf, createGate, NPC_FEATURE } from './npc-talk.js';
+import { sheetOf, npcSystem, splitReply, actionOf, noteOf, createGate, NPC_FEATURE } from './npc-talk.js';
 
 export { BriefStore, Ledger };
 
@@ -152,7 +152,7 @@ async function npcTalk(env, T, player, H) {
 		// no key, or the day's Claude turns are gone: one Workers AI reply, the same shape
 		const A = await aiTurn(env, T, system, res ? null : player);
 		if (A.error) return reply({ error: A.error, fallback: 'offline' }, A.status, H, { 'cache-control': 'no-store' });
-		return new Response(new Uint8Array([...lineOf({ t: A.text }), ...lineOf({ end: true, reply: A.text, act: A.act, provider: 'ai', neurons: A.neurons, ms: Date.now() - t0 })]), { status: 200, headers });
+		return new Response(new Uint8Array([...lineOf({ t: A.text }), ...lineOf({ end: true, reply: A.text, act: A.act, note: A.note, provider: 'ai', neurons: A.neurons, ms: Date.now() - t0 })]), { status: 200, headers });
 	}
 	const { readable, writable } = new TransformStream();
 	const w = writable.getWriter();
@@ -165,11 +165,11 @@ async function npcTalk(env, T, player, H) {
 		await L.fetch('https://ledger/settle', { method: 'POST', body: JSON.stringify({ kind: 'claude', day: res.day, usage: out.usage, ok: !!out.text }) });
 		if (out.text) {
 			const { text, act } = splitReply(out.text);
-			return line({ end: true, reply: text, act: actionOf(act, T.sheet), provider: 'claude', model: out.model, usage: out.usage, ms: Date.now() - t0 });
+			return line({ end: true, reply: text, act: actionOf(act, T.sheet), note: noteOf(act), provider: 'claude', model: out.model, usage: out.usage, ms: Date.now() - t0 });
 		}
 		if (!said && env.AI) {
 			const A = await aiTurn(env, T, system, null);
-			if (!A.error) { await line({ t: A.text }); return line({ end: true, reply: A.text, act: A.act, provider: 'ai', neurons: A.neurons, ms: Date.now() - t0 }); }
+			if (!A.error) { await line({ t: A.text }); return line({ end: true, reply: A.text, act: A.act, note: A.note, provider: 'ai', neurons: A.neurons, ms: Date.now() - t0 }); }
 		}
 		return line({ error: out.error || 'no reply', fallback: 'offline' });
 	})().catch((err) => { console.error('npc/talk', err?.message || err); return line({ error: 'server error', fallback: 'offline' }); }).finally(() => w.close().catch(() => {}));
@@ -188,7 +188,7 @@ async function aiTurn(env, T, system, player) {
 	await L.fetch('https://ledger/settle', { method: 'POST', body: JSON.stringify({ kind: 'talk', day: res.day, reserved: res.reserved, used: out.neurons, exhausted: out.exhausted }) });
 	const { text, act } = splitReply(typeof out.value === 'string' ? out.value : '');
 	if (!text) return { error: 'no reply', status: 503 };
-	return { text, act: actionOf(act, T.sheet), neurons: out.neurons };
+	return { text, act: actionOf(act, T.sheet), note: noteOf(act), neurons: out.neurons };
 }
 
 // the nightly round: the biggest atlas cities not yet discovered, while the allowance lasts

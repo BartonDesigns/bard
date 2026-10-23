@@ -50,7 +50,7 @@ export function createClaude(env = {}) {
 	let noFallbacks = !S.fallbacks;
 	const request = ({ system, messages, maxTokens }, withFallbacks) => ({
 		model: S.model, max_tokens: Math.min(S.maxTokens, maxTokens || S.maxTokens),
-		system: system.map((text, i) => (i === 0 ? { type: 'text', text, cache_control: { type: 'ephemeral' } } : { type: 'text', text })),
+		system: system.map((text, i) => (i < 2 ? { type: 'text', text, cache_control: { type: 'ephemeral' } } : { type: 'text', text })),
 		messages, output_config: { effort: S.effort },
 		...(withFallbacks ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
 	});
