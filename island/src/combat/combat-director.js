@@ -43,7 +43,7 @@ export function combatDirector(cb, dt) {
 		cb.policeT = 8;
 		const R = responseFor(wanted.stars), have = squads.alive().filter((h) => h.fid === 'patrol' || h.fid === 'police').length;
 		// the police answer in their cruisers (military/police.js); on foot if nobody took the call
-		if (have < R.officers && !hooks.police?.(wanted.stars, R, have)) { const s = spotHidden(50, 90); if (s) squads.squad('police', s.x, s.z, Math.min(2, R.officers - have), { alert: true, armour: R.armour }); call('Dispatch: units responding.', 'Harbour Police'); }
+		if (have < R.officers && !hooks.police?.(wanted.stars, R, have)) { const s = spotHidden(50, 90); if (s) squads.squad('police', s.x, s.z, Math.min(2, R.officers - have), { alert: true, armour: R.armour }); call('Dispatch: units responding.', FACTIONS.police.name); }
 	}
 	// contract hunters, for a bounty
 	// (only where there are people or businesses about: not out in the empty country)

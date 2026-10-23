@@ -27,6 +27,7 @@ import { artReady } from './art.js';
 import { denied } from '../economy/establishments.js';
 import { GFX_PHONE } from '../world/device.js';
 import { runAll, runSteps } from '../world/buildslice.js';
+import { localForce, onForceChange } from '../law/force.js';
 
 const PHONE = GFX_PHONE;
 
@@ -45,13 +46,15 @@ function plateFace(locale, i) {
 	const text = locale === 'us-ca' ? `${1 + Math.floor(r() * 9)}${L()}${L()}${L()}${D()}${D()}${D()}` : `${L()}${L()}${L()}-${D()}${D()}${D()}${r() < 0.5 ? D() : ''}`;
 	return { k: 'plate', style: 'us', state, ink, ink2, band: band || '', text, dealer: r() < 0.4 ? pick(r, DEALERS) : '' };
 }
+// (the police's are the local force's, law/force.js: policeFaces below fills them in, and they are
+// drawn again in their cells when the force changes)
 const LIVERY_FACES = {
-	police: { k: 'livery', svc: 'police', word: 'POLICE', sub: 'HARBOUR' },
+	police: { k: 'livery', svc: 'police', word: 'POLICE', sub: '' },
 	roof: { k: 'livery', svc: 'roof', word: '12' },
 	military: { k: 'livery', svc: 'military', word: 'MERIDIAN GUARD' },
 	// the vans: the tactical team's in charcoal with reflective white, a patrol van's with gold
 	swat: { k: 'livery', svc: 'swat', word: 'POLICE', sub: 'TACTICAL UNIT' },
-	van: { k: 'livery', svc: 'van', word: 'POLICE', sub: 'HARBOUR' },
+	van: { k: 'livery', svc: 'van', word: 'POLICE', sub: '' },
 	vanRoof: { k: 'livery', svc: 'roof', word: '41' },
 };
 // the military's stencils (militaryStencils below): the side's word and mark, the bumper codes
@@ -62,10 +65,42 @@ const STENCILS = {
 	guardWord: { k: 'livery', svc: 'stencil', word: 'MERIDIAN GUARD' }, ironWord: { k: 'livery', svc: 'stencil', word: 'IRONVALE LEGION' },
 	guardMark: { k: 'livery', svc: 'stencil', mark: 'guard' }, ironMark: { k: 'livery', svc: 'stencil', mark: 'ironvale' },
 	guardWordDark: { k: 'livery', svc: 'stencil', word: 'MERIDIAN GUARD', ink: '#24272a' }, guardMarkDark: { k: 'livery', svc: 'stencil', mark: 'guard', ink: '#24272a' },
-	policeWord: { k: 'livery', svc: 'stencil', word: 'HARBOUR POLICE', ink: '#f4f4f0' }, policeCode: { k: 'livery', svc: 'stencil', word: 'AIR 1', ink: '#f4f4f0' },
+	policeWord: { k: 'livery', svc: 'stencil', word: 'POLICE', ink: '#f4f4f0' }, policeCode: { k: 'livery', svc: 'stencil', word: 'AIR 1', ink: '#f4f4f0' },
 	nostep: { k: 'livery', svc: 'stencil', word: 'NO STEP', small: true }, unit: { k: 'livery', svc: 'stencil', word: '4 MG' }, unitIron: { k: 'livery', svc: 'stencil', word: '9 IVL' },
 	...Object.fromEntries(MIL_CODES.map((c, i) => ['code' + i, { k: 'livery', svc: 'stencil', word: c }])),
 };
+// the local force on the cruisers' doors, the vans' sides and the helicopter's tail boom
+const POLICE_KEYS = [['liv:police', () => LIVERY_FACES.police], ['liv:van', () => LIVERY_FACES.van], ['liv:swat', () => LIVERY_FACES.swat], ['mil:policeWord', () => STENCILS.policeWord]];
+function policeFaces(F) {
+	LIVERY_FACES.police = { k: 'livery', svc: 'police', word: F.word, sub: F.sub };
+	LIVERY_FACES.van = { k: 'livery', svc: 'van', word: F.word, sub: F.sub };
+	LIVERY_FACES.swat = { k: 'livery', svc: 'swat', word: F.tacWord, sub: F.tacSub };
+	STENCILS.policeWord = { k: 'livery', svc: 'stencil', word: F.air, ink: '#f4f4f0' };
+}
+policeFaces(localForce());
+// a new force: its faces drawn over the old in the same cells (the same size whatever the words,
+// so every decal and the helicopter's stencil mesh that points at them stays right; one texture
+// upload, no new material or program)
+export function setPoliceLivery(F) {
+	policeFaces(F);
+	if (!ATLAS || !CELLS.size) return 0;
+	let n = 0;
+	for (const [k, face] of POLICE_KEYS) if (ATLAS.redraw(k, face())) n++;
+	return n;
+}
+onForceChange(setPoliceLivery);
+// what the police vehicles carry now (Crysis.policeLivery): the faces, and the door panel's cell
+// as a picture when asked
+export function policeLiveryInfo(picture = false) {
+	const e = ATLAS && CELLS.has('liv:police') ? ATLAS.cellRect?.('liv:police') : null;
+	let png = null;
+	if (picture && e && ATLAS.canvas && typeof document !== 'undefined') {
+		const c = document.createElement('canvas'); c.width = e.w; c.height = e.h;
+		c.getContext('2d').drawImage(ATLAS.canvas, e.x, e.y, e.w, e.h, 0, 0, e.w, e.h);
+		png = c.toDataURL('image/png');
+	}
+	return { door: LIVERY_FACES.police, van: LIVERY_FACES.van, tactical: LIVERY_FACES.swat, air: STENCILS.policeWord.word, drawn: !!e, png };
+}
 // the brands whose marks go on bumper stickers (a phone loads four of their sheets, a computer
 // eight): what people put on a car, a record shop, an outfitter, a roaster, a bike shop
 const STICKER_BRANDS = PHONE ? ['brands-music', 'brands-outdoor', 'brands-coffee', 'brands-transport'] : ['brands-music', 'brands-outdoor', 'brands-coffee', 'brands-transport', 'brands-retro', 'brands-apparel', 'brands-beverages', 'brands-books'];
@@ -104,7 +139,8 @@ export function carFaces(locale = 'us-ca') {
 	for (let i = 0; i < POOLS.slap; i++) want.set('slap' + i, { face: { k: 'sticker', seed: 401 + i * 37 }, w: 0.1, h: 0.1 });
 	for (let i = 0; i < POOLS.permit; i++) want.set('permit' + i, { face: { k: 'cpermit', seed: i + 1, year: 2026, style: locale === 'de' ? 'de' : sys.id === 'jp' ? 'jp' : 'us' }, w: 0.08, h: 0.08 });
 	for (const [k, f] of Object.entries(LIVERY_FACES)) want.set('liv:' + k, { face: f, w: k === 'roof' || k === 'vanRoof' ? 0.6 : 2.4, h: k === 'roof' || k === 'vanRoof' ? 0.6 : 0.5 });
-	for (const [k, f] of Object.entries(STENCILS)) want.set('mil:' + k, { face: f, w: f.mark ? 0.5 : f.word?.length > 8 ? 2.4 : 0.8, h: f.mark ? 0.5 : f.word?.length > 8 ? 0.32 : 0.18 });
+	// (the police's word is always given the long cell: a new force's may be longer)
+	for (const [k, f] of Object.entries(STENCILS)) { const long = k === 'policeWord' || f.word?.length > 8; want.set('mil:' + k, { face: f, w: f.mark ? 0.5 : long ? 2.4 : 0.8, h: f.mark ? 0.5 : long ? 0.32 : 0.18 }); }
 	return want;
 }
 const cellOf = (k) => CELLS.get(k) || null;
