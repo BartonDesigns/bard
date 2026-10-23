@@ -18,6 +18,7 @@ import { hash01, hash32, rng, pick } from './rand.js';
 import { LAYER } from './layers.js';
 import { RANK } from './systems.js';
 import { retailIdentity } from './art.js';
+import { carriageways, gapLeft, medianFor, SHOULDER_R } from '../bay/fwyplan.js';   // the freeway's cross section: where its shoulders and median are
 
 export const BACK = Object.freeze({ blank: 0, readable: 1, mirrored: 2, none: 3 });
 export const MAT = Object.freeze({ retro: 'retro', vinyl: 'vinyl', glass: 'glass', paper: 'paper', foil: 'foil', paint: 'paint', grime: 'grime' });
@@ -230,6 +231,7 @@ export function freewaySigns(roads, sys, { faces = [], decks = [], route = () =>
 		return null;
 	};
 	const nearDeck = (x, z) => decks.some((q) => Math.hypot(q.x - x, q.z - z) < 70);
+	let CW = null;
 	const used = [];
 	for (const L of links) {
 		const p = L.pts, m = p.length;
@@ -263,7 +265,15 @@ export function freewaySigns(roads, sys, { faces = [], decks = [], route = () =>
 		if (!B || nearDeck(B.x, B.z) || used.some((u) => Math.hypot(u.x - B.x, u.z - B.z) < 250)) continue;
 		used.push(B);
 		const hw = M.r.w / 2, [rx, rz] = rightOf(B.ux, B.uz), sd = sys.side === 'left' ? -1 : 1;
-		const a = { x: B.x - rx * sd * (hw + 1.6), z: B.z - rz * sd * (hw + 1.6) }, b = { x: B.x + rx * sd * (hw + 1.6), z: B.z + rz * sd * (hw + 1.6) };
+		// the legs beyond the shoulders: on the right past the paved shoulder, on the left on the
+		// median wall (or past the rail where the median is ground: bay/fwyplan.js)
+		let lo = hw + 1.6, ro = hw + 1.6;
+		if (sd === 1) {
+			CW = CW || carriageways(main);
+			const m = medianFor(hw, gapLeft(CW, B.x, B.z, B.ux, B.uz));
+			lo = m.shared ? m.wall : m.wall + 0.6; ro = hw + SHOULDER_R + 0.7;
+		}
+		const a = { x: B.x - rx * sd * lo, z: B.z - rz * sd * lo }, b = { x: B.x + rx * sd * ro, z: B.z + rz * sd * ro };
 		gantries.push({ x0: a.x, z0: a.z, x1: b.x, z1: b.z, h: 6.6, ux: B.ux, uz: B.uz });
 		const dir = Math.abs(B.ux) > Math.abs(B.uz) ? (B.ux > 0 ? 'E' : 'W') : (B.uz < 0 ? 'N' : 'S');
 		const panel = (face, along, w, h) => out.push({ mat: MAT.retro, layer: LAYER.poster, face, x: B.x + rx * sd * along - B.ux * 0.35, z: B.z + rz * sd * along - B.uz * 0.35, hy: 6.6 + 0.45 + h / 2 - 0.4, nx: -B.ux, nz: -B.uz, w, h, back: BACK.blank, wear: 0, base: null, gantry: true });
@@ -480,16 +490,21 @@ export function constructionSigns(site, sys, { seed = 0 } = {}) {
 // ---------- the cars ----------
 // What a car carries: its plates from the pool the region's plates are drawn into, a dealer's
 // frame on some, bumper stickers on a third, a parking permit or a region's windscreen
-// sticker, a rear-window sticker now and then. Liveries for the services' cars. Indexes into
+// sticker, a rear-window sticker now and then, a brand's sticker on some, a street slap on
+// the back glass of a few. Liveries for the services' cars. Indexes into
 // the pools (signage/cars.js draws them); the same car is the same every time.
-export const POOLS = { plate: 48, bumper: 24, window: 12, permit: 8 };
+export const POOLS = { plate: 48, bumper: 24, window: 12, permit: 8, logo: 16, slap: 8 };
 export function carDecalSet(seed, { sys, livery = null, phone = false } = {}) {
 	const r = rng(seed >>> 0 || 1);
-	const S = { plate: Math.floor(r() * POOLS.plate), front: !!sys.frontPlate, bumper: [], window: -1, permit: -1, livery };
+	const S = { plate: Math.floor(r() * POOLS.plate), front: !!sys.frontPlate, bumper: [], window: -1, permit: -1, logo: -1, slap: -1, livery };
 	if (livery) return S;
 	const nb = r() < 0.33 ? 1 + Math.floor(r() * (phone ? 1 : 3)) : 0;
 	for (let i = 0; i < nb; i++) S.bumper.push(Math.floor(r() * POOLS.bumper));
-	if (r() < 0.18) S.window = Math.floor(r() * POOLS.window);
+	if (r() < 0.24) S.window = Math.floor(r() * POOLS.window);
 	if (r() < (sys.id === 'jp' || sys.id === 'vienna' ? 0.55 : 0.2)) S.permit = Math.floor(r() * POOLS.permit);
+	// a brand's sticker on the boot or tailgate (a shop, a label, a coffee roaster) on three in
+	// ten; a round sticker up in a corner of the back glass on one in seven
+	if (r() < 0.3) S.logo = Math.floor(r() * POOLS.logo);
+	if (r() < 0.15) S.slap = Math.floor(r() * POOLS.slap);
 	return S;
 }

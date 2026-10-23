@@ -12,6 +12,8 @@ import * as THREE from 'three';
 
 const N = 256, CELL = 2, SIZE = N * CELL, STEP = 5, MAXG = 0.25, BERM = 7, MAXCUT = 60;
 const SKIP = new Set(['path', 'track', 'footway', 'steps', 'pedestrian', 'cycleway']);
+// a freeway's shoulders are graded with its lanes (fwyplan.js: 3 m right, 3 m or more left)
+const FWY_SHOULDERS = 3.5;
 
 // The footpaths near you get their own finer grid (half a metre): the tread is cut level
 // from side to side into the slope and sunk a little, a short cut bank above it and a
@@ -199,7 +201,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		// so two roads meeting never leave a step between them
 		let ri = 0;
 		for (const r of roads) {
-			const P = profile(r), p = r.pts, hw = r.w / 2, reach = hw + BERM, touched = [];
+			const P = profile(r), p = r.pts, hw = r.w / 2 + (r.cls === 'motorway' && !r.link ? FWY_SHOULDERS : 0), reach = hw + BERM, touched = [];
 			ri++;
 			for (let i = 0; i + 3 < p.length; i += 2) {
 				const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l2 = dx * dx + dz * dz;
@@ -297,6 +299,9 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		return d * edge * edge * (3 - 2 * edge);
 	}
 
+	// the grading at one cell corner (one function for every look, not one made per call: the
+	// ground's height is asked thousands of times a frame)
+	const gradeAt = (a, b) => delta[b * N + a] * weight[b * N + a];
 	// how far the roads' grading moved the ground at (x, z), the footpaths' treads left out: what
 	// stands beside a road (the trees, city.js) rides on it, and is stood again when it changes
 	function roadDelta(x, z) {
@@ -305,8 +310,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		const u = (x - R.x) / CELL - 0.5, v = (z - R.y) / CELL - 0.5;
 		if (u < 0 || v < 0 || u >= N - 1 || v >= N - 1) return 0;
 		const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
-		const at = (a, b) => delta[b * N + a] * weight[b * N + a];
-		const d = (at(i, j) * (1 - fu) + at(i + 1, j) * fu) * (1 - fv) + (at(i, j + 1) * (1 - fu) + at(i + 1, j + 1) * fu) * fv;
+		const d = (gradeAt(i, j) * (1 - fu) + gradeAt(i + 1, j) * fu) * (1 - fv) + (gradeAt(i, j + 1) * (1 - fu) + gradeAt(i + 1, j + 1) * fu) * fv;
 		const eu = (x - R.x) / R.z, ev = (z - R.y) / R.z, e = Math.min(eu, ev, 1 - eu, 1 - ev), edge = Math.max(0, Math.min(1, e / 0.08));
 		return d * edge * edge * (3 - 2 * edge);
 	}
@@ -318,8 +322,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		const u = (x - R.x) / CELL - 0.5, v = (z - R.y) / CELL - 0.5;
 		if (u < 0 || v < 0 || u >= N - 1 || v >= N - 1) return h;
 		const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
-		const at = (a, b) => delta[b * N + a] * weight[b * N + a];
-		const d = (at(i, j) * (1 - fu) + at(i + 1, j) * fu) * (1 - fv) + (at(i, j + 1) * (1 - fu) + at(i + 1, j + 1) * fu) * fv;
+		const d = (gradeAt(i, j) * (1 - fu) + gradeAt(i + 1, j) * fu) * (1 - fv) + (gradeAt(i, j + 1) * (1 - fu) + gradeAt(i + 1, j + 1) * fu) * fv;
 		const eu = (x - R.x) / R.z, ev = (z - R.y) / R.z, e = Math.min(eu, ev, 1 - eu, 1 - ev), edge = Math.max(0, Math.min(1, e / 0.08));
 		return h + d * edge * edge * (3 - 2 * edge);
 	}

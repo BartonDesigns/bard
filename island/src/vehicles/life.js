@@ -18,14 +18,18 @@ import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/body.js';
 import { peopleCap } from '../world/governor.js';
 import { createMotion } from '../people/motion.js';
+import { wallKeeper } from '../people/walls.js';
 import { fadePerson } from '../people/fade.js';
 import { zoneOf, crowd } from '../people/flow.js';
 import { specOf, seatsOf } from '../bay/cars.js';
+import { laneAway, laneIn } from './lane-path.js';
+import { routeOf, along } from '../military/route.js';
 
 const hashS = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
 const frac = (h) => ((Math.imul(h ^ (h >>> 15), 2246822519) ^ (h >>> 13)) >>> 0) / 4294967296;
 
 export function createLife({ scene, world, camera, isPhone }) {
+	const keepWalls = wallKeeper(world);
 	const group = new THREE.Group();
 	group.name = 'car-people';
 	scene.add(group);
@@ -54,7 +58,8 @@ export function createLife({ scene, world, camera, isPhone }) {
 		b = { seed, P, wrap, used: now, busy: false, floor: 0, mode: 'car' };
 		// the ground under them: the car's floor while in it, the street's when out
 		const W = () => world();
-		b.M = createMotion(P, (x, z) => b.mode === 'car' ? b.floor : groundAt(W(), x, z, b.M ? b.M.S.pos.y : undefined));
+		// (on foot, kept off the walls and fences between their door and the car: people/walls.js)
+		b.M = createMotion(P, (x, z) => b.mode === 'car' ? b.floor : groundAt(W(), x, z, b.M ? b.M.S.pos.y : undefined), { constrain: (pos, from) => { if (b.mode !== 'car') keepWalls(pos, from, from.y); }, space: () => b.mode !== 'car' });
 		P.root.visible = false;
 		bodies.set(seed, b);
 		return b;
@@ -172,7 +177,15 @@ export function createLife({ scene, world, camera, isPhone }) {
 		// (arrivals come up the street from well behind the space, a lane out from the kerb)
 		const kerb = pullSide(car);
 		E.lane = [sx * kerb * 2.4, sz * kerb * 2.4]; E.kerb = kerb;
-		if (kind === 'arrive') { E.pos = [car.x - fx * 110 + E.lane[0], car.z - fz * 110 + E.lane[1]]; world().street.hide(car.id, true); }
+		if (kind === 'arrive') {
+			// (up the street it is parked on, by the way the street goes; too short a way in sight,
+			// and it simply is there later, when you are not looking)
+			E.way = laneWay(world(), car, 'in'); E.s = 0;
+			if (E.way && E.way.length < 80) return false;
+			if (E.way) { const [x, z] = inAt(E, 0); E.pos = [x, z]; }
+			else E.pos = [car.x - fx * 110 + E.lane[0], car.z - fz * 110 + E.lane[1]];
+			world().street.hide(car.id, true);
+		}
 		episodes.push(E);
 		return true;
 	}
@@ -183,6 +196,32 @@ export function createLife({ scene, world, camera, isPhone }) {
 		let best = 0, bd = 1e9;
 		for (const r of roads) for (let i = 0; i + 1 < r.pts.length; i += 2) { const d = Math.hypot(r.pts[i] - car.x, r.pts[i + 1] - car.z); if (d < bd) { bd = d; best = (r.pts[i] - car.x) * sx + (r.pts[i + 1] - car.z) * sz; } }
 		return best >= 0 ? 1 : -1;
+	}
+	// the lane a car drives off along or comes in by (vehicles/lane-path.js), as a route; null
+	// where no street is mapped under it (then the old straight way)
+	function laneWay(W, car, how) {
+		const near = W.real?.loaded?.() ? (x, z, r) => W.real.near('roads', x, z, r) : null;
+		if (!near) return null;
+		const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
+		const pts = how === 'out' ? laneAway(near, car.x, car.z, fx, fz, 400) : laneIn(near, car.x, car.z, fx, fz, 110);
+		if (!pts) return null;
+		// (the lane's first point, or its last coming in, is beside the space: awayAt and inAt ease
+		// the car between the two)
+		const R = routeOf(pts);
+		return R.length > 5 ? R : null;
+	}
+	// along the way out: from the space, eased over into the lane over its first 9 m
+	function awayAt(E, s) {
+		const car = E.car, fx = Math.sin(car.yaw), fz = Math.cos(car.yaw), q = along(E.way, s);
+		const k = Math.min(1, Math.max(0, s / 9)), ease = k * k * (3 - 2 * k);
+		return [car.x + fx * s + (q.x - car.x - fx * s) * ease, car.z + fz * s + (q.z - car.z - fz * s) * ease];
+	}
+	// and the way in: the lane, eased over to the kerb along the space's own line over its last 9 m
+	function inAt(E, s) {
+		const car = E.car, fx = Math.sin(car.yaw), fz = Math.cos(car.yaw), q = along(E.way, s), left = Math.max(0, E.way.length - s);
+		const k = Math.min(1, Math.max(0, 1 - left / 9)), ease = k * k * (3 - 2 * k);
+		const sx = car.x - fx * left, sz = car.z - fz * left;
+		return [q.x + (sx - q.x) * ease, q.z + (sz - q.z) * ease];
 	}
 	function walkTo(b, x, z) {
 		const S = b.M.S, dx = x - S.pos.x, dz = z - S.pos.z, d = Math.hypot(dx, dz);
@@ -219,12 +258,22 @@ export function createLife({ scene, world, camera, isPhone }) {
 				break;
 			}
 			case 'pull-out': {
-				// ease out of the space into the lane and away down the street
-				E.v = Math.min(10, E.v + dt * (E.t < 1 ? 0 : 1.8));
+				// ease out of the space into the lane and away down the street (round the corner where
+				// it ends, never on through the block: lane-path.js); slowing to a stop at a dead end
+				if (E.way === undefined) E.way = laneWay(W, car, 'out');
+				const end = E.way ? E.way.length - E.s : Infinity;
+				E.v = Math.min(10, end < 25 ? Math.max(0, end - 3) * 0.4 : E.v + dt * (E.t < 1 ? 0 : 1.8));
 				E.s += E.v * dt;
-				const k = Math.min(1, E.s / 9), ease = k * k * (3 - 2 * k);
-				const x = car.x + fx * E.s + E.lane[0] * ease, z = car.z + fz * E.s + E.lane[1] * ease;
-				const yaw = car.yaw + E.kerb * Math.atan(2.4 * 6 * k * (1 - k) / 9);
+				let x, z, yaw;
+				if (E.way) {
+					[x, z] = awayAt(E, E.s);
+					const [x1, z1] = awayAt(E, E.s + 0.6);
+					yaw = Math.hypot(x1 - x, z1 - z) > 1e-3 ? Math.atan2(x1 - x, z1 - z) : E.yaw;
+				} else {
+					const k = Math.min(1, E.s / 9), ease = k * k * (3 - 2 * k);
+					x = car.x + fx * E.s + E.lane[0] * ease; z = car.z + fz * E.s + E.lane[1] * ease;
+					yaw = car.yaw + E.kerb * Math.atan(2.4 * 6 * k * (1 - k) / 9);
+				}
 				E.spin += E.v * dt / (specOf(car.kind).wr || 0.34);
 				carAt(E, x, z, yaw);
 				step(b, dt, t, E.matrix);
@@ -233,12 +282,24 @@ export function createLife({ scene, world, camera, isPhone }) {
 				break;
 			}
 			case 'drive-in': {
-				// up the street, slowing, and into the space
+				// up the street (its own lane, round the corner it came by: lane-path.js), slowing,
+				// and into the space
 				if (b.mode !== 'car') seat(b, car.kind, 0);
 				const tx = car.x, tz = car.z;
-				const along = (E.pos[0] - tx) * fx + (E.pos[1] - tz) * fz;                         // negative: still behind the space
-				E.v = Math.max(1.2, Math.min(9, -along * 0.35));
-				const s2 = Math.min(0, along + E.v * dt);
+				if (E.way) {
+					const left = E.way.length - E.s;
+					E.v = Math.max(1.2, Math.min(9, left * 0.35));
+					E.s = Math.min(E.way.length, E.s + E.v * dt);
+					const [x, z] = inAt(E, E.s), [x1, z1] = inAt(E, E.s + 0.6);
+					E.spin += E.v * dt / (specOf(car.kind).wr || 0.34);
+					carAt(E, x, z, Math.hypot(x1 - x, z1 - z) > 1e-3 ? Math.atan2(x1 - x, z1 - z) : car.yaw);
+					step(b, dt, t, E.matrix);
+					if (E.way.length - E.s < 0.02) { E.phase = 'park'; E.t = 0; carAt(E, tx, tz, car.yaw); }
+					break;
+				}
+				const ahead = (E.pos[0] - tx) * fx + (E.pos[1] - tz) * fz;                         // negative: still behind the space
+				E.v = Math.max(1.2, Math.min(9, -ahead * 0.35));
+				const s2 = Math.min(0, ahead + E.v * dt);
 				const k = Math.max(0, Math.min(1, 1 + s2 / 9)), ease = k * k * (3 - 2 * k);
 				const x = tx + fx * s2 + E.lane[0] * (1 - ease), z = tz + fz * s2 + E.lane[1] * (1 - ease);
 				E.spin += E.v * dt / (specOf(car.kind).wr || 0.34);
@@ -283,7 +344,8 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!St) return;
 		const h = hours();
 		for (const car of St.parkedNear(cam.x, cam.z, 130, true)) {
-			if (busySpace(Math.round(car.x) + ':' + Math.round(car.z))) continue;
+			// (a car in a drive stays home: the episodes pull out of a kerb space into the lane)
+			if (car.drive || busySpace(Math.round(car.x) + ':' + Math.round(car.z))) continue;
 			const o = car.owner || (car.owner = ownerOf(car));
 			const want = present(o, h), d = Math.hypot(car.x - cam.x, car.z - cam.z), vis = d < 90 && inView(car.x, car.y, car.z);
 			// (a space met for the first time, out of sight or far off: as its owner's day has it)
@@ -301,7 +363,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!St || episodes.length) return;
 		const bucket = Math.floor(t / 20);
 		if (frac(bucket * 7919) > 0.55) return;
-		const cands = St.parkedNear(cam.x, cam.z, 45).filter((c) => { const d = Math.hypot(c.x - cam.x, c.z - cam.z); return d > 10 && inView(c.x, c.y, c.z); });
+		const cands = St.parkedNear(cam.x, cam.z, 45).filter((c) => { if (c.drive) return false; const d = Math.hypot(c.x - cam.x, c.z - cam.z); return d > 10 && inView(c.x, c.y, c.z); });
 		if (!cands.length) return;
 		const car = cands[Math.floor(frac(bucket * 104729) * cands.length)];
 		const o = car.owner || (car.owner = ownerOf(car));
@@ -385,5 +447,13 @@ export function createLife({ scene, world, camera, isPhone }) {
 	// what cars there are that are not in the street's own lists (for bumping into)
 	const moving = () => episodes.filter((E) => E.phase === 'pull-out' || E.phase === 'drive-in' || E.phase === 'park').map((E) => ({ kind: E.car.kind, x: E.pos[0], z: E.pos[1], y: E.matrix.elements[13], yaw: E.yaw }));
 	const info = () => ({ err: lastErr, t: +(buildT || 0).toFixed(1), episodes: episodes.map((E) => E.kind + ':' + E.phase + ':' + E.car.kind), drivers: [...seated.values()].reduce((a, b) => a + b.length, 0), bodies: bodies.size });
-	return { update, draw, moving, info, episodes, begin, ownerOf, present, group, pull, flee };
+	// (the way a parked car would drive off or come in, every 2 m, for the checks: tools/walls-game-browser.cjs)
+	function way(car, how = 'out') {
+		const E = { car, way: laneWay(world(), car, how) };
+		if (!E.way) return null;
+		const out = [];
+		for (let s = 0; s <= E.way.length; s += 2) out.push(how === 'out' ? awayAt(E, s) : inAt(E, s));
+		return out;
+	}
+	return { update, draw, moving, info, episodes, begin, ownerOf, present, group, pull, flee, way };
 }

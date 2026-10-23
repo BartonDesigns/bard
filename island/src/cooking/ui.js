@@ -9,9 +9,9 @@ import { RECIPE, rank, buffText, optionsOf } from './recipes.js';
 import { leftText, MAX_MEALS } from './meals.js';
 
 const CSS = `
-.ck-root{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);font:14px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#fff}
+.ck-root{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);font:14px var(--bard-body,system-ui,sans-serif);color:#fff}
 .ck-card{width:min(620px,94vw);max-height:min(86vh,860px);display:flex;flex-direction:column;background:#141414;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.8);overflow:hidden}
-.ck-phone .ck-card{width:100%;height:100%;max-height:none;border-radius:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.ck-phone .ck-card{width:100%;height:100%;max-height:none;border-radius:0;padding-top:var(--l99-top, env(safe-area-inset-top));padding-bottom:env(safe-area-inset-bottom)}
 .ck-head{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
 .ck-title{font:700 18px inherit;flex:1;line-height:1.25}
 .ck-sub{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px;font-weight:400}

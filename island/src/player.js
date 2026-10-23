@@ -11,6 +11,7 @@ import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 import { DEFAULT_AIM_SENSITIVITY } from './aim-sensitivity.js';
 import { lookPrefs, lookGain, levelPitch, LEVEL, onGyro, resumeGyro } from './ui/touch-look.js';
 import { createParkour } from './parkour.js';
+import { keepSpace } from './people/personal-space.js';
 
 const EYE = 1.68;
 
@@ -66,10 +67,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = s.descendAssist = false; keys.add(k); e.preventDefault(); }
 	}
 	// Aim and camera (desktop). Alt / Option lets go of the mouse for the camera: the cursor is
-	// free, a click-drag turns the view and clicks fire nothing. A double tap of Alt / Option
-	// captures it again to aim. (The first tap of a double tap from aiming passes through the
-	// camera and straight back.)
-	let altAt = 0;
+	// free (a hand), a click-drag turns the view and clicks fire nothing. Alt / Option again, or
+	// a plain click on the world, captures it to aim.
 	function setLookMode(m) {
 		if (s.lookMode === m) return;
 		s.lookMode = m;
@@ -83,9 +82,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		// (Alt alone would focus a browser's menu bar on Windows)
 		e.preventDefault();
 		if (e.type !== 'keydown' || e.repeat) return;
-		const now = performance.now();
-		if (now - altAt < 350) { altAt = 0; setLookMode('aim'); }
-		else { altAt = now; setLookMode('camera'); }
+		// (a tap each way: aiming, it lets the mouse go; with the mouse free, it takes it back;
+		// a double tap from aiming lands back at aiming, as it always did)
+		setLookMode(s.lookMode === 'camera' ? 'aim' : 'camera');
 	}
 	addEventListener('keydown', altKey, true); addEventListener('keyup', altKey, true);
 	function cycleBoost() { if (!s.flying) return 1; s.boost = nextFlightSpeed(s.boost, !!s.orbit?.deep?.()); s.onBoost?.(s.boost); return s.boost; }
@@ -97,7 +96,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const r = dom.canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
 		if (e.pointerType === 'mouse') {
    // (the camera: a click-drag turns the view, the mouse stays free)
-   if (s.lookMode === 'camera') { if (e.button === 0) { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY }; dom.canvas.style.cursor = 'grabbing'; dom.canvas.setPointerCapture?.(e.pointerId); } return; }
+   if (s.lookMode === 'camera') { if (e.button === 0) { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: e.timeStamp }; dom.canvas.style.cursor = 'grabbing'; dom.canvas.setPointerCapture?.(e.pointerId); } return; }
    if (document.pointerLockElement !== dom.canvas && e.button === 0 && dom.canvas.requestPointerLock) {
     e.preventDefault();
     try { dom.canvas.requestPointerLock()?.catch?.(() => {}); } catch {}
@@ -134,7 +133,14 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch));
 	}
 	function pUp(e) {
-		if (mouse && e.pointerId === mouse.id) { mouse = null; if (s.lookMode === 'camera') dom.canvas.style.cursor = 'grab'; }
+		if (mouse && e.pointerId === mouse.id) {
+			// (a plain click on the world, not a drag, takes the mouse back to aim: the way a game
+			// is clicked into after Esc let the cursor go)
+			const tap = s.lookMode === 'camera' && mouse.t0 !== undefined && e.timeStamp - mouse.t0 < 260 && Math.hypot(e.clientX - mouse.x0, e.clientY - mouse.y0) < 4;
+			mouse = null;
+			if (tap) setLookMode('aim');
+			else if (s.lookMode === 'camera') dom.canvas.style.cursor = 'grab';
+		}
 		if (touch.move && e.pointerId === touch.move.id) {
 			touch.move = null; joy.x = joy.y = 0; s.run = false;
 			dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = '';
@@ -157,6 +163,13 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 
 	// ---------- ground and walls ----------
 	const foot = village.footprints.filter((f) => !f.fence);
+	// how far from its middle each one can reach you, by any of the tests below (squared, and a
+	// little over): far from the village (out in the Bay) a footprint is passed by on that alone
+	const reach = foot.map((f) => {
+		const d = f.d || 0, body = Math.abs(d - 2.2) / 2, r = Math.max(Math.hypot(f.w / 2 + 1, d / 2 + 1), Math.hypot(f.w / 2 + 0.2, Math.max(2, f.len || 0)), Math.hypot(f.w / 2 + 0.2, body + 2.8));
+		return (r + 0.01) * (r + 0.01);
+	});
+	const far = (k, x, z) => (x - foot[k].x) * (x - foot[k].x) + (z - foot[k].z) * (z - foot[k].z) > reach[k];
 	// footprints are placed with rotationY(face): world = (lx cos + lz sin, -lx sin + lz cos)
 	const toLocal = (f, x, z) => {
 		const c = Math.cos(f.face), sn = Math.sin(f.face), dx = x - f.x, dz = z - f.z;
@@ -173,8 +186,11 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		let g = island.heightAt(x, z);
 		// other walkable surfaces the world adds (the Golden Gate Bridge's deck)
 		if (island.extraFloor) g = Math.max(g, island.extraFloor(x, z, y));
-		for (const f of foot) {
-			const [lx, lz] = toLocal(f, x, z);
+		// (the houses' roofs, for you once you have climbed up: parkour.js)
+		if (island.roofFloor) g = Math.max(g, island.roofFloor(x, z, y));
+		for (let k = 0; k < foot.length; k++) {
+			if (far(k, x, z)) continue;
+			const f = foot[k], [lx, lz] = toLocal(f, x, z);
 			if (f.pier) {
 				if (Math.abs(lx) < f.w / 2 + 0.2 && lz > -2 && lz < f.len && y > f.y - 1.2) g = Math.max(g, f.y);
 			} else {
@@ -193,8 +209,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function pushOut(p) {
 		// in a cave: only its walls (the village, trees and rocks overhead are not here)
 		if (island.underFloor?.(p.x, p.z, p.y - EYE) != null) { island.underPush?.(p, p.y - EYE); return; }
-		for (const f of foot) {
-			if (f.pier) continue;
+		for (let k = 0; k < foot.length; k++) {
+			const f = foot[k];
+			if (f.pier || far(k, p.x, p.z)) continue;
 			let [lx, lz] = toLocal(f, p.x, p.z);
 			// a cottage you can walk into: its walls (and its furniture) one by one
 			if (f.walls) {
@@ -228,9 +245,12 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	}
 
 	// the climbs and the wall runs, felt for with the same two tests
-	const park = createParkour({ s, camera, floorAt, pushOut });
+	// (the ceilings over you: inside a house, its own; island-build.js)
+	const ceilingAt = (x, z, y) => island.ceilingAt ? island.ceilingAt(x, z, y) : Infinity;
+	const park = createParkour({ s, camera, floorAt, pushOut, ceilingAt });
 
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
+	const spaceFrom = { x: 0, z: 0 };
 	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
 	function input() {
 		let mx = joy.x + s.pad.x, mz = joy.y + s.pad.y;
@@ -342,6 +362,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const px0 = s.pos.x, pz0 = s.pos.z;
 		pushOut(s.pos);
 		{ const ox = s.pos.x - px0, oz = s.pos.z - pz0, ol = Math.hypot(ox, oz); if (ol > 1e-4) met = { nx: ox / ol, nz: oz / ol, kind: 1 }; }
+		// people: never walked into, held at a natural distance (people/personal-space.js); the
+		// walls again after, should that have set you against one
+		spaceFrom.x = x0; spaceFrom.z = z0;
+		if (keepSpace(spaceFrom, s.pos, s.vel, s.pos.y - EYE, dt, wish.lengthSq() > 0.01, pushOut)) pushOut(s.pos);
 		const ground = seenFloorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
 		const contact = waterContact(island, s.pos, ground, t, shared.uWave?.value ?? 1, s.diving);
@@ -387,6 +411,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const gk = s.grounded ? 1 : park.air(dt, { run, wish, contact: met, jump: jumpEdge });
 			s.vel.y -= 18 * (island.gravity || 1) * (s.vel.y < 0 ? s.fallK || 1 : 1) * dt * gk;
 			s.pos.y += s.vel.y * dt;
+			// a jump indoors: the head meets the ceiling, not the room above or the sky
+			if (s.vel.y > 0 && !s.grounded) { const c = ceilingAt(s.pos.x, s.pos.z, s.pos.y - EYE - s.vel.y * dt); if (s.pos.y + 0.15 > c) { s.pos.y = Math.max(floorY + EYE, c - 0.15); s.vel.y = 0; } }
 			if (s.pos.y < floorY + EYE) { s.pos.y = floorY + EYE; s.vel.y = 0; s.grounded = true; }
 			else if (s.pos.y > floorY + EYE + 0.05) s.grounded = false;
 			if (s.grounded) park.grounded();

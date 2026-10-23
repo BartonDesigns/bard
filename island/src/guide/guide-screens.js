@@ -138,7 +138,7 @@ export function guideQuests(gd) {
 	section('Story quests', list.length ? `${live.length} active${offers.length ? ` · ${offers.length} offered` : ''}` : '');
 	if (!live.length && !offers.length) {
 		const empty = qel('div', qcss.card + 'border-style:dashed;');
-		empty.append(qel('div', 'font:600 14px system-ui;color:#fff;', 'No story quest under way'), qel('div', qcss.body, 'Talk to someone nearby and ask for an adventure. They suggest a story rooted in this world.'));
+		empty.append(qel('div', 'font:600 14px var(--bard-display,system-ui,sans-serif);color:#fff;', 'No story quest under way'), qel('div', qcss.body, 'Talk to someone nearby and ask for an adventure. They suggest a story rooted in this world.'));
 		log.append(empty);
 	}
 	for (const q of [...live, ...offers]) log.append(questCard(q, bodyKey, context));

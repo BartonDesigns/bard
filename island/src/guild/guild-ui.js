@@ -8,27 +8,27 @@ import { COLOURS, ROLES, NPC_MAX, xpToNext, nextSpell, tagFrom, cleanTag, guildL
 import { SPELL } from '../magic/spells.js';
 
 const CSS = `
-.gld{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:21;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:16px;font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#fff}
+.gld{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:21;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:16px;font:14px/1.45 var(--bard-body,system-ui,sans-serif);color:#fff}
 .gld.on{display:flex}
 .gld-card{width:min(820px,100%);height:min(88vh,900px);background:#1a1a1a;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.8);display:flex;flex-direction:column;overflow:hidden}
 .gld-top{display:flex;align-items:center;gap:12px;padding:16px 20px 12px}
 .gld-tag{flex:none;min-width:48px;height:48px;padding:0 10px;border-radius:12px;display:flex;align-items:center;justify-content:center;font:700 16px/1 ui-monospace,Menlo,monospace;letter-spacing:.04em;border:2px solid}
 .gld-title{flex:1;min-width:0}
-.gld-title b{display:block;font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gld-title b{display:block;font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--bard-display,Georgia,serif)}
 .gld-title span{font-size:13px;color:rgba(255,255,255,.7)}
 .gld-x{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);font-size:16px;cursor:pointer}
 .gld-tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid rgba(255,255,255,.1);overflow-x:auto;scrollbar-width:none}
-.gld-tab{flex:1;min-width:96px;padding:12px 8px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 14px system-ui;cursor:pointer;min-height:44px;white-space:nowrap}
+.gld-tab{flex:1;min-width:96px;padding:12px 8px;border:0;border-bottom:3px solid transparent;background:none;color:rgba(255,255,255,.7);font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;min-height:44px;white-space:nowrap}
 .gld-tab.cur{color:#fff;border-bottom-color:#01a982}
 .gld-tab i{font-style:normal;margin-left:6px;padding:1px 7px;border-radius:10px;background:rgba(1,169,130,.25);color:#5eead4;font-size:12px}
 .gld-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px 20px 24px;display:flex;flex-direction:column;gap:14px}
-.gld h3{margin:6px 0 0;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+.gld h3{margin:6px 0 0;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.5);font-family:var(--bard-display,Georgia,serif)}
 .gld label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(255,255,255,.7)}
-.gld input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:12px 14px;color:#fff;font:16px system-ui;outline:none;min-width:0}
+.gld input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:12px 14px;color:#fff;font:16px var(--bard-body,system-ui,sans-serif);outline:none;min-width:0}
 .gld input:focus{border-color:#01a982;background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(1,169,130,.2)}
-.gld-go{background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;border:0;border-radius:8px;padding:12px 20px;font:600 15px system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);min-height:44px}
-.gld-alt{background:transparent;color:#01a982;border:2px solid #01a982;border-radius:8px;padding:8px 16px;font:600 14px system-ui;cursor:pointer;min-height:44px}
-.gld-ghost{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 14px;font:13px system-ui;cursor:pointer;min-height:40px}
+.gld-go{background:linear-gradient(135deg,#01a982 0%,#10b981 100%);color:#fff;border:0;border-radius:8px;padding:12px 20px;font:600 15px var(--bard-display,system-ui,sans-serif);cursor:pointer;box-shadow:0 4px 12px rgba(1,169,130,.3);min-height:44px}
+.gld-alt{background:transparent;color:#01a982;border:2px solid #01a982;border-radius:8px;padding:8px 16px;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;min-height:44px}
+.gld-ghost{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 14px;font:13px var(--bard-body,system-ui,sans-serif);cursor:pointer;min-height:40px}
 .gld-ghost.warn{color:#fca5a5;border-color:rgba(239,68,68,.45)}
 .gld button:disabled{opacity:.5;cursor:default}
 .gld button:focus-visible,.gld input:focus-visible{outline:2px solid #01a982;outline-offset:2px}
@@ -44,11 +44,11 @@ const CSS = `
 .gld-ch{display:flex;align-items:flex-start;gap:10px}
 .gld-ch b{flex:1;font-size:15px;line-height:1.3}
 .gld-ch small{display:block;font-size:12px;font-weight:400;color:rgba(255,255,255,.6)}
-.gld-lv{flex:none;font:700 13px system-ui;padding:4px 10px;border-radius:16px;background:rgba(59,130,246,.2);color:#93c5fd}
+.gld-lv{flex:none;font:700 13px var(--bard-display,system-ui,sans-serif);padding:4px 10px;border-radius:16px;background:rgba(59,130,246,.2);color:#93c5fd}
 .gld-bar{height:8px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden}
 .gld-bar i{display:block;height:100%;background:linear-gradient(135deg,#01a982 0%,#10b981 100%);transition:width .5s ease}
 .gld-pills{display:flex;gap:6px;flex-wrap:wrap}
-.gld-pill{padding:3px 10px;border-radius:16px;font-size:12px;font-weight:600;background:rgba(139,92,246,.2);color:#c4b5fd}
+.gld-pill{padding:3px 10px;border-radius:16px;font-size:12px;font-weight:600;background:rgba(139,92,246,.2);color:#c4b5fd;font-family:var(--bard-display,Georgia,serif)}
 .gld-pill.role{background:rgba(16,185,129,.2);color:#6ee7b7}
 .gld-pill.rest{background:rgba(245,158,11,.2);color:#fcd34d}
 .gld-pill.down{background:rgba(239,68,68,.2);color:#fca5a5}
@@ -58,7 +58,7 @@ const CSS = `
 .gld-li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#2a2a2a;border:1px solid rgba(255,255,255,.08);flex-wrap:wrap}
 .gld-li>span{flex:1;min-width:140px}
 .gld-li small{color:rgba(255,255,255,.6);font-size:12px;margin-left:6px}
-@media (max-width:640px){.gld{padding:0}.gld-card{width:100%;height:100%;border-radius:0;border:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.gld-top{padding:12px 16px 8px}.gld-body{padding:14px 16px 24px}.gld-grid{grid-template-columns:1fr}.gld-tabs{padding:0 4px;gap:0}.gld-tab{min-width:0;padding:12px 2px;font-size:13px}.gld-tab i{margin-left:4px;padding:1px 5px}}
+@media (max-width:640px){.gld{padding:0}.gld-card{width:100%;height:100%;border-radius:0;border:0;padding-top:var(--l99-top, env(safe-area-inset-top));padding-bottom:env(safe-area-inset-bottom)}.gld-top{padding:12px 16px 8px}.gld-body{padding:14px 16px 24px}.gld-grid{grid-template-columns:1fr}.gld-tabs{padding:0 4px;gap:0}.gld-tab{min-width:0;padding:12px 2px;font-size:13px}.gld-tab i{margin-left:4px;padding:1px 5px}}
 `;
 
 const TABS = [['guild', 'Guild'], ['folk', 'Townsfolk'], ['players', 'Players'], ['allies', 'Alliances']];
@@ -82,7 +82,7 @@ export function createGuildPanel({ mount, menu, hint = () => {} }) {
 	if (menu) {
 		btn = el('button');
 		btn.type = 'button';
-		btn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		btn.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) btn.addEventListener(ev, (x) => x.stopPropagation());
 		btn.addEventListener('click', (e) => { e.stopPropagation(); menu.style.display = 'none'; open(); });
 		// (just under the account's row, the menu's first)

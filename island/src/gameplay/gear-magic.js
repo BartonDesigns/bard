@@ -28,6 +28,7 @@ export const XP_PER_FABRIC = 3;
 const WEAPON_SCHOOLS = Object.freeze({
 	'aurora-trail-rifle': ['radiance', 'storm', 'void', 'warding', 'dawn'],
 	'mossback-scout-rifle': ['shadow', 'blight', 'umbral', 'chrono', 'void'],
+	'longwatch-sniper-rifle': ['void', 'storm', 'shadow', 'chrono', 'radiance'],
 	'warden-spark-carbine': ['storm', 'warding', 'chrono', 'restoration', 'radiance'],
 	'reedline-hunting-bow': ['primal', 'radiance', 'shadow', 'blight', 'dawn', 'restoration'],
 });

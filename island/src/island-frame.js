@@ -8,10 +8,13 @@
 // world. It sets frameAvg, indoorK, last, projectRefresh, projectSnapshot, time.
 
 import * as THREE from 'three';
+import { beatNow } from './music/beat.js';
+import { crowdBeat } from './people/crowd.js';
 import { qualityNow } from './world/governor.js';
 import { kitDaylight } from './people/kit-light.js';
 import { worldAir } from './world/soundbus.js';
 import { today } from './calendar.js';
+import { scopeView } from './crysis/scope-view.js';
 import { toLL as globeLL } from './earth/globeframe.js';
 import { waterContact } from './world/water-contact.js';
 import { AIR } from './world/airfog.js';
@@ -21,6 +24,8 @@ import { AIR } from './world/airfog.js';
 const MIRROR_EASE = 1500;
 let shownAt = 0;
 const caveFog = new THREE.Color();
+// where the town's own light is read round you (island-frame's city light): here and 250 m out
+const CITY_AT = [[0, 0], [250, 0], [-250, 0], [0, 250], [0, -250]];
 
 export function islandFrame(iw, now) {
 	const { _voidFog, actions, applyQuality, arcade, autoMusic, bridgeSound, camera, carjack, chatter,
@@ -93,7 +98,10 @@ export function islandFrame(iw, now) {
 	W.boardwalk?.update(dt, iw.time, camera, sk.night, W.sky.state.hours);
 	// the weather: frames running slow shed rain streaks; indoors the rain stays out
 	W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
-	const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: iw.frameAvg > 26 });
+	// (in a car's seat the rain is on the glass, not in the cabin: the streaks start past it)
+	const seated = iw.drive.active() && !iw.drive.state.chase && !iw.drive.state.onTrail && !iw.drive.military() && !carjack.active();
+	const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: iw.frameAvg > 26, cab: seated });
+	W.windshield?.update(dt, camera, { seated, rain: W.weather.state.sheltered ? 0 : wx.rainHere, fog: scene.fog.color, car: iw.drive.state });
 	W.ocean.userData.tick?.(dt, W, camera, wx?.rainHere || 0);   // what touches the sea, the rain on it (world/ocean.js)
 	surprises.update(dt, sk, wx);
 	W.whale.update(dt, iw.time, shared.uBass.value, camera.position);
@@ -152,7 +160,9 @@ export function islandFrame(iw, now) {
 		scene.fog.density *= W.island.profileHaze || 1;
 		// (the Moon's ground runs to its horizon in clear vacuum)
 		if (W.island.far) scene.fog.density = 0.000006;
-		const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+		const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = iw.drive.active() && !iw.drive.state.chase && !iw.drive.state.onTrail ? 0.05 : openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+		// (at the wheel the headliner and the pillars are within a quarter metre: the near plane
+		// comes in to them, as drive.js asks; it used to be put back to 0.25 here every frame)
 		if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 	}
 	// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
@@ -188,6 +198,13 @@ export function islandFrame(iw, now) {
 		// (and which way the glow lies: the sky over the cities brightest toward them)
 		W.sky.glowToward(gx, gz, dt);
 	}
+	// and the town's own light by night in the shade (sky.js): how built up it is just round you
+	{
+		const U = shared.uCityLight || (shared.uCityLight = { value: 0 });
+		let u = 0;
+		if (W.bayArea?.loaded() && !W.island.far) for (const [dx, dz] of CITY_AT) u += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+		U.value += (THREE.MathUtils.smoothstep(u / CITY_AT.length, 0.04, 0.3) - U.value) * Math.min(1, dt * 0.5);
+	}
 	if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 	const dazed = W.shrooms?.muffle() || 0;
 	if (under || dazed > 0 || muffle.k > 0.01) underwaterAudio(under ? Math.min(1, 0.75 + (surf - camera.position.y) * 0.03) : dazed, dt);
@@ -213,6 +230,7 @@ export function islandFrame(iw, now) {
 	W.fauna.update(iw.time, sk.night, camera.position);
 	W.landFauna.update(dt, iw.time, sk.night, camera.position, camera.position.y > -0.5);
 	W.bridge?.update(iw.time, sk.night);
+	W.sanMateo?.update(camera, sk.night);
 	W.civ?.update(camera);
 	if (W.civ) { const ll = globeLL(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
 	W.real?.update(camera);
@@ -227,7 +245,8 @@ export function islandFrame(iw, now) {
 	if (W.commercial) {
 		W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
 		W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
-		W.interiors?.update(camera, dt, W.sky.state.hours, sk.night);
+		// (down a scope, the room behind the window under the reticle is built, however far: interiors/index.js)
+		W.interiors?.update(camera, dt, W.sky.state.hours, sk.night, scopeView.active && scopeView.aiming > 0.5 ? scopeView : null);
 		W.structures?.update(dt, sk.night, W.sky.state.hours);
 		W.services?.update(dt, W.sky.state.hours, sk.night);
 		// stepping into a place: what it is, and how busy at this hour
@@ -267,10 +286,10 @@ export function islandFrame(iw, now) {
 	W.vehicles?.update(dt, iw.time);
 	ragdolls.update(dt);
 	W.berms?.update(camera);
-	W.freeways?.update(camera);
+	W.freeways?.update(camera, sk.night);
 	W.signage?.update(dt, camera, sk.night, iw.drive.active());
 	bridgeSound.update(dt);
-	W.streets?.update(dt, sk.night, W.sky.state.hours);
+	W.streets?.update(dt, sk.night, W.sky.state.hours, wx.rainHere || 0, shared.uWet.value);
 	crosswalks.update(dt);
 	W.lake?.update(dt, iw.time, camera, sk.night);
 	W.water?.update(dt, iw.time, camera, sk.night);
@@ -313,9 +332,12 @@ export function islandFrame(iw, now) {
 	fishing.update(dt, iw.time, !arcade.active() && !W.player.state.flying && !iw.drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 	W.roads?.update(iw.time, sk.night);
 	shaderWarm.tick(dt, { frameMs: iw.frameAvg });
+	shaderWarm.buildHeld();
 	guide.update(dt);
 	watchTalk(dt);
 	people.update(dt, iw.time, camera.position, sk.night, camera.position.y > -0.5);
+	// the baked crowds move to the same beat (people/crowd.js)
+	{ const B = beatNow(); crowdBeat(B.beat, B.on); }
 	dogWalkers.update(dt, camera);
 	chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 	encounterPacing.tick(dt);
@@ -365,12 +387,14 @@ export function islandFrame(iw, now) {
 	// (while the skills menu covers the frame nothing is drawn, so neither are they; left as they
 	// are rather than reset, so closing the menu does not warm their shaders again)
 	HOOKS.lightPad?.update(now, camera);
+	// (last, once everyone has moved this frame: the shade under their feet)
+	W.footShade?.update(camera);
 	const covered = magic.covering(), seaOn = !iw.arrival?.blind && !(isPhone && now - shownAt < MIRROR_EASE) && W.island.hasOcean !== false && W.ocean.visible && caveK < 0.5 && iw.indoorK < 0.5;
 	if (covered) { /* the menu over it all */ } else if (seaOn) {
-		seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.city?.group], under || shared.uUnder.value);
+		seaMirror.render(scene, camera, [W.terrain, W.vegetation?.group, W.farForest?.group, W.village?.group, W.distant?.group, W.bayArea?.group, W.bridge?.group, W.sanMateo?.group, W.city?.group], under || shared.uUnder.value);
 		seaDepth.render(scene, camera, under || shared.uUnder.value);
 	} else { seaMirror.reset(); seaDepth.reset(); }
-	if (iw.arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
+	if (iw.arrival?.blind || covered || W.beyond?.render()) { /* hidden (the skills menu over it all), or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { HOOKS.portrait?.tick(); renderer.render(scene, camera); magic.post?.(renderer); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 	W.orbit?.render(iw.time);
 	// the governor: a tier down when the frames or the memory say so, back up after a long easy
 	// run (world/governor.js)

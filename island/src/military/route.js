@@ -49,6 +49,15 @@ export function trimToRoad(R, max = 15) {
 }
 // a stretch of points [x, z, ...] leading into a route, joined on
 export function joinRoute(pts, R) { return finish([...pts, ...R.pts]); }
+// a route ended at distance s along it (a column pulled up short at a wall: military/dispatch.js)
+export function cutRoute(R, s) {
+	const q = along(R, s), pts = [];
+	for (let i = 0; i < R.L.length && R.L[i] < s; i++) pts.push(R.pts[i * 2], R.pts[i * 2 + 1]);
+	pts.push(q.x, q.z);
+	return finish(pts.length >= 4 ? pts : [R.pts[0], R.pts[1], q.x, q.z]);
+}
+// any line of points [x, z, ...] as a route, to travel along (vehicles/lane-path.js's lanes)
+export const routeOf = (pts) => finish(pts);
 // with its running length, for travelling along it
 function finish(pts) {
 	const L = [0];

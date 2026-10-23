@@ -10,11 +10,14 @@ export const DAMAGE_TYPES = ['ballistic', 'energy', 'pierce', 'blast', 'fire', '
 // there drops anyone unarmoured), the neck nearly as bad, centre mass hits hard, the gut a
 // little less; the shoulders, arms and legs take less but the legs slow and cripple
 // (combat/wounds.js)
-export const PARTS = Object.freeze({ head: 4, neck: 2.6, chest: 1.35, gut: 1.05, shoulder: 0.8, arm: 0.6, leg: 0.7, torso: 1, limb: 0.7, body: 1, weak: 2.5, plate: 0.25, wheel: 0.8 });
+export const PARTS = Object.freeze({ head: 4, neck: 2.6, chest: 1.35, gut: 1.05, shoulder: 0.8, arm: 0.6, leg: 0.7, torso: 1, limb: 0.7, body: 1, weak: 2.5, vital: 1.5, plate: 0.25, wheel: 0.8 });
 // a fist, a bat or a boot (blow.melee): the head counts for less than a bullet in it
 // how much of a hit there the armour takes: a vest covers the chest and gut, not the face and throat
 export const ARMOUR_COVER = { head: 0.3, neck: 0, shoulder: 0.6, arm: 0.4, leg: 0.4 };
 export const MELEE_PARTS = Object.freeze({ ...PARTS, head: 1.8, neck: 1.5, chest: 1, gut: 1.1 });
+// an area's blow (a grenade, a burst, a storm) on one caught in it ({ part, d }: targets.js
+// within): the zone it goes off against when it bursts on them, else the whole body
+export const blastPart = (x, touch = 0.35) => (x && x.d <= touch && x.part ? x.part : 'body');
 
 const fin = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 

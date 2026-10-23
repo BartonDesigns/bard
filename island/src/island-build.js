@@ -16,6 +16,7 @@ import { makeHeightTexture, makeMaskTexture, createTerrain } from './world/terra
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
+import { createWindshield } from './world/windshield.js';
 import { createSunRays } from './world/sunrays.js';
 import { createSpray } from './world/spray.js';
 import { createVegetation } from './world/vegetation.js';
@@ -81,6 +82,7 @@ import { createDiablo } from './bay/diablo.js';
 import { createEdgelands } from './bay/edgelands.js';
 import { createVehicles } from './vehicles/index.js';
 import { createLandmarks } from './bay/landmarks.js';
+import { createSanMateoBridge } from './bay/sanmateo.js';
 import { createRoads, ROUTES } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
 import { createGlobe, BAY_WILD_KM } from './earth/globe.js';
@@ -108,6 +110,8 @@ import { createPowerlines } from './world/powerlines.js';
 import { createContrails } from './world/contrails.js';
 import { createFlush } from './world/flush.js';
 import { createFarForest } from './world/farforest.js';
+import { createFootShade } from './world/footshade.js';
+import { liveBodies } from './people/body.js';
 
 export async function islandBuild(iw, params) {
 	const { actions, arms, arriving, buildPanel, button, camera, dom, earthDirector, fishing, fitShadow,
@@ -158,6 +162,8 @@ export async function islandBuild(iw, params) {
 	// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 	const weather = createWeather(scene, shared, { isPhone: GFX, airless: !!profile.airless });
 	sky.attach(weather);
+	// the rain on the glass when you drive in it (world/windshield.js)
+	const windshield = createWindshield(scene, shared);
 	const terrain = createTerrain(island, shared);
 	// the real Bay Area round the island: its heights are shared with the sea
 	shared.bayU = bayUniforms();
@@ -253,7 +259,7 @@ export async function islandBuild(iw, params) {
 	for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 	const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(iw.world?.underworld?.pickables || []), () => iw.running && iw.visible);
 	music.register();
-	iw.world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, flush, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+	iw.world = { island, sky, weather, windshield, terrain, ocean, grass, turf, litter, vegetation, village, distant, plumes, powerlines, contrails, flush, farForest, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
 	// what stands in the sea, for its depth pass: the pier and the boats, the rocks, the reef
 	seaDepth.mark(village?.group); seaDepth.mark(reef?.group);
 	seaDepth.mark(vegetation?.group, (o) => o.userData.material175 === 'stone');
@@ -299,6 +305,14 @@ export async function islandBuild(iw, params) {
 	iw.world.rays = createSunRays(scene, shared, renderer, { isPhone: GFX, sun: sky.sun, air: sky.uniforms.uAir });
 	iw.world.rays.quality(qualityNow().fx);
 	fitShadow();
+	// the soft shade where people's shoes meet the ground (world/footshade.js), on whatever floor
+	// they stand: the one you would stand on there, as drawn (player.js seenFloorAt)
+	iw.world.footShade = createFootShade(scene, { bodies: liveBodies, floor: (x, z, y) => {
+		const I = iw.world.island, at = y + 0.3;
+		let g = iw.world.player?.floorAt ? iw.world.player.floorAt(x, z, at) : I.heightAt(x, z);
+		if (I.drawnAt && I.underFloor?.(x, z, at) == null) g = Math.max(g, I.drawnAt(x, z));
+		return g;
+	} });
 	// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
 	iw.world.spray = createSpray(scene, shared, { isPhone: GFX, world: () => iw.world });
 	iw.world.spray.quality(qualityNow().fx);
@@ -410,6 +424,8 @@ export async function islandBuild(iw, params) {
 	window.L99Loading.stage('Lighting the world');
 	HOOKS.lightPad?.update(performance.now(), camera, true);
 	await shaderWarm.all({ budget: 2500, progress: (k) => { if (iw.arrival) arriving(k * 0.3); } });
+	// (the windshield's rain is hidden until you drive in rain: built now, not then)
+	if (renderer.compileAsync) await renderer.compileAsync(windshield.quad, camera, scene).catch(() => {});
 	window.L99Loading.stage('Preparing the surroundings');
 	// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 	// for everything: the island's own map on the island, the real land beyond it
@@ -441,7 +457,7 @@ export async function islandBuild(iw, params) {
 		// inside the towers: the lobby, the elevators, every floor, the roof
 		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state });
 		// ...and every other building: solid, and built inside as you come to it (interiors/)
-		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers });
+		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers, warm: (o) => (renderer.compileAsync ? renderer.compileAsync(o, camera, scene) : null) });
 		{ const cv = iw.world.commercial.venue, I = iw.world.interiors; iw.world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
 		// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
 		iw.world.interiors.addDoors(iw.world.commercial);
@@ -462,7 +478,7 @@ export async function islandBuild(iw, params) {
 		iw.world.services.hooks.charge = (who, credits) => { const M = HOOKS.npcMoney; if (!M || !(M.balance(who) >= credits)) return false; M.spend(who, credits, 'hospital', 'hospital'); return true; };
 		HOOKS.military?.setInteriors(iw.world.services.militaryInteriors());
 		HOOKS.military?.setStations((x, z) => iw.world?.services?.stationAt(x, z));
-		iw.world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), iw.world.real);
+		iw.world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), iw.world.real, iw.world.city);
 		// the streets by era and season: potholes and their crews, the trees' stakes and leaves, holiday lights, sprinklers (bay/streets.js)
 		iw.world.streets = createStreets({ scene, camera, world: () => iw.world, drive: iw.drive, isPhone: GFX, hint: (t, ms) => hint(t, ms, 1) });
 		// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
@@ -471,7 +487,7 @@ export async function islandBuild(iw, params) {
 		iw.world.vehicles = createVehicles({ scene, world: () => iw.world, camera, isPhone: GFX, people: () => people });
 		iw.world.military = HOOKS.military;
 		// the freeways' barriers, sound walls and overpasses (their decks are floors)
-		iw.world.freeways = createFreeways(scene, bayArea, iw.world.real, { isPhone: GFX, roadAt: (r, x, z) => iw.world.berms?.along(r, x, z) });
+		iw.world.freeways = createFreeways(scene, bayArea, iw.world.real, { isPhone: GFX, shared, roadAt: (r, x, z) => iw.world.berms?.along(r, x, z) });
 		// the signs, decals, stickers, posters, tags and grime of the streets, shops and cars (signage/)
 		iw.world.signage = HOOKS.signage = createSignage({ scene, world: () => iw.world, isPhone: GFX, locate: (x, z) => globeLL(x, z), morality: () => HOOKS.npcQuests?.where?.() });
 		// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
@@ -526,6 +542,9 @@ export async function islandBuild(iw, params) {
 				]);
 			}
 			iw.world.landmarks = createLandmarks(scene, bayArea);
+			// the San Mateo Bridge: its trestles and high-rise, to walk and drive across (bay/sanmateo.js)
+			iw.world.sanMateo = createSanMateoBridge(scene, bayArea, { isPhone });
+			seaDepth.mark(iw.world.sanMateo.substructure);
 			iw.world.roads = createRoads(shared, scene, bayArea);
 			iw.world.diablo = createDiablo(scene, bayArea);
 			// the Summit Building's rooms, built inside its stone as you come near
@@ -540,7 +559,7 @@ export async function islandBuild(iw, params) {
 			// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 			// ...and in and out of the houses, up their stairs
 			const diablo = iw.world.diablo, houses = iw.world.houses, fwy = iw.world.freeways, pools = iw.world.tidepools;
-			island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), iw.world.landmarks.floor(x, z, y), iw.world.beaches.floor(x, z, y), iw.world.commercial.floor(x, z, y), iw.world.discovery.floor(x, z, y), iw.world.towers.floor(x, z, y), iw.world.boardwalk.floor(x, z, y), iw.world.lake?.floor?.(x, z, y) ?? -1e9, iw.world.parks?.floor?.(x, z, y) ?? -1e9);
+			island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), iw.world.sanMateo.floor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), iw.world.landmarks.floor(x, z, y), iw.world.beaches.floor(x, z, y), iw.world.commercial.floor(x, z, y), iw.world.discovery.floor(x, z, y), iw.world.towers.floor(x, z, y), iw.world.boardwalk.floor(x, z, y), iw.world.lake?.floor?.(x, z, y) ?? -1e9, iw.world.parks?.floor?.(x, z, y) ?? -1e9);
 			island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); iw.world.commercial.push(p, footY); iw.world.discovery.push(p, footY); iw.world.towers.push(p, footY); iw.world.boardwalk.push(p, footY); iw.world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); iw.world.lake?.push(p, footY, iw.world.player.state.flying); iw.world.fields.push(p, footY); iw.world.beaches.push?.(p, footY); iw.world.parks?.push?.(p, footY); picnic.push(p, footY); };
 			{ const of = island.extraFloor, P = iw.world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
 			{ const of = island.extraFloor, op = island.extraPush, E = iw.world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
@@ -550,6 +569,11 @@ export async function islandBuild(iw, params) {
 			{ const of = island.extraFloor, op = island.extraPush, V = iw.world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
 			// the military bases' pads, banks, roofs and towers to stand on; their walls, fence and vehicles solid
 			{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
+			// the houses' pitched roofs for you to stand on (climbed onto from outside: parkour.js; yours
+			// alone, player.js, so nothing else falls or spawns onto them); the ceilings over you indoors,
+			// which no jump or climb goes up through
+			island.roofFloor = (x, z, y) => iw.world.city.roofFloor(x, z, y);
+			island.ceilingAt = (x, z, y) => Math.min(houses.ceiling(x, z, y), iw.world.interiors?.ceiling?.(x, z, y) ?? Infinity, iw.world.city.ceiling(x, z, y));
 			// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 			{ const of = island.extraFloor, G = iw.world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
 			// New district materials are warmed by the bounded frame queue.
@@ -562,6 +586,18 @@ export async function islandBuild(iw, params) {
 	// will draw, handed over now in small steps: Enter then only shows them (a phone given all of
 	// it in the first frame after Enter closed the page)
 	HOOKS.lightPad?.update(performance.now(), camera, true);
+	// the city's first set round you, laid out now in slices behind the card (bay/city.js update
+	// runs it a frame's share at a time; done in one go in the first frame after Enter, it held a
+	// phone for the best part of a second as the page's memory peaked): Enter finds it standing.
+	// What is still to come (the real city's tiles arrive later and rebuild the set) comes the
+	// same way once the world shows
+	if (iw.world.city) {
+		for (const t0 = performance.now(); performance.now() - t0 < 8000;) {
+			await yieldBuild('Raising the city');
+			iw.world.city.update(camera, 0);
+			if (!iw.world.city.busy()) break;
+		}
+	}
 	await shaderWarm.all({ budget: 2500 });
 	await shaderWarm.textures({ budget: 2500 });
 	buildPanel();

@@ -34,6 +34,7 @@ export const ITEM_ICONS = {
 	'aurora-trail-rifle': '🎯', 'mossback-scout-rifle': '🌲', 'warden-spark-carbine': '🛡️', 'reedline-hunting-bow': '🏹',
 	'hunting-net': '🥅', 'trail-scent-kit': '🌿', 'door-brace': '🚪', 'lantern-alarm': '🔔', 'field-medkit': '🩹',
 	'camp-lantern': '🏮', 'repair-roll': '🧰', 'station-signal-flare': '🎆',
+	'longwatch-sniper-rifle': '🔭', 'longwatch-round-box': '📦',
 	'trail-rifle-box': '📦', 'scout-rifle-box': '📦', 'spark-cell-pack': '🔋', 'reed-arrow-quiver': '🏹',
 	'relay-transceiver-board': '📡', 'kestrel-flight-recorder': '🟧', 'regolith-core-sample': '🪨', 'hydroponic-harvest-crate': '🥬',
 	// garments (worn, not held: no model of their own yet)
@@ -384,13 +385,14 @@ function handguard(k, F, x0, x1, y, h, w, hex) {
 	k.add(block(0.012, h + 0.004, w + 0.006, 0.004), F.trim, x1 + 0.004, y, 0);
 }
 // a long scope from x0 to x1 at height y, on two rings
-function scope(k, F, x0, x1, y, railY, reticle) {
-	const seg = k.hi ? 40 : 16, r = 0.0145;
+// (bell: how much wider the objective end is, for a long-range scope)
+function scope(k, F, x0, x1, y, railY, reticle, bell = 1) {
+	const seg = k.hi ? 40 : 16, r = 0.0145, B = bell, L = (bell - 1) * 0.06;
 	// an open tube, dark inside, so the eye sees through it to the glass
-	const outer = [[0.0185, x0 - 0.05], [0.0205, x0 - 0.05], [0.021, x0 - 0.04], [0.0195, x0 - 0.012], [r, x0], [r, x1], [0.022, x1 + 0.04], [0.0265, x1 + 0.07], [0.0265, x1 + 0.082], [0.0245, x1 + 0.082]];
+	const outer = [[0.0185, x0 - 0.05], [0.0205, x0 - 0.05], [0.021, x0 - 0.04], [0.0195, x0 - 0.012], [r, x0], [r, x1], [0.022 * B, x1 + 0.04 + L], [0.0265 * B, x1 + 0.07 + L], [0.0265 * B, x1 + 0.082 + L], [0.0245 * B, x1 + 0.082 + L]];
 	k.add(turn(outer, seg), OPTIC, 0, y, 0);
 	k.add(turn(outer.map(([q, x]) => [q - 0.0015, x]).reverse(), seg), BLACK, 0, y, 0);
-	if (k.hi) { k.add(turn([[0.0205, x0 - 0.035], [0.0215, x0 - 0.035], [0.0215, x0 - 0.02], [0.0205, x0 - 0.02]], seg), KNURL, 0, y, 0); k.add(ring(0.0265, 0.0015, seg), F.trim, x1 + 0.082, y, 0, 0, Math.PI / 2); }
+	if (k.hi) { k.add(turn([[0.0205, x0 - 0.035], [0.0215, x0 - 0.035], [0.0215, x0 - 0.02], [0.0205, x0 - 0.02]], seg), KNURL, 0, y, 0); k.add(ring(0.0265 * B, 0.0015, seg), F.trim, x1 + 0.082 + L, y, 0, 0, Math.PI / 2); }
 	const mid = (x0 + x1) / 2;
 	k.add(tube(0.011, 0.011, 0.02, seg), KNURL, mid, y + 0.022, 0, 0, 0, Math.PI / 2);
 	k.add(tube(0.01, 0.01, 0.018, seg), KNURL, mid, y, 0.022, 0, Math.PI / 2, 0);
@@ -401,7 +403,7 @@ function scope(k, F, x0, x1, y, railY, reticle) {
 		if (k.hi) for (const z of [-0.011, 0.011]) k.add(tube(0.0028, 0.0028, 0.006, 6), STEEL, x, railY + 0.006, z, 0, Math.PI / 2, 0);
 	}
 	k.glass(0.0196, x0 - 0.049, y, 0, 0, -Math.PI / 2, 0, reticle);
-	k.glass(0.0255, x1 + 0.0815, y, 0, 0, Math.PI / 2, 0, null);
+	k.glass(0.0255 * B, x1 + 0.0815 + L, y, 0, 0, Math.PI / 2, 0, null);
 }
 // an open reflex sight on the rail at x, its window centred at height y
 function reflex(k, F, x, railY, y, reticle) {
@@ -436,7 +438,7 @@ function cell(k, F, x, y, len, w) {
 // the charging handle on the receiver's left side (z the side's face): a dark slot in the body
 // and a knurled knob in its own mesh, which the support hand draws back after a fresh cell
 // (crysis/viewmodel.js CHARGE). Exterior only: nothing behind it.
-export const CHARGERS = { 'aurora-trail-rifle': [0.15, 0.124, -0.0285], 'mossback-scout-rifle': [0.165, 0.099, -0.0235], 'warden-spark-carbine': [0.11, 0.128, -0.0315] };
+export const CHARGERS = { 'aurora-trail-rifle': [0.15, 0.124, -0.0285], 'mossback-scout-rifle': [0.165, 0.099, -0.0235], 'warden-spark-carbine': [0.11, 0.128, -0.0315], 'longwatch-sniper-rifle': [0.2, 0.122, -0.0265] };
 function charger(k, F, id) {
 	const [x, y, z] = CHARGERS[id];
 	k.add(block(0.056, 0.0075, 0.003, 0.0015, 0.0005), BLACK, x - 0.018, y, z - 0.0008);
@@ -595,7 +597,54 @@ function warden(k, F) {
 	reflex(k, F, 0.04, 0.17, 0.205, 0xffb347);
 	charger(k, F, 'warden-spark-carbine');
 }
-const RIFLES = { 'aurora-trail-rifle': aurora, 'mossback-scout-rifle': mossback, 'warden-spark-carbine': warden };
+// the Longwatch: a heavy long-range rifle. A one-piece thumbhole chassis in the finish's
+// second colour from the butt to the fore-end, an adjustable cheek riser, a long fluted barrel
+// with a big brake, a long scope with a wide objective, a bipod folded under the barrel, and a
+// bolt knob on the left that is worked after every shot (crysis/viewmodel.js)
+function longwatch(k, F) {
+	const seg = k.hi ? 36 : 14, by = 0.115;
+	const stock = poly([[0.56, 0.06], [0.565, 0.094], [0.2, 0.098], [-0.06, 0.1], [-0.3, 0.114], [-0.34, 0.128], [-0.38, 0.128], [-0.382, -0.05], [-0.36, -0.056], [-0.25, -0.004], [-0.06, -0.075], [-0.03, -0.086], [0.006, -0.074], [0.03, 0.045], [0.2, 0.046], [0.5, 0.05]], 0.008);
+	stock.holes.push(hole([[-0.07, 0.07], [-0.21, 0.082], [-0.27, 0.062], [-0.2, 0.03], [-0.058, -0.03], [-0.035, 0.03]].reverse(), 0.012));
+	k.add(slab(stock, 0.04, 0.004, k.hi ? 3 : 1, 3), F.wild);
+	if (k.hi) k.add(block(0.04, 0.05, 0.042, 0.006), GRIP, -0.01, -0.03, 0, 0, 0, -0.3);
+	guard(k, 0.015, F);
+	// the receiver and its rail
+	k.add(slab(poly([[-0.06, 0.094], [0.25, 0.094], [0.25, 0.134], [0.24, 0.14], [-0.05, 0.14], [-0.06, 0.13]], 0.005), 0.05, 0.002, 2), F.main);
+	inlay(k, F, -0.04, 0.23, 0.112, 0.0255);
+	screws(k, [[-0.04, 0.124], [0.23, 0.124]], 0.0255);
+	cell(k, F, 0.12, 0.05, 0.08, 0.034);
+	display(k, F, 0.0, 0.118, 0.0255);
+	sidePanel(k, F, 0.12, 0.117, 0.025, 0.1, 0.022);
+	rail(k, -0.07, 0.31, 0.141);
+	// the barrel: heavy at the chamber, fluted, out to the brake
+	k.add(turn([[0.021, 0.25], [0.02, 0.29], [0.0165, 0.42], [0.0155, 0.97]], seg), STEEL, 0, by, 0);
+	if (k.hi) for (let i = 0; i < 6; i++) { const a = (i + 0.5) / 6 * Math.PI * 2; k.add(block(0.4, 0.0036, 0.003, 0.001, 0.0006), BLACK, 0.68, by + Math.cos(a) * 0.015, Math.sin(a) * 0.015, a, 0, 0); }
+	k.add(turn([[0.0, 0.965], [0.022, 0.965], [0.0235, 0.972], [0.0235, 1.05], [0.02, 1.056], [0.007, 1.056], [0.007, 1.052], [0.0, 1.052]], seg), STEEL, 0, by, 0);
+	for (let i = 0; i < (k.hi ? 4 : 2); i++) for (const sd of [-1, 1]) k.add(block(0.01, 0.013, 0.008, 0.001, 0.0006), BLACK, 0.985 + i * 0.017, by, sd * 0.021);
+	if (k.hi) k.add(ring(0.023, 0.0014, seg), F.trim, 0.968, by, 0, 0, Math.PI / 2);
+	// the bipod, folded forward under the barrel
+	k.add(block(0.03, 0.016, 0.034, 0.004), F.trim, 0.52, 0.046, 0);
+	for (const z of [-0.011, 0.011]) {
+		k.add(tube(0.0055, 0.0045, 0.24, k.hi ? 12 : 6), STEEL, 0.66, 0.05, z);
+		k.add(tube(0.0075, 0.0075, 0.016, k.hi ? 12 : 6), RUBBER, 0.787, 0.05, z);
+		if (k.hi) k.add(ring(0.0062, 0.0013, 10), KNURL, 0.6, 0.05, z, 0, Math.PI / 2);
+	}
+	pressurePad(k, 0.38, 0.076, 0.0205, 0.11);
+	// the cheek riser on its posts, the butt pad, a spike under the butt
+	k.add(block(0.15, 0.016, 0.036, 0.006), GRIP, -0.25, 0.136, 0);
+	if (k.hi) for (const x of [-0.29, -0.21]) k.add(tube(0.0035, 0.0035, 0.012, 8), STEEL, x, 0.124, 0, 0, 0, Math.PI / 2);
+	k.add(block(0.018, 0.19, 0.046, 0.008, 0.003), RUBBER, -0.39, 0.036, 0);
+	k.add(tube(0.006, 0.0045, 0.05, k.hi ? 10 : 6), STEEL, -0.33, -0.05, 0, 0, 0, Math.PI / 2);
+	if (k.hi) for (const sign of [-1, 1]) {
+		k.add(block(0.068, 0.012, 0.0025, 0.004), F.trim, -0.29, 0.061, sign * 0.0215);
+		k.add(tube(0.004, 0.004, 0.002, 8), STEEL, -0.29, 0.061, sign * 0.0235, 0, Math.PI / 2);
+	}
+	sling(k, [-0.34, -0.03], [0.5, 0.05], 0.12);
+	// the long scope, its objective wide
+	scope(k, F, -0.03, 0.26, 0.205, 0.15, 0xff3b30, 1.3);
+	charger(k, F, 'longwatch-sniper-rifle');
+}
+const RIFLES = { 'aurora-trail-rifle': aurora, 'mossback-scout-rifle': mossback, 'warden-spark-carbine': warden, 'longwatch-sniper-rifle': longwatch };
 
 // External fictional chassis upgrades, merged into the body rather than separate
 // draw calls. Keep the grip, sight axis, muzzle and animated cell travel untouched.
@@ -617,7 +666,7 @@ function rankedChassis(k, F, id) {
 		if (rank >= 4) for (const sy of [-1,1]) k.add(slab(poly([[-.014,0],[0,.023],[.014,0],[0,-.023]],.003),.004,.001,2),F.trim,0,sy*.126,.023);
 		return;
 	}
-	const scout = id === 'mossback-scout-rifle', compact = id === 'warden-spark-carbine';
+	const scout = id === 'mossback-scout-rifle', compact = id === 'warden-spark-carbine', long = id === 'longwatch-sniper-rifle';
 	const receiverX = compact ? -.025 : .035, receiverY = scout ? .111 : compact ? .113 : .121;
 	const skin = scout ? .025 : compact ? .031 : .029;
 	// Rounded shoulder fairings create real highlights in the player's oblique view.
@@ -626,7 +675,7 @@ function rankedChassis(k, F, id) {
 		k.add(slab(rrect(.068, .011, .004), .002, .0006, 2, 4), F.trim, receiverX, receiverY + .018, sign * (skin + .005));
 	}
 	const stockX = compact ? -.214 : scout ? -.265 : -.245;
-	const stockY = compact ? .124 : scout ? .099 : .124;
+	const stockY = compact ? .124 : scout || long ? .099 : .124;
 	const cheek = poly([[-.062,-.019],[.052,-.013],[.066,.005],[.048,.021],[-.054,.024],[-.07,.011]],.008);
 	k.add(slab(cheek,.043,.003,k.hi ? 3 : 1,5),F.alt,stockX,stockY,0);
 	if (!rank) return;
@@ -638,8 +687,8 @@ function rankedChassis(k, F, id) {
 	}
 	if (rank < 2) return;
 	// Superior: sculpted fore-end shells, with actual openings, not black decals.
-	const x = compact ? .256 : scout ? .455 : .535, y = compact ? .119 : scout ? .108 : .112;
-	const width = compact ? .071 : .085, depth = compact ? .035 : .029;
+	const x = compact ? .256 : scout ? .455 : long ? .46 : .535, y = compact ? .119 : scout ? .108 : long ? .074 : .112;
+	const width = compact ? .071 : .085, depth = compact ? .035 : long ? .023 : .029;
 	const shell = rrect(width,.046,.012);
 	shell.holes.push(slotPath(width*.56,.012,0,.003));
 	for(const sign of [-1,1]) k.add(slab(shell,.006,.0012,k.hi?3:1,k.hi?6:3),F.alt,x,y,sign*depth);
@@ -855,7 +904,7 @@ const BUILD = {
 	...RIFLES,
 	'reedline-hunting-bow': bow, 'camp-lantern': (k, F) => lantern(k, F, false), 'lantern-alarm': (k, F) => lantern(k, F, true), 'field-medkit': medkit,
 	'repair-roll': toolRoll, 'hunting-net': net, 'trail-scent-kit': scentKit, 'door-brace': brace, 'station-signal-flare': flare,
-	'trail-rifle-box': supplyBox, 'scout-rifle-box': (k, F) => supplyBox(k, F, true), 'spark-cell-pack': cellPack, 'reed-arrow-quiver': quiver,
+	'trail-rifle-box': supplyBox, 'scout-rifle-box': (k, F) => supplyBox(k, F, true), 'longwatch-round-box': (k, F) => supplyBox(k, F, true), 'spark-cell-pack': cellPack, 'reed-arrow-quiver': quiver,
 	'relay-transceiver-board': relayBoard, 'kestrel-flight-recorder': recorder, 'regolith-core-sample': coreSample, 'hydroponic-harvest-crate': harvestCrate,
 };
 
@@ -879,8 +928,11 @@ const HANDLE = (y = 0, r = 0.012) => ({ c: v3(0, y, 0), r, a: v3(0, -1, 0), t: v
 const SCOUT_GRIP = { c: v3(-0.05, 0.012, 0), r: 0.03, a: v3(Math.cos(0.2), -Math.sin(0.2), 0), t: v3(Math.sin(0.2), Math.cos(0.2), 0), twist: 0 };
 export const HOLDS = {
 	'aurora-trail-rifle': { kind: 'long', R: PISTOL, L: fore(0.42, 0.112, 0.036), sight: [-0.069, 0.198, 0.08], zoom: 1.9 },
-	'mossback-scout-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 1.5 },
+	'mossback-scout-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 2.0 },
 	'warden-spark-carbine': { kind: 'long', R: PISTOL, L: fore(0.22, 0.1, 0.036), sight: [0.04, 0.205, 0.22], zoom: 1.25 },
+	// (the Longwatch: the world's lens at 2.2 at the sights, and its scope 5 times that again;
+	// bolt: it is worked after every shot)
+	'longwatch-sniper-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.4, 0.074, 0.03), sight: [-0.079, 0.205, 0.08], zoom: 3.0, scopeMag: 5, bolt: true },
 	'reedline-hunting-bow': { kind: 'bow', side: 'L', L: { c: v3(0, 0, 0), r: .026, a: v3(.3, 0, -1), t: v3(0, 1, 0) }, R: { c: v3(-.14, .056, -.025), r: .026, a: v3(.12, 0, -1), t: v3(0, 1, 0) } },
 	'hunting-net': { kind: 'one', R: SHAFT(0, 0.018) },
 	'door-brace': { kind: 'one', R: SHAFT(0, 0.04) },
@@ -892,6 +944,7 @@ export const HOLDS = {
 	'trail-scent-kit': { kind: 'one', R: HANDLE(-0.03, 0.004), level: true },
 	'trail-rifle-box': { kind: 'one', R: HANDLE(0, 0.008), level: true },
 	'scout-rifle-box': { kind: 'one', R: HANDLE(0, 0.008), level: true },
+	'longwatch-round-box': { kind: 'one', R: HANDLE(0, 0.008), level: true },
 	'spark-cell-pack': { kind: 'one', R: HANDLE(0, 0.008), level: true },
 	'reed-arrow-quiver': { kind: 'one', R: HANDLE(0, 0.006), level: true },
 	'relay-transceiver-board': { kind: 'one', R: HANDLE(0, 0.008), level: true },
@@ -946,6 +999,7 @@ export const GRIPS = {
 	'aurora-trail-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.0255], thumb: [-0.03, 0.008, -0.022], support: [0.465, 0.098, -0.029] }),
 	'mossback-scout-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.12, 0.052, 0.0185], thumb: [-0.04, 0.006, -0.026], support: [0.405, 0.1, -0.0255] }),
 	'warden-spark-carbine': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.028], thumb: [-0.03, 0.008, -0.022], support: [0.255, 0.085, -0.031] }),
+	'longwatch-sniper-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.12, 0.052, 0.0205], thumb: [-0.04, 0.006, -0.028], support: [0.445, 0.09, -0.0215] }),
 	// the bow hand round the riser, relaxed, its thumb round the far side; the draw hand closed on
 	// the string as the body's own curl closed it on main, the thumb resting flexed beside it
 	'reedline-hunting-bow': {
@@ -962,6 +1016,7 @@ const cues = (fire, ready = 'ready') => ({ fire, dry: 'dry', out: 'cell-out', in
 export const WEAPONS = {
 	'aurora-trail-rifle': { rate: 1.6, mag: 8, reload: 2.3, muzzle: [0.9, 0.112], vent: [0.06, 0.13, 0.03], flash: 'flash', tint: 0xffcf95, size: 0.16, recoil: { kick: 0.055, rise: 0.11, side: [0.012, -0.02, 0.016, -0.008, 0.02], recover: 9 }, sounds: cues('marksman') },
 	'mossback-scout-rifle': { rate: 1.1, mag: 5, reload: 2.0, muzzle: [0.764, 0.108], vent: [0.05, 0.12, 0.028], flash: 'flash', tint: 0xffd9a8, size: 0.14, recoil: { kick: 0.05, rise: 0.1, side: [-0.014, 0.01, -0.018, 0.012], recover: 9 }, sounds: cues('scout') },
+	'longwatch-sniper-rifle': { rate: 0.7, mag: 5, reload: 3.0, bolt: 0.85, muzzle: [1.056, 0.115], vent: [0.05, 0.13, 0.03], flash: 'flash', tint: 0xffc890, size: 0.22, recoil: { kick: 0.085, rise: 0.2, side: [0.014, -0.02, 0.018, -0.012], recover: 7 }, sounds: { ...cues('longwatch'), bolt: 'bolt' } },
 	'warden-spark-carbine': { rate: 6, mag: 24, reload: 1.7, muzzle: [0.401, 0.117], vent: [0.1, 0.1, 0.045], flash: 'pulse', tint: 0xffb347, size: 0.11, recoil: { kick: 0.018, rise: 0.028, side: [0.006, -0.004, 0.008, -0.007, 0.003, -0.006], recover: 14 }, sounds: cues('pulse', 'charge') },
 	'reedline-hunting-bow': { rate: 0.8, mag: 1, reload: 0.9, muzzle: [0.04, 0.02], flash: null, tint: 0xffffff, size: 0, recoil: { kick: 0.02, rise: 0.02, side: [0.004], recover: 8 }, sounds: { ...cues('bow'), out: 'aim', in: 'aim', ready: 'aim' } },
 };
@@ -1217,7 +1272,11 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			// (the support hand off it, on a wound: it hangs from the strong hand, the muzzle down)
 			const C = Mo?.S?.clutch, droop = C?.side === 'L' && H.kind === 'long' ? Math.max(0, Math.min(1, C.t / 0.25) * Math.min(1, (C.dur - C.t) / 0.4)) : 0;
 			const bow = H.kind === 'bow', a = aimBlend * (1 - droop), angle = -0.29 + (pitch + 0.29) * a - droop * 0.55;
-			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? .12 - .32 * a : -.15) * k).addScaledVector(UP, (1.02 + (bow ? .56 : .34) * a) * k).addScaledVector(f, (.24 + (bow ? .31 : .05) * a) * k);
+			// (kneeling behind cover, moving low under fire: the gun comes down with the shoulders,
+			// not held up where a standing body's would be, which put it over the head)
+			const shR = P.bones[P.map['upperarm01.R']], shL = P.bones[P.map['upperarm01.L']];
+			const sink = shR && shL ? Math.max(0, 0.8 * P.height - ((shR.matrixWorld.elements[13] + shL.matrixWorld.elements[13]) / 2 - P.root.position.y)) : 0;
+			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? .12 - .32 * a : -.15) * k).addScaledVector(UP, (1.02 + (bow ? .56 : .34) * a) * k - sink).addScaledVector(f, (.24 + (bow ? .31 : .05) * a) * k);
 			const v = _z.copy(f).multiplyScalar(Math.cos(angle)).addScaledVector(l, 0.1 * (1 - a)).addScaledVector(UP, Math.sin(angle)).normalize(), u = UP.clone().addScaledVector(v, -v.y).normalize();
 			model.matrix.makeBasis(v, u, new THREE.Vector3().crossVectors(v, u)).setPosition(org);
 		} else if (H.level) {

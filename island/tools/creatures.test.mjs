@@ -7,7 +7,8 @@ import fs from 'node:fs';
 import { SPECIES, SPECIES_IDS, speciesFor, pickSpecies } from '../src/creatures/catalog.js';
 import { FACTIONS, PLAYER, createRelations } from '../src/combat/factions.js';
 import { pveHonor } from '../src/combat/honor.js';
-import { DAMAGE_TYPES } from '../src/combat/health.js';
+import { DAMAGE_TYPES, PARTS } from '../src/combat/health.js';
+import { HIT_PARTS } from '../src/net/protocol.js';
 import { VOICES, renderVoice } from '../src/creatures/voice.js';
 
 test('every kind has its packed model', () => {
@@ -48,6 +49,15 @@ test('the night ones come only after dark; the Deep keeps its own', () => {
 	assert.ok(!speciesFor('deep', 1).includes('fog-wight'));
 });
 
+test('the Moon has its white hounds at any hour, and none of the woods\' or the towns\' creatures', () => {
+	// (Ryan 2026-10-22: the Burnt Giant stood at the moon base; the sky there is black by day)
+	assert.deepEqual(speciesFor('moon', 0), ['ridge-hound']);
+	assert.deepEqual(speciesFor('moon', 1), ['ridge-hound']);
+	const M = SPECIES['ridge-hound'].moon;
+	assert.ok(M && M.sat < 0.5 && M.val > 1.2, 'bleached on the Moon');
+	for (const id of SPECIES_IDS) if (id !== 'ridge-hound') assert.ok(!SPECIES[id].where.zones.includes('moon'), id);
+});
+
 test('a rare one comes rarely', () => {
 	const n = { 'sporeborn-miner': 0, 'old-drain-king': 0 };
 	for (let i = 0; i < 1000; i++) n[pickSpecies(['sporeborn-miner', 'old-drain-king'], (i + 0.5) / 1000)]++;
@@ -63,8 +73,38 @@ test('a flyer keeps above you and drops into reach to strike', () => {
 	assert.ok(SPECIES.lampeater.fly);
 });
 
+test('the big ones have a weak point on bones they have, worth 1.5x', () => {
+	assert.equal(PARTS.vital, 1.5);
+	assert.ok(HIT_PARTS.includes('vital'));
+	let n = 0;
+	for (const [id, S] of Object.entries(SPECIES)) {
+		if (!S.weak) continue;
+		n++;
+		const spec = JSON.parse(fs.readFileSync(new URL(`./monsters/specs/${S.model ?? id}.json`, import.meta.url)));
+		const bones = spec.bones.map((b) => b.name);
+		for (const b of S.weak.bones) assert.ok(bones.includes(b), `${id} weak bone ${b}`);
+		assert.ok(S.weak.name && S.weak.glow && S.weak.r > 0, `${id} weak point incomplete`);
+		assert.ok(S.height >= 1.9 || S.hp >= 400, `${id} is not a big one`);
+	}
+	assert.ok(n >= 8, `${n} weak points`);
+	for (const big of ['burnt-giant', 'hollow-king', 'old-drain-king', 'saltmarsh-mother']) assert.ok(SPECIES[big].weak, big);
+});
+
 test('their voices are made, heard and never clip', () => {
-	for (const v of ['growl', 'snarl', 'sniff', 'scrape', 'creak', 'chitter', 'click', 'shatter']) assert.ok(VOICES.includes(v), v);
+	for (const v of ['growl', 'snarl', 'sniff', 'scrape', 'creak', 'chitter', 'click', 'shatter', 'slam', 'souls', 'soulburst', 'ember', 'thud', 'collapse', 'crystalroar', 'lunge', 'pulse', 'burst', 'cracking', 'slither', 'spit', 'chord']) assert.ok(VOICES.includes(v), v);
+	// (every kind has a voice of its own, every sound it names is one that is made, and the
+	// sets stay apart: no two kinds share a whole set)
+	const sets = new Map();
+	for (const [id, S] of Object.entries(SPECIES)) {
+		assert.ok(S.voice, `${id} has no voice`);
+		for (const [k, v] of Object.entries(S.voice)) {
+			if (k === 'loop') assert.ok(VOICES.includes(v.name), `${id} loop ${v.name}`);
+			else if (typeof v === 'string') assert.ok(VOICES.includes(v), `${id} ${k} ${v}`);
+		}
+		const key = ['spot', 'strike', 'swing', 'hit', 'idle', 'die', 'turn', 'lob'].map((k) => S.voice[k] || '').join('|');
+		assert.ok(!sets.has(key), `${id} sounds just like ${sets.get(key)}`);
+		sets.set(key, id);
+	}
 	for (const v of VOICES) {
 		const d = renderVoice(v, 22050);
 		let peak = 0, e = 0;

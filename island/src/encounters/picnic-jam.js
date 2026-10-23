@@ -11,7 +11,7 @@ export function createPicnicJam({scene,world,camera,profile,mount,isPhone=false,
  let active=null, generation=0, scan=0, lastWorld=null, dead=false, memory=new Map();
  const audio=createPicnicAudio(), button=document.createElement('button');
  button.textContent='👏 Join the rhythm';button.hidden=true;button.type='button';
- button.style.cssText='position:absolute;bottom:calc(116px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:24;padding:11px 18px;border:1px solid #d6b57788;border-radius:22px;background:#192720eb;color:#fff1d5;font:600 14px system-ui;cursor:pointer;touch-action:manipulation;white-space:nowrap';
+ button.style.cssText='position:absolute;bottom:calc(116px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:24;padding:11px 18px;border:1px solid #d6b57788;border-radius:22px;background:#192720eb;color:#fff1d5;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;touch-action:manipulation;white-space:nowrap';
  mount.append(button);
  button.onclick=e=>{e.stopPropagation();if(!active?.ready)return;active.joined=!active.joined;button.textContent=active.joined?'👏 Leave the rhythm':'👏 Join the rhythm';button.setAttribute('aria-pressed',String(active.joined));hint(active.joined?'You clap along. Misha never misses a note.':'The off-duty orchestra carries on.',3500);};
  const key=W=>`l99-picnic:${W.body?.key||profile()?.type||'island'}`;

@@ -9,7 +9,7 @@
 // Oakland's container cranes, Berkeley's Campanile and Memorial Stadium, Mount Diablo's
 // summit. Peninsula and South Bay: Hoover Tower, Hangar One at Moffett Field, Levi's
 // Stadium, the SAP Center, Lick Observatory on Mount Hamilton. The other bridges: the
-// Richmond-San Rafael, San Mateo, Dumbarton, Carquinez and Benicia-Martinez.
+// Richmond-San Rafael, Dumbarton, Carquinez and Benicia-Martinez (the San Mateo: sanmateo.js).
 // San Ramon: Bishop Ranch's City Center, City Hall and Central Park.
 
 import * as THREE from 'three';
@@ -18,6 +18,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { addNightField } from '../world/nightfield.js';
 import { ferryBuilding, sfCityHall, oaklandCityHall, palaceHall, cellhouse, fortPoint, towerLobby, library, cityHall, shopRow, oneRoom, visitorCentre } from '../interiors/landmarks.js';
 import { smoothstep as smooth } from '../noise.js';
+import { shadowByTiles } from '../world/shadowreach.js';
 
 // piers you can walk out on (floor())
 const PIERS = [];
@@ -1076,14 +1077,17 @@ export function createLandmarks(scene, bay) {
 		}
 	};
 	bridge([37.9360, -122.4745], [37.9368, -122.4060], 22, 90, [[0.08, 0.2, 56], [0.62, 0.8, 56]], mats.concrete, mats.steel);        // Richmond-San Rafael
-	bridge([37.5832, -122.2583], [37.6180, -122.1470], 11, 60, [[0.12, 0.34, 42]]);                                                  // San Mateo
+	// (the San Mateo Bridge is built whole in bay/sanmateo.js)
 	bridge([37.4897, -122.1240], [37.5110, -122.0790], 10, 60, [[0.38, 0.62, 28]]);                                                  // Dumbarton
 	bridge([38.0540, -122.2280], [38.0680, -122.2250], 45, 80, null, mats.concrete, mats.craneWhite, Object.assign([[0.22, 125], [0.78, 125]], { mat: mats.craneWhite }));   // Carquinez (Al Zampa)
 	bridge([38.0330, -122.1260], [38.0520, -122.1230], 40, 100);                                                                      // Benicia-Martinez
 
+	// (each merged across the whole Bay: in the sun's shadow pass only its tiles in the box,
+	// world/shadowreach.js)
 	for (const [mat, list] of parts) {
 		const m = new THREE.Mesh(mergeGeometries(list), mat);
 		m.castShadow = true; m.receiveShadow = true;
+		shadowByTiles(m);
 		group.add(m);
 	}
 	// ---------- you among them ----------

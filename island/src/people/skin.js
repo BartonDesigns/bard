@@ -326,7 +326,7 @@ void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryP
 	float nl = dot( N, L );
 	// (the red channel sees mostly the surface under the fine detail, so pores and lines
 	// soften to a red edge, as they do in living skin)
-	vec3 w = vec3( 0.36, 0.15, 0.1 ) * ( 0.65 + skinThin * 0.4 ) * uSkin.x * ( 0.45 + 0.55 * k );
+	vec3 w = vec3( 0.42, 0.18, 0.12 ) * ( 0.65 + skinThin * 0.4 ) * uSkin.x * ( 0.45 + 0.55 * k );
 	vec3 c = clamp( ( vec3( mix( nl, dot( skinBaseN, L ), 0.65 ), nl, nl ) + w ) / ( 1.0 + w ), 0.0, 1.0 );
 	vec3 dif = pow( c, vec3( 1.0 ) + w );
 	vec3 F = F_Schlick( material.specularColor, material.specularF90, saturate( dot( V, normalize( L + V ) ) ) );
@@ -523,6 +523,10 @@ skinBaseN = normal;
 	// the folds' baked shade, the creases and contact: the sky and bounce light most, the sun a little
 	float ao = vSkin.x * skinCav;
 	reflectedLight.indirectDiffuse *= mix(1.0, ao, 0.8);
+	// skin in shade stays warm: the sky's light goes into it and comes out redder, as the
+	// sun's does at the terminator (without this a face turned from the sun reads grey, the
+	// ground's dull olive under the chin like a shadow of beard)
+	reflectedLight.indirectDiffuse *= mix(vec3(1.0), vec3(1.1, 0.98, 0.92), uSkin.x);
 	reflectedLight.indirectSpecular *= ao * ao;
 	reflectedLight.directDiffuse *= mix(1.0, ao, 0.3);
 	reflectedLight.directSpecular *= mix(1.0, ao, 0.7);

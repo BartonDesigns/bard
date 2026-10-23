@@ -7,17 +7,17 @@ import { AXES, AXIS_NAMES } from './morality.js';
 import { FACTIONS } from './factions.js';
 
 const CSS = `
-.cb-cmp{position:absolute;left:50%;top:calc(56px + env(safe-area-inset-top));transform:translateX(-50%);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 72px - var(--l99-low,88px));overflow-y:auto;background:rgba(10,16,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px 16px;color:#eef6f4;font:13px/1.35 system-ui,sans-serif;z-index:8;display:none;touch-action:pan-y;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.cb-cmp h3{margin:0 0 2px;font:700 16px system-ui;letter-spacing:.5px}.cb-cmp .ti{opacity:.85;margin-bottom:10px;color:#ffd07a}
+.cb-cmp{position:absolute;left:50%;top:calc(56px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);width:min(420px,calc(100vw - 24px));max-height:calc(100% - 72px - var(--l99-low,88px));overflow-y:auto;background:rgba(10,16,20,.86);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:14px 16px;color:#eef6f4;font:13px/1.35 var(--bard-body,system-ui,sans-serif);z-index:8;display:none;touch-action:pan-y;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.cb-cmp h3{margin:0 0 2px;font:700 16px var(--bard-display,system-ui,sans-serif);letter-spacing:.5px}.cb-cmp .ti{opacity:.85;margin-bottom:10px;color:#ffd07a}
 .cb-cmp .ax{display:grid;grid-template-columns:76px 1fr 76px;gap:6px;align-items:center;margin:5px 0;font-size:11px}
 .cb-cmp .ax span:last-child{text-align:right}.cb-cmp .tr{height:8px;border-radius:4px;background:linear-gradient(90deg,#ff7a5a33,#ffffff14 50%,#5fe0b033);position:relative}
 .cb-cmp .tr i{position:absolute;top:-3px;width:4px;height:14px;border-radius:2px;background:#fff;box-shadow:0 0 6px #fff;transform:translateX(-2px)}
 .cb-cmp .tr b{position:absolute;top:-2px;width:3px;height:12px;border-radius:2px;background:#9ab;opacity:.6;transform:translateX(-1px)}
-.cb-cmp h4{margin:12px 0 4px;font:600 11px system-ui;letter-spacing:1px;text-transform:uppercase;opacity:.7}
+.cb-cmp h4{margin:12px 0 4px;font:600 11px var(--bard-display,system-ui,sans-serif);letter-spacing:1px;text-transform:uppercase;opacity:.7}
 .cb-cmp ul{margin:0;padding-left:16px}.cb-cmp li{margin:2px 0}
 .cb-cmp .fs{display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:12px}
 .cb-cmp .st{font-size:10px;padding:1px 6px;border-radius:8px}.st.hostile{background:#ff5a3a44;color:#ffb39f}.st.allied{background:#5fe0b044;color:#b8f5d6}.st.neutral{background:#ffffff1a}
-.cb-cmp button{margin-top:10px;min-height:34px;padding:6px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer}
+.cb-cmp button{margin-top:10px;min-height:34px;padding:6px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);cursor:pointer}
 .cb-cmp .lg{font-size:11px;opacity:.7;margin-top:8px}
 `;
 
@@ -50,7 +50,7 @@ export function createCompass({ mount, menu, morality, relations, worldKey, sett
 	if (menu) {
 		const m = document.createElement('button');
 		m.type = 'button'; m.textContent = '🧭 Morality compass';
-		m.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		m.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		m.onclick = (e) => { e.stopPropagation(); menu.style.display = 'none'; toggle(true); };
 		for (const ev of ['pointerdown', 'touchstart']) m.addEventListener(ev, (e) => e.stopPropagation());
 		menu.insertBefore(m, menu.children[1] || null);

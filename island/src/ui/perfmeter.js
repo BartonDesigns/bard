@@ -13,9 +13,10 @@
 // nothing that sets visibility fights it) and the frame time without it read against the frame
 // time with everything, timed again between every two parts (so a hitch while one is timed
 // spoils only that one); the readout then lists what each costs, most first (kept, too, in
-// l99-perf-probe). Stand still while it runs, about two minutes.
+// l99-perf-probe). Stand still while it runs, about two minutes: walk off and it waits, everything
+// drawn, until you stand still again (a part left out while you walk looks like the world breaking).
 const KEY = 'l99-perf', PROBE_KEY = 'l99-perf-probe';
-const SETTLE = 1000, MEASURE = 2500, MAX_GROUPS = 18;
+const SETTLE = 1000, MEASURE = 2500, MAX_GROUPS = 18, MOVED = 1.5;
 
 // the switch from the address, kept on the device
 export function perfWanted(search = '', storage = null) {
@@ -61,7 +62,7 @@ const trisOf = (root) => {
 	return n;
 };
 
-export function createPerfMeter({ mount, renderer, governor, scene = null, storage = null, search = '' }) {
+export function createPerfMeter({ mount, renderer, governor, scene = null, camera = null, storage = null, search = '' }) {
 	let probe = new URLSearchParams(search).get('perf') === 'probe' ? { phase: 'wait', t: 0 } : null, probeText = '';
 	try { const kept = storage?.getItem(PROBE_KEY); if (kept && !probe) probeText = JSON.parse(kept).lines.join('\n'); } catch { /* none */ }
 	let on = false, el = null, times = [], prev = 0, acc = { calls: 0, tris: 0 }, shown = { calls: 0, tris: 0 }, frames = 0, nextT = 0, plainRender = null;
@@ -81,7 +82,7 @@ export function createPerfMeter({ mount, renderer, governor, scene = null, stora
 			el = document.createElement('div');
 			el.className = 'l99-perf';
 			el.setAttribute('aria-hidden', 'true');
-			el.style.cssText = 'position:absolute;left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));z-index:40;pointer-events:none;padding:6px 8px;border-radius:8px;background:rgba(10,10,10,.72);border:1px solid rgba(255,255,255,.12);color:#fff;font:600 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;letter-spacing:.01em';
+			el.style.cssText = 'position:absolute;left:max(8px,env(safe-area-inset-left));top:max(8px,var(--l99-top, env(safe-area-inset-top)));z-index:40;pointer-events:none;padding:6px 8px;border-radius:8px;background:rgba(10,10,10,.72);border:1px solid rgba(255,255,255,.12);color:#fff;font:600 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;letter-spacing:.01em';
 			mount.appendChild(el);
 		}
 		if (el) el.hidden = !on;
@@ -101,10 +102,22 @@ export function createPerfMeter({ mount, renderer, governor, scene = null, stora
 			P.steps = [{ name: 'all', tris: 0 }];
 			for (const g of groups) P.steps.push(g, { name: 'all', tris: 0 });
 			P.i = 0; P.rows = []; P.alls = []; P.phase = 'settle'; P.t = now + SETTLE; P.times = [];
+			P.ax = camera?.position.x ?? 0; P.az = camera?.position.z ?? 0; P.held = false;
 			return;
 		}
 		const S = P.steps[P.i];
-		if (P.phase === 'settle') { if (now < P.t) return; P.phase = 'measure'; P.t = now + MEASURE; P.times = []; return; }
+		// (moved: everything back in the picture, and this part timed again once you stand still)
+		const c = camera?.position;
+		if (c && Math.hypot(c.x - P.ax, c.z - P.az) > MOVED) {
+			P.ax = c.x; P.az = c.z;
+			putBack(); P.held = true; P.phase = 'settle'; P.t = now + SETTLE; P.times = [];
+			return;
+		}
+		if (P.phase === 'settle') {
+			if (now < P.t) return;
+			if (P.held) { P.held = false; if (S.g) leaveOut(S.g); P.t = now + SETTLE; return; }
+			P.phase = 'measure'; P.t = now + MEASURE; P.times = []; return;
+		}
 		if (P.phase === 'measure') {
 			P.times.push(ms);
 			if (now < P.t) return;
@@ -154,7 +167,7 @@ export function createPerfMeter({ mount, renderer, governor, scene = null, stora
 				+ `${shown.calls} calls  ${(shown.tris / 1000).toFixed(0)}k tris\n`
 				+ `${g.tier || '?'} (${g.mode || '?'})  scale ${renderer.getPixelRatio().toFixed(2)}`
 				+ (lost ? '\n' + lost : '')
-				+ (probe ? `\nprobe: ${probe.steps ? `${probe.i + 1} of ${probe.steps.length}, stand still` : 'starting, stand still'}` : probeText ? '\n' + probeText : '');
+				+ (probe ? `\nprobe: ${probe.steps ? `${probe.i + 1} of ${probe.steps.length}, ${probe.held ? 'waiting for you to stand still' : 'stand still'}` : 'starting, stand still'}` : probeText ? '\n' + probeText : '');
 			el.style.color = f.avg > 33 ? '#f59e0b' : '#fff';
 		},
 	};

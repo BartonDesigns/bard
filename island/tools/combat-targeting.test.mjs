@@ -3,7 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { trackStep, aimAngles, pickAt, LOCK_WINDOW, focusScore, focusReach } from '../src/combat/target-focus.js';
-import { createHealth, applyDamage, PARTS } from '../src/combat/health.js';
+import { createHealth, applyDamage, PARTS, blastPart } from '../src/combat/health.js';
+import { createLayer, personShapes } from '../src/combat/targets.js';
 import { createWounds, react, pace, CRIPPLE_AT } from '../src/combat/wounds.js';
 import { ACTIONS } from '../src/people/actions.js';
 
@@ -61,6 +62,17 @@ test('the head is the weakest point; centre mass hits harder than a limb', () =>
 	const v = createHealth({ max: 100, armour: 35, soak: 0.5 }), w = createHealth({ max: 100, armour: 35, soak: 0.5 });
 	const head = applyDamage(v, { amount: 17, type: 'energy', part: 'head' }).dealt, chest = applyDamage(w, { amount: 17, type: 'energy', part: 'chest' }).dealt;
 	assert.ok(head > chest * 2, 'a vest covers the chest, not the face');
+});
+
+test('a blast or a spell burst counts where it goes off on them; one further off, the whole body', () => {
+	const layer = createLayer(), T = { id: 'f', kind: 'hostile', faction: 'ashfang', bound: { x: 0, y: 1, z: 0, r: 1.4 }, shapes: personShapes(0, 0, 0), onHit: () => ({ dealt: 0 }) };
+	layer.add(T);
+	const at = (x, y, z) => layer.within({ x, y, z }, 4).find((q) => q.T === T);
+	assert.equal(blastPart(at(0, 1.62, 0.1)), 'head', 'a fireball bursting on the face');
+	assert.equal(blastPart(at(0, 0.3, 0.12)), 'limb', 'a burst at the shins');
+	assert.equal(blastPart(at(2.5, 0.2, 0)), 'body', 'a grenade a couple of metres off');
+	const a = createHealth({ max: 200 }), b = createHealth({ max: 200 });
+	assert.ok(applyDamage(a, { amount: 30, type: 'energy', part: blastPart(at(0, 1.62, 0.1)) }).dealt > applyDamage(b, { amount: 30, type: 'energy', part: blastPart(at(2.5, 0.2, 0)) }).dealt);
 });
 
 const motion = () => { const S = { heading: 0, act: { name: null }, clutch: null }; return { S, play(n) { S.act.name = n; }, act(n) { S.act.name = n; } }; };

@@ -104,7 +104,7 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 			const wr = r.pose?.wr || '', d = lookDNA(r.seed);
 			if (wr && d.style) d.style = dressInGear(d.style, wornOfCode(wr));
 			const P = buildPerson(assets, d);
-			const M = createMotion(P, (x, z) => ground(x, z));
+			const M = createMotion(P, (x, z) => ground(x, z), { space: 'fixed' });
 			P.root.visible = false;
 			r.body = { P, M, placed: false, wr };
 			if (list.get(r.id) === r) group.add(P.root);

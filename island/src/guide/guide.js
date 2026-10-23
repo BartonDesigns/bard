@@ -1052,18 +1052,18 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// ---------- the panel ----------
 	const css = (el, s) => { el.style.cssText = s; return el; };
 	const el = (tag, s, text) => { const e = document.createElement(tag); if (s) css(e, s); if (text) e.textContent = text; return e; };
-	const btnCss = 'min-width:40px;min-height:40px;max-width:100%;white-space:normal;overflow-wrap:anywhere;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#eafaf6;font:600 13px system-ui;cursor:pointer;';
-	const open = el('button', 'position:absolute;width:44px;min-height:44px;border-radius:12px;border:1px solid rgba(1,169,130,.7);background:rgba(8,20,26,.55);color:#9fe8d0;font:600 18px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;', '✦');
+	const btnCss = 'min-width:40px;min-height:40px;max-width:100%;white-space:normal;overflow-wrap:anywhere;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#eafaf6;font:600 13px var(--bard-display,system-ui,sans-serif);cursor:pointer;';
+	const open = el('button', 'position:absolute;width:44px;min-height:44px;border-radius:12px;border:1px solid rgba(1,169,130,.7);background:rgba(8,20,26,.55);color:#9fe8d0;font:600 18px var(--bard-display,system-ui,sans-serif);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;', '✦');
 	open.dataset.hud = 'rail 40';
 	open.title = 'Talk to the guide (G)'; open.setAttribute('aria-label', 'Talk to the guide');
-	const panel = el('div', 'position:absolute;left:calc(12px + env(safe-area-inset-left));bottom:calc(12px + env(safe-area-inset-bottom));width:min(420px,calc(100vw - 24px));max-height:min(80vh,560px);display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(10,14,18,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 20px 60px rgba(0,0,0,.6);color:#f2f5f4;font:14px/1.45 system-ui;z-index:5;');
+	const panel = el('div', 'position:absolute;left:calc(12px + env(safe-area-inset-left));bottom:calc(12px + env(safe-area-inset-bottom));width:min(420px,calc(100vw - 24px));max-height:min(80vh,560px);display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(10,14,18,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 20px 60px rgba(0,0,0,.6);color:#f2f5f4;font:14px/1.45 var(--bard-body,system-ui,sans-serif);z-index:5;');
 	// (a dialog: over the touch HUD's buttons while it is open, so none sits on its close button)
 	if (mount.classList?.contains('l99-touch')) panel.style.zIndex = '16';
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'The Guide');
 	const head = el('div', 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);');
-	const title = el('div', 'flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13px system-ui;letter-spacing:.06em;color:#9fe8d0;', 'THE GUIDE');
-	const statusEl = el('div', 'font:11px system-ui;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;');
-	const speechStatusEl = el('div', 'font:11px system-ui;color:#a5cfc0;padding:0 12px 6px;', speechStatus);
+	const title = el('div', 'flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13px var(--bard-display,system-ui,sans-serif);letter-spacing:.06em;color:#9fe8d0;', 'THE GUIDE');
+	const statusEl = el('div', 'font:11px var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;');
+	const speechStatusEl = el('div', 'font:11px var(--bard-body,system-ui,sans-serif);color:#a5cfc0;padding:0 12px 6px;', speechStatus);
 	speechStatusEl.setAttribute('role', 'status');
 	const gearB = el('button', btnCss, '⚙'); gearB.title = 'Model settings'; gearB.setAttribute('aria-label', 'Model settings');
 	const closeB = el('button', btnCss, '✕'); closeB.setAttribute('aria-label', 'Close the guide');
@@ -1074,11 +1074,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const archiveControls=el('div','display:none;flex-shrink:0;padding:6px 12px;gap:6px;flex-wrap:wrap;');
 	const archiveSearch=el('input','min-width:0;flex:1;padding:8px;background:#172225;border:1px solid #586567;border-radius:8px;color:#fff;');archiveSearch.type='search';archiveSearch.name='conversation-search';archiveSearch.placeholder='Search every conversation';archiveSearch.setAttribute('aria-label','Search conversations');
 	const archiveExport=el('button',btnCss,'Export'); archiveControls.append(archiveSearch,archiveExport);
-	const settings = el('div', 'display:none;max-height:45vh;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font:12px system-ui;color:rgba(255,255,255,.8);');
+	const settings = el('div', 'display:none;max-height:45vh;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font:12px var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.8);');
 	const log = el('div', 'flex:1;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0;');
 	log.setAttribute('aria-live', 'polite');
 	const bar = el('div', 'flex-shrink:0;display:flex;gap:6px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);');
-	const input = el('input', 'flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:14px system-ui;outline:none;');
+	const input = el('input', 'flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:14px var(--bard-body,system-ui,sans-serif);outline:none;');
 	input.name = 'guide-message'; input.placeholder = 'Ask anything, or "take me to Alcatraz"'; input.setAttribute('aria-label', 'Message the guide');
 	const mic = el('button', btnCss, '🎙'); mic.title = 'Speak'; mic.setAttribute('aria-label', 'Speak to the guide');
 	const spk = el('button', btnCss, voiceOut ? '🔊' : '🔈'); spk.setAttribute('aria-pressed', String(voiceOut)); spk.title = 'Read replies aloud'; spk.setAttribute('aria-label', 'Read replies aloud');
@@ -1094,7 +1094,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 	function say(text, who) {
 		const b = el('div', who === 'me' ? 'align-self:flex-end;max-width:85%;padding:8px 11px;border-radius:12px 12px 4px 12px;background:rgba(1,169,130,.22);border:1px solid rgba(1,169,130,.35);'
-			: who === 'note' ? 'align-self:center;font:12px system-ui;color:rgba(255,255,255,.55);' : 'align-self:flex-start;max-width:90%;padding:8px 11px;border-radius:12px 12px 12px 4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);', text);
+			: who === 'note' ? 'align-self:center;font:12px var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.55);' : 'align-self:flex-start;max-width:90%;padding:8px 11px;border-radius:12px 12px 12px 4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);', text);
 		b.style.whiteSpace = 'pre-line';
 		b.style.overflowWrap='anywhere';b.style.boxSizing='border-box';if(who==='note')b.style.maxWidth='100%';
 		log.append(b); scroll();
@@ -1133,12 +1133,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// each place says how far and which way, and can be tracked: pin, marker and trail)
 	const QC = { teal: '#5ff0c6', green: '#10b981', amber: '#f59e0b', grey: 'rgba(255,255,255,.45)' };
 	const qcss = {
-		section: 'display:flex;align-items:baseline;gap:8px;margin:10px 2px 0;font:700 11px/1.2 system-ui;letter-spacing:.09em;text-transform:uppercase;color:#9fe8d0;',
-		count: 'margin-left:auto;font:600 11px system-ui;letter-spacing:.02em;text-transform:none;color:rgba(255,255,255,.5);',
+		section: 'display:flex;align-items:baseline;gap:8px;margin:10px 2px 0;font:700 11px/1.2 var(--bard-display,system-ui,sans-serif);letter-spacing:.09em;text-transform:uppercase;color:#9fe8d0;',
+		count: 'margin-left:auto;font:600 11px var(--bard-display,system-ui,sans-serif);letter-spacing:.02em;text-transform:none;color:rgba(255,255,255,.5);',
 		card: 'display:flex;flex-direction:column;gap:8px;padding:12px 12px 12px 14px;border-radius:12px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);box-sizing:border-box;',
-		title: 'font:600 15px/1.3 system-ui;color:#fff;overflow-wrap:anywhere;',
-		body: 'font:13px/1.45 system-ui;color:rgba(255,255,255,.7);overflow-wrap:anywhere;',
-		meta: 'font:500 12px/1.35 system-ui;color:rgba(255,255,255,.55);',
+		title: 'font:600 15px/1.3 var(--bard-display,system-ui,sans-serif);color:#fff;overflow-wrap:anywhere;',
+		body: 'font:13px/1.45 var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.7);overflow-wrap:anywhere;',
+		meta: 'font:500 12px/1.35 var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.55);',
 		row: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;',
 		primary: btnCss + 'background:linear-gradient(135deg,#01a982,#10b981);border-color:transparent;color:#fff;padding:6px 14px;',
 		ghost: btnCss + 'background:transparent;color:rgba(255,255,255,.75);',
@@ -1155,7 +1155,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		}
 	}
 	function questPill(text, color) {
-		const p = qel('span', `display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font:700 10.5px/1.5 system-ui;letter-spacing:.07em;text-transform:uppercase;color:${color};background:color-mix(in srgb, ${color} 18%, transparent);border:1px solid color-mix(in srgb, ${color} 40%, transparent);white-space:nowrap;`, text);
+		const p = qel('span', `display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font:700 10.5px/1.5 var(--bard-display,system-ui,sans-serif);letter-spacing:.07em;text-transform:uppercase;color:${color};background:color-mix(in srgb, ${color} 18%, transparent);border:1px solid color-mix(in srgb, ${color} 40%, transparent);white-space:nowrap;`, text);
 		return p;
 	}
 	function section(label, count) {
@@ -1169,7 +1169,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// how far and which way: an arrow turned to where you look, the distance and the bearing
 	// (kept current while Quests is open)
 	function bearing(at, big = false) {
-		const b = qel('span', `display:inline-flex;align-items:center;gap:6px;font:600 ${big ? 13 : 12}px/1.2 system-ui;color:${QC.teal};white-space:nowrap;font-variant-numeric:tabular-nums;`);
+		const b = qel('span', `display:inline-flex;align-items:center;gap:6px;font:600 ${big ? 13 : 12}px/1.2 var(--bard-display,system-ui,sans-serif);color:${QC.teal};white-space:nowrap;font-variant-numeric:tabular-nums;`);
 		const a = qel('span', `display:inline-flex;width:${big ? 18 : 15}px;height:${big ? 18 : 15}px;align-items:center;justify-content:center;`);
 		a.innerHTML = `<svg width="${big ? 15 : 13}" height="${big ? 15 : 13}" viewBox="0 0 24 24" fill="${QC.teal}" aria-hidden="true"><path d="M12 2 20 21l-8-4.5L4 21z"/></svg>`;
 		const t = qel('span', '');
@@ -1214,7 +1214,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (state === 'done') dot.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>';
 		else if (state === 'now') dot.append(qel('span', `width:8px;height:8px;border-radius:50%;background:${QC.teal};`));
 		const text = qel('div', 'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;');
-		text.append(qel('span', state === 'done' ? 'font:13px/1.35 system-ui;color:rgba(255,255,255,.45);' : state === 'now' ? 'font:600 14px/1.35 system-ui;color:#fff;' : 'font:13px/1.35 system-ui;color:rgba(255,255,255,.72);', words));
+		text.append(qel('span', state === 'done' ? 'font:13px/1.35 var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.45);' : state === 'now' ? 'font:600 14px/1.35 var(--bard-body,system-ui,sans-serif);color:#fff;' : 'font:13px/1.35 var(--bard-body,system-ui,sans-serif);color:rgba(255,255,255,.72);', words));
 		if (at) text.append(bearing(at));
 		r.append(dot, text);
 		r.setAttribute('aria-label', `${state === 'done' ? 'Done' : state === 'now' ? 'Current' : 'To come'}: ${words}`);
@@ -1231,7 +1231,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function questCard(q, bodyKey, context) { return guideQuestCard(gd, q, bodyKey, context); }
 	function folded(label, count) {
 		const d = qel('details', 'border-radius:10px;');
-		const s = qel('summary', 'cursor:pointer;padding:8px 2px;font:600 12px system-ui;color:rgba(255,255,255,.6);list-style-position:inside;', `${label} (${count})`);
+		const s = qel('summary', 'cursor:pointer;padding:8px 2px;font:600 12px var(--bard-display,system-ui,sans-serif);color:rgba(255,255,255,.6);list-style-position:inside;', `${label} (${count})`);
 		const inner = qel('div', 'display:flex;flex-direction:column;gap:8px;padding-top:4px;');
 		d.append(s, inner); log.append(d);
 		return inner;
@@ -1295,7 +1295,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	if (choice.kind === 'ollama' || (choice.kind === 'cloud' && DISCOVERY_URL)) connect(false);
 	else if (choice.kind === 'webllm') setTimeout(() => connect(false), store.get('crysis-guide-loaded', false) ? 1500 : 9000);   // after the world is up
 	// a quiet progress pill while the model downloads the first time
-	const pill = el('div', 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(72px + env(safe-area-inset-top));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px system-ui;pointer-events:none;display:none;');
+	const pill = el('div', 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(72px + var(--l99-top, env(safe-area-inset-top)));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px var(--bard-body,system-ui,sans-serif);pointer-events:none;display:none;');
 	mount.append(pill);
 	llm.onStatus((st) => {
 		if (llm.kind() !== 'webllm') { pill.style.display = 'none'; return; }

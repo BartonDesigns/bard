@@ -6,8 +6,8 @@
 
 import * as THREE from 'three';
 import { spreadDir, spreadNow, isBow, bowPower, damageAt } from './weapons.js';
-import { revive } from './health.js';
-import { rayCapsule } from './targets.js';
+import { revive, blastPart } from './health.js';
+import { rayCapsule, nearestOn } from './targets.js';
 import { officerHurt, clearWanted } from './heat.js';
 import { FACTIONS, PLAYER } from './factions.js';
 
@@ -38,7 +38,7 @@ export function combatLandShot(cb, hit, from, dir, by, dmg, type = 'ballistic', 
 export function combatYours(cb, T, r, blow, ctx0) {
 	const { arms, broke, call, cars, crime, defendNow, eye, forgive, held, hud, hurtOnce, isEarth,
 		morality, notice, placeName, relations, squads, wanted, witnesses } = cb;
-	if (r.dealt > 0) { hud.hit(!!r.killed, blow.part === 'head' || blow.part === 'neck'); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
+	if (r.dealt > 0) { hud.hit(!!r.killed, blow.part === 'head' || blow.part === 'neck', blow.part === 'vital'); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
 	const ctx = { ...(ctx0 || {}), ...(blow.moral || {}), witnessed: witnesses(T.bound) > 0 };
 	ctx.unseen = !ctx.witnessed;
 	const fac = T.faction, F = FACTIONS[fac];
@@ -98,7 +98,18 @@ export function combatFireShot(cb, w, charge = 1) {
 		projectile({ from, to, direction: isBow(w) ? dir : null, speed: S.projectile.speed * power.speed, drop: S.projectile.drop, dmg: S.dmg * power.damage, type: S.type, owner: ME, style: S.tracer, splash: S.projectile.splash, life: S.projectile.life, arrow: isBow(w) });
 		net.fx(from, to, S.tracer, 0);
 	} else {
-		const hit = firstHit(o, dir, S.range);
+		let hit = firstHit(o, dir, S.range);
+		// a forgiving weapon: a near miss of someone (nothing met, or a wall or the ground past
+		// them) is drawn onto them: the shot goes to the nearest point of the shape it passed, and
+		// must still reach it (a wall in the way keeps it)
+		if (S.assist && (!hit || hit.wall)) {
+			const near = firstHit(o, dir, hit ? hit.t : S.range, ME, S.assist);
+			if (near?.T && !near.wall && !near.ward) {
+				const at = nearestOn(near.shape, o, dir), to = new THREE.Vector3(at.x - o.x, at.y - o.y, at.z - o.z).normalize();
+				const sure = firstHit(o, to, S.range);
+				if (sure?.T === near.T) { dir.copy(to); hit = sure; }
+			}
+		}
 		// game in the open before anything else (a deer, a turkey: cooking/hunting.js)
 		const game = cb.hooks?.quarry?.(o, dir, hit ? hit.t : S.range) ?? -1;
 		if (hit && game < 0) landShot(hit, o, dir, ME, damageAt(S, hit.t), S.type);
@@ -187,7 +198,7 @@ export function combatBlast(cb, at, r, dmg, by, source = null, type = 'blast') {
 	for (const x of layer.within(c, r, mine ? ME : by, rules, wards)) {
 		if (x.T === source) continue;
 		const k = 1 - x.d / r;
-		const blow = { amount: dmg * (0.3 + 0.7 * k), type, part: 'body', src: c, dir: { x: x.T.bound.x - c.x, y: 0.3, z: x.T.bound.z - c.z }, by: mine ? ME : by };
+		const blow = { amount: dmg * (0.3 + 0.7 * k), type, part: blastPart(x), src: c, dir: { x: x.T.bound.x - c.x, y: 0.3, z: x.T.bound.z - c.z }, by: mine ? ME : by };
 		const before = x.T.moral?.();
 		const res = deal(x.T, blow, mine);
 		if (mine && res?.dealt && x.T.faction === 'civ' && squads.alive().some((h) => h.alert)) morality.record({ kind: 'collateral', place: placeName(), world: cb.worldKey, ctx: before || {} });

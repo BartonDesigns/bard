@@ -35,9 +35,10 @@
 // hits reach in here (hexOn, arc, ward, fleet, strike) and loose spells of their own (a free cast).
 
 import * as THREE from 'three';
-import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf, moonlit } from './spells.js';
-import { GLOW, magicSound, beamVoice } from './fx.js';
+import { SPELL, SCHOOLS, castBlock, spend, spellPower, manaMax, manaRegen, manaCost, shaped, strandOf, moonlit, gargantuaSize, gargantuaRange, GARGANTUA_LIFT } from './spells.js';
+import { GLOW, magicSound, beamVoice, holeVoice } from './fx.js';
 import { CHARGE, MIN_BLAST } from './beam.js';
+import { blastPart } from '../combat/health.js';
 import { lookOf, LOOK } from './looks.js';
 import { createAfflictions } from './elements.js';
 
@@ -88,22 +89,24 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		return camera.localToWorld(out.set(0, -0.26, -0.8));
 	}
 	// the point you aim at, up to range: the first thing the aim meets, else the ground below the
-	// end of it. returns { at, T } (T: a target struck by the aim, if any)
+	// end of it. returns { at, T, part } (T: a target struck by the aim, if any; part: where on it)
 	function aimPoint(range) {
 		aim(_o, _d);
 		const h = combat.firstHit(_o, _d, range, combat.me);
 		const at = _o.clone().addScaledVector(_d, h ? h.t : range);
 		if (!h) at.y = combat.ground(at.x, at.z, at.y + 50);
-		return { at, T: h?.T || null, n: h?.n || null };
+		return { at, T: h?.T || null, n: h?.n || null, part: h?.part || null };
 	}
 
 	// ---------- harm and hexes ----------
 	// a spell's blow on T: dread makes it land harder, and what lands sets off its element's
 	// affliction (magic/elements.js)
-	// (plain: a weapon's own leap, which carries no affliction of its own)
-	function harm(T, amount, spell, at, dir = null, plain = false) {
+	// (plain: a weapon's own leap, which carries no affliction of its own; part: where on them it
+	// landed, as a round's would (combat/health.js PARTS): a bolt or a beam where it struck, an
+	// area where it burst against them, else the whole body)
+	function harm(T, amount, spell, at, dir = null, plain = false, part = 'body') {
 		if (!T || amount <= 0) return null;
-		const blow = { amount: amount * (1 + afflict.vuln(T)), type: typeOf(spell.type), part: 'body', src: at, dir: dir || { x: T.bound.x - at.x, y: 0.3, z: T.bound.z - at.z }, by: combat.me, spell: spell.type };
+		const blow = { amount: amount * (1 + afflict.vuln(T)), type: typeOf(spell.type), part, src: at, dir: dir || { x: T.bound.x - at.x, y: 0.3, z: T.bound.z - at.z }, by: combat.me, spell: spell.type };
 		const r = combat.deal(T, blow, true);
 		const c = GLOW[spell.type === 'frost' ? 'frost' : spell.school];
 		if (r?.dealt) { const at2 = { x: T.bound.x, y: T.bound.y + 0.2, z: T.bound.z }; fx.burst(at2, c, 8, 3, 0.4, 0.2); fx.flash?.(at2, c, r.killed ? Math.max(0.6, r.dealt / 60) : r.dealt / 60); if (r.killed) afflict.fell(T, spell.type); else if (amount < 1e5 && !plain) afflict.apply(T, spell.type, r.dealt, at); }
@@ -192,7 +195,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 	function areaHarm(c, r, spell, k, dmg, status, push = 0) {
 		for (const x of hostilesNear(c, r, struck)) {
 			const f = 1 - 0.5 * (x.d / r);
-			harm(x.T, dmg * k * f, spell, c);
+			harm(x.T, dmg * k * f, spell, c, null, false, blastPart(x));
 			hex(x.T, status, k, spell.id);
 			if (push) shove(x.T, c, push * f);
 		}
@@ -226,13 +229,13 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const c = GLOW[spell.school], L = lookOf(spell), D = spell.delay || 0;
 			if (L.tell) effects.push({ t: 0, every: 0.08, life: Math.max(0.16, D), step() { L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / Math.max(0.16, D)); } });
 			else fx.ring(at, spell.r, c, 30, D || 0.5, 0.25);
-			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, c, 60, spell.r * 1.6, 0.8, 0.45, 1); fx.ring(at, spell.r, c, 50, 0.5, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, spell.status); magicSound(spell.school, 0.16); } });
+			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, c, 60, spell.r * 1.6, 0.8, 0.45, 1); fx.ring(at, spell.r, c, 50, 0.5, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, spell.status); magicSound(`${spell.school}-blast`, 0.2, at); } });
 		},
 		strike(spell, k) {
 			const { at } = aimPoint(spell.range);
 			const c = GLOW[spell.school], L = lookOf(spell);
 			effects.push({ t: 0, every: 0.08, life: spell.delay, step() { if (L.tell) L.tell(fx, at, spell.r, 1 - Math.max(0, this.life) / spell.delay); else fx.ring(at, spell.r, c, 18, 0.3, 0.2); } });
-			effects.push({ t: spell.delay, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); } areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm', 0.2); } });
+			effects.push({ t: spell.delay, run: () => { if (L.blast) L.blast(fx, at, spell.r); else { fx.pillar(at, 40, c, isPhone ? 60 : 140, 0.5, 0.9, false); fx.burst(at, c, 80, 9, 1, 0.5, 2); } areaHarm(at, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.25); magicSound('storm-blast', 0.24, at); } });
 		},
 		flare(spell, k) {
 			// Solar Flare: directed light out of wherever the sun stands, a column down onto where you aim
@@ -245,14 +248,16 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const { at } = aimPoint(spell.range), L = lookOf(spell), D = spell.delay || 0.5, kk = night ? k * 0.8 : k;
 			const top = { x: at.x + dir.x * 70, y: at.y + dir.y * 70, z: at.z + dir.z * 70 };
 			effects.push({ t: 0, every: 0.05, life: D, step() { const u = 1 - Math.max(0, this.life) / D; L.tell?.(fx, at, spell.r, u, night); L.beam?.(fx, top, at, u, night); } });
-			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(spell.school, 0.16); } });
+			effects.push({ t: D, run: () => { if (L.blast) L.blast(fx, at, spell.r, night); else fx.burst(at, GLOW.radiance, 60, spell.r * 1.6, 0.8, 0.45, 1); areaHarm(at, spell.r, spell, kk, spell.dmg, spell.status); combat.shake?.(0.12); magicSound(`${spell.school}-blast`, 0.2, at); } });
 		},
 		singularity(spell, k) {
-			// Gargantua: a dot on the horizon the way you face that swells, faster and faster, until it fills
-			// the whole sky (spell.size0 to spell.size m); over spell.t it draws every foe within
-			// spell.r of you into it, holding them as they slide toward it and unmaking each at its moment.
-			// Anything vast loses spell.bossCut of its life, a little at each step. Foes who come into
-			// reach while it feeds are taken too.
+			// Gargantua: a dot far off on the horizon the way you face that swells to stand there, its
+			// lower half under the horizon, feeds (the ground round you torn up and streaming into it),
+			// creeping nearer, then rushes at you to fill the whole sky (spells.js gargantuaSize and
+			// gargantuaRange); over spell.t it draws every foe within spell.r of you into
+			// it, holding them as they slide toward it and unmaking each at its moment. Anything vast
+			// loses spell.bossCut of its life, a little at each step. Foes who come into reach while
+			// it feeds are taken too.
 			const L = lookOf(spell), me = camera.position.clone();
 			aim(_o, _d);
 			const fw = _d.clone().setY(0);
@@ -260,10 +265,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			fw.normalize();
 			const hx = me.x + fw.x * spell.far, hz = me.z + fw.z * spell.far, base = Math.max(me.y - EYE, combat.ground(hx, hz, me.y) ?? -1e9);
 			const hole = new THREE.Vector3(hx, base + spell.rise, hz), drawn = hole.clone(), RISE = 1.2;
-			// (its radius at time t: a dot, then growing by the same factor every moment, a little faster
-			// as it goes, filling the sky by 85% of its time and holding there; its heart climbs with it so its lower rim stays down on the horizon)
-			const R0 = spell.size0 || 1.5, R1 = spell.size, size = (tt) => R0 * Math.pow(R1 / R0, Math.pow(Math.min(1, tt / (spell.t * 0.85)), 1.2));
-			let R = R0;
+			let R = spell.size0 || 1.5;
 			const doomed = new Map(), vast = new Map();
 			let t = 0, n = 0;
 			const gather = () => {
@@ -274,7 +276,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					else if (!doomed.has(T)) doomed.set(T, { at: Math.max(t + 0.8, RISE + 0.3 + Math.random() * (spell.t - RISE - 1.3)) });
 				}
 			};
-			const unmake = (T) => { const b = T.bound; L.arc?.(fx, b, drawn); harm(T, 1e6, spell, drawn, { x: drawn.x - b.x, y: drawn.y - b.y, z: drawn.z - b.z }); };
+			const unmake = (T) => { const b = T.bound; L.arc?.(fx, b, drawn, R); harm(T, 1e6, spell, drawn, { x: drawn.x - b.x, y: drawn.y - b.y, z: drawn.z - b.z }); };
 			const bleed = (T, B, share) => {
 				const M = T.life?.(), owed = M ? M.max * spell.bossCut * share - B.dealt : 0;
 				if (owed > 0) B.dealt += harm(T, owed, spell, drawn)?.dealt || 0;
@@ -282,26 +284,35 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			gather();
 			combat.shake?.(0.3);
 			magicSound('void', 0.25);
+			// (its voice: a rumble under everything, rising as it grows; fx.js holeVoice)
+			const voice = holeVoice(spell.t);
 			// (the world's colours invert, grey and go black at its end; after two seconds of black they
-			// burst back, with a kick: fx.js gradeFrom)
+			// burst back, with a kick and a rain of embers: fx.js gradeFrom)
 			fx.gradeFrom?.(spell.t);
-			effects.push({ t: spell.t * 0.95 + 2.3, run: () => { combat.shake?.(0.35); magicSound('radiance', 0.25); } });
+			effects.push({ t: spell.t * 0.95 + 2.3, run: () => { combat.shake?.(0.35); magicSound('radiance-blast', 0.3); aim(_o, _d); L.back?.(fx, camera.position, _d); } });
 			effects.push({ t: 0, life: spell.t, every: 0.1,
 				step() {
 					t += 0.1; n++;
 					const u = Math.min(1, t / RISE), e = 1 - (1 - u) * (1 - u);
-					R = size(t);
-					// (it stands over the horizon: its heart a little above your eye's level, so the horizon cuts
-					// off its lower part (fx.js), climbing up out from behind it as it comes)
-					drawn.set(hole.x, me.y + R * 0.35 - (1 - e) * R * 1.4, hole.z);
-					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position);
+					R = gargantuaSize(spell, t);
+					// (it comes: nearer as it feeds and rushing in at the end; its heart stands a little over
+					// your eye's level, so the lower part of the shadow is always under the horizon, and it
+					// climbs up out from behind it as it comes (fx.js))
+					const D = gargantuaRange(spell, t);
+					hole.x = me.x + fw.x * D; hole.z = me.z + fw.z * D;
+					drawn.set(hole.x, me.y + R * GARGANTUA_LIFT - (1 - e) * R * 2.4, hole.z);
+					if (u < 1) { if (L.tell) L.tell(fx, drawn, R, e, camera.position); } else if (L.tick) L.tick(fx, drawn, R, now(), camera.position, t / spell.t);
 					else fx.burst(drawn, GLOW.void, 6, -R, 0.5, R * 0.1, 0);
 					if (n % 10 === 0) { gather(); combat.shake?.(0.05); }
+					// (its last rush out: the ground shudders under you)
+					if (t > spell.t * 0.75 && n % 3 === 0) combat.shake?.(0.04 + 0.1 * (t / spell.t - 0.75));
 					for (const [T, D] of doomed) {
 						if (T.removed || T.dead || !T.bound) { doomed.delete(T); continue; }
 						const h = T.ref, S = h?.body?.M?.S, pos = S ? S.pos : h?.pos;
 						if (pos) { const dx = drawn.x - pos.x, dz = drawn.z - pos.z, l = Math.hypot(dx, dz) || 1, v = (1.5 + 12 * t / spell.t) * 0.1; pos.x += dx / l * v; pos.z += dz / l * v; }
 						hex(T, { hold: 0.3 }, k, spell.id);
+						// (held in its pull: their dust and clothing torn off and streaming toward it)
+						if (n % 2 === 0) L.held?.(fx, T.bound, drawn);
 						if (t >= D.at) { unmake(T); doomed.delete(T); }
 					}
 					for (const [T, B] of vast) if (!T.removed) bleed(T, B, Math.min(1, t / spell.t));
@@ -311,7 +322,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					for (const T of doomed.keys()) if (!T.removed && T.bound) unmake(T);
 					for (const [T, B] of vast) if (!T.removed) bleed(T, B, 1);
 					if (L.blast) L.blast(fx, drawn, R); else fx.burst(drawn, GLOW.void, 90, R * 3, 0.9, R * 0.2, 0);
-					combat.shake?.(0.4); magicSound('void', 0.3);
+					voice?.stop();
+					combat.shake?.(0.4); magicSound('void-blast', 0.3, drawn);
 				} });
 		},
 		lances(spell, k) {
@@ -329,7 +341,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 				effects.push({ t: 0, life: 0.18 * i + T, every: 0.04, pos: from.clone(), wait: 0.18 * i,
 					move(dt) { if ((this.wait -= dt) > 0) { L.tell?.(fx, to, spell.r, 0, night); return; } this.pos.addScaledVector(dir, -fall / T * dt); if (this.pos.distanceTo(to) < 0.5 || (this.pos.y < to.y)) this.pos.copy(to); },
 					step() { if (this.wait <= 0) L.fall?.(fx, this.pos, dir, night); },
-					end() { L.blast?.(fx, to, spell.r, night); areaHarm(to, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.08); magicSound(spell.school, 0.12); } });
+					end() { L.blast?.(fx, to, spell.r, night); areaHarm(to, spell.r, spell, k, spell.dmg, null); combat.shake?.(0.08); magicSound(`${spell.school}-blast`, 0.16, to); } });
 			}
 		},
 		nova(spell, k) {
@@ -350,7 +362,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			for (const x of hostilesNear(_o, spell.range, struck)) {
 				_p.set(x.T.bound.x - _o.x, 0, x.T.bound.z - _o.z).normalize();
 				if (_p.dot(_q.set(_d.x, 0, _d.z).normalize()) < cos) continue;
-				harm(x.T, spell.dmg * k, spell, _o);
+				harm(x.T, spell.dmg * k, spell, _o, null, false, blastPart(x));
 				hex(x.T, spell.status, k, spell.id);
 				if (spell.push) shove(x.T, _o, spell.push);
 			}
@@ -361,7 +373,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			}
 		},
 		chain(spell, k) {
-			const { at, T } = aimPoint(spell.range);
+			const { at, T, part } = aimPoint(spell.range);
 			const from = hand(new THREE.Vector3()), c = GLOW.storm, L = lookOf(spell);
 			const arc = L.arc || ((f, a, b) => f.line(a, b, c, 0.45, 0.25, 0.2, 1.4));
 			let cur = T && hostile(T) ? T : nearestHostile(at, 6);
@@ -372,7 +384,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 				done.add(cur);
 				const b = { x: cur.bound.x, y: cur.bound.y + 0.2, z: cur.bound.z };
 				arc(fx, a, b);
-				harm(cur, dmg, spell, a);
+				// (the first where the aim was on them; the jumps the body)
+				harm(cur, dmg, spell, a, null, false, j === 0 && cur === T && part ? part : 'body');
 				hex(cur, { hold: 0.3 });
 				a = b; dmg *= 0.8;
 				cur = nearestHostile(b, spell.hop, (q) => !done.has(q));
@@ -384,7 +397,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			const L = lookOf(spell);
 			effects.push({ t: 0, life: spell.t, every: spell.rate, pos, vel: _d.clone().setY(0).normalize().multiplyScalar(spell.speed), trail: 0,
 				move(dt) { this.pos.addScaledVector(this.vel, dt); const gy = combat.ground(this.pos.x, this.pos.z, this.pos.y + 2); this.pos.y += (gy + 1.2 - this.pos.y) * Math.min(1, dt * 3); if (L.orb) L.orb(fx, this.pos, now()); else fx.burst(this.pos, GLOW.storm, 3, 1.5, 0.25, 0.35, 0); },
-				step() { for (const x of hostilesNear(this.pos, spell.r, struck)) { if (L.arc) L.arc(fx, this.pos, x.T.bound); else fx.line(this.pos, x.T.bound, GLOW.storm, 0.4, 0.15, 0.15, 0.8); harm(x.T, spell.dmg * k, spell, this.pos); } } });
+				step() { for (const x of hostilesNear(this.pos, spell.r, struck)) { if (L.arc) L.arc(fx, this.pos, x.T.bound); else fx.line(this.pos, x.T.bound, GLOW.storm, 0.4, 0.15, 0.15, 0.8); harm(x.T, spell.dmg * k, spell, this.pos, null, false, blastPart(x)); } } });
 		},
 		well(spell, k) {
 			const { at } = aimPoint(spell.range);
@@ -400,11 +413,11 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					for (const x of hostilesNear(at, spell.r, struck)) {
 						const h = x.T.ref, S = h?.body?.M?.S, pos = S ? S.pos : h?.pos;
 						if (pos && x.d > 0.8) { const dx = at.x - pos.x, dz = at.z - pos.z, l = Math.hypot(dx, dz) || 1; pos.x += dx / l * spell.pull * 0.1; pos.z += dz / l * spell.pull * 0.1; }
-						if (spell.dps) harm(x.T, spell.dps * 0.1 * k, spell, at);
+						if (spell.dps) harm(x.T, spell.dps * 0.1 * k, spell, at, null, false, blastPart(x));
 						hex(x.T, spell.status ? { hold: 0.3 } : { slow: 0.3, t: 0.3 }, k, spell.id);
 					}
 				},
-				end() { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, GLOW.void, 90, spell.r * 1.5, 0.7, 0.5, 0); fx.ring(at, spell.r, GLOW.void, 50, 0.4, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, null); magicSound('void', 0.2); } });
+				end() { if (L.blast) L.blast(fx, at, spell.r); else { fx.burst(at, GLOW.void, 90, spell.r * 1.5, 0.7, 0.5, 0); fx.ring(at, spell.r, GLOW.void, 50, 0.4, 0.4); } areaHarm(at, spell.r, spell, k, spell.dmg, null); magicSound('void-blast', 0.24, at); } });
 		},
 		cloud(spell, k) {
 			const { at } = aimPoint(spell.range);
@@ -413,7 +426,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 				step() {
 					if (L.tick) L.tick(fx, at, spell.r, now());
 					else for (let n = 0; n < (isPhone ? 6 : 14); n++) { const a = Math.random() * 6.283, r = spell.r * Math.sqrt(Math.random()); fx.emit(at.x + Math.cos(a) * r, at.y + 0.3 + Math.random() * 1.5, at.z + Math.sin(a) * r, 0, 0.2, 0, 1.6, 0.9, 1.6, GLOW.blight, 0.35, 0, 0.5); }
-					for (const x of hostilesNear(at, spell.r, struck)) { harm(x.T, spell.dps * 0.5 * k, spell, at); hex(x.T, spell.status, k, spell.id); }
+					for (const x of hostilesNear(at, spell.r, struck)) { harm(x.T, spell.dps * 0.5 * k, spell, at, null, false, blastPart(x)); hex(x.T, spell.status, k, spell.id); }
 					for (const x of peopleNear(at, spell.r, bystanders)) hex(x.T, calm(spell.status), k, spell.id);
 				} });
 		},
@@ -442,8 +455,8 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					const top = { x: p.x + (Math.random() - 0.5) * 6, y: p.y + (L.strike ? 15 : 45), z: p.z + (Math.random() - 0.5) * 6 };
 					if (L.strike) L.strike(fx, top, p);
 					else { fx.line(top, p, GLOW.storm, 0.9, 0.22, 0.4, 3.5); fx.burst(p, GLOW.storm, 20, 6, 0.4, 0.3, 1); }
-					for (const x of hostilesNear(p, 3, struck)) harm(x.T, spell.dmg * k, spell, p);
-					combat.shake?.(0.08); magicSound('storm', 0.1);
+					for (const x of hostilesNear(p, 3, struck)) harm(x.T, spell.dmg * k, spell, p, null, false, blastPart(x));
+					combat.shake?.(0.08); magicSound('storm-hit', 0.12, p);
 				} });
 			// (the rain under it)
 			// (and the thunderhead over it)
@@ -469,7 +482,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 					const c = { x: camera.position.x, y: camera.position.y - 1, z: camera.position.z };
 					if (LOOK[spell.id]?.tick) LOOK[spell.id].tick(fx, { x: c.x, y: c.y - 0.6, z: c.z }, spell.r, now());
 					else for (let n = 0; n < 8; n++) { const a = Math.random() * 6.283; fx.emit(c.x + Math.cos(a) * spell.r, c.y + Math.random(), c.z + Math.sin(a) * spell.r, 0, 0.8, 0, 0.5, 0.25, 0.05, GLOW.radiance, 0.8, 0, 0); }
-					for (const x of hostilesNear(c, spell.r, struck)) harm(x.T, spell.dps * 0.25 * k, spell, c);
+					for (const x of hostilesNear(c, spell.r, struck)) harm(x.T, spell.dps * 0.25 * k, spell, c, null, false, blastPart(x));
 				} });
 		},
 		buff(spell) {
@@ -652,8 +665,9 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			else for (let n = 0; n < 3; n++) fx.emit(B.pos.x - _d.x * step * n / 3, B.pos.y - _d.y * step * n / 3, B.pos.z - _d.z * step * n / 3, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, 0.28, n ? 0.18 : 0.32, 0.04, c, 1, 0, 0);
 			if (h) {
 				const at = B.pos.clone().addScaledVector(_d, h.t);
-				if (h.T && !h.ward) { harm(h.T, (B.dmg ?? spell.dmg) * B.k, spell, at, _d); hex(h.T, spell.status, B.k, spell.id); }
+				if (h.T && !h.ward) { harm(h.T, (B.dmg ?? spell.dmg) * B.k, spell, at, _d, false, h.part); hex(h.T, spell.status, B.k, spell.id); }
 				if (L.hit) L.hit(fx, at, _d); else fx.burst(at, c, 16, 3, 0.4, 0.22, 0.6);
+				magicSound(`${spell.school}-hit`, spell.kind === 'orb' ? 0.2 : 0.14, at);
 				if (spell.splash) { fx.ring(at, spell.splash, c, 24, 0.35, 0.3); areaHarm(at, spell.splash, spell, B.k, spell.dmg * 0.6, null); }
 				if (spell.ignite) combat.igniteAt(at.x, at.z, 5);
 				if (spell.burn) burnAt(at, spell, B.k);
@@ -672,7 +686,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 		effects.push({ t: 0, life: B0.t, every: 0.25,
 			step() {
 				for (let n = 0; n < (isPhone ? 4 : 9); n++) { const a = Math.random() * 6.283, r = B0.r * Math.sqrt(Math.random()); fx.emit(p.x + Math.cos(a) * r, p.y + 0.1, p.z + Math.sin(a) * r, 0, 1.2 + Math.random(), 0, 0.5, 0.22, 0.05, c, 0.9, 0, 0); }
-				for (const x of hostilesNear(p, B0.r, struck)) harm(x.T, B0.dps * 0.25 * k, spell, p);
+				for (const x of hostilesNear(p, B0.r, struck)) harm(x.T, B0.dps * 0.25 * k, spell, p, null, false, blastPart(x));
 			} });
 	}
 	function stepBeams(dt, keysHeld) {
@@ -697,7 +711,7 @@ export function createCaster({ camera, combat, player, state, fx, light, heavens
 			if (h?.T && !h.ward) {
 				const acc = (H.acc.get(h.T) || 0) + spell.dps * H.k * dt;
 				if (acc >= 4) {
-					const r = harm(h.T, acc, spell, from, _d);
+					const r = harm(h.T, acc, spell, from, _d, false, h.part);
 					if (spell.drain && r?.dealt) combat.mend(r.dealt * spell.drain);
 					H.acc.set(h.T, 0);
 				} else H.acc.set(h.T, acc);

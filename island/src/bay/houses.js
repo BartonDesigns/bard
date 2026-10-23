@@ -20,6 +20,7 @@ import { occasions, today } from '../calendar.js';
 import { houseLights } from './seasons.js';            // the holidays' strings, the same houses as from afar (holidaylights.js)
 import { carGeometry, carMaterial } from './cars.js';
 import { anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { buildSlice, viewDistance } from '../world/buildslice.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
 
 // the rooms that sometimes have a raised (tray) ceiling
@@ -77,7 +78,11 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const SK = look.surround === 'stucco' ? 'stucco' : look.surround === 'none' ? null : 'trim', SC = SK === 'stucco' ? FOAM : XT;
 		const lv = (L) => (L ? HT.floor1 : 0);
 		// which rooms have a light on after dark
-		const lit = plan.rooms.map((r) => rnd() < (r.type === 'garage' || r.type === 'closet' ? 0.08 : r.level ? 0.45 : 0.6));
+		// (the rooms the household lives in are lit; a bedroom or bathroom now and then; and in
+		// the evening, once it is getting dark outside, every room they use: a dark living room
+		// at half past six is a house with nobody home)
+		const evening = night.value > 0.04;
+		const lit = plan.rooms.map((r) => rnd() < (LIT_P[r.type] ?? 0.6) * (evening ? 1.35 : 1) + (evening && LIVED.has(r.type) ? 0.2 : 0));
 		// each room's walls (paint, paper, panelling), and in some one wall picked out: the
 		// longest, fewest-opened one it has
 		const fin = plan.rooms.map((r) => { const f = dec.wall(r.type, r.id); return { key: f.key, col: lin(f.col) }; });
@@ -273,7 +278,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			// local -z points to: (-sin phi, -cos phi)
 			const mz = [-Math.sin(phi), -Math.cos(phi)], sideDir = w.axis === 'x' ? [0, swing] : [swing, 0];
 			const sign = mz[0] * sideDir[0] + mz[1] * sideDir[1] > 0 ? 1 : -1;
-			const b = new Builder();
+			// (a door between rooms stands inside: no shadow of the sun's)
+			const b = front ? new Builder() : new Builder().inside();
 			// the era's doors: its front door and colour, the household's inside
 			const dc = lin(front ? look.door || ext.door : dec.door.col);
 			b.box('door' + (front ? look.doorStyle ?? ext.doorStyle : dec.door.slot), 0, 0, -t / 2, width - 0.04, h, t / 2, dc);
@@ -497,8 +503,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 
 		yield;
-		// furniture: shaded at the foot, each a shade of its own, a soft shadow under it
+		// furniture: shaded at the foot, each a shade of its own, a soft shadow under it (inside:
+		// no shadow of the sun's, housekit.js)
 		g.ao = true;
+		g.inside();
 		for (const it of plan.items) {
 			if (++step % 12 === 0) yield;
 			if (it.type === 'closet') it.wallCol = paint[it.room];
@@ -550,6 +558,9 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		return { grp, plan, root, floorY, base, col, doors, stoop, lights, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, walls: { list: wallInfo, era, siding: look.siding == null ? 'stucco' : ['lap', 'batten', 'shingle', 'brick'][look.siding] || 'lap', mats: M }, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
 	}
 
+	// how likely each kind of room is to have its light on (by day the lamps are half on: lighting.js)
+	const LIT_P = { living: 0.75, family: 0.75, kitchen: 0.75, dining: 0.6, entry: 0.7, hall: 0.65, loft: 0.6, office: 0.55, master: 0.5, bed: 0.5, bath: 0.4, mbath: 0.4, powder: 0.3, laundry: 0.3, garage: 0.08, closet: 0.08 };
+	const LIVED = new Set(['living', 'family', 'kitchen', 'dining', 'entry', 'hall', 'loft']);
 	function dispose(h) {
 		releaseInterior(h.root);
 		group.remove(h.root);
@@ -560,7 +571,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	// streaming: build the nearest, one a frame; let the far ones go
 
 	let scanX = 1e9, scanZ = 1e9, cands = [], buildMs = 0, job = null;
-	const BUDGET = isPhone ? 3 : 4;
+	const BUDGET = isPhone ? 3 : 4, fwd = new THREE.Vector3();
 	function update(cam, dt, nightK = 0) {
 		updateDetailClock();night.value = nightK;
 		lightingClock(nightK);
@@ -585,7 +596,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			}
 			// ...and the gridded towns' houses (city.js gives them the same shape)
 			for (const grp of city?.procHomes?.(x, z, BUILD_R) || []) if (!grp.wrecked) cands.push([Math.hypot(grp[0].x - x, grp[0].z - z), grp]);
-			cands.sort((p, q) => p[0] - q[0]);
+			// (the nearest first; of those near alike, the ones you are looking at)
+			cam.getWorldDirection(fwd);
+			for (const c of cands) { const Mb = mainOf(c[1]) || c[1][0]; c[2] = viewDistance(c[0], Mb.x, Mb.z, cam.position, fwd); }
+			cands.sort((p, q) => p[2] - q[2]);
 			cands.length = Math.min(cands.length, MAX);
 		}
 		for (const [grp, h] of houses) {
@@ -598,8 +612,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		// one house at a time, a few milliseconds a frame
 		if (job && !cands.some((c) => c[1] === job.grp)) job = null;
 		if (!job) for (const [, grp] of cands) if (!houses.has(grp)) { job = { grp, gen: build(grp), ms: 0 }; break; }
-		const t0 = performance.now();
-		while (job && performance.now() - t0 < BUDGET) {
+		const t0 = performance.now(), slice = buildSlice(dt, BUDGET);
+		while (job && performance.now() - t0 < slice) {
 			let r;
 			const t1 = performance.now();
 			try { r = job.gen.next(); } catch (e) { console.warn('house', e); r = { done: true, value: null }; }
@@ -679,6 +693,24 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (moved) { const [x, z] = toWorld(h, lx, lz); pos.x = x; pos.z = z; }
 		}
 	}
+	// the ceiling over a body inside a house (feet at footY): its ground floor's, or the upper
+	// floor's where there is one; none over the stairwell, outside, or up above its walls
+	// (parkour.js: no climbing over its walls and out through its roof; player.js: a jump's head)
+	function ceiling(x, z, footY) {
+		let best = Infinity;
+		for (const h of houses.values()) {
+			if (!h) continue;
+			const [lx, lz] = local(h, x, z);
+			if (Math.abs(lx) > h.r || Math.abs(lz) > h.r) continue;
+			const p = h.plan, c = p.cellAt(lx, lz), st = p.stairs;
+			if (c < 0 || p.occ[c] < 0 || (st && lx > st.x0 && lx < st.x1 && lz > st.zt && lz < (st.zw ?? st.zb))) continue;
+			const y = footY - h.floorY;
+			if (y < -0.6) continue;
+			if (y < HT.ceil0 - 0.05) best = Math.min(best, h.floorY + HT.ceil0);
+			else if (p.onLevel(c, 1) && y < HT.ceil1 - 0.05) best = Math.min(best, h.floorY + HT.ceil1);
+		}
+		return best;
+	}
 	// the door in front of you, within reach
 	function doorNear(cam) {
 		let best = null;
@@ -706,6 +738,6 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 		return null;
 	}
-	return { update, floor: floorAt, push, doorNear, inside, group, M, count: () => houses.size, houses, buildMs: () => buildMs, busy: () => !!job };
+	return { update, floor: floorAt, push, ceiling, doorNear, inside, group, M, count: () => houses.size, houses, buildMs: () => buildMs, busy: () => !!job };
 }
 

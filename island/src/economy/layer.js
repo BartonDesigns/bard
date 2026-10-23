@@ -9,12 +9,13 @@
 // 650 m. No material per building: one for the boards, the rest is the city's.
 
 import * as THREE from 'three';
-import { planTown, localeAt, USE_OF_KIND, hashAt } from './establishments.js';
+import { planTown, planTownSteps, localeAt, USE_OF_KIND, hashAt } from './establishments.js';
 import { coastScan, coastClass, COAST_RINGS, profileOf, hoursOf, frontSpec, fasciaOf, gapRoom, postsFor, stateAt } from './frontage.js';
 import { createStorefronts } from './storefront.js';
 import { setRequestSource } from './requests.js';
 import { payroll } from './payroll.js';
 import { drawTradeBoard, artRevision } from '../signage/art.js';
+import { createRoadsAt, roadsAtOnce, DRIVE_CLS, BUSY_CLS } from './roadsat.js';
 
 const CW = 256, CH = 64;                 // a board in the atlas, pixels
 const FONTS = {
@@ -24,8 +25,6 @@ const FONTS = {
 	slab: 'Rockwell, "Roboto Slab", "Courier New", serif',
 	narrow: '"Arial Narrow", "Roboto Condensed", Arial, sans-serif',
 };
-const DRIVE_CLS = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
-const BUSY_CLS = { trunk: 2, primary: 2, secondary: 2, tertiary: 1 };
 
 // a '#rrggbb' colour to linear rgb (the shopfront frames and fascias take the board's)
 function hexLin(h) {
@@ -149,24 +148,11 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		return C;
 	}
 	// the mapped streets near a point: the busiest it faces, whether two meet by it, a freeway near
+	// (roadsat.js: sorted once per cell round a point, the same answer as walking every street)
+	const cellRoads = real?.nearOwn && real?.roadVersion ? createRoadsAt(real) : null;
 	function roadsAt(x, z) {
 		if (!real?.near) return { busy: 0, corner: false, highway: false };
-		let busy = 0, highway = false;
-		const close = new Set();
-		for (const r of real.near('roads', x, z, 230)) {
-			const pts = r.pts;
-			if (!pts) continue;
-			let best = 1e9;
-			for (let i = 0; i + 3 < pts.length; i += 2) {
-				const ax = pts[i], az = pts[i + 1], dx = pts[i + 2] - ax, dz = pts[i + 3] - az, l2 = dx * dx + dz * dz || 1;
-				const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-				best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
-			}
-			if (r.cls === 'motorway' && best < 230) highway = true;
-			if (best < 40 && BUSY_CLS[r.cls]) busy = Math.max(busy, BUSY_CLS[r.cls]);
-			if (best < 26 && DRIVE_CLS.has(r.cls)) close.add(r.name || r);
-		}
-		return { busy, corner: close.size >= 2, highway };
+		return cellRoads ? cellRoads(x, z) : roadsAtOnce(real, x, z);
 	}
 	// the side of a mapped shop or office that faces the street (0 +z, 1 -z, 2 +x, 3 -x)
 	function frontOf(o) {
@@ -243,14 +229,22 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	}
 	// the turn of a city box laid along a face (its local +z out from the face)
 	const faceA = (o, face) => o.a + [0, Math.PI, -Math.PI / 2, Math.PI / 2][face];
+	// apply(list, cx, cz): the buildings round you made businesses, all at once; applySteps the
+	// same a slice at a time (the city's rebuild, bay/city.js: yield between slices), the
+	// businesses standing as they were till the last slice puts the new ones in place together
 	function apply(list, cx, cz) {
+		const it = applySteps(list, cx, cz);
+		for (let r = it.next(); !r.done; r = it.next());
+		return plan;
+	}
+	function* applySteps(list, cx, cz) {
 		stamp++;
 		const ll = locate?.(cx, cz);
-		here = ll ? localeAt(ll.lat, ll.lon) : 'us-ca';
+		const loc = ll ? localeAt(ll.lat, ll.lon) : 'us-ca';
 		const seen = new Set(), descs = [];
+		let n = 0;
 		for (const o of list) {
-			if (o.biz) o.biz = null;
-			if (o.src?.biz) o.src.biz = null;
+			if ((++n & 1023) === 0) yield;
 			const D = describe(o);
 			if (!D) continue;
 			const k = Math.round(o.x) + ',' + Math.round(o.z);
@@ -274,7 +268,12 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 				if (c && Math.hypot(D.x - cx, D.z - cz) < 1500) { c.rural = D.rural; c.wild = D.wild; }
 			}
 		}
-		plan = planTown(descs, { locale: here });
+		yield;
+		const next = yield* planTownSteps(descs, { locale: loc });
+		// (from here on in one go)
+		here = loc;
+		for (const o of list) { if (o.biz) o.biz = null; if (o.src?.biz) o.src.biz = null; }
+		plan = next;
 		// the homes, for the requests' customers (a door in front of each, the nearer ones)
 		const isBiz = new Set(plan.map((E) => E.i));
 		homes = descs.filter((D, i) => D.use === 'house' && !isBiz.has(i) && Math.hypot(D.x - cx, D.z - cz) < 1200).map((D) => { const F = faceOf(D.o, 0); return { x: F.cx + F.nx * 2, z: F.cz + F.nz * 2 }; });
@@ -312,7 +311,6 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		}
 		cityBoards = boards; cityFronts = fronts;
 		refresh();
-		return plan;
 	}
 	// how a business shows itself (economy/frontage.js): its shopfront's glazing, fascia and
 	// board, a house's shop window under an awning, the pavement's things kept to the room
@@ -632,7 +630,7 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		return best && bd < 3 ? view(best) : null;
 	});
 	return {
-		apply, near, byId, info, raw, anchors, tick,
+		apply, applySteps, near, byId, info, raw, anchors, tick,
 		// every business planned, the regional towns' too (signage/ lays their glass decals)
 		plan: () => everyone(),
 		setNight: (k) => { night.value = 0.55 * k; },

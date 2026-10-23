@@ -35,47 +35,53 @@ const ease = (t) => t * t * (3 - 2 * t);
 // The feel for what is ahead, with a body's own two tests: floorAt(x, z, footY) (the surface
 // under feet at footY) and pushOut(p) (moves an eye-height point p off walls); eye is how far
 // its eye is above its feet.
-export function feelFor({ floorAt, pushOut, eye = EYE }) {
+// ceilingAt(x, z, footY) (optional): the lowest ceiling over a body there, or Infinity: no climb
+// goes up through one (from inside a house, over its walls and out through its roof)
+export function feelFor({ floorAt, pushOut, ceilingAt = null, eye = EYE }) {
 	const P = new THREE.Vector3();
-// can a body stand at x, z with its feet at f? 0 if so; 1 a wall in the way, 2 the ground
-// (or something's top) above the feet
-function freeAt(x, z, f) {
-	P.set(x, f + EYE, z);
-	pushOut(P);
-	if ((P.x - x) ** 2 + (P.z - z) ** 2 > 4e-4) return 1;
-	return floorAt(x, z, f) > f + 0.12 ? 2 : 0;
-}
-// what is ahead (dx, dz) of a body at px, pz with its feet at f, within reach: null (open
-// ground), { kind: 'wall' } (nothing to get on within upTo), or { kind: 'ledge' | 'fence',
-// face (how far on its side is), top (world y of the lip), far (how far on you stand, or
-// land), y (the floor there) }
-function scan(px, pz, f, dx, dz, reach, upTo) {
-	let d = -1, why = 0;
-	for (let k = 0.05; k <= reach; k += 0.1) { why = freeAt(px + dx * k, pz + dz * k, f + 0.02); if (why) { d = k; break; } }
-	if (d < 0) return null;
-	// (bodies are kept 0.3 m off a wall, so its side is that far on from where the push begins;
-	// a rise of the ground starts where it is met)
-	const face = why === 1 ? d + 0.25 : Math.max(0.05, d - 0.05);
-	const qx = px + dx * (face + 0.1), qz = pz + dz * (face + 0.1);
-	// how high the feet must be to be clear of it, to a couple of centimetres
-	let lo = -1;
-	for (let u = 0.3; u <= upTo + 0.15; u += 0.15) if (!freeAt(qx, qz, f + u)) { lo = u; break; }
-	if (lo < 0) return { kind: 'wall', face };
-	let a = lo - 0.15, b = lo;
-	for (let i = 0; i < 3; i++) { const m = (a + b) / 2; if (freeAt(qx, qz, f + m)) a = m; else b = m; }
-	let top = f + b;
-	// a top you could stand on is exact; a wall's or a fence's is a little above where it lets go
-	const g = floorAt(qx, qz, top + 0.3);
-	top = Number.isFinite(g) && g > top - 0.45 && g < top + 0.35 ? g : top + 0.2;
-	// beyond it: somewhere to stand on top (a ledge), or the ground on the far side (a fence)
-	for (let k = face + 0.35; k <= face + 2.1; k += 0.15) {
-		const x = px + dx * k, z = pz + dz * k, y = floorAt(x, z, top + 0.4);
-		if (!Number.isFinite(y) || y > top + 0.4) return { kind: 'wall', face, top };
-		if (y > top - 0.4) { if (!freeAt(x, z, y + 0.03)) return { kind: 'ledge', face, top, far: k, y }; continue; }
-		if (y > top - 4.5 && !freeAt(x, z, y + 0.03)) return { kind: 'fence', face, top, far: k + 0.1, y };
+	// can a body stand at x, z with its feet at f? 0 if so; 1 a wall in the way, 2 the ground
+	// (or something's top) above the feet
+	function freeAt(x, z, f) {
+		P.set(x, f + eye, z);
+		pushOut(P);
+		if ((P.x - x) ** 2 + (P.z - z) ** 2 > 4e-4) return 1;
+		return floorAt(x, z, f) > f + 0.12 ? 2 : 0;
 	}
-	return { kind: 'wall', face, top };
-}
+	// what is ahead (dx, dz) of a body at px, pz with its feet at f, within reach: null (open
+	// ground), { kind: 'wall' } (nothing to get on within upTo), or { kind: 'ledge' | 'fence',
+	// face (how far on its side is), top (world y of the lip), far (how far on you stand, or
+	// land), y (the floor there) }
+	function scan(px, pz, f, dx, dz, reach, upTo) {
+		let d = -1, why = 0;
+		for (let k = 0.05; k <= reach; k += 0.1) { why = freeAt(px + dx * k, pz + dz * k, f + 0.02); if (why) { d = k; break; } }
+		if (d < 0) return null;
+		// (bodies are kept 0.3 m off a wall, so its side is that far on from where the push begins;
+		// a rise of the ground starts where it is met)
+		const face = why === 1 ? d + 0.25 : Math.max(0.05, d - 0.05);
+		const qx = px + dx * (face + 0.1), qz = pz + dz * (face + 0.1);
+		// how high the feet must be to be clear of it, to a couple of centimetres
+		let lo = -1;
+		for (let u = 0.3; u <= upTo + 0.15; u += 0.15) if (!freeAt(qx, qz, f + u)) { lo = u; break; }
+		if (lo < 0) return { kind: 'wall', face };
+		let a = lo - 0.15, b = lo;
+		for (let i = 0; i < 3; i++) { const m = (a + b) / 2; if (freeAt(qx, qz, f + m)) a = m; else b = m; }
+		let top = f + b;
+		// a top you could stand on is exact; a wall's or a fence's is a little above where it lets go
+		const g = floorAt(qx, qz, top + 0.3);
+		top = Number.isFinite(g) && g > top - 0.45 && g < top + 0.35 ? g : top + 0.2;
+		// a ceiling over you or over its top too low to get up there (inside a house: its walls
+		// stop at its ceiling): no way over it
+		const room = (x, z, y) => (ceilingAt ? ceilingAt(x, z, y) : Infinity) - y;
+		if (room(px, pz, f) < top - f + 1.05 || room(qx, qz, top) < 1.05) return { kind: 'wall', face, top, low: true };
+		// beyond it: somewhere to stand on top (a ledge), or the ground on the far side (a fence)
+		for (let k = face + 0.35; k <= face + 2.1; k += 0.15) {
+			const x = px + dx * k, z = pz + dz * k, y = floorAt(x, z, top + 0.4);
+			if (!Number.isFinite(y) || y > top + 0.4) return { kind: 'wall', face, top };
+			if (y > top - 0.4) { if (!freeAt(x, z, y + 0.03) && room(x, z, y) > 1.75) return { kind: 'ledge', face, top, far: k, y }; continue; }
+			if (y > top - 4.5 && !freeAt(x, z, y + 0.03) && room(x, z, y) > 1.75) return { kind: 'fence', face, top, far: k + 0.1, y };
+		}
+		return { kind: 'wall', face, top };
+	}
 	return { freeAt, scan };
 }
 
@@ -86,8 +92,8 @@ export function climbFor(A, f, how = 'key') {
 	if (!A || A.kind === 'wall') return null;
 	const rel = A.top - f, auto = how === 'auto';
 	if (how === 'air') {
-		if (A.kind === 'ledge' && rel >= 0.45 && rel <= 1.95) return rel > 1.1 ? 'pull' : 'mantle';
-		if (A.kind === 'fence' && rel >= 0.25 && rel <= 1.95) return rel > 1.15 ? 'over' : 'hop';
+		if (A.kind === 'ledge' && rel >= 0.45 && rel <= 2.1) return rel > 1.1 ? 'pull' : 'mantle';
+		if (A.kind === 'fence' && rel >= 0.25 && rel <= 2.1) return rel > 1.15 ? 'over' : 'hop';
 		return null;
 	}
 	if (A.kind === 'ledge' && rel >= 0.5 && rel <= (auto ? 1.0 : 1.5)) return 'mantle';
@@ -134,7 +140,7 @@ export function pathAt(C, t) {
 	return { x: C.ox + C.dx * w, z: C.oz + C.dz * w, eye: lerp(a[2], b[2], k), w };
 }
 
-export function createParkour({ s, camera, floorAt, pushOut }) {
+export function createParkour({ s, camera, floorAt, pushOut, ceilingAt = null }) {
 	// C: the climb under way; R: the wall run under way
 	let C = null, R = null, hands = null, clock = 0, scanAt = -1, upUsed = false, runs = 0, lastN = null, coolRun = 0, last = null;
 	// the hands on the lip, once there is a scene to put them in (main.js)
@@ -144,7 +150,7 @@ export function createParkour({ s, camera, floorAt, pushOut }) {
 		hands = [0, 1].map(() => { const m = new THREE.Mesh(geo, mat); m.visible = false; m.frustumCulled = false; m.name = 'climb-hand'; scene.add(m); return m; });
 	}
 
-	const { freeAt, scan } = feelFor({ floorAt, pushOut });
+	const { freeAt, scan } = feelFor({ floorAt, pushOut, ceilingAt });
 
 	// ---------- the climbs ----------
 	// each a path through keys [t, w (along, from its side), eye y], eased key to key
@@ -229,7 +235,7 @@ export function createParkour({ s, camera, floorAt, pushOut }) {
 		const into = -(o.wish.x * n.nx + o.wish.z * n.nz);
 		if (into > 0.35 && clock - scanAt > 0.06) {
 			scanAt = clock;
-			const A = scan(s.pos.x, s.pos.z, f, -n.nx, -n.nz, 0.75, 1.95);
+			const A = scan(s.pos.x, s.pos.z, f, -n.nx, -n.nz, 0.75, 2.1);
 			const kind = climbFor(A, f, 'air');
 			if (kind) { begin(kind, A, -n.nx, -n.nz, Math.hypot(s.vel.x, s.vel.z)); return 1; }
 			// (something low: the step takes it, or the jump lands on it)
@@ -242,7 +248,8 @@ export function createParkour({ s, camera, floorAt, pushOut }) {
 		const c = -(s.vel.x * n.nx + s.vel.z * n.nz) / v;
 		// straight at it: a kick up it (once a jump)
 		if (c > 0.9) {
-			if (!upUsed) { upUsed = true; s.vel.y = Math.max(s.vel.y + 1.6, 4.4); sfx('kick'); footfall(); }
+			// (not under a ceiling: a room's wall is no way up)
+			if (!upUsed && (ceilingAt ? ceilingAt(s.pos.x, s.pos.z, f) : Infinity) - f > 3.6) { upUsed = true; s.vel.y = Math.max(s.vel.y + 1.6, 4.4); sfx('kick'); footfall(); }
 			return 1;
 		}
 		// at a slant: along it, a wall you have not just run

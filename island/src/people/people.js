@@ -1,4 +1,6 @@
 import {pauseWorkplaceRoutine} from './workplace-routine.js';
+import { beatNow } from '../music/beat.js';
+import { moveToMusic } from './dance.js';
 // Crysis people in the world. A pool of real bodies (MakeHuman, see body.js) lives
 // round the player and is handed out to whoever is near: people walking the city's
 // sidewalks round their blocks and crossing at the corners, joggers, pairs stopped to
@@ -14,6 +16,7 @@ import { loadPeopleAssets, buildPerson, personDNA, rng, freeBody } from './body.
 import { qualityNow } from '../world/governor.js';
 import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
+import { wallKeeper } from './walls.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
 import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE, isWeekend } from './flow.js';
 import { fadePerson } from './fade.js';
@@ -22,6 +25,7 @@ import { regionalDress } from '../region/dress.js';
 import { ancestryFor } from '../region/cultures.js';
 import { coldOf } from '../region/climate.js';
 import { makeTeen, teensAbout, teenStyle, UNIFORM_CULTURES } from './teens.js';
+import { comeUp } from './personal-space.js';
 import { walkNow } from '../bay/crosswalks.js';
 import { GFX_PHONE } from '../world/device.js';
 
@@ -68,7 +72,10 @@ export function createPeople(scene, world, camera = null) {
 		return frustum.intersectsSphere(sphere);
 	};
 	const hiddenSpot = (x, z, cam) => { const d = Math.hypot(x - cam.x, z - cam.z); return d > 75 || !seen(x, ground(x, z), z, d); };
-	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined), {constrain:pos=>P.workConstrain?.(pos)}); return M; };
+	// (each step kept off walls while they are about, swept so a runner cannot pass through one:
+	// people/walls.js; solid below reads how far the walls held them)
+	const keepWalls = wallKeeper(world);
+	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined), { constrain: (pos, from) => { if (P.solidOn) P.wallHeld += keepWalls(pos, from, from.y); P.workConstrain?.(pos); } }); return M; };
 
 	async function ensure() {
 		if (A || failed) return;
@@ -464,10 +471,9 @@ export function createPeople(scene, world, camera = null) {
 		if (p.override && p.override(p, dt, cam)) { pauseWorkplaceRoutine(p); return; }
 		if (p.engaged) {
 			pauseWorkplaceRoutine(p);
-			// talking with you: stop, turn to face you, listen; speak while there is speech
-			const dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
-			M.want.heading = Math.atan2(dx, dz);
-			M.want.speed = !p.workSpot && d > 2.4 ? 0.8 : 0;
+			// talking with you: come up once, to a comfortable distance, turn to face you, listen;
+			// speak while there is speech (never a step after you as you back away)
+			comeUp(p, cam, p.workSpot ? 0 : 0.8);
 			S.look.target = cam;
 			const speaking = performance.now() < (p.speakUntil || 0);
 			S.talk = speaking ? 1 : 0;
@@ -653,14 +659,14 @@ export function createPeople(scene, world, camera = null) {
 	}
 	// solid: people keep out of walls, parked cars and the rocks (the same pushes you get)
 	// and out of your own space; walked into a wall for a while, they turn back
-	const PP = new THREE.Vector3(), walkers = [];
+	const walkers = [];
 	function solid(p, dt, cam) {
-		const S = p.M.S, W = world(), I = W.island;
+		const S = p.M.S;
 		const x0 = S.pos.x, z0 = S.pos.z;
-		if (I.extraPush) { PP.set(S.pos.x, S.pos.y + 1.6, S.pos.z); I.extraPush(PP, S.pos.y); S.pos.x = PP.x; S.pos.z = PP.z; }
 		const Y = you(cam), dx = S.pos.x - Y.x, dz = S.pos.z - Y.z, d = Math.hypot(dx, dz), R = 0.62;
 		if (d < R && Math.abs(S.pos.y - (Y.y - 1.68)) < 1.4) { const k = d > 1e-3 ? R / d : 0; S.pos.x = Y.x + (d > 1e-3 ? dx * k : R); S.pos.z = Y.z + (d > 1e-3 ? dz * k : 0); }
-		const pushed = Math.hypot(S.pos.x - x0, S.pos.z - z0);
+		// (the walls' hold this frame came from the step itself: motionFor's constrain)
+		const pushed = Math.hypot(S.pos.x - x0, S.pos.z - z0) + (p.P.wallHeld || 0);
 		p.stuckT = pushed > 0.004 && p.M.want.speed > 0.3 && d > 1.2 ? (p.stuckT || 0) + dt : Math.max(0, (p.stuckT || 0) - dt);
 		if (p.stuckT > 2) {
 			p.stuckT = 0;
@@ -808,6 +814,8 @@ export function createPeople(scene, world, camera = null) {
 		let active = 0, kids = 0;
 		const drop = (p) => {
 			if (p.rod) p.rod.visible = false;
+			if (p.dance) { p.dance = null; p.M.act(null); }
+			p.M.groove(0);
 			disposeWorkplaceProps(p);p.workSpot=null;p.workContext=null;
 			p.active = false; p.P.root.visible = false; p.leaving = false; p.fade = 0;
 			// out of the family: the grown-up lets go of the hand
@@ -816,6 +824,7 @@ export function createPeople(scene, world, camera = null) {
 			if (p.route?.kind === 'seat') { p.route.seat.taken = false; p.M.stand(); p.M.S.sitK.v = 0; p.route = null; }
 			if (p.partner) { p.partner.partner = null; p.partner = null; }
 		};
+		const B = beatNow();
 		for (const p of pool) {
 			const S = p.M.S;
 			if (p.active && p.demo === undefined) {
@@ -836,8 +845,15 @@ export function createPeople(scene, world, camera = null) {
 				if (!p.leaving && (p.fade ?? 1) < 1) p.fade = Math.min(1, (p.fade ?? 0) + dt * 1.25);
 				fadePerson(p.P, p.fade ?? 1);
 				steer(p, dt, cam);
+				// the music (people/dance.js): everyone in earshot moves to it, and someone standing
+				// about free gets up and dances a while, staying put for it
+				if (moveToMusic(p, d, B, dt) && p.role === 'wait') p.timer = Math.max(p.timer, 3);
+				// solid: kept off walls, parked cars and the rocks (the same pushes you get) and out of
+				// your own space; a seat's sitter stays where the seat is
+				p.P.solidOn = d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override));
+				p.P.wallHeld = 0;
 				p.M.update(dt, t, cam);
-				if (d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override))) solid(p, dt, cam);
+				if (p.P.solidOn) solid(p, dt, cam);
 			}
 		}
 		trim(dt, Q);
@@ -935,7 +951,7 @@ export function createPeople(scene, world, camera = null) {
 		}
 		return best;
 	}
-	function engage(p) { p.engaged = true; p.role = 'wait'; if (p.partner) { p.partner.partner = null; p.partner = null; } p.M.S.gestures.length = 0; }
-	function release(p) { if (!p) return; p.engaged = false; p.speakUntil = 0; p.M.S.talk = 0; p.M.S.look.target = null; p.timer = 1 + Math.random() * 2; }
+	function engage(p) { p.engaged = true; p.cameUp = false; p.role = 'wait'; if (p.partner) { p.partner.partner = null; p.partner = null; } p.M.S.gestures.length = 0; }
+	function release(p) { if (!p) return; p.engaged = false; p.cameUp = false; p.speakUntil = 0; p.M.S.talk = 0; p.M.S.look.target = null; p.timer = 1 + Math.random() * 2; }
 	return { update, lineup, showcase, demo, pool, group, sidewalk, steps, facing, engage, release, ready: () => !!A };
 }

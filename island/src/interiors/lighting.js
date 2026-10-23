@@ -27,6 +27,7 @@ import * as THREE from 'three';
 import { qualityNow } from '../world/governor.js';
 import { bake, tessellate, tessellatedCount, findPieces, pieceFixture, quadBoxes, QUALITY, E_RANGE } from './lightbake.js';
 import { GFX_PHONE } from '../world/device.js';
+import { buildSlice, viewDistance } from '../world/buildslice.js';
 
 const S = {
 	isPhone: GFX_PHONE,
@@ -90,10 +91,14 @@ function step(renderer, scene, camera, dt, ease) {
 	const t0 = performance.now();
 	// (the nearest building first, unless one is under way)
 	if (camera && S.queue.length > 1 && !S.queue[0].gen) {
-		const d = (H) => H.root.getWorldPosition(tmpP).distanceToSquared(camera.position);
-		S.queue.sort((a, b) => d(a) - d(b));
+		// (of those near alike, the ones you are looking at)
+		camera.getWorldDirection(tmpF);
+		const d = (H) => { H.root.getWorldPosition(tmpP); return viewDistance(tmpP.distanceTo(camera.position), tmpP.x, tmpP.z, camera.position, tmpF); };
+		for (const H of S.queue) H.qd = d(H);
+		S.queue.sort((a, b) => a.qd - b.qd);
 	}
-	while (S.queue.length && performance.now() - t0 < S.budget) {
+	const slice = buildSlice(dt, S.budget);
+	while (S.queue.length && performance.now() - t0 < slice) {
 		const H = S.queue[0];
 		if (!H.gen) { H.state = 'baking'; H.gen = job(H); }
 		let r;
@@ -116,7 +121,9 @@ function step(renderer, scene, camera, dt, ease) {
 		// and its screens: a lamp left on in the hall or by the sofa, the television)
 		const late = h < 12 ? h + 24 : h, asleep = sp.home && sp.bed != null && late >= sp.bed && late < 30.5 && S.night > 0.3;
 		const nightMode = asleep || (!sp.home && !sp.allNight && (!open || (always && S.night > 0.5))) ? 1 : 0;
-		const target = !open ? 0.6 : sp.home ? 0.5 + 0.5 * S.night : 1;
+		// (a home by day: its lamps half on; from the evening until bedtime, on in full)
+		const evening = h >= 16.5 || h < 7.5;
+		const target = !open ? 0.6 : sp.home ? (evening ? 1 : 0.5 + 0.5 * S.night) : 1;
 		H.k += (target - H.k) * ease;
 		H.nk = (H.nk ?? nightMode) + (nightMode - (H.nk ?? nightMode)) * ease;
 		// (the same light by night as by day: no lift for the dark, the lamps are what they are)
@@ -227,7 +234,7 @@ function blobMesh() {
 	mesh.count = 0; mesh.frustumCulled = false; mesh.name = 'lighting:blobs';
 	return mesh;
 }
-const tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3();
+const tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3(), tmpF = new THREE.Vector3();
 function blobs(camera) {
 	const B = S.blobs;
 	if (!B) return;
@@ -369,7 +376,8 @@ function* job(H) {
 			const g0 = q.o.geometry.index ? q.o.geometry.toNonIndexed() : q.o.geometry;
 			const attrs = {};
 			for (const k of Object.keys(g0.attributes)) { const A = g0.attributes[k]; if (A.isInterleavedBufferAttribute) continue; attrs[k] = { array: A.array instanceof Float32Array ? A.array : Float32Array.from(A.array), size: A.itemSize, normalized: A.normalized, type: A.array.constructor }; }
-			const T = tessellate(attrs, g0.attributes.position.count, cell);
+			// (the shell's share kept apart: housekit.js sunCast, what the sun's shadow pass draws)
+			const T = tessellate(attrs, g0.attributes.position.count, cell, q.o.geometry.userData.sunCast ?? -1);
 			for (const k of Object.keys(T.attrs)) { T.attrs[k].type = attrs[k].type; T.attrs[k].normalized = attrs[k].normalized; }
 			if (g0 !== q.o.geometry) g0.dispose();
 			geos.push(T);
@@ -415,6 +423,7 @@ function* job(H) {
 			const A = T.attrs[k];
 			g.setAttribute(k, new THREE.BufferAttribute(A.type && A.type !== Float32Array ? A.type.from(A.array) : A.array, A.size, !!A.normalized));
 		}
+		if (T.mark != null) g.userData.sunCast = T.mark;
 		g.setAttribute('ilight', R.light);
 		g.setAttribute('idir', R.dir);
 		g.setAttribute('inight', R.night);

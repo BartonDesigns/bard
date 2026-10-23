@@ -103,6 +103,22 @@ export function rayShape(o, d, s) {
 	return null;
 }
 
+// a shape grown by g all round (an assisted shot's, cast() above)
+function swell(s, g) {
+	if (s.type === 'box') return { ...s, h: [s.h[0] + g, s.h[1] + g, s.h[2] + g] };
+	return { ...s, r: s.r + g };
+}
+// the point of a shape nearest a ray (where an assisted shot is drawn to), as { x, y, z }
+export function nearestOn(s, o, d) {
+	if (s.type === 'sphere' || s.type === 'box') return s.c;
+	// a capsule's axis: the point on the segment nearest the line
+	const ux = s.b.x - s.a.x, uy = s.b.y - s.a.y, uz = s.b.z - s.a.z, wx = s.a.x - o.x, wy = s.a.y - o.y, wz = s.a.z - o.z;
+	const a = ux * ux + uy * uy + uz * uz, b = ux * d.x + uy * d.y + uz * d.z, e = d.x * wx + d.y * wy + d.z * wz, f = ux * wx + uy * wy + uz * wz;
+	const den = a - b * b;
+	const k = den > 1e-9 ? Math.max(0, Math.min(1, (b * e - f) / den)) : 0.5;
+	return { x: s.a.x + ux * k, y: s.a.y + uy * k, z: s.a.z + uz * k };
+}
+
 // a person standing at feet (x, y, z), of height h: head, torso and legs (arms count as limbs
 // with the legs; the multipliers are health.js PARTS)
 export function personShapes(x, y, z, h = 1.75, crouch = 0) {
@@ -127,19 +143,22 @@ export function createLayer() {
 		clear() { map.clear(); },
 		get size() { return map.size; },
 		// the nearest target a ray strikes within max, past the filter: { T, t, part, n, shape },
-		// with ward: true when it is a warded child (the shot stops there, harmlessly)
-		cast(o, d, max, shooter = null, rules = {}) {
+		// with ward: true when it is a warded child (the shot stops there, harmlessly).
+		// assist (a forgiving weapon's, combat/weapons.js): every shape swollen by pad metres and
+		// ang radians of its distance (a head by head of that), so a near miss meets it too
+		cast(o, d, max, shooter = null, rules = {}, assist = null) {
 			let best = null, bt = max;
 			for (const T of map.values()) {
 				const B = T.bound, ward = warded(T);
 				if (!B || (!ward && !canHit(T, shooter, rules))) continue;
 				// (the bounding sphere first)
 				const bx = B.x - o.x, by = B.y - o.y, bz = B.z - o.z, along = bx * d.x + by * d.y + bz * d.z;
-				if (along < -B.r || along - B.r > bt) continue;
+				const grow = assist ? assist.pad + assist.ang * Math.max(0, along) : 0, R = B.r + grow;
+				if (along < -R || along - R > bt) continue;
 				const ax = bx - d.x * along, ay = by - d.y * along, az = bz - d.z * along;
-				if (ax * ax + ay * ay + az * az > B.r * B.r) continue;
+				if (ax * ax + ay * ay + az * az > R * R) continue;
 				for (const s of shapesOf(T)) {
-					const h = rayShape(o, d, s);
+					const h = grow ? rayShape(o, d, swell(s, s.part === 'head' ? grow * assist.head : grow)) : rayShape(o, d, s);
 					if (h && h.t < bt) { bt = h.t; best = { T, t: h.t, part: s.part || 'body', n: h.n, shape: s, ward }; }
 				}
 			}

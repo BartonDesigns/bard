@@ -6,12 +6,25 @@
 // head and shoulders where the driver sits.
 //
 //   const F = createFleet(group, { cap, isPhone, night });
-//   F.begin(); F.add(kind, matrix, colour, dist2, { spin, steer, riders }); F.end();
+//   F.begin(); F.add(kind, matrix, colour, dist2, { spin, steer, riders, finish }); F.end();
 
 import * as THREE from 'three';
-import { carGeometry, carMaterial, carGlassMaterial, wheelGeometry, wheelHubs, seatsOf, SPEC } from '../bay/cars.js';
+import { carGeometry, carMaterial, carGlassMaterial, wheelGeometry, wheelHubs, seatsOf, steeringWheelGeometry, WHEEL_TILT, SPEC } from '../bay/cars.js';
 import { MODEL_KINDS, modelKit, wantModel, modelNight } from './models.js';
 import { qualityNow } from '../world/governor.js';
+import { hash32 } from '../signage/rand.js';
+
+// which finish a car has (bay/cars.js FINISH): by its seed, most of them ordinary, a few
+// showroom-bright, some old and chalked or dusty, now and then a matte wrap; o.finish says
+// outright (a bus, a liveried car)
+const FINISH_W = [0.16, 0.44, 0.24, 0.1, 0.06];
+export function finishOf(o, e) {
+	if (o.finish !== undefined) return o.finish;
+	const seed = o.seed !== undefined ? hash32(String(o.seed)) : o.seedAt ? hash32(Math.round(o.seedAt[0] * 2), Math.round(o.seedAt[1] * 2)) : hash32(Math.round(e[12] * 2), Math.round(e[14] * 2));
+	let r = ((seed >>> 8) & 1023) / 1024;
+	for (let i = 0; i < FINISH_W.length; i++) { r -= FINISH_W[i]; if (r < 0) return i; }
+	return 1;
+}
 
 // the reach of each level (metres): the real model or finest loft, the middle, the far lofts
 export const REACH = [40, 120, 320];
@@ -20,18 +33,25 @@ const geos = {};
 // (a body is built the first time its kind comes into a level, one a frame per fleet, so
 // that a street full of new kinds does not stall a frame; until then it waits, drawn coarser)
 let budget = 1;
-function loftGeo(kind, t, wheels, force = false) {
-	const k = kind + t + (wheels ? 'w' : '');
+// (mine: your own car's finest loft, its steering wheel left out of the cabin: that is its
+// own instance, turned with your steering)
+function loftGeo(kind, t, wheels, force = false, mine = false) {
+	const k = kind + t + (wheels ? 'w' : '') + (mine ? 'f' : '');
 	if (!geos[k]) {
 		if (budget <= 0 && !force) return null;
 		budget--;
-		const [ns, ws, cabin] = LOFT[t]; geos[k] = carGeometry(kind, ns, ws, { wheels, cabin, glass: cabin });
+		const [ns, ws, cabin] = LOFT[t]; geos[k] = carGeometry(kind, ns, ws, { wheels, cabin, glass: cabin, steering: !mine });
 	}
 	return geos[k];
 }
 // your own car where it is a real model: the loft's cabin inside it, and the loft's body
 // seen from within (door cards, the headliner), as the model has no inside of its own
-const cabGeo = (kind) => geos[kind + 'cab'] || (geos[kind + 'cab'] = { cabin: carGeometry(kind, 32, 12, { wheels: false, only: 'cabin' }), shell: carGeometry(kind, 48, 12, { wheels: false, only: 'shell' }) });
+const cabGeo = (kind) => geos[kind + 'cab'] || (geos[kind + 'cab'] = { cabin: carGeometry(kind, 32, 12, { wheels: false, only: 'cabin', steering: false }), shell: carGeometry(kind, 48, 12, { wheels: false, only: 'shell' }) });
+// your own car's steering wheel, its own instance so it turns in your hands
+const swGeo = (kind) => geos[kind + 'sw'] || (geos[kind + 'sw'] = steeringWheelGeometry(kind));
+// a road wheel's lock turned into the steering wheel's turn: about a turn and a half each
+// way at full lock, as in a car
+const STEER_RATIO = 15;
 const wgeo = {};
 const wheelGeo = (kind) => wgeo[kind] || (wgeo[kind] = wheelGeometry(kind, 18));
 // someone in a far car: head and shoulders, dark against the glass
@@ -66,10 +86,11 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		return S;
 	}
 	const w4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), mir = new THREE.Vector3(-1, 1, 1);
-	function put(S, M, c) {
+	// (the finish rides in the colour's red, in steps of 2 above it: bay/cars.js FINISH_GLSL)
+	function put(S, M, c, fin = 0) {
 		if (S.n >= S.cap) return;
 		M.toArray(S.matrix.array, S.n * 16);
-		if (S.color && c) c.toArray(S.color.array, S.n * 3);
+		if (S.color && c) { c.toArray(S.color.array, S.n * 3); S.color.array[S.n * 3] += 2 * fin; }
 		S.n++;
 	}
 	function begin() {
@@ -100,6 +121,16 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 			else put(set(kind + 'lw', [[wheelGeo(kind), carMat, false]], false, cap * 4, cast), w4);
 		});
 	}
+	// your own steering wheel, hung at the column's top, tilted back to you, turned with the
+	// steering (left is anticlockwise as you see it)
+	function steeringWheel(kind, M, steer) {
+		const [x, y, z] = seatsOf(kind).wheel;
+		e.set(WHEEL_TILT, 0, -steer * STEER_RATIO, 'XYZ');
+		q.setFromEuler(e);
+		w4.compose(v.set(x, y, z), q, one);
+		w4.premultiply(M);
+		put(set(kind + 'sw', [[swGeo(kind), carMat, false]], false, 2, false), w4);
+	}
 	function riders(kind, M, n) {
 		const C = seatsOf(kind), S = set('riders', [[riderGeo, riderMat, false]], false, cap * 2, false);
 		for (let i = 0; i < n && i < C.seats.length; i++) { const s = C.seats[i]; w4.makeTranslation(s[0], s[1] - 0.05, s[2] - 0.3).premultiply(M); put(S, w4); }
@@ -114,33 +145,35 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		const far = qualityNow().far;
 		if (far < 1) d2 /= far * far;
 		const t = d2 < near2 ? 0 : d2 < mid2 ? 1 : d2 < far2 ? 2 : 3;
-		if (decals && t < 2) decals.add(kind, M, d2, o);
+		const K = t <= 1 && MODEL_KINDS[kind] ? (t === 0 ? wantModel(kind, 'near') && modelKit(kind, 'near') : (wantModel(kind, 'mid'), modelKit(kind, 'mid'))) || null : null;
+		const fin = o.livery || kind === 'bus' ? 1 : finishOf(o, M.elements);
+		// (the decals laid on the body it is drawn with)
+		if (decals && t < 2) decals.add(kind, M, d2, o, K);
 		const cast = t < 2;
-		if (t <= 1 && MODEL_KINDS[kind]) {
-			const K = t === 0 ? wantModel(kind, 'near') && modelKit(kind, 'near') : (wantModel(kind, 'mid'), modelKit(kind, 'mid'));
-			if (K) {
-				put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c);
-				if (t === 0 && K.hubs.length === 4) wheels(kind, M, o.spin || 0, o.steer || 0, K, cast);
-				if (t === 0 && o.first) {
-					const G = cabGeo(kind);
-					insideMat ||= carMaterial(night, { cheap: isPhone, side: THREE.BackSide });
-					put(set(kind + 'cab', [[G.cabin, carMat, false], [G.shell, insideMat, false]], false, 2, false), M);
-				}
-				if (o.riders) riders(kind, M, o.riders);
-				return t;
+		if (K) {
+			put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c, fin);
+			if (t === 0 && K.hubs.length === 4) wheels(kind, M, o.spin || 0, o.steer || 0, K, cast);
+			if (t === 0 && o.first) {
+				const G = cabGeo(kind);
+				insideMat ||= carMaterial(night, { cheap: isPhone, side: THREE.BackSide });
+				put(set(kind + 'cab', [[G.cabin, carMat, false], [G.shell, insideMat, false]], false, 2, false), M);
+				steeringWheel(kind, M, o.steer || 0);
 			}
+			if (o.riders) riders(kind, M, o.riders);
+			return t;
 		}
-		const near = t === 0 && loftGeo(kind, 0, false, o.first);
+		const near = t === 0 && loftGeo(kind, 0, false, o.first, !!o.first);
 		if (near) {
-			put(set(kind + 'l0', [[near, [carMat, glassMat], true]], true, cap / 2, cast), M, c);
+			put(set(kind + (o.first ? 'l0f' : 'l0'), [[near, [carMat, glassMat], true]], true, o.first ? 2 : cap / 2, cast), M, c, fin);
 			wheels(kind, M, o.spin || 0, o.steer || 0, null, cast);
+			if (o.first) steeringWheel(kind, M, o.steer || 0);
 			if (o.riders) riders(kind, M, o.riders);
 			return t;
 		}
 		for (let u = Math.max(1, t); u < LOFT.length; u++) {
 			const geo = loftGeo(kind, u, true);
 			if (!geo) continue;
-			put(set(kind + 'l' + u, [[geo, carMat, true]], true, cap, cast), M, c);
+			put(set(kind + 'l' + u, [[geo, carMat, true]], true, cap, cast), M, c, fin);
 			if (o.riders && u === 1) riders(kind, M, o.riders);
 			return u;
 		}

@@ -44,6 +44,7 @@ import { SPECIES } from '../creatures/catalog.js';
 import { makeCreature } from '../creatures/models.js';
 import { createCreatureVoice } from '../creatures/voice.js';
 import { facetLook } from '../creatures/facets.js';
+import { weakSpot } from '../creatures/weakspot.js';
 import { crystalLegs } from '../creatures/crystal-legs.js';
 import { hollowKing } from '../creatures/hollow-king.js';
 
@@ -55,11 +56,11 @@ const BODY = {
 	person: { speed: 3.9, sight: 60, range: 70, dmg: 7, burst: [2, 5], gap: [1.0, 2.2], rate: 0.15, surface: 'person' },
 };
 const CALL = {
-	default: { contact: ['Contact!', 'There!', 'We have company!'], flank: ['Flanking left!', 'Going round!', 'Moving up!'], reload: ['Reloading!', 'Changing cells!'], down: ['Man down!', 'We lost one!'], hit: ['I\'m hit!', 'Agh! I\'m hit!', 'Hit! I\'m hit!'], pin: ['Keep them pinned!', 'Covering fire!'], give: ['Enough! I yield!', 'Don\'t shoot! I\'m done!'] },
-	law: { contact: ['Patrol! Drop your weapon!', 'Suspect sighted!', 'Hold it right there!'], flank: ['Moving to flank!', 'Cutting them off!'], reload: ['Reloading!'], down: ['Officer down!'], pin: ['Suppressing!', 'Stay in cover!'], give: ['I\'m down, I\'m down!'] },
-	villagers: { contact: ['Raiders! Protect the houses!', 'To the walls!'], flank: ['Round the back of the barn!'], reload: ['Arrows!'], down: ['They got Tam!'], pin: ['Keep their heads down!'], give: ['Mercy!'] },
-	police: { contact: ['Police! Drop it!', 'Show me your hands!', 'Suspect in sight!'], flank: ['Cover the back!', 'Cutting across!'], reload: ['Reloading!'], down: ['Officer down! Officer down!'], pin: ['Stay behind the car!', 'Hold them there!'], give: ['Okay! Okay! I\'m down!'] },
-	military: { contact: ['Contact front!', 'Hostiles, on me!', 'Halt! Halt!'], flank: ['Bounding left!', 'Second team, flank!'], reload: ['Changing mag!'], down: ['Man down! Medic!'], pin: ['Suppress, suppress!', 'Keep fire on them!'], give: ['Cease fire, I yield!'] },
+	default: { contact: ['Contact!', 'There!', 'We have company!'], monster: ['What is that thing?!', 'Something\'s out there!', 'Shoot it! Shoot it!'], flank: ['Flanking left!', 'Going round!', 'Moving up!'], reload: ['Reloading!', 'Changing cells!'], down: ['Man down!', 'We lost one!'], hit: ['I\'m hit!', 'Agh! I\'m hit!', 'Hit! I\'m hit!'], pin: ['Keep them pinned!', 'Covering fire!'], give: ['Enough! I yield!', 'Don\'t shoot! I\'m done!'] },
+	law: { contact: ['Patrol! Drop your weapon!', 'Suspect sighted!', 'Hold it right there!'], monster: ['What the hell is that? Light it up!', 'Dispatch, we have... something. Opening fire!'], flank: ['Moving to flank!', 'Cutting them off!'], reload: ['Reloading!'], down: ['Officer down!'], pin: ['Suppressing!', 'Stay in cover!'], give: ['I\'m down, I\'m down!'] },
+	villagers: { contact: ['Raiders! Protect the houses!', 'To the walls!'], monster: ['A beast! Get inside!', 'Monster in the village!'], flank: ['Round the back of the barn!'], reload: ['Arrows!'], down: ['They got Tam!'], pin: ['Keep their heads down!'], give: ['Mercy!'] },
+	police: { contact: ['Police! Drop it!', 'Show me your hands!', 'Suspect in sight!'], monster: ['Dispatch, there\'s some kind of creature here. Shots fired!', 'What IS that?! Open fire!', 'Don\'t let it near the houses!'], flank: ['Cover the back!', 'Cutting across!'], reload: ['Reloading!'], down: ['Officer down! Officer down!'], pin: ['Stay behind the car!', 'Hold them there!'], give: ['Okay! Okay! I\'m down!'] },
+	military: { contact: ['Contact front!', 'Hostiles, on me!', 'Halt! Halt!'], monster: ['Contact, unknown creature! Weapons free!', 'Hostile creature front! Engage!'], flank: ['Bounding left!', 'Second team, flank!'], reload: ['Changing mag!'], down: ['Man down! Medic!'], pin: ['Suppress, suppress!', 'Keep fire on them!'], give: ['Cease fire, I yield!'] },
 	invaders: { contact: ['Forward! Take the town!', 'Defenders ahead!'], flank: ['Round their side!'], reload: ['Reloading!'], down: ['We lost one!'], pin: ['Pin them down!'], give: ['Enough! We yield!'] },
 	// your own guild's people (guild/companions.js)
 	guild: { contact: ['With you! I see them!', 'Contact, on your side!', 'Here they come!', 'I\'ve got your back!'], flank: ['Going round them!', 'Taking the flank!'], reload: ['Reloading, cover me!', 'Changing mags!'], down: ['They got one of ours!', 'We lost one! Keep going!'], hit: ['I\'m hit!', 'Ah! Still standing!', 'Hit, I\'m okay!'], pin: ['Keep their heads down!', 'Covering you!'], give: ['Falling back!'] },
@@ -71,6 +72,8 @@ const npcPart = () => { const u = Math.random(); return u < 0.08 ? 'head' : u < 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+// (where a body without legs of its own stood before this frame's step: ctx.keepOut sweeps from it)
+const _was = new THREE.Vector3();
 // your guild's people fight what is within this of you, and catch you up past this
 const ALLY_LEASH = 70, ALLY_CATCH = 60;
 
@@ -172,7 +175,7 @@ export function createSquads(ctx) {
 			const P = buildPerson(A, d), g = gun !== undefined ? gun : F.gun;
 			if (F.masked) maskOn(P, F.colors?.[0] || '#ff7a2a');
 			// (over a fence or up a ledge, combat/npc-climb.js: the climb's own floor while it lasts)
-			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos) => b.climbY == null && ctx.keepOut?.(pos) }), climbY: null, fid, key, used: true, hand: g ? npcHand(group, g, 2 + (seed % 4), seed % 3) : null };
+			const b = { P, M: createMotion(P, (x, z) => (b.climbY != null ? b.climbY : ctx.ground(x, z, P.root.position.y + 1.2)), { constrain: (pos, from) => b.climbY == null && ctx.keepOut?.(pos, from) }), climbY: null, fid, key, used: true, hand: g ? npcHand(group, g, 2 + (seed % 4), seed % 3) : null };
 			group.add(P.root);
 			pools.person.push(b);
 			res(b);
@@ -241,10 +244,12 @@ export function createSquads(ctx) {
 					return null;
 				}
 				h.cr = c; h.beast = beast; h.turn = beast ? -1 : 1;
+				// (its sounds made now, a frame at a time, not in the middle of the fight)
+				voice.warm([...Object.values(Sp.voice || {}), Sp.voice?.loop?.name, ...Object.values(DEFAULT_CRY[c.meta.rig] || {}), 'sniff', 'scrape', 'chitter', 'click'].filter((x) => typeof x === 'string'));
 				// no two alike: each its own size, build and colour (creatures/models.js); a person's
-				// skin barely turns
-				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1 });
-				if (beast) { beast.size = beast.vary(); beast.root.visible = false; }
+				// skin barely turns (opts.look: the Moon's bleached hounds, creatures/catalog.js moon)
+				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1, ...(opts.look || {}) });
+				if (beast) { beast.size = beast.vary(Math.random, opts.look || {}); beast.root.visible = false; }
 				// one that waits, still among the trees, for you to come too close (the Burnt Giant)
 				h.dormant = Sp.lurk && !opts.alert ? 1 : 0; h.waking = -1;
 				if (h.dormant) h.yaw = Math.random() * 6.283;
@@ -304,6 +309,7 @@ export function createSquads(ctx) {
 		// (the Facet Wraith's shell turns most of a blow until it opens)
 		if (h.cr?.facets) blow = { ...blow, amount: blow.amount * h.cr.facets.exposure() };
 		const r = applyDamage(h.H, blow);
+		if (blow.part === 'vital' && r.dealt > 0) h.cr?.weak?.flash();
 		if (h.dormant && h.waking < 0) h.waking = 0;
 		h.standT = 0;
 		const by = blow.by;
@@ -316,6 +322,7 @@ export function createSquads(ctx) {
 		}
 		if (!h.alert) alertSquad(h, blow.src);
 		h.hurtT = 0.25;
+		if (h.cr && r.dealt > 0 && !r.killed && !(h.cryT > 0)) { h.cryT = 0.7; cry(h, 'hurt', h.pos, 0.8); }
 		// a round that lands knocks them: the chest and head snap back or round with it, a beat
 		// held as it lands, the aim thrown off; one behind cover ducks back down
 		if (!r.killed && !blow.melee && h.body && !h.body.P.ragdoll && r.dealt > 0) {
@@ -361,13 +368,15 @@ export function createSquads(ctx) {
 	function die(h, blow) {
 		h.dead = true; h.deadT = 0;
 		layer.remove(h.id);
+		if (h.cr) { h.hum?.stop(2.5); h.hum = null; cry(h, 'die'); }
 		const rest = (h.squad?.members || []).filter((m) => !m.dead && !m.surrendered);
 		if (rest.length) say(rest[0], 'down');
 		const d = blow?.dir || { x: 0, z: 0 };
 		if (h.body) {
 			const p = h.pos;
 			h.body.M.act(null);
-			ctx.ragdolls.hit(h.body.P, { vel: new THREE.Vector3(d.x, 0.1, d.z).normalize().multiplyScalar(blow?.type === 'blast' ? 7 : 3.5), mass: 400, point: new THREE.Vector3(p.x, p.y + 1.2, p.z), lift: 0.06 });
+			// (a blast throws them, a blow shoves them, a bullet barely moves them: they drop)
+			ctx.ragdolls.hit(h.body.P, { vel: new THREE.Vector3(d.x, 0.1, d.z).normalize().multiplyScalar(blow?.type === 'blast' ? 7 : 3.5), mass: blow?.type === 'blast' ? 400 : blow?.melee ? 90 : 30, point: new THREE.Vector3(p.x, p.y + 1.2, p.z), lift: 0.06, limp: 1 });
 			h.body.hand?.hide();
 		} else if (h.kind === 'drone') { fx.explosion(h.pos, 1.2, false); h.vy = 0; }
 		else if (h.cr) h.cr.motion.die();
@@ -379,13 +388,38 @@ export function createSquads(ctx) {
 		if (i >= 0) list.splice(i, 1);
 		layer.remove(h.id);
 		h.gone = true;
+		if (h.hum) { h.hum.stop(0.5); h.hum = null; }
 		if (h.body) { if (h.body.P.ragdoll) ctx.ragdolls.release(h.body.P); h.body.P.root.visible = false; h.body.hand?.hide(); h.body.M.act(null); h.body.used = false; h.body.M.want.speed = 0; }
 		if (h.mesh) { h.mesh.visible = false; h.mesh.userData.used = false; }
 		for (const q of [h.cr, h.beast]) if (q) { q.root.visible = false; q.used = false; q.root.position.y = -1e4; }
 		if (h.squad) { const k = h.squad.members.indexOf(h); if (k >= 0) h.squad.members.splice(k, 1); if (!h.squad.members.length) squads.delete(h.squad.id); }
 	}
 
+	// a creature's cry of a kind (catalog voice: spot, strike, swing, hit, throw, lob, turn,
+	// hurt, die, idle), from its own set or the rig's (a hound's snarl and growl), pitched for
+	// its size
+	const DEFAULT_CRY = { quad: { strike: 'snarl', idle: 'growl' } };
+	function cry(h, kind, at = h.pos, gain = 1) {
+		const S = h.Sp, name = S?.voice?.[kind] ?? DEFAULT_CRY[h.cr?.meta.rig]?.[kind];
+		if (!name) return;
+		const size = h.cr?.size || 1, rate = (S.voice?.pitch ?? 1 / (S.height ** 0.3)) / size ** 0.3;
+		const ref = S.voice?.ref ?? 2 + S.height * size * 0.6;
+		voice.play(name, at, gain, rate, { ref, far: Math.min(400, ref * 25) });
+	}
+	// a sound kept on a body (the Burnt Giant's embers, catalog voice.loop): moved with it as it
+	// goes, low while it stands as a tree, full once it is up; let go when you are far off
+	const _hum = new THREE.Vector3();
+	function loopStep(h, d) {
+		const L = h.Sp.voice.loop;
+		if (d > (L.far || 90) || h.dead || !h.cr) { if (h.hum) { h.hum.stop(1); h.hum = null; } return; }
+		const at = h.cr.motion.at(L.bone || 'chest', _hum) || _hum.copy(h.pos).setY(h.pos.y + h.Sp.height * (h.cr.size || 1) * 0.5);
+		if (h.hum && !h.hum.move(at)) h.hum = null;
+		if (!h.hum) { h.hum = voice.loop(L.name, at, L.gain || 1, L.rate || 1, { ref: L.ref || h.Sp.voice.ref || 8 }); if (!h.hum) return; }
+		h.hum.level(h.dormant ? (L.still ?? 0.3) : 1, d);
+	}
 	function say(h, what, force = false) {
+		// (a creature growls instead: creatures/voice.js)
+		if (h.cr) return;
 		const lines = (CALL[h.F.kind] || CALL.default)[what] || CALL.default[what];
 		if (!lines || (h.saidT > 0 && !force)) return;
 		const d = Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z);
@@ -393,7 +427,8 @@ export function createSquads(ctx) {
 		h.saidT = 4;
 		ctx.call?.(pick(lines), h.ally?.first || h.F.name || 'someone');
 	}
-	function alertSquad(h, src) {
+	// (what: the call that goes up, 'contact' for a fighter, 'monster' for a creature in sight)
+	function alertSquad(h, src, what = 'contact') {
 		const mem = h.squad ? h.squad.members : [h];
 		let k = 0;
 		for (const m of mem) {
@@ -405,7 +440,7 @@ export function createSquads(ctx) {
 		}
 		if (src && h.squad) h.squad.last = { x: src.x, z: src.z };
 		const first = mem.find((m) => !m.dead && !m.crew);
-		if (first) say(first, 'contact');
+		if (first) say(first, what);
 	}
 	// gunfire heard at (x, z): squads within earshot wake
 	function hear(x, z, r = 60) {
@@ -424,20 +459,34 @@ export function createSquads(ctx) {
 		if (h.recall) return null;
 		if (h.ally) return allyTarget(h, eye);
 		const F = h.F;
-		let best = null, bd = h.B.sight * (h.alert ? 1.8 : 1);
+		let best = null, bd = h.B.sight * (h.alert ? (h.Sp?.hunt ?? 1.8) : 1);
 		const dMe = Math.hypot(eye.x - h.pos.x, eye.z - h.pos.z);
 		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && F.kind !== 'military' && ctx.wanted() > 0) || (F.kind === 'military' && (ctx.wanted() >= 5 || !!ctx.trespass?.(h))) || (F.kind === 'mercs' && ctx.bounty() > 0);
 		if (hateMe && !ctx.playerDown() && !ctx.cloaked?.() && dMe < bd) { best = ME; bd = dMe; }
 		// (the police on your side after you were fired on: whoever opened fire on you is theirs)
 		const backMe = F.lawful && F.kind !== 'military' && ctx.defending?.();
+		// the law before a monster: an officer, a guard or a ranger who can see one of the
+		// night's creatures (or the Deep's) goes for it over anyone else in sight, you included
+		// (a suspect waits; a monster loose in town does not), and a big one is seen from
+		// further off, by its height
+		const reach = h.B.sight * (h.alert ? (h.Sp?.hunt ?? 1.8) : 1);
+		let beast = null, bm = reach;
 		for (const o of list) {
 			if (o === h || o.dead || o.surrendered || o.crew || o.recall || o.fid === h.fid || ctx.ignore?.(h, o)) continue;
 			// (your guild's people: fought by whoever fights you, and the law only once they fire on it)
 			if (o.ally) { if (!(F.lawful ? o.hitLaw > 0 : hateMe || h.lastHitBy === o)) continue; }
 			else if (!relations.hostile(h.fid, o.fid) && !(backMe && o.struckFirst && !o.F?.lawful)) continue;
 			const d = Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z);
+			if (F.lawful && o.cr && o.F?.kind === 'creatures') {
+				// (one still a villager to look at, or lying dormant, is no monster to them yet)
+				if ((o.beast && o.turn < 0) || o.dormant) continue;
+				const seen = d / Math.max(1, (o.Sp?.height || 1.8) / 2);
+				if (seen < bm) { bm = seen; beast = o.T; }
+				continue;
+			}
 			if (d < bd) { bd = d; best = o.T; }
 		}
+		if (beast) return beast;
 		if (!best && (F.kind === 'raiders' || F.kind === 'creatures' || F.kind === 'machines') && h.squad?.raid) {
 			for (const T of ctx.civilians()) {
 				if (T.child || !relations.hostile(h.fid, T.faction)) continue;
@@ -566,6 +615,7 @@ export function createSquads(ctx) {
 			if (h.crew) { crewStep(h, dt, d); bounds(h); continue; }
 			if (h.surrendered) { yieldStep(h, dt, d); bounds(h); continue; }
 			// held still or put to flight by a spell (magic/caster.js lays h.T.hex on and wears it off)
+			if (h.Sp?.voice?.loop) loopStep(h, d);
 			const hx = h.T.hex;
 			if (hx && (hx.hold > 0 || hx.fear > 0)) { hexStep(h, dt, hx, eye); bounds(h); continue; }
 			if (h.dormant) { dormantStep(h, dt, d); bounds(h); continue; }
@@ -579,7 +629,7 @@ export function createSquads(ctx) {
 				const T = h.target;
 				const from = _v.set(h.pos.x, h.pos.y + (h.kind === 'drone' ? 0 : h.kind === 'crawler' ? 0.7 : h.cr ? h.Sp.height * 0.85 : 1.5), h.pos.z);
 				h.los = !!T && !ctx.blocked(from, posOf(T));
-				if (h.los && !h.alert) alertSquad(h, posOf(T));
+				if (h.los && !h.alert) alertSquad(h, posOf(T), T.ref?.cr && T.ref.F?.kind === 'creatures' ? 'monster' : 'contact');
 				if (h.los && h.squad) h.squad.last = { x: posOf(T).x, z: posOf(T).z };
 			}
 			if (h.kind === 'drone') droneStep(h, dt);
@@ -611,7 +661,7 @@ export function createSquads(ctx) {
 			// the death plays out (the knees go, it folds), it lies a while, then sinks away
 			const c = h.cr;
 			if (h.deadT < 2) c.motion.update(dt, { speed: 0 });
-			if (h.deadT < 4) c.facets?.update(dt, { dead: true });
+			if (h.deadT < 4) { c.facets?.update(dt, { dead: true }); c.weak?.update(dt, { dead: true }); }
 			// (a crystal thing bursts as its legs fold, and is gone)
 			if (h.Sp.shatter && h.deadT > 0.3 && c.root.visible) { c.legs?.shatter(fx); c.root.visible = false; voice.play('shatter', h.pos, 0.9); }
 			// (a flyer drops out of the air)
@@ -635,10 +685,10 @@ export function createSquads(ctx) {
 		const ax = h.pos.x - eye.x, az = h.pos.z - eye.z, l = Math.hypot(ax, az) || 1;
 		h.target = null; h.los = false;
 		if (M) { M.want.heading = Math.atan2(ax / l, az / l); M.want.speed = h.B.speed * 1.2 * (hx.slowK || 1); M.want.run = 1; }
-		else if (h.kind === 'crawler') { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * h.B.speed * dt; h.pos.z += az / l * h.B.speed * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); h.mesh.position.copy(h.pos); h.mesh.rotation.set(0, h.yaw, 0); }
+		else if (h.kind === 'crawler') { h.yaw = Math.atan2(ax / l, az / l); _was.copy(h.pos); h.pos.x += ax / l * h.B.speed * dt; h.pos.z += az / l * h.B.speed * dt; ctx.keepOut?.(h.pos, _was); h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); h.mesh.position.copy(h.pos); h.mesh.rotation.set(0, h.yaw, 0); }
 		else if (h.cr) {
 			const sp = hx.hold > 0 ? 0 : h.Sp.run * (hx.slowK || 1);
-			if (sp) { h.yaw = Math.atan2(ax / l, az / l); h.pos.x += ax / l * sp * dt; h.pos.z += az / l * sp * dt; h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); }
+			if (sp) { h.yaw = Math.atan2(ax / l, az / l); _was.copy(h.pos); h.pos.x += ax / l * sp * dt; h.pos.z += az / l * sp * dt; ctx.keepOut?.(h.pos, _was); h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); }
 			h.cr.root.position.copy(h.pos); h.cr.root.position.y += flyAlt(h, dt, null); h.cr.root.rotation.set(0, h.yaw, 0);
 			h.cr.motion.update(dt, { speed: sp });
 		}
@@ -676,7 +726,7 @@ export function createSquads(ctx) {
 		if (h.react) {
 			const R0 = h.react;
 			R0.age += dt; R0.t -= dt;
-			if (R0.push > 0 && R0.age < 0.3 && !h.W.crippled) { const k = R0.push * Math.min(dt, 0.05) / 0.3; S.pos.x += R0.ax * k; S.pos.z += R0.az * k; }
+			if (R0.push > 0 && R0.age < 0.3 && !h.W.crippled) { const k = R0.push * Math.min(dt, 0.05) / 0.3; S.pos.x += R0.ax * k; S.pos.z += R0.az * k; ctx.keepOut?.(S.pos, h.pos); }
 			if (R0.t <= 0) h.react = null;
 		}
 		// (the knee behind cover is held only while the fight below keeps asking for it)
@@ -812,8 +862,11 @@ export function createSquads(ctx) {
 		const fx = -Math.sin(yaw), fz = -Math.cos(yaw), side = (k % 2 ? 1 : -1) * (1.5 + Math.floor(k / 2) * 1.3), back = 2.4 + Math.floor(k / 2) * 1.4;
 		const gx = eye.x - fx * back + fz * side, gz = eye.z - fz * back - fx * side;
 		if (d > ALLY_CATCH && !h.target) {
-			const gy = ctx.ground(gx, gz, eye.y);
-			M.place(gx, gy, gz, Math.atan2(fx, fz)); h.pos.set(gx, gy, gz); h.goal = null; h.climb = null; h.body.climbY = null;
+			// (set down where there is room: from where you stand out to their place, as far as the
+			// walls allow, never inside a wall or the far side of one)
+			const at = ctx.clearSpot ? ctx.clearSpot(eye, { x: gx, z: gz }, eye.y - 1.68) : { x: gx, z: gz };
+			const gy = ctx.ground(at.x, at.z, eye.y);
+			M.place(at.x, gy, at.z, Math.atan2(fx, fz)); h.pos.set(at.x, gy, at.z); h.goal = null; h.climb = null; h.body.climbY = null;
 			return;
 		}
 		const gd = Math.hypot(gx - h.pos.x, gz - h.pos.z);
@@ -904,7 +957,9 @@ export function createSquads(ctx) {
 			speed = 1.2;
 		}
 		speed *= h.T.hex?.slowK || 1;
+		_was.copy(h.pos);
 		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
+		ctx.keepOut?.(h.pos, _was);
 		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
 		const rear = h.leap > 0.35 ? Math.sin((0.9 - h.leap) / 0.55 * Math.PI / 2) * 0.5 : 0;
 		m.position.copy(h.pos); m.rotation.set(-rear, h.yaw, 0);
@@ -936,6 +991,7 @@ export function createSquads(ctx) {
 			// shuddering where it stands, and comes on as the beast
 			if (h.turn < 0 && h.alert && at && Math.hypot(at.x - h.pos.x, at.z - h.pos.z) < 16) h.turn = 0;
 			if (h.turn >= 0) {
+				if (h.turn === 0 && !h.turned) { h.turned = true; cry(h, 'turn', h.pos, 1.1); }
 				h.turn += dt / 1.8;
 				h.turnK = (h.turnK || 0) + dt;
 				if (h.turnK > 0.45) { h.turnK = 0; c.motion.hit(); }
@@ -955,6 +1011,7 @@ export function createSquads(ctx) {
 			// growls, or rakes the ground; anything else twitches round to look), then it comes
 			if (!h.spotted) {
 				h.spotted = true;
+				cry(h, 'spot');
 				if (dd > S.reach * 2.5 && !S.fly) {
 					h.standT = c.meta.rig === 'quad' ? rnd(1.4, 2.4) : rnd(0.7, 1.2);
 					c.motion.beat(c.meta.rig === 'quad' ? (Math.random() < 0.65 ? 'growl' : 'scrape') : 'twitch');
@@ -970,12 +1027,16 @@ export function createSquads(ctx) {
 					// a fire pot, a curse: lobbed from the hand at where you stand
 					h.struck = true;
 					const Th = S.throw, from = new THREE.Vector3(h.pos.x + Math.sin(h.yaw) * 0.4, h.pos.y + S.height * 0.85, h.pos.z + Math.cos(h.yaw) * 0.4);
+					cry(h, 'lob', from, 0.9);
 					ctx.projectile({ from, to: at.clone().add(_v.set(0, -0.3, 0)), speed: 16, drop: 9, dmg: Th.dmg, type: Th.type, owner: h.T, style: 4, splash: Th.splash, hostile: true });
 				} else if (!h.struck && h.strikeT >= 0.45) {
 					h.struck = true;
 					const ahead = (Math.sin(h.yaw) * tx + Math.cos(h.yaw) * tz) / (dd || 1);
+					// (the limb or the blade through the air, from the shoulder; then the blow where it lands)
+					cry(h, 'swing', _w.set(h.pos.x + Math.sin(h.yaw) * 0.5, h.pos.y + S.height * 0.65, h.pos.z + Math.cos(h.yaw) * 0.5), 0.9);
 					if (dd < S.reach + 0.5 && ahead > 0.5) {
 						const src = _w.set(h.pos.x, h.pos.y + S.height * 0.6, h.pos.z).clone();
+						cry(h, 'hit', at, 1);
 						if (T.id === 'me') ctx.hurtPlayer({ amount: S.dmg * rnd(0.9, 1.1), type: 'impact', part: 'torso', src, by: h.T });
 						else ctx.strikeNpc(T, { amount: S.dmg * 2, type: 'impact', part: 'torso', src, dir: { x: tx / dd, y: 0, z: tz / dd }, by: h.T });
 						fx.dust({ x: at.x, y: at.y - 0.4, z: at.z }, 3, 0.5, 0.45, 0.4, 0.25, 0.25);
@@ -984,15 +1045,24 @@ export function createSquads(ctx) {
 				if (h.strikeT >= 1) { h.strikeT = -1; h.fireT = h.throwing ? rnd(...S.throw.every) : rnd(0.5, 1.3); h.throwing = false; }
 			} else if (dd < S.reach && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.6) {
 				h.strikeT = 0; h.struck = false; h.throwing = false; c.motion.strike();
-				if (c.meta.rig === 'quad') voice.play('snarl', h.pos, 0.8, 1 / (S.height * (c.size || 1)) ** 0.3);
+				cry(h, 'strike', h.pos, 0.8);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
 			} else if (S.throw && h.los && dd > S.reach * 1.6 && dd < S.throw.range && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.5) {
 				h.strikeT = 0; h.struck = false; h.throwing = true; c.motion.strike();
+				cry(h, 'throw', h.pos, 0.8);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
 			} else if (S.throw && dd < S.throw.keep && dd > S.reach) speed = -S.walk;
 			else if (S.throw && dd < S.throw.range * 0.8 && dd > S.reach) speed = 0;
-			else if (dd > S.reach * 0.75) speed = dd > 7 ? S.run : Math.max(S.walk, S.run * 0.5);
+			// (fresh woken from standing as a tree, it only walks after you for a while)
+			else if (dd > S.reach * 0.75) speed = h.stalkT > 0 ? S.walk : dd > 7 ? S.run : Math.max(S.walk, S.run * 0.5);
+			if (h.stalkT > 0) h.stalkT -= dt;
 		} else {
+			// lost you: it forgets you by degrees, and one that stood as a tree (the Burnt Giant)
+			// goes back to standing as one, wherever it is, until something disturbs it again
+			if (h.alert && !at) {
+				h.alert = Math.max(0, h.alert - dt / (S.lurk?.settle || 20));
+				if (h.alert <= 0 && S.lurk) { h.dormant = 1; h.waking = -1; h.spotted = false; h.target = null; c.motion.update(dt, { speed: 0, dormant: 1 }); return; }
+			}
 			// wandering: a slow walk this way and that, with pauses
 			h.goalT -= dt;
 			if (h.goalT <= 0) { h.goalT = rnd(3, 7); h.wander = Math.random() < 0.35 ? 0 : 1; h.face = h.yaw + rnd(-1.4, 1.4); }
@@ -1003,8 +1073,9 @@ export function createSquads(ctx) {
 		// (turns as a body turns, not in a snap: the heavier slower)
 		const turn = (h.alert ? 3.2 : 1.6) / Math.max(0.7, S.height / 1.8);
 		h.yaw += Math.max(-turn * dt, Math.min(turn * dt, wrapA(want - h.yaw)));
+		_was.copy(h.pos);
 		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
-		ctx.keepOut?.(h.pos);
+		ctx.keepOut?.(h.pos, _was);
 		h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);
 		c.root.position.copy(h.pos); c.root.position.y += flyAlt(h, dt, at);
 		c.root.rotation.set(0, h.yaw, 0);
@@ -1014,11 +1085,14 @@ export function createSquads(ctx) {
 		// (one that drifts, the Facet Wraith, glides without a step)
 		if (h.animT >= every) { c.motion.update(h.animT, { speed: S.drift ? 0 : Math.abs(speed), look: 0, menace }); h.animT = 0; }
 		c.facets?.update(dt, { strike: c.motion.state.strike, alert: !!h.alert });
+		c.weak?.update(dt, { still: !!h.dormant });
 		// a growl now and then as it closes on you
-		if (menace > 0.5 && c.meta.rig === 'quad' && d < 40) {
+		const idle = S.voice?.idle ?? (c.meta.rig === 'quad' ? 'growl' : null);
+		if (idle && menace > 0.5 && d < 60) {
 			h.growlT = (h.growlT ?? rnd(1, 3)) - dt;
-			if (h.growlT <= 0) { h.growlT = rnd(3, 6); voice.play('growl', h.pos, 0.7, 1 / (S.height * (c.size || 1)) ** 0.3); }
+			if (h.growlT <= 0) { h.growlT = rnd(3, 6); cry(h, 'idle', h.pos, 0.7); }
 		}
+		if (h.cryT > 0) h.cryT -= dt;
 		creatureEvents(h, c, d);
 		c.root.visible = d < 220;
 	}
@@ -1027,15 +1101,19 @@ export function createSquads(ctx) {
 	function creatureEvents(h, c, d) {
 		const ev = c.motion.drain();
 		if (!ev.length || d > 60) return;
-		const big = 1 / (h.Sp.height * (c.size || 1)) ** 0.3;
+		const big = 1 / (h.Sp.height * (c.size || 1)) ** 0.3, V = h.Sp.voice || {};
+		// (a species' own sound for a beat, where its table names one; null for none)
+		const own = (e, def) => (e in V ? V[e] : def);
 		for (const e of ev) {
-			if (e === 'growl') voice.play('growl', h.pos, 0.8, big);
-			else if (e === 'sniff') voice.play('sniff', h.pos, 0.5, big * 1.2);
-			else if (e === 'twitch' && (c.meta.rig === 'flyer' || c.meta.rig === 'spider')) voice.play('chitter', h.pos, 0.5, c.meta.rig === 'spider' ? 1.3 : 1);
-			else if (e === 'click') voice.play('click', h.pos, 0.45);
+			const name = own(e, e === 'growl' ? 'growl' : e === 'sniff' ? 'sniff' : e === 'twitch' && (c.meta.rig === 'flyer' || c.meta.rig === 'spider') ? 'chitter' : e === 'click' ? 'click' : e === 'scuff' ? 'scrape' : null);
+			if (!name) continue;
+			if (e === 'growl') voice.play(name, h.pos, 0.8, big);
+			else if (e === 'sniff') voice.play(name, h.pos, 0.5, big * 1.2);
+			else if (e === 'twitch') voice.play(name, h.pos, 0.5, c.meta.rig === 'spider' ? 1.3 : 1);
+			else if (e === 'click') voice.play(name, h.pos, 0.45);
 			else if (e === 'scuff') {
 				const b = c.motion.state.beat, p = c.motion.at(b?.side < 0 ? 'hand_R' : 'hand_L', _paw) || _paw.copy(h.pos);
-				voice.play('scrape', p, 0.6);
+				voice.play(name, p, 0.6);
 				fx.dust({ x: p.x, y: h.pos.y + 0.1, z: p.z }, 4, 0.45, 0.42, 0.36, 0.28, 0.35);
 			}
 		}
@@ -1048,7 +1126,7 @@ export function createSquads(ctx) {
 		if (h.waking < 0 && d < (L.wake || 8)) h.waking = 0;
 		if (h.waking >= 0) {
 			if (h.waking === 0) {
-				voice.play('creak', h.pos, 1, 0.8);
+				voice.play('creak', h.pos, 1, 0.8, { ref: 12, far: 220 });
 				ctx.shake?.(0.25);
 			}
 			h.waking += dt / (L.rise || 2.8);
@@ -1061,7 +1139,7 @@ export function createSquads(ctx) {
 			}
 			h.dormant = 1 - Math.min(1, h.waking);
 			if (h.waking >= 1) {
-				h.dormant = 0; h.spotted = true;
+				h.dormant = 0; h.spotted = true; h.stalkT = L.stalk || 0;
 				alertSquad(h, ctx.eye());
 			}
 		}
@@ -1085,12 +1163,16 @@ export function createSquads(ctx) {
 	// or grown on, the Shard Mite's crystal legs: creatures/crystal-legs.js)
 	async function creatureBody(id, species = id, look = null) {
 		const pool = pools.creature;
-		const free = pool.find((c) => !c.used && c.id === id && c.look === look);
-		if (free) { free.used = true; free.meta.strikeTime = SPECIES[species].strike; return free; }
+		const Sp = SPECIES[species], weak = Sp.human && id === Sp.human ? null : Sp.weak || null;
+		const free = pool.find((c) => !c.used && c.id === id && c.look === look && c.weakOf === (weak ? species : null));
+		if (free) { free.used = true; free.meta.strikeTime = Sp.strike; return free; }
 		try {
-			const c = await makeCreature(id);
-			c.meta.strikeTime = SPECIES[species].strike;
+			const c = await makeCreature(id, { weak });
+			c.meta.strikeTime = Sp.strike;
 			c.look = look;
+			// (a big one's weak point, lit: creatures/weakspot.js)
+			c.weakOf = weak ? species : null;
+			if (weak) c.weak = weakSpot(c, weak);
 			if (look === 'facets') c.facets = facetLook(c);
 			if (look === 'legs') c.legs = crystalLegs(c);
 			if (look === 'sword') c.sword = hollowKing(c);

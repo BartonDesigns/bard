@@ -135,8 +135,8 @@ export function createDamage(ctx) {
 	function roofOf(list, M) {
 		if (roofIdx?.list === list) return roofIdx.map;
 		const map = new Map();
-		let nh = 0, ng = 0;
-		for (const o of list) { if (o.slot === undefined) continue; if (o.roof) map.set(o, o.roof.hip ? [M.hips, nh++] : [M.gables, ng++]); }
+		// (each roof's own slot, as the city wrote it: bay/city.js upload, a sector at a time)
+		for (const o of list) { if (o.slot === undefined || o.roofSlot === undefined || !o.roof) continue; map.set(o, o.roof.hip ? [M.hips, o.roofSlot] : [M.gables, o.roofSlot]); }
 		roofIdx = { list, map };
 		return map;
 	}
@@ -175,7 +175,8 @@ export function createDamage(ctx) {
 			M.near.getMatrixAt(q.slot, T4); out.push([M.near, q.slot, T4.clone()]); M.near.setMatrixAt(q.slot, HIDE);
 		}
 		M.city.group?.traverse((im) => {
-			if (!im.isInstancedMesh || im === M.near || im === M.hips || im === M.gables || im.count > 20000) return;
+			// (a near copy of another mesh's instances, city.js's rooftop units: it follows the one copied)
+			if (!im.isInstancedMesh || im === M.near || im === M.hips || im === M.gables || im.count > 20000 || im.userData.copyOf) return;
 			for (let i = 0; i < im.count; i++) {
 				im.getMatrixAt(i, T4);
 				const el = T4.elements;

@@ -147,7 +147,8 @@ export function toolMatrix(P, S, kind, u, out) {
 export const toolGeometry = (kind) => (TOOLS ||= toolGeometries())[kind];
 export { TOOL_OF, ACT_OF, stroke };
 
-export function createCrewPeople(parent, { isPhone = false } = {}) {
+// (walls(pos, from, footY): a worker walking about the site is kept off its walls, people/walls.js)
+export function createCrewPeople(parent, { isPhone = false, walls = null } = {}) {
 	const group = new THREE.Group();
 	group.name = 'structures-crew-people';
 	parent.add(group);
@@ -194,7 +195,7 @@ export function createCrewPeople(parent, { isPhone = false } = {}) {
 		P.job = `${TRADES[q.role] || 'a labourer'} with ${company}, on the rebuild here`;
 		P.errand = q.role === 'talk' ? 'keeping an eye on the rebuild' : 'at work on the rebuild';
 		const b = { P, M: null, key: q.key, fade: 0, leaving: false, active: true, gy: q.y, tool: null, toolKind: null, pose: null, gT: 2 + r() * 3, talkT: r() * 10, engaged: false, speakUntil: 0, placed: false };
-		b.M = createMotion(P, () => b.gy);
+		b.M = createMotion(P, () => b.gy, { constrain: (pos, from) => walls?.(pos, from, from.y) });
 		b.M.S.hand = 'R';
 		b.M.place(q.x, q.y, q.z, q.yaw);
 		fadePerson(P, 0);

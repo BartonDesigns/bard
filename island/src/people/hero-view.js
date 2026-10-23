@@ -143,7 +143,7 @@ export function createHeroView({ scene, renderer, avatar, self, world, setCine }
 	}
 
 	// ---------- the panel ----------
-	const BTN = 'min-height:32px;padding:0 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px system-ui;cursor:pointer;';
+	const BTN = 'min-height:32px;padding:0 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);cursor:pointer;';
 	function button(row, label, on, fn) {
 		const b = document.createElement('button');
 		b.style.cssText = BTN + (on ? 'background:#01a982;border-color:#01a982;' : '');
@@ -201,7 +201,7 @@ export function createHeroView({ scene, renderer, avatar, self, world, setCine }
 		if (self && !self.state.third) self.toggle();
 		avatar.ready().then(() => { setLook(); pose(); });
 		panel = document.createElement('div');
-		panel.style.cssText = 'position:fixed;left:8px;top:8px;z-index:60;width:min(340px,calc(100vw - 32px));max-height:calc(100vh - 16px);overflow:auto;padding:10px;border-radius:12px;background:rgba(10,16,20,.82);color:#eafaf6;font:12px system-ui;';
+		panel.style.cssText = 'position:fixed;left:8px;top:8px;z-index:60;width:min(340px,calc(100vw - 32px));max-height:calc(100vh - 16px);overflow:auto;padding:10px;border-radius:12px;background:rgba(10,16,20,.82);color:#eafaf6;font:12px var(--bard-body,system-ui,sans-serif);';
 		for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) panel.addEventListener(ev, (e) => e.stopPropagation());
 		document.body.appendChild(panel);
 		draw();

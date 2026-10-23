@@ -150,7 +150,7 @@ function makeGame(theme) {
 					K.button(ARROW(-1), (d) => { if (d) step(-1); }, 'left:16px;bottom:calc(24px + env(safe-area-inset-bottom));');
 					K.button(ARROW(1), (d) => { if (d) step(1); }, 'right:16px;bottom:calc(24px + env(safe-area-inset-bottom));');
 				}
-				if (C.hazard === 'bombs') hzBtn = K.button('', (d) => { if (d) { S.hz = !S.hz; hzLabel(); } }, 'left:16px;top:calc(64px + env(safe-area-inset-top));font-size:13px;');
+				if (C.hazard === 'bombs') hzBtn = K.button('', (d) => { if (d) { S.hz = !S.hz; hzLabel(); } }, 'left:16px;top:calc(64px + var(--l99-top, env(safe-area-inset-top)));font-size:13px;');
 				flash = K.el('position:absolute;inset:0;opacity:0;transition:opacity .5s;background:radial-gradient(circle,transparent 30%,#ff4010 120%);');
 				tr = trail(K, C.accent);
 			}

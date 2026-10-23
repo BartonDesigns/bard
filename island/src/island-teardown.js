@@ -28,6 +28,7 @@ export function islandTeardown(iw) {
 	social.reset();
 	iw.world.labels?.dispose();
 	iw.world.plumes?.dispose();
+	iw.world.windshield?.dispose();
 	iw.world.powerlines?.dispose();
 	iw.world.contrails?.dispose();
 	iw.world.flush?.dispose();
@@ -68,6 +69,7 @@ export function islandTeardown(iw) {
 	iw.world.beyond?.dispose();
 	iw.world.boardwalk?.destroy();
 	iw.world.rays?.dispose();
+	iw.world.footShade?.dispose();
 	iw.world.spray?.dispose();
 	release();
 	while (scene.children.length) scene.remove(scene.children[0]);

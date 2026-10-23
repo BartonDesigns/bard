@@ -3,7 +3,7 @@ export function createFamilyAid({ mount, help, hint = () => {} }) {
 	if (!mount) return { update() {}, dispose() {} };
 	const panel = document.createElement('div');
 	panel.className = 'family-aid';
-	panel.style.cssText = 'position:absolute;right:14px;bottom:156px;display:none;max-width:260px;padding:10px;background:#17251eee;color:#fff;border:1px solid #718475;border-radius:10px;pointer-events:auto;font:13px system-ui;z-index:31';
+	panel.style.cssText = 'position:absolute;right:14px;bottom:156px;display:none;max-width:260px;padding:10px;background:#17251eee;color:#fff;border:1px solid #718475;border-radius:10px;pointer-events:auto;font:13px var(--bard-body,system-ui,sans-serif);z-index:31';
 	const title = document.createElement('div'); title.style.cssText = 'font-weight:600;margin-bottom:7px';
 	const controls = document.createElement('div'); controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
 	panel.append(title, controls); mount.append(panel);

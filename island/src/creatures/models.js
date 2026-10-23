@@ -61,8 +61,9 @@ export function loadCreature(id) {
 const PART = (n) => { const name = n.replace(/^rider_/, ''); return /^(head|neck|ear)/.test(name) ? 'head' : /^abdomen/.test(name) ? 'weak' : /^(hips|spine|chest|robe|cloak|wing|mane|seat)/.test(name) ? 'torso' : 'limb'; };
 const _a = new THREE.Vector3(), _b = new THREE.Vector3();
 
-// one body of a kind: { root, motion, meta, shapes(out), height }
-export async function makeCreature(id) {
+// one body of a kind: { root, motion, meta, shapes(out), height }; weak: the bones of its weak
+// point (catalog.js weak), hit zones of part 'vital'
+export async function makeCreature(id, { weak = null } = {}) {
 	const { scene, meta: meta0 } = await loadCreature(id);
 	// (its own copy: one model can serve two kinds, each with its own timing)
 	const meta = { ...meta0 };
@@ -82,7 +83,7 @@ export async function makeCreature(id) {
 		const j = meta.joints?.[name];
 		if (!b || !j) continue;
 		const tail = b.worldToLocal(new THREE.Vector3(...j[1]).applyMatrix4(root.matrixWorld));
-		zones.push({ b, tail, r: Math.max(0.04, (meta.radii?.[name] || 0.08) * 0.9), part: PART(name), name });
+		zones.push({ b, tail, r: Math.max(0.04, (meta.radii?.[name] || 0.08) * 0.9), part: weak?.bones?.includes(name) ? 'vital' : PART(name), name });
 	}
 	// the hit zones where the bones are now: capsules in world space, reused
 	const shapes = zones.map((z) => ({ type: 'capsule', a: { x: 0, y: 0, z: 0 }, b: { x: 0, y: 0, z: 0 }, r: z.r, part: z.part, bone: z.name }));
@@ -106,8 +107,9 @@ export async function makeCreature(id) {
 	// no two of a kind alike: a size up to a tenth either way, a little stockier or leaner,
 	// longer or shorter in the body, its head, ears and tail a touch different, and its hide's
 	// colour turned a little round the wheel, richer or paler, darker or lighter. hue: how far
-	// the colour may wander (0 keeps it: a person's skin)
-	function vary(rnd = Math.random, { hue = 1 } = {}) {
+	// the colour may wander (0 keeps it: a person's skin); sat and val: its colour's strength and
+	// lightness, times (the Moon's hounds bleached white: catalog.js moon)
+	function vary(rnd = Math.random, { hue = 1, sat = 1, val = 1 } = {}) {
 		const r2 = () => (rnd() + rnd()) - 1; // -1..1, most near the middle
 		const k = 1 + r2() * 0.1;
 		root.scale.set(k * (1 + r2() * 0.06), k * (1 + r2() * 0.035), k * (1 + r2() * 0.05));
@@ -115,7 +117,7 @@ export async function makeCreature(id) {
 		head?.scale.setScalar(1 + r2() * 0.08);
 		tail?.scale.setScalar(1 + r2() * 0.12);
 		for (const n of ['ear_L', 'ear_R']) bone(n)?.scale.setScalar(ek);
-		tint.value.set(r2() * 0.24 * hue, 1 + r2() * 0.2 * Math.max(0.4, hue), 1 + r2() * 0.12);
+		tint.value.set(r2() * 0.24 * hue, (1 + r2() * 0.2 * Math.max(0.4, hue)) * sat, (1 + r2() * 0.12) * val);
 		return k;
 	}
 	return { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2, vary };

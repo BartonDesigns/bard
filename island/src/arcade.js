@@ -66,14 +66,14 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 	addEventListener('keydown', (e) => { if (cur && e.key === 'Escape') stop(); });
 
 	// ---- the button, the list, the Play prompt ----
-	const style = 'position:absolute;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.78);color:#eafaf6;font:600 14px system-ui;cursor:pointer;z-index:5;';
+	const style = 'position:absolute;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(8,20,26,.78);color:#eafaf6;font:600 14px var(--bard-display,system-ui,sans-serif);cursor:pointer;z-index:5;';
 	const btn = document.createElement('button');
 	btn.title = 'Games'; btn.setAttribute('aria-label', 'Games');
 	btn.innerHTML = icon('games', 24);
 	btn.style.cssText = style + 'width:44px;height:44px;padding:0;display:none;align-items:center;justify-content:center;';
 	btn.dataset.hud = 'rail 50';
 	const menu = document.createElement('div');
-	menu.style.cssText = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;display:none;flex-direction:column;gap:4px;padding:8px;width:min(300px,78vw);border-radius:12px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);z-index:6;';
+	menu.style.cssText = 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + var(--l99-top, env(safe-area-inset-top)));max-height:calc(100% - 64px - var(--l99-low, 88px) - var(--l99-top, env(safe-area-inset-top)) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;display:none;flex-direction:column;gap:4px;padding:8px;width:min(300px,78vw);border-radius:12px;background:rgba(8,20,26,.88);border:1px solid rgba(255,255,255,.18);z-index:6;';
 	const play = document.createElement('button');
 	play.style.cssText = style + 'padding:10px 22px 10px 16px;border-radius:24px;display:none;align-items:center;gap:8px;white-space:nowrap;';
 	play.dataset.hud = 'prompt 40';
@@ -83,12 +83,12 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 	const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 	function row(G, where, fn) {
 		const b = document.createElement('button');
-		b.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#eafaf6;font:13px system-ui;min-height:44px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;';
+		b.style.cssText = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:44px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;';
 		b.innerHTML = `<span style="color:#5ad1c8;margin-top:1px">${icon(G.id, 22)}</span><span style="min-width:0"><span style="display:block;font-weight:600">${esc(G.title)}</span><span style="display:block;opacity:.65;font-size:11px;margin-top:2px">${esc(G.blurb || '')}</span><span style="display:block;opacity:.55;font-size:11px;margin-top:1px">${esc(where)}</span></span>`;
 		b.onclick = (e) => { e.stopPropagation(); menu.style.display = 'none'; fn(); };
 		menu.appendChild(b);
 	}
-	const heading = (t) => { const h = document.createElement('div'); h.style.cssText = 'font:700 12px system-ui;color:#eafaf6;opacity:.7;padding:6px 4px 2px;'; h.textContent = t; menu.appendChild(h); };
+	const heading = (t) => { const h = document.createElement('div'); h.style.cssText = 'font:700 12px var(--bard-display,system-ui,sans-serif);color:#eafaf6;opacity:.7;padding:6px 4px 2px;'; h.textContent = t; menu.appendChild(h); };
 	// the list, as it stands from here: each venue game once, at its nearest venue
 	let shownSig = '';
 	function nearest() {

@@ -31,6 +31,7 @@
  */
 //
 //   requestsFor(E, places, { day, now, homes })   one establishment's requests for a day (pure)
+//   nearestPast(d, far, n)   the n nearest past far, as a steady sort of all would have them
 //   const board = createBoard({ near, homes, clock, payroll })
 //   board.near(x, z, r)  board.take(id, takerId)  board.complete(id, takerId, outcome)
 // and the game's own board, as requestsNear / takeRequest / completeRequest.
@@ -77,6 +78,20 @@ const NEEDS = {
 
 const round5 = (v) => Math.max(10, Math.min(250, Math.round(v / 5) * 5));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+// the places of the n nearest past far, given each one's distance d: their places in d, in the
+// order a steady sort gives (nearer first, and of two as near the earlier), without sorting all
+export function nearestPast(d, far, n) {
+	const c = [];
+	for (let i = 0; i < d.length; i++) {
+		const v = d[i];
+		if (!(v > far) || (c.length === n && !(v < d[c[n - 1]]))) continue;
+		let k = c.length < n ? c.length : n - 1;
+		while (k > 0 && d[c[k - 1]] > v) k--;
+		c.splice(k, 0, i);
+		if (c.length > n) c.pop();
+	}
+	return c;
+}
 
 // one establishment's requests on a day: places is the registry round it (establishments, with
 // id, name, type, x, z, door); homes are doors of houses round it ({ x, z }); hole: a pothole in
@@ -87,9 +102,18 @@ export function requestsFor(E, places, { day = 0, now = 0, homes = [], hole = nu
 	const here = { x: E.door?.[0] ?? E.x, z: E.door?.[1] ?? E.z, name: E.name, establishmentId: E.id };
 	const others = places.filter((p) => p.id !== E.id);
 	const placeOf = (P) => ({ x: P.door?.[0] ?? P.x, z: P.door?.[1] ?? P.z, name: P.name, establishmentId: P.id });
-	// the nearest few of some kinds, one picked by the day
-	const find = (types, n) => { const c = others.filter((p) => types.includes(p.type)).sort((a, b) => dist(a, E) - dist(b, E)).slice(0, 4); return c.length ? c[Math.floor(r(n) * c.length)] : null; };
-	const anyOther = (n, far = 120) => { const c = others.filter((p) => dist(p, E) > far).sort((a, b) => dist(a, E) - dist(b, E)).slice(0, 8); return c.length ? c[Math.floor(r(n) * c.length)] : null; };
+	// the nearest few of some kinds, one picked by the day (each place's distance measured once,
+	// when first wanted: downtown the registry round a place is thousands strong, and sorting it
+	// all, measuring both sides at every turn, for each place in turn stalled a walk for seconds)
+	let D = null;
+	const dists = () => D || (D = others.map((p) => dist(p, E)));
+	const find = (types, n) => {
+		const d = dists(), at = [];
+		for (let i = 0; i < others.length; i++) if (types.includes(others[i].type)) at.push(i);
+		const c = at.sort((a, b) => d[a] - d[b]).slice(0, 4).map((i) => others[i]);
+		return c.length ? c[Math.floor(r(n) * c.length)] : null;
+	};
+	const anyOther = (n, far = 120) => { const c = nearestPast(dists(), far, 8); return c.length ? others[c[Math.floor(r(n) * c.length)]] : null; };
 	const person = (n) => { const h = homes.length ? homes[Math.floor(r(n) * homes.length)] : null; const who = F[Math.floor(r(n + 1) * F.length)]; return h ? { x: h.x, z: h.z, name: `${who}'s house`, who } : null; };
 	const out = [];
 	const add = (kind, title, steps, base, { tempt = 0.2, betray = undefined, done = 'favour', life = 40 } = {}) => {

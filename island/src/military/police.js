@@ -28,6 +28,7 @@ import { policePlan } from './rules.js';
 import { sirenSound } from './sound.js';
 import { blockSlots, inCone, offscreenPace } from '../law/tactics.js';
 import { searchLoop } from '../law/ladder.js';
+import { noseInto, inBuilding } from '../vehicles/wall-guard.js';
 
 const NAVY = new THREE.Color('#141a2c'), CHAR = new THREE.Color('#25282e');
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _y = new THREE.Vector3(0, 1, 0), _o = new THREE.Matrix4(), _t = new THREE.Matrix4();
@@ -132,7 +133,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		const made = [];
 		for (const q of cars) {
 			const c = { id: 'pc' + seq++, why: 'block', kind: 'sedan', S: SED, fid: 'police', col: NAVY, to: { x: spot.x, z: spot.z }, route: null, s: 0, pos: new THREE.Vector3(q.x, ground(q.x, q.z), q.z), yaw: q.yaw, state: 'blocking', officers: 0, alert, t: 0, siren: null, spin: 0, road: { tx: spot.tx, tz: spot.tz } };
-			c.car = { kind: 'sedan', x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: NAVY.toArray() };
+			c.car = { kind: 'sedan', x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: NAVY.toArray(), police: true };
 			STATIC_CARS.add(c.car);
 			cruisers.push(c); made.push(c);
 		}
@@ -145,7 +146,25 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 	}
 	function clearBlocks() { for (const c of cruisers) if (c.why === 'block' && c.state === 'blocking') leave(c); }
 
+	// a cruiser whose way ended inside a block (a route's last stretch across the ground, or one
+	// brought on out of sight) backs up along its route to where its whole length is clear
+	const carIn = (w, x, z, yaw, half) => {
+		const fx = Math.sin(yaw), fz = Math.cos(yaw);
+		return inBuilding(w, x, z) || inBuilding(w, x + fx * half, z + fz * half) || inBuilding(w, x - fx * half, z - fz * half);
+	};
+	function outOfBlocks(c) {
+		const w = W(), half = c.S.L / 2;
+		if (!c.route || !carIn(w, c.pos.x, c.pos.z, c.yaw, half)) return;
+		for (let s = Math.min(c.s, c.route.length) - 1; s > 0 && s > c.s - 120; s -= 1) {
+			const q = along(c.route, s), yaw = Math.atan2(q.dx, q.dz);
+			if (carIn(w, q.x, q.z, yaw, half)) continue;
+			c.s = s; c.yaw = yaw;
+			c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z);
+			return;
+		}
+	}
 	function arrive(c) {
+		outOfBlocks(c);
 		c.state = 'arrived'; c.t = 0;
 		const S = c.S, sx = c.pos.x + Math.cos(c.yaw) * (S.W / 2 + 1), sz = c.pos.z - Math.sin(c.yaw) * (S.W / 2 + 1);
 		const n = isPhone ? Math.min(c.fid === 'swat' ? 3 : 2, c.officers) : c.officers;
@@ -156,7 +175,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		c.squad = combat.squads.squad(c.fid, sx, sz, n, { post, alert: c.alert, tag: c.id, y: c.pos.y + 0.6, spread: 2 });
 		c.squad.then((s) => { c.members = s?.members || []; });
 		// a parked cruiser is a car like the others: solid, and yours to take
-		c.car = { kind: c.kind, x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: c.col.toArray() };
+		c.car = { kind: c.kind, x: c.pos.x, y: c.pos.y, z: c.pos.z, yaw: c.yaw, id: c.id, col: c.col.toArray(), police: c.kind === 'sedan' };
 		STATIC_CARS.add(c.car);
 		if (c.why === 'brawl') combat.melee?.calm?.(c.to.x, c.to.z, 40);
 	}
@@ -182,6 +201,18 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 			c.route = roadRoute(null, { x: c.pos.x + tx * dir * 600, z: c.pos.z + tz * dir * 600 }, { x: c.pos.x, z: c.pos.z });
 			c.s = c.route.length;
 		}
+	}
+	// a cruiser taken by you (drive.js: E or V at its door while its officers are out of it): the
+	// car is yours; the officers are left at the scene, cross about it, and go off once you are
+	// out of sight; a wanted level comes as it does for any crime they see
+	function take(car) {
+		const c = cruisers.find((k) => k.car && (k.car === car || k.car.id === car?.id));
+		if (!c) return false;
+		STATIC_CARS.delete(c.car); c.car = null;
+		c.taken = true; c.state = 'leaving'; c.t = 0; c.route = null; c.s = 0;
+		c.siren?.stop(); c.siren = null;
+		for (const h of c.members || []) if (!h.dead) { h.provoked = true; h.alert = 1; h.recall = false; }
+		return true;
 	}
 	function drop(c) {
 		c.siren?.stop(); c.siren = null;
@@ -211,6 +242,13 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 				}
 				const left = c.route.length - c.s;
 				const v = left < 40 ? Math.max(3, left * 0.25) : offscreenPace(dEye, 18);
+				// (never into a building while you can see it: pulled up at its wall instead, and the
+				// officers out from there; looked ahead every metre and a half, vehicles/wall-guard.js)
+				if (Math.abs(c.s - (c.wallS ?? -9)) > 1.5 && dEye < 260 && visible(c.pos.x, c.pos.z, 260)) {
+					const a = along(c.route, c.s + v * dt);
+					if (noseInto(w, a.x, a.z, Math.atan2(a.dx, a.dz), c.S.L / 2)) { arrive(c); continue; }
+					c.wallS = c.s;
+				}
 				c.s += v * dt;
 				const q = along(c.route, c.s);
 				c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z);
@@ -228,10 +266,23 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 				// in when they are all at the door, or after a while out of your sight
 				const all = (c.members || []).filter((h) => !h.dead).every((h) => Math.hypot(h.pos.x - c.pos.x, h.pos.z - c.pos.z) < 3.4);
 				if ((all && c.t > 1.5) || c.t > 25 || (c.t > 6 && !visible(c.pos.x, c.pos.z))) depart(c);
+			} else if (c.taken) {
+				// (its officers on foot: gone once you are well away or looking elsewhere for a while)
+				if (dEye > 420 || (c.t > 20 && !visible(c.pos.x, c.pos.z, 260)) || c.t > 240) { for (const h of [...(c.members || [])]) if (!h.dead) combat.squads.release(h); c.members = []; drop(c); }
+				continue;
 			} else {
 				const v = offscreenPace(dEye, 14);
-				c.s -= v * dt; const q = along(c.route, Math.max(0, c.s));
-				c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z); c.yaw = Math.atan2(-q.dx, -q.dz); c.spin += v * dt / c.S.wr;
+				// (driving off: the same, held at a wall in sight until you look away)
+				let go = true;
+				if (Math.abs(c.s - (c.wallS ?? -9)) > 1.5 && dEye < 260 && visible(c.pos.x, c.pos.z, 260)) {
+					const a = along(c.route, Math.max(0, c.s - v * dt));
+					if (noseInto(w, a.x, a.z, Math.atan2(-a.dx, -a.dz), c.S.L / 2)) go = false;
+					else c.wallS = c.s;
+				}
+				if (go) {
+					c.s -= v * dt; const q = along(c.route, Math.max(0, c.s));
+					c.pos.set(q.x, ground(q.x, q.z, c.pos.y + 2), q.z); c.yaw = Math.atan2(-q.dx, -q.dz); c.spin += v * dt / c.S.wr;
+				}
 				const hidden = !visible(c.pos.x, c.pos.z, 260);
 				if (((c.s <= 0 || c.t > 60) && hidden) || dEye > 420) drop(c);
 			}
@@ -253,6 +304,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		const on = Math.floor(flash * 6) % 2;
 		red.color.setRGB(on ? 1.6 : 0.15, 0.02, 0.02); blue.color.setRGB(0.05, 0.15, on ? 0.2 : 1.8);
 		for (const c of cruisers) {
+			if (c.taken) continue;
 			const S = c.S;
 			_m.compose(_p.copy(c.pos), _q.setFromAxisAngle(_y, c.yaw), _s);
 			fleet.add(c.kind, _m, c.col, e ? c.pos.distanceToSquared(e) : 0, { spin: c.spin, steer: 0, riders: c.state === 'arrived' || c.state === 'blocking' || c.state === 'boarding' ? 0 : 2, livery: c.kind === 'sedan' ? 'police' : c.kind === 'van' ? (c.fid === 'swat' ? 'swat' : 'van') : null, seed: c.id });
@@ -263,6 +315,16 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 			n++;
 		}
 		fleet.end();
+		// (the cruiser you took, driven or left somewhere: still a cruiser to look at)
+		const mine = w.vehicles?.mine?.car;
+		if (mine?.police && mine.kind === 'sedan' && n < barBase.instanceMatrix.count && nd < doors.instanceMatrix.count) {
+			_m.copy(mine.matrix);
+			barBase.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(0, SED.H + 0.04, -0.15)));
+			lampR.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(0.32, SED.H + 0.13, -0.15)));
+			lampB.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(-0.32, SED.H + 0.13, -0.15)));
+			doors.setMatrixAt(nd++, _o.multiplyMatrices(_m, _t.makeTranslation(0, 0.78, -0.18)));
+			n++;
+		}
 		for (const im of [barBase, lampR, lampB]) { im.count = n; im.instanceMatrix.needsUpdate = true; }
 		doors.count = nd; doors.instanceMatrix.needsUpdate = true;
 	}
@@ -278,5 +340,5 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		return best;
 	}
 	const info = () => cruisers.map((c) => ({ id: c.id, why: c.why, kind: c.kind, state: c.state, km: eye() ? +(c.pos.distanceTo(eye()) / 1000).toFixed(2) : null, siren: !!c.siren, from: c.station }));
-	return { respond, need, event, block, clearBlocks, standDown, update, clear, info, cover, cruisers, law, visible, setStations(fn) { stationAt = typeof fn === 'function' ? fn : null; return !!stationAt; }, stationsPush: () => [] };
+	return { respond, need, event, block, clearBlocks, standDown, update, clear, info, cover, cruisers, law, visible, take, setStations(fn) { stationAt = typeof fn === 'function' ? fn : null; return !!stationAt; }, stationsPush: () => [] };
 }

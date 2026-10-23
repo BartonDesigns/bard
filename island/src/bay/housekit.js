@@ -9,6 +9,7 @@ import { weatherStucco } from './weathering.js';
 import { usePhoto } from '../world/photomats.js';
 import { addNightField } from '../world/nightfield.js';
 import { srgbToLinear as lin } from '../world/srgb.js';
+import { GFX_PHONE } from '../world/device.js';
 
 export { lin };
 // the door and garage door styles are stacked in their textures, a row each (metres)
@@ -26,6 +27,9 @@ export class Builder {
 	// count] (structures/walls/ takes a broken wall's own triangles out of the merged meshes)
 	mark() { const m = new Map(); for (const [k, b] of this.bufs) m.set(k, b.p.length / 3); return m; }
 	since(m) { const out = []; for (const [k, b] of this.bufs) { const s = m.get(k) || 0, e = b.p.length / 3; if (e > s) out.push([k, s, e - s]); } return out; }
+	// from here on what is built stands inside (the furniture, an inner door): it throws no shadow
+	// of the sun's, the shell round it already does (a lamp's shadow it still throws)
+	inside() { this.insideAt = this.mark(); return this; }
 	buf(k) { let b = this.bufs.get(k); if (!b) this.bufs.set(k, b = { p: [], n: [], u: [], c: [], a: [] }); return b; }
 	tp(x, y, z) {
 		const [ox, oy, oz] = this.o;
@@ -171,10 +175,34 @@ export class Builder {
 			const m = new THREE.Mesh(g, mats[k]);
 			m.castShadow = shadows && !mats[k].transparent; m.receiveShadow = true;
 			m.name = k;
+			// (the shell's vertices first, then what stands inside: the sun's shadow pass draws only
+			// the shell's; all inside, on a phone, none at all, as no lamp throws shadows there)
+			const shell = this.insideAt ? this.insideAt.get(k) || 0 : b.p.length / 3;
+			if (m.castShadow && shell < b.p.length / 3) {
+				g.userData.sunCast = shell;
+				if (!shell && GFX_PHONE) m.castShadow = false;
+				else sunShell(m);
+			}
 			out.push(m);
 		}
 		return out;
 	}
+}
+
+// A mesh drawn whole by every view and every lamp's shadow, but in the sun's shadow pass (an
+// orthographic shadow camera: a directional light's) only its first geometry.userData.sunCast
+// vertices (none: not drawn). A geometry put in its place without the count is drawn whole.
+export function sunShell(m) {
+	let kept = null;
+	m.onBeforeShadow = (renderer, object, camera, shadowCamera, geometry) => {
+		const n = geometry.userData.sunCast;
+		if (!shadowCamera.isOrthographicCamera || n == null) return;
+		const R = geometry.drawRange;
+		kept = [geometry, R.start, R.count];
+		R.count = Math.max(0, Math.min(R.start + R.count, n) - R.start);
+	};
+	m.onAfterShadow = () => { if (kept) { kept[0].drawRange.start = kept[1]; kept[0].drawRange.count = kept[2]; kept = null; } };
+	return m;
 }
 
 // the things that lie flat, hang or stand about loose, with no shadow of their own under them
@@ -604,6 +632,18 @@ function books(g, x0, x1, y, z0, depth, rnd) {
 	}
 	if (g.ao) g.shadow((x0 + x1) / 2, y + 0.003, z0 + depth * 0.45, x1 - x0, depth * 0.85, 0.6, 0.04);
 }
+// what is on the television: a programme as cards of their own colour just in front of its
+// face, z the face's z (the 'bulb' material shows its vertex colours, dim by day and bright
+// after dark; the cards touch, so interiors/lighting.js finds them as one screen that lights
+// the room and stays on at night): a match, the news, a film, a cartoon, a nature programme
+function tvPicture(g, x, y0, z, w, h, rnd) {
+	const P = Math.floor(rnd() * 5), x0 = x - w / 2, c = (a, b, cc, d, col) => g.box('bulb', x0 + a * w, y0 + b * h, z + 0.002, x0 + cc * w, y0 + d * h, z + 0.01, lin(col));
+	if (P === 0) { c(0, 0, 1, 1, [0.18, 0.5, 0.2]); c(0.08, 0.1, 0.92, 0.9, [0.26, 0.62, 0.25]); c(0.47, 0.1, 0.53, 0.9, [0.85, 0.9, 0.8]); for (let i = 0; i < 6; i++) { const px = 0.1 + rnd() * 0.78, py = 0.18 + rnd() * 0.6; c(px, py, px + 0.03, py + 0.1, i < 3 ? [0.9, 0.2, 0.2] : [0.3, 0.4, 0.95]); } c(0, 0.86, 1, 1, [0.1, 0.1, 0.12]); c(0.04, 0.89, 0.3, 0.97, [0.95, 0.95, 0.95]); }
+	else if (P === 1) { c(0, 0, 1, 1, [0.12, 0.2, 0.42]); c(0.06, 0.2, 0.4, 0.84, [0.75, 0.62, 0.52]); c(0.12, 0.6, 0.34, 0.82, [0.85, 0.75, 0.65]); c(0.45, 0.3, 0.94, 0.8, [0.5, 0.7, 0.9]); c(0, 0, 1, 0.16, [0.85, 0.15, 0.15]); c(0.03, 0.04, 0.7, 0.12, [1, 1, 1]); }
+	else if (P === 2) { c(0, 0, 1, 1, [0.25, 0.2, 0.3]); c(0, 0.55, 1, 1, [0.9, 0.55, 0.35]); c(0, 0.5, 1, 0.58, [1, 0.85, 0.5]); c(0.3, 0.1, 0.5, 0.75, [0.1, 0.08, 0.12]); c(0.58, 0.1, 0.72, 0.6, [0.12, 0.1, 0.14]); }
+	else if (P === 3) { c(0, 0, 1, 1, [0.4, 0.75, 1]); c(0.1, 0.1, 0.5, 0.55, [1, 0.85, 0.2]); c(0.2, 0.3, 0.4, 0.5, [1, 1, 1]); c(0.6, 0.2, 0.9, 0.7, [0.95, 0.3, 0.4]); c(0, 0, 1, 0.14, [0.3, 0.8, 0.3]); }
+	else { c(0, 0, 1, 1, [0.55, 0.7, 0.9]); c(0, 0, 1, 0.45, [0.35, 0.55, 0.25]); c(0.1, 0.3, 0.55, 0.75, [0.35, 0.3, 0.2]); c(0.55, 0.35, 0.95, 0.5, [0.95, 0.95, 1]); }
+}
 function tableLamp(g, x, y, z, rnd) {
 	if (g.ao) g.shadow(x, y + 0.003, z, 0.12, 0.12, 0.5, 0.06);
 	g.cyl('gloss', x, y, z, 0.07, 0.04, lin(pick(ACCENT, rnd())), 10);
@@ -670,6 +710,7 @@ export function drawItem(g, it, rnd, H) {
 			g.box('matte', -0.15, h, -0.1, 0.15, h + 0.02, 0.08, BLACK);
 			g.box('matte', -0.02, h + 0.02, -0.04, 0.02, h + 0.1, 0, BLACK);
 			g.box('gloss', -tw / 2, h + 0.08, -0.06, tw / 2, h + 0.08 + tw * 0.56, -0.02, BLACK);
+			tvPicture(g, 0, h + 0.08 + 0.02, -0.02, tw - 0.04, tw * 0.56 - 0.04, rnd);
 			plant(g, W2 - 0.18, h, 0, 0.5, rnd);
 			break;
 		}

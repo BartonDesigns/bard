@@ -1,25 +1,28 @@
 // A batch: every decal of one material and one layer in a region, one instanced draw. The
 // instance's matrix carries where it is, which way it faces and its size; aCell the graphic's
-// place in the atlas; aFx its back, seed, wear and a flag. Filled at a region's rebuild (or,
+// place in the atlas; aFx its back, seed, wear and a flag; with bend (the cars' stickers) aBend
+// how the quad curves to lie on the body under it (see putMatrix). Filled at a region's rebuild (or,
 // for the cars, every frame) with no allocation: put() writes straight into the arrays.
 
 import * as THREE from 'three';
 import { signMaterial } from './materials.js';
 
-export function createBatch(group, kind, layer, map, cap, { phone = false, name = '' } = {}) {
-	// (its own quad: a disposed geometry takes its buffers with it)
-	const geo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1, kind === 'cloth' ? 8 : 1, kind === 'cloth' ? 3 : 1));
+export function createBatch(group, kind, layer, map, cap, { phone = false, name = '', bend = false } = {}) {
+	// (its own quad: a disposed geometry takes its buffers with it; a bent one in strips across)
+	const geo = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1, kind === 'cloth' || bend ? 8 : 1, kind === 'cloth' ? 3 : 1));
 	const cell = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4), fx = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
 	cell.setUsage(THREE.DynamicDrawUsage); fx.setUsage(THREE.DynamicDrawUsage);
 	geo.setAttribute('aCell', cell); geo.setAttribute('aFx', fx);
-	const mat = signMaterial(kind, layer, map, { phone });
+	const curve = bend ? new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4) : null;
+	if (curve) { curve.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aBend', curve); }
+	const mat = signMaterial(kind, layer, map, { phone, bend });
 	const mesh = new THREE.InstancedMesh(geo, mat, cap);
 	mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	mesh.count = 0; mesh.frustumCulled = false; mesh.castShadow = false; mesh.receiveShadow = true;
 	mesh.renderOrder = mat.userData.renderOrder; mesh.visible = false;
 	mesh.name = `signage-${name || kind}-${layer}`;
 	group.add(mesh);
-	const M = mesh.instanceMatrix.array, C = cell.array, F = fx.array, lift = mat.userData.lift;
+	const M = mesh.instanceMatrix.array, C = cell.array, F = fx.array, K = curve?.array, lift = mat.userData.lift;
 	let n = 0;
 	const B = {
 		mesh, kind, layer, cap, lift,
@@ -39,17 +42,21 @@ export function createBatch(group, kind, layer, map, cap, { phone = false, name 
 			const q = n * 4;
 			if (c) { C[q] = c[0]; C[q + 1] = c[1]; C[q + 2] = c[2]; C[q + 3] = c[3]; } else { C[q] = 0; C[q + 1] = 0; C[q + 2] = 1; C[q + 3] = 1; }
 			F[q] = back; F[q + 1] = seed; F[q + 2] = wear; F[q + 3] = extra;
+			if (K) K[q] = K[q + 1] = K[q + 2] = K[q + 3] = 0;
 			n++;
 			return true;
 		},
-		// a decal by a full matrix (a car's frame times a local one), then its size
-		putMatrix(m4e, c, back, seed, wear, extra) {
+		// a decal by a full matrix (a car's frame times a local one), then its size; bend (a bent
+		// batch's) [c, b, a, e]: the quad pushed out along its face by c + b x + a x^2 + e y metres,
+		// x and y across it from -0.5 to 0.5, so that it follows the swell of a bumper
+		putMatrix(m4e, c, back, seed, wear, extra, bend = null) {
 			if (n >= cap) return false;
 			const o = n * 16;
 			for (let i = 0; i < 16; i++) M[o + i] = m4e[i];
 			const q = n * 4;
 			C[q] = c[0]; C[q + 1] = c[1]; C[q + 2] = c[2]; C[q + 3] = c[3];
 			F[q] = back; F[q + 1] = seed; F[q + 2] = wear; F[q + 3] = extra;
+			if (K) { if (bend) { K[q] = bend[0]; K[q + 1] = bend[1]; K[q + 2] = bend[2]; K[q + 3] = bend[3]; } else K[q] = K[q + 1] = K[q + 2] = K[q + 3] = 0; }
 			n++;
 			return true;
 		},
@@ -59,6 +66,7 @@ export function createBatch(group, kind, layer, map, cap, { phone = false, name 
 			mesh.instanceMatrix.clearUpdateRanges(); mesh.instanceMatrix.addUpdateRange(0, n * 16); mesh.instanceMatrix.needsUpdate = true;
 			cell.clearUpdateRanges(); cell.addUpdateRange(0, n * 4); cell.needsUpdate = true;
 			fx.clearUpdateRanges(); fx.addUpdateRange(0, n * 4); fx.needsUpdate = true;
+			if (curve) { curve.clearUpdateRanges(); curve.addUpdateRange(0, n * 4); curve.needsUpdate = true; }
 		},
 		dispose() { group.remove(mesh); geo.dispose(); mesh.dispose(); },
 	};

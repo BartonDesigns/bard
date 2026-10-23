@@ -1,9 +1,11 @@
 // What makes a street feel lived in, placed on the same grids as the buildings and the
 // painted streets: cars parked along the kerbs (sedans, hatchbacks, SUVs, pickups, vans,
-// in the colours people actually buy), traffic driving the lanes, stopping and turning
+// in every colour people buy), traffic driving the lanes, stopping and turning
 // at the corners, headlights and tail lights at night; street lights, traffic signals at
 // the busier crossings, fire hydrants, benches and bus shelters downtown, bins, and
-// parking meters in the city. Built around you as you move, a few hundred metres out.
+// parking meters in the city. Built around you as you move, a few hundred metres out. The
+// cars in the drives, the carports and out front of the garages and the auto shops are the
+// city's to place (bay/city.js, driveCars) and these same real cars to draw.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -14,13 +16,28 @@ import { onLandmark } from './footprints.js';
 import { eraMap, kitFor } from './streetera.js';            // streets by era: the lamps
 import { LAMP, lampLook, lampPools } from './streetlamps.js';
 import { GFX_PHONE } from '../world/device.js';
+import { addLodFade, NONE_IN, NONE_OUT } from '../world/lodfade.js';
+import { nearFirst } from '../world/nearfirst.js';             // the lamps near you in full, the rest plainer
 
 const LAMPS = 1200;
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-// car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
-const PAINT = [[0.92, 0.92, 0.91], [0.92, 0.92, 0.91], [0.05, 0.05, 0.06], [0.05, 0.05, 0.06], [0.35, 0.36, 0.38], [0.35, 0.36, 0.38], [0.66, 0.67, 0.69], [0.66, 0.67, 0.69], [0.1, 0.2, 0.45], [0.55, 0.06, 0.06], [0.2, 0.3, 0.26], [0.45, 0.38, 0.3], [0.8, 0.8, 0.82], [0.25, 0.08, 0.1]];
+// car paint, cars and trucks alike, as on a Bay Area freeway: mostly white, black, the greys
+// and silvers (about half), then every colour people do buy (the blues, the reds and
+// wines, greens from racing to sage, the yellows and oranges, browns and bronzes, a purple, a
+// pink now and then), as sRGB, weighted by how many repeats
+const PAINT_HEX = [
+	0xf2f2ef, 0xf2f2ef, 0xf2f2ef, 0xf2f2ef, 0xe9e6dc, 0xe9e6dc, 0x121315, 0x121315, 0x121315, 0x121315, 0x23262b, 0x23262b,
+	0x4a4d52, 0x4a4d52, 0x5d6066, 0x5d6066, 0x6b6e72, 0x8d9095, 0x8d9095, 0xa9acb0, 0xa9acb0, 0xa9acb0, 0xb9b3a3, 0x7d8288, 0xc4c6c8,
+	0x1b2f5e, 0x2c55a8, 0x4b86c9, 0x0f6a7a, 0x8fb3d4, 0x2a3b4f,
+	0xa51b1b, 0xc8262e, 0x6a1622, 0x8a2433, 0xe0614f,
+	0x1f4a33, 0x3c6b3a, 0x7a8a5a, 0x9bb59a, 0x6fbf3a, 0x5e6340,
+	0xe3b81f, 0xf2d15c, 0xe06a1c, 0xb34d1c,
+	0x6b4a32, 0x8c6a3f, 0xa47c56, 0xc9b28a, 0x9b5a34,
+	0x4a2a5e, 0x7a5aa0, 0xd8608e,
+];
+const PAINT = PAINT_HEX.map((h) => new THREE.Color(h).toArray());
 
-export function createStreetLife(shared, scene, bay, groundAt, real = null) {
+export function createStreetLife(shared, scene, bay, groundAt, real = null, city = null) {
 	const group = new THREE.Group();
 	group.name = 'street-life';
 	scene.add(group);
@@ -49,7 +66,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// The parked cars are placed into a plain store, then shared out between the levels as
 	// you move. Each has an id (kind and place) that the owners (vehicles/life.js) use, and a
 	// car whose owner has driven it off is hidden from its space until they are back.
-	const store = (cap) => ({ m: new Float32Array(cap * 16), c: new Float32Array(cap * 3), n: 0, instanceMatrix: { count: cap }, setMatrixAt(i, m) { m.toArray(this.m, i * 16); }, setColorAt(i, c) { c.toArray(this.c, i * 3); } });
+	// (d: 1 where the car is in a drive, not at the kerb: its owner does not pull out of it into
+	// the lane, vehicles/life.js)
+	const store = (cap) => ({ m: new Float32Array(cap * 16), c: new Float32Array(cap * 3), d: new Uint8Array(cap), n: 0, instanceMatrix: { count: cap }, setMatrixAt(i, m) { m.toArray(this.m, i * 16); }, setColorAt(i, c) { c.toArray(this.c, i * 3); } });
 	const parked = Object.fromEntries(kinds.map((k) => [k, store(1600)]));
 	const hidden = new Set(), taken = new Set();
 	const spot = (x, z) => Math.round(x) + ':' + Math.round(z);
@@ -79,7 +98,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			for (let i = 0; i < S.n; i++) {
 				const x = S.m[i * 16 + 12], z = S.m[i * 16 + 14], key = Math.floor(x / GRID) + ',' + Math.floor(z / GRID);
 				let L = grid.get(key); if (!L) grid.set(key, L = []);
-				L.push({ kind: k, i, x, y: S.m[i * 16 + 13], z, yaw: Math.atan2(S.m[i * 16 + 8], S.m[i * 16 + 10]), id: k + i, col: [S.c[i * 3], S.c[i * 3 + 1], S.c[i * 3 + 2]] });
+				L.push({ kind: k, i, x, y: S.m[i * 16 + 13], z, yaw: Math.atan2(S.m[i * 16 + 8], S.m[i * 16 + 10]), id: k + i, col: [S.c[i * 3], S.c[i * 3 + 1], S.c[i * 3 + 2]], drive: S.d[i] === 1 });
 			}
 		}
 	}
@@ -96,17 +115,43 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// street furniture
 	const metal = new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: 0.5, metalness: 0.6 });
 	const lampGeo = mergeGeometries([new THREE.CylinderGeometry(0.07, 0.11, 8.5, 6).translate(0, 4.25, 0), new THREE.BoxGeometry(0.12, 0.12, 1.8).translate(0, 8.4, 0.85), new THREE.BoxGeometry(0.35, 0.14, 0.6).translate(0, 8.33, 1.7)]);
-	const lamps = mk(lampGeo, metal, 900, false);
 	// by the street's era (streetera.js): an acorn lantern on a fluted post in an old core, a
 	// slim pole with a flat LED head in the newest subdivisions
 	const acornGeo = mergeGeometries([new THREE.CylinderGeometry(0.12, 0.17, 0.5, 8).translate(0, 0.25, 0), new THREE.CylinderGeometry(0.06, 0.09, 3.4, 8).translate(0, 2.1, 0), new THREE.CylinderGeometry(0.16, 0.1, 0.16, 8).translate(0, 3.86, 0), new THREE.SphereGeometry(0.24, 10, 8).scale(1, 1.45, 1).translate(0, 4.2, 0), new THREE.ConeGeometry(0.1, 0.22, 8).translate(0, 4.65, 0)]);
-	const acorns = mk(acornGeo, new THREE.MeshStandardMaterial({ color: 0x1d2a22, roughness: 0.45, metalness: 0.6 }), 400, false);
 	const ledGeo = mergeGeometries([new THREE.CylinderGeometry(0.05, 0.08, 7.4, 8).translate(0, 3.7, 0), new THREE.CylinderGeometry(0.035, 0.035, 1.3, 6).rotateX(Math.PI / 2 - 0.1).translate(0, 7.4, 0.62), new THREE.BoxGeometry(0.28, 0.06, 0.62).translate(0, 7.48, 1.4)]);
-	const leds = mk(ledGeo, new THREE.MeshStandardMaterial({ color: 0x8c9196, roughness: 0.35, metalness: 0.7 }), 400, false);
+	// Past LAMP_LOD a lamp is drawn plainer: the same shapes with fewer sides and no hidden ends,
+	// a globe of a few facets (a pixel or two either way at that distance). The plain set holds
+	// every lamp and dissolves in across the band; the full one is a copy of the lamps near you,
+	// nearest first, dissolving out across it, and it alone throws shadows, of the lamps the
+	// sun's box can reach (world/nearfirst.js). Hundreds of lamps of up to 252 triangles each
+	// were drawn in both passes out to the edge of the street furniture.
+	const LAMP_LOD = isPhone ? [70, 90] : [120, 150];
+	const open = (r0, r1, h, n) => new THREE.CylinderGeometry(r0, r1, h, n, 1, true);
+	const lampFar = mergeGeometries([open(0.07, 0.11, 8.5, 4).translate(0, 4.25, 0), new THREE.BoxGeometry(0.12, 0.12, 1.8).translate(0, 8.4, 0.85), new THREE.BoxGeometry(0.35, 0.14, 0.6).translate(0, 8.33, 1.7)]);
+	const acornFar = mergeGeometries([open(0.12, 0.17, 0.5, 5).translate(0, 0.25, 0), open(0.06, 0.09, 3.4, 4).translate(0, 2.1, 0), open(0.16, 0.1, 0.16, 5).translate(0, 3.86, 0), new THREE.SphereGeometry(0.24, 6, 4).scale(1, 1.45, 1).translate(0, 4.2, 0), new THREE.ConeGeometry(0.1, 0.22, 4, 1, true).translate(0, 4.65, 0)]);
+	const ledFar = mergeGeometries([open(0.05, 0.08, 7.4, 4).translate(0, 3.7, 0), open(0.035, 0.035, 1.3, 3).rotateX(Math.PI / 2 - 0.1).translate(0, 7.4, 0.62), new THREE.BoxGeometry(0.28, 0.06, 0.62).translate(0, 7.48, 1.4)]);
+	const lampNear = [];
+	// the plain set (written as the street is built) and its full copy, each with its own
+	// material carrying its half of the dissolve; reach: how far a lamp's arm and head stand out
+	// from its post
+	const lampPair = (full, plain, mat, cap, reach) => {
+		const farM = mat.clone(), nearM = mat.clone();
+		addLodFade(farM, 'uniform', [LAMP_LOD[0], LAMP_LOD[1], NONE_OUT[0], NONE_OUT[1]]);
+		addLodFade(nearM, 'uniform', [NONE_IN[0], NONE_IN[1], LAMP_LOD[0], LAMP_LOD[1]]);
+		const far = mk(plain, farM, cap, false), near = mk(full, nearM, cap, false);
+		far.castShadow = false;
+		lampNear.push(nearFirst(near, far, { band: LAMP_LOD, half: reach }));
+		return far;
+	};
+	const lamps = lampPair(lampGeo, lampFar, metal, 900, 2.1);
+	const acorns = lampPair(acornGeo, acornFar, new THREE.MeshStandardMaterial({ color: 0x1d2a22, roughness: 0.45, metalness: 0.6 }), 400, 0.5);
+	const leds = lampPair(ledGeo, ledFar, new THREE.MeshStandardMaterial({ color: 0x8c9196, roughness: 0.35, metalness: 0.7 }), 400, 1.8);
 	const signalGeo = mergeGeometries([new THREE.CylinderGeometry(0.1, 0.12, 5.5, 6).translate(0, 2.75, 0), new THREE.BoxGeometry(0.1, 0.1, 5).translate(0, 5.4, 2.5), new THREE.BoxGeometry(0.35, 1.0, 0.3).translate(0, 4.9, 3.4)]);
 	const signals = mk(signalGeo, new THREE.MeshStandardMaterial({ color: 0x3a3f36, roughness: 0.6, metalness: 0.4 }), 300, false);
 	const hydrantGeo = mergeGeometries([new THREE.CylinderGeometry(0.13, 0.15, 0.65, 8).translate(0, 0.33, 0), new THREE.SphereGeometry(0.14, 8, 6).translate(0, 0.66, 0), new THREE.CylinderGeometry(0.05, 0.05, 0.36, 6).rotateZ(Math.PI / 2).translate(0, 0.45, 0)]);
-	const hydrants = mk(hydrantGeo, new THREE.MeshStandardMaterial({ color: 0xc8b020, roughness: 0.5 }), 400, false);
+	// (the hydrants the same way: a plain post and cap past the band, the full one near you)
+	const hydrantFar = mergeGeometries([open(0.13, 0.15, 0.65, 5).translate(0, 0.33, 0), new THREE.ConeGeometry(0.14, 0.12, 5, 1, true).translate(0, 0.72, 0), open(0.05, 0.05, 0.36, 3).rotateZ(Math.PI / 2).translate(0, 0.45, 0)]);
+	const hydrants = lampPair(hydrantGeo, hydrantFar, new THREE.MeshStandardMaterial({ color: 0xc8b020, roughness: 0.5 }), 400, 0.3);
 	const benchGeo = mergeGeometries([new THREE.BoxGeometry(1.8, 0.06, 0.45).translate(0, 0.45, 0), new THREE.BoxGeometry(1.8, 0.4, 0.05).translate(0, 0.7, -0.2), new THREE.BoxGeometry(0.06, 0.45, 0.4).translate(-0.8, 0.22, 0), new THREE.BoxGeometry(0.06, 0.45, 0.4).translate(0.8, 0.22, 0)]);
 	const benches = mk(benchGeo, new THREE.MeshStandardMaterial({ color: 0x3a2e24, roughness: 0.8 }), 300, false);
 	const shelterGeo = mergeGeometries([new THREE.BoxGeometry(3.6, 0.08, 1.5).translate(0, 2.5, 0), new THREE.BoxGeometry(3.6, 2.4, 0.04).translate(0, 1.25, -0.7), new THREE.BoxGeometry(0.04, 2.4, 1.4).translate(-1.78, 1.25, 0), new THREE.BoxGeometry(1.2, 1.8, 0.06).translate(1.1, 1.2, -0.66)]);
@@ -258,6 +303,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		const lampPos = lampLightGeo.attributes.position.array; let nl = 0;
 		const E = eraMap(real);
 		signalList.length = 0; lanes.length = 0; stopsAt.length = 0;
+		for (const S of Object.values(parked)) S.d.fill(0);
 		const grids = new Map();
 		for (let dz = -R; dz <= R; dz += R / 4) for (let dx = -R; dx <= R; dx += R / 4) { const u = bay.urbanAt(cx + dx, cz + dz); if (u.u > 0.15) grids.set(Math.round(u.a * 1000) + ':' + u.s, [u.a, u.s]); }
 		for (const [a, style] of grids.values()) {
@@ -325,10 +371,12 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			}
 		}
 		if (real?.loaded()) realStreets(cx, cz, R, n, lampPos, (v) => { nl = v; }, () => nl);
+		driveCars(cx, cz, R, n);
 		for (const im of [lamps, acorns, leds, signals, hydrants, benches, shelters, bins, meters]) {
 			im.count = Math.min(counts.get(im) || 0, im.instanceMatrix.count);
 			mark(im);
 		}
+		for (const L of lampNear) L.place(cx, cz);
 		for (const S of Object.values(parked)) S.n = Math.min(counts.get(S) || 0, S.instanceMatrix.count);
 		splitX = 1e9;
 		hidden.clear();
@@ -356,6 +404,58 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			}
 		}
 	}
+	// the cars in the drives (bay/city.js: lotkit entries [x, y, z, yaw, sx, sy, sz, tilt, r, g, b]):
+	// a kind by what people keep at home, mostly nosed in to the garage, in the street's paint;
+	// one left to sit (squashed a little, sy < 1) keeps its faded colour and sits on flat tyres
+	const DRIVE = ['sedan', 'sedan', 'sedan', 'suv', 'suv', 'crossover', 'crossover', 'pickup', 'pickup', 'hatch', 'van', 'sports'];
+	let driveV = -1;
+	// where a car of kind at (x, z), facing yaw, stands clear of the buildings (bay/city.js
+	// lotsNear): there, or moved out along its length (away from the doors it faces) by up to
+	// 3 m; null if it cannot be
+	const SLIDE = [0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0];
+	function clearOf(kind, x, z, yaw) {
+		const S = SPEC[kind] || SPEC.sedan, hl = S.L / 2 + 0.2, hw = S.W / 2 + 0.15, fx = Math.sin(yaw), fz = Math.cos(yaw);
+		const L = city?.lotsNear?.(x, z, 12) || [];
+		const hits = (px, pz) => {
+			for (const o of L) {
+				// (two boxes in plan: apart if any of the four axes parts them)
+				const oa = o.a || 0, ox = Math.cos(oa), oz = Math.sin(oa), dx = o.x - px, dz = o.z - pz;
+				const axes = [[fx, fz], [fz, -fx], [ox, oz], [-oz, ox]];
+				let apart = false;
+				for (const [ax, az] of axes) {
+					const ra = hl * Math.abs(fx * ax + fz * az) + hw * Math.abs(fz * ax - fx * az), rb = o.w / 2 * Math.abs(ox * ax + oz * az) + o.d / 2 * Math.abs(-oz * ax + ox * az);
+					if (Math.abs(dx * ax + dz * az) > ra + rb) { apart = true; break; }
+				}
+				if (!apart) return true;
+			}
+			return false;
+		};
+		for (const s of SLIDE) if (!hits(x + fx * s, z + fz * s)) return [x + fx * s, z + fz * s];
+		return null;
+	}
+	function driveCars(cx, cz, R, n) {
+		const D = city?.driveCars?.();
+		driveV = D ? D.v : -1;
+		if (!D) return;
+		for (const e of D.list) {
+			const x = e[0], z = e[2];
+			if (Math.abs(x - cx) > R || Math.abs(z - cz) > R || Math.hypot(x - cx, z - cz) > R) continue;
+			const h = hash(x * 2.3 + 11, z * 1.9 - 7), left = e[5] < 1;
+			const kind = DRIVE[Math.floor(hash(h * 997, x) * DRIVE.length)], S = parked[kind];
+			// (never into a wall: eased out along the drive until the body clears every building,
+			// or left out)
+			const yaw = -e[3] + (hash(z, h * 313) < 0.7 ? Math.PI : 0), at = clearOf(kind, x, z, -e[3]);
+			if (!at) continue;
+			const c = n(S);
+			if (c < 0) continue;
+			carMatrix(pm, kind, at[0], at[1], yaw);
+			if (left) pm.elements[13] -= 0.09;
+			S.setMatrixAt(c, pm);
+			const pc = left && e.length > 10 ? [e[8], e[9], e[10]] : PAINT[Math.floor(hash(h * 577, z) * PAINT.length)];
+			S.setColorAt(c, col.setRGB(pc[0], pc[1], pc[2]));
+			S.d[c] = 1;
+		}
+	}
 	const cars = [];
 	let trafficN = 0;
 	// the bus stops (each shelter): a bus coming by pulls up and waits a while
@@ -369,7 +469,12 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		if (high) return;
 		const x = cam.position.x, z = cam.position.z;
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
+		// (and when the city has placed a new set of cars in the drives)
+		if (city?.driveCars && city.driveCars().v !== driveV) lastX = 1e9;
 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
+		// (the full lamps copied again round you every 15 m: what each pass draws of them is
+		// counted from there)
+		if (Math.hypot(x - lampNear[0].at[0], z - lampNear[0].at[1]) > 15) for (const L of lampNear) L.place(x, z);
 		if (Math.hypot(x - splitX, cam.position.y - splitY, z - splitZ) > SPLIT_M || t - splitT > SPLIT_S || t < splitT) split(x, cam.position.y, z, t);
 		// (on at dusk by their photocells, a little before the porch lights)
 		lampLights.material.opacity = lampsOn(nightK);

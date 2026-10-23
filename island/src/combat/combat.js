@@ -26,8 +26,10 @@ import { createHealth, applyDamage, tickHealth, revive } from './health.js';
 import { createLayer, canHit, warded, strike, rayBox, personShapes } from './targets.js';
 import { createWanted, offend, tickWanted, clearWanted, sighted, defend, tickDefence } from './heat.js';
 import { pushOut, hiddenSpot } from '../law/tactics.js';
+import { sweepOut, worldPush, clearSpot } from '../people/walls.js';
 import { createDamageLog, smashed } from '../law/ladder.js';
 import { createFx } from './fx.js';
+import { listen } from '../audio/spatial.js';
 import { createHud } from './hud.js';
 import { createWeaponView } from './weapon-view.js';
 import { createCivilians } from './civilians.js';
@@ -136,7 +138,10 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 				if (!(b.w > 0.5)) continue;
 				const g = w.island.heightAt(b.x, b.z), H = (b.wallH || 6) + (b.roofH || 0) * 0.5;
 				const h = rayBox(o, d, { x: b.x, y: g + H / 2 - 0.5, z: b.z }, [b.w / 2, H / 2 + 0.5, b.d / 2], -(b.a || 0));
-				if (h && h.t < (best?.t ?? max)) best = { t: h.t, n: h.n, surface: 'stone', box: b };
+				// (into the room seen down a scope, through its window: interiors/index.js seeInto)
+				const into = h ? w.interiors?.seeInto?.(b, o, d) ?? -1 : -1;
+				if (into > 0) { if (into < (best?.t ?? max)) best = { t: into, n: new THREE.Vector3(-d.x, 0, -d.z), surface: 'stone', box: b, inside: true }; }
+				else if (h && h.t < (best?.t ?? max)) best = { t: h.t, n: h.n, surface: 'stone', box: b };
 			}
 			const sg = w.structures?.ray?.(o, d, best?.t ?? max, best, max);          // structures: a pane, a wall built near you (in place of its box) in the way
 			if (sg) best = sg.none ? null : sg;
@@ -217,7 +222,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
 	// weapons deal, for your skills; honorRank() your honor's rank and pvpWin({ from, r, name })
 	// a friend beaten in a PvP fight, for your honor: combat/honor.js)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, remoteSpell: null, honorRank: null, pvpWin: null, guild: null, quarry: null };
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, spellAim: null, remoteSpell: null, honorRank: null, pvpWin: null, guild: null, quarry: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -299,7 +304,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// ---------- your weapon ----------
 	const ammo = load('l99-combat-ammo', { mags: {}, loose: {}, starter: {} });
 	const saveAmmo = () => { if (Wp) ammo.mags[Wp.uid] = Wp.mag; store.set('l99-combat-ammo', JSON.stringify(ammo)); };
-	let Wp = null;
+	let Wp = null, physicsWarm = false;
 	function held() { const H = arms?.held?.(); return H && WEAPONS[H.i] ? H : null; }
 	function weaponNow() {
 		const H = held();
@@ -388,8 +393,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- shots ----------
 	// the first thing a ray meets: a target in the layer or a wall: { T?, t, n, surface, part, ward }
-	function firstHit(o, d, max, shooterT = ME) {
-		const a = layer.cast(o, d, max, shooterT, rules), b = worldHit(o, d, a ? a.t : max);
+	// (assist: a forgiving weapon's, layer.cast)
+	function firstHit(o, d, max, shooterT = ME, assist = null) {
+		const a = layer.cast(o, d, max, shooterT, rules, assist), b = worldHit(o, d, a ? a.t : max);
 		// (a wall built near you keeps its own record under wall: structures/walls/ needs it)
 		if (b && (!a || b.t < a.t)) return { ...b, wall: b.wall || true };
 		return a;
@@ -545,7 +551,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		holdFire: (h) => !!hooks.holdFire?.(h),
 		cloaked: () => !!hooks.cloak?.(),
 		ignore: (h, o) => !!hooks.ignore?.(h, o),
-		keepOut: (pos) => keepOut(pos),
+		keepOut: (pos, from) => keepOut(pos, from),
+		clearSpot: (from, want, footY) => clearSpot(worldPush(W()), from, want, footY),
 		coverK: () => (P()?.crouch ? 0.7 : 1),
 		fireAt: (id) => fireField.fires.get(id) || null, douse: (id, dt) => fireField.douse(id, dt * 3),
 		heat: (id, x, z, fuel, amount) => { if (fuel) { const h = (heatMap.get(id) || 0) + amount; heatMap.set(id, h); if (h > 60) ignite(id, x, z, fuel, true); } },
@@ -575,10 +582,13 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hud.feed(killer, plainName(h.T?.name), how, { mine, head: blow?.part === 'head' });
 	}
 	function buildingCover(x, z, r) { const b = boxesNear(x, z, r).find((q) => q.w > 2); return b ? { x: b.x, z: b.z, r: Math.max(b.w, b.d) / 2 } : null; }
-	// the fighters kept out of buildings: the boxes round each cell of the street, looked up a
-	// few times a second rather than every step of every body
+	// the fighters kept out of walls and buildings: each step swept against the same pushes that
+	// keep you out (people/walls.js: house walls, closed doors, the city's blocks, fences, cars);
+	// then the mapped buildings' boxes round each cell of the street, looked up a few times a
+	// second rather than every step of every body
 	const boxCells = new Map();
-	function keepOut(pos) {
+	function keepOut(pos, from = null) {
+		sweepOut(worldPush(W()), from, pos, from ? from.y : pos.y);
 		if (!isEarth() || W()?.deep?.active?.()) return;
 		const k = (Math.floor(pos.x / 24) * 73856093) ^ Math.floor(pos.z / 24);
 		let c = boxCells.get(k);
@@ -610,6 +620,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	const melee = createMelee({
 		camera, mount, touch, scene, group, layer, people, ragdolls, civilians, fx, hint, eye, ground, hurtPlayer, call, isPhone,
 		deal: (T, blow, mine) => deal(T, blow, mine),
+		// (a body knocked down gets up short of any wall it slid against, people/walls.js)
+		clearSpot: (from, want, footY) => clearSpot(worldPush(W()), from, want, footY),
 		// (fists are quieter than gunfire: the nearest run, those further off stop and watch)
 		heard: (at) => civilians.alarm(at.x, at.z, 7),
 		focusTarget: () => focus.current(), blocked,
@@ -674,6 +686,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	function zone() {
 		const w = W(), e = eye();
 		if (w?.deep?.active?.()) return 'deep';
+		// (the Moon, and any airless world: its own creatures, none of the Earth's or the wilds')
+		if (shared.planet?.airless) return 'moon';
 		if (isEarth()) {
 			if (boxesNear(e.x, e.z, 70).length > 6) return 'earth-urban';
 			return w.island.heightAt(e.x, e.z) < 6 ? 'earth-coast' : 'earth-rural';
@@ -740,7 +754,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	}
 	if (menu) {
 		// a way to meet each one, in the places menu (with Skills and magic, and Test mode)
-		const css = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;';
+		const css = 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:36px;cursor:pointer;';
 		const stop = (el) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) el.addEventListener(ev, (x) => x.stopPropagation()); };
 		const btn = document.createElement('button');
 		btn.type = 'button'; btn.textContent = '☠ Creatures'; btn.title = 'Meet one of the creatures, just ahead of you'; btn.style.cssText = css;
@@ -946,6 +960,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		}
 		if (group.parent !== scene) scene.add(group);
 		worldT += dt; wardMarkT -= dt; sparkLineT -= dt;
+		// a weapon out: the physics the fallen need is loaded now, not on the first body to
+		// drop (which would stand frozen mid-step while it came)
+		if (!physicsWarm && Wp) { physicsWarm = true; ragdolls.ready?.().catch?.(() => {}); }
 		fx.resize(innerHeight, camera.fov / (camera.zoom || 1));
 		// you: speed, and a trail of safe spots to wake at
 		const pos = p.pos;
@@ -982,6 +999,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (p.aimAssist !== assist) p.aimAssist = assist;
 		focus.update(dt);
 		melee.update(dt);
+		// (the world's sounds come from where they are: the listener is the camera, audio/spatial.js)
+		listen(camera);
 		squads.update(dt);
 		recovery.update(dt);
 		contracts.update(dt);
@@ -1006,6 +1025,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hud.update(dt, {
 			show: true, ko: me.ko > 0, koText: me.ko > 0 ? `Coming to in ${Math.ceil(me.ko)}…` : '',
 			aiming: !!view.state()?.aiming,
+			// (bare-handed with a spell to hand: the crosshair stays up to aim it by, brighter while a cast plays)
+			spellAim: wpn ? 0 : hooks.spellAim?.() || 0,
 			spread: wpn ? Math.tan(spreadNow(wpn, view.state()?.aiming ? 1 : 0, Math.min(1, me.speed / 5))) * fovPx : 6,
 			health: me.H,
 			weapon: wpn && { name: wpn.S.name, mag: wpn.mag, max: wpn.S.mag, reserve: reserve(wpn), mode: modeOf(wpn), modes: wpn.S.modes.length, reloading: wpn.reloading > 0, bow: isBow(wpn), draw: wpn.draw, drawing: wpn.drawing },
