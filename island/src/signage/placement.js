@@ -18,6 +18,7 @@ import { hash01, hash32, rng, pick } from './rand.js';
 import { LAYER } from './layers.js';
 import { RANK } from './systems.js';
 import { retailIdentity } from './art.js';
+import { paintAge } from './wallpaint.js';
 import { carriageways, gapLeft, medianFor, SHOULDER_R } from '../bay/fwyplan.js';   // the freeway's cross section: where its shoulders and median are
 
 export const BACK = Object.freeze({ blank: 0, readable: 1, mirrored: 2, none: 3 });
@@ -395,8 +396,11 @@ export function graffitiFor(surfaces, { morality = {}, seed = 0, day = 0, phone 
 		const lu = S.lu ?? 7, luK = lu === 8 ? 1.4 : lu === 7 ? 1.1 : lu === 1 ? 0.45 : lu === 2 || lu === 6 ? 0.25 : 0.8;
 		const chance = Math.min(0.95, base * P * luK);
 		const tx = S.nz, tz = -S.nx;
-		const put = (along, hy, w, h, face, mat, layer, wear = 0) => out.push({ mat, layer, face, x: S.x + tx * along, z: S.z + tz * along, hy, nx: S.nx, nz: S.nz, w, h, back: BACK.none, wear, base: S.y ?? null, surf: S.kind });
+		// (host: the wall the paint lies on, signage/wallpaint.js; null on a sign's back or a post)
+		const put = (along, hy, w, h, face, mat, layer, wear = 0) => out.push({ mat, layer, face, x: S.x + tx * along, z: S.z + tz * along, hy, nx: S.nx, nz: S.nz, w, h, back: BACK.none, wear, base: S.y ?? null, surf: S.kind, host: mat === MAT.paint ? S.paintHost ?? null : null });
 		const span = S.w || 3, tall = S.h || 3;
+		// (kept under the top of the wall, whatever grew it)
+		const fit = (hy, h) => Math.min(hy, tall - h / 2 - 0.05);
 		if (S.kind === 'signback' || S.kind === 'post') {
 			// a cluster of stickers, slapped one over another
 			if (r() > chance) continue;
@@ -419,17 +423,37 @@ export function graffitiFor(surfaces, { morality = {}, seed = 0, day = 0, phone 
 			if (S.kind === 'dumpster') { w *= 0.6; h *= 0.6; hy = 0.75; }
 			if (S.kind === 'pier') { w = Math.min(w, span * 0.9); h = Math.min(h, w * 0.5); }
 			hy = Math.min(hy, tall - h / 2 - 0.1);
-			// the crews: some get buffed out in a block of grey that does not quite match the wall;
-			// a few weeks on, someone writes over the buff again
+			// the crews: some get buffed out in a block of the wall's colour a shade off (its ghost
+			// showing through: one of a dozen, so the buffs share the sheet); a few weeks on,
+			// someone writes over the buff again
 			const buffRate = 0.22 + (morality.means ?? 0.5) * 0.25;
-			const buffed = hash01(sid, week, 'buff') < buffRate;
+			const buffed = hash01(sid, week, 'buff') < buffRate, tone = Math.floor(hash01(sid, 'tone') * 4);
 			if (buffed) {
-				put(along, hy, w * 1.15, h * 1.3, { k: 'buff', tone: Math.floor(hash01(sid, 'tone') * 4) }, MAT.paint, LAYER.paint, 0);
+				const bh = Math.min(h * 1.3, tall - 0.15);
+				put(along, fit(hy, bh), w * 1.15, bh, { k: 'buff', tone, ghost: sid % 12, gk: face.k === 'tag' ? 'tag' : 'throwup' }, MAT.paint, LAYER.paint, 0.1 + hash01(sid, week, 'bw') * 0.5);
 				// (the new tag is pushed after its buff, and a batch draws in order: it lands on top)
-				if (hash01(sid, week, 'again') < 0.35 * P) put(along + (r() - 0.5) * 0.4, hy + (r() - 0.5) * 0.3, 0.8 + r() * 0.6, 0.35 + r() * 0.2, { k: 'tag', seed: (sid + 101) % 8192 }, MAT.paint, LAYER.paint, 0);
+				if (hash01(sid, week, 'again') < 0.35 * P) put(along + (r() - 0.5) * 0.4, hy + (r() - 0.5) * 0.3, 0.8 + r() * 0.6, 0.35 + r() * 0.2, { k: 'tag', seed: (sid + 101) % 8192 }, MAT.paint, LAYER.paint, paintAge(r, morality) * 0.4);
 				continue;
 			}
-			put(along, hy, w, h, face, MAT.paint, LAYER.paint, r() * 0.5);
+			// a wall's history: some paint went up over an older piece let go to chalk and flakes,
+			// some was half rolled out by a crew that never came back for the rest
+			const wear = paintAge(r, morality), hist = hash01(sid, 'hist');
+			if (hist < 0.15) {
+				// (the piece is old by now; the crew's roller came in from one end)
+				put(along, hy, w, h, face, MAT.paint, LAYER.paint, Math.max(wear, 0.5 + hash01(sid, 'pw') * 0.35));
+				const bw = w * (0.4 + hash01(sid, 'pb') * 0.25), side = hash01(sid, 'ps') < 0.5 ? -1 : 1, bh = Math.min(h * (1.08 + hash01(sid, 'ph') * 0.2), tall - 0.15);
+				put(along + side * (w - bw) / 2 + side * w * 0.06, fit(hy + (hash01(sid, 'py') - 0.5) * h * 0.15, bh), bw, bh, { k: 'buff', tone }, MAT.paint, LAYER.paint, 0.15 + hash01(sid, 'pbw') * 0.45);
+				continue;
+			}
+			if (hist < 0.4) {
+				// (an older throw-up or tag, a little off, under the new one; the new one younger)
+				const old = 0.72 + hash01(sid, 'ow') * 0.23, ok = face.k === 'tag' && hash01(sid, 'ok') < 0.5 ? 'tag' : 'throwup';
+				const ow = Math.min(span * 0.92, ok === 'tag' ? w * (1 + hash01(sid, 'os') * 0.4) : Math.max(w * 0.9, 1.8 + hash01(sid, 'os') * 1.4)), oh = Math.min(ow * (ok === 'tag' ? 0.42 : 0.45), tall - 0.2), room = Math.max(0, (span - ow) / 2);
+				put(Math.max(-room, Math.min(room, along + (hash01(sid, 'ox') - 0.5) * w * 0.5)), fit(hy + (hash01(sid, 'oy') - 0.5) * h * 0.4, oh), ow, oh, { k: ok, seed: (sid + 37) % 8192 }, MAT.paint, LAYER.paint, old);
+				put(along, hy, w, h, face, MAT.paint, LAYER.paint, Math.min(wear, old - 0.3));
+				continue;
+			}
+			put(along, hy, w, h, face, MAT.paint, LAYER.paint, wear);
 		}
 		// a wheatpasted poster or two in the alleys and on the industrial walls
 		if ((S.kind === 'alley' || S.kind === 'industrial' || S.kind === 'abutment') && r() < 0.45 * P) {

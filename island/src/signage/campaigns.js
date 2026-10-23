@@ -30,5 +30,5 @@ export function wallCampaign(surface,seed=0){
  const categories=['mobile','network','coffee','beverages','apparel','hardware','transport','home'];
  const category=surface.category||categories[hash32(surface.x,surface.z,seed)%categories.length];
  const height=surface.h-.5, width=Math.min(surface.w-.8,height*.7,12);
- return {mat:'paint',layer:LAYER.poster,face:campaignFace(category,Math.floor(surface.x/250)+':'+Math.floor(surface.z/250),'mural'),x:surface.x,z:surface.z,hy:.25+height/2,nx:surface.nx,nz:surface.nz,w:width,h:height,base:surface.y??null,back:3,wear:.12+hash01(surface.x,surface.z,'faded')*.25};
+ return {mat:'paint',layer:LAYER.poster,face:campaignFace(category,Math.floor(surface.x/250)+':'+Math.floor(surface.z/250),'mural'),x:surface.x,z:surface.z,hy:.25+height/2,nx:surface.nx,nz:surface.nz,w:width,h:height,base:surface.y??null,back:3,wear:.2+hash01(surface.x,surface.z,'faded')*.55,host:surface.paintHost??null};
 }

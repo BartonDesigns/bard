@@ -31,7 +31,7 @@ const sysOf = (f) => SYSTEMS[f.sys] || SYSTEMS.us;
 // px per metre by kind: the faces read close get more
 const DENS = { blade: 330, hours: 520, pushpull: 760, payment: 760, access: 700, nosmoking: 700, alarm: 900, address: 520, suite: 900, nosolicit: 900, open: 600, window: 420, sale: 420, staff: 640, deliveries: 640, plate: 900, bumper: 900, bbrand: 700, wsticker: 900, cpermit: 1100, livery: 200, aisle: 260, dept: 200, price: 1200, talker: 1000, flyer: 640, sticker: 1100, permit: 420, site: 300 };
 export function faceDims(face, w, h) {
-	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 40 : face.k === 'wheatpaste' ? 300 : 230);
+	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 90 : face.k === 'wheatpaste' ? 300 : 230);
 	// (three quarters of the nominal density: enough for the distance each is read at, and the
 	// region's faces fit one sheet without repacking)
 	let pw = Math.round(w * d * 0.75), ph = Math.round(h * d * 0.75);
@@ -523,7 +523,7 @@ const STREET = {
 	damage: (g,x,y,w,h,f) => drawCivicDecal(g,x,y,w,h,{id:'damage',tile:f.tile,phone:!!f.phone,opacity:.7}),
 	throwup: (g, x, y, w, h, f) => drawThrowup(g, x, y, w, h, f.seed),
 	piece: (g,x,y,w,h,f) => {const a=graffitiGraphic('piece',f.seed);if(!a||!drawCivicDecal(g,x,y,w,h,{...a,phone:!!f.phone}))drawPiece(g,x,y,w,h,f.seed);},
-	buff: (g, x, y, w, h, f) => drawBuff(g, x, y, w, h, f.tone || 0),
+	buff: (g, x, y, w, h, f) => drawBuff(g, x, y, w, h, f.tone || 0, f.ghost >= 0 ? (c, X, Y, W2, H2) => STREET[f.gk === 'throwup' ? 'throwup' : 'tag'](c, X, Y, W2, H2, { seed: f.ghost, phone: !!f.phone }) : null),
 	wheatpaste: (g, x, y, w, h, f) => drawWheatpaste(g, x, y, w, h, f.seed),
 	sticker: (g, x, y, w, h, f) => { if (f.seed % 3 !== 0 || !drawEmblem(g, x + (w - Math.min(w, h)) / 2, y + (h - Math.min(w, h)) / 2, Math.min(w, h), 'modern', Math.abs(f.seed) % 8, !!f.phone)) drawSticker(g, x, y, w, h, f.seed); },
 	banner: (g, x, y, w, h, f) => drawBanner(g, x, y, w, h, f, { phone: !!f.phone }),
