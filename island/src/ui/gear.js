@@ -632,7 +632,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		// the held item and your hands, drawn over the frame (main.js, after the world)
 		post: (renderer) => vm.render(renderer, scene),
 		// Crysis.viewmodel({ hold: [id, level, tier], aim: true }): a look without owning it
-		viewmodel: (o = {}) => { if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) setAim(o.aim); const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
+		viewmodel: (o = {}) => { if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) setAim(o.aim); if (o.tallOut !== undefined) vm.state.tallOut = o.tallOut; if (o.tallDrop !== undefined) vm.state.tallDrop = o.tallDrop; const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
 	};
 	multiplayer?.link?.(api);
 	return api;

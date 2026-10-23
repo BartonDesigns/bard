@@ -96,6 +96,10 @@ export function createHud({ mount, touch = false }) {
 	}
 
 	let supK = 0, hitT = 0, kill = false, headHit = false, weakHit = false, edgeT = 0, shownHp = 0, bossPhT = 0, lastStars = -2;
+	// (the crosshair opens with the spread over a few frames, not in one: at a phone's frame
+	// rate the jump from still to moving read as a flicker between two crosshairs, Josh's
+	// fifth recording)
+	let gShown = 0;
 	const callList = [], feedList = [];
 	return {
 		root, btns,
@@ -136,7 +140,9 @@ export function createHud({ mount, touch = false }) {
 			root.style.display = S.show ? '' : 'none';
 			const vis = S.show && !S.ko;
 			cross.style.opacity = vis && S.weapon && !S.aiming ? '1' : vis && S.weapon ? '0.35' : vis && S.spellAim > 0 ? String(S.spellAim) : '0';
-			const g = Math.max(3, Math.min(60, S.spread || 4));
+			const gT = Math.max(3, Math.min(60, S.spread || 4));
+			gShown = gShown ? gShown + (gT - gShown) * Math.min(1, dt * 9) : gT;
+			const g = Math.abs(gShown - gT) < 0.05 ? gT : gShown;
 			arms[0].style.left = `${-g - 9}px`; arms[1].style.left = `${g}px`; arms[2].style.top = `${-g - 9}px`; arms[3].style.top = `${g}px`;
 			hitT = Math.max(0, hitT - dt);
 			hit.style.opacity = hitT > 0 ? '1' : '0';

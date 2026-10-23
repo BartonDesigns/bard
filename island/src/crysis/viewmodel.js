@@ -113,7 +113,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	// ---------- the item ----------
 	const flash = createFlash(scene), sparks = createSparks(scene);
 	const kick = { z: new Spring(10), p: new Spring(10), y: new Spring(10), r: new Spring(10) };
-	const S = { shots: 0, lastShot: -9, reload: null, key: '', want: '', id: null, model: null, equip: 0, ads: 0, aimHeld: false, aimTap: false, last: null, land: new Spring(14), lagX: new Spring(9, 0.72), lagY: new Spring(9, 0.72), lagR: new Spring(8, 0.62), trig: 0, shotT: -9, clock: 0, sprint: 0, air: 0, zoom: 1, shown: false, calls: 0, item: null };
+	const S = { shots: 0, lastShot: -9, reload: null, key: '', want: '', id: null, model: null, equip: 0, ads: 0, aimHeld: false, aimTap: false, last: null, land: new Spring(14), lagX: new Spring(9, 0.72), lagY: new Spring(9, 0.72), lagR: new Spring(8, 0.62), trig: 0, shotT: -9, clock: 0, sprint: 0, air: 0, zoom: 1, shown: false, calls: 0, item: null, tallOut: 0.8, tallDrop: 0.05 };
 	function swapIn(item) {
 		optics?.reset();
 		if (S.model) { S.model.userData.bow?.dispose(); rig.remove(S.model); }
@@ -399,6 +399,13 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect;
 		const px = Math.min(Math.abs(vw.p[0]), Math.abs(vw.p[2]) * halfW * 0.62) * Math.sign(vw.p[0]);
 		const hip = V.set(px, vw.p[1], vw.p[2]);
+		// (a phone held upright: the lens is already as wide as it goes, and a long gun still
+		// took half the screen, its scope over the thumb buttons (Josh's fifth recording). Held
+		// out by four fifths and a hand lower, the sniper covers 11% of an iPhone 14 screen
+		// instead of 16.5% (measured drawn alone); a wider lens only showed more of the stock.
+		// Crysis.viewmodel({ tallOut, tallDrop }) tunes it)
+		const tallK = clamp((0.72 - cam.aspect) / 0.3, 0, 1);
+		if (tallK > 0) { hip.multiplyScalar(1 + (S.tallOut ?? 0.8) * tallK); hip.y -= (S.tallDrop ?? 0.05) * tallK; }
 		Q.copy(BASE);
 		Q2.setFromEuler(E.set(vw.r[1], vw.r[0], vw.r[2], 'YXZ'));
 		hipQ.multiplyQuaternions(Q2, Q);

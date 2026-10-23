@@ -206,7 +206,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const g = floorAt(x, z, y);
 		return island.drawnAt && island.underFloor?.(x, z, y) == null ? Math.max(g, island.drawnAt(x, z)) : g;
 	}
-	function pushOut(p) {
+	// (trees: false skips the trunks, for a flight above the tree tops)
+	function pushOut(p, trees = true) {
 		// in a cave: only its walls (the village, trees and rocks overhead are not here)
 		if (island.underFloor?.(p.x, p.z, p.y - EYE) != null) { island.underPush?.(p, p.y - EYE); return; }
 		for (let k = 0; k < foot.length; k++) {
@@ -238,7 +239,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 		// the world's own solid things (Mt Diablo's sandstone)
 		if (island.extraPush) island.extraPush(p, p.y - EYE);
-		for (const o of vegetation.obstacles(p.x, p.z, 0.35, p.y)) {
+		if (trees) for (const o of vegetation.obstacles(p.x, p.z, 0.35, p.y)) {
 			const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = o.r + 0.35;
 			if (d < min && d > 1e-4) { p.x = o.x + dx / d * min; p.z = o.z + dz / d * min; }
 		}
@@ -297,7 +298,28 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const tx = wish.x * fs, ty = wish.y * fs, tz = wish.z * fs;
 			const k = Math.min(1, dt * 3);
 			s.vel.x += (tx - s.vel.x) * k; s.vel.y += (ty - s.vel.y) * k; s.vel.z += (tz - s.vel.z) * k;
-			s.pos.addScaledVector(s.vel, dt);
+			// low over the land the walls stop you in the air as they do on foot: a house's, a
+			// tower's, a trunk's (above the tree tops the trunks are passed over). Fast, the stride
+			// is taken in pieces no longer than a body's width, so a wall is met rather than
+			// crossed in one (Josh's fifth recording: a flight in through a living room's window
+			// and out through a bedroom wall, the camera inside the walls on the way)
+			const low = !s.orbit?.high() && agl < 120;
+			const stride = Math.sqrt(s.vel.x * s.vel.x + s.vel.y * s.vel.y + s.vel.z * s.vel.z) * dt;
+			const n = low ? Math.min(40, Math.max(1, Math.ceil(stride / 0.25))) : 1;
+			for (let i = 0; i < n; i++) {
+				const bx = s.pos.x, by = s.pos.y, bz = s.pos.z, wasIn = low && ceilingAt(bx, bz, by - EYE) < Infinity;
+				s.pos.addScaledVector(s.vel, dt / n);
+				if (!low) continue;
+				const px = s.pos.x, pz = s.pos.z;
+				pushOut(s.pos, agl < 16);
+				const ox = s.pos.x - px, oz = s.pos.z - pz, ol = Math.sqrt(ox * ox + oz * oz);
+				if (ol <= 1e-6) continue;
+				// met a wall: the speed into it is gone, the rest slides along it. Fast enough to
+				// land inside the wall itself and be put out on the room's side, the step is undone
+				// and the flight stopped there (an open door pushes nothing, so it is still flown through)
+				if (!wasIn && ceilingAt(s.pos.x, s.pos.z, s.pos.y - EYE) < Infinity) { s.pos.set(bx, by, bz); s.vel.x = s.vel.z = 0; break; }
+				const into = (s.vel.x * ox + s.vel.z * oz) / ol; if (into < 0) { s.vel.x -= into * ox / ol; s.vel.z -= into * oz / ol; }
+			}
 			// Orbital bodies (currently the authored Moon) own a curved surface
 			// collider. It clamps a descent to the ground and removes only inward
 			// velocity, so lateral steering and crater exploration remain live.
@@ -307,6 +329,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const lift0 = 1.2 + Math.min(4, Math.max(0, Math.hypot(s.vel.x, s.vel.z) - 16) * 0.05);
 			const floor = s.orbit?.high() ? -Infinity : Math.max(seenFloorAt(s.pos.x, s.pos.z, s.pos.y), 0) + lift0;
 			if (s.pos.y < floor) { s.pos.y = floor; s.vel.y = Math.max(0, s.vel.y); }
+			// (indoors, the room's ceiling: no way up through a roof in the air either; a roof
+			// stood on is a floor, never a ceiling)
+			if (low) { const c = ceilingAt(s.pos.x, s.pos.z, s.pos.y - EYE); if (c < Infinity && c - 0.15 > floor && s.pos.y + 0.15 > c) { s.pos.y = c - 0.15; s.vel.y = Math.min(0, s.vel.y); } }
 			// a ceiling above the land, so Mt Diablo can be flown over (out over the globe, earth/globe.js,
 			// a cruising height: the speed above grows with it, so a continent is minutes away)
 			if (!s.orbit) { const ceil = island.flyCeiling ? island.flyCeiling(s.pos.x, s.pos.z) : 900; s.pos.y = Math.min(s.pos.y, Math.max(ceil, floor + ceil)); }
