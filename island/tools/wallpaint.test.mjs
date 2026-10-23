@@ -55,11 +55,11 @@ test('wallpaint: style and gloss share the flag, read back whole', () => {
 	assert.equal(paintExtra(STYLE.spray, false), 0);
 });
 
-test('wallpaint: most paint is a season or two old, a few fresh, some years', () => {
+test('wallpaint: one in ten fresh, the rest a season or two or years old', () => {
 	const r = rng(7), ages = Array.from({ length: 2000 }, () => paintAge(r));
 	const fresh = ages.filter((a) => a < 0.12).length / ages.length, old = ages.filter((a) => a > 0.6).length / ages.length;
-	assert.ok(fresh > 0.08 && fresh < 0.3, 'fresh ' + fresh);
-	assert.ok(old > 0.15 && old < 0.45, 'old ' + old);
+	assert.ok(fresh > 0.05 && fresh < 0.2, 'fresh ' + fresh);
+	assert.ok(old > 0.3 && old < 0.6, 'old ' + old);
 	assert.ok(ages.every((a) => a >= 0 && a <= 1));
 	// (the crews come oftener where there is money: younger there)
 	const r2 = rng(7), rich = Array.from({ length: 2000 }, () => paintAge(r2, { means: 1 }));

@@ -73,10 +73,11 @@ export function freewayHost(y, height, x, z, colour = FREEWAY_WALL) {
 export const binHost = (y, v = 0) => host(y, 1.3, SURFACE.bin, 0.55, packColour(BIN_PAINT[v ? 1 : 0], true));
 function frac(v) { return v - Math.floor(v); }
 
-// how old a piece of paint is on a wall (the decal's wear): a few fresh, most a season or two,
-// the rest years old; where the crews come often (well off), younger
+// how old a piece of paint is on a wall (the decal's wear): one in ten fresh, the rest a season
+// or two or years old (a wall the writers use is a wall nobody repaints); where the crews come
+// often (well off), younger
 export function paintAge(r, { means = 0.5 } = {}) {
-	const q = r(), k = q < 0.16 ? q / 0.16 * 0.12 : q < 0.66 ? 0.18 + (q - 0.16) / 0.5 * 0.37 : 0.58 + (q - 0.66) / 0.34 * 0.37;
+	const q = r(), k = q < 0.1 ? q / 0.1 * 0.12 : q < 0.55 ? 0.22 + (q - 0.1) / 0.45 * 0.38 : 0.6 + (q - 0.55) / 0.45 * 0.35;
 	return clamp01(k * (1.15 - 0.3 * clamp01(means)));
 }
 
@@ -111,6 +112,8 @@ float sgWetK = 0.0;
 // to hold it (it would alias into speckle and lines along the lattice)
 float sgOct(vec2 p, float f, float px) { return mix(0.5, sgN(p * f), 1.0 - smoothstep(0.12, 0.35, px * f)); }
 vec4 paintOnWall(vec4 tex, vec4 halo, vec2 uv, vec3 w, vec3 n, float style, float age, float seed) {
+	// (a few weeks outside are enough to take the shine off it)
+	age = max(age, 0.08);
 	float type = vSgHost.z, hostAge = vSgHost.w;
 	bool known = vSgHost.y > 0.0;
 	// the wall's own metres: along it (the same u the city's shader uses) and up. Paint with no
