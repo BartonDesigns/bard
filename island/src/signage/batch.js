@@ -1,7 +1,8 @@
 // A batch: every decal of one material and one layer in a region, one instanced draw. The
 // instance's matrix carries where it is, which way it faces and its size; aCell the graphic's
 // place in the atlas; aFx its back, seed, wear and a flag; with bend (the cars' stickers) aBend
-// how the quad curves to lie on the body under it (see putMatrix). Filled at a region's rebuild (or,
+// how the quad curves to lie on the body under it (see putMatrix); paint's aHost the wall it is
+// on (signage/wallpaint.js: its foot, height, type and age, colour). Filled at a region's rebuild (or,
 // for the cars, every frame) with no allocation: put() writes straight into the arrays.
 
 import * as THREE from 'three';
@@ -15,6 +16,8 @@ export function createBatch(group, kind, layer, map, cap, { phone = false, name 
 	geo.setAttribute('aCell', cell); geo.setAttribute('aFx', fx);
 	const curve = bend ? new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4) : null;
 	if (curve) { curve.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aBend', curve); }
+	const hostA = kind === 'paint' ? new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4) : null;
+	if (hostA) { hostA.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aHost', hostA); }
 	const mat = signMaterial(kind, layer, map, { phone, bend });
 	const mesh = new THREE.InstancedMesh(geo, mat, cap);
 	mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -22,15 +25,16 @@ export function createBatch(group, kind, layer, map, cap, { phone = false, name 
 	mesh.renderOrder = mat.userData.renderOrder; mesh.visible = false;
 	mesh.name = `signage-${name || kind}-${layer}`;
 	group.add(mesh);
-	const M = mesh.instanceMatrix.array, C = cell.array, F = fx.array, K = curve?.array, lift = mat.userData.lift;
+	const M = mesh.instanceMatrix.array, C = cell.array, F = fx.array, K = curve?.array, HA = hostA?.array, lift = mat.userData.lift;
 	let n = 0;
 	const B = {
 		mesh, kind, layer, cap, lift,
 		get n() { return n; },
 		clear() { n = 0; },
 		// a decal at p facing n (unit), its right along t (unit, perpendicular to n), w x h metres;
-		// c the atlas cell [u, v, du, dv]; back, seed, wear, extra into aFx
-		put(px, py, pz, nx, ny, nz, tx, ty, tz, w, h, c, back, seed, wear, extra) {
+		// c the atlas cell [u, v, du, dv]; back, seed, wear, extra into aFx; host (paint) the wall's
+		// [foot, height, type + age, colour] (wallpaint.js host()), or nothing where it is not known
+		put(px, py, pz, nx, ny, nz, tx, ty, tz, w, h, c, back, seed, wear, extra, host = null) {
 			if (n >= cap) return false;
 			// up: n x t  (so that t x up = n)
 			const ux = ny * tz - nz * ty, uy = nz * tx - nx * tz, uz = nx * ty - ny * tx;
@@ -43,6 +47,7 @@ export function createBatch(group, kind, layer, map, cap, { phone = false, name 
 			if (c) { C[q] = c[0]; C[q + 1] = c[1]; C[q + 2] = c[2]; C[q + 3] = c[3]; } else { C[q] = 0; C[q + 1] = 0; C[q + 2] = 1; C[q + 3] = 1; }
 			F[q] = back; F[q + 1] = seed; F[q + 2] = wear; F[q + 3] = extra;
 			if (K) K[q] = K[q + 1] = K[q + 2] = K[q + 3] = 0;
+			if (HA) { if (host) { HA[q] = host[0]; HA[q + 1] = host[1]; HA[q + 2] = host[2]; HA[q + 3] = host[3] || 0; } else HA[q] = HA[q + 1] = HA[q + 2] = HA[q + 3] = 0; }
 			n++;
 			return true;
 		},
@@ -57,6 +62,7 @@ export function createBatch(group, kind, layer, map, cap, { phone = false, name 
 			C[q] = c[0]; C[q + 1] = c[1]; C[q + 2] = c[2]; C[q + 3] = c[3];
 			F[q] = back; F[q + 1] = seed; F[q + 2] = wear; F[q + 3] = extra;
 			if (K) { if (bend) { K[q] = bend[0]; K[q + 1] = bend[1]; K[q + 2] = bend[2]; K[q + 3] = bend[3]; } else K[q] = K[q + 1] = K[q + 2] = K[q + 3] = 0; }
+			if (HA) HA[q] = HA[q + 1] = HA[q + 2] = HA[q + 3] = 0;
 			n++;
 			return true;
 		},
@@ -67,6 +73,7 @@ export function createBatch(group, kind, layer, map, cap, { phone = false, name 
 			cell.clearUpdateRanges(); cell.addUpdateRange(0, n * 4); cell.needsUpdate = true;
 			fx.clearUpdateRanges(); fx.addUpdateRange(0, n * 4); fx.needsUpdate = true;
 			if (curve) { curve.clearUpdateRanges(); curve.addUpdateRange(0, n * 4); curve.needsUpdate = true; }
+			if (hostA) { hostA.clearUpdateRanges(); hostA.addUpdateRange(0, n * 4); hostA.needsUpdate = true; }
 		},
 		dispose() { group.remove(mesh); geo.dispose(); mesh.dispose(); },
 	};
