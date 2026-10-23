@@ -424,13 +424,14 @@ export function graffitiFor(surfaces, { morality = {}, seed = 0, day = 0, phone 
 			if (S.kind === 'pier') { w = Math.min(w, span * 0.9); h = Math.min(h, w * 0.5); }
 			hy = Math.min(hy, tall - h / 2 - 0.1);
 			// the crews: some get buffed out in a block of the wall's colour a shade off (its ghost
-			// showing through: one of a dozen, so the buffs share the sheet); a few weeks on,
-			// someone writes over the buff again
+			// showing through: one of a few, each with its own roller, so the buffs share the
+			// sheet); a few weeks on, someone writes over the buff again
 			const buffRate = 0.22 + (morality.means ?? 0.5) * 0.25;
 			const buffed = hash01(sid, week, 'buff') < buffRate, tone = Math.floor(hash01(sid, 'tone') * 4);
 			if (buffed) {
 				const bh = Math.min(h * 1.3, tall - 0.15);
-				put(along, fit(hy, bh), w * 1.15, bh, { k: 'buff', tone, ghost: sid % 12, gk: face.k === 'tag' ? 'tag' : 'throwup' }, MAT.paint, LAYER.paint, 0.1 + hash01(sid, week, 'bw') * 0.5);
+				const ghost = sid % 6;
+				put(along, fit(hy, bh), w * 1.15, bh, { k: 'buff', tone: ghost % 4, ghost, gk: face.k === 'tag' ? 'tag' : 'throwup' }, MAT.paint, LAYER.paint, 0.1 + hash01(sid, week, 'bw') * 0.5);
 				// (the new tag is pushed after its buff, and a batch draws in order: it lands on top)
 				if (hash01(sid, week, 'again') < 0.35 * P) put(along + (r() - 0.5) * 0.4, hy + (r() - 0.5) * 0.3, 0.8 + r() * 0.6, 0.35 + r() * 0.2, { k: 'tag', seed: (sid + 101) % 8192 }, MAT.paint, LAYER.paint, paintAge(r, morality) * 0.4);
 				continue;

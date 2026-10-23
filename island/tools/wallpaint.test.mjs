@@ -77,8 +77,8 @@ test('wallpaint: the walls keep their history, and the paint knows its wall', ()
 	const buffs = paint.filter((d) => d.face.k === 'buff');
 	assert.ok(buffs.some((d) => d.face.ghost >= 0 && /tag|throwup/.test(d.face.gk)));
 	assert.ok(buffs.some((d) => d.face.ghost === undefined));
-	// (a dozen ghosts at most, so the buffs share the sheet)
-	assert.ok(buffs.every((d) => d.face.ghost === undefined || d.face.ghost < 12));
+	// (a few ghosts at most, so the buffs share the sheet)
+	assert.ok(new Set(buffs.map((d) => JSON.stringify(d.face))).size <= 16);
 	// painted over: an old piece with a younger one drawn after it, overlapping
 	let over = 0;
 	for (let i = 1; i < paint.length; i++) {

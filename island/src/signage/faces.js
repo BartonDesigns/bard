@@ -31,7 +31,7 @@ const sysOf = (f) => SYSTEMS[f.sys] || SYSTEMS.us;
 // px per metre by kind: the faces read close get more
 const DENS = { blade: 330, hours: 520, pushpull: 760, payment: 760, access: 700, nosmoking: 700, alarm: 900, address: 520, suite: 900, nosolicit: 900, open: 600, window: 420, sale: 420, staff: 640, deliveries: 640, plate: 900, bumper: 900, bbrand: 700, wsticker: 900, cpermit: 1100, livery: 200, aisle: 260, dept: 200, price: 1200, talker: 1000, flyer: 640, sticker: 1100, permit: 420, site: 300 };
 export function faceDims(face, w, h) {
-	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 90 : face.k === 'wheatpaste' ? 300 : 230);
+	const d = DENS[face.k] ?? (face.k === 'tag' || face.k === 'throwup' ? 200 : face.k === 'piece' ? 120 : face.k === 'buff' ? 50 : face.k === 'wheatpaste' ? 300 : 230);
 	// (three quarters of the nominal density: enough for the distance each is read at, and the
 	// region's faces fit one sheet without repacking)
 	let pw = Math.round(w * d * 0.75), ph = Math.round(h * d * 0.75);
