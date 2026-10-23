@@ -26,6 +26,7 @@
 import * as THREE from 'three';
 import { spotsOf, arrange, lineFor, doingAt } from './home-routine.js';
 import { makeHousehold, KINDS } from './households.js';
+import { cultureOf } from '../region/cultures.js';
 import { planDay } from './schedules.js';
 import { fadePerson } from './fade.js';
 import { freeBody } from './social-actors.js';
@@ -74,7 +75,8 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	const emit = (e) => { for (const f of listeners) { try { f(e); } catch (err) { console.warn('home-life listener', err); } } };
 
 	// ---------- a house's household ----------
-	const keyOf = (h) => h.key || `${Math.round(h.cx)}:${Math.round(h.cz)}`;
+	// (a home out in the country goes by its own name, wherever the globe's frame lies: region/settle.js)
+	const keyOf = (h) => h.key || h.grp?.homeId || `${Math.round(h.cx)}:${Math.round(h.cz)}`;
 	function householdOf(h) {
 		const key = keyOf(h);
 		let hh = households.get(key);
@@ -88,9 +90,11 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 			// for a family (the beds are counted, not the people culled)
 			const beds = (h.plan.items || []).filter((it) => it.type === 'bed').length;
 			const weights = beds <= 1 ? { couple: 18, single: 16, 'older-couple': 9, 'elder-alone': 3, 'single-parent': 3 } : beds === 2 ? { ...KINDS, multigenerational: 2, roommates: 4 } : KINDS;
-			let seed = (Math.imul(Math.round(h.cx * 2) | 0, 73856093) ^ Math.imul(Math.round(h.cz * 2) | 0, 19349663) ^ 0x6f3e) >>> 0;
-			if (h.key) for (let i = 0; i < h.key.length; i++) seed = Math.imul(seed ^ h.key.charCodeAt(i), 16777619) >>> 0;
-			hh = makeHousehold(seed, { x: h.cx, z: h.cz, kind: h.kind || 'house' }, { id: `home-${key}`, weights });
+			// (out in the country: the same family each time, and the place's own people)
+			const tag = h.key || h.grp?.homeId, C = h.grp?.region ? cultureOf(h.grp.region) : null;
+			let seed = h.grp?.homeId ? 0x6f3e : (Math.imul(Math.round(h.cx * 2) | 0, 73856093) ^ Math.imul(Math.round(h.cz * 2) | 0, 19349663) ^ 0x6f3e) >>> 0;
+			if (tag) for (let i = 0; i < tag.length; i++) seed = Math.imul(seed ^ tag.charCodeAt(i), 16777619) >>> 0;
+			hh = makeHousehold(seed, { x: h.cx, z: h.cz, kind: h.kind || 'house' }, { id: `home-${key}`, weights, ...(C ? { mix: [[C.ancestry, 1]] } : {}) });
 			if (a) { foodFor?.(hh, a.place); a.households.push(hh); }
 		}
 		households.set(key, hh);
