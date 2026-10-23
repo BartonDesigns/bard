@@ -133,6 +133,8 @@ export function createCooking({ scene, camera, mount, button, hint = () => {}, i
 		// a food mart, a corner store, a grocer, a bottle shop
 		const C = W?.commercial?.inside?.(pos);
 		if (C?.stocked) {
+			// (at a cooler's door, its own prompt: something cold to take, interiors/office-perks.js)
+			if (W.commercial.amenities?.(pos, 2.2)?.some((q) => q.door)) return null;
 			const t = C.b.biz?.type, sk = C.trade === 'mart' ? 'mart' : C.trade === 'liquor' ? 'liquor' : C.trade === 'grocer' ? shopKind(t) || 'grocer' : null;
 			if (sk) return { kind: 'shop', shop: sk, key: `s:biz:${Math.round(C.b.x)}:${Math.round(C.b.z)}`, at: { x: pos.x, z: pos.z }, name: C.b.biz?.name || SHOPS[sk].name, place: 'suburb' };
 		}

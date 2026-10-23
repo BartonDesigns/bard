@@ -9,7 +9,7 @@ import { tradeOf } from '../src/bay/storefit.js';
 import { styleOf } from '../src/bay/dinefit.js';
 import { venueOf } from '../src/economy/venue.js';
 import { RECIPE } from '../src/cooking/recipes.js';
-import { KINDS, SIGNS, stripUV, signUV, GoodsBuilder } from '../src/interiors/goods.js';
+import { KINDS, SIGNS, stripUV, signUV, GoodsBuilder, GARMENTS, garmentAt } from '../src/interiors/goods.js';
 import { shelves, menuOf, SHOPS } from '../src/cooking/kitchens.js';
 
 const shop = (o) => { const b = { x: 12, z: 0, w: 15, d: 10, a: 0.3, wallH: 4.6, kind: 6, h: 4.6, door: 0.5, ...o }; b.grp = [b]; b.grp.biz = true; return b; };
@@ -90,6 +90,28 @@ test('the goods sheet: every kind and sign has its place on it', () => {
 	assert.ok(Math.abs(w / h - 8) < 0.01, `letters 8:1 (${(w / h).toFixed(2)})`);
 });
 
+test('a clothes shop hangs its clothes: some facing out, printed, and everyone inside its walls', () => {
+	// (every garment's front has its place among the garments' strips)
+	for (let n = 0; n < GARMENTS.length; n++) { const [t, f0, f1] = garmentAt(n); assert.ok(t >= 0 && t < KINDS.garments && f0 >= 0 && f1 <= 1 && f1 > f0, GARMENTS[n].name); }
+	const [, gv0] = stripUV('garments', 0), [, , , gv1] = stripUV('garments', KINDS.garments - 1);
+	for (const [w, d] of [[13, 14], [10, 10], [18, 16], [9, 18]]) {
+		const b = shop({ biz: { type: 'boutique', name: 'b', sign: { bg: '#111111', fg: '#ffffff' } }, w, d });
+		const { C, L } = built(b);
+		let faces = 0;
+		C.group.traverse((o) => { if (o.name !== 'goods') return; const uv = o.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) if (uv.getY(i) >= gv0 - 1e-6 && uv.getY(i) <= gv1 + 1e-6 && uv.getY(i) < 1) faces++; });
+		assert.ok(faces >= 4 * 6, `${w}x${d}: garments facing out (${faces / 6})`);
+		const v = C.venue({ x: b.x, z: b.z }, 20), ca = Math.cos(b.a), sa = Math.sin(b.a);
+		for (const q of v.areas[0].seats) {
+			const dx = q.x - b.x, dz = q.z - b.z, lx = ca * dx + sa * dz, lz = -sa * dx + ca * dz;
+			assert.ok(Math.abs(lx) < L.hw - 0.3 && Math.abs(lz) < L.hd - 0.3, `${w}x${d}: a place out of the shop at ${lx.toFixed(2)}, ${lz.toFixed(2)}`);
+			// (and not inside a rack or a table)
+			const p = { x: q.x, z: q.z };
+			C.push(p, L.y);
+			assert.ok(Math.hypot(p.x - q.x, p.z - q.z) < 0.05, `${w}x${d}: a place to stand inside a fitting at ${lx.toFixed(2)}, ${lz.toFixed(2)}`);
+		}
+	}
+});
+
 test('the marts and bottle shops sell food and drink, not fresh meat', () => {
 	const mart = shelves('mart', { seed: 3 }).map((q) => q.id);
 	for (const id of ['milk', 'eggs', 'bread', 'spaghetti', 'tinned-tomatoes']) assert.ok(mart.includes(id), id);
@@ -141,4 +163,22 @@ test('a café or a restaurant serves dishes of its cuisine, priced, from the rec
 	}
 	// the same menu all day, a different dish off another day
 	assert.deepEqual(menuOf('bistro', { seed: 3, day: 100 }), menuOf('bistro', { seed: 3, day: 100 }));
+});
+
+test('a shop that sells things to carry away lists them from the gear catalog, at its own prices', async () => {
+	const { ARMS_CATALOG, listOffers, ACQUISITION_SOURCES } = await import('../src/gameplay/arms.js');
+	const { gearOf } = await import('../src/bay/storefit.js');
+	const SRC = { supermarket: ACQUISITION_SOURCES.SUPERMARKET, outfitter: ACQUISITION_SOURCES.NPC_TRADER };
+	for (const type of ['hardware', 'feed', 'pharmacy', 'pet', 'boutique', 'thrift', 'surf', 'tailor', 'gift', 'antiques', 'bait', 'bike']) {
+		const G = gearOf(tradeOf(type), type);
+		assert.ok(G?.stock.length, `${type} sells something`);
+		const offered = new Set(listOffers(SRC[G.kind]).filter((o) => o.mode === 'purchase').map((o) => o.itemId));
+		for (const id of G.stock) { assert.ok(ARMS_CATALOG[id], `${type}: ${id} in the catalog`); assert.ok(offered.has(id), `${type}: ${id} sold at a ${G.kind}`); }
+	}
+	// (the food shops sell their food; the outfitters and hunting posts are the economy's own sites)
+	for (const type of ['grocer', 'liquor', 'bookshop', 'florist', 'salon', 'outfitter', 'huntpost']) assert.equal(gearOf(tradeOf(type), type), null, type);
+	// a hardware store built: its list says what it sells
+	const b = shop({ biz: { type: 'hardware', name: 'h', sign: { bg: '#e05a00', fg: '#ffffff' } }, w: 20, d: 16 });
+	const { L } = built(b);
+	assert.deepEqual(L.gear, gearOf('hardware', 'hardware'));
 });
