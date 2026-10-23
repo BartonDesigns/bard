@@ -43,7 +43,7 @@ import { createLightPad } from './world/lightpad.js';
 import { preferLite } from './world/gpulite.js';
 import { resetKitEnvironment } from './people/kit-light.js';
 import { createGovernor, qualityNow } from './world/governor.js';
-import { createGraphicsRenderer, graphicsMode, renderRatio } from './world/graphics-startup.js';
+import { createGraphicsRenderer, graphicsMode, renderRatio, gpuName } from './world/graphics-startup.js';
 import { createGraphicsRecovery, graphicsReloadError } from './world/graphics-recovery.js';
 import { bindSignLighting, recoverSignage, syncSignageMaterials } from './signage/materials.js';
 import { meterGL } from './world/gpumeter.js';
@@ -473,6 +473,8 @@ export function createIslandWorld() {
 	const graphics = createGraphicsRenderer({ canvas: document.createElement('canvas'), Renderer: THREE.WebGLRenderer,
 		replaceCanvas: () => document.createElement('canvas'), storage, phone: GFX, safe: SAFE, mode: initialMode });
 	const renderer = graphics.renderer;
+	// the graphics card's name, for the loading card's Copy load details (loading-screen.js)
+	window.L99GpuName = () => graphics.gpu || gpuName(renderer.getContext());
 	const recovery = createGraphicsRecovery({ onTimeout: failGraphicsRecovery }), draw = renderer.render.bind(renderer);
 	renderer.render = (...args) => {
 		if (recovery.blocked()) throw graphicsReloadError();
@@ -547,6 +549,8 @@ export function createIslandWorld() {
 		// same large attachments must not be recreated on the first restored frame.
 		seaMirror.reset(); seaDepth.reset();
 		if (!building && world) { share.keep(true, true); social.flush(); world.player.clearInput(); }
+		// (and in the black box, so a failed load's Copy load details afterwards carries it)
+		try { window.L99Loading?.note?.({ kind: 'graphics lost in the world', secs: Math.round(time), at: camera.position.toArray().map(Math.round), building: String(linking.what || '').slice(0, 120), shaders: shaderWarm.recent(), governor: governor.info(), blocked, gpu: window.L99GpuName?.() }); } catch { /* the box is a convenience */ }
 		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
 		shaderWarm.reset();
 		if (blocked) {
