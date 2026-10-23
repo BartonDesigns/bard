@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
-import { groupBoxes, isHome, frontOf } from './houseplan.js';
+import { groupBoxes, isHome, frontOf, houseSeed } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
@@ -280,10 +280,71 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		};
 		// a drive the map already has, within r of (x, z)
 		const driveAt = (x, z, r) => { mapped.length = 0; nearIn(G, 'paths', x, z, 30, mapped); return mapped.find((q) => q.w >= 2.2 && segDist(q.ax, q.az, q.bx, q.bz, x, z) < r); };
+		// The house fitted to its lot before its drive and walk are made, so that the map and
+		// the house agree: the garage built in at the end of the front a mapped drive comes up
+		// to; with no drive mapped, a garage built in for most houses wide and deep enough, at
+		// the end away from the front door (or the other, where only it can reach the street);
+		// the front door where a mapped walk comes up to the front; and the door the far facade
+		// paints (city.js) where the house is built with it: on the main block or on the wing
+		// that has it, and on no other block
+		const GAR_W = 11, GAR_D = 8.5;
+		const fitFront = (grp) => {
+			let F = frontOf(grp);
+			if (!F) return;
+			const { M, ca, sa, R0 } = F, MW = R0.x1 - R0.x0, MD = R0.z1 - R0.z0, nx = -sa, nz = ca;
+			const W = (lx, lz) => [M.x + ca * lx - sa * lz, M.z + sa * lx + ca * lz];
+			const Lc = (x, z) => [ca * (x - M.x) + sa * (z - M.z), -sa * (x - M.x) + ca * (z - M.z)];
+			// (the mapped drive and walk ends nearest the front, in the house's frame)
+			let drive = null, walk = null;
+			const [fx, fz] = W((R0.x0 + R0.x1) / 2, R0.z1);
+			mapped.length = 0; nearIn(G, 'paths', fx, fz, MW / 2 + 12, mapped);
+			for (const q of mapped) {
+				if (q.made) continue;
+				for (const [x, z] of [[q.ax, q.az], [q.bx, q.bz]]) {
+					const [lx, lz] = Lc(x, z), d = lz - R0.z1;
+					if (lx < R0.x0 - 1 || lx > R0.x1 + 1 || d < -0.8 || d > 4) continue;
+					if (q.w >= 2.2) { if (!drive || d < drive.d) drive = { lx, d }; }
+					else if (q.w > 0.6 && (!walk || d < walk.d)) walk = { lx, d };
+				}
+			}
+			// (the middle of a built-in garage's two doors, at the left or right end: houseplan.js garageIn)
+			const gmid = (left) => (left ? R0.x0 + 3.05 : R0.x1 - 3.05);
+			if (M.kind === 1 || M.kind === 2) {
+				if (drive) M.kind = Math.abs(drive.lx - gmid(true)) < Math.abs(drive.lx - gmid(false)) ? 1 : 2;
+			} else if (M.kind === 0 && !grp.some((q) => q.kind === 3) && MW >= GAR_W && MD >= GAR_D) {
+				let left = null;
+				if (drive) { if (drive.lx < R0.x0 + 6.5) left = true; else if (drive.lx > R0.x1 - 6.5) left = false; }
+				else if (((houseSeed(M) >>> 9) & 1023) / 1024 < 0.85) {
+					const doorL = M.door < 0.5;
+					for (const l of [!doorL, doorL]) {
+						const [dx, dz] = W(gmid(l), R0.z1), [best] = toStreet(dx, dz, nx, nz, true);
+						if (best <= 32 && best >= 0.8 && clear(grp, dx + nx * 2.5, dz + nz * 2.5, 1.4)) { left = l; break; }
+					}
+				}
+				if (left !== null) M.kind = left ? 1 : 2;
+			}
+			// the front door at a mapped walk, where the house can have it there
+			const toF = (x) => Math.max(0, Math.min(1, (x - R0.x0 - 1.25) / Math.max(0.1, MW - 2.5)));
+			if (walk && walk.d < 3) { const was = M.door; M.door = toF(walk.lx); if (Math.abs(frontOf(grp).door.x - walk.lx) > 0.9) M.door = was; }
+			F = frontOf(grp);
+			const D = F.door;
+			let holder = null;
+			if (Math.abs(D.z - R0.z1) < 0.02 && D.x > R0.x0 && D.x < R0.x1) { holder = M; M.door = toF(D.x); delete M.doorF; }
+			else {
+				const [X, Z] = W(D.x, D.z - 0.2);
+				for (const q of grp) {
+					if (q === M) continue;
+					const qc = Math.cos(q.a), qs = Math.sin(q.a), lx = qc * (X - q.x) + qs * (Z - q.z), lz = -qs * (X - q.x) + qc * (Z - q.z);
+					if (Math.abs(lx) < q.w / 2 && Math.abs(lz) < q.d / 2) { holder = q; q.doorF = Math.max(0, Math.min(1, (lx + q.w / 2 - 1.25) / Math.max(0.1, q.w - 2.5))); break; }
+				}
+			}
+			for (const q of grp) q.noDoor = !!holder && q !== holder;
+		};
 		for (const b of G.boxes) {
 			if (!b.grp || seen.has(b.grp) || !isHome(b)) continue;
 			seen.add(b.grp);
 			if (performance.now() - t > 5) { await new Promise((ok) => setTimeout(ok, 0)); if (signal?.aborted) return; t = performance.now(); }
+			fitFront(b.grp);
 			const F = frontOf(b.grp);
 			if (!F) continue;
 			const { M, ca, sa, R0, door, garage: gar } = F, nx = -sa, nz = ca;
