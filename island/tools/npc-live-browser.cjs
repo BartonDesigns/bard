@@ -21,7 +21,7 @@ const server = http.createServer((req, res) => {
 	const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required', '--disable-dev-shm-usage'] });
 	try {
 		const phone = profile === 'phone';
-		const page = await browser.newPage(phone ? { viewport: { width: 390, height: 664 }, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' } : { viewport: { width: 1280, height: 720 } });
+		const page = await browser.newPage(phone ? { viewport: { width: 390, height: 664 }, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' } : { viewport: { width: 800, height: 450 } });
 		page.setDefaultTimeout(600000);
 		const errors = [];
 		page.on('pageerror', (e) => errors.push(e.message));
@@ -37,8 +37,16 @@ const server = http.createServer((req, res) => {
 		});
 		const enter = page.getByRole('button', { name: 'Enter world', exact: true });
 		await enter.waitFor({ state: 'visible', timeout: 600000 }).catch(() => {});
-		if (await enter.isVisible()) await enter.click();
-		await page.waitForFunction(() => L99Island.people.pool.filter((p) => p.active && !p.P.dna.child && p.detachForSocial).length >= 3, null, { timeout: 600000 });
+		if (await enter.isVisible()) { if (phone) await enter.tap(); else await enter.click(); }
+		await page.waitForFunction(() => !window.L99Loading?.active?.(), null, { timeout: 900000 });
+		console.log(profile + ': in the world');
+		for (let k = 0; ; k++) {
+			const n = await page.evaluate(() => L99Island.people.pool.filter((p) => p.active && !p.P.dna.child && p.detachForSocial).length);
+			if (n >= 3) break;
+			if (k >= 60) throw new Error('nobody came out in fifteen minutes');
+			if (k % 4 === 0) console.log(profile + ': waiting for people (' + n + ')');
+			await page.waitForTimeout(15000);
+		}
 		console.log(profile + ': people are out');
 		// the stand-in server: replies streamed in small pieces, with what the game sent kept
 		await page.evaluate(() => {
@@ -55,12 +63,14 @@ const server = http.createServer((req, res) => {
 				for (let i = 0; i < reply.length; i += 6) { if (signal?.aborted) throw new DOMException('cancelled', 'AbortError'); text += reply.slice(i, i + 6); onText?.(text); await new Promise((res) => setTimeout(res, 15)); }
 				return { reply, act, note: r.note || null, provider: 'claude' };
 			};
+			// walk up to them, as a player would (the game ends a talk once the camera is 7 m off)
+			qa.walkUp = (who) => { const P = a.world().player.state, q = who.M.S.pos; P.pos.set(q.x + 1.2, q.y + 1.7, q.z + 1.2); P.vel.set(0, 0, 0); a.camera().position.set(q.x + 1.6, q.y + 1.7, q.z + 1.6); };
 			qa.actors = a.people.pool.filter((p) => p.active && !p.P.dna.child && p.detachForSocial && (p.P.dna.age ?? 30) >= 18).slice(0, 3);
 		});
 		const live = () => page.evaluate(() => { const w = document.querySelector('.l99-live'); return { on: w?.classList.contains('on'), text: w?.innerText || '', panel: document.querySelector('[role=dialog][aria-label="The Guide"]').style.display, rect: w?.getBoundingClientRect().toJSON() }; });
 
 		// 1. walk up: they speak first, live, the panel closed
-		await page.evaluate(() => { L99Island.camera().position.copy(qa.actors[0].M.S.pos); L99Island.guide.talkTo(qa.actors[0]); });
+		await page.evaluate(() => { qa.walkUp(qa.actors[0]); L99Island.guide.talkTo(qa.actors[0]); });
 		await page.waitForFunction(() => qa.sheets.length === 1 && /Nice day/.test(document.querySelector('.l99-live')?.innerText || ''));
 		let L = await live();
 		assert.equal(L.on, true, 'the live subtitles are up');
@@ -84,7 +94,7 @@ const server = http.createServer((req, res) => {
 		assert.equal(sheet1.lines.at(-1).content, 'Want to come with me for a walk?');
 
 		// 3. a second person, asked for work: a quest of their own from the places the sheet gave
-		await page.evaluate(() => { L99Island.camera().position.copy(qa.actors[1].M.S.pos); L99Island.guide.talkTo(qa.actors[1]); });
+		await page.evaluate(() => { qa.walkUp(qa.actors[1]); L99Island.guide.talkTo(qa.actors[1]); });
 		await page.waitForFunction(() => qa.sheets.length === 3);
 		const quest = await page.evaluate(async () => {
 			const sh = qa.sheets[2].sheet, Q = sh.can.quest;
@@ -108,7 +118,7 @@ const server = http.createServer((req, res) => {
 		assert.equal(await page.evaluate(() => !!L99Island.guide.partner()), true, 'nothing done, still talking');
 
 		// 5. pushed too far: a third person squares up
-		await page.evaluate(() => { L99Island.camera().position.copy(qa.actors[2].M.S.pos); L99Island.guide.talkTo(qa.actors[2]); });
+		await page.evaluate(() => { qa.walkUp(qa.actors[2]); L99Island.guide.talkTo(qa.actors[2]); });
 		await page.waitForFunction(() => qa.sheets.length >= 6);
 		const fight = await page.evaluate(async () => {
 			qa.replies.push({ reply: '[[mood: angry]] What did you just say to me? Come on then!', act: { act: 'fight' } });
@@ -134,7 +144,7 @@ const server = http.createServer((req, res) => {
 		console.log(profile + ': said aloud', JSON.stringify(spoken.slice(0, 8)));
 		assert.ok(!spoken.some((t) => /\[\[/.test(t)), 'no tags are spoken');
 		L = await live();
-		if (L.rect) assert.ok(L.rect.left >= 0 && L.rect.right <= (phone ? 390.5 : 1280.5), 'the subtitles fit the screen');
+		if (L.rect) assert.ok(L.rect.left >= 0 && L.rect.right <= (phone ? 390.5 : 800.5), 'the subtitles fit the screen');
 		await page.screenshot({ path: `${out}/${profile}-end.png` });
 		assert.deepEqual(errors, []);
 		fs.writeFileSync(`${out}/${profile}-report.json`, JSON.stringify({ opening: s0.sheet, followed, quest, fight, mkey, spoken, errors }, null, 2));
