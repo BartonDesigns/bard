@@ -4,7 +4,7 @@
 //   cd island && node_modules/.bin/esbuild tools/sleeve-preview.mjs --bundle --format=esm --outfile=dist/sleeve-preview.js
 //   node tools/sleeve-browser.mjs
 // SLEEVE_OUT names the folder for the images, SLEEVE_BUNDLE another build of the preview to load; SLEEVE_OUTFITS, SLEEVE_ITEMS and SLEEVE_VIEWS
-// (comma lists) narrow what is captured. CHROME_EXECUTABLE and PLAYWRIGHT_MODULE as for the
+// (comma lists) narrow what is captured; SLEEVE_PORTRAIT=1 holds the phone upright (390x844). CHROME_EXECUTABLE and PLAYWRIGHT_MODULE as for the
 // other hand harnesses.
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -23,7 +23,7 @@ try {
 	browser = await chromium.launch({ executablePath: process.env.CHROME_EXECUTABLE || undefined, headless: true, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 	for (const view of list('SLEEVE_VIEWS', ['desktop', 'phone'])) {
 		const phone = view === 'phone';
-		const page = await browser.newPage({ viewport: phone ? { width: 844, height: 390 } : { width: 1100, height: 700 }, ...(phone ? { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', isMobile: true, hasTouch: true } : {}) });
+		const page = await browser.newPage({ viewport: phone ? (process.env.SLEEVE_PORTRAIT ? { width: 390, height: 844 } : { width: 844, height: 390 }) : { width: 1100, height: 700 }, ...(phone ? { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', isMobile: true, hasTouch: true } : {}) });
 		page.setDefaultTimeout(600000);
 		page.on('pageerror', e => errors.push(String(e))); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 		await page.goto('http://127.0.0.1:' + server.address().port + '/');

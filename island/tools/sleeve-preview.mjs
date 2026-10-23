@@ -33,6 +33,8 @@ Object.defineProperty(performance, 'now', { configurable: true, value: () => tim
 
 // the outfits under review: what people wear in the street and in the fights
 export const OUTFITS = {
+	// the hero's own top (people/hero.js): a fitted charcoal longsleeve, its sleeves pushed up
+	hero: { top: { kind: 'longsleeve', col: '#36383c', pat: 'plain', fit: 'fitted', sleeves: 'rolled', push: true, tuck: true, shoulderEase: 0.6 }, outer: null },
 	tee: { top: { kind: 'tee', col: '#3d4f63', acc: '#e9e4d6', pat: 'plain', fit: 'regular', sleeves: 'short' }, outer: null, ink: true },
 	hoodie: { top: { kind: 'hoodie', col: '#7d8086', acc: '#2b2d31', pat: 'plain', fit: 'oversized', sleeves: 'long' }, outer: null },
 	police: (() => { const o = outfitFor({ kind: 'police' }, 11); o.top = { ...o.top, col: '#1c2540', sleeves: 'long' }; return o; })(),
@@ -97,5 +99,5 @@ function fist(mode) {
 	return { calls: renderer.info.render.calls, tris, garment, failed: failed() };
 }
 const failed = () => renderer.info.programs.filter(p => p.diagnostics?.runnable === false).length;
-window.sleeveReview = { dress, weapon, fist, frame, png: () => renderer.domElement.toDataURL('image/png'), failed, outfits: Object.keys(OUTFITS), get vm() { return vm; }, get fists() { return fists; }, get P() { return P; }, phoneTier, renderer };
+window.sleeveReview = { dress, weapon, fist, frame, png: () => renderer.domElement.toDataURL('image/png'), failed, outfits: Object.keys(OUTFITS), camera, get vm() { return vm; }, get fists() { return fists; }, get P() { return P; }, phoneTier, renderer };
 window.SLEEVE_READY = true;
