@@ -96,18 +96,22 @@ float gTri(sampler2D t, vec3 p, vec3 n){
 // field its own crop with its rows one way, a verge round it, and along some of the blocks'
 // edges a hedge or a track. soil and grass: the place's own; ripe: how far the grain has
 // turned (spring 0, summer 1); dorm: the winter's bare ground; orch: the share of orchards.
-// fk: the share farmed (whole fields left wild where farming thins out); bare: open soil
-vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dorm, float hedgeP, float px, vec2 fq, out float fk, out float bare){
+// fk: the share farmed (whole fields left wild where farming thins out); bare: open soil.
+// hedgy: hedge-bounded pasture country (Ireland, England, the bocage): the fields smaller and
+// nearly all grass, a hedge round each of them, and the patchwork kept from afar
+vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dorm, float hedgeP, float hedgy, float px, vec2 fq, out float fk, out float bare){
 	// (the lines wander a few metres: no survey is ruled quite straight)
 	vec2 w = gQF + (vec2(gq(2, 81u), gq(2, 83u)) - 0.5) * 0.6;
 	ivec2 wi = gQI + ivec2(floor(w)), B = wi >> 5;
 	vec2 b = (vec2(wi - (B << 5)) + fract(w)) / 32.0;
 	float r0 = gfH(ivec3(B, 1), 91u), r1 = gfH(ivec3(B, 1), 93u);
 	vec2 a = r0 < 0.5 ? b : b.yx;                     // a.x across the strips, a.y along them
-	float n = 1.0 + floor(r1 * r1 * 4.99), t = a.x * n, si = floor(t), ts = t - si;
-	float rc = gfH(ivec3(B, int(si) + 2), 97u), cutK = step(0.45, rc), cut = 0.25 + 0.5 * fract(rc * 7.31);
+	float n = 1.0 + floor(r1 * r1 * 4.99 + hedgy * 2.5), t = a.x * n, si = floor(t), ts = t - si;
+	float rc = gfH(ivec3(B, int(si) + 2), 97u), cutK = step(0.45 - 0.3 * hedgy, rc), cut = 0.25 + 0.5 * fract(rc * 7.31);
 	int fi = int(si) * 2 + int(cutK * step(cut, a.y)) + 8;
 	float id = gfH(ivec3(B, fi), 101u), id2 = gfH(ivec3(B, fi), 103u), id3 = gfH(ivec3(B, fi), 105u);
+	// (in hedge country most of the fields are grazed)
+	id = mix(id, 0.76 + id * 0.24, step(gfH(ivec3(B, fi), 109u), hedgy * 0.8));
 	fk = smoothstep(-0.08, 0.08, farmP - gfH(ivec3(B, fi), 107u));
 	// how far to the field's edge, and to the block's (m)
 	vec2 eb = min(b, 1.0 - b);
@@ -143,7 +147,10 @@ vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dor
 	} else {
 		// grass for hay and grazing, mown in stripes; some of it watered alfalfa, green whatever the season
 		col = mix(grass * (0.85 + 0.35 * id3), vec3(0.06, 0.12, 0.028), step(0.55, id3) * (1.0 - dorm)); rowA = 0.05; rowP = 9.0;
+		// (the forty shades: hedge country's pastures lush, each its own green)
+		col = mix(col, mix(vec3(0.05, 0.11, 0.024), vec3(0.085, 0.13, 0.03), fract(id3 * 7.7)) * (0.85 + 0.3 * fract(id2 * 5.3)), hedgy * (0.75 - 0.5 * dorm));
 	}
+	vec3 own = col;                                     // the field's own tone, flat
 	// the rows and furrows, gone to their average where a pixel holds several
 	col *= 1.0 + rowA * (abs(fract(across / rowP) - 0.5) * 2.0 - 0.5) * (1.0 - smoothstep(0.2, 0.45, fw / rowP));
 	col *= 0.8 + 0.4 * vary;
@@ -152,16 +159,24 @@ vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dor
 	bool ex = eb.x < eb.y;
 	ivec3 eid = ex ? ivec3(B.x + int(b.x > 0.5), B.y, 3) : ivec3(B.x, B.y + int(b.y > 0.5), 5);
 	float ea = (ex ? b.y : b.x) * 800.0, er = gfH(eid, 121u);
+	// (a hedgerow and its trees and their shade read wider than the hedge from afar: a dark
+	// line on the patchwork a few km off, as England's and Ireland's are seen)
+	vec3 hedge = vec3(0.03, 0.055, 0.02) * (0.7 + 0.6 * mix(0.5, vn(vec2(ea / 3.0, 5.0)), 1.0 - smoothstep(1.0, 3.0, px)));
+	float hpx = px / (1.0 + 1.5 * hedgy);
 	if (er < hedgeP) {
 		float gap = smoothstep(0.28, 0.38, vn(vec2(ea / 40.0, er * 300.0)));
-		col = mix(col, vec3(0.03, 0.055, 0.02) * (0.7 + 0.6 * mix(0.5, vn(vec2(ea / 3.0, 5.0)), 1.0 - smoothstep(1.0, 3.0, px))), gLine(dB, 1.5 + 1.5 * vn(vec2(ea / 30.0, 9.0)), px) * gap);
+		col = mix(col, hedge, gLine(dB, 1.5 + 1.5 * vn(vec2(ea / 30.0, 9.0)), hpx) * gap);
 	} else if (er < hedgeP + 0.3) {
-		float tk = gLine(abs(dB - 4.5), 1.6, px) * (1.0 - 0.6 * gLine(abs(dB - 4.5), 0.35, px));
+		float tk = gLine(abs(dB - 4.5), 1.6 + 0.6 * hedgy, px / (1.0 + hedgy)) * (1.0 - 0.6 * gLine(abs(dB - 4.5), 0.35, px));
 		col = mix(col, soil * 1.25 + vec3(0.03, 0.025, 0.015), tk); bare = mix(bare, 1.0, tk);
 	}
-	// far off: the patchwork's average, calm
+	// in hedge country a hedge round every field too (a gate or a gap here and there)
+	if (hedgy > 0.01 && dE < dB - 0.5) col = mix(col, hedge, gLine(dE, 1.2 + 0.8 * id2, hpx) * hedgy * smoothstep(0.2, 0.3, vn(vec2((a.x + a.y) * 17.8, id * 300.0))));
+	// far off: the patchwork's average, calm (hedge country keeps each field's tone a while longer)
 	float far = smoothstep(30.0, 110.0, px);
-	col = mix(col, mix(mix(vec3(0.07, 0.11, 0.03), vec3(0.22, 0.18, 0.085), ripe * 0.6 + dorm * 0.4), soil, 0.25) * (0.8 + 0.4 * gq(5, 115u)), far);
+	vec3 avg = mix(mix(vec3(0.07, 0.11, 0.03), vec3(0.22, 0.18, 0.085), ripe * 0.6 + dorm * 0.4), soil, 0.25);
+	avg = mix(avg, own, hedgy * (1.0 - smoothstep(150.0, 400.0, px)) * 0.7);
+	col = mix(col, avg * (0.8 + 0.4 * gq(5, 115u)), far);
 	fk = mix(fk, farmP, far);
 	return col;
 }
@@ -236,7 +251,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					vec3 n = normalize(vGN); float slope = 1.0 - n.y, h = vGW.y;
 					float dist = length(vViewPosition), px = max(1e-3, length(fwidth(vGW.xz)));
 					// patches on the sphere: 2 km, 512 m and 128 m (the finest fades out far off)
-					float pB = gfN(2, 11u), pM = gfN(4, 23u), pS = mix(0.5, gfN(6, 37u), 1.0 - smoothstep(1500.0, 5000.0, dist));
+					float pB = gfN(2, 11u), pM = gfN(4, 23u), pSr = gfN(6, 37u), pS = mix(0.5, pSr, 1.0 - smoothstep(1500.0, 5000.0, dist));
 					// the atlas's cells read smoothly, their edges wandering with the patches (no 11 km
 					// squares; globetrees.js reads them the same way)
 					vec2 uv = (vGCC + 0.5 + (vec2(pB, pM) - 0.5) * vec2(0.8, 0.15)) / vec2(textureSize(uGT3, 0));
@@ -276,20 +291,34 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// Denver near 10)
 					float air = temp - 6.5 * max(0.0, h - 400.0 - 0.5 * vGE) / 1000.0;
 					// farmland: rain-fed where it is wet and warm enough (not in the warm dry foothills, nor
-					// among their oaks), watered on the warm dry valley floors; only on the flat. Trees up to
-					// the tree line, not on cliffs, and thinner where the land is farmed (as globetrees.js
-					// grows them)
+					// among their oaks), watered on the warm dry valley floors; only on the flat, except in
+					// meadow country, where the pastures climb the hillsides. Trees up to the tree line, not
+					// on cliffs, and thinner where the land is farmed (as globetrees.js grows them). The
+					// fine patch reads unfaded here so the woods keep their 128 m blocks far off
 					float farmable = max(smoothstep(380.0, 560.0, rain) * smoothstep(3.0, 9.0, temp) * (1.0 - (1.0 - smoothstep(650.0, 850.0, rain)) * max(smoothstep(0.3, 0.45, trees), smoothstep(12.0, 15.0, temp) * smoothstep(250.0, 450.0, h))),
-						smoothstep(150.0, 260.0, rain) * (1.0 - smoothstep(300.0, 600.0, h)) * smoothstep(12.0, 16.0, temp) * 0.75) * (1.0 - smoothstep(0.004, 0.012, slope)) * (1.0 - smoothstep(1200.0, 2200.0, h));
-					float forest = smoothstep(0.44 + 0.045 * meadow, 0.56 - 0.045 * meadow, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * (0.12 + 0.1 * meadow) + smoothstep(0.01, 0.06, slope) * 0.12 * meadow) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
+						smoothstep(150.0, 260.0, rain) * (1.0 - smoothstep(300.0, 600.0, h)) * smoothstep(12.0, 16.0, temp) * 0.75) * (1.0 - smoothstep(0.004 + 0.02 * meadow, 0.012 + 0.05 * meadow, slope)) * (1.0 - smoothstep(1200.0, 2200.0, h));
+					float forest = smoothstep(0.44 + 0.045 * meadow, 0.56 - 0.045 * meadow, trees + (pM - 0.5) * 0.7 + (pSr - 0.5) * 0.35 - farmable * (0.12 + 0.1 * meadow) + smoothstep(0.01, 0.06, slope) * 0.2 * meadow) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
 					float farmP = farmable * (1.0 - forest) * (1.0 - smoothstep(0.55, 0.8, trees)) * smoothstep(0.15, 0.45, pB * 0.7 + m2 * 0.3 + 0.1);
+					// hedge country: wet meadow country (Ireland, England, Normandy), its pastures hedged
+					float hedgy = meadow * smoothstep(800.0, 1000.0, rain);
 					vec2 fq = fwidth(vec2(vGW.x, -vGW.z) * uGFd.zw) * 25.0;
 					if (farmP > 0.002) {
 						float fk, fb;
 						vec3 fc = gFarm(farmP, smoothstep(13.0, 17.0, temp) * (1.0 - smoothstep(500.0, 900.0, rain)) * 0.45, soil, grass, smoothstep(-1.0, 5.0, uGSeason + (temp - 12.0) * 0.3), dorm,
-							0.08 + 0.4 * smoothstep(0.25, 0.5, trees) * smoothstep(550.0, 800.0, rain), px, fq, fk, fb);
+							0.08 + 0.4 * smoothstep(0.25, 0.5, trees) * smoothstep(550.0, 800.0, rain) + 0.45 * hedgy, hedgy, px, fq, fk, fb);
 						c = mix(c, fc, fk); bare = mix(bare, fb, fk);
 					}
+					// the moor: the steeper and higher ground of wet cool country above the last fields,
+					// heather and bog grass, rust-brown bracken on the lower banks, and the granite showing
+					// through in tors and crags (Wicklow, the Pennines, Dartmoor)
+					float moorK = smoothstep(900.0, 1150.0, rain) * (1.0 - smoothstep(12.0, 15.0, temp)) * smoothstep(3.0, 6.0, air) * (1.0 - forest)
+						* smoothstep(0.02, 0.06, slope + (pM - 0.5) * 0.04 + (m2 - 0.5) * 0.02 + (pSr - 0.5) * 0.015) * (1.0 - farmP * 0.85);
+					float heath = smoothstep(0.4, 0.62, m2 * 0.5 + pSr * 0.5), brack = smoothstep(0.55, 0.72, tus * 0.4 + m1 * 0.6) * (1.0 - heath);
+					vec3 moorC = mix(vec3(0.075, 0.08, 0.035), vec3(0.1, 0.06, 0.075), heath * 0.7) * (0.75 + 0.5 * tus);
+					moorC = mix(moorC, vec3(0.2, 0.11, 0.045) * (0.8 + 0.4 * tus), brack * mix(0.45, 0.8, dorm));
+					c = mix(c, moorC, moorK);
+					float q47 = gq(1, 47u);
+					float torK = moorK * smoothstep(0.62, 0.72, m1 * 0.5 + pSr * 0.3 + q47 * 0.2) * smoothstep(0.03, 0.06, slope);
 					// the woods: from afar their crowns and the shade between them, close by the dark floor
 					// under them, litter and moss
 					vec3 wood = mix(vec3(0.028, 0.05, 0.03), vec3(0.045, 0.075, 0.025), smoothstep(4.0, 14.0, temp));
@@ -301,7 +330,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					c = mix(c, wood, forest);
 					bare = mix(bare, 0.7, forest * floorK);
 					// and the shade of the scattered trees in open woodland
-					c *= 1.0 - 0.35 * smoothstep(0.15, 0.45, trees) * (1.0 - forest) * (1.0 - 0.85 * meadow) * smoothstep(0.55, 0.7, gq(1, 47u) * 0.6 + pS * 0.4);
+					c *= 1.0 - 0.35 * smoothstep(0.15, 0.45, trees) * (1.0 - forest) * (1.0 - 0.85 * meadow) * smoothstep(0.55, 0.7, q47 * 0.6 + pS * 0.4);
 					// which way the slope faces: + toward the pole (in its own shade most of the day), - toward
 					// the sun, nothing on the flat
 					float shadeSide = clamp(-n.z * sign(uGAnc.x + 1e-4) / max(n.y, 0.25), -1.0, 1.0) * smoothstep(0.03, 0.25, slope);
@@ -313,7 +342,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					vec3 scree = mix(vec3(0.42, 0.4, 0.37), gA, 0.25) * (0.8 + 0.35 * mix(0.5, vn(gM(4) + 9.0), ck));
 					c = mix(c, scree, screeK * 0.75);
 					// rock on the steep ground, and above the plants, banded
-					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15 + (m1 - 0.5) * 0.1), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
+					float rockK = max(max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15 + (m1 - 0.5) * 0.1), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7), torK * 0.8);
 					vec3 rock = mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35) * (0.75 + 0.25 * m1 + 0.25 * mix(0.5, vn(vec2(gM(1).x, h * 0.25)), ck));
 					// moss and lichen on the shaded faces of a wet place's rock, none in a desert or the cold
 					rock = mix(rock, vec3(0.13, 0.17, 0.08) * (0.8 + 0.4 * m2), max(0.0, shadeSide) * smoothstep(600.0, 1400.0, rain) * smoothstep(0.0, 6.0, air) * smoothstep(0.45, 0.65, m2 * 0.7 + pS * 0.3) * 0.6);

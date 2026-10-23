@@ -1162,9 +1162,12 @@ function furnish(plan) {
 				inFront(sofa, 'rug', Math.min(2.4, sofa.w + 0.4), 1.7, 0.01, -0.35);
 				inFront(sofa, 'coffeeTable', 1.1, 0.6, 0.42, 0.45);
 			}
+			// the television, where the house has no family room for it: on the wall the sofa faces
+			if (!rooms.some((r) => r.type === 'family' && r.cells.length)) against('tvConsole', Math.min(1.6, bw - 1, bd - 1), 0.45, 0.55, { long: true, clear: 1.4, centre: true, score: (s) => (sofa && s.axis === sofa.side.axis && s.n !== sofa.side.n ? 1.5 : 0) });
 			against('armchair', 0.85, 0.85, 0.85, { corner: true, clear: 0.7 });
 			against('armchair', 0.85, 0.85, 0.85, { corner: true, clear: 0.7 });
 			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.7 });
+			against('sideTable', 0.5, 0.5, 0.55, { corner: true, clear: 0 });
 			against('floorLamp', 0.35, 0.35, 1.6, { corner: true, clear: 0 });
 			against('plant', 0.45, 0.45, 1.2, { corner: true, clear: 0 });
 			// a small house's kitchen along one wall of its living room
@@ -1284,6 +1287,10 @@ function furnish(plan) {
 			against('plant', 0.4, 0.4, 1.1, { corner: true, clear: 0 });
 			art(1); light('pendant');
 		} else if (t === 'hall') {
+			// a runner down it, a narrow table with a lamp, a plant, pictures
+			if (Math.min(bw, bd) > 1.3) against('console', 0.9, 0.3, 0.8, { clear: 0.7, noWindow: true });
+			if (Math.max(bw, bd) > 2.6) against('rug', Math.min(2.4, Math.max(bw, bd) - 1), 0.7, 0.01, { clear: 0, long: true });
+			against('plant', 0.35, 0.35, 1.0, { corner: true, clear: 0 });
 			art(2); light();
 		} else if (t === 'garage') {
 			against('shelves', Math.min(2.4, bw - 0.6), 0.55, 1.95, { clear: 0.8, score: (s) => (s.axis === 'x' && s.n > 0 ? 2 : 0) });

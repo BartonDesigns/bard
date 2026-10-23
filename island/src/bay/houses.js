@@ -78,7 +78,11 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const SK = look.surround === 'stucco' ? 'stucco' : look.surround === 'none' ? null : 'trim', SC = SK === 'stucco' ? FOAM : XT;
 		const lv = (L) => (L ? HT.floor1 : 0);
 		// which rooms have a light on after dark
-		const lit = plan.rooms.map((r) => rnd() < (r.type === 'garage' || r.type === 'closet' ? 0.08 : r.level ? 0.45 : 0.6));
+		// (the rooms the household lives in are lit; a bedroom or bathroom now and then; and in
+		// the evening, once it is getting dark outside, every room they use: a dark living room
+		// at half past six is a house with nobody home)
+		const evening = night.value > 0.04;
+		const lit = plan.rooms.map((r) => rnd() < (LIT_P[r.type] ?? 0.6) * (evening ? 1.35 : 1) + (evening && LIVED.has(r.type) ? 0.2 : 0));
 		// each room's walls (paint, paper, panelling), and in some one wall picked out: the
 		// longest, fewest-opened one it has
 		const fin = plan.rooms.map((r) => { const f = dec.wall(r.type, r.id); return { key: f.key, col: lin(f.col) }; });
@@ -554,6 +558,9 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		return { grp, plan, root, floorY, base, col, doors, stoop, lights, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, walls: { list: wallInfo, era, siding: look.siding == null ? 'stucco' : ['lap', 'batten', 'shingle', 'brick'][look.siding] || 'lap', mats: M }, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
 	}
 
+	// how likely each kind of room is to have its light on (by day the lamps are half on: lighting.js)
+	const LIT_P = { living: 0.75, family: 0.75, kitchen: 0.75, dining: 0.6, entry: 0.7, hall: 0.65, loft: 0.6, office: 0.55, master: 0.5, bed: 0.5, bath: 0.4, mbath: 0.4, powder: 0.3, laundry: 0.3, garage: 0.08, closet: 0.08 };
+	const LIVED = new Set(['living', 'family', 'kitchen', 'dining', 'entry', 'hall', 'loft']);
 	function dispose(h) {
 		releaseInterior(h.root);
 		group.remove(h.root);

@@ -122,7 +122,8 @@ export function createFistView({ camera, isPhone = false }) {
 			if (a.anatomical) {
 				a.anatomical.mesh.renderOrder = 2; a.grp.add(a.anatomical.mesh);
 				// the sleeve, cuff and glove over this forearm, cut to it (the skin under them left out)
-				a.garment = dressArms(body, a.anatomical.mesh, { sides: [side], isPhone, far: 0.75 });
+				// (the upper arm is not posed here, so the sleeve runs straight on past the elbow, out of view)
+				a.garment = dressArms(body, a.anatomical.mesh, { sides: [side], isPhone, far: 0.75, upper: false });
 				if (a.garment) { a.garment.mesh.renderOrder = 2; a.grp.add(a.garment.mesh); }
 			}
 			a.fallback.visible = a.sleeve.visible = !a.anatomical;

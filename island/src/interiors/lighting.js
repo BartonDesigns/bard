@@ -121,7 +121,9 @@ function step(renderer, scene, camera, dt, ease) {
 		// and its screens: a lamp left on in the hall or by the sofa, the television)
 		const late = h < 12 ? h + 24 : h, asleep = sp.home && sp.bed != null && late >= sp.bed && late < 30.5 && S.night > 0.3;
 		const nightMode = asleep || (!sp.home && !sp.allNight && (!open || (always && S.night > 0.5))) ? 1 : 0;
-		const target = !open ? 0.6 : sp.home ? 0.5 + 0.5 * S.night : 1;
+		// (a home by day: its lamps half on; from the evening until bedtime, on in full)
+		const evening = h >= 16.5 || h < 7.5;
+		const target = !open ? 0.6 : sp.home ? (evening ? 1 : 0.5 + 0.5 * S.night) : 1;
 		H.k += (target - H.k) * ease;
 		H.nk = (H.nk ?? nightMode) + (nightMode - (H.nk ?? nightMode)) * ease;
 		// (the same light by night as by day: no lift for the dark, the lamps are what they are)
