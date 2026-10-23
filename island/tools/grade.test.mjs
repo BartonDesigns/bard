@@ -41,6 +41,10 @@ test('black, white and the pivot hold; the mid-tones spread and gain colour', ()
 	// a muted colour comes out more colourful
 	const c = [0.45, 0.5, 0.6], g = bardLook(c, flat);
 	assert.ok(g[2] - g[0] > c[2] - c[0]);
+	// and a dark colour, next to none (a tree's shade at dusk kept going neon green)
+	const d = [0.12, 0.16, 0.08], gd = bardLook(d, flat), l = (x) => x[0] * 0.2627 + x[1] * 0.678 + x[2] * 0.0593;
+	const chroma = (x) => (Math.max(...x) - Math.min(...x)) / Math.max(l(x), 1e-6);
+	assert.ok(chroma(gd) < chroma(d) * 1.08, `${chroma(gd)} vs ${chroma(d)}`);
 	// skin's orange gains less of it
 	const s = [0.6, 0.5, 0.4], spared = bardLook(s, flat), full = bardLook(s, { ...flat, skin: 0 });
 	assert.ok(spared[0] - spared[2] < full[0] - full[2]);
