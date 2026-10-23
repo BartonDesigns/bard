@@ -78,6 +78,8 @@ function body() {
 	return { P: { bones, skeleton, map, _p: Float32Array.from(p), height: 1.75, rest: { heads } }, skin: g };
 }
 
+const gbOf = (geometry, i) => geometry.attributes.garB.getX(i) % 2 < 0.5 ? 'L' : 'R';
+
 test('a sleeve is cut over the forearm, never inside it, skinned and within its triangle budget', () => {
 	const { P, skin } = body();
 	for (const top of [{ kind: 'hoodie', sleeves: 'long' }, { kind: 'shirt', sleeves: 'long' }, { kind: 'tee', sleeves: 'long' }]) {
@@ -112,10 +114,48 @@ test('cuffs end at the wrist, a jacket stands over the shirt and shows its hem a
 	for (const s of [0.03, 0.06, 0.12]) assert.ok(b.offAt(s) > a.offAt(s) + inner.wall, 'the jacket over the shirt at ' + s);
 	const rolled = sleeveSpec({ top: { kind: 'longsleeve', pat: 'camo', sleeves: 'elbow', roll: true } }).layers[0];
 	const r = layerStations(rolled, F, { far: 0.5 });
-	assert.ok(Math.min(...r.stations.map((x) => x.s)) > F.Lf * 0.85, 'the rolled band sits at the elbow');
+	// the roll just below the elbow, its lower edge a thumb's length down the forearm, standing
+	// well off the arm at that edge (a thick fold, not a seam), and the sleeve above closed at
+	// its far end
+	const low = Math.min(...r.stations.map((x) => x.s));
+	assert.ok(low > F.Lf - 0.045 && low < F.Lf - 0.02, 'the rolled band sits just below the elbow: ' + low.toFixed(3));
+	assert.equal(r.hem, F.Lf - 0.03);
+	const roll = r.stations.filter((x) => x.part === 3);
+	assert.ok(Math.max(...roll.map((x) => x.off)) > 0.015, 'the roll stands a thick fold off the arm');
+	assert.ok(roll[roll.length - 1].off > roll[0].off, 'the fattest fold at the roll\'s lower edge');
+	const caps = r.stations.filter((x) => x.shrink < 1);
+	assert.ok(caps.length >= 3 && caps.some((x) => x.shrink === 0) && caps.every((x) => x.s > 0.5), 'the far end drawn in and shut beyond far');
+	// (the jacket too; the shirt under it runs only a little way up inside it and needs no end)
+	assert.ok(b.stations.some((x) => x.shrink === 0), 'a long sleeve is shut at its far end too');
+	assert.ok(!a.stations.some((x) => x.shrink < 1));
 	const { P: P2, skin } = body();
-	const { hide } = buildGarment(P2, sleeveSpec({ top: { kind: 'longsleeve', sleeves: 'elbow', roll: true } }), skin, {});
-	assert.equal(hide.size, 0, 'nothing of the bare forearm is hidden');
+	const F2 = armFrame(P2, 'L');
+	const { hide, geometry } = buildGarment(P2, sleeveSpec({ top: { kind: 'longsleeve', sleeves: 'elbow', roll: true } }), skin, {});
+	// the hands' mesh ends at the elbow: its last triangles are hidden under the roll, the bare
+	// forearm below the roll is not
+	assert.ok(hide.size > 0, 'the skin under the roll is hidden');
+	const sp = skin.attributes.position, ix = skin.index.array, v = new T.Vector3();
+	const sAt = (i) => v.fromBufferAttribute(sp, i).sub(F2.W).dot(F2.A);
+	for (const t of hide) assert.ok(Math.max(sAt(ix[t * 3]), sAt(ix[t * 3 + 1]), sAt(ix[t * 3 + 2])) > F2.Lf - 0.03, 'only skin up at the roll is hidden');
+	let bare = 0;
+	for (let t = 0; t < ix.length / 3; t++) if (!hide.has(t) && Math.max(sAt(ix[t * 3]), sAt(ix[t * 3 + 1]), sAt(ix[t * 3 + 2])) > F2.Lf * 0.5) bare++;
+	assert.ok(bare > 0, 'the forearm below the roll is bare');
+	// past the elbow the sleeve bends up the upper arm: its far stations ride the upper arm's bone
+	const ga = geometry.attributes.garA, si = geometry.attributes.skinIndex, sw = geometry.attributes.skinWeight, pos = geometry.attributes.position;
+	let upper = 0;
+	const rings = new Map();
+	for (let i = 0; i < ga.count; i++) {
+		if (ga.getX(i) < F2.Lf + 0.2 || gbOf(geometry, i) !== 'L') continue;
+		upper++;
+		let w = 0; for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === F2.iU) w += sw.getComponent(i, k);
+		assert.ok(w > 0.999, 'the sleeve above the elbow is carried by the upper arm');
+		// (and its rings lie along the upper arm, not the forearm's line)
+		const key = ga.getX(i).toFixed(4), ring = rings.get(key) || rings.set(key, { n: 0, c: new T.Vector3() }).get(key);
+		ring.n++; ring.c.add(v.fromBufferAttribute(pos, i));
+	}
+	assert.ok(upper > 0 && rings.size >= 3);
+	const sorted = [...rings.entries()].sort((x, y) => +x[0] - +y[0]).map(([, r]) => r.c.divideScalar(r.n));
+	for (let i = 1; i < sorted.length; i++) { const d = sorted[i].clone().sub(sorted[i - 1]).normalize(); assert.ok(d.dot(F2.Au) > 0.85 && d.dot(F2.Au) > d.dot(F2.A), 'the upper sleeve runs toward the shoulder'); }
 });
 
 test('gloves are shells over the hand that replace its skin triangle for triangle', () => {
