@@ -17,20 +17,27 @@
 
 import * as THREE from 'three';
 import { GFX_PHONE } from '../world/device.js';
+import { brandName } from '../signage/brand-catalog.js';
+import { brandMark } from '../signage/brand-marks.js';
 
 // ---------------------------------------------------------------------------------
-// the sheet: 8 strips across, 14 down, 256 x 96 each (at the full size: half on a phone), then
+// the sheet: 8 strips across, 15 down, 256 x 96 each (at the full size: half on a phone), then
 // the price rail on its own, the shops' hanging signs (white letters, cut out) and a plain patch
 export const STRIP_W = 1.2, STRIP_H = 0.45;
-const TW = 256, TH = 96, ROWS = 14, RAIL_Y = ROWS * TH, SIGN_Y = RAIL_Y + 10, SW = 256, SH = 32, W = 2048, H = 1568, PX = TW / STRIP_W, RAIL = 8;
+const TW = 256, TH = 96, ROWS = 15, RAIL_Y = ROWS * TH, SIGN_Y = RAIL_Y + 10, SW = 256, SH = 32, W = 2048, H = 1664, PX = TW / STRIP_W, RAIL = 8;
 // the kinds and how many strips of each (a strip's goods differ, so a long run never repeats
 // itself side by side); cool: in a cooler, lit from behind
 export const KINDS = {
-	chips: 4, candy: 3, cookies: 3, cereal: 2, cans: 3, jars: 2, dry: 2, bread: 2,
-	soda: 3, cancool: 3, water: 2, energy: 2, beer: 3, wine: 2, spirits: 2, dairy: 2, frozen: 2,
-	laundry: 2, paper: 2, clean: 1, care: 3, meds: 3, auto: 2, pet: 2,
-	paint: 2, tools: 2, peg: 3, bins: 2, books: 3, clothes: 2, tech: 2, toys: 2, smokes: 2,
-	flowers: 2,
+	chips: 4, candy: 3, cookies: 3, trays: 2, cereal: 2, cans: 3, jars: 2, dry: 2, bread: 2,
+	soda: 3, cancool: 3, water: 2, energy: 2, fountain: 1, beer: 3, wine: 2, spirits: 2, dairy: 2, frozen: 2, crates: 2,
+	laundry: 2, paper: 2, clean: 1, care: 3, meds: 3, vanity: 2, auto: 2, pet: 2,
+	paint: 2, tools: 2, peg: 3, bins: 2, books: 3, covers: 3, clothes: 2, tech: 2, toys: 2, smokes: 2,
+	flowers: 2, notices: 1, posters: 3,
+	// (vanity: a stylist's bottles and jars standing on a counter, nothing behind them;
+	// painted whole: a fast-food tray from above, two to a strip; a drinks fountain's front, its
+	// makers' badges over the nozzles; a grocer's crates of produce from above, five to a strip; the
+	// covers of new books, four to a strip, for the tops of the stacks on a table; a notice board;
+	// the pictures on a café's or a restaurant's walls: makers' posters and painted prints)
 	// the cafés', restaurants' and offices': the pastries and donuts and cakes in their cases, the
 	// bags of beans, the mugs, the tubs of ice cream seen from above, the glasses behind a bar, the
 	// binders on an office's shelves, the menus on the wall (chalk, and lit with their pictures)
@@ -62,9 +69,34 @@ export function signUV(name) {
 // ---------------------------------------------------------------------------------
 // the painting
 const prng = (seed) => { let a = seed >>> 0 || 1; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; };
-// the makers' names on the packets (made up, none a real brand)
-const BRANDS = ['Krunchos', 'Zestara', 'Fizzlo', 'Crispeta', 'Tropiq', 'Polaro', 'Munchly', 'Zingo', 'Puffly', 'Nuvo', 'Brisko', 'Glimmo', 'Sunvale', 'Ridgemark', 'Tidewell', 'Bayline', 'Marigo', 'Velvo', 'Quenchy', 'Rivo', 'Kalo', 'Orbo', 'Pemba', 'Lupo', 'Fenna', 'Torvo', 'Dazzo', 'Calio', 'Mavo', 'Zeffy', 'Vigo', 'Snapper', 'Hearty', 'Goldleaf', 'Pinecrest', 'Oakmill', 'Redwood', 'Clearbrook', 'Summit', 'Coastal', 'Mesa', 'Sierra', 'Larkin', 'Whistle', 'Bolt', 'Rally', 'Sprig', 'Nimbus', 'Hollis', 'Juniper', 'Copper', 'Maple', 'Pebble', 'Lantern', 'Comet', 'Breeze', 'Ember', 'Harbor', 'Meadow', 'Valley', 'Willow', 'Thistle', 'Crest', 'Arrow'];
-function brand(r) { return BRANDS[Math.floor(r() * BRANDS.length)]; }
+// whose goods each kind's are: a family of the brand catalog (signage/brand-catalog.js), its
+// eight makers' marks on the family's sheet of emblems. A packet carries its maker's mark (on a
+// pale label of its own where the packet is dark), and is printed in its maker's inks.
+const MAKERS = {
+	chips: 'snacks', candy: 'snacks', cookies: 'snacks', cereal: 'grains', cans: 'pantry', jars: 'pantry', dry: 'pasta', bread: 'bakery',
+	soda: 'beverages', cancool: 'beverages', water: 'beverages', energy: 'beverages', beer: 'guild', wine: 'guild', spirits: 'guild',
+	dairy: 'dairy', frozen: 'produce', laundry: 'cleaning', paper: 'cleaning', clean: 'cleaning', care: 'care', meds: 'care', vanity: 'care', clothes: 'apparel',
+	auto: 'transport', pet: 'home', paint: 'hardware', tools: 'hardware', peg: 'hardware', tech: 'mobile', toys: 'retro',
+	posters: ['coffee', 'beverages', 'bakery', 'tea'], covers: 'books', crates: 'produce', beans: 'coffee', mugs: 'coffee', trays: 'snacks', fountain: 'beverages', notices: 'network',
+};
+// the families' sheets while the goods are painted (the small sheets: a packet's mark is a few
+// dozen pixels across), a few on their way at once, each let go once its kinds are painted
+const LOGOS = new Map();
+let logosT0 = 0;
+function logos(fam) {
+	if (LOGOS.has(fam) || typeof Image === 'undefined') return LOGOS.get(fam);
+	const img = new Image(), L = { img, ok: false, done: false, t: performance.now() };
+	logosT0 ||= L.t;
+	img.onload = () => { L.ok = true; L.done = true; };
+	img.onerror = () => { L.done = true; };            // (its makers' names in type instead)
+	img.decoding = 'async';
+	img.src = new URL(`../assets/signage/brands-${fam}-v1-mobile.webp`, import.meta.url).href;
+	LOGOS.set(fam, L);
+	return L;
+}
+// (in, or given up on: four seconds a family, eight in all, and the shops are not kept waiting)
+const logosIn = (fam) => { const L = logos(fam), t = performance.now(); return !L || L.done || t - L.t > 4000 || t - logosT0 > 8000; };
+function letGo(fam) { const L = LOGOS.get(fam); if (L?.img) { L.img.onload = L.img.onerror = null; L.img = null; L.ok = false; L.done = true; } }
 const pick = (r, l) => l[Math.floor(r() * l.length)];
 // the colours packets come in (bold, as they are to catch an eye across a shop)
 const LOUD = ['#d62828', '#f77f00', '#fcbf49', '#ffd60a', '#2a9d8f', '#1d6fd1', '#3a0ca3', '#7b2cbf', '#06a77d', '#e63946', '#118ab2', '#073b4c', '#ef476f', '#8ac926', '#ff595e', '#1982c4', '#6a4c93', '#111111', '#f4f1de', '#c1121f'];
@@ -99,6 +131,30 @@ function word(g, s, x, y, w, size, col, bold = true) {
 	g.fillStyle = col; g.font = `${bold ? '800 ' : '600 '}${size}px Arial, Helvetica, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
 	const m = g.measureText(s).width;
 	if (m > w) { g.save(); g.translate(x, y); g.scale(w / m, 1); g.fillText(s, 0, 0); g.restore(); } else g.fillText(s, x, y);
+}
+// a colour's channels (a '#rrggbb' or an 'rgb(r,g,b)'), how light it is, whether it is a strong one
+function rgbOf(c) {
+	if (c[0] === '#') { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+	return (c.match(/\d+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+}
+const pale = (c) => { const [r, g, b] = rgbOf(c); return 0.3 * r + 0.59 * g + 0.11 * b > 165; };
+const strong = (c) => { const q = rgbOf(c), hi = Math.max(...q); return hi - Math.min(...q) > 40 && hi > 50; };
+// a colour made k times as bright (its hue kept), as '#rrggbb'
+const lift = (c, k) => '#' + rgbOf(c).map((v) => Math.min(255, Math.round(v * k)).toString(16).padStart(2, '0')).join('');
+// a maker's mark, centred at x, y and fitted to w x h: straight onto what is under it where that is
+// pale, else on a pale label of its own; its name in type if its sheet never came
+function mark(g, S, x, y, w, h, under) {
+	const L = S.logo, onPale = pale(under);
+	if (!L) { word(g, S.n, x, y, w, Math.max(6, Math.min(h * 0.8, w * 0.3)), onPale ? S.ink : '#ffffff'); return; }
+	const { m, t } = L, cw = L.img.naturalWidth / 4, ch = L.img.naturalHeight / 2;
+	const sw = (m.x1 - m.x0) * cw, sh = (m.y1 - m.y0) * ch, k = Math.min(w / sw, h / sh), dw = sw * k, dh = sh * k;
+	if (!onPale) { g.fillStyle = S.lab; rr(g, x - dw / 2 - 2, y - dh / 2 - 1.5, dw + 4, dh + 3, 2); g.fill(); }
+	g.drawImage(L.img, (t % 4) * cw + m.x0 * cw, Math.floor(t / 4) * ch + m.y0 * ch, sw, sh, x - dw / 2, y - dh / 2, dw, dh);
+}
+// a maker, as mark() takes it: its family's t-th, its inks
+function maker(fam, t) {
+	const M = brandMark(fam, t), L = LOGOS.get(fam);
+	return { n: brandName(fam, t), ink: M?.ink || '#222222', lab: '#fbf8f0', logo: M && L?.ok ? { img: L.img, m: M, t } : null };
 }
 
 // one product, standing on base at x, w wide and h tall; S its look
@@ -157,6 +213,7 @@ const PAINT = {
 		g.strokeStyle = S.c; g.lineWidth = Math.max(1.5, w * 0.08); g.beginPath(); g.arc(x + bw, b - h * 0.5, h * 0.22, -Math.PI / 2, Math.PI / 2); g.stroke();
 		g.fillStyle = S.c; rr(g, x, b - h, bw, h, 2); g.fill();
 		g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x, b - h, bw, 2);
+		mark(g, S, x + bw / 2, b - h * 0.5, bw * 0.78, h * 0.42, S.c);
 		roundShade(g, x, bw, b - h, h, 0.3);
 	},
 	// a glass: a wine glass's bowl on its stem, or a pint
@@ -201,8 +258,8 @@ const PAINT = {
 		g.fillStyle = 'rgba(0,0,0,0.25)'; for (let i = x + 3; i < x + w - 3; i += 2) { g.fillRect(i, y + 1, 1, 4); g.fillRect(i, b - 4, 1, 3); }
 		// a band across, the brand on its oval, the window with what is inside
 		g.fillStyle = S.a; g.beginPath(); g.moveTo(x + 1, y + h * 0.62); g.lineTo(x + w - 1, y + h * 0.5); g.lineTo(x + w - 1, y + h * 0.62); g.lineTo(x + 1, y + h * 0.74); g.fill();
-		g.fillStyle = S.l; g.beginPath(); g.ellipse(x + w / 2, y + h * 0.3, w * 0.42, h * 0.13, -0.15, 0, Math.PI * 2); g.fill();
-		word(g, S.n, x + w / 2, y + h * 0.3, w * 0.72, Math.max(7, h * 0.13), S.k);
+		g.fillStyle = S.lab; g.beginPath(); g.ellipse(x + w / 2, y + h * 0.3, w * 0.44, h * 0.15, -0.15, 0, Math.PI * 2); g.fill();
+		mark(g, S, x + w / 2, y + h * 0.3, w * 0.7, h * 0.2, S.lab);
 		g.fillStyle = S.f; for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(x + w * (0.3 + 0.13 * i), b - h * 0.24 + (i % 2) * 2, w * 0.13, h * 0.06, i, 0, Math.PI * 2); g.fill(); }
 		roundShade(g, x + 1, w - 2, y + 3, h - 5, 0.32);
 	},
@@ -210,7 +267,7 @@ const PAINT = {
 		const y = b - h;
 		g.fillStyle = S.c; g.fillRect(x, y, w, h);
 		g.fillStyle = S.a; g.fillRect(x, y + h * 0.18, w, h * 0.2);
-		word(g, S.n, x + w / 2, y + h * 0.28, w * 0.85, Math.max(7, Math.min(h * 0.16, w * 0.32)), S.l);
+		mark(g, S, x + w / 2, y + h * 0.28, w * 0.84, Math.min(h * 0.2, w * 0.5), S.a);
 		if (h > w * 0.9) { g.fillStyle = S.f; g.beginPath(); g.ellipse(x + w / 2, y + h * 0.66, w * 0.33, h * 0.16, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = S.l; g.beginPath(); g.ellipse(x + w / 2, y + h * 0.7, w * 0.36, h * 0.09, 0, 0, Math.PI); g.fill(); }
 		else { g.fillStyle = S.f; g.fillRect(x + w * 0.15, y + h * 0.5, w * 0.7, h * 0.32); }
 		flatShade(g, x, w, y, h);
@@ -219,7 +276,7 @@ const PAINT = {
 		const y = b - h;
 		g.fillStyle = S.c; g.fillRect(x, y + 2, w, h - 3);
 		g.fillStyle = S.a; g.fillRect(x, y + h * 0.35, w, h * 0.3);
-		if (w > 9) word(g, S.n, x + w / 2, y + h * 0.5, w * 0.86, Math.max(6, h * 0.22), S.l);
+		if (w > 9) mark(g, S, x + w / 2, y + h * 0.5, w * 0.86, h * 0.26, S.a);
 		g.fillStyle = '#b8bcc0'; g.fillRect(x + 1, y, w - 2, 3); g.fillRect(x + 1, b - 2, w - 2, 2);
 		roundShade(g, x, w, y, h, 0.5);
 	},
@@ -229,7 +286,7 @@ const PAINT = {
 		g.fillStyle = S.liq; g.fillRect(cx - nw / 2, y + h * 0.08, nw, h * 0.16);
 		g.beginPath(); g.moveTo(cx - nw / 2, y + h * 0.24); g.quadraticCurveTo(x, y + h * 0.3, x, y + h * 0.42); g.lineTo(x, b - 1); g.lineTo(x + w, b - 1); g.lineTo(x + w, y + h * 0.42); g.quadraticCurveTo(x + w, y + h * 0.3, cx + nw / 2, y + h * 0.24); g.closePath(); g.fill();
 		g.fillStyle = S.c; g.fillRect(x, y + h * 0.5, w, h * 0.26);
-		if (w > 9) word(g, S.n, cx, y + h * 0.63, w * 0.86, Math.max(6, h * 0.1), S.l);
+		if (w > 9) mark(g, S, cx, y + h * 0.63, w * 0.84, h * 0.22, S.c);
 		roundShade(g, x, w, y + h * 0.24, h * 0.76, 0.42);
 		g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(x + w * 0.24, y + h * 0.3, 1.2, h * 0.6);
 	},
@@ -240,7 +297,7 @@ const PAINT = {
 		g.fillStyle = S.k2 || S.a; g.fillRect(x + w * 0.17, y, w * 0.26, h * 0.08);
 		g.fillStyle = 'rgba(0,0,0,0.35)'; rr(g, x + w * 0.58, y + h * 0.1, w * 0.3, h * 0.16, 3); g.fill();
 		g.fillStyle = S.a; rr(g, x + w * 0.1, y + h * 0.4, w * 0.8, h * 0.4, 4); g.fill();
-		word(g, S.n, x + w / 2, y + h * 0.55, w * 0.7, Math.max(7, h * 0.12), S.l);
+		mark(g, S, x + w / 2, y + h * 0.6, w * 0.72, h * 0.3, S.a);
 		roundShade(g, x, w, y + h * 0.16, h * 0.84, 0.38);
 	},
 	jar(g, x, b, w, h, S) {
@@ -248,7 +305,7 @@ const PAINT = {
 		g.fillStyle = S.k2 || '#d0d0d0'; g.fillRect(x + 1, y, w - 2, h * 0.16);
 		g.fillStyle = S.liq; rr(g, x, y + h * 0.14, w, h * 0.86, 3); g.fill();
 		g.fillStyle = S.c; g.fillRect(x, y + h * 0.36, w, h * 0.42);
-		word(g, S.n, x + w / 2, y + h * 0.57, w * 0.8, Math.max(6, h * 0.16), S.l);
+		mark(g, S, x + w / 2, y + h * 0.57, w * 0.82, h * 0.36, S.c);
 		roundShade(g, x, w, y, h, 0.45);
 	},
 	carton(g, x, b, w, h, S) {                    // a gable-top carton (milk, juice)
@@ -257,7 +314,7 @@ const PAINT = {
 		g.beginPath(); g.moveTo(x, y + h * 0.18); g.lineTo(x + w / 2, y + h * 0.04); g.lineTo(x + w, y + h * 0.18); g.fill();
 		g.fillStyle = shade(S.c, 0.85); g.fillRect(x + w * 0.42, y, w * 0.16, h * 0.08);
 		g.fillStyle = S.a; g.fillRect(x, y + h * 0.5, w, h * 0.24);
-		word(g, S.n, x + w / 2, y + h * 0.36, w * 0.85, Math.max(6, h * 0.12), S.k);
+		mark(g, S, x + w / 2, y + h * 0.36, w * 0.84, h * 0.2, S.c);
 		flatShade(g, x, w, y, h);
 	},
 	tall(g, x, b, w, h, S) {                      // a slim can (an energy drink)
@@ -271,14 +328,14 @@ const PAINT = {
 		g.fillStyle = S.k2 || '#c8a24a'; for (let i = 0; i < 3; i++) g.fillRect(x + w * (0.13 + i * 0.28), y, w * 0.16, h * 0.05);
 		g.fillStyle = S.c; g.fillRect(x, y + h * 0.18, w, h * 0.82);
 		g.fillStyle = S.a; g.fillRect(x, y + h * 0.62, w, h * 0.16);
-		word(g, S.n, x + w / 2, y + h * 0.42, w * 0.85, Math.max(7, h * 0.18), S.l);
+		mark(g, S, x + w / 2, y + h * 0.42, w * 0.84, h * 0.3, S.c);
 		flatShade(g, x, w, y + h * 0.18, h * 0.82);
 	},
 	sleeve(g, x, b, w, h, S) {                    // a packet lying (cookies, crackers)
 		const y = b - h;
 		g.fillStyle = S.c; rr(g, x, y, w, h, h * 0.3); g.fill();
 		g.fillStyle = S.f; for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(x + w * (0.6 + i * 0.12), y + h * 0.55, h * 0.26, 0, Math.PI * 2); g.fill(); }
-		word(g, S.n, x + w * 0.3, y + h * 0.5, w * 0.45, Math.max(6, h * 0.36), S.l);
+		mark(g, S, x + w * 0.27, y + h * 0.5, w * 0.44, h * 0.72, S.c);
 		g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(x + 2, y + 2, w - 4, 2);
 		g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x + 2, b - 3, w - 4, 2);
 	},
@@ -286,7 +343,7 @@ const PAINT = {
 		const y = b - h, n = Math.max(1, Math.round(w / 14));
 		for (let i = 0; i < n; i++) { g.fillStyle = '#f2f0ea'; rr(g, x + i * w / n, y, w / n - 1, h, 4); g.fill(); roundShade(g, x + i * w / n, w / n - 1, y, h, 0.3); }
 		g.fillStyle = S.c; g.fillRect(x, y + h * 0.3, w, h * 0.32);
-		word(g, S.n, x + w / 2, y + h * 0.46, w * 0.8, Math.max(7, h * 0.13), S.l);
+		mark(g, S, x + w / 2, y + h * 0.46, w * 0.8, h * 0.28, S.c);
 		g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x, y + 2, w, 2);
 	},
 	spray(g, x, b, w, h, S) {
@@ -295,15 +352,20 @@ const PAINT = {
 		g.fillRect(x + w * 0.4, y + h * 0.12, w * 0.2, h * 0.12);
 		g.fillStyle = S.liq; rr(g, x, y + h * 0.24, w, h * 0.76, w * 0.15); g.fill();
 		g.fillStyle = S.c; g.fillRect(x + 1, y + h * 0.45, w - 2, h * 0.32);
-		word(g, S.n, x + w / 2, y + h * 0.6, w * 0.8, Math.max(6, h * 0.1), S.l);
+		mark(g, S, x + w / 2, y + h * 0.61, w * 0.82, h * 0.26, S.c);
 		roundShade(g, x, w, y + h * 0.24, h * 0.76, 0.35);
 	},
-	book(g, x, b, w, h, S) {                      // a spine
-		const y = b - h;
+	book(g, x, b, w, h, S, r) {                   // a spine: its bands, the title down it, the publisher at its foot
+		const y = b - h, ink = pale(S.c) ? '#2b2d42' : '#f4f1de';
 		g.fillStyle = S.c; g.fillRect(x, y, w, h);
-		g.fillStyle = S.a; g.fillRect(x, y + h * 0.1, w, h * 0.05); g.fillRect(x, b - h * 0.14, w, h * 0.05);
-		g.fillStyle = S.l; for (let i = 0; i < 3; i++) g.fillRect(x + w * 0.3, y + h * (0.25 + i * 0.12), w * 0.4, h * 0.07);
-		g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x + w - 1, y, 1, h);
+		if (r() < 0.6) { g.fillStyle = S.a; g.fillRect(x, y + h * 0.06, w, h * 0.04); g.fillRect(x, b - h * 0.18, w, h * 0.04); }
+		g.fillStyle = ink; g.globalAlpha = 0.85;
+		g.fillRect(x + w * 0.38, y + h * 0.16, Math.max(1, w * 0.24), h * (0.34 + r() * 0.2));
+		if (r() < 0.5) g.fillRect(x + w * 0.38, y + h * 0.66, Math.max(1, w * 0.24), h * 0.08);
+		g.globalAlpha = 1;
+		g.fillRect(x + w * 0.3, b - h * 0.1, w * 0.4, h * 0.04);
+		g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x + w - 1, y, 1, h);
+		g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(x, y, 1, h);
 	},
 	folded(g, x, b, w, h, S) {                    // a stack of folded shirts
 		const n = Math.max(3, Math.floor(h / 7));
@@ -313,13 +375,15 @@ const PAINT = {
 			g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x, y + h / n - 1, w, 1);
 			g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(x + 1, y + 1, w - 2, 1);
 		}
+		// the maker's label on the top one
+		mark(g, S, x + w / 2, b - h + h / n * 0.5, w * 0.42, h / n * 0.62, S.c);
 	},
 	paintcan(g, x, b, w, h, S) {
 		const y = b - h;
 		g.fillStyle = '#bfc3c6'; g.fillRect(x, y + 2, w, h - 2);
 		g.fillStyle = S.c; g.fillRect(x, y + h * 0.2, w, h * 0.6);
 		g.fillStyle = S.f; g.fillRect(x + w * 0.12, y + h * 0.48, w * 0.3, h * 0.26);
-		word(g, S.n, x + w / 2, y + h * 0.34, w * 0.8, Math.max(6, h * 0.14), S.l);
+		mark(g, S, x + w / 2, y + h * 0.33, w * 0.8, h * 0.2, S.c);
 		g.strokeStyle = '#777'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 2, y + 3); g.quadraticCurveTo(x + w / 2, y - h * 0.18, x + w - 2, y + 3); g.stroke();
 		roundShade(g, x, w, y + 2, h - 2, 0.42);
 	},
@@ -339,7 +403,7 @@ const PAINT = {
 		g.fillStyle = S.c; g.fillRect(x, y, w, h);
 		g.fillStyle = '#222'; g.beginPath(); g.arc(x + w / 2, y + 3, 1.6, 0, Math.PI * 2); g.fill();
 		g.fillStyle = S.a; g.fillRect(x, y + 6, w, h * 0.18);
-		word(g, S.n, x + w / 2, y + 6 + h * 0.09, w * 0.85, Math.max(6, h * 0.12), S.l);
+		mark(g, S, x + w / 2, y + 6 + h * 0.09, w * 0.84, h * 0.16, S.a);
 		g.fillStyle = 'rgba(220,235,245,0.55)'; rr(g, x + w * 0.15, y + h * 0.36, w * 0.7, h * 0.56, 3); g.fill();
 		g.fillStyle = S.f; g.fillRect(x + w * 0.3, y + h * 0.45, w * 0.4, h * 0.36);
 		g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(x + w * 0.2, y + h * 0.4, 1.5, h * 0.4);
@@ -358,7 +422,7 @@ const PAINT = {
 		g.fillStyle = S.l; g.beginPath(); g.arc(x + w / 2, y + h * 0.58, Math.min(w, h) * 0.24, 0, Math.PI * 2); g.fill();
 		g.fillStyle = S.f; g.beginPath(); g.arc(x + w / 2, y + h * 0.6, Math.min(w, h) * 0.16, 0, Math.PI * 2); g.fill();
 		g.fillStyle = S.a; g.fillRect(x, y + h * 0.12, w, h * 0.18);
-		word(g, S.n, x + w / 2, y + h * 0.21, w * 0.85, Math.max(7, h * 0.12), S.l);
+		mark(g, S, x + w / 2, y + h * 0.21, w * 0.84, h * 0.17, S.a);
 		roundShade(g, x, w, y + 2, h - 2, 0.3);
 	},
 	loaf(g, x, b, w, h, S) {
@@ -367,7 +431,7 @@ const PAINT = {
 		g.fillStyle = 'rgba(255,255,255,0.55)'; rr(g, x, y + h * 0.1, w, h * 0.9, h * 0.35); g.fill();
 		g.fillStyle = S.c; g.fillRect(x, y + h * 0.4, w, h * 0.3);
 		g.fillStyle = S.a; g.fillRect(x + w * 0.85, y, w * 0.08, h * 0.2);
-		word(g, S.n, x + w / 2, y + h * 0.55, w * 0.7, Math.max(7, h * 0.18), S.l);
+		mark(g, S, x + w / 2, y + h * 0.55, w * 0.72, h * 0.28, S.c);
 		roundShade(g, x, w, y + h * 0.1, h * 0.9, 0.25);
 	},
 };
@@ -410,7 +474,210 @@ function food(g, kind, cx, cy, s) {
 		for (let i = 0; i < 12; i++) { g.fillStyle = ['#5aa02c', '#c1121f', '#6b3a1e', '#f4f1de'][i % 4]; g.fillRect(cx - s * 0.35 + (i % 6) * s * 0.12, cy - s * 0.22 + Math.floor(i / 6) * s * 0.08, s * 0.1, s * 0.06); }
 	}
 }
+// the new books' covers: [ground, type, picture], their titles and their authors (made up)
+const COVERS = [['#1d3557', '#f1faee', '#e63946'], ['#f4f1de', '#3d405b', '#e07a5f'], ['#2a9d8f', '#ffffff', '#e9c46a'], ['#e9c46a', '#264653', '#f4a261'], ['#6d597a', '#ffffff', '#e56b6f'], ['#ffffff', '#111111', '#118ab2'],
+	['#283618', '#fefae0', '#dda15e'], ['#bc4749', '#f2e8cf', '#386641'], ['#0b132b', '#ffd166', '#3a506b'], ['#ffcad4', '#3d405b', '#f4acb7'], ['#ffb703', '#023047', '#fb8500'], ['#edf2f4', '#2b2d42', '#ef233c']];
+const TITLES = [['SALT', 'HOUR'], ['NORTH', 'OF MAY'], ['THE GLASS', 'BAY'], ['LOW TIDE'], ['PAPER', 'MOONS'], ['THE FOG', 'LINE'], ['GOLDEN', 'HILLS'], ['NIGHT', 'FERRY'], ['THE LONG', 'WALK'], ['ORCHARD', 'SONGS'], ['EAST OF', 'THE BRIDGE'], ['WILD', 'MINT']];
+const AUTHORS = ['MAYA ORTEGA', 'J. L. HART', 'SAMIR NOOR', 'ELLEN VOSS', 'T. OKAFOR', 'RUTH CALDER', 'LEO MARSH', 'ANA SILVA', 'KENJI ROSS', 'NOOR HADDAD'];
+// a grocer's produce, a crate of each: [its card, its colour, its size (px), its shape, its price]
+// (ten crates on the sheet: the first ten)
+const PRODUCE = [['APPLES', '#c1121f', 6, 'round', '1.99'], ['ORANGES', '#f77f00', 6.5, 'round', '1.49'], ['LEMONS', '#f7d117', 5.5, 'oval', '0.79'], ['LIMES', '#6a994e', 4.5, 'round', '0.50'],
+	['TOMATOES', '#e63946', 6, 'round', '2.49'], ['AVOCADOS', '#3a5a40', 6, 'oval', '1.25'], ['LETTUCE', '#80b918', 13, 'leafy', '1.99'], ['BANANAS', '#f9d423', 8, 'banana', '0.69'],
+	['ONIONS', '#c9a66b', 6, 'round', '1.29'], ['POTATOES', '#b08968', 6, 'oval', '0.99'], ['PEPPERS', '#d62828', 6.5, 'round', '2.99'], ['PEARS', '#a7c957', 6, 'oval', '2.29']];
+// one piece of produce, seen from above
+function fruit(g, form, x, y, s, c, r) {
+	g.fillStyle = c;
+	if (form === 'banana') {
+		g.strokeStyle = c; g.lineWidth = s * 0.55; g.lineCap = 'round';
+		const a = r() * Math.PI * 2;
+		for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(x + Math.cos(a) * i * 2, y + Math.sin(a) * i * 2, s, a, a + 1.8); g.stroke(); }
+		g.lineCap = 'butt';
+		return;
+	}
+	g.beginPath();
+	if (form === 'oval') g.ellipse(x, y, s * 1.25, s * 0.85, r() * Math.PI, 0, Math.PI * 2);
+	else g.arc(x, y, s, 0, Math.PI * 2);
+	g.fill();
+	g.strokeStyle = 'rgba(0,0,0,0.28)'; g.lineWidth = 1; g.stroke();
+	if (form === 'leafy') {
+		g.strokeStyle = 'rgba(230,255,200,0.45)';
+		for (let i = 0; i < 5; i++) { const a = i * 1.26 + r(); g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + 0.4) * s * 0.6, y + Math.sin(a + 0.4) * s * 0.6, x + Math.cos(a) * s * 0.95, y + Math.sin(a) * s * 0.95); g.stroke(); }
+	}
+	g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.arc(x - s * 0.32, y - s * 0.32, s * 0.32, 0, Math.PI * 2); g.fill();
+}
+// a flyer pinned to a board, centred at x, y: a maker's (its mark, two lines), or a neighbour's (its
+// line, lines of writing, the tear-off tabs)
+function flyer(g, x, y, w, h, F, r) {
+	g.save(); g.translate(x, y); g.rotate((r() - 0.5) * 0.14);
+	g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(-w / 2 + 1.5, -h / 2 + 1.5, w, h);
+	g.fillStyle = F.bg; g.fillRect(-w / 2, -h / 2, w, h);
+	if (F.fam) {
+		const S = maker(F.fam, F.t);
+		g.fillStyle = lift(S.ink, 1.6); g.fillRect(-w / 2, h / 2 - 8, w, 8);
+		mark(g, S, 0, -h * 0.22, w * 0.82, h * 0.3, F.bg);
+		word(g, F.line, 0, h * 0.12, w * 0.86, 6, '#1d1d1d');
+		word(g, 'call today', 0, h * 0.27, w * 0.8, 4.5, '#444', false);
+	} else {
+		word(g, F.line, 0, -h / 2 + 7, w * 0.88, 6, '#1d1d1d');
+		if (F.cat) { g.fillStyle = '#222'; g.beginPath(); g.arc(0, -h * 0.05, w * 0.16, 0, Math.PI * 2); g.fill(); g.beginPath(); g.moveTo(-w * 0.15, -h * 0.1); g.lineTo(-w * 0.1, -h * 0.25); g.lineTo(-w * 0.02, -h * 0.14); g.moveTo(w * 0.15, -h * 0.1); g.lineTo(w * 0.1, -h * 0.25); g.lineTo(w * 0.02, -h * 0.14); g.fill(); }
+		else { g.fillStyle = 'rgba(40,40,60,0.55)'; for (let i = 0; i < 4; i++) g.fillRect(-w * 0.38, -h / 2 + 13 + i * 5, w * (0.5 + r() * 0.26), 1.2); }
+		g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 0.6;
+		for (let i = 1; i < 6; i++) { g.beginPath(); g.moveTo(-w / 2 + i * w / 6, h / 2 - 11); g.lineTo(-w / 2 + i * w / 6, h / 2); g.stroke(); }
+		g.beginPath(); g.moveTo(-w / 2, h / 2 - 11); g.lineTo(w / 2, h / 2 - 11); g.stroke();
+	}
+	g.fillStyle = F.pin; g.beginPath(); g.arc(0, -h / 2 + 2.5, 2, 0, Math.PI * 2); g.fill();
+	g.restore();
+}
+// a maker's poster: its colour, its mark large on a pale disc, its line
+function poster(g, x, y, w, h, fam, t, line) {
+	const S = maker(fam, t), c = strong(S.ink) ? lift(S.ink, 1.35) : lift(S.ink, 2.4);
+	g.fillStyle = c; g.fillRect(x, y, w, h);
+	g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.arc(x + w * 0.85, y + h * 0.15, Math.min(w, h) * 0.5, 0, Math.PI * 2); g.fill();
+	const d = Math.min(w * 0.8, h * 0.62);
+	g.fillStyle = '#fbf8f0'; g.beginPath(); g.arc(x + w / 2, y + h * 0.42, d / 2, 0, Math.PI * 2); g.fill();
+	mark(g, S, x + w / 2, y + h * 0.42, d * 0.8, d * 0.5, '#fbf8f0');
+	word(g, line, x + w / 2, y + h * 0.86, w * 0.86, Math.max(6, h * 0.08), '#ffffff');
+}
+// a painted print: 0 the hills under the sun, 1 the bay and its bridge, 2 a leaf, 3 shapes
+function scene(g, x, y, w, h, k, r) {
+	g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+	if (k === 0 || k === 1) {
+		const sky = g.createLinearGradient(0, y, 0, y + h); sky.addColorStop(0, k ? '#9cc5d9' : '#f4c27a'); sky.addColorStop(1, k ? '#e8eef0' : '#f7e3c0');
+		g.fillStyle = sky; g.fillRect(x, y, w, h);
+		g.fillStyle = k ? '#f1f1e8' : '#e76f51'; g.beginPath(); g.arc(x + w * 0.7, y + h * 0.35, h * 0.14, 0, Math.PI * 2); g.fill();
+		const bands = k ? ['#6b8f71', '#3d5a6c', '#2a3d4f'] : ['#c9a46b', '#8a9a5b', '#4f6d3a'];
+		bands.forEach((c, i) => {
+			g.fillStyle = c; g.beginPath(); g.moveTo(x, y + h);
+			for (let u = 0; u <= 1.001; u += 0.1) g.lineTo(x + u * w, y + h * (0.55 + i * 0.13) - Math.sin(u * 3 + i * 2 + r()) * h * 0.07);
+			g.lineTo(x + w, y + h); g.fill();
+		});
+		if (k) {
+			g.strokeStyle = '#c0362c'; g.lineWidth = 2;
+			for (const tx of [0.3, 0.62]) { g.beginPath(); g.moveTo(x + w * tx, y + h * 0.78); g.lineTo(x + w * tx, y + h * 0.3); g.stroke(); }
+			g.lineWidth = 1; g.beginPath(); g.moveTo(x, y + h * 0.66); g.quadraticCurveTo(x + w * 0.3, y + h * 0.32, x + w * 0.46, y + h * 0.6); g.quadraticCurveTo(x + w * 0.62, y + h * 0.32, x + w, y + h * 0.66); g.stroke();
+			g.lineWidth = 2; g.beginPath(); g.moveTo(x, y + h * 0.66); g.lineTo(x + w, y + h * 0.66); g.stroke();
+		}
+	} else if (k === 2) {
+		g.fillStyle = '#f2ede1'; g.fillRect(x, y, w, h);
+		g.fillStyle = '#4f772d'; g.beginPath(); g.moveTo(x + w / 2, y + h * 0.12); g.quadraticCurveTo(x + w * 0.95, y + h * 0.45, x + w / 2, y + h * 0.88); g.quadraticCurveTo(x + w * 0.05, y + h * 0.45, x + w / 2, y + h * 0.12); g.fill();
+		g.strokeStyle = '#d8e2c4'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + w / 2, y + h * 0.15); g.lineTo(x + w / 2, y + h * 0.92); g.stroke();
+		for (let i = 1; i < 6; i++) for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(x + w / 2, y + h * (0.2 + i * 0.11)); g.lineTo(x + w / 2 + sx * w * 0.25, y + h * (0.12 + i * 0.11)); g.stroke(); }
+	} else {
+		g.fillStyle = '#efe6d8'; g.fillRect(x, y, w, h);
+		const cs = ['#e07a5f', '#3d405b', '#81b29a', '#f2cc8f'];
+		for (let i = 0; i < 4; i++) { g.fillStyle = cs[i]; if (i % 2) g.fillRect(x + w * (0.1 + r() * 0.4), y + h * (0.1 + i * 0.2), w * 0.45, h * 0.18); else { g.beginPath(); g.arc(x + w * (0.3 + r() * 0.4), y + h * (0.2 + i * 0.2), w * 0.22, 0, Math.PI * 2); g.fill(); } }
+	}
+	g.restore();
+}
 const WHOLE = {
+	// four new books' covers: the picture, the title, the author, the publisher's mark at the foot
+	covers(g, x0, y0, n) {
+		const CW = TW / 4;
+		for (let i = 0; i < 4; i++) {
+			const k = n * 4 + i, x = x0 + i * CW, y = y0, [bg, ink, acc] = COVERS[k % COVERS.length];
+			g.fillStyle = bg; g.fillRect(x, y, CW, TH);
+			g.fillStyle = acc; g.strokeStyle = acc; g.beginPath();
+			switch (k % 5) {
+				case 0: g.arc(x + CW / 2, y + TH * 0.56, CW * 0.26, 0, Math.PI * 2); g.fill(); break;
+				case 1: g.moveTo(x, y + TH * 0.76); g.lineTo(x + CW * 0.35, y + TH * 0.46); g.lineTo(x + CW * 0.6, y + TH * 0.62); g.lineTo(x + CW * 0.8, y + TH * 0.5); g.lineTo(x + CW, y + TH * 0.66); g.lineTo(x + CW, y + TH * 0.78); g.lineTo(x, y + TH * 0.78); g.fill(); break;
+				case 2: for (let j = 0; j < 4; j++) g.fillRect(x, y + TH * (0.42 + j * 0.08), CW, TH * 0.04); break;
+				case 3: g.lineWidth = 2; g.strokeRect(x + 6, y + 6, CW - 12, TH - 12); g.fillRect(x + CW * 0.3, y + TH * 0.46, CW * 0.4, CW * 0.4); break;
+				default: g.moveTo(x, y + TH); g.lineTo(x + CW, y + TH * 0.36); g.lineTo(x + CW, y + TH); g.fill();
+			}
+			const [t1, t2] = TITLES[k % TITLES.length];
+			word(g, t1, x + CW / 2, y + TH * 0.14, CW - 10, 11, ink);
+			if (t2) word(g, t2, x + CW / 2, y + TH * 0.26, CW - 10, 11, ink);
+			word(g, AUTHORS[(k * 3) % AUTHORS.length], x + CW / 2, y + TH * 0.85, CW - 12, 6, ink, false);
+			mark(g, maker('books', k % 8), x + CW / 2, y + TH * 0.94, CW * 0.4, 5, bg);
+			g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x, y, 2, TH);
+			g.fillStyle = 'rgba(255,255,255,0.1)'; g.fillRect(x + 2, y, 1, TH);
+		}
+	},
+	// five crates of produce from above: the slatted rim, the fruit heaped, the grower's card on the
+	// front rim and the price on its stick
+	crates(g, x0, y0, n, r) {
+		const CW = TW / 5;
+		for (let i = 0; i < 5; i++) {
+			const k = n * 5 + i, [name, col, rad, form, price] = PRODUCE[k % PRODUCE.length], x = x0 + i * CW, y = y0;
+			g.fillStyle = '#9c6b3f'; g.fillRect(x, y, CW, TH);
+			g.fillStyle = 'rgba(0,0,0,0.3)'; for (let j = 1; j < 3; j++) g.fillRect(x, y + j * TH / 3, CW, 1);
+			g.fillStyle = '#4a2e17'; g.fillRect(x + 4, y + 4, CW - 8, TH - 8);
+			g.save(); g.beginPath(); g.rect(x + 3, y + 3, CW - 6, TH - 6); g.clip();
+			const step = rad * 1.65;
+			for (let row = 0, yy = y + 4; yy < y + TH - 1; yy += step * 0.86, row++) for (let xx = x + 4 + (row % 2) * step / 2; xx < x + CW - 1; xx += step) fruit(g, form, xx + (r() - 0.5) * rad * 0.5, yy + (r() - 0.5) * rad * 0.5, rad * (0.88 + r() * 0.22), shade(col, 0.8 + r() * 0.35), r);
+			g.restore();
+			mark(g, maker('produce', k % 8), x + CW / 2, y + TH - 6, CW * 0.66, 7, '#4a2e17');
+			g.fillStyle = '#ffffff'; g.fillRect(x + CW - 25, y + 5, 21, 14);
+			word(g, name, x + CW - 14.5, y + 9, 19, 5, '#222222', false);
+			word(g, '$' + price, x + CW - 14.5, y + 15, 19, 6, '#c1121f');
+		}
+	},
+	// two fast-food trays from above: the tray, its liner printed with a snack maker's marks, the
+	// burger opened in its wrapper, the fries in the maker's carton, the cup's lid and straw, ketchup
+	trays(g, x0, y0, n, r) {
+		for (let i = 0; i < 2; i++) {
+			const k = n * 2 + i, x = x0 + i * 128, y = y0, S = maker('snacks', (k * 3) % 8);
+			g.fillStyle = ['#8c1c13', '#5e3023', '#b5121b', '#3d405b'][k % 4]; rr(g, x + 2, y + 2, 124, 92, 9); g.fill();
+			g.fillStyle = 'rgba(255,255,255,0.14)'; rr(g, x + 5, y + 5, 118, 86, 7); g.fill();
+			g.fillStyle = '#fbf6ea'; g.fillRect(x + 11, y + 10, 106, 76);
+			g.globalAlpha = 0.3; for (let j = 0; j < 6; j++) mark(g, S, x + 29 + (j % 3) * 35, y + 20 + Math.floor(j / 3) * 56, 28, 9, '#fbf6ea'); g.globalAlpha = 1;
+			// the burger, its wrapper open under it
+			g.fillStyle = '#efe0c2'; g.beginPath(); g.moveTo(x + 16, y + 30); g.lineTo(x + 56, y + 18); g.lineTo(x + 68, y + 62); g.lineTo(x + 24, y + 74); g.closePath(); g.fill();
+			g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 1; g.stroke();
+			g.fillStyle = '#5a2d14'; g.beginPath(); g.arc(x + 42, y + 47, 17, 0, Math.PI * 2); g.fill();
+			g.fillStyle = '#d9973d'; g.beginPath(); g.arc(x + 42, y + 46, 15.5, 0, Math.PI * 2); g.fill();
+			g.fillStyle = 'rgba(255,255,255,0.28)'; g.beginPath(); g.arc(x + 37, y + 41, 6, 0, Math.PI * 2); g.fill();
+			g.fillStyle = '#f7e1b5'; for (let j = 0; j < 9; j++) g.fillRect(x + 32 + r() * 20, y + 37 + r() * 18, 2, 1.2);
+			// the fries in their carton, the maker's mark on its front
+			g.fillStyle = S.ink === '#222222' ? '#c1121f' : lift(S.ink, 1.4); g.beginPath(); g.moveTo(x + 72, y + 52); g.lineTo(x + 100, y + 52); g.lineTo(x + 97, y + 80); g.lineTo(x + 75, y + 80); g.closePath(); g.fill();
+			g.fillStyle = '#f2c14e'; for (let j = 0; j < 12; j++) { const fx = x + 74 + j * 2.1; g.fillRect(fx, y + 40 + r() * 8, 2, 16); }
+			g.fillStyle = 'rgba(160,100,20,0.5)'; for (let j = 0; j < 6; j++) g.fillRect(x + 75 + j * 4, y + 42 + r() * 6, 1, 12);
+			mark(g, S, x + 86, y + 68, 20, 10, '#c1121f');
+			// the cup: its lid, the dome's ring, the straw; the ketchup
+			g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x + 98, y + 26, 14, 0, Math.PI * 2); g.fill();
+			g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1; g.beginPath(); g.arc(x + 98, y + 26, 10, 0, Math.PI * 2); g.stroke();
+			g.strokeStyle = '#e63946'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(x + 98, y + 26); g.lineTo(x + 110, y + 14); g.stroke();
+			g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x + 112, y + 74, 6, 0, Math.PI * 2); g.fill();
+			g.fillStyle = '#b3261e'; g.beginPath(); g.arc(x + 112, y + 74, 4.2, 0, Math.PI * 2); g.fill();
+		}
+	},
+	// a drinks fountain's front: six makers' badges, lit, each over its nozzle and lever; the grate
+	fountain(g, x0, y0, n) {
+		const B = g.createLinearGradient(0, y0, 0, y0 + TH); B.addColorStop(0, '#30353a'); B.addColorStop(1, '#141618');
+		g.fillStyle = B; g.fillRect(x0, y0, TW, TH);
+		for (let i = 0; i < 6; i++) {
+			const S = maker('beverages', (n * 3 + i) % 8), x = x0 + 5 + i * 41.5, w = 37;
+			g.fillStyle = lift(S.ink, S.ink === '#222222' ? 4 : 1.5); rr(g, x, y0 + 5, w, 45, 4); g.fill();
+			g.fillStyle = '#fbf8f0'; rr(g, x + 3, y0 + 8, w - 6, 30, 3); g.fill();
+			mark(g, S, x + w / 2, y0 + 23, w - 10, 22, '#fbf8f0');
+			g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x + 3, y0 + 41, w - 6, 5);
+			g.fillStyle = '#a3aab1'; rr(g, x + w / 2 - 7, y0 + 54, 14, 12, 2); g.fill();
+			g.fillStyle = '#2a2e32'; g.fillRect(x + w / 2 - 3, y0 + 66, 6, 7);
+			g.fillStyle = '#cfd4d9'; g.fillRect(x + w / 2 - 9, y0 + 75, 18, 3);
+		}
+		g.fillStyle = '#5c636a'; g.fillRect(x0, y0 + TH - 11, TW, 11);
+		g.fillStyle = '#25292d'; for (let x = x0 + 3; x < x0 + TW; x += 5) g.fillRect(x, y0 + TH - 9, 2, 7);
+	},
+	// a notice board: cork in its frame, the flyers pinned up (an internet maker's or two, rooms to
+	// rent, a lost cat, lessons, a yard sale, a dog walker)
+	notices(g, x0, y0, n, r) {
+		g.fillStyle = '#b5835a'; g.fillRect(x0, y0, TW, TH);
+		for (let i = 0; i < 400; i++) { g.fillStyle = r() < 0.5 ? 'rgba(90,50,20,0.3)' : 'rgba(255,230,190,0.2)'; g.fillRect(x0 + r() * TW, y0 + r() * TH, 1.5, 1.5); }
+		g.fillStyle = '#5b3c22'; g.fillRect(x0, y0, TW, 4); g.fillRect(x0, y0 + TH - 4, TW, 4); g.fillRect(x0, y0, 4, TH); g.fillRect(x0 + TW - 4, y0, 4, TH);
+		const F = [
+			{ fam: 'network', t: 0, line: 'FAST FIBER', bg: '#ffffff' }, { line: 'ROOM FOR RENT', bg: '#fff3b0' }, { line: 'LOST CAT', cat: true, bg: '#ffffff' },
+			{ fam: 'network', t: 4, line: 'NOW IN YOUR AREA', bg: '#eef6f8' }, { line: 'GUITAR LESSONS', bg: '#d8f3dc' }, { line: 'YARD SALE SAT', bg: '#ffd6e0' }, { line: 'DOG WALKER', bg: '#ffffff' },
+		];
+		F.forEach((f, i) => flyer(g, x0 + 22 + i * 35.5, y0 + 46 + (i % 2 ? 6 : -4), 30, 58 + (i % 3) * 6, { ...f, pin: ['#d62828', '#1d6fd1', '#06a77d', '#ffd60a'][i % 4] }, r));
+	},
+	// the pictures for a café's or a restaurant's walls: two makers' posters across (a coffee
+	// roaster's, a drinks maker's), two painted prints across (the hills and the sun, the bay and
+	// its bridge), and four up (a baker's poster, a tea maker's, a leaf, shapes)
+	posters(g, x0, y0, n, r) {
+		if (n === 0) { poster(g, x0, y0, 128, TH, 'coffee', 2, 'ROASTED DOWN THE ROAD'); poster(g, x0 + 128, y0, 128, TH, 'beverages', 0, 'ICE COLD, ALWAYS'); }
+		else if (n === 1) { scene(g, x0, y0, 128, TH, 0, r); scene(g, x0 + 128, y0, 128, TH, 1, r); }
+		else { poster(g, x0, y0, 64, TH, 'bakery', 4, 'BAKED AT DAWN'); poster(g, x0 + 64, y0, 64, TH, 'tea', 1, 'STEEP SLOW'); scene(g, x0 + 128, y0, 64, TH, 2, r); scene(g, x0 + 192, y0, 64, TH, 3, r); }
+	},
 	menu(g, x0, y0, n) {
 		const [title, rows] = MENUS[n % MENUS.length];
 		g.fillStyle = '#5a3b22'; g.fillRect(x0, y0, TW, TH);
@@ -472,6 +739,7 @@ const STOCK = {
 	paper: { p: 'roll', w: [0.24, 0.34], h: [0.26, 0.36], f: [1, 2], ink: ['#1d6fd1', '#06a77d', '#ef476f', '#7b2cbf', '#f77f00'] },
 	clean: { p: 'spray', w: [0.08, 0.11], h: [0.24, 0.3], f: [2, 4], liq: ['#a8dadc', '#90be6d', '#ffd166', '#ffc8dd', '#bde0fe'] },
 	care: { p: ['spray', 'jar', 'box'], w: [0.06, 0.1], h: [0.12, 0.24], f: [3, 5], liq: SOFT, ink: ['#ffffff', '#a8dadc', '#cdb4db', '#ffc8dd', '#bde0fe', '#118ab2', '#2a9d8f'] },
+	vanity: { p: ['spray', 'jar', 'bottle'], w: [0.05, 0.075], h: [0.1, 0.19], f: [1, 2], open: true, foot: 1, liq: SOFT, ink: ['#ffffff', '#111111', '#e9edc9', '#cdb4db', '#2b2d42', '#f4f1de', '#ffc8dd'] },
 	meds: { p: ['box', 'jar'], w: [0.06, 0.1], h: [0.1, 0.16], f: [3, 6], liq: ['#ffffff'], ink: ['#ffffff', '#f1faee', '#e0e1dd'] },
 	auto: { p: ['jug', 'bottle'], w: [0.09, 0.14], h: [0.22, 0.3], f: [3, 5], liq: ['#111111', '#073b4c'], ink: ['#111111', '#ffd60a', '#1d6fd1', '#06a77d', '#d62828'] },
 	pet: { p: 'sack', w: [0.3, 0.4], h: [0.34, 0.4], f: [1, 2], food: ['#ddb892', '#f6bd60', '#ffffff'] },
@@ -480,7 +748,7 @@ const STOCK = {
 	peg: { p: 'blister', w: [0.1, 0.16], h: [0.16, 0.26], f: [2, 4], peg: true, ink: ['#d62828', '#ffd60a', '#1d6fd1', '#f77f00', '#111111', '#06a77d'], food: ['#6c757d', '#adb5bd', '#343a40', '#c0a062'] },
 	bins: { p: 'drawer', w: [0.08, 0.1], h: [0.07, 0.09], f: [5, 10], grid: true, ink: ['#e9c46a', '#219ebc', '#d62828', '#8d99ae'] },
 	books: { p: 'book', w: [0.025, 0.05], h: [0.19, 0.27], f: [1, 2], ink: ['#7f1d1d', '#1e3a5f', '#0b6e4f', '#2b2d42', '#e9c46a', '#a44a3f', '#5c4d7d', '#f4f1de', '#d4a373', '#264653', '#e76f51'] },
-	clothes: { p: 'folded', w: [0.26, 0.32], h: [0.18, 0.32], f: [1, 1], ink: ['#1d3557', '#e63946', '#f1faee', '#2b2d42', '#a8dadc', '#6d6875', '#e9c46a', '#264653', '#ffffff', '#111111'] },
+	clothes: { p: 'folded', w: [0.26, 0.32], h: [0.18, 0.32], f: [1, 1], open: true, foot: 1, ink: ['#1d3557', '#e63946', '#f1faee', '#2b2d42', '#a8dadc', '#6d6875', '#e9c46a', '#264653', '#ffffff', '#111111'] },
 	tech: { p: ['blister', 'box'], w: [0.1, 0.18], h: [0.12, 0.22], f: [2, 4], peg: true, ink: ['#ffffff', '#111111', '#e5e5e5', '#1d6fd1'], food: ['#111111', '#333333', '#ffffff'] },
 	toys: { p: 'box', w: [0.16, 0.3], h: [0.16, 0.34], f: [1, 2], food: ['#ffd60a', '#8ac926', '#ef476f', '#118ab2'] },
 	smokes: { p: 'packs', w: [1.2, 1.2], h: [0.4, 0.4], f: [1, 1] },
@@ -495,6 +763,7 @@ const STOCK = {
 	glasses: { p: 'glass', w: [0.07, 0.09], h: [0.14, 0.2], f: [4, 8] },
 	binders: { p: 'binder', w: [0.05, 0.08], h: [0.28, 0.32], f: [2, 5], ink: ['#1d3557', '#2b2d42', '#e63946', '#f1faee', '#457b9d', '#111111', '#2a9d8f', '#e9c46a'] },
 	menu: { whole: 'menu' }, menulit: { whole: 'menulit' }, tubs: { whole: 'tubs' },
+	covers: { whole: 'covers' }, crates: { whole: 'crates' }, trays: { whole: 'trays' }, fountain: { whole: 'fountain' }, notices: { whole: 'notices' }, posters: { whole: 'posters' },
 };
 
 function paintStrip(g, kind, x0, y0, seed) {
@@ -511,13 +780,26 @@ function paintStrip(g, kind, x0, y0, seed) {
 	if (S0.back) { const B = g.createLinearGradient(0, y0, 0, y0 + TH); B.addColorStop(0, shade(S0.back, 0.7)); B.addColorStop(0.3, S0.back); B.addColorStop(1, S0.back); g.fillStyle = B; g.fillRect(x0, y0, TW, TH); }
 	else if (!S0.open) { g.fillStyle = back; g.fillRect(x0, y0, TW, TH); }
 	if (S0.peg) { g.fillStyle = 'rgba(40,30,20,0.55)'; for (let y = y0 + 4; y < y0 + TH; y += 6) for (let x = x0 + 3; x < x0 + TW; x += 6) g.fillRect(x, y, 1.4, 1.4); }
-	const base = y0 + TH - RAIL;
+	const base = y0 + TH - (S0.foot ?? RAIL);
+	// a product: its maker (one of its family's eight), its packet in the maker's inks: the maker's
+	// own strong colour, or a pale packet with the colour in its band (a kind with colours of its
+	// own, the water's blues and the milk's whites, keeps them, the maker's colour in the band)
+	const fam = [].concat(MAKERS[kind] || [])[0], L = fam && LOGOS.get(fam);
 	const sku = () => {
-		const ink = S0.ink || LOUD, food = S0.food || ['#f6bd60'];
-		const c = pick(r, ink);
-		let a = pick(r, LOUD); if (a === c) a = pick(r, SOFT);
-		const lightBody = /#f[0-9a-f]{5}|#e[0-9a-f]{5}|#ffffff/i.test(c);
-		return { c, a, l: lightBody ? pick(r, ['#d62828', '#1d3557', '#111111', '#06a77d']) : pick(r, ['#ffffff', '#ffd60a', '#f1faee']), k: pick(r, ['#111111', '#d62828', '#1d3557']), f: pick(r, food), liq: S0.liq ? pick(r, S0.liq) : c, k2: pick(r, ['#d62828', '#ffffff', '#1d6fd1', '#ffd60a', '#111111', '#06a77d']), n: brand(r), p: Array.isArray(S0.p) ? pick(r, S0.p) : S0.p };
+		const food = S0.food || ['#f6bd60'], t = Math.floor(r() * 8), M = fam ? brandMark(fam, t) : null;
+		const ink = M ? M.ink : pick(r, ['#111111', '#d62828', '#1d3557']), ink2 = M && M.ink2 !== M.ink ? M.ink2 : null;
+		let c, a;
+		if (S0.ink) { c = pick(r, S0.ink); a = M ? lift(strong(ink) || !ink2 ? ink : ink2, 1.25) : pick(r, LOUD); }
+		else if (M && strong(ink) && r() < 0.75) { c = lift(ink, Math.max(1.3, 150 / Math.max(...rgbOf(ink)))); a = ink2 && !pale(ink2) ? lift(ink2, 1.2) : '#f4efe2'; }
+		else if (M && r() < 0.5) { c = lift(ink, 1.7); a = ink2 && strong(ink2) ? lift(ink2, 1.2) : '#f4efe2'; }
+		else { c = pick(r, ['#f6f2e8', '#ffffff', '#efe9dc', '#f3efe4', '#e9eef0']); a = M ? lift(ink2 && strong(ink2) ? ink2 : ink, strong(ink) ? 1.25 : 1.9) : pick(r, LOUD); }
+		if (a === c) a = pick(r, SOFT);
+		const lightBody = pale(c);
+		return {
+			c, a, ink, lab: '#fbf8f0', l: lightBody ? lift(ink, 1.2) : pick(r, ['#ffffff', '#ffd60a', '#f1faee']), k: ink, f: pick(r, food), liq: S0.liq ? pick(r, S0.liq) : c,
+			k2: pick(r, ['#d62828', '#ffffff', '#1d6fd1', '#ffd60a', '#111111', '#06a77d']), p: Array.isArray(S0.p) ? pick(r, S0.p) : S0.p,
+			n: M ? brandName(fam, t) : '', logo: M && L?.ok ? { img: L.img, m: M, t } : null,
+		};
 	};
 	if (S0.p === 'packs') PAINT.packs(g, x0 + 2, base, TW - 4, TH - RAIL - 4, null, r);
 	else if (S0.grid) {
@@ -584,11 +866,23 @@ export function* goodsSteps() {
 		// the signs: their letters alone (the sign's panel is drawn under them in its own colour)
 		SIGNS.forEach((t, i) => word(g, t, (i % 8) * SW + SW / 2, SIGN_Y + Math.floor(i / 8) * SH + SH / 2 + 1, SW - 24, 22, '#ffffff'));
 	}
+	// the makers' families in the order their kinds are painted (each kind's strips together), the
+	// last strip each is wanted for
+	const famsOf = (kind) => [].concat(MAKERS[kind] || []), fams = [], last = new Map();
+	ALL_TILES.forEach(([kind], i) => { for (const f of famsOf(kind)) { if (!last.has(f)) fams.push(f); last.set(f, i); } });
+	g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
 	while (S.next < ALL_TILES.length) {
+		// this strip's makers' marks and the next two families' on their way; these waited for (a
+		// few seconds at most: then their names in type)
+		const fk = famsOf(ALL_TILES[S.next][0]);
+		if (fk.length) { const at = fams.indexOf(fk[0]); for (let j = at; j < at + 2 + fk.length && j < fams.length; j++) logos(fams[j]); }
+		if (!fk.every(logosIn)) { yield; continue; }
 		g.setTransform(S.k, 0, 0, S.k, 0, 0);
 		for (let n = 0; n < 4 && S.next < ALL_TILES.length; n++, S.next++) {
-			const [kind, t, i] = ALL_TILES[S.next];
+			const [kind, t, i] = ALL_TILES[S.next], fs = famsOf(kind);
+			if (!fs.every(logosIn)) break;
 			paintStrip(g, kind, (t % 8) * TW, Math.floor(t / 8) * TH, t * 31 + i * 7 + 3);
+			for (const f of fs) if (last.get(f) === S.next) letGo(f);
 		}
 		yield;
 	}
@@ -675,6 +969,35 @@ export class GoodsBuilder {
 		for (let x = x0; x < x1 - 0.02; x += STRIP_W, n++) {
 			const xe = Math.min(x1, x + STRIP_W), [u0, v0, u1, v1] = stripUV(kind, n), uw = (xe - x) / STRIP_W;
 			this.quad([x, y, z1], [xe, y, z1], [xe, y, z0], [x, y, z0], [u0, v0, u0 + (u1 - u0) * uw, v1], k);
+		}
+	}
+	// one of the pictures painted parts to a strip (a book's cover, a tray), lying flat at y from
+	// (x0, z0) to (x1, z1), its top toward z0: the j-th of the n-th strip of kind's
+	decal(kind, n, j, parts, x0, z0, x1, z1, y, k = 1) {
+		const [u0, v0, u1, v1] = stripUV(kind, n), du = (u1 - u0) / parts;
+		this.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], [u0 + du * j, v0, u0 + du * (j + 1), v1], k);
+	}
+	// one of them standing up (a picture on a wall): from x0 to x1 at z, y to y + h
+	card(kind, n, j, parts, x0, x1, y, h, z, k = 1) {
+		const [u0, v0, u1, v1] = stripUV(kind, n), du = (u1 - u0) / parts;
+		this.quad([x0, y, z], [x1, y, z], [x1, y + h, z], [x0, y + h, z], [u0 + du * j, v0, u0 + du * (j + 1), v1], k);
+	}
+	// a stack of them (a pile of one new book): its sides plain in side (linear rgb), the picture on top
+	stack(kind, n, j, parts, x0, z0, x1, z1, y0, y1, side, k = 1) {
+		this.solid(x0, y0, z0, x1, y1, z1, side, k, 'fbls');
+		this.decal(kind, n, j, parts, x0, z0, x1, z1, y1, k * 1.05);
+	}
+	// strips laid on a slope (a grocer's angled bins), from x0 to x1, from the slope's front edge
+	// (yf, zf) up to its back (yb, zb): rows of them, a strip's height deep each
+	slope(kind, x0, x1, yf, zf, yb, zb, seed = 0, k = 1) {
+		const rows = Math.max(1, Math.round(Math.hypot(yb - yf, zb - zf) / STRIP_H));
+		let n = Math.floor(Math.abs(seed * 13.7)) % 97;
+		for (let i = 0; i < rows; i++, n += 3) {
+			const ya = yf + (yb - yf) * i / rows, za = zf + (zb - zf) * i / rows, yc = yf + (yb - yf) * (i + 1) / rows, zc = zf + (zb - zf) * (i + 1) / rows;
+			for (let x = x0, m = n; x < x1 - 0.02; x += STRIP_W, m++) {
+				const xe = Math.min(x1, x + STRIP_W), [u0, v0, u1, v1] = stripUV(kind, m), uw = (xe - x) / STRIP_W;
+				this.quad([x, ya, za], [xe, ya, za], [xe, yc, zc], [x, yc, zc], [u0, v0, u0 + (u1 - u0) * uw, v1], [k * 0.92, k]);
+			}
 		}
 	}
 	// a lit sign: its panel in its colour, the letters on it (from x0 to x1 at z, y to y + h)

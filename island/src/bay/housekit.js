@@ -723,7 +723,7 @@ export function drawItem(g, it, rnd, H) {
 				const y = 0.05 + i * (h - 0.08) / (n - 1);
 				g.box(k, -W2, y - 0.02, -D2, W2, y, D2, col);
 				if (i < n - 1) {
-					if (it.type === 'bookcase') books(g, -W2 + 0.03, W2 - 0.03, y, -D2 + 0.02, d - 0.04, rnd);
+					if (it.type === 'bookcase') { if (!it.bare) books(g, -W2 + 0.03, W2 - 0.03, y, -D2 + 0.02, d - 0.04, rnd); }
 					else for (let x = -W2 + 0.05; x < W2 - 0.3; x += 0.35 + rnd() * 0.2) if (rnd() < 0.75) g.box('matte', x, y, -D2 + 0.03, x + 0.28 + rnd() * 0.1, y + 0.15 + rnd() * 0.18, D2 - 0.03, lin(pick([[0.8, 0.7, 0.5], [0.2, 0.3, 0.6], [0.85, 0.85, 0.8], [0.3, 0.3, 0.32], [0.7, 0.2, 0.15]], rnd())));
 				}
 			}

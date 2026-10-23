@@ -219,7 +219,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			if (full && !B.P.rooms.every((r) => r.k !== k || r.furnished)) { furnish(B.P, k); B.spots = null; B.nav = null; yield; }
 			const Lb = yield* buildLevel(B.P, B.M || M, B.C, k, full, night);
 			// a full level lit by its own fixtures (lighting.js); the shells keep their glow
-			if (full) lightInterior(Lb.root, lightSpec(B, k, Lb));
+			if (full) Lb.light = lightInterior(Lb.root, lightSpec(B, k, Lb));
 			if (have) { releaseInterior(have.root); B.root.remove(have.root); disposeTree(have.root); }
 			B.levels[k] = Lb;
 			B.root.add(Lb.root);
@@ -251,7 +251,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			? { p: [a.x, a.y, a.z], c: [1, 0.9, 0.78], I: 7, shape: 'spot', n: [0, -1, 0], cone: [0.85, 0.55], room: a.room }
 			: { p: [a.x, a.y, a.z], c: [1, 0.82, 0.62], I: a.kind === 'pendant' ? 6 : 8, shape: 'down', n: [0, -1, 0], beam: 2, room: a.room });
 	}
-	function disposeTree(root) { root.traverse((q) => { if (q.isMesh && q.geometry && !q.geometry.userData?.shared) q.geometry.dispose(); }); }
+	function disposeTree(root) { root.traverse((q) => { if (q.isMesh && q.geometry && !q.geometry.userData?.shared) q.geometry.dispose(); if (q.isMesh && q.material?.userData?.own) q.material.dispose(); }); }
 	let stoneM = null;
 	const stoneMat = () => stoneM || (stoneM = new THREE.MeshStandardMaterial({ color: 0xa8a49a, roughness: 0.85 }));
 	function mergeBoxes(list) {
@@ -455,6 +455,12 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		const high = p.y - (bay.heightAt(x, z) || 0) > 150;
 		group.visible = !high;
 		if (!bay.loaded() || high) return;
+		// a shop's goods (build.js) as lit as the shop round them: full while it is lit, the night
+		// lights' share once it is dark, a little of the day through the windows
+		for (const B of live.values()) for (const Lb of B.levels || []) {
+			const U = Lb?.goodsMat && Lb.light?.U;
+			if (U) Lb.goodsMat.color.setScalar(0.92 * (U.ibakeK.value * (1 - 0.72 * U.ibakeNight.value) + 0.18 * (1 - nightK) * U.ibakeNight.value));
+		}
 		scopeStep(camera, dt, scoped === true ? camera : scoped || null);
 		scanT -= dt;
 		if (scanT < 0 || Math.hypot(x - scanX, z - scanZ) > 8) {

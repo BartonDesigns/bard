@@ -119,7 +119,8 @@ const KIT = {
 		bx(g, 'grain', -W2, 0.78, -D2, W2, 0.84, D2, lin(pick(WOODS, it.v)));
 		bx(g, 'grain', -W2 + 0.05, 0.84, -D2, W2 - 0.05, 2.05, -D2 + 0.04, lin([0.2, 0.18, 0.16]));
 		bx(g, 'mirror', -W2 + 0.1, 0.95, -D2 + 0.04, W2 - 0.1, 1.95, -D2 + 0.05, WHITE);
-		for (let k = 0; k < 4; k++) g.cyl('gloss', -W2 + 0.15 + k * 0.12, 0.84, 0, 0.03, 0.12 + rnd() * 0.1, lin(pick(BRIGHT, rnd())), 6);
+		// (its bottles, unless whoever fits it out stocks it with real ones: bay/storefit.js)
+		if (!it.bare) for (let k = 0; k < 4; k++) g.cyl('gloss', -W2 + 0.15 + k * 0.12, 0.84, 0, 0.03, 0.12 + rnd() * 0.1, lin(pick(BRIGHT, rnd())), 6);
 	},
 	washBasin(g) {
 		bx(g, 'gloss', -0.3, 0, -0.3, 0.3, 0.85, 0.05, lin([0.15, 0.15, 0.16]));
@@ -242,3 +243,59 @@ const KIT = {
 function colorArm(g) { bx(g, 'metal', 0.3, 0.6, -0.1, 0.36, 1.6, -0.04, WHITE); bx(g, 'metal', 0.0, 1.55, -0.1, 0.36, 1.6, 0.2, WHITE); }
 addKit(KIT, ['yogaMat', 'menuBoard']);
 
+// what a shop's shelves hold (estab-fit.js tags them with the shop: it.stock), from the goods'
+// sheet (goods.js), into a GoodsBuilder s: its makers' packets on the shelves, the crates on a
+// grocer's bins, the new books on a table; the kit draws the fixtures bare (it.bare). Used by
+// interiors/build.js and bay/houses.js
+const SHELF_KINDS = {
+	grocer: ['cans', 'jars', 'dry', 'cereal', 'chips', 'cookies', 'candy', 'paper', 'laundry', 'clean'], general: ['cans', 'dry', 'chips', 'candy', 'paper', 'clean', 'care', 'tools'],
+	hardware: ['paint', 'tools', 'auto', 'bins', 'clean'], pharmacy: ['care', 'meds', 'meds', 'clean', 'paper'], pet: ['pet', 'pet', 'meds'], liquor: ['wine', 'spirits', 'beer', 'wine'],
+	gift: ['toys', 'mugs', 'candy', 'books'], antiques: ['books', 'mugs', 'toys'], clothes: ['clothes'], tailor: ['clothes'], books: ['books'], records: ['books'],
+};
+export const STOCKED = new Set(['shopShelf', 'produce', 'bookTable', 'bookcase']);
+export function stockShop(s, it) {
+	const W2 = it.w / 2, D2 = it.d / 2, seed = Math.floor(it.v * 997);
+	if (it.type === 'produce') {
+		// (the crates on a slope along the bin's top, rising from its front to its back)
+		s.at(it.x, it.y, it.z, it.rot || 0);
+		s.slope('crates', -W2 + 0.03, W2 - 0.03, 0.76, D2 - 0.04, 0.95, -D2 + 0.04, seed, 0.95);
+		return;
+	}
+	if (it.type === 'bookTable') {
+		s.at(it.x, it.y, it.z, it.rot || 0);
+		const cols = Math.max(1, Math.floor((it.w - 0.06) / 0.21)), rows = Math.max(1, Math.floor((it.d - 0.04) / 0.27));
+		for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+			const x = -W2 + 0.03 + (i + 0.5) * (it.w - 0.06) / cols, z = -D2 + 0.02 + (j + 0.5) * (it.d - 0.04) / rows, n = (seed + i * 7 + j * 5) % 12, h = 0.03 + ((seed + i * 5 + j * 11) % 4) * 0.018;
+			s.stack('covers', n >> 2, n & 3, 4, x - 0.078, z - 0.115, x + 0.078, z + 0.115, 0.8, 0.8 + h, [0.6, 0.55, 0.45], 0.9);
+		}
+		return;
+	}
+	if (it.type === 'bookcase') {
+		// (a bookshop's case: a run of spines along each shelf, its front toward +z; the shelves as
+		// housekit.js draws them)
+		s.at(it.x, it.y, it.z, it.rot || 0);
+		for (let i = 0; i < 4; i++) {
+			const y = 0.05 + i * (it.h - 0.08) / 4;
+			s.run('books', -W2 + 0.03, W2 - 0.03, y, (it.h - 0.08) / 4 - 0.04, D2 - 0.02, it.d - 0.06, seed + i * 3, 0.8 + 0.2 * Math.min(1, y / 1.4));
+		}
+		return;
+	}
+	const kinds = SHELF_KINDS[it.stock] || SHELF_KINDS.general, lv = [0.12, 0.55, 0.98, 1.4].filter((q) => q < it.h - 0.2);
+	if (it.d < 0.7) {
+		// a shelf against a wall: each shelf a run toward the room, either side of the spine
+		s.at(it.x, it.y, it.z, it.rot || 0);
+		lv.forEach((y, i) => {
+			const top = i + 1 < lv.length ? lv[i + 1] : it.h, k = 0.85 + 0.15 * Math.min(1, y / 1.4);
+			for (const [x0, x1, j] of [[-W2 + 0.02, -0.06, 0], [0.06, W2 - 0.02, 1]]) s.run(kinds[(i + j + seed) % kinds.length], x0, x1, y + 0.03, top - y - 0.06, D2 - 0.01, it.d - 0.04, seed + i * 3 + j, k);
+		});
+		return;
+	}
+	// a gondola: its two sides, back to back on the spine, each shelf of them a run of one kind
+	for (const side of [1, -1]) {
+		s.at(it.x, it.y, it.z, ((it.rot || 0) + (side > 0 ? 1 : 3)) % 4);
+		lv.forEach((y, i) => {
+			const top = i + 1 < lv.length ? lv[i + 1] : it.h;
+			s.run(kinds[(i + seed + (side > 0 ? 0 : 2)) % kinds.length], -D2 + 0.02, D2 - 0.02, y + 0.03, top - y - 0.06, W2 - 0.01, W2 - 0.07, seed + i * 3 + side, 0.85 + 0.15 * Math.min(1, y / 1.4));
+		});
+	}
+}

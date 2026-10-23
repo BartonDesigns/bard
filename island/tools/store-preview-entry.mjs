@@ -57,8 +57,12 @@ const commercial = createCommercial(scene, bay, null, city, { isPhone: phone, ho
 window.commercial = commercial;
 
 let hours = 13, night = 0;
-function settle() {
-	for (let i = 0; i < 900 && !commercial.list().some((q) => q.name === current[0].biz.name); i++) commercial.update(camera, 0.016, hours, night);
+// (a tick to the page now and then: the goods' sheet waits on the makers' marks loading)
+async function settle() {
+	for (let i = 0; i < 3000 && !commercial.list().some((q) => q.name === current[0].biz.name); i++) {
+		commercial.update(camera, 0.016, hours, night);
+		if (i % 20 === 19) await new Promise((r) => setTimeout(r, 4));
+	}
 	detailClock.value = 1e6;
 }
 // a shop at an hour, from just inside its door (or a spot given in its own frame: x, z, yaw)
@@ -68,7 +72,7 @@ async function show(name, h = 13, view = null) {
 	lightingClock(night, hours); M.setNight(night, true);
 	hemi.intensity = night ? 0.08 : 1.4; sun.intensity = night ? 0 : 2.6; scene.background.set(night ? 0x0b1020 : 0xb8d1e0);
 	camera.position.set(b.x, 3.6, b.z + 30);
-	settle();
+	await settle();
 	const L = commercial.list().find((q) => q.name === b.biz.name);
 	const [lx, lz, yaw] = view || [L.doorX - 0.6, L.hd - 1.2, 0.18];
 	camera.position.set(b.x + lx, L.y + 1.62, b.z + lz);

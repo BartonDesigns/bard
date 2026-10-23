@@ -78,6 +78,45 @@ function item(K, F, type, lx, lz, w, d, h, rot = 0, extra = {}) {
 	return it;
 }
 
+// a table of new books at (x, z), w x d: piles of one book each, its cover on top (the goods'
+// sheet), facing the door
+const PAGES = lin([0.8, 0.76, 0.68]);
+function bookTable(K, x, z, w, d, seed) {
+	const g = K.g, s = K.s, T = 0.78;
+	g.at(0, 0, 0, 0); s.at(0, 0, 0, 0);
+	g.box('grain', x - w / 2, T - 0.04, z - d / 2, x + w / 2, T, z + d / 2, C.oak);
+	g.box('grain', x - w / 2 + 0.05, 0, z - d / 2 + 0.05, x + w / 2 - 0.05, T - 0.04, z + d / 2 - 0.05, C.wood);
+	const cols = Math.max(2, Math.floor((w - 0.06) / 0.21)), rows = Math.max(2, Math.floor((d - 0.04) / 0.27));
+	for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+		const bx = x - w / 2 + 0.04 + (i + 0.5) * (w - 0.08) / cols, bz = z - d / 2 + 0.03 + (j + 0.5) * (d - 0.06) / rows, n = (seed + i * 7 + j * 5) % 12;
+		const h = 0.03 + ((seed * 13 + i * 5 + j * 11) % 4) * 0.018, hw = 0.075 + (n % 3) * 0.006, hd = 0.112 + (n % 2) * 0.008;
+		s.stack('covers', n >> 2, n & 3, 4, bx - hw, bz - hd, bx + hw, bz + hd, T, T + h, PAGES, 0.9);
+	}
+	K.col.push([x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0, T + 0.15]);
+}
+// a table of folded clothes at (x, z), w x d: the stacks along both its long sides, each with its
+// maker's label
+function foldTable(K, x, z, w, d, seed) {
+	const g = K.g, s = K.s, T = 0.78;
+	g.at(0, 0, 0, 0);
+	g.box('grain', x - w / 2, T - 0.04, z - d / 2, x + w / 2, T, z + d / 2, C.oak);
+	g.box('grain', x - w / 2 + 0.05, 0, z - d / 2 + 0.05, x + w / 2 - 0.05, T - 0.04, z + d / 2 - 0.05, C.wood);
+	for (const rot of [0, 2]) { s.at(x, 0, z, rot); s.run('clothes', -w / 2 + 0.04, w / 2 - 0.04, T, 0.24, d / 2 - 0.03, d / 2 - 0.06, seed + rot, 0.95); }
+	K.col.push([x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0, T + 0.15]);
+}
+// a grocer's produce bin at (x, z), w x d, facing +z: a wooden stand, the crates laid on its slope
+// rising to the back, each with its grower's card and its price
+function produceBin(K, x, z, w, d, seed) {
+	const g = K.g, s = K.s, wd = lin([0.45, 0.32, 0.2]), z0 = z - d / 2, z1 = z + d / 2;
+	g.at(0, 0, 0, 0); s.at(0, 0, 0, 0);
+	g.box('grain', x - w / 2, 0, z0, x + w / 2, 0.62, z1, wd);
+	g.box('grain', x - w / 2, 0.62, z0, x + w / 2, 1.04, z0 + 0.05, wd);
+	for (const sx of [x - w / 2, x + w / 2 - 0.035]) g.box('grain', sx, 0.62, z0, sx + 0.035, 0.84, z1 - 0.25, wd);
+	g.box('grain', x - w / 2, 0.62, z1 - 0.05, x + w / 2, 0.7, z1, wd);
+	s.slope('crates', x - w / 2 + 0.035, x + w / 2 - 0.035, 0.66, z1 - 0.05, 1.0, z0 + 0.05, seed, 1.0);
+	K.col.push([x - w / 2, z0, x + w / 2, z1, 0, 1.0]);
+}
+
 // ---------------------------------------------------------------------------------
 // shelving
 
@@ -398,8 +437,9 @@ export function* fitMart(K, store) {
 		// the fountain: its lit front, the nozzles, the ice
 		if (x < L1 - 1.0) {
 			g.box('gloss', x, 0.96, 0.02, x + 0.9, 1.75, 0.5, C.black);
-			fbox(K, F, K.mats.screen, x + 0.04, 1.42, 0.505, x + 0.86, 1.72, 0.51);
-			for (let i = 0; i < 6; i++) g.box('metal', x + 0.08 + i * 0.13, 1.25, 0.45, x + 0.16 + i * 0.13, 1.33, 0.55, C.steel);
+			fbox(K, F, K.mats.screen, x + 0.04, 1.62, 0.505, x + 0.86, 1.72, 0.51);
+			// (its front: the drinks makers' badges, lit, over the nozzles; on the goods' sheet)
+			s.face('fountain', x + 0.03, x + 0.87, 1.04, 0.4, 0.506, 0, 1.2);
 			g.box('metal', x + 0.05, 0.96, 0.4, x + 0.85, 1.0, 0.6, C.steel);
 			spot(K, F, x + 0.45, D + 0.65, 0, -1);
 			x += 1.0;
@@ -608,17 +648,12 @@ const GYM = {
 			for (const s of [-1, 1]) g.box('metal', x + s * r * 0.55 - 0.014, r * 1.4, -0.014, x + s * r * 0.55 + 0.014, r * 1.83, 0.014, c);
 		}
 	},
-	// cubbies for bags and shoes, w wide: a grid of open boxes, a bag or a pair of shoes in some
-	cubbies(g, rnd) {
+	// cubbies for bags and shoes, w wide: a grid of open boxes (empty: nobody's in)
+	cubbies(g) {
 		const W2 = 0.8, wd = lin([0.86, 0.85, 0.82]);
 		g.box('grain', -W2, 0, -0.21, W2, 1.9, -0.19, wd);
 		for (let x = -W2; x <= W2 + 1e-3; x += 0.4) g.box('grain', x - 0.012, 0, -0.2, x + 0.012, 1.9, 0.2, wd);
 		for (let y = 0; y <= 1.9 + 1e-3; y += 0.38) g.box('grain', -W2, y - 0.012, -0.2, W2, y + 0.012, 0.2, wd);
-		for (let x = -W2 + 0.2; x < W2; x += 0.4) for (let y = 0.012; y < 1.8; y += 0.38) {
-			const q = rnd();
-			if (q < 0.35) g.box('fabric', x - 0.14, y, -0.15, x + 0.14, y + 0.22 + q * 0.2, 0.12, lin(hsl(q * 2.7 % 1, 0.45, 0.32)));
-			else if (q < 0.5) for (const s of [-1, 1]) g.box('fabric', x + s * 0.06 - 0.045, y, -0.12, x + s * 0.06 + 0.045, y + 0.09, 0.15, lin([0.9, 0.9, 0.9]));
-		}
 	},
 	// a drinking fountain and bottle filler on the wall
 	fountain(g) {
@@ -673,7 +708,7 @@ export function* fitShop(K, type) {
 			kinds: (row, lv, b, side) => [['cans', 'jars', 'dry', 'cereal', 'dry'], ['chips', 'cookies', 'candy', 'chips', 'cookies'], ['paper', 'laundry', 'clean', 'care', 'meds']][row % 3][(lv + b + (side > 0 ? 0 : 2)) % 5] });
 		yield;
 		// produce: angled bins of fruit and greens by the windows
-		for (let x = w.x0 + 1.2, k = 0; x < w.x1 - 4.5 && k < 3; x += 1.9, k++) item(K, frame('+z', 0), 'produce', x + 0.8, w.z1 - 2.6, 1.6, 0.9, 0.85, 0);
+		for (let x = w.x0 + 1.2, k = 0; x < w.x1 - 4.5 && k < 3; x += 1.9, k++) produceBin(K, x + 0.75, w.z1 - 2.6, 1.5, 0.9, k * 3 + 1);
 		frontCounter(K, true, 2.2);
 		if (iw > 12) { const c2 = counter(K, '-z', w.z1 - 1.9, w.x1 - 4.2, w.x1 - 2.0, { impulse: true, depth: 0.7 }); void c2; }
 	} else if (t === 'hardware') {
@@ -760,7 +795,7 @@ export function* fitShop(K, type) {
 		for (const [dir, line] of [['+x', w.x0 + 0.34], ['-x', w.x1 - 0.34]]) shelfRun(K, dir, line, w.z0 + 0.8, w.z1 - 2.8, { h: 2.2, depth: 0.32, levels: [0.12, 0.5, 0.88, 1.26, 1.64], kinds: () => 'books', back: brown, seed: line });
 		yield;
 		aisles(K, { left: 2.0, right: 2.0, back: 2.0, front: 4.0, h: 1.5, depth: 0.32, aisle: 1.4, levels: [0.12, 0.5, 0.88], ends: ['books'], signs: ['BOOKS', 'NEW ARRIVALS'], kinds: () => 'books', seed: 70 });
-		for (let x = w.x0 + 1.6, k = 0; x < w.x1 - 2 && k < 2; x += 2.6, k++) item(K, frame('+z', 0), 'bookTable', x + 0.7, w.z1 - 2.9, 1.4, 0.8, 0.8, 0);
+		for (let x = w.x0 + 1.6, k = 0; x < w.x1 - 2 && k < 2; x += 2.6, k++) bookTable(K, x + 0.7, w.z1 - 2.9, 1.4, 0.8, k * 5 + 1);
 		item(K, frame('+z', 0), 'armchair', w.x1 - 1.2, w.z1 - 2.2, 0.85, 0.85, 0.9, 3);
 		frontCounter(K, false, 1.8);
 	} else if (t === 'clothes') {
@@ -785,7 +820,7 @@ export function* fitShop(K, type) {
 		for (let z = w.z0 + 2.6; z < w.z1 - 3.0; z += 2.0) for (let x = w.x0 + 1.9; x < w.x1 - 1.8; x += 2.4) {
 			const kind = (Math.round(x * 3 + z) % 3 + 3) % 3;
 			if (kind === 0) item(K, frame('+z', 0), 'clothesRack', x, z, 1.4, 0.5, 1.6, 0);
-			else if (kind === 1) item(K, frame('+z', 0), 'bookTable', x, z, 1.2, 0.8, 0.8, 0);
+			else if (kind === 1) foldTable(K, x, z, 1.2, 0.8, Math.round(x * 7 + z));
 			else item(K, frame('+z', 0), 'mannequin', x, z, 0.4, 0.4, 1.8, r() < 0.5 ? 0 : 1);
 			K.col.push([x - 0.7, z - 0.4, x + 0.7, z + 0.4, 0, 1.6]);
 			spot(K, frame('+z', z + 0.6), x, 0.0, 0, -1);
@@ -898,14 +933,16 @@ export function* fitShop(K, type) {
 		const z0 = w.z0 + 2.5, z1 = w.z1 - 3.0, n = Math.max(1, Math.min(6, Math.floor((z1 - z0) / 1.5)));
 		const station = (dir, line, z, k) => {
 			const F = frame(dir, line), lx = dir === '+x' ? -z : z;
-			item(K, F, 'mirrorStation', lx, 0.2, 1.2, 0.4, 2.0, 0);
+			item(K, F, 'mirrorStation', lx, 0.2, 1.2, 0.4, 2.0, 0, { bare: true });
+			// (the stylist's own products along the ledge under the mirror)
+			K.s.face('vanity', lx - 0.52, lx - 0.04, 0.84, 0.2, 0.26, k * 3 + line, 1.0);
 			item(K, F, 'salonChair', lx, 1.2, 0.6, 0.7, 1.2, 2);
 			solid(K, F, lx - 0.6, 0, lx + 0.6, 0.42, 2.05);
 			solid(K, F, lx - 0.3, 0.85, lx + 0.3, 1.55, 1.2);
 			// (the trolley: its drawers, the dryer and the brushes on top)
 			g.box('gloss', lx - 0.92, 0.06, 0.55, lx - 0.6, 0.82, 0.87, C.black);
 			for (let y = 0.25; y < 0.8; y += 0.18) g.box('metal', lx - 0.9, y, 0.87, lx - 0.62, y + 0.01, 0.875, C.steel);
-			g.box('gloss', lx - 0.86, 0.82, 0.62, lx - 0.7, 0.92, 0.72, lin(hsl(0.9, 0.5, 0.5)));
+			K.s.face('vanity', lx - 0.9, lx - 0.62, 0.82, 0.18, 0.74, k * 5 + 2, 1.0);
 			solid(K, F, lx - 0.92, 0.55, lx - 0.6, 0.87, 0.9);
 			// the client in the chair, looking in the mirror; the stylist by them
 			spot(K, F, lx, 1.2, 0, -1);
@@ -998,8 +1035,8 @@ export function* fitShop(K, type) {
 			g.box('gloss', cx - 0.2, 1.1, 0.4, cx + 0.2, 1.4, 0.41, C.black);
 			fbox(K, F, K.mats.screen, cx - 0.12, 1.25, 0.41, cx + 0.12, 1.35, 0.412);
 			g.box('metal', cx - 0.1, 0.5, 0.4, cx + 0.1, 0.6, 0.45, C.steelDark);
-			g.box('grain', mx + 0.3, 1.2, 0.0, mx + 1.4, 1.9, 0.03, lin([0.62, 0.45, 0.3]));
-			for (let k = 0; k < 6; k++) g.box('matte', mx + 0.38 + (k % 3) * 0.33, 1.27 + Math.floor(k / 3) * 0.32, 0.03, mx + 0.62 + (k % 3) * 0.33, 1.52 + Math.floor(k / 3) * 0.3, 0.035, lin(hsl(k * 0.17, 0.35, 0.8)));
+			g.box('grain', mx + 0.25, 1.3, 0.0, mx + 1.45, 1.75, 0.03, lin([0.62, 0.45, 0.3]));
+			s.face('notices', mx + 0.25, mx + 1.45, 1.3, 0.45, 0.032, 1, 1.0);
 			solid(K, F, sx - 0.4, 0, cx + 0.28, 0.5, 1.8);
 		}
 		yield;
@@ -1009,7 +1046,6 @@ export function* fitShop(K, type) {
 			g.at(0, 0, 0, 0);
 			g.box('gloss', tx - 0.9, T - 0.04, tz - 0.4, tx + 0.9, T, tz + 0.4, lin([0.85, 0.84, 0.8]));
 			for (const sx of [-0.85, 0.85]) for (const sz of [-0.35, 0.35]) g.box('metal', tx + sx - 0.02, 0, tz + sz - 0.02, tx + sx + 0.02, T - 0.04, tz + sz + 0.02, C.steel);
-			for (let k = 0; k < 3; k++) { const fx = tx - 0.55 + k * 0.45, h = 0.04 + r() * 0.12; g.box('fabric', fx - 0.16, T, tz - 0.2, fx + 0.16, T + h, tz + 0.12, lin(hsl(r(), 0.35, 0.3 + r() * 0.5))); }
 			K.col.push([tx - 0.9, tz - 0.4, tx + 0.9, tz + 0.4, 0, T]);
 			spot(K, frame('+z', tz + 0.4), tx, 0.45, 0, -1);
 			// a cart: its basket, the bar for hangers over it
@@ -1019,7 +1055,6 @@ export function* fitShop(K, type) {
 			for (const sz of [-0.22, 0.22]) g.box('metal', cx - 0.3, 0.57, cz + sz - 0.012, cx + 0.3, 0.85, cz + sz + 0.012, C.steel);
 			g.box('metal', cx - 0.3, 1.68, cz - 0.012, cx + 0.3, 1.7, cz + 0.012, C.steel);
 			g.box('metal', cx - 0.32, 0.04, cz - 0.24, cx + 0.32, 0.08, cz + 0.24, C.steelDark);
-			g.box('fabric', cx - 0.26, 0.57, cz - 0.18, cx + 0.26, 0.75, cz + 0.18, lin(hsl(r(), 0.3, 0.6)));
 			K.col.push([cx - 0.32, cz - 0.24, cx + 0.32, cz + 0.24, 0, 1.7]);
 		}
 		item(K, frame('+z', 0), 'waitingChairs', K.doorX < 0 ? w.x1 - 2.0 : w.x0 + 2.0, w.z1 - 0.6, 2.2, 0.5, 0.9, 2);
@@ -1084,9 +1119,9 @@ export function* fitShop(K, type) {
 		// cubbies and the water fountain against the wall by the mats
 		const mx0 = left ? K.doorX + 1.6 : w.x0 + 0.6, mx1 = left ? w.x1 - 0.6 : K.doorX - 1.6;
 		for (let x = mx0 + 0.4, k = 0; x < mx1 - 0.3 && k < 5; x += 1.0, k++) item(K, frame('+z', 0), 'yogaMat', x, w.z1 - 1.6, 0.6, 1.8, 0.01, 0, { y: 0.013 });
-		if (mx1 - mx0 > 1.5) { g.at(0, 0, 0, 0); for (let k = 0; k < 3; k++) g.cyl('fabric', mx0 + 0.1, 0.075, w.z1 - 2.55 + k * 0.17, 0.075, 0.45, lin(hsl(0.55 + k * 0.15, 0.5, 0.45)), 10, 'x'); spot(K, frame('+z', w.z1 - 1.6), mx0 + 0.9, 0, 1, 0); }
+		if (mx1 - mx0 > 1.5) spot(K, frame('+z', w.z1 - 1.6), mx0 + 0.9, 0, 1, 0);
 		const cw = left ? w.x1 : w.x0;
-		piece(K, GYM.cubbies, cw + (left ? -0.22 : 0.22), fz + 1.2, left ? 3 : 1, 1.6, 0.42, 1.9, r);
+		piece(K, GYM.cubbies, cw + (left ? -0.22 : 0.22), fz + 1.2, left ? 3 : 1, 1.6, 0.42, 1.9);
 		piece(K, GYM.fountain, cw + (left ? -0.2 : 0.2), fz + 0.1, left ? 3 : 1, 0.45, 0.35, 1.0);
 		frontCounter(K, false, 1.8);
 	} else if (t === 'clinic') {
@@ -1114,7 +1149,7 @@ export function* fitShop(K, type) {
 				if (wl > 1.3) {
 					const cx = a + wl / 2;
 					g.box('grain', cx - 0.4, 1.25, pz + 0.05, cx + 0.4, 1.85, pz + 0.075, C.wood);
-					g.box('matte', cx - 0.34, 1.31, pz + 0.075, cx + 0.34, 1.79, pz + 0.08, lin(hsl(0.08 + k * 0.27, 0.45, 0.55)));
+					s.at(0, 0, 0, 0); s.card('posters', 1, k % 2, 2, cx - 0.34, cx + 0.34, 1.31, 0.48, pz + 0.077, 1.0);
 					const cw = Math.min(wl - 0.4, 1.7);
 					item(K, frame('+z', 0), 'waitingChairs', cx, pz + 0.35, cw, 0.5, 0.9, 0);
 					K.col.push([cx - cw / 2, pz + 0.05, cx + cw / 2, pz + 0.6, 0, 0.9]);

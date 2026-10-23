@@ -12,14 +12,15 @@ import { planHouse, houseFloor, mainOf, houseSeed, HT, TW } from './houseplan.js
 import { houseEra, exteriorLook, householdDecor } from './decor.js';
 import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
 import { drawAny, hasKit } from '../interiors/kit.js';
-import '../interiors/estab-kit.js';
+import { STOCKED, stockShop } from '../interiors/estab-kit.js';
+import { GoodsBuilder, goodsSteps, goodsMaterial } from '../interiors/goods.js';
 import { profileOf } from '../economy/frontage.js';
 // a business's fit-out for the house's plan (houseplan.js): its trade's fit, and whether it has a shopfront
 const estabOf = (E) => { const p = profileOf(E.type); return p.fit ? { fit: p.fit, glass: p.style === 'glass', type: E.type, id: E.id } : null; };
 import { occasions, today } from '../calendar.js';
 import { houseLights } from './seasons.js';            // the holidays' strings, the same houses as from afar (holidaylights.js)
 import { carGeometry, carMaterial } from './cars.js';
-import { anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { addLodFade, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
 import { buildSlice, viewDistance } from '../world/buildslice.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
 
@@ -507,8 +508,12 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		// no shadow of the sun's, housekit.js)
 		g.ao = true;
 		g.inside();
+		// (a shop's goods, where the house is one: the sheet painted first, once for every shop)
+		const gs = plan.items.some((it) => STOCKED.has(it.type) && it.stock) ? new GoodsBuilder() : null;
+		if (gs) yield* goodsSteps();
 		for (const it of plan.items) {
 			if (++step % 12 === 0) yield;
+			if (gs && STOCKED.has(it.type) && it.stock) { it.bare = true; stockShop(gs, it); }
 			if (it.type === 'closet') it.wallCol = paint[it.room];
 			if (it.type === 'car') continue;
 			// the household's kitchen and its era's lights
@@ -526,6 +531,15 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 		yield;
 		for (const m of g.meshes(M)) root.add(m);
+		// (the goods unlit, their light the shop's: set each frame in update)
+		let goodsMat = null;
+		if (gs && !gs.empty()) {
+			goodsMat = goodsMaterial(); goodsMat.userData.own = true;
+			addLodFade(goodsMat, 'building', band);
+			const m = new THREE.Mesh(gs.geometry(), goodsMat);
+			m.name = 'goods'; m.userData.noBake = true; m.castShadow = false;
+			root.add(m);
+		}
 		// a car in the garage
 		for (const it of plan.items) {
 			if (it.type !== 'car') continue;
@@ -546,7 +560,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		if (plan.rooms.some((r) => r.level)) levels.push([HT.floor1, HT.ceil1]);
 		let bx0 = 1e9, bz0 = 1e9, bx1 = -1e9, bz1 = -1e9;
 		for (const r of plan.rects) { bx0 = Math.min(bx0, r.x0); bz0 = Math.min(bz0, r.z0); bx1 = Math.max(bx1, r.x1); bz1 = Math.max(bz1, r.z1); }
-		lightInterior(root, {
+		const light = lightInterior(root, {
 			id: 'house:' + Math.round(Mb.x) + ':' + Math.round(Mb.z), occluders: col, levels, bounds: [bx0, bz0, bx1, bz1], home: true,
 			rooms: plan.rooms.length, roomOf: (x, y, z) => { const c = plan.cellAt(x, z); return c < 0 ? -1 : plan.labels?.[y > HT.floor1 - 0.2 ? 1 : 0]?.[c] ?? -1; },
 			litOf: (id) => !!lit[id], dust: (x, y, z, id) => plan.rooms[id]?.type === 'garage', exclude: ['stucco', 'siding'],
@@ -555,7 +569,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		});
 		// the footprint at each level, for the floors that carry you
 		const lights = plan.rooms.filter((r) => r.cells.length && lit[r.id] && r.type !== 'closet').map((r) => [r.cx, (r.level ? HT.ceil1 : HT.ceil0) - 0.45, r.cz]);
-		return { grp, plan, root, floorY, base, col, doors, stoop, lights, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, walls: { list: wallInfo, era, siding: look.siding == null ? 'stucco' : ['lap', 'batten', 'shingle', 'brick'][look.siding] || 'lap', mats: M }, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
+		return { grp, plan, root, floorY, base, col, doors, stoop, lights, goodsMat, light, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, walls: { list: wallInfo, era, siding: look.siding == null ? 'stucco' : ['lap', 'batten', 'shingle', 'brick'][look.siding] || 'lap', mats: M }, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
 	}
 
 	// how likely each kind of room is to have its light on (by day the lamps are half on: lighting.js)
@@ -564,7 +578,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	function dispose(h) {
 		releaseInterior(h.root);
 		group.remove(h.root);
-		h.root.traverse((o) => { if (o.isMesh && o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); });
+		h.root.traverse((o) => { if (o.isMesh && o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); if (o.isMesh && o.material?.userData?.own) o.material.dispose(); });
 	}
 
 	// ---------------------------------------------------------------------------
@@ -580,6 +594,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		group.visible = !high;
 		if (high) { for (const [grp,h] of houses) if(h && grp.near) city?.setNear?.(grp,null); return; }
 		for (const [grp,h] of houses) if(h && !grp.near) city?.setNear?.(grp,[h.cx,h.cz]);
+		// a shop's goods as lit as the shop: full while it is lit, the night lights' share once dark
+		for (const h of houses.values()) { const U = h?.goodsMat && h.light?.U; if (U) h.goodsMat.color.setScalar(0.92 * (U.ibakeK.value * (1 - 0.72 * U.ibakeNight.value) + 0.18 * (1 - nightK) * U.ibakeNight.value)); }
 		if (!real?.loaded() && !city?.procHomes) return;
 		// what is near, every few metres
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
