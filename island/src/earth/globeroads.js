@@ -267,6 +267,26 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		}
 		return pts;
 	}
+	// a town's street ends (the ways in), found by where: the nearest within 60 m of a point
+	const ENDS = new WeakMap();
+	function endsOf(T) {
+		let f = ENDS.get(T);
+		if (f) return f;
+		const cells = new Map(), C = 100;
+		for (const r of T.roads) {
+			if (!r.pts || r.pts.length < 4 || r.cls === 'service' || /path|track|footway|steps/.test(r.cls || '')) continue;
+			for (const k of [0, r.pts.length - 2]) { const key = Math.floor(r.pts[k] / C) + ',' + Math.floor(r.pts[k + 1] / C); let c = cells.get(key); if (!c) cells.set(key, c = []); c.push([r.pts[k], r.pts[k + 1]]); }
+		}
+		f = (x, z) => {
+			let best = null, bd = 60;
+			for (let i = Math.floor((x - 60) / C); i <= Math.floor((x + 60) / C); i++) for (let j = Math.floor((z - 60) / C); j <= Math.floor((z + 60) / C); j++) {
+				for (const e of cells.get(i + ',' + j) || []) { const d = Math.hypot(e[0] - x, e[1] - z); if (d < bd) { bd = d; best = e; } }
+			}
+			return best;
+		};
+		ENDS.set(T, f);
+		return f;
+	}
 	function* make(cx, cz) {
 		const t0 = performance.now();
 		let s0 = t0, work = 0;
@@ -282,18 +302,34 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 			for (let q = 0; q < n; q++) { const p = toXZ(R.lat[q], R.lon[q]); P[q * 2] = p.x; P[q * 2 + 1] = p.z; if (!any && Math.abs(p.x - cx) < REG && Math.abs(p.z - cz) < REG) any = true; }
 			if (!any) continue;
 			// the town grown at either end: stop at its edge, and go on into its streets
+			// (a place standing inside a gridded town, as the atlas's Modesto stands in the Bay's
+			// generated one, is reached through that town's streets too: t.around; and a link with
+			// both its ends in one is that town's own streets)
+			const townAt = (q, node) => townNow.find((t) => t.id === node.id) || townNow.find((t) => t.around && Math.hypot(P[q * 2] - t.x, P[q * 2 + 1] - t.z) < t.r * 0.9);
+			const T0 = townAt(0, L.a), T1 = townAt(n - 1, L.b);
+			if (T0 && T0 === T1 && T0.around) continue;
 			let q0 = 0, q1 = n - 1;
 			const joins = [];
-			for (const [end, node] of [[0, L.a], [1, L.b]]) {
-				const T = townNow.find((t) => t.id === node.id);
+			for (const [end, T] of [[0, T0], [1, T1]]) {
 				if (!T?.roads?.length) continue;
 				const reach = T.r * 0.9, previous0 = q0, previous1 = q1;
 				if (end === 0) { while (q0 < q1 && Math.hypot(P[q0 * 2] - T.x, P[q0 * 2 + 1] - T.z) < reach) q0++; } else { while (q1 > q0 && Math.hypot(P[q1 * 2] - T.x, P[q1 * 2 + 1] - T.z) < reach) q1--; }
 				const q = end === 0 ? q0 : q1, px = P[q * 2], pz = P[q * 2 + 1];
-				let best = null, bd = Math.max(600, T.r);
+				// (no further than the town's own join, where it has one: a gridded town's streets are
+				// only worked out round you, globe.js gridTowns, and one far across it is no way in)
+				let best = null, bd = T.join ?? Math.max(600, T.r);
 				for (const r of T.roads) {
 					if (!r.pts || r.pts.length < 4 || r.cls === 'service' || /path|track|footway|steps/.test(r.cls || '')) continue;
 					for (const k of [0, r.pts.length - 2]) { const d = Math.hypot(r.pts[k] - px, r.pts[k + 1] - pz); if (d < bd) { const to = [r.pts[k], r.pts[k + 1]], pts = connector([px, pz], to); if (pts) { bd = d; best = pts; } } }
+				}
+				// (none near its edge, where the streets worked out round you stop short of it: the road
+				// goes on in to the first of them and joins it there, rather than across them)
+				if (!best && T.around) {
+					const E = endsOf(T), dir = end === 0 ? -1 : 1, stop = end === 0 ? previous0 : previous1;
+					for (let q2 = q + dir; dir < 0 ? q2 >= stop : q2 <= stop; q2 += dir) {
+						const to = E(P[q2 * 2], P[q2 * 2 + 1]), pts = to && connector([P[q2 * 2], P[q2 * 2 + 1]], to);
+						if (pts) { best = pts; if (end === 0) q0 = q2; else q1 = q2; break; }
+					}
 				}
 				if (best) joins.push(best);
 				else { q0 = previous0; q1 = previous1; }
@@ -323,7 +359,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		// the ribbons: the road's own line on the ground, level across, a vertex every 6 m at
 		// most (its points are 10 to 20 m apart: straight across that, the ribbon floated over
 		// the dips and sank into the rises)
-		const pos = [], uv = [], idx = [];
+		const pos = [], uv = [], side = [], idx = [];
 		for (const r of out) {
 			const p = dense(r.pts, 6), n = p.length / 2, hw = r.w / 2, v0 = pos.length / 3;
 			// Sample each edge on ungraded terrain. The shared berm texture applies the same
@@ -336,6 +372,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 				const lx = p[q * 2] - dz * hw, lz = p[q * 2 + 1] + dx * hw, rx = p[q * 2] + dz * hw, rz = p[q * 2 + 1] - dx * hw;
 				pos.push(lx, groundAt(lx, lz) + 0.12, lz, rx, groundAt(rx, rz) + 0.12, rz);
 				uv.push(-1, s, 1, s);
+				side.push(-dz * hw, dx * hw, dz * hw, -dx * hw);
 				if (q) { const k = v0 + q * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
 			}
 			if (performance.now() - s0 > 3) { work += performance.now() - s0; yield; s0 = performance.now(); }
@@ -343,6 +380,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		const geo = new THREE.BufferGeometry();
 		geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
 		geo.setAttribute('aRoad', new THREE.Float32BufferAttribute(uv, 2));
+		geo.setAttribute('aSide', new THREE.Float32BufferAttribute(side, 2));
 		geo.setIndex(idx);
 		geo.computeVertexNormals();
 		geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, 0, cz), REG * 1.5);
@@ -357,23 +395,35 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 	}
 
 	// ---------- drawn ----------
+	// Far off a highway is held to about two pixels wide (so the roads between the towns are seen
+	// from the air, as they are from a plane: uRoadPx is a pixel's size per metre away), its
+	// asphalt weathered paler and its paint faded into it rather than a white thread glaring
+	// across the fields (a 15 cm line is gone long before the road is)
+	const roadU = { uRoadPx: { value: 0.0016 } };
 	const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 	mat.onBeforeCompile = (sh) => {
-		Object.assign(sh.uniforms, BERM_U);
-		sh.vertexShader = 'attribute vec2 aRoad; varying vec2 vRoad;\n' + BERM_GLSL + '\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+		Object.assign(sh.uniforms, BERM_U, roadU);
+		sh.vertexShader = 'attribute vec2 aRoad; attribute vec2 aSide; uniform float uRoadPx; varying vec2 vRoad; varying float vFar;\n' + BERM_GLSL + '\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
 			vRoad = aRoad;
-			transformed.y += bermDelta(position.xz);`);
-		sh.fragmentShader = 'varying vec2 vRoad;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+			float dist = distance(cameraPosition, position), hw = max(length(aSide), 0.5);
+			float grow = clamp(1.1 * dist * uRoadPx / hw, 1.0, 5.0);
+			vFar = smoothstep(1.0, 2.5, grow);
+			transformed.xz += aSide * (grow - 1.0);
+			transformed.y += bermDelta(position.xz) + dist * 3e-4;`);
+		sh.fragmentShader = 'varying vec2 vRoad; varying float vFar;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 			{
-				float a = abs(vRoad.x), fw = fwidth(vRoad.x) * 1.5;
-				vec3 c = vec3(0.075, 0.075, 0.08) * (0.9 + 0.2 * fract(sin(dot(floor(vRoad * vec2(4.0, 0.5)), vec2(12.9898, 78.233))) * 43758.5453));
+				float a = abs(vRoad.x), fw = fwidth(vRoad.x) * 1.5, fade = clamp(0.06 / max(fw, 1e-4), 0.0, 1.0) * (1.0 - vFar);
+				vec3 c = vec3(0.1, 0.1, 0.105) * (0.9 + 0.2 * fract(sin(dot(floor(vRoad * vec2(4.0, 0.5)), vec2(12.9898, 78.233))) * 43758.5453));
+				// the wheel tracks worn paler, the shoulders dustier
+				c *= 1.0 + 0.25 * (1.0 - smoothstep(0.0, 0.25, abs(a - 0.5))) + 0.35 * smoothstep(0.88, 1.0, a);
 				float edge = smoothstep(0.86 - fw, 0.88, a) * (1.0 - smoothstep(0.93, 0.95 + fw, a));
 				float mid = (1.0 - smoothstep(0.03, 0.05 + fw, a)) * step(0.5, fract(vRoad.y / 12.0));
-				c = mix(c, vec3(0.62, 0.62, 0.58), max(edge, mid) * 0.9);
+				c = mix(c, vec3(0.62, 0.62, 0.58), max(edge, mid) * 0.85 * fade);
+				c = mix(c, vec3(0.26, 0.26, 0.25), vFar * 0.6);
 				diffuseColor.rgb = c;
 			}`);
 	};
-	mat.customProgramCacheKey = () => 'globeroads2';
+	mat.customProgramCacheKey = () => 'globeroads3';
 	const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
 	mesh.frustumCulled = false; mesh.receiveShadow = true;
 	group.add(mesh);
@@ -386,6 +436,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 	function update(dt, cam, on, town) {
 		group.visible = on;
 		if (!on) return;
+		if (cam.fov) roadU.uRoadPx.value = 2 * Math.tan(cam.fov * Math.PI / 360) / Math.max(300, typeof innerHeight === 'number' ? innerHeight : 800);
 		// Bay towns are created after the globe starts streaming. Rebuild the bounded graph
 		// once their deterministic catalogue appears, without rebuilding every frame.
 		const pk = placesKey();

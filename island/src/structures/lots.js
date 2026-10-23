@@ -31,13 +31,15 @@ export function settleLots(list, x, z) {
 // the same in steps, as city.js lays its set out a frame's share at a time: settling the lots
 // in one go cost a landing's frame 80 ms on a computer (far more on a phone), the longest step
 // of the set
-export function* settleLotsSteps(list, x, z) {
+// (more: other roads the lots keep off as they keep off the freeways, the globe's highways and
+// section roads where they reach the gridded towns out past the Bay's survey: bay/city.js)
+export function* settleLotsSteps(list, x, z, more = null) {
 	for (const o of list) if (o.src) o.mapped = true;
 	// (the first set's before-and-after count is a check for the console, two passes over every
 	// lot: a phone, which has no console open, skips it unless countNext() asks)
 	const first = last.n++ === 0, count = last.count || (first && !PHONE);
 	last.count = false;
-	const res = yield* resolveLotsSteps(list, { roads: roadsOfGrid(), landmark: onLandmark, near: [x, z], R: REACH, count });
+	const res = yield* resolveLotsSteps(list, { roads: more?.length ? [...roadsOfGrid(), ...more] : roadsOfGrid(), landmark: onLandmark, near: [x, z], R: REACH, count });
 	if (count) last.seen = { before: res.before, after: res.after, at: [Math.round(x), Math.round(z)] };
 	yield;
 	// the alleys behind the grid's shops and towers: each block's middle is its paved yard
