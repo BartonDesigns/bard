@@ -197,10 +197,11 @@ const POSE = { eat: 'table', homework: 'read', work: 'type', read: 'read', phone
 
 // the whole house at an hour: who is home, doing what, and where. Couples share the big bed,
 // the little ones get the small beds, everyone else a bed of their own if there is one (else
-// the sofa). o: { day, sunset, minAge (no bodies for babies), max (how many shown) }
+// the sofa). o: { day, sunset, minAge (no bodies for babies), max (how many shown), taken (spot
+// ids kept for someone else: you, sat in one, gameplay/rest.js) }
 export function arrange(h, plan, spots, hour, o = {}) {
 	const minAge = o.minAge ?? 2.5;
-	const taken = new Set(), out = [];
+	const taken = new Set(o.taken || []), out = [];
 	const home = [];
 	for (const m of h.members) {
 		if (m.age < minAge || m.away || m.embodied) continue;

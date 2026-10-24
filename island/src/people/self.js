@@ -12,6 +12,8 @@ import { driveDance } from './dance.js';
 import { DANCE_NAMES } from './actions.js';
 
 const EYE = 1.68;
+// lying in bed, the head raised a little on the pillow (as people/home-life.js lays the families)
+const TILT = 0.14;
 const IDLE = ['pockets', 'crossed', 'phone', 'hip', 'behind'];
 // (the hero stands ready, and idles like one: people/hero.js)
 const HERO_IDLE = ['hip', 'crossed', 'behind'];
@@ -20,7 +22,7 @@ const HERO_IDLE = ['hip', 'crossed', 'behind'];
 // eye; busy() also covers the car scenes (vehicles/carjack.js), which show and hide your body
 // themselves
 export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint, ward = null, driving = () => false }) {
-	const S = { third: false, idle: 0, pose: 'rest', down: null, posePin: null, air: 0, leap: false, dance: null, danceN: -1, wasThird: false };
+	const S = { third: false, idle: 0, pose: 'rest', down: null, posePin: null, air: 0, leap: false, dance: null, danceN: -1, wasThird: false, sat: false };
 	const cam = new THREE.Vector3(), look = new THREE.Vector3(), v = new THREE.Vector3();
 	let shown = false;
 
@@ -36,6 +38,7 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 		if (!me) return false;
 		const feet = P.pos.y - EYE;
 		if (!shown) { avatar.show(P.pos.x, P.pos.z, Math.atan2(-Math.sin(P.yaw), -Math.cos(P.yaw))); shown = true; }
+		if (P.seat && P.seat.up == null) return seated(dt, t, P.seat);
 		const sp = Math.hypot(P.vel.x, P.vel.z);
 		me.M.want.heading = Math.atan2(-Math.sin(P.yaw), -Math.cos(P.yaw));
 		me.M.want.speed = sp;
@@ -56,9 +59,33 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 			if (sp > 0.15 || leap || !B.playing) stopDance(); else driveDance(me.M, S.dance, B);
 		}
 		me.M.groove?.(B.playing ? (S.dance ? 1 : 0.5) : 0, S.dance ? 1.1 : 0.8);
+		// (up out of a seat)
+		if (S.sat) { S.sat = false; me.M.stand(); }
 		me.M.update(dt, t, null);
 		me.M.S.pos.set(P.pos.x, feet, P.pos.z);
+		// (getting up out of a seat: from it to where you stood, as the eye goes, player.js)
+		if (P.seat) { const k = P.seat.up; me.M.S.pos.lerpVectors(v.set(P.seat.x, P.seat.y, P.seat.z), me.M.S.pos, k * k * (3 - 2 * k)); }
 		me.P.root.position.copy(me.M.S.pos);
+		return true;
+	}
+	// sat down (gameplay/rest.js, player.js s.seat): the body in the seat, facing the way it does,
+	// hands in the lap; in bed, laid along it on its back with the head on the pillow, as the
+	// families sleep (people/home-life.js)
+	function seated(dt, t, seat) {
+		const me = avatar.me, M = me.M;
+		M.want.heading = seat.face; M.want.speed = 0; M.want.run = 0;
+		S.sat = !seat.lie;
+		if (seat.lie) M.stand(); else M.sit(seat.h);
+		const want = seat.lie ? 'rest' : 'lap';
+		if (want !== S.pose) { S.pose = want; M.setPose(want); }
+		M.update(dt, t, null);
+		M.S.pos.set(seat.x, seat.y, seat.z);
+		me.P.root.position.copy(M.S.pos);
+		if (seat.lie) {
+			const len = Math.max(0.9, (me.P.height || 1.7) - 0.12) * Math.cos(TILT);
+			me.P.root.position.set(seat.x + Math.sin(seat.face) * len, seat.y + seat.top - 0.02, seat.z + Math.cos(seat.face) * len);
+			me.P.root.rotation.set(-Math.PI / 2 + TILT, seat.face, 0, 'YXZ');
+		}
 		return true;
 	}
 
@@ -73,7 +100,7 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 	}
 	function dance(name) {
 		const W = world(), P = W?.player?.state;
-		if (!P || P.locked || busy() || P.flying || P.swimming || S.down) return false;
+		if (!P || P.locked || P.seat || busy() || P.flying || P.swimming || S.down) return false;
 		if (!beatNow().playing) { hint('Nothing to dance to: turn the auto music on (the notes by the sun), or play the Bard.', 2400); return false; }
 		if (!S.dance) S.wasThird = S.third;
 		S.danceN = name && DANCE_ORDER.includes(name) ? DANCE_ORDER.indexOf(name) : (S.danceN + 1) % DANCE_ORDER.length;
