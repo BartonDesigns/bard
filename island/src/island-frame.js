@@ -51,7 +51,7 @@ export function islandFrame(iw, now) {
 	shared.uTime.value = iw.time;
 	stepWind(dt, shared);
 	const W = iw.world;
-	W.player.state.inputBlocked = window.L99Loading.active() || arcade.active() || studio.active() || gear.busy() || dom.mount.classList.contains('l99-tools-open') || !!dom.mount.querySelector('[role="dialog"]:not([style*="display: none"]) input:focus');
+	W.player.state.inputBlocked = window.L99Loading.active() || arcade.active() || studio.active() || gear.busy() || !!HOOKS.casino?.active?.() || dom.mount.classList.contains('l99-tools-open') || !!dom.mount.querySelector('[role="dialog"]:not([style*="display: none"]) input:focus');
 	if (W.player.state.inputBlocked) W.player.clearInput();
 	W.arms?.update(dt, camera.position);
 	W.music.update(dt);

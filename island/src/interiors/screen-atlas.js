@@ -5,7 +5,7 @@
 // to their screensaver. All glow (a fixture of interiors/lighting.js, as the plain screens were).
 import * as THREE from 'three';
 
-export const COLS = 4, ROWS = 8;
+export const COLS = 4, ROWS = 9;
 export const TILE = {
 	code: 0, terminal: 1, sheet: 2, dashboard: 3, bars: 4, inbox: 5, call: 6, design: 7,
 	slides: 8, ticker: 9, cad: 10, map: 11, chat: 12, doc: 13, calendar: 14, photo: 15,
@@ -14,6 +14,8 @@ export const TILE = {
 	// (the places to play: the lanes' scores, a film on a cinema's screen, the concession's menu,
 	// another arcade game)
 	scores: 28, movie: 29, concession: 30, shooter: 31,
+	// (a casino's: the slot machines' reels, sevens and fruit, the sportsbook's odds, the keno board)
+	slot7: 32, slotFruit: 33, odds: 34, keno: 35,
 };
 // what each kind of floor has up (workplace-plan.js programs), and the screensavers
 const BY_PROGRAM = {
@@ -54,6 +56,25 @@ export function screenAtlasTexture() {
 	const rect = (c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 	const lines = (x, y, w, n, step, cols, minW = 0.25) => { for (let i = 0; i < n; i++) { const ind = Math.floor(rn() * 3) * 6; let cx = x + ind; for (let k = 0; k < 1 + Math.floor(rn() * 3); k++) { const lw = Math.max(4, (w - ind) * (minW + rn() * 0.35) / 2); if (cx + lw > x + w) break; rect(cols[Math.floor(rn() * cols.length)], cx, y + i * step, lw, 2); cx += lw + 3; } } };
 	const bar = (x, y, w, h, c) => rect(c, x, y, w, h);
+	const reels = (x, y, faces, cab) => {
+		bar(x, y, W, H, cab); rect('#ffd166', x + 6, y + 6, W - 12, 46);
+		for (let i = 0; i < 3; i++) {
+			const rx = x + 10 + i * 37;
+			const gr = g.createLinearGradient(0, y + 9, 0, y + 49); gr.addColorStop(0, '#9a9a9a'); gr.addColorStop(0.5, '#ffffff'); gr.addColorStop(1, '#9a9a9a');
+			g.fillStyle = gr; g.fillRect(rx, y + 9, 33, 40);
+			// (cherries drawn: two on their stems)
+			if (faces[i] === 'cherry') {
+				g.strokeStyle = '#2d6a4f'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(rx + 11, y + 33); g.quadraticCurveTo(rx + 15, y + 18, rx + 21, y + 16); g.moveTo(rx + 22, y + 33); g.lineTo(rx + 21, y + 16); g.stroke();
+				g.fillStyle = '#d00000'; for (const cx of [rx + 11, rx + 22]) { g.beginPath(); g.arc(cx, y + 35, 5, 0, Math.PI * 2); g.fill(); }
+				continue;
+			}
+			g.fillStyle = faces[i] === '7' ? '#d00000' : '#111111'; g.font = `bold ${faces[i] === 'BAR' ? 11 : 24}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+			g.fillText(faces[i], rx + 16.5, y + 30);
+		}
+		rect('#ff006e', x + 6, y + 28.5, W - 12, 1.2);
+		rect('#000000', x + 6, y + 56, 52, 12); rect('#000000', x + 70, y + 56, 52, 12);
+		rect('#ff4d4d', x + 10, y + 60, 30, 4); rect('#39ff14', x + 74, y + 60, 16, 4);
+	};
 	const DRAW = {
 		code(x, y) { bar(x, y, W, H, '#1e1e1e'); bar(x, y, 22, H, '#252526'); bar(x, y, W, 7, '#3c3c3c'); lines(x + 2, y + 10, 18, 9, 7, ['#8a8a8a']); for (let i = 0; i < 10; i++) rect('#5a5a5a', x + 25, y + 11 + i * 7, 4, 2); lines(x + 32, y + 11, W - 36, 10, 7, ['#569cd6', '#ce9178', '#9cdcfe', '#dcdcaa', '#6a9955', '#c586c0']); },
 		codeLight(x, y) { bar(x, y, W, H, '#fbfbfb'); bar(x, y, 22, H, '#f0f0f0'); bar(x, y, W, 7, '#dddddd'); lines(x + 2, y + 10, 18, 9, 7, ['#9a9a9a']); lines(x + 30, y + 11, W - 34, 10, 7, ['#0000ff', '#a31515', '#001080', '#795e26', '#008000', '#af00db']); },
@@ -124,6 +145,20 @@ export function screenAtlasTexture() {
 			for (let r = 0; r < 4; r++) for (let c = 0; c < 9; c++) { const cx = x + 14 + c * 12, cy = y + 10 + r * 9; rect(['#ff006e', '#ffbe0b', '#8338ec', '#3a86ff'][r], cx, cy, 7, 5); rect('#02010a', cx + 2, cy + 1.5, 1.4, 1.4); rect('#02010a', cx + 3.8, cy + 1.5, 1.4, 1.4); }
 			rect('#06d6a0', x + 56, y + H - 10, 14, 5); rect('#06d6a0', x + 62, y + H - 13, 2, 3); rect('#ffffff', x + 62.5, y + H - 30, 1, 6);
 			rect('#ffffff', x + 4, y + 2, 26, 3); rect('#ffbe0b', x + W - 30, y + 2, 26, 3);
+		},
+		// a slot machine's glass: three reels in their gold frame, the pay line across them, the
+		// credits and the bet under; sevens on one, cherries and bars on the other
+		slot7(x, y) { reels(x, y, ['7', '7', 'BAR'], '#c1121f'); },
+		slotFruit(x, y) { reels(x, y, ['cherry', 'BAR', 'cherry'], '#5a189a'); },
+		// the sportsbook's board: the games tonight in rows, their lines in lit figures
+		odds(x, y) {
+			bar(x, y, W, H, '#05070d'); bar(x, y, W, 9, '#0b3d91'); rect('#ffffff', x + 4, y + 3, 40, 3); rect('#ffd60a', x + W - 34, y + 3, 30, 3);
+			for (let i = 0; i < 7; i++) { const ry = y + 13 + i * 8.4; rect(i % 2 ? '#0d1424' : '#0a101c', x, ry - 1, W, 8); rect('#cfd8e3', x + 3, ry + 1, 30 + rn() * 14, 2.4); rect('#cfd8e3', x + 3, ry + 4.4, 26 + rn() * 14, 2.4); for (let c = 0; c < 3; c++) rect(['#39ff14', '#ffd60a', '#ff4d6d'][c], x + 62 + c * 21, ry + 2, 14, 3.4); }
+		},
+		// keno: the eighty numbers, the twenty drawn lit
+		keno(x, y) {
+			bar(x, y, W, H, '#140326'); rect('#ffbe0b', x + 4, y + 2, 30, 4);
+			for (let r = 0; r < 8; r++) for (let c = 0; c < 10; c++) rect(rn() < 0.25 ? '#ff006e' : '#2e1a47', x + 6 + c * 12, y + 10 + r * 7.6, 9.4, 5.6);
 		},
 		crm(x, y) { bar(x, y, W, H, '#f3f2f2'); bar(x, y, W, 9, '#032d60'); bar(x + 4, y + 13, W - 8, 14, '#ffffff'); rect('#0176d3', x + 8, y + 16, 8, 8); rect('#181818', x + 20, y + 17, 40, 3); bar(x + 4, y + 30, W - 8, H - 34, '#ffffff'); for (let i = 0; i < 7; i++) { rect('#e5e5e5', x + 4, y + 36 + i * 7, W - 8, 1); rect('#0176d3', x + 8, y + 32 + i * 7, 22, 2); rect('#444444', x + 40, y + 32 + i * 7, 26, 2); rect(['#2e844a', '#dd7a01', '#ba0517'][i % 3], x + 90, y + 32 + i * 7, 18, 2); } },
 	};

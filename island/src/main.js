@@ -54,6 +54,7 @@ import { createMagic } from './magic/index.js';
 import { createFishing } from './fishing.js';
 import { createCooking } from './cooking/index.js';
 import { createOfficePerks } from './interiors/office-perks.js';
+import { createCasino } from './ui/casino.js';
 import { createRest } from './gameplay/rest.js';
 import { createArcade } from './arcade.js';
 import { worldAir } from './world/soundbus.js';
@@ -1028,7 +1029,9 @@ export function createIslandWorld() {
 	const cooking = HOOKS.cooking = createCooking({ scene, camera, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, arms, magic: () => HOOKS.magic, families, fishing, combat, addTalkers, talkTo: (p) => guide.talkTo(p), doorNear: () => !!doorHere, yields: () => !!HOOKS.rest?.ownsE?.(), morality: () => HOOKS.morality || null, hours: () => world?.sky?.state?.hours ?? 12 });
 	cooking.addMenu(tpMenu);
 	// the office's coffee, water, vending machine and first-aid box (interiors/office-perks.js)
-	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() || !!HOOKS.rest?.seated?.(), openShop: (id) => gear.open('shop', id) });
+	// a Strip casino's games, at its machines and tables (ui/casino.js)
+	const casino = HOOKS.casino = createCasino({ mount: dom.mount, arms, hint: (t, ms) => hint(t, ms, 1), isPhone });
+	const officePerks = HOOKS.officePerks = createOfficePerks({ mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, world: () => world, camera, combat, arms, doorNear: () => !!doorHere, busy: () => cooking.near() || !!HOOKS.rest?.seated?.() || casino.active(), openShop: (id) => gear.open('shop', id), play: (game, q) => casino.open(game, q) });
 	// sitting down and sleeping (gameplay/rest.js): chairs, sofas, benches, a seat at the cinema; your
 	// own bed until the morning. (A menu or a shop's counter is the whole room's prompt, and a
 	// kitchen's counter has E only when it is nearer than the seat: a seat in reach has E over
@@ -1171,6 +1174,7 @@ export function createIslandWorld() {
 	function watchDoor(dt) {
 		cooking.update(dt);
 		officePerks.update(dt);
+		casino.update(camera.position);
 		rest.update();
 		doorT += dt;
 		if (doorT < 0.15) return;
@@ -1809,6 +1813,8 @@ if (typeof window !== 'undefined') {
 		get cooking() { return HOOKS.cooking; },
 		// sitting and sleeping: Crysis.rest.info(), .seats(), .sitHere(), .stand()
 		get rest() { return HOOKS.rest; },
+		// a Strip casino's games: Crysis.casino.open('slots' | 'blackjack' | 'roulette'), .info()
+		get casino() { return HOOKS.casino; },
 		version: 1,
 		world: () => window.L99Island?.world?.(),
 		performance: () => window.L99Island?.world?.()?.music?.performance,

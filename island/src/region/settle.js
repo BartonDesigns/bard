@@ -27,7 +27,8 @@ import { Geo } from './geo.js';
 import { STRUCTURES, basePalette } from './structures.js';
 import { plan, blockLots, BLOCK, SIZES, denseStreetDistance, lotGround } from './layout.js';
 import { KITS } from './kits.js';
-import { detailClock } from '../world/lodfade.js';
+import { detailClock, updateDetailClock } from '../world/lodfade.js';
+import { createMarquees } from './marquee.js';
 
 const CELL = 120, VCELL = 240;
 const kitOf = (s) => s.kitObj || KITS[s.kit];
@@ -82,6 +83,8 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 	const nightMat = nearDissolve(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, fog: true }), nearBand);
 	// (paving laid on the ground, a resort's whole clearing: region/index.js paveLot. Drawn a hair nearer than
 	// it is, so the far ground's coarser mesh never shows through it; the same program as mat)
+	// (the real resorts' names in lights: marquee.js)
+	const marquees = createMarquees({ isPhone });
 	const paveMat = nearDissolve(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }), nearBand);
 	const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: 0.96, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 	const smokeU = { uTime: { value: 0 }, uWind: { value: new THREE.Vector2(0.4, 0.2) }, uCol: { value: new THREE.Color(0.7, 0.7, 0.72) }, uSize: { value: isPhone ? 260 : 380 } };
@@ -173,7 +176,7 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 	function* buildCell(s, i, j) {
 		let tWork = 0, tLast = performance.now();
 		const kit = kitOf(s), lots = cellLots(s, i, j);
-		const G = new Geo(), glow = new Geo(), nightG = new Geo(), paveG = new Geo(), smoke = [], solids = [], spots = [], lights = [], trees = [], homes = [];
+		const G = new Geo(), glow = new Geo(), nightG = new Geo(), paveG = new Geo(), smoke = [], solids = [], spots = [], lights = [], trees = [], homes = [], halls = [], big = [], signs = [];
 		G.seed = glow.seed = nightG.seed = paveG.seed = (s.seed ^ (i * 92821 + j * 68917)) >>> 0 || 1;
 		const opts = { ...(s.opts || {}), snow: snowOf(s) };
 		for (const L of lots) {
@@ -185,7 +188,7 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 			if (L.role === 'house' && !foundation) continue;
 			const y = foundation?.y ?? ground(terrainLot.x, terrainLot.z);
 
-			const B = { G, glow, night: nightG, pave: paveG, later: [], smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense, home: null };
+			const B = { G, glow, night: nightG, pave: paveG, later: [], smoke: [], solid: [], lights: [], trees: [], signs: [], name: s.kind === 'real' ? s.name : null, seat: null, seats: null, seatY: 0, lite: !!s.planned.dense, home: null };
 			const rot = L.rot + Math.PI;
 			G.frame(L.x, y, L.z, rot); glow.frame(L.x, y, L.z, rot); nightG.frame(L.x, y, L.z, rot); paveG.frame(L.x, y, L.z, rot);
 			const pal = basePalette(s.palette, kit, r, opts);
@@ -199,11 +202,33 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 			const H = L.role === 'house' && !B.lite ? B.home : null;
 			const rec = H ? { L, y, H, v0, v1: H.v, g0, g1: H.gv, c: toS(H.x || 0, 0), cell: null, grp: null, nearGrp: null, n: homes.length } : null;
 			if (rec) homes.push(rec);
+			// (a resort's casino, walked into: bay/towers.js builds its floor inside it, hallsNear; Fremont
+			// Street has a row of them, each its own)
+			const HLs = new Map();
+			for (const Q of B.halls || []) {
+				const HL = { L, y, rot: rot + Q.r, name: Q.name || B.name, c: toS(Q.x, Q.z), door: toS(Q.gx, Q.gz), w: Q.w, d: Q.d, h: Q.h, v0: Q.v0, v1: Q.v1, g0: Q.g0, g1: Q.g1, fy: Q.fy || 0, stair: Q.stair, cell: null, open: false, o: null };
+				halls.push(HL); HLs.set(Q, HL);
+			}
+			// (what stands on a casino's roof, its hotel towers, holds you out where the casino does: its
+			// footing is the casino's own floor, which you walk once you are in)
+			const onHall = (a, b) => { for (const [Q, HL] of HLs) { const dx = a - Q.x, dz = b - Q.z, c = Math.cos(Q.r), n = Math.sin(Q.r); if (Math.abs(dx * c - dz * n) < Q.w / 2 && Math.abs(dx * n + dz * c) < Q.d / 2) return HL; } return null; };
+			// (and those towers are its hotel, its lobby up off the casino's roof, the elevators from
+			// the casino floor up to it: its storeys open round you there, openTower)
+			for (const t of B.towers || []) {
+				const HL = t.y0 > 1 && HLs.size ? onHall(t.x, t.z) : null;
+				if (HL) (HL.hotels || (HL.hotels = [])).push({ hall: HL, c: toS(t.x, t.z), w: t.w, d: t.d, y0: t.y0, h: t.h, rot: rot + t.r, storeys: t.storeys, open: null });
+			}
 			const h = (SIZES[L.type]?.[0] || 4) > 12 ? 14 : 8;
-			// (the walls of a home hold you out until it is built for real round you)
-			for (const [a, b, w, d, rr] of B.solid) { const [x, z] = toS(a, b); solids.push({ x, z, w, d, rot: rot + (rr || 0), y0: y - 1, h: h + 2, home: rec && Math.abs(a - (H.x || 0)) < H.w / 2 + 0.6 && Math.abs(b) < H.d / 2 + 0.6 ? rec : null }); }
+			// (the walls of a home hold you out until it is built for real round you; a casino's, till you are in it)
+			for (const [a, b, w, d, rr, tag] of B.solid) {
+				const [x, z] = toS(a, b), q = { x, z, w, d, rot: rot + (rr || 0), y0: y - 1, h: h + 2, home: rec && Math.abs(a - (H.x || 0)) < H.w / 2 + 0.6 && Math.abs(b) < H.d / 2 + 0.6 ? rec : null, hall: HLs.get(tag) || (HLs.size ? onHall(a, b) : null) };
+				solids.push(q);
+				// (one reaching further than the next cell's edge: a resort's casino block, a garage)
+				if (Math.max(w, d) > 50) big.push(q);
+			}
 			for (const [a, yy, b] of B.smoke) { const [x, z] = toS(a, b); if (((Math.abs(x * 7.1 + z * 3.3) | 0) % 100) / 100 < kit.smoke + 0.15) smoke.push(x, y + yy, z); }
 			for (const [a, yy, b] of B.lights) { const [x, z] = toS(a, b); lights.push([x, y + yy, z]); }
+			for (const q of B.signs) { const [x, z] = toS(q.x, q.z); signs.push({ ...q, x, y: y + q.y, z, yaw: rot + q.yaw }); }
 			// (a great tree the lot keeps is grown with the region's plants, flora.js)
 			for (const [a, b, word, size] of B.trees) { const [x, z] = toS(a, b); trees.push({ x, z, word, size, yaw: rot + a }); }
 			const seats = B.seats || (B.seat ? [B.seat] : []);
@@ -227,14 +252,16 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 				G.frame(x, y - 0.35, z, f.rot); G.box(0, 0, 0, 6.2, 0.75, 0.45, wall, { r: 0 });
 			}
 		}
-		const C = { i, j, mesh: null, glow: null, night: null, pave: null, ground: null, smoke: null, solids, spots, lights, trees, homes };
+		const C = { i, j, mesh: null, glow: null, night: null, pave: null, signs: null, ground: null, smoke: null, solids, big, spots, lights, trees, homes, halls };
 		if (trees.length) treesVersion++;
 		const nearOf = (g) => { g.setAttribute('aNear', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 4), 4)); return g; };
 		if (G.count()) { C.mesh = new THREE.Mesh(nearOf(G.geometry()), mat); C.mesh.castShadow = !isPhone; C.mesh.receiveShadow = true; s.group.add(C.mesh); stats.tris += G.count() / 3; }
 		if (glow.count()) { C.glow = new THREE.Mesh(nearOf(glow.geometry()), glowMat); s.group.add(C.glow); }
 		if (nightG.count()) { C.night = new THREE.Mesh(nearOf(nightG.geometry()), nightMat); s.group.add(C.night); }
 		if (paveG.count()) { C.pave = new THREE.Mesh(nearOf(paveG.geometry()), paveMat); C.pave.receiveShadow = true; s.group.add(C.pave); stats.tris += paveG.count() / 3; }
+		if (signs.length && (C.signs = marquees.mesh(signs))) s.group.add(C.signs);
 		for (const rec of homes) rec.cell = C;
+		for (const H of halls) H.cell = C;
 		if (homes.length) homesVersion++;
 		C.ground = paintCell(s, i, j, kit);
 		if (smoke.length) {
@@ -256,7 +283,7 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 		// (its homes built for real go with it: bay/houses.js lets a dead one go)
 		for (const rec of C.homes) { if (rec.grp) rec.grp.dead = true; rec.grp = null; rec.nearGrp = null; }
 		if (C.homes.length) homesVersion++;
-		for (const m of [C.mesh, C.glow, C.night, C.pave, C.ground, C.smoke]) if (m) { m.geometry.dispose(); m.parent?.remove(m); }
+		for (const m of [C.mesh, C.glow, C.night, C.pave, C.signs, C.ground, C.smoke]) if (m) { m.geometry.dispose(); m.parent?.remove(m); }
 		if (C.trees.length) treesVersion++;
 		stats.cells--;
 	}
@@ -394,9 +421,12 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 		for (const s of sites.values()) {
 			if (!s.cells.size || Math.abs(p.x - s.x) > 4000 || Math.abs(p.z - s.z) > 4000) continue;
 			const lx = p.x - s.x, lz = p.z - s.z, C = s.cells.get(Math.floor(lx / s.cell) + ',' + Math.floor(lz / s.cell));
-			const list = C?.solids || [];
-			for (const b of edgeSolids(s, lx, lz, list)) {
-				if (footY > b.y0 + b.h || footY < b.y0 - 2 || b.home?.nearGrp) continue;
+			const list = C?.solids || [], near = edgeSolids(s, lx, lz, list);
+			// (and the big ones from wherever in the place they stand: a resort's casino block is
+			// solid all along its front, not only in the cell its lot is in)
+			for (const D of s.cells.values()) if (D !== C && D.big?.length) for (const b of D.big) near.push(b);
+			for (const b of near) {
+				if (footY > b.y0 + b.h || footY < b.y0 - 2 || b.home?.nearGrp || b.hall?.open) continue;
 				const cx = Math.cos(b.rot), cz = Math.sin(b.rot), dx = p.x - s.x - b.x, dz = p.z - s.z - b.z;
 				// (the box's frame: x along its width)
 				const u = dx * cx - dz * cz, v = dx * cz + dz * cx, r = 0.3;
@@ -536,6 +566,83 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 		grp.region = s.regionId; grp.kit = s.kitId || s.kit; grp.label = HOME_NAMES[L.type] || 'House';
 		return grp;
 	}
+	// ---------- the resorts' casinos, walked into (bay/towers.js) ----------
+	// the casino blocks within r of a point, each as the block bay/towers.js plans a casino in
+	// (interiors/workplace-plan.js planResort): just inside its walls, its doors to the front (the
+	// tower's +z, the lot's -z), up to under the hotel over it; the same one while its cell stands
+	function hallsNear(x, z, r) {
+		const out = [];
+		for (const s of sites.values()) {
+			if (!s.cells.size || Math.abs(x - s.x) > (s.planned?.reach || 0) + r + s.cell || Math.abs(z - s.z) > (s.planned?.reach || 0) + r + s.cell) continue;
+			for (const C of s.cells.values()) for (const H of C.halls || []) {
+				const hx = s.x + H.c[0], hz = s.z + H.c[1];
+				if (Math.hypot(hx - x, hz - z) > r + Math.max(H.w, H.d) / 2) continue;
+				// (its floor where the lot laid it, the steps up to its doors)
+				if (!H.o) {
+					H.o = { x: hx, z: hz, y: H.y, w: H.w - 1, d: H.d - 1, h: H.h - 1.5, a: Math.PI - H.rot, floor0: H.y + H.fy, stair: H.stair && { y: H.y + H.stair.y, len: H.stair.len, w: H.stair.w }, hall: H, landmark: H.name, src: { kind: 6, resort: [Math.round(hx), Math.round(hz)], biz: { name: H.name } }, hotels: [] };
+					// (its hotel towers, each planned as the Strip's own hotels are: the lobby, the guest floors)
+					for (const t of H.hotels || []) {
+						const tx = s.x + t.c[0], tz = s.z + t.c[1];
+						t.org = [s.x, s.z];
+						H.o.hotels.push(t.o = { x: tx, z: tz, y: H.y + t.y0, w: t.w - 1, d: t.d - 1, h: t.h - 0.5, a: Math.PI - t.rot, floor0: H.y + t.y0 + 0.1, tower: t, casino: H.o, landmark: H.name, src: { kind: 11, resort: H.o.src.resort, biz: { name: H.name } } });
+					}
+				}
+				out.push(H.o);
+				for (const t of H.o.hotels) if (Math.hypot(t.x - x, t.z - z) < r + Math.max(t.w, t.d) / 2) out.push(t);
+			}
+		}
+		return out;
+	}
+	// the casino built inside one (its block, as hallsNear gave it) or none: its walls let you in,
+	// and the dark glass over its doors gives way to its own as you come up to them
+	let openH = null;
+	function openHall(o) {
+		const H = o?.hall || null;
+		if (H === openH) return;
+		for (const q of [openH, H]) {
+			if (!q) continue;
+			const on = q === H, born = on ? updateDetailClock() : 0;
+			q.open = on;
+			// (its door frames in the cell's faces, the light through its glass in its glow)
+			for (const [m, a, b] of [[q.cell?.mesh, q.v0, q.v1], [q.cell?.glow, q.g0, q.g1]]) {
+				const A = m?.geometry.attributes.aNear;
+				if (!A || b <= a) continue;
+				for (let k = a; k < b; k++) { A.array[k * 4] = on ? q.door[0] : 0; A.array[k * 4 + 1] = on ? q.door[1] : 0; A.array[k * 4 + 2] = on ? 1 : 0; A.array[k * 4 + 3] = born; }
+				A.addUpdateRange(a * 4, (b - a) * 4); A.needsUpdate = true;
+			}
+		}
+		openH = H;
+	}
+	// a hotel tower walked into (as hallsNear gave it) between heights y0 and y1, you at (x, z), or
+	// none: its storeys there give way round you to its floors built inside it (bay/towers.js), the
+	// rest of it stands
+	let openT = null;
+	function openTower(o, y0 = 0, y1 = 0, x = 0, z = 0) {
+		const t = o?.tower || null;
+		if (openT && openT !== t) setStoreys(openT, null);
+		if (t) setStoreys(t, [y0, y1], [x - t.org[0], z - t.org[1]]);
+		openT = t;
+	}
+	function setStoreys(t, span, at) {
+		const C = t.hall.cell, was = t.open || new Set(), now = new Set();
+		if (span) for (const [i, [ya, yb]] of t.storeys.entries()) if (t.hall.y + yb > span[0] && t.hall.y + ya < span[1]) now.add(i);
+		// (round where you stand: a slab of a tower is longer than the faces' band is wide)
+		const moved = at && (!t.at || Math.hypot(at[0] - t.at[0], at[1] - t.at[1]) > 6);
+		if (moved) t.at = at;
+		const born = updateDetailClock();
+		for (const [i, [, , v0, v1, l0, l1]] of t.storeys.entries()) {
+			const on = now.has(i), fresh = on !== was.has(i);
+			if (!fresh && !(on && moved)) continue;
+			for (const [m, a, b] of [[C?.mesh, v0, v1], [C?.night || C?.glow, l0, l1]]) {
+				const A = m?.geometry.attributes.aNear;
+				if (!A || b <= a) continue;
+				for (let k = a; k < b; k++) { A.array[k * 4] = on ? t.at[0] : 0; A.array[k * 4 + 1] = on ? t.at[1] : 0; A.array[k * 4 + 2] = on ? 1 : 0; if (fresh) A.array[k * 4 + 3] = born; }
+				A.addUpdateRange(a * 4, (b - a) * 4); A.needsUpdate = true;
+			}
+		}
+		t.open = span ? now : null;
+		if (!span) t.at = null;
+	}
 	// a home built for real (at c, its centre) or given back (null): its faces here hand over
 	function setNear(grp, c) {
 		const rec = grp.rec;
@@ -550,9 +657,9 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 			A.addUpdateRange(a * 4, (b - a) * 4); A.needsUpdate = true;
 		}
 	}
-	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); nightMat.dispose(); paveMat.dispose(); groundMat.dispose(); smokeMat.dispose(); }
+	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); nightMat.dispose(); paveMat.dispose(); marquees.dispose(); groundMat.dispose(); smokeMat.dispose(); }
 	// the great trees of the built cells, where they stand now
 	function trees() { const out = []; for (const s of sites.values()) for (const C of s.cells.values()) for (const T of C.trees) out.push({ ...T, x: s.x + T.x, z: s.z + T.z }); return out; }
-	const api = { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, homesNear, homesVersion: () => homesVersion, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
+	const api = { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, homesNear, homesVersion: () => homesVersion, setNear, hallsNear, openHall, openTower, setNearBand: (a, b) => nearBand.value.set(a, b), dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
 	return api;
 }

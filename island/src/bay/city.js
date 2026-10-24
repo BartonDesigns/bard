@@ -2259,7 +2259,7 @@ export function createCity(shared, scene, bay, real = null) {
 		skylineBeside(list);
 		indexLots(list);
 		// the tall ones, for going inside (bay/towers.js)
-		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
+		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2,!!o.src?.resort));
 		yield;
 		phase = 'kit';
 		if (acX > 1e8) { acX = x; acZ = z; }          // (the first set: its near units round where it was laid out)

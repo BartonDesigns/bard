@@ -471,7 +471,7 @@ export async function islandBuild(iw, params) {
 		// (a shop's fittings in the houses' own materials: no more of them, no new shaders)
 		iw.world.commercial = createCommercial(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX, houseMats: iw.world.houses.M });
 		// inside the towers: the lobby, the elevators, every floor, the roof
-		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state });
+		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state, regional: () => iw.world?.globe?.regional?.settlements });
 		// ...and every other building: solid, and built inside as you come to it (interiors/)
 		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers, warm: (o) => (renderer.compileAsync ? renderer.compileAsync(o, camera, scene) : null) });
 		{ const cv = iw.world.commercial.venue, I = iw.world.interiors; iw.world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }

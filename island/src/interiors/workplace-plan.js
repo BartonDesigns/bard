@@ -23,8 +23,9 @@ export function regionAt({ lat = 37.77, lon = -122.42 } = {}) {
 }
 
 // The source and renderer use different kind enumerations; callers pass source kind.
-export function commercialStack(kind, w, d, height) {
- if (Math.min(w, d) <= 12 || w * d > 26000) return false;
+// (resort: a Strip resort's casino or tower, crysis/civgen.js: its casino may be bigger yet)
+export function commercialStack(kind, w, d, height, resort = false) {
+ if (Math.min(w, d) <= 12 || w * d > (resort ? 40000 : 26000)) return false;
  return kind === 11 || (kind === 5 && height >= 7.5) || (kind === 6 && w * d >= 1600 && Math.min(w, d) >= 28 && height >= 7);
 }
 
@@ -32,6 +33,8 @@ export function planWorkplace(o, floor0, location) {
  const top = o.y + o.h, height = top - floor0, seed = hash(Math.round(o.x * .37), Math.round(o.z * .29));
  const region = regionAt(location), W = o.w, D = o.d, hw = W / 2 - .3, hd = D / 2 - .3;
  const sourceKind = o.src?.kind ?? (o.kind === 2 ? 11 : o.kind === 3 ? 5 : o.kind === 6 ? 6 : 8);
+ // a Strip resort's (crysis/civgen.js strip): its casino a casino, its tower a hotel
+ if (o.src?.resort && (sourceKind === 6 || sourceKind === 11)) return planResort(o, floor0, sourceKind === 6, { top, height, seed, region, W, D, hw, hd });
  const mall = sourceKind === 6, residential = sourceKind === 8 || o.src?.use === 'residential';
  const type = mall ? 'mall' : residential ? 'home' : 'office';
  const lobbyH = Math.min(mall ? 4.8 : 5.2, Math.max(3.2, height / 2));
@@ -55,6 +58,32 @@ export function planWorkplace(o, floor0, location) {
  levels.push({ n: 'R', y: top, h: 0, kind: 'roof', program: 'Roof terrace', holes: [] });
  const T = { o, key: Math.round(o.x) + ':' + Math.round(o.z), W, D, hw, hd, floor0, top, type, region, profile:WORKPLACE_PROFILES[region], levels, coreW, coreD, coreZ, r: seed, atrium };
  for (const L of levels) L.zones = L.kind === 'office' ? officeZones(T, L) : [];
+ return T;
+}
+
+// A resort's casino: the gaming floor inside the doors, under a low ceiling, open all hours;
+// over it, where the block is tall enough, the showroom. Its hotel: the lobby with the front
+// desk, then floor after floor of guest rooms down a corridor, the suites at the top.
+export const HOTEL_STOREY = 3.3;
+function planResort(o, floor0, casino, { top, height, seed, region, W, D, hw, hd }) {
+ const coreW = Math.min(10, W * .32), coreD = Math.min(4.5, D * .2), coreZ = -hd + coreD, levels = [];
+ const name = o.src?.biz?.name || null;
+ if (casino) {
+  const h0 = height >= 12 ? Math.min(7.2, height * .45) : height;
+  levels.push({ n: 0, y: floor0, h: h0, kind: 'casino', program: 'Casino floor', seed: hash(seed * 137, 0), holes: [] });
+  if (height - h0 >= 5) levels.push({ n: 1, y: floor0 + h0, h: top - floor0 - h0, kind: 'showroom', program: 'Showroom', seed: hash(seed * 137, 1), holes: [] });
+ } else {
+  const lobbyH = Math.min(6.4, Math.max(3.4, height / 2)), count = Math.max(1, 1 + Math.floor((height - lobbyH + 1e-6) / HOTEL_STOREY));
+  for (let i = 0; i < count; i++) {
+   const y = i ? floor0 + lobbyH + (i - 1) * HOTEL_STOREY : floor0, h = i === count - 1 ? top - y : i ? HOTEL_STOREY : lobbyH;
+   // (the top two floors of a tall one its suites)
+   const suite = i > 0 && count > 8 && i >= count - 2;
+   levels.push({ n: i, y, h, kind: i ? 'hotel' : 'lobby', program: i ? (suite ? 'Suites' : 'Guest rooms') : 'Hotel lobby', seed: hash(seed * 137, i), holes: [], suite });
+  }
+ }
+ levels.push({ n: 'R', y: top, h: 0, kind: 'roof', program: 'Roof terrace', holes: [] });
+ const T = { o, key: Math.round(o.x) + ':' + Math.round(o.z), W, D, hw, hd, floor0, top, type: casino ? 'casino' : 'hotel', name, region, profile: WORKPLACE_PROFILES[region], levels, coreW, coreD, coreZ, r: seed, atrium: null };
+ for (const L of levels) L.zones = [];
  return T;
 }
 

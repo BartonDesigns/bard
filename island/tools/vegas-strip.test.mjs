@@ -20,7 +20,7 @@ const VEGAS = REAL.filter(([, la, lo]) => la > 36 && la < 36.25 && lo > -115.25 
 const B = () => ({ G: new Geo(), glow: new Geo(), night: new Geo(), solid: [], smoke: [], lights: [], trees: [] });
 const finite = (g) => g.p.every((v) => Number.isFinite(v));
 
-test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street, each built and lit', () => {
+test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street, each built and lit', async () => {
 	const names = VEGAS.map((e) => e[0]).join(' / ');
 	for (const want of ['Welcome to Fabulous Las Vegas', 'Luxor', 'Bellagio', 'Caesars', 'Paris Las Vegas', 'New York-New York', 'High Roller', 'Venetian', 'Sphere', 'Wynn', 'Strat', 'Fremont Street']) assert.ok(names.includes(want), want);
 	const idx = fs.readFileSync(new URL('../src/region/index.js', import.meta.url), 'utf8');
@@ -28,7 +28,7 @@ test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street,
 		assert.ok(REAL_BUILD[type], name + ' has a builder');
 		assert.match(idx, new RegExp('\\b' + type + ': \\d+'), name + ' keeps its ground clear');
 		assert.ok(about.length > 20, name + ' has a tale');
-		const b = B();
+		const b = { ...B(), signs: [], name };
 		REAL_BUILD[type](b, sc, args, () => 0.5, (x) => 0.002 * x);
 		assert.ok(b.G.p.length > 0 && finite(b.G) && finite(b.glow) && finite(b.night), name + ' built');
 		assert.ok(b.glow.p.length + b.night.p.length > 0, name + ' is lit by night');
@@ -37,9 +37,20 @@ test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street,
 		if (type === 'casino' || type === 'bellagio') {
 			const clear = +idx.match(new RegExp('\\b' + type + ': (\\d+)'))[1] * sc;
 			assert.ok(b.solid.length >= 4 && b.trees.length > 12, name + ' has its pools and garage');
+			// (its own name in lights: both faces of its pylon, the crown of each tower)
+			assert.ok(b.signs.length >= 3 && b.signs.every((q) => q.text === name && q.w > 4 && q.h > 3 && [q.x, q.y, q.z, q.yaw].every(Number.isFinite)), name + ' has its name up');
+			assert.equal(b.signs.filter((q) => q.y > 40 && q.y < 50).length, 2, name + ' on its pylon both sides');
 			for (const [x, z, w, d] of b.solid) assert.ok(Math.hypot(Math.abs(x) + w / 2, Math.abs(z) + d / 2) < clear, `${name}: ${Math.round(x)},${Math.round(z)} inside its ground (${clear})`);
 		}
 	}
+	// (the names lettered as each resort letters its own: no "the", capitals but for the script ones)
+	const { signText } = await import('../src/region/marquee.js');
+	assert.equal(signText('the Flamingo', 'script'), 'Flamingo');
+	assert.equal(signText('Caesars Palace'), 'CAESARS PALACE');
+	const st = fs.readFileSync(new URL('../src/region/settle.js', import.meta.url), 'utf8');
+	assert.match(st, /name: s\.kind === 'real' \? s\.name : null/);
+	assert.match(st, /signs\.push\(\{ \.\.\.q, x, y: y \+ q\.y, z, yaw: rot \+ q\.yaw \}\)/);
+	assert.match(st, /C\.signs = marquees\.mesh\(signs\)/);
 	// (the towers' rooms lit only after dark; the Luxor's beam goes up from its point)
 	const mb = B(); REAL_BUILD.casino(mb, 1, VEGAS.find((e) => e[0] === 'Mandalay Bay')[7], () => 0.5);
 	assert.ok(mb.night.p.length > 900, 'lit rooms up the tower');
