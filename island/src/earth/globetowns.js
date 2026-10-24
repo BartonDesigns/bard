@@ -21,6 +21,7 @@ import { createCivilization } from '../crysis/civ.js';
 import { loadAtlas, atlasReady, citiesNear, regionAt, aridAt, hash } from './atlas.js';
 import { STYLE } from '../bay/styles.js';
 import { F, toXZ, toLL } from './globeframe.js';
+import { cityAbsorbed, cityDistrict, cityProfile, citySites } from './cityprofiles.js';
 
 // civgen's reach, and how far the built-up ground spreads, by the atlas's size class
 // (village, town, city, large city, metropolis, megacity)
@@ -85,6 +86,7 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 		list = [];
 		towns.length = 0;
 		for (const c of near) {
+			if (cityAbsorbed(c, near)) continue;
 			const p = toXZ(c.lat, c.lon), size = Math.max(0, Math.min(5, c.pop | 0));
 			const rec = { city: c, x: p.x, z: p.z, size, spread: SPREAD[size], km: c.km };
 			if (skip(p.x, p.z, REACH[size])) { rec.bay = true; list.push(rec); continue; }
@@ -95,19 +97,19 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 			const R = regionAt(c.lat, c.lon), id = R?.id || '';
 			// (the American desert's towns, Las Vegas and Phoenix as much as the small ones, are stucco
 			// subdivisions on the survey's mile grid, north and south; a warm desert's street trees are palms)
-			const southwest = /^na\b/.test(id) && aridAt(c.lat, c.lon), palms = aridAt(c.lat, c.lon) && (R.profile?.climate?.temp?.[0] ?? 0) >= 5;
+			const profile = cityProfile(c), southwest = !profile && /^na\b/.test(id) && aridAt(c.lat, c.lon), palms = aridAt(c.lat, c.lon) && (R.profile?.climate?.temp?.[0] ?? 0) >= 5;
 			rec.grid = southwest;
 			const older = (!/^(na|oc)\b/.test(id) || size >= 3) && !southwest;
-			const h = hash(c.id), ang = southwest ? 0 : (h % 1000) / 1000 * Math.PI / 2, style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
+			const h = hash(c.id), ang = profile?.angle ?? (southwest ? 0 : (h % 1000) / 1000 * Math.PI / 2), style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
 			// (the manner it is built in, where its region has one of its own)
-			const look = lookOf(c) || null;
-			towns.push(spined({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, palms, look }));
-			districts(rec, ang, style, pop, id, palms, look);
+			const look = profile?.look || lookOf(c) || null, name = cityDistrict(profile, c.lat, c.lon) || c.name;
+			towns.push(spined({ x: p.x, z: p.z, r: REACH[size], ang, style, name, pop, city: c, region: id, palms, look, profile: profile?.id || null, sites: citySites(profile, toXZ, p.x, p.z, REACH[size]) }));
+			districts(rec, ang, style, pop, id, palms, look, profile);
 		}
 	}
 	// the districts of a city round where you are (within D_KM): the lattice's points that are
 	// built up enough, past the centre's own reach, not the Bay's
-	function districts(rec, ang, style, pop, region, palms, look = null) {
+	function districts(rec, ang, style, pop, region, palms, look = null, profile = null) {
 		const size = rec.size, r = DISTRICT[size];
 		if (!r || rec.km > SPREAD[size] / 1000 + D_KM) return;
 		const D = r * D_STEP, row = D * Math.sqrt(3) / 2, ca = Math.cos(ang), sa = Math.sin(ang);
@@ -129,7 +131,8 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 				const S = SPINES[rec.city.id];
 				if (S && !ang) { const ll = toLL(x, z), sx = toXZ(ll.lat, S.lon).x; if (ll.lat > S.lat[0] - 0.02 && ll.lat < S.lat[1] + 0.02 && Math.abs(sx - x) < D / 2) x = sx; }
 				if (Math.hypot(x - here.x, z - here.z) > D_KM * 1000 || skip(x, z, r)) continue;
-				towns.push(spined({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j], look }));
+				const ll = toLL(x, z), name = cityDistrict(profile, ll.lat, ll.lon) || rec.city.name;
+				towns.push(spined({ x, z, r, ang, style, name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j], look, profile: profile?.id || null, sites: citySites(profile, toXZ, x, z, r) }));
 			}
 		}
 	}
