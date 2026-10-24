@@ -20,7 +20,7 @@ let stripTex = null;
 // directional light (the sun) reaches this fragment (1 where there are no shadows; the hills'
 // shade in it too). Taken from the chunk when the grass is built, not as the page loads, so it
 // has what is put into the chunk before any shader is built (world/hillsun.js)
-const sunlitBegin = () => THREE.ShaderChunk.lights_fragment_begin.replace(
+export const sunlitBegin = () => THREE.ShaderChunk.lights_fragment_begin.replace(
 	'vDirectionalShadowCoord[ i ] ) : 1.0;',
 	'vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\tgSunLit = min(gSunLit, length(directLight.color) / max(length(directionalLight.color), 1e-4));');
 
