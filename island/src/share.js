@@ -139,6 +139,13 @@ export function createShare(ctx) {
 			const B = w.commercial?.inside(pos);
 			if (B) b = { k: 'shop', id: 's' + r2(B.b.x) + ':' + r2(B.b.z), cx: B.b.x, cz: B.b.z, type: B.type, at: 'in' };
 		}
+		// a home in the city's own buildings (interiors/): a row house, or a flat in its block (which
+		// one, as people/home-life.js has them: ctx.homeAt)
+		if (!b && w.interiors?.inside?.(pos)) {
+			let u = null;
+			try { u = ctx.homeAt?.(pos); } catch { /* its rooms not made yet */ }
+			if (u?.building && u.house?.key) b = { k: 'flat', id: 'i' + u.house.key, cx: u.house.cx, cz: u.house.cz, at: 'in', row: u.house.kind === 'row' };
+		}
 		// at the door: close by, on the same level
 		if (!b && w.houses?.houses) for (const h of w.houses.houses.values()) {
 			if (h && Math.hypot(pos.x - h.cx, pos.z - h.cz) < h.r && Math.abs(eye - h.floorY) < 2) { b = houseOf(h, 'door'); break; }
@@ -159,6 +166,8 @@ export function createShare(ctx) {
 			const on = st ? ` on ${st}` : '';
 			b.n = b.k === 'tower' ? `${b.label.replace(/^(\d+) · /, 'Floor $1 · ')} · tower${on}` : b.k === 'house' && b.ll ? `${b.label} ${((p) => (/^near /.test(p) ? p : /^-?\d/.test(p) ? 'at ' + p : 'in ' + p))(farPlace(b.ll).name)}` : b.k === 'house' ? `House${on}` : b.k === 'shop' ? `${SHOP[b.type] || 'Shop'}${on}` : b.k === 'cave' ? 'Hut in the cave village' : 'House in the village';
 		}
+		// (the city's homes by what they are)
+		if (b?.k === 'flat' && named) b.n = `${b.row ? 'Row house' : 'Flat'}${((st) => (st ? ` on ${st}` : ''))(w.bayArea ? streetAt(w, b.cx, b.cz) : '')}`;
 		return b;
 	}
 
@@ -304,6 +313,8 @@ export function createShare(ctx) {
 					const at = new THREE.Vector3(s.x, yOf(), s.z);
 					if (b?.k === 'house') await until(() => w.houses?.inside(at) || [...(w.houses?.houses?.values() || [])].some((h) => h && (b.lat != null ? h.grp?.homeId === b.id : Math.hypot(h.cx - b.cx, h.cz - b.cz) < 2)), 60000);
 					else if (b?.k === 'shop') await until(() => w.commercial?.inside(at), 60000);
+					// (a flat upstairs: its floor built before you are let down onto it, interiors/)
+					else if (b?.k === 'flat') await until(() => { const I = w.interiors?.inside(at); return !!I?.B.levels?.[I.level]; }, 60000);
 				}
 				await sleep(250);
 			} else if (s.bld?.k === 'cave' && w.underworld) {
@@ -573,6 +584,8 @@ export function createShare(ctx) {
 	return {
 		update, refresh, share, openAt, go, capture, keep: keepPlace, resumeCode, describe, link, pack, unpack, building,
 		homes, addHome, renameHome, removeHome, goHome,
+		// (the home saved for the building you are in, if it is one: gameplay/rest.js's beds)
+		mine: () => mine,
 		busy: () => busy,
 		setName: (n) => { try { localStorage.setItem(NAME_KEY, String(n || '').slice(0, 40)); } catch { /* storage off */ } return n; },
 	};

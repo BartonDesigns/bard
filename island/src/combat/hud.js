@@ -40,7 +40,7 @@ const CSS = `
 .cb-star .on{color:#ffd24a;text-shadow:0 0 6px rgba(255,180,40,.8)}.cb-star .off{color:rgba(255,255,255,.25)}.cb-star .blue{color:#4aa8ff;text-shadow:0 0 6px rgba(60,140,255,.85)}
 .cb-calls{position:absolute;left:calc(14px + env(safe-area-inset-left));top:40%;display:flex;flex-direction:column;gap:4px;max-width:46vw}
 .cb-calls div{background:rgba(10,16,20,.5);padding:4px 8px;border-radius:6px;font-weight:500;transition:opacity .6s}
-.cb-feed{position:absolute;right:calc(14px + env(safe-area-inset-right));top:calc(48px + var(--l99-top, env(safe-area-inset-top)));display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:56vw}
+.cb-feed{position:absolute;right:calc(14px + env(safe-area-inset-right));top:calc(var(--l99-feed-top, 48px) + var(--l99-top, env(safe-area-inset-top)));display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:56vw}
 .cb-feed div{background:rgba(10,16,20,.55);padding:3px 8px;border-radius:4px;font:600 12px/1.3 var(--bard-display,system-ui,sans-serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:opacity .5s}
 .cb-feed div.me{box-shadow:inset 3px 0 0 #01a982}.cb-feed em{font-style:normal;opacity:.7;font-weight:500;margin:0 6px}.cb-feed .a{color:#9ff0d4}.cb-feed .v{color:#ffb08a}.cb-feed .h{color:#ffd27a;margin-left:6px}
 .cb-ko{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(6,10,14,.55);opacity:0;transition:opacity .5s;font:700 22px var(--bard-display,system-ui,sans-serif);letter-spacing:2px}

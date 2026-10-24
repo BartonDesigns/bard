@@ -30,7 +30,7 @@ import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/bo
 import { peopleCap } from '../world/governor.js';
 import { createMotion } from '../people/motion.js';
 import { fadePerson } from '../people/fade.js';
-import { createHealth, applyDamage, tickHealth } from './health.js';
+import { createHealth, applyDamage, tickHealth, PARTS, CREATURE_HEAD } from './health.js';
 import { personShapes } from './targets.js';
 import { npcHand } from './weapon-view.js';
 import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
@@ -213,6 +213,8 @@ export function createSquads(ctx) {
 				// one of your guild's townsfolk (their record in guild/guild-rules.js), and a while
 				// they have fired on the law (only then does the law fire back on them)
 				ally: opts.ally || null, hitLaw: 0, castT: rnd(1, 2),
+				// a caster's mana (creatures/catalog.js mana): its throws spend it
+				mana: Sp?.mana?.max || 0, manaMax: Sp?.mana?.max || 0,
 			};
 			// (a mage of yours carries no gun: spells only)
 			if (h.ally && !F.gun) h.noGun = true;
@@ -272,6 +274,9 @@ export function createSquads(ctx) {
 				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: Sp ? Math.max(1, Sp.height * 0.55) : 1.4 }, name: Sp ? (/^the /i.test(Sp.name) ? Sp.name : `${/^[aeiou]/i.test(Sp.name) ? 'an' : 'a'} ${Sp.name}`) : F.officer ? F.officer : F.name ? `${/^[aeiou]/i.test(F.name) ? 'an' : 'a'} ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
 				get surrendered() { return h.surrendered > 0 || h.fleeing; },
 				surface: B.surface, shapes: () => shapesOf(h), ref: h,
+				// (what the target frame shows: combat/target-frame.js)
+				vitals: () => ({ hp: h.H.hp, max: h.H.max, armour: h.H.armour, armourMax: h.H.armourMax, mana: h.manaMax ? h.mana : null, manaMax: h.manaMax }),
+				rank: Sp?.rank || null,
 				aim: () => (h.body ? aimPoint(h.body.P) : null),
 				onHit: (blow) => hit(h, blow),
 				moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0 || h.struckFirst, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
@@ -310,6 +315,8 @@ export function createSquads(ctx) {
 		if (h.dead || h.surrendered || h.fleeing || h.restrained) return null;
 		// (the Facet Wraith's shell turns most of a blow until it opens)
 		if (h.cr?.facets) blow = { ...blow, amount: blow.amount * h.cr.facets.exposure() };
+		// (a monster's thick skull: health.js CREATURE_HEAD; a fist's head blow is already less)
+		if (h.cr && blow.part === 'head' && !blow.melee) blow = { ...blow, amount: blow.amount * CREATURE_HEAD / PARTS.head };
 		const r = applyDamage(h.H, blow);
 		if (blow.part === 'vital' && r.dealt > 0) h.cr?.weak?.flash();
 		if (h.dormant && h.waking < 0) h.waking = 0;
@@ -684,6 +691,7 @@ export function createSquads(ctx) {
 			if (h.dead) { fading(h, dt); continue; }
 			if (d > 280 && !h.ally) { release(h); continue; }
 			tickHealth(h.H, dt);
+			if (h.manaMax && h.mana < h.manaMax) h.mana = Math.min(h.manaMax, h.mana + (h.Sp?.mana?.regen || 0) * dt);
 			if (h.crew) { crewStep(h, dt, d); bounds(h); continue; }
 			if (h.surrendered) { yieldStep(h, dt, d); bounds(h); continue; }
 			if (h.downT > 0) h.downT -= dt;
@@ -1084,6 +1092,8 @@ export function createSquads(ctx) {
 		let menace = 0;
 		if (h.alert && at && !h.beast) {
 			const tx = at.x - h.pos.x, tz = at.z - h.pos.z, dd = Math.hypot(tx, tz);
+			// (a thrower with the mana for it, or none needed; run dry, it comes in to fight)
+			const lobs = !!S.throw && (!S.mana || h.mana >= S.mana.cost);
 			want = Math.atan2(tx, tz);
 			h.fireT -= dt;
 			menace = h.strikeT >= 0 ? 0.4 : 1;
@@ -1127,12 +1137,13 @@ export function createSquads(ctx) {
 				h.strikeT = 0; h.struck = false; h.throwing = false; c.motion.strike();
 				cry(h, 'strike', h.pos, 0.8);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
-			} else if (S.throw && h.los && dd > S.reach * 1.6 && dd < S.throw.range && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.5) {
+			} else if (lobs && h.los && dd > S.reach * 1.6 && dd < S.throw.range && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.5) {
 				h.strikeT = 0; h.struck = false; h.throwing = true; c.motion.strike();
+				if (S.mana) h.mana = Math.max(0, h.mana - S.mana.cost);
 				cry(h, 'throw', h.pos, 0.8);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
-			} else if (S.throw && dd < S.throw.keep && dd > S.reach) speed = -S.walk;
-			else if (S.throw && dd < S.throw.range * 0.8 && dd > S.reach) speed = 0;
+			} else if (lobs && dd < S.throw.keep && dd > S.reach) speed = -S.walk;
+			else if (lobs && dd < S.throw.range * 0.8 && dd > S.reach) speed = 0;
 			// (fresh woken from standing as a tree, it only walks after you for a while)
 			else if (dd > S.reach * 0.75) speed = h.stalkT > 0 ? S.walk : dd > 7 ? S.run : Math.max(S.walk, S.run * 0.5);
 			if (h.stalkT > 0) h.stalkT -= dt;

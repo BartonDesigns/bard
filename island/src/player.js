@@ -264,6 +264,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function update(dt, t) {
 		if (s.locked || s.flying || s.swimming) { settleFeel(); park.grounded(); }
 		if (s.locked) return;
+		if (s.seat && seated(dt)) { settleFeel(); return; }          // sat down (gameplay/rest.js)
 		if (s.move?.(dt)) { settleFeel(); return; }          // a vault carries you (structures/vault.js)
 		if (park.step(dt)) { settleFeel(); F.ride = s.pos.y; return; }          // a climb carries you (parkour.js)
 		s.aimAssist?.(dt);          // locked on to someone: the view held on them (combat/target-focus.js)
@@ -456,6 +457,51 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		else F.ride = s.pos.y;
 		camera.position.set(s.pos.x + right.x * F.side, F.ride + bob + F.dip.v - F.low, s.pos.z + right.z * F.side);
 		camera.rotation.set(s.pitch + F.dip.v * 0.25, s.yaw, F.roll, 'YXZ');
+	}
+	// Sat down (gameplay/rest.js sets s.seat: { x, z where you sit, y its floor, h how high the seat
+	// is, yaw the view that faces the way it does, lie: in bed, the head on the pillow at x, z with
+	// top the mattress's height and pitch the look up from it; hold: kept there, asleep }): the eye
+	// eased down onto it from where you stood and turned the way it faces, then the view is yours
+	// to turn. A step, a jump (or rest.js setting up) and the eye eases up again where you stood.
+	// Moved meanwhile by anything else (a teleport, a blow, taking to the air), the seat lets you go
+	// where that left you. s.onStand(seat, why) hears each getting up.
+	const SIT_EYE = 0.76, LIE_EYE = 0.2;
+	const ease = (k) => k * k * (3 - 2 * k), turn = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
+	function seated(dt) {
+		const S = s.seat, moved = !!S.at && Math.abs(s.pos.x - S.at.x) + Math.abs(s.pos.y - S.at.y) + Math.abs(s.pos.z - S.at.z) > 0.05;
+		if (moved || s.flying || s.swimming) {
+			// (up and away from where you stood, unless something else has put you somewhere)
+			if (!moved && S.from) s.pos.copy(S.from);
+			s.seat = null; s.onStand?.(S, 'moved');
+			return false;
+		}
+		if (!S.from) { S.from = s.pos.clone(); S.yaw0 = s.yaw; S.pitch0 = s.pitch; S.k = 0; }
+		const m = input(), ax = m.mx + (s.auto?.x || 0), az = m.mz + (s.auto?.z || 0);
+		if (S.up == null && !S.hold && (Math.hypot(ax, az) > 0.3 || keys.has(' ') || s.jumpQueued)) S.up = 0;
+		s.jumpQueued = false;
+		s.vel.set(0, 0, 0); s.grounded = true;
+		const eye = S.y + (S.lie ? S.top + LIE_EYE : S.h + SIT_EYE);
+		if (S.up != null) {
+			// getting up: on your feet where you stood, the eye rising to it
+			S.up = Math.min(1, S.up + dt / 0.35);
+			const k = ease(S.up);
+			s.pos.copy(S.from);
+			camera.position.set(S.x + (S.from.x - S.x) * k, eye + (S.from.y - eye) * k, S.z + (S.from.z - S.z) * k);
+			// (out of bed, the eyes come down off the ceiling)
+			if (S.lie) { S.p0 ??= s.pitch; s.pitch = S.p0 * (1 - k); }
+		} else {
+			S.k = Math.min(1, S.k + dt / 0.45);
+			const k = ease(S.k);
+			s.pos.set(S.x, S.y + EYE, S.z);
+			camera.position.set(S.from.x + (S.x - S.from.x) * k, S.from.y + (eye - S.from.y) * k, S.from.z + (S.z - S.from.z) * k);
+			// (turned the way the seat faces as you sit; then free)
+			if (S.k < 1 || S.hold) { s.yaw = turn(S.yaw0, S.yaw, k); if (S.pitch != null) s.pitch = S.pitch0 + (S.pitch - S.pitch0) * k; }
+		}
+		camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');
+		F.ride = s.pos.y;
+		S.at = { x: s.pos.x, y: s.pos.y, z: s.pos.z };
+		if (S.up >= 1) { s.seat = null; s.onStand?.(S, 'up'); }
+		return true;
 	}
 	// How the view moves with the body, as in a shooter: it sinks as you crouch (lower still in a
 	// slide), dips on a hard landing and springs back, sways a little from foot to foot, leans

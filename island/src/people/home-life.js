@@ -265,7 +265,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	function replan(H, hour, budget) {
 		const d = day();
 		if (H.planDay !== d) { H.plans = planDay(H.hh, d); H.planDay = d; }
-		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget });
+		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget, taken: claimed?.h === H.h ? claimed.ids : null });
 		H.prev = new Map(A.map((q) => [q.member.id, { act: q.act, spot: q.spot.id }]));
 		const keep = new Set();
 		for (const q of A) {
@@ -656,14 +656,25 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		if (!Number.isFinite(pos?.x)) return null;
 		const ins = W()?.houses?.inside?.(pos);
 		if (!ins) {
-			// a home in the city's (interiors/): the row house, the flat
+			// a home in the city's (interiors/): the row house, the flat (once its rooms are
+			// furnished and it has somewhere to sleep)
 			const I = W()?.interiors?.inside?.(pos), u = I ? dwellingAt(I.B, I.level, pos) : null;
-			return u ? { house: u, level: I.level, household: householdOf(u), home: homes.has(u) ? whoIsHome(u) : null, building: I.B } : null;
+			return u?.ready() ? { house: u, level: I.level, household: householdOf(u), home: homes.has(u) ? whoIsHome(u) : null, building: I.B } : null;
 		}
 		// (upstairs over a business: the flat's household)
 		const u = ins.h.plan?.estab && ins.level > 0 ? over(ins.h) : null, h = u || ins.h;
 		return { house: h, level: ins.level, household: householdOf(h), home: homes.has(h) ? whoIsHome(h) : null };
 	}
+	// the spots of a home its household has (sat or lying in, or on the way there), and the ones
+	// kept for you while you are in them (gameplay/rest.js: a seat, or a whole bed): they keep clear
+	// of them, whoever had them getting up for somewhere else
+	let claimed = null;
+	function inUse(h) {
+		const H = homes.get(h), out = new Set();
+		if (H) for (const a of H.actors.values()) if (a.active) for (const q of [a.q, a.walk?.q, a.swap?.q, a.next]) if (q?.spot) out.add(q.spot.id);
+		return out;
+	}
+	function claim(h, id) { claimed = h && id != null ? { h, ids: [].concat(id) } : null; planT = 0; }
 	function whoIsHome(h) {
 		const H = homes.get(h);
 		if (!H) return [];
@@ -684,7 +695,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		};
 	}
 	return {
-		update, clear, dispose, actors, info, homeAt, whoIsHome, homeNow, householdOf, group: root,
+		update, clear, dispose, actors, info, homeAt, whoIsHome, homeNow, householdOf, inUse, claim, group: root,
 		occupants: () => [...homes.values()].flatMap((H) => whoIsHome(H.h).map((q) => ({ ...q, house: H.h }))),
 		on: (f) => { listeners.add(f); return () => listeners.delete(f); },
 		// (for a look: a fight crashes into the house you are at)
