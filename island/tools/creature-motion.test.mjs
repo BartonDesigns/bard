@@ -9,9 +9,34 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as THREE from 'three';
 import { createCreatureMotion, character } from '../src/creatures/motion.js';
-import { standOf, footShade } from '../src/creatures/contact.js';
+import { standOf, footShade, createContactShadows } from '../src/creatures/contact.js';
 
 const dir = new URL('../assets/creatures/', import.meta.url);
+test('contact shadows stay within the mobile/desktop budget and clear without reallocating', () => {
+	for (const isPhone of [true, false]) {
+		const shadows = createContactShadows({ isPhone }), mesh = shadows.mesh;
+		const capacity = isPhone ? 24 : 48, matrices = mesh.instanceMatrix.array;
+		const plane = { x: 0, y: 2, z: 0, nx: 0, ny: 1, nz: 0 };
+		assert.equal(mesh.instanceMatrix.usage, THREE.DynamicDrawUsage);
+		shadows.begin();
+		for (let i = 0; i < capacity + 10; i++) shadows.put(i, 0, plane, 0.5, 0.8, 0, 0.3);
+		shadows.end();
+		assert.equal(shadows.count, capacity);
+		assert.equal(mesh.count, capacity);
+		assert.ok(matrices.every(Number.isFinite));
+		assert.ok(Math.abs(matrices[13] - 2.025) < 1e-5);
+		shadows.begin();
+		shadows.put(0, 0, plane, 1, 1, 0, 0.01);
+		shadows.end();
+		assert.equal(mesh.count, 0);
+		assert.equal(mesh.instanceMatrix.array, matrices);
+		let disposed = 0;
+		mesh.geometry.addEventListener('dispose', () => disposed++);
+		mesh.material.addEventListener('dispose', () => disposed++);
+		shadows.dispose();
+		assert.equal(disposed, 2);
+	}
+});
 const files = fs.readdirSync(dir).filter((f) => f.endsWith('.glb'));
 const san = (n) => n.replace(/[\s.[\]:/]/g, '');
 // a model's nodes as three's GLTFLoader makes them (bones for the skin's joints, a skinned mesh

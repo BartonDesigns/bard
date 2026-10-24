@@ -20,7 +20,7 @@ const VEGAS = REAL.filter(([, la, lo]) => la > 36 && la < 36.25 && lo > -115.25 
 const B = () => ({ G: new Geo(), glow: new Geo(), night: new Geo(), solid: [], smoke: [], lights: [], trees: [] });
 const finite = (g) => g.p.every((v) => Number.isFinite(v));
 
-test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street, each built and lit', () => {
+test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street, each built and lit', async () => {
 	const names = VEGAS.map((e) => e[0]).join(' / ');
 	for (const want of ['Welcome to Fabulous Las Vegas', 'Luxor', 'Bellagio', 'Caesars', 'Paris Las Vegas', 'New York-New York', 'High Roller', 'Venetian', 'Sphere', 'Wynn', 'Strat', 'Fremont Street']) assert.ok(names.includes(want), want);
 	const idx = fs.readFileSync(new URL('../src/region/index.js', import.meta.url), 'utf8');
@@ -28,12 +28,29 @@ test('the Strip: its resorts, the wheel, the tower, the sign and Fremont Street,
 		assert.ok(REAL_BUILD[type], name + ' has a builder');
 		assert.match(idx, new RegExp('\\b' + type + ': \\d+'), name + ' keeps its ground clear');
 		assert.ok(about.length > 20, name + ' has a tale');
-		const b = B();
+		const b = { ...B(), signs: [], name };
 		REAL_BUILD[type](b, sc, args, () => 0.5, (x) => 0.002 * x);
 		assert.ok(b.G.p.length > 0 && finite(b.G) && finite(b.glow) && finite(b.night), name + ' built');
 		assert.ok(b.glow.p.length + b.night.p.length > 0, name + ' is lit by night');
 		assert.ok(b.solid.length > 0, name + ' stands in your way');
+		// (a resort's pool deck out the back and its garage at the side, all on its own paved ground)
+		if (type === 'casino' || type === 'bellagio') {
+			const clear = +idx.match(new RegExp('\\b' + type + ': (\\d+)'))[1] * sc;
+			assert.ok(b.solid.length >= 4 && b.trees.length > 12, name + ' has its pools and garage');
+			// (its own name in lights: both faces of its pylon, the crown of each tower)
+			assert.ok(b.signs.length >= 3 && b.signs.every((q) => q.text === name && q.w > 4 && q.h > 3 && [q.x, q.y, q.z, q.yaw].every(Number.isFinite)), name + ' has its name up');
+			assert.equal(b.signs.filter((q) => q.y > 40 && q.y < 50).length, 2, name + ' on its pylon both sides');
+			for (const [x, z, w, d] of b.solid) assert.ok(Math.hypot(Math.abs(x) + w / 2, Math.abs(z) + d / 2) < clear, `${name}: ${Math.round(x)},${Math.round(z)} inside its ground (${clear})`);
+		}
 	}
+	// (the names lettered as each resort letters its own: no "the", capitals but for the script ones)
+	const { signText } = await import('../src/region/marquee.js');
+	assert.equal(signText('the Flamingo', 'script'), 'Flamingo');
+	assert.equal(signText('Caesars Palace'), 'CAESARS PALACE');
+	const st = fs.readFileSync(new URL('../src/region/settle.js', import.meta.url), 'utf8');
+	assert.match(st, /name: s\.kind === 'real' \? s\.name : null/);
+	assert.match(st, /signs\.push\(\{ \.\.\.q, x, y: y \+ q\.y, z, yaw: rot \+ q\.yaw \}\)/);
+	assert.match(st, /C\.signs = marquees\.mesh\(signs\)/);
 	// (the towers' rooms lit only after dark; the Luxor's beam goes up from its point)
 	const mb = B(); REAL_BUILD.casino(mb, 1, VEGAS.find((e) => e[0] === 'Mandalay Bay')[7], () => 0.5);
 	assert.ok(mb.night.p.length > 900, 'lit rooms up the tower');
@@ -313,4 +330,73 @@ test('Las Vegas Boulevard runs straight down the Strip, the district\'s grid lin
 		assert.match(sh, /gw = step\(2\.0, C\.w\)/);
 		assert.match(sh, /gQI & 63/, 'the section lines every mile');
 	} finally { bayFrame(); }
+});
+
+test('the Strip is alive at night: thronged round the clock, every resort between the named ones a casino with its tower, its name in lights, the boulevard full of cars', async () => {
+	const town = { x: 0, z: 0, r: 2000, ang: 0, style: STYLE.suburb, name: 'Las Vegas', spine: { x: 437, name: 'Las Vegas Boulevard', z0: -1500, z1: 1800, hw: 380 } };
+	const civ = createCivilization({ real: { addRegion: (r) => ({ r }), removeRegion: () => {} }, bay: { towns: [town], heightAt: () => 610, loaded: () => true }, keep: () => [], palms: () => true });
+	const cam = { position: { x: 0, y: 1.7, z: 0 } };
+	for (let n = 0; n < 20000 && !civ.active(); n++) civ.update(cam);
+	const R = civ.active().region;
+	// (people: the town map says the Strip, and the Strip is busy at every hour, busiest late)
+	const { townMapAt } = await import('../src/crysis/townmap.js');
+	const { zoneOf, crowd, ZONE } = await import('../src/people/flow.js');
+	assert.ok(R.strip?.length === 1, 'the Strip\'s frontage');
+	const U = townMapAt(R, 437 + 30, 300), off = townMapAt(R, -1200, 300);
+	assert.ok(U?.strip && U.u > 0.8 && zoneOf(U) === ZONE.strip, 'on the Strip');
+	assert.ok(!off?.strip, 'and not the subdivisions across the freeway');
+	for (const h of [0, 1, 21, 22.5, 23.5]) assert.ok(crowd(ZONE.strip, h, false).k > 0.75, `thronged at ${h}`);
+	assert.ok(crowd(ZONE.strip, 15, false).k > 0.5 && crowd(ZONE.strip, 4, false).k > 0.35, 'busy by afternoon, never empty');
+	assert.ok(crowd(ZONE.strip, 7, false).k < crowd(ZONE.strip, 22.5, false).k * 0.4, 'quietest at breakfast');
+	assert.ok(crowd(ZONE.retail, 22.5, false).k < 0.1, '(a shopping street is shut by then)');
+	const ppl = fs.readFileSync(new URL('../src/people/people.js', import.meta.url), 'utf8');
+	assert.match(ppl, /zone === ZONE\.downtown \|\| zone === ZONE\.strip \? 1/);
+	// (and they walk it: the boulevard's broad pavements, though it is no side street)
+	assert.match(ppl, /const onFoot = \(q\) => \(q\.walked \|\| q\.strip \|\|/);
+	assert.match(ppl, /band = road\.strip \?/);
+	// (and far down it, by the hundred, round wherever you are on it: people/stripcrowd.js)
+	const { createStripCrowd } = await import('../src/people/stripcrowd.js');
+	const added = [], SC = createStripCrowd({ scene: { add: (g) => added.push(g) }, ground: () => 610 });
+	SC.update(0.016, 1, { position: { x: 437, y: 2, z: 0 } }, R, 22.5);
+	assert.ok(SC.info().pieces >= 1 && SC.info().walkers === 300 && added.length === 1, JSON.stringify(SC.info()));
+	SC.update(0.016, 1, { position: { x: 437, y: 2, z: 0 } }, null, 22.5);
+	assert.equal(SC.info().walkers, 0, 'gone with the town');
+	assert.match(fs.readFileSync(new URL('../src/earth/globe.js', import.meta.url), 'utf8'), /stripCrowd\.update\(dt, t0 \/ 1000, cam, A\?\.region/);
+	// (the resorts: casino, tower and garage one resort; the economy makes the casino a casino and the tower its hotel, by one name)
+	const strip = (x, z) => Math.abs(x - 437) < 380 && z > -1500 && z < 1800;
+	const on = R.boxes.filter((b) => strip(b.x, b.z) && b.resort);
+	const casinos = on.filter((b) => b.kind === 6);
+	assert.ok(casinos.length >= 10, `${casinos.length} casinos`);
+	for (const c of casinos) assert.ok(Math.hypot(c.resort[0] - c.x, c.resort[1] - c.z) < 80, 'keyed by its own place');
+	assert.ok(on.filter((b) => b.kind === 11).every((t) => casinos.some((c) => c.resort === t.resort)), 'each tower its casino\'s');
+	const { describeBoxes, planTown } = await import('../src/economy/establishments.js');
+	const D = describeBoxes(R.boxes.filter((b) => strip(b.x, b.z)));
+	const plan = planTown(D, { locale: 'us' });
+	const byKey = new Map();
+	for (const E of plan) {
+		const b = D[E.i];
+		if (!b.resort) continue;
+		assert.ok(E.type === (b.use === 'tower' ? 'resorthotel' : 'casino'), `${b.use} a ${E.type}`);
+		assert.equal(E.venue, null, 'no shop fitted in a casino');
+		const k = b.resort.join(',');
+		if (byKey.has(k)) assert.equal(E.name, byKey.get(k), 'casino and tower one name'); else byKey.set(k, E.name);
+	}
+	assert.ok(byKey.size >= 10 && new Set(byKey.values()).size === byKey.size, 'each resort its own name');
+	assert.ok(plan.filter((E) => D[E.i].resort).length === D.filter((b) => b.resort && (b.use === 'retail' || b.use === 'tower')).length, 'every one of them');
+	// (the name in lights: across the casino's front, on its pylon both sides, across the tower's crown; all night)
+	const layer = fs.readFileSync(new URL('../src/economy/layer.js', import.meta.url), 'utf8');
+	assert.match(layer, /D\.use === 'retail' && E\.type === 'casino'/);
+	assert.match(layer, /put\('pylon'/);
+	assert.match(layer, /E\.type === 'resorthotel'/);
+	assert.match(fs.readFileSync(new URL('../src/bay/lotkit.js', import.meta.url), 'utf8'), /S\.pylon = M\(/);
+	const { hoursOf } = await import('../src/economy/frontage.js');
+	assert.deepEqual(hoursOf({ type: 'casino', x: 1, z: 2 }), [0, 24]);
+	// (the boulevard: the Strip by name, three lanes each way, nose to tail)
+	assert.ok(R.roads.filter((q) => q.name === 'Las Vegas Boulevard').every((q) => q.strip === 1), 'the boulevard is the Strip');
+	assert.ok(!R.roads.some((q) => q.strip && q.name !== 'Las Vegas Boulevard'));
+	const sl = fs.readFileSync(new URL('../src/bay/streetlife.js', import.meta.url), 'utf8');
+	assert.match(sl, /Math\.min\(3, Math\.floor\(\(half - 1\.2\) \/ 3\.5\)\)/, 'lanes side by side');
+	assert.match(sl, /const nC = l\.strip \? Math\.min\(150, Math\.round\(\(u1 - u0\) \* l\.L \* l\.n \* 2 \/ 35\)\)/, 'a car every 35 m of each lane round you');
+	assert.match(sl, /u: u0 \+ Math\.random\(\) \* \(u1 - u0\)/);
+	assert.match(sl, /if \(\(c\.u \* L - l\.camS\) \* c\.dir > W\) \{ c\.u = /, 'and one gone off down it comes up it again');
 });

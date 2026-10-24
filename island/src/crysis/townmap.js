@@ -16,6 +16,10 @@ for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) RING.push([i * 20, j
 const QUARTER = Math.PI / 2;
 const NONE = null;
 
+// is (x, z) on the Strip's frontage: one of its rectangles across the boulevard ({ x, z, ux, uz } its
+// middle and the way across, hw across either side, hd along)
+const onStrip = (S, x, z) => S.some((q) => { const dx = x - q.x, dz = z - q.z; return Math.abs(dx * q.ux + dz * q.uz) < q.hw && Math.abs(dz * q.ux - dx * q.uz) < q.hd; });
+
 // a town record from civgen.js (its centre, radius, angle, style and land-use map)
 export function townMapAt(T, x, z) {
 	const M = T?.map, C = T?.centre;
@@ -47,7 +51,10 @@ export function townMapAt(T, x, z) {
 	const dense = Math.min(1, Math.max(0, (roof - 0.3) / 0.25));
 	const down = u > 0.1 ? Math.min(1, Math.max(core, plaza * 0.6 + shops * 0.2, dense * 0.3)) : 0;
 	const s = works > 0.5 ? STYLE.industry : shops + plaza > 0.45 && plaza < shops ? STYLE.retail : older ? STYLE.older : STYLE.suburb;
-	return { u, a: (((T.ang || 0) % QUARTER) + QUARTER) % QUARTER, d: down, s };
+	const a = (((T.ang || 0) % QUARTER) + QUARTER) % QUARTER;
+	// (the Strip's frontage, crysis/civgen.js strip: all resort, as built up as anywhere, busy at every hour, people/flow.js)
+	if (T.strip?.length && onStrip(T.strip, x, z)) return { u: Math.max(u, 0.85), a, d: Math.max(down, 0.5), s: STYLE.retail, strip: 1 };
+	return { u, a, d: down, s };
 }
 
 // the world's townAt: the Bay's town map (bay/terrain.js urbanAt) where it has a town, and where

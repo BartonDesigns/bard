@@ -36,6 +36,7 @@ import { setFarGround } from '../bay/terrain.js';
 import { LAT0, LON0 } from '../bay/geo.js';
 import { today, onMonth } from '../calendar.js';
 import { createRegional } from '../region/index.js';
+import { createStripCrowd } from '../people/stripcrowd.js';
 
 // the countries that drive on the left (the rest keep right)
 const LEFT = /United Kingdom|England|Scotland|Wales|Ireland|Japan|India|Pakistan|Bangladesh|Sri Lanka|Nepal|Bhutan|Thailand|Malaysia|Singapore|Indonesia|Brunei|Hong Kong|Macau|Australia|New Zealand|South Africa|Kenya|Tanzania|Uganda|Zambia|Zimbabwe|Botswana|Namibia|Mozambique|Malawi|Lesotho|Eswatini|Mauritius|Seychelles|Cyprus|Malta|Jamaica|Bahamas|Barbados|Trinidad|Guyana|Suriname|Bermuda|Cayman|Virgin Islands|Saint Lucia|Grenada|Dominica|Antigua|Saint Kitts|Saint Vincent|Fiji|Papua|Solomon|Tonga|Samoa|Timor|Falkland/i;
@@ -160,6 +161,8 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		},
 	};
 	// (the real landmarks' ground is kept clear of the towns grown round them: region/landmarks.js)
+	// (the crowds down a Strip grown here: people/stripcrowd.js)
+	const stripCrowd = createStripCrowd({ scene, ground: (x, z) => (island.drawnAt || island.heightAt)(x, z), phone: isPhone });
 	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c), keep: (x, z, r) => regional.landmarksNear(x, z, r), look: (c) => regional.cityLook(c) });
 
 	// ---------- the towns' own streets, out where the Bay's ground no longer paints them ----------
@@ -354,6 +357,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const nextRoadTowns = regional.settlements.roadTowns();
 		if (nextRoadTowns.length !== regionalRoadTowns.length || nextRoadTowns.some((t, i) => t !== regionalRoadTowns[i])) { regionalRoadTowns = nextRoadTowns; regionalRoadVersion++; }
 		const A = towns.civ().active(), B = world()?.civ?.active();
+		stripCrowd.update(dt, t0 / 1000, cam, A?.region || null, world()?.sky?.state?.hours ?? 12);
 		const activeTownRoads = [];
 		// (a town grown here: a highway to it ends at its edge and goes on into its streets, and one
 		// only passing through leaves it at its edge each way, globeroads.js; a city's district is
@@ -382,7 +386,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const ll = toLL(camera.position.x, camera.position.z);
 		return {
 			at: `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)}`, frame: F.bay ? 'the Bay\'s' : `floating at ${F.lat.toFixed(3)}, ${F.lon.toFixed(3)}`, rebases: stats.rebases,
-			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(), lanes: lanes.info(), streets: { ...streets.info(), grid: gridStreets.info() }, regional: regional.info(),
+			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(), lanes: lanes.info(), streets: { ...streets.info(), grid: gridStreets.info() }, regional: regional.info(), strip: stripCrowd.info(),
 			window: { cell0: [data.win.gi0, data.win.gj0], tiles: data.stats.tiles, composeMs: data.stats.composeMs, decodeMs: Math.round(data.stats.decodeMs), mb: Math.round(data.bytes() / 1e5) / 10 },
 			ms: { mean: Math.round(stats.updateMs * 100) / 100, peak: Math.round(stats.maxMs * 10) / 10 },
 		};

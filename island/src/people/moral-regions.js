@@ -64,8 +64,8 @@ export function globeRegionOf({ regionId = 'earth', regionName = '', lat = 0, lo
 
 // ---------- a town's situation ----------
 const hash01 = (s) => { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
-const ZONE_TROUBLE = { [ZONE.downtown]: 0.12, [ZONE.industrial]: 0.15, [ZONE.retail]: 0.05, [ZONE.dining]: 0.04, [ZONE.office]: 0, [ZONE.neighbourhood]: -0.05, [ZONE.trail]: -0.1, [ZONE.beach]: -0.06, [ZONE.quiet]: -0.08, island: -0.12 };
-const ZONE_MEANS = { [ZONE.office]: 0.12, [ZONE.industrial]: -0.15, [ZONE.neighbourhood]: 0.05, [ZONE.dining]: 0.04, [ZONE.retail]: 0, [ZONE.downtown]: 0, island: -0.05 };
+const ZONE_TROUBLE = { [ZONE.strip]: 0.1, [ZONE.downtown]: 0.12, [ZONE.industrial]: 0.15, [ZONE.retail]: 0.05, [ZONE.dining]: 0.04, [ZONE.office]: 0, [ZONE.neighbourhood]: -0.05, [ZONE.trail]: -0.1, [ZONE.beach]: -0.06, [ZONE.quiet]: -0.08, island: -0.12 };
+const ZONE_MEANS = { [ZONE.strip]: 0.1, [ZONE.office]: 0.12, [ZONE.industrial]: -0.15, [ZONE.neighbourhood]: 0.05, [ZONE.dining]: 0.04, [ZONE.retail]: 0, [ZONE.downtown]: 0, island: -0.05 };
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // pop in thousands (the Bay's list) or the atlas class (0 village .. 5 megacity)
 export function situationOf({ name = '', pop = 0, cls = null, zone = ZONE.neighbourhood } = {}) {

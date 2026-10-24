@@ -34,6 +34,14 @@ const PERK = {
 	coldbeer: { label: '🍺 Cold beer', hp: 6, wait: 60, price: 4, door: 'guild', line: (b) => `A cold bottle of ${b} ale from the cooler` },
 	milk: { label: '🥛 Milk', hp: 8, wait: 60, price: 2, door: 'dairy', line: (b) => `A cold carton of ${/milk|dairy/i.test(b) ? b : `${b} milk`} from the cooler` },
 	icecream: { label: '🍦 Ice cream', hp: 10, wait: 60, price: 3, door: 'produce', line: (b) => `${/^[aeiou]/i.test(b) ? 'An' : 'A'} ${b} ice lolly from the freezer` },
+	// a Strip casino's (interiors/resort-fitout.js): its games played at ui/casino.js, its bar, its
+	// buffet, the cashier at the cage
+	slots: { label: '🎰 Play the slots', game: 'slots' },
+	blackjack: { label: '🃏 Play blackjack', game: 'blackjack' },
+	roulette: { label: '🎡 Play roulette', game: 'roulette' },
+	cage: { label: '💰 Cashier', game: 'cage' },
+	cocktail: { label: '🍸 Order a drink', hp: 8, wait: 60, price: 9, line: () => ['A margarita on the rocks from the casino bar', 'An old fashioned, poured long, from the casino bar', 'A vodka soda with lime from the casino bar', 'A cold beer from the casino bar', 'A dirty martini from the casino bar'][Math.floor(Math.random() * 5)] },
+	casinobuffet: { label: '🦀 The buffet', hp: 40, wait: 300, price: 30, line: 'All you can eat at the buffet: crab legs, prime rib, a slice of cheesecake' },
 };
 // a maker's name as said (the catalog's shouted ones in plain capitals)
 const said = (s) => (s && s === s.toUpperCase() ? s.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()) : s);
@@ -51,7 +59,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 // world(): the world; camera: your eye; combat: its mend/hurt0 (combat/combat.js); arms: the
 // wallet and the gear (gameplay/arms.js); button: main.js's; doorNear(), busy(): another prompt
 // has E (a door, the kitchen)
-export function createOfficePerks({ mount, button, hint = () => {}, isPhone = false, world, camera, combat = null, arms = null, doorNear = () => false, busy = () => false, openShop = null }) {
+// play(game, q): a casino's game to sit down at (ui/casino.js)
+export function createOfficePerks({ mount, button, hint = () => {}, isPhone = false, world, camera, combat = null, arms = null, doorNear = () => false, busy = () => false, openShop = null, play = null }) {
 	let here = null, hereT = 0, txN = 0;
 	const used = new Map();
 	let kept = {};
@@ -105,6 +114,7 @@ export function createOfficePerks({ mount, button, hint = () => {}, isPhone = fa
 	function use(q = here) {
 		if (!q) return;
 		if (q.kind === 'till') { till(q); return; }
+		if (PERK[q.kind]?.game) { if (play) play(PERK[q.kind].game, q); else hint('The table is closed.', 2000); return; }
 		// (one cold drink a while from a shop's coolers, whichever door: its key without the door's place)
 		const P = PERK[q.kind], now = performance.now() / 1000, wk = P.door ? q.key.replace(/(:-?\d+){2}$/, '') : q.key, last = used.get(wk) ?? -1e9;
 		if (q.kind === 'firstaid') {

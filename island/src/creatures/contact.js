@@ -72,6 +72,7 @@ export function createContactShadows({ isPhone = false } = {}) {
 		polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
 	});
 	const mesh = new THREE.InstancedMesh(geo, mat, CAP);
+	mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	mesh.count = 0; mesh.frustumCulled = false; mesh.name = 'creature-contact'; mesh.renderOrder = 1;
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qy = new THREE.Quaternion(), n = new THREE.Vector3(), p = new THREE.Vector3(), sc = new THREE.Vector3();
 	let i = 0;

@@ -62,7 +62,7 @@ function paveLot(B, R, gr) {
 	}
 }
 // how far round a real landmark the generated places keep clear (m), by its builder
-const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 190, bellagio: 270, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 50, vegassign: 15, canopy: 230, venetian: 200, sphere: 80, empire: 50, chrysler: 45, grandcentral: 80, brooklynbridge: 240 };
+const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 190, bellagio: 270, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 105, vegassign: 15, canopy: 230, venetian: 200, sphere: 80, empire: 50, chrysler: 45, grandcentral: 80, brooklynbridge: 240 };
 
 // the real towns a kit builds itself (the town generator grows the rest: earth/globetowns.js)
 export function kitClaims(city) {

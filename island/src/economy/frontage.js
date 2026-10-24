@@ -100,6 +100,8 @@ export const PROFILES = {
 	motel: P('lodging', 'lobby', [0, 24], 'lit', 'reception'),
 	cabins: P('lodging', 'lobby', [7, 21], 'dark', 'reception', { post: 'host' }),
 	hotel: P('none', 'lobby', [0, 24], 'lit', null),
+	casino: P('none', 'lobby', [0, 24], 'lit', null),
+	resorthotel: P('none', 'lobby', [0, 24], 'lit', null),
 	tech: P('none', 'office', [8, 19], 'night', null, { wk: true }),
 	law: P('office', 'office', [8.5, 18], 'dark', 'office', { wk: true }),
 	design: P('office', 'office', [9, 19], 'dark', 'studio', { wk: true }),

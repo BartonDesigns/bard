@@ -218,7 +218,8 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		if (b && !b.gen && use !== 'house') { if (b.econFace === undefined) b.econFace = frontOf(o); face = b.econFace; }
 		// (grown: a grown town's building, its centre built of houses; store: a corner store or gas
 		// station's own building, bay/siteplan.js, a shop inside)
-		return { x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, h: o.h, use, ...c, sign: b?.sign || null, face, o, grown: !!b?.gen, core: b?.core ?? 1, store: b?.store || null, ...(b?.store ? { venue: 'shop' } : {}) };
+		// (resort: a Strip resort's casino or tower, crysis/civgen.js: the resort's, no shop fitted in it)
+		return { x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, h: o.h, use, ...c, sign: b?.sign || null, face, o, grown: !!b?.gen, core: b?.core ?? 1, store: b?.store || null, ...(b?.store ? { venue: 'shop' } : {}), ...(b?.resort ? { resort: b.resort, venue: null } : {}) };
 	}
 
 	// ---------- the plan, made visible ----------
@@ -344,7 +345,20 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			}
 			else if (D.use === 'shop' || D.use === 'row') { const w = Math.min(F.run - 0.8, 3.2); wall(g + 3.8, w, w / 4); }
 			else if (D.use === 'apt') { const w = Math.min(F.run * 0.5, 3.6); wall(g + 3.4, w, w / 4); }
+			else if (D.use === 'retail' && E.type === 'casino') {
+				// a Strip casino: its name in lights along the top of its front, and again up on its
+				// pylon by the pavement, both faces (lotkit.js pylon)
+				const h = Math.max(2.6, Math.min(5.5, F.run / 18));
+				wall(top - h / 2 - 0.7, h * 4, h);
+				if (put) {
+					const [px, pz] = P(side * Math.max(0, Math.min(F.run * 0.32, F.run / 2 - 8)), 5), py = H(px, pz);
+					put('pylon', [px, py, pz, -F.yaw, 1, 1, 1, 0]);
+					for (const k of [1, -1]) boards.push({ E, x: px + F.nx * 0.62 * k, y: py + 23.6, z: pz + F.nz * 0.62 * k, yaw: F.yaw + (k < 0 ? Math.PI : 0), w: 9.2, h: 2.3, d: bd });
+				}
+			}
 			else if (D.use === 'retail') { const h = Math.max(1.1, Math.min(2.6, F.run / 9)); wall(Math.min(top - h / 2 - 0.3, g + 4.9), h * 4, h); }
+			// (a Strip resort's tower: its name across its crown, big enough to read down the boulevard)
+			else if (D.use === 'tower' && E.type === 'resorthotel') { const h = Math.max(3, Math.min(7, F.run / 8)); wall(top - h / 2 - 3, h * 4, h); }
 			else if (D.use === 'office' || D.use === 'tower' || D.use === 'industry') { const h = Math.max(0.9, Math.min(D.use === 'tower' ? 5 : 2.2, F.run / 9)); wall(top - h / 2 - (D.use === 'tower' ? 2.5 : 0.6), h * 4, h); }
 			if (D.use === 'house' && (!spec || spec.kind === 'office') && put) {
 				// a sign on a post by the front walk; the board hangs from its arm

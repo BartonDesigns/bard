@@ -874,7 +874,8 @@ export function createCity(shared, scene, bay, real = null) {
 	// the detail levels and where they hand over (metres): each dissolves into the next
 	// across a band rather than popping; the far masses dissolve out at the edge
 	// (pushed well out, so the hand-overs happen where a tree is small on screen, and the far
-	// masses carry the woodland out to where the ground's own painted woods take over)
+	// masses carry the woodland out to where the ground's own painted woods take over; in town,
+	// the ground's painted crowns, bay/canopy.js FAR_CROWNS, across the far band's end)
 	// (a phone keeps the leafy middle tier nearer: the far masses take over sooner, and cheaply)
 	const LOD = PHONE ? { near: [NONE_IN[0], NONE_IN[1], 150, 175], mid: [150, 175, 430, 470], far: [430, 470, 2000, 2400], shrub: [NONE_IN[0], NONE_IN[1], 260, 300] }
 		: { near: [NONE_IN[0], NONE_IN[1], 185, 215], mid: [185, 215, 560, 610], far: [560, 610, 2400, 2800], shrub: [NONE_IN[0], NONE_IN[1], 360, 410] };
@@ -2258,7 +2259,7 @@ export function createCity(shared, scene, bay, real = null) {
 		skylineBeside(list);
 		indexLots(list);
 		// the tall ones, for going inside (bay/towers.js)
-		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
+		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2,!!o.src?.resort));
 		yield;
 		phase = 'kit';
 		if (acX > 1e8) { acX = x; acZ = z; }          // (the first set: its near units round where it was laid out)
