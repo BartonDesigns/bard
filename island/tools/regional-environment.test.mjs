@@ -8,6 +8,7 @@ import { climateNow } from '../src/region/climate.js';
 import { airKindNow, createAir } from '../src/region/air.js';
 import { iceCover, auroraStrength, createIce } from '../src/region/ice.js';
 import { createFlora } from '../src/region/flora.js';
+import { mockTextureCanvas } from './fixtures/canvas.mjs';
 
 await loadAtlas();
 const samples = [
@@ -102,7 +103,8 @@ function watchDispose(scene) {
   return () => { for (const [resource, count] of counts) assert.equal(count, 1, resource.type || 'resource'); };
 }
 
-test('Svalbard flora stays treeless and bounded; flora and ice release their instance buffers', () => {
+test('Svalbard flora stays treeless and bounded; flora and ice release their instance buffers', (t) => {
+  mockTextureCanvas(t);
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
   const lat = 78.2232, lon = 15.6469, meters = 111000, longitude = meters * Math.cos(lat * Math.PI / 180);
   const toLL = (x, z) => ({ lat: lat - z / meters, lon: lon + x / longitude });

@@ -33,7 +33,10 @@ test('nearby tiles still load, and teardown releases their combined map', async 
 	globalThis.fetch = async (url) => fixture(url);
 	const c = city();
 	c.update(camera(37.78, -122.45));
-	await flush();
+	// Decoding and staged map construction yield across frames; 20 ms is not
+	// a completion signal, especially when the full suite runs concurrently.
+	const deadline = Date.now() + 5000;
+	while (c.info().pending && Date.now() < deadline) await flush();
 	assert.equal(c.info().live.length, 2);
 	assert.equal(c.info().pending, 0);
 	assert.equal(c.loaded(), true);

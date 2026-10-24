@@ -63,8 +63,10 @@ test('cooking takes from the larder first, then the kitchen, and lacks what is m
 	assert.equal(R[0].c.ok, true);
 });
 
-test('meals last until 4 am, stack three, refresh the same dish, and fold into stats', () => {
+test('meals last until 4 am, stack three, refresh the same dish, and fold into stats', (ctx) => {
 	const t = new Date(2026, 9, 20, 19, 30).getTime();
+	// composeMods reads the clock too: keep it inside this meal's lifetime.
+	ctx.mock.method(Date, 'now', () => t + 5);
 	assert.equal(new Date(dayEnd(t)).getHours(), DAY_ENDS);
 	assert.equal(new Date(dayEnd(t)).getDate(), 21);
 	assert.equal(new Date(dayEnd(new Date(2026, 9, 20, 2).getTime())).getDate(), 20);
