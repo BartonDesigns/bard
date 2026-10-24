@@ -574,8 +574,11 @@ function sync(src, v) {
 	if (again) v.needsUpdate = true;
 }
 // the shader: the skylight by the sky share, the fixtures' light, their gleam; the baked
-// rooms take no light of the real lamps but their shadows
-const LFB = (() => {
+// rooms take no light of the real lamps but their shadows. (Taken from three's chunk when the
+// first room is lit, not as the page loads, so it has what is put into the chunk before any
+// shader is built: the hills' shade, world/hillsun.js)
+let LFB;
+const lfb = () => LFB !== undefined ? LFB : (LFB = (() => {
 	const c = THREE.ShaderChunk.lights_fragment_begin, i0 = c.indexOf('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )'), i1 = c.indexOf('#if ( NUM_SPOT_LIGHTS > 0 )');
 	if (i0 < 0 || i1 < 0) return null;
 	const mid = c.slice(i0, i1)
@@ -585,7 +588,7 @@ const LFB = (() => {
 	// middle of a deep hall little; the shell's shadow, where there is one, does the rest)
 	return (c.slice(0, i0) + 'float ibLoss = 0.0;\nvec3 ibC0 = vec3( 0.0 );\n' + mid + c.slice(i1))
 		.replace('getDirectionalLightInfo( directionalLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= clamp( vIl.a * 1.6, 0.0, 1.0 );');
-})();
+})());
 function patch(sh, U) {
 	sh.uniforms.ibakeK = U.ibakeK;
 	sh.uniforms.ibakeGlow = U.ibakeGlow;
@@ -595,7 +598,7 @@ function patch(sh, U) {
 	sh.vertexShader = 'attribute vec4 ilight;\nattribute vec4 idir;\nattribute float inight;\nuniform float ibakeNight;\nvarying vec4 vIl;\nvarying vec3 vIdir;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tfloat ibN = mix( 1.0, inight, ibakeNight );\n\tvIl = vec4( ilight.rgb * ibN, ilight.a );\n\tvIdir = mat3( modelViewMatrix ) * idir.xyz * idir.w;\n\t#ifdef IBAKE_FIX\n\tvIl.a *= ibN;\n\t#endif');
 	let f = sh.fragmentShader;
 	f = 'varying vec4 vIl;\nvarying vec3 vIdir;\nuniform float ibakeK;\nuniform float ibakeGlow;\n' + f;
-	if (LFB) f = '#ifndef IBAKE_FIX\n#define IBAKE_LOSS\n#endif\n' + f.replace('#include <lights_fragment_begin>', '#ifdef IBAKE_FIX\n#include <lights_fragment_begin>\n#else\n' + LFB + '\n#endif');
+	if (lfb()) f = '#ifndef IBAKE_FIX\n#define IBAKE_LOSS\n#endif\n' + f.replace('#include <lights_fragment_begin>', '#ifdef IBAKE_FIX\n#include <lights_fragment_begin>\n#else\n' + lfb() + '\n#endif');
 	f = f.replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
 	#if defined( RE_IndirectDiffuse ) && !defined( IBAKE_FIX ) && !defined( IBAKE_EM )
 	{

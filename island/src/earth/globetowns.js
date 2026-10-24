@@ -18,9 +18,10 @@
 // grown (globeterrain.js).
 
 import { createCivilization } from '../crysis/civ.js';
-import { loadAtlas, atlasReady, citiesNear, regionAt, hash } from './atlas.js';
+import { loadAtlas, atlasReady, citiesNear, regionAt, aridAt, hash } from './atlas.js';
 import { STYLE } from '../bay/styles.js';
 import { F, toXZ, toLL } from './globeframe.js';
+import { cityAbsorbed, cityDistrict, cityProfile, citySites } from './cityprofiles.js';
 
 // civgen's reach, and how far the built-up ground spreads, by the atlas's size class
 // (village, town, city, large city, metropolis, megacity)
@@ -36,12 +37,18 @@ const SCAN_KM = 260, RESCAN = 1500;
 const DISTRICT = [0, 1100, 1500, 1800, 2000, 2200];
 const D_STEP = 1.3, D_LIT = 0.3, D_KM = 9;
 const urbOf = (size, d) => Math.exp(-((d / SPREAD[size]) ** 3) * 1.2) * GLOW[size];
+// the real boulevards a city's grid is lined up on (crysis/civ.js spine), by the atlas's city id: the
+// line of longitude it runs north and south on, between two latitudes (the districts that reach
+// between them have it, and the district nearest it is centred on it). strip: the latitudes between
+// which it is the Strip, hw metres either side of it all resort (crysis/civgen.js), no house
+const SPINES = { 'las-vegas': { lon: -115.1722, lat: [36.07, 36.126], name: 'Las Vegas Boulevard', strip: [36.0835, 36.1235], hw: 380 } };
+
 // a point on a grown city's ground (by its size class, metres from its middle): in its centre's
 // reach, or as built up as its districts are grown. The open country's farms, villages and
 // wayside tales keep off it (region/index.js)
 export const cityGround = (size, d) => d < REACH[size] || urbOf(size, d) >= D_LIT;
 
-export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false, look: lookOf = () => null }) {
+export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false, keep = () => [], look: lookOf = () => null }) {
 	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city, look? }
 	let list = [], civ = null, scanAt = null, scanEpoch = -1, scanT = -1e9;
 	const view = { towns, heightAt: (x, z) => heightAt(x, z), loaded: () => true };
@@ -71,7 +78,7 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 		turned.set(k, B);
 		return B.v;
 	}
-	const make = () => createCivilization({ real, bay: view, water, brief });
+	const make = () => createCivilization({ real, bay: view, water, brief, keep, palms: (t) => !!t.palms });
 	civ = make();
 
 	function scan(lat, lon) {
@@ -79,6 +86,7 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 		list = [];
 		towns.length = 0;
 		for (const c of near) {
+			if (cityAbsorbed(c, near)) continue;
 			const p = toXZ(c.lat, c.lon), size = Math.max(0, Math.min(5, c.pop | 0));
 			const rec = { city: c, x: p.x, z: p.z, size, spread: SPREAD[size], km: c.km };
 			if (skip(p.x, p.z, REACH[size])) { rec.bay = true; list.push(rec); continue; }
@@ -87,17 +95,21 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 			list.push(rec);
 			// the old world's towns keep their old grids; the new world's big cities too
 			const R = regionAt(c.lat, c.lon), id = R?.id || '';
-			const older = !/^(na|oc)\b/.test(id) || size >= 3;
-			const h = hash(c.id), ang = (h % 1000) / 1000 * Math.PI / 2, style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
+			// (the American desert's towns, Las Vegas and Phoenix as much as the small ones, are stucco
+			// subdivisions on the survey's mile grid, north and south; a warm desert's street trees are palms)
+			const profile = cityProfile(c), southwest = !profile && /^na\b/.test(id) && aridAt(c.lat, c.lon), palms = aridAt(c.lat, c.lon) && (R.profile?.climate?.temp?.[0] ?? 0) >= 5;
+			rec.grid = southwest;
+			const older = (!/^(na|oc)\b/.test(id) || size >= 3) && !southwest;
+			const h = hash(c.id), ang = profile?.angle ?? (southwest ? 0 : (h % 1000) / 1000 * Math.PI / 2), style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
 			// (the manner it is built in, where its region has one of its own)
-			const look = lookOf(c) || null;
-			towns.push({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, look });
-			districts(rec, ang, style, pop, id, look);
+			const look = profile?.look || lookOf(c) || null, name = cityDistrict(profile, c.lat, c.lon) || c.name;
+			towns.push(spined({ x: p.x, z: p.z, r: REACH[size], ang, style, name, pop, city: c, region: id, palms, look, profile: profile?.id || null, sites: citySites(profile, toXZ, p.x, p.z, REACH[size]) }));
+			districts(rec, ang, style, pop, id, palms, look, profile);
 		}
 	}
 	// the districts of a city round where you are (within D_KM): the lattice's points that are
 	// built up enough, past the centre's own reach, not the Bay's
-	function districts(rec, ang, style, pop, region, look = null) {
+	function districts(rec, ang, style, pop, region, palms, look = null, profile = null) {
 		const size = rec.size, r = DISTRICT[size];
 		if (!r || rec.km > SPREAD[size] / 1000 + D_KM) return;
 		const D = r * D_STEP, row = D * Math.sqrt(3) / 2, ca = Math.cos(ang), sa = Math.sin(ang);
@@ -112,11 +124,28 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 				if (!i && !j) continue;
 				const u = i * D + off, v = j * row, d = Math.hypot(u, v);
 				if (d < REACH[size] * 0.9 || urbOf(size, d) < D_LIT) continue;
-				const x = rec.x + u * ca - v * sa, z = rec.z + u * sa + v * ca;
+				let x = rec.x + u * ca - v * sa;
+				const z = rec.z + u * sa + v * ca;
+				// (each row's district nearest the city's boulevard moved onto it, so the boulevard
+				// runs down a district's middle, where it is built up, not along an edge)
+				const S = SPINES[rec.city.id];
+				if (S && !ang) { const ll = toLL(x, z), sx = toXZ(ll.lat, S.lon).x; if (ll.lat > S.lat[0] - 0.02 && ll.lat < S.lat[1] + 0.02 && Math.abs(sx - x) < D / 2) x = sx; }
 				if (Math.hypot(x - here.x, z - here.z) > D_KM * 1000 || skip(x, z, r)) continue;
-				towns.push({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, district: [i, j], look });
+				const ll = toLL(x, z), name = cityDistrict(profile, ll.lat, ll.lon) || rec.city.name;
+				towns.push(spined({ x, z, r, ang, style, name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j], look, profile: profile?.id || null, sites: citySites(profile, toXZ, x, z, r) }));
 			}
 		}
+	}
+	// a town on its city's boulevard (its grid square to north): where the boulevard runs past it,
+	// and the stretch of it that is the Strip (z0 to z1, north to south)
+	function spined(t) {
+		const S = SPINES[t.city.id];
+		if (!S || t.ang) return t;
+		const ll = toLL(t.x, t.z), dl = t.r * 1.3 / 111320;
+		if (ll.lat + dl < S.lat[0] || ll.lat - dl > S.lat[1]) return t;
+		const x = toXZ(ll.lat, S.lon).x;
+		if (Math.abs(x - t.x) < t.r * 1.3) t.spine = { x, name: S.name, z0: toXZ(S.strip[1], S.lon).z, z1: toXZ(S.strip[0], S.lon).z, hw: S.hw };
+		return t;
 	}
 	function update(camera, arriving = false) {
 		if (!atlasReady()) { loadAtlas().catch(() => {}); return; }
@@ -136,8 +165,9 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 		scanAt = null;
 	}
 	// the cities round a point for the terrain's built-up ground (engine metres; nearest first)
+	// (2 added for a city on the mile grid: its lights are drawn on it)
 	function lit(n) {
-		return list.slice(0, n).map((c) => ({ x: c.x, z: c.z, r: c.spread, k: GLOW[c.size] * (c.bay ? 0 : 1) }));
+		return list.slice(0, n).map((c) => ({ x: c.x, z: c.z, r: c.spread, k: GLOW[c.size] * (c.bay ? 0 : 1) + (c.grid ? 2 : 0) }));
 	}
 	const busy = () => civ.busy() || !!civ.active();
 	// how built up the ground is at a point, for the town's own light by night (island-frame.js):

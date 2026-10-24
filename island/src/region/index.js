@@ -33,17 +33,36 @@ const hash2 = (a, b, k) => (Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 193496
 const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 export const bearingWord = (dx, dz) => DIRS[Math.round(((Math.atan2(dx, -dz) / (Math.PI * 2)) * 8 + 8)) % 8];
 // how often the open country has a village, by kit (per cell of about 5.5 km)
-const RATE = { polar: 0.06, station: 0.004, snow: 0.3, alpine: 0.55, himalaya: 0.35, andes: 0.35, village: 0.6, farm: 0, outback: 0.06, mediterranean: 0.5, desert: 0.14, pueblo: 0.15, bazaar: 0.15, steppe: 0.4, savanna: 0.45, sahel: 0.4, jungle: 0.32, island: 0.5, eastvillage: 0.6, eastcity: 0.6, southasia: 0.75, southcity: 0.75 };
+const RATE = { polar: 0.06, station: 0.004, snow: 0.3, alpine: 0.55, himalaya: 0.35, andes: 0.35, village: 0.6, farm: 0, outback: 0.06, mojave: 0.04, mediterranean: 0.5, desert: 0.14, pueblo: 0.15, bazaar: 0.15, steppe: 0.4, savanna: 0.45, sahel: 0.4, jungle: 0.32, island: 0.5, eastvillage: 0.6, eastcity: 0.6, southasia: 0.75, southcity: 0.75 };
 // the biggest size class each kit builds itself (the farm country's towns are the generator's).
 // A real city is the town generator's: its streets, traffic, people and doors (crysis/civgen.js);
 // the old towns and bazaars of the Middle East and North Africa (Khiva, Ouarzazate, Nizwa) are
 // the kit's, and every city from Aswan up is grown; the East and South Asian city kits' places
 // are all cities (300,000 and up), so none of theirs is the kit's
-const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2, bazaar: 1, eastcity: -1, southcity: -1 };
+const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, mojave: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2, bazaar: 1, eastcity: -1, southcity: -1 };
 // ...and the manner the town generator builds a city in, by its kit (crysis/civgen.js look)
 const LOOK = { eastcity: 'east', southcity: 'south', bazaar: 'arid' };
+// the landmarks whose clearing is all paved and planted by hand (the Strip's resorts, Fremont Street):
+// no wild plant in it (settle.js blocked)
+const PAVED = new Set(['casino', 'bellagio', 'luxor', 'excalibur', 'nyny', 'parislv', 'wheel', 'strat', 'canopy', 'venetian', 'sphere']);
+// a paved landmark's whole clearing paved, out to its edge (its drives, lots, plazas and pool decks; its
+// own grounds lie over the middle of it, landmarks.js; on its own layer, settle.js paveMat): a resort
+// stands in no patch of desert
+function paveLot(B, R, gr) {
+	// (fine enough, 16 m out and at most 18 m round, that it follows the ground's bumps instead of sinking under them)
+	const n = Math.max(12, Math.ceil(Math.PI * 2 * R / 18)), step = 16, up = (x, z) => gr(x, z) + 0.06, pave = [0.5, 0.48, 0.45], Gp = B.pave || B.G;
+	const P = (r, t) => { const x = Math.cos(t) * r, z = Math.sin(t) * r; return [x, up(x, z), z]; };
+	for (let r0 = 0; r0 < R - 0.01; r0 += step) {
+		const r1 = Math.min(R, r0 + step);
+		for (let k = 0; k < n; k++) {
+			const t0 = k / n * Math.PI * 2, t1 = (k + 1) / n * Math.PI * 2;
+			// (counter-clockwise seen from above)
+			Gp.face(r0 ? [P(r0, t1), P(r1, t1), P(r1, t0), P(r0, t0)] : [P(0, 0), P(r1, t1), P(r1, t0)], pave);
+		}
+	}
+}
 // how far round a real landmark the generated places keep clear (m), by its builder
-const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30 };
+const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 190, bellagio: 270, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 50, vegassign: 15, canopy: 230, venetian: 200, sphere: 80, empire: 50, chrysler: 45, grandcentral: 80, brooklynbridge: 240 };
 
 // the real towns a kit builds itself (the town generator grows the rest: earth/globetowns.js)
 export function kitClaims(city) {
@@ -68,7 +87,7 @@ export function grownCityAt(lat, lon) {
 	return citiesNear(lat, lon, 30, 8).find((c) => cityGround(Math.max(0, Math.min(5, c.pop | 0)), c.km * 1000) && !kitClaims(c)) || null;
 }
 
-export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null, water = () => null }) {
+export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null, water = () => null, built = null }) {
 	const height = globe.height;
 	const ground = (x, z) => island.heightAt(x, z);
 	// (the sea, the big lakes, and the generated land's own lakes and ponds, crysis/rivers.js)
@@ -84,7 +103,8 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	};
 	const S = createSettlements({ scene, ground, wet, waterReady, isPhone, toXZ, toLL, F, lanes });
 	const ice = createIce(scene, { height, toXZ, toLL, isPhone });
-	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m), isPhone, toLL, shared, extra: () => S.trees(), woods });
+	// (and none of the wild plants in a town grown round you: its yards, streets and parks are its own)
+	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m) || !!built?.at(x, z), isPhone, toLL, shared, extra: () => S.trees(), woods });
 	const air = createAir(scene, { isPhone });
 	// (the people stand on the ground as drawn, or on the ice)
 	const folk = createFolk(scene, { settlements: S, ground: (x, z) => Math.max((island.drawnAt || island.heightAt)(x, z), ice.floor(x, z)), wet, onIce: (x, z) => ice.floor(x, z) > -1e8, isPhone });
@@ -108,7 +128,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	// the centre building by the place's faith (the kit's own unless the faith says otherwise)
 	function centreFor(kit, C, pop, id = '') {
 		const f = C.faith, k = kit.id;
-		if (k === 'bazaar' || k === 'eastcity' || k === 'southcity' || k === 'steppe' || k === 'farm' || k === 'outback') return null;
+		if (k === 'bazaar' || k === 'eastcity' || k === 'southcity' || k === 'steppe' || k === 'farm' || k === 'outback' || k === 'mojave') return null;
 		if (f === 'mosque') return k === 'sahel' ? 'mudmosque' : pop >= 1 ? 'mosque' : 'mosque-small';
 		if (f === 'mandir') return 'mandir';
 		if (f === 'wat') return 'wat';
@@ -127,6 +147,19 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	}
 	const claims = kitClaims;
 
+	// the real landmarks' ground round a point (engine metres): the towns grown round them keep off it
+	// (earth/globetowns.js). From the list itself, so it is known before the sites round you are scanned
+	function landmarksNear(x, z, r) {
+		const out = [], ll = toLL(x, z);
+		for (const [, la, lo, type, sc] of REAL) {
+			const c = (CLEAR[type] ?? 45) * sc;
+			if (!(c > 0) || km(ll.lat, ll.lon, la, lo) > (r + c) / 1000 + 2) continue;
+			const p = toXZ(la, lo);
+			if (Math.hypot(p.x - x, p.z - z) < r + c) out.push({ x: p.x, z: p.z, r: c, paved: PAVED.has(type) });
+		}
+		return out;
+	}
+
 	// ---------- finding the places round you ----------
 	function scan(lat, lon) {
 		// the real landmarks within 10 km
@@ -138,8 +171,9 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			let site = null;
 			// (the ground in the landmark's own frame: turned as settle.js turns the lot)
 			const fr = (rot || 0) * Math.PI / 180 + Math.PI, fc = Math.cos(fr), fs = Math.sin(fr);
-			const build = (B, L, P, r) => fn(B, sc, args, r, (x, z) => ground(site.x + x * fc + z * fs, site.z - x * fs + z * fc) - ground(site.x, site.z));
-			site = S.add({ key: 'real:' + n, kind: 'real', clear: (CLEAR[type] ?? 45) * sc, lat: la, lon: lo, kit: kitAt(at, { pop: 3 }).id, pop: -1, name, tale: about, regionId: at.id, culture: kitAt(at, {}).culture, palette: palette(at.id), opts: {}, env: { snow: 0 }, lots: [{ type, build, x: 0, z: 0, rot: (rot || 0) * Math.PI / 180, w: 30, d: 30, role: 'centre' }] });
+			const gr = (x, z) => ground(site.x + x * fc + z * fs, site.z - x * fs + z * fc) - ground(site.x, site.z);
+			const build = (B, L, P, r) => { fn(B, sc, args, r, gr); if (PAVED.has(type)) paveLot(B, (CLEAR[type] ?? 45) * sc, gr); };
+			site = S.add({ key: 'real:' + n, kind: 'real', clear: (CLEAR[type] ?? 45) * sc, paved: PAVED.has(type), lat: la, lon: lo, kit: kitAt(at, { pop: 3 }).id, pop: -1, name, tale: about, regionId: at.id, culture: kitAt(at, {}).culture, palette: palette(at.id), opts: {}, env: { snow: 0 }, lots: [{ type, build, x: 0, z: 0, rot: (rot || 0) * Math.PI / 180, w: 30, d: 30, role: 'centre' }] });
 		}
 		// the claimed towns: the atlas's own, within 8 km (a big city's dense quarter, within 8 km
 		// of where its blocks reach)
@@ -310,7 +344,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 		S.update(dt, cam, { night, wind });
 		folk.update(dt, time, cam);
 		ice.update(dt, cam, { month: env.month, night, cover: here.wx?.cover ?? 0.4, lat: ll.lat, on: true, epoch: F.epoch });
-		flora.update(cam, { kit: here.on ? here.kit : null, climate: here.climate, culture: here.culture?.key, veg: here.region?.veg, on: here.on, epoch: here.regionId + ':' + F.epoch + ':' + S.version() + ':' + S.treesVersion() + ':' + (roads?.version() || 0) });
+		flora.update(cam, { kit: here.on ? here.kit : null, climate: here.climate, culture: here.culture?.key, veg: here.region?.veg, on: here.on, epoch: here.regionId + ':' + F.epoch + ':' + S.version() + ':' + S.treesVersion() + ':' + (roads?.version() || 0) + ':' + (built?.version() || 0) });
 		air.update(dt, cam, { kit: here.kit, climate: here.climate, wx: here.wx, night, on: here.on, fog: scene.fog, wind });
 		const W = globe.world?.(), hours = W?.sky?.state?.hours ?? 12;
 		const churchy = /church|orthodox/.test(here.culture?.faith || '') && /village|alpine|mediterranean|snow|andes|island|farm/.test(here.kit?.id || '');
@@ -336,7 +370,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	const info = () => ({ sound: sound.debug(), folk: folk.info(), ice: ice.info(), flora: flora.info(), kit: here.kit?.id, region: here.regionId, culture: here.culture?.key, climate: here.climate, town: here.town, landmark: here.landmark?.name, onward: here.onward, ...S.info() });
 	function pause() { sound.pause(); }
 	function dispose() { sound.dispose(); folk.dispose(); ice.dispose(); flora.dispose(); air.dispose(); S.dispose(); here.on = false; }
-	return { update, claims, cityLook, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
+	return { update, claims, landmarksNear, cityLook, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
 }
 
 const firstSentence = (t = '') => (t.match(/^.*?[.!?](\s|$)/)?.[0] || t).trim();
