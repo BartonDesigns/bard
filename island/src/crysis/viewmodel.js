@@ -541,6 +541,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			sun.color.copy(ws.color); sun.intensity = ws.visible === false ? 0 : ws.intensity;
 			sun.position.copy(ws.position).sub(ws.target.position).normalize().applyQuaternion(camInv);
 			if (W.houses?.inside?.(camera.position) || W.interiors?.inside?.(camera.position)) sun.intensity *= 0.2;
+			// (and in the hills' shade when the sun has gone behind a ridge: world/hillsun.js)
+			sun.intensity *= W.hillSun?.at?.(camera.position.x, camera.position.y, camera.position.z) ?? 1;
 		}
 		if (wh) { hemi.color.copy(wh.color); hemi.groundColor.copy(wh.groundColor); hemi.intensity = wh.intensity; hemi.position.set(0, 1, 0).applyQuaternion(camInv); }
 		day = clamp((sun.intensity * 0.3 + hemi.intensity * 0.6) / 1.6, 0, 1);
