@@ -156,7 +156,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 			}
 		},
 	};
-	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c) });
+	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c), look: (c) => regional.cityLook(c) });
 
 	// ---------- the towns' own streets, out where the Bay's ground no longer paints them ----------
 	// (townstreets.js) the grown towns' (bay/realcity.js's generated regions, anywhere on Earth) and
@@ -351,8 +351,12 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		if (nextRoadTowns.length !== regionalRoadTowns.length || nextRoadTowns.some((t, i) => t !== regionalRoadTowns[i])) { regionalRoadTowns = nextRoadTowns; regionalRoadVersion++; }
 		const A = towns.civ().active(), B = world()?.civ?.active();
 		const activeTownRoads = [];
-		if (A?.region) activeTownRoads.push({ id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] });
-		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, around: true, roads: B.region.roads || [] });
+		// (a town grown here: a highway to it ends at its edge and goes on into its streets, and one
+		// only passing through leaves it at its edge each way, globeroads.js; a city's district is
+		// not the city's end, the town at its middle is, but a place standing in it ends there)
+		const D = A?.town.district;
+		if (A?.region) activeTownRoads.push({ id: D ? A.town.city.id + ':' + D.join(',') : A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, district: !!D, around: !!D, join: D ? 500 : undefined, through: true, roads: A.region.roads || [] });
+		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, around: true, through: true, roads: B.region.roads || [] });
 		// the gridded towns' streets round you, worked out tile by tile (inside the Bay's ground
 		// it paints them, and none are needed)
 		gridStreets.update(cam, steady && F.bay && bay.loaded() && out > SEAM_A - 2600);
