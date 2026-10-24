@@ -29,4 +29,21 @@ export const LEGENDARIES = Object.freeze(rows.map(([id, name, base, school, colo
 	reload: base === L ? 3.1 : base === W ? 1.9 + (index % 3) * 0.15 : 2.3,
 })));
 export const LEGENDARY = Object.freeze(Object.fromEntries(LEGENDARIES.map(x => [x.id, x])));
-export const legendaryBase = id => LEGENDARY[id]?.base || id;
+export const LEGENDARY_ARMOR = Object.freeze([
+	['lumencrest-circlet', 'Lumencrest Circlet', 'stargazer-circlet', 'head', 'radiance', 'leviathan', 0x9ee8ed, 'A crest shard from the Lumen Leviathan. Its radiance splits Sunspark into a fan.'],
+	['gallery-scale-mail', 'Gallery Scale Mail', 'mail-hauberk', 'body', 'radiance', 'leviathan', 0x9ee8ed, 'Crystal-gallery scales over silver mail, resonating with the Leviathan’s Shell of Song.'],
+	['cinder-core-cuirass', 'Cinder Core Cuirass', 'plate-cuirass', 'body', 'primal', 'walker', 0xe58a4b, 'Forged around the Cinder Colossus’s cooled vent plates. Cinder leaves burning ground.'],
+	['ashwalker-greaves', 'Ashwalker Greaves', 'plate-greaves', 'legs', 'primal', 'walker', 0xe58a4b, 'Blackened plates from the Colossus’s kneeling joints, threaded with living embers.'],
+	['stormwarden-flightcoat', 'Stormwarden Flightcoat', 'plate-carrier', 'body', 'storm', 'gunship', 0x7ac6ed, 'Storm-grey gunship plating and cyan seams. Chain Lightning reaches three more foes.'],
+	['stormwarden-gauntlets', 'Stormwarden Gauntlets', 'tactical-gloves', 'hands', 'storm', 'gunship', 0x7ac6ed, 'Insulated gloves sewn around the Stormwarden’s recovered induction contacts.'],
+	['fogmothers-veil', 'Fog Mother’s Veil', 'wayfarers-hood', 'head', 'shadow', 'fogmother', 0xb2a2cf, 'Salt-stained mourning cloth from the Gate. Shadowstep leaves a brief cloak behind.'],
+	['drowned-procession-boots', 'Drowned Procession Boots', 'duskwalker-boots', 'feet', 'shadow', 'fogmother', 0xb2a2cf, 'The drowned walk silently in these weathered boots, their bridge-red seams still holding.'],
+].map(([id,name,base,slot,school,boss,color,lore]) => Object.freeze({id,name,base,slot,school,boss,color,lore})));
+export const RELICS = Object.freeze({ ...LEGENDARY, ...Object.fromEntries(LEGENDARY_ARMOR.map(x => [x.id,x])) });
+export const legendaryBase = id => RELICS[id]?.base || id;
+export const BOSS_RELICS = Object.freeze({
+	leviathan: ['first-morning', 'winter-debt'], walker: ['orchard-of-ashes', 'wildfire-canticle'],
+	gunship: ['stormglass-repeater', 'cathedral-of-sparks'], fogmother: ['black-tide', 'gravesong-resonator'],
+});
+export const relicBoss = id => RELICS[id]?.boss || Object.keys(BOSS_RELICS).find(k => BOSS_RELICS[k].includes(id)) || null;
+export const RELIC_BOSS_NAMES = Object.freeze({leviathan:'Lumen Leviathan',walker:'Cinder Colossus',gunship:'Stormwarden',fogmother:'Fog Mother'});

@@ -78,13 +78,14 @@ test('an outfitter stops at 99; a weapon or garment earns its hundredth by its t
 
 test('garments: five slots head to foot, aether cloth, steel and combat gear, sold at outfitters, one to a slot', () => {
 	assert.deepEqual([...GARMENT_SLOTS], ['head', 'body', 'legs', 'hands', 'feet']);
-	assert.equal(GARMENTS.length, 29);
+	assert.equal(GARMENTS.length, 37);
+	assert.equal(GARMENTS.filter(g=>g.sources['npc-trader']).length,29,'the eight relics are loot, not shop stock');
 	for (const slot of GARMENT_SLOTS) assert.ok(GARMENTS.filter((g) => g.slot === slot).length >= 5, slot);
 	for (const g of GARMENTS) {
 		const rows = statsOf({ u: 'aaaa', i: g.id, l: 1, t: 0 });
 		assert.ok(rows.some((r) => r.unit === 'pt') && rows.every((r) => (r.unit === 'pt' && ATTRS[r.label.toLowerCase()]) || /^(Armour|Weight|Spellcraft)$/.test(r.label)), g.id + ' lends attributes, and only armour besides');
 		assert.ok(LOOKS[g.id], g.id + ' has a look');
-		assert.ok(sellPrice(g.id, 'npc-trader') > 0, g.id + ' bought back at an outfitter');
+		if(g.sources['npc-trader'])assert.ok(sellPrice(g.id, 'npc-trader') > 0, g.id + ' bought back at an outfitter');
 		assert.equal(sellPrice(g.id, 'supermarket'), null);
 	}
 	let s = createInventoryState('me', { credits: 2000 });

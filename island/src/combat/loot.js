@@ -1,10 +1,12 @@
 // Local encounter recovery. Inventory commits atomically before a drop is removed.
 // Unclaimed equipment lives for this world visit; collected instances use the normal save.
 import { WEAPONS } from './weapons.js';
+import { isGarment } from '../gameplay/arms.js';
 import { cleanInstance } from '../gameplay/gear-levels.js';
 import { lootProgress, rewardEligible, rollEncounter } from './encounter-loot.js';
 
 export const LOOT_REACH = 3.4;
+export const equipmentItems = x => WEAPONS[x.i] ? [x, { u: `${x.u}a`, i: WEAPONS[x.i].box, l: 1, t: 0, x: 0 }] : [x];
 export function recoveryItems(soldier, uid) {
 	if (soldier?.kind !== 'person' || soldier.crew || !soldier.dead || soldier.noGun) return null;
 	const held = soldier.loadout;
@@ -32,7 +34,7 @@ export function createLoot({ apply, visible = () => true, max = 32, nonce = Math
 		const x = result.item;
 		const drop = { id, name: h.Sp?.name || h.F?.name || 'Defeated foe', reward: true,
 			pos: { x: h.pos.x + .45, y: h.pos.y + .2, z: h.pos.z }, yaw: h.yaw || 0, age: 0,
-			items: [x, { u: `${id}a`, i: WEAPONS[x.i].box, l: 1, t: 0, x: 0 }] };
+			items: equipmentItems(x) };
 		drops.set(id, drop); return drop;
 	}
 	function add(soldier) {
@@ -49,11 +51,11 @@ export function createLoot({ apply, visible = () => true, max = 32, nonce = Math
 	}
 	function addCache({ id, name, pos, weapon, source }) {
 		if (caches.has(id)) return null;
-		const x = cleanInstance({ ...weapon, u: id, x: 0 }, (i) => !!WEAPONS[i]);
+		const x = cleanInstance({ ...weapon, u: id, x: 0 }, (i) => !!WEAPONS[i] || isGarment(i));
 		if (!x) return null;
 		caches.add(id);
 		if (drops.size >= max) { const oldest = [...drops.values()].find((d) => !d.cache); if (oldest) drops.delete(oldest.id); }
-		const drop = { id, name, pos: { ...pos }, items: [x, { u: `${id}a`, i: WEAPONS[x.i].box, l: 1, t: 0, x: 0 }], source, lift: .26, age: 0, yaw: 0, cache: true };
+		const drop = { id, name, pos: { ...pos }, items: equipmentItems(x), source, lift: .26, age: 0, yaw: 0, cache: true };
 		drops.set(id, drop); return drop;
 	}
 	function reachable(drop, eye) {

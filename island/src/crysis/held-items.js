@@ -24,6 +24,7 @@ import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { TIERS } from '../gameplay/gear-levels.js';
 import { LEGENDARIES, LEGENDARY } from '../gameplay/legendary-items.js';
+import { buildLegendary } from './legendary-models.js';
 import { armamentVariant } from '../gameplay/armament-variants.js';
 import { createFlash } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
@@ -1025,7 +1026,7 @@ export const weaponOf = (id) => WEAPONS[id] || null;
 
 // Relics share proven hand/reload rigs, but have individual surfaces, silhouettes and cadence.
 for (const x of LEGENDARIES) {
-	BUILD[x.id] = BUILD[x.base]; HOLDS[x.id] = HOLDS[x.base]; GRIPS[x.id] = GRIPS[x.base];
+	BUILD[x.id] = (k,F) => { buildLegendary(k,F,x,WEAPONS[x.base].muzzle); pistolGrip(k,F); cell(k,F,.12,.046,.09,.034); charger(k,F,x.base); }; HOLDS[x.id] = HOLDS[x.base]; GRIPS[x.id] = GRIPS[x.base];
 	CHARGERS[x.id] = CHARGERS[x.base]; ITEM_ICONS[x.id] = x.form === 'firearm' ? '✦' : '✧';
 	WEAPONS[x.id] = { ...WEAPONS[x.base], rate: x.rpm / 60, mag: x.mag, reload: x.reload, tint: x.color };
 }
@@ -1078,16 +1079,7 @@ function built(id, t, band, lod, optics = false, view = false) {
 			F.inlay = S(relic.color, .35, .65, T.plain, { glow: .45 });
 		}
 		BUILD[id](k, F);
-		if (armamentVariant(base, t)) rankedChassis(k, F, base);
-		if (relic) {
-			k.main();
-			// Low-poly crystal reliquaries/induction collars merge into the existing body mesh.
-			for (let n = 0; n < 1 + relic.index % 3; n++) {
-				const x = .16 + n * .065;
-				if (relic.form === 'relic') k.add(new THREE.OctahedronGeometry(.025, 0), F.core, x, .11, -.065);
-				else k.add(new THREE.TorusGeometry(.028, .004, 4, k.hi ? 12 : 8), F.trim, x, .11, 0, 0, Math.PI / 2);
-			}
-		}
+		if (!relic && armamentVariant(base, t)) rankedChassis(k, F, base);
 		cache.set(key, k.build());
 	}
 	return cache.get(key);

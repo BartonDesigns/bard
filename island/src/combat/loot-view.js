@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { itemModel } from '../crysis/held-items.js';
 import { armamentVariant } from '../gameplay/armament-variants.js';
-import { TIERS } from '../gameplay/gear-levels.js';
+import { TIERS, statsOf } from '../gameplay/gear-levels.js';
+import { ARMS_CATALOG, isGarment } from '../gameplay/arms.js';
+import { armorPickupModel } from './armor-pickup.js';
 import { weaponStats, WEAPONS } from './weapons.js';
 import { createLoot } from './loot.js';
 
@@ -31,6 +33,7 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 		const v = visuals.get(id); if (!v) return;
 		v.model.userData.bow?.dispose(); v.root.removeFromParent();
 		v.model.getObjectByName('motes')?.geometry.dispose();
+		if (v.model.userData.ownedArmor) { const mats=new Set(); v.model.traverse(o=>{if(o.isMesh){o.geometry.dispose();mats.add(o.material);}}); for(const m of mats)m.dispose(); }
 		// Item geometry and materials belong to the shared held-model cache.
 		v.marker.geometry.dispose(); v.marker.material.dispose(); visuals.delete(id);
 		v.beam?.geometry.dispose(); v.beam?.material.dispose();
@@ -38,12 +41,12 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 	function add(h, playerKill = false) {
 		const drop = loot.add(h), reward = playerKill ? loot.addReward(h) : null;
 		if (drop) visualize(drop);
-		if (reward) { visualize(reward); const x = reward.items[0]; hint(`${TIERS[x.t].name} drop: ${WEAPONS[x.i].name}. Follow the ${x.t === 4 ? 'gold' : x.t === 3 ? 'violet' : 'blue'} marker and take it.`, 6500, 2); }
+		if (reward) { visualize(reward); const x = reward.items[0]; hint(`${TIERS[x.t].name} drop: ${ARMS_CATALOG[x.i].name}. Follow the ${x.t === 4 ? 'gold' : x.t === 3 ? 'violet' : 'blue'} marker and take it.`, 6500, 2); }
 		else if (drop && Math.hypot(drop.pos.x - eye().x, drop.pos.z - eye().z) < 20) hint('Equipment recoverable. Approach the fallen fighter and look toward their weapon.', 3200, 1);
 	}
 	function addCache(data) { const drop = loot.addCache(data); if (drop) visualize(drop); return drop?.id || null; }
 	function visualize(drop) {
-		const x = drop.items[0], model = itemModel(x.i, { level: x.l, tier: x.t, lod: 'high' });
+		const x = drop.items[0], model = armorPickupModel(x.i) || itemModel(x.i, { level: x.l, tier: x.t, lod: 'high' });
 		const root = new THREE.Group(); root.name = 'recovered:' + drop.id;
 		// Rest the actual weapon on its side, clear of the terrain; no floating loot cube.
 		model.rotation.x = Math.PI / 2; model.rotation.y = drop.yaw;
@@ -76,8 +79,8 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 		pickupT = .48; onPickup(); onCollected(out.source);
 		selected = null; panel.style.display = 'none'; signature = '';
 		let held = false;
-		if (equip) held = !!arms.hold(out.weapon.u)?.ok;
-		hint(`${WEAPONS[out.weapon.i].name} + ammunition recovered.${held ? ' Equipped.' : ' Saved in Gear (I).'}${equip && !held ? ' Open Gear to equip.' : ''}`, 3000, 1);
+		if (equip) held = !!(isGarment(out.weapon.i) ? arms.wear(out.weapon.u) : arms.hold(out.weapon.u))?.ok;
+		hint(`${ARMS_CATALOG[out.weapon.i].name}${isGarment(out.weapon.i)?'':' + ammunition'} recovered.${held ? ' Equipped.' : ' Saved in Gear (I).'}${equip && !held ? ' Open Gear to equip.' : ''}`, 3000, 1);
 		sound('pickup'); return true;
 	}
 	const onKey = (e) => {
@@ -109,6 +112,13 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 		if (!selected) { signature = ''; return; }
 		const x = selected.items[0], held = arms.held?.(), key = `${selected.id}:${held?.u}:${held?.l}:${held?.t}`;
 		if (key === signature) return; signature = key;
+		if (isGarment(x.i)) {
+			const item=ARMS_CATALOG[x.i],rank=TIERS[x.t];
+			source.textContent=`${selected.name} · armor reward`;
+			title.textContent=`${item.name} · ${rank.name}`;title.style.color=rank.color;panel.style.borderColor=rank.color;
+			stats.textContent=`Level ${x.l} · ${item.slot}\n${statsOf(x).map(s=>`${s.label} ${s.value}${s.unit}`).join(' · ')}\nEquip replaces this slot only; your previous armor stays in Gear.`;
+			return;
+		}
 		const s = weaponStats(x), old = held && weaponStats(held), rank = TIERS[x.t], variant = armamentVariant(x.i, x.t);
 		source.textContent = `${selected.name} · ${selected.cache ? 'supply cache' : selected.reward ? 'encounter reward' : 'field recovery'}`;
 		title.textContent = `${variant?.name || ''} ${s.name} · ${rank.name}`; title.style.color = rank.color; panel.style.borderColor = rank.color;

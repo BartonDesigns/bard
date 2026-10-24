@@ -5,7 +5,7 @@ import { sanitizeSkills, pointsOf, levelOf, addXp } from '../src/magic/skills.js
 import { ascend } from '../src/magic/trials.js';
 import { useFor } from '../src/magic/perks.js';
 import { ARMS_CATALOG, ascendTrialOf, createInventoryState, serializeInventory, deserializeInventory } from '../src/gameplay/arms.js';
-import { LEGENDARY } from '../src/gameplay/legendary-items.js';
+import { RELICS as LEGENDARY } from '../src/gameplay/legendary-items.js';
 import { awakenings, isWeaponId } from '../src/gameplay/gear-magic.js';
 import { statScale, trained } from '../src/gameplay/gear-levels.js';
 import { cleanGearLevel, tradeLevelLimit, tradeFitsLevel, GEAR_FEATURE, PREVIOUS_GEAR_FEATURE } from '../src/net/protocol.js';

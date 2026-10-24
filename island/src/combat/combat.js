@@ -35,7 +35,8 @@ import { createWeaponView } from './weapon-view.js';
 import { createCivilians } from './civilians.js';
 import { createSquads } from './ai-squads.js';
 import { createLootView } from './loot-view.js';
-import { legendaryReward } from './encounter-loot.js';
+import { bossRelics } from './encounter-loot.js';
+import { ARMS_CATALOG } from '../gameplay/arms.js';
 import { createContracts } from './contracts-view.js';
 import { createFieldAudio } from './field-audio.js';
 import { createProps } from './props.js';
@@ -669,12 +670,14 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const D = B0.def, R = D.reward;
 		call(`${D.name} is down.`, 'boss');
 		const inst = { u: `bs${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(0, 20), i: R.item, l: R.level, t: 4, x: 0 };
-		const relic = legendaryReward(`${inst.u}r`, R.level);
-		const res = arms?.apply?.({ id: `boss-${B0.kind}-${Date.now().toString(36)}`, kind: 'trade', peer: B0.kind, give: { credits: 0, items: [] }, get: { credits: R.credits, items: [inst, relic, { u: `${inst.u}a`, i: WEAPONS[relic.i].box, l: 1, t: 0, x: 0 }] } });
+		const relics = bossRelics(B0.kind, `${inst.u}r`, R.level), relic = relics[0];
+		const items = [inst, ...relics, ...(relic ? [{ u: `${inst.u}m`, i: WEAPONS[relic.i].box, l: 1, t: 0, x: 0 }] : [])];
+		const res = arms?.apply?.({ id: `boss-${B0.kind}-${Date.now().toString(36)}`, kind: 'trade', peer: B0.kind, give: { credits: 0, items: [] }, get: { credits: R.credits, items } });
 		const name = WEAPONS[R.item]?.name || R.item;
 		// A pending trade must not swallow the new relic. Keep it as a retryable floor pickup.
-		const fallback = !res?.ok && recovery.addCache({ id: relic.u, name: `${D.name} spoils`, pos: eye(), weapon: relic });
-		hint(res?.ok ? `${D.name} defeated. ${WEAPONS[relic.i].name} (Legendary) saved in Gear, plus Legendary ${name} and ${R.credits.toLocaleString()} credits.` : fallback ? `${D.name} defeated. Legendary ${WEAPONS[relic.i].name} waits at your feet. Finish the pending trade, then collect it.` : `${D.name} defeated. Reward could not be saved.`, 7000, 2);
+		const fallback = !res?.ok && relics.map((weapon,n) => recovery.addCache({ id: weapon.u, name: `${D.name} spoils`, pos: {...eye(),x:eye().x+n*.6}, weapon })).every(Boolean);
+		const names = relics.map(x=>ARMS_CATALOG[x.i].name).join(' + ');
+		hint(res?.ok ? `${D.name} defeated. ${names} (Legendary weapon + armor) saved in Gear, plus Legendary ${name} and ${R.credits.toLocaleString()} credits.` : fallback ? `${D.name} defeated. ${names} wait at your feet. Finish the pending trade, then collect them.` : `${D.name} defeated. Reward could not be saved.`, 7000, 2);
 		journal.push({ t: Date.now(), boss: B0.kind, name: D.name, where: placeName(), line: `Brought down ${D.name} in ${D.where}.` });
 		store.set('l99-combat-journal', JSON.stringify(journal.slice(-50)));
 		morality.record({ kind: 'boss-slain', target: D.name, place: placeName(), world: worldKey });
