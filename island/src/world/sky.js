@@ -264,7 +264,7 @@ const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
 // in a dim grey-blue (airBlue of the way to the blue overhead, airDim as bright), ridge behind
 // ridge, while the high air behind them still has the sun and the low sky keeps its gold.
 // (Crysis.world().sky.state.dusk, for tuning)
-const DUSK = { sunLast: C(1.0, 0.42, 0.28), sun: 3.2, sky: 1.9, skyBlue: 0.4, haze: 0.4, mid: 0.75, air: 2.25, airBlue: 0.75, airDim: 0.42 };
+const DUSK = { sunLast: C(1.0, 0.42, 0.28), sun: 4.0, sky: 1.9, skyBlue: 0.4, haze: 0.4, mid: 0.75, air: 2.25, airBlue: 0.75, airDim: 0.42 };
 function agx(c, exposure, out) {
 	exposure *= GRADE.exposure;
 	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
@@ -1115,7 +1115,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		sun.shadow.intensity = vacuum ? 0.96 : 0.78 * (0.12 + 0.88 * sunVis);
 		if (night < 0.5) {
 			sun.color.copy(sunCol);
-			sun.intensity = Math.max(3.4 * dayK + 0.4 * setK, DUSK.sun * lastK) * (0.25 + 0.75 * sunVis);
+			// (the floor only while the sun is low: by 20 degrees it is the day's own light again)
+			sun.intensity = Math.max(3.4 * dayK + 0.4 * setK, DUSK.sun * lastK * (1 - THREE.MathUtils.smoothstep(elev, 0.12, 0.35))) * (0.25 + 0.75 * sunVis);
 			sun.position.copy(sd).multiplyScalar(SUN_D).add(focus);
 		} else {
 			sun.color.copy(PAL.moon);
