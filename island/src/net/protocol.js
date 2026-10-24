@@ -22,7 +22,7 @@ export const STALE_MS = 30000;
 // an empty room is kept this long for a reconnect, then forgotten
 export const EMPTY_MS = 30 * 60 * 1000;
 export const EVENTS_MAX = 30;
-export const ANIMS = ['idle', 'walk', 'run', 'fly', 'drive', 'swim'];
+export const ANIMS = ['idle', 'walk', 'run', 'fly', 'drive', 'swim', 'sit'];
 export const VEHICLES = ['', 'car', 'boat'];
 // room codes: six letters and digits, none that read alike (no 0/O, 1/I/L)
 const ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -59,6 +59,9 @@ export function cleanPose(p) {
 	// what they wear, head to foot (people/armor-looks.js wearCode), which friends see on them
 	// their PvP flag: raised, they will fight friends who raised theirs (combat/honor.js)
 	if (p.pk === 1) o.pk = 1;
+	// with it raised, how they stand: [life, mana] as whole percents (mana -1 for none), for the
+	// target frame of a friend who fights them (combat/target-frame.js)
+	if (o.pk && Array.isArray(p.hv) && p.hv.length === 2 && Number.isInteger(p.hv[0]) && p.hv[0] >= 0 && p.hv[0] <= 100 && Number.isInteger(p.hv[1]) && p.hv[1] >= -1 && p.hv[1] <= 100) o.hv = [p.hv[0], p.hv[1]];
 	if (typeof p.wr === 'string' && /^[0-9a-z]{1,2}(\.[0-9a-z]{1,2}){0,5}$/.test(p.wr)) o.wr = p.wr;
 	if (ITEM_RE.test(p.h || '')) {
 		o.h = p.h;

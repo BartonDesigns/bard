@@ -31,10 +31,12 @@ const FORM = {
 	tussock: ['grass', '#8a8a5a', 0.5], steppegrass: ['grass', '#9a9a5a', 0.45], feathergrass: ['grass', '#b8b080', 0.6], savannagrass: ['grass', '#b8a05a', 0.9], spinifex: ['grass', '#a8a060', 0.7], ichu: ['grass', '#b8a868', 0.8], barley: ['grass', '#b8b070', 0.7],
 	saltbush: ['shrub', '#8a9a7a', 1.2], sagebrush: ['shrub', '#8a9a80', 1], hedge: ['shrub', '#3e5e2e', 1.8], hibiscus: ['shrub', '#3e6a2a', 2], euphorbia: ['cactus', '#5a7a3a', 4, 'candelabra'], vine: ['shrub', '#5a7a32', 1.4],
 	quinoa: ['shrub', '#a85a3a', 1.2], sugarcane: ['bamboo', '#7a9a48', 3], tamarisk: ['shrub', '#7a8a6a', 4], cactus: ['cactus', '#4a6a3a', 3, 'saguaro'], flowers: ['grass', '#8aa050', 0.4],
+	creosote: ['shrub', '#5e6e3e', 1.5], joshua: ['cactus', '#5e7238', 5, 'joshua'], yucca: ['cactus', '#5e7238', 1.8, 'yucca'],
 	// the villages' great trees and their garden beds (structures.js)
 	sacredfig: ['banyan', '#34562a', 20], oldbaobab: ['baobab', '#5a6a32', 18],
 	greens: ['shrub', '#4a7a32', 0.9],
 };
+const NAMED = { joshua: /joshua/i, creosote: /creosote/i, yucca: /yucca|lechuguilla|sotol|agave/i, juniper: /juniper/i };
 // the colour each form's leaves are built in: a kit colour of this is no tint at all
 const REF = { eucalypt: '#6e8478', conifer: '#36502e', column: '#36502e', palm: '#4a7a32', banana: '#4a8a32', fern: '#3a6a2a', grass: '#9a9a5a', shrub: '#4a6a32', cactus: '#4a6a3a' };
 // forms with a far tier (the rest are small, and simply fade out where they stop mattering)
@@ -362,6 +364,28 @@ function cactus(seed, kind) {
 			const a = i / n * 6.283 + r() * 0.4, d = H * (0.12 + r() * 0.12), h = H * (0.7 + r() * 0.3), o = V(0, T * (0.8 + r() * 0.2), 0);
 			ribbed(b, [o, V(Math.cos(a) * d * 0.7, o.y + H * 0.04, Math.sin(a) * d * 0.7), V(Math.cos(a) * d, o.y + H * 0.15, Math.sin(a) * d), V(Math.cos(a) * d, h, Math.sin(a) * d)], [R * 0.5, R * 0.55, R * 0.6, R * 0.55], 10, 4, C);
 		}
+	} else if (kind === 'joshua' || kind === 'yucca') {
+		// the Mojave's Joshua tree: a shaggy trunk forking into crooked arms, a ball of spiky leaves at
+		// each tip (the Mojave yucca: a short one, a head or two)
+		const josh = kind === 'joshua', H = (josh ? 5 : 1.8) * (0.8 + r() * 0.4), R = josh ? 0.2 : 0.09;
+		const bark = new THREE.Color(0.4, 0.34, 0.26), leaf = new THREE.Color(0.36, 0.46, 0.22), tips = [];
+		const T = H * (josh ? 0.35 + r() * 0.15 : 0.55 + r() * 0.2), lean = V((r() - 0.5) * 0.25 * T, T, (r() - 0.5) * 0.25 * T);
+		tube(b, [V(0, -0.3, 0), V(lean.x * 0.4, T * 0.5, lean.z * 0.4), lean], [R * 1.25, R, R * 0.85], 7, bark, () => 0);
+		const arm = (o, a, len, depth) => {
+			const dir = V(Math.cos(a) * 0.75, 0.7, Math.sin(a) * 0.75).normalize(), m = o.clone().addScaledVector(dir, len * 0.55), e = o.clone().addScaledVector(dir, len).add(V(0, len * 0.3, 0)), k = 1 - depth * 0.25;
+			tube(b, [o, m, e], [R * 0.8 * k, R * 0.72 * k, R * 0.62 * k], 6, bark, () => 0);
+			if (depth < 1 && r() < 0.75) for (let i = 0; i < 2; i++) arm(e, a + (i - 0.5) * 1.5 + (r() - 0.5) * 0.6, len * 0.7, depth + 1);
+			else tips.push(e);
+		};
+		if (josh) { const n = 2 + Math.floor(r() * 2); for (let i = 0; i < n; i++) arm(lean, i / n * 6.283 + r(), H * 0.3, 0); }
+		else { tips.push(lean); if (r() < 0.4) arm(V(lean.x * 0.5, T * 0.55, lean.z * 0.5), r() * 6.283, H * 0.3, 1); }
+		// (each head: stiff blades out of it, most of them up)
+		const blade = josh ? 0.4 : 0.6;
+		for (const p of tips) for (let k = 0; k < (josh ? 16 : 22); k++) {
+			const u = r() * 6.283, v = -0.35 + r() * 1.3, c = Math.sqrt(Math.max(0, 1 - Math.min(1, v * v)));
+			const d = V(Math.cos(u) * c, v, Math.sin(u) * c).normalize();
+			tube(b, [p, p.clone().addScaledVector(d, blade * (0.75 + r() * 0.5))], [josh ? 0.035 : 0.03, 0.004], 3, leaf, () => 0);
+		}
 	} else {
 		const H = 3 * (0.85 + r() * 0.4), R = H * 0.085, pts = [], rad = [];
 		for (let k = 0; k <= 5; k++) { pts.push(V(0, H * k / 5 - (k ? 0 : 0.3), 0)); rad.push(R * (1 - 0.12 * k / 5)); }
@@ -498,7 +522,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 
 	let at = null;
 	const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), TC = new THREE.Color();
-	const DENS = { jungle: 2.2, island: 1, eastvillage: 1.1, southasia: 0.8, southcity: 0.15, eastcity: 0.15, bazaar: 0.2, mediterranean: 0.9, village: 0.9, farm: 0.4, alpine: 1, snow: 1, polar: 0.5, himalaya: 0.6, andes: 0.6, steppe: 1.6, savanna: 1.1, sahel: 0.6, desert: 0.25, pueblo: 0.5, outback: 0.7 };
+	const DENS = { jungle: 2.2, island: 1, eastvillage: 1.1, southasia: 0.8, southcity: 0.15, eastcity: 0.15, bazaar: 0.2, mediterranean: 0.9, village: 0.9, farm: 0.4, alpine: 1, snow: 1, polar: 0.5, himalaya: 0.6, andes: 0.6, steppe: 1.6, savanna: 1.1, sahel: 0.6, desert: 0.25, pueblo: 0.5, outback: 0.7, mojave: 0.6 };
 	const counts = new Map();
 	// one plant: into the tier(s) its distance puts it in
 	function put(v, mi, d, x, y, z, yaw, size, word, base, C, culture, t, gx = 0, gz = 0, lie = 0) {
@@ -527,6 +551,9 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 		// where the atlas has gum trees (Australia, California's planted groves, the Andes and the
 		// Ethiopian highlands), eucalyptus grows among the kit's own, the more the earlier it is named
 		const vegL = typeof veg === 'string' ? veg.split('|') : veg || [], ei = vegL.findIndex((w) => /eucalypt|\bgum\b/i.test(w));
+		// (the American desert's plants each where the atlas names them: the Joshua tree in the Mojave,
+		// not the Chihuahuan; the creosote not up in the Great Basin's sagebrush)
+		if (kit.id === 'mojave' && vegL.length) flora = flora.filter(([w]) => !NAMED[w] || vegL.some((v) => NAMED[w].test(v)));
 		const tot0 = flora.reduce((a, b) => a + b[1], 0);
 		if (ei >= 0 && tot0 && !flora.some(([w]) => FORM[w]?.[0] === 'eucalypt')) flora = [...flora, ['eucalyptus', tot0 * 0.6 / (ei + 1) ** 2]];
 		const tot = flora.reduce((a, b) => a + b[1], 0), dens = DENS[kit.id] ?? 0.8;

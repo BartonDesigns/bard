@@ -24,6 +24,13 @@ import * as THREE from 'three';
 import { F, RAD, EARTH_R, lonRaw } from './globeframe.js';
 
 export const RES = 10;                 // cells a degree
+// the lowest the land lies above its water (the sea's, a lake's): the flat low ground of the deltas,
+// the Low Countries and the reclaimed shores (Mumbai, Shanghai, Amsterdam, Tokyo by its bay) is dry
+// land a metre and a half up, as everything built and walked on it takes dry land to be (a town's
+// lots over 1.5 m: crysis/civgen.js; its buildings, people and street things over half a metre),
+// not a sheet at the water's own level nothing will stand on. The coast still runs down to the sea
+// as its beach (shoreLand)
+export const LAND_FLOOR = 1.6;
 export const S0 = 8192, OCT = 10;      // the relief's octaves: 8 km down to 16 m
 // the hills drawn taller than the measured ground's (the 600 m survey the bake reads smooths away
 // the small hills, and a true 40 m across 3 km reads as flat from the ground): the plains and the
@@ -176,7 +183,7 @@ export function createGlobeHeight(win) {
 				const st = clamp(c.A * 0.3, 10, 80), q = (hl - Ws) / st, fq = fract(q);
 				hl += (Ws + (Math.floor(q) + sstep(0.3, 0.7, fq)) * st - hl) * c.TR * 0.8;
 			}
-			hl = Math.max(hl, Ws + 0.3);
+			hl = Math.max(hl, Ws + LAND_FLOOR);
 			h = shoreLand(cs, hl, Ws, c.A);
 		} else {
 			const hs = Math.min(c.e, Ws - 1.5 - 60 * -cs);
@@ -345,7 +352,7 @@ float globeHeight(vec2 d, float oct){
 			float st = clamp(A * 0.3, 10.0, 80.0), q = (hl2 - Ws) / st, fq = fract(q);
 			hl2 += (Ws + (floor(q) + smoothstep(0.3, 0.7, fq)) * st - hl2) * TR * 0.8;
 		}
-		hl2 = max(hl2, Ws + 0.3);
+		hl2 = max(hl2, Ws + ${LAND_FLOOR.toFixed(2)});
 		h = gShoreLand(cs, hl2, Ws, A);
 	} else h = gSeaSide(cs, Ws);
 	return h;

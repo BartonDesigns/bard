@@ -36,6 +36,8 @@ export function createCivilians(ctx) {
 				surface: 'person',
 				get surrendered() { return s.hands > 0; },
 				onHit: (blow) => hit(s, blow),
+				// (their life for the target frame, combat/target-frame.js: whole until first hurt)
+				vitals: () => s.H || { hp: 100, max: 100 },
 			};
 			known.set(p, s);
 		}

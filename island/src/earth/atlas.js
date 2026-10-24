@@ -219,6 +219,13 @@ export function regionAt(lat, lon) {
 	const top = W[0].R;
 	return { lat, lon, id: top.id, name: top.name, land: true, path: top.path, weights: W.map(({ id, name, w }) => ({ id, name, w: Math.round(w * 1000) / 1000 })), profile: top, mix: mixOf(W), coast: top.terrain?.coast || 'none', sea };
 }
+// a desert's ground (the climate of the region it is most in: a desert by name, or under 300 mm of
+// rain a year with a warm summer, so not the tundra's thaw lakes): its towns stucco under palms
+// (globetowns.js), its closed basins dry pans, not lakes (crysis/rivers.js)
+export function aridAt(lat, lon) {
+	const R = regionAt(lat, lon), C = R?.land ? R.profile?.climate : null;
+	return !!C && (/desert/.test(C.kind || '') || ((C.rain ?? 1e9) < 300 && (C.temp?.[1] ?? 0) >= 20));
+}
 function mixOf(W) {
 	const num = (f) => W.reduce((a, x) => a + (f(x.R) ?? 0) * x.w, 0);
 	const pair = (f) => [num((R) => f(R)?.[0]), num((R) => f(R)?.[1])].map((v) => Math.round(v * 10) / 10);

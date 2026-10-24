@@ -138,7 +138,7 @@ export function createSensing() {
 		// under a deck: a freeway overpass, the bridge's approach
 		const head = pos.y + 0.3;
 		for (const f of [W.freeways?.floor, W.bridge?.deckFloor]) if (f) { const v = f(x, z, head + 14); if (v > head && v < head + 14) return ['underpass', 1]; }
-		const U = W.bayArea && Math.max(Math.abs(x), Math.abs(z)) > W.island.half ? W.bayArea.urbanAt(x, z) : null;
+		const U = W.bayArea && Math.max(Math.abs(x), Math.abs(z)) > W.island.half ? (W.townAt || W.bayArea.urbanAt)(x, z) : null;
 		if (U && U.u > 0.45 && (U.s === STYLE.sf || U.d > 0.25 || U.s === STYLE.office || U.s === STYLE.retail)) return ['street', Math.min(1, (U.u - 0.3) * 1.5)];
 		return ['open', 1];
 	}
@@ -224,10 +224,10 @@ export function createSensing() {
 		if (bc) { out.kind = 'beach'; out.busy = crowd(bc.quiet ? ZONE.quiet : ZONE.beach, hours, weekend).k * (bc.quiet ? 0.3 : 1); return out; }
 		const pk = W.parks?.parkAt?.(x, z);
 		if (pk) { out.kind = 'park'; out.busy = crowd(ZONE.trail, hours, weekend).k; return out; }
-		const U = W.bayArea.urbanAt(x, z);
+		const U = (W.townAt || W.bayArea.urbanAt)(x, z);
 		if (U.u > 0.2) {
 			const zone = zoneOf(U);
-			out.kind = zone === ZONE.downtown ? 'downtown' : zone === ZONE.dining || zone === ZONE.retail ? 'mainstreet' : zone === ZONE.office ? 'offices' : zone === ZONE.industrial ? 'industrial' : 'suburb';
+			out.kind = zone === ZONE.downtown || zone === ZONE.strip ? 'downtown' : zone === ZONE.dining || zone === ZONE.retail ? 'mainstreet' : zone === ZONE.office ? 'offices' : zone === ZONE.industrial ? 'industrial' : 'suburb';
 			out.busy = crowd(zone, hours, weekend).k * Math.min(1, U.u * 1.3);
 			return out;
 		}

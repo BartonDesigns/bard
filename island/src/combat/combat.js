@@ -48,6 +48,8 @@ import { PVP_FEATURE } from '../net/protocol.js';
 import { createCompass } from './compass.js';
 import { soundBus } from '../world/soundbus.js';
 import { createTargetFocus } from './target-focus.js';
+import { createTargetFrame } from './target-frame.js';
+import { createNameplates } from './nameplates.js';
 import { createMelee } from './melee.js';
 import { mayStation, militiaCamps } from '../military/rules.js';
 import { SPECIES, SPECIES_IDS } from '../creatures/catalog.js';
@@ -221,8 +223,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// (magic/: shield takes a blow aimed at you and returns what gets through, or null; cloak
 	// says whether you are hidden from those hunting you; power(T, blow) reshapes a blow your
 	// weapons deal, for your skills; honorRank() your honor's rank and pvpWin({ from, r, name })
-	// a friend beaten in a PvP fight, for your honor: combat/honor.js)
-	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, spellAim: null, remoteSpell: null, honorRank: null, pvpWin: null, guild: null, quarry: null };
+	// a friend beaten in a PvP fight, for your honor: combat/honor.js; mana() your { mana, max })
+	const hooks = { posts: null, trespass: null, event: null, police: null, crime: null, holdFire: null, ignore: null, cover: null, arrest: null, booked: null, death: null, ambient: null, campOk: null, shield: null, cloak: null, power: null, casting: null, spellAim: null, remoteSpell: null, honorRank: null, pvpWin: null, guild: null, quarry: null, mana: null };
 	// an offence on Earth: to the law to be witnessed and called in, or (no law) at once
 	function crime(kind, at, witnessed = true) {
 		if (!isEarth()) return wanted.stars;
@@ -641,10 +643,14 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		wallBlow: (m) => { const e = eye(), d = camera.getWorldDirection(new THREE.Vector3()); const r = W()?.structures?.blow?.(e, d, m.reach + 0.35, m); if (r) { if (r.broke) broke(r.at || e); return r; } const h = worldHit(e, d, m.reach + 0.25); return h && h.surface !== 'ground' ? { material: h.surface, hard: true, at: e.clone().addScaledVector(d, h.t) } : null; },
 	});
 
+	const isHostile = (T) => !!(T.P && melee.foes.has(T.P)) || !!T.moral?.()?.hostileTarget;
 	const focus = createTargetFocus({ layer, camera, mount, blocked, shooter: ME, rules, vector: () => new THREE.Vector3(), hint,
 		active: () => active() && !me.ko && !P()?.flying && !recovery.busy,
-		hostile: (T) => !!(T.P && melee.foes.has(T.P)) || !!T.moral?.()?.hostileTarget,
+		hostile: isHostile,
 	});
+	// whoever you have targeted, at the top of the screen; a bar over every monster in the fight
+	const frame = createTargetFrame({ mount, target: () => focus.selected(), hostile: isHostile, eye: () => camera.position });
+	const plates = createNameplates({ mount, camera, vector: () => new THREE.Vector3(), list: () => squads.list, blocked, target: () => focus.selected(), phone: isPhone });
 	const assist = (dt) => focus.assist(P(), dt);
 
 	// ---------- bosses ----------
@@ -877,7 +883,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		hint(pvp.flag ? why : 'PvP flag lowered: no friend can hurt you.', 3000, 1);
 		return pvp.flag;
 	}
-	multiplayer?.linkCombat?.({ heard, rules: () => ({ ...rules }), setRules: (r) => { if (!multiplayer.isHost()) return; Object.assign(rules, { pvp: !!r.pvp }); multiplayer.send({ t: 'rules', r: { pvp: !!r.pvp } }); }, flag: () => pvp.flag, setFlag });
+	multiplayer?.linkCombat?.({ heard, rules: () => ({ ...rules }), setRules: (r) => { if (!multiplayer.isHost()) return; Object.assign(rules, { pvp: !!r.pvp }); multiplayer.send({ t: 'rules', r: { pvp: !!r.pvp } }); }, flag: () => pvp.flag, setFlag,
+		// (your life and mana as whole percents, for a friend fighting you: their target frame)
+		vitals: () => { const M = hooks.mana?.(); return [me.ko > 0 ? 0 : Math.round(Math.max(0, Math.min(1, me.H.hp / me.H.max)) * 100), M && M.max > 0 ? Math.round(Math.max(0, Math.min(1, M.mana / M.max)) * 100) : -1]; } });
 	// friends' bodies in the layer while PvP is open to you: those with their own flag up (an
 	// older server cannot tell: then everyone, as before)
 	function stepRemotes() {
@@ -887,7 +895,10 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		for (const r of list) {
 			remotes.set(r.id, r);
 			let T = layer.get('rp:' + r.id);
-			if (!T) T = layer.add({ id: 'rp:' + r.id, peer: r.id, kind: 'remote', faction: 'friend:' + r.id, surface: 'person', name: r.name, bound: { x: 0, y: 0, z: 0, r: 1.2 }, shapes: () => personShapes(T.bound.x, T.bound.y - 0.9, T.bound.z, 1.75), onHit: () => ({ dealt: 0 }) });
+			if (!T) T = layer.add({ id: 'rp:' + r.id, peer: r.id, kind: 'remote', faction: 'friend:' + r.id, surface: 'person', name: r.name, bound: { x: 0, y: 0, z: 0, r: 1.2 }, shapes: () => personShapes(T.bound.x, T.bound.y - 0.9, T.bound.z, 1.75), onHit: () => ({ dealt: 0 }),
+				// (their life and mana as they send them, whole percents: none from a server that
+				// does not pass them on yet)
+				vitals: () => { const v = remotes.get(r.id)?.hv; return v ? { hp: v[0], max: 100, mana: v[1] >= 0 ? v[1] : null, manaMax: v[1] >= 0 ? 100 : 0, pct: true } : null; } });
 			T.bound.x = r.at[0]; T.bound.y = r.at[1] - EYE + 0.9; T.bound.z = r.at[2];
 		}
 	}
@@ -951,6 +962,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (me.ko) { if (P()) P().locked = false; me.ko = 0; revive(me.H, 0.7); }
 		group.removeFromParent(); lastWorld = null;
 		hud.update(0, { show: false, stars: 0 });
+		frame.update(0, { show: false }); plates.update(0, false);
 	}
 	function update(dt) {
 		const w = W(), p = P();
@@ -1024,6 +1036,9 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		if (saveT <= 0) { saveT = 10; store.set('l99-factions', JSON.stringify(relations.save())); }
 		// the HUD
 		const boss = [...bosses.values()].find((b) => !b.dead || b.deadT < 3);
+		const see = active() && !me.ko;
+		plates.update(dt, see);
+		frame.update(dt, { show: see, boss: !!boss });
 		const fovPx = innerHeight / 2 / Math.tan((camera.fov * Math.PI) / 360) * (camera.zoom || 1);
 		hud.update(dt, {
 			show: true, ko: me.ko > 0, koText: me.ko > 0 ? `Coming to in ${Math.ceil(me.ko)}…` : '',
@@ -1046,7 +1061,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	const api = {
 		// a game controller's trigger (ui/gamepad.js), held as the mouse button is
 		trigger: (down) => fireInput('pad', !!down),
-		update, reset, heard, group, layer, fx, hud, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
+		update, reset, heard, group, layer, fx, hud, frame, plates, morality, relations, compass, recovery, contracts, fieldAudio, melee, focus, hooks, squads,
 		projectile, blast, firstHit, landShot, ground, eye, sound: (k, at) => sound(k, at), deal: (T, blow, mine) => deal(T, blow, mine), hurtPlayer, wantedLevel: () => wanted.stars, isEarth, zone: () => (W() ? zone() : null),
 		// harm done by your vehicle's guns (military/): yours, weighed like a shot
 		strikeAs: (T, blow) => deal(T, { ...blow, by: ME }, true),

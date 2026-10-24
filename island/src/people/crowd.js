@@ -117,8 +117,9 @@ vCrowd = rg == 0 ? iSkin : rg == 1 ? iTop : rg == 2 ? iOuter : rg == 3 ? iBottom
 	return mat;
 }
 
-// a crowd of n: kind 'seat' (in the stands), 'walk' (going along), 'stand'
-export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 1, cold = 0.4, far = false } = {}) {
+// a crowd of n: kind 'seat' (in the stands), 'walk' (going along), 'stand'; kids, the share of
+// children in it; night, dressed for a night out (wardrobe.js)
+export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 1, cold = 0.4, far = false, kids = 0.2, night = false } = {}) {
 	const group = new THREE.Group();
 	group.name = 'crowd';
 	const meshes = [], slots = [];
@@ -126,7 +127,7 @@ export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 
 	const r = rng(seed);
 	// who is in it: an age, a body shape, colours for their generation and the place
 	for (let i = 0; i < n; i++) {
-		const age = r() < 0.2 ? 6 + r() * 10 : 17 + Math.pow(r(), 1.2) * 60;
+		const age = r() < kids ? 6 + r() * 10 : 17 + Math.pow(r(), 1.2) * 60;
 		const shape = age < 15 ? 5 : age > 58 ? (r() < 0.5 ? 3 : 2) : age < 24 ? (r() < 0.5 ? 4 : 1) : Math.floor(r() * 3);
 		who.push({ age, shape, seed: (seed * 7919 + i * 131) >>> 0 });
 	}
@@ -151,7 +152,7 @@ export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 
 			const c = new THREE.Color();
 			mine.forEach(([w, i], j) => {
 				const rr = rng(w.seed), d = personDNA(w.seed, { age: w.age });
-				const o = dressFor(rr, d, { place: where, activity: kind === 'seat' ? 'sit' : 'walk', cold });
+				const o = dressFor(rr, d, { place: where, activity: kind === 'seat' ? 'sit' : 'walk', cold, night });
 				const tone = d.ancestry[0] * 0.55 + d.ancestry[1] * 0.12;
 				c.setRGB(0.72 * (1 - tone * 0.62), 0.52 * (1 - tone * 0.7), 0.4 * (1 - tone * 0.75)); attrs.iSkin.setXYZ(j, c.r, c.g, c.b);
 				const set = (a, col) => { c.set(col || '#777777'); attrs[a].setXYZ(j, c.r, c.g, c.b); };

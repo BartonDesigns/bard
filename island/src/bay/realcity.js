@@ -26,6 +26,8 @@ import { paintStreet } from './potholes.js';                 // ...its sidewalk,
 import { qualityNow, onQuality } from '../world/governor.js';
 import { GFX_PHONE } from '../world/device.js';
 import { buildSlice } from '../world/buildslice.js';
+import { townMapAt } from '../crysis/townmap.js';            // how built up a grown town is, as the Bay's town map says it
+import { canopySteps, canopyInto } from './canopy.js';      // the trees' crowns in the coarse map, for the towns far off
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -164,6 +166,15 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	const CELL = 250;
 	const key = (gx, gz) => (gx + 4096) * 8192 + gz + 4096;
 	const cellIn = (grid, x, z) => { const k = key(Math.floor(x / CELL), Math.floor(z / CELL)); let g = grid.get(k); if (!g) grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] }); return g; };
+	// a coarse map as the ground reads it: mipmapped, so far off, where a pixel spans many of its
+	// cells, it gives their mean (the roofs, streets and crowns of a whole block) and not one cell
+	// in so many, which crawled in streaks across the far towns; and filtered along the grazing
+	// view so the nearer blocks keep their shape (the land use is read cell by cell, texelFetch)
+	const ANISO = Math.min(isPhone ? 4 : 8, renderer?.capabilities?.getMaxAnisotropy?.() || 1);
+	const mapFilter = (tex) => {
+		tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true;
+		tex.anisotropy = ANISO; tex.colorSpace = THREE.NoColorSpace;
+	};
 	const roadBox = (r) => {
 		const p = r.pts;
 		let mnx = 1e9, mnz = 1e9, mxx = -1e9, mxz = -1e9;
@@ -514,13 +525,14 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			if (inIb(p.x, p.z) && Math.hypot(p.x - sm.x, p.z - sm.z) > 400 && !onLot(p.x, p.z, Math.max(p.w, p.d) / 2)) cellIn(G.grid, p.x, p.z).pools.push(p);
 		}
 		o = S.trees[0];
+		const own = [];               // (every tree this region stands, for its crowns in the coarse map below)
 		for (let n = 0; n < S.trees[1]; n++, o += 8) {
 			if ((n & 2047) === 2047) await breathe();
 			const t = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, h: dv.getInt16(o + 4, true) / 20, cone: dv.getInt16(o + 6, true) };
 			if (!inIb(t.x, t.z) || LF.skip(t.x, t.z) || onLandmark(t.x, t.z, 2) || onLot(t.x, t.z, 1.5)) continue;
-			cellIn(G.grid, t.x, t.z).trees.push(t);
+			cellIn(G.grid, t.x, t.z).trees.push(t); own.push(t);
 		}
-		for (const t of plan.trees) cellIn(G.grid, t.x, t.z).trees.push(t);
+		for (const t of plan.trees) { cellIn(G.grid, t.x, t.z).trees.push(t); own.push(t); }
 		// the coarse map, for what grows where (and drawn into the ground's, compose())
 		G.map = map;
 		// Lake Annabel's trees and its walk (lake.js), where this region holds it
@@ -530,9 +542,14 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			const local = (kind, x, z, rad) => { const out = []; nearIn(G, kind, x, z, rad, out); return out; };
 			const onRoad = (x, z) => local('roads', x, z, 30).some((q) => { const p = q.pts; for (let i = 0; i + 3 < p.length; i += 2) { const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2)); if (Math.hypot(x - p[i] - dx * t, z - p[i + 1] - dz * t) < q.w / 2 + 2.5) return true; } return false; });
 			const onBox = (x, z) => local('boxes', x, z, 60).some((b) => Math.hypot(x - b.x, z - b.z) < Math.max(b.w, b.d) / 2 + 3);
-			for (const t of LF.trees) if (!onRoad(t.x, t.z) && !onBox(t.x, t.z)) cellIn(G.grid, t.x, t.z).trees.push(t);
+			for (const t of LF.trees) if (!onRoad(t.x, t.z) && !onBox(t.x, t.z)) { cellIn(G.grid, t.x, t.z).trees.push(t); own.push(t); }
 			for (const q of LF.paths) cellIn(G.grid, q.ax, q.az).paths.push(q);
 		}
+		// the trees' crowns, cell by cell, in the coarse map's alpha (canopy.js): the ground paints
+		// them where the trees themselves are too far off to stand
+		const CS = canopySteps(map, own);
+		while (!CS.next().done) await breathe();
+		map.canopy = true;
 		G.ms = Math.round(performance.now() - t0);
 		return { G, attribution: H.attribution };
 	}
@@ -603,7 +620,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			comp?.tex.dispose();
 			const px = new Uint8Array(w * h * 4);
 			const tex = new THREE.DataTexture(px, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
-			tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = false;
+			mapFilter(tex);
 			comp = { w, h, px, tex };
 		} else comp.px.fill(0);
 		comp.x0 = ux0; comp.z0 = uz0; comp.step = step;
@@ -619,7 +636,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 				for (let i = i0; i < i1; i++) {
 					const s = (row + si[i - i0]) * 4, d = (out + i) * 4;
 					if (M.px[s + 3] === 0) continue;
-					comp.px[d] = M.px[s]; comp.px[d + 1] = M.px[s + 1]; comp.px[d + 2] = M.px[s + 2]; comp.px[d + 3] = 255;
+					comp.px[d] = M.px[s]; comp.px[d + 1] = M.px[s + 1]; comp.px[d + 2] = M.px[s + 2]; comp.px[d + 3] = M.px[s + 3];
 				}
 			}
 		}
@@ -746,8 +763,10 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		for (const t of D.trees) if (!plan.clear(t.x, t.z, 1.5)) cellIn(G.grid, t.x, t.z).trees.push(t);
 		for (const t of plan.trees) cellIn(G.grid, t.x, t.z).trees.push(t);
 		const M = D.map;
+		// (civgen puts its trees' crowns in the map's alpha as it grows the town; a region from elsewhere gets them here)
+		if (!M.canopy) { canopyInto(M, D.trees || []); M.canopy = true; }
 		G.tex = new THREE.DataTexture(M.px, M.w, M.h, THREE.RGBAFormat, THREE.UnsignedByteType);
-		G.tex.minFilter = G.tex.magFilter = THREE.LinearFilter; G.tex.colorSpace = THREE.NoColorSpace; G.tex.needsUpdate = true;
+		mapFilter(G.tex); G.tex.needsUpdate = true;
 		gens.push(G);
 		R.regions.unshift(G);                       // found first where it overlaps nothing real anyway
 		R.loaded = true;
@@ -765,6 +784,13 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		G.tex.dispose();
 		genVersion++;
 		changed(-1, camX, camZ);
+	}
+	// how built up the grown town standing at a point is, in the shape of the Bay's town map
+	// ({ u, a, d, s }: crysis/townmap.js), for a town out past that map's edge; null where none stands
+	function townAt(x, z) {
+		let best = null;
+		for (const G of gens) { const U = townMapAt(G.data, x, z); if (U && (!best || U.u > best.u)) best = U; }
+		return best;
 	}
 
 	// ---------- the road maps round you: a fine one close by, a coarser one further out ----------
@@ -1221,5 +1247,5 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 
 	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
 	// town came or went; roadVersion: the regions' or the hand-laid roads changed, anywhere)
-	return (self = { R, inside, regionAt, near, nearOwn, nearSources, roadVersion: () => roadV, update, dispose, sidewalk, landAt, sites, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
+	return (self = { R, inside, regionAt, near, nearOwn, nearSources, roadVersion: () => roadV, update, dispose, sidewalk, landAt, townAt, sites, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) });
 }

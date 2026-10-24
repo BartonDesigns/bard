@@ -114,6 +114,8 @@ export function hollowKing(c, hand = 'hand_R') {
 		const m = new THREE.Matrix4().compose(fist, q, new THREE.Vector3(1, 1, 1)).premultiply(toModel.clone().invert());
 		m.decompose(sword.position, sword.quaternion, sword.scale);
 		b.add(sword);
+		// (a hand with a sword in it: his stance keeps that arm near its drawn hold, creatures/motion.js)
+		c.meta.held = [...(c.meta.held || []), hand.slice(-1)];
 	} else c.root.add(sword);
 	crown(c, K);
 	const tipLocal = new THREE.Vector3(0, 2.1 * k, 0);

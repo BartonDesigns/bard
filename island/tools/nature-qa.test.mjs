@@ -122,7 +122,8 @@ test('trees beside a graded road ride its banks and cuts, and the grade never ca
 });
 
 test('the grass glows with the sun only where the sun reaches it, and never stretches across the lens', async () => {
-	const { SUNLIT_BEGIN } = await import('../src/world/grass.js');
+	// (taken from three's chunk when the grass is built, so it has the hills' shade, world/hillsun.js)
+	const SUNLIT_BEGIN = (await import('../src/world/grass.js')).sunlitBegin();
 	// three's light loop, with the sun's shadow kept for the glow
 	assert.ok(SUNLIT_BEGIN.length > THREE.ShaderChunk.lights_fragment_begin.length);
 	assert.match(SUNLIT_BEGIN, /vDirectionalShadowCoord\[ i \] \) : 1\.0;\n\t\tgSunLit = min\(gSunLit,/);

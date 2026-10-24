@@ -18,6 +18,7 @@ import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
 import { createWindshield } from './world/windshield.js';
 import { createSunRays } from './world/sunrays.js';
+import { createHillSun } from './world/hillsun.js';
 import { createSpray } from './world/spray.js';
 import { createVegetation } from './world/vegetation.js';
 import { createGrass } from './world/grass.js';
@@ -68,6 +69,7 @@ import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
+import { gearOf } from './bay/storefit.js';
 import { createInteriors } from './interiors/index.js';
 import { createStructures } from './structures/index.js';
 import { createServices } from './services/index.js';
@@ -80,6 +82,7 @@ import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createNatureSound } from './bay/naturesound.js';
 import { createRealCity } from './bay/realcity.js';
+import { townAtOf } from './crysis/townmap.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
 import { createEdgelands } from './bay/edgelands.js';
@@ -160,7 +163,7 @@ export async function islandBuild(iw, params) {
 	shared.heightTex = makeHeightTexture(island);
 	shared.maskTex = makeMaskTexture(island);
 	await yieldBuild('Preparing the surroundings');
-	const sky = createSky(scene, shared, renderer, { isPhone: GFX, earth, latitude: () => earth && iw.world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
+	const sky = createSky(scene, shared, renderer, { isPhone: GFX, earth, latitude: () => earth && iw.world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8, longitude: () => earth && iw.world?.globe ? globeLL(camera.position.x, camera.position.z).lon : NaN });
 	try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 	// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 	const weather = createWeather(scene, shared, { isPhone: GFX, airless: !!profile.airless });
@@ -288,16 +291,18 @@ export async function islandBuild(iw, params) {
 			const x = E.door?.[0] ?? E.x, z = E.door?.[1] ?? E.z;
 			out.push({ id: E.id, economyId: E.id, name: E.name, kind: ['outfitter', 'huntpost'].includes(E.type) ? 'outfitter' : 'supermarket', x, z,
 				y: iw.world.island.heightAt(x, z), actions: ['purchase'], source: 'economy',
-				...(E.type === 'hardware' ? { stock: ['repair-roll', 'camp-lantern', 'home-supply-kit'] } : {}) });
+				...(E.type === 'hardware' ? { stock: gearOf('hardware', 'hardware').stock } : {}) });
 		}
 		for (const B of iw.world.commercial?.list?.() || []) {
 			if (B.type !== 'shop') continue;
 			// A named business owns its own counter; do not add a second generic store
 			// over it with a separate stock lot or let its neighbours sell its goods.
+			// (but a walk-in shop fitted out for its trade sells what it stocks over its own
+			// counter, the hardware, the medkits, the clothes: bay/storefit.js gearOf)
 			const E = businesses.find(e => Math.hypot(e.x - B.x, e.z - B.z) < 5);
-			if (E) continue;
-			const id = `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
-			out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, w: B.w, d: B.d, actions: ['purchase'], source: 'generated-commercial' });
+			if (E && (equipment.has(E.type) || !B.gear)) continue;
+			const id = E ? `shop-${E.id}` : `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
+			out.push({ id, ...(E ? { economyId: E.id } : {}), name: B.gear ? B.name || E?.name || 'Shop' : 'Neighbourhood supermarket', kind: B.gear?.kind || 'supermarket', x: B.x, z: B.z, y: B.y, w: B.w, d: B.d, actions: ['purchase'], source: 'generated-commercial', ...(B.gear ? { stock: B.gear.stock } : {}) });
 		}
 		return out;
 	};
@@ -307,6 +312,9 @@ export async function islandBuild(iw, params) {
 	// sunbeams through the trees in mist (world/sunrays.js)
 	iw.world.rays = createSunRays(scene, shared, renderer, { isPhone: GFX, sun: sky.sun, air: sky.uniforms.uAir });
 	iw.world.rays.quality(qualityNow().fx);
+	// the land's own shade when the sun is low: the valleys go into the shadow of the ridges and
+	// the light climbs the hills as it sets, the last of it on the summits (world/hillsun.js)
+	iw.world.hillSun = createHillSun({ heightAt: (x, z) => island.heightAt(x, z), renderer, scene, isPhone: GFX });
 	fitShadow();
 	// the soft shade where people's shoes meet the ground (world/footshade.js), on whatever floor
 	// they stand: the one you would stand on there, as drawn (player.js seenFloorAt)
@@ -433,7 +441,7 @@ export async function islandBuild(iw, params) {
 	// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 	// for everything: the island's own map on the island, the real land beyond it
 	if (earth) {
-		const bayArea = createBayArea(shared, scene, island, shared.bayU);
+		const bayArea = createBayArea(shared, scene, island, shared.bayU, { renderer, isPhone: GFX });
 		iw.world.bayArea = bayArea;
 		// globe: the Earth past the survey, and the engine's relief on the Bay's own ground (earth/globe.js)
 		iw.world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => iw.world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX, busy: () => iw.drive.active() || !!iw.world?.boat?.boarded?.() || !!iw.world?.orbit?.active() });
@@ -442,6 +450,10 @@ export async function islandBuild(iw, params) {
 		const bayNear = Object.create(bayArea, { loaded: { value: () => bayArea.loaded() && globeF.bay && (() => { const ll = globeLL(camera.position.x, camera.position.z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM; })() } });
 		iw.world.labels = createLabels(dom.mount, bayArea, null);
 		iw.world.real = createRealCity(renderer, { isPhone: GFX });
+		// how built up a point is: the Bay's town map, and past its edge the town grown there
+		// (crysis/townmap.js), for what asks "is this a town?" (the people on the sidewalks, the
+		// street sound, the music); the Bay's grids and blocks keep asking the Bay's map alone
+		iw.world.townAt = townAtOf(bayArea, iw.world.real);
 		// Crysis: the towns beyond the survey, grown street by street as you near them
 		iw.world.civ = createCivilization({ real: iw.world.real, bay: bayArea, water: () => iw.world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
 		iw.world.city = createCity(shared, scene, bayNear, iw.world.real);
@@ -453,13 +465,13 @@ export async function islandBuild(iw, params) {
 		{ const daily = createDailyLife(iw.world.city.economy, { isPhone: GFX }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
 		// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 		iw.world.forestFloor = createForestFloor(scene, bayNear, iw.world.city, iw.world.real, { shared, isPhone: GFX, ground: (x, z) => island.heightAt(x, z), globe: () => iw.world?.globe });
-		// the real houses close by, built whole with their rooms
-		iw.world.houses = createHouses(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX });
+		// the real houses close by, built whole with their rooms (and the country's homes out in the world)
+		iw.world.houses = createHouses(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX, regional: () => iw.world?.globe?.regional?.settlements });
 		// ...and the shops, cafés, restaurants, offices and places to play, walked into
 		// (a shop's fittings in the houses' own materials: no more of them, no new shaders)
 		iw.world.commercial = createCommercial(scene, bayArea, iw.world.real, iw.world.city, { isPhone: GFX, houseMats: iw.world.houses.M });
 		// inside the towers: the lobby, the elevators, every floor, the roof
-		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state });
+		iw.world.towers = createTowers(scene, bayArea, iw.world.city, { isPhone: GFX, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => iw.world?.player.state, regional: () => iw.world?.globe?.regional?.settlements });
 		// ...and every other building: solid, and built inside as you come to it (interiors/)
 		iw.world.interiors = createInteriors(scene, bayArea, iw.world.city, { isPhone: GFX, mats: iw.world.houses.M, towers: iw.world.towers, warm: (o) => (renderer.compileAsync ? renderer.compileAsync(o, camera, scene) : null) });
 		{ const cv = iw.world.commercial.venue, I = iw.world.interiors; iw.world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
@@ -515,7 +527,7 @@ export async function islandBuild(iw, params) {
 		iw.world.boardwalk = createBoardwalk(scene, bayArea, shared, { isPhone, mount: dom.mount, hint: (t, ms, pri = 1) => hint(t, ms, pri), camera, player: () => iw.world?.player.state });
 		// the Bay Area's wild animals by habitat, month and hour, and the field journal
 		iw.world.wildlife = createWildlife(scene, bayNear, { isPhone: GFX, real: iw.world.real, globe: () => iw.world?.globe, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
-		iw.world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
+		iw.world.citySound = createCitySound(Object.create(bayArea, { urbanAt: { value: (x, z) => iw.world.townAt(x, z) } }), (x, z) => island.heightAt(x, z));
 		iw.world.natureSound = createNatureSound(bayNear, (x, z) => bayArea.heightAt(x, z));
 		// the in-between places: dirt tracks, the industrial fringe, town's ragged edge, the odd camp
 		iw.world.edge = createEdgelands(scene, { bay: bayNear, real: iw.world.real, city: iw.world.city, world: () => iw.world, shared, isPhone: GFX });

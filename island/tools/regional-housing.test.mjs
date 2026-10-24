@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { KITS } from '../src/region/kits.js';
 import { blockLots, denseStreetDistance, lotGround } from '../src/region/layout.js';
 import { createSettlements } from '../src/region/settle.js';
+import { mockTextureCanvas } from './fixtures/canvas.mjs';
 const rng = (seed) => { let a=seed>>>0; return () => { a=(Math.imul(a,1664525)+1013904223)>>>0; return a/4294967296; }; };
 
 test('East Asian dense homes leave non-overlapping corners and shopfront clearance to actual streets', () => {
@@ -127,7 +128,8 @@ test('planned streets and homes exclude vegetation before meshes build while par
   S.dispose();
 });
 
-test('regional vegetation refreshes once when settlement occupancy changes, not every frame', async () => {
+test('regional vegetation refreshes once when settlement occupancy changes, not every frame', async (t) => {
+  mockTextureCanvas(t);
   const {createFlora}=await import('../src/region/flora.js');
   const scene=new THREE.Scene(),F={epoch:1};
   const S=createSettlements({scene,ground:()=>30,wet:()=>false,F,toXZ:()=>({x:0,z:0}),isPhone:true});

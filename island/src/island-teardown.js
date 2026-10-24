@@ -69,6 +69,7 @@ export function islandTeardown(iw) {
 	iw.world.beyond?.dispose();
 	iw.world.boardwalk?.destroy();
 	iw.world.rays?.dispose();
+	iw.world.hillSun?.dispose();
 	iw.world.footShade?.dispose();
 	iw.world.spray?.dispose();
 	release();

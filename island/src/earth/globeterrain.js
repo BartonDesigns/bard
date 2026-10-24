@@ -31,7 +31,7 @@ const PH = [photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 }), ph
 
 const FRAG_GLSL = /* glsl */`
 uniform highp sampler2D uGT2, uGT3, uGT4; uniform vec4 uGWin; uniform ivec3 uGI0; uniform vec3 uGF0; uniform vec2 uGSeam; uniform float uGBay, uGNight;
-uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason, uGDry; uniform vec4 uGAnc;
+uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason, uGDry; uniform vec4 uGAnc; uniform vec2 uGLitNear;
 varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;
 float gfH(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
 // value noise on the sphere at 8192 / 2^k metres (the same lattice as the relief)
@@ -189,7 +189,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	const U = data.U;
 	const common = {
 		uGSeam: U.uGSeam, uGBay: U.uGBay, uGF: U.uGF,
-		uGIsl: { value: 1400 }, uGNight: { value: 0 }, uGDebug: { value: 0 }, uGCity: { value: Array.from({ length: CITIES }, () => new THREE.Vector4(0, 0, 0, 0)) },
+		uGIsl: { value: 1400 }, uGNight: { value: 0 }, uGLitNear: { value: new THREE.Vector2(1500, 4000) }, uGDebug: { value: 0 }, uGCity: { value: Array.from({ length: CITIES }, () => new THREE.Vector4(0, 0, 0, 0)) },
 		uGLoam: PH[0][0], uGMoss: PH[1][0], uGRock: PH[2][0], uGSand: PH[3][0], uGPhK: { value: new THREE.Vector4() },
 		uGFd: { value: new THREE.Vector4() }, uGFdI: { value: new THREE.Vector2() },
 		// (the photos' reads, in loops the compiler can't unroll: twice and on three planes, once on a phone)
@@ -382,12 +382,15 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// under water: the bed darkens
 					c = mix(c, c * vec3(0.5, 0.6, 0.6), (1.0 - smoothstep(vGC.z - 6.0, vGC.z, h)));
 					// the towns and cities round you: built ground, and their lights after dark
-					float urb = 0.0;
+					// (a city laid out on the survey's mile grid, the American desert's, has 2 added to how
+					// built up it is: its lights run on the grid, below)
+					float urb = 0.0, gridK = 0.0;
 					for (int i = 0; i < ${CITIES}; i++) {
 						vec4 C = uGCity[i];
 						if (C.z <= 0.0) continue;
-						float dd = length(vGW.xz - C.xy) / C.z;
-						urb = max(urb, exp(-dd * dd * dd * 1.2) * C.w);
+						float dd = length(vGW.xz - C.xy) / C.z, on = exp(-dd * dd * dd * 1.2), gw = step(2.0, C.w);
+						urb = max(urb, on * (C.w - 2.0 * gw));
+						gridK = max(gridK, on * gw);
 					}
 					urb *= (1.0 - smoothstep(0.25, 0.45, slope)) * step(0.0, vGC.x);
 					if (urb > 0.01) {
@@ -405,7 +408,38 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 						// it fades to the land, and the town grown here draws its real streets and buildings)
 						float builtK = smoothstep(0.08, 0.5, urb) * (1.0 - forest) * (1.0 - snowK) * smoothstep(1500.0, 4000.0, dist);
 						c = mix(c, built, builtK * (1.0 - smoothstep(20000.0, 60000.0, dist) * 0.5));
-						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk)) * 0.35;
+						// and by night, seen from the air, its lights: streets strung with lamps round blocks of
+						// about 100 m (wandering, as old streets do), the main roads brighter round 400 m, the
+						// windows and porch lights dim between them, the parks, woods and snow dark. Never a wash
+						// over the ground: down among the town (uGLitNear, from how high you are) the town grown
+						// round you lights itself, and the glow gives way to it. (The tone curve, AgX in main.js,
+						// lifts the dimmest light a long way, so a block's own glow is kept stops under its streets')
+						float litK = uGNight * smoothstep(0.1, 0.6, urb) * (1.0 - forest) * (1.0 - snowK) * smoothstep(uGLitNear.x, uGLitNear.y, dist);
+						if (litK > 0.003) {
+							float lane = 0.21, main = 0.05, sid = 0.5, speck = 0.0;
+							// (past where a block is a few pixels across, the streets are their mean; a phone's main
+							// roads are theirs everywhere, a second net of cells being too dear for it)
+							if (px < 60.0) {
+								float se = gVor(2, 83u, sid) * 100.0;
+								float near = 1.0 - smoothstep(30.0, 60.0, px);
+								lane = mix(lane, gLine(se, 3.5, px) * (0.6 + 0.8 * gq(3, 85u)), near);
+								if (gridK > 0.3) {
+									// the grid's lights: the section-line roads every mile (64 survey units, north and
+									// south on it) the brightest, the half-mile streets after them; the subdivisions'
+									// winding streets dim between
+									vec2 qm = vec2(gQI & 63) + gQF, qh = vec2(gQI & 31) + gQF;
+									vec2 dm = min(qm, 64.0 - qm) * 25.0, dh = min(qh, 32.0 - qh) * 25.0;
+									main = mix(main, max(gLine(min(dm.x, dm.y), 9.0, px), 0.55 * gLine(min(dh.x, dh.y), 5.0, px)), near);
+									lane *= 0.7;
+								}${isPhone ? '' : ' else { float mid, me = gVor(4, 87u, mid) * 400.0; main = mix(main, gLine(me, 6.0, px), near); }'}
+								sid = mix(0.5, sid, near);
+								float sh = gfH(ivec3(gQI, 5), 89u);
+								speck = step(0.72, sh) * gLine(length(gQF - vec2(0.3 + 0.4 * fract(sh * 13.1), 0.3 + 0.4 * fract(sh * 7.7))) * 25.0, 1.4, px) * (1.0 - smoothstep(2.0, 6.0, px));
+							}
+							float fill = 0.004 * smoothstep(0.08, 0.2, sid) * (0.7 + 0.6 * sid) * (0.6 + 0.6 * dense);
+							vec3 lamp = vec3(1.0, 0.7, 0.36), led = vec3(0.95, 0.9, 0.78), win = vec3(1.0, 0.82, 0.55);
+							gCityGlow = (lamp * max(lane, 0.0) * 0.22 + led * main * 0.35 + win * (fill + speck * 0.4) * (1.0 - min(1.0, lane + main))) * litK;
+						}
 					}
 					// close by: the photographs' grain (loam on the soil, moss in the grass, sand, the rock on
 					// the three planes), on the survey's lattice so it stays put when the frame moves
@@ -492,7 +526,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	group.add(lakes);
 
 	// place the rings round the camera; bayOut: how far past the Bay's survey the camera is (m)
-	function update(cam, F, { bay, bayOut, night, cities, on: may = true, lead = null }) {
+	function update(cam, F, { bay, bayOut, night, cities, on: may = true, lead = null, agl = 0 }) {
 		const on = data.win.ready && may;
 		U.uGOn.value = data.win.ready ? 1 : 0;            // (the sea reads the coasts from here too)
 		const x = cam.position.x, z = cam.position.z;
@@ -504,6 +538,9 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		common.uGBay.value = bay ? 1 : 0;
 		common.uGF.value.set(F.fx, F.fz);
 		common.uGNight.value = night;
+		// (the town's lights from the air give way to the town itself as you come down among it)
+		const lk = THREE.MathUtils.smoothstep(agl, 400, 2000);
+		common.uGLitNear.value.set(1500 * (1 - lk), 4000 * (1 - lk) + 1);
 		// how far into a dry place's dry season (1 late summer, -1 late winter; turned round in the south)
 		const day = today(), mo = day.getMonth() + (day.getDate() - 1) / 30;
 		common.uGDry.value = Math.cos(2 * Math.PI * (mo - 8) / 12) * (F.lat < 0 ? -1 : 1);

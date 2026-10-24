@@ -51,7 +51,7 @@ export function islandFrame(iw, now) {
 	shared.uTime.value = iw.time;
 	stepWind(dt, shared);
 	const W = iw.world;
-	W.player.state.inputBlocked = window.L99Loading.active() || arcade.active() || studio.active() || gear.busy() || dom.mount.classList.contains('l99-tools-open') || !!dom.mount.querySelector('[role="dialog"]:not([style*="display: none"]) input:focus');
+	W.player.state.inputBlocked = window.L99Loading.active() || arcade.active() || studio.active() || gear.busy() || !!HOOKS.casino?.active?.() || dom.mount.classList.contains('l99-tools-open') || !!dom.mount.querySelector('[role="dialog"]:not([style*="display: none"]) input:focus');
 	if (W.player.state.inputBlocked) W.player.clearInput();
 	W.arms?.update(dt, camera.position);
 	W.music.update(dt);
@@ -96,6 +96,8 @@ export function islandFrame(iw, now) {
 	stampPrints(W.player.state);
 	W.boat.update(dt, iw.time);
 	const sk = W.sky.update(dt, camera.position);
+	// (the hills' shade, swept for where the sun is now: world/hillsun.js)
+	W.hillSun?.update(dt, camera.position, shared.uSunDir.value, sk.night < 0.5);
 	W.boardwalk?.update(dt, iw.time, camera, sk.night, W.sky.state.hours);
 	// the weather: frames running slow shed rain streaks; indoors the rain stays out
 	W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
@@ -155,8 +157,12 @@ export function islandFrame(iw, now) {
 		// rain closes the distance in; the coast south of Half Moon Bay is kept crystal
 		// clear, the air over the bluffs washed clean by the wind off the sea
 		const lat = 37.76 - camera.position.z / 110996, lon = camera.position.x / (111320 * Math.cos(37.76 * Math.PI / 180)) - 122.57;
-		const clearK = THREE.MathUtils.smoothstep(lat, 37.5, 37.44) * THREE.MathUtils.smoothstep(lat, 37.02, 37.1) * THREE.MathUtils.smoothstep(lon, -122.2, -122.3);
+		// (three's smoothstep takes its edges low then high: turned round, it gave 1 north of
+		// 37.5 and east of -122.2, and the whole East Bay had the clear coast's thin air)
+		const clearK = (1 - THREE.MathUtils.smoothstep(lat, 37.44, 37.5)) * THREE.MathUtils.smoothstep(lat, 37.02, 37.1) * (1 - THREE.MathUtils.smoothstep(lon, -122.3, -122.2));
 		scene.fog.density *= (1 + (wx.rainHere * 12 + wx.gloom * 1.5) * (1 - clearK * 0.8)) * (1 - clearK * 0.55);
+		// the evening's haze, thicker as the sun gets low (world/sky.js DUSK.air)
+		scene.fog.density *= 1 + (W.sky?.state?.duskAir || 0);
 		// another world's air: dust, ash, spores, mist
 		scene.fog.density *= W.island.profileHaze || 1;
 		// (the Moon's ground runs to its horizon in clear vacuum)
@@ -194,7 +200,9 @@ export function islandFrame(iw, now) {
 	if (W.bayArea?.loaded()) {
 		let glow = 0;
 		let gx = 0, gz = 0;
-		for (const [dx, dz] of GLOW_AT) { const u = W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u; glow += u; gx += dx * u; gz += dz * u; }
+		// (out on the globe, the cities' lit footprints: earth/globetowns.js)
+		const GT = W.globe?.towns;
+		for (const [dx, dz] of GLOW_AT) { const x = camera.position.x + dx, z = camera.position.z + dz, u = Math.max(W.bayArea.urbanAt(x, z).u, GT ? GT.glowAt(x, z) : 0); glow += u; gx += dx * u; gz += dz * u; }
 		shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
 		// (and which way the glow lies: the sky over the cities brightest toward them)
 		W.sky.glowToward(gx, gz, dt);
@@ -203,7 +211,10 @@ export function islandFrame(iw, now) {
 	{
 		const U = shared.uCityLight || (shared.uCityLight = { value: 0 });
 		let u = 0;
-		if (W.bayArea?.loaded() && !W.island.far) for (const [dx, dz] of CITY_AT) u += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+		// (out on the globe, the town grown round you, earth/globetowns.js, while you are down in it:
+		// from the air its ground is dark between its lights, globeterrain.js)
+		const GT = W.globe?.towns, low = GT ? 1 - THREE.MathUtils.smoothstep(camera.position.y - W.island.heightAt(camera.position.x, camera.position.z), 150, 700) : 0;
+		if (W.bayArea?.loaded() && !W.island.far) for (const [dx, dz] of CITY_AT) { const x = camera.position.x + dx, z = camera.position.z + dz; u += Math.max(W.bayArea.urbanAt(x, z).u, low > 0 ? GT.urbanAt(x, z) * low : 0); }
 		U.value += (THREE.MathUtils.smoothstep(u / CITY_AT.length, 0.04, 0.3) - U.value) * Math.min(1, dt * 0.5);
 	}
 	if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
@@ -360,7 +371,7 @@ export function islandFrame(iw, now) {
 	if (!W.player.state.beat) W.player.state.beat = () => autoMusic.clock();
 	worldAudio.update(dt, { under, night: sk.night, hours: W.sky.state.hours, rain: wx.rainHere || 0 });
 	if (W.natureSound && W.bayArea?.loaded()) {
-		const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
+		const cx = camera.position.x, cz = camera.position.z, U = (W.townAt || W.bayArea.urbanAt)(cx, cz);
 		let pond = 1e9;
 		if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if ((W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) ?? W.water?.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r)) != null) pond = r; } if (pond < 1e8) break; }
 		// (anyone about within 150 m: out alone long enough, the wolves)

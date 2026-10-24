@@ -26,6 +26,7 @@
 import * as THREE from 'three';
 import { spotsOf, arrange, lineFor, doingAt } from './home-routine.js';
 import { makeHousehold, KINDS } from './households.js';
+import { cultureOf } from '../region/cultures.js';
 import { planDay } from './schedules.js';
 import { fadePerson } from './fade.js';
 import { freeBody } from './social-actors.js';
@@ -74,7 +75,8 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	const emit = (e) => { for (const f of listeners) { try { f(e); } catch (err) { console.warn('home-life listener', err); } } };
 
 	// ---------- a house's household ----------
-	const keyOf = (h) => h.key || `${Math.round(h.cx)}:${Math.round(h.cz)}`;
+	// (a home out in the country goes by its own name, wherever the globe's frame lies: region/settle.js)
+	const keyOf = (h) => h.key || h.grp?.homeId || `${Math.round(h.cx)}:${Math.round(h.cz)}`;
 	function householdOf(h) {
 		const key = keyOf(h);
 		let hh = households.get(key);
@@ -88,9 +90,11 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 			// for a family (the beds are counted, not the people culled)
 			const beds = (h.plan.items || []).filter((it) => it.type === 'bed').length;
 			const weights = beds <= 1 ? { couple: 18, single: 16, 'older-couple': 9, 'elder-alone': 3, 'single-parent': 3 } : beds === 2 ? { ...KINDS, multigenerational: 2, roommates: 4 } : KINDS;
-			let seed = (Math.imul(Math.round(h.cx * 2) | 0, 73856093) ^ Math.imul(Math.round(h.cz * 2) | 0, 19349663) ^ 0x6f3e) >>> 0;
-			if (h.key) for (let i = 0; i < h.key.length; i++) seed = Math.imul(seed ^ h.key.charCodeAt(i), 16777619) >>> 0;
-			hh = makeHousehold(seed, { x: h.cx, z: h.cz, kind: h.kind || 'house' }, { id: `home-${key}`, weights });
+			// (out in the country: the same family each time, and the place's own people)
+			const tag = h.key || h.grp?.homeId, C = h.grp?.region ? cultureOf(h.grp.region) : null;
+			let seed = h.grp?.homeId ? 0x6f3e : (Math.imul(Math.round(h.cx * 2) | 0, 73856093) ^ Math.imul(Math.round(h.cz * 2) | 0, 19349663) ^ 0x6f3e) >>> 0;
+			if (tag) for (let i = 0; i < tag.length; i++) seed = Math.imul(seed ^ tag.charCodeAt(i), 16777619) >>> 0;
+			hh = makeHousehold(seed, { x: h.cx, z: h.cz, kind: h.kind || 'house' }, { id: `home-${key}`, weights, ...(C ? { mix: [[C.ancestry, 1]] } : {}) });
 			if (a) { foodFor?.(hh, a.place); a.households.push(hh); }
 		}
 		households.set(key, hh);
@@ -261,7 +265,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	function replan(H, hour, budget) {
 		const d = day();
 		if (H.planDay !== d) { H.plans = planDay(H.hh, d); H.planDay = d; }
-		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget });
+		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget, taken: claimed?.h === H.h ? claimed.ids : null });
 		H.prev = new Map(A.map((q) => [q.member.id, { act: q.act, spot: q.spot.id }]));
 		const keep = new Set();
 		for (const q of A) {
@@ -652,14 +656,25 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		if (!Number.isFinite(pos?.x)) return null;
 		const ins = W()?.houses?.inside?.(pos);
 		if (!ins) {
-			// a home in the city's (interiors/): the row house, the flat
+			// a home in the city's (interiors/): the row house, the flat (once its rooms are
+			// furnished and it has somewhere to sleep)
 			const I = W()?.interiors?.inside?.(pos), u = I ? dwellingAt(I.B, I.level, pos) : null;
-			return u ? { house: u, level: I.level, household: householdOf(u), home: homes.has(u) ? whoIsHome(u) : null, building: I.B } : null;
+			return u?.ready() ? { house: u, level: I.level, household: householdOf(u), home: homes.has(u) ? whoIsHome(u) : null, building: I.B } : null;
 		}
 		// (upstairs over a business: the flat's household)
 		const u = ins.h.plan?.estab && ins.level > 0 ? over(ins.h) : null, h = u || ins.h;
 		return { house: h, level: ins.level, household: householdOf(h), home: homes.has(h) ? whoIsHome(h) : null };
 	}
+	// the spots of a home its household has (sat or lying in, or on the way there), and the ones
+	// kept for you while you are in them (gameplay/rest.js: a seat, or a whole bed): they keep clear
+	// of them, whoever had them getting up for somewhere else
+	let claimed = null;
+	function inUse(h) {
+		const H = homes.get(h), out = new Set();
+		if (H) for (const a of H.actors.values()) if (a.active) for (const q of [a.q, a.walk?.q, a.swap?.q, a.next]) if (q?.spot) out.add(q.spot.id);
+		return out;
+	}
+	function claim(h, id) { claimed = h && id != null ? { h, ids: [].concat(id) } : null; planT = 0; }
 	function whoIsHome(h) {
 		const H = homes.get(h);
 		if (!H) return [];
@@ -680,7 +695,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		};
 	}
 	return {
-		update, clear, dispose, actors, info, homeAt, whoIsHome, homeNow, householdOf, group: root,
+		update, clear, dispose, actors, info, homeAt, whoIsHome, homeNow, householdOf, inUse, claim, group: root,
 		occupants: () => [...homes.values()].flatMap((H) => whoIsHome(H.h).map((q) => ({ ...q, house: H.h }))),
 		on: (f) => { listeners.add(f); return () => listeners.delete(f); },
 		// (for a look: a fight crashes into the house you are at)
