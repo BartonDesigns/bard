@@ -17,8 +17,10 @@ import { mulberry32 } from '../noise.js';
 let stripTex = null;
 
 // three's light loop with the sun's shadow kept: gSunLit, how much of the first shadowing
-// directional light (the sun) reaches this fragment (1 where there are no shadows)
-export const SUNLIT_BEGIN = THREE.ShaderChunk.lights_fragment_begin.replace(
+// directional light (the sun) reaches this fragment (1 where there are no shadows; the hills'
+// shade in it too). Taken from the chunk when the grass is built, not as the page loads, so it
+// has what is put into the chunk before any shader is built (world/hillsun.js)
+const sunlitBegin = () => THREE.ShaderChunk.lights_fragment_begin.replace(
 	'vDirectionalShadowCoord[ i ] ) : 1.0;',
 	'vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\tgSunLit = min(gSunLit, length(directLight.color) / max(length(directionalLight.color), 1e-4));');
 
@@ -257,7 +259,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// tall grass goes to seed: pale straw tips
 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.36) * vec3(0.62, 0.58, 0.36), smoothstep(0.7, 1.0, vGUv.y) * smoothstep(0.3, 0.8, vTall228) * 0.7);
 				diffuseColor.rgb *= 1.0 - 0.35 * vWet;`)
-			.replace('#include <lights_fragment_begin>', SUNLIT_BEGIN)
+			.replace('#include <lights_fragment_begin>', sunlitBegin())
 			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\t\t\t\ttotalEmissiveRadiance += gGlow * gSunLit * vShadeK;')
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				// blades glow when the sun is behind them; the highs make the field shimmer

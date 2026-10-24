@@ -47,6 +47,7 @@ import { orderBySector, sectorOf, chunkStore, chunkedMesh } from '../world/insta
 import { cityBlocks, cityBlocksSteps } from './city-blocks.js';
 import { cityGrounds, cityDecorate, cityApart } from './city-dressing.js';
 import { plantingBed, BED_LEN } from './lantana.js';
+import { HILL_SUN_GLSL, hillSunUniforms } from '../world/hillsun.js';      // the hills' shade at a low sun
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -697,7 +698,7 @@ function treeImpostor(parts, texAvg) {
 }
 const IMPOSTOR_VERT = /* glsl */`
 	attribute float aSize; attribute float aSp; attribute vec3 aTint;
-	uniform float uScale; varying float vSp; varying vec3 vTint; varying float vD; varying float vFill;
+	uniform float uScale; varying float vSp; varying vec3 vTint; varying float vD; varying float vFill; varying vec3 vWP;
 	#include <fog_pars_vertex>
 	void main(){
 		// (the species plus 10: one of the wild land's near scatter (city.js wildLand), gone by 790 m
@@ -707,6 +708,7 @@ const IMPOSTOR_VERT = /* glsl */`
 		vFill = fill * gone;
 		float size = aSize * (1.0 + 0.45 * gone * step(1.5, code));
 		vec4 mvPosition = modelViewMatrix * vec4(position + vec3(0.0, size * 0.5, 0.0), 1.0);
+		vWP = (modelMatrix * vec4(position + vec3(0.0, size * 0.75, 0.0), 1.0)).xyz;
 		gl_Position = fill * step(0.999, gone) > 0.5 ? vec4(0.0, 0.0, 2.0, 1.0) : projectionMatrix * mvPosition;
 		gl_PointSize = size * uScale / -mvPosition.z;
 		vSp = aSp - 10.0 * code; vTint = aTint; vD = length(mvPosition.xyz);
@@ -714,8 +716,9 @@ const IMPOSTOR_VERT = /* glsl */`
 	}`;
 const IMPOSTOR_FRAG = /* glsl */`
 	uniform sampler2D uAtlas; uniform vec3 uSunC, uAmb, uSunD, uSkyH; uniform vec4 uBand; uniform float uSheen;
-	varying float vSp; varying vec3 vTint; varying float vD; varying float vFill;
+	varying float vSp; varying vec3 vTint; varying float vD; varying float vFill; varying vec3 vWP;
 	#include <fog_pars_fragment>
+	${HILL_SUN_GLSL}
 	void main(){
 		vec2 uv = vec2((gl_PointCoord.x + floor(vSp + 0.5)) / 4.0, 1.0 - gl_PointCoord.y);
 		vec4 t = texture2D(uAtlas, uv);
@@ -723,8 +726,8 @@ const IMPOSTOR_FRAG = /* glsl */`
 		float fade = smoothstep(uBand.x, uBand.y, vD) * (1.0 - smoothstep(uBand.z, uBand.w, vD)) * (1.0 - vFill);
 		float h = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
 		if (t.a < 0.45 || fade < h) discard;
-		// lit from above: the sun on the upper crown, the sky everywhere
-		vec3 light = uAmb * 1.6 + uSunC * smoothstep(-0.05, 0.3, uSunD.y) * (0.45 + 0.55 * (1.0 - gl_PointCoord.y)) * 0.95;
+		// lit from above: the sun on the upper crown (none in the hills' shade: world/hillsun.js), the sky everywhere
+		vec3 light = uAmb * 1.6 + uSunC * smoothstep(-0.05, 0.3, uSunD.y) * (0.45 + 0.55 * (1.0 - gl_PointCoord.y)) * 0.95 * hillSunAt(vWP);
 		// (and the sky off the leaves, as the leafy tier's sheen: world/vegetation.js swayMaterial)
 		vec3 sheen = uSkyH * uSheen * (0.6 + 0.4 * (1.0 - gl_PointCoord.y));
 		gl_FragColor = vec4((t.rgb * vTint * light + sheen) * vec3(0.8, 0.78, 0.8), 1.0);      // (matched to the leafy tier beside it)
@@ -963,6 +966,7 @@ export function createCity(shared, scene, bay, real = null) {
 		vertexShader: IMPOSTOR_VERT, fragmentShader: IMPOSTOR_FRAG, fog: true,
 	});
 	farMat.uniforms.uAtlas.value = atlas;
+	Object.assign(farMat.uniforms, hillSunUniforms());
 	const farPts = new THREE.Points(farGeo, farMat);
 	farPts.frustumCulled = false;
 	farPts.onBeforeRender = (r, sc2, cam) => {

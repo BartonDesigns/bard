@@ -24,6 +24,7 @@ import { WET_SHEEN_PARS, wetSheenUniforms } from './wetsheen.js';
 import { SEASON_U } from './seasons.js';             // streets by era: the lawns browning off in late summer
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
+import { FAR_RELIEF_U, FAR_RELIEF_GLSL, createFarRelief } from './farrelief.js';
 import { SWASH_GLSL } from '../world/shore.js';
 import { trackUpload } from './levelrows.js';
 import { GFX_COARSE } from '../world/device.js';
@@ -317,7 +318,7 @@ const FAR_GRID = () => ringGrid(GFX_COARSE ? 256 : 320, 3500, 95000, 10);
 const NEAR_SEG = GFX_COARSE ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
 const GROUND_Y = [-1300, 2600];
 
-export function createBayArea(shared, scene, island, BU) {
+export function createBayArea(shared, scene, island, BU, { renderer = null, isPhone = false } = {}) {
 	let disposed = false;
 	const requests = new AbortController();
 	const levels = [];                       // CPU copies: { x0, zN, step, W, H, v: Uint16Array }
@@ -496,7 +497,8 @@ export function createBayArea(shared, scene, island, BU) {
 		for (let k = 0; k < W * H; k++) { v[k] = px[k * 4] * 256 + px[k * 4 + 1]; half[k] = THREE.DataUtils.toHalfFloat(v[k] / H_SCALE - H_OFF); }
 		const x0 = (L.lon[0] - LON0) * KX, zN = -(L.lat[1] - LAT0) * KZ;
 		const tex = new THREE.DataTexture(half, W, H, THREE.RedFormat, THREE.HalfFloatType);
-		tex.minFilter = tex.magFilter = THREE.NearestFilter;
+		// (texelFetch, as the vertex reads them, ignores this; the far ring's pixels read them filtered)
+		tex.minFilter = tex.magFilter = THREE.LinearFilter;
 		tex.needsUpdate = true;
 		trackUpload(tex);   // (lakes and rivers later change rows of it: bay/levelrows.js)
 		levels[i] = { x0, zN, step: L.step, W, H, v, tex };
@@ -534,7 +536,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uWave: shared.uWave || { value: 1 }, uSkyZenS: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorS: shared.uSkyHor || { value: new THREE.Color() }, uGroundP: GPHOTO[0], uTrailK: GPHOTO[1], uGroundK: GPHOTO[1] }, wetSheenUniforms(shared));
+			Object.assign(sh.uniforms, BU, U2, FAR_RELIEF_U, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, SEASON_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uWave: shared.uWave || { value: 1 }, uSkyZenS: shared.uSkyZen || { value: new THREE.Color() }, uSkyHorS: shared.uSkyHor || { value: new THREE.Color() }, uGroundP: GPHOTO[0], uTrailK: GPHOTO[1], uGroundK: GPHOTO[1] }, wetSheenUniforms(shared));
 			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\n' + (hole ? 'attribute float aGsp;\n' : '') + 'varying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + SAFE_GLSL + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return safeH(b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0), -60.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -582,7 +584,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);
 					#endif`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0, pavedAsph = 0.0; float shWet = 0.0, shSoak = 0.0, shSheen = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + WET_SHEEN_PARS + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + GROUND_PHOTO_GLSL + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0, pavedAsph = 0.0; float shWet = 0.0, shSoak = 0.0, shSheen = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + (hole && !LITE_F ? FAR_RELIEF_GLSL : 'vec3 bCurv = vec3(0.0);\n') + WET_SHEEN_PARS + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + (hole && !LITE_F ? '' : GROUND_PHOTO_GLSL + TILE2_GLSL) + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here
@@ -639,8 +641,17 @@ export function createBayArea(shared, scene, island, BU) {
 				}
 				#else
 				{
-					vec3 n = normalize(vBN); float slope = 1.0 - n.y, h = vBH;
+					bCurv = vCurv;
+					#ifdef BAY_FAR_RELIEF
+					farRelief();
+					vec3 n = farK > 0.0 ? farN : normalize(vBN);
+					#else
+					vec3 n = normalize(vBN);
+					#endif
+					float slope = 1.0 - n.y, h = vBH;
 					float n1 = fbm3(vBW * 0.0025), n2 = fbm3(vBW * 0.021);
+					// (past the trees city.js grows round you, 2.7 km, the woods are painted: savanna below)
+					float savFar = smoothstep(2200.0, 3200.0, length(cameraPosition - vec3(vBW.x, vBH, vBW.y)));
 					// (the 4 m speckle settles to its mean where it is finer than a pixel, so far
 					// hills do not shimmer)
 					float n3 = mix(0.5, vn(vBW * 0.23), 1.0 - smoothstep(0.35, 0.9, length(fwidth(vBW * 0.23))));
@@ -683,7 +694,7 @@ export function createBayArea(shared, scene, island, BU) {
 					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4) * (1.0 - csOpen);
 					c = mix(c, mix(vec3(0.085, 0.1, 0.045), vec3(0.14, 0.15, 0.075), n3), chap * 0.85);          // chaparral: dark olive scrub
 					float oak = smoothstep(0.42, 0.68, n1 + north * 0.4 + fogbelt * 0.12 - south * 0.15 + (n2 - 0.5) * 0.3) * (1.0 - csOpen);
-					c = mix(c, mix(vec3(0.12, 0.16, 0.07), vec3(0.19, 0.23, 0.11), n3), oak * 0.88);
+					c = mix(c, mix(vec3(0.12, 0.16, 0.07), vec3(0.19, 0.23, 0.11), n3), oak * 0.88 * (1.0 - 0.55 * savFar));
 					float forest = smoothstep(0.5, 0.74, n1 * 0.5 + north * 0.45 + fogbelt * 0.55) * smoothstep(12.0, 120.0, h) * (1.0 - csOpen);
 					c = mix(c, mix(vec3(0.05, 0.1, 0.05), vec3(0.08, 0.14, 0.07), n3), forest * 0.92);
 					// rock where it is steep, in its own region's colour (the naturalist's geology)
@@ -712,8 +723,23 @@ export function createBayArea(shared, scene, island, BU) {
 						float st = h / 11.0 + (vn(vBW * 0.0025) - 0.5) * 4.0;
 						float band = smoothstep(0.78, 0.9, sin(st * 6.2832) * 0.5 + 0.5) * (1.0 - smoothstep(0.2, 0.4, fwidth(st))) * smoothstep(0.12, 0.22, slope);
 						c = mix(c, rockC, band * 0.55 * smoothstep(0.4, 0.6, vn(vBW * 0.01 - 4.0)));
-						float gb = smoothstep(0.3, 0.7, clamp(vCurv.x, 0.0, 1.0)) * openG;
+						float gb = smoothstep(0.3, 0.7, clamp(bCurv.x, 0.0, 1.0)) * openG;
 						c = mix(c, mix(vec3(0.07, 0.09, 0.04), vec3(0.11, 0.13, 0.06), n3), gb * 0.6);
+					}
+					// oak savanna, past the trees drawn round you: blue and valley oaks dot the open grass,
+					// thick down the draws and on the north faces, thin on the dry south slopes and the
+					// ridges (Mt Diablo's range from San Ramon, Josh's photo 2026-10-24), a crown a dot where
+					// a pixel is fine enough to show it, their cover's mean where it is not
+					{
+						float savK = savFar * (1.0 - forest) * (1.0 - csOpen) * smoothstep(20.0, 80.0, h) * (1.0 - smoothstep(0.55, 0.8, slope));
+						if (savK > 0.01) {
+							float dens = clamp(0.06 + 0.6 * smoothstep(0.05, 0.5, bCurv.x) + 0.3 * north - 0.12 * south + (fbm3(vBW * 0.0033 + 5.3) - 0.5) * 0.7 + oak * 0.35, 0.0, 0.9);
+							vec2 q = vBW / 16.0, qi = floor(q), qf = q - qi;
+							float aa = length(fwidth(vBW)) / 16.0, r = 0.28 + 0.14 * h21(qi + 5.1);
+							float crown = step(h21(qi + 9.7), dens) * (1.0 - smoothstep(r - aa, r + aa, length(qf - vec2(h21(qi), h21(qi + 17.3)) * 0.5 - 0.25)));
+							crown = mix(crown, dens * 0.36, smoothstep(0.35, 1.0, aa));
+							c = mix(c, mix(vec3(0.06, 0.075, 0.035), vec3(0.1, 0.11, 0.05), n3), crown * savK * 0.92);
+						}
 					}
 					// the fog forest's floor: moss and duff, green on the shady side
 					c = mix(c, mix(vec3(0.045, 0.09, 0.02), vec3(0.08, 0.05, 0.03), n3), forest * fogbelt * (0.25 + north * 0.5) * (1.0 - smoothstep(0.5, 0.85, slope)));
@@ -721,7 +747,7 @@ export function createBayArea(shared, scene, island, BU) {
 					// slopes (along the fall line: the nearest of four compass lines to it), cut banks
 					// in the draws, scree fanned below the rock, the drainages dark and wet, the high
 					// ridges scoured pale by the wind
-					float pxE = length(fwidth(vBW)), gullyE = clamp(vCurv.x, 0.0, 1.0);
+					float pxE = length(fwidth(vBW)), gullyE = clamp(bCurv.x, 0.0, 1.0);
 					{
 						float bare = (1.0 - chap) * (1.0 - forest) * (1.0 - oak * 0.7);
 						vec3 soil = mix(vec3(0.3, 0.2, 0.12), vec3(0.44, 0.31, 0.19), n2) * (0.85 + 0.3 * n3);
@@ -744,7 +770,7 @@ export function createBayArea(shared, scene, island, BU) {
 						// cut banks: the steep sides of the draws, bare soil
 						c = mix(c, soil * 0.8, smoothstep(0.3, 0.7, gullyE) * smoothstep(0.3, 0.5, slope) * (1.0 - smoothstep(0.8, 1.0, slope)) * 0.6);
 						// scree: moderately steep ground at the foot of the steeper, where the rock is
-						float screeK = smoothstep(0.3, 0.42, slope) * (1.0 - smoothstep(0.6, 0.75, slope)) * smoothstep(0.02, 0.3, vCurv.y) * smoothstep(0.45, 0.65, vn(vBW * 0.02) * 0.6 + rkMax * 0.35 + smoothstep(250.0, 700.0, h) * 0.3) * (1.0 - forest);
+						float screeK = smoothstep(0.3, 0.42, slope) * (1.0 - smoothstep(0.6, 0.75, slope)) * smoothstep(0.02, 0.3, bCurv.y) * smoothstep(0.45, 0.65, vn(vBW * 0.02) * 0.6 + rkMax * 0.35 + smoothstep(250.0, 700.0, h) * 0.3) * (1.0 - forest);
 						if (screeK > 0.01) {
 							vec2 sq = mod(vBW, 1024.0) * 2.5 + (vn(vBW * 1.1) - 0.5) * 0.8;
 							vec2 sf = fract(sq); float gap = min(min(sf.x, 1.0 - sf.x), min(sf.y, 1.0 - sf.y));
@@ -760,7 +786,7 @@ export function createBayArea(shared, scene, island, BU) {
 						wxDamp = drain;
 						wxPud = drain * smoothstep(0.7 - uWet * 0.3, 0.75 - uWet * 0.3, vn(vBW * 0.3)) * smoothstep(0.1, 0.4, uWet);
 						// the wind-scoured ridges: grass cropped pale, gravelly bare patches
-						float ridgeK = smoothstep(0.15, 0.5, -vCurv.y) * smoothstep(250.0, 650.0, h) * bare;
+						float ridgeK = smoothstep(0.15, 0.5, -bCurv.y) * smoothstep(250.0, 650.0, h) * bare;
 						c = mix(c, c * vec3(1.1, 1.06, 0.98) + 0.02, ridgeK * 0.4);
 						c = mix(c, mix(rockC, soil, 0.5) * 1.1, ridgeK * smoothstep(0.62, 0.75, vn(vBW * 0.05 + 2.0)) * 0.7);
 					}
@@ -815,8 +841,8 @@ export function createBayArea(shared, scene, island, BU) {
 							wildOK = (lu0 < 0.5 || (lu0 > 10.5 && lu0 < 12.5) ? 1.0 : 0.0) * (1.0 - smoothstep(0.15, 0.25, max(M0.r, M0.b)));
 						}
 					}
-					float gully = clamp(vCurv.x, 0.0, 1.0);
-					wildOK *= (1.0 - plantedK) * (1.0 - vCurv.z * step(0.5, fogbelt) * (1.0 - smoothstep(0.4, 0.9, gully)));
+					float gully = clamp(bCurv.x, 0.0, 1.0);
+					wildOK *= (1.0 - plantedK) * (1.0 - bCurv.z * step(0.5, fogbelt) * (1.0 - smoothstep(0.4, 0.9, gully)));
 					float duffK = wildCanopy(vBW, n, h, gully) * wildOK * (1.0 - smoothstep(1800.0, 2700.0, dist));
 					if (duffK > 0.0) {
 						float hiK = 1.0 - smoothstep(0.25, 0.8, length(fwidth(vBW * 4.3)));
@@ -920,12 +946,14 @@ export function createBayArea(shared, scene, island, BU) {
 						vec3 dirtC = mix(vec3(0.56, 0.42, 0.3), vec3(0.66, 0.52, 0.38), vn(vBW * 0.8)) * (0.85 + 0.3 * gn);
 						dirtC = mix(dirtC, dirtC * 0.8, step(0.7, vn(vBW * 6.0)) * 0.5);                       // stones and ruts
 						// close by, the trail is real ground: packed loam, and gravel where it washes
+						#ifndef BAY_FAR_RELIEF
 						if (dirt > 0.01 && uTrailK > 0.5 && dist < 90.0) {
 							// (the photos are evened to a mean of 0.5: they carry the grain, the trail its colour)
 							vec3 lo = gpRead(vBW * 0.45, 1.0).rgb * 2.0, gr = gpRead(vBW.yx * 0.9 + 0.37, 3.0).rgb * 2.0;
 							vec3 ph = mix(lo, mix(vec3(dot(gr, vec3(0.33))), gr, 0.6) * 1.06, smoothstep(0.45, 0.75, vn(vBW * 0.07)) * 0.8);
 							dirtC = mix(dirtC, dirtC * ph * vec3(1.04, 1.0, 0.96), (1.0 - smoothstep(45.0, 90.0, dist)) * 0.85);
 						}
+						#endif
 						c = mix(c, dirtC, dirt);
 						// the trail's edges: roots bared where the feet and the rain have worn it down
 						// under the trees, and after rain, water standing in its ruts
@@ -1142,7 +1170,7 @@ export function createBayArea(shared, scene, island, BU) {
 					// the ground's own colours
 					vec3 sunL = normalize(uSunDir);
 					float reliefK = (0.35 + 0.65 * smoothstep(0.08, 0.35, urban)) * step(0.0, h);
-					c *= 1.0 - (0.3 * max(vCurv.y, 0.0) - 0.1 * max(-vCurv.y, 0.0)) * reliefK;
+					c *= 1.0 - (0.3 * max(bCurv.y, 0.0) - 0.1 * max(-bCurv.y, 0.0)) * reliefK;
 					c *= 1.0 + clamp((dot(n, sunL) - sunL.y) * 1.3, -0.4, 0.3) * smoothstep(0.0, 0.15, sunL.y) * reliefK;
 					// after rain the ground is darker (and glossier, below)
 					// close by, the ground is photographed ground (world/photomats.js): river gravel on the
@@ -1152,6 +1180,8 @@ export function createBayArea(shared, scene, island, BU) {
 					// colour above keeps the hue. Two scales, a 1.25 m tile at your feet and a 5 m one
 					// out to the middle distance, each fading as its grain nears a pixel; the photo's
 					// brightness raises its pebbles and clods in the bump. Not on the pavement.
+					// (never on the far ring, 4 km out and more: its textures are full, bay/farrelief.js)
+					#ifndef BAY_FAR_RELIEF
 					if (dist < 170.0 && uGroundK > 0.5) {
 						float pxG = length(fwidth(vBW));
 						float gk = (1.0 - smoothstep(110.0, 170.0, dist)) * (1.0 - flatK);
@@ -1182,6 +1212,7 @@ export function createBayArea(shared, scene, island, BU) {
 							wxBump += (pd.a - 0.5) * mix(0.012, 0.035, wR) * gk * mix(0.5, 1.0, kF);
 						}
 					}
+					#endif
 					// the dry sand close by: its ripples and the prints in it (the wet band's is the shore's)
 					if (sandK * (1.0 - flatK) > 0.01 && dist < 60.0 && h > 0.8) {
 						vec2 sR = sandRelief(vBW, sandPx) * sandK * (1.0 - flatK) * smoothstep(0.8, 1.3, h) * (1.0 - smoothstep(40.0, 60.0, dist));
@@ -1241,6 +1272,9 @@ export function createBayArea(shared, scene, island, BU) {
 				#endif`)
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 				#ifndef GROUND_LITE_F
+				#ifdef BAY_FAR_RELIEF
+				if (farK > 0.0) normal = normalize((viewMatrix * vec4(farN, 0.0)).xyz);
+				#endif
 				{
 					// fine relief the survey cannot see: gullies, knolls and grain, as a bump
 					float dist2 = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
@@ -1302,19 +1336,25 @@ export function createBayArea(shared, scene, island, BU) {
 	const coast = createCoastside({ groundAt, urbanAt, group });
 	ready.then(() => { if (!disposed) coast.start(); });
 	// the three finest surveys within reach of you go into the ground's three slots (the
-	// coarse whole-Bay level is always bound); chosen again when you have moved half a km
+	// coarse whole-Bay level is always bound); chosen again when you have moved half a km.
+	// A slot left over takes the nearest fine survey in sight, so a mountain 10-15 km off is
+	// drawn from its own (Mt Diablo's 12 m from San Ramon, not the Bay's 60 m), as it is walked
 	const MARGIN = [0, 1500, 500, 400, 400, 400, 400, 400, 400, 500, 400], SLOTS = ['a', 'b', 'c'];
 	let slotsAt = null;
+	const relief = renderer && !LITE_F ? createFarRelief({ renderer, BU, isPhone }) : null;
 	function pickSlots(x, z) {
 		if (slotsAt && Math.hypot(x - slotsAt[0], z - slotsAt[1]) < 500) return;
 		slotsAt = [x, z];
-		const near3 = [];
-		for (let i = levels.length - 1; i >= 1 && near3.length < 3; i--) {
+		const near3 = [], seen = [];
+		for (let i = levels.length - 1; i >= 1; i--) {
 			const L = levels[i];
 			if (!L?.tex) continue;
-			const dx = Math.max(L.x0 - x, 0, x - (L.x0 + L.W * L.step)), dz = Math.max(L.zN - z, 0, z - (L.zN + L.H * L.step));
-			if (Math.hypot(dx, dz) < 4000) near3.push(i);
+			const dx = Math.max(L.x0 - x, 0, x - (L.x0 + L.W * L.step)), dz = Math.max(L.zN - z, 0, z - (L.zN + L.H * L.step)), d = Math.hypot(dx, dz);
+			if (d < 4000 && near3.length < 3) near3.push(i);
+			else if (d < 16000) seen.push([d, i]);
 		}
+		seen.sort((a, b) => a[0] - b[0]);
+		for (const [, i] of seen) if (near3.length < 3) near3.push(i);
 		// (coarser first, so the finer one lies over it)
 		near3.sort((a, b) => a - b);
 		SLOTS.forEach((k, n) => {
@@ -1346,6 +1386,8 @@ export function createBayArea(shared, scene, island, BU) {
 		BSEAM_U.uBSeam.value = farG?.ready() ? farG.seam[0] + 150 : 1e9;
 		if (!on) return;
 		pickSlots(cam.position.x, cam.position.z);
+		// (the far ring's slopes and folds, drawn from the same slots: bay/farrelief.js)
+		relief?.update(cam.position, on);
 		uNightB.value = night;
 		const nx = Math.round(cam.position.x / 32) * 32, nz = Math.round(cam.position.z / 32) * 32;
 		const fx = Math.round(cam.position.x / 512) * 512, fz = Math.round(cam.position.z / 512) * 512;
@@ -1356,9 +1398,10 @@ export function createBayArea(shared, scene, island, BU) {
 	function dispose() {
 		if (disposed) return;
 		disposed = true; requests.abort();
+		relief?.dispose();
 		for (const level of levels) level?.tex?.dispose();
 		levels.fill(null);
 		BU.uBayOn.value = 0;
 	}
-	return { group, update, dispose, heightAt, fixedAt, drawnAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
+	return { group, update, dispose, heightAt, fixedAt, drawnAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels, relief };
 }

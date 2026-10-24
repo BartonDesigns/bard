@@ -96,6 +96,8 @@ export function islandFrame(iw, now) {
 	stampPrints(W.player.state);
 	W.boat.update(dt, iw.time);
 	const sk = W.sky.update(dt, camera.position);
+	// (the hills' shade, swept for where the sun is now: world/hillsun.js)
+	W.hillSun?.update(dt, camera.position, shared.uSunDir.value, sk.night < 0.5);
 	W.boardwalk?.update(dt, iw.time, camera, sk.night, W.sky.state.hours);
 	// the weather: frames running slow shed rain streaks; indoors the rain stays out
 	W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;

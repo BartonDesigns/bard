@@ -20,7 +20,7 @@ const EQ2GAL = [-0.0548755604, -0.8734370902, -0.4838350155, 0.4941094279, -0.44
 const C = (r, g, b) => new THREE.Color(r, g, b);
 const PAL = {
 	dayZen: C(0.03, 0.24, 0.72), dayHor: C(0.50, 0.72, 0.92),
-	setZen: C(0.20, 0.24, 0.50), setHor: C(1.00, 0.52, 0.26),
+	setZen: C(0.20, 0.24, 0.50), setHor: C(1.00, 0.52, 0.26), setMid: C(0.72, 0.74, 0.56),
 	nightZen: C(0.004, 0.009, 0.028), nightHor: C(0.018, 0.03, 0.065),
 	sunDay: C(1.0, 0.90, 0.74), sunSet: C(1.0, 0.52, 0.22), moon: C(0.45, 0.55, 0.8),
 };
@@ -245,6 +245,19 @@ const LEAF_SHEEN_DAY = 0.011, LEAF_SHEEN_DUSK = 0.022;
 // how much a low light is opened up against the look's darker shade (world/grade.js), and how
 // much of that the full night gives back (dusk wants the most; the night was tuned darker)
 const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
+// Round sunset (Mt Diablo from San Ramon, Josh's photo and video, 2026-10-24). The dome keeps
+// the brightness of the day's sky as the sun goes down, as a camera's eye does, so the land
+// under it has to keep its light as well: measured against the photo, the hills at sunset came
+// out three to five times too dark beside the sky, the shade near black. So while the sun is
+// low its light never falls under sun (it is the last of it, deep orange, sunLast as it nears
+// the horizon, a little rose in it), and the sky's light into the shade never under sky, and
+// nearer the blue overhead (skyBlue of the way from the mean, which took in the orange of the
+// horizon and came out brown): the shade a cool blue-grey, the last sun salmon on the gold
+// grass. Neither by night, and both gone as it comes in. The haze, looking away from the sun,
+// is the air in the land's shade, toward the blue overhead (haze of the way); and between the
+// gold of the low sky and the blue the sky goes a clear pale green-gold (PAL.setMid), not the
+// mauve the two would mix to. (Crysis.world().sky.state.dusk, for tuning)
+const DUSK = { sunLast: C(1.0, 0.42, 0.28), sun: 2.4, sky: 1.9, skyBlue: 0.5, haze: 0.4, mid: 0.75 };
 function agx(c, exposure, out) {
 	exposure *= GRADE.exposure;
 	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
@@ -284,6 +297,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uFogCol: { value: new THREE.Color() },
+		// round sunrise and sunset, the sky's clear green-gold between the low gold and the blue (rgb, how much)
+		uSkyMid: { value: new THREE.Vector4() },
 		// the haze looking into the sun (raw, as uFogCol is) and how much of it there is
 		uFogSunCol: { value: new THREE.Color() }, uFogSunK: { value: 0 },
 		// the clouds with depth (VOL_GLSL): on, and where the eye is
@@ -310,7 +325,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol, uFogSunCol; uniform vec4 uAir, uGiant; uniform float uFogSunK; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon, uMoon; uniform vec3 uGlowDir; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol, uFogSunCol; uniform vec4 uAir, uGiant; uniform float uFogSunK; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon, uMoon, uSkyMid; uniform vec3 uGlowDir; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -341,6 +356,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 				vec3 d = normalize(vDir);
 				float h = max(d.y, 0.0);
 				vec3 col = mix(uSkyHor, uSkyZen, pow(h, 0.5));
+				// (round sunrise and sunset: the clear pale green-gold between the low gold and the blue)
+				col = mix(col, uSkyMid.rgb, uSkyMid.w * smoothstep(0.0, 0.1, h) * (1.0 - smoothstep(0.16, 0.6, h)));
 				// a world's own dusk: magenta at the horizon, violet, deep indigo overhead
 				if (uDusk.x > 0.0) col = mix(col, mix(mix(vec3(1.0, 0.12, 0.42), vec3(0.3, 0.04, 0.46), smoothstep(0.0, 0.16, h)), vec3(0.008, 0.01, 0.06), smoothstep(0.1, 0.5, h)) * uDusk.y, uDusk.x);
 				float sd = max(dot(d, uSunDir), 0.0);
@@ -1028,6 +1045,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 	let SUN = solarDate(today());
 	Object.assign(SUN, solarTimes(latitude(), SUN.dec, SUN.noon));
 	state.sun = SUN;
+	// (the palette, for tuning from the console: Crysis.world().sky.state.pal)
+	state.pal = PAL;
+	state.dusk = DUSK;
 	function update(dt, focus) {
 		// (the clouds with depth: a desktop at the high tier, a world with air)
 		uniforms.uVolK.value = !isPhone && !shared.planet?.airless && qualityNow().name === 'high' ? 1 : 0;
@@ -1068,7 +1088,13 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		}
 		shared.uSkyZen.value.copy(tmpA);
 		shared.uSkyHor.value.copy(tmpB);
+		uniforms.uSkyMid.value.set(PAL.setMid.r, PAL.setMid.g, PAL.setMid.b, DUSK.mid * skySet * (1 - night) * (1 - gl));
 		const sunCol = shared.uSunColor.value.copy(PAL.sunDay).lerp(PAL.sunSet, setK);
+		// (the last of it, rose: world/hillsun.js keeps it to the heights by then)
+		sunCol.lerp(DUSK.sunLast, 1 - THREE.MathUtils.smoothstep(elev, -0.02, 0.07));
+		// (round sunset: the low sun's light and the sky's into the shade, kept up; none by night)
+		const lastK = THREE.MathUtils.smoothstep(elev, -0.03, 0.005);
+		const duskK = (1 - THREE.MathUtils.smoothstep(elev, 0.15, 0.4)) * (1 - night);
 		// light: the sun by day, the moon by night
 		// cloud over the sun (a shower's, or overcast) takes the direct light and softens the shadows
 		// (and a sky closing over, whatever is over the sun just now: under a full overcast
@@ -1082,7 +1108,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		sun.shadow.intensity = vacuum ? 0.96 : 0.78 * (0.12 + 0.88 * sunVis);
 		if (night < 0.5) {
 			sun.color.copy(sunCol);
-			sun.intensity = (3.4 * dayK + 0.4 * setK) * (0.25 + 0.75 * sunVis);
+			sun.intensity = Math.max(3.4 * dayK + 0.4 * setK, DUSK.sun * lastK) * (0.25 + 0.75 * sunVis);
 			sun.position.copy(sd).multiplyScalar(SUN_D).add(focus);
 		} else {
 			sun.color.copy(PAL.moon);
@@ -1104,12 +1130,12 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		sun.target.position.z = Math.round(focus.z / texel) * texel;
 		sun.position.x += sun.target.position.x - focus.x;
 		sun.position.z += sun.target.position.z - focus.z;
-		hemi.color.copy(tmpB).lerp(tmpA, 0.5).multiplyScalar(1.0);
+		hemi.color.copy(tmpB).lerp(tmpA, 0.5 + DUSK.skyBlue * duskK * (1 - gl));
 		// light bounced off warm sand and sunlit leaves fills the shade with gold, not grey
 		hemi.groundColor.setRGB(0.46, 0.36, 0.18).multiplyScalar(0.3 + 0.7 * dayK);
 		// (a rainy or overcast dawn is lit by the whole grey sky, not by a sun still under the
 		// hills: the shade is open enough to read the trees and the road by, as a camera has it)
-		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) * (1 + dawnC * 1.0 * Math.max(gl, overcast)) + (W?.flash || 0) * 2.5;
+		hemi.intensity = Math.max((0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) * (1 + dawnC * 1.0 * Math.max(gl, overcast)), DUSK.sky * duskK * (1 - gl * 0.5) * (vacuum ? 0 : 1)) + (W?.flash || 0) * 2.5;
 		// (in vacuum only the grey ground's bounce fills the shade)
 		if (vacuum) { hemi.groundColor.setRGB(0.4, 0.4, 0.4); hemi.intensity *= 0.3; }
 		// a town by night is never as dark as open country: its lamps light the streets and the
@@ -1126,7 +1152,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		// (the sky off the leaves' waxy faces, world/vegetation.js swayMaterial: none without a sky)
 		(shared.uLeafSheen ||= { value: 0 }).value = vacuum ? 0 : LEAF_SHEEN_DAY + (LEAF_SHEEN_DUSK - LEAF_SHEEN_DAY) * (1 - dayK);
 		// haze: blue by day so far land stacks up in layers
-		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
+		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12 + DUSK.haze * skySet * (1 - night) * (1 - gl));
 		const rainK = W ? Math.min(1, W.rainHere * 0.6 + gl * 0.3) : 0;
 		if (W) haze.lerp(tmpC.setRGB(0.5 + 0.08 * dawnC, 0.53 - 0.01 * dawnC, 0.57 + 0.06 * dawnC).multiplyScalar(1 - night * 0.9), rainK);
 		const dk = uniforms.uDusk.value;
