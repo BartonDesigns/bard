@@ -1,6 +1,24 @@
 // Twenty authored silhouettes, not recolors of the shop rifle. Geometry stays merged by
 // Kit; only the existing hand, charging-handle and replaceable-cell rigs are shared.
 import * as THREE from 'three';
+import { buildLegendaryDetails } from './legendary-details.js';
+
+// Identity belongs to the relic, not its shop-base rarity finish. In particular the
+// void relics must read as obsidian, and their cores must not bleach the whole gun.
+export function legendaryFinish(F, relic) {
+	const colors = {
+		'sunbreak-testament':0xb6a885, 'black-tide':0x30372e, 'stormglass-repeater':0x34424c,
+		'widows-meridian':0x393442, 'orchard-of-ashes':0x30251e, 'pilgrims-last-light':0xc6bda1,
+		'event-horizon':0x21202d, 'copper-saint':0x916348, 'moth-kings-lantern':0x39303d,
+		'choir-of-thorns':0x453d2c, 'dawn-engine':0x8b6542, 'winter-debt':0x465d70,
+		'cathedral-of-sparks':0x30343a, 'gravesong-resonator':0x34313a, 'hearth-of-the-exile':0x79513b,
+		'gargantuas-whisper':0x24222e, 'wildfire-canticle':0x9e633c, 'oathkeeper-lattice':0x9da9a9,
+		'hollow-crown':0x29242f, 'first-morning':0xc8bea2,
+	};
+	const s=(base,c,r,m,tile,glow=0)=>({...base,c:new THREE.Color(c),r,m,tile,glow,wear:.38});
+	return {...F,main:s(F.main,colors[relic.id],.48,.68,11),trim:s(F.trim,0xb39358,.4,.85,1),
+		alt:s(F.alt,0x302b28,.86,.02,3),core:s(F.core,relic.color,.26,.15,0,.8),coreHex:relic.color};
+}
 
 export function buildLegendary(k, F, relic, muzzle) {
 	const tip=muzzle[0], y=muzzle[1], L=tip-.09, seg=k.hi?20:10;
@@ -8,7 +26,7 @@ export function buildLegendary(k, F, relic, muzzle) {
 	const surface=(c,r,m,tile=0)=>({...metal,c:new THREE.Color(c),r,m,tile,glow:0});
 	const wood=surface(0x473426,.83,.02,3), ivory=surface(0xc7c0a4,.65,.08), copper=surface(0x99623f,.53,.7), cloth=surface(0x665349,.95,0,13);
 	const box=(x,h,w,d,s=metal,z=0,a=0)=>k.add(new THREE.BoxGeometry(w,h,d),s,x,y,z,0,0,a);
-	const rod=(pts,r=.015,s=metal)=>k.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(([x,v,z=0])=>new THREE.Vector3(x,y+v,z))),k.hi?24:12,r,k.hi?8:6,false),s);
+	const rod=(pts,r=.015,s=metal)=>k.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(([x,v,z=0])=>new THREE.Vector3(x,y+v,z))),pts.length===2?1:Math.min(k.hi?24:12,pts.length*4),r,k.hi?8:6,false),s);
 	const arc=(x,v,r,s=gold,start=0,end=Math.PI*2,z=0)=>{
 		const pts=Array.from({length:seg+1},(_,n)=>[x+Math.cos(start+(end-start)*n/seg)*r,v+Math.sin(start+(end-start)*n/seg)*r,z]);rod(pts,.012,s);
 	};
@@ -17,7 +35,7 @@ export function buildLegendary(k, F, relic, muzzle) {
 		const shape=new THREE.Shape(pts.map(([x,v])=>new THREE.Vector2(x,y+v)));
 		k.add(new THREE.ExtrudeGeometry(shape,{depth:d,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.004,bevelThickness:.004}),s,0,0,z-d/2);
 		// Beaten edge piping on both faces, rather than featureless flat polygons.
-		if(k.hi)for(const side of [-1,1])rod([...pts,pts[0]].map(([x,v])=>[x,v,z+side*(d/2+.004)]),.0025,gold);
+		if(k.hi)for(const side of [-1,1])for(let i=0;i<pts.length;i++)rod([pts[i],pts[(i+1)%pts.length]].map(([x,v])=>[x,v,z+side*(d/2+.004)]),.0025,gold);
 	};
 	const fan=(x,v,r,count,s=gold)=>{for(let n=0;n<count;n++){const a=.18+n*(Math.PI-.36)/(count-1);rod([[x+Math.cos(a)*r*.45,v+Math.sin(a)*r*.45],[x+Math.cos(a)*r,v+Math.sin(a)*r]],.009,s);}};
 	// A narrow structural spine connects the actual palms and muzzle, never a stock chassis.
@@ -70,7 +88,7 @@ export function buildLegendary(k, F, relic, muzzle) {
 			for(let n=0;n<3;n++){const end=tip-n*.055,v=(n-1)*.06;plate([[.04,v-.018],[end,v],[end-.06,v+.03],[.08,v+.02]],.025,ivory);}
 			gem(L*.4,0,.07);rod([[.05,-.1],[.1,0],[.05,.1]],.018,gold);break;
 		case 'cathedral-of-sparks':
-			box(L*.5,.065,L,.1,wood);for(let n=0;n<5;n++){const x=.04+n*L*.2,h=.12+(.08*Math.sin(n*1.2));rod([[x,-.015],[x,h]],.021,gold);gem(x,h,.023);}break;
+			box(L*.5,.065,L,.1,wood);for(let n=0;n<5;n++){const x=.04+n*L*.2,h=.12+(.08*Math.sin(n*1.2));rod([[x,-.015],[x,h]],.021,gold);gem(x,h-.025,.012,light,.022);}break;
 		case 'gravesong-resonator':
 			for(const s of [-1,1])rod([[0,0],[L*.2,s*.1],[L*.7,s*.17],[tip,s*.13]],.022,ivory);
 			arc(L*.32,0,.075,metal);for(let n=0;n<3;n++)gem(L*.6+n*.045,-.05-n*.025,.025,copper);break;
@@ -82,7 +100,7 @@ export function buildLegendary(k, F, relic, muzzle) {
 			plate([[0,0],[.08,-.16],[.12,-.04]],.02,gold);break;
 		case 'wildfire-canticle':
 			k.add(new THREE.CylinderGeometry(.115,.028,L*.65,seg,1,true),copper,tip-L*.325,y,0,0,0,-Math.PI/2);
-			arc(tip-.015,0,.115,gold);for(let n=0;n<3;n++)arc(.04+n*.05,0,.055,copper);gem(.08,0,.055);break;
+			for(let n=0;n<3;n++)arc(.04+n*.05,0,.055,copper);gem(.08,0,.055);break;
 		case 'oathkeeper-lattice':
 			rod([[0,0],[L*.55,.16],[tip,0],[L*.55,-.16],[0,0]],.018,ivory);
 			for(let n=1;n<4;n++){const x=L*n/4;rod([[x,-.07],[x+.1,.07]],.008,gold);}gem(L*.55,0,.05);break;
@@ -93,4 +111,5 @@ export function buildLegendary(k, F, relic, muzzle) {
 			gem(L*.52,0,.075);plate([[.02,-.035],[tip,-.035],[L*.7,-.11],[.05,-.1]],.04,gold);break;
 		default: throw new Error(`Missing legendary silhouette: ${relic.id}`);
 	}
+	buildLegendaryDetails(k,F,relic,muzzle);
 }

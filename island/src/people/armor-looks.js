@@ -59,6 +59,7 @@ const BASE_LOOKS = {
 };
 // Append only: existing multiplayer wardrobe codes must never shift.
 const relicLook = x => {
+	if(x.id==='stormwarden-flightcoat')return {top:{kind:'longsleeve',col:'#273442',pat:'plain',fit:'fitted',sleeves:'long'},outer:{kind:'jacket',col:'#273442',acc:'#9b875a',pat:'plain',fab:'twill',fit:'regular',sleeves:'long',long:true}};
 	const paint = v => Array.isArray(v) ? v.map(paint) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k,a]) =>
 		[k, k === 'camo' ? undefined : k === 'col' ? (x.boss === 'leviathan' ? '#536b75' : x.boss === 'walker' ? '#38302d' : x.boss === 'gunship' ? '#3b4b5b' : '#34313f') : ['acc','trim','acc2'].includes(k) && typeof a === 'string' ? `#${x.color.toString(16).padStart(6,'0')}` : k === 'pat' && a === 'camo' ? 'plain' : paint(a)])) : v;
 	return paint(BASE_LOOKS[x.base]);

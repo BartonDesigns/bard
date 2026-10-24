@@ -1,5 +1,6 @@
 import { LEGENDARY_ARMOR } from '../gameplay/legendary-items.js';
 import { createRelicEffect } from '../crysis/relic-effects.js';
+import { createRelicArmor, disposeRelicArmor } from '../crysis/relic-armor-models.js';
 
 // Local-space anchors on the same bones that carry the garment. No floating world-space
 // halo and no extra avatar. Both local hero and remote wardrobe use this body pipeline.
@@ -18,6 +19,9 @@ export function dressArmorEffects(P, ids=[]) {
   for(const [name,x,y,z,scale] of ANCHORS[def.slot]) {
    const bone=P.bones[P.map[name]];if(!bone)continue;
    const fx=createRelicEffect(id,{lod:'low'}),k=(P.height||1.75)/1.75;
+   const relief=createRelicArmor(id,{lod:'low',worn:true}),release=fx.dispose;
+   fx.root.add(relief);
+   fx.dispose=()=>{disposeRelicArmor(relief);release();};
    fx.root.position.set(x*k,y*k,z*k);fx.root.rotation.y=Math.PI;fx.root.scale.setScalar(scale*k);
    bone.add(fx.root);P.relicEffects.push(fx);
   }
