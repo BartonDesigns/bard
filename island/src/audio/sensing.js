@@ -227,7 +227,7 @@ export function createSensing() {
 		const U = (W.townAt || W.bayArea.urbanAt)(x, z);
 		if (U.u > 0.2) {
 			const zone = zoneOf(U);
-			out.kind = zone === ZONE.downtown ? 'downtown' : zone === ZONE.dining || zone === ZONE.retail ? 'mainstreet' : zone === ZONE.office ? 'offices' : zone === ZONE.industrial ? 'industrial' : 'suburb';
+			out.kind = zone === ZONE.downtown || zone === ZONE.strip ? 'downtown' : zone === ZONE.dining || zone === ZONE.retail ? 'mainstreet' : zone === ZONE.office ? 'offices' : zone === ZONE.industrial ? 'industrial' : 'suburb';
 			out.busy = crowd(zone, hours, weekend).k * Math.min(1, U.u * 1.3);
 			return out;
 		}

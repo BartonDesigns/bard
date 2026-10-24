@@ -11,12 +11,15 @@ import { STYLE } from '../bay/styles.js';
 // a bump in the day: peak hour, width in hours
 const bump = (h, at, w) => Math.exp(-(((h - at) / w) ** 2));
 const clamp = (v) => Math.max(0, Math.min(1, v));
+// ...the same round the clock (a peak at 10 pm reaches past midnight)
+const bumpW = (h, at, w) => { const d = ((h - at) % 24 + 36) % 24 - 12; return Math.exp(-((d / w) ** 2)); };
 
-export const ZONE = { downtown: 'downtown', office: 'office', retail: 'retail', dining: 'dining', neighbourhood: 'neighbourhood', industrial: 'industrial', trail: 'trail', beach: 'beach', quiet: 'quiet' };
+export const ZONE = { downtown: 'downtown', office: 'office', retail: 'retail', dining: 'dining', neighbourhood: 'neighbourhood', industrial: 'industrial', trail: 'trail', beach: 'beach', quiet: 'quiet', strip: 'strip' };
 
 // what kind of place a city cell is (from the town map's style and downtown weight)
 export function zoneOf(U) {
 	if (!U) return ZONE.quiet;
+	if (U.strip) return ZONE.strip;
 	if (U.s === STYLE.industry) return ZONE.industrial;
 	if (U.s === STYLE.sf || U.d > 0.35) return ZONE.downtown;
 	if (U.s === STYLE.office) return ZONE.office;
@@ -27,7 +30,7 @@ export function zoneOf(U) {
 
 // weekends: offices near empty, parks, trails and beaches half as busy again, the dining
 // streets a little livelier (the parks & rec survey)
-const WEEKEND = { office: 0.18, industrial: 0.3, trail: 1.7, beach: 1.6, quiet: 1.4, dining: 1.2, retail: 1.25, neighbourhood: 1.2, downtown: 0.85 };
+const WEEKEND = { office: 0.18, industrial: 0.3, trail: 1.7, beach: 1.6, quiet: 1.4, dining: 1.2, retail: 1.25, neighbourhood: 1.2, downtown: 0.85, strip: 1.15 };
 export const isWeekend = (d = new Date()) => d.getDay() === 0 || d.getDay() === 6;
 export function crowd(zone, h, weekend = isWeekend()) {
 	const c = crowdDay(zone, h);
@@ -44,6 +47,9 @@ function crowdDay(zone, h) {
 		case ZONE.trail: return { k: clamp(bump(h, 9, 2) * 0.8 + bump(h, 16.5, 2) * 0.6), wait: 0.15, chat: 0.1, jog: 0.15, what: 'hike' };
 		case ZONE.beach: return { k: clamp(bump(h, 14, 3) * 0.7 + bump(h, 7.5, 1) * 0.3), wait: 0.35, chat: 0.25, jog: 0.12, what: 'beach' };
 		case ZONE.quiet: return { k: clamp(bump(h, 11, 3) * 0.15), wait: 0.3, chat: 0.1, jog: 0.05, what: 'quiet' };
+		// the Las Vegas Strip: never empty, busy by afternoon, thronged from dusk till the small
+		// hours, quietest at breakfast (the visitors' surveys: the walk peaks 9 pm to 1 am)
+		case ZONE.strip: return { k: clamp(0.42 + bumpW(h, 22.5, 3.4) * 0.6 + bumpW(h, 15, 3) * 0.22 - bumpW(h, 7, 1.8) * 0.3), wait: 0.3, chat: 0.4, jog: 0.01, what: h >= 5 && h < 11 ? 'coffee' : h >= 11 && h < 17.5 ? 'sightseeing' : 'night out' };
 		default: return { k: clamp(0.12 + bump(h, 7.6, 1.2) * 0.5 + bump(h, 18.3, 1.6) * 0.6), wait: 0.1, chat: 0.2, jog: 0.18, what: 'neighbourhood' };
 	}
 }
@@ -58,4 +64,4 @@ export function kidsAbout(h, weekend = isWeekend()) {
 	return h < 7.5 ? 0.25 : h < 8.8 ? 0.85 : h < 15 ? 0.3 : 1;
 }
 // how many of the people in a kind of place are children, at their busiest
-export const KID_SHARE = { neighbourhood: 0.26, retail: 0.2, dining: 0.15, downtown: 0.1, office: 0.03, industrial: 0, trail: 0.16, beach: 0.3, quiet: 0.12 };
+export const KID_SHARE = { neighbourhood: 0.26, retail: 0.2, dining: 0.15, downtown: 0.1, office: 0.03, industrial: 0, trail: 0.16, beach: 0.3, quiet: 0.12, strip: 0.06 };

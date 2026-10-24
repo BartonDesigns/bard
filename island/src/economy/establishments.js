@@ -35,7 +35,7 @@ export function hashAt(x, z, salt = 0) {
 const pickOf = (a, u) => a[Math.min(a.length - 1, Math.floor(u * a.length))];
 
 // ---------- where it stands ----------
-export const SETTINGS = ['downtown', 'main', 'strip', 'park', 'harbour', 'rural', 'forest', 'highway', 'residential', 'industrial'];
+export const SETTINGS = ['downtown', 'main', 'strip', 'park', 'harbour', 'rural', 'forest', 'highway', 'residential', 'industrial', 'resort'];
 
 // ---------- the kinds of business ----------
 // u: the buildings it takes (H house, R row house, S shopfront, T strip or big box, O office,
@@ -120,6 +120,10 @@ export const TYPES = {
 	motel: { label: 'motel', u: 'HSI', w: { highway: 3, rural: 0.6, harbour: 0.6 }, s: ['neon', 'slab'], pal: NEON_PAL, awn: null, props: ['postsign'], n: ['{W} Motor Lodge', 'The {A} Star Motel', "{F}'s Motor Court"], tag: 'VACANCY · POOL' },
 	cabins: { label: 'cabin rentals', u: 'H', w: { forest: 3, rural: 0.8 }, s: ['plank', 'slab'], pal: OLD_PAL, awn: null, props: ['postsign', 'gearrack'], n: ['{W} Creek Cabins', 'The {A} Pine Lodge', "{F}'s Cabin Rentals"], tag: 'CABINS · FIREWOOD' },
 	hotel: { label: 'hotel', u: 'W', w: { downtown: 1 }, s: ['rect', 'serif'], pal: DARK_PAL, awn: [[0.15, 0.15, 0.2]], props: [], n: ['Hotel {W}', 'The {W} Hotel', 'The {A} Grand'], tag: 'HOTEL' },
+	// a resort on the Las Vegas Strip (crysis/civgen.js strip): its casino along the boulevard and its
+	// hotel tower behind, the one name over both (resortName, below)
+	casino: { label: 'casino', u: 'T', w: { resort: 1 }, s: ['neon', 'slab'], pal: [['#140a1e', '#ffd34e'], ['#1a0b0b', '#ff4f6d'], ['#071a24', '#6fe7ff'], ['#1b1205', '#ffb347'], ['#10061c', '#e58bff']], awn: null, props: [], resort: true, n: ['The {W} Casino'], tags: ['CASINO · SHOWS · BUFFET', 'SLOTS · POKER · TABLES', 'CASINO · NIGHTCLUB · POOL', 'LIVE TONIGHT · CASINO', 'CASINO · SPA · STEAKHOUSE'] },
+	resorthotel: { label: 'resort hotel', u: 'W', w: { resort: 1 }, s: ['neon', 'serif'], pal: [['#0d0d14', '#ffd34e'], ['#0b1420', '#f2f2f2'], ['#14060e', '#ff7ab8']], awn: null, props: [], resort: true, n: ['The {W} Resort'], tag: 'HOTEL · CASINO · SPA' },
 	// offices
 	tech: { label: 'tech company', u: 'OW', v: 'office', w: { downtown: 4, park: 6 }, s: ['rect', 'sans'], pal: [['#101820', '#5ce1e6'], ['#f7f7f7', '#2b59c3'], ['#1b1b2f', '#e94560'], ['#ffffff', '#111111']], awn: null, props: ['monument'], n: ['{W}{X}', '{W} Labs', '{A}{X}', '{W}{X} Systems', '{W} Robotics', '{A} {W} Games'], tags: ['SOFTWARE', 'ROBOTICS', 'DATA', 'GAMES', 'CLOUD', 'SENSORS', 'BATTERIES', 'MAPS'] },
 	law: { label: 'law firm', u: 'OWH', v: 'office', w: { downtown: 2, park: 1.5, main: 0.4, residential: 0.4 }, s: ['rect', 'serif'], pal: DARK_PAL, awn: null, props: ['monument'], n: ['{S} & {S2}', '{S}, {S2} & Partners', '{S} Law'], tag: 'ATTORNEYS AT LAW' },
@@ -293,6 +297,7 @@ export function denied(name) {
 // ---------- what a building is ----------
 export function settingOf(b) {
 	const use = b.use, down = b.down || 0;
+	if (b.resort) return 'resort';
 	if (use === 'tower' || (down > 0.3 && use !== 'house')) return 'downtown';
 	if (use === 'industry') return b.coast ? 'harbour' : b.highway ? 'highway' : 'industrial';
 	if (use === 'office') return down > 0.12 ? 'downtown' : 'park';
@@ -309,6 +314,8 @@ export function settingOf(b) {
 // of town comes out at about a third or more: tools/economy.test.mjs holds it to 30%)
 export function chanceOf(b, setting) {
 	const st = b.street || 0;
+	// (a Strip resort's casino and tower are the resort's, every one)
+	if (setting === 'resort') return b.use === 'retail' || b.use === 'tower' ? 1 : 0;
 	switch (b.use) {
 		case 'tower': return 0.92;
 		case 'office': return 0.95;
@@ -341,6 +348,7 @@ export function chanceOf(b, setting) {
 // the walk-in fit-out a low commercial block gets (bay/commercial.js), so its sign agrees
 export function venueFor(b) {
 	if (b.venue !== undefined) return b.venue;
+	if (b.resort) return null;
 	if ((b.use === 'retail' || b.use === 'office') && (b.h || 0) <= 20) return venueOf({ x: b.x, z: b.z, w: b.w, d: b.d, kind: b.use === 'office' ? 5 : 6 });
 	return null;
 }
@@ -405,6 +413,19 @@ function nameOf(id, x, z, loc, salt) {
 	return 'The ' + pickOf(EN.W, hashAt(x, z, 77 + salt)) + ' ' + T.label.replace(/^\w/, (c) => c.toUpperCase());
 }
 
+// a resort's name, by its casino's place (its casino and tower share it): made up, as every name
+// here is, none a real resort's, past or present
+const RESORT_W = ['Starlight', 'Golden Mesa', 'Silver Saguaro', 'Desert Jewel', 'Grand Oasis', 'Jade Lotus', 'Velvet Sky', 'Monarch', 'Emerald Sands', 'Coral Crown', 'Golden Phoenix', 'Neon Coyote', 'Blue Agave', 'Diamond Dune', 'Copper Canyon', 'Moonstone', 'Topaz', 'Firebird', 'Rhinestone', 'Gilded Cactus', 'Sunburst', 'Majestic', 'Opal', 'Empress', 'Caravan', 'Silver Comet', 'Zephyr', 'Lucky Star', 'Crystal Mesa', 'Royal Flush', 'Scarlet', 'Mesa Verde', 'Sundance', 'Pinnacle', 'Red Ace', 'Gemini'];
+const RESORT_N = ['The {R}', '{R} Resort & Casino', '{R} Casino', 'The {R} Hotel & Casino', '{R} Las Vegas', 'The {R} Club', 'Casino {R}'];
+export function resortName(x, z, salt = 0) {
+	for (let k = 0; k < 8; k++) {
+		const u = (n) => hashAt(x, z, 2000 + (salt * 8 + k) * 17 + n);
+		const name = pickOf(RESORT_N, u(1)).replace('{R}', pickOf(RESORT_W, u(2)));
+		if (!denied(name)) return name;
+	}
+	return 'The ' + pickOf(RESORT_W, hashAt(x, z, 2099 + salt));
+}
+
 // the services' own siting (src/services/): registerSiting('hospital', (b, setting) => true) claims
 // a building for that service before anything else is considered; fn returns true to claim it,
 // or the service's own name for it (so the sign and the service agree)
@@ -444,7 +465,7 @@ export function establish(b, loc = 'us-ca') {
 	const pal = pickOf(T.pal, r(1));
 	const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0), f = b.front ?? 1, out = (b.d / 2 + 1.2) * f;
 	return {
-		type: id, label: T.label, name: given || force?.name || nameFor(id, b.x, b.z, loc), tag: b.sign && !denied(b.sign) ? String(b.sign).slice(0, 28) : force?.tag || (T.tags ? pickOf(T.tags, r(4)) : T.tag),
+		type: id, label: T.label, name: given || force?.name || (T.resort && b.resort ? resortName(b.resort[0], b.resort[1]) : nameFor(id, b.x, b.z, loc)), resort: T.resort && b.resort ? b.resort : null, tag: b.sign && !denied(b.sign) ? String(b.sign).slice(0, 28) : force?.tag || (T.tags ? pickOf(T.tags, r(4)) : T.tag),
 		setting, use: b.use, venue: T.service ? null : venueFor(b) || T.v || null, service: T.service || null, locale: loc,
 		x: b.x, z: b.z, a: b.a || 0, w: b.w, d: b.d, h: b.h || 0, front: f,
 		door: [b.x - sa * out, b.z + ca * out],
@@ -464,19 +485,23 @@ export function planTown(list, opts) {
 }
 // the same a slice at a time: yields between slices, returns the plan
 export function* planTownSteps(list, { locale = 'us-ca' } = {}) {
-	const out = [], used = new Set(), order = list.map((b, i) => [hashAt(b.x, b.z, 5), i]).sort((p, q) => p[0] - q[0]);
+	const out = [], used = new Set(), resorts = new Map(), order = list.map((b, i) => [hashAt(b.x, b.z, 5), i]).sort((p, q) => p[0] - q[0]);
 	let n = 0;
 	for (const [, i] of order) {
 		if ((++n & 255) === 0) yield;
 		const b = list[i], E = establish(b, b.locale || locale);
 		if (!E) continue;
-		for (let s = 1; used.has(E.name.toLowerCase()) && s < 24; s++) E.name = nameFor(E.type, b.x, b.z, E.locale, s);
+		// (a resort's casino and tower go by the one name: the second takes the first's)
+		const rk = E.resort && E.resort.join(','), same = rk && resorts.get(rk);
+		if (same) { E.name = same; E.i = i; out.push(E); continue; }
+		for (let s = 1; used.has(E.name.toLowerCase()) && s < 24; s++) E.name = E.resort ? resortName(E.resort[0], E.resort[1], s) : nameFor(E.type, b.x, b.z, E.locale, s);
 		// (still taken: the same name with a branch or an owner after it)
 		if (used.has(E.name.toLowerCase())) {
 			const L = LOCALES[E.locale] || LOCALES.us, Q = APART[E.locale] || APART_EN, base = E.name;
 			for (let k = 0; used.has(E.name.toLowerCase()) && k < 60; k++) E.name = base + ' ' + fill(pickOf(Q, hashAt(b.x, b.z, 500 + k)), L, (n) => hashAt(b.x, b.z, 600 + k * 17 + n));
 		}
 		used.add(E.name.toLowerCase());
+		if (rk) resorts.set(rk, E.name);
 		E.i = i;
 		out.push(E);
 	}
@@ -508,7 +533,7 @@ export function describeBoxes(boxes, env = {}) {
 		const st = env.street ? env.street(b) : Math.max(cls === 'primary' || cls === 'secondary' || cls === 'trunk' ? 2 : cls === 'tertiary' ? 1 : 0, core < 0.4 ? 2 : core < 0.6 || b.artery ? 1 : 0);
 		const n = crowd(b.x, b.z);
 		out.push({
-			x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH || 0, use, street: st, src: b, sign: b.sign || null, grown: !!b.gen, core, store: b.store || null, ...(b.store ? { venue: 'shop' } : {}),
+			x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH || 0, use, street: st, src: b, sign: b.sign || null, grown: !!b.gen, core, store: b.store || null, ...(b.store ? { venue: 'shop' } : {}), ...(b.resort ? { resort: b.resort, venue: null } : {}),
 			coast: !!env.coast?.(b.x, b.z), shore: env.shore ? env.shore(b.x, b.z) : env.coast?.(b.x, b.z) ? 2 : 0, wild: !!env.wild?.(b.x, b.z) && n < 8, rural: use === 'house' && n < 5, highway: !!env.highway?.(b.x, b.z), down: env.down?.(b.x, b.z) || (b.site === 'downtown' ? 0.4 : 0),
 		});
 	}
