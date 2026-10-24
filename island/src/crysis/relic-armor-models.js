@@ -51,7 +51,7 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
   if(bend){const a=g.attributes.position;for(let i=0;i<a.count;i++)a.setZ(i,a.getZ(i)-a.getX(i)**2*bend);g.computeVertexNormals();}
   add(g,c,kind,0,0,z-d/2);
  };
- const path=(points,r=.003,c=C.bronze,kind=0)=>add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),points.length===2?1:hi?16:8,r,hi?6:4,false),c,kind);
+ const path=(points,r=.003,c=C.bronze,kind=0)=>add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),points.length===2?1:hi?16:6,r,hi?6:4,false),c,kind);
  const ring=(r,t,x,y,z,c=C.gold,rx=0)=>add(new THREE.TorusGeometry(r,t,hi?6:4,N),c,0,x,y,z,rx);
  const gem=(r,x,y,z,c=def.color,scale=null)=>add(new THREE.OctahedronGeometry(r,0),c,2,x,y,z,0,0,0,scale);
  const rivet=(x,y,z)=>add(new THREE.SphereGeometry(.004,hi?8:4,4),C.bronze,0,x,y,z);
@@ -69,10 +69,25 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
   plate([[-.145,.15],[-.072,.18],[0,.135],[.072,.18],[.145,.15],[.13,-.13],[0,-.195],[-.13,-.13]],.022,z,c,0,1.6);
   return z;
  };
+ // Rear construction is authored separately, rather than mirroring a chest jewel onto
+ // the spine. It remains in the same three material batches as the front sculpture.
+ const back=worn?-.29:-.122;
+ const backStrap=(x,top,bottom,z=back,c=C.leather)=>{
+  box(.018,top-bottom,.008,x,(top+bottom)/2,z,c,1);
+  box(.028,.022,.006,x,bottom+.035,z-.008,C.bronze);
+  box(.015,.012,.008,x,bottom+.035,z-.012,c,1);
+ };
  switch(id){
  case 'lumencrest-circlet':{
   const z=worn?.012:.14;
   if(!worn){ring(.143,.009,0,0,0,C.steel,Math.PI/2);ring(.144,.003,0,-.017,0,C.gold,Math.PI/2);}
+  else ring(.14,.006,0,0,-.125,C.steel,Math.PI/2);
+  const rear=worn?-.265:-.148;
+  for(const s of [-1,1]){
+   plate([[s*.018,-.012],[s*.04,.019],[s*.08,.028],[s*.068,0],[s*.035,-.017]],.005,rear,C.steel);
+   path([[s*.02,-.005,rear-.005],[s*.065,.013,rear-.005]],.002,C.gold);
+  }
+  gem(.012,0,.002,rear-.009,def.color,[1,.65,.45]);
   for(let j=-3;j<=3;j++){
    const x=j*.031,v=.025+(3-Math.abs(j))*.009;
    plate([[x-.018,0],[x-.02,v],[x,v+.025],[x+.012,v],[x+.017,0]],.007,z-x*x*2,C.steel);
@@ -89,6 +104,11 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
   }
   path([[-.13,.15,z],[0,.115,z+.018],[.13,.15,z]],.005,C.gold);
   gem(.026,0,.12,z+.039,def.color,[.8,1.2,.5]);
+  for(let n=0;n<3;n++){
+   const v=.11-n*.092;
+   plate([[-.125,v+.025],[.125,v+.025],[.12,v-.025],[.075,v-.042],[.035,v-.025],[0,v-.047],[-.035,v-.025],[-.075,v-.042],[-.12,v-.025]],.01,back-n*.002,n%2?0x698793:0x9babb2,0,-.7);
+  }
+  for(const s of [-1,1])backStrap(s*.105,.14,-.15);
   if(!worn)for(const s of [-1,1]){
    for(let n=0;n<3;n++)add(new THREE.SphereGeometry(.075-n*.009,N,6,0,Math.PI*2,0,Math.PI*.65),C.steel,0,s*(.18+n*.018),.13-n*.025,0,0,0,-s*.5,[1,.5,1]);
    gem(.036,s*.19,.19,.01,def.color,[.8,1.4,.65]);
@@ -106,6 +126,11 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
   plate([[-.023,.08],[0,.105],[.023,.08],[.025,-.05],[0,-.09],[-.025,-.05]],.015,z+.026,C.bronze);
   gem(.055,0,.005,z+.04,def.color,[.32,1.55,.25]);
   for(const x of [-.012,0,.012])path([[x,-.062,z+.06],[x,.076,z+.06]],.003,C.iron);
+  for(let n=0;n<3;n++){
+   const v=.10-n*.09;
+   plate([[-.12,v+.035],[0,v+.012],[.12,v+.035],[.11,v-.025],[.045,v-.047],[0,v-.062],[-.045,v-.047],[-.11,v-.025]],.018,back-n*.004,n%2?0x454047:C.iron,0,-.8);
+  }
+  for(const s of [-1,1])backStrap(s*.10,.15,-.14,back-.018);
   if(!worn)for(const s of [-1,1])for(let n=0;n<3;n++){
    const x=s*(.17+n*.024),v=.15-n*.034;
    plate([[x-s*.055,v+.03],[x+s*.025,v+.017],[x+s*.05,v-.054],[x,v-.04],[x-s*.035,v-.02]],.035,.035,0x3d373b);
@@ -117,6 +142,13 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
    for(const s of [-1,1])plate([[s*.015,-.07],[s*.15,-.07],[s*.20,-.43],[s*.045,-.39]],.023,.065,C.cloth,1,1.2);
    for(const s of [-1,1])for(let n=0;n<3;n++)plate([[s*.135,.19],[s*(.21+n*.02),.19-n*.035],[s*(.25+n*.012),.11-n*.04],[s*.16,.10-n*.018]],.025,.025,C.iron);
   }
+  plate([[-.13,.15],[.13,.15],[.11,.065],[0,.025],[-.11,.065]],.014,back,C.iron,0,-.6);
+  path([[-.12,.12,back-.012],[0,.055,back-.024],[.12,.12,back-.012]],.003,def.color,2);
+  for(const s of [-1,1])backStrap(s*.08,.10,-.14,back-.01);
+  if(!worn)for(const s of [-1,1]){
+   plate([[s*.008,-.08],[s*.15,-.08],[s*.18,-.43],[s*.02,-.40]],.012,-.096,C.cloth,1,-.7);
+   path([[s*.15,-.11,-.085],[s*.175,-.40,-.076]],.002,C.gold);
+  }
   for(const s of [-1,1]){
    plate([[s*.015,.17],[s*.11,.16],[s*.14,.11],[s*.08,-.07],[s*.015,-.13]],.012,z,C.iron,0,1);
    path([[s*.025,.15,z+.014],[s*.075,.07,z+.014],[s*.045,-.10,z+.014]],.0025,def.color,2);
@@ -127,6 +159,13 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
   for(const x of worn?[0]:[-.092,.092]){
    const z=worn?.01:.055;
    if(!worn){add(new THREE.CylinderGeometry(.066,.045,.34,N,4,true),C.leather,1,x,0,0);for(const v of [-.11,.10])add(new THREE.CylinderGeometry(.067,.067,.018,N,1,true),C.bronze,0,x,v,0);}
+   const rear=worn?-.14:-.063;
+   backStrap(x,.14,-.15,rear);
+   for(const v of [-.10,.09]){
+    const strap=[[x-.052,v,worn?-.05:0],[x-.042,v,rear],[x+.042,v,rear],[x+.052,v,worn?-.05:0]];
+    for(let j=1;j<strap.length;j++)path([strap[j-1],strap[j]],.005,C.leather,1);
+    box(.025,.017,.009,x+.042,v,rear-.006,C.bronze);
+   }
    for(let n=0;n<5;n++){
     const v=.13-n*.06,w=.057-n*.004;
     plate([[x-w,v+.03],[x,v+.048],[x+w,v+.03],[x+w*.8,v-.022],[x,v-.05],[x-w*.8,v-.022]],.018,z+n*.002,n%2?0x444045:C.iron);
@@ -138,6 +177,9 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
   for(const x of worn?[0]:[-.085,.085]){
    const z=worn?.01:.034;
    if(!worn){box(.095,.12,.06,x,0,0,C.leather,1);add(new THREE.CylinderGeometry(.057,.05,.055,N,1,true),C.cloth,1,x,.083,0);}
+   const rear=worn?-.09:-.035;
+   plate([[x-.034,.045],[x+.034,.045],[x+.029,-.04],[x,-.056],[x-.029,-.04]],.006,rear,C.leather,1);
+   box(.095,.017,.008,x,.046,rear-.008,C.cloth,1);box(.022,.022,.012,x+.029,.046,rear-.014,C.bronze);
    for(let n=0;n<3;n++)plate([[x-.047,.065-n*.032],[x+.047,.065-n*.032],[x+.04,.035-n*.032],[x,.024-n*.032],[x-.04,.035-n*.032]],.012,z+n*.003,C.iron);
    for(let j=0;j<4;j++){
     const a=x+(j-1.5)*.024;
@@ -156,6 +198,12 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
     for(let j=0;j<3;j++)path([[s*(.105+j*.012),.015,.11],[s*(.12+j*.016),-.17,.10]],.002,C.salt,1);
    }
   }
+  const rear=worn?-.265:-.15;
+  path([[-.095,.025,rear+.03],[0,-.025,rear-.008],[.095,.025,rear+.03]],.0025,0x7e3534,1);
+  for(const s of [-1,1]){
+   path([[s*.045,.005,rear],[s*.035,-.05,rear-.005]],.002,C.salt,1);
+   gem(.009,s*.035,-.055,rear-.005,def.color,[.6,1,.5]);
+  }
   for(const s of [-1,1]){
    path([[s*.01,.10,z],[s*.075,.065,z+.015],[s*.11,-.075,z]],.0025,0x7e3534,1);
    for(let j=0;j<3;j++){const x=s*(.07+j*.017),v=-.03-j*.026;path([[x,v,z],[x,v-.026,z]],.0015,C.salt);gem(.009,x,v-.032,z+.006);}
@@ -169,6 +217,9 @@ export function createRelicArmor(id,{lod='high',worn=false}={}) {
     box(.12,.019,.20,x,-.13,.035,C.iron,1);
     if(hi)for(let n=0;n<5;n++)box(.124,.008,.008,x,-.142,-.04+n*.035,C.leather,1);
    }
+   const rear=worn?-.12:-.062;
+   backStrap(x,.12,-.095,rear);
+   path([[x-.018,.105,rear],[x-.018,.14,rear-.014],[x+.018,.14,rear-.014],[x+.018,.105,rear]],.004,C.leather,1);
    for(let n=0;n<6;n++){
     const v=.11-n*.029;
     for(const s of [-1,1]){rivet(x+s*.028,v,z);path([[x+s*.026,v,z+.003],[x-s*.026,v-.025,z+.006]],.0025,0x7e3534,1);}

@@ -55,3 +55,27 @@ credential change, balance change, or unrelated Claude work is included.
 4. Observe the vortex and occasional eye movement; verify reduced-motion freezes the effects.
 5. Repeat equip/unequip and inspection on mobile. Watch memory, context recovery and frame time;
    the triangle budgets alone are not a measured FPS guarantee.
+
+## Follow-up: reverse-side construction and actual-rig fit
+
+The next pass adds separate rear construction to all eight armor sculptures: circlet clasp
+and leaves, overlapping mail/back plates, cuirass fastening straps, a flightcoat back yoke
+and split tails, greave closures, gauntlet palm leather, veil stitching/charms and boot pull loops.
+These details remain merged into the same three material batches. The complete high-detail
+armor sculptures remain below 5,500 triangles and low-detail worn relief below 1,600.
+
+Inspection of the actual garment/rig convention found an attachment error: body/head/shin/foot
+relic fronts were placed at negative Z and rotated by PI, although the character's front is
+positive Z in rest space. Those attachments now face forward. Chest and head placement uses
+measured torso/skull dimensions when available, including depth scaling to keep the new rear
+relief outside the torso. Missing measurements retain finite fallback anchors.
+
+Gauntlets require a different frame: their long axis follows the wrist-to-middle-finger
+direction, and the metal relief faces the dorsal side, not the palm. They now derive that
+frame from the actual rest skeleton, instead of assuming a globally downward hand.
+
+`island/tools/relic-fit.test.mjs` reads the shipped compressed human mesh and full patched rig.
+It checks eye/front orientation, front/rear torso clearance at three size profiles, skull fit,
+both hand frames, posed arm/wrist following, rear geometry and fallback behavior. The focused
+relic suite now has 45 passing tests. A reverse-side CPU geometry preview was inspected as well.
+These geometric checks still do not replace an on-device clothing-clipping or GPU lighting test.
