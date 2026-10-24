@@ -8,6 +8,10 @@
 // A big city's districts round its centre grow the same way, one at a time, where you are in it
 // (so wherever its lights are, coming down among them finds its streets).
 //
+// A city of a region with a manner of its own (East Asia's, South Asia's, the Middle East's and
+// North Africa's: look(city), region/index.js cityLook) is grown in that manner: blocks of flats
+// and shops out to the pavement, in its own colours (crysis/civgen.js look, bay/decor.js).
+//
 // Where the Bay's own map already has the place (its surveyed land, its mapped regions, or a
 // town the Bay's generator already put there), it is left to the Bay. The same cities also
 // give the terrain its built-up ground and its lights at night, far out past where a town is
@@ -32,9 +36,13 @@ const SCAN_KM = 260, RESCAN = 1500;
 const DISTRICT = [0, 1100, 1500, 1800, 2000, 2200];
 const D_STEP = 1.3, D_LIT = 0.3, D_KM = 9;
 const urbOf = (size, d) => Math.exp(-((d / SPREAD[size]) ** 3) * 1.2) * GLOW[size];
+// a point on a grown city's ground (by its size class, metres from its middle): in its centre's
+// reach, or as built up as its districts are grown. The open country's farms, villages and
+// wayside tales keep off it (region/index.js)
+export const cityGround = (size, d) => d < REACH[size] || urbOf(size, d) >= D_LIT;
 
-export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false }) {
-	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city }
+export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false, look: lookOf = () => null }) {
+	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city, look? }
 	let list = [], civ = null, scanAt = null, scanEpoch = -1, scanT = -1e9;
 	const view = { towns, heightAt: (x, z) => heightAt(x, z), loaded: () => true };
 	const briefs = new Map();
@@ -81,13 +89,15 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 			const R = regionAt(c.lat, c.lon), id = R?.id || '';
 			const older = !/^(na|oc)\b/.test(id) || size >= 3;
 			const h = hash(c.id), ang = (h % 1000) / 1000 * Math.PI / 2, style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
-			towns.push({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id });
-			districts(rec, ang, style, pop, id);
+			// (the manner it is built in, where its region has one of its own)
+			const look = lookOf(c) || null;
+			towns.push({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, look });
+			districts(rec, ang, style, pop, id, look);
 		}
 	}
 	// the districts of a city round where you are (within D_KM): the lattice's points that are
 	// built up enough, past the centre's own reach, not the Bay's
-	function districts(rec, ang, style, pop, region) {
+	function districts(rec, ang, style, pop, region, look = null) {
 		const size = rec.size, r = DISTRICT[size];
 		if (!r || rec.km > SPREAD[size] / 1000 + D_KM) return;
 		const D = r * D_STEP, row = D * Math.sqrt(3) / 2, ca = Math.cos(ang), sa = Math.sin(ang);
@@ -104,7 +114,7 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 				if (d < REACH[size] * 0.9 || urbOf(size, d) < D_LIT) continue;
 				const x = rec.x + u * ca - v * sa, z = rec.z + u * sa + v * ca;
 				if (Math.hypot(x - here.x, z - here.z) > D_KM * 1000 || skip(x, z, r)) continue;
-				towns.push({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, district: [i, j] });
+				towns.push({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, district: [i, j], look });
 			}
 		}
 	}

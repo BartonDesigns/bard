@@ -1404,7 +1404,8 @@ export function createCity(shared, scene, bay, real = null) {
 	function houseLook(b) {
 		const r = hash(Math.round(b.x / 9) * 3.7, Math.round(b.z / 9) * 1.9);
 		const r2 = hash(Math.round(b.x / 9) * 5.3 + 1, Math.round(b.z / 9) * 2.3 + 7);
-		const era = houseEra(b.x, b.z, { era: b.look?.era }), L = exteriorLook(era, seedAt(b.x, b.z));
+		// (a city grown in its own manner out in the world gives its buildings that look: b.era, civgen.js)
+		const era = houseEra(b.x, b.z, { era: b.look?.era ?? b.era }), L = exteriorLook(era, seedAt(b.x, b.z));
 		if (era === 'tract') { L.roof = pick(REAL_ROOF, hash(Math.round(b.x / 9) + 11, Math.round(b.z / 9) + 5)); L.roofT = L.roof[0] > L.roof[2] * 1.4 ? ROOF.barrel : r2 < 0.6 ? ROOF.flatTile : ROOF.shingle; }
 		return { r, r2, ...L };
 	}
@@ -1931,7 +1932,7 @@ export function createCity(shared, scene, bay, real = null) {
 			else if (b.kind === 3) kind = KIND.garage;
 			else if (b.kind === 4 || b.kind === 10) kind = b.doorF !== undefined && !b.noDoor ? doorKind(KIND.house, b.doorF) : KIND.house;
 			else if (b.kind === 5) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
-			else if (b.kind === 6) { kind = KIND.retail; col = jit(pick(PAL.retail, r2), r); }
+			else if (b.kind === 6) { kind = KIND.retail; col = b.era ? col : jit(pick(PAL.retail, r2), r); }      // (a dense city's shop, its flats over it: painted as its street, civgen.js)
 			else if (b.kind === 7) { kind = KIND.office; col = jit([0.86, 0.8, 0.68], r); }
 			else if (b.kind === 11) { kind = KIND.tower; col = jit(pick(PAL.tower, r2), r); }
 			else if (b.kind === 12) { kind = KIND.office + 0.3; col = jit([0.6, 0.59, 0.56], r); }        // a parking garage: open concrete decks (ribbon openings, lit at night: the building shader)
