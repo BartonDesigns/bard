@@ -96,6 +96,10 @@ test('the seat offered: the nearest within reach on your level, the one you face
 	const bed = { x: 0, z: 0, y: 0, kind: 'bed', lie: { mx: 0, mz: 1, r: 1, top: 0.58 } };
 	assert.equal(pickSeat([bed], { x: 1.5, z: 1, feet: 0, fx: -1, fz: 0 }), bed);
 	assert.equal(pickSeat([bed], { x: 2.9, z: 1, feet: 0, fx: -1, fz: 0 }), null);
+	// (in your own home: a bed nobody is in before the one the household has, though it is nearer)
+	const theirs = { ...bed, busy: true }, free = { x: 2, z: 0, y: 0, kind: 'bed', lie: { mx: 2, mz: 1, r: 1, top: 0.58 } };
+	assert.equal(pickSeat([theirs, free], { x: 1.1, z: 1, feet: 0, fx: 0, fz: 1 }), free);
+	assert.equal(pickSeat([theirs], { x: 1.1, z: 1, feet: 0, fx: 0, fz: 1 }), theirs, 'yours all the same when it is the only one');
 });
 
 test('a night\'s sleep runs to seven in the morning; by day a nap; with friends about, a rest', () => {

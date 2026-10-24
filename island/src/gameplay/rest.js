@@ -52,7 +52,7 @@ export function homeSeats(house, feet, used = null) {
 		const y = house.floorY + (sp.y || 0);
 		if (Math.abs(y - feet) > 1.2) continue;
 		const [x, z] = at(sp.x, sp.z);
-		const seat = { x, z, y, h: sp.sit || 0, face: sp.heading + yaw, kind: sp.kind, id: sp.id, house };
+		const seat = { x, z, y, h: sp.sit || 0, face: sp.heading + yaw, kind: sp.kind, id: sp.id, house, item: sp.item };
 		// (a bed or the sofa to lie on: its pillow at x, z; reached from anywhere round it)
 		if (sp.lie) { const it = sp.item, [mx, mz] = at(it.x, it.z); seat.lie = { top: sp.lie.top, mx, mz, r: Math.max(it.w, it.d) / 2 }; }
 		out.push(seat);
@@ -114,8 +114,8 @@ export function pickSeat(seats, me, reach = REACH) {
 		const dx = cx - me.x, dz = cz - me.z, d = Math.hypot(dx, dz);
 		if (d > r) continue;
 		const ahead = d > 1e-3 ? (dx * me.fx + dz * me.fz) / d : 1;
-		// (the two sides of a double bed: the nearer pillow)
-		const score = d / r - 0.3 * ahead + 0.02 * Math.hypot(s.x - me.x, s.z - me.z);
+		// (the two sides of a double bed: the nearer pillow; a bed nobody is in before one that is)
+		const score = d / r - 0.3 * ahead + 0.02 * Math.hypot(s.x - me.x, s.z - me.z) + (s.busy ? 0.6 : 0);
 		if (score < bs) { bs = score; best = s; }
 	}
 	return best;
@@ -160,12 +160,16 @@ export function createRest({ world, camera, mount, button, hint = () => {}, isPh
 		if (home?.house && !home.house.plan) home.house.ready?.();
 		if (home?.house?.plan) {
 			const used = H.inUse?.(home.house) || null, all = homeSeats(home.house, feet, used);
-			// your own home: its beds are for sleeping in (the sofa, if every bed is taken); anyone
-			// else's: a seat on the edge of one at most
+			// your own home: its beds are for sleeping in (the sofa, if it has none), yours even where
+			// the household lies (they get up for somewhere else: the whole bed is kept for you,
+			// home-life claim); anyone else's: a seat on the edge of one at most
 			if (share?.mine?.()) {
-				const beds = all.filter((s) => s.kind === 'bed'), lie = beds.length ? beds : all.filter((s) => s.kind === 'couch');
+				const every = homeSeats(home.house, feet), beds = every.filter((s) => s.kind === 'bed'), lie = beds.length ? beds : every.filter((s) => s.kind === 'couch');
 				for (const s of all) if (!s.lie && s.kind !== 'bedEdge') out.push(s);
-				for (const s of lie) out.push({ ...s, kind: 'bed' });
+				for (const s of lie) {
+					const ids = every.filter((q) => q.item === s.item).map((q) => q.id);
+					out.push({ ...s, kind: 'bed', ids, busy: ids.some((id) => used?.has(id)) });
+				}
 			} else for (const s of all) if (!s.lie) out.push(s);
 			return out;
 		}
@@ -191,7 +195,7 @@ export function createRest({ world, camera, mount, button, hint = () => {}, isPh
 	function mark(seat, on) {
 		if (!seat) return;
 		if (seat.spot) seat.spot.taken = on;
-		if (seat.house && seat.id != null) { try { homes?.()?.claim?.(on ? seat.house : null, seat.id); } catch { /* the house is gone */ } }
+		if (seat.house && seat.id != null) { try { homes?.()?.claim?.(on ? seat.house : null, seat.ids || seat.id); } catch { /* the house is gone */ } }
 	}
 	function take(seat, o = {}) {
 		const p = P();

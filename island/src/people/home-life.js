@@ -265,7 +265,7 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 	function replan(H, hour, budget) {
 		const d = day();
 		if (H.planDay !== d) { H.plans = planDay(H.hh, d); H.planDay = d; }
-		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget, taken: claimed?.h === H.h ? [claimed.id] : null });
+		const A = arrange(H.hh, H.plans, H.spots, hour, { day: d, sunset: sunset(), prev: H.prev, max: budget, taken: claimed?.h === H.h ? claimed.ids : null });
 		H.prev = new Map(A.map((q) => [q.member.id, { act: q.act, spot: q.spot.id }]));
 		const keep = new Set();
 		for (const q of A) {
@@ -665,15 +665,16 @@ export function createHomeLife({ world, camera, parent, isPhone = false, areaAt,
 		const u = ins.h.plan?.estab && ins.level > 0 ? over(ins.h) : null, h = u || ins.h;
 		return { house: h, level: ins.level, household: householdOf(h), home: homes.has(h) ? whoIsHome(h) : null };
 	}
-	// the spots of a home its household has (sat or lying in, or on the way there), and the one
-	// kept for you while you are in it (gameplay/rest.js): they keep clear of it
+	// the spots of a home its household has (sat or lying in, or on the way there), and the ones
+	// kept for you while you are in them (gameplay/rest.js: a seat, or a whole bed): they keep clear
+	// of them, whoever had them getting up for somewhere else
 	let claimed = null;
 	function inUse(h) {
 		const H = homes.get(h), out = new Set();
 		if (H) for (const a of H.actors.values()) if (a.active) for (const q of [a.q, a.walk?.q, a.swap?.q, a.next]) if (q?.spot) out.add(q.spot.id);
 		return out;
 	}
-	function claim(h, id) { claimed = h && id != null ? { h, id } : null; planT = 0; }
+	function claim(h, id) { claimed = h && id != null ? { h, ids: [].concat(id) } : null; planT = 0; }
 	function whoIsHome(h) {
 		const H = homes.get(h);
 		if (!H) return [];
