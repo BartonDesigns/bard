@@ -8,6 +8,10 @@
 // A big city's districts round its centre grow the same way, one at a time, where you are in it
 // (so wherever its lights are, coming down among them finds its streets).
 //
+// A city of a region with a manner of its own (East Asia's, South Asia's, the Middle East's and
+// North Africa's: look(city), region/index.js cityLook) is grown in that manner: blocks of flats
+// and shops out to the pavement, in its own colours (crysis/civgen.js look, bay/decor.js).
+//
 // Where the Bay's own map already has the place (its surveyed land, its mapped regions, or a
 // town the Bay's generator already put there), it is left to the Bay. The same cities also
 // give the terrain its built-up ground and its lights at night, far out past where a town is
@@ -38,8 +42,13 @@ const urbOf = (size, d) => Math.exp(-((d / SPREAD[size]) ** 3) * 1.2) * GLOW[siz
 // which it is the Strip, hw metres either side of it all resort (crysis/civgen.js), no house
 const SPINES = { 'las-vegas': { lon: -115.1722, lat: [36.07, 36.126], name: 'Las Vegas Boulevard', strip: [36.0835, 36.1235], hw: 380 } };
 
-export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false, keep = () => [] }) {
-	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city }
+// a point on a grown city's ground (by its size class, metres from its middle): in its centre's
+// reach, or as built up as its districts are grown. The open country's farms, villages and
+// wayside tales keep off it (region/index.js)
+export const cityGround = (size, d) => d < REACH[size] || urbOf(size, d) >= D_LIT;
+
+export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false, keep = () => [], look: lookOf = () => null }) {
+	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city, look? }
 	let list = [], civ = null, scanAt = null, scanEpoch = -1, scanT = -1e9;
 	const view = { towns, heightAt: (x, z) => heightAt(x, z), loaded: () => true };
 	const briefs = new Map();
@@ -90,13 +99,15 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 			rec.grid = southwest;
 			const older = (!/^(na|oc)\b/.test(id) || size >= 3) && !southwest;
 			const h = hash(c.id), ang = southwest ? 0 : (h % 1000) / 1000 * Math.PI / 2, style = older ? STYLE.older : STYLE.suburb, pop = [800, 8000, 60000, 300000, 1500000, 8000000][size];
-			towns.push(spined({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, palms }));
-			districts(rec, ang, style, pop, id, palms);
+			// (the manner it is built in, where its region has one of its own)
+			const look = lookOf(c) || null;
+			towns.push(spined({ x: p.x, z: p.z, r: REACH[size], ang, style, name: c.name, pop, city: c, region: id, palms, look }));
+			districts(rec, ang, style, pop, id, palms, look);
 		}
 	}
 	// the districts of a city round where you are (within D_KM): the lattice's points that are
 	// built up enough, past the centre's own reach, not the Bay's
-	function districts(rec, ang, style, pop, region, palms) {
+	function districts(rec, ang, style, pop, region, palms, look = null) {
 		const size = rec.size, r = DISTRICT[size];
 		if (!r || rec.km > SPREAD[size] / 1000 + D_KM) return;
 		const D = r * D_STEP, row = D * Math.sqrt(3) / 2, ca = Math.cos(ang), sa = Math.sin(ang);
@@ -118,7 +129,7 @@ export function createGlobeTowns({ real, heightAt, water, director, skip, claim 
 				const S = SPINES[rec.city.id];
 				if (S && !ang) { const ll = toLL(x, z), sx = toXZ(ll.lat, S.lon).x; if (ll.lat > S.lat[0] - 0.02 && ll.lat < S.lat[1] + 0.02 && Math.abs(sx - x) < D / 2) x = sx; }
 				if (Math.hypot(x - here.x, z - here.z) > D_KM * 1000 || skip(x, z, r)) continue;
-				towns.push(spined({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j] }));
+				towns.push(spined({ x, z, r, ang, style, name: rec.city.name, pop: Math.round(pop / 4), city: rec.city, region, palms, district: [i, j], look }));
 			}
 		}
 	}

@@ -160,7 +160,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		},
 	};
 	// (the real landmarks' ground is kept clear of the towns grown round them: region/landmarks.js)
-	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c), keep: (x, z, r) => regional.landmarksNear(x, z, r) });
+	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c), keep: (x, z, r) => regional.landmarksNear(x, z, r), look: (c) => regional.cityLook(c) });
 
 	// ---------- the towns' own streets, out where the Bay's ground no longer paints them ----------
 	// (townstreets.js) the grown towns' (bay/realcity.js's generated regions, anywhere on Earth) and

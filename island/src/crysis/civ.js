@@ -43,7 +43,7 @@ export function createCivilization({ real, bay, water = () => null, brief = null
 		// spacing, to put one of its north-south arterials on it)
 		const style = t.style === STYLE.older ? 'older' : 'suburb', SP = arterialSpacing(t.r, style);
 		const k = t.spine ? Math.round((t.spine.x - t.x) / SP) : 0, cx = t.spine ? t.spine.x - k * SP : t.x;
-		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style, name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null, spine: t.spine ? { k, name: t.spine.name, v0: t.spine.z0 - t.z, v1: t.spine.z1 - t.z, hw: t.spine.hw } : null });
+		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style, name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null, spine: t.spine ? { k, name: t.spine.name, v0: t.spine.z0 - t.z, v1: t.spine.z1 - t.z, hw: t.spine.hw } : null, look: t.look || null });
 		return { town: t, it, t0: performance.now(), work: 0, near: W || K.length ? near : null, keep: K };
 	}
 	function finish(J, region) {
