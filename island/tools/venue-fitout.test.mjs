@@ -53,7 +53,9 @@ test('every office, arcade, bowling alley, cinema and tattoo parlour builds in a
 	}
 });
 
-test('the doorway and a few steps in are clear, and everyone stands inside the walls', () => {
+test('the doorway and a few steps in are clear, and everyone stands inside the walls', (t) => {
+	// (on a weekday: the offices are all but empty at the weekend, people/flow.js)
+	t.mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 21, 11) });
 	for (const b of CASES) {
 		const { C, L } = built(b), F = frameOf(b);
 		for (const dz of [0.5, 1.4, 2.0]) {
