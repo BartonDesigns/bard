@@ -70,10 +70,6 @@ function freeze(value) {
 }
 
 const ITEMS = [
-	...LEGENDARIES.map(x => ({ id: x.id, name: x.name, kind: 'rifle', fictional: true,
-		activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use: x.lore,
-		sources: {}, marketTradable: true, basePrice: 600, weight: 4, slot: 'primary',
-		stackable: false, consumable: false, heatRisk: 8, ascend: 'weapon' })),
 	{
 		id: 'aurora-trail-rifle',
 		name: 'Aurora Trail Rifle',
@@ -338,6 +334,11 @@ const ITEMS = [
 		['regolith-core-sample', 'Sealed Regolith Core', 'A metre of fresh regolith from the Copernicus face, sealed on site for the med bay.'],
 		['hydroponic-harvest-crate', 'Harvest Crate', 'Basil and lettuces from the dome farm, on their way to the mess.'],
 	].map(([id, name, use]) => ({ id, name, kind: 'errand', fictional: true, activities: [], use, sources: {}, marketTradable: true, basePrice: 0, weight: 1, slot: 'hand', stackable: false, consumable: false, heatRisk: 0 })),
+	// Keep existing catalog order: broad conversational matches must still prefer shop gear.
+	...LEGENDARIES.map(x => ({ id: x.id, name: x.name, kind: 'rifle', fictional: true,
+		activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use: x.lore,
+		sources: {}, marketTradable: true, basePrice: 600, weight: 4, slot: 'primary',
+		stackable: false, consumable: false, heatRisk: 8, ascend: 'weapon' })),
 ];
 
 export const ARMS_CATALOG = freeze(Object.fromEntries(ITEMS.map((item) => [item.id, item])));

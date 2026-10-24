@@ -18,6 +18,8 @@ test('20 new legends are named, playable, fixed-school, legendary-quality items 
 		assert.equal(item.i, x.id); assert.equal(item.t, 4); assert.ok(ARMS_CATALOG[x.id]);
 		assert.deepEqual(ARMS_CATALOG[x.id].sources, {});
 		assert.equal(cleanInstance({ ...item, t: 0 }).t, 4);
+		const inventory = createInventoryState('collector'); inventory.instances[item.u] = item;
+		assert.deepEqual(deserializeInventory(serializeInventory(inventory), 'collector').instances[item.u], item);
 		assert.equal(attunement(item), x.school); assert.equal(attunement({ ...item, u: 'different' }), x.school);
 		assert.ok(statsOf(item).length); assert.ok(awakenings(item)[2].on);
 		const view = weaponOf(x.id), S = weaponStats(item, view), W = createWeaponState(item, null, view);

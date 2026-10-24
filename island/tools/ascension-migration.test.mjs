@@ -5,6 +5,7 @@ import { sanitizeSkills, pointsOf, levelOf, addXp } from '../src/magic/skills.js
 import { ascend } from '../src/magic/trials.js';
 import { useFor } from '../src/magic/perks.js';
 import { ARMS_CATALOG, ascendTrialOf, createInventoryState, serializeInventory, deserializeInventory } from '../src/gameplay/arms.js';
+import { LEGENDARY } from '../src/gameplay/legendary-items.js';
 import { awakenings, isWeaponId } from '../src/gameplay/gear-magic.js';
 import { statScale, trained } from '../src/gameplay/gear-levels.js';
 import { cleanGearLevel, tradeLevelLimit, tradeFitsLevel, GEAR_FEATURE, PREVIOUS_GEAR_FEATURE } from '../src/net/protocol.js';
@@ -36,7 +37,9 @@ test('legacy players above 99 earn one additional point without losing their lev
 });
 
 test('existing level-20 gear keeps all four unlocks, stats and inventory identity', () => {
-	for (const item of Object.values(ARMS_CATALOG).filter(i => i.kind === 'garment' || isWeaponId(i.id))) {
+	// Named relics were introduced after these saves and have an intrinsic Legendary tier.
+	// Their save/restore invariants are covered for all twenty in legendary-loot.test.mjs.
+	for (const item of Object.values(ARMS_CATALOG).filter(i => !LEGENDARY[i.id] && (i.kind === 'garment' || isWeaponId(i.id)))) {
 		const inst = { u: 'legacy-0001', i: item.id, l: 20, t: 0, x: 0 };
 		assert.equal(awakenings(inst).filter(a => a.on).length, 4, item.id);
 		assert.ok(Math.abs(statScale(inst) - 2.13) < 1e-12);
