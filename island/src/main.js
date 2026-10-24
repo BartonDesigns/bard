@@ -127,6 +127,7 @@ import { setForceLocator, localForce, setLocalForce, forceAt } from './law/force
 import { policeLiveryInfo } from './signage/cars.js';
 import { installAirFog } from './world/airfog.js';
 import { GRADE, installGrade } from './world/grade.js';
+import { installHillSun } from './world/hillsun.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
 import { PHONE_DEVICE, GFX_PHONE, ULTRA, ULTRA_DROPPED } from './world/device.js';
 import { islandBuild } from './island-build.js';
@@ -145,6 +146,9 @@ const GLOW_AT = [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0
 installAirFog();
 // the look on the tone mapping: contrast, colour and a little split toning (world/grade.js)
 installGrade();
+// the land's own shade when the sun is low: the sun in every lit shader only above the height
+// the hills let it down to (world/hillsun.js; the grid is swept as the world runs)
+installHillSun();
 
 // Muffle the whole Bard under water: a low-pass between the faceplate's master output
 // and the speakers, eased in as you go under and out as you surface.
@@ -1314,6 +1318,8 @@ export function createIslandWorld() {
 				// hills or mountains in the way?
 				let seen = 1;
 				for (const t of [80, 200, 500, 1200, 3000, 7000]) { const x = camera.position.x + sd.x * t, z = camera.position.z + sd.z * t; if (W.island.heightAt(x, z) > camera.position.y + sd.y * t + 3) { seen = 0; break; } }
+				// (and the ridges farther off: world/hillsun.js)
+				if (seen) seen = W.hillSun?.at(camera.position.x, camera.position.y, camera.position.z) ?? 1;
 				// (as much of it as the cloud over the sun lets through: none under an overcast)
 				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (W.weather?.state?.sunVis ?? 1);
 			}

@@ -179,6 +179,26 @@ export const KITS = {
 		lore: ['oldbore', 'ruin'],
 		travel: 'three hundred k down the road to the next town',
 	},
+	// the American desert, the Great Basin, the Mojave and the Chihuahuan: ranches and their windmills out
+	// in the sagebrush and the creosote (flora.js keeps each plant to where the atlas names it)
+	mojave: {
+		name: 'desert ranch country', climate: 'arid',
+		build: { houses: [['homestead', 3], ['shed', 3], ['tank', 1.5]], centre: ['store'], props: [['windmill', 1.5], ['tank', 1], ['fence', 1.5], ['truck', 1.5]], count: [3, 8], layout: 'farms', spread: 450, fields: null },
+		ground: { path: '#b89a74', plaza: '#c4a884', yard: '#b8a080' },
+		flora: [['creosote', 4], ['yucca', 1.5], ['joshua', 1.2], ['sagebrush', 1.2], ['juniper', 0.5]],
+		air: { kind: 'dust', haze: '#dcc8a8', k: 1 },
+		smoke: 0,
+		folk: {
+			dress: 'outback', roles: [['walk', 3], ['farm', 1.5], ['talk', 2]],
+			jobs: ['running cattle on the open range', 'a ranch hand', 'driving a long-haul truck', 'a ranger out at the lake', 'a mechanic at the truck stop', 'dealing cards in town', 'a line cook at the diner'],
+			errands: ['checking the well', 'on the way to the truck stop', 'fixing the windmill', 'driving in to town for supplies'],
+			hobbies: ['the rodeo', 'high school football on Friday', 'off-roading in the washes', 'stargazing out past the lights'],
+		},
+		sound: { day: ['birdsdry', 'wind', 'insects'], night: ['insects', 'wind'] },
+		music: { penta: 0.4, drone: 0.3, swing: 0.1 },
+		lore: ['oldbore', 'ruin'],
+		travel: 'out on the interstate, a couple of hours to the next town',
+	},
 	mediterranean: {
 		name: 'Mediterranean village', climate: 'mediterranean',
 		build: { houses: [['cube', 4], ['stonetile', 4], ['shed', 0.6]], centre: ['belltower'], props: [['pergola', 1.5], ['bench', 1], ['well', 0.6], ['pots', 2], ['wall', 1.5]], count: [12, 34], layout: 'hill', spread: 200, fields: 'grove' },

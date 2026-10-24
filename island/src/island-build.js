@@ -18,6 +18,7 @@ import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
 import { createWindshield } from './world/windshield.js';
 import { createSunRays } from './world/sunrays.js';
+import { createHillSun } from './world/hillsun.js';
 import { createSpray } from './world/spray.js';
 import { createVegetation } from './world/vegetation.js';
 import { createGrass } from './world/grass.js';
@@ -311,6 +312,9 @@ export async function islandBuild(iw, params) {
 	// sunbeams through the trees in mist (world/sunrays.js)
 	iw.world.rays = createSunRays(scene, shared, renderer, { isPhone: GFX, sun: sky.sun, air: sky.uniforms.uAir });
 	iw.world.rays.quality(qualityNow().fx);
+	// the land's own shade when the sun is low: the valleys go into the shadow of the ridges and
+	// the light climbs the hills as it sets, the last of it on the summits (world/hillsun.js)
+	iw.world.hillSun = createHillSun({ heightAt: (x, z) => island.heightAt(x, z), renderer, scene, isPhone: GFX });
 	fitShadow();
 	// the soft shade where people's shoes meet the ground (world/footshade.js), on whatever floor
 	// they stand: the one you would stand on there, as drawn (player.js seenFloorAt)
@@ -437,7 +441,7 @@ export async function islandBuild(iw, params) {
 	// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 	// for everything: the island's own map on the island, the real land beyond it
 	if (earth) {
-		const bayArea = createBayArea(shared, scene, island, shared.bayU);
+		const bayArea = createBayArea(shared, scene, island, shared.bayU, { renderer, isPhone: GFX });
 		iw.world.bayArea = bayArea;
 		// globe: the Earth past the survey, and the engine's relief on the Bay's own ground (earth/globe.js)
 		iw.world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => iw.world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone: GFX, busy: () => iw.drive.active() || !!iw.world?.boat?.boarded?.() || !!iw.world?.orbit?.active() });

@@ -23,7 +23,7 @@ const SYL = [['Wil', 'Al', 'Cor', 'Ash', 'Bran', 'Mil', 'Sil', 'Ced', 'Ro', 'Lin
 const hash = (a, b) => { let x = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
 const nameOf = (a, b) => SYL[0][Math.floor(hash(a, b) * 20)] + SYL[1][Math.floor(hash(b + 7, a - 3) * 20)];
 
-export function proceduralWater({ heightAt, inSurvey }) {
+export function proceduralWater({ heightAt, inSurvey, arid = () => false }) {
 	const doms = new Map(), lakes = [];
 	let version = 0;
 	const dkey = (i, j) => i + ',' + j;
@@ -47,7 +47,10 @@ export function proceduralWater({ heightAt, inSurvey }) {
 			for (let i = 0; i < n; i++) h[j * n + i] = heightAt(X0 + i * CELL, Z0 + j * CELL);
 			if (due()) yield;
 		}
-		const R = yield* hydrology({ W: n, H: n, x0: X0, z0: Z0, cell: CELL, h }, { sea: 0, minCells: 140, lakeCells: 5, lakeDepth: 1.5, inset: 0.35, breach: 4, breachLen: 48, basin: { deep: 8, cells: 300, share: 0.04, pond: 120, pondDeep: 6 } });
+		// (in a desert a closed basin is a dry pan, not a lake or a pond, and the washes run dry: no
+		// creek or river in them)
+		const dry = arid(cx, cz);
+		const R = yield* hydrology({ W: n, H: n, x0: X0, z0: Z0, cell: CELL, h }, { sea: 0, minCells: dry ? 1700 : 140, lakeCells: 5, lakeDepth: 1.5, inset: 0.35, breach: 4, breachLen: 48, basin: { deep: 8, cells: 300, share: 0.04, pond: 120, pondDeep: 6 } });
 		const inCore = (x, z) => x >= D.di * CORE && x < D.di * CORE + CORE && z >= D.dj * CORE && z < D.dj * CORE + CORE;
 		// each lake's shore traced again on the ground every 16 m (the 64 m cells it was found
 		// on are too coarse for a shore: on a hillside the ground between them falls away under
@@ -108,7 +111,7 @@ export function proceduralWater({ heightAt, inSurvey }) {
 		}
 		// the lakes whose middle lies in this square
 		const middle = (r) => { let sx = 0, sz = 0; for (let i = 0; i < r.length; i += 2) { sx += r[i]; sz += r[i + 1]; } return [sx / (r.length / 2), sz / (r.length / 2)]; };
-		for (const L of R.lakes) {
+		for (const L of dry ? [] : R.lakes) {
 			if (!L.rings[0]) continue;
 			// (whose square it is by the cells' shore, so each lake is listed by one square only)
 			const [mx, mz] = middle(L.rings[0]);
@@ -127,7 +130,7 @@ export function proceduralWater({ heightAt, inSurvey }) {
 		}
 		yield;
 		// the streams, smoothed, their widths by what drains into them, cut to the 2 km tiles
-		for (const S of R.streams) {
+		for (const S of dry ? [] : R.streams) {
 			if (due()) yield;
 			const P = smoothLine(S.pts.map((p) => [p[0], p[1], p[2], 1.9 + 3.8 * Math.sqrt(p[3] * CELL * CELL / 1e6)]));
 			// (the water in its bed, never over the ground it runs on: the ground between the

@@ -382,12 +382,15 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// under water: the bed darkens
 					c = mix(c, c * vec3(0.5, 0.6, 0.6), (1.0 - smoothstep(vGC.z - 6.0, vGC.z, h)));
 					// the towns and cities round you: built ground, and their lights after dark
-					float urb = 0.0;
+					// (a city laid out on the survey's mile grid, the American desert's, has 2 added to how
+					// built up it is: its lights run on the grid, below)
+					float urb = 0.0, gridK = 0.0;
 					for (int i = 0; i < ${CITIES}; i++) {
 						vec4 C = uGCity[i];
 						if (C.z <= 0.0) continue;
-						float dd = length(vGW.xz - C.xy) / C.z;
-						urb = max(urb, exp(-dd * dd * dd * 1.2) * C.w);
+						float dd = length(vGW.xz - C.xy) / C.z, on = exp(-dd * dd * dd * 1.2), gw = step(2.0, C.w);
+						urb = max(urb, on * (C.w - 2.0 * gw));
+						gridK = max(gridK, on * gw);
 					}
 					urb *= (1.0 - smoothstep(0.25, 0.45, slope)) * step(0.0, vGC.x);
 					if (urb > 0.01) {
@@ -420,7 +423,15 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 								float se = gVor(2, 83u, sid) * 100.0;
 								float near = 1.0 - smoothstep(30.0, 60.0, px);
 								lane = mix(lane, gLine(se, 3.5, px) * (0.6 + 0.8 * gq(3, 85u)), near);
-								${isPhone ? '' : 'float mid, me = gVor(4, 87u, mid) * 400.0; main = mix(main, gLine(me, 6.0, px), near);'}
+								if (gridK > 0.3) {
+									// the grid's lights: the section-line roads every mile (64 survey units, north and
+									// south on it) the brightest, the half-mile streets after them; the subdivisions'
+									// winding streets dim between
+									vec2 qm = vec2(gQI & 63) + gQF, qh = vec2(gQI & 31) + gQF;
+									vec2 dm = min(qm, 64.0 - qm) * 25.0, dh = min(qh, 32.0 - qh) * 25.0;
+									main = mix(main, max(gLine(min(dm.x, dm.y), 9.0, px), 0.55 * gLine(min(dh.x, dh.y), 5.0, px)), near);
+									lane *= 0.7;
+								}${isPhone ? '' : ' else { float mid, me = gVor(4, 87u, mid) * 400.0; main = mix(main, gLine(me, 6.0, px), near); }'}
 								sid = mix(0.5, sid, near);
 								float sh = gfH(ivec3(gQI, 5), 89u);
 								speck = step(0.72, sh) * gLine(length(gQF - vec2(0.3 + 0.4 * fract(sh * 13.1), 0.3 + 0.4 * fract(sh * 7.7))) * 25.0, 1.4, px) * (1.0 - smoothstep(2.0, 6.0, px));
