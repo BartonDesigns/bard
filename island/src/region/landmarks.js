@@ -263,6 +263,63 @@ R.statue = (B, s = 1, a = {}) => {
 };
 R.moai = (B, s = 1) => { const { G } = B; G.box(0, -0.5, 0, 98 * s, 3 * s, 8 * s, [0.42, 0.4, 0.38]); for (let i = 0; i < 15; i++) { const x = -45 * s + i * 6.4 * s, h = (6 + (i * 7 % 5)) * s; G.box(x, 2.5 * s, 0, 3 * s, h, 2.4 * s, [0.38, 0.33, 0.3]).box(x, 2.5 * s + h * 0.62, -1.3 * s, 1 * s, h * 0.3, 0.6 * s, [0.34, 0.3, 0.27]); if (i % 4 === 0) G.cyl(x, 2.5 * s + h, 0, 1.3 * s, 1.3 * s, 1.6 * s, [0.6, 0.3, 0.22], { n: 8 }); } B.solid.push([0, 0, 98 * s, 8 * s, 0]); };
 R.clocktower = (B, s = 1) => { const { G } = B, c = [0.82, 0.74, 0.55]; G.box(0, 0, 0, 12 * s, 60 * s, 12 * s, c); G.box(0, 60 * s, 0, 13 * s, 12 * s, 13 * s, c); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; G.cyl(Math.sin(a) * 6.6 * s, 66 * s, Math.cos(a) * 6.6 * s, 3.4 * s, 3.4 * s, 0.1, [0.95, 0.93, 0.85], { n: 14 }); } B.glow?.box(0, 63 * s, 0, 13.4 * s, 6 * s, 13.4 * s, [0.9, 0.8, 0.5]); G.hip(0, 72 * s, 0, 13 * s, 13 * s, 22 * s, [0.3, 0.32, 0.34], { o: 0.5 }); B.solid.push([0, 0, 12 * s, 12 * s, 0]); };
+// New York's skyline anchors are deliberately economical silhouettes. The surrounding grown
+// city supplies thousands of ordinary blocks; these give the player the unmistakable bearings.
+R.empire = (B, s = 1) => {
+	const { G } = B, stone = [0.57, 0.56, 0.52], dark = [0.28, 0.29, 0.3];
+	G.box(0, 0, 0, 72 * s, 24 * s, 42 * s, stone);
+	G.box(0, 24 * s, 0, 58 * s, 92 * s, 34 * s, stone);
+	G.box(0, 116 * s, 0, 45 * s, 96 * s, 29 * s, [0.61, 0.6, 0.56]);
+	G.box(0, 212 * s, 0, 31 * s, 72 * s, 23 * s, [0.64, 0.63, 0.59]);
+	G.box(0, 284 * s, 0, 20 * s, 38 * s, 18 * s, dark);
+	G.cyl(0, 322 * s, 0, 5.5 * s, 3.3 * s, 42 * s, [0.48, 0.49, 0.5], { n: 12 });
+	G.cyl(0, 364 * s, 0, 1.1 * s, 0.18 * s, 56 * s, [0.55, 0.56, 0.57], { n: 8 });
+	B.glow?.box(0, 300 * s, 0, 20.5 * s, 7 * s, 18.5 * s, [0.84, 0.72, 0.42]);
+	B.solid.push([0, 0, 68 * s, 40 * s, 0]);
+};
+R.chrysler = (B, s = 1) => {
+	const { G } = B, brick = [0.48, 0.43, 0.38], steel = [0.72, 0.75, 0.76];
+	G.box(0, 0, 0, 52 * s, 30 * s, 36 * s, brick);
+	G.box(0, 30 * s, 0, 42 * s, 128 * s, 30 * s, [0.55, 0.51, 0.46]);
+	G.box(0, 158 * s, 0, 32 * s, 76 * s, 25 * s, [0.61, 0.58, 0.53]);
+	// Seven bright Art Deco setbacks read as the crown without a dense texture budget.
+	for (let k = 0; k < 7; k++) {
+		const w = (31 - k * 3.5) * s, d = (24 - k * 2.5) * s;
+		G.hip(0, (234 + k * 8) * s, 0, w, d, 10 * s, k % 2 ? [0.56, 0.6, 0.62] : steel, { o: 0.15 });
+	}
+	G.cone(0, 296 * s, 0, 5 * s, 38 * s, steel, 12);
+	G.cyl(0, 332 * s, 0, 0.7 * s, 0.15 * s, 26 * s, [0.5, 0.53, 0.54], { n: 8 });
+	B.glow?.box(0, 267 * s, 0, 21 * s, 5 * s, 16 * s, [0.72, 0.82, 0.88]);
+	B.solid.push([0, 0, 50 * s, 34 * s, 0]);
+};
+R.brooklynbridge = (B, s = 1) => {
+	const { G } = B, stone = [0.53, 0.48, 0.4], cable = [0.24, 0.24, 0.25], deck = [0.18, 0.19, 0.2];
+	const span = 430 * s, tower = 86 * s;
+	G.box(0, 19 * s, 0, span, 3 * s, 18 * s, deck);
+	for (const x of [-span * 0.36, span * 0.36]) {
+		for (const z of [-7 * s, 7 * s]) G.box(x, 0, z, 8 * s, tower, 8 * s, stone);
+		G.box(x, 62 * s, 0, 24 * s, 7 * s, 22 * s, stone);
+		for (const z of [-7 * s, 7 * s]) G.hip(x, tower, z, 9 * s, 9 * s, 12 * s, stone, { o: 0.2 });
+	}
+	for (const z of [-9 * s, 9 * s]) {
+		G.beam(-span / 2, 22 * s, z, -span * 0.36, tower * 0.9, z, 0.75 * s, cable);
+		G.beam(-span * 0.36, tower * 0.9, z, span * 0.36, tower * 0.9, z, 0.75 * s, cable);
+		G.beam(span * 0.36, tower * 0.9, z, span / 2, 22 * s, z, 0.75 * s, cable);
+		for (let k = -8; k <= 8; k++) { const x = k / 8 * span * 0.36, sag = tower * 0.9 - (1 - Math.abs(k) / 8) * 38 * s; G.beam(x, 22 * s, z, x, sag, z, 0.32 * s, cable); }
+	}
+	B.solid.push([0, 19 * s, span, 18 * s, 0]);
+};
+R.grandcentral = (B, s = 1) => {
+	const { G } = B, stone = [0.72, 0.68, 0.6], roof = [0.28, 0.31, 0.3];
+	G.box(0, 0, 0, 130 * s, 30 * s, 72 * s, stone);
+	G.box(0, 30 * s, 0, 92 * s, 18 * s, 62 * s, [0.76, 0.72, 0.64]);
+	G.hip(0, 48 * s, 0, 94 * s, 64 * s, 12 * s, roof, { o: 1.2 * s });
+	for (let x = -48; x <= 48; x += 12) G.cyl(x * s, 0, -37 * s, 1.5 * s, 1.5 * s, 27 * s, [0.82, 0.78, 0.7], { n: 10 });
+	G.box(0, 25 * s, -37 * s, 114 * s, 5 * s, 3 * s, [0.65, 0.6, 0.52]);
+	G.cyl(0, 34 * s, -38.7 * s, 7 * s, 7 * s, 0.6 * s, [0.88, 0.85, 0.75], { n: 18 });
+	B.glow?.cyl(0, 34 * s, -39.1 * s, 5.6 * s, 5.6 * s, 0.2 * s, [0.78, 0.65, 0.32], { n: 18 });
+	B.solid.push([0, 0, 128 * s, 70 * s, 0]);
+};
 R.needle = (B, s = 1) => { const { G } = B, c = [0.7, 0.75, 0.8]; let y = 0; for (let k = 0; k < 9; k++) { const w = (40 - k * 4.2) * s, h = (k < 8 ? 70 : 200) * s; for (let p = 0; p < 3; p++) { const a = p / 3 * Math.PI * 2; G.box(Math.cos(a) * w * 0.4, y, Math.sin(a) * w * 0.4, w * (k < 8 ? 0.6 : 0.15), h, w * (k < 8 ? 0.6 : 0.15), c, { r: a }); } y += h * 0.8; } G.box(0, 0, 0, 30 * s, y * 0.9, 30 * s, [0.62, 0.68, 0.74]); B.solid.push([0, 0, 50 * s, 50 * s, 0]); };
 R.leaning = (B, s = 1) => { const { G } = B, c = [0.92, 0.9, 0.84], tilt = 0.07; for (let k = 0; k < 8; k++) { const y = k * 7 * s, dx = Math.sin(tilt) * y; G.cyl(dx, y, 0, 8 * s, 8 * s, 7 * s, c, { n: 18 }); G.cyl(dx, y + 6.2 * s, 0, 8.6 * s, 8.6 * s, 0.6 * s, [0.85, 0.83, 0.76], { n: 18, top: false }); } B.solid.push([0, 0, 16 * s, 16 * s, 0]); };
 R.roundtower = (B, s = 1) => { const { G } = B, c = [0.62, 0.55, 0.45]; G.cyl(0, 0, 0, 8 * s, 8 * s, 52 * s, c, { n: 16 }).cyl(0, 52 * s, 0, 9 * s, 9 * s, 2 * s, [0.5, 0.45, 0.38], { n: 16 }).cone(0, 54 * s, 0, 8.5 * s, 13 * s, [0.3, 0.3, 0.32], 16); B.solid.push([0, 0, 16 * s, 16 * s, 0]); };
@@ -324,6 +381,10 @@ export const REAL = [
 	['the Sydney Opera House', -33.8568, 151.2153, 'sails', 1, 0, 'Its roofs are like sails on the harbour. Tiles from Sweden, every one of them.'],
 	['Uluru', -25.3444, 131.0369, 'monolith', 1, 0, 'A sacred place for the Anangu. The climb was closed in 2019; people walk round its base instead.'],
 	['the Statue of Liberty', 40.6892, -74.0445, 'statue', 1.2, 0, 'Copper gone green, with her torch up over the harbour.', { c: [0.45, 0.65, 0.58], pose: 'torch' }],
+	['the Empire State Building', 40.7484, -73.9857, 'empire', 1, 29, 'The old compass of Midtown. Its crown changes colour with the night.'],
+	['the Chrysler Building', 40.7516, -73.9755, 'chrysler', 1, 29, 'Steel eagles and a silver crown: the city made into an Art Deco tower.'],
+	['Grand Central Terminal', 40.7527, -73.9772, 'grandcentral', 1, 29, 'Meet under the clock. Trains leave below the constellations painted across the ceiling.'],
+	['the Brooklyn Bridge', 40.7061, -73.9969, 'brooklynbridge', 1, 315, 'Stone towers, steel cables, and the river below. Walk the centre path for the skyline.'],
 	['the Burj Khalifa', 25.1972, 55.2744, 'needle', 1, 0, 'The tallest building in the world. At the top the sun sets a few minutes later than down here.'],
 	['Hallgrímskirkja', 64.1417, -21.9266, 'stepchurch', 1, 180, 'Its front is shaped like the basalt columns of the coast.'],
 	['the Arctic Cathedral', 69.6481, 18.9874, 'arcticcathedral', 1, 0, 'Like stacked ice. In the midnight sun the big window glows.'],

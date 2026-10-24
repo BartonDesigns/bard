@@ -3,7 +3,7 @@
 //     wind caves you can walk into, honeycombed with tafoni, ledged by old bedding
 //   Castle Rock: the sandstone crags over Pine Canyon
 //   the summit: the stone Summit Building, its observation deck, its crenellated tower
-//     and the beacon, and the car park's walled loop
+//     and the beacon, the car park's walled loop, and the radio mast by it
 // Each rock is carved from a signed-distance field (blobs, bedding ledges, caves hollowed
 // out of it) into a surface-nets mesh, in a Web Worker, the nearest first as you come
 // near. The same field makes the rock solid: you are pushed off its walls and can step
@@ -361,6 +361,11 @@ const LOOP_GAPS = [[-54.5, 1.5], [-49.5, 15], [-31.5, 4.5]];
 // the Summit Building's mapped footprint (Overture): the hall's middle from SUMMIT, its
 // long axis's bearing (radians, as the map records it) and size, and the tower's middle
 const HALL = { dx: -4.3, dz: -0.7, a: 0.9717, w: 26, d: 12.35 }, TOWER = { dx: 0.2, dz: 5.8, s: 6.4 };
+// The radio mast north of the car park: a galvanised lattice tower, four legs drawn in from a
+// base a side to top a side, braced in sections, its antennas and a red warning light at the
+// top. The summit has carried radio masts since the 1920s, and this one stands on the skyline
+// beside the building seen from the valleys (Josh's photo from San Ramon, 2026-10-24)
+const MAST = { dx: -42, dz: -15, h: 38, base: 4.4, top: 1.2 };
 // landmarks.js's stand-in for this building, a plain block and tower some 17 m off
 const STAND_IN = { lat: 37.8816, lon: -121.9142 };
 
@@ -446,8 +451,12 @@ export function createDiablo(scene, bay) {
 	const glowTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
 	const glow = (color) => new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
 	// the beacon's turning white beam, and the steady red warning light under it
-	const beacon = glow(0xfff2dc), red = glow(0xff2a1a);
+	const beacon = glow(0xfff2dc), red = glow(0xff2a1a), mastRed = glow(0xff2a1a);
 	summit.add(beacon, red);
+	group.add(mastRed);
+	const galv = new THREE.MeshStandardMaterial({ color: 0xa4a9ad, roughness: 0.45, metalness: 0.7 });
+	// the mast's legs at its foot (x, z, world), to be pushed off: set when it is built
+	const mastLegs = [];
 	// (built over three frames: the building, the car park's wall, then the stand-in cleared)
 	let summitPlaced = false, summitStage = 0;
 	// the inside: the stone shell is hollow, its door and windows open, and the rooms are built
@@ -596,6 +605,55 @@ export function createDiablo(scene, bay) {
 		wm.position.set(sw.x, 0, sw.z); wm.castShadow = wm.receiveShadow = true;
 		group.add(wm);
 	}
+	function buildMast() {
+		const { h: H, base: B, top: T } = MAST, x0 = sw.x + MAST.dx, z0 = sw.z + MAST.dz;
+		// on the lowest ground under its legs, the footings a little proud of it
+		let gy = Infinity;
+		for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) gy = Math.min(gy, bay.heightAt(x0 + a * B / 2, z0 + b * B / 2));
+		const parts = [], up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), q = new THREE.Quaternion();
+		// a member of thickness t from a to b ([x, y, z], the mast's frame)
+		const bar = (a, b, t) => {
+			d.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+			const L = d.length();
+			q.setFromUnitVectors(up, d.normalize());
+			parts.push(new THREE.BoxGeometry(t, L, t).applyQuaternion(q).translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2));
+		};
+		// the half side at height y, and a corner there
+		const half = (y) => (B + (T - B) * y / H) / 2, corner = (i, y) => [(i === 0 || i === 3 ? -1 : 1) * half(y), y, (i < 2 ? -1 : 1) * half(y)];
+		for (let i = 0; i < 4; i++) {
+			bar(corner(i, -0.6), corner(i, H), 0.24);
+			// the footing
+			const [fx, , fz] = corner(i, 0);
+			parts.push(new THREE.BoxGeometry(0.8, 1.0, 0.8).translate(fx, -0.1, fz));
+			mastLegs.push([x0 + fx, z0 + fz]);
+		}
+		// braced in sections, an X on each face and a girt at each joint
+		const n = Math.round(H / 4.2);
+		for (let k = 0; k < n; k++) {
+			const y0 = H * k / n, y1 = H * (k + 1) / n;
+			for (let i = 0; i < 4; i++) {
+				const j = (i + 1) % 4;
+				bar(corner(i, y0), corner(j, y1), 0.12); bar(corner(j, y0), corner(i, y1), 0.12);
+				bar(corner(i, y1), corner(j, y1), 0.12);
+			}
+		}
+		// at the top: a whip, three panel antennas round it and the light's platform; lower down,
+		// two dishes, one looking out over the valley and one toward the city
+		bar([0, H, 0], [0, H + 6, 0], 0.14);
+		parts.push(new THREE.BoxGeometry(T + 0.8, 0.15, T + 0.8).translate(0, H, 0));
+		for (let k = 0; k < 3; k++) {
+			const a = k * Math.PI * 2 / 3, r = T / 2 + 0.35;
+			parts.push(new THREE.BoxGeometry(0.32, 1.8, 0.14).translate(0, H - 1.6, r).rotateY(a));
+		}
+		for (const [y, a] of [[H * 0.62, -2.0], [H * 0.48, -0.6]]) {
+			const r = half(y) + 0.6;
+			parts.push(new THREE.CylinderGeometry(0.75, 0.6, 0.45, 14).rotateX(Math.PI / 2).translate(0, y, r).rotateY(a));
+		}
+		const mesh = new THREE.Mesh(mergeGeometries(parts), galv);
+		mesh.position.set(x0, gy, z0); mesh.castShadow = true;
+		group.add(mesh);
+		mastRed.position.set(x0, gy + H + 0.6, z0); mastRed.scale.setScalar(5);
+	}
 	// landmarks.js's plain stand-in for this building stands 17 m off: fold its faces away
 	function foldStandIn() {
 		const lw = toWorld(STAND_IN.lat, STAND_IN.lon);
@@ -616,8 +674,8 @@ export function createDiablo(scene, bay) {
 	function update(dt, t, cam, nightK) {
 		if (!bay.loaded() || !fine()) return;
 		const x = cam.position.x, z = cam.position.z;
-		// the summit first, over three frames; then carve the rocks you come near, the nearest first
-		if (summitStage < 3) { [buildHall, buildLoopWall, foldStandIn][summitStage++](); summitPlaced = true; } else if (!pending && !job) {
+		// the summit first, over four frames; then carve the rocks you come near, the nearest first
+		if (summitStage < 4) { [buildHall, buildLoopWall, buildMast, foldStandIn][summitStage++](); summitPlaced = true; } else if (!pending && !job) {
 			let best = null, bd = 3500;
 			for (const R of rocks) { const d = Math.hypot(R.x - x, R.z - z); if (!R.built && d < bd) { bd = d; best = R; } }
 			if (best) {
@@ -644,6 +702,8 @@ export function createDiablo(scene, bay) {
 		beacon.scale.setScalar((20 + 60 * flash) * (1 + beaconDay * 1.5));
 		lens.emissiveIntensity = (0.15 + 2.5 * flash) * Math.max(nightK, beaconDay * 0.5);
 		red.material.opacity = nightK * (0.55 + 0.45 * Math.sin(t * 3)) * 0.9;
+		// (the mast's: a slow flash, half a second on in every two)
+		mastRed.material.opacity = nightK * (t % 2 < 0.5 ? 0.95 : 0.12);
 		// the museum's windows lit in the evening
 		glassM.emissiveIntensity = nightK * 0.35;
 	}
@@ -664,6 +724,11 @@ export function createDiablo(scene, bay) {
 			const e = 0.15, gx = f(lx + e, ly, lz) - f(lx - e, ly, lz), gz = f(lx, ly, lz + e) - f(lx, ly, lz - e), gl = Math.hypot(gx, gz) || 1;
 			const m = 0.4 - d, c = Math.cos(R.yaw), s = Math.sin(R.yaw), wx = gx / gl * m, wz = gz / gl * m;
 			p.x += wx * c - wz * s; p.z += wx * s + wz * c;
+		}
+		// the mast's legs
+		for (const [lx, lz] of mastLegs) {
+			const dx = p.x - lx, dz = p.z - lz, dd = Math.hypot(dx, dz);
+			if (dd < 0.6 && dd > 1e-6) { p.x = lx + dx / dd * 0.6; p.z = lz + dz / dd * 0.6; }
 		}
 		if (!summitPlaced || Math.abs(p.x - summit.position.x) + Math.abs(p.z - summit.position.z) > 40) return;
 		let [lx, lz] = hallAt(p.x, p.z);
