@@ -7,6 +7,7 @@ import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 
 import { planWorkplace, levelBelow, floorAt, slabRects } from '../interiors/workplace-plan.js';
 import { fitWorkplace } from '../interiors/workplace-fitout.js';
+import { fitResort } from '../interiors/resort-fitout.js';
 import { screenAtlasTexture, tileUV } from '../interiors/screen-atlas.js';
 import { toLL } from '../earth/globeframe.js';
 import { officeScheme } from './decor.js';
@@ -15,7 +16,7 @@ import { sineHash as hh } from '../noise.js';
 
 const WALL = 0.3;
 
-export function createTowers(scene, bay, city, { isPhone = false, mount, hint = () => {}, player }) {
+export function createTowers(scene, bay, city, { isPhone = false, mount, hint = () => {}, player, regional = () => null }) {
 	configureLighting({ isPhone });
 	const group = new THREE.Group();
 	group.name = 'towers';
@@ -44,7 +45,40 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	M.carpetTile = S(0xffffff, 0.95, { map: carpetTex }); M.carpetTile.userData.planUV = true;
 	M.ceilGrid = S(0xf4f3ef, 0.9, { map: gridTex }); M.ceilGrid.userData.planUV = true;
 	M.ceilOpen = S(0x7d8085, 0.9); M.duct = S(0xb4b8bc, 0.45, { metalness: 0.3 });
-	const FILL = [M.stone, M.carpet, M.carpetTile, M.oak, M.wall, M.ceil, M.ceilGrid, M.ceilOpen, M.duct, M.desk, M.sofa, M.sofa2, M.rug, M.bed, M.throw, M.green, ...M.art];
+	// a Strip resort's (interiors/resort-fitout.js): the casino's carpet, as busy as they are, in
+	// metres across its floor; the hotel's corridors' own; the felt and the padded rails of the
+	// tables, the dark walls and ceiling, the gold, the velvet, the cabinets' neon (lit of
+	// themselves, not lamps of the bake), the slot machines' glass and the lamp shades
+	const casinoTex = canvasTex((g) => {
+		g.fillStyle = '#3d0a16'; g.fillRect(0, 0, 128, 128);
+		g.strokeStyle = '#7a5a1e'; g.lineWidth = 2;
+		for (let k = -128; k < 256; k += 32) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + 128, 128); g.moveTo(k + 128, 0); g.lineTo(k, 128); g.stroke(); }
+		for (const [x, y] of [[32, 32], [96, 96], [96, 32], [32, 96]]) {
+			const gold = (x + y) % 128 === 64;
+			g.fillStyle = gold ? '#c8962e' : '#0f5c63'; g.beginPath(); g.arc(x, y, 13, 0, Math.PI * 2); g.fill();
+			g.fillStyle = gold ? '#5a1030' : '#d9a441'; g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill();
+			g.strokeStyle = '#e8c56a'; g.lineWidth = 1.5; for (let a = 0; a < 8; a++) { g.beginPath(); g.moveTo(x + Math.cos(a * Math.PI / 4) * 14, y + Math.sin(a * Math.PI / 4) * 14); g.lineTo(x + Math.cos(a * Math.PI / 4) * 20, y + Math.sin(a * Math.PI / 4) * 20); g.stroke(); }
+		}
+		for (let k = 0; k < 900; k++) { g.fillStyle = `rgba(${rn() < 0.5 ? '0,0,0' : '255,220,160'},0.1)`; g.fillRect(rn() * 128, rn() * 128, 1, 1); }
+	});
+	casinoTex.repeat.set(1 / 2.4, 1 / 2.4);
+	const hallTex = canvasTex((g) => {
+		g.fillStyle = '#1d2a44'; g.fillRect(0, 0, 128, 128);
+		g.strokeStyle = '#c9b48a'; g.lineWidth = 3; g.strokeRect(8, 8, 112, 112);
+		g.strokeStyle = '#8a6d3b'; g.lineWidth = 2; g.beginPath(); g.moveTo(64, 14); g.lineTo(114, 64); g.lineTo(64, 114); g.lineTo(14, 64); g.closePath(); g.stroke();
+		g.fillStyle = '#c9b48a'; g.beginPath(); g.arc(64, 64, 8, 0, Math.PI * 2); g.fill();
+		for (let k = 0; k < 900; k++) { g.fillStyle = `rgba(${rn() < 0.5 ? '0,0,0' : '255,255,255'},0.08)`; g.fillRect(rn() * 128, rn() * 128, 1, 1); }
+	});
+	hallTex.repeat.set(1 / 1.8, 1 / 1.8);
+	M.casinoCarpet = S(0xffffff, 0.95, { map: casinoTex }); M.casinoCarpet.userData.planUV = true;
+	M.hallCarpet = S(0xffffff, 0.95, { map: hallTex }); M.hallCarpet.userData.planUV = true;
+	M.showCarpet = S(0x3a0c12, 0.95); M.casinoWall = S(0x23141a, 0.8); M.casinoCeil = S(0x151010, 0.85);
+	M.felt = S(0x0d5c3a, 0.95); M.rail = S(0x2a140c, 0.45); M.red = S(0x9b1020, 0.8); M.velvet = S(0x6d0f1f, 0.9);
+	M.gold = S(0xc9a24a, 0.3, { metalness: 0.6 });
+	M.neon = [0xff2d78, 0xffc23d, 0x2de2ff, 0xb04dff, 0xff4040, 0x39ff88, 0xff8a1f].map((c) => S(0x111111, 0.4, { emissive: new THREE.Color(c), emissiveIntensity: 1.5 }));
+	M.slotScreens = S(0xffffff, 0.3, { map: atlas, emissive: new THREE.Color(0xffffff), emissiveMap: atlas, emissiveIntensity: 0.9 });
+	M.shade = S(0x3a3026, 0.6, { emissive: new THREE.Color(0xffd9a0), emissiveIntensity: 1.1 });
+	const FILL = [M.stone, M.carpet, M.carpetTile, M.oak, M.wall, M.ceil, M.ceilGrid, M.ceilOpen, M.duct, M.desk, M.sofa, M.sofa2, M.rug, M.bed, M.throw, M.green, ...M.art, M.casinoCarpet, M.hallCarpet, M.showCarpet, M.casinoWall, M.casinoCeil, M.felt, M.rail, M.red, M.velvet];
 	for (const m of FILL) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.12; }
 	// a floor's fit-out in its company's colours (decor.js officeScheme): the walls and an
 	// accent wall, the carpet, the desks and chairs, the woods, the ceiling; the tinted
@@ -67,6 +101,8 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 
 	// ---------- a tower's plan ----------
 	function plan(o) {
+		// (a famous resort's casino: its floor where region/landmarks.js laid its steps up to it)
+		if (o.floor0 != null) return planWorkplace(o, o.floor0, toLL(o.x, o.z));
 		// the lobby floor level with the highest corner of the lot, a step up off the pavement
 		let g0 = -1e9;
 		for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) { const ca = Math.cos(o.a), sa = Math.sin(o.a), lx = sx * o.w / 2, lz = sz * o.d / 2; g0 = Math.max(g0, bay.heightAt(o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz)); }
@@ -118,13 +154,15 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			return finish(T, parts, col, seats, L, labels, details, perks);
 		}
 		// the floor, the ceiling, the glass all round
-		const floorM=L.kind==='lobby'||L.kind==='mall'?M.stone:L.kind==='office'?M.carpet:M.oak;
+		const floorM=L.kind==='casino'?M.casinoCarpet:L.kind==='showroom'?M.showCarpet:L.kind==='hotel'?M.hallCarpet:L.kind==='lobby'||L.kind==='mall'?M.stone:L.kind==='office'?M.carpet:M.oak;
+		// (a casino's: a low dark ceiling and no windows but the glass of its doors)
+		const dim=T.type==='casino';
 		for(const [x0,z0,x1,z1] of slabRects(T,L)) box(floorM,x0,-.16,z0,x1,0,z1);
 		const above=T.levels[T.levels.indexOf(L)+1];
 		// (everything stops short of the floor above: the ceiling's top, the mullions and the
 		// band laid exactly on its top surface and flickered through the carpet up there)
 		const top=above?H-.18:H;
-		for(const [x0,z0,x1,z1] of slabRects(T,above||L)) box(M.ceil,x0,H-.25,z0,x1,top,z1);
+		for(const [x0,z0,x1,z1] of slabRects(T,above||L)) box(dim?M.casinoCeil:M.ceil,x0,H-.25,z0,x1,top,z1);
 		// the lights: square panels or long strips, flush with the ceiling, or hung under an
 		// open one, its ducts run down the floor
 		const open = S?.ceiling === 'open', strips = S?.lights === 'strips', ly = open ? H - 1.0 : H - .27;
@@ -143,6 +181,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			const along = Math.abs(x1 - x0) > Math.abs(z1 - z0), len = along ? x1 - x0 : z1 - z0;
 			const pane = (a0, a1) => {
 				if (a1 - a0 < 0.05) return;
+				// (a casino's walls are walls: glass only either side of its doors)
+				if (dim && !(along && z0 > 0)) { if (along) box(M.casinoWall, a0, 0, z0 - 0.1, a1, H - 0.25, z0 + 0.1, true); else box(M.casinoWall, x0 - 0.1, 0, a0, x0 + 0.1, H - 0.25, a1, true); return; }
+				if (dim && (a0 < -12 || a1 > 12)) { const c0 = Math.max(a0, -12), c1 = Math.min(a1, 12); if (a0 < c0) box(M.casinoWall, a0, 0, z0 - 0.1, c0, H - 0.25, z0 + 0.1, true); if (c1 < a1) box(M.casinoWall, c1, 0, z0 - 0.1, a1, H - 0.25, z0 + 0.1, true); if (c1 - c0 < 0.05) return; a0 = c0; a1 = c1; }
 				if (along) { add(M.glass, new THREE.BoxGeometry(a1 - a0, H - 0.6, 0.03).translate((a0 + a1) / 2, 0.3 + (H - 0.6) / 2, z0)); col.push([a0, z0 - WALL / 2, a1, z0 + WALL / 2, 0, H]); }
 				else { add(M.glass, new THREE.BoxGeometry(0.03, H - 0.6, a1 - a0).translate(x0, 0.3 + (H - 0.6) / 2, (a0 + a1) / 2)); col.push([x0 - WALL / 2, a0, x0 + WALL / 2, a1, 0, H]); }
 			};
@@ -167,7 +208,10 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		}
 		box(M.glow, -0.05, 1.1, cz, 0.05, 1.3, cz + 0.05);
 		const iz0 = cz + 2.6, ix0 = -hw + 1.0, ix1 = hw - 1.0;
-		if (L.kind === 'lobby') {
+		if (T.type === 'casino' || T.type === 'hotel') {
+			// a Strip resort's casino, showroom, hotel lobby and guest floors
+			details = fitResort(T, L, { box, cyl, chair, plant, sign, M, seats, add, screen, solid, perk, phone: isPhone });
+		} else if (L.kind === 'lobby') {
 			// reception, the seating by the windows, planters, a long piece of art on the core
 			box(M.oak, -2.2, 0, iz0 + 1.2, 2.2, 1.1, iz0 + 2.0, true); box(M.stoneD, -2.3, 1.1, iz0 + 1.1, 2.3, 1.16, iz0 + 2.1);
 			seats.push([0, iz0 + 0.6, Math.PI, false]);
@@ -203,7 +247,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			if (L.kind === 'penthouse') { box(M.piano, dx0 - 1, 0.7, lz - 1.6, dx0 + 1, 1.0, lz + 0.6, true); for (const [x, z] of [[dx0 - 0.8, lz - 1.4], [dx0 + 0.8, lz - 1.4], [dx0, lz + 0.4]]) box(M.piano, x - 0.05, 0, z - 0.05, x + 0.05, 0.7, z + 0.05); }
 			plant(ix0 + 0.4, hd - 1); plant(ix1 - 0.4, hd - 1);
 		}
-		if(L.kind==='lobby') { sign(T.region+' / WORKPLACE',0,3.8,T.coreZ+.07,5,.5); sign('LIFTS  /  '+(T.levels.length-1)+' FLOORS',0,2.85,T.coreZ+.08,3.6,.3); }
+		if(L.kind==='lobby'&&T.type!=='hotel') { sign(T.region+' / WORKPLACE',0,3.8,T.coreZ+.07,5,.5); sign('LIFTS  /  '+(T.levels.length-1)+' FLOORS',0,2.85,T.coreZ+.08,3.6,.3); }
 		return finish(T, parts, col, seats, L, labels, details, perks);
 	}
 	function finish(T, parts, col, seats, L, labels=[], details=null, perks=[]) {
@@ -222,7 +266,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		g.position.set(o.x, L.y, o.z); g.rotation.y = -o.a;
 		group.add(g);
 		// lit by its own panels, strips and screens (interiors/lighting.js); the roof by the sky
-		if (L.kind !== 'roof') lightInterior(g, { id: 'tower:' + T.key + ':' + T.levels.indexOf(L), lamps: [M.panel, M.screen, M.screens, M.glow], levels: [[0, L.h - 0.25]], bounds: [-T.hw, -T.hd, T.hw, T.hd], hours: L.kind === 'office' ? [7, 20] : L.kind === 'mall' ? [9, 22] : null });
+		// (a resort's casino, its showroom and its hotel never shut: as lit at four in the morning)
+		const resort = T.type === 'casino' || T.type === 'hotel';
+		if (L.kind !== 'roof') lightInterior(g, { id: 'tower:' + T.key + ':' + T.levels.indexOf(L), lamps: [M.panel, M.screen, M.screens, M.glow], levels: [[0, L.h - 0.25]], bounds: [-T.hw, -T.hd, T.hw, T.hd], hours: L.kind === 'office' ? [7, 20] : L.kind === 'mall' ? [9, 22] : null, allNight: resort });
 		return { g, col, seats, L, details, perks, dispose: () => {releaseInterior(g);g.traverse((q) => q.geometry?.dispose());labelMat?.map.dispose();labelMat?.dispose();} };
 	}
 	function structure(T){
@@ -315,7 +361,8 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			scanT = 0.5;
 			// Prefer the building containing the camera, not a neighbour retained by a wide
 			// proximity band. This also handles direct upper-floor arrivals from flight.
-			const near=city?.towersNear?.(cam.x,cam.z,28)||[];
+			// (and out in the world, the famous resorts' casinos: region/settle.js hallsNear)
+			const near=(city?.towersNear?.(cam.x,cam.z,28)||[]).concat(regional()?.hallsNear?.(cam.x,cam.z,28)||[]);
 			let best=null,bd=1e9;
 			for(const o of near){
 				if(o.wrecked||cam.y>o.y+o.h+30||cam.y<o.y-10)continue;          // structures: a wrecked tower is its shell
@@ -329,7 +376,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			}
 			const key=best&&Math.round(best.x)+':'+Math.round(best.z);
 			if(!best||bd>28){if(T)drop();}
-			else if(!T||T.key!==key){if(T)drop();T=plan(best);structure(T);loadAround(levelBelow(T,p.pos.y-1.7)||T.levels[0]);}
+			else if(!T||T.key!==key){if(T)drop();T=plan(best);structure(T);loadAround(levelBelow(T,p.pos.y-1.7)||T.levels[0]);if(best.hall)regional()?.openHall?.(best);}
 		}
 		if (!T) { panel.style.display = 'none'; return; }
 		// at the elevators, on whichever level: the panel
@@ -343,7 +390,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	function drop() {
 		if(!T)return;
 		for(const B of T.cache.values()){group.remove(B.g);B.dispose();}
-		group.remove(T.structure);T.structure.geometry.dispose();city?.setDoor?.(T.o,null);
+		group.remove(T.structure);T.structure.geometry.dispose();city?.setDoor?.(T.o,null);if(T.o.hall)regional()?.openHall?.(null);
 		T=null;panel.style.display='none';panelFor=null;
 	}
 	// ---------- the floor seen through a scope ----------
@@ -379,7 +426,13 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			return { x: T.o.x + ca * x - sa * z, z: T.o.z + sa * x + ca * z, y: B.L.y, h: sit ? h : 0, sit, heading: Math.atan2(fx * ca - fz * sa, fx * sa + fz * ca), work, table: sit && B.L.kind === 'office' };
 		}));
 	}
-	function floor(x,z,y){if(!T)return -1e9;const [lx,lz]=local(x,z);return floorAt(T,lx,lz,y);}
+	function floor(x,z,y){
+		if(!T)return -1e9;const [lx,lz]=local(x,z),f=floorAt(T,lx,lz,y),st=T.o.stair;
+		// (a famous resort's steps up to its doors, and the doorway in its wall: region/landmarks.js hall)
+		if(f>-1e8||!st||Math.abs(lx)>st.w||lz<T.D/2-.01||lz>T.D/2+.5+st.len)return f;
+		const sy=T.floor0-(T.floor0-st.y)*Math.max(0,lz-T.D/2-.5)/st.len;
+		return y>=sy-.6?sy:-1e9;
+	}
 
 	function push(pos, footY) {
 		if (!T) return;
@@ -408,7 +461,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		if (!B) return null;
 		const [lx, lz] = local(cam.x, cam.z);
 		if (Math.abs(lx) > T.W / 2 + 6 || Math.abs(lz) > T.D / 2 + 6) return null;
-		const k = B.L.kind === 'office' ? crowd(ZONE.office, hours).k : B.L.kind === 'lobby' ? 0.3 + crowd(ZONE.office, hours).k * 0.5 : 0.35;
+		// (a casino as busy as the Strip outside, any hour; the showroom full for its shows)
+		const show = (hours >= 19.5 || hours < 0.5) ? 0.9 : 0.06, kind = B.L.kind;
+		const k = kind === 'casino' ? crowd(ZONE.strip, hours).k : kind === 'showroom' ? show : kind === 'office' ? crowd(ZONE.office, hours).k : kind === 'lobby' ? (T.type === 'hotel' ? 0.5 + crowd(ZONE.strip, hours).k * 0.4 : 0.3 + crowd(ZONE.office, hours).k * 0.5) : 0.35;
 		if (!B.spots) {
 			const ca = Math.cos(T.o.a), sa = Math.sin(T.o.a);
 			B.spots = B.seats.map(([x, z, yaw, sit, h = 0.46,work]) => {
@@ -425,8 +480,10 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		}
 		const n = Math.min(22, Math.round(B.spots.filter(s=>!s.work?.routineOnly).length * k * (B.L.kind === 'office' ? 0.6 : 0.5)));
 		// the homes have their families in; a few children pass through the lobby
-		const kids = B.L.kind === 'office' ? 0 : (B.L.kind === 'lobby' ? 0.08 : 0.3) * kidsAbout(hours);
-		return n ? { n, kids: B.L.kind==='mall'?0:kids, zone:B.L.kind==='mall'?'retail':B.L.kind==='office'?'office':'neighbourhood', key:T.key+':'+B.L.n, areas: [{ w: 1, seats: B.spots }] } : null;
+		// (nobody under 21 on a casino's floor)
+		const resort = T.type === 'casino' || T.type === 'hotel';
+		const kids = B.L.kind === 'office' || T.type === 'casino' ? 0 : (B.L.kind === 'lobby' ? 0.08 : 0.3) * kidsAbout(hours);
+		return n ? { n, kids: B.L.kind==='mall'?0:kids, zone:resort?'strip':B.L.kind==='mall'?'retail':B.L.kind==='office'?'office':'neighbourhood', key:T.key+':'+B.L.n, areas: [{ w: 1, seats: B.spots }] } : null;
 	}
 	// where you stand in the tower you're at: which tower, which level (for homes and shared spots)
 	function here(pos) {
