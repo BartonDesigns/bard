@@ -8,7 +8,7 @@
 // Moving on to the next town, the one you leave stands until the next is grown, and the one
 // you are well inside is kept even when a neighbour (a big city's next district) is nearer.
 
-import { generateTownSteps, arterialSpacing, hashStr } from './civgen.js';
+import { generateTownSteps, arterialSpacing, hashStr, LU } from './civgen.js';
 import { STYLE } from '../bay/styles.js';
 import { industrialEdge } from './civedge.js';
 
@@ -44,7 +44,7 @@ export function createCivilization({ real, bay, water = () => null, brief = null
 		const style = t.style === STYLE.older ? 'older' : 'suburb', SP = arterialSpacing(t.r, style);
 		const k = t.spine ? Math.round((t.spine.x - t.x) / SP) : 0, cx = t.spine ? t.spine.x - k * SP : t.x;
 		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style, name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null, spine: t.spine ? { k, name: t.spine.name, v0: t.spine.z0 - t.z, v1: t.spine.z1 - t.z, hw: t.spine.hw } : null });
-		return { town: t, it, t0: performance.now(), work: 0, near: W || K.length ? near : null };
+		return { town: t, it, t0: performance.now(), work: 0, near: W || K.length ? near : null, keep: K };
 	}
 	function finish(J, region) {
 		const cached = cache.some((c) => c.region === region);
@@ -59,6 +59,16 @@ export function createCivilization({ real, bay, water = () => null, brief = null
 			const k = hashStr(Math.round(tr.x) + ':' + Math.round(tr.z)) % 20;
 			tr.sp = k < 14 ? 3 : 1;
 			if (k < 14) tr.h = Math.max(tr.h || 0, 9 + k * 0.6);
+		}
+		// (a paved landmark's clearing, a resort's drives and lots, is the town's paved ground on its map, not
+		// wild land: no scrub or wild tree comes up in it, landAt() says so)
+		const M = region.map;
+		for (const k of J.keep || []) {
+			if (!k.paved || !M) continue;
+			for (let j = Math.max(0, Math.floor((k.z - k.r - M.z0) / M.step)); j <= Math.min(M.h - 1, Math.floor((k.z + k.r - M.z0) / M.step)); j++) for (let i = Math.max(0, Math.floor((k.x - k.r - M.x0) / M.step)); i <= Math.min(M.w - 1, Math.floor((k.x + k.r - M.x0) / M.step)); i++) {
+				const q = (j * M.w + i) * 4 + 1;
+				if (!M.px[q] && Math.hypot(M.x0 + (i + 0.5) * M.step - k.x, M.z0 + (j + 0.5) * M.step - k.z) < k.r) M.px[q] = LU.commercial * 16;
+			}
 		}
 		// (the town left behind stood until now)
 		if (active) real.removeRegion(active.handle);

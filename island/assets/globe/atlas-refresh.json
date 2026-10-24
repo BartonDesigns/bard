@@ -5,9 +5,9 @@
   "cellsPerDegree": 10,
   "preserved": "Plane 0 RGB: elevation/land; plane 1 R: survey-derived relief amplitude; plane 3 G: lakes",
   "refreshed": "Plane 1 GB, plane 2 RGB, plane 3 RB: atlas shapes/trees; planes 4–5 RGB: ground; plane 6 RGB: mean temperature/rain/snow",
-  "sourceSha256": "6b421159ac37c5dc9f3c3b2cc48ff1b88e461f2b4faafb0ebc6c81eb12e9665c",
-  "version": "ca5bb2df71cc6f15",
-  "totalBytes": 5288329,
+  "sourceSha256": "aafb01d0d503d49a3b12d601039babacffe18c1b5577ff20c39fef4f4934c884",
+  "version": "b3aca2dd90bb8ed8",
+  "totalBytes": 5288399,
   "tiles": [
     {
       "name": "g0-0.png",
@@ -95,8 +95,8 @@
     },
     {
       "name": "g1-2.png",
-      "bytes": 195170,
-      "sha256": "a4beb6710d5ed519ce02da278ac853c5c4837d27b6ded255d31fecb9ad76156d",
+      "bytes": 195240,
+      "sha256": "176559f083cd31b802b66cc036a4f056a323acfcf9ae0437e04835bcf92fc395",
       "preservedSha256": "95019faaf217c152fa67d0115f86af50d2afe7ba5adca7588de6886d082a72be"
     },
     {

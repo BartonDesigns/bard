@@ -222,6 +222,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		const away = ll && Math.hypot((ll.lat - 37.6) * 111, (ll.lon + 122.1) * 88) > 190;
 		const E = away ? { rock: null } : landAt(cx, cz);
 		if (!E) return out;
+		// (out on the globe a grown town's ground is its own too: its yards, lots and parks are not the wild)
+		if (away && real?.inside(cx, cz)) { const L = real.landAt(cx, cz); if (L && L.lu !== 0 && L.lu !== 11 && L.lu !== 12) return out; }
 		const r = mulberry32((ci * 73856093) ^ (cj * 19349663) ^ 0x5bd1e995);
 		const season = REAL_U.uSeason.value, month = today().getMonth() + 1;
 		const fall = month >= 8 && month <= 11, winter = month === 12 || month <= 2;
@@ -506,7 +508,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	// ---------- streaming ----------
 	let MAXR = 0;
 	const queue = [];
-	let at = null, dirty = true, levelsN = -1, seasonAt = -1, monthAt = -1, epochSeen;
+	let at = null, dirty = true, levelsN = -1, seasonAt = -1, monthAt = -1, epochSeen, genSeen = -1;
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qt = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), col = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3();
 	function wanted(cx, cz) {
 		// the cells round you, nearest first
@@ -588,6 +590,10 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		// the globe's frame moved (earth/globeframe.js): every cell's place with it
 		const ep = globe?.()?.frame?.epoch;
 		if (ep !== undefined && ep !== epochSeen) { epochSeen = ep; cells.clear(); at = null; }
+		// a town grew up round you, or went (crysis/civ.js, bay/realcity.js): its streets, yards and lots
+		// are no longer wild, nor wild again
+		const gv = real?.genVersion?.() ?? 0;
+		if (gv !== genSeen) { genSeen = gv; cells.clear(); at = null; }
 		if (cells.size > 9000) cells.clear();
 		if (!at || Math.hypot(x - at.x, z - at.z) > 8) { wanted(x, z); dirty = true; at = { x, z }; }
 		// a few cells a frame, nearest first, within a small budget

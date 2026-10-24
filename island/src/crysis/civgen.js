@@ -885,8 +885,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		} else if (s.kind === 'strip') {
 			// the Strip between its named resorts: on each side of the boulevard, block after block,
 			// a resort: its casino along the pavement, its hotel tower behind, the garage at the back,
-			// all on its paved lot; palms down the broad pavements. (One on a landmark's own ground goes,
-			// as from the water, below; the landmark paves its own.)
+			// all on its paved lot; palms in their wells down the broad pavements. (One on a landmark's
+			// own ground goes, as from the water, below; the landmark paves its own.)
 			const kerb = STRIP_W / 2 + 6;
 			const otherSite = (qx, qz, pad) => sites.some((o) => { if (o === s) return false; const dx = qx - o.x, dz = qz - o.z, a = dx * o.ux + dz * o.uz, b = -dx * o.uz + dz * o.ux; return Math.abs(a) < o.hw + pad && Math.abs(b) < o.hd + pad; });
 			for (const side of [-1, 1]) {
@@ -900,23 +900,39 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 					}
 					return true;
 				};
-				for (let b = -hd + 30; b < hd - 120;) {
-					const len = 130 + r() * 150, mid = b + len / 2;
-					if (mid + len / 2 > hd - 20) break;
-					const cd = 60 + r() * 50, [px, pz] = at(side * (kerb + 18 + cd / 2), mid);
-					if (fits(px, pz, len - 16, cd)) {
-						boxes.push({ x: px, z: pz, w: len - 16, d: cd, a: face, wallH: 13 + r() * 9, roofH: 0, kind: K.retail, hip: 0, door: 0.5 });
-						const deep = cd + 150, [l0x, l0z] = at(side * (kerb + 18 + deep / 2), mid - len / 2 + 4), [l1x, l1z] = at(side * (kerb + 18 + deep / 2), mid + len / 2 - 4);
-						paths.push({ ax: l0x, az: l0z, bx: l1x, bz: l1z, w: deep });
-						const tw = clamp(len * (0.35 + r() * 0.3), 40, 110), td = 24 + r() * 16, th = 55 + Math.pow(r(), 1.4) * 120;
-						const [tx, tz] = at(side * (kerb + 26 + cd + td / 2), mid + (r() - 0.5) * (len - tw) * 0.6);
+				// the ground from the pavement back, paved in strips across it (where no landmark keeps its own):
+				// the forecourts, the lots and the drives between the resorts, never desert
+				const pave = (b0, b1) => {
+					for (let b = b0; b < b1 - 1; b += 24) for (let k = 0; k < 6; k++) {
+						const off = side * (kerb + 15 + 17.5 + k * 35), [ax2, az2] = at(off, b), [bx2, bz2] = at(off, Math.min(b1, b + 24));
+						if (!wet((ax2 + bx2) / 2, (az2 + bz2) / 2, 19)) paths.push({ ax: ax2, az: az2, bx: bx2, bz: bz2, w: 35 });
+					}
+				};
+				let b = -hd + 30;
+				pave(-hd, b);
+				while (b < hd - 60) {
+					const gap = 18 + r() * 30;
+					let len = Math.min(130 + r() * 150, hd - 20 - b);
+					// a resort where one fits; nearer a landmark a smaller one, the space between them built
+					for (const k of [1, 0.65, 0.45]) {
+						const L = len * k, mid = b + L / 2;
+						if (L < 70) break;
+						const cd = 60 + r() * 50, [px, pz] = at(side * (kerb + 18 + cd / 2), mid);
+						if (!fits(px, pz, L - 16, cd)) continue;
+						len = L;
+						boxes.push({ x: px, z: pz, w: L - 16, d: cd, a: face, wallH: 13 + r() * 9, roofH: 0, kind: K.retail, hip: 0, door: 0.5 });
+						const tw = clamp(L * (0.35 + r() * 0.3), 40, 110), td = 24 + r() * 16, th = 55 + Math.pow(r(), 1.4) * 120;
+						const [tx, tz] = at(side * (kerb + 26 + cd + td / 2), mid + (r() - 0.5) * (L - tw) * 0.6);
 						if (fits(tx, tz, tw, td)) boxes.push({ x: tx, z: tz, w: tw, d: td, a: face, wallH: th, roofH: 0, kind: K.tower, hip: 0, door: 0.5 });
 						const gw = 50 + r() * 30, gd = 40 + r() * 20, [gx, gz] = at(side * (kerb + 66 + cd + td + gd / 2), mid + (r() - 0.5) * 40);
 						if (fits(gx, gz, gw, gd)) boxes.push({ x: gx, z: gz, w: gw, d: gd, a: face, wallH: 12 + Math.floor(r() * 4) * 3, roofH: 0, kind: K.parking, hip: 0, door: 0.5 });
+						break;
 					}
-					b += len + 18 + r() * 30;
+					pave(b, Math.min(hd, b + len + gap));
+					b += len + gap;
 				}
-				for (let b = -hd + 8; b < hd - 8; b += 12) { const [qx, qz] = at(side * (kerb - 2), b); trees.push({ x: qx, z: qz, h: 12 + r() * 5, cone: 0, sp: 3 }); }
+				pave(b, hd);
+				for (let b = -hd + 8; b < hd - 8; b += 12) { const [qx, qz] = at(side * (kerb - 2), b); trees.push({ x: qx, z: qz, h: 12 + r() * 5, cone: 0, sp: 3, well: 1 }); }
 				for (let b = -hd; b < hd - 1; b += 24) {
 					const [ax2, az2] = at(side * (kerb + 3), b), [bx2, bz2] = at(side * (kerb + 3), Math.min(hd, b + 24));
 					if (!wet((ax2 + bx2) / 2, (az2 + bz2) / 2, 1)) paths.push({ ax: ax2, az: az2, bx: bx2, bz: bz2, w: 24 });

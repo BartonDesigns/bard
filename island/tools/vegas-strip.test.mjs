@@ -79,7 +79,7 @@ test('the night layer is dark by day and lit after it, on the glow\'s own shader
 test('the towns grown round the resorts keep off their ground, and their trees are palms', () => {
 	const log = [];
 	const town = { x: 0, z: 0, r: 1100, ang: 0, style: STYLE.suburb, name: 'Paradise' };
-	const keepAt = [{ x: 300, z: -200, r: 170 }, { x: -450, z: 350, r: 230 }];
+	const keepAt = [{ x: 300, z: -200, r: 170, paved: true }, { x: -450, z: 350, r: 230 }];
 	const civ = createCivilization({ real: { addRegion: (r) => { log.push(r); return { r }; }, removeRegion: () => {} }, bay: { towns: [town], heightAt: () => 610, loaded: () => true }, keep: (x, z, r) => keepAt.filter((k) => Math.hypot(k.x - x, k.z - z) < r + k.r), palms: (t) => t === town });
 	const cam = { position: { x: 0, y: 1.7, z: 0 } };
 	for (let n = 0; n < 6000 && !civ.active(); n++) civ.update(cam);
@@ -96,6 +96,11 @@ test('the towns grown round the resorts keep off their ground, and their trees a
 	const palms = leafy.filter((t) => t.sp === 3).length / leafy.length;
 	assert.ok(palms > 0.55 && palms < 0.85, `${Math.round(palms * 100)}% palms`);
 	assert.ok(leafy.filter((t) => t.sp === 3).every((t) => t.h >= 9), 'palms stand tall');
+	// a resort's clearing is the town's paved ground on its map (no scrub there); a landmark in the wild keeps it wild
+	const M = R.map, luAt = (x, z) => Math.round(M.px[(Math.floor((z - M.z0) / M.step) * M.w + Math.floor((x - M.x0) / M.step)) * 4 + 1] / 16);
+	assert.equal(luAt(300, -200), 7, 'the resort\'s ground is paved');
+	assert.equal(luAt(300, -200 + 150), 7, 'out to its edge');
+	assert.equal(luAt(-450, 350), 0, 'the unpaved landmark\'s is not');
 });
 
 test('no wild plant comes up on a resort\'s ground, nor in the yards and streets of a town grown round you', () => {
@@ -115,6 +120,22 @@ test('no wild plant comes up on a resort\'s ground, nor in the yards and streets
 	const g = fs.readFileSync(new URL('../src/earth/globe.js', import.meta.url), 'utf8');
 	assert.match(g, /L\.lu > 0 \|\| L\.road > 0\.05/);
 	assert.match(g, /&& !built\.at\(x, z\) \}\);/, 'nor the wild trees');
+	// the wild ground at your feet (nature/wildground.js): worked out again when a town grows, and out on the
+	// globe none in the town's yards, lots and streets
+	const wg = fs.readFileSync(new URL('../src/nature/wildground.js', import.meta.url), 'utf8');
+	assert.match(wg, /real\?\.genVersion\?\.\(\)[^\n]*\n[^\n]*if \(gv !== genSeen\) \{ genSeen = gv; cells\.clear\(\)/);
+	assert.match(wg, /if \(away && real\?\.inside\(cx, cz\)\) \{ const L = real\.landAt\(cx, cz\); if \(L && L\.lu !== 0/);
+	// a paved landmark's clearing is paved out to its edge
+	const G = new Geo(), B = { G, glow: new Geo(), night: new Geo(), later: [], smoke: [], solid: [], lights: [], trees: [] };
+	const paveLot = new Function('B', 'R', 'gr', idx.match(/function paveLot\(B, R, gr\) \{([\s\S]*?)\n\}/)[1]);
+	paveLot(B, 150, () => 0);
+	const P = G.p;
+	let far = 0, up = 0;
+	for (let i = 0; i < P.length; i += 3) far = Math.max(far, Math.hypot(P[i], P[i + 2]));
+	for (let i = 1; i < G.n.length; i += 3) if (G.n[i] > 0.99) up++;
+	assert.ok(far > 149 && far < 151, `paved out to ${far}`);
+	assert.equal(up, G.n.length / 3, 'facing up');
+	assert.match(idx, /if \(PAVED\.has\(type\)\) paveLot\(B, \(CLEAR\[type\] \?\? 45\) \* sc, gr\)/);
 });
 
 test('the desert\'s towns: Las Vegas grows stucco subdivisions on a north-south grid, palms in its streets', async () => {
@@ -247,6 +268,19 @@ test('Las Vegas Boulevard runs straight down the Strip, the district\'s grid lin
 	assert.ok(!on.some((b) => Math.hypot(b.x - keepAt[0].x, b.z - keepAt[0].z) < keepAt[0].r), 'none on a named resort\'s ground');
 	const palms = R.trees.filter((t) => strip(t.x, t.z));
 	assert.ok(palms.length > 200 && palms.filter((t) => t.sp === 3).length > palms.length * 0.95, 'palms down its pavements');
+	// (in their wells: the pavement under them is paved, and city.js keeps a tree off paving unless it stands in a well)
+	const kerbPalms = R.trees.filter((t) => strip(t.x, t.z) && Math.abs(Math.abs(t.x - 437) - 17) < 1);
+	assert.ok(kerbPalms.length > 200 && kerbPalms.every((t) => t.well), 'kerb palms in wells');
+	assert.match(fs.readFileSync(new URL('../src/bay/city.js', import.meta.url), 'utf8'), /trees\.push\(\{ src: 'real',[^\n]*well: t\.well/);
+	// (and its ground paved from the pavement back, the forecourts, lots and drives: no desert between the resorts)
+	const slabs = R.paths.filter((p) => p.w >= 8), onSlab = (x, z) => slabs.some((p) => { const dx = p.bx - p.ax, dz = p.bz - p.az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p.ax) * dx + (z - p.az) * dz) / L2)); return Math.hypot(p.ax + dx * t - x, p.az + dz * t - z) <= p.w / 2 + 0.5; });
+	let n = 0, paved = 0;
+	for (let z = -1300; z < 1700; z += 37) for (const dx of [-200, -120, -60, 60, 120, 200]) {
+		const x = 437 + dx;
+		if (Math.hypot(x - keepAt[0].x, z - keepAt[0].z) < keepAt[0].r + 25) continue;
+		n++; if (onSlab(x, z)) paved++;
+	}
+	assert.ok(paved > n * 0.95, `${paved} of ${n} spots on the Strip paved`);
 	// (the freeway behind the resorts on the west, north and south beside it, as the 15 runs)
 	const fwy = R.roads.filter((q) => q.cls === 'motorway' && !q.link);
 	assert.ok(fwy.length);

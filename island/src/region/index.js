@@ -40,6 +40,20 @@ const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes
 // the landmarks whose clearing is all paved and planted by hand (the Strip's resorts, Fremont Street):
 // no wild plant in it (settle.js blocked)
 const PAVED = new Set(['casino', 'bellagio', 'luxor', 'excalibur', 'nyny', 'parislv', 'wheel', 'strat', 'canopy', 'venetian', 'sphere']);
+// a paved landmark's whole clearing paved, out to its edge (its drives, lots, plazas and pool decks; its
+// own grounds lie over the middle of it, landmarks.js): a resort stands in no patch of desert
+function paveLot(B, R, gr) {
+	const n = 24, step = 20, up = (x, z) => gr(x, z) + 0.11, pave = [0.5, 0.48, 0.45];
+	const P = (r, t) => { const x = Math.cos(t) * r, z = Math.sin(t) * r; return [x, up(x, z), z]; };
+	for (let r0 = 0; r0 < R - 0.01; r0 += step) {
+		const r1 = Math.min(R, r0 + step);
+		for (let k = 0; k < n; k++) {
+			const t0 = k / n * Math.PI * 2, t1 = (k + 1) / n * Math.PI * 2;
+			// (counter-clockwise seen from above)
+			B.G.face(r0 ? [P(r0, t1), P(r1, t1), P(r1, t0), P(r0, t0)] : [P(0, 0), P(r1, t1), P(r1, t0)], pave);
+		}
+	}
+}
 // how far round a real landmark the generated places keep clear (m), by its builder
 const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30, casino: 190, bellagio: 270, luxor: 140, excalibur: 140, nyny: 130, parislv: 130, wheel: 80, strat: 50, vegassign: 15, canopy: 230, venetian: 200, sphere: 80 };
 
@@ -121,7 +135,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			const c = (CLEAR[type] ?? 45) * sc;
 			if (!(c > 0) || km(ll.lat, ll.lon, la, lo) > (r + c) / 1000 + 2) continue;
 			const p = toXZ(la, lo);
-			if (Math.hypot(p.x - x, p.z - z) < r + c) out.push({ x: p.x, z: p.z, r: c });
+			if (Math.hypot(p.x - x, p.z - z) < r + c) out.push({ x: p.x, z: p.z, r: c, paved: PAVED.has(type) });
 		}
 		return out;
 	}
@@ -137,7 +151,8 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			let site = null;
 			// (the ground in the landmark's own frame: turned as settle.js turns the lot)
 			const fr = (rot || 0) * Math.PI / 180 + Math.PI, fc = Math.cos(fr), fs = Math.sin(fr);
-			const build = (B, L, P, r) => fn(B, sc, args, r, (x, z) => ground(site.x + x * fc + z * fs, site.z - x * fs + z * fc) - ground(site.x, site.z));
+			const gr = (x, z) => ground(site.x + x * fc + z * fs, site.z - x * fs + z * fc) - ground(site.x, site.z);
+			const build = (B, L, P, r) => { fn(B, sc, args, r, gr); if (PAVED.has(type)) paveLot(B, (CLEAR[type] ?? 45) * sc, gr); };
 			site = S.add({ key: 'real:' + n, kind: 'real', clear: (CLEAR[type] ?? 45) * sc, paved: PAVED.has(type), lat: la, lon: lo, kit: kitAt(at, { pop: 3 }).id, pop: -1, name, tale: about, regionId: at.id, culture: kitAt(at, {}).culture, palette: palette(at.id), opts: {}, env: { snow: 0 }, lots: [{ type, build, x: 0, z: 0, rot: (rot || 0) * Math.PI / 180, w: 30, d: 30, role: 'centre' }] });
 		}
 		// the claimed towns: the atlas's own, within 8 km (a big city's dense quarter, within 8 km
