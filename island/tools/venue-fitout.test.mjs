@@ -11,6 +11,14 @@ import { officeKind } from '../src/bay/venuefit.js';
 import { venueOf } from '../src/economy/venue.js';
 import { GAMES } from '../src/games/index.js';
 
+// (the crowds keep the calendar, offices near empty at weekends: people/flow.js isWeekend reads
+// today's date. The day these run on is pinned, a Wednesday unless a test says otherwise, so
+// the test does not hang on the day it is run)
+const RealDate = Date, WEDNESDAY = RealDate.UTC(2026, 9, 21, 12), SATURDAY = RealDate.UTC(2026, 9, 24, 12);
+let today = WEDNESDAY;
+globalThis.Date = class extends RealDate { constructor(...a) { super(...(a.length ? a : [today])); } };
+const on = (day, fn) => { today = day; try { return fn(); } finally { today = WEDNESDAY; } };
+
 const OFFICES = ['tech', 'law', 'design', 'finance', 'agency', 'realtor', 'clinic', 'dental', 'insurance', 'hospital'];
 const place = (venue, type, o = {}) => {
 	const b = { x: 12, z: 0, w: 15, d: 18, a: 0.3, wallH: 4.6, kind: venue === 'office' ? 5 : 6, h: 4.6, door: 0.5, biz: { type, name: type + ' place', sign: { bg: '#1d3557', fg: '#ffffff' } }, ...o };
@@ -72,6 +80,14 @@ test('the doorway and a few steps in are clear, and everyone stands inside the w
 		// someone behind the desk or the counter
 		assert.ok(v.areas[0].seats.some((s) => s.staff), what(b) + ': a place for the staff');
 	}
+});
+
+test('at the weekend the offices are near empty, and the places to play no quieter', () => {
+	const office = place('office', 'tech', { w: 17, d: 18 }), arcade = place('arcade', 'arcade', { w: 14, d: 20, door: 0.3 });
+	const inAt = (b, h, day) => { const { C } = built(b); return on(day, () => C.venue({ x: b.x, z: b.z }, h))?.n || 0; };
+	const week = inAt(office, 11, WEDNESDAY), weekend = inAt(office, 11, SATURDAY);
+	assert.ok(week > 0 && weekend < week / 2, `an office on a Wednesday (${week}) and on a Saturday (${weekend})`);
+	assert.ok(inAt(arcade, 20, SATURDAY) >= inAt(arcade, 20, WEDNESDAY), 'an arcade on a Saturday night');
 });
 
 test("an office's coffee, water, vending machine and first-aid box, the cinema's popcorn and the lanes' snack bar are yours", () => {
