@@ -3,7 +3,7 @@
 // others. It uses the hibernation API, so a room whose players are standing still (their
 // pings answered without waking it) costs nothing while it waits.
 
-import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, GEAR_FEATURE, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, cleanDown, DOWN_MS, PVP_FEATURE, ID_RE } from '../../../island/src/net/protocol.js';
+import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, GEAR_FEATURE, PREVIOUS_GEAR_FEATURE, cleanGearLevel, tradeFitsLevel, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, cleanDown, DOWN_MS, PVP_FEATURE, ID_RE } from '../../../island/src/net/protocol.js';
 
 import { createCombatGuard } from './combat-guard.js';
 import { acceptReputation } from './reputation.js';
@@ -48,7 +48,7 @@ export class Room {
 	}
 	player(ws) {
 		const a = this.info(ws);
-		return { id: a.id, name: a.name, look: a.look, joined: a.joined, pose: this.poses.get(a.id) || null, spot: this.spots.get(a.id) || '' };
+		return { id: a.id, name: a.name, look: a.look, joined: a.joined, gearLevel: cleanGearLevel(a.gearLevel), pose: this.poses.get(a.id) || null, spot: this.spots.get(a.id) || '' };
 	}
 
 	async fetch(request) {
@@ -67,7 +67,7 @@ export class Room {
 		if (url.pathname === '/ws') {
 			if (request.headers.get('upgrade') !== 'websocket') return new Response('websocket only', { status: 426 });
 			const pair = new WebSocketPair(), [client, server] = Object.values(pair);
-			await this.connect(server, { id: url.searchParams.get('id'), name: url.searchParams.get('name'), seed: url.searchParams.get('seed') });
+			await this.connect(server, { id: url.searchParams.get('id'), name: url.searchParams.get('name'), seed: url.searchParams.get('seed'), gear: url.searchParams.get('gear') });
 			return new Response(null, { status: 101, webSocket: client });
 		}
 		return new Response('not found', { status: 404 });
@@ -82,7 +82,7 @@ export class Room {
 		// the same player again (a reconnect before the old socket noticed): the new one wins
 		for (const old of this.sockets()) if (this.info(old).id === q.id) { old.serializeAttachment({ ...this.info(old), gone: true }); try { old.close(CLOSE.replaced, 'replaced'); } catch { /* gone */ } }
 		if (this.sockets().length >= MAX_PLAYERS) { ws.serializeAttachment({ gone: true }); ws.close(CLOSE.full, 'room full'); return; }
-		const a = { id: q.id, name: cleanName(q.name), look: cleanLook({ seed: +q.seed }), joined: Date.now() };
+		const a = { id: q.id, name: cleanName(q.name), look: cleanLook({ seed: +q.seed }), joined: Date.now(), gearLevel: cleanGearLevel(q.gear) };
 		ws.serializeAttachment(a);
 		this.seen.set(a.id, Date.now());
 		// the room's owner (coming back) takes the host's seat; so does anyone, when no host is here
@@ -91,7 +91,7 @@ export class Room {
 		meta.emptySince = 0;
 		await this.save();
 		const now=Date.now();
-		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE, GEAR_FEATURE, PVP_FEATURE, ...(this.env.SOULS ? [SOUL_FEATURE] : []), ...(this.env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE] : [])], now });
+		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE, GEAR_FEATURE, PREVIOUS_GEAR_FEATURE, PVP_FEATURE, ...(this.env.SOULS ? [SOUL_FEATURE] : []), ...(this.env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE] : [])], now });
 		const memories=(meta.reputation||[]).filter(e=>reputationAlive(e,now));
 		for(let i=0;i<memories.length;i+=6)this.send(ws,{t:'reputation-snapshot',records:memories.slice(i,i+6)});
 		this.broadcast({ t: 'join', player: this.player(ws) }, ws);
@@ -200,6 +200,11 @@ export class Room {
 				const c = cleanTrade(m);
 				if (!c || !c.to || c.to === a.id) return;
 				const to = this.sockets().find((s) => this.info(s).id === c.to);
+				const maxLevel = Math.min(cleanGearLevel(a.gearLevel), cleanGearLevel(to && this.info(to).gearLevel));
+				if (to && !tradeFitsLevel(c, maxLevel)) {
+					this.send(ws, { t: 'trade-ack', id: c.id, op: c.op, to: c.to, there: true, compatible: false, maxLevel });
+					return;
+				}
 				const { to: id, ...rest } = c;
 				if (to) this.send(to, { t: 'trade', from: a.id, ...rest });
 				this.send(ws, { t: 'trade-ack', id: c.id, op: c.op, to: id, there: !!to });

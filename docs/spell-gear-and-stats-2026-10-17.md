@@ -3,26 +3,86 @@
 The owner asked for:
 - the spell logic integrated into the player's statistics, with specific attributes;
 - clothing and weapons with higher levels;
-- levels that grant magical buffs for particular spells, and that augment and alter how things work.
+- levels that grant magical buffs for particular spells, and that augment and alter how things work;
+- then (the same day): level 99, and endgame tasks to reach level 100, for you and for gear alike.
 
 This builds on the spells and the skills menu ([spells-and-controls-2026-10-16.md](spells-and-controls-2026-10-16.md),
-[skills-and-magic-menu-2026-10-16.md](skills-and-magic-menu-2026-10-16.md)). Those two branches had not reached
-main, so this branch carries them, merged with main as of `ad0743c`.
+[skills-and-magic-menu-2026-10-16.md](skills-and-magic-menu-2026-10-16.md)). The spells reached main in PR #60.
+The skills menu is now on main; this continuation preserves it and the newer combat, clothing and honor systems.
 
 ## What changed, in a line each
 
-- **Gear goes to level 20** (was 10). Growth is the same 7% a level up to 10, then 5% a level.
-- **Garments**: eight to wear, two for each of four slots (head, body, hands, feet), sold at outfitters,
+- **Level 99, then 100★** ([below](#level-99-and-the-hundredth)): experience takes you, and every weapon and
+  garment, to 99. The hundredth is earned: yours by seven trials and a rite at an aether well, an item's by a
+  trial of its own.
+- **Gear goes to level 99** (was 20). Growth is the same 7% a level up to 10, then 5% a level to 20, then ever
+  slower to three times at 99.
+- **Garments**: the current clothing catalog across five slots (head, body, legs, hands, feet), sold at outfitters,
   ranger camps and traders. They are worn, never held.
 - **Attunement**: every weapon and garment is attuned to one of the eleven schools of magic, fixed by its own
   id. Two hoods are rarely alike.
 - **Awakenings**: at levels 5, 10, 15 and 20 an item's magic wakes: its school's spells grow stronger, then
   cheaper and quicker, then one of them changes (a garment) or its hits carry the school (a weapon), then
-  spells come free (a garment) or the weapon casts on its own (a weapon).
+  spells come free (a garment) or the weapon casts on its own (a weapon). The hundredth wakes it once more.
 - **Seven attributes**: Vigour, Resolve, Precision, Swiftness, Potency, Focus and Haste. Your ranks and level
   feed them, and so do your gear. They, your perks and your gear's magic become one set of numbers that the
   spells and the fight read.
 - **The Character view** (Shift+I, or Character in the gear sheet) shows all of it. (C was taken: it is down when flying and the dodge in close combat.)
+
+## Level 99, and the hundredth
+
+Experience goes as far as 99, for you and for gear. The hundredth, shown as **100★**, is never experience: it
+is earned.
+
+### Your level (`magic/skills.js`, `magic/trials.js`)
+
+- **To 99**: the first 30 levels take what they always did (100, then 35 more a level). Past 30 the climb
+  steepens by 4·(level − 30)² a level: about 17,000 experience to 30 and about 605,000 to 99. At 99 experience
+  no longer counts. Legacy saves above 99 retain their level, XP, earned perks and points. Ascension adds one point without lowering that level.
+- **The trials of the hundredth** open at 99. Deeds done before then count:
+
+| Trial | What it asks |
+|---|---|
+| ✦ Master of Schools | rank 100 in three schools of magic |
+| ⛈ Twilight Unbound | weave Tempest or Rewind, the deepest twilight spells |
+| ♜ Giant-feller | bring down three of the great beasts and machines |
+| ⊙ Wellwalker | find twelve aether wells, in any of the worlds |
+| ❦ The Open Hand | spare twenty-five who fought you |
+| ⚔ Heirloom | raise a weapon to level 99 |
+| ♛ Regalia | wear a garment on every slot, each at level 75 or more |
+
+- **Counting**:
+  - The great beasts and the mercy are counted from the fight's own record (`combat/morality.js` events
+    `boss-slain` and `spare`), kept as `deeds` with your magic.
+  - The wells are those you have found (Sunwell Gate takes you back to them).
+  - Heirloom and Regalia read what you own and wear.
+- **Telling**: each trial is told once as it is done (`newlyDone`), every few seconds. Reaching 99 says how many
+  are done already.
+- **The rite**: with every trial done, gather from an aether well at dusk or dawn, when both strands show
+  (`aether.js strandsShowing`). Daybreak can bring the dawn.
+- **The hundredth** (`state.ascended`, kept with your magic, and only ever on 99) gives:
+  - a skill point;
+  - five to every attribute;
+  - its own banner, and a pillar of light at the well.
+
+### Gear (`gameplay/gear-levels.js`, `gameplay/arms.js`)
+
+- **To 99**: experience takes an item to 99. An outfitter's upgrades stop there too.
+  - It takes 60 a level to 10, then 600 and 8 more a level: about 87,000 from 1 to 99.
+  - An item's numbers grow 1.63 times by 10, 2.13 by 20, 3 by 99, and 3.3 at the hundredth.
+- **An item's trial** (`ASCEND_TRIALS`, a catalog item's `ascend`): at 99 its experience stops, and `x` counts
+  its trial instead:
+  - **A weapon**: bring down one of the great beasts or machines with it in hand.
+  - **A garment**: cast 300 spells of its own school while wearing it.
+  - Each step is a `trial` transaction, counted like experience and not journaled. The last step makes it 100★.
+- **Tools**: a tool stops at 99 (it has no trial).
+- **Combining** keeps the higher of the two, with its experience or its trial's progress.
+- **Level 100★ wakes its magic once more** (Ascended):
+  - **A garment**: its school's spells 10% stronger still, and its free spell one sooner (never sooner than
+    every second).
+  - **A weapon**: its hits 10% harder, and its Spellshot one hit sooner.
+- **Items show their level** as `100★` in gold at the hundredth. The item view shows the trial's progress in
+  place of experience at 99.
 
 ## Attributes (`magic/stats.js`)
 
@@ -36,7 +96,8 @@ main, so this branch carries them, merged with main as of `ad0743c`.
 | ◈ Focus | +2.5 mana pool, +0.05 mana a second | (your level − 1) ÷ 2 |
 | ⌁ Haste | 0.5% quicker cooldowns | Chrono rank ÷ 5 |
 
-- **Your own growth** lends at most 30 points to any attribute (`BASE_CAP`). Gear adds on top.
+- **Your own growth** lends at most 30 points to any attribute (`BASE_CAP`). Gear adds on top, and the
+  hundredth five more to each.
 - **Gear** lends attributes as rows in `'pt'` in `gameplay/gear-levels.js` (`STATS`). They are whole points
   that grow with level and tier, like any other stat.
 - **Composing** (`composeMods`): the perks first (`skills.js computeMods`). Then each attribute's points times
@@ -62,7 +123,8 @@ main, so this branch carries them, merged with main as of `ad0743c`.
 | Feet | Trailstrider Boots | Swiftness 3, Vigour 2 | 100 |
 | Feet | Duskwalker Boots | Swiftness 3, Focus 2 | 120 |
 
-A Legendary garment at level 20 lends about 3.5 times as much (11 and 7). The weapons now lend attributes as well:
+A Legendary garment lends about 3.5 times as much at level 20 (11 and 7), about 5 times at 99 (15 and 10), and
+5.4 times at 100★. The weapons now lend attributes as well:
 - Aurora: Precision 3
 - Mossback: Precision 2 and Focus 1
 - Warden: Precision 2 and Resolve 1
@@ -105,6 +167,7 @@ Tier `t` is 0 (Common) to 4 (Legendary).
 | 10 | Flow | its school's spells cost 6% + 2%·t less mana and come back that much sooner | Spellstrike: each hit takes 0.3 + 0.1·t s off the school's cooldowns |
 | 15 | Altered | one of its school's spells works differently (below) | Infused: its hits carry the school (below) |
 | 20 | Mastery | every 5th, 4th or 3rd spell of its school (by tier) costs nothing and starts no cooldown | Spellshot: every 6 to 3 hits (by tier) it casts one of the school's spells by itself |
+| 100★ | Ascended | its school 10% stronger still, its free spell one sooner | its hits 10% harder, its Spellshot one hit sooner |
 
 How they combine:
 - Two garments of one school add their power and flow together. For Mastery, the more generous one counts.
@@ -187,7 +250,7 @@ Ways to level an item:
   - The coat and hood learn from the harm you take.
   - Boots learn from the ground you cover.
   - All of this is counted every 8 s (`arms.trainMany`), so automatic fire does not write the save on every hit.
-- **Upgrade at an outfitter**: as before, now to level 20.
+- **Upgrade at an outfitter**: as before, now to level 99 (never the hundredth).
 - **Infuse with aether fabric** (the item view's Infuse buttons, or `Crysis.magic.infuse(uid, strand, n)`):
   - Each thread gives 3 experience. It takes fabric of the school's strand: light, dark, or either for a
     twilight school.
@@ -195,12 +258,14 @@ Ways to level an item:
   - This is where the spell economy feeds gear.
 
 **Level-up messages**: when an item reaches a level that wakes its magic, the message says what woke
-(`awakenedBetween`).
+(`awakenedBetween`). At 99 it says what the item's trial asks.
 
 ## The Character view (`ui/gear.js drawChar`)
 
 The view has these parts, top to bottom:
-1. **Level**, and skill points waiting.
+1. **Level** (100★ at the hundredth), the trials done at 99, and skill points waiting. At 99 the trials
+   come next: each with its progress, then the rite once all are done. Before 99 they sit lower down, dimmed,
+   saying they open at 99.
 2. **Three tiles**: life, mana (with its return out of and in a fight), and harm taken.
 3. **The seven attributes**, each with:
    - its total and a bar;
@@ -215,7 +280,8 @@ The view has these parts, top to bottom:
 **The item view** now shows:
 - its attunement;
 - its attributes;
-- its four awakenings, with those still asleep dimmed and the level that wakes them;
+- its five awakenings, with those still asleep dimmed and the level that wakes them;
+- at 99, its trial for the hundredth and how far along it is (the Upgrade button says "Earned by its trial");
 - Wear or Take off (a garment);
 - Infuse.
 
@@ -228,35 +294,40 @@ the next awakening.
 
 - **Levels on the wire**: `net/protocol.js` now allows levels up to `MAX_LEVEL` in a held item's pose and in
   trades. The rooms server imports the same file.
-- **The server says so**: the server now names `gear-levels-20` in its welcome and on `/status`.
-  `server/verify-workers.mjs` requires it, so it reports the live Worker as out of date until the owner
-  redeploys.
-- **Until the owner redeploys the rooms Worker**:
-  - The old server would silently drop a trade message holding an item above level 10, and the trade would
-    stall. So the trade window refuses such an item when the room's server does not name the feature, and
-    says why.
-  - Friends see a held item above level 10 at level 1's look.
-- **Server tests**: `cd server/multiplayer && npm test`: 107 pass. Two are new: gear at the highest level
-  travels, and the welcome names the feature.
+- **Capability negotiation**: the updated rooms source advertises both `gear-levels-20` and
+  `gear-levels-100`. A joining client declares its supported maximum. High-level trades require the
+  server and both clients to understand them; unsupported gear stays in the inventory.
+- **Compatibility**: existing level-20 rooms still accept trades through 20; older rooms through 10.
+  Local growth and ascension do not depend on a Worker deployment.
+- **Worker deployment is separate**: this workspace has no authenticated Cloudflare account. The
+  updated Worker is tested but not deployed by this release. Do not claim shared level-100 trades
+  are live until the owner deploys `server/multiplayer` and verifies both clients.
+- **Server tests**: 122 room checks and 67 account, reputation, world-project, household and
+  communication checks pass.
 
 ## Console
 
 `Crysis.magic`:
 - `.stats()`: the whole sheet.
-- `.info()`: now has `life` and `gear` (each with its school).
+- `.info()`: now has `life`, `gear` (each with its school), `levelShown`, `ascended` and `deeds`.
+- `.trials()`: the trials as they stand, and what the rite still needs.
 - `.infuse(uid, 'light', 10)`
 - `.restat()`
 
 ## Tests
 
-`node --test island/tools/gear-magic.test.mjs` (11):
-- **Levels to 20**: the first ten grow as before, slower growth past them, and the wire's bounds.
+`node --test island/tools/gear-magic.test.mjs` (12):
+- **Levels to 99, then 100★**:
+  - the first twenty grow as before, every level grows, and ever slower to three times at 99;
+  - experience stops at 99, a trial's steps make the hundredth, and the wire's bounds.
+- **Outfitters and trials**: an outfitter stops at 99; a garment's trial counts and makes it 100★; a tool has
+  none; combining keeps the higher one's progress.
 - **Garments**: two a slot, sold at outfitters, worn by uid, one to a slot, never held, kept between visits, and
   no longer worn once sold.
 - **Attunement**: every weapon and garment, stable through levels and combining; the weapons together reach all
   eleven schools; garments spread evenly; the strands it takes.
 - **Awakenings**:
-  - they wake at 5, 10, 15 and 20, and their words;
+  - they wake at 5, 10, 15, 20 and the hundredth, and their words; the trial in words;
   - every school's alteration, infusion and spellshot is real;
   - stacking, mastery and the weapon's share.
 - **Attributes**: from ranks and level, capped, with gear by name.
@@ -277,16 +348,29 @@ the next awakening.
 - **A weapon's hits**: arcs, ward, holds and Spellstrike reach the caster.
 - **Wiring**: the runtime and screens are wired.
 
-`trade.test.mjs` and the server's `room.test.mjs` now take the level bound from `MAX_LEVEL`.
+`node --test island/tools/trials.test.mjs` (6):
+- **Your level**: experience to 99 and no further, the first thirty levels as they were, a point a level, an
+  old save past 99 back at 99, the hundredth only on 99.
+- **The seven trials**, each read from what you have done or own; deeds counted from the fight's record.
+- **Opening and telling**: they open at 99, deeds before then count, each is told once.
+- **The rite**:
+  - it is refused with a trial left, at noon, or away from a well, and made at a well at dusk;
+  - the hundredth gives a skill point and five to every attribute.
+- **Saving**: the hundredth, the deeds and the told trials are kept between visits; rubbish is dropped.
+- **Wiring**: the runtime counts, tells and makes the rite, and the screens show it.
+
+`trade.test.mjs` and the server's `room.test.mjs` take the level bound from `MAX_LEVEL`.
 
 **In the running island**: `node island/tools/character-sheet-browser.cjs` (Chromium, software WebGL):
-1. It seeds a save with four garments, a bow, fabric and ranks.
-2. **Enter world** is pressed, then Shift+I opens the Character view.
-3. A worn coat's item view opens.
+1. It seeds a level 99 save five trials into seven. You wear garments at 60, 80, 99 (its trial 120 of 300) and
+   100★, and hold a bow at 99, with fabric and ranks.
+2. **Enter world** is pressed, then Shift+I opens the Character view with its trials.
+3. The coat at 100★ opens, then the circlet at 99 with its trial.
 4. Ten light fabric are infused into the boots.
 5. Altered spells are cast: three sparks, two shades.
-6. The view is checked at a phone's width with no sideways scroll.
-7. It checks that nothing throws.
+6. The view at 100★ is shown.
+7. The view is checked at a phone's width with no sideways scroll.
+8. It checks that nothing throws.
 
 Screenshots are in [verification/character-sheet/](verification/character-sheet/).
 
@@ -297,4 +381,10 @@ Screenshots are in [verification/character-sheet/](verification/character-sheet/
 - **Re-attuning**: an item cannot be re-attuned. Its school is fixed by its id.
 - **Where garments come from**: they are not yet found in the world (field contracts' caches, aether wells). Only
   shops sell them.
-- **Other players**: multiplayer does not show other players' spellshots or attunements.
+- **Other players**: multiplayer does not show other players' spellshots or attunements, or their hundredth.
+- **Spare skill points**: with 99 levels and the hundredth there are 100 skill points and 65 perks, so late
+  points have nothing to buy yet.
+- **Tuning**: the curves and the trials' counts are first numbers, not played through: experience to 99
+  (about 605,000 for you, 87,000 for an item), and the trials (300 spells, twelve wells, three great beasts,
+  twenty-five spared). Each is one constant (`skills.js xpNeed`, `gear-levels.js xpNeed` and
+  `ASCEND_TRIALS`, `trials.js TRIALS`).

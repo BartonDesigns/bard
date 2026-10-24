@@ -12,7 +12,7 @@
 import { Room } from './room.js';
 import { Soul, soulId, SOUL_TOKEN } from './soul.js';
 import { SOUL_FEATURE } from '../../../island/src/reputation/sanctuary.js';
-import { VERSION, MAX_PLAYERS, ID_RE, GEAR_FEATURE, PVP_FEATURE, newCode, cleanCode } from '../../../island/src/net/protocol.js';
+import { VERSION, MAX_PLAYERS, ID_RE, GEAR_FEATURE, PREVIOUS_GEAR_FEATURE, cleanGearLevel, tradeFitsLevel, PVP_FEATURE, newCode, cleanCode } from '../../../island/src/net/protocol.js';
 import { REPUTATION_FEATURE } from '../../../island/src/net/reputation.js';
 import { Account } from './account.js';
 import { ChatHub, CHAT_FEATURE } from './chat.js';
@@ -62,7 +62,7 @@ export async function handle(request, env) {
 	if (origin && !ok) return reply({ error: 'origin not allowed' }, 403, { vary: 'Origin' });
 	if (request.method === 'OPTIONS') return new Response(null, { status: ok ? 204 : 403, headers: H });
 
-	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : []), ...(env.ACCOUNTS ? [ACCOUNT_FEATURE] : []), ...(env.CHAT ? [CHAT_FEATURE] : []), ...(env.ACCOUNTS && env.GUILDS ? [GUILD_FEATURE] : [])] }, 200, H);
+	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', GEAR_FEATURE, PREVIOUS_GEAR_FEATURE, 'combat-v1', 'combat-guard-v1', PVP_FEATURE, REPUTATION_FEATURE, ...(env.SOULS ? [SOUL_FEATURE] : []), ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE, HOUSEHOLD_FEATURE] : []), ...(env.ACCOUNTS ? [ACCOUNT_FEATURE] : []), ...(env.CHAT ? [CHAT_FEATURE] : []), ...(env.ACCOUNTS && env.GUILDS ? [GUILD_FEATURE] : [])] }, 200, H);
 
 	const living = url.pathname.match(/^\/living\/([^/]+)\/([^/]+)$/);
 	if (living && ['GET', 'POST'].includes(request.method)) {

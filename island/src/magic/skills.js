@@ -8,7 +8,8 @@
 //
 //   Experience comes from everything you do: the mana you spend casting, the fabric you weave
 //   and gather, the harm your weapons deal, the harm you take, the ground you cover on foot,
-//   and mercy and its opposite. Each level gives a skill point.
+//   and mercy and its opposite. Each level gives a skill point. Experience carries you to level
+//   99 (LEVEL_CAP); the hundredth, 100★, is earned by the trials (magic/trials.js).
 //   A skill's rank (0 to 100) rises with its own use: a school with the mana spent on its
 //   spells, Marksman with the harm your weapons deal, Athletics with the ground you cover,
 //   Resilience with the harm you take and live through.
@@ -22,6 +23,8 @@ import { SCHOOLS, SPELLS, SPELL, weaveBlock, weaveCost } from './spells.js';
 import { composeMods } from './stats.js';
 import { PERKS, PERK, RANK_MAX, useFor, rankOf, computeMods, applyMastery, MASTERY, MASTERY_POWER, NUMERAL, MASTERY_GIFT, masteryLevel } from './perks.js';
 import { sanitizeHonor } from '../combat/honor.js';
+import { LEVEL_CAP, ASCENDED_LEVEL, levelOf } from './levels.js';
+export { LEVEL_CAP, ASCENDED_LEVEL, levelOf };
 
 // the perk tree and its sums live in magic/perks.js; they are still offered from here
 export { PERKS, PERK, RANK_MAX, useFor, rankOf, computeMods, applyMastery, MASTERY, MASTERY_POWER, NUMERAL, MASTERY_GIFT, masteryLevel };
@@ -94,21 +97,26 @@ export function rankFrac(use) {
 	const a = useFor(r), b = useFor(r + 1);
 	return Math.max(0, Math.min(1, (use - a) / Math.max(1, b - a)));
 }
-// experience from one level to the next
-export const xpNeed = (level) => 100 + 35 * (Math.max(1, level) - 1);
+// the level experience reaches; the hundredth beyond it is earned (magic/trials.js)
+// experience from one level to the next: 100, and 35 more a level; past 30 the climb steepens
+// (about 600,000 from level 1 to 99)
+export const xpNeed = (level) => { const l = Math.max(1, level); return 100 + 35 * (l - 1) + 4 * Math.max(0, l - 30) ** 2; };
 export const START_POINTS = 1;
-// the points you hold (a level's each, and the one you start with, less those spent)
-export const pointsOf = (s) => Math.max(0, START_POINTS + (s.level || 1) - 1 - (s.perks?.length || 0));
+// your level as it stands: 100 once the trials are done and the rite is made
+// the points you hold (a level's each, the one you start with and the hundredth's, less those spent)
+export const pointsOf = (s) => Math.max(0, START_POINTS + (s.level || 1) - 1 + (s.ascended ? 1 : 0) - (s.perks?.length || 0));
 
 // the skills' part of your magic, made whole (from what was kept, or new)
 export function sanitizeSkills(s) {
 	s.xp = Math.max(0, Math.floor(+s.xp || 0));
+	// Preserve the previous save format's legitimate levels, points and perks.
 	s.level = Math.max(1, Math.min(999, Math.floor(+s.level || 1)));
+	s.ascended = s.ascended === true && s.level >= LEVEL_CAP;
 	const seen = new Set();
 	s.perks = (Array.isArray(s.perks) ? s.perks : []).filter((id) => PERK[id] && !seen.has(id) && seen.add(id));
 	// (a perk can only stand on what it hangs from, and only so many as the points allow)
 	s.perks = s.perks.filter((id) => parentsHeld(s, PERK[id], s.perks));
-	while (s.perks.length > START_POINTS + s.level - 1) s.perks.pop();
+	while (s.perks.length > START_POINTS + s.level - 1 + (s.ascended ? 1 : 0)) s.perks.pop();
 	const use = {};
 	for (const k of PAGES) use[k] = Math.max(0, Math.floor(+s.use?.[k] || 0));
 	s.use = use;
@@ -126,13 +134,13 @@ function parentsHeld(s, p, held = s.perks) {
 // does the player hold this node (a spell known, a perk taken)
 export const holds = (s, id) => (SPELL[id] ? !!s.known?.includes(id) : !!s.perks?.includes(id));
 
-// experience gained: n, raised by perks. Returns the levels gained.
+// experience gained: n, raised by perks. Returns the levels gained. At 99 it no longer counts.
 export function addXp(s, n) {
-	if (!(n > 0)) return 0;
+	if (!(n > 0) || s.level >= LEVEL_CAP) return 0;
 	s.xp += n * (1 + (s.mods?.xp || 0));
 	let up = 0;
-	while (s.xp >= xpNeed(s.level) && s.level < 999) { s.xp -= xpNeed(s.level); s.level++; up++; }
-	s.xp = Math.round(s.xp * 100) / 100;
+	while (s.xp >= xpNeed(s.level) && s.level < LEVEL_CAP) { s.xp -= xpNeed(s.level); s.level++; up++; }
+	s.xp = s.level >= LEVEL_CAP ? 0 : Math.round(s.xp * 100) / 100;
 	return up;
 }
 // use of a skill: n. Returns the ranks gained (and gives as much experience).

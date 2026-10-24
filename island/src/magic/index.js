@@ -20,17 +20,24 @@
 // mana), time off its school's cooldowns, and every few hits a spell of its own. What you wear
 // and hold learns as you go (gear experience, counted every few seconds), and takes aether
 // fabric of its school's strand to grow faster (infuse).
+//
+// Level 99 is as far as experience goes, for you and for gear. Your hundredth comes through the
+// trials (magic/trials.js): the deeds are counted here from the fight's own record, the gear read
+// from what you own and wear, each trial told as it is done, and the rite made at an aether
+// well at dusk or dawn. A weapon or garment at 99 has a trial of its own (a great beast felled
+// with it in hand, its school's spells cast while it is worn), counted with gear experience.
 
 import { createMagicState, saveMagic, weave, weaveCost, bind, gather, manaMax, aetherShare, grantMoonlit, SPELL, SLOTS } from './spells.js';
 import { ELEMENTS } from './elements.js';
-import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, rankOf, useFor, refreshMods, RANK_MAX, MASTERY, PAGES, PERKS, PERK, spellBlock, addMastery, feedSpell, masteryLevel, NUMERAL, MASTERY_GIFT } from './skills.js';
+import { sanitizeSkills, addUse, addXp, takePerk, pointsOf, levelOf, LEVEL_CAP, rankOf, useFor, refreshMods, RANK_MAX, MASTERY, PAGES, PERKS, PERK, spellBlock, addMastery, feedSpell, masteryLevel, NUMERAL, MASTERY_GIFT } from './skills.js';
 import { refreshStats, statSheet, BASE_LIFE } from './stats.js';
 import { mealSig } from '../cooking/meals.js';
-import { attunement, infuseStrands, isWeaponId, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
-import { MAX_LEVEL, xpToMax } from '../gameplay/gear-levels.js';
+import { ascendTrial, attunement, infuseStrands, isWeaponId, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
+import { LEVEL_CAP as GEAR_CAP, xpToMax } from '../gameplay/gear-levels.js';
 import { createSkillsMenu } from './skills-ui.js';
-import { createMagicFx, magicSound } from './fx.js';
+import { createMagicFx, magicSound, GLOW } from './fx.js';
 import { startSpellSound } from './sound.js';
+import { trialsOf, trialsOpen, trialsDone, newlyDone, countDeed, riteBlock, ascend, TRIALS, RITE } from './trials.js';
 import { createAether, seedOf } from './aether.js';
 import { createCaster } from './caster.js';
 import { createMagicHud } from './hud.js';
@@ -38,7 +45,6 @@ import { createHotbar } from '../combat/hotbar.js';
 import { createCastHands } from './hands.js';
 import { createBeams, CHARGE } from './beam.js';
 import { encodeSpell, decodeSpell, SPELL_STYLE } from './net.js';
-import { GLOW } from './fx.js';
 import { createLens } from './lens.js';
 import { pveHonor, pvpWin, addHonor, rankOf as honorRank, titleOf, honorSheet } from '../combat/honor.js';
 
@@ -63,7 +69,46 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	function learnt(r) {
 		dirty = true;
 		const levels = typeof r === 'number' ? r : r?.levels || 0;
-		if (levels > 0) { hud?.levelUp(state.level, pointsOf(state)); magicSound('level', 0.16); skills?.refresh(); }
+		if (levels <= 0) return;
+		magicSound('level', 0.16); skills?.refresh();
+		if (state.level < LEVEL_CAP) { hud?.levelUp(state.level, pointsOf(state)); return; }
+		// (99: experience goes no further; the trials open, and those done already are counted)
+		const was = newlyDone(state, trialContext()).length;
+		hud?.levelUp(state.level, pointsOf(state), `The trials of the hundredth are open · ${was} of ${TRIALS.length} done · Shift+I`);
+	}
+	// what the trials read from your gear: your best weapon's level, and the slots worn at 75 or more
+	function trialContext() {
+		let weaponTop = 0;
+		for (const x of arms.instances?.() || []) if (isWeaponId(x.i)) weaponTop = Math.max(weaponTop, x.l);
+		const wornTop = Object.values(arms.worn?.() || {}).filter((x) => x.l >= 75).length;
+		return { weaponTop, wornTop };
+	}
+	// trials done since last told, told (only once they are open, at 99)
+	function tellTrials() {
+		if (state.ascended || !trialsOpen(state)) return;
+		const ctx = trialContext(), ids = newlyDone(state, ctx);
+		if (!ids.length) return;
+		dirty = true;
+		const n = trialsDone(state, ctx), names = ids.map((id) => TRIALS.find((t) => t.id === id).name).join(', ');
+		hint(`Trial done: ${names} (${n} of ${TRIALS.length}).${n === TRIALS.length ? ` ${RITE}` : ''}`, n === TRIALS.length ? 7000 : 4000);
+		magicSound('level', 0.1);
+	}
+	// the rite, made where an aether well is gathered: the hundredth
+	function rite(m) {
+		const ctx = trialContext(), at = { well: true, light: light() };
+		if (!ascend(state, ctx, at)) {
+			const why = riteBlock(state, ctx, at);
+			if (trialsOpen(state) && !state.ascended && trialsDone(state, ctx) === TRIALS.length && why) hint(why, 4000);
+			return false;
+		}
+		dirty = true;
+		restat(true);
+		hud?.ascend?.(pointsOf(state));
+		magicSound('level', 0.22);
+		fx.pillar({ x: m.x, y: (m.y ?? camera.position.y - 1.6), z: m.z }, 60, GLOW.dawn, isPhone ? 80 : 200, 2.5, 1.2, true);
+		skills?.refresh();
+		saveProgress();
+		return true;
 	}
 	// ---------- your statistics: what you wear and hold, your ranks and level ----------
 	const gearNow = () => [...Object.values(arms.worn?.() || {}), arms.held?.()].filter(Boolean);
@@ -71,7 +116,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	// (made anew when any of what feeds them has changed; force: now, whatever)
 	function restat(force = false) {
 		const g = gearNow();
-		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}|${honorRank(state.honor.pts)}|${mealSig(state.fed)}`;
+		const sig = `${g.map((x) => `${x.u}:${x.l}:${x.t}`).join(',')}|${state.level}|${state.ascended}|${state.perks.length}|${PAGES.map((k) => rankOf(state.use[k] || 0)).join('.')}|${honorRank(state.honor.pts)}|${mealSig(state.fed)}`;
 		if (!force && sig === statSig) return false;
 		statSig = sig; state.gear = g;
 		refreshStats(state);
@@ -80,24 +125,31 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	}
 	restat(true);
 	// experience for what you wear and hold, gathered and counted every few seconds
-	const gearXp = {};
+	// (and the steps of items' trials at 99, counted the same way)
+	const gearXp = {}, trialSteps = {};
 	let gearT = 8;
 	const gainGear = (uid, n) => { if (uid && n > 0) gearXp[uid] = (gearXp[uid] || 0) + n; };
+	const stepTrial = (uid, n = 1) => { if (uid) trialSteps[uid] = (trialSteps[uid] || 0) + n; };
 	function announce(up) {
 		for (const x of up) {
 			const woke = x.awake.at(-1);
-			hint(`${x.name} reached level ${x.to}.${woke ? ` ${woke.name}: ${woke.desc}` : ''}`, woke ? 6000 : 3500);
+			const inst = x.to === GEAR_CAP ? arms.instance?.(x.uid) : null, trial = inst && ascendTrial(inst);
+			hint(`${x.name} reached ${x.to >= 100 ? 'the hundredth level, 100★' : `level ${x.to}`}.${woke ? ` ${woke.name}: ${woke.desc}` : ''}${trial ? ` Its trial for the hundredth: ${trial.desc}` : ''}`, woke || trial ? 6000 : 3500);
 			if (woke) magicSound('level', 0.12);
 		}
 		if (up.length) restat(true);
 	}
 	function flushGear() {
-		const gains = {};
+		if (arms.locked?.()) return; // Keep earned progress until the trade releases the inventory.
+		const gains = {}, steps = {};
 		for (const [u, n] of Object.entries(gearXp)) {
-			if (!arms.instance?.(u)) { delete gearXp[u]; continue; }
+			// (gone, or at 99: experience no longer counts for it)
+			if (!(arms.instance?.(u)?.l < GEAR_CAP)) { delete gearXp[u]; continue; }
 			if (n >= 1) { gains[u] = Math.floor(n); gearXp[u] -= gains[u]; }
 		}
+		for (const [u, n] of Object.entries(trialSteps)) { if (n >= 1) steps[u] = n; delete trialSteps[u]; }
 		if (Object.keys(gains).length) announce(arms.trainMany?.(gains) || []);
+		if (Object.keys(steps).length) announce(arms.trialMany?.(steps) || []);
 	}
 	const fx = createMagicFx(scene, { isPhone });
 	const lens = createLens();
@@ -108,8 +160,11 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		if (kind === 'cast' && b > 0) {
 			learnt(addUse(state, a.school, b));
 			mastered(a.id, addMastery(state, a.id, b));
-			// (garments learn from the weave they carry, twice as fast for their own school)
-			for (const g of Object.values(arms.worn?.() || {})) gainGear(g.u, b / 6 * (attunement(g) === a.school ? 2 : 1));
+			// (garments learn from the weave they carry, twice as fast for their own school; at 99 a
+			// spell of their own school is a step of their trial)
+			for (const g of Object.values(arms.worn?.() || {})) {
+				if (g.l === GEAR_CAP) { if (attunement(g) === a.school) stepTrial(g.u); } else gainGear(g.u, b / 6 * (attunement(g) === a.school ? 2 : 1));
+			}
 		} else if (kind === 'hurt' && a > 0) {
 			learnt(addUse(state, 'resilience', a / 2));
 			const w = arms.worn?.() || {};
@@ -186,7 +241,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		const M = state.mods, H = blow.melee ? null : arms.held?.();
 		const foe = T?.kind === 'hostile' || T?.kind === 'boss';
 		const GW = foe && H && M?.gearWeapon?.uid === H.u ? M.gearWeapon : null;
-		const k = 1 + (M?.weapon || 0) + (WEAK.has(blow.part) ? M?.weak || 0 : 0) + (T?.kind === 'boss' ? M?.boss || 0 : 0) + (GW?.infuse?.harm || 0);
+		const k = 1 + (M?.weapon || 0) + (WEAK.has(blow.part) ? M?.weak || 0 : 0) + (T?.kind === 'boss' ? M?.boss || 0 : 0) + (GW?.infuse?.harm || 0) + (GW?.harm || 0);
 		if (M?.manaOnHit) state.mana = Math.min(state.mana + M.manaOnHit, 9999);
 		learnt(addUse(state, 'marksman', Math.min(60, blow.amount * k) / 3));
 		if (H && isWeaponId(H.i)) gainGear(H.u, Math.min(4, blow.amount * k / 20));
@@ -220,7 +275,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		if (!x || !attunement(x)) return { ok: false, message: 'Only weapons and garments take the weave.' };
 		const can = infuseStrands(x);
 		if (!can.includes(strand)) return { ok: false, message: `It takes ${can.join(' or ')} fabric.` };
-		if (x.l >= MAX_LEVEL) return { ok: false, message: 'It is at its highest level.' };
+		if (x.l >= GEAR_CAP) return { ok: false, message: x.l > GEAR_CAP ? 'It is at its highest level.' : 'It is at level 99: its hundredth is earned by its trial, not woven.' };
 		// (gear is held still while a trade is open: the fabric would be spent for nothing)
 		if (arms.locked?.()) return { ok: false, message: 'Finish the pending trade first.' };
 		n = Math.min(Math.floor(+n || 0), state.fabric[strand], Math.ceil(xpToMax(x) / XP_PER_FABRIC));
@@ -244,6 +299,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 			gather(state, m.strand, n); dirty = true;
 			learnt(addXp(state, n * 2));
 			magicSound('gather', 0.1);
+			if (m.well && rite(m)) return;
 			hint(m.well ? `An aether well: +${n} ${m.strand} fabric. You will know the way back to it.` : `+${n} ${m.strand} aether fabric${share > 1.15 ? ' (your name draws it)' : share < 0.85 ? ' (it shies from your name)' : ''}`, m.well ? 3500 : 1200);
 		},
 	});
@@ -398,8 +454,10 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		const h = again ? 0 : pveHonor(e);
 		// (mercy says its honor in its own line)
 		if (h) honored(addHonor(state.honor, h, 'pve'), HONOR_WHY[e.kind] || (h < 0 ? 'no honor in that' : ''), e.kind === 'spare');
-		if (e.kind === 'spare') { gather(state, 'light', 2); dirty = true; hint(`Mercy shown: +2 light aether fabric${h ? `, +${h} honor` : ''}`, 1600); learnt(addXp(state, 25)); }
+		if (e.kind === 'spare') { gather(state, 'light', 2); countDeed(state, 'spare'); dirty = true; hint(`Mercy shown: +2 light aether fabric${h ? `, +${h} honor` : ''}`, 1600); learnt(addXp(state, 25)); }
 		else if (e.kind === 'kill' || e.kind === 'kill-surrendered') { gather(state, 'dark', e.kind === 'kill' ? 1 : 3); dirty = true; learnt(addXp(state, 10)); }
+		// (a great beast brought down: a deed for the trials, and a weapon's own trial at 99)
+		else if (e.kind === 'boss-slain' && !again) { countDeed(state, 'boss-slain'); dirty = true; const H = arms.held?.(); if (H && isWeaponId(H.i) && H.l === GEAR_CAP) stepTrial(H.u); }
 	});
 	let player = null, lastH = 0, walked = 0, wasBeam = false;
 	const lastPos = { x: NaN, z: NaN };
@@ -444,7 +502,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		statT -= dt;
 		if (statT <= 0) { statT = 0.25; if (restat() && skills?.isOpen()) skills.refresh(); }
 		gearT -= dt;
-		if (gearT <= 0) { gearT = 8; flushGear(); }
+		if (gearT <= 0) { gearT = 8; flushGear(); tellTrials(); }
 		afterHits();
 		caster.update(dt, keysHeld);
 		beams.update(dt);
@@ -468,7 +526,15 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		saveT -= dt;
 		if (saveT <= 0) { saveT = 5; if (dirty && !testOn) { dirty = false; store.set(KEY, JSON.stringify(saveMagic(state))); } }
 	}
-	function dispose() { removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.spellAim = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = combat.hooks.mana = null; }
+	function saveProgress() {
+		if (testOn) return;
+		flushGear();
+		store.set(KEY, JSON.stringify(saveMagic(state)));
+	}
+	function hidden() { if (document.visibilityState === 'hidden') saveProgress(); }
+	addEventListener('pagehide', saveProgress);
+	document.addEventListener('visibilitychange', hidden);
+	function dispose() { saveProgress(); removeEventListener('pagehide', saveProgress); document.removeEventListener('visibilitychange', hidden); removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.spellAim = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = combat.hooks.mana = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
 		update, dispose, state, caster, hud, hotbar, skills, exposure: () => caster.exposure(),
@@ -490,13 +556,14 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		covering: () => skills.covering(),
 		// after the frame is drawn (main.js): the light round Gargantua's rim bent, and its ending's grade (magic/lens.js)
 		post: (renderer) => lens.post(renderer, camera, fx.lenses(), performance.now() / 1000, fx.grade()),
-		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: [...(state.moonlit || [])], life: BASE_LIFE + (state.mods?.life || 0), gear: state.gear.map((x) => ({ i: x.i, l: x.l, t: x.t, school: attunement(x) })), ...caster.info() }),
+		info: () => ({ known: state.known.length, binds: [...state.binds], fabric: { ...state.fabric }, affinity: { ...state.affinity }, wells: state.wells.length, near: aether.near().length, shown: aether.shown().length, level: state.level, levelShown: levelOf(state), ascended: !!state.ascended, deeds: { ...state.deeds }, xp: state.xp, points: pointsOf(state), perks: [...state.perks], mastery: { ...state.mastery }, moonlit: [...(state.moonlit || [])], life: BASE_LIFE + (state.mods?.life || 0), gear: state.gear.map((x) => ({ i: x.i, l: x.l, t: x.t, school: attunement(x) })), ...caster.info() }),
 		// your statistics as a sheet (the Character view, ui/gear.js), and fabric into gear
-		stats: () => statSheet(state, { light: light() }),
+		stats: () => statSheet(state, { light: light(), trial: trialContext() }),
 		// your honor: rank, title, the way to the next, and what it lifts (the Character view)
 		honor: () => honorSheet(state.honor, combat.pvpFlag?.()),
 		// (the console and the tests: honor given, n < 0 taken; way 'pve' or 'pvp')
 		giveHonor: (n = 50, way = 'pve') => { honored(addHonor(state.honor, n, way)); return honorSheet(state.honor, combat.pvpFlag?.()); },
+		trials: () => ({ open: trialsOpen(state), ascended: !!state.ascended, list: trialsOf(state, trialContext()), rite: state.ascended ? null : riteBlock(state, trialContext()) }),
 		infuse, restat: () => restat(true),
 		// the meals on you today (cooking/meals.js), folded into your stats
 		setMeals: (list) => { state.fed = Array.isArray(list) ? list.slice() : []; restat(); skills?.refresh?.(); },

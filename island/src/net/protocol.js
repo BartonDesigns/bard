@@ -6,9 +6,20 @@
 import { MAX_LEVEL } from '../gameplay/gear-levels.js';
 
 export const VERSION = 1;
-// gear above the old top level (10) travels in trades: a server without this word drops it
-export const GEAR_FEATURE = 'gear-levels-20';
+// gear above the old top level (10), to 99 and 100★, travels in trades: a server without this
+// word drops it
+export const GEAR_FEATURE = 'gear-levels-100';
+export const PREVIOUS_GEAR_FEATURE = 'gear-levels-20';
+export const PREVIOUS_GEAR_LEVEL = 20;
 export const LEGACY_LEVEL = 10;
+// High-level trades require both the room and the receiving client to support them.
+export const cleanGearLevel = (n) => Number(n) === MAX_LEVEL ? MAX_LEVEL : n == null || Number(n) === PREVIOUS_GEAR_LEVEL ? PREVIOUS_GEAR_LEVEL : LEGACY_LEVEL;
+export function tradeLevelLimit(features, peerLevel = PREVIOUS_GEAR_LEVEL) {
+	const has = (id) => features?.has ? features.has(id) : Array.isArray(features) && features.includes(id);
+	if (has(GEAR_FEATURE)) return cleanGearLevel(peerLevel);
+	return has(PREVIOUS_GEAR_FEATURE) ? PREVIOUS_GEAR_LEVEL : LEGACY_LEVEL;
+}
+export const tradeFitsLevel = (m, level) => [m?.side, m?.sides?.a, m?.sides?.b].every((s) => !s?.items?.some((x) => x.l > level));
 // a server that weighs each player's own PvP flag (the pose's pk) and passes on a PvP win
 // ('down'): a server without this word knows neither
 export const PVP_FEATURE = 'pvp-flags-v1';
