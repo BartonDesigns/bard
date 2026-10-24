@@ -935,7 +935,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				for (let b = -hd + 8; b < hd - 8; b += 12) { const [qx, qz] = at(side * (kerb - 2), b); trees.push({ x: qx, z: qz, h: 12 + r() * 5, cone: 0, sp: 3, well: 1 }); }
 				for (let b = -hd; b < hd - 1; b += 24) {
 					const [ax2, az2] = at(side * (kerb + 3), b), [bx2, bz2] = at(side * (kerb + 3), Math.min(hd, b + 24));
-					if (!wet((ax2 + bx2) / 2, (az2 + bz2) / 2, 1)) paths.push({ ax: ax2, az: az2, bx: bx2, bz: bz2, w: 24 });
+					if (!wet((ax2 + bx2) / 2, (az2 + bz2) / 2, 1)) paths.push({ ax: ax2, az: az2, bx: bx2, bz: bz2, w: 24, wells: 1 });
 				}
 			}
 		} else if (s.kind === 'shop') {

@@ -272,6 +272,12 @@ test('Las Vegas Boulevard runs straight down the Strip, the district\'s grid lin
 	const kerbPalms = R.trees.filter((t) => strip(t.x, t.z) && Math.abs(Math.abs(t.x - 437) - 17) < 1);
 	assert.ok(kerbPalms.length > 200 && kerbPalms.every((t) => t.well), 'kerb palms in wells');
 	assert.match(fs.readFileSync(new URL('../src/bay/city.js', import.meta.url), 'utf8'), /trees\.push\(\{ src: 'real',[^\n]*well: t\.well/);
+	assert.ok(R.paths.some((p) => p.wells && strip(p.ax, p.az) && Math.abs(Math.abs(p.ax - 437) - 22) < 1), 'the promenade under them takes trees in wells');
+	const { makeClearance } = await import('../src/bay/clearance.js');
+	const promenade = { ax: 22, az: 0, bx: 22, bz: 24, w: 24, wells: 1 }, lot = { ax: -22, az: 0, bx: -22, bz: 24, w: 24 };
+	const K = makeClearance({ near: (k) => (k === 'paths' ? [promenade, lot] : []), inside: () => true }, 0, 12, 200);
+	assert.ok(K.clear(17, 12, 0.5, true) && !K.clear(17, 12, 0.5, false), 'a palm in its well on the promenade; nothing else stands there');
+	assert.ok(!K.clear(-17, 12, 0.5, true), 'nor in a lot');
 	// (and its ground paved from the pavement back, the forecourts, lots and drives: no desert between the resorts)
 	const slabs = R.paths.filter((p) => p.w >= 8), onSlab = (x, z) => slabs.some((p) => { const dx = p.bx - p.ax, dz = p.bz - p.az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p.ax) * dx + (z - p.az) * dz) / L2)); return Math.hypot(p.ax + dx * t - x, p.az + dz * t - z) <= p.w / 2 + 0.5; });
 	let n = 0, paved = 0;
