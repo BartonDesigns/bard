@@ -8,7 +8,7 @@
 // Moving on to the next town, the one you leave stands until the next is grown, and the one
 // you are well inside is kept even when a neighbour (a big city's next district) is nearer.
 
-import { generateTownSteps, hashStr } from './civgen.js';
+import { generateTownSteps, arterialSpacing, hashStr, LU } from './civgen.js';
 import { STYLE } from '../bay/styles.js';
 import { industrialEdge } from './civedge.js';
 
@@ -19,8 +19,11 @@ const LEAVE = 4500;         // and drop it this far outside
 const KEEP = 0.85;          // the town standing is kept within this share of its reach of its middle
 
 // brief(town): the town's city brief from the director (earth/director.js): its street names and
-// shop signs; null while one is on its way (the town waits), undefined for none
-export function createCivilization({ real, bay, water = () => null, brief = null }) {
+// shop signs; null while one is on its way (the town waits), undefined for none. keep(x, z, r): the
+// ground kept for landmarks round a town ([{ x, z, r }]); palms(town): its street trees are palms.
+// A town with a spine ({ x, name, z0, z1, hw }, its grid square to north) has a real boulevard down
+// it, a Strip of resorts hw either side of it from z0 to z1
+export function createCivilization({ real, bay, water = () => null, brief = null, keep = () => [], palms = () => false }) {
 	let active = null, job = null, pending = false;
 	const cache = [];        // the last few towns grown, newest last
 	const reach = (t) => t.r * 1.3 + 150;
@@ -31,15 +34,42 @@ export function createCivilization({ real, bay, water = () => null, brief = null
 	function start(t, B) {
 		const hit = cache.find((c) => c.key === key(t));
 		if (hit) return { town: t, done: hit.region };
-		const W = water(), it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name, water: W ? { near: (x, z) => W.near(x, z), lake: (x, z) => W.inLake(x, z) } : null, brief: B || null, look: t.look || null });
-		return { town: t, it, t0: performance.now(), work: 0 };
+		// (the ground a landmark stands on is kept as the water is: no street through it, no house on it)
+		const W = water(), K = keep(t.x, t.z, reach(t));
+		const near = (x, z) => { let d = W ? W.near(x, z) : Infinity; for (const k of K) d = Math.min(d, Math.max(0, Math.hypot(x - k.x, z - k.z) - k.r)); return d; };
+		const kept = (x, z, m = 0) => K.some((k) => Math.hypot(x - k.x, z - k.z) < k.r + m);
+		const lake = (x, z) => !!W?.inLake(x, z) || kept(x, z);
+		// (a town on a real boulevard, t.spine { x, name }: its grid moved, by up to half its arterial
+		// spacing, to put one of its north-south arterials on it)
+		const style = t.style === STYLE.older ? 'older' : 'suburb', SP = arterialSpacing(t.r, style);
+		const k = t.spine ? Math.round((t.spine.x - t.x) / SP) : 0, cx = t.spine ? t.spine.x - k * SP : t.x;
+		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style, name: t.name, water: W || K.length ? { near, lake, kept } : null, brief: B || null, spine: t.spine ? { k, name: t.spine.name, v0: t.spine.z0 - t.z, v1: t.spine.z1 - t.z, hw: t.spine.hw } : null, look: t.look || null });
+		return { town: t, it, t0: performance.now(), work: 0, near: W || K.length ? near : null, keep: K };
 	}
 	function finish(J, region) {
 		const cached = cache.some((c) => c.region === region);
 		if (!cached) { cache.push({ key: key(J.town), region }); if (cache.length > 2) cache.shift(); }
 		// its warehouses out past the last houses (civedge.js; once, so a cached town keeps its own)
 		const W = water();
-		industrialEdge(region, bay.heightAt, W ? (x, z) => W.near(x, z) : null);
+		industrialEdge(region, bay.heightAt, J.near || (W ? (x, z) => W.near(x, z) : null));
+		// (a warm desert town's street trees are palms, and the odd mesquite: civgen.js plants for greener places)
+		// (the pines it plants stay pines: the Aleppo pine is the desert's other street tree)
+		if (!cached && palms(J.town)) for (const tr of region.trees || []) {
+			if (tr.cone || tr.sp) continue;
+			const k = hashStr(Math.round(tr.x) + ':' + Math.round(tr.z)) % 20;
+			tr.sp = k < 14 ? 3 : 1;
+			if (k < 14) tr.h = Math.max(tr.h || 0, 9 + k * 0.6);
+		}
+		// (a paved landmark's clearing, a resort's drives and lots, is the town's paved ground on its map, not
+		// wild land: no scrub or wild tree comes up in it, landAt() says so)
+		const M = region.map;
+		for (const k of J.keep || []) {
+			if (!k.paved || !M) continue;
+			for (let j = Math.max(0, Math.floor((k.z - k.r - M.z0) / M.step)); j <= Math.min(M.h - 1, Math.floor((k.z + k.r - M.z0) / M.step)); j++) for (let i = Math.max(0, Math.floor((k.x - k.r - M.x0) / M.step)); i <= Math.min(M.w - 1, Math.floor((k.x + k.r - M.x0) / M.step)); i++) {
+				const q = (j * M.w + i) * 4 + 1;
+				if (!M.px[q] && Math.hypot(M.x0 + (i + 0.5) * M.step - k.x, M.z0 + (j + 0.5) * M.step - k.z) < k.r) M.px[q] = LU.commercial * 16;
+			}
+		}
 		// (the town left behind stood until now)
 		if (active) real.removeRegion(active.handle);
 		active = { town: J.town, handle: real.addRegion(region), region };

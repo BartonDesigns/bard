@@ -332,6 +332,34 @@ export const REAL = [
 	['Amundsen\'s airship mast', 78.9277, 11.9214, 'mast', 1, 0, 'The Norge left from this mast in 1926 and flew over the North Pole.'],
 	['St Jude\'s Cathedral', 63.7483, -68.517, 'igloochurch', 1, 0, 'The igloo-shaped cathedral; the altar is a sled and the cross is made of narwhal tusks.'],
 	['Ilulissat Icefjord', 69.165, -50.04, 'icefjord', 1, 0, 'The icebergs here come from the fastest glacier in the world. You can hear them crack.'],
+	// the Las Vegas Strip, south to north, its resorts facing the boulevard; the Strat; Fremont Street
+	['the Welcome to Fabulous Las Vegas sign', 36.082, -115.1728, 'vegassign', 1, 0, 'Everyone stops for a picture with it. The back has said Drive Carefully, Come Back Soon since 1959.'],
+	['Mandalay Bay', 36.0919, -115.1762, 'casino', 1, 90, 'Gold glass all the way up, and a beach with a wave pool out the back.', { form: 'y', h: 145, c: [0.86, 0.68, 0.36], g: [0.55, 0.42, 0.2], neon: 'gold', neon2: 'red' }],
+	['the Luxor', 36.0955, -115.1761, 'luxor', 1, 90, 'The beam off the top of the pyramid is the brightest light in Las Vegas. The moths love it.'],
+	['the Excalibur', 36.0987, -115.1754, 'excalibur', 1, 90, 'The castle with the coloured turrets. Families come for the jousting dinner.'],
+	['New York-New York', 36.1022, -115.1745, 'nyny', 1, 90, 'A whole Manhattan skyline, a roller coaster round it, and the Statue of Liberty out front.'],
+	['Park MGM', 36.1046, -115.1747, 'casino', 0.7, 90, 'The old Monte Carlo made over, its casino smoke-free, a street of restaurants down the side to the arena.', { form: 'slab', h: 150, w: 180, c: [0.78, 0.7, 0.6], g: [0.3, 0.26, 0.22], neon: 'gold', neon2: 'white' }],
+	['the MGM Grand', 36.1024, -115.1696, 'casino', 1, 270, 'Emerald green glass. It was the biggest hotel in the world when it opened.', { form: 'tri', h: 90, w: 200, c: [0.3, 0.58, 0.42], g: [0.12, 0.3, 0.22], neon: 'green', neon2: 'gold' }],
+	['Aria', 36.1073, -115.1766, 'casino', 1, 90, 'Silver glass curves in the middle of CityCenter.', { form: 'curve', h: 180, c: [0.62, 0.66, 0.7], g: [0.2, 0.24, 0.28], neon: 'white', neon2: 'blue' }],
+	['the Bellagio', 36.1129, -115.1765, 'bellagio', 1, 90, 'After dark the fountains dance to music every fifteen minutes. Get a spot on the rail.', { form: 'curve', h: 150, c: [0.9, 0.84, 0.72], g: [0.4, 0.38, 0.34], neon: 'gold', neon2: 'white', lake: true }],
+	['Paris Las Vegas', 36.1125, -115.1707, 'parislv', 1, 270, 'A half-size Eiffel Tower, with a full-size view of the Bellagio fountains from the top.'],
+	['the Cosmopolitan', 36.1097, -115.1748, 'casino', 1, 90, 'Two dark glass towers, and a bar inside a three-storey chandelier.', { form: 'twin', h: 184, w: 160, c: [0.24, 0.26, 0.3], g: [0.1, 0.11, 0.14], neon: 'purple', neon2: 'pink' }],
+	['Planet Hollywood', 36.11, -115.1696, 'casino', 1, 270, 'Its whole front is a wall of screens, and the Miracle Mile shops wrap round behind it.', { form: 'slab', h: 120, w: 190, c: [0.3, 0.3, 0.36], g: [0.14, 0.14, 0.2], neon: 'blue', neon2: 'white' }],
+	['the Flamingo', 36.1162, -115.1697, 'casino', 1, 270, 'Pink neon feathers all down its front, and real flamingos in the garden out the back.', { form: 'slab', h: 90, w: 190, c: [0.95, 0.86, 0.86], g: [0.45, 0.32, 0.36], neon: 'pink', neon2: 'pink' }],
+	['Caesars Palace', 36.1162, -115.1745, 'casino', 1, 90, 'Marble, columns and fountains. Everyone gets lost in the Forum Shops.', { form: 'slab', h: 120, w: 200, c: [0.94, 0.92, 0.88], g: [0.4, 0.44, 0.5], neon: 'white', neon2: 'blue' }],
+	['the High Roller', 36.1176, -115.1681, 'wheel', 1, 270, 'Half an hour to go round. At night the whole rim lights up.'],
+	['the Venetian', 36.1212, -115.1697, 'venetian', 1, 270, 'Canals indoors, gondoliers singing, and a painted sky that never gets dark.'],
+	['the Hard Rock', 36.1212, -115.1748, 'casino', 0.9, 90, 'The Mirage that was: its three-winged tower shut in 2024 to be made over as the Hard Rock, with a guitar of a tower to rise beside it.', { form: 'y', h: 100, c: [0.9, 0.82, 0.62], g: [0.5, 0.38, 0.2], neon: 'purple', neon2: 'gold' }],
+	['the Palazzo', 36.1245, -115.1685, 'casino', 0.75, 270, 'The Venetian\'s taller sister: a gold-brown tower over Italian shops and a waterfall.', { form: 'curve', h: 260, c: [0.82, 0.68, 0.48], g: [0.36, 0.28, 0.18], neon: 'gold', neon2: 'red' }],
+	['the Sphere', 36.1208, -115.1622, 'sphere', 1, 270, 'The whole outside is a screen. Some nights it\'s a giant eyeball looking back at you.'],
+	['the Wynn', 36.1265, -115.1657, 'casino', 1, 270, 'A bronze curve of a tower, quieter inside than the rest of the Strip.', { form: 'curve', h: 185, c: [0.55, 0.4, 0.26], g: [0.32, 0.22, 0.14], neon: 'gold', neon2: 'gold' }],
+	['Treasure Island', 36.1247, -115.1747, 'casino', 1, 90, 'Gold glass in a Y, and the cove out front where the pirate ships used to fight.', { form: 'y', h: 110, c: [0.86, 0.7, 0.46], g: [0.42, 0.32, 0.2], neon: 'red', neon2: 'gold' }],
+	['Encore', 36.1291, -115.165, 'casino', 1, 250, 'The Wynn\'s bronze twin, a little taller and a little quieter.', { form: 'curve', h: 190, c: [0.55, 0.4, 0.26], g: [0.32, 0.22, 0.14], neon: 'gold', neon2: 'gold' }],
+	['Resorts World', 36.1333, -115.166, 'casino', 1, 60, 'Red towers, and a screen down the side bigger than any billboard on the Strip.', { form: 'twin', h: 200, w: 180, c: [0.55, 0.16, 0.14], g: [0.25, 0.08, 0.08], neon: 'red', neon2: 'white' }],
+	['the Fontainebleau', 36.1366, -115.1612, 'casino', 1, 240, 'The tallest building in Nevada: a blue glass curve that stood half-finished for fifteen years.', { form: 'curve', h: 225, c: [0.4, 0.55, 0.7], g: [0.15, 0.25, 0.35], neon: 'blue', neon2: 'white' }],
+	['the Sahara', 36.1424, -115.1574, 'casino', 1, 240, 'At the north end of the Strip since 1952, when all of this was sand.', { form: 'slab', h: 85, w: 160, c: [0.92, 0.88, 0.8], g: [0.3, 0.32, 0.36], neon: 'blue', neon2: 'white' }],
+	['the Strat', 36.1475, -115.1566, 'strat', 1, 0, 'Three hundred and fifty metres up, and people pay to jump off the top on a wire.'],
+	['Fremont Street', 36.1706, -115.1441, 'canopy', 1, 151.5, 'The whole ceiling of the canopy is a screen. Some of these casinos have been here since the forties.'],
 ];
 // a few more builders by name (the shared structures where they serve)
 R.mosque = (B, s, a) => S.mosque(B, {}, { wall: a?.mosque === 'ottoman' ? [0.88, 0.86, 0.8] : a?.mosque === 'persian' ? [0.82, 0.72, 0.56] : [0.82, 0.68, 0.5], stone: [0.6, 0.55, 0.48], mosque: a?.mosque, trim: [0.9, 0.9, 0.86], door: [0.35, 0.24, 0.16] }, () => 0.5, s);
@@ -343,6 +371,267 @@ R['church-red'] = (B) => S['church-red'](B, {}, PAL, () => 0.5);
 R.stonecircle = (B, s, a, r) => S.stonecircle(B, {}, PAL, r);
 R.goldtemple = (B, s = 1) => { const { G } = B, gold = [0.9, 0.72, 0.3]; G.slab(0, -0.4, 0, 150 * s, 150 * s, 0.3, [0.92, 0.9, 0.86]); G.slab(0, -0.2, 0, 120 * s, 120 * s, 0.2, [0.25, 0.38, 0.42]); G.box(0, 0, 0, 3 * s, 0.6, 60 * s, [0.92, 0.9, 0.86]); G.box(0, 0, 0, 20 * s, 10 * s, 20 * s, [0.92, 0.9, 0.86]).box(0, 10 * s, 0, 18 * s, 8 * s, 18 * s, gold).dome(0, 18 * s, 0, 7 * s, gold, { bulge: 0.4, n: 14, rings: 5, tip: 3 * s }); for (const sx of [-1, 1]) for (const sz of [-1, 1]) G.dome(sx * 8 * s, 18 * s, sz * 8 * s, 1.6 * s, gold, { bulge: 0.4, n: 8, rings: 3 }); B.solid.push([0, 0, 20 * s, 20 * s, 0]); };
 R.icefjord = (B, s = 1, a, r) => { const { G } = B; for (let i = 0; i < 12; i++) { const x = (r() - 0.5) * 900, z = (r() - 0.5) * 900, w = 30 + r() * 80, h = 15 + r() * 45; G.box(x, -h * 0.5, z, w, h, w * (0.6 + r() * 0.6), [0.9, 0.95, 1], { r: r() * 3, topc: [0.96, 0.98, 1] }); } void s; };
+// ---------- Las Vegas: the Strip's resorts, its wheel and tower, the sign and Fremont Street ----------
+// Built as the others are, from their own proportions, and lit as they are lit: the glow
+// (B.glow: unlit, untouched by the tone curve) is their neon, their LED crowns and marquees; the
+// night's own layer (B.night: dark by day) the lit rooms of their towers and the Luxor's beam.
+// Their fronts face the boulevard.
+const NEON = { pink: [1, 0.22, 0.62], gold: [1, 0.74, 0.28], blue: [0.25, 0.6, 1], red: [1, 0.18, 0.12], green: [0.3, 1, 0.55], white: [0.95, 0.95, 1], purple: [0.7, 0.3, 1] };
+const WIN = [1, 0.8, 0.52];
+// (a part of a landmark built about (x, z) of its own frame, turned by r: its faces, its lights and its solids)
+function part(B, x, z, r, fn) {
+	const G = B.G, L = B.glow, N = B.night, f = [G.ox, G.oy, G.oz, Math.atan2(G.sn, G.cs)], [ax, , az] = G.at(x, 0, z);
+	G.frame(ax, f[1], az, f[3] + r); L?.frame(ax, f[1], az, f[3] + r); N?.frame(ax, f[1], az, f[3] + r);
+	const s0 = B.solid.length;
+	fn();
+	const c = Math.cos(r), s = Math.sin(r);
+	for (let k = s0; k < B.solid.length; k++) { const [a, b, w, d, rr] = B.solid[k]; B.solid[k] = [x + a * c + b * s, z - a * s + b * c, w, d, rr + r]; }
+	G.frame(...f); L?.frame(...f); N?.frame(...f);
+}
+// a hotel tower w x d from y0 up h: banded with glass a storey apart, and by night its rooms lit, a
+// stretch of window here and there on every floor (built a tower a frame where settle.js lets it: B.later)
+function tower(B, x, z, w, d, y0, h, c, g, r = 0, lit = 0.34) {
+	B.solid.push([x, z, w, d, r]);
+	if (B.later) B.later.push(() => towerNow(B, x, z, w, d, y0, h, c, g, r, lit));
+	else towerNow(B, x, z, w, d, y0, h, c, g, r, lit);
+}
+function towerNow(B, x, z, w, d, y0, h, c, g, r, lit) {
+	const { G } = B, L = B.night || B.glow, n = Math.floor(h / 3.3);
+	G.box(x, y0, z, w, h, d, c, { r });
+	const cs = Math.cos(r), sn = Math.sin(r), q = (a, b) => [x + a * cs + b * sn, z - a * sn + b * cs];
+	for (let k = 1; k < n; k++) {
+		const y = y0 + k * 3.3 - 1.7;
+		G.box(x, y, z, w + 0.3, 1.5, d + 0.3, g, { r, top: false });
+		if (!L) continue;
+		// (each face in stretches of about 12 m, some of them lit)
+		for (const [len, u, v, nx, nz] of [[w, 1, 0, 0, -1], [w, -1, 0, 0, 1], [d, 0, 1, 1, 0], [d, 0, -1, -1, 0]]) {
+			const m = Math.max(1, Math.round(len / 12)), seg = len / m, out = (nx ? w : d) / 2 + 0.3;
+			for (let i = 0; i < m; i++) {
+				if (G.rand() > 0.55) continue;
+				const t0 = -len / 2 + i * seg + 1, t1 = t0 + seg - 2, k2 = lit * (0.55 + 0.45 * G.rand());
+				const p0 = q(u * t0 + nx * out, v * t0 + nz * out), p1 = q(u * t1 + nx * out, v * t1 + nz * out);
+				L.face([[p0[0], y + 0.15, p0[1]], [p1[0], y + 0.15, p1[1]], [p1[0], y + 1.35, p1[1]], [p0[0], y + 1.35, p0[1]]], WIN.map((v2) => v2 * k2));
+			}
+		}
+	}
+}
+// a resort's grounds: paved from the boulevard's kerb (local z0, to the front) back to z1, following
+// the ground, the drive to its door darker, and a row of palms down the kerb (flora.js grows them)
+function grounds(B, ground, w, z0, z1, { palms = z0 + 4, skip = () => false, drive = 0 } = {}) {
+	const { G } = B, gr = ground || (() => 0), step = 16, pave = [0.5, 0.48, 0.45], up = (x, z) => gr(x, z) + 0.12;
+	for (let x = -w / 2; x < w / 2 - 0.01; x += step) for (let z = z0; z < z1 - 0.01; z += step) {
+		const x1 = Math.min(x + step, w / 2), z2 = Math.min(z + step, z1);
+		G.face([[x, up(x, z), z], [x, up(x, z2), z2], [x1, up(x1, z2), z2], [x1, up(x1, z), z]], pave);
+	}
+	if (drive) for (let z = z0; z < -8; z += step) { const z2 = Math.min(z + step, -8), h = drive / 2; G.face([[-h, up(-h, z) + 0.03, z], [-h, up(-h, z2) + 0.03, z2], [h, up(h, z2) + 0.03, z2], [h, up(h, z) + 0.03, z]], [0.3, 0.3, 0.31]); }
+	for (let x = -w / 2 + 6; x < w / 2 - 4; x += 13) if (!(drive && Math.abs(x) < drive / 2 + 3) && !skip(x)) B.trees.push([x, palms, 'datepalm', 11 + ((x * 7.3) % 4 + 4) % 4]);
+}
+// the casino floor under it all: a long low block, its marquee and porte-cochère to the front (-z)
+// and a pylon sign at the kerb; the tower or towers rise behind; a crown of neon on top
+R.casino = (B, s = 1, a = {}, r, ground) => {
+	const { G } = B, L = B.glow, c = a.c || [0.86, 0.8, 0.7], g = a.g || [0.22, 0.26, 0.3], neon = NEON[a.neon] || NEON.gold, neon2 = NEON[a.neon2] || NEON.pink;
+	const W = (a.w || 170) * s, D = (a.d || 120) * s, H = (a.h || 120) * s, P = 14 * s;
+	const px = W / 2 - 18, pz = -40, front = a.lake ? -60 - 190 * s : -56;
+	grounds(B, ground, W + 50 * s, front, D + 30 * s, { palms: front + 4, drive: a.lake ? 0 : 24, skip: (x) => Math.abs(x - px) < 8 });
+	G.box(0, -3, D / 2, W, P + 3, D, a.pc || [0.9, 0.86, 0.78]);
+	L?.box(0, P - 1.6, -0.5, W, 1.2, 0.4, neon2);
+	G.box(0, 7, -9, 46 * s, 1.4, 18, [0.92, 0.9, 0.86]);
+	L?.box(0, 6.6, -18.2, 46 * s, 0.5, 0.3, neon);
+	for (const x of [-21, -7, 7, 21]) G.cyl(x * s, 0, -16, 0.8, 0.8, 7, [0.9, 0.88, 0.84], { n: 8 });
+	// the pylon at the kerb, its sign lit both sides, bulbs round its edge
+	G.box(px, 0, pz, 4, 34, 4, [0.3, 0.3, 0.32]).box(px, 34, pz, 18, 24, 3, [0.12, 0.1, 0.14]);
+	if (L) { L.box(px, 36, pz, 16, 20, 3.3, neon); for (const y of [34.2, 57.6]) L.box(px, y, pz, 18.4, 0.4, 3.5, NEON.white); L.box(px, 26, pz, 4.4, 6, 4.4, neon2); }
+	B.solid.push([px, pz, 4, 4, 0]);
+	const ty = P - 1, tz = D * 0.55, form = a.form || 'slab';
+	let crown = [];
+	if (form === 'slab') { tower(B, 0, tz, W * 0.62, 24 * s, ty, H, c, g); crown = [[0, tz - 12 * s - 0.4, W * 0.4, 0]]; }
+	else if (form === 'twin') for (const sx of [-1, 1]) { const h = H * (sx > 0 ? 1 : 0.93); tower(B, sx * W * 0.22, tz, W * 0.3, 26 * s, ty, h, c, g); crown.push([sx * W * 0.22, tz - 13 * s - 0.4, W * 0.24, 0, h]); }
+	else if (form === 'curve') {
+		// a crescent, its hollow to the front (its ends come forward round the middle)
+		const R2 = 150 * s, n = 9, span = 1.25, wseg = 2 * R2 * Math.sin(span / (n - 1) / 2) + 1;
+		for (let i = 0; i < n; i++) {
+			const t = (i / (n - 1) - 0.5) * span, x = Math.sin(t) * R2, z = tz - R2 * (1 - Math.cos(t)), h = H * (1 - Math.abs(i - (n - 1) / 2) / n * 0.5);
+			tower(B, x, z, wseg, 24 * s, ty, h, c, g, t);
+			if (i === (n - 1) / 2) crown = [[x, z - 12 * s - 0.4, 22 * s, 0, h]];
+		}
+	} else {
+		// three wings from a core (a Y), or a long one and two short (a T: 'tri')
+		const wl = (form === 'tri' ? 70 : 58) * s, ww = 20 * s;
+		G.cyl(0, ty, tz, ww * 0.7, ww * 0.7, H + 6 * s, c, { n: 12 });
+		for (let k = 0; k < 3; k++) {
+			const th = -Math.PI / 2 + k * Math.PI * 2 / 3 + Math.PI, ux = Math.cos(th), uz = Math.sin(th), len = form === 'tri' && k ? wl * 0.8 : wl;
+			tower(B, ux * len / 2, tz + uz * len / 2, len, ww, ty, H * (k ? 0.92 : 1), c, g, -th);
+			crown.push([ux * (len + 0.5), tz + uz * (len + 0.5), ww * 0.8, -th + Math.PI / 2, H * (k ? 0.92 : 1)]);
+		}
+	}
+	// the crown: the name in neon up top, its edges strung with light
+	if (L) for (const [x, z, w, r, h] of crown) { const hh = h ?? H; L.box(x, ty + hh - 9 * s, z, w, 6 * s, 0.6, neon, { r }); L.box(x, ty + hh - 0.3, z, w * 1.15, 0.5, 1.2, neon2, { r }); }
+	// (the Bellagio's lake in front, its fountains standing up out of it)
+	if (a.lake) {
+		const lw = W * 1.6, ld = 190 * s, z0 = -60 - ld / 2, gr = ground || (() => 0);
+		for (let i = 0; i < 6; i++) { const z = z0 - ld / 2 + (i + 0.5) * ld / 6; G.box(0, gr(0, z) - 1.2, z, lw, 1.5, ld / 6 + 0.2, [0.05, 0.14, 0.2]); }
+		G.box(0, -1, z0 - ld / 2 - 2, lw + 6, 2, 4, [0.85, 0.82, 0.76]);
+		if (L) for (let i = 0; i < 26; i++) { const x = (i / 25 - 0.5) * lw * 0.85, z = z0 + Math.sin(i * 0.7) * ld * 0.25, h = 18 + 40 * Math.abs(Math.sin(i * 1.3)); L.box(x, gr(x, z), z, 1.2, h, 1.2, [0.62, 0.78, 0.9]); }
+	}
+	B.solid.push([0, D / 2, W, D, 0]);
+};
+// the Bellagio: a casino behind its lake, the fountains out on the water to the boulevard
+R.bellagio = (B, s, a, r, ground) => R.casino(B, s, { ...a, lake: true }, r, ground);
+// the Luxor: a dark glass pyramid, its edges lit, and the beam from its point up into the night
+R.luxor = (B, s = 1, a, r, ground) => {
+	const { G } = B, L = B.glow, h = 107 * s, w = 180 * s;
+	grounds(B, ground, 250 * s, -w / 2 - 75 * s, w / 2 + 20 * s, { drive: 22 * s });
+	R.pyramid(B, h / 139, [0.1, 0.11, 0.13]);
+	if (L) {
+		for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) L.beam(x * w / 2, 0.5, z * w / 2, 0, h, 0, 0.9, [0.9, 0.8, 0.55]);
+		(B.night || L).box(0, h - 2, 0, 5, 4000, 5, [0.85, 0.92, 1]);
+	}
+	// the sphinx at its door, to the front
+	G.box(0, 0, -w / 2 - 40, 16 * s, 12 * s, 50 * s, [0.78, 0.68, 0.5]).box(0, 12 * s, -w / 2 - 60, 10 * s, 12 * s, 10 * s, [0.78, 0.68, 0.5]);
+	B.solid.push([0, -w / 2 - 40, 16 * s, 50 * s, 0]);
+};
+// the Excalibur: two white towers in an L behind a cluster of turrets roofed red, blue and gold
+R.excalibur = (B, s = 1, a, r, ground) => {
+	const { G } = B, white = [0.92, 0.9, 0.86], g = [0.55, 0.5, 0.42];
+	grounds(B, ground, 240 * s, -55 * s, 100 * s);
+	tower(B, -30 * s, 70 * s, 120 * s, 20 * s, 0, 82 * s, white, g);
+	tower(B, 50 * s, 30 * s, 20 * s, 100 * s, 0, 82 * s, white, g);
+	for (const [x, z] of [[-90, 70], [30, 70], [50, -20]]) { G.cone(x * s, 82 * s, z * s, 14 * s, 18 * s, [0.75, 0.12, 0.1], 10); }
+	const roofs = [[0.75, 0.12, 0.1], [0.15, 0.3, 0.7], [0.85, 0.65, 0.2]];
+	for (let i = 0; i < 9; i++) {
+		const x = (-60 + i * 15) * s, z = (i % 2 ? -20 : -5) * s, r = (5 + (i % 3) * 2) * s, h = (28 + (i * 7) % 18) * s;
+		G.cyl(x, 0, z, r, r, h, white, { n: 12 }).cone(x, h, z, r * 1.25, r * 2.6, roofs[i % 3], 12);
+		B.glow?.box(x, h - 3 * s, z - r - 0.2, r, 1.2, 0.3, NEON.gold);
+		B.solid.push([x, z, r * 2, r * 2, 0]);
+	}
+	G.box(0, 0, -10 * s, 150 * s, 18 * s, 30 * s, white);
+};
+// New York-New York: its own Manhattan, the Empire State and the Chrysler among them, the Statue
+// of Liberty out front
+R.nyny = (B, s = 1, a, r, ground) => {
+	const { G } = B, L = B.glow, g = [0.24, 0.26, 0.3];
+	grounds(B, ground, 190 * s, -80 * s, 80 * s, { skip: (x) => Math.abs(x - 40 * s) < 10 * s });
+	G.box(0, -2, 20 * s, 150 * s, 16 * s, 90 * s, [0.72, 0.62, 0.5]);
+	const T = [[-55, 40, 26, 26, 95, [0.62, 0.5, 0.4]], [-30, 55, 22, 30, 120, [0.7, 0.66, 0.6]], [30, 50, 26, 22, 105, [0.55, 0.45, 0.38]], [55, 30, 22, 24, 80, [0.66, 0.6, 0.52]], [-60, 0, 20, 20, 70, [0.6, 0.56, 0.5]], [60, -5, 18, 22, 65, [0.5, 0.42, 0.36]]];
+	for (const [x, z, w, d, h, c] of T) tower(B, x * s, z * s, w * s, d * s, 14 * s, h * s, c, g);
+	// the Empire State: its setbacks and mast
+	tower(B, 0, 30 * s, 34 * s, 28 * s, 14 * s, 100 * s, [0.74, 0.7, 0.64], g);
+	G.box(0, 114 * s, 30 * s, 24 * s, 22 * s, 20 * s, [0.74, 0.7, 0.64]).box(0, 136 * s, 30 * s, 12 * s, 10 * s, 10 * s, [0.74, 0.7, 0.64]).cyl(0, 146 * s, 30 * s, 2.5 * s, 0.6 * s, 18 * s, [0.7, 0.7, 0.72], { n: 8 });
+	L?.box(0, 133 * s, 30 * s, 24.6 * s, 3 * s, 20.6 * s, NEON.white);
+	// the Chrysler: its crown in arcs of light
+	tower(B, -12 * s, 75 * s, 22 * s, 22 * s, 14 * s, 108 * s, [0.68, 0.68, 0.7], g);
+	for (let k = 0; k < 5; k++) { const r = (11 - k * 2) * s, y = (122 + k * 6) * s; G.cyl(-12 * s, y, 75 * s, r, r * 0.8, 6 * s, [0.82, 0.82, 0.86], { n: 12 }); L?.cyl(-12 * s, y + 4 * s, 75 * s, r * 0.82, r * 0.8, 0.6, NEON.white, { n: 12, top: false }); }
+	G.cyl(-12 * s, 152 * s, 75 * s, 1.2 * s, 0.1, 16 * s, [0.85, 0.85, 0.88], { n: 6 });
+	part(B, 40 * s, -55 * s, 0, () => R.statue(B, 0.45 * s, { c: [0.45, 0.65, 0.58], pose: 'torch' }));
+	B.solid.push([0, 20 * s, 150 * s, 90 * s, 0]);
+};
+// Paris Las Vegas: the Eiffel Tower at half its size, lit gold, the hotel behind, the balloon sign out front
+R.parislv = (B, s = 1, a, r, ground) => {
+	const { G } = B, L = B.glow;
+	grounds(B, ground, 200 * s, -64 * s, 92 * s, { skip: (x) => Math.abs(x - 60 * s) < 14 * s || Math.abs(x + 40 * s) < 34 * s });
+	part(B, -40 * s, -10 * s, 0, () => R.lattice(B, 0.5 * s, { c: [0.52, 0.42, 0.3] }));
+	if (L) for (const [y, w] of [[28, 22], [57, 12], [148, 3]]) L.box(-40 * s, y * s, -10 * s, w * s, 1.4, w * s, NEON.gold);
+	tower(B, 50 * s, 70 * s, 110 * s, 22 * s, 0, 105 * s, [0.9, 0.84, 0.72], [0.3, 0.3, 0.32]);
+	G.hip(50 * s, 105 * s, 70 * s, 110 * s, 22 * s, 8 * s, [0.28, 0.32, 0.36], { o: 0 });
+	G.box(20 * s, -2, 40 * s, 150 * s, 15 * s, 70 * s, [0.88, 0.82, 0.7]);
+	// the balloon: a ball of light on its basket
+	G.box(60 * s, 0, -45 * s, 6 * s, 14 * s, 6 * s, [0.5, 0.4, 0.3]);
+	if (L) { L.dome(60 * s, 26 * s, -45 * s, 11 * s, NEON.blue, { k: 1.2, n: 12, rings: 4 }); L.dome(60 * s, 26 * s, -45 * s, 11 * s, NEON.pink, { k: -1, n: 12, rings: 4 }); }
+	B.solid.push([60 * s, -45 * s, 6 * s, 6 * s, 0]);
+};
+// the High Roller: the wheel, 168 m, its rim strung with light, cabins round it
+R.wheel = (B, s = 1, a, r, ground) => {
+	const { G } = B, L = B.glow, R2 = 76 * s, hy = 90 * s, n = 40, steel = [0.85, 0.86, 0.88];
+	grounds(B, ground, 130 * s, -34 * s, 50 * s, { skip: (x) => Math.abs(Math.abs(x) - 30 * s) < 8 * s });
+	const at = (k, r = R2) => { const t = k / n * Math.PI * 2; return [Math.cos(t) * r, hy + Math.sin(t) * r]; };
+	for (let k = 0; k < n; k++) {
+		const [x0, y0] = at(k), [x1, y1] = at(k + 1);
+		G.beam(x0, y0, 0, x1, y1, 0, 1.6 * s, steel);
+		if (k % 2 === 0) { G.beam(0, hy, 0, x0, y0, -3 * s, 0.25 * s, steel); G.beam(0, hy, 0, x0, y0, 3 * s, 0.25 * s, steel); }
+		if (k % 2 === 0) { const [cx, cy] = at(k, R2 + 5 * s); G.box(cx, cy - 3.5 * s, 0, 7 * s, 7 * s, 9 * s, [0.75, 0.85, 0.9]); }
+		if (L) { const [a0, b0] = at(k, R2 - 1.4 * s), [a1, b1] = at(k + 1, R2 - 1.4 * s); L.beam(a0, b0, 0, a1, b1, 0, 0.8 * s, k % 4 < 2 ? NEON.pink : NEON.blue); }
+	}
+	G.cyl(0, hy - 3 * s, -6 * s, 4 * s, 4 * s, 6 * s, steel, { n: 12 });
+	for (const sx of [-1, 1]) { G.beam(sx * 30 * s, 0, -8 * s, 0, hy, -2 * s, 3.5 * s, steel); G.beam(sx * 30 * s, 0, 8 * s, 0, hy, 2 * s, 3.5 * s, steel); }
+	G.box(0, -2, 30 * s, 60 * s, 12 * s, 30 * s, [0.3, 0.32, 0.36]);
+	for (const sx of [-1, 1]) for (const sz of [-1, 1]) B.solid.push([sx * 30 * s, sz * 8 * s, 6 * s, 6 * s, 0]);
+	B.solid.push([0, 30 * s, 60 * s, 30 * s, 0]);
+};
+// the Strat: a 350 m tower on three legs, its pod ringed with light, a mast and its beacon
+R.strat = (B, s = 1, a, r, ground) => {
+	const { G } = B, L = B.glow, c = [0.86, 0.85, 0.82];
+	grounds(B, ground, 110 * s, -42 * s, 70 * s, { skip: (x) => Math.abs(x) < 34 * s });
+	G.cyl(0, 0, 0, 9 * s, 7 * s, 255 * s, c, { n: 12 });
+	for (let k = 0; k < 3; k++) { const t = k * Math.PI * 2 / 3; G.beam(Math.cos(t) * 26 * s, 0, Math.sin(t) * 26 * s, Math.cos(t) * 8 * s, 230 * s, Math.sin(t) * 8 * s, 6 * s, c); B.solid.push([Math.cos(t) * 26 * s, Math.sin(t) * 26 * s, 7 * s, 7 * s, 0]); }
+	for (const [y, r0, r1, h] of [[250, 14, 26, 8], [258, 26, 27, 14], [272, 27, 22, 10], [282, 22, 16, 8]]) G.cyl(0, y * s, 0, r0 * s, r1 * s, h * s, [0.8, 0.8, 0.82], { n: 18 });
+	if (L) { for (const y of [262, 268]) L.cyl(0, y * s, 0, 27.3 * s, 27.3 * s, 1.2, NEON.blue, { n: 18, top: false }); L.cyl(0, 276 * s, 0, 25.5 * s, 25.5 * s, 1, NEON.purple, { n: 18, top: false }); L.box(0, 348 * s, 0, 1.6, 2, 1.6, NEON.red); }
+	G.cyl(0, 290 * s, 0, 3 * s, 1 * s, 60 * s, [0.75, 0.75, 0.78], { n: 8 });
+	G.box(0, -2, 40 * s, 90 * s, 14 * s, 50 * s, [0.84, 0.8, 0.72]);
+	B.solid.push([0, 0, 18 * s, 18 * s, 0], [0, 40 * s, 90 * s, 50 * s, 0]);
+};
+// the Venetian: its campanile and a Y of a tower behind
+R.venetian = (B, s = 1, a, r, ground) => {
+	const { G } = B, L = B.glow, brick = [0.66, 0.32, 0.24], stone = [0.9, 0.86, 0.76];
+	R.casino(B, s, { form: 'y', h: 140, c: [0.88, 0.8, 0.66], neon: 'gold', neon2: 'gold', w: 190 }, r, ground);
+	const cx = -70 * s, cz = -50 * s;
+	G.box(cx, 0, cz, 12 * s, 70 * s, 12 * s, brick).box(cx, 70 * s, cz, 13 * s, 12 * s, 13 * s, stone).hip(cx, 82 * s, cz, 12 * s, 12 * s, 14 * s, [0.3, 0.45, 0.4], { o: 0 }).cone(cx, 96 * s, cz, 1.2 * s, 6 * s, [0.85, 0.7, 0.3], 6);
+	L?.box(cx, 72 * s, cz, 13.4 * s, 8 * s, 13.4 * s, NEON.gold.map((v) => v * 0.7));
+	B.solid.push([cx, cz, 12 * s, 12 * s, 0]);
+};
+// the Sphere: a ball of light 112 m across, its whole skin a screen, tonight an eye looking down the Strip
+R.sphere = (B, s = 1, a, rr, ground) => {
+	const { G } = B, L = B.glow, r = 56 * s, y0 = 50 * s, n = 14;
+	grounds(B, ground, 150 * s, -80 * s, 75 * s, { drive: 20 * s });
+	G.box(0, -1, 0, 70 * s, 4 * s, 70 * s, [0.2, 0.2, 0.22]);
+	G.cyl(0, 0, 0, 30 * s, 20 * s, y0 - r * 0.7, [0.18, 0.18, 0.2], { n: 16 });
+	for (let j = 0; j < n; j++) {
+		const a0 = -Math.PI / 2 + j / n * Math.PI, a1 = -Math.PI / 2 + (j + 1) / n * Math.PI, t = j / (n - 1);
+		const c = [0.25 + 0.75 * t * t, 0.3 + 0.4 * Math.sin(t * Math.PI), 1 - 0.6 * t];
+		(L || G).cyl(0, y0 + Math.sin(a0) * r, 0, Math.cos(a0) * r, Math.cos(a1) * r, (Math.sin(a1) - Math.sin(a0)) * r, c, { n: 24, top: false });
+	}
+	// (the eye: its white, its iris and its pupil, to the front)
+	if (L) { L.box(0, y0 - 14 * s, -r - 0.4, 46 * s, 28 * s, 0.3, [1, 1, 1]); L.box(0, y0 - 9 * s, -r - 0.8, 18 * s, 18 * s, 0.3, [0.2, 0.55, 1]); L.box(0, y0 - 4 * s, -r - 1.2, 8 * s, 8 * s, 0.3, [0.02, 0.02, 0.04]); }
+	B.solid.push([0, 0, 2 * r, 2 * r, 0]);
+};
+// the sign at the Strip's south end: on its two posts, the diamond, the silver dollars of WELCOME, the red star
+R.vegassign = (B, s = 1) => {
+	const { G } = B, L = B.glow, w = 7.6 * s, y0 = 5 * s, h = 6.2 * s;
+	for (const x of [-w * 0.32, w * 0.32]) G.box(x, 0, 0, 0.5 * s, y0 + 1, 0.5 * s, [0.85, 0.85, 0.82]);
+	// (the diamond: a hexagon wider at the middle, white both sides)
+	const P = [[-w / 2, y0 + h * 0.5], [-w * 0.3, y0], [w * 0.3, y0], [w / 2, y0 + h * 0.5], [w * 0.3, y0 + h], [-w * 0.3, y0 + h]];
+	for (const z of [-0.2, 0.2]) { const q = (i) => [P[i][0], P[i][1], z], quad = z < 0 ? [[0, 1, 2, 3], [0, 3, 4, 5]] : [[3, 2, 1, 0], [5, 4, 3, 0]]; for (const f of quad) G.face(f.map(q), [0.95, 0.94, 0.9]); }
+	if (L) {
+		for (let i = 0; i < 6; i++) { const [x0, y1] = P[i], [x1, y2] = P[(i + 1) % 6]; for (let k = 0; k < 6; k++) { const t = (k + 0.5) / 6; L.box(x0 + (x1 - x0) * t, y1 + (y2 - y1) * t - 0.08, -0.32, 0.16, 0.16, 0.64, NEON.gold); } }
+		for (let i = 0; i < 7; i++) { const x = (i / 6 - 0.5) * w * 0.7; G.box(x, y0 + h * 0.62, -0.3, 0.84 * s, 0.84 * s, 0.1, [0.92, 0.92, 0.94]); L.box(x, y0 + h * 0.66, -0.37, 0.36 * s, 0.5 * s, 0.05, NEON.red); }
+		L.box(0, y0 + h * 0.25, -0.32, w * 0.5, 0.9 * s, 0.05, NEON.blue).box(0, y0 + h * 0.43, -0.32, w * 0.42, 0.8 * s, 0.05, NEON.red);
+		L.cone(-w * 0.18, y0 + h + 0.2, -0.1, 0.9 * s, 1.6 * s, NEON.red, 5);
+	}
+	B.solid.push([0, 0, w, 1, 0]);
+};
+// Fremont Street: the canopy over five blocks of the old downtown, its underside a screen of light,
+// the old casinos' neon down both sides
+R.canopy = (B, s = 1, a, r, ground) => {
+	const { G } = B, L = B.glow, len = 420 * s, half = 15 * s, top = 27 * s, n = 8;
+	const gr = ground || (() => 0), cols = [NEON.blue, NEON.purple, NEON.pink, NEON.gold, NEON.green];
+	for (let x = -len / 2; x <= len / 2; x += 30 * s) for (const z of [-half, half]) { const y = gr(x, z); G.box(x, y - 1, z, 1.6, gr(x, 0) + top - 4 - y + 1, 1.6, [0.3, 0.3, 0.32]); B.solid.push([x, z, 1.6, 1.6, 0]); }
+	const seg = 20 * s;
+	for (let x = -len / 2; x < len / 2; x += seg) {
+		const y = gr(x + seg / 2, 0);
+		for (let k = 0; k < n; k++) {
+			const t0 = Math.PI * k / n, t1 = Math.PI * (k + 1) / n, z0 = -Math.cos(t0) * half, z1 = -Math.cos(t1) * half, y0 = y + top - 4 + Math.sin(t0) * 5 * s, y1 = y + top - 4 + Math.sin(t1) * 5 * s;
+			G.face([[x, y0, z0], [x, y1, z1], [x + seg, y1, z1], [x + seg, y0, z0]], [0.35, 0.36, 0.4]);
+			L?.face([[x, y1 - 0.25, z1], [x, y0 - 0.25, z0], [x + seg, y0 - 0.25, z0], [x + seg, y1 - 0.25, z1]], cols[((Math.floor(x / seg) + k) % cols.length + cols.length) % cols.length].map((v) => v * 0.8));
+		}
+	}
+	// the casinos along it: their fronts, and a blade of neon on each
+	for (let i = 0; i < 10; i++) {
+		const x = -len / 2 + 25 + i * len / 10, side = i % 2 ? 1 : -1, z = side * (half + 14 * s), y = gr(x, z), h = (16 + (i * 5) % 14) * s;
+		G.box(x, y - 1, z, 34 * s, h, 22 * s, [0.6 + (i % 3) * 0.1, 0.5, 0.42]);
+		L?.box(x, y + 8 * s, z - side * (11 * s + 0.3), 30 * s, 2 * s, 0.4, cols[i % cols.length]);
+		L?.box(x + 12 * s, y + h, z - side * 9 * s, 1.2, 18 * s, 5 * s, cols[(i + 2) % cols.length]);
+		B.solid.push([x, z, 34 * s, 22 * s, 0]);
+	}
+};
 export const REAL_BUILD = R;
 
 // ---------- the lore ----------

@@ -54,7 +54,8 @@ export function* makeClearanceSteps(real, cx, cz, R) {
 	// corner and 9 m along each kerb (15 m where an arterial is one of them)
 	for (const n of nodes.values()) if (n.legs >= 3) put(n.x, n.z, n.x, n.z, n.hw + (n.big ? 15 : 9));
 	yield;
-	for (const q of real.near('paths', cx, cz, R)) put(q.ax, q.az, q.bx, q.bz, q.w / 2 + 0.3);
+	// (a promenade's trees stand in wells in it: q.wells, the Strip's palms, crysis/civgen.js)
+	for (const q of real.near('paths', cx, cz, R)) put(q.ax, q.az, q.bx, q.bz, q.w / 2 + 0.3, q.wells ? -1 : undefined);
 	yield;
 	// the freeways and the Iron Horse Trail where the map doesn't draw them (roads.js)
 	if (!routes) routes = Object.values(ROUTES).map((ll) => ll.map(([a, b]) => toWorld(a, b)));
