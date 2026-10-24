@@ -112,6 +112,42 @@ test('a highway goes on into a big gridded town to the first of its streets work
  assert.ok(inner<900*0.9-50&&inner>150,`highway reaches ${inner|0} m from the middle`);
 });
 
+test('a city\'s district is not the highway\'s end: it leaves the road at the district\'s edge and joins its streets there',()=> {
+ const {roads,cam}=fixture(['West|35|134.8|3','East|35|135.1|3']);
+ roads.settle(cam);
+ const a=toXZ(35,134.8), b=toXZ(35,135.1), L=Math.hypot(b.x-a.x,b.z-a.z), ux=(b.x-a.x)/L, uz=(b.z-a.z)/L, nx=-uz, nz=ux;
+ // one of East's districts on the way in, its edge 300 m short of East's middle (as the Strip is
+ // of Las Vegas's), sharing the city's id as a district did; a street just in from each edge
+ const r=1500, c={x:b.x-ux*(r+300),z:b.z-uz*(r+300)};
+ const stub=(t,s)=>{const x=c.x+ux*t+nx*s*40,z=c.z+uz*t+nz*s*40;return {pts:new Float32Array([x,z,x+nx*s*100,z+nz*s*100]),cls:'residential'};};
+ const district={id:'east',district:true,around:true,through:true,join:500,x:c.x,z:c.z,r,roads:[stub(-1150,1),stub(1150,-1),stub(0,1)]};
+ roads.update(.1,cam,true,[district]); roads.settle(cam);
+ const out=[]; roads.near('roads',c.x,c.z,6000,out);
+ const hw=out.filter(q=>!q.link&&/West – East/.test(q.name)), links=out.filter(q=>q.link);
+ // nothing of the highway runs across the district
+ for(const q of hw) for(let k=0;k<q.pts.length;k+=2) assert.ok(Math.hypot(q.pts[k]-c.x,q.pts[k+1]-c.z)>r*0.9-40,'highway over the district');
+ // ...it goes on to the city's middle past it
+ assert.ok(hw.some(q=>{for(let k=0;k<q.pts.length;k+=2) if(Math.hypot(q.pts[k]-b.x,q.pts[k+1]-b.z)<50) return true; return false;}),'highway reaches East');
+ // joined to the district's streets each way, and only by a short way in
+ assert.ok(links.length>=2,`${links.length} joins`);
+ for(const q of links){const n=q.pts.length; assert.ok(Math.hypot(q.pts[n-2]-q.pts[0],q.pts[n-1]-q.pts[1])<450,'a long join across the district');}
+ roads.dispose();
+});
+
+test('a grown town a highway only passes through is not cut where it has no street to join',()=> {
+ const {roads,cam}=fixture(['West|35|134.8|3','East|35|135.1|3']);
+ roads.settle(cam);
+ const a=toXZ(35,134.8), b=toXZ(35,135.1), c={x:(a.x+b.x)/2,z:(a.z+b.z)/2};
+ const before=[]; roads.near('roads',c.x,c.z,1000,before);
+ // its only street far off the highway's line
+ const town={id:'mid',through:true,x:c.x,z:c.z,r:1200,roads:[{pts:new Float32Array([c.x,c.z+900,c.x+100,c.z+900]),cls:'residential'}]};
+ roads.update(.1,cam,true,[town]); roads.settle(cam);
+ const out=[]; roads.near('roads',c.x,c.z,1000,out);
+ assert.ok(!out.some(q=>q.link));
+ assert.ok(out.some(q=>{for(let k=0;k<q.pts.length;k+=2) if(Math.hypot(q.pts[k]-c.x,q.pts[k+1]-c.z)<100) return true; return false;}),'the highway still runs through');
+ roads.dispose();
+});
+
 test('open sea is not replaced by a continent-spanning road',()=> {
  const {roads,cam}=fixture(['West|35|134.85|3','East|35|135.15|3'],(_lat,lon)=>lon>134.94&&lon<135.06);
  roads.settle(cam);

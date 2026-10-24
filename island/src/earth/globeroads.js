@@ -33,6 +33,7 @@ const ROUTE_KM = 260;         // routes are found for links this near
 const MOTORWAY = { cls: 'motorway', w: 11, off: 7.5 }, MAIN = { cls: 'primary', w: 8, off: 0 };
 const PIECE = 40;             // points a piece (20 m apart)
 const STEP = 20;
+const THRU = 400;             // m: how far a road passing through a town reaches for its streets at the town's edge
 
 // the Bay's survey: its own roads there (bay/*)
 const inBay = (lat, lon) => lat > 36.93 && lat < 38.87 && lon > -123.6 && lon < -121.45;
@@ -287,6 +288,46 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		ENDS.set(T, f);
 		return f;
 	}
+	// the way into a town from a road at its edge (point qOut): the nearest end of its streets
+	// within THRU, its own freeway's ends first; or, none that near, the first of its street ends
+	// the road comes to going on in (from qIn towards qFar). { q: where the road stops, pts }
+	function joinAt(T, P, qOut, qIn, qFar) {
+		const px = P[qOut * 2], pz = P[qOut * 2 + 1];
+		let best = null, bd = THRU;
+		for (const r of T.roads) {
+			if (!r.pts || r.pts.length < 4 || r.cls === 'service' || /path|track|footway|steps/.test(r.cls || '')) continue;
+			const k0 = r.cls === 'motorway' ? 0.5 : 1;
+			for (const k of [0, r.pts.length - 2]) { const d = Math.hypot(r.pts[k] - px, r.pts[k + 1] - pz) * k0; if (d < bd) { const pts = connector([px, pz], [r.pts[k], r.pts[k + 1]]); if (pts) { bd = d; best = { q: qOut, pts }; } } }
+		}
+		if (best) return best;
+		const E = endsOf(T), dir = qFar > qIn ? 1 : -1;
+		for (let q = qIn; q !== qFar; q += dir) {
+			const to = E(P[q * 2], P[q * 2 + 1]), pts = to && connector([P[q * 2], P[q * 2 + 1]], to);
+			if (pts) return { q, pts };
+		}
+		return null;
+	}
+	// a road's spans [q0, q1] with the stretches inside town T cut out, each cut joined to the
+	// town's streets (a stretch it can't join at both ends is left: the road over the town as before)
+	function cutThrough(T, P, spans, joins) {
+		const reach = T.r * 0.9, inside = (q) => Math.hypot(P[q * 2] - T.x, P[q * 2 + 1] - T.z) < reach, out = [];
+		for (const [s, e] of spans) {
+			let lo = s;
+			for (let q = s; q <= e; q++) {
+				if (!inside(q)) continue;
+				let b = q;
+				while (b < e && inside(b + 1)) b++;
+				// (a stretch at the span's own end is that end's: a town's edge, or a cut already)
+				if (q > s && b < e) {
+					const A = joinAt(T, P, q - 1, q, b), B = A && joinAt(T, P, b + 1, b, q);
+					if (A && B && A.q < B.q) { out.push([lo, A.q]); joins.push(A.pts, B.pts); lo = B.q; }
+				}
+				q = b;
+			}
+			out.push([lo, e]);
+		}
+		return out;
+	}
 	function* make(cx, cz) {
 		const t0 = performance.now();
 		let s0 = t0, work = 0;
@@ -304,8 +345,9 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 			// the town grown at either end: stop at its edge, and go on into its streets
 			// (a place standing inside a gridded town, as the atlas's Modesto stands in the Bay's
 			// generated one, is reached through that town's streets too: t.around; and a link with
-			// both its ends in one is that town's own streets)
-			const townAt = (q, node) => townNow.find((t) => t.id === node.id) || townNow.find((t) => t.around && Math.hypot(P[q * 2] - t.x, P[q * 2 + 1] - t.z) < t.r * 0.9);
+			// both its ends in one is that town's own streets). A city's district is not the city's
+			// end: the road goes on past it to the town grown at the city's middle
+			const townAt = (q, node) => townNow.find((t) => t.id === node.id && !t.district) || townNow.find((t) => t.around && Math.hypot(P[q * 2] - t.x, P[q * 2 + 1] - t.z) < t.r * 0.9);
 			const T0 = townAt(0, L.a), T1 = townAt(n - 1, L.b);
 			if (T0 && T0 === T1 && T0.around) continue;
 			let q0 = 0, q1 = n - 1;
@@ -334,20 +376,28 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 				if (best) joins.push(best);
 				else { q0 = previous0; q1 = previous1; }
 			}
-			const base = P.subarray(q0 * 2, q1 * 2 + 2);
-			const key = L.id + ':' + F.epoch + ':' + q0 + ':' + q1 + ':' + townKey;
+			// a grown town it only passes through (a city's district, a town between its two ends):
+			// it leaves the road at the town's edge each way and joins its streets there, rather than
+			// the road running on across the town's lots
+			let spans = [[q0, q1]];
+			for (const T of townNow) if (T.through && T !== T0 && T !== T1 && T.roads?.length) spans = cutThrough(T, P, spans, joins);
+			const key = L.id + ':' + F.epoch + ':' + spans.map((S) => S[0] + '-' + S[1]).join(',') + ':' + townKey;
 			let pieces = pieceCache.get(key);
 			if (!pieces) {
 				pieces = [];
-				const name = `${L.a.name} – ${L.b.name}`, m = base.length / 2;
+				const name = `${L.a.name} – ${L.b.name}`;
 				const lanes = L.cls === 'motorway' ? [[L.off, false], [-L.off, true]] : [[0, false]];
-				for (const [off, back] of lanes) {
-					const S = off ? offset(base, (left() ? -1 : 1) * off, true, true) : base;
-					for (let q = 0; q < m - 1; q += PIECE) {
-						const e = Math.min(m - 1, q + PIECE);
-						let pts = S.slice(q * 2, e * 2 + 2);
-						if (back) { const r = new Float32Array(pts.length); for (let k = 0; k < pts.length; k += 2) { r[k] = pts[pts.length - 2 - k]; r[k + 1] = pts[pts.length - 1 - k]; } pts = r; }
-						pieces.push(road(L, pts, L.cls === 'motorway', name));
+				for (const [s0, s1] of spans) {
+					if (s1 <= s0) continue;
+					const base = P.subarray(s0 * 2, s1 * 2 + 2), m = base.length / 2;
+					for (const [off, back] of lanes) {
+						const S = off ? offset(base, (left() ? -1 : 1) * off, true, true) : base;
+						for (let q = 0; q < m - 1; q += PIECE) {
+							const e = Math.min(m - 1, q + PIECE);
+							let pts = S.slice(q * 2, e * 2 + 2);
+							if (back) { const r = new Float32Array(pts.length); for (let k = 0; k < pts.length; k += 2) { r[k] = pts[pts.length - 2 - k]; r[k + 1] = pts[pts.length - 1 - k]; } pts = r; }
+							pieces.push(road(L, pts, L.cls === 'motorway', name));
+						}
 					}
 				}
 				for (const pts of joins) pieces.push(road(MAIN, pts, false, `${L.a.name} – ${L.b.name}`, { cls: 'primary', w: 8, link: true }));
