@@ -5,7 +5,15 @@
 // (a squad member of kind 'creature', whose side is one of the creature factions in
 // combat/factions.js: honor for each one brought down comes from that, combat/honor.js).
 //
-//   hp, armour   its life and the harm its hide turns (combat/health.js)
+//   hp, armour   its life and the harm its hide turns (combat/health.js). Every one takes a
+//                fight to bring down, not a round or two (Josh 2026-10-23: monsters more
+//                substantial, more of a damage sponge, the small ones too), and every one shows
+//                its life in a bar over it in a fight (combat/nameplates.js)
+//   rank         how it stands among the others, shown on its bar and the target frame
+//                (combat/target-frame.js): elite (a hard fight of its own), rare (an elite
+//                seldom met), boss (the end of a place); an ordinary one has none
+//   mana         a caster's pool { max, cost (a cast's), regen (a second) }: each throw spends
+//                it, and one run dry comes in close to fight with its hands until it is back
 //   walk, run    its paces, in m/s (the run is its charge)
 //   dmg, reach   a blow's harm to you (more to another fighter) and how far it reaches, in m
 //   strike       a blow's whole time, in s (the wind-up is the first third: read it and step back)
@@ -53,7 +61,7 @@
 export const SPECIES = Object.freeze({
 	'fog-wight': {
 		name: 'Fog Wight', faction: 'nightborn', height: 3.0,
-		hp: 260, armour: 10, walk: 1.5, run: 4.6, dmg: 22, reach: 2.6, strike: 1.1, sight: 55,
+		hp: 650, armour: 10, walk: 1.5, run: 4.6, dmg: 22, reach: 2.6, strike: 1.1, sight: 55,
 		resist: { fire: 1.5, ballistic: 0.9 }, surface: 'creature',
 		// (cold air with a voice in it: a hollow moan, a gust as it reaches, the draught it carries)
 		weak: { bones: ['chest'], name: 'the cold light in it', glow: 0x9fd8ff, r: 0.42 },
@@ -62,28 +70,28 @@ export const SPECIES = Object.freeze({
 	},
 	'sexton': {
 		name: 'The Sexton', faction: 'nightborn', height: 1.85,
-		hp: 180, armour: 15, walk: 1.1, run: 3.2, dmg: 18, reach: 2.3, strike: 1.0, sight: 40,
+		hp: 450, armour: 15, walk: 1.1, run: 3.2, dmg: 18, reach: 2.3, strike: 1.0, sight: 40,
 		resist: { fire: 1.3 }, surface: 'creature',
 		voice: { spot: 'rasp', idle: 'lantern', swing: 'spadeswing', hit: 'spadehit', hurt: 'rasp', die: 'rattle', pitch: 1, ref: 3.5 },
 		where: { night: true, zones: ['earth-rural', 'earth-urban', 'village', 'wild'], pack: [1, 1] },
 	},
 	'drain-skulker': {
 		name: 'Drain Skulker', faction: 'goblins', height: 1.2,
-		hp: 70, armour: 0, walk: 1.8, run: 5.6, dmg: 8, reach: 1.5, strike: 0.7, sight: 45,
+		hp: 160, armour: 0, walk: 1.8, run: 5.6, dmg: 8, reach: 1.5, strike: 0.7, sight: 45,
 		resist: { fire: 1.2 }, surface: 'creature',
 		voice: { spot: 'cackle', idle: 'cackle', strike: 'snap', hurt: 'yelp', die: 'squeal', pitch: 1, ref: 2.5 },
 		where: { night: true, zones: ['earth-urban', 'earth-coast', 'village'], pack: [2, 4] },
 	},
 	'sporeborn-miner': {
 		name: 'Sporeborn Miner', faction: 'deepborn', height: 1.8,
-		hp: 150, armour: 10, walk: 1.2, run: 3.6, dmg: 14, reach: 1.9, strike: 0.9, sight: 40,
+		hp: 360, armour: 10, walk: 1.2, run: 3.6, dmg: 14, reach: 1.9, strike: 0.9, sight: 40,
 		resist: { fire: 1.6, energy: 0.9 }, surface: 'creature',
 		voice: { spot: 'wheeze', idle: 'wheeze', swing: 'pickswing', hit: 'pickhit', hurt: 'wheeze', die: 'spores', pitch: 1, ref: 3.5 },
 		where: { night: false, zones: ['deep'], pack: [1, 3] },
 	},
 	'cinderkin': {
-		name: 'Cinderkin', faction: 'deepborn', height: 2.3,
-		hp: 340, armour: 45, walk: 1.0, run: 2.8, dmg: 26, reach: 2.5, strike: 1.2, sight: 45,
+		name: 'Cinderkin', faction: 'deepborn', height: 2.3, rank: 'elite',
+		hp: 800, armour: 45, walk: 1.0, run: 2.8, dmg: 26, reach: 2.5, strike: 1.2, sight: 45,
 		resist: { fire: 0.15, ballistic: 0.75, impact: 0.8, energy: 1.3 }, surface: 'stone',
 		// (the magma under its skin never stops churning: close to, that is what gives it away)
 		weak: { bones: ['chest'], name: 'the magma vent', glow: 0xff4a10, r: 0.36 },
@@ -91,8 +99,8 @@ export const SPECIES = Object.freeze({
 		where: { night: false, zones: ['deep', 'arid'], pack: [1, 1] },
 	},
 	'signplate-brute': {
-		name: 'Signplate Brute', faction: 'goblins', height: 1.9,
-		hp: 320, armour: 60, walk: 1.1, run: 3.4, dmg: 28, reach: 2.4, strike: 1.3, sight: 45,
+		name: 'Signplate Brute', faction: 'goblins', height: 1.9, rank: 'elite',
+		hp: 760, armour: 60, walk: 1.1, run: 3.4, dmg: 28, reach: 2.4, strike: 1.3, sight: 45,
 		resist: { ballistic: 0.7, pierce: 0.8, fire: 1.1 }, surface: 'metal',
 		weak: { bones: ['neck'], name: 'the gap under the helm', glow: 0xffd257, r: 0.2 },
 		voice: { spot: 'bellow', idle: 'plates', swing: 'plateswing', hit: 'plateslam', hurt: 'clang', die: 'heap', pitch: 1, ref: 5 },
@@ -100,7 +108,7 @@ export const SPECIES = Object.freeze({
 	},
 	'flarepot': {
 		name: 'Flarepot', faction: 'goblins', height: 1.15,
-		hp: 60, armour: 0, walk: 1.8, run: 5.2, dmg: 7, reach: 1.4, strike: 0.8, sight: 50,
+		hp: 140, armour: 0, walk: 1.8, run: 5.2, dmg: 7, reach: 1.4, strike: 0.8, sight: 50,
 		resist: { fire: 0.4 }, surface: 'creature',
 		voice: { spot: 'cackle', idle: 'cackle', strike: 'snap', lob: 'lob', hurt: 'yelp', die: 'flamepop', pitch: 1.1, ref: 2.5 },
 		throw: { range: 17, keep: 7, every: [2.2, 3.6], dmg: 14, type: 'fire', splash: 2.4 },
@@ -108,23 +116,25 @@ export const SPECIES = Object.freeze({
 	},
 	'spore-hexer': {
 		name: 'Spore Hexer', faction: 'goblins', height: 1.25,
-		hp: 90, armour: 5, walk: 0.9, run: 2.6, dmg: 9, reach: 1.9, strike: 1.0, sight: 50,
+		hp: 210, armour: 5, walk: 0.9, run: 2.6, dmg: 9, reach: 1.9, strike: 1.0, sight: 50,
 		resist: { fire: 1.5, energy: 0.8 }, surface: 'creature',
 		voice: { spot: 'chant', idle: 'chant', throw: 'chant', lob: 'hex', hurt: 'wheeze', die: 'spores', pitch: 1, ref: 4 },
 		throw: { range: 20, keep: 9, every: [3, 4.5], dmg: 10, type: 'energy', splash: 2.0 },
+		// (four curses, then it has to come and fight: watch its mana on the target frame)
+		mana: { max: 120, cost: 30, regen: 4 },
 		where: { night: false, zones: ['deep'], pack: [1, 2] },
 	},
 	'old-drain-king': {
-		name: 'The Old Drain King', faction: 'goblins', height: 2.4,
-		hp: 900, armour: 40, walk: 0.8, run: 2.0, dmg: 40, reach: 2.8, strike: 1.6, sight: 40,
+		name: 'The Old Drain King', faction: 'goblins', height: 2.4, rank: 'rare',
+		hp: 2000, armour: 40, walk: 0.8, run: 2.0, dmg: 40, reach: 2.8, strike: 1.6, sight: 40,
 		resist: { ballistic: 0.85 }, surface: 'creature',
 		weak: { bones: ['spine', 'hips'], name: 'the swollen gut', glow: 0x9aff3a, r: 0.42, along: 0.6 },
 		voice: { spot: 'roar', idle: 'grunt', swing: 'heavyswing', hit: 'kingblow', hurt: 'grunt', die: 'kingfall', pitch: 1, ref: 7 },
 		where: { night: false, zones: ['deep'], pack: [1, 1], odds: 0.12 },
 	},
 	'saltmarsh-mother': {
-		name: 'Saltmarsh Mother', faction: 'nightborn', height: 2.5,
-		hp: 420, armour: 10, walk: 1.0, run: 4.0, dmg: 30, reach: 3.0, strike: 1.2, sight: 50,
+		name: 'Saltmarsh Mother', faction: 'nightborn', height: 2.5, rank: 'elite',
+		hp: 950, armour: 10, walk: 1.0, run: 4.0, dmg: 30, reach: 3.0, strike: 1.2, sight: 50,
 		resist: { fire: 1.4, ballistic: 0.8 }, surface: 'creature',
 		weak: { bones: ['neck'], name: 'the bloated throat', glow: 0x3ae8c8, r: 0.3 },
 		voice: { spot: 'keen', idle: 'gurgle', swing: 'wetswipe', hit: 'slap', hurt: 'gurgle', die: 'drown', pitch: 1, ref: 6 },
@@ -132,7 +142,7 @@ export const SPECIES = Object.freeze({
 	},
 	'moonturned': {
 		name: 'Moonturned', faction: 'nightborn', height: 2.2, model: 'moonturned-beast', human: 'moonturned',
-		hp: 220, armour: 5, walk: 1.3, run: 6.0, dmg: 20, reach: 2.0, strike: 0.8, sight: 50,
+		hp: 550, armour: 5, walk: 1.3, run: 6.0, dmg: 20, reach: 2.0, strike: 0.8, sight: 50,
 		resist: { fire: 1.2 }, surface: 'creature',
 		// (the scream of the change, then a beast's howl: snarl and growl are the hound's)
 		weak: { bones: ['chest'], name: 'the heart', glow: 0xff3a5a, r: 0.3 },
@@ -140,8 +150,8 @@ export const SPECIES = Object.freeze({
 		where: { night: true, zones: ['village', 'earth-rural'], pack: [1, 2], odds: 0.7 },
 	},
 	'burnt-giant': {
-		name: 'Burnt Giant', faction: 'nightborn', height: 12,
-		hp: 2400, armour: 80, walk: 1.4, run: 3.6, dmg: 55, reach: 7, strike: 2.4, sight: 70,
+		name: 'Burnt Giant', faction: 'nightborn', height: 12, rank: 'rare',
+		hp: 4800, armour: 80, walk: 1.4, run: 3.6, dmg: 55, reach: 7, strike: 2.4, sight: 70,
 		// (it hunts no further than it sees: get 70 m from it and it loses you; a fresh-woken
 		// one walks after you a while before it runs, so there is time to get away)
 		hunt: 1, resist: { fire: 2.0, ballistic: 0.5, pierce: 0.6 }, surface: 'wood',
@@ -154,7 +164,7 @@ export const SPECIES = Object.freeze({
 	},
 	'ridge-hound': {
 		name: 'Ridge Hound', faction: 'nightborn', height: 1.15,
-		hp: 110, armour: 0, walk: 1.6, run: 8.5, dmg: 13, reach: 1.7, strike: 0.7, sight: 70,
+		hp: 250, armour: 0, walk: 1.6, run: 8.5, dmg: 13, reach: 1.7, strike: 0.7, sight: 70,
 		resist: { fire: 1.3 }, surface: 'creature',
 		voice: { spot: 'howl', strike: 'snarl', idle: 'growl', hurt: 'yelp', die: 'whine', pitch: 1.05, ref: 3.5 },
 		where: { night: true, zones: ['earth-rural', 'wild', 'moon'], pack: [3, 5], odds: 0.8 },
@@ -163,14 +173,14 @@ export const SPECIES = Object.freeze({
 	},
 	'hound-rider': {
 		name: 'Hound Rider', faction: 'goblins', height: 2.1,
-		hp: 280, armour: 15, walk: 1.6, run: 8.0, dmg: 20, reach: 2.3, strike: 0.85, sight: 75,
+		hp: 680, armour: 15, walk: 1.6, run: 8.0, dmg: 20, reach: 2.3, strike: 0.85, sight: 75,
 		resist: { fire: 1.2 }, surface: 'creature',
 		voice: { spot: 'warcry', strike: 'snarl', idle: 'growl', hurt: 'yelp', die: 'tumble', pitch: 1, ref: 4 },
 		where: { night: true, zones: ['earth-rural', 'wild', 'village'], pack: [1, 2], odds: 0.5 },
 	},
 	'gloomcrawler': {
 		name: 'Gloomcrawler', faction: 'gloom', height: 1.0,
-		hp: 90, armour: 25, walk: 1.4, run: 6.5, dmg: 12, reach: 1.8, strike: 0.8, sight: 40,
+		hp: 200, armour: 25, walk: 1.4, run: 6.5, dmg: 12, reach: 1.8, strike: 0.8, sight: 40,
 		resist: { fire: 1.4, ballistic: 0.85 }, surface: 'creature',
 		// (no hound's growl or sniff from it: it skitters)
 		voice: { spot: 'screech', idle: 'skitter', growl: 'skitter', sniff: null, strike: 'snap', lob: 'spit', hurt: 'screech', die: 'shrivel', pitch: 1, ref: 3 },
@@ -179,8 +189,8 @@ export const SPECIES = Object.freeze({
 		where: { night: false, zones: [], pack: [2, 4] },
 	},
 	'undertow': {
-		name: 'Undertow', faction: 'deepborn', height: 1.05,
-		hp: 500, armour: 10, walk: 1.0, run: 4.5, dmg: 30, reach: 3.0, strike: 1.1, sight: 30,
+		name: 'Undertow', faction: 'deepborn', height: 1.05, rank: 'elite',
+		hp: 1100, armour: 10, walk: 1.0, run: 4.5, dmg: 30, reach: 3.0, strike: 1.1, sight: 30,
 		resist: { fire: 1.3, ballistic: 0.9 }, surface: 'creature',
 		weak: { bones: ['gill_L', 'gill2_L', 'gill_R', 'gill2_R'], name: 'the gills', glow: 0x40d0ff, r: 0.16 },
 		voice: { spot: 'surge', idle: 'drip', growl: 'drip', sniff: null, scuff: null, swing: 'wavecrash', hurt: 'surge', die: 'sink', pitch: 1, ref: 6 },
@@ -188,7 +198,7 @@ export const SPECIES = Object.freeze({
 	},
 	'lampeater': {
 		name: 'Lampeater', faction: 'nightborn', height: 0.9,
-		hp: 160, armour: 0, walk: 2.5, run: 7.0, dmg: 16, reach: 2.2, strike: 1.0, sight: 60,
+		hp: 380, armour: 0, walk: 2.5, run: 7.0, dmg: 16, reach: 2.2, strike: 1.0, sight: 60,
 		resist: { fire: 1.8 }, surface: 'creature',
 		// (its wings never stop: heard over you before it is seen)
 		voice: { spot: 'shriek', idle: 'shriek', strike: 'shriek', hurt: 'shriek', die: 'fall', pitch: 1, ref: 4, loop: { name: 'wings', bone: 'chest', gain: 0.9, ref: 5, far: 70, still: 1 } },
@@ -197,7 +207,7 @@ export const SPECIES = Object.freeze({
 	},
 	'facet-wraith': {
 		name: 'Facet Wraith', faction: 'deepborn', height: 1.75, model: 'moonturned', look: 'facets', drift: true,
-		hp: 240, armour: 0, walk: 1.2, run: 3.6, dmg: 24, reach: 3.2, strike: 1.2, sight: 45,
+		hp: 560, armour: 0, walk: 1.2, run: 3.6, dmg: 24, reach: 3.2, strike: 1.2, sight: 45,
 		resist: { energy: 0.6, fire: 0.8 }, surface: 'stone',
 		// (its shell sings to itself; it dies the way the mites do, in a shower of glass)
 		voice: { spot: 'chord', idle: 'chord', swing: 'glassswipe', hit: 'glasshit', hurt: 'crack', die: 'shatter', pitch: 0.8, ref: 5, loop: { name: 'chime', gain: 0.5, ref: 4, far: 50, still: 1 } },
@@ -206,15 +216,15 @@ export const SPECIES = Object.freeze({
 	},
 	'shard-mite': {
 		name: 'Shard Mite', faction: 'deepborn', height: 0.56, look: 'legs', shatter: true,
-		hp: 45, armour: 20, walk: 1.6, run: 7.0, dmg: 7, reach: 1.2, strike: 0.6, sight: 35,
+		hp: 100, armour: 20, walk: 1.6, run: 7.0, dmg: 7, reach: 1.2, strike: 0.6, sight: 35,
 		resist: { ballistic: 0.8, impact: 1.5, blast: 1.4 }, surface: 'crystal',
 		// (its death is the shatter ai-squads plays for a shattering kind)
 		voice: { spot: 'chitter', idle: 'click', strike: 'tick', pitch: 1, ref: 2 },
 		where: { night: false, zones: ['deep'], pack: [3, 6], odds: 0.3 },
 	},
 	'hollow-king': {
-		name: 'The Hollow King', faction: 'nightborn', height: 4, look: 'sword',
-		hp: 1800, armour: 120, walk: 1.2, run: 3.2, dmg: 45, reach: 3.4, strike: 1.5, sight: 50,
+		name: 'The Hollow King', faction: 'nightborn', height: 4, rank: 'boss', look: 'sword',
+		hp: 3600, armour: 120, walk: 1.2, run: 3.2, dmg: 45, reach: 3.4, strike: 1.5, sight: 50,
 		resist: { ballistic: 0.6, pierce: 0.7, energy: 1.2 }, surface: 'metal',
 		weak: { bones: ['chest'], name: 'the hollow under the crown', glow: 0x6ad8ff, r: 0.45 },
 		voice: { spot: 'hollow', idle: 'armour', swing: 'bladeswing', hit: 'bladeclang', hurt: 'clang', die: 'knell', pitch: 1, ref: 9 },

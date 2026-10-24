@@ -97,6 +97,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 			// (where a lock-on and a seeking spell aim: the middle of the body; combat/target-focus.js)
 			aim: () => ({ x: u.pos.x, y: u.pos.y + D.H * 0.5, z: u.pos.z }),
 			onHit: (blow) => hurt(u, blow),
+			vitals: () => ({ hp: Math.max(0, u.hp), max: HP[u.kind] }),
 			moral: () => ({ hostileTarget: u.side === 'ironvale' || (u.side === 'guard' && combat.wantedLevel() >= 5), lawTarget: u.side !== 'ironvale' }),
 		};
 		combat.layer.add(u.T);
