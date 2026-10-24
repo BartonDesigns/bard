@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { itemModel } from '../crysis/held-items.js';
+import { itemModel, spinMotes, disposeItemModel } from '../crysis/held-items.js';
 import { armamentVariant } from '../gameplay/armament-variants.js';
 import { TIERS, statsOf } from '../gameplay/gear-levels.js';
 import { ARMS_CATALOG, isGarment } from '../gameplay/arms.js';
@@ -31,8 +31,7 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 	let selected = null, signature = '', clock = 0, pickupT = 0;
 	function remove(id) {
 		const v = visuals.get(id); if (!v) return;
-		v.model.userData.bow?.dispose(); v.root.removeFromParent();
-		v.model.getObjectByName('motes')?.geometry.dispose();
+		disposeItemModel(v.model); v.root.removeFromParent();
 		if (v.model.userData.ownedArmor) { const mats=new Set(); v.model.traverse(o=>{if(o.isMesh){o.geometry.dispose();mats.add(o.material);}}); for(const m of mats)m.dispose(); }
 		// Item geometry and materials belong to the shared held-model cache.
 		v.marker.geometry.dispose(); v.marker.material.dispose(); visuals.delete(id);
@@ -104,6 +103,8 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 			if (!loot.drops.has(id)) { remove(id); continue; }
 			const d = v.root.position.distanceTo(viewer);
 			v.root.visible = d < 70; v.model.visible = d < 35;
+			if(v.model.userData.relicFX)v.model.userData.relicFX.root.visible=d<(touch?10:18);
+			if(d<(touch?10:18))spinMotes(v.model,clock);
 			v.marker.material.opacity = 0.42 + Math.sin(clock * 2) * 0.12;
 		}
 		camera.getWorldDirection(forward);

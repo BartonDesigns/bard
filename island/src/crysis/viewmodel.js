@@ -116,7 +116,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const S = { shots: 0, lastShot: -9, reload: null, key: '', want: '', id: null, model: null, equip: 0, ads: 0, aimHeld: false, aimTap: false, last: null, land: new Spring(14), lagX: new Spring(9, 0.72), lagY: new Spring(9, 0.72), lagR: new Spring(8, 0.62), trig: 0, shotT: -9, clock: 0, sprint: 0, air: 0, zoom: 1, shown: false, calls: 0, item: null, tallOut: 0.8, tallDrop: 0.05 };
 	function swapIn(item) {
 		optics?.reset();
-		if (S.model) { S.model.userData.bow?.dispose(); rig.remove(S.model); }
+		if (S.model) { S.model.userData.bow?.dispose(); S.model.userData.relicFX?.dispose(); S.model.getObjectByName('motes')?.geometry.dispose(); rig.remove(S.model); }
 		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: 'high', optics: true, view: true }) : null;
 		const was = S.id;
 		S.id = item?.i || null; S.key = S.want; S.item = item; S.reload = null; S.bolt = null; S.trig = 0;
@@ -632,6 +632,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			kitPulse(W.flash === 'pulse' ? 1 : 0.5);
 		}
 		if (W.vent) sparks.emit(V.set(...W.vent).applyMatrix4(m), V2.set(0.6, 0.5, 0.25), W.flash === 'pulse' ? 5 : 8, W.flash === 'pulse' ? W.tint : 0xffc070);
+		S.model.userData.relicFX?.trigger();
 		playCue(W.sounds.fire);
 		if (W.bolt) S.bolt = { t: 0, T: W.bolt, out: false };
 		return true;

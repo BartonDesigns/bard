@@ -25,6 +25,7 @@ import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/Buff
 import { TIERS } from '../gameplay/gear-levels.js';
 import { LEGENDARIES, LEGENDARY } from '../gameplay/legendary-items.js';
 import { buildLegendary } from './legendary-models.js';
+import { createRelicEffect } from './relic-effects.js';
 import { armamentVariant } from '../gameplay/armament-variants.js';
 import { createFlash } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
@@ -1096,16 +1097,20 @@ export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false
 	if (B.cell) { const c = new THREE.Mesh(B.cell, kitMaterial(plain)); c.name = 'cell'; c.position.set(...B.cellAt); g.add(c); }
 	if (B.charger) { const c = new THREE.Mesh(B.charger, kitMaterial(plain)); c.name = 'charger'; c.position.set(...B.chargerAt); c.userData.home = B.chargerAt.slice(); g.add(c); }
 	for (const L of B.lens) { const m = new THREE.Mesh(L.g, lensMaterial(L.reticle, plain, L.dot)); m.renderOrder = 2; m.name = 'glass'; g.add(m); }
-	if (t === 4 && lod !== 'low') g.add(motes(t));
+	if (t === 4 && lod !== 'low' && !LEGENDARY[id]) g.add(motes(t));
 	g.traverse((o) => { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; });
 	g.name = 'held:' + id;
 	g.userData = { id, long: holdOf(id).kind === 'long', tier: t, level: l, hold: holdOf(id), variant: armamentVariant(id, t) };
+	if (LEGENDARY[id]) { const fx=createRelicEffect(id,{lod,length:WEAPONS[id].muzzle[0]-.09,y:WEAPONS[id].muzzle[1]});g.add(fx.root);g.userData.relicFX=fx; }
 	if (id === 'reedline-hunting-bow') g.userData.bow = createBowVisual(g, kitMaterial(plain), { low: lod === 'low', colour: finish(t, band).alt.c, drawLength: bowDraw });
 	return g;
 }
 // triangles in a model, for budgets
 export function triangles(o) { let n = 0; o.traverse((x) => { if (x.isMesh) n += (x.geometry.index ? x.geometry.index.count : x.geometry.attributes.position.count) / 3; }); return Math.round(n); }
-export function spinMotes(model, time) { const m = model?.getObjectByName('motes'); if (m) { m.rotation.x = time * 0.8; m.position.y = Math.sin(time * 1.3) * 0.01; } }
+export function spinMotes(model, time) { const m = model?.getObjectByName('motes'); if (m) { m.rotation.x = time * 0.8; m.position.y = Math.sin(time * 1.3) * 0.01; } model?.userData.relicFX?.update(time); }
+
+// Only private animated resources. Never dispose the shared merged model cache here.
+export function disposeItemModel(model) { model?.userData.bow?.dispose();model?.userData.relicFX?.dispose();model?.getObjectByName('motes')?.geometry.dispose(); }
 
 // ---------- in a body's hands (third person: yours and your friends') ----------
 const _h = new THREE.Matrix4(), _h2 = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _o = new THREE.Vector3();
@@ -1245,7 +1250,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 	function set(id, level = 1, tier = 0) {
 		const k = id ? `${id}:${level}:${tier}` : '';
 		if (k === key) return;
-		if (model) { model.userData.bow?.dispose(); model.parent?.remove(model); }
+		if (model) { disposeItemModel(model); model.parent?.remove(model); }
 		key = k; model = id ? itemModel(id, { level, tier, lod }) : null;
 		reload = null; aimBlend = 0;
 		if (model) { model.matrixAutoUpdate = false; model.userData.bow?.set(bowState); scene.add(model); flash = createFlash(model); }
@@ -1386,6 +1391,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		if (!W || reload) return false;
 		kick = 0.14;
 		model.userData.bow?.fire();
+		model.userData.relicFX?.trigger();
 		if (W.flash) { const [x, y] = W.muzzle; flash.sprite.position.set(x + 0.03, y, 0); flash.fire(W.flash, W.tint, W.size * 1.6); }
 		if (distance != null) playCue(W.sounds.fire, { distance });
 		return true;
