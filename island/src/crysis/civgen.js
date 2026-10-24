@@ -32,6 +32,7 @@
 import STATS from './civstats.json' with { type: 'json' };
 import { finishTownSteps } from '../structures/town.js';    // structures: settled lots and alleys
 import { clamp } from '../noise.js';
+import { canopySteps } from '../bay/canopy.js';           // the trees' crowns in the map, for the town seen far off
 
 // ---------- small tools ----------
 export function rng(seed) {
@@ -1124,6 +1125,10 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	// (and no tree with its trunk in a street, whatever planted it)
 	{ let n = 0, k = 0; for (const t of trees) { if (roadClear(t.x, t.z, 0.6)) trees[n++] = t; if (++k % 4000 === 0) yield 'finish'; } trees.length = n; }
 	yield 'finish';
+	// the trees' crowns, cell by cell, in the map's alpha (bay/canopy.js): the ground paints them
+	// past where the trees themselves stand
+	const mapOut = { px, w: MW, h: MH, x0, z0, step, canopy: true };
+	for (const S = canopySteps(mapOut, trees); !S.next().done;) yield 'finish';
 	// how near the middle of town each building stands (0 at the centre, 1 at the edge), for the
 	// economy (economy/establishments.js): the old centre's houses are mostly shops and offices now
 	for (const b of boxes) b.core = Math.round(Math.hypot(b.x - cx, b.z - cz) / radius * 100) / 100;
@@ -1137,7 +1142,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	return {
 		name, gen: true, seed, style, look, centre: [cx, cz], radius, ang, bounds: [x0, z0, x0 + MW * step, z0 + MH * step], brief: brief ? { id: brief.id, city: brief.city, source: brief.source, vibe: brief.vibe } : null,
 		roads, boxes, paths, pools, trees, ponds, parks: parksOut,
-		map: { px, w: MW, h: MH, x0, z0, step },
+		map: mapOut,
 		info: { freeway: FWY.on ? { name: FWY.name, crossings: FWY.cross.length, interchanges: FWY.cross.filter((c) => c.ic).length } : null, houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },
 	};
 }
