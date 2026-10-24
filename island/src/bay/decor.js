@@ -27,12 +27,14 @@
 //           grey; flat roofs; painted doors, blue, green, maroon
 //   arid    the Middle East's and North Africa's: sand, limestone, whitewash, ochre, Marrakech
 //           rose, mud brick; flat roofs; blue, green, cedar and turquoise doors
+//   nyc     New York's prewar fabric: brownstone, soot-darkened brick, pale limestone, black
+//           cornices and fire-escape iron; flat roofs; deep red, green and black doors
 
 import { eraFor, ERA, STYLE } from './styles.js';
 
 export const ERA_KEYS = ['prewar', 'ranch', 'split', 'tract', 'modern'];
 // the looks of the cities out in the world, and the era each is furnished as inside
-export const LOOK_ERA = { east: 'modern', south: 'tract', arid: 'tract' };
+export const LOOK_ERA = { east: 'modern', south: 'tract', arid: 'tract', nyc: 'prewar' };
 
 // a well-mixed hash: a seed and a salt to 0..1
 export function roll(seed, salt) {
@@ -121,6 +123,12 @@ const EXT = {
 		roof: [[0.8, 0.74, 0.62], [0.7, 0.66, 0.6], [0.66, 0.38, 0.26]],
 		door: [[0.16, 0.34, 0.6], [0.18, 0.44, 0.34], [0.45, 0.3, 0.18], [0.2, 0.55, 0.58]],
 	},
+	nyc: {
+		wall: [[0.35, 0.16, 0.12], [0.46, 0.22, 0.16], [0.56, 0.3, 0.22], [0.28, 0.24, 0.22], [0.62, 0.57, 0.48], [0.76, 0.72, 0.64], [0.84, 0.82, 0.76], [0.42, 0.4, 0.36]],
+		trim: [[0.12, 0.11, 0.1], [0.22, 0.2, 0.18], [0.72, 0.68, 0.6], [0.88, 0.86, 0.8]],
+		roof: [[0.12, 0.12, 0.13], [0.18, 0.18, 0.19], [0.25, 0.24, 0.23]],
+		door: [[0.08, 0.09, 0.1], [0.2, 0.08, 0.06], [0.08, 0.2, 0.13], [0.28, 0.17, 0.1]],
+	},
 };
 // a house's outside: walls, roof (colour and covering, roofs.js ROOF), trim, windows, doors
 export function exteriorLook(era, seed) {
@@ -145,11 +153,17 @@ export function exteriorLook(era, seed) {
 		L.siding = r(6) < 0.5 ? SIDING.batten : r(6) < 0.75 ? SIDING.shingle : null;
 		L.roofT = 4; L.frame = BRONZE; L.doorStyle = DOOR.carved; L.garageStyle = r(10) < 0.5 ? GARAGE.carriage : GARAGE.ribbed; L.garage = r(11) < 0.6 ? [0.42, 0.3, 0.2] : L.trim;
 	} else if (era in LOOK_ERA) {
-		// rendered and painted, plain surrounds, metal-framed windows; East Asia's houses under
-		// glazed tile (barrel tile in the south-east), the others' roofs flat
-		L.surround = era === 'east' ? 'none' : 'stucco'; L.grilles = false; L.frame = era === 'east' ? [0.6, 0.61, 0.62] : L.trim;
-		L.roofT = era === 'east' ? (L.roof[0] > L.roof[2] * 1.4 ? 1 : 2) : 5;
-		L.doorStyle = era === 'east' ? DOOR.slab : DOOR.carved; L.garageStyle = GARAGE.ribbed; L.garage = L.trim;
+		if (era === 'nyc') {
+			L.siding = SIDING.brick; L.surround = 'trim'; L.grilles = true; L.frame = [0.11, 0.1, 0.09];
+			L.roofT = 5; L.roofTrim = 3; L.doorStyle = r(9) < 0.58 ? DOOR.five : DOOR.carved;
+			L.garageStyle = GARAGE.ribbed; L.garage = L.trim;
+		} else {
+			// rendered and painted, plain surrounds, metal-framed windows; East Asia's houses under
+			// glazed tile (barrel tile in the south-east), the others' roofs flat
+			L.surround = era === 'east' ? 'none' : 'stucco'; L.grilles = false; L.frame = era === 'east' ? [0.6, 0.61, 0.62] : L.trim;
+			L.roofT = era === 'east' ? (L.roof[0] > L.roof[2] * 1.4 ? 1 : 2) : 5;
+			L.doorStyle = era === 'east' ? DOOR.slab : DOOR.carved; L.garageStyle = GARAGE.ribbed; L.garage = L.trim;
+		}
 	} else if (era === 'tract') {
 		L.roofT = L.roof[0] > L.roof[2] * 1.4 ? 1 : 2; L.surround = 'stucco'; L.grilles = r(6) < 0.7; L.frame = r(7) < 0.8 ? WHITE : [0.86, 0.82, 0.72];
 		L.doorStyle = DOOR.six; L.garageStyle = GARAGE.raised; L.garage = r(10) < 0.6 ? [0.93, 0.92, 0.88] : [0.86, 0.82, 0.72]; L.roofTrim = r(8) < 0.5 ? 0 : 3;
