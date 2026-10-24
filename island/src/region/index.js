@@ -26,6 +26,7 @@ import { here } from './here.js';
 import { today } from '../calendar.js';
 import { gridSnap } from '../earth/globelanes.js';
 import { inClearing } from '../sportsfields.js';
+import { cityGround } from '../earth/globetowns.js';
 
 const rng = (seed) => { let s = (seed >>> 0) || 1; return () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 const hash2 = (a, b, k) => (Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 19349663) ^ Math.imul(k, 83492791)) >>> 0;
@@ -33,12 +34,39 @@ const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west'
 export const bearingWord = (dx, dz) => DIRS[Math.round(((Math.atan2(dx, -dz) / (Math.PI * 2)) * 8 + 8)) % 8];
 // how often the open country has a village, by kit (per cell of about 5.5 km)
 const RATE = { polar: 0.06, station: 0.004, snow: 0.3, alpine: 0.55, himalaya: 0.35, andes: 0.35, village: 0.6, farm: 0, outback: 0.06, mediterranean: 0.5, desert: 0.14, pueblo: 0.15, bazaar: 0.15, steppe: 0.4, savanna: 0.45, sahel: 0.4, jungle: 0.32, island: 0.5, eastvillage: 0.6, eastcity: 0.6, southasia: 0.75, southcity: 0.75 };
-// the places the regional kit builds whole (the town generator keeps the rest)
-const CLAIM_ALL = new Set(['bazaar', 'eastcity', 'southcity']);
-// ...and the biggest size class each other kit builds itself (the farm country's towns are the generator's)
-const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2 };
+// the biggest size class each kit builds itself (the farm country's towns are the generator's).
+// A real city is the town generator's: its streets, traffic, people and doors (crysis/civgen.js);
+// the old towns and bazaars of the Middle East and North Africa (Khiva, Ouarzazate, Nizwa) are
+// the kit's, and every city from Aswan up is grown; the East and South Asian city kits' places
+// are all cities (300,000 and up), so none of theirs is the kit's
+const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes: 2, village: 0, farm: -1, outback: 0, pueblo: 0, mediterranean: 1, desert: 2, sahel: 2, savanna: 1, jungle: 2, island: 1, steppe: 1, eastvillage: 2, southasia: 2, bazaar: 1, eastcity: -1, southcity: -1 };
+// ...and the manner the town generator builds a city in, by its kit (crysis/civgen.js look)
+const LOOK = { eastcity: 'east', southcity: 'south', bazaar: 'arid' };
 // how far round a real landmark the generated places keep clear (m), by its builder
 const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30 };
+
+// the real towns a kit builds itself (the town generator grows the rest: earth/globetowns.js)
+export function kitClaims(city) {
+	if (!atlasReady()) return false;
+	const at = regionAt(city.lat, city.lon);
+	if (!at) return false;
+	const K = kitAt(at, { pop: city.pop });
+	if (!K) return false;
+	const max = CLAIM_MAX[K.id] ?? 1;
+	return city.pop <= (K.id === 'snow' && Math.abs(city.lat) > 60 ? max + 1 : max);
+}
+// the manner a real city the town generator grows is built in (null: the Bay's own)
+export function cityLook(city) {
+	if (!atlasReady()) return null;
+	const at = regionAt(city.lat, city.lon), K = at && kitAt(at, { pop: city.pop });
+	return (K && LOOK[K.id]) || null;
+}
+// the real city the town generator grows on whose ground a point is (its middle or its districts:
+// earth/globetowns.js), or null
+export function grownCityAt(lat, lon) {
+	if (!atlasReady()) return null;
+	return citiesNear(lat, lon, 30, 8).find((c) => cityGround(Math.max(0, Math.min(5, c.pop | 0)), c.km * 1000) && !kitClaims(c)) || null;
+}
 
 export function createRegional({ scene, shared = null, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null, woods = null, water = () => null }) {
 	const height = globe.height;
@@ -97,17 +125,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 		const ex = toXZ(lat, lon), elev = ground(ex.x, ex.z), C2 = climateNow(at, env.month, elev);
 		return S.add({ key, kind, lat, lon, kit: kit.id, kitObj: k2, pop, name, regionId: at.id, culture: C, palette: palette(at.id), opts: optsFor(at, K), env: { snow: C2.snow }, kitId: kit.id, align });
 	}
-	// the real towns the kit builds itself
-	function claims(city) {
-		if (!atlasReady()) return false;
-		const at = regionAt(city.lat, city.lon);
-		if (!at) return false;
-		const K = kitAt(at, { pop: city.pop });
-		if (!K) return false;
-		if (CLAIM_ALL.has(K.id)) return true;
-		const max = CLAIM_MAX[K.id] ?? 1;
-		return city.pop <= (K.id === 'snow' && Math.abs(city.lat) > 60 ? max + 1 : max);
-	}
+	const claims = kitClaims;
 
 	// ---------- finding the places round you ----------
 	function scan(lat, lon) {
@@ -149,7 +167,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			const kit = kitPick(KH.K, r());
 			const dens = 0.35 + (KH.at.mix.density || 0) * 1.3;
 			if (r() > (RATE[kit.id] ?? 0.3) * dens) continue;
-			if (citiesNear(vl, vn, 3, 1).length) continue;
+			if (citiesNear(vl, vn, 3, 1).length || grownCityAt(vl, vn)) continue;
 			addSettlement('vil:' + i + ':' + j, 'village', vl, vn, { ...KH.K, id: kit.id, kit }, KH.at, { pop: -1, name: '' });
 		}
 		// the farmsteads of the open valleys
@@ -168,6 +186,8 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 			// (the prairie's farms on the flat; elsewhere a farm keeps to its hillside too, as in
 			// Ireland, Wales, the Alps)
 			if (KH.K.id === 'farm' && s > 0.06) continue;
+			// (and none in a city's streets)
+			if (grownCityAt(vl, vn)) continue;
 			const farmKit = KH.K.id === 'farm' ? KITS.farm : { ...KH.K.kit, build: { ...KH.K.kit.build, count: [1, 3], spread: 50, fields: KH.K.kit.build.fields || 'strip' } };
 			// where the land was surveyed in squares, the farms string out along the section roads
 			const g = KH.K.id === 'farm' ? gridSnap(vl, vn) : null;
@@ -198,7 +218,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 				else { const e = 20, s = Math.max(Math.abs(ground(p.x + e, p.z) - ground(p.x - e, p.z)), Math.abs(ground(p.x, p.z + e) - ground(p.x, p.z - e))) / (2 * e); sc = s > 0.35 ? -1e9 : high ? h : -s * 100; }
 				if (sc > bs) { bs = sc; best = [ql, qn]; }
 			}
-			if (!best || bs <= -1e8) continue;
+			if (!best || bs <= -1e8 || grownCityAt(best[0], best[1])) continue;
 			const L = loreFor(kind, KH.K.culture, hash2(i, j, 4), shrineOf(KH.K.id, KH.K.culture));
 			const s = S.add({ key: 'lore:' + i + ':' + j, kind: 'lore', lat: best[0], lon: best[1], kit: KH.K.id, pop: -1, name: L.name, tale: L.tale, lore: kind, regionId: KH.at.id, culture: KH.K.culture, palette: palette(KH.at.id), opts: optsFor(KH.at, KH.K), env: { snow: climateNow(KH.at, env.month, 0).snow }, lots: [{ type: kind, x: 0, z: 0, rot: r() * Math.PI * 2, w: 12, d: 12, role: 'centre' }] });
 			s.kitId = KH.K.id;
@@ -209,7 +229,10 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	const coastAt = { x: Infinity, z: Infinity };
 	function updateHere(lat, lon, cam) {
 		const elev = ground(cam.position.x, cam.position.z);
-		const KH = kitHere(lat, lon, -1, elev);
+		// (in a real city the town generator grows, as far as its built-up ground goes: the city's
+		// kit, its people, sounds and music, not the open country's round it)
+		const city = grownCityAt(lat, lon);
+		const KH = kitHere(lat, lon, city ? city.pop : -1, elev);
 		if (!KH) { here.on = false; return; }
 		const { at, K } = KH;
 		const hours = (globe.world?.()?.sky?.state?.hours) ?? 13;
@@ -313,7 +336,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	const info = () => ({ sound: sound.debug(), folk: folk.info(), ice: ice.info(), flora: flora.info(), kit: here.kit?.id, region: here.regionId, culture: here.culture?.key, climate: here.climate, town: here.town, landmark: here.landmark?.name, onward: here.onward, ...S.info() });
 	function pause() { sound.pause(); }
 	function dispose() { sound.dispose(); folk.dispose(); ice.dispose(); flora.dispose(); air.dispose(); S.dispose(); here.on = false; }
-	return { update, claims, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
+	return { update, claims, cityLook, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
 }
 
 const firstSentence = (t = '') => (t.match(/^.*?[.!?](\s|$)/)?.[0] || t).trim();

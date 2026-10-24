@@ -21,6 +21,13 @@
 //      back now and then, yard and street trees;
 //   5. the land-use map painted from all of that.
 // Everything is drawn from one seeded random stream, so a town is the same every visit.
+//
+// A city built in a denser manner (look: 'east', 'south' or 'arid': Tokyo or Bangkok, Delhi or
+// Karachi, Cairo or Tehran, earth/globetowns.js) grows the same streets on the older grid, but
+// its lots are blocks of flats built out to the pavement, three to ten storeys by how near the
+// middle they stand, shops along the busier streets, and (in East Asia) small two-storey houses
+// under tile roofs between them; no lawn, drive, garage, pool or shed. Its buildings carry the
+// look (b.era) the city paints them in (bay/decor.js), and its downtown rises as high as any.
 
 import STATS from './civstats.json' with { type: 'json' };
 import { finishTownSteps } from '../structures/town.js';    // structures: settled lots and alleys
@@ -209,9 +216,10 @@ export function generateTown(opts) {
 
 // the same, one piece at a time: yields between the pieces (a superblock, a pass), so a
 // caller can spread the work over frames. The generator's return value is the region.
-export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null, brief = null }) {
+export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null, brief = null, look = null }) {
 	const S = stats, r = rng(seed), T0 = Date.now();
-	const older = style === 'older';
+	// (a dense city: the older grid, its lots built up; see the top)
+	const dense = !!look, older = style === 'older' || dense;
 	const W = S.widths;
 	const ca = Math.cos(ang), sa = Math.sin(ang);
 	const toW = (u, v) => [cx + u * ca - v * sa, cz + u * sa + v * ca];
@@ -549,7 +557,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				if (dens(sd.x, sd.z) < 0.25) continue;
 				const pa = G.nearest(sd.x, sd.z, 2);
 				if (!pa) continue;
-				const court = sd.gen > 0 && r() < (older ? 0.08 : 0.16);
+				const court = sd.gen > 0 && r() < (dense ? 0 : older ? 0.08 : 0.16);
 				const g = grow(sd.x, sd.z, sd.h, { id: pa.id }, court, B);
 				if (!g) continue;
 				// cut the parent where the street leaves it; the far end joins or stops
@@ -686,7 +694,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		let nx = -tz * side, nz = tx * side;
 		const u = r(), w = clamp(fromPct(HS.w, clamp(u + (r() - 0.5) * 0.3, 0, 1)) * (big ? 1.2 : 1), 7, Math.min(24, frontage - 3));
 		const d = clamp(fromPct(HS.d, clamp(u + (r() - 0.5) * 0.4, 0, 1)), 8, 22);
-		const set = clamp(fromPct(S.lots.setback, r() * 0.8 + 0.1), 5, 16) * (older ? 0.75 : 1);
+		// (a dense city's house stands close to the pavement)
+		const set = dense ? 1.5 + r() * 2 : clamp(fromPct(S.lots.setback, r() * 0.8 + 0.1), 5, 16) * (older ? 0.75 : 1);
 		const off = hw + set + d / 2, x = ex + nx * off, z = ez + nz * off;
 		let ux = -nz, uz = nx;    // the box's local x in the world, along the street
 		if (!dry(x, z) || slope(x, z) > 0.2 || inSite(x, z, Math.max(w, d) / 2 + 4) || wet(x, z, Math.max(w, d) / 2 + 6)) return false;
@@ -710,14 +719,17 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		// few degrees about its middle, its garage, drive and yard with it
 		if (r() < (older ? 0.4 : 0.18)) { yaw += (r() - 0.5) * 0.1; ux = Math.cos(yaw); uz = Math.sin(yaw); nx = uz; nz = -ux; }
 		const roofH = clamp(fromPct(HS.roofH, r()), 1, Math.min(3.2, Math.min(w, d) * 0.25));
-		const two = r() < (older ? 0.35 : 0.2);
+		const two = r() < (dense ? 0.75 : older ? 0.35 : 0.2);
 		const wallH = two ? 5.2 + r() * 0.8 : clamp(fromPct(HS.wallH, r() * 0.6), 2.6, 3.4);
 		const hip = r() < 0.55 ? 1 : 0;
 		// the garage: in the front of the house (left or right), a wing beside it, or none seen
-		const g = r();
+		// (none in a dense city: the car, if there is one, on the street)
+		const g = dense ? 1 : r();
 		let kind = K.house, gx = 0, door = r() * 0.6 + 0.2;
 		if (g < GA.attached && w >= 11) { kind = r() < 0.5 ? K.garageL : K.garageR; gx = (kind === K.garageL ? -1 : 1) * (w / 2 - 3); door = r() * 0.3 + (kind === K.garageL ? 0.55 : 0.15); }
-		boxes.push({ x, z, w, d, a: yaw, wallH, roofH, kind, hip, door, street: lotRoad?.cls || 'residential' });
+		const hb = { x, z, w, d, a: yaw, wallH, roofH, kind, hip, door, street: lotRoad?.cls || 'residential' };
+		if (look) hb.era = look;
+		boxes.push(hb);
 		const fx = x - nx * d / 2, fz = z - nz * d / 2;   // the middle of the front
 		let dx = fx + ux * gx, dz = fz + uz * gx, dw = 5.0;
 		if (kind === K.house && g < GA.attached + GA.wing + 0.2) {
@@ -731,16 +743,16 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			} else { dx = fx + ux * s2 * (w / 2 - 2.5); dz = fz + uz * s2 * (w / 2 - 2.5); }
 		}
 		// the driveway to the kerb, the front walk from the door
-		if (r() < S.lots.drivewayPerHouse + 0.03) paths.push({ ax: dx, az: dz, bx: dx - nx * (set + hw * 0.5), bz: dz - nz * (set + hw * 0.5), w: dw });
+		if (!dense && r() < S.lots.drivewayPerHouse + 0.03) paths.push({ ax: dx, az: dz, bx: dx - nx * (set + hw * 0.5), bz: dz - nz * (set + hw * 0.5), w: dw });
 		if (kind !== K.garage && r() < 0.8) { const o = (door - 0.5) * (w - 2.5), wx = fx + ux * o, wz = fz + uz * o; paths.push({ ax: wx, az: wz, bx: wx - nx * (set + hw * 0.5), bz: wz - nz * (set + hw * 0.5), w: 1.2 }); }
 		// out back: a pool now and then, and the yard trees
 		const bx = x + nx * (d / 2 + 9.5), bz = z + nz * (d / 2 + 9.5);
-		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8) && slope(bx, bz) < 0.1) {
+		if (!dense && r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8) && slope(bx, bz) < 0.1) {
 			pools.push({ x: bx, z: bz, w: (4 + r() * 1.5) * (big ? 1.3 : 1), d: (8 + r() * 3) * (big ? 1.3 : 1), a: yaw + Math.PI / 2 + (r() - 0.5) * 0.2 });
 			claim(bx, bz, ux, uz, 3, 5);
 		}
 		// a shed in the back corner, or a cottage out back (a guest house on the big lots)
-		const sr = r(), sa2 = r() < 0.5 ? -1 : 1;
+		const sr = dense ? 1 : r(), sa2 = r() < 0.5 ? -1 : 1;
 		if (sr < (big ? 0.7 : 0.22)) {
 			const cot = sr < (big ? 0.4 : 0.05), sw = cot ? 6 : 2.8, sd = cot ? 6.5 : 2.4;
 			const qx = x + ux * sa2 * (w / 2 - sw / 2) + nx * (d / 2 + 12 + sd / 2), qz = z + uz * sa2 * (w / 2 - sw / 2) + nz * (d / 2 + 12 + sd / 2);
@@ -749,7 +761,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				boxes.push({ x: qx, z: qz, w: sw, d: sd, a: yaw + Math.PI, wallH: cot ? 3.0 : 2.3, roofH: cot ? 1.5 : 0.8, kind: K.shed, hip: 0, door: 0.5 });
 			}
 		}
-		const nT = Math.round((S.treesPerHa.residential / S.housesPerHa) * 0.55 * (0.5 + r()));
+		const nT = dense ? (r() < 0.35 ? 1 : 0) : Math.round((S.treesPerHa.residential / S.housesPerHa) * 0.55 * (0.5 + r()));
 		for (let n = 0; n < nT; n++) {
 			const back = r() < 0.7, a = (r() - 0.5) * frontage * 0.9, b = back ? d / 2 + 3 + r() * 12 : -(d / 2 + 2 + r() * (set - 4));
 			const qx = x + ux * a + nx * b, qz = z + uz * a + nz * b;
@@ -780,8 +792,31 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		for (const [a, b] of [[-bw / 2 - 11, -D / 2 - 3], [0, -D / 2 - 3], [bw / 2 - 11, -D / 2 - 3], [-W / 2 + 3, 0], [4, 12], [-10, -12]]) { const [qx, qz] = at(a, b); trees.push({ x: qx, z: qz, h: treeH() * 0.8, cone: 0 }); }
 		return true;
 	}
+	// a dense city's building on its lot: a block of flats out to the pavement (taller toward the
+	// middle: East Asia's the tallest), or on a busier street a shop with a floor or two over it;
+	// its door on the street, the walk to it the pavement's
+	function block(ex, ez, tx, tz, side, hw, frontage, shop) {
+		const nx = -tz * side, nz = tx * side, ux = -nz, uz = nx;
+		const w = clamp(frontage - 2, 8, 32), d = clamp((shop ? 11 : 12) + r() * 8, 10, 22), set = 1 + r() * 2;
+		const off = hw + set + d / 2, x = ex + nx * off, z = ez + nz * off;
+		if (!dry(x, z) || slope(x, z) > 0.16 || inSite(x, z, Math.max(w, d) / 2 + 3) || wet(x, z, Math.max(w, d) / 2 + 5)) return false;
+		const k = dens(x, z);
+		if (r() > Math.min(1, k * 1.6)) return false;
+		if (!free(x, z, ux, uz, w / 2 + 0.4, d / 2 + 0.6)) return false;
+		for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) if (!roadClear(x + ux * a * w / 2 + nx * b * d / 2, z + uz * a * w / 2 + nz * b * d / 2, 1)) return false;
+		claim(x, z, ux, uz, w / 2 + 0.4, d / 2 + 0.6);
+		// (two or three storeys out at the edge, up to ten or more in the middle of a big one)
+		const span = (look === 'south' ? 3.5 : look === 'arid' ? 6 : 7) * clamp(radius / 3000, 0.45, 1.1);
+		const floors = shop ? 1 + Math.floor(r() * 3) : Math.max(2, Math.round(2 + k * k * k * span + r() * 2));
+		const b = { x, z, w, d, a: Math.atan2(nx, -nz), wallH: shop ? 4.6 + floors * 2.9 : floors * 2.8 + 0.4, roofH: 0, kind: shop ? K.retail : K.apartments, hip: 0, door: 0.5, street: lotRoad?.cls || 'residential', era: look };
+		boxes.push(b);
+		// (now and then a street tree in its grate out front)
+		if (r() < 0.25) { const qx = ex + nx * (hw + 1.2), qz = ez + nz * (hw + 1.2); if (roadClear(qx, qz, 0.8) && free(qx, qz, 1, 0, 0.6, 0.6)) trees.push({ x: qx, z: qz, h: treeH() * 0.7, cone: 0 }); }
+		return true;
+	}
 	// down both sides of every residential street (and some collectors)
-	const houseRoads = roads.filter((q) => q.cls === 'residential' || (q.cls === 'tertiary' && r() < 0.35));
+	// (a dense city's every street is built up, its main roads lined with shops)
+	const houseRoads = roads.filter((q) => q.cls === 'residential' || (q.cls === 'tertiary' && (r() < 0.35 || dense)) || (dense && (q.cls === 'secondary' || q.cls === 'primary')));
 	let nh = 0, done = 0;
 	for (const q of houseRoads) {
 		const p = q.pts, L = lengthOf(p), hw = q.w / 2;
@@ -793,6 +828,14 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				// now and then a double lot with an estate on it, an empty lot, or (on a collector)
 				// a block of garden apartments round its pool
 				const lk = r();
+				// (a dense city's lot: its block of flats, a shop on a collector, a small house now and
+				// then out from the middle of an East Asian one)
+				if (dense) {
+					const [x, z, tx, tz] = along(p, s + fr / 2);
+					if (lk < (q.cls === 'residential' ? 0.05 : q.cls === 'tertiary' ? 0.35 : 0.4) ? block(x, z, tx, tz, side, hw, fr, true) : look === 'east' && lk > 0.4 && dens(x, z) < 0.85 ? house(x, z, tx, tz, side, hw, fr, false) : block(x, z, tx, tz, side, hw, fr, false)) nh++;
+					s += fr;
+					continue;
+				}
 				if (q.cls !== 'residential' && lk < 0.22 && s + 90 < L - 4) { fr = 80 + r() * 30; const [x, z, tx, tz] = along(p, s + fr / 2); if (complexAt(x, z, tx, tz, side, hw, fr)) { s += fr; continue; } fr = 30; }
 				const big = lk > 0.955;
 				if (big) fr *= 2.1;
@@ -802,7 +845,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			}
 			// street trees behind the kerb
 			if (q.cls === 'residential') for (let t = 4 + r() * 8; t < L; t += 11 + r() * 8) {
-				if (r() > 0.7) continue;
+				if (r() > (dense ? 0.4 : 0.7)) continue;
 				const [x, z, tx, tz] = along(p, t), ox = x - tz * side * (hw + 3), oz = z + tx * side * (hw + 3);
 				if (roadClear(ox, oz, 2.5) && free(ox, oz, 1, 0, 0.8, 0.8) && dry(ox, oz)) trees.push({ x: ox, z: oz, h: treeH() * 0.9, cone: 0 });
 			}
@@ -814,7 +857,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			for (const da of [-1.0, 0, 1.0]) {
 				const a = Math.atan2(tz * dir, tx * dir) + da, cxx = Math.cos(a), czz = Math.sin(a);
 				// a lot on the bulb: the "street" there runs round the circle
-				if (house(ex + cxx * 5, ez + czz * 5, -czz, cxx, -1, 8, 24, true)) nh++;
+				if (dense ? block(ex + cxx * 5, ez + czz * 5, -czz, cxx, -1, 8, 20, false) : house(ex + cxx * 5, ez + czz * 5, -czz, cxx, -1, 8, 24, true)) nh++;
 			}
 		}
 		if (++done % 80 === 0) yield 'lots';
@@ -852,10 +895,11 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				const sx = (r() - 0.5) * (bw - tw - 16), sz2 = (r() - 0.5) * (bd - td - 16);
 				const [tx, tz] = at((a0 + a1) / 2 + sx, (b0 + b1) / 2 + sz2);
 				if (G.nearest(tx, tz, Math.hypot(tw, td) / 2 + 2)) continue;           // (never on a road)
-				let tall = older ? 12 + r() * 16 : 16 + Math.pow(r(), 1.5) * 100 * near;
+				// (a dense city's downtown rises like the newer towns')
+				let tall = older && !dense ? 12 + r() * 16 : 16 + Math.pow(r(), 1.5) * 100 * near;
 				// Select downtown landmarks can carry 45–74 occupied storeys.
 				const landmark = hashStr(Math.round(tx)+':'+Math.round(tz));
-				if (!older && near > .55 && tw > 28 && td > 26 && landmark % 7 === 0) tall = 5.2 + 3.9 * (44 + landmark % 30);
+				if ((!older || dense) && near > .55 && tw > 28 && td > 26 && landmark % 7 === 0) tall = 5.2 + 3.9 * (44 + landmark % 30);
 				boxes.push({ x: tx, z: tz, w: tw, d: td, a: Math.atan2(sa, ca), wallH: tall, roofH: 0, kind: tall > 22 ? K.tower : K.office, hip: 0, door: 0.5 });
 				// a low block of shops along one side of the block
 				if (r() < 0.7) {
@@ -960,9 +1004,12 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	// (a big city's tens of thousands of buildings and streets are painted a few thousand a step)
 	yield 'map';
 	let painted = 0;
-	for (const b of boxes) { if (b.kind <= K.wing) disc(b.x, b.z, Math.max(b.w, b.d) / 2 + 16, 1, LU.residential * 16); if (++painted % 3000 === 0) yield 'map'; }
+	// (a dense city's streets are paved out to the walls: their pavements, round its blocks; a
+	// house's little yard its own)
+	const VERGE = dense ? LU.plaza * 16 : LU.residential * 16;
+	for (const b of boxes) { if (b.kind <= K.wing) disc(b.x, b.z, Math.max(b.w, b.d) / 2 + (dense ? 4 : 16), 1, LU.residential * 16); else if (dense && b.kind === K.apartments) disc(b.x, b.z, Math.max(b.w, b.d) / 2 + 4, 1, LU.plaza * 16); if (++painted % 3000 === 0) yield 'map'; }
 	yield 'map';
-	for (const q of roads) { if (q.cls === 'residential') for (let i = 0; i < q.pts.length; i += 2) disc(q.pts[i], q.pts[i + 1], q.w / 2 + 12, 1, LU.residential * 16); if (++painted % 1500 === 0) yield 'map'; }
+	for (const q of roads) { if (q.cls === 'residential') for (let i = 0; i < q.pts.length; i += 2) disc(q.pts[i], q.pts[i + 1], q.w / 2 + 12, 1, VERGE); if (++painted % 1500 === 0) yield 'map'; }
 	for (const s of sites) {
 		const sub = (a, b, hw, hd) => ({ x: s.x + s.ux * a - s.uz * b, z: s.z + s.uz * a + s.ux * b, ux: s.ux, uz: s.uz, hw, hd });
 		if (s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
@@ -1011,7 +1058,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const signs = Array.isArray(brief?.signs) ? brief.signs.filter((s) => typeof s === 'string' && s) : [];
 	if (signs.length) { let k = 0; for (const b of boxes) if (b.kind === K.retail || b.kind === K.office) b.sign = signs[k++ % signs.length]; }
 	return {
-		name, gen: true, seed, style, centre: [cx, cz], radius, ang, bounds: [x0, z0, x0 + MW * step, z0 + MH * step], brief: brief ? { id: brief.id, city: brief.city, source: brief.source, vibe: brief.vibe } : null,
+		name, gen: true, seed, style, look, centre: [cx, cz], radius, ang, bounds: [x0, z0, x0 + MW * step, z0 + MH * step], brief: brief ? { id: brief.id, city: brief.city, source: brief.source, vibe: brief.vibe } : null,
 		roads, boxes, paths, pools, trees, ponds, parks: parksOut,
 		map: { px, w: MW, h: MH, x0, z0, step },
 		info: { freeway: FWY.on ? { name: FWY.name, crossings: FWY.cross.length, interchanges: FWY.cross.filter((c) => c.ic).length } : null, houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },

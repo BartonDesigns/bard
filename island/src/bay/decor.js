@@ -18,10 +18,21 @@
 //   modern  2010s-2020s: white board-and-batten farmhouse or charcoal contemporary, black
 //           windows, metal roofs; wide grey plank floors, white shaker kitchens, quartz,
 //           a navy or grasscloth accent wall
+//
+// The cities built in their own manner out in the world (crysis/civgen.js look) have looks of
+// their own outside, kept in the house as its era; inside they are furnished as the nearest era:
+//   east    East Asia's cities: white and grey tile, pale concrete, beige render, now and then a
+//           brown tile front; dark grey tile roofs (terracotta in the south-east); aluminium
+//   south   South Asia's: whitewash and cream, ochre, salmon, sky blue and mint paint, concrete
+//           grey; flat roofs; painted doors, blue, green, maroon
+//   arid    the Middle East's and North Africa's: sand, limestone, whitewash, ochre, Marrakech
+//           rose, mud brick; flat roofs; blue, green, cedar and turquoise doors
 
 import { eraFor, ERA, STYLE } from './styles.js';
 
 export const ERA_KEYS = ['prewar', 'ranch', 'split', 'tract', 'modern'];
+// the looks of the cities out in the world, and the era each is furnished as inside
+export const LOOK_ERA = { east: 'modern', south: 'tract', arid: 'tract' };
 
 // a well-mixed hash: a seed and a salt to 0..1
 export function roll(seed, salt) {
@@ -44,7 +55,7 @@ export function cityEra(era, r) {
 // (mostly before the war, some postwar infill), or the mapped suburbs' by tract (one builder,
 // one decade), with now and then a teardown rebuilt new or an infill lot
 export function houseEra(x, z, ctx = {}) {
-	if (ctx.era && ERA_KEYS.includes(ctx.era)) return ctx.era;
+	if (ctx.era && (ERA_KEYS.includes(ctx.era) || ctx.era in LOOK_ERA)) return ctx.era;
 	const lot = roll(seedAt(x, z), 11);
 	if (ctx.style === STYLE.older) return lot < 0.64 ? 'prewar' : lot < 0.84 ? 'ranch' : lot < 0.92 ? 'split' : lot < 0.97 ? 'tract' : 'modern';
 	const ti = Math.floor((x + 1e6) / 520), tj = Math.floor((z + 1e6) / 400), tr = roll(ti * 7 + 3, tj * 13 + 5);
@@ -92,6 +103,24 @@ const EXT = {
 		roof: [[0.18, 0.18, 0.19], [0.22, 0.22, 0.23], [0.3, 0.3, 0.31]],
 		door: [BLACK, [0.5, 0.34, 0.2], [0.18, 0.3, 0.3], [0.6, 0.42, 0.26], [0.85, 0.66, 0.2]],
 	},
+	east: {
+		wall: [[0.9, 0.89, 0.86], [0.92, 0.91, 0.88], [0.78, 0.78, 0.76], [0.84, 0.79, 0.7], [0.72, 0.75, 0.78], [0.62, 0.62, 0.61], [0.55, 0.44, 0.36], [0.88, 0.8, 0.76], [0.74, 0.77, 0.72], [0.93, 0.89, 0.8]],
+		trim: [WHITE, [0.6, 0.61, 0.62], [0.2, 0.2, 0.22], [0.82, 0.82, 0.8]],
+		roof: [[0.22, 0.24, 0.27], [0.3, 0.33, 0.38], [0.2, 0.18, 0.17], [0.62, 0.33, 0.21]],
+		door: [[0.3, 0.22, 0.15], [0.55, 0.56, 0.57], [0.1, 0.1, 0.11], [0.9, 0.9, 0.88]],
+	},
+	south: {
+		wall: [[0.93, 0.88, 0.75], [0.95, 0.94, 0.9], [0.9, 0.75, 0.42], [0.9, 0.66, 0.58], [0.62, 0.76, 0.86], [0.7, 0.86, 0.76], [0.75, 0.45, 0.32], [0.78, 0.72, 0.86], [0.68, 0.66, 0.62], [0.76, 0.84, 0.5]],
+		trim: [WHITE, [0.86, 0.85, 0.8], [0.2, 0.36, 0.26]],
+		roof: [[0.6, 0.58, 0.55], [0.5, 0.48, 0.45], [0.62, 0.34, 0.24]],
+		door: [[0.18, 0.36, 0.62], [0.2, 0.5, 0.34], [0.4, 0.26, 0.16], [0.5, 0.14, 0.14]],
+	},
+	arid: {
+		wall: [[0.87, 0.78, 0.6], [0.86, 0.82, 0.72], [0.95, 0.94, 0.9], [0.82, 0.65, 0.42], [0.8, 0.5, 0.4], [0.9, 0.86, 0.76], [0.72, 0.58, 0.42], [0.8, 0.79, 0.75]],
+		trim: [WHITE, [0.9, 0.84, 0.7], [0.7, 0.62, 0.5]],
+		roof: [[0.8, 0.74, 0.62], [0.7, 0.66, 0.6], [0.66, 0.38, 0.26]],
+		door: [[0.16, 0.34, 0.6], [0.18, 0.44, 0.34], [0.45, 0.3, 0.18], [0.2, 0.55, 0.58]],
+	},
 };
 // a house's outside: walls, roof (colour and covering, roofs.js ROOF), trim, windows, doors
 export function exteriorLook(era, seed) {
@@ -115,6 +144,12 @@ export function exteriorLook(era, seed) {
 	} else if (era === 'split') {
 		L.siding = r(6) < 0.5 ? SIDING.batten : r(6) < 0.75 ? SIDING.shingle : null;
 		L.roofT = 4; L.frame = BRONZE; L.doorStyle = DOOR.carved; L.garageStyle = r(10) < 0.5 ? GARAGE.carriage : GARAGE.ribbed; L.garage = r(11) < 0.6 ? [0.42, 0.3, 0.2] : L.trim;
+	} else if (era in LOOK_ERA) {
+		// rendered and painted, plain surrounds, metal-framed windows; East Asia's houses under
+		// glazed tile (barrel tile in the south-east), the others' roofs flat
+		L.surround = era === 'east' ? 'none' : 'stucco'; L.grilles = false; L.frame = era === 'east' ? [0.6, 0.61, 0.62] : L.trim;
+		L.roofT = era === 'east' ? (L.roof[0] > L.roof[2] * 1.4 ? 1 : 2) : 5;
+		L.doorStyle = era === 'east' ? DOOR.slab : DOOR.carved; L.garageStyle = GARAGE.ribbed; L.garage = L.trim;
 	} else if (era === 'tract') {
 		L.roofT = L.roof[0] > L.roof[2] * 1.4 ? 1 : 2; L.surround = 'stucco'; L.grilles = r(6) < 0.7; L.frame = r(7) < 0.8 ? WHITE : [0.86, 0.82, 0.72];
 		L.doorStyle = DOOR.six; L.garageStyle = GARAGE.raised; L.garage = r(10) < 0.6 ? [0.93, 0.92, 0.88] : [0.86, 0.82, 0.72]; L.roofTrim = r(8) < 0.5 ? 0 : 3;
@@ -160,6 +195,7 @@ const PUBLIC = new Set(['living', 'family', 'dining', 'office', 'hall']);
 
 // a household's insides: era, then the owners' tastes (the same lot, the same rooms)
 export function householdDecor(era, seed) {
+	if (era in LOOK_ERA) era = LOOK_ERA[era];
 	if (!ERA_KEYS.includes(era)) era = 'tract';
 	const r = (k) => roll(seed, 100 + k);
 	// some households redid the place since: a newer kitchen and paint over the old bones
