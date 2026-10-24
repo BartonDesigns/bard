@@ -31,7 +31,7 @@ async function makeRoom(owner = 'owner-aaaa') {
 	const r = await R.fetch(new Request('https://room/init', { method: 'POST', body: JSON.stringify({ code: 'ABCDEF', owner }) }));
 	return { R, st, r };
 }
-async function join(R, id, name = id, seed = 42) { const ws = socket(); await R.connect(ws, { id, name, seed: String(seed) }); return ws; }
+async function join(R, id, name = id, seed = 42, gear = MAX_LEVEL) { const ws = socket(); await R.connect(ws, { id, name, seed: String(seed), gear }); return ws; }
 const say = (R, ws, m) => R.webSocketMessage(ws, typeof m === 'string' ? m : JSON.stringify(m));
 const bye = async (R, ws) => { ws.close(1000); await R.webSocketClose(ws, 1000, '', true); };
 
@@ -181,6 +181,14 @@ const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' +
 	await say(R, a, { t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', v: 2, side: { credits: 0, items: [{ ...LAMP, l: MAX_LEVEL }] } });
 	ok(b.of('trade').at(-1)?.side?.items?.[0]?.l === MAX_LEVEL, 'gear at the highest level travels');
 	ok(a.of('welcome')[0]?.features?.includes(GEAR_FEATURE), 'and the room says so on welcome');
+	// A newly deployed room still protects an older client from unfamiliar item levels.
+	const old = await join(R, 'older-dddd', 'Old client', 42, undefined);
+	// Explicitly model a pre-capability socket (join's default above models current clients).
+	old.serializeAttachment({ ...old.deserializeAttachment(), gearLevel: 20 });
+	await say(R, a, { t: 'trade', op: 'update', id: 'tr-compat1', to: 'older-dddd', v: 1, side: { credits: 0, items: [{ ...LAMP, l: 99 }] } });
+	ok(old.of('trade').length === 0 && a.of('trade-ack').at(-1)?.compatible === false, 'high gear never reaches an older client');
+	await say(R, a, { t: 'trade', op: 'update', id: 'tr-compat2', to: 'older-dddd', v: 1, side: { credits: 0, items: [{ ...LAMP, l: 20 }] } });
+	ok(old.of('trade').at(-1)?.side.items[0].l === 20, 'existing level-20 trades remain available');
 	const own = a.of('trade').length;
 	await say(R, a, { t: 'trade', op: 'propose', id: 'tr-999999', to: 'owner-aaaa' });
 	ok(a.of('trade').length === own && !a.of('trade-ack').some((x) => x.id === 'tr-999999'), 'not to yourself');
@@ -197,7 +205,7 @@ const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' +
 	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 7, ht: 4 });
 	const hp = b.of('pose').at(-1);
 	ok(hp?.h === 'camp-lantern' && hp.hl === 7 && hp.ht === 4, 'a held item passes with its level and tier');
-	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 70, ht: -1 });
+	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: MAX_LEVEL + 1, ht: -1 });
 	const hq = b.of('pose').at(-1);
 	ok(hq?.h === 'camp-lantern' && !('hl' in hq) && !('ht' in hq), 'a bad level or tier is dropped');
 }

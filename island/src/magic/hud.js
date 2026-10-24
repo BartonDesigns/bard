@@ -326,9 +326,14 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 			fab.title = `Aether fabric: light and dark.${pts ? ` ${pts} skill point${pts > 1 ? 's' : ''} to spend.` : ''} Tab or N (or a tap here) opens skills and magic.`;
 		}
 	}
-	// the word when you go up a level
-	function levelUp(level, pts) {
-		lvl.innerHTML = `<b>LEVEL ${level}</b><i></i>${pts === 1 ? 'A skill point to spend' : `${pts} skill points to spend`} · ${isTouch ? 'hold the spell button, then tap ☀,' : 'Tab'} for skills and magic`;
+	// the word when you go up a level (note: in place of the points, at 99 the trials)
+	function levelUp(level, pts, note = '') {
+		lvl.innerHTML = `<b>LEVEL ${level}</b><i></i>${note || `${pts === 1 ? 'A skill point to spend' : `${pts} skill points to spend`} · ${isTouch ? 'hold the spell button, then tap ☀,' : 'Tab'} for skills and magic`}`;
+		lvl.classList.remove('go'); void lvl.offsetWidth; lvl.classList.add('go');
+	}
+	// the hundredth, made at a well (magic/trials.js)
+	function ascend(pts) {
+		lvl.innerHTML = `<b>LEVEL 100★</b><i></i>The hundredth · five to every attribute · ${pts === 1 ? 'a skill point' : `${pts} skill points`} to spend`;
 		lvl.classList.remove('go'); void lvl.offsetWidth; lvl.classList.add('go');
 	}
 	function setMode(m) { mode.style.opacity = m === 'camera' ? '1' : '0'; }
@@ -338,5 +343,5 @@ export function createMagicHud({ mount, state, hotbar, onCast, onPress, onBook =
 	}
 
 	function dispose() { for (const e of [bar, mana, mode, lvl]) e.remove(); wheel?.dispose(); }
-	return { update, setMode, show, levelUp, open: onBook, isOpen: bookOpen, dispose };
+	return { update, setMode, show, levelUp, ascend, open: onBook, isOpen: bookOpen, dispose };
 }

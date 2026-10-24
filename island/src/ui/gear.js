@@ -17,12 +17,13 @@ import { armamentVariant } from '../gameplay/armament-variants.js';
 // (magic/stats.js statSheet, through magic().stats()).
 
 import { ARMS_CATALOG, GARMENT_SLOTS, isGarment, upgradePrice } from '../gameplay/arms.js';
-import { TIERS, MAX_LEVEL, UPGRADE_MATERIAL, canCombine, groupInstances, statsOf, xpNeed } from '../gameplay/gear-levels.js';
-import { attunement, awakenings, infuseStrands, schoolGlyph, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
+import { TIERS, MAX_LEVEL, LEVEL_CAP, UPGRADE_MATERIAL, canCombine, groupInstances, levelText, statsOf, xpNeed } from '../gameplay/gear-levels.js';
+import { ascendTrial, attunement, awakenings, infuseStrands, schoolGlyph, XP_PER_FABRIC } from '../gameplay/gear-magic.js';
 import { ATTRS, ATTR_IDS } from '../magic/stats.js';
+import { trialEmblem } from './trial-emblems.js';
 import { SCHOOLS } from '../magic/spells.js';
 import { OPEN, accept, cancel, editSide, finished, holdLeft, newTradeId, receive, relayed, startTrade, tick, tradeWhy, worthKeeping } from '../gameplay/trade.js';
-import { GEAR_FEATURE, LEGACY_LEVEL } from '../net/protocol.js';
+import { tradeLevelLimit, tradeFitsLevel } from '../net/protocol.js';
 import { createHand, weaponOf } from '../crysis/held-items.js';
 import { createViewmodel } from '../crysis/viewmodel.js';
 import { createStudio } from './gear-studio.js';
@@ -180,7 +181,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		if (st) {
 			const cr = el('div'); cr.style.cssText = 'display:flex;align-items:center;gap:10px;';
 			if (portrait) cr.append(hero());
-			const tx = el('div', '', `Level ${st.level} · ${st.life} life · ${Math.round(st.mana)} mana · ${st.harmTaken}% harm taken`); tx.style.cssText = 'flex:1;min-width:0;font-size:12px;opacity:.85;';
+			const tx = el('div', '', `Level ${st.level}${st.ascended ? '★' : ''} · ${st.life} life · ${Math.round(st.mana)} mana · ${st.harmTaken}% harm taken`); tx.style.cssText = 'flex:1;min-width:0;font-size:12px;opacity:.85;';
 			cr.append(tx, btn('Character ›', () => open('char'), '', 'Character (Shift+I)'));
 			sheet.append(cr);
 		}
@@ -231,7 +232,8 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		if (!x) { view = 'gear'; drawGear(); return; }
 		const item = ARMS_CATALOG[x.i], T = TIERS[x.t];
 		sheet.append(head(nameOf(x.i), () => open('gear')));
-		const sub = el('div', '', `${T.name} · Level ${x.l}${x.l >= MAX_LEVEL ? ' (max)' : ''}`); sub.style.cssText = `color:${T.color};font:600 13px var(--bard-display,system-ui,sans-serif);text-shadow:0 0 ${4 + T.glow * 10}px ${T.color}55;`;
+		const trial = x.l === LEVEL_CAP ? ascendTrial(x) : null;
+		const sub = el('div', '', `${T.name} · Level ${levelText(x.l)}${x.l === LEVEL_CAP && !trial ? ' (max)' : ''}`); sub.style.cssText = `color:${T.color};font:600 13px var(--bard-display,system-ui,sans-serif);text-shadow:0 0 ${4 + T.glow * 10}px ${T.color}55;`;
 		sheet.append(sub);
 		const variant = armamentVariant(x.i, x.t);
 		if (variant) sheet.append(el('div', '', `${variant.name} · Mark ${variant.mark}`));
@@ -246,13 +248,14 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		if (!box.firstChild) { const f = el('div', '', ''); f.append(slot(x)); box.append(f); }
 		// the level and experience
 		const lv = el('div'); lv.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
-		lv.append(el('div', '', x.l >= MAX_LEVEL ? 'Highest level' : `Experience ${x.x} / ${xpNeed(x.l)} to level ${x.l + 1}`), bar(xpFrac(x)));
+		// (to 99 by experience; at 99 its trial for the hundredth; then the hundredth itself)
+		lv.append(el('div', '', x.l < LEVEL_CAP ? `Experience ${x.x} / ${xpNeed(x.l)} to level ${x.l + 1}` : trial ? `Trial for the hundredth: ${trial.n} / ${trial.of}. ${trial.desc}` : x.l > LEVEL_CAP ? 'The hundredth level ★' : 'Level 99: as high as it goes'), bar(xpFrac(x)));
 		sheet.append(lv);
 		const rowsOf = (list, title) => {
 			if (!list.length) return;
 			const tbl = el('div'); tbl.style.cssText = 'display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:center;';
 			for (const r of list) {
-				const nx = el('span', 'g99-up', x.l < MAX_LEVEL && r.next !== r.value ? `→ ${fmt(r.next, r.unit)}` : '');
+				const nx = el('span', 'g99-up', (x.l < LEVEL_CAP || (x.l === LEVEL_CAP && trial)) && r.next !== r.value ? `→ ${fmt(r.next, r.unit)}` : '');
 				nx.style.fontSize = '12px';
 				const A = r.unit === 'pt' ? ATTRS[r.label.toLowerCase()] : null, name = el('span', '', A ? `${A.glyph} ${r.label}` : r.label);
 				if (A) name.style.color = A.color;
@@ -286,7 +289,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		sheet.append(label('Improve'), acts);
 		// fabric woven in: experience for it, of its school's strand
 		const M = magic();
-		if (S && M && x.l < MAX_LEVEL) {
+		if (S && M && x.l < LEVEL_CAP) {
 			const fab = M.state?.fabric || { light: 0, dark: 0 }, ir = el('div'); ir.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
 			for (const strand of infuseStrands(x)) {
 				const have = fab[strand] || 0, n = Math.min(10, have);
@@ -301,11 +304,11 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		}
 		const of = outfitter(), cost = upgradePrice(x), mats = Object.values(s.instances).filter((y) => y.i === UPGRADE_MATERIAL && y.u !== x.u).length;
 		const upRow = el('div'); upRow.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
-		const up = btn(x.l >= MAX_LEVEL ? 'Max level' : `Upgrade to ${x.l + 1}`, () => { const r = arms.upgrade(x.u, of.id, where()); hint(r.message, 2600); if (r.ok) sound('done'); draw(); }, '');
-		up.disabled = x.l >= MAX_LEVEL || !of || (s.credits || 0) < cost || !mats;
+		const up = btn(x.l > LEVEL_CAP || (x.l === LEVEL_CAP && !trial) ? 'Max level' : x.l === LEVEL_CAP ? 'Earned by its trial' : `Upgrade to ${x.l + 1}`, () => { const r = arms.upgrade(x.u, of.id, where()); hint(r.message, 2600); if (r.ok) sound('done'); draw(); }, '');
+		up.disabled = x.l >= LEVEL_CAP || !of || (s.credits || 0) < cost || !mats;
 		const matName = nameOf(UPGRADE_MATERIAL);
-		const why = x.l >= MAX_LEVEL ? '' : !of ? 'at an outfitter, ranger camp or trader' : !mats ? `needs a ${matName}` : (s.credits || 0) < cost ? 'not enough credits' : '';
-		const cw = el('span', '', x.l >= MAX_LEVEL ? '' : `${cost} credits + 1 ${matName}${why ? ` (${why})` : ''}`); cw.style.cssText = 'font-size:12px;opacity:.8;flex:1;min-width:140px;';
+		const why = x.l >= LEVEL_CAP ? '' : !of ? 'at an outfitter, ranger camp or trader' : !mats ? `needs a ${matName}` : (s.credits || 0) < cost ? 'not enough credits' : '';
+		const cw = el('span', '', x.l >= LEVEL_CAP ? '' : `${cost} credits + 1 ${matName}${why ? ` (${why})` : ''}`); cw.style.cssText = 'font-size:12px;opacity:.8;flex:1;min-width:140px;';
 		upRow.append(up, cw);
 		sheet.append(upRow);
 		const twin = Object.values(s.instances).filter((y) => canCombine(x, y)).sort((a, b) => a.l - b.l)[0];
@@ -365,10 +368,13 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		const st = magic()?.stats?.();
 		sheet.append(head('Character', () => open('gear')), el('div', 'g99-rule'));
 		if (!st) { sheet.append(note('Your statistics show once you are out in a world.')); return; }
-		const pts = magic()?.info?.()?.points || 0;
-		const lv = el('div', '', `Level ${st.level}${pts ? ` · ${pts} skill point${pts > 1 ? 's' : ''} waiting (Tab)` : ''}`); lv.style.cssText = 'font:600 13px var(--bard-display,system-ui,sans-serif);color:#e9cf93;';
+		const pts = magic()?.info?.()?.points || 0, done = st.trials.filter((t) => t.done).length;
+		const lv = el('div', '', `Level ${st.ascended ? `${st.level}★ · ascended` : st.level}${!st.ascended && st.trialsOpen ? ` · trials ${done} of ${st.trials.length}` : ''}${pts ? ` · ${pts} skill point${pts > 1 ? 's' : ''} waiting (Tab)` : ''}`); lv.style.cssText = `font:600 13px var(--bard-display,system-ui,sans-serif);color:${st.ascended ? '#ffd27a' : '#e9cf93'};${st.ascended ? 'text-shadow:0 0 10px #ffb34088;' : ''}`;
 		if (portrait) sheet.append(hero('big'));
 		sheet.append(lv);
+		// (the trials come first once they are open: they are what is left)
+		const trialsAt = st.trialsOpen || st.ascended;
+		if (trialsAt) drawTrials(st);
 		const tiles = el('div'); tiles.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
 		for (const [k, v, sub, c] of [['Life', st.life, st.lifeRegen ? `+${st.lifeRegen}/s resting` : 'resting: the usual', '#ff8a8a'], ['Mana', Math.round(st.mana), `+${st.manaRegen}/s · ${st.manaRegenFighting}/s fighting`, '#8fb0ff'], ['Harm taken', `${st.harmTaken}%`, st.harmTaken < 100 ? `${100 - st.harmTaken}% turned aside` : 'nothing turned aside', '#d8c49a'], ['Load', `${st.load} kg`, st.loadPace ? `${st.loadPace}% slower` : 'light enough to run free', '#c9c2a2']]) {
 			const t = el('div', 'g99-panel'); t.style.cssText += 'padding:7px 8px;text-align:center;';
@@ -433,11 +439,35 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 			card.onclick = (e) => { e.stopPropagation(); open('item', uid); };
 			sheet.append(card);
 		}
+		if (!trialsAt) drawTrials(st);
 		sheet.append(label('The body'));
 		const body = [st.weapon && `+${st.weapon}% weapon harm`, st.weak && `+${st.weak}% on heads and weak points`, st.boss && `+${st.boss}% against great beasts and machines`, st.manaOnHit && `+${st.manaOnHit} mana a weapon hit`, st.pace && `+${st.pace}% pace`, st.jump && `+${st.jump}% jump`, st.fall && `${st.fall}% gentler falls`, st.xp && `+${st.xp}% experience`].filter(Boolean);
 		sheet.append(note(body.length ? body.join(' · ') : 'Nothing beyond the usual yet: Precision, Swiftness and the body\'s perks add to it.'));
 		const aff = el('div', '', `Affinity: ${st.affinity.light} light, ${st.affinity.dark} dark`); aff.style.cssText = 'font-size:11px;opacity:.6;';
 		sheet.append(aff);
+	}
+
+	// the trials of the hundredth (magic/trials.js): each with its progress; then the rite, or
+	// the hundredth itself
+	function drawTrials(st) {
+		const done = st.trials.filter((t) => t.done).length;
+		sheet.append(label(`The hundredth${st.ascended ? ' ★' : ` · ${done} of ${st.trials.length}`}`));
+		if (st.ascended) { const a = note('You stand at level 100★: five to every attribute, and a skill point. Experience took you to 99; the trials and the rite took you the rest of the way.'); a.style.color = '#ffd27a'; sheet.append(a); return; }
+		sheet.append(note(st.trialsOpen ? 'Experience goes no further than 99. The hundredth is earned: every trial, then the rite.' : `They open at level ${st.cap}. What you do before then counts toward them.`));
+		const list = el('div'); list.style.cssText = `display:flex;flex-direction:column;gap:7px;${st.trialsOpen ? '' : 'opacity:.6;'}`;
+		for (const t of st.trials) {
+			const r = el('div'); r.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
+			const h = el('div'); h.style.cssText = 'display:flex;align-items:baseline;gap:8px;';
+			const emblem = el('span'); emblem.innerHTML = trialEmblem(t.id, t.done); emblem.style.cssText = 'flex:none;width:32px;height:32px;align-self:center;';
+			const nm = el('span', '', t.name); nm.style.cssText = `flex:1;font:600 12px system-ui;color:${t.done ? '#ffd27a' : '#efe6d2'};`;
+			const n = el('b', '', t.done ? '✓' : `${t.n} / ${t.of}`); n.style.cssText = `font:600 12px system-ui;color:${t.done ? '#6ff09a' : '#efe6d2'};`;
+			h.append(emblem, nm, n);
+			const b = el('div', 'g99-bar'), i = el('i'); i.style.width = `${Math.round(t.n / t.of * 100)}%`; if (t.done) i.style.background = 'linear-gradient(90deg,#b48a3c,#ffd27a)'; b.append(i);
+			const d = el('div', '', t.desc); d.style.cssText = 'font-size:10px;opacity:.65;';
+			r.append(h, b, d); list.append(r);
+		}
+		sheet.append(list);
+		if (st.trialsOpen && done === st.trials.length) { const rt = el('div', 'g99-panel ok', `The rite: ${st.rite || 'gather from an aether well at dusk or dawn.'}`); rt.style.cssText += 'font:600 12px system-ui;color:#ffd27a;line-height:1.4;'; sheet.append(rt); }
 	}
 
 	function draw() {
@@ -452,6 +482,14 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 	let activeId = null, invite = null;
 	// what the room's server understands (its welcome's features)
 	let roomFeatures = new Set();
+	const peerLevels = new Map();
+	const tradeLimit = (peer) => tradeLevelLimit(roomFeatures, peerLevels.get(peer));
+	const incompatible = (T, m) => {
+		const level = tradeLimit(T.peer);
+		if (tradeFitsLevel(m, level)) return false;
+		hint(`This room and player support trades up to level ${level}. Higher gear stays in your bag until both are updated.`, 5000);
+		return true;
+	};
 	const active = () => (activeId && trades.get(activeId)) || null;
 	try { for (const T of JSON.parse(store.get(KEEP_KEY) || '[]')) if (T?.id && Array.isArray(T.sides?.a?.items)) trades.set(T.id, T); } catch { /* none kept */ }
 	let keptSig = null;
@@ -482,10 +520,10 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 			const T = active();
 			if (!T) return;
 			// (an older rooms server drops gear above level 10 from a trade: say so, never stall)
-			if (!roomFeatures.has(GEAR_FEATURE) && side?.items?.some((x) => x.l > LEGACY_LEVEL)) { hint(`This room's server is older: gear above level ${LEGACY_LEVEL} can be traded once it is updated.`, 4000); drawTrade(true); return; }
+			if (incompatible(T, { side })) { drawTrade(true); return; }
 			step(editSide(T, side, Date.now()));
 		},
-		onAccept: () => { const T = active(); if (T) step(accept(T, ctxFor(T.peer))); },
+		onAccept: () => { const T = active(); if (T && !incompatible(T, T)) step(accept(T, ctxFor(T.peer))); },
 		onCancel: () => { const T = active(); if (T) step(cancel(T, 'cancelled', Date.now())); },
 		onClose: () => { const T = active(); if (T && OPEN.includes(T.status)) step(cancel(T, 'cancelled', Date.now())); win.close(); },
 	});
@@ -531,17 +569,27 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 	// what the room says (net/multiplayer.js passes everything here)
 	function heard(t, v) {
 		const now = Date.now();
+		if (t === 'welcome') { peerLevels.clear(); for (const p of v.players || []) peerLevels.set(p.id, p.gearLevel); }
+		else if (t === 'join') peerLevels.set(v.id, v.gearLevel);
+		else if (t === 'leave') peerLevels.delete(v.id);
+		else if (t === 'closed' || (t === 'status' && v.status === 'off')) peerLevels.clear();
 		if (t === 'welcome') roomFeatures = new Set(Array.isArray(v.features) ? v.features : []);
 		else if (t === 'closed' || (t === 'status' && v.status === 'off')) roomFeatures = new Set();
 		if (t === 'trade') {
 			const T = trades.get(v.id);
 			if (T && T.peer !== v.from) return;
+			if (incompatible(T || { peer: v.from }, v)) { if (T && OPEN.includes(T.status)) step(cancel(T, 'cancelled', now)); return; }
 			const cur = active();
 			if (v.op === 'propose' && !T && cur && OPEN.includes(cur.status)) { multiplayer.send({ t: 'trade', to: v.from, op: 'cancel', id: v.id, why: 'busy' }); return; }
 			const N = step(receive(T, v, ctxFor(v.from)), v.from);
 			if (v.op === 'propose' && N) activeId = N.id;
 		} else if (t === 'trade-ack') {
 			const T = trades.get(v.id);
+			if (v.compatible === false) {
+				hint(`The room refused this gear: both players must support level ${MAX_LEVEL} trades. No new trade was applied.`, 5000);
+				if (T && OPEN.includes(T.status)) step(cancel(T, 'cancelled', now));
+				return;
+			}
 			if (T && v.op === 'propose') step(relayed(T, v.there, now));
 		} else if (t === 'leave') {
 			for (const T of trades.values()) if (T.peer === v.id && OPEN.includes(T.status)) step({ T: { ...T, status: 'cancelled', why: 'gone', endedAt: now }, note: 'gone' });
@@ -599,7 +647,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		if (shown()) {
 			const s = arms.state();
 			const mi = view === 'char' || view === 'item' || view === 'gear' ? magic()?.info?.() : null;
-			const k = JSON.stringify([view, shopId, itemUid, s.revision, s.credits, multiplayer?.friends?.().map((f) => [f.id, Math.round(f.d / 5)]), view !== 'item' ? arms.shops(where()).map((x) => [x.id, Math.round(x.distance / 5)]) : outfitter()?.id || '', mi && [mi.level, mi.points, mi.fabric, mi.life, mi.max, view === 'char' ? mi.perks.length : 0]]);
+			const k = JSON.stringify([view, shopId, itemUid, s.revision, s.credits, multiplayer?.friends?.().map((f) => [f.id, Math.round(f.d / 5)]), view !== 'item' ? arms.shops(where()).map((x) => [x.id, Math.round(x.distance / 5)]) : outfitter()?.id || '', mi && [mi.level, mi.ascended, mi.points, mi.fabric, mi.life, mi.max, mi.wells, mi.deeds, view === 'char' ? mi.perks.length : 0]]);
 			if (k !== sig) { sig = k; draw(); }
 		}
 	}

@@ -72,7 +72,7 @@ const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('  FAIL', msg
 	globalThis.setTimeout = (fn, ms) => { timers.push(ms); return realSet(fn, 0); };
 	const C = createRoomClient({ url: 'https://rooms.test', id: 'me-123456', name: () => 'Me', seed: 5, WS: FakeWS, on: (t, v) => seen.push([t, v]) });
 	ok(C.join('abc-def') === true && made.length === 1, 'joins with a cleaned code');
-	ok(/^wss:\/\/rooms\.test\/rooms\/ABCDEF\/ws\?id=me-123456&name=Me&seed=5$/.test(made[0].url), 'the address carries the hello');
+	ok(/^wss:\/\/rooms\.test\/rooms\/ABCDEF\/ws\?id=me-123456&name=Me&seed=5&gear=100$/.test(made[0].url), 'the address carries the hello and gear capability');
 	made[0].open({ t: 'welcome', you: 'me-123456', host: 'me-123456', code: 'ABCDEF', players: [{ id: 'me-123456' }, { id: 'f-1234567', name: 'F' }] });
 	ok(C.status === 'on' && C.isHost() && C.players.size === 1, 'welcomed as host, with one friend');
 	ok(C.send({ t: 'pose', p: [0, 0, 0] }) && made[0].sent.length === 1, 'sends when open');

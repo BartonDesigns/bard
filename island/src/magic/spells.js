@@ -169,7 +169,7 @@ export function createMagicState(from = null) {
 	// (xp, level, perks, use and mastery: your skills, magic/skills.js; mods: what the perks and
 	// mastery add up to; moonlit: the ids of the sun spells mastered to work by the moon; honor:
 	// what you earned in fair fights, combat/honor.js)
-	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, xp: 0, level: 1, perks: [], use: {}, mastery: {}, mods: null, moonlit: [], honor: null };
+	const s = { v: 1, known: [...STARTER.known], binds: [...STARTER.binds], fabric: { ...STARTER.fabric }, affinity: { light: 0, dark: 0 }, mana: 100, cds: {}, mark: null, wells: [], gateAt: 0, gathered: {}, xp: 0, level: 1, perks: [], use: {}, mastery: {}, mods: null, moonlit: [], honor: null, ascended: false, deeds: { bosses: 0, spared: 0 }, trials: [] };
 	if (from && from.v === 1) {
 		if (Array.isArray(from.known)) s.known = from.known.filter((id) => SPELL[id]);
 		if (Array.isArray(from.binds)) s.binds = [...Array(SLOTS)].map((_, i) => (SPELL[from.binds[i]] && s.known.includes(from.binds[i]) ? from.binds[i] : null));
@@ -185,11 +185,14 @@ export function createMagicState(from = null) {
 		if (from.mastery && typeof from.mastery === 'object') s.mastery = { ...from.mastery };
 		if (Array.isArray(from.moonlit)) s.moonlit = from.moonlit.filter((id) => SPELL[id]?.night === 'moon');
 		if (from.honor && typeof from.honor === 'object') s.honor = from.honor;
+		s.ascended = from.ascended === true;
+		for (const k of ['bosses', 'spared']) s.deeds[k] = Math.max(0, Math.floor(+from.deeds?.[k] || 0));
+		if (Array.isArray(from.trials)) s.trials = from.trials.filter((id) => typeof id === 'string').slice(0, 16);
 	}
 	return fillBinds(s);
 }
 // what is kept (no cooldowns: they are of the moment)
-export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {}, mastery: s.mastery || {}, moonlit: s.moonlit || [], honor: s.honor || null }; }
+export function saveMagic(s) { return { v: 1, known: s.known, binds: s.binds, fabric: s.fabric, affinity: s.affinity, mana: Math.round(s.mana), mark: s.mark, wells: s.wells, gathered: s.gathered, xp: s.xp || 0, level: s.level || 1, perks: s.perks || [], use: s.use || {}, mastery: s.mastery || {}, moonlit: s.moonlit || [], honor: s.honor || null, ascended: !!s.ascended, deeds: s.deeds || { bosses: 0, spared: 0 }, trials: s.trials || [] }; }
 
 // A spell of the sun (night: 'moon') works by night only once it channels the moon: the skills
 // side grants that when it is mastered or fed enough aether (grantMoonlit), and it is kept

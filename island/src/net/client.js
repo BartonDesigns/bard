@@ -3,7 +3,8 @@
 // line drops. Callers get events: status, welcome, join, leave, pose, spot, state, event,
 // host, closed, trade (from one friend to you) and trade-ack (the server passed yours on).
 
-import { cleanCode, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules } from './protocol.js';
+import { cleanCode, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, cleanGearLevel } from './protocol.js';
+import { MAX_LEVEL } from '../gameplay/gear-levels.js';
 import { cleanReputationRecord } from './reputation.js';
 
 const FINAL = new Set([4000, 4001, 4404, 4409, 1008]);
@@ -32,7 +33,7 @@ export function createRoomClient({ url, id, name, seed, WS = globalThis.WebSocke
 		if (!want) return;
 		status(tries ? 'reconnecting' : 'connecting');
 		const base = url.replace(/^http/, 'ws').replace(/\/$/, '');
-		const q = new URLSearchParams({ id, name: name(), seed: String(seed) });
+		const q = new URLSearchParams({ id, name: name(), seed: String(seed), gear: String(MAX_LEVEL) });
 		let s;
 		try { s = new WS(`${base}/rooms/${code}/ws?${q}`); } catch { retry(); return; }
 		ws = s;
@@ -82,7 +83,7 @@ export function createRoomClient({ url, id, name, seed, WS = globalThis.WebSocke
 			case 'standing': if ((m.actor === id || C.players.has(m.actor)) && Number.isFinite(m.standing?.reputation) && Number.isSafeInteger(m.standing?.epoch)) emit('standing', m); break;
 			case 'reputation': { const e=cleanReputationRecord(m.e); if(e)emit('reputation',{e,live:m.live===true}); break; }
 			case 'reputation-snapshot': { if(Array.isArray(m.records) && m.records.length<=6)emit('reputation-snapshot',m.records.map(cleanReputationRecord).filter(Boolean)); break; }
-			case 'trade-ack': if (typeof m.id === 'string') emit('trade-ack', { id: m.id, op: m.op, there: m.there !== false }); break;
+			case 'trade-ack': if (typeof m.id === 'string') emit('trade-ack', { id: m.id, op: m.op, there: m.there !== false, compatible: m.compatible !== false, maxLevel: cleanGearLevel(m.maxLevel) }); break;
 		}
 	}
 	const send = (m) => { if (ws?.readyState === 1) { ws.send(JSON.stringify(m)); return true; } return false; };
