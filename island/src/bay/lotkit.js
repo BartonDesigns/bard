@@ -182,6 +182,12 @@ function shapes() {
 	}
 	// a monument sign at an office's entrance: a stone slab on its plinth (the name is the atlas's)
 	S.monument = M([B(3.3, 0.35, 0.7, 0, 0, 0, [0.5, 0.49, 0.47]), B(3.1, 1.25, 0.32, 0, 0.35, 0, [0.82, 0.8, 0.76]), B(3.2, 0.06, 0.36, 0, 1.6, 0, [0.62, 0.6, 0.58])]);
+	// a Strip casino's pylon at the pavement: two dark legs on a plinth, a head 10 m wide edged in
+	// gold, its name (the atlas's board) lit on both faces up at 24 m
+	{
+		const gold = [0.86, 0.72, 0.36], leg = [0.16, 0.15, 0.18];
+		S.pylon = M([B(9.6, 0.8, 2.4, 0, 0, 0, [0.52, 0.5, 0.47]), B(1.1, 20.8, 1.1, -3.4, 0.8, 0, leg), B(1.1, 20.8, 1.1, 3.4, 0.8, 0, leg), B(10, 4.4, 1.1, 0, 21.4, 0, [0.06, 0.05, 0.07]), B(10.4, 0.3, 1.3, 0, 21.2, 0, gold), B(10.4, 0.3, 1.3, 0, 25.8, 0, gold), B(0.3, 4.4, 1.3, -5.05, 21.4, 0, gold), B(0.3, 4.4, 1.3, 5.05, 21.4, 0, gold)]);
+	}
 	// a sign post in the front garden: a white post, an arm, the board hangs below it
 	S.postsign = M([B(0.1, 2.0, 0.1, 0, 0, 0, WHITE), B(1.85, 0.07, 0.07, 0.88, 1.88, 0, WHITE), B(0.02, 0.12, 0.02, 0.2, 1.74, 0, DARK), B(0.02, 0.12, 0.02, 1.6, 1.74, 0, DARK), B(0.3, 0.06, 0.3, 0, 0, 0, [0.6, 0.6, 0.58])]);
 	// crates of produce, the fruit tinted
@@ -215,7 +221,7 @@ const SPEC = {
 	lounger: [3000, false, true], umbrella: [1200, true, true], cabana: [400, true, true], bbq: [400, false, true], table: [800, false, true],
 	carport: [3000, true, true], mailbox: [400, false, true], gate: [300, false, true], net: [400, false, true], bench: [1500, false, false],
 	aboard: [500, false, true], outrigger: [120, false, true], nets: [200, false, true], antlers: [150, false, true], gearrack: [150, false, true], menuboard: [150, false, true],
-	monument: [400, false, true], postsign: [700, false, true], crates: [600, false, true], surfrack: [120, false, true], kegs: [300, false, true],
+	monument: [400, false, true], pylon: [200, true, true], postsign: [700, false, true], crates: [600, false, true], surfrack: [120, false, true], kegs: [300, false, true],
 };
 
 export function createProps(group, wrap, isPhone) {

@@ -474,6 +474,42 @@ R.casino = (B, s = 1, a = {}, r, ground) => {
 		if (L) for (let i = 0; i < 26; i++) { const x = (i / 25 - 0.5) * lw * 0.85, z = z0 + Math.sin(i * 0.7) * ld * 0.25, h = 18 + 40 * Math.abs(Math.sin(i * 1.3)); L.box(x, gr(x, z), z, 1.2, h, 1.2, [0.62, 0.78, 0.9]); }
 	}
 	B.solid.push([0, D / 2, W, D, 0]);
+	resortBack(B, s, W, D);
+};
+// behind every resort, what its guests never see from the boulevard: the pool deck out the back,
+// its pools lit from under the water at night, loungers in rows, cabanas and palms round it; and
+// the parking garage at its side, deck on open deck, lit low all night. (All inside its paved
+// ground, landmarks.js CLEAR: the towns grown round keep out of that.)
+function resortBack(B, s, W, D) {
+	const { G } = B, L = B.night || B.glow, stone = [0.86, 0.82, 0.74], water = [0.12, 0.56, 0.66];
+	// the pool deck: a stone terrace a little up off the lot
+	const dx = -W * 0.25, dz = D + 22 * s, dw = W * 0.45, dd = 36 * s;
+	G.box(dx, -1.5, dz, dw, 2.4, dd, stone);
+	// two pools, a long one and a round-ended one, and a spa
+	const pools = [[dx - dw * 0.18, dz - dd * 0.12, dw * 0.42, dd * 0.42], [dx + dw * 0.24, dz + dd * 0.08, dw * 0.26, dd * 0.5]];
+	for (const [x, z, w, d] of pools) {
+		G.box(x, 0.86, z, w, 0.08, d, water);
+		G.box(x, 0.84, z, w + 1.2, 0.08, d + 1.2, [0.95, 0.94, 0.9]);
+		L?.box(x, 0.95, z, w * 0.96, 0.02, d * 0.94, [0.18, 0.72, 0.85]);
+	}
+	G.cyl(dx + dw * 0.05, 0.86, dz + dd * 0.3, 2.6 * s, 2.6 * s, 0.1, water, { n: 12 });
+	L?.cyl(dx + dw * 0.05, 0.97, dz + dd * 0.3, 2.4 * s, 2.4 * s, 0.02, [0.3, 0.8, 0.9], { n: 12 });
+	// loungers in rows along the pools' sides, white cabanas down the back
+	for (const [x, z, w, d] of pools) for (const side of [-1, 1]) for (let u = -w / 2 + 1.5; u < w / 2 - 1; u += 2.2) G.box(x + u, 0.9, z + side * (d / 2 + 2.6), 0.75, 0.32, 1.9, [0.96, 0.95, 0.92]);
+	for (let u = -dw / 2 + 6; u < dw / 2 - 5; u += 9) { G.box(dx + u, 0.9, dz + dd / 2 - 3.5, 4.2, 2.6, 4, [0.97, 0.96, 0.93]); L?.box(dx + u, 3.2, dz + dd / 2 - 3.5, 0.3, 0.3, 0.3, NEON.gold); }
+	for (let u = -dw / 2 + 3; u < dw / 2; u += 10) for (const v of [-dd / 2 + 2, dd / 2 - 8]) B.trees.push([dx + u, dz + v, 'datepalm', 9 + ((u * 3.1) % 3 + 3) % 3]);
+	B.solid.push([dx, dz, dw, dd, 0]);
+	// the garage beside the casino: six open decks, the ramps' lamps showing between them at night
+	const gx = W / 2 + 28 * s, gz = D * 0.5, gw = 46 * s, gd = 70 * s, decks = 6;
+	G.box(gx, -2, gz, gw, 2, gd, [0.62, 0.61, 0.58]);
+	for (let k = 0; k < decks; k++) {
+		const y = k * 3.1;
+		G.box(gx, y, gz, gw, 1.1, gd, [0.66, 0.65, 0.62]);
+		G.box(gx, y + 1.1, gz, gw - 1, 2, gd - 1, [0.1, 0.1, 0.11], { top: false });
+		if (L) for (const [lx, lz, lw, ld] of [[gx - gw / 2 - 0.05, gz, 0.1, gd * 0.9], [gx + gw / 2 + 0.05, gz, 0.1, gd * 0.9], [gx, gz - gd / 2 - 0.05, gw * 0.9, 0.1]]) L.box(lx, y + 1.9, lz, lw, 0.18, ld, [0.62, 0.52, 0.34]);
+	}
+	G.box(gx, decks * 3.1, gz, gw, 1.1, gd, [0.66, 0.65, 0.62]);
+	B.solid.push([gx, gz, gw, gd, 0]);
 };
 // the Bellagio: a casino behind its lake, the fountains out on the water to the boulevard
 R.bellagio = (B, s, a, r, ground) => R.casino(B, s, { ...a, lake: true }, r, ground);

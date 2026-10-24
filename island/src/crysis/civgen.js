@@ -628,7 +628,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const bOf = (x, z) => (x - FWY.x) * FWY.nx + (z - FWY.z) * FWY.nz, aOf = (x, z) => (x - FWY.x) * FWY.dx + (z - FWY.z) * FWY.dz;
 	for (const e of live) {
 		const res = e.cls === 'residential';
-		const base = { cls: e.cls, w: e.wide || W[e.cls] || 6, name: e.name || '', end0: res && deg[e.a] === 1, end1: res && deg[e.b] === 1, bridge: false, link: false, divided: false };
+		const base = { cls: e.cls, w: e.wide || W[e.cls] || 6, name: e.name || '', end0: res && deg[e.a] === 1, end1: res && deg[e.b] === 1, bridge: false, link: false, divided: false, ...(e.wide ? { strip: 1 } : {}) };
 		// (only a road that crosses the freeway goes over it)
 		let crosses = false;
 		if (FWY.on) for (let i = 0; i + 3 < e.p.length && !crosses; i += 2) crosses = (bOf(e.p[i], e.p[i + 1]) > 0) !== (bOf(e.p[i + 2], e.p[i + 3]) > 0) && Math.abs(aOf(e.p[i], e.p[i + 1])) < FWY.L;
@@ -964,12 +964,14 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 						const cd = 60 + r() * 50, [px, pz] = at(side * (kerb + 18 + cd / 2), mid);
 						if (!fits(px, pz, L - 16, cd)) continue;
 						len = L;
-						boxes.push({ x: px, z: pz, w: L - 16, d: cd, a: face, wallH: 13 + r() * 9, roofH: 0, kind: K.retail, hip: 0, door: 0.5 });
+						// (the casino, its tower and its garage are one resort, by the casino's place: economy/establishments.js)
+						const resort = [Math.round(px), Math.round(pz)];
+						boxes.push({ x: px, z: pz, w: L - 16, d: cd, a: face, wallH: 13 + r() * 9, roofH: 0, kind: K.retail, hip: 0, door: 0.5, resort });
 						const tw = clamp(L * (0.35 + r() * 0.3), 40, 110), td = 24 + r() * 16, th = 55 + Math.pow(r(), 1.4) * 120;
 						const [tx, tz] = at(side * (kerb + 26 + cd + td / 2), mid + (r() - 0.5) * (L - tw) * 0.6);
-						if (fits(tx, tz, tw, td)) boxes.push({ x: tx, z: tz, w: tw, d: td, a: face, wallH: th, roofH: 0, kind: K.tower, hip: 0, door: 0.5 });
+						if (fits(tx, tz, tw, td)) boxes.push({ x: tx, z: tz, w: tw, d: td, a: face, wallH: th, roofH: 0, kind: K.tower, hip: 0, door: 0.5, resort });
 						const gw = 50 + r() * 30, gd = 40 + r() * 20, [gx, gz] = at(side * (kerb + 66 + cd + td + gd / 2), mid + (r() - 0.5) * 40);
-						if (fits(gx, gz, gw, gd)) boxes.push({ x: gx, z: gz, w: gw, d: gd, a: face, wallH: 12 + Math.floor(r() * 4) * 3, roofH: 0, kind: K.parking, hip: 0, door: 0.5 });
+						if (fits(gx, gz, gw, gd)) boxes.push({ x: gx, z: gz, w: gw, d: gd, a: face, wallH: 12 + Math.floor(r() * 4) * 3, roofH: 0, kind: K.parking, hip: 0, door: 0.5, resort });
 						break;
 					}
 					pave(b, Math.min(hd, b + len + gap));
@@ -1133,6 +1135,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		name, gen: true, seed, style, look, centre: [cx, cz], radius, ang, bounds: [x0, z0, x0 + MW * step, z0 + MH * step], brief: brief ? { id: brief.id, city: brief.city, source: brief.source, vibe: brief.vibe } : null,
 		roads, boxes, paths, pools, trees, ponds, parks: parksOut,
 		map: { px, w: MW, h: MH, x0, z0, step },
+		// (the Strip's frontage, a rectangle across the boulevard: crysis/townmap.js, as busy as it is at any hour)
+		strip: sites.filter((s) => s.kind === 'strip').map((s) => ({ x: s.x, z: s.z, ux: s.ux, uz: s.uz, hw: s.hw, hd: s.hd })),
 		info: { freeway: FWY.on ? { name: FWY.name, crossings: FWY.cross.length, interchanges: FWY.cross.filter((c) => c.ic).length } : null, houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },
 	};
 }

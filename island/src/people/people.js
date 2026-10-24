@@ -36,6 +36,8 @@ const PHONE = GFX_PHONE;
 const MAX = PHONE ? 16 : 26, KIDS = PHONE ? 6 : 12, NEAR = 70;
 const steps = [];
 const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                 // hiked, down the middle
+// (a street with people along it: its sidewalks, a trail, or the Strip's broad pavements: crysis/civgen.js)
+const onFoot = (q) => (q.walked || q.strip || TRAIL.has(q.cls)) && !q.bridge;
 
 // other systems' people you can stop and talk to (region/folk.js): each a function giving
 // a list of { P, M, active } like the walkers here
@@ -148,19 +150,20 @@ export function createPeople(scene, world, camera = null) {
 		if (!U || U.u < 0.2 || cam.y - ground(cam.x, cam.z) > 90) return { n: 0 };
 		// how busy, by what kind of place and the hour (flow.js)
 		const zone = zoneOf(U), C = crowd(zone, hours);
-		const busy = zone === ZONE.downtown ? 1 : zone === ZONE.retail || zone === ZONE.dining ? 0.8 : zone === ZONE.office ? 0.7 : zone === ZONE.industrial ? 0.4 : 0.35;
+		const busy = zone === ZONE.downtown || zone === ZONE.strip ? 1 : zone === ZONE.retail || zone === ZONE.dining ? 0.8 : zone === ZONE.office ? 0.7 : zone === ZONE.industrial ? 0.4 : 0.35;
 		return { n: Math.round(MAX * busy * C.k), kids: (KID_SHARE[zone] || 0) * kidsAbout(hours), island: false, C, zone };
 	}
 
 	// the real city's sidewalks: a point beside a street, on one side, at distance s along it
 	function roadLen(r) { if (r.len) return r.len; let L = 0; for (let i = 2; i < r.pts.length; i += 2) L += Math.hypot(r.pts[i] - r.pts[i - 2], r.pts[i + 1] - r.pts[i - 1]); return (r.len = L); }
-	function curbPoint(r, s, side) {
+	// (band: how far in from the kerb, on a pavement broad enough to walk anywhere across)
+	function curbPoint(r, s, side, band = 0) {
 		const p = r.pts;
 		let acc = 0;
 		for (let i = 2; i < p.length; i += 2) {
 			const ax = p[i - 2], az = p[i - 1], bx = p[i], bz = p[i + 1], L = Math.hypot(bx - ax, bz - az);
 			if (acc + L >= s || i === p.length - 2) {
-				const t = L ? Math.min(1, Math.max(0, (s - acc) / L)) : 0, off = TRAIL.has(r.cls) ? 0.35 * side : (r.w / 2 + 0.9) * side;
+				const t = L ? Math.min(1, Math.max(0, (s - acc) / L)) : 0, off = TRAIL.has(r.cls) ? 0.35 * side : (r.w / 2 + 0.9 + band) * side;
 				const nx = L ? -(bz - az) / L : 0, nz = L ? (bx - ax) / L : 0;
 				return new THREE.Vector3(ax + (bx - ax) * t + nx * off, 0, az + (bz - az) * t + nz * off);
 			}
@@ -171,7 +174,7 @@ export function createPeople(scene, world, camera = null) {
 	function streetRoute(x, z, r) {
 		const real = world().real;
 		if (!real?.loaded() || !real.inside(x, z)) return null;
-		const roads = real.near('roads', x, z, 60).filter((q) => (q.walked || TRAIL.has(q.cls)) && !q.bridge);
+		const roads = real.near('roads', x, z, 60).filter(onFoot);
 		if (!roads.length) return null;
 		// the streets that really pass close to the chosen spot (the index hands back whole cells)
 		const close = [];
@@ -188,7 +191,9 @@ export function createPeople(scene, world, camera = null) {
 		}
 		if (!close.length) return null;
 		const [road, best, L] = close[Math.floor(r() * close.length)];
-		return { kind: 'street', road, side: r() < 0.5 ? 1 : -1, s: Math.max(0, Math.min(L, best + (r() - 0.5) * 20)), dir: r() < 0.5 ? 1 : -1 };
+		// (the Strip's 24 m of pavement: nearer the kerb, or out past the palms toward the casinos)
+		const band = road.strip ? (r() < 0.35 ? r() * 2 : 5 + r() * 6) : 0;
+		return { kind: 'street', road, side: r() < 0.5 ? 1 : -1, s: Math.max(0, Math.min(L, best + (r() - 0.5) * 20)), dir: r() < 0.5 ? 1 : -1, band };
 	}
 
 	function cast(p, cam, island, mood = null, venue = null) {
@@ -261,7 +266,7 @@ export function createPeople(scene, world, camera = null) {
 			}
 			const st = streetRoute(x, z, r);
 			if (st) {
-				const q = curbPoint(st.road, st.s, st.side), q2 = curbPoint(st.road, st.s + st.dir, st.side);
+				const q = curbPoint(st.road, st.s, st.side, st.band), q2 = curbPoint(st.road, st.s + st.dir, st.side, st.band);
 				if (ground(q.x, q.z) < 0.6 || !hiddenSpot(q.x, q.z, cam)) continue;
 				p.route = st;
 				M.place(q.x, ground(q.x, q.z), q.z, Math.atan2(q2.x - q.x, q2.z - q.z));
@@ -574,16 +579,16 @@ export function createPeople(scene, world, camera = null) {
 				if (R.cross) { M.want.heading = Math.atan2(tx - S.pos.x, tz - S.pos.z); M.want.speed = giveWay(p, speed, cam); return; }
 			}
 			// along the sidewalk; at the end of the street, on into the one that joins it, or back
-			let tgt = curbPoint(R.road, R.s, R.side);
+			let tgt = curbPoint(R.road, R.s, R.side, R.band);
 			if (Math.hypot(tgt.x - S.pos.x, tgt.z - S.pos.z) < 2.2) {
 				R.s += R.dir * 2.5;
 				const L = roadLen(R.road);
 				if (R.s < 0 || R.s > L) {
 					const ex = R.road.pts[R.s < 0 ? 0 : R.road.pts.length - 2], ez = R.road.pts[R.s < 0 ? 1 : R.road.pts.length - 1];
-					const next = world().real.near('roads', ex, ez, 30).filter((q) => q !== R.road && (q.walked || TRAIL.has(q.cls)) && !q.bridge && (Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16 || Math.hypot(q.pts[q.pts.length - 2] - ex, q.pts[q.pts.length - 1] - ez) < 16));
+					const next = world().real.near('roads', ex, ez, 30).filter((q) => q !== R.road && onFoot(q) && (Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16 || Math.hypot(q.pts[q.pts.length - 2] - ex, q.pts[q.pts.length - 1] - ez) < 16));
 					if (next.length && Math.random() < 0.85) {
 						const q = next[Math.floor(Math.random() * next.length)], atStart = Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16;
-						R.road = q; R.dir = atStart ? 1 : -1; R.s = atStart ? 1 : roadLen(q) - 1;
+						R.road = q; R.dir = atStart ? 1 : -1; R.s = atStart ? 1 : roadLen(q) - 1; if (!q.strip) R.band = 0;
 						// keep to the same hand of the street as we turn, or cross it, at the crosswalk
 						// where there is one (realcity.js paints them)
 						if (Math.random() < 0.2) {
@@ -595,7 +600,7 @@ export function createPeople(scene, world, camera = null) {
 					} else { R.dir = -R.dir; R.s = Math.min(L, Math.max(0, R.s)); }
 				}
 				if (Math.random() < 0.02) { p.role = 'wait'; p.timer = 2 + Math.random() * 5; }
-				tgt = curbPoint(R.road, R.s, R.side);
+				tgt = curbPoint(R.road, R.s, R.side, R.band);
 			}
 			M.want.heading = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z);
 			M.want.speed = giveWay(p, speed, cam);

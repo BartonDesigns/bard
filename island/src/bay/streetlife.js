@@ -212,10 +212,23 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 	let lastX = 1e9, lastZ = 1e9, realV = 0;
 	const signalList = [], lanes = [];
 	// a lane is a polyline with its running length; cars ride it by distance
-	function laneOf(pts, half, style, oneway) {
+	// (a two-way road wide enough has lanes side by side each way: n of them, 3.5 m apart; strip:
+	// Las Vegas Boulevard, crysis/civgen.js, nose to tail day and night)
+	function laneOf(pts, half, style, oneway, strip = false) {
 		const cum = [0];
 		for (let i = 2; i < pts.length; i += 2) cum.push(cum[cum.length - 1] + Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]));
-		return { pts, cum, L: cum[cum.length - 1] || 1, half, style, oneway, x0: pts[0], z0: pts[1], x1: pts[pts.length - 2], z1: pts[pts.length - 1] };
+		const n = oneway || half < 8.5 ? 1 : Math.max(1, Math.min(3, Math.floor((half - 1.2) / 3.5)));
+		return { pts, cum, L: cum[cum.length - 1] || 1, half, style, oneway, n, strip, x0: pts[0], z0: pts[1], x1: pts[pts.length - 2], z1: pts[pts.length - 1] };
+	}
+	// how far along the lane its nearest point to (x, z) is
+	function alongLane(l, x, z) {
+		let best = 0, bd = Infinity;
+		for (let i = 1; i < l.cum.length; i++) {
+			const ax = l.pts[i * 2 - 2], az = l.pts[i * 2 - 1], dx = l.pts[i * 2] - ax, dz = l.pts[i * 2 + 1] - az, l2 = dx * dx + dz * dz || 1;
+			const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+			if (d < bd) { bd = d; best = l.cum[i - 1] + t * (l.cum[i] - l.cum[i - 1]); }
+		}
+		return best;
 	}
 	function laneAt(l, s) {
 		// position and direction at distance s along the lane
@@ -240,7 +253,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 			// (the freeways: a lamp each side every forty metres or so, as the arterials)
 			const look = lampLook(lampKind, era, rank, hash(p[0] * 0.37, p[1] * 0.53));
 			for (const k of [0, p.length - 2]) { const key = Math.round(p[k] / 2) + ',' + Math.round(p[k + 1] / 2); const e = ends.get(key) || { x: p[k], z: p[k + 1], n: 0, rank: 0, hw: 0 }; e.n++; e.rank = Math.max(e.rank, rank); e.hw = Math.max(e.hw, hw); ends.set(key, e); }
-			lanes.push(laneOf(Array.from(p), hw, r.cls === 'residential' || r.cls === 'living_street' || r.cls === 'unclassified' ? STYLE.suburb : STYLE.office, r.divided || r.cls === 'motorway' || r.link));
+			lanes.push(laneOf(Array.from(p), hw, r.cls === 'residential' || r.cls === 'living_street' || r.cls === 'unclassified' ? STYLE.suburb : STYLE.office, r.divided || r.cls === 'motorway' || r.link, !!r.strip));
 			// walk the street every 2.2 m, both sides
 			let run = 0;
 			for (let i = 0; i + 3 < p.length; i += 2) {
@@ -392,15 +405,19 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 		cars.length = 0;
 		const near = lanes.map((l) => ({ l, d: Math.hypot((l.x0 + l.x1) / 2 - cx, (l.z0 + l.z1) / 2 - cz) })).sort((a, b) => a.d - b.d).slice(0, 90);
 		for (const { l } of near) {
-			const nC = l.style === STYLE.sf || l.style === STYLE.retail ? 2 : Math.max(1, Math.min(4, Math.round(l.L / 160)));
+			// (the Strip: nose to tail in every lane down the stretch round you, a car every 35 m or so
+			// of each, crawling; the rest as they were, anywhere along their lane)
+			let u0 = 0, u1 = 1;
+			if (l.strip) { const s = alongLane(l, cx, cz), W = isPhone ? 300 : 420; u0 = Math.max(0, s - W) / l.L; u1 = Math.min(l.L, s + W) / l.L; }
+			const nC = l.strip ? Math.min(150, Math.round((u1 - u0) * l.L * l.n * 2 / 35)) : l.style === STYLE.sf || l.style === STYLE.retail ? 2 : Math.max(1, Math.min(4, Math.round(l.L / 160)));
 			for (let k = 0; k < nC; k++) {
 				const r = Math.random();
-				if (r > (l.style === STYLE.suburb ? 0.45 : 0.75)) continue;
-				const busy = l.style === STYLE.sf || l.style === STYLE.office || l.style === STYLE.retail;
-				const kind = busy && Math.random() < 0.07 ? 'bus' : TRAFFIC[Math.floor(Math.random() * TRAFFIC.length)];
-				// (who is in it: the driver, and now and then someone beside them or behind)
-				const riders = kind === 'bus' ? 1 : 1 + (Math.random() < 0.3 ? 1 : 0) + (Math.random() < 0.12 ? 1 : 0);
-				cars.push({ l, u: Math.random(), dir: l.oneway || Math.random() < 0.5 ? 1 : -1, v: 0, vmax: (l.style === STYLE.suburb ? 8 : 12) + Math.random() * 5 - (kind === 'bus' || kind === 'truck' ? 3 : 0), kind, col: kind === 'bus' ? [0.9, 0.9, 0.88] : PAINT[Math.floor(Math.random() * PAINT.length)], wait: 0, lane: l.oneway ? (Math.random() < 0.5 ? -0.5 : 0.5) : 0, spin: 0, steer: 0, riders, id: 'tr' + (trafficN++) });
+				if (r > (l.strip ? 0.95 : l.style === STYLE.suburb ? 0.45 : 0.75)) continue;
+				const busy = l.strip || l.style === STYLE.sf || l.style === STYLE.office || l.style === STYLE.retail;
+				const kind = busy && Math.random() < (l.strip ? 0.09 : 0.07) ? 'bus' : TRAFFIC[Math.floor(Math.random() * TRAFFIC.length)];
+				// (who is in it: the driver, and now and then someone beside them or behind; on the Strip, a carful)
+				const riders = kind === 'bus' ? 1 : 1 + (Math.random() < (l.strip ? 0.6 : 0.3) ? 1 : 0) + (Math.random() < (l.strip ? 0.35 : 0.12) ? 1 : 0);
+				cars.push({ l, u: u0 + Math.random() * (u1 - u0), dir: l.oneway || Math.random() < 0.5 ? 1 : -1, v: 0, vmax: (l.strip ? 6 : l.style === STYLE.suburb ? 8 : 12) + Math.random() * (l.strip ? 4 : 5) - (kind === 'bus' || kind === 'truck' ? 3 : 0), kind, col: kind === 'bus' ? [0.9, 0.9, 0.88] : PAINT[Math.floor(Math.random() * PAINT.length)], wait: 0, lane: l.oneway ? (Math.random() < 0.5 ? -0.5 : 0.5) : Math.floor(Math.random() * l.n), spin: 0, steer: 0, riders, id: 'tr' + (trafficN++) });
 			}
 		}
 	}
@@ -530,7 +547,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 			}
 			c.u = Math.min(1, Math.max(0, c.u + c.dir * c.v * dt / L));
 			const [lx, lz, dx, dz] = laneAt(l, c.u * L);
-			const off = l.oneway ? c.lane * l.half : (c.dir > 0 ? -1 : 1) * Math.min(1.8, l.half * 0.4);
+			const off = l.oneway ? c.lane * l.half : (c.dir > 0 ? -1 : 1) * (l.n > 1 ? Math.min(l.half - 1.7, 2 + c.lane * 3.5) : Math.min(1.8, l.half * 0.4));
 			const px = lx + dz * off, pz = lz - dx * off, yaw = Math.atan2(dx * c.dir, dz * c.dir);
 			// the wheels roll with the road, the front ones turned into a bend
 			const S = SPEC[c.kind] || SPEC.sedan;
