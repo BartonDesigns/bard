@@ -25,6 +25,7 @@ import { SEASON_U } from './seasons.js';             // streets by era: the lawn
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
 import { FAR_RELIEF_U, FAR_RELIEF_GLSL, createFarRelief } from './farrelief.js';
+import { FAR_CROWNS } from './canopy.js';              // where the towns' painted crowns take over from their trees
 import { SWASH_GLSL } from '../world/shore.js';
 import { trackUpload } from './levelrows.js';
 import { GFX_COARSE } from '../world/device.js';
@@ -157,6 +158,42 @@ vec2 sandRelief(vec2 w, float px){
 	}
 	return vec2(rH, pr);
 }
+// The towns' trees far off, past those city.js stands round you (bay/canopy.js), painted on the
+// ground. cov: how much of it their crowns cover seen from straight above (the coarse map's
+// alpha), roof: how much the roofs do. Looked at from low down, the crowns, standing 10 m and
+// more, hide the lawns and the streets and most of the roofs behind them, and the roofs, a
+// storey or two, the lawns and streets behind those: from San Ramon the valley floor of
+// Danville is a forest with roofs in it (Josh's photo 2026-10-24), not a carpet of roofs and
+// asphalt. x: the crowns seen; y: the roofs seen in what the crowns leave
+vec2 townSeen(float cov, float roof, float sinE){
+	float cotE = min(sqrt(max(1.0 - sinE * sinE, 0.0)) / max(sinE, 0.01), 4.5);
+	return vec2(1.0 - exp(-cov * (1.2 + 0.9 * cotE)), 1.0 - exp(-roof * (1.0 + 0.25 * cotE)));
+}
+const vec2 FAR_CROWNS = vec2(${FAR_CROWNS[0].toFixed(1)}, ${FAR_CROWNS[1].toFixed(1)});
+// the crowns themselves: live and valley oaks and the yards' planted trees, here and there a
+// darker pine or redwood, in clumps and gaps a few lots across. A crown a dot, darker at its
+// edge, while a pixel is fine enough to show one; where it is not, their mean, darker the lower
+// you look (more of their shaded sides and of the shade between them). k: how much of the
+// ground is crowns. rgb the colour, a how much of the pixel they take
+vec4 crownsAt(vec2 w, float k, float sinE){
+	float px = length(fwidth(w));
+	// (clumps and gaps a few lots across, and leafier and barer blocks and streets a few hundred metres
+	// across, which still show where a pixel spans a whole block: a far town is never one flat colour)
+	float clump = mix(0.5, vn(w * 0.021), 1.0 - smoothstep(0.25, 0.7, px * 0.021));
+	float mot = mix(0.5, vn(w * 0.0065 + 3.7), 1.0 - smoothstep(0.25, 0.6, px * 0.0065)) * 0.5 + mix(0.5, vn(w * 0.0023 + 8.1), 1.0 - smoothstep(0.25, 0.6, px * 0.0023)) * 0.5;
+	k = clamp(k * (0.7 + 0.6 * clump) * (0.55 + 0.9 * mot), 0.0, 1.0);
+	vec2 q = w / 9.0, qi = floor(q), qf = q - qi;
+	float aa = px / 9.0, sp = h21(qi + 3.3);
+	// (a dot covers about half its 9 m cell: there are as many as k asks, and they spread as it asks more)
+	float r = (0.36 + 0.12 * h21(qi + 5.1)) * sqrt(max(1.0, k / 0.55));
+	float d = length(qf - 0.5 - (vec2(h21(qi), h21(qi + 17.3)) - 0.5) * 0.2);
+	float dotK = step(h21(qi + 9.7), k / 0.55) * (1.0 - smoothstep(r - aa, r + aa, d));
+	vec3 leaf = mix(vec3(0.08, 0.11, 0.045), vec3(0.14, 0.17, 0.07), mix(0.5, vn(w * 0.05), 1.0 - smoothstep(0.3, 0.8, px * 0.05)));
+	vec3 one = (sp < 0.15 ? vec3(0.05, 0.08, 0.045) : leaf) * (0.75 + 0.35 * (1.0 - smoothstep(0.0, r, d)));
+	vec3 avg = mix(leaf, vec3(0.05, 0.08, 0.045), 0.15) * mix(0.82, 1.0, smoothstep(0.04, 0.35, sinE)) * (1.1 - 0.2 * mot);
+	float meanK = smoothstep(0.3, 0.9, aa);
+	return vec4(mix(one, avg, meanK), mix(dotK, k, meanK));
+}
 vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	vec3 lawn = mix(vec3(0.2, 0.34, 0.1), vec3(0.3, 0.41, 0.15), gn);
 	vec3 dry = mix(lawn, mix(vec3(0.32, 0.22, 0.09), vec3(0.46, 0.33, 0.14), gn), uSeason);
@@ -177,8 +214,10 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 		return mix(y, vec3(0.3, 0.24, 0.16), smoothstep(0.62, 0.72, vn(w * 0.35)) * 0.5);
 	}
 	if (lu < 2.5) return wildflowers(mix(lawn, dry, smoothstep(0.6, 0.85, gf) * 0.4), w, 0.15);
-	if (lu < 3.5) return mix(vec3(0.24, 0.42, 0.13), vec3(0.3, 0.47, 0.16), step(0.5, fract(dot(w, vec2(0.6, 0.8)) / 14.0)));
-	if (lu < 4.5) return mix(vec3(0.26, 0.47, 0.15), vec3(0.3, 0.52, 0.18), step(0.5, fract(w.x / 5.0)));
+	// (the mown stripes of a fairway or a pitch their mean where a pixel spans a stripe: far off they crawled in streaks)
+	float stripeK = 1.0 - smoothstep(0.2, 0.5, length(fwidth(w)) / 5.0);
+	if (lu < 3.5) return mix(vec3(0.24, 0.42, 0.13), vec3(0.3, 0.47, 0.16), mix(0.5, step(0.5, fract(dot(w, vec2(0.6, 0.8)) / 14.0)), 1.0 - smoothstep(0.2, 0.5, length(fwidth(w)) / 14.0)));
+	if (lu < 4.5) return mix(vec3(0.26, 0.47, 0.15), vec3(0.3, 0.52, 0.18), mix(0.5, step(0.5, fract(w.x / 5.0)), stripeK));
 	if (lu < 5.5) return mix(vec3(0.52, 0.4, 0.28), vec3(0.62, 0.5, 0.36), gn);
 	if (lu < 6.5) return mix(lawn, vec3(0.3, 0.3, 0.31), step(0.7, gf));
 	// commercial and retail: parking with landscaped islands and borders
@@ -809,6 +848,10 @@ export function createBayArea(shared, scene, island, BU, { renderer = null, isPh
 					vec2 US = vec2(textureSize(uUrban, 0));
 					vec4 T = texture2D(uUrban, uu / US);
 					float dist = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
+					// how steeply this is looked down on (the sine), and the ground's footprint in the
+					// pixel, taken here where every pixel has it (the coarse map's mipmaps go by it)
+					float sinE = (cameraPosition.y - vBH) / max(dist, 1.0);
+					vec2 bwDx = dFdx(vBW), bwDy = dFdy(vBW);
 					// San Francisco's planted woods: Golden Gate Park and Stern Grove (with their
 					// meadows, lawns and lakes), and the groves on the hills and in the Presidio
 					float plantedK = 0.0;
@@ -911,7 +954,8 @@ export function createBayArea(shared, scene, island, BU, { renderer = null, isPh
 						bool mainR = inReal(vBW);
 						vec2 mu = (vBW - uRealR.xy) / uRealR.z;
 						vec2 MS = vec2(textureSize(uRealMap, 0));
-						vec4 M = mainR ? texture2D(uRealMap, (mu + 0.5) / MS) : vec4(0.0);
+						vec2 uvM = (mu + 0.5) / MS;
+						vec4 M = mainR ? textureGrad(uRealMap, uvM, bwDx / (uRealR.z * MS), bwDy / (uRealR.z * MS)) : vec4(0.0);
 						float gn = vn(vBW * 0.09), gf = fbm3(vBW * 0.03);
 						float flatten = 1.0 - smoothstep(0.25, 0.45, slope);
 						// land use, blended across the four nearest 8 m cells so its edges are soft
@@ -928,9 +972,26 @@ export function createBayArea(shared, scene, island, BU, { renderer = null, isPh
 							luS += (lu > 8.5 && lu < 9.5 ? 1.0 : park || lu < 0.5 || (lu > 10.5 && lu < 12.5) || lu > 13.5 ? beach : 0.0) * wk;
 						}
 						if (mainR) { c = mix(c, luC / max(luW, 1e-4), flatten); sandK = mix(sandK, luS / max(luW, 1e-4), flatten); }
-						// far away: roofs and streets from the 8 m map (up close the buildings stand here)
+						// far away: roofs and streets from the 8 m map (up close the buildings stand here);
+						// and past the trees round you, their crowns over them, and the roofs between
+						// them, the streets and the yards only where neither hides them (townSeen)
 						float farK = smoothstep(1500.0, 2200.0, dist);
-						c = mix(c, mix(vec3(0.5, 0.42, 0.38), vec3(0.42, 0.42, 0.44), gn), M.b * farK * 0.9);
+						float crownK = smoothstep(FAR_CROWNS.x, FAR_CROWNS.y, dist) * flatten * (mainR ? 1.0 : 0.0);
+						// (a roof is hidden by the trees in front of it as well as by its own lot's: the crowns'
+						// cover is taken over the stretch a look this low crosses below their height, about 12 m
+						// for every metre it drops, and the roofs show cell by cell in what they leave)
+						float cotV = sqrt(max(1.0 - sinE * sinE, 0.0)) / max(sinE, 0.01);
+						float aCov = crownK > 0.0 ? textureLod(uRealMap, uvM, log2(max(max(12.0 * cotV, length(bwDx) + length(bwDy)), 8.0) / uRealR.z)).a : M.a;
+						vec2 seen = townSeen(max(aCov - 0.004, 0.0), M.b * 0.9, sinE);
+						// (the roofs the houses round you wear, city.js REAL_ROOF, on average: brown tile and grey
+						// shingle, not pale stucco grey that the haze turns to water; their 11 m mottle its mean
+						// where a pixel spans it, and in a low sun half their faces and the lots behind them in shade)
+						float gnR = mix(0.5, gn, 1.0 - smoothstep(0.3, 0.8, (length(bwDx) + length(bwDy)) * 0.09));
+						vec3 roofC = mix(vec3(0.42, 0.33, 0.27), vec3(0.33, 0.32, 0.33), gnR) * (1.0 - 0.18 * farK * (1.0 - smoothstep(0.08, 0.5, normalize(uSunDir).y)));
+						c = mix(c, roofC, mix(M.b * farK * 0.9, seen.y, crownK));
+						vec4 CR = crownK > 0.0 ? crownsAt(vBW, seen.x, sinE) : vec4(0.0);
+						c = mix(c, CR.rgb, CR.a * crownK);
+						float groundSeen = mix(1.0, (1.0 - CR.a) * (1.0 - seen.y), crownK);
 						// the streets: from the fine road map round you, the coarser one beyond it, the
 						// 8 m map beyond that. The road maps hold distance to each edge (0.5 on it),
 						// so a cut at 0.5 gives crisp, straight edges at any range.
@@ -952,7 +1013,7 @@ export function createBayArea(shared, scene, island, BU, { renderer = null, isPh
 						float fy = max(fwidth(Y1) * 0.75, 0.004), yellow = smoothstep(0.5 - fy, 0.5 + fy, Y1) * e1;
 						vec4 RM = mix(C2 * e2, C1, e1);
 						float edge = max(e1, e2);
-						float asph = mix(M.r * 0.85, RM.r, edge), conc = RM.g * edge, dirt = RM.b * edge;
+						float asph = mix(M.r * 0.85 * groundSeen, RM.r, edge), conc = RM.g * edge, dirt = RM.b * edge;
 						float white = C1.a * e1;
 						vec3 asphC = mix(vec3(0.16, 0.16, 0.17), vec3(0.24, 0.24, 0.25), vn(vBW * 0.7)) * (0.9 + 0.2 * gf);
 						asphC = mix(asphC, vec3(0.1), step(0.985, vn(vBW * 3.1)) * 0.5);                      // patched cracks
@@ -1141,6 +1202,15 @@ export function createBayArea(shared, scene, island, BU, { renderer = null, isPh
 						avgC = mix(avgC, vec3(0.54, 0.52, 0.49), smoothstep(0.2, 0.6, down)) * (0.86 + 0.28 * fbm3(vBW * 0.0035));
 						avgC *= 0.9 + 0.2 * mix(0.5, h21(cid + 7.0), 1.0 - smoothstep(0.1, 0.3, length(fwidth(g)) / B.y));
 						cityC = mix(cityC, avgC, smoothstep(1500.0, 6000.0, dist));
+						// ...and past the trees round you, theirs over it all (townSeen, crownsAt): the old
+						// towns' street trees, the suburbs' yards, the parks; few downtown or among the
+						// warehouses and the parking lots
+						float crownU = smoothstep(FAR_CROWNS.x, FAR_CROWNS.y, dist);
+						if (crownU > 0.0) {
+							float covU = (sty < 1.5 ? 0.05 : sty < 2.5 ? 0.3 : sty < 3.5 ? 0.24 : (sty > 4.5 && sty < 5.5) ? 0.02 : sty > 5.5 ? 0.04 : 0.1) * (1.0 - smoothstep(0.2, 0.6, down)) + park * 0.25;
+							vec4 CU = crownsAt(vBW, townSeen(covU * smoothstep(0.14, 0.3, urban), 0.0, sinE).x, sinE);
+							cityC = mix(cityC, CU.rgb, CU.a * crownU);
+						}
 						c = mix(c, cityC, smoothstep(0.08, 0.35, urban));
 						// night: street lamps along the grid, windows in the blocks; far away,
 						// the town is a carpet of light
