@@ -55,7 +55,7 @@ test('the casino floor: slot banks, blackjack and roulette in their pits, the ba
 		const T = planWorkplace(casinoBox(w, d), 0.25, at), F = fit(T, T.levels[0], phone);
 		const tag = `${w}x${d}${phone ? ' phone' : ''}`;
 		assert.ok(F.stats.slots >= (phone ? 100 : 200), tag + ' slot machines: ' + F.stats.slots);
-		assert.ok(F.stats.slots <= (phone ? 140 : 300), tag + ' no more machines than a floor can build');
+		assert.ok(F.stats.slots <= (phone ? 200 : 300), tag + ' no more machines than a floor can build');
 		assert.equal(count(F.perks, 'slots'), F.stats.slots, tag + ' every machine is played');
 		assert.ok(count(F.perks, 'blackjack') >= 4 && count(F.perks, 'roulette') >= 2, tag + ' the tables');
 		assert.equal(count(F.perks, 'cocktail'), 1, tag + ' the bar');
@@ -209,6 +209,26 @@ test('the famous resorts are walked into: Caesars\' casino block holds a casino 
 	S.openHall(null);
 	assert.equal(A[H.v0 * 4 + 2], 0, 'and come back when you have gone');
 	assert.equal(AG[H.g0 * 4 + 2], 0);
+	// (its hotel: the towers over the casino, each a hotel walked into from the casino's elevators)
+	assert.ok(o.hotels.length >= 1, 'its hotel towers');
+	for (const t of o.hotels) {
+		assert.equal(t.casino, o);
+		assert.ok(t.y > o.y + o.h && Math.abs(t.floor0 - t.y) < 0.5, 'its lobby up off the casino roof');
+		const Th = planWorkplace(t, t.floor0, at);
+		assert.equal(Th.type, 'hotel');
+		assert.equal(Th.levels[0].kind, 'lobby');
+		assert.ok(Th.levels.filter((L) => L.kind === 'hotel').length >= 20, Th.levels.length + ' floors');
+		const st = t.tower.storeys;
+		assert.ok(st.length >= 10 && Math.abs(st[0][0] - t.tower.y0) < 1e-6 && Math.abs(st.at(-1)[1] - (t.tower.y0 + t.tower.h)) < 1e-6, 'its storeys floor to roof');
+	}
+	assert.ok(S.hallsNear(o.hotels[0].x, o.hotels[0].z, 5).includes(o.hotels[0]), 'found where it stands');
+	const ht = o.hotels[0], st = ht.tower.storeys, ya = ht.y + 20, yb = ya + 8;
+	S.openTower(ht, ya, yb, ht.x, ht.z);
+	const opened = st.filter(([a, b, v0]) => A[v0 * 4 + 2] === 1), shut = st.filter(([a, b, v0]) => A[v0 * 4 + 2] === 0);
+	assert.ok(opened.length >= 2 && opened.length <= 4 && opened.every(([a, b]) => ht.tower.hall.y + b > ya && ht.tower.hall.y + a < yb), opened.length + ' of its storeys give way round you');
+	assert.ok(shut.length >= st.length - 4, 'the rest of it stands');
+	S.openTower(null);
+	assert.ok(st.every(([, , v0]) => A[v0 * 4 + 2] === 0), 'and stands whole when you have gone');
 	S.dispose();
 	// (and every resort on the Strip with a casino block: each opens onto its own casino)
 	const { Geo } = await import('../src/region/geo.js');
@@ -247,8 +267,11 @@ test('the famous resorts are walked into: Caesars\' casino block holds a casino 
 	for (const n of ['the Luxor', 'the Excalibur', 'Circa', 'Golden Nugget', 'Binion\'s', 'Four Queens', 'Golden Gate', 'The D', 'Fremont']) assert.ok(named.includes(n), n + ' walked into');
 	// (bay/towers.js takes them with the city's own towers, island-build.js hands it the settlements)
 	assert.match(src('bay/towers.js'), /concat\(regional\(\)\?\.hallsNear\?\.\(cam\.x,cam\.z,28\)/);
-	assert.match(src('bay/towers.js'), /if\(best\.hall\)regional\(\)\?\.openHall\?\.\(best\)/);
-	assert.match(src('bay/towers.js'), /if\(T\.o\.hall\)regional\(\)\?\.openHall\?\.\(null\)/);
+	assert.match(src('bay/towers.js'), /const hl=best\.hall\?best:best\.casino;if\(hl\)regional\(\)\?\.openHall\?\.\(hl\)/);
+	assert.match(src('bay/towers.js'), /if\(T\.o\.hall\|\|T\.o\.casino\)regional\(\)\?\.openHall\?\.\(null\);if\(T\.o\.tower\)regional\(\)\?\.openTower\?\.\(null\)/);
+	assert.match(src('bay/towers.js'), /const out=d<0\?\(o\.casino&&cam\.y-1\.7>o\.floor0-0\.3\?-1:cam\.y>o\.y\+o\.h\+2\.5\|\|cam\.y<o\.y-1\.5\?1:0\):2;/, 'the hotel you stand in before the casino under it');
+	assert.match(src('bay/towers.js'), /'Hotel · Lobby'\]\) : T\.o\.casino \? \[\[T\.o\.casino, 'Casino floor'\]\]/, 'the elevators between them');
+	assert.match(src('bay/towers.js'), /regional\(\)\?\.openTower\?\.\(T\.o, lo - 0\.3, hi \+ 0\.3, p\.pos\.x, p\.pos\.z\)/);
 	assert.match(src('bay/towers.js'), /if \(o\.floor0 != null\) return planWorkplace\(o, o\.floor0/, 'its floor where its steps lead');
 	assert.match(src('bay/towers.js'), /const sy=T\.floor0-\(T\.floor0-st\.y\)/, 'and the steps walked up');
 	assert.match(src('island-build.js'), /createTowers\([^\n]*regional: \(\) => iw\.world\?\.globe\?\.regional\?\.settlements/);

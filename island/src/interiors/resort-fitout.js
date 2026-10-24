@@ -235,17 +235,18 @@ export function fitResort(T, L, B) {
 			}
 			sign('THE BUFFET', cx - 0.5, L.h - 0.7, 0, 5, 0.55, -Math.PI / 2);
 		}
-		// the slot banks: every place for a machine pair on the floor, the nearest the middle kept,
-		// in rows back to back, a bank of eight then a way through
+		// the slot banks: every place for a machine pair on the floor, the rows nearest the doors kept
+		// right across the floor (the floor you walk in onto full of them), in rows back to back, a
+		// bank of eight then a way through
 		// (MAX pairs of machines, back to back)
-		const MAX = phone ? 70 : 150, P = 0.8, ROW = 4.8, mid = (z0 + z1) / 2;
+		const MAX = phone ? 100 : 150, P = 0.8, ROW = 4.8, fz = (z0 + z1) / 2 + (z1 - z0) * 0.3;
 		const cand = [];
 		for (let rz = z0 + 1.7, r = 0; rz < z1 - 1.7; rz += ROW, r++) {
 			let run = 0;
 			for (let x = -gx + P / 2; x <= gx - P / 2; x += P) {
 				if (!free(x - P / 2, rz - 1.8, x + P / 2, rz + 1.8)) { run = 0; continue; }
 				if (run++ % 10 >= 8) continue;
-				cand.push({ x, rz, r, d: Math.abs(x) * 0.8 + Math.abs(rz - mid) });
+				cand.push({ x, rz, r, d: Math.abs(x) * 0.3 + Math.abs(rz - fz) });
 			}
 		}
 		cand.sort((a, b) => a.d - b.d);
@@ -268,7 +269,8 @@ export function fitResort(T, L, B) {
 				bb(M.casinoWall, x - 0.37, 0, rz, x + 0.37, 1.04, rz + f * 0.62);
 				bb(M.casinoWall, x - 0.36, 1.04, rz + f * 0.04, x + 0.36, 2.0, rz + f * 0.42);
 				pic(M.slotScreens, x, 1.48, rz + f * 0.425, 0.6, 0.36, tile, f > 0 ? 0 : Math.PI);
-				bb(NEON[bank.k % NEON.length], x - 0.32, 1.04, rz + f * 0.5, x - 0.2, 1.07, rz + f * 0.6);
+				// (its buttons lit: on a phone, the bank's own light over it stands for them)
+				if (!phone) bb(NEON[bank.k % NEON.length], x - 0.32, 1.04, rz + f * 0.5, x - 0.2, 1.07, rz + f * 0.6);
 				const sz = rz + f * 1.12;
 				cyl(M.rail, x, 0.6, sz, 0.2, 0.08, 6, false); bb(M.steel, x - 0.03, 0, sz - 0.03, x + 0.03, 0.6, sz + 0.03);
 				sit(x, sz, face(0, -f), 0.68, work('gambler', 'slots:' + q.r + ':' + Math.round(bank.xa)));

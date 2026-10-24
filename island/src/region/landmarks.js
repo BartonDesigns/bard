@@ -443,39 +443,52 @@ const WIN = [1, 0.8, 0.52];
 function part(B, x, z, r, fn) {
 	const G = B.G, L = B.glow, N = B.night, f = [G.ox, G.oy, G.oz, Math.atan2(G.sn, G.cs)], [ax, , az] = G.at(x, 0, z);
 	G.frame(ax, f[1], az, f[3] + r); L?.frame(ax, f[1], az, f[3] + r); N?.frame(ax, f[1], az, f[3] + r);
-	const s0 = B.solid.length, h0 = B.halls?.length || 0;
+	const s0 = B.solid.length, h0 = B.halls?.length || 0, t0 = B.towers?.length || 0;
 	fn();
 	const c = Math.cos(r), s = Math.sin(r);
 	for (let k = s0; k < B.solid.length; k++) { const [a, b, w, d, rr, tag] = B.solid[k]; B.solid[k] = [x + a * c + b * s, z - a * s + b * c, w, d, rr + r, tag]; }
 	// (and its casino halls, hall(): where they stand in the landmark, which way they face)
 	for (let k = h0; k < (B.halls?.length || 0); k++) { const H = B.halls[k]; [H.x, H.z, H.gx, H.gz] = [x + H.x * c + H.z * s, z - H.x * s + H.z * c, x + H.gx * c + H.gz * s, z - H.gx * s + H.gz * c]; H.r += r; }
+	for (let k = t0; k < (B.towers?.length || 0); k++) { const T = B.towers[k]; [T.x, T.z] = [x + T.x * c + T.z * s, z - T.x * s + T.z * c]; T.r += r; }
 	G.frame(...f); L?.frame(...f); N?.frame(...f);
 }
 // a hotel tower w x d from y0 up h: banded with glass a storey apart, and by night its rooms lit, a
-// stretch of window here and there on every floor (built a tower a frame where settle.js lets it: B.later)
+// stretch of window here and there on every floor (built a tower a frame where settle.js lets it: B.later).
+// Built storey by storey, each storey's faces where settle.js can find them (B.towers: its hotel,
+// walked into from the casino under it, opens the storeys round you, hotelsNear)
 function tower(B, x, z, w, d, y0, h, c, g, r = 0, lit = 0.34) {
 	B.solid.push([x, z, w, d, r]);
-	if (B.later) B.later.push(() => towerNow(B, x, z, w, d, y0, h, c, g, r, lit));
-	else towerNow(B, x, z, w, d, y0, h, c, g, r, lit);
+	const t = { x, z, w, d, y0, h, r, storeys: [] };
+	(B.towers || (B.towers = [])).push(t);
+	if (B.later) B.later.push(() => towerNow(B, t, c, g, lit));
+	else towerNow(B, t, c, g, lit);
 }
-function towerNow(B, x, z, w, d, y0, h, c, g, r, lit) {
-	const { G } = B, L = B.night || B.glow, n = Math.floor(h / 3.3);
-	G.box(x, y0, z, w, h, d, c, { r });
+function towerNow(B, t, c, g, lit) {
+	const { x, z, w, d, y0, h, r } = t, { G } = B, L = B.night || B.glow, n = Math.max(1, Math.floor(h / 3.3));
 	const cs = Math.cos(r), sn = Math.sin(r), q = (a, b) => [x + a * cs + b * sn, z - a * sn + b * cs];
-	for (let k = 1; k < n; k++) {
-		const y = y0 + k * 3.3 - 1.7;
-		G.box(x, y, z, w + 0.3, 1.5, d + 0.3, g, { r, top: false });
-		if (!L) continue;
-		// (each face in stretches of about 12 m, some of them lit)
-		for (const [len, u, v, nx, nz] of [[w, 1, 0, 0, -1], [w, -1, 0, 0, 1], [d, 0, 1, 1, 0], [d, 0, -1, -1, 0]]) {
-			const m = Math.max(1, Math.round(len / 12)), seg = len / m, out = (nx ? w : d) / 2 + 0.3;
-			for (let i = 0; i < m; i++) {
-				if (G.rand() > 0.55) continue;
-				const t0 = -len / 2 + i * seg + 1, t1 = t0 + seg - 2, k2 = lit * (0.55 + 0.45 * G.rand());
-				const p0 = q(u * t0 + nx * out, v * t0 + nz * out), p1 = q(u * t1 + nx * out, v * t1 + nz * out);
-				L.face([[p0[0], y + 0.15, p0[1]], [p1[0], y + 0.15, p1[1]], [p1[0], y + 1.35, p1[1]], [p0[0], y + 1.35, p0[1]]], WIN.map((v2) => v2 * k2));
+	let seg = null;
+	for (let k = 0; k < n; k++) {
+		// (two storeys at a time: their walls, the band of glass across each, its windows lit or not)
+		const ya = y0 + k * 3.3, y = ya + 1.6;
+		if (k % 2 === 0) {
+			const yb = k >= n - 2 ? y0 + h : ya + 6.6;
+			seg = [ya, yb, G.count(), 0, L ? L.count() : 0, 0];
+			G.box(x, ya, z, w, yb - ya, d, c, { r, top: k >= n - 2 });
+		}
+		if (k < n - 1) G.box(x, y, z, w + 0.3, 1.5, d + 0.3, g, { r, top: false });
+		if (L && k < n - 1) {
+			// (each face in stretches of about 12 m, some of them lit)
+			for (const [len, u, v, nx, nz] of [[w, 1, 0, 0, -1], [w, -1, 0, 0, 1], [d, 0, 1, 1, 0], [d, 0, -1, -1, 0]]) {
+				const m = Math.max(1, Math.round(len / 12)), seg = len / m, out = (nx ? w : d) / 2 + 0.3;
+				for (let i = 0; i < m; i++) {
+					if (G.rand() > 0.55) continue;
+					const t0 = -len / 2 + i * seg + 1, t1 = t0 + seg - 2, k2 = lit * (0.55 + 0.45 * G.rand());
+					const p0 = q(u * t0 + nx * out, v * t0 + nz * out), p1 = q(u * t1 + nx * out, v * t1 + nz * out);
+					L.face([[p0[0], y + 0.15, p0[1]], [p1[0], y + 0.15, p1[1]], [p1[0], y + 1.35, p1[1]], [p0[0], y + 1.35, p0[1]]], WIN.map((v2) => v2 * k2));
+				}
 			}
 		}
+		if (k % 2 === 1 || k === n - 1) { seg[3] = G.count(); seg[5] = L ? L.count() : 0; t.storeys.push(seg); }
 	}
 }
 // a resort's grounds: paved from the boulevard's kerb (local z0, to the front) back to z1, following
@@ -812,7 +825,10 @@ R.canopy = (B, s = 1, a, r, ground) => {
 		if (B.signs) B.signs.push({ text: name, font, fg: ng, x, y: y + 9.5, z: zs - side * 0.4, w: Math.min(W * 0.55, 48), h: 4, yaw: side > 0 ? Math.PI : 0 });
 		else L?.box(x, y + 9.5, zs - side * 0.4, W * 0.5, 3.6, 0.3, ng);
 		L?.box(x, y + 6.6, zs - side * 0.3, W * 0.8, 0.5, 0.4, n2);
-		L?.box(x + W / 2 - 6, y + P * 0.45, zs - side * 2.6, 1.2, P * 0.5 + 6, 5, n2);
+		// (the blade out over the street at its corner, the name up it both ways along the street)
+		const bx = x + W / 2 - 6, by = y + P * 0.45, bz = zs - side * 2.6, bh = P * 0.5 + 6;
+		if (B.signs) { G.box(bx, by, bz, 1.2, bh, 5, [0.08, 0.07, 0.09]); for (const f of [-1, 1]) B.signs.push({ text: name, font, fg: n2, x: bx + f * 0.62, y: by + bh / 2, z: bz, w: 4.6, h: bh - 0.4, yaw: f * Math.PI / 2 }); }
+		else L?.box(bx, by, bz, 1.2, bh, 5, n2);
 		if (H > P) tower(B, x, side * (zf + D * 0.7), W * 0.5, D * 0.4, P, H - P, c, [0.22, 0.26, 0.3]);
 	}
 };

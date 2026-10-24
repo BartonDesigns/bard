@@ -323,6 +323,15 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			b.onclick = (e) => { e.stopPropagation(); go(L); };
 			panel.appendChild(b);
 		}
+		// (a famous resort's: from its casino up to its hotel's lobby, and back down)
+		const H = T.o.hotels || [], links = H.length ? H.map((o, i) => [o, H.length > 1 ? `Hotel tower ${i + 1} · Lobby` : 'Hotel · Lobby']) : T.o.casino ? [[T.o.casino, 'Casino floor']] : [];
+		for (const [o, text] of links) {
+			const b = document.createElement('button');
+			b.textContent = text;
+			b.style.cssText = 'flex:none;text-align:left;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#eafaf6;font:13px var(--bard-body,system-ui,sans-serif);min-height:40px;cursor:pointer;';
+			b.onclick = (e) => { e.stopPropagation(); goTo(o); };
+			panel.appendChild(b);
+		}
 		panel.style.display = 'flex';
 	}
 	function go(L) {
@@ -347,6 +356,29 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		}, 380);
 	}
 
+	// to another building's elevators (a famous resort's casino and the hotel over it): its lowest floor
+	function goTo(o) {
+		if (busy || !T) return;
+		busy = true;
+		veil.style.opacity = '1';
+		setTimeout(() => {
+			drop();
+			T = plan(o); structure(T);
+			const L = T.levels[0], hl = o.hall ? o : o.casino;
+			loadAround(L);
+			if (hl) regional()?.openHall?.(hl);
+			const [x, z] = world(0, T.coreZ + 3.2), p = P();
+			p.pos.set(x, L.y + 1.7, z);
+			p.vel?.set(0, 0, 0);
+			p.yaw = Math.PI - T.o.a;
+			p.flying = false;
+			hint(`${o.landmark || T.name || ''} · ${o.casino ? 'Hotel lobby' : 'Casino floor'}`.replace(/^ · /, ''), 2200);
+			panelFor = null;
+			veil.style.opacity = '0';
+			setTimeout(() => { busy = false; }, 400);
+		}, 380);
+	}
+
 	// ---------- near you ----------
 	let scanT = 0;
 	function update(dt, camera, hours, nightK) {
@@ -363,7 +395,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			// proximity band. This also handles direct upper-floor arrivals from flight.
 			// (and out in the world, the famous resorts' casinos: region/settle.js hallsNear)
 			const near=(city?.towersNear?.(cam.x,cam.z,28)||[]).concat(regional()?.hallsNear?.(cam.x,cam.z,28)||[]);
-			let best=null,bd=1e9;
+			let best=null,bd=1e9,bo=2;
 			for(const o of near){
 				if(o.wrecked||cam.y>o.y+o.h+30||cam.y<o.y-10)continue;          // structures: a wrecked tower is its shell
 				// (a block a service has taken: its own rooms are built inside it, services/index.js; a
@@ -372,16 +404,21 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 				const dx=cam.x-o.x,dz=cam.z-o.z,ca=Math.cos(o.a),sa=Math.sin(o.a);
 				const ex=Math.abs(ca*dx+sa*dz)-o.w/2,ez=Math.abs(-sa*dx+ca*dz)-o.d/2;
 				const d=ex<0&&ez<0?Math.max(ex,ez):Math.hypot(Math.max(0,ex),Math.max(0,ez));
-				if(d<bd){bd=d;best=o;}
+				// (one you stand in, floor to roof, before one you stand over or under; a famous resort's
+				// hotel tower, from its lobby up, before the casino it stands on)
+				const out=d<0?(o.casino&&cam.y-1.7>o.floor0-0.3?-1:cam.y>o.y+o.h+2.5||cam.y<o.y-1.5?1:0):2;
+				if(out<bo||(out===bo&&d<bd)){bd=d;best=o;bo=out;}
 			}
 			const key=best&&Math.round(best.x)+':'+Math.round(best.z);
 			if(!best||bd>28){if(T)drop();}
-			else if(!T||T.key!==key){if(T)drop();T=plan(best);structure(T);loadAround(levelBelow(T,p.pos.y-1.7)||T.levels[0]);if(best.hall)regional()?.openHall?.(best);}
+			else if(!T||T.key!==key){if(T)drop();T=plan(best);structure(T);loadAround(levelBelow(T,p.pos.y-1.7)||T.levels[0]);const hl=best.hall?best:best.casino;if(hl)regional()?.openHall?.(hl);}
 		}
 		if (!T) { panel.style.display = 'none'; return; }
 		// at the elevators, on whichever level: the panel
 		const [lx, lz] = local(p.pos.x, p.pos.z), cur = levelAt(p.pos.y - 1.7);
 		loadAround(cur||T.levels[0]);
+		// (a famous resort's hotel tower: its walls give way to the floors built round you)
+		if (T.o.tower) { let lo = 1e9, hi = -1e9; for (const B of T.cache.values()) { lo = Math.min(lo, B.L.y); hi = Math.max(hi, B.L.y + Math.max(B.L.h, 3)); } regional()?.openTower?.(T.o, lo - 0.3, hi + 0.3, p.pos.x, p.pos.z); }
 		for(const B of T.cache.values())B.g.visible=T.type==='mall'||B.L===cur||Math.abs(lx)>T.hw||Math.abs(lz)>T.hd;
 		const atLift = cur && Math.abs(lx) < T.coreW / 2 + 0.3 && lz > T.coreZ && lz < T.coreZ + 2.4 && Math.abs(p.pos.y - 1.7 - cur.y) < 1;
 		if (atLift && !busy) showPanel(cur); else if (!busy) { panel.style.display = 'none'; panelFor = null; }
@@ -390,7 +427,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	function drop() {
 		if(!T)return;
 		for(const B of T.cache.values()){group.remove(B.g);B.dispose();}
-		group.remove(T.structure);T.structure.geometry.dispose();city?.setDoor?.(T.o,null);if(T.o.hall)regional()?.openHall?.(null);
+		group.remove(T.structure);T.structure.geometry.dispose();city?.setDoor?.(T.o,null);if(T.o.hall||T.o.casino)regional()?.openHall?.(null);if(T.o.tower)regional()?.openTower?.(null);
 		T=null;panel.style.display='none';panelFor=null;
 	}
 	// ---------- the floor seen through a scope ----------

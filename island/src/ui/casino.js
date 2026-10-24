@@ -43,7 +43,7 @@ const CSS = `
 .cz-sym .bars i{font-style:normal;font-size:12px;line-height:13px;background:#111;color:#fff;padding:0 7px;border-radius:3px;letter-spacing:.1em}
 .cz-sym .em{font-size:36px}
 .cz-line{position:absolute;left:6px;right:6px;top:50%;height:2px;background:rgba(255,0,110,.75);box-shadow:0 0 8px #ff006e;pointer-events:none}
-.cz-pays{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:12px;opacity:.75;margin:10px 4px 0}
+.cz-pays{display:grid;grid-template-columns:1fr auto 1fr auto;gap:2px 10px;font-size:12px;opacity:.75;margin:10px 4px 0}
 .cz-table{border-radius:120px 120px 16px 16px;background:radial-gradient(ellipse at 50% 0%,#17784c,#0b4a2e 70%);border:6px solid #3a1e10;padding:12px 10px 14px;min-height:210px}
 .cz-hand{display:flex;gap:6px;justify-content:center;min-height:78px;align-items:center;flex-wrap:wrap}
 .cz-hand.cur{filter:drop-shadow(0 0 8px rgba(255,209,102,.7))}
@@ -60,6 +60,7 @@ const CSS = `
 .cz-n b{position:absolute;right:-4px;top:-6px;background:#ffd166;color:#111;border-radius:999px;font-size:10px;padding:1px 4px}
 .cz-n.hit{outline:2px solid #39ff88}
 .cz-out{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+@media (max-height:760px){.cz-wheel{width:140px;height:140px;margin-bottom:4px}.cz-out .cz-n{height:34px!important}.cz-card{padding-top:10px}}
 `;
 
 // mount: the game's screen; arms: the wallet (credits(), spendCredits, apply); hint(text, ms)
@@ -133,7 +134,7 @@ export function createCasino({ mount, arms, hint = () => {}, isPhone = false }) 
 			strip.style.transform = `translateY(${-(pos[r] - 1) * CELL}px)`;
 		}
 		wrap.appendChild(el('div', 'cz-line'));
-		const pays = el('div', 'cz-pays', [['7 7 7', '1,000'], ['Triple bars ×3', '150'], ['Double bars ×3', '80'], ['Bells ×3', '40'], ['Bars ×3', '35'], ['Cherries ×3', '25'], ['Any three bars', '9'], ['Two cherries', '5'], ['Cherry on the first reel', '1']].map(([a, b]) => `<span>${a}</span><b>${b}×</b>`).join(''));
+		const pays = el('div', 'cz-pays', [['7 7 7', '1,000'], ['Triple bars ×3', '150'], ['Double bars ×3', '80'], ['Bells ×3', '40'], ['Bars ×3', '35'], ['Cherries ×3', '25'], ['Any three bars', '9'], ['Two cherries', '5'], ['Cherry, first reel', '1']].map(([a, b]) => `<span>${a}</span><b>${b}×</b>`).join(''));
 		body.replaceChildren(wrap, pays);
 		const go = el('button', 'cz-b go', 'SPIN'), betLine = el('div', 'cz-bet');
 		const showBet = () => { betLine.textContent = `Bet ${bet} a pull`; };
