@@ -168,9 +168,10 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 				const M = B.M;
 				if (!B.placed) { M.place(V.x, feet, V.z, heading); B.placed = true; }
 				M.want.heading = heading;
-				M.want.speed = a.a === 'drive' || a.v || (a.a === 'fly' && !low) ? 0 : Math.min(12, V.sp < 0.3 ? 0 : V.sp);
+				M.want.speed = a.a === 'drive' || a.a === 'sit' || a.v || (a.a === 'fly' && !low) ? 0 : Math.min(12, V.sp < 0.3 ? 0 : V.sp);
 				M.want.run = a.a === 'run' ? 1 : 0;
-				if (a.a === 'drive' || a.v) M.sit(0.5); else M.stand();
+				// (sat in a seat: gameplay/rest.js)
+				if (a.a === 'drive' || a.v) M.sit(0.5); else if (a.a === 'sit') M.sit(0.47); else M.stand();
 				M.update(Math.min(dt, 0.05), time, cam);
 				M.S.pos.set(V.x, feet, V.z);
 				if (a.a === 'drive' || a.v === 'car') M.S.pos.y = (veh ? veh.position.y : feet) + 0.15;

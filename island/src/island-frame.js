@@ -365,7 +365,7 @@ export function islandFrame(iw, now) {
 	if (!W.player.state.beat) W.player.state.beat = () => autoMusic.clock();
 	worldAudio.update(dt, { under, night: sk.night, hours: W.sky.state.hours, rain: wx.rainHere || 0 });
 	if (W.natureSound && W.bayArea?.loaded()) {
-		const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
+		const cx = camera.position.x, cz = camera.position.z, U = (W.townAt || W.bayArea.urbanAt)(cx, cz);
 		let pond = 1e9;
 		if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if ((W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) ?? W.water?.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r)) != null) pond = r; } if (pond < 1e8) break; }
 		// (anyone about within 150 m: out alone long enough, the wolves)
