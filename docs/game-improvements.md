@@ -4,8 +4,106 @@
 
 This is the plain-language record of improvements players can already meet in Bard. It feeds the **Chronicle** tab on the loading screen. Entries describe merged work, not plans, experiments or promises. Newest entries stay first.
 
-Last woven: **October 23, 2026**
-Source checkpoint: `90dda13e66c51d5fa1be13e55265fbf1b24001f6`
+Last woven: **October 24, 2026**
+Source checkpoint: `0a97d8cd04bcf3a7b51929c4d86160904300314c`
+
+## October 24, 2026
+
+<!-- 2026-10-24-monsters-break-rank -->
+### Monsters break rank
+
+Monsters carry their own posture, stride and temper now. They stalk, skid, feint and strike out of step with one another, while readable life and mana reveal what the fight is asking of you.
+
+- Every creature moves with its own cadence.
+- Target frames reveal armour, life and magic.
+
+<!-- 2026-10-24-casinos-open-their-doors -->
+### The casinos open their doors
+
+The Strip's great halls are no longer painted shells. Walk through their doors to find casino floors, bars, buffets and showrooms, then ride the towers upward into working hotels.
+
+- Enter the resorts from the boulevard.
+- Play tables and machines for in-world credits.
+
+<!-- 2026-10-24-far-towns-grow-crowns -->
+### Far towns grow crowns
+
+Distant neighborhoods settle into tree canopy and varied rooftops instead of shining like false lakes. Low sun now holds their depth as roads and homes disappear naturally into the haze.
+
+- Tree crowns break up distant roofs.
+- Far streets stay grounded at low angles.
+
+<!-- 2026-10-24-strip-keeps-midnight -->
+### The Strip keeps midnight
+
+Las Vegas stays awake after dark. Crowds fill the pavements, traffic keeps the boulevard moving and resort pools, garages and marquees carry the city beyond its famous silhouettes.
+
+- Night crowds and traffic stay active.
+- Resorts extend behind their façades.
+
+<!-- 2026-10-24-diablo-holds-the-sunset -->
+### Diablo holds the sunset
+
+Mt Diablo and the Bay hills now keep their real relief in the distance. Sunset lays long shade across the folds, evening haze separates each ridge and the summit mast marks the crown.
+
+- Far hills keep their own height.
+- Gold sky gives way to blue-grey distance.
+
+<!-- 2026-10-24-new-york-finds-its-grid -->
+### New York finds its grid
+
+New York now grows around Manhattan's direction and density, with borough districts, Central Park, brownstone streets and a stronger vertical heart connecting its familiar anchors.
+
+- Neighborhood fabric changes by borough.
+- Parks, bridges and towers shape the approach.
+
+<!-- 2026-10-24-cities-grow-in-their-own-manner -->
+### Cities grow in their own manner
+
+Major cities beyond the Bay now rise as streets, flats and shops shaped by their region instead of distant prop quarters. Their people, street sound and music arrive with them.
+
+- Dense districts replace empty city ground.
+- Regional homes can be entered and kept.
+
+<!-- 2026-10-24-vegas-finds-its-boulevard -->
+### Vegas finds its boulevard
+
+Las Vegas Boulevard now crosses a living Mojave city: palms, resort blocks, fountains, towers and the desert basin build a recognizable road from the Welcome sign toward downtown.
+
+- The Strip follows a connected boulevard.
+- Desert, resorts and downtown share one city.
+
+<!-- 2026-10-24-a-chair-becomes-a-place -->
+### A chair becomes a place
+
+Chairs, sofas, benches and café seats are places to stop now. Claim a home and its bed becomes a place to sleep through the night, wake restored and meet the household's next morning.
+
+- Sit throughout homes, streets and venues.
+- Sleep safely in a home you have claimed.
+
+<!-- 2026-10-24-roads-reach-the-wider-world -->
+### Roads reach the wider world
+
+Towns beyond the Bay finally carry their streets beneath them. Drives meet houses, local roads meet town edges and long highways join the network without cutting across whole districts.
+
+- Generated towns gain streets and walks.
+- Highways connect at believable edges.
+
+<!-- 2026-10-24-water-finds-the-low-ground -->
+### Water finds the low ground
+
+Creeks now follow the earth and closed valleys drain into modest ponds instead of vast phantom lakes. Villages wait for the water map before choosing dry ground for homes.
+
+- No deep false lakes over settlements.
+- Creeks and houses agree with the terrain.
+
+<!-- 2026-10-24-shops-keep-what-they-sell -->
+### Shops keep what they sell
+
+Walk-in businesses now look and work like their trade. Shelves carry branded goods, restaurants serve menus, cooler doors open and venues from arcades to bowling alleys invite you to play.
+
+- Buy the stock you can actually see.
+- Distinct interiors support real interactions.
 
 ## October 23, 2026
 
