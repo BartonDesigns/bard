@@ -12,6 +12,7 @@
 // Pure: no three, no DOM.
 
 import { CAMO } from '../combat/outfits.js';
+import { LEGENDARY_ARMOR } from '../gameplay/legendary-items.js';
 
 const STEEL = '#55595e', IRON = '#55595e', MAIL = '#55585c', LEATHER = '#4a3424', GOLD = '#c9a45c';
 const MC = CAMO.multicam;
@@ -21,7 +22,7 @@ const mailShirt = () => ({ kind: 'tunic', col: MAIL, acc: IRON, pat: 'mail', fab
 const mailLegs = () => ({ kind: 'trousers', col: MAIL, acc: IRON, pat: 'mail', fab: 'metal', legs: 'long', fit: 'slim' });
 
 // each item's look: the parts it puts on (top, outer, bottom, shoes) and the things it adds (acc)
-export const LOOKS = Object.freeze({
+const BASE_LOOKS = {
 	// the aether garments
 	'wayfarers-hood': { acc: [{ kind: 'hood', col: '#2c3047', acc: GOLD }] },
 	'stargazer-circlet': { acc: [{ kind: 'circlet', col: '#d9dbe6', acc: '#8fd0ff' }] },
@@ -55,7 +56,14 @@ export const LOOKS = Object.freeze({
 	'combat-trousers': { bottom: multicam('cargo', { legs: 'long', fit: 'regular' }), acc: [{ kind: 'kneepads', col: '#3a3a32' }] },
 	'tactical-gloves': { acc: [{ kind: 'gloves', col: '#3b3a33', acc: '#24241f', knuckle: true }] },
 	'combat-boots': { shoes: { kind: 'boot', col: '#8a7556', sole: '#2a241c', combat: true } },
-});
+};
+// Append only: existing multiplayer wardrobe codes must never shift.
+const relicLook = x => {
+	const paint = v => Array.isArray(v) ? v.map(paint) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k,a]) =>
+		[k, k === 'camo' ? undefined : k === 'col' ? (x.boss === 'leviathan' ? '#536b75' : x.boss === 'walker' ? '#38302d' : x.boss === 'gunship' ? '#3b4b5b' : '#34313f') : ['acc','trim','acc2'].includes(k) && typeof a === 'string' ? `#${x.color.toString(16).padStart(6,'0')}` : k === 'pat' && a === 'camo' ? 'plain' : paint(a)])) : v;
+	return paint(BASE_LOOKS[x.base]);
+};
+export const LOOKS = Object.freeze({ ...BASE_LOOKS, ...Object.fromEntries(LEGENDARY_ARMOR.map(x => [x.id,relicLook(x)])) });
 
 // the things on the head, the hands, the legs and the feet that a worn piece takes the place of
 const CLEARS = {

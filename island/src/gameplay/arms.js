@@ -7,7 +7,7 @@
 // real-world weapons simulator.
 
 import { ASCEND_TRIALS, LEVEL_CAP, UPGRADE_MATERIAL, canCombine, cleanInstance, combined, mintUid, trained, trialStep, upgradeCost, valueFactor } from './gear-levels.js';
-import { LEGENDARIES } from './legendary-items.js';
+import { LEGENDARIES, LEGENDARY_ARMOR, relicBoss, RELIC_BOSS_NAMES } from './legendary-items.js';
 
 // 2: every item owned is an instance with an id, a level and a quality tier (gameplay/gear-levels.js)
 export const INVENTORY_VERSION = 2;
@@ -336,9 +336,11 @@ const ITEMS = [
 	].map(([id, name, use]) => ({ id, name, kind: 'errand', fictional: true, activities: [], use, sources: {}, marketTradable: true, basePrice: 0, weight: 1, slot: 'hand', stackable: false, consumable: false, heatRisk: 0 })),
 	// Keep existing catalog order: broad conversational matches must still prefer shop gear.
 	...LEGENDARIES.map(x => ({ id: x.id, name: x.name, kind: 'rifle', fictional: true,
-		activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use: x.lore,
+		activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use: x.lore + (relicBoss(x.id) ? ` A relic of the ${RELIC_BOSS_NAMES[relicBoss(x.id)]}.` : ''),
 		sources: {}, marketTradable: true, basePrice: 600, weight: 4, slot: 'primary',
 		stackable: false, consumable: false, heatRisk: 8, ascend: 'weapon' })),
+	...LEGENDARY_ARMOR.map(x => ({ id:x.id, name:x.name, kind:'garment', fictional:true, activities:[], use:x.lore,
+		sources:{}, marketTradable:true, basePrice:480, weight:2, slot:x.slot, stackable:false, consumable:false, heatRisk:0, ascend:'garment' })),
 ];
 
 export const ARMS_CATALOG = freeze(Object.fromEntries(ITEMS.map((item) => [item.id, item])));

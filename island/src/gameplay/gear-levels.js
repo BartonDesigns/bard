@@ -8,7 +8,7 @@
 // functions over plain data, shared by the inventory, the gear screen and trading.
 
 // the most experience and outfitters reach; the hundredth beyond it is earned by a trial
-import { LEGENDARY, legendaryBase } from './legendary-items.js';
+import { RELICS, legendaryBase } from './legendary-items.js';
 export const LEVEL_CAP = 99;
 export const ASCENDED = 100;
 export const MAX_LEVEL = ASCENDED;
@@ -98,7 +98,7 @@ export const statScale = (inst) => statMult(int(inst?.l, 1, MAX_LEVEL, 1), int(i
 // an instance, cleaned (null when it is not one)
 export function cleanInstance(x, known = () => true) {
 	if (!x || typeof x !== 'object' || !UID_RE.test(x.u || '') || typeof x.i !== 'string' || !known(x.i)) return null;
-	return { u: x.u, i: x.i, l: int(x.l, 1, MAX_LEVEL, 1), t: LEGENDARY[x.i] ? 4 : int(x.t, 0, 4, 0), x: int(x.x ?? 0, 0, 1e6, 0) };
+	return { u: x.u, i: x.i, l: int(x.l, 1, MAX_LEVEL, 1), t: RELICS[x.i] ? 4 : int(x.t, 0, 4, 0), x: int(x.x ?? 0, 0, 1e6, 0) };
 }
 
 // an item's stats at its level and tier, each with the next level's value for comparison
