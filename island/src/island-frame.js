@@ -157,8 +157,12 @@ export function islandFrame(iw, now) {
 		// rain closes the distance in; the coast south of Half Moon Bay is kept crystal
 		// clear, the air over the bluffs washed clean by the wind off the sea
 		const lat = 37.76 - camera.position.z / 110996, lon = camera.position.x / (111320 * Math.cos(37.76 * Math.PI / 180)) - 122.57;
-		const clearK = THREE.MathUtils.smoothstep(lat, 37.5, 37.44) * THREE.MathUtils.smoothstep(lat, 37.02, 37.1) * THREE.MathUtils.smoothstep(lon, -122.2, -122.3);
+		// (three's smoothstep takes its edges low then high: turned round, it gave 1 north of
+		// 37.5 and east of -122.2, and the whole East Bay had the clear coast's thin air)
+		const clearK = (1 - THREE.MathUtils.smoothstep(lat, 37.44, 37.5)) * THREE.MathUtils.smoothstep(lat, 37.02, 37.1) * (1 - THREE.MathUtils.smoothstep(lon, -122.3, -122.2));
 		scene.fog.density *= (1 + (wx.rainHere * 12 + wx.gloom * 1.5) * (1 - clearK * 0.8)) * (1 - clearK * 0.55);
+		// the evening's haze, thicker as the sun gets low (world/sky.js DUSK.air)
+		scene.fog.density *= 1 + (W.sky?.state?.duskAir || 0);
 		// another world's air: dust, ash, spores, mist
 		scene.fog.density *= W.island.profileHaze || 1;
 		// (the Moon's ground runs to its horizon in clear vacuum)

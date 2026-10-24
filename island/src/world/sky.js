@@ -258,8 +258,13 @@ const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
 // grass. Neither by night, and both gone as it comes in. The haze, looking away from the sun,
 // is the air in the land's shade, toward the blue overhead (haze of the way); and between the
 // gold of the low sky and the blue the sky goes a clear pale green-gold (PAL.setMid), not the
-// mauve the two would mix to. (Crysis.world().sky.state.dusk, for tuning)
-const DUSK = { sunLast: C(1.0, 0.42, 0.28), sun: 2.4, sky: 1.9, skyBlue: 0.4, haze: 0.4, mid: 0.75 };
+// mauve the two would mix to. The evening's air: as the sun gets low the haze over the land
+// thickens (air more of it at sunset, island-frame.js), and once the low air lies in the
+// hills' shade and then the earth's it is lit by the sky overhead alone: the far land veiled
+// in a dim grey-blue (airBlue of the way to the blue overhead, airDim as bright), ridge behind
+// ridge, while the high air behind them still has the sun and the low sky keeps its gold.
+// (Crysis.world().sky.state.dusk, for tuning)
+const DUSK = { sunLast: C(1.0, 0.42, 0.28), sun: 3.2, sky: 1.9, skyBlue: 0.4, haze: 0.4, mid: 0.75, air: 2.25, airBlue: 0.75, airDim: 0.42 };
 function agx(c, exposure, out) {
 	exposure *= GRADE.exposure;
 	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
@@ -1170,8 +1175,13 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the
 		// sky's own horizon just above it, which drew a bright band where the far land and
 		// sea meet the sky. The fog gets the haze as the sky shows it instead.
-		if (renderer.toneMapping === THREE.AgXToneMapping) agx(haze, renderer.toneMappingExposure, scene.fog.color);
-		else scene.fog.color.copy(haze);
+		// (the evening's air over the land: thicker, and grey-blue in the shade. The dome's own
+		// low sky, uFogCol, keeps the haze as it is)
+		state.duskAir = DUSK.air * (1 - THREE.MathUtils.smoothstep(elev, 0.04, 0.3)) * (1 - night) * (vacuum ? 0 : 1);
+		const shadeAir = (1 - THREE.MathUtils.smoothstep(elev, 0.0, 0.08)) * (1 - night) * (1 - gl) * (vacuum ? 0 : 1);
+		const landHaze = shadeAir > 0 ? tmpD.copy(haze).lerp(tmpE.copy(haze).lerp(tmpA, DUSK.airBlue).multiplyScalar(DUSK.airDim), shadeAir) : haze;
+		if (renderer.toneMapping === THREE.AgXToneMapping) agx(landHaze, renderer.toneMappingExposure, scene.fog.color);
+		else scene.fog.color.copy(landHaze);
 		// the haze looking into the sun, as the dome glows that way (world/airfog.js): a little
 		// of the sun's colour by day, and the gold of a low sun along the horizon under it
 		{

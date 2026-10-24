@@ -40,3 +40,13 @@ test('the photographed ground stays out of the far ring', () => {
 	}
 	assert.ok(!/gpRead\(|gpTap\(|loamGrain\(/.test(kept.join('\n')), 'no photographed ground read in the far ring');
 });
+
+test('far summits are not cut off between the far ring\'s vertices', () => {
+	// (a vertex on a crown lifted toward its cell's highest, in the far ring's vertex shader only)
+	const at = terrain.indexOf('const vec2 DIAG[4]');
+	assert.ok(at > 0, 'the crown lift found');
+	const before = terrain.lastIndexOf('${hole ? `', at);
+	assert.ok(before > 0 && at - before < 1200, 'inside the far ring\'s own part');
+	assert.match(terrain.slice(at, at + 800), /for \(int i = 0; i < uN4; i\+\+\) pk = max\(pk, bayHeight/, 'its taps in a loop the compiler keeps once');
+	assert.match(terrain.slice(at, at + 800), /min\(pk, 0\.5 \* be\)/, 'half a cell at most');
+});

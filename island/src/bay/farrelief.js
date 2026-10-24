@@ -9,7 +9,8 @@
 // Drawn again when you have gone a sixth of the way to its edge, or the slots or the surveys
 // change (a lake filled, bay/levelrows.js). Each texel: the slope east and south (a square
 // root's scale, so the gentle slopes the low sun picks out keep their fine steps in 8 bits)
-// and the fold at the woods' 18 m scale, as the vertex takes it (vCurv.x).
+// and the fold of the land 54 m about (vCurv.x's measure): the draws the oaks fill, a few
+// score metres across. (At the texel's own 20 m every rill came out a thin dark vein.)
 
 import * as THREE from 'three';
 
@@ -17,6 +18,8 @@ import * as THREE from 'three';
 export const FAR_RELIEF_U = { uFRel: { value: null }, uFRelR: { value: new THREE.Vector4(0, 0, 1, 0) } };
 // (the slope's range in the map: 3, about 72 degrees)
 export const FAR_RELIEF_SLOPE = 3;
+// (the fold's reach either way, metres)
+const FOLD_E = 54;
 
 // The far ring's side: the slope and the fold from the map, eased into the vertex's own over
 // the map's last 6% so its edge never shows. Derivatives taken before any branch.
@@ -45,7 +48,7 @@ void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
 `;
 const BAKE_F = /* glsl */`
 precision highp float;
-uniform highp sampler2D uB0, uBa, uBb, uBc; uniform vec4 uR0, uRa, uRb, uRc; uniform vec4 uWin; uniform int uN5;
+uniform highp sampler2D uB0, uBa, uBb, uBc; uniform vec4 uR0, uRa, uRb, uRc; uniform vec4 uWin; uniform float uFoldE; uniform int uN9;
 varying vec2 vUv;
 // (the surveys read filtered, as a pixel of the far ring would see them between its vertices)
 float lv(highp sampler2D t, vec4 r, vec2 w){ vec2 S = vec2(textureSize(t, 0)); return textureLod(t, ((w - r.xy) / r.z + 0.5) / S, 0.0).r; }
@@ -60,13 +63,14 @@ float hAt(vec2 w){
 float enc(float g){ return 0.5 + 0.5 * sign(g) * sqrt(min(abs(g), ${FAR_RELIEF_SLOPE.toFixed(1)}) / ${FAR_RELIEF_SLOPE.toFixed(1)}); }
 void main(){
 	vec2 w = uWin.xy + (vUv - 0.5) * uWin.z;
-	float e = uWin.w;
+	// the slope across a texel either way; the fold across uFoldE either way
+	float e = uWin.w, f = uFoldE;
 	const vec2 OFF[5] = vec2[5](vec2(0.0), vec2(-1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, -1.0), vec2(0.0, 1.0));
-	float hs[5];
+	float hs[9];
 	// (in a loop the compiler cannot unroll, so the height code is there once)
-	for (int i = 0; i < uN5; i++) hs[i] = hAt(w + OFF[i] * e);
+	for (int i = 0; i < uN9; i++) hs[i] = hAt(w + OFF[i < 5 ? i : i - 4] * (i < 5 ? e : f));
 	vec2 g = vec2(hs[2] - hs[1], hs[4] - hs[3]) / (2.0 * e);
-	float fold = (hs[1] + hs[2] + hs[3] + hs[4] - 4.0 * hs[0]) * (324.0 / (e * e)) / 6.0;
+	float fold = (hs[5] + hs[6] + hs[7] + hs[8] - 4.0 * hs[0]) * (324.0 / (f * f)) / 6.0;
 	gl_FragColor = vec4(enc(g.x), enc(g.y), 0.5 + clamp(fold, -2.0, 2.0) * 0.25, 1.0);
 }
 `;
@@ -83,7 +87,7 @@ export function createFarRelief({ renderer, BU, isPhone = false }) {
 	rt.texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1);
 	const uWin = { value: new THREE.Vector4() };
 	const mat = new THREE.ShaderMaterial({
-		uniforms: { uB0: BU.uB0, uBa: BU.uBa, uBb: BU.uBb, uBc: BU.uBc, uR0: BU.uR0, uRa: BU.uRa, uRb: BU.uRb, uRc: BU.uRc, uWin, uN5: { value: 5 } },
+		uniforms: { uB0: BU.uB0, uBa: BU.uBa, uBb: BU.uBb, uBc: BU.uBc, uR0: BU.uR0, uRa: BU.uRa, uRb: BU.uRb, uRc: BU.uRc, uWin, uFoldE: { value: FOLD_E }, uN9: { value: 9 } },
 		vertexShader: BAKE_V, fragmentShader: BAKE_F, depthTest: false, depthWrite: false, toneMapped: false,
 	});
 	const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);

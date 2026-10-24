@@ -582,6 +582,20 @@ export function createBayArea(shared, scene, island, BU, { renderer = null, isPh
 						for (int i = 0; i < nW; i++) windS = max(windS, step(bayHeight(bw + (i == 0 ? vec2(-900.0, 0.0) : i == 1 ? vec2(-2200.0, 0.0) : vec2(0.0, 1500.0))), -2.0));
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);
+					${hole ? `// (out here the grid is a few hundred metres across, and a summit or a ridge's crest
+					// between its vertices was cut off: Mt Diablo's drawn 35 m low from San Ramon, its
+					// building and mast standing in the sky over it. A vertex on a crown, higher than its
+					// neighbours' mean, is lifted toward the highest of its own cell, a quarter of the
+					// cell's width at most; on an even slope or in a fold it is left as it is)
+					{
+						const vec2 DIAG[4] = vec2[4](vec2(-0.5, -0.5), vec2(0.5, -0.5), vec2(-0.5, 0.5), vec2(0.5, 0.5));
+						float crown = bc - sG * 0.25, liftK = smoothstep(0.02 * ge, 0.12 * ge, crown) * smoothstep(5000.0, 8000.0, length(position.xz));
+						if (liftK > 0.0) {
+							float pk = 0.0;
+							for (int i = 0; i < uN4; i++) pk = max(pk, bayHeight(bw + DIAG[i] * be) - bh);
+							bh += min(pk, 0.5 * be) * liftK;
+						}
+					}` : ''}
 					#endif`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
 			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uGroundP; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0, pavedAsph = 0.0; float shWet = 0.0, shSoak = 0.0, shSheen = 0.0;\nuniform float uWave; uniform vec3 uSkyZenS, uSkyHorS;\n' + (hole && !LITE_F ? FAR_RELIEF_GLSL : 'vec3 bCurv = vec3(0.0);\n') + WET_SHEEN_PARS + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + (hole && !LITE_F ? '' : GROUND_PHOTO_GLSL + TILE2_GLSL) + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
