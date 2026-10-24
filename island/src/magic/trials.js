@@ -24,7 +24,7 @@ export const TRIALS = Object.freeze([
 	T('heirloom', 'Heirloom', '⚔', LEVEL_CAP, 'Raise a weapon to level 99.', (s, c) => c.weaponTop || 0),
 	T('regalia', 'Regalia', '♛', GARMENT_SLOTS.length, 'Wear a garment on every slot, each at level 75 or more.', (s, c) => c.wornTop || 0),
 ]);
-export const RITE = 'With every trial done, gather from an aether well at dusk or dawn.';
+export const RITE = 'With every trial done, reach an aether well at dusk or dawn and perform the rite in Gear → Character. Gathering from the well also works.';
 // the hundredth's gift to every attribute (magic/stats.js)
 export const ASCENDED_ATTRIBUTE = 5;
 
