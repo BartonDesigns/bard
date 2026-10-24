@@ -474,7 +474,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 		}
 	}
 	const cars = [];
-	let trafficN = 0;
+	let trafficN = 0, stripF = 0;
 	// the bus stops (each shelter): a bus coming by pulls up and waits a while
 	const stopsAt = [];
 
@@ -507,8 +507,16 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null, city
 		// for anyone (or any car) in the road ahead
 		const stops = avoid ? avoid() : [];
 		movingFleet.begin();
+		stripF++;
 		for (const c of cars) {
 			const l = c.l, L = l.L;
+			// (the Strip: a car gone off down it, out of the stretch round you, is one more coming up
+			// it from the far end of the stretch, so the traffic round you never thins)
+			if (l.strip) {
+				if (l.camF !== stripF) { l.camF = stripF; l.camS = alongLane(l, x, z); }
+				const W = isPhone ? 300 : 420;
+				if ((c.u * L - l.camS) * c.dir > W) { c.u = Math.max(0, Math.min(1, (l.camS - c.dir * W) / L)); c.v = c.vmax * 0.6; c.px = undefined; }
+			}
 			const toEnd = c.dir > 0 ? (1 - c.u) * L : c.u * L;
 			let target = toEnd < 12 ? Math.max(0, (toEnd - 3) * 0.8) : c.vmax;
 			// (held: someone is at the driver's door, vehicles/carjack.js)

@@ -387,4 +387,5 @@ test('the Strip is alive at night: thronged round the clock, every resort betwee
 	assert.match(sl, /Math\.min\(3, Math\.floor\(\(half - 1\.2\) \/ 3\.5\)\)/, 'lanes side by side');
 	assert.match(sl, /const nC = l\.strip \? Math\.min\(150, Math\.round\(\(u1 - u0\) \* l\.L \* l\.n \* 2 \/ 35\)\)/, 'a car every 35 m of each lane round you');
 	assert.match(sl, /u: u0 \+ Math\.random\(\) \* \(u1 - u0\)/);
+	assert.match(sl, /if \(\(c\.u \* L - l\.camS\) \* c\.dir > W\) \{ c\.u = /, 'and one gone off down it comes up it again');
 });
