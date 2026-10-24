@@ -72,7 +72,7 @@ export function weatherLine(kit, C, wx, r, R, coast = true) {
 			if (k === 'himalaya') L.push(s === 'monsoon' || (s === 'summer' && C.rain > 600) ? 'The monsoon clouds sit on the valleys; up here we get rain and mist.' : 'Clear days now, the mountains out every morning.');
 			else L.push(s === 'wet' || (C.south && (s === 'summer')) ? 'The rains are here. The paths turn to mud.' : 'Dry season, cold nights, blue sky every day.');
 			break;
-		case 'desert': case 'pueblo': case 'outback':
+		case 'desert': case 'pueblo': case 'outback': case 'mojave':
 			if (C.now > 30) L.push(`It\'ll be ${deg(C, Math.max(t, C.temp + 6))} by the afternoon. Everyone rests through the middle of the day.`, 'In this heat you work at dawn and in the evening, and you drink before you are thirsty.');
 			else L.push('Warm days, but the nights are cold out here. You\'d be surprised.', 'If the wind gets up this afternoon we\'ll have dust. Keep a cloth over your mouth.');
 			break;

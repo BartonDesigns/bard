@@ -74,7 +74,7 @@ export function gridSnap(lat, lon, half = 280) {
 // the surfaces: 0 marked asphalt, 1 plain asphalt, 2 gravel, 3 dirt
 const GRAVEL = [0.3, 0.28, 0.24], DIRT = [0.42, 0.34, 0.25];
 // the kits whose lanes are earth, not metalled
-const EARTH = /^(steppe|savanna|sahel|desert|outback|jungle|polar|station|himalaya|andes|island|kraal|camp)$/;
+const EARTH = /^(steppe|savanna|sahel|desert|outback|mojave|jungle|polar|station|himalaya|andes|island|kraal|camp)$/;
 const PAVED = /^(village|alpine|mediterranean|eastvillage|snow|eastcity|southcity|bazaar)$/;
 
 export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, settlements }) {

@@ -57,6 +57,7 @@ export function kitFor(id, R, { pop = -1, elev = 0, lat = 0 } = {}) {
 	if (starts(id, 'pac', 'na.hi', 'atl.carib', 'atl.capeverde')) return 'island';
 	// the Americas, Australia and New Zealand
 	if (starts(id, 'oc.outback')) return 'outback';
+	if (starts(id, 'na.gb', 'na.cal.desert', 'na.tx.west')) return 'mojave';
 	if (starts(id, 'na.sw', 'na.utah.canyons')) return 'pueblo';
 	if (starts(id, 'sa.amazon')) return 'jungle';
 	if (starts(id, 'na.cam', 'sa.co') && rain > 2000 && !town) return 'jungle';
