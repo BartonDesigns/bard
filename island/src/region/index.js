@@ -41,17 +41,18 @@ const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes
 // no wild plant in it (settle.js blocked)
 const PAVED = new Set(['casino', 'bellagio', 'luxor', 'excalibur', 'nyny', 'parislv', 'wheel', 'strat', 'canopy', 'venetian', 'sphere']);
 // a paved landmark's whole clearing paved, out to its edge (its drives, lots, plazas and pool decks; its
-// own grounds lie over the middle of it, landmarks.js): a resort stands in no patch of desert
+// own grounds lie over the middle of it, landmarks.js; on its own layer, settle.js paveMat): a resort
+// stands in no patch of desert
 function paveLot(B, R, gr) {
 	// (fine enough, 16 m out and at most 18 m round, that it follows the ground's bumps instead of sinking under them)
-	const n = Math.max(12, Math.ceil(Math.PI * 2 * R / 18)), step = 16, up = (x, z) => gr(x, z) + 0.11, pave = [0.5, 0.48, 0.45];
+	const n = Math.max(12, Math.ceil(Math.PI * 2 * R / 18)), step = 16, up = (x, z) => gr(x, z) + 0.06, pave = [0.5, 0.48, 0.45], Gp = B.pave || B.G;
 	const P = (r, t) => { const x = Math.cos(t) * r, z = Math.sin(t) * r; return [x, up(x, z), z]; };
 	for (let r0 = 0; r0 < R - 0.01; r0 += step) {
 		const r1 = Math.min(R, r0 + step);
 		for (let k = 0; k < n; k++) {
 			const t0 = k / n * Math.PI * 2, t1 = (k + 1) / n * Math.PI * 2;
 			// (counter-clockwise seen from above)
-			B.G.face(r0 ? [P(r0, t1), P(r1, t1), P(r1, t0), P(r0, t0)] : [P(0, 0), P(r1, t1), P(r1, t0)], pave);
+			Gp.face(r0 ? [P(r0, t1), P(r1, t1), P(r1, t0), P(r0, t0)] : [P(0, 0), P(r1, t1), P(r1, t0)], pave);
 		}
 	}
 }

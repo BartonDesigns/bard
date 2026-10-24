@@ -80,6 +80,9 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 	const glowMat = nearDissolve(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, fog: true }), nearBand);
 	// (the lights that are on only after dark, a tower's lit rooms and the Luxor's beam: the same shader as the glow)
 	const nightMat = nearDissolve(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, fog: true }), nearBand);
+	// (paving laid on the ground, a resort's whole clearing: region/index.js paveLot. Drawn a hair nearer than
+	// it is, so the far ground's coarser mesh never shows through it; the same program as mat)
+	const paveMat = nearDissolve(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }), nearBand);
 	const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: 0.96, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 	const smokeU = { uTime: { value: 0 }, uWind: { value: new THREE.Vector2(0.4, 0.2) }, uCol: { value: new THREE.Color(0.7, 0.7, 0.72) }, uSize: { value: isPhone ? 260 : 380 } };
 	const smokeMat = new THREE.ShaderMaterial({ uniforms: smokeU, vertexShader: SMOKE_VS, fragmentShader: SMOKE_FS, transparent: true, depthWrite: false });
@@ -170,8 +173,8 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 	function* buildCell(s, i, j) {
 		let tWork = 0, tLast = performance.now();
 		const kit = kitOf(s), lots = cellLots(s, i, j);
-		const G = new Geo(), glow = new Geo(), nightG = new Geo(), smoke = [], solids = [], spots = [], lights = [], trees = [], homes = [];
-		G.seed = glow.seed = nightG.seed = (s.seed ^ (i * 92821 + j * 68917)) >>> 0 || 1;
+		const G = new Geo(), glow = new Geo(), nightG = new Geo(), paveG = new Geo(), smoke = [], solids = [], spots = [], lights = [], trees = [], homes = [];
+		G.seed = glow.seed = nightG.seed = paveG.seed = (s.seed ^ (i * 92821 + j * 68917)) >>> 0 || 1;
 		const opts = { ...(s.opts || {}), snow: snowOf(s) };
 		for (const L of lots) {
 			const r = rng((s.seed ^ Math.imul(Math.round(L.x * 10), 73856093) ^ Math.imul(Math.round(L.z * 10), 19349663)) >>> 0);
@@ -182,9 +185,9 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 			if (L.role === 'house' && !foundation) continue;
 			const y = foundation?.y ?? ground(terrainLot.x, terrainLot.z);
 
-			const B = { G, glow, night: nightG, later: [], smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense, home: null };
+			const B = { G, glow, night: nightG, pave: paveG, later: [], smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense, home: null };
 			const rot = L.rot + Math.PI;
-			G.frame(L.x, y, L.z, rot); glow.frame(L.x, y, L.z, rot); nightG.frame(L.x, y, L.z, rot);
+			G.frame(L.x, y, L.z, rot); glow.frame(L.x, y, L.z, rot); nightG.frame(L.x, y, L.z, rot); paveG.frame(L.x, y, L.z, rot);
 			const pal = basePalette(s.palette, kit, r, opts);
 			// (a home's own faces, from its foundation on: structures.js home() marks where they stop)
 			const v0 = G.count(), g0 = glow.count();
@@ -224,12 +227,13 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 				G.frame(x, y - 0.35, z, f.rot); G.box(0, 0, 0, 6.2, 0.75, 0.45, wall, { r: 0 });
 			}
 		}
-		const C = { i, j, mesh: null, glow: null, night: null, ground: null, smoke: null, solids, spots, lights, trees, homes };
+		const C = { i, j, mesh: null, glow: null, night: null, pave: null, ground: null, smoke: null, solids, spots, lights, trees, homes };
 		if (trees.length) treesVersion++;
 		const nearOf = (g) => { g.setAttribute('aNear', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 4), 4)); return g; };
 		if (G.count()) { C.mesh = new THREE.Mesh(nearOf(G.geometry()), mat); C.mesh.castShadow = !isPhone; C.mesh.receiveShadow = true; s.group.add(C.mesh); stats.tris += G.count() / 3; }
 		if (glow.count()) { C.glow = new THREE.Mesh(nearOf(glow.geometry()), glowMat); s.group.add(C.glow); }
 		if (nightG.count()) { C.night = new THREE.Mesh(nearOf(nightG.geometry()), nightMat); s.group.add(C.night); }
+		if (paveG.count()) { C.pave = new THREE.Mesh(nearOf(paveG.geometry()), paveMat); C.pave.receiveShadow = true; s.group.add(C.pave); stats.tris += paveG.count() / 3; }
 		for (const rec of homes) rec.cell = C;
 		if (homes.length) homesVersion++;
 		C.ground = paintCell(s, i, j, kit);
@@ -252,7 +256,7 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 		// (its homes built for real go with it: bay/houses.js lets a dead one go)
 		for (const rec of C.homes) { if (rec.grp) rec.grp.dead = true; rec.grp = null; rec.nearGrp = null; }
 		if (C.homes.length) homesVersion++;
-		for (const m of [C.mesh, C.glow, C.night, C.ground, C.smoke]) if (m) { m.geometry.dispose(); m.parent?.remove(m); }
+		for (const m of [C.mesh, C.glow, C.night, C.pave, C.ground, C.smoke]) if (m) { m.geometry.dispose(); m.parent?.remove(m); }
 		if (C.trees.length) treesVersion++;
 		stats.cells--;
 	}
@@ -546,7 +550,7 @@ export function createSettlements({ scene, ground, wet, waterReady = () => true,
 			A.addUpdateRange(a * 4, (b - a) * 4); A.needsUpdate = true;
 		}
 	}
-	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); nightMat.dispose(); groundMat.dispose(); smokeMat.dispose(); }
+	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); nightMat.dispose(); paveMat.dispose(); groundMat.dispose(); smokeMat.dispose(); }
 	// the great trees of the built cells, where they stand now
 	function trees() { const out = []; for (const s of sites.values()) for (const C of s.cells.values()) for (const T of C.trees) out.push({ ...T, x: s.x + T.x, z: s.z + T.z }); return out; }
 	const api = { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, homesNear, homesVersion: () => homesVersion, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
