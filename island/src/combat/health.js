@@ -11,6 +11,10 @@ export const DAMAGE_TYPES = ['ballistic', 'energy', 'pierce', 'blast', 'fire', '
 // little less; the shoulders, arms and legs take less but the legs slow and cripple
 // (combat/wounds.js)
 export const PARTS = Object.freeze({ head: 4, neck: 2.6, chest: 1.35, gut: 1.05, shoulder: 0.8, arm: 0.6, leg: 0.7, torso: 1, limb: 0.7, body: 1, weak: 2.5, vital: 1.5, plate: 0.25, wheel: 0.8 });
+// a monster's head (creatures/models.js: head, neck, ears): a thick skull, twice and not a
+// person's four times, so a round there is no shortcut through the life it has (Josh
+// 2026-10-23: monsters a fight, not a shot); its glowing weak point is the place to aim
+export const CREATURE_HEAD = 2;
 // a fist, a bat or a boot (blow.melee): the head counts for less than a bullet in it
 // how much of a hit there the armour takes: a vest covers the chest and gut, not the face and throat
 export const ARMOUR_COVER = { head: 0.3, neck: 0, shoulder: 0.6, arm: 0.4, leg: 0.4 };

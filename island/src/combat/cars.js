@@ -33,7 +33,7 @@ export function createCars(ctx) {
 		const x = traffic ? c.px : c.x, z = traffic ? c.pz : c.z;
 		if (!S) {
 			S = { id, kind: c.kind, H: createHealth({ max: 260, resist: { pierce: 0.3, energy: 1.2, blast: 1.5 } }), stage: 0, flat: 0, burnT: 0, ref: c, traffic, x, y: 0, z, yaw: c.yaw || 0, emit: 0 };
-			S.T = { id, kind: 'car', faction: 'world', surface: 'metal', name: 'a car', bound: { x, y: 0, z, r: 3 }, shapes: () => shapes(S), onHit: (blow) => hit(S, blow), aim: () => ({ x: S.x, y: S.y + 0.8, z: S.z }) };
+			S.T = { id, kind: 'car', faction: 'world', surface: 'metal', name: 'a car', bound: { x, y: 0, z, r: 3 }, shapes: () => shapes(S), onHit: (blow) => hit(S, blow), aim: () => ({ x: S.x, y: S.y + 0.8, z: S.z }), vitals: () => S.H };
 			state.set(id, S);
 		}
 		S.ref = c; S.x = x; S.z = z; S.yaw = c.yaw || 0; S.y = traffic ? c.py ?? ctx.ground(x, z, 0) : c.y ?? ctx.ground(x, z, 0);
