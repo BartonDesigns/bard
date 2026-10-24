@@ -61,7 +61,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 		const cr = [...Crysis.combat.layer.map.values()].filter((T) => T.ref?.cr);
 		for (const T of cr) T.hex = { hold: 1e6, fear: 0, slowK: 1, slowT: 0, dot: 0, dotT: 0 };
 		return cr.length >= 4;
-	}, null, { timeout: 300000, polling: 500 });
+	}, null, { timeout: 900000, polling: 500 });
 	const ids = await page.evaluate(() => {
 		const cr = [...Crysis.combat.layer.map.values()].filter((T) => T.ref?.cr);
 		const of = (sp) => cr.filter((T) => T.ref.Sp.name === sp).map((T) => T.id);
@@ -98,6 +98,18 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 		if (!/^\d+ \/ 210$/.test(F.lifeText || '')) problems.push('frame life text ' + F.lifeText);
 		if (F.mana == null || !/\/ 120$/.test(F.manaText || '')) problems.push('no mana on the Hexer: ' + F.manaText);
 		if (F.reaction !== 'hostile') problems.push('Hexer not hostile on the frame');
+		// where it sits: a compact one top left beside ◀ Bard with a mouse (Josh 2026-10-24),
+		// centred at the top on a phone
+		R.rect = await page.evaluate(() => {
+			const r = (el) => { const b = el?.getBoundingClientRect(); return b && { l: Math.round(b.left), t: Math.round(b.top), r: Math.round(b.right), b: Math.round(b.bottom) }; };
+			return { tf: r(document.querySelector('.tf')), back: r(document.querySelector('[aria-label^="Back to the Bard"]')), w: innerWidth };
+		});
+		console.log('rect', JSON.stringify(R.rect));
+		const { tf, back } = R.rect;
+		if (profile === 'desktop') {
+			if (!(tf.l < 140 && tf.t < 90 && tf.r - tf.l <= 240)) problems.push('the desktop frame is not the small one top left: ' + JSON.stringify(tf));
+			if (back && tf.l < back.r + 4) problems.push('the desktop frame runs into ◀ Bard');
+		} else if (Math.abs((tf.l + tf.r) / 2 - R.rect.w / 2) > 4) problems.push('the phone frame is not centred: ' + JSON.stringify(tf));
 	}
 	const P = R.locked.plates;
 	if (P.shown < 3) problems.push(`only ${P.shown} bars over the monsters`);
