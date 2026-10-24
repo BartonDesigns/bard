@@ -19,6 +19,7 @@
 // Pure: no three, no DOM (island/tools/gear-magic.test.mjs). magic/stats.js sums it.
 
 import { ARMS_CATALOG } from './arms.js';
+import { LEGENDARY } from './legendary-items.js';
 import { ASCEND_TRIALS, ASCENDED, LEVEL_CAP, hashOf, statsOf } from './gear-levels.js';
 import { SCHOOLS, SPELL, SPELLS } from '../magic/spells.js';
 
@@ -46,10 +47,10 @@ const GLYPH = Object.fromEntries(Object.keys(SCHOOLS).map((k) => [k, SPELLS.filt
 export const schoolGlyph = (school) => GLYPH[school] || '';
 
 export const isGarmentId = (id) => ARMS_CATALOG[id]?.kind === 'garment';
-export const isWeaponId = (id) => !!WEAPON_SCHOOLS[id];
+export const isWeaponId = (id) => !!WEAPON_SCHOOLS[id] || !!LEGENDARY[id];
 // does this item carry magic at all
 export const isMagical = (id) => isWeaponId(id) || isGarmentId(id);
-const schoolsFor = (id) => WEAPON_SCHOOLS[id] || (isGarmentId(id) ? ALL_SCHOOLS : null);
+const schoolsFor = (id) => LEGENDARY[id] ? [LEGENDARY[id].school] : WEAPON_SCHOOLS[id] || (isGarmentId(id) ? ALL_SCHOOLS : null);
 
 // the school an instance is attuned to (null: not a magical item)
 export function attunement(inst) {

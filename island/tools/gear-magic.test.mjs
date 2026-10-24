@@ -112,7 +112,7 @@ test('garments: five slots head to foot, aether cloth, steel and combat gear, so
 
 test('every weapon and garment is attuned to a school, the same one always', () => {
 	const ws = Object.keys(ARMS_CATALOG).filter(isWeaponId), seen = new Set();
-	assert.equal(ws.length, 5);
+	assert.equal(ws.length, 25);
 	for (const id of ws) for (let n = 0; n < 300; n++) seen.add(attunement({ u: `w${n}abc`, i: id }));
 	assert.deepEqual([...seen].sort(), Object.keys(SCHOOLS).sort(), 'the weapons between them reach every school');
 	const counts = {};

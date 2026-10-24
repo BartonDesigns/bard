@@ -5,8 +5,9 @@ import { TIERS } from '../gameplay/gear-levels.js';
 import { weaponStats, WEAPONS } from './weapons.js';
 import { createLoot } from './loot.js';
 
-export function createLootView({ group, mount, arms, camera, eye, blocked, ground, active, hint, sound, onPickup = () => {}, onCollected = () => {}, touch = false }) {
-	const loot = createLoot({ max: touch ? 16 : 32, apply: (tx) => arms.apply(tx), visible: (a, b) => !blocked(new THREE.Vector3(a.x, a.y, a.z), new THREE.Vector3(b.x, b.y, b.z)) });
+export function createLootView({ group, mount, arms, camera, eye, blocked, ground, active, hint, sound, store, onPickup = () => {}, onCollected = () => {}, touch = false }) {
+	let progress; try { progress = JSON.parse(store?.get('l99-encounter-loot-v1') || '{}'); } catch { /* fresh counters */ }
+	const loot = createLoot({ progress, saveProgress: p => store?.set('l99-encounter-loot-v1', JSON.stringify(p)), max: touch ? 16 : 32, apply: (tx) => arms.apply(tx), visible: (a, b) => !blocked(new THREE.Vector3(a.x, a.y, a.z), new THREE.Vector3(b.x, b.y, b.z)) });
 	const visuals = new Map(), forward = new THREE.Vector3(), viewer = new THREE.Vector3();
 	const panel = document.createElement('div');
 	panel.dataset.fieldRecovery = '';
@@ -32,11 +33,13 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 		v.model.getObjectByName('motes')?.geometry.dispose();
 		// Item geometry and materials belong to the shared held-model cache.
 		v.marker.geometry.dispose(); v.marker.material.dispose(); visuals.delete(id);
+		v.beam?.geometry.dispose(); v.beam?.material.dispose();
 	}
-	function add(h) {
-		const drop = loot.add(h); if (!drop) return;
-		visualize(drop);
-		if (Math.hypot(drop.pos.x - eye().x, drop.pos.z - eye().z) < 20) hint('Equipment recoverable. Approach the fallen fighter and look toward their weapon.', 3200, 1);
+	function add(h, playerKill = false) {
+		const drop = loot.add(h), reward = playerKill ? loot.addReward(h) : null;
+		if (drop) visualize(drop);
+		if (reward) { visualize(reward); const x = reward.items[0]; hint(`${TIERS[x.t].name} drop: ${WEAPONS[x.i].name}. Follow the ${x.t === 4 ? 'gold' : x.t === 3 ? 'violet' : 'blue'} marker and take it.`, 6500, 2); }
+		else if (drop && Math.hypot(drop.pos.x - eye().x, drop.pos.z - eye().z) < 20) hint('Equipment recoverable. Approach the fallen fighter and look toward their weapon.', 3200, 1);
 	}
 	function addCache(data) { const drop = loot.addCache(data); if (drop) visualize(drop); return drop?.id || null; }
 	function visualize(drop) {
@@ -52,7 +55,13 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 		root.add(model);
 		const marker = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.28, 48), new THREE.MeshBasicMaterial({ color: TIERS[x.t].color, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
 		marker.rotation.x = -Math.PI / 2; marker.position.y = 0.025; root.add(marker); group.add(root);
-		visuals.set(drop.id, { root, model, marker });
+		let beam;
+		if (x.t >= 2) {
+			const height = x.t === 4 ? 3 : 1.5;
+			beam = new THREE.Mesh(new THREE.CylinderGeometry(.025, .09, height, 6, 1, true), new THREE.MeshBasicMaterial({ color: TIERS[x.t].color, transparent: true, opacity: .3, depthWrite: false, side: THREE.DoubleSide }));
+			beam.position.y = height / 2; root.add(beam);
+		}
+		visuals.set(drop.id, { root, model, marker, beam });
 	}
 	function collect(equip = false) {
 		if (!active() || pickupT > 0) return false;
@@ -63,7 +72,7 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 		const out = loot.take(current.id, eye());
 		if (!out.ok) { hint(out.message, 2800, 1); return true; }
 		const visual = visuals.get(current.id);
-		if (visual) { visual.pickup = 0; visual.start = visual.model.position.clone(); visual.marker.visible = false; }
+		if (visual) { visual.pickup = 0; visual.start = visual.model.position.clone(); visual.marker.visible = false; if (visual.beam) visual.beam.visible = false; }
 		pickupT = .48; onPickup(); onCollected(out.source);
 		selected = null; panel.style.display = 'none'; signature = '';
 		let held = false;
@@ -101,7 +110,7 @@ export function createLootView({ group, mount, arms, camera, eye, blocked, groun
 		const x = selected.items[0], held = arms.held?.(), key = `${selected.id}:${held?.u}:${held?.l}:${held?.t}`;
 		if (key === signature) return; signature = key;
 		const s = weaponStats(x), old = held && weaponStats(held), rank = TIERS[x.t], variant = armamentVariant(x.i, x.t);
-		source.textContent = `${selected.name} · ${selected.cache ? 'supply cache' : 'field recovery'}`;
+		source.textContent = `${selected.name} · ${selected.cache ? 'supply cache' : selected.reward ? 'encounter reward' : 'field recovery'}`;
 		title.textContent = `${variant?.name || ''} ${s.name} · ${rank.name}`; title.style.color = rank.color; panel.style.borderColor = rank.color;
 		const delta = old ? Math.round((s.dmg - old.dmg) * 10) / 10 : null;
 		stats.textContent = `Level ${x.l} · Damage ${s.dmg} · Range ${s.range} · Magazine ${s.mag}\n${WEAPONS[x.i].perBox} reserve ${x.i === 'reedline-hunting-bow' ? 'arrows' : 'rounds'} included${delta !== null ? ` · Damage ${delta >= 0 ? '+' : ''}${delta} vs held` : ''}\nTake keeps your current weapon. Equip keeps it in your bag.`;

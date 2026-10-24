@@ -8,6 +8,7 @@
 // functions over plain data, shared by the inventory, the gear screen and trading.
 
 // the most experience and outfitters reach; the hundredth beyond it is earned by a trial
+import { LEGENDARY, legendaryBase } from './legendary-items.js';
 export const LEVEL_CAP = 99;
 export const ASCENDED = 100;
 export const MAX_LEVEL = ASCENDED;
@@ -97,12 +98,12 @@ export const statScale = (inst) => statMult(int(inst?.l, 1, MAX_LEVEL, 1), int(i
 // an instance, cleaned (null when it is not one)
 export function cleanInstance(x, known = () => true) {
 	if (!x || typeof x !== 'object' || !UID_RE.test(x.u || '') || typeof x.i !== 'string' || !known(x.i)) return null;
-	return { u: x.u, i: x.i, l: int(x.l, 1, MAX_LEVEL, 1), t: int(x.t, 0, 4, 0), x: int(x.x ?? 0, 0, 1e6, 0) };
+	return { u: x.u, i: x.i, l: int(x.l, 1, MAX_LEVEL, 1), t: LEGENDARY[x.i] ? 4 : int(x.t, 0, 4, 0), x: int(x.x ?? 0, 0, 1e6, 0) };
 }
 
 // an item's stats at its level and tier, each with the next level's value for comparison
 export function statsOf(inst) {
-	const rows = STATS[inst?.i] || [];
+	const rows = STATS[legendaryBase(inst?.i)] || [];
 	const m = statMult(inst.l, inst.t), next = inst.l < MAX_LEVEL ? statMult(inst.l + 1, inst.t) : m;
 	// (weight and a hindrance to spells are what the thing is: they do not grow)
 	const at = (v, k, cap, unit) => { if (unit === 'kg' || unit === '-%') return v; const n = v * k; const r = n >= 100 || unit === 'pt' ? Math.round(n) : Math.round(n * 10) / 10; return cap ? Math.min(cap, r) : r; };
