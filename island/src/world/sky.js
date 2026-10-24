@@ -20,7 +20,9 @@ const EQ2GAL = [-0.0548755604, -0.8734370902, -0.4838350155, 0.4941094279, -0.44
 const C = (r, g, b) => new THREE.Color(r, g, b);
 const PAL = {
 	dayZen: C(0.03, 0.24, 0.72), dayHor: C(0.50, 0.72, 0.92),
-	setZen: C(0.20, 0.24, 0.50), setHor: C(1.00, 0.52, 0.26), setMid: C(0.72, 0.74, 0.56),
+	// (round sunset the low sky's gold and the clear green-gold above it: fitted through the tone
+	// mapping to Josh's photo of the sky over Mt Diablo, 2026-10-24)
+	setZen: C(0.20, 0.24, 0.50), setHor: C(0.74, 0.39, 0.06), setMid: C(0.45, 0.65, 0.36),
 	nightZen: C(0.004, 0.009, 0.028), nightHor: C(0.018, 0.03, 0.065),
 	sunDay: C(1.0, 0.90, 0.74), sunSet: C(1.0, 0.52, 0.22), moon: C(0.45, 0.55, 0.8),
 };
@@ -257,7 +259,7 @@ const LOW_OPEN = 0.5, NIGHT_TRIM = 0.12;
 // is the air in the land's shade, toward the blue overhead (haze of the way); and between the
 // gold of the low sky and the blue the sky goes a clear pale green-gold (PAL.setMid), not the
 // mauve the two would mix to. (Crysis.world().sky.state.dusk, for tuning)
-const DUSK = { sunLast: C(1.0, 0.42, 0.28), sun: 2.4, sky: 1.9, skyBlue: 0.5, haze: 0.4, mid: 0.75 };
+const DUSK = { sunLast: C(1.0, 0.42, 0.28), sun: 2.4, sky: 1.9, skyBlue: 0.4, haze: 0.4, mid: 0.75 };
 function agx(c, exposure, out) {
 	exposure *= GRADE.exposure;
 	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
@@ -1075,7 +1077,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, earth = tr
 		// sky stays blue and the gold is the light toward the sun, in the dome's shader)
 		const skySet = 1 - THREE.MathUtils.smoothstep(Math.abs(elev), 0.0, 0.1);
 		tmpA.copy(PAL.dayZen).lerp(PAL.setZen, skySet * 0.8).lerp(PAL.nightZen, night);
-		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, skySet * 0.85).lerp(PAL.nightHor, night);
+		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, skySet).lerp(PAL.nightHor, night);
 		// overcast and rain: a greyer, lower-contrast sky
 		const W = weather?.state, gl = W?.gloom || 0;
 		// (round sunrise and sunset the grey goes lavender overhead and warm at the horizon,

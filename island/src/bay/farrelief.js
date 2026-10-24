@@ -90,7 +90,7 @@ export function createFarRelief({ renderer, BU, isPhone = false }) {
 	quad.frustumCulled = false;
 	const bakeScene = new THREE.Scene(), bakeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 	bakeScene.add(quad);
-	let at = null, sig = -1, ready = false, warming = false, bakes = 0, disposed = false;
+	let at = null, sig = -1, ready = false, warming = false, bakes = 0, bakedAt = 0, disposed = false;
 	// what the map was drawn from: the slots' surveys, where they lie, and their versions
 	const SL = ['0', 'a', 'b', 'c'];
 	function signature() {
@@ -129,9 +129,11 @@ export function createFarRelief({ renderer, BU, isPhone = false }) {
 			}
 			return;
 		}
-		const s = signature();
-		if (s !== sig || !at || Math.hypot(pos.x - at[0], pos.z - at[1]) > SPAN / 6) {
-			sig = s;
+		const s = signature(), now = performance.now();
+		// (a survey's rows edited as its lakes and creeks come in: drawn again once they settle,
+		// two seconds apart at most)
+		if (!at || Math.hypot(pos.x - at[0], pos.z - at[1]) > SPAN / 6 || (s !== sig && now - bakedAt > 2000)) {
+			sig = s; bakedAt = now;
 			bake(pos.x, pos.z);
 		}
 	}
@@ -142,5 +144,15 @@ export function createFarRelief({ renderer, BU, isPhone = false }) {
 		FAR_RELIEF_U.uFRel.value = null;
 		rt.dispose(); mat.dispose(); quad.geometry.dispose();
 	}
-	return { update, dispose, info: () => ({ at, bakes, N, SPAN, ready }) };
+	// (for checking from the console: the slope east and south and the fold the map holds at x, z)
+	const px = new Uint8Array(4);
+	function probe(x, z) {
+		if (!at) return null;
+		const i = Math.floor(((x - at[0]) / SPAN + 0.5) * N), j = Math.floor(((z - at[1]) / SPAN + 0.5) * N);
+		if (i < 0 || j < 0 || i >= N || j >= N) return null;
+		renderer.readRenderTargetPixels(rt, i, j, 1, 1, px);
+		const dec = (v) => { const s = v / 255 * 2 - 1; return Math.sign(s) * s * s * FAR_RELIEF_SLOPE; };
+		return [dec(px[0]), dec(px[1]), (px[2] / 255 - 0.5) * 4];
+	}
+	return { update, dispose, probe, info: () => ({ at, bakes, N, SPAN, ready }) };
 }
