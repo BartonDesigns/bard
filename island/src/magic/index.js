@@ -39,6 +39,7 @@ import { createMagicFx, magicSound, GLOW } from './fx.js';
 import { startSpellSound } from './sound.js';
 import { trialsOf, trialsOpen, trialsDone, newlyDone, countDeed, riteBlock, ascend, TRIALS, RITE } from './trials.js';
 import { createAether, seedOf } from './aether.js';
+import { surveyWells, riteSite } from './wellfinder.js';
 import { createCaster } from './caster.js';
 import { createMagicHud } from './hud.js';
 import { createHotbar } from '../combat/hotbar.js';
@@ -73,7 +74,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 		magicSound('level', 0.16); skills?.refresh();
 		if (state.level < LEVEL_CAP) { hud?.levelUp(state.level, pointsOf(state)); return; }
 		// (99: experience goes no further; the trials open, and those done already are counted)
-		const was = newlyDone(state, trialContext()).length;
+		newlyDone(state, trialContext());
+		const was = trialsDone(state, trialContext());
 		hud?.levelUp(state.level, pointsOf(state), `The trials of the hundredth are open · ${was} of ${TRIALS.length} done · Shift+I`);
 	}
 	// what the trials read from your gear: your best weapon's level, and the slots worn at 75 or more
@@ -95,6 +97,8 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	}
 	// the rite, made where an aether well is gathered: the hundredth
 	function rite(m) {
+		// Count buffered item progress before deciding whether the final trials are complete.
+		flushGear();
 		const ctx = trialContext(), at = { well: true, light: light() };
 		if (!ascend(state, ctx, at)) {
 			const why = riteBlock(state, ctx, at);
@@ -303,6 +307,30 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 			hint(m.well ? `An aether well: +${n} ${m.strand} fabric. You will know the way back to it.` : `+${n} ${m.strand} aether fabric${share > 1.15 ? ' (your name draws it)' : share < 0.85 ? ' (it shies from your name)' : ''}`, m.well ? 3500 : 1200);
 		},
 	});
+	function wellSurvey() {
+		const w = W();
+		return surveyWells({ position: w?.player?.state?.pos, seed: seed(),
+			heightAt: w?.island ? (x, z) => w.island.heightAt(x, z) : null,
+			ground: (x, z) => {
+				const shown = aether.near().find(m => m.well && m.x === x && m.z === z && Number.isFinite(m.y));
+				return shown ? shown.y - 0.4 : combat.ground(x, z, camera.position.y + 40);
+			},
+			light: light(), gathered: state.gathered, wells: state.wells });
+	}
+	function wellGuide() {
+		const survey = wellSurvey(), site = riteSite(survey);
+		return { wells: survey.slice(0, 5), site: site?.key || null,
+			block: riteBlock(state, trialContext(), { well: !!site, light: light() }),
+			twilight: Math.abs(light()) < 0.06 };
+	}
+	function performRite() {
+		flushGear();
+		const site = riteSite(wellSurvey());
+		const block = riteBlock(state, trialContext(), { well: !!site, light: light() });
+		if (block) return { ok: false, message: block };
+		if (!site || !rite(site)) return { ok: false, message: 'Return to the well and try the rite again.' };
+		return { ok: true, message: 'The hundredth is yours. Your ascension has been saved.' };
+	}
 	const active = () => !!W()?.player && !busy() && !mount.inert && mount.style.display !== 'none' && !skills?.isOpen() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') && !window._KEYS_PLAY_ON;
 	const hotbar = createHotbar({ arms, melee: () => combat.melee, store, ok: () => active(), hint });
 	function castSlot(i, o = {}) {
@@ -537,6 +565,7 @@ export function createMagic({ scene, camera, mount, combat, arms, world, light, 
 	function dispose() { saveProgress(); removeEventListener('pagehide', saveProgress); document.removeEventListener('visibilitychange', hidden); removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onMove); removeEventListener('blur', clearKeys); unMoral?.(); hotbar.dispose(); hud.dispose(); skills.dispose(); menuBtn?.remove(); testBtn?.remove(); beams.dispose(); fx.dispose(); lens.dispose(); hands.dispose(); pulse.remove(); combat.hooks.shield = combat.hooks.cloak = combat.hooks.power = combat.hooks.casting = combat.hooks.spellAim = combat.hooks.remoteSpell = combat.hooks.honorRank = combat.hooks.pvpWin = combat.hooks.mana = null; }
 	// for the console and the tests: Crysis.magic
 	const api = {
+		wellGuide, performRite,
 		update, dispose, state, caster, hud, hotbar, skills, exposure: () => caster.exposure(),
 		// (the menu open: the fight holds; fully over the world: it need not be drawn, main.js)
 		// (Gargantua putting out the sky: how much the world's daylight should dim, 0 to 1)

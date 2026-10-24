@@ -451,6 +451,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 	// the hundredth itself
 	function drawTrials(st) {
 		const done = st.trials.filter((t) => t.done).length;
+		drawWellfinder();
 		sheet.append(label(`The hundredth${st.ascended ? ' ★' : ` · ${done} of ${st.trials.length}`}`));
 		if (st.ascended) { const a = note('You stand at level 100★: five to every attribute, and a skill point. Experience took you to 99; the trials and the rite took you the rest of the way.'); a.style.color = '#ffd27a'; sheet.append(a); return; }
 		sheet.append(note(st.trialsOpen ? 'Experience goes no further than 99. The hundredth is earned: every trial, then the rite.' : `They open at level ${st.cap}. What you do before then counts toward them.`));
@@ -468,6 +469,27 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		}
 		sheet.append(list);
 		if (st.trialsOpen && done === st.trials.length) { const rt = el('div', 'g99-panel ok', `The rite: ${st.rite || 'gather from an aether well at dusk or dawn.'}`); rt.style.cssText += 'font:600 12px system-ui;color:#ffd27a;line-height:1.4;'; sheet.append(rt); }
+	}
+	function drawWellfinder() {
+		const guide = magic()?.wellGuide?.();
+		if (!guide) return;
+		sheet.append(label('Wellfinder'));
+		const panel = el('div', 'g99-panel'); panel.style.cssText += 'padding:12px;display:flex;flex-direction:column;gap:8px;';
+		panel.append(note(guide.twilight ? 'Twilight: both strands are showing.' : 'Light wells appear by day; dark wells after nightfall.'));
+		if (!guide.wells.length) panel.append(note('No well found on the surveyed ground nearby. Explore farther and check again.'));
+		for (const w of guide.wells) {
+			const row = el('div'); row.style.cssText = 'font-size:12px;line-height:1.5;';
+			row.append(el('b', '', `${w.strand === 'light' ? 'Light' : 'Dark'} well · ${metres(w.distance)} ${w.bearing}`));
+			row.append(el('div', '', `${w.discovered ? 'Discovered' : 'Unvisited'} · ${w.waitMs > 0 ? `fabric returns in ${Math.ceil(w.waitMs / 60000)} min` : w.visible ? 'fabric available' : 'waiting for its strand'}${w.inReach ? ' · within reach' : ''}`));
+			panel.append(row);
+		}
+		panel.append(note('Bearings point toward wells, not a safe walking route. Reach their ground level to gather.'));
+		const action = btn('Perform the rite', () => { const r = magic()?.performRite?.(); if (r) hint(r.message, 6000); draw(); }, 'go');
+		action.style.minHeight = '44px'; action.disabled = !!guide.block;
+		action.title = guide.block || 'Ascend at this well. No fabric is consumed.';
+		panel.append(action, note(guide.block || 'All trials complete. The well is within reach and twilight is here.'));
+		panel.append(note('A depleted well can still host the rite. You do not need to wait for its fabric to return.'));
+		sheet.append(panel);
 	}
 
 	function draw() {
@@ -647,8 +669,10 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		if (shown()) {
 			const s = arms.state();
 			const mi = view === 'char' || view === 'item' || view === 'gear' ? magic()?.info?.() : null;
+			const wg = view === 'char' ? magic()?.wellGuide?.() : null;
 			const k = JSON.stringify([view, shopId, itemUid, s.revision, s.credits, multiplayer?.friends?.().map((f) => [f.id, Math.round(f.d / 5)]), view !== 'item' ? arms.shops(where()).map((x) => [x.id, Math.round(x.distance / 5)]) : outfitter()?.id || '', mi && [mi.level, mi.ascended, mi.points, mi.fabric, mi.life, mi.max, mi.wells, mi.deeds, view === 'char' ? mi.perks.length : 0]]);
-			if (k !== sig) { sig = k; draw(); }
+			const guideSig = wg ? JSON.stringify([wg.block, wg.twilight, wg.wells.map(w => [w.key, Math.round(w.distance / 5), w.bearing, w.inReach, w.discovered, Math.ceil(w.waitMs / 60000)])]) : '';
+			if (k + guideSig !== sig) { sig = k + guideSig; draw(); }
 		}
 	}
 
