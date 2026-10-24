@@ -7,7 +7,9 @@
 // blow shows as a pale piece of the bar draining after it (combat/vitals.js chipStep). One that
 // falls stays a moment at nothing before the frame goes.
 //
-// One small panel, centred between the corner buttons; under the boss's bar while a boss is up.
+// One small panel. On a phone, centred between the corner buttons, and under the boss's bar
+// while a boss is up. With a mouse and keyboard (Josh 2026-10-24: smaller, top left) a compact
+// one in the top left corner beside ◀ Bard, clear of the column under it and of the boss's bar.
 // Hidden with display:none when nobody is targeted (no idle layer over the world: hud.js).
 
 import { vitalsOf, chipStep, rankOf, RANK_LABEL, plainName, lifeText, sortOf, reactionOf } from './vitals.js';
@@ -23,6 +25,8 @@ export const iconOf = (T) => (T?.ref?.cr ? 'creature' : T?.kind === 'remote' ? '
 const RC = { hostile: '#ff8a72', neutral: '#ffd27a', friendly: '#9ff0d4' };
 const HP = { hostile: 'linear-gradient(180deg,#ff7a5a,#c8302a)', neutral: 'linear-gradient(180deg,#ffd77a,#cf922a)', friendly: 'linear-gradient(180deg,#86f0c6,#2fae7e)' };
 
+// the desktop frame: its left edge (clear of ◀ Bard, 12 + 74 px wide) and width, in px
+const DESK_LEFT = 100, DESK_W = 236;
 const CSS = `
 .tf{position:absolute;left:50%;top:calc(46px + var(--l99-top, env(safe-area-inset-top)));transform:translateX(-50%);width:min(320px,calc(100% - 156px));box-sizing:border-box;display:none;align-items:center;gap:9px;padding:7px 11px 7px 7px;border-radius:14px;background:rgba(10,18,22,.74);box-shadow:0 0 0 1px rgba(255,255,255,.12),0 4px 16px rgba(0,0,0,.35);z-index:5;pointer-events:none;font:600 13px/1.2 var(--bard-display,system-ui,sans-serif);color:#eef6f4;text-shadow:0 1px 2px rgba(0,0,0,.6)}
 .tf.boss{top:calc(128px + var(--l99-top, env(safe-area-inset-top)))}
@@ -42,6 +46,15 @@ const CSS = `
 .tf .mn .f{background:linear-gradient(180deg,#8aa6ff,#3e5ee0)}
 .tf .mn b{font-size:7.5px}
 .tf .sb{margin-top:4px;font:500 10.5px/1.2 var(--bard-body,system-ui,sans-serif);opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#l99-island-mount:not(.l99-touch) .tf,#l99-island-mount:not(.l99-touch) .tf.boss{left:calc(${DESK_LEFT}px + env(safe-area-inset-left));top:calc(12px + var(--l99-top, env(safe-area-inset-top)));transform:none;width:${DESK_W}px;gap:7px;padding:5px 9px 5px 5px;border-radius:11px;font-size:11.5px}
+#l99-island-mount:not(.l99-touch) .tf .em{flex-basis:30px;height:30px}
+#l99-island-mount:not(.l99-touch) .tf .em svg{width:16px;height:16px}
+#l99-island-mount:not(.l99-touch) .tf .rk{font-size:8px;padding:2px 4px 1px}
+#l99-island-mount:not(.l99-touch) .tf .br{height:10px;margin-top:3px}
+#l99-island-mount:not(.l99-touch) .tf .br b{font-size:8.5px}
+#l99-island-mount:not(.l99-touch) .tf .mn{height:7px}
+#l99-island-mount:not(.l99-touch) .tf .mn b{font-size:6.5px}
+#l99-island-mount:not(.l99-touch) .tf .sb{margin-top:2px;font-size:9.5px}
 `;
 const STYLE_ID = 'tf-style';
 // how long one that fell stays on the frame at nothing, in s
