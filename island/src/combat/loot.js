@@ -2,6 +2,7 @@
 // Unclaimed equipment lives for this world visit; collected instances use the normal save.
 import { WEAPONS } from './weapons.js';
 import { cleanInstance } from '../gameplay/gear-levels.js';
+import { lootProgress, rewardEligible, rollEncounter } from './encounter-loot.js';
 
 export const LOOT_REACH = 3.4;
 export function recoveryItems(soldier, uid) {
@@ -14,10 +15,26 @@ export function recoveryItems(soldier, uid) {
 	return [weapon, { u: `${uid}a`, i: box, l: 1, t: 0, x: 0 }];
 }
 
-export function createLoot({ apply, visible = () => true, max = 32, nonce = Math.random().toString(36).slice(2, 10) } = {}) {
+export function createLoot({ apply, visible = () => true, max = 32, nonce = Math.random().toString(36).slice(2, 10), progress, saveProgress = () => {}, rand = Math.random } = {}) {
 	const drops = new Map();
+	let luck = lootProgress(progress);
 	const caches = new Set();
 	let sequence = 0;
+	function addReward(h) {
+		if (h.rewardRolled || !rewardEligible(h)) return null;
+		const oldest = drops.size >= max ? [...drops.values()].find(d => !d.cache) : null;
+		if (drops.size >= max && !oldest) return null;
+		h.rewardRolled = true;
+		const id = `r${nonce}${(++sequence).toString(36)}`, result = rollEncounter(h, id, luck, rand);
+		luck = result.progress; saveProgress({ ...luck });
+		if (!result.item) return null;
+		if (oldest) drops.delete(oldest.id);
+		const x = result.item;
+		const drop = { id, name: h.Sp?.name || h.F?.name || 'Defeated foe', reward: true,
+			pos: { x: h.pos.x + .45, y: h.pos.y + .2, z: h.pos.z }, yaw: h.yaw || 0, age: 0,
+			items: [x, { u: `${id}a`, i: WEAPONS[x.i].box, l: 1, t: 0, x: 0 }] };
+		drops.set(id, drop); return drop;
+	}
 	function add(soldier) {
 		if (soldier.recoveryCreated) return null;
 		const id = `l${nonce}${(++sequence).toString(36)}`;
@@ -67,5 +84,5 @@ export function createLoot({ apply, visible = () => true, max = 32, nonce = Math
 			if (!drop.cache && drop.age > 600 && Math.hypot(drop.pos.x - eye.x, drop.pos.z - eye.z) > 40) drops.delete(id);
 		}
 	}
-	return { drops, add, addCache, nearest, take, update, remove: (id) => drops.delete(id), clear: () => { drops.clear(); caches.clear(); } };
+	return { drops, add, addReward, addCache, nearest, take, update, remove: (id) => drops.delete(id), clear: () => { drops.clear(); caches.clear(); } };
 }

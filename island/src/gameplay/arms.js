@@ -7,6 +7,7 @@
 // real-world weapons simulator.
 
 import { ASCEND_TRIALS, LEVEL_CAP, UPGRADE_MATERIAL, canCombine, cleanInstance, combined, mintUid, trained, trialStep, upgradeCost, valueFactor } from './gear-levels.js';
+import { LEGENDARIES } from './legendary-items.js';
 
 // 2: every item owned is an instance with an id, a level and a quality tier (gameplay/gear-levels.js)
 export const INVENTORY_VERSION = 2;
@@ -69,6 +70,10 @@ function freeze(value) {
 }
 
 const ITEMS = [
+	...LEGENDARIES.map(x => ({ id: x.id, name: x.name, kind: 'rifle', fictional: true,
+		activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use: x.lore,
+		sources: {}, marketTradable: true, basePrice: 600, weight: 4, slot: 'primary',
+		stackable: false, consumable: false, heatRisk: 8, ascend: 'weapon' })),
 	{
 		id: 'aurora-trail-rifle',
 		name: 'Aurora Trail Rifle',

@@ -35,6 +35,7 @@ import { createWeaponView } from './weapon-view.js';
 import { createCivilians } from './civilians.js';
 import { createSquads } from './ai-squads.js';
 import { createLootView } from './loot-view.js';
+import { legendaryReward } from './encounter-loot.js';
 import { createContracts } from './contracts-view.js';
 import { createFieldAudio } from './field-audio.js';
 import { createProps } from './props.js';
@@ -537,7 +538,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// ---------- the townsfolk, the squads, cars, props ----------
 	const fieldAudio = createFieldAudio();
 	const fieldActive = () => active() && !me.ko && !P()?.flying && !P()?.locked;
-	const recovery = createLootView({ group, mount, arms, camera, eye, blocked, ground, active: fieldActive, hint, sound: fieldAudio.play, touch,
+	const recovery = createLootView({ group, mount, arms, camera, eye, blocked, ground, active: fieldActive, hint, sound: fieldAudio.play, touch, store,
 		onPickup: () => { cancelInput(); gear?.()?.weapon?.pickup?.(); }, onCollected: (source) => contracts.recovered(source) });
 	const ctx = {
 		layer, fx, isPhone, relations, ragdolls, people, world: W, ground, eye, blocked, call, hud,
@@ -566,7 +567,7 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		onSurrender: (h) => { if (Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 60) hint(`${h.F.name}: one of them throws down their weapon and surrenders. They are out of the fight.`, 4000, 1); },
 		// (one of your guild's struck down is carried off to rest, guild/companions.js; what others
 		// fell teaches them, and you)
-		onDeath: (h, blow) => { if (h.ally) { hooks.guild?.down?.(h, blow); feedDeath(h, blow); return; } recovery.add(h); gangDeath(h); hooks.death?.(h); feedDeath(h, blow); hooks.guild?.kill?.(h, blow); },
+		onDeath: (h, blow) => { if (h.ally) { hooks.guild?.down?.(h, blow); feedDeath(h, blow); return; } recovery.add(h, blow?.by === ME); gangDeath(h); hooks.death?.(h); feedDeath(h, blow); hooks.guild?.kill?.(h, blow); },
 		allyCast: (h, dt) => hooks.guild?.cast?.(h, dt),
 		onSpared: (h, d) => { if (d < 50) morality.record({ kind: 'spare', target: h.T.name, faction: h.fid, place: placeName(), world: worldKey }); },
 		onPhase: (B0) => net.boss(B0, true),
@@ -668,9 +669,12 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		const D = B0.def, R = D.reward;
 		call(`${D.name} is down.`, 'boss');
 		const inst = { u: `bs${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(0, 20), i: R.item, l: R.level, t: 4, x: 0 };
-		const res = arms?.apply?.({ id: `boss-${B0.kind}-${Date.now().toString(36)}`, kind: 'trade', peer: B0.kind, give: { credits: 0, items: [] }, get: { credits: R.credits, items: [inst] } });
+		const relic = legendaryReward(`${inst.u}r`, R.level);
+		const res = arms?.apply?.({ id: `boss-${B0.kind}-${Date.now().toString(36)}`, kind: 'trade', peer: B0.kind, give: { credits: 0, items: [] }, get: { credits: R.credits, items: [inst, relic, { u: `${inst.u}a`, i: WEAPONS[relic.i].box, l: 1, t: 0, x: 0 }] } });
 		const name = WEAPONS[R.item]?.name || R.item;
-		hint(res?.ok ? `${D.name} defeated. Reward: Legendary ${name} (level ${R.level}) and ${R.credits.toLocaleString()} credits.` : `${D.name} defeated.`, 7000, 2);
+		// A pending trade must not swallow the new relic. Keep it as a retryable floor pickup.
+		const fallback = !res?.ok && recovery.addCache({ id: relic.u, name: `${D.name} spoils`, pos: eye(), weapon: relic });
+		hint(res?.ok ? `${D.name} defeated. ${WEAPONS[relic.i].name} (Legendary) saved in Gear, plus Legendary ${name} and ${R.credits.toLocaleString()} credits.` : fallback ? `${D.name} defeated. Legendary ${WEAPONS[relic.i].name} waits at your feet. Finish the pending trade, then collect it.` : `${D.name} defeated. Reward could not be saved.`, 7000, 2);
 		journal.push({ t: Date.now(), boss: B0.kind, name: D.name, where: placeName(), line: `Brought down ${D.name} in ${D.where}.` });
 		store.set('l99-combat-journal', JSON.stringify(journal.slice(-50)));
 		morality.record({ kind: 'boss-slain', target: D.name, place: placeName(), world: worldKey });
