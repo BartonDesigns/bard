@@ -9,6 +9,7 @@
 // painted by one shader (garment.js): a cloth mesh, an accessories mesh, skin, eyes, hair.
 
 import * as THREE from 'three';
+import { dressArmorEffects, clearArmorEffects, armorEffectsLOD } from './relic-armor-effects.js';
 import { shedImage } from '../world/cpucopy.js';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
@@ -382,6 +383,7 @@ export function* buildPersonSteps(A, d) {
 		P.detail = dm;
 	}
 	P.lod = (dist) => {
+		armorEffectsLOD(P,dist);
 		const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90 || P.accKeep; for (const b of P.bags || []) b.lod(dist);
 		// fluffy hair: all its tufts near, the locks' cores and inner layer further, the cores far off
 		const hl = P.hair?.geometry.userData.lod;
@@ -482,6 +484,7 @@ function* dressSteps(A, P, o) {
 	// and the bags themselves, shared by everyone who carries one
 	P.bags = fits.map((f) => attachBag(P, f, PHONE));
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
+	dressArmorEffects(P,o.relics || []);
 	if (swap) {
 		// the old clothes off, the new on, in the same frame
 		for (const m of old) { m.removeFromParent(); m.geometry.dispose(); }
@@ -691,6 +694,7 @@ function browOf(d) {
 
 // a body let go for good: its own geometry, materials and skeleton (the shared assets stay)
 export function freeBody(P) {
+	clearArmorEffects(P);
 	if (!P.freed) { P.freed = true; live = Math.max(0, live - 1); }
 	// Eyes and accessories share materials; textures and eye geometry belong to assets.
 	P.hairWant = null; // invalidate deferred hair-kit completion for this released body

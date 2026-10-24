@@ -242,9 +242,7 @@ export function createGear({ portrait = null, arms, multiplayer, mount, menu, bu
 		sheet.append(el('div', 'g99-rule'));
 		const box = el('div'); box.style.cssText = `border-radius:12px;background:radial-gradient(circle at 50% 45%,${(S || T).color}22,rgba(0,0,0,.35) 70%);box-shadow:inset 0 0 30px rgba(0,0,0,.7);min-height:${isGarment(x.i) ? 150 : 200}px;display:flex;align-items:center;justify-content:center;`;
 		sheet.append(box);
-		// (a garment has no model yet: its mark, large, in its school's light)
-		if (isGarment(x.i)) { const g = el('div', '', slot(x).firstChild?.textContent || '🧥'); g.style.cssText = `font-size:76px;line-height:1;filter:drop-shadow(0 0 ${8 + T.glow * 16}px ${(S || T).color});`; box.append(g); }
-		else stopSpin = studio.turntable(box, x.i, x.l, x.t, 200);
+		stopSpin = studio.turntable(box, x.i, x.l, x.t, 200);
 		if (!box.firstChild) { const f = el('div', '', ''); f.append(slot(x)); box.append(f); }
 		// the level and experience
 		const lv = el('div'); lv.style.cssText = 'display:flex;flex-direction:column;gap:4px;';

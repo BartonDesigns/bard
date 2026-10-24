@@ -5,10 +5,19 @@
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { itemModel } from '../crysis/held-items.js';
+import { itemModel, spinMotes, disposeItemModel } from '../crysis/held-items.js';
+import { armorPickupModel } from '../combat/armor-pickup.js';
+
+const modelFor = (id, level, tier) => armorPickupModel(id) || itemModel(id, { level, tier, lod: 'high', plain: true });
+function freeModel(m) {
+	disposeItemModel(m);
+	if(m?.userData.ownedArmor){const gs=new Set(),ms=new Set();m.traverse(o=>{if(o.isMesh){gs.add(o.geometry);ms.add(o.material);}});for(const g of gs)g.dispose();for(const mat of ms)mat.dispose();}
+	m?.removeFromParent();
+}
 
 export function createStudio() {
 	let R = null, scene = null, camera = null, failed = false, spinning = null;
+	const calm = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 	const thumbs = new Map();
 	function ready() {
 		if (R || failed) return !!R;
@@ -36,7 +45,7 @@ export function createStudio() {
 		camera.lookAt(c);
 	}
 	function show(id, level, tier, size, turn) {
-		const m = itemModel(id, { level, tier, lod: 'high', plain: true });
+		const m = modelFor(id, level, tier);
 		if (!m) return null;
 		m.scale.setScalar(1);
 		// (long items lie across the picture)
@@ -44,7 +53,7 @@ export function createStudio() {
 		scene.add(m);
 		R.setSize(size, size, false);
 		frame(m, turn);
-		R.render(scene, camera);
+		try { R.render(scene, camera); } catch(e) { freeModel(m);throw e; }
 		return m;
 	}
 	// a data URL picture of an item at its tier (level bands share one), or '' without WebGL
@@ -54,7 +63,9 @@ export function createStudio() {
 		if (!ready()) return '';
 		const was = spinning;
 		let url = '';
-		try { const m = show(id, band, tier, 96, 0.7); url = m ? R.domElement.toDataURL('image/png') : ''; if (m) scene.remove(m); } catch { url = ''; }
+		let m=null;
+		try { if(was)was.m.visible=false;m = show(id, band, tier, 96, 0.7); url = m ? R.domElement.toDataURL('image/png') : ''; } catch { url = ''; }
+		finally { freeModel(m);if(was)was.m.visible=true; }
 		thumbs.set(k, url);
 		if (was) R.setSize(was.size, was.size, false);
 		return url;
@@ -63,7 +74,7 @@ export function createStudio() {
 	function turntable(box, id, level = 1, tier = 0, size = 200) {
 		stop();
 		if (!ready()) return () => {};
-		const m = itemModel(id, { level, tier, lod: 'high', plain: true });
+		const m = modelFor(id, level, tier);
 		if (!m) return () => {};
 		if (m.userData.long) m.rotation.z = -Math.PI / 5;
 		scene.add(m);
@@ -81,9 +92,8 @@ export function createStudio() {
 		const loop = (now) => {
 			if (spinning !== S) return;
 			const dt = Math.min(0.1, (now - last) / 1000); last = now;
-			if (S.drag > 0) S.drag -= dt; else S.turn += dt * 0.6;
-			const motes = m.getObjectByName('motes');
-			if (motes) motes.rotation.y = (now - S.t0) / 1000 * 0.8;
+			if (S.drag > 0) S.drag -= dt; else if(!calm?.matches) S.turn += dt * 0.6;
+			spinMotes(m,(now-S.t0)/1000);
 			frame(m, S.turn);
 			R.render(scene, camera);
 			S.raf = requestAnimationFrame(loop);
@@ -96,7 +106,7 @@ export function createStudio() {
 		if (!S) return;
 		spinning = null;
 		cancelAnimationFrame(S.raf);
-		scene?.remove(S.m);
+		freeModel(S.m);
 		R?.domElement.remove();
 	}
 	return { thumb, turntable, stop, ok: () => ready() };

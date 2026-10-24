@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ARMS_CATALOG, isGarment } from '../gameplay/arms.js';
 import { RELICS } from '../gameplay/legendary-items.js';
+import { createRelicEffect } from '../crysis/relic-effects.js';
 
 // Small owned meshes: armor is readable on the ground without creating another avatar.
 export function armorPickupModel(id) {
@@ -23,6 +24,6 @@ export function armorPickupModel(id) {
 			add(new THREE.BoxGeometry(.13,.06,slot==='feet'?.24:.12),trim,x,-.08,.04);
 		}
 	}
-	if(relic) for(let n=0;n<3;n++) add(new THREE.OctahedronGeometry(.025,0),trim,(n-1)*.065,.08,.17);
+	if(relic) { const fx=createRelicEffect(id);fx.root.position.z=.18;root.add(fx.root);root.userData.relicFX=fx; }
 	return root;
 }

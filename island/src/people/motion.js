@@ -257,6 +257,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2, space
 		return X;
 	}
 	function update(dt, t, cam) {
+		for(const fx of P.relicEffects || [])if(fx.root.visible)fx.update(t);
 		P.motionTime = t;
 		// (gone limp: the ragdoll moves the bones now, people/ragdoll.js)
 		if (P.ragdoll) return;

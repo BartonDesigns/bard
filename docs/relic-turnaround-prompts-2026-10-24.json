@@ -1,0 +1,151 @@
+{
+  "date": "2026-10-24",
+  "method": "Built-in image generation",
+  "purpose": "External visual turnarounds and motion studies, not UV textures, manufactured blueprints or game captures",
+  "entries": [
+    {
+      "id": "event-horizon",
+      "path": "docs/images/relic-turnarounds/event-horizon.png",
+      "reference": "docs/images/relic-concepts/event-horizon.png",
+      "prompt": "Use case: stylized-concept. Asset: BARD production wraparound model and motion reference sheet for Event Horizon. Reference image is approved design: preserve exact silhouette, proportions, material palette, construction. Gold-and-ink BARD presentation on warm charcoal, crisp detailed physically plausible materials. Landscape sheet: four clearly separated consistent orthographic views LEFT SIDE, RIGHT SIDE (opposite face), TOP, FRONT, same geometry in each, no perspective distortion. Below, three small motion-state detail insets. Design/motion: obsidian halo with a hollow black center and gold armillary rings; swirl spirals inward clockwise, outer ring counterrotates, smooth not strobing. Title BARD / Event Horizon. Small footer MODEL REFERENCE • NOT GAME CAPTURE. No numeric measurements, no stats, no invented extra attachments. Spend image area on clear full-length views and component joinery, keep all ends inside margins. This is an art/model guide, not a flat UV texture."
+    },
+    {
+      "id": "first-morning",
+      "path": "docs/images/relic-turnarounds/first-morning.png",
+      "reference": "docs/images/relic-concepts/first-morning.png",
+      "prompt": "Use case: stylized-concept. Asset: BARD production wraparound model and motion reference sheet for First Morning. Reference image is approved design: preserve exact silhouette, proportions, material palette, construction. Gold-and-ink BARD presentation on warm charcoal, crisp detailed physically plausible materials. Landscape sheet: four clearly separated consistent orthographic views LEFT SIDE, RIGHT SIDE (opposite face), TOP, FRONT, same geometry in each, no perspective distortion. Below, three small motion-state detail insets. Design/motion: ivory and gold fan fins, faceted forward prism, a living amber slit-pupil eye at the receiver; eye looks left, rests, looks right, eyelids blink fully closed briefly, reopen. Title BARD / First Morning. Small footer MODEL REFERENCE • NOT GAME CAPTURE. No numeric measurements, no stats, no invented extra attachments. Spend image area on clear full-length views and component joinery, keep all ends inside margins. This is an art/model guide, not a flat UV texture."
+    },
+    {
+      "id": "sunbreak-testament",
+      "path": "docs/images/relic-turnarounds/sunbreak-testament.png",
+      "reference": "docs/images/relic-concepts/sunbreak-testament.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Sunbreak Testament, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, beautifully weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Keep same item geometry across all views and fit whole weapon within margins. Below add three motion detail states for: three lighthouse beacons rotate at staggered phases. Title BARD / Sunbreak Testament. Footer MODEL REFERENCE • NOT GAME CAPTURE. Do not invent extra attachments. No measurement numbers or gameplay stats. Clear modeling guide, not a UV texture."
+    },
+    {
+      "id": "black-tide",
+      "path": "docs/images/relic-turnarounds/black-tide.png",
+      "reference": "docs/images/relic-concepts/black-tide.png",
+      "prompt": "Create a stylized-concept BARD fantasy-game art sheet of the magical collectible in the reference image: Black Tide. It is a fictional decorative enchanted prop, displayed alone, no person, no violence. Preserve its ornamental exterior design, weathering and colors. Show four external appearance views from side, opposite side, above and end, plus a small magical motion study of tattered sea cloth drifting gently in a supernatural tide. This is exclusively visual concept art, not a technical blueprint; do not show internals, assembly, measurements or working mechanisms. Charcoal background with fine gold BARD typography, title \"Black Tide\", small footer \"FANTASY ART REFERENCE\"."
+    },
+    {
+      "id": "stormglass-repeater",
+      "path": "docs/images/relic-turnarounds/stormglass-repeater.png",
+      "reference": "docs/images/relic-concepts/stormglass-repeater.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Stormglass Repeater, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, beautifully weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Keep same item geometry across all views and fit whole weapon within margins. Below add three motion detail states for: contained cyan charge crawls between the two tuning forks, gradual arcs not flashing. Title BARD / Stormglass Repeater. Footer MODEL REFERENCE • NOT GAME CAPTURE. Do not invent extra attachments. No measurement numbers or gameplay stats. Clear modeling guide, not a UV texture."
+    },
+    {
+      "id": "widows-meridian",
+      "path": "docs/images/relic-turnarounds/widows-meridian.png",
+      "reference": "docs/images/relic-concepts/widows-meridian.png",
+      "prompt": "Create a stylized-concept BARD fantasy-game art sheet of the magical collectible in the reference image: Widow’s Meridian. It is a fictional decorative enchanted prop, displayed alone, no person, no violence. Preserve its ornamental exterior design, weathering and colors. Show four external appearance views from side, opposite side, above and end, plus a small magical motion study of decorative clock hands briefly turning backward. This is exclusively visual concept art, not a technical blueprint; do not show internals, assembly, measurements or working mechanisms. Charcoal background with fine gold BARD typography, title \"Widow’s Meridian\", small footer \"FANTASY ART REFERENCE\"."
+    },
+    {
+      "id": "orchard-of-ashes",
+      "path": "docs/images/relic-turnarounds/orchard-of-ashes.png",
+      "reference": "docs/images/relic-concepts/orchard-of-ashes.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Orchard of Ashes, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, beautifully weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: ember seed opens its protective charred petals slowly then folds shut. Title BARD / Orchard of Ashes. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "pilgrims-last-light",
+      "path": "docs/images/relic-turnarounds/pilgrims-last-light.png",
+      "reference": "docs/images/relic-concepts/pilgrims-last-light.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Pilgrim’s Last Light, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, beautifully weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: pendant lantern swings on its arch while renewal filaments rise gently. Title BARD / Pilgrim’s Last Light. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "copper-saint",
+      "path": "docs/images/relic-turnarounds/copper-saint.png",
+      "reference": "docs/images/relic-concepts/copper-saint.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Copper Saint, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, beautifully weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: protective engraved shield seams trace outward into a delicate ward outline. Title BARD / Copper Saint. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "moth-kings-lantern",
+      "path": "docs/images/relic-turnarounds/moth-kings-lantern.png",
+      "reference": "docs/images/relic-concepts/moth-kings-lantern.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Moth King’s Lantern, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, beautifully weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: small spectral moth wings flutter around the lantern. Title BARD / Moth King’s Lantern. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "choir-of-thorns",
+      "path": "docs/images/relic-turnarounds/choir-of-thorns.png",
+      "reference": "docs/images/relic-concepts/choir-of-thorns.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Choir of Thorns, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: thorn chimes sway in a traveling wave around the three hoops. Title BARD / Choir of Thorns. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "dawn-engine",
+      "path": "docs/images/relic-turnarounds/dawn-engine.png",
+      "reference": "docs/images/relic-concepts/dawn-engine.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Dawn Engine, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: sunwheel rotates like a deliberate geared mechanism. Title BARD / Dawn Engine. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "winter-debt",
+      "path": "docs/images/relic-turnarounds/winter-debt.png",
+      "reference": "docs/images/relic-concepts/winter-debt.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Winter Debt, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: ice shards hang in time then reverse their orbit, never disappearing. Title BARD / Winter Debt. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "cathedral-of-sparks",
+      "path": "docs/images/relic-turnarounds/cathedral-of-sparks.png",
+      "reference": "docs/images/relic-concepts/cathedral-of-sparks.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Cathedral of Sparks, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: charge rises through five organ pipes in a sequential wave, no strobing. Title BARD / Cathedral of Sparks. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "gravesong-resonator",
+      "path": "docs/images/relic-turnarounds/gravesong-resonator.png",
+      "reference": "docs/images/relic-concepts/gravesong-resonator.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Gravesong Resonator, based on approved reference image. Preserve silhouette, proportions, material palette and functional joinery. Warm charcoal background, restrained gold-and-ink lettering, weathered believable materials. Four orthographic views: LEFT SIDE, RIGHT SIDE opposite face, TOP narrow thickness, FRONT end-on. Same item geometry across all views, all ends within margins. Below three motion detail states for: three funeral bells sway in alternating pendulum rhythms. Title BARD / Gravesong Resonator. Footer MODEL REFERENCE • NOT GAME CAPTURE. No extra attachments or gameplay stats. Clear modeling guide, not UV texture."
+    },
+    {
+      "id": "hearth-of-the-exile",
+      "path": "docs/images/relic-turnarounds/hearth-of-the-exile.png",
+      "reference": "docs/images/relic-concepts/hearth-of-the-exile.png",
+      "prompt": "Create a stylized-concept BARD fantasy-game art sheet of the magical collectible in the reference image: Hearth of the Exile. It is a fictional decorative enchanted prop, displayed alone, no person, no violence. Preserve its ornamental exterior design, weathering and colors. Show four external appearance views from side, opposite side, above and end, plus a small magical motion study of small green enchanted flames breathing in the decorative brazier vents. Exclusively visual concept art, not a technical blueprint; do not show internals, assembly, measurements or working mechanisms. Charcoal background with fine gold BARD typography, title \"Hearth of the Exile\", small footer \"FANTASY ART REFERENCE\"."
+    },
+    {
+      "id": "gargantuas-whisper",
+      "path": "docs/images/relic-turnarounds/gargantuas-whisper.png",
+      "reference": "docs/images/relic-concepts/gargantuas-whisper.png",
+      "prompt": "Create a stylized-concept BARD fantasy-game art sheet of the magical collectible in the reference image: Gargantua’s Whisper. It is a fictional decorative enchanted prop, displayed alone, no person, no violence. Preserve its ornamental exterior design, weathering and colors. Show four external appearance views from side, opposite side, above and end, plus a small magical motion study of fragments of an impossible island orbit the central floating obsidian crystal. Exclusively visual concept art, not a technical blueprint; do not show internals, assembly, measurements or working mechanisms. Charcoal background with fine gold BARD typography, title \"Gargantua’s Whisper\", small footer \"FANTASY ART REFERENCE\"."
+    },
+    {
+      "id": "wildfire-canticle",
+      "path": "docs/images/relic-turnarounds/wildfire-canticle.png",
+      "reference": "docs/images/relic-concepts/wildfire-canticle.png",
+      "prompt": "Create a stylized-concept BARD fantasy-game art sheet of the magical collectible in the reference image: Wildfire Canticle. It is a fictional decorative enchanted prop, displayed alone, no person, no violence. Preserve its ornamental exterior design, weathering and colors. Show four external appearance views from side, opposite side, above and end, plus a small magical motion study of a magical ember ribbon travels in a spiral toward the ornamental horn. Exclusively visual concept art, not a technical blueprint; do not show internals, assembly, measurements or working mechanisms. Charcoal background with fine gold BARD typography, title \"Wildfire Canticle\", small footer \"FANTASY ART REFERENCE\"."
+    },
+    {
+      "id": "oathkeeper-lattice",
+      "path": "docs/images/relic-turnarounds/oathkeeper-lattice.png",
+      "reference": "docs/images/relic-concepts/oathkeeper-lattice.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Oathkeeper Lattice, based on approved reference image. Preserve silhouette, proportions and material palette. Four views LEFT SIDE, RIGHT SIDE, TOP, FRONT end-on. Orthographic consistent shapes across views. Warm charcoal, restrained gold-and-ink lettering, weathered believable materials. All ends inside margins. Small motion detail studies: turquoise glass ward panes fold inward and unfold one after another. Title BARD / Oathkeeper Lattice. Footer MODEL REFERENCE • NOT GAME CAPTURE. Only visual art reference for fictional game, no manufacturing dimensions or internal mechanisms."
+    },
+    {
+      "id": "hollow-crown",
+      "path": "docs/images/relic-turnarounds/hollow-crown.png",
+      "reference": "docs/images/relic-concepts/hollow-crown.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Hollow Crown, based on approved reference image. Preserve silhouette, proportions and material palette. Four views LEFT SIDE, RIGHT SIDE, TOP, FRONT end-on. Orthographic consistent shapes across views. Warm charcoal, restrained gold-and-ink lettering, weathered believable materials. All ends inside margins. Small motion detail studies: five broken crown tips hover with independent rise and fall. Title BARD / Hollow Crown. Footer MODEL REFERENCE • NOT GAME CAPTURE. Only visual art reference for fictional game, no manufacturing dimensions or internal mechanisms."
+    },
+    {
+      "id": "lumen-armor",
+      "path": "docs/images/relic-turnarounds/lumen-armor.png",
+      "reference": "docs/images/relic-concepts/lumen-armor.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Lumencrest Circlet + Gallery Scale Mail, based on approved reference image. Preserve silhouette, proportions and material palette. Two separate matching armor pieces, each shown individually in FRONT, BACK, LEFT and RIGHT views, not a new full outfit. Orthographic consistent shapes across views. Warm charcoal, restrained gold-and-ink lettering, weathered believable materials. All ends inside margins. Small motion detail studies: circlet crystal rays sweep slowly; separate mail scales shimmer in a descending caustic wave. Title BARD / Lumencrest Circlet + Gallery Scale Mail. Footer MODEL REFERENCE • NOT GAME CAPTURE. Only visual art reference for fictional game, no manufacturing dimensions or internal mechanisms."
+    },
+    {
+      "id": "cinder-armor",
+      "path": "docs/images/relic-turnarounds/cinder-armor.png",
+      "reference": "docs/images/relic-concepts/cinder-armor.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Cinder Core Cuirass + Ashwalker Greaves, based on approved reference image. Preserve silhouette, proportions and material palette. Two separate matching armor pieces, each shown individually in FRONT, BACK, LEFT and RIGHT views, not a new full outfit. Orthographic consistent shapes across views. Warm charcoal, restrained gold-and-ink lettering, weathered believable materials. All ends inside margins. Small motion detail studies: cuirass reactor shutters breathe; separate greave seams send a heat ripple downward. Title BARD / Cinder Core Cuirass + Ashwalker Greaves. Footer MODEL REFERENCE • NOT GAME CAPTURE. Only visual art reference for fictional game, no manufacturing dimensions or internal mechanisms."
+    },
+    {
+      "id": "stormwarden-armor",
+      "path": "docs/images/relic-turnarounds/stormwarden-armor.png",
+      "reference": "docs/images/relic-concepts/stormwarden-armor.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Stormwarden Flightcoat + Stormwarden Gauntlets using approved reference image. Two separate matching armor pieces, each shown individually in FRONT, BACK, LEFT and RIGHT views, not a new full outfit. Consistent orthographic shapes and material placement across views. Warm charcoal, restrained gold-and-ink lettering, weathered believable materials. All ends inside margins. Small motion detail studies: coat fin vanes breathe open and closed; gauntlet knuckle arcs crawl in a cascade. Title BARD / Stormwarden Flightcoat + Stormwarden Gauntlets. Footer MODEL REFERENCE • NOT GAME CAPTURE. Preserve design; no manufacturing dimensions, no internal mechanisms."
+    },
+    {
+      "id": "fogmother-armor",
+      "path": "docs/images/relic-turnarounds/fogmother-armor.png",
+      "reference": "docs/images/relic-concepts/fogmother-armor.png",
+      "prompt": "Use case: stylized-concept. BARD production wraparound reference sheet for Fog Mother’s Veil + Drowned Procession Boots using approved reference image. Two separate matching armor pieces, each shown individually in FRONT, BACK, LEFT and RIGHT views, not a new full outfit. Consistent orthographic shapes and material placement across views. Warm charcoal, restrained gold-and-ink lettering, weathered believable materials. All ends inside margins. Small motion detail studies: veil fog threads drift and fold; boot sole rings ripple out with each remembered footfall. Title BARD / Fog Mother’s Veil + Drowned Procession Boots. Footer MODEL REFERENCE • NOT GAME CAPTURE. Preserve design; no manufacturing dimensions, no internal mechanisms."
+    }
+  ]
+}

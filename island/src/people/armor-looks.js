@@ -76,10 +76,11 @@ const CLEARS = {
 // each item's slot (gameplay/arms.js), passed in so this stays free of the catalogue
 // worn: { slot: item id } (or { slot: { i } }); returns a new style, the old one untouched
 export function dressInGear(style, worn = {}) {
-	const o = { ...style, acc: [...(style?.acc || [])] };
+	const o = { ...style, acc: [...(style?.acc || [])], relics: [] };
 	for (const [slot, w] of Object.entries(worn || {})) {
 		const id = typeof w === 'string' ? w : w?.i, L = LOOKS[id];
 		if (!L || !CLEARS[slot]) continue;
+		if(LEGENDARY_ARMOR.some(x=>x.id===id && x.slot===slot))o.relics.push(id);
 		o.acc = o.acc.filter((q) => !CLEARS[slot].test(q.kind));
 		if (slot === 'body' && L.top) { o.top = { ...L.top }; o.outer = L.outer ? { ...L.outer } : null; }
 		if (slot === 'legs' && L.bottom) o.bottom = { ...L.bottom };
