@@ -47,6 +47,7 @@ import { facetLook } from '../creatures/facets.js';
 import { weakSpot } from '../creatures/weakspot.js';
 import { crystalLegs } from '../creatures/crystal-legs.js';
 import { hollowKing } from '../creatures/hollow-king.js';
+import { createContactShadows, standOf, footShade } from '../creatures/contact.js';
 
 // the bodies: people (dressed by faction), and those that are not (a creature's own are made
 // from its kind: creatures/catalog.js)
@@ -74,6 +75,7 @@ const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 // (where a body without legs of its own stood before this frame's step: ctx.keepOut sweeps from it)
 const _was = new THREE.Vector3();
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 // your guild's people fight what is within this of you, and catch you up past this
 const ALLY_LEASH = 70, ALLY_CATCH = 60;
 
@@ -149,6 +151,9 @@ function maskOn(P, glow) {
 export function createSquads(ctx) {
 	const { layer, fx, isPhone, relations } = ctx;
 	const group = new THREE.Group(); group.name = 'combat-squads';
+	// the creatures' shade on the ground under their feet and bodies (creatures/contact.js)
+	const shade = createContactShadows({ isPhone });
+	group.add(shade.mesh);
 	// (as many as the quality tier's people share allows: world/governor.js; at least a squad of three)
 	const MAX0 = isPhone ? 6 : 14, maxNow = () => peopleCap(MAX0, 3);
 	const list = [];
@@ -250,7 +255,10 @@ export function createSquads(ctx) {
 				voice.warm([...Object.values(Sp.voice || {}), Sp.voice?.loop?.name, ...Object.values(DEFAULT_CRY[c.meta.rig] || {}), 'sniff', 'scrape', 'chitter', 'click'].filter((x) => typeof x === 'string'));
 				// no two alike: each its own size, build and colour (creatures/models.js); a person's
 				// skin barely turns (opts.look: the Moon's bleached hounds, creatures/catalog.js moon)
-				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1, ...(opts.look || {}) });
+				// and who it is: its stance, its arms, its stride, out of step with the rest (a person
+				// still, the Moonturned before it turns, stands as one); its own pace on top
+				c.size = c.vary(Math.random, { hue: Sp.human ? 0.15 : 1, tame: !!Sp.human, ...(opts.look || {}) });
+				h.paceK = rnd(0.86, 1.14); h.v = 0; h.sv = 0; h.skidT = 0; h.recoilT = 0; h.circ = 0; h.rush = false; h.ground = null;
 				if (beast) { beast.size = beast.vary(Math.random, opts.look || {}); beast.root.visible = false; }
 				// one that waits, still among the trees, for you to come too close (the Burnt Giant)
 				h.dormant = Sp.lurk && !opts.alert ? 1 : 0; h.waking = -1;
@@ -459,6 +467,7 @@ export function createSquads(ctx) {
 		c.root.position.copy(h.pos); c.root.rotation.set(0, h.yaw, 0);
 		c.motion.update(0, { speed: 0 });
 		h.down = null; h.downT = 7; h.standT = 0.5; h.fireT = Math.max(h.fireT, 0.9); h.animT = 0;
+		h.v = h.sv = h.skidT = h.recoilT = 0;
 		if (c.meta.rig === 'quad') c.motion.beat('shake');
 		if (d < 60 && !(h.cryT > 0)) { h.cryT = 0.7; cry(h, 'hurt', h.pos, 0.8); }
 	}
@@ -720,6 +729,71 @@ export function createSquads(ctx) {
 			else personStep(h, dt, d);
 			bounds(h);
 		}
+		contacts(eye);
+	}
+	// the creatures near you sitting on the ground (creatures/contact.js): a soft shade under the
+	// body, and under each foot while it is down, the nearest first; one lying where it fell has
+	// its own, going as it sinks away; a flyer's faint and wide, less the higher it hangs
+	const BODY_R = isPhone ? 45 : 60, FEET_R = isPhone ? 30 : 40;
+	const _near = [], _ft = new THREE.Vector3();
+	const byEye = (a, b) => a.eyeD - b.eyeD;
+	const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+	function contacts(eye) {
+		_near.length = 0;
+		for (const h of list) {
+			if (!h.cr?.root.visible || h.gone) continue;
+			const dx = h.pos.x - eye.x, dz = h.pos.z - eye.z;
+			h.eyeD = Math.sqrt(dx * dx + dz * dz);
+			if (h.eyeD < BODY_R) _near.push(h);
+		}
+		_near.sort(byEye);
+		shade.begin();
+		for (const h of _near) contactOf(h);
+		shade.end();
+		_near.length = 0;
+	}
+	// the ground's slope at x, z (by the creature's own height there), kept while it is near
+	function groundPlane(h, x, z) {
+		let g = h.ground;
+		if (g && time - g.t < 0.3 && Math.abs(x - g.x) + Math.abs(z - g.z) < 1) return g;
+		if (!g) g = h.ground = { x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0, t: 0 };
+		const hint = h.pos.y + 1, y = ctx.ground(x, z, hint);
+		const ax = ctx.ground(x + 0.7, z, hint) - y, az = ctx.ground(x, z + 0.7, hint) - y;
+		// (a step or a kerb beside it is no slope)
+		const sx = Math.abs(ax) < 0.45 ? ax / 0.7 : 0, sz = Math.abs(az) < 0.45 ? az / 0.7 : 0;
+		const l = Math.sqrt(sx * sx + 1 + sz * sz);
+		g.x = x; g.y = y; g.z = z; g.nx = -sx / l; g.ny = 1 / l; g.nz = -sz / l; g.t = time;
+		return g;
+	}
+	function contactOf(h) {
+		const c = h.cr, St = c.stand || (c.stand = standOf(c.meta)), sc = c.root.scale, Bd = St.body;
+		const fx0 = Math.sin(h.yaw), fz0 = Math.cos(h.yaw);
+		if (h.dead || h.down) {
+			// lying where it fell (limp, or folded over its knees): round, under its middle
+			if (h.dead && h.Sp.shatter) return;
+			const at = c.rag?.ragdoll ? c.rag.at : null;
+			const tip = at ? 0 : !c.meta.rig || c.meta.rig === 'biped' ? Math.min(1, (h.deadT || 0) / 1.3) : 0;
+			const x = at ? at.x : h.pos.x + fx0 * tip * St.H * sc.y * 0.35, z = at ? at.z : h.pos.z + fz0 * tip * St.H * sc.y * 0.35;
+			const r = Math.max(Bd.rx, St.H * 0.3) * sc.x;
+			shade.put(x, z, groundPlane(h, x, z), r * 1.1, Math.max(Bd.rz * sc.z, r), at ? at.yaw : h.yaw, 0.32 * (h.dead ? 1 - smooth01((h.deadT - 8) / 2.5) : 1));
+			return;
+		}
+		const G = groundPlane(h, h.pos.x, h.pos.z);
+		if (St.flyer) {
+			const alt = h.alt || 0, r = 1 + alt * 0.12;
+			shade.put(h.pos.x, h.pos.z, G, Bd.rx * sc.x * r, Bd.rz * sc.z * r, h.yaw, 0.26 * (1 - smooth01(alt / (St.H * 2.5))));
+			return;
+		}
+		shade.put(h.pos.x + fx0 * Bd.cz * sc.z, h.pos.z + fz0 * Bd.cz * sc.z, G, Bd.rx * sc.x, Bd.rz * sc.z, h.yaw, 0.3);
+		if (h.eyeD > FEET_R) return;
+		// (each foot's own, while it is down: it goes as the foot lifts)
+		for (const f of St.feet) {
+			const p = c.motion.at(f.bone, _ft);
+			if (!p) continue;
+			const gy = G.y - ((p.x - G.x) * G.nx + (p.z - G.z) * G.nz) / Math.max(0.3, G.ny);
+			const k = footShade(p.y - gy - f.y0 * sc.y, St.hipH * sc.y);
+			shade.put(p.x + fx0 * f.fz * sc.z, p.z + fz0 * f.fz * sc.z, G, f.r * sc.x, f.r * 1.35 * sc.z, h.yaw, 0.42 * k);
+		}
 	}
 	function bounds(h) { const B = h.T.bound; B.x = h.pos.x; B.y = h.pos.y + (h.kind === 'drone' ? 0 : h.cr ? h.Sp.height * (h.cr.size || 1) * 0.45 + (h.alt || 0) : 0.9); B.z = h.pos.z; }
 	function fading(h, dt) {
@@ -769,7 +843,7 @@ export function createSquads(ctx) {
 	// a fighter under a spell: held, it stands (a drone hangs where it is); afraid, it runs from you
 	function hexStep(h, dt, hx, eye) {
 		const M = h.body?.M;
-		if (hx.hold > 0) { if (M) { M.want.speed = 0; M.want.run = 0; } else if (h.cr) h.cr.motion.update(dt, { speed: 0 }); return; }
+		if (hx.hold > 0) { if (M) { M.want.speed = 0; M.want.run = 0; } else if (h.cr) { h.v = h.sv = h.skidT = 0; h.cr.motion.update(dt, { speed: 0 }); } return; }
 		const ax = h.pos.x - eye.x, az = h.pos.z - eye.z, l = Math.hypot(ax, az) || 1;
 		h.target = null; h.los = false;
 		if (M) { M.want.heading = Math.atan2(ax / l, az / l); M.want.speed = h.B.speed * 1.2 * (hx.slowK || 1); M.want.run = 1; }
@@ -778,6 +852,7 @@ export function createSquads(ctx) {
 			const sp = hx.hold > 0 ? 0 : h.Sp.run * (hx.slowK || 1);
 			if (sp) { h.yaw = Math.atan2(ax / l, az / l); _was.copy(h.pos); h.pos.x += ax / l * sp * dt; h.pos.z += az / l * sp * dt; ctx.keepOut?.(h.pos, _was); h.pos.y = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1); }
 			h.cr.root.position.copy(h.pos); h.cr.root.position.y += flyAlt(h, dt, null); h.cr.root.rotation.set(0, h.yaw, 0);
+			h.v = sp; h.sv = h.skidT = 0;
 			h.cr.motion.update(dt, { speed: sp });
 		}
 	}
@@ -1089,7 +1164,9 @@ export function createSquads(ctx) {
 				return;
 			}
 		}
-		let menace = 0;
+		let menace = 0, side = 0, look = 0, lunge = false, rushIn = false;
+		// (a big one, a flyer or a drifter never skids, slides round you or hops back: it comes as it comes)
+		const heavy = S.height * (c.size || 1) > 5 || !!S.fly || !!S.drift;
 		if (h.alert && at && !h.beast) {
 			const tx = at.x - h.pos.x, tz = at.z - h.pos.z, dd = Math.hypot(tx, tz);
 			// (a thrower with the mana for it, or none needed; run dry, it comes in to fight)
@@ -1107,12 +1184,17 @@ export function createSquads(ctx) {
 					c.motion.beat(c.meta.rig === 'quad' ? (Math.random() < 0.65 ? 'growl' : 'scrape') : 'twitch');
 				}
 			}
+			// (how far it slides stopping from the speed it has on it)
+			const brake = h.v * h.v / (4.4 * S.run);
+			// coming in from afar, now and then it charges all the way in and skids to a stop at you
+			if (dd > 8) h.rushPick = true;
+			else if (h.rushPick) { h.rushPick = false; h.rush = !heavy && Math.random() < 0.55; }
 			if (h.standT > 0) h.standT -= dt;
 			if (h.standT > 0) speed = 0;
 			else if (h.strikeT >= 0) {
 				h.strikeT += dt / S.strike;
 				// (a short lunge into the blow; a thrower stands to throw)
-				if (!h.throwing && h.strikeT > 0.3 && h.strikeT < 0.5) speed = S.walk * 1.5;
+				if (!h.throwing && h.strikeT > 0.3 && h.strikeT < 0.5) { speed = S.walk * 1.5; lunge = true; }
 				if (!h.struck && h.strikeT >= 0.45 && h.throwing) {
 					// a fire pot, a curse: lobbed from the hand at where you stand
 					h.struck = true;
@@ -1132,8 +1214,13 @@ export function createSquads(ctx) {
 						fx.dust({ x: at.x, y: at.y - 0.4, z: at.z }, 3, 0.5, 0.45, 0.4, 0.25, 0.25);
 					}
 				}
-				if (h.strikeT >= 1) { h.strikeT = -1; h.fireT = h.throwing ? rnd(...S.throw.every) : rnd(0.5, 1.3); h.throwing = false; }
-			} else if (dd < S.reach && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.6) {
+				if (h.strikeT >= 1) {
+					// (and after a blow, now and then, a hop back out of your reach, to come again)
+					if (!h.throwing && !heavy && Math.random() < 0.35) h.recoilT = rnd(0.25, 0.4);
+					h.strikeT = -1; h.fireT = h.throwing ? rnd(...S.throw.every) : rnd(0.5, 1.3); h.throwing = false;
+				}
+			} else if (h.recoilT > 0) { h.recoilT -= dt; speed = -S.walk * 1.8; lunge = true; }
+			else if (dd < S.reach && h.fireT <= 0 && Math.abs(wrapA(want - h.yaw)) < 0.6) {
 				h.strikeT = 0; h.struck = false; h.throwing = false; c.motion.strike();
 				cry(h, 'strike', h.pos, 0.8);
 				if (T.id === 'me') { h.struckFirst = h.struckFirst || !h.provoked; h.shotAtPlayer = 8; }
@@ -1145,8 +1232,15 @@ export function createSquads(ctx) {
 			} else if (lobs && dd < S.throw.keep && dd > S.reach) speed = -S.walk;
 			else if (lobs && dd < S.throw.range * 0.8 && dd > S.reach) speed = 0;
 			// (fresh woken from standing as a tree, it only walks after you for a while)
-			else if (dd > S.reach * 0.75) speed = h.stalkT > 0 ? S.walk : dd > 7 ? S.run : Math.max(S.walk, S.run * 0.5);
+			else if (dd > S.reach * 0.75) speed = h.stalkT > 0 ? S.walk : dd > 7 || (h.rush && dd > S.reach + brake) ? S.run : Math.max(S.walk, S.run * 0.5);
 			if (h.stalkT > 0) h.stalkT -= dt;
+			rushIn = h.rush && dd < S.reach + brake;
+			// between its blows, in reach of you, it slides round you this way and that, sizing you up
+			if (!heavy && !lobs && h.strikeT < 0 && !(h.standT > 0) && !(h.recoilT > 0) && h.fireT > 0.25 && dd < S.reach * 1.6 && dd > S.reach * 0.5) {
+				h.circT = (h.circT || 0) - dt;
+				if (h.circT <= 0) { h.circT = rnd(0.8, 2.2); h.circ = Math.random() < 0.3 ? 0 : Math.random() < 0.5 ? -1 : 1; }
+				side = h.circ * S.walk * 0.9;
+			} else h.circT = 0;
 		} else {
 			// lost you: it forgets you by degrees, and one that stood as a tree (the Burnt Giant)
 			// goes back to standing as one, wherever it is, until something disturbs it again
@@ -1161,11 +1255,43 @@ export function createSquads(ctx) {
 			speed = (h.wander ?? 1) * S.walk * 0.6;
 		}
 		speed *= h.T.hex?.slowK || 1;
-		// (turns as a body turns, not in a snap: the heavier slower)
-		const turn = (h.alert ? 3.2 : 1.6) / Math.max(0.7, S.height / 1.8);
-		h.yaw += Math.max(-turn * dt, Math.min(turn * dt, wrapA(want - h.yaw)));
+		const aim = speed;
+		// its own pace on the way (creatures/motion.js pace): a stutter, stop and go, a surge with
+		// each push, a hitch on a bad leg; less of it at a run
+		if (speed > 0 && !lunge) { const pk = c.motion.pace(); speed *= (h.paceK || 1) * (speed > S.walk * 1.5 ? 1 + (pk - 1) * 0.5 : pk); }
+		// (turns as a body turns, not in a snap: the heavier slower; spun round in a skid, quicker)
+		const turn = (h.alert ? 3.2 : 1.6) / Math.max(0.7, S.height / 1.8) * (h.skidT > 0 ? 1.6 : 1);
+		const dy = clamp(wrapA(want - h.yaw), -turn * dt, turn * dt);
+		// a skid: going fast and pulled up short, or turned hard, or charged right in at you: the
+		// feet dug in, it slides on the way it was going, scraping, spinning round to you
+		if (!heavy && !(h.skidT > 0) && !lunge && h.v > Math.max(2.6, S.run * 0.6) && (aim < h.v * 0.4 || Math.abs(wrapA(want - h.yaw)) > 1.5 || rushIn)) {
+			h.skidT = 0.6; h.slideX = Math.sin(h.yaw); h.slideZ = Math.cos(h.yaw); h.rush = false;
+			if (d < 60) voice.play('scrape', h.pos, 0.7, 1 / (S.height * (c.size || 1)) ** 0.3);
+		}
+		h.yaw += dy;
 		_was.copy(h.pos);
-		h.pos.x += Math.sin(h.yaw) * speed * dt; h.pos.z += Math.cos(h.yaw) * speed * dt;
+		if (h.skidT > 0) {
+			h.skidT -= dt;
+			h.v = Math.max(0, h.v - S.run * 2.2 * dt);
+			if (h.v < 0.4) h.skidT = 0;
+			h.pos.x += h.slideX * h.v * dt; h.pos.z += h.slideZ * h.v * dt;
+			// (dust kicked up off the dragging feet, one and then the other)
+			if (d < 50 && (h.dustT = (h.dustT || 0) - dt) <= 0) {
+				h.dustT = 0.08; h.dustSide = -(h.dustSide || 1);
+				const p = c.motion.at((c.meta.rig === 'quad' ? 'hand_' : 'foot_') + (h.dustSide > 0 ? 'L' : 'R'), _paw) || _paw.copy(h.pos);
+				fx.dust({ x: p.x, y: h.pos.y + 0.05, z: p.z }, 2, 0.45, 0.42, 0.36, 0.22 * Math.sqrt(S.height * (c.size || 1) / 1.8), 0.25);
+			}
+		} else {
+			// (and it gets going and pulls up as a body does, not from nothing to a run in a step;
+			// a blow's lunge and a hop back at once)
+			if (lunge) h.v = speed;
+			else { const a = (speed > h.v ? 2.4 : 3.5) * S.run; h.v += clamp(speed - h.v, -a * dt, a * dt); }
+			h.pos.x += Math.sin(h.yaw) * h.v * dt; h.pos.z += Math.cos(h.yaw) * h.v * dt;
+		}
+		// (and sideways, round you: its left is x in its own axes)
+		h.sv += (side - h.sv) * Math.min(1, dt * 5);
+		h.pos.x += Math.cos(h.yaw) * h.sv * dt; h.pos.z -= Math.sin(h.yaw) * h.sv * dt;
+		if (h.alert && at) look = clamp(wrapA(want - h.yaw), -1.1, 1.1);
 		// (a blow's shove: knocked back along it over a quarter second, feet dragging)
 		const sh = h.shove;
 		if (sh) { const k = sh.k * Math.min(dt, sh.t) / 0.25; h.pos.x += sh.ax * k; h.pos.z += sh.az * k; sh.t -= dt; if (sh.t <= 0) h.shove = null; }
@@ -1177,7 +1303,8 @@ export function createSquads(ctx) {
 		h.animT = (h.animT || 0) + dt;
 		const every = d > 70 ? 0.1 : d > 35 ? 0.05 : 0;
 		// (one that drifts, the Facet Wraith, glides without a step)
-		if (h.animT >= every) { c.motion.update(h.animT, { speed: S.drift ? 0 : Math.abs(speed), look: 0, menace }); h.animT = 0; }
+		// (its steps forward, back, sideways and round as it turns; braced in a skid)
+		if (h.animT >= every) { c.motion.update(h.animT, { speed: S.drift ? 0 : h.v, look, menace, side: S.drift ? 0 : h.sv, turn: S.drift ? 0 : dy / Math.max(dt, 1e-3), skid: h.skidT > 0 ? Math.min(1, h.v / 1.5) : 0 }); h.animT = 0; }
 		c.facets?.update(dt, { strike: c.motion.state.strike, alert: !!h.alert });
 		c.weak?.update(dt, { still: !!h.dormant });
 		// a growl now and then as it closes on you
@@ -1289,7 +1416,7 @@ export function createSquads(ctx) {
 		}
 		return Promise.all(out).then(() => sq);
 	}
-	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); }
+	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); shade.begin(); shade.end(); }
 	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: maxNow(), squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length, stances: s.members.filter((m) => !m.dead).map((m) => m.body?.M.S.act.name === 'kneel' ? 'kneel' : m.body?.M.want.travelT > 0 ? 'strafe' : 'move') })), bodies: pools.person.length, queue: queue.length });
 	// (the world's fighters, alive: your guild's own are counted apart, allies())
 	return { group, update, squad, spawn, hear, clear, info, alive: () => alive().filter((h) => !h.ally), allies: () => list.filter((h) => h.ally && !h.dead), list, release, surrender, squads };

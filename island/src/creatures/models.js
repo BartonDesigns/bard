@@ -98,10 +98,15 @@ export async function makeCreature(id, { weak = null } = {}) {
 		}
 		return shapes;
 	}
-	// each one its own paint (sharing the kind's textures), so it can be tinted on its own
+	// each one its own paint (sharing the kind's textures), so it can be tinted on its own; and
+	// how it sits in the light round it (lit()): how high off the ground the earth's shade on it
+	// reaches, in the model's metres, and how dark at the feet, the sky's light round its edges,
+	// the sun's or the moon's behind it (a flyer is up in the air: no ground shade on it)
 	const tint = { value: new THREE.Vector3(0, 1, 1) };
+	const H0 = meta.height || 2;
+	const air = { value: new THREE.Vector4(Math.min(1.2, Math.max(0.3, H0 * 0.28)), meta.rig === 'flyer' ? 0 : 0.42, 0.5, 0.85) };
 	root.traverse((o) => {
-		if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map((m) => tintable(m, tint)) : tintable(o.material, tint);
+		if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map((m) => tintable(m, tint, air)) : tintable(o.material, tint, air);
 	});
 	const bonesBy = new Map((skel?.bones || []).map((b) => [b.name, b]));
 	const bone = (n) => bonesBy.get(san(n)) || bonesBy.get(n);
@@ -109,8 +114,11 @@ export async function makeCreature(id, { weak = null } = {}) {
 	// longer or shorter in the body, its head, ears and tail a touch different, and its hide's
 	// colour turned a little round the wheel, richer or paler, darker or lighter. hue: how far
 	// the colour may wander (0 keeps it: a person's skin); sat and val: its colour's strength and
-	// lightness, times (the Moon's hounds bleached white: catalog.js moon)
-	function vary(rnd = Math.random, { hue = 1, sat = 1, val = 1 } = {}) {
+	// lightness, times (the Moon's hounds bleached white: catalog.js moon). And who it is, drawn
+	// afresh (creatures/motion.js character(): its stance, its arms, its head, its stride, out of
+	// step with the rest of its mob); tame: a person still (the Moonturned before the change)
+	function vary(rnd = Math.random, { hue = 1, sat = 1, val = 1, tame = false } = {}) {
+		motion?.character(rnd, { tame });
 		const r2 = () => (rnd() + rnd()) - 1; // -1..1, most near the middle
 		const k = 1 + r2() * 0.1;
 		root.scale.set(k * (1 + r2() * 0.06), k * (1 + r2() * 0.035), k * (1 + r2() * 0.05));
@@ -135,17 +143,26 @@ export async function makeCreature(id, { weak = null } = {}) {
 		rag.mass = R2.mass; rag.height = (meta.height || 2) * sc;
 		return rag;
 	}
-	const c = { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2, vary, rig, rag };
+	const c = { id, root, motion, meta, shapes: hitShapes, height: meta.height || 2, vary, rig, rag, air };
 	return c;
 }
 
 // a creature's paint with a colour turn of its own: the hide's colour (only the painted map, not
-// its glow) turned round the hue wheel by x radians, its saturation times y, its value times z
-function tintable(m0, tint) {
+// its glow) turned round the hue wheel by x radians, its saturation times y, its value times z.
+// And lit as a thing standing in the world is, not a picture laid over it (Josh 2026-10-24: "they
+// just look stamped on"): the sky shut out round its feet, darker toward the ground (air.x the
+// height that reaches, in the model's metres, air.y how dark), the undersides (chin, armpits,
+// belly) in their own shade, the sky's light wrapping its edges (air.z) and the sun or the moon
+// behind it lighting a rim (air.w), only where that light reaches it (its shadow kept). The same
+// program for every creature (one cache key): only the numbers are each its own
+function tintable(m0, tint, air) {
 	const m = m0.clone();
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uVary = tint;
-		sh.fragmentShader = 'uniform vec3 uVary;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+		sh.uniforms.uCrAir = air;
+		sh.vertexShader = 'varying float vCrY;\n' + sh.vertexShader.replace('#include <skinning_vertex>', `#include <skinning_vertex>
+	vCrY = transformed.y;`);
+		sh.fragmentShader = 'uniform vec3 uVary;\nuniform vec4 uCrAir;\nvarying float vCrY;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
 	{
 		vec3 c = diffuseColor.rgb;
 		float yy = dot(c, vec3(0.299, 0.587, 0.114));
@@ -153,8 +170,25 @@ function tintable(m0, tint) {
 		float ch = cos(uVary.x), sh = sin(uVary.x);
 		float i2 = (ii * ch - qq * sh) * uVary.y, q2 = (ii * sh + qq * ch) * uVary.y;
 		diffuseColor.rgb = max(vec3(yy + 0.956 * i2 + 0.621 * q2, yy - 0.272 * i2 - 0.647 * q2, yy - 1.106 * i2 + 1.703 * q2) * uVary.z, 0.0);
+	}`).replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>
+	#if NUM_DIR_LIGHTS > 0
+		vec3 crSunC = directLight.color, crSunL = directLight.direction;
+	#endif`).replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+	{
+		float crG = smoothstep(0.0, uCrAir.x, vCrY);
+		vec3 crN = inverseTransformDirection(normal, viewMatrix);
+		reflectedLight.indirectDiffuse *= mix(1.0 - uCrAir.y, 1.0, crG) * mix(0.7, 1.0, crN.y * 0.5 + 0.5);
+		reflectedLight.directDiffuse *= mix(1.0 - uCrAir.y * 0.4, 1.0, crG);
+		float crF = pow(1.0 - saturate(dot(normal, geometryViewDir)), 3.0);
+		#if NUM_HEMI_LIGHTS > 0
+			reflectedLight.indirectDiffuse += diffuseColor.rgb * crF * hemisphereLights[0].skyColor * uCrAir.z * mix(0.35, 1.0, crG) * saturate(crN.y * 0.6 + 0.6);
+		#endif
+		#if NUM_DIR_LIGHTS > 0
+			float crB = saturate(-dot(crSunL, geometryViewDir));
+			reflectedLight.directDiffuse += diffuseColor.rgb * crSunC * crF * crB * crB * saturate(dot(normal, crSunL) + 0.6) * uCrAir.w;
+		#endif
 	}`);
 	};
-	m.customProgramCacheKey = () => 'creature-vary';
+	m.customProgramCacheKey = () => 'creature-vary-lit';
 	return m;
 }
